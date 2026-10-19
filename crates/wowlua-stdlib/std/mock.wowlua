@@ -775,7 +775,11 @@ export function defineSpell(id: number, data: table)
     engine().defineSpell(id, data)
 end
 
---- An item's data; `opts.cached = false` makes it load (`delay`).
+--- An item's data; `opts.cached = false` makes it load (`delay`). A
+--- consumable's use: `spell`, `castSpells`, `cooldownCategory`; its
+--- `aura` (an `applyAura` table: food's eating, run out after its
+--- duration); food's `wellFed = { aura, maxHealth?, cooldowns?, after? }`
+--- (eaten `after` seconds, 10 by default: the buff).
 export function defineItem(id: number, data: table, opts: table?)
     engine().defineItem(id, data, opts)
 end

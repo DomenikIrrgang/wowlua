@@ -16,6 +16,13 @@ e.defineItem(263509, {
     equipLoc = "INVTYPE_NON_EQUIP_IGNORE", sellPrice = 100,
     link = "|cnIQ1:|Hitem:263509::::::::11:1489:::::::::|h[Skywall Souffle]|h|r",
     spell = 1248377, castSpells = { 433 }, cooldownCategory = 11,
+    -- Eating, then Well Fed 10 s later: 10 more health (recorded; the
+    -- session's aura instances).
+    aura = { spellId = 433, name = "Food", icon = 134062, duration = 18, auraInstanceID = 47 },
+    wellFed = {
+        maxHealth = 10, cooldowns = { 1243969, 1248406 },
+        aura = { spellId = 1248406, name = "Well Fed", icon = 133943, duration = 900, auraInstanceID = 51 },
+    },
 })
 -- Tough Jerky on the bars (slots 12, 184): food too.
 e.defineItem(117, { name = "Tough Jerky", quality = 1, icon = 133972, stackCount = 20, classID = 0, subclassID = 5 })

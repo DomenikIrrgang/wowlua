@@ -244,7 +244,42 @@ pub fn apply(vm: &mut Vm, me: UnitId, data: TableRef) -> f64 {
     };
     engine_mut(vm).units.auras.push(aura.clone());
     fire_update(vm, me, Some(&aura), None);
+    // Gone when it runs out, the server's word a moment later (recorded:
+    // a food's aura 0.086 s after its expiration).
+    if expiration > now {
+        let gone = vm.native_with(
+            "auraExpired",
+            expired,
+            vec![Value::Num(me.0 as f64), Value::Num(instance)],
+        );
+        crate::clock::after_engine(vm, expiration - now + EXPIRY_LAG, gone);
+    }
     instance
+}
+
+/// An aura's removal after its expiration (recorded once).
+const EXPIRY_LAG: f64 = 0.086;
+
+/// An aura run out: removed, unless already gone or renewed since.
+fn expired(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (Some(Value::Num(unit)), Some(Value::Num(id))) = (c.upvals.first(), c.upvals.get(1)) else {
+        return Ok(vec![]);
+    };
+    let unit = UnitId(*unit as usize);
+    let id = *id;
+    let now = crate::clock::now(vm);
+    let due =
+        engine(vm).units.auras.iter().any(|a| {
+            a.unit == unit && a.instance == id && a.expiration > 0.0 && a.expiration <= now
+        });
+    if due {
+        let food = crate::inventory::eating_ends(vm, id);
+        remove(vm, unit, id);
+        if food {
+            crate::inventory::eating_ended(vm);
+        }
+    }
+    Ok(vec![])
 }
 
 /// Auras a place gives, gone as the player leaves it (recorded: Campfire

@@ -21,7 +21,8 @@
 //!   locked again, the server removes it.
 //! - Using a consumable with a `spell` (food): the cast at once
 //!   (`CURRENT_SPELL_CAST_CHANGED`), the server's casts (its `castSpells`
-//!   first, triggered), the category's cooldowns, a moment later one fewer.
+//!   first, triggered), its `aura` (eating), the category's cooldowns, a
+//!   moment later one fewer; eaten long enough (`wellFed`), its buff.
 //!
 //! Unverified: rings and trinkets (the first slot), a one-handed weapon
 //! with a two-handed one worn, bags as gear, using an item with a target.
@@ -578,29 +579,8 @@ fn used(vm: &mut Vm, c: NativeCall) -> Ret {
         "UNIT_SPELLCAST_SENT",
         &[player, Value::Nil, g, Value::Num(spell)],
     );
-    // The action slots holding the item, and for food any food (recorded:
-    // eating a souffle, the jerky's slots changed).
-    let food = |vm: &mut Vm, item: i64| {
-        matches!(character::item_field(vm, item, "classID"), Value::Num(c) if c == 0.0)
-            && matches!(character::item_field(vm, item, "subclassID"), Value::Num(s) if s == 5.0)
-    };
     let eating = food(vm, id);
-    let held: Vec<(i64, i64)> = engine(vm)
-        .world
-        .character
-        .actions
-        .iter()
-        .filter_map(|(s, a)| match (a.kind.as_str(), a.id) {
-            ("item", Value::Num(n)) => Some((*s, n as i64)),
-            _ => None,
-        })
-        .collect();
-    let slots: Vec<i64> = held
-        .into_iter()
-        .filter(|(_, item)| *item == id || (eating && food(vm, *item)))
-        .map(|(s, _)| s)
-        .collect();
-    for s in &slots {
+    for s in &action_slots(vm, id) {
         fire(vm, "ACTIONBAR_SLOT_CHANGED", &[Value::Num(*s as f64)]);
     }
     for t in &triggered {
@@ -621,6 +601,27 @@ fn used(vm: &mut Vm, c: NativeCall) -> Ret {
         PLAYER,
         &[g, Value::Num(spell), Value::Nil],
     );
+    // Its aura (food's: eating), and what eating long enough gives.
+    if let Value::Table(aura) = character::item_field(vm, id, "aura") {
+        let instance = crate::auras::apply(vm, PLAYER, aura);
+        if eating {
+            engine_mut(vm).units.eating = Some((instance, id));
+        }
+        if let Value::Table(fed) = character::item_field(vm, id, "wellFed") {
+            let k = vm.str("after");
+            let after = match vm.heap.table(fed).get(k) {
+                Value::Num(n) => n,
+                _ => WELL_FED_AFTER,
+            };
+            later(
+                vm,
+                after,
+                "inventoryWellFed",
+                well_fed,
+                vec![Value::Table(fed), Value::Num(instance)],
+            );
+        }
+    }
     fire(vm, "ACTIONBAR_UPDATE_COOLDOWN", &[]);
     fire(vm, "ACTIONBAR_UPDATE_STATE", &[]);
     fire(vm, "BAG_UPDATE_COOLDOWN", &[]);
@@ -653,6 +654,109 @@ fn used(vm: &mut Vm, c: NativeCall) -> Ret {
             Value::Num(id as f64),
         ],
     );
+    Ok(vec![])
+}
+
+/// Food (consumable, food and drink).
+fn food(vm: &mut Vm, item: i64) -> bool {
+    matches!(character::item_field(vm, item, "classID"), Value::Num(c) if c == 0.0)
+        && matches!(character::item_field(vm, item, "subclassID"), Value::Num(s) if s == 5.0)
+}
+
+/// The action slots holding the item, and for food any food (recorded:
+/// eating a souffle, the jerky's slots changed).
+fn action_slots(vm: &mut Vm, id: i64) -> Vec<i64> {
+    let eating = food(vm, id);
+    let held: Vec<(i64, i64)> = engine(vm)
+        .world
+        .character
+        .actions
+        .iter()
+        .filter_map(|(s, a)| match (a.kind.as_str(), a.id) {
+            ("item", Value::Num(n)) => Some((*s, n as i64)),
+            _ => None,
+        })
+        .collect();
+    held.into_iter()
+        .filter(|(_, item)| *item == id || (eating && food(vm, *item)))
+        .map(|(s, _)| s)
+        .collect()
+}
+
+/// The food's aura running out: the food's slots changed before it goes,
+/// the bars' cooldowns after (recorded); `auras` removes it between.
+pub fn eating_ends(vm: &mut Vm, instance: f64) -> bool {
+    let Some((eaten, item)) = engine(vm).units.eating else {
+        return false;
+    };
+    if eaten != instance {
+        return false;
+    }
+    engine_mut(vm).units.eating = None;
+    for s in action_slots(vm, item) {
+        fire(vm, "ACTIONBAR_SLOT_CHANGED", &[Value::Num(s as f64)]);
+    }
+    true
+}
+
+pub fn eating_ended(vm: &mut Vm) {
+    fire(vm, "ACTIONBAR_UPDATE_COOLDOWN", &[]);
+}
+
+/// Eating long enough for food's buff (the classic rule; recorded 10.07 s).
+const WELL_FED_AFTER: f64 = 10.0;
+
+/// Food eaten long enough (its aura still on): its buff's stamina (the
+/// maximum health: `UNIT_MAXHEALTH` twice, `UNIT_STATS`), the buff, its
+/// spells' cooldowns, the health (recorded: a Skywall Souffle's).
+/// `wellFed = { after?, aura, maxHealth?, cooldowns? }`.
+fn well_fed(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (Value::Table(fed), food) = (c.upvals[0], num(c.upvals[1])) else {
+        return Ok(vec![]);
+    };
+    let eating = engine(vm)
+        .units
+        .auras
+        .iter()
+        .any(|a| a.unit == PLAYER && a.instance == food);
+    if !eating {
+        return Ok(vec![]);
+    }
+    let field = |vm: &mut Vm, k: &str| {
+        let key = vm.str(k);
+        vm.heap.table(fed).get(key)
+    };
+    if let Value::Num(more) = field(vm, "maxHealth") {
+        engine_mut(vm).units.list[PLAYER.0].health_max += more;
+    }
+    units::fire_unit(vm, "UNIT_MAXHEALTH", PLAYER, &[]);
+    units::fire_unit(vm, "UNIT_MAXHEALTH", PLAYER, &[]);
+    units::fire_unit(vm, "UNIT_STATS", PLAYER, &[]);
+    if let Value::Table(aura) = field(vm, "aura") {
+        crate::auras::apply(vm, PLAYER, aura);
+    }
+    fire(vm, "ACTIONBAR_UPDATE_COOLDOWN", &[]);
+    fire(vm, "BAG_UPDATE_COOLDOWN", &[]);
+    if let Value::Table(list) = field(vm, "cooldowns") {
+        let n = vm.heap.table(list).border();
+        for i in 1..=n {
+            if let Value::Num(s) = vm.heap.table(list).get(Value::Num(i as f64)) {
+                fire(
+                    vm,
+                    "SPELL_UPDATE_COOLDOWN",
+                    &[
+                        Value::Num(s),
+                        Value::Nil,
+                        Value::Nil,
+                        Value::Nil,
+                        Value::Nil,
+                    ],
+                );
+            }
+        }
+    }
+    fire(vm, "SPELL_UPDATE_USABLE", &[]);
+    units::fire_unit(vm, "UNIT_HEALTH", PLAYER, &[]);
     Ok(vec![])
 }
 

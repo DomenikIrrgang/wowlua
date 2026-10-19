@@ -127,6 +127,8 @@ pub struct Units {
     pub lockdown: bool,
     /// Auras on the units, in application order, and the last instance ID.
     pub auras: Vec<crate::auras::Aura>,
+    /// The player eating: the food's aura instance and the item.
+    pub eating: Option<(f64, i64)>,
     pub next_aura: f64,
     /// The test's unit handles' metatable.
     handle_meta: Option<TableRef>,

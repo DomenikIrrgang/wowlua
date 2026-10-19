@@ -1393,7 +1393,7 @@ fn the_engine_plays_legacy_as_the_client_did() {
 
 /// How many of the items scenario's lines the engine plays as the client
 /// did: only ever up.
-const ITEMS_MATCHED: usize = 302;
+const ITEMS_MATCHED: usize = 350;
 
 /// The items scenario: gear worn and taken off by right-click and drag,
 /// a two-handed weapon refused (bags full), food eaten, an item deleted.
