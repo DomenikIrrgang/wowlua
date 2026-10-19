@@ -1153,6 +1153,65 @@ end
     assert!(out.contains("3 passed, 0 failed"), "{out}");
 }
 
+/// The addon's own `ReloadUI()` (Questie's `/questie tracker hide`) ends
+/// the session there: `PLAYER_LOGOUT`, then nothing of it runs (its
+/// timers, its `OnUpdate`); the test's pass ends at its next wait and runs
+/// again after the reload, as at `mock.reloadUI()`.
+#[test]
+fn the_addons_reload_ui() {
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            (
+                "src/main.wowlua",
+                r#"local f = CreateFrame("Frame")
+f:RegisterEvent("PLAYER_LOGOUT")
+f:SetScript("OnEvent", function()
+    _G.DemoDB = _G.DemoDB or {}
+    _G.DemoDB.loggedOut = (_G.DemoDB.loggedOut or 0) + 1
+end)
+f:SetScript("OnUpdate", function() _G.Updates = (_G.Updates or 0) + 1 end)
+SLASH_DEMORELOAD1 = "/demoreload"
+SlashCmdList.DEMORELOAD = function() C_UI.Reload() end
+"#,
+            ),
+            (
+                "tests/reload.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+@test("the addon reloads the UI")
+local function reloads()
+    const g = _G :: any
+    if mock.reloads() == 0 then
+        mock.waitFrames(2)
+        mock.slash("/demoreload")
+        local updates = g.Updates
+        mock.advanceFrames(10)
+        expect(g.Updates).toBe(updates)
+        mock.waitFrames(1)
+        error("not reached")
+    end
+    expect(mock.reloads()).toBe(1)
+    expect(g.DemoDB.loggedOut).toBe(1)
+end
+
+@test("the next test runs where the file was")
+local function after()
+    expect(mock.reloads()).toBe(0)
+    local updates = (_G :: any).Updates
+    mock.waitFrames(1)
+    expect((_G :: any).Updates).toBe(updates + 1)
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    assert!(out.contains("2 passed, 0 failed"), "{out}");
+}
+
 /// GUI tests act as the user: hover, click, type and keys.
 #[test]
 fn gui_input() {

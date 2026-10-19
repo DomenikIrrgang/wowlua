@@ -275,8 +275,15 @@ pub fn login(vm: &mut Vm, addon: &str, has_bindings: bool, reload: bool) {
 /// `C_UI.Reload()` (`ReloadUI`, `/reload`): the session ends (the
 /// module's doc); nothing runs the next one.
 pub fn reload_ui(vm: &mut Vm, _c: NativeCall) -> Ret {
+    end_session(vm);
+    Ok(vec![])
+}
+
+/// The session's end before a /reload (`reload_ui`), once; after it
+/// nothing of the session runs (`clock`).
+pub fn end_session(vm: &mut Vm) {
     if engine(vm).world.logged_out {
-        return Ok(vec![]);
+        return;
     }
     fire(vm, "LOADING_SCREEN_ENABLED", &[]);
     if engine(vm).units.target.is_some() {
@@ -316,5 +323,4 @@ pub fn reload_ui(vm: &mut Vm, _c: NativeCall) -> Ret {
     fire(vm, "CVAR_UPDATE", &[k, v]);
     fire(vm, "GAME_PAD_CONFIGS_CHANGED", &[]);
     engine_mut(vm).world.logged_out = true;
-    Ok(vec![])
 }

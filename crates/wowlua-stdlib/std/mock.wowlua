@@ -68,8 +68,9 @@ export interface MockUnit
     function showNameplate()
     function hideNameplate()
     function despawn()
-    --- The unit's tokens (`"target"`, `"nameplate1"`, …).
-    function token(): string[]
+    --- The unit's first token (`"player"`, `"nameplate1"` before
+    --- `"target"`, …), nil when none names it.
+    function token(): string?
     function setName(name: string, lastName: string?)
     --- The group role it chose (`UnitGroupRolesAssigned`, the raid
     --- roster's combat role); nil none.
@@ -653,7 +654,10 @@ wl.reloadSignal = reloadSignal
 --- `/reload`: the test's pass ends here. The runner keeps the TOC's
 --- SavedVariables (as the client writes them), loads everything again in a
 --- fresh VM, logs in and runs the test again from the top, with
---- `reloads()` one higher. The file's other tests go on as before.
+--- `reloads()` one higher. The file's other tests go on as before. Code
+--- that calls `ReloadUI()` itself ends the session there (`PLAYER_LOGOUT`
+--- and the rest; nothing of it runs after) and the pass at the test's
+--- next wait, as here.
 export function reloadUI()
     if coroutine.running() == nil then
         error("mock.reloadUI runs inside a test", 2)
@@ -713,11 +717,22 @@ end
 
 -- ------------------------------------------------------------ waiting
 
+-- The session ended (`ReloadUI` in an addon's or Blizzard's code): as at
+-- `reloadUI`, the test's pass ends.
+local function reloaded()
+    if engine().loggedOut() then
+        coroutine.yield(waitToken, "reload", 0)
+        error(reloadSignal, 0)
+    end
+end
+
 local function wait(kind: string, amount: number)
     if coroutine.running() == nil then
         error("mock.wait… runs inside a test", 3)
     end
+    reloaded()
     coroutine.yield(waitToken, kind, amount)
+    reloaded()
 end
 
 --- Lets `n` frames pass (decision T216).
