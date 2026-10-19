@@ -95,6 +95,8 @@ pub struct Widget {
 #[derive(Default)]
 pub struct World {
     pub widgets: Vec<Widget>,
+    /// Loose files' IDs given out (`GetFileIDFromPath`), by normalized path.
+    pub file_ids: std::collections::HashMap<String, f64>,
     /// The widgets given an `OnUpdate` (set, hooked or from XML) or an
     /// intrinsic type's handlers, ever: the ones a frame looks at, each
     /// checked as its turn comes (most of the UI's widgets never update);

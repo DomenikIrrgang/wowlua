@@ -321,6 +321,81 @@ fn is_player_in_world(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(!engine(vm).world.loading_screen)])
 }
 
+/// `GetLocale()`: the `textLocale` CVar, else `"enUS"` (the recordings'
+/// client strings are English; its locale CVars were recorded empty).
+fn get_locale(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let locale = crate::framescript::cvar_get(vm, "textLocale").filter(|l| !l.is_empty());
+    Ok(vec![vm.str(locale.as_deref().unwrap_or("enUS"))])
+}
+
+/// `GetFileIDFromPath(path)`: a loose file's ID, the same for the same path
+/// (any case, either slash, with or without its extension), new ones
+/// negative counting down (unverified: the client gives an addon's own
+/// files generated negative IDs; a game file's real ID is not known here).
+fn get_file_id_from_path(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Str(s) = c.arg(1) else {
+        return Ok(vec![Value::Num(0.0)]);
+    };
+    let path = String::from_utf8_lossy(vm.str_bytes(s))
+        .to_ascii_lowercase()
+        .replace('/', "\\");
+    let key = match path.rsplit_once('.') {
+        Some((stem, ext)) if !ext.contains('\\') => stem.to_string(),
+        _ => path,
+    };
+    let ids = &mut crate::engine_mut(vm).world.file_ids;
+    let next = -(ids.len() as f64) - 1.0;
+    let id = *ids.entry(key).or_insert(next);
+    Ok(vec![Value::Num(id)])
+}
+
+/// `GetCurrentRegion()`: 0 (unverified: the recorded `GetCurrentRegionName()`
+/// is empty, which no standard region's ID gives).
+fn get_current_region(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(0.0)])
+}
+
+/// `GetCurrentRegionName()`: empty (recorded).
+fn get_current_region_name(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![vm.str("")])
+}
+
+/// `C_CurrencyInfo.GetCoinTextureString(amount [, fontHeight])`: gold,
+/// silver and copper each with its icon (`|T…:h:h:2:0|t`), parts that are
+/// 0 left out, a zero amount as 0 copper (unverified: the client's exact
+/// markup).
+fn get_coin_texture_string(vm: &mut Vm, c: NativeCall) -> Ret {
+    let amount = match vm.hidden(c.arg(1)) {
+        Value::Num(n) => n.max(0.0).floor() as i64,
+        _ => 0,
+    };
+    let height = match c.arg(2) {
+        Value::Num(h) => h,
+        _ => 14.0,
+    };
+    let icon =
+        |name: &str| format!("|TInterface\\MoneyFrame\\UI-{name}Icon:{height}:{height}:2:0|t");
+    let (gold, silver, copper) = (amount / 10000, amount / 100 % 100, amount % 100);
+    let mut parts = Vec::new();
+    if gold > 0 {
+        parts.push(format!("{gold}{}", icon("Gold")));
+    }
+    if silver > 0 {
+        parts.push(format!("{silver}{}", icon("Silver")));
+    }
+    if copper > 0 || parts.is_empty() {
+        parts.push(format!("{copper}{}", icon("Copper")));
+    }
+    Ok(vec![vm.str(&parts.join(" "))])
+}
+
+/// `C_Map.GetAreaInfo(areaID)`: the area's name; none known here (noted
+/// as unanswered; the client's area table is not recorded).
+fn get_area_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    crate::note_default(vm, "C_Map.GetAreaInfo", &c, 1);
+    Ok(vec![vm.str("")])
+}
+
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
         (
@@ -328,6 +403,15 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             get_current_calendar_time,
         ),
         ("IsPlayerInWorld", is_player_in_world),
+        ("GetLocale", get_locale),
+        ("GetCurrentRegion", get_current_region),
+        ("GetCurrentRegionName", get_current_region_name),
+        (
+            "C_CurrencyInfo.GetCoinTextureString",
+            get_coin_texture_string,
+        ),
+        ("C_Map.GetAreaInfo", get_area_info),
+        ("GetFileIDFromPath", get_file_id_from_path),
         ("C_Calendar.GetMonthInfo", get_month_info),
         (
             "C_AuraContainerUtil.ProcessAuraTooltipBackdropOptions",
