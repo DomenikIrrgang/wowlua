@@ -39,6 +39,11 @@
 //! (one account's run never drops another's), the engine battery's parts
 //! by their prefix; a file whose content is unchanged keeps its header.
 //! Without a path, every account's SavedVariables in the WoW installation.
+//! The engine's default world (the account's settings, the character:
+//! the battery, answers, maps, collections, achievements, snapshot,
+//! cursor, keys, input, login) comes from one account (`#1`, or
+//! `--account <n>`); a class's traits, a trainer, a window, a scenario
+//! from any.
 
 use anyhow::{Context, Result, anyhow};
 use std::fmt::Write;
@@ -205,6 +210,39 @@ pub struct Gate {
     path: std::path::PathBuf,
     recorded: std::collections::BTreeMap<String, (String, String)>,
     unstamped: bool,
+    /// The file's WoW account (`#1`'s 1), when its path names one.
+    account: Option<String>,
+    /// The account the engine's default world is (`--account`, 1).
+    world_account: String,
+}
+
+/// The parts that are the engine's default world (the account's settings,
+/// the character): taken only from its account. A class's traits, a
+/// trainer, a window, a scenario come from any.
+const WORLD_PARTS: &[&str] = &[
+    "probe",
+    "order",
+    "protected",
+    "blocked",
+    "answers",
+    "maps",
+    "collections",
+    "achievements",
+    "snapshot",
+    "cursor",
+    "keys",
+    "input",
+    "login",
+    "reload",
+];
+
+/// The WoW account a SavedVariables path is in (`…/Account/<id>#2/…`: 2).
+fn account_of(path: &Path) -> Option<String> {
+    let mut parts = path
+        .components()
+        .map(|c| c.as_os_str().to_string_lossy().into_owned());
+    parts.by_ref().find(|c| c == "Account")?;
+    parts.next()?.rsplit_once('#').map(|(_, n)| n.to_string())
 }
 
 /// The time an unstamped part is recorded as: before any stamp.
@@ -228,12 +266,24 @@ impl Gate {
             path,
             recorded,
             unstamped,
+            account: None,
+            world_account: "1".to_string(),
         })
     }
 
     /// Whether to take `part` of a file with these stamps: its client if so
     /// (recorded as the repository's from now on).
     fn take(&mut self, stamps: &Stamps, part: &str, fallback: &str) -> Option<String> {
+        if WORLD_PARTS.contains(&part)
+            && let Some(account) = &self.account
+            && *account != self.world_account
+        {
+            println!(
+                "skipped {part}: account #{account}'s (the default world is account #{}'s; --account {account} takes it)",
+                self.world_account
+            );
+            return None;
+        }
         let (at, client) = match stamps.get(part) {
             Some(s) => s.clone(),
             None if self.unstamped => (UNSTAMPED.to_string(), fallback.to_string()),
@@ -1164,12 +1214,19 @@ fn with_books(profile: &str, books: &std::collections::BTreeSet<String>) -> Stri
 /// folder (`_classic_beta_` unless `--client`).
 pub fn run_all(root: &Path, args: &[String]) -> Result<()> {
     let mut unstamped = false;
+    let mut world_account = "1".to_string();
     let mut client = "_classic_beta_".to_string();
     let mut paths: Vec<std::path::PathBuf> = Vec::new();
     let mut it = args.iter();
     while let Some(arg) = it.next() {
         match arg.as_str() {
             "--unstamped" => unstamped = true,
+            "--account" => {
+                world_account = it
+                    .next()
+                    .ok_or_else(|| anyhow!("--account needs a number (2 for `<id>#2`)"))?
+                    .clone();
+            }
             "--client" => {
                 client = it
                     .next()
@@ -1178,7 +1235,7 @@ pub fn run_all(root: &Path, args: &[String]) -> Result<()> {
             }
             other if other.starts_with("--") => {
                 return Err(anyhow!(
-                    "usage: cargo xtask ingest [--unstamped] [--client <folder>] [<StdTest.lua>...]"
+                    "usage: cargo xtask ingest [--unstamped] [--account <n>] [--client <folder>] [<StdTest.lua>...]"
                 ));
             }
             path => paths.push(path.into()),
@@ -1195,8 +1252,10 @@ pub fn run_all(root: &Path, args: &[String]) -> Result<()> {
         }
     }
     let mut gate = Gate::load(root, unstamped)?;
+    gate.world_account = world_account;
     for path in &paths {
         println!("ingesting {}", path.display());
+        gate.account = account_of(path);
         run(root, path, &mut gate)?;
     }
     gate.save()
@@ -1484,6 +1543,19 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
                 &format!("WoW Forever {version}: {about} (cargo xtask ingest)."),
                 &list,
             )?;
+            // The cursor's character, its own snapshot (another's would
+            // have other spells and items).
+            if part == "cursor"
+                && let Ok(snapshot) = state.get::<mlua::Value>("engineCursorCharacter")
+                && !snapshot.is_nil()
+            {
+                let (text, names) = crate::profile::profile_text(&state, &snapshot)?;
+                let text = names
+                    .iter()
+                    .filter(|n| n.len() > 2)
+                    .fold(me.scrub(&text), |t, n| t.replace(n.as_str(), "Player"));
+                write_file(&client.join("forever-camelot-cursor-character.json"), &text)?;
+            }
         }
     }
     // The map data (`/stdtest engine maps`, all static) and the account's
@@ -1960,6 +2032,29 @@ mod tests {
         .into_iter()
         .collect();
         assert!(g.take(&maps, "maps", "v").is_some());
+    }
+
+    /// The default world's parts come from its account only.
+    #[test]
+    fn the_default_world_comes_from_its_account() {
+        let path = Path::new("/WoW/_classic_beta_/WTF/Account/123#2/SavedVariables/StdTest.lua");
+        assert_eq!(account_of(path).as_deref(), Some("2"));
+        assert_eq!(account_of(Path::new("/tmp/StdTest.lua")), None);
+        let dir = tempfile::tempdir().unwrap();
+        let mut g = gate(dir.path(), false);
+        g.account = Some("2".into());
+        let stamped = |part: &str| -> Stamps {
+            [(part.to_string(), ("2026-10-19 12:00:00".into(), "c".into()))]
+                .into_iter()
+                .collect()
+        };
+        assert!(g.take(&stamped("answers"), "answers", "v").is_none());
+        assert!(
+            g.take(&stamped("trainer:DRUID-3060"), "trainer:DRUID-3060", "v")
+                .is_some()
+        );
+        g.world_account = "2".into();
+        assert!(g.take(&stamped("answers"), "answers", "v").is_some());
     }
 
     /// A file whose content is the same keeps its header; answers merge,

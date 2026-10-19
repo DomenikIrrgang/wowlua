@@ -25,6 +25,7 @@
 -- Only harmless calls: getters on fresh frames, and arguments the client's
 -- checks refuse before any game code runs.
 import state from "/state"
+import takeSnapshot from "/snapshot"
 import stamp from "/state"
 import answersProbe from "/answers"
 import mapsProbe from "/maps"
@@ -1651,6 +1652,9 @@ end
 local function cursorProbe()
     const st = state() :: any
     const A = _G :: any
+    -- The character it ran on (its spells, bags, gear): the engine's test
+    -- plays it with this one.
+    st.engineCursorCharacter = takeSnapshot()
     const log: string[] = {}
     const events = CreateFrame("Frame")
     for _, e in ipairs({ "CURSOR_CHANGED", "ACTIONBAR_SLOT_CHANGED", "ACTIONBAR_SHOWGRID", "ACTIONBAR_HIDEGRID",

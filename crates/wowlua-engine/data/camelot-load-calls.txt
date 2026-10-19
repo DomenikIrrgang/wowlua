@@ -70,7 +70,6 @@ C_UIWidgetManager.GetBelowMinimapWidgetSetID	1: number 2
 C_UIWidgetManager.GetPowerBarWidgetSetID	1: number 283
 C_UIWidgetManager.GetTopCenterWidgetSetID	1: number 1
 C_UnitAuras.GetGroupBuffVisualAlerts	1: {}
-C_UnitAuras.GetHiddenGroupBuffs	1: {1=number 19740,10=number 20729,11=number 19837,12=number 10290,13=number 6940,14=number 25916,15=number 19896,16=number 1044,17=number 25890,18=number 25291,19=number 1032,2=number 1038,20=number 19854,21=number 19742,22=number 19900,23=number 19853,24=number 19897,25=number 19835,26=number 19891,27=number 643,28=number 10300,29=number 1022,3=number 25290,30=number 19979,31=number 19834,32=number 19876,33=number 10293,34=number 7294,35=number 19898,36=number 10298,37=number 465,38=number 10278,39=number 25782,4=number 5599,40=number 19850,41=number 10301,42=number 10299,43=number 19899,44=number 19838,45=number 25895,46=number 25918,47=number 19836,48=number 19746,49=number 25894,5=number 10292,50=number 19895,51=number 19852,52=number 10291,53=number 20217,6=number 25898,7=number 19977,8=number 19978,9=number 19888}
 C_VoiceChat.GetActiveChannelID	0: 
 C_VoiceChat.IsLoggedIn	1: boolean false
 C_VoiceChat.IsTranscriptionAllowed	1: boolean true

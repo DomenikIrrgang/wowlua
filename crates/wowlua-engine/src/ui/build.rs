@@ -430,7 +430,13 @@ fn apply_in(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Eleme
                         k = key;
                     }
                 }
-                _ => cx.error(vm, el.line, format!("mixin {m} is not a table")),
+                // Not defined: skipped, without an error (recorded: the
+                // camelot tutorial's keyboard frame, its mixins' file
+                // missing from the client, loads without one).
+                _ => engine_mut(vm)
+                    .world
+                    .warnings
+                    .push(format!("{}:{}: mixin {m} is not a table", cx.file, el.line)),
             }
         }
     }
@@ -923,7 +929,12 @@ fn set_script(vm: &mut Vm, cx: &Context, id: WidgetId, s: &Element) {
         }
         g
     } else if let Some(m) = s.attr("method") {
-        let src = format!("return function(self, ...) return self[{m:?}](self, ...) end");
+        // A method the frame lacks does nothing (recorded: the camelot
+        // tutorial's keyboard frame, its mixin's file missing from the
+        // client, loads without an error).
+        let src = format!(
+            "return function(self, ...) local f = self[{m:?}] if f ~= nil then return f(self, ...) end end"
+        );
         match compile(vm, cx, s.line, &src) {
             Some(f) => f,
             None => return,

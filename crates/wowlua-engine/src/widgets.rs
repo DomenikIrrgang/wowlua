@@ -138,7 +138,7 @@ pub struct World {
     pub taxis: crate::taxi::Taxis,
     pub death: crate::death::Death,
     /// The class's hidden group buffs (`HIDDEN_GROUP_BUFFS_CHANGED`).
-    pub hidden_group_buffs: Vec<f64>,
+    pub hidden_group_buffs: Option<Vec<f64>>,
     /// The player rests (an inn, a city: `setResting`).
     pub resting: bool,
     /// The session ended (`ReloadUI`, logging out).

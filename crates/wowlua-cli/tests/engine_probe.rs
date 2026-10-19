@@ -7,7 +7,7 @@
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use assert_cmd::Command;
 use wowlua_vm::{Value, Vm};
@@ -207,6 +207,9 @@ fn compared(key: &str) -> bool {
         "probe.client",
         "probe.getTime",
         "probe.units.",
+        // The class's: the engine's per class, checked by
+        // `the_hidden_group_buffs_are_the_recorded_class_s`.
+        "probe.loadCalls.C_UnitAuras.GetHiddenGroupBuffs",
         "probe.widgets.AuraContainer.",
         // Session values: addresses, the UI scale, the screen.
         "probe.widgets.UIParent.getters.Get",
@@ -321,6 +324,42 @@ fn same(key: &str, expected: &str, mine: &str) -> bool {
         return count(expected) == count(mine) && values(expected) == values(mine);
     }
     false
+}
+
+/// The engine's hidden group buffs for the battery's character's class are
+/// the ones the client gave it (`data/camelot-hidden-group-buffs.txt`).
+#[test]
+fn the_hidden_group_buffs_are_the_recorded_class_s() {
+    let theirs = fixture();
+    let class = theirs["probe.units.UnitClass(player)"]
+        .split(", ")
+        .nth(1)
+        .and_then(|c| c.strip_prefix("string "))
+        .expect("the class")
+        .to_string();
+    let ids = |s: &str| -> std::collections::BTreeSet<String> {
+        s.split(|c: char| !c.is_ascii_digit())
+            .filter(|x| !x.is_empty())
+            .map(String::from)
+            .collect()
+    };
+    let recorded = &theirs["probe.loadCalls.C_UnitAuras.GetHiddenGroupBuffs"];
+    let recorded: std::collections::BTreeSet<String> = recorded
+        .split("number ")
+        .skip(1)
+        .filter_map(|x| x.split(|c: char| !c.is_ascii_digit()).next())
+        .map(String::from)
+        .collect();
+    let data =
+        fs::read_to_string(repo().join("crates/wowlua-engine/data/camelot-hidden-group-buffs.txt"))
+            .expect("the data");
+    let ours = data
+        .lines()
+        .filter_map(|l| l.split_once('\t'))
+        .find(|(c, _)| *c == class)
+        .map(|(_, list)| ids(list))
+        .unwrap_or_default();
+    assert_eq!(ours, recorded, "{class}");
 }
 
 #[test]
@@ -1701,8 +1740,21 @@ return table.concat(out, '\\n')",
     assert_eq!(ours.lines().collect::<Vec<_>>(), expected);
 }
 
+/// The cursor recording's character: its own snapshot once the probe
+/// records one (`forever-camelot-cursor-character.json`), else the shared
+/// one it was recorded with.
+fn cursor_character() -> PathBuf {
+    let client = repo().join("crates/wowlua-engine/tests/client");
+    let own = client.join("forever-camelot-cursor-character.json");
+    if own.is_file() {
+        own
+    } else {
+        client.join("forever-camelot-character.json")
+    }
+}
+
 /// The cursor (`/stdtest engine cursor`): each step's state and the events
-/// between, as the client recorded them for the recorded character.
+/// between, as the client recorded them for its character.
 #[test]
 fn the_cursor_moves_as_the_client_recorded() {
     let dir = build();
@@ -1711,12 +1763,8 @@ fn the_cursor_moves_as_the_client_recorded() {
     wowlua_engine::install(&mut vm, "camelot").expect("installs");
     let mut vm = client_in(vm, &out);
     let controls = wowlua_engine::controls::table(&mut vm);
-    wowlua_test::profile::apply(
-        &mut vm,
-        controls,
-        &repo().join("crates/wowlua-engine/tests/client/forever-camelot-character.json"),
-    )
-    .expect("the character's profile");
+    wowlua_test::profile::apply(&mut vm, controls, &cursor_character())
+        .expect("the character's profile");
     addon(&mut vm, "StdTestEngineProbe('cursor')");
     wowlua_engine::clock::advance_frames(&mut vm, 90, 1000.0 / 60.0);
     let f = vm
@@ -1750,4 +1798,47 @@ fn the_cursor_moves_as_the_client_recorded() {
     lines.sort();
     let theirs: Vec<String> = lines.into_iter().map(|(_, v)| v).collect();
     assert_eq!(ours.lines().collect::<Vec<_>>(), theirs);
+}
+
+fn yes(_vm: &mut Vm, _c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
+    Ok(vec![Value::Bool(true)])
+}
+
+/// Blizzard's UI logs in without an error with tutorials on (a fresh
+/// account's: `GetTutorialsEnabled()`, `showNPETutorials`): the new player
+/// experience loads, as it did on such an account's client (recorded: no
+/// Blizzard error), though its keyboard frame's mixin is missing from the
+/// client's files.
+#[test]
+fn blizzard_ui_logs_in_with_tutorials_on() {
+    let Some(ui) = wowlua_test::ui_source_in(&repo().join("target/types-src"), "camelot") else {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    };
+    let dir = build();
+    let out = dir.path().join("dist/dev/StdTest");
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    let report = wowlua_engine::ui::load(&mut vm, &ui.interface, ui.strings.as_deref());
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let mut vm = client_in(vm, &out);
+    let tutorials = vm.native("GetTutorialsEnabled", yes);
+    vm.set_global("GetTutorialsEnabled", tutorials);
+    addon(&mut vm, "__engine.setCVar('showNPETutorials', '1')");
+    let errors_before = wowlua_engine::engine(&vm).world.ui.errors.len();
+    wowlua_engine::login::login(&mut vm, "StdTest", true, false);
+    wowlua_engine::clock::advance_frames(&mut vm, 60, 1000.0 / 60.0);
+    let errors = wowlua_engine::engine(&vm).world.ui.errors[errors_before..].to_vec();
+    assert!(errors.is_empty(), "{errors:#?}");
+    let f = vm
+        .load(
+            b"return C_AddOns.IsAddOnLoaded('Blizzard_NewPlayerExperience')",
+            "=check",
+        )
+        .expect("compiles");
+    let loaded = vm.call(f, &[]).expect("runs");
+    assert!(
+        matches!(loaded.first(), Some(Value::Bool(true))),
+        "the new player experience loaded"
+    );
 }

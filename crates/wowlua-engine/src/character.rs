@@ -898,12 +898,41 @@ pub fn set_context(vm: &mut Vm, bag: i64, id: i64, context: &str) {
     }
 }
 
-/// `HIDDEN_GROUP_BUFFS_CHANGED(list)` (the class's hidden group buffs,
-/// `e.setHiddenGroupBuffs`: a shaman's 68, a level 1 warrior's none,
-/// recorded) and `GROUP_BUFF_VISUAL_ALERTS_CHANGED({})`.
+/// The class's hidden group buffs: the test's (`e.setHiddenGroupBuffs`),
+/// else the player's class's as recorded (`data/camelot-hidden-group-buffs.txt`:
+/// a paladin's, a druid's, a shaman's), else none (a level 1 warrior's,
+/// recorded; other classes unverified).
+fn hidden_group_buffs(vm: &Vm) -> Vec<f64> {
+    if let Some(ids) = &engine(vm).world.hidden_group_buffs {
+        return ids.clone();
+    }
+    let class = &engine(vm).units.list[units::PLAYER.0].class;
+    include_str!("../data/camelot-hidden-group-buffs.txt")
+        .lines()
+        .filter(|l| !l.starts_with('#'))
+        .filter_map(|l| l.split_once('\t'))
+        .find(|(c, _)| c == class)
+        .map(|(_, ids)| ids.split(',').filter_map(|i| i.parse().ok()).collect())
+        .unwrap_or_default()
+}
+
+/// `C_UnitAuras.GetHiddenGroupBuffs()`: the class's (`hidden_group_buffs`).
+fn get_hidden_group_buffs(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let list = vm.new_table();
+    for (i, id) in hidden_group_buffs(vm).into_iter().enumerate() {
+        let _ = vm
+            .heap
+            .table_mut(list)
+            .set(Value::Num((i + 1) as f64), Value::Num(id));
+    }
+    Ok(vec![Value::Table(list)])
+}
+
+/// `HIDDEN_GROUP_BUFFS_CHANGED(list)` (the class's hidden group buffs) and
+/// `GROUP_BUFF_VISUAL_ALERTS_CHANGED({})`.
 pub fn group_buffs_changed(vm: &mut Vm) {
     let list = vm.new_table();
-    let ids = engine(vm).world.hidden_group_buffs.clone();
+    let ids = hidden_group_buffs(vm);
     for (i, id) in ids.into_iter().enumerate() {
         let _ = vm
             .heap
@@ -931,7 +960,7 @@ pub fn control_set_hidden_group_buffs(vm: &mut Vm, c: NativeCall) -> Ret {
             _ => None,
         })
         .collect();
-    engine_mut(vm).world.hidden_group_buffs = ids;
+    engine_mut(vm).world.hidden_group_buffs = Some(ids);
     Ok(vec![])
 }
 
@@ -1334,6 +1363,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
         ("GetMoney", get_money),
         ("IsResting", is_resting),
+        ("C_UnitAuras.GetHiddenGroupBuffs", get_hidden_group_buffs),
         (
             "C_Container.GetContainerItemQuestInfo",
             container_item_quest_info,
