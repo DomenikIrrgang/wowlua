@@ -124,6 +124,8 @@ pub struct Units {
     pub group: Vec<UnitId>,
     pub raid: bool,
     pub bosses: Vec<Option<UnitId>>,
+    /// The player's pet (`pets.rs`).
+    pub pet: Option<UnitId>,
     /// Each restriction type's state: 0 inactive, 1 activating, 2 active.
     pub restrictions: [u8; 6],
     pub lockdown: bool,
@@ -306,6 +308,7 @@ fn base_token<'a>(u: &Units, t: &'a str) -> Option<(Option<UnitId>, &'a str)> {
     };
     for (name, unit) in [
         ("player", Some(PLAYER)),
+        ("pet", u.pet),
         ("target", u.target),
         ("focus", u.focus),
         ("mouseover", u.mouseover),
@@ -370,6 +373,10 @@ pub fn tokens_of(u: &Units, id: UnitId) -> Vec<String> {
     let mut out = Vec::new();
     if id == PLAYER {
         out.push("player".to_string());
+    }
+    // The pet's (unverified: its place in the order).
+    if u.pet == Some(id) {
+        out.push("pet".to_string());
     }
     for (i, n) in u.nameplates.iter().enumerate() {
         if *n == Some(id) {
@@ -800,10 +807,12 @@ fn unit_selection_color(vm: &mut Vm, c: NativeCall) -> Ret {
     ])
 }
 
-/// `UnitPlayerControlled`: a player (recorded; pets unverified).
+/// `UnitPlayerControlled`: a player (recorded) or the player's pet
+/// (unverified).
 fn unit_player_controlled(vm: &mut Vm, c: NativeCall) -> Ret {
+    let pet = unit_arg(vm, &c, 1).is_some_and(|id| engine(vm).units.pet == Some(id));
     with_unit_or(vm, &c, Value::Bool(false), |_, u| {
-        vec![Value::Bool(u.player)]
+        vec![Value::Bool(u.player || pet)]
     })
 }
 
@@ -1299,6 +1308,7 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("setSpellFocus", crate::tradeskill::control_spell_focus),
         ("interact", crate::quests::control_interact),
         ("die", crate::death::control_die),
+        ("resurrect", crate::death::control_resurrect),
         ("setThreat", control_set_threat),
         ("raiseSkill", control_raise_skill),
         ("leaveCombat", control_leave_combat),

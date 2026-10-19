@@ -284,9 +284,13 @@ fn zone_pvp_info(vm: &mut Vm, _c: NativeCall) -> Ret {
     }
 }
 
-/// The continent the player is on (its name and ID; recorded after a
-/// Hearthstone: "Kalimdor", 1), else outside any: the 11 results empty.
+/// The instance the player is in (`encounters.rs`); else the continent
+/// the player is on (its name and ID; recorded after a Hearthstone:
+/// "Kalimdor", 1), else outside any: the 11 results empty.
 fn instance_info(vm: &mut Vm, _c: NativeCall) -> Ret {
+    if let Some(info) = crate::encounters::instance_info(vm) {
+        return Ok(info);
+    }
     let (empty, none) = (vm.str(""), vm.str("none"));
     let zero = Value::Num(0.0);
     let (name, id) = match engine(vm).world.character.position.instance.clone() {

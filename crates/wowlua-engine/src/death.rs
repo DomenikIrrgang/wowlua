@@ -42,6 +42,8 @@ pub struct Death {
     pub ghost_aura: f64,
     /// Deaths so far (the death link's number).
     pub deaths: u32,
+    /// A resurrection offered to the player: by whom, the health it gives.
+    pub offer: Option<(units::UnitId, f64)>,
 }
 
 fn fire(vm: &mut Vm, e: &str, args: &[Value]) {
@@ -285,6 +287,121 @@ fn revived(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `caster:resurrect(target, { health })`: another's resurrection spell
+/// landing (unverified throughout: no recording). On the dead player: an
+/// offer, `RESURRECT_REQUEST(name)` (Blizzard's popup; `AcceptResurrect`
+/// takes it, a round trip later alive with `health`, half the maximum by
+/// default, as `RetrieveCorpse`'s: `PLAYER_ALIVE`, or `PLAYER_UNGHOST` for
+/// a ghost). On another dead unit: alive at once with `health`
+/// (`UNIT_HEALTH`, `UNIT_FLAGS`).
+pub fn control_resurrect(vm: &mut Vm, c: NativeCall) -> Ret {
+    let caster = units::this(vm, &c)?;
+    let Some(target) = units::handle_of(vm, c.arg(2)) else {
+        return Err(vm.error("resurrect: a unit to resurrect expected"));
+    };
+    let health = match c.arg(3) {
+        Value::Table(t) => {
+            let k = vm.str("health");
+            match vm.heap.table(t).get(k) {
+                Value::Num(n) => Some(n),
+                _ => None,
+            }
+        }
+        _ => None,
+    };
+    let (is_dead, max) = {
+        let u = &engine(vm).units.list[target.0];
+        (u.dead || u.ghost, u.health_max)
+    };
+    if !is_dead {
+        return Err(vm.error("resurrect: the unit is alive"));
+    }
+    let health = health
+        .unwrap_or((max / 2.0).floor())
+        .clamp(1.0, max.max(1.0));
+    if target == PLAYER {
+        engine_mut(vm).world.death.offer = Some((caster, health));
+        let name = engine(vm).units.list[caster.0].name.clone();
+        let name = vm.str(&name);
+        fire(vm, "RESURRECT_REQUEST", &[name]);
+        return Ok(vec![]);
+    }
+    {
+        let u = &mut engine_mut(vm).units.list[target.0];
+        u.dead = false;
+        u.ghost = false;
+        u.health = health;
+    }
+    units::fire_unit(vm, "UNIT_HEALTH", target, &[]);
+    units::fire_unit(vm, "UNIT_FLAGS", target, &[]);
+    Ok(vec![])
+}
+
+/// `ResurrectGetOfferer()`: the offer's caster's name, else nil (recorded
+/// without an offer).
+fn resurrect_get_offerer(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let Some((caster, _)) = engine(vm).world.death.offer else {
+        return Ok(vec![Value::Nil]);
+    };
+    let name = engine(vm).units.list[caster.0].name.clone();
+    Ok(vec![vm.str(&name)])
+}
+
+/// `AcceptResurrect()`: alive a round trip later.
+fn accept_resurrect(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let Some((_, health)) = engine(vm).world.death.offer else {
+        return Ok(vec![]);
+    };
+    let delay = crate::clock::server_delay(vm);
+    let later = vm.native_with(
+        "deathResurrected",
+        resurrected as NativeFn,
+        vec![Value::Num(health)],
+    );
+    crate::clock::after_engine(vm, delay, later);
+    Ok(vec![])
+}
+
+fn resurrected(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Num(health) = c.upvals[0] else {
+        return Ok(vec![]);
+    };
+    if engine_mut(vm).world.death.offer.take().is_none() || !(dead(vm) || ghost(vm)) {
+        return Ok(vec![]);
+    }
+    let was_ghost = ghost(vm);
+    {
+        let p = &mut engine_mut(vm).units.list[PLAYER.0];
+        p.dead = false;
+        p.ghost = false;
+        p.health = health;
+    }
+    engine_mut(vm).world.death.died_at = None;
+    let event = if was_ghost {
+        "PLAYER_UNGHOST"
+    } else {
+        "PLAYER_ALIVE"
+    };
+    fire(vm, event, &[]);
+    units::fire_unit(vm, "UNIT_FLAGS", PLAYER, &[]);
+    if crate::actions::usability_changed(vm) {
+        fire(vm, "ACTIONBAR_UPDATE_USABLE", &[]);
+    }
+    units::fire_unit(vm, "UNIT_HEALTH", PLAYER, &[]);
+    fire(vm, "UPDATE_SHAPESHIFT_USABLE", &[]);
+    Ok(vec![])
+}
+
+/// `DeclineResurrect()`, `TimeoutResurrect()`: the offer gone.
+fn decline_resurrect(vm: &mut Vm, _c: NativeCall) -> Ret {
+    engine_mut(vm).world.death.offer = None;
+    Ok(vec![])
+}
+
+fn no(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(false)])
+}
+
 /// `GetReleaseTimeRemaining()`: 360 s from the death (unverified: the
 /// count down), 0 alive.
 fn get_release_time_remaining(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -317,5 +434,13 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetReleaseTimeRemaining", get_release_time_remaining),
         ("GetCorpseRecoveryDelay", zero),
         ("HasNoReleaseAura", has_no_release_aura),
+        ("ResurrectGetOfferer", resurrect_get_offerer),
+        ("AcceptResurrect", accept_resurrect),
+        ("DeclineResurrect", decline_resurrect),
+        ("TimeoutResurrect", decline_resurrect),
+        // No resurrection sickness, no timer (recorded without an offer;
+        // with one unverified).
+        ("ResurrectHasSickness", no),
+        ("ResurrectHasTimer", no),
     ]
 }

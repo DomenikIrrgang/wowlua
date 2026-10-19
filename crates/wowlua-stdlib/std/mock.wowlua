@@ -54,6 +54,12 @@ export interface MockUnit
     --- releases the spirit (`RepopMe`), `mock.nearCorpse` and its popup
     --- take the corpse back (`RetrieveCorpse`).
     function die(opts: { durability?: table, ghostAura?: number }?)
+    --- Its resurrection spell lands on dead `target` (`health`: what it
+    --- comes back with, half its maximum by default). The player is
+    --- offered it (`RESURRECT_REQUEST`, Blizzard's popup; accepted, alive
+    --- a round trip later: `PLAYER_ALIVE`); another unit lives at once
+    --- (`UNIT_HEALTH`, `UNIT_FLAGS`).
+    function resurrect(target: MockUnit, opts: { health?: number }?)
     function showNameplate()
     function hideNameplate()
     function despawn()
@@ -111,7 +117,9 @@ export interface MockUnit
     function setMoney(copper: number)
     --- The player's stats given (the others stay), each change told by its
     --- event (`UNIT_STATS`, `PLAYER_XP_UPDATE`, …):
-    --- `setStats({ xp = 0, stat = { [1] = { 67, 67, 22, 0 } } })`.
+    --- `setStats({ xp = 0, stat = { [1] = { 67, 67, 22, 0 } } })`. The
+    --- player's pet's (`mock.setPet`) too: the unit's own stats
+    --- (`UnitDamage("pet")`, …).
     function setStats(stats: PlayerStats)
     --- The player's item in an inventory slot (`nil`: none):
     --- `PLAYER_EQUIPMENT_CHANGED`, `UNIT_INVENTORY_CHANGED`.
@@ -510,13 +518,60 @@ export const group = {
     end,
 }
 
---- Enters a restricted instance of `kind` (`"raid"`, `"party"`, `"pvp"`, …).
-export function enterInstance(kind: string)
-    engine().enterInstance(kind)
+--- Enters a restricted instance of `kind` (`"raid"`, `"party"`, `"pvp"`, …):
+--- `IsInInstance`, `GetInstanceInfo` (`opts`: its `name`, `instanceID`,
+--- `difficultyID`, `difficultyName`, `maxPlayers`; a normal dungeon's or
+--- raid's by default), `UPDATE_INSTANCE_INFO`, `PLAYER_DIFFICULTY_CHANGED`.
+export function enterInstance(kind: string?, opts: { name?: string, instanceID?: number, difficultyID?: number, difficultyName?: string, maxPlayers?: number }?)
+    engine().enterInstance(kind, opts)
 end
 
+--- Leaves the instance (an encounter under way ends, not won).
 export function leaveInstance()
     engine().leaveInstance()
+end
+
+--- A boss encounter begins: `ENCOUNTER_START(id, name, difficultyID,
+--- groupSize)` (the instance's by default), then the `bosses` on the
+--- `boss1`.. tokens (Blizzard's boss frames) and
+--- `INSTANCE_ENCOUNTER_ENGAGE_UNIT`;
+--- `C_InstanceEncounter.IsEncounterInProgress()` true.
+export function startEncounter(data: { id: number, name: string, difficultyID?: number, groupSize?: number, bosses?: MockUnit[] })
+    engine().startEncounter(data)
+end
+
+--- The encounter ends: won (`success`), `BOSS_KILL(id, name)`; then
+--- `ENCOUNTER_END(id, name, difficultyID, groupSize, success, status)`
+--- (each boss's creature ID, name and health left in percent), the boss
+--- tokens cleared, `INSTANCE_ENCOUNTER_ENGAGE_UNIT`.
+export function endEncounter(success: boolean)
+    engine().endEncounter(success)
+end
+
+--- A slot of the pet's bar (`mock.setPet`'s `actions`): a spell
+--- (`spell`, `name`, `icon`, `autocast`, `autocastAllowed`) or a command
+--- (`token`: `"PET_ACTION_ATTACK"`, …, `texture`: its texture's global).
+export type PetAction = {
+    spell?: number,
+    name?: string,
+    icon?: number | string,
+    autocast?: boolean,
+    autocastAllowed?: boolean,
+    token?: string,
+    texture?: string,
+    active?: boolean,
+}
+
+--- The player's pet (`nil`: dismissed): `UNIT_PET("player")`,
+--- `PET_BAR_UPDATE`, `UNIT_HAPPINESS("pet")`; Blizzard's pet frame and
+--- pet bar. A hunter's (`hunter`, by default) has its `happiness` (1 to
+--- 3, happy by default), `loyalty` and experience (`xp` of `xpMax`); its
+--- bar is a hunter's (attack, follow, stay, four spells, the three modes)
+--- with `actions` in their slots. Called again for the same pet, it
+--- changes what `opts` gives (`UNIT_HAPPINESS`, `UNIT_PET_EXPERIENCE`,
+--- `PET_BAR_UPDATE`).
+export function setPet(pet: MockUnit?, opts: { hunter?: boolean, happiness?: number, loyalty?: string, xp?: number, xpMax?: number, actions?: { [number]: PetAction } }?)
+    engine().setPet(pet, opts)
 end
 
 --- Turns one of the client's addon restrictions on or off.

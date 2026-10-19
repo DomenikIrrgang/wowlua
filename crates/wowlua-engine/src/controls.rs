@@ -338,8 +338,11 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("type", crate::input::control_type),
         ("setModifiers", crate::input::control_set_modifiers),
         ("addToGroup", units::add_to_group),
-        ("enterInstance", units::enter_instance),
-        ("leaveInstance", units::leave_instance),
+        ("enterInstance", crate::encounters::control_enter_instance),
+        ("leaveInstance", crate::encounters::control_leave_instance),
+        ("startEncounter", crate::encounters::control_start),
+        ("endEncounter", crate::encounters::control_end),
+        ("setPet", crate::pets::control_set_pet),
         ("setRestriction", units::set_restriction_control),
     ] {
         let native = vm.native(key, f);

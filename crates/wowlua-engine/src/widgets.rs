@@ -137,6 +137,10 @@ pub struct World {
     pub trainers: crate::trainer::Trainers,
     pub taxis: crate::taxi::Taxis,
     pub death: crate::death::Death,
+    /// The instance the player is in and its encounter (`encounters.rs`).
+    pub encounters: crate::encounters::Encounters,
+    /// The player's pet's state (`pets.rs`).
+    pub pets: crate::pets::Pets,
     /// The class's hidden group buffs (`HIDDEN_GROUP_BUFFS_CHANGED`).
     pub hidden_group_buffs: Option<Vec<f64>>,
     /// The player rests (an inn, a city: `setResting`).
