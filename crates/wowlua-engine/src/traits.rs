@@ -27,7 +27,7 @@
 //!
 //! Unverified: an edge is met by its source at its last rank (the classic
 //! rule; recorded only met at 5 of 5); the unlocked nodes' order (the
-//! recording's 110303, 110305, 110304: here the tree's); a met condition's
+//! recording's 110303, 110305, 110304: here those without edges first); a met condition's
 //! points (the probe's spent points: at most); refunds, rollbacks,
 //! selection nodes; the second stage of a commit (0.5 s after the first in
 //! the legacy recording, 0.07 s in the talents one).
@@ -1097,13 +1097,20 @@ fn purchase_rank(vm: &mut Vm, c: NativeCall) -> Ret {
             }
         }
         // The nodes it unlocked, after the currencies, then its edges'
-        // targets again (recorded: the legacy druid's fifth point).
-        let unlocked: Vec<i64> = before
+        // targets again (recorded: the legacy druid's fifth point). Those
+        // with edges of their own after the others, each in the tree's
+        // order (recorded once: 110303 and 110305, then 110304 with its
+        // edge; unverified, as is any order key the one sample fits).
+        let mut unlocked: Vec<i64> = before
             .iter()
             .zip(after.iter())
             .filter(|((n, a), (_, b))| *n != node && !targets.contains(n) && a != b)
             .map(|((n, _), _)| *n)
             .collect();
+        {
+            let m = model(vm);
+            unlocked.sort_by_key(|n| !m.targets(config, *n).is_empty());
+        }
         if !unlocked.is_empty() {
             for n in unlocked {
                 fire(vm, "TRAIT_NODE_CHANGED", &[Value::Num(n as f64)]);

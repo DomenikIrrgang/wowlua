@@ -8,7 +8,8 @@
 //!
 //! As `/stdtest engine` recorded on WoW Forever 1.60.1 (fixture
 //! `tests/client/forever-camelot-engine.lua`, checked by `wowlua-cli`'s
-//! `tests/engine_probe.rs`): events reach frames in registration order;
+//! `tests/engine_probe.rs`): events reach frames in the order they first
+//! registered one;
 //! `OnShow` / `OnHide` run children first; `SetScript` clears the hooks;
 //! each class has its own method functions; methods check `self` and their
 //! documented arguments first (counting `self` as #1, usage `self:Name(…)`,
@@ -67,11 +68,12 @@ pub struct Widget {
     pub shown: bool,
     /// Registered events, with the units of unit events.
     pub events: HashMap<String, Option<Vec<String>>>,
-    /// When each event was registered (the dispatch order).
-    pub event_order: HashMap<String, u64>,
-    /// `RegisterAllEvents`: when (every event comes, in that place of the
-    /// registration order; the combat log's not, restricted).
+    /// `RegisterAllEvents`: when (every event comes; the combat log's not,
+    /// restricted).
     pub all_events: Option<u64>,
+    /// When it first registered an event, `RegisterAllEvents` too (its
+    /// place in the dispatch order: 0 never).
+    pub first_registration: u64,
     /// `IsProtected`'s second result: protected by a secure template.
     pub explicitly_protected: bool,
     /// Made by Blizzard's secure code (`UseSecureEnvironment`): addon code
@@ -577,8 +579,8 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         text: None,
         attributes,
         protected: false,
-        event_order: HashMap::new(),
         all_events: None,
+        first_registration: 0,
         explicitly_protected: false,
         forbidden: false,
         forbidden_aspects: 0,
@@ -1425,18 +1427,18 @@ fn event_name(vm: &mut Vm, c: &NativeCall, op: &str) -> Result<String, LuaError>
     Ok(e)
 }
 
-/// Registers an event, keeping when it was first registered (frames get
-/// events in registration order); false if it already was.
+/// Registers an event, keeping when the frame first registered one
+/// (frames get events in that order); false if it already was.
 fn register(vm: &mut Vm, id: WidgetId, event: String, units: Option<Vec<String>>) -> bool {
     let world = &mut engine_mut(vm).world;
     world.next_registration += 1;
     let seq = world.next_registration;
     world.listening.insert(id.0);
     let w = &mut world.widgets[id.0];
-    let fresh = !w.events.contains_key(&event);
-    if fresh {
-        w.event_order.insert(event.clone(), seq);
+    if w.first_registration == 0 {
+        w.first_registration = seq;
     }
+    let fresh = !w.events.contains_key(&event);
     w.events.insert(event, units);
     fresh
 }
@@ -1464,7 +1466,6 @@ fn unregister_event(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let e = String::from_utf8_lossy(vm.str_bytes(e)).into_owned();
     let w = &mut engine_mut(vm).world.widgets[id.0];
     w.events.remove(&e);
-    w.event_order.remove(&e);
     Ok(vec![])
 }
 
@@ -1475,6 +1476,9 @@ fn register_all_events(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let seq = world.next_registration;
     world.listening.insert(id.0);
     world.widgets[id.0].all_events = Some(seq);
+    if world.widgets[id.0].first_registration == 0 {
+        world.widgets[id.0].first_registration = seq;
+    }
     Ok(vec![])
 }
 
@@ -1487,7 +1491,6 @@ fn restricted_event(event: &str) -> bool {
 fn unregister_all_events(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let w = &mut engine_mut(vm).world.widgets[id.0];
     w.events.clear();
-    w.event_order.clear();
     w.all_events = None;
     Ok(vec![])
 }
@@ -1521,12 +1524,19 @@ pub fn fire_event(vm: &mut Vm, event: &str, args: &[Value]) {
 
 /// Fires `event` now, batched or not (`fire_event`).
 pub fn fire_now(vm: &mut Vm, event: &str, args: &[Value]) {
+    crate::batch::run_before(vm, event);
     let unit = match args.first() {
         Some(Value::Str(s)) => Some(String::from_utf8_lossy(vm.str_bytes(*s)).into_owned()),
         _ => None,
     };
-    // In registration order (`/stdtest engine order`), among the widgets
-    // that ever registered (the others have no events), in creation order.
+    // In the order the frames first registered an event, whichever
+    // (`/stdtest engine order`: the registrations' order, not the frames'
+    // creation; recorded, `inspect` 11.157: the event registry's frame,
+    // registering `INSPECT_READY` only after the recorder's
+    // `RegisterAllEvents` but registered for others since the UI loaded,
+    // got it first: the talents it loaded told before; ordered by each
+    // event's registration that one fails, with `RegisterAllEvents` frames
+    // last `profession` loses 12 lines).
     let world = &engine(vm).world;
     let mut targets: Vec<(u64, WidgetId)> = world
         .listening
@@ -1537,15 +1547,7 @@ pub fn fire_now(vm: &mut Vm, event: &str, args: &[Value]) {
             Some(Some(units)) => unit.as_ref().is_some_and(|u| units.contains(u)),
             None => w.all_events.is_some() && !restricted_event(event),
         })
-        .map(|(i, w)| {
-            let seq = w
-                .event_order
-                .get(event)
-                .copied()
-                .or(w.all_events)
-                .unwrap_or(0);
-            (seq, WidgetId(i))
-        })
+        .map(|(i, w)| (w.first_registration, WidgetId(i)))
         .collect();
     targets.sort_by_key(|(seq, _)| *seq);
     let targets: Vec<WidgetId> = targets.into_iter().map(|(_, id)| id).collect();

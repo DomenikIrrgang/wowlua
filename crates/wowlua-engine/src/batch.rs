@@ -68,6 +68,10 @@ pub struct Batch {
     checking: bool,
     /// Creatures that turned on the player in a fight, their update owed.
     turns: Vec<usize>,
+    /// A test's functions to run before an event's next firing
+    /// (`beforeEvent`), by the event's name, and how many.
+    before: Option<TableRef>,
+    befores: usize,
 }
 
 /// Whether a creature's turning on the player waits for the frame's end
@@ -232,6 +236,8 @@ pub fn flush(vm: &mut Vm) {
         for unit in std::mem::take(&mut engine_mut(vm).batch.turns) {
             crate::units::told_turn(vm, crate::units::UnitId(unit));
         }
+        // The target's aura states with its update (aurastates.rs).
+        crate::aurastates::tell_owed(vm);
         // The actions' usability first (its `ACTIONBAR_UPDATE_USABLE`
         // batched with the rest).
         match std::mem::take(&mut engine_mut(vm).batch.usability) {
@@ -305,4 +311,48 @@ pub fn control_set(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::
     }
     engine_mut(vm).batch.on = on;
     Ok(vec![])
+}
+
+/// `beforeEvent(name, fn)`: `fn` runs once just before the engine next
+/// fires event `name`: a world event inside a server packet's (recorded:
+/// `mail2` 16.286, another player's death between a taken item's bag
+/// updates and their `BAG_UPDATE_DELAYED`).
+pub fn control_before_event(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
+    let name = vm.check_str(&c, 1)?;
+    let f = c.arg(2);
+    if !matches!(f, Value::Func(_)) {
+        return Err(vm.error("beforeEvent: a function expected"));
+    }
+    let t = match engine(vm).batch.before {
+        Some(t) => t,
+        None => {
+            let t = vm.new_table();
+            widgets::keep_as(vm, "beforeEvent", Value::Table(t));
+            engine_mut(vm).batch.before = Some(t);
+            t
+        }
+    };
+    if vm.heap.table(t).get(Value::Str(name)).is_nil() {
+        engine_mut(vm).batch.befores += 1;
+    }
+    let _ = vm.heap.table_mut(t).set(Value::Str(name), f);
+    Ok(vec![])
+}
+
+/// Before `event` fires: a test's function waiting for it, run once.
+pub fn run_before(vm: &mut Vm, event: &str) {
+    if engine(vm).batch.befores == 0 {
+        return;
+    }
+    let Some(t) = engine(vm).batch.before else {
+        return;
+    };
+    let k = vm.str(event);
+    let f = vm.heap.table(t).get(k);
+    if f.is_nil() {
+        return;
+    }
+    let _ = vm.heap.table_mut(t).set(k, Value::Nil);
+    engine_mut(vm).batch.befores -= 1;
+    vm.call_from_engine(f, &[]);
 }

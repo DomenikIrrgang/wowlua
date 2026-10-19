@@ -19,13 +19,16 @@ export interface MockUnit
     --- hostile or neutral unit, else the friend; `nil` clears it):
     --- `PLAYER_SOFT_ENEMY_CHANGED`, `…_FRIEND_CHANGED`, `…_INTERACT_CHANGED`.
     function softTarget(unit: MockUnit?, kind: ("enemy" | "friend" | "interact")?)
-    function damage(amount: number)
-    function heal(amount: number)
+    --- Its health down or up; `statesAfter`: its aura states' change told
+    --- that many seconds later (the server's next update), else at once.
+    function damage(amount: number, opts: { statesAfter?: number | boolean }?)
+    function heal(amount: number, opts: { statesAfter?: number | boolean }?)
     --- Dies (`UNIT_DIED`); `by` the player or the group: `PARTY_KILL` and
     --- the killing blow's `UNIT_COMBAT` (`amount`, else the health left;
     --- `school`, 1 physical by default); `lootable`: `UNIT_LOOT`. Its
-    --- auras go with it.
-    function kill(opts: { by?: MockUnit, lootable?: boolean, amount?: number, school?: number }?)
+    --- auras go with it; `flagsAfter`: the player's flags told these
+    --- seconds after (the server's, still in combat).
+    function kill(opts: { by?: MockUnit, lootable?: boolean, amount?: number, school?: number, flagsAfter?: number }?)
     --- Its power now (`UNIT_POWER_UPDATE`); `frequent`: a regeneration
     --- tick's, `UNIT_POWER_FREQUENT` alone.
     function setPower(amount: number, opts: { frequent?: boolean }?)
@@ -40,7 +43,13 @@ export interface MockUnit
     --- `victimPower`: rage), the victim's health, and the combat text
     --- (`UNIT_COMBAT`) a moment later (`textAfter` seconds, 0.4 by
     --- default); `combat = false`: no one put in combat. `kind`: `WOUND` (default), `PARRY`, `DODGE`, `MISS`, `BLOCK`;
-    --- `indicator`: the text's (`"CRITICAL"`, `"GLANCING"`).
+    --- `indicator`: the text's (`"CRITICAL"`, `"GLANCING"`). The victim's
+    --- health's aura states (below 20, 25, 35, 50 percent, above 75, 80:
+    --- `PET_BAR_UPDATE_USABLE`) told with the blow (the target's at the
+    --- frame's end), or `statesAfter` seconds later (`true`: when
+    --- `mock.tellAuraStates` tells it); the player's dodge, parry or block with a
+    --- `procOnAvoid` spell known turns its defensive state on (told the
+    --- same way) for `stateFor` seconds (5 by default).
     --- The player's skill `name` up to `rank` ("Your skill in … has
     --- increased", the stats' events); more `name2, rank2` pairs: skills up
     --- in the same packet (their messages, then the stats' events once).
@@ -50,8 +59,10 @@ export interface MockUnit
     --- `echo`: the target's clearing told back after these seconds;
     --- `xpAfter`: the experience's update after these seconds;
     --- `diesAfter`: with a queued spell's swing, the death, the
-    --- experience's message and the corpse's loot after these seconds).
-    function swing(victim: MockUnit, amount: number, opts: { kind?: string, power?: number, victimPower?: number, speed?: number, textAfter?: number, combat?: boolean, indicator?: string, kill?: { xp?: number, loot?: table, echo?: number | boolean, xpAfter?: number, diesAfter?: number } }?)
+    --- experience's message and the corpse's loot after these seconds;
+    --- `flagsAfter`: the player's `UNIT_FLAGS` these seconds after, as
+    --- for `kill`).
+    function swing(victim: MockUnit, amount: number, opts: { kind?: string, power?: number, victimPower?: number, speed?: number, textAfter?: number, combat?: boolean, indicator?: string, statesAfter?: number | boolean, stateFor?: number, kill?: { xp?: number, loot?: table, echo?: number | boolean, xpAfter?: number, diesAfter?: number, flagsAfter?: number } }?)
     --- The player talks to an NPC: a round trip later its quest dialog
     --- opens (`QUEST_DETAIL` for a quest it offers, `QUEST_PROGRESS` for
     --- one in the log); too far (`setDistance` above 5 yards): the
@@ -92,8 +103,9 @@ export interface MockUnit
     --- (1 physical, 2 holy, …), `indicator` ("CRITICAL"), `kind` ("WOUND",
     --- "HEAL"); `aura`: the victim's aura it updates; `cooldowns = { {
     --- spell, a?, b? } }`: the triggered spells' `SPELL_UPDATE_COOLDOWN`s;
-    --- `spell`: the spell the damage meter counts it under.
-    function hit(victim: MockUnit, amount: number, opts: { school?: number, indicator?: string, kind?: string, aura?: number, cooldowns?: table, spell?: number }?)
+    --- `spell`: the spell the damage meter counts it under; `statesAfter`:
+    --- as for `swing`.
+    function hit(victim: MockUnit, amount: number, opts: { school?: number, indicator?: string, kind?: string, aura?: number, cooldowns?: table, spell?: number, statesAfter?: number | boolean }?)
     --- Starts casting (`UNIT_SPELLCAST_START`, or `CHANNEL_START`); it ends
     --- `castTime` seconds later (the spell data's, else 1.5).
     function castSpell(spellID: number, opts: { castTime?: number, channel?: boolean, notInterruptible?: boolean }?)
@@ -1198,6 +1210,18 @@ end
 --- `UI_ERROR_MESSAGE` with the client's code and text).
 export function gameError(name: string)
     engine().gameError(name)
+end
+
+--- `fn` runs once just before the engine next fires event `name`: a
+--- world event among a server packet's events.
+export function beforeEvent(name: string, fn: () -> ())
+    engine().beforeEvent(name, fn)
+end
+
+--- The server's update owing an aura state change (a blow's
+--- `statesAfter`) comes now, after the moment's other packets.
+export function tellAuraStates()
+    engine().tellAuraStates()
 end
 
 --- A CVar the client changed without telling (the camera's pitch as it

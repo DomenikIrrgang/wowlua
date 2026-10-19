@@ -846,6 +846,10 @@ pub fn control_cast_failed(vm: &mut Vm, c: NativeCall) -> Ret {
     let off = spell_field(vm, id, "offGCD").truthy()
         || crate::actions::has_trait(vm, Value::Num(id), "offGlobalCooldown");
     if !client && !off {
+        // The server's refusal ends the global cooldown the press began
+        // (recorded: `auradeath` 17.005, the slots' cooldowns inactive
+        // after a refusal 0.48 s into it; unverified elsewhere).
+        engine_mut(vm).world.global_cooldown = None;
         cooldown_events(vm, id, GCD_CATEGORY, true);
     }
     crate::widgets::fire_event(vm, "ACTIONBAR_UPDATE_STATE", &[]);

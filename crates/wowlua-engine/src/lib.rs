@@ -11,6 +11,7 @@ pub mod api;
 pub mod args;
 pub mod auction;
 pub mod auras;
+pub mod aurastates;
 pub mod bank;
 pub mod bars;
 pub mod batch;

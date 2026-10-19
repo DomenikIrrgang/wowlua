@@ -80,8 +80,10 @@ local function pick(recipe)
     end))
 end
 -- The wheel made: a cast of 10 s; the window closed meanwhile.
--- Its cast 0.343 s after the click (recorded).
+-- Its cast 0.343 s after the click, its success 9.960 s after the cast,
+-- the item with it, its bags 0.421 s after (recorded).
 e.setLatency(0.343)
+player:craftTimings({ { start = 0.343, success = 9.960, item = 0, bags = 0.421 } })
 at(27.640) press(ProfessionsFrame.CraftingPage.CreateButton)
 at(27.984) e.setLatency(0.345)
 -- The window's list updated mid-cast, its cause unknown (recorded).
