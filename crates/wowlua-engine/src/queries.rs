@@ -80,6 +80,24 @@ fn not_that_item(_vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![if item { Value::Bool(false) } else { Value::Nil }])
 }
 
+/// `IsInventoryItemProfessionBag(unit, slot)`: a worn bag is no
+/// profession bag; an empty slot answers nothing (recorded).
+fn is_inventory_item_profession_bag(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Num(slot) = c.arg(2) else {
+        return Ok(vec![]);
+    };
+    let worn = engine(vm)
+        .world
+        .character
+        .equipment
+        .contains_key(&(slot as i64));
+    Ok(if worn {
+        vec![Value::Bool(false)]
+    } else {
+        vec![]
+    })
+}
+
 fn no(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(false)])
 }
@@ -417,6 +435,18 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("UnitGetTotalAbsorbs", no_absorbs),
         ("UnitGetTotalHealAbsorbs", no_absorbs),
         ("UnitIsInInteractRange", unit_exists),
+        // No new appearances, glyphs, press-and-hold spells, spell
+        // overlays, waypoint texts (recorded, every call).
+        ("C_TransmogCollection.IsNewAppearance", no),
+        ("HasAttachedGlyph", no),
+        ("IsSpellValidForPendingGlyph", nil),
+        ("C_Spell.IsPressHoldReleaseSpell", no),
+        ("C_SpellActivationOverlay.IsSpellOverlayed", no),
+        ("C_QuestLog.GetNextWaypointText", nothing),
+        (
+            "IsInventoryItemProfessionBag",
+            is_inventory_item_profession_bag,
+        ),
         // Nothing of these for any unit yet (recorded for the player
         // alone and absent party members).
         ("UnitHasVehicleUI", no),

@@ -116,6 +116,54 @@ fn has_action(vm: &mut Vm, c: NativeCall) -> Ret {
     })
 }
 
+/// `C_ActionBar.IsItemAction(slot)`: an item there (recorded).
+fn is_item_action(vm: &mut Vm, c: NativeCall) -> Ret {
+    let item = slot(&c)
+        .and_then(|s| action(vm, s))
+        .is_some_and(|a| a.kind == "item");
+    Ok(vec![Value::Bool(item)])
+}
+
+/// The gamepad bars' first slot (the items recording: slot 184 mirrors
+/// 12).
+const GAMEPAD_SLOTS: i64 = 181;
+
+/// `C_ActionBar.FindSpellActionButtons(spellID [, setToSearch])`: the slots
+/// holding the spell, in order, or nothing; `Enum.ActionBarSet` All (3, the
+/// default), Mkb (1: not the gamepad bars, recorded: slot 200 left out),
+/// Gamepad (2, unverified). Unverified: overridden spells.
+fn find_spell_action_buttons(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(spell) = num(c.arg(1)) else {
+        return Ok(vec![]);
+    };
+    let set = num(c.arg(2)).unwrap_or(3.0);
+    let slots: Vec<i64> = engine(vm)
+        .world
+        .character
+        .actions
+        .iter()
+        .filter(|(_, a)| a.kind == "spell" && num(a.id) == Some(spell))
+        .map(|(s, _)| *s)
+        .filter(|s| match set as i64 {
+            1 => *s < GAMEPAD_SLOTS,
+            2 => *s >= GAMEPAD_SLOTS,
+            3 => true,
+            _ => false,
+        })
+        .collect();
+    if slots.is_empty() {
+        return Ok(vec![]);
+    }
+    let list = vm.new_table();
+    for (i, s) in slots.into_iter().enumerate() {
+        let _ = vm
+            .heap
+            .table_mut(list)
+            .set(Value::Num(i as f64 + 1.0), Value::Num(s as f64));
+    }
+    Ok(vec![Value::Table(list)])
+}
+
 fn get_action_info(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(match slot(&c).and_then(|s| action(vm, s)) {
         Some(a) => vec![vm.str(&a.kind), a.id, a.sub_type],
@@ -450,6 +498,11 @@ pub fn control_set_action(vm: &mut Vm, c: NativeCall) -> Ret {
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
         ("C_ActionBar.HasAction", has_action),
+        ("C_ActionBar.IsItemAction", is_item_action),
+        (
+            "C_ActionBar.FindSpellActionButtons",
+            find_spell_action_buttons,
+        ),
         ("HasAction", has_action),
         ("GetActionInfo", get_action_info),
         ("C_ActionBar.GetActionTexture", get_action_texture),
