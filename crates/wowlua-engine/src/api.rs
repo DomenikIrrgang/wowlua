@@ -144,6 +144,12 @@ pub fn api(flavor: &str) -> Option<&'static Api> {
             class.widget = Some(name.to_string());
         }
     }
+    // A nameplate (the client makes them in code, `NAME_PLATE_CREATED`):
+    // a frame with the hit-test methods (unverified: no probe of its type).
+    let class = parsed.classes.entry("NamePlate".to_string()).or_default();
+    if class.bases.is_empty() {
+        class.bases.push("Frame".to_string());
+    }
     // A model scene's actor has its base's methods (`ClearModel`, `Show`)
     // and an object's (`GetParent`: its scene); the documentation gives
     // neither base.

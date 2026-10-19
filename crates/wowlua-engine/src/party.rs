@@ -376,11 +376,72 @@ fn nothing(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `GetRaidRosterInfo(index)`: name, rank, subgroup, level, class, file
+/// name, zone, online, dead, role, master looter, combat role; nothing out
+/// of a raid or past its members. Unverified (no raid recording): the
+/// player first, then the members in joining order, five to a subgroup;
+/// the player's rank 2 when leading, else 0; every member online in the
+/// player's zone, without a role.
+fn get_raid_roster_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    let index = match c.arg(1) {
+        Value::Num(n) if n >= 1.0 && n.fract() == 0.0 => n as usize,
+        _ => return Ok(vec![]),
+    };
+    let unit = {
+        let u = &engine(vm).units;
+        if !u.raid || u.group.is_empty() {
+            return Ok(vec![]);
+        }
+        match index {
+            1 => PLAYER,
+            i => match u.group.get(i - 2) {
+                Some(&id) => id,
+                None => return Ok(vec![]),
+            },
+        }
+    };
+    let rank = if unit == PLAYER && party(vm).leader {
+        2.0
+    } else {
+        0.0
+    };
+    let (name, level, class_name, class, dead) = {
+        let u = &engine(vm).units.list[unit.0];
+        (
+            u.name.clone(),
+            u.level,
+            if u.player {
+                u.class_name.clone()
+            } else {
+                u.name.clone()
+            },
+            u.class.clone(),
+            u.dead,
+        )
+    };
+    let zone = engine(vm).world.character.position.zone.clone();
+    Ok(vec![
+        vm.str(&name),
+        Value::Num(rank),
+        Value::Num(((index - 1) / 5 + 1) as f64),
+        Value::Num(level),
+        vm.str(&class_name),
+        vm.str(&class),
+        vm.str(&zone),
+        Value::Bool(true),
+        Value::Bool(dead),
+        Value::Nil,
+        Value::Bool(false),
+        vm.str("NONE"),
+    ])
+}
+
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
         ("C_PartyInfo.InviteUnit", invite_unit),
         ("InviteUnit", invite_unit),
         ("UnitIsGroupLeader", unit_is_group_leader),
+        ("GetRaidRosterInfo", get_raid_roster_info),
         ("FollowUnit", follow_unit),
         ("InitiateTrade", initiate_trade),
         ("CloseTrade", close_trade),

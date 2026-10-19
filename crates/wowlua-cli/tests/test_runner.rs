@@ -1445,6 +1445,260 @@ end
     assert!(text.contains("1 passed, 0 failed"), "{text}");
 }
 
+/// A test file run with Blizzard's UI loaded: its output, after asserting
+/// it passed (`summary`).
+fn blizzard_ui_test(file: &str, source_text: &str, summary: &str) {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");
+    if !source.join("camelot/Interface").exists() {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    }
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            ("src/main.wowlua", "print(\"loaded\")\n"),
+            (file, source_text),
+        ],
+    );
+    let manifest = dir.path().join("wowlua.json");
+    let text = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        text.replacen('{', r#"{ "test": { "blizzard-ui": true },"#, 1),
+    )
+    .unwrap();
+    let out = wowlua(dir.path())
+        .arg("test")
+        .env("WOWLUA_UI_SOURCE", &source)
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.status.success(), "{text}");
+    assert!(text.contains(summary), "{text}");
+}
+
+/// A group's fight's helpers: a member of a class (a player character at
+/// the player's level, in the group), buffs from one on all, debuffs from
+/// several on each mob. (No recording: a synthetic fight; what the engine
+/// does is what its modules model, unverified beyond them.)
+const GROUP_FIGHT: &str = r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+local function member(name: string, class: string, classID: number, powerType: number, raid: boolean?): any
+    local u = mock.spawnUnit({
+        name = name, class = class, classID = classID, level = 20, reaction = "friendly", player = true,
+        health = 900, maxHealth = 1000, powerType = powerType, power = 500, maxPower = 1000,
+    })
+    mock.group:add(u, raid)
+    return u
+end
+
+local function mobs(n: number): any[]
+    local out = {}
+    for i = 1, n do
+        out[i] = mock.spawnUnit({ name = `Defias Thug {i}`, level = 19, reaction = "hostile", health = 800, maxHealth = 800 })
+        out[i]:showNameplate()
+        mock.nextFrame(2)
+        -- Blizzard's nameplate for it.
+        local plate = C_NamePlate.GetNamePlateForUnit(`nameplate{i}`) :: any
+        expect(plate.UnitFrame.unit).toBe(`nameplate{i}`)
+        expect(plate.UnitFrame.name:GetText()).toBe(`Defias Thug {i}`)
+    end
+    expect(#C_NamePlate.GetNamePlates()).toBe(n)
+    return out
+end
+
+local function auras(unit: string, filter: string): number
+    local n = 0
+    while C_UnitAuras.GetAuraDataByIndex(unit, n + 1, filter) do n = n + 1 end
+    return n
+end
+
+--- The whole group's fight: buffs from a caster on everyone, debuffs from
+--- each member on every mob, casts, hits and heals, a member's death,
+--- target switches among the group and the mobs.
+local function fight(p: any, group: any[], enemies: any[])
+    local everyone = { p }
+    for _, u in ipairs(group) do everyone[#everyone + 1] = u end
+    local buffs = {
+        { spellId = 1243, name = "Power Word: Fortitude", duration = 1800 },
+        { spellId = 1459, name = "Arcane Intellect", duration = 1800 },
+        { spellId = 1126, name = "Mark of the Wild", duration = 1800 },
+        { spellId = 19740, name = "Blessing of Might", duration = 300 },
+        { spellId = 139, name = "Renew", duration = 15 },
+    }
+    for i, buff in ipairs(buffs) do
+        local caster = group[((i - 1) % #group) + 1]
+        for _, u in ipairs(everyone) do
+            u:applyAura({ spellId = buff.spellId, name = buff.name, duration = buff.duration, source = caster })
+        end
+        mock.nextFrame(2)
+    end
+    local debuffs = {
+        { spellId = 772, name = "Rend", duration = 15 },
+        { spellId = 589, name = "Shadow Word: Pain", duration = 18, dispelName = "Magic" },
+        { spellId = 172, name = "Corruption", duration = 18, dispelName = "Magic" },
+        { spellId = 8921, name = "Moonfire", duration = 12, dispelName = "Magic" },
+        { spellId = 1978, name = "Serpent Sting", duration = 15, dispelName = "Poison" },
+        { spellId = 7386, name = "Sunder Armor", duration = 30, applications = 3 },
+    }
+    expect(auras("player", "HELPFUL")).toBe(#buffs)
+    for i = 1, #group do
+        local token = IsInRaid() and `raid{i + 1}` or `party{i}`
+        expect(auras(token, "HELPFUL")).toBe(#buffs)
+    end
+    p:target(enemies[1])
+    mock.nextFrame(10)
+    local targetFrame = (_G :: any).TargetFrame
+    expect(targetFrame:IsShown()).toBe(true)
+    expect(UnitName("target")).toBe("Defias Thug 1")
+    for i, u in ipairs(group) do
+        local d = debuffs[((i - 1) % #debuffs) + 1]
+        for _, mob in ipairs(enemies) do
+            mob:applyAura({ spellId = d.spellId, name = d.name, duration = d.duration, harmful = true,
+                source = u, dispelName = d.dispelName, applications = d.applications })
+        end
+        u:castSpell(116, { castTime = 0.5 })
+        mock.advanceTime(0.2)
+        mock.nextFrame(3)
+    end
+    -- (Tainted code reads no aura in combat: counted before the pull.)
+    for i = 1, #enemies do
+        expect(auras(`nameplate{i}`, "HARMFUL")).toBe(#group)
+    end
+    p:enterCombat()
+    mock.nextFrame(10)
+    -- A debuff on a member, cured.
+    local curse = group[1]:applyAura({ spellId = 18266, name = "Curse of Agony", duration = 24, harmful = true,
+        dispelName = "Curse", source = enemies[2] })
+    mock.nextFrame(5)
+    group[1]:removeAura(curse)
+    -- Hits and heals.
+    for round = 1, 3 do
+        for _, mob in ipairs(enemies) do mob:damage(120) end
+        for _, u in ipairs(everyone) do u:damage(60 * round) end
+        mock.nextFrame(5)
+        for _, u in ipairs(everyone) do u:heal(80) end
+        mock.nextFrame(5)
+    end
+    -- Target switches: each member, each mob, a member's target.
+    for _, u in ipairs(group) do
+        p:target(u)
+        mock.nextFrame(2)
+    end
+    for _, mob in ipairs(enemies) do
+        p:target(mob)
+        mock.nextFrame(2)
+    end
+    p:focus(group[1])
+    mock.nextFrame(3)
+    expect((_G :: any).FocusFrame:IsShown()).toBe(true)
+    -- A member dies; the mobs die.
+    group[#group]:kill()
+    mock.nextFrame(5)
+    for _, mob in ipairs(enemies) do
+        mob:kill({ by = p, lootable = true })
+        mock.nextFrame(3)
+    end
+    p:leaveCombat()
+    mock.nextFrame(30)
+    -- The dead member's buffs gone with it.
+    local dead = IsInRaid() and `raid{#group + 1}` or `party{#group}`
+    expect(auras(dead, "HELPFUL")).toBe(0)
+    expect(auras("player", "HELPFUL")).toBe(#buffs)
+end
+"#;
+
+/// A party's fight with Blizzard's UI, without an error: four members of
+/// four classes, buffs on all, debuffs from each on three mobs, casts,
+/// hits, heals, a death, target switches.
+#[test]
+fn blizzard_ui_through_a_party_fight() {
+    let test = format!(
+        "{GROUP_FIGHT}{}",
+        r#"
+@test("a party's fight")
+local function party()
+    mock.nextFrame(60)
+    local p = mock.player :: any
+    local group = {
+        member("Arnhild", "PRIEST", 5, 0),
+        member("Brenna", "MAGE", 8, 0),
+        member("Corvin", "ROGUE", 4, 3),
+        member("Dalla", "DRUID", 11, 0),
+    }
+    mock.nextFrame(30)
+    expect(IsInGroup()).toBe(true)
+    expect(IsInRaid()).toBe(false)
+    expect(GetNumGroupMembers()).toBe(5)
+    expect(UnitName("party1")).toBe("Arnhild")
+    expect(UnitName("party4")).toBe("Dalla")
+    -- Blizzard's party frames.
+    local frames = (_G :: any).PartyFrame
+    expect(frames.MemberFrame1:IsShown()).toBe(true)
+    expect(frames.MemberFrame1.name:GetText()).toBe("Arnhild")
+    expect(frames.MemberFrame4.name:GetText()).toBe("Dalla")
+    fight(p, group, mobs(3))
+    expect(UnitIsDead("party4")).toBe(true)
+end
+"#
+    );
+    blizzard_ui_test("tests/party.test.wowlua", &test, "1 passed, 0 failed");
+}
+
+/// A raid's fight with Blizzard's UI, without an error: ten members, every
+/// class once (a second warrior), buffs on all, debuffs from each on four
+/// mobs, casts, hits, heals, a death, target switches.
+#[test]
+fn blizzard_ui_through_a_raid_fight() {
+    let test = format!(
+        "{GROUP_FIGHT}{}",
+        r#"
+@test("a raid's fight")
+local function raid()
+    mock.nextFrame(60)
+    local p = mock.player :: any
+    local group = {
+        member("Arnhild", "PALADIN", 2, 0, true),
+        member("Brenna", "HUNTER", 3, 0, true),
+        member("Corvin", "ROGUE", 4, 3, true),
+        member("Dalla", "PRIEST", 5, 0, true),
+        member("Eskil", "SHAMAN", 7, 0, true),
+        member("Freya", "MAGE", 8, 0, true),
+        member("Gunnar", "WARLOCK", 9, 0, true),
+        member("Hilde", "DRUID", 11, 0, true),
+        member("Ivar", "WARRIOR", 1, 1, true),
+    }
+    mock.nextFrame(30)
+    expect(IsInRaid()).toBe(true)
+    expect(GetNumGroupMembers()).toBe(10)
+    expect(UnitName("raid2")).toBe("Arnhild")
+    -- Blizzard's raid frames: two groups of five; the party frames hidden.
+    for i, name in ipairs({ "Player", "Arnhild", "Brenna", "Corvin", "Dalla", "Eskil", "Freya", "Gunnar", "Hilde", "Ivar" }) do
+        local frame = (_G :: any)[`CompactRaidGroup{math.floor((i - 1) / 5) + 1}Member{(i - 1) % 5 + 1}`]
+        expect(frame:IsVisible()).toBe(true)
+        expect(frame.unit).toBe(`raid{i}`)
+        expect(frame.name:GetText()).toBe(name)
+    end
+    expect((_G :: any).PartyFrame.MemberFrame1:IsShown()).toBe(false)
+    fight(p, group, mobs(4))
+    expect(UnitIsDead("raid10")).toBe(true)
+    local name, _, subgroup, _, _, file, _, online, dead = GetRaidRosterInfo(10)
+    expect(name).toBe("Ivar")
+    expect(subgroup).toBe(2)
+    expect(file).toBe("WARRIOR")
+    expect(online).toBe(true)
+    expect(dead).toBe(true)
+end
+"#
+    );
+    blizzard_ui_test("tests/raid.test.wowlua", &test, "1 passed, 0 failed");
+}
+
 /// Every panel's key binding with Blizzard's UI, opened and closed, as the
 /// fresh character (the default) and as the recorded one (its profile):
 /// not a single Blizzard error, nothing refused.

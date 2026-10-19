@@ -196,10 +196,6 @@ pub fn recorded_call(vm: &mut Vm, c: NativeCall) -> Ret {
 
 // ------------------------------------------------- the neutral world
 
-fn nothing(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Nil])
-}
-
 fn no(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(false)])
 }
@@ -574,8 +570,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_PetBattles.GetSpeed", zero),
         ("C_PetBattles.GetLevel", zero),
         ("C_PetBattles.GetXP", zeros),
-        ("C_NamePlate.GetNamePlateForUnit", nothing),
-        ("C_NamePlate.GetNamePlates", empty_list),
         ("C_LFGListRoles.GetSavedRoles", saved_roles),
         ("GetGroupMemberCounts", group_member_counts),
         ("GetNetStats", net_stats),

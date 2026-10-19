@@ -108,6 +108,8 @@ pub struct Units {
     /// The NPC the player talks to (`npc`: a vendor).
     pub npc: Option<UnitId>,
     pub nameplates: Vec<Option<UnitId>>,
+    /// Each nameplate slot's frame, made the first time the slot is used.
+    pub nameplate_frames: Vec<widgets::WidgetId>,
     /// The group without the player, in order; a raid when `raid`.
     pub group: Vec<UnitId>,
     pub raid: bool,
@@ -1079,6 +1081,8 @@ pub fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
         ("UnitCanAssist", unit_can_assist),
         ("UnitInParty", unit_in_party),
         ("UnitInRaid", unit_in_raid),
+        ("C_NamePlate.GetNamePlateForUnit", get_name_plate_for_unit),
+        ("C_NamePlate.GetNamePlates", get_name_plates),
         ("IsInGroup", is_in_group),
         ("TargetUnit", target_unit),
         (
@@ -1839,6 +1843,7 @@ pub(crate) fn died(vm: &mut Vm, me: UnitId, lootable: bool) {
         fire(vm, "PLAYER_TARGET_DIED", &[]);
         clear_target(vm);
     }
+    crate::auras::died(vm, me);
     if !instance {
         loot(vm);
     }
@@ -2322,9 +2327,68 @@ fn control_show_nameplate(vm: &mut Vm, c: NativeCall) -> Ret {
             }
         }
     };
+    // A slot's first use makes its frame: `NAME_PLATE_CREATED(frame)` in
+    // the same frame as, and before, its `NAME_PLATE_UNIT_ADDED` (recorded,
+    // the auction scenario). Its name and parent are unverified.
+    if engine(vm).units.nameplate_frames.len() <= slot {
+        let world = engine(vm)
+            .world
+            .widgets
+            .iter()
+            .position(|w| w.name.as_deref() == Some("WorldFrame"))
+            .map(widgets::WidgetId);
+        let frame = widgets::create(
+            vm,
+            "NamePlate",
+            Some(format!("NamePlate{}", slot + 1)),
+            world,
+        );
+        let id = widgets::widget_of(vm, frame).expect("a widget");
+        engine_mut(vm).world.widgets[id.0].frame = true;
+        engine_mut(vm).units.nameplate_frames.push(id);
+        fire(vm, "NAME_PLATE_CREATED", &[frame]);
+    }
     let token = vm.str(&format!("nameplate{}", slot + 1));
     fire(vm, "NAME_PLATE_UNIT_ADDED", &[token]);
     Ok(vec![Value::Num(slot as f64 + 1.0)])
+}
+
+/// `C_NamePlate.GetNamePlateForUnit(unit)`: the frame of the nameplate the
+/// unit is on, or nil.
+fn get_name_plate_for_unit(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(id) = unit_arg(vm, &c, 1) else {
+        return Ok(vec![]);
+    };
+    let u = &engine(vm).units;
+    let frame = u
+        .nameplates
+        .iter()
+        .position(|n| *n == Some(id))
+        .and_then(|i| u.nameplate_frames.get(i));
+    Ok(match frame {
+        Some(f) => vec![Value::Table(engine(vm).world.widgets[f.0].table)],
+        None => vec![],
+    })
+}
+
+/// `C_NamePlate.GetNamePlates()`: the frames of the nameplates shown, in
+/// slot order.
+fn get_name_plates(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let frames: Vec<Value> = {
+        let e = engine(vm);
+        let u = &e.units;
+        u.nameplates
+            .iter()
+            .zip(&u.nameplate_frames)
+            .filter(|(n, _)| n.is_some())
+            .map(|(_, f)| Value::Table(e.world.widgets[f.0].table))
+            .collect()
+    };
+    let list = vm.new_table();
+    for (i, f) in frames.into_iter().enumerate() {
+        let _ = vm.heap.table_mut(list).set(Value::Num(i as f64 + 1.0), f);
+    }
+    Ok(vec![Value::Table(list)])
 }
 
 fn control_hide_nameplate(vm: &mut Vm, c: NativeCall) -> Ret {

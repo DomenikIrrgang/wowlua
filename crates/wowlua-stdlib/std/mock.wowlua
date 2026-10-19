@@ -458,10 +458,11 @@ export function setRenown(factionID: number, level: number)
     engine().setRenown(factionID, level)
 end
 
---- The player's group: `mock.group:add(unit)` (`partyN`, `raidN`).
+--- The player's group: `mock.group:add(unit, raid?)` (`partyN`; with
+--- `raid`, the group a raid: `raidN`).
 export const group = {
-    add = function(_: any, unit: MockUnit)
-        engine().addToGroup(unit)
+    add = function(_: any, unit: MockUnit, raid: boolean?)
+        engine().addToGroup(unit, raid)
     end,
 }
 

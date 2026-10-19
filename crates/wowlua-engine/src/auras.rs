@@ -275,6 +275,21 @@ pub fn remove(vm: &mut Vm, unit: UnitId, id: f64) {
     }
 }
 
+/// A unit's death takes its auras (unverified: no recording has a unit
+/// dying with one; an update for each, in the order they were applied).
+pub fn died(vm: &mut Vm, unit: UnitId) {
+    let gone: Vec<f64> = engine(vm)
+        .units
+        .auras
+        .iter()
+        .filter(|a| a.unit == unit)
+        .map(|a| a.instance)
+        .collect();
+    for id in gone {
+        remove(vm, unit, id);
+    }
+}
+
 /// `unit:removeAura(instanceID)`.
 pub fn control_remove(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = units::this(vm, &c)?;
