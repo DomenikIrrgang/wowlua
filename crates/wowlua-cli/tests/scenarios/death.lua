@@ -22,11 +22,13 @@ player:setDurability(7, 24, 25)
 player:setDurability(8, 16, 16)
 player:setDurability(16, 19, 20)
 player:setDurability(17, 20, 20)
-local u_69_cd4e8eb2c4 = e.spawnUnit({ name = "Timber Wolf", guid = "Creature-0-6782-0-7-69-CD4E8EB2C4", npcID = 69, level = 2, reaction = "neutral", sex = 1, class = "WARRIOR", classID = 1, powerType = 1, creatureType = "Beast", creatureTypeID = 1, creatureFamily = "Wolf", creatureFamilyID = 1, health = 1, maxHealth = 1 })
-local u_299_cd4e8eb2c4 = e.spawnUnit({ name = "Young Wolf", guid = "Creature-0-6782-0-7-299-CD4E8EB2C4", npcID = 299, level = 1, reaction = "neutral", sex = 1, class = "WARRIOR", classID = 1, powerType = 1, creatureType = "Beast", creatureTypeID = 1, creatureFamily = "Wolf", creatureFamilyID = 1, health = 6, maxHealth = 6 })
-local u_6_9adbb50a8f = e.spawnUnit({ name = "Kobold Vermin", guid = "Creature-0-6782-0-7-6-9ADBB50A8F", npcID = 6, level = 2, reaction = "hostile", sex = 1, class = "WARRIOR", classID = 1, powerType = 1, creatureType = "Humanoid", creatureTypeID = 7, health = 6, maxHealth = 6 })
-local u_6_f4dca45d75 = e.spawnUnit({ name = "Kobold Vermin", guid = "Creature-0-6782-0-7-6-F4DCA45D75", npcID = 6, level = 2, reaction = "hostile", sex = 1, class = "WARRIOR", classID = 1, powerType = 1, creatureType = "Humanoid", creatureTypeID = 7, health = 7, maxHealth = 7 })
-local u_6_65112a2818 = e.spawnUnit({ name = "Kobold Vermin", guid = "Creature-0-6782-0-7-6-65112A2818", npcID = 6, level = 1, reaction = "hostile", sex = 1, class = "WARRIOR", classID = 1, powerType = 1, creatureType = "Humanoid", creatureTypeID = 7, health = 5, maxHealth = 5 })
+-- The creatures' health (secret in the recording; each alive to the
+-- end, unrecorded).
+local u_69_cd4e8eb2c4 = e.spawnUnit({ name = "Timber Wolf", guid = "Creature-0-6782-0-7-69-CD4E8EB2C4", npcID = 69, level = 2, reaction = "neutral", sex = 1, class = "WARRIOR", classID = 1, powerType = 1, creatureType = "Beast", creatureTypeID = 1, creatureFamily = "Wolf", creatureFamilyID = 1, health = 40, maxHealth = 40 })
+local u_299_cd4e8eb2c4 = e.spawnUnit({ name = "Young Wolf", guid = "Creature-0-6782-0-7-299-CD4E8EB2C4", npcID = 299, level = 1, reaction = "neutral", sex = 1, class = "WARRIOR", classID = 1, powerType = 1, creatureType = "Beast", creatureTypeID = 1, creatureFamily = "Wolf", creatureFamilyID = 1, health = 40, maxHealth = 40 })
+local u_6_9adbb50a8f = e.spawnUnit({ name = "Kobold Vermin", guid = "Creature-0-6782-0-7-6-9ADBB50A8F", npcID = 6, level = 2, reaction = "hostile", sex = 1, class = "WARRIOR", classID = 1, powerType = 1, creatureType = "Humanoid", creatureTypeID = 7, health = 40, maxHealth = 40 })
+local u_6_f4dca45d75 = e.spawnUnit({ name = "Kobold Vermin", guid = "Creature-0-6782-0-7-6-F4DCA45D75", npcID = 6, level = 2, reaction = "hostile", sex = 1, class = "WARRIOR", classID = 1, powerType = 1, creatureType = "Humanoid", creatureTypeID = 7, health = 40, maxHealth = 40 })
+local u_6_65112a2818 = e.spawnUnit({ name = "Kobold Vermin", guid = "Creature-0-6782-0-7-6-65112A2818", npcID = 6, level = 1, reaction = "hostile", sex = 1, class = "WARRIOR", classID = 1, powerType = 1, creatureType = "Humanoid", creatureTypeID = 7, health = 40, maxHealth = 40 })
 -- A creature another player killed nearby: its death.
 local function bystander(guid, npcID, name)
     e.spawnUnit({ name = name, guid = guid, npcID = npcID, level = 1, reaction = "hostile" }):kill()

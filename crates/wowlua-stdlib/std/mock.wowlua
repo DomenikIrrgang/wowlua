@@ -9,8 +9,10 @@ type Fn = (...any) -> ...any
 
 --- A unit of the simulated world (`mock.player`, `mock.spawnUnit`).
 export interface MockUnit
-    --- Targets, focuses or mouses over `unit` (`PLAYER_TARGET_CHANGED`, …).
-    function target(unit: MockUnit?)
+    --- Targets, focuses or mouses over `unit` (`PLAYER_TARGET_CHANGED`, …);
+    --- the player's target told back by the server (`UNIT_TARGET`) a round
+    --- trip later, or `echo` seconds (`false`: not).
+    function target(unit: MockUnit?, opts: { echo?: number | boolean }?)
     function focus(unit: MockUnit?)
     function mouseover(unit: MockUnit?)
     --- The player's soft target of `kind` (by default the enemy for a
@@ -37,13 +39,15 @@ export interface MockUnit
     --- both in combat, the attacker's then the victim's power (`power`,
     --- `victimPower`: rage), the victim's health, and the combat text
     --- (`UNIT_COMBAT`) a moment later (`textAfter` seconds, 0.4 by
-    --- default); `combat = false`: no one put in combat. `kind`: `WOUND` (default), `PARRY`, `DODGE`, `MISS`, `BLOCK`.
+    --- default); `combat = false`: no one put in combat. `kind`: `WOUND` (default), `PARRY`, `DODGE`, `MISS`, `BLOCK`;
+    --- `indicator`: the text's (`"CRITICAL"`, `"GLANCING"`).
     --- The player's skill `name` up to `rank` ("Your skill in … has
     --- increased", the stats' events).
     function raiseSkill(name: string, rank: number)
     --- `kill`: the swing kills (`PARTY_KILL`, the death, the experience's
-    --- message, its update a round trip later; `loot`: the corpse's items).
-    function swing(victim: MockUnit, amount: number, opts: { kind?: string, power?: number, victimPower?: number, speed?: number, textAfter?: number, combat?: boolean, kill?: { xp?: number, loot?: table } }?)
+    --- message, its update a round trip later; `loot`: the corpse's items;
+    --- `echo`: the target's clearing told back after these seconds).
+    function swing(victim: MockUnit, amount: number, opts: { kind?: string, power?: number, victimPower?: number, speed?: number, textAfter?: number, combat?: boolean, indicator?: string, kill?: { xp?: number, loot?: table, echo?: number | boolean } }?)
     --- The player talks to an NPC: a round trip later its quest dialog
     --- opens (`QUEST_DETAIL` for a quest it offers, `QUEST_PROGRESS` for
     --- one in the log); too far (`setDistance` above 5 yards): the
