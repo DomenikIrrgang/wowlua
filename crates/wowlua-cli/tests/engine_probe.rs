@@ -1897,7 +1897,7 @@ fn the_engine_answers_the_group_as_the_client_did() {
     wowlua_engine::login::login(&mut vm, "StdTest", true, false);
     wowlua_engine::clock::advance_frames(&mut vm, 10, 1000.0 / 60.0);
     // A nameplate shown, as one was; the druid in another zone; made a
-    // raid (the server put the druid in subgroup 4), probed, made a party
+    // raid (the user moved the druid to subgroup 4), probed, made a party
     // again, probed: the order recorded.
     addon(
         &mut vm,

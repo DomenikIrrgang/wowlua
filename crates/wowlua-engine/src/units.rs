@@ -1009,9 +1009,9 @@ fn unit_player_or_pet_in_raid(vm: &mut Vm, c: NativeCall) -> Ret {
     )])
 }
 
-/// A group member's raid subgroup: its own, else five to a subgroup in
-/// raid order, the player first (unverified: a party made a raid put its
-/// second member in subgroup 4, recorded once).
+/// A group member's raid subgroup: its own (moved: the recording's druid,
+/// moved to subgroup 4 by hand), else five to a subgroup in raid order,
+/// the player first (unverified beyond a party made a raid).
 pub fn subgroup(u: &Units, id: UnitId) -> f64 {
     if let Some(n) = u.list[id.0].subgroup {
         return n;
