@@ -82,6 +82,25 @@ pub struct Loot {
     /// A recording's times of the slots' answers after the window opened
     /// (`slotsAfter`), for the next window.
     pub slots_after: Option<Vec<f64>>,
+    /// A recording's times of the bags' packet after each slot's item
+    /// (`bagsAfter`, a gathering's), for the next window.
+    pub bags_after: Option<Vec<f64>>,
+}
+
+/// A list of seconds in the options (`slotsAfter`, `bagsAfter`).
+fn times(vm: &mut Vm, opts: Option<wowlua_vm::TableRef>, key: &str) -> Option<Vec<f64>> {
+    let Value::Table(t) = opt_field(vm, opts, key) else {
+        return None;
+    };
+    let n = vm.heap.table(t).border();
+    Some(
+        (1..=n)
+            .filter_map(|i| match vm.heap.table(t).get(Value::Num(i as f64)) {
+                Value::Num(x) => Some(x),
+                _ => None,
+            })
+            .collect(),
+    )
 }
 
 fn fire(vm: &mut Vm, e: &str, args: &[Value]) {
@@ -115,20 +134,8 @@ pub fn control_loot(vm: &mut Vm, c: NativeCall) -> Ret {
         Value::Num(n) => n,
         _ => crate::clock::server_delay(vm),
     };
-    engine_mut(vm).world.loot.slots_after = match opt_field(vm, opts, "slotsAfter") {
-        Value::Table(t) => {
-            let n = vm.heap.table(t).border();
-            Some(
-                (1..=n)
-                    .filter_map(|i| match vm.heap.table(t).get(Value::Num(i as f64)) {
-                        Value::Num(x) => Some(x),
-                        _ => None,
-                    })
-                    .collect(),
-            )
-        }
-        _ => None,
-    };
+    engine_mut(vm).world.loot.slots_after = times(vm, opts, "slotsAfter");
+    engine_mut(vm).world.loot.bags_after = None;
     later(
         vm,
         delay,
@@ -173,14 +180,18 @@ pub(crate) fn gather_cooldowns(vm: &mut Vm, spell: f64, bags: bool) {
 }
 
 /// `player:gather(object, { spell, castTime?, loot = { { id, count? } },
-/// auto? })`: the player gathers a world object (a vein, a herb), as the
+/// auto?, succeedsAfter?, slotsAfter?, bagsAfter? })`: the player gathers a world object (a vein, a herb), as the
 /// client recorded the paladin mining copper: the click asks
 /// (`CURRENT_SPELL_CAST_CHANGED(false)`, `ACTIONBAR_UPDATE_STATE()`), a round
 /// trip later the gathering spell is cast on it (`SENT` names it) with its
 /// cooldowns' events; at its success the
 /// object's loot ready (`LOOT_READY(auto)`), the player's `UNIT_FLAGS`, the
 /// cooldowns' events again (the bags' too); the window a moment later
-/// (`LOOT_OPENED`, `LOOT_READY`), its slots as a corpse's.
+/// (`LOOT_OPENED`, `LOOT_READY`), its slots as a corpse's (`slotsAfter`:
+/// a recording's times after the window opened), each item's bags'
+/// packet as recorded (`bagsAfter`: seconds after the item, one per slot);
+/// the cast's success `succeedsAfter` seconds after its start as recorded
+/// (else at its end: the server's answer comes up to 0.06 s either side).
 pub fn control_gather(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = units::this(vm, &c)?;
     if me != units::PLAYER {
@@ -216,9 +227,12 @@ pub fn control_gather(vm: &mut Vm, c: NativeCall) -> Ret {
         }
     }
     engine_mut(vm).units.list[object.0].loot = items;
+    engine_mut(vm).world.loot.slots_after = times(vm, opts, "slotsAfter");
+    engine_mut(vm).world.loot.bags_after = times(vm, opts, "bagsAfter");
     fire(vm, "CURRENT_SPELL_CAST_CHANGED", &[Value::Bool(false)]);
     fire(vm, "ACTIONBAR_UPDATE_STATE", &[]);
     let delay = crate::clock::server_delay(vm);
+    let succeeds_after = opt_field(vm, opts, "succeedsAfter");
     later(
         vm,
         delay,
@@ -229,6 +243,7 @@ pub fn control_gather(vm: &mut Vm, c: NativeCall) -> Ret {
             Value::Bool(auto),
             Value::Num(spell),
             seconds.map_or(Value::Nil, Value::Num),
+            succeeds_after,
         ],
     );
     Ok(vec![])
@@ -243,6 +258,9 @@ fn gather_cast(vm: &mut Vm, c: NativeCall) -> Ret {
         Value::Num(s) => Some(s),
         _ => None,
     };
+    if let Some(Value::Num(after)) = c.upvals.get(4) {
+        engine_mut(vm).units.casting.succeeds_after = Some(*after);
+    }
     let done = vm.native_with("gathered", gathered as NativeFn, c.upvals[..3].to_vec());
     let look = crate::casting::spell_look(vm, spell, seconds);
     let object = UnitId(object as usize);
@@ -454,6 +472,12 @@ fn taken(vm: &mut Vm, c: NativeCall) -> Ret {
     if last && let Some(corpse) = corpse {
         engine_mut(vm).units.list[corpse.0].loot.clear();
         engine_mut(vm).world.loot.emptied = Some(corpse);
+        // No longer looting: the flags a round trip after the last item
+        // (recorded: the profession's veins 0.30-0.34 s at a ping of 0.345,
+        // the quest's corpses 0.26-0.28 s at 0.3; before or after the
+        // bags' packet as that comes).
+        let delay = crate::clock::server_delay(vm);
+        later(vm, delay, "lootFlags", loot_flags, vec![]);
     }
     {
         let l = &mut engine_mut(vm).world.loot;
@@ -465,7 +489,15 @@ fn taken(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     if !engine(vm).world.loot.bags_due {
         engine_mut(vm).world.loot.bags_due = true;
-        later(vm, BAGS_AFTER, "lootBags", bags_told, vec![]);
+        let after = engine(vm)
+            .world
+            .loot
+            .bags_after
+            .as_ref()
+            .and_then(|t| t.get(slot - 1))
+            .copied()
+            .unwrap_or(BAGS_AFTER);
+        later(vm, after, "lootBags", bags_told, vec![]);
     }
     if let Some(slot) = new_slot {
         engine_mut(vm)
@@ -514,9 +546,6 @@ fn bags_told(vm: &mut Vm, _c: NativeCall) -> Ret {
             let g = vm.str(&g);
             fire(vm, "UNIT_LOOT", &[g, Value::Bool(false)]);
         }
-        // No longer looting: the flags a round trip later (recorded).
-        let delay = crate::clock::server_delay(vm);
-        later(vm, delay, "lootFlags", loot_flags, vec![]);
     }
     fire(vm, "BAG_UPDATE_DELAYED", &[]);
     for p in placed.iter().filter(|p| p.stacked) {

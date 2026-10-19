@@ -34,15 +34,27 @@ local function at(t)
 end
 local function world(...) e.fireEvent(...) end
 e.setLatency(0.345)
--- The vein mined four times: a cast of 3.208 s, its ore autolooted (the
--- third time with two rough stones).
+-- The vein mined four times: a cast of 3.2 s, its ore autolooted (the
+-- third time with two rough stones). Each cast's start as recorded (the
+-- server's answer 0.364, 0.378, 0.340 and 0.348 s after the click): a
+-- moment of its own, at that time; its success, the slots' answers after
+-- the window opened and each item's bags' packet after it as recorded.
 local ore = { { id = 2770 } }
+local function mine(t, answer, succeedsAfter, loot, slotsAfter, bagsAfter)
+    e.setLatency(answer)
+    at(t) player:gather(vein, {
+        spell = 2576, castTime = 3.2, loot = loot, auto = true, succeedsAfter = succeedsAfter,
+        slotsAfter = slotsAfter, bagsAfter = bagsAfter,
+    })
+    at(t + answer + 0.001)
+    e.setLatency(0.345)
+end
 at(2.872) player:softTarget(vein, "interact")
 at(3.504) world("PLAYER_STOPPED_MOVING")
-at(3.734) player:gather(vein, { spell = 2576, castTime = 3.208, loot = ore, auto = true })
-at(9.672) player:gather(vein, { spell = 2576, castTime = 3.208, loot = ore, auto = true })
-at(14.495) player:gather(vein, { spell = 2576, castTime = 3.208, loot = { { id = 2770 }, { id = 2835, count = 2 } }, auto = true })
-at(19.363) player:gather(vein, { spell = 2576, castTime = 3.208, loot = ore, auto = true })
+mine(3.734, 0.364, 3.208, ore, { 0.566 }, { 0.334 })
+mine(9.672, 0.378, 3.154, ore, { 0.605 }, { 0.405 })
+mine(14.495, 0.340, 3.197, { { id = 2770 }, { id = 2835, count = 2 } }, { 0.517, 0.713 }, { 0.160, 0.036 })
+mine(19.363, 0.348, 3.192, ore, { 0.528 }, { 0.061 })
 at(24.2)
 check("the ore in the bag", C_Item.GetItemCount(2770) == 18)
 -- Blacksmithing's spell clicked on the bar: its window.
@@ -68,7 +80,12 @@ local function pick(recipe)
     end))
 end
 -- The wheel made: a cast of 10 s; the window closed meanwhile.
+-- Its cast 0.343 s after the click (recorded).
+e.setLatency(0.343)
 at(27.640) press(ProfessionsFrame.CraftingPage.CreateButton)
+at(27.984) e.setLatency(0.345)
+-- The window's list updated mid-cast, its cause unknown (recorded).
+at(31.474) world("TRADE_SKILL_LIST_UPDATE")
 at(37.442) e.pressKey("ESCAPE")
 -- The spellbook, Blacksmithing again, Smelting.
 at(37.985) e.pressKey("P")
@@ -127,6 +144,10 @@ local npc = e.spawnUnit({ name = "Crossroads Grunt", reaction = "friendly" })
 local caster = e.spawnUnit({ name = "Crossroads Caster", reaction = "friendly", powerType = 0, power = 1000, maxPower = 1000 })
 local other = e.spawnUnit({ name = "Crossroads Peon", reaction = "friendly" })
 at(145.408) player:softTarget(npc, "friend")
+-- An aura gone from it, ENCHANT_SPELL_COMPLETED (its cause unknown): the
+-- world's, as recorded.
+at(145.608) world("UNIT_AURA", "softfriend", { isFullUpdate = false, removedAuraInstanceIDs = { 1 } })
+at(147.208) world("ENCHANT_SPELL_COMPLETED", false, nil)
 at(156.708) player:softTarget(caster, "friend")
 at(157.375) caster:setPower(990)
 at(159.308) caster:setPower(1000)

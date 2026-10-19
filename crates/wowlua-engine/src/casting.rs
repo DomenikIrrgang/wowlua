@@ -48,6 +48,11 @@ pub struct Cast {
 pub struct Casting {
     pub casts: HashMap<UnitId, Cast>,
     pub next: u64,
+    /// The next cast's success this long after its start, not at its end
+    /// (a recording's: the server's answer).
+    pub succeeds_after: Option<f64>,
+    /// The next cast a craft's (`mark_craft`).
+    pub crafting: bool,
     /// The player's spell for the next swing (Heroic Strike), taken by the
     /// server: its ID and cast GUID.
     pub next_swing: Option<(f64, String)>,
@@ -285,6 +290,7 @@ fn start(
     done: Option<Value>,
     announce: bool,
 ) -> Ret {
+    let craft = std::mem::take(&mut engine_mut(vm).units.casting.crafting);
     let now = crate::clock::now(vm);
     let n = {
         let c = &mut engine_mut(vm).units.casting;
@@ -317,6 +323,12 @@ fn start(
         cast_changed(vm, me);
         return Ok(vec![]);
     }
+    // A craft's flags with its start (its `UnitCastingInfo` asked then).
+    let not_interruptible = if craft {
+        !crate::actions::has_trait(vm, Value::Num(spell_id), "interruptible")
+    } else {
+        not_interruptible
+    };
     let cast = Cast {
         spell_id,
         name,
@@ -325,7 +337,7 @@ fn start(
         end: now + seconds,
         channel,
         not_interruptible,
-        trade_skill: false,
+        trade_skill: craft,
         guid: guid.clone(),
         bar: bar.clone(),
         done,
@@ -347,7 +359,13 @@ fn start(
         cast_done as NativeFn,
         vec![Value::Num(me.0 as f64), g],
     );
-    crate::clock::after_engine(vm, seconds, native);
+    let after = engine_mut(vm)
+        .units
+        .casting
+        .succeeds_after
+        .take()
+        .unwrap_or(seconds);
+    crate::clock::after_engine(vm, after, native);
     Ok(vec![])
 }
 
@@ -714,17 +732,11 @@ fn instant(vm: &mut Vm, id: f64) {
 /// The player's cast running a craft: a trade skill's, not to be
 /// interrupted unless it has the trait `interruptible` (recorded: Smelt
 /// Copper, Smelt Bronze, a Blacksmithing craft `true, true`; the
-/// Sharpening Wheel `true, false`; a gathering neither).
+/// Sharpening Wheel `true, false`; a gathering neither): the next cast
+/// started, its flags with its start (recorded: the answers asked at its
+/// `UNIT_SPELLCAST_START`).
 pub fn mark_craft(vm: &mut Vm) {
-    let id = match engine(vm).units.casting.casts.get(&units::PLAYER) {
-        Some(c) => c.spell_id,
-        None => return,
-    };
-    let interruptible = crate::actions::has_trait(vm, Value::Num(id), "interruptible");
-    if let Some(c) = engine_mut(vm).units.casting.casts.get_mut(&units::PLAYER) {
-        c.trade_skill = true;
-        c.not_interruptible = !interruptible;
-    }
+    engine_mut(vm).units.casting.crafting = true;
 }
 
 /// A new cast GUID of a kind (3 a spell, 4 an item's, 15 a triggered one,

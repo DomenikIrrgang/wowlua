@@ -86,8 +86,12 @@ export interface MockUnit
     --- `castTime` seconds later (the spell data's, else 1.5).
     function castSpell(spellID: number, opts: { castTime?: number, channel?: boolean, notInterruptible?: boolean }?)
     --- The player gathers a world object (a vein, a herb): `spell` cast on
-    --- it, at its success its `loot` in the window (`auto`: autoloot).
-    function gather(object: MockUnit, opts: { spell: number, castTime?: number, loot?: { id: number, count?: number }[], auto?: boolean })
+    --- it, at its success its `loot` in the window (`auto`: autoloot). A
+    --- recording's timing: `succeedsAfter` (the success, seconds after the
+    --- cast's start; else at its end), `slotsAfter` (each slot's item,
+    --- seconds after the window opened), `bagsAfter` (each item's bags'
+    --- packet, seconds after the item).
+    function gather(object: MockUnit, opts: { spell: number, castTime?: number, loot?: { id: number, count?: number }[], auto?: boolean, succeedsAfter?: number, slotsAfter?: number[], bagsAfter?: number[] })
     --- The player clicks a profession's spell: its window open, as the
     --- client recorded `profession`'s (`"Blacksmithing"`, `"Mining"`).
     function openTradeSkill(spell: number, profession: string)

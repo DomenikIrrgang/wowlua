@@ -707,12 +707,12 @@ fn start_craft(vm: &mut Vm, recipe: i64, announce: bool) -> Ret {
     let _ = vm.heap.table_mut(t).set(k, Value::Bool(false));
     let id = recipe as f64;
     let done = vm.native_with("crafted", crafted as NativeFn, vec![Value::Num(id)]);
+    crate::casting::mark_craft(vm);
     if announce {
         crate::casting::cast_at(vm, PLAYER, id, look, false, false, None, Some(done))?;
     } else {
         crate::casting::cast_unsent(vm, id, look, Some(done))?;
     }
-    crate::casting::mark_craft(vm);
     crate::loot::gather_cooldowns(vm, id, false);
     Ok(vec![])
 }
@@ -739,8 +739,8 @@ fn held_start(vm: &mut Vm, c: NativeCall) -> Ret {
     let look = recipe_spell(vm, recipe);
     let id = recipe as f64;
     let done = vm.native_with("crafted", crafted as NativeFn, vec![Value::Num(id)]);
-    crate::casting::cast_at(vm, PLAYER, id, look, false, false, None, Some(done))?;
     crate::casting::mark_craft(vm);
+    crate::casting::cast_at(vm, PLAYER, id, look, false, false, None, Some(done))?;
     if let Some(old) = refused {
         let g = crate::casting::cast_guid(vm, 3, old as f64);
         let g = vm.str(&g);
