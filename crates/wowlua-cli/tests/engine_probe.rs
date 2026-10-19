@@ -1237,7 +1237,7 @@ fn align(ours: &[String], theirs: &[String]) -> (usize, Vec<String>, Vec<String>
 
 /// How many of the combat scenario's lines the engine plays as the client
 /// did: only ever up.
-const COMBAT_MATCHED: usize = 725;
+const COMBAT_MATCHED: usize = 726;
 
 /// The combat scenario: a wolf targeted, fought, killed and looted.
 #[test]
@@ -1263,6 +1263,17 @@ const FLIGHT_MATCHED: usize = 259;
 #[test]
 fn the_engine_plays_flight_as_the_client_did() {
     plays_as_the_client_did("flight", FLIGHT_MATCHED);
+}
+
+/// How many of the auradeath scenario's lines the engine plays as the
+/// client did: only ever up.
+const AURADEATH_MATCHED: usize = 883;
+
+/// The auradeath scenario: a fight with a seal, Consecration, a stun, a
+/// Judgement's kill; the stunned cat's death taking its auras.
+#[test]
+fn the_engine_plays_auradeath_as_the_client_did() {
+    plays_as_the_client_did("auradeath", AURADEATH_MATCHED);
 }
 
 /// How many of the gossip2 scenario's lines the engine plays as the client

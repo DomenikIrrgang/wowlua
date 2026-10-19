@@ -1300,6 +1300,8 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("raiseSkill", control_raise_skill),
         ("leaveCombat", control_leave_combat),
         ("showNameplate", control_show_nameplate),
+        ("hit", control_hit),
+        ("updateAura", crate::auras::control_update),
         ("setRole", control_set_role),
         ("setOnline", control_set_online),
         ("hideNameplate", control_hide_nameplate),
@@ -1817,14 +1819,14 @@ fn control_heal(vm: &mut Vm, c: NativeCall) -> Ret {
 fn control_kill(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
     let opts = Kill::of(vm, c.arg(2))?;
-    let amount = engine(vm).units.list[me.0].health;
+    let amount = opts.amount.unwrap_or(engine(vm).units.list[me.0].health);
     let blow = opts.by.map(|by| (by, amount));
     {
         let u = &mut engine_mut(vm).units.list[me.0];
         u.health = 0.0;
         u.dead = true;
     }
-    kill_blow(vm, me, blow);
+    kill_blow_of(vm, me, blow, opts.school);
     kill_xp(vm, me, &opts, true);
     kill_xp(vm, me, &opts, false);
     engine_mut(vm).units.list[me.0].loot = opts.loot.clone();
@@ -1839,6 +1841,9 @@ pub(crate) struct Kill {
     pub xp: Option<f64>,
     /// The corpse's items: `{ { id, count? }, … }`.
     pub loot: Vec<(i64, f64)>,
+    /// The killing blow's damage (else the health left) and school.
+    pub amount: Option<f64>,
+    pub school: f64,
 }
 
 impl Kill {
@@ -1849,6 +1854,8 @@ impl Kill {
                 lootable: false,
                 xp: None,
                 loot: Vec::new(),
+                amount: None,
+                school: 1.0,
             });
         };
         let field = |vm: &mut Vm, k: &str| {
@@ -1886,11 +1893,21 @@ impl Kill {
             }
         }
         let lootable = lootable || !loot.is_empty();
+        let amount = match field(vm, "amount") {
+            Value::Num(n) => Some(n),
+            _ => None,
+        };
+        let school = match field(vm, "school") {
+            Value::Num(n) => n,
+            _ => 1.0,
+        };
         Ok(Kill {
             by,
             lootable,
             xp,
             loot,
+            amount,
+            school,
         })
     }
 }
@@ -1920,6 +1937,12 @@ pub(crate) fn event_guid(vm: &mut Vm, id: UnitId) -> Value {
 /// The killing blow: `PARTY_KILL(killer, victim)` for the player's or the
 /// group's, then its `UNIT_COMBAT`.
 pub(crate) fn kill_blow(vm: &mut Vm, me: UnitId, blow: Option<(UnitId, f64)>) {
+    kill_blow_of(vm, me, blow, 1.0);
+}
+
+/// The killing blow's kill and combat text, of a school (`1` physical,
+/// `2` holy: a Judgement's, recorded).
+fn kill_blow_of(vm: &mut Vm, me: UnitId, blow: Option<(UnitId, f64)>, school: f64) {
     let Some((killer, amount)) = blow else { return };
     if ours(&engine(vm).units, killer) {
         let k = event_guid(vm, killer);
@@ -1932,7 +1955,7 @@ pub(crate) fn kill_blow(vm: &mut Vm, me: UnitId, blow: Option<(UnitId, f64)>) {
         vm,
         "UNIT_COMBAT",
         me,
-        &[wound, empty, Value::Num(amount), Value::Num(1.0)],
+        &[wound, empty, Value::Num(amount), Value::Num(school)],
     );
 }
 
@@ -2372,6 +2395,108 @@ fn set_power_quietly(vm: &mut Vm, id: UnitId, n: f64) {
 }
 
 /// A swing's combat text: `UNIT_COMBAT(unit, kind, "", amount, 1)`.
+/// `unit:hit(victim, amount, { school?, indicator?, kind?, aura?,
+/// cooldowns? })`: a spell's or a periodic effect's hit, as one server
+/// packet (recorded: a Consecration's ticks, a seal's holy damage,
+/// auradeath): combat for both if not yet; the combat text at once, with
+/// the school (`2` holy; `1` physical by default) and indicator
+/// (`"CRITICAL"`); the victim's aura `aura` updated; the triggered spells'
+/// cooldowns (`cooldowns = { { spell, a?, b? } }`: `SPELL_UPDATE_COOLDOWN`'s
+/// third and fourth values); the victim's health; then
+/// `UPDATE_SHAPESHIFT_COOLDOWN`.
+fn control_hit(vm: &mut Vm, c: NativeCall) -> Ret {
+    let me = this(vm, &c)?;
+    let Some(victim) = handle_of(vm, c.arg(2)) else {
+        return Err(vm.error("hit: a unit to hit expected"));
+    };
+    let amount = vm.check_number(&c, 3)?;
+    let opts = match c.arg(4) {
+        Value::Table(t) => Some(t),
+        _ => None,
+    };
+    let field = |vm: &mut Vm, k: &str| match opts {
+        Some(t) => {
+            let key = vm.str(k);
+            vm.heap.table(t).get(key)
+        }
+        None => Value::Nil,
+    };
+    let text = |vm: &mut Vm, k: &str, d: &str| match field(vm, k) {
+        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        _ => d.to_string(),
+    };
+    let kind = text(vm, "kind", "WOUND");
+    let indicator = text(vm, "indicator", "");
+    let school = match field(vm, "school") {
+        Value::Num(n) => n,
+        _ => 1.0,
+    };
+    let aura = field(vm, "aura");
+    let cooldowns = field(vm, "cooldowns");
+    for id in [me, victim] {
+        if !engine(vm).units.list[id.0].in_combat {
+            enter_combat(vm, id, false);
+        }
+    }
+    let lands = kind == "WOUND" || kind == "BLOCK" || kind == "ABSORB";
+    if lands && amount > 0.0 {
+        let u = &mut engine_mut(vm).units.list[victim.0];
+        u.health = (u.health - amount).clamp(0.0, u.health_max);
+        u.dead = u.health <= 0.0;
+    }
+    let kind = vm.str(&kind);
+    let indicator = vm.str(&indicator);
+    fire_unit(
+        vm,
+        "UNIT_COMBAT",
+        victim,
+        &[kind, indicator, Value::Num(amount), Value::Num(school)],
+    );
+    if let Value::Num(id) = aura {
+        crate::auras::fire_updated(vm, victim, id);
+    }
+    let any = triggered_cooldowns(vm, cooldowns);
+    if lands && amount > 0.0 {
+        fire_unit(vm, "UNIT_HEALTH", victim, &[]);
+    }
+    if any {
+        fire(vm, "UPDATE_SHAPESHIFT_COOLDOWN", &[]);
+    }
+    Ok(vec![])
+}
+
+/// Triggered spells' cooldowns (`{ { spell, a?, b? } }`):
+/// `ACTIONBAR_UPDATE_COOLDOWN`, `BAG_UPDATE_COOLDOWN`, then each
+/// `SPELL_UPDATE_COOLDOWN(spell, nil, a, b, nil)` (recorded); whether any.
+pub(crate) fn triggered_cooldowns(vm: &mut Vm, list: Value) -> bool {
+    let Value::Table(list) = list else {
+        return false;
+    };
+    let n = vm.heap.table(list).border();
+    if n == 0 {
+        return false;
+    }
+    fire(vm, "ACTIONBAR_UPDATE_COOLDOWN", &[]);
+    fire(vm, "BAG_UPDATE_COOLDOWN", &[]);
+    for i in 1..=n {
+        let Value::Table(e) = vm.heap.table(list).get(Value::Num(i as f64)) else {
+            continue;
+        };
+        let t = vm.heap.table(e);
+        let (spell, a, b) = (
+            t.get(Value::Num(1.0)),
+            t.get(Value::Num(2.0)),
+            t.get(Value::Num(3.0)),
+        );
+        fire(
+            vm,
+            "SPELL_UPDATE_COOLDOWN",
+            &[spell, Value::Nil, a, b, Value::Nil],
+        );
+    }
+    true
+}
+
 fn swing_text(vm: &mut Vm, c: NativeCall) -> Ret {
     let (Value::Num(id), kind, Value::Num(amount)) = (c.upvals[0], c.upvals[1], c.upvals[2]) else {
         return Ok(vec![]);

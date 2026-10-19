@@ -51,6 +51,9 @@ pub const GLOBAL_COOLDOWN: f64 = 133.0;
 /// The global cooldown's length (recorded: 1.5 s).
 pub const GLOBAL_COOLDOWN_LENGTH: f64 = 1.5;
 
+/// Auto Attack's spell.
+const AUTO_ATTACK: f64 = 6603.0;
+
 /// The global cooldown starts (a cast begun).
 pub fn start_global_cooldown(vm: &mut Vm) {
     let now = crate::clock::now(vm);
@@ -360,9 +363,19 @@ fn get_action_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
         engine_mut(vm).plain_results = true;
     }
     let now = crate::clock::now(vm);
+    // Off the global cooldown: Auto Attack, a spell on the next swing (the
+    // combat recording's Heroic Strike), a trait's or the data's.
+    let off = |vm: &mut Vm, id: Value| {
+        num(id) == Some(AUTO_ATTACK)
+            || has_trait(vm, id, "offGlobalCooldown")
+            || num(id).is_some_and(|id| {
+                crate::casting::spell_field(vm, id, "nextSwing").truthy()
+                    || crate::casting::spell_field(vm, id, "offGCD").truthy()
+            })
+    };
     let gcd = match (&a, engine(vm).world.global_cooldown) {
         (Some(a), Some((start, length))) if a.kind == "spell" && start + length > now => {
-            (!has_trait(vm, a.id, "offGlobalCooldown")).then_some((start, length))
+            (!off(vm, a.id)).then_some((start, length))
         }
         _ => None,
     };

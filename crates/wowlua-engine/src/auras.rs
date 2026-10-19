@@ -333,6 +333,60 @@ pub fn died(vm: &mut Vm, unit: UnitId) {
     fire_update(vm, unit, None, &gone);
 }
 
+/// `unit:updateAura(instanceID, { cooldowns? })`: the aura changed in
+/// place (a periodic effect's tick: `UNIT_AURA` with
+/// `updatedAuraInstanceIDs`; recorded: Consecration's every 0.5 s,
+/// auradeath), then the spells it triggered tell their cooldowns, then
+/// `UPDATE_SHAPESHIFT_COOLDOWN`.
+pub fn control_update(vm: &mut Vm, c: NativeCall) -> Ret {
+    let me = units::this(vm, &c)?;
+    let id = vm.check_number(&c, 2)?;
+    let on = engine(vm)
+        .units
+        .auras
+        .iter()
+        .any(|a| a.unit == me && a.instance == id);
+    if on {
+        fire_updated(vm, me, id);
+    }
+    let cooldowns = match c.arg(3) {
+        Value::Table(t) => field(vm, t, "cooldowns"),
+        _ => Value::Nil,
+    };
+    if units::triggered_cooldowns(vm, cooldowns) {
+        widgets::fire_event(vm, "UPDATE_SHAPESHIFT_COOLDOWN", &[]);
+    }
+    Ok(vec![])
+}
+
+/// `UNIT_AURA` telling one aura updated, for each of the unit's tokens.
+pub(crate) fn fire_updated(vm: &mut Vm, id: UnitId, instance: f64) {
+    let restricted = units::active(
+        &engine(vm).units,
+        &[
+            units::COMBAT,
+            units::ENCOUNTER,
+            units::CHALLENGE_MODE,
+            units::PVP_MATCH,
+        ],
+    );
+    let field = |vm: &mut Vm, v: Value| if restricted { vm.secret_wrap(v) } else { v };
+    for token in units::tokens_of(&engine(vm).units, id) {
+        let info = vm.new_table();
+        let full = field(vm, Value::Bool(false));
+        set(vm, info, "isFullUpdate", full);
+        let list = vm.new_table();
+        let _ = vm
+            .heap
+            .table_mut(list)
+            .set(Value::Num(1.0), Value::Num(instance));
+        let list = field(vm, Value::Table(list));
+        set(vm, info, "updatedAuraInstanceIDs", list);
+        let t = vm.str(&token);
+        widgets::fire_event(vm, "UNIT_AURA", &[t, Value::Table(info)]);
+    }
+}
+
 /// `unit:removeAura(instanceID)`.
 pub fn control_remove(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = units::this(vm, &c)?;

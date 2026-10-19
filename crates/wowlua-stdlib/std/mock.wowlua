@@ -20,8 +20,10 @@ export interface MockUnit
     function damage(amount: number)
     function heal(amount: number)
     --- Dies (`UNIT_DIED`); `by` the player or the group: `PARTY_KILL` and
-    --- the killing blow's `UNIT_COMBAT`; `lootable`: `UNIT_LOOT`.
-    function kill(opts: { by?: MockUnit, lootable?: boolean }?)
+    --- the killing blow's `UNIT_COMBAT` (`amount`, else the health left;
+    --- `school`, 1 physical by default); `lootable`: `UNIT_LOOT`. Its
+    --- auras go with it.
+    function kill(opts: { by?: MockUnit, lootable?: boolean, amount?: number, school?: number }?)
     function setPower(powerType: number, amount: number)
     function enterCombat()
     function leaveCombat()
@@ -63,6 +65,15 @@ export interface MockUnit
     function setOnline(online: boolean)
     function applyAura(data: table): number
     function removeAura(auraInstanceID: number)
+    --- The aura changed in place (a periodic effect's tick:
+    --- `updatedAuraInstanceIDs`); `cooldowns`: the spells it triggered, as
+    --- for `hit`.
+    function updateAura(auraInstanceID: number, opts: { cooldowns?: table }?)
+    --- A spell's or periodic effect's hit, its combat text at once: `school`
+    --- (1 physical, 2 holy, …), `indicator` ("CRITICAL"), `kind` ("WOUND",
+    --- "HEAL"); `aura`: the victim's aura it updates; `cooldowns = { {
+    --- spell, a?, b? } }`: the triggered spells' `SPELL_UPDATE_COOLDOWN`s.
+    function hit(victim: MockUnit, amount: number, opts: { school?: number, indicator?: string, kind?: string, aura?: number, cooldowns?: table }?)
     --- Starts casting (`UNIT_SPELLCAST_START`, or `CHANNEL_START`); it ends
     --- `castTime` seconds later (the spell data's, else 1.5).
     function castSpell(spellID: number, opts: { castTime?: number, channel?: boolean, notInterruptible?: boolean }?)
@@ -783,7 +794,8 @@ export function provideLibrary(major: string, impl: table, minor: number?)
     stub.minors[major] = minor ?? 1
 end
 
---- A spell's data (decision T203).
+--- A spell's data (decision T203). `cooldown` (seconds): pressing it
+--- again sooner is refused ("Spell is not ready yet.").
 export function defineSpell(id: number, data: table)
     engine().defineSpell(id, data)
 end

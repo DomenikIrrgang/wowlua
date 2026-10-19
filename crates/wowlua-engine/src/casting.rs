@@ -49,6 +49,9 @@ pub struct Casting {
     /// The player's spell for the next swing (Heroic Strike), taken by the
     /// server: its ID and cast GUID.
     pub next_swing: Option<(f64, String)>,
+    /// The player's spells on cooldown: when each is ready again (the
+    /// clock's), from its data's `cooldown` (seconds).
+    pub ready_at: HashMap<i64, f64>,
 }
 
 fn field(vm: &mut Vm, t: TableRef, key: &str) -> Value {
@@ -356,7 +359,7 @@ pub fn end_cast(vm: &mut Vm) {
 const GCD_CATEGORY: f64 = 133.0;
 
 /// A spell's data field (`defineSpell`'s, the profile's).
-fn spell_field(vm: &mut Vm, id: f64, key: &str) -> Value {
+pub(crate) fn spell_field(vm: &mut Vm, id: f64, key: &str) -> Value {
     match engine(vm).world.data.spells.get(&(id as i64)).copied() {
         Some(t) => field(vm, t, key),
         None => Value::Nil,
@@ -405,32 +408,23 @@ pub fn control_use_spell(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     let id = vm.check_number(&c, 2)?;
     let fire = |vm: &mut Vm, e: &str, args: &[Value]| crate::widgets::fire_event(vm, e, args);
+    // On its cooldown: refused (recorded: Hammer of Justice pressed again,
+    // "Spell is not ready yet.", 61).
+    let ready = engine(vm).units.casting.ready_at.get(&(id as i64)).copied();
+    if ready.is_some_and(|at| crate::clock::now(vm) < at) {
+        refuse(vm, id, 61.0, "Spell is not ready yet.");
+        return Ok(vec![]);
+    }
     if let Value::Num(cost) = spell_field(vm, id, "powerCost")
         && engine(vm).units.list[units::PLAYER.0].power < cost
     {
-        let n = {
-            let c = &mut engine_mut(vm).units.casting;
-            c.next += 1;
-            c.next
-        };
-        // The client's own cast GUID (`Cast-2-0-0-0-…`).
-        let g = vm.str(&format!("Cast-2-0-0-0-{}-{:010X}", id as i64, n));
-        units::fire_unit(
-            vm,
-            "UNIT_SPELLCAST_FAILED",
-            me,
-            &[g, Value::Num(id), Value::Nil],
-        );
-        cast_changed(vm, me);
-        fire(vm, "ACTIONBAR_UPDATE_STATE", &[]);
         let token = engine(vm).units.list[units::PLAYER.0].power_type;
         let (code, text) = match token as i64 {
             1 => (359.0, "Not enough rage"),
             3 => (360.0, "Not enough energy"),
             _ => (358.0, "Not enough mana"),
         };
-        let text = vm.str(text);
-        fire(vm, "UI_ERROR_MESSAGE", &[Value::Num(code), text]);
+        refuse(vm, id, code, text);
         return Ok(vec![]);
     }
     let delay = crate::clock::server_delay(vm);
@@ -451,6 +445,11 @@ pub fn control_use_spell(vm: &mut Vm, c: NativeCall) -> Ret {
         GCD_CATEGORY
     };
     cast_changed(vm, me);
+    // The global cooldown from the key press (recorded: the bar's spells
+    // on it in the first cooldown events).
+    if category == GCD_CATEGORY {
+        crate::actions::start_global_cooldown(vm);
+    }
     cooldown_events(vm, id, category, false);
     let later = vm.native_with(
         "spellUsed",
@@ -461,11 +460,39 @@ pub fn control_use_spell(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// The server's answer to an instant spell: the cast, the cooldown events.
+/// The client refusing the player's spell: `UNIT_SPELLCAST_FAILED` with
+/// its own cast GUID (`Cast-2-0-0-0-…`), `CURRENT_SPELL_CAST_CHANGED`,
+/// `ACTIONBAR_UPDATE_STATE`, `UI_ERROR_MESSAGE(code, text)` (recorded).
+fn refuse(vm: &mut Vm, id: f64, code: f64, text: &str) {
+    let me = units::PLAYER;
+    let n = {
+        let c = &mut engine_mut(vm).units.casting;
+        c.next += 1;
+        c.next
+    };
+    let g = vm.str(&format!("Cast-2-0-0-0-{}-{:010X}", id as i64, n));
+    units::fire_unit(
+        vm,
+        "UNIT_SPELLCAST_FAILED",
+        me,
+        &[g, Value::Num(id), Value::Nil],
+    );
+    cast_changed(vm, me);
+    crate::widgets::fire_event(vm, "ACTIONBAR_UPDATE_STATE", &[]);
+    let text = vm.str(text);
+    crate::widgets::fire_event(vm, "UI_ERROR_MESSAGE", &[Value::Num(code), text]);
+}
+
+/// The server's answer to an instant spell: the cast, the cooldown events;
+/// its cooldown running (data `cooldown`).
 fn spell_used(vm: &mut Vm, c: NativeCall) -> Ret {
     let (Value::Num(id), Value::Num(category)) = (c.upvals[0], c.upvals[1]) else {
         return Ok(vec![]);
     };
+    if let Value::Num(cd) = spell_field(vm, id, "cooldown") {
+        let at = crate::clock::now(vm) + cd;
+        engine_mut(vm).units.casting.ready_at.insert(id as i64, at);
+    }
     instant(vm, id);
     cooldown_events(vm, id, category, true);
     Ok(vec![])
