@@ -40,9 +40,18 @@ fn num(v: Value) -> Option<f64> {
     }
 }
 
-/// The slot asked about: `None` for slot 0 and below (no answer).
+/// The last action slot the bars answer for: past it, as for slot 0 and
+/// below, the slot functions answer nothing (the full probe, 1.60.1: slot
+/// 2147483647 answered nothing; unverified: the limit, somewhere above the
+/// recorded slot 200).
+pub(crate) const LAST_SLOT: f64 = 1000.0;
+
+/// The slot asked about: `None` for slot 0 and below and past the last
+/// (no answer).
 fn slot(c: &NativeCall) -> Option<i64> {
-    num(c.arg(1)).filter(|n| *n >= 1.0).map(|n| n as i64)
+    num(c.arg(1))
+        .filter(|n| (1.0..=LAST_SLOT).contains(n))
+        .map(|n| n as i64)
 }
 
 /// The global cooldown's category (`Enum`-less: the spells' start
@@ -122,11 +131,13 @@ fn has_action(vm: &mut Vm, c: NativeCall) -> Ret {
     })
 }
 
-/// `C_ActionBar.IsItemAction(slot)`: an item there (recorded).
+/// `C_ActionBar.IsItemAction(slot)`: an item there (recorded; nothing for
+/// a slot there is not: the full probe, 1.60.1).
 fn is_item_action(vm: &mut Vm, c: NativeCall) -> Ret {
-    let item = slot(&c)
-        .and_then(|s| action(vm, s))
-        .is_some_and(|a| a.kind == "item");
+    let Some(s) = slot(&c) else {
+        return Ok(vec![]);
+    };
+    let item = action(vm, s).is_some_and(|a| a.kind == "item");
     Ok(vec![Value::Bool(item)])
 }
 
@@ -138,25 +149,41 @@ const GAMEPAD_SLOTS: i64 = 181;
 /// holding the spell, in order, or nothing; `Enum.ActionBarSet` All (3, the
 /// default), Mkb (1: not the gamepad bars, recorded: slot 200 left out),
 /// Gamepad (2, unverified). Unverified: overridden spells.
+///
+/// The full probe (1.60.1): set 0 searched every bar as 3 did; a spell's
+/// name stands for its spell, a string naming none for spell 0; a macro
+/// casting nothing (a `/whisper`) was found as holding spell 0.
 fn find_spell_action_buttons(vm: &mut Vm, c: NativeCall) -> Ret {
-    let Some(spell) = num(c.arg(1)) else {
-        return Ok(vec![]);
+    let spell = match c.arg(1) {
+        Value::Num(n) => n,
+        v @ Value::Str(_) => crate::spellinfo::spell_of(vm, v).unwrap_or(0.0),
+        _ => return Ok(vec![]),
     };
     let set = num(c.arg(2)).unwrap_or(3.0);
-    let slots: Vec<i64> = engine(vm)
+    let held: Vec<(i64, Action)> = engine(vm)
         .world
         .character
         .actions
         .iter()
-        .filter(|(_, a)| a.kind == "spell" && num(a.id) == Some(spell))
-        .map(|(s, _)| *s)
-        .filter(|s| match set as i64 {
-            1 => *s < GAMEPAD_SLOTS,
-            2 => *s >= GAMEPAD_SLOTS,
-            3 => true,
-            _ => false,
-        })
+        .map(|(s, a)| (*s, a.clone()))
         .collect();
+    let mut slots: Vec<i64> = Vec::new();
+    for (s, a) in held {
+        let holds = match a.kind.as_str() {
+            "spell" => num(a.id),
+            "macro" => Some(crate::spellinfo::macro_spell(vm, a.id).unwrap_or(0.0)),
+            _ => None,
+        };
+        let in_set = match set as i64 {
+            1 => s < GAMEPAD_SLOTS,
+            2 => s >= GAMEPAD_SLOTS,
+            0 | 3 => true,
+            _ => false,
+        };
+        if holds == Some(spell) && in_set {
+            slots.push(s);
+        }
+    }
     if slots.is_empty() {
         return Ok(vec![]);
     }
@@ -210,10 +237,12 @@ fn get_action_texture(vm: &mut Vm, c: NativeCall) -> Ret {
     })
 }
 
+/// `GetActionText(slot)`: a macro's name; nothing for a slot without text
+/// (the full probe, 1.60.1: a spell's slot).
 fn get_action_text(vm: &mut Vm, c: NativeCall) -> Ret {
-    Ok(match slot(&c) {
-        Some(s) => vec![action(vm, s).map_or(Value::Nil, |a| a.text)],
-        None => vec![],
+    Ok(match slot(&c).and_then(|s| action(vm, s)) {
+        Some(a) if !a.text.is_nil() => vec![a.text],
+        _ => vec![],
     })
 }
 
@@ -447,6 +476,13 @@ fn not_for_slot(_vm: &mut Vm, c: NativeCall) -> Ret {
         Some(_) => vec![Value::Bool(false)],
         None => vec![],
     })
+}
+
+/// `IsAutoCastPetAction`, `IsEnabledAutoCastPetAction`,
+/// `IsEquippedGearOutfitAction`: false for any slot, 0 and past the last
+/// too (the full probe, 1.60.1; unverified: a pet's action on the bars).
+fn never(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(false)])
 }
 
 /// `IsAttackAction(slot)`: whether the slot holds Auto Attack (spell
@@ -704,9 +740,9 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_ActionBar.IsAttackAction", is_attack_action),
         ("IsAttackAction", is_attack_action),
         // No pet actions or outfits on the bars yet (recorded false).
-        ("C_ActionBar.IsAutoCastPetAction", not_for_slot),
-        ("C_ActionBar.IsEnabledAutoCastPetAction", not_for_slot),
-        ("C_ActionBar.IsEquippedGearOutfitAction", not_for_slot),
+        ("C_ActionBar.IsAutoCastPetAction", never),
+        ("C_ActionBar.IsEnabledAutoCastPetAction", never),
+        ("C_ActionBar.IsEquippedGearOutfitAction", never),
         ("C_ActionBar.IsAssistedCombatAction", not_assisted),
         ("C_ActionBar.GetActionCooldown", get_action_cooldown),
         ("C_ActionBar.GetActionCharges", get_action_charges),

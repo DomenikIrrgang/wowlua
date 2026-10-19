@@ -956,10 +956,16 @@ pet_stats! {
 
 // --------------------------------------------------------------- auras
 
-/// The aura with this instance ID on the unit argument `n` names.
+/// The aura with this instance ID (truncated: the full probe, 1.60.1,
+/// found aura 1 at 1.5) on the unit argument `n` names by its token.
 fn aura_at(vm: &Vm, c: &NativeCall, n: usize) -> Option<auras::Aura> {
     let unit = units::unit_arg(vm, c, n)?;
-    let id = num(vm, c.arg(n + 1))?;
+    aura_on(vm, c, unit, n + 1)
+}
+
+/// The aura with the instance ID argument `n` gives on the unit.
+fn aura_on(vm: &Vm, c: &NativeCall, unit: UnitId, n: usize) -> Option<auras::Aura> {
+    let id = num(vm, c.arg(n))?.trunc();
     engine(vm)
         .units
         .auras
@@ -976,9 +982,9 @@ fn get_unit_auras(vm: &mut Vm, c: NativeCall) -> Ret {
     auras::refuse(vm, "GetUnitAuras")?;
     let filter = text(vm, c.arg(2)).unwrap_or_default();
     let max = num(vm, c.arg(3)).map(|n| n.max(0.0) as usize);
-    let list = match units::unit_arg(vm, &c, 1) {
-        Some(unit) => auras::listed(vm, unit, &filter),
-        None => Vec::new(),
+    let list = match auras::unit_or_guid(vm, c.arg(1)) {
+        Some(unit) if auras::names_kind(&filter) => auras::listed(vm, unit, &filter),
+        _ => Vec::new(),
     };
     let values: Vec<Value> = list
         .iter()
@@ -994,13 +1000,13 @@ fn get_unit_aura_instance_ids(vm: &mut Vm, c: NativeCall) -> Ret {
     auras::refuse(vm, "GetUnitAuraInstanceIDs")?;
     let filter = text(vm, c.arg(2)).unwrap_or_default();
     let max = num(vm, c.arg(3)).map(|n| n.max(0.0) as usize);
-    let ids: Vec<Value> = match units::unit_arg(vm, &c, 1) {
-        Some(unit) => auras::listed(vm, unit, &filter)
+    let ids: Vec<Value> = match auras::unit_or_guid(vm, c.arg(1)) {
+        Some(unit) if auras::names_kind(&filter) => auras::listed(vm, unit, &filter)
             .iter()
             .take(max.unwrap_or(usize::MAX))
             .map(|a| Value::Num(a.instance))
             .collect(),
-        None => Vec::new(),
+        _ => Vec::new(),
     };
     Ok(vec![list_of(vm, &ids)])
 }
@@ -1022,38 +1028,64 @@ fn get_unit_aura_by_spell_id(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_UnitAuras.IsAuraFilteredOutByInstanceID(unit, auraInstanceID,
-/// filter)`: the aura fails the filter (an aura the unit lacks too).
+/// filter)`: the aura fails the filter (an aura the unit lacks too, and
+/// every aura a filter naming no kind; the unit by token or GUID: the full
+/// probe, 1.60.1).
 fn is_aura_filtered_out(vm: &mut Vm, c: NativeCall) -> Ret {
     auras::refuse(vm, "IsAuraFilteredOutByInstanceID")?;
     let filter = text(vm, c.arg(3)).unwrap_or_default();
-    let out = aura_at(vm, &c, 1).is_none_or(|a| !auras::matches(&a, &filter));
+    let aura = auras::unit_or_guid(vm, c.arg(1)).and_then(|unit| aura_on(vm, &c, unit, 2));
+    let out = !auras::names_kind(&filter) || aura.is_none_or(|a| !auras::matches(&a, &filter));
     Ok(vec![Value::Bool(out)])
 }
+
+// The queries of one aura by its instance answer nothing for a unit or an
+// aura there is not, and take a unit token only (the full probe, 1.60.1:
+// the player's GUID answered nothing).
 
 /// `C_UnitAuras.GetAuraCasterGUID(unit, auraInstanceID)`: its caster's
 /// GUID.
 fn get_aura_caster_guid(vm: &mut Vm, c: NativeCall) -> Ret {
     auras::refuse(vm, "GetAuraCasterGUID")?;
-    let guid = aura_at(vm, &c, 1)
-        .and_then(|a| a.source)
-        .map(|s| engine(vm).units.list[s.0].guid.clone());
+    let Some(a) = aura_at(vm, &c, 1) else {
+        return Ok(vec![]);
+    };
+    let guid = a.source.map(|s| engine(vm).units.list[s.0].guid.clone());
     Ok(vec![guid.map_or(Value::Nil, |g| vm.str(&g))])
 }
 
 /// `C_UnitAuras.DoesAuraHaveExpirationTime(unit, auraInstanceID)`.
 fn does_aura_have_expiration_time(vm: &mut Vm, c: NativeCall) -> Ret {
     auras::refuse(vm, "DoesAuraHaveExpirationTime")?;
-    let has = aura_at(vm, &c, 1).is_some_and(|a| a.expiration > 0.0);
-    Ok(vec![Value::Bool(has)])
+    let Some(a) = aura_at(vm, &c, 1) else {
+        return Ok(vec![]);
+    };
+    Ok(vec![Value::Bool(a.expiration > 0.0)])
 }
 
 /// `C_UnitAuras.GetAuraBaseDuration(unit, auraInstanceID [, spellID])`:
-/// its duration.
+/// its duration; 0 when a spell is given, whichever (the full probe,
+/// 1.60.1: a one-hour buff's 3600 without, 0 with its own spell, another,
+/// 0 or `"x"`; unverified: a spell whose aura it changes).
 fn get_aura_base_duration(vm: &mut Vm, c: NativeCall) -> Ret {
     auras::refuse(vm, "GetAuraBaseDuration")?;
-    Ok(vec![
-        aura_at(vm, &c, 1).map_or(Value::Nil, |a| Value::Num(a.duration)),
-    ])
+    let Some(a) = aura_at(vm, &c, 1) else {
+        return Ok(vec![]);
+    };
+    let spell = !vm.hidden(c.arg(3)).is_nil();
+    Ok(vec![Value::Num(if spell { 0.0 } else { a.duration })])
+}
+
+/// `C_UnitAuras.GetRefreshCarryOverDuration` and
+/// `GetRefreshExtendedDuration(unit, auraInstanceID [, spellID])`: nil for
+/// an aura the unit has (the full probe, 1.60.1: a one-hour buff's, any
+/// spell; unverified: an aura a refresh extends).
+fn get_refresh_duration(vm: &mut Vm, c: NativeCall) -> Ret {
+    auras::refuse(vm, "GetRefreshCarryOverDuration")?;
+    Ok(match aura_at(vm, &c, 1) {
+        Some(_) => vec![Value::Nil],
+        None => vec![],
+    })
 }
 
 /// `C_UnitAuras.GetAuraApplicationDisplayCount(unit, auraInstanceID
@@ -1063,7 +1095,10 @@ fn get_aura_application_display_count(vm: &mut Vm, c: NativeCall) -> Ret {
     auras::refuse(vm, "GetAuraApplicationDisplayCount")?;
     let min = num(vm, c.arg(3)).unwrap_or(2.0);
     let max = num(vm, c.arg(4));
-    let count = aura_at(vm, &c, 1).map_or(0.0, |a| a.applications);
+    let Some(a) = aura_at(vm, &c, 1) else {
+        return Ok(vec![]);
+    };
+    let count = a.applications;
     let shown = if count < min {
         String::new()
     } else if max.is_some_and(|m| count > m) {
@@ -1424,8 +1459,14 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             cancel_aura_by_instance_id,
         ),
         ("C_UnitAuras.SetHiddenGroupBuffs", set_hidden_group_buffs),
-        ("C_UnitAuras.GetRefreshCarryOverDuration", nil),
-        ("C_UnitAuras.GetRefreshExtendedDuration", nil),
+        (
+            "C_UnitAuras.GetRefreshCarryOverDuration",
+            get_refresh_duration,
+        ),
+        (
+            "C_UnitAuras.GetRefreshExtendedDuration",
+            get_refresh_duration,
+        ),
         ("C_UnitAuras.GetCooldownAuraBySpellID", nil),
         ("C_UnitAuras.AuraIsBigDefensive", no),
         ("C_UnitAuras.AuraIsPrivate", no),

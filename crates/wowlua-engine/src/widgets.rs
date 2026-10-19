@@ -666,6 +666,13 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
             .table_mut(own)
             .set_str(newindex, Value::Table(table));
         vm.heap.table_mut(own).set_str(hidden, Value::Bool(false));
+        // A duration prints as the client's `LuaDurationObject: 0x…` (the
+        // full probe, 1.60.1; unverified: the other script objects' names).
+        if class == "DurationObject" {
+            let k = vm.heap.intern(b"__tostring");
+            let f = vm.native_with("__tostring", duration_tostring, vec![]);
+            vm.heap.table_mut(own).set_str(k, f);
+        }
         keep(vm, Value::Table(own));
         let ud = vm.heap.alloc_userdata(Userdata {
             serial: 0,
@@ -678,6 +685,13 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         return Value::Userdata(ud);
     }
     Value::Table(table)
+}
+
+/// `tostring(duration)`: its type and address, as the client prints it.
+fn duration_tostring(vm: &mut Vm, c: NativeCall) -> Ret {
+    let raw = vm.raw_tostring(c.arg(1));
+    let text = String::from_utf8_lossy(&raw).replacen("userdata", "LuaDurationObject", 1);
+    Ok(vec![vm.str(&text)])
 }
 
 /// Addon code may not use a forbidden widget (unverified wording). The

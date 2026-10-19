@@ -883,9 +883,16 @@ fn deactivate_binding_context(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+///
+/// Context 0 (the default) is active unless deactivated (the full probe,
+/// 1.60.1: 0 and "x" true, 1 to 9 false).
 fn is_binding_context_active(vm: &mut Vm, c: NativeCall) -> Ret {
     let k = context_key(vm, c.arg(1));
-    Ok(vec![Value::Bool(get_state(vm, &k).truthy())])
+    let active = match get_state(vm, &k) {
+        Value::Nil => num(vm, c.arg(1)).unwrap_or(0.0) == 0.0,
+        v => v.truthy(),
+    };
+    Ok(vec![Value::Bool(active)])
 }
 
 /// `C_KeyBindings.GetTurnStrafeStyle()`: as set, else 2 (recorded with
@@ -1842,6 +1849,30 @@ fn secret_while_restricted(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(restricted(vm))])
 }
 
+/// `C_Secrets.ShouldUnitThreatStateBeSecret(unit [, mobUnit])` and
+/// `…ThreatValuesBeSecret(unit, mobUnit)`: secret, but for no mob and for a
+/// group token's threat on `"target"` (the full probe, 1.60.1, out of
+/// combat and unrestricted, no target: every other pair secret, `"none"`,
+/// `"target"` and a GUID on `"target"` too; unverified: other states, a
+/// target that exists).
+fn threat_secret(vm: &mut Vm, c: NativeCall) -> Ret {
+    let token = |v: Value| match vm.hidden(v) {
+        Value::Str(s) => Some(String::from_utf8_lossy(vm.str_bytes(s)).to_ascii_lowercase()),
+        _ => None,
+    };
+    let Some(mob) = token(c.arg(2)) else {
+        return Ok(vec![Value::Bool(false)]);
+    };
+    let group = token(c.arg(1)).is_some_and(|u| {
+        let base = u.trim_end_matches(|ch: char| ch.is_ascii_digit());
+        matches!(
+            base,
+            "player" | "pet" | "party" | "raid" | "partypet" | "raidpet"
+        )
+    });
+    Ok(vec![Value::Bool(!(mob == "target" && group))])
+}
+
 /// `C_Secrets.ShouldUnitSpellCastBeSecret(unit, spell)`: another unit's
 /// casts, as `SecretWhenUnitSpellCastRestricted` answers.
 fn unit_spell_cast_secret(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -1908,10 +1939,38 @@ fn nums(values: [f64; 3]) -> Vec<Value> {
     values.into_iter().map(Value::Num).collect()
 }
 
+/// `C_Texture.GetFilenameFromFileDataID(id)`: "FileData ID <id>", the
+/// client's name for a file it does not list (the full probe, 1.60.1:
+/// -1, 0, 1, 1.5 as 1, 2147483647; unverified: a file it names).
+fn filename_from_file_id(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = num(vm, c.arg(1)).unwrap_or(0.0).trunc() as i64;
+    Ok(vec![vm.str(&format!("FileData ID {id}"))])
+}
+
+// The conversions clamp their inputs (hue to 0..360, the rest to 0..1)
+// and compute in single precision (the full probe, 1.60.1: hue
+// 2147483647 read as 360, -1 as 0, a saturation 1.5 as 1; HSV (1, 1, 1)
+// gave green 0.016666650772095, a float's 1 - (1 - 1/60)).
+
+/// The arguments clamped: a hue (0..360) or a channel (0..1) each.
+fn clamped(vm: &Vm, c: &NativeCall, hue: bool) -> (f32, f32, f32) {
+    let (a, b, d) = three(vm, c);
+    let a = if hue {
+        a.clamp(0.0, 360.0)
+    } else {
+        a.clamp(0.0, 1.0)
+    };
+    (a as f32, b.clamp(0.0, 1.0) as f32, d.clamp(0.0, 1.0) as f32)
+}
+
+fn nums32(v: [f32; 3]) -> Vec<Value> {
+    nums(v.map(f64::from))
+}
+
 /// `C_ColorUtil.ConvertRGBToHSV(r, g, b)`: hue in degrees, -1 for a gray
-/// (documented), saturation and value 0..1 (unverified: degrees).
+/// (documented), saturation and value 0..1.
 fn convert_rgb_to_hsv(vm: &mut Vm, c: NativeCall) -> Ret {
-    let (r, g, b) = three(vm, &c);
+    let (r, g, b) = clamped(vm, &c, false);
     let max = r.max(g).max(b);
     let min = r.min(g).min(b);
     let delta = max - min;
@@ -1928,45 +1987,49 @@ fn convert_rgb_to_hsv(vm: &mut Vm, c: NativeCall) -> Ret {
         };
         h * 60.0
     };
-    Ok(nums([h, s, max]))
+    Ok(nums32([h, s, max]))
 }
 
-/// `C_ColorUtil.ConvertHSVToRGB(h, s, v)`.
+/// `C_ColorUtil.ConvertHSVToRGB(h, s, v)`: the hue's sixth of the circle
+/// (the last one past 360's float rounding: hue 360 gave blue
+/// -4.7683715820312e-07).
 fn convert_hsv_to_rgb(vm: &mut Vm, c: NativeCall) -> Ret {
-    let (h, s, v) = three(vm, &c);
-    let h = if h < 0.0 { 0.0 } else { h.rem_euclid(360.0) };
-    let chroma = v * s;
-    let x = chroma * (1.0 - ((h / 60.0).rem_euclid(2.0) - 1.0).abs());
-    let m = v - chroma;
-    let (r, g, b) = match (h / 60.0) as i64 {
-        0 => (chroma, x, 0.0),
-        1 => (x, chroma, 0.0),
-        2 => (0.0, chroma, x),
-        3 => (0.0, x, chroma),
-        4 => (x, 0.0, chroma),
-        _ => (chroma, 0.0, x),
+    let (h, s, v) = clamped(vm, &c, true);
+    let hh = h * (1.0f32 / 60.0);
+    let i = hh.floor().min(5.0);
+    let f = hh - i;
+    let p = v * (1.0 - s);
+    let q = v * (1.0 - s * f);
+    let t = v * (1.0 - s * (1.0 - f));
+    let rgb = match i as i64 {
+        0 => [v, t, p],
+        1 => [q, v, p],
+        2 => [p, v, t],
+        3 => [p, q, v],
+        4 => [t, p, v],
+        _ => [v, p, q],
     };
-    Ok(nums([r + m, g + m, b + m]))
+    Ok(nums32(rgb))
 }
 
 /// `C_ColorUtil.ConvertHSVToHSL(h, s, v)`: the hue kept.
 fn convert_hsv_to_hsl(vm: &mut Vm, c: NativeCall) -> Ret {
-    let (h, s, v) = three(vm, &c);
+    let (h, s, v) = clamped(vm, &c, true);
     let l = v * (1.0 - s / 2.0);
     let sl = if l <= 0.0 || l >= 1.0 {
         0.0
     } else {
         (v - l) / l.min(1.0 - l)
     };
-    Ok(nums([h, sl, l]))
+    Ok(nums32([h, sl, l]))
 }
 
 /// `C_ColorUtil.ConvertHSLToHSV(h, s, l)`: the hue kept.
 fn convert_hsl_to_hsv(vm: &mut Vm, c: NativeCall) -> Ret {
-    let (h, s, l) = three(vm, &c);
+    let (h, s, l) = clamped(vm, &c, true);
     let v = l + s * l.min(1.0 - l);
     let sv = if v <= 0.0 { 0.0 } else { 2.0 * (1.0 - l / v) };
-    Ok(nums([h, sv, v]))
+    Ok(nums32([h, sv, v]))
 }
 
 // ----------------------------------------------------------- encoding
@@ -2164,7 +2227,7 @@ fn cbor_head(major: u8, n: u64, out: &mut Vec<u8>) {
 }
 
 /// A Lua value as CBOR: integers as integers, other numbers as doubles,
-/// strings as text (bytes when not UTF-8), lists as arrays (an empty
+/// strings as byte strings, lists as arrays (an empty
 /// table one too: recorded `\x80`), other tables as maps (unverified: the
 /// client's float widths).
 fn cbor_encode(
@@ -2192,10 +2255,11 @@ fn cbor_encode(
             out.push(0xfb);
             out.extend_from_slice(&n.to_bits().to_be_bytes());
         }
+        // A string is a byte string, UTF-8 or not (the full probe,
+        // 1.60.1: "x" as `Ax`, 0x41).
         Value::Str(s) => {
             let b = vm.str_bytes(s);
-            let major = if std::str::from_utf8(b).is_ok() { 3 } else { 2 };
-            cbor_head(major, b.len() as u64, out);
+            cbor_head(2, b.len() as u64, out);
             out.extend_from_slice(b);
         }
         Value::Table(t) => {
@@ -2387,6 +2451,10 @@ fn deserialize_cbor(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(src) = bytes_arg(vm, &c, 1) else {
         return Ok(vec![Value::Nil]);
     };
+    // No bytes: nothing (the full probe, 1.60.1; "x" fails).
+    if src.is_empty() {
+        return Ok(vec![]);
+    }
     let mut d = Cbor { b: &src, i: 0 };
     match cbor_decode(vm, &mut d, 0) {
         Some(v) => Ok(vec![v]),
@@ -2943,7 +3011,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Texture.GetAtlasElementID", zero),
         ("C_Texture.GetAtlasID", zero),
         ("C_Texture.GetAtlasElements", empty_table),
-        ("C_Texture.GetFilenameFromFileDataID", empty_string),
+        ("C_Texture.GetFilenameFromFileDataID", filename_from_file_id),
         // Game pads: none connected.
         ("C_GamePad.IsEnabled", no),
         ("C_GamePad.GetAllDeviceIDs", empty_table),
@@ -3051,14 +3119,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             "C_Secrets.ShouldUnitAuraSlotBeSecret",
             secret_while_restricted,
         ),
-        (
-            "C_Secrets.ShouldUnitThreatStateBeSecret",
-            secret_while_restricted,
-        ),
-        (
-            "C_Secrets.ShouldUnitThreatValuesBeSecret",
-            secret_while_restricted,
-        ),
+        ("C_Secrets.ShouldUnitThreatStateBeSecret", threat_secret),
+        ("C_Secrets.ShouldUnitThreatValuesBeSecret", threat_secret),
         (
             "C_Secrets.ShouldUnitSpellCastBeSecret",
             unit_spell_cast_secret,

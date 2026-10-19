@@ -246,6 +246,21 @@ filters! {
     base_sets_default_filters, set_base_sets_default_filters: "basesets.filter.";
 }
 
+/// Whether an indexed filter has that index (the full probe, 1.60.1: the
+/// mount journal's collected filters 1 to 3 and types its own, 0 and
+/// 2147483647 reading false and keeping no setting, its sources none, as
+/// `IsValidSourceFilter` answered; the pet journal's from 1, 99 kept; the
+/// toy box's expansions from 0; unverified: the others, taken from 1).
+fn valid_filter_index(key: &str, i: i64) -> bool {
+    match key {
+        "mount.filter.source." => false,
+        "mount.filter.collected." => (1..=3).contains(&i),
+        "mount.filter.type." => (1..=MOUNT_TYPES).contains(&i),
+        "toy.filter.expansion." => i >= 0,
+        _ => i >= 1,
+    }
+}
+
 /// A boolean filter's getter and setter, by an index argument (`$indexed`)
 /// or none, with its default.
 macro_rules! flag_filters {
@@ -253,13 +268,20 @@ macro_rules! flag_filters {
         $(
             fn $get(vm: &mut Vm, c: NativeCall) -> Ret {
                 let key = if $indexed {
-                    format!("{}{}", $key, num(vm, &c, 1).unwrap_or(0.0) as i64)
+                    let i = num(vm, &c, 1).unwrap_or(0.0) as i64;
+                    if !valid_filter_index($key, i) {
+                        return Ok(vec![Value::Bool(false)]);
+                    }
+                    format!("{}{}", $key, i)
                 } else {
                     $key.to_string()
                 };
                 Ok(vec![Value::Bool(flag(vm, &key, $default))])
             }
             fn $set(vm: &mut Vm, c: NativeCall) -> Ret {
+                if $indexed && !valid_filter_index($key, num(vm, &c, 1).unwrap_or(0.0) as i64) {
+                    return Ok(vec![]);
+                }
                 let (key, on) = if $indexed {
                     (
                         format!("{}{}", $key, num(vm, &c, 1).unwrap_or(0.0) as i64),
@@ -530,9 +552,14 @@ fn get_mount_usability(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `C_MountJournal.IsValidSourceFilter(i)`, `IsValidTypeFilter(i)`: the
 /// filters the dropdown lists (unverified counts).
+///
+/// No source filter (the full probe, 1.60.1: 0, 1 and 2147483647 false).
 fn is_valid_mount_source(vm: &mut Vm, c: NativeCall) -> Ret {
     let i = num(vm, &c, 1).unwrap_or(0.0) as i64;
-    Ok(vec![Value::Bool((1..=MOUNT_SOURCES).contains(&i))])
+    Ok(vec![Value::Bool(valid_filter_index(
+        "mount.filter.source.",
+        i,
+    ))])
 }
 
 fn is_valid_mount_type(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -617,8 +644,13 @@ fn get_toy_info(vm: &mut Vm, c: NativeCall) -> Ret {
 // Pets and pet battles.
 
 /// `C_PetJournal.GetPetLoadOutInfo(slot)`: no pet, no abilities, locked
-/// (unverified: no battle pets).
-fn get_pet_loadout_info(_vm: &mut Vm, _c: NativeCall) -> Ret {
+/// (unverified: no battle pets); nothing for a slot past the three (the
+/// full probe, 1.60.1: 1 and 1.5 the empty slot, 0 and 2147483647
+/// nothing).
+fn get_pet_loadout_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    if !num(vm, &c, 1).is_some_and(|n| (1.0..4.0).contains(&n)) {
+        return Ok(vec![]);
+    }
     Ok(vec![
         Value::Nil,
         Value::Num(0.0),

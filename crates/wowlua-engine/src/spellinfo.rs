@@ -176,8 +176,10 @@ fn get_bool(fields: &Fields, key: &str) -> Option<bool> {
 
 /// The spellbook item `(slot, bank)` asks about: the player's bank (0)
 /// only (the pet's items are not recorded).
+///
+/// The slot is truncated (the full probe, 1.60.1: 1.5 asked about slot 1).
 fn book_item(vm: &Vm, c: &NativeCall) -> Option<Fields> {
-    let slot = num(vm.hidden(c.arg(1)))?;
+    let slot = num(vm.hidden(c.arg(1)))?.trunc();
     if matches!(vm.hidden(c.arg(2)), Value::Num(b) if b == 1.0) {
         return None;
     }
@@ -240,7 +242,7 @@ fn spell_named(vm: &mut Vm, text: &str) -> Option<f64> {
 }
 
 /// The spell a `SpellIdentifier` names: an ID, or a name.
-fn spell_of(vm: &mut Vm, v: Value) -> Option<f64> {
+pub(crate) fn spell_of(vm: &mut Vm, v: Value) -> Option<f64> {
     match vm.hidden(v) {
         Value::Num(n) => Some(n),
         Value::Str(s) => {
@@ -422,17 +424,6 @@ fn empty_string(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 // ------------------------------------------------------------ C_Spell
 
-/// `C_Spell.GetSpellIDForSpellIdentifier(spell)`, `C_Spell.GetBaseSpell`,
-/// `C_SpellBook.FindSpellOverrideByID`, `C_SpellBook.FindBaseSpellByID`:
-/// the spell's own ID (no overrides modelled, as `C_Spell.GetOverrideSpell`
-/// answers), nothing for a name nobody has.
-fn spell_itself(vm: &mut Vm, c: NativeCall) -> Ret {
-    Ok(match spell_of(vm, c.arg(1)) {
-        Some(id) => vec![Value::Num(id)],
-        None => vec![],
-    })
-}
-
 /// `C_Spell.GetSpellCooldownDuration(spell [, ignoreGCD])`: its cooldown
 /// running (`spell_cooldown`) as a duration object, a zero one when none,
 /// nothing for a spell the client lacks.
@@ -448,15 +439,84 @@ fn get_spell_cooldown_duration(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![d])
 }
 
-/// `C_Spell.GetSpellChargeDuration(spell)`,
-/// `C_Spell.GetSpellLossOfControlCooldownDuration(spell)`: zero (no
-/// charges or loss of control on the classic spells), nothing for a spell
-/// the client lacks.
+/// `C_Spell.GetSpellLossOfControlCooldownDuration(spell)`: zero (no loss
+/// of control on the classic spells), nothing for a spell the client
+/// lacks.
 fn spell_zero_duration(vm: &mut Vm, c: NativeCall) -> Ret {
     match spell_of(vm, c.arg(1)) {
         Some(id) if exists(vm, id) => Ok(vec![zero_duration(vm)]),
         _ => Ok(vec![]),
     }
+}
+
+/// `C_Spell.GetSpellChargeDuration(spell)`: a zero duration for a spell
+/// with charges (`C_Spell.GetSpellCharges` answers some), nothing for
+/// others (the full probe, 1.60.1: Attack and Cannibalize nothing).
+fn spell_charge_duration(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(id) = spell_of(vm, c.arg(1)).filter(|id| exists(vm, *id)) else {
+        return Ok(vec![]);
+    };
+    let charges = ask(vm, "C_Spell.GetSpellCharges", &[Value::Num(id)]);
+    Ok(match charges.first() {
+        Some(Value::Table(_)) => vec![zero_duration(vm)],
+        _ => vec![],
+    })
+}
+
+/// `C_Spell.GetVisibilityInfo(spell, context)`: no custom visibility, not
+/// always shown, not for the spec (the full probe, 1.60.1: every spell and
+/// context alike).
+fn get_visibility_info(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(false); 3])
+}
+
+/// `C_Spell.GetSchoolString(schoolMask)`: the school's name, the global
+/// strings' (`STRING_SCHOOL_*`) for a school and the combinations they
+/// name, "Unknown" for none (the full probe, 1.60.1: 0 "Unknown", 1
+/// "Physical"; recorded "Fire" for 4, "Frost" for 16; unverified: the
+/// combinations, and nil for one no string names). The game data's
+/// behaviour (`gamedata.rs`), before the two recorded answers.
+pub(crate) fn get_school_string(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Num(mask) = vm.hidden(c.arg(1)) else {
+        return Ok(vec![Value::Nil]);
+    };
+    let name = match mask as i64 {
+        0 => "Unknown",
+        1 => "Physical",
+        2 => "Holy",
+        3 => "Holystrike",
+        4 => "Fire",
+        5 => "Flamestrike",
+        6 => "Holyfire",
+        8 => "Nature",
+        9 => "Stormstrike",
+        10 => "Holystorm",
+        12 => "Firestorm",
+        16 => "Frost",
+        17 => "Froststrike",
+        18 => "Holyfrost",
+        20 => "Frostfire",
+        24 => "Froststorm",
+        28 => "Elemental",
+        32 => "Shadow",
+        33 => "Shadowstrike",
+        34 => "Twilight",
+        36 => "Shadowflame",
+        40 => "Plague",
+        48 => "Shadowfrost",
+        64 => "Arcane",
+        65 => "Spellstrike",
+        66 => "Divine",
+        68 => "Spellfire",
+        72 => "Spellstorm",
+        80 => "Spellfrost",
+        96 => "Spellshadow",
+        124 => "Chromatic",
+        126 => "Magic",
+        127 => "Chaos",
+        _ => return Ok(vec![Value::Nil]),
+    };
+    Ok(vec![vm.str(name)])
 }
 
 /// `C_Spell.IsSpellUsable(spell)`: usable, short of power (`usable`).
@@ -540,12 +600,18 @@ fn get_spell_loss_of_control_info(vm: &mut Vm, c: NativeCall) -> Ret {
     }
 }
 
-/// `C_Spell.GetItemCooldown(itemID)`: the item's cooldown as
-/// `C_Container.GetItemCooldown` has it, as a `SpellCooldownInfo`.
+/// `C_Spell.GetItemCooldown(itemID)`: nothing for an item without a use
+/// cooldown running (the full probe, 1.60.1: the Hearthstone, 6948, and
+/// items the character lacks nothing); else its cooldown as
+/// `C_Container.GetItemCooldown` has it, as a `SpellCooldownInfo`
+/// (unverified).
 fn get_item_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
     let r = ask(vm, "C_Container.GetItemCooldown", &[c.arg(1)]);
     let start = r.first().copied().and_then(num).unwrap_or(0.0);
     let length = r.get(1).copied().and_then(num).unwrap_or(0.0);
+    if length <= 0.0 {
+        return Ok(vec![]);
+    }
     let now = crate::clock::now(vm);
     let t = table(
         vm,
@@ -737,21 +803,11 @@ fn skill_lines(vm: &Vm) -> Vec<(i64, f64, f64, Option<f64>)> {
 }
 
 /// `C_SpellBook.GetSpellBookItemSkillLineIndex(slot, bank)`: its recorded
-/// `skillLineIndex`, else the skill line whose items hold the slot (by
-/// their recorded offsets and counts).
+/// `skillLineIndex`, nil for an item without one (the full probe, 1.60.1:
+/// the General line's Attack nil, as its recorded item lacks the field).
 fn get_spellbook_item_skill_line_index(vm: &mut Vm, c: NativeCall) -> Ret {
-    let Some(f) = book_item(vm, &c) else {
-        return Ok(vec![Value::Nil]);
-    };
-    if let Some(i) = get_num(&f, "skillLineIndex") {
-        return Ok(vec![Value::Num(i)]);
-    }
-    let slot = num(vm.hidden(c.arg(1))).unwrap_or(0.0);
-    let line = skill_lines(vm)
-        .into_iter()
-        .find(|(_, offset, count, _)| slot > *offset && slot <= offset + count)
-        .map(|(i, ..)| Value::Num(i as f64));
-    Ok(vec![line.unwrap_or(Value::Nil)])
+    let line = book_item(vm, &c).and_then(|f| get_num(&f, "skillLineIndex"));
+    Ok(vec![line.map_or(Value::Nil, Value::Num)])
 }
 
 /// `C_SpellBook.GetSkillLineIndexByID(skillLineID)`: the recorded skill
@@ -781,13 +837,46 @@ fn get_spellbook_item_cooldown_duration(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![d])
 }
 
-/// `C_SpellBook.GetSpellBookItemChargeDuration`,
-/// `…LossOfControlCooldownDuration(slot, bank)`: zero for an item.
+/// `C_SpellBook.GetSpellBookItemLossOfControlCooldownDuration(slot,
+/// bank)`: zero for an item.
 fn spellbook_item_zero_duration(vm: &mut Vm, c: NativeCall) -> Ret {
     match book_item(vm, &c) {
         Some(_) => Ok(vec![zero_duration(vm)]),
         None => Ok(vec![]),
     }
+}
+
+/// `C_SpellBook.GetSpellBookItemChargeDuration(slot, bank)`: its spell's
+/// (`C_Spell.GetSpellChargeDuration`; the full probe, 1.60.1: Attack's
+/// nothing).
+fn spellbook_item_charge_duration(vm: &mut Vm, c: NativeCall) -> Ret {
+    match book_spell(vm, &c) {
+        Some(id) => Ok(ask(vm, "C_Spell.GetSpellChargeDuration", &[Value::Num(id)])),
+        None => Ok(vec![]),
+    }
+}
+
+/// `C_SpellBook.GetCurrentLevelSpells(level)`: the spells of the
+/// spellbook's General line (its items without a skill line) learned at
+/// that level, in the book's order (the full probe, 1.60.1: level 0
+/// Attack, the racials and the passives, level 1 Block, Dodge, Parry and
+/// Sacred Duty; the class lines' Holy Light and Seal of Righteousness at
+/// level 1 not; unverified: the rule beyond this character).
+fn get_current_level_spells(vm: &mut Vm, c: NativeCall) -> Ret {
+    let level = num(vm.hidden(c.arg(1)));
+    let levels = match engine(vm).world.character.stats.get("spellBookItemLevel") {
+        Some(Entry::ByIndex(m)) => m.clone(),
+        _ => Default::default(),
+    };
+    let spells: Vec<f64> = book(vm)
+        .into_iter()
+        .filter(|(_, f)| get_num(f, "skillLineIndex").is_none())
+        .filter(|(s, _)| {
+            matches!(levels.get(s).and_then(|a| a.first()), Some(Answer::Num(l)) if Some(*l) == level)
+        })
+        .filter_map(|(_, f)| get_num(&f, "spellID"))
+        .collect();
+    Ok(vec![list(vm, &spells)])
 }
 
 /// `GetFlyoutID(slot)`: the flyout a spellbook slot holds (its item's
@@ -807,7 +896,8 @@ fn get_flyout_id(vm: &mut Vm, c: NativeCall) -> Ret {
 /// The slot asked about (`None` for 0 and below, as the bars answer
 /// nothing for them) and the action in it.
 fn action_at(vm: &Vm, c: &NativeCall) -> Option<Option<Action>> {
-    let slot = num(vm.hidden(c.arg(1))).filter(|n| *n >= 1.0)? as i64;
+    let slot =
+        num(vm.hidden(c.arg(1))).filter(|n| (1.0..=crate::actions::LAST_SLOT).contains(n))? as i64;
     Some(engine(vm).world.character.actions.get(&slot).cloned())
 }
 
@@ -843,12 +933,21 @@ fn get_action_cooldown_duration(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![d])
 }
 
-/// `C_ActionBar.GetActionChargeDuration(slot)`,
-/// `…GetActionLossOfControlCooldownDuration(slot)`: zero (no charges or
-/// loss of control run, as `GetActionCharges` answers).
+/// `C_ActionBar.GetActionLossOfControlCooldownDuration(slot)`: zero (no
+/// loss of control runs).
 fn action_zero_duration(vm: &mut Vm, c: NativeCall) -> Ret {
     match action_at(vm, &c) {
         Some(_) => Ok(vec![zero_duration(vm)]),
+        None => Ok(vec![]),
+    }
+}
+
+/// `C_ActionBar.GetActionChargeDuration(slot)`: nil, no action having
+/// charges (the full probe, 1.60.1: a spell's slot; as `GetActionCharges`'
+/// zero charges answer).
+fn action_charge_duration(vm: &mut Vm, c: NativeCall) -> Ret {
+    match action_at(vm, &c) {
+        Some(_) => Ok(vec![Value::Nil]),
         None => Ok(vec![]),
     }
 }
@@ -881,9 +980,16 @@ fn get_action_use_count(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `C_ActionBar.IsOnBarOrSpecialBar(spell [, set])`,
 /// `C_ActionBar.HasSpellActionButtons(spell [, set])`: a slot of the set
 /// holds it (`C_ActionBar.FindSpellActionButtons`).
+///
+/// A string naming no spell searches as `FindSpellActionButtons` does (the
+/// full probe, 1.60.1: "x" found the macro holding spell 0).
 fn has_spell_action_buttons(vm: &mut Vm, c: NativeCall) -> Ret {
-    let Some(id) = spell_of(vm, c.arg(1)) else {
-        return Ok(vec![Value::Bool(false)]);
+    let id = match vm.hidden(c.arg(1)) {
+        Value::Str(_) => spell_of(vm, c.arg(1)).unwrap_or(0.0),
+        _ => match spell_of(vm, c.arg(1)) {
+            Some(id) => id,
+            None => return Ok(vec![Value::Bool(false)]),
+        },
     };
     let set = match vm.hidden(c.arg(2)) {
         Value::Nil => Value::Num(3.0),
@@ -1070,6 +1176,14 @@ fn macro_value(vm: &mut Vm, body: &str) -> Option<String> {
 /// `GetMacroSpell(macro)`: the spell the macro casts now (its value named
 /// a spell of the spellbook, or a defined one), else nothing
 /// (warcraft.wiki.gg: the spell ID the macro is set to cast).
+/// The spell a macro (by index or name) casts now, as `GetMacroSpell`
+/// answers.
+pub(crate) fn macro_spell(vm: &mut Vm, id: Value) -> Option<f64> {
+    let body = macro_body(vm, id)?;
+    let value = macro_value(vm, &body)?;
+    spell_named(vm, &value)
+}
+
 fn get_macro_spell(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(body) = macro_body(vm, c.arg(1)) else {
         return Ok(vec![]);
@@ -1374,16 +1488,14 @@ fn is_cooldown_viewer_available(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
-        // C_Spell
-        ("C_Spell.GetSpellIDForSpellIdentifier", spell_itself),
-        ("C_Spell.GetBaseSpell", spell_itself),
-        ("C_SpellBook.FindSpellOverrideByID", spell_itself),
-        ("C_SpellBook.FindBaseSpellByID", spell_itself),
+        // C_Spell (`GetSpellIDForSpellIdentifier`, `GetBaseSpell`,
+        // `C_SpellBook.FindSpellOverrideByID` and `FindBaseSpellByID` are
+        // the game data's, `gamedata.rs`).
         (
             "C_Spell.GetSpellCooldownDuration",
             get_spell_cooldown_duration,
         ),
-        ("C_Spell.GetSpellChargeDuration", spell_zero_duration),
+        ("C_Spell.GetSpellChargeDuration", spell_charge_duration),
         (
             "C_Spell.GetSpellLossOfControlCooldownDuration",
             spell_zero_duration,
@@ -1430,7 +1542,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Spell.GetItemModifiedAppearancesApplied", empty_list),
         ("C_Spell.GetSpellSkillLineAbilityRank", nothing),
         ("C_Spell.GetSpellTradeSkillLink", nothing),
-        ("C_Spell.GetVisibilityInfo", nothing),
+        ("C_Spell.GetVisibilityInfo", get_visibility_info),
         ("C_Spell.GetDeadlyDebuffInfo", nothing),
         ("C_Spell.GetLastCategoryCooldownSource", nothing),
         ("C_Spell.GetMawPowerLinkBySpellID", nothing),
@@ -1521,14 +1633,17 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ),
         (
             "C_SpellBook.GetSpellBookItemChargeDuration",
-            spellbook_item_zero_duration,
+            spellbook_item_charge_duration,
         ),
         (
             "C_SpellBook.GetSpellBookItemLossOfControlCooldownDuration",
             spellbook_item_zero_duration,
         ),
         ("C_SpellBook.GetSpellBookItemTradeSkillLink", nothing),
-        ("C_SpellBook.GetCurrentLevelSpells", empty_list),
+        (
+            "C_SpellBook.GetCurrentLevelSpells",
+            get_current_level_spells,
+        ),
         ("C_SpellBook.AbortSpellIntro", nothing),
         ("C_SpellBook.SetBarSlotFromIntro", nothing),
         ("C_SpellBook.SetSpellBookItemAutoCastEnabled", nothing),
@@ -1539,7 +1654,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             "C_ActionBar.GetActionCooldownDuration",
             get_action_cooldown_duration,
         ),
-        ("C_ActionBar.GetActionChargeDuration", action_zero_duration),
+        (
+            "C_ActionBar.GetActionChargeDuration",
+            action_charge_duration,
+        ),
         (
             "C_ActionBar.GetActionLossOfControlCooldownDuration",
             action_zero_duration,

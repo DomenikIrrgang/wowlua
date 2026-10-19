@@ -415,8 +415,13 @@ pub(crate) const QUALITY_COLORS: [[f64; 4]; 9] = [
 
 /// `C_ColorOverrides.GetColorForQuality(quality)`: a `ColorMixin` color
 /// (camelot's; an unknown quality gives nothing, unverified).
+///
+/// A string reads as quality 0 (the full probe, 1.60.1: "x" the poor gray).
 fn color_for_quality(vm: &mut Vm, c: NativeCall) -> Ret {
-    let q = vm.check_int(&c, 1)?;
+    let q = match vm.hidden(c.arg(1)) {
+        Value::Str(_) => 0,
+        _ => vm.check_int(&c, 1)?,
+    };
     let Some(rgba) = usize::try_from(q).ok().and_then(|q| QUALITY_COLORS.get(q)) else {
         return Ok(vec![Value::Nil]);
     };
@@ -644,12 +649,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_LFGList.GetApplications", empty_list),
         // No pet battle, no nameplates.
         ("C_PetBattles.GetNumPets", zero),
-        ("C_PetBattles.GetHealth", zero),
-        ("C_PetBattles.GetMaxHealth", zero),
+        // (Health, level and experience are the full probe's,
+        // `leftovers2.rs`.)
         ("C_PetBattles.GetPower", zero),
         ("C_PetBattles.GetSpeed", zero),
-        ("C_PetBattles.GetLevel", zero),
-        ("C_PetBattles.GetXP", zeros),
         ("C_LFGListRoles.GetSavedRoles", saved_roles),
         ("GetGroupMemberCounts", group_member_counts),
         ("GetNetStats", net_stats),

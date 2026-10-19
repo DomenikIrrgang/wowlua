@@ -1062,6 +1062,5 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Mail.IsCommandPending", no),
         ("C_Mail.CanCheckInbox", yes),
         ("C_Mail.SetOpeningAll", nothing),
-        ("C_Mail.GetCraftingOrderMailInfo", nothing),
     ]
 }

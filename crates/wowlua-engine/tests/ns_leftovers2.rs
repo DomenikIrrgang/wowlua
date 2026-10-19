@@ -62,7 +62,8 @@ local home, world = GetNetIpTypes()
 return ConsoleGetFontHeight(), home, world, GetDownloadedPercentage(), C_Club.GetClubCapacity(),
     C_BattleNet.AreFriendTagsEnabled(), GetNumRaidProfiles()",
     );
-    assert_eq!(r, ["20", "1", "1", "0", "1000", "false", "0"]);
+    // Friend tags on (the full probe, 1.60.1).
+    assert_eq!(r, ["20", "1", "1", "0", "1000", "true", "0"]);
 }
 
 #[test]

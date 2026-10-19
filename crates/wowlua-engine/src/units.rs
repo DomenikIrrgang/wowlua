@@ -218,8 +218,9 @@ const CAMELOT_CLASSES: &[f64] = &[1.0, 2.0, 3.0, 4.0, 5.0, 7.0, 8.0, 9.0, 11.0];
 /// classID }` for camelot's classes; nil for another (recorded for 0;
 /// unverified for the rest, probes queued).
 fn creature_class_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    // Truncated (the full probe, 1.60.1: 1.5 named the warriors).
     let id = match vm.hidden(c.arg(1)) {
-        Value::Num(n) => n,
+        Value::Num(n) => n.trunc(),
         _ => return Ok(vec![Value::Nil]),
     };
     let Some((i, file, name)) = CLASS_INFO
@@ -1266,6 +1267,14 @@ fn contextually_secret(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(2.0)])
 }
 
+/// `C_Secrets.GetPowerTypeSecrecy(powerType)`: contextually secret (2),
+/// combo points (4) never (0) (the full probe, 1.60.1: every type from 0
+/// to 29).
+fn power_type_secrecy(vm: &mut Vm, c: NativeCall) -> Ret {
+    let never = matches!(vm.hidden(c.arg(1)), Value::Num(n) if n.trunc() == 4.0);
+    Ok(vec![Value::Num(if never { 0.0 } else { 2.0 })])
+}
+
 /// Spells' auras and cooldowns, and unit stats: secret in combat
 /// (`/stdtest restrictions`).
 fn secret_in_combat(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -1280,7 +1289,20 @@ macro_rules! should {
     };
 }
 should!(should_identity, "SecretWhenUnitIdentityRestricted");
-should!(should_power, "SecretWhenUnitPowerRestricted");
+
+/// `C_Secrets.ShouldUnitPowerBeSecret(unit [, powerType])`: as the unit's
+/// power, but a power type the unit does not have is never secret (the
+/// full probe, 1.60.1: the player's mana, the default and `"x"` alike,
+/// secret, every other type of the player's not; unverified: a unit with
+/// several power types).
+fn should_power(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let (Some(id), Value::Num(wanted)) = (unit_arg(vm, &c, 1), vm.hidden(c.arg(2)))
+        && engine(vm).units.list[id.0].power_type != wanted.trunc()
+    {
+        return Ok(vec![Value::Bool(false)]);
+    }
+    should_be_secret("SecretWhenUnitPowerRestricted")(vm, c)
+}
 should!(should_power_max, "SecretWhenUnitPowerMaxRestricted");
 should!(should_health_max, "SecretWhenUnitHealthMaxRestricted");
 should!(should_casting, "SecretWhenUnitSpellCastRestricted");
@@ -1388,7 +1410,7 @@ pub fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
         ("C_Secrets.ShouldUnitSpellCastingBeSecret", should_casting),
         ("C_Secrets.ShouldAurasBeSecret", should_auras),
         ("C_Secrets.ShouldCooldownsBeSecret", should_cooldowns),
-        ("C_Secrets.GetPowerTypeSecrecy", contextually_secret),
+        ("C_Secrets.GetPowerTypeSecrecy", power_type_secrecy),
         ("C_Secrets.GetSpellAuraSecrecy", contextually_secret),
         ("C_Secrets.GetSpellCastSecrecy", contextually_secret),
         ("C_Secrets.GetSpellCooldownSecrecy", contextually_secret),
@@ -3141,9 +3163,11 @@ fn control_show_nameplate(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `C_NamePlate.GetNamePlateForUnit(unit)`: the frame of the nameplate the
 /// unit is on, or nil.
+///
+/// No nameplate: nil (the full probe, 1.60.1: every token, none shown).
 fn get_name_plate_for_unit(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(id) = unit_arg(vm, &c, 1) else {
-        return Ok(vec![]);
+        return Ok(vec![Value::Nil]);
     };
     let u = &engine(vm).units;
     let frame = u
@@ -3153,7 +3177,7 @@ fn get_name_plate_for_unit(vm: &mut Vm, c: NativeCall) -> Ret {
         .and_then(|i| u.nameplate_frames.get(i));
     Ok(match frame {
         Some(f) => vec![Value::Table(engine(vm).world.widgets[f.0].table)],
-        None => vec![],
+        None => vec![Value::Nil],
     })
 }
 

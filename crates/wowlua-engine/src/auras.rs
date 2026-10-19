@@ -466,19 +466,39 @@ pub(crate) fn refuse(vm: &mut Vm, function: &str) -> Result<(), LuaError> {
     Err(vm.raise(msg))
 }
 
-fn unit_and_filter(vm: &mut Vm, c: &NativeCall, filter_at: usize) -> (Option<UnitId>, String) {
-    let unit = match vm.hidden(c.arg(1)) {
-        Value::Str(s) => {
-            let token = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
-            units::resolve(&engine(vm).units, &token)
-        }
-        _ => None,
+/// The unit a token or a GUID names (the full probe, 1.60.1: the queries
+/// by index, slot, instance and name, and the lists, answer for the
+/// player's GUID as for `"player"`).
+pub(crate) fn unit_or_guid(vm: &Vm, v: Value) -> Option<UnitId> {
+    let Value::Str(s) = vm.hidden(v) else {
+        return None;
     };
+    let token = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
+    let u = &engine(vm).units;
+    units::resolve(u, &token).or_else(|| {
+        u.list
+            .iter()
+            .position(|x| x.alive_in_world && x.guid == token)
+            .map(UnitId)
+    })
+}
+
+fn unit_and_filter(vm: &mut Vm, c: &NativeCall, filter_at: usize) -> (Option<UnitId>, String) {
+    let unit = unit_or_guid(vm, c.arg(1));
     let filter = match c.arg(filter_at) {
         Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
         _ => String::new(),
     };
     (unit, filter)
+}
+
+/// Whether a filter names helpful or harmful auras: one that names neither
+/// (`""`, `"x"`) passes no aura (the full probe, 1.60.1: by index, the
+/// lists, `IsAuraFilteredOutByInstanceID` and `GetAuraSlots` alike).
+pub(crate) fn names_kind(filter: &str) -> bool {
+    filter
+        .split(['|', ' '])
+        .any(|w| w.eq_ignore_ascii_case("HELPFUL") || w.eq_ignore_ascii_case("HARMFUL"))
 }
 
 /// The unit's auras passing `filter`, in application order.
@@ -492,43 +512,73 @@ pub(crate) fn listed(vm: &Vm, unit: UnitId, filter: &str) -> Vec<Aura> {
         .collect()
 }
 
-fn by_index(vm: &mut Vm, c: NativeCall, function: &str, extra: &str) -> Ret {
+/// An aura or nil: the queries answer nil for a missing unit or aura, not
+/// nothing (the full probe, 1.60.1).
+fn aura_or_nil(vm: &mut Vm, a: Option<Aura>) -> Ret {
+    Ok(vec![a.map_or(Value::Nil, |a| aura_data(vm, &a))])
+}
+
+/// `GetAuraDataByIndex(unit, index [, filter])` and its buff and debuff
+/// forms. Without a filter the first looks at helpful auras; the buff and
+/// debuff forms keep to their kind whatever the filter says (the full
+/// probe, 1.60.1: `GetBuffDataByIndex(…, "HARMFUL")` and `"x"` gave the
+/// buff, `GetDebuffDataByIndex(…, "HELPFUL")` no aura; unverified: the
+/// filter's other words kept).
+fn by_index(vm: &mut Vm, c: NativeCall, function: &str, kind: Option<&str>) -> Ret {
     refuse(vm, function)?;
     let index = vm.check_int(&c, 2)?;
+    let given = !vm.hidden(c.arg(3)).is_nil();
     let (unit, filter) = unit_and_filter(vm, &c, 3);
-    let Some(unit) = unit else { return Ok(vec![]) };
-    let filter = format!("{filter}|{extra}");
+    let Some(unit) = unit else {
+        return aura_or_nil(vm, None);
+    };
+    let filter = match kind {
+        Some(kind) => {
+            let rest: Vec<&str> = filter
+                .split(['|', ' '])
+                .filter(|w| !w.is_empty() && !names_kind(w))
+                .collect();
+            format!("{kind}|{}", rest.join("|"))
+        }
+        None if !given => "HELPFUL".to_string(),
+        None if !names_kind(&filter) => return aura_or_nil(vm, None),
+        None => filter,
+    };
     let list = listed(vm, unit, &filter);
-    match usize::try_from(index - 1).ok().and_then(|i| list.get(i)) {
-        Some(a) => Ok(vec![aura_data(vm, a)]),
-        None => Ok(vec![]),
-    }
+    let found = usize::try_from(index - 1)
+        .ok()
+        .and_then(|i| list.get(i))
+        .cloned();
+    aura_or_nil(vm, found)
 }
 
 fn get_aura_data_by_index(vm: &mut Vm, c: NativeCall) -> Ret {
-    by_index(vm, c, "GetAuraDataByIndex", "")
+    by_index(vm, c, "GetAuraDataByIndex", None)
 }
 
 fn get_buff_data_by_index(vm: &mut Vm, c: NativeCall) -> Ret {
-    by_index(vm, c, "GetBuffDataByIndex", "HELPFUL")
+    by_index(vm, c, "GetBuffDataByIndex", Some("HELPFUL"))
 }
 
 fn get_debuff_data_by_index(vm: &mut Vm, c: NativeCall) -> Ret {
-    by_index(vm, c, "GetDebuffDataByIndex", "HARMFUL")
+    by_index(vm, c, "GetDebuffDataByIndex", Some("HARMFUL"))
 }
 
+/// `GetAuraDataByAuraInstanceID(unit, id)`: the ID truncated (the full
+/// probe, 1.60.1: 1.5 found aura 1).
 fn get_aura_data_by_instance(vm: &mut Vm, c: NativeCall) -> Ret {
     refuse(vm, "GetAuraDataByAuraInstanceID")?;
-    let id = vm.check_number(&c, 2)?;
+    let id = vm.check_number(&c, 2)?.trunc();
     let (unit, _) = unit_and_filter(vm, &c, 3);
-    let Some(unit) = unit else { return Ok(vec![]) };
-    let found = engine(vm)
-        .units
-        .auras
-        .iter()
-        .find(|a| a.unit == unit && a.instance == id)
-        .cloned();
-    Ok(found.map(|a| vec![aura_data(vm, &a)]).unwrap_or_default())
+    let found = unit.and_then(|unit| {
+        engine(vm)
+            .units
+            .auras
+            .iter()
+            .find(|a| a.unit == unit && a.instance == id)
+            .cloned()
+    });
+    aura_or_nil(vm, found)
 }
 
 fn get_aura_data_by_spell_name(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -536,15 +586,21 @@ fn get_aura_data_by_spell_name(vm: &mut Vm, c: NativeCall) -> Ret {
     let name = vm.check_str(&c, 2)?;
     let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
     let (unit, filter) = unit_and_filter(vm, &c, 3);
-    let Some(unit) = unit else { return Ok(vec![]) };
-    let found = listed(vm, unit, &filter)
-        .into_iter()
-        .find(|a| a.name == name);
-    Ok(found.map(|a| vec![aura_data(vm, &a)]).unwrap_or_default())
+    let found = unit.and_then(|unit| {
+        listed(vm, unit, &filter)
+            .into_iter()
+            .find(|a| a.name == name)
+    });
+    aura_or_nil(vm, found)
 }
 
+/// `GetPlayerAuraBySpellID(spellID)`: a string finds no aura (the full
+/// probe, 1.60.1: `"x"` and a spell's name gave nil).
 fn get_player_aura_by_spell_id(vm: &mut Vm, c: NativeCall) -> Ret {
     refuse(vm, "GetPlayerAuraBySpellID")?;
+    if matches!(vm.hidden(c.arg(1)), Value::Str(_)) {
+        return aura_or_nil(vm, None);
+    }
     let id = vm.check_number(&c, 1)?;
     let found = engine(vm)
         .units
@@ -552,46 +608,74 @@ fn get_player_aura_by_spell_id(vm: &mut Vm, c: NativeCall) -> Ret {
         .iter()
         .find(|a| a.unit == units::PLAYER && a.spell_id == id)
         .cloned();
-    Ok(found.map(|a| vec![aura_data(vm, &a)]).unwrap_or_default())
+    aura_or_nil(vm, found)
 }
 
-/// `GetAuraSlots(unit, filter)`: no continuation, then the slots (the
-/// auras' positions, from 1; unverified numbering).
+/// `GetAuraSlots(unit, filter [, maxSlots [, continuationToken]])`: the
+/// continuation token (nil when no slot is left), then up to `maxSlots`
+/// slots after the first `continuationToken` (the full probe, 1.60.1: no
+/// filter or one naming no kind a lone nil; `maxSlots` 0 the token back
+/// unchanged; 1.5 truncated). A slot is the aura's place among the unit's
+/// auras by instance ID from 0, as `GetAuraDataBySlot` takes it (slot 0
+/// held aura 1, slot 1 aura 3, slot 2 aura 5, though the list gave 3, 5,
+/// 1; unverified: the client's reuse of freed slots).
 fn get_aura_slots(vm: &mut Vm, c: NativeCall) -> Ret {
     refuse(vm, "GetAuraSlots")?;
     let (unit, filter) = unit_and_filter(vm, &c, 2);
-    let Some(unit) = unit else {
+    let Some(unit) = unit.filter(|_| names_kind(&filter)) else {
         return Ok(vec![Value::Nil]);
     };
-    let all: Vec<f64> = engine(vm)
+    let count = |v: Value| match vm.hidden(v) {
+        Value::Num(n) if n >= 0.0 => Some(n.trunc() as usize),
+        _ => None,
+    };
+    let max = count(c.arg(3));
+    let from = count(c.arg(4)).unwrap_or(0);
+    let all = slotted(vm, unit);
+    let slots: Vec<usize> = listed(vm, unit, &filter)
+        .iter()
+        .filter_map(|a| all.iter().position(|&x| x == a.instance))
+        .collect();
+    let rest = slots.get(from..).unwrap_or_default();
+    let taken = max.map_or(rest.len(), |m| m.min(rest.len()));
+    let next = from + taken;
+    let mut out = vec![if next < slots.len() {
+        Value::Num(next as f64)
+    } else {
+        Value::Nil
+    }];
+    out.extend(rest[..taken].iter().map(|&s| Value::Num(s as f64)));
+    Ok(out)
+}
+
+/// The unit's auras' instance IDs in slot order (`GetAuraSlots`).
+fn slotted(vm: &Vm, unit: UnitId) -> Vec<f64> {
+    let mut all: Vec<f64> = engine(vm)
         .units
         .auras
         .iter()
         .filter(|a| a.unit == unit)
         .map(|a| a.instance)
         .collect();
-    let mut out = vec![Value::Nil];
-    for a in listed(vm, unit, &filter) {
-        if let Some(i) = all.iter().position(|&x| x == a.instance) {
-            out.push(Value::Num(i as f64 + 1.0));
-        }
-    }
-    Ok(out)
+    all.sort_by(f64::total_cmp);
+    all
 }
 
+/// `GetAuraDataBySlot(unit, slot)`: slots from 0 (`GetAuraSlots`).
 fn get_aura_data_by_slot(vm: &mut Vm, c: NativeCall) -> Ret {
     refuse(vm, "GetAuraDataBySlot")?;
     let slot = vm.check_int(&c, 2)?;
     let (unit, _) = unit_and_filter(vm, &c, 3);
-    let Some(unit) = unit else { return Ok(vec![]) };
-    let found = engine(vm)
-        .units
-        .auras
-        .iter()
-        .filter(|a| a.unit == unit)
-        .nth(usize::try_from(slot - 1).unwrap_or(usize::MAX))
-        .cloned();
-    Ok(found.map(|a| vec![aura_data(vm, &a)]).unwrap_or_default())
+    let found = unit.and_then(|unit| {
+        let id = *slotted(vm, unit).get(usize::try_from(slot).ok()?)?;
+        engine(vm)
+            .units
+            .auras
+            .iter()
+            .find(|a| a.unit == unit && a.instance == id)
+            .cloned()
+    });
+    aura_or_nil(vm, found)
 }
 
 /// The aura functions with behaviour.

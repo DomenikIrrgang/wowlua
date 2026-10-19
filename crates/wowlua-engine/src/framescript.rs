@@ -332,9 +332,16 @@ fn get_cvar_info(vm: &mut Vm, c: NativeCall) -> Ret {
 /// client does not have neither (recorded: Blizzard's talents frame sets
 /// `heroTalentsCollapse`, which camelot lacks, and no `CVAR_UPDATE` comes;
 /// unverified: the result).
+///
+/// No value sets "0" (the full probe, 1.60.1: ten switches read "0" after
+/// `SetCVar(name)`; unverified: a CVar whose range lacks 0, the camera's
+/// zoom factor kept its 2).
 fn set_cvar(vm: &mut Vm, c: NativeCall) -> Ret {
     let name = string_arg(vm, &c, 1)?;
-    let text = value_text(vm, c.arg(2));
+    let text = match c.arg(2) {
+        Value::Nil => "0".to_string(),
+        v => value_text(vm, v),
+    };
     set_cvar_text(vm, &name, text, true)
 }
 
@@ -393,8 +400,13 @@ pub(crate) fn control_set_cvar(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `C_Texture.GetAtlasInfo(atlas)`: a stand-in (64 x 64, whole texture);
 /// the size of a recorded atlas (`measures::atlas`).
+///
+/// The empty name is no atlas: nothing (the full probe, 1.60.1).
 fn atlas_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let name = vm.check_str(&c, 1)?;
+    if vm.str_bytes(name).is_empty() {
+        return Ok(vec![]);
+    }
     let known = crate::measures::atlas(&String::from_utf8_lossy(vm.str_bytes(name)));
     let width = known.and_then(|a| a.width).unwrap_or(64.0);
     let height = known.and_then(|a| a.height).unwrap_or(64.0);
@@ -420,6 +432,14 @@ fn atlas_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let file = vm.str("Interface\\Buttons\\WHITE8X8");
     set(vm, "filename", file);
     Ok(vec![Value::Table(t)])
+}
+
+/// `C_Texture.GetAtlasExists(atlas)`: every name but the empty one (the
+/// full probe, 1.60.1: "" false; unverified: the client's whole list,
+/// "x" false too, which the engine cannot tell from an atlas it lacks).
+fn atlas_exists(vm: &mut Vm, c: NativeCall) -> Ret {
+    let empty = matches!(vm.hidden(c.arg(1)), Value::Str(s) if vm.str_bytes(s).is_empty());
+    Ok(vec![Value::Bool(!empty)])
 }
 
 fn truthy(_vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -551,7 +571,7 @@ pub fn functions() -> Vec<(&'static str, NativeFn)> {
         ("C_CVar.SetCVar", set_cvar),
         ("C_UI.Reload", crate::login::reload_ui),
         ("C_Texture.GetAtlasInfo", atlas_info),
-        ("C_Texture.GetAtlasExists", truthy),
+        ("C_Texture.GetAtlasExists", atlas_exists),
         ("C_InputInterfaceStyle.GetCurrentStyle", zero),
         ("C_Glue.IsOnGlueScreen", falsy),
         // The recorded client's (Forever on macOS: its key texts too).

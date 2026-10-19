@@ -71,16 +71,57 @@ fn weekday(year: i64, month: i64, day: i64) -> i64 {
     (y + y / 4 - y / 100 + y / 400 + T[(month - 1) as usize] + day).rem_euclid(7) + 1
 }
 
+/// The calendar's month shown, as months since year 0: the clock's until
+/// `C_Calendar.SetMonth` or `SetAbsMonth` moves it.
+fn calendar_view(vm: &mut Vm) -> Result<i64, wowlua_vm::LuaError> {
+    if let Some(Value::Num(n)) = engine(vm).lua_helpers.get("misc.calendarView").copied() {
+        return Ok(n as i64);
+    }
+    let (year, month) = year_month(vm)?;
+    Ok(year * 12 + (month - 1))
+}
+
+fn set_calendar_view(vm: &mut Vm, index: i64) {
+    crate::engine_mut(vm)
+        .lua_helpers
+        .insert("misc.calendarView", Value::Num(index as f64));
+}
+
+/// `C_Calendar.SetMonth(offsetMonths)`: the month shown moved by that many
+/// (the full probe, 1.60.1: -1 showed September from October, 1
+/// November, 0 stayed).
+fn set_month(vm: &mut Vm, c: NativeCall) -> Ret {
+    let offset = match vm.hidden(c.arg(1)) {
+        Value::Num(n) => n.trunc() as i64,
+        _ => 0,
+    };
+    let view = calendar_view(vm)?;
+    set_calendar_view(vm, view + offset);
+    Ok(vec![])
+}
+
+/// `C_Calendar.SetAbsMonth(month, year)`: that month shown (the full
+/// probe, 1.60.1: 1, 2025 showed January 2025; unverified: month 0 or 13,
+/// which showed February 2021 and January 2025, kept as they were).
+fn set_abs_month(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let (Value::Num(m), Value::Num(y)) = (vm.hidden(c.arg(1)), vm.hidden(c.arg(2)))
+        && (1.0..=12.0).contains(&m.trunc())
+        && y >= 1.0
+    {
+        set_calendar_view(vm, y.trunc() as i64 * 12 + (m.trunc() as i64 - 1));
+    }
+    Ok(vec![])
+}
+
 /// `C_Calendar.GetMonthInfo([offsetMonths])`: the month that many from the
-/// clock's: `month, year, numDays, firstWeekday` (Sunday 1, as the
+/// one shown: `month, year, numDays, firstWeekday` (Sunday 1, as the
 /// calendar time's weekday; unverified: the client's server-time month).
 fn get_month_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let offset = match c.arg(1) {
         Value::Num(n) => n as i64,
         _ => 0,
     };
-    let (year, month) = year_month(vm)?;
-    let index = year * 12 + (month - 1) + offset;
+    let index = calendar_view(vm)? + offset;
     let (year, month) = (index.div_euclid(12), index.rem_euclid(12) + 1);
     let out = vm.new_table();
     for (k, v) in [
@@ -460,6 +501,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Map.GetAreaInfo", get_area_info),
         ("GetFileIDFromPath", get_file_id_from_path),
         ("C_Calendar.GetMonthInfo", get_month_info),
+        ("C_Calendar.SetMonth", set_month),
+        ("C_Calendar.SetAbsMonth", set_abs_month),
         (
             "C_AuraContainerUtil.ProcessAuraTooltipBackdropOptions",
             process_backdrop,

@@ -449,11 +449,16 @@ fn color_from_boolean(vm: &mut Vm, c: NativeCall) -> Ret {
         c.arg(3)
     };
     let (rgba, s) = color_of(vm, pick).ok_or_else(|| vm.error("a color expected"))?;
+    // The chosen color as bytes, read back as floats (the full probe,
+    // 1.60.1: 0.5 came back 0.50196081399918, 128/255; unverified: the
+    // color curves' colors, kept as computed).
+    let rgba = rgba.map(|v| f64::from(((v.clamp(0.0, 1.0) * 255.0).round() / 255.0) as f32));
     Ok(vec![make_color(vm, rgba, secret || s)])
 }
 
 /// `C_CurveUtil.EvaluateColorValueFromBoolean(boolean, ifTrue, ifFalse)`:
-/// the chosen value, secret when the boolean is.
+/// the chosen value clamped to a color's 0..1 (the full probe, 1.60.1: -1
+/// gave 0, 1.5 and 2147483647 gave 1), secret when the boolean is.
 fn color_value_from_boolean(vm: &mut Vm, c: NativeCall) -> Ret {
     let b = c.arg(1);
     let secret = matches!(b, Value::Secret(_));
@@ -461,6 +466,10 @@ fn color_value_from_boolean(vm: &mut Vm, c: NativeCall) -> Ret {
         c.arg(2)
     } else {
         c.arg(3)
+    };
+    let pick = match vm.hidden(pick) {
+        Value::Num(n) if !matches!(pick, Value::Secret(_)) => Value::Num(n.clamp(0.0, 1.0)),
+        _ => pick,
     };
     Ok(vec![hide(vm, secret, pick)])
 }

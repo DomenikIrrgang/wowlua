@@ -377,9 +377,9 @@ fn get_channel_shortcut(vm: &mut Vm, c: NativeCall) -> Ret {
     let shortcut = index
         .checked_sub(1)
         .and_then(|i| joined.get(i))
-        .map(|ch| ch.shortcut.clone().unwrap_or_else(|| ch.name.clone()))
-        .unwrap_or_default();
-    Ok(vec![vm.str(&shortcut)])
+        .map(|ch| ch.shortcut.clone().unwrap_or_else(|| ch.name.clone()));
+    // No channel there: nil (the full probe, 1.60.1: 0 and 2147483647).
+    Ok(vec![shortcut.map_or(Value::Nil, |s| vm.str(&s))])
 }
 
 /// `C_ChatInfo.GetNumActiveChannels()`: the channels joined.
@@ -563,6 +563,12 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         // ------------------------------------------------ chat
         ("C_ChatInfo.IsPartyChannelType", is_party_channel_type),
         ("C_ChatInfo.GetChannelShortcut", get_channel_shortcut),
+        // By the channel's local ID, as by its index (unverified: the two
+        // differ when a channel was left).
+        (
+            "C_ChatInfo.GetChannelShortcutForChannelID",
+            get_channel_shortcut,
+        ),
         ("C_ChatInfo.GetNumActiveChannels", get_num_active_channels),
         (
             "C_ChatInfo.SwapChatChannelsByChannelIndex",

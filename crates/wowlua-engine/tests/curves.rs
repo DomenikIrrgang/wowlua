@@ -153,7 +153,8 @@ fn colors_from_booleans() {
 local c = C_CurveUtil.EvaluateColorFromBoolean(false, yes, no)
 return c.a, C_CurveUtil.EvaluateColorValueFromBoolean(true, 0.25, 1)",
     );
-    assert_eq!(r, ["0.5", "0.25"]);
+    // The color as bytes (the full probe, 1.60.1: 0.5 as 128/255).
+    assert_eq!(r, ["0.501960813999176", "0.25"]);
     let r = secure(
         &mut vm,
         "local c = C_CurveUtil.EvaluateColorFromBoolean(secretwrap(true), { r = 1, g = 1, b = 1 }, { r = 0, g = 0, b = 0 })

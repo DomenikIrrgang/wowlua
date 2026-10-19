@@ -1239,8 +1239,9 @@ pub fn import(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
 pub fn template_info(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
     let name = vm.check_str(&c, 1)?;
     let name = String::from_utf8_lossy(vm.str_bytes(name)).to_ascii_lowercase();
+    // A template the client lacks: nothing (the full probe, 1.60.1).
     let Some(el) = engine(vm).world.ui.templates.get(&name).cloned() else {
-        return Ok(vec![Value::Nil]);
+        return Ok(vec![]);
     };
     // The size: this template's, else the first inherited one's.
     fn size_of(vm: &Vm, el: &Element, depth: usize) -> Option<(f64, f64)> {

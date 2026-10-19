@@ -1972,7 +1972,7 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
 /// stand in for it (synthetic: the number changes with the first real
 /// run). Only ever raised, but for the plan's own changes: retail systems
 /// left out of it took 19 matched calls with them (762 of 792 before).
-const FULLPROBE_MATCHED: usize = 30410;
+const FULLPROBE_MATCHED: usize = 32063;
 
 #[test]
 fn the_engine_answers_the_full_probe_as_the_client_did() {
@@ -2051,7 +2051,11 @@ for _, k in ipairs(keys) do
     if fixture[k]:find("string <scrubbed>", 1, true) then
         mine = mine:gsub("string [^,}]*", "string <scrubbed>")
     end
-    if mine == fixture[k] then
+    -- A script object prints its type and address (`LuaDurationObject:
+    -- 0x...`), the address each run's own.
+    local theirs = fixture[k]:gsub("(Lua%a+Object): 0x%x+", "%1")
+    mine = mine:gsub("(Lua%a+Object): 0x%x+", "%1")
+    if mine == theirs then
         matched = matched + 1
     else
         local name = k:match("^set ([%w_.:]+)") or k:match("^([%w_.:]+)") or k

@@ -935,12 +935,33 @@ fn tooltip_unit_debuff(vm: &mut Vm, c: NativeCall) -> Ret {
 /// (`C_UnitAuras.GetAuraDataByAuraInstanceID`; unverified: the filter
 /// left out).
 fn tooltip_unit_aura_by_instance(vm: &mut Vm, c: NativeCall) -> Ret {
+    tooltip_aura_by_instance(vm, &c, None)
+}
+
+/// The buff form: none for a harmful aura (unverified).
+fn tooltip_unit_buff_by_instance(vm: &mut Vm, c: NativeCall) -> Ret {
+    tooltip_aura_by_instance(vm, &c, Some("isHelpful"))
+}
+
+/// The debuff form: none for a helpful aura (the full probe, 1.60.1: the
+/// player's buff by its instance nothing, by token and GUID).
+fn tooltip_unit_debuff_by_instance(vm: &mut Vm, c: NativeCall) -> Ret {
+    tooltip_aura_by_instance(vm, &c, Some("isHarmful"))
+}
+
+fn tooltip_aura_by_instance(vm: &mut Vm, c: &NativeCall, kind: Option<&str>) -> Ret {
     let aura = ask(
         vm,
         "C_UnitAuras.GetAuraDataByAuraInstanceID",
         &[c.arg(1), c.arg(2)],
     );
-    aura_tooltip(vm, aura.first().copied())
+    let aura = aura.first().copied();
+    if let (Some(kind), Some(Value::Table(t))) = (kind, aura)
+        && !field(vm, t, kind).truthy()
+    {
+        return Ok(vec![]);
+    }
+    aura_tooltip(vm, aura)
 }
 
 /// `C_TooltipInfo.GetWorldCursor()`: the unit under the cursor's
@@ -1106,8 +1127,10 @@ const RACES: &[Race] = &[
     (96.0, "Windshaper Skyborne", "Skyborne", None),
 ];
 
+/// The race an ID argument names, the ID truncated (the full probe,
+/// 1.60.1: 1.5 named the humans).
 fn race(vm: &Vm, c: &NativeCall) -> Option<&'static Race> {
-    let id = arg_num(vm, c, 1)?;
+    let id = arg_num(vm, c, 1)?.trunc();
     RACES.iter().find(|r| r.0 == id)
 }
 
@@ -1169,25 +1192,18 @@ fn same_name(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![vm.str(&name)])
 }
 
-/// The items' quality colors, poor to heirloom (`tooltip.rs`'s).
-const QUALITY_RGB: [(f64, f64, f64); 8] = [
-    (0.62, 0.62, 0.62),
-    (1.0, 1.0, 1.0),
-    (0.12, 1.0, 0.0),
-    (0.0, 0.44, 0.87),
-    (0.64, 0.21, 0.93),
-    (1.0, 0.5, 0.0),
-    (0.9, 0.8, 0.5),
-    (0.0, 0.8, 1.0),
-];
-
 /// `C_ColorOverrides.GetDefaultColorForQuality(quality)`: the quality's
-/// color as the tooltips draw it (a quality beyond: the common white;
-/// unverified: the client's exact values).
+/// color (a quality beyond: the common white, unverified): the client's
+/// own quality colors, as `C_ColorOverrides.GetColorForQuality`
+/// has them (the full probe, 1.60.1: every quality 0 to 8 alike; a string
+/// as 0).
 fn get_default_color_for_quality(vm: &mut Vm, c: NativeCall) -> Ret {
-    let quality = arg_num(vm, &c, 1).unwrap_or(1.0).max(0.0) as usize;
-    let rgb = QUALITY_RGB.get(quality).copied().unwrap_or(QUALITY_RGB[1]);
-    Ok(vec![color(vm, rgb)])
+    let quality = arg_num(vm, &c, 1).unwrap_or(0.0).max(0.0) as usize;
+    let rgba = crate::facts::QUALITY_COLORS
+        .get(quality)
+        .copied()
+        .unwrap_or(crate::facts::QUALITY_COLORS[1]);
+    Ok(vec![color(vm, (rgba[0], rgba[1], rgba[2]))])
 }
 
 // ---------------------------------------------------------- auctions
@@ -1341,12 +1357,21 @@ fn request_more_commodity_search_results(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `C_Intl.GetCurrentLocale()`: the client's locale (`GetLocale`'s
 /// answer; unverified: ICU's form of it).
+///
+/// The full probe (1.60.1): "en-US", the locale's language and region
+/// joined by a hyphen (`GetLocale`'s "enUS").
 fn intl_current_locale(vm: &mut Vm, _c: NativeCall) -> Ret {
     let locale = ask(vm, "GetLocale", &[]);
-    Ok(vec![match locale.first().copied() {
-        Some(v @ Value::Str(_)) => v,
-        _ => vm.str("enUS"),
-    }])
+    let text = match locale.first().copied() {
+        Some(Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        _ => "enUS".to_string(),
+    };
+    let text = if text.len() == 4 && text.is_ascii() {
+        format!("{}-{}", &text[..2], &text[2..])
+    } else {
+        text
+    };
+    Ok(vec![vm.str(&text)])
 }
 
 /// A text function of `C_Intl` (Unicode's case rules; unverified against
@@ -1452,8 +1477,7 @@ fn grouped(n: i64) -> String {
 
 /// `C_Intl.FormatNumber(number, style)`: en-US's: `Decimal` grouped with
 /// up to three decimals, `Integer` rounded, `Percent` times 100 rounded
-/// with "%", `Currency` with "$" and two decimals (ICU's patterns;
-/// unverified on the client).
+/// with "%" (ICU's patterns); `Currency` nothing (the full probe, 1.60.1).
 fn intl_format_number(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(n) = arg_num(vm, &c, 1) else {
         return Ok(vec![]);
@@ -1482,13 +1506,8 @@ fn intl_format_number(vm: &mut Vm, c: NativeCall) -> Ret {
     let out = match style {
         1 => grouped(n.round() as i64),
         2 => format!("{}%", grouped((n * 100.0).round() as i64)),
-        3 => {
-            let text = with_decimals(n, 2, true);
-            match text.strip_prefix('-') {
-                Some(rest) => format!("-${rest}"),
-                None => format!("${text}"),
-            }
-        }
+        // Currency: nothing (the full probe, 1.60.1: every number).
+        3 => return Ok(vec![]),
         _ => with_decimals(n, 3, false),
     };
     Ok(vec![vm.str(&out)])
@@ -1746,11 +1765,11 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ),
         (
             "C_TooltipInfo.GetUnitBuffByAuraInstanceID",
-            tooltip_unit_aura_by_instance,
+            tooltip_unit_buff_by_instance,
         ),
         (
             "C_TooltipInfo.GetUnitDebuffByAuraInstanceID",
-            tooltip_unit_aura_by_instance,
+            tooltip_unit_debuff_by_instance,
         ),
         ("C_TooltipInfo.GetWorldCursor", tooltip_world_cursor),
         // Interactions and trainers.

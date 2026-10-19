@@ -852,7 +852,44 @@ fn recorded(vm: &mut Vm, c: NativeCall) -> Ret {
     {
         return Ok(values.iter().map(|v| v.to_value(vm)).collect());
     }
+    if let Some(values) = unknown_tree(vm, &name, &call) {
+        return Ok(values);
+    }
     crate::recorded::recorded(vm, c)
+}
+
+/// A tree or config the client lacks (the full probe, 1.60.1: IDs -1, 0,
+/// 1, 1.5 and 2147483647): no nodes, no increased data, the hash of
+/// nothing (MD5 of no bytes), no edits ("You can't do that right now.",
+/// `ERR_CLIENT_LOCKED_OUT`), variation 0. Not for a call the recordings
+/// answer.
+fn unknown_tree(vm: &mut Vm, name: &str, call: &str) -> Option<Vec<Value>> {
+    if crate::recorded::answers().contains_key(call) {
+        return None;
+    }
+    Some(match name {
+        "C_Traits.GetTreeNodes" | "C_Traits.GetIncreasedTraitData" => {
+            vec![Value::Table(vm.new_table())]
+        }
+        "C_Traits.GetTreeHash" => {
+            const EMPTY_MD5: [u8; 16] = [
+                212, 29, 140, 217, 143, 0, 178, 4, 233, 128, 9, 152, 236, 248, 66, 126,
+            ];
+            let t = vm.new_table();
+            for (i, b) in EMPTY_MD5.iter().enumerate() {
+                let _ = vm
+                    .heap
+                    .table_mut(t)
+                    .set(Value::Num(i as f64 + 1.0), Value::Num(f64::from(*b)));
+            }
+            vec![Value::Table(t)]
+        }
+        "C_Traits.CanEditConfig" => {
+            vec![Value::Bool(false), vm.str("You can't do that right now.")]
+        }
+        "C_Traits.GetConfigVariationID" => vec![Value::Num(0.0)],
+        _ => return None,
+    })
 }
 
 /// A behaviour of the model for a recorded class, else the general one.
@@ -903,6 +940,10 @@ fn get_tree_currency_info(vm: &mut Vm, c: NativeCall) -> Ret {
         }
         let (key, config, _) = resolve(vm, config);
         let rv = Model::new(&key, &engine(vm).world.traits).tree_currency(config, tree, exclude);
+        // A tree the client lacks: no currencies (the full probe, 1.60.1).
+        if rv.is_none() {
+            return Ok(vec![Value::Table(vm.new_table())]);
+        }
         Ok(answer(vm, rv))
     })
 }

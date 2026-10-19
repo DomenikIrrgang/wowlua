@@ -886,6 +886,16 @@ const OVER_RECORDED: &[&str] = &[
     "GetSpecializationInfoForClassID",
     // An inspected unit's none (the full probe).
     "GetNumSpecializations",
+    // The full probe's constants (`leftovers2.rs`), the recorded calls'
+    // answers for every argument.
+    "C_PetBattles.CanPetSwapIn",
+    "C_KeyBindings.GetBindingContextForAction",
+    "C_GameRules.GetGameRuleAsFrameStrata",
+    "C_SpecializationInfo.GetNumSpecializationsForClassID",
+    "C_SpecializationInfo.GetPvpTalentSlotInfo",
+    "C_ContentTracking.GetTrackablesOnMap",
+    "C_Club.ShouldAllowClubType",
+    "C_Club.GetAvatarIdList",
     "GetDungeonDifficultyID",
     "GetActionBarToggles",
     "C_Heirloom.GetCollectedHeirloomFilter",
