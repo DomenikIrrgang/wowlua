@@ -346,6 +346,44 @@ end
     assert!(out.contains("1 passed, 1 failed"), "{out}");
 }
 
+/// An error the client drops without a report (a `secureexecuterange`
+/// callback's) reaches no error handler, as in the client, but fails the
+/// test: the code failed.
+#[test]
+fn errors_the_client_drops_fail_the_test() {
+    let dir = project(
+        r#""standard": {}"#,
+        &[(
+            "tests/dropped.test.wowlua",
+            r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+@test("dropped")
+local function dropped()
+    local n = 0
+    secureexecuterange({ 1, 2 }, function() n = n + 1 error("in range") end)
+    expect(n).toBe(2)
+    expect(#mock.errors()).toBe(0)
+end
+
+@test("fine")
+local function fine()
+    secureexecuterange({ 1 }, function() end)
+end
+"#,
+        )],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(!ok, "{out}");
+    assert!(
+        out.contains("an error was dropped without a report"),
+        "{out}"
+    );
+    assert!(out.contains("secureexecuterange dropped: "), "{out}");
+    assert!(out.contains("in range"), "{out}");
+    assert!(out.contains("1 passed, 1 failed"), "{out}");
+}
+
 #[test]
 fn test_modules_are_only_for_test_files() {
     let dir = project(

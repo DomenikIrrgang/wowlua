@@ -151,3 +151,40 @@ fn secure_code_calls_a_secret_function() {
         "{msg}"
     );
 }
+
+thread_local! {
+    static DROPPED: std::cell::RefCell<Vec<(String, String)>> = Default::default();
+}
+
+fn note_dropped(_vm: &mut Vm, message: String, stack: String) {
+    DROPPED.with(|d| d.borrow_mut().push((message, stack)));
+}
+
+/// `secureexecuterange` drops its callbacks' errors as the client does (no
+/// error handler call, the next entries still run: `forever-camelot.lua`),
+/// and tells the host of each, with the stack where it was raised.
+#[test]
+fn secureexecuterange_tells_the_host_of_dropped_errors() {
+    let mut vm = Vm::wow();
+    vm.on_dropped_error = Some(note_dropped);
+    let f = vm
+        .load(
+            b"local handled = 0
+            seterrorhandler(function() handled = handled + 1 end)
+            local n = 0
+            secureexecuterange({ 1, 2 }, function(k) n = n + 1 error('entry ' .. k) end)
+            return n, handled",
+            "@range.lua",
+        )
+        .expect("compiles");
+    let r = vm.call(f, &[]).expect("runs");
+    assert!(matches!(r[0], Value::Num(n) if n == 2.0), "every entry ran");
+    assert!(
+        matches!(r[1], Value::Num(n) if n == 0.0),
+        "no error reached the handler"
+    );
+    let dropped = DROPPED.with(|d| d.borrow().clone());
+    let messages: Vec<&str> = dropped.iter().map(|(m, _)| m.as_str()).collect();
+    assert_eq!(messages, ["range.lua:4: entry 1", "range.lua:4: entry 2"]);
+    assert!(dropped[0].1.contains("range.lua:4"), "{}", dropped[0].1);
+}

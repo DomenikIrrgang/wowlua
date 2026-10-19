@@ -1107,7 +1107,9 @@ export function printed(): string[]
 end
 
 --- The errors that reached the error handler. Reading them marks them as
---- expected: errors no test reads fail the test.
+--- expected: errors no test reads fail the test. (Errors the client drops
+--- without a report, a `secureexecuterange` callback's, are not here: they
+--- always fail the test.)
 export function errors(): string[]
     return engine().errors()
 end

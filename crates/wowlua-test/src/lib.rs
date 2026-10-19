@@ -300,6 +300,11 @@ struct Reload {
     elapsed_ms: f64,
 }
 
+/// What fails a test on an error the client drops without a report
+/// (`secureexecuterange`'s callbacks): code that failed, though no error
+/// handler heard it.
+const DROPPED_FAILURE: &str = "an error was dropped without a report (as the client drops it)";
+
 fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loaded, String> {
     let build = suite.build;
     let dir = &build.dir;
@@ -330,6 +335,7 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
     vm.set_output(natives::print_sink);
     natives::install_print(&mut vm);
     vm.error_handler = vm.native("errorhandler", natives::error_handler);
+    vm.on_dropped_error = Some(natives::dropped_error);
     // The addon table, with the runtime's table holding the mock's engine.
     let ns = vm.new_table();
     let wl = vm.new_table();
@@ -756,6 +762,13 @@ fn run_one(suite: &Suite, file: &TestFile, state: &mut Loaded, p: &Planned) -> O
                 pending.join("\n")
             ));
         }
+        let dropped = natives::unread_dropped();
+        if !dropped.is_empty() {
+            break failed(format!(
+                "{DROPPED_FAILURE} while reloading:\n{}",
+                dropped.join("\n")
+            ));
+        }
         let tests = fresh.tests;
         let vm = &mut fresh.vm;
         let ended = match start(vm, tests, "beforeAll", None, None) {
@@ -837,6 +850,14 @@ fn run_tests(
         ));
         return;
     }
+    let dropped = natives::unread_dropped();
+    if !dropped.is_empty() {
+        result.error = Some(to_sources(
+            suite,
+            &format!("{DROPPED_FAILURE} while loading:\n{}", dropped.join("\n")),
+        ));
+        return;
+    }
     match start(vm, tests, "beforeAll", None, None) {
         Ok(job) => {
             if let Outcome::Fail { message, .. } = drive(vm, tests, job) {
@@ -869,10 +890,16 @@ fn run_tests(
         // does a protected action refused because of taint (with its taint
         // chain) that no test expected (`toBeBlocked`, `mock.refusals()`).
         let unread = natives::unread_errors();
+        let dropped = natives::unread_dropped();
         let refused = natives::unread_refusals(vm);
         if outcome == Outcome::Pass && !unread.is_empty() {
             outcome = Outcome::Fail {
                 message: format!("an error reached the error handler: {}", unread.join("\n")),
+                stack: String::new(),
+            };
+        } else if outcome == Outcome::Pass && !dropped.is_empty() {
+            outcome = Outcome::Fail {
+                message: format!("{DROPPED_FAILURE}: {}", dropped.join("\n")),
                 stack: String::new(),
             };
         } else if outcome == Outcome::Pass && !refused.is_empty() {
