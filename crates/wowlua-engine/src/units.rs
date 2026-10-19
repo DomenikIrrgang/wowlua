@@ -416,7 +416,47 @@ fn ours(u: &Units, id: UnitId) -> bool {
 /// Whether a documented function's results are secret for this call, from
 /// its flags and the world (recorded on WoW Forever; see the module).
 pub fn secret_results(vm: &Vm, doc: &serde_json::Value, c: &NativeCall) -> bool {
-    let flag = |k: &str| doc.get(k).and_then(serde_json::Value::as_bool) == Some(true);
+    secret_results_flagged(vm, secret_flags(doc), c)
+}
+
+/// The documentation's flags [`secret_results`] reads.
+const SECRET_FLAGS: [&str; 13] = [
+    "SecretReturns",
+    "SecretWhenUnitAuraRestricted",
+    "SecretWhenAurasRestricted",
+    "SecretWhenCooldownsRestricted",
+    "SecretWhenTotemSlotSecret",
+    "SecretWhenInCombat",
+    "SecretOnRestrictedMaps",
+    "SecretWhenUnitHealthMaxRestricted",
+    "SecretWhenUnitSpellCastRestricted",
+    "SecretWhenUnitPowerMaxRestricted",
+    "SecretWhenUnitIdentityRestricted",
+    "SecretWhenUnitNameIdentityRestricted",
+    "SecretWhenUnitPowerRestricted",
+];
+
+/// Which of [`SECRET_FLAGS`] a function's documentation sets, as bits.
+pub fn secret_flags(doc: &serde_json::Value) -> u32 {
+    SECRET_FLAGS
+        .iter()
+        .enumerate()
+        .filter(|(_, k)| doc.get(**k).and_then(serde_json::Value::as_bool) == Some(true))
+        .fold(0, |bits, (i, _)| bits | 1 << i)
+}
+
+/// [`secret_results`] by the documentation's flags (`secret_flags`).
+pub fn secret_results_flagged(vm: &Vm, flags: u32, c: &NativeCall) -> bool {
+    // Every answer of secrecy below needs a flag.
+    if flags == 0 {
+        return false;
+    }
+    let flag = |k: &str| {
+        SECRET_FLAGS
+            .iter()
+            .position(|f| *f == k)
+            .is_some_and(|i| flags & 1 << i != 0)
+    };
     let u = &engine(vm).units;
     if flag("SecretReturns") {
         return true;

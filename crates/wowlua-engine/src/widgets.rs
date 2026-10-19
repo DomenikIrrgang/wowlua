@@ -95,8 +95,9 @@ pub struct World {
     pub widgets: Vec<Widget>,
     /// The widgets given an `OnUpdate` (set, hooked or from XML) or an
     /// intrinsic type's handlers, ever: the ones a frame looks at, each
-    /// checked as its turn comes (most of the UI's widgets never update).
-    pub updating: std::collections::BTreeSet<usize>,
+    /// checked as its turn comes (most of the UI's widgets never update);
+    /// in order, each once (`World::updates`).
+    pub updating: Vec<usize>,
     /// The widgets that ever registered for events: the ones an event
     /// looks at.
     pub listening: std::collections::BTreeSet<usize>,
@@ -111,6 +112,12 @@ pub struct World {
     /// Widgets whose size changed since the last frame (`OnSizeChanged`
     /// runs with the next frame, not at `SetSize`).
     pub resized: Vec<WidgetId>,
+    /// The same widgets, by index: whether one is already among them.
+    pub resizing: std::collections::HashSet<usize>,
+    /// The widgets a keyboard setting (`KeyboardEnabled`) was ever stored
+    /// for, in order, each once: the only ones that can take keys
+    /// (`input::keyboard_frames`).
+    pub keyboard: Vec<usize>,
     /// Edit boxes Lua set the text of this frame: `OnTextChanged(false)`
     /// runs once each after the frame's `OnUpdate`, not at `SetText`, with
     /// the last text, also when it did not change, the last box set first
@@ -209,6 +216,20 @@ pub struct World {
     pub input: crate::input::Input,
 }
 
+impl World {
+    /// Widget `i` among those a frame looks at (`updating`).
+    pub fn updates(&mut self, i: usize) {
+        insert_sorted(&mut self.updating, i);
+    }
+}
+
+/// `i` in a list kept in order, once.
+fn insert_sorted(list: &mut Vec<usize>, i: usize) {
+    if let Err(at) = list.binary_search(&i) {
+        list.insert(at, i);
+    }
+}
+
 /// UIParent's size in screen units at scale 1: 1920 x 1080, as WoW Forever
 /// had it (`/stdtest engine`).
 pub const SCREEN: (f64, f64) = (1920.0, 1080.0);
@@ -251,7 +272,18 @@ pub fn widget_of(vm: &Vm, v: Value) -> Option<WidgetId> {
 }
 
 /// The class `name` and its bases, nearest first.
-pub(crate) fn lineage(e: &Engine, name: &str) -> Vec<String> {
+pub(crate) fn lineage(e: &Engine, name: &str) -> std::rc::Rc<[String]> {
+    if let Some(known) = e.lineages.borrow().get(name) {
+        return known.clone();
+    }
+    let out: std::rc::Rc<[String]> = lineage_of(e, name).into();
+    e.lineages
+        .borrow_mut()
+        .insert(name.to_string(), out.clone());
+    out
+}
+
+fn lineage_of(e: &Engine, name: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut todo = vec![name.to_string()];
     while let Some(c) = todo.pop() {
@@ -788,14 +820,21 @@ pub fn recorded_default(
     getter: &str,
 ) -> Option<&'static Vec<crate::widgetdata::Recorded>> {
     let data = crate::widgetdata::data(&e.flavor)?;
-    lineage(e, class)
-        .iter()
-        .find_map(|c| data.defaults.get(&(c.clone(), getter.to_string())))
+    let mut key = (String::new(), getter.to_string());
+    lineage(e, class).iter().find_map(|c| {
+        c.clone_into(&mut key.0);
+        data.defaults.get(&key)
+    })
 }
 
 /// The stored arguments of setter `stem`, if it ran.
 pub fn stored_args(vm: &mut Vm, props: TableRef, stem: &str) -> Option<Vec<Value>> {
     let key = vm.str(stem);
+    stored_args_at(vm, props, key)
+}
+
+/// [`stored_args`] by the stem's string.
+pub fn stored_args_at(vm: &mut Vm, props: TableRef, key: Value) -> Option<Vec<Value>> {
     let Value::Table(list) = vm.heap.table(props).get(key) else {
         return None;
     };
@@ -823,8 +862,7 @@ fn stored(vm: &mut Vm, id: WidgetId, f: &crate::api::Function, c: &NativeCall) -
         .doc
         .get("Returns")
         .and_then(serde_json::Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+        .map_or(&[][..], Vec::as_slice);
     let setter = short
         .strip_prefix("Set")
         .map(str::to_string)
@@ -892,9 +930,13 @@ fn stored(vm: &mut Vm, id: WidgetId, f: &crate::api::Function, c: &NativeCall) -
 pub fn has_script(e: &Engine, class: &str, script: &str) -> bool {
     // The client's answers where recorded (camelot: `/stdtest engine`).
     if let Some(data) = crate::widgetdata::data(&e.flavor)
-        && let Some(&yes) = lineage(e, class)
-            .iter()
-            .find_map(|c| data.scripts.get(&(c.clone(), script.to_string())))
+        && let Some(&yes) = {
+            let mut key = (String::new(), script.to_string());
+            lineage(e, class).iter().find_map(|c| {
+                c.clone_into(&mut key.0);
+                data.scripts.get(&key)
+            })
+        }
     {
         return yes;
     }
@@ -1021,7 +1063,7 @@ fn set_script(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 /// makes it one a frame looks at.
 pub fn script_stored(vm: &mut Vm, id: WidgetId, script: &str) {
     if script == "OnUpdate" {
-        engine_mut(vm).world.updating.insert(id.0);
+        engine_mut(vm).world.updates(id.0);
     }
 }
 
@@ -2032,14 +2074,16 @@ fn resize(vm: &mut Vm, id: WidgetId, w: Option<f64>, h: Option<f64>) {
     // `OnUpdate` (also when resized in `OnUpdate`), a frame without points
     // never gets one (`/stdtest engine`).
     let world = &mut engine_mut(vm).world;
-    if new != old && !world.resized.contains(&id) {
+    if new != old && world.resizing.insert(id.0) {
         world.resized.push(id);
     }
 }
 
 /// `OnSizeChanged` for the widgets resized since the last frame.
 pub fn run_size_changes(vm: &mut Vm) {
-    let resized = std::mem::take(&mut engine_mut(vm).world.resized);
+    let world = &mut engine_mut(vm).world;
+    world.resizing.clear();
+    let resized = std::mem::take(&mut world.resized);
     for id in resized {
         let w = &engine(vm).world.widgets[id.0];
         if w.points.is_empty() {
@@ -2165,6 +2209,27 @@ fn anchor(point: &str) -> (f64, f64) {
 /// `LEFT` and a `RIGHT` point give the width, a `TOP` and a `BOTTOM` the
 /// height); otherwise the size set, placed by the axis's first point.
 pub fn bounds(vm: &Vm, id: WidgetId, depth: usize) -> Option<(f64, f64, f64, f64)> {
+    bounds_in(vm, id, depth, &mut HashMap::new())
+}
+
+/// A rectangle (left, bottom, width, height), as [`bounds`] gives it.
+type Rect = (f64, f64, f64, f64);
+
+/// The rectangles worked out in one [`bounds`], by widget and depth.
+type KnownBounds = HashMap<(usize, usize), Option<Rect>>;
+
+/// [`bounds`], each widget's at a depth worked out once (two points on the
+/// same frame ask for it twice, and so on up the chain).
+fn bounds_in(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -> Option<Rect> {
+    if let Some(&b) = known.get(&(id.0, depth)) {
+        return b;
+    }
+    let b = bounds_of(vm, id, depth, known);
+    known.insert((id.0, depth), b);
+    b
+}
+
+fn bounds_of(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -> Option<Rect> {
     let e = engine(vm);
     let w = &e.world.widgets[id.0];
     if w.name.as_deref() == Some("UIParent") || depth > 64 {
@@ -2175,7 +2240,7 @@ pub fn bounds(vm: &Vm, id: WidgetId, depth: usize) -> Option<(f64, f64, f64, f64
     // top left (unverified: the scroll offsets are not applied).
     if w.points.is_empty() {
         let p = w.scroll_parent?;
-        let r = bounds(vm, p, depth + 1)?;
+        let r = bounds_in(vm, p, depth + 1, known)?;
         let (width, height) = (w.width * s, w.height * s);
         return Some((r.0, r.1 + r.3 - height, width, height));
     }
@@ -2192,7 +2257,7 @@ pub fn bounds(vm: &Vm, id: WidgetId, depth: usize) -> Option<(f64, f64, f64, f64
             None => w.parent,
         };
         let r = rel
-            .and_then(|r| bounds(vm, r, depth + 1))
+            .and_then(|r| bounds_in(vm, r, depth + 1, known))
             .unwrap_or((0.0, 0.0, SCREEN.0, SCREEN.1));
         let (rx, ry) = anchor(&p.relative_point);
         let ax = r.0 + rx * r.2 + p.x * s;
@@ -3137,6 +3202,9 @@ pub type MethodFn = fn(&mut Vm, WidgetId, NativeCall) -> Ret;
 
 /// Stores `args` as setter `stem`'s on a widget's properties.
 pub(crate) fn store(vm: &mut Vm, id: WidgetId, stem: &str, args: &[Value]) {
+    if stem == "KeyboardEnabled" {
+        insert_sorted(&mut engine_mut(vm).world.keyboard, id.0);
+    }
     let props = engine(vm).world.widgets[id.0].props;
     let list = vm.new_table();
     // A fixed-height font keeps its height as set.

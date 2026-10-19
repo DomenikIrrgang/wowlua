@@ -67,8 +67,12 @@ pub struct Engine {
     /// Behaviour by function name (`C_Timer.After`).
     behaviours: HashMap<&'static str, NativeFn>,
     /// Widget methods' behaviour by name (`Show`), or by class and name
-    /// (`Button:Click`) where a class differs.
-    methods: HashMap<&'static str, widgets::MethodFn>,
+    /// (`Button:Click`) where a class differs. Looked up, never iterated:
+    /// its hasher is not observable.
+    methods: rustc_hash::FxHashMap<&'static str, widgets::MethodFn>,
+    /// Each class's lineage (`widgets::lineage`), worked out once: the
+    /// documentation's classes do not change.
+    pub(crate) lineages: std::cell::RefCell<rustc_hash::FxHashMap<String, std::rc::Rc<[String]>>>,
     pub world: widgets::World,
     pub timers: clock::Timers,
     pub units: units::Units,
@@ -266,6 +270,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(input::methods())
             .chain(bars::methods())
             .collect(),
+        lineages: Default::default(),
         world: widgets::World::default(),
         timers: clock::Timers::default(),
         units: units::Units::default(),
@@ -791,7 +796,8 @@ fn api_function(vm: &mut Vm, c: NativeCall) -> Ret {
     };
     // The client's secrecy: results secret as the function's documentation
     // and the restrictions active say; a return marked never secret stays.
-    let secret = units::secret_results(vm, &f.doc, &c);
+    let flags = *f.secret_flags.get_or_init(|| units::secret_flags(&f.doc));
+    let secret = units::secret_results_flagged(vm, flags, &c);
     let results = behaviour(vm, c)?;
     // A behaviour may say its answer has nothing to hide (an empty action
     // slot's cooldown, recorded plain in combat).
@@ -803,8 +809,7 @@ fn api_function(vm: &mut Vm, c: NativeCall) -> Ret {
         .doc
         .get("Returns")
         .and_then(serde_json::Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+        .map_or(&[][..], Vec::as_slice);
     Ok(results
         .into_iter()
         .enumerate()

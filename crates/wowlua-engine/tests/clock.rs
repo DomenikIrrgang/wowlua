@@ -58,6 +58,32 @@ return n, string.format('%.1f', total)",
     assert_eq!(r, ["3", "0.3"]);
 }
 
+/// An `OnUpdate` given during a frame: a widget after the one running gets
+/// its turn in that frame, one before it and one made in it the next.
+#[test]
+fn on_update_given_during_a_frame_runs_in_creation_order() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local log = {}
+local a, b, c = CreateFrame('Frame'), CreateFrame('Frame'), CreateFrame('Frame')
+local function logger(name) return function() log[#log + 1] = name end end
+b:SetScript('OnUpdate', function()
+    log[#log + 1] = 'b'
+    if not a:GetScript('OnUpdate') then
+        a:SetScript('OnUpdate', logger('a'))
+        c:SetScript('OnUpdate', logger('c'))
+        CreateFrame('Frame'):SetScript('OnUpdate', logger('d'))
+    end
+end)
+mock.nextFrame()
+log[#log + 1] = '|'
+mock.nextFrame()
+return table.concat(log, ' ')",
+    );
+    assert_eq!(r, ["b c | a b c d"]);
+}
+
 #[test]
 fn fire_event_checks_the_documentation() {
     let mut vm = vm();

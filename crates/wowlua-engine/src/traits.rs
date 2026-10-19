@@ -241,6 +241,19 @@ pub struct Traits {
 }
 
 /// Any class's answer to a call (data by call).
+/// A recorded answer's values, parsed once: the answers are the build's.
+fn parsed(answer: &'static str) -> &'static [Rv] {
+    type Parsed = HashMap<(usize, usize), &'static [Rv]>;
+    static PARSED: OnceLock<std::sync::Mutex<Parsed>> = OnceLock::new();
+    let mut parsed = PARSED
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    parsed
+        .entry((answer.as_ptr() as usize, answer.len()))
+        .or_insert_with(|| Box::leak(Rv::answer(answer).into_boxed_slice()))
+}
+
 pub(crate) fn owner_answer(call: &str) -> Option<&'static &'static str> {
     static BY_CALL: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
     BY_CALL
@@ -268,21 +281,24 @@ impl<'a> Model<'a> {
 
     /// Whether the class's configs were recorded.
     fn known(&self) -> bool {
-        data().keys().any(|(c, _)| *c == self.class)
+        static CLASSES: OnceLock<std::collections::HashSet<&'static str>> = OnceLock::new();
+        CLASSES
+            .get_or_init(|| data().keys().map(|(c, _)| *c).collect())
+            .contains(self.class.as_str())
     }
 
     /// The class's recorded answer, else the class's whose it is (each
     /// node, entry and spell kept from the class owning its tree; an
     /// answer every class gave alike kept once).
-    fn recorded(&self, call: &str) -> Option<Vec<Rv>> {
+    fn recorded(&self, call: &str) -> Option<&'static [Rv]> {
         data()
             .get(&(self.class.as_str(), call))
             .or_else(|| owner_answer(call))
-            .map(|a| Rv::answer(a))
+            .map(|a| parsed(a))
     }
 
     fn first(&self, call: &str) -> Option<Rv> {
-        self.recorded(call)?.into_iter().next()
+        self.recorded(call)?.first().cloned()
     }
 
     fn recorded_node(&self, config: i64, node: i64) -> Option<Rv> {
@@ -715,14 +731,24 @@ fn character(vm: &Vm) -> String {
         return c.clone();
     }
     let prefix = format!("{}-", engine(vm).units.list[PLAYER.0].class.to_uppercase());
-    let mut keys: Vec<&str> = data()
-        .keys()
-        .map(|(k, _)| *k)
+    // The first of the class's, in order: those with the prefix start at
+    // the first key not before it.
+    let keys = characters();
+    let at = keys.partition_point(|k| *k < prefix.as_str());
+    keys.get(at)
         .filter(|k| k.starts_with(&prefix))
-        .collect();
-    keys.sort_unstable();
-    keys.dedup();
-    keys.first().map_or(prefix, |k| k.to_string())
+        .map_or(prefix, |k| k.to_string())
+}
+
+/// The recorded characters' keys, in order, each once.
+fn characters() -> &'static [&'static str] {
+    static KEYS: OnceLock<Vec<&'static str>> = OnceLock::new();
+    KEYS.get_or_init(|| {
+        let mut keys: Vec<&str> = data().keys().map(|(k, _)| *k).collect();
+        keys.sort_unstable();
+        keys.dedup();
+        keys
+    })
 }
 
 fn model(vm: &Vm) -> Model<'_> {

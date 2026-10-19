@@ -268,15 +268,27 @@ pub fn advance_frames(vm: &mut Vm, n: usize, ms: f64) {
         // during the frame too), not those made in it. The name interned as
         // when each widget was looked at: before the first, and after each
         // `OnUpdate` (a collection in it may have freed the string, and
-        // interning it again counts towards the next).
+        // interning it again counts towards the next). Between those, the
+        // handler's lookup finds the name interned and changes nothing: it
+        // waits until the widget shows.
         if count > 0 {
             vm.heap.intern(b"OnUpdate");
         }
+        // (A widget given one before the one at `at` moves it on: the list
+        // is caught up to `next`.)
         let mut next = 0;
-        while let Some(&i) = engine(vm).world.updating.range(next..count).next() {
+        let mut at = 0;
+        loop {
+            let updating = &engine(vm).world.updating;
+            while updating.get(at).is_some_and(|&i| i < next) {
+                at += 1;
+            }
+            let Some(&i) = updating.get(at).filter(|&&i| i < count) else {
+                break;
+            };
             next = i + 1;
             let id = WidgetId(i);
-            if widgets::has_handler(vm, id, "OnUpdate") && widgets::visible(engine(vm), id) {
+            if widgets::visible(engine(vm), id) && widgets::has_handler(vm, id, "OnUpdate") {
                 widgets::run_script(vm, id, "OnUpdate", &[elapsed]);
                 if next < count {
                     vm.heap.intern(b"OnUpdate");

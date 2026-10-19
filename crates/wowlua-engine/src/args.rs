@@ -239,10 +239,20 @@ pub fn usage(f: &Function) -> String {
     text
 }
 
-/// The arguments as the client checks them: the documentation's, or the
-/// client's own, relaxed; the same each call, so worked out once.
-fn checked_arguments(f: &Function) -> &[Json] {
-    f.checked_arguments.get_or_init(|| {
+/// An argument as the client checks it: its documentation, how its type
+/// takes a value, and whether it may be left out.
+pub struct Checked {
+    arg: Json,
+    family: Family,
+    optional: bool,
+}
+
+/// The arguments as the client checks them from argument `first` on: the
+/// documentation's, or the client's own, relaxed; the same each call, so
+/// worked out once.
+fn checked_arguments<'f>(api: &Api, f: &'f Function, first: usize) -> &'f [Checked] {
+    let method = first == 2;
+    f.checked_arguments[first - 1].get_or_init(|| {
         let mut args = match overridden_arguments(f.name) {
             Some(Json::Array(a)) => a,
             _ => f
@@ -253,7 +263,33 @@ fn checked_arguments(f: &Function) -> &[Json] {
                 .unwrap_or_default(),
         };
         relax(f, &mut args);
-        args
+        args.into_iter()
+            .enumerate()
+            .map(|(i, arg)| {
+                let n = if method { i + first } else { i + 1 };
+                let ty = arg.get("Type").and_then(Json::as_str).unwrap_or("");
+                let mut family = family(api, ty, &arg, method);
+                if let Family::Int { index, .. } = family
+                    && UNSIGNED.contains(&(f.name, n))
+                {
+                    family = Family::Int {
+                        min: U32.0,
+                        max: U32.1,
+                        index,
+                    };
+                }
+                // A repeated (stride) argument may come no times: Blizzard's
+                // `ChannelFrameMixin = CreateFromMixins()` works in the client.
+                let optional = arg.get("Nilable").and_then(Json::as_bool).unwrap_or(false)
+                    || arg.get("Default").is_some()
+                    || arg.get("StrideIndex").is_some();
+                Checked {
+                    arg,
+                    family,
+                    optional,
+                }
+            })
+            .collect()
     })
 }
 
@@ -272,32 +308,16 @@ pub fn check_from(
     c: &NativeCall,
     first: usize,
 ) -> Result<(), LuaError> {
-    let args = checked_arguments(f);
     // A method's arguments count `self` as the first (`/stdtest engine`).
     let method = first == 2;
-    for (i, arg) in args.iter().enumerate() {
+    for (i, checked) in checked_arguments(api, f, first).iter().enumerate() {
         let at = i + first;
         let n = if method { at } else { i + 1 };
-        let ty = arg.get("Type").and_then(Json::as_str).unwrap_or("");
-        let mut family = family(api, ty, arg, method);
-        if let Family::Int { index, .. } = family
-            && UNSIGNED.contains(&(f.name, n))
-        {
-            family = Family::Int {
-                min: U32.0,
-                max: U32.1,
-                index,
-            };
-        }
+        let (arg, family) = (&checked.arg, checked.family);
         let v = c.arg(at);
         let present = c.has(at) && !vm.hidden(v).is_nil();
         if !present {
-            // A repeated (stride) argument may come no times: Blizzard's
-            // `ChannelFrameMixin = CreateFromMixins()` works in the client.
-            let optional = arg.get("Nilable").and_then(Json::as_bool).unwrap_or(false)
-                || arg.get("Default").is_some()
-                || arg.get("StrideIndex").is_some();
-            if optional {
+            if checked.optional {
                 continue;
             }
             return Err(fail(vm, f, n, None));

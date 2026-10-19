@@ -21,8 +21,12 @@ pub struct Function {
     /// Its documentation entry: `Arguments`, `Returns` and the flags.
     pub doc: Json,
     /// Its arguments as the client checks them (`crate::args`), worked out
-    /// on the first call.
-    pub checked_arguments: OnceLock<Vec<Json>>,
+    /// on the first call: from the first argument on, and from the second
+    /// (a method's, after `self`).
+    pub checked_arguments: [OnceLock<Vec<crate::args::Checked>>; 2],
+    /// The secrecy flags its documentation sets (`units::secret_flags`),
+    /// read on the first call.
+    pub secret_flags: OnceLock<u32>,
 }
 
 /// A widget class: its bases (from the annotations), its `CreateFrame`
@@ -244,7 +248,8 @@ fn parse(gz: &[u8]) -> Api {
                     namespace: Some(leak(&class)),
                     system: sname,
                     doc: f,
-                    checked_arguments: OnceLock::new(),
+                    checked_arguments: Default::default(),
+                    secret_flags: OnceLock::new(),
                 });
                 let index = api.methods.len() - 1;
                 api.classes
@@ -281,7 +286,8 @@ fn parse(gz: &[u8]) -> Api {
                     namespace: namespace.as_deref().map(leak),
                     system: sname,
                     doc: f,
-                    checked_arguments: OnceLock::new(),
+                    checked_arguments: Default::default(),
+                    secret_flags: OnceLock::new(),
                 });
             }
         }
