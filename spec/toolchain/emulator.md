@@ -213,7 +213,8 @@ as the client has them (probed on WoW Forever 1.60.1, `/stdtest probe`):
   `securecopy` behave as in the client.
 - **Secure code** may use secrets; what it computes from one is secret again
   (decision T195, from Blizzard's documentation: addon code cannot observe
-  it).
+  it). That includes calling a secret function: the function it hides runs
+  and its results are secret.
 
 The engine returns secrets where the client does: from the documentation's
 `SecretReturns`, `SecretArguments` and `SecretWhen…` flags, under the

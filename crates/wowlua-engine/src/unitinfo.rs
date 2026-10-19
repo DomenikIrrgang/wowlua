@@ -871,15 +871,21 @@ fn get_unit_auras(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![list_of(vm, &values)])
 }
 
-/// `C_UnitAuras.GetUnitAuraInstanceIDs(unit, filter [, maxCount])`: none
-/// yet, the empty list Blizzard's code read before. The unit's listed
-/// auras' IDs set off the target frame's aura buttons in a party fight,
-/// whose dispel border then reads a secret dispel type in an execution
-/// the engine wrongly holds tainted (by ""); open until that taint is
-/// found.
-fn get_unit_aura_instance_ids(vm: &mut Vm, _c: NativeCall) -> Ret {
+/// `C_UnitAuras.GetUnitAuraInstanceIDs(unit, filter [, maxCount])`: the
+/// instance IDs of the unit's auras that pass the filter.
+fn get_unit_aura_instance_ids(vm: &mut Vm, c: NativeCall) -> Ret {
     auras::refuse(vm, "GetUnitAuraInstanceIDs")?;
-    Ok(vec![list_of(vm, &[])])
+    let filter = text(vm, c.arg(2)).unwrap_or_default();
+    let max = num(vm, c.arg(3)).map(|n| n.max(0.0) as usize);
+    let ids: Vec<Value> = match units::unit_arg(vm, &c, 1) {
+        Some(unit) => auras::listed(vm, unit, &filter)
+            .iter()
+            .take(max.unwrap_or(usize::MAX))
+            .map(|a| Value::Num(a.instance))
+            .collect(),
+        None => Vec::new(),
+    };
+    Ok(vec![list_of(vm, &ids)])
 }
 
 /// `C_UnitAuras.GetUnitAuraBySpellID(unit, spellID)`: the unit's first
