@@ -53,7 +53,7 @@ fn set(vm: &mut Vm, t: TableRef, key: &str, v: Value) {
 }
 
 /// An aura as the client's `AuraData` table.
-fn aura_data(vm: &mut Vm, a: &Aura) -> Value {
+pub(crate) fn aura_data(vm: &mut Vm, a: &Aura) -> Value {
     let t = vm.new_table();
     let source_token = a
         .source
@@ -111,7 +111,7 @@ fn aura_data(vm: &mut Vm, a: &Aura) -> Value {
 
 /// Whether an aura passes a filter (`"HELPFUL|PLAYER"`; HELPFUL when none
 /// says HARMFUL).
-fn matches(a: &Aura, filter: &str) -> bool {
+pub(crate) fn matches(a: &Aura, filter: &str) -> bool {
     let words: Vec<String> = filter
         .split(['|', ' '])
         .filter(|w| !w.is_empty())
@@ -429,7 +429,7 @@ pub fn control_remove(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// The recorded refusal: in combat, tainted code may not read auras.
-fn refuse(vm: &mut Vm, function: &str) -> Result<(), LuaError> {
+pub(crate) fn refuse(vm: &mut Vm, function: &str) -> Result<(), LuaError> {
     let restricted = units::active(&engine(vm).units, &[units::COMBAT]);
     if !(restricted && protection::tainted(vm)) {
         return Ok(());
@@ -457,7 +457,7 @@ fn unit_and_filter(vm: &mut Vm, c: &NativeCall, filter_at: usize) -> (Option<Uni
 }
 
 /// The unit's auras passing `filter`, in application order.
-fn listed(vm: &Vm, unit: UnitId, filter: &str) -> Vec<Aura> {
+pub(crate) fn listed(vm: &Vm, unit: UnitId, filter: &str) -> Vec<Aura> {
     engine(vm)
         .units
         .auras
