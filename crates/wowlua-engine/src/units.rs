@@ -90,6 +90,8 @@ pub struct Unit {
     pub zone: Option<String>,
     /// A raid member's subgroup when not the one its place gives.
     pub subgroup: Option<f64>,
+    /// A player character logged in (an offline group member not).
+    pub online: bool,
 }
 
 /// The addon restriction types (`Enum.AddOnRestrictionType`).
@@ -273,6 +275,7 @@ pub fn install(vm: &mut Vm) {
         role: None,
         zone: None,
         subgroup: None,
+        online: true,
     };
     engine_mut(vm).units.list.push(player);
 }
@@ -320,7 +323,7 @@ fn base_token<'a>(u: &Units, t: &'a str) -> Option<(Option<UnitId>, &'a str)> {
     }
     let group = |n: usize| {
         if u.raid {
-            // raid1 is the player, raid2.. the others (unverified).
+            // raid1 is the player, raid2.. the others (recorded).
             if n == 1 {
                 Some(PLAYER)
             } else {
@@ -330,11 +333,9 @@ fn base_token<'a>(u: &Units, t: &'a str) -> Option<(Option<UnitId>, &'a str)> {
             None
         }
     };
-    let party = |n: usize| {
-        (!u.raid)
-            .then(|| u.group.get(n.wrapping_sub(1)).copied())
-            .flatten()
-    };
+    // The party: in a raid, the others of the player's subgroup
+    // (recorded: a member there party1, one moved away none).
+    let party = |n: usize| party_members(u).get(n.wrapping_sub(1)).copied();
     numbered("nameplate", &|n| {
         u.nameplates.get(n.wrapping_sub(1)).copied().flatten()
     })
@@ -345,6 +346,20 @@ fn base_token<'a>(u: &Units, t: &'a str) -> Option<(Option<UnitId>, &'a str)> {
             u.bosses.get(n.wrapping_sub(1)).copied().flatten()
         })
     })
+}
+
+/// The members `partyN` names: the group's others, in a raid those in the
+/// player's subgroup.
+fn party_members(u: &Units) -> Vec<UnitId> {
+    if !u.raid {
+        return u.group.clone();
+    }
+    let mine = subgroup(u, PLAYER);
+    u.group
+        .iter()
+        .copied()
+        .filter(|g| subgroup(u, *g) == mine)
+        .collect()
 }
 
 /// The tokens that name a unit by themselves (not compounds), in the order
@@ -389,13 +404,13 @@ pub fn tokens_of(u: &Units, id: UnitId) -> Vec<String> {
         out.push("mouseover".into());
     }
     for (i, g) in u.group.iter().enumerate() {
-        if *g == id {
-            out.push(if u.raid {
-                format!("raid{}", i + 2)
-            } else {
-                format!("party{}", i + 1)
-            });
+        if *g == id && u.raid {
+            out.push(format!("raid{}", i + 2));
         }
+    }
+    // In a raid too, the player's subgroup's (unverified: after raidN).
+    if let Some(i) = party_members(u).iter().position(|g| *g == id) {
+        out.push(format!("party{}", i + 1));
     }
     if u.raid && id == PLAYER {
         out.push("raid1".into());
@@ -740,8 +755,12 @@ fn unit_not_special(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `UnitIsConnected`: every unit there is.
+/// `UnitIsConnected(unit)`: logged in (recorded: an offline party member
+/// not).
 fn unit_is_connected(vm: &mut Vm, c: NativeCall) -> Ret {
-    with_unit_or(vm, &c, Value::Bool(false), |_, _| vec![Value::Bool(true)])
+    with_unit_or(vm, &c, Value::Bool(false), |_, u| {
+        vec![Value::Bool(u.online)]
+    })
 }
 
 /// `UnitShouldDisplayName`: others' names, not the player's (recorded).
@@ -1037,8 +1056,23 @@ fn unit_is_visible(vm: &mut Vm, c: NativeCall) -> Ret {
     let id = unit_arg(vm, &c, 1);
     let e = engine(vm);
     let here = &e.world.character.position.zone;
-    let visible = id.is_some_and(|id| e.units.list[id.0].zone.as_ref().is_none_or(|z| z == here));
+    let visible = id.is_some_and(|id| {
+        let u = &e.units.list[id.0];
+        u.online && u.zone.as_ref().is_none_or(|z| z == here)
+    });
     Ok(vec![Value::Bool(visible)])
+}
+
+/// `unit:setOnline(online)`: a group member logged in or out
+/// (`GROUP_ROSTER_UPDATE`; unverified: the client's other events).
+fn control_set_online(vm: &mut Vm, c: NativeCall) -> Ret {
+    let me = this(vm, &c)?;
+    let online = c.arg(2).truthy();
+    engine_mut(vm).units.list[me.0].online = online;
+    if crate::party::grouped(vm) {
+        fire(vm, "GROUP_ROSTER_UPDATE", &[]);
+    }
+    Ok(vec![])
 }
 
 /// `unit:setRole(role?)`: the group role it chose (`TANK`, `HEALER`,
@@ -1267,6 +1301,7 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("leaveCombat", control_leave_combat),
         ("showNameplate", control_show_nameplate),
         ("setRole", control_set_role),
+        ("setOnline", control_set_online),
         ("hideNameplate", control_hide_nameplate),
         ("despawn", control_despawn),
         ("token", control_tokens),
@@ -1506,6 +1541,7 @@ fn unit_from(vm: &mut Vm, data: Option<TableRef>, player_guid: Option<String>) -
             _ => None,
         },
         subgroup: None,
+        online: !matches!(get(vm, "online"), Value::Bool(false)),
     }
 }
 

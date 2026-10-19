@@ -386,10 +386,12 @@ pub fn lead(vm: &mut Vm) {
 /// `GetRaidRosterInfo(index)`: name, rank, subgroup, level, class, file
 /// name, zone, online, dead, role, master looter, combat role; in a party
 /// too (recorded): the player first, then the members in joining order;
-/// the leader's rank 2, the others' 0; each member's zone (out of sight:
-/// its own); the chosen role last. An index past the members, or 0: a
-/// placeholder (recorded: `nil, 0, 1, 1, nil × 6, false, "NONE"`).
-/// Unverified: solo; ranks of assistants; offline members.
+/// the full name ("Name Lastname" on Forever); the leader's rank 2, the
+/// others' 0; each member's zone (out of sight: its own); an offline
+/// member's level 0 and zone "Offline"; dead a ghost too; the chosen role
+/// last. An index past the members, or 0: a placeholder (recorded: `nil,
+/// 0, 1, 1, nil × 6, false, "NONE"`). Unverified: solo; assistants; a
+/// cross-realm member's realm.
 fn get_raid_roster_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let placeholder = |vm: &mut Vm| {
         let mut out = vec![
@@ -434,20 +436,26 @@ fn get_raid_roster_info(vm: &mut Vm, c: NativeCall) -> Ret {
         }
     };
     let here = engine(vm).world.character.position.zone.clone();
-    let (name, level, class_name, class, dead, zone, role) = {
+    let offline = global(vm, "PLAYER_OFFLINE", "Offline");
+    let name = full_name(vm, unit);
+    let (level, class_name, class, dead, zone, role, online) = {
         let u = &engine(vm).units.list[unit.0];
         (
-            u.name.clone(),
-            u.level,
+            if u.online { u.level } else { 0.0 },
             if u.player {
                 u.class_name.clone()
             } else {
                 u.name.clone()
             },
             u.class.clone(),
-            u.dead,
-            u.zone.clone().unwrap_or(here),
+            u.dead || u.ghost,
+            if u.online {
+                u.zone.clone().unwrap_or(here)
+            } else {
+                offline
+            },
             u.role.clone().unwrap_or_else(|| "NONE".to_string()),
+            u.online,
         )
     };
     Ok(vec![
@@ -458,7 +466,7 @@ fn get_raid_roster_info(vm: &mut Vm, c: NativeCall) -> Ret {
         vm.str(&class_name),
         vm.str(&class),
         vm.str(&zone),
-        Value::Bool(true),
+        Value::Bool(online),
         Value::Bool(dead),
         Value::Nil,
         Value::Bool(false),

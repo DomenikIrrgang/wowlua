@@ -1871,9 +1871,9 @@ fn group_fixture() -> BTreeMap<String, BTreeMap<String, String>> {
 }
 
 /// `/stdtest engine group` played in the engine as the client recorded it
-/// (70450): the paladin leading a party with a druid of the user's in
-/// another zone (out of sight; chosen roles: tank, healer), then the party
-/// made a raid; every call's answer the client's.
+/// (70450): the paladin, dead, leading a party with an offline druid of the
+/// user's (both on damage), then the party made a raid; every call's
+/// answer the client's.
 #[test]
 fn the_engine_answers_the_group_as_the_client_did() {
     let Some(ui) = wowlua_test::ui_source_in(&repo().join("target/types-src"), "camelot") else {
@@ -1896,25 +1896,23 @@ fn the_engine_answers_the_group_as_the_client_did() {
     .expect("the character's world");
     wowlua_engine::login::login(&mut vm, "StdTest", true, false);
     wowlua_engine::clock::advance_frames(&mut vm, 10, 1000.0 / 60.0);
-    // A nameplate shown, as one was; the druid in another zone; made a
-    // raid (the user moved the druid to subgroup 4), probed, made a party
-    // again, probed: the order recorded.
+    // As recorded (16:55): a nameplate shown, the player dead, the druid
+    // offline, both on damage; probed as a party, made a raid, probed.
     addon(
         &mut vm,
         r#"local e = __engine
 e.spawnUnit({ name = "Plainstrider", level = 12, reaction = "hostile" }):showNameplate()
 e.player:setName("Player", "Lastname")
-e.player:setRole("TANK")
+e.player:setRole("DAMAGER")
 GroupDruid = e.spawnUnit({
     name = "Member1", lastName = "Member1Last", player = true, level = 21, class = "DRUID", classID = 11,
-    reaction = "friendly", zone = "Thunder Bluff", role = "HEALER",
+    reaction = "friendly", role = "DAMAGER", online = false,
 })
-e.addToGroup(GroupDruid, { subgroup = 4 })
+e.addToGroup(GroupDruid)
+e.player:die()
 e.advanceFrames(10, 1000 / 60)
-C_PartyInfo.ConvertToRaid()
-e.advanceFrames(60, 1000 / 60)
 StdTestEngineProbe("group")
-C_PartyInfo.ConvertToParty()
+C_PartyInfo.ConvertToRaid()
 e.advanceFrames(60, 1000 / 60)
 StdTestEngineProbe("group")"#,
     );

@@ -59,6 +59,8 @@ export interface MockUnit
     --- The group role it chose (`UnitGroupRolesAssigned`, the raid
     --- roster's combat role); nil none.
     function setRole(role: ("TANK" | "HEALER" | "DAMAGER")?)
+    --- A group member logging in or out (`UnitIsConnected`, the roster).
+    function setOnline(online: boolean)
     function applyAura(data: table): number
     function removeAura(auraInstanceID: number)
     --- Starts casting (`UNIT_SPELLCAST_START`, or `CHANNEL_START`); it ends
@@ -271,6 +273,9 @@ export type UnitData = {
     --- Where it is when not where the player is (a group member's roster
     --- zone; out of sight: `UnitIsVisible` false).
     zone?: string,
+    --- false: an offline player character (`UnitIsConnected` false; the
+    --- roster's level 0, zone "Offline").
+    online?: boolean,
 }
 
 local function engine(): any
