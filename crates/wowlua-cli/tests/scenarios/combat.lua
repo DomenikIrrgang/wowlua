@@ -4,7 +4,8 @@
 -- Each step at its recorded time, the ping as recorded (~0.3 s). Rage
 -- values are the engine's guesses, consistent with the usability the
 -- client told (it keeps rage secret in combat). Each hit's combat text
--- after its recorded delay (`textAfter`).
+-- after its recorded delay (`textAfter`), the loot's slots at their
+-- recorded times (`slotsAfter`).
 local e = __engine
 local player = e.player
 e.setLatency(0.3)
@@ -68,7 +69,7 @@ at(13.237) wolf:setThreat(41)
 at(13.892) player:swing(wolf, 7, { power = 13, textAfter = 0.396 })
 at(14.151) player:useSpell(78)
 at(14.343) player:useSpell(78)
-at(14.348) wolf:swing(player, 1, { victimPower = 14, textAfter = 0.396 })
+at(14.348) wolf:swing(player, 1, { textAfter = 0.396 })
 wolf:setThreat(47)
 at(14.454) player:setPower(15)
 at(14.849) player:useSpell(78)
@@ -81,7 +82,7 @@ player:heal(1)
 at(20.808) player:heal(1)
 -- The corpse clicked: targeted, looted with autoloot.
 at(21.077) player:target(wolf)
-player:loot(wolf, { auto = true })
+player:loot(wolf, { auto = true, slotsAfter = { 0.516, 0.767 } })
 at(21.700) check("the loot window open", LootFrame:IsShown())
 at(22.921)
 -- What Blizzard's UI shows at the end.

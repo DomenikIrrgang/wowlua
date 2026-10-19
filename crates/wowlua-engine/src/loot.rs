@@ -1,11 +1,12 @@
 //! Looting a corpse, as the client recorded the player's with autoloot
 //! (`/stdtest engine scenario combat` and `quest`, a ping near 0.3 s):
-//! `player:loot(corpse, { auto? })` opens it a round trip later
-//! (`UNIT_FLAGS`, `LOOT_READY(auto)`, `LOOT_OPENED(auto, false)`,
-//! `LOOT_READY(auto)`), the slots answer (`GetNumLootItems`,
-//! `GetLootSlotInfo`, `GetLootSlotLink`, `GetLootSlotType`,
-//! `GetLootSourceInfo`). `LootSlot(i)` (autoloot asks every slot, one
-//! after another) is answered by the server in three packets:
+//! `player:loot(corpse, { auto?, slotsAfter? })` readies it a round trip
+//! later (`UNIT_FLAGS`, `LOOT_READY(auto)`), the window 0.25 s after that
+//! (`LOOT_OPENED(auto, false)`, `LOOT_READY(auto)`), the slots answer
+//! (`GetNumLootItems`, `GetLootSlotInfo`, `GetLootSlotLink`,
+//! `GetLootSlotType`, `GetLootSourceInfo`). `LootSlot(i)` (autoloot asks
+//! every slot, one after another) is answered by the server in three
+//! packets:
 //!
 //! - the item: `LOOT_SLOT_CLEARED(i)` twice, the item's `ITEM_PUSH(bag,
 //!   icon)` and "You receive loot", `BAG_NEW_ITEMS_UPDATED()` for a new
@@ -25,9 +26,10 @@
 //! asked for still arrive (no `LOOT_SLOT_CLEARED`), the corpse stays
 //! targeted.
 //!
-//! Unverified: the packets' spacing (recorded: the bags 0.06 to 0.25 s
-//! after the item, the item data 0.17 to 1.18 s; one value each), money,
-//! a slot left on a corpse closed early.
+//! Unverified: the packets' spacing (recorded: the slots 0.39 to 1.07 s
+//! after the window opened, `slotsAfter` replays a recording's; the bags
+//! 0.06 to 0.25 s after the item, the item data 0.17 to 1.18 s; one value
+//! each), money, a slot left on a corpse closed early.
 
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, NativeFn, Value, Vm};
@@ -77,6 +79,9 @@ pub struct Loot {
     /// New slots whose item data is on its way: bag, slot, item.
     pub arriving: Vec<(i64, usize, i64)>,
     pub arriving_due: bool,
+    /// A recording's times of the slots' answers after the window opened
+    /// (`slotsAfter`), for the next window.
+    pub slots_after: Option<Vec<f64>>,
 }
 
 fn fire(vm: &mut Vm, e: &str, args: &[Value]) {
@@ -88,7 +93,11 @@ fn later(vm: &mut Vm, seconds: f64, name: &'static str, f: NativeFn, upvals: Vec
     crate::clock::after_engine(vm, seconds, native);
 }
 
-/// `player:loot(corpse, { auto? })`: the player loots a corpse.
+/// `player:loot(corpse, { auto?, opensAfter?, slotsAfter? })`: the player
+/// loots a corpse; the window opens a round trip later (`opensAfter`
+/// seconds: a recording's), autoloot's slots answer at the usual spacing
+/// (`slotsAfter`: a recording's times after the window opened, one per
+/// slot).
 pub fn control_loot(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = units::this(vm, &c)?;
     if me != units::PLAYER {
@@ -97,14 +106,29 @@ pub fn control_loot(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(corpse) = units::handle_of(vm, c.arg(2)) else {
         return Err(vm.error("loot: a corpse to loot expected"));
     };
-    let auto = match c.arg(3) {
-        Value::Table(t) => {
-            let k = vm.str("auto");
-            vm.heap.table(t).get(k).truthy()
-        }
-        _ => false,
+    let opts = match c.arg(3) {
+        Value::Table(t) => Some(t),
+        _ => None,
     };
-    let delay = crate::clock::server_delay(vm);
+    let auto = opt_field(vm, opts, "auto").truthy();
+    let delay = match opt_field(vm, opts, "opensAfter") {
+        Value::Num(n) => n,
+        _ => crate::clock::server_delay(vm),
+    };
+    engine_mut(vm).world.loot.slots_after = match opt_field(vm, opts, "slotsAfter") {
+        Value::Table(t) => {
+            let n = vm.heap.table(t).border();
+            Some(
+                (1..=n)
+                    .filter_map(|i| match vm.heap.table(t).get(Value::Num(i as f64)) {
+                        Value::Num(x) => Some(x),
+                        _ => None,
+                    })
+                    .collect(),
+            )
+        }
+        _ => None,
+    };
     later(
         vm,
         delay,
@@ -293,22 +317,50 @@ fn fill(vm: &mut Vm, corpse: UnitId, auto: bool) {
     l.items = items;
 }
 
+/// A corpse's window after its loot is ready (recorded: 0.244 to 0.254 s
+/// at each of the quest and combat scenarios' nine).
+const CORPSE_OPEN_AFTER: f64 = 0.25;
+
 /// The loot window open on a corpse's or an object's items (a corpse's
-/// told by `UNIT_FLAGS` and `LOOT_READY` first; an object's were).
+/// told by `UNIT_FLAGS` and `LOOT_READY` first, the window a moment
+/// later; an object's were).
 fn open_window(vm: &mut Vm, corpse: UnitId, auto: bool, corpse_flags: bool) {
     fill(vm, corpse, auto);
     // Looting: the player's flags change (recorded just before).
     if corpse_flags {
         units::fire_unit(vm, "UNIT_FLAGS", units::PLAYER, &[]);
         fire(vm, "LOOT_READY", &[Value::Bool(auto)]);
+        later(
+            vm,
+            CORPSE_OPEN_AFTER,
+            "lootWindow",
+            window_opened,
+            vec![Value::Bool(auto)],
+        );
+    } else {
+        show_window(vm, auto);
     }
+}
+
+fn window_opened(vm: &mut Vm, c: NativeCall) -> Ret {
+    show_window(vm, c.upvals[0].truthy());
+    Ok(vec![])
+}
+
+/// The window shown: `LOOT_OPENED`, `LOOT_READY`; autoloot asks for every
+/// slot.
+fn show_window(vm: &mut Vm, auto: bool) {
     fire(vm, "LOOT_OPENED", &[Value::Bool(auto), Value::Bool(false)]);
     fire(vm, "LOOT_READY", &[Value::Bool(auto)]);
+    let recorded = engine_mut(vm).world.loot.slots_after.take();
     if auto {
         let n = engine(vm).world.loot.items.len();
         let delay = crate::clock::server_delay(vm);
         for i in 1..=n {
-            let after = delay + FIRST_SLOT_AFTER + NEXT_SLOT_AFTER * (i - 1) as f64;
+            let after = match recorded.as_ref().and_then(|r| r.get(i - 1)) {
+                Some(&t) => t,
+                None => delay + FIRST_SLOT_AFTER + NEXT_SLOT_AFTER * (i - 1) as f64,
+            };
             later(vm, after, "lootTaken", taken, vec![Value::Num(i as f64)]);
         }
     }

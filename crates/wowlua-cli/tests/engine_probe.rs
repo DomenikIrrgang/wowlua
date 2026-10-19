@@ -999,8 +999,64 @@ function note(...) local t = {} for i = 1, select('#', ...) do t[i] = tostring((
                 .join("\n")
         );
     }
+    // Both logs with their times, for fitting a script's steps.
+    if let Ok(dir) = std::env::var("WOWLUA_SCENARIO_DUMP") {
+        let dir = Path::new(&dir);
+        fs::write(
+            dir.join(format!("{name}-engine-timed.txt")),
+            ours.join("\n"),
+        )
+        .expect("writes");
+        fs::write(
+            dir.join(format!("{name}-client-timed.txt")),
+            theirs.join("\n"),
+        )
+        .expect("writes");
+    }
     let compared = |log: &[String]| -> Vec<String> { scenario_lines(log) };
-    Some((compared(&ours), compared(&theirs), errors))
+    let theirs = compared(&theirs);
+    let ours = asked_as_recorded(compared(&ours), &theirs);
+    Some((ours, theirs, errors))
+}
+
+/// The engine's answers less those the recording's recorder did not ask:
+/// a call after an event the client's log has, but never after it (the
+/// recorder's asks added since, e.g. `UnitOnTaxi` on `UNIT_FLAGS`).
+fn asked_as_recorded(ours: Vec<String>, theirs: &[String]) -> Vec<String> {
+    fn pairs(log: &[String]) -> Vec<(String, String)> {
+        let mut event = String::new();
+        let mut out = Vec::new();
+        for l in log {
+            match l.strip_prefix("= ") {
+                Some(answer) => {
+                    let call = answer.split_once(" -> ").map_or(answer, |(c, _)| c);
+                    out.push((event.clone(), call.to_string()));
+                }
+                None => event = l.split('(').next().unwrap_or(l).to_string(),
+            }
+        }
+        out
+    }
+    let asked: std::collections::HashSet<(String, String)> = pairs(theirs).into_iter().collect();
+    let events: std::collections::HashSet<&str> = theirs
+        .iter()
+        .filter(|l| !l.starts_with("= "))
+        .map(|l| l.split('(').next().unwrap_or(l))
+        .collect();
+    let mut event = String::new();
+    ours.into_iter()
+        .filter(|l| match l.strip_prefix("= ") {
+            Some(answer) => {
+                let call = answer.split_once(" -> ").map_or(answer, |(c, _)| c);
+                !events.contains(event.as_str())
+                    || asked.contains(&(event.clone(), call.to_string()))
+            }
+            None => {
+                event = l.split('(').next().unwrap_or(l).to_string();
+                true
+            }
+        })
+        .collect()
 }
 
 /// Where the engine's world at a scenario's end differs from the client's
@@ -1247,7 +1303,7 @@ fn the_engine_plays_combat_as_the_client_did() {
 
 /// How many of the death scenario's lines the engine plays as the client
 /// did: only ever up.
-const DEATH_MATCHED: usize = 1382;
+const DEATH_MATCHED: usize = 1398;
 
 /// The death scenario: a fight lost, the spirit released, the corpse taken.
 #[test]
@@ -1426,7 +1482,7 @@ fn the_engine_plays_items_as_the_client_did() {
 
 /// How many of the quest scenario's lines the engine plays as the client
 /// did: only ever up.
-const QUEST_MATCHED: usize = 4807;
+const QUEST_MATCHED: usize = 4979;
 
 /// The quest scenario: a quest taken, eight wolves hunted for its item (a
 /// level gained), the quest turned in.
