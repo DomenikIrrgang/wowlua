@@ -836,6 +836,14 @@ const NOTHING: &[&str] = &[
     "SendSubscriptionInterstitialResponse",
     "HandleAtlasMemberCommand",
     "ClearOutage",
+    "SetPOIIconOverlapDistance",
+    "SetPOIIconOverlapPushDistance",
+    "SetTaxiBenchmarkMode",
+    "RequestBottomLeftActionBar",
+    "NeutralPlayerSelectFaction",
+    // The world map's action button (none in the classic game).
+    "ClickWorldMapActionButton",
+    "UseWorldMapActionButtonSpellOnQuest",
     // Chat windows and channels (the client keeps their settings).
     "SetChatWindowSize",
     "SetChatWindowColor",
@@ -1155,6 +1163,8 @@ const NO: &[&str] = &[
     "HasSPEffectsAttackPower",
     "HasKey",
     "ReagentsFromBankAllowed",
+    "DoesCurrentLocaleSellExpansionLevels",
+    "ItemCanTargetGarrisonFollowerAbility",
     "CannotBeResurrected",
     "IsCemeterySelectionAvailable",
     "CanPortGraveyard",
@@ -1245,6 +1255,7 @@ const ZERO: &[&str] = &[
     "EJ_GetInstanceForMap",
     "GMSurveyNumAnswers",
     "VehicleAimGetNormPower",
+    "ItemTextGetPage",
 ];
 
 /// No such thing: an unknown index's or ID's info, no running macro, no
@@ -1313,6 +1324,13 @@ const NIL: &[&str] = &[
     "ItemTextGetCreator",
     "ItemTextGetMaterial",
     "GMSurveyQuestion",
+    // No languages (`GetNumLanguages` answers 0), no world map action
+    // button, no garrison followers, no specializations.
+    "GetLanguageByIndex",
+    "GetWorldMapActionButtonSpellInfo",
+    "GetFollowerTypeIDFromSpell",
+    "GetJournalInfoForSpellConfirmation",
+    "GetPrimarySpecialization",
     "EJ_GetInstanceByIndex",
     "EJ_GetInstanceInfo",
     "EJ_GetEncounterInfo",
@@ -1482,6 +1500,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetArtifactProgress", three_zeros),
         ("CanChangePlayerDifficulty", two_falses),
         ("EJ_IsSearchFinished", yes),
+        ("GetNumTotemSlots", get_num_totem_slots),
+        ("GetNumFlyouts", get_num_flyouts),
         ("GetSelectedWarGameType", get_selected_war_game_type),
     ];
     let groups: [(&[&str], NativeFn); 9] = [
@@ -1499,6 +1519,21 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         out.extend(names.iter().map(|name| (*name, f)));
     }
     out
+}
+
+/// `GetNumTotemSlots()`: the four totem elements (Blizzard's cooldown
+/// viewer loops over them; unverified for classes without totems).
+fn get_num_totem_slots(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(4.0)])
+}
+
+/// The global twin of `C_Flyout.GetNumFlyouts()`: its answer, else none
+/// (unverified).
+fn get_num_flyouts(vm: &mut Vm, _c: NativeCall) -> Ret {
+    match ask(vm, "C_Flyout.GetNumFlyouts", &[]).first().copied() {
+        Some(v @ Value::Num(_)) => Ok(vec![v]),
+        _ => Ok(vec![Value::Num(0.0)]),
+    }
 }
 
 /// `GetOSLocale()`: enUS, the engine's locale (unverified).
