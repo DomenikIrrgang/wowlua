@@ -134,6 +134,9 @@ pub struct Engine {
     /// Documented namespaces only Blizzard's secure code has (none of their
     /// functions in the client's addon environment: `C_PingSecure`).
     pub secure_namespaces: Vec<(wowlua_vm::StrRef, Value)>,
+    /// The behaviours of undocumented functions that check their arguments
+    /// first (`args::install_usages`), by name.
+    pub(crate) usage_checked: HashMap<&'static str, NativeFn>,
 }
 
 impl Engine {
@@ -353,6 +356,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         secure_tables,
         main_globals: vm.globals,
         secure_namespaces: Vec::new(),
+        usage_checked: HashMap::new(),
     }));
     vm.untrusted_layout_forbidden = Some(protection::untrusted_layout_forbidden);
     // Protected functions the documentation lacks.
@@ -529,6 +533,10 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
                 }
             }
         }
+    }
+    // The undocumented functions' own argument checks (camelot's).
+    if flavor == "camelot" {
+        args::install_usages(vm);
     }
     units::install(vm);
     // The CVars' defaults (camelot's, recorded by `/stdtest engine`; other
@@ -936,7 +944,14 @@ fn api_function(vm: &mut Vm, c: NativeCall) -> Ret {
     if protection::refuses_without_user(vm, f.name) {
         return Ok(defaults(vm, api, &f.doc));
     }
+    // Nothing, by the documentation's requirements (`extras`).
+    if extras::silent_unchecked(&f.doc) {
+        return Ok(vec![]);
+    }
     args::check(vm, api, f, &c)?;
+    if extras::silent_checked(&f.doc) {
+        return Ok(vec![]);
+    }
     let Some(behaviour) = behaviour else {
         // Blizzard's code gets empty values; the addon's code an error.
         if protection::blizzard_caller(vm) {

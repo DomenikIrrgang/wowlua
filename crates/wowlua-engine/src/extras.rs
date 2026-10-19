@@ -108,10 +108,19 @@ fn state_set(vm: &mut Vm, k: &str, v: Value) {
 // ---------------------------------------------------- "nothing here"
 
 /// Undocumented functions of systems Forever lacks and their answers by
-/// kind: `f` false, `0` zero, `t` an empty table, `n` nil, empty nothing
-/// (unverified: named as their kind; Blizzard's UI reads the lists
-/// `C_Garrison.GetFollowers(…) or {}`, the counts as numbers,
-/// `GetLandingPageGarrisonType()` against 0).
+/// kind: `f` false, `0` zero, `t` an empty table, `s` an empty string, `n`
+/// a nil each, empty nothing (unverified: named as their kind; Blizzard's
+/// UI reads the lists `C_Garrison.GetFollowers(…) or {}`, the counts as
+/// numbers, `GetLandingPageGarrisonType()` against 0).
+///
+/// `C_Garrison`, `C_CharacterServices` and `Kiosk` answer as the full
+/// probe recorded them (WoW Forever 1.60.1): most of their getters give
+/// nothing at all, whatever they are asked (no garrison; the character
+/// services and the kiosk belong to the login screens), a few an empty
+/// string, list or 0. The probe crashed in `C_Garrison` before its
+/// getters after `GetShipmentItemInfo` (and skipped those before
+/// `GetFollowerAbilityIsTrait`): those of them named as giving a nil give
+/// nothing as all 27 recorded ones did (unverified).
 const UNDOCUMENTED: &[(&str, &str)] = &[
     ("C_AdventureJournal.ActivateEntry", ""),
     ("C_AdventureJournal.GetNumAvailableSuggestions", "0"),
@@ -140,7 +149,7 @@ const UNDOCUMENTED: &[(&str, &str)] = &[
     ("C_BlackMarket.RequestItems", ""),
     (
         "C_CharacterServices.ArePaidCharacterTransfersBetweenBnetAccountsEnabled",
-        "f",
+        "",
     ),
     ("C_CharacterServices.AssignFCMDistribution", ""),
     ("C_CharacterServices.AssignHCTDistribution", ""),
@@ -151,31 +160,28 @@ const UNDOCUMENTED: &[(&str, &str)] = &[
         "",
     ),
     ("C_CharacterServices.AssignUpgradeDistribution", ""),
-    (
-        "C_CharacterServices.GetActiveCharacterUpgradeBoostType",
-        "n",
-    ),
-    ("C_CharacterServices.GetActiveClassTrialBoostType", "n"),
-    ("C_CharacterServices.GetAutomaticBoost", "n"),
-    ("C_CharacterServices.GetAutomaticBoostCharacter", "n"),
-    ("C_CharacterServices.GetCharacterServiceDisplayData", "n"),
+    ("C_CharacterServices.GetActiveCharacterUpgradeBoostType", ""),
+    ("C_CharacterServices.GetActiveClassTrialBoostType", ""),
+    ("C_CharacterServices.GetAutomaticBoost", ""),
+    ("C_CharacterServices.GetAutomaticBoostCharacter", ""),
+    ("C_CharacterServices.GetCharacterServiceDisplayData", ""),
     (
         "C_CharacterServices.GetCharacterServiceDisplayDataByVASType",
-        "n",
+        "",
     ),
-    ("C_CharacterServices.GetCharacterServiceDisplayInfo", "n"),
+    ("C_CharacterServices.GetCharacterServiceDisplayInfo", ""),
     (
         "C_CharacterServices.GetHardcoreTransferSuperDistrictDestinations",
-        "t",
+        "",
     ),
     (
         "C_CharacterServices.GetPaidCharacterTransferSuperDistrictDestinations",
-        "t",
+        "",
     ),
-    ("C_CharacterServices.GetVASDistributions", "t"),
-    ("C_CharacterServices.HasRequiredBoostForClassTrial", "f"),
-    ("C_CharacterServices.HasRequiredBoostForUnrevoke", "f"),
-    ("C_CharacterServices.IsRealmlessRealmSelectionEnabled", "f"),
+    ("C_CharacterServices.GetVASDistributions", ""),
+    ("C_CharacterServices.HasRequiredBoostForClassTrial", ""),
+    ("C_CharacterServices.HasRequiredBoostForUnrevoke", ""),
+    ("C_CharacterServices.IsRealmlessRealmSelectionEnabled", ""),
     ("C_CharacterServices.SetAutomaticBoost", ""),
     ("C_CharacterServices.SetAutomaticBoostCharacter", ""),
     ("C_CharacterServicesPublic.ShouldSeeControlPopup", "f"),
@@ -204,129 +210,129 @@ const UNDOCUMENTED: &[(&str, &str)] = &[
     ("C_Garrison.GenerateRecruits", ""),
     ("C_Garrison.GetAllBonusAbilityEffects", "t"),
     ("C_Garrison.GetAllEncounterThreats", "t"),
-    ("C_Garrison.GetAvailableMissions", "n"),
+    ("C_Garrison.GetAvailableMissions", ""),
     ("C_Garrison.GetAvailableRecruits", "t"),
-    ("C_Garrison.GetBasicMissionInfo", "n"),
+    ("C_Garrison.GetBasicMissionInfo", ""),
     ("C_Garrison.GetBuffedFollowersForMission", "t"),
-    ("C_Garrison.GetBuildingInfo", "n"),
-    ("C_Garrison.GetBuildingLockInfo", "n"),
+    ("C_Garrison.GetBuildingInfo", ""),
+    ("C_Garrison.GetBuildingLockInfo", ""),
     ("C_Garrison.GetBuildingSizes", "t"),
-    ("C_Garrison.GetBuildingSpecInfo", "n"),
-    ("C_Garrison.GetBuildingTimeRemaining", "n"),
-    ("C_Garrison.GetBuildingTooltip", "n"),
-    ("C_Garrison.GetBuildingUpgradeInfo", "n"),
+    ("C_Garrison.GetBuildingSpecInfo", ""),
+    ("C_Garrison.GetBuildingTimeRemaining", ""),
+    ("C_Garrison.GetBuildingTooltip", ""),
+    ("C_Garrison.GetBuildingUpgradeInfo", ""),
     ("C_Garrison.GetBuildings", "t"),
     ("C_Garrison.GetBuildingsForPlot", "t"),
     ("C_Garrison.GetBuildingsForSize", "t"),
     ("C_Garrison.GetClassSpecCategoryInfo", "t"),
-    ("C_Garrison.GetCombatAllyMission", "n"),
+    ("C_Garrison.GetCombatAllyMission", ""),
     ("C_Garrison.GetCompleteMissions", "t"),
-    ("C_Garrison.GetCompleteTalent", "n"),
-    ("C_Garrison.GetCurrencyTypes", "n"),
+    ("C_Garrison.GetCompleteTalent", ""),
+    ("C_Garrison.GetCurrencyTypes", ""),
     ("C_Garrison.GetFollowerAbilities", "t"),
-    ("C_Garrison.GetFollowerAbilityAtIndex", "n"),
-    ("C_Garrison.GetFollowerAbilityAtIndexByID", "n"),
-    ("C_Garrison.GetFollowerAbilityCounterMechanicInfo", "n"),
+    ("C_Garrison.GetFollowerAbilityAtIndex", ""),
+    ("C_Garrison.GetFollowerAbilityAtIndexByID", ""),
+    ("C_Garrison.GetFollowerAbilityCounterMechanicInfo", ""),
     ("C_Garrison.GetFollowerAbilityCountersForMechanicTypes", "t"),
-    ("C_Garrison.GetFollowerAbilityDescription", "n"),
-    ("C_Garrison.GetFollowerAbilityIcon", "n"),
-    ("C_Garrison.GetFollowerAbilityInfo", "n"),
+    ("C_Garrison.GetFollowerAbilityDescription", ""),
+    ("C_Garrison.GetFollowerAbilityIcon", ""),
+    ("C_Garrison.GetFollowerAbilityInfo", ""),
     ("C_Garrison.GetFollowerAbilityIsTrait", "f"),
-    ("C_Garrison.GetFollowerAbilityLink", "n"),
+    ("C_Garrison.GetFollowerAbilityLink", "s"),
     ("C_Garrison.GetFollowerAbilityName", "n"),
     ("C_Garrison.GetFollowerActivationCost", "0"),
     ("C_Garrison.GetFollowerBiasForMission", "0"),
     ("C_Garrison.GetFollowerClassSpec", "n"),
-    ("C_Garrison.GetFollowerClassSpecAtlas", "n"),
-    ("C_Garrison.GetFollowerClassSpecByID", "n"),
-    ("C_Garrison.GetFollowerClassSpecName", "n"),
+    ("C_Garrison.GetFollowerClassSpecAtlas", "s"),
+    ("C_Garrison.GetFollowerClassSpecByID", ""),
+    ("C_Garrison.GetFollowerClassSpecName", ""),
     ("C_Garrison.GetFollowerDisplayID", "n"),
-    ("C_Garrison.GetFollowerInfo", "n"),
-    ("C_Garrison.GetFollowerInfoForBuilding", "n"),
-    ("C_Garrison.GetFollowerIsTroop", "f"),
+    ("C_Garrison.GetFollowerInfo", ""),
+    ("C_Garrison.GetFollowerInfoForBuilding", ""),
+    ("C_Garrison.GetFollowerIsTroop", ""),
     ("C_Garrison.GetFollowerItemLevelAverage", "n"),
     ("C_Garrison.GetFollowerItems", "n"),
     ("C_Garrison.GetFollowerLevel", "n"),
     ("C_Garrison.GetFollowerLevelXP", "n"),
     ("C_Garrison.GetFollowerLink", "n"),
-    ("C_Garrison.GetFollowerLinkByID", "n"),
+    ("C_Garrison.GetFollowerLinkByID", ""),
     ("C_Garrison.GetFollowerMissionTimeLeft", "n"),
     ("C_Garrison.GetFollowerMissionTimeLeftSeconds", "n"),
     ("C_Garrison.GetFollowerModelItems", "t"),
     ("C_Garrison.GetFollowerName", "n"),
-    ("C_Garrison.GetFollowerNameByID", "n"),
+    ("C_Garrison.GetFollowerNameByID", ""),
     ("C_Garrison.GetFollowerPortraitIconID", "n"),
-    ("C_Garrison.GetFollowerPortraitIconIDByID", "n"),
+    ("C_Garrison.GetFollowerPortraitIconIDByID", ""),
     ("C_Garrison.GetFollowerQuality", "n"),
     ("C_Garrison.GetFollowerQualityTable", "t"),
     ("C_Garrison.GetFollowerRecentlyGainedAbilityIDs", "t"),
     ("C_Garrison.GetFollowerRecentlyGainedTraitIDs", "t"),
-    ("C_Garrison.GetFollowerShipments", "t"),
+    ("C_Garrison.GetFollowerShipments", ""),
     ("C_Garrison.GetFollowerSoftCap", "0"),
-    ("C_Garrison.GetFollowerSourceTextByID", "n"),
+    ("C_Garrison.GetFollowerSourceTextByID", ""),
     ("C_Garrison.GetFollowerSpecializationAtIndex", "n"),
     ("C_Garrison.GetFollowerStatus", "n"),
     ("C_Garrison.GetFollowerTraitAtIndex", "n"),
-    ("C_Garrison.GetFollowerTraitAtIndexByID", "n"),
-    ("C_Garrison.GetFollowerTypeByID", "n"),
-    ("C_Garrison.GetFollowerTypeByMissionID", "n"),
+    ("C_Garrison.GetFollowerTraitAtIndexByID", ""),
+    ("C_Garrison.GetFollowerTypeByID", ""),
+    ("C_Garrison.GetFollowerTypeByMissionID", ""),
     ("C_Garrison.GetFollowerUnderBiasReason", "n"),
     ("C_Garrison.GetFollowerXP", "n"),
     ("C_Garrison.GetFollowerXPTable", "t"),
-    ("C_Garrison.GetFollowerZoneSupportAbilities", "t"),
-    ("C_Garrison.GetFollowers", "n"),
-    ("C_Garrison.GetFollowersSpellsForMission", "t"),
-    ("C_Garrison.GetFollowersTraitsForMission", "t"),
-    ("C_Garrison.GetGarrisonInfo", "n"),
+    ("C_Garrison.GetFollowerZoneSupportAbilities", ""),
+    ("C_Garrison.GetFollowers", ""),
+    ("C_Garrison.GetFollowersSpellsForMission", ""),
+    ("C_Garrison.GetFollowersTraitsForMission", ""),
+    ("C_Garrison.GetGarrisonInfo", ""),
     ("C_Garrison.GetGarrisonUpgradeCost", "n"),
-    ("C_Garrison.GetInProgressMissions", "n"),
+    ("C_Garrison.GetInProgressMissions", ""),
     ("C_Garrison.GetLandingPageGarrisonType", "0"),
-    ("C_Garrison.GetLandingPageItems", "t"),
+    ("C_Garrison.GetLandingPageItems", ""),
     ("C_Garrison.GetLandingPageShipmentCount", "0"),
-    ("C_Garrison.GetLandingPageShipmentInfo", "n"),
-    ("C_Garrison.GetLandingPageShipmentInfoByContainerID", "n"),
-    ("C_Garrison.GetLooseShipments", "t"),
-    ("C_Garrison.GetMissionBonusAbilityEffects", "t"),
-    ("C_Garrison.GetMissionCost", "n"),
-    ("C_Garrison.GetMissionDisplayIDs", "t"),
-    ("C_Garrison.GetMissionLink", "n"),
+    ("C_Garrison.GetLandingPageShipmentInfo", ""),
+    ("C_Garrison.GetLandingPageShipmentInfoByContainerID", ""),
+    ("C_Garrison.GetLooseShipments", ""),
+    ("C_Garrison.GetMissionBonusAbilityEffects", ""),
+    ("C_Garrison.GetMissionCost", ""),
+    ("C_Garrison.GetMissionDisplayIDs", ""),
+    ("C_Garrison.GetMissionLink", ""),
     ("C_Garrison.GetMissionMaxFollowers", "0"),
-    ("C_Garrison.GetMissionName", "n"),
-    ("C_Garrison.GetMissionRewardInfo", "t"),
-    ("C_Garrison.GetMissionSuccessChance", "n"),
-    ("C_Garrison.GetMissionTexture", "n"),
-    ("C_Garrison.GetMissionTimes", "n"),
-    ("C_Garrison.GetMissionUncounteredMechanics", "t"),
-    ("C_Garrison.GetNumActiveFollowers", "0"),
-    ("C_Garrison.GetNumFollowerActivationsRemaining", "0"),
+    ("C_Garrison.GetMissionName", "s"),
+    ("C_Garrison.GetMissionRewardInfo", ""),
+    ("C_Garrison.GetMissionSuccessChance", "0"),
+    ("C_Garrison.GetMissionTexture", ""),
+    ("C_Garrison.GetMissionTimes", ""),
+    ("C_Garrison.GetMissionUncounteredMechanics", ""),
+    ("C_Garrison.GetNumActiveFollowers", ""),
+    ("C_Garrison.GetNumFollowerActivationsRemaining", ""),
     ("C_Garrison.GetNumFollowerDailyActivations", "0"),
     ("C_Garrison.GetNumFollowers", "0"),
     ("C_Garrison.GetNumFollowersForMechanic", "0"),
-    ("C_Garrison.GetNumFollowersOnMission", "0"),
-    ("C_Garrison.GetNumPendingShipments", "0"),
+    ("C_Garrison.GetNumFollowersOnMission", ""),
+    ("C_Garrison.GetNumPendingShipments", ""),
     ("C_Garrison.GetNumShipmentCurrencies", "0"),
     ("C_Garrison.GetNumShipmentReagents", "0"),
-    ("C_Garrison.GetOwnedBuildingInfo", "n"),
-    ("C_Garrison.GetOwnedBuildingInfoAbbrev", "n"),
-    ("C_Garrison.GetPartyBuffs", "t"),
-    ("C_Garrison.GetPartyMentorLevels", "n"),
-    ("C_Garrison.GetPartyMissionInfo", "n"),
-    ("C_Garrison.GetPendingShipmentInfo", "n"),
+    ("C_Garrison.GetOwnedBuildingInfo", ""),
+    ("C_Garrison.GetOwnedBuildingInfoAbbrev", ""),
+    ("C_Garrison.GetPartyBuffs", ""),
+    ("C_Garrison.GetPartyMentorLevels", ""),
+    ("C_Garrison.GetPartyMissionInfo", ""),
+    ("C_Garrison.GetPendingShipmentInfo", ""),
     ("C_Garrison.GetPlots", "t"),
     ("C_Garrison.GetPlotsForBuilding", "t"),
     ("C_Garrison.GetPossibleFollowersForBuilding", "t"),
-    ("C_Garrison.GetRecruitAbilities", "t"),
+    ("C_Garrison.GetRecruitAbilities", ""),
     ("C_Garrison.GetRecruiterAbilityCategories", "t"),
     ("C_Garrison.GetRecruiterAbilityList", "t"),
-    ("C_Garrison.GetRecruitmentPreferences", "n"),
+    ("C_Garrison.GetRecruitmentPreferences", ""),
     ("C_Garrison.GetShipDeathAnimInfo", "n"),
-    ("C_Garrison.GetShipmentContainerInfo", "n"),
-    ("C_Garrison.GetShipmentItemInfo", "n"),
-    ("C_Garrison.GetShipmentReagentCurrencyInfo", "n"),
-    ("C_Garrison.GetShipmentReagentInfo", "n"),
-    ("C_Garrison.GetShipmentReagentItemLink", "n"),
-    ("C_Garrison.GetSpecChangeCost", "n"),
-    ("C_Garrison.GetTabForPlot", "n"),
+    ("C_Garrison.GetShipmentContainerInfo", "nn"),
+    ("C_Garrison.GetShipmentItemInfo", ""),
+    ("C_Garrison.GetShipmentReagentCurrencyInfo", ""),
+    ("C_Garrison.GetShipmentReagentInfo", ""),
+    ("C_Garrison.GetShipmentReagentItemLink", ""),
+    ("C_Garrison.GetSpecChangeCost", ""),
+    ("C_Garrison.GetTabForPlot", ""),
     ("C_Garrison.HasGarrison", "f"),
     ("C_Garrison.HasShipyard", "f"),
     ("C_Garrison.IsAboveFollowerSoftCap", "f"),
@@ -461,36 +467,144 @@ const UNDOCUMENTED: &[(&str, &str)] = &[
     ("C_WowTokenPublic.UpdateMarketPrice", ""),
     ("C_WowTokenPublic.UpdateTokenCount", ""),
     ("Kiosk.EnableGodMode", ""),
-    ("Kiosk.GetCharacterTemplateSetID", "n"),
-    ("Kiosk.GetKioskLoginInfo", "n"),
-    ("Kiosk.GetSecondsRemaining", "0"),
-    ("Kiosk.GetSessionDuration", "0"),
+    ("Kiosk.GetCharacterTemplateSetID", ""),
+    ("Kiosk.GetKioskLoginInfo", ""),
+    ("Kiosk.GetSecondsRemaining", ""),
+    ("Kiosk.GetSessionDuration", ""),
     ("Kiosk.IsCompetitiveModeEnabled", "f"),
-    ("Kiosk.IsExpired", "f"),
-    ("Kiosk.IsHousingResetPending", "f"),
-    ("Kiosk.IsInLobby", "f"),
-    ("Kiosk.IsSessionActive", "f"),
-    ("Kiosk.IsSessionTimed", "f"),
+    ("Kiosk.IsExpired", ""),
+    ("Kiosk.IsHousingResetPending", ""),
+    ("Kiosk.IsInLobby", ""),
+    ("Kiosk.IsSessionActive", ""),
+    ("Kiosk.IsSessionTimed", ""),
     ("Kiosk.RequestHousingReset", ""),
-    ("Kiosk.ShouldDeleteAllCharacters", "f"),
+    ("Kiosk.ShouldDeleteAllCharacters", ""),
     ("Kiosk.ShutdownSession", ""),
     ("Kiosk.StartSession", ""),
 ];
 
-/// A system Forever lacks: its documented empty values, or an
-/// undocumented function's by its kind (`UNDOCUMENTED`).
+/// What the client answered to functions of systems Forever lacks the
+/// same whatever they were asked (the full probe, WoW Forever 1.60.1:
+/// every call with arguments it took, a commentator's camera settings,
+/// the shop's race list), in the recordings' form (`n: value, …`); their
+/// other calls fail as the arguments' checks say. A color is written with
+/// its `GetRGB` (made with `CreateColor`, without alpha as recorded).
+const RECORDED: &[(&str, &str)] = &[
+    ("C_ArtifactUI.IsArtifactDisabled", "1: boolean true"),
+    ("C_ArtifactUI.IsEquippedArtifactDisabled", "1: boolean true"),
+    (
+        "C_CatalogShop.GetAvailableTransmogRaceInfos",
+        "1: {1={displayName=string Human,raceID=number 1},2={displayName=string Orc,raceID=number 2},\
+         3={displayName=string Dwarf,raceID=number 3},4={displayName=string Night Elf,raceID=number 4},\
+         5={displayName=string Undead,raceID=number 5},6={displayName=string Tauren,raceID=number 6},\
+         7={displayName=string Gnome,raceID=number 7},8={displayName=string Troll,raceID=number 8},\
+         9={displayName=string High Order Skyborne,raceID=number 95},\
+         10={displayName=string Windshaper Skyborne,raceID=number 96}}",
+    ),
+    ("C_CatalogShop.GetFailureInfo", "2: number 0, nil nil"),
+    // The largest 64-bit amount: no refund pending.
+    (
+        "C_CatalogShop.GetRefundableDecors",
+        "2: {}, number 9.2233720368548e+18",
+    ),
+    (
+        "C_CatalogShop.GetSpellVisualInfoForMount",
+        "1: {animID=number 91,spellVisualKitID=number 0}",
+    ),
+    ("C_Commentator.GetCameraCollision", "1: boolean true"),
+    (
+        "C_Commentator.GetDistanceBeforeForcedHorizontalConvergence",
+        "1: number 8",
+    ),
+    (
+        "C_Commentator.GetDurationToForceHorizontalConvergence",
+        "1: number 2000",
+    ),
+    ("C_Commentator.GetHardlockWeight", "1: number 100"),
+    (
+        "C_Commentator.GetHorizontalAngleThresholdToSmooth",
+        "1: number 0.78554916381836",
+    ),
+    (
+        "C_Commentator.GetLookAtLerpAmount",
+        "1: number 0.03999999910593",
+    ),
+    ("C_Commentator.GetMaxNumPlayersPerTeam", "1: number 6"),
+    ("C_Commentator.GetMaxNumTeams", "1: number 2"),
+    (
+        "C_Commentator.GetMsToHoldForHorizontalMovement",
+        "1: number 500",
+    ),
+    (
+        "C_Commentator.GetMsToHoldForVerticalMovement",
+        "1: number 500",
+    ),
+    (
+        "C_Commentator.GetMsToSmoothHorizontalChange",
+        "1: number 4000",
+    ),
+    (
+        "C_Commentator.GetMsToSmoothVerticalChange",
+        "1: number 2000",
+    ),
+    (
+        "C_Commentator.GetPositionLerpAmount",
+        "1: number 0.03999999910593",
+    ),
+    ("C_Commentator.GetSoftlockWeight", "1: number 100"),
+    ("C_Commentator.GetSpeedFactor", "1: number 1"),
+    (
+        "C_Commentator.GetTeamColorByUnit",
+        "1: {GetRGB=function,b=number 0,g=number 0,r=number 0}",
+    ),
+    ("C_Commentator.IsUsingSmartCamera", "1: boolean true"),
+    (
+        "C_ContributionCollector.GetContributionResult",
+        "1: number 1",
+    ),
+    ("C_ContributionCollector.GetRewardQuestID", "1: nil nil"),
+    ("C_Covenants.GetCovenantIDs", "1: {1=number 46,2=number 48}"),
+    ("C_Garrison.GetFollowerActivationCost", "1: number 2500000"),
+    // Without the documented texture and texture kit (an empty structure
+    // has no 0 file or empty kit here, unlike others).
+    (
+        "C_Garrison.GetMissionDeploymentInfo",
+        "1: {enemies={},isExhausting=boolean false,location=string ,xp=number 0}",
+    ),
+    (
+        "C_Garrison.GetMissionEncounterIconInfo",
+        "1: {isElite=boolean false,isRare=boolean false,missionScalar=number 0}",
+    ),
+    ("C_Garrison.GetNumFollowerDailyActivations", "1: number 1"),
+    (
+        "C_Garrison.GetShipDeathAnimInfo",
+        "6: number 58040, number 0, number 58041, number 0, number 58041, number 0",
+    ),
+    ("C_Housing.CanEditCharter", "1: boolean true"),
+];
+
+/// A system Forever lacks: the client's recorded answer (`RECORDED`), its
+/// documented empty values, or an undocumented function's by its kind
+/// (`UNDOCUMENTED`).
 fn nothing(vm: &mut Vm, c: NativeCall) -> Ret {
     let api = engine(vm).api;
+    let recorded = |name: &str| RECORDED.iter().find(|(n, _)| *n == name).map(|(_, a)| *a);
     let name = match c.upvals.first().copied() {
         Some(Value::Num(i)) => {
-            return Ok(match api.functions.get(i as usize) {
-                Some(f) => crate::defaults(vm, api, &f.doc),
-                None => vec![],
+            let Some(f) = api.functions.get(i as usize) else {
+                return Ok(vec![]);
+            };
+            return Ok(match recorded(f.name) {
+                Some(answer) => crate::recorded::parse_answer(vm, answer),
+                None => crate::defaults(vm, api, &f.doc),
             });
         }
         Some(Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
         _ => return Ok(vec![]),
     };
+    if let Some(answer) = recorded(&name) {
+        return Ok(crate::recorded::parse_answer(vm, answer));
+    }
     if let Some(f) = api.functions.iter().find(|f| f.name == name) {
         return Ok(crate::defaults(vm, api, &f.doc));
     }
@@ -1380,6 +1494,222 @@ fn intl_format_number(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![vm.str(&out)])
 }
 
+// ------------------------------------------- what the documentation says
+
+fn flagged(doc: &serde_json::Value, flag: &str) -> bool {
+    doc.get(flag).and_then(serde_json::Value::as_bool) == Some(true)
+}
+
+/// Whether a documented function answers nothing before its arguments
+/// are checked: one that needs a commentator (`RequiresCommentator`,
+/// `RequiresActiveCommentator`), WoW Forever having none (the full probe:
+/// all 615 calls of the 39 asked answered nothing, those with arguments
+/// of the wrong type or none too).
+pub(crate) fn silent_unchecked(doc: &serde_json::Value) -> bool {
+    flagged(doc, "RequiresActiveCommentator") || flagged(doc, "RequiresCommentator")
+}
+
+/// Whether a documented function whose arguments passed their checks
+/// answers nothing: one that needs a timeline event
+/// (`RequiresValidTimelineEvent`), none being there (the engine has no
+/// encounter timeline events; the full probe: the 7 asked answered
+/// nothing to every event ID that passed, 0 to 2147483647).
+pub(crate) fn silent_checked(doc: &serde_json::Value) -> bool {
+    flagged(doc, "RequiresValidTimelineEvent")
+}
+
+// ------------------------------------------- retail systems' game data
+
+/// An argument as a whole number as the client's C code takes it (a
+/// fraction cut, a non-number 0: the full probe's `"x"` and 1.5).
+fn arg_whole(vm: &Vm, c: &NativeCall, n: usize) -> f64 {
+    arg_num(vm, c, n).map_or(0.0, f64::trunc)
+}
+
+/// `C_Commentator.GetTeamColor(teamIndex)`: the first team blue, any other
+/// red, without alpha (the full probe: 1 and 1.5 (100, 179, 255), 0 and
+/// 2147483647 (255, 0, 0)).
+fn commentator_team_color(vm: &mut Vm, c: NativeCall) -> Ret {
+    let answer = if arg_whole(vm, &c, 1) == 1.0 {
+        "1: {GetRGB=function,b=number 1,g=number 0.70196080207825,r=number 0.39215689897537}"
+    } else {
+        "1: {GetRGB=function,b=number 0,g=number 0,r=number 1}"
+    };
+    Ok(crate::recorded::parse_answer(vm, answer))
+}
+
+/// `C_Commentator.GetOrCreateSeries(teamName1, teamName2)`: a new series
+/// of the two teams, no score (the full probe: two teams of score 0, their
+/// names blanked by the ingest; the names the ones asked, unverified).
+fn commentator_series(vm: &mut Vm, c: NativeCall) -> Ret {
+    let teams = vm.new_table();
+    for i in 1..=2 {
+        let team = vm.new_table();
+        let name = vm.hidden(c.arg(i));
+        set(vm, team, "name", name);
+        set(vm, team, "score", Value::Num(0.0));
+        let _ = vm
+            .heap
+            .table_mut(teams)
+            .set(Value::Num(i as f64), Value::Table(team));
+    }
+    let t = vm.new_table();
+    set(vm, t, "teams", Value::Table(teams));
+    Ok(vec![Value::Table(t)])
+}
+
+/// The encounter timeline's tracks (`Enum.EncounterTimelineTrack`, 0 to
+/// 4): their type, sort direction (none for some) and longest event in
+/// seconds, as the full probe's `C_EncounterTimeline.GetTrackList()` gave
+/// them (the indeterminate track's the largest 32-bit milliseconds); no
+/// other bound set.
+const TRACKS: [(f64, Option<f64>, f64); 5] = [
+    (1.0, Some(1.0), 0.0),
+    (2.0, None, 0.0),
+    (2.0, None, 0.0),
+    (1.0, Some(0.0), 0.0),
+    (0.0, None, 4_294_967.295),
+];
+
+/// The track an argument names (a non-number the first).
+fn track(vm: &Vm, c: &NativeCall) -> Option<usize> {
+    let n = arg_whole(vm, c, 1);
+    (0.0..TRACKS.len() as f64)
+        .contains(&n)
+        .then_some(n as usize)
+}
+
+fn track_info(vm: &mut Vm, i: usize) -> Value {
+    let (ty, sort, longest) = TRACKS[i];
+    let t = vm.new_table();
+    set(vm, t, "id", Value::Num(i as f64));
+    set(vm, t, "type", Value::Num(ty));
+    if let Some(sort) = sort {
+        set(vm, t, "sortDirection", Value::Num(sort));
+    }
+    for k in [
+        "minimumDuration",
+        "minimumEventIntroDuration",
+        "minimumEventGapDuration",
+        "maximumEventCount",
+    ] {
+        set(vm, t, k, Value::Num(0.0));
+    }
+    set(vm, t, "maximumDuration", Value::Num(longest));
+    Value::Table(t)
+}
+
+/// `C_EncounterTimeline.GetTrackInfo(track)`.
+fn timeline_track_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(match track(vm, &c) {
+        Some(i) => vec![track_info(vm, i)],
+        None => vec![],
+    })
+}
+
+/// `C_EncounterTimeline.GetTrackList()`: every track, in order.
+fn timeline_track_list(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let list = vm.new_table();
+    for i in 0..TRACKS.len() {
+        let info = track_info(vm, i);
+        let _ = vm
+            .heap
+            .table_mut(list)
+            .set(Value::Num((i + 1) as f64), info);
+    }
+    Ok(vec![Value::Table(list)])
+}
+
+/// `C_EncounterTimeline.GetTrackType(track)`.
+fn timeline_track_type(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(match track(vm, &c) {
+        Some(i) => vec![Value::Num(TRACKS[i].0)],
+        None => vec![],
+    })
+}
+
+/// `C_EncounterTimeline.GetTrackMaxEventDuration(track)`.
+fn timeline_track_max_event_duration(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(match track(vm, &c) {
+        Some(i) => vec![Value::Num(TRACKS[i].2)],
+        None => vec![],
+    })
+}
+
+/// `C_EncounterTimeline.GetCurrentTime()`: the client's clock, as
+/// `GetTime` (the full probe: 206454.927 within the run's `GetTime`
+/// answers; one sample, unverified).
+fn timeline_current_time(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let now = ask(vm, "GetTime", &[]);
+    Ok(vec![now.first().copied().unwrap_or(Value::Num(0.0))])
+}
+
+/// Artifact power a trait's ranks cost, from rank 0, whatever the tier
+/// (the full probe: rank 0 100, rank 1 300, tiers 0 and 1 alike; the
+/// later ranks were not asked and cost nothing here, unverified, as a rank
+/// past the table does, 2147483647: 0).
+const ARTIFACT_RANK_COSTS: [f64; 2] = [100.0, 300.0];
+
+fn artifact_rank_cost(rank: f64) -> f64 {
+    if rank < 0.0 {
+        return 0.0;
+    }
+    ARTIFACT_RANK_COSTS
+        .get(rank as usize)
+        .copied()
+        .unwrap_or(0.0)
+}
+
+/// `C_ArtifactUI.GetCostForPointAtRank(rank, tier)`.
+fn artifact_cost_at_rank(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(artifact_rank_cost(arg_whole(vm, &c, 1)))])
+}
+
+/// `C_ArtifactUI.GetTotalPowerCost(startingTrait, numTraits, tier)`: the
+/// ranks' costs from the starting one (counted from 1) on (the full probe:
+/// (1, 1) 100, (0, 1) and (1, 0) and (2147483647, 1) 0; (1, 2147483647)
+/// gave 2.78e17, the ranks this table lacks).
+fn artifact_total_power_cost(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (start, count) = (arg_whole(vm, &c, 1), arg_whole(vm, &c, 2));
+    if start < 1.0 || count < 1.0 {
+        return Ok(vec![Value::Num(0.0)]);
+    }
+    let first = start - 1.0;
+    let last = (first + count).min(ARTIFACT_RANK_COSTS.len() as f64);
+    let mut total = 0.0;
+    let mut rank = first;
+    while rank < last {
+        total += artifact_rank_cost(rank);
+        rank += 1.0;
+    }
+    Ok(vec![Value::Num(total)])
+}
+
+/// `C_DelvesUI.GetCurioLink(spellID, rarity)`: a curio link of the spell
+/// (by ID or name) in its rarity's quality color, the second epic tier
+/// epic; empty for a spell the game lacks (the full probe:
+/// `|cnIQ1:|Hcurio:6603|h[Attack]|h|r` for (6603, 1) and ("Attack", 1),
+/// IQ4 for rarity 5, "" for -1, 0 and "x").
+fn curio_link(vm: &mut Vm, c: NativeCall) -> Ret {
+    let spell = vm.hidden(c.arg(1));
+    let rarity = arg_whole(vm, &c, 2).clamp(0.0, 4.0);
+    let info = match spell {
+        Value::Num(n) if n > 0.0 => ask(vm, "C_Spell.GetSpellInfo", &[spell]),
+        Value::Str(_) => ask(vm, "C_Spell.GetSpellInfo", &[spell]),
+        _ => vec![],
+    };
+    let Some(Value::Table(t)) = info.first().copied() else {
+        return Ok(vec![vm.str("")]);
+    };
+    let (id, name) = (field(vm, t, "spellID"), field(vm, t, "name"));
+    let (Value::Num(id), Value::Str(name)) = (id, name) else {
+        return Ok(vec![vm.str("")]);
+    };
+    let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
+    let link = format!("|cnIQ{}:|Hcurio:{}|h[{name}]|h|r", rarity as i64, id as i64);
+    Ok(vec![vm.str(&link)])
+}
+
 // ------------------------------------------------------------ the list
 
 /// The functions answered here (several with the same behaviour), and
@@ -1523,6 +1853,20 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Intl.Length", intl_length),
         ("C_Intl.CompareStrings", intl_compare_strings),
         ("C_Intl.FormatNumber", intl_format_number),
+        // Retail systems' game data.
+        ("C_Commentator.GetTeamColor", commentator_team_color),
+        ("C_Commentator.GetOrCreateSeries", commentator_series),
+        ("C_EncounterTimeline.GetTrackInfo", timeline_track_info),
+        ("C_EncounterTimeline.GetTrackList", timeline_track_list),
+        ("C_EncounterTimeline.GetTrackType", timeline_track_type),
+        (
+            "C_EncounterTimeline.GetTrackMaxEventDuration",
+            timeline_track_max_event_duration,
+        ),
+        ("C_EncounterTimeline.GetCurrentTime", timeline_current_time),
+        ("C_ArtifactUI.GetCostForPointAtRank", artifact_cost_at_rank),
+        ("C_ArtifactUI.GetTotalPowerCost", artifact_total_power_cost),
+        ("C_DelvesUI.GetCurioLink", curio_link),
     ];
     list.extend(NOTHING.iter().map(|&n| (n, nothing as NativeFn)));
     list.extend(UNDOCUMENTED.iter().map(|&(n, _)| (n, nothing as NativeFn)));
@@ -1590,7 +1934,6 @@ const NOTHING: &[&str] = &[
     "C_ArtifactUI.GetArtifactItemID",
     "C_ArtifactUI.GetArtifactTier",
     "C_ArtifactUI.GetArtifactXPRewardTargetInfo",
-    "C_ArtifactUI.GetCostForPointAtRank",
     "C_ArtifactUI.GetEquippedArtifactArtInfo",
     "C_ArtifactUI.GetEquippedArtifactItemID",
     "C_ArtifactUI.GetEquippedArtifactNumRelicSlots",
@@ -1617,7 +1960,6 @@ const NOTHING: &[&str] = &[
     "C_ArtifactUI.GetRespecArtifactArtInfo",
     "C_ArtifactUI.GetRespecArtifactInfo",
     "C_ArtifactUI.GetRespecCost",
-    "C_ArtifactUI.GetTotalPowerCost",
     "C_ArtifactUI.GetTotalPurchasedRanks",
     "C_ArtifactUI.IsArtifactDisabled",
     "C_ArtifactUI.IsArtifactItem",
@@ -1843,7 +2185,6 @@ const NOTHING: &[&str] = &[
     "C_Commentator.GetMsToSmoothVerticalChange",
     "C_Commentator.GetNumMaps",
     "C_Commentator.GetNumPlayers",
-    "C_Commentator.GetOrCreateSeries",
     "C_Commentator.GetPlayerAuraInfo",
     "C_Commentator.GetPlayerAuraInfoByUnit",
     "C_Commentator.GetPlayerCooldownInfo",
@@ -1863,7 +2204,6 @@ const NOTHING: &[&str] = &[
     "C_Commentator.GetSoftlockWeight",
     "C_Commentator.GetSpeedFactor",
     "C_Commentator.GetStartLocation",
-    "C_Commentator.GetTeamColor",
     "C_Commentator.GetTeamColorByUnit",
     "C_Commentator.GetTimeLeftInMatch",
     "C_Commentator.GetTrackedSpellID",
@@ -2036,7 +2376,6 @@ const NOTHING: &[&str] = &[
     "C_EncounterTimeline.CancelEditModeEvents",
     "C_EncounterTimeline.CancelScriptEvent",
     "C_EncounterTimeline.FinishScriptEvent",
-    "C_EncounterTimeline.GetCurrentTime",
     "C_EncounterTimeline.GetEventColor",
     "C_EncounterTimeline.GetEventCountBySource",
     "C_EncounterTimeline.GetEventHighlightTime",
@@ -2048,10 +2387,6 @@ const NOTHING: &[&str] = &[
     "C_EncounterTimeline.GetEventTimer",
     "C_EncounterTimeline.GetEventTrack",
     "C_EncounterTimeline.GetSortedEventList",
-    "C_EncounterTimeline.GetTrackInfo",
-    "C_EncounterTimeline.GetTrackList",
-    "C_EncounterTimeline.GetTrackMaxEventDuration",
-    "C_EncounterTimeline.GetTrackType",
     "C_EncounterTimeline.GetViewType",
     "C_EncounterTimeline.HasActiveEvents",
     "C_EncounterTimeline.HasAnyEvents",
