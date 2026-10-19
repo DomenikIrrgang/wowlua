@@ -615,9 +615,10 @@ fn get_player_aura_by_spell_id(vm: &mut Vm, c: NativeCall) -> Ret {
 /// continuation token (nil when no slot is left), then up to `maxSlots`
 /// slots after the first `continuationToken` (the full probe, 1.60.1: no
 /// filter or one naming no kind a lone nil; `maxSlots` 0 the token back
-/// unchanged; 1.5 truncated). A slot is the aura's place on the unit from
-/// 0, as `GetAuraDataBySlot` takes it (slot 0 was the player's first aura;
-/// unverified: the client's reuse of freed slots).
+/// unchanged; 1.5 truncated). A slot is the aura's place among the unit's
+/// auras by instance ID from 0, as `GetAuraDataBySlot` takes it (slot 0
+/// held aura 1, slot 1 aura 3, slot 2 aura 5, though the list gave 3, 5,
+/// 1; unverified: the client's reuse of freed slots).
 fn get_aura_slots(vm: &mut Vm, c: NativeCall) -> Ret {
     refuse(vm, "GetAuraSlots")?;
     let (unit, filter) = unit_and_filter(vm, &c, 2);
@@ -630,13 +631,7 @@ fn get_aura_slots(vm: &mut Vm, c: NativeCall) -> Ret {
     };
     let max = count(c.arg(3));
     let from = count(c.arg(4)).unwrap_or(0);
-    let all: Vec<f64> = engine(vm)
-        .units
-        .auras
-        .iter()
-        .filter(|a| a.unit == unit)
-        .map(|a| a.instance)
-        .collect();
+    let all = slotted(vm, unit);
     let slots: Vec<usize> = listed(vm, unit, &filter)
         .iter()
         .filter_map(|a| all.iter().position(|&x| x == a.instance))
@@ -653,18 +648,31 @@ fn get_aura_slots(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(out)
 }
 
+/// The unit's auras' instance IDs in slot order (`GetAuraSlots`).
+fn slotted(vm: &Vm, unit: UnitId) -> Vec<f64> {
+    let mut all: Vec<f64> = engine(vm)
+        .units
+        .auras
+        .iter()
+        .filter(|a| a.unit == unit)
+        .map(|a| a.instance)
+        .collect();
+    all.sort_by(f64::total_cmp);
+    all
+}
+
 /// `GetAuraDataBySlot(unit, slot)`: slots from 0 (`GetAuraSlots`).
 fn get_aura_data_by_slot(vm: &mut Vm, c: NativeCall) -> Ret {
     refuse(vm, "GetAuraDataBySlot")?;
     let slot = vm.check_int(&c, 2)?;
     let (unit, _) = unit_and_filter(vm, &c, 3);
     let found = unit.and_then(|unit| {
+        let id = *slotted(vm, unit).get(usize::try_from(slot).ok()?)?;
         engine(vm)
             .units
             .auras
             .iter()
-            .filter(|a| a.unit == unit)
-            .nth(usize::try_from(slot).unwrap_or(usize::MAX))
+            .find(|a| a.unit == unit && a.instance == id)
             .cloned()
     });
     aura_or_nil(vm, found)

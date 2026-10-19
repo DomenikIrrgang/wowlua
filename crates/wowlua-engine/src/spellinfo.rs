@@ -980,9 +980,16 @@ fn get_action_use_count(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `C_ActionBar.IsOnBarOrSpecialBar(spell [, set])`,
 /// `C_ActionBar.HasSpellActionButtons(spell [, set])`: a slot of the set
 /// holds it (`C_ActionBar.FindSpellActionButtons`).
+///
+/// A string naming no spell searches as `FindSpellActionButtons` does (the
+/// full probe, 1.60.1: "x" found the macro holding spell 0).
 fn has_spell_action_buttons(vm: &mut Vm, c: NativeCall) -> Ret {
-    let Some(id) = spell_of(vm, c.arg(1)) else {
-        return Ok(vec![Value::Bool(false)]);
+    let id = match vm.hidden(c.arg(1)) {
+        Value::Str(_) => spell_of(vm, c.arg(1)).unwrap_or(0.0),
+        _ => match spell_of(vm, c.arg(1)) {
+            Some(id) => id,
+            None => return Ok(vec![Value::Bool(false)]),
+        },
     };
     let set = match vm.hidden(c.arg(2)) {
         Value::Nil => Value::Num(3.0),
