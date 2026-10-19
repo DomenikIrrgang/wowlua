@@ -24,6 +24,23 @@
 //!   first, triggered), its `aura` (eating), the category's cooldowns, a
 //!   moment later one fewer; eaten long enough (`wellFed`), its buff.
 //!
+//! - An item with stats (its `worn` data, `{ maxHealth, maxMana, stats,
+//!   attackPower }`) changes the player's as it goes on or off (recorded
+//!   once each way, scenario equip: a paladin's gloves): after the bag's
+//!   update `UNIT_MAXHEALTH` twice, `UNIT_DAMAGE` four times and
+//!   `UNIT_ATTACK_POWER` (strength), the mana's `UNIT_POWER_UPDATE` twice
+//!   when its new maximum cuts it, `UNIT_MAXPOWER`, `UNIT_STATS` once a
+//!   stat; `PLAYER_DAMAGE_DONE_MODS` after `UNIT_INVENTORY_CHANGED`; the
+//!   health's update; the average item level's update twice and
+//!   `UNIT_MAXHEALTH` again, then the other units' (the target's, the soft
+//!   targets', the name plates'), at once for an item put on (after
+//!   `PLAYER_EQUIPMENT_CHANGED`), 0.112 s later for one taken off.
+//!   Unverified: other classes and stats (what the four damage updates
+//!   are), the delay's cause.
+//! - A worn item that binds (its `bindType` 1 or 2) is bound: taken off,
+//!   it is in the bag bound (recorded, scenario equip: the gloves; scenario
+//!   items: shirts and boots that do not bind stay unbound).
+//!
 //! Unverified: rings and trinkets (the first slot), a one-handed weapon
 //! with a two-handed one worn, bags as gear, using an item with a target.
 
@@ -39,6 +56,9 @@ use crate::{engine, engine_mut, widgets};
 /// (recorded).
 const PORTRAIT_AFTER: f64 = 0.042;
 const PORTRAITS_AFTER: f64 = 0.05;
+/// The average item level's update after a stat item was taken off
+/// (recorded once).
+const ITEM_LEVEL_AFTER: f64 = 0.112;
 /// The item's count after its use (recorded).
 const USED_AFTER: f64 = 0.455;
 /// A cast item's effect after its success (recorded: the loading screen).
@@ -220,11 +240,21 @@ fn equipped(vm: &mut Vm, c: NativeCall) -> Ret {
     let moved = usize::from(in_bag.is_some() && !unequipping) + usize::from(worn.is_some());
     let armor_changed = in_bag.as_ref().is_some_and(|h| armor(vm, h.id))
         || worn.as_ref().is_some_and(|h| armor(vm, h.id));
+    // The stats put on and taken off (see the module).
+    let on = in_bag
+        .as_ref()
+        .filter(|_| !unequipping)
+        .and_then(|h| worn_stats(vm, h.id));
+    let off = worn.as_ref().and_then(|h| worn_stats(vm, h.id));
+    let binds = |vm: &mut Vm, id: i64| matches!(character::item_field(vm, id, "bindType"), Value::Num(b) if b == 1.0 || b == 2.0);
+    let worn_binds = worn.as_ref().is_some_and(|h| binds(vm, h.id));
+    let in_bag_binds = in_bag.as_ref().is_some_and(|h| binds(vm, h.id));
     // The swap.
     {
         let ch = &mut engine_mut(vm).world.character;
         let into_bag: Option<Held> = worn.clone().map(|mut h| {
             h.locked = false;
+            h.bound |= worn_binds;
             h
         });
         let into_gear: Option<Held> = if unequipping {
@@ -232,6 +262,7 @@ fn equipped(vm: &mut Vm, c: NativeCall) -> Ret {
         } else {
             in_bag.clone().map(|mut h| {
                 h.locked = false;
+                h.bound |= in_bag_binds;
                 h
             })
         };
@@ -265,6 +296,10 @@ fn equipped(vm: &mut Vm, c: NativeCall) -> Ret {
         fire(vm, "ITEM_UNLOCKED", &args);
     }
     character::bag_updated(vm, bag);
+    let stats = on.is_some() || off.is_some();
+    if stats {
+        stats_changed(vm, on.unwrap_or_default(), off.unwrap_or_default());
+    }
     if armor_changed {
         units::fire_unit(vm, "UNIT_RESISTANCES", PLAYER, &[]);
         units::fire_unit(vm, "UNIT_RESISTANCES", PLAYER, &[]);
@@ -274,6 +309,9 @@ fn equipped(vm: &mut Vm, c: NativeCall) -> Ret {
         character::equipped_spells_changed(vm);
     }
     units::fire_unit(vm, "UNIT_INVENTORY_CHANGED", PLAYER, &[]);
+    if stats {
+        units::fire_unit(vm, "PLAYER_DAMAGE_DONE_MODS", PLAYER, &[]);
+    }
     if !empty {
         let args = [Value::Num(gear as f64), Value::Nil];
         fire(vm, "ITEM_LOCK_CHANGED", &args);
@@ -285,7 +323,25 @@ fn equipped(vm: &mut Vm, c: NativeCall) -> Ret {
         "PLAYER_EQUIPMENT_CHANGED",
         &[Value::Num(gear as f64), Value::Bool(empty)],
     );
+    if stats && !empty {
+        fire(vm, "PLAYER_AVG_ITEM_LEVEL_UPDATE", &[]);
+        fire(vm, "PLAYER_AVG_ITEM_LEVEL_UPDATE", &[]);
+    }
     fire(vm, "BAG_UPDATE_DELAYED", &[]);
+    if stats {
+        units::fire_unit(vm, "UNIT_HEALTH", PLAYER, &[]);
+        if empty {
+            later(
+                vm,
+                ITEM_LEVEL_AFTER,
+                "inventoryItemLevel",
+                item_level,
+                vec![],
+            );
+        } else {
+            max_health_told(vm);
+        }
+    }
     units::fire_unit(vm, "UNIT_MODEL_CHANGED", PLAYER, &[]);
     units::fire_unit(vm, "UNIT_PORTRAIT_UPDATE", PLAYER, &[]);
     later(
@@ -296,6 +352,95 @@ fn equipped(vm: &mut Vm, c: NativeCall) -> Ret {
         vec![Value::Bool(armor_changed)],
     );
     Ok(vec![])
+}
+
+/// What wearing an item changes (its `worn` data, see the module).
+#[derive(Clone, Copy, Default)]
+struct Worn {
+    max_health: f64,
+    max_mana: f64,
+    stats: usize,
+    attack_power: bool,
+}
+
+fn worn_stats(vm: &mut Vm, id: i64) -> Option<Worn> {
+    let Value::Table(t) = character::item_field(vm, id, "worn") else {
+        return None;
+    };
+    let mut get = |k: &str| {
+        let key = vm.str(k);
+        vm.heap.table(t).get(key)
+    };
+    Some(Worn {
+        max_health: num(get("maxHealth")),
+        max_mana: num(get("maxMana")),
+        stats: num(get("stats")) as usize,
+        attack_power: get("attackPower").truthy(),
+    })
+}
+
+/// The player's maximums and stats as `on` goes on and `off` comes off.
+fn stats_changed(vm: &mut Vm, on: Worn, off: Worn) {
+    let health = on.max_health - off.max_health;
+    let mana = on.max_mana - off.max_mana;
+    let cut = {
+        let u = &mut engine_mut(vm).units.list[PLAYER.0];
+        // The health follows its maximum (recorded: no regeneration after).
+        u.health_max += health;
+        u.health = (u.health + health).clamp(0.0, u.health_max.max(0.0));
+        u.power_max += mana;
+        let cut = u.power > u.power_max;
+        u.power = u.power.min(u.power_max.max(0.0));
+        cut
+    };
+    if health != 0.0 {
+        units::fire_unit(vm, "UNIT_MAXHEALTH", PLAYER, &[]);
+        units::fire_unit(vm, "UNIT_MAXHEALTH", PLAYER, &[]);
+    }
+    if on.attack_power || off.attack_power {
+        for _ in 0..4 {
+            units::fire_unit(vm, "UNIT_DAMAGE", PLAYER, &[]);
+        }
+        units::fire_unit(vm, "UNIT_ATTACK_POWER", PLAYER, &[]);
+    }
+    if mana != 0.0 {
+        let token = vm.str("MANA");
+        if cut {
+            units::fire_unit(vm, "UNIT_POWER_UPDATE", PLAYER, &[token]);
+            units::fire_unit(vm, "UNIT_POWER_UPDATE", PLAYER, &[token]);
+        }
+        units::fire_unit(vm, "UNIT_MAXPOWER", PLAYER, &[token]);
+    }
+    for _ in 0..on.stats.max(off.stats) {
+        units::fire_unit(vm, "UNIT_STATS", PLAYER, &[]);
+    }
+}
+
+/// The average item level after a stat item came off (see the module).
+fn item_level(vm: &mut Vm, _c: NativeCall) -> Ret {
+    fire(vm, "PLAYER_AVG_ITEM_LEVEL_UPDATE", &[]);
+    fire(vm, "PLAYER_AVG_ITEM_LEVEL_UPDATE", &[]);
+    max_health_told(vm);
+    Ok(vec![])
+}
+
+/// The player's maximum health told, then the other units' (see the
+/// module; the name plates' unmodelled).
+fn max_health_told(vm: &mut Vm) {
+    units::fire_unit(vm, "UNIT_MAXHEALTH", PLAYER, &[]);
+    let u = &engine(vm).units;
+    let mut others: Vec<units::UnitId> = Vec::new();
+    for id in [u.target, u.soft[0], u.soft[1], u.soft[2]]
+        .into_iter()
+        .flatten()
+    {
+        if id != PLAYER && !others.contains(&id) {
+            others.push(id);
+        }
+    }
+    for id in others {
+        units::fire_unit(vm, "UNIT_MAXHEALTH", id, &[]);
+    }
 }
 
 fn portrait(vm: &mut Vm, c: NativeCall) -> Ret {

@@ -36,6 +36,26 @@ pub struct Input {
     /// Modifier keys held that a keyboard frame kept: its `OnKeyUp` comes
     /// with their release.
     pub held_by: Vec<(String, WidgetId)>,
+    /// Where the mouse is on the screen (`GetCursorPosition`, in the
+    /// screen's units: a frame's position times its effective scale).
+    pub cursor: (f64, f64),
+}
+
+/// `setCursorPosition(x, y)`: the mouse moved there (screen units, as
+/// `GetCursorPosition` answers; a frame's point times its effective
+/// scale). No events: what is under it is `hover`'s.
+pub fn control_set_cursor_position(vm: &mut Vm, c: NativeCall) -> Ret {
+    let x = vm.check_number(&c, 1)?;
+    let y = vm.check_number(&c, 2)?;
+    engine_mut(vm).world.input.cursor = (x, y);
+    Ok(vec![])
+}
+
+/// `GetCursorPosition()`: the mouse's place (`setCursorPosition`; the
+/// screen's corner, 0, 0, until it is set).
+fn get_cursor_position(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let (x, y) = engine(vm).world.input.cursor;
+    Ok(vec![Value::Num(x), Value::Num(y)])
 }
 
 /// Runs `f` as the user's action.
@@ -513,6 +533,7 @@ fn get_current_keyboard_focus(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
+        ("GetCursorPosition", get_cursor_position),
         ("GetMouseFoci", get_mouse_foci),
         ("GetMouseFocus", get_mouse_focus),
         ("GetCurrentKeyBoardFocus", get_current_keyboard_focus),

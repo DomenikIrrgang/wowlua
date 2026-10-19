@@ -21,8 +21,17 @@
 //! at the bank goes into the bank (or out of it) the same way, locked at
 //! once. Trade goods do not show the action bars' grid.
 //!
-//! Unverified: picking up while holding something (swaps), moving within
-//! one bag, placing on a filled action slot, money.
+//! A spell or a macro picked up or put down also tells whether the click
+//! bindings' highlights show (`CLICKBINDINGS_SET_HIGHLIGHTS_SHOWN`, true
+//! after the grid shows, false before it hides); an item does not
+//! (recorded: scenarios actionbar, six spells; macro, two; equip and items,
+//! no item). An action placed on a filled slot swaps: the cursor let go,
+//! the slot's old action picked up, then the slot's change; the action
+//! bars' cooldowns updated after each slot's change (recorded: scenario
+//! actionbar, twice, and every pickup and placement there and in macro).
+//!
+//! Unverified: picking up while holding something else, moving within one
+//! bag, money.
 
 use std::collections::BTreeMap;
 
@@ -72,6 +81,12 @@ fn fire(vm: &mut Vm, event: &str, args: &[Value]) {
     widgets::fire_event(vm, event, args);
 }
 
+/// Whether holding it shows the click bindings' highlights: a spell, a
+/// macro (see the module).
+fn shows_highlights(cursor: &Cursor) -> bool {
+    matches!(cursor, Cursor::Spell(_) | Cursor::Macro(_))
+}
+
 /// Whether holding it shows the action bars' grid: a spell, a macro, an
 /// item but a trade good or a quest item (recorded: Copper Ore and Rough
 /// Stone without the grid, the Hearthstone, a weapon and a Mining Pick
@@ -100,6 +115,13 @@ fn pick_up(vm: &mut Vm, new: Cursor) {
     if grid {
         fire(vm, "ACTIONBAR_SHOWGRID", &[]);
     }
+    if shows_highlights(&engine(vm).world.character.cursor) {
+        fire(
+            vm,
+            "CLICKBINDINGS_SET_HIGHLIGHTS_SHOWN",
+            &[Value::Bool(true)],
+        );
+    }
     fire(
         vm,
         "CURSOR_CHANGED",
@@ -121,6 +143,13 @@ fn put_down(vm: &mut Vm) {
     }
     if let Cursor::Item(_, Some(source)) = &old {
         set_locked(vm, source, false);
+    }
+    if shows_highlights(&old) {
+        fire(
+            vm,
+            "CLICKBINDINGS_SET_HIGHLIGHTS_SHOWN",
+            &[Value::Bool(false)],
+        );
     }
     if shows_grid(vm, &old) {
         fire(vm, "ACTIONBAR_HIDEGRID", &[]);
@@ -216,8 +245,18 @@ fn pickup_action(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(action) = engine_mut(vm).world.character.actions.remove(&slot) else {
         return Ok(vec![]);
     };
+    let held = held_action(&action);
+    put_down(vm);
+    pick_up(vm, held);
+    fire(vm, "ACTIONBAR_SLOT_CHANGED", &[Value::Num(slot as f64)]);
+    fire(vm, "ACTIONBAR_UPDATE_COOLDOWN", &[]);
+    Ok(vec![])
+}
+
+/// What an action is on the cursor.
+fn held_action(action: &Action) -> Cursor {
     let id = num(action.id).unwrap_or(0.0);
-    let held = match action.kind.as_str() {
+    match action.kind.as_str() {
         "macro" => Cursor::Macro(id),
         "item" => Cursor::Item(
             Held {
@@ -228,11 +267,7 @@ fn pickup_action(vm: &mut Vm, c: NativeCall) -> Ret {
             None,
         ),
         _ => Cursor::Spell(id),
-    };
-    put_down(vm);
-    pick_up(vm, held);
-    fire(vm, "ACTIONBAR_SLOT_CHANGED", &[Value::Num(slot as f64)]);
-    Ok(vec![])
+    }
 }
 
 /// `PlaceAction(slot)`: what the cursor holds becomes the slot's action.
@@ -279,8 +314,13 @@ fn place_action(vm: &mut Vm, c: NativeCall) -> Ret {
         widgets::keep(vm, v);
     }
     put_down(vm);
-    engine_mut(vm).world.character.actions.insert(slot, action);
+    let old = engine_mut(vm).world.character.actions.insert(slot, action);
+    // A filled slot's action onto the cursor (see the module).
+    if let Some(old) = old {
+        pick_up(vm, held_action(&old));
+    }
     fire(vm, "ACTIONBAR_SLOT_CHANGED", &[Value::Num(slot as f64)]);
+    fire(vm, "ACTIONBAR_UPDATE_COOLDOWN", &[]);
     Ok(vec![])
 }
 
@@ -371,6 +411,13 @@ pub fn hold_for_server(vm: &mut Vm, source: Source) {
 /// move): `ACTIONBAR_HIDEGRID`, `CURSOR_CHANGED`.
 pub fn release_keeping_lock(vm: &mut Vm) {
     let old = std::mem::take(&mut engine_mut(vm).world.character.cursor);
+    if shows_highlights(&old) {
+        fire(
+            vm,
+            "CLICKBINDINGS_SET_HIGHLIGHTS_SHOWN",
+            &[Value::Bool(false)],
+        );
+    }
     if shows_grid(vm, &old) {
         fire(vm, "ACTIONBAR_HIDEGRID", &[]);
     }

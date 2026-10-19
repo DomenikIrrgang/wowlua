@@ -904,16 +904,45 @@ fn is_super_tracking_quest(vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// `C_SuperTrack.SetSuperTrackedUserWaypoint(superTracked)`: the user's
-/// map pin, when there is one.
+/// map pin, when there is one. The first place super-tracked creates the
+/// client's navigation frame: `NAVIGATION_FRAME_CREATED(frame)` after
+/// `SUPER_TRACKING_CHANGED`, the frame kept as the pin goes (recorded once,
+/// scenario mapnav: no `NAVIGATION_FRAME_DESTROYED` at its removal).
 fn set_super_tracked_user_waypoint(vm: &mut Vm, c: NativeCall) -> Ret {
     let on = c.arg(1).truthy();
     let tracked = get(vm, "waypoint").truthy();
     if on && waypoint(vm).is_some() {
         super_track(vm, &[("waypoint", Value::Bool(true))]);
+        navigation_frame(vm)?;
     } else if !on && tracked {
         super_track(vm, &[]);
     }
     Ok(vec![])
+}
+
+/// The navigation frame made once (see `set_super_tracked_user_waypoint`).
+fn navigation_frame(vm: &mut Vm) -> Result<(), wowlua_vm::LuaError> {
+    if !get(vm, "navFrame").is_nil() {
+        return Ok(());
+    }
+    let create = vm.get_global("CreateFrame");
+    if !matches!(create, Value::Func(_)) {
+        return Ok(());
+    }
+    let kind = vm.str("Frame");
+    let frame = vm
+        .call(create, &[kind])?
+        .first()
+        .copied()
+        .unwrap_or(Value::Nil);
+    put(vm, "navFrame", frame);
+    fire(vm, "NAVIGATION_FRAME_CREATED", &[frame]);
+    Ok(())
+}
+
+/// `C_Navigation.GetFrame()`: the navigation frame once made, else nil.
+fn get_navigation_frame(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![get(vm, "navFrame")])
 }
 
 fn is_super_tracking_user_waypoint(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -1145,18 +1174,52 @@ fn set_user_waypoint(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(true)])
 }
 
-/// `C_Map.ClearUserWaypoint()`: the pin gone (and its super-tracking),
-/// `USER_WAYPOINT_UPDATED()`.
+/// `C_Map.ClearUserWaypoint()`: the pin gone, `USER_WAYPOINT_UPDATED()`,
+/// then its super-tracking (recorded once, scenario mapnav: the pin
+/// ctrl-clicked away, the update before `SUPER_TRACKING_CHANGED`).
 fn clear_user_waypoint(vm: &mut Vm, _c: NativeCall) -> Ret {
     if waypoint(vm).is_none() {
         return Ok(vec![]);
     }
     put(vm, "point", Value::Nil);
+    fire(vm, "USER_WAYPOINT_UPDATED", &[]);
     if get(vm, "waypoint").truthy() {
         super_track(vm, &[]);
     }
-    fire(vm, "USER_WAYPOINT_UPDATED", &[]);
     Ok(vec![])
+}
+
+/// `C_Map.GetUserWaypointPositionForMap(uiMapID)`: the pin's place on that
+/// map (a `vector2`): its own map's point, else through its map's
+/// rectangle on that one (`C_Map.GetMapRectOnMap`, recorded; unverified),
+/// else nothing.
+fn get_user_waypoint_position_for_map(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (Some((map, x, y, _)), Some(on)) = (waypoint(vm), num_of(vm, c.arg(1))) else {
+        return Ok(vec![]);
+    };
+    if map == on {
+        return Ok(vec![crate::methods2::vector2(vm, x, y)]);
+    }
+    let rect = crate::recorded::lookup_text(
+        vm,
+        &format!("C_Map.GetMapRectOnMap({}, {})", map as i64, on as i64),
+    );
+    let Some(
+        [
+            Value::Num(x0),
+            Value::Num(x1),
+            Value::Num(y0),
+            Value::Num(y1),
+        ],
+    ) = rect.as_deref()
+    else {
+        return Ok(vec![]);
+    };
+    if x1 <= x0 || y1 <= y0 {
+        return Ok(vec![]);
+    }
+    let (px, py) = (x0 + x * (x1 - x0), y0 + y * (y1 - y0));
+    Ok(vec![crate::methods2::vector2(vm, px, py)])
 }
 
 /// `C_Map.GetUserWaypoint()`: the pin, else nothing.
@@ -1711,6 +1774,11 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             get_user_waypoint_from_hyperlink,
         ),
         ("C_Map.GetMapInfoAtPosition", get_map_info_at_position),
+        ("C_Navigation.GetFrame", get_navigation_frame),
+        (
+            "C_Map.GetUserWaypointPositionForMap",
+            get_user_waypoint_position_for_map,
+        ),
         // Gossip quests.
         ("C_GossipInfo.SelectAvailableQuest", select_available_quest),
         ("C_GossipInfo.SelectActiveQuest", select_active_quest),

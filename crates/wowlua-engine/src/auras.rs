@@ -291,6 +291,9 @@ pub fn apply(vm: &mut Vm, me: UnitId, data: TableRef) -> f64 {
     // `quiet`: there already, as a snapshot has it (no `UNIT_AURA`).
     if !flag(vm, "quiet") {
         fire_update(vm, me, Some(&aura), &removed);
+        if me == units::PLAYER {
+            crate::systeminfo::tracking_aura_changed(vm, spell_id);
+        }
     }
     // A stun (`stuns`) changes the unit's flags, told at once (recorded:
     // Hammer of Justice on the cat, its flags before the hit's power,
@@ -357,10 +360,16 @@ pub fn left_place(vm: &mut Vm) {
 /// An aura gone from `unit`.
 pub fn remove(vm: &mut Vm, unit: UnitId, id: f64) {
     let auras = &mut engine_mut(vm).units.auras;
-    let before = auras.len();
+    let spell = auras
+        .iter()
+        .find(|a| a.unit == unit && a.instance == id)
+        .map(|a| a.spell_id);
     auras.retain(|a| !(a.unit == unit && a.instance == id));
-    if auras.len() != before {
+    if let Some(spell) = spell {
         fire_update(vm, unit, None, &[id]);
+        if unit == units::PLAYER {
+            crate::systeminfo::tracking_aura_changed(vm, spell);
+        }
     }
 }
 

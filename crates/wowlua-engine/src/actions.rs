@@ -459,7 +459,10 @@ fn get_action_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![]);
     };
     let a = action(vm, s);
-    let enabled = a.is_some() && !engine(vm).world.loading_screen;
+    // A macro casting nothing is not enabled (`macros.rs`).
+    let enabled = a.as_ref().is_some_and(|a| {
+        a.kind != "macro" || num(a.id).is_some_and(|i| crate::macros::casts_something(vm, i))
+    }) && !engine(vm).world.loading_screen;
     // An empty slot's cooldown is plain in combat too (recorded).
     if a.is_none() {
         engine_mut(vm).plain_results = true;

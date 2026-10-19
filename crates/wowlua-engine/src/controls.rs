@@ -355,6 +355,10 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("slide", crate::input::control_slide),
         ("type", crate::input::control_type),
         ("setModifiers", crate::input::control_set_modifiers),
+        (
+            "setCursorPosition",
+            crate::input::control_set_cursor_position,
+        ),
         ("addToGroup", units::add_to_group),
         ("enterInstance", crate::encounters::control_enter_instance),
         ("leaveInstance", crate::encounters::control_leave_instance),

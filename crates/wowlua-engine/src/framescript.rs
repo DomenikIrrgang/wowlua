@@ -366,8 +366,12 @@ pub(crate) fn set_cvar_text(vm: &mut Vm, name: &str, text: String, tell: bool) -
     if read_only {
         return Ok(vec![Value::Bool(false)]);
     }
+    // Set to what it is: not told (recorded twice: the world map's first
+    // showing after a reload sets `miniWorldMap` to its value, no
+    // `CVAR_UPDATE`; scenarios tracking and mapnav).
+    let unchanged = cvar_get(vm, &name).is_some_and(|v| v == text);
     cvar_set(vm, &name, text.clone());
-    if !tell {
+    if !tell || unchanged {
         return Ok(vec![Value::Bool(true)]);
     }
     let n = vm.str(&name);
