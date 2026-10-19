@@ -55,6 +55,7 @@ pub mod maps;
 pub mod measures;
 pub mod merchant;
 pub mod methods2;
+pub mod methods3;
 pub mod misc;
 pub mod objects2;
 pub mod party;
@@ -318,6 +319,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         // The fill-in methods first: the engine's own take their place.
         methods: methods2::methods()
             .into_iter()
+            .chain(methods3::methods())
             .chain(widgets::behaviours())
             .chain(curves::methods())
             .chain(objects2::methods())

@@ -357,7 +357,9 @@ fn get_source_location(vm: &mut Vm, _id: WidgetId, _c: NativeCall) -> Ret {
 /// `FrameScriptObject:HasAnySecretAspect()`: the engine's secret aspect is
 /// an alpha set from a secret.
 fn has_any_secret_aspect(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(engine(vm).world.widgets[id.0].secret_alpha)])
+    Ok(vec![Value::Bool(
+        engine(vm).world.widgets[id.0].secret_alpha,
+    )])
 }
 
 /// `FrameScriptObject:HasSecretAspect(aspect)`: the alpha aspect
@@ -831,8 +833,8 @@ fn html_lines(markup: &str) -> Vec<String> {
         let tag = rest[start + 1..start + end].trim().to_lowercase();
         let name = tag.trim_start_matches('/').trim_end_matches('/').trim();
         let name = name.split_whitespace().next().unwrap_or("");
-        let breaks = name == "br"
-            || (tag.starts_with('/') && matches!(name, "p" | "h1" | "h2" | "h3"));
+        let breaks =
+            name == "br" || (tag.starts_with('/') && matches!(name, "p" | "h1" | "h2" | "h3"));
         if breaks {
             lines.push(String::new());
         }
@@ -1020,10 +1022,7 @@ fn scene_axes(vm: &mut Vm, id: WidgetId) -> [[f64; 3]; 3] {
     let ypr = stored(vm, id, "CameraOrientationByYawPitchRoll").unwrap_or_default();
     let vm: &Vm = vm;
     if axes.len() >= 9 {
-        let n: Vec<f64> = axes
-            .iter()
-            .map(|x| number(vm, *x).unwrap_or(0.0))
-            .collect();
+        let n: Vec<f64> = axes.iter().map(|x| number(vm, *x).unwrap_or(0.0)).collect();
         return [[n[0], n[1], n[2]], [n[3], n[4], n[5]], [n[6], n[7], n[8]]];
     }
     let a = |i: usize| ypr.get(i).and_then(|x| number(vm, *x)).unwrap_or(0.0);
@@ -1206,10 +1205,16 @@ fn get_region_parent(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 fn get_loop_state(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let playing = engine(vm).animations.playing.contains_key(&id.0);
     let looping = match first(vm, id, "Looping") {
-        Some(Value::Str(s)) => !String::from_utf8_lossy(vm.str_bytes(s)).eq_ignore_ascii_case("NONE"),
+        Some(Value::Str(s)) => {
+            !String::from_utf8_lossy(vm.str_bytes(s)).eq_ignore_ascii_case("NONE")
+        }
         _ => false,
     };
-    Ok(vec![vm.str(if playing && looping { "FORWARD" } else { "NONE" })])
+    Ok(vec![vm.str(if playing && looping {
+        "FORWARD"
+    } else {
+        "NONE"
+    })])
 }
 
 /// `Rotation:SetDegrees(angle)` / `SetRadians(angle)`: the angle, read in
@@ -1298,7 +1303,10 @@ fn control_points(vm: &Vm, path: WidgetId) -> Vec<WidgetId> {
 fn get_control_points(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let points = control_points(vm, id);
     let e = engine(vm);
-    Ok(points.into_iter().map(|p| widgets::value_of(e, p)).collect())
+    Ok(points
+        .into_iter()
+        .map(|p| widgets::value_of(e, p))
+        .collect())
 }
 
 /// `Path:GetMaxControlPointOrder()`: the highest order of its points, 0
@@ -1410,7 +1418,10 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
             can_propagate_mouse_motion,
         ),
         ("ScriptRegion:CollapsesLayout", collapses_layout),
-        ("ScriptRegion:GetRoundLayoutToNearestPixel", get_round_layout),
+        (
+            "ScriptRegion:GetRoundLayoutToNearestPixel",
+            get_round_layout,
+        ),
         ("ScriptRegion:GetSourceLocation", get_source_location),
         (
             "ScriptRegion:ShouldButtonPassThrough",
@@ -1419,7 +1430,10 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
         ("FrameScriptObject:GetAccessRestrictions", zero),
         ("FrameScriptObject:GetForbiddenAspects", zero),
         ("FrameScriptObject:HasAnyAccessRestrictions", no),
-        ("FrameScriptObject:HasAnySecretAspect", has_any_secret_aspect),
+        (
+            "FrameScriptObject:HasAnySecretAspect",
+            has_any_secret_aspect,
+        ),
         ("FrameScriptObject:HasSecretAspect", has_secret_aspect),
         // Textures and lines.
         ("TextureBase:GetBlendMode", get_blend_mode),
@@ -1427,14 +1441,26 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
             "TextureBase:GetRadialProgressBarEndOffset",
             get_radial_end_offset,
         ),
-        ("TextureBase:GetRadialProgressBarFeather", get_radial_feather),
-        ("TextureBase:GetRadialProgressBarPercent", get_radial_percent),
-        ("TextureBase:GetRadialProgressBarReverse", get_radial_reverse),
+        (
+            "TextureBase:GetRadialProgressBarFeather",
+            get_radial_feather,
+        ),
+        (
+            "TextureBase:GetRadialProgressBarPercent",
+            get_radial_percent,
+        ),
+        (
+            "TextureBase:GetRadialProgressBarReverse",
+            get_radial_reverse,
+        ),
         (
             "TextureBase:GetRadialProgressBarStartOffset",
             get_radial_start_offset,
         ),
-        ("TextureBase:ClearRadialProgressBar", clear_radial_progress_bar),
+        (
+            "TextureBase:ClearRadialProgressBar",
+            clear_radial_progress_bar,
+        ),
         ("TextureBase:GetTexelSnappingBias", get_texel_snapping_bias),
         (
             "TextureBase:GetTextureSliceMargins",
@@ -1528,14 +1554,20 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
         ("SimpleHTML:SetSpacing", html_set_spacing),
         ("SimpleHTML:SetJustifyH", html_set_justify_h),
         ("SimpleHTML:SetJustifyV", html_set_justify_v),
-        ("SimpleHTML:SetIndentedWordWrap", html_set_indented_word_wrap),
+        (
+            "SimpleHTML:SetIndentedWordWrap",
+            html_set_indented_word_wrap,
+        ),
         ("SimpleHTML:GetTextColor", html_get_text_color),
         ("SimpleHTML:GetShadowColor", html_get_shadow_color),
         ("SimpleHTML:GetShadowOffset", html_get_shadow_offset),
         ("SimpleHTML:GetSpacing", html_get_spacing),
         ("SimpleHTML:GetJustifyH", html_get_justify_h),
         ("SimpleHTML:GetJustifyV", html_get_justify_v),
-        ("SimpleHTML:GetIndentedWordWrap", html_get_indented_word_wrap),
+        (
+            "SimpleHTML:GetIndentedWordWrap",
+            html_get_indented_word_wrap,
+        ),
         ("SimpleHTML:GetFontObject", html_get_font_object),
         ("SimpleHTML:GetHyperlinkFormat", html_get_hyperlink_format),
         ("SimpleHTML:GetContentHeight", html_get_content_height),
@@ -1564,7 +1596,10 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
         ),
         ("CharacterModelBase:GetDisplayInfo", get_display_info),
         ("CharacterModelBase:GetDoBlend", get_do_blend),
-        ("CharacterModelBase:GetKeepModelOnHide", get_keep_model_on_hide),
+        (
+            "CharacterModelBase:GetKeepModelOnHide",
+            get_keep_model_on_hide,
+        ),
         // No model is loaded to have an animation (unverified).
         ("CharacterModelBase:HasAnimation", no),
         ("DressUpModel:GetAutoDress", get_auto_dress),
@@ -1577,7 +1612,10 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
             "DressUpModel:GetObeyHideInTransmogFlag",
             get_obey_hide_in_transmog,
         ),
-        ("DressUpModel:GetUseTransmogChoices", get_use_transmog_choices),
+        (
+            "DressUpModel:GetUseTransmogChoices",
+            get_use_transmog_choices,
+        ),
         ("DressUpModel:GetUseTransmogSkin", get_use_transmog_skin),
         // A guild's tabard is not shown in the engine: no files, nothing
         // to save.
@@ -1589,7 +1627,10 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
         ("TabardModel:GetUpperEmblemFile", zero),
         ("TabardModelBase:CanSaveTabardNow", no),
         // Model scenes' actors.
-        ("ModelSceneFrameActorBase:GetActiveBoundingBox", bounding_box),
+        (
+            "ModelSceneFrameActorBase:GetActiveBoundingBox",
+            bounding_box,
+        ),
         ("ModelSceneFrameActorBase:GetMaxBoundingBox", bounding_box),
         (
             "ModelSceneFrameActorBase:GetAnimationBlendOperation",
@@ -1600,19 +1641,28 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
             get_animation_variation,
         ),
         ("ModelSceneFrameActorBase:GetModelPath", get_model_path),
-        ("ModelSceneFrameActorBase:GetModelUnitGUID", get_model_unit_guid),
+        (
+            "ModelSceneFrameActorBase:GetModelUnitGUID",
+            get_model_unit_guid,
+        ),
         (
             "ModelSceneFrameActorBase:GetParticleOverrideScale",
             get_particle_override_scale,
         ),
-        ("ModelSceneFrameActorBase:GetSpellVisualKit", get_spell_visual_kit),
+        (
+            "ModelSceneFrameActorBase:GetSpellVisualKit",
+            get_spell_visual_kit,
+        ),
         (
             "ModelSceneFrameActorBase:IsUsingCenterForOrigin",
             is_using_center_for_origin,
         ),
         ("ModelSceneFrameActor:AttachToMount", no),
         ("ModelSceneFrameActor:DetachFromMount", no),
-        ("ModelSceneFrameActor:CalculateMountScale", calculate_mount_scale),
+        (
+            "ModelSceneFrameActor:CalculateMountScale",
+            calculate_mount_scale,
+        ),
         ("ModelSceneFrameActor:GetAutoDress", get_auto_dress),
         ("ModelSceneFrameActor:GetItemTransmogInfo", nil),
         ("ModelSceneFrameActor:GetItemTransmogInfoList", empty_table),
@@ -1625,7 +1675,10 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
             "ModelSceneFrameActor:GetUseTransmogChoices",
             get_use_transmog_choices,
         ),
-        ("ModelSceneFrameActor:GetUseTransmogSkin", get_use_transmog_skin),
+        (
+            "ModelSceneFrameActor:GetUseTransmogSkin",
+            get_use_transmog_skin,
+        ),
         // Nothing to release (unverified).
         ("ModelSceneFrameActor:ReleaseFrontEndCharacterDisplays", yes),
         // Map scenes.
@@ -1640,7 +1693,10 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
         ("Animation:GetSmoothing", get_smoothing),
         ("AnimationGroup:GetLoopState", get_loop_state),
         ("FlipBook:GetFlipBookFrameWidth", get_flip_book_frame_width),
-        ("FlipBook:GetFlipBookFrameHeight", get_flip_book_frame_height),
+        (
+            "FlipBook:GetFlipBookFrameHeight",
+            get_flip_book_frame_height,
+        ),
         ("Path:GetControlPoints", get_control_points),
         ("Path:GetCurveType", get_curve_type),
         ("Path:GetMaxControlPointOrder", get_max_control_point_order),
@@ -1664,7 +1720,10 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
         ("NamePlate:CanChangeHitTestPoints", no),
         ("NamePlate:GetHitTestPoints", get_hit_test_points),
         ("UnitPositionFrame:GetMouseOverUnits", get_mouse_over_units),
-        ("UnitPositionFrame:GetPlayerPingScale", get_player_ping_scale),
+        (
+            "UnitPositionFrame:GetPlayerPingScale",
+            get_player_ping_scale,
+        ),
         (
             "FogOfWarFrame:GetFogOfWarBackgroundAtlas",
             get_fog_background_atlas,
@@ -1697,7 +1756,10 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
         ("Checkout:OpenExternalLink", nothing),
         ("QuestPOIFrame:GetNumTooltips", zero),
         ("QuestPOIFrame:GetTooltipIndex", zero),
-        ("QuestPOIFrame:UpdateMouseOverTooltip", quest_poi_update_tooltip),
+        (
+            "QuestPOIFrame:UpdateMouseOverTooltip",
+            quest_poi_update_tooltip,
+        ),
         ("ScenarioPOIFrame:GetScenarioTooltipText", nil),
         ("ScenarioPOIFrame:UpdateMouseOverTooltip", no),
     ];
