@@ -786,10 +786,17 @@ pub fn load_defined(vm: &mut Vm, name: &str) -> Option<bool> {
     let mut bindings = false;
     if let Some((dir, toc, table, has)) = files {
         bindings = has;
-        // Its files' errors reach the error handler, as the client's do.
+        // Its files' errors reach the error handler, as the client's do
+        // (those the client drops stay the engine's alone).
         let before = engine(vm).world.ui.errors.len();
         crate::ui::load_user_addon(vm, &dir, &toc, &real, table, &Default::default());
-        let errors: Vec<String> = engine_mut(vm).world.ui.errors.drain(before..).collect();
+        let (dropped, errors): (Vec<String>, Vec<String>) = engine_mut(vm)
+            .world
+            .ui
+            .errors
+            .drain(before..)
+            .partition(|e| e.starts_with(crate::ui::DROPPED));
+        engine_mut(vm).world.ui.errors.extend(dropped);
         for e in errors {
             let (handler, message) = (vm.error_handler, vm.str(&e));
             vm.call_from_engine(handler, &[message]);

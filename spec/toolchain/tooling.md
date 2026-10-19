@@ -84,7 +84,10 @@ An error while loading (a step above) fails the file, Blizzard's code's
 included (with `test.blizzard-ui`: it runs without an error in the client,
 so the engine must too). An error that reaches
 the error handler during a test (an event handler's, a timer's) fails that
-test, unless the test read it with `mock.errors()`. The addon's
+test, unless the test read it with `mock.errors()`. An error the client
+drops without a report (a `secureexecuterange` callback's: no error handler
+hears it, the next entries still run) fails the test or the file too, though
+`mock.errors()` does not list it: the code failed. The addon's
 `Bindings.xml` is read before its files load, as the client does.
 
 `test.addons` (manifest §9.18) names other addons' folders, a test's

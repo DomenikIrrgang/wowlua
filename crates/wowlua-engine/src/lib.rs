@@ -580,6 +580,9 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         }
     }
     widgets::create(vm, "Frame", Some("WorldFrame".into()), None);
+    // The errors the client drops without a report are the engine's
+    // errors too (`ui::DROPPED`).
+    vm.on_dropped_error = Some(ui::dropped_error);
     Ok(())
 }
 

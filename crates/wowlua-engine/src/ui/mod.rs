@@ -1041,7 +1041,18 @@ fn font_named(vm: &mut Vm, name: &str, el: &Element) {
         {
             let mut a = vec![f];
             a.extend_from_slice(args);
-            let _ = vm.call(m, &a);
+            // A font the engine cannot build is the loader's error.
+            if let Err(e) = vm.call(m, &a) {
+                let msg = match e.value {
+                    Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+                    _ => "?".into(),
+                };
+                engine_mut(vm)
+                    .world
+                    .ui
+                    .errors
+                    .push(format!("{name} {method}: {msg}"));
+            }
         }
     };
     // What the font inherits: the parent font's face, color, shadow and
@@ -1247,6 +1258,19 @@ fn call_delegate(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Re
     vm.taint_mut().restore(saved);
     let results = r?;
     Ok(results.into_iter().map(|s| s.v).collect())
+}
+
+/// What starts an error the client dropped without a report in the
+/// engine's list (`secureexecuterange`'s callbacks: the client runs on
+/// silently, but code that failed is a failure all the same).
+pub const DROPPED: &str = "secureexecuterange dropped: ";
+
+/// `Vm::on_dropped_error`: the error in the engine's list, marked
+/// (`DROPPED`), with its stack.
+pub fn dropped_error(vm: &mut Vm, message: String, stack: String) {
+    let ui = &mut engine_mut(vm).world.ui;
+    ui.errors.push(format!("{DROPPED}{message}"));
+    ui.error_stacks.push(format!("{DROPPED}{message}\n{stack}"));
 }
 
 pub fn load(vm: &mut Vm, interface: &Path, global_strings: Option<&Path>) -> Report {

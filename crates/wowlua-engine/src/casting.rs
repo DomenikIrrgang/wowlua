@@ -924,7 +924,12 @@ pub(crate) fn stop(vm: &mut Vm, unit: UnitId, interrupted: bool) {
     // mining's success, its loot at once).
     match cast.done {
         Some(f) if !interrupted => {
-            let _ = vm.call(f, &[]);
+            // What its end does (the loot, the craft) failing is an error
+            // the error handler hears, as a script's would be.
+            if let Err(e) = vm.call(f, &[]) {
+                let handler = vm.error_handler;
+                vm.call_from_engine(handler, &[e.value]);
+            }
         }
         _ => cast_changed(vm, unit),
     }

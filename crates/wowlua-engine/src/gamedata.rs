@@ -550,11 +550,17 @@ fn get_item_icon_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_Item.DoesItemExistByID(item)`: a defined item (not `missing`),
-/// else as the client answered.
+/// else as the client answered. The item may be a link or a name too
+/// (the API documentation's `ItemInfo`; Blizzard's `ItemMixin:IsItemEmpty`
+/// asks it with an item's link, as the profession window's reagent
+/// containers do: the engine answered nothing for links before, and the
+/// mixin's `ContinueWithCancelOnItemLoad` failed inside
+/// `secureexecuterange`). Unverified for names (as `item_id` reads one: a
+/// cached item's).
 fn does_item_exist_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
-    let defined = match vm.hidden(c.arg(1)) {
-        Value::Num(n) => item_data(vm, n as i64),
-        _ => None,
+    let defined = match item_id(vm, c.arg(1)) {
+        Some(id) => item_data(vm, id),
+        None => None,
     };
     match defined {
         Some(t) => Ok(vec![Value::Bool(!field(vm, t, "missing").truthy())]),

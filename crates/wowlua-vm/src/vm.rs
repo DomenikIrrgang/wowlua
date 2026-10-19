@@ -175,6 +175,11 @@ pub struct Vm {
     pub clock: Clock,
     /// `geterrorhandler`/`seterrorhandler` and the print handler (WoW).
     pub error_handler: Value,
+    /// Told of each error a client function drops without a report (the
+    /// error and the stack where it was raised): `secureexecuterange`'s
+    /// callbacks fail without a trace in the client, but the host's tests
+    /// see them (code that fails is a failure even where nobody hears it).
+    pub on_dropped_error: Option<fn(&mut Vm, String, String)>,
     pub heap: Heap,
     pub(crate) cur: ThreadState,
     pub(crate) current: ThreadRef,
@@ -309,6 +314,7 @@ impl Vm {
             cstack: Vec::new(),
             errfunc: None,
             in_errfunc: false,
+            on_dropped_error: None,
             coverage: None,
             cov_frame: None,
             output: Box::new(|bytes| {
