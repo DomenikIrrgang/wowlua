@@ -453,8 +453,8 @@ fn get_quest_objective_info(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `GetQuestLink(questID)`: a link to a quest in the log
-/// (`|cffffff00|Hquest:ID:LEVEL|h[Title]|h|r`), else nil (warcraft.wiki.gg:
-/// nil for a quest not in the log; the link's colour and fields unverified).
+/// (`|cffffff00|Hquest:ID:0|h[Title]|h|r`, coloured by its difficulty),
+/// else nil (warcraft.wiki.gg: nil for a quest not in the log).
 fn get_quest_link(vm: &mut Vm, c: NativeCall) -> Ret {
     // A quest not in the log: nothing (the full probe; the newest answer,
     // over nil).
@@ -473,7 +473,25 @@ fn get_quest_link(vm: &mut Vm, c: NativeCall) -> Ret {
         Some(Answer::Str(s)) => s.clone(),
         _ => String::new(),
     };
-    let link = format!("|cffffff00|Hquest:{quest}:{}|h[{title}]|h|r", level as i64);
+    // The quest's colour for the player's level, Blizzard's
+    // `GetRelativeDifficultyColor` steps with `UnitQuestTrivialLevelRange`'s
+    // 5; the link's level field 0 (the full probe: 1063, level 18 for a
+    // 21, `|cff40c040|Hquest:1063:0|h`; the other colours' codes
+    // unverified).
+    let me = engine(vm).units.list[units::PLAYER.0].level;
+    let diff = level - me;
+    let color = if diff >= 5.0 {
+        "ff1919"
+    } else if diff >= 3.0 {
+        "ff8040"
+    } else if diff >= -2.0 {
+        "ffff00"
+    } else if -diff <= 5.0 {
+        "40c040"
+    } else {
+        "808080"
+    };
+    let link = format!("|cff{color}|Hquest:{quest}:0|h[{title}]|h|r");
     Ok(vec![vm.str(&link)])
 }
 
@@ -1701,6 +1719,32 @@ fn zero(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(0.0)])
 }
 
+/// `GetQuestSortIndex(questIndex)`: the log entry's header's place among
+/// the log's headers, counting the entry itself if a header; 0 past the
+/// log or below its start (the full probe: the header at 1 and its quest
+/// at 2 answered 1; -1, 0 and 1063 0).
+fn get_quest_sort_index(vm: &mut Vm, c: NativeCall) -> Ret {
+    let index = vm.tonumber(vm.hidden(c.arg(1))).unwrap_or(0.0).trunc() as i64;
+    let mut headers = 0.0;
+    for i in 1..=index.max(0) {
+        let Some(info) = stat_at(vm, "questLogInfo", i).and_then(|a| a.first().cloned()) else {
+            return Ok(vec![Value::Num(0.0)]);
+        };
+        if matches!(answer_field(&info, "isHeader"), Some(Answer::Bool(true))) {
+            headers += 1.0;
+        }
+    }
+    Ok(vec![Value::Num(headers)])
+}
+
+/// `GetQuestExpansion(questID)`: -2 for any quest (Forever's carry no
+/// expansion), 0 for an ID below 1 (the full probe: 1, 2 and the log's
+/// 1063 -2; 0 and -1 0; a quest of an expansion unverified).
+fn get_quest_expansion(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = vm.tonumber(vm.hidden(c.arg(1))).unwrap_or(0.0);
+    Ok(vec![Value::Num(if id >= 1.0 { -2.0 } else { 0.0 })])
+}
+
 fn empty_list(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Table(vm.new_table())])
 }
@@ -1748,14 +1792,17 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetNumQuestLogTasks", zero),
         ("GetNumQuestItemDrops", zero),
         ("GetQuestLogItemDrop", nothing),
-        ("GetQuestCurrencyID", none),
+        // No currency for a reward asked properly: 0 (the full probe:
+        // `(1, 1)`).
+        ("GetQuestCurrencyID", zero),
         ("GetQuestLogChoiceInfoLootType", zero),
         ("GetQuestProgressBarPercent", zero),
         ("GetQuestPOIBlobCount", zero),
         // A quest not in the log: nothing (the full probe; a quest's own
         // faction unverified, the probe's second quest answered 2).
         ("GetQuestFactionGroup", nothing),
-        ("GetQuestExpansion", zero),
+        ("GetQuestExpansion", get_quest_expansion),
+        ("GetQuestSortIndex", get_quest_sort_index),
         ("GetQuestLogQuestType", none),
         ("QuestLogShouldShowPortrait", no),
         ("QuestLogRewardHasTreasurePicker", no),

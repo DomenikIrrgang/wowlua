@@ -202,8 +202,11 @@ pub fn trait_character(vm: &mut Vm) -> Option<i64> {
     }
 }
 
+/// `CanInspect(unit)`: a unit with inspect data, and the player itself
+/// (the full probe: "player" true; its GUID, "target", "pet" false).
 fn can_inspect(vm: &mut Vm, c: NativeCall) -> Ret {
-    let ok = units::unit_arg(vm, &c, 1).is_some_and(|id| inspect(vm).data.contains_key(&id.0));
+    let ok = units::unit_arg(vm, &c, 1)
+        .is_some_and(|id| id == units::PLAYER || inspect(vm).data.contains_key(&id.0));
     Ok(vec![Value::Bool(ok)])
 }
 

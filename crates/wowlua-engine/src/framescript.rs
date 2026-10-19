@@ -456,6 +456,21 @@ fn build_info(vm: &mut Vm, _c: NativeCall) -> Ret {
         (c.version.clone(), c.interface)
     });
     let v = vm.str(&version);
+    // Camelot's: the recorded client's build and date, then an empty text
+    // and a space (the full probe, 1.60.1: "70450", "Oct 15 2026", 16001,
+    // "", " ").
+    if flavor == "camelot" {
+        let (build, date) = (vm.str("70450"), vm.str("Oct 15 2026"));
+        let (empty, space) = (vm.str(""), vm.str(" "));
+        return Ok(vec![
+            v,
+            build,
+            date,
+            Value::Num(f64::from(interface)),
+            empty,
+            space,
+        ]);
+    }
     let build = vm.str("0");
     let date = vm.str("");
     let info = vm.str(&format!("{version}.0"));

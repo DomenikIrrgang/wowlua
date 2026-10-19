@@ -317,8 +317,13 @@ fn get_pet_action_cooldown(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(0.0), Value::Num(0.0), Value::Num(0.0)])
 }
 
-/// `GetPetActionSlotUsable(slot)`: an action there, the pet alive.
+/// `GetPetActionSlotUsable(slot)`: an action there, the pet alive; with
+/// no pet, any slot (the full probe: -1, 0, 1 and 2 true without a pet;
+/// unverified why).
 fn get_pet_action_slot_usable(vm: &mut Vm, c: NativeCall) -> Ret {
+    if pet(vm).is_none() {
+        return Ok(vec![Value::Bool(true)]);
+    }
     let usable = action(vm, &c).is_some() && pet_alive(vm);
     Ok(vec![Value::Bool(usable)])
 }

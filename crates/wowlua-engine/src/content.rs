@@ -203,7 +203,7 @@ fn truthy(v: Value) -> bool {
 
 /// A difficulty: its ID, name, instance kind, its heroic flag, the fewest
 /// and most players.
-struct Difficulty {
+pub(crate) struct Difficulty {
     id: f64,
     name: &'static str,
     kind: &'static str,
@@ -245,7 +245,7 @@ const DIFFICULTIES: &[Difficulty] = &[
     },
 ];
 
-fn difficulty(id: f64) -> Option<&'static Difficulty> {
+pub(crate) fn difficulty(id: f64) -> Option<&'static Difficulty> {
     DIFFICULTIES.iter().find(|d| d.id == id)
 }
 

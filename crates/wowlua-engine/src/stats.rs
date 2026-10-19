@@ -1161,7 +1161,9 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
         _ => true,
     };
     let index = match stat.ask {
-        UnitIndex => num(c.arg(2)),
+        // An enumeration's index not a number reads as 0 (the full probe:
+        // `UnitResistance("player", "x")` answered as 0's armor).
+        UnitIndex => num(c.arg(2)).or(matches!(c.arg(2), Value::Str(_)).then_some(0.0)),
         Index | ForStat => num(c.arg(1)),
         Location => location_key(vm, c.arg(1)),
         FlyoutSlot => num(c.arg(1)).zip(num(c.arg(2))).map(|(f, i)| f * 100.0 + i),
@@ -1200,6 +1202,17 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
                     };
                     match (effective, num(c.arg(2))) {
                         (Some(Answer::Num(e)), Some(value)) if *e == value => v,
+                        // Another value: the recorded one's rate per point,
+                        // the value taken whole, none below 0 (the full
+                        // probe: strength 67 recorded 134, and 1 and 1.5
+                        // answer 2, 2147483647 4294967294, -1 and 0 0;
+                        // unverified for a rate not whole).
+                        (Some(Answer::Num(e)), Some(value)) if *e > 0.0 => match v.as_deref() {
+                            Some([Answer::Num(at)]) => {
+                                Some(vec![Answer::Num(at / e * value.trunc().max(0.0))])
+                            }
+                            _ => None,
+                        },
                         _ => None,
                     }
                 } else {

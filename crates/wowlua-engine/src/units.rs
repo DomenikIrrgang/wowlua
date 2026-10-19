@@ -310,6 +310,27 @@ pub fn resolve(u: &Units, token: &str) -> Option<UnitId> {
     unit.filter(|id| u.list[id.0].alive_in_world)
 }
 
+/// Whether argument `n` is written as a unit token (`player`, `party1`,
+/// `none`), whether or not it names a unit now; not a GUID or nil.
+pub(crate) fn names_token(vm: &Vm, c: &NativeCall, n: usize) -> bool {
+    match vm.hidden(c.arg(n)) {
+        Value::Str(s) => {
+            let t = String::from_utf8_lossy(vm.str_bytes(s)).to_ascii_lowercase();
+            let Some((_, mut rest)) = base_token(&engine(vm).units, &t) else {
+                return false;
+            };
+            while !rest.is_empty() {
+                match rest.strip_prefix("target") {
+                    Some(r) => rest = r,
+                    None => return false,
+                }
+            }
+            true
+        }
+        _ => false,
+    }
+}
+
 /// A base token's unit (possibly none: `target` without one) and what is
 /// left of the token after it.
 fn base_token<'a>(u: &Units, t: &'a str) -> Option<(Option<UnitId>, &'a str)> {
@@ -808,6 +829,9 @@ fn unit_not_special(vm: &mut Vm, c: NativeCall) -> Ret {
 fn unit_has_power_type(vm: &mut Vm, c: NativeCall) -> Ret {
     let wanted = match vm.hidden(c.arg(2)) {
         Value::Num(n) => n,
+        // An enumeration's value not a number reads as 0, mana (the full
+        // probe: `UnitHasPowerType("player", "x")` true for a paladin).
+        Value::Str(_) => 0.0,
         _ => return Ok(vec![Value::Bool(false)]),
     };
     with_unit_or(vm, &c, Value::Bool(false), |_, u| {
@@ -1161,8 +1185,15 @@ pub fn subgroup(u: &Units, id: UnitId) -> f64 {
 }
 
 /// `UnitGroupRolesAssigned(unit)`: a group member's chosen role, else
-/// `NONE` (recorded: the player's and a member's; absent tokens `NONE`).
+/// `NONE` (recorded: the player's and a member's; absent tokens `NONE`);
+/// asked with no unit token (none, nil, a GUID), the player's
+/// specialization's role (the full probe: "DAMAGER" for those, `NONE` for
+/// "player" outside a group).
 fn unit_group_roles_assigned(vm: &mut Vm, c: NativeCall) -> Ret {
+    if !names_token(vm, &c, 1) {
+        let role = crate::facts::own_specialization_role(vm);
+        return Ok(vec![vm.str(role.as_deref().unwrap_or("NONE"))]);
+    }
     let id = unit_arg(vm, &c, 1);
     let role = {
         let u = &engine(vm).units;

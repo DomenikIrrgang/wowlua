@@ -368,6 +368,9 @@ fn get_locale(vm: &mut Vm, _c: NativeCall) -> Ret {
 /// negative counting down (probed: an addon's texture -1755; the client's
 /// own numbering of loose files is not reproduced; a game file's real ID is
 /// not known here).
+///
+/// A path to no file answers nil (the full probe: `""` and `"x"`; taken
+/// here as a path without a folder, unverified for others).
 fn get_file_id_from_path(vm: &mut Vm, c: NativeCall) -> Ret {
     let Value::Str(s) = c.arg(1) else {
         return Ok(vec![Value::Num(0.0)]);
@@ -375,6 +378,9 @@ fn get_file_id_from_path(vm: &mut Vm, c: NativeCall) -> Ret {
     let path = String::from_utf8_lossy(vm.str_bytes(s))
         .to_ascii_lowercase()
         .replace('/', "\\");
+    if !path.contains('\\') {
+        return Ok(vec![Value::Nil]);
+    }
     let key = match path.rsplit_once('.') {
         Some((stem, ext)) if !ext.contains('\\') => stem.to_string(),
         _ => path,

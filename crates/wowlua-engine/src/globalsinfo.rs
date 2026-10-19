@@ -300,7 +300,11 @@ fn can_loot_unit(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![]);
     };
     let loot = unit.dead && !unit.loot.is_empty();
-    Ok(vec![Value::Bool(loot), Value::Bool(loot)])
+    // A living unit leaves nothing to forbid: may loot, nothing there (the
+    // full probe: the player's own GUID answers false, true; unverified for
+    // other units).
+    let may = loot || !unit.dead;
+    Ok(vec![Value::Bool(loot), Value::Bool(may)])
 }
 
 /// `GetDefaultLanguage()`, `GetAlternativeDefaultLanguage()`: the
@@ -654,16 +658,31 @@ fn get_world_elapsed_time(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 /// `GetNextAvailableRaidTargetMarkerIndex(start, …)`: with no marker in
 /// use, the start (recorded 1 from 1, 8 from 8 backwards; unverified with
-/// markers placed).
+/// markers placed); a start that is no marker, 0 (the full probe: 0 and
+/// 2147483647).
 fn next_raid_target_marker(vm: &mut Vm, c: NativeCall) -> Ret {
-    let start = num_arg(vm, &c, 1).unwrap_or(1.0).clamp(1.0, 8.0);
-    Ok(vec![Value::Num(start.floor())])
+    let start = num_arg(vm, &c, 1).unwrap_or(1.0).trunc();
+    let next = if (1.0..=8.0).contains(&start) {
+        start
+    } else {
+        0.0
+    };
+    Ok(vec![Value::Num(next)])
 }
 
-/// `GetBaseDifficultyID(difficultyID)`: the difficulty itself (no
-/// difficulty derives from another in the classic game; unverified).
+/// `GetBaseDifficultyID(difficultyID)`: the difficulty itself, taken whole
+/// (no difficulty derives from another in the classic game; unverified);
+/// 0 for 0, and for a difficulty the game lacks 4294967295, the C code's
+/// -1 as its unsigned result (the full probe: 1.5 answers 1, 2147483647
+/// that).
 fn get_base_difficulty_id(vm: &mut Vm, c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(num_arg(vm, &c, 1).unwrap_or(0.0))])
+    let id = num_arg(vm, &c, 1).unwrap_or(0.0).trunc();
+    let base = if id == 0.0 || crate::content::difficulty(id).is_some() {
+        id
+    } else {
+        4_294_967_295.0
+    };
+    Ok(vec![Value::Num(base)])
 }
 
 /// `GetTaskInfo(questID)`: not a task quest: not in its area, not on the
@@ -687,10 +706,30 @@ fn in_guild_party(_vm: &mut Vm, _c: NativeCall) -> Ret {
     ])
 }
 
-/// `GetMovieDownloadProgress(movieID)`: not downloading, nothing of
-/// nothing (the documentation's shape; unverified).
-fn get_movie_download_progress(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(false), Value::Num(0.0), Value::Num(0.0)])
+/// The movies the client has, by ID, and their sizes in bytes: the intro
+/// (the full probe: `GetMovieDownloadProgress(1)` false, 5298374 of
+/// 5298374, `IsMovieLocal(1)` true; 0, -1 and 2147483647 none; the other
+/// IDs unverified).
+const MOVIES: &[(f64, f64)] = &[(1.0, 5_298_374.0)];
+
+/// The movie a call names (its first argument, taken whole), if the client
+/// has it: its size.
+fn movie(vm: &Vm, c: &NativeCall) -> Option<f64> {
+    let id = num_arg(vm, c, 1)?.trunc();
+    MOVIES.iter().find(|(m, _)| *m == id).map(|(_, size)| *size)
+}
+
+/// `GetMovieDownloadProgress(movieID)`: not downloading; a movie at hand
+/// all of its size, another nothing of nothing (`MOVIES`).
+fn get_movie_download_progress(vm: &mut Vm, c: NativeCall) -> Ret {
+    let size = movie(vm, &c).unwrap_or(0.0);
+    Ok(vec![Value::Bool(false), Value::Num(size), Value::Num(size)])
+}
+
+/// `IsMovieLocal(movieID)`, `IsMoviePlayable`, `IsMovieReadable`: whether
+/// the client has the movie (`MOVIES`).
+fn is_movie_at_hand(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(movie(vm, &c).is_some())])
 }
 
 // ------------------------------------------------------------ chat colors
@@ -1208,8 +1247,6 @@ const NOTHING: &[&str] = &[
     // Macros' icons, spell confirmation prompts, surveys and tickets.
     "SetMacroItem",
     "SetMacroSpell",
-    "GetLooseMacroIcons",
-    "GetLooseMacroItemIcons",
     "AcceptSpellConfirmationPrompt",
     "DeclineSpellConfirmationPrompt",
     "AcknowledgeSurvey",
@@ -1271,7 +1308,6 @@ const NO: &[&str] = &[
     "IsPartyWorldPVP",
     "IsServerControlledBackfill",
     "CanPartyLFGBackfill",
-    "CanInitiateWarGame",
     "CanJoinBattlefieldAsGroup",
     "DungeonAppearsInRandomLFD",
     "InitiateRolePoll",
@@ -1294,13 +1330,10 @@ const NO: &[&str] = &[
     "SetAchievementComparisonUnit",
     "IsMasterLooter",
     "CanMapChangeDifficulty",
-    "IsLegacyDifficulty",
     "EJ_IsValidInstanceDifficulty",
     "EJ_InstanceIsRaid",
-    "EJ_IsLootListOutOfDate",
     "FlyoutHasSpell",
     "TargetSpellReplacesBonusTree",
-    "IsSpecializationActivateSpell",
     "HasLootSpecializations",
     "AreTalentsLocked",
     "CheckTalentMasterDist",
@@ -1312,9 +1345,6 @@ const NO: &[&str] = &[
     "ItemAddedToArtifact",
     "RemoveItemFromArtifact",
     "CanItemBeSocketedToArtifact",
-    "IsMovieLocal",
-    "IsMoviePlayable",
-    "IsMovieReadable",
     "IsInCinematicScene",
     "CanCancelScene",
     "IsUsingVehicleControls",
@@ -1334,7 +1364,6 @@ const NO: &[&str] = &[
     "CannotBeResurrected",
     "IsCemeterySelectionAvailable",
     "CanPortGraveyard",
-    "QuestHasPOIInfo",
     "IsBreadcrumbQuest",
     "IsStoryQuest",
     "QuestIsDaily",
@@ -1492,7 +1521,6 @@ const NIL: &[&str] = &[
     "EJ_GetMapEncounter",
     "EJ_GetSearchResult",
     "EJ_GetSectionPath",
-    "EJ_GetTierInfo",
     "EJ_HandleLinkPath",
 ];
 
@@ -1501,7 +1529,6 @@ const NIL: &[&str] = &[
 /// indicator, no unit of that creature near; unverified).
 const RETURNS_NOTHING: &[&str] = &[
     "GetEventTime",
-    "GetSourceLocation",
     "GetVehicleUIIndicator",
     "GetVehicleUIIndicatorSeat",
     "ClosestUnitPosition",
@@ -1514,7 +1541,6 @@ const RETURNS_NOTHING: &[&str] = &[
 const TWO_ZEROS: &[&str] = &[
     "GetEventCPUUsage",
     "GetFrameCPUUsage",
-    "GetFunctionCPUUsage",
     "SearchLFGGetNumResults",
     "GetBattlegroundPoints",
 ];
@@ -1539,6 +1565,9 @@ const PASSED_TABLE: &[&str] = &[
     "GetLFDChoiceEnabledState",
     "GetLFRChoiceOrder",
     "GetScenariosChoiceOrder",
+    // The macro icons from loose files: none (the full probe: `{}`).
+    "GetLooseMacroIcons",
+    "GetLooseMacroItemIcons",
     "GetHomePartyInfo",
 ];
 
@@ -1827,6 +1856,147 @@ fn comparison_completed_achievements(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![own, Value::Num(0.0)])
 }
 
+/// `EJ_IsLootListOutOfDate(...)`: false asked with nothing, true with any
+/// argument (the full probe: `()` false, `("x")`, `(-1)`, `(1)` true; why
+/// is not known, unverified).
+fn ej_is_loot_list_out_of_date(_vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(c.has(1))])
+}
+
+/// `EJ_GetTierInfo(index)`: no tier listed (`EJ_GetNumTiers` 0), so every
+/// index refused, its number in the error (the full probe: "Usage:
+/// EJ_GetTierInfo(index) Invalid index -1", 0, 1 and 2 alike; a value not
+/// a number refused before, `camelot-usages.txt`).
+fn ej_get_tier_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    let n = vm.tonumber(vm.hidden(c.arg(1))).unwrap_or(0.0).trunc();
+    Err(vm.error(&format!(
+        "Usage: EJ_GetTierInfo(index) Invalid index {}",
+        n as i64
+    )))
+}
+
+/// `IsLegacyDifficulty(difficultyID)`: false for a difficulty of the game,
+/// nil for another, 0 too (the full probe: 1 and 1.5 false, 0 and
+/// 2147483647 nil).
+fn is_legacy_difficulty(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = num_arg(vm, &c, 1).unwrap_or(0.0).trunc();
+    Ok(vec![if crate::content::difficulty(id).is_some() {
+        Value::Bool(false)
+    } else {
+        Value::Nil
+    }])
+}
+
+/// `IsSpecializationActivateSpell(spellID)`: no spell activates a
+/// specialization, but 0 answers true (the full probe: 0 true; -1, 1, 2,
+/// 6603 false; why unverified, an empty entry matched).
+fn is_specialization_activate_spell(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(num_arg(vm, &c, 1) == Some(0.0))])
+}
+
+/// `QuestHasPOIInfo(questID)`: a quest of the player's log has its map
+/// point, 0 too; another not (the full probe: 1063 of the log and 0 true;
+/// -1, 1, 2 false).
+fn quest_has_poi_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    if num_arg(vm, &c, 1) == Some(0.0) {
+        return Ok(vec![Value::Bool(true)]);
+    }
+    have_quest_data(vm, c)
+}
+
+/// `CanInitiateWarGame(index)`: no war game to start, with the war game
+/// type's player counts (the full probe: 1 answers false, 1, 10; 2 false,
+/// 1, 15; other types unverified: 0, 0 as for 0, -1 and no number).
+fn can_initiate_war_game(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (min, max) = match num_arg(vm, &c, 1).map(f64::trunc) {
+        Some(1.0) => (1.0, 10.0),
+        Some(2.0) => (1.0, 15.0),
+        _ => (0.0, 0.0),
+    };
+    Ok(vec![Value::Bool(false), Value::Num(min), Value::Num(max)])
+}
+
+/// `GetSourceLocation()`: where the caller is, its chunk's name (a file's
+/// path, or the code of a string chunk) and line (the full probe: `return
+/// GetSourceLocation()` loaded from a string answers "return
+/// GetSourceLocation():1"; a file's form unverified: the path without
+/// `@`).
+fn get_source_location(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let Some(source) = vm.caller_source(1) else {
+        return Ok(vec![]);
+    };
+    let name = match source.first() {
+        Some(b'@' | b'=') => &source[1..],
+        _ => &source[..],
+    };
+    // The line, from `chunk:line: `.
+    let w = vm.where_(1);
+    let text = String::from_utf8_lossy(&w);
+    let line = text
+        .trim_end_matches(": ")
+        .rsplit(':')
+        .next()
+        .and_then(|l| l.parse::<u32>().ok())
+        .unwrap_or(0);
+    let mut out = name.to_vec();
+    out.extend_from_slice(format!(":{line}").as_bytes());
+    Ok(vec![vm.bytes(&out)])
+}
+
+/// `GetFunctionCPUUsage(func [, includeSubroutines])`: no CPU used, no
+/// calls profiled; asked without a function, the C code's usage error
+/// (the full probe: `()`; a value not a function unverified, refused as
+/// well).
+fn get_function_cpu_usage(vm: &mut Vm, c: NativeCall) -> Ret {
+    if !matches!(vm.hidden(c.arg(1)), Value::Func(_)) {
+        return Err(vm.error("Usage: GetFunctionCPUUsage(function[, includeSubroutines])"));
+    }
+    Ok(vec![Value::Num(0.0), Value::Num(0.0)])
+}
+
+/// `GetInspectArenaData(bracketIndex)`: an inspected player's arena
+/// rating, games and wins of none, five zeros; nothing for a bracket below
+/// 1 (the full probe: 1 and 2 zeros, 0 and -1 nothing).
+fn get_inspect_arena_data(vm: &mut Vm, c: NativeCall) -> Ret {
+    if !positive(vm, &c) {
+        return Ok(vec![]);
+    }
+    Ok(vec![Value::Num(0.0); 5])
+}
+
+/// `GetStringFromModifiers(modifiers)`: the keys a modifier mask holds,
+/// as a binding writes them (the full probe: 0 "", 1 "SHIFT"; the other
+/// bits, a left and a right key each for shift, control and alt as
+/// `Enum.ModifierKey` orders them, and their order, unverified).
+fn get_string_from_modifiers(vm: &mut Vm, c: NativeCall) -> Ret {
+    let mask = num_arg(vm, &c, 1).unwrap_or(0.0) as u64;
+    let mut keys = Vec::new();
+    for (bits, name) in [
+        (0b11_0000, "ALT"),
+        (0b00_1100, "CTRL"),
+        (0b00_0011, "SHIFT"),
+    ] {
+        if mask & bits != 0 {
+            keys.push(name);
+        }
+    }
+    Ok(vec![vm.str(&keys.join("-"))])
+}
+
+/// `GetMonitorName(index)`: the recorded monitors' (1 the system's
+/// default, nil and true; 2 a named one; 3 none, nil and false); a
+/// monitor index below 1 none, nil and false (the full probe: -1 and 0);
+/// no number, nothing.
+fn get_monitor_name(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some(v) = crate::recorded::lookup(vm, "GetMonitorName", &c) {
+        return Ok(v);
+    }
+    if num_arg(vm, &c, 1).is_none() {
+        return Ok(vec![]);
+    }
+    Ok(vec![Value::Nil, Value::Bool(false)])
+}
+
 /// The rules the full probe settled (`/stdtest engine fullprobe`).
 fn probed() -> Vec<(&'static str, NativeFn)> {
     vec![
@@ -1846,6 +2016,23 @@ fn probed() -> Vec<(&'static str, NativeFn)> {
         ("GetNextCompleatedTutorial", no_tutorial),
         ("GetPrevCompleatedTutorial", no_tutorial),
         ("GetPromotionRank", get_promotion_rank),
+        ("EJ_IsLootListOutOfDate", ej_is_loot_list_out_of_date),
+        ("EJ_GetTierInfo", ej_get_tier_info),
+        ("IsLegacyDifficulty", is_legacy_difficulty),
+        (
+            "IsSpecializationActivateSpell",
+            is_specialization_activate_spell,
+        ),
+        ("QuestHasPOIInfo", quest_has_poi_info),
+        ("CanInitiateWarGame", can_initiate_war_game),
+        ("GetSourceLocation", get_source_location),
+        ("GetFunctionCPUUsage", get_function_cpu_usage),
+        ("GetInspectArenaData", get_inspect_arena_data),
+        ("GetStringFromModifiers", get_string_from_modifiers),
+        ("GetMonitorName", get_monitor_name),
+        ("IsMovieLocal", is_movie_at_hand),
+        ("IsMoviePlayable", is_movie_at_hand),
+        ("IsMovieReadable", is_movie_at_hand),
     ]
 }
 

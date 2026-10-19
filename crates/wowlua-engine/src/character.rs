@@ -373,7 +373,19 @@ fn equipped(vm: &mut Vm, c: &NativeCall) -> Option<Held> {
     engine(vm).world.character.equipment.get(&slot).cloned()
 }
 
+/// Whether a call names no slot (nil) for a unit there is: the client
+/// answers as for an empty slot of its own (the full probe:
+/// `GetInventoryItemID("player")` 0, its quality and texture nil, broken
+/// and unusable false; a unit not there, `("x")`, nothing but a nil
+/// texture).
+fn no_slot(vm: &Vm, c: &NativeCall) -> bool {
+    c.arg(2).is_nil() && units::unit_arg(vm, c, 1).is_some()
+}
+
 fn get_inventory_item_id(vm: &mut Vm, c: NativeCall) -> Ret {
+    if no_slot(vm, &c) {
+        return Ok(vec![Value::Num(0.0)]);
+    }
     Ok(equipped(vm, &c)
         .map(|h| vec![Value::Num(h.id as f64)])
         .unwrap_or_default())
@@ -391,19 +403,30 @@ fn get_inventory_item_link(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn get_inventory_item_texture(vm: &mut Vm, c: NativeCall) -> Ret {
+    // No slot, or a unit not there: nil (the full probe, `("player")` and
+    // `("x")`).
+    if c.arg(2).is_nil() {
+        return Ok(vec![Value::Nil]);
+    }
     Ok(equipped(vm, &c)
         .map(|h| vec![item_field(vm, h.id, "icon")])
         .unwrap_or_default())
 }
 
 fn get_inventory_item_quality(vm: &mut Vm, c: NativeCall) -> Ret {
+    if no_slot(vm, &c) {
+        return Ok(vec![Value::Nil]);
+    }
     Ok(equipped(vm, &c)
         .map(|h| vec![item_field(vm, h.id, "quality")])
         .unwrap_or_default())
 }
 
+/// `GetInventoryItemCount(unit, slot)`: the worn item's count, 1 where
+/// none is (the full probe: `("player")` and `("x")` 1, as a worn piece's;
+/// unverified for an empty slot of the player's).
 fn get_inventory_item_count(vm: &mut Vm, c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(equipped(vm, &c).map_or(0.0, |h| h.count))])
+    Ok(vec![Value::Num(equipped(vm, &c).map_or(1.0, |h| h.count))])
 }
 
 /// `unit:equip(slot, item)` / `unit:equip(slot, nil)` (the player):
@@ -1539,8 +1562,12 @@ fn inventory_item_cooldown(_vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// `GetInventoryItemBroken(unit, slot)`, `GetInventoryItemEquippedUnusable(
-/// unit, slot)`: whole and usable (recorded; unverified otherwise).
-fn inventory_item_no(_vm: &mut Vm, _c: NativeCall) -> Ret {
+/// unit, slot)`: whole and usable (recorded; unverified otherwise); a
+/// unit not there, nothing (the full probe: `("x")`).
+fn inventory_item_no(vm: &mut Vm, c: NativeCall) -> Ret {
+    if units::unit_arg(vm, &c, 1).is_none() {
+        return Ok(vec![]);
+    }
     Ok(vec![Value::Bool(false)])
 }
 

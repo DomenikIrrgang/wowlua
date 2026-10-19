@@ -363,19 +363,87 @@ fn screen_width(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(widgets::SCREEN.0)])
 }
 
-/// `GetSpecializationRole(specIndex)`: the role `C_SpecializationInfo.
-/// GetSpecializationInfo(specIndex)` answers (its fifth value, recorded
-/// "DAMAGER" for the default warrior). Unverified: that the client's
-/// answers agree for every class.
-fn specialization_role(vm: &mut Vm, c: NativeCall) -> Ret {
+/// The role `C_SpecializationInfo.GetSpecializationInfo(index)` answers
+/// for the player's specialization at that index (its fifth value).
+fn role_at(vm: &mut Vm, index: f64) -> Result<Value, wowlua_vm::LuaError> {
     let ns = vm.get_global("C_SpecializationInfo");
     let Value::Table(ns) = ns else {
-        return Ok(vec![Value::Nil]);
+        return Ok(Value::Nil);
     };
     let k = vm.str("GetSpecializationInfo");
     let f = vm.heap.table(ns).get(k);
-    let info = vm.call(f, &[c.arg(1)])?;
-    Ok(vec![info.get(4).copied().unwrap_or(Value::Nil)])
+    let info = vm.call(f, &[Value::Num(index)])?;
+    Ok(info.get(4).copied().unwrap_or(Value::Nil))
+}
+
+/// The role of the player's (first) specialization, if it has one.
+pub(crate) fn own_specialization_role(vm: &mut Vm) -> Option<String> {
+    match role_at(vm, 1.0) {
+        Ok(Value::Str(s)) => Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
+        _ => None,
+    }
+}
+
+/// What `GetSpecializationRole(specIndex [, isInspect, isPet])` asks
+/// about: nothing for an index past the class's specializations (the
+/// full probe: -1, 0 and 2 nothing, 1 "DAMAGER"), an inspected unit's
+/// role 0, a number (`(1, 1)`, `GetSpecializationRoleEnum` alike;
+/// unverified why), a pet's none (unverified), else the player's.
+enum SpecRole {
+    Nothing,
+    Inspected,
+    Pet,
+    Own(Value),
+}
+
+fn spec_role(vm: &mut Vm, c: &NativeCall) -> Result<SpecRole, wowlua_vm::LuaError> {
+    let index = vm.tonumber(vm.hidden(c.arg(1))).unwrap_or(0.0).trunc();
+    // The class's one specialization (`GetNumSpecializations()`, the full
+    // probe: 1).
+    if index != 1.0 {
+        return Ok(SpecRole::Nothing);
+    }
+    if vm.hidden(c.arg(2)).truthy() {
+        return Ok(SpecRole::Inspected);
+    }
+    if vm.hidden(c.arg(3)).truthy() {
+        return Ok(SpecRole::Pet);
+    }
+    Ok(SpecRole::Own(role_at(vm, index)?))
+}
+
+/// `GetSpecializationRole(specIndex [, isInspect, isPet])`: the role
+/// `C_SpecializationInfo.GetSpecializationInfo(specIndex)` answers (its
+/// fifth value, recorded "DAMAGER" for the default warrior), as
+/// [`spec_role`] tells. Unverified: that the client's answers agree for
+/// every class.
+fn specialization_role(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(match spec_role(vm, &c)? {
+        SpecRole::Nothing => vec![],
+        SpecRole::Inspected => vec![Value::Num(0.0)],
+        SpecRole::Pet => vec![Value::Nil],
+        SpecRole::Own(role) => vec![role],
+    })
+}
+
+/// `GetSpecializationRoleEnum(specIndex [, isInspect, isPet])`: the role
+/// as `Enum.LFGRole` (recorded 2 for 1), as `GetSpecializationRole`.
+fn specialization_role_enum(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(match spec_role(vm, &c)? {
+        SpecRole::Nothing => vec![],
+        SpecRole::Inspected => vec![Value::Num(0.0)],
+        SpecRole::Pet => vec![Value::Nil],
+        SpecRole::Own(Value::Str(s)) => {
+            let n = match vm.str_bytes(s) {
+                b"TANK" => 0.0,
+                b"HEALER" => 1.0,
+                b"DAMAGER" => 2.0,
+                _ => -1.0,
+            };
+            vec![Value::Num(n)]
+        }
+        SpecRole::Own(_) => vec![Value::Nil],
+    })
 }
 
 /// The font objects made, in order: by name, else as `tostring` gives
@@ -620,6 +688,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("SetPortraitTexture", not_drawn),
         ("C_NamePlate.SetNamePlateSize", not_drawn),
         ("GetSpecializationRole", specialization_role),
+        ("GetSpecializationRoleEnum", specialization_role_enum),
         // The neutral world: no follower dungeon, keystone, house editor,
         // garrison, friend online or warband bank gold.
         ("C_LFGInfo.IsInLFGFollowerDungeon", no),

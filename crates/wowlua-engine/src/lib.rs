@@ -897,6 +897,15 @@ const OVER_RECORDED: &[&str] = &[
     "C_Club.ShouldAllowClubType",
     "C_Club.GetAvatarIdList",
     "GetDungeonDifficultyID",
+    // The full probe's answers over the load's (an older build's): no
+    // error callstack height set (nil), no expansion trial (false, nil).
+    "GetErrorCallstackHeight",
+    "GetExpansionTrialInfo",
+    // Rules over the recorded calls, asking them first: a game message's
+    // name from its index (the full probe: 1 `ERR_SYSTEM`), a monitor of
+    // none.
+    "GetGameMessageInfo",
+    "GetMonitorName",
     "GetActionBarToggles",
     "C_Heirloom.GetCollectedHeirloomFilter",
     "C_Heirloom.GetUncollectedHeirloomFilter",
