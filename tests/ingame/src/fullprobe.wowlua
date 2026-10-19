@@ -533,8 +533,20 @@ local function eta(run: FullProbe): string
 end
 
 local function progress(run: FullProbe): string
-    const done = math.min(run.cursor - 1, run.total)
-    return `{done}/{run.total} calls ({math.floor(done * 100 / math.max(run.total, 1))}%), {#run.crashed} crashed, about {eta(run)} left`
+    -- The calls answered, wherever the run stands (after the plan's end it
+    -- goes back to the stretches a crash put off).
+    local done = 0
+    const out = results()
+    for _, e in ipairs(entries(run.values)) do
+        if out[e.text] ~= nil then
+            done = done + 1
+        end
+    end
+    local tail = ""
+    if run.deferredTo ~= nil then
+        tail = `; now the stretches a crash put off ({#(run.deferred ?? {}) + 1} left)`
+    end
+    return `{done}/{run.total} calls answered ({math.floor(done * 100 / math.max(run.total, 1))}%), {#run.crashed} crashed, about {eta(run)} left{tail}`
 end
 
 local function reloadUI()
