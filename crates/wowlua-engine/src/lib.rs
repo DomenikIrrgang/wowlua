@@ -21,12 +21,14 @@ pub mod character;
 pub mod chat;
 pub mod clock;
 pub mod conditionals;
+pub mod content;
 pub mod controls;
 pub mod cursor;
 pub mod curves;
 pub mod death;
 pub mod editmode;
 pub mod encounters;
+pub mod extras;
 pub mod facts;
 pub mod formatters;
 pub mod framescript;
@@ -35,6 +37,7 @@ pub mod gossip;
 pub mod input;
 pub mod inspect;
 pub mod inventory;
+pub mod iteminfo;
 pub mod itemlocation;
 pub mod levels;
 pub mod login;
@@ -49,8 +52,11 @@ pub mod party;
 pub mod pets;
 pub mod protection;
 pub mod queries;
+pub mod questinfo;
 pub mod quests;
 pub mod recorded;
+pub mod social;
+pub mod spellinfo;
 pub mod stats;
 pub mod taxi;
 pub mod tooltip;
@@ -58,6 +64,7 @@ pub mod tradeskill;
 pub mod trainer;
 pub mod traits;
 pub mod ui;
+pub mod unitinfo;
 pub mod units;
 pub mod widgetdata;
 pub mod widgets;
@@ -75,6 +82,9 @@ pub struct Engine {
     pub plain_results: bool,
     /// Behaviour by function name (`C_Timer.After`).
     behaviours: HashMap<&'static str, NativeFn>,
+    /// The functions answered by a fill-in (`fill_ins`): secure code's
+    /// calls of them are still noted for the probes, as defaulted ones.
+    fill_ins: std::collections::HashSet<&'static str>,
     /// Widget methods' behaviour by name (`Show`), or by class and name
     /// (`Button:Click`) where a class differs. Looked up, never iterated:
     /// its hasher is not observable.
@@ -219,12 +229,9 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
     } else {
         Vec::new()
     };
-    vm.host = Some(Box::new(Engine {
-        flavor: flavor.to_string(),
-        api,
-        // The recorded answers first: any behaviour of the engine's own
-        // takes their place.
-        behaviours: recorded::behaviours(flavor)
+    // The engine's own behaviours, the recorded answers first: any
+    // behaviour of the engine's own takes their place.
+    let own: HashMap<&'static str, NativeFn> = recorded::behaviours(flavor)
             .into_iter()
             .chain(traits::recorded_behaviours(flavor))
             .chain(clock::behaviours())
@@ -279,7 +286,19 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
                 ),
             ])
             .chain(framescript::functions())
-            .collect(),
+        .collect();
+    // The fill-ins answer only what nothing else does.
+    let fill = fill_ins();
+    let fill_ins: std::collections::HashSet<&'static str> = fill
+        .iter()
+        .map(|(name, _)| *name)
+        .filter(|name| !own.contains_key(name))
+        .collect();
+    vm.host = Some(Box::new(Engine {
+        flavor: flavor.to_string(),
+        api,
+        behaviours: fill.into_iter().chain(own).collect(),
+        fill_ins,
         methods: widgets::behaviours()
             .into_iter()
             .chain(curves::methods())
@@ -383,10 +402,13 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         };
         let key = vm.heap.intern(short.as_bytes());
         if !vm.heap.table(table).get_str(key).is_nil() {
-            engine_mut(vm)
-                .behaviours
-                .entry(name)
-                .or_insert(facts::recorded_call);
+            // A recorded answer takes a fill-in's place.
+            let engine = engine_mut(vm);
+            if engine.fill_ins.contains(name) {
+                engine.behaviours.insert(name, facts::recorded_call);
+            } else {
+                engine.behaviours.entry(name).or_insert(facts::recorded_call);
+            }
             continue;
         }
         let upval = vm.str(name);
@@ -797,6 +819,21 @@ pub(crate) fn call_text(vm: &Vm, name: &str, c: &NativeCall, first: usize) -> St
     format!("{name}({})", args.join(", "))
 }
 
+/// The fill-in modules' behaviours: answers for functions no recording
+/// or model of the engine answers, from Blizzard's documentation and UI
+/// code, warcraft.wiki.gg and the functions' names (unverified).
+fn fill_ins() -> Vec<(&'static str, NativeFn)> {
+    unitinfo::behaviours()
+        .into_iter()
+        .chain(spellinfo::behaviours())
+        .chain(iteminfo::behaviours())
+        .chain(social::behaviours())
+        .chain(content::behaviours())
+        .chain(questinfo::behaviours())
+        .chain(extras::behaviours())
+        .collect()
+}
+
 /// Every API function: its behaviour, or the "not mocked" error.
 fn api_function(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(Value::Num(i)) = c.upvals.first().copied() else {
@@ -828,6 +865,9 @@ fn api_function(vm: &mut Vm, c: NativeCall) -> Ret {
     // and the restrictions active say; a return marked never secret stays.
     let flags = *f.secret_flags.get_or_init(|| units::secret_flags(&f.doc));
     let secret = units::secret_results_flagged(vm, flags, &c);
+    if engine_mut(vm).fill_ins.contains(f.name) && protection::blizzard_caller(vm) {
+        note_default(vm, f.name, &c, 1);
+    }
     let results = behaviour(vm, c)?;
     // A behaviour may say its answer has nothing to hide (an empty action
     // slot's cooldown, recorded plain in combat).
