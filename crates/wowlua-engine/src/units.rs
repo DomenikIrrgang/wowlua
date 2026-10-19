@@ -1313,6 +1313,7 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("castSpell", crate::casting::control_cast),
         ("useSpell", crate::casting::control_use_spell),
         ("interruptCast", crate::casting::control_interrupt),
+        ("setMoving", crate::casting::control_set_moving),
         ("setDistance", crate::character::control_set_distance),
         ("setMoney", crate::character::control_set_money),
         ("setStats", crate::stats::control_set_stats),
@@ -1695,6 +1696,12 @@ fn control_soft_target(vm: &mut Vm, c: NativeCall) -> Ret {
         fire(vm, event, &[o, n]);
     } else {
         fire(vm, event, &[]);
+    }
+    // A soft friend is where a spell on a friend lands without a target
+    // (recorded, `profession`: Blessing of Protection unusable once a
+    // friendly NPC was soft targeted, 0.2 s later; unverified: the delay).
+    if i == 1 {
+        crate::actions::update_target_usability(vm);
     }
     Ok(vec![])
 }

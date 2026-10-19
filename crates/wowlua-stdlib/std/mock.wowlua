@@ -89,6 +89,10 @@ export interface MockUnit
     --- answered by the server 0.4 s later. The player's with no cast yet:
     --- a craft's next cast, asked of the server, given up.
     function interruptCast()
+    --- The player starts or stops moving (`PLAYER_STARTED_MOVING`,
+    --- `PLAYER_STOPPED_MOVING`); meanwhile a spell with a cast time is
+    --- refused ("Can't do that while moving").
+    function setMoving(moving: boolean)
     --- Which crafts of `recipe` to come raise the profession's skill, in
     --- order (the server's chance).
     function craftSkillUps(recipe: number, ups: boolean[])
@@ -467,7 +471,7 @@ end
 --- What the client knows of the character's spells: those off the global
 --- cooldown, the tracking ones, the professions', those usable on the
 --- player or a group member in reach only (`partyOrSelf`: Blessing of
---- Protection; re-told as the target changes).
+--- Protection; re-told as the target or the soft friend changes).
 export function setSpellTraits(traits: {
     offGlobalCooldown?: number[],
     tracking?: number[],
@@ -752,6 +756,12 @@ end
 
 export function joinGuild()
     engine().joinGuild()
+end
+
+--- A message of the server's own (`CHAT_MSG_SYSTEM`): a friend coming
+--- online, going offline.
+export function systemMessage(text: string)
+    engine().systemMessage(text)
 end
 
 -- ------------------------------------------------------------- the client
