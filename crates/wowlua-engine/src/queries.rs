@@ -300,7 +300,7 @@ fn break_up_large_numbers(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `AbbreviateLargeNumbers(n)`: by its whole digits, from 9 the millions
 /// (`123 M`), from 6 the thousands (`1234 K`), else broken up (recorded).
-fn abbreviate_large_numbers(vm: &mut Vm, c: NativeCall) -> Ret {
+pub(crate) fn abbreviate_large_numbers(vm: &mut Vm, c: NativeCall) -> Ret {
     let n = num(c.arg(1)).unwrap_or(0.0);
     let digits = format!("{}", n.abs().trunc() as u64).len();
     let sign = if n < 0.0 { "-" } else { "" };
@@ -321,7 +321,7 @@ fn abbreviate_large_numbers(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `AbbreviateNumbers(n)`: from 1000 by the breakpoints (`1.2K`, `12K`,
 /// `1.2M`, `1.2B`; one decimal below ten of a unit, truncated); smaller
 /// numbers and negatives as Lua writes them (recorded).
-fn abbreviate_numbers(vm: &mut Vm, c: NativeCall) -> Ret {
+pub(crate) fn abbreviate_numbers(vm: &mut Vm, c: NativeCall) -> Ret {
     let n = num(c.arg(1)).unwrap_or(0.0);
     let units = [
         (1e12, "FOURTH_NUMBER_CAP_NO_SPACE", "T"),

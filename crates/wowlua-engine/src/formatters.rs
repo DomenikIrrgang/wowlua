@@ -474,7 +474,7 @@ fn reset_breakpoints(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 /// `RequiresValidAbbreviationBreakpoints`, its errors after
 /// `Enum.AbbreviationDataError`; unverified: the message, and "a multiple
 /// of ten" read as the divisors' product).
-fn abbreviation_copy(vm: &mut Vm, v: Value) -> Result<(TableRef, bool), LuaError> {
+pub(crate) fn abbreviation_copy(vm: &mut Vm, v: Value) -> Result<(TableRef, bool), LuaError> {
     let Value::Table(t) = vm.hidden(v) else {
         return Err(vm.error("a breakpoint table expected"));
     };
