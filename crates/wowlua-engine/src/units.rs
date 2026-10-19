@@ -76,6 +76,9 @@ pub struct Unit {
     pub classification: String,
     /// The player's threat on this creature (`setThreat`).
     pub threat: Option<f64>,
+    /// Dead with the player on its threat list, the list's update not told
+    /// yet (told as the player leaves combat, or by `setThreat(nil)`).
+    pub listed_dead: bool,
     /// What its corpse holds (`kill({ loot })`): items and counts.
     pub loot: Vec<(i64, f64)>,
     /// A creature's type and family: their names and IDs
@@ -276,6 +279,7 @@ pub fn install(vm: &mut Vm) {
         distance: Some(0.0),
         classification: "normal".into(),
         threat: None,
+        listed_dead: false,
         loot: Vec::new(),
         creature_type: None,
         creature_family: None,
@@ -1590,6 +1594,7 @@ fn unit_from(vm: &mut Vm, data: Option<TableRef>, player_guid: Option<String>) -
         },
         classification: text(vm, "classification", "normal"),
         threat: None,
+        listed_dead: false,
         loot: Vec::new(),
         creature_type: match get(vm, "creatureType") {
             Value::Str(s) => Some((
@@ -1717,6 +1722,7 @@ fn control_set_threat(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
     if c.arg(2).is_nil() {
         engine_mut(vm).units.list[me.0].threat = None;
+        engine_mut(vm).units.list[me.0].listed_dead = false;
         fire_unit(vm, "UNIT_THREAT_LIST_UPDATE", me, &[]);
         let any = engine(vm).units.list.iter().any(|u| u.threat.is_some());
         if !any && engine(vm).units.threat_situation {
@@ -2189,6 +2195,7 @@ pub(crate) fn died(vm: &mut Vm, me: UnitId, lootable: bool) {
     {
         let u = &mut engine_mut(vm).units.list[me.0];
         u.in_combat = false;
+        u.listed_dead |= u.threat.is_some();
         u.threat = None;
     }
     let instance = identity_restricted(vm);
@@ -2914,10 +2921,6 @@ fn control_leave_combat(vm: &mut Vm, c: NativeCall) -> Ret {
         for u in engine_mut(vm).units.list.iter_mut() {
             u.threat = None;
         }
-        // Off the threat lists first (recorded: the wolf's, dead).
-        if living.is_empty() {
-            fire_unit(vm, "UNIT_THREAT_SITUATION_UPDATE", PLAYER, &[]);
-        }
     }
     if me == PLAYER {
         // A creature giving up drops the player as its target with the
@@ -2953,6 +2956,31 @@ fn control_leave_combat(vm: &mut Vm, c: NativeCall) -> Ret {
             fire_unit(vm, "UNIT_FLAGS", id, &[]);
         }
         crate::actions::update_usability(vm);
+    }
+    // Off the dead creatures' lists with the combat's end, after the
+    // corpses dropped the player (so no `targettarget`): each corpse's
+    // list not told yet, then the player's situation (recorded: `quest`'s
+    // 8 fights' ends, the corpse's list by its tokens, the situation the
+    // player's alone; `auradeath`'s; `combat`'s list told before, by the
+    // server, the situation with it).
+    if me == PLAYER {
+        let listed: Vec<UnitId> = engine(vm)
+            .units
+            .list
+            .iter()
+            .enumerate()
+            .filter(|(_, u)| u.listed_dead)
+            .map(|(i, _)| UnitId(i))
+            .collect();
+        for id in listed {
+            engine_mut(vm).units.list[id.0].listed_dead = false;
+            if situation {
+                fire_unit(vm, "UNIT_THREAT_LIST_UPDATE", id, &[]);
+            }
+        }
+    }
+    if situation && living.is_empty() {
+        fire_unit(vm, "UNIT_THREAT_SITUATION_UPDATE", PLAYER, &[]);
     }
     if situation && !living.is_empty() {
         let ids = living.iter().map(|id| Value::Num(id.0 as f64)).collect();

@@ -128,6 +128,8 @@ at(12.419) player:raiseSkill("Defense", 8)
 at(12.969) u_6_65112a2818:swing(player, 2, { victimPower = 15, textAfter = 0.397 })
 at(13.141) u_6_65112a2818:swing(player, 0, { kind = "MISS", textAfter = 0.33 })
 at(13.560) u_6_65112a2818:setThreat(5)
+-- Two power packets in this moment (recorded).
+at(13.909) player:setPower(15)
 at(13.909) u_6_65112a2818:swing(player, 2, { victimPower = 15, textAfter = 0.362 })
 at(14.162) e.gameError("BADATTACKFACING")
 at(14.324) u_6_65112a2818:swing(player, 2, { victimPower = 15, textAfter = 0.299 })
@@ -135,6 +137,8 @@ at(14.324) u_6_65112a2818:swing(player, 2, { victimPower = 15, textAfter = 0.299
 at(14.324) u_6_65112a2818:swing(player, 2, { textAfter = 0.361 })
 at(14.439) player:setPower(15)
 at(14.968) u_6_65112a2818:swing(player, 2, { victimPower = 15, textAfter = 0.397 })
+-- Two power packets in this moment (recorded).
+at(15.127) player:setPower(15)
 at(15.127) u_6_65112a2818:swing(player, 2, { victimPower = 15, textAfter = 0.398 })
 at(15.841) bystander("Creature-0-6782-0-7-299-069F61ED3A", 299, "Young Wolf")
 at(15.882) u_6_65112a2818:swing(player, 3, { textAfter = 0.298 })
@@ -193,6 +197,10 @@ check("chat: you died", chatHas(ChatFrame1, "|cff71d5ff|Hdeath:1|h[You died.]|h"
 at(29.150) press(StaticPopup1Button1)
 at(29.6)
 check("a ghost", UnitIsGhost("player"))
+-- Running back: the area's updates, then a building's other part
+-- (recorded; the places unrecorded).
+at(39.381) e.areaChanged()
+at(39.714) e.newWmoChunk()
 at(43.106) player:wear()
 at(44.277) bystander("Creature-0-6782-0-7-257-1DCD5746D5", 257, "Kobold Worker")
 at(49.158) bystander("Creature-0-6782-0-7-257-DE4AC94919", 257, "Kobold Worker")

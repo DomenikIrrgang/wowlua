@@ -1384,7 +1384,7 @@ fn the_engine_plays_combat_as_the_client_did() {
 
 /// How many of the death scenario's lines the engine plays as the client
 /// did: only ever up.
-const DEATH_MATCHED: usize = 1590;
+const DEATH_MATCHED: usize = 1619;
 
 /// The death scenario: a fight lost, the spirit released, the corpse taken.
 #[test]
@@ -1564,7 +1564,7 @@ fn the_engine_plays_items_as_the_client_did() {
 
 /// How many of the quest scenario's lines the engine plays as the client
 /// did: only ever up.
-const QUEST_MATCHED: usize = 5481;
+const QUEST_MATCHED: usize = 5493;
 
 /// The quest scenario: a quest taken, eight wolves hunted for its item (a
 /// level gained), the quest turned in.
