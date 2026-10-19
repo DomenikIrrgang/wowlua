@@ -1341,6 +1341,7 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("gather", crate::loot::control_gather),
         ("openTradeSkill", crate::tradeskill::control_open),
         ("craftSkillUps", crate::tradeskill::control_skill_ups),
+        ("craftTimings", crate::tradeskill::control_timings),
         ("setSpellFocus", crate::tradeskill::control_spell_focus),
         ("interact", crate::quests::control_interact),
         ("die", crate::death::control_die),
@@ -1650,44 +1651,51 @@ fn control_target(vm: &mut Vm, c: NativeCall) -> Ret {
         }
         set_player_target(vm, new);
     } else {
-        engine_mut(vm).units.list[me.0].target = new;
-        // A creature turning on someone, as a wolf on the player
-        // (`/stdtest engine scenario combat`): the new target's flags
-        // (also by its new token, `targettarget`), the creature's target,
-        // its flags in combat; a friendly one turning to face someone (a
-        // flight master, `taxi`): its target only. Unverified: for others
-        // than the player.
-        let friendly = engine(vm).units.list[me.0].reaction == Reaction::Friendly;
-        // On the player: its flags only the first time this fight, and
-        // only once in combat (else told as it enters combat); the
-        // creature in combat (recorded: `combat`'s wolf turning after the
-        // player's first swing, flags; `death`'s second creature, none;
-        // `death`'s and `auradeath`'s first, before the player's combat,
-        // none of their own).
-        let on_player = new == Some(PLAYER) && !friendly;
-        if on_player {
-            engine_mut(vm).units.list[me.0].in_combat = true;
-            let first = !engine(vm).units.engaged;
-            engine_mut(vm).units.engaged = true;
-            if first && engine(vm).units.list[PLAYER.0].in_combat {
-                fire_unit(vm, "UNIT_FLAGS", PLAYER, &[]);
-            }
-        } else if let Some(t) = new
-            && !friendly
-        {
-            fire_unit(vm, "UNIT_FLAGS", t, &[]);
-        }
-        // On the player in a fight: its own update told after the
-        // player's in the packet (its power), at the frame's end (`batch`).
-        if on_player
-            && engine(vm).units.list[PLAYER.0].in_combat
-            && crate::batch::owe_turn(vm, me.0)
-        {
-            return Ok(vec![]);
-        }
-        told_turn(vm, me);
+        unit_target(vm, me, new);
     }
     Ok(vec![])
+}
+
+/// Another unit's target now `new`, told at once.
+fn unit_target(vm: &mut Vm, me: UnitId, new: Option<UnitId>) {
+    engine_mut(vm).units.list[me.0].target = new;
+    // A creature turning on someone, as a wolf on the player
+    // (`/stdtest engine scenario combat`): the new target's flags (also by
+    // its new token, `targettarget`), the creature's target, its flags in
+    // combat; a friendly one turning to face someone (a flight master,
+    // `taxi`): its target only.
+    let friendly = engine(vm).units.list[me.0].reaction == Reaction::Friendly;
+    // On the player: its flags only the first time this fight, and only
+    // once in combat (else told as it enters combat); the creature in
+    // combat (recorded: `combat`'s wolf turning after the player's first
+    // swing, flags; `death`'s second creature, none; `death`'s and
+    // `auradeath`'s first, before the player's combat, none of their own).
+    let on_player = new == Some(PLAYER) && !friendly;
+    // On another: its flags only when the creature is the player's target
+    // (the flags come with the targettarget token: recorded, `talents`, a
+    // fox turning on the player untargeted told none, its flags told once
+    // targeted, see `set_player_target`). Unverified: for others than the
+    // player.
+    let targeted = engine(vm).units.target == Some(me);
+    if on_player {
+        engine_mut(vm).units.list[me.0].in_combat = true;
+        let first = !engine(vm).units.engaged;
+        engine_mut(vm).units.engaged = true;
+        if first && engine(vm).units.list[PLAYER.0].in_combat {
+            fire_unit(vm, "UNIT_FLAGS", PLAYER, &[]);
+        }
+    } else if let Some(t) = new
+        && !friendly
+        && targeted
+    {
+        fire_unit(vm, "UNIT_FLAGS", t, &[]);
+    }
+    // On the player in a fight: its own update told after the player's in
+    // the packet (its power), at the frame's end (`batch`).
+    if on_player && engine(vm).units.list[PLAYER.0].in_combat && crate::batch::owe_turn(vm, me.0) {
+        return;
+    }
+    told_turn(vm, me);
 }
 
 /// A creature's target told (`UNIT_TARGET`), its flags if in combat.
@@ -1837,6 +1845,19 @@ fn set_player_target(vm: &mut Vm, new: Option<UnitId>) {
     engine_mut(vm).units.target = new;
     engine_mut(vm).units.list[PLAYER.0].target = new;
     fire(vm, "PLAYER_TARGET_CHANGED", &[]);
+    // A hostile target on someone: that one's flags, by its tokens with
+    // targettarget (recorded, `talents`: the fox on the player targeted,
+    // UNIT_FLAGS for player and targettarget; as when the target turns on
+    // the player, `combat`). Unverified: for others than the player.
+    let turned = new.and_then(|n| {
+        let u = &engine(vm).units.list[n.0];
+        (u.reaction != Reaction::Friendly)
+            .then_some(u.target)
+            .flatten()
+    });
+    if let Some(t) = turned {
+        fire_unit(vm, "UNIT_FLAGS", t, &[]);
+    }
     // The actions on a target's kind (recorded: Blessing of Protection's
     // after targeting an NPC, then a party member).
     crate::actions::update_target_usability(vm);
@@ -2804,9 +2825,25 @@ fn control_leave_combat(vm: &mut Vm, c: NativeCall) -> Ret {
         }
     }
     if me == PLAYER {
+        // A creature giving up drops the player as its target with the
+        // combat's end, told after the player's flags (already without the
+        // targettarget token), before the actions' usability (recorded
+        // once, `talents`: the fox's).
+        let dropping: Vec<UnitId> = living
+            .iter()
+            .copied()
+            .filter(|u| engine(vm).units.list[u.0].target == Some(PLAYER))
+            .collect();
+        for &u in &dropping {
+            engine_mut(vm).units.list[u.0].target = None;
+        }
         player_out_of_combat(vm);
+        for u in dropping {
+            unit_target(vm, u, None);
+        }
         // The corpses still on the player drop it (recorded: after the
-        // player's flags, `quest`, `combat`).
+        // player's flags, `quest`, `combat`; unverified: after the living
+        // ones', never recorded together).
         let corpses: Vec<UnitId> = engine(vm)
             .units
             .list

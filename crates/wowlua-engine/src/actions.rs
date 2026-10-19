@@ -278,13 +278,18 @@ pub(crate) fn usability(vm: &mut Vm, a: &Action) -> (bool, bool) {
     // recorded: usable on a member nearby). With no target, the soft
     // friend decides (probed: unusable with a friendly NPC soft targeted;
     // recorded, `profession`, on the road); with neither, usable (probed
-    // in the open world, away from anyone).
+    // in the open world, away from anyone). A player soft friend while not
+    // grouped is (recorded, `group`: usable with the druid soft targeted,
+    // unusable once the party formed without it; unverified: a player
+    // targeted).
     if a.kind == "spell" && has_trait(vm, a.id, "partyOrSelf") {
+        let grouped = crate::party::grouped(vm);
         let e = engine(vm);
         let u = &e.units;
         let ok = match u.target.or(u.soft[1]) {
             None => true,
             Some(crate::units::PLAYER) => true,
+            Some(t) if u.target.is_none() && !grouped && u.list[t.0].player => true,
             Some(t) => {
                 let m = &u.list[t.0];
                 let here = &e.world.character.position.zone;
@@ -476,6 +481,25 @@ fn get_action_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
         }
         _ => None,
     };
+    // An item of a food's category just used (`inventory.rs`).
+    if let Some(a) = &a
+        && a.kind == "item"
+        && let Some((category, start, length)) = engine(vm).units.casting.category_cooldown
+        && start + length > now
+        && num(data_field(vm, true, a.id, "cooldownCategory")) == Some(category)
+    {
+        let t = table(
+            vm,
+            &[
+                ("startTime", Value::Num(start)),
+                ("duration", Value::Num(length)),
+                ("isEnabled", Value::Bool(true)),
+                ("modRate", Value::Num(1.0)),
+                ("isActive", Value::Bool(true)),
+            ],
+        );
+        return Ok(vec![t]);
+    }
     // Its own cooldown, running since before the snapshot (recorded: a
     // warrior's three-minute spell on its slot until it ended), longer
     // than the global one: told without the global cooldown's fields.

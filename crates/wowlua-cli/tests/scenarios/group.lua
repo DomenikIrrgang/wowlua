@@ -81,6 +81,15 @@ check("in a party", IsInGroup() and UnitIsGroupLeader("player"))
 at(7.606) druid:joinGroup()
 at(8.0)
 check("two in the party", GetNumGroupMembers() == 2)
+-- Tooltips' data updates as the mouse passed over the party frame, not
+-- modelled: as recorded.
+at(8.735) for id = 817, 821 do e.fireEvent("TOOLTIP_DATA_UPDATE", id) end
+-- The campfire nearby, on the druid, later on the paladin following it
+-- (the session's aura instances, recorded).
+local function campfire(unit, instance)
+    unit:applyAura({ spellId = 1283391, name = "Campfire Nearby", icon = 7808147, auraInstanceID = instance })
+end
+at(8.832) campfire(druid, 21)
 at(9.499) e.newWmoChunk()
 -- Targeted on its party frame.
 at(10.525)
@@ -90,6 +99,7 @@ check("the druid targeted", UnitIsUnit("target", "party1"))
 -- Followed from the target's menu.
 at(18.536) press(TargetFrame, "RightButton")
 at(19.419) press(menuEntry("Follow"))
+at(19.480) campfire(player, 51)
 -- Asked to trade from the menu; the druid accepted; the window closed.
 at(20.077) press(TargetFrame, "RightButton")
 at(22.593) press(menuEntry("Trade"))
@@ -97,6 +107,10 @@ at(23.331) druid:openTrade()
 at(23.5)
 check("the trade window open", TradeFrame and TradeFrame:IsShown())
 at(23.736) e.pressKey("ESCAPE")
+-- The druid within the paladin's Devotion Aura (recorded).
+at(23.900) druid:applyAura({
+    spellId = 643, name = "Devotion Aura", icon = 135893, source = player, auraInstanceID = 23,
+})
 at(24.2)
 check("the trade window closed", not TradeFrame:IsShown())
 at(25.4)

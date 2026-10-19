@@ -4,12 +4,8 @@
 -- fox that gives up; walks on through the island (the quest log's updates);
 -- targets another of the user's characters, a druid, follows it and views
 -- its talents (scenarios/talents.lua). Each step at its recorded time.
--- Not yet: the player's flags told again as the fox is targeted (39.516),
--- the fox's target dropped between the combat's end and the actions'
--- usability (53.550; the engine tells the usability with the combat's
--- end), Earth Shock's range checks (SPELL_RANGE_CHECK_UPDATE: the cooldown
--- viewer's, off in the engine), the fox's last hit after it gave up
--- (54.880).
+-- Earth Shock's range checks (SPELL_RANGE_CHECK_UPDATE: the cooldown
+-- viewer's) are the recorded events: the engine checks no range.
 local e = __engine
 local player = e.player
 -- The shaman's hidden group buffs (HIDDEN_GROUP_BUFFS_CHANGED, recorded).
@@ -136,7 +132,13 @@ vuldren:enterCombat()
 player:enterCombat()
 vuldren:setThreat(0)
 e.setLatency(0.699)
+-- Earth Shock's range checks (the cooldown viewer's: its cvar on in the
+-- client, not in the profile; the engine checks no range): as recorded.
+local function earthShockInRange(inRange, checksRange)
+    world("SPELL_RANGE_CHECK_UPDATE", 8044, inRange, checksRange)
+end
 at(39.516) player:target(vuldren)
+earthShockInRange(true, true)
 vuldren:swing(player, 6)
 -- Its soft targeting as the client switched it (PLAYER_SOFT_ENEMY_CHANGED).
 at(39.530) player:softTarget(vuldren, "enemy")
@@ -148,12 +150,12 @@ at(45.558) vuldren:swing(player, 6)
 at(47.505) vuldren:swing(player, 6)
 at(49.525) vuldren:swing(player, 6)
 at(51.540) vuldren:swing(player, 5)
--- It gives up: its target dropped, the player out of combat. The health
--- comes back every 2 s (the amounts guessed: the client keeps them
--- secret).
-at(53.550) vuldren:target(nil)
-player:leaveCombat()
-player:heal(3)
+-- It gives up: the player out of combat, its target dropped (the
+-- engine's), its last hit landing as it goes (the health's update, the
+-- combat text 1.33 s later: recorded). The health comes back every 2 s
+-- after (the amounts guessed: the client keeps them secret).
+at(53.550) player:leaveCombat()
+vuldren:swing(player, 6, { combat = false, textAfter = 1.33 })
 at(53.713) player:softTarget(nil, "enemy")
 -- Out of the fox's reach, in the highlands (the quest watch's update
 -- after the map's, as recorded).
@@ -161,11 +163,13 @@ at(53.918) e.moveTo({ subZone = "Shen'dar Highlands" })
 at(53.96) world("QUEST_WATCH_LIST_CHANGED", nil, nil)
 at(54.467) player:heal(3)
 at(54.567) vuldren:setDistance(40)
+earthShockInRange(false, true)
 at(56.090) player:softTarget(vuldren, "enemy")
 at(56.428) player:heal(3)
 at(58.457) player:heal(3)
 e.setLatency(0.834)
 at(60.057) player:target(nil)
+earthShockInRange(false, false)
 at(60.491) player:heal(3)
 at(62.491) player:heal(3)
 at(64.492) player:heal(3)

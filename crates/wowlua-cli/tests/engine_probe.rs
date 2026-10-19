@@ -809,7 +809,26 @@ fn session_start(recording: &str) -> Option<f64> {
             .min_by(|a, b| a.0.total_cmp(&b.0))
             .map(|(at, started)| started / scale - at)
     };
-    first(&gcd, 1.0).or_else(|| first(&cast, 1000.0))
+    // Else an aura the player gained with a duration: applied at its
+    // event, its expiration the session's time plus the duration.
+    let aura = regex::Regex::new(
+        r#"= "([0-9.]+) UNIT_AURA\(string player; \{addedAuras=\{1=\{[^}]*duration=number ([0-9.]+),expirationTime=number ([0-9.]+),"#,
+    )
+    .unwrap();
+    let applied = || {
+        aura.captures_iter(recording)
+            .filter_map(|c| {
+                let at = c[1].parse::<f64>().ok()?;
+                let duration = c[2].parse::<f64>().ok()?;
+                let expires = c[3].parse::<f64>().ok()?;
+                (duration > 0.0).then_some((at, expires - duration))
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(at, started)| started - at)
+    };
+    first(&gcd, 1.0)
+        .or_else(|| first(&cast, 1000.0))
+        .or_else(applied)
 }
 
 /// A scenario (`/stdtest engine scenario <name>`) played in the engine:
@@ -826,12 +845,12 @@ fn play_scenario(name: &str) -> Option<(Vec<String>, Vec<String>, Vec<String>)> 
     let fixtures = repo().join("crates/wowlua-engine/tests/client/scenarios");
     let recording = fs::read_to_string(fixtures.join(format!("{name}.lua"))).unwrap_or_default();
     // The session's clock as the client's (its answers' times are the
-    // session's): begun as long before the recording as logging in and
-    // ten frames take.
+    // session's): begun as long before the recording as a /reload and ten
+    // frames take.
     let session_start = session_start(&recording);
     let mut vm = Vm::wow();
     if let Some(start) = session_start {
-        let before = wowlua_engine::login::duration(false) + 10.0 / 60.0;
+        let before = wowlua_engine::login::duration(true) + 10.0 / 60.0;
         vm.clock.elapsed_ms = (start - before) * 1000.0;
     }
     wowlua_engine::install(&mut vm, "camelot").expect("installs");
@@ -846,8 +865,11 @@ fn play_scenario(name: &str) -> Option<(Vec<String>, Vec<String>, Vec<String>)> 
     )
     .expect("the character's world");
     // Logged in as the client logs in (the recorded login: the chat
-    // windows set up, …), as `wowlua test` does.
-    wowlua_engine::login::login(&mut vm, "StdTest", true, false);
+    // windows set up, …), as `wowlua test` does: after a /reload, as each
+    // recording ends with one (recorded: Blizzard_PlayerChoice loading at
+    // the session's first PLAYER_CHOICE_UPDATE, taxi's and hearth's, which
+    // a fresh login's would have loaded at once).
+    wowlua_engine::login::login(&mut vm, "StdTest", true, true);
     wowlua_engine::clock::advance_frames(&mut vm, 10, 1000.0 / 60.0);
     if let Some(start) = session_start {
         let now = wowlua_engine::clock::now(&vm);
@@ -1303,7 +1325,7 @@ fn the_engine_plays_combat_as_the_client_did() {
 
 /// How many of the death scenario's lines the engine plays as the client
 /// did: only ever up.
-const DEATH_MATCHED: usize = 1548;
+const DEATH_MATCHED: usize = 1549;
 
 /// The death scenario: a fight lost, the spirit released, the corpse taken.
 #[test]
@@ -1313,7 +1335,7 @@ fn the_engine_plays_death_as_the_client_did() {
 
 /// How many of the flight scenario's lines the engine plays as the client
 /// did: only ever up.
-const FLIGHT_MATCHED: usize = 259;
+const FLIGHT_MATCHED: usize = 277;
 
 /// The flight scenario: a flight master's gossip, the taxi map looked at.
 #[test]
@@ -1323,7 +1345,7 @@ fn the_engine_plays_flight_as_the_client_did() {
 
 /// How many of the auradeath scenario's lines the engine plays as the
 /// client did: only ever up.
-const AURADEATH_MATCHED: usize = 1252;
+const AURADEATH_MATCHED: usize = 1257;
 
 /// The auradeath scenario: a fight with a seal, Consecration, a stun, a
 /// Judgement's kill; the stunned cat's death taking its auras.
@@ -1334,7 +1356,7 @@ fn the_engine_plays_auradeath_as_the_client_did() {
 
 /// How many of the gossip2 scenario's lines the engine plays as the client
 /// did: only ever up.
-const GOSSIP2_MATCHED: usize = 166;
+const GOSSIP2_MATCHED: usize = 167;
 
 /// The gossip2 scenario: a merchant's gossip, his goods browsed, his gossip
 /// again, closed with Escape.
@@ -1345,7 +1367,7 @@ fn the_engine_plays_gossip2_as_the_client_did() {
 
 /// How many of the trainer scenario's lines the engine plays as the client
 /// did: only ever up.
-const TRAINER_MATCHED: usize = 171;
+const TRAINER_MATCHED: usize = 176;
 
 /// The trainer scenario: its gossip, its services, one bought.
 #[test]
@@ -1367,12 +1389,12 @@ fn the_engine_plays_vendor_as_the_client_did() {
 /// How many of the hearth scenario's lines the engine plays as the client
 /// did: only ever up. Not yet: the inventory's packets after the loading
 /// screen (one per item, in the server's order: the items' GUIDs, not in
-/// the snapshot), `Blizzard_PlayerChoice` loading at the first loading
-/// screen, the active talent config, the account's Edit Mode layouts, the
-/// aura instance IDs (not in the snapshot), Blessing of Protection told
-/// unusable at a usability check after an NPC was soft targeted in Thunder
-/// Bluff (the soft friend's change during the loading screen's replay).
-const HEARTH_MATCHED: usize = 1396;
+/// the snapshot), the active talent config, the account's Edit Mode
+/// layouts, the aura instance IDs (not in the snapshot), Blessing of
+/// Protection told unusable at a usability check after an NPC was soft
+/// targeted in Thunder Bluff (the soft friend's change during the loading
+/// screen's replay).
+const HEARTH_MATCHED: usize = 1397;
 
 /// The hearth scenario: a Hearthstone cast, the loading screen.
 #[test]
@@ -1382,7 +1404,7 @@ fn the_engine_plays_hearth_as_the_client_did() {
 
 /// How many of the taxi scenario's lines the engine plays as the client
 /// did: only ever up.
-const TAXI_MATCHED: usize = 1229;
+const TAXI_MATCHED: usize = 1237;
 
 /// The taxi scenario: a flight from Orgrimmar to the Crossroads.
 #[test]
@@ -1422,7 +1444,7 @@ fn the_engine_plays_auction_as_the_client_did() {
 
 /// How many of the group scenario's lines the engine plays as the client
 /// did: only ever up.
-const GROUP_MATCHED: usize = 252;
+const GROUP_MATCHED: usize = 262;
 
 /// The group scenario: an invitation, a party, following, a trade.
 #[test]
@@ -1432,7 +1454,7 @@ fn the_engine_plays_group_as_the_client_did() {
 
 /// How many of the inspect scenario's lines the engine plays as the
 /// client did: only ever up.
-const INSPECT_MATCHED: usize = 283;
+const INSPECT_MATCHED: usize = 285;
 
 /// The inspect scenario: another player's gear and talents.
 #[test]
@@ -1442,7 +1464,7 @@ fn the_engine_plays_inspect_as_the_client_did() {
 
 /// How many of the talents scenario's lines the engine plays as the client
 /// did: only ever up.
-const TALENTS_MATCHED: usize = 861;
+const TALENTS_MATCHED: usize = 875;
 
 /// The talents scenario: a class talent bought and applied; a trainer's
 /// gossip, a fox's attack, a walk, a druid followed and its talents viewed.
@@ -1453,7 +1475,7 @@ fn the_engine_plays_talents_as_the_client_did() {
 
 /// How many of the profession scenario's lines the engine plays as the
 /// client did: only ever up.
-const PROFESSION_MATCHED: usize = 2144;
+const PROFESSION_MATCHED: usize = 2295;
 
 /// The profession scenario: a vein mined, a profession's window, crafts.
 #[test]
@@ -1463,7 +1485,7 @@ fn the_engine_plays_profession_as_the_client_did() {
 
 /// How many of the legacy scenario's lines the engine plays as the client
 /// did: only ever up.
-const LEGACY_MATCHED: usize = 119;
+const LEGACY_MATCHED: usize = 120;
 
 /// The legacy scenario: the legacy system's tree, five ranks bought and
 /// applied.
@@ -1474,7 +1496,7 @@ fn the_engine_plays_legacy_as_the_client_did() {
 
 /// How many of the items scenario's lines the engine plays as the client
 /// did: only ever up.
-const ITEMS_MATCHED: usize = 350;
+const ITEMS_MATCHED: usize = 357;
 
 /// The items scenario: gear worn and taken off by right-click and drag,
 /// a two-handed weapon refused (bags full), food eaten, an item deleted.
@@ -1553,7 +1575,7 @@ fn plays_as_the_client_did(name: &str, ratchet: usize) {
 /// gives as well: the calls Blizzard's UI made that the engine could not
 /// answer, asked again with the recorded character's world. Only ever
 /// raised (decision: the engine answers every call as the client does).
-const ANSWERS_MATCHED: usize = 5926;
+const ANSWERS_MATCHED: usize = 5928;
 
 #[test]
 fn the_engine_answers_blizzards_calls_as_the_client_did() {

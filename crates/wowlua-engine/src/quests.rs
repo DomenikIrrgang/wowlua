@@ -18,8 +18,9 @@
 //! An item an objective asks for, looted: `QUEST_WATCH_UPDATE(id)` before
 //! the item's push, "Tough Wolf Meat: 1/8" (`UI_INFO_MESSAGE(317, …)`)
 //! after, "Objective Complete." (314) when the quest is; the log tells the
-//! new count with the server's next packet (`UNIT_QUEST_LOG_CHANGED`, a
-//! frame later `QUEST_LOG_UPDATE`; till then the old count).
+//! new count with the loot's bags' packet, before its updates
+//! (`UNIT_QUEST_LOG_CHANGED`, a frame later `QUEST_LOG_UPDATE`; till then
+//! the old count).
 //!
 //! `CompleteQuest()` (the progress panel's Continue): the server closes
 //! the panel (`QUEST_FINISHED` and the interaction's hides) and opens the
@@ -49,9 +50,6 @@ use crate::{engine, engine_mut, widgets};
 const TURNED_IN_AFTER: f64 = 0.05;
 const REWARDED_AFTER: f64 = 0.186;
 const BAGS_AFTER: f64 = 0.355;
-/// The log's packet after an item an objective asks for (recorded 0.06 to
-/// 0.16 s; one value).
-const LOG_AFTER: f64 = 0.08;
 /// The map's points of interest after a quest is accepted (recorded).
 const POI_AFTER: f64 = 0.477;
 /// How near the player must be to talk to an NPC, in yards (unverified:
@@ -94,6 +92,8 @@ pub struct Quests {
     pub completed: BTreeSet<i64>,
     /// Whether the engine keeps the log (once a quest was accepted).
     pub kept: bool,
+    /// A looted item's log packet owed, told with the bags' (`tell_log`).
+    pub log_owed: bool,
 }
 
 /// An objective, as defined: `{ item = 750, required = 8, text = "Tough
@@ -1014,17 +1014,23 @@ pub fn after_item(vm: &mut Vm, item: i64) {
             let text = global(vm, "ERR_QUEST_UNKNOWN_COMPLETE", "Objective Complete.");
             game_error(vm, "ERR_QUEST_UNKNOWN_COMPLETE", &text);
         }
-        let later = vm.native("questLogChanged", log_changed as NativeFn);
-        crate::clock::after_engine(vm, LOG_AFTER, later);
+        engine_mut(vm).world.quests.log_owed = true;
     }
 }
 
-fn log_changed(vm: &mut Vm, _c: NativeCall) -> Ret {
-    sync_log(vm);
-    units::fire_unit(vm, "UNIT_QUEST_LOG_CHANGED", units::PLAYER, &[]);
-    let next = vm.native("questLogUpdated", log_updated as NativeFn);
-    crate::clock::after_engine(vm, 1.0 / 60.0, next);
-    Ok(vec![])
+/// The log's packet owed by a looted item, told right before the loot's
+/// bags' packet (`loot`). Recorded, `quest`: 7 of its 8 loots of a wanted
+/// item (at 22.417, 32.346, 46.868, 59.260, 71.558, 83.708 and 92.693)
+/// tell `UNIT_QUEST_LOG_CHANGED` in the bags' moment, before their
+/// `BAG_UPDATE`s, 0 to 0.37 s after the item; one (103.043) with the next
+/// item's push, unexplained.
+pub fn tell_log(vm: &mut Vm) {
+    if std::mem::take(&mut engine_mut(vm).world.quests.log_owed) {
+        sync_log(vm);
+        units::fire_unit(vm, "UNIT_QUEST_LOG_CHANGED", units::PLAYER, &[]);
+        let next = vm.native("questLogUpdated", log_updated as NativeFn);
+        crate::clock::after_engine(vm, 1.0 / 60.0, next);
+    }
 }
 
 /// `UI_INFO_MESSAGE(LE_GAME_ERR_<name>, text)`.
