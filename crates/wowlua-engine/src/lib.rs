@@ -36,6 +36,7 @@ pub mod login;
 pub mod loot;
 pub mod macros;
 pub mod mail;
+pub mod maps;
 pub mod merchant;
 pub mod party;
 pub mod protection;
@@ -236,6 +237,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(gossip::behaviours())
             .chain(trainer::behaviours())
             .chain(taxi::behaviours())
+            .chain(maps::behaviours())
             .chain(mail::behaviours())
             .chain(bank::behaviours())
             .chain(auction::behaviours())

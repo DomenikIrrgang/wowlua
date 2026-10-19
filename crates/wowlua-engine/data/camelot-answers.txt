@@ -11552,6 +11552,7 @@ C_TransmogCollection.GetFilteredCategoryTotal(8)	1: number 365
 C_TransmogCollection.GetFilteredCategoryTotal(9)	1: number 324
 C_TransmogCollection.GetIllusions()	1: {}
 C_TransmogCollection.GetLatestAppearance()	0: 
+C_TransmogCollection.GetNumTransmogSources()	1: number 6
 C_TransmogCollection.GetValidAppearanceSourcesForClass(11257, 2, 1)	1: {1={canDisplayOnPlayer=boolean false,categoryID=number 1,invType=number 2,isCollected=boolean false,isValidSourceForPlayer=boolean false,itemID=number 44803,itemModID=number 0,playerCanCollect=boolean false,sourceID=number 21598,sourceType=number 4,visualID=number 11257}}
 C_TransmogCollection.GetValidAppearanceSourcesForClass(114757, 2, 19)	1: {1={canDisplayOnPlayer=boolean false,categoryID=number 19,invType=number 24,isCollected=boolean false,isValidSourceForPlayer=boolean false,itemID=number 276897,itemModID=number 0,playerCanCollect=boolean false,sourceID=number 309910,sourceType=number 2,visualID=number 114757}}
 C_TransmogCollection.GetValidAppearanceSourcesForClass(114767, 2, 9)	1: {1={canDisplayOnPlayer=boolean false,categoryID=number 9,invType=number 7,isCollected=boolean false,isValidSourceForPlayer=boolean false,itemID=number 260196,itemModID=number 0,playerCanCollect=boolean false,sourceID=number 302087,sourceType=number 2,visualID=number 114767}}
@@ -15330,6 +15331,7 @@ C_TransmogCollection.GetValidAppearanceSourcesForClass(93751, 2, 9)	1: {1={canDi
 C_TransmogCollection.GetValidAppearanceSourcesForClass(93767, 2, 9)	1: {1={canDisplayOnPlayer=boolean false,categoryID=number 9,invType=number 7,isCollected=boolean false,isValidSourceForPlayer=boolean false,itemID=number 272398,itemModID=number 0,playerCanCollect=boolean false,sourceID=number 307946,sourceType=number 3,visualID=number 93767}}
 C_TransmogCollection.GetValidAppearanceSourcesForClass(93775, 2, 9)	1: {1={canDisplayOnPlayer=boolean false,categoryID=number 9,invType=number 7,isCollected=boolean false,isValidSourceForPlayer=boolean false,itemID=number 272396,itemModID=number 0,playerCanCollect=boolean false,sourceID=number 307944,sourceType=number 3,visualID=number 93775}}
 C_TransmogCollection.GetValidAppearanceSourcesForClass(94153, 2, 15)	1: {1={canDisplayOnPlayer=boolean false,categoryID=number 15,invType=number 22,isCollected=boolean false,isValidSourceForPlayer=boolean false,itemID=number 275698,itemModID=number 0,playerCanCollect=boolean false,sourceID=number 309480,sourceType=number 2,visualID=number 94153}}
+C_TransmogCollection.HasAnyAppearance()	1: boolean true
 C_TransmogCollection.IsSearchInProgress(1)	1: boolean false
 C_TransmogCollection.IsUsingDefaultFilters()	1: boolean true
 C_TransmogOutfitInfo.IsTransmogEnabled()	1: boolean true

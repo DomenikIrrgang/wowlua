@@ -358,6 +358,8 @@ const STATIC: &[&str] = &[
     "C_TransmogCollection.GetFilteredCategoryCollectedCount",
     "C_TransmogCollection.GetFilteredCategoryTotal",
     "C_TransmogCollection.GetAppearanceSourceInfo",
+    "C_TransmogCollection.HasAnyAppearance",
+    "C_TransmogCollection.GetNumTransmogSources",
     "C_Map.",
     "C_GameRules.",
     "GetBuildOption",
