@@ -61,10 +61,11 @@ pub fn start_global_cooldown(vm: &mut Vm) {
 }
 
 /// `setSpellTraits({ offGlobalCooldown = { id, … }, tracking = { … },
-/// profession = { … }, partyOrSelf = { … } })`: what the client knows of
-/// the character's spells and the engine does not (recorded: Judgement off
-/// the global cooldown, Find Minerals and Sense Undead tracking, the crafts
-/// professions; probed: Blessing of Protection on the player or a member
+/// profession = { … }, partyOrSelf = { … }, interruptible = { … } })`:
+/// what the client knows of the character's spells and the engine does not
+/// (recorded: Judgement off the global cooldown, Find Minerals and Sense
+/// Undead tracking, the crafts professions, the Sharpening Wheel's craft
+/// interruptible; probed: Blessing of Protection on the player or a member
 /// in reach only).
 pub fn control_set_spell_traits(vm: &mut Vm, c: NativeCall) -> Ret {
     let Value::Table(t) = c.arg(1) else {
@@ -257,16 +258,14 @@ fn usability(vm: &mut Vm, a: &Action) -> (bool, bool) {
     // `partyOrSelf`; probed: Blessing of Protection usable targeting the
     // player, not with no target, an NPC, or a member in another zone;
     // recorded: usable on a member nearby). With no target, the soft
-    // friend decides (recorded, `profession`: unusable once a friendly
-    // NPC was soft targeted on the road); with neither, as the profile
-    // recorded it (usable on the open road there, through six target
-    // changes; unusable in town in `bank`, `auction`, `hearth`: a soft
-    // friend near, unverified, as the probe's "no target" may have had).
+    // friend decides (probed: unusable with a friendly NPC soft targeted;
+    // recorded, `profession`, on the road); with neither, usable (probed
+    // in the open world, away from anyone).
     if a.kind == "spell" && has_trait(vm, a.id, "partyOrSelf") {
         let e = engine(vm);
         let u = &e.units;
         let ok = match u.target.or(u.soft[1]) {
-            None => a.usable.0,
+            None => true,
             Some(crate::units::PLAYER) => true,
             Some(t) => {
                 let m = &u.list[t.0];

@@ -10,6 +10,9 @@
 -- (29.8 s: which entry, unrecorded); the Create clicks the client ignored
 -- (no TRADE_SKILL_CRAFT_BEGIN: a request still unanswered) are left out.
 local e = __engine
+-- The Sharpening Wheel's craft may be interrupted (recorded: its
+-- UnitCastingInfo's eighth false; the other crafts' true).
+e.setSpellTraits({ interruptible = { 1230171 } })
 local player = e.player
 e.setSpellTraits({ offGlobalCooldown = { 20271 }, tracking = { 2580, 5502 }, profession = { 3100, 2656 }, partyOrSelf = { 1022 } })
 -- The spell and the stone as the client named them (UnitCastingInfo, the

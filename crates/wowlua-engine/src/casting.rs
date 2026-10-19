@@ -36,6 +36,8 @@ pub struct Cast {
     pub end: f64,
     pub channel: bool,
     pub not_interruptible: bool,
+    /// A craft from a trade skill window (`UnitCastingInfo`'s sixth).
+    pub trade_skill: bool,
     pub guid: String,
     pub bar: String,
     /// What follows its success (a gathered object's loot).
@@ -323,6 +325,7 @@ fn start(
         end: now + seconds,
         channel,
         not_interruptible,
+        trade_skill: false,
         guid: guid.clone(),
         bar: bar.clone(),
         done,
@@ -368,6 +371,7 @@ pub fn begin_cast(
         end: now + seconds,
         channel: false,
         not_interruptible: false,
+        trade_skill: false,
         guid: guid.to_string(),
         bar: bar.to_string(),
         done: None,
@@ -707,6 +711,22 @@ fn instant(vm: &mut Vm, id: f64) {
     cast_changed(vm, me);
 }
 
+/// The player's cast running a craft: a trade skill's, not to be
+/// interrupted unless it has the trait `interruptible` (recorded: Smelt
+/// Copper, Smelt Bronze, a Blacksmithing craft `true, true`; the
+/// Sharpening Wheel `true, false`; a gathering neither).
+pub fn mark_craft(vm: &mut Vm) {
+    let id = match engine(vm).units.casting.casts.get(&units::PLAYER) {
+        Some(c) => c.spell_id,
+        None => return,
+    };
+    let interruptible = crate::actions::has_trait(vm, Value::Num(id), "interruptible");
+    if let Some(c) = engine_mut(vm).units.casting.casts.get_mut(&units::PLAYER) {
+        c.trade_skill = true;
+        c.not_interruptible = !interruptible;
+    }
+}
+
 /// A new cast GUID of a kind (3 a spell, 4 an item's, 15 a triggered one,
 /// recorded) for the player's spell `id`.
 pub fn cast_guid(vm: &mut Vm, kind: u8, id: f64) -> String {
@@ -911,7 +931,7 @@ fn info(vm: &mut Vm, c: &NativeCall, channel: bool) -> Ret {
         cast.icon,
         Value::Num((cast.start * 1000.0).floor()),
         Value::Num((cast.end * 1000.0).floor()),
-        Value::Bool(false),
+        Value::Bool(cast.trade_skill),
     ];
     if !channel {
         out.push(vm.str(&cast.guid));

@@ -1769,7 +1769,7 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
 /// How many of the client's map answers (`/stdtest engine maps`: each
 /// map's data and what it holds) the engine gives as well, the probe run
 /// in the engine with the recorded character's world. Only ever raised.
-const MAPS_MATCHED: usize = 1272;
+const MAPS_MATCHED: usize = 2956;
 
 #[test]
 fn the_engine_answers_the_maps_as_the_client_did() {
