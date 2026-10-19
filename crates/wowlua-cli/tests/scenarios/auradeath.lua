@@ -104,9 +104,17 @@ steps[#steps + 1] = { 4.789, function() player:softTarget(cat, "enemy") end }
 -- Consecration under the cat: the cat targeted as it lands, the fight
 -- begins, the ground's aura on it ticking every half second.
 local consecration
-steps[#steps + 1] = { 4.957, function() e.setLatency(0.372) player:useSpell(26573) end }
+steps[#steps + 1] = { 4.957, function()
+    e.setLatency(0.372)
+    player:useSpell(26573)
+    -- The cat targeted (the click's) between the answer's success and its
+    -- cast's change (none echoed), its mana cost after (recorded).
+    e.beforeEvent("UNIT_SPELLCAST_SUCCEEDED", function()
+        e.beforeEvent("CURRENT_SPELL_CAST_CHANGED", function() player:target(cat, { echo = false }) end)
+    end)
+end }
 steps[#steps + 1] = { 5.329, function()
-    player:target(cat, { echo = false }) -- (none recorded)
+    player:setPower(695)
     -- (Its end told at 13.957, recorded: its duration left out.)
     consecration = cat:applyAura({ spellId = 26573, name = "Consecration", harmful = true, source = player })
     cat:target(player)
