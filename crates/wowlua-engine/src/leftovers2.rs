@@ -1652,6 +1652,95 @@ fn club_avatar_ids(vm: &mut Vm, c: NativeCall) -> Ret {
     }])
 }
 
+/// The inventory slot each `Enum.TransmogOutfitSlot` dresses.
+const OUTFIT_INVENTORY: [f64; 15] = [
+    1.0, 3.0, 3.0, 15.0, 5.0, 19.0, 4.0, 9.0, 10.0, 6.0, 7.0, 8.0, 16.0, 17.0, 18.0,
+];
+
+/// `C_TransmogOutfitInfo.GetViewedOutfitSlotInfo(slot, type, option)`: the
+/// slot as nothing transmogrified shows it, with the warning that no item
+/// is equipped there; an illusion (type 1) not transmogrifiable, error 12
+/// (the full probe, 1.60.1: the character's empty slots warned, the
+/// others not, every option alike; unverified: an item that cannot be
+/// transmogrified).
+fn viewed_outfit_slot_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(slot) = outfit_slot(vm, &c) else {
+        return Ok(vec![]);
+    };
+    let illusion = arg_num(vm, &c, 2).unwrap_or(0.0).trunc() == 1.0;
+    let player = vm.str("player");
+    let equipped = !ask(
+        vm,
+        "GetInventoryItemID",
+        &[player, Value::Num(OUTFIT_INVENTORY[slot])],
+    )
+    .first()
+    .is_none_or(|v| v.is_nil());
+    let t = vm.new_table();
+    for (k, v) in [
+        ("canTransmogrify", Value::Bool(!illusion)),
+        ("displayType", Value::Num(0.0)),
+        ("error", Value::Num(if illusion { 12.0 } else { 0.0 })),
+        ("hasPending", Value::Bool(false)),
+        ("isPendingCollected", Value::Bool(false)),
+        ("isTransmogrified", Value::Bool(false)),
+        ("sheatheCategory", Value::Num(0.0)),
+        ("transmogID", Value::Num(0.0)),
+        ("warning", Value::Num(if equipped { 0.0 } else { 7.0 })),
+    ] {
+        set(vm, t, k, v);
+    }
+    let error_text = vm.str("");
+    set(vm, t, "errorText", error_text);
+    let warning = vm.str(if equipped {
+        ""
+    } else {
+        "There is no equipped item in this slot that can be transmogrified."
+    });
+    set(vm, t, "warningText", warning);
+    Ok(vec![Value::Table(t)])
+}
+
+/// `C_TransmogOutfitInfo.GetEquippedSlotOptionFromTransmogSlot(slot)`:
+/// the option the item equipped there wears, `Enum.TransmogOutfitSlotOption`
+/// (the full probe, 1.60.1, a paladin in mail: mail 14 in the armor slots,
+/// 0 for the cloak, the shirt and an empty slot, 1 for a one-handed main
+/// hand; unverified: cloth 12, leather 13, plate 15, two-handed 2, a
+/// shield 5 and a held item 4, after `GetOptionsForSlot`'s types).
+fn equipped_slot_option(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(slot) = outfit_slot(vm, &c) else {
+        return Ok(vec![Value::Num(0.0)]);
+    };
+    let player = vm.str("player");
+    let id = ask(
+        vm,
+        "GetInventoryItemID",
+        &[player, Value::Num(OUTFIT_INVENTORY[slot])],
+    )
+    .first()
+    .copied()
+    .and_then(num);
+    let Some(data) = id.and_then(|id| crate::gamedata::item_data(vm, id as i64)) else {
+        return Ok(vec![Value::Num(0.0)]);
+    };
+    let class = num(field(vm, data, "classID")).unwrap_or(-1.0) as i64;
+    let sub = num(field(vm, data, "subclassID")).unwrap_or(-1.0) as i64;
+    let equip = match field(vm, data, "equipLoc") {
+        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        _ => String::new(),
+    };
+    let option = match (class, sub) {
+        _ if matches!(slot, 3 | 5 | 6) => 0,
+        (4, 1..=4) => 11 + sub,
+        (4, 6) => 5,
+        _ if equip == "INVTYPE_HOLDABLE" => 4,
+        (2, _) if equip == "INVTYPE_2HWEAPON" => 2,
+        (2, _) => 1,
+        _ => 0,
+    };
+    Ok(vec![Value::Num(option as f64)])
+}
+
 /// `C_PvP.GetBrawlRewards(brawlType)`: no rewards for a brawl type from 1,
 /// nothing for 0 (the full probe, 1.60.1: types 1 to 5; 0 and a string
 /// nothing).
@@ -2178,6 +2267,14 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             can_transmog_slot,
         ),
         ("C_TransmogOutfitInfo.SlotHasSecondary", slot_has_secondary),
+        (
+            "C_TransmogOutfitInfo.GetEquippedSlotOptionFromTransmogSlot",
+            equipped_slot_option,
+        ),
+        (
+            "C_TransmogOutfitInfo.GetViewedOutfitSlotInfo",
+            viewed_outfit_slot_info,
+        ),
         (
             "C_TransmogOutfitInfo.GetMaxNumberOfTotalOutfitsForSource",
             max_outfits_for_source,
