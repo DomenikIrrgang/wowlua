@@ -132,8 +132,8 @@ pub fn format_with(vm: &mut Vm, formatter: Value, x: f64, secret: bool) -> Resul
 /// `FormatNumber(number)`, every formatter's.
 fn format_number(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let (x, s) = number_arg(vm, &c, 2)?;
-    let table = engine(vm).world.widgets[id.0].table;
-    Ok(vec![format_with(vm, Value::Table(table), x, s)?])
+    let formatter = widgets::value_of(engine(vm), id);
+    Ok(vec![format_with(vm, formatter, x, s)?])
 }
 
 /// The same as a plain native, for the formatters whose class the
