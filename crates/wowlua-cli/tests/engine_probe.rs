@@ -1769,13 +1769,23 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
 /// How many of the client's map answers (`/stdtest engine maps`: each
 /// map's data and what it holds) the engine gives as well, the probe run
 /// in the engine with the recorded character's world. Only ever raised.
-const MAPS_MATCHED: usize = 2956;
+const MAPS_MATCHED: usize = 3028;
 
 #[test]
 fn the_engine_answers_the_maps_as_the_client_did() {
+    // Blizzard's UI is loaded, as in the client: its `CreateVector2D` makes
+    // the positions (an area POI's, a flight point's).
+    let Some(ui) = wowlua_test::ui_source_in(&repo().join("target/types-src"), "camelot") else {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    };
     let dir = build();
     let out = dir.path().join("dist/dev/StdTest");
-    let mut vm = client(&out);
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    let report = wowlua_engine::ui::load(&mut vm, &ui.interface, ui.strings.as_deref());
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let mut vm = client_in(vm, &out);
     let controls = wowlua_engine::controls::table(&mut vm);
     wowlua_test::profile::apply(
         &mut vm,
@@ -1794,14 +1804,19 @@ fn the_engine_answers_the_maps_as_the_client_did() {
     let Value::Table(t) = r[0] else {
         panic!("a table")
     };
+    // Addresses as the recording keeps them: none (a vector's methods).
+    let address = regex::Regex::new(r"(function|table|userdata|thread): 0x[0-9a-f]+").unwrap();
     let ours: BTreeMap<String, String> = vm
         .heap
         .table(t)
         .entries()
         .filter_map(|(k, v)| match (k, v) {
-            (Value::Str(k), Value::Str(v)) => {
-                Some((text(&vm, Value::Str(k)), text(&vm, Value::Str(v))))
-            }
+            (Value::Str(k), Value::Str(v)) => Some((
+                text(&vm, Value::Str(k)),
+                address
+                    .replace_all(&text(&vm, Value::Str(v)), "$1")
+                    .into_owned(),
+            )),
             _ => None,
         })
         .collect();

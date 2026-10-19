@@ -32,19 +32,36 @@ fn zero(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(0.0)])
 }
 
-/// `C_ContentTracking.GetTrackablesOnMap(type, mapID)`: success (0) and
-/// none (recorded: types 0 and 3).
-fn trackables_on_map(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(0.0), Value::Table(vm.new_table())])
+/// Whether `id` names no map: 0 or below, or one the client has no info on
+/// (`C_Map.GetMapInfo` recorded giving nothing: the cosmic map 946, which
+/// Forever lacks). A map never recorded counts as a map (unverified).
+fn no_map(vm: &mut Vm, id: Value) -> bool {
+    let Value::Num(n) = id else {
+        return true;
+    };
+    if n <= 0.0 {
+        return true;
+    }
+    let call = format!("C_Map.GetMapInfo({})", n as i64);
+    crate::recorded::lookup_text(vm, &call).is_some_and(|v| v.is_empty())
 }
 
-/// `C_TaskQuest.GetQuestsOnMap(mapID)`: none on a map; nothing at all for
-/// map 0 (recorded).
+/// `C_ContentTracking.GetTrackablesOnMap(type, mapID)`: success (0) and
+/// none; on no map failure (`Enum.ContentTrackingResult.Failure`, 2) and
+/// none (recorded: types 0 and 3 on every map, 946 the only failure; map 0
+/// unverified).
+fn trackables_on_map(vm: &mut Vm, c: NativeCall) -> Ret {
+    let result = if no_map(vm, c.arg(2)) { 2.0 } else { 0.0 };
+    Ok(vec![Value::Num(result), Value::Table(vm.new_table())])
+}
+
+/// `C_TaskQuest.GetQuestsOnMap(mapID)`: none on a map; nothing at all on
+/// no map (recorded: maps 0 and 946).
 fn task_quests_on_map(vm: &mut Vm, c: NativeCall) -> Ret {
-    match c.arg(1) {
-        Value::Num(n) if n > 0.0 => Ok(vec![Value::Table(vm.new_table())]),
-        _ => Ok(vec![]),
+    if no_map(vm, c.arg(1)) {
+        return Ok(vec![]);
     }
+    Ok(vec![Value::Table(vm.new_table())])
 }
 
 /// `C_DeathInfo.GetCorpseMapPosition(mapID)`: none while alive (recorded).

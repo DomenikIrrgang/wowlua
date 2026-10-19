@@ -303,8 +303,20 @@ fn get_all_taxi_nodes(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Table(out)])
 }
 
-/// `C_TaxiMap.GetTaxiNodesForMap(mapID)`: every node the map shows.
-fn get_taxi_nodes_for_map(vm: &mut Vm, _c: NativeCall) -> Ret {
+/// `C_TaxiMap.GetTaxiNodesForMap(mapID)`: every node the map shows. A
+/// world map's are the client's (`/stdtest engine maps`, every map of
+/// Forever's world recorded): each map of a continent lists all of that
+/// continent's nodes (Kalimdor's 38, the Eastern Kingdoms' 36, both
+/// factions', none undiscovered), Azeroth (947) both continents', Alterac
+/// Valley its two, the rest none; the positions are the client's on each
+/// map. A flight map never recorded (1464) shows the open flight master's
+/// nodes (the test's `mapNodes`). Unverified: another character's
+/// undiscovered nodes; a world map's answer while a flight master's map is
+/// open (recorded closed).
+fn get_taxi_nodes_for_map(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some(values) = crate::recorded::lookup(vm, "C_TaxiMap.GetTaxiNodesForMap", &c) {
+        return Ok(values);
+    }
     let out = vm.new_table();
     for (i, n) in list(vm, "mapNodes").into_iter().enumerate() {
         let e = vm.new_table();
