@@ -1241,8 +1241,6 @@ const PROBED_CONSTANT: &[(&str, &str)] = &[
     ),
     // Trait configs: no variation (every config probed).
     ("C_Traits.GetConfigVariationID", "1: number 0"),
-    // Clubs: every type allowed.
-    ("C_Club.ShouldAllowClubType", "1: boolean true"),
     // Specializations: one each class (class 0 too), no PvP talent slot.
     (
         "C_SpecializationInfo.GetNumSpecializationsForClassID",
@@ -1532,6 +1530,126 @@ fn level_up_toasts(vm: &mut Vm, c: NativeCall) -> Ret {
         set(vm, toast, k, v);
     }
     Ok(vec![list(vm, &[Value::Table(toast)])])
+}
+
+/// `Enum.TransmogOutfitSlot`'s slots as the transmog atlases name them
+/// (the full probe, 1.60.1: both shoulders "shoulders"; the ranged
+/// gear slot's atlas spelled "gearslot").
+const OUTFIT_SLOTS: [&str; 15] = [
+    "head",
+    "shoulders",
+    "shoulders",
+    "back",
+    "chest",
+    "tabard",
+    "shirt",
+    "wrist",
+    "hands",
+    "waist",
+    "legs",
+    "feet",
+    "mainHand",
+    "offHand",
+    "ranged",
+];
+
+fn outfit_slot(vm: &Vm, c: &NativeCall) -> Option<usize> {
+    let n = arg_num(vm, c, 1).unwrap_or(0.0).trunc();
+    (n >= 0.0)
+        .then_some(n as usize)
+        .filter(|i| *i < OUTFIT_SLOTS.len())
+}
+
+/// `C_TransmogOutfitInfo.GetUnassignedAtlasForSlot(slot)`: the gear slot's
+/// empty art (the full probe, 1.60.1: every slot, a string as 0;
+/// unverified: past the ranged slot, nil).
+fn unassigned_atlas(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(vec![match outfit_slot(vm, &c) {
+        Some(14) => vm.str("transmog-gearslot-unassigned-ranged"),
+        Some(i) => vm.str(&format!("transmog-gearSlot-unassigned-{}", OUTFIT_SLOTS[i])),
+        None => Value::Nil,
+    }])
+}
+
+/// `C_TransmogOutfitInfo.GetUnassignedDisplayAtlasForSlot(slot)`: the
+/// appearance's empty art (as `GetUnassignedAtlasForSlot`).
+fn unassigned_display_atlas(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(vec![match outfit_slot(vm, &c) {
+        Some(i) => vm.str(&format!(
+            "transmog-appearance-unassigned-{}",
+            OUTFIT_SLOTS[i]
+        )),
+        None => Value::Nil,
+    }])
+}
+
+/// `C_TransmogOutfitInfo.CanPlayerTransmogSlot(slot)`: every slot but the
+/// ranged one (the full probe, 1.60.1, a paladin: 0 to 13 and a string
+/// true, 14 false; unverified: a class with a ranged slot).
+fn can_transmog_slot(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(
+        outfit_slot(vm, &c).is_some_and(|i| i < 14),
+    )])
+}
+
+/// `C_TransmogOutfitInfo.SlotHasSecondary(slot)`: the shoulders (the full
+/// probe, 1.60.1: slots 1 and 2).
+fn slot_has_secondary(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(matches!(
+        outfit_slot(vm, &c),
+        Some(1 | 2)
+    ))])
+}
+
+/// `C_TransmogOutfitInfo.GetMaxNumberOfTotalOutfitsForSource(source)`: 1,
+/// 2 and 48 for sources 0 to 2 (the full probe, 1.60.1; a string as 0;
+/// unverified: past 2, 0).
+fn max_outfits_for_source(vm: &mut Vm, c: NativeCall) -> Ret {
+    let n = arg_num(vm, &c, 1).unwrap_or(0.0).trunc();
+    let max = match n as i64 {
+        0 => 1.0,
+        1 => 2.0,
+        2 => 48.0,
+        _ => 0.0,
+    };
+    Ok(vec![Value::Num(max)])
+}
+
+/// `C_TransmogOutfitInfo.GetIllusionDefaultIMAIDForCollectionType(type)`:
+/// the weapon types' default illusion appearances, nothing for armor (the
+/// full probe, 1.60.1: types 0 to 29, a string as 0).
+fn illusion_default_imaid(vm: &mut Vm, c: NativeCall) -> Ret {
+    const IDS: [f64; 17] = [
+        28149.0, 18.0, 15.0, 17.0, 590.0, 6499.0, 746.0, 16155.0, 4385.0, 9212.0, 25771.0, 16.0,
+        28166.0, 829.0, 833.0, 9213.0, 114255.0,
+    ];
+    let n = arg_num(vm, &c, 1).unwrap_or(0.0).trunc();
+    let id = (n >= 12.0)
+        .then(|| IDS.get(n as usize - 12).copied())
+        .flatten();
+    Ok(id.map(|i| vec![Value::Num(i)]).unwrap_or_default())
+}
+
+/// `C_Club.ShouldAllowClubType(clubType)`: every type but 3 (the full
+/// probe, 1.60.1: 0 to 2 and a string true, 3 false).
+fn should_allow_club_type(vm: &mut Vm, c: NativeCall) -> Ret {
+    let t = arg_num(vm, &c, 1).unwrap_or(0.0).trunc();
+    Ok(vec![Value::Bool(t != 3.0)])
+}
+
+/// `C_Club.GetAvatarIdList(clubType)`: as recorded (type 1's avatars),
+/// none for types 2 and 3, nil for another (the full probe, 1.60.1: 0 and
+/// a string nil).
+fn club_avatar_ids(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some(values) = crate::recorded::lookup(vm, "C_Club.GetAvatarIdList", &c) {
+        return Ok(values);
+    }
+    let t = arg_num(vm, &c, 1).unwrap_or(0.0).trunc();
+    Ok(vec![if t == 2.0 || t == 3.0 {
+        Value::Table(vm.new_table())
+    } else {
+        Value::Nil
+    }])
 }
 
 /// `C_PvP.GetBrawlRewards(brawlType)`: no rewards for a brawl type from 1,
@@ -2045,6 +2163,29 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Heirloom.GetHeirloomLink", heirloom_link),
         ("C_ZoneAbility.GetZoneAbilityIcon", zone_ability_icon),
         ("C_PvP.GetBrawlRewards", brawl_rewards),
+        ("C_Club.ShouldAllowClubType", should_allow_club_type),
+        ("C_Club.GetAvatarIdList", club_avatar_ids),
+        (
+            "C_TransmogOutfitInfo.GetUnassignedAtlasForSlot",
+            unassigned_atlas,
+        ),
+        (
+            "C_TransmogOutfitInfo.GetUnassignedDisplayAtlasForSlot",
+            unassigned_display_atlas,
+        ),
+        (
+            "C_TransmogOutfitInfo.CanPlayerTransmogSlot",
+            can_transmog_slot,
+        ),
+        ("C_TransmogOutfitInfo.SlotHasSecondary", slot_has_secondary),
+        (
+            "C_TransmogOutfitInfo.GetMaxNumberOfTotalOutfitsForSource",
+            max_outfits_for_source,
+        ),
+        (
+            "C_TransmogOutfitInfo.GetIllusionDefaultIMAIDForCollectionType",
+            illusion_default_imaid,
+        ),
         (
             "C_EventToastManager.GetLevelUpDisplayToastsFromLevel",
             level_up_toasts,

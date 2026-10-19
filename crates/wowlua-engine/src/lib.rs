@@ -880,6 +880,8 @@ const OVER_RECORDED: &[&str] = &[
     "C_SpecializationInfo.GetNumSpecializationsForClassID",
     "C_SpecializationInfo.GetPvpTalentSlotInfo",
     "C_ContentTracking.GetTrackablesOnMap",
+    "C_Club.ShouldAllowClubType",
+    "C_Club.GetAvatarIdList",
     "GetDungeonDifficultyID",
     "GetActionBarToggles",
     "C_Heirloom.GetCollectedHeirloomFilter",
