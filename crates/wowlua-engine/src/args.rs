@@ -137,6 +137,10 @@ fn family(api: &Api, ty: &str, arg: &Json, method: bool) -> Family {
         // `(-1, 0)` and `(0, 2147483649)` answer; `C_GameRules.
         // IsGameRuleActive(true)` refused; the full probe).
         "CombatLogObject" | "GameRule" if !method => return Family::Number,
+        // A color's channel: any number, a non-number refused with the
+        // usage alone (`C_CurveUtil.EvaluateColorValueFromBoolean(true, "x",
+        // 1)`, `(true, 2147483647, 1)` answers; the full probe).
+        "SingleColorValue" if !method => return Family::Number,
         // An inventory slot: -1, 2147483647 and "x" refused, 0 to 1.5 taken
         // (`C_PaperDollInfo.GetTemporaryEnchantmentInfo`, the full probe;
         // the upper bound is unverified).
@@ -612,7 +616,7 @@ impl Checked {
 
 /// Documented `number` arguments the client takes otherwise than as a
 /// signed 32-bit integer (`data/camelot-number-args.txt`): by function and
-/// argument number, `u32`, `float`, `finite` or `plain`.
+/// argument number, `u32`, `float` or `finite`.
 fn number_kind(function: &str, n: usize) -> Option<&'static str> {
     static KINDS: std::sync::OnceLock<
         std::collections::HashMap<(&'static str, usize), &'static str>,
@@ -678,7 +682,6 @@ fn checked(api: &Api, f: &Function, arg: Json, n: usize, method: bool) -> Checke
             }
             Some("float") => family = Family::Float,
             Some("finite") => family = Family::Finite,
-            Some("plain") => family = Family::Number,
             _ => {}
         }
     }
