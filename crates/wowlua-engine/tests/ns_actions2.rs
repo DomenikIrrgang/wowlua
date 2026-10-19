@@ -65,7 +65,10 @@ TakeInboxMoney(1)",
     let r = run(&mut vm, "return GetMoney(), (GetInboxNumItems())");
     assert_eq!(r, ["600", "2"]);
     wowlua_engine::clock::advance(&mut vm, 0.5);
-    let r = run(&mut vm, "local n = GetInboxNumItems() DeleteInboxItem(1) return n");
+    let r = run(
+        &mut vm,
+        "local n = GetInboxNumItems() DeleteInboxItem(1) return n",
+    );
     assert_eq!(r, ["1"]);
     wowlua_engine::clock::advance(&mut vm, 0.5);
     let r = run(&mut vm, "return (GetInboxNumItems())");

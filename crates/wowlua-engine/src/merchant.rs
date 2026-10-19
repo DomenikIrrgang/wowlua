@@ -329,10 +329,6 @@ fn nothing(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-fn no(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(false)])
-}
-
 fn yes(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(true)])
 }
@@ -920,7 +916,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetRepairAllCost", repair_all_cost),
         ("RepairAllItems", repair_all),
         ("CanGuildBankRepair", yes),
-        ("InRepairMode", no),
+        ("InRepairMode", crate::actions2::in_repair_mode),
         (
             "C_MerchantFrame.IsSellAllJunkEnabled",
             sell_all_junk_enabled,

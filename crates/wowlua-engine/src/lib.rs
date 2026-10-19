@@ -5,6 +5,7 @@
 
 pub mod achievements;
 pub mod actions;
+pub mod actions2;
 pub mod animations;
 pub mod api;
 pub mod args;
@@ -868,6 +869,7 @@ fn fill_ins() -> Vec<(&'static str, NativeFn)> {
         .chain(extras::behaviours())
         .chain(globalsinfo::behaviours())
         .chain(systeminfo::behaviours())
+        .chain(actions2::behaviours())
         .collect()
 }
 

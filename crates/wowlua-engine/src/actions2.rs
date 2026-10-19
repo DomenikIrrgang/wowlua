@@ -247,7 +247,13 @@ fn letter_at(vm: &Vm, c: &NativeCall) -> Option<(usize, TableRef)> {
         return None;
     }
     let i = i as usize - 1;
-    engine(vm).world.mail.letters.get(i).copied().map(|t| (i, t))
+    engine(vm)
+        .world
+        .mail
+        .letters
+        .get(i)
+        .copied()
+        .map(|t| (i, t))
 }
 
 /// A letter's place in the inbox now, if it is still there.
@@ -407,7 +413,13 @@ fn take_inbox_text_item(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![]);
     }
     let delay = crate::clock::server_delay(vm);
-    later(vm, delay, "mailTextTaken", text_taken, vec![Value::Table(t)]);
+    later(
+        vm,
+        delay,
+        "mailTextTaken",
+        text_taken,
+        vec![Value::Table(t)],
+    );
     Ok(vec![])
 }
 
