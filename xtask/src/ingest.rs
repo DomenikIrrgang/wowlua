@@ -2072,6 +2072,9 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
             .expect("a valid pattern");
         // Other players' crafts in the combat log ("<name> creates <item>.").
         let crafter = regex::Regex::new(r"^string (.+) creates ").expect("a valid pattern");
+        // Others' pets in the combat log tab ("<name>'s pet begins eating
+        // ..."): the owner's name goes too (2026-10-20: one leaked).
+        let pet_owner = regex::Regex::new(r"^string [^ ']+'s pet ").expect("a valid pattern");
         // Mail's players: an auction invoice's buyer or seller, the sender
         // of a letter one can answer (`canReply`, the header's twelfth).
         let invoice = regex::Regex::new(
@@ -2261,6 +2264,7 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
                 for (i, line) in shown.sequence_values::<String>().enumerate() {
                     let line = line.map_err(|e| anyhow!("{e}"))?;
                     let line = crafter.replace(&line, "string Someone creates ");
+                    let line = pet_owner.replace(&line, "string Someone's pet ");
                     list.push((format!("log{:04}", i + 1), scrub(&line)));
                 }
             }

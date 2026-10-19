@@ -584,6 +584,6 @@ return {
     ["log0025"] = "string Someone creates Cured Light Hide.",
     ["log0026"] = "string Someone creates Cured Light Hide.",
     ["log0027"] = "string Someone creates Cured Light Hide.",
-    ["log0028"] = "string Katy's pet begins eating a Galestrider Jerky.",
+    ["log0028"] = "string Someone's pet begins eating a Galestrider Jerky.",
     ["log0029"] = "string Someone creates Light Leather.",
 }
