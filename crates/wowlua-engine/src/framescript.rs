@@ -387,9 +387,13 @@ pub(crate) fn control_set_cvar(vm: &mut Vm, c: NativeCall) -> Ret {
 
 // ---------------------------------------------------------------- others
 
-/// `C_Texture.GetAtlasInfo(atlas)`: a stand-in (64 x 64, whole texture).
+/// `C_Texture.GetAtlasInfo(atlas)`: a stand-in (64 x 64, whole texture);
+/// the size of a recorded atlas (`measures::atlas`).
 fn atlas_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let name = vm.check_str(&c, 1)?;
+    let known = crate::measures::atlas(&String::from_utf8_lossy(vm.str_bytes(name)));
+    let width = known.and_then(|a| a.width).unwrap_or(64.0);
+    let height = known.and_then(|a| a.height).unwrap_or(64.0);
     let t = vm.new_table();
     let set = |vm: &mut Vm, k: &str, v: Value| {
         let key = vm.str(k);
@@ -397,8 +401,8 @@ fn atlas_info(vm: &mut Vm, c: NativeCall) -> Ret {
     };
     set(vm, "elementName", Value::Str(name));
     for (k, v) in [
-        ("width", 64.0),
-        ("height", 64.0),
+        ("width", width),
+        ("height", height),
         ("leftTexCoord", 0.0),
         ("rightTexCoord", 1.0),
         ("topTexCoord", 0.0),

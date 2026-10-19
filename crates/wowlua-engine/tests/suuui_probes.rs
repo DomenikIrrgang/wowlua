@@ -245,6 +245,8 @@ fn blizzard_xml_as_the_client_builds_it() {
         "local _, missing = pcall(CreateFrame, 'Button', nil, UIParent, 'BankItemButtonGenericTemplate')
 local t = UIParent:CreateTexture()
 t:SetDrawLayer('OVERLAY')
+-- Placed once the window is (unplaced, the slots have no rectangle).
+ToggleCharacter('PaperDollFrame')
 local icon = CharacterHeadSlotIconTexture
 return missing, ChatFrame1EditBox:GetHistoryLines(), select(2, t:GetDrawLayer()),
     CharacterFrame.NineSlice.TopLeftCorner:GetDrawLayer(),

@@ -1,0 +1,17 @@
+Frame PaperDollSidebarTabs 233.0x85.0 shown=false at TOP>CharacterFrameRightPaneHost.TOP(0,-4) level=2
+  CheckButton PaperDollSidebarTab2 42.0x42.0 shown=true at TOP>PaperDollSidebarTabs.TOP(0,-5) scripts=OnClick,OnEnter level=3
+    · Texture Icon 42.0x42.0 shown=true at CENTER>PaperDollSidebarTab2.CENTER(0,0) tex=514608 layer=BACKGROUND:0 rgba=1,1,1,1
+    · Texture - 42.0x42.0 shown=true at CENTER>PaperDollSidebarTab2.CENTER(0,0) atlas=UI-Character-Info-StatTab layer=BORDER:0 rgba=1,1,1,1
+    · Texture - 42.0x42.0 shown=false at TOPLEFT>PaperDollSidebarTab2.TOPLEFT(0,0) atlas=UI-Character-Info-StatTab-Selected layer=OVERLAY:0 rgba=1,1,1,1
+  CheckButton PaperDollSidebarTab3 42.0x42.0 shown=true at LEFT>PaperDollSidebarTab2.RIGHT(0,0) scripts=OnClick,OnEnter level=3
+    · Texture Icon 36.0x33.0 shown=true at CENTER>PaperDollSidebarTab3.CENTER(0,0) tex=514608 layer=BACKGROUND:0 rgba=1,1,1,1
+    · Texture - 42.0x42.0 shown=true at CENTER>PaperDollSidebarTab3.CENTER(0,0) atlas=UI-Character-Info-StatTab layer=BORDER:0 rgba=1,1,1,1
+    · Texture - 42.0x42.0 shown=false at TOPLEFT>PaperDollSidebarTab3.TOPLEFT(0,0) atlas=UI-Character-Info-StatTab-Selected layer=OVERLAY:0 rgba=1,1,1,1
+  CheckButton PaperDollSidebarTab1 42.0x42.0 shown=true at RIGHT>PaperDollSidebarTab2.LEFT(0,0) scripts=OnClick,OnEnter level=3
+    · Texture Icon 36.0x33.0 shown=true at CENTER>PaperDollSidebarTab1.CENTER(0,0) tex=RTPortrait1 layer=BACKGROUND:0 rgba=1,1,1,1
+    · Texture - 42.0x42.0 shown=true at CENTER>PaperDollSidebarTab1.CENTER(0,0) atlas=UI-Character-Info-StatTab layer=BORDER:0 rgba=1,1,1,1
+    · Texture - 42.0x42.0 shown=true at TOPLEFT>PaperDollSidebarTab1.TOPLEFT(0,0) atlas=UI-Character-Info-StatTab-Selected layer=OVERLAY:0 rgba=1,1,1,1
+  CheckButton PaperDollSidebarTab4 42.0x42.0 shown=false at - scripts=OnClick,OnEnter level=3
+    · Texture Icon 29.0x31 shown=true at CENTER>PaperDollSidebarTab4.CENTER(0,0) tex=nil layer=BACKGROUND:0 rgba=1,1,1,1
+    · Texture - 42.0x42.0 shown=true at CENTER>PaperDollSidebarTab4.CENTER(0,0) atlas=UI-Character-Info-StatTab layer=BORDER:0 rgba=1,1,1,1
+    · Texture - 42.0x42.0 shown=false at TOPLEFT>PaperDollSidebarTab4.TOPLEFT(0,0) atlas=UI-Character-Info-StatTab-Selected layer=OVERLAY:0 rgba=1,1,1,1

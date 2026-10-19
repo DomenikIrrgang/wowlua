@@ -1,0 +1,58 @@
+Frame StatisticsFrame 631.0x484.0 shown=true at TOPLEFT>CharacterFrame.TOPLEFT(0,0) scripts=OnShow level=1
+  Frame ScrollBox 363.0x409.0 shown=true at TOPLEFT>CharacterFrameLeftPaneHost.TOPLEFT(10,-40) level=2
+    Frame DragDelegate 0x0 shown=true at - level=3
+    Frame ScrollTarget 343.0x1.0 shown=true at TOPLEFT>ScrollBox.TOPLEFT(10,-10) level=2
+      Button - 343.0x26.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(0,-0) scripts=OnClick,OnEnter level=3
+        · Texture - 343.0x26.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=common-button-list-collapseExpand layer=BACKGROUND:0 rgba=1,1,1,1
+        · Texture - 343.0x26.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=common-button-list-collapseExpand layer=HIGHLIGHT:0 rgba=1,1,1,0.3
+        · Texture StateIcon 13.0x4.0 shown=true at RIGHT>?.RIGHT(-8,-1) atlas=common-button-list-minus layer=BORDER:0 rgba=1,1,1,1
+        · FontString Name 62x15.0 shown=true at LEFT>?.LEFT(10,0) font=FRIZQT__.TTF 12 object=GameFontNormalLeft
+      Button - 323x24.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(20,-29.0) scripts=OnClick,OnEnter level=3
+        Frame Content 323x24.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) level=4
+      Button - 323x24.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(20,-56.0) scripts=OnClick,OnEnter level=3
+        Frame Content 323x24.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) level=4
+      Button - 323x22.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(20,-83.0) scripts=OnClick,OnEnter level=3
+        Frame Content 323x22.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) level=4
+        Button ToggleCollapseButton 20.0x20.0 shown=true at LEFT>?.LEFT(2,0) scripts=OnClick level=4
+      Button - 303.0x24.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(40,-108.0) scripts=OnClick,OnEnter level=3
+        Frame Content 303.0x24.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) level=4
+      Button - 303.0x24.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(40,-135.0) scripts=OnClick,OnEnter level=3
+        Frame Content 303.0x24.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) level=4
+      Button - 303.0x24.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(40,-162.0) scripts=OnClick,OnEnter level=3
+        Frame Content 303.0x24.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) level=4
+      Button - 303.0x24.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(40,-189.0) scripts=OnClick,OnEnter level=3
+        Frame Content 303.0x24.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) level=4
+      Button - 303.0x24.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(40,-216.0) scripts=OnClick,OnEnter level=3
+        Frame Content 303.0x24.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) level=4
+      Button - 303.0x24.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(40,-243.0) scripts=OnClick,OnEnter level=3
+        Frame Content 303.0x24.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) level=4
+      Button - 303.0x24.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(40,-270.0) scripts=OnClick,OnEnter level=3
+        Frame Content 303.0x24.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) level=4
+      Button - 303.0x24.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(40,-297.0) scripts=OnClick,OnEnter level=3
+        Frame Content 303.0x24.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) level=4
+      Button - 303.0x24.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(40,-324.0) scripts=OnClick,OnEnter level=3
+        Frame Content 303.0x24.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) level=4
+      Button - 303.0x24.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(40,-351.0) scripts=OnClick,OnEnter level=3
+        Frame Content 303.0x24.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) level=4
+      Button - 303.0x24.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(40,-378.0) scripts=OnClick,OnEnter level=3
+        Frame Content 303.0x24.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) level=4
+    Frame Shadows 363.0x409.0 shown=true at TOPLEFT>ScrollBox.TOPLEFT(0,0) level=4
+      · Texture Lower 0x0 shown=true at BOTTOMLEFT>Shadows.BOTTOMLEFT(0,0) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture Upper 0x0 shown=false at TOPLEFT>Shadows.TOPLEFT(0,0) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+    Frame - 1.0x1.0 shown=true at TOP>ScrollBox.TOP(0,0) level=6
+      · Texture - 384x8.0 shown=true at CENTER>?.CENTER(0,0) atlas=UI-Character-Info-ScrollLine-Long layer=OVERLAY:0 rgba=1,1,1,1
+    Frame - 1.0x1.0 shown=true at BOTTOM>ScrollBox.BOTTOM(0,0) level=6
+      · Texture - 384x8.0 shown=true at CENTER>?.CENTER(0,0) atlas=UI-Character-Info-ScrollLine-Long layer=OVERLAY:0 rgba=1,1,1,1
+  Frame ScrollBar 8.0x403.0 shown=true at TOPLEFT>ScrollBox.TOPRIGHT(5,-2) level=2
+    Frame Track 8.0x365.0 shown=true at TOP>ScrollBar.TOP(0,-19) level=4
+      · Texture Begin 8.0x8.0 shown=true at TOPLEFT>Track.TOPLEFT(0,0) atlas=minimal-scrollbar-track-top layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture End 8.0x8.0 shown=true at BOTTOMLEFT>Track.BOTTOMLEFT(0,0) atlas=minimal-scrollbar-track-bottom layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture Middle 8.0x349.0 shown=true at TOPLEFT>Begin.BOTTOMLEFT(0,0) atlas=!minimal-scrollbar-track-middle layer=ARTWORK:0 rgba=1,1,1,1
+      Button Thumb 8.0x28.3 shown=true at TOP>Track.TOP(0,-0) scripts=OnEnter level=5
+        · Texture Begin 8.0x8.0 shown=true at TOPLEFT>Thumb.TOPLEFT(0,0) atlas=minimal-scrollbar-small-thumb-top layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture End 8.0x8.0 shown=true at BOTTOMLEFT>Thumb.BOTTOMLEFT(0,0) atlas=minimal-scrollbar-small-thumb-bottom layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture Middle 8.0x12.3 shown=true at TOPLEFT>Begin.BOTTOMLEFT(0,0) atlas=minimal-scrollbar-small-thumb-middle layer=ARTWORK:0 rgba=1,1,1,1
+    Button Back 17.0x11.0 shown=true at TOP>ScrollBar.TOP(0,0) scripts=OnEnter level=5
+      · Texture Texture 17.0x11.0 shown=true at TOPLEFT>Back.TOPLEFT(0,0) atlas=minimal-scrollbar-arrow-top layer=BACKGROUND:0 rgba=1,1,1,1
+    Button Forward 17.0x11.0 shown=true at BOTTOM>ScrollBar.BOTTOM(0,0) scripts=OnEnter level=5
+      · Texture Texture 17.0x11.0 shown=true at TOPLEFT>Forward.TOPLEFT(0,0) atlas=minimal-scrollbar-arrow-bottom layer=BACKGROUND:0 rgba=1,1,1,1

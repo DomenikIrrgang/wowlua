@@ -1,0 +1,58 @@
+Frame tabSystem 302x32.0 shown=false at TOPLEFT>PlayerSpellsFrame.BOTTOMLEFT(22,2) scripts=OnShow level=2
+  Button - 91.0x26.0 shown=false at BOTTOMLEFT>?.BOTTOMLEFT(12,0) scripts=OnClick,OnEnter level=503
+    · Texture LeftActive 35x32.0 shown=false at TOPLEFT>?.TOPLEFT(0,0) atlas=uiframe-activetab-left layer=BACKGROUND:0 rgba=1,1,1,0
+    · Texture RightActive 37.0x32.0 shown=false at TOPRIGHT>?.TOPRIGHT(7.0,0) atlas=uiframe-activetab-right layer=BACKGROUND:0 rgba=1,1,1,0
+    · Texture MiddleActive 26.0x32.0 shown=false at LEFT>LeftActive.RIGHT(0,0) atlas=_uiframe-activetab-center layer=BACKGROUND:0 rgba=1,1,1,0
+    · Texture Left 35x32.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=uiframe-tab-left layer=BACKGROUND:0 rgba=1,1,1,0
+    · Texture Right 37.0x32.0 shown=true at TOPRIGHT>?.TOPRIGHT(6,0) atlas=uiframe-tab-right layer=BACKGROUND:0 rgba=1,1,1,0
+    · Texture Middle 25.0x32.0 shown=true at LEFT>Left.RIGHT(0,0) atlas=_uiframe-tab-center layer=BACKGROUND:0 rgba=1,1,1,0
+    · Texture Icon 36.0x35 shown=false at CENTER>?.CENTER(0,0) tex=nil layer=ARTWORK:0 rgba=1,1,1,0
+    · MaskTexture IconMask 34.0x33.0 shown=false at TOPLEFT>Icon.TOPLEFT(0,-2) atlas=SquareMask layer=ARTWORK:0 rgba=1,1,1,0
+    · Texture SquareBackground 0x0 shown=false at BOTTOM>?.BOTTOM(0,1) tex=nil layer=ARTWORK:1 rgba=1,1,1,0
+    · Texture SquareBackgroundActive 0x0 shown=false at BOTTOM>?.BOTTOM(0,1) tex=nil layer=ARTWORK:1 rgba=1,1,1,0
+    · Texture SquareBackgroundActiveGlow 0x0 shown=false at BOTTOM>?.BOTTOM(0,0) tex=nil layer=ARTWORK:1 rgba=1,1,1,0
+    · Texture LeftHighlight 35x32.0 shown=true at TOPLEFT>Left.TOPLEFT(0,0) atlas=uiframe-tab-left layer=HIGHLIGHT:0 rgba=1,1,1,0
+    · Texture MiddleHighlight 25.0x32.0 shown=true at LEFT>Middle.LEFT(0,0) atlas=_uiframe-tab-center layer=HIGHLIGHT:0 rgba=1,1,1,0
+    · Texture RightHighlight 37.0x32.0 shown=true at TOPRIGHT>Right.TOPRIGHT(0,0) atlas=uiframe-tab-right layer=HIGHLIGHT:0 rgba=1,1,1,0
+    · FontString Text 90.0x10.0 shown=true at CENTER>?.CENTER(0,2) font=FRIZQT__.TTF 10 object=GameFontNormalSmall
+    · FontString - 91.0x13.0 shown=true at CENTER>?.CENTER(0,1) font=MarcellusSC-Regular.ttf 13.0 object=SuuUIFont_header
+    · Texture - 5.0x5.0 shown=false at CENTER>?.BOTTOM(0,0) tex=130871 layer=OVERLAY:7 rgba=0.8,0.7,0.4,1
+    Frame - 91.0x1.0 shown=false at BOTTOMLEFT>?.BOTTOMLEFT(0,0) level=504
+  Button - 49.0x26.0 shown=true at BOTTOMLEFT>?.BOTTOMRIGHT(12,0) scripts=OnClick,OnEnter level=503
+    · Texture LeftActive 35x32.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=uiframe-activetab-left layer=BACKGROUND:0 rgba=1,1,1,0
+    · Texture RightActive 37.0x32.0 shown=true at TOPRIGHT>?.TOPRIGHT(7.0,0) atlas=uiframe-activetab-right layer=BACKGROUND:0 rgba=1,1,1,0
+    · Texture MiddleActive 0x32.0 shown=true at LEFT>LeftActive.RIGHT(0,0) atlas=_uiframe-activetab-center layer=BACKGROUND:0 rgba=1,1,1,0
+    · Texture Left 35x32.0 shown=false at TOPLEFT>?.TOPLEFT(0,0) atlas=uiframe-tab-left layer=BACKGROUND:0 rgba=1,1,1,0
+    · Texture Right 37.0x32.0 shown=false at TOPRIGHT>?.TOPRIGHT(6,0) atlas=uiframe-tab-right layer=BACKGROUND:0 rgba=1,1,1,0
+    · Texture Middle 0x32.0 shown=false at LEFT>Left.RIGHT(0,0) atlas=_uiframe-tab-center layer=BACKGROUND:0 rgba=1,1,1,0
+    · Texture Icon 36.0x35 shown=false at CENTER>?.CENTER(0,0) tex=nil layer=ARTWORK:0 rgba=1,1,1,0
+    · MaskTexture IconMask 34.0x33.0 shown=false at TOPLEFT>Icon.TOPLEFT(0,-2) atlas=SquareMask layer=ARTWORK:0 rgba=1,1,1,0
+    · Texture SquareBackground 0x0 shown=false at BOTTOM>?.BOTTOM(0,1) tex=nil layer=ARTWORK:1 rgba=1,1,1,0
+    · Texture SquareBackgroundActive 0x0 shown=false at BOTTOM>?.BOTTOM(0,1) tex=nil layer=ARTWORK:1 rgba=1,1,1,0
+    · Texture SquareBackgroundActiveGlow 0x0 shown=false at BOTTOM>?.BOTTOM(0,0) tex=nil layer=ARTWORK:1 rgba=1,1,1,0
+    · Texture LeftHighlight 35x32.0 shown=true at TOPLEFT>Left.TOPLEFT(0,0) atlas=uiframe-tab-left layer=HIGHLIGHT:0 rgba=1,1,1,0
+    · Texture MiddleHighlight 0x32.0 shown=true at LEFT>Middle.LEFT(0,0) atlas=_uiframe-tab-center layer=HIGHLIGHT:0 rgba=1,1,1,0
+    · Texture RightHighlight 37.0x32.0 shown=true at TOPRIGHT>Right.TOPRIGHT(0,0) atlas=uiframe-tab-right layer=HIGHLIGHT:0 rgba=1,1,1,0
+    · FontString Text 90.0x10.0 shown=true at CENTER>?.CENTER(0,-3) font=FRIZQT__.TTF 10
+    · FontString - 49.0x13.0 shown=true at CENTER>?.CENTER(0,1) font=MarcellusSC-Regular.ttf 13.0 object=SuuUIFont_header
+    · Texture - 5.0x5.0 shown=true at CENTER>?.BOTTOM(0,0) tex=130871 layer=OVERLAY:7 rgba=0.8,0.7,0.4,1
+    Frame - 49.0x1.0 shown=true at BOTTOMLEFT>?.BOTTOMLEFT(0,0) level=504
+  Button - 65.0x26.0 shown=true at BOTTOMLEFT>?.BOTTOMRIGHT(12,0) scripts=OnClick,OnEnter level=503
+    · Texture LeftActive 35x32.0 shown=false at TOPLEFT>?.TOPLEFT(0,0) atlas=uiframe-activetab-left layer=BACKGROUND:0 rgba=1,1,1,0
+    · Texture RightActive 37.0x32.0 shown=false at TOPRIGHT>?.TOPRIGHT(7.0,0) atlas=uiframe-activetab-right layer=BACKGROUND:0 rgba=1,1,1,0
+    · Texture MiddleActive 0x32.0 shown=false at LEFT>LeftActive.RIGHT(0,0) atlas=_uiframe-activetab-center layer=BACKGROUND:0 rgba=1,1,1,0
+    · Texture Left 35x32.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=uiframe-tab-left layer=BACKGROUND:0 rgba=1,1,1,0
+    · Texture Right 37.0x32.0 shown=true at TOPRIGHT>?.TOPRIGHT(6,0) atlas=uiframe-tab-right layer=BACKGROUND:0 rgba=1,1,1,0
+    · Texture Middle 0x32.0 shown=true at LEFT>Left.RIGHT(0,0) atlas=_uiframe-tab-center layer=BACKGROUND:0 rgba=1,1,1,0
+    · Texture Icon 36.0x35 shown=false at CENTER>?.CENTER(0,0) tex=nil layer=ARTWORK:0 rgba=1,1,1,0
+    · MaskTexture IconMask 34.0x33.0 shown=false at TOPLEFT>Icon.TOPLEFT(0,-2) atlas=SquareMask layer=ARTWORK:0 rgba=1,1,1,0
+    · Texture SquareBackground 0x0 shown=false at BOTTOM>?.BOTTOM(0,1) tex=nil layer=ARTWORK:1 rgba=1,1,1,0
+    · Texture SquareBackgroundActive 0x0 shown=false at BOTTOM>?.BOTTOM(0,1) tex=nil layer=ARTWORK:1 rgba=1,1,1,0
+    · Texture SquareBackgroundActiveGlow 0x0 shown=false at BOTTOM>?.BOTTOM(0,0) tex=nil layer=ARTWORK:1 rgba=1,1,1,0
+    · Texture LeftHighlight 35x32.0 shown=true at TOPLEFT>Left.TOPLEFT(0,0) atlas=uiframe-tab-left layer=HIGHLIGHT:0 rgba=1,1,1,0
+    · Texture MiddleHighlight 0x32.0 shown=true at LEFT>Middle.LEFT(0,0) atlas=_uiframe-tab-center layer=HIGHLIGHT:0 rgba=1,1,1,0
+    · Texture RightHighlight 37.0x32.0 shown=true at TOPRIGHT>Right.TOPRIGHT(0,0) atlas=uiframe-tab-right layer=HIGHLIGHT:0 rgba=1,1,1,0
+    · FontString Text 90.0x10.0 shown=true at CENTER>?.CENTER(0,2) font=FRIZQT__.TTF 10 object=GameFontNormalSmall
+    · FontString - 64.0x13.0 shown=true at CENTER>?.CENTER(0,1) font=MarcellusSC-Regular.ttf 13.0 object=SuuUIFont_header
+    · Texture - 5.0x5.0 shown=false at CENTER>?.BOTTOM(0,0) tex=130871 layer=OVERLAY:7 rgba=0.8,0.7,0.4,1
+    Frame - 65.0x1.0 shown=false at BOTTOMLEFT>?.BOTTOMLEFT(0,0) level=504

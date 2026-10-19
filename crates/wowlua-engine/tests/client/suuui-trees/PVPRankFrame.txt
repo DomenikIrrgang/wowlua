@@ -1,0 +1,61 @@
+Frame PVPRankFrame 631.0x484.0 shown=false at TOPLEFT>CharacterFrame.TOPLEFT(0,0) scripts=OnShow level=1
+  · FontString SeasonTimerField 165x12.0 shown=false at TOPRIGHT>CharacterFrameLeftPaneHost.TOPRIGHT(-46,-18.0) font=FRIZQT__.TTF 12 object=GameFontNormal
+  Frame MainInfoFrame 398x135.0 shown=true at TOPLEFT>CharacterFrameLeftPaneHost.TOPLEFT(0,-60) level=2
+    · FontString CurrentSeasonField 70x14.0 shown=false at TOP>MainInfoFrame.TOP(0,-20) font=FRIZQT__.TTF 14.0 object=GameFontNormalMed2
+    · FontString CurrentRankField 61.0x16.0 shown=true at TOP>CurrentSeasonField.BOTTOM(0,-10) font=FRIZQT__.TTF 16 object=GameFontHighlightLarge
+    · FontString CurrentRankProgressField 128x12.0 shown=true at TOP>CurrentRankField.BOTTOM(0,-210) font=FRIZQT__.TTF 12 object=GameFontNormal
+    · Texture Line 350.0x62.0 shown=true at BOTTOM>CurrentRankField.BOTTOM(0,-10) atlas=UI-Character-Info-Honor-LevelBG layer=ARTWORK:0 rgba=1,1,1,1
+    Cooldown RankProgressBarDisplay 154x154.0 shown=true at TOP>MainInfoFrame.TOP(0,-95) level=3
+      · Texture - 275x295.0 shown=true at CENTER>RankProgressBarDisplay.CENTER(0,0) atlas=UI-Character-Info-Honor-Bar-BG-Glow layer=BACKGROUND:0 rgba=1,1,1,1
+      · Texture Background 95.0x95.0 shown=true at CENTER>RankProgressBarDisplay.CENTER(0,0) atlas=UI-Character-Info-Honor-Bar-BG-Horde layer=BACKGROUND:0 rgba=1,1,1,1
+      · Texture Bar 235x209.0 shown=true at CENTER>RankProgressBarDisplay.CENTER(0,-1) atlas=pvpqueue-sidebar-honorbar-background layer=BORDER:0 rgba=1,1,1,1
+      · Texture FactionBadge 75x75.0 shown=true at CENTER>RankProgressBarDisplay.CENTER(0,0) atlas=UI-Character-Info-Honor-Icon-Horde layer=ARTWORK:0 rgba=1,1,1,1
+      · FontString - 1.0x1.0 shown=false at CENTER>RankProgressBarDisplay.CENTER(0,-1) font=FRIZQT__.TTF 16 object=SystemFont_Shadow_Large_Outline
+      Frame DropDown 40x32 shown=false at - level=4
+        · Texture PVPRankFrameLeft 25x64 shown=true at TOPLEFT>DropDown.TOPLEFT(0,17) tex=131143 layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture PVPRankFrameMiddle 115x64 shown=true at LEFT>PVPRankFrameLeft.RIGHT(0,0) tex=131143 layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture PVPRankFrameRight 25x64 shown=true at LEFT>PVPRankFrameMiddle.RIGHT(0,0) tex=131143 layer=ARTWORK:0 rgba=1,1,1,1
+        · FontString PVPRankFrameText 1x10 shown=true at RIGHT>PVPRankFrameRight.RIGHT(-43,2) font=FRIZQT__.TTF 10 object=GameFontHighlightSmall
+        · Texture PVPRankFrameIcon 16x16 shown=false at LEFT>DropDown.LEFT(30,2) tex=nil layer=OVERLAY:0 rgba=1,1,1,1
+        Button PVPRankFrameButton 24x24 shown=true at TOPRIGHT>PVPRankFrameRight.TOPRIGHT(-16,-18.0) scripts=OnEnter level=5
+      Button NextRewardLevel 36.0x36.0 shown=true at BOTTOM>RankProgressBarDisplay.BOTTOM(0,-1) scripts=OnEnter level=4
+        · Texture RewardIcon 28.0x28.0 shown=false at CENTER>NextRewardLevel.CENTER(0,0) tex=FileData ID 0 layer=BACKGROUND:0 rgba=1,1,1,1
+        · Texture IconCover 36.0x36.0 shown=true at CENTER>NextRewardLevel.CENTER(0,0) tex=FileData ID 0 layer=BACKGROUND:-1 rgba=1,1,1,1
+        · MaskTexture CircleMask 36.0x36.0 shown=true at CENTER>NextRewardLevel.CENTER(0,0) tex=130924 layer=BACKGROUND:1 rgba=1,1,1,1
+        · Texture RingBorder 48x48.0 shown=true at CENTER>NextRewardLevel.CENTER(0,0) atlas=UI-Character-Info-Honor-RewardRing layer=BORDER:0 rgba=1,1,1,1
+        · FontString LevelLabel 12.0x16.0 shown=true at CENTER>NextRewardLevel.CENTER(0,0) font=FRIZQT__.TTF 16 object=GameFontNormalLarge
+  Frame DetailFrame 205.0x436.0 shown=true at TOPLEFT>CharacterFrameRightPaneHost.TOPLEFT(16,-14.0) scripts=OnShow level=2
+    · FontString Title 195.0x14.0 shown=true at TOP>DetailFrame.TOP(0,0) font=FRIZQT__.TTF 14.0 object=GameFontNormalMed3
+    · FontString Subtitle 195.0x1.0 shown=false at TOP>Title.BOTTOM(0,-3) font=FRIZQT__.TTF 12 object=GameFontHighlight
+    · FontString EmptyText 170.0x1.0 shown=false at CENTER>DetailFrame.CENTER(0,30) font=FRIZQT__.TTF 12 object=GameFontDisable
+    · Texture Divider 210.0x7.0 shown=true at TOP>Subtitle.BOTTOM(0,-4) atlas=UI-Character-Info-ScrollLine layer=BORDER:0 rgba=1,1,1,1
+    Frame Description 191.0x60.0 shown=true at TOP>Divider.BOTTOM(0,-6) level=3
+      Frame ScrollBox 191.0x60.0 shown=true at TOPLEFT>Description.TOPLEFT(0,0) level=4
+        Frame DragDelegate 0x0 shown=true at - level=5
+        Frame ScrollTarget 191.0x1.0 shown=true at TOPLEFT>ScrollBox.TOPLEFT(0,0) level=4
+        Frame Shadows 191.0x60.0 shown=true at TOPLEFT>ScrollBox.TOPLEFT(0,0) level=6
+    Frame DescriptionScrollBar 8.0x58.0 shown=false at TOPLEFT>Description.TOPRIGHT(4,-1) level=3
+      Frame Track 8.0x20.0 shown=true at TOP>DescriptionScrollBar.TOP(0,-19) level=5
+        · Texture Begin 8.0x8.0 shown=true at TOPLEFT>Track.TOPLEFT(0,0) atlas=minimal-scrollbar-track-top layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture End 8.0x8.0 shown=true at BOTTOMLEFT>Track.BOTTOMLEFT(0,0) atlas=minimal-scrollbar-track-bottom layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture Middle 8.0x4.0 shown=true at TOPLEFT>Begin.BOTTOMLEFT(0,0) atlas=!minimal-scrollbar-track-middle layer=ARTWORK:0 rgba=1,1,1,1
+        Button Thumb 8.0x20.0 shown=false at TOP>Track.TOP(0,-0) scripts=OnEnter level=6
+      Button Back 17.0x11.0 shown=true at TOP>DescriptionScrollBar.TOP(0,0) scripts=OnEnter level=6
+        · Texture Texture 17.0x11.0 shown=true at TOPLEFT>Back.TOPLEFT(0,0) atlas=minimal-scrollbar-arrow-top layer=BACKGROUND:0 rgba=1,1,1,1
+      Button Forward 17.0x11.0 shown=true at BOTTOM>DescriptionScrollBar.BOTTOM(0,0) scripts=OnEnter level=6
+        · Texture Texture 17.0x11.0 shown=true at TOPLEFT>Forward.TOPLEFT(0,0) atlas=minimal-scrollbar-arrow-bottom layer=BACKGROUND:0 rgba=1,1,1,1
+    Frame Content 195.0x153.0 shown=true at TOP>Description.BOTTOM(0,-6) scripts=OnShow level=3
+      Frame - 195.0x8.0 shown=true at TOPLEFT>Content.TOPLEFT(0,-0) level=4
+        · FontString Label 205.0x1.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) font=FRIZQT__.TTF 12 object=GameFontNormal
+      Frame - 195.0x40.0 shown=true at TOPLEFT>Content.TOPLEFT(0,-10) level=4
+        · Texture Background 195.0x40.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=UI-Character-Info-Title layer=BACKGROUND:0 rgba=1,1,1,1
+        · FontString Label 147.0x12.0 shown=true at CENTER>?.CENTER(0,1) font=FRIZQT__.TTF 12 object=GameFontNormal
+      Frame - 195.0x55.0 shown=true at TOPLEFT>Content.TOPLEFT(0,-52.0) level=4
+        · Texture IconSlot 55.0x55.0 shown=true at LEFT>?.LEFT(2,0) atlas=UI-Character-Info-GearSlot layer=BACKGROUND:0 rgba=1,1,1,1
+        · Texture Icon 32.0x32.0 shown=true at CENTER>IconSlot.CENTER(0,0) tex=135026 layer=ARTWORK:0 rgba=1,1,1,1
+        · FontString Label 128x12.0 shown=true at LEFT>IconSlot.RIGHT(8,0) font=FRIZQT__.TTF 12 object=GameFontNormal
+      Frame - 195.0x36.0 shown=true at TOPLEFT>Content.TOPLEFT(0,-117) level=4
+        · FontString Label 205.0x36.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) font=FRIZQT__.TTF 12 object=GameFontNormal
+      Frame - 195.0x6.0 shown=true at TOPLEFT>Content.TOPLEFT(0,-109) level=4
+        · FontString Label 205.0x1.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) font=FRIZQT__.TTF 12 object=GameFontNormal
+    Frame Footer 205.0x1.0 shown=true at BOTTOMLEFT>DetailFrame.BOTTOMLEFT(0,0) level=3

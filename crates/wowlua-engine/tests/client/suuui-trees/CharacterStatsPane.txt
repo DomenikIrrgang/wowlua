@@ -1,0 +1,17 @@
+Frame CharacterStatsPane 233.0x404.0 shown=false at TOPLEFT>CharacterFrameRightPaneHostStoneBg.BOTTOMLEFT(0,0) level=2
+  Frame ItemLevelCategory 197.0x40.0 shown=true at TOP>CharacterStatsPane.TOP(0,-2) level=3
+    · Texture Background 197.0x40.0 shown=true at TOPLEFT>ItemLevelCategory.TOPLEFT(0,0) atlas=UI-Character-Info-Title layer=BACKGROUND:0 rgba=1,1,1,1
+    · FontString Title 65.0x12.0 shown=true at CENTER>ItemLevelCategory.CENTER(0,1) font=FRIZQT__.TTF 12 object=GameFontHighlight
+  Frame ItemLevelFrame 187.0x29.0 shown=true at TOP>ItemLevelCategory.BOTTOM(0,0) scripts=OnEnter level=3
+    · Texture Background 204.0x21.0 shown=true at CENTER>ItemLevelFrame.CENTER(0,0) atlas=UI-Character-Info-ItemLevel-Bounce layer=BORDER:0 rgba=1,1,1,1
+    · FontString Value 1.0x1.0 shown=true at CENTER>ItemLevelFrame.CENTER(0,-1) font=FRIZQT__.TTF 15 object=Game15Font_o1
+  Frame AttributesCategory 197.0x40.0 shown=true at TOP>CharacterStatsPane.TOP(0,-81) level=3
+    · Texture Background 197.0x40.0 shown=true at TOPLEFT>AttributesCategory.TOPLEFT(0,0) atlas=UI-Character-Info-Title layer=BACKGROUND:0 rgba=1,1,1,1
+    · FontString Title 65.0x12.0 shown=true at CENTER>AttributesCategory.CENTER(0,1) font=FRIZQT__.TTF 12 object=GameFontHighlight
+  Frame EnhancementsCategory 197x40 shown=true at - level=3
+    · Texture Background 201x32 shown=true at TOPLEFT>EnhancementsCategory.TOPLEFT(0,0) atlas=UI-Character-Info-Title layer=BACKGROUND:0 rgba=1,1,1,1
+    · FontString Title 92.0x12 shown=true at CENTER>EnhancementsCategory.CENTER(0,1) font=FRIZQT__.TTF 12 object=GameFontHighlight
+  Frame - 187x15 shown=false at - scripts=OnEnter level=3
+    · Texture Background 213.0x18.0 shown=true at CENTER>?.CENTER(0,0) atlas=UI-Character-Info-Line-Bounce layer=BACKGROUND:0 rgba=1,1,1,1
+    · FontString Label 45x12 shown=true at LEFT>?.LEFT(11,0) font=FRIZQT__.TTF 12 object=GameFontNormal
+    · FontString Value 36x12 shown=true at RIGHT>?.RIGHT(-8,0) font=FRIZQT__.TTF 12 object=GameFontHighlight

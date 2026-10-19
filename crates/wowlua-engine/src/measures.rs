@@ -95,15 +95,85 @@ fn get_horizontal_scroll_range(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret
     Ok(vec![Value::Num(scroll_range(vm, id, false))])
 }
 
-/// `GetAtlas()`: the atlas set, else nil.
+/// An atlas the client was seen to have: its name as the client spells
+/// it, its width and height where known (`data/camelot-atlases.txt`).
+pub struct Atlas {
+    pub name: &'static str,
+    pub width: Option<f64>,
+    pub height: Option<f64>,
+}
+
+/// The atlas named `name` (any case), if recorded.
+pub fn atlas(name: &str) -> Option<&'static Atlas> {
+    static TABLE: std::sync::OnceLock<std::collections::HashMap<String, Atlas>> =
+        std::sync::OnceLock::new();
+    let table = TABLE.get_or_init(|| {
+        include_str!("../data/camelot-atlases.txt")
+            .lines()
+            .filter(|l| !l.starts_with('#') && !l.is_empty())
+            .map(|l| {
+                let mut f = l.split('\t');
+                let name = f.next().unwrap_or("");
+                let width = f.next().and_then(|v| v.parse().ok());
+                let height = f.next().and_then(|v| v.parse().ok());
+                (
+                    name.to_ascii_lowercase(),
+                    Atlas {
+                        name,
+                        width,
+                        height,
+                    },
+                )
+            })
+            .collect()
+    });
+    table.get(&name.to_ascii_lowercase())
+}
+
+/// A texture's atlas set (`SetAtlas(atlas, useAtlasSize)`, a button's
+/// `SetXAtlas`): with `useAtlasSize`, the texture takes the atlas's size
+/// where it is known (SuuUI probe trees: the window frames' metal corners
+/// 95 by 95 and 95 by 100, their edges 95 deep, the slots' gear frames 55
+/// by 55, set so; a side not recorded keeps the size it had, unverified).
+pub fn apply_atlas_size(vm: &mut Vm, id: WidgetId, args: &[Value]) {
+    if !args.get(1).is_some_and(|v| v.truthy()) {
+        return;
+    }
+    let Some(Value::Str(name)) = args.first().copied() else {
+        return;
+    };
+    let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
+    if let Some(a) = atlas(&name) {
+        let r = &mut crate::engine_mut(vm).world.widgets[id.0];
+        r.width = a.width.unwrap_or(r.width);
+        r.height = a.height.unwrap_or(r.height);
+    }
+}
+
+/// `SetAtlas(atlas [, useAtlasSize, …])`: kept, sizing the texture as
+/// [`apply_atlas_size`] does.
+fn set_atlas(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let args: Vec<Value> = c.args.iter().skip(1).copied().collect();
+    widgets::store(vm, id, "Atlas", &args);
+    apply_atlas_size(vm, id, &args);
+    Ok(vec![])
+}
+
+/// `GetAtlas()`: the atlas set, else nil; spelled as the client spells it
+/// when recorded (SuuUI probe trees: the gamepad prompts, set as
+/// `gamepad-xbox1-trigger-lt-normal`, read back
+/// `Gamepad-Xbox1-Trigger-LT-Normal`).
 fn get_atlas(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let props = engine(vm).world.widgets[id.0].props;
-    let atlas = widgets::stored_args(vm, props, "Atlas").and_then(|v| v.first().copied());
-    Ok(vec![
-        atlas
-            .filter(|v| matches!(v, Value::Str(_)))
-            .unwrap_or(Value::Nil),
-    ])
+    let atlas_set = widgets::stored_args(vm, props, "Atlas").and_then(|v| v.first().copied());
+    let Some(Value::Str(s)) = atlas_set else {
+        return Ok(vec![Value::Nil]);
+    };
+    let given = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
+    Ok(vec![match atlas(&given) {
+        Some(a) if a.name != given => vm.str(a.name),
+        _ => Value::Str(s),
+    }])
 }
 
 /// `GetTextureFileID()`: the file ID `SetTexture` was given; a path's ID
@@ -266,6 +336,7 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
         ("GetVerticalScrollRange", get_vertical_scroll_range),
         ("GetHorizontalScrollRange", get_horizontal_scroll_range),
         ("GetAtlas", get_atlas),
+        ("SetAtlas", set_atlas),
         ("GetZoom", get_zoom),
         ("GetZoomLevels", get_zoom_levels),
         ("GetTextureFileID", get_texture_file_id),

@@ -12,17 +12,17 @@
 |     BOTTOMRIGHT on WidgetDemoWindow BOTTOMRIGHT (0, 0)
 |   FontString <FontString>
 |     shown
-|     size 1 x 1
+|     size 108 x 16
 |     TOP on WidgetDemoWindow TOP (0, -12)
 |     text "|cff33ff99wowlua|r widget demo"
 |   FontString <FontString>
 |     shown
-|     size 1 x 1
+|     size 96 x 10
 |     LEFT on <EditBox> RIGHT (8, 0)
 |     text "Enter adds a row"
 |   FontString <FontString>
 |     shown
-|     size 1 x 1
+|     size 30 x 10
 |     BOTTOM on WidgetDemoWindow BOTTOM (0, 12)
 |     text "|cff9d9d9dready|r"
 |   Button <Button>
@@ -30,7 +30,7 @@
 |     size 24 x 24
 |     TOPRIGHT on WidgetDemoWindow TOPRIGHT (-2, -2)
 |     Texture <Texture>
-|       shown
+|       hidden
 |       size 24 x 24
 |       TOPLEFT on $parent TOPLEFT (0, 0)
 |       BOTTOMRIGHT on $parent BOTTOMRIGHT (0, 0)
@@ -40,7 +40,7 @@
 |       TOPLEFT on $parent TOPLEFT (0, 0)
 |       BOTTOMRIGHT on $parent BOTTOMRIGHT (0, 0)
 |     Texture <Texture>
-|       shown
+|       hidden
 |       size 24 x 24
 |       TOPLEFT on $parent TOPLEFT (0, 0)
 |       BOTTOMRIGHT on $parent BOTTOMRIGHT (0, 0)
@@ -83,7 +83,7 @@
 |       BOTTOMRIGHT on <Texture> BOTTOMLEFT (0, 0)
 |     FontString WidgetDemoWindowText
 |       shown
-|       size 1 x 1
+|       size 54 x 12
 |       text "Clicks: 0"
 |     Texture <Texture>
 |       shown
@@ -112,7 +112,7 @@
 |       BOTTOMRIGHT on <Texture> BOTTOMLEFT (0, 0)
 |     FontString WidgetDemoWindowText
 |       shown
-|       size 1 x 1
+|       size 48 x 12
 |       text "Plain: 0"
 |     Texture <Texture>
 |       shown
@@ -129,7 +129,7 @@
 |       TOPLEFT on $parent TOPLEFT (0, 0)
 |       BOTTOMRIGHT on $parent BOTTOMRIGHT (0, 0)
 |     Texture <Texture>
-|       shown
+|       hidden
 |       size 32 x 32
 |       TOPLEFT on $parent TOPLEFT (0, 0)
 |       BOTTOMRIGHT on $parent BOTTOMRIGHT (0, 0)
@@ -144,13 +144,13 @@
 |       TOPLEFT on $parent TOPLEFT (0, 0)
 |       BOTTOMRIGHT on $parent BOTTOMRIGHT (0, 0)
 |     Texture <Texture>
-|       shown
+|       hidden
 |       size 32 x 32
 |       TOPLEFT on $parent TOPLEFT (0, 0)
 |       BOTTOMRIGHT on $parent BOTTOMRIGHT (0, 0)
 |     FontString WidgetDemoWindowText
 |       shown
-|       size 1 x 1
+|       size 54 x 10
 |       LEFT on $parent RIGHT (-2, 0)
 |       text "Show list"
 |   EditBox <EditBox>

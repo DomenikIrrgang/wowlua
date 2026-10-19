@@ -601,8 +601,34 @@ fn apply_in(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Eleme
                 Ok(n) => Value::Num(n),
                 Err(_) => vm.str(v),
             };
+            // `useAtlasSize` sizes the texture as its atlas is
+            // (`SetAtlas(atlas, true)`).
+            if *attr == "atlas" && el.flag("useAtlasSize") {
+                call_method(vm, cx, el.line, frame, method, &[v, Value::Bool(true)]);
+                continue;
+            }
             call_method(vm, cx, el.line, frame, method, &[v]);
         }
+    }
+    // A texture's `alpha` is its vertex color's too (SuuUI probe trees: the
+    // character window's side tabs' `TabGlow`, `alpha="0"`, the model
+    // controls' highlights, `alpha="0.4"`, and a statistics row's texture,
+    // `alpha="0.3"`, report it as `GetVertexColor`'s alpha, their color
+    // white).
+    // Unverified: `GetAlpha` (kept as `SetAlpha` set it), and the alpha
+    // `SetVertexColor` set before.
+    if let Some(a) = el.number("alpha")
+        && matches!(
+            engine(vm).world.widgets[id.0].class.as_str(),
+            "Texture" | "MaskTexture" | "Line"
+        )
+    {
+        let props = engine(vm).world.widgets[id.0].props;
+        let mut rgba = widgets::stored_args(vm, props, "VertexColor")
+            .filter(|v| v.len() == 4)
+            .unwrap_or_else(|| vec![Value::Num(1.0); 4]);
+        rgba[3] = Value::Num(a);
+        widgets::store(vm, id, "VertexColor", &rgba);
     }
     // A slider's or a status bar's range, then its value.
     if el.attr("minValue").is_some() || el.attr("maxValue").is_some() {
@@ -938,11 +964,27 @@ fn apply_child(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, child: &Rc
             build(vm, cx, child, Some(id));
         }
         _ => {
-            if let Some((_, method)) = TEXTURE_SLOTS
+            if let Some((slot, method)) = TEXTURE_SLOTS
                 .iter()
                 .find(|(t, _)| t.eq_ignore_ascii_case(tag))
             {
                 if let Some(tex) = build_as(vm, cx, child, "Texture", Some(id)) {
+                    // A button state's texture in its state's layer.
+                    if let Some(state) = slot.strip_suffix("Texture").filter(|s| {
+                        [
+                            "Normal",
+                            "Pushed",
+                            "Disabled",
+                            "Highlight",
+                            "Checked",
+                            "DisabledChecked",
+                        ]
+                        .contains(s)
+                    }) && let Some(tid) = widgets::widget_of(vm, tex)
+                    {
+                        let layer = vm.str(crate::buttons::state_layer(state));
+                        widgets::store(vm, tid, "DrawLayer", &[layer, Value::Num(0.0)]);
+                    }
                     call_method(vm, cx, child.line, frame, method, &[tex]);
                 }
             } else if let Some((_, method)) =
