@@ -305,7 +305,7 @@ fn dialog_opened(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-fn open(vm: &mut Vm, npc: UnitId, quest: i64, panel: Panel) {
+pub(crate) fn open(vm: &mut Vm, npc: UnitId, quest: i64, panel: Panel) {
     engine_mut(vm).units.npc = Some(npc);
     engine_mut(vm).world.quests.dialog = Some(Dialog { npc, quest, panel });
     match panel {
@@ -1060,7 +1060,7 @@ fn structure(fields: Vec<(&str, Answer)>) -> Answer {
 
 /// The log as the character's stats tell it: a header per zone, then its
 /// quests (`C_QuestLog.GetInfo`'s fields as recorded).
-fn sync_log(vm: &mut Vm) {
+pub(crate) fn sync_log(vm: &mut Vm) {
     if !engine(vm).world.quests.kept {
         return;
     }
