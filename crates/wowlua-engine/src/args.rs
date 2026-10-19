@@ -1,15 +1,19 @@
 //! The client's checks of documented functions' arguments, as
-//! `/stdtest argcheck` recorded them on WoW Forever 1.60.1 (fixture
-//! `tests/client/forever-camelot-argcheck.lua`): a missing argument, a
+//! `/stdtest argcheck` and `/stdtest engine fullprobe` recorded them on WoW
+//! Forever 1.60.1 (fixtures `tests/client/forever-camelot-argcheck.lua`,
+//! `forever-camelot-fullprobe.lua`; the full probe, newer and calling each
+//! function directly, wins where they differ): a missing argument, a
 //! secret where the function refuses one, or a value its C type does not
 //! take raises "bad argument #N to 'name' (<message>Usage: …)", the usage
-//! made from the documentation. (The client cuts some secret-argument
-//! messages at 199 bytes, but not all: which is not known, so none are.)
+//! made from the documentation as the client makes it (`fail` tells whose
+//! error it is and how it reads), and the undocumented functions' own
+//! checks (`data/camelot-usages.txt`).
 //!
 //! The check depends on the argument's documented type, as the client's
 //! C bindings differ: integers check their range, the restricted unit
-//! tokens want a string, enums and some IDs take anything. Types the probe
-//! did not reach follow their family (by their alias) and are unverified.
+//! tokens want a string, enumerations their range, some IDs take anything.
+//! Types the probes did not reach follow their family (by their alias) and
+//! are unverified.
 
 use serde_json::Value as Json;
 use wowlua_vm::{LuaError, NativeCall, Value, Vm};
@@ -32,6 +36,12 @@ enum Family {
     Filled,
     /// A name plate's unit token.
     NamePlateUnit,
+    /// A locale's name (`enUS`).
+    Locale,
+    /// A font object (a widget).
+    FontObject,
+    /// A garrison follower's ID.
+    FollowerId,
     /// A number in `min..=max`, refused with the usage alone otherwise.
     Bounded { min: f64, max: f64 },
     /// A spell book item: its slot and its bank, two of Lua's arguments
@@ -144,7 +154,15 @@ fn family(api: &Api, ty: &str, arg: &Json, method: bool) -> Family {
         "CalendarEventID" | "ClubId" | "WeeklyRewardItemDBID" | "InventorySlots" => {
             return Family::Any;
         }
+        // A function's font: a font object, not any table (`GetFontInfo({})`
+        // refused with the usage alone, the full probe).
+        "SimpleFont" if !method => return Family::FontObject,
         "SimpleFont" => return Family::Font,
+        // A garrison follower's ID: "" and "x" refused with the usage alone
+        // (`C_Garrison.GetFollowerAutoCombatSpells`, the full probe; Forever
+        // has no followers: what it takes, here "0x…" as the IDs were in
+        // retail, is unverified).
+        "GarrisonFollower" if !method => return Family::FollowerId,
         // A name plate's unit: a string, but neither a group member's
         // ("party1": "Raid<n>/Party<n> unit tokens are not allowed for this
         // call.") nor a compound token (a GUID: "Compound unit tokens
@@ -626,6 +644,12 @@ fn checked(api: &Api, f: &Function, arg: Json, n: usize, method: bool) -> Checke
             index,
         };
     }
+    // A locale's name: "Invalid locale name 'x'." for "x", "player", -1, 0,
+    // 1 and 2 (`C_StringUtil.GetDefaultAbbreviationBreakpoints`, the full
+    // probe; which names it knows is unverified: the client's locales).
+    if f.name == "C_StringUtil.GetDefaultAbbreviationBreakpoints" && n == 1 {
+        family = Family::Locale;
+    }
     // The client's own C types of documented numbers (the full probe).
     if ty == "number" && !method {
         match number_kind(f.name, n) {
@@ -805,6 +829,7 @@ fn missing_field(vm: &mut Vm, api: &Api, arg: &Json, table: Value) -> Option<Str
 
 enum Refusal {
     Field(String),
+    Text(String),
     Message(&'static str),
     Type,
     Range(f64, f64),
@@ -894,6 +919,42 @@ fn refuses_type(vm: &mut Vm, family: Family, v: Value) -> Option<Refusal> {
         Family::Func => (!matches!(v, Value::Func(_))).then_some(Refusal::Type),
         Family::Str => (!is_str).then_some(Refusal::Type),
         Family::StrictStr => (!is_str).then_some(Refusal::String),
+        Family::FontObject => {
+            let font = match v {
+                Value::Table(_) => crate::widgets::widget_of(vm, v).is_some(),
+                Value::Str(s) => {
+                    let name = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
+                    let g = vm.get_global(&name);
+                    crate::widgets::widget_of(vm, g).is_some()
+                }
+                _ => false,
+            };
+            (!font).then_some(Refusal::Type)
+        }
+        Family::FollowerId => match v {
+            Value::Str(s) if vm.str_bytes(s).starts_with(b"0x") => None,
+            _ => Some(Refusal::Type),
+        },
+        Family::Locale => {
+            const LOCALES: &[&[u8]] = &[
+                b"enUS", b"enGB", b"deDE", b"esES", b"esMX", b"frFR", b"itIT", b"koKR", b"ptBR",
+                b"ruRU", b"zhCN", b"zhTW",
+            ];
+            let name = match v {
+                Value::Str(s) => vm.str_bytes(s).to_vec(),
+                Value::Num(_) => match vm.tostring(v) {
+                    Ok(Value::Str(s)) => vm.str_bytes(s).to_vec(),
+                    _ => return Some(Refusal::Type),
+                },
+                _ => return Some(Refusal::Type),
+            };
+            (!LOCALES.contains(&name.as_slice())).then(|| {
+                Refusal::Text(format!(
+                    "Invalid locale name '{}'.",
+                    String::from_utf8_lossy(&name)
+                ))
+            })
+        }
         Family::NamePlateUnit => {
             if !is_str {
                 return Some(Refusal::String);
@@ -1116,6 +1177,7 @@ fn fail(vm: &mut Vm, api: &Api, f: &Function, n: usize, why: Option<Refusal>) ->
         Some(Refusal::Finite) => format!("must be a finite number - {usage}"),
         Some(Refusal::Field(field)) => format!("Current Field: [{field}], {usage}"),
         Some(Refusal::Message(text)) => format!("{text} - {usage}"),
+        Some(Refusal::Text(text)) => format!("{text} - {usage}"),
         Some(Refusal::SpellBank(bank)) => format!(
             "Invalid spellBank value {bank}. Must be an Enum.SpellBookSpellBank value. - {usage}"
         ),

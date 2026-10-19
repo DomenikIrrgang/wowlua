@@ -134,3 +134,21 @@ GetUnitPowerBarStringsByID	1	u32
 GetUnitPowerBarTextureInfoByID	1	u32
 IsLegacyDifficulty	1	u32
 IsTitleKnown	1	u32
+# The social systems' (their errors' text blanked in the recording): -1
+# refused, 0 to 2147483647 taken, as an unsigned integer is (unverified
+# text).
+C_AuctionHouse.GetReplicateItemBattlePetInfo	1	u32
+C_AuctionHouse.GetReplicateItemTimeLeft	1	u32
+C_ChatInfo.CanPlayerSpeakLanguage	1	u32
+C_ChatInfo.GetChatLineSenderGUID	1	u32
+C_ChatInfo.IsChatLineCensored	1	u32
+C_ChatInfo.IsValidChatLine	1	u32
+C_ClubFinder.GetFocusIndexFromFlag	1	u32
+C_ClubFinder.IsListingEnabledFromFlags	1	u32
+C_LFGInfo.IsLFGFollowerDungeon	1	u32
+C_LFGList.HasSearchResultInfo	1	u32
+C_LFGList.IsPlayerAuthenticatedForLFG	1	u32
+C_LFGList.ListingUsesEndgameEditRestrictions	1	u32
+C_PvP.GetAssignedSpecForBattlefieldQueue	1	u32
+C_PvP.IsTrainingGroundsArena	1	u32
+C_PvP.IsTrainingGroundsBG	1	u32

@@ -170,7 +170,7 @@ EJ_GetEncounterInfoByIndex	number	Usage: EJ_GetEncounterInfoByIndex(index, [inst
 EJ_GetInstanceByIndex	required,strictstr	Usage: EJ_GetInstanceByIndex(index, isRaid)
 EJ_GetInstanceForMap	number	Usage: EJ_GetInstanceForMap(mapID)
 EJ_GetInvTypeSortOrder	number	Usage: EJ_GetInvTypeSortOrder(invType)
-EJ_GetMapEncounter	any,number	Usage: EJ_GetMapEncounter(mapID, index, fromJournal
+EJ_GetMapEncounter	any,required	Usage: EJ_GetMapEncounter(mapID, index, fromJournal
 EJ_GetNumEncountersForLootByIndex	number	Usage: EJ_GetNumEncountersForLootByIndex(index)
 EJ_GetSearchResult	number	Usage: GetSearchResult(index)
 EJ_GetSectionPath	number	Usage: EJ_GetSectionPath(id)
@@ -214,7 +214,7 @@ GetCategoryAchievementPoints	required,strictstr	Usage: GetCategoryAchievementPoi
 GetCategoryInfo	number	Usage: GetCategoryInfo(categoryID)
 GetCategoryNumAchievements	number,number?	Usage: GetCategoryNumAchievements(categoryID, includeSuperceded)
 GetChannelDisplayInfo	number	Usage: GetChannelDisplayInfo(index)
-GetChannelName	string	Usage: GetChannelName([channelIndex] or [channelName])
+GetChannelName	required	Usage: GetChannelName([channelIndex] or [channelName])
 GetChatTypeIndex	required	Usage: GetChatTypeIndex(type)
 GetChatWindowChannels	number	Usage: GetChatWindowChannels(index)
 GetChatWindowInfo	number	Usage: GetChatWindowInfo(index)
@@ -341,6 +341,7 @@ GetSpecializationRoleByID	number	Usage: GetSpecializationInfoByID(specID)
 GetSpecializationRoleEnum	number	Usage: GetSpecializationRole(specIndex[, isInspect[, isPet]])
 GetSpecializationRoleEnumByID	number	Usage: GetSpecializationInfoByID(specID)
 GetSpecializationSpells	number	Usage: GetSpecializationSpells(specIndex[, isInspect[, isPet[, ignorePetOverrideSpec]]])
+GetSpecsForSpell	required	GetSpecsForSpell(): Invalid spell slot
 GetSpellBaseCooldown	required	Usage: GetSpellBaseCooldown(spellID)
 GetSpellsForCharacterUpgradeTier	required	Usage: GetSpellsForCharacterUpgradeTier(tierIndex)
 GetStatistic	required	Usage: GetStatistic(achievementID)
@@ -387,7 +388,9 @@ IsQuestIDValidSpellTarget	number	Usage: IsQuestValidSpellTarget(questID)
 IsQuestItemHidden	number	Usage: IsQuestItemHidden(index)
 IsQuestLogSpecialItemInRange	number	Usage: IsQuestLogSpecialItemInRange(index [,target])
 IsQuestSequenced	number	Usage: IsQuestSequenced(questID
+IsSelectedSpellBookItem	required	IsSelectedSpellBookItem(): Invalid spell slot
 IsSpecializationActivateSpell	number	Usage: IsSpecializationActivateSpell(spellID)
+IsSpellClassOrSpec	required	IsSpellClassOrSpec(): Invalid spell slot
 IsSpellValidForPendingGlyph	number	Usage: IsSpellValidForPendingGlyph(spellID)
 IsStoryQuest	number	Usage: IsStoryQuest(questID
 IsTutorialFlagged	number	Usage: Trigger("tutorial")
@@ -413,7 +416,7 @@ UnitHasLFGRandomCooldown	required	Usage: UnitHasLFGRandomCooldown("unit")
 # first comma (a player's name may be in it), so the message's start is not
 # known: `...` stands for it (unverified; that the call is refused is the
 # client's).
-BNGetBlockedInfo	required,number	Usage: BNGetBlockedInfo(...)
+BNGetBlockedInfo	required,required	Usage: BNGetBlockedInfo(...)
 BNGetDisplayName	number	Usage: BNGetDisplayName(...)
 BNGetFriendIndex	number	Usage: BNGetFriendIndex(...)
 BNGetNumFOF	number	Usage: BNGetNumFOF(...)

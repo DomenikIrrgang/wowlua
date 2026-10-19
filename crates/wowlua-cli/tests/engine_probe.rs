@@ -2024,7 +2024,7 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
 /// stand in for it (synthetic: the number changes with the first real
 /// run). Only ever raised, but for the plan's own changes: retail systems
 /// left out of it took 19 matched calls with them (762 of 792 before).
-const FULLPROBE_MATCHED: usize = 20204;
+const FULLPROBE_MATCHED: usize = 26350;
 
 #[test]
 fn the_engine_answers_the_full_probe_as_the_client_did() {
