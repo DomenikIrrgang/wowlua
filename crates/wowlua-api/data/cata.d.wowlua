@@ -4517,7 +4517,6 @@ declare interface CatalogShopProductInfo
     decorQuantity?: DecorQuantity
     isVCProduct: boolean
     containsHousingItem: boolean
-    deferredGameTimeDays: number
 end
 
 declare interface CatalogShopSectionInfo
@@ -27472,8 +27471,6 @@ declare namespace Enum
         const ChangeAnimationTarget: 256
         const RemoveSecretAspects: 512
         const ChangeParent: 1024
-        const SetTexture: 2048
-        const QueryRotation: 4096
     end
     namespace TableSecurityOption
         const DisallowTaintedAccess: 0

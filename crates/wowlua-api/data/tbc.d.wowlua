@@ -30961,8 +30961,6 @@ declare namespace Enum
         const ChangeAnimationTarget: 256
         const RemoveSecretAspects: 512
         const ChangeParent: 1024
-        const SetTexture: 2048
-        const QueryRotation: 4096
     end
     namespace GossipOptionRewardType
         const Item: 0
