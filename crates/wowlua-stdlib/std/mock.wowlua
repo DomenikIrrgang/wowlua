@@ -42,13 +42,16 @@ export interface MockUnit
     --- default); `combat = false`: no one put in combat. `kind`: `WOUND` (default), `PARRY`, `DODGE`, `MISS`, `BLOCK`;
     --- `indicator`: the text's (`"CRITICAL"`, `"GLANCING"`).
     --- The player's skill `name` up to `rank` ("Your skill in … has
-    --- increased", the stats' events).
-    function raiseSkill(name: string, rank: number)
+    --- increased", the stats' events); more `name2, rank2` pairs: skills up
+    --- in the same packet (their messages, then the stats' events once).
+    function raiseSkill(name: string, rank: number, ...: string | number)
     --- `kill`: the swing kills (`PARTY_KILL`, the death, the experience's
     --- message, its update a round trip later; `loot`: the corpse's items;
     --- `echo`: the target's clearing told back after these seconds;
-    --- `xpAfter`: the experience's update after these seconds).
-    function swing(victim: MockUnit, amount: number, opts: { kind?: string, power?: number, victimPower?: number, speed?: number, textAfter?: number, combat?: boolean, indicator?: string, kill?: { xp?: number, loot?: table, echo?: number | boolean, xpAfter?: number } }?)
+    --- `xpAfter`: the experience's update after these seconds;
+    --- `diesAfter`: with a queued spell's swing, the death, the
+    --- experience's message and the corpse's loot after these seconds).
+    function swing(victim: MockUnit, amount: number, opts: { kind?: string, power?: number, victimPower?: number, speed?: number, textAfter?: number, combat?: boolean, indicator?: string, kill?: { xp?: number, loot?: table, echo?: number | boolean, xpAfter?: number, diesAfter?: number } }?)
     --- The player talks to an NPC: a round trip later its quest dialog
     --- opens (`QUEST_DETAIL` for a quest it offers, `QUEST_PROGRESS` for
     --- one in the log); too far (`setDistance` above 5 yards): the
