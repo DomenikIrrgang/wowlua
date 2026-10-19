@@ -1039,6 +1039,9 @@ fn scenario_lines(log: &[String]) -> Vec<String> {
     out
 }
 
+/// A pattern compiled on first use.
+type Pattern = std::sync::LazyLock<regex::Regex>;
+
 fn scenario_line(line: &str) -> Option<String> {
     let body = line.split_once(' ').map_or(line, |(_, b)| b);
     const NOISE: &[&str] = &[
@@ -1088,21 +1091,28 @@ fn scenario_line(line: &str) -> Option<String> {
         return None;
     }
     // Players' GUIDs as the recordings have them (scrubbed); a chat
-    // message's line number (the session's).
-    let guid = regex::Regex::new(r"Player-\d+-[0-9A-F]{8}").unwrap();
-    let line =
+    // message's line number (the session's). (Each pattern compiled once:
+    // a scenario has thousands of lines.)
+    static GUID: Pattern = Pattern::new(|| regex::Regex::new(r"Player-\d+-[0-9A-F]{8}").unwrap());
+    static LINE: Pattern = Pattern::new(|| {
         regex::Regex::new(r"^(CHAT_MSG_.*; number )\d+(; (?:nil nil|string [^;]*); number 0;)")
-            .unwrap();
+            .unwrap()
+    });
+    let (guid, line) = (&*GUID, &*LINE);
     let body = guid.replace_all(body, "Player-0000-00000000");
     // A cast's GUID by its kind and spell (its server, map and number are
     // the session's).
-    let cast = regex::Regex::new(r"Cast-(\d+)-\d+-\d+-\d+-(\d+)-[0-9A-F]+").unwrap();
+    static CAST: Pattern =
+        Pattern::new(|| regex::Regex::new(r"Cast-(\d+)-\d+-\d+-\d+-(\d+)-[0-9A-F]+").unwrap());
+    let cast = &*CAST;
     let body = cast.replace_all(&body, "Cast-$1-$2");
     // A party's ID, the session's.
-    let party = regex::Regex::new(r"Party-\d+-\d+-[0-9A-F]+").unwrap();
+    static PARTY: Pattern = Pattern::new(|| regex::Regex::new(r"Party-\d+-\d+-[0-9A-F]+").unwrap());
+    let party = &*PARTY;
     let body = party.replace_all(&body, "Party-<id>");
     // A cast bar's ID, the session's.
-    let bar = regex::Regex::new(r"CastBar-[0-9A-F]+").unwrap();
+    static BAR: Pattern = Pattern::new(|| regex::Regex::new(r"CastBar-[0-9A-F]+").unwrap());
+    let bar = &*BAR;
     let body = bar.replace_all(&body, "CastBar-<id>");
     // An item's GUID, the server's (a made item's: the session's).
     let item = regex::Regex::new(r"Item-\d+-0-[0-9A-F]{16}").unwrap();
