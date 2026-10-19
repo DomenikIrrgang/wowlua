@@ -19,6 +19,10 @@
 --- - The character's own IDs (`{SPELL1}`, `{ITEMLOC}`, `{QUEST1}`) are
 ---   resolved once at the start and kept, so the calls are the same in
 ---   every session.
+---
+--- The same runner drives the method probe (methodprobe.wowlua, which
+--- registers itself): each probe its own command, run state and answers;
+--- one runs at a time.
 import state from "/state"
 import stamp from "/state"
 import say from "/harness"
@@ -40,8 +44,34 @@ local function plan(): any
     return G.StdTestFullProbePlan ?? defaultPlan
 end
 
-local function pack(...: any): { n: number, [number]: any }
+export function pack(...: any): { n: number, [number]: any }
     return { n = select("#", ...), ... }
+end
+
+--- While the method probe calls: the widgets it made, by their names in
+--- its answers (`self`, `parent`, `F1`); a widget is shown by its name or
+--- its type, not its table.
+local widgetNames: { [any]: string }? = nil
+
+export function setWidgetNames(names: { [any]: string }?)
+    widgetNames = names
+end
+
+local function widgetLabel(v: any): string?
+    if type(rawget(v :: table, 0)) ~= "userdata" then
+        return nil
+    end
+    const names = widgetNames :: { [any]: string }
+    if names[v] ~= nil then
+        return names[v]
+    end
+    local ok, kind = pcall(function(): any return v:GetObjectType() end)
+    local okName, name = pcall(function(): any return v:GetName() end)
+    local label = ok and tostring(kind) or "?"
+    if okName and type(name) == "string" then
+        label = `{label} {name}`
+    end
+    return label
 end
 
 --- A value in full: tables to depth 4, keys sorted, secrets marked (the
@@ -55,6 +85,12 @@ local function show(v: any, depth: number): string
     end
     if type(v) ~= "table" then
         return `{type(v)} {tostring(v)}`
+    end
+    if widgetNames ~= nil then
+        const label = widgetLabel(v)
+        if label ~= nil then
+            return `widget {label}`
+        end
     end
     if depth >= 4 then
         return "table"
@@ -75,7 +111,7 @@ local function show(v: any, depth: number): string
 end
 
 --- A protected call's outcome as the answers battery writes it.
-local function describe(ok: boolean, packed: any): string
+export function describe(ok: boolean, packed: any): string
     if not ok then
         return `error: {issecretvalue(packed) and "<secret>" or tostring(packed)}`
     end
@@ -99,7 +135,7 @@ end
 
 --- A call's answer: its source compiled, called, its results packed
 --- inside the protected call.
-local function call(source: string): string
+export function call(source: string): string
     const f = loadstring("return " .. source)
     if f == nil then
         return "syntax"
@@ -185,7 +221,7 @@ end
 
 --- The placeholders of `source` filled in: the text, and the first one
 --- without a value.
-local function resolve(source: string, values: { [string]: string }): (string, string?)
+export function resolve(source: string, values: { [string]: string }): (string, string?)
     local missing: string? = nil
     const text = source:gsub("{(%u[%u%d]*)}", function(name: string): string?
         const v = values[name]
@@ -201,7 +237,7 @@ end
 export type Entry = { text: string, fn: string, setter: boolean, missing: string? }
 
 --- The plan's calls in order, filled in with the character's values.
-local function entries(values: { [string]: string }): Entry[]
+local function fullEntries(values: { [string]: string }): Entry[]
     const p = plan()
     const out: Entry[] = {}
     const suspects: Entry[] = {}
@@ -249,7 +285,7 @@ end
 
 --- The character's own values the plan's placeholders name, as Lua
 --- sources (`{GUID}`-like values as calls: no name or GUID in a key).
-local function collect(): { [string]: string }
+export function collect(): { [string]: string }
     const v: { [string]: string } = {}
     local function try(f: () -> ())
         pcall(f)
@@ -286,7 +322,7 @@ local function collect(): { [string]: string }
                         v.BAG = tostring(bag)
                         v.BAGSLOT = tostring(slot)
                         v.ITEMLOC = `ItemLocation:CreateFromBagAndSlot({bag}, {slot})`
-                        v.ITEMLINK1 = `G.C_Container.GetContainerItemLink({bag}, {slot})`
+                        v.ITEMLINK1 = `C_Container.GetContainerItemLink({bag}, {slot})`
                     end
                 end
             end
@@ -426,26 +462,46 @@ export type FullProbe = {
     announced: boolean?,
 }
 
+--- A probe the runner drives: its command (and stamp), where its run and
+--- answers are kept, its plan, its calls in order, a recorded key's answer
+--- (and whether its settings stayed put), and what it records at the start.
+export type Probe = {
+    name: string,
+    stateKey: string,
+    resultsKey: string,
+    plan: () -> any,
+    entries: (values: { [string]: string }) -> Entry[],
+    answer: (key: string) -> (string, boolean),
+    begin: (out: { [string]: string }) -> (),
+}
+
+const probes: Probe[] = {}
+
+--- Adds a probe (the method probe) to the runner.
+export function register(k: Probe)
+    probes[#probes + 1] = k
+end
+
 --- The player's GUID (kept to resume with the same character only).
 local function playerGuid(): string?
     return G.UnitGUID("player")
 end
 
-local function fp(): FullProbe?
-    return (state() :: any).fullProbe
+local function fp(k: Probe): FullProbe?
+    return (state() :: any)[k.stateKey]
 end
 
-local function results(): { [string]: string }
+local function results(k: Probe): { [string]: string }
     const st = state() :: any
-    st.engineFullProbe = st.engineFullProbe ?? {}
-    return st.engineFullProbe
+    st[k.resultsKey] = st[k.resultsKey] ?? {}
+    return st[k.resultsKey]
 end
 
 --- The settings the plan changes, by their read-back (once each).
-local function settings(values: { [string]: string }): { get: string, restore: string }[]
+local function settings(k: Probe, values: { [string]: string }): { get: string, restore: string }[]
     const out: { get: string, restore: string }[] = {}
     const seen: { [string]: boolean } = {}
-    for _, s in ipairs(plan().setters :: any[]) do
+    for _, s in ipairs((k.plan().setters or {}) :: any[]) do
         local get, missingGet = resolve(s.get, values)
         local restore, missingRestore = resolve(s.restore, values)
         if missingGet == nil and missingRestore == nil and not seen[get] then
@@ -457,8 +513,8 @@ local function settings(values: { [string]: string }): { get: string, restore: s
 end
 
 --- Each setting's value at the start.
-local function readOriginals(run: FullProbe)
-    for _, s in ipairs(settings(run.values)) do
+local function readOriginals(k: Probe, run: FullProbe)
+    for _, s in ipairs(settings(k, run.values)) do
         const f = loadstring("return " .. s.get)
         if f ~= nil then
             local ok, packed = pcall(function(): any return pack((f :: any)()) end)
@@ -472,9 +528,9 @@ end
 
 --- Every setting put back where it differs from the start; the ones that
 --- stay different kept in `restoreFailures`.
-local function restoreAll(run: FullProbe): number
+local function restoreAll(k: Probe, run: FullProbe): number
     local fixed = 0
-    for _, s in ipairs(settings(run.values)) do
+    for _, s in ipairs(settings(k, run.values)) do
         const f = loadstring("return " .. s.get)
         const maker = loadstring("return " .. s.restore)
         const want = run.originalTexts[s.get]
@@ -532,12 +588,12 @@ local function eta(run: FullProbe): string
     return minutes(left / math.max(rate, 1) + reloadsLeft * perReload)
 end
 
-local function progress(run: FullProbe): string
+local function progress(k: Probe, run: FullProbe): string
     -- The calls answered, wherever the run stands (after the plan's end it
     -- goes back to the stretches a crash put off).
     local done = 0
-    const out = results()
-    for _, e in ipairs(entries(run.values)) do
+    const out = results(k)
+    for _, e in ipairs(k.entries(run.values)) do
         if out[e.text] ~= nil then
             done = done + 1
         end
@@ -559,7 +615,7 @@ end
 
 --- Ends the session: the next segment written down, the UI reloaded (or
 --- the user asked to, when the client refuses).
-local function planReload(run: FullProbe)
+local function planReload(k: Probe, run: FullProbe)
     const size = segmentSize(run)
     local to = math.min(run.cursor + size, run.total + 1)
     if run.deferredTo ~= nil then
@@ -568,25 +624,25 @@ local function planReload(run: FullProbe)
     run.segment = { from = run.cursor, to = to }
     run.reloading = true
     run.reloadAt = time()
-    stamp("fullprobe")
+    stamp(k.name)
     reloadUI()
     C_Timer.After(5, function()
         if run.reloading then
-            say("|cffffd200fullprobe: type /reload to go on (the client did not reload)|r")
+            say(`|cffffd200{k.name}: type /reload to go on (the client did not reload)|r`)
         end
     end)
 end
 
-local function finish(run: FullProbe)
+local function finish(k: Probe, run: FullProbe)
     run.running = false
     run.done = true
-    restoreAll(run)
-    stamp("fullprobe")
+    restoreAll(k, run)
+    stamp(k.name)
     local failures = 0
     for _ in pairs(run.restoreFailures) do
         failures = failures + 1
     end
-    say(`fullprobe: done, {run.total} calls, {#run.crashed} crashed, {failures} settings not restored; reloading so the file is written`)
+    say(`{k.name}: done, {run.total} calls, {#run.crashed} crashed, {failures} settings not restored; reloading so the file is written`)
     run.reloading = true
     reloadUI()
 end
@@ -595,17 +651,17 @@ local driver: any = nil
 
 --- Runs the segment: a few calls each frame (none in combat), then the
 --- reload.
-local function runSegment(run: FullProbe)
-    const list = entries(run.values)
+local function runSegment(k: Probe, run: FullProbe)
+    const list = k.entries(run.values)
     run.total = #list
     const segment = run.segment ?? { from = run.cursor, to = run.cursor + segmentSize(run) }
     const to = math.min(segment.to, run.total + 1)
-    const out = results()
+    const out = results(k)
     const started = GetTime()
     if driver == nil then
         driver = CreateFrame("Frame")
     end
-    say(`fullprobe: {progress(run)}`)
+    say(`{k.name}: {progress(k, run)}`)
     driver:SetScript("OnUpdate", function()
         if not run.running then
             driver:SetScript("OnUpdate", nil)
@@ -628,14 +684,10 @@ local function runSegment(run: FullProbe)
                 out[e.text] = `skipped: {e.fn} crashed the client on {run.crashedFunctions[e.fn]}`
             else
                 run.inflight = run.cursor
-                if e.setter then
-                    local text, restored = answer(e.text)
-                    out[e.text] = text
-                    if not restored then
-                        restoreAll(run)
-                    end
-                else
-                    out[e.text] = call(e.text)
+                local text, restored = k.answer(e.text)
+                out[e.text] = text
+                if not restored then
+                    restoreAll(k, run)
                 end
                 run.inflight = nil
                 run.callsRun = run.callsRun + 1
@@ -653,16 +705,16 @@ local function runSegment(run: FullProbe)
                 const pending = run.deferred ?? {}
                 const r = table.remove(pending, 1)
                 if r == nil then
-                    finish(run)
+                    finish(k, run)
                 else
                     run.cursor = r.from
                     run.deferredTo = r.to
                     run.careful[#run.careful + 1] = { to = r.to, size = math.max(1, math.ceil((r.to - r.from) / 16)) }
-                    say(`fullprobe: the calls a crash put off: {r.from} to {r.to - 1} ({#pending} more stretches after them)`)
-                    planReload(run)
+                    say(`{k.name}: the calls a crash put off: {r.from} to {r.to - 1} ({#pending} more stretches after them)`)
+                    planReload(k, run)
                 end
             else
-                planReload(run)
+                planReload(k, run)
             end
         end
     end)
@@ -670,20 +722,20 @@ end
 
 --- The session after a crash in the last segment: smaller segments over it,
 --- or the call marked when the segment was one call.
-local function crashed(run: FullProbe)
+local function crashed(k: Probe, run: FullProbe)
     const segment = run.segment
     if segment == nil then
         return
     end
     const size = segment.to - segment.from
     if size <= 1 then
-        const list = entries(run.values)
+        const list = k.entries(run.values)
         const e = list[segment.from]
         if e ~= nil then
-            results()[e.text] = "crashed"
+            results(k)[e.text] = "crashed"
             run.crashed[#run.crashed + 1] = e.text
             run.crashedFunctions[e.fn] = e.text
-            say(`|cffff4040fullprobe: {e.text} crashed the client; skipped (and {e.fn}'s other calls)|r`)
+            say(`|cffff4040{k.name}: {e.text} crashed the client; skipped (and {e.fn}'s other calls)|r`)
         end
         run.cursor = segment.from + 1
     elseif run.deferredTo == nil then
@@ -694,23 +746,23 @@ local function crashed(run: FullProbe)
         pending[#pending + 1] = { from = segment.from, to = segment.to }
         run.cursor = segment.to
         run.careful = {}
-        say(`|cffffd200fullprobe: the client stopped in calls {segment.from} to {segment.to - 1}; they run at the end, going on with the rest|r`)
+        say(`|cffffd200{k.name}: the client stopped in calls {segment.from} to {segment.to - 1}; they run at the end, going on with the rest|r`)
     else
         run.careful[#run.careful + 1] = { to = segment.to, size = math.max(1, math.ceil(size / 16)) }
         run.cursor = segment.from
-        say(`|cffffd200fullprobe: the client stopped in calls {segment.from} to {segment.to - 1}; running them again in smaller steps|r`)
+        say(`|cffffd200{k.name}: the client stopped in calls {segment.from} to {segment.to - 1}; running them again in smaller steps|r`)
     end
-    const fixed = restoreAll(run)
+    const fixed = restoreAll(k, run)
     if fixed > 0 then
-        say(`fullprobe: {fixed} settings put back after the crash`)
+        say(`{k.name}: {fixed} settings put back after the crash`)
     end
 end
 
 --- A run started on another plan (StdTest updated mid-run): it goes on at
 --- its first call without an answer; the stretches put off by a crash are
 --- found again the same way.
-local function rebase(run: FullProbe)
-    const version = (plan() :: any).version
+local function rebase(k: Probe, run: FullProbe)
+    const version = (k.plan() :: any).version
     if run.planVersion == version then
         return
     end
@@ -719,8 +771,8 @@ local function rebase(run: FullProbe)
     run.deferredTo = nil
     run.careful = {}
     run.segment = nil
-    const list = entries(run.values)
-    const out = results()
+    const list = k.entries(run.values)
+    const out = results(k)
     run.total = #list
     run.cursor = #list + 1
     for i, e in ipairs(list) do
@@ -729,15 +781,11 @@ local function rebase(run: FullProbe)
             break
         end
     end
-    say(`fullprobe: StdTest's plan changed; going on at call {run.cursor} (the first without an answer)`)
+    say(`{k.name}: StdTest's plan changed; going on at call {run.cursor} (the first without an answer)`)
 end
 
-@onEnterWorld
-local function resume(isInitialLogin: boolean, isReloadingUi: boolean)
-    if not isInitialLogin and not isReloadingUi then
-        return
-    end
-    const run = fp()
+local function resumeProbe(k: Probe, isReloadingUi: boolean)
+    const run = fp(k)
     if run == nil then
         return
     end
@@ -747,21 +795,21 @@ local function resume(isInitialLogin: boolean, isReloadingUi: boolean)
     if not run.running then
         if run.done and not run.announced then
             run.announced = true
-            say(`fullprobe: finished, {run.total} calls, {#run.crashed} crashed (cargo xtask ingest takes them)`)
+            say(`{k.name}: finished, {run.total} calls, {#run.crashed} crashed (cargo xtask ingest takes them)`)
         end
         return
     end
     if run.character ~= playerGuid() then
-        say("fullprobe: paused (started on another character; log in with it, or /stdtest engine fullprobe reset)")
+        say(`{k.name}: paused (started on another character; log in with it, or /stdtest engine {k.name} reset)`)
         return
     end
     const inflight = run.inflight
     if inflight ~= nil then
         -- Saved in the middle of a call: the call ended the session.
-        const list = entries(run.values)
+        const list = k.entries(run.values)
         const e = list[inflight]
         if e ~= nil then
-            results()[e.text] = "crashed"
+            results(k)[e.text] = "crashed"
             run.crashed[#run.crashed + 1] = e.text
             run.crashedFunctions[e.fn] = e.text
         end
@@ -774,44 +822,63 @@ local function resume(isInitialLogin: boolean, isReloadingUi: boolean)
             run.reloadSeconds = run.reloadSeconds + math.max(0, time() - run.reloadAt)
         end
         run.reloadAt = nil
-        rebase(run)
-        C_Timer.After(1, function() runSegment(run) end)
+        rebase(k, run)
+        C_Timer.After(1, function() runSegment(k, run) end)
         return
     end
     run.reloadAt = nil
     if planned then
-        crashed(run)
+        crashed(k, run)
     else
-        say("fullprobe: going on after a reload")
+        say(`{k.name}: going on after a reload`)
     end
-    rebase(run)
-    C_Timer.After(1, function() planReload(run) end)
+    rebase(k, run)
+    C_Timer.After(1, function() planReload(k, run) end)
+end
+
+@onEnterWorld
+local function resume(isInitialLogin: boolean, isReloadingUi: boolean)
+    if not isInitialLogin and not isReloadingUi then
+        return
+    end
+    for _, k in ipairs(probes) do
+        resumeProbe(k, isReloadingUi)
+    end
 end
 
 @onLogout
 local function leaving()
-    const run = fp()
-    if run ~= nil then
-        run.endKind = run.reloading and "planned" or "other"
+    for _, k in ipairs(probes) do
+        const run = fp(k)
+        if run ~= nil then
+            run.endKind = run.reloading and "planned" or "other"
+        end
     end
 end
 
-local function start()
+local function start(k: Probe)
     const st = state() :: any
-    const old = fp()
+    const old = fp(k)
     if old ~= nil and old.running then
-        say(`fullprobe: running, {progress(old)}`)
+        say(`{k.name}: running, {progress(k, old)}`)
         return
     end
+    for _, other in ipairs(probes) do
+        const r = fp(other)
+        if other ~= k and r ~= nil and r.running then
+            say(`{k.name}: {other.name} is running; /stdtest engine {other.name} stop first`)
+            return
+        end
+    end
     if InCombatLockdown() then
-        say("fullprobe: leave combat first")
+        say(`{k.name}: leave combat first`)
         return
     end
     if old ~= nil and not old.done then
         old.running = true
         old.character = playerGuid()
-        say(`fullprobe: going on, {progress(old)}`)
-        planReload(old)
+        say(`{k.name}: going on, {progress(k, old)}`)
+        planReload(k, old)
         return
     end
     const run: FullProbe = {
@@ -824,8 +891,8 @@ local function start()
         total = 0,
         careful = {},
         deferred = {},
-        planVersion = (plan() :: any).version,
-        segmentSize = plan().segmentSize ?? SEGMENT,
+        planVersion = (k.plan() :: any).version,
+        segmentSize = k.plan().segmentSize ?? SEGMENT,
         crashed = {},
         crashedFunctions = {},
         restoreFailures = {},
@@ -835,31 +902,32 @@ local function start()
         workSeconds = 0,
         callsRun = 0,
     } :: any
-    run.total = #entries(run.values)
-    readOriginals(run)
-    st.fullProbe = run
-    st.engineFullProbe = {}
-    const p = plan()
-    say(`fullprobe: {#(p.calls :: any[])} functions, {run.total} calls ({#(p.skipped :: any[])} functions skipped), {run.segmentSize} calls between reloads; the UI reloads by itself (stay out of combat; /stdtest engine fullprobe stop pauses)`)
-    planReload(run)
+    run.total = #k.entries(run.values)
+    readOriginals(k, run)
+    st[k.stateKey] = run
+    st[k.resultsKey] = {}
+    k.begin(results(k))
+    const p = k.plan()
+    say(`{k.name}: {run.total} calls ({#((p.skipped or {}) :: any[])} skipped), {run.segmentSize} calls between reloads; the UI reloads by itself (stay out of combat; /stdtest engine {k.name} stop pauses)`)
+    planReload(k, run)
 end
 
---- `/stdtest engine fullprobe [stop | status | reset]`.
-export function fullProbe(arg: string?)
+--- `/stdtest engine <probe> [stop | status | reset]`.
+export function command(k: Probe, arg: string?)
     const st = state() :: any
-    const run = fp()
+    const run = fp(k)
     if arg == "stop" then
         if run == nil or not run.running then
-            say("fullprobe: not running")
+            say(`{k.name}: not running`)
             return
         end
         run.running = false
-        const fixed = restoreAll(run)
-        stamp("fullprobe")
-        say(`fullprobe: stopped, {progress(run)}; {fixed} settings put back; /reload writes the results, /stdtest engine fullprobe goes on`)
+        const fixed = restoreAll(k, run)
+        stamp(k.name)
+        say(`{k.name}: stopped, {progress(k, run)}; {fixed} settings put back; /reload writes the results, /stdtest engine {k.name} goes on`)
     elseif arg == "status" then
         if run == nil then
-            say("fullprobe: not started (/stdtest engine fullprobe starts it)")
+            say(`{k.name}: not started (/stdtest engine {k.name} starts it)`)
             return
         end
         local failures = 0
@@ -867,21 +935,40 @@ export function fullProbe(arg: string?)
             failures = failures + 1
         end
         const phase = run.running and "running" or (run.done and "done" or "stopped")
-        say(`fullprobe: {phase}, {progress(run)}, {run.reloads} reloads, {failures} settings not restored`)
+        say(`{k.name}: {phase}, {progress(k, run)}, {run.reloads} reloads, {failures} settings not restored`)
         for _, text in ipairs(run.crashed) do
             say(`  crashed: {text}`)
         end
     elseif arg == "reset" then
         if run ~= nil and run.running then
             run.running = false
-            restoreAll(run)
+            restoreAll(k, run)
         end
-        st.fullProbe = nil
-        st.engineFullProbe = nil
-        say("fullprobe: reset")
+        st[k.stateKey] = nil
+        st[k.resultsKey] = nil
+        say(`{k.name}: reset`)
     else
-        start()
+        start(k)
     end
+end
+
+--- The full probe.
+const full: Probe = {
+    name = "fullprobe",
+    stateKey = "fullProbe",
+    resultsKey = "engineFullProbe",
+    plan = plan,
+    entries = fullEntries,
+    answer = function(key: string): (string, boolean)
+        return answer(key)
+    end,
+    begin = function(_out: { [string]: string }) end,
+}
+register(full)
+
+--- `/stdtest engine fullprobe [stop | status | reset]`.
+export function fullProbe(arg: string?)
+    command(full, arg)
 end
 
 --- The answers to recorded keys (calls and settings), for the engine's
@@ -897,7 +984,7 @@ end
 --- The plan's calls without a placeholder (the same in every world).
 export function literalCalls(): string[]
     const out: string[] = {}
-    for _, e in ipairs(entries({})) do
+    for _, e in ipairs(fullEntries({})) do
         if e.missing == nil and not e.setter then
             out[#out + 1] = e.text
         end

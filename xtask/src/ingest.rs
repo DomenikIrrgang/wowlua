@@ -33,7 +33,8 @@
 //! - the font heights: `crates/wowlua-engine/data/camelot-font-heights.txt`;
 //! - the static functions' answers: `crates/wowlua-engine/data/camelot-answers.txt`;
 //! - the login: `crates/wowlua-engine/data/camelot-login.txt` (and reload);
-//! - `/stdtest engine fullprobe`: `…/forever-camelot-fullprobe.lua`.
+//! - `/stdtest engine fullprobe`: `…/forever-camelot-fullprobe.lua`;
+//! - `/stdtest engine methodprobe`: `…/forever-camelot-methodprobe.lua`.
 //!
 //! Each part is written only when the file has it, and only when StdTest
 //! stamped it later than the repository's (`tests/client/recorded.txt`;
@@ -238,6 +239,7 @@ const WORLD_PARTS: &[&str] = &[
     "login",
     "reload",
     "fullprobe",
+    "methodprobe",
 ];
 
 /// The WoW account a SavedVariables path is in (`…/Account/<id>#2/…`: 2).
@@ -870,10 +872,16 @@ fn identity_from_scenarios(state: &mlua::Table) -> Result<Identity> {
     })
 }
 
-/// The player of a file with the full probe only: its answers to
-/// `UnitName("player")` and `UnitGUID("player")`.
+/// The player of a file with the full probe or the method probe only:
+/// their answers to `UnitName("player")` and `UnitGUID("player")`.
 fn identity_from_fullprobe(state: &mlua::Table) -> Option<Identity> {
-    let probe: mlua::Table = state.get("engineFullProbe").ok()?;
+    ["engineFullProbe", "engineMethodProbe"]
+        .iter()
+        .find_map(|key| identity_from_probe(state, key))
+}
+
+fn identity_from_probe(state: &mlua::Table, key: &str) -> Option<Identity> {
+    let probe: mlua::Table = state.get(key).ok()?;
     let strings = |v: &str| -> Vec<String> {
         let re = regex::Regex::new(r"string ([^,]+)").expect("a valid pattern");
         re.captures_iter(v)
@@ -1758,6 +1766,26 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
             &all,
         )?;
     }
+    // Every widget method called on fresh widgets (`/stdtest engine
+    // methodprobe`), merged in; scrubbed as the full probe (its own
+    // answers name the player, the realm and the guild).
+    if let Ok(probe) = state.get::<mlua::Table>("engineMethodProbe")
+        && let Some(client_version) = gate.take(&stamps, "methodprobe", &version)
+    {
+        let path = client.join("forever-camelot-methodprobe.lua");
+        let entries = fullprobe_entries(&me, &probe)?;
+        let all = merged(read_table(&path), &entries);
+        write_table(
+            &path,
+            &format!(
+                "WoW Forever {client_version}: /stdtest engine methodprobe, every widget method\n\
+                 called on fresh hidden widgets, setters read back\n\
+                 (tests/ingame/src/methodprobe.wowlua, its plan methodprobeplan.lua); the\n\
+                 player, realm and guild scrubbed (cargo xtask ingest)."
+            ),
+            &all,
+        )?;
+    }
     // The cursor (`/stdtest engine cursor`): each step's state and the
     // events between; the keyboard (`/stdtest engine keys`): which frames
     // each key reached, and the binding's clicks; in order.
@@ -2392,6 +2420,34 @@ mod tests {
             all,
             vec![("a".into(), "3".into()), ("b".into(), "2".into())]
         );
+    }
+
+    /// The method probe alone names the player too (its first answers);
+    /// a widget's answer loses the player's name, GUID and realm.
+    #[test]
+    fn the_method_probe_is_scrubbed() {
+        let lua = mlua::Lua::new();
+        let state: mlua::Table = lua
+            .load(
+                r#"return { engineMethodProbe = {
+                    ['UnitName("player")'] = "2: string Tamsin, string Ashford",
+                    ['UnitGUID("player")'] = "1: string Player-1234-" .. "0ABCDEF1",
+                    ['GetRealmName()'] = "1: string Moonfall Vale",
+                    ['FontStringWithFont:SetText(UnitName("player")) -> GetText()'] = "0:  || GetText(): 1: string Tamsin",
+                    ['Frame:SetAttribute("x", UnitGUID("player")) -> GetAttribute(#1)'] = "0:  || GetAttribute(#1): 1: string Player-1234-" .. "0ABCDEF1 of Moonfall Vale",
+                } }"#,
+            )
+            .eval()
+            .unwrap();
+        let me = identity_from_fullprobe(&state).expect("the player");
+        assert_eq!(me.name, "Tamsin");
+        let probe: mlua::Table = state.get("engineMethodProbe").unwrap();
+        let entries = fullprobe_entries(&me, &probe).unwrap();
+        let all = format!("{entries:?}");
+        for leak in ["Tamsin", "Ashford", "Moonfall", "0ABCDEF1"] {
+            assert!(!all.contains(leak), "{leak} in {all}");
+        }
+        assert!(all.contains("GetText(): 1: string Player"), "{all}");
     }
 
     /// The full probe names the player itself; its answers lose the

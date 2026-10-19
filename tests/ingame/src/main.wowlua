@@ -12,7 +12,9 @@
 --   /stdtest argcheck  how documented functions check their arguments (then /reload)
 --   /stdtest engine    what the client's engine does (also: order, protected, blocked,
 --                      record <label>, stop; fullprobe [stop | status | reset]: every
---                      function called with many arguments, reloading by itself)
+--                      function called with many arguments, reloading by itself;
+--                      methodprobe [stop | status | reset]: every widget method,
+--                      each on a fresh hidden widget, the same way)
 --   /stdtest sv        how the client writes SavedVariables (risky: values that may
 --                      break the file; back it up first)
 import slash, router from "wowlua:slash"
@@ -128,7 +130,7 @@ local commands = router({
     },
     engine = {
         args = { "rest" },
-        help = "Record what the client's engine does: /stdtest engine [order | protected | blocked | input | merchant | soft | answers | group | startup | fullprobe [stop | status | reset] | record <label> | stop] (then /reload)",
+        help = "Record what the client's engine does: /stdtest engine [order | protected | blocked | input | merchant | soft | answers | group | startup | fullprobe [stop | status | reset] | methodprobe [stop | status | reset] | record <label> | stop] (then /reload)",
         run = function(arg: string?) engineProbe(arg) end,
     },
     sv = {
