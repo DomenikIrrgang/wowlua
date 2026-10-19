@@ -59,6 +59,9 @@ pub struct Casting {
     /// The player's spells on cooldown: when each is ready again (the
     /// clock's), from its data's `cooldown` (seconds).
     pub ready_at: HashMap<i64, f64>,
+    /// A food's cooldown category on its short cooldown since its use:
+    /// the category, the start (the clock's), the seconds.
+    pub category_cooldown: Option<(f64, f64, f64)>,
     /// The player's presses the server has not answered yet, in order:
     /// the spell and the client's cast GUID for it.
     pub pending: Vec<(f64, String)>,

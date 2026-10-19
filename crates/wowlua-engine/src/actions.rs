@@ -432,6 +432,25 @@ fn get_action_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
         }
         _ => None,
     };
+    // An item of a food's category just used (`inventory.rs`).
+    if let Some(a) = &a
+        && a.kind == "item"
+        && let Some((category, start, length)) = engine(vm).units.casting.category_cooldown
+        && start + length > now
+        && num(data_field(vm, true, a.id, "cooldownCategory")) == Some(category)
+    {
+        let t = table(
+            vm,
+            &[
+                ("startTime", Value::Num(start)),
+                ("duration", Value::Num(length)),
+                ("isEnabled", Value::Bool(true)),
+                ("modRate", Value::Num(1.0)),
+                ("isActive", Value::Bool(true)),
+            ],
+        );
+        return Ok(vec![t]);
+    }
     // Its own cooldown, running since before the snapshot (recorded: a
     // warrior's three-minute spell on its slot until it ended), longer
     // than the global one: told without the global cooldown's fields.

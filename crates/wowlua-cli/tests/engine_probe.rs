@@ -809,7 +809,26 @@ fn session_start(recording: &str) -> Option<f64> {
             .min_by(|a, b| a.0.total_cmp(&b.0))
             .map(|(at, started)| started / scale - at)
     };
-    first(&gcd, 1.0).or_else(|| first(&cast, 1000.0))
+    // Else an aura the player gained with a duration: applied at its
+    // event, its expiration the session's time plus the duration.
+    let aura = regex::Regex::new(
+        r#"= "([0-9.]+) UNIT_AURA\(string player; \{addedAuras=\{1=\{[^}]*duration=number ([0-9.]+),expirationTime=number ([0-9.]+),"#,
+    )
+    .unwrap();
+    let applied = || {
+        aura.captures_iter(recording)
+            .filter_map(|c| {
+                let at = c[1].parse::<f64>().ok()?;
+                let duration = c[2].parse::<f64>().ok()?;
+                let expires = c[3].parse::<f64>().ok()?;
+                (duration > 0.0).then_some((at, expires - duration))
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(at, started)| started - at)
+    };
+    first(&gcd, 1.0)
+        .or_else(|| first(&cast, 1000.0))
+        .or_else(applied)
 }
 
 /// A scenario (`/stdtest engine scenario <name>`) played in the engine:
@@ -1475,7 +1494,7 @@ fn the_engine_plays_legacy_as_the_client_did() {
 
 /// How many of the items scenario's lines the engine plays as the client
 /// did: only ever up.
-const ITEMS_MATCHED: usize = 356;
+const ITEMS_MATCHED: usize = 357;
 
 /// The items scenario: gear worn and taken off by right-click and drag,
 /// a two-handed weapon refused (bags full), food eaten, an item deleted.

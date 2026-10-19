@@ -374,6 +374,9 @@ fn deleted(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// A food's category's cooldown after its use (recorded once).
+const FOOD_RECOVERY: f64 = 1.0;
+
 /// An item used: the cast at once (one with a cast time: its cooldown
 /// foretold); the server's casts and cooldowns; one fewer a moment later.
 fn use_item(vm: &mut Vm, bag: i64, slot: usize, id: i64) {
@@ -392,6 +395,15 @@ fn use_item(vm: &mut Vm, bag: i64, slot: usize, id: i64) {
         return;
     }
     fire(vm, "ACTIONBAR_UPDATE_STATE", &[]);
+    // Food: its cooldown category's items on a second's cooldown from the
+    // use (recorded once: the jerky's slot told so with the souffle's
+    // cooldown events, from the click; unverified: its length beyond the
+    // recording's, told active 0.65 s after and over 10 s after).
+    let category = num(character::item_field(vm, id, "cooldownCategory"));
+    if food(vm, id) && category != 0.0 {
+        let now = crate::clock::now(vm);
+        engine_mut(vm).units.casting.category_cooldown = Some((category, now, FOOD_RECOVERY));
+    }
     let after = server(vm);
     later(
         vm,
