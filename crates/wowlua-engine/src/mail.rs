@@ -398,7 +398,13 @@ fn get_latest_three_senders(vm: &mut Vm, _c: NativeCall) -> Ret {
 /// item's count and link (recorded).
 fn get_inbox_header_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some((_, t)) = letter(vm, &c) else {
-        return Ok(vec![]);
+        // No such letter: its fifteen values empty, the money, cost and
+        // days 0 (the full probe).
+        let mut out = vec![Value::Nil; 15];
+        for v in &mut out[4..7] {
+            *v = Value::Num(0.0);
+        }
+        return Ok(out);
     };
     let items = items_of(vm, t);
     let first = items.first().copied();
@@ -454,7 +460,17 @@ fn get_inbox_header_info(vm: &mut Vm, c: NativeCall) -> Ret {
 /// till the names are known), else the seven of none (recorded).
 fn get_inbox_invoice_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some((_, t)) = letter(vm, &c) else {
-        return Ok(vec![]);
+        // No such letter: as one without an invoice (the full probe).
+        let zero = Value::Num(0.0);
+        return Ok(vec![
+            Value::Nil,
+            Value::Nil,
+            Value::Nil,
+            zero,
+            zero,
+            zero,
+            zero,
+        ]);
     };
     let invoice = match field(vm, t, "invoice") {
         // Retrieving: none yet (recorded).

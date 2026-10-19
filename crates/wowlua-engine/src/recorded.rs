@@ -253,6 +253,11 @@ pub fn recorded(vm: &mut Vm, c: NativeCall) -> Ret {
     if let Some(values) = lookup(vm, &name, &c) {
         return Ok(values);
     }
+    // A call the recording lacks: the client's answer with nothing there
+    // (an unknown chat type's index 0, the full probe).
+    if let Some(answer) = crate::blanks::answer(&name) {
+        return Ok(parse_answer(vm, answer));
+    }
     crate::note_default(vm, &name, &c, 1);
     Ok(match documented {
         Some(doc) => {
@@ -308,38 +313,8 @@ pub fn lookup_text(vm: &mut Vm, call: &str) -> Option<Vec<Value>> {
 pub fn lookup(vm: &mut Vm, name: &str, c: &NativeCall) -> Option<Vec<Value>> {
     let answer = call_variants(vm, name, c)
         .iter()
-        .find_map(|call| answers().get(call.as_str()).copied())
-        .or_else(|| without_arguments(name))?;
+        .find_map(|call| answers().get(call.as_str()))?;
     Some(parse_answer(vm, answer))
-}
-
-/// A function recorded only as called without arguments takes none: the
-/// client ignores what it is given (the full probe: 501 of 509 such calls
-/// with arguments answered as the call without, e.g.
-/// `C_TradeSkillUI.IsTradeSkillGuild("player")`, `AntiAliasingSupported(1,
-/// 1)`; the others a count that changed between the recordings).
-fn without_arguments(name: &str) -> Option<&'static str> {
-    static ONLY: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
-    ONLY.get_or_init(|| {
-        let mut with_args = std::collections::HashSet::new();
-        let mut bare = HashMap::new();
-        for (call, answer) in answers() {
-            let Some((f, args)) = call.split_once('(') else {
-                continue;
-            };
-            if args == ")" {
-                bare.insert(f, *answer);
-            } else if args.trim_end_matches(')').split(", ").all(|a| a == "nil") {
-                // `F(nil)`: as `F()`.
-            } else {
-                with_args.insert(f);
-            }
-        }
-        bare.retain(|f, _| !with_args.contains(f));
-        bare
-    })
-    .get(name)
-    .copied()
 }
 
 /// A call as the engine writes it, then without its trailing tables and
@@ -360,10 +335,18 @@ pub fn call_variants(vm: &Vm, name: &str, c: &NativeCall) -> Vec<String> {
         args.pop();
         out.push(format!("{name}({})", args.join(", ")));
     }
-    // A fraction asks for its whole number's answer (the client's integer
-    // conversion: the full probe's 23 calls with 1.5 that have a recorded
-    // call with 1 all answered as it, `C_Item.GetItemClassInfo(1.5)`
-    // "Container").
+    // Arguments past those the function takes: the client ignores them
+    // (the full probe: `IsPartyLFG("player")`, `AntiAliasingSupported(1,
+    // 1)` answered as without them, every function taking none).
+    if let Some(n) = arity(vm, name)
+        && args.len() > n
+    {
+        args.truncate(n);
+        out.push(format!("{name}({})", args.join(", ")));
+    }
+    // A number with a fraction as its whole part, as the client takes an
+    // integer (the full probe: `GetCombatRating(1.5)`,
+    // `C_SpellBook.GetSpellBookItemInfo(1.5, 0)` answered as with 1).
     let whole: Vec<String> = args
         .iter()
         .map(|a| match a.parse::<f64>() {
@@ -375,4 +358,87 @@ pub fn call_variants(vm: &Vm, name: &str, c: &NativeCall) -> Vec<String> {
         out.push(format!("{name}({})", whole.join(", ")));
     }
     out
+}
+
+/// How many arguments a function with recorded answers takes: its
+/// documentation's, else none when every recorded call of it has none
+/// (the answers battery asks a function with arguments with them) or
+/// every one, without and with arguments, got the same answer
+/// (`GetCategoryList()` and `GetCategoryList(true)`: the full probe's
+/// `GetCategoryList(1)` answered as they).
+fn arity(vm: &Vm, name: &str) -> Option<usize> {
+    static ARGLESS: OnceLock<std::collections::HashSet<&'static str>> = OnceLock::new();
+    let argless = ARGLESS.get_or_init(|| {
+        // Each function's argless call, and whether its calls with
+        // arguments all answered as it.
+        let mut answer: HashMap<&str, &str> = HashMap::new();
+        for (call, a) in answers() {
+            if let Some(f) = call.strip_suffix("()") {
+                answer.insert(f, a);
+            }
+        }
+        let mut with_args = std::collections::HashSet::new();
+        for (call, a) in answers() {
+            if call.ends_with("()") {
+                continue;
+            }
+            if let Some((f, _)) = call.split_once('(')
+                && answer.get(f) != Some(a)
+            {
+                with_args.insert(f);
+            }
+        }
+        answer
+            .into_keys()
+            .filter(|f| !with_args.contains(f))
+            .collect()
+    });
+    // The recorded answers are camelot's: its documentation's arities.
+    static DOCUMENTED: OnceLock<HashMap<&'static str, usize>> = OnceLock::new();
+    let engine = crate::Engine::of(vm)?;
+    if engine.flavor != "camelot" {
+        return None;
+    }
+    let api = engine.api;
+    let documented = DOCUMENTED.get_or_init(|| {
+        api.functions
+            .iter()
+            .map(|f| {
+                let n = f
+                    .doc
+                    .get("Arguments")
+                    .and_then(serde_json::Value::as_array)
+                    .map_or(0, Vec::len);
+                (f.name, n)
+            })
+            .collect()
+    });
+    if let Some(&n) = documented.get(name) {
+        return Some(n);
+    }
+    if argless.contains(name) {
+        return Some(0);
+    }
+    // Else as many as the most any recorded call passed (the full probe:
+    // `GetChatWindowInfo(1, 1)` answered as the recorded `(1)`).
+    static MOST: OnceLock<HashMap<&'static str, usize>> = OnceLock::new();
+    MOST.get_or_init(|| {
+        let mut most: HashMap<&'static str, usize> = HashMap::new();
+        for call in answers().keys() {
+            let Some((f, rest)) = call.split_once('(') else {
+                continue;
+            };
+            let inner = rest.strip_suffix(')').unwrap_or(rest);
+            let n = if inner.is_empty() {
+                0
+            } else {
+                inner.split(", ").count()
+            };
+            let m = most.entry(f).or_insert(0);
+            *m = (*m).max(n);
+        }
+        most
+    })
+    .get(name)
+    .copied()
 }

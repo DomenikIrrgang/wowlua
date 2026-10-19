@@ -327,17 +327,16 @@ fn item_id(vm: &mut Vm, c: NativeCall) -> Ret {
         .unwrap_or_default())
 }
 
+/// No such goods (no merchant open): 1 (the full probe).
 fn item_max_stack(vm: &mut Vm, c: NativeCall) -> Ret {
-    Ok(goods(vm, &c)
-        .map(|g| vec![Value::Num(g.max_stack)])
-        .unwrap_or_default())
+    let n = goods(vm, &c).map_or(1.0, |g| g.max_stack);
+    Ok(vec![Value::Num(n)])
 }
 
-/// `GetMerchantItemCostInfo(i)`: no extended costs.
-fn cost_info(vm: &mut Vm, c: NativeCall) -> Ret {
-    Ok(goods(vm, &c)
-        .map(|_| vec![Value::Num(0.0)])
-        .unwrap_or_default())
+/// `GetMerchantItemCostInfo(i)`: no extended costs, no such goods none
+/// either (the full probe).
+fn cost_info(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(0.0)])
 }
 
 fn nothing(_vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -531,7 +530,17 @@ fn num_buyback(vm: &mut Vm, _c: NativeCall) -> Ret {
 /// isUsable, isBound.
 fn buyback_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(s) = sold(vm, &c) else {
-        return Ok(vec![]);
+        // Nothing sold there: the empty slot's values (the full probe).
+        let (zero, one) = (Value::Num(0.0), Value::Num(1.0));
+        return Ok(vec![
+            Value::Nil,
+            Value::Nil,
+            zero,
+            one,
+            zero,
+            one,
+            Value::Nil,
+        ]);
     };
     let name = character::item_field(vm, s.held.id, "name");
     let icon = character::item_field(vm, s.held.id, "icon");

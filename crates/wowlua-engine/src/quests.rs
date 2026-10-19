@@ -365,9 +365,10 @@ fn dialog_data(vm: &Vm) -> Option<(Dialog, TableRef)> {
 
 // ------------------------------------------------------------- the dialog
 
+/// A dialog's text; with none open an empty one (the full probe).
 fn dialog_text(vm: &mut Vm, key: &str) -> Ret {
     let Some((_, t)) = dialog_data(vm) else {
-        return Ok(vec![]);
+        return Ok(vec![vm.str("")]);
     };
     let s = text(vm, t, key);
     Ok(vec![vm.str(&s)])
@@ -388,7 +389,7 @@ fn get_objective_text(vm: &mut Vm, _c: NativeCall) -> Ret {
 /// The progress text names the player as the client does ("Hey <name>.").
 fn get_progress_text(vm: &mut Vm, _c: NativeCall) -> Ret {
     let Some((_, t)) = dialog_data(vm) else {
-        return Ok(vec![]);
+        return Ok(vec![vm.str("")]);
     };
     let s = text(vm, t, "progress");
     let name = engine(vm).units.list[units::PLAYER.0].name.clone();
@@ -398,7 +399,7 @@ fn get_progress_text(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 fn get_reward_text(vm: &mut Vm, _c: NativeCall) -> Ret {
     let Some((_, t)) = dialog_data(vm) else {
-        return Ok(vec![]);
+        return Ok(vec![vm.str("")]);
     };
     let s = text(vm, t, "completion");
     let name = engine(vm).units.list[units::PLAYER.0].name.clone();
@@ -428,8 +429,9 @@ fn get_reward_xp(vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// No title rewarded: nothing (recorded).
+/// No title rewarded: nil (the full probe).
 fn get_reward_title(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![])
+    Ok(vec![Value::Nil])
 }
 
 fn count_of(vm: &mut Vm, key: &str) -> Ret {
@@ -477,9 +479,22 @@ fn zero(_vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// No portrait: `0, "", "", 0` (recorded).
+/// No portrait: the giver's five values, the turn-in's three (the full
+/// probe: 0, "", "", 0, nil and 0, "", "").
 fn get_quest_portrait(vm: &mut Vm, _c: NativeCall) -> Ret {
     let empty = vm.str("");
-    Ok(vec![Value::Num(0.0), empty, empty, Value::Num(0.0)])
+    Ok(vec![
+        Value::Num(0.0),
+        empty,
+        empty,
+        Value::Num(0.0),
+        Value::Nil,
+    ])
+}
+
+fn get_quest_portrait_turn_in(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let empty = vm.str("");
+    Ok(vec![Value::Num(0.0), empty, empty])
 }
 
 /// The item a dialog's list names: `choice`, `reward` or `required`.
@@ -531,7 +546,7 @@ fn get_quest_item_info(vm: &mut Vm, c: NativeCall) -> Ret {
 /// bonus (3524), as recorded for these items.
 fn get_quest_item_link(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some((id, _)) = listed(vm, &c) else {
-        return Ok(vec![]);
+        return Ok(vec![Value::Nil]);
     };
     let link = crate::character::link_in_context(vm, id, "11", &[3524]);
     Ok(vec![link.map_or(Value::Nil, |l| vm.str(&l))])
@@ -1496,6 +1511,16 @@ fn nothing(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// None: nil (the full probe: `GetQuestBackgroundMaterial()` with no dialog).
+fn nil(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Nil])
+}
+
+/// No skill rewarded: three nils (the full probe).
+fn three_nils(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Nil; 3])
+}
+
 fn zeros(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(0.0), Value::Num(0.0)])
 }
@@ -1519,11 +1544,11 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         // honor, an item's loot type (0).
         ("GetNumQuestCurrencies", zero),
         ("IsQuestItemHidden", zero),
-        ("GetQuestBackgroundMaterial", nothing),
+        ("GetQuestBackgroundMaterial", nil),
         ("IsCurrentQuestFailed", no),
         ("GetCriteriaSpell", nothing),
         ("GetSuggestedGroupSize", zero),
-        ("GetRewardSkillPoints", nothing),
+        ("GetRewardSkillPoints", three_nils),
         ("GetRewardArtifactXP", zeros),
         ("GetRewardHonor", zero),
         ("GetQuestItemInfoLootType", zero),
@@ -1547,7 +1572,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("QuestFlagsPVP", no),
         ("GetQuestMoneyToGet", zero),
         ("GetQuestPortraitGiver", get_quest_portrait),
-        ("GetQuestPortraitTurnIn", get_quest_portrait),
+        ("GetQuestPortraitTurnIn", get_quest_portrait_turn_in),
         ("GetQuestItemInfo", get_quest_item_info),
         ("GetQuestItemLink", get_quest_item_link),
         ("IsQuestCompletable", is_quest_completable),

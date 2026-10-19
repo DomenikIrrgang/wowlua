@@ -1145,14 +1145,23 @@ pub fn update_text_bindings(vm: &mut Vm) {
     }
 }
 
-fn update_memory(_vm: &mut Vm, _c: NativeCall) -> Ret {
+/// `UpdateAddOnMemoryUsage()`: measures the memory now, for
+/// `GetAddOnMemoryUsage`.
+fn update_memory(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let kib = vm.heap.estimate_bytes() as f64 / 1024.0;
+    crate::globalsinfo::put(vm, "addOnMemory", Value::Num(kib));
     Ok(vec![])
 }
 
-/// The memory in KiB; the VM does not tell addons apart (unverified: the
-/// whole VM's).
+/// The memory in KiB as `UpdateAddOnMemoryUsage` last measured it, 0
+/// before (the full probe: 0 for any name, its own addon's too); the VM
+/// does not tell addons apart (unverified: the whole VM's).
 fn addon_memory(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(vm.heap.estimate_bytes() as f64 / 1024.0)])
+    Ok(vec![crate::globalsinfo::get_or(
+        vm,
+        "addOnMemory",
+        Value::Num(0.0),
+    )])
 }
 
 pub fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {

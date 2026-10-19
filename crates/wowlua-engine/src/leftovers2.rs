@@ -181,7 +181,9 @@ const UNDOCUMENTED: &[(&str, &str)] = &[
     ("GetQuestPOIs", ""),
     ("GetTaskPOIs", ""),
     ("GetQuestPOILeaderBoard", "n"),
-    ("GetQuestSortIndex", "n"),
+    // The full probe: 0 for an index naming no quest (a quest's own 1
+    // unverified).
+    ("GetQuestSortIndex", "0"),
     // Raid profiles: none kept (`unitinfo`'s getters answer none), not
     // loaded.
     ("GetNumRaidProfiles", "0"),
@@ -612,16 +614,27 @@ fn console_echo(_vm: &mut Vm, _c: NativeCall) -> Ret {
 
 /// `ConsoleGetColorFromType(colorType)`: the console's colors, white for
 /// text, red for errors, yellow for warnings, green for the default green,
-/// black for the background (unverified: the client's palette).
+/// black for the background; 1 sky blue, 2 grey and 10 pale blue as bytes;
+/// a color without alpha (the full probe: every type 0 to 11).
 fn console_get_color_from_type(vm: &mut Vm, c: NativeCall) -> Ret {
+    // A byte times 1/255 in single precision (the client's 196 is
+    // 0.76862752437592).
+    let byte = |b: f64| f64::from(b as f32 * (1.0f32 / 255.0));
     let rgb = match arg_num(vm, &c, 1).map(|n| n as i64) {
+        Some(1) => (byte(128.0), byte(196.0), 1.0),
+        Some(2) => (byte(128.0), byte(128.0), byte(128.0)),
+        Some(10) => (byte(200.0), byte(200.0), 1.0),
         Some(3) => (1.0, 0.0, 0.0),
         Some(4) => (1.0, 1.0, 0.0),
         Some(8) => (0.0, 0.0, 0.0),
         Some(11) => (0.0, 1.0, 0.0),
         _ => (1.0, 1.0, 1.0),
     };
-    Ok(vec![color(vm, rgb)])
+    let color = color(vm, rgb);
+    if let Value::Table(t) = color {
+        set(vm, t, "a", Value::Nil);
+    }
+    Ok(vec![color])
 }
 
 /// The console's font height until set (unverified).
@@ -709,7 +722,9 @@ fn get_monitor_aspect_ratio(vm: &mut Vm, _c: NativeCall) -> Ret {
     let size = ask(vm, "GetPhysicalScreenSize", &[]);
     let w = size.first().copied().and_then(num).unwrap_or(1920.0);
     let h = size.get(1).copied().and_then(num).unwrap_or(1080.0);
-    Ok(vec![Value::Num(if h > 0.0 { w / h } else { 16.0 / 9.0 })])
+    let ratio = if h > 0.0 { w / h } else { 16.0 / 9.0 };
+    // A single-precision float (the full probe: 1.7777777910233).
+    Ok(vec![Value::Num(f64::from(ratio as f32))])
 }
 
 /// `GetCurrentScaledResolution()`: the UI's width and height
@@ -829,7 +844,8 @@ fn get_glancing_blow_chance(vm: &mut Vm, c: NativeCall) -> Ret {
     let skill = capped_skill(vm, &c);
     let defense = arg_num(vm, &c, 2).unwrap_or(skill);
     let chance = (0.1 + (defense - skill) * 0.02).clamp(0.0, 1.0);
-    Ok(vec![Value::Num(chance)])
+    // A single-precision float (the full probe: 0.10000000149012).
+    Ok(vec![Value::Num(f64::from(chance as f32))])
 }
 
 /// `GetGlancingBlowPenalty(playerWeaponSkill, targetDefenseSkill)`: the
@@ -844,7 +860,9 @@ fn get_glancing_blow_penalty(vm: &mut Vm, c: NativeCall) -> Ret {
     let diff = defense - skill;
     let low = (1.3 - 0.05 * diff).clamp(0.01, 0.91);
     let high = (1.2 - 0.03 * diff).clamp(0.2, 0.99);
-    Ok(vec![Value::Num(1.0 - (low + high) / 2.0)])
+    // Worked in single precision (the full probe: 0.049999952316284).
+    let (low, high) = (low as f32, high as f32);
+    Ok(vec![Value::Num(f64::from(1.0 - (low + high) / 2.0))])
 }
 
 /// `ResistancePercent(resistance, casterLevel)`: the share of damage the

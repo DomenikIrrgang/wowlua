@@ -1594,10 +1594,10 @@ fn criteria_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `GetAchievementSearchProgress()`, `GetAchievementSearchSize()`: the
-/// search done, its results' count both (unverified: the client's counts
-/// what it searched; never 0, Blizzard's bar divides by the size).
+/// search done, its results' count both; none searched 0 (the full probe;
+/// unverified: the client's counts what it searched).
 fn achievement_search_count(vm: &mut Vm, _c: NativeCall) -> Ret {
-    let n = engine(vm).world.achievements.results.len().max(1);
+    let n = engine(vm).world.achievements.results.len();
     Ok(vec![Value::Num(n as f64)])
 }
 

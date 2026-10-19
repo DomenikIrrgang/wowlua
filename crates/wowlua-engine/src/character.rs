@@ -1121,6 +1121,23 @@ fn get_zone_text(vm: &mut Vm, c: NativeCall) -> Ret {
     zone_text(|p| &p.zone)(vm, c)
 }
 
+/// `GetRealZoneText([instanceID])`: the zone; given an instance ID, that
+/// instance's name: the continents' (the full probe: 0 "Eastern
+/// Kingdoms", 1 and 1.5 "Kalimdor", others "").
+fn get_real_zone_text(vm: &mut Vm, c: NativeCall) -> Ret {
+    match vm.hidden(c.arg(1)) {
+        Value::Num(n) => {
+            let name = match n.trunc() as i64 {
+                0 if n >= 0.0 => "Eastern Kingdoms",
+                1 => "Kalimdor",
+                _ => "",
+            };
+            Ok(vec![vm.str(name)])
+        }
+        _ => get_zone_text(vm, c),
+    }
+}
+
 fn get_sub_zone_text(vm: &mut Vm, c: NativeCall) -> Ret {
     zone_text(|p| &p.sub_zone)(vm, c)
 }
@@ -1221,8 +1238,12 @@ fn vector_xy(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn unit_position(vm: &mut Vm, c: NativeCall) -> Ret {
-    if units::unit_arg(vm, &c, 1) != Some(units::PLAYER) {
-        return Ok(vec![]);
+    // A unit that does not exist (or a GUID): three nils and instance 0
+    // (the full probe); another unit's nothing (unverified).
+    match units::unit_arg(vm, &c, 1) {
+        None => return Ok(vec![Value::Nil, Value::Nil, Value::Nil, Value::Num(0.0)]),
+        Some(id) if id != units::PLAYER => return Ok(vec![]),
+        _ => {}
     }
     let p = engine(vm).world.character.position.clone();
     // Not given: the map position's place on its map's world rectangle
@@ -1558,7 +1579,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Item.GetItemCount", get_item_count),
         ("GetItemCount", get_item_count),
         ("GetZoneText", get_zone_text),
-        ("GetRealZoneText", get_zone_text),
+        ("GetRealZoneText", get_real_zone_text),
         ("GetSubZoneText", get_sub_zone_text),
         ("GetMinimapZoneText", get_minimap_zone_text),
         ("C_Map.GetBestMapForUnit", get_best_map_for_unit),

@@ -40,7 +40,9 @@ EJ_SelectTier(2)
 local logging = LoggingCombat(true)
 return before, ShowingHelm(), tab, GetCurrentGuildBankTab(), EJ_GetCurrentTier(), logging, LoggingCombat()",
     );
-    assert_eq!(r, ["true", "false", "1", "3", "2", "true", "true"]);
+    // The helmet not shown, and unchanged right after `ShowHelm` (the full
+    // probe: the server answers later).
+    assert_eq!(r, ["false", "false", "1", "3", "2", "true", "true"]);
 }
 
 #[test]

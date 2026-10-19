@@ -814,7 +814,8 @@ fn get_trainer_selection_index(vm: &mut Vm, _c: NativeCall) -> Ret {
         .trainers
         .selected
         .map(|i| vec![Value::Num(i as f64)])
-        .unwrap_or_default())
+        // None selected: nil (the full probe).
+        .unwrap_or_else(|| vec![Value::Nil]))
 }
 
 fn select_trainer_service(vm: &mut Vm, c: NativeCall) -> Ret {

@@ -1081,6 +1081,10 @@ fn location_key(vm: &mut Vm, v: Value) -> Option<f64> {
 
 /// The documented empty values of `name` (no stat for this call).
 fn empty(vm: &mut Vm, name: &str) -> Vec<Value> {
+    // The client's answer with nothing there, if the full probe settled it.
+    if let Some(answer) = crate::blanks::answer(name) {
+        return crate::recorded::parse_answer(vm, answer);
+    }
     let api = engine(vm).api;
     match api.functions.iter().find(|f| f.name == name) {
         Some(f) => crate::defaults(vm, api, &f.doc),
@@ -1128,6 +1132,19 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(stat) = name.and_then(|n| STATS.iter().find(|s| s.function == n)) else {
         return Ok(vec![]);
     };
+    // An inspected unit's or pet's groups: none (the full probe:
+    // `GetNumSpecGroups(isInspect)` 0 with any argument, 1 without).
+    if stat.function == "GetNumSpecGroups" && !c.arg(1).is_nil() {
+        return Ok(vec![Value::Num(0.0)]);
+    }
+    // A spellbook item's link with a glyph: nothing (the full probe:
+    // glyph 1, 1.5 and 2147483647 nothing, -1, 0 and nil the link;
+    // unverified: a glyph the spell takes).
+    if stat.function == "C_SpellBook.GetSpellBookItemLink"
+        && matches!(c.arg(3), Value::Num(g) if g > 0.0)
+    {
+        return Ok(vec![]);
+    }
     // The unit asked about: the player, or its pet (its own stats).
     let asked = units::unit_arg(vm, &c, 1);
     let pet = matches!(stat.ask, Unit | UnitIndex)
@@ -1156,12 +1173,11 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
         };
         match (stats.get(stat.key), index) {
             (Some(Entry::One(v)), None) => Some(v.clone()),
-            // A fraction asks for the whole number's (the client's
-            // conversion: the full probe's `1.5`s answered as `1`), but a
-            // spellbook slot's (`GetSpellBookItemLink(1.5, 0)`: nothing).
-            (Some(Entry::ByIndex(m)), Some(i)) if stat.ask != Slot || i.fract() == 0.0 => {
-                let i = i.trunc();
-                let v = m.get(&(i as i64)).cloned();
+            // An index with a fraction as its whole part (the full probe:
+            // `GetCombatRating(1.5)`, `C_SpellBook.GetSpellBookItemInfo(1.5,
+            // 0)` answered as with 1).
+            (Some(Entry::ByIndex(m)), Some(i)) => {
+                let v = m.get(&(i.trunc() as i64)).cloned();
                 // For the attribute's effective value only (as the sheet
                 // asks it); unverified for others.
                 if stat.ask == ForStat {
@@ -1416,13 +1432,15 @@ fn num_quest_leader_boards(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `GetQuestLogLeaderBoard(i, logIndex)`: the objective's text, type and
 /// whether it is finished (derived as `GetNumQuestLeaderBoards`).
 fn quest_log_leader_board(vm: &mut Vm, c: NativeCall) -> Ret {
+    // No such objective: three nils (the full probe).
+    let none = || Ok(vec![Value::Nil; 3]);
     let (Some(i), Some(log)) = (num(c.arg(1)), num(c.arg(2))) else {
-        return Ok(vec![]);
+        return none();
     };
     let Some(objective) =
         quest_objectives(vm, log).and_then(|o| o.get((i as usize).wrapping_sub(1)).cloned())
     else {
-        return Ok(vec![]);
+        return none();
     };
     Ok(["text", "type", "finished"]
         .iter()

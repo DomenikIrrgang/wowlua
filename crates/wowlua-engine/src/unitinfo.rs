@@ -138,10 +138,6 @@ fn zero(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(0.0)])
 }
 
-fn one(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(1.0)])
-}
-
 fn nil(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Nil])
 }
@@ -198,16 +194,21 @@ fn unit_has_power_type(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(id) = units::unit_arg(vm, &c, 1) else {
         return Ok(vec![Value::Bool(false)]);
     };
-    let pt = num(vm, c.arg(2)).unwrap_or(-1.0);
     let u = &engine(vm).units.list[id.0];
+    // A power type not a number: the unit's own (the full probe:
+    // `UnitHasPowerType("player", "x")` true).
+    let pt = num(vm, c.arg(2)).unwrap_or(u.power_type);
     let has = u.power_type == pt || (u.class == "DRUID" && pt == 0.0);
     Ok(vec![Value::Bool(has)])
 }
 
 /// `UnitPowerMissing(unit [, powerType])`: its maximum less its power, as
-/// `UnitPower` and `UnitPowerMax` give them (they ignore the power type
-/// too); no unit 0.
+/// `UnitPower` and `UnitPowerMax` give them; a power type the unit lacks
+/// a plain 0 (`units::other_power_type`); no unit 0.
 fn unit_power_missing(vm: &mut Vm, c: NativeCall) -> Ret {
+    if units::other_power_type(vm, &c) {
+        return Ok(vec![Value::Num(0.0)]);
+    }
     let missing = units::unit_arg(vm, &c, 1).map_or(0.0, |id| {
         let u = &engine(vm).units.list[id.0];
         (u.power_max - u.power).max(0.0)
@@ -215,11 +216,74 @@ fn unit_power_missing(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Num(missing)])
 }
 
-/// `UnitPowerDisplayMod(powerType)`: 1, soul shards 10 (Blizzard's
-/// `ShardBar.lua`: `UnitPower` gives them tenfold).
+/// `UnitPartialPower(unit [, powerType])`: none (no fractional power
+/// modelled); a power type the unit lacks a plain 0, as `UnitPower`.
+fn unit_partial_power(vm: &mut Vm, c: NativeCall) -> Ret {
+    units::other_power_type(vm, &c);
+    Ok(vec![Value::Num(0.0)])
+}
+
+/// `UnitPowerDisplayMod(powerType)`: 1; rage 10 and type 27 1000 (the full
+/// probe, every type 0 to 29; the newest answer, over soul shards' 10).
 fn unit_power_display_mod(vm: &mut Vm, c: NativeCall) -> Ret {
     let pt = num(vm, c.arg(1)).unwrap_or(0.0);
-    Ok(vec![Value::Num(if pt == 7.0 { 10.0 } else { 1.0 })])
+    let m = match pt as i64 {
+        1 => 10.0,
+        27 => 1000.0,
+        _ => 1.0,
+    };
+    Ok(vec![Value::Num(m)])
+}
+
+/// `GetUnitHealthModifier(unit)` and the like: 1, a unit that does not
+/// exist 0 (the full probe).
+fn unit_modifier(vm: &mut Vm, c: NativeCall) -> Ret {
+    let n = if units::unit_arg(vm, &c, 1).is_some() {
+        1.0
+    } else {
+        0.0
+    };
+    Ok(vec![Value::Num(n)])
+}
+
+/// `UnitHasLFGDeserter(unit)` and the random cooldown: the player's false,
+/// any other unit nothing (the full probe).
+fn player_only_no(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(match units::unit_arg(vm, &c, 1) {
+        Some(PLAYER) => vec![Value::Bool(false)],
+        _ => vec![],
+    })
+}
+
+/// `UnitBattlePetLevel(unit)`: the player's 0, others nil (the full
+/// probe).
+fn battle_pet_level(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(match units::unit_arg(vm, &c, 1) {
+        Some(PLAYER) => vec![Value::Num(0.0)],
+        _ => vec![Value::Nil],
+    })
+}
+
+/// `UnitThreatPercentageOfLead(unit, mob)`: nil, but against the player a
+/// secret (the full probe: any first unit with "player" second secret;
+/// unverified what it hides).
+fn threat_percentage_of_lead(vm: &mut Vm, c: NativeCall) -> Ret {
+    if units::unit_arg(vm, &c, 2) == Some(PLAYER) {
+        let zero = vm.secret_wrap(Value::Num(0.0));
+        return Ok(vec![zero]);
+    }
+    Ok(vec![Value::Nil])
+}
+
+/// `UnitStagger(unit)`: none; a unit that does not exist a secret (the
+/// full probe: the player's 0 plain, the absent tokens' and a GUID's
+/// secret).
+fn unit_stagger(vm: &mut Vm, c: NativeCall) -> Ret {
+    if units::unit_arg(vm, &c, 1).is_none() {
+        let zero = vm.secret_wrap(Value::Num(0.0));
+        return Ok(vec![zero]);
+    }
+    Ok(vec![Value::Num(0.0)])
 }
 
 /// `UnitIsPVPSanctuary([unit])`: in a sanctuary zone (`C_PvP.GetZonePVPInfo`'s
@@ -289,7 +353,10 @@ fn unit_quest_trivial_level_range(vm: &mut Vm, c: NativeCall) -> Ret {
     let level = units::unit_arg(vm, &c, 1).map_or(engine(vm).units.list[PLAYER.0].level, |id| {
         engine(vm).units.list[id.0].level
     });
-    Ok(vec![Value::Num(trivial_range(level))])
+    // A quest's range one level short of a creature's (the full probe: 5
+    // at the player's level 21, any unit token; one sample, the other
+    // levels unverified).
+    Ok(vec![Value::Num((trivial_range(level) - 1.0).max(0.0))])
 }
 
 /// `C_PlayerInfo.GetContentDifficultyCreatureForPlayer(unit)`: the
@@ -418,9 +485,10 @@ fn unit_realm_relationship(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Num(r)])
 }
 
-/// `UnitIsSameServer(unit)`: a unit on the player's realm.
+/// `UnitIsSameServer(unit)`: a unit on the player's realm; a name naming
+/// no unit too (the full probe: "", "x", "Nobody" true).
 fn unit_is_same_server(vm: &mut Vm, c: NativeCall) -> Ret {
-    let same = units::unit_arg(vm, &c, 1).is_some_and(|id| same_realm(vm, id));
+    let same = units::unit_arg(vm, &c, 1).is_none_or(|id| same_realm(vm, id));
     Ok(vec![Value::Bool(same)])
 }
 
@@ -480,7 +548,10 @@ fn get_raid_difficulty_id(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 /// `GetComboPoints(unit, target)`: none (recorded: 0 for the player and
 /// target; the engine keeps no combo points).
-fn get_combo_points(_vm: &mut Vm, _c: NativeCall) -> Ret {
+/// Nothing to hide (the full probe: the player's 0 plain, whatever the
+/// target).
+fn get_combo_points(vm: &mut Vm, _c: NativeCall) -> Ret {
+    engine_mut(vm).plain_results = true;
     Ok(vec![Value::Num(0.0)])
 }
 
@@ -636,13 +707,18 @@ fn unit_class_from_guid(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `UnitNameFromGUID(guid)`: the unit's name and realm (empty on the
 /// player's); nothing for a GUID the world lacks.
+/// `UnitNameFromGUID(guid)`: the name and, on WoW Forever, the last name
+/// (the full probe: the player's "Player", "Lastname"), else the realm;
+/// a GUID naming no unit two nils (the full probe).
 fn unit_name_from_guid(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(id) = by_guid(vm, c.arg(1)) else {
-        return Ok(vec![]);
+        return Ok(vec![Value::Nil, Value::Nil]);
     };
     let realm = realm_text(vm, id);
-    let name = engine(vm).units.list[id.0].name.clone();
-    Ok(vec![vm.str(&name), vm.str(&realm)])
+    let u = &engine(vm).units.list[id.0];
+    let name = u.name.clone();
+    let second = u.last_name.clone().unwrap_or(realm);
+    Ok(vec![vm.str(&name), vm.str(&second)])
 }
 
 /// `UnitPercentHealthFromGUID(guid)`: its health's fraction of its
@@ -1186,27 +1262,27 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("UnitTreatAsPlayerForDisplay", no),
         ("UnitIsNPCAsPlayer", no),
         ("UnitShouldDisplaySpellTargetName", no),
-        ("UnitHasLFGDeserter", no),
-        ("UnitHasLFGRandomCooldown", no),
+        ("UnitHasLFGDeserter", player_only_no),
+        ("UnitHasLFGRandomCooldown", player_only_no),
         ("UnitHasEffectivelyTankAura", no),
         ("UnitIsLieutenant", no),
         ("UnitIsRaidOfficer", no),
         ("UnitAlliedRaceInfo", two_falses),
         ("UnitInBattleground", nil),
         ("UnitPvpClassification", nil),
-        ("UnitThreatPercentageOfLead", nil),
+        ("UnitThreatPercentageOfLead", threat_percentage_of_lead),
         ("UnitThreatLeadSituation", nil),
         ("UnitSpellTargetName", nothing),
         ("UnitSpellTargetClass", nothing),
         ("UnitGetDetailedHealPrediction", nothing),
-        ("UnitStagger", zero),
+        ("UnitStagger", unit_stagger),
         ("UnitTrialXP", zero),
         ("UnitChromieTimeID", zero),
-        ("UnitPartialPower", zero),
+        ("UnitPartialPower", unit_partial_power),
         ("UnitWeaponAttackPower", three_zeros),
-        ("GetUnitHealthModifier", one),
-        ("GetUnitMaxHealthModifier", one),
-        ("GetUnitPowerModifier", one),
+        ("GetUnitHealthModifier", unit_modifier),
+        ("GetUnitMaxHealthModifier", unit_modifier),
+        ("GetUnitPowerModifier", unit_modifier),
         // Vehicles: none on WoW Forever.
         ("UnitTargetsVehicleInRaidUI", no),
         ("UnitControllingVehicle", no),
@@ -1221,7 +1297,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("UnitIsBattlePet", no),
         ("UnitIsOtherPlayersBattlePet", no),
         ("UnitCanPetBattle", no),
-        ("UnitBattlePetLevel", nil),
+        ("UnitBattlePetLevel", battle_pet_level),
         ("UnitBattlePetType", nil),
         ("UnitBattlePetSpeciesID", nil),
         // Empowered casts, runes, charged points: none.
