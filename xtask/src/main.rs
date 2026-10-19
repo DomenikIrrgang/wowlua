@@ -12,6 +12,8 @@
 //!   exit check against the BigWigs packager (every AddOn folder).
 //! - `cargo xtask parse-stats <dir>`: what the syntax trees of every Lua
 //!   file below a directory hold, and the heap they take (#19).
+//! - `cargo xtask trainer-levels <SuuUI>/src/Data/Trainer`: the recorded
+//!   class trainer services' levels from SuuUI's trainer data.
 
 use anyhow::{Context, Result, bail};
 use std::fs;
@@ -25,6 +27,7 @@ mod packager_diff;
 mod parse_stats;
 mod profile;
 mod runtime;
+mod trainer_levels;
 mod types;
 
 // Counts live heap bytes for `parse-stats`; forwards to the system allocator.
@@ -42,6 +45,12 @@ fn main() -> Result<()> {
                 bail!("usage: cargo xtask fixture <SavedVariables/StdTest.lua> <name>");
             };
             fixture::run(&root, Path::new(&saved), &name)
+        }
+        "trainer-levels" => {
+            let Some(dir) = std::env::args().nth(2) else {
+                bail!("usage: cargo xtask trainer-levels <SuuUI>/src/Data/Trainer");
+            };
+            trainer_levels::run(&root, Path::new(&dir))
         }
         "ingest" => {
             let Some(saved) = std::env::args().nth(2) else {

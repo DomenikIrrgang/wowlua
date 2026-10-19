@@ -173,7 +173,8 @@ fn class_ranks(class: &str) -> &'static HashMap<i64, String> {
 }
 
 /// The level a class's spell is learned at (`C_Spell.GetSpellLevelLearned`,
-/// any of its trainers' recordings).
+/// any of its trainers' recordings), else its service's in SuuUI's trainer
+/// data (`data/camelot-trainer-levels.txt`).
 fn learned_level(class: &str, spell: i64) -> Option<f64> {
     let call = format!("C_Spell.GetSpellLevelLearned({spell})");
     data()
@@ -183,6 +184,26 @@ fn learned_level(class: &str, spell: i64) -> Option<f64> {
             Some(Rv::Num(n)) if *n > 0.0 => Some(*n),
             _ => None,
         })
+        .or_else(|| service_levels().get(&(class, spell)).copied())
+}
+
+/// The class trainers' services' levels from SuuUI's trainer data, by
+/// class and spell (`cargo xtask trainer-levels`).
+fn service_levels() -> &'static HashMap<(&'static str, i64), f64> {
+    static LEVELS: OnceLock<HashMap<(&'static str, i64), f64>> = OnceLock::new();
+    LEVELS.get_or_init(|| {
+        include_str!("../data/camelot-trainer-levels.txt")
+            .lines()
+            .filter(|l| !l.starts_with('#'))
+            .filter_map(|l| {
+                let mut parts = l.split('\t');
+                let class = parts.next()?;
+                let spell = parts.next()?.parse().ok()?;
+                let level = parts.next()?.parse().ok()?;
+                Some(((class, spell), level))
+            })
+            .collect()
+    })
 }
 
 /// A recorded trainer's services, in its order.
@@ -1060,6 +1081,41 @@ mod tests {
             }
         }
         assert!(checked > 0);
+        assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    }
+
+    /// SuuUI's levels (matched by name and description) are the recorded
+    /// ones wherever a service's level is recorded.
+    #[test]
+    fn suuui_s_levels_are_the_recorded_ones() {
+        let mut checked = 0;
+        let mut wrong = Vec::new();
+        for ((key, call), answer) in data() {
+            let Some(i) = call
+                .strip_prefix("GetTrainerServiceLevelReq(")
+                .and_then(|r| r.strip_suffix(')'))
+            else {
+                continue;
+            };
+            let level = match Rv::answer(answer).first() {
+                Some(Rv::Num(n)) if *n > 0.0 => *n,
+                _ => continue,
+            };
+            let tip = recorded(key, &format!("C_TooltipInfo.GetTrainerService({i})"));
+            let Some(Rv::Num(spell)) = tip.first().and_then(|t| t.get("id")) else {
+                continue;
+            };
+            let class = key.split('-').next().unwrap_or(key);
+            if let Some(theirs) = service_levels().get(&(class, *spell as i64)) {
+                checked += 1;
+                if *theirs != level {
+                    wrong.push(format!(
+                        "{key} {i} (spell {spell}): {level}, SuuUI {theirs}"
+                    ));
+                }
+            }
+        }
+        assert!(checked > 1000, "{checked}");
         assert!(wrong.is_empty(), "{}", wrong.join("\n"));
     }
 }
