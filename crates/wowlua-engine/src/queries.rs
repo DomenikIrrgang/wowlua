@@ -48,19 +48,18 @@ fn cvar_bitfield(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `C_CVar.SetCVarBitfield(name, index, value)`: bit `index` set or
 /// cleared in the encoding `GetCVarBitfield` reads, characters added as
-/// `@` (no bits) to reach it, then set as `SetCVar` sets it but untold:
-/// no `CVAR_UPDATE` (recorded: Blizzard's bags close a tutorial's bit as
-/// a merchant closes, and the client told nothing, six scenarios).
-/// Unverified: the characters the client adds; that the bit was not set
-/// already in the recording's client.
+/// `@` (no bits) to reach it, then set as `SetCVar` sets it, told by
+/// `CVAR_UPDATE(name, value)` only when the value changed (the user's
+/// probe: setting `closedInfoFrames` bit 30 told it and returned true;
+/// six scenarios where Blizzard's bags close a tutorial's bit already set
+/// told nothing). Unverified: the characters the client adds.
 fn set_cvar_bitfield(vm: &mut Vm, c: NativeCall) -> Ret {
     let (Value::Str(name), Some(index)) = (c.arg(1), num(c.arg(2))) else {
         return Ok(vec![Value::Bool(false)]);
     };
     let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
-    let mut value = framescript::cvar_get(vm, &name)
-        .unwrap_or_default()
-        .into_bytes();
+    let before = framescript::cvar_get(vm, &name).unwrap_or_default();
+    let mut value = before.clone().into_bytes();
     let i = (index as i64 - 1).max(0) as usize;
     let header = value.iter().take_while(|b| **b < b'@').count();
     while value.len() <= header + i / 6 {
@@ -76,7 +75,8 @@ fn set_cvar_bitfield(vm: &mut Vm, c: NativeCall) -> Ret {
     };
     value[at] = b'@' + bits;
     let text = String::from_utf8_lossy(&value).into_owned();
-    framescript::set_cvar_text(vm, &name, text, false)
+    let changed = text != before;
+    framescript::set_cvar_text(vm, &name, text, changed)
 }
 
 /// `UnitIsHumanPlayer(unit)`: a player unit that exists (an NPC or no

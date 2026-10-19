@@ -612,8 +612,13 @@ fn refuse_forbidden(
     short: &str,
     documented: Option<&crate::api::Function>,
 ) -> Result<(), LuaError> {
+    // Attributes stay open: Blizzard's "Inbound" files talk to a forbidden
+    // frame through them from any code (`StoreFrame:SetAttribute("action",
+    // ...)`, `StoreFrame_IsShown`'s `GetAttribute("isshown")`; the user's
+    // probe: StoreFrame forbidden, the shop's old path taken, SuuUI
+    // error-free; unverified for other methods).
     if engine(vm).world.widgets[id.0].forbidden
-        && short != "IsForbidden"
+        && !matches!(short, "IsForbidden" | "GetAttribute" | "SetAttribute")
         && crate::protection::tainted(vm)
     {
         // `/stdtest engine`: "calling 'GetObjectType' on bad self (Attempt
