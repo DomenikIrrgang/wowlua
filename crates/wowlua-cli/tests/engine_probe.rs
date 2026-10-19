@@ -1335,7 +1335,7 @@ fn the_engine_plays_combat_as_the_client_did() {
 
 /// How many of the death scenario's lines the engine plays as the client
 /// did: only ever up.
-const DEATH_MATCHED: usize = 1549;
+const DEATH_MATCHED: usize = 1619;
 
 /// The death scenario: a fight lost, the spirit released, the corpse taken.
 #[test]
@@ -1397,14 +1397,12 @@ fn the_engine_plays_vendor_as_the_client_did() {
 }
 
 /// How many of the hearth scenario's lines the engine plays as the client
-/// did: only ever up. Not yet: the inventory's packets after the loading
-/// screen (one per item, in the server's order: the items' GUIDs, not in
-/// the snapshot), the active talent config, the account's Edit Mode
-/// layouts, the aura instance IDs (not in the snapshot), Blessing of
-/// Protection told unusable at a usability check after an NPC was soft
-/// targeted in Thunder Bluff (the soft friend's change during the loading
-/// screen's replay).
-const HEARTH_MATCHED: usize = 1397;
+/// did: only ever up. Not yet: the active talent config, the account's
+/// Edit Mode layouts, the aura instance IDs, the party the player was in
+/// and its new mail (not in the snapshot), Blessing of Protection told
+/// unusable at a usability check after an NPC was soft targeted in Thunder
+/// Bluff (the soft friend's change during the loading screen's replay).
+const HEARTH_MATCHED: usize = 1595;
 
 /// The hearth scenario: a Hearthstone cast, the loading screen.
 #[test]
@@ -1517,7 +1515,7 @@ fn the_engine_plays_items_as_the_client_did() {
 
 /// How many of the quest scenario's lines the engine plays as the client
 /// did: only ever up.
-const QUEST_MATCHED: usize = 5430;
+const QUEST_MATCHED: usize = 5493;
 
 /// The quest scenario: a quest taken, eight wolves hunted for its item (a
 /// level gained), the quest turned in.
@@ -1666,10 +1664,9 @@ fn the_engine_plays_macro_as_the_client_did() {
 }
 
 /// How many of the mapnav scenario's lines the engine plays as the client
-/// did: only ever up. Not yet: the quest log's entries as Blizzard's quest
-/// map asks them on Kalimdor and back (their order and collapsed headers
-/// follow the map shown in the client).
-const MAPNAV_MATCHED: usize = 101;
+/// did: only ever up (all of them; Kalimdor's view of the quest log is the
+/// play script's recorded data).
+const MAPNAV_MATCHED: usize = 149;
 
 /// The mapnav scenario: the world map, zoomed out to Kalimdor and back
 /// into the Barrens, a user waypoint placed, super-tracked and removed.

@@ -329,6 +329,7 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
             "setHiddenGroupBuffs",
             crate::character::control_set_hidden_group_buffs,
         ),
+        ("setInventoryLoad", crate::login::control_set_inventory_load),
         ("defineLevel", crate::levels::control_define),
         ("setSpellTraits", crate::actions::control_set_spell_traits),
         ("setTraitRanks", crate::traits::control_set_trait_ranks),

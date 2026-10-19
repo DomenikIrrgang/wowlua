@@ -40,11 +40,17 @@ const BATCHED: &[&str] = &[
     "MINIMAP_UPDATE_TRACKING",
     "SPELL_UPDATE_COOLDOWN",
     "SPELL_UPDATE_USABLE",
+    // Recorded twice, `death`: the corpse's tracking at the spirit's
+    // release and at the resurrection, between the spells' usability and
+    // the health; the shapeshift bar's usability after the health (the
+    // resurrection's).
+    "SUPER_TRACKING_CHANGED",
     "UI_ERROR_MESSAGE",
     "UNIT_HEALTH",
     "UNIT_THREAT_LIST_UPDATE",
     "UNIT_THREAT_SITUATION_UPDATE",
     "UPDATE_SHAPESHIFT_COOLDOWN",
+    "UPDATE_SHAPESHIFT_USABLE",
 ];
 
 #[derive(Default)]

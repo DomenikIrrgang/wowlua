@@ -567,8 +567,16 @@ fn bags_told(vm: &mut Vm, _c: NativeCall) -> Ret {
         }
     }
     fire(vm, "BAG_UPDATE_DELAYED", &[]);
+    let mut wanted = false;
     for p in placed.iter().filter(|p| p.stacked) {
         fire(vm, "ITEM_COUNT_CHANGED", &[Value::Num(p.id as f64)]);
+        wanted |= crate::quests::is_quest_item(vm, p.id);
+    }
+    // A logged quest's item counted anew: the log's update after the
+    // counts (recorded, `quest`: all 7 counts of Tough Wolf Meat, none of
+    // the 3 without it).
+    if wanted {
+        fire(vm, "QUEST_LOG_UPDATE", &[]);
     }
     Ok(vec![])
 }

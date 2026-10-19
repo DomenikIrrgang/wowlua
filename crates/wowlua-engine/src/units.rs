@@ -76,6 +76,9 @@ pub struct Unit {
     pub classification: String,
     /// The player's threat on this creature (`setThreat`).
     pub threat: Option<f64>,
+    /// Dead with the player on its threat list, the list's update not told
+    /// yet (told as the player leaves combat, or by `setThreat(nil)`).
+    pub listed_dead: bool,
     /// What its corpse holds (`kill({ loot })`): items and counts.
     pub loot: Vec<(i64, f64)>,
     /// A creature's type and family: their names and IDs
@@ -281,6 +284,7 @@ pub fn install(vm: &mut Vm) {
         distance: Some(0.0),
         classification: "normal".into(),
         threat: None,
+        listed_dead: false,
         loot: Vec::new(),
         creature_type: None,
         creature_family: None,
@@ -1670,6 +1674,7 @@ fn unit_from(vm: &mut Vm, data: Option<TableRef>, player_guid: Option<String>) -
         },
         classification: text(vm, "classification", "normal"),
         threat: None,
+        listed_dead: false,
         loot: Vec::new(),
         creature_type: match get(vm, "creatureType") {
             Value::Str(s) => Some((
@@ -1797,6 +1802,7 @@ fn control_set_threat(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
     if c.arg(2).is_nil() {
         engine_mut(vm).units.list[me.0].threat = None;
+        engine_mut(vm).units.list[me.0].listed_dead = false;
         fire_unit(vm, "UNIT_THREAT_LIST_UPDATE", me, &[]);
         let any = engine(vm).units.list.iter().any(|u| u.threat.is_some());
         if !any && engine(vm).units.threat_situation {
@@ -1849,13 +1855,16 @@ fn unit_detailed_threat_situation(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `UnitThreatSituation(unit [, mob])`: the status on `mob`, else the
 /// highest on any creature; one nil without threat or unit (recorded:
-/// `party1`, the player alone, the player and an absent boss).
+/// `party1`, the player alone, the player and an absent boss; in `death`,
+/// the player in combat with no target, twice: a mob named that is not
+/// there, nil).
 fn unit_threat_situation(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(unit) = unit_arg(vm, &c, 1) else {
         return Ok(vec![Value::Nil]);
     };
     let status = match unit_arg(vm, &c, 2) {
         Some(mob) => threat_of(vm, unit, mob).map(|t| t.1),
+        None if !matches!(c.arg(2), Value::Nil) => None,
         None => (0..engine(vm).units.list.len())
             .filter_map(|i| threat_of(vm, unit, UnitId(i)).map(|t| t.1))
             .reduce(f64::max),
@@ -2090,6 +2099,9 @@ pub(crate) struct Kill {
     /// The experience's update this long after the kill (`xpAfter`, as
     /// recorded; else as the kill's kind has it).
     pub xp_after: Option<f64>,
+    /// The death told this long after the killing blow (`diesAfter`, as
+    /// recorded; else with it).
+    pub dies_after: Option<f64>,
 }
 
 impl Kill {
@@ -2103,6 +2115,7 @@ impl Kill {
                 amount: None,
                 school: 1.0,
                 xp_after: None,
+                dies_after: None,
             });
         };
         let field = |vm: &mut Vm, k: &str| {
@@ -2154,8 +2167,13 @@ impl Kill {
             Value::Num(n) => Some(n),
             _ => None,
         };
+        let dies_after = match field(vm, "diesAfter") {
+            Value::Num(n) if n > 0.0 => Some(n),
+            _ => None,
+        };
         Ok(Kill {
             xp_after,
+            dies_after,
             by,
             lootable,
             xp,
@@ -2257,6 +2275,7 @@ pub(crate) fn died(vm: &mut Vm, me: UnitId, lootable: bool) {
     {
         let u = &mut engine_mut(vm).units.list[me.0];
         u.in_combat = false;
+        u.listed_dead |= u.threat.is_some();
         u.threat = None;
     }
     let instance = identity_restricted(vm);
@@ -2377,11 +2396,24 @@ fn control_raise_skill(vm: &mut Vm, c: NativeCall) -> Ret {
     if me != PLAYER {
         return Err(vm.error("raiseSkill: the player's"));
     }
-    let name = vm.check_str(&c, 2)?;
-    let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
-    let rank = vm.check_number(&c, 3)?;
-    let times = if name == "Defense" { 2 } else { 1 };
-    skill_raised(vm, &name, rank, times);
+    // Several skills up in one packet (`raiseSkill(name, rank, name2,
+    // rank2)`): their messages, then the stats' events once with every
+    // skill's mods (unverified, once in `death`: Defense and Swords at
+    // 5.036, the damage's mods three times).
+    let mut mods = 0;
+    let mut i = 2;
+    loop {
+        let name = vm.check_str(&c, i)?;
+        let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
+        let rank = vm.check_number(&c, i + 1)?;
+        mods += if name == "Defense" { 2 } else { 1 };
+        skill_message(vm, &name, rank);
+        i += 2;
+        if matches!(c.arg(i), Value::Nil) {
+            break;
+        }
+    }
+    skill_stats(vm, mods);
     Ok(vec![])
 }
 
@@ -2389,6 +2421,12 @@ fn control_raise_skill(vm: &mut Vm, c: NativeCall) -> Ret {
 /// events, the damage's mods `mods` times (a weapon's once, Defense twice,
 /// a profession's none).
 pub fn skill_raised(vm: &mut Vm, name: &str, rank: f64, mods: usize) {
+    skill_message(vm, name, rank);
+    skill_stats(vm, mods);
+}
+
+/// "Your skill in … has increased to …" (`CHAT_MSG_SKILL`).
+fn skill_message(vm: &mut Vm, name: &str, rank: f64) {
     let format = match vm.get_global("ERR_SKILL_UP_SI") {
         Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
         _ => "Your skill in %s has increased to %d.".into(),
@@ -2397,6 +2435,10 @@ pub fn skill_raised(vm: &mut Vm, name: &str, rank: f64, mods: usize) {
         .replacen("%s", name, 1)
         .replacen("%d", &format!("{rank}"), 1);
     crate::chat::game_message(vm, "CHAT_MSG_SKILL", &text, None);
+}
+
+/// A skill's stats' events, the damage's mods `mods` times.
+fn skill_stats(vm: &mut Vm, mods: usize) {
     for e in ["UNIT_ATTACK", "UNIT_DEFENSE", "UNIT_RANGED_ATTACK_POWER"] {
         fire_unit(vm, e, PLAYER, &[]);
     }
@@ -2657,7 +2699,7 @@ fn swing_with_spell(
             &[k, empty, Value::Num(dealt), Value::Num(1.0)],
         );
     }
-    if let Some(k) = &kill {
+    if let Some(k) = kill.as_ref().filter(|k| k.dies_after.is_none()) {
         kill_xp(vm, victim, k, true);
     }
     if let Value::Num(p) = power {
@@ -2673,7 +2715,21 @@ fn swing_with_spell(
             _ => kill_xp(vm, victim, k, false),
         }
         engine_mut(vm).units.list[victim.0].loot = k.loot.clone();
-        died(vm, victim, k.lootable);
+        match k.dies_after {
+            Some(after) => {
+                let later = vm.native_with(
+                    "killDied",
+                    died_later,
+                    vec![
+                        Value::Num(victim.0 as f64),
+                        Value::Bool(k.lootable),
+                        k.xp.map_or(Value::Nil, Value::Num),
+                    ],
+                );
+                crate::clock::after_engine(vm, after, later);
+            }
+            None => died(vm, victim, k.lootable),
+        }
     }
     let changed = crate::actions::usability_changed(vm);
     fire(vm, "ACTIONBAR_UPDATE_COOLDOWN", &[]);
@@ -2693,10 +2749,41 @@ fn swing_with_spell(
             Value::Nil,
         ],
     );
-    if kill.is_none() {
+    if kill.as_ref().is_none_or(|k| k.dies_after.is_some()) {
         fire_unit(vm, "UNIT_HEALTH", victim, &[]);
     }
     fire(vm, "UPDATE_SHAPESHIFT_COOLDOWN", &[]);
+    Ok(vec![])
+}
+
+/// A kill's death told after its blow (`diesAfter`, recorded once in
+/// `quest`: a Heroic Strike's kill at 101.134, the death 0.104 s later
+/// with the experience's message and the corpse's loot after it, the
+/// blow's usability, cooldowns and the victim's health told before).
+fn died_later(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (Value::Num(victim), Value::Bool(lootable)) = (c.upvals[0], c.upvals[1]) else {
+        return Ok(vec![]);
+    };
+    let victim = UnitId(victim as usize);
+    died(vm, victim, false);
+    if let Value::Num(xp) = c.upvals[2] {
+        let k = Kill {
+            by: None,
+            lootable,
+            xp: Some(xp),
+            loot: Vec::new(),
+            amount: None,
+            school: 1.0,
+            xp_after: None,
+            dies_after: None,
+        };
+        kill_xp(vm, victim, &k, true);
+    }
+    if lootable {
+        let g = engine(vm).units.list[victim.0].guid.clone();
+        let g = vm.str(&g);
+        fire(vm, "UNIT_LOOT", &[g, Value::Bool(true)]);
+    }
     Ok(vec![])
 }
 
@@ -2914,10 +3001,6 @@ fn control_leave_combat(vm: &mut Vm, c: NativeCall) -> Ret {
         for u in engine_mut(vm).units.list.iter_mut() {
             u.threat = None;
         }
-        // Off the threat lists first (recorded: the wolf's, dead).
-        if living.is_empty() {
-            fire_unit(vm, "UNIT_THREAT_SITUATION_UPDATE", PLAYER, &[]);
-        }
     }
     if me == PLAYER {
         // A creature giving up drops the player as its target with the
@@ -2953,6 +3036,31 @@ fn control_leave_combat(vm: &mut Vm, c: NativeCall) -> Ret {
             fire_unit(vm, "UNIT_FLAGS", id, &[]);
         }
         crate::actions::update_usability(vm);
+    }
+    // Off the dead creatures' lists with the combat's end, after the
+    // corpses dropped the player (so no `targettarget`): each corpse's
+    // list not told yet, then the player's situation (recorded: `quest`'s
+    // 8 fights' ends, the corpse's list by its tokens, the situation the
+    // player's alone; `auradeath`'s; `combat`'s list told before, by the
+    // server, the situation with it).
+    if me == PLAYER {
+        let listed: Vec<UnitId> = engine(vm)
+            .units
+            .list
+            .iter()
+            .enumerate()
+            .filter(|(_, u)| u.listed_dead)
+            .map(|(i, _)| UnitId(i))
+            .collect();
+        for id in listed {
+            engine_mut(vm).units.list[id.0].listed_dead = false;
+            if situation {
+                fire_unit(vm, "UNIT_THREAT_LIST_UPDATE", id, &[]);
+            }
+        }
+    }
+    if situation && living.is_empty() {
+        fire_unit(vm, "UNIT_THREAT_SITUATION_UPDATE", PLAYER, &[]);
     }
     if situation && !living.is_empty() {
         let ids = living.iter().map(|id| Value::Num(id.0 as f64)).collect();

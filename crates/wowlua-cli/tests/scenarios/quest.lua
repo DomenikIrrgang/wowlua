@@ -390,11 +390,13 @@ at(99.305) player:swing(u_fba621fce1, 7, { power = 20, textAfter = 0.531 })
 at(99.523) u_fba621fce1:swing(player, 1, { victimPower = 20, textAfter = 0.398 })
 at(100.377) u_fba621fce1:setThreat(38)
 at(100.552) strike(0.322)
-at(101.134) player:swing(u_fba621fce1, 16, { spent = 5, kill = { xpAfter = 0.424, echo = 0.424, xp = 40, loot = { { id = 750 }, { id = 4865 } } } })
-at(101.134) player:setPower(5)
+-- The death told 0.104 s after the blow (recorded); in the frame at
+-- 101.558 the attack's end, a bystander's death, the target's clearing
+-- echoed, the experience, the combat's end (recorded in that order).
+at(101.134) player:swing(u_fba621fce1, 16, { spent = 5, kill = { xpAfter = 0.424, diesAfter = 0.104, echo = 0.3195, xp = 40, loot = { { id = 750 }, { id = 4865 } } } })
 at(101.238) player:setPower(5)
-at(101.558) player:stopAttack()
-at(101.558) bystander("Creature-0-6782-0-7-257-BA7C88CBE5", 257, "Kobold Worker")
+at(101.557) player:stopAttack()
+at(101.557) bystander("Creature-0-6782-0-7-257-BA7C88CBE5", 257, "Kobold Worker")
 at(101.558) player:leaveCombat()
 at(101.791) player:loot(u_fba621fce1, { auto = true, bagsAfter = { 0.19 }, slotsAfter = { 0.629, 0.701 } })
 at(101.821) player:target(u_fba621fce1, { echo = 0.27 })
