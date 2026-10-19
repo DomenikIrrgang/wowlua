@@ -93,8 +93,12 @@ export interface MockUnit
     --- `castTime` seconds later (the spell data's, else 1.5).
     function castSpell(spellID: number, opts: { castTime?: number, channel?: boolean, notInterruptible?: boolean }?)
     --- The player gathers a world object (a vein, a herb): `spell` cast on
-    --- it, at its success its `loot` in the window (`auto`: autoloot).
-    function gather(object: MockUnit, opts: { spell: number, castTime?: number, loot?: { id: number, count?: number }[], auto?: boolean })
+    --- it, at its success its `loot` in the window (`auto`: autoloot). A
+    --- recording's timing: `succeedsAfter` (the success, seconds after the
+    --- cast's start; else at its end), `slotsAfter` (each slot's item,
+    --- seconds after the window opened), `bagsAfter` (the bags' packets,
+    --- each seconds after the item that set it off, in order).
+    function gather(object: MockUnit, opts: { spell: number, castTime?: number, loot?: { id: number, count?: number }[], auto?: boolean, succeedsAfter?: number, slotsAfter?: number[], bagsAfter?: number[] })
     --- The player clicks a profession's spell: its window open, as the
     --- client recorded `profession`'s (`"Blacksmithing"`, `"Mining"`).
     function openTradeSkill(spell: number, profession: string)
@@ -118,6 +122,14 @@ export interface MockUnit
     --- Which crafts of `recipe` to come raise the profession's skill, in
     --- order (the server's chance).
     function craftSkillUps(recipe: number, ups: boolean[])
+    --- A recording's timings of the crafts' casts to come, in order (the
+    --- server's answers, seconds): each cast's `start` after its request
+    --- or the last cast's success, its `success` after its start, its
+    --- `item` after its success (0: with it), the bags' packet (`bags`)
+    --- after its item, a new slot's item data (`data`, its own packet;
+    --- else with the bags') after its item; what one leaves out is the
+    --- engine's.
+    function craftTimings(timings: { start?: number, success?: number, item?: number, bags?: number, data?: number }[])
     --- The spell focuses near the player (`{ "Forge" }`): a recipe needing
     --- one can be made.
     function setSpellFocus(names: string[])

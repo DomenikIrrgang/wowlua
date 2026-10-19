@@ -16,9 +16,9 @@
 //!
 //! Unverified: a party of more than two, leaving, a raid, roles, the loot
 //! method's choice (group loot, uncommon: recorded), trading items or
-//! money, the action bar's usability with a party (the paladin's
-//! Blessing of Protection unusable alone in a party: recorded, not
-//! modelled).
+//! money. The action bar's usability with a party: the paladin's Blessing
+//! of Protection unusable alone in a party with a soft friend outside it
+//! (recorded; `actions.rs`).
 
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, NativeFn, Value, Vm};
@@ -167,9 +167,10 @@ fn formed(vm: &mut Vm, c: NativeCall) -> Ret {
     system(vm, &threshold.replacen("%s", &uncommon, 1));
     let guid = party_guid(vm);
     fire(vm, "GROUP_JOINED", &[Value::Num(1.0), guid]);
-    // The actions on a group (recorded: Blessing of Protection's re-told).
-    crate::actions::update_usability(vm);
     fire(vm, "CHANNEL_UI_UPDATE", &[]);
+    // The actions on a group (recorded: Blessing of Protection's re-told
+    // here, the bars' update after the difficulty's).
+    crate::actions::usability_changed(vm);
     fire(vm, "PLAYER_DIFFICULTY_CHANGED", &[]);
     fire(vm, "CHANNEL_UI_UPDATE", &[]);
     for _ in 0..3 {
@@ -200,7 +201,16 @@ pub fn control_join_group(vm: &mut Vm, c: NativeCall) -> Ret {
         }
     }
     party_mut(vm).formed = true;
-    units::fire_unit(vm, "UNIT_FACTION", me, &[]);
+    // Its faction by its group token alone (recorded: party1's, not the
+    // soft friend's it also was; unverified: other tokens).
+    let tokens: Vec<String> = units::tokens_of(&engine(vm).units, me)
+        .into_iter()
+        .filter(|t| t.starts_with("party") || t.starts_with("raid"))
+        .collect();
+    for t in tokens {
+        let t = vm.str(&t);
+        fire(vm, "UNIT_FACTION", &[t]);
+    }
     let format = global(vm, "ERR_JOINED_GROUP_S", "%s joins the party.");
     let name = full_name(vm, me);
     system(vm, &format.replacen("%s", &name, 1));

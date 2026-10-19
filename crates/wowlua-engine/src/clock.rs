@@ -23,6 +23,8 @@ pub struct Timer {
     /// Runs left (`f64::INFINITY` for a ticker without a count).
     pub left: f64,
     pub cancelled: bool,
+    /// The engine's (the server's answer), not an addon's.
+    pub engine: bool,
     /// The callback and the handle it gets (none for `C_Timer.After`), kept
     /// in a registry table.
     pub slot: TableRef,
@@ -115,9 +117,11 @@ pub fn after_engine(vm: &mut Vm, seconds: f64, callback: Value) {
     schedule(vm, seconds, callback, 1.0, false);
     // Due at a whole millisecond, as the client's clock tells its packets
     // (a round trip from a recorded moment lands on the recorded moment,
-    // not a hair after it).
+    // not a hair after it), and run at that time within a frame
+    // (`advance_frames`).
     if let Some(t) = engine_mut(vm).timers.list.last_mut() {
         t.due = (t.due * 1000.0).round() / 1000.0;
+        t.engine = true;
     }
 }
 
@@ -151,6 +155,7 @@ fn schedule(vm: &mut Vm, seconds: f64, callback: Value, runs: f64, handle: bool)
         every: seconds.max(0.0),
         left: runs,
         cancelled: false,
+        engine: false,
         slot,
     });
     out
@@ -238,8 +243,12 @@ pub fn advance(vm: &mut Vm, seconds: f64) {
             .min_by(|a, b| a.1.due.total_cmp(&b.1.due).then(a.0.cmp(&b.0)))
             .map(|(i, t)| (TimerId(i), t.due));
         let Some((id, due)) = next else { break };
-        if due * 1000.0 > vm.clock.elapsed_ms {
-            tick(vm, due * 1000.0 - vm.clock.elapsed_ms);
+        // At its time, but not past the advance's end (a timer due within
+        // the rounding of the end runs at the end: the clock does not
+        // drift ahead of the steps' times).
+        let due_ms = (due * 1000.0).min(end_ms);
+        if due_ms > vm.clock.elapsed_ms {
+            tick(vm, due_ms - vm.clock.elapsed_ms);
         }
         {
             // A ticker without an interval fires once a frame (once this
@@ -266,10 +275,16 @@ pub fn advance(vm: &mut Vm, seconds: f64) {
 /// `SetText` owes (those before it and in `OnUpdate`), then the due
 /// timers, those an `OnUpdate` just set included (`/stdtest engine`:
 /// "update1 after0 after0 (set in update1) update2"; "update1 … changed
-/// after0").
+/// after0"). The engine's own timers (the server's answers) run at their
+/// own times during the frame, before it ends: a packet's events at the
+/// moment it comes, as the recordings time them (the client's frames are
+/// not the engine's 60 a second; the profession's casts, recorded to the
+/// millisecond, start at their recorded times).
 pub fn advance_frames(vm: &mut Vm, n: usize, ms: f64) {
     for _ in 0..n {
-        tick(vm, ms);
+        let end_ms = vm.clock.elapsed_ms + ms;
+        engine_answers(vm, end_ms);
+        tick(vm, end_ms - vm.clock.elapsed_ms);
         engine_mut(vm).timers.tick_time = ms / 1000.0;
         widgets::run_size_changes(vm);
         let count = engine(vm).world.widgets.len();
@@ -308,6 +323,31 @@ pub fn advance_frames(vm: &mut Vm, n: usize, ms: f64) {
         widgets::run_text_changes(vm);
         crate::animations::tick(vm, ms / 1000.0);
         advance(vm, 0.0);
+    }
+}
+
+/// The engine's timers (the server's answers) due before the frame's end,
+/// each at its time.
+fn engine_answers(vm: &mut Vm, end_ms: f64) {
+    loop {
+        let timers = &mut engine_mut(vm).timers;
+        let list = &timers.list;
+        timers
+            .active
+            .retain(|&i| !list[i].cancelled && list[i].left > 0.0);
+        let next = timers
+            .active
+            .iter()
+            .map(|&i| (i, &timers.list[i]))
+            .filter(|(_, t)| t.engine && t.due * 1000.0 < end_ms)
+            .min_by(|a, b| a.1.due.total_cmp(&b.1.due).then(a.0.cmp(&b.0)))
+            .map(|(i, t)| (TimerId(i), t.due));
+        let Some((id, due)) = next else { break };
+        if due * 1000.0 > vm.clock.elapsed_ms {
+            tick(vm, due * 1000.0 - vm.clock.elapsed_ms);
+        }
+        engine_mut(vm).timers.list[id.0].left -= 1.0;
+        fire(vm, id);
     }
 }
 

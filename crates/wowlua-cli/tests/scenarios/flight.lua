@@ -130,11 +130,26 @@ tal:setDistance(3)
 player:interact(tal)
 at(3.0)
 check("the gossip shown", GossipFrame:IsShown())
+-- The world's own, not modelled: the server's events as recorded.
+local function world(...) e.fireEvent(...) end
+-- ENCHANT_SPELL_COMPLETED now and then, its cause unknown.
+at(3.732) world("ENCHANT_SPELL_COMPLETED", false, nil)
 local option = button(GossipFrame, "I need a ride.")
 check("the gossip's option shown", option ~= nil)
+-- The option chosen: the map 0.372 s later (recorded).
+e.setLatency(0.372)
 at(5.676) if option then press(option) end
+e.setLatency(0.4)
+-- With the map, in its frame, the server's cooldown for a spell (416262,
+-- not the player's), as on the taxi's flight (416221).
+at(6.06)
+world("ACTIONBAR_UPDATE_COOLDOWN")
+world("BAG_UPDATE_COOLDOWN")
+world("SPELL_UPDATE_COOLDOWN", 416262, nil, nil, nil, nil)
+world("UPDATE_SHAPESHIFT_COOLDOWN")
 at(6.5)
 check("the taxi map shown", TaxiFrame and TaxiFrame:IsShown())
+at(8.276) world("ENCHANT_SPELL_COMPLETED", false, nil)
 at(11.995) player:wear()
 at(13.557) if TaxiFrame then HideUIPanel(TaxiFrame) end
 at(14)

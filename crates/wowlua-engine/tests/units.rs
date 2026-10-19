@@ -451,8 +451,7 @@ return unpack(out)",
     assert_eq!(
         r,
         [
-            "PLAYER_MONEY MERCHANT_SHOW PLAYER_INTERACTION_MANAGER_FRAME_SHOW(5) MERCHANT_FILTER_ITEM_UPDATE(6256) \
-             MERCHANT_FILTER_ITEM_UPDATE(6529) MERCHANT_UPDATE",
+            "PLAYER_MONEY MERCHANT_SHOW PLAYER_INTERACTION_MANAGER_FRAME_SHOW(5)",
             "2",
             "Fishing Pole",
             "23",
