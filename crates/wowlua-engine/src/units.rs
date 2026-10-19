@@ -2192,7 +2192,7 @@ pub fn skill_raised(vm: &mut Vm, name: &str, rank: f64, mods: usize) {
 const COMBAT_TEXT_DELAY: f64 = 0.4;
 
 /// `unit:swing(victim, amount, { kind?, power?, victimPower?, speed?,
-/// textAfter? })`: a melee swing landing, as the client recorded the
+/// textAfter?, combat? })`: a melee swing landing, as the client recorded the
 /// player's and a wolf's (`/stdtest engine scenario combat`):
 /// `PLAYER_SWING(speed, 0)` for the player's, combat for both if not yet,
 /// the attacker's then the victim's power (`power`, `victimPower`: rage),
@@ -2249,9 +2249,13 @@ fn control_swing(vm: &mut Vm, c: NativeCall) -> Ret {
         let power = field(vm, "power");
         return swing_kill(vm, me, victim, k, power);
     }
-    for id in [me, victim] {
-        if !engine(vm).units.list[id.0].in_combat {
-            enter_combat(vm, id, false);
+    // `combat = false`: the swing puts no one in combat (recorded: the
+    // quest's first, combat a moment later with the wolf's answer).
+    if !matches!(field(vm, "combat"), Value::Bool(false)) {
+        for id in [me, victim] {
+            if !engine(vm).units.list[id.0].in_combat {
+                enter_combat(vm, id, false);
+            }
         }
     }
     if let Value::Num(p) = field(vm, "power") {

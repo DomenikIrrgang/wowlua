@@ -37,13 +37,13 @@ export interface MockUnit
     --- both in combat, the attacker's then the victim's power (`power`,
     --- `victimPower`: rage), the victim's health, and the combat text
     --- (`UNIT_COMBAT`) a moment later (`textAfter` seconds, 0.4 by
-    --- default). `kind`: `WOUND` (default), `PARRY`, `DODGE`, `MISS`, `BLOCK`.
+    --- default); `combat = false`: no one put in combat. `kind`: `WOUND` (default), `PARRY`, `DODGE`, `MISS`, `BLOCK`.
     --- The player's skill `name` up to `rank` ("Your skill in … has
     --- increased", the stats' events).
     function raiseSkill(name: string, rank: number)
     --- `kill`: the swing kills (`PARTY_KILL`, the death, the experience's
     --- message, its update a round trip later; `loot`: the corpse's items).
-    function swing(victim: MockUnit, amount: number, opts: { kind?: string, power?: number, victimPower?: number, speed?: number, textAfter?: number, kill?: { xp?: number, loot?: table } }?)
+    function swing(victim: MockUnit, amount: number, opts: { kind?: string, power?: number, victimPower?: number, speed?: number, textAfter?: number, combat?: boolean, kill?: { xp?: number, loot?: table } }?)
     --- The player talks to an NPC: a round trip later its quest dialog
     --- opens (`QUEST_DETAIL` for a quest it offers, `QUEST_PROGRESS` for
     --- one in the log); too far (`setDistance` above 5 yards): the
