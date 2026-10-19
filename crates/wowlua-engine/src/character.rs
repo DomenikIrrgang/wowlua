@@ -76,6 +76,8 @@ pub struct Character {
     pub money: f64,
     /// By inventory slot ID (1 head … 19 tabard).
     pub equipment: BTreeMap<i64, Held>,
+    /// Items' running cooldowns: start (the clock's), duration.
+    pub item_cooldowns: BTreeMap<i64, (f64, f64)>,
     /// By bag ID (0 the backpack).
     pub bags: BTreeMap<i64, Bag>,
     pub position: Position,
@@ -106,6 +108,7 @@ impl Default for Character {
         Character {
             money: 0.0,
             equipment: BTreeMap::new(),
+            item_cooldowns: BTreeMap::new(),
             bags,
             position: Position::default(),
             stats: crate::stats::defaults(),
@@ -647,6 +650,17 @@ pub fn control_set_bag(vm: &mut Vm, c: NativeCall) -> Ret {
                 for slot in 1..=slots {
                     let v = vm.heap.table(list).get(Value::Num(slot as f64));
                     if let Some(h) = held_of(vm, v) {
+                        // A snapshot's running cooldown: `{ remaining,
+                        // duration }`.
+                        if let Value::Table(item) = v
+                            && let Value::Table(cd) = field(vm, item, "cooldown")
+                            && let (Some(left), Some(duration)) = (
+                                num(field(vm, cd, "remaining")),
+                                num(field(vm, cd, "duration")),
+                            )
+                        {
+                            set_item_cooldown(vm, h.id, duration, left);
+                        }
                         items.insert(slot, h);
                     }
                 }
@@ -691,6 +705,52 @@ pub fn control_set_bag(vm: &mut Vm, c: NativeCall) -> Ret {
         widgets::fire_event(vm, "ITEM_COUNT_CHANGED", &[Value::Num(id as f64)]);
     }
     Ok(vec![])
+}
+
+/// An item's cooldown: `duration` seconds, `left` of them to run.
+pub fn set_item_cooldown(vm: &mut Vm, id: i64, duration: f64, left: f64) {
+    let now = crate::clock::now(vm);
+    let cds = &mut engine_mut(vm).world.character.item_cooldowns;
+    if duration > 0.0 && left > 0.0 {
+        cds.insert(id, (now - (duration - left), duration));
+    } else {
+        cds.remove(&id);
+    }
+}
+
+/// An item's running cooldown: its start and duration.
+pub fn item_cooldown(vm: &Vm, id: i64) -> Option<(f64, f64)> {
+    let now = crate::clock::now(vm);
+    engine(vm)
+        .world
+        .character
+        .item_cooldowns
+        .get(&id)
+        .copied()
+        .filter(|(start, duration)| start + duration > now)
+}
+
+/// `mock.setItemCooldown(itemID, duration, remaining?)`: the item's
+/// cooldown (all of it to run by default; 0: none).
+pub fn control_set_item_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = vm.check_int(&c, 1)?;
+    let duration = vm.check_number(&c, 2)?;
+    let left = num(c.arg(3)).unwrap_or(duration);
+    set_item_cooldown(vm, id, duration, left);
+    widgets::fire_event(vm, "BAG_UPDATE_COOLDOWN", &[]);
+    Ok(vec![])
+}
+
+/// `C_Container.GetItemCooldown(itemID)`: its running cooldown's start and
+/// duration, enabled (unverified: none recorded).
+fn get_item_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
+    let cd = num(c.arg(1)).and_then(|id| item_cooldown(vm, id as i64));
+    let (start, duration) = cd.unwrap_or((0.0, 0.0));
+    Ok(vec![
+        Value::Num(start),
+        Value::Num(duration),
+        Value::Num(1.0),
+    ])
 }
 
 /// A bag the player carries (the backpack, the bags, the reagent bag; not
@@ -1371,6 +1431,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Container.GetBagName", bag_name),
         ("GetInventoryAlertStatus", inventory_alert_status),
         ("GetInventoryItemCooldown", inventory_item_cooldown),
+        ("C_Container.GetItemCooldown", get_item_cooldown),
         ("GetInventoryItemBroken", inventory_item_no),
         ("GetInventoryItemEquippedUnusable", inventory_item_no),
         ("GetInventoryItemID", get_inventory_item_id),

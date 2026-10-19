@@ -92,6 +92,13 @@ local function bags(items: { [number]: table }): table
                 const info = C_Container.GetContainerItemInfo(bag, slot)
                 if info then
                     const quest = C_Container.GetContainerItemQuestInfo(bag, slot)
+                    -- A running cooldown: what is left of it, and its length.
+                    local cooldown: table? = nil
+                    local start, duration = C_Container.GetContainerItemCooldown(bag, slot)
+                    if not issecretvalue(start) and not issecretvalue(duration)
+                        and type(duration) == "number" and duration > 0 then
+                        cooldown = { remaining = start + duration - GetTime(), duration = duration }
+                    end
                     contents[slot] = {
                         id = info.itemID,
                         count = info.stackCount,
@@ -100,6 +107,7 @@ local function bags(items: { [number]: table }): table
                         questItem = quest and quest.isQuestItem or nil,
                         questID = quest and quest.questID or nil,
                         questActive = quest and quest.isActive or nil,
+                        cooldown = cooldown,
                     }
                     itemData(items, info.itemID)
                     if info.isReadable then

@@ -115,14 +115,28 @@ fn no_toy(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(-1.0)])
 }
 
-/// `C_Container.GetContainerItemCooldown(bag, slot)`: no cooldown; enabled
-/// except in the reagent bag (bag 5; recorded).
-fn container_item_cooldown(_vm: &mut Vm, c: NativeCall) -> Ret {
-    let reagents = num(c.arg(1)) == Some(5.0);
+/// `C_Container.GetContainerItemCooldown(bag, slot)`: the item's running
+/// cooldown's start and duration, enabled; an empty slot not (recorded:
+/// a Hearthstone's hour, every other item 0, 0, 1, empty slots 0, 0, 0).
+fn container_item_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
+    let held = match (num(c.arg(1)), num(c.arg(2))) {
+        (Some(bag), Some(slot)) => engine(vm)
+            .world
+            .character
+            .bags
+            .get(&(bag as i64))
+            .and_then(|b| b.items.get(&(slot as usize)))
+            .map(|h| h.id),
+        _ => None,
+    };
+    let Some(id) = held else {
+        return Ok(vec![Value::Num(0.0), Value::Num(0.0), Value::Num(0.0)]);
+    };
+    let (start, duration) = crate::character::item_cooldown(vm, id).unwrap_or((0.0, 0.0));
     Ok(vec![
-        Value::Num(0.0),
-        Value::Num(0.0),
-        Value::Num(if reagents { 0.0 } else { 1.0 }),
+        Value::Num(start),
+        Value::Num(duration),
+        Value::Num(1.0),
     ])
 }
 

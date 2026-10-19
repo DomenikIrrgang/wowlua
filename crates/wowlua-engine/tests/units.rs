@@ -584,3 +584,28 @@ return full, cost, tostring(needed), table.concat(Seen, ' '), GetMoney(), select
         ]
     );
 }
+
+#[test]
+fn item_cooldowns_run_out() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "mock.setBag(0, { slots = 3, items = { [1] = { id = 6948, cooldown = { remaining = 600, duration = 3600 } }, [2] = 117 } })
+local now = GetTime()
+local s, d, e = C_Container.GetContainerItemCooldown(0, 1)
+local _, d2, e2 = C_Container.GetContainerItemCooldown(0, 2)
+local _, d3, e3 = C_Container.GetContainerItemCooldown(0, 3)
+local _, d4 = C_Container.GetItemCooldown(6948)
+mock.setItemCooldown(117, 10)
+local _, d5 = C_Container.GetContainerItemCooldown(0, 2)
+mock.advanceTime(11)
+local _, d6 = C_Container.GetContainerItemCooldown(0, 2)
+return now - s, d, e, d2, e2, d3, e3, d4, d5, d6",
+    );
+    // The Hearthstone an hour long, 600 s left: started 3000 s ago; an
+    // item without one enabled; an empty slot not (recorded).
+    assert_eq!(
+        r,
+        ["3000", "3600", "1", "0", "1", "0", "0", "3600", "10", "0"]
+    );
+}

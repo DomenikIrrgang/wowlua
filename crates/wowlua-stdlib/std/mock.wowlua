@@ -237,6 +237,8 @@ export type HeldItem = {
     questItem?: boolean,
     questID?: number,
     questActive?: boolean,
+    --- Its running cooldown (a snapshot's): seconds left, its length.
+    cooldown?: { remaining: number, duration: number },
 }
 
 --- What `spawnUnit` takes.
@@ -309,6 +311,12 @@ end
 --- The player's data (a world profile's character), firing no events.
 export function setPlayer(data: UnitData)
     engine().setPlayer(data)
+end
+
+--- An item's cooldown: `duration` seconds, `remaining` of them to run
+--- (all by default; 0: none). `BAG_UPDATE_COOLDOWN`.
+export function setItemCooldown(itemID: number, duration: number, remaining: number?)
+    engine().setItemCooldown(itemID, duration, remaining)
 end
 
 --- A bag's contents (`nil`: no bag): `BAG_UPDATE`, `BAG_UPDATE_DELAYED`.

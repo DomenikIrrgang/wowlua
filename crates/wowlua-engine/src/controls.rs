@@ -319,6 +319,10 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("spawnUnit", units::spawn),
         ("setPlayer", units::set_player),
         ("setBag", crate::character::control_set_bag),
+        (
+            "setItemCooldown",
+            crate::character::control_set_item_cooldown,
+        ),
         ("defaultedCalls", defaulted_calls),
         ("openMerchant", crate::merchant::control_open),
         ("setAction", crate::actions::control_set_action),
