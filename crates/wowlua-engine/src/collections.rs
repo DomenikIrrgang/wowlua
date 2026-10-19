@@ -475,8 +475,19 @@ const MOUNT_IDS: [u32; 139] = [
     28, 55, 2954, 3129, 87, 65, 64, 25, 100, 67, 116, 58, 3130, 75, 121, 3127, 3167, 2995, 77,
 ];
 
+/// Only the mounts whose info was recorded: addons read each listed
+/// mount's info and index by its spell (ElvUI's `E.MountIDs[spellID]`), so
+/// a mount listed without info breaks them (none recorded yet: empty, as
+/// Blizzard's code read before).
 fn get_mount_ids(vm: &mut Vm, _c: NativeCall) -> Ret {
-    let ids = MOUNT_IDS.iter().map(|id| Value::Num(f64::from(*id)));
+    let answers = crate::recorded::answers();
+    let ids: Vec<Value> = MOUNT_IDS
+        .iter()
+        .filter(|id| {
+            answers.contains_key(format!("C_MountJournal.GetMountInfoByID({id})").as_str())
+        })
+        .map(|id| Value::Num(f64::from(*id)))
+        .collect();
     Ok(vec![list(vm, ids)])
 }
 
