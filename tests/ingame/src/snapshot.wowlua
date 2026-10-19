@@ -72,8 +72,6 @@ local function equipment(items: { [number]: table }): table
                 link = GetInventoryItemLink("player", slot),
                 durability = durability,
                 maxDurability = maxDurability,
-                -- The server's GUID: the order the inventory loads in.
-                guid = C_Item.GetItemGUID(G.ItemLocation:CreateFromEquipmentSlot(slot)),
             }
             itemData(items, id)
         end
@@ -101,7 +99,6 @@ local function bags(items: { [number]: table }): table
                         questItem = quest and quest.isQuestItem or nil,
                         questID = quest and quest.questID or nil,
                         questActive = quest and quest.isActive or nil,
-                        guid = C_Item.GetItemGUID(G.ItemLocation:CreateFromBagAndSlot(bag, slot)),
                     }
                     itemData(items, info.itemID)
                     if info.isReadable then

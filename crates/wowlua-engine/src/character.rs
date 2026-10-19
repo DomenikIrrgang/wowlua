@@ -43,9 +43,6 @@ pub struct Held {
     pub arriving: bool,
     /// Worn gear's durability: current, maximum.
     pub durability: Option<(f64, f64)>,
-    /// The server's GUID for it (`Item-…`), when the snapshot has it: the
-    /// order the inventory loads in.
-    pub guid: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -141,7 +138,7 @@ fn num(v: Value) -> Option<f64> {
 }
 
 /// An item as a test gives it: its ID, or `{ id, count, link, bound,
-/// locked, questItem, questID, questActive, guid }`.
+/// locked, questItem, questID, questActive }`.
 fn held_of(vm: &mut Vm, v: Value) -> Option<Held> {
     match v {
         Value::Num(n) => Some(Held {
@@ -168,10 +165,6 @@ fn held_of(vm: &mut Vm, v: Value) -> Option<Held> {
                 ) {
                     (Some(d), Some(m)) => Some((d, m)),
                     _ => None,
-                },
-                guid: {
-                    let g = field(vm, t, "guid");
-                    text(vm, g)
                 },
             })
         }
