@@ -363,6 +363,16 @@ local function collect(): { [string]: string }
             end
         end
     end)
+    try(function()
+        -- A title the character knows, not the one it shows.
+        const current = G.GetCurrentTitle()
+        for id = 1, G.GetNumTitles() do
+            if id ~= current and G.IsTitleKnown(id) then
+                v.TITLE1 = tostring(id)
+                break
+            end
+        end
+    end)
     return v
 end
 

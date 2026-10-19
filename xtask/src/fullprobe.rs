@@ -431,18 +431,6 @@ const ACTING_QUERIES: &[(&str, &str)] = &[
         "acts: completes the quest and takes its reward",
     ),
     ("GetInboxText", "acts: marks the mail read"),
-    (
-        "ShowHelm",
-        "changes what other players see (not called: decide)",
-    ),
-    (
-        "ShowCloak",
-        "changes what other players see (not called: decide)",
-    ),
-    (
-        "SetCurrentTitle",
-        "changes what other players see (not called: decide)",
-    ),
     ("UnitSetRole", "acts: sets the group role"),
     ("UnitSetRoleEnum", "acts: sets the group role"),
     ("UnitSwitchToVehicleSeat", "acts: moves the character"),
@@ -688,6 +676,10 @@ pub fn setters(docs: &Docs) -> Vec<Setter> {
         ("GetAutoDeclineGuildInvites", "SetAutoDeclineGuildInvites"),
         ("GetAllowLowLevelRaid", "SetAllowLowLevelRaid"),
         ("GetGuildRosterShowOffline", "SetGuildRosterShowOffline"),
+        // What other players see, put back at once (user decision
+        // 2026-10-20: probed as restorable settings).
+        ("ShowingHelm", "ShowHelm"),
+        ("ShowingCloak", "ShowCloak"),
     ] {
         out.push(Setter {
             get: format!("{get}()"),
@@ -922,6 +914,19 @@ pub fn setters(docs: &Docs) -> Vec<Setter> {
             "SetActionBarToggles(false, false, false, false, false)",
             "SetActionBarToggles(true)",
             "SetActionBarToggles()",
+        ],
+    ));
+    // The title other players see, put back at once (user decision
+    // 2026-10-20). `{TITLE1}`: a title the character knows.
+    out.push(one(
+        "GetCurrentTitle()",
+        "function(o) SetCurrentTitle(o) end",
+        &[
+            "SetCurrentTitle({TITLE1})",
+            "SetCurrentTitle(0)",
+            "SetCurrentTitle(-1)",
+            "SetCurrentTitle(99999)",
+            "SetCurrentTitle(\"x\")",
         ],
     ));
     out.push(one(
