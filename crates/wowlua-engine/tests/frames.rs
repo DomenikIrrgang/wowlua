@@ -127,6 +127,38 @@ return table.concat(log, ' '), tostring(c:IsVisible())",
     assert_eq!(r, ["c- p- p+ c+", "true"]);
 }
 
+/// A C error's "Lua Taint:" line names the addon whose code made the
+/// failing call, though a library's value tainted the execution after a C
+/// call (the user's client: ElvUI's Minimap.lua, a string from
+/// ElvUI_Libraries' `utf8sub`, "Lua Taint: ElvUI").
+#[test]
+fn a_c_errors_taint_line_names_the_calling_addon() {
+    let mut vm = vm();
+    let lib = vm
+        .load_as(
+            b"function LibCut(s) return string.sub(s, 1, 3) end",
+            "@MyLib/lib.lua",
+            "MyLib",
+        )
+        .expect("compiles");
+    vm.call(lib, &[]).expect("runs");
+    let r = run(
+        &mut vm,
+        "local fs = UIParent:CreateFontString(nil, 'OVERLAY')
+local text = LibCut('abcdef')
+fs:SetTextColor(1, 1, 1)
+local tainter = select(2, issecurevariable('LibCut'))
+return select(2, pcall(fs.SetText, fs, text)), tainter",
+    );
+    assert_eq!(
+        r,
+        [
+            "FontString:SetText(): Font not set\nLua Taint: MyAddon",
+            "MyLib"
+        ]
+    );
+}
+
 #[test]
 fn layout_and_stored_setters() {
     let mut vm = vm();

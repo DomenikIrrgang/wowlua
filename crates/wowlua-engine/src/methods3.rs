@@ -1429,6 +1429,10 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
         ),
         ("FrameScriptObject:GetAccessRestrictions", zero),
         ("FrameScriptObject:GetForbiddenAspects", zero),
+        (
+            "FrameScriptObject:AddForbiddenAspects",
+            crate::protection::add_forbidden_aspects,
+        ),
         ("FrameScriptObject:HasAnyAccessRestrictions", no),
         (
             "FrameScriptObject:HasAnySecretAspect",

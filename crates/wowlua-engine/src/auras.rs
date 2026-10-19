@@ -450,7 +450,7 @@ pub(crate) fn refuse(vm: &mut Vm, function: &str) -> Result<(), LuaError> {
     if !(restricted && protection::tainted(vm)) {
         return Ok(());
     }
-    let addon = vm.taint_name(vm.taint().stack).unwrap_or_default();
+    let addon = vm.taint_name(vm.error_taint()).unwrap_or_default();
     let msg = vm.str(&format!(
         "{function}(): Auras cannot be accessed when secret while tainted by '{addon}'\nLua Taint: {addon}"
     ));

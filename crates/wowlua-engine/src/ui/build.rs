@@ -882,6 +882,15 @@ fn apply_child(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, child: &Rc
                 set_script(vm, cx, id, s);
             }
         }
+        // The template's forbidden aspects (`DisableUntrustedLayoutScriptsTemplate`).
+        "forbiddenaspects" => {
+            let flags = child
+                .children
+                .iter()
+                .filter_map(|a| a.attr("aspect"))
+                .fold(0, |f, name| f | crate::protection::aspect_flag(name));
+            crate::protection::add_aspects(vm, id, flags);
+        }
         "buttontext" => {
             if let Some(fs) = build_as(vm, cx, child, "FontString", Some(id)) {
                 call_method(vm, cx, child.line, frame, "SetFontString", &[fs]);
