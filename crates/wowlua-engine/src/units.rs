@@ -600,7 +600,12 @@ fn unit_exists(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(unit_arg(vm, &c, 1).is_some())])
 }
 
+/// `UnitGUID(unit)`: the GUID; a token naming no one one nil (recorded:
+/// a target gone, in every recording that counts trailing nils).
 fn unit_guid(vm: &mut Vm, c: NativeCall) -> Ret {
+    if unit_arg(vm, &c, 1).is_none() {
+        return Ok(vec![Value::Nil]);
+    }
     with_unit(vm, &c, |vm, u| vec![vm.str(&u.guid)])
 }
 
