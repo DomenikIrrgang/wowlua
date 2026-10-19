@@ -2158,13 +2158,15 @@ pub fn skill_raised(vm: &mut Vm, name: &str, rank: f64, mods: usize) {
 /// what it waits for).
 const COMBAT_TEXT_DELAY: f64 = 0.4;
 
-/// `unit:swing(victim, amount, { kind?, power?, victimPower?, speed? })`: a
-/// melee swing landing, as the client recorded the player's and a wolf's
-/// (`/stdtest engine scenario combat`): `PLAYER_SWING(speed, 0)` for the
-/// player's, combat for both if not yet, the attacker's then the victim's
-/// power (`power`, `victimPower`: rage), the victim's health (`amount`;
-/// none for a `PARRY`, `DODGE` or `MISS`), and the combat text
-/// `UNIT_COMBAT(victim, kind, "", amount, 1)` a moment later.
+/// `unit:swing(victim, amount, { kind?, power?, victimPower?, speed?,
+/// textAfter? })`: a melee swing landing, as the client recorded the
+/// player's and a wolf's (`/stdtest engine scenario combat`):
+/// `PLAYER_SWING(speed, 0)` for the player's, combat for both if not yet,
+/// the attacker's then the victim's power (`power`, `victimPower`: rage),
+/// the victim's health (`amount`; none for a `PARRY`, `DODGE` or `MISS`),
+/// and the combat text `UNIT_COMBAT(victim, kind, "", amount, 1)` a moment
+/// later: `textAfter` seconds (the recordings show 0.12 to 0.5; 0.4 when
+/// not given).
 fn control_swing(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
     let Some(victim) = handle_of(vm, c.arg(2)) else {
@@ -2238,7 +2240,13 @@ fn control_swing(vm: &mut Vm, c: NativeCall) -> Ret {
         Value::Num(if lands { amount } else { 0.0 }),
     ];
     let text = vm.native_with("swingText", swing_text, upvals);
-    crate::clock::after_engine(vm, COMBAT_TEXT_DELAY, text);
+    // The combat text's delay: the swing's `textAfter` (a recording's,
+    // per hit: 0.12 to 0.5 s), else the usual.
+    let after = match field(vm, "textAfter") {
+        Value::Num(n) => n,
+        _ => COMBAT_TEXT_DELAY,
+    };
+    crate::clock::after_engine(vm, after, text);
     Ok(vec![])
 }
 
