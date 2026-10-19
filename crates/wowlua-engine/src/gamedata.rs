@@ -266,6 +266,68 @@ fn is_spell_known(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(field(vm, s, key).truthy())])
 }
 
+/// `C_Item.IsEquippableItem(item)`: an item with an equipment slot (its
+/// `equipLoc`, `INVTYPE_NON_EQUIP_IGNORE` and none not); false for one not
+/// known (unverified: an item whose data is not loaded).
+fn is_equippable_item(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(t) = item_id(vm, c.arg(1)).and_then(|id| item_data(vm, id)) else {
+        return Ok(vec![Value::Bool(false)]);
+    };
+    let equippable = match field(vm, t, "equipLoc") {
+        Value::Str(s) => {
+            let loc = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
+            !loc.is_empty() && !loc.starts_with("INVTYPE_NON_EQUIP")
+        }
+        _ => false,
+    };
+    Ok(vec![Value::Bool(equippable)])
+}
+
+/// `C_Item.GetItemSpell(item)`: the spell its use casts (a defined
+/// item's `spell`): its name and ID; nothing for an item without one.
+fn get_item_spell(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(id) = item_id(vm, c.arg(1)) else {
+        return Ok(vec![]);
+    };
+    let Some(t) = item_data(vm, id) else {
+        return Ok(vec![]);
+    };
+    let Value::Num(spell) = field(vm, t, "spell") else {
+        return Ok(vec![]);
+    };
+    let name = spell_data(vm, spell as i64).map_or(Value::Nil, |s| field(vm, s, "name"));
+    Ok(vec![name, Value::Num(spell)])
+}
+
+/// `C_Spell.GetBaseSpell(spell [, spec])`: the spell's ID, as the
+/// documentation says for a spell without an override (the engine models
+/// none); a name the spell's ID, nothing for a spell not known by it.
+fn get_base_spell(vm: &mut Vm, c: NativeCall) -> Ret {
+    match vm.hidden(c.arg(1)) {
+        Value::Num(n) => Ok(vec![Value::Num(n)]),
+        _ => Ok(spell(vm, &c).map_or_else(Vec::new, |(id, _)| vec![Value::Num(id as f64)])),
+    }
+}
+
+/// `C_SpellBook.IsSpellKnownOrInSpellBook(spellID [, bank,
+/// includeOverrides])`: known (`C_SpellBook.IsSpellKnown`) or in the book
+/// (`C_SpellBook.IsSpellInSpellBook`), as its documentation says.
+/// Unverified: overrides.
+fn is_spell_known_or_in_spellbook(vm: &mut Vm, c: NativeCall) -> Ret {
+    let copy = |c: &NativeCall| NativeCall {
+        args: c.args.clone(),
+        taints: c.taints.clone(),
+        origins: c.origins.clone(),
+        upvals: c.upvals.clone(),
+        upval_taints: c.upval_taints.clone(),
+    };
+    let known = is_spell_known(vm, copy(&c))?;
+    if known.first().is_some_and(|v| v.truthy()) {
+        return Ok(known);
+    }
+    crate::stats::is_spell_in_spellbook(vm, c)
+}
+
 /// A spell the client has though no test defined it: in the recorded
 /// spellbook, or with recorded info (`C_Spell.GetSpellInfo`).
 fn client_spell(vm: &mut Vm, c: &NativeCall) -> bool {
@@ -548,11 +610,20 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Spell.GetSpellCooldown", get_spell_cooldown),
         ("C_Spell.GetSpellLink", get_spell_link),
         ("C_Spell.GetOverrideSpell", get_override_spell),
+        // The same rule (unverified: the documented nil for no override).
+        ("C_SpellBook.FindSpellOverrideByID", get_override_spell),
         ("C_Spell.IsSpellDataCached", is_spell_data_cached),
         ("C_Spell.DoesSpellExist", does_spell_exist),
         ("C_Spell.GetSpellSubtext", get_spell_subtext),
         ("C_Spell.RequestLoadSpellData", request_load_spell_data),
         ("C_SpellBook.IsSpellKnown", is_spell_known),
+        ("C_Spell.GetBaseSpell", get_base_spell),
+        ("C_Item.GetItemSpell", get_item_spell),
+        ("C_Item.IsEquippableItem", is_equippable_item),
+        (
+            "C_SpellBook.IsSpellKnownOrInSpellBook",
+            is_spell_known_or_in_spellbook,
+        ),
         ("C_Item.GetItemInfo", get_item_info),
         ("C_Item.GetItemInfoInstant", get_item_info_instant),
         ("C_Item.GetItemNameByID", get_item_name_by_id),

@@ -180,6 +180,15 @@ fn get_action_info(vm: &mut Vm, c: NativeCall) -> Ret {
     })
 }
 
+/// `C_ActionBar.GetSpell(slot)`: a spell action's spell; 0 for another
+/// slot (documented never nil; unverified: a macro's spell).
+fn get_spell(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(vec![match slot(&c).and_then(|s| action(vm, s)) {
+        Some(a) if a.kind == "spell" => a.id,
+        _ => Value::Num(0.0),
+    }])
+}
+
 fn get_action_texture(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(match slot(&c) {
         Some(s) => vec![action(vm, s).map_or(Value::Nil, |a| a.texture)],
@@ -635,6 +644,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ),
         ("HasAction", has_action),
         ("GetActionInfo", get_action_info),
+        ("C_ActionBar.GetSpell", get_spell),
         ("C_ActionBar.GetActionTexture", get_action_texture),
         ("GetActionTexture", get_action_texture),
         ("GetActionText", get_action_text),

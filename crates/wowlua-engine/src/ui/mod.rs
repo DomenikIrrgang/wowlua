@@ -720,6 +720,20 @@ pub fn read_user_addon(flavor: &str, dir: &Path) -> Result<UserAddon, String> {
         .map(|f| resolve(dir, &f))
         .find(|p| p.is_file())
         .ok_or_else(|| format!("{}: no {name}.toc for {flavor}", dir.display()))?;
+    read_user_toc(flavor, &name, dir, &toc)
+}
+
+/// An addon named `name` in `dir` as its TOC `toc` describes it for
+/// `flavor` (see [`read_user_addon`]).
+pub fn read_user_toc(
+    flavor: &str,
+    name: &str,
+    dir: &Path,
+    toc: &Path,
+) -> Result<UserAddon, String> {
+    let t = Target::new(flavor);
+    let name = name.to_string();
+    let toc = toc.to_path_buf();
     let text = std::fs::read_to_string(&toc).map_err(|e| format!("{}: {e}", toc.display()))?;
     let parsed = wowlua_toc::parse(&text);
     let on = |v: &str| v.trim() == "1" || v.trim().eq_ignore_ascii_case("true");
@@ -791,6 +805,16 @@ pub fn user_addon_order(addons: Vec<UserAddon>) -> Vec<UserAddon> {
         visit(i, &addons, &mut seen, &mut order);
     }
     order.into_iter().map(|i| addons[i].clone()).collect()
+}
+
+/// Whether the loaded UI code has a Blizzard addon of this name (loaded or
+/// loadable).
+pub fn is_blizzard_addon(vm: &Vm, name: &str) -> bool {
+    engine(vm)
+        .world
+        .ui
+        .available
+        .contains_key(&name.to_ascii_lowercase())
 }
 
 /// Loads an addon of the user's from its folder as the client does: the

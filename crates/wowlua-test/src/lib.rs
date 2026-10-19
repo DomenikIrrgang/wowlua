@@ -410,6 +410,9 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
             &format!("loading the addon {}", addon.name),
         )?;
     }
+    // The addon itself, known to the addon functions as its TOC says.
+    let own = wowlua_engine::ui::read_user_toc(&suite.flavor, &name, dir, &dir.join(&toc))?;
+    wowlua_engine::bindings::add_own_addon(&mut vm, &own, table, bindings.exists());
     let before = errors_before(&vm);
     wowlua_engine::ui::load_user_addon(&mut vm, dir, &dir.join(&toc), &name, table, &loaded);
     loaded.extend(listed);

@@ -328,6 +328,46 @@ fn screen_height(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(widgets::SCREEN.1)])
 }
 
+/// `SetPortraitTexture(texture, unit [, disableMasking])`,
+/// `C_NamePlate.SetNamePlateSize(width, height)`,
+/// `C_NamePlateManager.SetNamePlateHitTestInsets(...)`: what the client draws,
+/// which the engine does not (nothing to read back: unverified that the
+/// portrait leaves the texture's file as it was).
+fn not_drawn(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![])
+}
+
+/// `C_PlayerInteractionManager.IsInteractingWithNpcOfType(type)`: that
+/// interaction is open (its `PLAYER_INTERACTION_MANAGER_FRAME_SHOW` told,
+/// its hide not yet).
+fn interacting_with(vm: &mut Vm, c: NativeCall) -> Ret {
+    let open = match vm.hidden(c.arg(1)) {
+        Value::Num(n) => engine(vm).world.interactions.contains(&n.to_bits()),
+        _ => false,
+    };
+    Ok(vec![Value::Bool(open)])
+}
+
+/// `GetScreenWidth()`: UIParent's width, as `GetScreenHeight` its height.
+fn screen_width(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(widgets::SCREEN.0)])
+}
+
+/// `GetSpecializationRole(specIndex)`: the role `C_SpecializationInfo.
+/// GetSpecializationInfo(specIndex)` answers (its fifth value, recorded
+/// "DAMAGER" for the default warrior). Unverified: that the client's
+/// answers agree for every class.
+fn specialization_role(vm: &mut Vm, c: NativeCall) -> Ret {
+    let ns = vm.get_global("C_SpecializationInfo");
+    let Value::Table(ns) = ns else {
+        return Ok(vec![Value::Nil]);
+    };
+    let k = vm.str("GetSpecializationInfo");
+    let f = vm.heap.table(ns).get(k);
+    let info = vm.call(f, &[c.arg(1)])?;
+    Ok(vec![info.get(4).copied().unwrap_or(Value::Nil)])
+}
+
 /// The font objects made, in order: by name, else as `tostring` gives
 /// them (the client lists unnamed ones so).
 fn fonts(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -562,6 +602,36 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         // The same without spaces: the placeholder has none.
         ("GetNormalizedRealmName", realm_name),
         ("GetScreenHeight", screen_height),
+        ("GetScreenWidth", screen_width),
+        ("SetPortraitTexture", not_drawn),
+        ("C_NamePlate.SetNamePlateSize", not_drawn),
+        ("C_NamePlateManager.SetNamePlateHitTestInsets", not_drawn),
+        ("GetSpecializationRole", specialization_role),
+        // The neutral world: no follower dungeon, keystone, house editor,
+        // garrison, friend online or warband bank gold.
+        ("C_LFGInfo.IsInLFGFollowerDungeon", no),
+        ("C_ChallengeMode.IsChallengeModeActive", no),
+        ("C_HouseEditor.IsHouseEditorActive", no),
+        ("C_Garrison.IsOnGarrisonMap", no),
+        ("C_FriendList.GetNumOnlineFriends", zero),
+        ("C_Bank.FetchDepositedMoney", zero),
+        ("C_EquipmentSet.GetEquipmentSetIDs", empty_list),
+        // No item is new (`C_NewItems.IsNewItem`): nothing to clear. No
+        // cast has a target the engine knows: no target's class.
+        ("C_NewItems.ClearAll", not_drawn),
+        // The bags' search: nothing the engine filters by (unverified:
+        // the client's `INVENTORY_SEARCH_UPDATE`).
+        ("C_Container.SetItemSearch", not_drawn),
+        // The engine measures no addon's time (unverified: the profiler
+        // disabled answers 0 too).
+        ("C_AddOnProfiler.GetAddOnMetric", zero),
+        ("UnitSpellTargetClass", not_drawn),
+        // Keyboard and mouse.
+        ("IsUsingGamepad", no),
+        (
+            "C_PlayerInteractionManager.IsInteractingWithNpcOfType",
+            interacting_with,
+        ),
         ("GetActiveLootRollIDs", empty_list),
         ("C_LFGList.GetApplications", empty_list),
         // No pet battle, no nameplates.

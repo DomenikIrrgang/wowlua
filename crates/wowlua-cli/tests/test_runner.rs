@@ -922,7 +922,7 @@ mock.module(clock, { now = function(): string return "x" end, later = 1 })
 /// its name, its own addon table, its SavedVariables and its
 /// `ADDON_LOADED` (the addon's last); an addon's dependencies first; the
 /// flavor's TOC; a load-on-demand one with `C_AddOns.LoadAddOn`; one for
-/// another game left out.
+/// another game left out. The addon itself is known as its TOC says.
 #[test]
 fn other_addons() {
     const RECORD: &str = "local name, ns = ...\nns.who = name\nOrder = Order or {}\ntable.insert(Order, name)\nNS = NS or {}\nNS[name] = ns\n";
@@ -981,8 +981,13 @@ local function each()
     expect(G.NS.Base.who).toBe("Base")
     expect(G.NS.Child.who).toBe("Child")
     expect(G.NS.Base == G.NS.Child).toBe(false)
-    expect(C_AddOns.GetNumAddOns()).toBe(3)
+    expect(C_AddOns.GetNumAddOns()).toBe(4)
     expect(C_AddOns.GetAddOnMetadata("Child", "X-Answer")).toBe("42")
+    expect(C_AddOns.GetAddOnMetadata("Demo", "Title")).toBe("Demo")
+    expect(C_AddOns.GetAddOnMetadata("Demo", "Version")).toBe("1.0.0-dev")
+    expect(C_AddOns.IsAddOnLoaded("Demo")).toBe(true)
+    expect(C_AddOns.LoadAddOn("Demo")).toBe(true)
+    expect(G.Order).toEqual({ "Base", "Child", "Demo" })
     expect(C_AddOns.GetAddOnInfo("Elsewhere")).toBeNil()
     expect(C_AddOns.IsAddOnLoaded("Child")).toBe(true)
     expect(C_AddOns.IsAddOnLoaded("Lazy")).toBe(false)

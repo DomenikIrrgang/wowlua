@@ -106,6 +106,120 @@ fn get_atlas(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     ])
 }
 
+/// `GetTextureFileID()`: the file ID `SetTexture` was given; a path's ID
+/// is not known to the engine (nil, unverified).
+fn get_texture_file_id(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let props = engine(vm).world.widgets[id.0].props;
+    let file = widgets::stored_args(vm, props, "Texture").and_then(|v| v.first().copied());
+    Ok(vec![match file {
+        Some(Value::Num(n)) => Value::Num(n),
+        _ => Value::Nil,
+    }])
+}
+
+/// `EditBox:GetTextInsets()`: what `SetTextInsets` set, else none
+/// (unverified: a fresh edit box's, not recorded).
+fn get_text_insets(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let props = engine(vm).world.widgets[id.0].props;
+    if let Some(v) = widgets::stored_args(vm, props, "TextInsets") {
+        return Ok(v);
+    }
+    Ok(vec![Value::Num(0.0); 4])
+}
+
+/// `Minimap:GetZoomLevels()`: 6 (zooms 0 to 5). Unverified: the long-known
+/// count, not recorded on this client.
+fn get_zoom_levels(_vm: &mut Vm, _id: WidgetId, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(6.0)])
+}
+
+/// A texture's masks (`AddMaskTexture`), in the order added, kept in its
+/// properties.
+fn masks(vm: &mut Vm, id: WidgetId) -> wowlua_vm::TableRef {
+    let props = engine(vm).world.widgets[id.0].props;
+    let key = vm.str("\u{0}masks");
+    if let Value::Table(t) = vm.heap.table(props).get(key) {
+        return t;
+    }
+    let t = vm.new_table();
+    let _ = vm.heap.table_mut(props).set(key, Value::Table(t));
+    t
+}
+
+fn mask_list(vm: &mut Vm, id: WidgetId) -> Vec<Value> {
+    let t = masks(vm, id);
+    let n = vm.heap.table(t).border();
+    (1..=n)
+        .map(|i| vm.heap.table(t).get(Value::Num(i as f64)))
+        .collect()
+}
+
+fn set_mask_list(vm: &mut Vm, id: WidgetId, list: &[Value]) {
+    let t = vm.new_table();
+    for (i, v) in list.iter().enumerate() {
+        let _ = vm.heap.table_mut(t).set(Value::Num(i as f64 + 1.0), *v);
+    }
+    let props = engine(vm).world.widgets[id.0].props;
+    let key = vm.str("\u{0}masks");
+    let _ = vm.heap.table_mut(props).set(key, Value::Table(t));
+}
+
+/// The same mask: the same object's table.
+fn same(a: Value, b: Value) -> bool {
+    matches!((a, b), (Value::Table(x), Value::Table(y)) if x == y)
+}
+
+/// `AddMaskTexture(mask)`: added once (unverified: a second add).
+fn add_mask_texture(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let mut list = mask_list(vm, id);
+    let mask = c.arg(2);
+    if !mask.is_nil() && !list.iter().any(|m| same(*m, mask)) {
+        list.push(mask);
+        set_mask_list(vm, id, &list);
+    }
+    Ok(vec![])
+}
+
+fn remove_mask_texture(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let mut list = mask_list(vm, id);
+    let mask = c.arg(2);
+    list.retain(|m| !same(*m, mask));
+    set_mask_list(vm, id, &list);
+    Ok(vec![])
+}
+
+fn get_num_mask_textures(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(mask_list(vm, id).len() as f64)])
+}
+
+/// `GetMaskTexture(index)`: the mask added `index`th.
+fn get_mask_texture(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let list = mask_list(vm, id);
+    let i = match c.arg(2) {
+        Value::Num(n) if n >= 1.0 => n as usize,
+        _ => return Ok(vec![Value::Nil]),
+    };
+    Ok(vec![list.get(i - 1).copied().unwrap_or(Value::Nil)])
+}
+
+/// `GetHorizTile()`, `GetVertTile()`: what `SetHorizTile`/`SetVertTile`
+/// set, off at first (unverified: a fresh texture's, not recorded).
+fn get_tile(vm: &mut Vm, id: WidgetId, stem: &str) -> Ret {
+    let props = engine(vm).world.widgets[id.0].props;
+    let on = widgets::stored_args(vm, props, stem)
+        .and_then(|v| v.first().copied())
+        .is_some_and(|v| v.truthy());
+    Ok(vec![Value::Bool(on)])
+}
+
+fn get_horiz_tile(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    get_tile(vm, id, "HorizTile")
+}
+
+fn get_vert_tile(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    get_tile(vm, id, "VertTile")
+}
+
 /// `Minimap:GetZoom()`: the zoom set, 0 at first.
 fn get_zoom(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let props = engine(vm).world.widgets[id.0].props;
@@ -153,6 +267,15 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
         ("GetHorizontalScrollRange", get_horizontal_scroll_range),
         ("GetAtlas", get_atlas),
         ("GetZoom", get_zoom),
+        ("GetZoomLevels", get_zoom_levels),
+        ("GetTextureFileID", get_texture_file_id),
+        ("GetTextInsets", get_text_insets),
+        ("AddMaskTexture", add_mask_texture),
+        ("RemoveMaskTexture", remove_mask_texture),
+        ("GetNumMaskTextures", get_num_mask_textures),
+        ("GetMaskTexture", get_mask_texture),
+        ("GetHorizTile", get_horiz_tile),
+        ("GetVertTile", get_vert_tile),
         ("GetVerticalScroll", get_vertical_scroll),
         ("GetHorizontalScroll", get_horizontal_scroll),
         ("GetFontString", get_font_string),

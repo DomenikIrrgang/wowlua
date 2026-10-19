@@ -1294,7 +1294,7 @@ fn find_spellbook_slot(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `C_SpellBook.IsSpellInSpellBook(spellID [, bank])`: in the player's
 /// book (unverified: overrides, the pet's bank).
-fn is_spell_in_spellbook(vm: &mut Vm, c: NativeCall) -> Ret {
+pub(crate) fn is_spell_in_spellbook(vm: &mut Vm, c: NativeCall) -> Ret {
     let pet = matches!(c.arg(2), Value::Num(b) if b == 1.0);
     let found = !pet
         && num(c.arg(1))

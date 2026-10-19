@@ -24,6 +24,7 @@ pub mod conditionals;
 pub mod controls;
 pub mod cursor;
 pub mod curves;
+pub mod damagemeter;
 pub mod death;
 pub mod editmode;
 pub mod encounters;
@@ -32,6 +33,7 @@ pub mod formatters;
 pub mod framescript;
 pub mod gamedata;
 pub mod gossip;
+pub mod healcalc;
 pub mod input;
 pub mod inspect;
 pub mod inventory;
@@ -231,6 +233,8 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(units::behaviours())
             .chain(units::more_behaviours())
             .chain(curves::behaviours())
+            .chain(healcalc::behaviours())
+            .chain(damagemeter::behaviours())
             .chain(formatters::behaviours())
             .chain(widgets::functions())
             .chain(auras::behaviours())
@@ -284,6 +288,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .into_iter()
             .chain(curves::methods())
             .chain(clock::methods())
+            .chain(healcalc::methods())
             .chain(formatters::methods())
             .chain(framescript::methods())
             .chain(animations::methods())

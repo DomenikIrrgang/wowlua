@@ -35,6 +35,8 @@ pub struct Timers {
     /// list keeps every timer for its handle).
     pub active: Vec<usize>,
     handle_meta: Option<TableRef>,
+    /// While due timers run (`advance`): the time they run up to.
+    advancing: Option<f64>,
     /// The last frame's seconds (`GetTickTime`), none before the first.
     pub tick_time: f64,
 }
@@ -143,7 +145,15 @@ fn schedule(vm: &mut Vm, seconds: f64, callback: Value, runs: f64, handle: bool)
             .set(Value::Num(2.0), Value::Userdata(ud));
         out = Value::Userdata(ud);
     }
-    let due = now(vm) + seconds.max(0.0);
+    let mut due = now(vm) + seconds.max(0.0);
+    // A timer a running timer sets without a delay waits for the next
+    // run of timers (the next frame), so one that sets itself again does
+    // not hold time still (unverified: the client's order).
+    if seconds <= 0.0
+        && let Some(target) = engine(vm).timers.advancing
+    {
+        due = due.max(target + 1e-9);
+    }
     let index = engine(vm).timers.list.len();
     engine_mut(vm).timers.active.push(index);
     engine_mut(vm).timers.list.push(Timer {
@@ -224,6 +234,7 @@ pub fn advance(vm: &mut Vm, seconds: f64) {
     // the time read at the end.
     let end_ms = vm.clock.elapsed_ms + seconds.max(0.0) * 1000.0;
     let target = end_ms.round() / 1000.0;
+    let outer = engine_mut(vm).timers.advancing.replace(target);
     loop {
         let timers = &mut engine_mut(vm).timers;
         let list = &timers.list;
@@ -254,6 +265,7 @@ pub fn advance(vm: &mut Vm, seconds: f64) {
         }
         fire(vm, id);
     }
+    engine_mut(vm).timers.advancing = outer;
     if end_ms > vm.clock.elapsed_ms {
         tick(vm, end_ms - vm.clock.elapsed_ms);
     }
@@ -315,6 +327,13 @@ pub fn advance_frames(vm: &mut Vm, n: usize, ms: f64) {
 /// (unverified: before the first frame, 0).
 fn get_tick_time(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(engine(vm).timers.tick_time)])
+}
+
+/// `GetFramerate()`: the frames a second the last frame's time makes (60
+/// before the first: `mock.nextFrame`'s default).
+fn get_framerate(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let t = engine(vm).timers.tick_time;
+    Ok(vec![Value::Num(if t > 0.0 { 1.0 / t } else { 60.0 })])
 }
 
 // ------------------------------------------------------- timed signal maps
@@ -511,6 +530,7 @@ pub fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
     vec![
         ("GetTime", get_time),
         ("GetTickTime", get_tick_time),
+        ("GetFramerate", get_framerate),
         ("GetTimePreciseSec", get_time),
         ("C_Timer.After", after),
         ("C_Timer.NewTimer", new_timer),

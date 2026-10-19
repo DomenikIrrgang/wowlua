@@ -100,7 +100,9 @@ flavor's game is skipped. A `## LoadOnDemand: 1` addon is known but not
 loaded: `C_AddOns.LoadAddOn(name)` loads it (its dependencies, its files,
 then its `ADDON_LOADED`; its files' errors reach the error handler).
 `C_AddOns.GetNumAddOns`, `GetAddOnInfo`, `GetAddOnMetadata`,
-`IsAddOnLoaded` and `IsAddOnLoadOnDemand` see each of them, in load order.
+`IsAddOnLoaded` and `IsAddOnLoadOnDemand` see each of them, in load order,
+and the addon itself last, as its generated TOC describes it (its `Title`,
+`Version`, `Notes`, `X-…` fields), with or without `test.addons`.
 Their SavedVariables (`## SavedVariables`, `## SavedVariablesPerCharacter`)
 survive `mock.reloadUI()` as the addon's do. An error while one loads fails
 the file, naming the addon. Coverage counts only the addon's own files.

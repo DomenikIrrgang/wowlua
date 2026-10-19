@@ -137,12 +137,17 @@ fn relax(f: &Function, args: &mut [Json]) {
         }
         // `SetFont(GetFont())` with no font yet (the developer console).
         (true, "SetFont") => set(0, "Nilable", Json::Bool(true)),
-        // A texture alone (gamepad action bars).
-        (true, "SetSwipeTexture") => {
+        // A texture alone (gamepad action bars; an edge's: Ellesmere UI's
+        // cooldowns, which the client runs without an error).
+        (true, "SetSwipeTexture" | "SetEdgeTexture") => {
             for i in 1..5 {
                 set(i, "Nilable", Json::Bool(true));
             }
         }
+        // A channel's name for the sound's sub type (`PlaySound(kit,
+        // "Master")`: Ellesmere UI's unlock sound, error-free in the
+        // client). Unverified: a name the client does not know.
+        (false, "C_Sound.PlaySound") => set(1, "Type", Json::from("LuaValueVariant")),
         // Any value, nil too (UIParentPanelManager stores true and numbers).
         (true, "SetAttributeNoHandler") => {
             set(1, "Nilable", Json::Bool(true));
