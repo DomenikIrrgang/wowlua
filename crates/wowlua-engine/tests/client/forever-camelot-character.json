@@ -831,6 +831,7 @@
   "character": {
     "class": "PALADIN",
     "faction": "Horde",
+    "lastName": "Lastname",
     "level": 21,
     "maxHealth": 776,
     "maxPower": 710,

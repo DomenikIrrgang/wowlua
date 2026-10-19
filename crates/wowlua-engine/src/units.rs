@@ -613,6 +613,9 @@ fn unit_exists(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `UnitGUID(unit)`: the GUID; a token naming no one one nil (recorded:
 /// a target gone, in every recording that counts trailing nils).
 fn unit_guid(vm: &mut Vm, c: NativeCall) -> Ret {
+    if is_none_token(vm, c.arg(1)) {
+        return Ok(vec![vm.str("Uniq-WOWGUID_SCRIPT_TARGET_NONE")]);
+    }
     if unit_arg(vm, &c, 1).is_none() {
         return Ok(vec![Value::Nil]);
     }
@@ -637,6 +640,15 @@ fn unit_token_from_guid(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `UnitName(unit)`: the name and the last name (or realm); a token naming
 /// no one two nils (recorded: absent group tokens).
 fn unit_name(vm: &mut Vm, c: NativeCall) -> Ret {
+    // "none" has a name (the full probe, blanked: a string and nil;
+    // unverified which, here `UNKNOWNOBJECT`'s).
+    if is_none_token(vm, c.arg(1)) {
+        let unknown = match vm.get_global("UNKNOWNOBJECT") {
+            v @ Value::Str(_) => v,
+            _ => vm.str("Unknown"),
+        };
+        return Ok(vec![unknown, Value::Nil]);
+    }
     if unit_arg(vm, &c, 1).is_none() {
         return Ok(vec![Value::Nil, Value::Nil]);
     }
@@ -763,9 +775,12 @@ fn unit_classification(vm: &mut Vm, c: NativeCall) -> Ret {
     with_unit_or(vm, &c, normal, |vm, u| vec![vm.str(&u.classification)])
 }
 
+/// `UnitCreatureType(unit)`: a creature's own; a player character a
+/// humanoid (the full probe: the Undead player "Humanoid", 7).
 fn unit_creature_type(vm: &mut Vm, c: NativeCall) -> Ret {
     with_unit(vm, &c, |vm, u| match &u.creature_type {
         Some((name, id)) => vec![vm.str(name), Value::Num(*id)],
+        None if u.player => vec![vm.str("Humanoid"), Value::Num(7.0)],
         None => vec![],
     })
 }
@@ -813,8 +828,15 @@ fn unit_should_display_name(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `UnitSelectionColor(unit [, useExtendedColors])`: a creature's by its
 /// reaction (recorded: a neutral wolf's yellow); the player's as recorded.
 fn unit_selection_color(vm: &mut Vm, c: NativeCall) -> Ret {
-    // No such unit: blue (recorded, a target cleared).
+    // No such unit: blue (recorded, a target cleared), the extended
+    // colors' blue as the player's (the full probe).
     let Some(id) = unit_arg(vm, &c, 1) else {
+        if c.arg(2).truthy() {
+            return Ok(
+                crate::recorded::lookup_text(vm, "UnitSelectionColor(\"player\", true)")
+                    .unwrap_or_else(|| [0.0, 0.0, 1.0, 1.0].map(Value::Num).to_vec()),
+            );
+        }
         return Ok([0.0, 0.0, 1.0, 1.0].map(Value::Num).to_vec());
     };
     if engine(vm).units.list[id.0].player {
@@ -855,8 +877,9 @@ fn unit_is_pvp(vm: &mut Vm, c: NativeCall) -> Ret {
     with_unit_or(vm, &c, Value::Bool(false), |_, u| vec![Value::Bool(u.pvp)])
 }
 
+/// `UnitSex(unit)`: no such unit nil (the full probe).
 fn unit_sex(vm: &mut Vm, c: NativeCall) -> Ret {
-    with_unit(vm, &c, |_, u| vec![Value::Num(u.sex)])
+    with_unit_or(vm, &c, Value::Nil, |_, u| vec![Value::Num(u.sex)])
 }
 
 fn unit_health(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -870,13 +893,36 @@ fn unit_health_max(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn unit_power(vm: &mut Vm, c: NativeCall) -> Ret {
+    if other_power_type(vm, &c) {
+        return Ok(vec![Value::Num(0.0)]);
+    }
     with_unit_or(vm, &c, Value::Num(0.0), |_, u| vec![Value::Num(u.power)])
 }
 
 fn unit_power_max(vm: &mut Vm, c: NativeCall) -> Ret {
+    if other_power_type(vm, &c) {
+        return Ok(vec![Value::Num(0.0)]);
+    }
     with_unit_or(vm, &c, Value::Num(0.0), |_, u| {
         vec![Value::Num(u.power_max)]
     })
+}
+
+/// Whether a power call (`UnitPower(unit [, powerType])`) asks for a power
+/// type the unit does not have: it has none of it, 0, and nothing to hide
+/// (the full probe: the paladin's `UnitPower("player", 1..29)` a plain 0,
+/// its mana and a power type not a number secret; unverified for a unit
+/// with a second power, a rogue's combo points).
+pub(crate) fn other_power_type(vm: &mut Vm, c: &NativeCall) -> bool {
+    let Value::Num(asked) = vm.hidden(c.arg(2)) else {
+        return false;
+    };
+    let other =
+        unit_arg(vm, c, 1).is_some_and(|id| engine(vm).units.list[id.0].power_type != asked);
+    if other {
+        engine_mut(vm).plain_results = true;
+    }
+    other
 }
 
 /// A power type's token (`UnitPowerType`'s second result: `/stdtest
@@ -903,13 +949,26 @@ fn power_token(power_type: f64) -> Option<&'static str> {
         .and_then(|i| TOKENS.get(i).copied())
 }
 
+/// `UnitPowerType(unit [, index])`: the power type, its token and its
+/// alternate colors (none: nils); an index but the first (0) nothing (the
+/// full probe: the player's 0, "MANA", nil, nil, nil; with index 1, -1,
+/// 1.5 nothing; every recording shows the three nils).
 fn unit_power_type(vm: &mut Vm, c: NativeCall) -> Ret {
+    if !matches!(vm.hidden(c.arg(2)), Value::Nil | Value::Num(0.0)) {
+        return Ok(vec![]);
+    }
     let t = with_unit(vm, &c, |_, u| vec![Value::Num(u.power_type)])?;
     let Some(Value::Num(n)) = t.first().copied() else {
         return Ok(t);
     };
     Ok(match power_token(n) {
-        Some(token) => vec![Value::Num(n), vm.str(token)],
+        Some(token) => vec![
+            Value::Num(n),
+            vm.str(token),
+            Value::Nil,
+            Value::Nil,
+            Value::Nil,
+        ],
         None => t,
     })
 }
@@ -933,15 +992,31 @@ fn unit_affecting_combat(vm: &mut Vm, c: NativeCall) -> Ret {
 fn unit_is_unit(vm: &mut Vm, c: NativeCall) -> Ret {
     let a = unit_arg(vm, &c, 1);
     let b = unit_arg(vm, &c, 2);
-    Ok(vec![Value::Bool(a.is_some() && a == b)])
+    // "none" is the script's no-target, with a GUID of its own: itself
+    // (the full probe: `UnitIsUnit("none", "none")` true, with any other
+    // false).
+    let none = is_none_token(vm, c.arg(1)) && is_none_token(vm, c.arg(2));
+    Ok(vec![Value::Bool((a.is_some() && a == b) || none)])
+}
+
+/// Whether a value is the unit token "none" (the scripts' no-target: no
+/// unit, yet a GUID and a name, the full probe).
+pub(crate) fn is_none_token(vm: &Vm, v: Value) -> bool {
+    match vm.hidden(v) {
+        Value::Str(s) => vm.str_bytes(s).eq_ignore_ascii_case(b"none"),
+        _ => false,
+    }
 }
 
 /// The reaction between `a` and `b`, the same both ways (1 hated .. 8
 /// exalted; hostile 2, neutral 4, friendly 5: a neutral wolf's is 4 toward
 /// the player and the player's toward it, recorded).
 fn unit_reaction(vm: &mut Vm, c: NativeCall) -> Ret {
+    // Either unit missing: nil (the full probe, every pair with "target",
+    // "pet", "party1" or "none" absent, or a GUID; the newest answer, over
+    // nothing).
     let Some(reaction) = reaction_of(vm, &c) else {
-        return Ok(vec![]);
+        return Ok(vec![Value::Nil]);
     };
     let r = match reaction {
         Reaction::Hostile => 2.0,
@@ -3134,7 +3209,13 @@ fn unit_health_percent(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![crate::curves::apply(vm, c.arg(3), pct)?])
 }
 
+/// `UnitHealthMissing(unit)`: a unit that does not exist (or a GUID)
+/// misses none, a secret like any unit's (the full probe).
 fn unit_health_missing(vm: &mut Vm, c: NativeCall) -> Ret {
+    if unit_arg(vm, &c, 1).is_none() {
+        let zero = vm.secret_wrap(Value::Num(0.0));
+        return Ok(vec![zero]);
+    }
     with_unit(vm, &c, |_, u| vec![Value::Num(u.health_max - u.health)])
 }
 
@@ -3217,13 +3298,15 @@ fn faction_of(u: &Unit) -> Option<String> {
 }
 
 /// `UnitCanCooperate(a, b)`: two players of one faction (unverified: not
-/// recorded; Blizzard's unit menu shows Trade and Follow by it).
+/// recorded; Blizzard's unit menu shows Trade and Follow by it); not a
+/// unit with itself (the full probe: the player's with "player" false).
 fn unit_can_cooperate(vm: &mut Vm, c: NativeCall) -> Ret {
     let (Some(a), Some(b)) = (unit_arg(vm, &c, 1), unit_arg(vm, &c, 2)) else {
         return Ok(vec![Value::Bool(false)]);
     };
     let u = &engine(vm).units.list;
-    let ok = u[a.0].player
+    let ok = a != b
+        && u[a.0].player
         && u[b.0].player
         && faction_of(&u[a.0]).is_some()
         && faction_of(&u[a.0]) == faction_of(&u[b.0]);
@@ -3236,12 +3319,27 @@ fn unit_is_human_player(vm: &mut Vm, c: NativeCall) -> Ret {
     unit_is_player(vm, c)
 }
 
+/// `UnitPVPName(unit)`: the full name, the last name with it on WoW
+/// Forever ("Player Lastname", the full probe); a unit that does not exist
+/// an empty one (the full probe: a GUID's "", the tokens' blanked).
 fn unit_pvp_name(vm: &mut Vm, c: NativeCall) -> Ret {
-    with_unit(vm, &c, |vm, u| vec![vm.str(&u.name)])
+    if unit_arg(vm, &c, 1).is_none() {
+        return Ok(vec![vm.str("")]);
+    }
+    with_unit(vm, &c, |vm, u| {
+        let name = match &u.last_name {
+            Some(last) => format!("{} {last}", u.name),
+            None => u.name.clone(),
+        };
+        vec![vm.str(&name)]
+    })
 }
 
+/// `UnitIsGhost(unit)`: no such unit false (the full probe).
 fn unit_is_ghost(vm: &mut Vm, c: NativeCall) -> Ret {
-    with_unit(vm, &c, |_, u| vec![Value::Bool(u.ghost)])
+    with_unit_or(vm, &c, Value::Bool(false), |_, u| {
+        vec![Value::Bool(u.ghost)]
+    })
 }
 
 fn unit_is_dead_or_ghost(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -3251,14 +3349,20 @@ fn unit_is_dead_or_ghost(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// Not casting or channeling: no values.
-/// The roles a unit can take (tank, healer, damage): damage (unverified
-/// per class).
-fn available_roles(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![
-        Value::Bool(false),
-        Value::Bool(false),
-        Value::Bool(true),
-    ])
+/// The roles a unit can take (tank, healer, damage) by its class (the
+/// full probe: the paladin all three; the other classes unverified, as
+/// their talents allow); a unit that does not exist nothing (the full
+/// probe).
+fn available_roles(vm: &mut Vm, c: NativeCall) -> Ret {
+    with_unit(vm, &c, |_, u| {
+        let (tank, healer) = match u.class.as_str() {
+            "PALADIN" | "DRUID" | "MONK" => (true, true),
+            "WARRIOR" | "DEATHKNIGHT" | "DEMONHUNTER" => (true, false),
+            "PRIEST" | "SHAMAN" | "EVOKER" => (false, true),
+            _ => (false, false),
+        };
+        vec![Value::Bool(tank), Value::Bool(healer), Value::Bool(true)]
+    })
 }
 
 /// `ClearFocus()`: no focus (`PLAYER_FOCUS_CHANGED` if there was one).

@@ -262,6 +262,19 @@ fn play_sound_with_options(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(true), Value::Num(h)])
 }
 
+/// `GetCombatRatingBonusForCombatRatingValue(rating, value)`: rating 1's
+/// bonus the value's whole part, as a single-precision float; the others none
+/// (the full probe: 1 for 1, -1 for -1, 2147483648 for 2147483647, rating
+/// 0 always 0; the other ratings unverified).
+fn combat_rating_bonus_for_value(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (rating, value) = (num(vm, c.arg(1)), num(vm, c.arg(2)));
+    let bonus = match (rating.map(f64::trunc), value) {
+        (Some(1.0), Some(v)) => f64::from(v.trunc() as f32),
+        _ => 0.0,
+    };
+    Ok(vec![Value::Num(bonus)])
+}
+
 // -------------------------------------------------------- mouse, keys
 
 /// `IsKeyDown(key)`: a modifier the engine holds (Shift, Ctrl, Alt, the
@@ -269,6 +282,10 @@ fn play_sound_with_options(vm: &mut Vm, _c: NativeCall) -> Ret {
 /// actions (unverified: the right keys, `excludeBindingState`).
 fn is_key_down(vm: &mut Vm, c: NativeCall) -> Ret {
     let key = text(vm, c.arg(1)).unwrap_or_default().to_uppercase();
+    // No key named: nil (the full probe: `IsKeyDown("")`).
+    if key.is_empty() && matches!(c.arg(1), Value::Str(_)) {
+        return Ok(vec![Value::Nil]);
+    }
     let i = match key.as_str() {
         "SHIFT" | "LSHIFT" => Some(0),
         "CTRL" | "LCTRL" => Some(1),
@@ -2693,7 +2710,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetExpertisePercent", get_expertise_percent),
         ("GetParryChanceFromAttribute", zero),
         ("GetCritChanceProvidesParryEffect", no),
-        ("GetCombatRatingBonusForCombatRatingValue", zero),
+        (
+            "GetCombatRatingBonusForCombatRatingValue",
+            combat_rating_bonus_for_value,
+        ),
         ("GetPowerRegenForPowerType", get_power_regen_for_power_type),
         // Raid marks (unverified: no mark kept).
         ("SetRaidTarget", nothing),
@@ -2993,6 +3013,16 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("CombatLogClearEntries", nothing),
         ("CombatLogGetRetentionTime", combat_log_get_retention_time),
         ("CombatLogSetRetentionTime", combat_log_set_retention_time),
+        // Their twins, which Blizzard's deprecation file makes the globals
+        // (the full probe: 300 both).
+        (
+            "C_CombatLog.GetEntryRetentionTime",
+            combat_log_get_retention_time,
+        ),
+        (
+            "C_CombatLog.SetEntryRetentionTime",
+            combat_log_set_retention_time,
+        ),
         ("CombatLog_Object_IsA", combat_log_object_is_a),
         ("CombatTextSetActiveUnit", nothing),
         // Secrets.

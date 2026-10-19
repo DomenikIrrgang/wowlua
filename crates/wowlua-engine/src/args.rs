@@ -97,10 +97,18 @@ fn enum_range(api: &Api, ty: &str) -> Option<(f64, f64)> {
         return Some((0.0, 2.0));
     }
     let meta = format!("{ty}Meta");
-    api.enum_meta
+    let range = api
+        .enum_meta
         .iter()
         .find(|(name, _)| *name == meta)
-        .map(|(_, [_, min, max])| (*min, *max))
+        .map(|(_, [_, min, max])| (*min, *max));
+    // The minimap's tracking filters are bit flags: any combination of
+    // them passes, -1 does not (the full probe: `C_Minimap.IsFilteredOut`
+    // and `GetDefaultTrackingValue` answer 16777217, refuse -1).
+    if ty == "MinimapTrackingFilter" {
+        return range.map(|(min, max)| (min, max * 2.0 - 1.0));
+    }
+    range
 }
 
 const U32: (f64, f64) = (0.0, 4_294_967_295.0);

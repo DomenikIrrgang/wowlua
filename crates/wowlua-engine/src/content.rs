@@ -67,8 +67,48 @@ fn zero(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(0.0)])
 }
 
-fn zeros2(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(0.0); 2])
+/// Whether a legacy function's first argument, an ID or index, is below 1
+/// or not a number: the client answers nothing (the full probe: -1, 0 and
+/// the wrong types for the dungeon finder's and PvP's indexes).
+fn below_one(vm: &Vm, c: &NativeCall) -> bool {
+    !matches!(vm.hidden(c.arg(1)), Value::Num(n) if n >= 1.0)
+}
+
+/// `GetLFGDungeonNumEncounters(dungeonID)`: one encounter, none done;
+/// nothing for no ID (the full probe: 1, 0 for IDs 1 and 2; another
+/// dungeon's count unverified).
+fn lfg_dungeon_num_encounters(vm: &mut Vm, c: NativeCall) -> Ret {
+    if below_one(vm, &c) {
+        return Ok(vec![]);
+    }
+    Ok(vec![Value::Num(1.0), Value::Num(0.0)])
+}
+
+/// `IsLFGDungeonJoinable(dungeonID)`: joinable, for the player, not
+/// locked (the full probe: true, true, false for IDs 1 and 2; nothing for
+/// no ID; unverified for a dungeon the level locks).
+fn is_lfg_dungeon_joinable(vm: &mut Vm, c: NativeCall) -> Ret {
+    if below_one(vm, &c) {
+        return Ok(vec![]);
+    }
+    Ok(vec![
+        Value::Bool(true),
+        Value::Bool(true),
+        Value::Bool(false),
+    ])
+}
+
+/// `GetBattlefieldTeamInfo(index)`: no team: an empty name for the first
+/// two (0 and 1, and -1), none past them, nothing rated (the full probe).
+fn battlefield_team_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    let name = match vm.hidden(c.arg(1)) {
+        Value::Num(n) if n <= 1.0 => vm.str(""),
+        Value::Num(_) => Value::Nil,
+        _ => return Ok(vec![]),
+    };
+    let mut out = vec![name];
+    out.extend([Value::Num(0.0); 4]);
+    Ok(out)
 }
 
 fn zeros4(_vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -442,9 +482,17 @@ fn get_loot_info(vm: &mut Vm, _c: NativeCall) -> Ret {
 // ------------------------------------------------- the dungeon finder
 
 /// `GetLFGRoles()`: leader, tank, healer, damage as `SetLFGRoles` chose
-/// them, none at first (as `C_LFGListRoles.GetSavedRoles`; unverified).
+/// them, at first as the `lfgSelectedRoles` CVar keeps them, bits 1, 2, 4,
+/// 8 (the full probe: false, true, true, false with it "6").
 fn get_lfg_roles(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(["lfgLeader", "lfgTank", "lfgHealer", "lfgDamage"]
+    let keys = ["lfgLeader", "lfgTank", "lfgHealer", "lfgDamage"];
+    if get_state(vm, keys[0]).is_nil() {
+        let bits = crate::framescript::cvar_get(vm, "lfgSelectedRoles")
+            .and_then(|v| v.parse::<u32>().ok())
+            .unwrap_or(0);
+        return Ok((0..4).map(|i| Value::Bool(bits & 1 << i != 0)).collect());
+    }
+    Ok(keys
         .iter()
         .map(|k| Value::Bool(state_bool(vm, k)))
         .collect())
@@ -469,35 +517,30 @@ fn get_pvp_roles(_vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// `GetLFGRoleShortageRewards(dungeonID, shortageIndex)`: not eligible,
-/// for no role, no items, money or experience (warcraft.wiki.gg's
-/// results).
+/// for no role, no items, money, experience or a fourth count (the full
+/// probe: four falses, four zeros).
 fn get_lfg_role_shortage_rewards(_vm: &mut Vm, _c: NativeCall) -> Ret {
     let mut out = vec![Value::Bool(false); 4];
-    out.extend([Value::Num(0.0); 3]);
+    out.extend([Value::Num(0.0); 4]);
     Ok(out)
 }
 
 /// `GetLFGDungeonRewards(dungeonID)`: not done today, no money,
 /// experience or rewards (warcraft.wiki.gg's results).
-fn get_lfg_dungeon_rewards(_vm: &mut Vm, _c: NativeCall) -> Ret {
+fn get_lfg_dungeon_rewards(vm: &mut Vm, c: NativeCall) -> Ret {
+    if below_one(vm, &c) {
+        return Ok(vec![]);
+    }
+    // Seven values (the full probe: a sixth count).
     let mut out = vec![Value::Bool(false)];
-    out.extend([Value::Num(0.0); 5]);
+    out.extend([Value::Num(0.0); 6]);
     Ok(out)
 }
 
-/// `GetLFGBootProposal()`: no vote under way (warcraft.wiki.gg's
-/// results).
+/// `GetLFGBootProposal()`: no vote under way, false alone (the full
+/// probe; the newest answer, over warcraft.wiki.gg's eight results).
 fn get_lfg_boot_proposal(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![
-        Value::Bool(false),
-        Value::Bool(false),
-        Value::Bool(false),
-        Value::Nil,
-        Value::Num(0.0),
-        Value::Num(0.0),
-        Value::Num(0.0),
-        Value::Nil,
-    ])
+    Ok(vec![Value::Bool(false)])
 }
 
 /// `GetLFGQueuedList(category [, table])`: the table given (else a new
@@ -538,7 +581,10 @@ fn get_pvp_timer(_vm: &mut Vm, _c: NativeCall) -> Ret {
 
 /// `GetPersonalRatedInfo(bracketIndex)`: no rating, games or tier; no
 /// ranking (warcraft.wiki.gg's 15 results).
-fn get_personal_rated_info(_vm: &mut Vm, _c: NativeCall) -> Ret {
+fn get_personal_rated_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    if below_one(vm, &c) {
+        return Ok(vec![]);
+    }
     let mut out = vec![Value::Num(0.0); 8];
     out.push(Value::Bool(false));
     out.push(Value::Num(0.0));
@@ -552,7 +598,10 @@ fn get_personal_rated_info(_vm: &mut Vm, _c: NativeCall) -> Ret {
 /// suspended (recorded for 1 and 2: seven values, the sixth 195499355,
 /// read here as the client's clock in milliseconds as Blizzard's
 /// `QueueStatusFrame.lua` names it `queuedTime`; unverified).
-fn get_world_pvp_queue_status(vm: &mut Vm, _c: NativeCall) -> Ret {
+fn get_world_pvp_queue_status(vm: &mut Vm, c: NativeCall) -> Ret {
+    if below_one(vm, &c) {
+        return Ok(vec![]);
+    }
     let queued = (crate::clock::now(vm) * 1000.0).floor();
     Ok(vec![
         vm.str("none"),
@@ -727,12 +776,12 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetLFGBootProposal", get_lfg_boot_proposal),
         ("GetLFGQueuedList", get_lfg_queued_list),
         ("HasLFGRestrictions", no),
-        ("IsLFGDungeonJoinable", no),
+        ("IsLFGDungeonJoinable", is_lfg_dungeon_joinable),
         ("IsInLFGDungeon", no),
         ("IsLFGComplete", no),
         ("IsInScenarioGroup", no),
         ("GetNumRandomDungeons", zero),
-        ("GetLFGDungeonNumEncounters", zeros2),
+        ("GetLFGDungeonNumEncounters", lfg_dungeon_num_encounters),
         ("GetLFGDungeonInfo", nothing),
         ("GetLFGRandomDungeonInfo", nothing),
         ("GetLFGCompletionReward", nothing),
@@ -809,7 +858,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetBattlefieldInstanceRunTime", zero),
         ("GetBattlefieldEstimatedWaitTime", zero),
         ("GetBattlefieldTimeWaited", zero),
-        ("GetBattlefieldTeamInfo", nothing),
+        ("GetBattlefieldTeamInfo", battlefield_team_info),
         ("GetRatedBattleGroundInfo", nothing),
         ("AcceptBattlefieldPort", nothing),
         ("LeaveBattlefield", nothing),

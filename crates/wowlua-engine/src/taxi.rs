@@ -143,7 +143,11 @@ fn node_field(vm: &mut Vm, c: &NativeCall, key: &str) -> Ret {
     })
 }
 
+/// No such node (the map closed): "INVALID" (the full probe).
 fn taxi_node_name(vm: &mut Vm, c: NativeCall) -> Ret {
+    if node(vm, &c).is_none() {
+        return Ok(vec![vm.str("INVALID")]);
+    }
     node_field(vm, &c, "name")
 }
 
@@ -151,7 +155,11 @@ fn taxi_node_cost(vm: &mut Vm, c: NativeCall) -> Ret {
     node_field(vm, &c, "cost")
 }
 
+/// No such node: none (the full probe).
 fn get_num_routes(vm: &mut Vm, c: NativeCall) -> Ret {
+    if node(vm, &c).is_none() {
+        return Ok(vec![Value::Num(0.0)]);
+    }
     node_field(vm, &c, "routes")
 }
 
@@ -222,14 +230,16 @@ fn taxi_get_node_slot(vm: &mut Vm, c: NativeCall) -> Ret {
     let source = c.arg(3).truthy();
     Ok(match route_end(vm, &c, source) {
         Some(s) => vec![Value::Num(s as f64)],
-        None => vec![],
+        // No such route (the map closed): slot 1 (the full probe).
+        None => vec![Value::Num(1.0)],
     })
 }
 
 /// A route end's map position (`TaxiGetSrcX`, `…Y`, `TaxiGetDestX`, `…Y`).
 fn route_xy(vm: &mut Vm, c: &NativeCall, source: bool, key: &str) -> Ret {
     let Some(slot) = route_end(vm, c, source) else {
-        return Ok(vec![]);
+        // No such route (the map closed): 0 (the full probe).
+        return Ok(vec![Value::Num(0.0)]);
     };
     let Some(t) = list(vm, "nodes").get(slot - 1).copied() else {
         return Ok(vec![]);

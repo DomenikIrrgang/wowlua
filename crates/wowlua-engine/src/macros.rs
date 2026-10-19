@@ -125,7 +125,8 @@ fn get_macro_info(vm: &mut Vm, c: NativeCall) -> Ret {
 
 fn get_macro_body(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(at) = find(vm, c.arg(1)) else {
-        return Ok(vec![Value::Nil]);
+        // No such macro: nothing (the full probe).
+        return Ok(vec![]);
     };
     let m = get(vm, at);
     Ok(vec![vm.str(&m.body)])

@@ -183,7 +183,12 @@ pub fn load_bindings_xml(
         widgets::keep(vm, action);
         engine_mut(vm).world.bindings.bindings.push(Binding {
             name: name.to_string(),
-            header: b.attr("header").map(str::to_string),
+            // Its category (`category="BINDING_HEADER_MOVEMENT"`, what
+            // `GetBinding` answers: the full probe), else its header.
+            header: b
+                .attr("category")
+                .or_else(|| b.attr("header"))
+                .map(str::to_string),
             action,
             run_on_up: b
                 .attr("runOnUp")
@@ -1060,6 +1065,9 @@ pub fn binding_text(vm: &mut Vm, key: &str) -> String {
 fn get_binding_text(vm: &mut Vm, c: NativeCall) -> Ret {
     let key = match c.arg(1) {
         Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        // A number: as Lua writes it (the full probe: `GetBindingText(-1)`
+        // "-1").
+        Value::Num(n) => wowlua_vm::number::fmt_num(n),
         _ => return Ok(vec![vm.str("")]),
     };
     let text = binding_text(vm, &key);

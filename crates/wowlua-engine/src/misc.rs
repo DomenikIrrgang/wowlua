@@ -422,13 +422,17 @@ fn classic_expansion_at_most(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `GetThreatStatusColor(status)`: grey, yellow, orange, red for 0 to 3,
 /// magenta above, white at 4294967295, as single-precision floats
-/// (warcraft.wiki.gg's values; unverified on the client).
+/// (warcraft.wiki.gg's values), each a byte's fraction (the full probe:
+/// grey 176/255, yellow's blue 119/255; orange's 153/255 unverified).
 fn get_threat_status_color(vm: &mut Vm, c: NativeCall) -> Ret {
     let status = vm.check_number(&c, 1)?;
+    // A byte times 1/255 in single precision (the client's 119 is
+    // 0.46666669845581).
+    let byte = |b: f32| b * (1.0f32 / 255.0);
     let rgb: [f32; 3] = match status as i64 {
-        0 => [0.69, 0.69, 0.69],
-        1 => [1.0, 1.0, 0.47],
-        2 => [1.0, 0.6, 0.0],
+        0 => [byte(176.0), byte(176.0), byte(176.0)],
+        1 => [1.0, 1.0, byte(119.0)],
+        2 => [1.0, byte(153.0), 0.0],
         3 => [1.0, 0.0, 0.0],
         4294967295 => [1.0, 1.0, 1.0],
         _ => [1.0, 0.0, 1.0],

@@ -42,7 +42,7 @@ C_QuestLog.SetSelectedQuest(33)
 local xp, base = GetQuestLogRewardXP()
 local name, _, count, _, usable, id = GetQuestLogRewardInfo(1, 33)
 return xp, base, GetQuestLogRewardMoney(33), GetNumQuestLogChoices(33), name, count, usable, id,
-    C_QuestLog.GetSelectedQuest(), C_QuestLog.IsOnQuest(33), tostring(GetQuestLink(33))",
+    C_QuestLog.GetSelectedQuest(), C_QuestLog.IsOnQuest(33), select('#', GetQuestLink(33))",
     );
     assert_eq!(
         r,
@@ -57,7 +57,8 @@ return xp, base, GetQuestLogRewardMoney(33), GetNumQuestLogChoices(33), name, co
             "80",
             "33",
             "false",
-            "nil"
+            // Not in the log: no link, nothing (the full probe).
+            "0"
         ]
     );
 }
