@@ -6,9 +6,12 @@
 //! world map 947, the city 1456, map 0; the fixture checks them).
 //! Unverified: the maps not asked (no delve, event, invasion, bounty,
 //! dig site, vignette or battleground anywhere in Forever's world).
+//! Where a map lies in the world (`C_Map.GetWorldPosFromMapPos`,
+//! `UnitPosition`): its recorded rectangle on its continent and the
+//! continent's corner (`CONTINENTS`, unverified).
 
 use wowlua_vm::stdlib::Ret;
-use wowlua_vm::{NativeCall, NativeFn, Value, Vm};
+use wowlua_vm::{NativeCall, NativeFn, TableRef, Value, Vm};
 
 use crate::units;
 
@@ -73,6 +76,105 @@ fn corpse_map_position(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Nil])
 }
 
+/// The two continents' world positions: their instance and the world
+/// coordinates of their top left corner (`left` the world's Y, `top` its
+/// X, both decreasing across the map). Unverified: not recorded. Kalimdor
+/// is vanilla's `WorldMapArea` bounds; Eastern Kingdoms the corner that
+/// Elwynn Forest's and Westfall's vanilla bounds (1535.42, -7939.58;
+/// 3016.67, -9400) give with their recorded rectangles on it. Both agree
+/// with HereBeDragons-2.0's Classic world-map table (instance 0: width
+/// 44688.53, left 32601.04, top 9894.93; instance 1: 44878.66, 8723.96,
+/// 14824.53) through the continents' recorded rectangles on Azeroth, and
+/// the zones' recorded rectangles times the continents' sizes give the
+/// zones' recorded sizes (`C_Map.GetMapWorldSize`).
+const CONTINENTS: [(i64, f64, f64, f64); 2] = [
+    (1414, 1.0, 17066.599609375, 12799.900390625),
+    (1415, 0.0, 16000.0, 7466.6000976562),
+];
+
+fn recorded_numbers(vm: &mut Vm, call: &str) -> Option<Vec<f64>> {
+    let v = crate::recorded::lookup_text(vm, call)?;
+    v.iter()
+        .map(|v| match v {
+            Value::Num(n) => Some(*n),
+            _ => None,
+        })
+        .collect()
+}
+
+/// A map's place in the world: its instance, the world coordinates of its
+/// top left corner and its size (`C_Map.GetMapWorldSize`, recorded). A
+/// zone's corner is its continent's moved by its recorded rectangle on it
+/// (`C_Map.GetMapRectOnMap`); a map with no rectangle on a continent (a
+/// battleground, an orphan, Azeroth) has none (unverified).
+pub(crate) fn world_rect(vm: &mut Vm, map: i64) -> Option<(f64, f64, f64, f64, f64)> {
+    let size = recorded_numbers(vm, &format!("C_Map.GetMapWorldSize({map})"))?;
+    let &[width, height] = &size[..] else {
+        return None;
+    };
+    for (id, instance, left, top) in CONTINENTS {
+        if id == map {
+            return Some((instance, left, top, width, height));
+        }
+        let call = format!("C_Map.GetMapRectOnMap({map}, {id})");
+        let Some(&[x0, x1, y0, y1]) = recorded_numbers(vm, &call).as_deref() else {
+            continue;
+        };
+        let continent = recorded_numbers(vm, &format!("C_Map.GetMapWorldSize({id})"));
+        let (true, Some(&[cw, ch])) = (x1 > x0 && y1 > y0, continent.as_deref()) else {
+            continue;
+        };
+        return Some((instance, left - x0 * cw, top - y0 * ch, width, height));
+    }
+    None
+}
+
+fn raw_num(vm: &mut Vm, t: TableRef, key: &str) -> Option<f64> {
+    let k = vm.str(key);
+    match vm.heap.table(t).get(k) {
+        Value::Num(n) => Some(n),
+        _ => None,
+    }
+}
+
+/// `C_Map.GetWorldPosFromMapPos(uiMapID, mapPosition)`: the instance and
+/// the world position (a vector, `x` the world's X, `y` its Y) of a point
+/// on a map, linear over the map's world rectangle (`world_rect`). A map
+/// the engine has no place for answers nothing (documented
+/// `MayReturnNothing`), noted as unanswered. warcraft.wiki.gg's
+/// API_C_Map.GetWorldPosFromMapPos gives Elwynn Forest's corners as these
+/// give them (-7939.58, 1535.42; -10254.20, -1935.42); unverified here.
+fn world_pos_from_map_pos(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (Value::Num(map), Value::Table(pos)) = (c.arg(1), c.arg(2)) else {
+        return Ok(vec![]);
+    };
+    let (Some(u), Some(v)) = (raw_num(vm, pos, "x"), raw_num(vm, pos, "y")) else {
+        return Ok(vec![]);
+    };
+    let Some((instance, left, top, width, height)) = world_rect(vm, map as i64) else {
+        crate::note_default(vm, "C_Map.GetWorldPosFromMapPos", &c, 1);
+        return Ok(vec![]);
+    };
+    let (x, y) = (top - v * height, left - u * width);
+    // A `Vector2DMixin` (Blizzard's `CreateVector2D`), else its fields.
+    let create = vm.get_global("CreateVector2D");
+    let vector = if create.is_nil() {
+        let t = vm.new_table();
+        for (k, n) in [("x", x), ("y", y)] {
+            let key = vm.str(k);
+            let _ = vm.heap.table_mut(t).set(key, Value::Num(n));
+        }
+        Value::Table(t)
+    } else {
+        let point = [Value::Num(x), Value::Num(y)];
+        vm.call(create, &point)?
+            .first()
+            .copied()
+            .unwrap_or(Value::Nil)
+    };
+    Ok(vec![Value::Num(instance), vector])
+}
+
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
         // A list, empty (recorded `{}`).
@@ -106,6 +208,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_QuestLog.GetActiveThreatMaps", nothing),
         // No housing neighbourhood, no battleground flags (recorded).
         ("C_Housing.IsOnNeighborhoodMap", no),
+        ("C_Map.GetWorldPosFromMapPos", world_pos_from_map_pos),
         ("GetNumBattlefieldFlagPositions", zero),
     ]
 }

@@ -1144,7 +1144,16 @@ fn unit_position(vm: &mut Vm, c: NativeCall) -> Ret {
     if units::unit_arg(vm, &c, 1) != Some(units::PLAYER) {
         return Ok(vec![]);
     }
-    Ok(match engine(vm).world.character.position.world {
+    let p = engine(vm).world.character.position.clone();
+    // Not given: the map position's place on its map's world rectangle
+    // (`maps::world_rect`), the documentation's returns not nilable.
+    // Unverified: never recorded; the height (z) unknown, 0.
+    let derived = || -> Option<(f64, f64, f64, f64)> {
+        let (map, u, v) = (p.map_id?, p.x?, p.y?);
+        let (instance, left, top, width, height) = crate::maps::world_rect(vm, map as i64)?;
+        Some((top - v * height, left - u * width, 0.0, instance))
+    };
+    Ok(match p.world.or_else(derived) {
         Some((y, x, z, instance)) => vec![
             Value::Num(y),
             Value::Num(x),

@@ -731,8 +731,11 @@ fn run_one(suite: &Suite, file: &TestFile, state: &mut Loaded, p: &Planned) -> O
     if let Some(o) = drive_inner(&mut state.vm, tests, job) {
         return o;
     }
-    // The first pass ends: its teardown runs in the file's VM.
+    // The first pass ends: its teardown runs in the file's VM. An addon's
+    // `ReloadUI()` ended its session (`PLAYER_LOGOUT`, nothing running
+    // after): the file's next tests go on in it as after `mock.reloadUI`.
     let mut saved = saved::capture(&mut state.vm, &state.saved);
+    wowlua_engine::engine_mut(&mut state.vm).world.logged_out = false;
     let mut clock = (state.vm.clock.now, state.vm.clock.elapsed_ms);
     if let Some(o @ Outcome::Fail { .. }) = drive_inner(&mut state.vm, tests, job) {
         return o;

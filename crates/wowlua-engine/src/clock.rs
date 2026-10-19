@@ -235,6 +235,12 @@ pub fn catch_up(vm: &mut Vm) {
 /// Advances the clock by `seconds`, running due timers in the order they
 /// come due (each at its time).
 pub fn advance(vm: &mut Vm, seconds: f64) {
+    // After `ReloadUI` the session's Lua is gone (the client loads a new
+    // one): time passes, nothing of it runs.
+    if engine(vm).world.logged_out {
+        jump(vm, seconds);
+        return;
+    }
     // The clock's own milliseconds (`now` rounds them): timers due by
     // the time read at the end.
     let end_ms = vm.clock.elapsed_ms + seconds.max(0.0) * 1000.0;
@@ -294,6 +300,10 @@ pub fn advance(vm: &mut Vm, seconds: f64) {
 /// millisecond, start at their recorded times).
 pub fn advance_frames(vm: &mut Vm, n: usize, ms: f64) {
     for _ in 0..n {
+        if engine(vm).world.logged_out {
+            jump(vm, ms / 1000.0);
+            continue;
+        }
         let end_ms = vm.clock.elapsed_ms + ms;
         engine_answers(vm, end_ms);
         tick(vm, end_ms - vm.clock.elapsed_ms);

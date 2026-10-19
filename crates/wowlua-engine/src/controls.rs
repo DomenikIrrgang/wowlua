@@ -207,6 +207,12 @@ fn snapshot_taken(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `loggedOut()`: whether the session ended (`ReloadUI`, the addon's or
+/// Blizzard's): the test runner reloads.
+fn logged_out(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(crate::engine(vm).world.logged_out)])
+}
+
 fn wheel(vm: &mut Vm, c: NativeCall) -> Ret {
     let id = widget_arg(vm, &c, 1)?;
     let delta = vm.check_number(&c, 2)?;
@@ -275,6 +281,7 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("advanceTime", advance_time),
         ("setLatency", set_latency),
         ("snapshotTaken", snapshot_taken),
+        ("loggedOut", logged_out),
         ("setFrameBatching", crate::batch::control_set),
         ("nextFrame", next_frame),
         ("advanceFrames", advance_frames),
