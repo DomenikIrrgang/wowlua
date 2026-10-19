@@ -1711,6 +1711,13 @@
           "items": {
             "type": "string"
           }
+        },
+        "addons": {
+          "description": "Other addons' folders (relative to the package root, or absolute),\neach loaded before the addon as its own addon: its TOC's files, its\nnamespace, its SavedVariables and its `ADDON_LOADED`; listed order,\nan addon's dependencies among them first (spec Tooling §16.1.2).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false

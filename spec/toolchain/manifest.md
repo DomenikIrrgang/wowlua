@@ -617,7 +617,7 @@ used.
 
 ## 9.18 `test`
 
-Since M9 S4 (`blizzard-ui`, `profile`) and S5 (`coverage`, `reporters`).
+Since M9 S4 (`blizzard-ui`, `profile`, `addons`) and S5 (`coverage`, `reporters`).
 
 | Key | Type | Default | Meaning |
 |-----|------|---------|---------|
@@ -626,3 +626,4 @@ Since M9 S4 (`blizzard-ui`, `profile`) and S5 (`coverage`, `reporters`).
 | `coverage.lines`, `.statements`, `.branches`, `.functions`, `.conditions` | number (percent) | none | Minimum coverage; a run below it fails ([Tooling §16.1.6](tooling.md#1616-coverage)) |
 | `coverage.exclude` | string[] | `[]` | Files excluded from coverage (glob patterns) |
 | `reporters` | string[] | `["pretty"]` | Default test and coverage reporters (`pretty`, `junit`, `tap`, `json`, `github`, `lcov`, `cobertura`, `coverage-json`, `html`) |
+| `addons` | string[] | `[]` | Other addons' folders (relative to the package root, or absolute) loaded before the addon, each as its own addon: its TOC's files, namespace, SavedVariables and `ADDON_LOADED` ([Tooling §16.1.2](tooling.md#1612-what-a-test-run-loads)). No two may share a folder name (E4002) |

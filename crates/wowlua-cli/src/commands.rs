@@ -710,6 +710,12 @@ fn test_once(
                 src: project.manifest.manifest.build.src.clone(),
                 blizzard_ui,
                 profile: test_settings.profile.clone(),
+                // Relative to the package root, or absolute.
+                addons: test_settings
+                    .addons
+                    .iter()
+                    .map(|a| project.root().join(a))
+                    .collect(),
                 update_snapshots: args.update_snapshots,
                 coverage: args.coverage,
             };

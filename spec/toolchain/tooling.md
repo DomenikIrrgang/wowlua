@@ -64,14 +64,16 @@ For each test file and flavor, the runner:
 
 1. creates a fresh VM and installs `wowlua:mock` for that flavor,
 2. loads the TOC's files up to the runtime (locale files, the runtime), then
-   the project mocks (`tests/mocks/`, with what they import),
+   the project mocks (`tests/mocks/`, with what they import), then the
+   manifest's `test.addons` (below),
 3. loads the rest of the **whole addon** in its computed load order,
    compiled with the `test` profile (exactly as the generated TOC would load
    it, XML included, as the addon's code),
 4. loads the test file after the helpers it imports (its top-level code
    runs),
-5. unless the file opted out, fires the lifecycle: `ADDON_LOADED` for the addon,
-   `PLAYER_LOGIN`, and `PLAYER_ENTERING_WORLD` (`isInitialLogin = true`),
+5. unless the file opted out, fires the lifecycle: `ADDON_LOADED` for each
+   of the `test.addons` loaded and then for the addon, `PLAYER_LOGIN`, and
+   `PLAYER_ENTERING_WORLD` (`isInitialLogin = true`),
 6. runs `@beforeAll`, then each test with its `@beforeEach` / `@afterEach`
    hooks, then `@afterAll`.
 
@@ -84,6 +86,24 @@ so the engine must too). An error that reaches
 the error handler during a test (an event handler's, a timer's) fails that
 test, unless the test read it with `mock.errors()`. The addon's
 `Bindings.xml` is read before its files load, as the client does.
+
+`test.addons` (manifest §9.18) names other addons' folders, a test's
+neighbours as the client would load them: each folder is an addon named
+after it, read from the TOC the client picks for the flavor
+(`<Name>_Mainline.toc` and the flavor's other suffixes, else `<Name>.toc`),
+its files loaded as its own code with its own addon table (`local name, ns =
+...`), its `Bindings.xml` read. They load in the listed order, each after
+those of its `## Dependencies` / `## RequiredDeps` the list has (and after
+the Blizzard addons it depends on, with `test.blizzard-ui`). An addon whose
+`AllowLoadGameType` / `ExcludeLoadGameType` / `AllowLoad` leaves out the
+flavor's game is skipped. A `## LoadOnDemand: 1` addon is known but not
+loaded: `C_AddOns.LoadAddOn(name)` loads it (its dependencies, its files,
+then its `ADDON_LOADED`; its files' errors reach the error handler).
+`C_AddOns.GetNumAddOns`, `GetAddOnInfo`, `GetAddOnMetadata`,
+`IsAddOnLoaded` and `IsAddOnLoadOnDemand` see each of them, in load order.
+Their SavedVariables (`## SavedVariables`, `## SavedVariablesPerCharacter`)
+survive `mock.reloadUI()` as the addon's do. An error while one loads fails
+the file, naming the addon. Coverage counts only the addon's own files.
 
 ### 16.1.3 `wowlua:test`
 

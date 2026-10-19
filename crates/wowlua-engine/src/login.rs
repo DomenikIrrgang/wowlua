@@ -226,6 +226,14 @@ pub fn login(vm: &mut Vm, addon: &str, has_bindings: bool, reload: bool) {
                 inventory(vm);
                 continue;
             }
+            // The other addons loaded at startup (`test.addons`), each
+            // loaded before the addon under test, so told before it.
+            "ADDON_LOADED" => {
+                for (name, bindings) in crate::bindings::login_addons(vm) {
+                    let n = vm.str(&name);
+                    fire(vm, event, &[n, Value::Bool(bindings)]);
+                }
+            }
             "PLAYER_ENTERING_WORLD" => {
                 fire(vm, event, &[Value::Bool(!reload), Value::Bool(reload)]);
                 continue;
