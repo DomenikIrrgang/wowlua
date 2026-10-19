@@ -64,6 +64,16 @@ pub struct Registry {
     /// The addon each of its templates came from, by lower-case name: their
     /// scripts are its code wherever they are applied.
     pub template_addons: HashMap<String, String>,
+    /// Templates and intrinsic types declared under `<ScopedModifier
+    /// allowUntaintedCreation="true">`, by lower-case name: frames made
+    /// from them are built untainted, whoever calls `CreateFrame`.
+    pub untainted_creation: HashSet<String>,
+    /// Inside such a modifier while the UI code loads.
+    in_untainted_creation: bool,
+    /// The secure delegates `<Mixin secureDelegates="true">` made, by the
+    /// function they call: every frame shares them (each kept, so the
+    /// function it holds is never collected).
+    pub mixin_delegates: HashMap<wowlua_vm::FuncRef, Value>,
     /// Every Blizzard addon of the UI code, by lower-case name: what
     /// `C_AddOns.LoadAddOn` can load later.
     available: HashMap<String, Addon>,
@@ -396,9 +406,24 @@ fn secure_env(vm: &mut Vm) -> wowlua_vm::TableRef {
     let unwrap = vm.native("secretunwrap", secret_unwrap);
     let k = vm.heap.intern(b"secretunwrap");
     vm.heap.table_mut(env).set_str(k, unwrap);
+    // `GetForbiddenObjectTable(object)` (documented `SecureOnly`): an
+    // object's forbidden partition. Partitions are not modelled, so an
+    // object is its own (the aura containers' inbound checks compare the
+    // two).
+    let forbidden = vm.native("GetForbiddenObjectTable", forbidden_object_table);
+    let k = vm.heap.intern(b"GetForbiddenObjectTable");
+    vm.heap.table_mut(env).set_str(k, forbidden);
     crate::widgets::keep(vm, Value::Table(env));
     engine_mut(vm).world.ui.secure_env = Some(env);
     env
+}
+
+fn forbidden_object_table(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
+    let object = c.arg(1);
+    if crate::widgets::widget_of(vm, object).is_none() {
+        return Err(vm.error("Usage: local forbiddenTable = GetForbiddenObjectTable(object)"));
+    }
+    Ok(vec![object])
 }
 
 /// `secretunwrap(...)`: its arguments, secrets revealed.
@@ -818,13 +843,28 @@ fn process_ui(
                     font_named(vm, name, f);
                 }
             }
-            "scopedmodifier" => process_ui(vm, interface_root, dir, cx, el, addon, addon_table),
+            "scopedmodifier" => {
+                // `allowUntaintedCreation` (Blizzard_AuraContainer's
+                // intrinsic and its custom container template): what is
+                // declared within is built untainted (see
+                // `widgets::create_frame`). Blizzard's code only (an
+                // addon's XML would make its own code secure; unverified).
+                let ui = &mut engine_mut(vm).world.ui;
+                let outer = ui.in_untainted_creation;
+                ui.in_untainted_creation |=
+                    el.flag("allowUntaintedCreation") && ui.code_of.is_none();
+                process_ui(vm, interface_root, dir, cx, el, addon, addon_table);
+                engine_mut(vm).world.ui.in_untainted_creation = outer;
+            }
             _ => {
                 if (el.flag("virtual") || el.flag("intrinsic"))
                     && let Some(name) = el.attr("name")
                 {
                     let globals = vm.globals;
                     let ui = &mut engine_mut(vm).world.ui;
+                    if ui.in_untainted_creation {
+                        ui.untainted_creation.insert(name.to_ascii_lowercase());
+                    }
                     ui.template_files
                         .insert(name.to_ascii_lowercase(), cx.file.to_string());
                     ui.template_envs.insert(name.to_ascii_lowercase(), globals);
@@ -1016,18 +1056,50 @@ fn load_global_strings(vm: &mut Vm, path: &Path) {
 /// (`GlobalStrings.lua`: `NAME = "text"` lines) if given; `ADDON_LOADED`
 /// fires for each addon.
 /// `CreateSecureDelegate(f)`: a C function calling `f` (Blizzard's code
-/// only, while it loads; whether the call is secure for a tainted caller is
-/// unverified).
+/// only, while it loads).
 fn create_secure_delegate(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
-    fn call_delegate(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
-        let f = c.upvals.first().copied().unwrap_or(Value::Nil);
-        vm.call(f, &c.args)
-    }
     let f = c.arg(1);
     if !matches!(f, Value::Func(_)) {
         return Err(vm.error("Usage: CreateSecureDelegate(func)"));
     }
-    Ok(vec![vm.native_with("delegate", call_delegate, vec![f])])
+    Ok(vec![secure_delegate(vm, f, false)])
+}
+
+/// A secure delegate of `f`: as the client documents `CreateSecureDelegate`,
+/// it "invokes the original function in a protected call context with
+/// secure execution taint, and supports passing and returning values
+/// directly". The arguments go in as values of that secure execution (were
+/// they to keep a tainted caller's taint, the first one read would taint
+/// it again), and the caller's taint is back after, the results taking it.
+/// A mixin's delegates (`<Mixin secureDelegates="true">`) stay at the
+/// caller's taint when a tainted caller passes a secret: Blizzard's
+/// ScriptErrorsFrame says secure mixin methods "drop their ability to
+/// elevate to an untainted state if any input parameter is secret from a
+/// tainted context", unlike a delegate of its own. Unverified: errors
+/// reach the caller (Blizzard's inbound methods validate with `assert`).
+pub fn secure_delegate(vm: &mut Vm, f: Value, mixin: bool) -> Value {
+    // The delegate is Blizzard's, whoever's frame needs it made.
+    let saved = vm.taint().saved();
+    vm.taint_mut().stack = wowlua_vm::Taint::SECURE;
+    let d = vm.native_with("delegate", call_delegate, vec![f, Value::Bool(mixin)]);
+    vm.taint_mut().restore(saved);
+    d
+}
+
+fn call_delegate(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
+    let f = c.upvals.first().copied().unwrap_or(Value::Nil);
+    let mixin = c.upvals.get(1).copied().is_some_and(Value::truthy);
+    let tainted = !vm.taint().stack.is_secure();
+    if mixin && tainted && c.args.iter().any(|v| matches!(v, Value::Secret(_))) {
+        return vm.call(f, &c.args);
+    }
+    let saved = vm.taint().saved();
+    vm.taint_mut().stack = wowlua_vm::Taint::SECURE;
+    let args: Vec<wowlua_vm::Slot> = c.args.iter().map(|&v| wowlua_vm::Slot::secure(v)).collect();
+    let r = vm.call_slots(wowlua_vm::Slot::secure(f), &args);
+    vm.taint_mut().restore(saved);
+    let results = r?;
+    Ok(results.into_iter().map(|s| s.v).collect())
 }
 
 pub fn load(vm: &mut Vm, interface: &Path, global_strings: Option<&Path>) -> Report {

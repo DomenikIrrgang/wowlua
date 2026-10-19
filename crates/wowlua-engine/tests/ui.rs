@@ -148,6 +148,83 @@ return table.concat(LoadLog, ','), tostring(FamilyLoaded), tostring(LazyLoaded),
     );
 }
 
+/// A secure addon's API for addons, as Blizzard_AuraContainer builds it: a
+/// template under `allowUntaintedCreation` is built untainted for an
+/// addon (its scripts and `OnLoad` Blizzard's), and its inbound mixin's
+/// `secureDelegates` run untainted for a tainted caller, unless it passes
+/// a secret; `CreateSecureDelegate` elevates even then.
+#[test]
+fn untainted_creation_and_secure_delegates() {
+    let interface = tree(
+        "delegates",
+        &[
+            (
+                "AddOns/Blizzard_Box/Blizzard_Box.toc",
+                "## UseSecureEnvironment: 1\nBox.lua\nBox.xml [LoadIntoEnvironment global]\nExport.lua [LoadIntoEnvironment global]\n",
+            ),
+            (
+                "AddOns/Blizzard_Box/Box.lua",
+                "local _, addonTable = ...
+local Shared = {}
+function Shared:SetValue(v) self.value = v self.setSecure = issecure() end
+function Shared:IsOwn() return GetForbiddenObjectTable(self) == self end
+BoxInbound = { SetValue = Shared.SetValue, IsOwn = Shared.IsOwn }
+BoxPrivate = { SetValue = Shared.SetValue, IsOwn = Shared.IsOwn }
+function BoxPrivate:OnLoad() self.loadSecure = issecure() end
+function BoxPrivate:OnUpdate() self.updateSecure = issecure() end
+addonTable.Delegate = CreateSecureDelegate(function(x) return issecure(), x ~= nil end)
+",
+            ),
+            (
+                "AddOns/Blizzard_Box/Export.lua",
+                "local _, addonTable = ...\nBoxDelegate = addonTable.Delegate\n",
+            ),
+            (
+                "AddOns/Blizzard_Box/Box.xml",
+                r#"<Ui>
+  <ScopedModifier allowUntaintedCreation="true">
+    <Frame name="BoxTemplate" virtual="true">
+      <Mixins>
+        <Mixin key="BoxInbound" source="secure" secureDelegates="true"/>
+        <Mixin key="BoxPrivate" source="secure"/>
+      </Mixins>
+      <Scripts><OnLoad method="OnLoad"/><OnUpdate method="OnUpdate"/></Scripts>
+    </Frame>
+  </ScopedModifier>
+  <Frame name="PlainBoxTemplate" virtual="true">
+    <Mixins><Mixin key="BoxPrivate" source="secure"/></Mixins>
+    <Scripts><OnLoad method="OnLoad"/></Scripts>
+  </Frame>
+</Ui>"#,
+            ),
+        ],
+    );
+    let mut vm = vm("camelot");
+    let report = wowlua_engine::ui::load(&mut vm, &interface, None);
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let r = run(
+        &mut vm,
+        "Box = CreateFrame('Frame', nil, UIParent, 'BoxTemplate')
+local plain = CreateFrame('Frame', nil, UIParent, 'PlainBoxTemplate')
+Box:SetValue({})
+local set, value = tostring(Box.setSecure), tostring(issecurevariable(Box, 'value'))
+local after = tostring(issecure())
+Box:SetValue(secretwrap(1))
+local elevated, given = BoxDelegate(secretwrap(1))
+return tostring(Box.loadSecure), tostring(plain.loadSecure), set, value, after,
+    tostring(Box.setSecure), tostring(elevated), tostring(given), tostring(Box:IsOwn()),
+    tostring(GetForbiddenObjectTable)",
+    );
+    assert_eq!(
+        r,
+        [
+            "true", "false", "true", "true", "false", "false", "true", "true", "true", "nil"
+        ]
+    );
+    wowlua_engine::clock::advance_frames(&mut vm, 1, 16.0);
+    assert_eq!(run(&mut vm, "return tostring(Box.updateSecure)"), ["true"]);
+}
+
 /// The flavor's own UI code, if `cargo xtask types` fetched it: loads, and
 /// says how many errors remain.
 #[test]

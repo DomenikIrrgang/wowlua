@@ -307,6 +307,195 @@ fn get_tick_time(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(engine(vm).timers.tick_time)])
 }
 
+// ------------------------------------------------------- timed signal maps
+
+/// `C_Timer.NewTimedSignalMap(callback)`: keys scheduled to signal at a
+/// time, as Blizzard's documentation describes the client's
+/// `TimedSignalMap`: when a key's time arrives it leaves the map and the
+/// callback gets it (from the client's C code). Each key runs on a timer
+/// of the clock's. Unverified: `GetNextSignal` on an empty map returns
+/// nothing; keys due at the same moment signal in the order they were set.
+fn new_timed_signal_map(vm: &mut Vm, c: NativeCall) -> Ret {
+    let callback = c.arg(1);
+    if !matches!(callback, Value::Func(_)) {
+        return Err(vm.error("Usage: local signalMap = C_Timer.NewTimedSignalMap(callback)"));
+    }
+    let map = widgets::create(vm, "TimedSignalMap", None, None);
+    let id = widgets::widget_of(vm, map).expect("a signal map");
+    set_map_prop(vm, id, "callback", callback);
+    let signals = Value::Table(vm.new_table());
+    set_map_prop(vm, id, "signals", signals);
+    Ok(vec![map])
+}
+
+fn map_prop(vm: &mut Vm, id: WidgetId, key: &str) -> Value {
+    let props = engine(vm).world.widgets[id.0].props;
+    let k = vm.str(key);
+    vm.heap.table(props).get(k)
+}
+
+fn set_map_prop(vm: &mut Vm, id: WidgetId, key: &str, v: Value) {
+    let props = engine(vm).world.widgets[id.0].props;
+    let k = vm.str(key);
+    let _ = vm.heap.table_mut(props).set(k, v);
+}
+
+/// The map's scheduled keys: key to `{ timer index, time }`.
+fn signals(vm: &mut Vm, id: WidgetId) -> TableRef {
+    match map_prop(vm, id, "signals") {
+        Value::Table(t) => t,
+        _ => {
+            let t = vm.new_table();
+            set_map_prop(vm, id, "signals", Value::Table(t));
+            t
+        }
+    }
+}
+
+/// A scheduled key's timer index and time.
+fn signal(vm: &mut Vm, id: WidgetId, key: f64) -> Option<(usize, f64)> {
+    let t = signals(vm, id);
+    let Value::Table(entry) = vm.heap.table(t).get(Value::Num(key)) else {
+        return None;
+    };
+    let num = |vm: &Vm, i: f64| match vm.heap.table(entry).get(Value::Num(i)) {
+        Value::Num(n) => n,
+        _ => 0.0,
+    };
+    Some((num(vm, 1.0) as usize, num(vm, 2.0)))
+}
+
+fn cancel_signal_of(vm: &mut Vm, id: WidgetId, key: f64) {
+    if let Some((timer, _)) = signal(vm, id, key) {
+        engine_mut(vm).timers.list[timer].cancelled = true;
+        let t = signals(vm, id);
+        let _ = vm.heap.table_mut(t).set(Value::Num(key), Value::Nil);
+    }
+}
+
+/// Schedules `key` at `time` (replacing its schedule).
+fn signal_at_time(vm: &mut Vm, id: WidgetId, key: f64, time: f64) {
+    cancel_signal_of(vm, id, key);
+    let timer = engine(vm).timers.list.len();
+    let map = Value::Table(engine(vm).world.widgets[id.0].table);
+    let due = vm.native_with(
+        "signal",
+        signal_due,
+        vec![map, Value::Num(key), Value::Num(timer as f64)],
+    );
+    schedule(vm, time - now(vm), due, 1.0, false);
+    let entry = vm.new_table();
+    let _ = vm
+        .heap
+        .table_mut(entry)
+        .set(Value::Num(1.0), Value::Num(timer as f64));
+    let _ = vm
+        .heap
+        .table_mut(entry)
+        .set(Value::Num(2.0), Value::Num(time));
+    let t = signals(vm, id);
+    let _ = vm
+        .heap
+        .table_mut(t)
+        .set(Value::Num(key), Value::Table(entry));
+}
+
+/// A key's timer came due: it leaves the map, and the callback gets it.
+fn signal_due(vm: &mut Vm, c: NativeCall) -> Ret {
+    let up = |i: usize| c.upvals.get(i).copied().unwrap_or(Value::Nil);
+    let (Some(id), Value::Num(key), Value::Num(timer)) =
+        (widgets::widget_of(vm, up(0)), up(1), up(2))
+    else {
+        return Ok(vec![]);
+    };
+    if signal(vm, id, key).map(|(t, _)| t) != Some(timer as usize) {
+        return Ok(vec![]);
+    }
+    let t = signals(vm, id);
+    let _ = vm.heap.table_mut(t).set(Value::Num(key), Value::Nil);
+    let callback = map_prop(vm, id, "callback");
+    vm.call(callback, &[Value::Num(key)])?;
+    Ok(vec![])
+}
+
+fn signal_key(vm: &mut Vm, c: &NativeCall) -> Result<f64, wowlua_vm::LuaError> {
+    vm.check_number(c, 2)
+}
+
+fn signal_at(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let key = signal_key(vm, &c)?;
+    let time = vm.check_number(&c, 3)?;
+    signal_at_time(vm, id, key, time);
+    Ok(vec![])
+}
+
+fn signal_after(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let key = signal_key(vm, &c)?;
+    let seconds = vm.check_number(&c, 3)?;
+    let time = now(vm) + seconds;
+    signal_at_time(vm, id, key, time);
+    Ok(vec![])
+}
+
+fn cancel_signal(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let key = signal_key(vm, &c)?;
+    cancel_signal_of(vm, id, key);
+    Ok(vec![])
+}
+
+/// The scheduled keys, in key order.
+fn signal_keys(vm: &mut Vm, id: WidgetId) -> Vec<f64> {
+    let t = signals(vm, id);
+    let mut keys = Vec::new();
+    let mut k = Value::Nil;
+    while let Some((key, _)) = vm.heap.table(t).next(k).ok().flatten() {
+        if let Value::Num(n) = key {
+            keys.push(n);
+        }
+        k = key;
+    }
+    keys.sort_by(f64::total_cmp);
+    keys
+}
+
+fn cancel_all_signals(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    for key in signal_keys(vm, id) {
+        cancel_signal_of(vm, id, key);
+    }
+    Ok(vec![])
+}
+
+fn has_signal(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let key = signal_key(vm, &c)?;
+    Ok(vec![Value::Bool(signal(vm, id, key).is_some())])
+}
+
+fn get_signal_time(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let key = signal_key(vm, &c)?;
+    Ok(vec![
+        signal(vm, id, key).map_or(Value::Nil, |(_, t)| Value::Num(t)),
+    ])
+}
+
+fn get_signal_count(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(signal_keys(vm, id).len() as f64)])
+}
+
+fn get_next_signal(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let mut next: Option<(f64, f64, usize)> = None;
+    for key in signal_keys(vm, id) {
+        if let Some((timer, time)) = signal(vm, id, key)
+            && next.is_none_or(|(_, t, i)| (time, timer) < (t, i))
+        {
+            next = Some((key, time, timer));
+        }
+    }
+    Ok(match next {
+        Some((key, time, _)) => vec![Value::Num(key), Value::Num(time)],
+        None => vec![],
+    })
+}
+
 /// The documented functions this module gives behaviour.
 pub fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
     vec![
@@ -316,5 +505,20 @@ pub fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
         ("C_Timer.After", after),
         ("C_Timer.NewTimer", new_timer),
         ("C_Timer.NewTicker", new_ticker),
+        ("C_Timer.NewTimedSignalMap", new_timed_signal_map),
+    ]
+}
+
+/// The timed signal maps' methods.
+pub fn methods() -> Vec<(&'static str, widgets::MethodFn)> {
+    vec![
+        ("TimedSignalMap:SignalAt", signal_at as widgets::MethodFn),
+        ("TimedSignalMap:SignalAfter", signal_after),
+        ("TimedSignalMap:CancelSignal", cancel_signal),
+        ("TimedSignalMap:CancelAllSignals", cancel_all_signals),
+        ("TimedSignalMap:HasSignal", has_signal),
+        ("TimedSignalMap:GetSignalTime", get_signal_time),
+        ("TimedSignalMap:GetSignalCount", get_signal_count),
+        ("TimedSignalMap:GetNextSignal", get_next_signal),
     ]
 }
