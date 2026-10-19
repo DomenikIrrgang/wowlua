@@ -118,19 +118,24 @@ local function press(frame)
     local ok, err = pcall(e.click, frame)
     if not ok then check("clicked: " .. tostring(err), false) end
 end
--- Heroic Strike pressed: told to the server, its answer (`SENT`) the
--- recorded delay later.
 -- A fight begun with the first swing's packet: the swing, then the auto
 -- attack's start and the target change's echo with it (`tokens`: the
 -- echo's units), then the swing's combat state (recorded, 24.671 and
 -- 48.121: PLAYER_SWING, PLAYER_ENTER_COMBAT, UNIT_TARGET, then
--- PLAYER_REGEN_DISABLED).
-local function attackWithSwing(tokens)
+-- PLAYER_REGEN_DISABLED). `mob`: a creature on the player in the same
+-- packet (its target known to the player's updates, its own told later:
+-- `e.tellTurns()`).
+local function attackWithSwing(tokens, mob)
     e.beforeEvent("PLAYER_REGEN_DISABLED", function()
-        player:startAttack()
-        for _, unit in ipairs(tokens) do e.fireUnitEvent("UNIT_TARGET", unit) end
+        if mob then mob:target(player) end
+        if tokens then
+            player:startAttack()
+            for _, unit in ipairs(tokens) do e.fireUnitEvent("UNIT_TARGET", unit) end
+        end
     end)
 end
+-- Heroic Strike pressed: told to the server, its answer (`SENT`) the
+-- recorded delay later.
 local function strike(sent)
     e.setLatency(sent)
     player:useSpell(78)
@@ -162,9 +167,12 @@ at(8.147) player:startAttack()
 -- The first swing puts no one in combat; the wolf's answer does (recorded).
 at(10.695) player:swing(u_53fa49cc84, 5, { textAfter = 0.532, combat = false })
 at(10.695) u_53fa49cc84:setThreat(4)
+-- The wolf on the player in the combat's packet: the player's flags and
+-- rage told for the target's target too, the wolf's own update after
+-- (recorded).
+at(10.781) e.beforeEvent("PLAYER_REGEN_DISABLED", function() u_53fa49cc84:target(player) end)
 at(10.781) player:enterCombat()
 at(10.781) player:setPower(5)
-at(10.781) u_53fa49cc84:target(player)
 at(10.781) u_53fa49cc84:swing(player, 0, { kind = "DODGE", textAfter = 0.248, statesAfter = 0.101, stateFor = 5.379 })
 at(12.094) u_53fa49cc84:setThreat(5)
 at(12.694) player:swing(u_53fa49cc84, 5, { power = 5, textAfter = 0.5, statesAfter = 0.2 })
@@ -187,12 +195,16 @@ at(20.239) player:swing(u_53fa49cc84, 5, { power = 20, kill = { xpAfter = 0.416,
 at(20.655) player:stopAttack()
 at(21.050) player:leaveCombat()
 at(21.177) player:target(u_53fa49cc84, { echo = 0.35 })
-at(21.227) player:loot(u_53fa49cc84, { auto = true, bagsAfter = { 0.081, 0.07, 0.127 }, dataAfter = { 0.648 }, slotsAfter = { 0.557, 0.713, 0.845 } })
+at(21.227) player:loot(u_53fa49cc84, { auto = true, bagsAfter = { 0.081, 0.07, 0.127 }, dataAfter = { 0.648 }, slotsAfter = { 0.559, 0.715, 0.847 } })
+-- The health and rage regained before the second bags' packet, in its
+-- moment (recorded, 22.562).
+at(21.227) e.beforeEvent("PLAYER_EQUIPED_SPELLS_CHANGED", function()
+    player:heal(60)
+    player:setPower(20)
+end)
 -- Out of combat each fight's wounds heal: the regeneration's last tick
 -- (none told at full), the player full again after it (the health's aura
 -- states told no change).
-at(22.562) player:heal(60)
-at(22.562) player:setPower(20)
 at(22.593) CloseLoot() -- walked off
 at(24.259) player:target(u_57ac1525ca, { echo = false })
 at(24.429) player:setPower(5, { frequent = true })
@@ -254,7 +266,11 @@ at(43.663) strike(0.346)
 at(43.752) bystander("Creature-0-6782-0-7-6-8D68555A0C", 6, "Kobold Vermin")
 at(43.752) u_57461dbc45:swing(player, 2, { victimPower = 20, textAfter = 0.333 })
 at(44.110) u_57461dbc45:setThreat(47)
-at(45.297) player:swing(u_57461dbc45, 17, { spent = 5, power = 5, kill = { echo = 0.391, xp = 50, loot = { { id = 750 }, { id = 4865 }, { id = 7074 }, { id = 1368 } } } })
+-- The swing's rage before the kill, the player's threat situation at the
+-- moment's end (recorded).
+at(45.297) e.beforeEvent("PARTY_KILL", function() player:setPower(5) end)
+at(45.297) player:swing(u_57461dbc45, 17, { spent = 5, kill = { echo = 0.391, xp = 50, loot = { { id = 750 }, { id = 4865 }, { id = 7074 }, { id = 1368 } } } })
+at(45.297) e.fireUnitEvent("UNIT_THREAT_SITUATION_UPDATE", "player")
 at(45.365) player:leaveCombat()
 at(45.587) player:stopAttack()
 at(45.681) player:target(u_57461dbc45, { echo = 0.346 })
@@ -267,11 +283,12 @@ e.beforeEvent("UNIT_QUEST_LOG_CHANGED", function()
 end)
 at(47.264) CloseLoot() -- walked off
 at(47.780) player:target(u_848ad88022, { echo = false })
--- The wolf on the player before the swing (the echo's and the swing's
--- updates told for the target's target too: recorded).
-at(48.121) u_848ad88022:target(player)
-at(48.121) attackWithSwing({ "player", "targettarget" })
+-- The wolf on the player in the swing's packet (the echo's and the
+-- swing's updates told for the target's target too), its own update
+-- after the swing's rage (recorded).
+at(48.121) attackWithSwing({ "player", "targettarget" }, u_848ad88022)
 at(48.121) player:swing(u_848ad88022, 5, { indicator = "GLANCING", power = 5, textAfter = 0.398 })
+at(48.121) e.tellTurns()
 at(48.121) u_848ad88022:swing(player, 2, { victimPower = 5, textAfter = 0.398 })
 at(48.121) u_848ad88022:setThreat(4)
 at(48.966) u_848ad88022:setThreat(5)
@@ -374,24 +391,47 @@ at(79.995) player:wear()
 at(79.995) player:swing(u_fed254bade, 5, { indicator = "GLANCING", power = 5, textAfter = 0.532, statesAfter = 0.112 })
 at(80.251) u_fed254bade:swing(player, 2, { victimPower = 20, textAfter = 0.398 })
 at(80.511) u_fed254bade:setThreat(44)
-at(81.998) player:useSpell(78) -- fails: not enough rage
-at(81.998) player:swing(u_fed254bade, 7, { power = 20, kill = { flagsAfter = 0.583, xpAfter = 0.173, echo = false, xp = 40, loot = { { id = 750 }, { id = 7073 }, { id = 2654 } } } })
+-- Heroic Strike pressed as the killing blow came (at 81.867; the server's
+-- SENT never came): the client's press failing with the kill, after the
+-- death; the server's answer a round trip on, the target dead (recorded).
+at(81.867) strike(100)
+at(81.998) e.beforeEvent("PLAYER_TARGET_DIED", function()
+    player:castFailed(78, { error = "TARGETS_DEAD", client = true })
+end)
+-- The swing's rage before the kill (recorded).
+at(81.998) e.beforeEvent("PARTY_KILL", function() player:setPower(20) end)
+at(81.998) player:swing(u_fed254bade, 7, { kill = { flagsAfter = 0.583, xpAfter = 0.173, echo = false, xp = 40, loot = { { id = 750 }, { id = 7073 }, { id = 2654 } } } })
 at(82.074) player:target(u_989f54f5af, { echo = 0.506 })
+at(82.171) player:castFailed(78, { error = "TARGETS_DEAD" })
 at(82.292) player:stopAttack()
+-- Pressed again on the next wolf: queued at once (recorded: its SENT in
+-- the press's moment), dropped as the corpse is targeted, its failure
+-- told twice more as the attack stops (recorded).
+at(82.416) strike(0)
 at(82.416) player:startAttack()
-at(82.416) player:useSpell(78)
-at(82.515) player:loot(u_fed254bade, { auto = true, bagsAfter = { 0.113, 0.231 }, dataAfter = { 0.278 }, slotsAfter = { 0.536, 0.694, 0.851 } })
+at(82.515) player:loot(u_fed254bade, { auto = true, bagsAfter = { 0.113, 0.231 }, dataAfter = { 0.278 }, slotsAfter = { 0.530, 0.688, 0.845 } })
+-- The health and rage regained in the first slot's bags' moment, before
+-- the log's word (recorded, 83.708).
+at(82.515) e.beforeEvent("UNIT_QUEST_LOG_CHANGED", function()
+    player:heal(60)
+    player:setPower(20)
+end)
+at(82.530) player:spellFailedQuiet(78)
 at(82.530) player:target(u_fed254bade, { echo = 0.394 })
 at(82.809) player:stopAttack()
+at(82.809) player:spellFailedQuiet(78)
+at(82.809) player:spellFailedQuiet(78)
 at(82.924) player:leaveCombat()
-at(83.708) player:heal(60)
-at(83.708) player:setPower(20)
 at(84.394) bystander("Creature-0-6782-0-7-257-212FF47877", 257, "Kobold Worker")
 at(85.764) player:target(u_3139e0d9e3, { echo = 0.463 })
 at(85.820) player:setPower(20)
 at(86.072) player:startAttack()
+-- The wolf on the player in the swing's packet, its own update after the
+-- swing's rage, the rage told twice with its blow (recorded).
+at(86.599) attackWithSwing(nil, u_3139e0d9e3)
 at(86.599) player:swing(u_3139e0d9e3, 14, { indicator = "CRITICAL", power = 20, textAfter = 0.5 })
-at(86.599) u_3139e0d9e3:target(player)
+at(86.599) e.tellTurns()
+at(86.599) player:setPower(20)
 at(86.599) u_3139e0d9e3:swing(player, 1, { victimPower = 20, textAfter = 0.3 })
 at(86.599) u_3139e0d9e3:setThreat(11)
 at(87.066) player:raiseSkill("Defense", 6)
@@ -412,8 +452,12 @@ at(92.735) CloseLoot() -- walked off
 at(93.655) player:target(u_fba621fce1, { echo = 0.614 })
 at(93.932) player:startAttack()
 at(93.932) player:setPower(20)
+-- The wolf's turn told before the swing's combat state (recorded).
+at(95.447) e.beforeEvent("PLAYER_REGEN_DISABLED", function()
+    u_fba621fce1:target(player)
+    e.tellTurns()
+end)
 at(95.447) player:swing(u_fba621fce1, 6, { power = 20, textAfter = 0.534 })
-at(95.447) u_fba621fce1:target(player)
 at(95.447) u_fba621fce1:swing(player, 1, { victimPower = 20, textAfter = 0.335 })
 at(95.447) u_fba621fce1:setThreat(5)
 at(95.629) player:setPower(20)

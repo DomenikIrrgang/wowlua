@@ -775,7 +775,19 @@ pub fn control_spell_failed_quiet(vm: &mut Vm, c: NativeCall) -> Ret {
         Value::Table(t) => field(vm, t, "client").truthy(),
         _ => false,
     };
-    let g = if client {
+    // The spell queued for the next swing failing so: no longer queued,
+    // told with its own GUID (recorded once, `quest` 82.530: Heroic Strike
+    // queued, the target changed to a corpse).
+    let queued = match &engine(vm).units.casting.next_swing {
+        Some((spell, g)) if *spell == id && !client => Some(g.clone()),
+        _ => None,
+    };
+    if queued.is_some() {
+        engine_mut(vm).units.casting.next_swing = None;
+    }
+    let g = if let Some(g) = queued {
+        g
+    } else if client {
         client_guid(vm, id)
     } else {
         new_guid(vm, id)

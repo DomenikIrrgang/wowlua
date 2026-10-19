@@ -77,7 +77,8 @@ pub struct Unit {
     /// The player's threat on this creature (`setThreat`).
     pub threat: Option<f64>,
     /// Dead with the player on its threat list, the list's update not told
-    /// yet (told as the player leaves combat, or by `setThreat(nil)`).
+    /// yet (told as the player leaves combat, or by `setThreat(nil)`); its
+    /// `threat` kept meanwhile.
     pub listed_dead: bool,
     /// What its corpse holds (`kill({ loot })`): items and counts.
     pub loot: Vec<(i64, f64)>,
@@ -1882,7 +1883,11 @@ fn control_set_threat(vm: &mut Vm, c: NativeCall) -> Ret {
         engine_mut(vm).units.list[me.0].threat = None;
         engine_mut(vm).units.list[me.0].listed_dead = false;
         fire_unit(vm, "UNIT_THREAT_LIST_UPDATE", me, &[]);
-        let any = engine(vm).units.list.iter().any(|u| u.threat.is_some());
+        let any = engine(vm)
+            .units
+            .list
+            .iter()
+            .any(|u| u.threat.is_some() && !u.dead);
         if !any && engine(vm).units.threat_situation {
             engine_mut(vm).units.threat_situation = false;
             fire_unit(vm, "UNIT_THREAT_SITUATION_UPDATE", PLAYER, &[]);
@@ -1901,13 +1906,16 @@ fn control_set_threat(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// The player's threat on `mob`: whether tanking, the status, the scaled
-/// and raw percentages, the value; none without threat or alive (recorded:
+/// and raw percentages, the value; none without threat (recorded:
 /// `true, 3, 100, 255, 5` alone on a wolf's list, before it turned on the
-/// player). Unverified: others on the list (here the player is alone).
+/// player). A dead one keeps the player's entry, its last value, until the
+/// player leaves combat (recorded, `quest`: 4 of 4 corpses targeted again
+/// before the combat's end, 45, 44, 44 and 17; 4 of 4 after it, none).
+/// Unverified: others on the list (here the player is alone).
 fn threat_of(vm: &Vm, unit: UnitId, mob: UnitId) -> Option<(bool, f64, f64, f64, f64)> {
     let u = &engine(vm).units;
     let m = &u.list[mob.0];
-    if unit != PLAYER || m.dead {
+    if unit != PLAYER || (m.dead && !m.listed_dead) {
         return None;
     }
     let value = m.threat?;
@@ -2426,7 +2434,6 @@ pub(crate) fn died(vm: &mut Vm, me: UnitId, lootable: bool) {
         let u = &mut engine_mut(vm).units.list[me.0];
         u.in_combat = false;
         u.listed_dead |= u.threat.is_some();
-        u.threat = None;
     }
     let instance = identity_restricted(vm);
     let loot = |vm: &mut Vm| {
@@ -3224,6 +3231,7 @@ fn control_leave_combat(vm: &mut Vm, c: NativeCall) -> Ret {
             .collect();
         for id in listed {
             engine_mut(vm).units.list[id.0].listed_dead = false;
+            engine_mut(vm).units.list[id.0].threat = None;
             if situation {
                 fire_unit(vm, "UNIT_THREAT_LIST_UPDATE", id, &[]);
             }
