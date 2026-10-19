@@ -7,10 +7,10 @@
 //! of its maximum lower (`UPDATE_INVENTORY_DURABILITY`), every action unusable. Blizzard's UI
 //! shows its death popup; its Release (`RepopMe()`): a round trip later the
 //! ghost (`PLAYER_ALIVE()`, the flags, the faction, the ghost's spell's
-//! cooldown, the corpse tracked). `e.nearCorpse(near)`:
+//! cooldown, its aura Ghost, the corpse tracked). `e.nearCorpse(near)`:
 //! `CORPSE_IN_RANGE()` / `CORPSE_OUT_OF_RANGE()` (Blizzard's popup
 //! offers the corpse); `RetrieveCorpse()`: a round trip later alive
-//! (`PLAYER_UNGHOST()`, the ghost's hidden aura removed: `UNIT_AURA`).
+//! (`PLAYER_UNGHOST()`, the ghost's aura removed: `UNIT_AURA`).
 //!
 //! Unverified: where the ghost appears, the health on
 //! resurrection (half), the release timer counting down, spirit healers,
@@ -22,8 +22,10 @@ use wowlua_vm::{NativeCall, NativeFn, Value, Vm};
 use crate::units::{self, PLAYER};
 use crate::{engine, engine_mut, widgets};
 
-/// The ghost's spell (its cooldown told at release, recorded).
+/// The ghost's spell (its cooldown told at release, its aura on the
+/// ghost: recorded).
 const GHOST_SPELL: f64 = 8326.0;
+const GHOST_ICON: f64 = 132331.0;
 /// The death's durability loss, in percent (recorded message).
 const DURABILITY_LOSS: f64 = 10.0;
 /// The release's second packet after its first (recorded).
@@ -180,6 +182,30 @@ fn released(vm: &mut Vm, _c: NativeCall) -> Ret {
     for e in ["UNIT_FLAGS", "PLAYER_FLAGS_CHANGED", "UNIT_FACTION"] {
         units::fire_unit(vm, e, PLAYER, &[]);
     }
+    // The ghost's aura: Ghost, harmful, without end, the player's own but
+    // not the player's to apply (its instance the death's `ghostAura`,
+    // recorded).
+    let data = vm.new_table();
+    let name = vm.str("Ghost");
+    let me = vm.str("player");
+    let instance = engine(vm).world.death.ghost_aura;
+    let mut fields = vec![
+        ("spellId", Value::Num(GHOST_SPELL)),
+        ("name", name),
+        ("icon", Value::Num(GHOST_ICON)),
+        ("harmful", Value::Bool(true)),
+        ("sourceUnit", me),
+        ("canApplyAura", Value::Bool(false)),
+    ];
+    if instance > 0.0 {
+        fields.push(("auraInstanceID", Value::Num(instance)));
+    }
+    for (k, v) in fields {
+        let k = vm.str(k);
+        let _ = vm.heap.table_mut(data).set(k, v);
+    }
+    let instance = crate::auras::apply(vm, PLAYER, data);
+    engine_mut(vm).world.death.ghost_aura = instance;
     fire(vm, "ACTIONBAR_UPDATE_COOLDOWN", &[]);
     fire(vm, "BAG_UPDATE_COOLDOWN", &[]);
     fire(
@@ -247,19 +273,9 @@ fn revived(vm: &mut Vm, _c: NativeCall) -> Ret {
     fire(vm, "CORPSE_OUT_OF_RANGE", &[]);
     units::fire_unit(vm, "UNIT_FACTION", PLAYER, &[]);
     let changed = crate::actions::usability_changed(vm);
-    // The ghost's hidden aura gone.
+    // The ghost's aura gone.
     let aura = engine(vm).world.death.ghost_aura;
-    let info = vm.new_table();
-    let k = vm.str("isFullUpdate");
-    let _ = vm.heap.table_mut(info).set(k, Value::Bool(false));
-    let removed = vm.new_table();
-    let _ = vm
-        .heap
-        .table_mut(removed)
-        .set(Value::Num(1.0), Value::Num(aura));
-    let k = vm.str("removedAuraInstanceIDs");
-    let _ = vm.heap.table_mut(info).set(k, Value::Table(removed));
-    units::fire_unit(vm, "UNIT_AURA", PLAYER, &[Value::Table(info)]);
+    crate::auras::remove(vm, PLAYER, aura);
     if changed {
         fire(vm, "ACTIONBAR_UPDATE_USABLE", &[]);
     }

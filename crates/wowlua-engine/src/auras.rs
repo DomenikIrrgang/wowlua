@@ -37,6 +37,9 @@ pub struct Aura {
     pub boss: bool,
     pub raid: bool,
     pub points: Vec<f64>,
+    /// Whether the player could apply it (`canApplyAura`; by default an
+    /// aura of the player's own).
+    pub can_apply: Option<bool>,
 }
 
 fn field(vm: &mut Vm, t: TableRef, key: &str) -> Value {
@@ -60,7 +63,10 @@ fn aura_data(vm: &mut Vm, a: &Aura) -> Value {
         ("applications", Value::Num(a.applications)),
         ("auraInstanceID", Value::Num(a.instance)),
         ("canActivePlayerDispel", Value::Bool(false)),
-        ("canApplyAura", Value::Bool(from_player)),
+        (
+            "canApplyAura",
+            Value::Bool(a.can_apply.unwrap_or(from_player)),
+        ),
         ("duration", Value::Num(a.duration)),
         ("expirationTime", Value::Num(a.expiration)),
         ("hideOnPartyFrames", Value::Bool(false)),
@@ -246,6 +252,10 @@ pub fn apply(vm: &mut Vm, me: UnitId, data: TableRef) -> f64 {
         boss: flag(vm, "boss"),
         raid: flag(vm, "raid"),
         points,
+        can_apply: match field(vm, data, "canApplyAura") {
+            Value::Bool(b) => Some(b),
+            _ => None,
+        },
     };
     engine_mut(vm).units.auras.push(aura.clone());
     fire_update(vm, me, Some(&aura), &[]);

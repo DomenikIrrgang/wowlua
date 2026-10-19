@@ -1303,7 +1303,7 @@ fn the_engine_plays_combat_as_the_client_did() {
 
 /// How many of the death scenario's lines the engine plays as the client
 /// did: only ever up.
-const DEATH_MATCHED: usize = 1398;
+const DEATH_MATCHED: usize = 1400;
 
 /// The death scenario: a fight lost, the spirit released, the corpse taken.
 #[test]
