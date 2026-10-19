@@ -927,7 +927,14 @@ fn api_function(vm: &mut Vm, c: NativeCall) -> Ret {
     if protection::refuses_without_user(vm, f.name) {
         return Ok(defaults(vm, api, &f.doc));
     }
+    // Nothing, by the documentation's requirements (`extras`).
+    if extras::silent_unchecked(&f.doc) {
+        return Ok(vec![]);
+    }
     args::check(vm, api, f, &c)?;
+    if extras::silent_checked(&f.doc) {
+        return Ok(vec![]);
+    }
     let Some(behaviour) = behaviour else {
         // Blizzard's code gets empty values; the addon's code an error.
         if protection::blizzard_caller(vm) {

@@ -565,25 +565,31 @@ fn get_world_pvp_queue_status(vm: &mut Vm, _c: NativeCall) -> Ret {
     ])
 }
 
-// ----------------------------------------------- challenge mode colours
+// ----------------------------------------------- challenge mode answers
 
-/// A colour object (Blizzard's `CreateColor`), white; nil before
-/// Blizzard's code defined it.
-fn white(vm: &mut Vm) -> Ret {
-    let create = vm.get_global("CreateColor");
-    if !matches!(create, Value::Func(_)) {
-        return Ok(vec![Value::Nil]);
-    }
-    let one = Value::Num(1.0);
-    let color = vm.call(create, &[one, one, one, one])?;
-    Ok(vec![color.first().copied().unwrap_or(Value::Nil)])
+/// `C_ChallengeMode.Get…RarityColor(score or level)`: nil, no score or
+/// keystone being of any rarity (the full probe, WoW Forever 1.60.1: nil
+/// for -1, 0, 1, 21 and 2147483647; Blizzard's code falls back to
+/// `HIGHLIGHT_FONT_COLOR`).
+fn rarity_color(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Nil])
 }
 
-/// `C_ChallengeMode.Get…RarityColor(score or level)`: white, no score
-/// or keystone being of any rarity (the documentation gives no results;
-/// retail returns a colour object; unverified).
-fn rarity_color(vm: &mut Vm, _c: NativeCall) -> Ret {
-    white(vm)
+/// `C_ChallengeMode.GetPowerLevelDamageHealthMod(powerLevel)`: no damage
+/// or health bonus, and -2; nothing for a level below 0 (the full probe:
+/// 0, -2 for 0, 1, 1.5 and 2147483647; nothing for -1).
+fn power_level_mod(vm: &mut Vm, c: NativeCall) -> Ret {
+    if matches!(vm.hidden(c.arg(1)), Value::Num(n) if n.trunc() < 0.0) {
+        return Ok(vec![]);
+    }
+    Ok(vec![Value::Num(0.0), Value::Num(-2.0)])
+}
+
+/// A delve answer of 1 whatever is asked (the full probe: a curio's
+/// rarity common, `GetCurioRarityByTraitCondAccountElementID` of -1 to
+/// 2147483647; the world tier `GetWorldTierDifficultyForActivePlayer`).
+fn one(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(1.0)])
 }
 
 // --------------------------------------------------------- the calendar
@@ -813,7 +819,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Scenario.GetSupersededObjectives", empty_list),
         ("C_Scenario.GetProvingGroundsInfo", zeros4),
         ("C_Scenario.TreatScenarioAsDungeon", no),
-        // Challenge modes' colours.
+        // Challenge modes.
         ("C_ChallengeMode.GetDungeonScoreRarityColor", rarity_color),
         ("C_ChallengeMode.GetKeystoneLevelRarityColor", rarity_color),
         (
@@ -824,6 +830,13 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             "C_ChallengeMode.GetSpecificDungeonScoreRarityColor",
             rarity_color,
         ),
+        (
+            "C_ChallengeMode.GetPowerLevelDamageHealthMod",
+            power_level_mod,
+        ),
+        // Delves.
+        ("C_DelvesUI.GetCurioRarityByTraitCondAccountElementID", one),
+        ("C_DelvesUI.GetWorldTierDifficultyForActivePlayer", one),
         // The calendar's range.
         ("C_Calendar.GetMinDate", get_min_date),
         ("C_Calendar.GetMaxCreateDate", get_max_create_date),
@@ -1060,7 +1073,6 @@ const NOTHING_HERE: &[(&str, NativeFn)] = &[
     ("C_ChallengeMode.ClearKeystone", nothing),
     ("C_ChallengeMode.CloseKeystoneFrame", nothing),
     ("C_ChallengeMode.GetMapScoreInfo", nothing),
-    ("C_ChallengeMode.GetPowerLevelDamageHealthMod", nothing),
     ("C_ChallengeMode.RequestLeaders", nothing),
     ("C_DelvesUI.RequestPartyEligibilityForDelveTiers", nothing),
     ("C_DelvesUI.SaveSeenCuriosBySlotType", nothing),
@@ -1122,7 +1134,6 @@ const NOTHING_HERE: &[(&str, NativeFn)] = &[
     ("C_Calendar.EventRemoveInvite", nothing),
     ("C_Calendar.EventRemoveInviteByGuid", nothing),
     ("C_Calendar.EventSetModerator", nothing),
-    ("C_ChallengeMode.GetGuildLeaders", nothing),
     ("C_EncounterJournal.SetPreviewMythicPlusLevel", nothing),
     ("C_EncounterJournal.SetPreviewPvpTier", nothing),
     ("C_LFGInfo.ConfirmLfgExpandSearch", nothing),
@@ -1138,14 +1149,6 @@ const NOTHING_HERE: &[(&str, NativeFn)] = &[
     ("C_ChallengeMode.GetActiveKeystoneInfo", documented),
     ("C_LFGList.GetAdvancedFilter", documented),
     ("C_PartyInfo.GetRestrictPings", documented),
-    (
-        "C_DelvesUI.GetCurioRarityByTraitCondAccountElementID",
-        documented,
-    ),
-    (
-        "C_DelvesUI.GetWorldTierDifficultyForActivePlayer",
-        documented,
-    ),
     ("C_Calendar.EventGetInviteSortCriterion", documented),
     ("C_Calendar.GetDefaultGuildFilter", documented),
     ("C_EncounterJournal.GetSlotFilter", documented),
@@ -1193,6 +1196,8 @@ const NOTHING_HERE: &[(&str, NativeFn)] = &[
     // Lists: empty.
     ("C_WeeklyRewards.GetActivities", empty_list),
     ("C_ChallengeMode.GetMapTable", empty_list),
+    // The full probe: `{}` (unlike the documentation's nothing).
+    ("C_ChallengeMode.GetGuildLeaders", empty_list),
     ("C_MythicPlus.GetRunHistory", empty_list),
     ("C_Calendar.GetClubCalendarEvents", empty_list),
     ("C_LootHistory.GetAllEncounterInfos", empty_list),
@@ -1278,6 +1283,8 @@ const NOTHING_HERE: &[(&str, NativeFn)] = &[
     ("C_DelvesUI.GetDelveEntranceHeaderString", nil),
     ("C_DelvesUI.GetDelveEntranceTitleString", nil),
     ("C_DelvesUI.GetTieredEntranceOptionalAffixTraitTreeID", nil),
+    // The full probe: nil whatever the companion.
+    ("C_DelvesUI.GetFlavorNodeNameForCompanion", nil),
     ("C_LootHistory.GetInfoForEncounter", nil),
     ("C_MythicPlus.GetCurrentUIDisplaySeason", nil),
     ("C_MythicPlus.GetRewardLevelFromKeystoneLevel", nil),
@@ -1295,9 +1302,7 @@ const NOTHING_HERE: &[(&str, NativeFn)] = &[
     ("C_PvP.GetMatchPVPStatColumn", nil),
     ("C_ScenarioInfo.GetJailersTowerTypeString", nil),
     // Texts: empty.
-    ("C_DelvesUI.GetCurioLink", empty_string),
     ("C_DeathRecap.GetRecapLink", empty_string),
-    ("C_DelvesUI.GetFlavorNodeNameForCompanion", empty_string),
     ("C_DelvesUI.GetLockedTextForCompanion", empty_string),
     ("C_LFGInfo.GetActiveLFGDungeonName", empty_string),
     ("C_LFGList.GetPlaystyleString", empty_string),
