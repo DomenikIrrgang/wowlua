@@ -1265,6 +1265,17 @@ fn the_engine_plays_flight_as_the_client_did() {
     plays_as_the_client_did("flight", FLIGHT_MATCHED);
 }
 
+/// How many of the gossip2 scenario's lines the engine plays as the client
+/// did: only ever up.
+const GOSSIP2_MATCHED: usize = 152;
+
+/// The gossip2 scenario: a merchant's gossip, his goods browsed, his gossip
+/// again, closed with Escape.
+#[test]
+fn the_engine_plays_gossip2_as_the_client_did() {
+    plays_as_the_client_did("gossip2", GOSSIP2_MATCHED);
+}
+
 /// How many of the trainer scenario's lines the engine plays as the client
 /// did: only ever up.
 const TRAINER_MATCHED: usize = 171;

@@ -7,7 +7,8 @@
 //! `SelectOptionByIndex(orderIndex)`, Blizzard's buttons):
 //! `GOSSIP_CONFIRM_CANCEL()` at once, the server's `GOSSIP_CLOSED(true)` a
 //! round trip later and what the option opens (`opens = "trainer"`: the
-//! NPC's trainer, `trainer.rs`).
+//! NPC's trainer, `trainer.rs`; `"taxi"`; `"merchant"` with the option's
+//! `merchant` table, `openMerchant`'s).
 //!
 //! The text usually comes with the interaction, before its event
 //! (recorded: two flight masters, an NPC talked to twice, the first time
@@ -241,8 +242,13 @@ fn select_option_by_index(vm: &mut Vm, c: NativeCall) -> Ret {
 fn choose(vm: &mut Vm, option: TableRef) -> Ret {
     fire(vm, "GOSSIP_CONFIRM_CANCEL", &[]);
     let opens = field(vm, option, "opens");
+    let merchant = field(vm, option, "merchant");
     let delay = crate::clock::server_delay(vm);
-    let later = vm.native_with("gossipChosen", chosen_option as NativeFn, vec![opens]);
+    let later = vm.native_with(
+        "gossipChosen",
+        chosen_option as NativeFn,
+        vec![opens, merchant],
+    );
     crate::clock::after_engine(vm, delay, later);
     Ok(vec![])
 }
@@ -259,6 +265,13 @@ fn chosen_option(vm: &mut Vm, c: NativeCall) -> Ret {
     match opens.as_str() {
         "trainer" => crate::trainer::open(vm, npc),
         "taxi" => crate::taxi::open(vm, npc),
+        // The vendor's window, its goods the option's `merchant` table
+        // (recorded: gossip2).
+        "merchant" => {
+            if let Some(Value::Table(data)) = c.upvals.get(1).copied() {
+                crate::merchant::open(vm, data, Some(npc))?;
+            }
+        }
         _ => {}
     }
     Ok(vec![])

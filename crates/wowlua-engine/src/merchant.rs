@@ -26,7 +26,7 @@
 //! repair's `UPDATE_INVENTORY_DURABILITY` per item then `PLAYER_MONEY`.
 
 use wowlua_vm::stdlib::Ret;
-use wowlua_vm::{NativeCall, NativeFn, TableRef, Value, Vm};
+use wowlua_vm::{LuaError, NativeCall, NativeFn, TableRef, Value, Vm};
 
 use crate::character::{self, Held};
 use crate::{engine, engine_mut, units, widgets};
@@ -102,6 +102,13 @@ pub fn control_open(vm: &mut Vm, c: NativeCall) -> Ret {
     let Value::Table(data) = c.arg(1) else {
         return Err(vm.error("mock.openMerchant: a table of the vendor's data expected"));
     };
+    open(vm, data, None)?;
+    Ok(vec![])
+}
+
+/// A vendor's window opened (`openMerchant`'s table): by `npc` (a gossip's
+/// option), else by an NPC of its name.
+pub fn open(vm: &mut Vm, data: TableRef, npc: Option<units::UnitId>) -> Result<(), LuaError> {
     let mut items = Vec::new();
     if let Value::Table(list) = field(vm, data, "items") {
         let n = vm.heap.table(list).border();
@@ -138,7 +145,10 @@ pub fn control_open(vm: &mut Vm, c: NativeCall) -> Ret {
     if merchant(vm).open {
         close(vm);
     }
-    let npc = units::spawn_named(vm, &name);
+    let npc = match npc {
+        Some(n) => n,
+        None => units::spawn_named(vm, &name),
+    };
     engine_mut(vm).units.npc = Some(npc);
     {
         let m = merchant_mut(vm);
@@ -156,7 +166,7 @@ pub fn control_open(vm: &mut Vm, c: NativeCall) -> Ret {
     );
     let later = vm.native("merchantFilled", filled);
     crate::clock::after_engine(vm, 1.0 / 60.0, later);
-    Ok(vec![])
+    Ok(())
 }
 
 /// A frame after opening: the items' filter updates, `MERCHANT_UPDATE`.
@@ -241,10 +251,16 @@ fn item_info(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// A merchant's goods' links: in the vendor's context (14, recorded:
 /// `/stdtest engine scenario vendor`).
+/// `GetMerchantItemLink(i)`: the goods' link in the vendor's context; none
+/// for an item whose data is not loaded, no name (recorded: gossip2's
+/// goods).
 fn item_link(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(g) = goods(vm, &c) else {
         return Ok(vec![]);
     };
+    if character::item_field(vm, g.id, "name").is_nil() {
+        return Ok(vec![]);
+    }
     let link = character::link_in_context(vm, g.id, "14", &[]);
     Ok(link.map(|l| vec![vm.str(&l)]).unwrap_or_default())
 }
