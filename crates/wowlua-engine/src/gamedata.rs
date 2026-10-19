@@ -216,16 +216,58 @@ pub fn scanned_spell(vm: &mut Vm, id: i64) -> Option<TableRef> {
         return None;
     }
     let s = spell_table().get(&id)?;
+    // The scan's icon, else the recorded spellbook item's (the full probe,
+    // 1.60.1: Attack's 133728 and Cannibalize's 132278, which the scan
+    // lacked, are their spellbook items' icons).
+    let icon = s
+        .icon
+        .or_else(|| book_icon(vm, id as f64))
+        .unwrap_or(NO_ICON);
     let t = vm.new_table();
     let name = vm.str(s.name);
     set(vm, t, "name", name);
-    set(vm, t, "iconID", Value::Num(s.icon.unwrap_or(NO_ICON)));
+    set(vm, t, "iconID", Value::Num(icon));
     let subtext = vm.str(s.subtext);
     set(vm, t, "subtext", subtext);
     set(vm, t, "cached", Value::Bool(true));
     widgets::keep(vm, Value::Table(t));
     engine_mut(vm).world.data.scanned.insert(id, t);
     Some(t)
+}
+
+/// The icon of the recorded spellbook item holding the spell.
+fn book_icon(vm: &mut Vm, id: f64) -> Option<f64> {
+    let Some(Value::Table(item)) = crate::stats::spellbook_item(vm, id) else {
+        return None;
+    };
+    match field(vm, item, "iconID") {
+        Value::Num(n) => Some(n),
+        _ => None,
+    }
+}
+
+/// The call with a spell's name in place of its ID: the spellbook's spell
+/// of that name, else a defined spell's (the full probe, 1.60.1:
+/// `C_Spell.GetSpellName(6603)`, "Attack", answered as 6603 by
+/// `GetSpellInfo`, `GetSpellName`, `GetSpellTexture`, `GetSpellSubtext`,
+/// `GetSpellLink`, `GetSpellCooldown`, `DoesSpellExist`,
+/// `IsSpellDataCached`, `GetBaseSpell` and `GetOverrideSpell`).
+fn by_id(vm: &mut Vm, mut c: NativeCall) -> NativeCall {
+    if let Value::Str(_) = vm.hidden(c.arg(1))
+        && let Some(id) = crate::spellinfo::spell_of(vm, c.arg(1))
+        && !c.args.is_empty()
+    {
+        c.args[0] = Value::Num(id);
+    }
+    c
+}
+
+/// Whether the client has the spell: defined or probed, of its spell
+/// table, or in the recorded spellbook.
+fn spell_exists(vm: &mut Vm, id: f64) -> bool {
+    spell_data(vm, id as i64).is_some()
+        || scanned_spell(vm, id as i64).is_some()
+        || crate::stats::spellbook_item(vm, id).is_some()
 }
 
 /// A spell's name: its data's (`spell_data`), else the client's spell
@@ -289,6 +331,7 @@ fn unrecorded(vm: &mut Vm, c: &NativeCall) -> Result<(i64, TableRef), Vec<Value>
 /// `C_Spell.GetSpellInfo(spell)`: a defined or probed spell's info, else
 /// the client's recorded answer, else the spell table's spell's.
 fn get_spell_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    let c = by_id(vm, c);
     let (id, s) = match spell(vm, &c) {
         Some(found) => found,
         None => match unrecorded(vm, &c) {
@@ -314,10 +357,21 @@ fn get_spell_info(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn spell_field(key: &'static str) -> impl Fn(&mut Vm, NativeCall) -> Ret {
-    move |vm: &mut Vm, c: NativeCall| match spell(vm, &c) {
+    move |vm: &mut Vm, c: NativeCall| {
+        let c = by_id(vm, c);
+        spell_field_of(vm, &c, key)
+    }
+}
+
+fn spell_field_of(vm: &mut Vm, c: &NativeCall, key: &str) -> Ret {
+    match spell(vm, c) {
         Some((_, s)) => Ok(vec![field(vm, s, key)]),
-        None => match unrecorded(vm, &c) {
+        None => match unrecorded(vm, c) {
             Ok((_, s)) => Ok(match field(vm, s, key) {
+                // A spell of the client's table without a description: an
+                // empty one (the full probe, 1.60.1: Attack's ""; unverified:
+                // a spell whose text the engine lacks).
+                Value::Nil if key == "description" => vec![vm.str("")],
                 Value::Nil => vec![],
                 v => vec![v],
             }),
@@ -336,14 +390,35 @@ macro_rules! spell_fields {
 
 spell_fields!(
     get_spell_name => "name",
-    get_spell_texture => "iconID",
     get_spell_description => "description",
     get_spell_charges => "charges"
 );
 
-/// `GetSpellCooldown`: the spell's `cooldown`, or none running.
+/// `C_Spell.GetSpellTexture(spell)`: its icon, its original icon (the
+/// same) and no conditional icon (the full probe, 1.60.1: three values for
+/// Attack and Cannibalize).
+fn get_spell_texture(vm: &mut Vm, c: NativeCall) -> Ret {
+    let c = by_id(vm, c);
+    let r = spell_field_of(vm, &c, "iconID")?;
+    Ok(match r.as_slice() {
+        [icon @ Value::Num(_)] => vec![*icon, *icon, Value::Nil],
+        _ => r,
+    })
+}
+
+/// `GetSpellCooldown`: the spell's `cooldown`, or none running; any
+/// spell of the client's (the full probe, 1.60.1: Attack's and
+/// Cannibalize's, by ID or name), nothing for one it lacks.
 fn get_spell_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
-    let Some((id, s)) = spell(vm, &c) else {
+    let c = by_id(vm, c);
+    let found = match spell(vm, &c) {
+        Some(found) => Some(found),
+        None => match vm.hidden(c.arg(1)) {
+            Value::Num(n) if spell_exists(vm, n) => Some((n as i64, vm.new_table())),
+            _ => None,
+        },
+    };
+    let Some((id, s)) = found else {
         return Ok(vec![]);
     };
     if let Value::Table(cd) = field(vm, s, "cooldown") {
@@ -388,7 +463,15 @@ fn get_spell_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `|cff71d5ff|Hspell:81:0|h[Dodge]|h|r`), and so is warcraft.wiki.gg's
 /// Hyperlinks page's (`spell:spellId:glyphId`). Unverified for this
 /// function itself.
+///
+/// A glyph above 0 gives no link (the full probe, 1.60.1: glyph 1
+/// nothing, 0 and none the link; the spellbook's -1 the link too;
+/// unverified: a real glyph).
 fn get_spell_link(vm: &mut Vm, c: NativeCall) -> Ret {
+    let c = by_id(vm, c);
+    if matches!(vm.hidden(c.arg(2)), Value::Num(g) if g > 0.0) {
+        return Ok(vec![]);
+    }
     let (id, s) = match spell(vm, &c) {
         Some(found) => found,
         None => match unrecorded(vm, &c) {
@@ -405,16 +488,21 @@ fn get_spell_link(vm: &mut Vm, c: NativeCall) -> Ret {
     ])
 }
 
+/// `C_SpellBook.IsSpellKnown(spellID [, bank])`: a defined spell's
+/// `known` (`petKnown` for the pet's bank, 1), else whether the player's
+/// recorded spellbook holds it (the full probe, 1.60.1: Attack and
+/// Cannibalize known for bank 0, none and `"x"`, not for the pet's).
 fn is_spell_known(vm: &mut Vm, c: NativeCall) -> Ret {
+    let pet = matches!(c.arg(2), Value::Num(n) if n == 1.0);
     let Some((_, s)) = spell(vm, &c) else {
-        return Ok(vec![Value::Bool(false)]);
+        let book = match vm.hidden(c.arg(1)) {
+            Value::Num(n) if !pet => crate::stats::spellbook_slot_of(vm, n).is_some(),
+            _ => false,
+        };
+        return Ok(vec![Value::Bool(book)]);
     };
     // Spell bank 1 is the pet's.
-    let key = if matches!(c.arg(2), Value::Num(n) if n == 1.0) {
-        "petKnown"
-    } else {
-        "known"
-    };
+    let key = if pet { "petKnown" } else { "known" };
     Ok(vec![Value::Bool(field(vm, s, key).truthy())])
 }
 
@@ -454,11 +542,54 @@ fn get_item_spell(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `C_Spell.GetBaseSpell(spell [, spec])`: the spell's ID, as the
 /// documentation says for a spell without an override (the engine models
 /// none); a name the spell's ID, nothing for a spell not known by it.
+///
+/// The full probe (1.60.1): a name the spellbook's spell's ID, a string
+/// naming no spell 0 (as `GetOverrideSpell`).
 fn get_base_spell(vm: &mut Vm, c: NativeCall) -> Ret {
-    match vm.hidden(c.arg(1)) {
-        Value::Num(n) => Ok(vec![Value::Num(n)]),
-        _ => Ok(spell(vm, &c).map_or_else(Vec::new, |(id, _)| vec![Value::Num(id as f64)])),
-    }
+    get_override_spell(vm, c)
+}
+
+/// `C_SpellBook.FindBaseSpellByID(spellID)`,
+/// `C_SpellBook.FindSpellOverrideByID(spellID)`: a spell the client has
+/// itself (no overrides modelled), nil for one it lacks (the full probe,
+/// 1.60.1: 0 nil, 1, Attack and Cannibalize themselves).
+fn find_spell_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(vec![match vm.hidden(c.arg(1)) {
+        Value::Num(n) if spell_exists(vm, n) => Value::Num(n),
+        _ => Value::Nil,
+    }])
+}
+
+/// `C_Spell.GetSpellIDForSpellIdentifier(spell)`: the ID of a spell the
+/// client has, a name's too; nothing for none (the full probe, 1.60.1: 0
+/// and `"x"` nothing).
+fn get_spell_id_for_identifier(vm: &mut Vm, c: NativeCall) -> Ret {
+    let c = by_id(vm, c);
+    Ok(match vm.hidden(c.arg(1)) {
+        Value::Num(n) if spell_exists(vm, n) => vec![Value::Num(n)],
+        _ => vec![],
+    })
+}
+
+/// `C_Spell.IsAutoAttackSpell(spell)`: Attack (6603), by ID or name (the
+/// full probe, 1.60.1).
+fn is_auto_attack_spell(vm: &mut Vm, c: NativeCall) -> Ret {
+    let c = by_id(vm, c);
+    Ok(vec![Value::Bool(
+        matches!(vm.hidden(c.arg(1)), Value::Num(n) if n == 6603.0),
+    )])
+}
+
+/// `C_Spell.IsRangedAutoAttackSpell(spell)`: Auto Shot (75) and Shoot
+/// (5019), and a spell the client lacks (the full probe, 1.60.1: 0 and
+/// `"x"` true, Attack and Cannibalize false; unverified: the ranged ones).
+fn is_ranged_auto_attack_spell(vm: &mut Vm, c: NativeCall) -> Ret {
+    let c = by_id(vm, c);
+    let ranged = match vm.hidden(c.arg(1)) {
+        Value::Num(n) => n == 75.0 || n == 5019.0 || !spell_exists(vm, n),
+        _ => true,
+    };
+    Ok(vec![Value::Bool(ranged)])
 }
 
 /// `C_SpellBook.IsSpellKnownOrInSpellBook(spellID [, bank,
@@ -496,6 +627,7 @@ fn client_spell(vm: &mut Vm, c: &NativeCall) -> bool {
 /// (unverified: the scan read every name without loading any, so the
 /// client keeps them at hand).
 fn is_spell_data_cached(vm: &mut Vm, c: NativeCall) -> Ret {
+    let c = by_id(vm, c);
     Ok(vec![Value::Bool(match spell(vm, &c) {
         Some((_, s)) => !matches!(field(vm, s, "cached"), Value::Bool(false)),
         None => client_spell(vm, &c) || scanned_arg(vm, &c).is_some(),
@@ -507,6 +639,7 @@ fn is_spell_data_cached(vm: &mut Vm, c: NativeCall) -> Ret {
 /// its spell table (every spell the scan named exists, as
 /// `C_Spell.GetSpellName` answered it).
 fn does_spell_exist(vm: &mut Vm, c: NativeCall) -> Ret {
+    let c = by_id(vm, c);
     if spell(vm, &c).is_some() {
         return Ok(vec![Value::Bool(true)]);
     }
@@ -522,6 +655,7 @@ fn does_spell_exist(vm: &mut Vm, c: NativeCall) -> Ret {
 /// else the spell table's (its rank where the scan read one, else ""
 /// as the client answers an unranked spell: the 133 recorded "").
 fn get_spell_subtext(vm: &mut Vm, c: NativeCall) -> Ret {
+    let c = by_id(vm, c);
     if let Some((_, s)) = spell(vm, &c) {
         return Ok(vec![field(vm, s, "subtext")]);
     }
@@ -843,10 +977,13 @@ fn get_item_subclass_info(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// The functions with behaviour here.
 /// `C_Spell.GetOverrideSpell(spell)`: the spell itself (unverified: no
-/// override modelled).
+/// override modelled); a name its spell's ID, a string naming no spell 0
+/// (the full probe, 1.60.1: "Attack" 6603, `"x"` 0).
 fn get_override_spell(vm: &mut Vm, c: NativeCall) -> Ret {
+    let c = by_id(vm, c);
     Ok(match vm.hidden(c.arg(1)) {
         Value::Num(n) => vec![Value::Num(n)],
+        Value::Str(_) => vec![Value::Num(0.0)],
         _ => vec![],
     })
 }
@@ -861,8 +998,21 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Spell.GetSpellCooldown", get_spell_cooldown),
         ("C_Spell.GetSpellLink", get_spell_link),
         ("C_Spell.GetOverrideSpell", get_override_spell),
-        // The same rule (unverified: the documented nil for no override).
-        ("C_SpellBook.FindSpellOverrideByID", get_override_spell),
+        ("C_SpellBook.FindSpellOverrideByID", find_spell_by_id),
+        ("C_SpellBook.FindBaseSpellByID", find_spell_by_id),
+        (
+            "C_Spell.GetSpellIDForSpellIdentifier",
+            get_spell_id_for_identifier,
+        ),
+        ("C_Spell.IsAutoAttackSpell", is_auto_attack_spell),
+        (
+            "C_Spell.GetSchoolString",
+            crate::spellinfo::get_school_string,
+        ),
+        (
+            "C_Spell.IsRangedAutoAttackSpell",
+            is_ranged_auto_attack_spell,
+        ),
         ("C_Spell.IsSpellDataCached", is_spell_data_cached),
         ("C_Spell.DoesSpellExist", does_spell_exist),
         ("C_Spell.GetSpellSubtext", get_spell_subtext),

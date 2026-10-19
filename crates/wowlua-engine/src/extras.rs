@@ -821,12 +821,33 @@ fn tooltip_unit_debuff(vm: &mut Vm, c: NativeCall) -> Ret {
 /// (`C_UnitAuras.GetAuraDataByAuraInstanceID`; unverified: the filter
 /// left out).
 fn tooltip_unit_aura_by_instance(vm: &mut Vm, c: NativeCall) -> Ret {
+    tooltip_aura_by_instance(vm, &c, None)
+}
+
+/// The buff form: none for a harmful aura (unverified).
+fn tooltip_unit_buff_by_instance(vm: &mut Vm, c: NativeCall) -> Ret {
+    tooltip_aura_by_instance(vm, &c, Some("isHelpful"))
+}
+
+/// The debuff form: none for a helpful aura (the full probe, 1.60.1: the
+/// player's buff by its instance nothing, by token and GUID).
+fn tooltip_unit_debuff_by_instance(vm: &mut Vm, c: NativeCall) -> Ret {
+    tooltip_aura_by_instance(vm, &c, Some("isHarmful"))
+}
+
+fn tooltip_aura_by_instance(vm: &mut Vm, c: &NativeCall, kind: Option<&str>) -> Ret {
     let aura = ask(
         vm,
         "C_UnitAuras.GetAuraDataByAuraInstanceID",
         &[c.arg(1), c.arg(2)],
     );
-    aura_tooltip(vm, aura.first().copied())
+    let aura = aura.first().copied();
+    if let (Some(kind), Some(Value::Table(t))) = (kind, aura)
+        && !field(vm, t, kind).truthy()
+    {
+        return Ok(vec![]);
+    }
+    aura_tooltip(vm, aura)
 }
 
 /// `C_TooltipInfo.GetWorldCursor()`: the unit under the cursor's
@@ -1415,11 +1436,11 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ),
         (
             "C_TooltipInfo.GetUnitBuffByAuraInstanceID",
-            tooltip_unit_aura_by_instance,
+            tooltip_unit_buff_by_instance,
         ),
         (
             "C_TooltipInfo.GetUnitDebuffByAuraInstanceID",
-            tooltip_unit_aura_by_instance,
+            tooltip_unit_debuff_by_instance,
         ),
         ("C_TooltipInfo.GetWorldCursor", tooltip_world_cursor),
         // Interactions and trainers.

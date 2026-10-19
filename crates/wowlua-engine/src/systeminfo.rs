@@ -1811,6 +1811,30 @@ fn secret_while_restricted(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(restricted(vm))])
 }
 
+/// `C_Secrets.ShouldUnitThreatStateBeSecret(unit [, mobUnit])` and
+/// `…ThreatValuesBeSecret(unit, mobUnit)`: secret, but for no mob and for a
+/// group token's threat on `"target"` (the full probe, 1.60.1, out of
+/// combat and unrestricted, no target: every other pair secret, `"none"`,
+/// `"target"` and a GUID on `"target"` too; unverified: other states, a
+/// target that exists).
+fn threat_secret(vm: &mut Vm, c: NativeCall) -> Ret {
+    let token = |v: Value| match vm.hidden(v) {
+        Value::Str(s) => Some(String::from_utf8_lossy(vm.str_bytes(s)).to_ascii_lowercase()),
+        _ => None,
+    };
+    let Some(mob) = token(c.arg(2)) else {
+        return Ok(vec![Value::Bool(false)]);
+    };
+    let group = token(c.arg(1)).is_some_and(|u| {
+        let base = u.trim_end_matches(|ch: char| ch.is_ascii_digit());
+        matches!(
+            base,
+            "player" | "pet" | "party" | "raid" | "partypet" | "raidpet"
+        )
+    });
+    Ok(vec![Value::Bool(!(mob == "target" && group))])
+}
+
 /// `C_Secrets.ShouldUnitSpellCastBeSecret(unit, spell)`: another unit's
 /// casts, as `SecretWhenUnitSpellCastRestricted` answers.
 fn unit_spell_cast_secret(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -3005,14 +3029,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             "C_Secrets.ShouldUnitAuraSlotBeSecret",
             secret_while_restricted,
         ),
-        (
-            "C_Secrets.ShouldUnitThreatStateBeSecret",
-            secret_while_restricted,
-        ),
-        (
-            "C_Secrets.ShouldUnitThreatValuesBeSecret",
-            secret_while_restricted,
-        ),
+        ("C_Secrets.ShouldUnitThreatStateBeSecret", threat_secret),
+        ("C_Secrets.ShouldUnitThreatValuesBeSecret", threat_secret),
         (
             "C_Secrets.ShouldUnitSpellCastBeSecret",
             unit_spell_cast_secret,

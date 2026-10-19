@@ -1147,6 +1147,14 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
         Slot if matches!(c.arg(2), Value::Num(b) if b == 0.0) => num(c.arg(1)),
         _ => None,
     };
+    // An index is truncated (the full probe, 1.60.1: the spellbook's item
+    // and skill line 1.5 answered as 1).
+    let index = index.map(f64::trunc);
+    // A spellbook item's link with a glyph above 0: none (the full probe,
+    // 1.60.1: glyph 1, 1.5 and 2147483647 nothing, -1 the link).
+    if stat.key == "spellBookItemLink" && matches!(c.arg(3), Value::Num(g) if g > 0.0) {
+        return Ok(vec![]);
+    }
     let found = if player {
         let ch = &engine(vm).world.character;
         let stats = if pet {
@@ -1156,7 +1164,7 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
         };
         match (stats.get(stat.key), index) {
             (Some(Entry::One(v)), None) => Some(v.clone()),
-            (Some(Entry::ByIndex(m)), Some(i)) if i.fract() == 0.0 => {
+            (Some(Entry::ByIndex(m)), Some(i)) => {
                 let v = m.get(&(i as i64)).cloned();
                 // For the attribute's effective value only (as the sheet
                 // asks it); unverified for others.
