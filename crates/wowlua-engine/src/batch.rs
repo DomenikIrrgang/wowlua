@@ -57,6 +57,26 @@ pub struct Batch {
     /// (2), those bound to the target alone (1), none (0).
     usability: u8,
     checking: bool,
+    /// Creatures that turned on the player in a fight, their update owed.
+    turns: Vec<usize>,
+}
+
+/// Whether a creature's turning on the player waits for the frame's end
+/// (then owed).
+///
+/// Recorded: in a fight, the player's power in the packet before the
+/// creature's target and flags (`combat`'s wolf, `death`'s kobolds,
+/// `quest`'s wolves); before a fight the creature's first (`death`'s and
+/// `auradeath`'s first blows: the caller's).
+pub fn owe_turn(vm: &mut Vm, unit: usize) -> bool {
+    let b = &mut engine_mut(vm).batch;
+    if !b.on {
+        return false;
+    }
+    if !b.turns.contains(&unit) {
+        b.turns.push(unit);
+    }
+    true
 }
 
 /// Whether the actions' usability waits for the frame's end (`all`, or
@@ -199,6 +219,10 @@ pub fn flush(vm: &mut Vm) {
     }
     engine_mut(vm).batch.flushing = true;
     loop {
+        // The creatures' turns first (their update after the player's).
+        for unit in std::mem::take(&mut engine_mut(vm).batch.turns) {
+            crate::units::told_turn(vm, crate::units::UnitId(unit));
+        }
         // The actions' usability first (its `ACTIONBAR_UPDATE_USABLE`
         // batched with the rest).
         match std::mem::take(&mut engine_mut(vm).batch.usability) {

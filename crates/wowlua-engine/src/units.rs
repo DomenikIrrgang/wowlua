@@ -1640,12 +1640,25 @@ fn control_target(vm: &mut Vm, c: NativeCall) -> Ret {
         {
             fire_unit(vm, "UNIT_FLAGS", t, &[]);
         }
-        fire_unit(vm, "UNIT_TARGET", me, &[]);
-        if engine(vm).units.list[me.0].in_combat {
-            fire_unit(vm, "UNIT_FLAGS", me, &[]);
+        // On the player in a fight: its own update told after the
+        // player's in the packet (its power), at the frame's end (`batch`).
+        if on_player
+            && engine(vm).units.list[PLAYER.0].in_combat
+            && crate::batch::owe_turn(vm, me.0)
+        {
+            return Ok(vec![]);
         }
+        told_turn(vm, me);
     }
     Ok(vec![])
+}
+
+/// A creature's target told (`UNIT_TARGET`), its flags if in combat.
+pub(crate) fn told_turn(vm: &mut Vm, me: UnitId) {
+    fire_unit(vm, "UNIT_TARGET", me, &[]);
+    if engine(vm).units.list[me.0].in_combat {
+        fire_unit(vm, "UNIT_FLAGS", me, &[]);
+    }
 }
 
 /// `unit:setThreat(value)`: the player's threat on a creature, as the
@@ -2357,7 +2370,11 @@ fn control_swing(vm: &mut Vm, c: NativeCall) -> Ret {
         Value::Num(n) => n,
         _ => COMBAT_TEXT_DELAY,
     };
-    crate::clock::after_engine(vm, after, text);
+    // The client's own delay: the text comes after the frame's server
+    // packets and batched events (recorded: a swing's text after the
+    // frame's mana update, auradeath 13.382), so half a millisecond on.
+    let late = if engine(vm).batch.on { 0.0005 } else { 0.0 };
+    crate::clock::after_engine(vm, after + late, text);
     Ok(vec![])
 }
 
