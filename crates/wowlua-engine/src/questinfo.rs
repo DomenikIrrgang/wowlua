@@ -1222,12 +1222,21 @@ fn get_user_waypoint_position_for_map(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![crate::methods2::vector2(vm, px, py)])
 }
 
-/// `C_Map.GetUserWaypoint()`: the pin, else nothing.
+/// `C_Map.GetUserWaypoint()`: the pin, else nothing; its position a plain
+/// `{x, y}` (the full probe, 1.60.1: no vector methods; Blizzard's
+/// waypoint pin reads `position.x`).
 fn get_user_waypoint(vm: &mut Vm, _c: NativeCall) -> Ret {
-    match waypoint(vm) {
-        Some((map, x, y, z)) => Ok(vec![map_point(vm, map, x, y, z)?]),
-        None => Ok(vec![]),
-    }
+    let Some((map, x, y, z)) = waypoint(vm) else {
+        return Ok(vec![]);
+    };
+    let p = vm.new_table();
+    set(vm, p, "x", Value::Num(x));
+    set(vm, p, "y", Value::Num(y));
+    let t = vm.new_table();
+    set(vm, t, "uiMapID", Value::Num(map));
+    set(vm, t, "position", Value::Table(p));
+    set(vm, t, "z", z);
+    Ok(vec![Value::Table(t)])
 }
 
 fn has_user_waypoint(vm: &mut Vm, _c: NativeCall) -> Ret {

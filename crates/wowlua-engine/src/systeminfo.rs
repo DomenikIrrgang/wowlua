@@ -866,9 +866,16 @@ fn deactivate_binding_context(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+///
+/// Context 0 (the default) is active unless deactivated (the full probe,
+/// 1.60.1: 0 and "x" true, 1 to 9 false).
 fn is_binding_context_active(vm: &mut Vm, c: NativeCall) -> Ret {
     let k = context_key(vm, c.arg(1));
-    Ok(vec![Value::Bool(get_state(vm, &k).truthy())])
+    let active = match get_state(vm, &k) {
+        Value::Nil => num(vm, c.arg(1)).unwrap_or(0.0) == 0.0,
+        v => v.truthy(),
+    };
+    Ok(vec![Value::Bool(active)])
 }
 
 /// `C_KeyBindings.GetTurnStrafeStyle()`: as set, else 2 (recorded with
@@ -2189,7 +2196,7 @@ fn cbor_head(major: u8, n: u64, out: &mut Vec<u8>) {
 }
 
 /// A Lua value as CBOR: integers as integers, other numbers as doubles,
-/// strings as text (bytes when not UTF-8), lists as arrays (an empty
+/// strings as byte strings, lists as arrays (an empty
 /// table one too: recorded `\x80`), other tables as maps (unverified: the
 /// client's float widths).
 fn cbor_encode(
@@ -2217,10 +2224,11 @@ fn cbor_encode(
             out.push(0xfb);
             out.extend_from_slice(&n.to_bits().to_be_bytes());
         }
+        // A string is a byte string, UTF-8 or not (the full probe,
+        // 1.60.1: "x" as `Ax`, 0x41).
         Value::Str(s) => {
             let b = vm.str_bytes(s);
-            let major = if std::str::from_utf8(b).is_ok() { 3 } else { 2 };
-            cbor_head(major, b.len() as u64, out);
+            cbor_head(2, b.len() as u64, out);
             out.extend_from_slice(b);
         }
         Value::Table(t) => {
@@ -2412,6 +2420,10 @@ fn deserialize_cbor(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(src) = bytes_arg(vm, &c, 1) else {
         return Ok(vec![Value::Nil]);
     };
+    // No bytes: nothing (the full probe, 1.60.1; "x" fails).
+    if src.is_empty() {
+        return Ok(vec![]);
+    }
     let mut d = Cbor { b: &src, i: 0 };
     match cbor_decode(vm, &mut d, 0) {
         Some(v) => Ok(vec![v]),

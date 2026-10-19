@@ -600,12 +600,18 @@ fn get_spell_loss_of_control_info(vm: &mut Vm, c: NativeCall) -> Ret {
     }
 }
 
-/// `C_Spell.GetItemCooldown(itemID)`: the item's cooldown as
-/// `C_Container.GetItemCooldown` has it, as a `SpellCooldownInfo`.
+/// `C_Spell.GetItemCooldown(itemID)`: nothing for an item without a use
+/// cooldown running (the full probe, 1.60.1: the Hearthstone, 6948, and
+/// items the character lacks nothing); else its cooldown as
+/// `C_Container.GetItemCooldown` has it, as a `SpellCooldownInfo`
+/// (unverified).
 fn get_item_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
     let r = ask(vm, "C_Container.GetItemCooldown", &[c.arg(1)]);
     let start = r.first().copied().and_then(num).unwrap_or(0.0);
     let length = r.get(1).copied().and_then(num).unwrap_or(0.0);
+    if length <= 0.0 {
+        return Ok(vec![]);
+    }
     let now = crate::clock::now(vm);
     let t = table(
         vm,

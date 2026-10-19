@@ -257,7 +257,6 @@ const DOCUMENTED_EMPTY: &[&str] = &[
     "C_ReportSystem.RequiresScreenshotForReportType",
     // Chat lines: none kept by their IDs; no regional or mentor channel.
     "C_ChatInfo.GetChatLineText",
-    "C_ChatInfo.GetChatLineSenderGUID",
     "C_ChatInfo.GetChatLineSenderName",
     "C_ChatInfo.IsChannelRegionalForChannelID",
     "C_ChatInfo.GetMentorChannelID",
@@ -510,20 +509,6 @@ fn get_chat_type_name(vm: &mut Vm, c: NativeCall) -> Ret {
 /// and a third, the voice transcription's in the mainline UI).
 fn get_num_reserved_chat_windows(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(3.0)])
-}
-
-/// `C_ChatInfo.IsValidCombatFilterName(name)`: any name with a letter
-/// (unverified: the client's name rules).
-fn is_valid_combat_filter_name(vm: &mut Vm, c: NativeCall) -> Ret {
-    let ok = arg_text(vm, &c, 1).is_some_and(|n| n.chars().any(char::is_alphabetic));
-    Ok(vec![Value::Bool(ok)])
-}
-
-/// `C_ClubFinder.IsValidSearchString(name)`: any text but an empty one
-/// (unverified: the client's profanity filter).
-fn is_valid_search_string(vm: &mut Vm, c: NativeCall) -> Ret {
-    let ok = arg_text(vm, &c, 1).is_some_and(|n| !n.trim().is_empty());
-    Ok(vec![Value::Bool(ok)])
 }
 
 /// `C_ChatInfo.CanPlayerSpeakLanguage(languageID)`: whether the language is
@@ -1225,6 +1210,38 @@ const PROBED_CONSTANT: &[(&str, &str)] = &[
         "1: boolean true",
     ),
     ("C_EncounterWarnings.GetWarningsShown", "1: boolean true"),
+    // Names: every one valid, the empty one too.
+    ("C_ChatInfo.IsValidCombatFilterName", "1: boolean true"),
+    ("C_ClubFinder.IsValidSearchString", "1: boolean true"),
+    ("C_EditMode.IsValidLayoutName", "1: boolean true"),
+    (
+        "C_TransmogCollection.IsValidCustomSetName",
+        "1: boolean true",
+    ),
+    (
+        "C_TransmogOutfitInfo.IsValidTransmogOutfitName",
+        "1: boolean true",
+    ),
+    // The group finders: usable (the reason text scrubbed).
+    ("C_LFGInfo.CanPlayerUseLFR", "2: boolean true, string "),
+    ("C_LFGInfo.CanPlayerUsePVP", "2: boolean true, string "),
+    (
+        "C_LFGInfo.CanPlayerUseScenarioFinder",
+        "2: boolean true, string ",
+    ),
+    // Trait configs: no variation (every config probed).
+    ("C_Traits.GetConfigVariationID", "1: number 0"),
+    // Clubs: every type allowed.
+    ("C_Club.ShouldAllowClubType", "1: boolean true"),
+    // Specializations: one each class (class 0 too), no PvP talent slot.
+    (
+        "C_SpecializationInfo.GetNumSpecializationsForClassID",
+        "1: number 1",
+    ),
+    (
+        "C_SpecializationInfo.GetPvpTalentSlotInfo",
+        "1: {availableTalentIDs={},enabled=boolean false,level=number 0}",
+    ),
 ];
 
 /// A `PROBED_CONSTANT` function: its one answer.
@@ -1332,6 +1349,113 @@ fn report_minor_categories(vm: &mut Vm, c: NativeCall) -> Ret {
     };
     let values: Vec<Value> = cats.iter().map(|&n| Value::Num(n)).collect();
     Ok(vec![list(vm, &values)])
+}
+
+/// A chat line's ID: kept lines from 1 (the full probe, 1.60.1: line 1
+/// valid with a sender, 0, 1.5 and 2147483647 not; unverified: how many
+/// the client keeps, taken as 1000).
+fn chat_line(vm: &Vm, c: &NativeCall) -> bool {
+    arg_num(vm, c, 1).is_some_and(|n| n.fract() == 0.0 && (1.0..=1000.0).contains(&n))
+}
+
+/// `C_ChatInfo.IsValidChatLine(lineID)`.
+fn is_valid_chat_line(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(chat_line(vm, &c))])
+}
+
+/// `C_ChatInfo.GetChatLineSenderGUID(lineID)`: nil for no line (the
+/// sender the engine does not keep: empty).
+fn chat_line_sender_guid(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(vec![if chat_line(vm, &c) {
+        vm.str("")
+    } else {
+        Value::Nil
+    }])
+}
+
+/// `C_LFGInfo.AreCrossFactionGroupQueuesAllowed(category)`,
+/// `DoesCrossFactionQueueRequireFullPremade(category)`: a category from 1
+/// (the full probe, 1.60.1: 1 and 1.5 true, -1, 0 and 2147483647 false;
+/// unverified: the last category, taken as 20).
+fn cross_faction_category(vm: &mut Vm, c: NativeCall) -> Ret {
+    let n = arg_num(vm, &c, 1).unwrap_or(0.0).trunc();
+    Ok(vec![Value::Bool((1.0..=20.0).contains(&n))])
+}
+
+/// `C_Club.GetClubLimits(clubType)`: 50 streams, none for type 3 (the full
+/// probe, 1.60.1: 0 to 2 and a string 50, 3 none).
+fn club_limits(vm: &mut Vm, c: NativeCall) -> Ret {
+    let t = arg_num(vm, &c, 1).unwrap_or(0.0).trunc();
+    let streams = if t == 3.0 { 0.0 } else { 50.0 };
+    let r = vm.new_table();
+    set(vm, r, "maximumNumberOfStreams", Value::Num(streams));
+    Ok(vec![Value::Table(r)])
+}
+
+/// `C_Minimap.GetDefaultTrackingValue(filter)`: on for the filters the
+/// minimap tracks by default (the full probe, 1.60.1: 0, 8, 32, 65536 and
+/// 2097152 of `Enum.MinimapTrackingFilter`, a string as 0; the other
+/// flags probed off).
+fn default_tracking_value(vm: &mut Vm, c: NativeCall) -> Ret {
+    let f = arg_num(vm, &c, 1).unwrap_or(0.0);
+    Ok(vec![Value::Bool(matches!(
+        f as i64,
+        0 | 8 | 32 | 65536 | 2097152
+    ))])
+}
+
+/// `C_EncounterWarnings.GetSoundKitForSeverity(severity)`: the sound kits
+/// of `Enum.EncounterEventSeverity` 0 to 2 (the full probe, 1.60.1; a
+/// string as 0; unverified: past 2).
+fn warning_sound_kit(vm: &mut Vm, c: NativeCall) -> Ret {
+    const KITS: [f64; 3] = [297258.0, 297255.0, 297253.0];
+    let i = arg_num(vm, &c, 1).unwrap_or(0.0);
+    let kit = KITS.get(i as usize).filter(|_| i >= 0.0).copied();
+    Ok(vec![Value::Num(kit.unwrap_or(0.0))])
+}
+
+/// `C_Minimap.GetPOITextureCoords(index)`: the cell of the POI sheet, 18
+/// pixels square on a 256 by 512 texture, a pixel's border inside (the
+/// full probe, 1.60.1: index 0 and none 1/256 to 18/256 by 1/512 to
+/// 18/512, index 1 the next cell; unverified: the rows, 14 cells each).
+fn poi_texture_coords(vm: &mut Vm, c: NativeCall) -> Ret {
+    let i = arg_num(vm, &c, 1).unwrap_or(0.0).trunc();
+    // Past the sheet (28 rows): zeros (the full probe, 1.60.1: -1 and
+    // 2147483647).
+    if !(0.0..392.0).contains(&i) {
+        return Ok(vec![Value::Num(0.0); 4]);
+    }
+    let i = i as i64;
+    let (col, row) = ((i % 14) as f64, (i / 14) as f64);
+    Ok(vec![
+        Value::Num((col * 18.0 + 1.0) / 256.0),
+        Value::Num((col * 18.0 + 18.0) / 256.0),
+        Value::Num((row * 18.0 + 1.0) / 512.0),
+        Value::Num((row * 18.0 + 18.0) / 512.0),
+    ])
+}
+
+/// `C_Macro.GetSelectedMacroIcon(index)`: the macro's icon, the question
+/// mark (134400) for none (the full probe, 1.60.1: 1.5 the account's
+/// first macro's 841219, 0 and 2147483647 the question mark).
+fn selected_macro_icon(vm: &mut Vm, c: NativeCall) -> Ret {
+    let i = arg_num(vm, &c, 1).unwrap_or(0.0).trunc();
+    let info = ask(vm, "GetMacroInfo", &[Value::Num(i)]);
+    let icon = info.get(1).copied().and_then(num).unwrap_or(134400.0);
+    Ok(vec![Value::Num(icon)])
+}
+
+/// `C_EncounterJournal.GetEncounterJournalLink(type, id, name,
+/// difficulty)`: the journal link (the full probe, 1.60.1: numbers
+/// truncated, a string as 0, difficulty 2147483647 written -1, as the
+/// client keeps it in 16 bits; unverified: the color for other types).
+fn encounter_journal_link(vm: &mut Vm, c: NativeCall) -> Ret {
+    let n = |i: usize| arg_num(vm, &c, i).unwrap_or(0.0).trunc() as i64;
+    let (kind, id, difficulty) = (n(1), n(2), n(4) as i16);
+    let name = arg_text(vm, &c, 3).unwrap_or_default();
+    Ok(vec![vm.str(&format!(
+        "|cff66bbff|Hjournal:{kind}:{id}:{difficulty}|h[{name}]|h|r"
+    ))])
 }
 
 // ------------------------------------------------------- dates and texts
@@ -1562,14 +1686,9 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             get_num_reserved_chat_windows,
         ),
         (
-            "C_ChatInfo.IsValidCombatFilterName",
-            is_valid_combat_filter_name,
-        ),
-        (
             "C_ChatInfo.CanPlayerSpeakLanguage",
             can_player_speak_language,
         ),
-        ("C_ClubFinder.IsValidSearchString", is_valid_search_string),
         ("DeclineName", decline_name),
         // The client.
         ("GetDownloadedPercentage", get_downloaded_percentage),
@@ -1651,6 +1770,28 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Intl.GetCurrencyName", intl_get_currency_name),
         ("C_Intl.GetDisplayName", intl_get_display_name),
         ("C_Ping.GetTextureKitForType", ping_texture_kit),
+        (
+            "C_EncounterWarnings.GetSoundKitForSeverity",
+            warning_sound_kit,
+        ),
+        ("C_Minimap.GetPOITextureCoords", poi_texture_coords),
+        ("C_ChatInfo.IsValidChatLine", is_valid_chat_line),
+        ("C_ChatInfo.GetChatLineSenderGUID", chat_line_sender_guid),
+        (
+            "C_LFGInfo.AreCrossFactionGroupQueuesAllowed",
+            cross_faction_category,
+        ),
+        (
+            "C_LFGInfo.DoesCrossFactionQueueRequireFullPremade",
+            cross_faction_category,
+        ),
+        ("C_Club.GetClubLimits", club_limits),
+        ("C_Minimap.GetDefaultTrackingValue", default_tracking_value),
+        ("C_Macro.GetSelectedMacroIcon", selected_macro_icon),
+        (
+            "C_EncounterJournal.GetEncounterJournalLink",
+            encounter_journal_link,
+        ),
         (
             "C_ScenarioInfo.GetJailersTowerTypeString",
             jailers_tower_type_string,

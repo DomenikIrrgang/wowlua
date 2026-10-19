@@ -363,6 +363,10 @@ fn get_pet_happiness(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 /// `C_PetInfo.GetPetLoyalty()`: the loyalty's name.
 fn get_pet_loyalty(vm: &mut Vm, _c: NativeCall) -> Ret {
+    // No pet: nothing (the full probe, 1.60.1, a paladin).
+    if engine(vm).units.pet.is_none() {
+        return Ok(vec![]);
+    }
     let l = engine(vm).world.pets.loyalty.clone();
     Ok(vec![vm.str(&l)])
 }

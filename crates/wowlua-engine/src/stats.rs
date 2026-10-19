@@ -1128,6 +1128,11 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(stat) = name.and_then(|n| STATS.iter().find(|s| s.function == n)) else {
         return Ok(vec![]);
     };
+    if stat.key == "specializationInfo"
+        && let Some(values) = other_specialization(vm, &c)
+    {
+        return Ok(values);
+    }
     // The unit asked about: the player, or its pet (its own stats).
     let asked = units::unit_arg(vm, &c, 1);
     let pet = matches!(stat.ask, Unit | UnitIndex)
@@ -1216,6 +1221,55 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
         None if stat.key == "shapeshiftForms" => Ok(vec![Value::Num(0.0)]),
         None => Ok(empty(vm, stat.function)),
     }
+}
+
+/// `C_SpecializationInfo.GetSpecializationInfo(index, isInspect, isPet,
+/// …)` for another than the player's recorded specs (the full probe,
+/// 1.60.1): inspecting nobody, or an index without a spec, gives the empty
+/// spec (ID 0, no texts, recommended); the pet's first spec is the
+/// stable's "Default" (`C_StableInfo.GetAvailablePetSpecInfos`' 1493),
+/// asked even without a pet. Unverified: a hunter's pet's other specs.
+fn other_specialization(vm: &mut Vm, c: &NativeCall) -> Option<Vec<Value>> {
+    let empty = || {
+        vec![
+            Value::Num(0.0),
+            Value::Nil,
+            Value::Nil,
+            Value::Nil,
+            Value::Nil,
+            Value::Nil,
+            Value::Num(0.0),
+            Value::Nil,
+            Value::Num(0.0),
+            Value::Bool(true),
+        ]
+    };
+    let index = num(c.arg(1)).map(f64::trunc);
+    if c.arg(2).truthy() {
+        return Some(empty());
+    }
+    if c.arg(3).truthy() {
+        if index != Some(1.0) {
+            return Some(empty());
+        }
+        return Some(vec![
+            Value::Num(1493.0),
+            vm.str("Default"),
+            vm.str("I'm a pet!"),
+            Value::Num(6642732.0),
+            vm.str("DAMAGER"),
+            Value::Num(2.0),
+            Value::Num(0.0),
+            Value::Nil,
+            Value::Num(0.0),
+            Value::Bool(true),
+        ]);
+    }
+    let recorded = match engine(vm).world.character.stats.get("specializationInfo") {
+        Some(Entry::ByIndex(m)) => index.is_some_and(|i| m.contains_key(&(i as i64))),
+        _ => true,
+    };
+    (!recorded).then(empty)
 }
 
 /// The player's spellbook slot holding `spell` (the recorded items'

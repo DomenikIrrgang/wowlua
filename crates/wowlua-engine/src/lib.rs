@@ -877,6 +877,8 @@ const OVER_RECORDED: &[&str] = &[
     "C_PetBattles.CanPetSwapIn",
     "C_KeyBindings.GetBindingContextForAction",
     "C_GameRules.GetGameRuleAsFrameStrata",
+    "C_SpecializationInfo.GetNumSpecializationsForClassID",
+    "C_SpecializationInfo.GetPvpTalentSlotInfo",
     "GetDungeonDifficultyID",
     "GetActionBarToggles",
     "C_Heirloom.GetCollectedHeirloomFilter",
