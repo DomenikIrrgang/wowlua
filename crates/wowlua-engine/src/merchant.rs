@@ -746,7 +746,9 @@ fn buyback(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// The buyback, as the server answers it: back where it was when free.
+/// The buyback, as the server answers it: placed as a purchase is, not
+/// back where it was (recorded: a claw sold from slot 7 bought back into
+/// the first free slot, 6).
 fn bought_back(vm: &mut Vm, c: NativeCall) -> Ret {
     let i = upval(&c, 0) as usize;
     let list = &mut merchant_mut(vm).buyback;
@@ -754,17 +756,7 @@ fn bought_back(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![]);
     }
     let s = list.remove(i - 1);
-    let free = engine(vm)
-        .world
-        .character
-        .bags
-        .get(&s.bag)
-        .is_some_and(|b| !b.items.contains_key(&s.slot));
-    let Some((bag, slot)) = (if free {
-        Some((s.bag, s.slot))
-    } else {
-        place(vm, s.held.id, s.held.count)
-    }) else {
+    let Some((bag, slot)) = place(vm, s.held.id, s.held.count) else {
         merchant_mut(vm).buyback.insert(i - 1, s);
         return Ok(vec![]);
     };

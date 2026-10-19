@@ -1277,7 +1277,7 @@ fn the_engine_plays_trainer_as_the_client_did() {
 
 /// How many of the vendor scenario's lines the engine plays as the client
 /// did: only ever up.
-const VENDOR_MATCHED: usize = 530;
+const VENDOR_MATCHED: usize = 536;
 
 /// The vendor scenario: goods sold, bought, bought back; too little money;
 /// a repair.
