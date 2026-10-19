@@ -79,3 +79,9 @@ jobs:
           case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
           gh release create "$GITHUB_REF_NAME" --title "wowlua $GITHUB_REF_NAME" --generate-notes $prerelease \
             artifacts/* scripts/install.sh scripts/install.ps1
+      - name: Post the release to Discord
+        env:
+          TAG: ${{ github.ref_name }}
+          DISCORD_RELEASES_WEBHOOK: ${{ secrets.DISCORD_RELEASES_WEBHOOK }}
+          DISCORD_RELEASE_ROLE_ID: ${{ vars.DISCORD_RELEASE_ROLE_ID }}
+        run: node .github/scripts/discord-release.mjs
