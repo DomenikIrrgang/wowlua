@@ -1078,25 +1078,18 @@ fn same_name(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![vm.str(&name)])
 }
 
-/// The items' quality colors, poor to heirloom (`tooltip.rs`'s).
-const QUALITY_RGB: [(f64, f64, f64); 8] = [
-    (0.62, 0.62, 0.62),
-    (1.0, 1.0, 1.0),
-    (0.12, 1.0, 0.0),
-    (0.0, 0.44, 0.87),
-    (0.64, 0.21, 0.93),
-    (1.0, 0.5, 0.0),
-    (0.9, 0.8, 0.5),
-    (0.0, 0.8, 1.0),
-];
-
 /// `C_ColorOverrides.GetDefaultColorForQuality(quality)`: the quality's
-/// color as the tooltips draw it (a quality beyond: the common white;
-/// unverified: the client's exact values).
+/// color (a quality beyond: the common white, unverified): the client's
+/// own quality colors, as `C_ColorOverrides.GetColorForQuality`
+/// has them (the full probe, 1.60.1: every quality 0 to 8 alike; a string
+/// as 0).
 fn get_default_color_for_quality(vm: &mut Vm, c: NativeCall) -> Ret {
-    let quality = arg_num(vm, &c, 1).unwrap_or(1.0).max(0.0) as usize;
-    let rgb = QUALITY_RGB.get(quality).copied().unwrap_or(QUALITY_RGB[1]);
-    Ok(vec![color(vm, rgb)])
+    let quality = arg_num(vm, &c, 1).unwrap_or(0.0).max(0.0) as usize;
+    let rgba = crate::facts::QUALITY_COLORS
+        .get(quality)
+        .copied()
+        .unwrap_or(crate::facts::QUALITY_COLORS[1]);
+    Ok(vec![color(vm, (rgba[0], rgba[1], rgba[2]))])
 }
 
 // ---------------------------------------------------------- auctions

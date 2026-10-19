@@ -404,8 +404,13 @@ pub(crate) const QUALITY_COLORS: [[f64; 4]; 9] = [
 
 /// `C_ColorOverrides.GetColorForQuality(quality)`: a `ColorMixin` color
 /// (camelot's; an unknown quality gives nothing, unverified).
+///
+/// A string reads as quality 0 (the full probe, 1.60.1: "x" the poor gray).
 fn color_for_quality(vm: &mut Vm, c: NativeCall) -> Ret {
-    let q = vm.check_int(&c, 1)?;
+    let q = match vm.hidden(c.arg(1)) {
+        Value::Str(_) => 0,
+        _ => vm.check_int(&c, 1)?,
+    };
     let Some(rgba) = usize::try_from(q).ok().and_then(|q| QUALITY_COLORS.get(q)) else {
         return Ok(vec![Value::Nil]);
     };

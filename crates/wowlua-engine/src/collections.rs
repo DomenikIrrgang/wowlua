@@ -617,8 +617,13 @@ fn get_toy_info(vm: &mut Vm, c: NativeCall) -> Ret {
 // Pets and pet battles.
 
 /// `C_PetJournal.GetPetLoadOutInfo(slot)`: no pet, no abilities, locked
-/// (unverified: no battle pets).
-fn get_pet_loadout_info(_vm: &mut Vm, _c: NativeCall) -> Ret {
+/// (unverified: no battle pets); nothing for a slot past the three (the
+/// full probe, 1.60.1: 1 and 1.5 the empty slot, 0 and 2147483647
+/// nothing).
+fn get_pet_loadout_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    if !num(vm, &c, 1).is_some_and(|n| (1.0..4.0).contains(&n)) {
+        return Ok(vec![]);
+    }
     Ok(vec![
         Value::Nil,
         Value::Num(0.0),

@@ -1229,6 +1229,11 @@ const PROBED_CONSTANT: &[(&str, &str)] = &[
         "C_LFGInfo.CanPlayerUseScenarioFinder",
         "2: boolean true, string ",
     ),
+    // The monument's trophies: none chosen, 57 of them.
+    (
+        "C_Trophy.MonumentGetTrophyInfoByIndex",
+        "2: number 0, number 57",
+    ),
     // Assisted combat not available.
     (
         "C_AssistedCombat.IsAvailable",
@@ -1473,6 +1478,60 @@ fn zone_ability_icon(vm: &mut Vm, c: NativeCall) -> Ret {
         None
     };
     Ok(vec![Value::Num(icon.unwrap_or(0.0))])
+}
+
+/// `C_ContentTracking.GetTrackablesOnMap(type, uiMapID)`: as recorded;
+/// else nothing to track, the result 0 on a map the client has and 2
+/// (`Enum.ContentTrackingResult`'s failure) on one it lacks (the full
+/// probe, 1.60.1: maps 1413 and 1414 0, maps -1 to 1 and 2147483647 2,
+/// as the recorded 946's).
+fn trackables_on_map(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some(values) = crate::recorded::lookup(vm, "C_ContentTracking.GetTrackablesOnMap", &c) {
+        return Ok(values);
+    }
+    let map = arg_num(vm, &c, 2).unwrap_or(0.0).trunc();
+    let known = crate::recorded::lookup_text(vm, &format!("C_Map.GetMapInfo({})", map as i64))
+        .is_some_and(|v| v.first().is_some_and(|v| !v.is_nil()));
+    let empty = vm.new_table();
+    Ok(vec![
+        Value::Num(if known { 0.0 } else { 2.0 }),
+        Value::Table(empty),
+    ])
+}
+
+/// `C_EncounterWarnings.GetColorForSeverity(severity)`: magenta for every
+/// severity (the full probe, 1.60.1: 0 to 2 and a string; unverified: an
+/// edit mode setting that colors them).
+fn warning_color(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![color(vm, (1.0, 0.0, 1.0))])
+}
+
+/// `C_EventToastManager.GetLevelUpDisplayToastsFromLevel(level)`: the
+/// level-up toast, "Level <level>" (truncated) under "You've Reached" (the
+/// full probe, 1.60.1: every level probed, -1 to 2147483647; unverified:
+/// the toasts of a level's new spells).
+fn level_up_toasts(vm: &mut Vm, c: NativeCall) -> Ret {
+    let level = arg_num(vm, &c, 1).unwrap_or(0.0).trunc() as i64;
+    let toast = vm.new_table();
+    for (k, v) in [
+        ("displayType", 2.0),
+        ("eventToastID", 481.0),
+        ("eventType", 0.0),
+        ("flags", 0.0),
+        ("sortOrder", 0.0),
+    ] {
+        set(vm, toast, k, Value::Num(v));
+    }
+    for (k, v) in [
+        ("instructionText", String::new()),
+        ("link", String::new()),
+        ("subtitle", "You've Reached".to_string()),
+        ("title", format!("Level {level}")),
+    ] {
+        let v = vm.str(&v);
+        set(vm, toast, k, v);
+    }
+    Ok(vec![list(vm, &[Value::Table(toast)])])
 }
 
 /// `C_PvP.GetBrawlRewards(brawlType)`: no rewards for a brawl type from 1,
@@ -1749,6 +1808,115 @@ fn jailers_tower_type_string(vm: &mut Vm, c: NativeCall) -> Ret {
     }])
 }
 
+// --------------------------------------------------------- text by ICU
+
+/// `C_Intl.FindBreaks(text, breakType)`: the 1-based byte offsets of the
+/// breaks, the text's start and end among them: characters (0), words (1:
+/// a run of letters and digits, each other character alone), lines (2:
+/// after spaces), sentences (3) (the full probe, 1.60.1: "Hello" and "x"
+/// in each, a color code's words at 1, 2, 14, 15 and 16, "" {1};
+/// unverified: sentences, which split the color code at 2 and 15, and
+/// text past ASCII).
+fn intl_find_breaks(vm: &mut Vm, c: NativeCall) -> Ret {
+    let text = arg_text(vm, &c, 1).unwrap_or_default();
+    let kind = style_arg(vm, &c, 2);
+    let end = text.len() + 1;
+    let mut breaks: Vec<usize> = vec![1];
+    let chars: Vec<(usize, char)> = text.char_indices().collect();
+    match kind {
+        0 => breaks.extend(chars.iter().skip(1).map(|(i, _)| i + 1)),
+        1 => {
+            let word = |ch: char| ch.is_alphanumeric();
+            for w in chars.windows(2) {
+                let ((_, a), (i, b)) = (w[0], w[1]);
+                if !(word(a) && word(b)) {
+                    breaks.push(i + 1);
+                }
+            }
+        }
+        2 => {
+            for w in chars.windows(2) {
+                let ((_, a), (i, b)) = (w[0], w[1]);
+                if a.is_whitespace() && !b.is_whitespace() {
+                    breaks.push(i + 1);
+                }
+            }
+        }
+        _ => {}
+    }
+    if !text.is_empty() {
+        breaks.push(end);
+    }
+    let values: Vec<Value> = breaks.into_iter().map(|b| Value::Num(b as f64)).collect();
+    Ok(vec![list(vm, &values)])
+}
+
+/// `C_Intl.FindStringMatches(text, pattern, strength)`: the 1-based byte
+/// offsets where the pattern starts; nothing for an empty text or pattern
+/// (the full probe, 1.60.1: "x" in "x" {1}, in "Hello" none; unverified:
+/// the strengths, case ignored below 2 as ICU's primary and secondary).
+fn intl_find_string_matches(vm: &mut Vm, c: NativeCall) -> Ret {
+    let text = arg_text(vm, &c, 1).unwrap_or_default();
+    let pattern = arg_text(vm, &c, 2).unwrap_or_default();
+    if text.is_empty() || pattern.is_empty() {
+        return Ok(vec![]);
+    }
+    let (text, pattern) = if style_arg(vm, &c, 3) < 2 {
+        (text.to_lowercase(), pattern.to_lowercase())
+    } else {
+        (text, pattern)
+    };
+    let values: Vec<Value> = text
+        .match_indices(&pattern)
+        .map(|(i, _)| Value::Num(i as f64 + 1.0))
+        .collect();
+    Ok(vec![list(vm, &values)])
+}
+
+/// `C_Intl.GetCharacterProperties(text)`: the first character's Unicode
+/// properties (the full probe, 1.60.1: "H" Lu, "x" Ll, both Latin, "|" Sm
+/// common, each in the ASCII block; nothing for ""; unverified: past
+/// ASCII, named by the character's own kind).
+fn intl_character_properties(vm: &mut Vm, c: NativeCall) -> Ret {
+    let text = arg_text(vm, &c, 1).unwrap_or_default();
+    let Some(ch) = text.chars().next() else {
+        return Ok(vec![]);
+    };
+    let category = match ch {
+        'A'..='Z' => "Lu",
+        'a'..='z' => "Ll",
+        '0'..='9' => "Nd",
+        ' ' => "Zs",
+        '$' => "Sc",
+        '(' | '[' | '{' => "Ps",
+        ')' | ']' | '}' => "Pe",
+        '+' | '<' | '=' | '>' | '|' | '~' => "Sm",
+        '-' => "Pd",
+        '^' | '`' => "Sk",
+        '_' => "Pc",
+        c if c.is_control() => "Cc",
+        c if c.is_ascii_punctuation() => "Po",
+        c if c.is_uppercase() => "Lu",
+        c if c.is_lowercase() => "Ll",
+        c if c.is_numeric() => "Nd",
+        c if c.is_whitespace() => "Zs",
+        _ => "Lo",
+    };
+    let latin = ch.is_ascii_alphabetic();
+    let t = vm.new_table();
+    let block = vm.str(if ch.is_ascii() { "ASCII" } else { "Unknown" });
+    set(vm, t, "blockCode", block);
+    set(vm, t, "codePoint", Value::Num(f64::from(u32::from(ch))));
+    let category = vm.str(category);
+    set(vm, t, "generalCategory", category);
+    set(vm, t, "isAlphabetic", Value::Bool(ch.is_alphabetic()));
+    set(vm, t, "isDigit", Value::Bool(ch.is_ascii_digit()));
+    set(vm, t, "isWhitespace", Value::Bool(ch.is_whitespace()));
+    let script = vm.str(if latin { "Latn" } else { "Zyyy" });
+    set(vm, t, "scriptCode", script);
+    Ok(vec![Value::Table(t)])
+}
+
 /// The module's behaviours.
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     let mut list: Vec<(&'static str, NativeFn)> = vec![
@@ -1863,6 +2031,9 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Intl.FormatDateTime", intl_format_date_time),
         ("C_Intl.GetCurrencyName", intl_get_currency_name),
         ("C_Intl.GetDisplayName", intl_get_display_name),
+        ("C_Intl.FindBreaks", intl_find_breaks),
+        ("C_Intl.FindStringMatches", intl_find_string_matches),
+        ("C_Intl.GetCharacterProperties", intl_character_properties),
         ("C_Ping.GetTextureKitForType", ping_texture_kit),
         (
             "C_EncounterWarnings.GetSoundKitForSeverity",
@@ -1874,6 +2045,12 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Heirloom.GetHeirloomLink", heirloom_link),
         ("C_ZoneAbility.GetZoneAbilityIcon", zone_ability_icon),
         ("C_PvP.GetBrawlRewards", brawl_rewards),
+        (
+            "C_EventToastManager.GetLevelUpDisplayToastsFromLevel",
+            level_up_toasts,
+        ),
+        ("C_EncounterWarnings.GetColorForSeverity", warning_color),
+        ("C_ContentTracking.GetTrackablesOnMap", trackables_on_map),
         (
             "C_PvP.GetArenaCrowdControlDuration",
             arena_crowd_control_duration,

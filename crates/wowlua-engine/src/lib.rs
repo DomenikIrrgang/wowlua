@@ -879,6 +879,7 @@ const OVER_RECORDED: &[&str] = &[
     "C_GameRules.GetGameRuleAsFrameStrata",
     "C_SpecializationInfo.GetNumSpecializationsForClassID",
     "C_SpecializationInfo.GetPvpTalentSlotInfo",
+    "C_ContentTracking.GetTrackablesOnMap",
     "GetDungeonDifficultyID",
     "GetActionBarToggles",
     "C_Heirloom.GetCollectedHeirloomFilter",

@@ -449,6 +449,10 @@ fn color_from_boolean(vm: &mut Vm, c: NativeCall) -> Ret {
         c.arg(3)
     };
     let (rgba, s) = color_of(vm, pick).ok_or_else(|| vm.error("a color expected"))?;
+    // The chosen color as bytes, read back as floats (the full probe,
+    // 1.60.1: 0.5 came back 0.50196081399918, 128/255; unverified: the
+    // color curves' colors, kept as computed).
+    let rgba = rgba.map(|v| f64::from(((v.clamp(0.0, 1.0) * 255.0).round() / 255.0) as f32));
     Ok(vec![make_color(vm, rgba, secret || s)])
 }
 
