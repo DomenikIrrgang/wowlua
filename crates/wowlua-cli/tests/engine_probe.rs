@@ -1364,7 +1364,7 @@ fn the_engine_plays_auction_as_the_client_did() {
 
 /// How many of the group scenario's lines the engine plays as the client
 /// did: only ever up.
-const GROUP_MATCHED: usize = 251;
+const GROUP_MATCHED: usize = 252;
 
 /// The group scenario: an invitation, a party, following, a trade.
 #[test]
@@ -1384,9 +1384,10 @@ fn the_engine_plays_inspect_as_the_client_did() {
 
 /// How many of the talents scenario's lines the engine plays as the client
 /// did: only ever up.
-const TALENTS_MATCHED: usize = 69;
+const TALENTS_MATCHED: usize = 861;
 
-/// The talents scenario: a class talent bought and applied.
+/// The talents scenario: a class talent bought and applied; a trainer's
+/// gossip, a fox's attack, a walk, a druid followed and its talents viewed.
 #[test]
 fn the_engine_plays_talents_as_the_client_did() {
     plays_as_the_client_did("talents", TALENTS_MATCHED);

@@ -1343,11 +1343,13 @@ fn unit_distance_squared(vm: &mut Vm, c: NativeCall) -> Ret {
     }
 }
 
-/// `unit:setDistance(yards)` (`nil`: unknown).
+/// `unit:setDistance(yards)` (`nil`: unknown); an NPC walked away from
+/// closes its gossip (`gossip::moved_away`).
 pub fn control_set_distance(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = units::this(vm, &c)?;
     let d = num(c.arg(2));
     engine_mut(vm).units.list[me.0].distance = d;
+    crate::gossip::moved_away(vm, me, d);
     Ok(vec![])
 }
 

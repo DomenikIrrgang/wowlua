@@ -14,8 +14,15 @@
 //! (recorded: two flight masters, an NPC talked to twice, the first time
 //! too); a class trainer's 0.472 s later (`textAfter`).
 //!
-//! Unverified: an option that opens nothing, quests in a gossip, why the
-//! trainer's text came later.
+//! The quests it offers (`availableQuests = { { questID, title } }`):
+//! `C_GossipInfo.GetAvailableQuests()`'s, the other fields as recorded at
+//! a shaman trainer offering one (talents). Walked away from (its
+//! distance beyond reach, `npc:setDistance(d)`): the gossip closes,
+//! `GOSSIP_CLOSED(false)` and the interaction's hide twice over (recorded:
+//! talents, 15.792).
+//!
+//! Unverified: an option that opens nothing, active quests in a gossip,
+//! why the trainer's text came later, why a walk away closes twice.
 
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, NativeFn, TableRef, Value, Vm};
@@ -202,6 +209,94 @@ fn empty_list(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Table(vm.new_table())])
 }
 
+/// The open gossip's quests offered (`availableQuests`), each a table.
+fn available(vm: &mut Vm) -> Vec<TableRef> {
+    let Some(t) = open_data(vm) else {
+        return vec![];
+    };
+    let Value::Table(list) = field(vm, t, "availableQuests") else {
+        return vec![];
+    };
+    let n = vm.heap.table(list).border();
+    (1..=n)
+        .filter_map(|i| match vm.heap.table(list).get(Value::Num(i as f64)) {
+            Value::Table(q) => Some(q),
+            _ => None,
+        })
+        .collect()
+}
+
+/// `C_GossipInfo.GetAvailableQuests()`: each quest offered, its ID and
+/// title as defined, the rest as recorded at a trainer's (not trivial,
+/// important, legendary or meta; no frequency, level or info ID; not
+/// repeatable or ignored).
+fn get_available_quests(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let out = vm.new_table();
+    for (i, q) in available(vm).into_iter().enumerate() {
+        let e = vm.new_table();
+        for key in ["questID", "title"] {
+            let v = field(vm, q, key);
+            set(vm, e, key, v);
+        }
+        for key in ["frequency", "questInfoID", "questLevel"] {
+            let v = match field(vm, q, key) {
+                Value::Num(n) => Value::Num(n),
+                _ => Value::Num(0.0),
+            };
+            set(vm, e, key, v);
+        }
+        for key in [
+            "isIgnored",
+            "isImportant",
+            "isLegendary",
+            "isMeta",
+            "isTrivial",
+            "repeatable",
+        ] {
+            let v = Value::Bool(field(vm, q, key).truthy());
+            set(vm, e, key, v);
+        }
+        let _ = vm
+            .heap
+            .table_mut(out)
+            .set(Value::Num((i + 1) as f64), Value::Table(e));
+    }
+    Ok(vec![Value::Table(out)])
+}
+
+/// `C_GossipInfo.GetNumAvailableQuests()`.
+fn num_available_quests(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(available(vm).len() as f64)])
+}
+
+/// The NPC now `distance` away: beyond reach, its open gossip closes
+/// (recorded, walking away from a trainer: `GOSSIP_CLOSED(false)`, the
+/// gossip's interaction hidden, `GOSSIP_CLOSED(false)` again, the
+/// interaction's end; the second close's cause unverified).
+pub fn moved_away(vm: &mut Vm, npc: UnitId, distance: Option<f64>) {
+    if engine(vm).world.gossip.open != Some(npc)
+        || !distance.is_some_and(|d| d > crate::quests::INTERACT_RANGE)
+    {
+        return;
+    }
+    engine_mut(vm).world.gossip.open = None;
+    if engine(vm).units.npc == Some(npc) {
+        engine_mut(vm).units.npc = None;
+    }
+    fire(vm, "GOSSIP_CLOSED", &[Value::Bool(false)]);
+    fire(
+        vm,
+        "PLAYER_INTERACTION_MANAGER_FRAME_HIDE",
+        &[Value::Num(GOSSIP)],
+    );
+    fire(vm, "GOSSIP_CLOSED", &[Value::Bool(false)]);
+    fire(
+        vm,
+        "PLAYER_INTERACTION_MANAGER_FRAME_HIDE",
+        &[Value::Num(0.0)],
+    );
+}
+
 fn zero(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(0.0)])
 }
@@ -300,9 +395,9 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
         ("C_GossipInfo.GetText", get_text),
         ("C_GossipInfo.GetOptions", get_options),
-        ("C_GossipInfo.GetAvailableQuests", empty_list),
+        ("C_GossipInfo.GetAvailableQuests", get_available_quests),
         ("C_GossipInfo.GetActiveQuests", empty_list),
-        ("C_GossipInfo.GetNumAvailableQuests", zero),
+        ("C_GossipInfo.GetNumAvailableQuests", num_available_quests),
         ("C_GossipInfo.GetNumActiveQuests", zero),
         ("C_GossipInfo.SelectOption", select_option),
         ("C_GossipInfo.SelectOptionByIndex", select_option_by_index),
