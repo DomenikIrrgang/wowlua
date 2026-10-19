@@ -42,9 +42,9 @@ const MAILBOX: f64 = 17.0;
 /// The invoices' players' names, after the inbox (recorded).
 const NAMES_AFTER: f64 = 0.536;
 /// A taken item's bag packet after the take (recorded).
-const BAG_AFTER: f64 = 0.134;
+pub(crate) const BAG_AFTER: f64 = 0.134;
 /// An emptied auction letter gone after the take (recorded).
-const GONE_AFTER: f64 = 0.268;
+pub(crate) const GONE_AFTER: f64 = 0.268;
 /// After a letter's sending: the spells' update, then the money and bags'
 /// (recorded).
 const SENT_SPELLS_AFTER: f64 = 0.041;
@@ -524,7 +524,7 @@ fn taken(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// The bags' packet: the spells' update, the bag's, the count's.
-fn bag_packet(vm: &mut Vm, c: NativeCall) -> Ret {
+pub(crate) fn bag_packet(vm: &mut Vm, c: NativeCall) -> Ret {
     let bag = num(c.upvals[0]).unwrap_or(0.0) as i64;
     if let Some(slot) = num(c.upvals[1]) {
         character::arrived(vm, bag, slot as usize);
