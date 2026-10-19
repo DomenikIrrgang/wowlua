@@ -1,4 +1,4 @@
--- WoW Forever 1.60.1 (70425): /stdtest engine answers' checks, the client's
+-- WoW Forever 1.60.1 (70450): /stdtest engine answers' checks, the client's
 -- answers to rules the call form cannot ask (cargo xtask ingest).
 return {
     ["Binding by key"] = "error: [string \"return (function() return GetBindingByKey(\"...\"]:1: attempt to call a nil value",
@@ -22,11 +22,11 @@ return {
     ["GetDebugName UIParent"] = "1: string UIParent",
     ["GetDebugName parent key"] = "1: string StdTestDebugParent.Child",
     ["GetDebugName texture key"] = "1: string StdTestDebugParent2.Icon",
-    ["GetDebugName unnamed"] = "1: string 75fc9dbf00",
-    ["GetDebugName unnamed child"] = "1: string UIParent.75fc9dc090",
+    ["GetDebugName unnamed"] = "1: string 7c2fd75ab0",
+    ["GetDebugName unnamed child"] = "1: string UIParent.7c2fd75c40",
     ["GetModifiedClick FOCUSCAST"] = "1: string NONE",
     ["GetModifiedClickAction 1"] = "1: string SELFCAST",
-    ["GetNumModifiedClickActions"] = "1: number 500",
+    ["GetNumModifiedClickActions"] = "1: number 760",
     ["IsModifiedClick NONE action"] = "1: boolean false",
     ["IsModifiedClick SHIFT action unheld"] = "1: boolean false",
     ["Keyboard ColorPickerFrame"] = "2: boolean true, boolean false",

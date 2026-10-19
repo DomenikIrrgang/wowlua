@@ -1,4 +1,4 @@
-# WoW Forever 1.60.1 (70425)'s answers to calls of functions that answer from the
+# WoW Forever 1.60.1 (70450)'s answers to calls of functions that answer from the
 # client's own data (/stdtest engine answers), as the engine gives them:
 # the call, a tab, the answer (cargo xtask ingest).
 AntiAliasingSupported()	3: boolean true, boolean false, boolean true
@@ -667,7 +667,7 @@ C_AzeriteItem.IsAzeriteItemAtMaxLevel()	1: boolean false
 C_Bank.CanPurchaseBankTab(0)	1: boolean false
 C_Bank.FetchBankLockedReason(0)	1: nil nil
 C_Bank.FetchMaxNumBankTabs(0)	1: number 9
-C_Bank.FetchNumPurchasedBankTabs(0)	1: number 1
+C_Bank.FetchNumPurchasedBankTabs(0)	1: number 3
 C_Bank.FetchPurchasedBankTabData(0)	1: {}
 C_BattleNet.IsBattleNetFriendsListSupported()	1: boolean true
 C_BattleNet.IsFriendTagSupportedForCurrentGameType(0)	1: boolean true
