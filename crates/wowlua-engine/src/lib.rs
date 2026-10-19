@@ -280,6 +280,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         methods: widgets::behaviours()
             .into_iter()
             .chain(curves::methods())
+            .chain(clock::methods())
             .chain(formatters::methods())
             .chain(framescript::methods())
             .chain(animations::methods())

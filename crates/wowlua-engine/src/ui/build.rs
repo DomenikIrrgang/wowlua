@@ -352,6 +352,17 @@ fn table_of(v: Value) -> Option<TableRef> {
     }
 }
 
+/// The secure delegate of a mixin's function, made once and shared.
+fn mixin_delegate(vm: &mut Vm, f: wowlua_vm::FuncRef) -> Value {
+    if let Some(&d) = engine(vm).world.ui.mixin_delegates.get(&f) {
+        return d;
+    }
+    let d = super::secure_delegate(vm, Value::Func(f), true);
+    widgets::keep(vm, d);
+    engine_mut(vm).world.ui.mixin_delegates.insert(f, d);
+    d
+}
+
 /// Which part of an element `apply_in` applies: its attributes, mixins and
 /// key values (the whole template chain's, first), or its children and
 /// scripts (a child's `OnLoad` sees the parent's key values: Blizzard's
@@ -441,8 +452,10 @@ fn apply_in(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Eleme
         }
     }
     // `<Mixins><Mixin key="X" [source="secure"]/></Mixins>`: from the
-    // globals, or the secure environment's (partitions and secure
-    // delegates not modelled).
+    // globals, or the secure environment's; with `secureDelegates`, its
+    // functions as secure delegates (`super::secure_delegate`: the custom
+    // aura container's inbound API, called by addons). Partitions are not
+    // modelled.
     for list in el
         .children
         .iter()
@@ -453,6 +466,7 @@ fn apply_in(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Eleme
             let secure = m
                 .attr("source")
                 .is_some_and(|s| s.eq_ignore_ascii_case("secure"));
+            let delegates = m.flag("secureDelegates");
             let globals = vm.globals;
             if secure && let Some(env) = engine(vm).world.ui.secure_env {
                 vm.globals = env;
@@ -463,6 +477,23 @@ fn apply_in(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Eleme
                 Value::Table(src) => {
                     let mut k = Value::Nil;
                     while let Some((key, v)) = vm.heap.table(src).next(k).ok().flatten() {
+                        let v =
+                            match v {
+                                Value::Func(f) if delegates => mixin_delegate(vm, f),
+                                // The private mixin shares the inbound one's
+                                // functions (both made from a shared mixin): in
+                                // the client they land in another partition, the
+                                // delegate staying what addons call.
+                                Value::Func(f)
+                                    if engine(vm).world.ui.mixin_delegates.get(&f).is_some_and(
+                                        |d| d.raw_eq(vm.heap.table(table).get(key)),
+                                    ) =>
+                                {
+                                    k = key;
+                                    continue;
+                                }
+                                v => v,
+                            };
                         let _ = vm.heap.table_mut(table).set(key, v);
                         k = key;
                     }

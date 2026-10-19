@@ -680,17 +680,52 @@ pub fn create_frame(vm: &mut Vm, c: NativeCall) -> Ret {
         let w = widget_of(vm, frame).expect("a widget");
         store(vm, w, "ID", &[Value::Num(id)]);
     }
-    if let Some((_, el)) = intrinsic {
+    // A type or template declared with `allowUntaintedCreation` is built
+    // untainted, its scripts compiled and its mixins copied as Blizzard's
+    // code would, then the caller's taint is back. Evidence: the client
+    // runs the custom aura container's layout (its `OnUpdate` script, a
+    // `method` handler, calling `SetSize` with secrets, allowed only
+    // untainted) without an error for an addon's container (SuuUI), and
+    // the attribute's name. Unverified: a frame mixing such a template
+    // with others is built untainted as a whole.
+    let untainted = {
+        let ui = &engine(vm).world.ui;
+        intrinsic.is_some() && ui.untainted_creation.contains(&kind.to_ascii_lowercase())
+            || templates
+                .iter()
+                .any(|t| ui.untainted_creation.contains(&t.to_ascii_lowercase()))
+    };
+    let saved = vm.taint().saved();
+    if untainted {
+        vm.taint_mut().stack = wowlua_vm::Taint::SECURE;
+    }
+    let built = build_from_xml(vm, frame, intrinsic.map(|(_, el)| el), &templates, from_xml);
+    if untainted {
+        vm.taint_mut().restore(saved);
+    }
+    built?;
+    Ok(vec![frame])
+}
+
+/// A new frame's intrinsic type and templates applied, then its `OnLoad`
+/// (templates of the UI code run it once applied).
+fn build_from_xml(
+    vm: &mut Vm,
+    frame: Value,
+    intrinsic: Option<std::rc::Rc<crate::ui::xml::Element>>,
+    templates: &[String],
+    from_xml: bool,
+) -> Result<(), LuaError> {
+    if let Some(el) = intrinsic {
         crate::ui::build::apply_intrinsic(vm, frame, &el);
     }
     for t in templates {
-        apply_template(vm, frame, &t)?;
+        apply_template(vm, frame, t)?;
     }
-    // Templates of the UI code run their OnLoad once applied.
     if from_xml && let Some(id) = widget_of(vm, frame) {
         run_script(vm, id, "OnLoad", &[]);
     }
-    Ok(vec![frame])
+    Ok(())
 }
 
 /// Applies template `name` to a frame: the function a test defined for it
@@ -1904,7 +1939,11 @@ const POINTS: &[&str] = &[
 
 fn set_point(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let class = engine(vm).world.widgets[id.0].class.clone();
-    let Value::Str(point) = c.arg(2) else {
+    // Secrets are the values they hide here: the method refused them
+    // before, unless allowed (untainted, as Blizzard's aura containers
+    // anchor their buttons: `SetPoint(secretwrap(...))`).
+    let arg = |vm: &Vm, n: usize| vm.hidden(c.arg(n));
+    let Value::Str(point) = arg(vm, 2) else {
         return Err(c_error(
             vm,
             &format!(
@@ -1923,7 +1962,7 @@ fn set_point(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         ));
     }
     // SetPoint(point [, relativeTo [, relativePoint]] [, x, y])
-    let (relative, relative_point, x, y) = match c.arg(3) {
+    let (relative, relative_point, x, y) = match arg(vm, 3) {
         Value::Num(_) => (
             None,
             point.clone(),
@@ -1939,11 +1978,11 @@ fn set_point(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
                 }
                 v => Some(v),
             };
-            let rp = match c.arg(4) {
+            let rp = match arg(vm, 4) {
                 Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).to_uppercase(),
                 _ => point.clone(),
             };
-            let (xi, yi) = if matches!(c.arg(4), Value::Num(_)) {
+            let (xi, yi) = if matches!(arg(vm, 4), Value::Num(_)) {
                 (4, 5)
             } else {
                 (5, 6)

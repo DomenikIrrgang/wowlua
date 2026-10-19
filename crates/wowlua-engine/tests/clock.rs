@@ -43,6 +43,32 @@ return table.concat(log, ' '), ticks, tostring(t:IsCancelled()), tostring(timer:
 }
 
 #[test]
+fn timed_signal_maps_signal_keys_when_due() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local log = {}
+local map = C_Timer.NewTimedSignalMap(function(key) log[#log + 1] = key .. '@' .. GetTime() end)
+map:SignalAfter(1, 3)
+map:SignalAt(2, 1)
+map:SignalAfter(3, 2)
+map:SignalAfter(3, 4)
+map:SignalAt(4, 2)
+map:CancelSignal(4)
+local count, has = map:GetSignalCount(), tostring(map:HasSignal(3))
+local nextKey, nextTime = map:GetNextSignal()
+local time3 = map:GetSignalTime(3)
+mock.advanceTime(5)
+return table.concat(log, ' '), count, has, nextKey, nextTime, time3, map:GetSignalCount(),
+    tostring(map:GetSignalTime(1)), select('#', map:GetNextSignal())",
+    );
+    assert_eq!(
+        r,
+        ["2@1 1@3 3@4", "3", "true", "2", "1", "4", "0", "nil", "0"]
+    );
+}
+
+#[test]
 fn on_update_runs_per_frame_for_visible_frames() {
     let mut vm = vm();
     let r = run(

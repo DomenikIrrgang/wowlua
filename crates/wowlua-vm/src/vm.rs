@@ -188,6 +188,10 @@ pub struct Vm {
     pub(crate) secret_used: bool,
     /// Where taint came from (`crate::origin`).
     pub(crate) origins: crate::origin::Origins,
+    /// `WOWLUA_TAINT_TRACE`: log where execution becomes tainted
+    /// (`crate::origin`); `1` or `all` for every site, else only sites
+    /// whose source contains the text.
+    pub taint_trace: Option<String>,
     /// The host's state (the engine's, spec emulator §17.6), for its
     /// natives.
     pub host: Option<Box<dyn std::any::Any>>,
@@ -297,6 +301,9 @@ impl Vm {
             c_depth: 0,
             secret_used: false,
             origins: Default::default(),
+            taint_trace: std::env::var("WOWLUA_TAINT_TRACE")
+                .ok()
+                .filter(|v| !v.is_empty() && v != "0"),
             host: None,
             secret_reveal: false,
             cstack: Vec::new(),

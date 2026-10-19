@@ -5,6 +5,11 @@
 //! table or an upvalue, with what tainted it then. A report walks the chain
 //! from a refused action (or a failed assertion) back to the addon's line.
 //! Records are kept per site and cause, so they stay few.
+//!
+//! `WOWLUA_TAINT_TRACE=1` (or `all`) logs each new read site on stderr as
+//! it is recorded, with its chain; any other text logs only the sites whose
+//! source contains it (`WOWLUA_TAINT_TRACE=Blizzard_AuraContainer`): where
+//! Blizzard's code picks up an addon's taint.
 
 use std::collections::HashMap;
 use std::rc::Rc;
@@ -91,7 +96,44 @@ impl Vm {
         self.origins.records.push(record);
         let o = Origin(self.origins.records.len() as u32);
         self.origins.index.insert(key, o);
+        self.trace(o, write);
         o
+    }
+
+    /// `WOWLUA_TAINT_TRACE`: a new site where execution became tainted, or
+    /// where secure code stored a tainted value, on stderr with the chain
+    /// behind it and the Lua calls leading there (once per site and cause,
+    /// as the records are kept).
+    fn trace(&self, o: Origin, write: bool) {
+        let Some(filter) = &self.taint_trace else {
+            return;
+        };
+        let (Some(Record::Read { site, .. } | Record::Write { site, .. }), Some(f)) =
+            (self.origins.get(o), self.cur.frames.last())
+        else {
+            return;
+        };
+        if filter != "1" && filter != "all" && !site.source.contains(filter.as_str()) {
+            return;
+        }
+        let by = self.taint_name(self.cur.taint.stack).unwrap_or_default();
+        let head = if !write {
+            format!("execution tainted by {by}")
+        } else if self.heap.func(f.closure).taint().is_secure() {
+            format!("secure code stored a value tainted by {by}")
+        } else {
+            return;
+        };
+        let mut out = format!("taint: {head}\n{}", self.taint_report(o));
+        let calls = self.levels().into_iter().filter(|l| l.what != "C");
+        for l in calls.take(8) {
+            out.push_str(&format!(
+                "    at {}:{}\n",
+                String::from_utf8_lossy(&l.short_src),
+                l.currentline
+            ));
+        }
+        eprint!("{out}");
     }
 
     /// The running Lua function's site at instruction `pc`.
