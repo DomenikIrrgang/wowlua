@@ -65,6 +65,9 @@ pub struct Trainers {
     pub filtered_out: Option<std::collections::BTreeSet<&'static str>>,
     /// The open trainer's recorded data (a class trainer's), if any.
     pub key: Option<&'static str>,
+    /// Its services' ranks still loading this session: spell → the
+    /// tooltip data each waits for (`loading`).
+    pub loading: HashMap<i64, f64>,
     /// Its services shown (their indices in its data), as the window
     /// opened or a filter changed.
     pub shown: Vec<usize>,
@@ -129,6 +132,57 @@ struct Listed {
     cost: f64,
     line: String,
     abilities: Vec<String>,
+    /// Its rank still loading as recorded (nil): the tooltip data it
+    /// waits for.
+    pending: Option<f64>,
+}
+
+/// A class's spells' ranks, from all its trainers' recordings (one may
+/// have a rank still loading).
+fn class_ranks(class: &str) -> &'static HashMap<i64, String> {
+    static RANKS: OnceLock<std::sync::Mutex<HashMap<String, &'static HashMap<i64, String>>>> =
+        OnceLock::new();
+    let all = RANKS.get_or_init(Default::default);
+    let mut all = all.lock().unwrap_or_else(|e| e.into_inner());
+    all.entry(class.to_string()).or_insert_with(|| {
+        let mut ranks = HashMap::new();
+        let mut keys: Vec<&'static str> = data()
+            .keys()
+            .map(|(k, _)| *k)
+            .filter(|k| k.split('-').next() == Some(class))
+            .collect();
+        keys.sort_unstable();
+        keys.dedup();
+        for key in keys {
+            let n = match recorded(key, "GetNumTrainerServices()").first() {
+                Some(Rv::Num(n)) => *n as usize,
+                _ => 0,
+            };
+            for i in 1..=n {
+                let tip = recorded(key, &format!("C_TooltipInfo.GetTrainerService({i})"));
+                let info = recorded(key, &format!("GetTrainerServiceInfo({i})"));
+                if let (Some(Rv::Num(id)), Some(Rv::Str(rank))) =
+                    (tip.first().and_then(|t| t.get("id")), info.get(4))
+                {
+                    ranks.entry(*id as i64).or_insert_with(|| rank.clone());
+                }
+            }
+        }
+        Box::leak(Box::new(ranks))
+    })
+}
+
+/// The level a class's spell is learned at (`C_Spell.GetSpellLevelLearned`,
+/// any of its trainers' recordings).
+fn learned_level(class: &str, spell: i64) -> Option<f64> {
+    let call = format!("C_Spell.GetSpellLevelLearned({spell})");
+    data()
+        .iter()
+        .filter(|((k, c), _)| k.split('-').next() == Some(class) && *c == call)
+        .find_map(|(_, a)| match Rv::answer(a).first() {
+            Some(Rv::Num(n)) if *n > 0.0 => Some(*n),
+            _ => None,
+        })
 }
 
 /// A recorded trainer's services, in its order.
@@ -157,12 +211,33 @@ fn listed(key: &'static str) -> &'static [Listed] {
                 let abilities =
                     numf(recorded(key, &format!("GetTrainerServiceNumAbilityReq({i})")).first())
                         as usize;
+                let spell = numf(tip.first().and_then(|t| t.get("id"))) as i64;
+                let rank = text(info.get(4));
+                let class = key.split('-').next().unwrap_or(key);
+                let pending = match rank {
+                    None => Some(numf(tip.first().and_then(|t| t.get("dataInstanceID")))),
+                    Some(_) => None,
+                };
                 Listed {
-                    spell: numf(tip.first().and_then(|t| t.get("id"))) as i64,
+                    spell,
                     name: text(info.first()).unwrap_or_default(),
                     icon: numf(info.get(2)),
-                    level: numf(recorded(key, &format!("GetTrainerServiceLevelReq({i})")).first()),
-                    rank: text(info.get(4)),
+                    level: match numf(
+                        recorded(key, &format!("GetTrainerServiceLevelReq({i})")).first(),
+                    ) {
+                        // Known to the probing character (a known one's
+                        // level reads 0): the level the spell is learned
+                        // at, a passive's aside (the test checks the two
+                        // agree where both are recorded; Parry is learned
+                        // at 1, taught at 6).
+                        0.0 if rank.as_deref() != Some("Passive") => {
+                            learned_level(class, spell).unwrap_or(0.0)
+                        }
+                        0.0 => 0.0,
+                        level => level,
+                    },
+                    rank: rank.or_else(|| class_ranks(class).get(&spell).cloned()),
+                    pending,
                     cost: numf(recorded(key, &format!("GetTrainerServiceCost({i})")).first()),
                     line: text(recorded(key, &format!("GetTrainerServiceSkillLine({i})")).first())
                         .unwrap_or_default(),
@@ -230,8 +305,9 @@ fn num(v: Value) -> Option<f64> {
 }
 
 /// `defineTrainer(npc, { greeting, services = { { spell, name, icon,
-/// level, rank, cost, skillLine, skillLineIndex } } })`, or `{ class }`:
-/// the class's recorded services.
+/// level, rank, cost, skillLine, skillLineIndex } } })`, or `{ class,
+/// loading = { [spell] = tooltip data } }`: the class's recorded services
+/// (the ranks still loading this session: nil till their data comes).
 pub fn control_define(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(npc) = units::handle_of(vm, c.arg(1)) else {
         return Err(vm.error("defineTrainer: an NPC expected"));
@@ -257,6 +333,15 @@ pub fn open(vm: &mut Vm, npc: UnitId) {
         }
         _ => None,
     };
+    let mut loading = HashMap::new();
+    if let Value::Table(l) = field(vm, data, "loading") {
+        let entries: Vec<(Value, Value)> = vm.heap.table(l).entries().collect();
+        for (spell, id) in entries {
+            if let (Value::Num(spell), Value::Num(id)) = (spell, id) {
+                loading.insert(spell as i64, id);
+            }
+        }
+    }
     {
         let t = &mut engine_mut(vm).world.trainers;
         t.open = Some(npc);
@@ -264,6 +349,7 @@ pub fn open(vm: &mut Vm, npc: UnitId) {
         t.selected = None;
         t.ranks_loaded = false;
         t.key = key;
+        t.loading = loading;
     }
     refilter(vm);
     engine_mut(vm).units.npc = Some(npc);
@@ -415,6 +501,7 @@ fn services(vm: &mut Vm) -> Vec<Service> {
     }
     if let Some(key) = t.key {
         let shown = t.shown.clone();
+        let loading = t.loading.clone();
         let list = listed(key);
         return shown
             .into_iter()
@@ -432,7 +519,7 @@ fn services(vm: &mut Vm) -> Vec<Service> {
                     cost: l.cost,
                     skill_line: vm.str(&l.line),
                     line_index: tab_of(key, &l.line),
-                    rank_data: None,
+                    rank_data: loading.get(&l.spell).copied().or(l.pending),
                     recorded: Some((key, i + 1)),
                     abilities: l.abilities.clone(),
                 }
@@ -730,6 +817,8 @@ fn taught(vm: &mut Vm, c: NativeCall) -> Ret {
     let slot = (1..=12).find(|n| !engine(vm).world.character.actions.contains_key(n));
     if let Some(slot) = slot {
         let sub_type = vm.str("spell");
+        widgets::keep(vm, sub_type);
+        widgets::keep(vm, s.icon);
         let action = crate::actions::Action {
             kind: "spell".into(),
             id: spell,
@@ -931,6 +1020,46 @@ mod tests {
                 }
             }
         }
+        assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    }
+
+    /// A service's level is the level its spell is learned at, wherever
+    /// both are recorded, a passive's aside (what fills the levels the
+    /// probing character's known services lack).
+    #[test]
+    fn a_service_s_level_is_its_spell_s() {
+        let mut checked = 0;
+        let mut wrong = Vec::new();
+        for ((key, call), answer) in data() {
+            let Some(i) = call
+                .strip_prefix("GetTrainerServiceLevelReq(")
+                .and_then(|r| r.strip_suffix(')'))
+            else {
+                continue;
+            };
+            let level = match Rv::answer(answer).first() {
+                Some(Rv::Num(n)) if *n > 0.0 => *n,
+                _ => continue,
+            };
+            let tip = recorded(key, &format!("C_TooltipInfo.GetTrainerService({i})"));
+            let Some(Rv::Num(spell)) = tip.first().and_then(|t| t.get("id")) else {
+                continue;
+            };
+            let info = recorded(key, &format!("GetTrainerServiceInfo({i})"));
+            if matches!(info.get(4), Some(Rv::Str(r)) if r == "Passive") {
+                continue;
+            }
+            let class = key.split('-').next().unwrap_or(key);
+            if let Some(learned) = learned_level(class, *spell as i64) {
+                checked += 1;
+                if learned != level {
+                    wrong.push(format!(
+                        "{key} {i} (spell {spell}): {level}, learned {learned}"
+                    ));
+                }
+            }
+        }
+        assert!(checked > 0);
         assert!(wrong.is_empty(), "{}", wrong.join("\n"));
     }
 }

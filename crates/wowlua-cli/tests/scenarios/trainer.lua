@@ -2,9 +2,7 @@
 -- level 2 warrior talks to Llane Beshere (Northshire's warrior trainer),
 -- asks for training, learns Battle Shout (10 copper) and closes the window
 -- (scenarios/trainer.lua). Each step at its recorded time (a click: a
--- moment before the server's answer), the ping as recorded (~0.3 s). The
--- services' spell IDs other than Battle Shout's are unrecorded (the
--- classic ones).
+-- moment before the server's answer), the ping as recorded (~0.3 s).
 local e = __engine
 local player = e.player
 e.setLatency(0.3)
@@ -19,16 +17,9 @@ e.defineGossip(llane, {
     text = "Stormwind is the pillar of the human race, maintained through strength of will and the edge of a sturdy blade.",
     options = { { name = "I require warrior training.", icon = 132058, gossipOptionID = 96654, opens = "trainer" } },
 })
-e.defineTrainer(llane, {
-    greeting = "",
-    services = {
-        { spell = 6673, name = "Battle Shout", icon = 132333, level = 1, rank = "Rank 1", cost = 10, skillLine = "Fury", skillLineIndex = 3 },
-        { spell = 100, name = "Charge", icon = 132337, level = 4, rank = "Rank 1", cost = 100 },
-        { spell = 772, name = "Rend", icon = 132155, level = 4, rank = "Rank 1", rankData = 9118, cost = 100 },
-        { spell = 3127, name = "Parry", icon = 132269, level = 6, rank = "Passive", cost = 100 },
-        { spell = 6343, name = "Thunder Clap", icon = 136105, level = 6, rank = "Rank 1", cost = 100 },
-    },
-})
+-- Its services as the client listed them (Northshire's: the recorded
+-- WARRIOR-911); Rend's rank still loading that session, its greeting empty.
+e.defineTrainer(llane, { class = "WARRIOR", greeting = "", loading = { [772] = 9118 } })
 local now = 0
 -- Time passes in frames, as in the client (60 a second: Blizzard's
 -- animations and OnUpdate code run), the rest of a step as one jump.

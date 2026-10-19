@@ -5,7 +5,7 @@
 -- clicks tin's Create again and again while they're made, smelts tin bars
 -- (moving stops it) and bronze bars (three skill-ups). Each step at its
 -- recorded time (a click: a round trip before the server's answer,
--- ~0.35 s). Not yet: the filter's menu (29.8 s), a recipe picked (43.1 s),
+-- ~0.35 s). Not yet: the filter's menu (29.8 s: which entry, unrecorded),
 -- the walk; the Create clicks the client ignored (no
 -- TRADE_SKILL_CRAFT_BEGIN: a request still unanswered) are left out.
 local e = __engine
@@ -56,6 +56,13 @@ local function press(frame, button)
     local ok, err = pcall(e.click, frame, button)
     if not ok then check("clicked: " .. tostring(err), false) end
 end
+local function pick(recipe)
+    local list = ProfessionsFrame.CraftingPage.RecipeList
+    press(list.ScrollBox:FindFrameByPredicate(function(_, node)
+        local data = node:GetData()
+        return data.recipeInfo ~= nil and data.recipeInfo.recipeID == recipe
+    end))
+end
 -- The wheel made: a cast of 10 s; the window closed meanwhile.
 at(27.640) press(ProfessionsFrame.CraftingPage.CreateButton)
 at(37.442) e.pressKey("ESCAPE")
@@ -65,19 +72,13 @@ at(39.0)
 check("the wheel made", C_Item.GetItemCount(279944) == 2)
 at(39.546) player:openTradeSkill(3100, "Blacksmithing")
 at(41.004) player:openTradeSkill(2656, "Mining")
+at(43.197) pick(2657)
 at(45.634) world("PLAYER_STARTED_TURNING")
 at(46.065) world("PLAYER_STARTED_MOVING")
 at(47.742) e.pressKey("ESCAPE")
 at(48.0)
 -- At the forge: Smelting again; bronze and copper picked.
 player:setSpellFocus({ "Forge" })
-local function pick(recipe)
-    local list = ProfessionsFrame.CraftingPage.RecipeList
-    press(list.ScrollBox:FindFrameByPredicate(function(_, node)
-        local data = node:GetData()
-        return data.recipeInfo ~= nil and data.recipeInfo.recipeID == recipe
-    end))
-end
 local page = ProfessionsFrame and ProfessionsFrame.CraftingPage
 at(167.288) player:openTradeSkill(2656, "Mining")
 at(170.091) pick(2659)

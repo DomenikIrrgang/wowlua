@@ -2,7 +2,8 @@
 -- trainer UI asks them, every service shown (the filters on, then put
 -- back): name, rank, state, cost, level and skill asked, the abilities
 -- needed, icon, description, the spell it teaches (its tooltip's) and,
--- once loaded, the spells' info, description, cooldown and cost; into
+-- once loaded, the spells' info, description, cooldown, cost and the
+-- level each is learned at; into
 -- StdTestState.engineTrainerAnswers[key][call] (the class's and the
 -- trainer NPC's for a class trainer, `WARRIOR-911`; the profession's for
 -- another) in the answers probe's form (`cargo xtask ingest` writes each
@@ -80,6 +81,7 @@ const BY_SPELL: string[] = {
     "GetSpellBaseCooldown",
     "C_SpellBook.IsSpellKnown",
     "IsPlayerSpell",
+    "C_Spell.GetSpellLevelLearned",
 }
 
 export function trainerProbe()
