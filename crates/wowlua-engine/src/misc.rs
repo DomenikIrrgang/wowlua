@@ -321,8 +321,8 @@ fn is_player_in_world(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(!engine(vm).world.loading_screen)])
 }
 
-/// `GetLocale()`: the `textLocale` CVar, else `"enUS"` (the recordings'
-/// client strings are English; its locale CVars were recorded empty).
+/// `GetLocale()`: the `textLocale` CVar, else `"enUS"` (probed: enUS; its
+/// locale CVars were recorded empty).
 fn get_locale(vm: &mut Vm, _c: NativeCall) -> Ret {
     let locale = crate::framescript::cvar_get(vm, "textLocale").filter(|l| !l.is_empty());
     Ok(vec![vm.str(locale.as_deref().unwrap_or("enUS"))])
@@ -330,8 +330,9 @@ fn get_locale(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 /// `GetFileIDFromPath(path)`: a loose file's ID, the same for the same path
 /// (any case, either slash, with or without its extension), new ones
-/// negative counting down (unverified: the client gives an addon's own
-/// files generated negative IDs; a game file's real ID is not known here).
+/// negative counting down (probed: an addon's texture -1755; the client's
+/// own numbering of loose files is not reproduced; a game file's real ID is
+/// not known here).
 fn get_file_id_from_path(vm: &mut Vm, c: NativeCall) -> Ret {
     let Value::Str(s) = c.arg(1) else {
         return Ok(vec![Value::Num(0.0)]);
@@ -349,10 +350,10 @@ fn get_file_id_from_path(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Num(id)])
 }
 
-/// `GetCurrentRegion()`: 0 (unverified: the recorded `GetCurrentRegionName()`
-/// is empty, which no standard region's ID gives).
+/// `GetCurrentRegion()`: WoW Forever's region, 110 (probed; its name
+/// empty).
 fn get_current_region(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(0.0)])
+    Ok(vec![Value::Num(110.0)])
 }
 
 /// `GetCurrentRegionName()`: empty (recorded).
@@ -362,8 +363,9 @@ fn get_current_region_name(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 /// `C_CurrencyInfo.GetCoinTextureString(amount [, fontHeight])`: gold,
 /// silver and copper each with its icon (`|T…:h:h:2:0|t`), parts that are
-/// 0 left out, a zero amount as 0 copper (unverified: the client's exact
-/// markup).
+/// 0 left out, a zero amount as 0 copper (probed: 123456 shows as 12 gold,
+/// 34 silver, 56 copper, each number before its icon, spaced; unverified:
+/// the icons' exact markup, a zero amount).
 fn get_coin_texture_string(vm: &mut Vm, c: NativeCall) -> Ret {
     let amount = match vm.hidden(c.arg(1)) {
         Value::Num(n) => n.max(0.0).floor() as i64,
@@ -390,7 +392,8 @@ fn get_coin_texture_string(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_Map.GetAreaInfo(areaID)`: the area's name; none known here (noted
-/// as unanswered; the client's area table is not recorded).
+/// as unanswered; the client's area table is not recorded: probed, 1637
+/// is "Orgrimmar").
 fn get_area_info(vm: &mut Vm, c: NativeCall) -> Ret {
     crate::note_default(vm, "C_Map.GetAreaInfo", &c, 1);
     Ok(vec![vm.str("")])
