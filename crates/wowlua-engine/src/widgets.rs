@@ -1700,6 +1700,21 @@ fn create_region(vm: &mut Vm, id: WidgetId, c: NativeCall, class: &str) -> Ret {
         None => None,
     };
     let region = create(vm, class, name, Some(id));
+    // `CreateTexture(name, layer, inherits, sublevel)`: the layer given (a
+    // fresh region's recorded default otherwise).
+    if let Some(layer) = vm.opt_str(&c, 3)? {
+        let rid = widget_of(vm, region).expect("a widget");
+        let sublevel = match c.arg(5) {
+            Value::Num(n) => n,
+            _ => 0.0,
+        };
+        store(
+            vm,
+            rid,
+            "DrawLayer",
+            &[Value::Str(layer), Value::Num(sublevel)],
+        );
+    }
     // `CreateFontString(name, layer, inherits)`: a font object's font, or
     // a template.
     if let Some(t) = vm.opt_str(&c, 4)? {

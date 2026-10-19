@@ -15,8 +15,8 @@ use std::rc::Rc;
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, TableRef, Value, Vm};
 
-use crate::widgets::{self, MethodFn, WidgetId};
 use crate::engine;
+use crate::widgets::{self, MethodFn, WidgetId};
 
 // ------------------------------------------------------------- helpers
 
@@ -376,10 +376,7 @@ fn get_cursor_position(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 fn get_utf8_cursor_position(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let at = cursor(vm, id);
     let text = text_of(vm, id);
-    let n = text
-        .char_indices()
-        .take_while(|(i, _)| *i < at)
-        .count();
+    let n = text.char_indices().take_while(|(i, _)| *i < at).count();
     Ok(vec![Value::Num(n as f64)])
 }
 
@@ -1074,12 +1071,10 @@ fn get_anchor_type(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
         return Ok(vec![v]);
     }
     match stored(vm, id, "Owner") {
-        Some(owner) if owner.first().is_some_and(|v| !v.is_nil()) => {
-            match owner.get(1).copied() {
-                Some(v @ Value::Str(_)) => Ok(vec![v]),
-                _ => Ok(vec![vm.str("ANCHOR_LEFT")]),
-            }
-        }
+        Some(owner) if owner.first().is_some_and(|v| !v.is_nil()) => match owner.get(1).copied() {
+            Some(v @ Value::Str(_)) => Ok(vec![v]),
+            _ => Ok(vec![vm.str("ANCHOR_LEFT")]),
+        },
         _ => Ok(vec![vm.str("ANCHOR_NONE")]),
     }
 }
@@ -1237,7 +1232,10 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
     out.extend([
         ("Font:GetFontHeight", get_font_height as MethodFn),
         ("FontString:GetFontHeight", get_font_height),
-        ("Font:GetFontObjectForAlphabet", get_font_object_for_alphabet),
+        (
+            "Font:GetFontObjectForAlphabet",
+            get_font_object_for_alphabet,
+        ),
         ("FontString:GetMaxLines", get_max_lines),
         ("FontString:CanWordWrap", can_word_wrap),
         ("FontString:CanNonSpaceWrap", can_non_space_wrap),
@@ -1290,7 +1288,10 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
         ("Cooldown:SetCooldownDuration", set_cooldown_duration),
         ("Cooldown:Clear", clear_cooldown),
         ("Cooldown:GetCountdownFontString", get_countdown_font_string),
-        ("Cooldown:GetHideCountdownNumbers", get_hide_countdown_numbers),
+        (
+            "Cooldown:GetHideCountdownNumbers",
+            get_hide_countdown_numbers,
+        ),
         ("Cooldown:GetRotation", get_plain_rotation),
         // Animations.
         ("Animation:GetElapsed", get_animation_elapsed),

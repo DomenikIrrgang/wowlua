@@ -51,6 +51,7 @@ pub mod mail;
 pub mod maps;
 pub mod measures;
 pub mod merchant;
+pub mod methods2;
 pub mod misc;
 pub mod party;
 pub mod pets;
@@ -308,8 +309,10 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         api,
         behaviours: fill.into_iter().chain(own).collect(),
         fill_ins,
-        methods: widgets::behaviours()
+        // The fill-in methods first: the engine's own take their place.
+        methods: methods2::methods()
             .into_iter()
+            .chain(widgets::behaviours())
             .chain(curves::methods())
             .chain(clock::methods())
             .chain(healcalc::methods())
