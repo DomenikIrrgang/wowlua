@@ -19,6 +19,7 @@ pub mod channels;
 pub mod character;
 pub mod chat;
 pub mod clock;
+pub mod conditionals;
 pub mod controls;
 pub mod cursor;
 pub mod curves;
@@ -83,6 +84,8 @@ pub struct Engine {
     pub world: widgets::World,
     pub timers: clock::Timers,
     pub units: units::Units,
+    /// The action bar page (`conditionals`).
+    pub bars: conditionals::Bars,
     /// Animation groups playing.
     pub animations: animations::Animations,
     /// Protected actions refused so far.
@@ -264,6 +267,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(facts::behaviours())
             .chain(encounters::behaviours())
             .chain(pets::behaviours())
+            .chain(conditionals::behaviours())
             .chain([
                 ("import", ui::build::import as NativeFn),
                 (
@@ -289,6 +293,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         world: widgets::World::default(),
         timers: clock::Timers::default(),
         units: units::Units::default(),
+        bars: Default::default(),
         refusals: Vec::new(),
         animations: Default::default(),
         defaulted: Default::default(),
