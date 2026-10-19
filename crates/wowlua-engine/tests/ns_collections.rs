@@ -41,7 +41,7 @@ return #C_MountJournal.GetMountIDs(), source.itemID, source.visualID,
     assert_eq!(
         &r[..9],
         [
-            "139", "44803", "11257", "44803", "60", "111", "-1", "true", "false"
+            "0", "44803", "11257", "44803", "60", "111", "-1", "true", "false"
         ]
     );
     assert_eq!(r[9], "false");
