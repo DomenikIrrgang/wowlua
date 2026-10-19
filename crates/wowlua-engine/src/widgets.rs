@@ -389,6 +389,16 @@ pub fn is_a(e: &Engine, name: &str, base: &str) -> bool {
 /// The metatable of class `name`, made on first use: `__index` holds the
 /// methods of the class and its bases (the nearest class's wins).
 pub fn class_meta(vm: &mut Vm, name: &str) -> TableRef {
+    // An aura container is a frame (Blizzard_AuraContainer's intrinsic of
+    // a `Frame`): the client names it one and gives it exactly a frame's
+    // methods (`/stdtest engine`), and ElvUI, which adds its API to the
+    // frame type's methods once, calls it on its aura containers
+    // error-free in the client. Unverified: the shared table itself.
+    let name = if name == "AuraContainer" {
+        "Frame"
+    } else {
+        name
+    };
     if let Some(&t) = engine(vm).world.classes.get(name) {
         return t;
     }
@@ -569,6 +579,23 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
     // without a color of their own).
     if class == "Font" {
         store(vm, id, "TextColor", &[Value::Num(1.0); 4]);
+    }
+    // Regions the client makes with the widget (`/stdtest engine`: a new
+    // edit box has 2, a new cooldown 1). A cooldown's is its countdown
+    // text (ElvUI takes it as `cooldown:GetRegions()`); an edit box's
+    // first its text, then a texture (ElvUI's color picker sets the font
+    // of `HexBox:GetRegions()`, error-free in the client; unverified: the
+    // second's type).
+    match class {
+        "EditBox" => {
+            create(vm, "FontString", None, Some(id));
+            create(vm, "Texture", None, Some(id));
+        }
+        "Cooldown" => {
+            let fs = create(vm, "FontString", None, Some(id));
+            store(vm, id, "\u{0}CountdownFontString", &[fs]);
+        }
+        _ => {}
     }
     // A script object the documentation calls a userdata is one, with its
     // class's methods (`ObjectType = "Userdata"`: `type(curve)` is

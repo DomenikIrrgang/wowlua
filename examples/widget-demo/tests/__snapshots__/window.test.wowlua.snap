@@ -136,6 +136,12 @@
 |     size 180 x 20
 |     TOPLEFT on WidgetDemoWindow TOPLEFT (22, -134)
 |     text ""
+|     FontString <FontString>
+|       shown
+|       size 1 x 1
+|     Texture <Texture>
+|       shown
+|       size 0 x 0
 |     Texture <Texture>
 |       shown
 |       size 8 x 20

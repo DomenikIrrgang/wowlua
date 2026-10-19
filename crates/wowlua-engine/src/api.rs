@@ -137,6 +137,14 @@ pub fn api(flavor: &str) -> Option<&'static Api> {
             }
         }
     }
+    // Events the client knows that neither the documentation nor Ketho's
+    // event list names: `UPDATE_EXPANSION_LEVEL` (`C_EventUtils.
+    // IsEventValid` true in WoW Forever, probed 2026-10-19; Blizzard's
+    // StatusTrackingManagerOverrides.lua and ElvUI's experience bar
+    // register it).
+    if flavor == "camelot" {
+        parsed.events.insert("UPDATE_EXPANSION_LEVEL".to_string());
+    }
     // Frame types the client has that the documentation lacks or gives no
     // base (`/stdtest engine`: each a Frame by IsObjectType).
     for name in ["Browser", "OffScreenFrame", "AuraContainer", "Checkout"] {
