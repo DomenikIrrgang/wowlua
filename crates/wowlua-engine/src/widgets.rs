@@ -2719,6 +2719,32 @@ fn set_text(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `region:SetDrawLayer(layer [, sublevel])`: kept, the sublevel 0 when
+/// not given (documented `Default = 0`; `GetDrawLayer` then answers both,
+/// as Blizzard's menus' radio entries need: the compositor's textures are
+/// set to `"ARTWORK"` alone, then raised a sublevel).
+fn set_draw_layer(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let sublevel = match c.arg(3) {
+        Value::Num(n) => n,
+        _ => 0.0,
+    };
+    store(vm, id, "DrawLayer", &[c.arg(2), Value::Num(sublevel)]);
+    Ok(vec![])
+}
+
+/// `fontString:SetTextToFit([text])`: its text set as `SetText` sets it
+/// (the documented `text`; Blizzard's menus' entries are labelled so),
+/// then its width the text's (the name; unverified).
+fn set_text_to_fit(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    set_text(vm, id, c)?;
+    let len = match engine(vm).world.widgets[id.0].text {
+        Some(Value::Str(s)) => vm.str_bytes(s).len(),
+        _ => 0,
+    };
+    resize(vm, id, Some(len as f64 * 6.0), None);
+    Ok(vec![])
+}
+
 /// A widget's text set, kept alive while it is the widget's (its
 /// properties hold it: the collector sees them, not the widget).
 pub fn store_text(vm: &mut Vm, id: WidgetId, text: Option<Value>) {
@@ -3656,6 +3682,8 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("GetCenter", get_center),
         ("GetRect", get_rect),
         ("SetText", set_text),
+        ("SetTextToFit", set_text_to_fit),
+        ("SetDrawLayer", set_draw_layer),
         ("SetNormalFontObject", set_normal_font_object),
         ("SetParentKey", set_parent_key),
         ("GetTextScale", get_text_scale),

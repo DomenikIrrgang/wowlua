@@ -2480,8 +2480,6 @@ const NOTHING: &[&str] = &[
     "C_IslandsQueue.GetIslandsWeeklyQuestID",
     "C_IslandsQueue.QueueForIsland",
     "C_IslandsQueue.RequestPreloadRewardData",
-    "C_LFGListRoles.GetRoles",
-    "C_LFGListRoles.SetRoles",
     "C_LegendaryCrafting.CloseRuneforgeInteraction",
     "C_LegendaryCrafting.CraftRuneforgeLegendary",
     "C_LegendaryCrafting.GetRuneforgeItemPreviewInfo",

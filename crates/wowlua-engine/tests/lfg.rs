@@ -352,7 +352,7 @@ return updated, SeenText(), tostring(C_LFGList.HasActiveEntryInfo()), select('#'
         r,
         [
             "LFG_LIST_ACTIVE_ENTRY_UPDATE() 796,799 true",
-            "LFG_LIST_ACTIVE_ENTRY_UPDATE()",
+            "LFG_LIST_ACTIVE_ENTRY_UPDATE(nil)",
             "false",
             "0"
         ]
@@ -376,7 +376,7 @@ fn member(name: &str, class: &str, role: &str) -> Member {
 #[test]
 fn a_search_finds_the_servers_listings() {
     let mut vm = vm();
-    let solo = wowlua_engine::lfg::add_listing(
+    wowlua_engine::lfg::add_listing(
         &mut vm,
         SearchResult {
             activity_ids: vec![1983.0],
@@ -386,7 +386,7 @@ fn a_search_finds_the_servers_listings() {
             ..SearchResult::default()
         },
     );
-    let group = wowlua_engine::lfg::add_listing(
+    wowlua_engine::lfg::add_listing(
         &mut vm,
         SearchResult {
             activity_ids: vec![800.0, 799.0],
@@ -399,7 +399,7 @@ fn a_search_finds_the_servers_listings() {
             ..SearchResult::default()
         },
     );
-    let _zone = wowlua_engine::lfg::add_listing(
+    wowlua_engine::lfg::add_listing(
         &mut vm,
         SearchResult {
             activity_ids: vec![876.0],
@@ -407,7 +407,6 @@ fn a_search_finds_the_servers_listings() {
             ..SearchResult::default()
         },
     );
-    assert_eq!((solo, group), (1.0, 2.0));
     run(
         &mut vm,
         &button("C_LFGList.Search(Category, 0, 0, nil, false, nil, Activities)"),
@@ -474,7 +473,8 @@ return before, count, table.concat(list, ','), info.searchResultID, table.concat
             "0"
         ]
     );
-    // The activities asked for; another category; the results cleared.
+    // The activities asked for; another category; the results cleared:
+    // each search numbers its results anew (recorded).
     let r = run(
         &mut vm,
         "Activities = { 799 }
@@ -489,7 +489,7 @@ local _, zones = C_LFGList.GetFilteredSearchResults()
 C_LFGList.ClearSearchResults()
 return first, table.concat(zones, ','), (C_LFGList.GetSearchResults())",
     );
-    assert_eq!(r, ["2", "3", "0"]);
+    assert_eq!(r, ["3", "4", "0"]);
 }
 
 fn repo() -> PathBuf {
@@ -608,5 +608,57 @@ return tostring(C_LFGList.HasActiveEntryInfo()), SeenText()",
     );
     let errors = wowlua_engine::engine(&vm).world.ui.errors[errors_before..].to_vec();
     assert!(errors.is_empty(), "{errors:#?}");
-    assert_eq!(r, ["false", "LFG_LIST_ACTIVE_ENTRY_UPDATE()"]);
+    assert_eq!(r, ["false", "LFG_LIST_ACTIVE_ENTRY_UPDATE(nil)"]);
+}
+
+/// A search finds the player's own listing (recorded: its delist button
+/// among the browse tab's results), each search numbering its results
+/// after the last's; the server's word of a result's change is told only
+/// for the last search's results (recorded).
+#[test]
+fn a_search_finds_the_own_listing_and_numbers_its_results_anew() {
+    let mut vm = vm();
+    wowlua_engine::lfg::add_listing(
+        &mut vm,
+        SearchResult {
+            activity_ids: vec![799.0],
+            members: vec![member("Player One", "Hunter", "DAMAGER")],
+            ..SearchResult::default()
+        },
+    );
+    run(&mut vm, WATCH);
+    secure(
+        &mut vm,
+        "C_LFGList.CreateListing({ activityIDs = { 799 }, generalPlaystyle = 1 })",
+    );
+    run(
+        &mut vm,
+        &button("C_LFGList.Search(2, 0, 0, nil, false, nil, { 799 })"),
+    );
+    let r = run(
+        &mut vm,
+        "mock.advanceTime(1)
+mock.click(TheButton)
+mock.advanceTime(1)
+local _, first = C_LFGList.GetSearchResults()
+local own = C_LFGList.GetSearchResultInfo(first[1])
+local other = C_LFGList.GetSearchResultInfo(first[2])
+mock.click(TheButton)
+mock.advanceTime(1)
+local _, second = C_LFGList.GetSearchResults()
+Updated = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('LFG_LIST_SEARCH_RESULT_UPDATED')
+f:SetScript('OnEvent', function(_, _, id) Updated[#Updated + 1] = id end)
+return table.concat(first, ','), tostring(own.hasSelf), own.numMembers, own.leaderName, own.generalPlaystyle,
+    tostring(other.hasSelf), table.concat(second, ','), tostring(C_LFGList.HasSearchResultInfo(1))",
+    );
+    assert_eq!(
+        r,
+        ["1,2", "true", "1", "Player", "1", "false", "3,4", "false"]
+    );
+    let stale = wowlua_engine::lfg::result_updated(&mut vm, 2.0);
+    let latest = wowlua_engine::lfg::result_updated(&mut vm, 4.0);
+    let r = run(&mut vm, "return table.concat(Updated, ',')");
+    assert_eq!((stale, latest, r[0].as_str()), (false, true, "4"));
 }

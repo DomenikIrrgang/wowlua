@@ -20,6 +20,16 @@
 //! The server's other listings are the engine's list (`Lfg::listings`),
 //! empty: a search finds nothing until a test adds some ([`add_listing`]).
 //!
+//! Recorded too (the lfg scenario: four listings posted from Blizzard's
+//! listing panel, each delisted from its own entry among the browse tab's
+//! results): a search finds the player's own listing (`hasSelf`, its
+//! delist button shown); each search numbers its results anew, after the
+//! last search's (the server's updates named results 2 to 34 after the
+//! first search, 41 and 42 after the second, 69 and 70 after the fifth and
+//! sixth, 82 to 107 after the seventh, 129 to 142 after the eighth, each
+//! only of the latest search); a delisting tells `LFG_LIST_ACTIVE_ENTRY_
+//! UPDATE(nil)`.
+//!
 //! Unverified: Blizzard's own (untainted) code searching and listing
 //! without a hardware event (its UI searches from `LFG_LIST_ACTIVE_ENTRY_
 //! UPDATE`, so the restriction is taken to be the addons'); `CreateListing`
@@ -27,7 +37,8 @@
 //! update was saved); a timer's `RemoveListing`; the events' timing beyond
 //! "within a second"; a listing's own entry among the results (`hasSelf`);
 //! the search's filters other than the category and the activities; a
-//! listing expiring.
+//! listing expiring; where the own listing is among the results (first
+//! here).
 
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
@@ -35,6 +46,8 @@ use std::sync::OnceLock;
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, NativeFn, TableRef, Value, Vm};
 
+use crate::units::PLAYER;
+use crate::widgets::WidgetId;
 use crate::{engine, engine_mut, protection, widgets};
 
 /// A listing's time (`GetActiveEntryInfo().duration`, seconds left): the
@@ -289,6 +302,9 @@ pub struct Listing {
     pub activity_ids: Vec<f64>,
     /// When it was made (`GetTime`).
     pub created: f64,
+    /// Its description: the listing panel's comment box's text (the
+    /// client's, `StoreSecureReference("LFGListingComment", editBox)`).
+    pub comment: String,
     pub auto_accept: bool,
     pub private_group: bool,
     pub new_player_friendly: bool,
@@ -314,10 +330,12 @@ pub struct Member {
 }
 
 /// Another group's or player's listing, as the server has it; its
-/// `searchResultID` is given when it is added.
+/// `searchResultID` is given by each search that finds it.
 #[derive(Clone, Debug, Default)]
 pub struct SearchResult {
     pub id: f64,
+    /// The player's own listing (`hasSelf`).
+    pub has_self: bool,
     pub activity_ids: Vec<f64>,
     pub name: String,
     pub comment: String,
@@ -347,14 +365,19 @@ pub struct Lfg {
     pub listing: Option<Listing>,
     /// The server's other listings (none unless a test adds them).
     pub listings: Vec<SearchResult>,
-    /// The last search's answer: its results' IDs.
-    results: Vec<f64>,
+    /// The last search's answer: its results, numbered.
+    results: Vec<SearchResult>,
+    /// The last result's number (each search's after the last's).
     next_result: f64,
     /// Requests awaiting their answer, by number.
     pending: BTreeMap<u32, Answer>,
     next_request: u32,
     /// `SaveLanguageSearchFilter`'s locales (none saved: recorded `{}`).
     languages: Vec<String>,
+    /// `StoreSecureReference`'s edit boxes, by name.
+    secure_refs: BTreeMap<String, WidgetId>,
+    /// `C_LFGListRoles.SetRoles`' tank, healer and damage.
+    roles: [bool; 3],
 }
 
 fn lfg(vm: &Vm) -> &Lfg {
@@ -366,13 +389,21 @@ fn lfg_mut(vm: &mut Vm) -> &mut Lfg {
 }
 
 /// Adds another group's or player's listing to the server's, for the
-/// searches to find; returns its `searchResultID`.
-pub fn add_listing(vm: &mut Vm, mut listing: SearchResult) -> f64 {
-    let l = lfg_mut(vm);
-    l.next_result += 1.0;
-    listing.id = l.next_result;
-    l.listings.push(listing);
-    l.next_result
+/// searches to find (each search numbers what it finds).
+pub fn add_listing(vm: &mut Vm, listing: SearchResult) {
+    lfg_mut(vm).listings.push(listing);
+}
+
+/// The server tells that a listing among the last search's results
+/// changed: `LFG_LIST_SEARCH_RESULT_UPDATED(searchResultID)`, only for a
+/// result of the last search (recorded, lfg: each of the 61 updates named a
+/// result of the latest search). Returns whether it was one.
+pub fn result_updated(vm: &mut Vm, id: f64) -> bool {
+    if !lfg(vm).results.iter().any(|r| r.id == id) {
+        return false;
+    }
+    widgets::fire_event(vm, "LFG_LIST_SEARCH_RESULT_UPDATED", &[Value::Num(id)]);
+    true
 }
 
 // ----------------------------------------------------------- helpers
@@ -477,23 +508,41 @@ fn answered(vm: &mut Vm, c: NativeCall) -> Ret {
             activities,
         } => {
             let cat = catalogue(vm);
-            let found: Vec<f64> = lfg(vm)
-                .listings
-                .iter()
-                .filter(|r| {
-                    let first = r.activity_ids.first().and_then(|a| cat.activity(*a));
-                    first.is_some_and(|a| a.num("categoryID") == category)
-                        && (activities.is_empty()
-                            || r.activity_ids.iter().any(|a| activities.contains(a)))
-                })
-                .map(|r| r.id)
+            let wanted = |r: &SearchResult| {
+                let first = r.activity_ids.first().and_then(|a| cat.activity(*a));
+                first.is_some_and(|a| a.num("categoryID") == category)
+                    && (activities.is_empty()
+                        || r.activity_ids.iter().any(|a| activities.contains(a)))
+            };
+            let own = own_result(vm).filter(|r| wanted(r));
+            let mut found: Vec<SearchResult> = own
+                .into_iter()
+                .chain(lfg(vm).listings.iter().filter(|r| wanted(r)).cloned())
                 .collect();
-            lfg_mut(vm).results = found;
+            let l = lfg_mut(vm);
+            for r in &mut found {
+                l.next_result += 1.0;
+                r.id = l.next_result;
+            }
+            l.results = found;
             widgets::fire_event(vm, "LFG_LIST_SEARCH_RESULTS_RECEIVED", &[]);
         }
         Answer::Created(listing) => {
+            let described = !listing.comment.is_empty();
             lfg_mut(vm).listing = Some(listing);
             widgets::fire_event(vm, "LFG_LIST_ACTIVE_ENTRY_UPDATE", &[Value::Bool(true)]);
+            // A description is checked: in the same answer the listing's
+            // update and the check's verdict, not censored (recorded once,
+            // lfg: a Custom listing's; the three listings without one told
+            // neither; unverified).
+            if described {
+                widgets::fire_event(vm, "LFG_LIST_ACTIVE_ENTRY_UPDATE", &[Value::Bool(false)]);
+                widgets::fire_event(
+                    vm,
+                    "LFG_LIST_CENSORED_ACTIVE_ENTRY_UPDATE",
+                    &[Value::Bool(false)],
+                );
+            }
         }
         Answer::Updated(listing) => {
             if lfg(vm).listing.is_some() {
@@ -502,12 +551,42 @@ fn answered(vm: &mut Vm, c: NativeCall) -> Ret {
             }
         }
         Answer::Removed => {
+            // Its payload nil (recorded, lfg: four times; SuuUI's probe).
             if lfg_mut(vm).listing.take().is_some() {
-                widgets::fire_event(vm, "LFG_LIST_ACTIVE_ENTRY_UPDATE", &[]);
+                widgets::fire_event(vm, "LFG_LIST_ACTIVE_ENTRY_UPDATE", &[Value::Nil]);
             }
         }
     }
     Ok(vec![])
+}
+
+/// The player's own listing as a search finds it: the player its only
+/// member (alone in the recording; a group's members unverified), listed
+/// for as long as it has been.
+fn own_result(vm: &Vm) -> Option<SearchResult> {
+    let l = lfg(vm).listing.clone()?;
+    let me = &engine(vm).units.list[PLAYER.0];
+    let member = Member {
+        name: me.name.clone(),
+        class_name: me.class_name.clone(),
+        class_filename: me.class.clone(),
+        level: me.level,
+        area_name: engine(vm).world.character.position.zone.clone(),
+        assigned_role: "NONE".into(),
+        ..Member::default()
+    };
+    Some(SearchResult {
+        has_self: true,
+        activity_ids: l.activity_ids.clone(),
+        comment: l.comment.clone(),
+        voice_mode: l.voice_mode,
+        age: (crate::clock::now(vm) - l.created).floor().max(0.0),
+        auto_accept: l.auto_accept,
+        general_playstyle: l.general_playstyle,
+        new_player_friendly: l.new_player_friendly,
+        members: vec![member],
+        ..SearchResult::default()
+    })
 }
 
 // ----------------------------------------------------------- the catalogue
@@ -684,7 +763,9 @@ fn get_active_entry_info(vm: &mut Vm, _c: NativeCall) -> Ret {
     set(vm, t, "activityIDs", ids);
     set(vm, t, "autoAccept", Value::Bool(l.auto_accept));
     set(vm, t, "censored", Value::Bool(false));
-    for k in ["comment", "name", "voiceChat"] {
+    let comment = vm.str(&l.comment);
+    set(vm, t, "comment", comment);
+    for k in ["name", "voiceChat"] {
         let empty = vm.str("");
         set(vm, t, k, empty);
     }
@@ -735,7 +816,99 @@ fn listing_from(vm: &mut Vm, data: Value, base: Listing) -> Listing {
     l.general_playstyle = number(vm, "generalPlaystyle", l.general_playstyle);
     l.voice_mode = number(vm, "voiceMode", l.voice_mode);
     l.required_item_level = number(vm, "requiredItemLevel", l.required_item_level);
+    if let Some(comment) = comment_box_text(vm) {
+        l.comment = comment;
+    }
     l
+}
+
+/// The listing panel's comment box's text, which the client takes as the
+/// listing's description (its secure reference; Blizzard's code passes no
+/// comment to `CreateListing`).
+fn comment_box_text(vm: &mut Vm) -> Option<String> {
+    let id = *lfg(vm).secure_refs.get("LFGListingComment")?;
+    match engine(vm).world.widgets[id.0].text {
+        Some(Value::Str(s)) => Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
+        _ => Some(String::new()),
+    }
+}
+
+/// `StoreSecureReference(name, object)`: the client keeps the object for
+/// its own use (the listing panel's comment box, whose text is the
+/// listing's description).
+fn store_secure_reference(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let (Value::Str(name), Some(id)) = (c.arg(1), widgets::widget_of(vm, c.arg(2))) {
+        let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
+        lfg_mut(vm).secure_refs.insert(name, id);
+    }
+    Ok(vec![])
+}
+
+/// Sets the comment box's text as the client does, its `OnTextChanged`
+/// (not the user's) to follow as a `SetText`'s.
+fn set_comment_box_text(vm: &mut Vm, text: &str) {
+    let Some(id) = lfg(vm).secure_refs.get("LFGListingComment").copied() else {
+        return;
+    };
+    let v = vm.str(text);
+    widgets::store_text(vm, id, Some(v));
+    if !engine(vm).world.text_set.contains(&id) {
+        engine_mut(vm).world.text_set.push(id);
+    }
+}
+
+/// `C_LFGList.ClearCreationTextFields()`: the comment box emptied
+/// (recorded, lfg: a dungeon listed after a described Custom listing, the
+/// panel cleared between, told no description's check; unverified
+/// otherwise).
+fn clear_creation_text_fields(vm: &mut Vm, _c: NativeCall) -> Ret {
+    set_comment_box_text(vm, "");
+    Ok(vec![])
+}
+
+/// `C_LFGList.CopyActiveEntryInfoToCreationFields()`: the listing's
+/// description into the comment box (unverified).
+fn copy_active_entry_info_to_creation_fields(vm: &mut Vm, _c: NativeCall) -> Ret {
+    if let Some(l) = lfg(vm).listing.clone() {
+        set_comment_box_text(vm, &l.comment);
+    }
+    Ok(vec![])
+}
+
+const ROLES: [&str; 3] = ["tank", "healer", "dps"];
+
+/// `C_LFGListRoles.GetRoles()`: the roles `SetRoles` chose, none at first
+/// (as `GetSavedRoles`; unverified).
+fn get_roles(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let roles = lfg(vm).roles;
+    let t = vm.new_table();
+    for (k, on) in ROLES.iter().zip(roles) {
+        set(vm, t, k, Value::Bool(on));
+    }
+    Ok(vec![Value::Table(t)])
+}
+
+/// `C_LFGListRoles.SetRoles(roles [, limitToClassRoles])`: kept, true; no
+/// event (recorded, lfg: Blizzard's listing panel set them at each of four
+/// listings, unchanged, and no `LFG_LIST_ROLE_UPDATE` came; a change's
+/// unverified).
+fn set_roles(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Value::Table(t) = c.arg(1) {
+        let mut roles = [false; 3];
+        for (i, k) in ROLES.iter().enumerate() {
+            roles[i] = field(vm, t, k).truthy();
+        }
+        lfg_mut(vm).roles = roles;
+    }
+    Ok(vec![Value::Bool(true)])
+}
+
+/// `C_LFGList.IsPlayerAuthenticatedForLFG(categoryID)`: true (recorded,
+/// lfg: the Custom category's listing posted, which needs a description
+/// typed into the comment box, enabled only for an authenticated
+/// account; the recorded account's, unverified for others).
+fn is_player_authenticated_for_lfg(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(true)])
 }
 
 /// `C_LFGList.CreateListing(createData)`: blocked for addons (SuuUI's
@@ -814,7 +987,7 @@ fn search(vm: &mut Vm, c: NativeCall) -> Ret {
 /// last search's results, their count (recorded 0 and `{}` before one;
 /// the filtered ones the same, unverified).
 fn get_search_results(vm: &mut Vm, _c: NativeCall) -> Ret {
-    let ids = lfg(vm).results.clone();
+    let ids: Vec<f64> = lfg(vm).results.iter().map(|r| r.id).collect();
     let t = num_list(vm, &ids);
     Ok(vec![Value::Num(ids.len() as f64), t])
 }
@@ -828,11 +1001,7 @@ fn clear_search_results(vm: &mut Vm, _c: NativeCall) -> Ret {
 /// A result of the last search.
 fn result(vm: &Vm, id: Option<f64>) -> Option<SearchResult> {
     let id = id?;
-    let l = lfg(vm);
-    if !l.results.contains(&id) {
-        return None;
-    }
-    l.listings.iter().find(|r| r.id == id).cloned()
+    lfg(vm).results.iter().find(|r| r.id == id).cloned()
 }
 
 /// `C_LFGList.HasSearchResultInfo(searchResultID)`.
@@ -860,9 +1029,10 @@ fn get_search_result_info(vm: &mut Vm, c: NativeCall) -> Ret {
         let s = vm.str(v);
         set(vm, t, k, s);
     }
-    for k in ["censored", "crossFactionListing", "hasSelf", "isWarMode"] {
+    for k in ["censored", "crossFactionListing", "isWarMode"] {
         set(vm, t, k, Value::Bool(false));
     }
+    set(vm, t, "hasSelf", Value::Bool(r.has_self));
     set(vm, t, "isDelisted", Value::Bool(r.delisted));
     set(
         vm,
@@ -1057,6 +1227,21 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         (
             "C_LFGList.SaveLanguageSearchFilter",
             save_language_search_filter,
+        ),
+        ("StoreSecureReference", store_secure_reference),
+        ("C_LFGListRoles.GetRoles", get_roles),
+        ("C_LFGListRoles.SetRoles", set_roles),
+        (
+            "C_LFGList.ClearCreationTextFields",
+            clear_creation_text_fields,
+        ),
+        (
+            "C_LFGList.CopyActiveEntryInfoToCreationFields",
+            copy_active_entry_info_to_creation_fields,
+        ),
+        (
+            "C_LFGList.IsPlayerAuthenticatedForLFG",
+            is_player_authenticated_for_lfg,
         ),
         ("C_LFGList.HasActiveEntryInfo", has_active_entry_info),
         ("C_LFGList.GetActiveEntryInfo", get_active_entry_info),

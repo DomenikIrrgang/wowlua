@@ -368,3 +368,23 @@ return f:GetID(), g:GetID()",
     );
     assert_eq!(r, ["7", "0"]);
 }
+
+/// `SetDrawLayer(layer)` without a sublevel sets sublevel 0 (documented),
+/// which `GetDrawLayer` answers (Blizzard's menus raise a pooled texture a
+/// sublevel above it); `SetTextToFit` sets the text.
+#[test]
+fn a_draw_layer_set_alone_has_sublevel_zero_and_text_fits() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local f = CreateFrame('Frame', nil, UIParent)
+local t = f:CreateTexture(nil, 'BACKGROUND', nil, 3)
+t:SetDrawLayer('ARTWORK')
+local layer, sublevel = t:GetDrawLayer()
+local s = f:CreateFontString()
+s:SetFont('Fonts\\\\FRIZQT__.TTF', 12, '')
+s:SetTextToFit('Learning')
+return layer, sublevel, s:GetText()",
+    );
+    assert_eq!(r, ["ARTWORK", "0", "Learning"]);
+}

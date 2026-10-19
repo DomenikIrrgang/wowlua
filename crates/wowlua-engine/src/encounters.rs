@@ -298,8 +298,25 @@ fn is_encounter_in_progress(vm: &mut Vm, _c: NativeCall) -> Ret {
     )])
 }
 
+/// `RequestRaidInfo()`: the server's answer a round trip later,
+/// `UPDATE_INSTANCE_INFO()` (recorded, lfg: each time the group finder's
+/// listing panel showed and asked, 0.35 to 0.6 s later, five times). One
+/// answer per request (unverified).
+fn request_raid_info(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let native = vm.native("raidInfoAnswer", raid_info_answered);
+    let delay = crate::clock::server_delay(vm);
+    crate::clock::after_engine(vm, delay, native);
+    Ok(vec![])
+}
+
+fn raid_info_answered(vm: &mut Vm, _c: NativeCall) -> Ret {
+    fire(vm, "UPDATE_INSTANCE_INFO", &[]);
+    Ok(vec![])
+}
+
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
+        ("RequestRaidInfo", request_raid_info),
         ("IsInInstance", is_in_instance),
         (
             "C_InstanceEncounter.IsEncounterInProgress",

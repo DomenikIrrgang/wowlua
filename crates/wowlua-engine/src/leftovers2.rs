@@ -190,7 +190,6 @@ const UNDOCUMENTED: &[(&str, &str)] = &[
     ("HasLoadedCUFProfiles", "f"),
     // The client's internals Blizzard's secure code calls: nothing to do.
     ("RegisterStaticConstants", ""),
-    ("StoreSecureReference", ""),
     ("setsecurehookforbidden", ""),
     ("SetupFullscreenScale", ""),
     // Mouselook and movement switches: nothing moves in the engine.

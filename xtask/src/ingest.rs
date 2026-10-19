@@ -1897,6 +1897,10 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
             r"string (?:\|Hplayer:[^|]*\|h\[)?([^\[\]|;]+?)(?:\]\|h)? has (?:gone offline|come online)\.",
         )
         .expect("a valid pattern");
+        // Another player's invitation names them (its chat line too, as a
+        // link).
+        let inviter = regex::Regex::new(r"^[0-9.]+ PARTY_INVITE_REQUEST\(string ([^;]+);")
+            .expect("a valid pattern");
         // First every recording's names (a name one recording shows
         // may be in another's chat), then each recording scrubbed of
         // them all.
@@ -1930,7 +1934,7 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
             let log: mlua::Table = scenario.get("log").map_err(|e| anyhow!("{e}"))?;
             for line in log.sequence_values::<String>() {
                 let line = line.map_err(|e| anyhow!("{e}"))?;
-                if let Some(c) = friend.captures(&line) {
+                if let Some(c) = friend.captures(&line).or_else(|| inviter.captures(&line)) {
                     let other = c[1].trim().to_string();
                     let first = other.split(' ').next().unwrap_or("");
                     let own = first == me.name || secrets.iter().any(|s| s == first);
