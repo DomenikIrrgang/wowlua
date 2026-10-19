@@ -1108,6 +1108,19 @@ fn fetch_viewable_bank_types(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Table(list(vm, &types))])
 }
 
+/// `C_Bank.BankBagTypeAndIDToInvSlot(bankType, slotIndex)`: the character
+/// bank's tabs 1 to 9 are inventory slots 63 to 71 (SuuUI probe bankSlots,
+/// all nine); nil otherwise (the account bank's unverified).
+fn bank_bag_inv_slot(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (ty, index) = (num(vm, c.arg(1)), num(vm, c.arg(2)));
+    Ok(vec![match (ty, index) {
+        (Some(0.0), Some(i)) if (1.0..=9.0).contains(&i) && i.fract() == 0.0 => {
+            Value::Num(62.0 + i)
+        }
+        _ => Value::Nil,
+    }])
+}
+
 /// `C_Bank.IsItemAllowedInBankType(bankType, location)`: any item in the
 /// character's bank, none in the account's (WoW Forever has none).
 fn is_item_allowed_in_bank_type(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -1419,7 +1432,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Bank.DoesBankTypeSupportAutoDeposit", no),
         ("C_Bank.AutoDepositItemsIntoBank", accept),
         ("C_Bank.ShouldUsePlayerBagsInBank", no),
-        ("C_Bank.BankBagTypeAndIDToInvSlot", nil),
+        ("C_Bank.BankBagTypeAndIDToInvSlot", bank_bag_inv_slot),
         (
             "C_Bank.IsItemAllowedInBankType",
             is_item_allowed_in_bank_type,

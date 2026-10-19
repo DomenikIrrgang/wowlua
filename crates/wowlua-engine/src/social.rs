@@ -189,8 +189,9 @@ fn get_guild_info(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `GetNumGuildMembers()`: members, online, online and on mobile: the
 /// player alone in a guild, else none (unverified).
 fn get_num_guild_members(vm: &mut Vm, _c: NativeCall) -> Ret {
+    // The total and those online: two (SuuUI probe social).
     let n = if in_guild(vm) { 1.0 } else { 0.0 };
-    Ok(vec![Value::Num(n); 3])
+    Ok(vec![Value::Num(n); 2])
 }
 
 /// `GetGuildRosterInfo(index)`: the member's name, rank name and index,
@@ -228,11 +229,13 @@ fn get_guild_roster_info(vm: &mut Vm, c: NativeCall) -> Ret {
         Value::Bool(true),
         Value::Num(0.0),
         vm.str(&class),
-        Value::Num(0.0),
+        // No achievement points, standing 3 (SuuUI probe social: five
+        // members of a guild, each so).
+        Value::Num(-1.0),
         Value::Num(1.0),
         Value::Bool(false),
         Value::Bool(false),
-        Value::Num(4.0),
+        Value::Num(3.0),
         vm.str(&guid),
     ])
 }
@@ -604,6 +607,9 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     let recorded: &[(&str, NativeFn)] = &[
         ("BNGetNumFriendInvites", zero),
         ("C_BattleNet.IsBattleNetFriendsListEnabled", yes),
+        // SuuUI probe friendSystem: title friends and their custom names on.
+        ("C_BattleNet.AreTitleFriendsEnabled", yes),
+        ("C_BattleNet.AreTitleFriendCustomNamesEnabled", yes),
         ("C_ChatInfo.CancelEmote", nothing),
         // Recorded nil even in a guild.
         ("C_GuildInfo.GetGuildTabardInfo", nil),
@@ -765,7 +771,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         "BNIsBlocked",
         "BNIsSelf",
         "C_BattleNet.SendWhisper",
-        "C_BattleNet.AreTitleFriendsEnabled",
         "C_ClubFinder.DoesPlayerBelongToClubFromClubGUID",
         "C_ClubFinder.IsPostingBanned",
         "C_ClubFinder.HasAlreadyAppliedToLinkedPosting",

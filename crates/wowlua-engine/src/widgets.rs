@@ -386,6 +386,22 @@ pub fn is_a(e: &Engine, name: &str, base: &str) -> bool {
         .any(|c| c.eq_ignore_ascii_case(base))
 }
 
+/// Methods the documentation or the declarations give a class whose
+/// client list was not recorded, that the client's class lacks (camelot).
+/// SuuUI probe minimap: the Minimap's metatable's methods about textures,
+/// blips, the player, icons, arrows, POIs, zoom, pings, rotation and masks
+/// are 20, none of these among them.
+const ABSENT_METHODS: &[(&str, &str)] = &[
+    ("Minimap", "SetBlipTexture"),
+    ("Minimap", "SetCorpsePOIArrowTexture"),
+    ("Minimap", "SetIconTexture"),
+    ("Minimap", "SetPOIArrowTexture"),
+    ("Minimap", "SetPlayerTexture"),
+    ("Minimap", "SetQuestBlobOutsideSelectedTexture"),
+    ("Minimap", "SetStaticPOIArrowTexture"),
+    ("Minimap", "SetTaskBlobOutsideSelectedTexture"),
+];
+
 /// The metatable of class `name`, made on first use: `__index` holds the
 /// methods of the class and its bases (the nearest class's wins).
 pub fn class_meta(vm: &mut Vm, name: &str) -> TableRef {
@@ -478,6 +494,15 @@ pub fn class_meta(vm: &mut Vm, name: &str) -> TableRef {
         let native = vm.native_with(leaked, undocumented_method, vec![full]);
         keep(vm, native);
         vm.heap.table_mut(methods).set_str(key, native);
+    }
+    // Methods documented or declared that the client's class lacks.
+    if engine(vm).flavor == "camelot" {
+        for &(class, short) in ABSENT_METHODS {
+            if class == name {
+                let key = vm.heap.intern(short.as_bytes());
+                vm.heap.table_mut(methods).set_str(key, Value::Nil);
+            }
+        }
     }
     let meta = vm.new_table();
     let index = vm.heap.intern(b"__index");
@@ -817,11 +842,12 @@ pub fn apply_template(vm: &mut Vm, frame: Value, name: &str) -> Result<(), LuaEr
             if !crate::ui::build::apply_template(vm, frame, name) {
                 // A template of Blizzard's code only warns while it is not
                 // loaded; any other name fails as in the client (decided
-                // 2026-10-16, `/stdtest engine`).
-                if !engine(vm)
-                    .api
-                    .templates
-                    .contains(&name.to_ascii_lowercase())
+                // 2026-10-16, `/stdtest engine`). With Blizzard's UI loaded,
+                // one its loaded files lack fails too (SuuUI probe bags:
+                // `BankItemButtonGenericTemplate`, a vanilla game type's).
+                let e = engine(vm);
+                if !e.world.ui.loaded.is_empty()
+                    || !e.api.templates.contains(&name.to_ascii_lowercase())
                 {
                     return Err(c_error(
                         vm,
@@ -2864,8 +2890,13 @@ pub fn frame_level(vm: &mut Vm, id: WidgetId) -> f64 {
             level = *n;
             break;
         }
+        // One using its parent's level is at it (SuuUI probe trees: the
+        // character frame's panes, `useParentLevel`, at its level 1).
+        let using = stored_args(vm, props, "UsingParentLevel")
+            .and_then(|v| v.first().copied())
+            .is_some_and(|v| v.truthy());
         cur = engine(vm).world.widgets[w.0].parent;
-        if cur.is_some() {
+        if cur.is_some() && !using {
             depth += 1.0;
         }
     }

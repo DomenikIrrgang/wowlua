@@ -385,6 +385,12 @@ fn get_max_letters(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     num_or(vm, id, "MaxLetters", 0.0)
 }
 
+/// `GetHistoryLines()`: the lines kept (XML `historyLines`; SuuUI probe
+/// chat: the chat edit box's 32), 0 at first (unverified).
+fn get_history_lines(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    num_or(vm, id, "HistoryLines", 0.0)
+}
+
 fn get_alt_arrow_key_mode(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     flag_or(vm, id, "AltArrowKeyMode", false)
 }
@@ -1209,8 +1215,20 @@ fn get_insert_mode(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 
 // ------------------------------------------------------------------ list
 
+/// `SetDrawLayer(layer, sublevel?)`: kept, a missing sublevel 0 (SuuUI
+/// probe trees: Blizzard's NineSlice pieces, set without one, read
+/// `OVERLAY`, 0).
+fn set_draw_layer(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let sublevel = match c.arg(3) {
+        Value::Nil => Value::Num(0.0),
+        v => v,
+    };
+    widgets::store(vm, id, "DrawLayer", &[c.arg(2), sublevel]);
+    Ok(vec![])
+}
+
 pub fn methods() -> Vec<(&'static str, MethodFn)> {
-    let mut out: Vec<(&'static str, MethodFn)> = Vec::new();
+    let mut out: Vec<(&'static str, MethodFn)> = vec![("SetDrawLayer", set_draw_layer)];
     // Fonts: a font string's, an edit box's, a message frame's and a font
     // object's (not a SimpleHTML's, which takes a text type first).
     for class in ["FontString", "Font", "EditBox", "MessageFrame"] {
@@ -1257,6 +1275,7 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
         ("EditBox:GetUTF8CursorPosition", get_utf8_cursor_position),
         ("EditBox:GetMaxLetters", get_max_letters),
         ("EditBox:GetAltArrowKeyMode", get_alt_arrow_key_mode),
+        ("EditBox:GetHistoryLines", get_history_lines),
         ("EditBox:GetInputLanguage", get_input_language),
         // Frames and regions.
         ("GetFrameStrata", get_frame_strata),

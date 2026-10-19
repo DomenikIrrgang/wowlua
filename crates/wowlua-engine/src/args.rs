@@ -313,6 +313,18 @@ pub fn check_from(
     c: &NativeCall,
     first: usize,
 ) -> Result<(), LuaError> {
+    // A spell book item's slot and bank read as one value: without the
+    // bank the first is refused (SuuUI probe spellbook: these three asked
+    // with a spell ID alone, 46 items each).
+    const BOOK_ITEM: &[&str] = &[
+        "C_SpellBook.GetSpellBookItemLevelLearned",
+        "C_SpellBook.GetSpellBookItemPowerCost",
+        "C_SpellBook.IsSpellBookItemLowRank",
+    ];
+    let given = |i: usize| c.has(i) && !vm.hidden(c.arg(i)).is_nil();
+    if first == 1 && BOOK_ITEM.contains(&f.name) && given(1) && !given(2) {
+        return Err(fail(vm, f, 1, Some(Refusal::NotNumerical)));
+    }
     // A method's arguments count `self` as the first (`/stdtest engine`).
     let method = first == 2;
     for (i, checked) in checked_arguments(api, f, first).iter().enumerate() {

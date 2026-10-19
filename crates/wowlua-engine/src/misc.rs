@@ -110,7 +110,7 @@ fn get_day_event(_vm: &mut Vm, _c: NativeCall) -> Ret {
 /// club ID, noted as unanswered).
 fn get_guild_club_id(vm: &mut Vm, c: NativeCall) -> Ret {
     if engine(vm).world.chat.guild {
-        crate::note_default(vm, "C_Club.GetGuildClubId", &c, 0);
+        crate::note_default(vm, "C_Club.GetGuildClubId", &c, 1);
     }
     Ok(vec![Value::Nil])
 }

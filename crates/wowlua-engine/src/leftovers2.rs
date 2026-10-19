@@ -248,7 +248,6 @@ const DOCUMENTED_EMPTY: &[&str] = &[
     // Battle.net's optional features: off; no game data sent.
     "C_BattleNet.AreHighResTexturesInstalled",
     "C_BattleNet.AreFriendTagsEnabled",
-    "C_BattleNet.AreTitleFriendCustomNamesEnabled",
     "C_BattleNet.CanToggleHighResTexturesWithoutClientReload",
     "C_BattleNet.GetFriendLevelFromInviteText",
     "C_BattleNet.SendGameData",

@@ -383,7 +383,12 @@ fn window_opened(vm: &mut Vm, c: NativeCall) -> Ret {
 /// slot.
 fn show_window(vm: &mut Vm, auto: bool) {
     fire(vm, "LOOT_OPENED", &[Value::Bool(auto), Value::Bool(false)]);
-    fire(vm, "LOOT_READY", &[Value::Bool(auto)]);
+    // Told again only when autoloot takes items (SuuUI probe loot: three
+    // windows looted by hand, `LOOT_READY(false)` then `LOOT_OPENED` alone;
+    // an empty window autolooted, one sample, the same).
+    if auto && !engine(vm).world.loot.items.is_empty() {
+        fire(vm, "LOOT_READY", &[Value::Bool(auto)]);
+    }
     let recorded = engine_mut(vm).world.loot.slots_after.take();
     if auto {
         let n = engine(vm).world.loot.items.len();

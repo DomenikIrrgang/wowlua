@@ -608,6 +608,12 @@ fn named_tooltip(vm: &mut Vm, ty: f64, id: f64, name: Value) -> Vec<Value> {
     vec![Value::Table(t)]
 }
 
+/// `C_DamageMeter.IsDamageMeterAvailable()`: available, no reason (SuuUI
+/// probe meter, four samples).
+fn damage_meter_available(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(true), vm.str("")])
+}
+
 /// `C_TooltipInfo.GetSpellBookItem(slot, bank)`: the player's spellbook
 /// slot's spell (its recorded entry; nothing for the pet's book or an
 /// empty slot).
@@ -1379,6 +1385,10 @@ fn intl_format_number(vm: &mut Vm, c: NativeCall) -> Ret {
 /// the "nothing here" ones of the systems Forever lacks.
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     let mut list: Vec<(&'static str, NativeFn)> = vec![
+        (
+            "C_DamageMeter.IsDamageMeterAvailable",
+            damage_meter_available,
+        ),
         // Tooltip data.
         ("C_TooltipInfo.GetSpellBookItem", tooltip_spellbook_item),
         ("C_TooltipInfo.GetAction", tooltip_action),
@@ -1979,7 +1989,6 @@ const NOTHING: &[&str] = &[
     "C_DamageMeter.GetCombatSessionFromType",
     "C_DamageMeter.GetCombatSessionSourceFromID",
     "C_DamageMeter.GetCombatSessionSourceFromType",
-    "C_DamageMeter.IsDamageMeterAvailable",
     "C_DamageMeter.ResetAllCombatSessions",
     "C_Discord.Authorize",
     "C_Discord.GetDiscordChannelName",

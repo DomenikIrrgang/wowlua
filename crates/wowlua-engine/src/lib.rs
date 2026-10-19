@@ -369,6 +369,14 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             None => {}
         }
     }
+    // Functions needing the user's action the documentation lacks.
+    for &name in protection::HARDWARE {
+        if !name.contains('.') && vm.get_global(name).is_nil() {
+            let upval = vm.str(name);
+            let native = vm.native_with(name, protection::hardware_global, vec![upval]);
+            vm.set_global(name, native);
+        }
+    }
     // Functions with behaviour the documentation lacks (`IsInGroup`): the
     // client has them (camelot's inventory; other flavors unverified).
     // By name: the globals made in the same order every run (a map's
@@ -717,7 +725,12 @@ pub(crate) fn default_value(
     if nilable {
         return Value::Nil;
     }
-    let ty = api.aliases.get(ty).map(String::as_str).unwrap_or(ty);
+    // `Seconds` (declared `any`) a number: SuuUI probe timeline,
+    // `C_EncounterTimeline` answered 0.
+    let ty = match ty {
+        "Seconds" => "number",
+        _ => api.aliases.get(ty).map(String::as_str).unwrap_or(ty),
+    };
     match ty {
         "bool" | "boolean" => Value::Bool(false),
         "string" | "cstring" => vm.str(""),
@@ -747,9 +760,12 @@ pub(crate) fn default_value(
             .and_then(|(_, f)| f.first().map(|(_, v)| Value::Num(*v)))
             .unwrap_or(Value::Num(0.0)),
         _ if ty.contains("string") => vm.str(""),
-        // Numbers by their alias; other types are objects.
+        // Numbers by their alias; other types are objects. By their names
+        // `normalizedValue` and `FrameTime` too (unverified).
         "number" | "luaIndex" | "uiUnit" | "fileID" | "time_t" | "BigInteger" | "BigUInteger"
-        | "WOWMONEY" | "SingleColorValue" | "uiFontHeight" => Value::Num(0.0),
+        | "WOWMONEY" | "SingleColorValue" | "uiFontHeight" | "normalizedValue" | "FrameTime" => {
+            Value::Num(0.0)
+        }
         // An object of its mixin (`ColorMixin`), when Blizzard's code
         // defined it.
         _ if r.get("Mixin").is_some() => {
@@ -894,6 +910,9 @@ fn api_function(vm: &mut Vm, c: NativeCall) -> Ret {
     if protection::is_protected(f.name, Some(&f.doc)) && protection::tainted(vm) {
         let action = protection::action_name(vm);
         protection::refuse(vm, "ADDON_ACTION_FORBIDDEN", action);
+        return Ok(defaults(vm, api, &f.doc));
+    }
+    if protection::refuses_without_user(vm, f.name) {
         return Ok(defaults(vm, api, &f.doc));
     }
     args::check(vm, api, f, &c)?;

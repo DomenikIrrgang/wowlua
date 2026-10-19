@@ -13,8 +13,10 @@
 //! paid), `BANK_TABS_CHANGED(0)`. `C_Bank.CloseBankFrame()`:
 //! `BANKFRAME_CLOSED` and the interaction's hides.
 //!
-//! Unverified: the account's bank, money, a new tab's size (its data's
-//! `tabSlots`, else 98), the tabs' settings.
+//! A tab's size, unless its data says (`slots`, `tabSlots`): 48 (the bank
+//! scenario's two tabs; SuuUI probe bankSlots: the first tab's
+//! `GetContainerNumSlots` 48). Unverified: the account's bank, money, the
+//! tabs' settings.
 
 use std::collections::BTreeMap;
 
@@ -28,6 +30,8 @@ use crate::{engine, engine_mut, widgets};
 const BANKER: f64 = 67.0;
 /// `Enum.BankType.Character`.
 const CHARACTER: f64 = 0.0;
+/// A tab's slots (see the module's comment).
+const TAB_SLOTS: f64 = 48.0;
 /// The character's first bank tab's bag (`Enum.BagIndex.CharacterBankTab_1`).
 const FIRST_TAB: i64 = 6;
 
@@ -85,7 +89,7 @@ pub fn control_define(vm: &mut Vm, c: NativeCall) -> Ret {
         let n = vm.heap.table(l).border();
         for i in 1..=n {
             if let Value::Table(tab) = vm.heap.table(l).get(Value::Num(i as f64)) {
-                let slots = num(field(vm, tab, "slots")).unwrap_or(98.0) as usize;
+                let slots = num(field(vm, tab, "slots")).unwrap_or(TAB_SLOTS) as usize;
                 let items = match field(vm, tab, "items") {
                     Value::Table(items) => Some(items),
                     _ => None,
@@ -224,9 +228,16 @@ fn next_cost(vm: &mut Vm) -> f64 {
         None => None,
     };
     let banker = bank(vm).bankers.values().next().copied();
+    // The second tab costs 1000 (SuuUI probe bankSlots: one bought), the
+    // third 10000 (the bank scenario: two bought); the others unverified.
+    let default = if bank(vm).tabs.len() == 1 {
+        1000.0
+    } else {
+        10000.0
+    };
     fallback
         .or_else(|| banker.and_then(|t| num(field(vm, t, "nextTabCost"))))
-        .unwrap_or(10000.0)
+        .unwrap_or(default)
 }
 
 /// `C_Bank.FetchNextPurchasableBankTabData(type)`: the next tab's price
@@ -287,8 +298,8 @@ fn purchase_bank_tab(vm: &mut Vm, c: NativeCall) -> Ret {
 fn tab_bought(vm: &mut Vm, _c: NativeCall) -> Ret {
     let cost = next_cost(vm);
     let slots = match open_data(vm) {
-        Some(t) => num(field(vm, t, "tabSlots")).unwrap_or(98.0),
-        None => 98.0,
+        Some(t) => num(field(vm, t, "tabSlots")).unwrap_or(TAB_SLOTS),
+        None => TAB_SLOTS,
     };
     let tab = vm.new_table();
     widgets::keep(vm, Value::Table(tab));

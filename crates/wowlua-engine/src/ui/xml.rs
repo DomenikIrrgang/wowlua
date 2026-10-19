@@ -28,8 +28,10 @@ impl Element {
 
     /// A boolean attribute (`"true"`, any case).
     pub fn flag(&self, name: &str) -> bool {
+        // Spaces around it ignored (SuuUI probe trees: InputIconTexture.xml's
+        // `hidden="true "` textures hidden in the client).
         self.attr(name)
-            .is_some_and(|v| v.eq_ignore_ascii_case("true"))
+            .is_some_and(|v| v.trim().eq_ignore_ascii_case("true"))
     }
 
     /// A number attribute.

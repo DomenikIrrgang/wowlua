@@ -148,6 +148,16 @@ pub fn api(flavor: &str) -> Option<&'static Api> {
             class.widget = Some(name.to_string());
         }
     }
+    // Events the client has that the documentation lacks (camelot): an
+    // addon's frame registers them and gets them.
+    if flavor == "camelot" {
+        // SuuUI probe lfg (lang): a frame registered it and got it after
+        // `C_AccountServices.RequestPreferredPlaySettings()`; the login
+        // recording has it too (`data/camelot-login.txt`).
+        parsed
+            .events
+            .insert("PREFERRED_PLAY_SETTINGS_UPDATED".to_string());
+    }
     // A nameplate (the client makes them in code, `NAME_PLATE_CREATED`):
     // a frame with the hit-test methods (unverified: no probe of its type).
     let class = parsed.classes.entry("NamePlate".to_string()).or_default();
