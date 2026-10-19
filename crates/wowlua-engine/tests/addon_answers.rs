@@ -127,7 +127,7 @@ return C_AddOns.GetAddOnMetadata(1, 'Group'), C_AddOns.GetAddOnMetadata('Second'
 }
 
 #[test]
-fn cvar_bitfields_set_silently() {
+fn cvar_bitfields_tell_only_changes() {
     let mut vm = vm();
     let r = run(
         &mut vm,
@@ -139,11 +139,13 @@ local before = C_CVar.GetCVarBitfield('closedInfoFrames', 8)
 C_CVar.SetCVarBitfield('closedInfoFrames', 8, true)
 local set = C_CVar.GetCVarBitfield('closedInfoFrames', 8)
 local other = C_CVar.GetCVarBitfield('closedInfoFrames', 7)
+C_CVar.SetCVarBitfield('closedInfoFrames', 8, true)
 C_CVar.SetCVarBitfield('closedInfoFrames', 8, false)
 return tostring(before), tostring(set), tostring(other),
     tostring(C_CVar.GetCVarBitfield('closedInfoFrames', 8)), Told",
     );
-    assert_eq!(r, ["false", "true", "false", "false", "0"]);
+    // Told for the two changes, not for setting the bit already set.
+    assert_eq!(r, ["false", "true", "false", "false", "2"]);
 }
 
 #[test]
