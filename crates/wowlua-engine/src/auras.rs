@@ -171,10 +171,11 @@ fn fire_update(vm: &mut Vm, id: UnitId, added: Option<&Aura>, removed: &[f64]) {
 
 /// `unit:applyAura({ spellId, name, icon, duration, applications, harmful,
 /// source, dispelName, stealable, boss, raid, points, auraInstanceID,
-/// sourceUnit, expirationTime, replaces, quiet })`: the aura's instance ID
-/// (`auraInstanceID`, `sourceUnit` and `expirationTime` as a snapshot has
-/// them; `replaces`: an aura it takes the place of, in one update;
-/// `quiet`: on the unit already, untold).
+/// sourceUnit, expirationTime, replaces, quiet, stuns })`: the aura's
+/// instance ID (`auraInstanceID`, `sourceUnit` and `expirationTime` as a
+/// snapshot has them; `replaces`: an aura it takes the place of, in one
+/// update; `quiet`: on the unit already, untold; `stuns`: the unit's flags
+/// change with it).
 pub fn control_apply(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = units::this(vm, &c)?;
     let Value::Table(data) = c.arg(2) else {
@@ -274,6 +275,12 @@ pub fn apply(vm: &mut Vm, me: UnitId, data: TableRef) -> f64 {
     // `quiet`: there already, as a snapshot has it (no `UNIT_AURA`).
     if !flag(vm, "quiet") {
         fire_update(vm, me, Some(&aura), &removed);
+    }
+    // A stun (`stuns`) changes the unit's flags, told at once (recorded:
+    // Hammer of Justice on the cat, its flags before the hit's power,
+    // auradeath; unverified for other effects).
+    if flag(vm, "stuns") {
+        units::fire_unit(vm, "UNIT_FLAGS", me, &[]);
     }
     // Gone when it runs out, the server's word a moment later (recorded:
     // a food's aura 0.086 s after its expiration).

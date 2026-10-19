@@ -9,8 +9,10 @@ type Fn = (...any) -> ...any
 
 --- A unit of the simulated world (`mock.player`, `mock.spawnUnit`).
 export interface MockUnit
-    --- Targets, focuses or mouses over `unit` (`PLAYER_TARGET_CHANGED`, …).
-    function target(unit: MockUnit?)
+    --- Targets, focuses or mouses over `unit` (`PLAYER_TARGET_CHANGED`, …);
+    --- the player's target told back by the server (`UNIT_TARGET`) a round
+    --- trip later, or `echo` seconds (`false`: not).
+    function target(unit: MockUnit?, opts: { echo?: number | boolean }?)
     function focus(unit: MockUnit?)
     function mouseover(unit: MockUnit?)
     --- The player's soft target of `kind` (by default the enemy for a
@@ -37,13 +39,16 @@ export interface MockUnit
     --- both in combat, the attacker's then the victim's power (`power`,
     --- `victimPower`: rage), the victim's health, and the combat text
     --- (`UNIT_COMBAT`) a moment later (`textAfter` seconds, 0.4 by
-    --- default); `combat = false`: no one put in combat. `kind`: `WOUND` (default), `PARRY`, `DODGE`, `MISS`, `BLOCK`.
+    --- default); `combat = false`: no one put in combat. `kind`: `WOUND` (default), `PARRY`, `DODGE`, `MISS`, `BLOCK`;
+    --- `indicator`: the text's (`"CRITICAL"`, `"GLANCING"`).
     --- The player's skill `name` up to `rank` ("Your skill in … has
     --- increased", the stats' events).
     function raiseSkill(name: string, rank: number)
     --- `kill`: the swing kills (`PARTY_KILL`, the death, the experience's
-    --- message, its update a round trip later; `loot`: the corpse's items).
-    function swing(victim: MockUnit, amount: number, opts: { kind?: string, power?: number, victimPower?: number, speed?: number, textAfter?: number, combat?: boolean, kill?: { xp?: number, loot?: table } }?)
+    --- message, its update a round trip later; `loot`: the corpse's items;
+    --- `echo`: the target's clearing told back after these seconds;
+    --- `xpAfter`: the experience's update after these seconds).
+    function swing(victim: MockUnit, amount: number, opts: { kind?: string, power?: number, victimPower?: number, speed?: number, textAfter?: number, combat?: boolean, indicator?: string, kill?: { xp?: number, loot?: table, echo?: number | boolean, xpAfter?: number } }?)
     --- The player talks to an NPC: a round trip later its quest dialog
     --- opens (`QUEST_DETAIL` for a quest it offers, `QUEST_PROGRESS` for
     --- one in the log); too far (`setDistance` above 5 yards): the
@@ -98,8 +103,14 @@ export interface MockUnit
     --- a craft's next cast, asked of the server, given up.
     function interruptCast()
     --- A spell the server cast for the player (a proc) failing quietly
-    --- (`UNIT_SPELLCAST_FAILED_QUIET`, `CURRENT_SPELL_CAST_CHANGED(true)`).
-    function spellFailedQuiet(spell: number)
+    --- (`UNIT_SPELLCAST_FAILED_QUIET`, `CURRENT_SPELL_CAST_CHANGED(true)`);
+    --- `client`: a press of the player's, by its client cast GUID.
+    function spellFailedQuiet(spell: number, opts: { client?: boolean }?)
+    --- The player's cast of `spell` refused, `error` told
+    --- (`UNIT_SPELLCAST_FAILED`, `UI_ERROR_MESSAGE`): a client error's
+    --- name (`"SPELL_COOLDOWN"`) or a spell failure's (`"TARGETS_DEAD"`);
+    --- by the server, or the client (`client`).
+    function castFailed(spell: number, opts: { error: string, client?: boolean })
     --- The player starts or stops moving (`PLAYER_STARTED_MOVING`,
     --- `PLAYER_STOPPED_MOVING`); meanwhile a spell with a cast time is
     --- refused ("Can't do that while moving").
@@ -651,6 +662,12 @@ export function setLatency(seconds: number)
     engine().setLatency(seconds)
 end
 
+--- The profile's snapshot was taken now: the cooldowns it recorded end
+--- their recorded time left from here.
+export function snapshotTaken()
+    engine().snapshotTaken()
+end
+
 export function advanceTime(sec: number)
     engine().advanceTime(sec)
 end
@@ -663,6 +680,15 @@ end
 --- `n` frames of `ms` milliseconds.
 export function advanceFrames(n: number, ms: number?)
     engine().advanceFrames(n, ms)
+end
+
+--- The client's batching of a frame's events (off by default: each event
+--- as the control causing it fires it). On: `ACTIONBAR_UPDATE_*`,
+--- `SPELL_UPDATE_COOLDOWN`, `UNIT_HEALTH`, the threat updates and the like
+--- wait for the frame's end (the clock's next move), each once, in their
+--- names' order; off: those owed fired now.
+export function setFrameBatching(on: boolean)
+    engine().setFrameBatching(on)
 end
 
 --- Simulated work of `ms` milliseconds (`debugprofilestop` moves).

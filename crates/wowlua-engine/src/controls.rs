@@ -199,6 +199,14 @@ fn set_latency(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `snapshotTaken()`: the profile's snapshot was taken now (its
+/// cooldowns' time left counts from here).
+fn snapshot_taken(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let now = crate::clock::now(vm);
+    crate::engine_mut(vm).world.snapshot_at = Some(now);
+    Ok(vec![])
+}
+
 fn wheel(vm: &mut Vm, c: NativeCall) -> Ret {
     let id = widget_arg(vm, &c, 1)?;
     let delta = vm.check_number(&c, 2)?;
@@ -266,6 +274,8 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("fireUnitEvent", fire_unit_event),
         ("advanceTime", advance_time),
         ("setLatency", set_latency),
+        ("snapshotTaken", snapshot_taken),
+        ("setFrameBatching", crate::batch::control_set),
         ("nextFrame", next_frame),
         ("advanceFrames", advance_frames),
         ("warnings", warnings),

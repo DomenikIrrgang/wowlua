@@ -5,8 +5,12 @@
 -- values are the engine's guesses, consistent with the usability the
 -- client told (it keeps rage secret in combat). Each hit's combat text
 -- after its recorded delay (`textAfter`), the loot's slots at their
--- recorded times (`slotsAfter`).
+-- recorded times, its bags' and new item's data too (`slotsAfter`,
+-- `bagsAfter`, `dataAfter`).
 local e = __engine
+-- As in the client's frames, some events wait for the frame's end, each
+-- once, in their names' order (`setFrameBatching`).
+e.setFrameBatching(true)
 local player = e.player
 e.setLatency(0.3)
 -- The warrior's names as the recording has them, scrubbed.
@@ -60,7 +64,8 @@ at(8.200) player:swing(wolf, 6, { power = 16, textAfter = 0.401 })
 at(8.305) wolf:setThreat(15)
 at(8.409) wolf:swing(player, 1, { victimPower = 17, textAfter = 0.335 })
 at(8.788) player:raiseSkill("Defense", 4)
-at(10.065) player:useSpell(78)
+-- Heroic Strike pressed; the server told of it the recorded delay later.
+at(10.065) e.setLatency(0.268) player:useSpell(78) e.setLatency(0.3)
 at(10.103) player:swing(wolf, 0, { kind = "PARRY", textAfter = 0.531 })
 at(10.437) wolf:swing(player, 1, { victimPower = 18, textAfter = 0.399 })
 at(11.976) player:swing(wolf, 16, { spent = 3, power = 8 })
@@ -72,9 +77,11 @@ at(14.343) player:useSpell(78)
 at(14.348) wolf:swing(player, 1, { textAfter = 0.396 })
 wolf:setThreat(47)
 at(14.454) player:setPower(15)
-at(14.849) player:useSpell(78)
+at(14.507) e.setLatency(0.342) player:useSpell(78) e.setLatency(0.3)
 at(15.857) player:swing(wolf, 17, { spent = 0, power = 2, kill = { xp = 50, loot = { { id = 7073 }, { id = 7074 } } } })
 at(16.116) player:stopAttack()
+-- Off the dead wolf's threat list first (recorded).
+at(16.782) wolf:setThreat(nil)
 at(16.915) player:leaveCombat()
 -- Out of combat: rage fades, health comes back.
 at(18.782) player:setPower(0)
@@ -82,7 +89,7 @@ player:heal(1)
 at(20.808) player:heal(1)
 -- The corpse clicked: targeted, looted with autoloot.
 at(21.077) player:target(wolf)
-player:loot(wolf, { auto = true, slotsAfter = { 0.516, 0.767 } })
+player:loot(wolf, { auto = true, slotsAfter = { 0.516, 0.767 }, bagsAfter = { 0.252, 0 }, dataAfter = { 0.52 } })
 at(21.700) check("the loot window open", LootFrame:IsShown())
 at(22.921)
 -- What Blizzard's UI shows at the end.
@@ -108,3 +115,5 @@ end
 find(MainStatusTrackingBarContainer, 0)
 local _, xpMax = xpBar:GetMinMaxValues()
 check("the experience bar: 151 of 400", xpBar:GetValue() == 151 and xpMax == 400)
+-- The last frame's batched events.
+e.setFrameBatching(false)

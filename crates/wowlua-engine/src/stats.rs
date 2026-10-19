@@ -1250,6 +1250,17 @@ pub fn recorded_cooldown(vm: &Vm, spell: f64) -> Option<(f64, f64)> {
         })
     };
     let (start, duration) = (get("startTime")?, get("duration")?);
+    // Its time left at the snapshot, counted from the snapshot's moment
+    // when the test told it (`snapshotTaken`: the engine's clock need not
+    // be the client's; recorded: a warrior's spell off its cooldown 59.6 s
+    // into the quest's recording, as the snapshot's time left said).
+    let start = match (
+        engine(vm).world.snapshot_at,
+        get("timeUntilEndOfStartRecovery"),
+    ) {
+        (Some(at), Some(left)) => at + left - duration,
+        _ => start,
+    };
     (duration > 0.0).then_some((start, duration))
 }
 

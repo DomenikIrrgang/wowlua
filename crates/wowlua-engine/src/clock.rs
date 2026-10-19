@@ -113,6 +113,12 @@ fn invoke(vm: &mut Vm, c: NativeCall) -> Ret {
 /// arriving from the server).
 pub fn after_engine(vm: &mut Vm, seconds: f64, callback: Value) {
     schedule(vm, seconds, callback, 1.0, false);
+    // Due at a whole millisecond, as the client's clock tells its packets
+    // (a round trip from a recorded moment lands on the recorded moment,
+    // not a hair after it).
+    if let Some(t) = engine_mut(vm).timers.list.last_mut() {
+        t.due = (t.due * 1000.0).round() / 1000.0;
+    }
 }
 
 /// Schedules `callback` after `seconds`, `runs` times; returns its handle
@@ -185,6 +191,10 @@ fn fire(vm: &mut Vm, id: TimerId) {
 
 /// Moves the clock by `ms` milliseconds (and the wall clock with it).
 fn tick(vm: &mut Vm, ms: f64) {
+    // The moment's end: its batched events (`batch`).
+    if ms > 0.0 {
+        crate::batch::flush(vm);
+    }
     vm.clock.elapsed_ms += ms;
     vm.clock.now += ms / 1000.0;
 }
