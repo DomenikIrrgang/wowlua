@@ -21,7 +21,8 @@
   <a href="docs/README.md">docs</a> ·
   <a href="spec/README.md">specification</a> ·
   <a href="spec/roadmap.md">roadmap</a> ·
-  <a href="https://github.com/DomenikIrrgang/wowlua/releases">releases</a>
+  <a href="https://github.com/DomenikIrrgang/wowlua/releases">releases</a> ·
+  <a href="https://discord.gg/Dn795czPYk">discord</a>
 </p>
 
 ---
