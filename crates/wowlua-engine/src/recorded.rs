@@ -357,7 +357,62 @@ pub fn call_variants(vm: &Vm, name: &str, c: &NativeCall) -> Vec<String> {
     if whole.iter().zip(&args).any(|(w, a)| w != a) {
         out.push(format!("{name}({})", whole.join(", ")));
     }
+    // An enumeration's value that is no number read as 0, as the client's
+    // bindings take it (the full probe: `C_CombatAudioAlert.
+    // GetCategoryVolume("x")`, `C_TradeSkillUI.GetProfessionSkillLineID("x")`
+    // answered as with 0).
+    if let Some(kinds) = enum_arguments(vm, name) {
+        let read: Vec<String> = whole
+            .iter()
+            .enumerate()
+            .map(|(i, a)| {
+                if !kinds.get(i).copied().unwrap_or(false) || a == "nil" || a.parse::<f64>().is_ok()
+                {
+                    return a.clone();
+                }
+                let quoted = a.strip_prefix('"').and_then(|s| s.strip_suffix('"'));
+                match quoted.and_then(|s| s.trim().parse::<f64>().ok()) {
+                    Some(n) => format!("{}", n.trunc() as i64),
+                    None => "0".to_string(),
+                }
+            })
+            .collect();
+        if read != whole {
+            out.push(format!("{name}({})", read.join(", ")));
+        }
+    }
     out
+}
+
+/// Which of a documented function's arguments are enumerations' values.
+fn enum_arguments(vm: &Vm, name: &str) -> Option<&'static [bool]> {
+    static ENUMS: OnceLock<HashMap<&'static str, Vec<bool>>> = OnceLock::new();
+    let engine = crate::Engine::of(vm)?;
+    // The recorded answers are camelot's: its documentation's.
+    if engine.flavor != "camelot" {
+        return None;
+    }
+    let api = engine.api;
+    let all = ENUMS.get_or_init(|| {
+        api.functions
+            .iter()
+            .filter_map(|f| {
+                let kinds: Vec<bool> = f
+                    .doc
+                    .get("Arguments")
+                    .and_then(serde_json::Value::as_array)?
+                    .iter()
+                    .map(|a| {
+                        a.get("Type")
+                            .and_then(serde_json::Value::as_str)
+                            .is_some_and(|t| api.enum_names.contains(t))
+                    })
+                    .collect();
+                kinds.contains(&true).then_some((f.name, kinds))
+            })
+            .collect()
+    });
+    all.get(name).map(Vec::as_slice)
 }
 
 /// How many arguments a function with recorded answers takes: its

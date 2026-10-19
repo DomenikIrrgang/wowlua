@@ -143,8 +143,9 @@ fn get_num_day_events(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(0.0)])
 }
 
+/// No event: nothing (the full probe, 1.60.1: `GetDayEvent(1, 1, 1)`).
 fn get_day_event(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Nil])
+    Ok(vec![])
 }
 
 /// `C_Club.GetGuildClubId()`: none outside a guild (unverified: a guild's

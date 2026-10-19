@@ -241,10 +241,6 @@ fn nothing(vm: &mut Vm, c: NativeCall) -> Ret {
 /// Documented functions of systems Forever lacks or the engine does not
 /// model, answering their documentation's empty values (unverified).
 const DOCUMENTED_EMPTY: &[&str] = &[
-    // The club finder: no clubs. (`C_Club.GetAvatarIdList` answers as
-    // recorded, `data/camelot-answers.txt`.)
-    "C_ClubFinder.GetFocusIndexFromFlag",
-    "C_ClubFinder.IsListingEnabledFromFlags",
     // Battle.net's optional features: off; no game data sent.
     "C_BattleNet.AreHighResTexturesInstalled",
     "C_BattleNet.GetFriendLevelFromInviteText",
@@ -488,7 +484,8 @@ fn get_color_for_chat_type(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `GetChatTypeIndex` is the ID (recorded: 1 is "SYSTEM", as its index);
 /// nil for 0, which several types share, and IDs none has (unverified).
 fn get_chat_type_name(vm: &mut Vm, c: NativeCall) -> Ret {
-    let Some(id) = arg_num(vm, &c, 1).filter(|&id| id > 0.0) else {
+    // Taken whole (the full probe: 1.5 answered as 1).
+    let Some(id) = arg_num(vm, &c, 1).map(f64::trunc).filter(|&id| id > 0.0) else {
         return Ok(vec![Value::Nil]);
     };
     let answer = format!("1: number {}", wowlua_vm::number::fmt_num(id));
@@ -517,7 +514,8 @@ fn get_num_reserved_chat_windows(_vm: &mut Vm, _c: NativeCall) -> Ret {
 /// among the player's (`GetLanguageByIndex`'s IDs, `GetNumLanguages`
 /// counting them).
 fn can_player_speak_language(vm: &mut Vm, c: NativeCall) -> Ret {
-    let Some(id) = arg_num(vm, &c, 1) else {
+    // Taken whole (the full probe, 1.60.1: 1.5 as 1).
+    let Some(id) = arg_num(vm, &c, 1).map(f64::trunc) else {
         return Ok(vec![Value::Bool(false)]);
     };
     let count = ask_num(vm, "GetNumLanguages", &[]).unwrap_or(0.0) as i64;
@@ -906,21 +904,49 @@ fn get_trade_skill_line_for_recipe(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![id, name, parent])
 }
 
-/// `C_FriendList.GetWhoRaceFilters()`: the playable races' names and IDs
-/// as `C_CreatureInfo.GetRaceInfo` names them, IDs 1 to 8 (the classic
-/// races; unverified: the client's filter list and order).
+/// `C_FriendList.GetWhoRaceFilters()`: the player's faction's races' names
+/// and IDs as `C_CreatureInfo.GetRaceInfo` names them (the full probe,
+/// 1.60.1, a Horde character: 2, 5, 6, 8 and 96, the classic Horde races
+/// and race 96, whose name the engine lacks: unverified; an Alliance
+/// character's list unrecorded, here its four classic races).
 fn get_who_race_filters(vm: &mut Vm, _c: NativeCall) -> Ret {
-    let mut filters = Vec::new();
+    let player = vm.str("player");
+    let faction = ask(vm, "UnitFactionGroup", &[player]);
+    let faction = match faction.first().copied() {
+        Some(Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        _ => String::new(),
+    };
+    let mut ids: Vec<f64> = Vec::new();
     for id in 1..=8 {
         let id = id as f64;
-        let info = ask(vm, "C_CreatureInfo.GetRaceInfo", &[Value::Num(id)]);
-        let Some(Value::Table(race)) = info.first().copied() else {
-            continue;
+        let info = ask(vm, "C_CreatureInfo.GetFactionInfo", &[Value::Num(id)]);
+        let tag = match info.first().copied() {
+            Some(Value::Table(t)) => field(vm, t, "groupTag"),
+            _ => Value::Nil,
         };
-        let name = field(vm, race, "raceName");
-        if !matches!(name, Value::Str(_)) {
-            continue;
+        let same = match tag {
+            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)) == faction,
+            _ => faction.is_empty(),
+        };
+        if same {
+            ids.push(id);
         }
+    }
+    if faction == "Horde" {
+        ids.push(96.0);
+    }
+    let mut filters = Vec::new();
+    for id in ids {
+        let info = ask(vm, "C_CreatureInfo.GetRaceInfo", &[Value::Num(id)]);
+        let name = match info.first().copied() {
+            Some(Value::Table(race)) => field(vm, race, "raceName"),
+            _ => Value::Nil,
+        };
+        let name = match name {
+            Value::Str(_) => name,
+            _ if id == 96.0 => vm.str(""),
+            _ => continue,
+        };
         let f = vm.new_table();
         set(vm, f, "name", name);
         set(vm, f, "ID", Value::Num(id));
@@ -1041,8 +1067,6 @@ const PROBED_CONSTANT: &[(&str, &str)] = &[
     ("C_SpellDiminish.GetAllSpellDiminishCategories", "0: "),
     ("C_DeathRecap.GetRecapEvents", "0: "),
     ("C_DeathRecap.GetRecapLink", "1: string You died."),
-    ("C_Debug.GetMapDebugObjects", "0: "),
-    ("C_Debug.GetAllPortLocsForMap", "0: "),
     ("C_HouseExterior.GetSelectedFixtureDebugInfo", "0: "),
     ("C_HouseExterior.GetHoveredFixtureDebugInfo", "0: "),
     ("C_HouseExterior.GetFixtureDebugInfoForGUID", "0: "),
@@ -1051,7 +1075,6 @@ const PROBED_CONSTANT: &[(&str, &str)] = &[
     ("C_VoiceChat.IsMemberMutedForAll", "1: nil nil"),
     ("C_VoiceChat.IsMemberMuted", "1: nil nil"),
     ("C_VoiceChat.GetMemberGUID", "1: nil nil"),
-    ("C_VoiceChat.GetActiveChannelID", "1: nil nil"),
     (
         "C_VoiceChat.GetCurrentVoiceChatConnectionStatusCode",
         "1: number 0",
@@ -1188,7 +1211,27 @@ const PROBED_CONSTANT: &[(&str, &str)] = &[
         "C_RecruitAFriend.GetSummonFriendCooldown",
         "3: number 0, number 0, boolean true",
     ),
-    ("C_QuestSession.GetSessionBeginDetails", "1: nil nil"),
+    // No club finder posting: the documentation's structure without its
+    // GUIDs, the club's ID 0 (the full probe, 1.60.1: every GUID asked).
+    (
+        "C_ClubFinder.GetRecruitingClubInfoFromFinderGUID",
+        "1: {cacheRequested=number 0,cached=number 0,clubId=number 0,comment=string ,emblemInfo=number 0,guildLeader=string ,isCrossFaction=boolean false,isGuild=boolean false,lastUpdatedTime=number 0,localeSet=boolean false,minILvl=number 0,name=string ,numActiveMembers=number 0,recruitingSpecIds={},recruitmentFlags=number 0,recruitmentLocale=number 0}",
+    ),
+    // Not spectating.
+    ("C_SpectatingUI.GetSpectateTargetInfo", "0: "),
+    // The encounter journal's slot filter: none (`Enum.ItemSlotFilterType`
+    // NoFilter, 15).
+    ("C_EncounterJournal.GetSlotFilter", "1: number 15"),
+    // Retail's island expeditions' difficulties, game data the client
+    // keeps.
+    (
+        "C_IslandsQueue.GetIslandDifficultyInfo",
+        "1: {1={difficultyId=number 1726,previewRewardQuestId=number 51838},2={difficultyId=number 1736,previewRewardQuestId=number 53339},3={difficultyId=number 1737,previewRewardQuestId=number 53340},4={difficultyId=number 1762,previewRewardQuestId=number 53341}}",
+    ),
+    (
+        "C_GameRules.GetCurrentGameModeDisplayInfo",
+        "1: {characterCreateExtraHeight=number 0,logoHeight=number 136,logoShrunkenHeight=number 0,logoUsesDarkBackdrop=boolean false,logoVerticalOffset=number -4}",
+    ),
     (
         "C_QuestOffer.GetQuestOfferMajorFactionReputationRewards",
         "0: ",
@@ -1269,6 +1312,203 @@ const PROBED_CONSTANT: &[(&str, &str)] = &[
         "1: {availableTalentIDs={},enabled=boolean false,level=number 0}",
     ),
 ];
+
+/// A club finder posting's recruitment flags: bit `n` set for
+/// `Enum.ClubFinderSettingFlags` value `n` (Blizzard's ClubFinder.lua
+/// compares the focus index with the enumeration's values).
+fn club_finder_flags(vm: &Vm, c: &NativeCall) -> u64 {
+    arg_num(vm, c, 1).map_or(0, |n| n.trunc().max(0.0) as u64)
+}
+
+/// `C_ClubFinder.GetFocusIndexFromFlag(flags)`: the first focus set, from
+/// Dungeons (1) to Social (5), else 0 (the full probe, 1.60.1: 2147483647
+/// answered 1, 0 and 1 answered 0; which focus wins is unverified).
+fn club_finder_focus_index(vm: &mut Vm, c: NativeCall) -> Ret {
+    let flags = club_finder_flags(vm, &c);
+    let focus = (1..=5).find(|bit| flags & (1 << bit) != 0).unwrap_or(0);
+    Ok(vec![Value::Num(f64::from(focus))])
+}
+
+/// `C_ClubFinder.IsListingEnabledFromFlags(flags)`: the EnableListing
+/// flag (12) set (the full probe, 1.60.1: 2147483647 true, 0 and 1 false).
+fn club_finder_listing_enabled(vm: &mut Vm, c: NativeCall) -> Ret {
+    let flags = club_finder_flags(vm, &c);
+    Ok(vec![Value::Bool(flags & (1 << 12) != 0)])
+}
+
+/// `C_Club.GetCommunityNameResultText(result)`: a failed name check's
+/// text, nil for Success (the full probe, 1.60.1: 0 and "x" nil, 1 to 17
+/// a text each, scrubbed there; here the result's name in
+/// `Enum.ValidateNameResult`, unverified).
+fn community_name_result_text(vm: &mut Vm, c: NativeCall) -> Ret {
+    let result = arg_num(vm, &c, 1).map_or(0.0, f64::trunc);
+    let name = engine(vm)
+        .api
+        .enums
+        .iter()
+        .find(|(n, _)| *n == "ValidateNameResult")
+        .and_then(|(_, fields)| fields.iter().find(|(_, v)| *v == result && result != 0.0))
+        .map(|(f, _)| f.clone());
+    Ok(vec![name.map_or(Value::Nil, |n| vm.str(&n))])
+}
+
+/// `C_Debug.GetMapDebugObjects(uiMapID)`, `GetAllPortLocsForMap(uiMapID)`
+/// (undocumented, checked as the bindings check a documented 32-bit
+/// integer): nothing, no debug objects there; no map refused with the
+/// usage, a non-number for the range (the full probe, 1.60.1: `()`,
+/// `("x")`, `("player")`; -1 to 1413 answer nothing).
+fn debug_map_objects(vm: &mut Vm, c: NativeCall) -> Ret {
+    let name = crate::recorded::called_name(vm, &c).unwrap_or_default();
+    let what = if name.ends_with("GetAllPortLocsForMap") {
+        "local debugPortLocInfos = C_Debug.GetAllPortLocsForMap(uiMapID)"
+    } else {
+        "local mapDebugObjects = C_Debug.GetMapDebugObjects(uiMapID)"
+    };
+    let v = vm.hidden(c.arg(1));
+    if v.is_nil() {
+        return Err(vm.api_arg_error(1, &format!("Usage: {what}")));
+    }
+    if vm
+        .tonumber(v)
+        .is_none_or(|n| !(-2_147_483_648.0..=2_147_483_647.0).contains(&n))
+    {
+        return Err(vm.api_arg_error(
+            1,
+            &format!("outside of expected range -2147483648 to 2147483647 - Usage: {what}"),
+        ));
+    }
+    Ok(vec![])
+}
+
+/// The creature types (`CreatureType.db2`) Forever lists: 1 to 12 and
+/// 14 (the full probe, 1.60.1: `GetCreatureTypeIDs()`), by name (1 Beast
+/// recorded; the others Classic's names, unverified).
+const CREATURE_TYPES: [(f64, &str); 13] = [
+    (1.0, "Beast"),
+    (2.0, "Dragonkin"),
+    (3.0, "Demon"),
+    (4.0, "Elemental"),
+    (5.0, "Giant"),
+    (6.0, "Undead"),
+    (7.0, "Humanoid"),
+    (8.0, "Critter"),
+    (9.0, "Mechanical"),
+    (10.0, "Not specified"),
+    (11.0, "Totem"),
+    (12.0, "Non-combat Pet"),
+    (14.0, "Wild Pet"),
+];
+
+/// The creature families Forever lists (the full probe, 1.60.1:
+/// `GetCreatureFamilyIDs()`), in its order.
+const CREATURE_FAMILIES: [f64; 27] = [
+    1.0, 2.0, 3.0, 4.0, 5.0, 6.0, 7.0, 8.0, 9.0, 11.0, 12.0, 15.0, 16.0, 17.0, 19.0, 20.0, 21.0,
+    23.0, 24.0, 25.0, 26.0, 27.0, 28.0, 302.0, 310.0, 312.0, 319.0,
+];
+
+/// A list of numbers, in order.
+fn number_list(vm: &mut Vm, list: impl Iterator<Item = f64>) -> Value {
+    let t = vm.new_table();
+    for (i, n) in list.enumerate() {
+        let _ = vm
+            .heap
+            .table_mut(t)
+            .set(Value::Num(i as f64 + 1.0), Value::Num(n));
+    }
+    Value::Table(t)
+}
+
+fn creature_type_ids(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![number_list(vm, CREATURE_TYPES.iter().map(|t| t.0))])
+}
+
+/// `C_CreatureInfo.GetCreatureTypeInfo(creatureTypeID)`: its ID and name,
+/// nil for one not listed (the full probe, 1.60.1: 1 and 1.5 Beast; -1, 0
+/// and 2147483647 nil).
+fn creature_type_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = arg_num(vm, &c, 1).map_or(0.0, f64::trunc);
+    let Some(&(id, name)) = CREATURE_TYPES.iter().find(|t| t.0 == id) else {
+        return Ok(vec![Value::Nil]);
+    };
+    let t = vm.new_table();
+    let (k, v) = (vm.str("id"), Value::Num(id));
+    let _ = vm.heap.table_mut(t).set(k, v);
+    let (k, v) = (vm.str("name"), vm.str(name));
+    let _ = vm.heap.table_mut(t).set(k, v);
+    Ok(vec![Value::Table(t)])
+}
+
+fn creature_family_ids(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![number_list(vm, CREATURE_FAMILIES.iter().copied())])
+}
+
+/// `C_CreatureInfo.GetCreatureFamilyInfo(creatureFamilyID)`: the wolf's
+/// (the full probe, 1.60.1: 1 and 1.5); nil for the others (their names
+/// and icons unrecorded: unverified).
+fn creature_family_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    if arg_num(vm, &c, 1).map(f64::trunc) != Some(1.0) {
+        return Ok(vec![Value::Nil]);
+    }
+    Ok(crate::recorded::parse_answer(
+        vm,
+        "1: {iconFile=number 132203,id=number 1,name=string Wolf}",
+    ))
+}
+
+/// `C_VoiceChat.GetActiveChannelID()`, `C_QuestSession.
+/// GetSessionBeginDetails()`: nothing while Blizzard's code loads (the
+/// load calls, 1.60.1 70425), nil once logged in (the full probe, 70450;
+/// when it changes is unverified: here at `PLAYER_LOGIN`).
+fn nil_after_login(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(if engine(vm).world.logged_in {
+        vec![Value::Nil]
+    } else {
+        vec![]
+    })
+}
+
+/// `C_QuestSession.GetProposedMaxLevelForSession()`: the player's level,
+/// out of a group (the full probe, 1.60.1: 21 for a level 21 character
+/// alone; a group's lowest level unverified).
+fn proposed_session_level(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let player = vm.str("player");
+    let level = ask(vm, "UnitLevel", &[player]);
+    Ok(vec![level.first().copied().unwrap_or(Value::Num(0.0))])
+}
+
+/// `C_PartyInfo.GetMinItemLevel(avgItemLevelCategory)`: out of a group,
+/// the player's average item level, whole, and name (the full probe,
+/// 1.60.1: categories 0 to 3 and "x" 11 for `GetAverageItemLevel()`'s
+/// 11.25). Unverified: the weighted categories, 4 and 5 (the client
+/// answered 68 and 73 by a formula not known; here the same 11), a
+/// group's lowest.
+fn min_item_level(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let player = vm.str("player");
+    let average = ask(vm, "GetAverageItemLevel", &[]);
+    let level = average
+        .first()
+        .copied()
+        .and_then(num)
+        .unwrap_or(0.0)
+        .floor();
+    let name = ask(vm, "UnitName", &[player]);
+    let name = match name.first().copied() {
+        Some(v @ Value::Str(_)) => v,
+        _ => vm.str(""),
+    };
+    Ok(vec![Value::Num(level), name])
+}
+
+/// `C_UIFileAsset.GetFileID(asset)`: a file ID is its own (the full probe,
+/// 1.60.1: 134400); a path's ID nil, the engine knowing no file's
+/// (unverified for the client's files: `INV_Misc_QuestionMark`'s is
+/// 134400).
+fn file_id(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(vec![match vm.hidden(c.arg(1)) {
+        Value::Num(n) => Value::Num(n),
+        _ => Value::Nil,
+    }])
+}
 
 /// A `PROBED_CONSTANT` function: its one answer.
 fn probed_constant(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -2067,6 +2307,18 @@ fn intl_find_breaks(vm: &mut Vm, c: NativeCall) -> Ret {
                 }
             }
         }
+        // Sentences: after a bar (the full probe, 1.60.1: a color code's
+        // at 2 and 15), and after a sentence's end and its spaces
+        // (unverified).
+        3 => {
+            for w in chars.windows(2) {
+                let ((_, a), (i, b)) = (w[0], w[1]);
+                let ended = text[..i].trim_end().ends_with(['.', '!', '?']);
+                if a == '|' || (a.is_whitespace() && !b.is_whitespace() && ended) {
+                    breaks.push(i + 1);
+                }
+            }
+        }
         _ => {}
     }
     if !text.is_empty() {
@@ -2074,6 +2326,111 @@ fn intl_find_breaks(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     let values: Vec<Value> = breaks.into_iter().map(|b| Value::Num(b as f64)).collect();
     Ok(vec![list(vm, &values)])
+}
+
+/// `C_Intl.GetSortKey(text, strength)`: ICU's sort key of the text, its
+/// levels by the strength (0 primary, 1 secondary, 2 tertiary, 3
+/// quaternary, 4 identical), each after a 1 byte (the full probe, 1.60.1:
+/// "", "x", "Hello" and "|cffff0000Red|r" at every strength; "x" as a
+/// strength reads 0). Primary weights: a letter one byte from 0x2B in
+/// steps of 2, either case; the digit 0 0x12; the bar 0x0C 0x8D (the
+/// probed characters). Unverified: the digits 1 to 9 (0x12 on in steps of
+/// 2), every other character (here 0x0C and a byte after the bar's by
+/// its code), accents. Secondary and tertiary weights are common but a
+/// capital's tertiary 0xDC, common runs compressed as ICU does (a run
+/// before a higher weight counted down from 0xC5, one at the end up from
+/// 0x05); the quaternary level is empty; the identical level is the
+/// text's BOCSU.
+fn intl_get_sort_key(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(text) = arg_text(vm, &c, 1) else {
+        return Ok(vec![]);
+    };
+    let strength = style_arg(vm, &c, 2);
+    let mut key: Vec<u8> = Vec::new();
+    let mut upper: Vec<bool> = Vec::new();
+    for ch in text.chars() {
+        match ch {
+            'a'..='z' | 'A'..='Z' => key.push(0x2B + 2 * (ch.to_ascii_lowercase() as u8 - b'a')),
+            '0'..='9' => key.push(0x12 + 2 * (ch as u8 - b'0')),
+            '|' => key.extend([0x0C, 0x8D]),
+            other => key.extend([0x0C, 0x11u32.wrapping_add(u32::from(other)) as u8]),
+        }
+        upper.push(ch.is_uppercase());
+    }
+    let n = upper.len();
+    if strength >= 1 {
+        key.push(0x01);
+        compress_end(&mut key, n);
+    }
+    if strength >= 2 {
+        key.push(0x01);
+        let mut run = 0;
+        for &up in &upper {
+            if up {
+                // A run before a higher weight, counted down from the top.
+                let mut left = run;
+                while left > 0 {
+                    let k = left.min(0x3F);
+                    key.push((0xC5 - (k - 1)) as u8);
+                    left -= k;
+                }
+                run = 0;
+                key.push(0xDC);
+            } else {
+                run += 1;
+            }
+        }
+        compress_end(&mut key, run);
+    }
+    if strength >= 3 {
+        key.push(0x01);
+    }
+    if strength >= 4 {
+        key.push(0x01);
+        bocsu(&mut key, &text);
+    }
+    Ok(vec![vm.bytes(&key)])
+}
+
+/// A run of common weights at a level's end: counted up from 0x05.
+fn compress_end(key: &mut Vec<u8>, mut run: usize) {
+    while run > 0 {
+        let k = run.min(0x21);
+        key.push((0x05 + (k - 1)) as u8);
+        run -= k;
+    }
+}
+
+/// ICU's BOCSU of a text (its identical level): each code point as its
+/// difference from the previous one's block middle; the single and
+/// double byte ranges (ASCII's single, the probe's; longer differences
+/// unverified).
+fn bocsu(key: &mut Vec<u8>, text: &str) {
+    let mut prev: i64 = 0;
+    for ch in text.chars() {
+        let c = i64::from(u32::from(ch));
+        if !(0x4E00..0xA000).contains(&prev) {
+            prev = (prev & !0x7F) + 80;
+        } else {
+            prev = 0x9FFF - 10667;
+        }
+        let diff = c - prev;
+        if (-80..=80).contains(&diff) {
+            key.push((0x81 + diff) as u8);
+        } else if (81..=10667).contains(&diff) {
+            key.push((0xD2 + diff / 253) as u8);
+            key.push((3 + diff % 253) as u8);
+        } else if (-10668..=-81).contains(&diff) {
+            let (q, m) = (diff.div_euclid(253), diff.rem_euclid(253));
+            key.push((0x31 + q) as u8);
+            key.push((3 + m) as u8);
+        } else {
+            for b in c.to_be_bytes().iter().skip(5) {
+                key.push(*b);
+            }
+        }
+        prev = c;
+    }
 }
 
 /// `C_Intl.FindStringMatches(text, pattern, strength)`: the 1-based byte
@@ -2236,8 +2593,34 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     );
     list.extend([
         (
+            "C_ClubFinder.GetFocusIndexFromFlag",
+            club_finder_focus_index as NativeFn,
+        ),
+        (
+            "C_ClubFinder.IsListingEnabledFromFlags",
+            club_finder_listing_enabled,
+        ),
+        (
+            "C_Club.GetCommunityNameResultText",
+            community_name_result_text,
+        ),
+        ("C_CreatureInfo.GetCreatureTypeIDs", creature_type_ids),
+        ("C_CreatureInfo.GetCreatureTypeInfo", creature_type_info),
+        ("C_CreatureInfo.GetCreatureFamilyIDs", creature_family_ids),
+        ("C_CreatureInfo.GetCreatureFamilyInfo", creature_family_info),
+        ("C_UIFileAsset.GetFileID", file_id),
+        ("C_PartyInfo.GetMinItemLevel", min_item_level),
+        (
+            "C_QuestSession.GetProposedMaxLevelForSession",
+            proposed_session_level,
+        ),
+        ("C_VoiceChat.GetActiveChannelID", nil_after_login),
+        ("C_QuestSession.GetSessionBeginDetails", nil_after_login),
+        ("C_Debug.GetMapDebugObjects", debug_map_objects),
+        ("C_Debug.GetAllPortLocsForMap", debug_map_objects),
+        (
             "C_ReportSystem.GetMajorCategoryString",
-            report_major_category_string as NativeFn,
+            report_major_category_string,
         ),
         (
             "C_ReportSystem.GetMinorCategoryString",
@@ -2257,6 +2640,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Intl.GetCurrencyName", intl_get_currency_name),
         ("C_Intl.GetDisplayName", intl_get_display_name),
         ("C_Intl.FindBreaks", intl_find_breaks),
+        ("C_Intl.GetSortKey", intl_get_sort_key),
         ("C_Intl.FindStringMatches", intl_find_string_matches),
         ("C_Intl.GetCharacterProperties", intl_character_properties),
         ("C_Ping.GetTextureKitForType", ping_texture_kit),

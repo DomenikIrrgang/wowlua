@@ -828,6 +828,37 @@ pub fn is_blizzard_addon(vm: &Vm, name: &str) -> bool {
         .contains_key(&name.to_ascii_lowercase())
 }
 
+/// A Blizzard addon of the loaded UI code as `C_AddOns` tells it: its
+/// name, its TOC's title, whether it loads on demand, its required
+/// dependencies (in the TOC's order).
+pub struct BlizzardAddon {
+    pub name: String,
+    pub title: Option<String>,
+    pub on_demand: bool,
+    pub deps: Vec<String>,
+}
+
+/// The loaded UI code's Blizzard addon of this name, any case.
+pub fn blizzard_addon(vm: &Vm, name: &str) -> Option<BlizzardAddon> {
+    let a = engine(vm)
+        .world
+        .ui
+        .available
+        .get(&name.to_ascii_lowercase())?;
+    let title = a
+        .toc
+        .directives
+        .iter()
+        .find(|d| d.key.eq_ignore_ascii_case("Title"))
+        .map(|d| d.value.clone());
+    Some(BlizzardAddon {
+        name: a.name.clone(),
+        title,
+        on_demand: a.on_demand,
+        deps: a.deps.clone(),
+    })
+}
+
 /// Loads an addon of the user's from its folder as the client does: the
 /// files its TOC lists, in order, as the addon's code (its taint), with
 /// `table` as the addon table; `skip`: files (relative to `dir`) already

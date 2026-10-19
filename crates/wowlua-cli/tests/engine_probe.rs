@@ -1972,7 +1972,7 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
 /// stand in for it (synthetic: the number changes with the first real
 /// run). Only ever raised, but for the plan's own changes: retail systems
 /// left out of it took 19 matched calls with them (762 of 792 before).
-const FULLPROBE_MATCHED: usize = 32063;
+const FULLPROBE_MATCHED: usize = 32320;
 
 #[test]
 fn the_engine_answers_the_full_probe_as_the_client_did() {
@@ -1994,6 +1994,32 @@ fn the_engine_answers_the_full_probe_as_the_client_did() {
         &repo().join("crates/wowlua-engine/tests/client/forever-camelot-character.json"),
     )
     .expect("the character's profile");
+    // The client has StdTest installed: `C_AddOns` knows it by its TOC,
+    // its title and notes the real manifest's (this build's has none).
+    let toc = fs::read_to_string(out.join("StdTest_Camelot.toc"))
+        .or_else(|_| fs::read_to_string(out.join("StdTest.toc")))
+        .expect("a TOC");
+    let mut metadata: Vec<String> = toc
+        .lines()
+        .filter_map(|l| l.strip_prefix("## ")?.split_once(':'))
+        .map(|(k, v)| format!("[{:?}] = {:?}", k.trim(), v.trim()))
+        .collect();
+    let manifest: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(repo().join("tests/ingame/wowlua.json")).expect("the manifest"),
+    )
+    .expect("parses");
+    for (key, field) in [("Title", "title"), ("Notes", "notes")] {
+        if let Some(v) = manifest["addon"][field].as_str() {
+            metadata.push(format!("[{key:?}] = {v:?}"));
+        }
+    }
+    addon(
+        &mut vm,
+        &format!(
+            "__engine.defineAddon('StdTest', {{ metadata = {{ {} }} }})",
+            metadata.join(", ")
+        ),
+    );
     let name = vm.str("StdTest");
     wowlua_engine::widgets::fire_event(&mut vm, "ADDON_LOADED", &[name, Value::Bool(false)]);
     wowlua_engine::widgets::fire_event(&mut vm, "PLAYER_LOGIN", &[]);
@@ -2026,6 +2052,8 @@ fn the_engine_answers_the_full_probe_as_the_client_did() {
     let show = vm.str(&show);
     vm.set_global("StdTestFullProbeShow", show);
     vm.set_global("StdTestFullProbeLimit", Value::Num(limit as f64));
+    let escape = vm.native("StdTestFullProbeEscape", escaped_answer);
+    vm.set_global("StdTestFullProbeEscape", escape);
     let compare = br#"
 local fixture = StdTestFullProbeFixture
 local only
@@ -2043,7 +2071,8 @@ table.sort(keys)
 local ours = StdTestFullProbeReplay(keys)
 local matched, missed, diffs = 0, {}, {}
 for _, k in ipairs(keys) do
-    local mine = ours[k] or "<missing>"
+    -- Bytes that are not UTF-8 written `\xf6`, as ingest writes the client's.
+    local mine = StdTestFullProbeEscape(ours[k] or "<missing>")
     for _, kind in ipairs({ "function", "table", "userdata", "thread" }) do
         mine = mine:gsub(kind .. ": 0x%x+", kind)
     end
@@ -2314,6 +2343,20 @@ fn the_cursor_moves_as_the_client_recorded() {
     lines.sort();
     let theirs: Vec<String> = lines.into_iter().map(|(_, v)| v).collect();
     assert_eq!(ours.lines().collect::<Vec<_>>(), theirs);
+}
+
+/// [`escaped_bytes`] for the full probe's comparison: a string's bytes that
+/// are not UTF-8 written `\xf6`, as ingest writes the client's answers.
+fn escaped_answer(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
+    let Some(Value::Str(s)) = c.args.first().copied() else {
+        return Ok(vec![c.args.first().copied().unwrap_or(Value::Nil)]);
+    };
+    let bytes = vm.str_bytes(s);
+    if std::str::from_utf8(bytes).is_ok() {
+        return Ok(vec![Value::Str(s)]);
+    }
+    let out = escaped_bytes(bytes);
+    Ok(vec![vm.str(&out)])
 }
 
 fn yes(_vm: &mut Vm, _c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {

@@ -1479,11 +1479,13 @@ fn set_layout_data(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// `C_CooldownViewer.IsCooldownViewerAvailable()`: not available, no
-/// reason, as Blizzard's code has been answered so far (its
-/// `cooldownViewerEnabled` CVar recorded 0).
+/// `C_CooldownViewer.IsCooldownViewerAvailable()`: available, no reason
+/// (the full probe, 1.60.1, a level 21 character; the newest answer wins
+/// over the engine's earlier "not available"; whether a low level's is
+/// refused is unverified). Blizzard's viewer stays hidden while its
+/// `cooldownViewerEnabled` CVar is 0, as recorded.
 fn is_cooldown_viewer_available(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(false), vm.str("")])
+    Ok(vec![Value::Bool(true), vm.str("")])
 }
 
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {

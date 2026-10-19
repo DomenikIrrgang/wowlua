@@ -106,6 +106,7 @@ C_Garrison.GetPlots	number	Usage: GetPlots(followerType)
 C_Garrison.GetPlots	never	Unknown follower type
 C_Garrison.GetPlotsForBuilding	number	Usage: GetPlotsForBuilding(buildingID)
 C_Garrison.GetPossibleFollowersForBuilding	required,required	Usage: GetPossibleFollowersForBuilding(followerType, plotInstanceID)
+C_Garrison.GetPossibleFollowersForBuilding	never	Unknown follower type
 C_Garrison.GetRecruitAbilities	number	Usage: GetRecruitAbilities(index)
 C_Garrison.GetRecruitAbilities	index	GetRecruitAbilities(index) expects index from 1 to GARRISON_NUM_AVAILABLE_RECRUITS
 C_Garrison.GetRecruiterAbilityList	never	Usage: GetRecruiterAbilityList(traits)
@@ -148,6 +149,7 @@ C_PetJournal.PetIsSlotted	guid	Usage: PetIsSlotted(petGUID)
 C_PetJournal.PetIsTradable	guid	Usage: PetIsTradable(petGUID)
 C_PetJournal.PetIsUsable	guid	Usage: PetIsUsable(ID)
 C_Scenario.GetBonusStepRewardQuestID	number	Usage: GetBonusStepRewardQuestID(stepIndex
+C_SpectatingUI.GetSpectatingPlayerSpellItemQuality	required	bad argument #1 to 'GetSpectatingPlayerSpellItemQuality' (Usage: local quality = C_SpectatingUI.GetSpectatingPlayerSpellItemQuality(inventorySlot))
 C_ToyBox.GetIsFavorite	number	Usage: GetIsFavorite(itemID)
 C_ToyBox.GetToyFromIndex	number	Usage: GetToyFromIndex(itemIndex)
 C_ToyBox.GetToyInfo	number	Usage: GetToyInfo(itemID)

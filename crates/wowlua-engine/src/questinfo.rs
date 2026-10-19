@@ -685,9 +685,10 @@ fn get_quest_type(_vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// `C_QuestLog.SetSelectedQuest(questID)`: the log's selection
-/// (`C_QuestLog.GetSelectedQuest`'s answer from then on).
+/// (`C_QuestLog.GetSelectedQuest`'s answer from then on); a negative ID
+/// selects none (the full probe, 1.60.1: `SetSelectedQuest(-1)` read 0).
 fn set_selected_quest(vm: &mut Vm, c: NativeCall) -> Ret {
-    let id = num_of(vm, c.arg(1)).unwrap_or(0.0);
+    let id = num_of(vm, c.arg(1)).unwrap_or(0.0).max(0.0);
     engine_mut(vm)
         .world
         .character
@@ -1256,12 +1257,18 @@ fn can_set_waypoint(vm: &mut Vm, map: f64) -> bool {
 
 /// `C_Map.SetUserWaypoint(point)`: the pin set where the map takes one,
 /// `USER_WAYPOINT_UPDATED()`; whether it was set.
+/// A point that is not one, on a map that takes no pin, or off its map
+/// (outside 0 to 1) is refused with the usage (the full probe, 1.60.1:
+/// `"x"`, map 0 and (2, 2) on 1413; other maps without pins unverified).
 fn set_user_waypoint(vm: &mut Vm, c: NativeCall) -> Ret {
-    let Some((map, x, y, z)) = read_point(vm, c.arg(1)) else {
-        return Ok(vec![Value::Bool(false)]);
+    let refuse = |vm: &mut Vm| {
+        Err(vm.api_arg_error(1, "Usage: local wasSet = C_Map.SetUserWaypoint(point)"))
     };
-    if !can_set_waypoint(vm, map) {
-        return Ok(vec![Value::Bool(false)]);
+    let Some((map, x, y, z)) = read_point(vm, c.arg(1)) else {
+        return refuse(vm);
+    };
+    if !can_set_waypoint(vm, map) || !(0.0..=1.0).contains(&x) || !(0.0..=1.0).contains(&y) {
+        return refuse(vm);
     }
     set_waypoint(vm, map, x, y, z);
     fire(vm, "USER_WAYPOINT_UPDATED", &[]);

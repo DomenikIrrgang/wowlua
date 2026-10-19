@@ -351,9 +351,15 @@ fn not_drawn(_vm: &mut Vm, _c: NativeCall) -> Ret {
 /// interaction is open (its `PLAYER_INTERACTION_MANAGER_FRAME_SHOW` told,
 /// its hide not yet).
 fn interacting_with(vm: &mut Vm, c: NativeCall) -> Ret {
-    let open = match vm.hidden(c.arg(1)) {
-        Value::Num(n) => engine(vm).world.interactions.contains(&n.to_bits()),
-        _ => false,
+    // An enumeration's value: a non-number reads as 0, `None`, which is
+    // the type while no interaction is open (the full probe, 1.60.1: 0 and
+    // "x" true, 1 to 57 false, nothing open; unverified with one open).
+    let n = vm.tonumber(vm.hidden(c.arg(1))).unwrap_or(0.0).trunc();
+    let interactions = &engine(vm).world.interactions;
+    let open = if n == 0.0 {
+        interactions.is_empty()
+    } else {
+        interactions.contains(&n.to_bits())
     };
     Ok(vec![Value::Bool(open)])
 }

@@ -909,6 +909,12 @@ const OVER_RECORDED: &[&str] = &[
     "C_SuperTrack.GetSuperTrackedContent",
     "C_SuperTrack.GetSuperTrackedVignette",
     "C_Map.GetUserWaypointPositionForMap",
+    // A rule over the one recorded call (the full probe: the joined
+    // channels' shortcuts, nil past them).
+    "C_ChatInfo.GetChannelShortcutForChannelID",
+    // Nothing at load (recorded), nil once logged in (the full probe).
+    "C_VoiceChat.GetActiveChannelID",
+    "C_QuestSession.GetSessionBeginDetails",
 ];
 
 /// The fill-in modules' behaviours: answers for functions no recording

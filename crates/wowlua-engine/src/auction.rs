@@ -1263,13 +1263,15 @@ fn post_item(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_AuctionHouse.CalculateItemDeposit(location, duration, quantity)`:
-/// the data's deposit.
+/// the data's deposit, a silver at least (the full probe, 1.60.1: 100 for
+/// a cheap item at every duration and quantity, no auction house open;
+/// recorded 100 in the auction scenario; unverified for dearer items).
 fn calculate_item_deposit(vm: &mut Vm, _c: NativeCall) -> Ret {
     let deposit = match data(vm) {
         Some(t) => num(field(vm, t, "deposit")).unwrap_or(0.0),
         None => 0.0,
     };
-    Ok(vec![Value::Num(deposit)])
+    Ok(vec![Value::Num(deposit.max(100.0))])
 }
 
 /// `C_AuctionHouse.CloseAuctionHouse()`: closed, the interaction's hides.

@@ -250,14 +250,26 @@ filters! {
 /// mount journal's collected filters 1 to 3 and types its own, 0 and
 /// 2147483647 reading false and keeping no setting, its sources none, as
 /// `IsValidSourceFilter` answered; the pet journal's from 1, 99 kept; the
-/// toy box's expansions from 0; unverified: the others, taken from 1).
+/// toy box's expansions from 0; the sets' 1 to `NUM_LE_TRANSMOG_SET_FILTERS`
+/// (4), 0 and 2147483647 answering nothing; unverified: the others,
+/// taken from 1).
 fn valid_filter_index(key: &str, i: i64) -> bool {
     match key {
         "mount.filter.source." => false,
         "mount.filter.collected." => (1..=3).contains(&i),
         "mount.filter.type." => (1..=MOUNT_TYPES).contains(&i),
         "toy.filter.expansion." => i >= 0,
+        "sets.filter." | "basesets.filter." => (1..=4).contains(&i),
         _ => i >= 1,
+    }
+}
+
+/// An indexed filter's answer for an index it lacks: false, the sets'
+/// nothing (the full probe, 1.60.1).
+fn no_filter_answer(key: &str) -> Vec<Value> {
+    match key {
+        "sets.filter." | "basesets.filter." => vec![],
+        _ => vec![Value::Bool(false)],
     }
 }
 
@@ -270,7 +282,7 @@ macro_rules! flag_filters {
                 let key = if $indexed {
                     let i = num(vm, &c, 1).unwrap_or(0.0) as i64;
                     if !valid_filter_index($key, i) {
-                        return Ok(vec![Value::Bool(false)]);
+                        return Ok(no_filter_answer($key));
                     }
                     format!("{}{}", $key, i)
                 } else {
@@ -1132,6 +1144,9 @@ fn player_has_transmog_by_item(vm: &mut Vm, c: NativeCall) -> Ret {
 fn slot_for_inventory_type(vm: &mut Vm, c: NativeCall) -> Ret {
     let inv = num(vm, &c, 1).unwrap_or(0.0) as i64 - 1;
     let slot = match inv {
+        // Not equippable: slot 0 (the full probe, 1.60.1: 1 and 1.5
+        // answered 0, 0 and 2147483647 nothing).
+        0 => 0,
         1 => 1,
         2 => 2,
         3 => 3,

@@ -1217,8 +1217,10 @@ fn in_combat_lockdown(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(engine(vm).units.lockdown)])
 }
 
+/// The restriction type: an enumeration's value, a non-number read as 0
+/// (`GetAddOnRestrictionState("x")` answers 0, the full probe).
 fn restriction_arg(vm: &mut Vm, c: &NativeCall) -> Result<usize, wowlua_vm::LuaError> {
-    let t = vm.check_int(c, 1)?;
+    let t = vm.tonumber(vm.hidden(c.arg(1))).unwrap_or(0.0).trunc() as i64;
     Ok(usize::try_from(t)
         .ok()
         .filter(|&t| t < 6)
@@ -1984,14 +1986,26 @@ fn set_player_target(vm: &mut Vm, new: Option<UnitId>) {
 /// `C_ClickBindings.GetEffectiveInteractionButton(button, modifiers)`: the
 /// default interaction bindings' (a unit frame's left click targets, its
 /// right click opens the menu): the button itself (unverified: not
-/// recorded; `GetBindingType("LeftButton", 0)` recorded an interaction).
+/// recorded; `GetBindingType("LeftButton", 0)` recorded an interaction);
+/// nil for a name that is no mouse button (the full probe, 1.60.1: `"x"`
+/// and `""` with any modifiers).
 fn effective_interaction_button(vm: &mut Vm, c: NativeCall) -> Ret {
     if let Some(r) =
         crate::recorded::lookup(vm, "C_ClickBindings.GetEffectiveInteractionButton", &c)
     {
         return Ok(r);
     }
-    Ok(vec![c.arg(1)])
+    let button = match vm.hidden(c.arg(1)) {
+        Value::Str(s) => vm.str_bytes(s).to_vec(),
+        _ => Vec::new(),
+    };
+    let mouse = matches!(
+        button.as_slice(),
+        b"LeftButton" | b"RightButton" | b"MiddleButton"
+    ) || button
+        .strip_prefix(b"Button")
+        .is_some_and(|n| !n.is_empty() && n.iter().all(u8::is_ascii_digit));
+    Ok(vec![if mouse { c.arg(1) } else { Value::Nil }])
 }
 
 /// `C_ClickBindings.GetBindingType(button, modifiers)`: the recorded

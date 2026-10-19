@@ -90,7 +90,10 @@ fn map_pos_from_world_pos(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some((_, left, top, width, height)) = world_rect(vm, map) else {
         return Ok(vec![]);
     };
+    // The client's floats (the full probe, 1.60.1: its positions are
+    // single precision, 0.46375513076782).
     let (u, v) = ((left - y) / width, (top - x) / height);
+    let (u, v) = (f64::from(u as f32), f64::from(v as f32));
     let mut out = vec![Value::Num(map as f64)];
     out.extend(vector2d(vm, u, v)?);
     Ok(out)
@@ -203,6 +206,8 @@ fn world_pos_from_map_pos(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![]);
     };
     let (x, y) = (top - v * height, left - u * width);
+    // The client's floats (the full probe, 1.60.1).
+    let (x, y) = (f64::from(x as f32), f64::from(y as f32));
     // A `Vector2DMixin` (Blizzard's `CreateVector2D`), else its fields.
     let create = vm.get_global("CreateVector2D");
     let vector = if create.is_nil() {

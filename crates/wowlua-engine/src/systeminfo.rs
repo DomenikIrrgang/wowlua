@@ -544,11 +544,14 @@ fn compare_calendar_time(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Num(r)])
 }
 
-/// `C_DateAndTime.GetCalendarTimeFromEpoch(epoch)`: the local date of an
-/// epoch in microseconds (as a club message's `epoch`; unverified).
+/// `C_DateAndTime.GetCalendarTimeFromEpoch(epoch)`: the date of an epoch
+/// in microseconds (as a club message's `epoch`), moved by the realm's
+/// offset the other way round, as if the epoch were the realm's time (the
+/// full probe, 1.60.1, a Pacific realm: `GetServerTimeLocal()` 7 hours
+/// before `GetServerTime()`, epoch 0 at 08:00 on 1 January 1970).
 fn calendar_time_from_epoch(vm: &mut Vm, c: NativeCall) -> Ret {
     let epoch = num(vm, c.arg(1)).unwrap_or(0.0);
-    let secs = (epoch / 1_000_000.0).floor() as i64 + vm.clock.utc_offset;
+    let secs = (epoch / 1_000_000.0).floor() as i64 - vm.clock.utc_offset;
     Ok(vec![calendar_time(vm, secs.div_euclid(60))])
 }
 
@@ -1189,11 +1192,15 @@ fn dragon_isles_supplies_currency_id(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(2003.0)])
 }
 
-/// `C_CurrencyInfo.GetPlayerCurrencyCategoryInfo(categoryID)`: no name,
-/// no currencies (unverified).
-fn get_player_currency_category_info(vm: &mut Vm, _c: NativeCall) -> Ret {
+/// `C_CurrencyInfo.GetPlayerCurrencyCategoryInfo(categoryID)`: the
+/// category's name, the ID taken whole, no currencies (the full probe,
+/// 1.60.1: 1 and 1.5 "Miscellaneous", -1, 0 and 2147483647 no name;
+/// unverified: the other categories' names, here none, and their
+/// currencies).
+fn get_player_currency_category_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let t = vm.new_table();
-    let name = vm.str("");
+    let id = num(vm, c.arg(1)).map(f64::trunc);
+    let name = vm.str(if id == Some(1.0) { "Miscellaneous" } else { "" });
     set_field(vm, t, "categoryName", name);
     for k in ["currencyTypes", "childCategories"] {
         let l = vm.new_table();
@@ -1265,9 +1272,12 @@ fn get_faction_data_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_Reputation.SetSelectedFaction(index)`: what
-/// `GetSelectedFaction` answers.
+/// `GetSelectedFaction` answers. Unverified: 0 is taken, though the full
+/// probe's client kept 12 after `SetSelectedFaction(0)`; refusing it would
+/// leave the engine's own start (0, no selection) beyond reach of the
+/// probe plan's restore.
 fn set_selected_faction(vm: &mut Vm, c: NativeCall) -> Ret {
-    let i = num(vm, c.arg(1)).unwrap_or(0.0);
+    let i = num(vm, c.arg(1)).unwrap_or(0.0).trunc();
     engine_mut(vm)
         .world
         .character
@@ -1302,22 +1312,46 @@ fn watch_faction(vm: &mut Vm, index: Option<i64>) {
 }
 
 /// `C_Reputation.SetWatchedFactionByIndex(index)`: that faction watched
-/// (0 or none there: none).
+/// (0 or none there: none), once the server answers.
 fn set_watched_faction_by_index(vm: &mut Vm, c: NativeCall) -> Ret {
     let i = num(vm, c.arg(1)).map(|i| i as i64);
     let exists = indexed(vm, "faction").iter().any(|(k, _)| Some(*k) == i);
-    watch_faction(vm, i.filter(|_| exists));
+    request_watch(vm, i.filter(|_| exists));
     Ok(vec![])
 }
 
+/// `C_Reputation.SetWatchedFactionByID(factionID)`: as by its index; a
+/// header's ID 0 watches none.
 fn set_watched_faction_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
-    let id = num(vm, c.arg(1));
+    let id = num(vm, c.arg(1)).filter(|&id| id > 0.0);
     let i = indexed(vm, "faction")
         .into_iter()
         .find(|(_, f)| id.is_some() && field_num(f, "factionID") == id)
         .map(|(i, _)| i);
-    watch_faction(vm, i);
+    request_watch(vm, i);
     Ok(vec![])
+}
+
+/// A watched faction asked of the server: the watch changes when it
+/// answers, the last asked winning (the full probe, 1.60.1:
+/// `GetWatchedFactionData()` still nil right after
+/// `SetWatchedFactionByID(530)` and `SetWatchedFactionByIndex(2)`, a
+/// faction the character has; unverified: the answer's delay, here the
+/// server's).
+fn request_watch(vm: &mut Vm, index: Option<i64>) {
+    let asked = index.map_or(Value::Bool(false), |i| Value::Num(i as f64));
+    set_state(vm, "watchRequest", asked);
+    let answer = vm.native("WatchFactionAnswer", |vm, _c| {
+        match get_state(vm, "watchRequest") {
+            Value::Num(i) => watch_faction(vm, Some(i as i64)),
+            Value::Bool(false) => watch_faction(vm, None),
+            _ => return Ok(vec![]),
+        }
+        set_state(vm, "watchRequest", Value::Nil);
+        Ok(vec![])
+    });
+    let delay = crate::clock::server_delay(vm);
+    crate::clock::after_engine(vm, delay, answer);
 }
 
 /// `C_Reputation.ToggleFactionAtWar(index)`: at war or not, where it can
@@ -1571,8 +1605,9 @@ fn tracking_active(vm: &mut Vm, kind: &str, id: f64) -> bool {
 }
 
 /// `C_Minimap.GetTrackingInfo(index)`: the type's name, kind, state and a
-/// spell's ID and icon (the spellbook's); a filter's texture and every
-/// subtype are not recorded (none, 0: unverified); nil past the list.
+/// spell's ID and icon (the spellbook's); a spell's subtype 1 (the full
+/// probe, 1.60.1: Sense Undead's); a filter's texture and subtype are not
+/// recorded (none, 0: unverified); nil past the list.
 fn get_tracking_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some((name, kind, id)) = tracking_type(vm, c.arg(1)) else {
         return Ok(vec![Value::Nil]);
@@ -1595,7 +1630,10 @@ fn get_tracking_info(vm: &mut Vm, c: NativeCall) -> Ret {
         ("texture", texture),
         ("active", Value::Bool(active)),
         ("type", vm.str(kind)),
-        ("subType", Value::Num(0.0)),
+        (
+            "subType",
+            Value::Num(if kind == "spell" { 1.0 } else { 0.0 }),
+        ),
     ];
     if kind == "spell" {
         fields.push(("spellID", Value::Num(id)));
@@ -1912,11 +1950,21 @@ fn can_compare_unit_tokens(vm: &mut Vm, c: NativeCall) -> Ret {
 
 // ---------------------------------------------------------- utilities
 
-/// `C_EventUtils.IsCallbackEvent(event)`: an event the client knows
-/// (unverified: the client's own list of callback events).
+/// `C_EventUtils.IsCallbackEvent(event)`: an event its documentation marks
+/// `CallbackEvent` (12, the combat log's among them); another event no
+/// (the full probe, 1.60.1: `PLAYER_LOGIN` false; the marked ones
+/// unverified).
 fn is_callback_event(vm: &mut Vm, c: NativeCall) -> Ret {
-    let known = text(vm, c.arg(1)).is_some_and(|e| engine(vm).api.events.contains(&e));
-    Ok(vec![Value::Bool(known)])
+    let callback = text(vm, c.arg(1)).is_some_and(|e| {
+        engine(vm)
+            .api
+            .event_docs
+            .get(&e)
+            .and_then(|d| d.get("CallbackEvent"))
+            .and_then(serde_json::Value::as_bool)
+            == Some(true)
+    });
+    Ok(vec![Value::Bool(callback)])
 }
 
 /// `C_ColorUtil.WrapTextInColorCode(text, code)`: `|c<code>text|r`
@@ -2131,13 +2179,18 @@ fn encode_hex(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![vm.str(&hex)])
 }
 
-/// `C_EncodingUtil.DecodeHex(source)`: either case; nothing for bad input.
+/// `C_EncodingUtil.DecodeHex(source)`: either case; an odd length errors
+/// (the full probe, 1.60.1: `"x"`); nothing for other bad input
+/// (unverified).
 fn decode_hex(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(src) = bytes_arg(vm, &c, 1) else {
         return Ok(vec![]);
     };
     if src.len() % 2 != 0 {
-        return Ok(vec![]);
+        return Err(encoding_error(
+            vm,
+            "DecodeHex(): attempted to decode a string that does not have an even number of bytes",
+        ));
     }
     let digit = |ch: u8| (ch as char).to_digit(16);
     let mut out = Vec::with_capacity(src.len() / 2);
@@ -2292,8 +2345,34 @@ fn lenient(vm: &mut Vm, options: Value) -> bool {
     }
 }
 
+/// The encodings' own error: the C code's message, with the taint line
+/// the client adds for an addon's call (as `DeserializeCBOR`'s).
+fn encoding_error(vm: &mut Vm, msg: &str) -> wowlua_vm::LuaError {
+    let mut msg = msg.to_string();
+    if !crate::protection::blizzard_caller(vm) {
+        msg.push_str("\nLua Taint: *** ForceTaint_Strong ***");
+    }
+    let v = vm.str(&msg);
+    vm.raise(v)
+}
+
+/// The serializers' options: a table or nil, anything else refused with
+/// the C code's usage (`SerializeJSON({}, "x")`, the full probe, 1.60.1;
+/// other non-tables unverified).
+fn check_options(vm: &mut Vm, c: &NativeCall, usage: &str) -> Result<(), wowlua_vm::LuaError> {
+    match vm.hidden(c.arg(2)) {
+        Value::Nil | Value::Table(_) => Ok(()),
+        _ => Err(encoding_error(vm, usage)),
+    }
+}
+
 /// `C_EncodingUtil.SerializeCBOR(value [, options])`.
 fn serialize_cbor(vm: &mut Vm, c: NativeCall) -> Ret {
+    check_options(
+        vm,
+        &c,
+        "Usage: C_EncodingUtil.SerializeCBOR(value[, options])",
+    )?;
     let lenient = lenient(vm, c.arg(2));
     let mut out = Vec::new();
     if let Err(e) = cbor_encode(vm, c.arg(1), &mut out, 0, lenient) {
@@ -2548,6 +2627,11 @@ fn from_json(vm: &mut Vm, j: &serde_json::Value) -> Value {
 
 /// `C_EncodingUtil.SerializeJSON(value [, options])`.
 fn serialize_json(vm: &mut Vm, c: NativeCall) -> Ret {
+    check_options(
+        vm,
+        &c,
+        "Usage: C_EncodingUtil.SerializeJSON(value[, options])",
+    )?;
     let lenient = lenient(vm, c.arg(2));
     match to_json(vm, c.arg(1), 0, lenient) {
         Ok(j) => Ok(vec![vm.str(&j.to_string())]),
@@ -2555,18 +2639,20 @@ fn serialize_json(vm: &mut Vm, c: NativeCall) -> Ret {
     }
 }
 
-/// `C_EncodingUtil.DeserializeJSON(source)`: the value, nil for bad input
-/// (unverified: the client may error).
+/// `C_EncodingUtil.DeserializeJSON(source)`: the value; bad input errors
+/// (the full probe, 1.60.1: `""` and `"x"` "attempted to deserialize an
+/// unknown json value"; other malformed input's message unverified).
 fn deserialize_json(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(src) = bytes_arg(vm, &c, 1) else {
         return Ok(vec![Value::Nil]);
     };
-    Ok(vec![
-        match serde_json::from_slice::<serde_json::Value>(&src) {
-            Ok(j) => from_json(vm, &j),
-            Err(_) => Value::Nil,
-        },
-    ])
+    match serde_json::from_slice::<serde_json::Value>(&src) {
+        Ok(j) => Ok(vec![from_json(vm, &j)]),
+        Err(_) => Err(encoding_error(
+            vm,
+            "attempted to deserialize an unknown json value",
+        )),
+    }
 }
 
 /// `Logout()` (Blizzard's `/camp`; protected): the client starts camping,
