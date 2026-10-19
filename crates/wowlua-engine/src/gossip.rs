@@ -9,11 +9,12 @@
 //! round trip later and what the option opens (`opens = "trainer"`: the
 //! NPC's trainer, `trainer.rs`).
 //!
-//! `textAfter = 0` (the flight masters' recordings): `GOSSIP_SHOW` with
-//! the interaction, before its event.
+//! The text usually comes with the interaction, before its event
+//! (recorded: two flight masters, an NPC talked to twice, the first time
+//! too); a class trainer's 0.472 s later (`textAfter`).
 //!
-//! Unverified: closing the gossip without choosing, an option that opens
-//! nothing, quests in a gossip, when the text comes with the interaction.
+//! Unverified: an option that opens nothing, quests in a gossip, why the
+//! trainer's text came later.
 
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, NativeFn, TableRef, Value, Vm};
@@ -21,8 +22,9 @@ use wowlua_vm::{NativeCall, NativeFn, TableRef, Value, Vm};
 use crate::units::{self, UnitId};
 use crate::{engine, engine_mut, widgets};
 
-/// The text's packet after the interaction's (recorded).
-const TEXT_AFTER: f64 = 0.472;
+/// The text's packet after the interaction's, by default: with it
+/// (recorded at three NPCs; a class trainer's came 0.472 s later).
+const TEXT_AFTER: f64 = 0.0;
 /// `Enum.PlayerInteractionType.Gossip`.
 const GOSSIP: f64 = 3.0;
 
@@ -72,9 +74,8 @@ pub fn has(vm: &Vm, npc: UnitId) -> bool {
 pub fn interact(vm: &mut Vm, npc: UnitId) {
     let delay = crate::clock::server_delay(vm);
     let id = Value::Num(npc.0 as f64);
-    // The text's packet's delay: the gossip's `textAfter`, else the
-    // trainer's; 0: with the interaction, before it (recorded at two
-    // flight masters, the text perhaps known; unverified when).
+    // The text's packet's delay: the gossip's `textAfter`, else with the
+    // interaction (0: before its event).
     let after = engine(vm)
         .world
         .gossip
@@ -263,7 +264,8 @@ fn chosen_option(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// `C_GossipInfo.CloseGossip()`: the gossip closed (unverified events).
+/// `C_GossipInfo.CloseGossip()`: the gossip closed, at once (recorded:
+/// gossip2, closed with Escape).
 fn close_gossip(vm: &mut Vm, _c: NativeCall) -> Ret {
     if engine_mut(vm).world.gossip.open.take().is_some() {
         fire(vm, "GOSSIP_CLOSED", &[Value::Bool(false)]);

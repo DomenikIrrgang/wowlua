@@ -803,8 +803,8 @@ end
 
 --- An NPC's gossip: `{ text, options = { { name, icon, gossipOptionID,
 --- opens } }, textAfter? }` (`opens = "trainer"`: its trainer).
---- `unit:interact` opens it (its text `textAfter` seconds after the
---- interaction, 0.472 by default; 0: at once, before it); choosing an
+--- `unit:interact` opens it (its text with the interaction by default;
+--- `textAfter` seconds later, as a class trainer's came); choosing an
 --- option closes it and opens what the option does.
 export function defineGossip(npc: MockUnit, data: table)
     engine().defineGossip(npc, data)

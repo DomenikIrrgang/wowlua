@@ -23,8 +23,6 @@ local tal = e.spawnUnit({
     creatureType = "Humanoid", creatureTypeID = 7, factionGroup = "Horde", pvp = true,
 })
 e.defineGossip(tal, {
-    -- The text with the interaction (recorded).
-    textAfter = 0,
     text = "When mounted on the back of a wind rider, one sees that its reputation for strength and speed is well earned.",
     options = { { name = "I need a ride.", icon = 132057, gossipOptionID = 98025, opens = "taxi" } },
 })

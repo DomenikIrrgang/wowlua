@@ -14,6 +14,8 @@ local llane = e.spawnUnit({
     creatureType = "Humanoid", creatureTypeID = 7, factionGroup = "Alliance",
 })
 e.defineGossip(llane, {
+    -- The text's packet 0.472 s after the interaction (recorded).
+    textAfter = 0.472,
     text = "Stormwind is the pillar of the human race, maintained through strength of will and the edge of a sturdy blade.",
     options = { { name = "I require warrior training.", icon = 132058, gossipOptionID = 96654, opens = "trainer" } },
 })

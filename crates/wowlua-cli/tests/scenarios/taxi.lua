@@ -18,8 +18,6 @@ local doras = e.spawnUnit({
     creatureType = "Humanoid", creatureTypeID = 7, factionGroup = "Horde", pvp = true,
 })
 e.defineGossip(doras, {
-    -- The text with the interaction (recorded).
-    textAfter = 0,
     text = "You haven't lived until you've looked down on the world from the back of a wind rider.",
     options = { { name = "I need a ride.", icon = 132057, gossipOptionID = 98541, opens = "taxi" } },
 })
