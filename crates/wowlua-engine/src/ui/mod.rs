@@ -679,6 +679,144 @@ pub fn load_addon(vm: &mut Vm, name: &str) -> Option<bool> {
     Some(true)
 }
 
+/// An addon folder a test loads besides the addon under test (the
+/// manifest's `test.addons`), as the client reads it for the flavor.
+#[derive(Clone, Debug)]
+pub struct UserAddon {
+    /// The folder's name, the addon's.
+    pub name: String,
+    pub dir: PathBuf,
+    /// The TOC the client reads: the flavor's own (`<Name>_Mainline.toc`),
+    /// else `<Name>.toc`.
+    pub toc: PathBuf,
+    /// The TOC's metadata (`## Title: …`), its inline conditions met.
+    pub metadata: Vec<(String, String)>,
+    /// `Dependencies`, `RequiredDeps` (and their short forms).
+    pub deps: Vec<String>,
+    /// `LoadOnDemand: 1`: known, loaded by `C_AddOns.LoadAddOn`.
+    pub on_demand: bool,
+    /// `SavedVariables` and `SavedVariablesPerCharacter`.
+    pub saved: Vec<String>,
+    /// The client loads it in this game (`AllowLoadGameType`,
+    /// `ExcludeLoadGameType`, `AllowLoad`).
+    pub allowed: bool,
+}
+
+/// Reads an addon folder as the client does for `flavor`: the flavor's
+/// TOC (the suffixes the Blizzard addons' are read with), else the plain
+/// one. An error if the folder has neither.
+pub fn read_user_addon(flavor: &str, dir: &Path) -> Result<UserAddon, String> {
+    let t = Target::new(flavor);
+    let name = dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(str::to_string)
+        .ok_or_else(|| format!("{}: not an addon folder", dir.display()))?;
+    let toc = t
+        .suffixes
+        .iter()
+        .map(|s| format!("{name}{s}.toc"))
+        .chain(std::iter::once(format!("{name}.toc")))
+        .map(|f| resolve(dir, &f))
+        .find(|p| p.is_file())
+        .ok_or_else(|| format!("{}: no {name}.toc for {flavor}", dir.display()))?;
+    read_user_toc(flavor, &name, dir, &toc)
+}
+
+/// An addon named `name` in `dir` as its TOC `toc` describes it for
+/// `flavor` (see [`read_user_addon`]).
+pub fn read_user_toc(
+    flavor: &str,
+    name: &str,
+    dir: &Path,
+    toc: &Path,
+) -> Result<UserAddon, String> {
+    let t = Target::new(flavor);
+    let name = name.to_string();
+    let toc = toc.to_path_buf();
+    let text = std::fs::read_to_string(&toc).map_err(|e| format!("{}: {e}", toc.display()))?;
+    let parsed = wowlua_toc::parse(&text);
+    let on = |v: &str| v.trim() == "1" || v.trim().eq_ignore_ascii_case("true");
+    let list = |keys: &[&str]| -> Vec<String> {
+        keys.iter()
+            .flat_map(|k| directive(&parsed, &t, k))
+            .flat_map(|v| v.split(','))
+            .map(|n| n.trim().to_string())
+            .filter(|n| !n.is_empty())
+            .collect()
+    };
+    let in_game = |key: &str| {
+        parsed
+            .directives
+            .iter()
+            .filter(|d| d.key.eq_ignore_ascii_case(key))
+            .map(|d| {
+                d.value.split(',').any(|v| {
+                    t.game_types
+                        .iter()
+                        .any(|g| g.eq_ignore_ascii_case(v.trim()))
+                })
+            })
+            .collect::<Vec<bool>>()
+    };
+    let allow_load: Vec<String> = directive(&parsed, &t, "AllowLoad")
+        .iter()
+        .map(|v| v.trim().to_ascii_lowercase())
+        .collect();
+    let allowed = in_game("AllowLoadGameType").iter().all(|b| *b)
+        && !in_game("ExcludeLoadGameType").iter().any(|b| *b)
+        && (allow_load.is_empty() || allow_load.iter().any(|a| a == "game" || a == "both"));
+    let metadata = parsed
+        .directives
+        .iter()
+        .filter(|d| t.allows(&d.conditions))
+        .map(|d| (d.key.clone(), d.value.trim().to_string()))
+        .collect();
+    Ok(UserAddon {
+        deps: list(&["Dep", "Dependencies", "RequiredDep", "RequiredDeps"]),
+        on_demand: directive(&parsed, &t, "LoadOnDemand").iter().any(|v| on(v)),
+        saved: list(&["SavedVariables", "SavedVariablesPerCharacter"]),
+        allowed,
+        metadata,
+        name,
+        dir: dir.to_path_buf(),
+        toc,
+    })
+}
+
+/// The client's load order of addons: as given, each after those of its
+/// dependencies the list has (a cycle's first stays first).
+pub fn user_addon_order(addons: Vec<UserAddon>) -> Vec<UserAddon> {
+    fn visit(i: usize, all: &[UserAddon], seen: &mut Vec<bool>, order: &mut Vec<usize>) {
+        if seen[i] {
+            return;
+        }
+        seen[i] = true;
+        for d in &all[i].deps {
+            if let Some(j) = all.iter().position(|a| a.name.eq_ignore_ascii_case(d)) {
+                visit(j, all, seen, order);
+            }
+        }
+        order.push(i);
+    }
+    let mut seen = vec![false; addons.len()];
+    let mut order = Vec::new();
+    for i in 0..addons.len() {
+        visit(i, &addons, &mut seen, &mut order);
+    }
+    order.into_iter().map(|i| addons[i].clone()).collect()
+}
+
+/// Whether the loaded UI code has a Blizzard addon of this name (loaded or
+/// loadable).
+pub fn is_blizzard_addon(vm: &Vm, name: &str) -> bool {
+    engine(vm)
+        .world
+        .ui
+        .available
+        .contains_key(&name.to_ascii_lowercase())
+}
+
 /// Loads an addon of the user's from its folder as the client does: the
 /// files its TOC lists, in order, as the addon's code (its taint), with
 /// `table` as the addon table; `skip`: files (relative to `dir`) already

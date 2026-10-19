@@ -918,6 +918,112 @@ mock.module(clock, { now = function(): string return "x" end, later = 1 })
     assert!(out.contains("is not assignable to `() -> number`"), "{out}");
 }
 
+/// `test.addons`: other addon folders load before the addon, each with
+/// its name, its own addon table, its SavedVariables and its
+/// `ADDON_LOADED` (the addon's last); an addon's dependencies first; the
+/// flavor's TOC; a load-on-demand one with `C_AddOns.LoadAddOn`; one for
+/// another game left out. The addon itself is known as its TOC says.
+#[test]
+fn other_addons() {
+    const RECORD: &str = "local name, ns = ...\nns.who = name\nOrder = Order or {}\ntable.insert(Order, name)\nNS = NS or {}\nNS[name] = ns\n";
+    let dir = project(
+        r#""standard": {}"#,
+        &[
+            (
+                "src/main.wowlua",
+                "local name: string = ...\nconst G = _G :: any\nG.Order = G.Order ?? {}\ntable.insert(G.Order, name)\n",
+            ),
+            (
+                "addons/Lazy/Lazy.toc",
+                "## Title: Lazy One\n## LoadOnDemand: 1\n## Dependencies: Base\nlazy.lua\n",
+            ),
+            ("addons/Lazy/lazy.lua", RECORD),
+            (
+                "addons/Child/Child.toc",
+                "## Title: Not this one\nwrong.lua\n",
+            ),
+            (
+                "addons/Child/Child_Mainline.toc",
+                "## Title: Child\n## X-Answer: 42\n## Dependencies: Base\n## SavedVariables: ChildDB\nchild.lua\n",
+            ),
+            (
+                "addons/Child/wrong.lua",
+                "error('the plain TOC was read')\n",
+            ),
+            ("addons/Child/child.lua", RECORD),
+            ("addons/Base/Base.toc", "## Title: Base\nbase.lua\n"),
+            ("addons/Base/base.lua", RECORD),
+            (
+                "addons/Elsewhere/Elsewhere.toc",
+                "## AllowLoadGameType: vanilla\nelsewhere.lua\n",
+            ),
+            (
+                "addons/Elsewhere/elsewhere.lua",
+                "error('loaded for another game')\n",
+            ),
+            (
+                "tests/others.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+const G = _G :: any
+local told: string[] = {}
+local f = CreateFrame("Frame")
+f:RegisterEvent("ADDON_LOADED")
+f:SetScript("OnEvent", function(_, _, name: string)
+    table.insert(told, name)
+end)
+
+@test("each loads first, as its own addon")
+local function each()
+    expect(G.Order).toEqual({ "Base", "Child", "Demo" })
+    expect(told).toEqual({ "Base", "Child", "Demo" })
+    expect(G.NS.Base.who).toBe("Base")
+    expect(G.NS.Child.who).toBe("Child")
+    expect(G.NS.Base == G.NS.Child).toBe(false)
+    expect(C_AddOns.GetNumAddOns()).toBe(4)
+    expect(C_AddOns.GetAddOnMetadata("Child", "X-Answer")).toBe("42")
+    expect(C_AddOns.GetAddOnMetadata("Demo", "Title")).toBe("Demo")
+    expect(C_AddOns.GetAddOnMetadata("Demo", "Version")).toBe("1.0.0-dev")
+    expect(C_AddOns.IsAddOnLoaded("Demo")).toBe(true)
+    expect(C_AddOns.LoadAddOn("Demo")).toBe(true)
+    expect(G.Order).toEqual({ "Base", "Child", "Demo" })
+    expect(C_AddOns.GetAddOnInfo("Elsewhere")).toBeNil()
+    expect(C_AddOns.IsAddOnLoaded("Child")).toBe(true)
+    expect(C_AddOns.IsAddOnLoaded("Lazy")).toBe(false)
+    expect(C_AddOns.IsAddOnLoadOnDemand("Lazy")).toBe(true)
+    expect(C_AddOns.LoadAddOn("Lazy")).toBe(true)
+    expect(G.Order).toEqual({ "Base", "Child", "Demo", "Lazy" })
+    expect(told).toEqual({ "Base", "Child", "Demo", "Lazy" })
+    expect(G.NS.Lazy.who).toBe("Lazy")
+    expect(C_AddOns.IsAddOnLoaded("Lazy")).toBe(true)
+end
+
+@test("their SavedVariables survive a reload")
+local function saved()
+    if mock.reloads() == 0 then
+        G.ChildDB = { n = 7 }
+        mock.reloadUI()
+    end
+    expect(G.ChildDB.n).toBe(7)
+    expect(G.Order).toEqual({ "Base", "Child", "Demo" })
+end
+"#,
+            ),
+        ],
+    );
+    let manifest = fs::read_to_string(dir.path().join("wowlua.json")).unwrap();
+    let manifest = manifest.replacen(
+        "{ \"package\"",
+        r#"{ "test": { "addons": ["addons/Lazy", "addons/Child", "addons/Base", "addons/Elsewhere"] }, "package""#,
+        1,
+    );
+    fs::write(dir.path().join("wowlua.json"), manifest).unwrap();
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    assert!(out.contains("2 passed, 0 failed"), "{out}");
+}
+
 /// `mock.reloadUI()`: the test runs again in a fresh VM with the
 /// SavedVariables as the client writes them (`/stdtest sv`), logged in as
 /// a reload; the file's next test runs where the file was.

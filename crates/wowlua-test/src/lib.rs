@@ -35,6 +35,8 @@ pub struct Suite<'a> {
     pub blizzard_ui: Option<UiSource>,
     /// `test.profile`: the world profile of files that name none.
     pub profile: Option<String>,
+    /// `test.addons`: other addons' folders, loaded before the addon.
+    pub addons: Vec<PathBuf>,
     /// `-u`: rewrite the snapshots that differ.
     pub update_snapshots: bool,
     /// `--coverage`: count what the addon's files run.
@@ -361,7 +363,7 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
     }
     let toc = toc_path(build, &suite.flavor).ok_or("the build has no TOC file")?;
     let toc_text = std::fs::read_to_string(dir.join(&toc)).map_err(|e| e.to_string())?;
-    let saved = saved::names(&wowlua_toc::parse(&toc_text));
+    let mut saved = saved::names(&wowlua_toc::parse(&toc_text));
     let listed: Vec<String> = wowlua_toc::parse(&toc_text)
         .files
         .iter()
@@ -397,6 +399,20 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
         }
     }
     check(&mut vm, before, "loading the mocks")?;
+    // The other addons (`test.addons`), as the client loads them first.
+    for addon in other_addons(suite)? {
+        saved.extend(addon.saved.iter().cloned());
+        let before = errors_before(&vm);
+        load_other_addon(&mut vm, &addon)?;
+        check(
+            &mut vm,
+            before,
+            &format!("loading the addon {}", addon.name),
+        )?;
+    }
+    // The addon itself, known to the addon functions as its TOC says.
+    let own = wowlua_engine::ui::read_user_toc(&suite.flavor, &name, dir, &dir.join(&toc))?;
+    wowlua_engine::bindings::add_own_addon(&mut vm, &own, table, bindings.exists());
     let before = errors_before(&vm);
     wowlua_engine::ui::load_user_addon(&mut vm, dir, &dir.join(&toc), &name, table, &loaded);
     loaded.extend(listed);
@@ -432,6 +448,48 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
         saved,
         reloaded_coverage: Vec::new(),
     })
+}
+
+/// The `test.addons` the client loads in this game, in its load order.
+fn other_addons(suite: &Suite) -> Result<Vec<wowlua_engine::ui::UserAddon>, String> {
+    let mut list = Vec::new();
+    for dir in &suite.addons {
+        let addon = wowlua_engine::ui::read_user_addon(&suite.flavor, dir)
+            .map_err(|e| format!("test.addons: {e}"))?;
+        // The client leaves out an addon for other games (unverified:
+        // whether its addon list shows it).
+        if addon.allowed {
+            list.push(addon);
+        }
+    }
+    Ok(wowlua_engine::ui::user_addon_order(list))
+}
+
+/// One of the `test.addons`, known to the client with its own addon table:
+/// its `Bindings.xml` read, then its files (unless on demand), after the
+/// Blizzard addons it depends on.
+fn load_other_addon(vm: &mut Vm, addon: &wowlua_engine::ui::UserAddon) -> Result<(), String> {
+    let table = Value::Table(vm.new_table());
+    let bindings = addon.dir.join("Bindings.xml");
+    if bindings.exists() {
+        wowlua_engine::bindings::load_bindings_xml(vm, &bindings, Some(&addon.name))?;
+    }
+    wowlua_engine::bindings::add_user_addon(vm, addon, table, bindings.exists());
+    if addon.on_demand {
+        return Ok(());
+    }
+    for dep in &addon.deps {
+        wowlua_engine::ui::load_addon(vm, dep);
+    }
+    wowlua_engine::ui::load_user_addon(
+        vm,
+        &addon.dir,
+        &addon.toc,
+        &addon.name,
+        table,
+        &HashSet::new(),
+    );
+    Ok(())
 }
 
 /// The TOC the client would read for the flavor: the flavor's own

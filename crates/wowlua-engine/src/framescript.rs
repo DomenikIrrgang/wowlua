@@ -334,6 +334,15 @@ fn get_cvar_info(vm: &mut Vm, c: NativeCall) -> Ret {
 /// unverified: the result).
 fn set_cvar(vm: &mut Vm, c: NativeCall) -> Ret {
     let name = string_arg(vm, &c, 1)?;
+    let text = value_text(vm, c.arg(2));
+    set_cvar_text(vm, &name, text, true)
+}
+
+/// Sets a CVar as `C_CVar.SetCVar` does: an unknown one ignored, a secure
+/// one refused to tainted code in combat, a read-only one not set, else
+/// set and, when `tell`, told (`CVAR_UPDATE`).
+pub(crate) fn set_cvar_text(vm: &mut Vm, name: &str, text: String, tell: bool) -> Ret {
+    let name = name.to_string();
     // Camelot's CVars are the client's (recorded); other flavors' unknown.
     let world = &engine(vm).world;
     let unknown = engine(vm).flavor == "camelot"
@@ -357,8 +366,10 @@ fn set_cvar(vm: &mut Vm, c: NativeCall) -> Ret {
     if read_only {
         return Ok(vec![Value::Bool(false)]);
     }
-    let text = value_text(vm, c.arg(2));
     cvar_set(vm, &name, text.clone());
+    if !tell {
+        return Ok(vec![Value::Bool(true)]);
+    }
     let n = vm.str(&name);
     let v = vm.str(&text);
     widgets::fire_event(vm, "CVAR_UPDATE", &[n, v]);
@@ -435,6 +446,11 @@ fn build_info(vm: &mut Vm, _c: NativeCall) -> Ret {
 fn is_addon_loaded(vm: &mut Vm, c: NativeCall) -> Ret {
     let name = match vm.hidden(c.arg(1)) {
         Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).to_lowercase(),
+        // An index into the addons the client knows (`GetNumAddOns`).
+        Value::Num(n) if n >= 1.0 => match engine(vm).world.bindings.addons.get(n as usize - 1) {
+            Some(a) => a.name.to_lowercase(),
+            None => return Ok(vec![Value::Bool(false), Value::Bool(false)]),
+        },
         _ => return Ok(vec![Value::Bool(false), Value::Bool(false)]),
     };
     let loaded = engine(vm).world.loaded_addons.contains(&name);

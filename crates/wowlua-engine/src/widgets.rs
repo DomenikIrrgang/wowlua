@@ -106,6 +106,9 @@ pub struct World {
     pub widgets: Vec<Widget>,
     /// Loose files' IDs given out (`GetFileIDFromPath`), by normalized path.
     pub file_ids: std::collections::HashMap<String, f64>,
+    /// The NPC interactions open (`Enum.PlayerInteractionType`, as bits),
+    /// from `PLAYER_INTERACTION_MANAGER_FRAME_SHOW`/`_HIDE`.
+    pub interactions: Vec<u64>,
     /// The widgets given an `OnUpdate` (set, hooked or from XML) or an
     /// intrinsic type's handlers, ever: the ones a frame looks at, each
     /// checked as its turn comes (most of the UI's widgets never update);
@@ -1420,6 +1423,19 @@ pub fn fire_now(vm: &mut Vm, event: &str, args: &[Value]) {
     let targets: Vec<WidgetId> = targets.into_iter().map(|(_, id)| id).collect();
     if event == "PLAYER_LOGIN" {
         engine_mut(vm).world.logged_in = true;
+    }
+    // The interactions open, as the client tells them (asked by
+    // `C_PlayerInteractionManager.IsInteractingWithNpcOfType`).
+    if let (true, Some(Value::Num(n))) = (
+        event.starts_with("PLAYER_INTERACTION_MANAGER_FRAME_"),
+        args.first().copied(),
+    ) {
+        let open = &mut engine_mut(vm).world.interactions;
+        if event.ends_with("_SHOW") && !open.contains(&n.to_bits()) {
+            open.push(n.to_bits());
+        } else if event.ends_with("_HIDE") {
+            open.retain(|&o| o != n.to_bits());
+        }
     }
     if event == "ADDON_LOADED"
         && let Some(Value::Str(s)) = args.first()
@@ -3062,21 +3078,33 @@ fn is_enabled(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 }
 
 /// `SetVertexColor(r, g, b [, a])`: alpha 1 when left out; white until set
-/// (unverified).
+/// (unverified). Secrets too, even from tainted code, as `SetAlpha` (the
+/// API documentation: `AllowedWhenTainted`, adding the vertex color
+/// aspect); the color then reads back secret (unverified: each channel,
+/// and the alpha aspect the documentation also names).
 fn set_vertex_color(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let secret = (2..=5).any(|i| matches!(c.arg(i), Value::Secret(_)));
     let mut rgba = [1.0; 4];
     for (i, v) in rgba.iter_mut().enumerate().take(3) {
-        *v = number_arg(vm, &c, i + 2)?;
+        *v = match vm.hidden(c.arg(i + 2)) {
+            Value::Num(n) if secret => n,
+            _ => number_arg(vm, &c, i + 2)?,
+        };
     }
-    rgba[3] = vm.opt_number(&c, 5, 1.0)?;
+    rgba[3] = match vm.hidden(c.arg(5)) {
+        Value::Num(n) if secret => n,
+        _ => vm.opt_number(&c, 5, 1.0)?,
+    };
     let rgba = rgba.map(byte_float);
     let props = engine(vm).world.widgets[id.0].props;
     let list = vm.new_table();
     for (i, v) in rgba.iter().enumerate() {
-        let _ = vm
-            .heap
-            .table_mut(list)
-            .set(Value::Num(i as f64 + 1.0), Value::Num(*v));
+        let v = if secret {
+            vm.secret_wrap(Value::Num(*v))
+        } else {
+            Value::Num(*v)
+        };
+        let _ = vm.heap.table_mut(list).set(Value::Num(i as f64 + 1.0), v);
     }
     let n = vm.str("n");
     let _ = vm.heap.table_mut(list).set(n, Value::Num(4.0));

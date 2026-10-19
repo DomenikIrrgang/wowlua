@@ -778,6 +778,18 @@ fn unit_not_special(vm: &mut Vm, c: NativeCall) -> Ret {
     with_unit_or(vm, &c, Value::Bool(false), |_, _| vec![Value::Bool(false)])
 }
 
+/// `UnitHasPowerType(unit, powerType)`: the unit's power is of that type
+/// (unverified: a unit's other powers, a druid's mana in a form).
+fn unit_has_power_type(vm: &mut Vm, c: NativeCall) -> Ret {
+    let wanted = match vm.hidden(c.arg(2)) {
+        Value::Num(n) => n,
+        _ => return Ok(vec![Value::Bool(false)]),
+    };
+    with_unit_or(vm, &c, Value::Bool(false), |_, u| {
+        vec![Value::Bool(u.power_type == wanted)]
+    })
+}
+
 /// `UnitIsConnected`: every unit there is.
 /// `UnitIsConnected(unit)`: logged in (recorded: an offline party member
 /// not).
@@ -1218,6 +1230,12 @@ pub fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
         ("UnitIsOtherPlayersPet", unit_not_special),
         ("UnitIsTrivial", unit_not_special),
         ("UnitIsWildBattlePet", unit_not_special),
+        // No battle pet companions; nobody feigns death; no cast has a
+        // target the engine knows (the documentation: false then).
+        ("UnitIsBattlePetCompanion", unit_not_special),
+        ("UnitIsFeignDeath", unit_not_special),
+        ("UnitShouldDisplaySpellTargetName", unit_not_special),
+        ("UnitHasPowerType", unit_has_power_type),
         ("UnitIsConnected", unit_is_connected),
         ("UnitShouldDisplayName", unit_should_display_name),
         ("UnitSelectionColor", unit_selection_color),

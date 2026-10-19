@@ -105,6 +105,7 @@ pub(crate) fn validate(
     publish(manifest, &mut ctx);
     globs(manifest, &mut ctx);
     lints(manifest, &mut ctx);
+    test_addons(manifest, &mut ctx);
     flavors
 }
 
@@ -890,6 +891,38 @@ fn globs(manifest: &Manifest, ctx: &mut Ctx) {
     }
 }
 
+/// `test.addons`: folders, each an addon named after its folder, so no two
+/// may share a name (the client knows one addon per name, any case).
+fn test_addons(manifest: &Manifest, ctx: &mut Ctx) {
+    let mut seen: Vec<String> = Vec::new();
+    for (i, entry) in manifest.test.addons.iter().enumerate() {
+        let path = root().key("test").key("addons").index(i);
+        let name = entry
+            .trim_end_matches(['/', '\\'])
+            .rsplit(['/', '\\'])
+            .next()
+            .unwrap_or("")
+            .to_ascii_lowercase();
+        if name.is_empty() || name == "." || name == ".." {
+            ctx.error(
+                "E4002",
+                &path,
+                format!("`{entry}` does not name an addon folder"),
+                "not an addon folder",
+            );
+        } else if seen.contains(&name) {
+            ctx.error(
+                "E4002",
+                &path,
+                format!("two addons in `test.addons` are named `{name}`"),
+                "a second addon of this name",
+            );
+        } else {
+            seen.push(name);
+        }
+    }
+}
+
 /// A warning code `check.lints` can set: a registered `W` code, or the
 /// warning form of a name, type, flavor or secret error (`E1xxx`, `E2xxx`),
 /// which pure Lua files report instead (appendix B.2: `E2001` → `W2001`).
@@ -1005,6 +1038,22 @@ mod tests {
                 r#"{{ {PKG}, "flavors": {{ "retail": {{}}, "standard": {{}} }} }}"#
             )),
             vec!["E4002"]
+        );
+    }
+
+    #[test]
+    fn test_addons_are_named_folders() {
+        assert!(
+            codes(&format!(
+                r#"{{ {PKG}, "test": {{ "addons": ["../Lib", "/abs/Other/"] }} }}"#
+            ))
+            .is_empty()
+        );
+        assert_eq!(
+            codes(&format!(
+                r#"{{ {PKG}, "test": {{ "addons": ["a/Lib", "b/lib", ""] }} }}"#
+            )),
+            vec!["E4002", "E4002"]
         );
     }
 

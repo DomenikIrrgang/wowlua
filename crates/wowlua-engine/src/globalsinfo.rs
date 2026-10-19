@@ -268,7 +268,9 @@ fn player_is_in_combat(vm: &mut Vm, _c: NativeCall) -> Ret {
 /// `IsOutdoors()`: not under a roof, as `IsIndoors` answers (the macro
 /// conditionals' rule; unverified: caves, instances).
 fn is_outdoors(vm: &mut Vm, _c: NativeCall) -> Ret {
-    let indoors = ask(vm, "IsIndoors", &[]).first().is_some_and(|v| v.truthy());
+    let indoors = ask(vm, "IsIndoors", &[])
+        .first()
+        .is_some_and(|v| v.truthy());
     Ok(vec![Value::Bool(!indoors)])
 }
 
@@ -512,9 +514,7 @@ fn get_game_message_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let name = include_str!("../data/camelot-globals.txt")
         .lines()
         .filter_map(|l| l.split_once('\t'))
-        .find(|(name, n)| {
-            name.starts_with("LE_GAME_ERR_") && n.parse::<f64>().ok() == Some(index)
-        })
+        .find(|(name, n)| name.starts_with("LE_GAME_ERR_") && n.parse::<f64>().ok() == Some(index))
         .map(|(name, _)| name.trim_start_matches("LE_GAME_"));
     match name {
         Some(name) => Ok(vec![vm.str(name), Value::Nil, Value::Nil]),
@@ -577,7 +577,11 @@ fn get_base_difficulty_id(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `GetTaskInfo(questID)`: not a task quest: not in its area, not on the
 /// map, no objectives (from the declaration; unverified).
 fn get_task_info(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(false), Value::Bool(false), Value::Num(0.0)])
+    Ok(vec![
+        Value::Bool(false),
+        Value::Bool(false),
+        Value::Num(0.0),
+    ])
 }
 
 /// `InGuildParty()`: not a guild group, no guild members, none needed,
@@ -644,10 +648,25 @@ setting!(
     Value::Num(1.0)
 );
 // The encounter journal's tier, the first.
-setting!(ej_get_current_tier, ej_select_tier, "ejTier", Value::Num(1.0));
+setting!(
+    ej_get_current_tier,
+    ej_select_tier,
+    "ejTier",
+    Value::Num(1.0)
+);
 // The encounter journal's difficulty, normal dungeons (1).
-setting!(ej_get_difficulty, ej_set_difficulty, "ejDifficulty", Value::Num(1.0));
-setting!(get_opt_out_of_loot, set_opt_out_of_loot, "optOutOfLoot", Value::Bool(false));
+setting!(
+    ej_get_difficulty,
+    ej_set_difficulty,
+    "ejDifficulty",
+    Value::Num(1.0)
+);
+setting!(
+    get_opt_out_of_loot,
+    set_opt_out_of_loot,
+    "optOutOfLoot",
+    Value::Bool(false)
+);
 setting!(
     get_allow_low_level_raid,
     set_allow_low_level_raid,
@@ -660,7 +679,12 @@ setting!(
     "autoDeclineNeighborhood",
     Value::Bool(false)
 );
-setting!(is_european_numbers, set_european_numbers, "europeanNumbers", Value::Bool(false));
+setting!(
+    is_european_numbers,
+    set_european_numbers,
+    "europeanNumbers",
+    Value::Bool(false)
+);
 setting!(
     get_error_callstack_height,
     set_error_callstack_height,
@@ -761,7 +785,6 @@ fn toggle_self_highlight(vm: &mut Vm, _c: NativeCall) -> Ret {
 const NOTHING: &[&str] = &[
     // Loot, groups, duels, trade.
     "SetLootSpecialization",
-    "SetLegacyRaidDifficultyID",
     "AcceptGroup",
     "DeclineGroup",
     "ConfirmBNRequestInviteFriend",
@@ -1390,9 +1413,19 @@ const PASSED_TABLE: &[&str] = &[
     "GetHomePartyInfo",
 ];
 
+/// `SetLegacyRaidDifficultyID(difficultyID)`: the legacy raid difficulty
+/// `GetLegacyRaidDifficultyID` tells (`content`; unverified: no event).
+fn set_legacy_raid_difficulty_id(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Value::Num(id) = c.arg(1) {
+        crate::content::set_legacy_raid_difficulty(vm, id);
+    }
+    Ok(vec![])
+}
+
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     let mut out: Vec<(&'static str, NativeFn)> = vec![
         ("TableIsEmpty", table_is_empty),
+        ("SetLegacyRaidDifficultyID", set_legacy_raid_difficulty_id),
         ("CountTable", count_table),
         ("GetKeysArray", get_keys_array),
         ("GetValuesArray", get_values_array),
@@ -1427,7 +1460,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ),
         ("CreateFontFamily", create_font_family),
         ("CopyToClipboard", copy_to_clipboard),
-        ("CalculateStringEditDistance", calculate_string_edit_distance),
+        (
+            "CalculateStringEditDistance",
+            calculate_string_edit_distance,
+        ),
         ("CaseAccentInsensitiveParse", case_accent_insensitive_parse),
         ("GetGameMessageInfo", get_game_message_info),
         (

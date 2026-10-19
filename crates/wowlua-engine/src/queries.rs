@@ -46,6 +46,39 @@ fn cvar_bitfield(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(set)])
 }
 
+/// `C_CVar.SetCVarBitfield(name, index, value)`: bit `index` set or
+/// cleared in the encoding `GetCVarBitfield` reads, characters added as
+/// `@` (no bits) to reach it, then set as `SetCVar` sets it but untold:
+/// no `CVAR_UPDATE` (recorded: Blizzard's bags close a tutorial's bit as
+/// a merchant closes, and the client told nothing, six scenarios).
+/// Unverified: the characters the client adds; that the bit was not set
+/// already in the recording's client.
+fn set_cvar_bitfield(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (Value::Str(name), Some(index)) = (c.arg(1), num(c.arg(2))) else {
+        return Ok(vec![Value::Bool(false)]);
+    };
+    let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
+    let mut value = framescript::cvar_get(vm, &name)
+        .unwrap_or_default()
+        .into_bytes();
+    let i = (index as i64 - 1).max(0) as usize;
+    let header = value.iter().take_while(|b| **b < b'@').count();
+    while value.len() <= header + i / 6 {
+        value.push(b'@');
+    }
+    let at = header + i / 6;
+    let bit = 1u8 << (i % 6);
+    let bits = value[at].wrapping_sub(b'@');
+    let bits = if c.arg(3).truthy() {
+        bits | bit
+    } else {
+        bits & !bit
+    };
+    value[at] = b'@' + bits;
+    let text = String::from_utf8_lossy(&value).into_owned();
+    framescript::set_cvar_text(vm, &name, text, false)
+}
+
 /// `UnitIsHumanPlayer(unit)`: a player unit that exists (an NPC or no
 /// unit: false). (`UnitIsConnected`: units.rs.)
 fn unit_is_player_online(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -444,6 +477,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetTasksTable", empty_table),
         ("C_CombatLog.DoesObjectMatchFilter", combat_log_filter),
         ("C_CVar.GetCVarBitfield", cvar_bitfield),
+        ("C_CVar.SetCVarBitfield", set_cvar_bitfield),
         ("UnitIsHumanPlayer", unit_is_player_online),
         ("UnitGetIncomingHeals", incoming_heals),
         ("UnitGetTotalAbsorbs", no_absorbs),

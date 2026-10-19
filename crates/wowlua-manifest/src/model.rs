@@ -936,6 +936,12 @@ pub struct TestSettings {
     /// `json`, `github`, `lcov`, `cobertura`, `coverage-json`, `html`).
     #[serde(default, skip_serializing_if = "Vec::is_empty")]
     pub reporters: Vec<String>,
+    /// Other addons' folders (relative to the package root, or absolute),
+    /// each loaded before the addon as its own addon: its TOC's files, its
+    /// namespace, its SavedVariables and its `ADDON_LOADED`; listed order,
+    /// an addon's dependencies among them first (spec Tooling §16.1.2).
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub addons: Vec<String>,
 }
 
 /// `test.coverage`: minimum percentages per kind (a run below one fails),

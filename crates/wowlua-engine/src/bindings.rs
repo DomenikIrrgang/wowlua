@@ -7,7 +7,11 @@
 //!
 //! Addons: `defineAddon(name, { metadata, loadOnDemand, load })` makes an
 //! addon the client knows (its TOC metadata), loaded by `C_AddOns.LoadAddOn`
-//! when on demand (`load` runs, then `ADDON_LOADED`).
+//! when on demand (`load` runs, then `ADDON_LOADED`). The addon folders a
+//! test loads (`test.addons`, [`add_user_addon`]) are known the same way:
+//! those loaded at startup get their `ADDON_LOADED` at login, before the
+//! addon under test's; a load-on-demand one's files load with
+//! `C_AddOns.LoadAddOn`, after its dependencies.
 //!
 //! Unverified: `GetBinding`'s results beyond the command and keys, and the
 //! addons' reasons and security strings.
@@ -40,6 +44,23 @@ pub struct Addon {
     pub metadata: Vec<(String, String)>,
     pub on_demand: bool,
     pub load: Value,
+    /// An addon folder's (`test.addons`): its files, loaded on demand.
+    pub files: Option<AddonFiles>,
+    /// Its dependencies, loaded before it on demand.
+    pub deps: Vec<String>,
+    /// Loaded at startup: `ADDON_LOADED` at login.
+    pub at_login: bool,
+    /// The addon under test, whose `ADDON_LOADED` the login tells itself.
+    pub own: bool,
+}
+
+/// An addon folder's files: its folder, TOC, addon table and whether it
+/// has a `Bindings.xml`.
+pub struct AddonFiles {
+    pub dir: std::path::PathBuf,
+    pub toc: std::path::PathBuf,
+    pub table: Value,
+    pub bindings: bool,
 }
 
 #[derive(Default)]
@@ -50,6 +71,10 @@ pub struct Bindings {
     /// Override bindings (`SetOverrideBinding*`), latest last.
     pub overrides: Vec<Override>,
     pub addons: Vec<Addon>,
+    /// The addons `C_AddOns.DisableAddOn` disabled, lower-case.
+    pub disabled: std::collections::HashSet<String>,
+    /// `C_AddOns.SetAddonVersionCheck(false)`: out-of-date addons load.
+    pub no_version_check: bool,
     /// The modified clicks (`<ModifiedClick action default>`): action,
     /// key (`SHIFT`, `ALT-CTRL`, `NONE`).
     pub modified_clicks: Vec<(String, String)>,
@@ -462,8 +487,57 @@ pub fn define_addon(vm: &mut Vm, c: NativeCall) -> Ret {
         metadata,
         on_demand,
         load,
+        files: None,
+        deps: Vec::new(),
+        at_login: false,
+        own: false,
     });
     Ok(vec![])
+}
+
+/// Makes an addon folder known to the client (`test.addons`), `table` its
+/// addon table: loaded at startup unless on demand (its files are the
+/// caller's to load then), with or without a `Bindings.xml`.
+pub fn add_user_addon(vm: &mut Vm, addon: &crate::ui::UserAddon, table: Value, bindings: bool) {
+    widgets::keep(vm, table);
+    engine_mut(vm).world.bindings.addons.push(Addon {
+        name: addon.name.clone(),
+        metadata: addon.metadata.clone(),
+        on_demand: addon.on_demand,
+        load: Value::Nil,
+        files: Some(AddonFiles {
+            dir: addon.dir.clone(),
+            toc: addon.toc.clone(),
+            table,
+            bindings,
+        }),
+        deps: addon.deps.clone(),
+        at_login: !addon.on_demand,
+        own: false,
+    });
+}
+
+/// Makes the addon under test known to the client as its TOC describes it
+/// (its metadata for `C_AddOns.GetAddOnMetadata`), loaded at startup, last.
+pub fn add_own_addon(vm: &mut Vm, addon: &crate::ui::UserAddon, table: Value, bindings: bool) {
+    add_user_addon(vm, addon, table, bindings);
+    if let Some(a) = engine_mut(vm).world.bindings.addons.last_mut() {
+        a.at_login = true;
+        a.own = true;
+    }
+}
+
+/// The addons loaded at startup that `ADDON_LOADED` tells at login, in
+/// load order: name and whether each has a `Bindings.xml`.
+pub fn login_addons(vm: &Vm) -> Vec<(String, bool)> {
+    engine(vm)
+        .world
+        .bindings
+        .addons
+        .iter()
+        .filter(|a| a.at_login && !a.own)
+        .map(|a| (a.name.clone(), a.files.as_ref().is_some_and(|f| f.bindings)))
+        .collect()
 }
 
 /// The addon an `uiAddon` argument names: its name or index.
@@ -493,12 +567,127 @@ fn get_addon_metadata(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![Value::Nil]);
     };
     let field = string(vm, c.arg(2)).unwrap_or_default();
-    let value = engine(vm).world.bindings.addons[i]
-        .metadata
-        .iter()
-        .find(|(k, _)| k.eq_ignore_ascii_case(&field))
-        .map(|(_, v)| v.clone());
+    let addons = &engine(vm).world.bindings.addons;
+    let mut value = meta_of(&addons[i], &field);
+    // "Every addon gets a group set" (Blizzard's AddonList): the TOC's,
+    // else one the client gives addons with similar names and
+    // dependencies, else the addon's own name. Unverified: the client's
+    // similarity rule (here: a dependency its name starts with).
+    if value.is_none() && field.eq_ignore_ascii_case("Group") {
+        let a = &addons[i];
+        let lower = a.name.to_lowercase();
+        let parent = a
+            .deps
+            .iter()
+            .find(|d| lower.starts_with(&d.to_lowercase()) && lower != d.to_lowercase());
+        value = Some(parent.cloned().unwrap_or_else(|| a.name.clone()));
+    }
     Ok(vec![value.map_or(Value::Nil, |v| vm.str(&v))])
+}
+
+/// A TOC field of an addon, any case.
+fn meta_of(a: &Addon, field: &str) -> Option<String> {
+    a.metadata
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case(field))
+        .map(|(_, v)| v.clone())
+}
+
+/// The addon an argument names, or nothing for one not known.
+fn known(vm: &mut Vm, c: &NativeCall) -> Option<usize> {
+    addon_index(vm, c.arg(1))
+}
+
+/// `C_AddOns.GetAddOnName(addon)`.
+fn get_addon_name(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(i) = known(vm, &c) else {
+        return Ok(vec![]);
+    };
+    let name = engine(vm).world.bindings.addons[i].name.clone();
+    Ok(vec![vm.str(&name)])
+}
+
+/// `C_AddOns.GetAddOnTitle(addon)`: its `Title`, else its name (as
+/// `GetAddOnInfo`'s).
+fn get_addon_title(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(i) = known(vm, &c) else {
+        return Ok(vec![]);
+    };
+    let a = &engine(vm).world.bindings.addons[i];
+    let title = meta_of(a, "Title").unwrap_or_else(|| a.name.clone());
+    Ok(vec![vm.str(&title)])
+}
+
+/// `C_AddOns.GetAddOnNotes(addon)`: its `Notes`, else nil (unverified).
+fn get_addon_notes(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(i) = known(vm, &c) else {
+        return Ok(vec![]);
+    };
+    let notes = meta_of(&engine(vm).world.bindings.addons[i], "Notes");
+    Ok(vec![notes.map_or(Value::Nil, |n| vm.str(&n))])
+}
+
+/// `C_AddOns.GetAddOnSecurity(addon)`: `Enum.AddOnSecurityStatus.Insecure`
+/// (1), as `GetAddOnInfo`'s "INSECURE".
+fn get_addon_security(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(match known(vm, &c) {
+        Some(_) => vec![Value::Num(1.0)],
+        None => vec![],
+    })
+}
+
+/// `C_AddOns.GetAddOnDependencies(addon)`: its required dependencies.
+fn get_addon_dependencies(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(i) = known(vm, &c) else {
+        return Ok(vec![]);
+    };
+    let deps = engine(vm).world.bindings.addons[i].deps.clone();
+    Ok(deps.iter().map(|d| vm.str(d)).collect())
+}
+
+/// `C_AddOns.IsAddOnLoadable(addon)`: every known addon loads (the reason
+/// nil, as `GetAddOnInfo`'s; unverified), an unknown one is "MISSING".
+fn is_addon_loadable(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(match known(vm, &c) {
+        Some(_) => vec![Value::Bool(true), Value::Nil],
+        None => vec![Value::Bool(false), vm.str("MISSING")],
+    })
+}
+
+fn yes(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(true)])
+}
+
+/// `C_AddOns.EnableAllAddOns()`, `ResetAddOns()`: none disabled (the
+/// session started with all enabled).
+fn enable_all_addons(vm: &mut Vm, _c: NativeCall) -> Ret {
+    engine_mut(vm).world.bindings.disabled.clear();
+    Ok(vec![])
+}
+
+fn disable_all_addons(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let names: Vec<String> = engine(vm)
+        .world
+        .bindings
+        .addons
+        .iter()
+        .map(|a| a.name.to_lowercase())
+        .collect();
+    engine_mut(vm).world.bindings.disabled.extend(names);
+    Ok(vec![])
+}
+
+/// `C_AddOns.IsAddonVersionCheckEnabled()`: on unless turned off
+/// (unverified: the account's setting).
+fn is_version_check_enabled(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(
+        !engine(vm).world.bindings.no_version_check,
+    )])
+}
+
+fn set_version_check(vm: &mut Vm, c: NativeCall) -> Ret {
+    engine_mut(vm).world.bindings.no_version_check = !c.arg(1).truthy();
+    Ok(vec![])
 }
 
 fn get_num_addons(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -547,19 +736,161 @@ pub fn load_defined(vm: &mut Vm, name: &str) -> Option<bool> {
         .iter()
         .position(|a| a.name.eq_ignore_ascii_case(name))?;
     let lower = name.to_lowercase();
-    if engine(vm).world.loaded_addons.contains(&lower) {
+    // One loaded at startup has its files loaded already (its
+    // `ADDON_LOADED` waits for the login).
+    if engine(vm).world.loaded_addons.contains(&lower)
+        || engine(vm).world.bindings.addons[i].at_login
+    {
         return Some(true);
     }
-    let (load, real) = {
+    let (load, real, deps) = {
         let a = &engine(vm).world.bindings.addons[i];
-        (a.load, a.name.clone())
+        (a.load, a.name.clone(), a.deps.clone())
     };
+    // Marked loading first, so a dependency cycle ends.
+    engine_mut(vm).world.loaded_addons.insert(lower);
+    for dep in deps {
+        if load_defined(vm, &dep).is_none() {
+            crate::ui::load_addon(vm, &dep);
+        }
+    }
     if !load.is_nil() {
         vm.call_from_engine(load, &[]);
     }
+    let files = engine(vm).world.bindings.addons[i]
+        .files
+        .as_ref()
+        .map(|f| (f.dir.clone(), f.toc.clone(), f.table, f.bindings));
+    let mut bindings = false;
+    if let Some((dir, toc, table, has)) = files {
+        bindings = has;
+        // Its files' errors reach the error handler, as the client's do.
+        let before = engine(vm).world.ui.errors.len();
+        crate::ui::load_user_addon(vm, &dir, &toc, &real, table, &Default::default());
+        let errors: Vec<String> = engine_mut(vm).world.ui.errors.drain(before..).collect();
+        for e in errors {
+            let (handler, message) = (vm.error_handler, vm.str(&e));
+            vm.call_from_engine(handler, &[message]);
+        }
+    }
     let n = vm.str(&real);
-    widgets::fire_event(vm, "ADDON_LOADED", &[n, Value::Bool(false)]);
+    widgets::fire_event(vm, "ADDON_LOADED", &[n, Value::Bool(bindings)]);
     Some(true)
+}
+
+/// `C_AddOns.DoesAddOnExist(name)`: an addon the client knows (one the
+/// test loads, or a Blizzard addon of the loaded UI code). Unverified for
+/// Blizzard's addons.
+fn does_addon_exist(vm: &mut Vm, c: NativeCall) -> Ret {
+    let known = addon_index(vm, c.arg(1)).is_some()
+        || string(vm, c.arg(1)).is_some_and(|n| crate::ui::is_blizzard_addon(vm, &n));
+    Ok(vec![Value::Bool(known)])
+}
+
+/// `C_AddOns.GetAddOnEnableState(name [, character])`: `All` (2) for an
+/// addon the client knows and loads, `None` (0) for one disabled or not
+/// known. Unverified: `Some` (enabled for other characters only), the
+/// character argument.
+fn get_addon_enable_state(vm: &mut Vm, c: NativeCall) -> Ret {
+    let state = match addon_index(vm, c.arg(1)) {
+        Some(i) => {
+            let name = engine(vm).world.bindings.addons[i].name.to_lowercase();
+            if engine(vm).world.bindings.disabled.contains(&name) {
+                0.0
+            } else {
+                2.0
+            }
+        }
+        None => 0.0,
+    };
+    Ok(vec![Value::Num(state)])
+}
+
+/// `C_AddOns.EnableAddOn(name)`, `DisableAddOn(name)`: the addon's state
+/// for the next session (what is loaded stays loaded).
+fn set_addon_enabled(vm: &mut Vm, c: NativeCall, enabled: bool) -> Ret {
+    let Some(i) = addon_index(vm, c.arg(1)) else {
+        return Ok(vec![]);
+    };
+    let name = engine(vm).world.bindings.addons[i].name.to_lowercase();
+    let disabled = &mut engine_mut(vm).world.bindings.disabled;
+    if enabled {
+        disabled.remove(&name);
+    } else {
+        disabled.insert(name);
+    }
+    Ok(vec![])
+}
+
+fn enable_addon(vm: &mut Vm, c: NativeCall) -> Ret {
+    set_addon_enabled(vm, c, true)
+}
+
+fn disable_addon(vm: &mut Vm, c: NativeCall) -> Ret {
+    set_addon_enabled(vm, c, false)
+}
+
+/// `C_AddOns.SaveAddOns()`: the enabled states are written at logout;
+/// nothing to tell.
+fn save_addons(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![])
+}
+
+/// `C_UIFileAsset.IsKnownFile(asset)`: a file ID, or a path the client
+/// ships, is known (the engine has no list of the client's files:
+/// unverified); a path into a loaded addon's folder is known if the file is
+/// there (the documentation: "a locally existing loose file"), with or
+/// without its extension, any case.
+fn is_known_file(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(path) = string(vm, c.arg(1)) else {
+        return Ok(vec![Value::Bool(!vm.hidden(c.arg(1)).is_nil())]);
+    };
+    let path = path.replace('\\', "/");
+    let lower = path.to_ascii_lowercase();
+    let Some(rest) = lower.strip_prefix("interface/addons/") else {
+        return Ok(vec![Value::Bool(true)]);
+    };
+    let folder = rest.split('/').next().unwrap_or("");
+    let dir = engine(vm)
+        .world
+        .bindings
+        .addons
+        .iter()
+        .find(|a| a.name.eq_ignore_ascii_case(folder))
+        .and_then(|a| a.files.as_ref().map(|f| f.dir.clone()));
+    let Some(dir) = dir else {
+        return Ok(vec![Value::Bool(true)]);
+    };
+    let rel = &path["interface/addons/".len() + folder.len()..];
+    let rel = rel.trim_start_matches('/');
+    let found = loose_file(&dir, rel);
+    Ok(vec![Value::Bool(found)])
+}
+
+/// Whether `rel` names a file in `dir`, any case, its extension optional
+/// (the client finds `x` as `x.blp` or `x.tga`).
+fn loose_file(dir: &std::path::Path, rel: &str) -> bool {
+    let mut cur = dir.to_path_buf();
+    let parts: Vec<&str> = rel.split('/').filter(|p| !p.is_empty()).collect();
+    for (i, part) in parts.iter().enumerate() {
+        let last = i + 1 == parts.len();
+        let Ok(entries) = std::fs::read_dir(&cur) else {
+            return false;
+        };
+        let next = entries.flatten().map(|e| e.path()).find(|p| {
+            p.file_name().and_then(|n| n.to_str()).is_some_and(|n| {
+                n.eq_ignore_ascii_case(part)
+                    || (last
+                        && n.rsplit_once('.')
+                            .is_some_and(|(stem, _)| stem.eq_ignore_ascii_case(part)))
+            })
+        });
+        match next {
+            Some(p) => cur = p,
+            None => return false,
+        }
+    }
+    cur.is_file()
 }
 
 /// The functions with behaviour here.
@@ -725,5 +1056,27 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_AddOns.GetNumAddOns", get_num_addons),
         ("C_AddOns.GetAddOnInfo", get_addon_info),
         ("C_AddOns.IsAddOnLoadOnDemand", is_addon_load_on_demand),
+        ("C_AddOns.DoesAddOnExist", does_addon_exist),
+        ("C_AddOns.GetAddOnEnableState", get_addon_enable_state),
+        ("C_AddOns.EnableAddOn", enable_addon),
+        ("C_AddOns.DisableAddOn", disable_addon),
+        ("C_AddOns.SaveAddOns", save_addons),
+        ("C_AddOns.GetAddOnName", get_addon_name),
+        ("C_AddOns.GetAddOnTitle", get_addon_title),
+        ("C_AddOns.GetAddOnNotes", get_addon_notes),
+        ("C_AddOns.GetAddOnSecurity", get_addon_security),
+        ("C_AddOns.GetAddOnDependencies", get_addon_dependencies),
+        ("C_AddOns.IsAddOnLoadable", is_addon_loadable),
+        // The TOC's `DefaultState` is not read (unverified: all on).
+        ("C_AddOns.IsAddOnDefaultEnabled", yes),
+        ("C_AddOns.EnableAllAddOns", enable_all_addons),
+        ("C_AddOns.ResetAddOns", enable_all_addons),
+        ("C_AddOns.DisableAllAddOns", disable_all_addons),
+        (
+            "C_AddOns.IsAddonVersionCheckEnabled",
+            is_version_check_enabled,
+        ),
+        ("C_AddOns.SetAddonVersionCheck", set_version_check),
+        ("C_UIFileAsset.IsKnownFile", is_known_file),
     ]
 }

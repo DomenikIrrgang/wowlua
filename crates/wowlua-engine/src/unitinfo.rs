@@ -474,10 +474,12 @@ fn get_player_facing(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(0.0)])
 }
 
-/// `GetRaidDifficultyID()`: classic's 40-player raid, 9 (unverified: the
+/// `GetRaidDifficultyID()`: the one `SetRaidDifficultyID` chose
+/// (`content`), else classic's 40-player raid, 9 (unverified: the
 /// dungeon's was recorded 1, Normal; the raid's not asked).
-fn get_raid_difficulty_id(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(9.0)])
+fn get_raid_difficulty_id(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let id = crate::content::raid_difficulty(vm).unwrap_or(9.0);
+    Ok(vec![Value::Num(id)])
 }
 
 /// `GetComboPoints(unit, target)`: none (recorded: 0 for the player and

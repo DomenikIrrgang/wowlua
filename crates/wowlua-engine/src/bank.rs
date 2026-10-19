@@ -325,8 +325,20 @@ fn close_bank_frame(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `C_Bank.IsItemAllowedInBankType(bankType, itemLocation)`: any item in
+/// the character's bank; none in another (the account's: unverified, the
+/// engine models no account bank).
+fn is_item_allowed_in_bank_type(vm: &mut Vm, c: NativeCall) -> Ret {
+    let character = matches!(vm.hidden(c.arg(1)), Value::Num(n) if n == CHARACTER);
+    Ok(vec![Value::Bool(character)])
+}
+
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
+        (
+            "C_Bank.IsItemAllowedInBankType",
+            is_item_allowed_in_bank_type,
+        ),
         ("C_Bank.CanUseBank", can_use_bank),
         ("C_Bank.CanViewBank", can_use_bank),
         (
