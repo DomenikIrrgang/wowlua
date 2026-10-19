@@ -320,9 +320,18 @@ pub(crate) fn abbreviate_large_numbers(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `AbbreviateNumbers(n)`: from 1000 by the breakpoints (`1.2K`, `12K`,
 /// `1.2M`, `1.2B`; one decimal below ten of a unit, truncated); smaller
-/// numbers and negatives as Lua writes them (recorded).
+/// numbers and negatives as Lua writes them (recorded). A secret number's
+/// text is secret (SuuUI probe group: `AbbreviateNumbers(UnitHealth(u))`
+/// secret, eight samples).
 pub(crate) fn abbreviate_numbers(vm: &mut Vm, c: NativeCall) -> Ret {
-    let n = num(c.arg(1)).unwrap_or(0.0);
+    let secret = matches!(c.arg(1), Value::Secret(_));
+    let n = num(vm.hidden(c.arg(1))).unwrap_or(0.0);
+    let text = abbreviated(vm, n);
+    let v = vm.str(&text);
+    Ok(vec![if secret { vm.secret_wrap(v) } else { v }])
+}
+
+fn abbreviated(vm: &mut Vm, n: f64) -> String {
     let units = [
         (1e12, "FOURTH_NUMBER_CAP_NO_SPACE", "T"),
         (1e9, "THIRD_NUMBER_CAP_NO_SPACE", "B"),
@@ -337,11 +346,10 @@ pub(crate) fn abbreviate_numbers(vm: &mut Vm, c: NativeCall) -> Ret {
                 (n / (unit / 10.0)).trunc() / 10.0
             };
             let cap = global_text(vm, cap, fallback);
-            let text = format!("{}{cap}", lua_number(value));
-            return Ok(vec![vm.str(&text)]);
+            return format!("{}{cap}", lua_number(value));
         }
     }
-    Ok(vec![vm.str(&lua_number(n))])
+    lua_number(n)
 }
 
 /// `C_TransmogCollection.GetCategoryAppearances(category, location)`: the

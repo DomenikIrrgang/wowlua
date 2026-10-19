@@ -437,8 +437,20 @@ fn moved(vm: &mut Vm, c: NativeCall) -> Ret {
     if let Some(b) = engine_mut(vm).world.character.bags.get_mut(&tb) {
         b.items.insert(ts, held);
     }
+    // Told the bank's bags first (recorded), then the backpack, the
+    // reagent bag, the other bags (SuuUI probe bagsort: moves both ways
+    // between the backpack and the reagent bag, a merge from the reagent
+    // bag into bag 1, a burst of three; unverified among bags 1 to 4 and
+    // for the keyring's `BAG_UPDATE(-1)` the client told between).
+    let rank = |b: i64| match b {
+        6.. => 0,
+        0 => 1,
+        5 => 2,
+        1..=4 => 3,
+        _ => 4,
+    };
     let mut bags = vec![fb, tb];
-    bags.sort_unstable_by(|a, b| b.cmp(a));
+    bags.sort_unstable_by(|a, b| rank(*a).cmp(&rank(*b)).then(b.cmp(a)));
     bags.dedup();
     for bag in bags {
         crate::character::equipped_spells_changed(vm);

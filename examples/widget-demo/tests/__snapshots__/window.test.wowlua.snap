@@ -31,16 +31,24 @@
 |     TOPRIGHT on WidgetDemoWindow TOPRIGHT (-2, -2)
 |     Texture <Texture>
 |       shown
-|       size 0 x 0
+|       size 24 x 24
+|       TOPLEFT on $parent TOPLEFT (0, 0)
+|       BOTTOMRIGHT on $parent BOTTOMRIGHT (0, 0)
 |     Texture <Texture>
 |       shown
-|       size 0 x 0
+|       size 24 x 24
+|       TOPLEFT on $parent TOPLEFT (0, 0)
+|       BOTTOMRIGHT on $parent BOTTOMRIGHT (0, 0)
 |     Texture <Texture>
 |       shown
-|       size 0 x 0
+|       size 24 x 24
+|       TOPLEFT on $parent TOPLEFT (0, 0)
+|       BOTTOMRIGHT on $parent BOTTOMRIGHT (0, 0)
 |     Texture <Texture>
 |       shown
-|       size 0 x 0
+|       size 24 x 24
+|       TOPLEFT on $parent TOPLEFT (0, 0)
+|       BOTTOMRIGHT on $parent BOTTOMRIGHT (0, 0)
 |   StatusBar <StatusBar>
 |     shown
 |     size 260 x 14
@@ -79,7 +87,9 @@
 |       text "Clicks: 0"
 |     Texture <Texture>
 |       shown
-|       size 0 x 0
+|       size 140 x 24
+|       TOPLEFT on $parent TOPLEFT (0, 0)
+|       BOTTOMRIGHT on $parent BOTTOMRIGHT (0, 0)
 |   Button <Button>
 |     shown
 |     size 140 x 24
@@ -106,26 +116,38 @@
 |       text "Plain: 0"
 |     Texture <Texture>
 |       shown
-|       size 0 x 0
+|       size 140 x 24
+|       TOPLEFT on $parent TOPLEFT (0, 0)
+|       BOTTOMRIGHT on $parent BOTTOMRIGHT (0, 0)
 |   CheckButton <CheckButton>
 |     shown
 |     size 32 x 32
 |     TOPLEFT on WidgetDemoWindow TOPLEFT (12, -100)
 |     Texture <Texture>
 |       shown
-|       size 0 x 0
+|       size 32 x 32
+|       TOPLEFT on $parent TOPLEFT (0, 0)
+|       BOTTOMRIGHT on $parent BOTTOMRIGHT (0, 0)
 |     Texture <Texture>
 |       shown
-|       size 0 x 0
+|       size 32 x 32
+|       TOPLEFT on $parent TOPLEFT (0, 0)
+|       BOTTOMRIGHT on $parent BOTTOMRIGHT (0, 0)
 |     Texture <Texture>
 |       shown
-|       size 0 x 0
+|       size 32 x 32
+|       TOPLEFT on $parent TOPLEFT (0, 0)
+|       BOTTOMRIGHT on $parent BOTTOMRIGHT (0, 0)
 |     Texture <Texture>
 |       shown
-|       size 0 x 0
+|       size 32 x 32
+|       TOPLEFT on $parent TOPLEFT (0, 0)
+|       BOTTOMRIGHT on $parent BOTTOMRIGHT (0, 0)
 |     Texture <Texture>
 |       shown
-|       size 0 x 0
+|       size 32 x 32
+|       TOPLEFT on $parent TOPLEFT (0, 0)
+|       BOTTOMRIGHT on $parent BOTTOMRIGHT (0, 0)
 |     FontString WidgetDemoWindowText
 |       shown
 |       size 1 x 1

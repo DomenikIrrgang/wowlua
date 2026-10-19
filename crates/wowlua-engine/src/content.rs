@@ -39,6 +39,30 @@ fn no(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(false)])
 }
 
+/// `C_PartyInfo.DoCountdown(seconds)`: the player's countdown starts,
+/// `START_PLAYER_COUNTDOWN(guid, seconds, seconds, true, name)` told
+/// within the call (SuuUI probe countdown, ten samples: the time left the
+/// whole, chat informed, the name without a realm; told before the call
+/// returned per SuuUI's timeline notes). Unverified: what it returns, a
+/// cancel (0 seconds), the rules on who may start one.
+fn do_countdown(vm: &mut Vm, c: NativeCall) -> Ret {
+    let seconds = match vm.hidden(c.arg(1)) {
+        Value::Num(n) if n > 0.0 => n,
+        _ => return Ok(vec![Value::Bool(false)]),
+    };
+    let p = &engine(vm).units.list[PLAYER.0];
+    let (guid, name) = (p.guid.clone(), p.name.clone());
+    let args = [
+        vm.str(&guid),
+        Value::Num(seconds),
+        Value::Num(seconds),
+        Value::Bool(true),
+        vm.str(&name),
+    ];
+    widgets::fire_event(vm, "START_PLAYER_COUNTDOWN", &args);
+    Ok(vec![Value::Bool(true)])
+}
+
 fn zero(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(0.0)])
 }
@@ -676,9 +700,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_PartyInfo.GetLootMethodStyle", documented),
         ("C_PartyInfo.IsCrossFactionParty", no),
         ("C_PartyInfo.IsPartyWalkIn", no),
-        // A countdown not started (unverified: the client's rules, its
-        // `START_PLAYER_COUNTDOWN`).
-        ("C_PartyInfo.DoCountdown", no),
+        ("C_PartyInfo.DoCountdown", do_countdown),
         // Loot: no roll under way (`GetActiveLootRollIDs` none), so a roll
         // ID names none.
         ("GetLootThreshold", get_loot_threshold),

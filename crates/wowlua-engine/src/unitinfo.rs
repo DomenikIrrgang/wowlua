@@ -1027,6 +1027,50 @@ fn set_hidden_group_buffs(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `C_UnitAuras.AddAuraSound(trigger, sound)` (SuuUI probe sound, one
+/// session): a sound with a `soundFileID` or a `soundFileName` (an
+/// `outputChannel` or not) is registered under the session's next ID,
+/// counting from 1 (removed ones not reused); one with neither (a
+/// `soundKitID`, unknown fields) answers nil. The sound's fields are
+/// checked in the documentation's order: no `unitToken`, or a `spellID`
+/// that is not a number, raise the recorded "bad argument #3" errors.
+/// Unverified: other fields' errors, a missing `spellID`.
+fn add_aura_sound(vm: &mut Vm, c: NativeCall) -> Ret {
+    const USAGE: &str = "Usage: local auraSoundID = C_UnitAuras.AddAuraSound(trigger, sound)";
+    let Value::Table(sound) = vm.hidden(c.arg(2)) else {
+        return Ok(vec![Value::Nil]);
+    };
+    let field = |vm: &mut Vm, k: &str| {
+        let key = vm.str(k);
+        let v = vm.heap.table(sound).get(key);
+        vm.hidden(v)
+    };
+    if field(vm, "unitToken").is_nil() {
+        let msg = format!("bad argument #3 to '?' (Current Field: [unitToken], {USAGE})");
+        return Err(widgets::c_error(vm, &msg, false));
+    }
+    let spell = field(vm, "spellID");
+    if !spell.is_nil() && !matches!(spell, Value::Num(_)) {
+        let msg = format!(
+            "bad argument #3 to '?' (Current Field: [spellID], outside of expected range -2147483648 to 2147483647 - {USAGE})"
+        );
+        return Err(widgets::c_error(vm, &msg, false));
+    }
+    if field(vm, "soundFileID").is_nil() && field(vm, "soundFileName").is_nil() {
+        return Ok(vec![Value::Nil]);
+    }
+    let registry = vm.registry;
+    let key = vm.heap.intern(b"wowlua.engine.auraSounds");
+    let last = match vm.heap.table(registry).get_str(key) {
+        Value::Num(n) => n,
+        _ => 0.0,
+    };
+    vm.heap
+        .table_mut(registry)
+        .set_str(key, Value::Num(last + 1.0));
+    Ok(vec![Value::Num(last + 1.0)])
+}
+
 // ------------------------------------------------------- raid profiles
 
 /// `GetRaidProfileFlattenedOptions(profile)`: no options (no raid profile
@@ -1276,7 +1320,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         // Private auras, aura sounds, blocked auras, the data provider:
         // accepted, nothing to show (no anchor made: nil).
         ("C_UnitAuras.AddPrivateAuraAnchor", nil),
-        ("C_UnitAuras.AddAuraSound", nil),
+        ("C_UnitAuras.AddAuraSound", add_aura_sound),
         ("C_UnitAuras.RemovePrivateAuraAnchor", nothing),
         ("C_UnitAuras.RemoveAuraSound", nothing),
         ("C_UnitAuras.RemovePrivateAuraAppliedSound", nothing),

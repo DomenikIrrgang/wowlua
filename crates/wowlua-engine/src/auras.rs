@@ -121,10 +121,26 @@ pub(crate) fn matches(a: &Aura, filter: &str) -> bool {
     if a.harmful != harmful {
         return false;
     }
-    words.iter().all(|w| match w.as_str() {
-        "PLAYER" => a.source == Some(units::PLAYER),
-        "RAID" => a.raid,
-        _ => true,
+    // A word after `!` must not hold (SuuUI probe partyAuras, the player's
+    // auras: `HELPFUL|!PLAYER` kept only another's buff, `!CANCELABLE`
+    // none). Buffs are cancelable, debuffs not; no aura is an external or
+    // big defensive; a debuff without a dispel type is not dispellable
+    // (Forbearance). Unverified: buffs that cannot be cancelled, real
+    // defensives, whether the player's class can dispel a typed debuff.
+    words.iter().all(|w| {
+        let (negated, word) = match w.strip_prefix('!') {
+            Some(rest) => (true, rest),
+            None => (false, w.as_str()),
+        };
+        let holds = match word {
+            "PLAYER" => a.source == Some(units::PLAYER),
+            "RAID" => a.raid,
+            "CANCELABLE" => !a.harmful,
+            "EXTERNAL_DEFENSIVE" | "BIG_DEFENSIVE" => false,
+            "RAID_PLAYER_DISPELLABLE" => a.harmful && a.dispel_name.is_some(),
+            _ => return true,
+        };
+        holds != negated
     })
 }
 

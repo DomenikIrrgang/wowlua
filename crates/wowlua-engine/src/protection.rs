@@ -37,11 +37,19 @@ use crate::{engine, engine_mut};
 /// moving and dismissing, the nearest-target variants, toys, totems, quest
 /// items, `SpellTargetItem`, `ReleaseAction`, `StopMacro` (unverified; not
 /// every secure slash command is protected: TargetLastTarget is not).
+/// SuuUI's probes saw AcceptBattlefieldPort and Logout (popups),
+/// GuildControlSetRank, `C_GuildInfo.SetMOTD` and `SetInfoText`
+/// (guildControl) and `C_GuildInfo.SetNote` (guildNotes, from a macro)
+/// forbidden; GuildControlSaveRank not.
 pub const PROTECTED: &[&str] = &[
+    "AcceptBattlefieldPort",
     "AscendStop",
     "AssistUnit",
     "AttackTarget",
     "C_Container.UseContainerItem",
+    "C_GuildInfo.SetInfoText",
+    "C_GuildInfo.SetMOTD",
+    "C_GuildInfo.SetNote",
     "CameraOrSelectOrMoveStart",
     "CameraOrSelectOrMoveStop",
     "CancelShapeshiftForm",
@@ -54,7 +62,9 @@ pub const PROTECTED: &[&str] = &[
     "DescendStop",
     "DestroyTotem",
     "FocusUnit",
+    "GuildControlSetRank",
     "JumpOrAscendStart",
+    "Logout",
     "MoveAndSteerStart",
     "MoveAndSteerStop",
     "MoveBackwardStart",
@@ -118,6 +128,49 @@ pub const PROTECTED: &[&str] = &[
     "UseToy",
     "UseToyByName",
 ];
+
+/// Functions tainted code may call only while the user acts (a click or a
+/// key): otherwise refused with `ADDON_ACTION_BLOCKED`, doing nothing.
+/// SuuUI probe popups (tries: each called from a timer out of combat):
+/// these four blocked (`DeleteCursorItem` with an empty cursor too);
+/// AcceptGroup, DeclineGroup, AcceptResurrect, DeclineResurrect,
+/// `C_SummonInfo.ConfirmSummon`, `CancelSummon`, AcceptDuel, CancelDuel,
+/// ConfirmReadyCheck, the area spirit heal's, RetrieveCorpse, RepopMe,
+/// CancelTrade and RejectProposal ran. Unverified: refused during a
+/// user's action too, or for Blizzard's code.
+pub const HARDWARE: &[&str] = &[
+    "AcceptProposal",
+    "AcceptTrade",
+    "CancelLogout",
+    "DeleteCursorItem",
+];
+
+/// Refuses a [`HARDWARE`] function called by tainted code while the user
+/// does nothing; true if refused.
+pub fn refuses_without_user(vm: &mut Vm, name: &str) -> bool {
+    if !HARDWARE.contains(&name) || !tainted(vm) || engine(vm).world.input.user_actions > 0 {
+        return false;
+    }
+    let action = action_name(vm);
+    refuse(vm, "ADDON_ACTION_BLOCKED", action);
+    true
+}
+
+/// A [`HARDWARE`] function the documentation lacks: refused without the
+/// user's action; otherwise its behaviour.
+pub fn hardware_global(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(Value::Str(name)) = c.upvals.first().copied() else {
+        return Err(vm.error("a function without its name"));
+    };
+    let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
+    if refuses_without_user(vm, &name) {
+        return Ok(vec![]);
+    }
+    match engine(vm).behaviour(&name) {
+        Some(b) => b(vm, c),
+        None => Ok(vec![]),
+    }
+}
 
 /// A refused protected action.
 pub struct Refusal {

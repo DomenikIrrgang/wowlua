@@ -1454,20 +1454,11 @@ fn get_view_radius(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(f64::from(700.0f32 / 3.0))])
 }
 
-/// `C_Minimap.GetUiMapID()`: the map the player is on
-/// (`C_Map.GetBestMapForUnit("player")`).
-fn get_minimap_ui_map_id(vm: &mut Vm, _c: NativeCall) -> Ret {
-    let ns = vm.get_global("C_Map");
-    let Value::Table(t) = ns else {
-        return Ok(vec![Value::Nil]);
-    };
-    let f = get_field(vm, t, "GetBestMapForUnit");
-    if f.is_nil() {
-        return Ok(vec![Value::Nil]);
-    }
-    let player = vm.str("player");
-    let r = vm.call(f, &[player])?;
-    Ok(vec![r.first().copied().unwrap_or_default()])
+/// `C_Minimap.GetUiMapID()`: none (SuuUI probes minimap and marks: nil
+/// while `C_Map.GetBestMapForUnit` named the player's map; Blizzard's
+/// Minimap.lua asks the player's map itself unless a hybrid minimap).
+fn get_minimap_ui_map_id(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Nil])
 }
 
 /// The minimap's tracking types: name and type (`data/camelot-tracking.txt`,
@@ -2325,6 +2316,48 @@ fn deserialize_json(vm: &mut Vm, c: NativeCall) -> Ret {
     ])
 }
 
+/// `Logout()` (Blizzard's `/camp`; protected): the client starts camping,
+/// `PLAYER_CAMPING` told in the same second (SuuUI probe popups, five
+/// samples: Blizzard's CAMP popup shown with it). Unverified: the exact
+/// delay (none here), and the logout itself after the countdown (never
+/// reached in the engine).
+fn logout(vm: &mut Vm, _c: NativeCall) -> Ret {
+    widgets::fire_event(vm, "PLAYER_CAMPING", &[]);
+    Ok(vec![])
+}
+
+// ------------------------------------------------ preferred play settings
+
+/// How long the account server takes to answer a request for the
+/// preferred play settings (unverified: SuuUI probe lfg had the answer
+/// within six seconds, its time not kept).
+const PREFERRED_PLAY_SETTINGS_AFTER: f64 = 0.2;
+
+/// `C_AccountServices.RequestPreferredPlaySettings()`: started (SuuUI
+/// probe lfg: `true`), the settings arrive as
+/// `PREFERRED_PLAY_SETTINGS_UPDATED` (the probe's frame got it). Its
+/// payload as the login recording has it (`1; 1; 1; 0; 0`): a status
+/// (1, unverified what others mean), then the locale, the data center and
+/// their change dates `GetPreferredPlaySettings` answers. Before the login
+/// is done the login's recorded answer is the one told.
+fn request_preferred_play_settings(vm: &mut Vm, _c: NativeCall) -> Ret {
+    if engine(vm).world.logged_in {
+        let answer = vm.native("PreferredPlaySettingsAnswer", |vm, _c| {
+            let settings =
+                crate::recorded::lookup_text(vm, "C_AccountServices.GetPreferredPlaySettings()")
+                    .unwrap_or_default();
+            let mut args = vec![Value::Num(1.0)];
+            for i in 1..5 {
+                args.push(settings.get(i).copied().unwrap_or(Value::Num(0.0)));
+            }
+            widgets::fire_event(vm, "PREFERRED_PLAY_SETTINGS_UPDATED", &args);
+            Ok(vec![])
+        });
+        crate::clock::after_engine(vm, PREFERRED_PLAY_SETTINGS_AFTER, answer);
+    }
+    Ok(vec![Value::Bool(true)])
+}
+
 // ------------------------------------------------------- registration
 
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
@@ -2417,8 +2450,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetExpansionForLevel", expansion_zero),
         ("GetExpansionDisplayInfo", nil),
         ("C_Glue.IsFirstLoadThisSession", no),
-        // Leaving the game: nothing happens in the engine.
-        ("Logout", nothing),
+        // Leaving the game: nothing happens in the engine but the camping.
+        ("Logout", logout),
         ("CancelLogout", nothing),
         ("Quit", nothing),
         ("ForceQuit", nothing),
@@ -2427,7 +2460,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_AccountServices.IsAccountSaveEnabled", no),
         ("C_AccountServices.IsAccountSaveInProgress", no),
         ("C_AccountServices.SetPreferredPlaySettings", nothing),
-        ("C_AccountServices.RequestPreferredPlaySettings", nothing),
+        (
+            "C_AccountServices.RequestPreferredPlaySettings",
+            request_preferred_play_settings,
+        ),
         ("C_AccountServices.SaveAccountData", nothing),
         // Add-ons.
         ("C_AddOns.DoesAddOnExist", does_addon_exist),

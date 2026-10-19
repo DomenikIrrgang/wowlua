@@ -73,6 +73,7 @@ const FLAG_ATTRS: &[(&str, &str)] = &[
     ("obeyStepOnDrag", "SetObeyStepOnDrag"),
     ("reverseFill", "SetReverseFill"),
     ("rotatesTexture", "SetRotatesTexture"),
+    ("useParentLevel", "SetUsingParentLevel"),
 ];
 
 /// String and number attributes passed to a setter.
@@ -84,6 +85,8 @@ const VALUE_ATTRS: &[(&str, &str)] = &[
     ("file", "SetTexture"),
     ("atlas", "SetAtlas"),
     ("letters", "SetMaxLetters"),
+    // SuuUI probe chat: ChatFrame1EditBox kept 32 (its template's).
+    ("historyLines", "SetHistoryLines"),
     ("alpha", "SetAlpha"),
     ("scale", "SetScale"),
     ("orientation", "SetOrientation"),
@@ -247,7 +250,15 @@ pub fn build(
     parent: Option<WidgetId>,
 ) -> Option<Value> {
     let class = class_of(vm, &el.tag)?;
-    let name = el.attr("name").map(|n| resolve_name(vm, n, parent));
+    // A child marked virtual is still built, but its name makes no global
+    // (SuuUI probe bankSlots: camelot's BankFrame.xml marks its purchase
+    // button so; `BankFrame.BankPanel.PurchaseButton` is a shown Button,
+    // `BankFramePurchaseButton` nil). Unverified: its `GetName`, and
+    // whether the name also makes a template.
+    let name = el
+        .attr("name")
+        .filter(|_| !el.flag("virtual"))
+        .map(|n| resolve_name(vm, n, parent));
     // The client's UIParent is the screen the engine already has.
     let existing = name
         .as_deref()
@@ -274,6 +285,7 @@ pub fn build(
         apply_as_intrinsic(vm, cx, frame, id, &i);
     }
     apply(vm, cx, frame, id, el);
+    fill_parent_if_unplaced(vm, cx, el, frame, id);
     widgets::run_script(vm, id, "OnLoad", &[]);
     // Built visible: shown (unverified that the client runs OnShow here;
     // Blizzard's PersonalResourceDisplay sets itself up in OnShow).
@@ -759,9 +771,22 @@ fn apply_child(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, child: &Rc
             }
         }
         "layers" => {
+            // A region takes its `<Layer>`'s level (ARTWORK when none) and
+            // sublevel, its own `textureSubLevel` first (SuuUI probe
+            // trees: the client's regions report them, a `<HighlightTexture>`
+            // HIGHLIGHT, set elsewhere).
             for layer in &child.children {
+                let level = layer.attr("level").unwrap_or("ARTWORK").to_string();
                 for region in &layer.children {
-                    build(vm, cx, region, Some(id));
+                    let built = build(vm, cx, region, Some(id));
+                    let sublevel = region
+                        .number("textureSubLevel")
+                        .or_else(|| layer.number("textureSubLevel"))
+                        .unwrap_or(0.0);
+                    if let Some(rid) = built.and_then(|r| widgets::widget_of(vm, r)) {
+                        let l = vm.str(&level);
+                        widgets::store(vm, rid, "DrawLayer", &[l, Value::Num(sublevel)]);
+                    }
                 }
             }
         }
@@ -947,7 +972,26 @@ fn build_as(
     let id = widgets::widget_of(vm, region)?;
     unforbid_file_widget(vm, id, parent);
     apply(vm, cx, region, id, el);
+    fill_parent_if_unplaced(vm, cx, el, region, id);
     Some(region)
+}
+
+/// A texture the XML neither anchors nor sizes fills its parent (SuuUI
+/// probe trees: such textures, slot icons, glows, a button's state
+/// textures, report `TOPLEFT` on their parent's and its size; textures
+/// made from Lua stay unplaced). Unverified: font strings, lines, and
+/// whether the client places them at creation or later.
+fn fill_parent_if_unplaced(vm: &mut Vm, cx: &Context, el: &Element, region: Value, id: WidgetId) {
+    let w = &engine(vm).world.widgets[id.0];
+    if !matches!(w.class.as_str(), "Texture" | "MaskTexture")
+        || w.parent.is_none()
+        || !w.points.is_empty()
+        || w.width != 0.0
+        || w.height != 0.0
+    {
+        return;
+    }
+    call_method(vm, cx, el.line, region, "SetAllPoints", &[]);
 }
 
 /// Compiles UI code: as the loading addon's ([`Registry::code_of`]), or

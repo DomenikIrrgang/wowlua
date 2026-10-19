@@ -92,6 +92,14 @@ fn probed_spell(vm: &mut Vm, id: i64) -> Option<TableRef> {
         let d = d.to_value(vm);
         set(vm, t, "description", d);
     }
+    // Its rank too (SuuUI probe spellbook: Holy Light's "Rank 3", which a
+    // trainer's recording has; it was lost here).
+    if let Some(text) = crate::recorded::probed(&format!("C_Spell.GetSpellSubtext({id})"))
+        && let Some(s) = crate::traits::Rv::answer(text).into_iter().next()
+    {
+        let s = s.to_value(vm);
+        set(vm, t, "subtext", s);
+    }
     set(vm, t, "cached", Value::Bool(true));
     widgets::keep(vm, Value::Table(t));
     engine_mut(vm).world.data.spells.insert(id, t);
@@ -366,6 +374,18 @@ fn get_spell_subtext(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(crate::recorded::client_answer(vm, &c))
 }
 
+/// `C_Spell.GetSpellPowerCost(spell)`: a spell the game data's probes
+/// recorded answers as recorded (a trainer's: Holy Light's 110 mana,
+/// which SuuUI probe spellbook's tooltip shows), else the client's
+/// recorded answer, else nothing.
+fn get_spell_power_cost(vm: &mut Vm, c: NativeCall) -> Ret {
+    let call = crate::call_text(vm, "C_Spell.GetSpellPowerCost", &c, 1);
+    if let Some(answer) = crate::recorded::probed(&call) {
+        return Ok(crate::recorded::parse_answer(vm, answer));
+    }
+    Ok(crate::recorded::client_answer(vm, &c))
+}
+
 /// The engine's timers run a native after a delay: the load results.
 fn after(vm: &mut Vm, delay: f64, f: NativeFn, args: Vec<Value>) {
     let native = vm.native_with("load", f, args);
@@ -615,6 +635,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Spell.IsSpellDataCached", is_spell_data_cached),
         ("C_Spell.DoesSpellExist", does_spell_exist),
         ("C_Spell.GetSpellSubtext", get_spell_subtext),
+        ("C_Spell.GetSpellPowerCost", get_spell_power_cost),
         ("C_Spell.RequestLoadSpellData", request_load_spell_data),
         ("C_SpellBook.IsSpellKnown", is_spell_known),
         ("C_Spell.GetBaseSpell", get_base_spell),

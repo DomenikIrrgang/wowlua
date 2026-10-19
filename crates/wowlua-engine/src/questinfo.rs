@@ -1174,7 +1174,9 @@ fn get_user_waypoint_hyperlink(vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// `C_Map.GetUserWaypointFromHyperlink(hyperlink)`: the point a
-/// `worldmap:MAP:X:Y` link names, else nothing.
+/// `worldmap:MAP:X:Y` link names, else nothing; its coordinates C floats
+/// (SuuUI probe marks: `5657:3315` gave x 0.56569999456406, y
+/// 0.33149999380112).
 fn get_user_waypoint_from_hyperlink(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(link) = text_of(vm, c.arg(1)) else {
         return Ok(vec![]);
@@ -1193,8 +1195,8 @@ fn get_user_waypoint_from_hyperlink(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![map_point(
         vm,
         map,
-        x / 10000.0,
-        y / 10000.0,
+        f64::from((x / 10000.0) as f32),
+        f64::from((y / 10000.0) as f32),
         Value::Nil,
     )?])
 }
@@ -1495,8 +1497,15 @@ fn empty_list(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Table(vm.new_table())])
 }
 
+/// `C_QuestLog.GetRequiredMoney(questID)`: -1, no money asked (SuuUI
+/// probe quest: all 23 quests of a log; a quest asking money unverified).
+fn get_required_money(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(-1.0)])
+}
+
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     let mut out: Vec<(&'static str, NativeFn)> = vec![
+        ("C_QuestLog.GetRequiredMoney", get_required_money),
         // The quest log's rewards and texts (the defined quests').
         ("GetQuestLogRewardXP", get_quest_log_reward_xp),
         ("GetQuestLogRewardMoney", get_quest_log_reward_money),
@@ -1852,7 +1861,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         "C_QuestLog.IsQuestCriteriaForBounty",
         "C_QuestLog.IsQuestTask",
         "C_QuestLog.IsQuestTrivial",
-        "C_QuestLog.GetRequiredMoney",
         "C_QuestLog.IsAccountQuest",
         "C_QuestLog.IsQuestBounty",
         "C_QuestLog.QuestCanHaveWarModeBonus",
