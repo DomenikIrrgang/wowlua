@@ -705,8 +705,29 @@ fn get_max_create_date(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![calendar_time(vm, year + 1, month, day)])
 }
 
+/// `C_LFGInfo.CanPlayerUseGroupFinder()`: usable, no reason (Forever has
+/// the group finder: `CanPlayerUseLFD()` and `CanPlayerUsePremadeGroup()`
+/// recorded `true, ""`; this one unverified).
+fn can_player_use_group_finder(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(true), vm.str("")])
+}
+
+/// `C_LFGInfo.IsLFDEnabled()`, `C_LFGList.IsPremadeGroupFinderEnabled()`:
+/// on, as the recorded `CanPlayerUseLFD` and `CanPlayerUsePremadeGroup`
+/// (unverified).
+fn finder_enabled(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(true)])
+}
+
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     let own: Vec<(&'static str, NativeFn)> = vec![
+        // The group finder.
+        (
+            "C_LFGInfo.CanPlayerUseGroupFinder",
+            can_player_use_group_finder,
+        ),
+        ("C_LFGInfo.IsLFDEnabled", finder_enabled),
+        ("C_LFGList.IsPremadeGroupFinderEnabled", finder_enabled),
         // Difficulties and instances.
         ("GetDifficultyInfo", get_difficulty_info),
         ("GetDungeonDifficultyID", get_dungeon_difficulty_id),
@@ -993,8 +1014,6 @@ const NOTHING_HERE: &[(&str, NativeFn)] = &[
     ("C_WeeklyRewards.ShouldShowRetirementMessage", no),
     ("C_Calendar.IsEventOpen", no),
     ("C_DelvesUI.IsEligibleForActiveDelveRewards", no),
-    ("C_LFGInfo.IsLFDEnabled", no),
-    ("C_LFGList.IsPremadeGroupFinderEnabled", no),
     ("C_PartyInfo.IsChallengeModeActive", no),
     ("C_PartyInfo.IsDelveComplete", no),
     ("C_PvP.HasArenaSkirmishWinToday", no),
@@ -1209,7 +1228,6 @@ const NOTHING_HERE: &[(&str, NativeFn)] = &[
     ("C_ChallengeMode.GetActiveKeystoneInfo", documented),
     ("C_LFGList.GetAdvancedFilter", documented),
     ("C_PartyInfo.GetRestrictPings", documented),
-    ("C_LFGInfo.CanPlayerUseGroupFinder", documented),
     (
         "C_DelvesUI.GetCurioRarityByTraitCondAccountElementID",
         documented,
