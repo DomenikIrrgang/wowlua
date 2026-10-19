@@ -295,10 +295,14 @@ fn parse(gz: &[u8]) -> Api {
                 let Some(short) = str_of(&f, "Name") else {
                     continue;
                 };
-                // A function may name its own namespace.
-                let namespace = str_of(&f, "Namespace")
-                    .filter(|n| !n.is_empty())
-                    .or_else(|| system_namespace.clone());
+                // A function may name its own namespace, an empty one the
+                // globals (`GetArenaOpponentSpec` in `C_PvP`'s system: the
+                // full probe's global checks its arguments as documented).
+                let namespace = match str_of(&f, "Namespace") {
+                    Some(n) if n.is_empty() => None,
+                    Some(n) => Some(n),
+                    None => system_namespace.clone(),
+                };
                 // Blizzard's secure code only: addons do not have it.
                 let env = str_of(&f, "Environment").or_else(|| system_env.clone());
                 if env.as_deref() == Some("SecureOnly") {

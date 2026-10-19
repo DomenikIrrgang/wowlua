@@ -1170,13 +1170,20 @@ const BAG_BIT_OFFSET: i64 = 8;
 /// `GetInventoryItemsForSlot(slot, table [, transmog])`: the items that
 /// may be worn in the slot, worn and carried, by their location's bit
 /// flags, as links (warcraft.wiki.gg; unverified: the bank's).
+///
+/// The client's checks (the full probe): a slot not a number refused with
+/// its usage; a slot past the inventory's answers nothing (6462; the
+/// bound, 256, unverified); else no table to fill refused (-1, 0, 1, 2).
 fn get_inventory_items_for_slot(vm: &mut Vm, c: NativeCall) -> Ret {
-    let out = match c.arg(2) {
-        Value::Table(t) => t,
-        _ => vm.new_table(),
-    };
+    const USAGE: &str = "Usage: GetInventoryItemsForSlot(slot, returnTable, [\"transmogrify\"])";
     let Some(slot) = num(vm, c.arg(1)).map(|s| s as i64) else {
-        return Ok(vec![Value::Table(out)]);
+        return Err(vm.error(USAGE));
+    };
+    if slot >= 256 {
+        return Ok(vec![]);
+    }
+    let Value::Table(out) = c.arg(2) else {
+        return Err(vm.error(USAGE));
     };
     let mut found: Vec<(i64, Held)> = Vec::new();
     if let Some(h) = engine(vm).world.character.equipment.get(&slot).cloned() {

@@ -474,7 +474,7 @@ fn get_visibility_info(_vm: &mut Vm, _c: NativeCall) -> Ret {
 /// strings' (`STRING_SCHOOL_*`) for a school and the combinations they
 /// name, "Unknown" for none (the full probe, 1.60.1: 0 "Unknown", 1
 /// "Physical"; recorded "Fire" for 4, "Frost" for 16; unverified: the
-/// combinations, and nil for one no string names). The game data's
+/// combinations, and "Unknown" for one no string names). The game data's
 /// behaviour (`gamedata.rs`), before the two recorded answers.
 pub(crate) fn get_school_string(vm: &mut Vm, c: NativeCall) -> Ret {
     let Value::Num(mask) = vm.hidden(c.arg(1)) else {
@@ -514,7 +514,9 @@ pub(crate) fn get_school_string(vm: &mut Vm, c: NativeCall) -> Ret {
         124 => "Chromatic",
         126 => "Magic",
         127 => "Chaos",
-        _ => return Ok(vec![Value::Nil]),
+        // A mask no string names: "Unknown" as for none (the full probe:
+        // `GetSchoolString(-1)`, every bit set).
+        _ => "Unknown",
     };
     Ok(vec![vm.str(name)])
 }

@@ -123,11 +123,16 @@ fn not_that_item(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `IsInventoryItemProfessionBag(unit, slot)`: a worn bag is no
-/// profession bag; an empty slot answers nothing (recorded).
+/// profession bag; an empty slot answers nothing (recorded), and a slot
+/// not a bag's (the full probe: the shoulders' 3, worn, nothing; the bags'
+/// slots as `C_Container.ContainerIDToInventoryID` gives them).
 fn is_inventory_item_profession_bag(vm: &mut Vm, c: NativeCall) -> Ret {
     let Value::Num(slot) = c.arg(2) else {
         return Ok(vec![]);
     };
+    if !(31.0..=35.0).contains(&slot) && !(64.0..=69.0).contains(&slot) {
+        return Ok(vec![]);
+    }
     let worn = engine(vm)
         .world
         .character
@@ -182,8 +187,13 @@ fn container_item_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
     ])
 }
 
-/// `IsInventoryItemLocked(slot)`: the equipped item's lock.
+/// `IsInventoryItemLocked(slot)`: the equipped item's lock; a slot below
+/// 0 or past the inventory's nothing (the full probe: -1 and 6462 nothing,
+/// 0, 1, 2 and no number false; the bound, 256, unverified).
 fn inventory_item_locked(vm: &mut Vm, c: NativeCall) -> Ret {
+    if num(c.arg(1)).is_some_and(|slot| !(0.0..256.0).contains(&slot)) {
+        return Ok(vec![]);
+    }
     let locked = num(c.arg(1)).is_some_and(|slot| {
         engine(vm)
             .world
@@ -294,12 +304,26 @@ fn lua_number(n: f64) -> String {
 }
 
 /// `BreakUpLargeNumbers(n, natural)`: a whole number with its digits
-/// grouped; a fraction to one decimal (`999.99` → `1000.0`), or rounded
-/// whole with `natural` (recorded). Unverified: fractions from 1000.
+/// grouped; a fraction to one decimal (`999.99` → `1000.0`), or cut whole
+/// with `natural` (recorded `12.345` → `12`; the full probe `1.5` → `1`),
+/// which from a billion names it in words to one decimal (the full probe:
+/// 2147483647 → `2.1 billion`, `THIRD_NUMBER`; 1234 still `1,234`; the
+/// millions, trillions and the decimal's rounding unverified). Unverified:
+/// fractions from 1000.
 fn break_up_large_numbers(vm: &mut Vm, c: NativeCall) -> Ret {
     let n = num(c.arg(1)).unwrap_or(0.0);
     let natural = matches!(c.arg(2), Value::Bool(true));
-    let text = if n.fract() == 0.0 || natural {
+    let text = if natural && n.abs() >= 1e9 {
+        let (scale, word, fallback) = if n.abs() >= 1e12 {
+            (1e12, "FOURTH_NUMBER", "trillion")
+        } else {
+            (1e9, "THIRD_NUMBER", "billion")
+        };
+        let word = global_text(vm, word, fallback);
+        format!("{:.1} {word}", n / scale)
+    } else if natural {
+        grouped(vm, n.trunc())
+    } else if n.fract() == 0.0 {
         grouped(vm, n)
     } else {
         format!("{n:.1}")

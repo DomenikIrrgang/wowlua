@@ -172,8 +172,7 @@ const UNDOCUMENTED: &[(&str, &str)] = &[
     ("GetComparisonStatistic", "n"),
     ("GetLatestUpdatedStats", ""),
     ("GetLatestUpdatedComparisonStats", ""),
-    // An inspected player's arena data and talents: none.
-    ("GetInspectArenaData", "00000"),
+    // An inspected player's talents: none.
     ("GetInspectTalent", "n"),
     // Guild news filters: none kept.
     ("GetGuildNewsFilters", "{"),
@@ -181,9 +180,6 @@ const UNDOCUMENTED: &[(&str, &str)] = &[
     ("GetQuestPOIs", ""),
     ("GetTaskPOIs", ""),
     ("GetQuestPOILeaderBoard", "n"),
-    // The full probe: 0 for an index naming no quest (a quest's own 1
-    // unverified).
-    ("GetQuestSortIndex", "0"),
     // Raid profiles: none kept (`unitinfo`'s getters answer none), not
     // loaded.
     ("GetNumRaidProfiles", "0"),
@@ -286,7 +282,6 @@ const DOCUMENTED_EMPTY: &[&str] = &[
     "SimulateMouseUp",
     "SimulateMouseWheel",
     "MakeModifiers",
-    "GetStringFromModifiers",
     // The target priority highlight and a Battle.net outage: nothing to
     // show.
     "TargetPriorityHighlightStart",
@@ -822,9 +817,10 @@ fn capped_skill(vm: &mut Vm, c: &NativeCall) -> f64 {
 fn get_glancing_blow_chance(vm: &mut Vm, c: NativeCall) -> Ret {
     let skill = capped_skill(vm, &c);
     let defense = arg_num(vm, &c, 2).unwrap_or(skill);
-    let chance = (0.1 + (defense - skill) * 0.02).clamp(0.0, 1.0);
-    // A single-precision float (the full probe: 0.10000000149012).
-    Ok(vec![Value::Num(f64::from(chance as f32))])
+    // Worked out in single-precision floats (the full probe: 0.12000000476837
+    // for a point over, 0.079999998211861 for one under, 0.10000000149012).
+    let chance = (0.1_f32 + (defense - skill) as f32 * 0.02_f32).clamp(0.0, 1.0);
+    Ok(vec![Value::Num(f64::from(chance))])
 }
 
 /// `GetGlancingBlowPenalty(playerWeaponSkill, targetDefenseSkill)`: the

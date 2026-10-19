@@ -197,6 +197,8 @@ EJ_GetInstanceForMap	number	Usage: EJ_GetInstanceForMap(mapID)
 EJ_GetInvTypeSortOrder	number	Usage: EJ_GetInvTypeSortOrder(invType)
 EJ_GetMapEncounter	any,required	Usage: EJ_GetMapEncounter(mapID, index, fromJournal
 EJ_GetNumEncountersForLootByIndex	number	Usage: EJ_GetNumEncountersForLootByIndex(index)
+# No loot listed (`EJ_GetNumLoot` 0): every index refused.
+EJ_GetNumEncountersForLootByIndex	never	Usage: EJ_GetNumEncountersForLootByIndex(index): Invalid Index
 EJ_GetSearchResult	number	Usage: GetSearchResult(index)
 EJ_GetSectionPath	number	Usage: EJ_GetSectionPath(id)
 EJ_GetTierInfo	number	Usage: EJ_GetTierInfo(index)
@@ -453,6 +455,9 @@ UnitHasLFGRandomCooldown	required	Usage: UnitHasLFGRandomCooldown("unit")
 # known: `...` stands for it (unverified; that the call is refused is the
 # client's).
 BNGetBlockedInfo	required,required	Usage: BNGetBlockedInfo(...)
+# No account blocked: every index refused (`(1, 1)`: "Invalid index.", the
+# text after the chunk's name kept by its comma).
+BNGetBlockedInfo	never	Invalid index.
 BNGetDisplayName	number	Usage: BNGetDisplayName(...)
 BNGetFriendIndex	number	Usage: BNGetFriendIndex(...)
 BNGetNumFOF	number	Usage: BNGetNumFOF(...)
@@ -497,12 +502,17 @@ GetLFGDungeonRewardInfo	required,required	Usage: GetLFGDungeonRewardInfo(..., lo
 GetLFGDungeonRewardLink	required,required	Usage: GetLFGDungeonRewardLink(..., lootIndex)
 GetLFGDungeonRewards	number	Usage: GetLFGDungeonRewards(...)
 GetLFGInfoServer	number,number?	Usage: GetLFGInfoServer(..., lfgID])
+# A category below 1 refused too, the message without a comma (all that is
+# known of it: `...`).
+GetLFGInfoServer	index	...
 GetLFGInviteRoleAvailability	number	Usage: local ..., alert = GetLFGInviteRoleAvailability(role)
 GetLFGInviteRoleRestrictions	index	Usage: GetLFGInviteRoleRestrictions(...)
 GetLFGProposalEncounter	number	Usage: GetLFGProposalEncounter(...)
 GetLFGProposalMember	number	Usage: GetLFGProposalMember(...)
 GetLFGQueueStats	number,number?	Usage: GetLFGQueueStats(..., lfgID])
+GetLFGQueueStats	index	...
 GetLFGQueuedList	number,number?	Usage: GetLFGQueuedList(..., table])
+GetLFGQueuedList	index	...
 GetLFGRandomDungeonInfo	number	Usage: GetLFGRandomDungeonInfo(...)
 GetLFGRoleShortageRewards	required,required	Usage: GetLFGRoleShortageRewards(..., shortageSeverity)
 GetLFGRoleUpdateMember	number	Usage: GetLFGRoleUpdateMember(...)

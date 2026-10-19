@@ -390,13 +390,34 @@ fn content_difficulty_creature(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `UnitIsPlayerControlledOrGroupMember(unit)`: a player, the player's
-/// pet, a group member.
+/// pet, a group member; the tokens of the player's own and its group's,
+/// whether or not they name a unit now (the full probe: "pet" and
+/// "party1" true with neither there, "target", "none" and a GUID false).
 fn unit_is_player_controlled_or_group_member(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Value::Str(s) = vm.hidden(c.arg(1)) {
+        let t = String::from_utf8_lossy(vm.str_bytes(s)).to_ascii_lowercase();
+        let numbered = |prefix: &str| {
+            t.strip_prefix(prefix)
+                .is_some_and(|n| !n.is_empty() && n.bytes().all(|b| b.is_ascii_digit()))
+        };
+        if t == "player" || t == "pet" || numbered("party") || numbered("raid") {
+            return Ok(vec![Value::Bool(true)]);
+        }
+    }
     let controlled = units::unit_arg(vm, &c, 1).is_some_and(|id| {
         let u = &engine(vm).units;
         u.list[id.0].player || u.pet == Some(id) || ours(vm, id)
     });
     Ok(vec![Value::Bool(controlled)])
+}
+
+/// `GetUnitEmpowerHoldAtMaxTime(unit)`: the player's 120 (the full probe,
+/// a paladin without empowered spells; the unit kept in milliseconds or
+/// another class's time unverified), another unit's 0 (secret, as the
+/// client's).
+fn empower_hold_at_max_time(vm: &mut Vm, c: NativeCall) -> Ret {
+    let me = units::unit_arg(vm, &c, 1) == Some(PLAYER);
+    Ok(vec![Value::Num(if me { 120.0 } else { 0.0 })])
 }
 
 /// `UnitIsOwnerOrControllerOfUnit(controlling, controlled)`: the player
@@ -614,8 +635,14 @@ fn role_enum(role: Option<&str>) -> f64 {
 }
 
 /// `UnitGroupRolesAssignedEnum([unit])`: `UnitGroupRolesAssigned`'s role
-/// as `Enum.LFGRole`.
+/// as `Enum.LFGRole`; with no unit token (none, nil, a GUID) the player's
+/// specialization's (the full probe: 2 for those, -1 for "player" outside
+/// a group).
 fn unit_group_roles_assigned_enum(vm: &mut Vm, c: NativeCall) -> Ret {
+    if !units::names_token(vm, &c, 1) {
+        let role = crate::facts::own_specialization_role(vm);
+        return Ok(vec![Value::Num(role_enum(role.as_deref()))]);
+    }
     let id = unit_or_player(vm, &c, 1);
     let grouped = crate::party::grouped(vm);
     let role = id
@@ -712,6 +739,12 @@ fn unit_class_from_guid(vm: &mut Vm, c: NativeCall) -> Ret {
 /// a GUID naming no unit two nils (the full probe).
 fn unit_name_from_guid(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(id) = by_guid(vm, c.arg(1)) else {
+        // A creature's GUID names it even with none there, nil for the
+        // second (the full probe: `Creature-0-0-0-0-0-0000000000` a name,
+        // its text blanked: "Unknown" here, unverified).
+        if text(vm, c.arg(1)).is_some_and(|g| g.starts_with("Creature-")) {
+            return Ok(vec![vm.str("Unknown"), Value::Nil]);
+        }
         return Ok(vec![Value::Nil, Value::Nil]);
     };
     let realm = realm_text(vm, id);
@@ -1339,7 +1372,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("UnitEmpoweredChannelDuration", nothing),
         ("UnitEmpoweredStagePercentages", nothing),
         ("UnitEmpoweredStageDurations", nothing),
-        ("GetUnitEmpowerHoldAtMaxTime", zero),
+        ("GetUnitEmpowerHoldAtMaxTime", empower_hold_at_max_time),
         ("GetUnitEmpowerMinHoldTime", zero),
         ("GetUnitEmpowerStageDuration", zero),
         ("GetRuneCooldown", nothing),

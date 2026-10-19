@@ -935,7 +935,10 @@ fn get_expertise_percent(_vm: &mut Vm, _c: NativeCall) -> Ret {
 
 /// `GetPowerRegenForPowerType(powerType)`: the player's power's
 /// regeneration (`GetPowerRegen`, recorded per character) for its own
-/// power type, none for another (unverified).
+/// power type; for another a base of 0.001 each, rage decaying 12.5 less
+/// out of combat; none for a value no power type has (the full probe, a
+/// paladin: -1 0.001, 0.001; rage, 1 and 1.5, -12.499, 0.001; 2147483647
+/// 0, 0; as C floats; the other types' and classes' unverified).
 fn get_power_regen_for_power_type(vm: &mut Vm, c: NativeCall) -> Ret {
     let asked = num(vm, c.arg(1));
     let own = engine(vm).units.list[units::PLAYER.0].power_type;
@@ -947,7 +950,17 @@ fn get_power_regen_for_power_type(vm: &mut Vm, c: NativeCall) -> Ret {
         out.resize(2, Value::Num(0.0));
         return Ok(out);
     }
-    Ok(vec![Value::Num(0.0), Value::Num(0.0)])
+    let base = 0.001_f32;
+    let regen = match asked.map(f64::trunc) {
+        Some(1.0) => base - 12.5,
+        // `Enum.PowerType`'s range, `HealthCost` to the last.
+        Some(t) if (-2.0..=29.0).contains(&t) => base,
+        _ => return Ok(vec![Value::Num(0.0), Value::Num(0.0)]),
+    };
+    Ok(vec![
+        Value::Num(f64::from(regen)),
+        Value::Num(f64::from(base)),
+    ])
 }
 
 // --------------------------------------------------------- raid marks

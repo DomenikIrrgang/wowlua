@@ -170,12 +170,13 @@ fn ambiguate(vm: &mut Vm, c: NativeCall) -> Ret {
 // ---------------------------------------------------------------- guild
 
 /// `GetGuildInfo(unit)`: the guild's name, the rank's name and index, and
-/// the realm (nil for the player's own); nothing outside a guild
-/// (warcraft.wiki.gg's shape; unverified; the placeholder guild for the
-/// player in one, noted as unanswered).
+/// the realm (nil for the player's own); for a unit in no guild nil, nil,
+/// 0, nil (the full probe: "x", -1, 0, 1, 2 so; outside a guild the
+/// player's unverified, taken as the same) (warcraft.wiki.gg's shape; the
+/// placeholder guild for the player in one, noted as unanswered).
 fn get_guild_info(vm: &mut Vm, c: NativeCall) -> Ret {
     if !in_guild(vm) || !is_player_unit(vm, c.arg(1)) {
-        return Ok(vec![Value::Nil]);
+        return Ok(vec![Value::Nil, Value::Nil, Value::Num(0.0), Value::Nil]);
     }
     crate::note_default(vm, "GetGuildInfo", &c, 1);
     Ok(vec![
@@ -198,14 +199,37 @@ fn get_num_guild_members(vm: &mut Vm, _c: NativeCall) -> Ret {
 /// level, class name, zone, notes, online, status, class file,
 /// achievement points and rank, mobile, can be resurrected by scroll,
 /// guild standing, GUID (warcraft.wiki.gg's order; unverified): the
-/// player as the only member, nothing for another index.
+/// player as the only member; for an index no member has the empty row
+/// (the full probe, in a guild: -1 and 0 nil, nil, 0, 0, nil × 5, a status
+/// text, nil, 0, 0, false, false, 0, nil; outside a guild unverified,
+/// taken as the same).
 fn get_guild_roster_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let index = match vm.hidden(c.arg(1)) {
         Value::Num(n) => n,
         _ => 0.0,
     };
     if !in_guild(vm) || index != 1.0 {
-        return Ok(vec![]);
+        let (nil, zero) = (Value::Nil, Value::Num(0.0));
+        let status = vm.str("");
+        return Ok(vec![
+            nil,
+            nil,
+            zero,
+            zero,
+            nil,
+            nil,
+            nil,
+            nil,
+            nil,
+            status,
+            nil,
+            zero,
+            zero,
+            Value::Bool(false),
+            Value::Bool(false),
+            zero,
+            nil,
+        ]);
     }
     crate::note_default(vm, "GetGuildRosterInfo", &c, 1);
     let name = player_full_name(vm);
@@ -238,6 +262,41 @@ fn get_guild_roster_info(vm: &mut Vm, c: NativeCall) -> Ret {
         Value::Num(3.0),
         vm.str(&guid),
     ])
+}
+
+/// `GetGuildRosterLastOnline(index)`: an online member's (the player's)
+/// and no member's time away, four nils (the full probe: 1, the player,
+/// and -1, 0 so; an offline member's years, months, days and hours
+/// unverified here).
+fn get_guild_roster_last_online(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Nil; 4])
+}
+
+/// `BNGetDisplayName(id)`: a text for any account ID, empty here with no
+/// friends (the full probe: -1, 0, 1, 2 answered a string, its text
+/// blanked; unverified: empty).
+fn bn_get_display_name(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![vm.str("")])
+}
+
+/// `GuildControlGetRank()`: the rank the guild control panel edits, as
+/// `GuildControlSetRank(rankOrder)` set it, 2 before (the full probe: 2
+/// with any argument; Blizzard's `GuildControlUI` sets 2 on load; the
+/// client's own start unverified).
+fn guild_control_get_rank(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![crate::globalsinfo::get_or(
+        vm,
+        "guildControlRank",
+        Value::Num(2.0),
+    )])
+}
+
+/// `GuildControlSetRank(rankOrder)`: the rank `GuildControlGetRank` tells.
+fn guild_control_set_rank(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Value::Num(n) = vm.hidden(c.arg(1)) {
+        crate::globalsinfo::put(vm, "guildControlRank", Value::Num(n.trunc()));
+    }
+    Ok(vec![])
 }
 
 /// `GuildControlGetRankName(rankOrder)`: the player's rank's name at its
@@ -542,6 +601,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetGuildInfo", get_guild_info),
         ("GetNumGuildMembers", get_num_guild_members),
         ("GetGuildRosterInfo", get_guild_roster_info),
+        ("GetGuildRosterLastOnline", get_guild_roster_last_online),
+        ("BNGetDisplayName", bn_get_display_name),
+        ("GuildControlGetRank", guild_control_get_rank),
+        ("GuildControlSetRank", guild_control_set_rank),
         ("GuildControlGetRankName", guild_control_get_rank_name),
         ("GetNumMembersInRank", get_num_members_in_rank),
         ("C_GuildInfo.GetGuildRankOrder", get_guild_rank_order),
@@ -761,7 +824,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         "GetGuildBankItemLink",
         "GetGuildNewsMemberName",
         "BNGetFriendIndex",
-        "BNGetDisplayName",
         "BNTokenFindName",
     ];
     // Not so (unverified unless said).
@@ -903,7 +965,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         "GetGuildRecipeMember",
         "GetGuildTabardFiles",
         "GetGuildMemberRecipes",
-        "GetGuildRosterLastOnline",
         "GetGuildTradeSkillInfo",
         "BNGetBlockedInfo",
         "BNGetFOFInfo",
@@ -926,7 +987,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         "C_GuildInfo.SetGuildRankOrder",
         "C_GuildInfo.QueryGuildMemberRecipes",
         "GuildInfo",
-        "GuildControlSetRank",
         "GuildControlSetRankFlag",
         "GuildControlSaveRank",
         "GuildControlAddRank",

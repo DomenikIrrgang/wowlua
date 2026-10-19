@@ -745,6 +745,11 @@ fn checked_arguments<'f>(api: &Api, f: &'f Function, first: usize) -> &'f [Check
 
 /// Checks a call's arguments as the client does.
 pub fn check(vm: &mut Vm, api: &Api, f: &Function, c: &NativeCall) -> Result<(), LuaError> {
+    // `UnitGUID(nil)` is taken (`relax`), no argument at all is not (the
+    // full probe: `UnitGUID()` refused with the usage).
+    if f.name == "UnitGUID" && !c.has(1) {
+        return Err(fail(vm, api, f, 1, None));
+    }
     check_from(vm, api, f, c, 1)?;
     own_check(vm, f, c)
 }

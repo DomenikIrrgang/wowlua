@@ -514,6 +514,11 @@ fn is_party_full(vm: &mut Vm, _c: NativeCall) -> Ret {
 /// main tank or assist (unverified: assigning); any other assignment the
 /// recorded error.
 fn get_party_assignment(vm: &mut Vm, c: NativeCall) -> Ret {
+    // Asked with nothing, its usage (the full probe: the text up to its
+    // first comma blanked, `...` for it).
+    if c.arg(1).is_nil() {
+        return Err(vm.error("Usage: GetPartyAssignment(...,\"raidmember\"] [,exactMatch])"));
+    }
     let valid = match c.arg(1) {
         Value::Str(s) => {
             let a = String::from_utf8_lossy(vm.str_bytes(s)).to_ascii_uppercase();

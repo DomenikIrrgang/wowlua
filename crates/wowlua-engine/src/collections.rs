@@ -782,6 +782,11 @@ fn get_title_name(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(v);
     }
     let id = num(vm, &c, 1).unwrap_or(0.0) as i64;
+    // 0 names a title too (the full probe: "the Blacksmith", true; not
+    // among `GetNumTitles()`' 111).
+    if id == 0 {
+        return Ok(vec![vm.str("the Blacksmith"), Value::Bool(true)]);
+    }
     let names = title_names();
     if (1..=names.len() as i64).contains(&id) {
         let name = names[(id - 1) as usize];

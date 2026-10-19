@@ -42,7 +42,7 @@ mock.player:setStats({
     stat = { [1] = { 67, 67, 22, 0 } },
     attackSpeed = { n = 3, 2.6 },
     xp = 6093,
-    attackPowerForStat = { [1] = 114 },
+    attackPowerForStat = { [1] = 134 },
 })
 table.sort(seen)
 return table.concat(seen, ','), UnitStat('player', 1), select('#', UnitAttackSpeed('player')),
@@ -57,9 +57,10 @@ return table.concat(seen, ','), UnitStat('player', 1), select('#', UnitAttackSpe
             "3",
             "2.6",
             "6093",
-            "114",
-            // Another attribute value: not recorded.
-            "0",
+            "134",
+            // Another attribute value: the recorded rate per point (the full
+            // probe: 2 a point of strength).
+            "160",
             // Not set: the documented empty values (all four).
             "0",
             "0",
