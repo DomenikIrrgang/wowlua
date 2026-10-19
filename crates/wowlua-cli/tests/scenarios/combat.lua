@@ -5,7 +5,8 @@
 -- values are the engine's guesses, consistent with the usability the
 -- client told (it keeps rage secret in combat). Each hit's combat text
 -- after its recorded delay (`textAfter`), the loot's slots at their
--- recorded times (`slotsAfter`).
+-- recorded times, its bags' and new item's data too (`slotsAfter`,
+-- `bagsAfter`, `dataAfter`).
 local e = __engine
 -- As in the client's frames, some events wait for the frame's end, each
 -- once, in their names' order (`setFrameBatching`).
@@ -88,7 +89,7 @@ player:heal(1)
 at(20.808) player:heal(1)
 -- The corpse clicked: targeted, looted with autoloot.
 at(21.077) player:target(wolf)
-player:loot(wolf, { auto = true, slotsAfter = { 0.516, 0.767 } })
+player:loot(wolf, { auto = true, slotsAfter = { 0.516, 0.767 }, bagsAfter = { 0.252, 0 }, dataAfter = { 0.52 } })
 at(21.700) check("the loot window open", LootFrame:IsShown())
 at(22.921)
 -- What Blizzard's UI shows at the end.

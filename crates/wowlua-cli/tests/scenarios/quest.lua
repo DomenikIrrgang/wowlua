@@ -7,7 +7,8 @@
 -- swings, spells, threat, kills, loot); the rage values are guesses
 -- consistent with the usability the client told (it keeps rage secret in
 -- combat). Each hit's combat text after its recorded delay (`textAfter`),
--- each loot's slots at their recorded times (`slotsAfter`).
+-- each loot's slots, bags and new items' data at their recorded times
+-- (`slotsAfter`, `bagsAfter`, `dataAfter`).
 -- The server's word of each target change (`UNIT_TARGET("player")`)
 -- after its recorded delay (`echo`; none when the target changed again
 -- first); each kill's experience after its recorded delay (`xpAfter`).
@@ -162,7 +163,7 @@ at(20.239) player:swing(u_53fa49cc84, 5, { power = 20, kill = { xpAfter = 0.416,
 at(20.655) player:stopAttack()
 at(21.050) player:leaveCombat()
 at(21.177) player:target(u_53fa49cc84, { echo = 0.35 })
-at(21.227) player:loot(u_53fa49cc84, { auto = true, slotsAfter = { 0.557, 0.713, 0.845 } })
+at(21.227) player:loot(u_53fa49cc84, { auto = true, bagsAfter = { 0.081, 0.07, 0.127 }, dataAfter = { 0.648 }, slotsAfter = { 0.557, 0.713, 0.845 } })
 at(22.562) player:heal(1)
 at(22.562) player:setPower(20)
 at(22.593) CloseLoot() -- walked off
@@ -188,7 +189,7 @@ at(29.474) u_57ac1525ca:setThreat(42)
 at(30.386) player:swing(u_57ac1525ca, 15, { spent = 5, power = 5, kill = { echo = 0.33, xp = 50, loot = { { id = 750 }, { id = 7074 } } } })
 at(30.716) player:stopAttack()
 at(30.716) player:leaveCombat()
-at(30.968) player:loot(u_57ac1525ca, { auto = true, slotsAfter = { 0.668, 0.704 } })
+at(30.968) player:loot(u_57ac1525ca, { auto = true, bagsAfter = { 0.157 }, slotsAfter = { 0.668, 0.704 } })
 at(31.015) player:target(u_57ac1525ca, { echo = 0.357 })
 at(32.053) CloseLoot() -- walked off
 at(32.714) bystander("Creature-0-6782-0-7-6-F55ABBB5D6", 6, "Kobold Vermin")
@@ -227,7 +228,7 @@ at(45.297) player:swing(u_57461dbc45, 17, { spent = 5, power = 5, kill = { echo 
 at(45.365) player:leaveCombat()
 at(45.587) player:stopAttack()
 at(45.681) player:target(u_57461dbc45, { echo = 0.346 })
-at(45.731) player:loot(u_57461dbc45, { auto = true, slotsAfter = { 0.590, 0.667, 0.897, 1.007 } })
+at(45.731) player:loot(u_57461dbc45, { auto = true, bagsAfter = { 0, 0.34 }, dataAfter = { 1.176 }, slotsAfter = { 0.590, 0.667, 0.897, 1.007 } })
 at(46.868) player:heal(1)
 at(46.868) player:setPower(5)
 at(47.264) CloseLoot() -- walked off
@@ -259,7 +260,7 @@ at(57.376) player:wear()
 at(57.638) player:swing(u_848ad88022, 17, { spent = 5, power = 5, kill = { xpAfter = 0.241, echo = 0.625, xp = 52, loot = { { id = 750 }, { id = 2672 }, { id = 4865 } } } })
 at(57.985) player:stopAttack()
 at(58.293) player:target(u_848ad88022, { echo = 0.359 })
-at(58.352) player:loot(u_848ad88022, { auto = true, slotsAfter = { 0.388, 0.388, 0.388 } })
+at(58.352) player:loot(u_848ad88022, { auto = true, dataAfter = { 0.92 }, slotsAfter = { 0.388, 0.388, 0.388 } })
 at(58.652) player:leaveCombat()
 at(58.768) bystander("Creature-0-6782-0-7-69-A50EDA3B96", 69, "Timber Wolf")
 at(58.910) CloseLoot() -- walked off
@@ -300,7 +301,7 @@ at(69.942) player:stopAttack()
 at(69.942) bystander("Creature-0-6782-0-7-257-8A19E1C4FE", 257, "Kobold Worker")
 at(70.006) player:heal(1)
 at(70.043) player:target(u_ba7c88cbe5, { echo = 0.323 })
-at(70.072) player:loot(u_ba7c88cbe5, { auto = true, slotsAfter = { 0.524, 0.673, 0.896, 1.047 } })
+at(70.072) player:loot(u_ba7c88cbe5, { auto = true, bagsAfter = { 0.418, 0 }, dataAfter = { 0.26 }, slotsAfter = { 0.524, 0.673, 0.896, 1.047 } })
 at(70.366) player:leaveCombat()
 at(71.420) CloseLoot() -- walked off
 at(71.558) player:setPower(5)
@@ -336,7 +337,7 @@ at(82.074) player:target(u_989f54f5af, { echo = 0.506 })
 at(82.292) player:stopAttack()
 at(82.416) player:startAttack()
 at(82.416) player:useSpell(78)
-at(82.515) player:loot(u_fed254bade, { auto = true, slotsAfter = { 0.536, 0.694, 0.851 } })
+at(82.515) player:loot(u_fed254bade, { auto = true, bagsAfter = { 0.113, 0.231 }, dataAfter = { 0.278 }, slotsAfter = { 0.536, 0.694, 0.851 } })
 at(82.530) player:target(u_fed254bade, { echo = 0.394 })
 at(82.809) player:stopAttack()
 at(82.924) player:leaveCombat()
@@ -360,7 +361,7 @@ at(89.942) strike(0.266)
 at(90.425) player:swing(u_3139e0d9e3, 36, { spent = 5, indicator = "CRITICAL", power = 20, kill = { echo = 0.651, xp = 40, loot = { { id = 750 }, { id = 2672 }, { id = 4865 }, { id = 7074 } } } })
 at(90.682) player:stopAttack()
 at(91.040) player:target(u_3139e0d9e3, { echo = 0.392 })
-at(91.132) player:loot(u_3139e0d9e3, { auto = true, slotsAfter = { 0.612, 0.672, 0.861, 1.069 } })
+at(91.132) player:loot(u_3139e0d9e3, { auto = true, bagsAfter = { 0.395, 0.062 }, dataAfter = { 1.065 }, slotsAfter = { 0.612, 0.672, 0.861, 1.069 } })
 at(91.496) player:leaveCombat()
 at(91.844) player:heal(1)
 at(91.844) player:setPower(20)
@@ -389,7 +390,7 @@ at(101.238) player:setPower(5)
 at(101.558) player:stopAttack()
 at(101.558) bystander("Creature-0-6782-0-7-257-BA7C88CBE5", 257, "Kobold Worker")
 at(101.558) player:leaveCombat()
-at(101.791) player:loot(u_fba621fce1, { auto = true, slotsAfter = { 0.629, 0.701 } })
+at(101.791) player:loot(u_fba621fce1, { auto = true, bagsAfter = { 0.19 }, slotsAfter = { 0.629, 0.701 } })
 at(101.821) player:target(u_fba621fce1, { echo = 0.27 })
 at(101.967) player:heal(1)
 at(101.967) player:setPower(5)

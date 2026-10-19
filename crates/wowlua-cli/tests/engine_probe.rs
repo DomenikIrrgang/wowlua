@@ -1293,7 +1293,7 @@ fn align(ours: &[String], theirs: &[String]) -> (usize, Vec<String>, Vec<String>
 
 /// How many of the combat scenario's lines the engine plays as the client
 /// did: only ever up.
-const COMBAT_MATCHED: usize = 737;
+const COMBAT_MATCHED: usize = 764;
 
 /// The combat scenario: a wolf targeted, fought, killed and looted.
 #[test]
@@ -1483,7 +1483,7 @@ fn the_engine_plays_items_as_the_client_did() {
 
 /// How many of the quest scenario's lines the engine plays as the client
 /// did: only ever up.
-const QUEST_MATCHED: usize = 5298;
+const QUEST_MATCHED: usize = 5424;
 
 /// The quest scenario: a quest taken, eight wolves hunted for its item (a
 /// level gained), the quest turned in.

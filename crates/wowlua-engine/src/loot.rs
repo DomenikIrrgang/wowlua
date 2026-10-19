@@ -82,6 +82,25 @@ pub struct Loot {
     /// A recording's times of the slots' answers after the window opened
     /// (`slotsAfter`), for the next window.
     pub slots_after: Option<Vec<f64>>,
+    /// A recording's delays of the bags' packets (`bagsAfter`) and the new
+    /// items' data (`dataAfter`) after the item that set each off, in
+    /// order.
+    pub bags_after: Vec<f64>,
+    pub data_after: Vec<f64>,
+}
+
+/// A table's numbers in order (`{ 0.08, 0.12 }`).
+fn numbers(vm: &Vm, v: Value) -> Vec<f64> {
+    let Value::Table(t) = v else {
+        return Vec::new();
+    };
+    let n = vm.heap.table(t).border();
+    (1..=n)
+        .filter_map(|i| match vm.heap.table(t).get(Value::Num(i as f64)) {
+            Value::Num(x) => Some(x),
+            _ => None,
+        })
+        .collect()
 }
 
 fn fire(vm: &mut Vm, e: &str, args: &[Value]) {
@@ -93,11 +112,13 @@ fn later(vm: &mut Vm, seconds: f64, name: &'static str, f: NativeFn, upvals: Vec
     crate::clock::after_engine(vm, seconds, native);
 }
 
-/// `player:loot(corpse, { auto?, opensAfter?, slotsAfter? })`: the player
-/// loots a corpse; the window opens a round trip later (`opensAfter`
-/// seconds: a recording's), autoloot's slots answer at the usual spacing
-/// (`slotsAfter`: a recording's times after the window opened, one per
-/// slot).
+/// `player:loot(corpse, { auto?, opensAfter?, slotsAfter?, bagsAfter?,
+/// dataAfter? })`: the player loots a corpse; the window opens a round trip
+/// later (`opensAfter` seconds: a recording's), autoloot's slots answer at
+/// the usual spacing (`slotsAfter`: a recording's times after the window
+/// opened, one per slot); the bags' packets and the new items' data the
+/// usual while after the item that sets each off (`bagsAfter`,
+/// `dataAfter`: a recording's, in order).
 pub fn control_loot(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = units::this(vm, &c)?;
     if me != units::PLAYER {
@@ -129,6 +150,10 @@ pub fn control_loot(vm: &mut Vm, c: NativeCall) -> Ret {
         }
         _ => None,
     };
+    let bags = opt_field(vm, opts, "bagsAfter");
+    engine_mut(vm).world.loot.bags_after = numbers(vm, bags);
+    let data = opt_field(vm, opts, "dataAfter");
+    engine_mut(vm).world.loot.data_after = numbers(vm, data);
     later(
         vm,
         delay,
@@ -465,7 +490,13 @@ fn taken(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     if !engine(vm).world.loot.bags_due {
         engine_mut(vm).world.loot.bags_due = true;
-        later(vm, BAGS_AFTER, "lootBags", bags_told, vec![]);
+        let l = &mut engine_mut(vm).world.loot;
+        let after = if l.bags_after.is_empty() {
+            BAGS_AFTER
+        } else {
+            l.bags_after.remove(0)
+        };
+        later(vm, after, "lootBags", bags_told, vec![]);
     }
     if let Some(slot) = new_slot {
         engine_mut(vm)
@@ -475,13 +506,13 @@ fn taken(vm: &mut Vm, c: NativeCall) -> Ret {
             .push((bag, slot, item.id));
         if !engine(vm).world.loot.arriving_due {
             engine_mut(vm).world.loot.arriving_due = true;
-            later(
-                vm,
-                ITEM_DATA_AFTER,
-                "lootItemData",
-                item_data_arrived,
-                vec![],
-            );
+            let l = &mut engine_mut(vm).world.loot;
+            let after = if l.data_after.is_empty() {
+                ITEM_DATA_AFTER
+            } else {
+                l.data_after.remove(0)
+            };
+            later(vm, after, "lootItemData", item_data_arrived, vec![]);
         }
     }
     Ok(vec![])
