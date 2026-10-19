@@ -550,8 +550,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_GuildInfo.CanSpeakInGuildChat", guild_member),
         ("GetGuildFactionGroup", get_guild_faction_group),
         ("GetGuildCharterCost", get_guild_charter_cost),
-        // Recorded true.
-        ("C_BattleNet.AreTitleFriendsEnabled", yes),
         // ------------------------------------------------ Battle.net
         ("BNGetInfo", bn_get_info),
         (
@@ -609,7 +607,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     let recorded: &[(&str, NativeFn)] = &[
         ("BNGetNumFriendInvites", zero),
         ("C_BattleNet.IsBattleNetFriendsListEnabled", yes),
-        // SuuUI probe friendSystem: title friends and their custom names on.
+        // SuuUI probe friendSystem and the answers battery: title friends and
+        // their custom names on.
         ("C_BattleNet.AreTitleFriendsEnabled", yes),
         ("C_BattleNet.AreTitleFriendCustomNamesEnabled", yes),
         ("C_ChatInfo.CancelEmote", nothing),
