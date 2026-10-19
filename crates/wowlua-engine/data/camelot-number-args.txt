@@ -19,6 +19,8 @@ C_ArtifactUI.GetAppearanceSetInfo	1	u32
 C_ArtifactUI.GetCostForPointAtRank	1	u32
 C_ArtifactUI.GetRelicInfoByItemID	1	u32
 C_ArtifactUI.GetTotalPowerCost	2	u32
+C_AuctionHouse.CalculateCommodityDeposit	3	u32
+C_AuctionHouse.CalculateItemDeposit	3	u32
 C_AuctionHouse.GetReplicateItemInfo	1	u32
 C_AuctionHouse.GetReplicateItemLink	1	u32
 C_AutoComplete.GetAutoCompleteResults	2	u32
@@ -35,6 +37,10 @@ C_ChatInfo.GetChatLineText	1	u32
 C_ChatInfo.GetChatTypeName	1	u32
 C_ClickBindings.GetBindingType	2	u32
 C_ClickBindings.GetEffectiveInteractionButton	2	u32
+C_Club.CanResolvePlayerLocationFromClubMessageData	3	u32
+C_Club.CanResolvePlayerLocationFromClubMessageData	4	u32
+C_Club.CompareBattleNetDisplayName	2	u32
+C_Club.CompareBattleNetDisplayName	3	u32
 C_Club.GetInvitationCandidates	2	u32
 C_Club.GetMessagesBefore	4	u32
 C_ContributionCollector.GetAtlases	1	u32

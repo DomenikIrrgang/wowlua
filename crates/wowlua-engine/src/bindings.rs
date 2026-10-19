@@ -608,9 +608,21 @@ fn known(vm: &mut Vm, c: &NativeCall) -> Option<usize> {
     addon_index(vm, c.arg(1))
 }
 
-/// `C_AddOns.GetAddOnName(addon)`.
+/// A name the client knows no addon by: one neither defined nor
+/// Blizzard's (`"NoSuchAddOn"`, `"x"`, `""` in the full probe).
+fn missing(vm: &mut Vm, c: &NativeCall) -> bool {
+    known(vm, c).is_none()
+        && matches!(vm.hidden(c.arg(1)), Value::Str(_))
+        && addon_kind(vm, c).is_none()
+}
+
+/// `C_AddOns.GetAddOnName(addon)`; nil for a name not known (the full
+/// probe, 1.60.1: `"NoSuchAddOn"`, `""`).
 fn get_addon_name(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(i) = known(vm, &c) else {
+        if missing(vm, &c) {
+            return Ok(vec![Value::Nil]);
+        }
         return Ok(vec![]);
     };
     let name = engine(vm).world.bindings.addons[i].name.clone();
@@ -618,9 +630,18 @@ fn get_addon_name(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_AddOns.GetAddOnTitle(addon)`: its `Title`, else its name (as
-/// `GetAddOnInfo`'s).
+/// `GetAddOnInfo`'s); a Blizzard addon's TOC title; nil for a name not
+/// known (the full probe, 1.60.1: `Blizzard_AuctionHouseUI`'s, nil for
+/// `"NoSuchAddOn"`).
 fn get_addon_title(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(i) = known(vm, &c) else {
+        if let Some(b) = string(vm, c.arg(1)).and_then(|n| crate::ui::blizzard_addon(vm, &n)) {
+            let title = b.title.unwrap_or(b.name);
+            return Ok(vec![vm.str(&title)]);
+        }
+        if missing(vm, &c) {
+            return Ok(vec![Value::Nil]);
+        }
         return Ok(vec![]);
     };
     let a = &engine(vm).world.bindings.addons[i];
@@ -628,13 +649,25 @@ fn get_addon_title(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![vm.str(&title)])
 }
 
-/// `C_AddOns.GetAddOnNotes(addon)`: its `Notes`, else nil (unverified).
+/// `C_AddOns.GetAddOnNotes(addon)`: its `Notes`, else nil; nil for a
+/// Blizzard addon and a name not known (the full probe, 1.60.1).
 fn get_addon_notes(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(i) = known(vm, &c) else {
+        if matches!(vm.hidden(c.arg(1)), Value::Str(_)) {
+            return Ok(vec![Value::Nil]);
+        }
         return Ok(vec![]);
     };
     let notes = meta_of(&engine(vm).world.bindings.addons[i], "Notes");
     Ok(vec![notes.map_or(Value::Nil, |n| vm.str(&n))])
+}
+
+/// `C_AddOns.IsAddOnDefaultEnabled(addon)`: an addon the client has, yes
+/// (the TOC's `DefaultState` is not read: unverified); a name not known,
+/// no (the full probe, 1.60.1: StdTest and `Blizzard_AuctionHouseUI`
+/// true, `"NoSuchAddOn"`, `"x"`, `""` false).
+fn is_addon_default_enabled(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(addon_kind(vm, &c).is_some())])
 }
 
 /// Whether an argument names an addon the client has, and whether it is
@@ -659,18 +692,26 @@ fn addon_kind(vm: &mut Vm, c: &NativeCall) -> Option<bool> {
 /// `C_AddOns.GetAddOnSecurity(addon)`: `Enum.AddOnSecurityStatus` Secure
 /// (0) for Blizzard's, Insecure (1) for the others, as `GetAddOnInfo`'s
 /// "INSECURE" (recorded: `Blizzard_GroupFinder_VanillaStyle` 0, StdTest
-/// 1); nothing for an unknown one (unverified).
+/// 1); a name not known Insecure too (the full probe, 1.60.1:
+/// `"NoSuchAddOn"`, `"x"`, `""`).
 fn get_addon_security(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(match addon_kind(vm, &c) {
         Some(blizzard) => vec![Value::Num(if blizzard { 0.0 } else { 1.0 })],
+        None if missing(vm, &c) => vec![Value::Num(1.0)],
         None => vec![],
     })
 }
 
-/// `C_AddOns.GetAddOnDependencies(addon)`: its required dependencies.
+/// `C_AddOns.GetAddOnDependencies(addon)`: its required dependencies; a
+/// Blizzard addon's its TOC's, in order (the full probe, 1.60.1:
+/// `Blizzard_AuctionHouseUI`'s three).
 fn get_addon_dependencies(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(i) = known(vm, &c) else {
-        return Ok(vec![]);
+        let deps = string(vm, c.arg(1))
+            .and_then(|n| crate::ui::blizzard_addon(vm, &n))
+            .map(|b| b.deps)
+            .unwrap_or_default();
+        return Ok(deps.iter().map(|d| vm.str(d)).collect());
     };
     let deps = engine(vm).world.bindings.addons[i].deps.clone();
     Ok(deps.iter().map(|d| vm.str(d)).collect())
@@ -684,10 +725,6 @@ fn is_addon_loadable(vm: &mut Vm, c: NativeCall) -> Ret {
         Some(_) => vec![Value::Bool(true), vm.str("")],
         None => vec![Value::Bool(false), vm.str("MISSING")],
     })
-}
-
-fn yes(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(true)])
 }
 
 /// `C_AddOns.EnableAllAddOns()`, `ResetAddOns()`: none disabled (the
@@ -729,9 +766,39 @@ fn get_num_addons(vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// `GetAddOnInfo(name)`: name, title, notes, loadable, reason, security.
+/// A loadable addon's reason is "" (the full probe, 1.60.1: StdTest's, as
+/// `IsAddOnLoadable`'s); a Blizzard addon's title is its TOC's, its notes
+/// nil, "SECURE"; a name not known is "MISSING", not loadable, its title
+/// and notes nil (`"NoSuchAddOn"`, `"x"`, `""`).
 fn get_addon_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(i) = addon_index(vm, c.arg(1)) else {
-        return Ok(vec![]);
+        let Some(name) =
+            string(vm, c.arg(1)).filter(|_| matches!(vm.hidden(c.arg(1)), Value::Str(_)))
+        else {
+            return Ok(vec![]);
+        };
+        if let Some(b) = crate::ui::blizzard_addon(vm, &name) {
+            let title = b.title.unwrap_or_else(|| b.name.clone());
+            return Ok(vec![
+                vm.str(&b.name),
+                vm.str(&title),
+                Value::Nil,
+                Value::Bool(true),
+                vm.str(""),
+                vm.str("SECURE"),
+            ]);
+        }
+        if addon_kind(vm, &c).is_some() {
+            return Ok(vec![]);
+        }
+        return Ok(vec![
+            vm.str(&name),
+            Value::Nil,
+            Value::Nil,
+            Value::Bool(false),
+            vm.str("MISSING"),
+            vm.str("INSECURE"),
+        ]);
     };
     let a = &engine(vm).world.bindings.addons[i];
     let meta = |k: &str| {
@@ -747,14 +814,20 @@ fn get_addon_info(vm: &mut Vm, c: NativeCall) -> Ret {
         title,
         notes.map_or(Value::Nil, |n| vm.str(&n)),
         Value::Bool(true),
-        Value::Nil,
+        vm.str(""),
         vm.str("INSECURE"),
     ])
 }
 
+/// `C_AddOns.IsAddOnLoadOnDemand(addon)`: a defined addon's, a Blizzard
+/// addon's TOC's (the full probe, 1.60.1: `Blizzard_AuctionHouseUI` true).
 fn is_addon_load_on_demand(vm: &mut Vm, c: NativeCall) -> Ret {
-    let lod =
-        addon_index(vm, c.arg(1)).is_some_and(|i| engine(vm).world.bindings.addons[i].on_demand);
+    let lod = match addon_index(vm, c.arg(1)) {
+        Some(i) => engine(vm).world.bindings.addons[i].on_demand,
+        None => string(vm, c.arg(1))
+            .and_then(|n| crate::ui::blizzard_addon(vm, &n))
+            .is_some_and(|b| b.on_demand),
+    };
     Ok(vec![Value::Bool(lod)])
 }
 
@@ -840,6 +913,9 @@ fn get_addon_enable_state(vm: &mut Vm, c: NativeCall) -> Ret {
                 2.0
             }
         }
+        // A Blizzard addon: `All` (the full probe, 1.60.1:
+        // `Blizzard_AuctionHouseUI`, whatever the character).
+        None if string(vm, c.arg(1)).is_some_and(|n| crate::ui::is_blizzard_addon(vm, &n)) => 2.0,
         None => 0.0,
     };
     Ok(vec![Value::Num(state)])
@@ -887,7 +963,9 @@ fn is_known_file(vm: &mut Vm, c: NativeCall) -> Ret {
     let path = path.replace('\\', "/");
     let lower = path.to_ascii_lowercase();
     let Some(rest) = lower.strip_prefix("interface/addons/") else {
-        return Ok(vec![Value::Bool(true)]);
+        // A name in no folder is no client file (the full probe, 1.60.1:
+        // "x" and "" false, "Interface\Icons\INV_Misc_QuestionMark" true).
+        return Ok(vec![Value::Bool(lower.contains('/'))]);
     };
     let folder = rest.split('/').next().unwrap_or("");
     let dir = engine(vm)
@@ -1109,8 +1187,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_AddOns.GetAddOnSecurity", get_addon_security),
         ("C_AddOns.GetAddOnDependencies", get_addon_dependencies),
         ("C_AddOns.IsAddOnLoadable", is_addon_loadable),
-        // The TOC's `DefaultState` is not read (unverified: all on).
-        ("C_AddOns.IsAddOnDefaultEnabled", yes),
+        ("C_AddOns.IsAddOnDefaultEnabled", is_addon_default_enabled),
         ("C_AddOns.EnableAllAddOns", enable_all_addons),
         ("C_AddOns.ResetAddOns", enable_all_addons),
         ("C_AddOns.DisableAllAddOns", disable_all_addons),

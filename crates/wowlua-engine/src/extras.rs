@@ -1411,11 +1411,15 @@ fn intl_fold_case(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_Intl.ToTitle(text)`: each word's first letter capital, the rest
-/// small.
+/// small; a word ends at any character but a letter or digit, a color
+/// code's bar too (the full probe, 1.60.1: "|cffff0000Red|r" is
+/// "|Cffff0000red|R"); an apostrophe, period or colon inside a word keeps
+/// it whole, as ICU's word breaks do (unverified).
 fn intl_to_title(vm: &mut Vm, c: NativeCall) -> Ret {
     intl_text(vm, &c, |s| {
         let mut out = String::with_capacity(s.len());
         let mut start = true;
+        let mut prev_letter = false;
         for ch in s.chars() {
             if ch.is_alphanumeric() {
                 if start {
@@ -1424,9 +1428,11 @@ fn intl_to_title(vm: &mut Vm, c: NativeCall) -> Ret {
                     out.extend(ch.to_lowercase());
                 }
                 start = false;
+                prev_letter = true;
             } else {
                 out.push(ch);
-                start = ch.is_whitespace();
+                start = !(prev_letter && matches!(ch, '\'' | '\u{2019}' | '.' | ':'));
+                prev_letter = false;
             }
         }
         out
@@ -1536,9 +1542,15 @@ fn flagged(doc: &serde_json::Value, flag: &str) -> bool {
 /// are checked: one that needs a commentator (`RequiresCommentator`,
 /// `RequiresActiveCommentator`), WoW Forever having none (the full probe:
 /// all 615 calls of the 39 asked answered nothing, those with arguments
-/// of the wrong type or none too).
+/// of the wrong type or none too); one that needs the diminishing returns
+/// UI (`RequiresSpellDiminishUI`), which Forever does not support
+/// (`C_SpellDiminish.IsSystemSupported()` false; all 39 calls of the 3
+/// asked answered nothing, `GetSpellDiminishCategoryInfo()` and `(-1)`
+/// too).
 pub(crate) fn silent_unchecked(doc: &serde_json::Value) -> bool {
-    flagged(doc, "RequiresActiveCommentator") || flagged(doc, "RequiresCommentator")
+    flagged(doc, "RequiresActiveCommentator")
+        || flagged(doc, "RequiresCommentator")
+        || flagged(doc, "RequiresSpellDiminishUI")
 }
 
 /// Whether a documented function whose arguments passed their checks

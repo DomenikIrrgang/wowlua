@@ -119,6 +119,57 @@ fn empty_list(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Table(vm.new_table())])
 }
 
+/// `C_ScenarioInfo.GetScenarioIconInfo(uiMapID)`: no scenario's icons, an
+/// empty list on a map the client has, nothing else (the full probe,
+/// 1.60.1: 1413 and 1414 {}, -1, 0, 1 and 2147483647 nothing; a map known
+/// by its recorded `C_Map.GetMapInfo`).
+fn scenario_icon_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    let map = match vm.hidden(c.arg(1)) {
+        Value::Num(n) => n.trunc() as i64,
+        _ => return Ok(vec![]),
+    };
+    let known = crate::recorded::lookup_text(vm, &format!("C_Map.GetMapInfo({map})"))
+        .is_some_and(|v| !v.is_empty() && !v[0].is_nil());
+    Ok(if known {
+        vec![Value::Table(vm.new_table())]
+    } else {
+        vec![]
+    })
+}
+
+/// The calendar's event types (`Enum.CalendarEventType`, raid to other)
+/// and their names: five (the full probe, 1.60.1; the names, scrubbed
+/// there, are unverified).
+const EVENT_TYPES: [&str; 5] = ["Raid", "Dungeon", "PvP", "Meeting", "Other"];
+
+/// `C_Calendar.EventGetTypes()`: the event types' names.
+fn event_types(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let t = vm.new_table();
+    for (i, name) in EVENT_TYPES.iter().enumerate() {
+        let v = vm.str(name);
+        let _ = vm.heap.table_mut(t).set(Value::Num(i as f64 + 1.0), v);
+    }
+    Ok(vec![Value::Table(t)])
+}
+
+/// `C_Calendar.EventGetTypesDisplayOrdered()`: each type's name and value,
+/// in the enumeration's order.
+fn event_types_ordered(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let t = vm.new_table();
+    for (i, name) in EVENT_TYPES.iter().enumerate() {
+        let entry = vm.new_table();
+        let (k, v) = (vm.str("displayString"), vm.str(name));
+        let _ = vm.heap.table_mut(entry).set(k, v);
+        let k = vm.str("eventType");
+        let _ = vm.heap.table_mut(entry).set(k, Value::Num(i as f64));
+        let _ = vm
+            .heap
+            .table_mut(t)
+            .set(Value::Num(i as f64 + 1.0), Value::Table(entry));
+    }
+    Ok(vec![Value::Table(t)])
+}
+
 fn empty_string(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![vm.str("")])
 }
@@ -413,8 +464,10 @@ fn get_available_loot_methods(vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// `C_PartyInfo.IsLootMethodAvailable(method)`.
+/// `C_PartyInfo.IsLootMethodAvailable(method)`: an enumeration's value, a
+/// non-number read as 0 (`("x")` true, the full probe).
 fn is_loot_method_available(vm: &mut Vm, c: NativeCall) -> Ret {
-    let m = vm.check_number(&c, 1)?;
+    let m = vm.tonumber(vm.hidden(c.arg(1))).unwrap_or(0.0).trunc();
     Ok(vec![Value::Bool(LOOT_METHODS.contains(&m))])
 }
 
@@ -672,14 +725,15 @@ fn calendar_time(vm: &mut Vm, year: i64, month: i64, day: i64) -> Value {
     Value::Table(t)
 }
 
-/// `C_Calendar.GetMinDate()`: the calendar's first day, 23 November 2004
-/// (unverified: the game's release; the client's answer not recorded).
+/// `C_Calendar.GetMinDate()`: the calendar's first day, 24 November 2004
+/// (the full probe, 1.60.1).
 fn get_min_date(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![calendar_time(vm, 2004, 11, 23)])
+    Ok(vec![calendar_time(vm, 2004, 11, 24)])
 }
 
-/// `C_Calendar.GetMaxCreateDate()`: a year from the clock's day
-/// (unverified).
+/// `C_Calendar.GetMaxCreateDate()`: the last minute of the month a year
+/// from the clock's (the full probe, 1.60.1: 31 October 2027 23:59 on 19
+/// October 2026; unverified on other days).
 fn get_max_create_date(vm: &mut Vm, _c: NativeCall) -> Ret {
     let date = vm.get_global("date");
     let fmt = vm.str("*t");
@@ -693,10 +747,18 @@ fn get_max_create_date(vm: &mut Vm, _c: NativeCall) -> Ret {
             _ => 1,
         }
     };
-    let (year, month, day) = (get("year"), get("month"), get("day"));
-    // 29 February a year on is the 28th.
-    let day = if month == 2 && day == 29 { 28 } else { day };
-    Ok(vec![calendar_time(vm, year + 1, month, day)])
+    let (year, month) = (get("year"), get("month"));
+    let days = [31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][(month - 1).clamp(0, 11) as usize];
+    let leap = (year + 1) % 4 == 0 && ((year + 1) % 100 != 0 || (year + 1) % 400 == 0);
+    let day = if month == 2 && leap { 29 } else { days };
+    let t = calendar_time(vm, year + 1, month, day);
+    if let Value::Table(t) = t {
+        for (k, v) in [("hour", 23.0), ("minute", 59.0)] {
+            let k = vm.str(k);
+            let _ = vm.heap.table_mut(t).set(k, Value::Num(v));
+        }
+    }
+    Ok(vec![t])
 }
 
 /// `C_LFGInfo.CanPlayerUseGroupFinder()`: usable, no reason (Forever has
@@ -1177,7 +1239,7 @@ const NOTHING_HERE: &[(&str, NativeFn)] = &[
     ("C_PvP.JoinTrainingGround", nothing),
     ("C_PvP.TogglePVP", nothing),
     ("C_PvP.ToggleWarMode", nothing),
-    ("C_ScenarioInfo.GetScenarioIconInfo", nothing),
+    ("C_ScenarioInfo.GetScenarioIconInfo", scenario_icon_info),
     ("C_ScenarioInfo.GetScenarioInfo", nothing),
     ("C_WeeklyRewards.ClaimReward", nothing),
     ("C_WeeklyRewards.CloseInteraction", nothing),
@@ -1260,7 +1322,10 @@ const NOTHING_HERE: &[(&str, NativeFn)] = &[
     ("C_DelvesUI.GetUnseenCuriosBySlotType", empty_list),
     ("C_EncounterJournal.GetEncountersOnMap", empty_list),
     ("C_Calendar.EventGetTextures", empty_list),
-    ("C_Calendar.EventGetTypesDisplayOrdered", empty_list),
+    (
+        "C_Calendar.EventGetTypesDisplayOrdered",
+        event_types_ordered,
+    ),
     ("C_DelvesUI.GetDelveEntranceTiers", empty_list),
     ("C_LFGInfo.GetAllEntriesForCategory", empty_list),
     ("C_LFGInfo.GetLFDLockStates", empty_list),
@@ -1269,7 +1334,7 @@ const NOTHING_HERE: &[(&str, NativeFn)] = &[
     ("C_PvP.GetPostMatchItemRewards", empty_list),
     ("C_PvP.GetTrainingGrounds", empty_list),
     ("C_WeeklyRewards.GetSortedProgressForActivity", empty_list),
-    ("C_Calendar.EventGetTypes", empty_list),
+    ("C_Calendar.EventGetTypes", event_types),
     ("C_DelvesUI.GetDelvesAffixSpellsForSeason", empty_list),
     ("C_LFGInfo.GetLevelUpInstances", empty_list),
     ("C_PvP.GetLevelUpBattlegrounds", empty_list),

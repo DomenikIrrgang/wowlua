@@ -922,6 +922,12 @@ const OVER_RECORDED: &[&str] = &[
     // (`collections.rs`).
     "C_MountJournal.GetMountInfoByID",
     "C_MountJournal.GetMountInfoExtraByID",
+    // A rule over the one recorded call (the full probe: the joined
+    // channels' shortcuts, nil past them).
+    "C_ChatInfo.GetChannelShortcutForChannelID",
+    // Nothing at load (recorded), nil once logged in (the full probe).
+    "C_VoiceChat.GetActiveChannelID",
+    "C_QuestSession.GetSessionBeginDetails",
 ];
 
 /// The fill-in modules' behaviours: answers for functions no recording

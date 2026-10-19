@@ -1117,6 +1117,51 @@ fn flyout_name(vm: &Vm, id: f64) -> Option<String> {
     })
 }
 
+/// A cooldown viewer category's set without `allowUnlearned`: only the
+/// cooldowns the player knows (their recorded info's `isKnown`), in order
+/// (the full probe, 1.60.1: `GetCooldownViewerCategorySet(0)`, `(0,
+/// false)` and `(0, nil)` 4 of the 12 `(0, true)` gives, every category
+/// as its recorded entries' `isKnown` says).
+fn known_cooldowns(vm: &Vm, values: Vec<Answer>) -> Vec<Answer> {
+    let Some(Entry::ByIndex(info)) = engine(vm).world.character.stats.get("cooldownViewerInfo")
+    else {
+        return values;
+    };
+    let known = |id: &Answer| {
+        let Answer::Num(id) = id else {
+            return false;
+        };
+        matches!(info.get(&(*id as i64)).and_then(|a| a.first()), Some(Answer::Table(fields))
+        if fields.iter().any(|(k, v)| {
+            matches!(k, Answer::Str(k) if k == "isKnown") && *v == Answer::Bool(true)
+        }))
+    };
+    values
+        .into_iter()
+        .map(|v| match v {
+            Answer::Table(entries) => {
+                let mut ids: Vec<(f64, Answer)> = entries
+                    .into_iter()
+                    .filter_map(|(k, v)| match k {
+                        Answer::Num(i) => Some((i, v)),
+                        _ => None,
+                    })
+                    .collect();
+                ids.sort_by(|a, b| a.0.total_cmp(&b.0));
+                Answer::Table(
+                    ids.into_iter()
+                        .map(|(_, v)| v)
+                        .filter(known)
+                        .enumerate()
+                        .map(|(i, v)| (Answer::Num(i as f64 + 1.0), v))
+                        .collect(),
+                )
+            }
+            other => other,
+        })
+        .collect()
+}
+
 /// A stat's function: the player's recorded answer.
 fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
     // The function called: its index in the API, or (undocumented) name.
@@ -1174,6 +1219,13 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
     // An index is truncated (the full probe, 1.60.1: the spellbook's item
     // and skill line 1.5 answered as 1).
     let index = index.map(f64::trunc);
+    // The cooldown viewer's category, an enumeration's value: a non-number
+    // read as 0 (the full probe: `GetCooldownViewerCategorySet("x", true)`
+    // answered category 0's).
+    let index = match stat.key {
+        "cooldownViewerSet" => index.or(Some(0.0)),
+        _ => index,
+    };
     // A spellbook item's link with a glyph above 0: none (the full probe,
     // 1.60.1: glyph 1, 1.5 and 2147483647 nothing, -1 the link).
     if stat.key == "spellBookItemLink" && matches!(c.arg(3), Value::Num(g) if g > 0.0) {
@@ -1223,6 +1275,12 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
         }
     } else {
         None
+    };
+    let found = match found {
+        Some(values) if stat.key == "cooldownViewerSet" && !c.arg(2).truthy() => {
+            Some(known_cooldowns(vm, values))
+        }
+        other => other,
     };
     match found {
         Some(values) => Ok(values.iter().map(|a| value_of(vm, a)).collect()),

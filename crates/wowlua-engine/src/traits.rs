@@ -936,7 +936,12 @@ fn get_tree_currency_info(vm: &mut Vm, c: NativeCall) -> Ret {
         };
         let exclude = vm.hidden(c.arg(3)).truthy();
         if config == INSPECT && inspected(vm).is_none() {
-            return Ok(answer(vm, bare_tree_currency(vm, tree, exclude)));
+            // No recorded tree either: no currencies (the full probe,
+            // 1.60.1: `GetTreeCurrencyInfo(-1, 1, true)` {}).
+            let Some(rv) = bare_tree_currency(vm, tree, exclude) else {
+                return Ok(vec![Value::Table(vm.new_table())]);
+            };
+            return Ok(answer(vm, Some(rv)));
         }
         let (key, config, _) = resolve(vm, config);
         let rv = Model::new(&key, &engine(vm).world.traits).tree_currency(config, tree, exclude);

@@ -373,6 +373,14 @@ pub(crate) fn set_cvar_text(vm: &mut Vm, name: &str, text: String, tell: bool) -
     if read_only {
         return Ok(vec![Value::Bool(false)]);
     }
+    // The camera's zoom factor keeps a value below 1 or no number, the set
+    // answered as done (the full probe, 1.60.1: "0", "" and "abc" left 2,
+    // "1" and "1.5" taken; the upper bound unverified).
+    if name.eq_ignore_ascii_case("cameraDistanceMaxZoomFactor")
+        && text.trim().parse::<f64>().map_or(true, |n| n < 1.0)
+    {
+        return Ok(vec![Value::Bool(true)]);
+    }
     // Set to what it is: not told (recorded twice: the world map's first
     // showing after a reload sets `miniWorldMap` to its value, no
     // `CVAR_UPDATE`; scenarios tracking and mapnav).

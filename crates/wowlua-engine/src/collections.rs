@@ -260,8 +260,10 @@ filters! {
 /// toy box's expansions 0 and 1, its sources from 1, 0 and 99 refused;
 /// the heirlooms' sources from 1, 0 and 99 refused; the wardrobe's source
 /// types its six, 99 and 2147483647 reading false and keeping nothing;
-/// unverified: the others, taken from 1, and the toy box's and heirlooms'
-/// last sources, taken as the 12 `IsHeirloomSourceValid` was recorded for).
+/// the sets' 1 to `NUM_LE_TRANSMOG_SET_FILTERS` (4), 0 and 2147483647
+/// answering nothing; unverified: the others, taken from 1, and the toy
+/// box's and heirlooms' last sources, taken as the 12
+/// `IsHeirloomSourceValid` was recorded for).
 fn valid_filter_index(key: &str, i: i64) -> bool {
     match key {
         "mount.filter.source." => false,
@@ -272,6 +274,7 @@ fn valid_filter_index(key: &str, i: i64) -> bool {
         "toy.filter.source." => (1..=TOY_SOURCES).contains(&i),
         "heirloom.filter.source." => (1..=HEIRLOOM_SOURCES).contains(&i),
         "transmog.filter.source." => (1..=TRANSMOG_SOURCES).contains(&i),
+        "sets.filter." | "basesets.filter." => (1..=4).contains(&i),
         _ => i >= 1,
     }
 }
@@ -318,6 +321,15 @@ fn refused_index(vm: &mut Vm, key: &str, i: i64, setter: bool) -> Option<wowlua_
     Some(vm.error(usage))
 }
 
+/// An indexed filter's answer for an index it lacks: false, the sets'
+/// nothing (the full probe, 1.60.1).
+fn no_filter_answer(key: &str) -> Vec<Value> {
+    match key {
+        "sets.filter." | "basesets.filter." => vec![],
+        _ => vec![Value::Bool(false)],
+    }
+}
+
 /// A boolean filter's getter and setter, by an index argument (`$indexed`)
 /// or none, with its default. The toy box's first expansion keeps no
 /// setting (the full probe, 1.60.1: `SetExpansionTypeFilter(0, false)`
@@ -332,7 +344,7 @@ macro_rules! flag_filters {
                         return Err(e);
                     }
                     if !valid_filter_index($key, i) {
-                        return Ok(vec![Value::Bool(false)]);
+                        return Ok(no_filter_answer($key));
                     }
                     (format!("{}{}", $key, i), default_at($key, i, $default))
                 } else {
@@ -1353,6 +1365,9 @@ fn player_has_transmog_by_item(vm: &mut Vm, c: NativeCall) -> Ret {
 fn slot_for_inventory_type(vm: &mut Vm, c: NativeCall) -> Ret {
     let inv = num(vm, &c, 1).unwrap_or(0.0) as i64 - 1;
     let slot = match inv {
+        // Not equippable: slot 0 (the full probe, 1.60.1: 1 and 1.5
+        // answered 0, 0 and 2147483647 nothing).
+        0 => 0,
         1 => 1,
         2 => 2,
         3 => 3,

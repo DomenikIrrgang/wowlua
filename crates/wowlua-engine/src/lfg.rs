@@ -770,16 +770,18 @@ fn get_activity_info_table(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Table(t)])
 }
 
-/// `C_LFGList.GetActivityFullName(activityID)`: its info's `fullName`.
+/// `C_LFGList.GetActivityFullName(activityID)`: its info's `fullName`, the
+/// ID taken whole; an activity not known still a string (the full probe,
+/// 1.60.1: -1, 1.5 and 2147483647 answered a string, blanked there: here
+/// empty, unverified).
 fn get_activity_full_name(vm: &mut Vm, c: NativeCall) -> Ret {
-    let id = num_arg(&c, 1).unwrap_or(-1.0);
-    match catalogue(vm)
+    let id = num_arg(&c, 1).map_or(-1.0, f64::trunc);
+    let name = catalogue(vm)
         .activity(id)
         .and_then(|a| a.fields.get("fullName"))
-    {
-        Some(name) => Ok(vec![vm.str(name)]),
-        None => Ok(vec![]),
-    }
+        .cloned()
+        .unwrap_or_default();
+    Ok(vec![vm.str(&name)])
 }
 
 /// `C_LFGList.GetAvailableLanguageSearchFilter()`: recorded, the eleven

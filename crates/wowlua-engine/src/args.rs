@@ -167,9 +167,30 @@ fn family(api: &Api, ty: &str, arg: &Json, method: bool) -> Family {
                 max: 255.0,
             };
         }
-        "CalendarEventID" | "ClubId" | "WeeklyRewardItemDBID" | "InventorySlots" => {
+        // A calendar event's ID: -1 refused with the usage alone, "x" taken
+        // as 0, 2147483647 taken (`C_Calendar.GetEventIndexInfo`, the full
+        // probe; the upper bound is unverified).
+        "CalendarEventID" if !method => {
+            return Family::Enum {
+                min: 0.0,
+                max: f64::MAX,
+            };
+        }
+        // A stream's ID and a recruit's acceptance ID take a table too
+        // (`C_Club.GetStreamInfo("x", {})`, `C_RecruitAFriend.
+        // GetRecruitActivityRequirementsText(1, {})` answer; the full probe).
+        "CalendarEventID"
+        | "ClubId"
+        | "ClubStreamId"
+        | "RecruitAcceptanceID"
+        | "WeeklyRewardItemDBID"
+        | "InventorySlots" => {
             return Family::Any;
         }
+        // A duration in seconds: any number, a non-number refused with the
+        // usage alone (`C_EncounterTimeline.GetSortedEventList(1, "x")`;
+        // `-1`, 1.5 taken; the full probe).
+        "Seconds" if !method => return Family::Number,
         // A function's font: a font object, not any table (`GetFontInfo({})`
         // refused with the usage alone, the full probe).
         "SimpleFont" if !method => return Family::FontObject,
@@ -502,6 +523,15 @@ fn relax(f: &Function, args: &mut [Json]) {
             set(1, "Nilable", Json::Bool(true));
             set(1, "Type", Json::from("LuaValueVariant"));
         }
+        // A death recap's ID: any value ("x" answers nothing as 1 does, the
+        // full probe).
+        (false, "C_DeathRecap.GetRecapEvents") => set(0, "Type", Json::from("LuaValueVariant")),
+        // The encodings' options: anything passes the bindings, the C code
+        // refusing a non-table with its own usage (`SerializeJSON({}, "x")`,
+        // the full probe).
+        (false, "C_EncodingUtil.SerializeJSON" | "C_EncodingUtil.SerializeCBOR") => {
+            set(1, "Type", Json::from("LuaValueVariant"));
+        }
         _ => {}
     }
 }
@@ -770,7 +800,20 @@ fn own_check(vm: &mut Vm, f: &Function, c: &NativeCall) -> Result<(), LuaError> 
         Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
         _ => String::new(),
     };
+    // A talent's query without its tier (the full probe: `GetTalentInfo({})`
+    // and `({ isInspect = true, isPet = true })`; unverified: its column).
+    let no_tier = f.name == "C_SpecializationInfo.GetTalentInfo"
+        && match vm.hidden(c.arg(1)) {
+            Value::Table(t) => {
+                let k = vm.str("tier");
+                vm.heap.table(t).get(k).is_nil()
+            }
+            _ => false,
+        };
     let refused: Option<String> = match f.name {
+        _ if no_tier => Some(
+            "GetTalentInfo(): C_SpecializationInfo.GetTalent: query.tier must be specified.".into(),
+        ),
         "UnitStat" if !(1.0..=5.0).contains(&num(vm, 2)) => {
             Some("UnitStat(): Invalid stat index in UnitStat".into())
         }
