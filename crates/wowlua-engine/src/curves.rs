@@ -576,7 +576,7 @@ fn set_time_span(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     set_time(vm, id, c, 2)
 }
 
-fn reset(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+pub(crate) fn reset(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     set_span(
         vm,
         id,
@@ -588,7 +588,7 @@ fn reset(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-fn assign(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+pub(crate) fn assign(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let Some(other) = widgets::widget_of(vm, c.arg(2)) else {
         return Err(vm.error("a duration object expected"));
     };
@@ -597,7 +597,7 @@ fn assign(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-fn copy(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+pub(crate) fn copy(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let s = span(vm, id);
     Ok(vec![new_duration(vm, s)])
 }
@@ -636,7 +636,7 @@ fn measures(vm: &mut Vm, s: Span, modifier: Value) -> (f64, f64, f64) {
     (total * k, elapsed * k, (total - elapsed) * k)
 }
 
-fn duration_get(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+pub(crate) fn duration_get(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let which = method_name(vm, &c);
     let s = span(vm, id);
     let (total, elapsed, remaining) = measures(vm, s, c.arg(2));
@@ -678,7 +678,7 @@ fn measure(vm: &mut Vm, which: &str, s: Span, modifier: Value) -> f64 {
 
 /// `Evaluate…(curve, modifier)`: the measure through the curve, secret when
 /// the curve or the span is.
-fn duration_evaluate(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+pub(crate) fn duration_evaluate(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let which = method_name(vm, &c);
     let s = span(vm, id);
     let x = measure(vm, &which, s, c.arg(3));
@@ -690,7 +690,7 @@ fn duration_evaluate(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 
 /// `Format…Duration(formatter, modifier)`: the measure through a numeric
 /// formatter, secret when the formatter or the span is.
-fn duration_format(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+pub(crate) fn duration_format(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let which = method_name(vm, &c);
     let s = span(vm, id);
     let x = measure(vm, &which, s, c.arg(3));
