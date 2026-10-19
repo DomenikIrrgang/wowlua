@@ -92,7 +92,9 @@ fn clauses_values_and_targets() {
             "nobody|nil",
             "none|nil",
             "alive|player",
-            "z|nil",
+            // An unknown condition holds (the client's `[frobnicate] a; b`
+            // is "a").
+            "x|nil",
             "|nil",
             "13|nil",
             "none|nil",

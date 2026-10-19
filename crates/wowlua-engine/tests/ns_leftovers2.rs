@@ -37,7 +37,7 @@ fn action_bar_pages() {
     C_ActionBar.GetOverrideBarIndex(), C_ActionBar.GetBonusBarIndexForSlot(73),
     C_ActionBar.GetBonusBarIndexForSlot(1)",
     );
-    assert_eq!(r, ["16", "17", "18", "7", "nil"]);
+    assert_eq!(r, ["31", "32", "33", "7", "nil"]);
 }
 
 #[test]
@@ -62,7 +62,7 @@ local home, world = GetNetIpTypes()
 return ConsoleGetFontHeight(), home, world, GetDownloadedPercentage(), C_Club.GetClubCapacity(),
     C_BattleNet.AreFriendTagsEnabled(), GetNumRaidProfiles()",
     );
-    assert_eq!(r, ["20", "1", "1", "1", "0", "false", "0"]);
+    assert_eq!(r, ["20", "1", "1", "0", "1000", "false", "0"]);
 }
 
 #[test]
@@ -76,5 +76,5 @@ fn combat_sums() {
     let n: Vec<f64> = r.iter().map(|s| s.parse().expect("a number")).collect();
     assert!((n[0] - 0.35).abs() < 1e-9);
     assert!((n[1] - 0.05).abs() < 1e-9);
-    assert!((n[2] - 37.5).abs() < 1e-9);
+    assert!((n[2] - 50.0).abs() < 1e-9);
 }

@@ -1575,7 +1575,21 @@ fn plays_as_the_client_did(name: &str, ratchet: usize) {
 /// gives as well: the calls Blizzard's UI made that the engine could not
 /// answer, asked again with the recorded character's world. Only ever
 /// raised (decision: the engine answers every call as the client does).
-const ANSWERS_MATCHED: usize = 5928;
+const ANSWERS_MATCHED: usize = 6117;
+
+/// An answer as `cargo xtask ingest` writes the client's: UTF-8 as it is,
+/// any other byte (a binary answer, `C_EncodingUtil.SerializeCBOR`'s) as
+/// `\xNN`.
+fn escaped_bytes(bytes: &[u8]) -> String {
+    let mut out = String::new();
+    for chunk in bytes.utf8_chunks() {
+        out.push_str(chunk.valid());
+        for b in chunk.invalid() {
+            out.push_str(&format!("\\x{b:02x}"));
+        }
+    }
+    out
+}
 
 #[test]
 fn the_engine_answers_blizzards_calls_as_the_client_did() {
@@ -1629,7 +1643,7 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
         .filter_map(|(k, v)| match (k, v) {
             (Value::Str(k), Value::Str(v)) => Some((
                 String::from_utf8_lossy(vm.str_bytes(k)).into_owned(),
-                String::from_utf8_lossy(vm.str_bytes(v)).into_owned(),
+                escaped_bytes(vm.str_bytes(v)),
             )),
             _ => None,
         })
@@ -1741,7 +1755,7 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
         .filter_map(|(k, v)| match (k, v) {
             (Value::Str(k), Value::Str(v)) => Some((
                 String::from_utf8_lossy(vm.str_bytes(k)).into_owned(),
-                String::from_utf8_lossy(vm.str_bytes(v)).into_owned(),
+                escaped_bytes(vm.str_bytes(v)),
             )),
             _ => None,
         })

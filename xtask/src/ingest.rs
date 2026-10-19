@@ -391,6 +391,7 @@ const STATIC: &[&str] = &[
     "C_Ping.GetDefaultPingOptions",
     "GetText",
     "GetMaxPlayerLevel",
+    "GetTotalAchievementPoints",
     "GetMaxLevelForPlayerExpansion",
     "GetClassicExpansionLevel",
     "GetSendMailPrice",
@@ -430,6 +431,7 @@ const STATIC: &[&str] = &[
     "C_Housing.IsHousingServiceEnabled",
     "C_MythicPlus.IsMythicPlusActive",
     "C_PartyInfo.IsRaidListSupported",
+    "C_PartyInfo.IsRaidListEnabled",
     "C_PhotoSharing.IsEnabled",
     "C_Ping.IsPingSystemEnabled",
     "C_RecentAllies.IsSystemEnabled",
@@ -512,8 +514,16 @@ const STATIC: &[&str] = &[
     "C_ClickBindings.GetBindingType",
     "C_SplashScreen.CanViewSplashScreen",
     "C_TransmogOutfitInfo.IsTransmogEnabled",
-    // The account's outfits (Blizzard's spellbook counts them).
+    // The account's outfits (Blizzard's spellbook counts them), the one
+    // worn.
     "C_TransmogOutfitInfo.GetOutfitsInfo",
+    "C_TransmogOutfitInfo.GetActiveOutfitID",
+    // The account's mounts (their data and whether collected), the club
+    // avatars, the game messages' sounds.
+    "C_MountJournal.GetMountInfoByID",
+    "C_MountJournal.GetMountInfoExtraByID",
+    "C_Club.GetAvatarIdList",
+    "GetGameMessageInfo",
     "GetAllowRecentAlliesSeeLocation",
     "C_EditMode.GetEditModeDefaultLayout",
     "C_EditMode.GetAccountSettings",
@@ -632,6 +642,8 @@ const BASELINE: &[&str] = &[
     "C_TradeSkillUI.GetRecipeItemNameFilter",
     "C_TradeSkillUI.IsNPCCrafting",
     "C_TradeSkillUI.IsTradeSkillGuild",
+    "C_TradeSkillUI.IsTradeSkillGuildMember",
+    "C_TradeSkillUI.IsTradeSkillLinked",
     "C_Traits.GetConfigIDByTreeID",
     "C_TransmogCollection.GetLatestAppearance",
     "C_TransmogCollection.IsSearchInProgress",
@@ -1534,7 +1546,7 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
         // the engine's tests.
         if let Ok(checks) = state.get::<mlua::Table>("engineChecks") {
             let mut list = Vec::new();
-            for pair in checks.pairs::<String, mlua::String>() {
+            for pair in checks.pairs::<String, mlua::LuaString>() {
                 let (label, answer) = pair.map_err(|e| anyhow!("{e}"))?;
                 list.push((label, me.scrub(&escaped_bytes(&answer.as_bytes()))));
             }
@@ -2072,6 +2084,22 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
     Ok(())
 }
 
+/// A recorded answer as text: UTF-8 as it is, any other byte (a binary
+/// answer, `C_EncodingUtil.SerializeCBOR`'s) as `\xNN`.
+fn escaped_bytes(bytes: &[u8]) -> String {
+    if let Ok(s) = std::str::from_utf8(bytes) {
+        return s.to_string();
+    }
+    let mut out = String::new();
+    for chunk in bytes.utf8_chunks() {
+        out.push_str(chunk.valid());
+        for b in chunk.invalid() {
+            out.push_str(&format!("\\x{b:02x}"));
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -2176,20 +2204,4 @@ mod tests {
         let open = info.replace("string Tamsin", "string ");
         assert_eq!(scrub_earners("GetAchievementInfo(6)", &open), open);
     }
-}
-
-/// A recorded answer as text: UTF-8 as it is, any other byte (a binary
-/// answer, `C_EncodingUtil.SerializeCBOR`'s) as `\xNN`.
-fn escaped_bytes(bytes: &[u8]) -> String {
-    if let Ok(s) = std::str::from_utf8(bytes) {
-        return s.to_string();
-    }
-    let mut out = String::new();
-    for chunk in bytes.utf8_chunks() {
-        out.push_str(chunk.valid());
-        for b in chunk.invalid() {
-            out.push_str(&format!("\\x{b:02x}"));
-        }
-    }
-    out
 }

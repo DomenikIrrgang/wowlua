@@ -10,15 +10,17 @@
 //! or a bare value. A clause matches when it has no brackets or when all
 //! conditions of one of its bracket groups hold; the first match gives its
 //! value (trimmed) and the group's target (`@unit` or `target=unit`), or
-//! the target nil. No match gives nil. Conditions take a `no` prefix
+//! the target nil. No match gives nothing. Conditions take a `no` prefix
 //! (negation) and `:a/b` arguments (any of them). Unit conditions test the
 //! group's target, else `target`. Each condition asks what the engine
 //! answers for the client function that reports it (its behaviour by name,
 //! so recorded answers count), never the addons' globals. The conditions
 //! are those the compiler checks state drivers against (`wowlua-sema`'s
-//! `MACRO_CONDITIONS`); an unknown one is false. Unverified: all of it
-//! beyond the call shapes `secure_cmd_option_parse` names (no probe of the
-//! client's answers yet).
+//! `MACRO_CONDITIONS`), their names in lower case; an unknown one, a known
+//! one capitalized among them, holds. Recorded (`/stdtest engine answers`):
+//! `[combat] a` out of combat answers nothing, `[Combat] a; b` and
+//! `[frobnicate] a; b` "a", `[group:party] a; b` alone "b", targets by
+//! `@unit` and `target=unit`; the rest unverified.
 
 use std::rc::Rc;
 
@@ -141,9 +143,10 @@ fn group_holds(vm: &mut Vm, group: &[u8]) -> Option<Option<Vec<u8>>> {
 /// One condition (`nocombat`, `mod:shift/ctrl`), testing `unit`.
 fn condition_holds(vm: &mut Vm, c: &[u8], unit: &[u8]) -> bool {
     let text = String::from_utf8_lossy(c).into_owned();
+    // The name as written: "Combat" is no condition (recorded).
     let (name, args) = match text.split_once(':') {
-        Some((n, a)) => (n.trim().to_ascii_lowercase(), Some(a.to_string())),
-        None => (text.trim().to_ascii_lowercase(), None),
+        Some((n, a)) => (n.trim().to_string(), Some(a.to_string())),
+        None => (text.trim().to_string(), None),
     };
     let args: Vec<String> = args
         .map(|a| a.split('/').map(|s| s.trim().to_string()).collect())
@@ -157,8 +160,8 @@ fn condition_holds(vm: &mut Vm, c: &[u8], unit: &[u8]) -> bool {
     {
         return !holds;
     }
-    // Unknown: false (unverified).
-    false
+    // Unknown: it holds (recorded: `[frobnicate] a; b` is "a").
+    true
 }
 
 /// The arguments' numbers.
@@ -320,16 +323,16 @@ fn modifier_held(vm: &mut Vm, key: &str) -> bool {
 }
 
 /// `SecureCmdOptionParse(options)`: the first matching clause's value and
-/// target, or nil. Evidence for the shape: `SlashCommands.lua` tests the
-/// answer for an empty message (`/stopcasting` with no options must act:
-/// an empty string answers "", not nil) and reads `action, target`;
-/// `SecureStateDriver.lua` sets the answer as an attribute. A number is
-/// read as its text; anything else answers nil (unverified).
+/// target (nil without one), or nothing when no clause matches. Recorded:
+/// an empty string answers "" and nil (`SlashCommands.lua`'s
+/// `/stopcasting` with no options must act), a number is read as its
+/// text, nil errors with the usage; anything else errors as nil does
+/// (unverified).
 fn secure_cmd_option_parse(vm: &mut Vm, c: NativeCall) -> Ret {
     let options = match vm.hidden(c.arg(1)) {
         Value::Str(s) => vm.str_bytes(s).to_vec(),
         Value::Num(n) => wowlua_vm::number::fmt_num(n).into_bytes(),
-        _ => return Ok(vec![Value::Nil]),
+        _ => return Err(vm.error("Usage: SecureCmdOptionParse(\"options\")")),
     };
     Ok(match parse(vm, &options) {
         Some((value, target)) => {
@@ -340,7 +343,7 @@ fn secure_cmd_option_parse(vm: &mut Vm, c: NativeCall) -> Ret {
             };
             vec![value, target]
         }
-        None => vec![Value::Nil],
+        None => vec![],
     })
 }
 

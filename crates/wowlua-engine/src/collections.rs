@@ -549,55 +549,39 @@ fn mount_is_favorite(_vm: &mut Vm, _c: NativeCall) -> Ret {
 // ---------------------------------------------------------------------------
 // Titles.
 
-/// The PvP ranks' titles, IDs 1 to 28 (warcraft.wiki.gg: `GetTitleName(2)`
-/// is "Corporal ", a trailing space for a title before the name;
-/// unverified on Forever).
-const PVP_TITLES: [&str; 28] = [
-    "Private",
-    "Corporal",
-    "Sergeant",
-    "Master Sergeant",
-    "Sergeant Major",
-    "Knight",
-    "Knight-Lieutenant",
-    "Knight-Captain",
-    "Knight-Champion",
-    "Lieutenant Commander",
-    "Commander",
-    "Marshal",
-    "Field Marshal",
-    "Grand Marshal",
-    "Scout",
-    "Grunt",
-    "Sergeant",
-    "Senior Sergeant",
-    "First Sergeant",
-    "Stone Guard",
-    "Blood Guard",
-    "Legionnaire",
-    "Centurion",
-    "Champion",
-    "Lieutenant General",
-    "General",
-    "Warlord",
-    "High Warlord",
-];
-
-/// `GetNumTitles()`: 111 (recorded).
-fn get_num_titles(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(111.0)])
+/// The client's titles by ID (`data/camelot-titles.txt`, recorded: the
+/// PvP ranks' and the others' names, a trailing space for a title before
+/// the name; an empty name where the client has none).
+fn title_names() -> &'static [&'static str] {
+    static NAMES: std::sync::OnceLock<Vec<&'static str>> = std::sync::OnceLock::new();
+    NAMES.get_or_init(|| {
+        include_str!("../data/camelot-titles.txt")
+            .lines()
+            .filter(|l| !l.starts_with('#'))
+            .filter_map(|l| l.split_once('\t'))
+            .map(|(_, name)| name)
+            .collect()
+    })
 }
 
-/// `GetTitleName(titleMaskID)`: as recorded, else a PvP rank's, else
-/// nothing, noted (the client's other titles are not recorded).
+/// `GetNumTitles()`: 111 (recorded), the titles listed.
+fn get_num_titles(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(title_names().len() as f64)])
+}
+
+/// `GetTitleName(titleMaskID)`: as recorded, else the title's name and
+/// true for a title (warcraft.wiki.gg's `playerTitle`; unverified), an
+/// empty name and false for an ID without one (the name recorded empty;
+/// unverified: the second value); past the list nothing, noted.
 fn get_title_name(vm: &mut Vm, c: NativeCall) -> Ret {
     if let Some(v) = crate::recorded::lookup(vm, "GetTitleName", &c) {
         return Ok(v);
     }
     let id = num(vm, &c, 1).unwrap_or(0.0) as i64;
-    if (1..=PVP_TITLES.len() as i64).contains(&id) {
-        let name = format!("{} ", PVP_TITLES[(id - 1) as usize]);
-        return Ok(vec![vm.str(&name), Value::Bool(true)]);
+    let names = title_names();
+    if (1..=names.len() as i64).contains(&id) {
+        let name = names[(id - 1) as usize];
+        return Ok(vec![vm.str(name), Value::Bool(!name.is_empty())]);
     }
     crate::note_default(vm, "GetTitleName", &c, 1);
     Ok(vec![])
@@ -1480,13 +1464,18 @@ fn lookup(vm: &mut Vm, call: &str) -> Option<Vec<Value>> {
 
 /// A statistic's value as the client shows it: a statistic of one
 /// criterion its quantity's text; of several, their quantities' sum; "--"
-/// for none (the criteria recorded; unverified: the sum).
+/// for none (the criteria recorded; unverified: the sum); empty for an ID
+/// without criteria, no statistic (recorded: `GetStatistic(122)`, a
+/// category's ID, is "").
 fn statistic_value(vm: &mut Vm, id: i64) -> String {
     let n = num_of(first(lookup(
         vm,
         &format!("GetAchievementNumCriteria({id})"),
     )))
     .unwrap_or(0.0) as i64;
+    if n == 0 {
+        return String::new();
+    }
     let mut sum = 0.0;
     let mut single = None;
     for i in 1..=n {
@@ -1635,11 +1624,10 @@ fn tracking_not_navigable(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(2.0), Value::Bool(false)])
 }
 
-/// `C_TransmogSets.GetCameraIDs()`: 0, 0, the documented numbers' empty
-/// values Blizzard's wardrobe read before (it asks the camera of what it
-/// gets; unverified: the client's IDs were not recorded).
+/// `C_TransmogSets.GetCameraIDs()`: 1019 and 1044 (recorded; Blizzard's
+/// wardrobe asks the camera of what it gets).
 fn get_camera_ids(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(0.0), Value::Num(0.0)])
+    Ok(vec![Value::Num(1019.0), Value::Num(1044.0)])
 }
 
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {

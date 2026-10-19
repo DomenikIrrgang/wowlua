@@ -312,10 +312,10 @@ fn get_guild_faction_group(vm: &mut Vm, _c: NativeCall) -> Ret {
     })])
 }
 
-/// `GetGuildCharterCost()`: 10 silver (warcraft.wiki.gg's classic price;
-/// unverified).
+/// `GetGuildCharterCost()`: 0 away from a guild registrar (recorded;
+/// unverified: the price at one, warcraft.wiki.gg's 10 silver).
 fn get_guild_charter_cost(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(1000.0)])
+    Ok(vec![Value::Num(0.0)])
 }
 
 // ---------------------------------------------------------------- Battle.net
@@ -547,6 +547,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_GuildInfo.CanSpeakInGuildChat", guild_member),
         ("GetGuildFactionGroup", get_guild_faction_group),
         ("GetGuildCharterCost", get_guild_charter_cost),
+        // Recorded true.
+        ("C_BattleNet.AreTitleFriendsEnabled", yes),
         // ------------------------------------------------ Battle.net
         ("BNGetInfo", bn_get_info),
         (
@@ -765,7 +767,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         "BNIsBlocked",
         "BNIsSelf",
         "C_BattleNet.SendWhisper",
-        "C_BattleNet.AreTitleFriendsEnabled",
         "C_ClubFinder.DoesPlayerBelongToClubFromClubGUID",
         "C_ClubFinder.IsPostingBanned",
         "C_ClubFinder.HasAlreadyAppliedToLinkedPosting",

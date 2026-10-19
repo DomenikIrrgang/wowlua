@@ -469,8 +469,11 @@ struct Breakpoint {
     fraction: f64,
 }
 
-/// The enUS text of the abbreviation globals where they are not defined
-/// (as `formatters::abbreviated_format`).
+/// An abbreviation's text: the global string it names (the enUS text of
+/// the abbreviation globals where they are not defined, as
+/// `formatters::abbreviated_format`), empty for a name that is no global
+/// string (recorded: "K" abbreviates 1234 to "1.2"); the raw text with
+/// `abbreviationIsGlobal` false.
 fn abbreviation_text(vm: &mut Vm, name: &str, global: bool) -> String {
     if !global {
         return name.to_string();
@@ -480,7 +483,7 @@ fn abbreviation_text(vm: &mut Vm, name: &str, global: bool) -> String {
         "SECOND_NUMBER_CAP_NO_SPACE" => "M",
         "THIRD_NUMBER_CAP_NO_SPACE" => "B",
         "FOURTH_NUMBER_CAP_NO_SPACE" => "T",
-        other => other,
+        _ => "",
     };
     global_text(vm, name, fallback)
 }

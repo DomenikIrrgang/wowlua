@@ -373,11 +373,13 @@ fn get_item_quality_color(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(out)
 }
 
-/// `GetItemLevelColor()`: the character sheet's item level color; white
-/// (unverified: the wiki gives no rule; a probe of the client's answer
-/// wanted).
+/// `GetItemLevelColor()`: the character sheet's item level color, the
+/// epic quality's #a335ee as the client's floats, each channel times a
+/// float 1/255 (recorded for a level 21 character in greens and blues,
+/// 0.20784315466881 for 53; unverified: whether it ever changes).
 fn get_item_level_color(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(rgb([1.0, 1.0, 1.0]))
+    let channel = |v: u8| f64::from(f32::from(v) * (1.0f32 / 255.0));
+    Ok(rgb([channel(163), channel(53), channel(238)]))
 }
 
 /// `C_Item.GetItemSpell(item)`: the item's use spell (its data's `spell`,

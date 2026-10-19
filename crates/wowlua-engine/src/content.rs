@@ -137,148 +137,48 @@ fn truthy(v: Value) -> bool {
 
 // ------------------------------------------------------- the difficulties
 
-/// A difficulty: its ID, name, instance kind, heroic, challenge mode,
-/// shown as heroic, shown as mythic, the difficulty it toggles to, LFR,
-/// the fewest and most players.
+/// A difficulty: its ID, name, instance kind, its heroic flag, the fewest
+/// and most players.
 struct Difficulty {
     id: f64,
     name: &'static str,
     kind: &'static str,
     heroic: bool,
-    challenge: bool,
-    display_heroic: bool,
-    display_mythic: bool,
-    toggle: Option<f64>,
-    lfr: bool,
-    min: Option<f64>,
-    max: Option<f64>,
+    min: f64,
+    max: f64,
 }
 
-const fn d(
-    id: f64,
-    name: &'static str,
-    kind: &'static str,
-    heroic: bool,
-    toggle: Option<f64>,
-    min: Option<f64>,
-    max: Option<f64>,
-) -> Difficulty {
-    Difficulty {
-        id,
-        name,
-        kind,
-        heroic,
-        challenge: false,
-        display_heroic: false,
-        display_mythic: false,
-        toggle,
-        lfr: false,
-        min,
-        max,
-    }
-}
-
-/// The difficulties warcraft.wiki.gg's `DifficultyID` lists for Classic
-/// (1 to 6, 9, 148, 173 to 176) and the main ones of the retail client
-/// whose UI camelot's is built on (unverified on the client: its
-/// difficulty table was not recorded; the sizes are the names', the
-/// flexible raids' 10 to 30).
+/// The difficulties the client has (`/stdtest engine answers`: 1, 9 and
+/// 148 answered; 2, 3, 4, 173 to 176 and 9999 nothing, so the retail and
+/// later classic IDs warcraft.wiki.gg lists are not this client's). Its
+/// raids are flagged heroic, as recorded; none challenge mode, shown as
+/// heroic or mythic, toggling or LFR. Unverified: IDs not asked (5 to 8,
+/// 14 and up but 148), which are taken to be missing as well.
 const DIFFICULTIES: &[Difficulty] = &[
-    d(1.0, "Normal", "party", false, None, None, Some(5.0)),
-    d(2.0, "Heroic", "party", true, None, None, Some(5.0)),
-    d(3.0, "10 Player", "raid", false, Some(5.0), None, Some(10.0)),
-    d(4.0, "25 Player", "raid", false, Some(6.0), None, Some(25.0)),
-    d(
-        5.0,
-        "10 Player (Heroic)",
-        "raid",
-        true,
-        Some(3.0),
-        None,
-        Some(10.0),
-    ),
-    d(
-        6.0,
-        "25 Player (Heroic)",
-        "raid",
-        true,
-        Some(4.0),
-        None,
-        Some(25.0),
-    ),
     Difficulty {
-        lfr: true,
-        ..d(
-            7.0,
-            "Looking For Raid",
-            "raid",
-            false,
-            None,
-            None,
-            Some(25.0),
-        )
+        id: 1.0,
+        name: "Normal",
+        kind: "party",
+        heroic: false,
+        min: 5.0,
+        max: 5.0,
     },
     Difficulty {
-        challenge: true,
-        ..d(8.0, "Mythic Keystone", "party", true, None, None, Some(5.0))
-    },
-    d(9.0, "40 Player", "raid", false, None, None, Some(40.0)),
-    d(14.0, "Normal", "raid", false, None, Some(10.0), Some(30.0)),
-    Difficulty {
-        display_heroic: true,
-        ..d(15.0, "Heroic", "raid", false, None, Some(10.0), Some(30.0))
+        id: 9.0,
+        name: "40 Player",
+        kind: "raid",
+        heroic: true,
+        min: 40.0,
+        max: 40.0,
     },
     Difficulty {
-        display_mythic: true,
-        ..d(16.0, "Mythic", "raid", true, None, Some(20.0), Some(20.0))
+        id: 148.0,
+        name: "20 Player",
+        kind: "raid",
+        heroic: true,
+        min: 20.0,
+        max: 20.0,
     },
-    Difficulty {
-        lfr: true,
-        ..d(
-            17.0,
-            "Looking For Raid",
-            "raid",
-            false,
-            None,
-            Some(10.0),
-            Some(30.0),
-        )
-    },
-    Difficulty {
-        display_mythic: true,
-        ..d(23.0, "Mythic", "party", true, None, None, Some(5.0))
-    },
-    d(24.0, "Timewalking", "party", false, None, None, Some(5.0)),
-    d(
-        33.0,
-        "Timewalking",
-        "raid",
-        false,
-        None,
-        Some(10.0),
-        Some(30.0),
-    ),
-    d(148.0, "20 Player", "raid", false, None, None, Some(20.0)),
-    d(173.0, "Normal", "party", false, None, None, Some(5.0)),
-    d(174.0, "Heroic", "party", true, None, None, Some(5.0)),
-    d(
-        175.0,
-        "10 Player",
-        "raid",
-        false,
-        Some(5.0),
-        None,
-        Some(10.0),
-    ),
-    d(
-        176.0,
-        "25 Player",
-        "raid",
-        false,
-        Some(6.0),
-        None,
-        Some(25.0),
-    ),
 ];
 
 fn difficulty(id: f64) -> Option<&'static Difficulty> {
@@ -286,26 +186,25 @@ fn difficulty(id: f64) -> Option<&'static Difficulty> {
 }
 
 /// `GetDifficultyInfo(difficultyID)`: the difficulty's name, instance
-/// kind, flags, toggle, sizes; none selectable (camelot's UI asks
-/// `HasAnyUserSelectableDifficulties` with it; it was given false so far);
-/// an unknown difficulty nothing (warcraft.wiki.gg; unverified).
+/// kind, flags, toggle (none), LFR, sizes and whether any is selectable
+/// by the user (false: camelot's UI asks `HasAnyUserSelectableDifficulties`
+/// with it); an unknown difficulty nothing (recorded, above).
 fn get_difficulty_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let id = vm.check_number(&c, 1)?;
     let Some(d) = difficulty(id) else {
         return Ok(vec![]);
     };
-    let opt = |v: Option<f64>| v.map(Value::Num).unwrap_or(Value::Nil);
     Ok(vec![
         vm.str(d.name),
         vm.str(d.kind),
         Value::Bool(d.heroic),
-        Value::Bool(d.challenge),
-        Value::Bool(d.display_heroic),
-        Value::Bool(d.display_mythic),
-        opt(d.toggle),
-        Value::Bool(d.lfr),
-        opt(d.min),
-        opt(d.max),
+        Value::Bool(false),
+        Value::Bool(false),
+        Value::Bool(false),
+        Value::Nil,
+        Value::Bool(false),
+        Value::Num(d.min),
+        Value::Num(d.max),
         Value::Bool(false),
     ])
 }
@@ -358,10 +257,10 @@ pub fn set_legacy_raid_difficulty(vm: &mut Vm, id: f64) {
     set_state(vm, "legacyRaidDifficulty", Value::Num(id));
 }
 
-/// `GetLegacyRaidDifficultyID()`: the legacy raid difficulty chosen, 10
-/// player (3) until changed (warcraft.wiki.gg's default; unverified).
+/// `GetLegacyRaidDifficultyID()`: the legacy raid difficulty chosen, none
+/// (0) until changed (recorded at load: 0).
 fn get_legacy_raid_difficulty_id(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(state_num(vm, "legacyRaidDifficulty", 3.0))])
+    Ok(vec![Value::Num(state_num(vm, "legacyRaidDifficulty", 0.0))])
 }
 
 /// `C_RaidLocks.GetRedirectedDifficultyID(mapID, difficultyID)`: the
@@ -378,12 +277,11 @@ fn get_base_difficulty_id(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Num(id)])
 }
 
-/// `CanShowResetInstances()`: outside an instance, alone or leading
-/// (warcraft.wiki.gg; unverified).
-fn can_show_reset_instances(vm: &mut Vm, _c: NativeCall) -> Ret {
-    let inside = engine(vm).world.encounters.instance.is_some();
-    let leading = !crate::party::grouped(vm) || engine(vm).world.party.leader;
-    Ok(vec![Value::Bool(!inside && leading)])
+/// `CanShowResetInstances()`: false, no instance run to reset (recorded
+/// alone outside an instance; the engine keeps no instances run, so the
+/// answer after one, alone or leading, is unverified).
+fn can_show_reset_instances(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(false)])
 }
 
 // ------------------------------------------------------------ the party
@@ -625,10 +523,22 @@ fn get_personal_rated_info(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(out)
 }
 
-/// `GetWorldPVPQueueStatus(index)`: no queue (`"none"`), no map, no queue
-/// ID (warcraft.wiki.gg's results).
+/// `GetWorldPVPQueueStatus(index)`: no queue: status `"none"`, no map,
+/// queue ID, expire time and average wait 0, the queued time, not
+/// suspended (recorded for 1 and 2: seven values, the sixth 195499355,
+/// read here as the client's clock in milliseconds as Blizzard's
+/// `QueueStatusFrame.lua` names it `queuedTime`; unverified).
 fn get_world_pvp_queue_status(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![vm.str("none"), Value::Nil, Value::Num(0.0)])
+    let queued = (crate::clock::now(vm) * 1000.0).floor();
+    Ok(vec![
+        vm.str("none"),
+        Value::Nil,
+        Value::Num(0.0),
+        Value::Num(0.0),
+        Value::Num(0.0),
+        Value::Num(queued),
+        Value::Bool(false),
+    ])
 }
 
 // ----------------------------------------------- challenge mode colours
@@ -917,7 +827,6 @@ const NOTHING_HERE: &[(&str, NativeFn)] = &[
     ("C_LFGInfo.IsInLFGFollowerDungeon", no),
     ("C_PvP.IsSoloShuffle", no),
     ("C_WeeklyRewards.CanClaimRewards", no),
-    ("C_PartyInfo.IsRaidListEnabled", no),
     ("C_PvP.IsRatedArena", no),
     ("C_PvP.IsRatedBattleground", no),
     ("C_PvP.IsRatedSoloShuffle", no),

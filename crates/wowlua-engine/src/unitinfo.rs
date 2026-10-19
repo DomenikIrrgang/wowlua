@@ -179,7 +179,11 @@ fn no_with_reason(vm: &mut Vm, _c: NativeCall) -> Ret {
 /// `UnitSelectionType(unit [, useExtendedColors])`: a player 4 (5 with
 /// extended colors), a creature by its reaction (hostile 0, neutral 2,
 /// friendly 3), as `UnitSelectionColor` colors it; no unit 4 or 5
-/// (warcraft.wiki.gg's values; unverified on the client).
+/// (warcraft.wiki.gg's values). Recorded (the user's manual probe,
+/// 2026-10-19): the player 4, as "player" and targeted; hostile mobs 0
+/// at the player's level, green and grey; a neutral grey mob 2: by the
+/// reaction alone, not the level. Unverified: friendly creatures,
+/// extended colors.
 fn unit_selection_type(vm: &mut Vm, c: NativeCall) -> Ret {
     let extended = vm.hidden(c.arg(2)).truthy();
     let player_type = if extended { 5.0 } else { 4.0 };
@@ -303,7 +307,11 @@ fn unit_quest_trivial_level_range(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `RelativeContentDifficulty` of its level against the player's, as
 /// Blizzard's `DifficultyUtil.GetRelativeDifficultyColor` colors it
 /// (5 above impossible, 3 above difficult, down to 4 below fair, within
-/// the trivial range easy, below trivial).
+/// the trivial range easy, below trivial). Recorded (the user's manual
+/// probe, 2026-10-19): a mob at the player's level 2 (fair), a green one
+/// below it 1 (easy), grey ones far below 0 (trivial), neutral or
+/// hostile alike: by the level alone. The difficult and impossible bands
+/// unverified.
 fn content_difficulty_creature(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(id) = units::unit_arg(vm, &c, 1) else {
         return Ok(vec![Value::Num(2.0)]);
@@ -475,10 +483,9 @@ fn get_player_facing(vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// `GetRaidDifficultyID()`: the one `SetRaidDifficultyID` chose
-/// (`content`), else classic's 40-player raid, 9 (unverified: the
-/// dungeon's was recorded 1, Normal; the raid's not asked).
+/// (`content`), else none, 0 (recorded at load; the dungeon's is 1).
 fn get_raid_difficulty_id(vm: &mut Vm, _c: NativeCall) -> Ret {
-    let id = crate::content::raid_difficulty(vm).unwrap_or(9.0);
+    let id = crate::content::raid_difficulty(vm).unwrap_or(0.0);
     Ok(vec![Value::Num(id)])
 }
 
@@ -535,14 +542,14 @@ fn unit_leads_any_group(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(leads)])
 }
 
-/// `Enum.LFGRole` of a role's name; none 3, past the enumeration
-/// (unverified: the documentation makes the result non-nilable).
+/// `Enum.LFGRole` of a role's name; none -1 (recorded for the player
+/// alone: -1).
 fn role_enum(role: Option<&str>) -> f64 {
     match role {
         Some("TANK") => 0.0,
         Some("HEALER") => 1.0,
         Some("DAMAGER") => 2.0,
-        _ => 3.0,
+        _ => -1.0,
     }
 }
 
@@ -1028,11 +1035,11 @@ fn raid_profile_options(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Table(vm.new_table())])
 }
 
-/// `C_NamePlate.GetNamePlateSize()`: the base nameplate's 110 by 45
-/// (unverified: Blizzard's mainline defaults; `SetNamePlateSize` is not
-/// kept).
+/// `C_NamePlate.GetNamePlateSize()`: 237.5 by 85 (recorded with the
+/// character's settings; unverified: how the nameplate CVars change it,
+/// `SetNamePlateSize` is not kept).
 fn get_name_plate_size(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(110.0), Value::Num(45.0)])
+    Ok(vec![Value::Num(237.5), Value::Num(85.0)])
 }
 
 /// `C_PlayerInfo.IsDisplayRaceNative()`, `CanUseItem(itemID)` and the

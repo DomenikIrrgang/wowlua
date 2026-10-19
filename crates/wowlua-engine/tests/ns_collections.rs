@@ -38,10 +38,11 @@ return #C_MountJournal.GetMountIDs(), source.itemID, source.visualID,
     C_TransmogCollection.GetSourceItemID(21598), statID, GetNumTitles(), GetCurrentTitle(),
     HasCompletedAnyAchievement(), PlayerHasToy(1), pcall(C_ToyBox.GetToyInfo)",
     );
+    // The two mounts whose info was recorded are listed.
     assert_eq!(
         &r[..9],
         [
-            "0", "44803", "11257", "44803", "60", "111", "-1", "true", "false"
+            "2", "44803", "11257", "44803", "60", "111", "-1", "true", "false"
         ]
     );
     assert_eq!(r[9], "false");

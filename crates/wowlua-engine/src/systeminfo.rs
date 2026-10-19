@@ -862,11 +862,12 @@ fn is_binding_context_active(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(get_state(vm, &k).truthy())])
 }
 
-/// `C_KeyBindings.GetTurnStrafeStyle()`: as set, modern (0) at first
-/// (`Enum.TurnStrafeStyle`; unverified).
+/// `C_KeyBindings.GetTurnStrafeStyle()`: as set, else 2 (recorded with
+/// the character's settings; `Enum.TurnStrafeStyle` documents 0 and 1
+/// only, unverified what 2 is).
 fn get_turn_strafe_style(vm: &mut Vm, _c: NativeCall) -> Ret {
     let v = get_state(vm, "turnStrafeStyle");
-    Ok(vec![if v.is_nil() { Value::Num(0.0) } else { v }])
+    Ok(vec![if v.is_nil() { Value::Num(2.0) } else { v }])
 }
 
 fn set_turn_strafe_style(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -1447,9 +1448,10 @@ fn is_class_allowed_for_game_mode(vm: &mut Vm, c: NativeCall) -> Ret {
 // ------------------------------------------------------------ minimap
 
 /// `C_Minimap.GetViewRadius()`: the outdoor radius at zoom 0, 233 1/3
-/// yards (unverified: zoom levels, indoors).
+/// yards as a C float (recorded 233.33332824707; unverified: zoom levels,
+/// indoors).
 fn get_view_radius(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(700.0 / 3.0)])
+    Ok(vec![Value::Num(f64::from(700.0f32 / 3.0))])
 }
 
 /// `C_Minimap.GetUiMapID()`: the map the player is on
@@ -1468,11 +1470,51 @@ fn get_minimap_ui_map_id(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![r.first().copied().unwrap_or_default()])
 }
 
-/// `C_Minimap.GetTrackingInfo(index)`: none (the engine lists no tracking
-/// types; noted as unanswered).
+/// The minimap's tracking types: name and type (`data/camelot-tracking.txt`,
+/// as the recording's character had them: its tracking spells first,
+/// then the townsfolk and others).
+fn tracking_types() -> &'static [(&'static str, &'static str)] {
+    static TYPES: std::sync::OnceLock<Vec<(&'static str, &'static str)>> =
+        std::sync::OnceLock::new();
+    TYPES.get_or_init(|| {
+        include_str!("../data/camelot-tracking.txt")
+            .lines()
+            .filter(|l| !l.starts_with('#'))
+            .filter_map(|l| l.split_once('\t'))
+            .collect()
+    })
+}
+
+/// `C_Minimap.GetNumTrackingTypes()`: the tracking types listed (recorded
+/// 25 for a paladin with mining; unverified: other classes' and
+/// professions' spells).
+fn get_num_tracking_types(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(tracking_types().len() as f64)])
+}
+
+/// `C_Minimap.GetTrackingInfo(index)`: the type's name and kind as
+/// recorded; its texture, state, subtype and spell are not (no texture,
+/// inactive, subtype 0, no spell: unverified); nil past the list.
 fn get_tracking_info(vm: &mut Vm, c: NativeCall) -> Ret {
-    crate::note_default(vm, "C_Minimap.GetTrackingInfo", &c, 1);
-    Ok(vec![Value::Nil])
+    let i = num(vm, c.arg(1)).unwrap_or(0.0);
+    let types = tracking_types();
+    if i < 1.0 || i > types.len() as f64 {
+        return Ok(vec![Value::Nil]);
+    }
+    let (name, kind) = types[i as usize - 1];
+    let t = vm.new_table();
+    let fields = [
+        ("name", vm.str(name)),
+        ("texture", Value::Num(0.0)),
+        ("active", Value::Bool(false)),
+        ("type", vm.str(kind)),
+        ("subType", Value::Num(0.0)),
+    ];
+    for (k, v) in fields {
+        let k = vm.str(k);
+        let _ = vm.heap.table_mut(t).set(k, v);
+    }
+    Ok(vec![Value::Table(t)])
 }
 
 fn draw_ground_textures(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -1946,8 +1988,9 @@ fn cbor_head(major: u8, n: u64, out: &mut Vec<u8>) {
 }
 
 /// A Lua value as CBOR: integers as integers, other numbers as doubles,
-/// strings as text (bytes when not UTF-8), lists as arrays, other tables
-/// as maps (unverified: the client's float widths, an empty table's kind).
+/// strings as text (bytes when not UTF-8), lists as arrays (an empty
+/// table one too: recorded `\x80`), other tables as maps (unverified: the
+/// client's float widths).
 fn cbor_encode(
     vm: &Vm,
     v: Value,
@@ -1980,9 +2023,7 @@ fn cbor_encode(
             out.extend_from_slice(b);
         }
         Value::Table(t) => {
-            if let Some(n) = list_len(vm, t)
-                && n > 0
-            {
+            if let Some(n) = list_len(vm, t) {
                 cbor_head(4, n as u64, out);
                 for i in 1..=n {
                     let item = vm.heap.table(t).get(Value::Num(i as f64));
@@ -2160,19 +2201,34 @@ fn cbor_decode(vm: &mut Vm, d: &mut Cbor<'_>, depth: usize) -> Option<Value> {
     }
 }
 
-/// `C_EncodingUtil.DeserializeCBOR(source)`: the value, nil for bad
-/// input (unverified: the client may error).
+/// `C_EncodingUtil.DeserializeCBOR(source)`: the value; bad input errors
+/// as the client's C code does, with the taint of the addon code that
+/// called it (recorded for "zz": "attempted to deserialize an incomplete
+/// or ill-formed data item" and a "Lua Taint: *** ForceTaint_Strong ***"
+/// line, as `SetMinMaxValues`' error; unverified: trailing bytes after a
+/// whole item, accepted here).
 fn deserialize_cbor(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(src) = bytes_arg(vm, &c, 1) else {
         return Ok(vec![Value::Nil]);
     };
     let mut d = Cbor { b: &src, i: 0 };
-    Ok(vec![cbor_decode(vm, &mut d, 0).unwrap_or(Value::Nil)])
+    match cbor_decode(vm, &mut d, 0) {
+        Some(v) => Ok(vec![v]),
+        None => {
+            let mut msg =
+                String::from("attempted to deserialize an incomplete or ill-formed data item");
+            if !crate::protection::blizzard_caller(vm) {
+                msg.push_str("\nLua Taint: *** ForceTaint_Strong ***");
+            }
+            let v = vm.str(&msg);
+            Err(vm.raise(v))
+        }
+    }
 }
 
-/// A Lua value as JSON: lists as arrays, other tables as objects (keys as
-/// strings), integers without a fraction (unverified: an empty table's
-/// kind, the key order).
+/// A Lua value as JSON: lists as arrays (an empty table one too: recorded
+/// `[]`), other tables as objects (keys as strings), integers without a
+/// fraction (unverified: the key order).
 fn to_json(vm: &Vm, v: Value, depth: usize, lenient: bool) -> Result<serde_json::Value, String> {
     use serde_json::Value as J;
     if depth > 100 {
@@ -2189,9 +2245,7 @@ fn to_json(vm: &Vm, v: Value, depth: usize, lenient: bool) -> Result<serde_json:
         },
         Value::Str(s) => J::String(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
         Value::Table(t) => {
-            if let Some(n) = list_len(vm, t)
-                && n > 0
-            {
+            if let Some(n) = list_len(vm, t) {
                 let mut items = Vec::with_capacity(n);
                 for i in 1..=n {
                     let item = vm.heap.table(t).get(Value::Num(i as f64));
@@ -2616,7 +2670,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Minimap.GetViewRadius", get_view_radius),
         // Recorded 25 for the probed character; their infos were not
         // recorded, so the engine lists none (noted).
-        ("C_Minimap.GetNumTrackingTypes", zero),
+        ("C_Minimap.GetNumTrackingTypes", get_num_tracking_types),
         ("C_Minimap.GetTrackingInfo", get_tracking_info),
         ("C_Minimap.GetTrackingFilter", empty_table),
         ("C_Minimap.SetTracking", nothing),

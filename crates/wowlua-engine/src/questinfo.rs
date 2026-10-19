@@ -597,11 +597,10 @@ fn get_all_completed_quest_ids(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![list_of(vm, &ids)])
 }
 
-/// `C_QuestLog.GetMaxNumQuestsCanAccept()`: 20, the classic quest log's
-/// size (unverified on Forever; its `C_QuestLog.GetMaxNumQuests()` was
-/// recorded 175).
+/// `C_QuestLog.GetMaxNumQuestsCanAccept()`: 40 (recorded; its
+/// `C_QuestLog.GetMaxNumQuests()` was recorded 175).
 fn get_max_num_quests_can_accept(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(20.0)])
+    Ok(vec![Value::Num(40.0)])
 }
 
 /// `C_QuestLog.ShouldShowQuestRewards(questID)`: true (no quest hides its
