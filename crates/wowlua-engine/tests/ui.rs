@@ -225,6 +225,68 @@ return tostring(Box.loadSecure), tostring(plain.loadSecure), set, value, after,
     assert_eq!(run(&mut vm, "return tostring(Box.updateSecure)"), ["true"]);
 }
 
+/// A frame whose untrusted layout scripts are forbidden (ElvUI's aura
+/// containers inherit `DisableUntrustedLayoutScriptsTemplate`): an addon's
+/// `SetSize` hook does not see the secrets Blizzard's layout sizes it with
+/// (the user's client: no error from ElvUI's hook), but sees the addon's
+/// own sizes; its tainted `OnSizeChanged` does not run, a secure one does.
+#[test]
+fn forbidden_untrusted_layout_scripts() {
+    let interface = tree(
+        "aspects",
+        &[
+            (
+                "AddOns/Blizzard_Aspects/Blizzard_Aspects.toc",
+                "Layout.lua\nTemplates.xml\n",
+            ),
+            (
+                "AddOns/Blizzard_Aspects/Layout.lua",
+                "function LayoutIt(f) f:SetSize(secretwrap(30, 40)) end\nfunction SecureSized(f) f.secureSized = true end\n",
+            ),
+            (
+                "AddOns/Blizzard_Aspects/Templates.xml",
+                r#"<Ui>
+  <Frame name="DisableUntrustedLayoutScriptsTemplate" virtual="true">
+    <ForbiddenAspects><ForbiddenAspect aspect="UntrustedLayoutScriptExecution"/></ForbiddenAspects>
+  </Frame>
+</Ui>"#,
+            ),
+        ],
+    );
+    let mut vm = vm("camelot");
+    let report = wowlua_engine::ui::load(&mut vm, &interface, None);
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    run(
+        &mut vm,
+        "Kept = CreateFrame('Frame', nil, UIParent, 'DisableUntrustedLayoutScriptsTemplate')
+Plain = CreateFrame('Frame', nil, UIParent)
+local mover = CreateFrame('Frame', nil, UIParent)
+Seen, Errors = {}, {}
+seterrorhandler(function(e) Errors[#Errors + 1] = e end)
+for _, f in ipairs({ Kept, Plain }) do
+    f:SetPoint('CENTER')
+    hooksecurefunc(f, 'SetSize', function(self, w, h)
+        Seen[#Seen + 1] = self == Kept and 'kept' or 'plain'
+        mover:SetSize(w, h)
+    end)
+    f:SetScript('OnSizeChanged', function(self) Seen[#Seen + 1] = 'size' end)
+    f:HookScript('OnSizeChanged', SecureSized)
+end",
+    );
+    for name in ["Kept", "Plain"] {
+        let layout = vm.get_global("LayoutIt");
+        let frame = vm.get_global(name);
+        vm.call_from_engine(layout, &[frame]);
+    }
+    wowlua_engine::clock::advance_frames(&mut vm, 1, 16.0);
+    let r = run(
+        &mut vm,
+        "Kept:SetSize(1, 2)
+return table.concat(Seen, ','), #Errors, tostring(Kept.secureSized), tostring(Plain.secureSized)",
+    );
+    assert_eq!(r, ["plain,size,kept", "1", "true", "true"]);
+}
+
 /// The flavor's own UI code, if `cargo xtask types` fetched it: loads, and
 /// says how many errors remain.
 #[test]

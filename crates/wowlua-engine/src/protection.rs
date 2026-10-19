@@ -318,3 +318,67 @@ pub fn refusals_control(vm: &mut Vm, _c: NativeCall) -> Ret {
     }
     Ok(vec![Value::Table(out)])
 }
+
+// ---------------------------------------------------------- forbidden aspects
+
+/// `Enum.ForbiddenAspect` (camelot's `ForbiddenAspectConstantsDocumentation`).
+const ASPECTS: &[(&str, u32)] = &[
+    ("SetToDefaults", 1),
+    ("ScriptBindings", 2),
+    ("UntrustedScriptExecution", 4),
+    ("UntrustedLayoutScriptExecution", 8),
+    ("EventRegistrations", 16),
+    ("AlwaysPropagateInput", 32),
+    ("ScriptedInput", 64),
+    ("QueryFocus", 128),
+    ("ChangeAnimationTarget", 256),
+    ("RemoveSecretAspects", 512),
+    ("ChangeParent", 1024),
+    ("SetTexture", 2048),
+    ("QueryRotation", 4096),
+    ("QueryAnimationProgress", 8192),
+    ("AddAnimations", 16384),
+];
+
+/// "Restricts execution of layout scripts (eg. OnSizeChanged) for this
+/// object" (the documentation).
+pub const UNTRUSTED_LAYOUT_SCRIPTS: u32 = 8;
+
+/// A `<ForbiddenAspect aspect="…"/>`'s flag (none for an unknown name).
+pub fn aspect_flag(name: &str) -> u32 {
+    ASPECTS
+        .iter()
+        .find(|(n, _)| n.eq_ignore_ascii_case(name))
+        .map_or(0, |(_, f)| *f)
+}
+
+/// Adds forbidden aspects to a widget.
+pub fn add_aspects(vm: &mut Vm, id: WidgetId, flags: u32) {
+    engine_mut(vm).world.widgets[id.0].forbidden_aspects |= flags;
+}
+
+/// `AddForbiddenAspects(aspects)`: from secure code only. Blizzard's
+/// `ForbiddenAspectTemplates.xml`: "we don't allow ... tainted calls to
+/// AddForbiddenAspects on frames created by tainted code" (ElvUI's aura
+/// containers inherit `DisableUntrustedLayoutScriptsTemplate` for it).
+/// Unverified: a tainted call does nothing and raises no error (the user's
+/// client showed none for ElvUI's containers, whose `AddAuraGroup` calls
+/// it tainted); a tainted call on a secure frame's untested.
+pub fn add_forbidden_aspects(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    if tainted(vm) {
+        return Ok(vec![]);
+    }
+    if let Value::Num(n) = c.arg(2) {
+        add_aspects(vm, id, n as u32);
+    }
+    Ok(vec![])
+}
+
+/// Whether `v` is a widget whose untrusted layout scripts are forbidden
+/// (its own aspect; unverified and not kept: the documented propagation
+/// to its children and the frames anchored to it).
+pub fn untrusted_layout_forbidden(vm: &Vm, v: Value) -> bool {
+    widgets::widget_of(vm, v).is_some_and(|id| {
+        engine(vm).world.widgets[id.0].forbidden_aspects & UNTRUSTED_LAYOUT_SCRIPTS != 0
+    })
+}

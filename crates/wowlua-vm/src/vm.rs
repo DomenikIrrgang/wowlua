@@ -195,6 +195,10 @@ pub struct Vm {
     /// The host's state (the engine's, spec emulator §17.6), for its
     /// natives.
     pub host: Option<Box<dyn std::any::Any>>,
+    /// The host's answer to whether an object keeps secrets its layout
+    /// passes from untrusted code (`hooksecurefunc`'s hooks on it: the
+    /// engine's `UntrustedLayoutScriptExecution`).
+    pub untrusted_layout_forbidden: Option<fn(&Vm, Value) -> bool>,
     /// The running native may take secrets' values even while tainted
     /// (`tostring`, `string.format`, `strjoin`: their results are secret).
     pub(crate) secret_reveal: bool,
@@ -305,6 +309,7 @@ impl Vm {
                 .ok()
                 .filter(|v| !v.is_empty() && v != "0"),
             host: None,
+            untrusted_layout_forbidden: None,
             secret_reveal: false,
             cstack: Vec::new(),
             errfunc: None,
@@ -2494,6 +2499,32 @@ impl Vm {
             }
         }
         out
+    }
+
+    /// The addon a C error's "Lua Taint:" line names: none while execution
+    /// is secure, else the taint of the innermost Lua function (the code
+    /// that made the failing call) when it is tainted, else the execution's.
+    /// The user's client (build 70450, ElvUI): ElvUI's Minimap.lua calls
+    /// `FontString:SetText` with a string ElvUI_Libraries' `utf8sub` made,
+    /// after a C call (`SetTextColor`), under ElvUI_Libraries'
+    /// CallbackHandler; the execution's taint is then ElvUI_Libraries (a
+    /// read after a C call taints it, `luaD_precall` having cleared the
+    /// fixed taint), and the client names ElvUI. Unverified: one sample;
+    /// the client may instead keep the fixed taint across C calls.
+    pub fn error_taint(&self) -> Taint {
+        let stack = self.cur.taint.stack;
+        if stack.is_secure() {
+            return stack;
+        }
+        match self
+            .cur
+            .frames
+            .last()
+            .map(|f| self.heap.func(f.closure).taint())
+        {
+            Some(t) if !t.is_secure() => t,
+            _ => stack,
+        }
     }
 }
 

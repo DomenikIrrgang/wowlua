@@ -154,7 +154,7 @@ fn securecopy(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// An error of `securecopy`, with the running taint as the client adds it.
 fn copy_error(vm: &mut Vm, msg: &str) -> LuaError {
-    let taint = vm.taint().stack;
+    let taint = vm.error_taint();
     let mut text = format!("securecopy(): {msg}");
     if let Some(name) = vm.taint_name(taint) {
         text.push_str(&format!("\nLua Taint: {name}"));

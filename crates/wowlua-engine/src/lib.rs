@@ -350,6 +350,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         main_globals: vm.globals,
         secure_namespaces: Vec::new(),
     }));
+    vm.untrusted_layout_forbidden = Some(protection::untrusted_layout_forbidden);
     // Protected functions the documentation lacks.
     for &name in protection::PROTECTED {
         let (ns, short) = match name.split_once('.') {

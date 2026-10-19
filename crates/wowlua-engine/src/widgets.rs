@@ -77,6 +77,10 @@ pub struct Widget {
     /// Made by Blizzard's secure code (`UseSecureEnvironment`): addon code
     /// may not use it (WoW Forever's `StoreFrame`).
     pub forbidden: bool,
+    /// Its forbidden aspects (`Enum.ForbiddenAspect` flags) from its
+    /// templates' `<ForbiddenAspects>` and secure `AddForbiddenAspects`
+    /// calls (`crate::protection::forbidden_aspects`).
+    pub forbidden_aspects: u32,
     /// Has an intrinsic type's handlers (`intrinsic_key`).
     pub intrinsic_scripts: bool,
     pub points: Vec<Point>,
@@ -299,10 +303,10 @@ pub fn keep_as(vm: &mut Vm, name: &str, v: Value) {
 
 /// An error the client's C code raises: no position, and with `taint_line`
 /// a "Lua Taint: <addon>" line while execution is tainted (as recorded by
-/// `/stdtest engine`).
+/// `/stdtest engine`), naming `Vm::error_taint`'s addon.
 pub fn c_error(vm: &mut Vm, msg: &str, taint_line: bool) -> LuaError {
     let mut text = msg.to_string();
-    if taint_line && let Some(name) = vm.taint_name(vm.taint().stack) {
+    if taint_line && let Some(name) = vm.taint_name(vm.error_taint()) {
         text.push_str(&format!("\nLua Taint: {name}"));
     }
     let v = vm.str(&text);
@@ -574,6 +578,7 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         all_events: None,
         explicitly_protected: false,
         forbidden: false,
+        forbidden_aspects: 0,
         intrinsic_scripts: false,
         moving: false,
         sizing: false,
@@ -1163,6 +1168,15 @@ pub fn intrinsic_key(order: &str, script: &str) -> String {
 }
 
 pub fn run_script(vm: &mut Vm, id: WidgetId, script: &str, args: &[Value]) {
+    run_script_of(vm, id, script, args, false);
+}
+
+/// [`run_script`], with `trusted_only` only the secure handlers and hooks
+/// (an object's forbidden untrusted layout scripts).
+fn run_script_of(vm: &mut Vm, id: WidgetId, script: &str, args: &[Value], trusted_only: bool) {
+    let untrusted = |vm: &Vm, f: Value| {
+        trusted_only && matches!(f, Value::Func(r) if !vm.heap.func(r).taint().is_secure())
+    };
     let (table, scripts, hooks, props, has_intrinsic) = {
         let w = &engine(vm).world.widgets[id.0];
         (w.table, w.scripts, w.hooks, w.props, w.intrinsic_scripts)
@@ -1182,7 +1196,7 @@ pub fn run_script(vm: &mut Vm, id: WidgetId, script: &str, args: &[Value]) {
         vm.call_from_engine(pre, &call);
     }
     let f = vm.heap.table(scripts).get_str(key);
-    if !f.is_nil() {
+    if !f.is_nil() && !untrusted(vm, f) {
         vm.call_from_engine(f, &call);
     }
     let post = intrinsic(vm, "postcall");
@@ -1193,7 +1207,9 @@ pub fn run_script(vm: &mut Vm, id: WidgetId, script: &str, args: &[Value]) {
         let n = vm.heap.table(list).border();
         for k in 1..=n {
             let h = vm.heap.table(list).get(Value::Num(k as f64));
-            vm.call_from_engine(h, &call);
+            if !untrusted(vm, h) {
+                vm.call_from_engine(h, &call);
+            }
         }
     }
 }
@@ -2336,7 +2352,11 @@ pub fn run_size_changes(vm: &mut Vm) {
             continue;
         }
         let size = [Value::Num(w.width), Value::Num(w.height)];
-        run_script(vm, id, "OnSizeChanged", &size);
+        // An object whose untrusted layout scripts are forbidden runs only
+        // its secure ones (the documentation's `UntrustedLayoutScriptExecution`;
+        // unverified by a probe).
+        let trusted_only = w.forbidden_aspects & crate::protection::UNTRUSTED_LAYOUT_SCRIPTS != 0;
+        run_script_of(vm, id, "OnSizeChanged", &size, trusted_only);
     }
 }
 
