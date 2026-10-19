@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use crate::compiler;
 use crate::error::LuaError;
-use crate::function::{Function, LuaFunction, NativeCall, NativeFn, NativeFunction, Upval};
+use crate::function::{Args, Function, LuaFunction, NativeCall, NativeFn, NativeFunction, Upval};
 use crate::heap::{FuncRef, Heap, StrRef, TableRef, ThreadRef, UpvalRef};
 use crate::number::{fmt_num, str2num};
 use crate::proto::{ArithOp, Op, Proto, Rk};
@@ -238,6 +238,31 @@ impl Default for Vm {
     fn default() -> Self {
         Vm::new()
     }
+}
+
+/// A native call's arguments, their taints and their origins, in order
+/// (up to [`Args`]' size in one pass over the slots, in place).
+fn split_slots(slots: &[Slot]) -> (Args<Value>, Args<Taint>, Args<Origin>) {
+    const N: usize = 6;
+    if slots.len() > N {
+        return (
+            slots.iter().map(|s| s.v).collect(),
+            slots.iter().map(|s| s.t).collect(),
+            slots.iter().map(|s| s.o).collect(),
+        );
+    }
+    let mut v = [Value::Nil; N];
+    let mut t = [Taint::SECURE; N];
+    let mut o = [Origin::NONE; N];
+    for (i, s) in slots.iter().enumerate() {
+        (v[i], t[i], o[i]) = (s.v, s.t, s.o);
+    }
+    let n = slots.len();
+    (
+        Args::from_buf_and_len(v, n),
+        Args::from_buf_and_len(t, n),
+        Args::from_buf_and_len(o, n),
+    )
 }
 
 impl Vm {
@@ -494,7 +519,8 @@ impl Vm {
     /// A native's results as they are, taints included: sets
     /// [`result_taints`](Self::result_taints) and returns the values.
     pub fn return_slots(&mut self, slots: Vec<Slot>) -> Vec<Value> {
-        self.result_taints = slots.iter().map(|s| s.t).collect();
+        self.result_taints.clear();
+        self.result_taints.extend(slots.iter().map(|s| s.t));
         slots.into_iter().map(|s| s.v).collect()
     }
 
@@ -796,10 +822,8 @@ impl Vm {
             Function::Native(nf) => {
                 let (native, upvals, upval_taints) =
                     (nf.f, nf.upvals.clone(), nf.upval_taints.clone());
-                let slots = &self.cur.stack[func + 1..func + 1 + nargs];
-                let args = slots.iter().map(|s| s.v).collect();
-                let taints = slots.iter().map(|s| s.t).collect();
-                let origins = slots.iter().map(|s| s.o).collect();
+                let (args, taints, origins) =
+                    split_slots(&self.cur.stack[func + 1..func + 1 + nargs]);
                 // Nested calls from the native go above its arguments.
                 self.cur.top = func + 1 + nargs;
                 self.cstack.push(CEntry {
@@ -853,37 +877,31 @@ impl Vm {
                 } else {
                     self.cur.taint.origin
                 };
-                let results: Vec<Slot> = results
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, v)| Slot {
-                        v,
-                        t: taints.get(i).copied().unwrap_or(write),
-                        o: origin,
-                    })
-                    .collect();
-                self.place_results(func, &results, nresults);
+                // Into the caller's registers (`luaD_poscall`), each with
+                // its taint.
+                let n = if nresults < 0 {
+                    results.len()
+                } else {
+                    nresults as usize
+                };
+                self.ensure_stack(func + n + 1);
+                for i in 0..n {
+                    match results.get(i) {
+                        Some(&v) => {
+                            let t = taints.get(i).copied().unwrap_or(write);
+                            self.set_copy(func + i, Slot { v, t, o: origin });
+                        }
+                        None => self.set_fresh(func + i, Value::Nil),
+                    }
+                }
+                if nresults < 0 {
+                    self.cur.top = func + n;
+                }
+                // The buffer back, empty, for the next call's.
+                self.result_taints = taints;
+                self.result_taints.clear();
                 Ok(false)
             }
-        }
-    }
-
-    /// Moves results to the caller's registers (`luaD_poscall`).
-    fn place_results(&mut self, func: usize, results: &[Slot], nresults: i32) {
-        let n = if nresults < 0 {
-            results.len()
-        } else {
-            nresults as usize
-        };
-        self.ensure_stack(func + n + 1);
-        for i in 0..n {
-            match results.get(i) {
-                Some(&s) => self.set_copy(func + i, s),
-                None => self.set_fresh(func + i, Value::Nil),
-            }
-        }
-        if nresults < 0 {
-            self.cur.top = func + n;
         }
     }
 
@@ -1006,11 +1024,17 @@ impl Vm {
     }
 
     fn run(&mut self) -> Result<(), LuaError> {
+        // The running frame's prototype, kept from one frame to the next
+        // when it is the same function's (a recursion, a loop's calls).
+        let mut proto = self.cur.frames[self.cur.frames.len() - 1].proto.clone();
         'frame: loop {
             let fi = self.cur.frames.len() - 1;
-            let (closure, proto, base) = {
+            let (closure, base) = {
                 let f = &self.cur.frames[fi];
-                (f.closure, f.proto.clone(), f.base)
+                if !Rc::ptr_eq(&proto, &f.proto) {
+                    proto = f.proto.clone();
+                }
+                (f.closure, f.base)
             };
             // (Re)entering a Lua frame: its closure's taint taints the
             // execution and fixes it while the frame runs.
@@ -1024,9 +1048,10 @@ impl Vm {
                 None => None,
             };
             let k = &proto.constants[..];
+            let code = &proto.code[..];
             loop {
                 let pc = self.cur.frames[fi].pc;
-                let op = proto.code[pc];
+                let op = code[pc];
                 self.cur.frames[fi].pc = pc + 1;
                 if let Some(ci) = self.cov_frame
                     && let Some(c) = self.coverage.as_mut()

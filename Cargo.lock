@@ -2745,6 +2745,7 @@ dependencies = [
  "indexmap",
  "mlua",
  "rustc-hash",
+ "smallvec",
  "wowlua-span",
  "wowlua-syntax",
 ]

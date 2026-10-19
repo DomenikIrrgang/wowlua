@@ -13,6 +13,7 @@ wowlua-span.workspace = true
 wowlua-syntax.workspace = true
 indexmap.workspace = true
 rustc-hash.workspace = true
+smallvec.workspace = true
 
 [dev-dependencies]
 mlua.workspace = true

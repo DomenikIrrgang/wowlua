@@ -11,13 +11,17 @@ use crate::vm::Vm;
 /// A native function: receives its arguments, returns its results.
 pub type NativeFn = fn(&mut Vm, NativeCall) -> Result<Vec<Value>, LuaError>;
 
+/// A call's arguments (or their taints): kept in the call itself up to a
+/// few, as most calls have.
+pub type Args<T> = smallvec::SmallVec<[T; 6]>;
+
 /// One call of a native function.
 pub struct NativeCall {
-    pub args: Vec<Value>,
+    pub args: Args<Value>,
     /// The arguments' taints (their stack slots').
-    pub taints: Vec<crate::taint::Taint>,
+    pub taints: Args<crate::taint::Taint>,
     /// The arguments' taints' origins.
-    pub origins: Vec<crate::taint::Origin>,
+    pub origins: Args<crate::taint::Origin>,
     /// The native function's own upvalues (set when it was created).
     pub upvals: Rc<[Value]>,
     pub upval_taints: Rc<[crate::taint::Taint]>,
