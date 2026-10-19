@@ -24,8 +24,12 @@ fn empty_session(vm: &mut Vm) -> Value {
 }
 
 /// `GetCombatSessionFromType(sessionType, type)`,
-/// `GetCombatSessionFromID(sessionID, type)`.
+/// `GetCombatSessionFromID(sessionID, type)`. Secret in combat as
+/// documented, but a session without sources has nothing to hide: told
+/// plain, so its empty `combatSources` reads as empty (unverified; SuuUI,
+/// error-free in the client, takes the length of a session's sources).
 fn combat_session(vm: &mut Vm, _c: NativeCall) -> Ret {
+    crate::engine_mut(vm).plain_results = true;
     Ok(vec![empty_session(vm)])
 }
 
