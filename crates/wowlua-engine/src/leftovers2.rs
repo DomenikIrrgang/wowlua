@@ -848,15 +848,15 @@ fn get_glancing_blow_penalty(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `ResistancePercent(resistance, casterLevel)`: the share of damage the
-/// resistance resists against a caster of the level, in percent: 100 at
-/// five points a caster level, at most 75 (recorded: 150 against level 60
-/// is 50; unverified: whether the share is linear, as here, or
-/// `r / (r + 2.5 * level)`, which agrees at that point, and the cap).
+/// resistance resists against a caster of the level, in percent,
+/// `100 r / (r + 2.5 level)` as a single-precision float (recorded: 150
+/// against level 60 is 50; the user's probe: 300 against 60 is
+/// 66.66667175293, so not linear; unverified: a cap).
 fn resistance_percent(vm: &mut Vm, c: NativeCall) -> Ret {
     let resistance = arg_num(vm, &c, 1).unwrap_or(0.0).max(0.0);
     let level = arg_num(vm, &c, 2).unwrap_or(60.0).max(1.0);
-    let percent = (100.0 * resistance / (level * 5.0)).min(75.0);
-    Ok(vec![Value::Num(percent)])
+    let percent = 100.0 * resistance / (resistance + 2.5 * level);
+    Ok(vec![Value::Num(f64::from(percent as f32))])
 }
 
 /// `PlayerEffectiveAttackPower()`: the main hand's, off hand's and

@@ -402,18 +402,20 @@ fn get_area_info(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![vm.str("")])
 }
 
-/// `ClassicExpansionAtLeast(level)`: the classic expansion level (recorded
-/// `GetClassicExpansionLevel()`: 0) at least `level`.
+/// `ClassicExpansionAtLeast(level)`: true for every level (the user's
+/// probe: true for 0 to 4; LibDualSpec's note "ClassicExpansionAtLeast is
+/// always true in Forever"; unverified above 4).
 fn classic_expansion_at_least(vm: &mut Vm, c: NativeCall) -> Ret {
-    let level = vm.check_number(&c, 1)?;
-    Ok(vec![Value::Bool(0.0 >= level)])
+    vm.check_number(&c, 1)?;
+    Ok(vec![Value::Bool(true)])
 }
 
-/// `ClassicExpansionAtMost(level)`: the classic expansion level (recorded
-/// 0) at most `level`.
+/// `ClassicExpansionAtMost(level)`: false for every level (the user's
+/// probe: false for 0 to 4, so Forever takes LibDualSpec's own branch;
+/// unverified above 4).
 fn classic_expansion_at_most(vm: &mut Vm, c: NativeCall) -> Ret {
-    let level = vm.check_number(&c, 1)?;
-    Ok(vec![Value::Bool(0.0 <= level)])
+    vm.check_number(&c, 1)?;
+    Ok(vec![Value::Bool(false)])
 }
 
 /// `GetThreatStatusColor(status)`: grey, yellow, orange, red for 0 to 3,
