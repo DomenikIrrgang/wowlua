@@ -12,7 +12,7 @@ use wowlua_vm::{NativeCall, Value, Vm};
 
 use crate::engine;
 
-fn answers() -> &'static HashMap<&'static str, &'static str> {
+pub(crate) fn answers() -> &'static HashMap<&'static str, &'static str> {
     static ANSWERS: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
     ANSWERS.get_or_init(|| {
         include_str!("../data/camelot-answers.txt")
