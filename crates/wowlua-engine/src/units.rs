@@ -705,7 +705,7 @@ fn unit_race(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// A race's file name and ID (the client's races; the Undead's and the
 /// Skyborne's recorded, the others unverified).
-fn race_file_and_id(race: &str) -> (String, Option<f64>) {
+pub(crate) fn race_file_and_id(race: &str) -> (String, Option<f64>) {
     const RACES: &[(&str, &str, f64)] = &[
         ("Human", "Human", 1.0),
         ("Orc", "Orc", 2.0),
@@ -733,7 +733,7 @@ fn race_file_and_id(race: &str) -> (String, Option<f64>) {
 
 /// A race's name as the client shows it (a snapshot may give its file
 /// name: "Scourge" is "Undead"; one the list lacks, as given).
-fn race_name(race: &str) -> String {
+pub(crate) fn race_name(race: &str) -> String {
     const NAMES: &[(&str, &str)] = &[
         ("Scourge", "Undead"),
         ("NightElf", "Night Elf"),
