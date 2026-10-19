@@ -34,6 +34,7 @@ import traitsProbe from "/traits"
 import tradeSkillProbe from "/tradeskill"
 import achievementsProbe from "/achievements"
 import trainerProbe from "/trainer"
+import groupProbe from "/group"
 import armStartup from "/startup"
 import scenarioProbe from "/scenario"
 import say from "/harness"
@@ -1798,6 +1799,9 @@ export function engineProbe(arg: string?)
         return
     elseif words[1] == "trainer" then
         trainerProbe()
+        return
+    elseif words[1] == "group" then
+        groupProbe()
         return
     elseif words[1] == "startup" then
         armStartup()

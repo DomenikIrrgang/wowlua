@@ -252,10 +252,6 @@ fn mirror_timer_info(vm: &mut Vm, _c: NativeCall) -> Ret {
     ])
 }
 
-fn no_role(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![vm.str("NONE")])
-}
-
 fn zeros(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(0.0), Value::Num(0.0)])
 }
@@ -574,8 +570,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetGroupMemberCounts", group_member_counts),
         ("GetNetStats", net_stats),
         ("GetMirrorTimerInfo", mirror_timer_info),
-        // No group, no role.
-        ("UnitGroupRolesAssigned", no_role),
         // The probed character's (`loadCalls`); the neutral world's 0.
         ("GetMaxBattlefieldID", zero),
         ("GetNumLanguages", zero),

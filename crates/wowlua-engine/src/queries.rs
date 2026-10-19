@@ -416,7 +416,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("UnitGetIncomingHeals", incoming_heals),
         ("UnitGetTotalAbsorbs", no_absorbs),
         ("UnitGetTotalHealAbsorbs", no_absorbs),
-        ("UnitIsVisible", unit_exists),
         ("UnitIsInInteractRange", unit_exists),
         // Nothing of these for any unit yet (recorded for the player
         // alone and absent party members).

@@ -35,6 +35,7 @@ fn build() -> tempfile::TempDir {
         "tradeskill.wowlua",
         "achievements.wowlua",
         "trainer.wowlua",
+        "group.wowlua",
         "startup.wowlua",
         "scenario.wowlua",
         "snapshot.wowlua",
@@ -1840,5 +1841,123 @@ fn blizzard_ui_logs_in_with_tutorials_on() {
     assert!(
         matches!(loaded.first(), Some(Value::Bool(true))),
         "the new player experience loaded"
+    );
+}
+
+/// The recorded group answers: each label's (`party`, `raid`) calls and
+/// answers.
+fn group_fixture() -> BTreeMap<String, BTreeMap<String, String>> {
+    let mut out = BTreeMap::new();
+    for label in ["party", "raid"] {
+        let src = fs::read(repo().join(format!(
+            "crates/wowlua-engine/tests/client/forever-camelot-group-{label}.lua"
+        )))
+        .expect("the fixture");
+        let mut vm = Vm::new();
+        let f = vm.load(&src, "=fixture").expect("compiles");
+        let r = vm.call(f, &[]).expect("runs");
+        let Value::Table(t) = r[0] else {
+            panic!("a table")
+        };
+        let calls: BTreeMap<String, String> = vm
+            .heap
+            .table(t)
+            .entries()
+            .map(|(k, v)| (text(&vm, k), text(&vm, v)))
+            .collect();
+        out.insert(label.to_string(), calls);
+    }
+    out
+}
+
+/// `/stdtest engine group` played in the engine as the client recorded it
+/// (70450): the paladin leading a party with a druid of the user's in
+/// another zone (out of sight; chosen roles: tank, healer), then the party
+/// made a raid; every call's answer the client's.
+#[test]
+fn the_engine_answers_the_group_as_the_client_did() {
+    let Some(ui) = wowlua_test::ui_source_in(&repo().join("target/types-src"), "camelot") else {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    };
+    let dir = build();
+    let out = dir.path().join("dist/dev/StdTest");
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    let report = wowlua_engine::ui::load(&mut vm, &ui.interface, ui.strings.as_deref());
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let mut vm = client_in(vm, &out);
+    let controls = wowlua_engine::controls::table(&mut vm);
+    wowlua_test::profile::apply(
+        &mut vm,
+        controls,
+        &repo().join("crates/wowlua-engine/tests/client/scenarios/group-before.json"),
+    )
+    .expect("the character's world");
+    wowlua_engine::login::login(&mut vm, "StdTest", true, false);
+    wowlua_engine::clock::advance_frames(&mut vm, 10, 1000.0 / 60.0);
+    // A nameplate shown, as one was; the druid in another zone; made a
+    // raid (the server put the druid in subgroup 4), probed, made a party
+    // again, probed: the order recorded.
+    addon(
+        &mut vm,
+        r#"local e = __engine
+e.spawnUnit({ name = "Plainstrider", level = 12, reaction = "hostile" }):showNameplate()
+e.player:setName("Player", "Lastname")
+e.player:setRole("TANK")
+GroupDruid = e.spawnUnit({
+    name = "Member1", lastName = "Member1Last", player = true, level = 21, class = "DRUID", classID = 11,
+    reaction = "friendly", zone = "Thunder Bluff", role = "HEALER",
+})
+e.addToGroup(GroupDruid, { subgroup = 4 })
+e.advanceFrames(10, 1000 / 60)
+C_PartyInfo.ConvertToRaid()
+e.advanceFrames(60, 1000 / 60)
+StdTestEngineProbe("group")
+C_PartyInfo.ConvertToParty()
+e.advanceFrames(60, 1000 / 60)
+StdTestEngineProbe("group")"#,
+    );
+    let f = vm
+        .load(
+            b"local out = {} for label, calls in pairs(StdTestState.engineGroupAnswers) do local t = {} for k, v in pairs(calls) do t[k] = v end out[label] = t end return out",
+            "=group",
+        )
+        .expect("compiles");
+    let r = vm.call(f, &[]).expect("runs");
+    let Value::Table(t) = r[0] else {
+        panic!("a table")
+    };
+    let mut ours: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
+    for (label, calls) in vm.heap.table(t).entries() {
+        let Value::Table(calls) = calls else { continue };
+        ours.insert(
+            text(&vm, label),
+            vm.heap
+                .table(calls)
+                .entries()
+                .map(|(k, v)| (text(&vm, k), text(&vm, v)))
+                .collect(),
+        );
+    }
+    let mut differences = Vec::new();
+    for (label, calls) in group_fixture() {
+        let mine = ours.get(&label);
+        for (call, answer) in calls {
+            let got = mine
+                .and_then(|m| m.get(&call))
+                .map_or("<missing>", String::as_str);
+            if got != answer {
+                differences.push(format!(
+                    "{label} {call}\n    client: {answer}\n    ours:   {got}"
+                ));
+            }
+        }
+    }
+    assert!(
+        differences.is_empty(),
+        "{} differences:\n{}",
+        differences.len(),
+        differences.join("\n")
     );
 }

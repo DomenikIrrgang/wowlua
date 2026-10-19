@@ -1,0 +1,222 @@
+-- /stdtest engine group: the player's group as the client tells it, into
+-- StdTestState.engineGroupAnswers[party | raid][call] in the answers
+-- probe's form: the counts, every group token's unit questions, each
+-- raid roster index (past the members too), the roles, the leader; the
+-- nameplates' frames (name, type, parent); Blizzard's group frames shown
+-- or not. The player's name is written Player (Lastname), the others'
+-- Member1, Member2, … in the order of the tokens (Member1Last, …), every
+-- player GUID Player-0000-00000000.
+import state from "/state"
+import stamp from "/state"
+import say from "/harness"
+
+local function pack(...: any): { n: number, [number]: any }
+    return { n = select("#", ...), ... }
+end
+
+--- A value in full: tables to depth 6, keys sorted, secrets marked.
+local function show(v: any, depth: number): string
+    if issecretvalue(v) then
+        return `secret {type(v)}`
+    end
+    if type(v) == "string" then
+        return `string {v}`
+    end
+    if type(v) ~= "table" then
+        return `{type(v)} {tostring(v)}`
+    end
+    if depth >= 6 then
+        return "table"
+    end
+    const keys: string[] = {}
+    const values: { [string]: any } = {}
+    for k, inner in pairs(v :: table) do
+        const key = tostring(k)
+        keys[#keys + 1] = key
+        values[key] = inner
+    end
+    table.sort(keys)
+    const parts: string[] = {}
+    for _, k in ipairs(keys) do
+        parts[#parts + 1] = `{k}={show(values[k], depth + 1)}`
+    end
+    return `\{{table.concat(parts, ",")}\}`
+end
+
+--- The group's functions asked without arguments.
+const PLAIN: string[] = {
+    "GetNumGroupMembers",
+    "GetNumSubgroupMembers",
+    "IsInGroup",
+    "IsInRaid",
+    "IsEveryoneAssistant",
+    "GetHiddenGroupBuffs",
+    "C_PartyInfo.GetLootMethod",
+    "C_PartyInfo.IsPartyFull",
+    "C_PartyInfo.CanFormCrossFactionParties",
+}
+
+--- The functions asked of each group token.
+const BY_UNIT: string[] = {
+    "UnitExists",
+    "UnitName",
+    "UnitClass",
+    "UnitLevel",
+    "UnitInParty",
+    "UnitInRaid",
+    "UnitPlayerOrPetInParty",
+    "UnitPlayerOrPetInRaid",
+    "UnitIsGroupLeader",
+    "UnitIsGroupAssistant",
+    "UnitGroupRolesAssigned",
+    "UnitIsConnected",
+    "UnitIsVisible",
+    "UnitInRange",
+    "UnitIsDeadOrGhost",
+    "GetReadyCheckStatus",
+    "GetPartyAssignment",
+}
+
+--- Blizzard's group frames, shown or not.
+const FRAMES: string[] = {
+    "PartyFrame",
+    "PartyFrame.MemberFrame1",
+    "PartyFrame.MemberFrame2",
+    "CompactPartyFrame",
+    "CompactRaidFrameContainer",
+    "CompactRaidFrameManager",
+    "CompactRaidGroup1",
+    "CompactRaidGroup1Member1",
+    "CompactRaidGroup1Member2",
+    "CompactRaidFrame1",
+}
+
+export function groupProbe()
+    const st = state() :: any
+    const G = _G :: any
+    if not IsInGroup() then
+        say("engine group: join a party or raid first")
+        return
+    end
+    -- Names as they will be written: the player's Player (its last name
+    -- Lastname), the others' Member1, Member2, … (theirs Member1Last, …).
+    const names: { [string]: string } = {}
+    local members = 0
+    local function hide(name: any, last: any, player: boolean)
+        if type(name) ~= "string" or issecretvalue(name) or name == "" then
+            return
+        end
+        if names[name] == nil then
+            if player then
+                names[name] = "Player"
+            else
+                members = members + 1
+                names[name] = `Member{members}`
+            end
+        end
+        if type(last) == "string" and not issecretvalue(last) and last ~= "" and names[last] == nil then
+            names[last] = player and "Lastname" or `{names[name]}Last`
+            names[`{name}-{last}`] = `{names[name]}-{names[last]}`
+        end
+    end
+    const tokens: string[] = { "player" }
+    for i = 1, 4 do
+        tokens[#tokens + 1] = `party{i}`
+    end
+    const count = GetNumGroupMembers()
+    for i = 1, math.max(count, 5) + 1 do
+        tokens[#tokens + 1] = `raid{i}`
+    end
+    for _, t in ipairs(tokens) do
+        local name, last = UnitName(t)
+        const same = UnitIsUnit(t, "player")
+        hide(name, last, t == "player" or (not issecretvalue(same) and same == true))
+    end
+    for i = 1, count do
+        hide((G.GetRaidRosterInfo(i)), nil, false)
+    end
+    local function scrub(text: string): string
+        text = text:gsub("Player%-%d+%-%x%x%x%x%x%x%x%x", "Player-0000-00000000")
+        -- The longest first: "Name-Realm" before "Name".
+        const keys: string[] = {}
+        for k in pairs(names) do
+            keys[#keys + 1] = k
+        end
+        table.sort(keys, function(a: string, b: string): boolean return #a > #b end)
+        for _, k in ipairs(keys) do
+            text = text:gsub(k:gsub("%p", "%%%0"), names[k] ?? "Member")
+        end
+        return text
+    end
+    const out: { [string]: string } = {}
+    local asked = 0
+    local function record(call: string, f: any, ...: any)
+        if f == nil then
+            return
+        end
+        local ok, packed = pcall(function(...: any): any return pack(f(...)) end, ...)
+        asked = asked + 1
+        if not ok then
+            -- Without where (the probe's own lines move).
+            const message = tostring(packed):gsub("^[^:]*%.lua:%d+: ", "")
+            out[call] = scrub(`error: {message}`)
+            return
+        end
+        const p = packed :: { n: number, [number]: any }
+        const parts: string[] = {}
+        for i = 1, p.n do
+            parts[#parts + 1] = show(p[i], 0)
+        end
+        out[call] = scrub(`{p.n}: {table.concat(parts, ", ")}`)
+    end
+    local function lookup(call: string): any
+        local space, name = call:match("^([%w_]+)%.(%w+)$")
+        if space == nil then
+            return G[call]
+        end
+        const ns = G[space :: string]
+        return ns and ns[name :: string]
+    end
+    for _, call in ipairs(PLAIN) do
+        record(`{call}()`, lookup(call))
+    end
+    for _, t in ipairs(tokens) do
+        for _, call in ipairs(BY_UNIT) do
+            record(`{call}("{t}")`, lookup(call), t)
+        end
+    end
+    for i = 0, math.max(count, 5) + 1 do
+        record(`GetRaidRosterInfo({i})`, G.GetRaidRosterInfo, i)
+    end
+    -- The nameplates' frames: what the client makes them.
+    const plates = C_NamePlate.GetNamePlates() ?? {}
+    out["#C_NamePlate.GetNamePlates()"] = `number {#plates}`
+    for i, plate in ipairs(plates) do
+        record(`nameplate {i}: frame`, function(): ...any
+            const p = plate :: any
+            const parent = p:GetParent()
+            return p:GetName(), p:GetObjectType(), p:IsObjectType("Frame"), parent and parent:GetName(),
+                p:IsForbidden(), p.namePlateUnitToken, p:IsShown()
+        end)
+        if i >= 3 then
+            break
+        end
+    end
+    for _, path in ipairs(FRAMES) do
+        record(`{path}:IsShown()`, function(): ...any
+            local f: any = G
+            for part in path:gmatch("[^.]+") do
+                f = f and f[part]
+            end
+            if f == nil then
+                return "missing"
+            end
+            return f:IsShown(), f:IsVisible()
+        end)
+    end
+    const label = IsInRaid() and "raid" or "party"
+    st.engineGroupAnswers = st.engineGroupAnswers ?? {}
+    st.engineGroupAnswers[label] = out
+    stamp(`group:{label}`)
+    say(`engine group: {label} of {count}: {asked} calls recorded; type /reload so the file is written`)
+end

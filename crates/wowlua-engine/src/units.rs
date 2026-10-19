@@ -82,6 +82,14 @@ pub struct Unit {
     /// (`UnitCreatureType`, `UnitCreatureFamily`; none for players).
     pub creature_type: Option<(String, f64)>,
     pub creature_family: Option<(String, f64)>,
+    /// The group role chosen (`TANK`, `HEALER`, `DAMAGER`;
+    /// `UnitGroupRolesAssigned`, the roster's combat role).
+    pub role: Option<String>,
+    /// Where a group member is when not where the player is (the roster's
+    /// zone; out of sight).
+    pub zone: Option<String>,
+    /// A raid member's subgroup when not the one its place gives.
+    pub subgroup: Option<f64>,
 }
 
 /// The addon restriction types (`Enum.AddOnRestrictionType`).
@@ -260,6 +268,9 @@ pub fn install(vm: &mut Vm) {
         loot: Vec::new(),
         creature_type: None,
         creature_family: None,
+        role: None,
+        zone: None,
+        subgroup: None,
     };
     engine_mut(vm).units.list.push(player);
 }
@@ -560,6 +571,8 @@ fn clone_unit(u: &Unit) -> Unit {
         loot: u.loot.clone(),
         creature_type: u.creature_type.clone(),
         creature_family: u.creature_family.clone(),
+        role: u.role.clone(),
+        zone: u.zone.clone(),
         ..*u
     }
 }
@@ -587,7 +600,12 @@ fn unit_token_from_guid(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![token.map_or(Value::Nil, |t| vm.str(&t))])
 }
 
+/// `UnitName(unit)`: the name and the last name (or realm); a token naming
+/// no one two nils (recorded: absent group tokens).
 fn unit_name(vm: &mut Vm, c: NativeCall) -> Ret {
+    if unit_arg(vm, &c, 1).is_none() {
+        return Ok(vec![Value::Nil, Value::Nil]);
+    }
     let home = engine(vm).units.list[PLAYER.0].realm.clone();
     with_unit(vm, &c, |vm, u| {
         // On WoW Forever the second value is the last name; elsewhere a
@@ -947,10 +965,95 @@ fn get_num_group_members(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(if grouped { n as f64 + 1.0 } else { 0.0 })])
 }
 
-/// `GetNumSubgroupMembers()`: the others in the player's party (raid
-/// subgroups unverified).
+/// `GetNumSubgroupMembers()`: the others in the player's party; in a raid,
+/// in the player's subgroup (recorded: none, the other in subgroup 4).
 fn get_num_subgroup_members(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(engine(vm).units.group.len() as f64)])
+    let u = &engine(vm).units;
+    let n = if u.raid {
+        let mine = subgroup(u, PLAYER);
+        u.group
+            .iter()
+            .filter(|&&id| subgroup(u, id) == mine)
+            .count()
+    } else {
+        u.group.len()
+    };
+    Ok(vec![Value::Num(n as f64)])
+}
+
+/// `UnitPlayerOrPetInParty(unit)`: a group member, a raid's too (recorded;
+/// pets unverified).
+fn unit_player_or_pet_in_party(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = unit_arg(vm, &c, 1);
+    let grouped = crate::party::grouped(vm);
+    let u = &engine(vm).units;
+    Ok(vec![Value::Bool(
+        grouped && id.is_some_and(|id| ours(u, id)),
+    )])
+}
+
+/// `UnitPlayerOrPetInRaid(unit)`: a raid's member, none in a party
+/// (recorded; pets unverified).
+fn unit_player_or_pet_in_raid(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = unit_arg(vm, &c, 1);
+    let grouped = crate::party::grouped(vm);
+    let u = &engine(vm).units;
+    Ok(vec![Value::Bool(
+        grouped && u.raid && id.is_some_and(|id| ours(u, id)),
+    )])
+}
+
+/// A group member's raid subgroup: its own, else five to a subgroup in
+/// raid order, the player first (unverified: a party made a raid put its
+/// second member in subgroup 4, recorded once).
+pub fn subgroup(u: &Units, id: UnitId) -> f64 {
+    if let Some(n) = u.list[id.0].subgroup {
+        return n;
+    }
+    let index = if id == PLAYER {
+        0
+    } else {
+        u.group.iter().position(|&g| g == id).map_or(0, |i| i + 1)
+    };
+    (index / 5 + 1) as f64
+}
+
+/// `UnitGroupRolesAssigned(unit)`: a group member's chosen role, else
+/// `NONE` (recorded: the player's and a member's; absent tokens `NONE`).
+fn unit_group_roles_assigned(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = unit_arg(vm, &c, 1);
+    let role = {
+        let u = &engine(vm).units;
+        id.filter(|&id| crate::party::grouped(vm) && ours(u, id))
+            .and_then(|id| u.list[id.0].role.clone())
+            .unwrap_or_else(|| "NONE".to_string())
+    };
+    Ok(vec![vm.str(&role)])
+}
+
+/// `UnitIsVisible(unit)`: a unit in the player's zone (recorded: a group
+/// member in another zone not; unverified: by distance).
+fn unit_is_visible(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = unit_arg(vm, &c, 1);
+    let e = engine(vm);
+    let here = &e.world.character.position.zone;
+    let visible = id.is_some_and(|id| e.units.list[id.0].zone.as_ref().is_none_or(|z| z == here));
+    Ok(vec![Value::Bool(visible)])
+}
+
+/// `unit:setRole(role?)`: the group role it chose (`TANK`, `HEALER`,
+/// `DAMAGER`; nil none).
+fn control_set_role(vm: &mut Vm, c: NativeCall) -> Ret {
+    let me = this(vm, &c)?;
+    let role = match c.arg(2) {
+        Value::Str(s) => Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
+        _ => None,
+    };
+    engine_mut(vm).units.list[me.0].role = role;
+    if crate::party::grouped(vm) {
+        fire(vm, "GROUP_ROSTER_UPDATE", &[]);
+    }
+    Ok(vec![])
 }
 
 fn in_combat_lockdown(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -1094,6 +1197,10 @@ pub fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
         ("IsInRaid", is_in_raid),
         ("GetNumGroupMembers", get_num_group_members),
         ("GetNumSubgroupMembers", get_num_subgroup_members),
+        ("UnitGroupRolesAssigned", unit_group_roles_assigned),
+        ("UnitIsVisible", unit_is_visible),
+        ("UnitPlayerOrPetInParty", unit_player_or_pet_in_party),
+        ("UnitPlayerOrPetInRaid", unit_player_or_pet_in_raid),
         ("InCombatLockdown", in_combat_lockdown),
         (
             "C_RestrictedActions.GetAddOnRestrictionState",
@@ -1159,6 +1266,7 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("raiseSkill", control_raise_skill),
         ("leaveCombat", control_leave_combat),
         ("showNameplate", control_show_nameplate),
+        ("setRole", control_set_role),
         ("hideNameplate", control_hide_nameplate),
         ("despawn", control_despawn),
         ("token", control_tokens),
@@ -1389,6 +1497,15 @@ fn unit_from(vm: &mut Vm, data: Option<TableRef>, player_guid: Option<String>) -
             )),
             _ => None,
         },
+        role: match get(vm, "role") {
+            Value::Str(s) => Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
+            _ => None,
+        },
+        zone: match get(vm, "zone") {
+            Value::Str(s) => Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
+            _ => None,
+        },
+        subgroup: None,
     }
 }
 
@@ -2452,18 +2569,39 @@ fn control_tokens(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(tokens.first().map_or(vec![Value::Nil], |t| vec![vm.str(t)]))
 }
 
-/// `mock.addToGroup(unit, raid?)`: the unit joins the player's group.
+/// `mock.addToGroup(unit, raid? | { raid, subgroup })`: the unit joins the
+/// player's group (a raid with `raid`; in a raid, in `subgroup`). A group
+/// the player makes this way the player leads (unverified).
 pub fn add_to_group(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(id) = handle_of(vm, c.arg(1)) else {
         return Err(vm.error("mock.addToGroup: a unit expected"));
     };
-    let raid = c.arg(2).truthy();
+    let (raid, subgroup) = match c.arg(2) {
+        Value::Table(t) => {
+            let raid = vm.str("raid");
+            let raid = vm.heap.table(t).get(raid).truthy();
+            let key = vm.str("subgroup");
+            let subgroup = match vm.heap.table(t).get(key) {
+                Value::Num(n) => Some(n),
+                _ => None,
+            };
+            (raid, subgroup)
+        }
+        v => (v.truthy(), None),
+    };
+    let forming = !crate::party::grouped(vm);
     {
         let u = &mut engine_mut(vm).units;
         if !u.group.contains(&id) {
             u.group.push(id);
         }
         u.raid = u.raid || raid;
+        if subgroup.is_some() {
+            u.list[id.0].subgroup = subgroup;
+        }
+    }
+    if forming {
+        crate::party::lead(vm);
     }
     fire(vm, "GROUP_ROSTER_UPDATE", &[]);
     Ok(vec![])

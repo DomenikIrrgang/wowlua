@@ -376,36 +376,65 @@ fn nothing(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// The player leading a group of its own making (`mock.addToGroup`).
+pub fn lead(vm: &mut Vm) {
+    let p = party_mut(vm);
+    p.formed = true;
+    p.leader = true;
+}
+
 /// `GetRaidRosterInfo(index)`: name, rank, subgroup, level, class, file
-/// name, zone, online, dead, role, master looter, combat role; nothing out
-/// of a raid or past its members. Unverified (no raid recording): the
-/// player first, then the members in joining order, five to a subgroup;
-/// the player's rank 2 when leading, else 0; every member online in the
-/// player's zone, without a role.
+/// name, zone, online, dead, role, master looter, combat role; in a party
+/// too (recorded): the player first, then the members in joining order;
+/// the leader's rank 2, the others' 0; each member's zone (out of sight:
+/// its own); the chosen role last. An index past the members, or 0: a
+/// placeholder (recorded: `nil, 0, 1, 1, nil × 6, false, "NONE"`).
+/// Unverified: solo; ranks of assistants; offline members.
 fn get_raid_roster_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    let placeholder = |vm: &mut Vm| {
+        let mut out = vec![
+            Value::Nil,
+            Value::Num(0.0),
+            Value::Num(1.0),
+            Value::Num(1.0),
+        ];
+        out.extend([Value::Nil; 6]);
+        out.push(Value::Bool(false));
+        out.push(vm.str("NONE"));
+        out
+    };
     let index = match c.arg(1) {
         Value::Num(n) if n >= 1.0 && n.fract() == 0.0 => n as usize,
-        _ => return Ok(vec![]),
+        _ => return Ok(placeholder(vm)),
     };
     let unit = {
         let u = &engine(vm).units;
-        if !u.raid || u.group.is_empty() {
-            return Ok(vec![]);
+        if !grouped(vm) {
+            None
+        } else if index == 1 {
+            Some(PLAYER)
+        } else {
+            u.group.get(index - 2).copied()
         }
-        match index {
-            1 => PLAYER,
-            i => match u.group.get(i - 2) {
-                Some(&id) => id,
-                None => return Ok(vec![]),
-            },
-        }
+    };
+    let Some(unit) = unit else {
+        return Ok(placeholder(vm));
     };
     let rank = if unit == PLAYER && party(vm).leader {
         2.0
     } else {
         0.0
     };
-    let (name, level, class_name, class, dead) = {
+    let subgroup = {
+        let u = &engine(vm).units;
+        if u.raid {
+            units::subgroup(u, unit)
+        } else {
+            1.0
+        }
+    };
+    let here = engine(vm).world.character.position.zone.clone();
+    let (name, level, class_name, class, dead, zone, role) = {
         let u = &engine(vm).units.list[unit.0];
         (
             u.name.clone(),
@@ -417,13 +446,14 @@ fn get_raid_roster_info(vm: &mut Vm, c: NativeCall) -> Ret {
             },
             u.class.clone(),
             u.dead,
+            u.zone.clone().unwrap_or(here),
+            u.role.clone().unwrap_or_else(|| "NONE".to_string()),
         )
     };
-    let zone = engine(vm).world.character.position.zone.clone();
     Ok(vec![
         vm.str(&name),
         Value::Num(rank),
-        Value::Num(((index - 1) / 5 + 1) as f64),
+        Value::Num(subgroup),
         Value::Num(level),
         vm.str(&class_name),
         vm.str(&class),
@@ -432,8 +462,64 @@ fn get_raid_roster_info(vm: &mut Vm, c: NativeCall) -> Ret {
         Value::Bool(dead),
         Value::Nil,
         Value::Bool(false),
-        vm.str("NONE"),
+        vm.str(&role),
     ])
+}
+
+/// `C_PartyInfo.ConvertToParty()`: the leader's raid of five or fewer a
+/// party again (`GROUP_ROSTER_UPDATE`; unverified: its other events).
+fn convert_to_party(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let small = engine(vm).units.group.len() < 5;
+    if party(vm).leader && engine(vm).units.raid && small {
+        engine_mut(vm).units.raid = false;
+        fire(vm, "GROUP_ROSTER_UPDATE", &[]);
+    }
+    Ok(vec![])
+}
+
+/// `C_PartyInfo.GetLootMethod()`: group loot (recorded in a party and a
+/// raid, as the party was formed with; unverified: solo, other methods).
+fn get_loot_method(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(3.0), Value::Nil, Value::Nil])
+}
+
+/// `C_PartyInfo.IsPartyFull()`: a party of five (recorded: not with two;
+/// unverified: full, a raid).
+fn is_party_full(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let u = &engine(vm).units;
+    Ok(vec![Value::Bool(!u.raid && u.group.len() >= 4)])
+}
+
+/// `GetPartyAssignment(assignment, unit [, exactMatch])`: no one is the
+/// main tank or assist (unverified: assigning); any other assignment the
+/// recorded error.
+fn get_party_assignment(vm: &mut Vm, c: NativeCall) -> Ret {
+    let valid = match c.arg(1) {
+        Value::Str(s) => {
+            let a = String::from_utf8_lossy(vm.str_bytes(s)).to_ascii_uppercase();
+            a == "MAINTANK" || a == "MAINASSIST"
+        }
+        _ => false,
+    };
+    if !valid {
+        return Err(vm.error("GetPartyAssignment(): Invalid party assignment"));
+    }
+    Ok(vec![Value::Bool(false)])
+}
+
+/// `C_PartyInfo.ConvertToRaid()`: the leader's party a raid
+/// (`GROUP_ROSTER_UPDATE`; unverified: its other events and messages).
+fn convert_to_raid(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let leading = party(vm).leader && !engine(vm).units.group.is_empty();
+    if leading && !engine(vm).units.raid {
+        engine_mut(vm).units.raid = true;
+        fire(vm, "GROUP_ROSTER_UPDATE", &[]);
+    }
+    Ok(vec![])
+}
+
+fn no(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(false)])
 }
 
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
@@ -442,6 +528,12 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("InviteUnit", invite_unit),
         ("UnitIsGroupLeader", unit_is_group_leader),
         ("GetRaidRosterInfo", get_raid_roster_info),
+        ("C_PartyInfo.ConvertToRaid", convert_to_raid),
+        ("C_PartyInfo.ConvertToParty", convert_to_party),
+        ("C_PartyInfo.GetLootMethod", get_loot_method),
+        ("C_PartyInfo.IsPartyFull", is_party_full),
+        ("C_PartyInfo.CanFormCrossFactionParties", no),
+        ("GetPartyAssignment", get_party_assignment),
         ("FollowUnit", follow_unit),
         ("InitiateTrade", initiate_trade),
         ("CloseTrade", close_trade),

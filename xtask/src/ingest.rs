@@ -22,6 +22,8 @@
 //!   `crates/wowlua-engine/data/camelot-tradeskill.txt`);
 //! - `/stdtest engine trainer`: each trainer's `…/forever-camelot-trainer-<key>.lua`
 //!   (all of them: `crates/wowlua-engine/data/camelot-trainers.txt`);
+//! - `/stdtest engine group`: `…/forever-camelot-group-party.lua`,
+//!   `…/forever-camelot-group-raid.lua`;
 //! - the default character (a fresh level 1 Human Warrior's `/stdtest
 //!   snapshot`): `cargo xtask profile <its StdTest.lua>
 //!   crates/wowlua-engine/data/camelot-default-character.json`;
@@ -1773,6 +1775,51 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
             }
             let path = root.join("crates/wowlua-engine/data/camelot-trainers.txt");
             write_file(&path, &data)?;
+        }
+    }
+    // The player's group (`/stdtest engine group`), a party's and a raid's
+    // answers (the probe names other players Member1, …).
+    if let Ok(groups) = state.get::<mlua::Table>("engineGroupAnswers") {
+        let named =
+            regex::Regex::new(r"string (Member\d+), string ([^,]+)$").expect("a valid pattern");
+        for pair in groups.pairs::<String, mlua::Table>() {
+            let (label, calls) = pair.map_err(|e| anyhow!("{e}"))?;
+            if !matches!(label.as_str(), "party" | "raid")
+                || gate
+                    .take(&stamps, &format!("group:{label}"), &version)
+                    .is_none()
+            {
+                continue;
+            }
+            let mut list = Vec::new();
+            for pair in calls.pairs::<String, String>() {
+                let (call, answer) = pair.map_err(|e| anyhow!("{e}"))?;
+                list.push((call, me.scrub(&answer)));
+            }
+            // A member's last name the probe left (`Member1, <last>`):
+            // `Member1Last`, wherever it appears.
+            let lasts: Vec<(String, String)> = list
+                .iter()
+                .filter(|(call, _)| call.starts_with("UnitName("))
+                .filter_map(|(_, answer)| named.captures(answer))
+                .map(|c| (c[2].to_string(), format!("{}Last", &c[1])))
+                .filter(|(last, hidden)| last != hidden)
+                .collect();
+            for (_, answer) in &mut list {
+                for (last, hidden) in &lasts {
+                    *answer = answer.replace(last.as_str(), hidden);
+                }
+            }
+            list.sort();
+            write_table(
+                &client.join(format!("forever-camelot-group-{label}.lua")),
+                &format!(
+                    "WoW Forever {version}: /stdtest engine group, the player's {label}\n\
+                     (the counts, every group token, the roster, roles, leader, nameplates,\n\
+                     Blizzard's group frames; other players Member1, …) (cargo xtask ingest)."
+                ),
+                &list,
+            )?;
         }
     }
     // Gameplay (`/stdtest engine scenario <name>`): each scenario's

@@ -56,6 +56,9 @@ export interface MockUnit
     --- The unit's tokens (`"target"`, `"nameplate1"`, …).
     function token(): string[]
     function setName(name: string, lastName: string?)
+    --- The group role it chose (`UnitGroupRolesAssigned`, the raid
+    --- roster's combat role); nil none.
+    function setRole(role: ("TANK" | "HEALER" | "DAMAGER")?)
     function applyAura(data: table): number
     function removeAura(auraInstanceID: number)
     --- Starts casting (`UNIT_SPELLCAST_START`, or `CHANNEL_START`); it ends
@@ -261,6 +264,11 @@ export type UnitData = {
     lastName?: string,
     classID?: number,
     npcID?: number,
+    --- The group role it chose.
+    role?: "TANK" | "HEALER" | "DAMAGER",
+    --- Where it is when not where the player is (a group member's roster
+    --- zone; out of sight: `UnitIsVisible` false).
+    zone?: string,
 }
 
 local function engine(): any
@@ -459,10 +467,13 @@ export function setRenown(factionID: number, level: number)
 end
 
 --- The player's group: `mock.group:add(unit, raid?)` (`partyN`; with
---- `raid`, the group a raid: `raidN`).
+--- `raid`, the group a raid: `raidN`), or `mock.group:add(unit, { raid?,
+--- subgroup? })` (its raid subgroup, else five to one in joining order).
+--- A group the player makes this way the player leads;
+--- `C_PartyInfo.ConvertToRaid()` / `ConvertToParty()` change it.
 export const group = {
-    add = function(_: any, unit: MockUnit, raid: boolean?)
-        engine().addToGroup(unit, raid)
+    add = function(_: any, unit: MockUnit, opts: (boolean | { raid?: boolean, subgroup?: number })?)
+        engine().addToGroup(unit, opts)
     end,
 }
 
