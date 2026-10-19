@@ -1110,6 +1110,112 @@ fn get_item_key_sample_link(vm: &mut Vm, c: NativeCall) -> Ret {
     }])
 }
 
+/// A search's results' field `key`, each row's (`count` rows, `row(i)`
+/// the engine's answer for row `i`).
+fn result_fields(
+    vm: &mut Vm,
+    count: &'static str,
+    row: &'static str,
+    search: Value,
+    key: &str,
+) -> Vec<f64> {
+    let n = ask(vm, count, &[search])
+        .first()
+        .copied()
+        .and_then(num)
+        .unwrap_or(0.0);
+    let mut out = Vec::new();
+    for i in 1..=(n as i64) {
+        let info = ask(vm, row, &[search, Value::Num(i as f64)]);
+        if let Some(Value::Table(t)) = info.first().copied()
+            && let Some(v) = num(field(vm, t, key))
+        {
+            out.push(v);
+        }
+    }
+    out
+}
+
+/// The largest of `values`, nil for none.
+fn largest(values: Vec<f64>) -> Ret {
+    Ok(vec![
+        values
+            .into_iter()
+            .reduce(f64::max)
+            .map_or(Value::Nil, Value::Num),
+    ])
+}
+
+/// `C_AuctionHouse.GetItemSearchResultsQuantity(itemKey)`: the item
+/// search's results' quantities summed (`GetItemSearchResultInfo`'s).
+fn get_item_search_results_quantity(vm: &mut Vm, c: NativeCall) -> Ret {
+    let total: f64 = result_fields(
+        vm,
+        "C_AuctionHouse.GetNumItemSearchResults",
+        "C_AuctionHouse.GetItemSearchResultInfo",
+        c.arg(1),
+        "quantity",
+    )
+    .iter()
+    .sum();
+    Ok(vec![Value::Num(total)])
+}
+
+/// `C_AuctionHouse.GetMaxItemSearchResultBuyout(itemKey)`: the item
+/// search's largest buyout, nil for none.
+fn get_max_item_search_result_buyout(vm: &mut Vm, c: NativeCall) -> Ret {
+    largest(result_fields(
+        vm,
+        "C_AuctionHouse.GetNumItemSearchResults",
+        "C_AuctionHouse.GetItemSearchResultInfo",
+        c.arg(1),
+        "buyoutAmount",
+    ))
+}
+
+/// `C_AuctionHouse.GetMaxItemSearchResultBid(itemKey)`: the item search's
+/// largest bid, nil for none.
+fn get_max_item_search_result_bid(vm: &mut Vm, c: NativeCall) -> Ret {
+    largest(result_fields(
+        vm,
+        "C_AuctionHouse.GetNumItemSearchResults",
+        "C_AuctionHouse.GetItemSearchResultInfo",
+        c.arg(1),
+        "bidAmount",
+    ))
+}
+
+/// `C_AuctionHouse.GetMaxCommoditySearchResultPrice(itemID)`: the
+/// commodity search's largest unit price, nil for none.
+fn get_max_commodity_search_result_price(vm: &mut Vm, c: NativeCall) -> Ret {
+    largest(result_fields(
+        vm,
+        "C_AuctionHouse.GetNumCommoditySearchResults",
+        "C_AuctionHouse.GetCommoditySearchResultInfo",
+        c.arg(1),
+        "unitPrice",
+    ))
+}
+
+/// `C_AuctionHouse.RequestMoreItemSearchResults(itemKey)`: whether the
+/// results are whole (`HasFullItemSearchResults`; the engine's searches
+/// answer in one page).
+fn request_more_item_search_results(vm: &mut Vm, c: NativeCall) -> Ret {
+    let full = ask(vm, "C_AuctionHouse.HasFullItemSearchResults", &[c.arg(1)]);
+    Ok(vec![Value::Bool(full.first().is_none_or(|v| v.truthy()))])
+}
+
+/// `C_AuctionHouse.RequestMoreCommoditySearchResults(itemID)`: whether the
+/// results are whole (`HasFullCommoditySearchResults`).
+fn request_more_commodity_search_results(vm: &mut Vm, c: NativeCall) -> Ret {
+    let full = ask(
+        vm,
+        "C_AuctionHouse.HasFullCommoditySearchResults",
+        &[c.arg(1)],
+    );
+    Ok(vec![Value::Bool(full.first().is_none_or(|v| v.truthy()))])
+}
+
 // -------------------------------------------------------------- C_Intl
 
 /// `C_Intl.GetCurrentLocale()`: the client's locale (`GetLocale`'s
@@ -1371,6 +1477,30 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             "C_AuctionHouse.GetItemKeySampleLink",
             get_item_key_sample_link,
         ),
+        (
+            "C_AuctionHouse.GetItemSearchResultsQuantity",
+            get_item_search_results_quantity,
+        ),
+        (
+            "C_AuctionHouse.GetMaxItemSearchResultBuyout",
+            get_max_item_search_result_buyout,
+        ),
+        (
+            "C_AuctionHouse.GetMaxItemSearchResultBid",
+            get_max_item_search_result_bid,
+        ),
+        (
+            "C_AuctionHouse.GetMaxCommoditySearchResultPrice",
+            get_max_commodity_search_result_price,
+        ),
+        (
+            "C_AuctionHouse.RequestMoreItemSearchResults",
+            request_more_item_search_results,
+        ),
+        (
+            "C_AuctionHouse.RequestMoreCommoditySearchResults",
+            request_more_commodity_search_results,
+        ),
         // Text.
         ("C_Intl.GetCurrentLocale", intl_current_locale),
         ("C_Intl.ToLower", intl_to_lower),
@@ -1505,12 +1635,8 @@ const NOTHING: &[&str] = &[
     "C_AuctionHouse.GetCancelCost",
     "C_AuctionHouse.GetExtraBrowseInfo",
     "C_AuctionHouse.GetItemKeyRequiredLevel",
-    "C_AuctionHouse.GetItemSearchResultsQuantity",
     "C_AuctionHouse.GetMaxBidItemBid",
     "C_AuctionHouse.GetMaxBidItemBuyout",
-    "C_AuctionHouse.GetMaxCommoditySearchResultPrice",
-    "C_AuctionHouse.GetMaxItemSearchResultBid",
-    "C_AuctionHouse.GetMaxItemSearchResultBuyout",
     "C_AuctionHouse.GetMaxOwnedAuctionBid",
     "C_AuctionHouse.GetMaxOwnedAuctionBuyout",
     "C_AuctionHouse.GetNumReplicateItems",
@@ -1526,8 +1652,6 @@ const NOTHING: &[&str] = &[
     "C_AuctionHouse.PostCommodity",
     "C_AuctionHouse.ReplicateItems",
     "C_AuctionHouse.RequestMoreBrowseResults",
-    "C_AuctionHouse.RequestMoreCommoditySearchResults",
-    "C_AuctionHouse.RequestMoreItemSearchResults",
     "C_AuctionHouse.RequestOwnedAuctionBidderInfo",
     "C_AuctionHouse.SearchForFavorites",
     "C_AuctionHouse.SearchForItemKeys",
