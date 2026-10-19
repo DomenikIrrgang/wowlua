@@ -588,11 +588,6 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         scroll_parent: None,
     };
     let mut w = w;
-    // A font string starts 1 x 1 (`/stdtest engine`).
-    if class == "FontString" {
-        w.width = 1.0;
-        w.height = 1.0;
-    }
     // Secure code's widgets are forbidden; their names are the addons'
     // globals all the same (`StoreFrame`).
     let main = engine(vm).main_globals;
@@ -626,6 +621,25 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         "Cooldown" => {
             let fs = create(vm, "FontString", None, Some(id));
             store(vm, id, "\u{0}CountdownFontString", &[fs]);
+            // Centered a unit low, in SystemFont_Shadow_Large_Outline (SuuUI
+            // probe trees: the equipment slots' cooldowns, from
+            // CooldownFrameTemplate, and the PvP rank frame's own
+            // `<Cooldown>` report it so).
+            if let Some(fid) = widget_of(vm, fs) {
+                engine_mut(vm).world.widgets[fid.0].points.push(Point {
+                    point: "CENTER".into(),
+                    relative: None,
+                    relative_point: "CENTER".into(),
+                    x: 0.0,
+                    y: -1.0,
+                });
+                let font = vm.get_global("SystemFont_Shadow_Large_Outline");
+                if widget_of(vm, font)
+                    .is_some_and(|f| engine(vm).world.widgets[f.0].class == "Font")
+                {
+                    store(vm, fid, "FontObject", &[font]);
+                }
+            }
         }
         _ => {}
     }
@@ -2195,6 +2209,19 @@ fn set_point(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `SetToDefaults()` of a region or frame: its anchors cleared, its size
+/// 0 by 0 (Blizzard's Compositor.lua: "The anchors were already cleared
+/// in SetToDefaults()", "SetToDefaults() will set the frame's size to
+/// 0,0"; its menus' pooled textures are anchored anew after it).
+/// Unverified: what else it resets.
+fn set_to_defaults(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let w = &mut engine_mut(vm).world.widgets[id.0];
+    w.points.clear();
+    w.width = 0.0;
+    w.height = 0.0;
+    Ok(vec![])
+}
+
 fn clear_all_points(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     engine_mut(vm).world.widgets[id.0].points.clear();
     Ok(vec![])
@@ -2381,14 +2408,131 @@ pub(crate) fn laid_out_size(vm: &mut Vm, id: WidgetId) -> (f64, f64) {
         let r = &engine(vm).world.widgets[id.0];
         (r.width, r.height, !r.points.is_empty())
     };
-    if !anchored {
+    let s = effective_scale(engine(vm), id);
+    match bounds(vm, id, 0).filter(|_| anchored) {
+        Some(b) => (b.2 / s, b.3 / s),
+        None => unplaced_size(vm, id, w, h),
+    }
+}
+
+/// A widget's size without a rectangle: as set, a font string's sides
+/// not set its text's ([`text_extent`]).
+fn unplaced_size(vm: &Vm, id: WidgetId, w: f64, h: f64) -> (f64, f64) {
+    if engine(vm).world.widgets[id.0].class != "FontString" || (w != 0.0 && h != 0.0) {
         return (w, h);
     }
-    let s = effective_scale(engine(vm), id);
-    match bounds(vm, id, 0) {
-        Some(b) => (b.2 / s, b.3 / s),
-        None => (w, h),
+    let w = if w == 0.0 {
+        text_extent(vm, id, None).0
+    } else {
+        w
+    };
+    let h = if h == 0.0 {
+        text_extent(vm, id, Some(w)).1
+    } else {
+        h
+    };
+    (w, h)
+}
+
+/// The stored arguments of setter `stem`, read without interning (for the
+/// layout, which only reads the world).
+fn stored_ref(vm: &Vm, props: TableRef, stem: &str) -> Option<Vec<Value>> {
+    let key = vm.heap.interned(stem.as_bytes())?;
+    let Value::Table(list) = vm.heap.table(props).get(Value::Str(key)) else {
+        return None;
+    };
+    let n = vm.heap.interned(b"n")?;
+    let count = match vm.heap.table(list).get(Value::Str(n)) {
+        Value::Num(n) => n as usize,
+        _ => 0,
+    };
+    Some(
+        (1..=count)
+            .map(|k| vm.heap.table(list).get(Value::Num(k as f64)))
+            .collect(),
+    )
+}
+
+/// A font string's font height, its own font's or its font object's.
+fn font_height(vm: &Vm, id: WidgetId) -> f64 {
+    let mut cur = id;
+    for _ in 0..32 {
+        let props = engine(vm).world.widgets[cur.0].props;
+        if let Some(v) = stored_ref(vm, props, "Font") {
+            return match v.get(1) {
+                Some(Value::Num(h)) => *h,
+                _ => 0.0,
+            };
+        }
+        match stored_ref(vm, props, "FontObject")
+            .and_then(|v| v.first().copied())
+            .and_then(|f| widget_of(vm, f))
+        {
+            Some(n) => cur = n,
+            None => break,
+        }
     }
+    0.0
+}
+
+/// A font string's text as the engine's text model lays it out: its
+/// widest line at six units a byte (as `GetStringWidth`, its color escapes
+/// left out), its lines, each
+/// wrapped at `width` when given and wrapping, at the font's height with
+/// the spacing between them (as `GetStringHeight`). Without text, 1 by 1.
+///
+/// SuuUI probe trees: the client's font strings report their text's size
+/// on the sides neither their size nor two points set (the character
+/// window's check box labels 158 wide, as set, by 12, their font's height;
+/// two-line texts 24; empty ones 1, as a new font string is 1 by 1,
+/// `/stdtest engine`). Unverified: the widths, the client measuring glyphs.
+fn text_extent(vm: &Vm, id: WidgetId, width: Option<f64>) -> (f64, f64) {
+    let w = &engine(vm).world.widgets[id.0];
+    let text = match w.text.map(|v| vm.hidden(v)) {
+        Some(Value::Str(s)) => String::from_utf8_lossy(vm.heap.str_bytes(s)).into_owned(),
+        Some(Value::Num(n)) => format!("{n}"),
+        _ => String::new(),
+    };
+    if text.is_empty() {
+        return (1.0, 1.0);
+    }
+    let wraps = stored_ref(vm, w.props, "WordWrap")
+        .and_then(|v| v.first().copied())
+        .is_none_or(|v| v.truthy());
+    let spacing = match stored_ref(vm, w.props, "Spacing").and_then(|v| v.first().copied()) {
+        Some(Value::Num(s)) => s,
+        _ => 0.0,
+    };
+    // Color escapes take no room (`|cAARRGGBB`, `|r`).
+    let shown_len = |l: &str| {
+        let b = l.as_bytes();
+        let (mut n, mut i) = (0, 0);
+        while i < b.len() {
+            match (b[i], b.get(i + 1)) {
+                (b'|', Some(b'c' | b'C')) if i + 10 <= b.len() => i += 10,
+                (b'|', Some(b'r' | b'R')) => i += 2,
+                _ => {
+                    n += 1;
+                    i += 1;
+                }
+            }
+        }
+        n
+    };
+    let widths: Vec<f64> = text
+        .split('\n')
+        .map(|l| shown_len(l) as f64 * 6.0)
+        .collect();
+    let widest = widths.iter().copied().fold(0.0, f64::max);
+    let lines: f64 = widths
+        .iter()
+        .map(|&lw| match width {
+            Some(width) if wraps && width > 0.0 && lw > width => (lw / width).ceil(),
+            _ => 1.0,
+        })
+        .sum();
+    let h = lines * font_height(vm, id) + (lines - 1.0) * spacing;
+    (widest, h)
 }
 
 fn get_width(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
@@ -2533,9 +2677,15 @@ fn bounds_of(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -> Op
             Some(v) => widget_of(vm, v),
             None => w.parent,
         };
-        let r = rel
-            .and_then(|r| bounds_in(vm, r, depth + 1, known))
-            .unwrap_or((0.0, 0.0, SCREEN.0, SCREEN.1));
+        // Anchored to a frame without a rectangle, it has none either
+        // (SuuUI probe trees: the gamepad tab buttons of the character
+        // window, sized but never placed, and their textures set to fill
+        // them report no points' size, 0 by 0, where the engine gave them
+        // the screen's).
+        let r = match rel {
+            Some(r) => bounds_in(vm, r, depth + 1, known)?,
+            None => (0.0, 0.0, SCREEN.0, SCREEN.1),
+        };
         let (rx, ry) = anchor(&p.relative_point);
         let ax = r.0 + rx * r.2 + p.x * s;
         let ay = r.1 + ry * r.3 + p.y * s;
@@ -2556,13 +2706,23 @@ fn bounds_of(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -> Op
         };
         slot.get_or_insert(ay);
     }
-    let (width, height) = (w.width * s, w.height * s);
+    let text = w.class == "FontString";
+    let width = if text && w.width == 0.0 {
+        text_extent(vm, id, None).0 * s
+    } else {
+        w.width * s
+    };
     let (x, width) = match (left, right, center_x) {
         (Some(l), Some(r), _) => (l, r - l),
         (Some(l), None, _) => (l, width),
         (None, Some(r), _) => (r - width, width),
         (None, None, Some(c)) => (c - width / 2.0, width),
         (None, None, None) => (0.0, width),
+    };
+    let height = if text && w.height == 0.0 {
+        text_extent(vm, id, Some(width / s)).1 * s
+    } else {
+        w.height * s
     };
     let (y, height) = match (bottom, top, center_y) {
         (Some(b), Some(t), _) => (b, t - b),
@@ -2959,6 +3119,22 @@ fn get_frame_level(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(frame_level(vm, id))])
 }
 
+/// `SetUsingParentLevel(using)`: kept; using its parent's, a frame drops
+/// the level set before (SuuUI probe trees: `InsetFrameTemplate`'s
+/// `NineSlice`, `useParentLevel` over `NineSlicePanelTemplate`'s
+/// `frameLevel="500"`, at its inset's level 2). Unverified: a level set
+/// after.
+fn set_using_parent_level(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let using = c.arg(2).truthy();
+    store(vm, id, "UsingParentLevel", &[Value::Bool(using)]);
+    if using {
+        let props = engine(vm).world.widgets[id.0].props;
+        let key = vm.str("FrameLevel");
+        let _ = vm.heap.table_mut(props).set(key, Value::Nil);
+    }
+    Ok(vec![])
+}
+
 /// A frame's level: what `SetFrameLevel` set, else one above the parent
 /// (unverified).
 pub fn frame_level(vm: &mut Vm, id: WidgetId) -> f64 {
@@ -3182,6 +3358,9 @@ fn set_enabled_to(vm: &mut Vm, id: WidgetId, on: bool) {
     let was = std::mem::replace(&mut w.enabled, on);
     let class = w.class.clone();
     let script = if on { "OnEnable" } else { "OnDisable" };
+    if was != on {
+        crate::buttons::refresh_states(vm, id);
+    }
     if was != on && has_script(engine(vm), &class, script) {
         run_script(vm, id, script, &[]);
     }
@@ -3561,11 +3740,7 @@ fn button_texture(vm: &mut Vm, id: WidgetId, kind: &str) -> Value {
     }
     let t = create(vm, "Texture", None, Some(id));
     if let Some(tid) = widget_of(vm, t) {
-        let layer = vm.str(if kind == "Highlight" {
-            "HIGHLIGHT"
-        } else {
-            "ARTWORK"
-        });
+        let layer = vm.str(crate::buttons::state_layer(kind));
         store(vm, tid, "DrawLayer", &[layer, Value::Num(0.0)]);
     }
     store(vm, id, &stem, &[t]);
@@ -3576,19 +3751,37 @@ fn button_texture(vm: &mut Vm, id: WidgetId, kind: &str) -> Value {
 /// texture's; `SetXAtlas(atlas, …)` the atlas of its texture.
 fn set_button_texture(vm: &mut Vm, id: WidgetId, c: &NativeCall, kind: &str, atlas: bool) -> Ret {
     let asset = c.arg(2);
-    if !atlas && widget_of(vm, asset).is_some() {
+    if !atlas && let Some(new) = widget_of(vm, asset) {
+        // The texture it replaces is hidden, back in ARTWORK (SuuUI probe
+        // trees: the ammo slot's `<HighlightTexture>` replaces its
+        // ItemButton's, which reports hidden in ARTWORK; one sample).
+        let props = engine(vm).world.widgets[id.0].props;
+        let old = stored_args(vm, props, &format!("{kind}Texture"))
+            .and_then(|v| v.first().copied())
+            .and_then(|v| widget_of(vm, v))
+            .filter(|old| *old != new);
+        if let Some(old) = old {
+            engine_mut(vm).world.widgets[old.0].shown = false;
+            let layer = vm.str("ARTWORK");
+            store(vm, old, "DrawLayer", &[layer, Value::Num(0.0)]);
+        }
         store(vm, id, &format!("{kind}Texture"), &[asset]);
+        crate::buttons::refresh_states(vm, id);
         return Ok(vec![]);
     }
     let t = button_texture(vm, id, kind);
     if let Some(tid) = widget_of(vm, t) {
         let args: Vec<Value> = c.args.iter().skip(1).copied().collect();
         store(vm, tid, if atlas { "Atlas" } else { "Texture" }, &args);
+        if atlas {
+            crate::measures::apply_atlas_size(vm, tid, &args);
+        }
     }
     if atlas {
         let args: Vec<Value> = c.args.iter().skip(1).copied().collect();
         store(vm, id, &format!("{kind}Atlas"), &args);
     }
+    crate::buttons::refresh_states(vm, id);
     Ok(vec![])
 }
 
@@ -3725,6 +3918,8 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("IsForbidden", is_forbidden),
         ("SetFontObject", set_font_object),
         ("GetFrameLevel", get_frame_level),
+        ("SetUsingParentLevel", set_using_parent_level),
+        ("SetToDefaults", set_to_defaults),
         ("GetID", get_id),
         ("GetStringWidth", get_string_width),
         ("GetTextWidth", get_string_width),

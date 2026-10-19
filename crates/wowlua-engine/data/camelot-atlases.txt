@@ -1,0 +1,296 @@
+# Atlases as WoW Forever 1.60.1 (70450) names them (GetAtlas gives this
+# spelling whatever case SetAtlas was given), from SuuUI's tree probe of
+# the character, talents and spell book, and legacy windows; with each side's
+# size where a texture sized by its atlas (useAtlasSize) showed it, that side
+# not set by two points. One per line: the name, then width and height when
+# known (- for a side not seen).
+!macropopup-left	17	-
+!macropopup-right	17	-
+!minimal-scrollbar-track-middle
+!UI-Frame-InnerLeftTile	3	-
+!UI-Frame-InnerRightTile	3	-
+!UI-Frame-LeftTile
+!UI-Frame-Metal-EdgeLeft	95	-
+!UI-Frame-Metal-EdgeRight	95	-
+!UI-Frame-RightTile
+128-GoldRedButton-Highlight
+128-GoldRedButton-Left-Disabled
+128-GoldRedButton-Right-Disabled
+128-RedButton-Highlight
+_128-GoldRedButton-Center-Disabled
+_macropopup-bottom	-	39
+_macropopup-top	-	68
+_search-rowbg
+_UI-Frame-Bot
+_UI-Frame-InnerBotTile	-	3
+_UI-Frame-InnerTopTile	-	3
+_UI-Frame-Metal-EdgeBottom	-	100
+_UI-Frame-Metal-EdgeTop	-	95
+_UI-Frame-TopTileStreaks
+_uiframe-activetab-center	-	32
+_uiframe-tab-center	-	32
+auctionhouse-ui-filter-redx
+AzeriteArmor-CharacterInfo-Border-Glow	53	41
+AzeriteArmor-CharacterInfo-Border-ItemGlow	35	35
+AzeriteArmor-CharacterInfo-Border-Smoke	9	32
+AzeriteArmor-CharacterInfo-Border-TitanStar
+AzeriteArmor-CharacterInfo-NeckLevelBorder
+character-emptysocket
+charactercreate-ring-select
+checkbox-minimal
+checkmark-minimal
+checkmark-minimal-disabled
+collections-newglow
+common-button-list-collapseExpand
+common-button-list-minus	13	4
+common-button-square-gray-down
+common-button-square-gray-up
+common-button-tertiary-normal
+common-dropdown-a-button	27	27
+common-dropdown-b-button
+common-dropdown-textholder
+common-framedivider
+common-icon-rotateleft
+common-icon-rotateright
+common-icon-undo
+common-icon-zoomin
+common-icon-zoomout
+common-insideframe
+common-mask-circle
+common-mask-semicircle-left
+common-mask-semicircle-right
+common-search-border-left
+common-search-border-middle
+common-search-border-right
+common-search-clearbutton
+common-search-magnifyingglass
+common-sidetab	55	60
+common-sidetab-hover	55	60
+common-sidetab-mask	55	60
+common-sidetab-selected	55	60
+common-stat-bar-BG
+common-stat-bar-blue
+common-stat-bar-green
+common-stat-bar-Mask
+common-stat-bar-white
+covenantsanctum-renown-icon-border-standard	55	65
+gamepad-press&hold-indicator
+gamepad-press&hold-indicator-BG
+gamepad-press&hold-loadBar
+gamepad-press&hold-loadBar-BG
+gamepad-press&hold-loadBar-glw-BG
+gamepad-press&hold-spinnerTip
+gamepad-uiframemetal-largeportrait-focus
+Gamepad-Xbox1-ButtonY-Disabled
+Gamepad-Xbox1-ButtonY-Down
+Gamepad-Xbox1-ButtonY-Focus
+Gamepad-Xbox1-ButtonY-Normal
+Gamepad-Xbox1-ButtonY-Over
+Gamepad-Xbox1-Menu-Disabled
+Gamepad-Xbox1-Menu-Down
+Gamepad-Xbox1-Menu-Focus
+Gamepad-Xbox1-Menu-Normal
+Gamepad-Xbox1-Menu-Over
+Gamepad-Xbox1-Trigger-LB-Disabled
+Gamepad-Xbox1-Trigger-LB-Down
+Gamepad-Xbox1-Trigger-LB-Focus
+Gamepad-Xbox1-Trigger-LB-Normal
+Gamepad-Xbox1-Trigger-LB-Over
+Gamepad-Xbox1-Trigger-LT-Disabled
+Gamepad-Xbox1-Trigger-LT-Down
+Gamepad-Xbox1-Trigger-LT-Focus
+Gamepad-Xbox1-Trigger-LT-Normal
+Gamepad-Xbox1-Trigger-LT-Over
+Gamepad-Xbox1-Trigger-RB-Disabled
+Gamepad-Xbox1-Trigger-RB-Down
+Gamepad-Xbox1-Trigger-RB-Focus
+Gamepad-Xbox1-Trigger-RB-Normal
+Gamepad-Xbox1-Trigger-RB-Over
+Gamepad-Xbox1-Trigger-RT-Disabled
+Gamepad-Xbox1-Trigger-RT-Down
+Gamepad-Xbox1-Trigger-RT-Focus
+Gamepad-Xbox1-Trigger-RT-Normal
+Gamepad-Xbox1-Trigger-RT-Over
+Gamepad-Xbox1-View-Disabled
+Gamepad-Xbox1-View-Down
+Gamepad-Xbox1-View-Focus
+Gamepad-Xbox1-View-Normal
+Gamepad-Xbox1-View-Over
+GearEnchant_IconBorder
+GearEnchantFX_CharUI_DarkGold	414	415
+GearEnchantFX_CharUI_Frame	233	323
+GearEnchantFX_CharUI_Gold	414	415
+GearEnchantFX_CharUI_Mask	512	512
+GearEnchantFX_CharUI_Sparkles	373	369
+heartofazeroth-animation-glowies	733	715
+heartofazeroth-animation-lensflareline
+heartofazeroth-animation-ring	511	476
+heartofazeroth-animation-ring-constellation	600	600
+heartofazeroth-animation-rune4	300	300
+heartofazeroth-animation-stars	512	512
+heartofazeroth-animation-sunburst	732	749
+heartofazeroth-animation-titans	972	810
+helptip-arrow	65	28
+Legacy-Challenge-BG
+Legacy-Challenge-Left-Sub-Tab
+Legacy-Challenge-Left-Sub-Tab-selected
+Legacy-Progressbar-BG
+Legacy-Progressbar-Fill
+Legacy-Progressbar-Frame
+Legacy-Rewards-Tracker-background
+Legacy-Rewards-Tracker-Cards
+Legacy-Rewards-Tracker-Cards-Disable
+Legacy-Rewards-Tracker-Diamond
+Legacy-Rewards-Tracker-Diamond-Disable
+Legacy-Rewards-Tracker-Icon	108	155
+Legacy-Rewards-Tracker-Icons-Frame
+Legacy-Rewards-Tracker-Icons-Frame-Disable
+Legacy-Tree-Frame-background
+Legacy-Tree-Frame-Card
+Legacy-Tree-Frame-Card-Glow	95	76
+Legacy-Tree-Frame-Card-Ring
+Legacy-Tree-Frame-divider-Vertical
+Legacy-Tree-Frame-icon-frame-disable
+Legacy-Tree-Frame-icon-frame-Green
+Legacy-Tree-Frame-level-circle	64	64
+Legacy-Tree-Frame-Points-Bar
+Legacy-Tree-Frame-reset-button	20	20
+Legacy-Tree-Frame-Ring-big
+Legacy-up-c60
+macropopup-bottomleft	18	39
+macropopup-bottomright	174	39
+macropopup-topleft	18	71
+macropopup-topright	18	71
+minimal-scrollbar-arrow-bottom
+minimal-scrollbar-arrow-top
+minimal-scrollbar-small-thumb-bottom	8	8
+minimal-scrollbar-small-thumb-middle
+minimal-scrollbar-small-thumb-top	8	8
+minimal-scrollbar-track-bottom	8	8
+minimal-scrollbar-track-top	8	8
+newplayertutorial-yellowglow-redbutton-left	25	49
+newplayertutorial-yellowglow-redbutton-middle
+newplayertutorial-yellowglow-redbutton-right	25	49
+Nzoth-charactersheet-item-glow	66	66
+pvpqueue-sidebar-honorbar-background
+RedButton-Condense
+RedButton-Condense-disabled
+RedButton-Condense-Pressed
+RedButton-Exit
+RedButton-Exit-Disabled
+RedButton-exit-pressed
+RedButton-Expand
+RedButton-Expand-Disabled
+RedButton-Expand-Pressed
+RedButton-Highlight
+shop-card-wide-map
+spec-background
+Spinner_Ring
+Spinner_Sparks
+SquareMask
+talent-background-paladin
+talents-animations-class-paladin	461	461
+talents-animations-clouds	1612	774
+talents-animations-gridburst
+talents-animations-heroclass-backgroundrunes	828	399
+talents-animations-heroclass-backplate-full-glow-expanded	286	362
+talents-animations-heroclass-backplate-intro-glow-expanded	252	282
+talents-animations-mask-filigree-activate
+talents-animations-mask-full
+talents-animations-mask-heroclass-backplatefull-expanded	308	512
+talents-animations-mask-heroclass-ring	128	128
+talents-animations-mask-specart
+talents-animations-mask-specart-mid
+talents-animations-orb-activated
+talents-animations-particles	1308	774
+talents-animations-titans	972	810
+talents-arrow-head-ghost
+talents-arrow-head-gray
+talents-arrow-head-locked
+talents-arrow-head-yellow
+Talents-Background-c60
+talents-button-reset	20	20
+Talents-divider-left-c60	591	56
+Talents-divider-right-c60	595	56
+Talents-divider-vertical-c60	2	468
+talents-heroclass-backplate-full-expanded
+talents-heroclass-backplate-intro-expanded	252	282
+talents-heroclass-backplate-minimized-bottom
+talents-heroclass-backplate-minimized-middle
+talents-heroclass-backplate-minimized-top
+talents-heroclass-ring-intro
+talents-heroclass-ring-intro-glow	252	252
+talents-heroclass-ring-intro-locked	192	192
+talents-heroclass-ring-mainpane
+talents-heroclass-ring-minimize-hide
+talents-heroclass-ring-pointsavailable
+talents-icon-learnableplus
+Talents-inner-frame-c60
+talents-node-square-ghost
+talents-node-square-gray
+talents-node-square-green
+talents-node-square-greenglow
+talents-node-square-locked
+talents-node-square-shadow
+talents-node-square-sheenmask
+talents-node-square-yellow
+talents-search-match
+talents-sheen-heroclassicon
+talents-sheen-node
+Talents-Square-Box-c60	125	45
+transfer-log-background
+UI-Character-Info-Button-PullSide
+UI-Character-Info-Button-PullSide-Pressed
+UI-Character-Info-Button-PullUp
+UI-Character-Info-Button-PullUp-Pressed
+UI-Character-Info-GearSlot	55	55
+UI-Character-Info-GearSlot-Arrow	33	23
+UI-Character-Info-GearSlotSmall	44	44
+UI-Character-Info-General-BG	398	464
+UI-Character-Info-Honor-Bar-BG-Glow
+UI-Character-Info-Honor-Bar-BG-Horde	95	95
+UI-Character-Info-Honor-Icon-Horde	75	75
+UI-Character-Info-Honor-LevelBG	350	62
+UI-Character-Info-Honor-RewardRing
+UI-Character-Info-Icon-Add	18	18
+UI-Character-Info-ItemLevel-Bounce	204	21
+UI-Character-Info-Line-Bounce	213	18
+UI-Character-Info-Paladin-BG	233	383
+UI-Character-Info-RaceBG-Overlay
+UI-Character-Info-ScrollLine	210	7
+UI-Character-Info-ScrollLine-Long	384	8
+UI-Character-Info-Stat-BG
+UI-Character-Info-Stat-StoneBG3	233	60
+UI-Character-Info-StatTab
+UI-Character-Info-StatTab-Selected
+UI-Character-Info-Title
+UI-Frame-BotCornerLeft
+UI-Frame-BotCornerRight
+UI-Frame-IconMask
+UI-Frame-InnerBotLeftCorner	6	6
+UI-Frame-InnerBotRight	6	6
+UI-Frame-InnerTopLeft	6	6
+UI-Frame-InnerTopRight	6	6
+UI-Frame-Metal-CornerBottomLeft	95	100
+UI-Frame-Metal-CornerBottomRight	95	100
+UI-Frame-Metal-CornerTopLeft	95	95
+UI-Frame-Metal-CornerTopRight	95	95
+UI-Frame-PortraitMetal-CornerTopLeft	95	95
+UI-HUD-MicroMenu-Communities-Icon-Notification
+UI-Journeys-Delve-Arrow-Big-Left	25	40
+UI-Journeys-Delve-Arrow-Big-Left-disable	25	40
+UI-Journeys-Delve-Arrow-Big-Left-pressed	25	40
+UI-Journeys-Delve-Arrow-Small-Left	25	40
+UI-Journeys-Delve-Arrow-Small-Left-disable	25	40
+UI-Journeys-Delve-Arrow-Small-Left-pressed	25	40
+UI-Journeys-Paragon-Level-divider	31	74
+UI-Journeys-Scroll-Mask
+UI-Legacy-Points-icon-c60
+UI-Legacy-Tree-Adventure
+UI-Legacy-Tree-Professions
+UI-Legacy-Tree-Progression
+uiframe-activetab-left	35	32
+uiframe-activetab-right	37	32
+uiframe-tab-left	35	32
+uiframe-tab-right	37	32
+worldquest-tracker-checkmark	40	35

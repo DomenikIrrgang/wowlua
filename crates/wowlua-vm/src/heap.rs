@@ -261,6 +261,12 @@ impl Heap {
         s
     }
 
+    /// The interned string for `bytes`, if there is one (without making
+    /// it).
+    pub fn interned(&self, bytes: &[u8]) -> Option<StrRef> {
+        self.intern.get(bytes).copied()
+    }
+
     pub fn str_bytes(&self, s: StrRef) -> &[u8] {
         &self.strings.get(s.idx, s.generation).bytes
     }
