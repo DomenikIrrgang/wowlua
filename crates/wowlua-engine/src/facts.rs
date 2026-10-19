@@ -633,12 +633,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_LFGList.GetApplications", empty_list),
         // No pet battle, no nameplates.
         ("C_PetBattles.GetNumPets", zero),
-        ("C_PetBattles.GetHealth", zero),
-        ("C_PetBattles.GetMaxHealth", zero),
+        // (Health, level and experience are the full probe's,
+        // `leftovers2.rs`.)
         ("C_PetBattles.GetPower", zero),
         ("C_PetBattles.GetSpeed", zero),
-        ("C_PetBattles.GetLevel", zero),
-        ("C_PetBattles.GetXP", zeros),
         ("C_LFGListRoles.GetSavedRoles", saved_roles),
         ("GetGroupMemberCounts", group_member_counts),
         ("GetNetStats", net_stats),

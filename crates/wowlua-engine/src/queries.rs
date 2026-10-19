@@ -37,7 +37,10 @@ fn cvar_bitfield(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![Value::Bool(false)]);
     };
     let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
-    let value = framescript::cvar_get(vm, &name).unwrap_or_default();
+    // A CVar the client lacks: nil (the full probe, 1.60.1: "x" and "").
+    let Some(value) = framescript::cvar_get(vm, &name) else {
+        return Ok(vec![Value::Nil]);
+    };
     let i = (index as i64 - 1).max(0) as usize;
     let header = value.bytes().take_while(|b| *b < b'@').count();
     let set = value.as_bytes()[header..]
@@ -58,6 +61,11 @@ fn set_cvar_bitfield(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![Value::Bool(false)]);
     };
     let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
+    // Bits count from 1 (the full probe, 1.60.1: index 0 failed so).
+    if index < 1.0 {
+        let msg = vm.str("Predicate check failed: IsIndexInRange");
+        return Err(vm.raise(msg));
+    }
     let before = framescript::cvar_get(vm, &name).unwrap_or_default();
     let mut value = before.clone().into_bytes();
     let i = (index as i64 - 1).max(0) as usize;

@@ -2974,9 +2974,11 @@ fn control_show_nameplate(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `C_NamePlate.GetNamePlateForUnit(unit)`: the frame of the nameplate the
 /// unit is on, or nil.
+///
+/// No nameplate: nil (the full probe, 1.60.1: every token, none shown).
 fn get_name_plate_for_unit(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(id) = unit_arg(vm, &c, 1) else {
-        return Ok(vec![]);
+        return Ok(vec![Value::Nil]);
     };
     let u = &engine(vm).units;
     let frame = u
@@ -2986,7 +2988,7 @@ fn get_name_plate_for_unit(vm: &mut Vm, c: NativeCall) -> Ret {
         .and_then(|i| u.nameplate_frames.get(i));
     Ok(match frame {
         Some(f) => vec![Value::Table(engine(vm).world.widgets[f.0].table)],
-        None => vec![],
+        None => vec![Value::Nil],
     })
 }
 

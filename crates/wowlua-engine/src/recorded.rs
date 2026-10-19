@@ -330,5 +330,36 @@ pub fn call_variants(vm: &Vm, name: &str, c: &NativeCall) -> Vec<String> {
         args.pop();
         out.push(format!("{name}({})", args.join(", ")));
     }
+    // Arguments past the documented ones are ignored (the full probe,
+    // 1.60.1: `C_AccountServices.GetPreferredLocales("x")`,
+    // `C_PetBattles.IsInBattle(1, 1)` answered as without them).
+    let documented = engine(vm)
+        .api
+        .functions
+        .iter()
+        .find(|f| f.name == name)
+        .map(|f| {
+            f.doc
+                .get("Arguments")
+                .and_then(|a| a.as_array())
+                .map_or(0, Vec::len)
+        });
+    if let Some(n) = documented
+        && n < args.len()
+    {
+        out.push(format!("{name}({})", args[..n].join(", ")));
+    }
+    // An undocumented function recorded only without arguments takes none.
+    let bare = format!("{name}()");
+    if documented.is_none() && !args.is_empty() && answers().contains_key(bare.as_str()) {
+        let prefix = format!("{name}(");
+        let only_bare = answers()
+            .keys()
+            .filter(|k| k.starts_with(&prefix))
+            .all(|k| *k == bare);
+        if only_bare {
+            out.push(bare);
+        }
+    }
     out
 }

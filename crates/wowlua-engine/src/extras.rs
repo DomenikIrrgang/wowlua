@@ -1247,12 +1247,21 @@ fn request_more_commodity_search_results(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `C_Intl.GetCurrentLocale()`: the client's locale (`GetLocale`'s
 /// answer; unverified: ICU's form of it).
+///
+/// The full probe (1.60.1): "en-US", the locale's language and region
+/// joined by a hyphen (`GetLocale`'s "enUS").
 fn intl_current_locale(vm: &mut Vm, _c: NativeCall) -> Ret {
     let locale = ask(vm, "GetLocale", &[]);
-    Ok(vec![match locale.first().copied() {
-        Some(v @ Value::Str(_)) => v,
-        _ => vm.str("enUS"),
-    }])
+    let text = match locale.first().copied() {
+        Some(Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        _ => "enUS".to_string(),
+    };
+    let text = if text.len() == 4 && text.is_ascii() {
+        format!("{}-{}", &text[..2], &text[2..])
+    } else {
+        text
+    };
+    Ok(vec![vm.str(&text)])
 }
 
 /// A text function of `C_Intl` (Unicode's case rules; unverified against
@@ -1358,8 +1367,7 @@ fn grouped(n: i64) -> String {
 
 /// `C_Intl.FormatNumber(number, style)`: en-US's: `Decimal` grouped with
 /// up to three decimals, `Integer` rounded, `Percent` times 100 rounded
-/// with "%", `Currency` with "$" and two decimals (ICU's patterns;
-/// unverified on the client).
+/// with "%" (ICU's patterns); `Currency` nothing (the full probe, 1.60.1).
 fn intl_format_number(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(n) = arg_num(vm, &c, 1) else {
         return Ok(vec![]);
@@ -1388,13 +1396,8 @@ fn intl_format_number(vm: &mut Vm, c: NativeCall) -> Ret {
     let out = match style {
         1 => grouped(n.round() as i64),
         2 => format!("{}%", grouped((n * 100.0).round() as i64)),
-        3 => {
-            let text = with_decimals(n, 2, true);
-            match text.strip_prefix('-') {
-                Some(rest) => format!("-${rest}"),
-                None => format!("${text}"),
-            }
-        }
+        // Currency: nothing (the full probe, 1.60.1: every number).
+        3 => return Ok(vec![]),
         _ => with_decimals(n, 3, false),
     };
     Ok(vec![vm.str(&out)])

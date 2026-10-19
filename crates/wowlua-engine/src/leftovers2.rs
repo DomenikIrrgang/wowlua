@@ -245,8 +245,6 @@ const DOCUMENTED_EMPTY: &[&str] = &[
     "C_ClubFinder.IsListingEnabledFromFlags",
     // Battle.net's optional features: off; no game data sent.
     "C_BattleNet.AreHighResTexturesInstalled",
-    "C_BattleNet.AreFriendTagsEnabled",
-    "C_BattleNet.CanToggleHighResTexturesWithoutClientReload",
     "C_BattleNet.GetFriendLevelFromInviteText",
     "C_BattleNet.SendGameData",
     // Voice chat: nothing to log into.
@@ -256,10 +254,6 @@ const DOCUMENTED_EMPTY: &[&str] = &[
     // Reporting: nothing to report (the report frame's lists empty).
     "C_ReportSystem.CanReportPlayer",
     "C_ReportSystem.CanReportPlayerForLanguage",
-    "C_ReportSystem.GetMajorCategoriesForReportType",
-    "C_ReportSystem.GetMajorCategoryString",
-    "C_ReportSystem.GetMinorCategoriesForReportTypeAndMajorCategory",
-    "C_ReportSystem.GetMinorCategoryString",
     "C_ReportSystem.RequiresScreenshotForReportType",
     // Chat lines: none kept by their IDs; no regional or mentor channel.
     "C_ChatInfo.GetChatLineText",
@@ -991,6 +985,552 @@ fn create_frame_with_options(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![frame])
 }
 
+// ------------------------------------------------ the full probe's constants
+
+/// Functions of systems the character was not in (no pet battle, black
+/// market, talking head, scenario, voice channel, adventure map…) or
+/// whose answer is a rule of the client's: one answer for every argument
+/// the full probe (1.60.1, `/stdtest engine fullprobe`) passed, as
+/// `data/camelot-answers.txt` writes answers. Unverified: the systems in
+/// use (a pet battle, an open black market).
+const PROBED_CONSTANT: &[(&str, &str)] = &[
+    // Pet battles, out of one: the slots' default pets.
+    ("C_PetBattles.GetBreedQuality", "1: number 0"),
+    ("C_PetBattles.GetXP", "2: number 0, number 50"),
+    (
+        "C_PetBattles.GetTurnTimeInfo",
+        "3: number 0, number 0, number 0",
+    ),
+    ("C_PetBattles.GetPlayerTrapAbility", "0: "),
+    ("C_PetBattles.GetPetType", "1: number 1"),
+    ("C_PetBattles.GetNumAuras", "0: "),
+    ("C_PetBattles.GetMaxHealth", "1: number 100"),
+    ("C_PetBattles.GetLevel", "1: number 1"),
+    ("C_PetBattles.GetHealth", "1: number 100"),
+    ("C_PetBattles.GetDisplayID", "1: number 0"),
+    ("C_PetBattles.GetActivePet", "1: number 1"),
+    ("C_PetBattles.CanAcceptQueuedPVPMatch", "1: boolean true"),
+    ("C_PetBattles.CanPetSwapIn", "1: boolean false"),
+    ("C_PetBattles.GetAbilityStateModification", "1: number 0"),
+    // No black market, adventure map, talking head, reincarnation,
+    // diminishing returns, death recap events, debug objects.
+    ("C_BlackMarket.GetNumItems", "0: "),
+    ("C_BlackMarket.GetItemInfoByIndex", "0: "),
+    ("C_BlackMarket.GetItemInfoByID", "0: "),
+    ("C_BlackMarket.GetHotItem", "0: "),
+    ("C_BlackMarket.IsViewOnly", "0: "),
+    ("C_AdventureMap.GetMapID", "0: "),
+    ("C_AdventureMap.GetQuestOfferInfo", "0: "),
+    ("C_AdventureMap.GetQuestInfo", "0: "),
+    ("C_AdventureMap.GetMapInsetInfo", "0: "),
+    ("C_AdventureMap.GetZoneChoiceInfo", "0: "),
+    ("C_AdventureMap.GetMapInsetDetailTileInfo", "0: "),
+    ("C_AdventureMap.GetAdventureMapTextureKit", "1: nil nil"),
+    ("C_AdventureJournal.GetReward", "0: "),
+    ("C_TalkingHead.IsCurrentTalkingHeadIgnored", "0: "),
+    ("C_TalkingHead.GetCurrentLineInfo", "0: "),
+    ("C_TalkingHead.GetCurrentLineAnimationInfo", "0: "),
+    ("C_TalkingHead.GetConversationsDeferred", "0: "),
+    ("C_Reincarnation.IsReincarnating", "0: "),
+    ("C_Reincarnation.GetReincarnatingCharacter", "0: "),
+    ("C_SpellDiminish.ShouldTrackSpellDiminishCategory", "0: "),
+    ("C_SpellDiminish.GetSpellDiminishCategoryInfo", "0: "),
+    ("C_SpellDiminish.GetAllSpellDiminishCategories", "0: "),
+    ("C_DeathRecap.GetRecapEvents", "0: "),
+    ("C_DeathRecap.GetRecapLink", "1: string You died."),
+    ("C_Debug.GetMapDebugObjects", "0: "),
+    ("C_Debug.GetAllPortLocsForMap", "0: "),
+    ("C_HouseExterior.GetSelectedFixtureDebugInfo", "0: "),
+    ("C_HouseExterior.GetHoveredFixtureDebugInfo", "0: "),
+    ("C_HouseExterior.GetFixtureDebugInfoForGUID", "0: "),
+    // Voice chat: no channel, no members.
+    ("C_VoiceChat.IsMemberSilenced", "1: nil nil"),
+    ("C_VoiceChat.IsMemberMutedForAll", "1: nil nil"),
+    ("C_VoiceChat.IsMemberMuted", "1: nil nil"),
+    ("C_VoiceChat.GetMemberGUID", "1: nil nil"),
+    ("C_VoiceChat.GetActiveChannelID", "1: nil nil"),
+    (
+        "C_VoiceChat.GetCurrentVoiceChatConnectionStatusCode",
+        "1: number 0",
+    ),
+    ("C_VoiceChat.GetProcesses", "0: "),
+    // The pet journal and toys: none summoned, no abilities listed.
+    ("C_PetJournal.GetSummonedPetGUID", "0: "),
+    (
+        "C_PetJournal.GetSummonRandomFavoritePetGUID",
+        "1: string BattlePet-0-FFFFFFFFFFFFFF",
+    ),
+    (
+        "C_PetJournal.GetSummonBattlePetCooldown",
+        "3: number 0, number 0, number 1",
+    ),
+    ("C_PetJournal.GetNumPetSources", "1: number 12"),
+    ("C_PetJournal.GetPetAbilityListTable", "0: "),
+    ("C_PetJournal.GetPetAbilityList", "0: "),
+    ("C_PetJournal.GetNumCollectedInfo", "0: "),
+    (
+        "C_PetJournal.GetPetSummonInfo",
+        "3: boolean false, number 0, nil nil",
+    ),
+    ("C_PetJournal.GetNonBattlePetLinkByIndex", "1: nil nil"),
+    ("C_PetJournal.PetIsFavorite", "1: nil nil"),
+    ("C_PetJournal.GetPetCooldownByGUID", "0: "),
+    ("C_PetJournal.GetBattlePetLink", "0: "),
+    ("C_ToyBox.IsToyUsable", "0: "),
+    ("C_ToyBox.GetToyLink", "0: "),
+    ("C_Heirloom.GetHeirloomMaxUpgradeLevel", "0: "),
+    // Transmog: every source collectable, no variants, no drops.
+    ("C_TransmogSets.GetVariantSets", "0: "),
+    ("C_TransmogSets.GetSetNewSources", "1: {}"),
+    ("C_TransmogSets.HasAnyValidSets", "1: boolean false"),
+    (
+        "C_TransmogSets.GetValidBaseSetsCountsForCharacter",
+        "2: number 0, number 0",
+    ),
+    (
+        "C_TransmogSets.GetFullBaseSetsCounts",
+        "2: number 0, number 0",
+    ),
+    (
+        "C_TransmogSets.GetFilteredBaseSetsCounts",
+        "2: number 0, number 0",
+    ),
+    (
+        "C_TransmogCollection.PlayerCanCollectSource",
+        "2: boolean true, boolean false",
+    ),
+    (
+        "C_TransmogCollection.AccountCanCollectSource",
+        "2: boolean true, boolean false",
+    ),
+    ("C_TransmogCollection.GetAppearanceSourceDrops", "0: "),
+    (
+        "C_TransmogCollection.GetValidAppearanceSourcesForClass",
+        "0: ",
+    ),
+    ("C_TransmogCollection.GetNumMaxCustomSets", "1: number 25"),
+    (
+        "C_TransmogCollection.GetInspectItemTransmogInfoList",
+        "1: {}",
+    ),
+    (
+        "C_TransmogOutfitInfo.GetOutfitSituationsEnabled",
+        "1: boolean true",
+    ),
+    ("C_TransmogOutfitInfo.GetNextOutfitCost", "1: number 1000"),
+    (
+        "C_TransmogOutfitInfo.GetMaxNumberOfUsableOutfits",
+        "1: number 50",
+    ),
+    // PvP outside a battleground: no flags, the rules' constants.
+    (
+        "C_PvP.GetBattlefieldFlagPosition",
+        "3: number 0, number 0, number 0",
+    ),
+    ("C_PvP.IsMatchFactional", "1: boolean true"),
+    ("C_PvP.GetUIDisplaySeason", "1: number 1"),
+    ("C_PvP.GetPvpTalentsUnlockedLevel", "1: number 20"),
+    ("C_PvP.GetActiveMatchBracket", "1: number -1"),
+    ("C_PvP.CanDisplayHonorableKills", "1: boolean true"),
+    ("C_PvP.CanDisplayDeaths", "1: boolean true"),
+    ("C_PvP.AreTrainingGroundsEnabled", "1: boolean true"),
+    // Game rules and services.
+    (
+        "C_CraftingOrders.CalculateCraftingOrderPostingFee",
+        "1: number 100",
+    ),
+    ("C_WowTokenPublic.GetGuaranteedPrice", "1: number 0"),
+    (
+        "C_WowTokenPublic.GetCurrentMarketPrice",
+        "2: nil nil, nil nil",
+    ),
+    (
+        "C_WowTokenPublic.GetCommerceSystemStatus",
+        "3: boolean false, number 300, boolean false",
+    ),
+    ("C_WowLabsDataManager.IsInPrematch", "1: boolean true"),
+    ("C_WowLabsDataManager.GetWoWLabsAreaInfo", "1: {}"),
+    ("C_Trophy.MonumentGetSelectedTrophyID", "1: number 0"),
+    ("C_LFGList.HasActivityList", "1: boolean true"),
+    ("C_LFGList.GetSearchResultEncounterInfo", "0: "),
+    ("C_Scenario.GetBonusStepRewardQuestID", "1: number 0"),
+    ("C_AddOns.GetAddOnLocalTable", "0: "),
+    ("C_GameRules.IsGameModeEnabled", "1: boolean true"),
+    ("C_GameRules.GetGameModePromoGlobalString", "1: nil nil"),
+    ("C_GameRules.GetGameRuleAsFrameStrata", "1: nil nil"),
+    ("C_GameRules.GetGameModeGlueScreenName", "1: nil nil"),
+    ("C_GameRules.GetNumDisplayedGameModes", "1: number 5"),
+    ("C_GameRules.GetCurrentGameModeRecordID", "1: number 15"),
+    ("C_AccountStore.GetStoreFrontState", "1: number 1"),
+    ("C_ClubFinder.GetPostingIDFromClubFinderGUID", "1: number 0"),
+    ("C_ClubFinder.PlayerGetClubInvitationList", "0: "),
+    ("C_AccountInfo.GetIDFromBattleNetAccountGUID", "1: nil nil"),
+    ("C_Mail.GetCraftingOrderMailInfo", "1: nil nil"),
+    (
+        "C_ChatInfo.GetClubStreamIDs",
+        "1: {1=number 0,2=number 0,3=number 0,4=number 0,5=number 0,6=number 0}",
+    ),
+    ("C_KeyBindings.GetBindingContextForAction", "1: number 0"),
+    ("C_Intl.GetCurrencyFractionDigits", "1: number 2"),
+    (
+        "C_SharedCharacterServices.IsPurchaseIDPendingUpgrade",
+        "0: ",
+    ),
+    (
+        "C_SeasonInfo.GetCurrentDisplaySeasonExpansion",
+        "1: number 0",
+    ),
+    ("C_SeasonInfo.GetCurrentDisplaySeasonID", "1: number 29"),
+    (
+        "C_RecruitAFriend.GetSummonFriendCooldown",
+        "3: number 0, number 0, boolean true",
+    ),
+    ("C_QuestSession.GetSessionBeginDetails", "1: nil nil"),
+    (
+        "C_QuestOffer.GetQuestOfferMajorFactionReputationRewards",
+        "0: ",
+    ),
+    ("C_PhotoSharing.GetCropRatio", "1: number 1"),
+    ("C_PartyInfo.GetLootMethodStyle", "1: number 1"),
+    ("C_IslandsQueue.GetIslandsMaxGroupSize", "1: number 3"),
+    ("C_IslandsQueue.GetIslandsWeeklyQuestID", "1: number 53435"),
+    ("C_HouseExterior.IsExteriorDecorHidden", "1: boolean true"),
+    ("C_HouseEditor.GetHouseEditorAvailability", "1: number 50"),
+    ("C_CombatLog.IsCombatLogRestricted", "1: boolean true"),
+    ("C_CombatLog.GetMessageLimit", "1: number 300"),
+    ("C_CombatLog.GetEntryRetentionTime", "1: number 300"),
+    ("C_CombatText.GetActiveUnit", "0: "),
+    ("C_Calendar.CanSendInvite", "1: boolean true"),
+    ("C_Calendar.CanAddEvent", "1: boolean true"),
+    (
+        "C_BattleNet.CanToggleHighResTexturesWithoutClientReload",
+        "1: boolean true",
+    ),
+    ("C_BattleNet.AreFriendTagsEnabled", "1: boolean true"),
+    (
+        "C_ArdenwealdGardening.IsGardenAccessible",
+        "1: boolean true",
+    ),
+    ("C_AnimaDiversion.GetTextureKit", "1: nil nil"),
+    ("C_AddOnProfiler.IsEnabled", "1: boolean true"),
+    ("C_AddOnProfiler.GetTicksPerSecond", "1: number 24000000"),
+    ("C_CovenantSanctumUI.GetRenownLevel", "1: number 1"),
+    (
+        "C_CovenantSanctumUI.GetAnimaInfo",
+        "2: number 1813, number 0",
+    ),
+    ("C_CovenantSanctumUI.CanAccessReservoir", "1: boolean true"),
+    (
+        "C_CharacterServicesPublic.ShouldSeeControlPopup",
+        "1: boolean true",
+    ),
+    ("C_EncounterWarnings.GetWarningsShown", "1: boolean true"),
+];
+
+/// A `PROBED_CONSTANT` function: its one answer.
+fn probed_constant(vm: &mut Vm, c: NativeCall) -> Ret {
+    let name = crate::recorded::called_name(vm, &c).unwrap_or_default();
+    let answer = PROBED_CONSTANT
+        .iter()
+        .find(|(n, _)| *n == name)
+        .map_or("0: ", |(_, a)| *a);
+    Ok(crate::recorded::parse_answer(vm, answer))
+}
+
+/// `C_ReportSystem.GetMajorCategoryString(category)`: the global string's
+/// name (the full probe, 1.60.1: 0 to 5; a string reads as 0; unverified:
+/// the categories past 5).
+fn report_major_category_string(vm: &mut Vm, c: NativeCall) -> Ret {
+    const NAMES: [&str; 6] = [
+        "INAPPROPRIATE_COMMUNICATION",
+        "GAMEPLAY_SABOTAGE",
+        "CHEATING",
+        "INAPPROPRIATE_NAME",
+        "INAPPROPRIATE_DECOR",
+        "INAPPROPRIATE_BLUEPRINT",
+    ];
+    let i = arg_num(vm, &c, 1).unwrap_or(0.0) as usize;
+    let name = NAMES
+        .get(i)
+        .map_or(String::new(), |n| format!("REPORTING_MAJOR_CATEGORY_{n}"));
+    Ok(vec![vm.str(&name)])
+}
+
+/// `C_ReportSystem.GetMinorCategoryString(category)`: the global string's
+/// name of its lowest flag (the full probe, 1.60.1: every flag of
+/// `Enum.ReportMinorCategory`; 1048577 named as 1).
+fn report_minor_category_string(vm: &mut Vm, c: NativeCall) -> Ret {
+    const NAMES: [&str; 21] = [
+        "MINOR_CATEGORY_TEXT_CHAT",
+        "MINOR_CATEGORY_BOOSTING",
+        "MINOR_CATEGORY_SPAM",
+        "MINOR_CATEGORY_AFK",
+        "MINOR_CATEGORY_FEEDING",
+        "MINOR_CATEGORY_BLOCKING_PROG",
+        "MINOR_CATEGORY_HACKING",
+        "MINOR_CATEGORY_BOTTING",
+        "MINOR_CATEGORY_ADVERTISEMENT",
+        "MINOR_CATEGORY_BTAG",
+        "MINOR_CATEGORY_GROUP_NAME",
+        "MINOR_CATEGORY_CHARACTER_NAME",
+        "MINOR_CATEGORY_GUILD_NAME",
+        "MINOR_CATEGORY_DESCRIPTION",
+        "MINOR_CATEGORY_NAME",
+        "MAJOR_CATEGORY_CHINA_HARMFUL_MINORS",
+        "MINOR_CATEGORY_DISRUPTION",
+        "MINOR_CATEGORY_TVEC",
+        "MINOR_CATEGORY_CSEA",
+        "MINOR_CATEGORY_NEIGHBORHOOD_NAME",
+        "MINOR_CATEGORY_HOUSING_BLUEPRINT",
+    ];
+    let flags = arg_num(vm, &c, 1).unwrap_or(0.0) as u64;
+    let name = (flags != 0)
+        .then(|| NAMES.get(flags.trailing_zeros() as usize))
+        .flatten()
+        .map_or(String::new(), |n| format!("REPORTING_{n}"));
+    Ok(vec![vm.str(&name)])
+}
+
+/// `C_ReportSystem.GetMajorCategoriesForReportType(reportType)`: the
+/// client's list for each type (the full probe, 1.60.1: types 0 to 21; a
+/// string reads as 0).
+fn report_major_categories(vm: &mut Vm, c: NativeCall) -> Ret {
+    let t = arg_num(vm, &c, 1).unwrap_or(0.0) as usize;
+    let cats: &[f64] = match t {
+        0 | 2..=6 => &[0.0, 3.0],
+        1 | 14 => &[3.0, 2.0, 1.0],
+        7 => &[3.0, 0.0, 1.0],
+        8 | 11 | 12 => &[3.0, 0.0],
+        9 | 10 | 17 | 19 | 20 => &[3.0],
+        13 => &[1.0],
+        15 => &[3.0, 0.0, 2.0, 1.0],
+        16 => &[0.0],
+        18 => &[4.0, 3.0],
+        21 => &[5.0],
+        _ => &[],
+    };
+    let values: Vec<Value> = cats.iter().map(|&n| Value::Num(n)).collect();
+    Ok(vec![list(vm, &values)])
+}
+
+/// `C_ReportSystem.GetMinorCategoriesForReportTypeAndMajorCategory(type,
+/// major)`: the client's lists where the full probe (1.60.1) asked them
+/// (major 0 for each type, and type 0's majors); none elsewhere
+/// (unverified).
+fn report_minor_categories(vm: &mut Vm, c: NativeCall) -> Ret {
+    const CHAT: &[f64] = &[1.0, 4.0, 256.0, 131072.0, 262144.0];
+    const PROFILE: &[f64] = &[256.0, 8192.0, 131072.0, 262144.0];
+    let t = arg_num(vm, &c, 1).unwrap_or(0.0) as usize;
+    let major = arg_num(vm, &c, 2).unwrap_or(0.0) as usize;
+    let cats: &[f64] = match (t, major) {
+        (0 | 6 | 7 | 8 | 12 | 15, 0) => CHAT,
+        (2..=5 | 11, 0) => PROFILE,
+        (16, 0) => &[1.0],
+        (21, 0) => &[1048576.0],
+        (0, 3) => &[2048.0, 512.0],
+        _ => &[],
+    };
+    let values: Vec<Value> = cats.iter().map(|&n| Value::Num(n)).collect();
+    Ok(vec![list(vm, &values)])
+}
+
+// ------------------------------------------------------- dates and texts
+
+/// A Unix time's UTC date and time: year, month (1..12), day, weekday
+/// (0 Sunday), hour, minute, second.
+fn utc_parts(t: i64) -> (i64, usize, i64, usize, i64, i64, i64) {
+    let days = t.div_euclid(86400);
+    let secs = t.rem_euclid(86400);
+    // Howard Hinnant's civil_from_days.
+    let z = days + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36524 - doe / 146_096) / 365;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    let y = yoe + era * 400 + i64::from(m <= 2);
+    let weekday = (days + 4).rem_euclid(7) as usize;
+    (
+        y,
+        m as usize,
+        d,
+        weekday,
+        secs / 3600,
+        secs / 60 % 60,
+        secs % 60,
+    )
+}
+
+const MONTHS: [&str; 12] = [
+    "January",
+    "February",
+    "March",
+    "April",
+    "May",
+    "June",
+    "July",
+    "August",
+    "September",
+    "October",
+    "November",
+    "December",
+];
+const WEEKDAYS: [&str; 7] = [
+    "Sunday",
+    "Monday",
+    "Tuesday",
+    "Wednesday",
+    "Thursday",
+    "Friday",
+    "Saturday",
+];
+
+/// A date in an `Enum.DateTimeStyle` (1 short, 2 medium, 3 long, 4 full),
+/// en-US as ICU writes it; none for 0.
+fn date_text(t: i64, style: i64) -> Option<String> {
+    let (y, m, d, wd, ..) = utc_parts(t);
+    let month = MONTHS[m - 1];
+    Some(match style {
+        1 => format!("{m}/{d}/{:02}", y.rem_euclid(100)),
+        2 => format!("{} {d}, {y}", &month[..3]),
+        3 => format!("{month} {d}, {y}"),
+        4 => format!("{}, {month} {d}, {y}", WEEKDAYS[wd]),
+        _ => return None,
+    })
+}
+
+/// A time in an `Enum.DateTimeStyle`, en-US as ICU writes it (a narrow
+/// no-break space before AM and PM), in UTC; none for 0.
+fn time_text(t: i64, style: i64) -> Option<String> {
+    let (.., h, min, s) = utc_parts(t);
+    let (h12, half) = match h {
+        0 => (12, "AM"),
+        1..=11 => (h, "AM"),
+        12 => (12, "PM"),
+        _ => (h - 12, "PM"),
+    };
+    Some(match style {
+        1 => format!("{h12}:{min:02}\u{202f}{half}"),
+        2 => format!("{h12}:{min:02}:{s:02}\u{202f}{half}"),
+        3 => format!("{h12}:{min:02}:{s:02}\u{202f}{half} GMT+0"),
+        4 => format!("{h12}:{min:02}:{s:02}\u{202f}{half} GMT+00:00"),
+        _ => return None,
+    })
+}
+
+fn style_arg(vm: &Vm, c: &NativeCall, n: usize) -> i64 {
+    arg_num(vm, c, n).unwrap_or(0.0) as i64
+}
+
+fn text_or_nothing(vm: &mut Vm, text: Option<String>) -> Ret {
+    Ok(text.map(|t| vec![vm.str(&t)]).unwrap_or_default())
+}
+
+// `C_Intl.FormatDate`, `FormatTime`, `FormatDateTime`: en-US, the time
+// zone given read as UTC (the full probe, 1.60.1: time 1 in each style
+// with zone "x": "1/1/70", "Jan 1, 1970", "January 1, 1970", "Thursday,
+// January 1, 1970", "12:00 AM", "12:00:01 AM", "… GMT+0", "… GMT+00:00";
+// style 0 or a string nothing). Unverified: a real time zone, both styles
+// at once (joined by ", " as ICU joins them).
+
+fn intl_format_date(vm: &mut Vm, c: NativeCall) -> Ret {
+    let t = arg_num(vm, &c, 1).unwrap_or(0.0).floor() as i64;
+    let text = date_text(t, style_arg(vm, &c, 2));
+    text_or_nothing(vm, text)
+}
+
+fn intl_format_time(vm: &mut Vm, c: NativeCall) -> Ret {
+    let t = arg_num(vm, &c, 1).unwrap_or(0.0).floor() as i64;
+    let text = time_text(t, style_arg(vm, &c, 2));
+    text_or_nothing(vm, text)
+}
+
+fn intl_format_date_time(vm: &mut Vm, c: NativeCall) -> Ret {
+    let t = arg_num(vm, &c, 1).unwrap_or(0.0).floor() as i64;
+    let date = date_text(t, style_arg(vm, &c, 2));
+    let time = time_text(t, style_arg(vm, &c, 3));
+    let text = match (date, time) {
+        (Some(d), Some(t)) => Some(format!("{d}, {t}")),
+        (d, t) => d.or(t),
+    };
+    text_or_nothing(vm, text)
+}
+
+/// `C_Intl.GetCurrencyName(code, style)`: the code itself for a code ICU
+/// does not know, nothing for none (the full probe, 1.60.1: "x" in every
+/// style; unverified: a real currency's name).
+fn intl_get_currency_name(vm: &mut Vm, c: NativeCall) -> Ret {
+    let code = arg_text(vm, &c, 1).unwrap_or_default();
+    if code.is_empty() {
+        return Ok(vec![]);
+    }
+    Ok(vec![vm.str(&code)])
+}
+
+/// `C_Intl.GetDisplayName(displayLocale)`: the client's locale named in
+/// that locale: English (United States), "en (US)" in the root locale ""
+/// (the full probe, 1.60.1; unverified: other display locales).
+fn intl_get_display_name(vm: &mut Vm, c: NativeCall) -> Ret {
+    let shown = arg_text(vm, &c, 1).unwrap_or_default();
+    let name = if shown.is_empty() {
+        "en (US)"
+    } else {
+        "English (United States)"
+    };
+    Ok(vec![vm.str(name)])
+}
+
+/// `C_Ping.GetTextureKitForType(type)`: `Enum.PingSubjectType`'s kits (the
+/// full probe, 1.60.1: 0 to 8, a string as 0; nil past them).
+fn ping_texture_kit(vm: &mut Vm, c: NativeCall) -> Ret {
+    const KITS: [&str; 9] = [
+        "Attack",
+        "Warning",
+        "Assist",
+        "OnMyWay",
+        "Threat",
+        "NonThreat",
+        "Available",
+        "Unavailable",
+        "Unavailable",
+    ];
+    let t = arg_num(vm, &c, 1).unwrap_or(0.0);
+    Ok(vec![match KITS.get(t as usize).filter(|_| t >= 0.0) {
+        Some(k) => vm.str(k),
+        None => Value::Nil,
+    }])
+}
+
+/// `C_ScenarioInfo.GetJailersTowerTypeString(type)`: Torghast's wings by
+/// `Enum.JailersTowerType` (the full probe, 1.60.1: 0 to 14, a string as
+/// 0; unverified: past 14).
+fn jailers_tower_type_string(vm: &mut Vm, c: NativeCall) -> Ret {
+    const WINGS: [&str; 15] = [
+        "Twisting Corridors",
+        "Skoldus Hall",
+        "Fracture Chambers",
+        "The Soulforges",
+        "Coldheart Interstitia",
+        "Mort'regar",
+        "Upper Reaches",
+        "Arkoban Hall",
+        "Torment Chamber: Jaina",
+        "Torment Chamber: Thrall",
+        "Torment Chamber: Anduin",
+        "Adamant Vaults",
+        "Fervid Catacombs",
+        "",
+        "The Jailer's Gauntlet",
+    ];
+    let t = arg_num(vm, &c, 1).unwrap_or(0.0);
+    Ok(vec![match WINGS.get(t as usize).filter(|_| t >= 0.0) {
+        Some(w) => vm.str(w),
+        None => Value::Nil,
+    }])
+}
+
 /// The module's behaviours.
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     let mut list: Vec<(&'static str, NativeFn)> = vec![
@@ -1083,6 +1623,39 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetMouseButtonClicked", get_mouse_button_clicked),
     ];
     list.extend(DOCUMENTED_EMPTY.iter().map(|&n| (n, nothing as NativeFn)));
+    list.extend(
+        PROBED_CONSTANT
+            .iter()
+            .map(|&(n, _)| (n, probed_constant as NativeFn)),
+    );
+    list.extend([
+        (
+            "C_ReportSystem.GetMajorCategoryString",
+            report_major_category_string as NativeFn,
+        ),
+        (
+            "C_ReportSystem.GetMinorCategoryString",
+            report_minor_category_string,
+        ),
+        (
+            "C_ReportSystem.GetMajorCategoriesForReportType",
+            report_major_categories,
+        ),
+        (
+            "C_ReportSystem.GetMinorCategoriesForReportTypeAndMajorCategory",
+            report_minor_categories,
+        ),
+        ("C_Intl.FormatDate", intl_format_date),
+        ("C_Intl.FormatTime", intl_format_time),
+        ("C_Intl.FormatDateTime", intl_format_date_time),
+        ("C_Intl.GetCurrencyName", intl_get_currency_name),
+        ("C_Intl.GetDisplayName", intl_get_display_name),
+        ("C_Ping.GetTextureKitForType", ping_texture_kit),
+        (
+            "C_ScenarioInfo.GetJailersTowerTypeString",
+            jailers_tower_type_string,
+        ),
+    ]);
     list.extend(UNDOCUMENTED.iter().map(|&(n, _)| (n, nothing as NativeFn)));
     list
 }

@@ -289,15 +289,20 @@ fn get_legacy_raid_difficulty_id(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 /// `C_RaidLocks.GetRedirectedDifficultyID(mapID, difficultyID)`: the
 /// difficulty itself, nothing redirected (unverified).
+///
+/// Truncated (the full probe, 1.60.1: 1.5 gave 1).
 fn get_redirected_difficulty_id(vm: &mut Vm, c: NativeCall) -> Ret {
-    let id = vm.check_number(&c, 2)?;
+    let id = vm.check_number(&c, 2)?.trunc();
     Ok(vec![Value::Num(id)])
 }
 
 /// `C_EncounterJournal.GetBaseDifficultyID(difficultyID)`: the difficulty
-/// itself (unverified).
+/// itself, truncated; one the client lacks its unsigned -1 (the full
+/// probe, 1.60.1: 1.5 gave 1, 2147483647 gave 4294967295; unverified: the
+/// last difficulty it has, taken as below 1000).
 fn get_base_difficulty_id(vm: &mut Vm, c: NativeCall) -> Ret {
-    let id = vm.check_number(&c, 1)?;
+    let id = vm.check_number(&c, 1)?.trunc();
+    let id = if id >= 1000.0 { 4294967295.0 } else { id };
     Ok(vec![Value::Num(id)])
 }
 

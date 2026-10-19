@@ -1901,10 +1901,38 @@ fn nums(values: [f64; 3]) -> Vec<Value> {
     values.into_iter().map(Value::Num).collect()
 }
 
+/// `C_Texture.GetFilenameFromFileDataID(id)`: "FileData ID <id>", the
+/// client's name for a file it does not list (the full probe, 1.60.1:
+/// -1, 0, 1, 1.5 as 1, 2147483647; unverified: a file it names).
+fn filename_from_file_id(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = num(vm, c.arg(1)).unwrap_or(0.0).trunc() as i64;
+    Ok(vec![vm.str(&format!("FileData ID {id}"))])
+}
+
+// The conversions clamp their inputs (hue to 0..360, the rest to 0..1)
+// and compute in single precision (the full probe, 1.60.1: hue
+// 2147483647 read as 360, -1 as 0, a saturation 1.5 as 1; HSV (1, 1, 1)
+// gave green 0.016666650772095, a float's 1 - (1 - 1/60)).
+
+/// The arguments clamped: a hue (0..360) or a channel (0..1) each.
+fn clamped(vm: &Vm, c: &NativeCall, hue: bool) -> (f32, f32, f32) {
+    let (a, b, d) = three(vm, c);
+    let a = if hue {
+        a.clamp(0.0, 360.0)
+    } else {
+        a.clamp(0.0, 1.0)
+    };
+    (a as f32, b.clamp(0.0, 1.0) as f32, d.clamp(0.0, 1.0) as f32)
+}
+
+fn nums32(v: [f32; 3]) -> Vec<Value> {
+    nums(v.map(f64::from))
+}
+
 /// `C_ColorUtil.ConvertRGBToHSV(r, g, b)`: hue in degrees, -1 for a gray
-/// (documented), saturation and value 0..1 (unverified: degrees).
+/// (documented), saturation and value 0..1.
 fn convert_rgb_to_hsv(vm: &mut Vm, c: NativeCall) -> Ret {
-    let (r, g, b) = three(vm, &c);
+    let (r, g, b) = clamped(vm, &c, false);
     let max = r.max(g).max(b);
     let min = r.min(g).min(b);
     let delta = max - min;
@@ -1921,45 +1949,49 @@ fn convert_rgb_to_hsv(vm: &mut Vm, c: NativeCall) -> Ret {
         };
         h * 60.0
     };
-    Ok(nums([h, s, max]))
+    Ok(nums32([h, s, max]))
 }
 
-/// `C_ColorUtil.ConvertHSVToRGB(h, s, v)`.
+/// `C_ColorUtil.ConvertHSVToRGB(h, s, v)`: the hue's sixth of the circle
+/// (the last one past 360's float rounding: hue 360 gave blue
+/// -4.7683715820312e-07).
 fn convert_hsv_to_rgb(vm: &mut Vm, c: NativeCall) -> Ret {
-    let (h, s, v) = three(vm, &c);
-    let h = if h < 0.0 { 0.0 } else { h.rem_euclid(360.0) };
-    let chroma = v * s;
-    let x = chroma * (1.0 - ((h / 60.0).rem_euclid(2.0) - 1.0).abs());
-    let m = v - chroma;
-    let (r, g, b) = match (h / 60.0) as i64 {
-        0 => (chroma, x, 0.0),
-        1 => (x, chroma, 0.0),
-        2 => (0.0, chroma, x),
-        3 => (0.0, x, chroma),
-        4 => (x, 0.0, chroma),
-        _ => (chroma, 0.0, x),
+    let (h, s, v) = clamped(vm, &c, true);
+    let hh = h * (1.0f32 / 60.0);
+    let i = hh.floor().min(5.0);
+    let f = hh - i;
+    let p = v * (1.0 - s);
+    let q = v * (1.0 - s * f);
+    let t = v * (1.0 - s * (1.0 - f));
+    let rgb = match i as i64 {
+        0 => [v, t, p],
+        1 => [q, v, p],
+        2 => [p, v, t],
+        3 => [p, q, v],
+        4 => [t, p, v],
+        _ => [v, p, q],
     };
-    Ok(nums([r + m, g + m, b + m]))
+    Ok(nums32(rgb))
 }
 
 /// `C_ColorUtil.ConvertHSVToHSL(h, s, v)`: the hue kept.
 fn convert_hsv_to_hsl(vm: &mut Vm, c: NativeCall) -> Ret {
-    let (h, s, v) = three(vm, &c);
+    let (h, s, v) = clamped(vm, &c, true);
     let l = v * (1.0 - s / 2.0);
     let sl = if l <= 0.0 || l >= 1.0 {
         0.0
     } else {
         (v - l) / l.min(1.0 - l)
     };
-    Ok(nums([h, sl, l]))
+    Ok(nums32([h, sl, l]))
 }
 
 /// `C_ColorUtil.ConvertHSLToHSV(h, s, l)`: the hue kept.
 fn convert_hsl_to_hsv(vm: &mut Vm, c: NativeCall) -> Ret {
-    let (h, s, l) = three(vm, &c);
+    let (h, s, l) = clamped(vm, &c, true);
     let v = l + s * l.min(1.0 - l);
     let sv = if v <= 0.0 { 0.0 } else { 2.0 * (1.0 - l / v) };
-    Ok(nums([h, sv, v]))
+    Ok(nums32([h, sv, v]))
 }
 
 // ----------------------------------------------------------- encoding
@@ -2931,7 +2963,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Texture.GetAtlasElementID", zero),
         ("C_Texture.GetAtlasID", zero),
         ("C_Texture.GetAtlasElements", empty_table),
-        ("C_Texture.GetFilenameFromFileDataID", empty_string),
+        ("C_Texture.GetFilenameFromFileDataID", filename_from_file_id),
         // Game pads: none connected.
         ("C_GamePad.IsEnabled", no),
         ("C_GamePad.GetAllDeviceIDs", empty_table),

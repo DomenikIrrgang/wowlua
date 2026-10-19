@@ -872,6 +872,11 @@ pub(crate) fn call_text(vm: &Vm, name: &str, c: &NativeCall, first: usize) -> St
 /// difficulty recorded 1, the action bar toggles, the heirloom and wardrobe filters recorded
 /// checked, nothing super-tracked, no map pin).
 const OVER_RECORDED: &[&str] = &[
+    // The full probe's constants (`leftovers2.rs`), the recorded calls'
+    // answers for every argument.
+    "C_PetBattles.CanPetSwapIn",
+    "C_KeyBindings.GetBindingContextForAction",
+    "C_GameRules.GetGameRuleAsFrameStrata",
     "GetDungeonDifficultyID",
     "GetActionBarToggles",
     "C_Heirloom.GetCollectedHeirloomFilter",

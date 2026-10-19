@@ -453,7 +453,8 @@ fn color_from_boolean(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_CurveUtil.EvaluateColorValueFromBoolean(boolean, ifTrue, ifFalse)`:
-/// the chosen value, secret when the boolean is.
+/// the chosen value clamped to a color's 0..1 (the full probe, 1.60.1: -1
+/// gave 0, 1.5 and 2147483647 gave 1), secret when the boolean is.
 fn color_value_from_boolean(vm: &mut Vm, c: NativeCall) -> Ret {
     let b = c.arg(1);
     let secret = matches!(b, Value::Secret(_));
@@ -461,6 +462,10 @@ fn color_value_from_boolean(vm: &mut Vm, c: NativeCall) -> Ret {
         c.arg(2)
     } else {
         c.arg(3)
+    };
+    let pick = match vm.hidden(pick) {
+        Value::Num(n) if !matches!(pick, Value::Secret(_)) => Value::Num(n.clamp(0.0, 1.0)),
+        _ => pick,
     };
     Ok(vec![hide(vm, secret, pick)])
 }
