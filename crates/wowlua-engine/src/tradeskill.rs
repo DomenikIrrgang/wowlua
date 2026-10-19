@@ -406,9 +406,15 @@ fn is_recipe_in_skill_line(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `C_TradeSkillUI.CanTradeSkillShowCraftingUI(spell)`: a profession's
 /// spell of the character's (`setSpellTraits`' `profession`; unverified:
-/// the client's rule).
+/// the client's rule); without those, the recorded character's answer.
 fn can_show_crafting_ui(vm: &mut Vm, c: NativeCall) -> Ret {
     let spell = vm.hidden(c.arg(1));
+    if !engine(vm).world.spell_traits.contains_key("profession")
+        && let Some(values) =
+            crate::recorded::lookup(vm, "C_TradeSkillUI.CanTradeSkillShowCraftingUI", &c)
+    {
+        return Ok(values);
+    }
     Ok(vec![Value::Bool(crate::actions::has_trait(
         vm,
         spell,
