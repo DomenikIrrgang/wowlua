@@ -133,11 +133,16 @@ pub fn control_die(vm: &mut Vm, c: NativeCall) -> Ret {
     units::player_out_of_combat(vm);
     fire(vm, "PET_BAR_UPDATE_USABLE", &[]);
     units::set_player_power(vm, 0.0);
-    for (i, (slot, current)) in durability.into_iter().enumerate() {
+    // Every item's loss before the first update is told (recorded: each
+    // update's answers already the items' new values).
+    let n = durability.len();
+    for (slot, current) in durability {
         if let Some(h) = engine_mut(vm).world.character.equipment.get_mut(&slot) {
             let max = h.durability.map_or(current, |(_, m)| m);
             h.durability = Some((current, max));
         }
+    }
+    for i in 0..n {
         fire(vm, "UPDATE_INVENTORY_DURABILITY", &[]);
         if i == 0 {
             units::fire_unit(vm, "UNIT_FLAGS", PLAYER, &[]);
