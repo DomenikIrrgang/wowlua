@@ -23,6 +23,8 @@ use crate::{engine, engine_mut, widgets};
 pub struct GameData {
     pub spells: HashMap<i64, TableRef>,
     pub items: HashMap<i64, TableRef>,
+    /// The client's spell table's spells asked so far (`scanned_spell`).
+    pub scanned: HashMap<i64, TableRef>,
     /// Items requested, in order.
     pub item_requests: Vec<i64>,
 }
@@ -159,6 +161,91 @@ pub fn spell_data(vm: &mut Vm, id: i64) -> Option<TableRef> {
     }
 }
 
+/// A spell of the client's spell table as SuuUI's spell probes read it
+/// (`data/camelot-spells.txt`): its name, its subtext ("" where none was
+/// read) and its icon file ID (none where none was read).
+struct Scanned {
+    name: &'static str,
+    subtext: &'static str,
+    icon: Option<f64>,
+}
+
+fn spell_table() -> &'static HashMap<i64, Scanned> {
+    static TABLE: std::sync::OnceLock<HashMap<i64, Scanned>> = std::sync::OnceLock::new();
+    TABLE.get_or_init(|| {
+        include_str!("../data/camelot-spells.txt")
+            .lines()
+            .filter(|l| !l.starts_with('#'))
+            .filter_map(|l| {
+                let mut f = l.split('\t');
+                let id = f.next()?.parse().ok()?;
+                let name = crate::recorded::unescape(f.next()?);
+                let subtext = crate::recorded::unescape(f.next().unwrap_or(""));
+                let icon = f.next().and_then(|i| i.parse().ok());
+                (!name.is_empty()).then_some((
+                    id,
+                    Scanned {
+                        name,
+                        subtext,
+                        icon,
+                    },
+                ))
+            })
+            .collect()
+    })
+}
+
+/// The art the client gives a spell without its own: `Interface\Icons\Temp`
+/// (the recorded smelting spells' `iconID`, 136235). Unverified estimate
+/// for a spell of the spell table whose icon the probes did not read (every
+/// recorded spell info has an icon; the true one is unknown here).
+const NO_ICON: f64 = 136235.0;
+
+/// A spell no test defined and no probe recorded, from the client's spell
+/// table (`spell_table`; camelot's): a table like a defined spell's (name,
+/// iconID, subtext, cached), made once. The spells' data files and the
+/// recorded answers win over it: callers ask it last. Unverified: its
+/// cast time and range (none here, as `get_spell_info` defaults them), and
+/// a spell's rank, which the scan read only where the client had it cached
+/// (Holy Light's ranks are in the trainers' recordings, not in the scan).
+pub fn scanned_spell(vm: &mut Vm, id: i64) -> Option<TableRef> {
+    if let Some(t) = engine(vm).world.data.scanned.get(&id).copied() {
+        return Some(t);
+    }
+    if engine(vm).flavor != "camelot" {
+        return None;
+    }
+    let s = spell_table().get(&id)?;
+    let t = vm.new_table();
+    let name = vm.str(s.name);
+    set(vm, t, "name", name);
+    set(vm, t, "iconID", Value::Num(s.icon.unwrap_or(NO_ICON)));
+    let subtext = vm.str(s.subtext);
+    set(vm, t, "subtext", subtext);
+    set(vm, t, "cached", Value::Bool(true));
+    widgets::keep(vm, Value::Table(t));
+    engine_mut(vm).world.data.scanned.insert(id, t);
+    Some(t)
+}
+
+/// A spell's name: its data's (`spell_data`), else the client's spell
+/// table's (`scanned_spell`); nil for one the engine does not know.
+pub fn spell_name(vm: &mut Vm, id: i64) -> Value {
+    match spell_data(vm, id).or_else(|| scanned_spell(vm, id)) {
+        Some(t) => field(vm, t, "name"),
+        None => Value::Nil,
+    }
+}
+
+/// The spell table's spell an ID argument names (none for a name: the
+/// client finds spells by name in the spellbook, not in its whole table).
+fn scanned_arg(vm: &mut Vm, c: &NativeCall) -> Option<(i64, TableRef)> {
+    match vm.hidden(c.arg(1)) {
+        Value::Num(n) => scanned_spell(vm, n as i64).map(|t| (n as i64, t)),
+        _ => None,
+    }
+}
+
 /// The spell a `spellIdentifier` names: an ID or a defined spell's name.
 fn spell(vm: &mut Vm, c: &NativeCall) -> Option<(i64, TableRef)> {
     match vm.hidden(c.arg(1)) {
@@ -184,9 +271,30 @@ fn spell(vm: &mut Vm, c: &NativeCall) -> Option<(i64, TableRef)> {
     }
 }
 
+/// The spell a call names that no test defined and no probe recorded: the
+/// client's recorded answer to the call wins (`Err`, its values), else
+/// the spell table's spell (`Ok`), else what an unanswered call gets.
+fn unrecorded(vm: &mut Vm, c: &NativeCall) -> Result<(i64, TableRef), Vec<Value>> {
+    if let Some(name) = crate::recorded::called_name(vm, c)
+        && let Some(values) = crate::recorded::lookup(vm, &name, c)
+    {
+        return Err(values);
+    }
+    match scanned_arg(vm, c) {
+        Some(s) => Ok(s),
+        None => Err(crate::recorded::client_answer(vm, c)),
+    }
+}
+
+/// `C_Spell.GetSpellInfo(spell)`: a defined or probed spell's info, else
+/// the client's recorded answer, else the spell table's spell's.
 fn get_spell_info(vm: &mut Vm, c: NativeCall) -> Ret {
-    let Some((id, s)) = spell(vm, &c) else {
-        return Ok(crate::recorded::client_answer(vm, &c));
+    let (id, s) = match spell(vm, &c) {
+        Some(found) => found,
+        None => match unrecorded(vm, &c) {
+            Ok(found) => found,
+            Err(values) => return Ok(values),
+        },
     };
     let t = vm.new_table();
     let name = field(vm, s, "name");
@@ -208,7 +316,13 @@ fn get_spell_info(vm: &mut Vm, c: NativeCall) -> Ret {
 fn spell_field(key: &'static str) -> impl Fn(&mut Vm, NativeCall) -> Ret {
     move |vm: &mut Vm, c: NativeCall| match spell(vm, &c) {
         Some((_, s)) => Ok(vec![field(vm, s, key)]),
-        None => Ok(crate::recorded::client_answer(vm, &c)),
+        None => match unrecorded(vm, &c) {
+            Ok((_, s)) => Ok(match field(vm, s, key) {
+                Value::Nil => vec![],
+                v => vec![v],
+            }),
+            Err(values) => Ok(values),
+        },
     }
 }
 
@@ -248,16 +362,27 @@ fn get_spell_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Table(t)])
 }
 
+/// `C_Spell.GetSpellLink(spell)`: a defined or probed spell's link, else
+/// the client's recorded answer, else the spell table's spell's. The link
+/// is `spell:<id>:0` (its glyph): the client's spellbook item links are
+/// (`C_SpellBook.GetSpellBookItemLink`, the recorded character's Dodge
+/// `|cff71d5ff|Hspell:81:0|h[Dodge]|h|r`), and so is warcraft.wiki.gg's
+/// Hyperlinks page's (`spell:spellId:glyphId`). Unverified for this
+/// function itself.
 fn get_spell_link(vm: &mut Vm, c: NativeCall) -> Ret {
-    let Some((id, s)) = spell(vm, &c) else {
-        return Ok(vec![]);
+    let (id, s) = match spell(vm, &c) {
+        Some(found) => found,
+        None => match unrecorded(vm, &c) {
+            Ok(found) => found,
+            Err(values) => return Ok(values),
+        },
     };
     let name = match field(vm, s, "name") {
         Value::Str(n) => String::from_utf8_lossy(vm.str_bytes(n)).into_owned(),
         _ => return Ok(vec![]),
     };
     Ok(vec![
-        vm.str(&format!("|cff71d5ff|Hspell:{id}|h[{name}]|h|r")),
+        vm.str(&format!("|cff71d5ff|Hspell:{id}:0|h[{name}]|h|r")),
     ])
 }
 
@@ -303,7 +428,7 @@ fn get_item_spell(vm: &mut Vm, c: NativeCall) -> Ret {
     let Value::Num(spell) = field(vm, t, "spell") else {
         return Ok(vec![]);
     };
-    let name = spell_data(vm, spell as i64).map_or(Value::Nil, |s| field(vm, s, "name"));
+    let name = spell_name(vm, spell as i64);
     Ok(vec![name, Value::Num(spell)])
 }
 
@@ -347,21 +472,36 @@ fn client_spell(vm: &mut Vm, c: &NativeCall) -> bool {
             .is_some_and(|v| !v.is_empty() && !v[0].is_nil())
 }
 
+/// `C_Spell.IsSpellDataCached(spell)`: a defined spell's `cached`, else
+/// whether the client has it (`client_spell`), or the spell table has it
+/// (unverified: the scan read every name without loading any, so the
+/// client keeps them at hand).
 fn is_spell_data_cached(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(match spell(vm, &c) {
         Some((_, s)) => !matches!(field(vm, s, "cached"), Value::Bool(false)),
-        None => client_spell(vm, &c),
+        None => client_spell(vm, &c) || scanned_arg(vm, &c).is_some(),
     })])
 }
 
-/// `C_Spell.DoesSpellExist(spell)`: a defined spell or one the client has.
+/// `C_Spell.DoesSpellExist(spell)`: a defined spell, else as the client
+/// answered the call, else one the client has (`client_spell`) or one of
+/// its spell table (every spell the scan named exists, as
+/// `C_Spell.GetSpellName` answered it).
 fn does_spell_exist(vm: &mut Vm, c: NativeCall) -> Ret {
-    let exists = spell(vm, &c).is_some() || client_spell(vm, &c);
+    if spell(vm, &c).is_some() {
+        return Ok(vec![Value::Bool(true)]);
+    }
+    if let Some(values) = crate::recorded::lookup(vm, "C_Spell.DoesSpellExist", &c) {
+        return Ok(values);
+    }
+    let exists = client_spell(vm, &c) || scanned_arg(vm, &c).is_some();
     Ok(vec![Value::Bool(exists)])
 }
 
 /// `C_Spell.GetSpellSubtext(spell)`: a defined spell's `subtext`, a
-/// spellbook spell's (its item's `subName`), else as the client answered.
+/// spellbook spell's (its item's `subName`), else as the client answered,
+/// else the spell table's (its rank where the scan read one, else ""
+/// as the client answers an unranked spell: the 133 recorded "").
 fn get_spell_subtext(vm: &mut Vm, c: NativeCall) -> Ret {
     if let Some((_, s)) = spell(vm, &c) {
         return Ok(vec![field(vm, s, "subtext")]);
@@ -371,7 +511,10 @@ fn get_spell_subtext(vm: &mut Vm, c: NativeCall) -> Ret {
     {
         return Ok(vec![field(vm, item, "subName")]);
     }
-    Ok(crate::recorded::client_answer(vm, &c))
+    match unrecorded(vm, &c) {
+        Ok((_, s)) => Ok(vec![field(vm, s, "subtext")]),
+        Err(values) => Ok(values),
+    }
 }
 
 /// `C_Spell.GetSpellPowerCost(spell)`: a spell the game data's probes
@@ -394,8 +537,15 @@ fn after(vm: &mut Vm, delay: f64, f: NativeFn, args: Vec<Value>) {
 
 fn spell_loaded(vm: &mut Vm, c: NativeCall) -> Ret {
     let id = c.upvals.first().copied().unwrap_or(Value::Nil);
-    let known =
-        matches!(id, Value::Num(n) if engine(vm).world.data.spells.contains_key(&(n as i64)));
+    // A spell of the client's spell table loads too (unverified: as a
+    // defined one; the scan read every name at once).
+    let known = match id {
+        Value::Num(n) => {
+            engine(vm).world.data.spells.contains_key(&(n as i64))
+                || scanned_spell(vm, n as i64).is_some()
+        }
+        _ => false,
+    };
     if let (true, Value::Num(n)) = (known, id)
         && let Some(s) = engine(vm).world.data.spells.get(&(n as i64)).copied()
     {
@@ -539,14 +689,32 @@ fn get_item_max_stack_size_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
     item_field(vm, &c, "stackCount")
 }
 
+/// The question mark icon (`QUESTION_MARK_ICON`, 134400), which Blizzard's
+/// PvP UI shows for a reward item `C_Item.GetItemIconByID` has no icon for.
+const QUESTION_MARK_ICON: f64 = 134400.0;
+
+/// `C_Item.GetItemIconByID(item)`: a defined or probed item's icon, else
+/// as the client answered, else the question mark's for an item the engine
+/// has no data for. Unverified estimate: the client reads icons from its
+/// item table without loading the item (as `GetItemInfoInstant` does), so
+/// an item it has always answers one, and the engine cannot know which;
+/// AtlasLoot's price buttons ask again until they get an icon (a stack
+/// overflow on nothing). The full probe asks it for 0 and -1.
 fn get_item_icon_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(id) = item_id(vm, c.arg(1)) else {
         return Ok(vec![]);
     };
-    match item_data(vm, id) {
-        Some(t) => Ok(vec![field(vm, t, "icon")]),
-        None => Ok(vec![]),
+    if let Some(t) = item_data(vm, id) {
+        return Ok(vec![field(vm, t, "icon")]);
     }
+    if let Some(values) = crate::recorded::lookup(vm, "C_Item.GetItemIconByID", &c) {
+        return Ok(values);
+    }
+    Ok(if id > 0 {
+        vec![Value::Num(QUESTION_MARK_ICON)]
+    } else {
+        vec![]
+    })
 }
 
 /// `C_Item.DoesItemExistByID(item)`: a defined item (not `missing`),
@@ -616,6 +784,38 @@ fn request_load_item_data(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// The item subclasses the answers probe did not ask (it asked classes
+/// 0, 1, 2, 4, 6, 7, 9, 11, 12, 13 and 15), as AtlasLoot's English table of
+/// the client's names has them (`Core/ItemInfo.lua`'s `LOC_DATA`, which
+/// asks each at login and fails on a missing one). Unverified estimates:
+/// the recorded single-subclass classes name their subclass after
+/// themselves (Reagent, Quest), as these do but Permanent.
+const UNPROBED_SUBCLASSES: &[(i64, i64, &str)] = &[
+    (3, 0, "Jewelry(OBSOLETE)"),
+    (8, 0, "Generic(OBSOLETE)"),
+    (10, 0, "Money(OBSOLETE)"),
+    (14, 0, "Permanent"),
+];
+
+/// `C_Item.GetItemSubClassInfo(class, subclass)`: as the client answered
+/// (`/stdtest engine answers`), else an unprobed subclass's estimate
+/// (`UNPROBED_SUBCLASSES`: its name, not a weapon-type subclass as the
+/// recorded ones answer false), else as an unrecorded call answers.
+fn get_item_subclass_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some(values) = crate::recorded::lookup(vm, "C_Item.GetItemSubClassInfo", &c) {
+        return Ok(values);
+    }
+    let (class, sub) = (vm.hidden(c.arg(1)), vm.hidden(c.arg(2)));
+    if let (Value::Num(class), Value::Num(sub)) = (class, sub)
+        && let Some((_, _, name)) = UNPROBED_SUBCLASSES
+            .iter()
+            .find(|(k, s, _)| *k as f64 == class && *s as f64 == sub)
+    {
+        return Ok(vec![vm.str(name), Value::Bool(false)]);
+    }
+    crate::recorded::recorded(vm, c)
+}
+
 /// The functions with behaviour here.
 /// `C_Spell.GetOverrideSpell(spell)`: the spell itself (unverified: no
 /// override modelled).
@@ -651,6 +851,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             "C_SpellBook.IsSpellKnownOrInSpellBook",
             is_spell_known_or_in_spellbook,
         ),
+        ("C_Item.GetItemSubClassInfo", get_item_subclass_info),
         ("C_Item.GetItemInfo", get_item_info),
         ("C_Item.GetItemInfoInstant", get_item_info_instant),
         ("C_Item.GetItemNameByID", get_item_name_by_id),

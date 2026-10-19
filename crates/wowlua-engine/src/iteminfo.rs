@@ -391,10 +391,7 @@ fn get_item_spell(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(spell) = data_num(vm, id, "spell") else {
         return Ok(vec![]);
     };
-    let name = match crate::gamedata::spell_data(vm, spell as i64) {
-        Some(t) => field(vm, t, "name"),
-        None => Value::Nil,
-    };
+    let name = crate::gamedata::spell_name(vm, spell as i64);
     Ok(vec![name, Value::Num(spell)])
 }
 

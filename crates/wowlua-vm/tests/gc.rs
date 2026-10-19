@@ -111,3 +111,36 @@ fn automatic_collection_keeps_running_state() {
     assert_eq!(out.borrow().trim(), "true\t50\t1275\t49\ttrue");
     assert!(vm.gc_cycles >= 2, "collections: {}", vm.gc_cycles);
 }
+
+fn collect_now(vm: &mut Vm, _c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
+    vm.collect().expect("no finalizer errors");
+    Ok(vec![])
+}
+
+/// A call from the engine inside another (a script firing an event whose
+/// handler collects), then an error in the outer one.
+fn nested_engine_calls(vm: &mut Vm, _c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
+    let inner = vm.native("collect", collect_now);
+    vm.call_from_engine(inner, &[]);
+    let fail = vm.get_global("fail");
+    let _ = vm.call(fail, &[]);
+    Ok(vec![])
+}
+
+/// The outer call's error handler survives a collection inside a nested
+/// call from the engine: it was held only by Rust while the inner one ran,
+/// and AtlasLoot's login reached it freed (a stale handle panic).
+#[test]
+fn the_outer_error_handler_survives_a_nested_engine_call() {
+    let mut vm = Vm::wow();
+    run(
+        &mut vm,
+        "seen = {} seterrorhandler(function(e) seen[#seen + 1] = e end) function fail() error('boom') end",
+    );
+    let f = vm.native("nested", nested_engine_calls);
+    vm.call_from_engine(f, &[]);
+    run(
+        &mut vm,
+        "assert(#seen == 1 and seen[1]:find('boom'), tostring(seen[1]))",
+    );
+}

@@ -148,6 +148,9 @@ impl Vm {
         if let Some(e) = self.errfunc {
             m.gray.push(Gray::Value(e));
         }
+        if let Some(e) = self.errfunc_proxy {
+            m.gray.push(Gray::Value(e));
+        }
         m.gray.push(Gray::Value(self.error_handler));
         m.gray.extend(
             self.to_finalize
