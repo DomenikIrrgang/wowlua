@@ -957,7 +957,7 @@ fn set_script(vm: &mut Vm, cx: &Context, id: WidgetId, s: &Element) {
         let _ = vm.heap.table_mut(props).set(key, handler);
         engine_mut(vm).world.widgets[id.0].intrinsic_scripts = true;
         // (Its handlers count for every script: `has_handler`.)
-        engine_mut(vm).world.updating.insert(id.0);
+        engine_mut(vm).world.updates(id.0);
         return;
     }
     let order = s.attr("inherit").map(str::to_ascii_lowercase);
