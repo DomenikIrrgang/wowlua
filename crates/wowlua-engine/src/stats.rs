@@ -1146,6 +1146,32 @@ pub fn spellbook_slot_of(vm: &Vm, spell: f64) -> Option<i64> {
         })
 }
 
+/// A spell's cooldown running when the snapshot was taken (its spellbook
+/// item's `spellBookItemCooldown`): start and duration on the client's
+/// clock, which the engine's is.
+pub fn recorded_cooldown(vm: &Vm, spell: f64) -> Option<(f64, f64)> {
+    let slot = spellbook_slot_of(vm, spell)?;
+    let Some(Entry::ByIndex(items)) = engine(vm)
+        .world
+        .character
+        .stats
+        .get("spellBookItemCooldown")
+    else {
+        return None;
+    };
+    let Some(Answer::Table(fields)) = items.get(&slot)?.first() else {
+        return None;
+    };
+    let get = |name: &str| {
+        fields.iter().find_map(|(k, v)| match (k, v) {
+            (Answer::Str(k), Answer::Num(n)) if k == name => Some(*n),
+            _ => None,
+        })
+    };
+    let (start, duration) = (get("startTime")?, get("duration")?);
+    (duration > 0.0).then_some((start, duration))
+}
+
 /// The recorded spellbook item of `spell` (its `GetSpellBookItemInfo`).
 pub fn spellbook_item(vm: &mut Vm, spell: f64) -> Option<Value> {
     let slot = spellbook_slot_of(vm, spell)?;

@@ -420,6 +420,35 @@ fn get_action_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
         }
         _ => None,
     };
+    // Its own cooldown, running since before the snapshot (recorded: a
+    // warrior's three-minute spell on its slot until it ended), longer
+    // than the global one: told without the global cooldown's fields.
+    let own = match &a {
+        Some(a) if a.kind == "spell" => num(a.id)
+            .and_then(|id| crate::stats::recorded_cooldown(vm, id))
+            .filter(|(start, length)| start + length > now),
+        _ => None,
+    };
+    let gcd_end = gcd.map(|(s, l)| s + l);
+    if let Some((start, length)) = own
+        && gcd_end.is_none_or(|end| start + length > end)
+    {
+        let t = table(
+            vm,
+            &[
+                ("startTime", Value::Num(start)),
+                ("duration", Value::Num(length)),
+                ("isEnabled", Value::Bool(true)),
+                ("modRate", Value::Num(1.0)),
+                ("isActive", Value::Bool(true)),
+                (
+                    "timeUntilEndOfStartRecovery",
+                    Value::Num(((start + length - now) * 1000.0).round() / 1000.0),
+                ),
+            ],
+        );
+        return Ok(vec![t]);
+    }
     if let Some((start, length)) = gcd {
         let t = table(
             vm,
