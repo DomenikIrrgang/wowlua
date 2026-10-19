@@ -31,6 +31,12 @@ use crate::{Engine, engine, engine_mut};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WidgetId(pub usize);
 
+/// A script object's userdata payload (a curve, a numeric formatter, a
+/// duration): the widget it is. Its own type, so a frame's `[0]` is not
+/// taken for one.
+#[derive(Clone, Copy, Debug)]
+pub struct ScriptObject(pub WidgetId);
+
 /// One anchor: `point`, the frame it is relative to, its point, offsets.
 #[derive(Clone, Debug)]
 pub struct Point {
@@ -44,8 +50,11 @@ pub struct Point {
 pub struct Widget {
     /// The class whose methods it has (`Frame`, `Button`, `FontString`).
     pub class: String,
-    /// The Lua object.
+    /// The Lua object (a script object's: the engine's own record, its
+    /// userdata is [`Widget::object`]).
     pub table: TableRef,
+    /// A script object's userdata: what Lua gets.
+    pub object: Option<wowlua_vm::heap::UdRef>,
     /// Its scripts (`OnEvent` → function) and hooks (`OnEvent` → list), in
     /// Lua tables the registry keeps.
     pub scripts: TableRef,
@@ -105,6 +114,9 @@ pub struct World {
     /// The widgets that ever registered for events: the ones an event
     /// looks at.
     pub listening: std::collections::BTreeSet<usize>,
+    /// The duration text bindings made (`C_DurationUtil.
+    /// CreateDurationTextBinding`): each frame looks at them.
+    pub text_bindings: Vec<WidgetId>,
     classes: HashMap<String, TableRef>,
     /// Templates and frame types tests (or stand-ins for Blizzard's UI
     /// code) define: name → (base class, function applied to the frame),
@@ -294,6 +306,14 @@ pub fn c_error(vm: &mut Vm, msg: &str, taint_line: bool) -> LuaError {
 
 /// The widget a value is, if it is one.
 pub fn widget_of(vm: &Vm, v: Value) -> Option<WidgetId> {
+    if let Value::Userdata(u) = v {
+        return vm
+            .heap
+            .userdata(u)
+            .data
+            .downcast_ref::<ScriptObject>()
+            .map(|o| o.0);
+    }
     let Value::Table(t) = v else { return None };
     let Value::Userdata(u) = vm.heap.table(t).get(Value::Num(0.0)) else {
         return None;
@@ -337,6 +357,23 @@ pub fn canonical_class(e: &Engine, name: &str) -> Option<String> {
         .filter(|(k, _)| k.eq_ignore_ascii_case(name))
         .find(|(k, c)| !c.bases.iter().any(|b| b.eq_ignore_ascii_case(k) && b != *k))
         .map(|(k, _)| k.clone())
+}
+
+/// Whether class `name` is a script object the client makes a userdata.
+pub fn is_userdata_class(e: &Engine, name: &str) -> bool {
+    lineage(e, name)
+        .iter()
+        .any(|c| e.api.classes.get(c).is_some_and(|c| c.userdata))
+}
+
+/// The Lua value widget `id` is: its table, or a script object's
+/// userdata.
+pub fn value_of(e: &Engine, id: WidgetId) -> Value {
+    let w = &e.world.widgets[id.0];
+    match w.object {
+        Some(u) => Value::Userdata(u),
+        None => Value::Table(w.table),
+    }
 }
 
 /// Whether class `name` is or derives from `base` (`IsObjectType`).
@@ -475,6 +512,7 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
     let w = Widget {
         class: class.to_string(),
         table,
+        object: None,
         scripts,
         hooks,
         props,
@@ -528,6 +566,34 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
     // without a color of their own).
     if class == "Font" {
         store(vm, id, "TextColor", &[Value::Num(1.0); 4]);
+    }
+    // A script object the documentation calls a userdata is one, with its
+    // class's methods (`ObjectType = "Userdata"`: `type(curve)` is
+    // "userdata", and `securecopy` passes it on where it refuses a frame,
+    // as SuuUI's aura button options with curves and formatters run
+    // error-free in the client). It keeps fields as a frame does
+    // (Blizzard's `TimerUtil.CreateTimedSignalCallbackMap` defines a
+    // method on its signal map): reads and writes go to the record behind
+    // it, its class's methods below. Unverified: its metatable's shape (a
+    // metatable of its own here).
+    if is_userdata_class(engine(vm), class) {
+        let own = vm.new_table();
+        let index = vm.heap.intern(b"__index");
+        let newindex = vm.heap.intern(b"__newindex");
+        vm.heap.table_mut(own).set_str(index, Value::Table(table));
+        vm.heap
+            .table_mut(own)
+            .set_str(newindex, Value::Table(table));
+        keep(vm, Value::Table(own));
+        let ud = vm.heap.alloc_userdata(Userdata {
+            serial: 0,
+            meta: Some(own),
+            env: None,
+            data: Box::new(ScriptObject(id)),
+        });
+        keep(vm, Value::Userdata(ud));
+        engine_mut(vm).world.widgets[id.0].object = Some(ud);
+        return Value::Userdata(ud);
     }
     Value::Table(table)
 }
@@ -780,7 +846,7 @@ fn method(vm: &mut Vm, c: NativeCall) -> Ret {
     // `self`, as the client checks it (`/stdtest engine`).
     let id = match c.arg(1) {
         Value::Nil => return Err(vm.api_arg_error(1, &crate::args::usage(f))),
-        Value::Table(_) => match widget_of(vm, c.arg(1)) {
+        Value::Table(_) | Value::Userdata(_) => match widget_of(vm, c.arg(1)) {
             Some(id) => id,
             None => {
                 let msg = format!("Wrong object type for function - {}", crate::args::usage(f));

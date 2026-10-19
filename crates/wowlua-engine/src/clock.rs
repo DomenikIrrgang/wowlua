@@ -307,6 +307,7 @@ pub fn advance_frames(vm: &mut Vm, n: usize, ms: f64) {
         }
         widgets::run_text_changes(vm);
         crate::animations::tick(vm, ms / 1000.0);
+        crate::curves::update_text_bindings(vm);
         advance(vm, 0.0);
     }
 }

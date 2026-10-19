@@ -737,6 +737,414 @@ fn unit_channel_duration(vm: &mut Vm, c: NativeCall) -> Ret {
     cast_duration(vm, &c, true)
 }
 
+// ------------------------------------------------- duration text bindings
+
+/// `C_DurationUtil.CreateDurationTextBinding()`: a binding that writes a
+/// duration's text (and color) into a font string, as Blizzard's
+/// documentation describes the client's `DurationTextBindingObject`
+/// (Blizzard's custom aura buttons give each one, SuuUI configures them).
+/// Unverified: a new binding starts disabled (warcraft.wiki.gg's
+/// `ScriptObject_DurationTextBinding` example enables its own), updating
+/// every frame (an interval of 0), on real time (`Enum.
+/// DurationTimeModifier.RealTime`, the duration objects' default).
+fn create_text_binding(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let b = widgets::create(vm, "DurationTextBindingObject", None, None);
+    if let Some(id) = widgets::widget_of(vm, b) {
+        binding_defaults(vm, id);
+        engine_mut(vm).world.text_bindings.push(id);
+    }
+    Ok(vec![b])
+}
+
+/// What a binding holds, by its stored name.
+const BINDING_KEYS: [&str; 12] = [
+    "fontString",
+    "duration",
+    "format",
+    "components",
+    "colorCurve",
+    "colorProperty",
+    "enabled",
+    "interval",
+    "modifier",
+    "expiredText",
+    "zeroText",
+    "secret",
+];
+
+/// `SetToDefaults()`: no font string, duration, format, formatter or
+/// fallback text (the documentation); the rest as a new binding's
+/// (unverified).
+fn binding_defaults(vm: &mut Vm, id: WidgetId) {
+    for k in BINDING_KEYS {
+        set_prop(vm, id, k, Value::Nil);
+    }
+    set_prop(vm, id, "enabled", Value::Bool(false));
+    set_prop(vm, id, "interval", Value::Num(0.0));
+    set_prop(vm, id, "modifier", Value::Num(0.0));
+    set_prop(vm, id, "secret", Value::Bool(false));
+}
+
+/// Marks the binding as holding a secret when `v` is one.
+fn note_secret(vm: &mut Vm, id: WidgetId, v: Value) {
+    if matches!(v, Value::Secret(_)) {
+        set_prop(vm, id, "secret", Value::Bool(true));
+    }
+}
+
+fn binding_to_defaults(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    binding_defaults(vm, id);
+    Ok(vec![])
+}
+
+/// `Assign(other)`: the other binding's configuration, all of it
+/// (unverified: its font string too).
+fn binding_assign(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let Some(other) = widgets::widget_of(vm, c.arg(2)) else {
+        return Err(vm.error("a duration text binding expected"));
+    };
+    copy_binding(vm, other, id);
+    Ok(vec![])
+}
+
+fn copy_binding(vm: &mut Vm, from: WidgetId, to: WidgetId) {
+    for k in BINDING_KEYS {
+        let v = prop(vm, from, k);
+        set_prop(vm, to, k, v);
+    }
+}
+
+fn binding_copy(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let b = widgets::create(vm, "DurationTextBindingObject", None, None);
+    if let Some(new) = widgets::widget_of(vm, b) {
+        copy_binding(vm, id, new);
+        engine_mut(vm).world.text_bindings.push(new);
+    }
+    Ok(vec![b])
+}
+
+/// The plain setters and getters: the value kept as given.
+fn binding_set(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let key = match method_name(vm, &c).as_str() {
+        "SetDuration" => "duration",
+        "SetExpiredText" => "expiredText",
+        "SetZeroDurationText" => "zeroText",
+        "SetFontString" => "fontString",
+        "SetTimeModifier" => "modifier",
+        "SetUpdateInterval" => "interval",
+        _ => return Ok(vec![]),
+    };
+    let v = c.arg(2);
+    note_secret(vm, id, v);
+    let v = vm.hidden(v);
+    set_prop(vm, id, key, v);
+    Ok(vec![])
+}
+
+fn binding_get(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let key = match method_name(vm, &c).as_str() {
+        "GetDuration" => "duration",
+        "GetExpiredText" => "expiredText",
+        "GetZeroDurationText" => "zeroText",
+        "GetFontString" => "fontString",
+        "GetTimeModifier" => "modifier",
+        "GetUpdateInterval" => "interval",
+        "IsEnabled" => "enabled",
+        _ => return Ok(vec![]),
+    };
+    Ok(vec![prop(vm, id, key)])
+}
+
+fn binding_enable(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let on = match method_name(vm, &c).as_str() {
+        "Enable" => true,
+        "Disable" => false,
+        _ => {
+            note_secret(vm, id, c.arg(2));
+            vm.hidden(c.arg(2)).truthy()
+        }
+    };
+    set_prop(vm, id, "enabled", Value::Bool(on));
+    Ok(vec![])
+}
+
+/// The binding's components: (property, formatter) in order.
+fn components(vm: &mut Vm, id: WidgetId) -> Vec<(f64, Value)> {
+    let Value::Table(t) = prop(vm, id, "components") else {
+        return Vec::new();
+    };
+    let n = vm.heap.table(t).border();
+    (0..n / 2)
+        .map(|i| {
+            let p = match vm.heap.table(t).get(Value::Num((2 * i + 1) as f64)) {
+                Value::Num(p) => p,
+                _ => 0.0,
+            };
+            (p, vm.heap.table(t).get(Value::Num((2 * i + 2) as f64)))
+        })
+        .collect()
+}
+
+fn set_format(vm: &mut Vm, id: WidgetId, format: Value, parts: &[(f64, Value)]) {
+    let t = vm.new_table();
+    for (i, (p, f)) in parts.iter().enumerate() {
+        let _ = vm
+            .heap
+            .table_mut(t)
+            .set(Value::Num((2 * i + 1) as f64), Value::Num(*p));
+        let _ = vm.heap.table_mut(t).set(Value::Num((2 * i + 2) as f64), *f);
+    }
+    set_prop(vm, id, "format", format);
+    set_prop(vm, id, "components", Value::Table(t));
+}
+
+/// `SetFormatter(formatter)`: the remaining duration through it (the
+/// documentation), a format of that one component.
+fn binding_set_formatter(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let f = vm.hidden(c.arg(2));
+    if widgets::widget_of(vm, f).is_none() {
+        return Err(vm.error("a numeric formatter expected"));
+    }
+    note_secret(vm, id, c.arg(2));
+    let format = vm.str("{}");
+    set_format(vm, id, format, &[(0.0, f)]);
+    Ok(vec![])
+}
+
+/// `SetTextFormat(formatString, components)`: each `{}` of the string the
+/// next component's property through its formatter (the documentation).
+fn binding_set_text_format(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let format = vm.hidden(c.arg(2));
+    let Value::Table(list) = vm.hidden(c.arg(3)) else {
+        return Err(vm.error("a list of components expected"));
+    };
+    note_secret(vm, id, c.arg(2));
+    let mut parts = Vec::new();
+    let n = vm.heap.table(list).border();
+    for i in 1..=n {
+        let Value::Table(t) = vm.hidden(vm.heap.table(list).get(Value::Num(i as f64))) else {
+            return Err(vm.error("a format component expected"));
+        };
+        let (p, ps) = field(vm, t, "property");
+        let (f, fs) = field(vm, t, "formatter");
+        if fs || ps {
+            set_prop(vm, id, "secret", Value::Bool(true));
+        }
+        if widgets::widget_of(vm, f).is_none() {
+            return Err(vm.error("a numeric formatter expected"));
+        }
+        let p = match p {
+            Value::Num(p) => p,
+            _ => 0.0,
+        };
+        parts.push((p, f));
+    }
+    set_format(vm, id, format, &parts);
+    Ok(vec![])
+}
+
+fn binding_set_color_curve(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let curve = vm.hidden(c.arg(2));
+    if widgets::widget_of(vm, curve).is_none() {
+        return Err(vm.error("a color curve expected"));
+    }
+    note_secret(vm, id, c.arg(2));
+    note_secret(vm, id, c.arg(3));
+    let property = vm.hidden(c.arg(3));
+    set_prop(vm, id, "colorCurve", curve);
+    set_prop(vm, id, "colorProperty", property);
+    Ok(vec![])
+}
+
+fn binding_clear_color_curve(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    set_prop(vm, id, "colorCurve", Value::Nil);
+    set_prop(vm, id, "colorProperty", Value::Nil);
+    Ok(vec![])
+}
+
+fn binding_get_color_curve(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let curve = prop(vm, id, "colorCurve");
+    if curve.is_nil() {
+        return Ok(vec![]);
+    }
+    Ok(vec![curve, prop(vm, id, "colorProperty")])
+}
+
+/// The widget a binding's stored value `key` is.
+fn widget_prop(vm: &mut Vm, id: WidgetId, key: &str) -> Option<WidgetId> {
+    let v = prop(vm, id, key);
+    widgets::widget_of(vm, v)
+}
+
+/// Whether it has a format to write (its formatter or text format).
+fn can_format(vm: &mut Vm, id: WidgetId) -> bool {
+    !prop(vm, id, "format").is_nil()
+}
+
+fn can_update(vm: &mut Vm, id: WidgetId) -> bool {
+    can_format(vm, id) && widget_prop(vm, id, "fontString").is_some()
+}
+
+fn binding_can(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let yes = if method_name(vm, &c) == "CanUpdateFontString" {
+        can_update(vm, id)
+    } else {
+        can_format(vm, id)
+    };
+    Ok(vec![Value::Bool(yes)])
+}
+
+/// The binding's duration's span, if it has one.
+fn binding_span(vm: &mut Vm, id: WidgetId) -> Option<Span> {
+    let d = widget_prop(vm, id, "duration")?;
+    Some(span(vm, d))
+}
+
+/// `Enum.DurationTextBindingProperty` `p` of the span now.
+fn property_value(vm: &mut Vm, s: Span, modifier: Value, p: f64) -> f64 {
+    let (total, elapsed, remaining) = measures(vm, s, modifier);
+    let percent = |x: f64| if total > 0.0 { x / total } else { 0.0 };
+    match p as i64 {
+        1 => percent(remaining),
+        2 => elapsed,
+        3 => percent(elapsed),
+        4 => total,
+        5 => s.start,
+        6 => s.end,
+        _ => remaining,
+    }
+}
+
+/// The text it would write, and whether it is secret: the zero-duration
+/// text without a duration or for a span of none, the expired text (when
+/// set) once it ended, else its format with each `{}` a component's
+/// property formatted (the documentation's wording). Unverified: a
+/// fallback text not set writes an empty string; a `{}` without a
+/// component stays empty.
+fn formatted_text(vm: &mut Vm, id: WidgetId) -> Result<(Vec<u8>, bool), LuaError> {
+    let held = prop(vm, id, "secret").truthy();
+    let text_of = |vm: &mut Vm, v: Value| match vm.hidden(v) {
+        Value::Str(s) => vm.str_bytes(s).to_vec(),
+        _ => Vec::new(),
+    };
+    let s = match binding_span(vm, id) {
+        Some(s) if s.end - s.start > 0.0 => s,
+        _ => {
+            let t = prop(vm, id, "zeroText");
+            return Ok((text_of(vm, t), held));
+        }
+    };
+    let secret = held || s.secret;
+    let expired = prop(vm, id, "expiredText");
+    if !expired.is_nil() && crate::clock::now(vm) >= s.end {
+        return Ok((text_of(vm, expired), secret));
+    }
+    let format = prop(vm, id, "format");
+    let format = text_of(vm, format);
+    let modifier = prop(vm, id, "modifier");
+    let mut parts = components(vm, id).into_iter();
+    let mut out = Vec::new();
+    let mut secret = secret;
+    let mut i = 0;
+    while i < format.len() {
+        if format[i..].starts_with(b"{}") {
+            if let Some((p, f)) = parts.next() {
+                let x = property_value(vm, s, modifier, p);
+                let v = crate::formatters::format_with(vm, f, x, false)?;
+                secret |= matches!(v, Value::Secret(_));
+                out.extend(text_of(vm, v));
+            }
+            i += 2;
+        } else {
+            out.push(format[i]);
+            i += 1;
+        }
+    }
+    Ok((out, secret))
+}
+
+/// The color its curve gives (`None`: no curve).
+fn formatted_color(vm: &mut Vm, id: WidgetId) -> Option<Value> {
+    let curve = widget_prop(vm, id, "colorCurve")?;
+    let s = binding_span(vm, id).unwrap_or_default();
+    let p = match prop(vm, id, "colorProperty") {
+        Value::Num(p) => p,
+        _ => 0.0,
+    };
+    let modifier = prop(vm, id, "modifier");
+    let x = property_value(vm, s, modifier, p);
+    let secret = s.secret || prop(vm, id, "secret").truthy();
+    Some(evaluate_value(vm, curve, x, secret))
+}
+
+fn binding_text(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let (text, secret) = formatted_text(vm, id)?;
+    let v = vm.bytes(&text);
+    Ok(vec![hide(vm, secret, v)])
+}
+
+fn binding_color(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    Ok(formatted_color(vm, id).into_iter().collect())
+}
+
+fn binding_secret(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let s = binding_span(vm, id).is_some_and(|s| s.secret);
+    Ok(vec![Value::Bool(s || prop(vm, id, "secret").truthy())])
+}
+
+/// Writes its text (and color) into its font string, as the client's C
+/// code does: no font string method runs.
+fn write_font_string(vm: &mut Vm, id: WidgetId) -> Result<(), LuaError> {
+    if !can_update(vm, id) {
+        return Ok(());
+    }
+    let Some(fs) = widget_prop(vm, id, "fontString") else {
+        return Ok(());
+    };
+    let (text, secret) = formatted_text(vm, id)?;
+    let v = vm.bytes(&text);
+    let v = hide(vm, secret, v);
+    widgets::store_text(vm, fs, Some(v));
+    if let Some(Value::Table(color)) = formatted_color(vm, id).map(|c| vm.hidden(c)) {
+        let mut rgba = Vec::new();
+        for k in ["r", "g", "b", "a"] {
+            let key = vm.str(k);
+            rgba.push(vm.heap.table(color).get(key));
+        }
+        widgets::store(vm, fs, "TextColor", &rgba);
+    }
+    set_prop(vm, id, "lastUpdate", Value::Num(crate::clock::now(vm)));
+    Ok(())
+}
+
+fn binding_update(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    write_font_string(vm, id)?;
+    Ok(vec![])
+}
+
+/// Each frame: the enabled bindings whose interval passed write their
+/// font strings (the documentation: "A value of zero updates every game
+/// tick").
+pub fn update_text_bindings(vm: &mut Vm) {
+    let list = engine(vm).world.text_bindings.clone();
+    let now = crate::clock::now(vm);
+    for id in list {
+        if !prop(vm, id, "enabled").truthy() {
+            continue;
+        }
+        let interval = match prop(vm, id, "interval") {
+            Value::Num(n) => n,
+            _ => 0.0,
+        };
+        if let Value::Num(last) = prop(vm, id, "lastUpdate")
+            && now - last < interval
+        {
+            continue;
+        }
+        let _ = write_font_string(vm, id);
+    }
+}
+
 fn update_memory(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
@@ -757,6 +1165,10 @@ pub fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
             color_value_from_boolean,
         ),
         ("C_DurationUtil.CreateDuration", create_duration),
+        (
+            "C_DurationUtil.CreateDurationTextBinding",
+            create_text_binding,
+        ),
         ("UnitCastingDuration", unit_casting_duration),
         ("UnitChannelDuration", unit_channel_duration),
         ("UpdateAddOnMemoryUsage", update_memory),
@@ -827,5 +1239,42 @@ pub fn methods() -> Vec<(&'static str, widgets::MethodFn)> {
         ("DurationObject:FormatRemainingDuration", duration_format),
         ("DurationObject:FormatTotalDuration", duration_format),
     ]);
+    let bindings: [(&str, widgets::MethodFn); 30] = [
+        ("Assign", binding_assign),
+        ("CanFormatText", binding_can),
+        ("CanUpdateFontString", binding_can),
+        ("ClearTextColorCurve", binding_clear_color_curve),
+        ("Copy", binding_copy),
+        ("Disable", binding_enable),
+        ("Enable", binding_enable),
+        ("SetEnabled", binding_enable),
+        ("IsEnabled", binding_get),
+        ("GetDuration", binding_get),
+        ("GetExpiredText", binding_get),
+        ("GetFontString", binding_get),
+        ("GetTimeModifier", binding_get),
+        ("GetUpdateInterval", binding_get),
+        ("GetZeroDurationText", binding_get),
+        ("SetDuration", binding_set),
+        ("SetExpiredText", binding_set),
+        ("SetFontString", binding_set),
+        ("SetTimeModifier", binding_set),
+        ("SetUpdateInterval", binding_set),
+        ("SetZeroDurationText", binding_set),
+        ("GetFormattedText", binding_text),
+        ("GetFormattedTextColor", binding_color),
+        ("GetTextColorCurve", binding_get_color_curve),
+        ("HasSecretValues", binding_secret),
+        ("SetFormatter", binding_set_formatter),
+        ("SetTextColorCurve", binding_set_color_curve),
+        ("SetTextFormat", binding_set_text_format),
+        ("SetToDefaults", binding_to_defaults),
+        ("UpdateFontString", binding_update),
+    ];
+    for (name, f) in bindings {
+        let full: &'static str =
+            Box::leak(format!("DurationTextBindingObject:{name}").into_boxed_str());
+        out.push((full, f));
+    }
     out
 }

@@ -36,6 +36,10 @@ pub struct Class {
     pub bases: Vec<String>,
     pub widget: Option<String>,
     pub methods: Vec<usize>,
+    /// A script object the client gives Lua as a userdata (its system's
+    /// `ObjectType = "Userdata"`: curves, numeric formatters, durations),
+    /// not as a table holding one at `[0]` as a frame.
+    pub userdata: bool,
 }
 
 pub struct Api {
@@ -244,6 +248,9 @@ fn parse(gz: &[u8]) -> Api {
         let system_env = str_of(system, "Environment");
         if kind == "ScriptObject" {
             let class = str_of(system, "Class").unwrap_or_else(|| sname.to_string());
+            if str_of(system, "ObjectType").as_deref() == Some("Userdata") {
+                api.classes.entry(class.clone()).or_default().userdata = true;
+            }
             for f in list(system, "Functions") {
                 let Some(short) = str_of(&f, "Name") else {
                     continue;

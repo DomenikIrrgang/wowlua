@@ -323,3 +323,100 @@ return tostring(d:HasSecretValues()), d:GetTotalDuration(), tostring((UnitCastin
     );
     assert_eq!(r, ["false", "3", "nil"]);
 }
+
+/// The documentation's userdata script objects are userdata: methods
+/// through their metatable, fields kept (Blizzard's `TimerUtil` defines a
+/// method on its signal map), `securecopy` passing them on.
+#[test]
+fn script_objects_are_userdata() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local c = C_CurveUtil.CreateCurve()
+local objects = { c, C_CurveUtil.CreateColorCurve(), C_StringUtil.CreateNumericRuleFormatter(),
+    C_StringUtil.CreateAbbreviatedNumberFormatter(), C_StringUtil.CreateSecondsFormatter(),
+    C_DurationUtil.CreateDuration(), C_DurationUtil.CreateDurationTextBinding(),
+    C_Timer.NewTimedSignalMap(function() end) }
+local types = {}
+for i, o in ipairs(objects) do types[i] = type(o) end
+c:AddPoint(0, 1)
+c.note = 'kept'
+local copy = securecopy({ curve = c, list = objects })
+local f = CreateFrame('Frame')
+local refused = pcall(securecopy, { frame = f })
+return table.concat(types, ' '), c:GetPointCount(), c.note, tostring(copy.curve == c),
+    tostring(copy.list[8] == objects[8]), tostring(refused), tostring(c.Missing)",
+    );
+    assert_eq!(
+        r,
+        [
+            "userdata userdata userdata userdata userdata userdata userdata userdata",
+            "1",
+            "kept",
+            "true",
+            "true",
+            "false",
+            "nil"
+        ]
+    );
+}
+
+/// A duration text binding writes its duration's text into its font
+/// string each frame while enabled: its formatter's remaining time, a text
+/// format's components, the zero-duration and expired texts.
+#[test]
+fn duration_text_bindings() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local fs = CreateFrame('Frame'):CreateFontString()
+fs:SetFont('Fonts\\\\FRIZQT__.TTF', 12, '')
+local f = C_StringUtil.CreateSecondsFormatter()
+f:SetDefaultAbbreviation(Enum.SecondsFormatterAbbreviation.OneLetter)
+local b = C_DurationUtil.CreateDurationTextBinding()
+local fresh = { tostring(b:IsEnabled()), tostring(b:CanFormatText()), b:GetFormattedText() }
+b:SetZeroDurationText('none')
+local zero = b:GetFormattedText()
+local d = C_DurationUtil.CreateDuration()
+d:SetTimeFromStart(GetTime(), 90)
+b:SetFormatter(f)
+b:SetDuration(d)
+b:SetFontString(fs)
+mock.nextFrame()
+local disabled = tostring(fs:GetText())
+b:SetEnabled(true)
+mock.nextFrame()
+local shown = fs:GetText()
+b:SetTextFormat('{} of {}', { { property = Enum.DurationTextBindingProperty.ElapsedDuration, formatter = f },
+    { property = Enum.DurationTextBindingProperty.TotalDuration, formatter = f } })
+mock.advanceTime(30)
+mock.nextFrame()
+local formatted = fs:GetText()
+b:SetExpiredText('done')
+mock.advanceTime(61)
+mock.nextFrame()
+local copy = b:Copy()
+b:SetToDefaults()
+return fresh[1], fresh[2], fresh[3], zero, disabled, shown, formatted, fs:GetText(),
+    tostring(copy:GetDuration() == d), tostring(b:GetDuration()), tostring(b:CanUpdateFontString()),
+    tostring(copy:CanUpdateFontString())",
+    );
+    assert_eq!(
+        r,
+        [
+            "false",
+            "false",
+            "",
+            "none",
+            "nil",
+            "1 m 30 s",
+            // The frames' time too: past 30 s, rounded up.
+            "31 s of 1 m 30 s",
+            "done",
+            "true",
+            "nil",
+            "false",
+            "true"
+        ]
+    );
+}
