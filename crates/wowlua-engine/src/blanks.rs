@@ -120,7 +120,6 @@ const BLANKS: &[(&str, &str)] = &[
     ("GetQuestPOILeaderBoard", "3: nil nil, nil nil, nil nil"),
     // A quest log index the snapshot lacks (`stats.rs` answers the
     // snapshot's).
-    ("GetQuestLogLeaderBoard", "3: nil nil, nil nil, nil nil"),
     ("IsQuestSequenced", "1: boolean false"),
     ("GetCombatRatingBonus", "1: number 0"),
     // Another unit's ranged weapon: none, at speed 1.

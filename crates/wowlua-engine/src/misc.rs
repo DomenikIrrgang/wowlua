@@ -418,7 +418,9 @@ fn classic_expansion_at_most(vm: &mut Vm, c: NativeCall) -> Ret {
 /// grey 176/255, yellow's blue 119/255; orange's 153/255 unverified).
 fn get_threat_status_color(vm: &mut Vm, c: NativeCall) -> Ret {
     let status = vm.check_number(&c, 1)?;
-    let byte = |b: f32| b / 255.0;
+    // A byte times 1/255 in single precision (the client's 119 is
+    // 0.46666669845581).
+    let byte = |b: f32| b * (1.0f32 / 255.0);
     let rgb: [f32; 3] = match status as i64 {
         0 => [byte(176.0), byte(176.0), byte(176.0)],
         1 => [1.0, 1.0, byte(119.0)],

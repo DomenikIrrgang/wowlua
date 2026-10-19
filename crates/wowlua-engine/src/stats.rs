@@ -1132,6 +1132,11 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(stat) = name.and_then(|n| STATS.iter().find(|s| s.function == n)) else {
         return Ok(vec![]);
     };
+    // An inspected unit's or pet's groups: none (the full probe:
+    // `GetNumSpecGroups(isInspect)` 0 with any argument, 1 without).
+    if stat.function == "GetNumSpecGroups" && !c.arg(1).is_nil() {
+        return Ok(vec![Value::Num(0.0)]);
+    }
     // The unit asked about: the player, or its pet (its own stats).
     let asked = units::unit_arg(vm, &c, 1);
     let pet = matches!(stat.ask, Unit | UnitIndex)
@@ -1383,13 +1388,15 @@ fn num_quest_leader_boards(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `GetQuestLogLeaderBoard(i, logIndex)`: the objective's text, type and
 /// whether it is finished (derived as `GetNumQuestLeaderBoards`).
 fn quest_log_leader_board(vm: &mut Vm, c: NativeCall) -> Ret {
+    // No such objective: three nils (the full probe).
+    let none = || Ok(vec![Value::Nil; 3]);
     let (Some(i), Some(log)) = (num(c.arg(1)), num(c.arg(2))) else {
-        return Ok(vec![]);
+        return none();
     };
     let Some(objective) =
         quest_objectives(vm, log).and_then(|o| o.get((i as usize).wrapping_sub(1)).cloned())
     else {
-        return Ok(vec![]);
+        return none();
     };
     Ok(["text", "type", "finished"]
         .iter()

@@ -74,12 +74,14 @@ fn below_one(vm: &Vm, c: &NativeCall) -> bool {
     !matches!(vm.hidden(c.arg(1)), Value::Num(n) if n >= 1.0)
 }
 
-/// `GetLFGDungeonNumEncounters(dungeonID)`: none, nothing for no ID.
+/// `GetLFGDungeonNumEncounters(dungeonID)`: one encounter, none done;
+/// nothing for no ID (the full probe: 1, 0 for IDs 1 and 2; another
+/// dungeon's count unverified).
 fn lfg_dungeon_num_encounters(vm: &mut Vm, c: NativeCall) -> Ret {
     if below_one(vm, &c) {
         return Ok(vec![]);
     }
-    Ok(vec![Value::Num(0.0); 2])
+    Ok(vec![Value::Num(1.0), Value::Num(0.0)])
 }
 
 /// `IsLFGDungeonJoinable(dungeonID)`: joinable, for the player, not

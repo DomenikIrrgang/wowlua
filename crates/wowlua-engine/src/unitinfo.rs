@@ -205,8 +205,10 @@ fn unit_has_power_type(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(id) = units::unit_arg(vm, &c, 1) else {
         return Ok(vec![Value::Bool(false)]);
     };
-    let pt = num(vm, c.arg(2)).unwrap_or(-1.0);
     let u = &engine(vm).units.list[id.0];
+    // A power type not a number: the unit's own (the full probe:
+    // `UnitHasPowerType("player", "x")` true).
+    let pt = num(vm, c.arg(2)).unwrap_or(u.power_type);
     let has = u.power_type == pt || (u.class == "DRUID" && pt == 0.0);
     Ok(vec![Value::Bool(has)])
 }
@@ -253,6 +255,35 @@ fn unit_modifier(vm: &mut Vm, c: NativeCall) -> Ret {
         0.0
     };
     Ok(vec![Value::Num(n)])
+}
+
+/// `UnitHasLFGDeserter(unit)` and the random cooldown: the player's false,
+/// any other unit nothing (the full probe).
+fn player_only_no(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(match units::unit_arg(vm, &c, 1) {
+        Some(PLAYER) => vec![Value::Bool(false)],
+        _ => vec![],
+    })
+}
+
+/// `UnitBattlePetLevel(unit)`: the player's 0, others nil (the full
+/// probe).
+fn battle_pet_level(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(match units::unit_arg(vm, &c, 1) {
+        Some(PLAYER) => vec![Value::Num(0.0)],
+        _ => vec![Value::Nil],
+    })
+}
+
+/// `UnitThreatPercentageOfLead(unit, mob)`: nil, but against the player a
+/// secret (the full probe: any first unit with "player" second secret;
+/// unverified what it hides).
+fn threat_percentage_of_lead(vm: &mut Vm, c: NativeCall) -> Ret {
+    if units::unit_arg(vm, &c, 2) == Some(PLAYER) {
+        let zero = vm.secret_wrap(Value::Num(0.0));
+        return Ok(vec![zero]);
+    }
+    Ok(vec![Value::Nil])
 }
 
 /// `UnitStagger(unit)`: none; a unit that does not exist a secret (the
@@ -1197,15 +1228,15 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("UnitTreatAsPlayerForDisplay", no),
         ("UnitIsNPCAsPlayer", no),
         ("UnitShouldDisplaySpellTargetName", no),
-        ("UnitHasLFGDeserter", no),
-        ("UnitHasLFGRandomCooldown", no),
+        ("UnitHasLFGDeserter", player_only_no),
+        ("UnitHasLFGRandomCooldown", player_only_no),
         ("UnitHasEffectivelyTankAura", no),
         ("UnitIsLieutenant", no),
         ("UnitIsRaidOfficer", no),
         ("UnitAlliedRaceInfo", two_falses),
         ("UnitInBattleground", nil),
         ("UnitPvpClassification", nil),
-        ("UnitThreatPercentageOfLead", nil),
+        ("UnitThreatPercentageOfLead", threat_percentage_of_lead),
         ("UnitThreatLeadSituation", nil),
         ("UnitSpellTargetName", nothing),
         ("UnitSpellTargetClass", nothing),
@@ -1232,7 +1263,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("UnitIsBattlePet", no),
         ("UnitIsOtherPlayersBattlePet", no),
         ("UnitCanPetBattle", no),
-        ("UnitBattlePetLevel", nil),
+        ("UnitBattlePetLevel", battle_pet_level),
         ("UnitBattlePetType", nil),
         ("UnitBattlePetSpeciesID", nil),
         // Empowered casts, runes, charged points: none.

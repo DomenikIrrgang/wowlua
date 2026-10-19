@@ -295,12 +295,11 @@ fn can_loot_unit(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(guid) = text_arg(vm, &c, 1) else {
         return Ok(vec![Value::Bool(false), Value::Bool(false)]);
     };
-    let loot = engine(vm)
-        .units
-        .list
-        .iter()
-        .find(|u| u.guid == guid)
-        .is_some_and(|u| u.dead && !u.loot.is_empty());
+    // A GUID naming no unit: nothing (the full probe).
+    let Some(unit) = engine(vm).units.list.iter().find(|u| u.guid == guid) else {
+        return Ok(vec![]);
+    };
+    let loot = unit.dead && !unit.loot.is_empty();
     Ok(vec![Value::Bool(loot), Value::Bool(loot)])
 }
 
@@ -1265,7 +1264,6 @@ const NO: &[&str] = &[
     "ConsoleIsActive",
     "IsChatAFK",
     "IsChatDND",
-    "IsChatChannelRaid",
     "IsRaidMarkerActive",
     "IsRaidMarkerSystemEnabled",
     "IsArenaSkirmish",
@@ -1301,7 +1299,6 @@ const NO: &[&str] = &[
     "EJ_InstanceIsRaid",
     "EJ_IsLootListOutOfDate",
     "FlyoutHasSpell",
-    "IsSelectedSpellBookItem",
     "TargetSpellReplacesBonusTree",
     "IsSpecializationActivateSpell",
     "HasLootSpecializations",
@@ -1359,13 +1356,7 @@ const NO: &[&str] = &[
 /// "Yes": the cursor shown (recorded true), a 64-bit client, the mouse in
 /// use, quest data at hand (the engine's quests carry theirs; from the
 /// names, unverified but the cursor).
-const YES: &[&str] = &[
-    "IsCursorVisible",
-    "Is64BitClient",
-    "IsUsingMouse",
-    "HaveQuestData",
-    "HaveQuestRewardData",
-];
+const YES: &[&str] = &["IsCursorVisible", "Is64BitClient", "IsUsingMouse"];
 
 /// Counts and amounts of nothing: no LFG dungeons, scenarios, war games
 /// or battleground types listed; no archaeology; no unspent PvP talents;
@@ -1419,7 +1410,6 @@ const ZERO: &[&str] = &[
     "EJ_GetSearchProgress",
     "EJ_GetNumLoot",
     "EJ_GetNumEncountersForLootByIndex",
-    "EJ_GetInvTypeSortOrder",
     "EJ_GetContentTuningID",
     "EJ_GetInstanceForMap",
     "GMSurveyNumAnswers",
@@ -1441,7 +1431,6 @@ const NIL: &[&str] = &[
     "GetDungeonForRandomSlot",
     "GetLFDLockInfo",
     "GetLFDRoleLockInfo",
-    "GetLFDRoleRestrictions",
     "GetWarGameTypeInfo",
     "GetWarGameQueueStatus",
     "GetTreasurePickerItemInfo",
@@ -1462,8 +1451,6 @@ const NIL: &[&str] = &[
     "GetPvpTalentLink",
     "GetCurrentGlyphNameForSpell",
     "GetPendingGlyphName",
-    "GetNextCompleatedTutorial",
-    "GetPrevCompleatedTutorial",
     "GetArchaeologyRaceInfo",
     "GetArchaeologyRaceInfoByID",
     "GetArchaeologyInfo",
@@ -1528,7 +1515,6 @@ const TWO_ZEROS: &[&str] = &[
     "GetEventCPUUsage",
     "GetFrameCPUUsage",
     "GetFunctionCPUUsage",
-    "GetNumComparisonCompletedAchievements",
     "SearchLFGGetNumResults",
     "GetBattlegroundPoints",
 ];
@@ -1703,6 +1689,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     for (names, f) in groups {
         out.extend(names.iter().map(|name| (*name, f)));
     }
+    // The rules the full probe settled, over the lists above.
+    out.extend(probed());
     out
 }
 
@@ -1725,6 +1713,140 @@ fn get_num_flyouts(vm: &mut Vm, _c: NativeCall) -> Ret {
 /// `GetOSLocale()`: enUS, the engine's locale (unverified).
 fn os_locale(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![vm.str("enUS")])
+}
+
+// ------------------------------------------------------- the full probe
+
+/// Whether the first argument is a number of at least 1: legacy functions
+/// answer nothing for an ID or index below (the full probe: -1 and 0).
+fn positive(vm: &Vm, c: &NativeCall) -> bool {
+    num_arg(vm, c, 1).is_some_and(|n| n >= 1.0)
+}
+
+/// `GetLFDRoleRestrictions(dungeonID)`: no role restricted for a dungeon,
+/// three trues (the full probe, IDs 1 and 2; unverified for a dungeon
+/// that restricts one); nothing for no ID.
+fn lfd_role_restrictions(vm: &mut Vm, c: NativeCall) -> Ret {
+    if !positive(vm, &c) {
+        return Ok(vec![]);
+    }
+    Ok(vec![Value::Bool(true); 3])
+}
+
+/// `EJ_GetInvTypeSortOrder(invType)`: nothing for a type below 1 (the full
+/// probe; the types' orders, 1's 0 and 2's 10, unverified for the others:
+/// 0).
+fn ej_inv_type_sort_order(vm: &mut Vm, c: NativeCall) -> Ret {
+    if !positive(vm, &c) {
+        return Ok(vec![]);
+    }
+    let order = if num_arg(vm, &c, 1) == Some(2.0) {
+        10.0
+    } else {
+        0.0
+    };
+    Ok(vec![Value::Num(order)])
+}
+
+/// `IsChatChannelRaid(index)`, `IsSelectedSpellBookItem(slot, bank)`'s like:
+/// false for a number, nothing for another argument or none (the full
+/// probe).
+fn false_for_number(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(match vm.hidden(c.arg(1)) {
+        Value::Num(_) => vec![Value::Bool(false)],
+        _ => vec![],
+    })
+}
+
+/// `IsSelectedSpellBookItem(slot, bank)`: none selected, false; with no
+/// bank nothing (the full probe: `(1)` nothing, `(1, 1)` and `(1,
+/// "spell")` false).
+fn is_selected_spell_book_item(vm: &mut Vm, c: NativeCall) -> Ret {
+    if c.arg(2).is_nil() {
+        return Ok(vec![]);
+    }
+    false_for_number(vm, c)
+}
+
+/// `IsSpellClassOrSpec(slot, bank)`: two nils for a slot and bank, nothing
+/// without the bank (the full probe; the spellbook's class spells
+/// unverified).
+fn is_spell_class_or_spec(_vm: &mut Vm, c: NativeCall) -> Ret {
+    if c.arg(2).is_nil() {
+        return Ok(vec![]);
+    }
+    Ok(vec![Value::Nil, Value::Nil])
+}
+
+/// `GetAchievementGuildRep(achievementID)`: no guild reputation needed,
+/// false alone; nothing for an argument not a number (the full probe; the
+/// newest answer, over three values).
+fn achievement_guild_rep(vm: &mut Vm, c: NativeCall) -> Ret {
+    false_for_number(vm, c)
+}
+
+/// `HaveQuestData(questID)`, `HaveQuestRewardData(questID)`: a quest of
+/// the player's log has its data, another not yet (the full probe: the
+/// log's 1063 true; 1, 2 and the invalid IDs false).
+fn have_quest_data(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = c.arg(1);
+    let known = num_arg(vm, &c, 1).is_some()
+        && ask(vm, "C_QuestLog.GetLogIndexForQuestID", &[id])
+            .first()
+            .is_some_and(|v| matches!(v, Value::Num(_)));
+    Ok(vec![Value::Bool(known)])
+}
+
+/// `GetNextCompleatedTutorial(index)` and the previous: none (the full
+/// probe: nothing for -1, 0 and 1; 2's 27 unverified, the tutorials'
+/// order).
+fn no_tutorial(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![])
+}
+
+/// `GetPromotionRank(rank)`: none (the full probe: nil, but 2's 3).
+fn get_promotion_rank(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Nil])
+}
+
+/// `GetNumSpecializations([isInspect, isPet])`: the class's one; an
+/// inspected unit's or pet's none (the full probe: 1 without arguments, 0
+/// with any).
+fn get_num_specializations(_vm: &mut Vm, c: NativeCall) -> Ret {
+    let n = if c.arg(1).is_nil() { 1.0 } else { 0.0 };
+    Ok(vec![Value::Num(n)])
+}
+
+/// `GetNumComparisonCompletedAchievements(category)`: with no comparison,
+/// the player's own completed count and 0 (the full probe: 112, 0 for
+/// any category, the player's `GetNumCompletedAchievements()` 112).
+fn comparison_completed_achievements(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let own = crate::recorded::lookup_text(vm, "GetNumCompletedAchievements()")
+        .and_then(|v| v.first().copied())
+        .unwrap_or(Value::Num(0.0));
+    Ok(vec![own, Value::Num(0.0)])
+}
+
+/// The rules the full probe settled (`/stdtest engine fullprobe`).
+fn probed() -> Vec<(&'static str, NativeFn)> {
+    vec![
+        ("GetNumSpecializations", get_num_specializations),
+        (
+            "GetNumComparisonCompletedAchievements",
+            comparison_completed_achievements,
+        ),
+        ("GetLFDRoleRestrictions", lfd_role_restrictions),
+        ("EJ_GetInvTypeSortOrder", ej_inv_type_sort_order),
+        ("IsChatChannelRaid", false_for_number),
+        ("IsSelectedSpellBookItem", is_selected_spell_book_item),
+        ("IsSpellClassOrSpec", is_spell_class_or_spec),
+        ("GetAchievementGuildRep", achievement_guild_rep),
+        ("HaveQuestData", have_quest_data),
+        ("HaveQuestRewardData", have_quest_data),
+        ("GetNextCompleatedTutorial", no_tutorial),
+        ("GetPrevCompleatedTutorial", no_tutorial),
+        ("GetPromotionRank", get_promotion_rank),
+    ]
 }
 
 #[cfg(test)]

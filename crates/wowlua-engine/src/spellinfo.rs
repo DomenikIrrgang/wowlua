@@ -1121,6 +1121,23 @@ fn get_totem_duration(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![zero_duration(vm)])
 }
 
+/// `GetTotemTimeLeft(slot)`: no totem, 0 left; slot 0 (none) nil (the full
+/// probe).
+fn totem_time_left(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(vec![match num(vm.hidden(c.arg(1))) {
+        Some(s) if s >= 1.0 => Value::Num(0.0),
+        _ => Value::Nil,
+    }])
+}
+
+/// `GetTotemCannotDismiss(slot)`: false; slot 0 nil (the full probe).
+fn totem_cannot_dismiss(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(vec![match num(vm.hidden(c.arg(1))) {
+        Some(s) if s >= 1.0 => Value::Bool(false),
+        _ => Value::Nil,
+    }])
+}
+
 // ------------------------------------------------------ specializations
 
 /// Each class's one specialization in WoW Forever (recorded:
@@ -1579,8 +1596,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         // Totems (none down), companions (none: Forever keeps mounts and
         // pets as items and spells), multi-cast bars (none in classic).
         ("GetTotemDuration", get_totem_duration),
-        ("GetTotemTimeLeft", zero),
-        ("GetTotemCannotDismiss", nil),
+        ("GetTotemTimeLeft", totem_time_left),
+        ("GetTotemCannotDismiss", totem_cannot_dismiss),
         ("GetMultiCastTotemSpells", nothing),
         ("GetNumCompanions", zero),
         ("GetCompanionInfo", nothing),

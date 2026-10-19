@@ -181,7 +181,9 @@ const UNDOCUMENTED: &[(&str, &str)] = &[
     ("GetQuestPOIs", ""),
     ("GetTaskPOIs", ""),
     ("GetQuestPOILeaderBoard", "n"),
-    ("GetQuestSortIndex", "n"),
+    // The full probe: 0 for an index naming no quest (a quest's own 1
+    // unverified).
+    ("GetQuestSortIndex", "0"),
     // Raid profiles: none kept (`unitinfo`'s getters answer none), not
     // loaded.
     ("GetNumRaidProfiles", "0"),
@@ -612,16 +614,27 @@ fn console_echo(_vm: &mut Vm, _c: NativeCall) -> Ret {
 
 /// `ConsoleGetColorFromType(colorType)`: the console's colors, white for
 /// text, red for errors, yellow for warnings, green for the default green,
-/// black for the background (unverified: the client's palette).
+/// black for the background; 1 sky blue, 2 grey and 10 pale blue as bytes;
+/// a color without alpha (the full probe: every type 0 to 11).
 fn console_get_color_from_type(vm: &mut Vm, c: NativeCall) -> Ret {
+    // A byte times 1/255 in single precision (the client's 196 is
+    // 0.76862752437592).
+    let byte = |b: f64| f64::from(b as f32 * (1.0f32 / 255.0));
     let rgb = match arg_num(vm, &c, 1).map(|n| n as i64) {
+        Some(1) => (byte(128.0), byte(196.0), 1.0),
+        Some(2) => (byte(128.0), byte(128.0), byte(128.0)),
+        Some(10) => (byte(200.0), byte(200.0), 1.0),
         Some(3) => (1.0, 0.0, 0.0),
         Some(4) => (1.0, 1.0, 0.0),
         Some(8) => (0.0, 0.0, 0.0),
         Some(11) => (0.0, 1.0, 0.0),
         _ => (1.0, 1.0, 1.0),
     };
-    Ok(vec![color(vm, rgb)])
+    let color = color(vm, rgb);
+    if let Value::Table(t) = color {
+        set(vm, t, "a", Value::Nil);
+    }
+    Ok(vec![color])
 }
 
 /// The console's font height until set (unverified).

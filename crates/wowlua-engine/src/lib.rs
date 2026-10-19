@@ -876,6 +876,8 @@ const OVER_RECORDED: &[&str] = &[
     // A rule over the recorded calls (the full probe: any sex, numbers
     // taken whole, the pets' class 0).
     "GetSpecializationInfoForClassID",
+    // An inspected unit's none (the full probe).
+    "GetNumSpecializations",
     "GetDungeonDifficultyID",
     "GetActionBarToggles",
     "C_Heirloom.GetCollectedHeirloomFilter",
