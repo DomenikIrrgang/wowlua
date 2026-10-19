@@ -17,8 +17,13 @@
 //! frame's `UNIT_AURA`s come right before them (59 of 60 frames), never
 //! two for a unit token (198 frames); its `ACTION_USABLE_CHANGED` once
 //! (61 frames), after the server's updates and before the auras'. Other
-//! events seem batched too (`SPELL_UPDATE_CHARGES`, `TOYS_UPDATED`,
-//! `UI_INFO_MESSAGE`: unverified, too few samples) and are fired at once.
+//! events seem batched too (`SPELL_UPDATE_CHARGES`, `TOYS_UPDATED`:
+//! unverified, too few samples) and are fired at once. `UI_INFO_MESSAGE`
+//! is batched: in all 11 recorded (quest's nine, mail's, group's) it is
+//! its frame's last but for batched events after it in their names' order
+//! (quest 46.868: `SPELL_UPDATE_USABLE` before it, `UNIT_HEALTH` after;
+//! 92.298: `SPELL_UPDATE_USABLE` before), never before a server update of
+//! its frame (quest 59.292: after the next item's push).
 //!
 //! Off unless a test turns it on (`setFrameBatching`): a test of an
 //! addon sees each event as the control that causes it fires it.
@@ -46,6 +51,7 @@ const BATCHED: &[&str] = &[
     // resurrection's).
     "SUPER_TRACKING_CHANGED",
     "UI_ERROR_MESSAGE",
+    "UI_INFO_MESSAGE",
     "UNIT_HEALTH",
     "UNIT_THREAT_LIST_UPDATE",
     "UNIT_THREAT_SITUATION_UPDATE",

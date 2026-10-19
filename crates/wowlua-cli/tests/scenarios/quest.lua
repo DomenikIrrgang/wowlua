@@ -27,6 +27,10 @@ local player = e.player
 e.setLatency(0.3)
 -- The warrior's names as the recording has them, scrubbed.
 player:setName("Player", "Lastname")
+-- The snapshot's Campfire Nearby: left behind at 63.547 (in a fight), near
+-- again at 106.436, a new instance (recorded).
+local campfire = C_UnitAuras.GetAuraDataByIndex("player", 1, "HELPFUL")
+campfire = campfire and campfire.auraInstanceID
 -- The warrior's Defensive State: its cooldown told when the warrior dodges,
 -- parries or blocks (recorded).
 e.defineSpell(5302, { name = "Defensive State", procOnAvoid = true })
@@ -116,6 +120,17 @@ local function press(frame)
 end
 -- Heroic Strike pressed: told to the server, its answer (`SENT`) the
 -- recorded delay later.
+-- A fight begun with the first swing's packet: the swing, then the auto
+-- attack's start and the target change's echo with it (`tokens`: the
+-- echo's units), then the swing's combat state (recorded, 24.671 and
+-- 48.121: PLAYER_SWING, PLAYER_ENTER_COMBAT, UNIT_TARGET, then
+-- PLAYER_REGEN_DISABLED).
+local function attackWithSwing(tokens)
+    e.beforeEvent("PLAYER_REGEN_DISABLED", function()
+        player:startAttack()
+        for _, unit in ipairs(tokens) do e.fireUnitEvent("UNIT_TARGET", unit) end
+    end)
+end
 local function strike(sent)
     e.setLatency(sent)
     player:useSpell(78)
@@ -179,9 +194,9 @@ at(21.227) player:loot(u_53fa49cc84, { auto = true, bagsAfter = { 0.081, 0.07, 0
 at(22.562) player:heal(60)
 at(22.562) player:setPower(20)
 at(22.593) CloseLoot() -- walked off
-at(24.259) player:target(u_57ac1525ca, { echo = 0.412 })
+at(24.259) player:target(u_57ac1525ca, { echo = false })
 at(24.429) player:setPower(5, { frequent = true })
-at(24.671) player:startAttack()
+at(24.671) attackWithSwing({ "player" })
 at(24.671) player:swing(u_57ac1525ca, 11, { indicator = "CRITICAL", power = 20, textAfter = 0.53 })
 at(24.671) u_57ac1525ca:target(player)
 at(24.671) u_57ac1525ca:swing(player, 1, { victimPower = 20, textAfter = 0.4 })
@@ -190,6 +205,7 @@ at(25.216) strike(0.261)
 at(25.898) u_57ac1525ca:setThreat(10)
 at(26.422) bystander("Creature-0-6782-0-7-6-529B52607A", 6, "Kobold Vermin")
 at(26.487) player:swing(u_57ac1525ca, 17, { spent = 5, power = 20, statesAfter = true })
+at(26.612) player:setPower(20) -- the rage told twice with the blow (recorded)
 at(26.612) u_57ac1525ca:swing(player, 1, { victimPower = 20, textAfter = 0.33 })
 at(26.612) e.tellAuraStates() -- the wolf's, after the blow's power (recorded)
 at(26.612) player:wear(16) -- the sword: 19 of 20 (after the blow's rage, recorded)
@@ -242,18 +258,25 @@ at(45.297) player:swing(u_57461dbc45, 17, { spent = 5, power = 5, kill = { echo 
 at(45.365) player:leaveCombat()
 at(45.587) player:stopAttack()
 at(45.681) player:target(u_57461dbc45, { echo = 0.346 })
-at(45.731) player:loot(u_57461dbc45, { auto = true, bagsAfter = { 0, 0.34 }, dataAfter = { 1.176 }, slotsAfter = { 0.590, 0.667, 0.897, 1.007 } })
-at(46.868) player:heal(60)
-at(46.868) player:setPower(5)
+at(45.731) player:loot(u_57461dbc45, { auto = true, bagsAfter = { 0, 0.34 }, dataAfter = { 1.176 }, slotsAfter = { 0.587, 0.667, 0.897, 1.007 } })
+-- The health and rage regained in the first slot's packets, after its
+-- item's push and before the log's word (recorded, 46.868).
+e.beforeEvent("UNIT_QUEST_LOG_CHANGED", function()
+    player:heal(60)
+    player:setPower(5)
+end)
 at(47.264) CloseLoot() -- walked off
-at(47.780) player:target(u_848ad88022, { echo = 0.341 })
-at(48.121) player:startAttack()
-at(48.121) player:swing(u_848ad88022, 5, { indicator = "GLANCING", power = 5, textAfter = 0.398 })
+at(47.780) player:target(u_848ad88022, { echo = false })
+-- The wolf on the player before the swing (the echo's and the swing's
+-- updates told for the target's target too: recorded).
 at(48.121) u_848ad88022:target(player)
+at(48.121) attackWithSwing({ "player", "targettarget" })
+at(48.121) player:swing(u_848ad88022, 5, { indicator = "GLANCING", power = 5, textAfter = 0.398 })
 at(48.121) u_848ad88022:swing(player, 2, { victimPower = 5, textAfter = 0.398 })
 at(48.121) u_848ad88022:setThreat(4)
 at(48.966) u_848ad88022:setThreat(5)
 at(50.017) player:swing(u_848ad88022, 5, { power = 5, textAfter = 0.532 })
+at(50.107) player:setPower(20) -- the rage told twice with the blow (recorded)
 at(50.107) u_848ad88022:swing(player, 2, { victimPower = 20, textAfter = 0.397 })
 at(50.539) u_848ad88022:setThreat(9)
 at(51.937) player:swing(u_848ad88022, 5, { indicator = "GLANCING", power = 20, textAfter = 0.401, statesAfter = true })
@@ -287,10 +310,14 @@ at(61.025) player:startAttack()
 at(61.071) player:heal(60)
 at(61.981) player:swing(u_ba7c88cbe5, 6, { power = 5, textAfter = 0.396 })
 at(61.981) u_ba7c88cbe5:setThreat(5)
-at(61.982) u_ba7c88cbe5:swing(player, 0, { kind = "BLOCK", textAfter = 0.33, statesAfter = 0.102 })
-at(62.084) player:raiseSkill("Defense", 5)
+at(61.981) u_ba7c88cbe5:swing(player, 0, { kind = "BLOCK", indicator = "BLOCK", textAfter = 0.331, statesAfter = true })
+-- The wolf on the player, then the block's state, then the skill (its
+-- updates told for the target's target too: recorded).
 at(62.084) u_ba7c88cbe5:target(player)
+at(62.084) e.tellAuraStates()
+at(62.084) player:raiseSkill("Defense", 5)
 at(63.125) u_ba7c88cbe5:setThreat(6)
+at(63.547) if campfire then player:removeAura(campfire) end
 at(63.879) player:swing(u_ba7c88cbe5, 7, { power = 5, textAfter = 0.398, statesAfter = 0.403 })
 at(64.012) u_ba7c88cbe5:swing(player, 0, { kind = "DODGE", textAfter = 0.33, stateFor = 5.188 })
 at(64.282) u_ba7c88cbe5:setThreat(12)
@@ -417,6 +444,7 @@ at(102.729) CloseLoot() -- walked off
 at(103.161) player:wear()
 at(104.047) player:setPower(5)
 at(106.018) player:setPower(5)
+at(106.436) player:applyAura({ spellId = 1283391, name = "Campfire Nearby", icon = 7808147, auraInstanceID = 51 })
 at(106.5)
 check("the objective done: 8/8", C_QuestLog.IsComplete(33))
 check("level 2: the player frame", PlayerLevelText:GetText() == "2")
