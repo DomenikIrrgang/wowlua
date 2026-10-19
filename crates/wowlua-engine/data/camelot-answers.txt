@@ -2655,6 +2655,7 @@ C_LFGList.GetActiveEntryInfo()	0:
 C_LFGList.GetAvailableRoles()	3: boolean true, boolean true, boolean true
 C_LFGList.GetFilteredSearchResults()	2: number 0, {}
 C_LFGList.HasActiveEntryInfo()	1: boolean false
+C_LFGList.IsPremadeGroupFinderEnabled()	1: boolean true
 C_LevelLink.IsSpellLocked(1022)	1: boolean false
 C_LevelLink.IsSpellLocked(1044)	1: boolean false
 C_LevelLink.IsSpellLocked(107)	1: boolean false
@@ -2765,6 +2766,19 @@ C_Map.CanSetUserWaypointOnMap(2548)	1: boolean true
 C_Map.CanSetUserWaypointOnMap(2652)	1: boolean true
 C_Map.CanSetUserWaypointOnMap(946)	1: boolean false
 C_Map.CanSetUserWaypointOnMap(947)	1: boolean true
+C_Map.GetAreaInfo(1)	1: string Dun Morogh
+C_Map.GetAreaInfo(12)	1: string Elwynn Forest
+C_Map.GetAreaInfo(14)	1: string Durotar
+C_Map.GetAreaInfo(141)	1: string Teldrassil
+C_Map.GetAreaInfo(1497)	1: string Undercity
+C_Map.GetAreaInfo(1519)	1: string Stormwind City
+C_Map.GetAreaInfo(1537)	1: string Ironforge
+C_Map.GetAreaInfo(1637)	1: string Orgrimmar
+C_Map.GetAreaInfo(1638)	1: string Thunder Bluff
+C_Map.GetAreaInfo(1657)	1: string Darnassus
+C_Map.GetAreaInfo(17)	1: string The Barrens
+C_Map.GetAreaInfo(215)	1: string Mulgore
+C_Map.GetAreaInfo(85)	1: string Tirisfal Glades
 C_Map.GetFallbackWorldMapID()	1: number 947
 C_Map.GetMapArtBackgroundAtlas(1411)	1: nil nil
 C_Map.GetMapArtBackgroundAtlas(1412)	1: nil nil
@@ -5200,7 +5214,7 @@ C_TradeSkillUI.CanTradeSkillShowCraftingUI(2550)	1: boolean true
 C_TradeSkillUI.CanTradeSkillShowCraftingUI(2656)	1: boolean true
 C_TradeSkillUI.CanTradeSkillShowCraftingUI(3100)	1: boolean true
 C_TradeSkillUI.CanTradeSkillShowCraftingUI(3273)	1: boolean true
-C_TradeSkillUI.GetAllFilterableInventorySlotsCount()	1: number 0
+C_TradeSkillUI.GetAllFilterableInventorySlotsCount()	1: number 12
 C_TradeSkillUI.GetBaseProfessionInfo()	1: {expansionName=string ,isPrimaryProfession=boolean false,maxSkillLevel=number 0,professionID=number 0,professionName=string ,skillLevel=number 0,skillModifier=number 0,sourceCounter=number 0}
 C_TradeSkillUI.GetChildProfessionInfo()	1: {expansionName=string ,isPrimaryProfession=boolean false,maxSkillLevel=number 0,professionID=number 0,professionName=string ,skillLevel=number 0,skillModifier=number 0,sourceCounter=number 0}
 C_TradeSkillUI.GetChildProfessionInfos()	1: {}
@@ -5209,10 +5223,10 @@ C_TradeSkillUI.GetOnlyShowMakeableRecipes()	1: boolean false
 C_TradeSkillUI.GetOnlyShowMakeableRecipes(nil)	1: boolean false
 C_TradeSkillUI.GetOnlyShowSkillUpRecipes()	1: boolean false
 C_TradeSkillUI.GetOnlyShowSkillUpRecipes(nil)	1: boolean false
-C_TradeSkillUI.GetProfessionInfoBySkillLineID(129)	1: {expansionName=string Unknown,isPrimaryProfession=boolean false,maxSkillLevel=number 0,profession=number 0,professionID=number 129,professionName=string First Aid,skillLevel=number 0,skillModifier=number 0,sourceCounter=number 0}
-C_TradeSkillUI.GetProfessionInfoBySkillLineID(164)	1: {expansionName=string Unknown,isPrimaryProfession=boolean true,maxSkillLevel=number 0,profession=number 1,professionID=number 164,professionName=string Blacksmithing,skillLevel=number 0,skillModifier=number 0,sourceCounter=number 0}
-C_TradeSkillUI.GetProfessionInfoBySkillLineID(185)	1: {expansionName=string Unknown,isPrimaryProfession=boolean false,maxSkillLevel=number 0,profession=number 5,professionID=number 185,professionName=string Cooking,skillLevel=number 0,skillModifier=number 0,sourceCounter=number 0}
-C_TradeSkillUI.GetProfessionInfoBySkillLineID(186)	1: {expansionName=string Unknown,isPrimaryProfession=boolean true,maxSkillLevel=number 0,profession=number 6,professionID=number 186,professionName=string Mining,skillLevel=number 0,skillModifier=number 0,sourceCounter=number 0}
+C_TradeSkillUI.GetProfessionInfoBySkillLineID(129)	1: {expansionName=string Unknown,isPrimaryProfession=boolean false,maxSkillLevel=number 0,profession=number 0,professionID=number 129,professionName=string First Aid,skillLevel=number 0,skillModifier=number 0,sourceCounter=number 3}
+C_TradeSkillUI.GetProfessionInfoBySkillLineID(164)	1: {expansionName=string Unknown,isPrimaryProfession=boolean true,maxSkillLevel=number 0,profession=number 1,professionID=number 164,professionName=string Blacksmithing,skillLevel=number 0,skillModifier=number 0,sourceCounter=number 3}
+C_TradeSkillUI.GetProfessionInfoBySkillLineID(185)	1: {expansionName=string Unknown,isPrimaryProfession=boolean false,maxSkillLevel=number 0,profession=number 5,professionID=number 185,professionName=string Cooking,skillLevel=number 0,skillModifier=number 0,sourceCounter=number 3}
+C_TradeSkillUI.GetProfessionInfoBySkillLineID(186)	1: {expansionName=string Unknown,isPrimaryProfession=boolean true,maxSkillLevel=number 0,profession=number 6,professionID=number 186,professionName=string Mining,skillLevel=number 0,skillModifier=number 0,sourceCounter=number 3}
 C_TradeSkillUI.GetProfessionSkillLineID(0)	1: number 129
 C_TradeSkillUI.GetProfessionSkillLineID(1)	1: number 164
 C_TradeSkillUI.GetProfessionSkillLineID(10)	1: number 356
