@@ -2052,9 +2052,9 @@ fn breaks(text: &str, kind: i64) -> Vec<usize> {
                     let before = if i >= 2 { Some(chars[i - 2].1) } else { None };
                     if word(prev) && word(cur) {
                         is_cjk(prev) || is_cjk(cur)
-                    } else if word(prev) && mid(cur) && next.is_some_and(word) {
-                        false
-                    } else if mid(prev) && word(cur) && before.is_some_and(word) {
+                    } else if (word(prev) && mid(cur) && next.is_some_and(word))
+                        || (mid(prev) && word(cur) && before.is_some_and(word))
+                    {
                         false
                     } else if prev.is_whitespace() && cur.is_whitespace() {
                         prev == '\n' || cur == '\n'

@@ -947,13 +947,8 @@ fn create_frame_with_options(vm: &mut Vm, c: NativeCall) -> Ret {
         Value::Table(t) => {
             let mut names = Vec::new();
             let mut i = 1;
-            loop {
-                match vm.heap.table(t).get(Value::Num(i as f64)) {
-                    Value::Str(s) => {
-                        names.push(String::from_utf8_lossy(vm.str_bytes(s)).into_owned())
-                    }
-                    _ => break,
-                }
+            while let Value::Str(s) = vm.heap.table(t).get(Value::Num(i as f64)) {
+                names.push(String::from_utf8_lossy(vm.str_bytes(s)).into_owned());
                 i += 1;
             }
             if names.is_empty() {
