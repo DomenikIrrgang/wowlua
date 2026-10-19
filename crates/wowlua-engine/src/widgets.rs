@@ -606,16 +606,19 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
     // error-free in the client). It keeps fields as a frame does
     // (Blizzard's `TimerUtil.CreateTimedSignalCallbackMap` defines a
     // method on its signal map): reads and writes go to the record behind
-    // it, its class's methods below. Unverified: its metatable's shape (a
-    // metatable of its own here).
+    // it, its class's methods below. Its metatable is hidden: `getmetatable`
+    // gives false (recorded for a curve; the other script objects' taken to
+    // be alike, unverified).
     if is_userdata_class(engine(vm), class) {
         let own = vm.new_table();
         let index = vm.heap.intern(b"__index");
         let newindex = vm.heap.intern(b"__newindex");
+        let hidden = vm.heap.intern(b"__metatable");
         vm.heap.table_mut(own).set_str(index, Value::Table(table));
         vm.heap
             .table_mut(own)
             .set_str(newindex, Value::Table(table));
+        vm.heap.table_mut(own).set_str(hidden, Value::Bool(false));
         keep(vm, Value::Table(own));
         let ud = vm.heap.alloc_userdata(Userdata {
             serial: 0,

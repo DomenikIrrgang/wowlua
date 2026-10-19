@@ -627,11 +627,32 @@ fn get_addon_notes(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![notes.map_or(Value::Nil, |n| vm.str(&n))])
 }
 
-/// `C_AddOns.GetAddOnSecurity(addon)`: `Enum.AddOnSecurityStatus.Insecure`
-/// (1), as `GetAddOnInfo`'s "INSECURE".
+/// Whether an argument names an addon the client has, and whether it is
+/// one of Blizzard's: a test-defined addon, one of Blizzard's UI code
+/// (loaded or loadable), or one whose `ADDON_LOADED` came (the addon under
+/// test's).
+fn addon_kind(vm: &mut Vm, c: &NativeCall) -> Option<bool> {
+    if known(vm, c).is_some() {
+        return Some(false);
+    }
+    let name = string(vm, c.arg(1))?;
+    if crate::ui::is_blizzard_addon(vm, &name) {
+        return Some(true);
+    }
+    engine(vm)
+        .world
+        .loaded_addons
+        .contains(&name.to_lowercase())
+        .then_some(false)
+}
+
+/// `C_AddOns.GetAddOnSecurity(addon)`: `Enum.AddOnSecurityStatus` Secure
+/// (0) for Blizzard's, Insecure (1) for the others, as `GetAddOnInfo`'s
+/// "INSECURE" (recorded: `Blizzard_GroupFinder_VanillaStyle` 0, StdTest
+/// 1); nothing for an unknown one (unverified).
 fn get_addon_security(vm: &mut Vm, c: NativeCall) -> Ret {
-    Ok(match known(vm, &c) {
-        Some(_) => vec![Value::Num(1.0)],
+    Ok(match addon_kind(vm, &c) {
+        Some(blizzard) => vec![Value::Num(if blizzard { 0.0 } else { 1.0 })],
         None => vec![],
     })
 }
@@ -645,11 +666,12 @@ fn get_addon_dependencies(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(deps.iter().map(|d| vm.str(d)).collect())
 }
 
-/// `C_AddOns.IsAddOnLoadable(addon)`: every known addon loads (the reason
-/// nil, as `GetAddOnInfo`'s; unverified), an unknown one is "MISSING".
+/// `C_AddOns.IsAddOnLoadable(addon)`: every known addon loads, the reason
+/// empty; an unknown one is "MISSING" (recorded for StdTest, a Blizzard
+/// addon and a missing one; unverified: a disabled addon's).
 fn is_addon_loadable(vm: &mut Vm, c: NativeCall) -> Ret {
-    Ok(match known(vm, &c) {
-        Some(_) => vec![Value::Bool(true), Value::Nil],
+    Ok(match addon_kind(vm, &c) {
+        Some(_) => vec![Value::Bool(true), vm.str("")],
         None => vec![Value::Bool(false), vm.str("MISSING")],
     })
 }

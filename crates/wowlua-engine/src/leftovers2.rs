@@ -240,9 +240,8 @@ fn nothing(vm: &mut Vm, c: NativeCall) -> Ret {
 /// Documented functions of systems Forever lacks or the engine does not
 /// model, answering their documentation's empty values (unverified).
 const DOCUMENTED_EMPTY: &[&str] = &[
-    // Clubs and the club finder: no clubs.
-    "C_Club.GetClubCapacity",
-    "C_Club.GetAvatarIdList",
+    // The club finder: no clubs. (`C_Club.GetAvatarIdList` answers as
+    // recorded, `data/camelot-answers.txt`.)
     "C_ClubFinder.GetFocusIndexFromFlag",
     "C_ClubFinder.IsListingEnabledFromFlags",
     // Battle.net's optional features: off; no game data sent.
@@ -312,18 +311,14 @@ const DOCUMENTED_EMPTY: &[&str] = &[
 /// `NUM_ACTIONBAR_PAGES` (Blizzard's ActionButtonUtil.lua): the bonus bars'
 /// pages follow it.
 const NUM_ACTIONBAR_PAGES: f64 = 6.0;
-/// The vehicle (and possess) bar's page: 16, after MultiBar 5-7's pages
-/// 13-15 (camelot's MultiActionBars.lua); ElvUI's and SuuUI's paging for
-/// the classic-engine clients page `[possessbar]` to 16 (unverified for
-/// Forever: its recorded `C_ActionBar.GetExtraBarIndex` 34 is not the 19
-/// that would follow these, so the extra pages between are unknown).
-const VEHICLE_BAR_INDEX: f64 = 16.0;
-/// The temporary shapeshift bar's page, after the vehicle bar's
-/// (unverified, as above).
-const TEMP_SHAPESHIFT_BAR_INDEX: f64 = 17.0;
-/// The override bar's page, after the temporary shapeshift bar's
-/// (unverified, as above).
-const OVERRIDE_BAR_INDEX: f64 = 18.0;
+/// The vehicle (and possess) bar's page: 31 (recorded, with the
+/// temporary shapeshift bar's 32, the override bar's 33 and the extra
+/// bar's 34 after it).
+const VEHICLE_BAR_INDEX: f64 = 31.0;
+/// The temporary shapeshift bar's page (recorded).
+const TEMP_SHAPESHIFT_BAR_INDEX: f64 = 32.0;
+/// The override bar's page (recorded).
+const OVERRIDE_BAR_INDEX: f64 = 33.0;
 
 /// `C_ActionBar.GetVehicleBarIndex()`.
 fn get_vehicle_bar_index(_vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -434,14 +429,24 @@ fn join_channel(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `EnumerateServerChannels()`: the server's channels' names, as the
-/// classic clients list them (unverified for Forever).
+/// recording's realm listed them where the character stood (recorded,
+/// "ChromieTime" six times over; unverified: how the list changes with
+/// the zone and realm).
 fn enumerate_server_channels(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok([
         "General",
-        "Trade",
         "LocalDefense",
-        "WorldDefense",
         "LookingForGroup",
+        "BigfootWorldChannel",
+        "MeetingStone",
+        "ShadowlandsBetaDiscussion",
+        "ShadowlandsPTRDiscussion",
+        "ChromieTime",
+        "ChromieTime",
+        "ChromieTime",
+        "ChromieTime",
+        "ChromieTime",
+        "ChromieTime",
     ]
     .iter()
     .map(|n| vm.str(n))
@@ -486,32 +491,33 @@ fn get_color_for_chat_type(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![color(vm, (r, g, b))])
 }
 
-/// `C_ChatInfo.GetChatTypeName(typeID)`: the `ChatTypeInfo` key whose
-/// entry's `id` is the ID, nil when none is (unverified).
+/// `C_ChatInfo.GetChatTypeName(typeID)`: the chat type whose recorded
+/// `GetChatTypeIndex` is the ID (recorded: 1 is "SYSTEM", as its index);
+/// nil for 0, which several types share, and IDs none has (unverified).
 fn get_chat_type_name(vm: &mut Vm, c: NativeCall) -> Ret {
-    let Some(id) = arg_num(vm, &c, 1) else {
+    let Some(id) = arg_num(vm, &c, 1).filter(|&id| id > 0.0) else {
         return Ok(vec![Value::Nil]);
     };
-    let Value::Table(info) = vm.get_global("ChatTypeInfo") else {
-        return Ok(vec![Value::Nil]);
-    };
-    let mut key = Value::Nil;
-    while let Ok(Some((k, v))) = vm.heap.table(info).next(key) {
-        key = k;
-        if let (Value::Str(_), Value::Table(entry)) = (k, v)
-            && num(field(vm, entry, "id")) == Some(id)
-        {
-            return Ok(vec![k]);
-        }
-    }
-    Ok(vec![Value::Nil])
+    let answer = format!("1: number {}", wowlua_vm::number::fmt_num(id));
+    let found = crate::recorded::answers().iter().find_map(|(call, a)| {
+        (*a == answer)
+            .then(|| {
+                call.strip_prefix("GetChatTypeIndex(\"")?
+                    .strip_suffix("\")")
+            })
+            .flatten()
+    });
+    Ok(vec![match found {
+        Some(name) => vm.str(name),
+        None => Value::Nil,
+    }])
 }
 
-/// `C_ChatInfo.GetNumReservedChatWindows()`: the General and Combat Log
-/// windows (Blizzard's FloatingChatFrame.lua keeps the windows up to it;
-/// unverified).
+/// `C_ChatInfo.GetNumReservedChatWindows()`: 3 (recorded; Blizzard's
+/// FloatingChatFrame.lua keeps the windows up to it: General, Combat Log
+/// and a third, the voice transcription's in the mainline UI).
 fn get_num_reserved_chat_windows(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(2.0)])
+    Ok(vec![Value::Num(3.0)])
 }
 
 /// `C_ChatInfo.IsValidCombatFilterName(name)`: any name with a letter
@@ -558,10 +564,10 @@ fn decline_name(vm: &mut Vm, c: NativeCall) -> Ret {
 
 // -------------------------------------------------------- the client
 
-/// `GetDownloadedPercentage()`: the client fully downloaded (Blizzard's
-/// performance bar shows it times 100; unverified).
+/// `GetDownloadedPercentage()`: 0 (recorded on a fully installed client:
+/// nothing being downloaded).
 fn get_downloaded_percentage(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(1.0)])
+    Ok(vec![Value::Num(0.0)])
 }
 
 /// `GetNetIpTypes()`: the home and world connections over IPv4 (1 in
@@ -576,10 +582,10 @@ fn get_protocol_types(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(1.0), Value::Num(1.0)])
 }
 
-/// `GetNumExpansions()`: the expansions the client's data knows, up to
-/// Midnight (`LE_EXPANSION_MIDNIGHT` is recorded 11; unverified).
+/// `GetNumExpansions()`: 1, classic alone (recorded, though the client
+/// defines `LE_EXPANSION_MIDNIGHT` 11).
 fn get_num_expansions(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(12.0)])
+    Ok(vec![Value::Num(1.0)])
 }
 
 /// `RequestTimePlayed()`: the server's answer (`TIME_PLAYED_MSG`) was
@@ -843,14 +849,15 @@ fn get_glancing_blow_penalty(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Num(1.0 - (low + high) / 2.0)])
 }
 
-/// `ResistancePercent(resistance, casterLevel)`: the average share of
-/// damage the resistance resists against a caster of the level, in
-/// percent: 75% at five points a caster level, at most 75% (the classic
-/// clients' rule; unverified).
+/// `ResistancePercent(resistance, casterLevel)`: the share of damage the
+/// resistance resists against a caster of the level, in percent: 100 at
+/// five points a caster level, at most 75 (recorded: 150 against level 60
+/// is 50; unverified: whether the share is linear, as here, or
+/// `r / (r + 2.5 * level)`, which agrees at that point, and the cap).
 fn resistance_percent(vm: &mut Vm, c: NativeCall) -> Ret {
     let resistance = arg_num(vm, &c, 1).unwrap_or(0.0).max(0.0);
     let level = arg_num(vm, &c, 2).unwrap_or(60.0).max(1.0);
-    let percent = (75.0 * resistance / (level * 5.0)).min(75.0);
+    let percent = (100.0 * resistance / (level * 5.0)).min(75.0);
     Ok(vec![Value::Num(percent)])
 }
 
@@ -925,6 +932,18 @@ fn get_who_race_filters(vm: &mut Vm, _c: NativeCall) -> Ret {
         filters.push(Value::Table(f));
     }
     Ok(vec![list(vm, &filters)])
+}
+
+/// `GetMouseButtonClicked()`: nil outside a click (recorded; unverified:
+/// the button during a click's handlers, which the engine does not keep
+/// for it).
+fn get_mouse_button_clicked(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Nil])
+}
+
+/// `C_Club.GetClubCapacity()`: 1000 (recorded).
+fn get_club_capacity(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(1000.0)])
 }
 
 /// `C_XMLUtil.GetTemplates()`: none listed (the engine's templates are
@@ -1062,6 +1081,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             get_trade_skill_line_for_recipe,
         ),
         ("C_FriendList.GetWhoRaceFilters", get_who_race_filters),
+        ("C_Club.GetClubCapacity", get_club_capacity),
+        ("GetMouseButtonClicked", get_mouse_button_clicked),
     ];
     list.extend(DOCUMENTED_EMPTY.iter().map(|&n| (n, nothing as NativeFn)));
     list.extend(UNDOCUMENTED.iter().map(|&(n, _)| (n, nothing as NativeFn)));

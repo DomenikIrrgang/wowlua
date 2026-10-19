@@ -967,6 +967,7 @@ C_ClickBindings.GetBindingType("LeftButton", 0)	1: number 3
 C_ClickBindings.GetProfileInfo()	1: {1={actionID=number 1,button=string LeftButton,modifiers=number 0,type=number 3},2={actionID=number 2,button=string RightButton,modifiers=number 0,type=number 3}}
 C_ClickBindings.GetTutorialShown()	1: boolean false
 C_ClientScene.IsSceneTypeActive(1)	1: boolean false
+C_Club.GetAvatarIdList(1)	1: {1=number 136235,10=number 626004,100=number 413579,101=number 413585,102=number 418250,103=number 134472,104=number 135777,105=number 133712,106=number 1516567,107=number 134513,108=number 1355358,109=number 134993,11=number 626005,110=number 1323035,111=number 459026,112=number 892833,113=number 606548,114=number 630863,115=number 1064187,116=number 132658,117=number 134140,118=number 134153,12=number 626006,13=number 626007,14=number 626008,15=number 463450,16=number 463451,17=number 463448,18=number 463449,19=number 255130,2=number 1120721,20=number 255132,21=number 255127,22=number 255128,23=number 255131,24=number 255139,25=number 255126,26=number 255133,27=number 255134,28=number 255145,29=number 132486,3=number 625998,30=number 132485,31=number 136240,32=number 133971,33=number 441139,34=number 136241,35=number 136244,36=number 136245,37=number 136249,38=number 135966,39=number 134366,4=number 1260827,40=number 136248,41=number 133611,42=number 134071,43=number 237171,44=number 136065,45=number 136243,46=number 132261,47=number 136041,48=number 136096,49=number 135932,5=number 625999,50=number 135810,51=number 135846,52=number 237542,53=number 136048,54=number 136145,55=number 132341,56=number 236693,57=number 801132,58=number 132222,59=number 237358,6=number 626000,60=number 135857,61=number 652412,62=number 1505935,63=number 133987,64=number 1061040,65=number 369278,66=number 660531,67=number 660263,68=number 1044996,69=number 133168,7=number 626001,70=number 132293,71=number 236329,72=number 461790,73=number 135981,74=number 132148,75=number 236396,76=number 1120424,77=number 132225,78=number 236407,79=number 254652,8=number 626002,80=number 236548,81=number 236690,82=number 656556,83=number 1100022,84=number 1339013,85=number 1721029,86=number 1125916,87=number 632858,88=number 133015,89=number 133695,9=number 626003,90=number 446127,91=number 133785,92=number 134532,93=number 1303199,94=number 656578,95=number 134414,96=number 236669,97=number 236681,98=number 132795,99=number 413589}
 C_Club.GetInvitationsForSelf()	1: {}
 C_Club.IsEnabled()	1: boolean true
 C_Club.ShouldAllowClubType(0)	1: boolean true
@@ -4173,6 +4174,10 @@ C_MapExplorationInfo.GetExploredMapTextures(947)	0:
 C_Minimap.IsFilteredOut(1024)	1: boolean true
 C_MountJournal.GetDisplayedMountInfo(1)	0: 
 C_MountJournal.GetDynamicFlightModeSpellID()	1: number 436854
+C_MountJournal.GetMountInfoByID(125)	13: string Riding Turtle, number 30174, number 132199, boolean false, boolean false, number 9, boolean false, boolean false, nil nil, boolean true, boolean false, number 125, boolean false
+C_MountJournal.GetMountInfoByID(95)	13: string Swift Gray Ram, number 23239, number 132248, boolean false, boolean false, number 0, boolean false, boolean true, number 1, boolean false, boolean false, number 95, boolean false
+C_MountJournal.GetMountInfoExtraByID(125)	9: number 17158, string , string , boolean false, number 453, number 4, number 91, number 0, boolean false
+C_MountJournal.GetMountInfoExtraByID(95)	9: number 14576, string , string , boolean false, number 460, number 4, number 91, number 0, boolean false
 C_MountJournal.GetNumDisplayedMounts()	1: number 0
 C_MountJournal.GetNumMounts()	1: number 139
 C_MountJournal.HasDisplayableMount()	1: boolean false
@@ -4259,6 +4264,7 @@ C_PaperDollInfo.GetInventorySlotInfoForInvSlot(19)	4: number 19, number 136527, 
 C_PaperDollInfo.GetInventorySlotInfoForInvSlot(2)	4: number 2, number 136519, boolean false, string NeckSlot
 C_PaperDollInfo.GetInventorySlotInfoForInvSlot(7)	4: number 7, number 136517, boolean false, string LegsSlot
 C_PartyInfo.AllowedToDoPartyConversion(true)	1: boolean false
+C_PartyInfo.IsRaidListEnabled()	1: boolean true
 C_PartyInfo.IsRaidListSupported()	1: boolean true
 C_PerksActivities.GetTrackedPerksActivities()	1: {trackedIDs={}}
 C_PetBattles.CanPetSwapIn(1)	1: boolean false
@@ -5258,6 +5264,8 @@ C_TradeSkillUI.IsAnyRecipeFromSource(9)	1: boolean false
 C_TradeSkillUI.IsGuildTradeSkillsEnabled()	1: boolean false
 C_TradeSkillUI.IsNPCCrafting()	1: boolean false
 C_TradeSkillUI.IsTradeSkillGuild()	1: boolean false
+C_TradeSkillUI.IsTradeSkillGuildMember()	1: boolean false
+C_TradeSkillUI.IsTradeSkillLinked()	2: boolean false, nil nil
 C_Traits.GetConfigIDByTreeID(0)	0: 
 C_Traits.GetConfigIDByTreeID(1188)	1: number 77961
 C_Traits.GetTraitCurrencyForAchievement(4225, 1042)	1: number 0
@@ -17052,6 +17060,7 @@ C_TransmogCollection.GetValidAppearanceSourcesForClass(94153, 2, 15)	1: {1={canD
 C_TransmogCollection.HasAnyAppearance()	1: boolean true
 C_TransmogCollection.IsSearchInProgress(1)	1: boolean false
 C_TransmogCollection.IsUsingDefaultFilters()	1: boolean true
+C_TransmogOutfitInfo.GetActiveOutfitID()	1: number 2
 C_TransmogOutfitInfo.GetOutfitsInfo()	1: {1={icon=number 134400,isDisabled=boolean false,isEventOutfit=boolean false,name=string Outfit 1,outfitID=number 2,playerFacingOutfitIndex=number 1,situationCategories={}},2={icon=number 134400,isDisabled=boolean false,isEventOutfit=boolean false,name=string Outfit 2,outfitID=number 3,playerFacingOutfitIndex=number 2,situationCategories={}}}
 C_TransmogOutfitInfo.IsTransmogEnabled()	1: boolean true
 C_TransmogSets.GetAllSets()	1: {1={classMask=number 0,collected=boolean false,description=string Green,expansionID=number 9,favorite=boolean false,grantAsPrecedingVariant=boolean false,hiddenUntilCollected=boolean true,label=string Snugglefin Murloc Romper,limitedTimeSet=boolean false,name=string Green Snugglefin Murloc Romper,patchID=number 100207,setID=number 3634,uiOrder=number 1640,validForCharacter=boolean true}}
@@ -20389,6 +20398,7 @@ GetCorpseRecoveryDelay()	1: number 0
 GetCurrentArenaSeason()	1: number 0
 GetCurrentBindingSet()	1: number 1
 GetCurrentGraphicsAPI()	1: string MTL
+GetGameMessageInfo(26)	3: string ERR_ITEM_MAX_COUNT, nil nil, number 30
 GetGraphicsAPIs()	2: string MTL, string Auto
 GetGraphicsCVarValueForQualityLevel("graphicsComputeEffects", 0, false)	1: number 0
 GetGraphicsCVarValueForQualityLevel("graphicsComputeEffects", 1, false)	1: number 0
@@ -21453,6 +21463,7 @@ GetText("FACTION_STANDING_LABEL6", 2)	1: string Honored
 GetText("NOT_READY", 2)	1: string Not Ready
 GetText("READY", 2)	1: string Ready
 GetTotalAchievementPoints()	1: number 0
+GetTotalAchievementPoints(true)	1: number 0
 GetTotemInfo(1)	7: boolean false, string , number 0, number 0, nil nil, number 0, number 0
 GetTotemInfo(2)	7: boolean false, string , number 0, number 0, nil nil, number 0, number 0
 GetTotemInfo(3)	7: boolean false, string , number 0, number 0, nil nil, number 0, number 0

@@ -391,6 +391,7 @@ const STATIC: &[&str] = &[
     "C_Ping.GetDefaultPingOptions",
     "GetText",
     "GetMaxPlayerLevel",
+    "GetTotalAchievementPoints",
     "GetMaxLevelForPlayerExpansion",
     "GetClassicExpansionLevel",
     "GetSendMailPrice",
@@ -430,6 +431,7 @@ const STATIC: &[&str] = &[
     "C_Housing.IsHousingServiceEnabled",
     "C_MythicPlus.IsMythicPlusActive",
     "C_PartyInfo.IsRaidListSupported",
+    "C_PartyInfo.IsRaidListEnabled",
     "C_PhotoSharing.IsEnabled",
     "C_Ping.IsPingSystemEnabled",
     "C_RecentAllies.IsSystemEnabled",
@@ -512,8 +514,16 @@ const STATIC: &[&str] = &[
     "C_ClickBindings.GetBindingType",
     "C_SplashScreen.CanViewSplashScreen",
     "C_TransmogOutfitInfo.IsTransmogEnabled",
-    // The account's outfits (Blizzard's spellbook counts them).
+    // The account's outfits (Blizzard's spellbook counts them), the one
+    // worn.
     "C_TransmogOutfitInfo.GetOutfitsInfo",
+    "C_TransmogOutfitInfo.GetActiveOutfitID",
+    // The account's mounts (their data and whether collected), the club
+    // avatars, the game messages' sounds.
+    "C_MountJournal.GetMountInfoByID",
+    "C_MountJournal.GetMountInfoExtraByID",
+    "C_Club.GetAvatarIdList",
+    "GetGameMessageInfo",
     "GetAllowRecentAlliesSeeLocation",
     "C_EditMode.GetEditModeDefaultLayout",
     "C_EditMode.GetAccountSettings",
@@ -632,6 +642,8 @@ const BASELINE: &[&str] = &[
     "C_TradeSkillUI.GetRecipeItemNameFilter",
     "C_TradeSkillUI.IsNPCCrafting",
     "C_TradeSkillUI.IsTradeSkillGuild",
+    "C_TradeSkillUI.IsTradeSkillGuildMember",
+    "C_TradeSkillUI.IsTradeSkillLinked",
     "C_Traits.GetConfigIDByTreeID",
     "C_TransmogCollection.GetLatestAppearance",
     "C_TransmogCollection.IsSearchInProgress",

@@ -563,13 +563,15 @@ fn abbreviated_format(vm: &mut Vm, id: WidgetId, x: f64) -> String {
     let k = vm.str("abbreviationIsGlobal");
     let global = !matches!(vm.heap.table(t).get(k), Value::Bool(false));
     let abbr = if global {
-        // The client's enUS text where the global is not defined.
+        // The client's enUS text where the global is not defined; a name
+        // that is no global string gives none (recorded for
+        // `CreateAbbreviateConfig`'s breakpoints, taken to be alike here).
         let fallback = match name.as_str() {
             "FIRST_NUMBER_CAP_NO_SPACE" => "K",
             "SECOND_NUMBER_CAP_NO_SPACE" => "M",
             "THIRD_NUMBER_CAP_NO_SPACE" => "B",
             "FOURTH_NUMBER_CAP_NO_SPACE" => "T",
-            other => other,
+            _ => "",
         };
         global_text(vm, &name, fallback)
     } else {

@@ -391,10 +391,13 @@ fn get_coin_texture_string(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![vm.str(&parts.join(" "))])
 }
 
-/// `C_Map.GetAreaInfo(areaID)`: the area's name; none known here (noted
-/// as unanswered; the client's area table is not recorded: probed, 1637
-/// is "Orgrimmar").
+/// `C_Map.GetAreaInfo(areaID)`: the area's name as the client answered
+/// (`data/camelot-answers.txt`: the zones and capitals probed, 1637
+/// "Orgrimmar"); else none, noted as unanswered.
 fn get_area_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some(v) = crate::recorded::lookup(vm, "C_Map.GetAreaInfo", &c) {
+        return Ok(v);
+    }
     crate::note_default(vm, "C_Map.GetAreaInfo", &c, 1);
     Ok(vec![vm.str("")])
 }

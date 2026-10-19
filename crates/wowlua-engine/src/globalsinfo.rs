@@ -342,9 +342,10 @@ fn get_local_game_time(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 /// `GetDefaultScale()`: the UI scale that makes the screen 768 units high
 /// at its physical height (`widgets::SCREEN`), Blizzard's long-standing
-/// rule (unverified on Forever).
+/// rule, as a C float (recorded 0.71111112833023 at 1080).
 fn get_default_scale(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(768.0 / widgets::SCREEN.1)])
+    let scale = (768.0 / widgets::SCREEN.1) as f32;
+    Ok(vec![Value::Num(f64::from(scale))])
 }
 
 /// `C_Spell.GetSchoolString`'s global twin `GetSchoolString(mask)`: its
@@ -504,10 +505,15 @@ fn fold_accent(c: char) -> char {
     }
 }
 
-/// `GetGameMessageInfo(index)`: the message's name, from the client's
-/// `LE_GAME_ERR_*` globals (`LE_GAME_ERR_X` = index gives `ERR_X`); no
-/// sound kit or voice (unverified); an unknown index nothing.
+/// `GetGameMessageInfo(index)`: the client's answer where recorded (26:
+/// `ERR_ITEM_MAX_COUNT`, no sound kit, voice 30); else the message's name,
+/// from the client's `LE_GAME_ERR_*` globals (`LE_GAME_ERR_X` = index
+/// gives `ERR_X`), no sound kit or voice (unverified); an unknown index
+/// nothing.
 fn get_game_message_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some(v) = crate::recorded::lookup(vm, "GetGameMessageInfo", &c) {
+        return Ok(v);
+    }
     let Some(index) = num_arg(vm, &c, 1) else {
         return Ok(vec![]);
     };
@@ -522,17 +528,14 @@ fn get_game_message_info(vm: &mut Vm, c: NativeCall) -> Ret {
     }
 }
 
-/// `GetMaxLevelForExpansionLevel(expansion)`: the level cap each
-/// expansion had before the level squish (60 for the classic game, as
-/// `GetMaxPlayerLevel` recorded; the rest unverified), 0 for one unknown.
+/// `GetMaxLevelForExpansionLevel(expansion)`: 60 for the classic game,
+/// 0 for every later expansion, which this client lacks (recorded for 0
+/// to 11).
 fn get_max_level_for_expansion_level(vm: &mut Vm, c: NativeCall) -> Ret {
-    const CAPS: [f64; 12] = [
-        60.0, 70.0, 80.0, 85.0, 90.0, 100.0, 110.0, 120.0, 60.0, 70.0, 80.0, 90.0,
-    ];
-    let level = num_arg(vm, &c, 1)
-        .filter(|n| *n >= 0.0)
-        .and_then(|n| CAPS.get(n as usize).copied())
-        .unwrap_or(0.0);
+    let level = match num_arg(vm, &c, 1) {
+        Some(0.0) => 60.0,
+        _ => 0.0,
+    };
     Ok(vec![Value::Num(level)])
 }
 
@@ -647,12 +650,13 @@ setting!(
     "guildBankTab",
     Value::Num(1.0)
 );
-// The encounter journal's tier, the first.
+// The encounter journal's tier: none, 0 (recorded, with
+// `EJ_GetNumTiers()` 0).
 setting!(
     ej_get_current_tier,
     ej_select_tier,
     "ejTier",
-    Value::Num(1.0)
+    Value::Num(0.0)
 );
 // The encounter journal's difficulty, normal dungeons (1).
 setting!(
@@ -1557,10 +1561,11 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     out
 }
 
-/// `GetNumTotemSlots()`: the four totem elements (Blizzard's cooldown
-/// viewer loops over them; unverified for classes without totems).
+/// `GetNumTotemSlots()`: 8 (recorded for a paladin, a class without
+/// totems: the client's slot count, not the class's; Blizzard's cooldown
+/// viewer loops over them).
 fn get_num_totem_slots(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(4.0)])
+    Ok(vec![Value::Num(8.0)])
 }
 
 /// The global twin of `C_Flyout.GetNumFlyouts()`: its answer, else none

@@ -29,7 +29,7 @@ fn run(vm: &mut Vm, src: &str) -> Vec<String> {
 }
 
 #[test]
-fn the_dungeon_difficulty_changes() {
+fn a_difficulty_the_client_lacks_is_not_chosen() {
     let mut vm = vm();
     let r = run(
         &mut vm,
@@ -43,7 +43,8 @@ SetDungeonDifficultyID(2)
 local name, kind, heroic, _, _, _, _, _, _, size = GetDifficultyInfo(9)
 return before, GetDungeonDifficultyID(), seen, name, kind, heroic, size, select('#', GetDifficultyInfo(9999))",
     );
-    assert_eq!(r, ["1", "2", "1", "40 Player", "raid", "false", "40", "0"]);
+    // Heroic dungeons (2) are not this client's: the normal one stays.
+    assert_eq!(r, ["1", "1", "0", "40 Player", "raid", "true", "40", "0"]);
 }
 
 #[test]
