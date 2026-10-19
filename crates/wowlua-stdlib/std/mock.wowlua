@@ -1066,6 +1066,11 @@ end
 --- … }, commodities = { [itemID] = { { auctionID, quantity, unitPrice,
 --- timeLeftSeconds, owners, … } } }, items = { [itemID] = { … } }, deposit,
 --- nextAuctionID, mailSender }`; `player:interact(auctioneer)` opens it.
+--- A browse query with a `searchString` finds the `browse` rows whose
+--- item's name holds it, all of them at once; without one, every row and
+--- more on the server (`RequestMoreBrowseResults` adds none). The
+--- player's posted auctions are told once asked (`QueryOwnedAuctions`:
+--- `OWNED_AUCTIONS_UPDATED`); `CancelAuction` sends one back by mail.
 export function defineAuctionHouse(auctioneer: MockUnit, data: table)
     engine().defineAuctionHouse(auctioneer, data)
 end

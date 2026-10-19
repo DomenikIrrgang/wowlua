@@ -877,6 +877,15 @@ fn build_from_xml(
     }
     if from_xml && let Some(id) = widget_of(vm, frame) {
         run_script(vm, id, "OnLoad", &[]);
+        // Built visible from XML: shown, as a frame of an XML file is
+        // (`ui::build`; warcraft.wiki.gg's UIHANDLER_OnShow, "if a frame is
+        // defined in XML then OnShow also fires after OnLoad unless hidden
+        // at the time"). Unverified for CreateFrame's templates: Auctionator
+        // sets itself up in the OnShow of a frame it creates under the
+        // shown auction house.
+        if visible(engine(vm), id) {
+            run_script(vm, id, "OnShow", &[]);
+        }
     }
     Ok(())
 }

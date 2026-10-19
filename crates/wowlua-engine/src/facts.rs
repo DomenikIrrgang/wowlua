@@ -646,8 +646,9 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         // The probed character's (`loadCalls`); the neutral world's 0.
         ("GetMaxBattlefieldID", zero),
         ("GetNumLanguages", zero),
-        // No forms (a warrior's stances aside: unverified).
-        ("GetNumShapeshiftForms", zero),
+        // The shapeshift forms are the character's stats (`stats.rs`,
+        // `shapeshiftForms`: the paladin's two auras, as the client's
+        // `probe.loadCalls` answered), none without a snapshot.
         ("GuildControlGetNumRanks", zero),
         ("BNGetNumFriends", four_zeros),
         ("C_MountJournal.GetNumMountsNeedingFanfare", zero),
