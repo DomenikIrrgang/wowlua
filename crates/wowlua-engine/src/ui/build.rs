@@ -1097,8 +1097,13 @@ fn set_script(vm: &mut Vm, cx: &Context, id: WidgetId, s: &Element) {
             Some(f) => f,
             None => return,
         }
-    } else if !s.text.trim().is_empty() {
-        // Lines as in the file.
+    } else {
+        // Lines as in the file. An empty element is a handler doing
+        // nothing, replacing the inherited one (ElvUI's popup template
+        // "removes the scripts added from GameDialogMixin" with empty
+        // ones and logs in without StaticPopup_OnShow's error in the
+        // client; Blizzard's artifact frame swallows the wheel with
+        // `<OnMouseWheel />`; unverified whether GetScript answers it).
         let src = format!(
             "{}return function({}) {} end",
             "\n".repeat(s.line.saturating_sub(1)),
@@ -1109,8 +1114,6 @@ fn set_script(vm: &mut Vm, cx: &Context, id: WidgetId, s: &Element) {
             Some(f) => f,
             None => return,
         }
-    } else {
-        return;
     };
     // An intrinsic type's own handlers stay, whatever the widget sets
     // (`ScrollingMessageFrame`'s `OnPreLoad`, before the frame's OnLoad).

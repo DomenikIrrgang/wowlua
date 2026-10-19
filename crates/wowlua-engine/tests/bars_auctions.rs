@@ -96,6 +96,48 @@ return Seen",
 }
 
 #[test]
+fn an_empty_script_element_replaces_the_inherited_handler() {
+    let interface = tree(
+        "emptyscript",
+        &[
+            (
+                "AddOns/Blizzard_Base/Blizzard_Base.toc",
+                "## Title: Base\nTemplates.xml\n",
+            ),
+            (
+                "AddOns/Blizzard_Base/Templates.xml",
+                r#"<Ui>
+  <Frame name="NoisyTemplate" virtual="true">
+    <Scripts>
+      <OnLoad>Seen = (Seen or '') .. 'load,'</OnLoad>
+      <OnShow>Seen = (Seen or '') .. 'show,'</OnShow>
+    </Scripts>
+  </Frame>
+  <Frame name="QuietTemplate" inherits="NoisyTemplate" virtual="true">
+    <Scripts>
+      <OnLoad></OnLoad>
+      <OnShow/>
+    </Scripts>
+  </Frame>
+</Ui>"#,
+            ),
+        ],
+    );
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    let report = wowlua_engine::ui::load(&mut vm, &interface, None);
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let r = run(
+        &mut vm,
+        "local f = CreateFrame('Frame', 'Quiet', UIParent, 'QuietTemplate')
+return Seen, type(f:GetScript('OnShow'))",
+    );
+    // Neither inherited handler runs (ElvUI's popup template, as the
+    // client loads it); the empty one is a handler.
+    assert_eq!(r, ["nil", "function"]);
+}
+
+#[test]
 fn bindings_set_or_saved_tell_update_bindings() {
     let mut vm = vm();
     let r = run(
