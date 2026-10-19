@@ -129,13 +129,15 @@ pub struct Craft {
 /// A recording's timing of a craft's cast (`craftTimings`), in seconds:
 /// its start after its request or the last cast's success, its success
 /// after its start, its item after its success, the bags' packet after its
-/// item. What one leaves out is the engine's.
+/// item, a new slot's item data after its item (else with the bags). What
+/// one leaves out is the engine's.
 #[derive(Clone, Copy, Default)]
 pub struct Timing {
     pub start: Option<f64>,
     pub success: Option<f64>,
     pub item: Option<f64>,
     pub bags: Option<f64>,
+    pub data: Option<f64>,
 }
 
 #[derive(Default)]
@@ -772,11 +774,31 @@ fn held_start(vm: &mut Vm, c: NativeCall) -> Ret {
         );
         crate::casting::cast_changed(vm, PLAYER);
     }
-    crate::loot::gather_cooldowns(vm, id, false);
-    if refused.is_some() {
+    cooldowns(vm, id, false, refused.is_some());
+    Ok(vec![])
+}
+
+/// A craft's cooldown events (a gathering's), a refusal's message told
+/// before the stance bar's (recorded twice: the tin's held craft started,
+/// the copper's last success).
+fn cooldowns(vm: &mut Vm, spell: f64, bags: bool, refused: bool) {
+    fire(vm, "ACTIONBAR_UPDATE_COOLDOWN", &[]);
+    fire(vm, "ACTIONBAR_UPDATE_STATE", &[]);
+    if bags {
+        fire(vm, "BAG_UPDATE_COOLDOWN", &[]);
+    }
+    let nils = [
+        Value::Num(spell),
+        Value::Nil,
+        Value::Nil,
+        Value::Nil,
+        Value::Nil,
+    ];
+    fire(vm, "SPELL_UPDATE_COOLDOWN", &nils);
+    if refused {
         another_action(vm);
     }
-    Ok(vec![])
+    fire(vm, "UPDATE_SHAPESHIFT_COOLDOWN", &[]);
 }
 
 /// The player moved while the craft's next cast was asked: the client
@@ -866,13 +888,19 @@ fn crafted(vm: &mut Vm, c: NativeCall) -> Ret {
         }
         // The item with the success: before the cooldowns (recorded).
         let after = item_made(vm, recipe, timing, QUEUED_ITEM_AFTER, queued_bags);
-        crate::loot::gather_cooldowns(vm, recipe, true);
+        cooldowns(vm, recipe, true, dropped.is_some());
         if dropped.is_some() {
-            another_action(vm);
             stopped(vm);
         }
         if let Some((after, bags)) = after {
-            later(vm, after, "craftedItem", made, vec![r, Value::Num(bags)]);
+            let data = Value::Num(timing.data.unwrap_or(-1.0));
+            later(
+                vm,
+                after,
+                "craftedItem",
+                made,
+                vec![r, Value::Num(bags), data],
+            );
         }
         let start = start_after(vm);
         if let Some((h, n)) = held {
@@ -895,7 +923,14 @@ fn crafted(vm: &mut Vm, c: NativeCall) -> Ret {
         after
     };
     if let Some((after, bags)) = later_item {
-        later(vm, after, "craftedItem", made, vec![r, Value::Num(bags)]);
+        let data = Value::Num(timing.data.unwrap_or(-1.0));
+        later(
+            vm,
+            after,
+            "craftedItem",
+            made,
+            vec![r, Value::Num(bags), data],
+        );
     }
     // Unverified: what follows the last cast, one held.
     if let Some((h, n)) = held {
@@ -914,7 +949,11 @@ fn made(vm: &mut Vm, c: NativeCall) -> Ret {
     if let (Some(Value::Num(recipe)), Some(Value::Num(bags))) =
         (c.upvals.first().copied(), c.upvals.get(1).copied())
     {
-        make(vm, recipe as i64, bags);
+        let data = match c.upvals.get(2) {
+            Some(Value::Num(d)) if *d >= 0.0 => Some(*d),
+            _ => None,
+        };
+        make(vm, recipe as i64, bags, data);
     }
     Ok(vec![])
 }
@@ -926,7 +965,7 @@ fn item_made(vm: &mut Vm, recipe: f64, timing: Timing, item: f64, bags: f64) -> 
     let item = timing.item.unwrap_or(item);
     let bags = timing.bags.unwrap_or(bags);
     if item <= 0.0 {
-        make(vm, recipe as i64, bags);
+        make(vm, recipe as i64, bags, timing.data);
         return None;
     }
     Some((item, bags))
@@ -951,11 +990,12 @@ fn take_timing(vm: &mut Vm) {
     state_mut(vm).timing = timing;
 }
 
-/// `player:craftTimings({ { start?, success?, item?, bags? }, … })`: a
+/// `player:craftTimings({ { start?, success?, item?, bags?, data? }, … })`: a
 /// recording's timings of the crafts' casts to come, in order (the
 /// server's answers): each cast's start after its request or the last
 /// success, its success after its start, its item after its success (0:
-/// with it), the bags' packet after its item.
+/// with it), the bags' packet after its item, a new slot's item data after
+/// its item (its own packet; else with the bags').
 pub fn control_timings(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = units::this(vm, &c)?;
     if me != PLAYER {
@@ -981,6 +1021,7 @@ pub fn control_timings(vm: &mut Vm, c: NativeCall) -> Ret {
             success: get("success"),
             item: get("item"),
             bags: get("bags"),
+            data: get("data"),
         };
         state_mut(vm).timings.push_back(timing);
     }
@@ -990,7 +1031,7 @@ pub fn control_timings(vm: &mut Vm, c: NativeCall) -> Ret {
 /// The item made: pushed and told (its new slot's bag updated); the
 /// reagents taken; the bags' packet `bags_after` later (a skill-up in
 /// it); the window's list after each.
-fn make(vm: &mut Vm, recipe: i64, bags_after: f64) {
+fn make(vm: &mut Vm, recipe: i64, bags_after: f64, data_after: Option<f64>) {
     let Some((output, quantity, reagents)) = schematic(vm, recipe) else {
         return;
     };
@@ -1073,7 +1114,16 @@ fn make(vm: &mut Vm, recipe: i64, bags_after: f64) {
         changes.extend(crate::character::take_from_bags(vm, *id, *count));
     }
     let taken = changes.len();
-    changes.push(bag);
+    // A new slot's item data in its own packet (recorded: the first tin
+    // and bronze bars'), else with the bags'.
+    let data_after = data_after.filter(|_| new_slot.is_some());
+    if let (Some(after), Some(slot)) = (data_after, new_slot) {
+        let upvals = vec![Value::Num(bag as f64), Value::Num(slot as f64)];
+        later(vm, after, "craftItemData", item_data, upvals);
+    } else {
+        changes.push(bag);
+    }
+    let new_slot = if data_after.is_some() { None } else { new_slot };
     let skill_up = state_mut(vm)
         .skill_ups
         .get_mut(&recipe)
@@ -1092,6 +1142,25 @@ fn make(vm: &mut Vm, recipe: i64, bags_after: f64) {
         upvals.push(Value::Num(n));
     }
     later(vm, bags_after, "craftBags", craft_bags, upvals);
+}
+
+/// A new slot's item data: the slot read, the equipped spells', its bag's
+/// and the inventory's updates (as a loot's).
+fn item_data(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (Some(Value::Num(bag)), Some(Value::Num(slot))) = (c.upvals.first(), c.upvals.get(1))
+    else {
+        return Ok(vec![]);
+    };
+    let (bag, slot) = (*bag as i64, *slot as usize);
+    crate::character::arrived(vm, bag, slot);
+    crate::character::equipped_spells_changed(vm);
+    crate::character::bag_updated(vm, bag);
+    if bag == crate::character::REAGENT_BAG {
+        units::fire_unit(vm, "UNIT_INVENTORY_CHANGED", PLAYER, &[]);
+    }
+    fire(vm, "BAG_UPDATE_DELAYED", &[]);
+    later(vm, LIST_AFTER_BAGS, "tradeSkillList", list_again, vec![]);
+    Ok(vec![])
 }
 
 /// The craft's bags' packet: the item's new slot read, each change's bag
@@ -1126,6 +1195,11 @@ fn craft_bags(vm: &mut Vm, c: NativeCall) -> Ret {
         if reagent_bag {
             units::fire_unit(vm, "UNIT_INVENTORY_CHANGED", PLAYER, &[]);
         }
+    }
+    // The item's bag told apart (its data's own packet): the skill-up
+    // after the reagents still.
+    if taken >= n && skill_recipe != 0 {
+        skill = skill_up(vm, skill_recipe);
     }
     fire(vm, "BAG_UPDATE_DELAYED", &[]);
     for pair in c.upvals[HEAD + n..].chunks(2) {

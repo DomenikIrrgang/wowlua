@@ -113,8 +113,10 @@ export interface MockUnit
     --- server's answers, seconds): each cast's `start` after its request
     --- or the last cast's success, its `success` after its start, its
     --- `item` after its success (0: with it), the bags' packet (`bags`)
-    --- after its item; what one leaves out is the engine's.
-    function craftTimings(timings: { start?: number, success?: number, item?: number, bags?: number }[])
+    --- after its item, a new slot's item data (`data`, its own packet;
+    --- else with the bags') after its item; what one leaves out is the
+    --- engine's.
+    function craftTimings(timings: { start?: number, success?: number, item?: number, bags?: number, data?: number }[])
     --- The spell focuses near the player (`{ "Forge" }`): a recipe needing
     --- one can be made.
     function setSpellFocus(names: string[])

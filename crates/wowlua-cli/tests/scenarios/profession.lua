@@ -170,20 +170,22 @@ check("copper picked", page.SchematicForm:GetRecipeInfo().recipeID == 2657)
 e.setLatency(0.3)
 -- The casts' timings as recorded (the server's answers, seconds): each
 -- start after its click or the last success, its success after its
--- start, its item after the success, its bags' packet after the item:
+-- start, its item after the success, its bags' packet after the item, a
+-- new slot's item data after the item (the first tin and bronze bars'):
 -- four copper bars, the tin the server held, four tin bars (the last
--- interrupted), four bronze bars.
+-- interrupted), four bronze bars. The first bar's bags in the moment of
+-- the next cast's start, before it (0.281 recorded for both).
 player:craftTimings({
-    { start = 0.335, success = 2.951, item = 0.068, bags = 0.281 },
+    { start = 0.335, success = 2.951, item = 0.068, bags = 0.2809 },
     { start = 0.349, success = 2.939, item = 0, bags = 0.325 },
     { start = 0.325, success = 3.030, item = 0, bags = 0.186 },
     { start = 0.299, success = 2.986, item = 0.044, bags = 0.124 },
-    { start = 0.293, success = 2.906, item = 0.096, bags = 0.098 },
+    { start = 0.293, success = 2.906, item = 0.096, bags = 0.098, data = 0.425 },
     { start = 0.327, success = 2.932, item = 0.024, bags = 0.151 },
     { start = 0.342, success = 2.987, item = 0, bags = 0.413 },
     { start = 0.310, success = 2.940, item = 0.035, bags = 0.396 },
     { start = 0.315 },
-    { start = 0.323, success = 3.001, item = 0.041, bags = 0.343 },
+    { start = 0.323, success = 3.001, item = 0.041, bags = 0.343, data = 1.034 },
     { start = 0.278, success = 2.967, item = 0.032, bags = 0.387 },
     { start = 0.297, success = 2.952, item = 0.038, bags = 0.346 },
     { start = 0.320, success = 2.982, item = 0.057, bags = 0.240 },
