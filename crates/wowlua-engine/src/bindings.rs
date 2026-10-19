@@ -653,9 +653,58 @@ fn is_modified_click(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(on)])
 }
 
+/// A global string, if the UI's strings define it.
+fn global_text(vm: &mut Vm, name: &str) -> Option<String> {
+    match vm.get_global(name) {
+        Value::Str(s) => Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
+        _ => None,
+    }
+}
+
+/// A key as the client shows it (recorded, 167 keys on the Mac client):
+/// the modifiers as written but META, which is `CMD_KEY_TEXT`; the key its
+/// `KEY_<key>_MAC` string, else `KEY_<key>`, else itself ("CTRL-Page Up",
+/// "Help" for INSERT, "F13" for PRINTSCREEN, "Num Pad 0"). Unverified: the
+/// other platforms, `abbreviate`.
+pub fn binding_text(vm: &mut Vm, key: &str) -> String {
+    // The modifiers, then the key (which may be "-" itself: "CTRL--").
+    let mut rest = key;
+    let mut parts = Vec::new();
+    loop {
+        let found = ["ALT-", "CTRL-", "SHIFT-", "META-"]
+            .into_iter()
+            .find(|m| rest.starts_with(m) && rest.len() > m.len());
+        let Some(m) = found else { break };
+        let name = &m[..m.len() - 1];
+        parts.push(if name == "META" {
+            global_text(vm, "CMD_KEY_TEXT").unwrap_or_else(|| "CMD".to_string())
+        } else {
+            name.to_string()
+        });
+        rest = &rest[m.len()..];
+    }
+    let shown = global_text(vm, &format!("KEY_{rest}_MAC"))
+        .or_else(|| global_text(vm, &format!("KEY_{rest}")))
+        .unwrap_or_else(|| rest.to_string());
+    parts.push(shown);
+    parts.join("-")
+}
+
+/// `GetBindingText(key [, prefix, abbreviate])`: the key as shown; no
+/// key the empty string (recorded).
+fn get_binding_text(vm: &mut Vm, c: NativeCall) -> Ret {
+    let key = match c.arg(1) {
+        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        _ => return Ok(vec![vm.str("")]),
+    };
+    let text = binding_text(vm, &key);
+    Ok(vec![vm.str(&text)])
+}
+
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
         ("SetBinding", set_binding),
+        ("GetBindingText", get_binding_text),
         ("GetModifiedClick", get_modified_click),
         ("SetModifiedClick", set_modified_click),
         ("GetNumModifiedClickActions", get_num_modified_click_actions),

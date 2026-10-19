@@ -6067,6 +6067,9 @@ const CALLS: string[] = {
     [==[C_AuctionHouse.GetNumBidTypes()]==],
     [==[C_AuctionHouse.HasFavorites()]==],
     [==[C_AuctionHouse.FavoritesAreAvailable()]==],
+    [==[C_Container.GetContainerNumSlots(-2)]==],
+    [==[IsMacClient()]==],
+    [==[NO_EMPTY_KEYRING_SLOTS]==],
 }
 
 --- Checks of rules the call form cannot ask (a table argument, a frame):
