@@ -773,7 +773,8 @@ end
 
 -- -------------------------------------------------------------- the user
 
---- Runs a slash command line as the player typed it.
+--- Runs a slash command line as the player typed it (a hardware event, as
+--- a click or a key press).
 export function slash(line: string)
     engine().slash(line)
 end

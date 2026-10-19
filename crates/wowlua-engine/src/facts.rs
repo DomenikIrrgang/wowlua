@@ -651,7 +651,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetNumShapeshiftForms", zero),
         ("GuildControlGetNumRanks", zero),
         ("BNGetNumFriends", four_zeros),
-        ("C_LFGList.GetAvailableCategories", empty_list),
         ("C_MountJournal.GetNumMountsNeedingFanfare", zero),
         ("C_PetJournal.GetNumPetsNeedingFanfare", zero),
         ("GetSpellConfirmationPromptsInfo", empty_list),

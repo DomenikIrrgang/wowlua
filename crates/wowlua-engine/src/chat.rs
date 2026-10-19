@@ -347,8 +347,8 @@ fn is_in_guild(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(engine(vm).world.chat.guild)])
 }
 
-/// `slash(line)`: runs `/cmd args` as the chat box does. Returns whether a
-/// command took it.
+/// `slash(line)`: runs `/cmd args` as the chat box does, the user's action
+/// (a hardware event). Returns whether a command took it.
 pub fn slash_control(vm: &mut Vm, c: NativeCall) -> Ret {
     let line = vm.check_str(&c, 1)?;
     let line = String::from_utf8_lossy(vm.str_bytes(line)).into_owned();
@@ -384,7 +384,10 @@ pub fn slash_control(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![Value::Bool(false)]);
     };
     let msg = vm.str(&msg);
-    vm.call_from_engine(handler, &[msg, Value::Nil]);
+    // Typed and sent with Enter: the user's action, a hardware event (an
+    // addon's group finder search from a slash command was allowed,
+    // `/suu probe social`).
+    crate::input::as_user(vm, |vm| vm.call_from_engine(handler, &[msg, Value::Nil]));
     Ok(vec![Value::Bool(true)])
 }
 
