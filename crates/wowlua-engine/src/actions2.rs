@@ -484,9 +484,7 @@ fn clear_send_mail(vm: &mut Vm, _c: NativeCall) -> Ret {
     }
     let (money, cod) = {
         let m = &mut engine_mut(vm).world.mail;
-        for a in &mut m.attached {
-            *a = None;
-        }
+        m.attached.fill(None);
         let was = (m.money, m.cod);
         m.money = 0.0;
         m.cod = 0.0;
