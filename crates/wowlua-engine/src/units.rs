@@ -525,16 +525,10 @@ pub fn secret_results_flagged(vm: &Vm, flags: u32, c: &NativeCall) -> bool {
     {
         return true;
     }
-    // Another unit's power is secret even out of combat (the scenarios: a
-    // wolf's, another player's out of combat, a party member's; none
-    // targeted, 0); the player's in combat, and the player's rage always
-    // (every scenario, out of combat too). Unverified: the player's other
-    // powers out of combat.
-    if flag("SecretWhenUnitPowerRestricted")
-        && (id != PLAYER
-            || active(u, &[COMBAT, MAP, ENCOUNTER, CHALLENGE_MODE, PVP_MATCH])
-            || (id == PLAYER && u.list[id.0].power_type == 1.0))
-    {
+    // A unit's power is secret, the player's too, in combat or out, any
+    // power (every recording: 188 of the player's answers, rage, mana;
+    // a wolf's, other players', a party member's).
+    if flag("SecretWhenUnitPowerRestricted") {
         return true;
     }
     false
@@ -1966,10 +1960,10 @@ pub(crate) fn died(vm: &mut Vm, me: UnitId, lootable: bool) {
         fire(vm, "PLAYER_TARGET_DIED", &[]);
         clear_target(vm);
     }
-    crate::auras::died(vm, me);
     if !instance {
         loot(vm);
     }
+    crate::auras::died(vm, me);
     fire_unit(vm, "UNIT_HEALTH", me, &[]);
 }
 

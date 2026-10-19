@@ -528,7 +528,8 @@ pub fn functions() -> Vec<(&'static str, NativeFn)> {
         ("C_Texture.GetAtlasExists", truthy),
         ("C_InputInterfaceStyle.GetCurrentStyle", zero),
         ("C_Glue.IsOnGlueScreen", falsy),
-        ("IsMacClient", falsy),
+        // The recorded client's (Forever on macOS: its key texts too).
+        ("IsMacClient", truthy),
         ("GetBuildInfo", build_info),
         ("IsLoggedIn", is_logged_in),
         ("C_AddOns.IsAddOnLoaded", is_addon_loaded),

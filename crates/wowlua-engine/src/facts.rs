@@ -555,6 +555,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetInstanceInfo", instance_info),
         ("GetPhysicalScreenSize", physical_screen_size),
         ("GetRealmName", realm_name),
+        // The same without spaces: the placeholder has none.
+        ("GetNormalizedRealmName", realm_name),
         ("GetScreenHeight", screen_height),
         ("GetActiveLootRollIDs", empty_list),
         ("C_LFGList.GetApplications", empty_list),

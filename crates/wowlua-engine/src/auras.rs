@@ -125,7 +125,7 @@ fn matches(a: &Aura, filter: &str) -> bool {
 /// `UNIT_AURA` for each of the unit's tokens, with the update information:
 /// its fields secret while auras are restricted (`/stdtest engine record
 /// aura` and `combat`: in combat, every token's).
-fn fire_update(vm: &mut Vm, id: UnitId, added: Option<&Aura>, removed: Option<f64>) {
+fn fire_update(vm: &mut Vm, id: UnitId, added: Option<&Aura>, removed: &[f64]) {
     let restricted = units::active(
         &engine(vm).units,
         &[
@@ -147,9 +147,14 @@ fn fire_update(vm: &mut Vm, id: UnitId, added: Option<&Aura>, removed: Option<f6
             let list = field(vm, Value::Table(list));
             set(vm, info, "addedAuras", list);
         }
-        if let Some(r) = removed {
+        if !removed.is_empty() {
             let list = vm.new_table();
-            let _ = vm.heap.table_mut(list).set(Value::Num(1.0), Value::Num(r));
+            for (i, r) in removed.iter().enumerate() {
+                let _ = vm
+                    .heap
+                    .table_mut(list)
+                    .set(Value::Num(i as f64 + 1.0), Value::Num(*r));
+            }
             let list = field(vm, Value::Table(list));
             set(vm, info, "removedAuraInstanceIDs", list);
         }
@@ -243,7 +248,7 @@ pub fn apply(vm: &mut Vm, me: UnitId, data: TableRef) -> f64 {
         points,
     };
     engine_mut(vm).units.auras.push(aura.clone());
-    fire_update(vm, me, Some(&aura), None);
+    fire_update(vm, me, Some(&aura), &[]);
     // Gone when it runs out, the server's word a moment later (recorded:
     // a food's aura 0.086 s after its expiration).
     if expiration > now {
@@ -306,12 +311,13 @@ pub fn remove(vm: &mut Vm, unit: UnitId, id: f64) {
     let before = auras.len();
     auras.retain(|a| !(a.unit == unit && a.instance == id));
     if auras.len() != before {
-        fire_update(vm, unit, None, Some(id));
+        fire_update(vm, unit, None, &[id]);
     }
 }
 
-/// A unit's death takes its auras (unverified: no recording has a unit
-/// dying with one; an update for each, in the order they were applied).
+/// A unit's death takes its auras: one update removing them all, after
+/// the death, the target's clearing and the loot (recorded: a stunned
+/// mob's; the same update added something, secret, not modelled).
 pub fn died(vm: &mut Vm, unit: UnitId) {
     let gone: Vec<f64> = engine(vm)
         .units
@@ -320,9 +326,11 @@ pub fn died(vm: &mut Vm, unit: UnitId) {
         .filter(|a| a.unit == unit)
         .map(|a| a.instance)
         .collect();
-    for id in gone {
-        remove(vm, unit, id);
+    if gone.is_empty() {
+        return;
     }
+    engine_mut(vm).units.auras.retain(|a| a.unit != unit);
+    fire_update(vm, unit, None, &gone);
 }
 
 /// `unit:removeAura(instanceID)`.

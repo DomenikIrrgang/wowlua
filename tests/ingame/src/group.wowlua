@@ -121,6 +121,14 @@ export function groupProbe()
         if type(last) == "string" and not issecretvalue(last) and last ~= "" and names[last] == nil then
             names[last] = player and "Lastname" or `{names[name]}Last`
             names[`{name}-{last}`] = `{names[name]}-{names[last]}`
+            -- The full name, as Forever writes it ("Name Lastname").
+            names[`{name} {last}`] = `{names[name]} {names[last]}`
+        end
+        -- With the realm ("Name-Realm"), either of its spellings.
+        for _, realm in ipairs({ GetNormalizedRealmName() or "", GetRealmName() or "" }) do
+            if realm ~= "" then
+                names[`{name}-{realm}`] = `{names[name]}-Realm`
+            end
         end
     end
     const tokens: string[] = { "player" }
