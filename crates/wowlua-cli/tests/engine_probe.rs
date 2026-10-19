@@ -1576,6 +1576,64 @@ fn the_engine_plays_lfg_as_the_client_did() {
     plays_as_the_client_did("lfg", LFG_MATCHED);
 }
 
+/// How many of the actionbar scenario's lines the engine plays as the
+/// client did: only ever up.
+const ACTIONBAR_MATCHED: usize = 140;
+
+/// The actionbar scenario: a spell dragged from the spellbook onto an
+/// empty action slot, that button onto a filled one (swapped), one
+/// shift-dragged off and back.
+#[test]
+fn the_engine_plays_actionbar_as_the_client_did() {
+    plays_as_the_client_did("actionbar", ACTIONBAR_MATCHED);
+}
+
+/// How many of the equip scenario's lines the engine plays as the client
+/// did: only ever up.
+const EQUIP_MATCHED: usize = 205;
+
+/// The equip scenario: gloves dragged from the character window into a
+/// bag, worn again by right-click, a bag item's comparison tooltip.
+#[test]
+fn the_engine_plays_equip_as_the_client_did() {
+    plays_as_the_client_did("equip", EQUIP_MATCHED);
+}
+
+/// How many of the tracking scenario's lines the engine plays as the
+/// client did: only ever up.
+const TRACKING_MATCHED: usize = 139;
+
+/// The tracking scenario: the minimap's tracking menu, Find Minerals on
+/// and off, a town's tracking types on and off, the minimap zoomed.
+#[test]
+fn the_engine_plays_tracking_as_the_client_did() {
+    plays_as_the_client_did("tracking", TRACKING_MATCHED);
+}
+
+/// How many of the macro scenario's lines the engine plays as the client
+/// did: only ever up.
+const MACRO_MATCHED: usize = 54;
+
+/// The macro scenario: a character macro made, dragged onto an empty
+/// action slot and off again, deleted.
+#[test]
+fn the_engine_plays_macro_as_the_client_did() {
+    plays_as_the_client_did("macro", MACRO_MATCHED);
+}
+
+/// How many of the mapnav scenario's lines the engine plays as the client
+/// did: only ever up. Not yet: the quest log's entries as Blizzard's quest
+/// map asks them on Kalimdor and back (their order and collapsed headers
+/// follow the map shown in the client).
+const MAPNAV_MATCHED: usize = 101;
+
+/// The mapnav scenario: the world map, zoomed out to Kalimdor and back
+/// into the Barrens, a user waypoint placed, super-tracked and removed.
+#[test]
+fn the_engine_plays_mapnav_as_the_client_did() {
+    plays_as_the_client_did("mapnav", MAPNAV_MATCHED);
+}
+
 /// A scenario played: no error of Blizzard's, every UI check passed, the
 /// end as the client's, and at least `ratchet` of its lines as the
 /// client's (`WOWLUA_SCENARIO_LIMIT`: how many differences to print;

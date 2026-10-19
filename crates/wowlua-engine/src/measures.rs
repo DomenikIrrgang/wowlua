@@ -230,6 +230,35 @@ fn get_zoom(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     ])
 }
 
+/// `Minimap:SetZoom(zoom)`: the zoom kept; a change sets the
+/// `minimapZoom` CVar (`CVAR_UPDATE("minimapZoom", zoom)`), then
+/// `MINIMAP_UPDATE_ZOOM()` (recorded twice, scenario tracking: the zoom
+/// buttons, in then out).
+fn set_zoom(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let Value::Num(zoom) = c.arg(2) else {
+        return Ok(vec![]);
+    };
+    let props = engine(vm).world.widgets[id.0].props;
+    let old = widgets::stored_args(vm, props, "Zoom")
+        .and_then(|v| v.first().copied())
+        .and_then(|v| match v {
+            Value::Num(n) => Some(n),
+            _ => None,
+        })
+        .unwrap_or(0.0);
+    widgets::store(vm, id, "Zoom", &[Value::Num(zoom)]);
+    let class = engine(vm).world.widgets[id.0].class.clone();
+    let minimap = widgets::lineage(engine(vm), &class)
+        .iter()
+        .any(|c| c.eq_ignore_ascii_case("Minimap"));
+    if minimap && zoom != old {
+        let text = format!("{}", zoom as i64);
+        crate::framescript::set_cvar_text(vm, "minimapZoom", text, true)?;
+        widgets::fire_event(vm, "MINIMAP_UPDATE_ZOOM", &[]);
+    }
+    Ok(vec![])
+}
+
 /// `GetVerticalScroll()` / `GetHorizontalScroll()`: the offset set, 0 at
 /// first.
 fn scroll_offset(vm: &mut Vm, id: WidgetId, stem: &str) -> Ret {
@@ -267,6 +296,7 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
         ("GetHorizontalScrollRange", get_horizontal_scroll_range),
         ("GetAtlas", get_atlas),
         ("GetZoom", get_zoom),
+        ("SetZoom", set_zoom),
         ("GetZoomLevels", get_zoom_levels),
         ("GetTextureFileID", get_texture_file_id),
         ("GetTextInsets", get_text_insets),

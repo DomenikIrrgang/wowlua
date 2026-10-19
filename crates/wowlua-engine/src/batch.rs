@@ -35,6 +35,9 @@ const BATCHED: &[&str] = &[
     "BAG_UPDATE_COOLDOWN",
     "DAMAGE_METER_COMBAT_SESSION_UPDATED",
     "DAMAGE_METER_CURRENT_SESSION_UPDATED",
+    // Recorded once: a tracking spell's aura's, between the bags' and the
+    // spells' cooldowns (scenario tracking).
+    "MINIMAP_UPDATE_TRACKING",
     "SPELL_UPDATE_COOLDOWN",
     "SPELL_UPDATE_USABLE",
     "UI_ERROR_MESSAGE",

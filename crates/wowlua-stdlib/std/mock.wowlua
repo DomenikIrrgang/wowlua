@@ -839,6 +839,13 @@ export function setModifiers(keys: { shift?: boolean, ctrl?: boolean, alt?: bool
     engine().setModifiers(keys)
 end
 
+--- Moves the mouse to (`x`, `y`) on the screen (`GetCursorPosition`'s
+--- units: a frame's point times its effective scale); no events (what is
+--- under it is `hover`'s).
+export function setCursorPosition(x: number, y: number)
+    engine().setCursorPosition(x, y)
+end
+
 --- A key binding the client knows (from `Bindings.xml`).
 export function defineBinding(name: string, action: (keystate: string) -> (), opts: { header?: string, runOnUp?: boolean }?)
     engine().defineBinding(name, action, opts)
@@ -937,7 +944,10 @@ end
 --- consumable's use: `spell`, `castSpells`, `cooldownCategory`; its
 --- `aura` (an `applyAura` table: food's eating, run out after its
 --- duration); food's `wellFed = { aura, maxHealth?, cooldowns?, after? }`
---- (eaten `after` seconds, 10 by default: the buff).
+--- (eaten `after` seconds, 10 by default: the buff). Gear's `worn = {
+--- maxHealth?, maxMana?, stats?, attackPower? }`: what wearing it adds (the
+--- player's maximums, how many stats change, whether the attack power
+--- does), told as it goes on and off; `bindType` 1 or 2: bound once worn.
 export function defineItem(id: number, data: table, opts: table?)
     engine().defineItem(id, data, opts)
 end

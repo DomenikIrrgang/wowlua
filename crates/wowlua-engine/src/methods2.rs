@@ -677,7 +677,7 @@ fn get_tex_coord(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 
 /// A `vector2` as Blizzard's code makes it (`CreateVector2D` when its UI
 /// code is loaded), else a table with `x` and `y`.
-fn vector2(vm: &mut Vm, x: f64, y: f64) -> Value {
+pub(crate) fn vector2(vm: &mut Vm, x: f64, y: f64) -> Value {
     let create = global(vm, "CreateVector2D");
     if matches!(create, Value::Func(_))
         && let Ok(v) = vm.call(create, &[Value::Num(x), Value::Num(y)])

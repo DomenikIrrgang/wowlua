@@ -59,6 +59,8 @@ return xp, base, GetQuestLogRewardMoney(33), GetNumQuestLogChoices(), name, coun
     );
 }
 
+/// The pin cleared: its update, then the super-tracking's (recorded,
+/// scenario mapnav).
 #[test]
 fn the_user_waypoint_set_tracked_linked_and_cleared() {
     let mut vm = vm();
@@ -83,7 +85,7 @@ return table.concat(seen, ' '), set, tracking, p.uiMapID, p.position.x, link, ba
     assert_eq!(
         r,
         [
-            "USER_WAYPOINT_UPDATED SUPER_TRACKING_CHANGED SUPER_TRACKING_CHANGED USER_WAYPOINT_UPDATED",
+            "USER_WAYPOINT_UPDATED SUPER_TRACKING_CHANGED USER_WAYPOINT_UPDATED SUPER_TRACKING_CHANGED",
             "true",
             "true",
             "1412",

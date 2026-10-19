@@ -496,6 +496,12 @@ pub fn control_use_spell(vm: &mut Vm, c: NativeCall) -> Ret {
         return Err(vm.error("useSpell: the player's"));
     }
     let id = vm.check_number(&c, 2)?;
+    use_spell(vm, id)
+}
+
+/// The player pressing spell `id` (`control_use_spell`).
+pub fn use_spell(vm: &mut Vm, id: f64) -> Ret {
+    let me = units::PLAYER;
     let fire = |vm: &mut Vm, e: &str, args: &[Value]| crate::widgets::fire_event(vm, e, args);
     // On its cooldown: refused (recorded: Hammer of Justice pressed again,
     // "Spell is not ready yet.", 61).

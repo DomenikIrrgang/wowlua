@@ -863,7 +863,7 @@ pub(crate) fn call_text(vm: &Vm, name: &str, c: &NativeCall, first: usize) -> St
 /// Fill-ins whose answer a setter of theirs changes: they take the place
 /// of the recorded answer, which they give until set (the dungeon
 /// difficulty recorded 1, the action bar toggles, the heirloom and wardrobe filters recorded
-/// checked, nothing super-tracked).
+/// checked, nothing super-tracked, no map pin).
 const OVER_RECORDED: &[&str] = &[
     "GetDungeonDifficultyID",
     "GetActionBarToggles",
@@ -877,6 +877,7 @@ const OVER_RECORDED: &[&str] = &[
     "C_SuperTrack.GetSuperTrackedMapPin",
     "C_SuperTrack.GetSuperTrackedContent",
     "C_SuperTrack.GetSuperTrackedVignette",
+    "C_Map.GetUserWaypointPositionForMap",
 ];
 
 /// The fill-in modules' behaviours: answers for functions no recording

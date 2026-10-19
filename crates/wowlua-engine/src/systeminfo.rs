@@ -1461,17 +1461,24 @@ fn get_minimap_ui_map_id(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Nil])
 }
 
-/// The minimap's tracking types: name and type (`data/camelot-tracking.txt`,
-/// as the recording's character had them: its tracking spells first,
-/// then the townsfolk and others).
-fn tracking_types() -> &'static [(&'static str, &'static str)] {
-    static TYPES: std::sync::OnceLock<Vec<(&'static str, &'static str)>> =
+/// The minimap's tracking types: name, type and filter (a spell's ID or
+/// an `Enum.MinimapTrackingFilter`; `data/camelot-tracking.txt`, as the
+/// recording's character had them: its tracking spells first, then the
+/// townsfolk and others).
+fn tracking_types() -> &'static [(&'static str, &'static str, f64)] {
+    static TYPES: std::sync::OnceLock<Vec<(&'static str, &'static str, f64)>> =
         std::sync::OnceLock::new();
     TYPES.get_or_init(|| {
         include_str!("../data/camelot-tracking.txt")
             .lines()
             .filter(|l| !l.starts_with('#'))
-            .filter_map(|l| l.split_once('\t'))
+            .filter_map(|l| {
+                let mut parts = l.split('\t');
+                let name = parts.next()?;
+                let kind = parts.next()?;
+                let id = parts.next()?.parse().ok()?;
+                Some((name, kind, id))
+            })
             .collect()
     })
 }
@@ -1483,29 +1490,167 @@ fn get_num_tracking_types(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(tracking_types().len() as f64)])
 }
 
-/// `C_Minimap.GetTrackingInfo(index)`: the type's name and kind as
-/// recorded; its texture, state, subtype and spell are not (no texture,
-/// inactive, subtype 0, no spell: unverified); nil past the list.
-fn get_tracking_info(vm: &mut Vm, c: NativeCall) -> Ret {
-    let i = num(vm, c.arg(1)).unwrap_or(0.0);
+/// The tracking type at a 1-based index.
+fn tracking_type(vm: &Vm, v: Value) -> Option<(&'static str, &'static str, f64)> {
+    let i = num(vm, v)?;
     let types = tracking_types();
-    if i < 1.0 || i > types.len() as f64 {
-        return Ok(vec![Value::Nil]);
+    (i >= 1.0 && i <= types.len() as f64).then(|| types[i as usize - 1])
+}
+
+/// The filters tracked: the bits of `minimapTrackedInfov4` (recorded
+/// 10552047 for the paladin, the same before and after its townsfolk were
+/// toggled: the CVar is not told changed as they are).
+fn tracked_filters(vm: &mut Vm) -> u64 {
+    if let Value::Num(n) = get_state(vm, "trackedFilters") {
+        return n as u64;
     }
-    let (name, kind) = types[i as usize - 1];
+    crate::framescript::cvar_get(vm, "minimapTrackedInfov4")
+        .and_then(|v| v.trim().parse().ok())
+        .unwrap_or(0)
+}
+
+/// Whether a tracking type is on: a spell's while its aura is on the
+/// player, a filter's while its bit is set.
+fn tracking_active(vm: &mut Vm, kind: &str, id: f64) -> bool {
+    if kind == "spell" {
+        engine(vm)
+            .units
+            .auras
+            .iter()
+            .any(|a| a.unit == crate::units::PLAYER && a.spell_id == id)
+    } else {
+        tracked_filters(vm) & (id as u64) != 0
+    }
+}
+
+/// `C_Minimap.GetTrackingInfo(index)`: the type's name, kind, state and a
+/// spell's ID and icon (the spellbook's); a filter's texture and every
+/// subtype are not recorded (none, 0: unverified); nil past the list.
+fn get_tracking_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some((name, kind, id)) = tracking_type(vm, c.arg(1)) else {
+        return Ok(vec![Value::Nil]);
+    };
+    let active = tracking_active(vm, kind, id);
+    let texture = if kind == "spell" {
+        match crate::stats::spellbook_item(vm, id) {
+            Some(Value::Table(item)) => {
+                let k = vm.str("iconID");
+                vm.heap.table(item).get(k)
+            }
+            _ => Value::Num(0.0),
+        }
+    } else {
+        Value::Num(0.0)
+    };
     let t = vm.new_table();
-    let fields = [
+    let mut fields = vec![
         ("name", vm.str(name)),
-        ("texture", Value::Num(0.0)),
-        ("active", Value::Bool(false)),
+        ("texture", texture),
+        ("active", Value::Bool(active)),
         ("type", vm.str(kind)),
         ("subType", Value::Num(0.0)),
     ];
+    if kind == "spell" {
+        fields.push(("spellID", Value::Num(id)));
+    }
     for (k, v) in fields {
         let k = vm.str(k);
         let _ = vm.heap.table_mut(t).set(k, v);
     }
     Ok(vec![Value::Table(t)])
+}
+
+/// `C_Minimap.GetTrackingFilter(index)`: `{ spellID }` for a spell,
+/// `{ filterID }` else (documented; see the data).
+fn get_tracking_filter(vm: &mut Vm, c: NativeCall) -> Ret {
+    let t = vm.new_table();
+    if let Some((_, kind, id)) = tracking_type(vm, c.arg(1)) {
+        let k = vm.str(if kind == "spell" {
+            "spellID"
+        } else {
+            "filterID"
+        });
+        let _ = vm.heap.table_mut(t).set(k, Value::Num(id));
+    }
+    Ok(vec![Value::Table(t)])
+}
+
+/// `C_Minimap.SetTracking(index, on)`: nothing when it already is so. A
+/// filter's bit set or cleared, `MINIMAP_UPDATE_TRACKING` at once
+/// (recorded four times: a town's tracking types toggled from Blizzard's
+/// menu). A spell turned on is used as the player's press (recorded: Find
+/// Minerals, its cast a round trip later, its aura then); turned off, its
+/// aura cancelled a round trip later: its action slots told changed, the
+/// aura's removal, the bars' cooldowns (recorded once). A tracking spell's
+/// aura gained or lost tells `MINIMAP_UPDATE_TRACKING`
+/// (`tracking_aura_changed`).
+fn set_tracking(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some((_, kind, id)) = tracking_type(vm, c.arg(1)) else {
+        return Ok(vec![]);
+    };
+    let on = c.arg(2).truthy();
+    if tracking_active(vm, kind, id) == on {
+        return Ok(vec![]);
+    }
+    if kind == "spell" {
+        if on {
+            return crate::casting::use_spell(vm, id);
+        }
+        let later = vm.native_with(
+            "trackingCancelled",
+            tracking_cancelled,
+            vec![Value::Num(id)],
+        );
+        let delay = crate::clock::server_delay(vm);
+        crate::clock::after_engine(vm, delay, later);
+        return Ok(vec![]);
+    }
+    let bits = tracked_filters(vm) ^ (id as u64);
+    set_state(vm, "trackedFilters", Value::Num(bits as f64));
+    crate::widgets::fire_event(vm, "MINIMAP_UPDATE_TRACKING", &[]);
+    Ok(vec![])
+}
+
+/// A tracking spell's aura cancelled by the server (see `set_tracking`).
+fn tracking_cancelled(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Num(id) = c.upvals[0] else {
+        return Ok(vec![]);
+    };
+    let slots: Vec<i64> = engine(vm)
+        .world
+        .character
+        .actions
+        .iter()
+        .filter(|(_, a)| a.kind == "spell" && matches!(a.id, Value::Num(n) if n == id))
+        .map(|(s, _)| *s)
+        .collect();
+    for s in slots {
+        crate::widgets::fire_event(vm, "ACTIONBAR_SLOT_CHANGED", &[Value::Num(s as f64)]);
+    }
+    let auras: Vec<f64> = engine(vm)
+        .units
+        .auras
+        .iter()
+        .filter(|a| a.unit == crate::units::PLAYER && a.spell_id == id)
+        .map(|a| a.instance)
+        .collect();
+    for a in auras {
+        crate::auras::remove(vm, crate::units::PLAYER, a);
+    }
+    crate::widgets::fire_event(vm, "ACTIONBAR_UPDATE_COOLDOWN", &[]);
+    Ok(vec![])
+}
+
+/// The player's aura of `spell` gained or lost: a tracking spell's tells
+/// `MINIMAP_UPDATE_TRACKING` (recorded: Find Minerals on and off, the
+/// event among the frame's batched ones).
+pub fn tracking_aura_changed(vm: &mut Vm, spell: f64) {
+    if tracking_types()
+        .iter()
+        .any(|(_, kind, id)| *kind == "spell" && *id == spell)
+    {
+        crate::widgets::fire_event(vm, "MINIMAP_UPDATE_TRACKING", &[]);
+    }
 }
 
 fn draw_ground_textures(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -2708,8 +2853,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         // recorded, so the engine lists none (noted).
         ("C_Minimap.GetNumTrackingTypes", get_num_tracking_types),
         ("C_Minimap.GetTrackingInfo", get_tracking_info),
-        ("C_Minimap.GetTrackingFilter", empty_table),
-        ("C_Minimap.SetTracking", nothing),
+        ("C_Minimap.GetTrackingFilter", get_tracking_filter),
+        ("C_Minimap.SetTracking", set_tracking),
         ("C_Minimap.ClearAllTracking", nothing),
         // Recorded: true.
         ("C_Minimap.CanTrackBattlePets", yes),
