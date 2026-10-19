@@ -3,7 +3,7 @@
 //! descriptors, jump lists, register allocation), so that evaluation order,
 //! multiple results, limits and error names match the client's.
 
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
 use std::rc::Rc;
 
 use wowlua_span::Span;
@@ -107,7 +107,7 @@ struct FuncState {
     nactvar: usize,
     /// Indices into `proto.locvars`: the active locals, then pending ones.
     actvar: Vec<usize>,
-    constants: HashMap<ConstKey, u32>,
+    constants: FxHashMap<ConstKey, u32>,
 }
 
 impl FuncState {
@@ -1141,7 +1141,7 @@ impl Compiler<'_> {
             freereg: 0,
             nactvar: 0,
             actvar: Vec::new(),
-            constants: HashMap::new(),
+            constants: FxHashMap::default(),
         });
     }
 
