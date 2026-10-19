@@ -18,6 +18,8 @@
 //!   StdTest's recordings into the fixtures and data, each part only when
 //!   newer than the repository's; without files, every account's in the
 //!   WoW installation.
+//! - `cargo xtask fullprobe-plan [--stats]`: the plan of `/stdtest engine
+//!   fullprobe` from camelot's documentation (`tests/ingame/src/fullprobeplan.lua`).
 
 use anyhow::{Context, Result, bail};
 use std::fs;
@@ -25,6 +27,7 @@ use std::path::{Path, PathBuf};
 
 mod corpus;
 mod fixture;
+mod fullprobe;
 mod ingest;
 mod lua51;
 mod packager_diff;
@@ -68,6 +71,13 @@ fn main() -> Result<()> {
             profile::run(Path::new(&saved), Path::new(&out))
         }
         "schema" => write_if_changed(&schema_path(&root), &wowlua_manifest::schema_json()),
+        "fullprobe-plan" => {
+            if std::env::args().nth(2).as_deref() == Some("--stats") {
+                fullprobe::stats(&root)
+            } else {
+                write_if_changed(&root.join(fullprobe::PLAN), &fullprobe::generate(&root)?)
+            }
+        }
         "runtime" => {
             let slices = runtime::generate(&root)?;
             for stale in stale_runtime_files(&root, &slices)? {
@@ -85,6 +95,11 @@ fn main() -> Result<()> {
                 &schema_path(&root),
                 &wowlua_manifest::schema_json(),
                 "schema",
+            )?;
+            check_current(
+                &root.join(fullprobe::PLAN),
+                &fullprobe::generate(&root)?,
+                "fullprobe-plan",
             )?;
             let slices = runtime::generate(&root)?;
             if let Some(stale) = stale_runtime_files(&root, &slices)?.first() {

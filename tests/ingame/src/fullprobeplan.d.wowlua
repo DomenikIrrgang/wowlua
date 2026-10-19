@@ -1,0 +1,10 @@
+declare module "/fullprobeplan"
+    --- Each probed function and its calls' argument lists: { function, arguments… }
+    --- (Lua sources; `{NAME}` a value of the character resolved at the start).
+    const calls: { [number]: { [number]: string } }
+    --- The curated settings: the read-back call, the restore (a function's source
+    --- given the read-back's values), the setting calls.
+    const setters: { [number]: { get: string, restore: string, sets: { [number]: string } } }
+    --- Each skipped function and why: { function, reason }.
+    const skipped: { [number]: { [number]: string } }
+end

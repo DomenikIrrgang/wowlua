@@ -37,6 +37,7 @@ import trainerProbe from "/trainer"
 import groupProbe from "/group"
 import armStartup from "/startup"
 import scenarioProbe from "/scenario"
+import fullProbe from "/fullprobe"
 import say from "/harness"
 
 local G = _G :: any
@@ -1805,6 +1806,9 @@ export function engineProbe(arg: string?)
         return
     elseif words[1] == "startup" then
         armStartup()
+        return
+    elseif words[1] == "fullprobe" then
+        fullProbe(words[2])
         return
     end
     const probe: { [string]: any } = {

@@ -32,7 +32,8 @@
 //! - the CVar flags: `crates/wowlua-engine/data/camelot-cvar-flags.txt`;
 //! - the font heights: `crates/wowlua-engine/data/camelot-font-heights.txt`;
 //! - the static functions' answers: `crates/wowlua-engine/data/camelot-answers.txt`;
-//! - the login: `crates/wowlua-engine/data/camelot-login.txt` (and reload).
+//! - the login: `crates/wowlua-engine/data/camelot-login.txt` (and reload);
+//! - `/stdtest engine fullprobe`: `…/forever-camelot-fullprobe.lua`.
 //!
 //! Each part is written only when the file has it, and only when StdTest
 //! stamped it later than the repository's (`tests/client/recorded.txt`;
@@ -43,7 +44,7 @@
 //! Without a path, every account's SavedVariables in the WoW installation.
 //! The engine's default world (the account's settings, the character:
 //! the battery, answers, maps, collections, achievements, snapshot,
-//! cursor, keys, input, login) comes from one account (`#1`, or
+//! cursor, keys, input, login, the full probe) comes from one account (`#1`, or
 //! `--account <n>`); a class's traits, a trainer, a window, a scenario
 //! from any.
 
@@ -236,6 +237,7 @@ const WORLD_PARTS: &[&str] = &[
     "input",
     "login",
     "reload",
+    "fullprobe",
 ];
 
 /// The WoW account a SavedVariables path is in (`…/Account/<id>#2/…`: 2).
@@ -868,6 +870,173 @@ fn identity_from_scenarios(state: &mlua::Table) -> Result<Identity> {
     })
 }
 
+/// The player of a file with the full probe only: its answers to
+/// `UnitName("player")` and `UnitGUID("player")`.
+fn identity_from_fullprobe(state: &mlua::Table) -> Option<Identity> {
+    let probe: mlua::Table = state.get("engineFullProbe").ok()?;
+    let strings = |v: &str| -> Vec<String> {
+        let re = regex::Regex::new(r"string ([^,]+)").expect("a valid pattern");
+        re.captures_iter(v)
+            .map(|c| c[1].trim().to_string())
+            .collect()
+    };
+    let names = strings(&probe.get::<String>("UnitName(\"player\")").ok()?);
+    let guid = strings(&probe.get::<String>("UnitGUID(\"player\")").ok()?)
+        .into_iter()
+        .next()?;
+    Some(Identity {
+        name: names.first().cloned()?,
+        last_name: names.get(1).cloned(),
+        guid,
+    })
+}
+
+/// The full probe's answers scrubbed: the player (name, last name, GUID),
+/// the realm and the guild (as the run's own answers name them), the
+/// social systems' strings blanked.
+fn fullprobe_entries(me: &Identity, probe: &mlua::Table) -> Result<Vec<(String, String)>> {
+    let first_string = |call: &str| -> Option<String> {
+        let answer: String = probe.get(call).ok()?;
+        let re = regex::Regex::new(r"^\d+: string ([^,]+)").expect("a valid pattern");
+        re.captures(&answer)
+            .map(|c| c[1].trim().to_string())
+            .filter(|s| s.len() >= 3)
+    };
+    let mut names: Vec<(String, &str)> = Vec::new();
+    for (call, with) in [
+        ("GetRealmName()", "Realm"),
+        ("GetNormalizedRealmName()", "Realm"),
+        ("GetGuildInfo(\"player\")", "Guild"),
+    ] {
+        if let Some(name) = first_string(call) {
+            names.push((name, with));
+        }
+    }
+    // The longest first (a realm's name in its normalized one).
+    names.sort_by_key(|(n, _)| std::cmp::Reverse(n.len()));
+    let scrub = |text: &str| -> String {
+        let mut out = me.scrub(text);
+        for (name, with) in &names {
+            out = out.replace(name.as_str(), with);
+        }
+        out
+    };
+    // A player link's name and text (`|Hplayer:Otherplayer:…|h[Otherplayer]|h`),
+    // but the placeholders'.
+    let player_links = regex::Regex::new(r"(\|H(?:player):)([^|:\]]*)([^|]*\|h\[)?([^\]|]*)")
+        .expect("a valid pattern");
+    let placeholder = regex::Regex::new(r"^(Player|Lastname|Realm)([ -](Player|Lastname|Realm))*$")
+        .expect("a valid pattern");
+    let mut entries = Vec::new();
+    for pair in probe.pairs::<mlua::LuaString, mlua::LuaString>() {
+        let (call, answer) = pair.map_err(|e| anyhow!("{e}"))?;
+        let call = escaped_bytes(&call.as_bytes());
+        let answer = escaped_bytes(&answer.as_bytes());
+        let answer = if names_others(&call) {
+            blank_strings(&answer)
+        } else {
+            answer
+        };
+        let scrubbed = scrub(&answer);
+        let answer = player_links.replace_all(&scrubbed, |c: &regex::Captures| {
+            let own = |text: &str| text.is_empty() || placeholder.is_match(text);
+            match c.get(3) {
+                Some(rest) => format!(
+                    "{}{}{}{}",
+                    &c[1],
+                    if own(&c[2]) { &c[2] } else { "Otherplayer" },
+                    rest.as_str(),
+                    if own(&c[4]) { &c[4] } else { "Otherplayer" }
+                ),
+                None => format!(
+                    "{}{}{}",
+                    &c[1],
+                    if own(&c[2]) { &c[2] } else { "Otherplayer" },
+                    &c[4]
+                ),
+            }
+        });
+        entries.push((scrub(&call), answer.into_owned()));
+    }
+    entries.sort();
+    Ok(entries)
+}
+
+/// Functions whose answers may name other players (the social systems',
+/// the group's, the guild's, chat, mail, auctions, the group finder,
+/// calendar invites, petitions): the full probe's strings of them blanked.
+const OTHERS: &[&str] = &[
+    "C_ChatInfo.",
+    "GetChannelRoster",
+    "GetChatLine",
+    "C_Calendar.",
+    "CalendarEvent",
+    "GetRaidRosterInfo",
+    "GetGuildRoster",
+    "GetGuildMember",
+    "GetGuildNews",
+    "GetGuildEvent",
+    "GetGuildBank",
+    "GuildControl",
+    "C_LFGList.",
+    "C_PartyInfo.",
+    "C_RecentAllies.",
+    "C_AuctionHouse.",
+    "GetInbox",
+    "GetPetition",
+    "GetTrade",
+    "GetMasterLoot",
+    "GetLootRoll",
+    "GetIgnore",
+    "GetBattlefieldScore",
+    "C_PvP.",
+    "C_Commentator.",
+    "GetReadyCheck",
+    "GetPartyAssignment",
+    "GetLFG",
+    "C_LFGInfo.",
+    "GetNumWho",
+    "GetWho",
+    "C_Housing",
+    "C_PlayerInfo.GetPlayerMythicPlusRatingSummary",
+    "C_TradeSkillUI.GetRecipeCrafter",
+    "C_CraftingOrders.",
+    "C_Item.GetItemCreator",
+    "GetItemCreator",
+    "ItemTextGetCreator",
+    "GetPlayerInfoByGUID",
+    "C_SocialRestrictions.",
+    "C_Texture.GetTitleIconTexture",
+];
+
+/// Functions that name a unit: other players' names unless asked of the
+/// player.
+const UNIT_NAMES: &[&str] = &[
+    "UnitName",
+    "UnitFullName",
+    "UnitNameUnmodified",
+    "UnitNameFromGUID",
+    "UnitPVPName",
+    "GetUnitName",
+    "UnitSpellTargetName",
+    "UnitSpellTargetClass",
+    "C_PlayerInfo.GetName",
+];
+
+/// Whether a full probe call's strings may name other players.
+fn names_others(call: &str) -> bool {
+    if SOCIAL.iter().chain(OTHERS).any(|p| call.starts_with(p)) {
+        return true;
+    }
+    let Some((name, args)) = call.split_once('(') else {
+        return false;
+    };
+    UNIT_NAMES.contains(&name)
+        && !["\"player\")", "UnitGUID(\"player\"))", "\"player\", "]
+            .iter()
+            .any(|own| args.starts_with(own))
+}
+
 /// An auction's owners (`owners={1=string <name>, …}`): other players'
 /// names, but the player's own ("player").
 fn scrub_owners(line: &str) -> String {
@@ -1363,7 +1532,10 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
             guid,
         }
     } else {
-        identity_from_scenarios(&state)?
+        match identity_from_scenarios(&state) {
+            Ok(me) => me,
+            Err(e) => identity_from_fullprobe(&state).ok_or(e)?,
+        }
     };
     let version = get("probe.client").unwrap_or_else(|| "an unknown client".into());
     let stamps = stamps_of(&state);
@@ -1560,6 +1732,25 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
                 &list,
             )?;
         }
+    }
+    // Every function called with many arguments (`/stdtest engine
+    // fullprobe`), merged in.
+    if let Ok(probe) = state.get::<mlua::Table>("engineFullProbe")
+        && let Some(client_version) = gate.take(&stamps, "fullprobe", &version)
+    {
+        let path = client.join("forever-camelot-fullprobe.lua");
+        let entries = fullprobe_entries(&me, &probe)?;
+        let all = merged(read_table(&path), &entries);
+        write_table(
+            &path,
+            &format!(
+                "WoW Forever {client_version}: /stdtest engine fullprobe, every C function called\n\
+                 with many arguments (tests/ingame/src/fullprobe.wowlua, its plan\n\
+                 fullprobeplan.lua); the player, realm and guild scrubbed, the social\n\
+                 systems' texts blanked (cargo xtask ingest)."
+            ),
+            &all,
+        )?;
     }
     // The cursor (`/stdtest engine cursor`): each step's state and the
     // events between; the keyboard (`/stdtest engine keys`): which frames
@@ -2190,6 +2381,68 @@ mod tests {
         assert_eq!(
             all,
             vec![("a".into(), "3".into()), ("b".into(), "2".into())]
+        );
+    }
+
+    /// The full probe names the player itself; its answers lose the
+    /// player, the realm, the guild and other players' GUIDs.
+    #[test]
+    fn the_full_probe_is_scrubbed() {
+        let lua = mlua::Lua::new();
+        let state: mlua::Table = lua
+            .load(
+                r#"return { engineFullProbe = {
+                    ['UnitName("player")'] = "2: string Tamsin, string Ashford",
+                    ['UnitGUID("player")'] = "1: string Player-1234-" .. "0ABCDEF1",
+                    ['GetRealmName()'] = "1: string Moonfall Vale",
+                    ['GetNormalizedRealmName()'] = "1: string MoonfallVale",
+                    ['GetGuildInfo("player")'] = "3: string Harbor Watch, string Member, number 2",
+                    ['UnitFullName("player")'] = "2: string Tamsin, string MoonfallVale",
+                    ['C_FriendList.GetFriendInfoByIndex(1)'] = "1: {name=string Otherfriend}",
+                    ['UnitGUID("target")'] = "1: string Player-99-" .. "0FEDCBA9",
+                    ['StdTestCrash()'] = "crashed",
+                    ['UnitName("party1")'] = "2: string Partyone, string Partytwo",
+                    ['GetRaidRosterInfo(1)'] = "12: string Partyone, number 0",
+                    ['C_ChatInfo.GetChatLineSenderName(1)'] = "1: string Partyone",
+                    ['GetQuestLogTitle(1)'] = "1: string |Hplayer:Partyone-Partytwo:12|h[Partyone]|h and |Hplayer:Tamsin|h",
+                } }"#,
+            )
+            .eval()
+            .unwrap();
+        let me = identity_from_fullprobe(&state).expect("the player");
+        assert_eq!(me.name, "Tamsin");
+        let probe: mlua::Table = state.get("engineFullProbe").unwrap();
+        let entries: std::collections::BTreeMap<String, String> = fullprobe_entries(&me, &probe)
+            .unwrap()
+            .into_iter()
+            .collect();
+        let all = format!("{entries:?}");
+        for leak in [
+            "Tamsin",
+            "Ashford",
+            "Moonfall",
+            "Harbor Watch",
+            "0ABCDEF1",
+            "0FEDCBA9",
+            "Otherfriend",
+            "Partyone",
+            "Partytwo",
+        ] {
+            assert!(!all.contains(leak), "{leak} in {all}");
+        }
+        assert_eq!(entries["GetRealmName()"], "1: string Realm");
+        assert_eq!(entries["StdTestCrash()"], "crashed");
+        assert_eq!(
+            entries["UnitName(\"party1\")"],
+            "2: string <scrubbed>, string <scrubbed>"
+        );
+        assert_eq!(
+            entries["GetRaidRosterInfo(1)"],
+            "12: string <scrubbed>, number 0"
+        );
+        assert_eq!(
+            entries["GetQuestLogTitle(1)"],
+            "1: string |Hplayer:Otherplayer:12|h[Otherplayer]|h and |Hplayer:Player|h"
         );
     }
 

@@ -39,6 +39,9 @@ fn build() -> tempfile::TempDir {
         "startup.wowlua",
         "scenario.wowlua",
         "snapshot.wowlua",
+        "fullprobe.wowlua",
+        "fullprobeplan.lua",
+        "fullprobeplan.d.wowlua",
     ] {
         fs::copy(repo().join("tests/ingame/src").join(file), src.join(file)).unwrap();
     }
@@ -55,7 +58,7 @@ fn build() -> tempfile::TempDir {
     .unwrap();
     fs::write(
         src.join("main.wowlua"),
-        "import engineProbe from \"/engineprobe\"\n_G.StdTestEngineProbe = engineProbe\n",
+        "import engineProbe from \"/engineprobe\"\nimport replay, literalCalls from \"/fullprobe\"\n_G.StdTestEngineProbe = engineProbe\n_G.StdTestFullProbeReplay = replay\n_G.StdTestFullProbeLiteral = literalCalls\n",
     )
     .unwrap();
     let mut cmd = Command::cargo_bin("wowlua").unwrap();
@@ -1861,6 +1864,140 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
         matched >= ANSWERS_MATCHED,
         "{matched} of {} answered as the client did (was {ANSWERS_MATCHED})",
         theirs.len()
+    );
+}
+
+/// How many of the client's answers to the full probe (`/stdtest engine
+/// fullprobe`: every C function called with many arguments, the curated
+/// settings set, read back and restored) the engine gives as well, each
+/// recorded call asked again with the recorded character's world. Until
+/// the client's run is ingested (`forever-camelot-fullprobe.lua`), the
+/// answers battery's answers to the plan's calls without placeholders
+/// stand in for it (synthetic: the number changes with the first real
+/// run). Only ever raised.
+const FULLPROBE_MATCHED: usize = 762;
+
+#[test]
+fn the_engine_answers_the_full_probe_as_the_client_did() {
+    let Some(ui) = wowlua_test::ui_source_in(&repo().join("target/types-src"), "camelot") else {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    };
+    let dir = build();
+    let out = dir.path().join("dist/dev/StdTest");
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    let report = wowlua_engine::ui::load(&mut vm, &ui.interface, ui.strings.as_deref());
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let mut vm = client_in(vm, &out);
+    let controls = wowlua_engine::controls::table(&mut vm);
+    wowlua_test::profile::apply(
+        &mut vm,
+        controls,
+        &repo().join("crates/wowlua-engine/tests/client/forever-camelot-character.json"),
+    )
+    .expect("the character's profile");
+    let name = vm.str("StdTest");
+    wowlua_engine::widgets::fire_event(&mut vm, "ADDON_LOADED", &[name, Value::Bool(false)]);
+    wowlua_engine::widgets::fire_event(&mut vm, "PLAYER_LOGIN", &[]);
+    wowlua_engine::widgets::fire_event(
+        &mut vm,
+        "PLAYER_ENTERING_WORLD",
+        &[Value::Bool(true), Value::Bool(false)],
+    );
+    wowlua_engine::widgets::fire_event(&mut vm, "VARIABLES_LOADED", &[]);
+    wowlua_engine::clock::advance_frames(&mut vm, 10, 1000.0 / 60.0);
+    let client = repo().join("crates/wowlua-engine/tests/client");
+    let recorded = client.join("forever-camelot-fullprobe.lua");
+    let (path, seed) = if recorded.exists() {
+        (recorded, false)
+    } else {
+        (client.join("forever-camelot-answers.lua"), true)
+    };
+    let src = fs::read(&path).expect("the fixture");
+    let f = vm.load(&src, "=fixture").expect("compiles");
+    let r = vm.call(f, &[]).expect("runs");
+    vm.set_global("StdTestFullProbeFixture", r[0]);
+    vm.set_global("StdTestFullProbeSeed", Value::Bool(seed));
+    // `WOWLUA_FULLPROBE=GetSpellInfo` shows that function's differences
+    // (`*`: every function's), `WOWLUA_FULLPROBE_LIMIT` how many.
+    let show = std::env::var("WOWLUA_FULLPROBE").unwrap_or_default();
+    let limit = std::env::var("WOWLUA_FULLPROBE_LIMIT")
+        .ok()
+        .and_then(|n| n.parse::<usize>().ok())
+        .unwrap_or(8);
+    let show = vm.str(&show);
+    vm.set_global("StdTestFullProbeShow", show);
+    vm.set_global("StdTestFullProbeLimit", Value::Num(limit as f64));
+    let compare = br#"
+local fixture = StdTestFullProbeFixture
+local only
+if StdTestFullProbeSeed then
+    only = {}
+    for _, c in ipairs(StdTestFullProbeLiteral()) do only[c] = true end
+end
+local keys = {}
+for k, v in pairs(fixture) do
+    if (only == nil or only[k]) and v ~= "crashed" and not v:find("^unresolved: ") and not v:find("^skipped: ") then
+        keys[#keys + 1] = k
+    end
+end
+table.sort(keys)
+local ours = StdTestFullProbeReplay(keys)
+local matched, missed, diffs = 0, {}, {}
+for _, k in ipairs(keys) do
+    local mine = ours[k] or "<missing>"
+    for _, kind in ipairs({ "function", "table", "userdata", "thread" }) do
+        mine = mine:gsub(kind .. ": 0x%x+", kind)
+    end
+    -- The social systems' strings, blanked as ingest blanks the client's.
+    if fixture[k]:find("string <scrubbed>", 1, true) then
+        mine = mine:gsub("string [^,}]*", "string <scrubbed>")
+    end
+    if mine == fixture[k] then
+        matched = matched + 1
+    else
+        local name = k:match("^set ([%w_.:]+)") or k:match("^([%w_.:]+)") or k
+        missed[name] = (missed[name] or 0) + 1
+        if #diffs < StdTestFullProbeLimit and (StdTestFullProbeShow == "*" or StdTestFullProbeShow == name) then
+            diffs[#diffs + 1] = k .. "\n    client: " .. fixture[k]:sub(1, 240) .. "\n    ours:   " .. mine:sub(1, 240)
+        end
+    end
+end
+local list = {}
+for n, c in pairs(missed) do list[#list + 1] = { n, c } end
+table.sort(list, function(a, b) if a[2] ~= b[2] then return a[2] > b[2] end return a[1] < b[1] end)
+local top = {}
+for i = 1, math.min(40, #list) do top[i] = string.format("%5d %s", list[i][2], list[i][1]) end
+return matched, #keys, table.concat(top, "\n"), table.concat(diffs, "\n")
+"#;
+    let f = vm
+        .load_as(compare, "@Interface/AddOns/StdTest/test.lua", "StdTest")
+        .expect("compiles");
+    let r = match vm.call(f, &[]) {
+        Ok(r) => r,
+        Err(e) => panic!("{}", text(&vm, e.value)),
+    };
+    let number = |v: &Value| match v {
+        Value::Num(n) => *n as usize,
+        other => panic!("a number: {other:?}"),
+    };
+    let (matched, total) = (number(&r[0]), number(&r[1]));
+    let (top, diffs) = (text(&vm, r[2]), text(&vm, r[3]));
+    if !diffs.is_empty() {
+        eprintln!("{diffs}");
+    }
+    eprintln!(
+        "{matched} of {total} full probe answers as the client gave them ({}); the most missed:\n{top}",
+        if seed {
+            "the answers battery's, until the client's run is ingested"
+        } else {
+            "the client's run"
+        }
+    );
+    assert!(
+        matched >= FULLPROBE_MATCHED,
+        "{matched} of {total} full probe answers as the client gave them (was {FULLPROBE_MATCHED})"
     );
 }
 
