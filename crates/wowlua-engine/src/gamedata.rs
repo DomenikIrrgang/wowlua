@@ -332,7 +332,7 @@ fn request_load_spell_data(vm: &mut Vm, c: NativeCall) -> Ret {
 // ----------------------------------------------------------------- items
 
 /// The item an `itemInfo` names: an ID, a link, or a cached item's name.
-fn item_id(vm: &mut Vm, v: Value) -> Option<i64> {
+pub(crate) fn item_id(vm: &mut Vm, v: Value) -> Option<i64> {
     match vm.hidden(v) {
         Value::Num(n) => Some(n as i64),
         Value::Str(s) => {

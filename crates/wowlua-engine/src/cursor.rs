@@ -281,7 +281,7 @@ fn place_action(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// Takes the item at `source` onto the cursor, or puts the held item back
 /// when it came from there; another slot: moves it (unverified).
-fn pickup_item_at(vm: &mut Vm, source: Source) {
+pub(crate) fn pickup_item_at(vm: &mut Vm, source: Source) {
     match engine(vm).world.character.cursor.clone() {
         Cursor::Item(_, Some(from)) if from == source => {
             put_down(vm);

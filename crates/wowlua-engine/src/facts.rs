@@ -351,7 +351,7 @@ fn fonts(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 /// Each item quality's color (`/stdtest engine`, `qualityColors`): red,
 /// green, blue, alpha.
-const QUALITY_COLORS: [[f64; 4]; 9] = [
+pub(crate) const QUALITY_COLORS: [[f64; 4]; 9] = [
     [0.61568629741669, 0.61568629741669, 0.61568629741669, 1.0],
     [1.0, 1.0, 1.0, 1.0],
     [0.11764706671238, 1.0, 0.0, 1.0],
