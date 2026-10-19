@@ -27,6 +27,9 @@ fn run(vm: &mut Vm, src: &str) -> Vec<String> {
     }
 }
 
+// `GetNumQuestLogChoices` with its quest: the client refuses a call without
+// one ("Usage: GetNumQuestLogChoices(questID, [includeCurrencies])",
+// `/stdtest engine fullprobe`).
 #[test]
 fn a_defined_quests_rewards_in_the_log_functions() {
     let mut vm = vm();
@@ -38,7 +41,7 @@ mock.defineQuest(33, { title = 'Wolves', xp = 170, money = 25, choices = { 80, 6
 C_QuestLog.SetSelectedQuest(33)
 local xp, base = GetQuestLogRewardXP()
 local name, _, count, _, usable, id = GetQuestLogRewardInfo(1, 33)
-return xp, base, GetQuestLogRewardMoney(33), GetNumQuestLogChoices(), name, count, usable, id,
+return xp, base, GetQuestLogRewardMoney(33), GetNumQuestLogChoices(33), name, count, usable, id,
     C_QuestLog.GetSelectedQuest(), C_QuestLog.IsOnQuest(33), tostring(GetQuestLink(33))",
     );
     assert_eq!(

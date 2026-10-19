@@ -187,7 +187,9 @@ return got, C_Bank.BankBagTypeAndIDToInvSlot(0, 1), C_Bank.BankBagTypeAndIDToInv
             "-1",
             "Rank 3",
             "110",
-            "bad argument #1 to '?' (not a numerical value - Usage: local levelLearned = C_SpellBook.GetSpellBookItemLevelLearned(spellBookItemSlotIndex, spellBookItemSpellBank))",
+            // The client's usage names the slot and bank as one argument
+            // (`/stdtest engine fullprobe`).
+            "bad argument #1 to '?' (not a numerical value - Usage: local levelLearned = C_SpellBook.GetSpellBookItemLevelLearned(spellBookItem))",
             "0.56569999456406",
             "number",
         ]
