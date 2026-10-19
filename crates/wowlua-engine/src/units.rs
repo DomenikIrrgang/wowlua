@@ -1591,16 +1591,29 @@ fn control_target(vm: &mut Vm, c: NativeCall) -> Ret {
     if me == PLAYER {
         set_player_target(vm, new);
     } else {
+        unit_target(vm, me, new);
+    }
+    Ok(vec![])
+}
+
+/// Another unit's target now `new`, told at once.
+fn unit_target(vm: &mut Vm, me: UnitId, new: Option<UnitId>) {
+    {
         engine_mut(vm).units.list[me.0].target = new;
         // A creature turning on someone, as a wolf on the player
         // (`/stdtest engine scenario combat`): the new target's flags
         // (also by its new token, `targettarget`), the creature's target,
         // its flags in combat; a friendly one turning to face someone (a
         // flight master, `taxi`): its target only. Unverified: for others
-        // than the player.
+        // than the player. Only the player's target's (the flags come with
+        // the targettarget token: recorded, `talents`, a fox turning on the
+        // player untargeted told none, its flags told once targeted, see
+        // `set_player_target`).
         let friendly = engine(vm).units.list[me.0].reaction == Reaction::Friendly;
+        let targeted = engine(vm).units.target == Some(me);
         if let Some(t) = new
             && !friendly
+            && targeted
         {
             fire_unit(vm, "UNIT_FLAGS", t, &[]);
         }
@@ -1609,7 +1622,6 @@ fn control_target(vm: &mut Vm, c: NativeCall) -> Ret {
             fire_unit(vm, "UNIT_FLAGS", me, &[]);
         }
     }
-    Ok(vec![])
 }
 
 /// `unit:setThreat(value)`: the player's threat on a creature, as the
@@ -1738,6 +1750,19 @@ fn set_player_target(vm: &mut Vm, new: Option<UnitId>) {
     engine_mut(vm).units.target = new;
     engine_mut(vm).units.list[PLAYER.0].target = new;
     fire(vm, "PLAYER_TARGET_CHANGED", &[]);
+    // A hostile target on someone: that one's flags, by its tokens with
+    // targettarget (recorded, `talents`: the fox on the player targeted,
+    // UNIT_FLAGS for player and targettarget; as when the target turns on
+    // the player, `combat`). Unverified: for others than the player.
+    let turned = new.and_then(|n| {
+        let u = &engine(vm).units.list[n.0];
+        (u.reaction != Reaction::Friendly)
+            .then_some(u.target)
+            .flatten()
+    });
+    if let Some(t) = turned {
+        fire_unit(vm, "UNIT_FLAGS", t, &[]);
+    }
     // The actions on a target's kind (recorded: Blessing of Protection's
     // after targeting an NPC, then a party member).
     crate::actions::update_target_usability(vm);
@@ -2659,7 +2684,22 @@ fn control_leave_combat(vm: &mut Vm, c: NativeCall) -> Ret {
         }
     }
     if me == PLAYER {
+        // A creature giving up drops the player as its target with the
+        // combat's end, told after the player's flags (already without the
+        // targettarget token), before the actions' usability (recorded
+        // once, `talents`: the fox's).
+        let dropping: Vec<UnitId> = living
+            .iter()
+            .copied()
+            .filter(|u| engine(vm).units.list[u.0].target == Some(PLAYER))
+            .collect();
+        for &u in &dropping {
+            engine_mut(vm).units.list[u.0].target = None;
+        }
         player_out_of_combat(vm);
+        for u in dropping {
+            unit_target(vm, u, None);
+        }
         crate::actions::update_usability(vm);
     }
     if situation && !living.is_empty() {

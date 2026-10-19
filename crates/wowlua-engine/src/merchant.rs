@@ -5,8 +5,9 @@
 //!
 //! Verified against the client (`/stdtest engine record merchant` and
 //! `/stdtest engine merchant`, Forever 70425): `MERCHANT_SHOW`,
-//! `PLAYER_INTERACTION_MANAGER_FRAME_SHOW(5)`, then a frame later the items'
-//! `MERCHANT_FILTER_ITEM_UPDATE(itemID)` and `MERCHANT_UPDATE`; closing:
+//! `PLAYER_INTERACTION_MANAGER_FRAME_SHOW(5)`, then a frame later the
+//! unloaded items' `MERCHANT_FILTER_ITEM_UPDATE(itemID)` and
+//! `MERCHANT_UPDATE` (none for loaded items: the vendor scenario); closing:
 //! `MERCHANT_CLOSED`, `PLAYER_INTERACTION_MANAGER_FRAME_HIDE(5)` and `(0)`;
 //! the server's answers to a purchase, a sale and a buyback (their events
 //! and order; a sale locks the item at once); `C_MerchantFrame.GetItemInfo`'s
@@ -18,7 +19,7 @@
 //! purchase's price for stacks (the price per `stackCount`), which bag slot
 //! a purchase fills (a stack of the item, else the first free slot), the
 //! buyback list's order (the latest last) and size (12), and that the
-//! filter update fires for every item. The client's answer to a purchase
+//! filter update fires for every unloaded item. The client's answer to a purchase
 //! orders `PLAYER_MONEY` and the bag's update differently from one time to
 //! the next (the server's packets); the first recording's order is kept.
 //! Recorded too (`/stdtest engine record vendor2`): `ITEM_PUSH` with the
@@ -169,16 +170,33 @@ pub fn open(vm: &mut Vm, data: TableRef, npc: Option<units::UnitId>) -> Result<(
     Ok(())
 }
 
-/// A frame after opening: the items' filter updates, `MERCHANT_UPDATE`.
+/// A frame after opening: the filter updates of the goods whose data was
+/// not loaded, with `MERCHANT_UPDATE` before the last of them. Recorded:
+/// gossip2's twelve unloaded goods (their links empty) each fired one, the
+/// update between the eleventh and the twelfth; vendor's eight loaded
+/// goods fired none and no update. Unverified (one sample each): where the
+/// update falls for other counts.
 fn filled(vm: &mut Vm, _c: NativeCall) -> Ret {
     if !merchant(vm).open {
         return Ok(vec![]);
     }
     let ids: Vec<i64> = merchant(vm).items.iter().map(|g| g.id).collect();
-    for id in ids {
+    let loading: Vec<i64> = ids
+        .into_iter()
+        .filter(|&id| character::item_field(vm, id, "name").is_nil())
+        .collect();
+    let Some((&last, rest)) = loading.split_last() else {
+        return Ok(vec![]);
+    };
+    for &id in rest {
         fire(vm, "MERCHANT_FILTER_ITEM_UPDATE", &[Value::Num(id as f64)]);
     }
     fire(vm, "MERCHANT_UPDATE", &[]);
+    fire(
+        vm,
+        "MERCHANT_FILTER_ITEM_UPDATE",
+        &[Value::Num(last as f64)],
+    );
     Ok(vec![])
 }
 

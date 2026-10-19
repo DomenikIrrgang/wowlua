@@ -1313,7 +1313,7 @@ fn the_engine_plays_death_as_the_client_did() {
 
 /// How many of the flight scenario's lines the engine plays as the client
 /// did: only ever up.
-const FLIGHT_MATCHED: usize = 259;
+const FLIGHT_MATCHED: usize = 277;
 
 /// The flight scenario: a flight master's gossip, the taxi map looked at.
 #[test]
@@ -1334,7 +1334,7 @@ fn the_engine_plays_auradeath_as_the_client_did() {
 
 /// How many of the gossip2 scenario's lines the engine plays as the client
 /// did: only ever up.
-const GOSSIP2_MATCHED: usize = 166;
+const GOSSIP2_MATCHED: usize = 167;
 
 /// The gossip2 scenario: a merchant's gossip, his goods browsed, his gossip
 /// again, closed with Escape.
@@ -1345,7 +1345,7 @@ fn the_engine_plays_gossip2_as_the_client_did() {
 
 /// How many of the trainer scenario's lines the engine plays as the client
 /// did: only ever up.
-const TRAINER_MATCHED: usize = 171;
+const TRAINER_MATCHED: usize = 176;
 
 /// The trainer scenario: its gossip, its services, one bought.
 #[test]
@@ -1380,7 +1380,7 @@ fn the_engine_plays_hearth_as_the_client_did() {
 
 /// How many of the taxi scenario's lines the engine plays as the client
 /// did: only ever up.
-const TAXI_MATCHED: usize = 1228;
+const TAXI_MATCHED: usize = 1236;
 
 /// The taxi scenario: a flight from Orgrimmar to the Crossroads.
 #[test]
@@ -1420,7 +1420,7 @@ fn the_engine_plays_auction_as_the_client_did() {
 
 /// How many of the group scenario's lines the engine plays as the client
 /// did: only ever up.
-const GROUP_MATCHED: usize = 252;
+const GROUP_MATCHED: usize = 262;
 
 /// The group scenario: an invitation, a party, following, a trade.
 #[test]
@@ -1430,7 +1430,7 @@ fn the_engine_plays_group_as_the_client_did() {
 
 /// How many of the inspect scenario's lines the engine plays as the
 /// client did: only ever up.
-const INSPECT_MATCHED: usize = 283;
+const INSPECT_MATCHED: usize = 285;
 
 /// The inspect scenario: another player's gear and talents.
 #[test]
@@ -1440,7 +1440,7 @@ fn the_engine_plays_inspect_as_the_client_did() {
 
 /// How many of the talents scenario's lines the engine plays as the client
 /// did: only ever up.
-const TALENTS_MATCHED: usize = 861;
+const TALENTS_MATCHED: usize = 875;
 
 /// The talents scenario: a class talent bought and applied; a trainer's
 /// gossip, a fox's attack, a walk, a druid followed and its talents viewed.
@@ -1461,7 +1461,7 @@ fn the_engine_plays_profession_as_the_client_did() {
 
 /// How many of the legacy scenario's lines the engine plays as the client
 /// did: only ever up.
-const LEGACY_MATCHED: usize = 119;
+const LEGACY_MATCHED: usize = 120;
 
 /// The legacy scenario: the legacy system's tree, five ranks bought and
 /// applied.
@@ -1472,7 +1472,7 @@ fn the_engine_plays_legacy_as_the_client_did() {
 
 /// How many of the items scenario's lines the engine plays as the client
 /// did: only ever up.
-const ITEMS_MATCHED: usize = 350;
+const ITEMS_MATCHED: usize = 356;
 
 /// The items scenario: gear worn and taken off by right-click and drag,
 /// a two-handed weapon refused (bags full), food eaten, an item deleted.

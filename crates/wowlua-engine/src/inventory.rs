@@ -663,10 +663,12 @@ fn food(vm: &mut Vm, item: i64) -> bool {
         && matches!(character::item_field(vm, item, "subclassID"), Value::Num(s) if s == 5.0)
 }
 
-/// The action slots holding the item, and for food any food (recorded:
-/// eating a souffle, the jerky's slots changed).
+/// The action slots holding the item, and for food any food of its
+/// cooldown category (recorded: eating a souffle, category 11, the jerky's
+/// slots changed, the spring water's, a drink, not).
 fn action_slots(vm: &mut Vm, id: i64) -> Vec<i64> {
-    let eating = food(vm, id);
+    let category = num(character::item_field(vm, id, "cooldownCategory"));
+    let eating = food(vm, id) && category != 0.0;
     let held: Vec<(i64, i64)> = engine(vm)
         .world
         .character
@@ -678,7 +680,12 @@ fn action_slots(vm: &mut Vm, id: i64) -> Vec<i64> {
         })
         .collect();
     held.into_iter()
-        .filter(|(_, item)| *item == id || (eating && food(vm, *item)))
+        .filter(|(_, item)| {
+            *item == id
+                || (eating
+                    && food(vm, *item)
+                    && num(character::item_field(vm, *item, "cooldownCategory")) == category)
+        })
         .map(|(s, _)| s)
         .collect()
 }

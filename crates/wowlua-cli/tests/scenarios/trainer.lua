@@ -73,7 +73,17 @@ check("the trainer's window", ClassTrainerFrame and ClassTrainerFrame:IsShown())
 local row = ClassTrainerFrame and button(ClassTrainerFrame, "Battle Shout")
 check("Battle Shout listed", row ~= nil)
 at(3.744) if row then press(row) end
+-- Another player's Blessing of Might on the warrior, its attack power a
+-- moment later (the server's, recorded).
+at(4.066) player:applyAura({
+    spellId = 19834, name = "Blessing of Might", icon = 135906, duration = 3600,
+    dispelName = "Magic", auraInstanceID = 65,
+})
 at(4.370) if ClassTrainerTrainButton then press(ClassTrainerTrainButton) end
+at(4.377)
+e.fireEvent("UNIT_DAMAGE", "player")
+e.fireEvent("UNIT_DAMAGE", "player")
+e.fireEvent("UNIT_ATTACK_POWER", "player")
 at(5.0)
 check("chat: Battle Shout learned", chatHas(ChatFrame1, "You have learned a new ability: |cff71d5ff|Hspell:6673:0|h[Battle Shout]|h|r."))
 check("Battle Shout on the bar's third slot", select(2, GetActionInfo(3)) == 6673)

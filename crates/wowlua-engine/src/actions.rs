@@ -260,13 +260,18 @@ fn usability(vm: &mut Vm, a: &Action) -> (bool, bool) {
     // recorded: usable on a member nearby). With no target, the soft
     // friend decides (probed: unusable with a friendly NPC soft targeted;
     // recorded, `profession`, on the road); with neither, usable (probed
-    // in the open world, away from anyone).
+    // in the open world, away from anyone). A player soft friend while not
+    // grouped is (recorded, `group`: usable with the druid soft targeted,
+    // unusable once the party formed without it; unverified: a player
+    // targeted).
     if a.kind == "spell" && has_trait(vm, a.id, "partyOrSelf") {
+        let grouped = crate::party::grouped(vm);
         let e = engine(vm);
         let u = &e.units;
         let ok = match u.target.or(u.soft[1]) {
             None => true,
             Some(crate::units::PLAYER) => true,
+            Some(t) if u.target.is_none() && !grouped && u.list[t.0].player => true,
             Some(t) => {
                 let m = &u.list[t.0];
                 let here = &e.world.character.position.zone;

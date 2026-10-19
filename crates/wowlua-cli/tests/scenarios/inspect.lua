@@ -74,9 +74,14 @@ at(5.192) press(menuEntry("Inspect"))
 at(6.0)
 check("the inspect frame shown", InspectFrame and InspectFrame:IsShown())
 check("its gloves shown", GetInventoryItemLink("target", 10) ~= nil)
+-- The world's own, not modelled: a tooltip's data update as the mouse
+-- passed over the world (recorded).
+at(9.305) e.fireEvent("TOOLTIP_DATA_UPDATE", 123)
 -- Its talents from the menu.
 at(9.742) press(TargetFrame, "RightButton")
 at(10.581) press(menuEntry("View Talents"))
 at(11.5)
 check("its talents shown", PlayerSpellsFrame and PlayerSpellsFrame:IsShown())
-at(12.0)
+-- The world's ENCHANT_SPELL_COMPLETED, its cause unknown (recorded).
+at(12.901) e.fireEvent("ENCHANT_SPELL_COMPLETED", false, nil)
+at(13.0)
