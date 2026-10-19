@@ -46,8 +46,9 @@ export interface MockUnit
     function raiseSkill(name: string, rank: number)
     --- `kill`: the swing kills (`PARTY_KILL`, the death, the experience's
     --- message, its update a round trip later; `loot`: the corpse's items;
-    --- `echo`: the target's clearing told back after these seconds).
-    function swing(victim: MockUnit, amount: number, opts: { kind?: string, power?: number, victimPower?: number, speed?: number, textAfter?: number, combat?: boolean, indicator?: string, kill?: { xp?: number, loot?: table, echo?: number | boolean } }?)
+    --- `echo`: the target's clearing told back after these seconds;
+    --- `xpAfter`: the experience's update after these seconds).
+    function swing(victim: MockUnit, amount: number, opts: { kind?: string, power?: number, victimPower?: number, speed?: number, textAfter?: number, combat?: boolean, indicator?: string, kill?: { xp?: number, loot?: table, echo?: number | boolean, xpAfter?: number } }?)
     --- The player talks to an NPC: a round trip later its quest dialog
     --- opens (`QUEST_DETAIL` for a quest it offers, `QUEST_PROGRESS` for
     --- one in the log); too far (`setDistance` above 5 yards): the

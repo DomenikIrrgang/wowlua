@@ -1933,6 +1933,9 @@ pub(crate) struct Kill {
     /// The killing blow's damage (else the health left) and school.
     pub amount: Option<f64>,
     pub school: f64,
+    /// The experience's update this long after the kill (`xpAfter`, as
+    /// recorded; else as the kill's kind has it).
+    pub xp_after: Option<f64>,
 }
 
 impl Kill {
@@ -1945,6 +1948,7 @@ impl Kill {
                 loot: Vec::new(),
                 amount: None,
                 school: 1.0,
+                xp_after: None,
             });
         };
         let field = |vm: &mut Vm, k: &str| {
@@ -1992,7 +1996,12 @@ impl Kill {
         };
         let echo = field(vm, "echo");
         set_echo(vm, echo);
+        let xp_after = match field(vm, "xpAfter") {
+            Value::Num(n) => Some(n),
+            _ => None,
+        };
         Ok(Kill {
+            xp_after,
             by,
             lootable,
             xp,
@@ -2414,7 +2423,7 @@ fn swing_kill(vm: &mut Vm, me: UnitId, victim: UnitId, k: Kill, power: Value) ->
     }
     if let Some(xp) = k.xp {
         let later = vm.native_with("killXp", kill_xp_later, vec![Value::Num(xp)]);
-        let delay = crate::clock::server_delay(vm);
+        let delay = k.xp_after.unwrap_or_else(|| crate::clock::server_delay(vm));
         crate::clock::after_engine(vm, delay, later);
     }
     Ok(vec![])
@@ -2493,7 +2502,14 @@ fn swing_with_spell(
         set_power_quietly(vm, PLAYER, p);
     }
     if let Some(k) = &kill {
-        kill_xp(vm, victim, k, false);
+        // The experience with the blow, or its recorded delay after.
+        match (k.xp, k.xp_after) {
+            (Some(xp), Some(after)) if after > 0.0 => {
+                let later = vm.native_with("killXp", kill_xp_later, vec![Value::Num(xp)]);
+                crate::clock::after_engine(vm, after, later);
+            }
+            _ => kill_xp(vm, victim, k, false),
+        }
         engine_mut(vm).units.list[victim.0].loot = k.loot.clone();
         died(vm, victim, k.lootable);
     }
