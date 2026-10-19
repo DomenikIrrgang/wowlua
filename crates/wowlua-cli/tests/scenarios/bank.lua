@@ -117,3 +117,7 @@ at(69.0)
 check("the bank closed", not BankFrame:IsShown())
 at(70.269) world("ENCHANT_SPELL_COMPLETED", false, nil)
 at(70.5)
+-- /reload: the session ends (the camera turned meanwhile: its pitch
+-- saved as it was then).
+e.setCVar("cameraSavedPitch", "27.375853")
+at(70.525) ReloadUI()

@@ -617,3 +617,7 @@ at(30.5)
 check("the auction house closed", not AuctionHouseFrame:IsShown())
 at(37.332) world("UPDATE_EXHAUSTION") player:wear()
 at(39.8)
+-- /reload: the session ends (the camera turned meanwhile: its pitch
+-- saved as it was then).
+e.setCVar("cameraSavedPitch", "34.575909")
+at(39.883) ReloadUI()

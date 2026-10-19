@@ -363,6 +363,15 @@ fn set_cvar(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(true)])
 }
 
+/// `setCVar(name, value)`: a CVar the client changed without telling (the
+/// camera's pitch as it turned): no `CVAR_UPDATE`.
+pub(crate) fn control_set_cvar(vm: &mut Vm, c: NativeCall) -> Ret {
+    let name = string_arg(vm, &c, 1)?;
+    let text = value_text(vm, c.arg(2));
+    cvar_set(vm, &name, text);
+    Ok(vec![])
+}
+
 // ---------------------------------------------------------------- others
 
 /// `C_Texture.GetAtlasInfo(atlas)`: a stand-in (64 x 64, whole texture).
@@ -514,6 +523,7 @@ pub fn functions() -> Vec<(&'static str, NativeFn)> {
         ("ConsoleGetAllCommands", console_get_all_commands),
         ("C_CVar.RegisterCVar", register_cvar),
         ("C_CVar.SetCVar", set_cvar),
+        ("C_UI.Reload", crate::login::reload_ui),
         ("C_Texture.GetAtlasInfo", atlas_info),
         ("C_Texture.GetAtlasExists", truthy),
         ("C_InputInterfaceStyle.GetCurrentStyle", zero),

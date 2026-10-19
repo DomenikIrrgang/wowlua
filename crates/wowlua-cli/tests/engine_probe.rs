@@ -1135,6 +1135,11 @@ fn scenario_line(line: &str) -> Option<String> {
     static ITEM: Pattern = Pattern::new(|| regex::Regex::new(r"Item-\d+-0-[0-9A-F]{16}").unwrap());
     let item = &*ITEM;
     let body = item.replace_all(&body, "Item-<id>");
+    // A value's address, the session's (the ingest drops the client's).
+    static ADDRESS: Pattern = Pattern::new(|| {
+        regex::Regex::new(r"(function|table|userdata|thread): 0x[0-9a-f]+").unwrap()
+    });
+    let body = ADDRESS.replace_all(&body, "$1");
     let body = line.replace(&body, "${1}<line>${2}").into_owned();
     // An answer's trailing nils dropped (the first recordings' recorder
     // lost them).
@@ -1276,7 +1281,7 @@ fn the_engine_plays_mail_as_the_client_did() {
 
 /// How many of the bank scenario's lines the engine plays as the client
 /// did: only ever up.
-const BANK_MATCHED: usize = 537;
+const BANK_MATCHED: usize = 553;
 
 /// The bank scenario: items moved in and out, a tab bought.
 #[test]
@@ -1286,7 +1291,7 @@ fn the_engine_plays_bank_as_the_client_did() {
 
 /// How many of the auction scenario's lines the engine plays as the
 /// client did: only ever up.
-const AUCTION_MATCHED: usize = 289;
+const AUCTION_MATCHED: usize = 349;
 
 /// The auction scenario: browsing, buying a commodity, posting an item.
 #[test]

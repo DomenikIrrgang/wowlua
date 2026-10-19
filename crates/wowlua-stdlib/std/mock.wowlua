@@ -844,6 +844,12 @@ export function gameError(name: string)
     engine().gameError(name)
 end
 
+--- A CVar the client changed without telling (the camera's pitch as it
+--- turned): no `CVAR_UPDATE`.
+export function setCVar(name: string, value: string)
+    engine().setCVar(name, value)
+end
+
 --- A level: `{ xpMax, health, power, talents, pvpTalentSlots, strength,
 --- agility, stamina, intellect, spirit }`. Experience past the current
 --- level's end gains it (`PLAYER_LEVEL_UP`, a round trip later

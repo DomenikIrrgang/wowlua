@@ -2325,6 +2325,24 @@ fn control_hide_nameplate(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// Every nameplate removed (`NAME_PLATE_UNIT_REMOVED` each: leaving the
+/// world).
+pub(crate) fn remove_nameplates(vm: &mut Vm) {
+    let shown: Vec<usize> = engine(vm)
+        .units
+        .nameplates
+        .iter()
+        .enumerate()
+        .filter(|(_, n)| n.is_some())
+        .map(|(i, _)| i)
+        .collect();
+    for i in shown {
+        let token = vm.str(&format!("nameplate{}", i + 1));
+        fire(vm, "NAME_PLATE_UNIT_REMOVED", &[token]);
+        engine_mut(vm).units.nameplates[i] = None;
+    }
+}
+
 fn control_despawn(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
     control_hide_nameplate(vm, c)?;

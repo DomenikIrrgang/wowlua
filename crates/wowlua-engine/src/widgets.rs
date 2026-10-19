@@ -141,6 +141,8 @@ pub struct World {
     pub hidden_group_buffs: Vec<f64>,
     /// The player rests (an inn, a city: `setResting`).
     pub resting: bool,
+    /// The session ended (`ReloadUI`, logging out).
+    pub logged_out: bool,
     /// A loading screen up, the world not entered yet: no map.
     pub loading_screen: bool,
     /// A loading screen's inventory, not loaded yet.

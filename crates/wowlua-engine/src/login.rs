@@ -9,10 +9,19 @@
 //! but no timer or OnUpdate runs; then an overdue timer fires once
 //! (recorded). A /reload loads within one frame (`data/camelot-reload.txt`).
 //!
+//! `ReloadUI()` (`C_UI.Reload`) ends the session as the client did before a /reload
+//! (`/stdtest engine scenario auction`, `bank`: the recordings' end): the
+//! loading screen, the target cleared, the windows' closes, the soft
+//! interaction let go, leaving the world, the addons unloading, logging
+//! out, the nameplates removed, the camera's pitch saved
+//! (`cameraSavedPitch`), the gamepads' configs.
+//!
 //! Unverified: the inventory's load, one block per item (the recording's
-//! character loaded 51 blocks for 35 items).
+//! character loaded 51 blocks for 35 items); the soft friend's change with
+//! no soft friend (recorded both times with an NPC to interact with).
 
-use wowlua_vm::{Value, Vm};
+use wowlua_vm::stdlib::Ret;
+use wowlua_vm::{NativeCall, Value, Vm};
 
 use crate::{engine, engine_mut, framescript, widgets};
 
@@ -227,4 +236,51 @@ pub fn login(vm: &mut Vm, addon: &str, has_bindings: bool, reload: bool) {
         }
         fire(vm, event, &values);
     }
+}
+
+/// `C_UI.Reload()` (`ReloadUI`, `/reload`): the session ends (the
+/// module's doc); nothing runs the next one.
+pub fn reload_ui(vm: &mut Vm, _c: NativeCall) -> Ret {
+    if engine(vm).world.logged_out {
+        return Ok(vec![]);
+    }
+    fire(vm, "LOADING_SCREEN_ENABLED", &[]);
+    if engine(vm).units.target.is_some() {
+        engine_mut(vm).units.target = None;
+        engine_mut(vm).units.list[crate::units::PLAYER.0].target = None;
+        fire(vm, "PLAYER_TARGET_CHANGED", &[]);
+    }
+    for e in [
+        "SECURE_TRANSFER_CANCEL",
+        "TAXIMAP_CLOSED",
+        "SECURE_TRANSFER_CANCEL",
+        "TRADE_SKILL_CLOSE",
+        "SOCKET_INFO_CLOSE",
+        "ARTIFACT_CLOSE",
+        "NAVIGATION_FRAME_DESTROYED",
+    ] {
+        fire(vm, e, &[]);
+    }
+    let soft = engine(vm).units.soft;
+    if let Some(interact) = soft[2] {
+        engine_mut(vm).units.soft[2] = None;
+        let guid = engine(vm).units.list[interact.0].guid.clone();
+        let g = vm.str(&guid);
+        fire(vm, "PLAYER_SOFT_INTERACT_CHANGED", &[g, Value::Nil]);
+    }
+    if soft[1].is_some() || soft[2].is_some() {
+        engine_mut(vm).units.soft[1] = None;
+        fire(vm, "PLAYER_SOFT_FRIEND_CHANGED", &[]);
+    }
+    fire(vm, "INSTANCE_LOCK_STOP", &[]);
+    fire(vm, "PLAYER_LEAVING_WORLD", &[]);
+    fire(vm, "ADDONS_UNLOADING", &[Value::Bool(false)]);
+    fire(vm, "PLAYER_LOGOUT", &[]);
+    crate::units::remove_nameplates(vm);
+    let pitch = framescript::cvar_get(vm, "cameraSavedPitch").unwrap_or_default();
+    let (k, v) = (vm.str("cameraSavedPitch"), vm.str(&pitch));
+    fire(vm, "CVAR_UPDATE", &[k, v]);
+    fire(vm, "GAME_PAD_CONFIGS_CHANGED", &[]);
+    engine_mut(vm).world.logged_out = true;
+    Ok(vec![])
 }
