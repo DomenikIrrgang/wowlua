@@ -324,9 +324,11 @@ fn get_cvar_info(vm: &mut Vm, c: NativeCall) -> Ret {
     ])
 }
 
-/// `SetCVar(name, value)`: a secure CVar is refused to addons
+/// `SetCVar(name, value)`: a secure CVar is refused to addons in combat
 /// (`ADDON_ACTION_FORBIDDEN`, recorded for `SoftTargetEnemy` set from
-/// `/run`), a read-only one not changed (unverified: its result), one the
+/// `/run`; out of combat allowed, the user's word: SuuUI sets the
+/// nameplates' secure CVars then without a refusal), a read-only one not
+/// changed (unverified: its result), one the
 /// client does not have neither (recorded: Blizzard's talents frame sets
 /// `heroTalentsCollapse`, which camelot lacks, and no `CVAR_UPDATE` comes;
 /// unverified: the result).
@@ -347,7 +349,7 @@ fn set_cvar(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![]);
     }
     let (_, secure, read_only) = cvar_flags(vm, &name);
-    if secure && crate::protection::tainted(vm) {
+    if secure && engine(vm).units.lockdown && crate::protection::tainted(vm) {
         let action = crate::protection::action_name(vm);
         crate::protection::refuse(vm, "ADDON_ACTION_FORBIDDEN", action);
         return Ok(vec![]);

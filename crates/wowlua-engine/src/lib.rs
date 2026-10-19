@@ -26,6 +26,7 @@ pub mod death;
 pub mod editmode;
 pub mod encounters;
 pub mod facts;
+pub mod formatters;
 pub mod framescript;
 pub mod gamedata;
 pub mod gossip;
@@ -224,6 +225,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .chain(units::behaviours())
             .chain(units::more_behaviours())
             .chain(curves::behaviours())
+            .chain(formatters::behaviours())
             .chain(widgets::functions())
             .chain(auras::behaviours())
             .chain(gamedata::behaviours())
@@ -274,6 +276,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         methods: widgets::behaviours()
             .into_iter()
             .chain(curves::methods())
+            .chain(formatters::methods())
             .chain(framescript::methods())
             .chain(animations::methods())
             .chain(tooltip::methods())

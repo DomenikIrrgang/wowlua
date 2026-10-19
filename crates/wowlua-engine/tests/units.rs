@@ -288,25 +288,30 @@ return table.concat(seen, ' | ')",
     );
 }
 
-/// A secure CVar is refused to addons (`ADDON_ACTION_FORBIDDEN`, recorded
-/// for `SoftTargetEnemy`); others change, and `GetCVarInfo` gives the flags.
+/// A secure CVar is refused to addons in combat (`ADDON_ACTION_FORBIDDEN`,
+/// recorded for `SoftTargetEnemy`), changed out of combat (the user's
+/// word); others change, and `GetCVarInfo` gives the flags.
 #[test]
 fn secure_cvars_refuse_addons() {
     let mut vm = vm();
     let r = run(
         &mut vm,
-        "local refused = C_CVar.SetCVar('SoftTargetEnemy', 3)
+        "C_CVar.SetCVar('SoftTargetEnemy', 3)
+local outside = C_CVar.GetCVar('SoftTargetEnemy')
+mock.player:enterCombat()
+local refused = C_CVar.SetCVar('SoftTargetEnemy', 1)
 local soft = C_CVar.GetCVar('SoftTargetEnemy')
 C_CVar.SetCVar('autoLootDefault', 1)
 local r = mock.refusals()
 local _, default, _, _, _, secure, readOnly = C_CVar.GetCVarInfo('SoftTargetEnemy')
-return tostring(refused), soft, C_CVar.GetCVar('autoLootDefault'), #r, r[1].event, r[1].addon, default, tostring(secure), tostring(readOnly)",
+return outside, tostring(refused), soft, C_CVar.GetCVar('autoLootDefault'), #r, r[1].event, r[1].addon, default, tostring(secure), tostring(readOnly)",
     );
     assert_eq!(
         r,
         [
+            "3",
             "nil",
-            "1",
+            "3",
             "1",
             "1",
             "ADDON_ACTION_FORBIDDEN",
