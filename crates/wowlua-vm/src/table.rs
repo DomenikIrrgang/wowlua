@@ -210,8 +210,23 @@ impl Table {
     }
 
     pub fn get_str_slot(&self, s: crate::heap::StrRef) -> Slot {
-        self.find_node(Value::Str(s))
-            .map_or(Slot::NIL, |i| self.nodes[i].val)
+        self.find_str(s).map_or(Slot::NIL, |i| self.nodes[i].val)
+    }
+
+    /// [`find_node`](Self::find_node) for a string key: the same chain from
+    /// its main position, compared as strings only.
+    fn find_str(&self, s: crate::heap::StrRef) -> Option<usize> {
+        if self.nodes.is_empty() {
+            return None;
+        }
+        let mut n = (s.hash as usize) & (self.nodes.len() - 1);
+        loop {
+            let node = &self.nodes[n];
+            if matches!(node.key, Value::Str(k) if k == s) {
+                return Some(n);
+            }
+            n = node.next? as usize;
+        }
     }
 
     pub fn get(&self, key: Value) -> Value {

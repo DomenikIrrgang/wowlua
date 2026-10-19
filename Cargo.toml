@@ -54,6 +54,7 @@ quick-xml = "0.42"
 regex = "1.13"
 rpassword = "7.5"
 rustc-hash = "2.1"
+smallvec = "1.16"
 schemars = { version = "1.2", features = ["indexmap2"] }
 semver = { version = "1.0", features = ["serde"] }
 serde = { version = "1.0", features = ["derive"] }
