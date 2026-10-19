@@ -789,7 +789,7 @@ pub fn load_defined(vm: &mut Vm, name: &str) -> Option<bool> {
         // Its files' errors reach the error handler, as the client's do
         // (those the client drops stay the engine's alone).
         let before = engine(vm).world.ui.errors.len();
-        crate::ui::load_user_addon(vm, &dir, &toc, &real, table, &Default::default());
+        crate::ui::load_other_user_addon(vm, &dir, &toc, &real, table);
         let (dropped, errors): (Vec<String>, Vec<String>) = engine_mut(vm)
             .world
             .ui

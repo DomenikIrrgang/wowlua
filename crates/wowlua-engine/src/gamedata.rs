@@ -343,19 +343,38 @@ spell_fields!(
 
 /// `GetSpellCooldown`: the spell's `cooldown`, or none running.
 fn get_spell_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
-    let Some((_, s)) = spell(vm, &c) else {
+    let Some((id, s)) = spell(vm, &c) else {
         return Ok(vec![]);
     };
     if let Value::Table(cd) = field(vm, s, "cooldown") {
         return Ok(vec![Value::Table(cd)]);
     }
+    // One a use began (the data's `cooldown` seconds, as the spell's
+    // `C_Spell.GetSpellCooldownDuration` has it): running since the use,
+    // active (the documentation's fields; unverified: `isOnGCD` false).
+    let now = crate::clock::now(vm);
+    let running = match field(vm, s, "cooldown") {
+        Value::Num(cd) => engine(vm)
+            .units
+            .casting
+            .ready_at
+            .get(&id)
+            .copied()
+            .filter(|at| *at > now)
+            .map(|at| (at - cd, cd)),
+        _ => None,
+    };
+    let (start, length) = running.unwrap_or((0.0, 0.0));
     let t = vm.new_table();
+    if running.is_some() {
+        set(vm, t, "isOnGCD", Value::Bool(false));
+    }
     for (k, v) in [
-        ("startTime", Value::Num(0.0)),
-        ("duration", Value::Num(0.0)),
+        ("startTime", Value::Num(start)),
+        ("duration", Value::Num(length)),
         ("modRate", Value::Num(1.0)),
         ("isEnabled", Value::Bool(true)),
-        ("isActive", Value::Bool(false)),
+        ("isActive", Value::Bool(running.is_some())),
     ] {
         set(vm, t, k, v);
     }

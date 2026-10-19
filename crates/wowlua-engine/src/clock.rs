@@ -37,6 +37,7 @@ pub struct Timers {
     /// list keeps every timer for its handle).
     pub active: Vec<usize>,
     handle_meta: Option<TableRef>,
+    handle_methods: Option<TableRef>,
     /// While due timers run (`advance`): the time they run up to.
     advancing: Option<f64>,
     /// The last frame's seconds (`GetTickTime`), none before the first.
@@ -75,18 +76,74 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         let key = vm.heap.intern(name.as_bytes());
         vm.heap.table_mut(methods).set_str(key, native);
     }
+    crate::widgets::keep(vm, Value::Table(methods));
+    engine_mut(vm).timers.handle_methods = Some(methods);
     // Handles are userdata whose metatable is hidden (`/stdtest engine`:
     // no methods table to read; that `__metatable` is false is unverified).
+    // A handle keeps the fields written to it: warcraft.wiki.gg's
+    // `API_C_Timer.NewTimer` ("user-defined fields written to handles can
+    // be used to supply additional data"; patch 10.0.0), and Details!'s
+    // Forever build stores its ticker's callback on the handle at login
+    // (unverified by a probe).
     let meta = vm.new_table();
-    let index = vm.heap.intern(b"__index");
-    vm.heap
-        .table_mut(meta)
-        .set_str(index, Value::Table(methods));
+    for (name, f) in [
+        ("__index", handle_index as wowlua_vm::NativeFn),
+        ("__newindex", handle_newindex),
+    ] {
+        let native = vm.native(name, f);
+        let key = vm.heap.intern(name.as_bytes());
+        vm.heap.table_mut(meta).set_str(key, native);
+    }
     let hidden = vm.heap.intern(b"__metatable");
     vm.heap.table_mut(meta).set_str(hidden, Value::Bool(false));
     crate::widgets::keep(vm, Value::Table(meta));
     engine_mut(vm).timers.handle_meta = Some(meta);
     meta
+}
+
+/// A handle's own fields (made on the first write), in its slot.
+fn handle_fields(vm: &mut Vm, id: TimerId, make: bool) -> Option<TableRef> {
+    let slot = engine(vm).timers.list[id.0].slot;
+    match vm.heap.table(slot).get(Value::Num(3.0)) {
+        Value::Table(t) => Some(t),
+        _ if make => {
+            let t = vm.new_table();
+            let _ = vm
+                .heap
+                .table_mut(slot)
+                .set(Value::Num(3.0), Value::Table(t));
+            Some(t)
+        }
+        _ => None,
+    }
+}
+
+/// `handle[key]`: a method, else a field written to it.
+fn handle_index(vm: &mut Vm, c: NativeCall) -> Ret {
+    let key = c.arg(2);
+    if let Some(methods) = engine(vm).timers.handle_methods {
+        let m = vm.heap.table(methods).get(key);
+        if !m.is_nil() {
+            return Ok(vec![m]);
+        }
+    }
+    let v = match timer_of(vm, c.arg(1)).and_then(|id| handle_fields(vm, id, false)) {
+        Some(t) => vm.heap.table(t).get(key),
+        None => Value::Nil,
+    };
+    Ok(vec![v])
+}
+
+/// `handle[key] = value`: kept on the handle.
+fn handle_newindex(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some(t) = timer_of(vm, c.arg(1)).and_then(|id| handle_fields(vm, id, true)) {
+        let (k, v) = (c.arg(2), c.arg(3));
+        if k.is_nil() {
+            return Err(vm.error("table index is nil"));
+        }
+        let _ = vm.heap.table_mut(t).set(k, v);
+    }
+    Ok(vec![])
 }
 
 fn timer_of(vm: &Vm, v: Value) -> Option<TimerId> {

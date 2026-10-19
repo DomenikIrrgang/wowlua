@@ -8,6 +8,9 @@
 -- it); each hit's combat text after its recorded delay (`textAfter`). The
 -- worn items' durability as the quest scenario left it.
 local e = __engine
+-- The damage meter's sessions numbered on from the client's before the
+-- recording (its first: 11).
+e.setDamageMeterSession(11)
 -- As in the client's frames, some events wait for the frame's end, each
 -- once, in their names' order (`setFrameBatching`).
 e.setFrameBatching(true)

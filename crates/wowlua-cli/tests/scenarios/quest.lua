@@ -14,6 +14,9 @@
 -- first); each kill's experience after its recorded delay (`xpAfter`).
 -- Other players' kills nearby: their deaths only.
 local e = __engine
+-- The damage meter's sessions numbered on from the client's before the
+-- recording (its first: 4).
+e.setDamageMeterSession(4)
 -- As in the client's frames, some events wait for the frame's end, each
 -- once, in their names' order (`setFrameBatching`).
 e.setFrameBatching(true)

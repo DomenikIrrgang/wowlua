@@ -8,6 +8,9 @@
 -- recorded times, its bags' and new item's data too (`slotsAfter`,
 -- `bagsAfter`, `dataAfter`).
 local e = __engine
+-- The damage meter's sessions numbered on from the client's before the
+-- recording (its first: 3).
+e.setDamageMeterSession(3)
 -- As in the client's frames, some events wait for the frame's end, each
 -- once, in their names' order (`setFrameBatching`).
 e.setFrameBatching(true)

@@ -107,6 +107,8 @@ pub struct Engine {
     pub timers: clock::Timers,
     /// The events owed at the frame's end (`batch`).
     pub batch: batch::Batch,
+    /// The damage meter's sessions (`damagemeter`).
+    pub damage_meter: damagemeter::DamageMeter,
     pub units: units::Units,
     /// The action bar page (`conditionals`).
     pub bars: conditionals::Bars,
@@ -338,6 +340,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         world: widgets::World::default(),
         timers: clock::Timers::default(),
         batch: batch::Batch::default(),
+        damage_meter: Default::default(),
         units: units::Units::default(),
         bars: Default::default(),
         refusals: Vec::new(),

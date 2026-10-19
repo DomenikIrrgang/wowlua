@@ -7,6 +7,9 @@
 -- Earth Shock's range checks (SPELL_RANGE_CHECK_UPDATE: the cooldown
 -- viewer's) are the recorded events: the engine checks no range.
 local e = __engine
+-- The damage meter's sessions numbered on from the client's before the
+-- recording (its first: 4).
+e.setDamageMeterSession(4)
 local player = e.player
 -- The shaman's hidden group buffs (HIDDEN_GROUP_BUFFS_CHANGED, recorded).
 e.setHiddenGroupBuffs({ 8185, 10613, 10478, 10534, 10441, 15036, 10609, 8836, 15111, 8249, 1239242, 10491, 17354, 8076, 8162, 15107, 10537, 16176, 8160, 10535, 15112, 8184, 8163, 10538, 10614, 16191, 17355, 5677, 10526, 8835, 17360, 10494, 8515, 8182, 10497, 15109, 10496, 8512, 16190, 10493, 8181, 10626, 8230, 10479, 1239243, 25362, 10495, 8227, 15108, 15110, 408521, 1325257, 10627, 10477, 17359, 16387, 8075, 1325256, 10521, 25360, 10442, 25361, 10476, 5678, 10612, 8161, 25359, 8250 })

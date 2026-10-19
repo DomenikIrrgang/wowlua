@@ -1087,6 +1087,13 @@ function note(...) local t = {} for i = 1, select('#', ...) do t[i] = tostring((
         )
         .expect("writes");
     }
+    let meter = |log: &[String]| -> Vec<String> {
+        log.iter()
+            .filter(|l| l.contains(" DAMAGE_METER_"))
+            .cloned()
+            .collect()
+    };
+    METER_LINES.with(|m| *m.borrow_mut() = (meter(&ours), meter(&theirs)));
     let compared = |log: &[String]| -> Vec<String> { scenario_lines(log) };
     let theirs = compared(&theirs);
     let ours = asked_as_recorded(compared(&ours), &theirs);
@@ -1611,6 +1618,44 @@ const BAGS_MATCHED: usize = 1253;
 #[test]
 fn the_engine_plays_bags_as_the_client_did() {
     plays_as_the_client_did("bags", BAGS_MATCHED);
+}
+
+thread_local! {
+    /// The last scenario played's damage meter events, with their times:
+    /// the engine's and the client's (left out of the compared lines).
+    static METER_LINES: std::cell::RefCell<(Vec<String>, Vec<String>)> =
+        const { std::cell::RefCell::new((Vec::new(), Vec::new())) };
+}
+
+/// How many of the fights' damage meter events (with their times) the
+/// engine tells as the client did: only ever up.
+const DAMAGE_METER_MATCHED: usize = 557;
+
+/// The damage meter's updates in every recorded fight (`combat`, `quest`,
+/// `death`, `auradeath`, `talents`): each blow's, each session's begin,
+/// at the client's times.
+#[test]
+fn the_engine_tells_the_damage_meter_as_the_client_did() {
+    let mut matched = 0;
+    for name in ["combat", "quest", "death", "auradeath", "talents"] {
+        if play_scenario(name).is_none() {
+            eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+            return;
+        }
+        let (ours, theirs) = METER_LINES.with(|m| m.borrow().clone());
+        let (n, only_ours, only_theirs) = align(&ours, &theirs);
+        eprintln!(
+            "{name}: {n} of {} damage meter events\nonly the client's:\n{}\nonly the engine's:\n{}",
+            theirs.len(),
+            only_theirs.join("\n"),
+            only_ours.join("\n")
+        );
+        matched += n;
+    }
+    assert!(
+        matched >= DAMAGE_METER_MATCHED,
+        "{matched} damage meter events as the client's (was {DAMAGE_METER_MATCHED})"
+    );
 }
 
 /// How many of the questlog scenario's lines the engine plays as the

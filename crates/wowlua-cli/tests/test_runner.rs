@@ -960,10 +960,11 @@ mock.module(clock, { now = function(): string return "x" end, later = 1 })
 /// its name, its own addon table, its SavedVariables and its
 /// `ADDON_LOADED` (the addon's last); an addon's dependencies first; the
 /// flavor's TOC; a load-on-demand one with `C_AddOns.LoadAddOn`; one for
-/// another game left out. The addon itself is known as its TOC says.
+/// another game left out. The addon itself is known as its TOC says. Their
+/// files are named as the client names them (`Interface/AddOns/<Name>/`).
 #[test]
 fn other_addons() {
-    const RECORD: &str = "local name, ns = ...\nns.who = name\nOrder = Order or {}\ntable.insert(Order, name)\nNS = NS or {}\nNS[name] = ns\n";
+    const RECORD: &str = "local name, ns = ...\nns.who = name\nOrder = Order or {}\ntable.insert(Order, name)\nNS = NS or {}\nNS[name] = ns\nStacks = Stacks or {}\nStacks[name] = debugstack(1, 1, 0)\n";
     let dir = project(
         r#""standard": {}"#,
         &[
@@ -1035,6 +1036,8 @@ local function each()
     expect(told).toEqual({ "Base", "Child", "Demo", "Lazy" })
     expect(G.NS.Lazy.who).toBe("Lazy")
     expect(C_AddOns.IsAddOnLoaded("Lazy")).toBe(true)
+    expect(string.find(G.Stacks.Base, "[Interface/AddOns/Base/base.lua]:", 1, true)).toBe(1)
+    expect(string.find(G.Stacks.Lazy, "[Interface/AddOns/Lazy/lazy.lua]:", 1, true)).toBe(1)
 end
 
 @test("their SavedVariables survive a reload")

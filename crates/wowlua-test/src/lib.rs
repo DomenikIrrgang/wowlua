@@ -487,14 +487,7 @@ fn load_other_addon(vm: &mut Vm, addon: &wowlua_engine::ui::UserAddon) -> Result
     for dep in &addon.deps {
         wowlua_engine::ui::load_addon(vm, dep);
     }
-    wowlua_engine::ui::load_user_addon(
-        vm,
-        &addon.dir,
-        &addon.toc,
-        &addon.name,
-        table,
-        &HashSet::new(),
-    );
+    wowlua_engine::ui::load_other_user_addon(vm, &addon.dir, &addon.toc, &addon.name, table);
     Ok(())
 }
 

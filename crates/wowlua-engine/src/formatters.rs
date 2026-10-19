@@ -472,8 +472,11 @@ fn reset_breakpoints(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 
 /// A `NumberAbbreviationBreakpoint` copied and checked (the predicate
 /// `RequiresValidAbbreviationBreakpoints`, its errors after
-/// `Enum.AbbreviationDataError`; unverified: the message, and "a multiple
-/// of ten" read as the divisors' product).
+/// `Enum.AbbreviationDataError`). Unverified: the message, and "a multiple
+/// of ten" read as each divisor a power of ten, one included: Details!
+/// (its Forever and Midnight build) makes a config at load whose last
+/// breakpoint divides by 1 and 1, and the client's own breakpoints and
+/// ElvUI's divide by powers of ten alone.
 pub(crate) fn abbreviation_copy(vm: &mut Vm, v: Value) -> Result<(TableRef, bool), LuaError> {
     let Value::Table(t) = vm.hidden(v) else {
         return Err(vm.error("a breakpoint table expected"));
@@ -492,14 +495,17 @@ pub(crate) fn abbreviation_copy(vm: &mut Vm, v: Value) -> Result<(TableRef, bool
     let bp = num_field(vm, copy, "breakpoint").unwrap_or(0.0);
     let sig = num_field(vm, copy, "significandDivisor").unwrap_or(0.0);
     let frac = num_field(vm, copy, "fractionDivisor").unwrap_or(0.0);
-    let product = sig * frac;
+    let power_of_ten = |x: f64| {
+        let l = x.log10();
+        l >= -1e-9 && (l - l.round()).abs() < 1e-9
+    };
     let error = if bp <= 0.0 {
         Some("InvalidBreakpoint")
     } else if sig <= 0.0 {
         Some("InvalidSignificandDivisor")
     } else if frac <= 0.0 {
         Some("InvalidFractionDivisor")
-    } else if product % 10.0 != 0.0 {
+    } else if !power_of_ten(sig) || !power_of_ten(frac) {
         Some("NotMultipleOfTen")
     } else {
         None
