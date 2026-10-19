@@ -216,9 +216,6 @@ spies and stubs. `wowlua test --watch` runs again on every change, and
 [Tooling §16.1](../spec/toolchain/tooling.md#161-test-runner-wowlua-test) for
 everything a test can do.
 
-`wowlua test` is newer than release 0.9.0. Until a release includes it, build
-wowlua [from source](install.md#from-source) to use it.
-
 ## Build a release
 
 ```sh

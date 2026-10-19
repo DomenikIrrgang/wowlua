@@ -4,7 +4,9 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ## Unreleased
 
-Work toward M9 on `main`, not in a release yet: wowlua's emulation of the WoW
+## [0.9.1] - 2026-10-20
+
+M9 so far, released before the milestone closes: wowlua's emulation of the WoW
 client, and the test framework that runs on it. The language server, the VS
 Code extension and the milestones after M9 are planned; see the
 [roadmap](spec/roadmap.md).
@@ -24,6 +26,10 @@ Code extension and the milestones after M9 are planned; see the
 - The standard library's tests run in the VM, on the engine
 - `-j, --jobs` (`WOWLUA_JOBS`, `build.jobs`) and `build.jobs-memory`: the worker threads of a build and the memory they may take
 - Lua compile results are kept between runs in the cache (`build.compile-cache`, `build.compile-cache-size`, `WOWLUA_NO_COMPILE_CACHE`)
+- The emulated client answers WoW: Forever's whole native API and its widget methods; answers come from client recordings where there are any, from models of the game's state (bags, mail, quests, auras, the group finder…) and otherwise from Blizzard's documentation (S4)
+- Twenty-four recorded client scenarios replay in the engine (bank, vendor, mail, auction, taxi, talents, professions, quests, combat, death, the group finder, repair, bags, the quest log…), checked line by line against the client (S4)
+- SuuUI, Ellesmere UI and ElvUI run in `wowlua test` with Blizzard's UI as in the client, ElvUI with exactly the client's errors (S4)
+- `/stdtest engine answers` and `/stdtest engine fullprobe` ask the client the engine's open questions; `cargo xtask ingest` turns the answers into the engine's data (S4)
 
 ### Changed
 
@@ -204,6 +210,7 @@ M0, the foundation: an existing Lua addon builds and installs from a
 - `wowlua.lock` with the pinned flavor table
 - Release binaries for macOS, Linux and Windows on GitHub Releases
 
+[0.9.1]: https://github.com/DomenikIrrgang/wowlua/releases/tag/v0.9.1
 [0.9.0]: https://github.com/DomenikIrrgang/wowlua/releases/tag/v0.9.0
 [0.8.2]: https://github.com/DomenikIrrgang/wowlua/releases/tag/v0.8.2
 [0.8.1]: https://github.com/DomenikIrrgang/wowlua/releases/tag/v0.8.1
