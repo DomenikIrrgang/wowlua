@@ -156,7 +156,9 @@ fn ambiguate(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some((name, realm)) = full.split_once('-') else {
         return Ok(vec![vm.str(&full)]);
     };
-    let own = realm.replace([' ', '-'], "").eq_ignore_ascii_case(&player_realm(vm));
+    let own = realm
+        .replace([' ', '-'], "")
+        .eq_ignore_ascii_case(&player_realm(vm));
     let short = match context.as_str() {
         "short" => true,
         "mail" | "craftingorder" => false,
@@ -303,7 +305,11 @@ fn get_guild_faction_group(vm: &mut Vm, _c: NativeCall) -> Ret {
         Some(v) => text(vm, v).unwrap_or_default(),
         None => String::new(),
     };
-    Ok(vec![Value::Num(if faction == "Alliance" { 1.0 } else { 0.0 })])
+    Ok(vec![Value::Num(if faction == "Alliance" {
+        1.0
+    } else {
+        0.0
+    })])
 }
 
 /// `GetGuildCharterCost()`: 10 silver (warcraft.wiki.gg's classic price;
@@ -428,7 +434,10 @@ fn replace_icon_expressions(vm: &mut Vm, c: NativeCall) -> Ret {
             break;
         };
         let word = after[..close].to_ascii_lowercase();
-        match NAMES.iter().position(|names| names.contains(&word.as_str())) {
+        match NAMES
+            .iter()
+            .position(|names| names.contains(&word.as_str()))
+        {
             Some(i) => out.push_str(&format!(
                 "|TInterface\\TargetingFrame\\UI-RaidTargetingIcon_{}:0|t",
                 i + 1
@@ -516,7 +525,11 @@ fn voice_not_logged_in(_vm: &mut Vm, _c: NativeCall) -> Ret {
 /// character rules).
 fn club_validate_text(vm: &mut Vm, c: NativeCall) -> Ret {
     let t = text(vm, c.arg(2)).unwrap_or_default();
-    Ok(vec![Value::Num(if t.trim().is_empty() { 2.0 } else { 0.0 })])
+    Ok(vec![Value::Num(if t.trim().is_empty() {
+        2.0
+    } else {
+        0.0
+    })])
 }
 
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
@@ -536,7 +549,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetGuildCharterCost", get_guild_charter_cost),
         // ------------------------------------------------ Battle.net
         ("BNGetInfo", bn_get_info),
-        ("C_AccountInfo.IsGUIDBattleNetAccountType", is_guid_bnet_account),
+        (
+            "C_AccountInfo.IsGUIDBattleNetAccountType",
+            is_guid_bnet_account,
+        ),
         (
             "C_AccountInfo.IsGUIDRelatedToLocalAccount",
             is_guid_local_account,
@@ -557,7 +573,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_VoiceChat.GetOutputVolume", voice_output_volume),
         ("C_VoiceChat.GetInputVolume", voice_input_volume),
         ("C_VoiceChat.GetVADSensitivity", voice_vad_sensitivity),
-        ("C_VoiceChat.GetMasterVolumeScale", voice_master_volume_scale),
+        (
+            "C_VoiceChat.GetMasterVolumeScale",
+            voice_master_volume_scale,
+        ),
         ("C_VoiceChat.GetCommunicationMode", voice_communication_mode),
         ("C_VoiceChat.SetOutputVolume", set_voice_output_volume),
         ("C_VoiceChat.SetInputVolume", set_voice_input_volume),

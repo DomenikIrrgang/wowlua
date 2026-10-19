@@ -43,7 +43,9 @@ return none, UnitSelectionType('target'), C_PlayerInfo.GetContentDifficultyCreat
     );
     assert_eq!(
         r,
-        ["4", "0", "0", "true", "true", "true", "Hogger", "false", "false"]
+        [
+            "4", "0", "0", "true", "true", "true", "Hogger", "false", "false"
+        ]
     );
 }
 
@@ -60,5 +62,8 @@ return #list, list[1].name, #C_UnitAuras.GetUnitAuras('player', 'HARMFUL'),
     C_UnitAuras.IsAuraFilteredOutByInstanceID('player', id, 'HARMFUL'),
     C_UnitAuras.GetAuraApplicationDisplayCount('player', id)",
     );
-    assert_eq!(r, ["1", "Arcane Intellect", "0", "Arcane Intellect", "true", ""]);
+    assert_eq!(
+        r,
+        ["1", "Arcane Intellect", "0", "Arcane Intellect", "true", ""]
+    );
 }

@@ -93,6 +93,8 @@ fn raid_target_expressions_become_icons() {
     );
     assert_eq!(
         r,
-        ["a |TInterface\\TargetingFrame\\UI-RaidTargetingIcon_8:0|t b |TInterface\\TargetingFrame\\UI-RaidTargetingIcon_1:0|t {g1}"]
+        [
+            "a |TInterface\\TargetingFrame\\UI-RaidTargetingIcon_8:0|t b |TInterface\\TargetingFrame\\UI-RaidTargetingIcon_1:0|t {g1}"
+        ]
     );
 }

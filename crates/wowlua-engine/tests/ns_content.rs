@@ -70,6 +70,8 @@ fn nothing_here_for_addons() {
     );
     assert_eq!(
         r,
-        ["false", "0", "0", "none", "0", "nil", "nil", "301000", "table", "0"]
+        [
+            "false", "0", "0", "none", "0", "nil", "nil", "301000", "table", "0"
+        ]
     );
 }

@@ -91,7 +91,10 @@ fn realm_text(vm: &Vm, id: UnitId) -> String {
     if same_realm(vm, id) {
         return String::new();
     }
-    engine(vm).units.list[id.0].realm.clone().unwrap_or_default()
+    engine(vm).units.list[id.0]
+        .realm
+        .clone()
+        .unwrap_or_default()
 }
 
 /// A documented structure's empty value (its fields' defaults).
@@ -104,10 +107,7 @@ fn structure_default(vm: &mut Vm, ty: &str) -> Value {
 fn list_of(vm: &mut Vm, values: &[Value]) -> Value {
     let t = vm.new_table();
     for (i, v) in values.iter().enumerate() {
-        let _ = vm
-            .heap
-            .table_mut(t)
-            .set(Value::Num(i as f64 + 1.0), *v);
+        let _ = vm.heap.table_mut(t).set(Value::Num(i as f64 + 1.0), *v);
     }
     Value::Table(t)
 }
@@ -293,10 +293,9 @@ fn trivial_range(level: f64) -> f64 {
 /// [`trivial_range`] (Blizzard's `DifficultyUtil`: green while the level
 /// difference is within it).
 fn unit_quest_trivial_level_range(vm: &mut Vm, c: NativeCall) -> Ret {
-    let level = units::unit_arg(vm, &c, 1)
-        .map_or(engine(vm).units.list[PLAYER.0].level, |id| {
-            engine(vm).units.list[id.0].level
-        });
+    let level = units::unit_arg(vm, &c, 1).map_or(engine(vm).units.list[PLAYER.0].level, |id| {
+        engine(vm).units.list[id.0].level
+    });
     Ok(vec![Value::Num(trivial_range(level))])
 }
 
@@ -697,7 +696,9 @@ fn player_info_get_race(vm: &mut Vm, c: NativeCall) -> Ret {
     };
     let race = engine(vm).units.list[id.0].race.clone();
     Ok(vec![
-        units::race_file_and_id(&race).1.map_or(Value::Nil, Value::Num),
+        units::race_file_and_id(&race)
+            .1
+            .map_or(Value::Nil, Value::Num),
     ])
 }
 
@@ -718,9 +719,9 @@ fn player_info_is_connected(vm: &mut Vm, c: NativeCall) -> Ret {
     } else {
         located(vm, c.arg(1))
     };
-    Ok(vec![
-        id.map_or(Value::Nil, |id| Value::Bool(engine(vm).units.list[id.0].online)),
-    ])
+    Ok(vec![id.map_or(Value::Nil, |id| {
+        Value::Bool(engine(vm).units.list[id.0].online)
+    })])
 }
 
 /// `C_PlayerInfo.UnitIsSameServer(playerLocation)`.
@@ -760,7 +761,11 @@ fn get_player_character_data(vm: &mut Vm, _c: NativeCall) -> Ret {
 /// `C_PlayerInfo.GetGlidingInfo()`: not gliding, cannot, speed 0 (no
 /// skyriding on WoW Forever).
 fn get_gliding_info(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(false), Value::Bool(false), Value::Num(0.0)])
+    Ok(vec![
+        Value::Bool(false),
+        Value::Bool(false),
+        Value::Num(0.0),
+    ])
 }
 
 /// `C_PlayerInfo.GetPlayerMythicPlusRatingSummary(unit)`: an empty summary
@@ -780,7 +785,9 @@ fn is_pet_active(vm: &mut Vm, _c: NativeCall) -> Ret {
 /// abandoning it; others are dismissed).
 fn pet_can_be_abandoned(vm: &mut Vm, _c: NativeCall) -> Ret {
     let e = engine(vm);
-    Ok(vec![Value::Bool(e.units.pet.is_some() && e.world.pets.hunter)])
+    Ok(vec![Value::Bool(
+        e.units.pet.is_some() && e.world.pets.hunter,
+    )])
 }
 
 /// A pet's stat (`pet:setStats`, the pet's own as `stats.rs` keeps them):
@@ -1226,8 +1233,14 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetPetSpellBonusDamage", get_pet_spell_bonus_damage),
         // Auras.
         ("C_UnitAuras.GetUnitAuras", get_unit_auras),
-        ("C_UnitAuras.GetUnitAuraInstanceIDs", get_unit_aura_instance_ids),
-        ("C_UnitAuras.GetUnitAuraBySpellID", get_unit_aura_by_spell_id),
+        (
+            "C_UnitAuras.GetUnitAuraInstanceIDs",
+            get_unit_aura_instance_ids,
+        ),
+        (
+            "C_UnitAuras.GetUnitAuraBySpellID",
+            get_unit_aura_by_spell_id,
+        ),
         (
             "C_UnitAuras.IsAuraFilteredOutByInstanceID",
             is_aura_filtered_out,
@@ -1243,7 +1256,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             get_aura_application_display_count,
         ),
         ("C_UnitAuras.GetAuraDuration", get_aura_duration),
-        ("C_UnitAuras.GetAuraDispelTypeColor", get_aura_dispel_type_color),
+        (
+            "C_UnitAuras.GetAuraDispelTypeColor",
+            get_aura_dispel_type_color,
+        ),
         (
             "C_UnitAuras.CancelAuraByInstanceID",
             cancel_aura_by_instance_id,
@@ -1271,7 +1287,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         // Loss of control: none.
         ("C_LossOfControl.GetActiveLossOfControlData", nil),
         ("C_LossOfControl.GetActiveLossOfControlDataCount", zero),
-        ("C_LossOfControl.GetActiveLossOfControlDataCountByUnit", zero),
+        (
+            "C_LossOfControl.GetActiveLossOfControlDataCountByUnit",
+            zero,
+        ),
         ("C_LossOfControl.GetActiveLossOfControlDuration", nil),
         // Nameplates.
         ("C_NamePlate.SetNamePlateSize", nothing),

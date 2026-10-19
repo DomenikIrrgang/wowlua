@@ -198,7 +198,9 @@ fn book_spell(vm: &Vm, c: &NativeCall) -> Option<f64> {
 fn spell_named(vm: &mut Vm, text: &str) -> Option<f64> {
     let text = text.trim();
     let (name, rank) = match text.find('(') {
-        Some(i) if text.ends_with(')') => (text[..i].trim(), Some(text[i + 1..text.len() - 1].trim())),
+        Some(i) if text.ends_with(')') => {
+            (text[..i].trim(), Some(text[i + 1..text.len() - 1].trim()))
+        }
         _ => (text, None),
     };
     let mut found = None;
@@ -551,7 +553,10 @@ fn get_item_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
             ("startTime", Value::Num(start)),
             ("duration", Value::Num(length)),
             ("isEnabled", Value::Bool(true)),
-            ("isActive", Value::Bool(length > 0.0 && start + length > now)),
+            (
+                "isActive",
+                Value::Bool(length > 0.0 && start + length > now),
+            ),
             ("modRate", Value::Num(1.0)),
         ],
     );
@@ -590,7 +595,11 @@ fn is_spell_known_or_in_spellbook(vm: &mut Vm, c: NativeCall) -> Ret {
     };
     let pet = matches!(vm.hidden(c.arg(2)), Value::Num(b) if b == 1.0);
     let k = if pet {
-        yes(vm, "C_SpellBook.IsSpellKnown", &[Value::Num(id), Value::Num(1.0)])
+        yes(
+            vm,
+            "C_SpellBook.IsSpellKnown",
+            &[Value::Num(id), Value::Num(1.0)],
+        )
     } else {
         known(vm, id)
     };
@@ -700,11 +709,7 @@ fn is_spellbook_item_off_spec(vm: &mut Vm, c: NativeCall) -> Ret {
 /// The recorded spellbook skill lines: index, item offset, item count,
 /// skill line ID.
 fn skill_lines(vm: &Vm) -> Vec<(i64, f64, f64, Option<f64>)> {
-    let Some(Entry::ByIndex(lines)) = engine(vm)
-        .world
-        .character
-        .stats
-        .get("spellBookSkillLine")
+    let Some(Entry::ByIndex(lines)) = engine(vm).world.character.stats.get("spellBookSkillLine")
     else {
         return Vec::new();
     };
@@ -884,7 +889,13 @@ fn has_spell_action_buttons(vm: &mut Vm, c: NativeCall) -> Ret {
         Value::Nil => Value::Num(3.0),
         v => v,
     };
-    let found = match ask(vm, "C_ActionBar.FindSpellActionButtons", &[Value::Num(id), set]).first() {
+    let found = match ask(
+        vm,
+        "C_ActionBar.FindSpellActionButtons",
+        &[Value::Num(id), set],
+    )
+    .first()
+    {
         Some(Value::Table(t)) => vm.heap.table(*t).border() > 0,
         _ => false,
     };
@@ -928,8 +939,9 @@ fn is_macro_action_with_show_tooltip(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![]);
     };
     let show = match a {
-        Some(a) if a.kind == "macro" => macro_body(vm, a.id)
-            .is_some_and(|b| b.to_ascii_lowercase().contains("#showtooltip")),
+        Some(a) if a.kind == "macro" => {
+            macro_body(vm, a.id).is_some_and(|b| b.to_ascii_lowercase().contains("#showtooltip"))
+        }
         _ => false,
     };
     Ok(vec![Value::Bool(show)])
@@ -970,10 +982,12 @@ fn is_action_in_range(vm: &mut Vm, c: NativeCall) -> Ret {
 /// An item action's data field.
 fn action_item_field(vm: &mut Vm, a: &Option<Action>, key: &str) -> Value {
     match a {
-        Some(a) if a.kind == "item" => match num(a.id).and_then(|id| crate::gamedata::item_data(vm, id as i64)) {
-            Some(t) => field(vm, t, key),
-            None => Value::Nil,
-        },
+        Some(a) if a.kind == "item" => {
+            match num(a.id).and_then(|id| crate::gamedata::item_data(vm, id as i64)) {
+                Some(t) => field(vm, t, key),
+                None => Value::Nil,
+            }
+        }
         _ => Value::Nil,
     }
 }
@@ -1204,9 +1218,17 @@ fn get_specialization_role(vm: &mut Vm, c: NativeCall) -> Ret {
     if vm.hidden(c.arg(3)).truthy() {
         return Ok(vec![Value::Nil]);
     }
-    let info = ask(vm, "C_SpecializationInfo.GetSpecializationInfo", &[c.arg(1)]);
+    let info = ask(
+        vm,
+        "C_SpecializationInfo.GetSpecializationInfo",
+        &[c.arg(1)],
+    );
     let role = info.get(4).copied().unwrap_or(Value::Nil);
-    Ok(vec![if matches!(role, Value::Str(_)) { role } else { Value::Nil }])
+    Ok(vec![if matches!(role, Value::Str(_)) {
+        role
+    } else {
+        Value::Nil
+    }])
 }
 
 /// `GetSpecializationSystem()`: `Enum.SpecializationSystem.
@@ -1227,7 +1249,11 @@ fn load_config(vm: &mut Vm, c: NativeCall) -> Ret {
         (Some(Value::Num(a)), Value::Num(b)) if a == b
     );
     let result = if same { 1.0 } else { 0.0 };
-    Ok(vec![Value::Num(result), Value::Nil, Value::Table(vm.new_table())])
+    Ok(vec![
+        Value::Num(result),
+        Value::Nil,
+        Value::Table(vm.new_table()),
+    ])
 }
 
 /// `C_ClassTalents.SetStarterBuildActive(active)`: an error (no starter
@@ -1253,16 +1279,17 @@ fn purchase_all_ranks(vm: &mut Vm, c: NativeCall) -> Ret {
 
 // ------------------------------------------------------ cooldown viewer
 
-/// The client's recorded layout data (the account's, at the probe).
-const LAYOUT_DATA: &str = "1|a2FdKMq0ULSpoenbQuZGKQZmviNNzsGlpYEBiTmJKZl5CroKUBYA";
 const LAYOUT_KEY: &str = "spellinfo.cooldownViewerLayout";
 
 /// `C_CooldownViewer.GetLayoutData()`: what `SetLayoutData` saved, else
-/// the recorded answer.
+/// nothing. The client answers the account's saved layout (recorded
+/// `"1|a2Fd…"`), which
+/// Blizzard's code decodes with `C_EncodingUtil`; the engine decodes no
+/// such data yet, so it answers as before any layout was saved.
 fn get_layout_data(vm: &mut Vm, _c: NativeCall) -> Ret {
     match named(vm, LAYOUT_KEY) {
         v @ Value::Str(_) => Ok(vec![v]),
-        _ => Ok(vec![vm.str(LAYOUT_DATA)]),
+        _ => Ok(vec![]),
     }
 }
 
@@ -1289,7 +1316,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Spell.GetBaseSpell", spell_itself),
         ("C_SpellBook.FindSpellOverrideByID", spell_itself),
         ("C_SpellBook.FindBaseSpellByID", spell_itself),
-        ("C_Spell.GetSpellCooldownDuration", get_spell_cooldown_duration),
+        (
+            "C_Spell.GetSpellCooldownDuration",
+            get_spell_cooldown_duration,
+        ),
         ("C_Spell.GetSpellChargeDuration", spell_zero_duration),
         (
             "C_Spell.GetSpellLossOfControlCooldownDuration",
@@ -1370,7 +1400,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             "C_SpellBook.GetSpellBookItemDescription",
             get_spellbook_item_description,
         ),
-        ("C_SpellBook.GetSpellBookItemCharges", get_spellbook_item_charges),
+        (
+            "C_SpellBook.GetSpellBookItemCharges",
+            get_spellbook_item_charges,
+        ),
         (
             "C_SpellBook.GetSpellBookItemPowerCost",
             get_spellbook_item_power_cost,
@@ -1395,15 +1428,30 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_SpellBook.IsPvPTalentSpellBookItem", no),
         ("C_SpellBook.IsSpellBookItemHarmful", no),
         ("C_SpellBook.IsSpellBookItemHelpful", no),
-        ("C_SpellBook.IsSpellBookItemInRange", is_spellbook_item_in_range),
-        ("C_SpellBook.IsSpellBookItemUsable", is_spellbook_item_usable),
-        ("C_SpellBook.SpellBookItemHasRange", spellbook_item_has_range),
-        ("C_SpellBook.IsSpellBookItemOffSpec", is_spellbook_item_off_spec),
+        (
+            "C_SpellBook.IsSpellBookItemInRange",
+            is_spellbook_item_in_range,
+        ),
+        (
+            "C_SpellBook.IsSpellBookItemUsable",
+            is_spellbook_item_usable,
+        ),
+        (
+            "C_SpellBook.SpellBookItemHasRange",
+            spellbook_item_has_range,
+        ),
+        (
+            "C_SpellBook.IsSpellBookItemOffSpec",
+            is_spellbook_item_off_spec,
+        ),
         (
             "C_SpellBook.GetSpellBookItemSkillLineIndex",
             get_spellbook_item_skill_line_index,
         ),
-        ("C_SpellBook.GetSkillLineIndexByID", get_skill_line_index_by_id),
+        (
+            "C_SpellBook.GetSkillLineIndexByID",
+            get_skill_line_index_by_id,
+        ),
         (
             "C_SpellBook.GetSpellBookItemCooldownDuration",
             get_spellbook_item_cooldown_duration,
@@ -1437,12 +1485,18 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_ActionBar.GetActionAutocast", get_action_autocast),
         ("C_ActionBar.GetActionUseCount", get_action_use_count),
         ("C_ActionBar.IsOnBarOrSpecialBar", has_spell_action_buttons),
-        ("C_ActionBar.HasSpellActionButtons", has_spell_action_buttons),
+        (
+            "C_ActionBar.HasSpellActionButtons",
+            has_spell_action_buttons,
+        ),
         (
             "C_ActionBar.FindFlyoutActionButtons",
             find_flyout_action_buttons,
         ),
-        ("C_ActionBar.HasFlyoutActionButtons", has_flyout_action_buttons),
+        (
+            "C_ActionBar.HasFlyoutActionButtons",
+            has_flyout_action_buttons,
+        ),
         // No pet actions on the bars, no assisted combat.
         ("C_ActionBar.FindPetActionButtons", nothing),
         ("C_ActionBar.GetPetActionPetBarIndices", nothing),
@@ -1529,7 +1583,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_SpecializationInfo.GetInspectSelectedPvpTalent", nil),
         // C_ClassTalents: no saved loadouts, starter builds or hero talents.
         ("C_ClassTalents.LoadConfig", load_config),
-        ("C_ClassTalents.SetStarterBuildActive", set_starter_build_active),
+        (
+            "C_ClassTalents.SetStarterBuildActive",
+            set_starter_build_active,
+        ),
         ("C_ClassTalents.UpdateLastSelectedSavedConfigID", nothing),
         ("C_ClassTalents.DeleteConfig", no),
         ("C_ClassTalents.RenameConfig", no),

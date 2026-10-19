@@ -188,11 +188,35 @@ const DIFFICULTIES: &[Difficulty] = &[
     d(2.0, "Heroic", "party", true, None, None, Some(5.0)),
     d(3.0, "10 Player", "raid", false, Some(5.0), None, Some(10.0)),
     d(4.0, "25 Player", "raid", false, Some(6.0), None, Some(25.0)),
-    d(5.0, "10 Player (Heroic)", "raid", true, Some(3.0), None, Some(10.0)),
-    d(6.0, "25 Player (Heroic)", "raid", true, Some(4.0), None, Some(25.0)),
+    d(
+        5.0,
+        "10 Player (Heroic)",
+        "raid",
+        true,
+        Some(3.0),
+        None,
+        Some(10.0),
+    ),
+    d(
+        6.0,
+        "25 Player (Heroic)",
+        "raid",
+        true,
+        Some(4.0),
+        None,
+        Some(25.0),
+    ),
     Difficulty {
         lfr: true,
-        ..d(7.0, "Looking For Raid", "raid", false, None, None, Some(25.0))
+        ..d(
+            7.0,
+            "Looking For Raid",
+            "raid",
+            false,
+            None,
+            None,
+            Some(25.0),
+        )
     },
     Difficulty {
         challenge: true,
@@ -210,19 +234,51 @@ const DIFFICULTIES: &[Difficulty] = &[
     },
     Difficulty {
         lfr: true,
-        ..d(17.0, "Looking For Raid", "raid", false, None, Some(10.0), Some(30.0))
+        ..d(
+            17.0,
+            "Looking For Raid",
+            "raid",
+            false,
+            None,
+            Some(10.0),
+            Some(30.0),
+        )
     },
     Difficulty {
         display_mythic: true,
         ..d(23.0, "Mythic", "party", true, None, None, Some(5.0))
     },
     d(24.0, "Timewalking", "party", false, None, None, Some(5.0)),
-    d(33.0, "Timewalking", "raid", false, None, Some(10.0), Some(30.0)),
+    d(
+        33.0,
+        "Timewalking",
+        "raid",
+        false,
+        None,
+        Some(10.0),
+        Some(30.0),
+    ),
     d(148.0, "20 Player", "raid", false, None, None, Some(20.0)),
     d(173.0, "Normal", "party", false, None, None, Some(5.0)),
     d(174.0, "Heroic", "party", true, None, None, Some(5.0)),
-    d(175.0, "10 Player", "raid", false, Some(5.0), None, Some(10.0)),
-    d(176.0, "25 Player", "raid", false, Some(6.0), None, Some(25.0)),
+    d(
+        175.0,
+        "10 Player",
+        "raid",
+        false,
+        Some(5.0),
+        None,
+        Some(10.0),
+    ),
+    d(
+        176.0,
+        "25 Player",
+        "raid",
+        false,
+        Some(6.0),
+        None,
+        Some(25.0),
+    ),
 ];
 
 fn difficulty(id: f64) -> Option<&'static Difficulty> {
@@ -661,7 +717,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             "C_RaidLocks.GetRedirectedDifficultyID",
             get_redirected_difficulty_id,
         ),
-        ("C_EncounterJournal.GetBaseDifficultyID", get_base_difficulty_id),
+        (
+            "C_EncounterJournal.GetBaseDifficultyID",
+            get_base_difficulty_id,
+        ),
         ("CanShowResetInstances", can_show_reset_instances),
         // No instance saved (`GetNumSavedInstances` 0): resetting does
         // nothing, an index names none.
@@ -675,8 +734,14 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_PartyInfo.IsGUIDInGroup", is_guid_in_group),
         ("C_PartyInfo.CanInvite", can_invite),
         ("C_PartyInfo.GetMinLevel", get_min_level),
-        ("C_PartyInfo.GetAvailableLootMethods", get_available_loot_methods),
-        ("C_PartyInfo.IsLootMethodAvailable", is_loot_method_available),
+        (
+            "C_PartyInfo.GetAvailableLootMethods",
+            get_available_loot_methods,
+        ),
+        (
+            "C_PartyInfo.IsLootMethodAvailable",
+            is_loot_method_available,
+        ),
         ("C_PartyInfo.GetLootMethodStyle", documented),
         ("C_PartyInfo.IsCrossFactionParty", no),
         ("C_PartyInfo.IsPartyWalkIn", no),
@@ -1003,7 +1068,10 @@ const NOTHING_HERE: &[(&str, NativeFn)] = &[
     ("C_EncounterJournal.SetSlotFilter", nothing),
     ("C_LFGList.ClearSearchTextFields", nothing),
     ("C_LFGList.GetApplicantPvpRatingInfoForListing", nothing),
-    ("C_LFGList.GetOwnedKeystoneActivityAndGroupAndLevel", nothing),
+    (
+        "C_LFGList.GetOwnedKeystoneActivityAndGroupAndLevel",
+        nothing,
+    ),
     ("C_LFGList.GetSearchResultLeaderInfo", nothing),
     ("C_LFGList.Search", nothing),
     ("C_LFGList.SetSearchToActivity", nothing),
@@ -1073,7 +1141,10 @@ const NOTHING_HERE: &[(&str, NativeFn)] = &[
     ("C_EncounterJournal.ResetSlotFilter", nothing),
     ("C_EncounterJournal.SetTab", nothing),
     ("C_EncounterJournal.StartArathiRPE", nothing),
-    ("C_EventToastManager.GetLevelUpDisplayToastsFromLevel", nothing),
+    (
+        "C_EventToastManager.GetLevelUpDisplayToastsFromLevel",
+        nothing,
+    ),
     ("C_EventToastManager.GetNextToastToDisplay", nothing),
     ("C_EventToastManager.RemoveCurrentToast", nothing),
     ("C_LFGList.ClearApplicationTextFields", nothing),
@@ -1090,7 +1161,10 @@ const NOTHING_HERE: &[(&str, NativeFn)] = &[
     ("C_LootFrame.TryAutoLoot", nothing),
     ("C_LootJournal.GetItemSetItems", nothing),
     ("C_LootJournal.GetItemSets", nothing),
-    ("C_MythicPlus.GetSeasonBestMythicRatingFromThisExpansion", nothing),
+    (
+        "C_MythicPlus.GetSeasonBestMythicRatingFromThisExpansion",
+        nothing,
+    ),
     ("C_MythicPlus.GetWeeklyBestForMap", nothing),
     ("C_MythicPlus.RequestCurrentAffixes", nothing),
     ("C_PartyInfo.ConfirmReadyCheck", nothing),
@@ -1140,7 +1214,10 @@ const NOTHING_HERE: &[(&str, NativeFn)] = &[
         "C_DelvesUI.GetCurioRarityByTraitCondAccountElementID",
         documented,
     ),
-    ("C_DelvesUI.GetWorldTierDifficultyForActivePlayer", documented),
+    (
+        "C_DelvesUI.GetWorldTierDifficultyForActivePlayer",
+        documented,
+    ),
     ("C_Calendar.EventGetInviteSortCriterion", documented),
     ("C_Calendar.GetDefaultGuildFilter", documented),
     ("C_EncounterJournal.GetSlotFilter", documented),

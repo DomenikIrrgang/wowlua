@@ -20,6 +20,7 @@ pub mod channels;
 pub mod character;
 pub mod chat;
 pub mod clock;
+pub mod collections;
 pub mod conditionals;
 pub mod content;
 pub mod controls;
@@ -232,60 +233,60 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
     // The engine's own behaviours, the recorded answers first: any
     // behaviour of the engine's own takes their place.
     let own: HashMap<&'static str, NativeFn> = recorded::behaviours(flavor)
-            .into_iter()
-            .chain(traits::recorded_behaviours(flavor))
-            .chain(clock::behaviours())
-            .chain(units::behaviours())
-            .chain(units::more_behaviours())
-            .chain(curves::behaviours())
-            .chain(formatters::behaviours())
-            .chain(widgets::functions())
-            .chain(auras::behaviours())
-            .chain(gamedata::behaviours())
-            .chain(character::behaviours())
-            .chain(stats::behaviours())
-            .chain(actions::behaviours())
-            .chain(editmode::behaviours())
-            .chain(channels::behaviours())
-            .chain(macros::behaviours())
-            .chain(cursor::behaviours())
-            .chain(input::behaviours())
-            .chain(casting::behaviours())
-            .chain(merchant::behaviours())
-            .chain(loot::behaviours())
-            .chain(quests::behaviours())
-            .chain(gossip::behaviours())
-            .chain(trainer::behaviours())
-            .chain(taxi::behaviours())
-            .chain(maps::behaviours())
-            .chain(misc::behaviours())
-            .chain(mail::behaviours())
-            .chain(bank::behaviours())
-            .chain(auction::behaviours())
-            .chain(itemlocation::behaviours())
-            .chain(death::behaviours())
-            .chain(inventory::behaviours())
-            .chain(queries::behaviours())
-            .chain(party::behaviours())
-            .chain(inspect::behaviours())
-            .chain(traits::behaviours(flavor))
-            .chain(achievements::behaviours())
-            .chain(tradeskill::behaviours(flavor))
-            .chain(tooltip::behaviours())
-            .chain(chat::behaviours())
-            .chain(bindings::behaviours())
-            .chain(facts::behaviours())
-            .chain(encounters::behaviours())
-            .chain(pets::behaviours())
-            .chain(conditionals::behaviours())
-            .chain([
-                ("import", ui::build::import as NativeFn),
-                (
-                    "C_XMLUtil.GetTemplateInfo",
-                    ui::build::template_info as NativeFn,
-                ),
-            ])
-            .chain(framescript::functions())
+        .into_iter()
+        .chain(traits::recorded_behaviours(flavor))
+        .chain(clock::behaviours())
+        .chain(units::behaviours())
+        .chain(units::more_behaviours())
+        .chain(curves::behaviours())
+        .chain(formatters::behaviours())
+        .chain(widgets::functions())
+        .chain(auras::behaviours())
+        .chain(gamedata::behaviours())
+        .chain(character::behaviours())
+        .chain(stats::behaviours())
+        .chain(actions::behaviours())
+        .chain(editmode::behaviours())
+        .chain(channels::behaviours())
+        .chain(macros::behaviours())
+        .chain(cursor::behaviours())
+        .chain(input::behaviours())
+        .chain(casting::behaviours())
+        .chain(merchant::behaviours())
+        .chain(loot::behaviours())
+        .chain(quests::behaviours())
+        .chain(gossip::behaviours())
+        .chain(trainer::behaviours())
+        .chain(taxi::behaviours())
+        .chain(maps::behaviours())
+        .chain(misc::behaviours())
+        .chain(mail::behaviours())
+        .chain(bank::behaviours())
+        .chain(auction::behaviours())
+        .chain(itemlocation::behaviours())
+        .chain(death::behaviours())
+        .chain(inventory::behaviours())
+        .chain(queries::behaviours())
+        .chain(party::behaviours())
+        .chain(inspect::behaviours())
+        .chain(traits::behaviours(flavor))
+        .chain(achievements::behaviours())
+        .chain(tradeskill::behaviours(flavor))
+        .chain(tooltip::behaviours())
+        .chain(chat::behaviours())
+        .chain(bindings::behaviours())
+        .chain(facts::behaviours())
+        .chain(encounters::behaviours())
+        .chain(pets::behaviours())
+        .chain(conditionals::behaviours())
+        .chain([
+            ("import", ui::build::import as NativeFn),
+            (
+                "C_XMLUtil.GetTemplateInfo",
+                ui::build::template_info as NativeFn,
+            ),
+        ])
+        .chain(framescript::functions())
         .collect();
     // The fill-ins answer only what nothing else does.
     let fill = fill_ins();
@@ -407,7 +408,10 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             if engine.fill_ins.contains(name) {
                 engine.behaviours.insert(name, facts::recorded_call);
             } else {
-                engine.behaviours.entry(name).or_insert(facts::recorded_call);
+                engine
+                    .behaviours
+                    .entry(name)
+                    .or_insert(facts::recorded_call);
             }
             continue;
         }
@@ -830,6 +834,7 @@ fn fill_ins() -> Vec<(&'static str, NativeFn)> {
         .chain(social::behaviours())
         .chain(content::behaviours())
         .chain(questinfo::behaviours())
+        .chain(collections::behaviours())
         .chain(extras::behaviours())
         .collect()
 }

@@ -37,7 +37,9 @@ return id, name, icon, role, file, className, GetSpecializationNameForSpecID(148
     );
     assert_eq!(
         r,
-        ["1491", "Warrior", "626008", "DAMAGER", "WARRIOR", "Warrior", "Druid", "2"]
+        [
+            "1491", "Warrior", "626008", "DAMAGER", "WARRIOR", "Warrior", "Druid", "2"
+        ]
     );
 }
 
