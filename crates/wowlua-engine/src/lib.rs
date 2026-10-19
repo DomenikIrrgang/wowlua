@@ -12,6 +12,7 @@ pub mod auction;
 pub mod auras;
 pub mod bank;
 pub mod bars;
+pub mod batch;
 pub mod bindings;
 pub mod casting;
 pub mod channels;
@@ -78,6 +79,8 @@ pub struct Engine {
     pub(crate) lineages: std::cell::RefCell<rustc_hash::FxHashMap<String, std::rc::Rc<[String]>>>,
     pub world: widgets::World,
     pub timers: clock::Timers,
+    /// The events owed at the frame's end (`batch`).
+    pub batch: batch::Batch,
     pub units: units::Units,
     /// Animation groups playing.
     pub animations: animations::Animations,
@@ -279,6 +282,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         lineages: Default::default(),
         world: widgets::World::default(),
         timers: clock::Timers::default(),
+        batch: batch::Batch::default(),
         units: units::Units::default(),
         refusals: Vec::new(),
         animations: Default::default(),

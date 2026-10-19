@@ -1272,6 +1272,15 @@ fn is_event_registered(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 /// (unverified); a unit event only where the unit (the first argument)
 /// is one the widget registered.
 pub fn fire_event(vm: &mut Vm, event: &str, args: &[Value]) {
+    // One the client batches to the frame's end: owed (`batch`).
+    if crate::batch::defer(vm, event, args) {
+        return;
+    }
+    fire_now(vm, event, args);
+}
+
+/// Fires `event` now, batched or not (`fire_event`).
+pub fn fire_now(vm: &mut Vm, event: &str, args: &[Value]) {
     let unit = match args.first() {
         Some(Value::Str(s)) => Some(String::from_utf8_lossy(vm.str_bytes(*s)).into_owned()),
         _ => None,

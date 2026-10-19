@@ -8,6 +8,9 @@
 -- it); each hit's combat text after its recorded delay (`textAfter`). The
 -- worn items' durability as the quest scenario left it.
 local e = __engine
+-- As in the client's frames, some events wait for the frame's end, each
+-- once, in their names' order (`setFrameBatching`).
+e.setFrameBatching(true)
 local player = e.player
 e.setLatency(0.3)
 -- The warrior's names as the recording has them, scrubbed.
@@ -186,3 +189,5 @@ at(52.807) player:heal(1)
 at(54.807) player:heal(1)
 at(56.910) player:heal(1)
 at(57.5)
+-- The last frame's batched events.
+e.setFrameBatching(false)

@@ -266,6 +266,7 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("fireUnitEvent", fire_unit_event),
         ("advanceTime", advance_time),
         ("setLatency", set_latency),
+        ("setFrameBatching", crate::batch::control_set),
         ("nextFrame", next_frame),
         ("advanceFrames", advance_frames),
         ("warnings", warnings),

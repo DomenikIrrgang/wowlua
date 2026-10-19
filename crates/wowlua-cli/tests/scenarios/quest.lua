@@ -10,6 +10,9 @@
 -- each loot's slots at their recorded times (`slotsAfter`).
 -- Other players' kills nearby: their deaths only.
 local e = __engine
+-- As in the client's frames, some events wait for the frame's end, each
+-- once, in their names' order (`setFrameBatching`).
+e.setFrameBatching(true)
 local player = e.player
 e.setLatency(0.3)
 -- The warrior's names as the recording has them, scrubbed.
@@ -419,3 +422,5 @@ end
 find(MainStatusTrackingBarContainer, 0)
 local _, xpMax = xpBar:GetMinMaxValues()
 check("the experience bar: 293 of 900", xpBar:GetValue() == 293 and xpMax == 900)
+-- The last frame's batched events.
+e.setFrameBatching(false)

@@ -7,6 +7,9 @@
 -- after its recorded delay (`textAfter`), the loot's slots at their
 -- recorded times (`slotsAfter`).
 local e = __engine
+-- As in the client's frames, some events wait for the frame's end, each
+-- once, in their names' order (`setFrameBatching`).
+e.setFrameBatching(true)
 local player = e.player
 e.setLatency(0.3)
 -- The warrior's names as the recording has them, scrubbed.
@@ -75,6 +78,8 @@ at(14.454) player:setPower(15)
 at(14.849) player:useSpell(78)
 at(15.857) player:swing(wolf, 17, { spent = 0, power = 2, kill = { xp = 50, loot = { { id = 7073 }, { id = 7074 } } } })
 at(16.116) player:stopAttack()
+-- Off the dead wolf's threat list first (recorded).
+at(16.782) wolf:setThreat(nil)
 at(16.915) player:leaveCombat()
 -- Out of combat: rage fades, health comes back.
 at(18.782) player:setPower(0)
@@ -108,3 +113,5 @@ end
 find(MainStatusTrackingBarContainer, 0)
 local _, xpMax = xpBar:GetMinMaxValues()
 check("the experience bar: 151 of 400", xpBar:GetValue() == 151 and xpMax == 400)
+-- The last frame's batched events.
+e.setFrameBatching(false)

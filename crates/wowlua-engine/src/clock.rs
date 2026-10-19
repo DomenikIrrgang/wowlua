@@ -185,6 +185,10 @@ fn fire(vm: &mut Vm, id: TimerId) {
 
 /// Moves the clock by `ms` milliseconds (and the wall clock with it).
 fn tick(vm: &mut Vm, ms: f64) {
+    // The moment's end: its batched events (`batch`).
+    if ms > 0.0 {
+        crate::batch::flush(vm);
+    }
     vm.clock.elapsed_ms += ms;
     vm.clock.now += ms / 1000.0;
 }

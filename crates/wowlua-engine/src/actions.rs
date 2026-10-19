@@ -311,6 +311,10 @@ pub fn update_usability(vm: &mut Vm) {
 /// whether any did (the bars' `ACTIONBAR_UPDATE_USABLE` is the caller's:
 /// after a spell's swing it comes after the cooldowns, recorded).
 pub fn usability_changed(vm: &mut Vm) -> bool {
+    // Batching frames: checked at the frame's end (`batch`).
+    if crate::batch::owe_usability(vm, true) {
+        return false;
+    }
     usability_changed_of(vm, &|_, _| true)
 }
 
@@ -318,6 +322,14 @@ pub fn usability_changed(vm: &mut Vm) -> bool {
 /// alone (`partyOrSelf`), others' changes left for their own moment
 /// (recorded: a warrior's rage-bound spell told after a kill's loot).
 pub fn update_target_usability(vm: &mut Vm) {
+    if crate::batch::owe_usability(vm, false) {
+        return;
+    }
+    target_usability_changed(vm);
+}
+
+/// The target-bound actions' usability now (`update_target_usability`).
+pub(crate) fn target_usability_changed(vm: &mut Vm) {
     let target_bound =
         |vm: &Vm, a: &Action| a.kind == "spell" && has_trait(vm, a.id, "partyOrSelf");
     if usability_changed_of(vm, &target_bound) {

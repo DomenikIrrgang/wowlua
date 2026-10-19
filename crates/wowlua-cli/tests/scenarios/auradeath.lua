@@ -6,6 +6,9 @@
 -- its death takes its auras. Each step at its recorded time (a key: when
 -- the client acted), each cast's answer its recorded round trip later.
 local e = __engine
+-- As in the client's frames, some events wait for the frame's end, each
+-- once, in their names' order (`setFrameBatching`).
+e.setFrameBatching(true)
 local player = e.player
 e.setLatency(0.37)
 player:setName("Player", "Lastname")
@@ -107,7 +110,9 @@ end
 for _, t in ipairs(ticks) do steps[#steps + 1] = { t, function() cat:updateAura(consecration, { cooldowns = TICK }) end } end
 -- The paladin's swings: the seal's holy damage at once, the blow's text
 -- later; the first with a burn.
-steps[#steps + 1] = { 10.030, function() player:target(cat) end }
+-- Right-clicked: targeted again, the soft target let go (recorded:
+-- no soft enemy events after it).
+steps[#steps + 1] = { 10.030, function() player:target(cat) player:softTarget(nil, "enemy") end }
 steps[#steps + 1] = { 10.354, function()
     player:hit(cat, 7, { school = 2 })
     player:startAttack()
@@ -178,3 +183,5 @@ for _, s in ipairs(steps) do
     s[2]()
 end
 at(30)
+-- The last frame's batched events.
+e.setFrameBatching(false)

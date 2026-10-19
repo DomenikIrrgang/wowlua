@@ -651,6 +651,15 @@ export function advanceFrames(n: number, ms: number?)
     engine().advanceFrames(n, ms)
 end
 
+--- The client's batching of a frame's events (off by default: each event
+--- as the control causing it fires it). On: `ACTIONBAR_UPDATE_*`,
+--- `SPELL_UPDATE_COOLDOWN`, `UNIT_HEALTH`, the threat updates and the like
+--- wait for the frame's end (the clock's next move), each once, in their
+--- names' order; off: those owed fired now.
+export function setFrameBatching(on: boolean)
+    engine().setFrameBatching(on)
+end
+
 --- Simulated work of `ms` milliseconds (`debugprofilestop` moves).
 export function spend(ms: number)
     engine().spend(ms)

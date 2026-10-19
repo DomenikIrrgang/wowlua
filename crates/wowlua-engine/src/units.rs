@@ -1615,9 +1615,22 @@ fn control_target(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `unit:setThreat(value)`: the player's threat on a creature, as the
 /// server tells it (`/stdtest engine scenario combat`: 5, 6, 10, … as the
 /// fight went): `UNIT_THREAT_LIST_UPDATE(unit)`, the first time also
-/// `UNIT_THREAT_SITUATION_UPDATE(player)`.
+/// `UNIT_THREAT_SITUATION_UPDATE(player)`. `nil`: the player off its list
+/// (its list's update; off the last list, the player's situation too:
+/// recorded, a dead wolf's list left before the player left combat,
+/// `combat`).
 fn control_set_threat(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
+    if c.arg(2).is_nil() {
+        engine_mut(vm).units.list[me.0].threat = None;
+        fire_unit(vm, "UNIT_THREAT_LIST_UPDATE", me, &[]);
+        let any = engine(vm).units.list.iter().any(|u| u.threat.is_some());
+        if !any && engine(vm).units.threat_situation {
+            engine_mut(vm).units.threat_situation = false;
+            fire_unit(vm, "UNIT_THREAT_SITUATION_UPDATE", PLAYER, &[]);
+        }
+        return Ok(vec![]);
+    }
     let value = vm.check_number(&c, 2)?;
     let first = engine(vm).units.list[me.0].threat.is_none();
     engine_mut(vm).units.list[me.0].threat = Some(value);
