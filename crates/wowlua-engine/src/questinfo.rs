@@ -818,8 +818,12 @@ fn abandoned(vm: &mut Vm, c: NativeCall) -> Ret {
 /// one before whose view of the log differs (`quests::quest_map_changed`):
 /// the log's `QUEST_LOG_UPDATE` in the same frame (recorded three times in
 /// `questlog`: a quest's details showing its map, twice, the details' back
-/// button; none in `taxi` while the zones' maps changed under the flight,
-/// the log's order the same).
+/// button; twice in `mapnav`: the world map zoomed out to Kalimdor and
+/// back; none in `taxi` while the zones' maps changed under the flight,
+/// the log's order the same). With the world map hidden, none: the log as
+/// the new map shows it with the server's next update (unverified, once
+/// in `hearth`: Thunder Bluff's map set as the player arrived, the next
+/// update 0.07 s later).
 fn set_map_for_quest_pois(vm: &mut Vm, c: NativeCall) -> Ret {
     let id = num_of(vm, c.arg(1)).unwrap_or(0.0);
     let before = match get(vm, "poiMap") {
@@ -827,16 +831,30 @@ fn set_map_for_quest_pois(vm: &mut Vm, c: NativeCall) -> Ret {
         _ => 0.0,
     };
     put(vm, "poiMap", Value::Num(id));
-    if id != before && crate::quests::quest_map_changed(vm, id) {
+    if id != before && crate::quests::quest_map_changed(vm, id) && world_map_shown(vm) {
         let update = vm.native("questMapUpdate", quest_map_update as NativeFn);
         crate::clock::after_engine(vm, 0.0, update);
     }
     Ok(vec![])
 }
 
+/// Blizzard's world map shown.
+fn world_map_shown(vm: &mut Vm) -> bool {
+    let map = vm.get_global("WorldMapFrame");
+    crate::widgets::widget_of(vm, map).is_some_and(|id| crate::widgets::visible(engine(vm), id))
+}
+
 fn quest_map_update(vm: &mut Vm, _c: NativeCall) -> Ret {
     fire(vm, "QUEST_LOG_UPDATE", &[]);
     Ok(vec![])
+}
+
+/// The map for quest POIs (0 before any).
+pub fn poi_map(vm: &mut Vm) -> f64 {
+    match get(vm, "poiMap") {
+        Value::Num(n) => n,
+        _ => 0.0,
+    }
 }
 
 fn get_map_for_quest_pois(vm: &mut Vm, _c: NativeCall) -> Ret {

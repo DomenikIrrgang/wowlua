@@ -26,6 +26,20 @@ e.defineItem(6948, {
         pvp = { "friendly", false, "Horde" },
     },
 })
+-- The inventory's load after the loading screen in the server's blocks
+-- and order (recorded: 50 blocks; a worn item's none or the backpack's, a
+-- bank item's bag 6, the bags' containers with three of them).
+e.setInventoryLoad({
+    "-", "-", "0", "-", "0", "-", "-", "1 5 6 containers bank 0", "6", "6",
+    "0", "0", "0", "1", "0", "0", "1", "0", "6", "0",
+    "0", "6", "0", "0", "0", "0", "6", "0", "1", "0",
+    "containers 0", "0", "1", "6", "5", "containers 0", "0", "0", "0", "0",
+    "0", "0", "0", "0", "0", "1", "0", "5", "1", "0",
+})
+-- The log as Thunder Bluff's map shows it (the client's answers there):
+-- The Elder Crone and In Nightmares on it.
+local thunderBluff = { 1063, 3369 }
+e.defineQuestMap(1456, { onMap = thunderBluff, localPOI = thunderBluff })
 local now = 0
 -- Time passes in frames, as in the client (60 a second: Blizzard's
 -- animations and OnUpdate code run), the rest of a step as one jump.

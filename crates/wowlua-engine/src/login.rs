@@ -71,6 +71,10 @@ fn fire(vm: &mut Vm, event: &str, args: &[Value]) {
 /// two hearthstones' loading screens, 49 and 95 blocks); blocks in
 /// another order match the recordings less than this.
 fn inventory(vm: &mut Vm) {
+    if let Some(blocks) = engine_mut(vm).world.inventory_load.clone() {
+        recorded_inventory(vm, &blocks);
+        return;
+    }
     let items = {
         let ch = &engine(vm).world.character;
         ch.equipment.len() + ch.bags.values().map(|b| b.items.len()).sum::<usize>()
@@ -90,6 +94,56 @@ fn inventory(vm: &mut Vm) {
     }
 }
 
+/// The inventory's load in the server's recorded blocks
+/// (`setInventoryLoad`): each block what it tells before its item (bags'
+/// updates, their containers', the bank's slot), the player's equipped
+/// spells, its item's bag's update, `UNIT_INVENTORY_CHANGED` (recorded:
+/// `hearth`'s 50 blocks, the bags' containers among them).
+fn recorded_inventory(vm: &mut Vm, blocks: &[String]) {
+    let player = vm.str("player");
+    for (i, block) in blocks.iter().enumerate() {
+        let mut tokens: Vec<&str> = block.split_whitespace().collect();
+        let own = tokens.pop().unwrap_or("-");
+        for t in tokens {
+            match t {
+                "containers" => fire(vm, "BAG_CONTAINER_UPDATE", &[]),
+                "bank" => fire(vm, "PLAYERBANKSLOTS_CHANGED", &[Value::Num(1.0)]),
+                bag => {
+                    if let Ok(bag) = bag.parse::<i64>() {
+                        crate::character::bag_updated(vm, bag);
+                    }
+                }
+            }
+        }
+        crate::character::equipped_spells_changed(vm);
+        if i == 0 {
+            crate::actions::usability_changed(vm);
+        }
+        if let Ok(bag) = own.parse::<i64>() {
+            crate::character::bag_updated(vm, bag);
+        }
+        fire(vm, "UNIT_INVENTORY_CHANGED", &[player]);
+    }
+}
+
+/// `setInventoryLoad(blocks)`: the server's blocks of a loading screen's
+/// inventory, in its order (`recorded_inventory`).
+pub fn control_set_inventory_load(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Table(t) = c.arg(1) else {
+        return Err(vm.error("setInventoryLoad: a list of blocks expected"));
+    };
+    let n = vm.heap.table(t).border();
+    let mut blocks = Vec::new();
+    for i in 1..=n {
+        match vm.heap.table(t).get(Value::Num(i as f64)) {
+            Value::Str(s) => blocks.push(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
+            _ => return Err(vm.error("setInventoryLoad: each block a string")),
+        }
+    }
+    engine_mut(vm).world.inventory_load = Some(blocks);
+    Ok(vec![])
+}
+
 /// A loading screen (a world transfer: a Hearthstone's), as the client
 /// recorded it (`data/camelot-teleport.txt`): the client loading (the
 /// clock moving, nothing running) to `LOADING_SCREEN_DISABLED`, the world
@@ -103,6 +157,7 @@ fn inventory(vm: &mut Vm) {
 pub fn teleport(vm: &mut Vm, map: f64, place: Option<wowlua_vm::TableRef>) {
     let mut now = None;
     let mut loading = true;
+    let mut recorded = false;
     engine_mut(vm).world.loading_screen = true;
     engine_mut(vm).world.inventory_loading = true;
     for (time, event, args) in parse(include_str!("../data/camelot-teleport.txt")) {
@@ -142,9 +197,13 @@ pub fn teleport(vm: &mut Vm, map: f64, place: Option<wowlua_vm::TableRef>) {
         match event {
             "$INVENTORY" => {
                 engine_mut(vm).world.inventory_loading = false;
+                recorded = engine(vm).world.inventory_load.is_some();
                 inventory(vm);
                 continue;
             }
+            // The bags' containers' updates after the stand-in's blocks;
+            // the recorded blocks tell them among theirs.
+            "BAG_CONTAINER_UPDATE" if recorded => continue,
             "PLAYER_MAP_CHANGED" => {
                 if let Some(t) = place {
                     crate::character::enter_instance(vm, t);

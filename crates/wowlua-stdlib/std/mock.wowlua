@@ -1008,11 +1008,15 @@ export function defineQuest(id: number, data: table)
 end
 
 --- The quest log as the client shows it while the map for quest POIs is
---- `mapID` (the server's data): `{ first = headerTitle, onMap = { questID,
---- … }, localPOI = { questID, … }, quests = { questID, … } }`; `first`'s
---- header moves to the top, shown expanded; `quests`: the logged quests
---- whose map (`GetQuestUiMapID`) it is.
-export function defineQuestMap(mapID: number, data: table)
+--- `mapID` (the server's data): `{ first = headerTitle(s), top = {
+--- headerTitle, … }, expanded = { headerTitle, … }, onMap = { questID, …
+--- }, localPOI = { questID, … }, quests = { questID, … } }`; `first`'s
+--- headers move to the top, shown expanded, `top`'s after them (their own
+--- state), `expanded`'s show expanded in their place; `quests`: the logged
+--- quests whose map (`GetQuestUiMapID`) it is. `nil`: the map shows the
+--- log as the snapshot's map does. A view defined or dropped for the map
+--- shown applies at once.
+export function defineQuestMap(mapID: number, data: table?)
     engine().defineQuestMap(mapID, data)
 end
 
@@ -1087,6 +1091,16 @@ end
 --- (`DELETE_ITEM_CONFIRM`, Blizzard's popup; `DeleteCursorItem` deletes it).
 export function clickWorld()
     engine().clickWorld()
+end
+
+--- The server's blocks of a loading screen's inventory, in its order: one
+--- per block, the bag the block's item updates last (`"0"`: the backpack,
+--- then `BAG_UPDATE(-1)`; `"-"`: none), after what the block tells before
+--- the item (`"1"`, `"5"`, ...: a bag's `BAG_UPDATE`; `"containers"`:
+--- `BAG_CONTAINER_UPDATE`; `"bank"`: `PLAYERBANKSLOTS_CHANGED(1)`), e.g.
+--- `{ "-", "0", "1 5 containers 0" }`. Without it, a block per item.
+export function setInventoryLoad(blocks: string[])
+    engine().setInventoryLoad(blocks)
 end
 
 --- The class's hidden group buffs (`HIDDEN_GROUP_BUFFS_CHANGED`' list).

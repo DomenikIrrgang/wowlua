@@ -98,18 +98,23 @@ pub struct Quests {
     pub map_views: std::collections::BTreeMap<i64, MapView>,
     /// The log as the snapshot's map shows it, kept while another's shows.
     pub base_log: Option<Vec<(&'static str, Entry)>>,
-    /// The header the shown map's view moved first and shows expanded.
-    pub forced: Option<String>,
+    /// The headers the shown map's view shows expanded whatever their own
+    /// state.
+    pub forced: Vec<String>,
     /// The headers the player collapsed or expanded (by title).
     pub manual_headers: BTreeSet<String>,
 }
 
-/// A map's view of the log (`defineQuestMap(mapID, { first, onMap,
-/// localPOI, quests })`): the header it shows first, the quests on it and
-/// with a place on it, the quests whose map it is.
+/// A map's view of the log (`defineQuestMap(mapID, { first, top,
+/// expanded, onMap, localPOI, quests })`): the headers it shows first
+/// (expanded), the headers after them (their own state), the headers it
+/// shows expanded in their place, the quests on it and with a place on it,
+/// the quests whose map it is.
 #[derive(Clone, Debug, Default)]
 pub struct MapView {
-    pub first: Option<String>,
+    pub first: Vec<String>,
+    pub top: Vec<String>,
+    pub expanded: Vec<String>,
     pub on_map: BTreeSet<i64>,
     pub local_poi: BTreeSet<i64>,
     pub quests: BTreeSet<i64>,
@@ -1257,6 +1262,23 @@ fn get_quest_ui_map_id(vm: &mut Vm, c: NativeCall) -> Ret {
 /// The stats a log index keys (moved with their entries).
 const BY_LOG_INDEX: [&str; 3] = ["questLogInfo", "questCompletionText", "questSpecialItem"];
 
+/// A title or a list of titles (`first = "Orgrimmar"` or `first = {
+/// "Blackfathom Deeps", "Orgrimmar" }`).
+fn titles(vm: &mut Vm, t: TableRef, key: &str) -> Vec<String> {
+    match field(vm, t, key) {
+        Value::Table(list) => {
+            let n = vm.heap.table(list).border();
+            (1..=n)
+                .filter_map(|i| {
+                    let v = vm.heap.table(list).get(Value::Num(i as f64));
+                    text_of(vm, v)
+                })
+                .collect()
+        }
+        v => text_of(vm, v).into_iter().collect(),
+    }
+}
+
 fn ids(vm: &mut Vm, t: TableRef, key: &str) -> BTreeSet<i64> {
     let mut out = BTreeSet::new();
     if let Value::Table(list) = field(vm, t, key) {
@@ -1270,11 +1292,14 @@ fn ids(vm: &mut Vm, t: TableRef, key: &str) -> BTreeSet<i64> {
     out
 }
 
-/// `defineQuestMap(mapID, { first = headerTitle, onMap = { questID, … },
-/// localPOI = { questID, … }, quests = { questID, … } })`: the log as the
-/// client's shows it while the map for quest POIs is that map (the
-/// server's data: which quests are on it); `quests`, the quests whose map
-/// (`GetQuestUiMapID`) it is.
+/// `defineQuestMap(mapID, { first = headerTitle(s), top = { headerTitle,
+/// … }, expanded = { headerTitle, … }, onMap = { questID, … }, localPOI = {
+/// questID, … }, quests = { questID, … } })`: the log as the client's
+/// shows it while the map for quest POIs is that map (the server's data:
+/// which quests are on it); `quests`, the quests whose map
+/// (`GetQuestUiMapID`) it is. `nil` for the table: the map shows the
+/// snapshot's log again. A view defined or dropped for the map shown
+/// applies at once (no update of its own: the script tells it).
 pub fn control_define_map(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(map) = (match c.arg(1) {
         Value::Num(n) => Some(n as i64),
@@ -1282,18 +1307,34 @@ pub fn control_define_map(vm: &mut Vm, c: NativeCall) -> Ret {
     }) else {
         return Err(vm.error("defineQuestMap: a map ID expected"));
     };
-    let Value::Table(t) = c.arg(2) else {
-        return Err(vm.error("defineQuestMap: a table of the map's log expected"));
+    let t = match c.arg(2) {
+        Value::Table(t) => t,
+        Value::Nil => {
+            engine_mut(vm).world.quests.map_views.remove(&map);
+            reapply_if_shown(vm, map);
+            return Ok(vec![]);
+        }
+        _ => return Err(vm.error("defineQuestMap: a table of the map's log expected")),
     };
-    let first = field(vm, t, "first");
     let view = MapView {
-        first: text_of(vm, first),
+        first: titles(vm, t, "first"),
+        top: titles(vm, t, "top"),
+        expanded: titles(vm, t, "expanded"),
         on_map: ids(vm, t, "onMap"),
         local_poi: ids(vm, t, "localPOI"),
         quests: ids(vm, t, "quests"),
     };
     engine_mut(vm).world.quests.map_views.insert(map, view);
+    reapply_if_shown(vm, map);
     Ok(vec![])
+}
+
+/// A redefined view of the map for quest POIs shown: the log as it shows
+/// it now.
+fn reapply_if_shown(vm: &mut Vm, map: i64) {
+    if crate::questinfo::poi_map(vm) as i64 == map {
+        quest_map_changed(vm, map as f64);
+    }
 }
 
 fn set_field(answer: &mut Answer, key: &str, v: Answer) {
@@ -1330,8 +1371,9 @@ fn title_of(a: &Answer) -> String {
 
 /// The map for quest POIs changed (`C_QuestLog.SetMapForQuestPOIs`): the
 /// log as that map shows it, as recorded in `questlog` (a quest's details
-/// showing Ashenvale, twice): the map's header first, shown expanded
-/// whatever its own state (that state kept for the other maps), the
+/// showing Ashenvale, twice; in `mapnav`, Kalimdor's two headers first and
+/// a third expanded in its place): the map's headers first, shown expanded
+/// whatever their own state (that state kept for the other maps), the
 /// quests' `isOnMap` and `hasLocalPOI` the map's, a header on the map when
 /// one of its quests is, every entry's `questLogIndex` its new place (and
 /// what the log index keys moved along); the snapshot's map's log back for
@@ -1370,18 +1412,30 @@ pub fn quest_map_changed(vm: &mut Vm, map: f64) -> bool {
             _ => blocks.last_mut().expect("a block").push(*i),
         }
     }
-    let first = view.first.as_ref().and_then(|title| {
-        blocks.iter().position(|b| {
-            log.get(&b[0])
-                .and_then(|a| a.first())
-                .is_some_and(|a| is_header(a) && title_of(a) == *title)
-        })
-    });
-    let forced = first.map(|p| blocks[p][0]);
-    if let Some(p) = first {
-        let block = blocks.remove(p);
-        blocks.insert(0, block);
+    let header_title = |b: &Vec<i64>| {
+        log.get(&b[0])
+            .and_then(|a| a.first())
+            .filter(|a| is_header(a))
+            .map(title_of)
+    };
+    // The headers moved up, in the view's order, before the others.
+    let mut moved: Vec<Vec<i64>> = Vec::new();
+    for title in view.first.iter().chain(view.top.iter()) {
+        if let Some(p) = blocks
+            .iter()
+            .position(|b| header_title(b).as_ref() == Some(title))
+        {
+            moved.push(blocks.remove(p));
+        }
     }
+    moved.append(&mut blocks);
+    let blocks = moved;
+    let forced_titles: Vec<&String> = view.first.iter().chain(view.expanded.iter()).collect();
+    let forced: BTreeSet<i64> = blocks
+        .iter()
+        .filter(|b| header_title(b).is_some_and(|t| forced_titles.contains(&&t)))
+        .map(|b| b[0])
+        .collect();
     let order: Vec<i64> = blocks.concat();
     let mut info = std::collections::BTreeMap::new();
     let mut indices = std::collections::BTreeMap::new();
@@ -1393,7 +1447,7 @@ pub fn quest_map_changed(vm: &mut Vm, map: f64) -> bool {
             continue;
         };
         if is_header(a) {
-            in_forced = Some(*old) == forced;
+            in_forced = forced.contains(old);
         }
         set_field(a, "questLogIndex", Answer::Num(new as f64));
         if in_forced {
@@ -1428,10 +1482,12 @@ pub fn quest_map_changed(vm: &mut Vm, map: f64) -> bool {
             set_field(a, "isOnMap", Answer::Bool(is_on));
         }
     }
-    let forced_title = forced
-        .and_then(|i| log.get(&i))
-        .and_then(|a| a.first())
-        .map(title_of);
+    let forced_title: Vec<String> = forced
+        .iter()
+        .filter_map(|i| log.get(i))
+        .filter_map(|a| a.first())
+        .map(title_of)
+        .collect();
     for key in &BY_LOG_INDEX[1..] {
         if let Some(Entry::ByIndex(by)) = stats.get(key).cloned() {
             let moved = order
@@ -1459,7 +1515,7 @@ fn restore_base_log(vm: &mut Vm) {
     let Some(saved) = engine_mut(vm).world.quests.base_log.take() else {
         return;
     };
-    let forced = engine_mut(vm).world.quests.forced.take();
+    let forced = std::mem::take(&mut engine_mut(vm).world.quests.forced);
     let stats = &mut engine_mut(vm).world.character.stats;
     // Each header's state in the view, by its title.
     let mut collapsed: std::collections::BTreeMap<String, bool> = std::collections::BTreeMap::new();
@@ -1479,7 +1535,7 @@ fn restore_base_log(vm: &mut Vm) {
         for a in log.values_mut().filter_map(|a| a.first_mut()) {
             if is_header(a) {
                 let title = title_of(a);
-                state = if Some(&title) == forced.as_ref() {
+                state = if forced.contains(&title) {
                     None
                 } else {
                     collapsed.get(&title).copied()

@@ -34,12 +34,37 @@ local function script(frame, name, ...)
     local ok, err = pcall(e.script, frame, name, ...)
     if not ok then check(name .. ": " .. tostring(err), false) end
 end
--- The client's quest log update as the map was shown, changed or hidden
--- (recorded each time; its cause not modelled: Blizzard's quest map sets
--- the quest POIs' map on every update, the same map at the close).
+-- The client's quest log update as the map was shown or hidden (recorded
+-- each time; its cause not modelled: Blizzard's quest map sets the quest
+-- POIs' map on every update, the same map at both; a change to another
+-- map's view of the log is the engine's update).
 local function questLog() e.fireEvent("QUEST_LOG_UPDATE") end
 -- An enchanting spell's end the server told, its cause unknown (recorded).
 local function enchant() e.fireEvent("ENCHANT_SPELL_COMPLETED", false, nil) end
+-- The log as Kalimdor's map showed it (the client's answers): Blackfathom
+-- Deeps and Orgrimmar first and expanded, Paladin expanded in its place,
+-- the quests on the map (each with its place there). Why these two moved
+-- up and the Barrens' headers (on Kalimdor too) did not is not known.
+local barrens = { 1063, 6481, 6301, 1068, 6393, 86576, 6282, 1095, 894, 3369, 1131, 1486, 962, 959 }
+local kalimdor = { 6562, 97275, 1087, 95036 }
+for _, id in ipairs(barrens) do kalimdor[#kalimdor + 1] = id end
+e.defineQuestMap(1414, {
+    first = { "Blackfathom Deeps", "Orgrimmar" },
+    expanded = { "Paladin" },
+    onMap = kalimdor,
+    localPOI = kalimdor,
+})
+-- Back on the Barrens the log kept Kalimdor's order (its headers' own
+-- state, the Barrens' quests on the map) until the map closed (recorded;
+-- in `questlog` a quest's details going back from Ashenvale showed the
+-- snapshot's order at once).
+local function barrensAfterKalimdor()
+    e.defineQuestMap(1413, {
+        top = { "Blackfathom Deeps", "Orgrimmar" },
+        onMap = barrens,
+        localPOI = barrens,
+    })
+end
 at(1.866) enchant()
 at(2.404) e.pressKey("M") questLog()
 check("the world map shown", map:IsShown() and map:GetMapID() == 1413)
@@ -53,12 +78,11 @@ at(2.756) script(map.ScrollContainer, "OnMouseUp", "RightButton")
 at(2.761) e.fireEvent("QUESTLINE_UPDATE", false)
 -- Out to Kalimdor.
 at(3.281) pointAt(0.5, 0.5) press(map.ScrollContainer, "RightButton")
-questLog()
 check("Kalimdor shown", map:GetMapID() == 1414)
+barrensAfterKalimdor()
 -- Into the Barrens (where on Kalimdor is not recorded: a point of its
 -- rectangle in no other zone's taken).
 at(6.099) pointAt(0.65, 0.6) press(map.ScrollContainer)
-questLog()
 check("the Barrens shown", map:GetMapID() == 1413)
 -- A pin placed with a ctrl-click (recorded: at 0.5308, 0.4559).
 at(8.644) e.setModifiers({ ctrl = true })
@@ -79,7 +103,7 @@ at(18.230) if pin() then press(pin()) end
 at(18.421) e.setModifiers({})
 check("no pin", not C_Map.HasUserWaypoint() and not C_SuperTrack.IsSuperTrackingUserWaypoint())
 -- Closed.
-at(20.167) e.pressKey("M") questLog()
+at(20.167) e.defineQuestMap(1413, nil) e.pressKey("M") questLog()
 check("the map closed", not map:IsShown())
 at(21.361) enchant()
 at(22)

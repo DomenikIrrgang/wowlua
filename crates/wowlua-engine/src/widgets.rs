@@ -174,6 +174,9 @@ pub struct World {
     pub loading_screen: bool,
     /// A loading screen's inventory, not loaded yet.
     pub inventory_loading: bool,
+    /// The server's blocks of a loading screen's inventory, in its order
+    /// (`setInventoryLoad`).
+    pub inventory_load: Option<Vec<String>>,
     /// The player on a flight.
     pub on_taxi: bool,
     /// The sounds played (`C_Sound.PlaySound`'s handles).
