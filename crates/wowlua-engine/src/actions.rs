@@ -234,7 +234,7 @@ fn data_field(vm: &mut Vm, item: bool, id: Value, key: &str) -> Value {
 /// profile's), but food and drink not in combat, and a spell with a power
 /// cost (its data's `powerCost`) only with that much of the player's
 /// power (`/stdtest engine scenario combat`: Tough Jerky, Heroic Strike).
-fn usability(vm: &mut Vm, a: &Action) -> (bool, bool) {
+pub(crate) fn usability(vm: &mut Vm, a: &Action) -> (bool, bool) {
     // Dead or a ghost: nothing (recorded, every action at the death).
     let p = &engine(vm).units.list[crate::units::PLAYER.0];
     if p.dead || p.ghost {
