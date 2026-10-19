@@ -1013,7 +1013,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             "C_ChatInfo.IsValidCombatFilterName",
             is_valid_combat_filter_name,
         ),
-        ("C_ChatInfo.CanPlayerSpeakLanguage", can_player_speak_language),
+        (
+            "C_ChatInfo.CanPlayerSpeakLanguage",
+            can_player_speak_language,
+        ),
         ("C_ClubFinder.IsValidSearchString", is_valid_search_string),
         ("DeclineName", decline_name),
         // The client.
@@ -1054,10 +1057,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetGlancingBlowChance", get_glancing_blow_chance),
         ("GetGlancingBlowPenalty", get_glancing_blow_penalty),
         ("ResistancePercent", resistance_percent),
-        (
-            "PlayerEffectiveAttackPower",
-            player_effective_attack_power,
-        ),
+        ("PlayerEffectiveAttackPower", player_effective_attack_power),
         (
             "FindSpellBookSlotBySpellID",
             find_spell_book_slot_by_spell_id,

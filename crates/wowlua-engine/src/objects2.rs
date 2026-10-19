@@ -1040,7 +1040,17 @@ const RU: LangData = LangData {
         "декабря",
     ],
     months_short: [
-        "янв.", "февр.", "мар.", "апр.", "мая", "июн.", "июл.", "авг.", "сент.", "окт.", "нояб.",
+        "янв.",
+        "февр.",
+        "мар.",
+        "апр.",
+        "мая",
+        "июн.",
+        "июл.",
+        "авг.",
+        "сент.",
+        "окт.",
+        "нояб.",
         "дек.",
     ],
     weekdays: [
@@ -1082,12 +1092,7 @@ const KO: LangData = LangData {
         "금요일",
         "토요일",
     ],
-    dates: [
-        "yy. M. d.",
-        "y. M. d.",
-        "y년 M월 d일",
-        "y년 M월 d일 EEEE",
-    ],
+    dates: ["yy. M. d.", "y. M. d.", "y년 M월 d일", "y년 M월 d일 EEEE"],
     times: [
         "a h:mm",
         "a h:mm:ss",
@@ -1489,7 +1494,11 @@ fn parse_localized(text: &str, data: &LangData) -> Option<f64> {
         s = s.replace(data.decimal, ".");
     }
     let s = s.replace('\u{2212}', "-");
-    if s.is_empty() || !s.chars().all(|ch| ch.is_ascii_digit() || matches!(ch, '.' | '-' | '+')) {
+    if s.is_empty()
+        || !s
+            .chars()
+            .all(|ch| ch.is_ascii_digit() || matches!(ch, '.' | '-' | '+'))
+    {
         return None;
     }
     s.parse::<f64>().ok()
@@ -1724,7 +1733,11 @@ fn zone_offset(vm: &Vm, zone: &str) -> i64 {
 /// UTC, `GMT+02:00`), ICU's localized GMT forms (unverified).
 fn zone_name(data: &LangData, offset: i64, long: bool) -> String {
     if offset == 0 {
-        return if long { data.utc.to_string() } else { "UTC".to_string() };
+        return if long {
+            data.utc.to_string()
+        } else {
+            "UTC".to_string()
+        };
     }
     let sign = if offset < 0 { '-' } else { '+' };
     let (h, m) = (offset.abs() / 3600, offset.abs() % 3600 / 60);
@@ -1829,7 +1842,14 @@ fn format_moment(data: &LangData, m: &Moment, date: i64, time: i64) -> String {
     }
 }
 
-fn format_date_time(vm: &mut Vm, id: WidgetId, c: &NativeCall, date: i64, time: i64, zone: usize) -> Ret {
+fn format_date_time(
+    vm: &mut Vm,
+    id: WidgetId,
+    c: &NativeCall,
+    date: i64,
+    time: i64,
+    zone: usize,
+) -> Ret {
     let Some((unix, _)) = num_arg(vm, c, 2) else {
         return Ok(vec![]);
     };
@@ -1953,7 +1973,9 @@ fn transform_locale(loc: &Locale, transform: i64) -> String {
             let mut out = loc.clone();
             if let Some(&(_, script, region)) = likely {
                 let traditional = loc.traditional();
-                if out.script == script || (traditional && out.script == "Hant" && out.region == "TW") {
+                if out.script == script
+                    || (traditional && out.script == "Hant" && out.region == "TW")
+                {
                     out.script.clear();
                 }
                 if out.region == region && !traditional {
@@ -2048,7 +2070,8 @@ fn breaks(text: &str, kind: i64) -> Vec<usize> {
                     j -= 1;
                 }
                 let spaced = j < i;
-                while j > 0 && matches!(chars[j - 1].1, '"' | '\'' | ')' | ']' | '»' | '”' | '’') {
+                while j > 0 && matches!(chars[j - 1].1, '"' | '\'' | ')' | ']' | '»' | '”' | '’')
+                {
                     j -= 1;
                 }
                 let ended = j > 0 && matches!(chars[j - 1].1, '.' | '?' | '!' | '。' | '？' | '！');
@@ -2181,7 +2204,10 @@ const PREDICTED: [(&str, &str); 6] = [
     ("health", "\u{0}health"),
     ("healthMax", "\u{0}healthMax"),
     ("totalIncomingHeals", "\u{0}totalIncomingHeals"),
-    ("totalIncomingHealsFromHealer", "\u{0}totalIncomingHealsFromHealer"),
+    (
+        "totalIncomingHealsFromHealer",
+        "\u{0}totalIncomingHealsFromHealer",
+    ),
     ("totalDamageAbsorbs", "\u{0}totalDamageAbsorbs"),
     ("totalHealAbsorbs", "\u{0}totalHealAbsorbs"),
 ];
@@ -2618,10 +2644,7 @@ mod tests {
             format_currency_in(&Locale::parse("enUS"), 1234.5, "USD"),
             "$1,234.50"
         );
-        assert_eq!(
-            format_currency_in(&de, 1234.5, "EUR"),
-            "1.234,50\u{A0}€"
-        );
+        assert_eq!(format_currency_in(&de, 1234.5, "EUR"), "1.234,50\u{A0}€");
         assert_eq!(parse_localized("1.234,5", lang_data(&de)), Some(1234.5));
     }
 
@@ -2635,10 +2658,7 @@ mod tests {
         let m = moment(1_792_422_245.0, 0);
         assert_eq!((m.year, m.month, m.day, m.weekday), (2026, 10, 19, 1));
         assert_eq!(format_moment(&EN_US, &m, 2, 0), "Oct 19, 2026");
-        assert_eq!(
-            format_moment(&EN_US, &m, 1, 1),
-            "10/19/26, 3:04\u{202F}PM"
-        );
+        assert_eq!(format_moment(&EN_US, &m, 1, 1), "10/19/26, 3:04\u{202F}PM");
         assert_eq!(format_moment(&DE, &m, 4, 0), "Montag, 19. Oktober 2026");
     }
 

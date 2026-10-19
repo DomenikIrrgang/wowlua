@@ -44,6 +44,7 @@ pub mod inspect;
 pub mod inventory;
 pub mod iteminfo;
 pub mod itemlocation;
+pub mod leftovers2;
 pub mod levels;
 pub mod login;
 pub mod loot;
@@ -54,6 +55,7 @@ pub mod measures;
 pub mod merchant;
 pub mod methods2;
 pub mod misc;
+pub mod objects2;
 pub mod party;
 pub mod pets;
 pub mod protection;
@@ -277,6 +279,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         .chain(death::behaviours())
         .chain(inventory::behaviours())
         .chain(queries::behaviours())
+        .chain(objects2::behaviours())
         .chain(party::behaviours())
         .chain(inspect::behaviours())
         .chain(traits::behaviours(flavor))
@@ -315,6 +318,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             .into_iter()
             .chain(widgets::behaviours())
             .chain(curves::methods())
+            .chain(objects2::methods())
             .chain(clock::methods())
             .chain(healcalc::methods())
             .chain(formatters::methods())
@@ -838,10 +842,11 @@ pub(crate) fn call_text(vm: &Vm, name: &str, c: &NativeCall, first: usize) -> St
 
 /// Fill-ins whose answer a setter of theirs changes: they take the place
 /// of the recorded answer, which they give until set (the dungeon
-/// difficulty recorded 1, the heirloom and wardrobe filters recorded
+/// difficulty recorded 1, the action bar toggles, the heirloom and wardrobe filters recorded
 /// checked, nothing super-tracked).
 const OVER_RECORDED: &[&str] = &[
     "GetDungeonDifficultyID",
+    "GetActionBarToggles",
     "C_Heirloom.GetCollectedHeirloomFilter",
     "C_Heirloom.GetUncollectedHeirloomFilter",
     "C_Heirloom.GetClassAndSpecFilters",
@@ -870,6 +875,7 @@ fn fill_ins() -> Vec<(&'static str, NativeFn)> {
         .chain(globalsinfo::behaviours())
         .chain(systeminfo::behaviours())
         .chain(actions2::behaviours())
+        .chain(leftovers2::behaviours())
         .collect()
 }
 
