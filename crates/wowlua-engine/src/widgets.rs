@@ -3370,10 +3370,15 @@ fn enumerate_frames(vm: &mut Vm, c: NativeCall) -> Ret {
             None => return Ok(vec![Value::Nil]),
         },
     };
+    // Addon code is not handed forbidden frames (unverified: ElvUI's
+    // toolkit asks every enumerated frame's `GetObjectType` before
+    // `IsForbidden`, error-free in the client, where that call on a
+    // forbidden frame errors, `/stdtest engine`).
+    let addon = crate::protection::tainted(vm);
     let e = engine(vm);
     let next = e.world.widgets[start.min(e.world.widgets.len())..]
         .iter()
-        .find(|w| is_a(e, &w.class, "Frame"))
+        .find(|w| is_a(e, &w.class, "Frame") && !(addon && w.forbidden))
         .map(|w| Value::Table(w.table));
     Ok(vec![next.unwrap_or(Value::Nil)])
 }
