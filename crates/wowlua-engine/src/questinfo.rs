@@ -1083,9 +1083,10 @@ fn set_super_tracked_vignette(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `C_SuperTrack.GetSuperTrackedVignette()`: its GUID, else nothing
 /// (recorded at load: nothing).
 fn get_super_tracked_vignette(vm: &mut Vm, _c: NativeCall) -> Ret {
+    // None tracked: nil (the full probe).
     Ok(match get(vm, "vignette") {
         v @ Value::Str(_) => vec![v],
-        _ => vec![],
+        _ => vec![Value::Nil],
     })
 }
 

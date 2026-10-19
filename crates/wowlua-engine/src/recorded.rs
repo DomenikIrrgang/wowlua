@@ -374,22 +374,5 @@ pub fn call_variants(vm: &Vm, name: &str, c: &NativeCall) -> Vec<String> {
     if whole.iter().zip(&args).any(|(w, a)| w != a) {
         out.push(format!("{name}({})", whole.join(", ")));
     }
-    // Arguments past the documented ones: the client ignores them.
-    if let Some(Value::Num(i)) = c.upvals.first().copied()
-        && let Some(f) = engine(vm).api.functions.get(i as usize)
-        && let Some(n) = f
-            .doc
-            .get("Arguments")
-            .and_then(|a| a.as_array())
-            .map(Vec::len)
-        && args.len() > n
-    {
-        args.truncate(n);
-        out.push(format!("{name}({})", args.join(", ")));
-        while matches!(args.last(), Some(&"nil" | &"{}")) {
-            args.pop();
-            out.push(format!("{name}({})", args.join(", ")));
-        }
-    }
     out
 }
