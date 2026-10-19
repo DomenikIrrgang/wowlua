@@ -301,6 +301,13 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("defineSpell", crate::gamedata::define_spell),
         ("defineItem", crate::gamedata::define_item),
         ("defineQuest", crate::quests::control_define),
+        ("defineQuestMap", crate::quests::control_define_map),
+        ("setBagOrder", crate::cursor::control_set_bag_order),
+        (
+            "setItemDataDelay",
+            crate::cursor::control_set_item_data_delay,
+        ),
+        ("setSortResult", crate::cursor::control_set_sort_result),
         ("defineGossip", crate::gossip::control_define),
         ("defineTrainer", crate::trainer::control_define),
         ("defineTaxi", crate::taxi::control_define),

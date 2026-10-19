@@ -1579,6 +1579,51 @@ fn the_engine_plays_lfg_as_the_client_did() {
     plays_as_the_client_did("lfg", LFG_MATCHED);
 }
 
+/// How many of the mail2 scenario's lines the engine plays as the client
+/// did: only ever up. Not yet: another player's death (the world's), told
+/// inside the taken item's packet.
+const MAIL2_MATCHED: usize = 218;
+
+/// The mail2 scenario: the inbox's first fetch of a session, a sold
+/// auction's money and a won auction's item taken.
+#[test]
+fn the_engine_plays_mail2_as_the_client_did() {
+    plays_as_the_client_did("mail2", MAIL2_MATCHED);
+}
+
+/// How many of the repair scenario's lines the engine plays as the client
+/// did: only ever up.
+const REPAIR_MATCHED: usize = 364;
+
+/// The repair scenario: a vendor's gossip, one item mended with the repair
+/// cursor, the rest with Repair All.
+#[test]
+fn the_engine_plays_repair_as_the_client_did() {
+    plays_as_the_client_did("repair", REPAIR_MATCHED);
+}
+
+/// How many of the bags scenario's lines the engine plays as the client
+/// did: only ever up.
+const BAGS_MATCHED: usize = 1253;
+
+/// The bags scenario: every bag opened, a stack split and dropped, an item
+/// moved to another bag, the bags sorted.
+#[test]
+fn the_engine_plays_bags_as_the_client_did() {
+    plays_as_the_client_did("bags", BAGS_MATCHED);
+}
+
+/// How many of the questlog scenario's lines the engine plays as the
+/// client did: only ever up.
+const QUESTLOG_MATCHED: usize = 424;
+
+/// The questlog scenario: the quest log opened, its zones collapsed and
+/// expanded one by one and all at once, two quests selected.
+#[test]
+fn the_engine_plays_questlog_as_the_client_did() {
+    plays_as_the_client_did("questlog", QUESTLOG_MATCHED);
+}
+
 /// A scenario played: no error of Blizzard's, every UI check passed, the
 /// end as the client's, and at least `ratchet` of its lines as the
 /// client's (`WOWLUA_SCENARIO_LIMIT`: how many differences to print;

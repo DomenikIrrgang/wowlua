@@ -400,8 +400,11 @@ export type MerchantItem = { id: number, price?: number, stack?: number, availab
 --- through the client's API, answered by the server a round trip later.
 --- `cached`: the goods' data known (a visit before: no filter updates);
 --- `repairMoneyAfter`: a repair's money told after that many items'
---- durability (the server's packets; by default after all).
-export function openMerchant(data: { name?: string, items?: MerchantItem[], canRepair?: boolean, repairCost?: number, damaged?: number, cached?: boolean, repairMoneyAfter?: number })
+--- durability (the server's packets; by default after all);
+--- `repairCosts`: what mending each worn slot's item costs (`{ [slot] =
+--- copper }`: `GetRepairAllCost` sums the damaged ones', the repair
+--- cursor's click on one mends it alone).
+export function openMerchant(data: { name?: string, items?: MerchantItem[], canRepair?: boolean, repairCost?: number, damaged?: number, cached?: boolean, repairMoneyAfter?: number, repairCosts?: { [number]: number } })
     engine().openMerchant(data)
 end
 
@@ -833,6 +836,26 @@ export function wheel(frame: any, delta: number)
     engine().wheel(frame, delta)
 end
 
+--- The order this session's server tells the bags' updates in (a move's,
+--- a sort's): `{ bag, … }` first, the default's after.
+export function setBagOrder(bags: number[])
+    engine().setBagOrder(bags)
+end
+
+--- A split stack's data this long after the server's answer (seconds; nil:
+--- at once): its slot reads empty till then.
+export function setItemDataDelay(seconds: number?)
+    engine().setItemDataDelay(seconds)
+end
+
+--- Where the next `C_Container.SortBags` puts the bags' items (the
+--- server's sort): `{ [bag] = { [slot] = { id, count, shownFirst, after } } }`
+--- (a merged stack shown first with `shownFirst`, its `count` `after`
+--- seconds later).
+export function setSortResult(bags: table)
+    engine().setSortResult(bags)
+end
+
 --- The modifier keys held (the left ones): `MODIFIER_STATE_CHANGED`;
 --- `IsShiftKeyDown` and the others follow.
 export function setModifiers(keys: { shift?: boolean, ctrl?: boolean, alt?: boolean })
@@ -951,6 +974,15 @@ export function defineQuest(id: number, data: table)
     engine().defineQuest(id, data)
 end
 
+--- The quest log as the client shows it while the map for quest POIs is
+--- `mapID` (the server's data): `{ first = headerTitle, onMap = { questID,
+--- … }, localPOI = { questID, … }, quests = { questID, … } }`; `first`'s
+--- header moves to the top, shown expanded; `quests`: the logged quests
+--- whose map (`GetQuestUiMapID`) it is.
+export function defineQuestMap(mapID: number, data: table)
+    engine().defineQuestMap(mapID, data)
+end
+
 --- An NPC's gossip: `{ text, options = { { name, icon, gossipOptionID,
 --- opens, merchant? } }, textAfter?, availableQuests? }` (`opens =
 --- "trainer"`: its trainer; `"taxi"`; `"merchant"`: its vendor window,
@@ -982,9 +1014,17 @@ end
 
 --- A mailbox and its inbox: `{ letters = { { packageIcon, stationeryIcon,
 --- sender, subject, money, cod, daysLeft, wasRead, wasReturned,
---- textCreated, canReply, isGM, text, items = { { id, count } }, invoice =
---- { type, itemName, playerName, … }, auction } }, newMail, senders }`;
---- `player:interact(mailbox)` opens it.
+--- textCreated, canReply, isGM, text, items = { { id, count, itemAfter } },
+--- invoice = { type, itemName, playerName, … }, auction, retrieving,
+--- readAfter } }, newMail, senders, fetched, received, namesAfter,
+--- dataAfter, bagAfter, goneAfter }`; `player:interact(mailbox)` opens it.
+--- `fetched = false`: the inbox not fetched yet this session (empty till
+--- the server's); `retrieving`: a letter's items' data not with the client
+--- ("Retrieving data") till `dataAfter` seconds after the inbox, the
+--- `received` items' `GET_ITEM_INFO_RECEIVED` then; the server's delays:
+--- the invoices' names (`namesAfter`), a taken item's bag packet
+--- (`bagAfter`), an emptied letter's going (`goneAfter`), a letter's read
+--- (`readAfter`), a taken item's data after its bag packet (`itemAfter`).
 export function defineMailbox(mailbox: MockUnit, data: table)
     engine().defineMailbox(mailbox, data)
 end
