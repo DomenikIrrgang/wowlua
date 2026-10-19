@@ -224,6 +224,14 @@ local function entries(values: { [string]: string }): Entry[]
             }
         end
     end
+    -- The calls most likely to crash the client, after everything else.
+    for _, c in ipairs((p.risky or {}) :: string[][]) do
+        const fn = c[1]
+        for i = 2, #c do
+            local args, missing = resolve(c[i], values)
+            out[#out + 1] = { text = `{fn}({args})`, fn = fn, setter = false, missing = missing }
+        end
+    end
     return out
 end
 

@@ -1511,7 +1511,12 @@ pub struct Plan {
     pub setters: Vec<Setter>,
     /// Each skipped function and why.
     pub skipped: Vec<(String, String)>,
+    /// The probed functions the documentation lacks (no argument checks).
+    pub undocumented: BTreeSet<String>,
 }
+
+/// Functions with their calls' argument lists.
+pub type Calls = Vec<(String, Vec<String>)>;
 
 impl Plan {
     pub fn build(root: &Path) -> Result<Plan> {
@@ -1528,9 +1533,13 @@ impl Plan {
         let setter_names = setter_functions(&setters);
         let mut calls = Vec::new();
         let mut skipped = Vec::new();
+        let mut undocumented = BTreeSet::new();
         let unique: BTreeSet<&String> = functions.iter().collect();
         for name in unique {
             let doc = docs.functions.get(name.as_str());
+            if doc.is_none() {
+                undocumented.insert(name.clone());
+            }
             match classify(name, doc, protected, &setter_names) {
                 Kind::Query => {
                     let list = match doc {
@@ -1554,7 +1563,38 @@ impl Plan {
             calls,
             setters,
             skipped,
+            undocumented,
         }
+    }
+
+    /// The calls in three passes: each function's first two (no
+    /// arguments, the baseline) for documented functions; the other calls
+    /// of documented functions without a boundary number; and the rest
+    /// (boundary numbers, out of range values of undocumented functions,
+    /// every call of an undocumented function past its first).
+    pub fn passes(&self) -> (Calls, Calls, Calls) {
+        let boundary = regex::Regex::new(r"(^|[^0-9.\w])(-1|2147483647|1\.5)($|[^0-9.])")
+            .expect("a valid pattern");
+        let (mut safe, mut checked, mut risky) = (Vec::new(), Vec::new(), Vec::new());
+        for (name, list) in &self.calls {
+            let documented = !self.undocumented.contains(name);
+            let (mut a, mut b, mut c) = (Vec::new(), Vec::new(), Vec::new());
+            for (i, args) in list.iter().enumerate() {
+                if documented && i < 2 || !documented && i == 0 {
+                    a.push(args.clone());
+                } else if documented && !boundary.is_match(args) {
+                    b.push(args.clone());
+                } else {
+                    c.push(args.clone());
+                }
+            }
+            for (pass, part) in [(&mut safe, a), (&mut checked, b), (&mut risky, c)] {
+                if !part.is_empty() {
+                    pass.push((name.clone(), part));
+                }
+            }
+        }
+        (safe, checked, risky)
     }
 
     pub fn call_count(&self) -> usize {
@@ -1597,7 +1637,23 @@ impl Plan {
              -- the restore (a function given the read-back's values), the settings.\n\
              local _, ns = ...\n\nlocal calls = {\n",
         );
-        for (name, list) in &self.calls {
+        // Safest first, so a short run gets the most: every function's
+        // call without arguments and its baseline, then the calls the
+        // argument checks answer; the calls most likely to crash the client
+        // (boundary numbers, undocumented functions, which have no argument
+        // checks) come last, after the settings (`risky`).
+        let (safe, checked, risky) = self.passes();
+        for pass in [&safe, &checked] {
+            for (name, list) in pass {
+                let _ = write!(out, "    {{ {}", lua_string(name));
+                for args in list {
+                    let _ = write!(out, ", {}", lua_string(args));
+                }
+                out.push_str(" },\n");
+            }
+        }
+        out.push_str("}\n\nlocal risky = {\n");
+        for (name, list) in &risky {
             let _ = write!(out, "    {{ {}", lua_string(name));
             for args in list {
                 let _ = write!(out, ", {}", lua_string(args));
@@ -1627,7 +1683,7 @@ impl Plan {
             let _ = writeln!(out, "    {{ {}, {} }},", lua_string(name), lua_string(why));
         }
         out.push_str(
-            "}\n\nns.__wowlua.define(\"fullprobeplan\", { calls = calls, setters = setters, skipped = skipped })\n",
+            "}\n\nns.__wowlua.define(\"fullprobeplan\", { calls = calls, risky = risky, setters = setters, skipped = skipped })\n",
         );
         out
     }
