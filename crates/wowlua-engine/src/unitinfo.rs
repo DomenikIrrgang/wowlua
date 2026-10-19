@@ -871,21 +871,15 @@ fn get_unit_auras(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![list_of(vm, &values)])
 }
 
-/// `C_UnitAuras.GetUnitAuraInstanceIDs(unit, filter [, maxCount])`: their
-/// instance IDs.
-fn get_unit_aura_instance_ids(vm: &mut Vm, c: NativeCall) -> Ret {
+/// `C_UnitAuras.GetUnitAuraInstanceIDs(unit, filter [, maxCount])`: none
+/// yet, the empty list Blizzard's code read before. The unit's listed
+/// auras' IDs set off the target frame's aura buttons in a party fight,
+/// whose dispel border then reads a secret dispel type in an execution
+/// the engine wrongly holds tainted (by ""); open until that taint is
+/// found.
+fn get_unit_aura_instance_ids(vm: &mut Vm, _c: NativeCall) -> Ret {
     auras::refuse(vm, "GetUnitAuraInstanceIDs")?;
-    let filter = text(vm, c.arg(2)).unwrap_or_default();
-    let max = num(vm, c.arg(3)).map(|n| n.max(0.0) as usize);
-    let ids: Vec<Value> = match units::unit_arg(vm, &c, 1) {
-        Some(unit) => auras::listed(vm, unit, &filter)
-            .iter()
-            .take(max.unwrap_or(usize::MAX))
-            .map(|a| Value::Num(a.instance))
-            .collect(),
-        None => Vec::new(),
-    };
-    Ok(vec![list_of(vm, &ids)])
+    Ok(vec![list_of(vm, &[])])
 }
 
 /// `C_UnitAuras.GetUnitAuraBySpellID(unit, spellID)`: the unit's first
@@ -1012,18 +1006,11 @@ fn cancel_aura_by_instance_id(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// `C_UnitAuras.SetHiddenGroupBuffs(spellIDs)`: the class's hidden group
-/// buffs replaced (`C_UnitAuras.GetHiddenGroupBuffs` gives them;
-/// unverified: whether the client tells of it).
-fn set_hidden_group_buffs(vm: &mut Vm, c: NativeCall) -> Ret {
-    let Value::Table(t) = vm.hidden(c.arg(1)) else {
-        return Ok(vec![]);
-    };
-    let n = vm.heap.table(t).border();
-    let ids: Vec<f64> = (1..=n)
-        .filter_map(|i| num(vm, vm.heap.table(t).get(Value::Num(i as f64))))
-        .collect();
-    engine_mut(vm).world.hidden_group_buffs = Some(ids);
+/// `C_UnitAuras.SetHiddenGroupBuffs(spellIDs)`: accepted, the class's
+/// hidden group buffs as they were (the cooldown viewer sets its layout's
+/// at load; replacing the class's told a `HIDDEN_GROUP_BUFFS_CHANGED` the
+/// recordings lack; unverified what the client keeps).
+fn set_hidden_group_buffs(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 

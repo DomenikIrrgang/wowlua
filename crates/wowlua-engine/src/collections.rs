@@ -116,10 +116,6 @@ fn nil(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Nil])
 }
 
-fn nil_nil(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Nil, Value::Nil])
-}
-
 fn empty_table(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Table(vm.new_table())])
 }
@@ -1247,11 +1243,14 @@ fn get_variant_sets(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_TransmogSets.GetBaseSets()`, `GetAvailableSets()`, `GetUsableSets()`:
-/// the base sets; those valid for the character and not hidden until
-/// collected; those valid and collected (unverified: which the client
-/// counts available).
+/// the base sets not hidden until collected; those valid for the
+/// character and not hidden; those valid and collected (unverified: which
+/// the client lists; the recorded set is hidden until collected, and its
+/// camera IDs are not recorded, so the wardrobe's sets tab shows none).
 fn get_base_sets(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![sets_where(vm, is_base)])
+    Ok(vec![sets_where(vm, |e| {
+        is_base(e) && (!field_bool(e, "hiddenUntilCollected") || field_bool(e, "collected"))
+    })])
 }
 
 fn get_available_sets(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -1623,6 +1622,13 @@ fn tracking_failure(_vm: &mut Vm, _c: NativeCall) -> Ret {
 /// `C_ContentTracking.IsNavigable`: failure, not navigable.
 fn tracking_not_navigable(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(2.0), Value::Bool(false)])
+}
+
+/// `C_TransmogSets.GetCameraIDs()`: 0, 0, the documented numbers' empty
+/// values Blizzard's wardrobe read before (it asks the camera of what it
+/// gets; unverified: the client's IDs were not recorded).
+fn get_camera_ids(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(0.0), Value::Num(0.0)])
 }
 
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
@@ -2114,6 +2120,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Transmog.IsAtTransmogNPC", no),
         // Transmog sets, as recorded.
         ("C_TransmogSets.GetSetInfo", get_set_info),
+        ("C_TransmogSets.GetCameraIDs", get_camera_ids),
         ("C_TransmogSets.GetBaseSetID", get_base_set_id),
         ("C_TransmogSets.GetVariantSets", get_variant_sets),
         ("C_TransmogSets.GetBaseSets", get_base_sets),
@@ -2145,7 +2152,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_TransmogSets.GetSourceIDsForSlot", set_items),
         ("C_TransmogSets.GetSetNewSources", set_items),
         ("C_TransmogSets.GetSetsContainingSourceID", empty_table),
-        ("C_TransmogSets.GetCameraIDs", nil_nil),
         // No new sources (`Constants.Transmog.NoTransmogID`-like 0 for the
         // latest; unverified).
         ("C_TransmogSets.GetLatestSource", zero),

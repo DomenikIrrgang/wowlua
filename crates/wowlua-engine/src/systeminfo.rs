@@ -222,14 +222,7 @@ fn lerp(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `Saturate(value)`: clamped to 0..1 (MathUtil.lua).
 fn saturate(vm: &mut Vm, c: NativeCall) -> Ret {
     let v = vm.check_number(&c, 1)?;
-    let out = if v > 1.0 {
-        1.0
-    } else if v < 0.0 {
-        0.0
-    } else {
-        v
-    };
-    Ok(vec![Value::Num(out)])
+    Ok(vec![Value::Num(v.clamp(0.0, 1.0))])
 }
 
 /// `RoundToSignificantDigits(value, digits)`: `Round(value * 10^digits) /

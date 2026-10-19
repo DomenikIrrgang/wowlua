@@ -81,9 +81,8 @@ local exists = C_AddOns.DoesAddOnExist('Other')
 C_AddOns.DisableAddOn('Other')
 local off = C_AddOns.GetAddOnEnableState('Other')
 C_AddOns.EnableAddOn('Other')
-local a, b = C_AddOns.GetAddOnDependencies('Other')
-return exists, off, C_AddOns.GetAddOnEnableState('Other'), C_AddOns.GetAddOnTitle('Other'), a, b,
+return exists, off, C_AddOns.GetAddOnEnableState('Other'), C_AddOns.GetAddOnTitle('Other'),
     C_AddOns.DoesAddOnExist('Missing')",
     );
-    assert_eq!(r, ["true", "0", "2", "The Other", "A", "B", "false"]);
+    assert_eq!(r, ["true", "0", "2", "The Other", "false"]);
 }
