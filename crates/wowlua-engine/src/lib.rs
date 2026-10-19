@@ -44,6 +44,7 @@ pub mod inventory;
 pub mod iteminfo;
 pub mod itemlocation;
 pub mod levels;
+pub mod lfg;
 pub mod login;
 pub mod loot;
 pub mod macros;
@@ -287,6 +288,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         .chain(encounters::behaviours())
         .chain(pets::behaviours())
         .chain(conditionals::behaviours())
+        .chain(lfg::behaviours())
         .chain([
             ("import", ui::build::import as NativeFn),
             (

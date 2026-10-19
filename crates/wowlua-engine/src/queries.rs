@@ -389,12 +389,6 @@ fn class_appearance_sources(vm: &mut Vm, c: NativeCall) -> Ret {
         .unwrap_or_else(|| vec![Value::Table(vm.new_table())]))
 }
 
-/// `C_LFGList.GetFilteredSearchResults()`, `GetSearchResults()`: no groups
-/// found (no search made; the recording's were other players' listings).
-fn no_search_results(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(0.0), Value::Table(vm.new_table())])
-}
-
 /// A color's code: `ff` and its red, green and blue as hex, rounded (as
 /// `WrapTextInColor` writes it, recorded; the alpha not written).
 fn color_code(vm: &mut Vm, color: Value) -> String {
@@ -456,10 +450,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             "C_ColorUtil.GenerateTextColorCode",
             generate_text_color_code,
         ),
-        ("C_LFGList.GetFilteredSearchResults", no_search_results),
         // Nothing tracked (unverified).
         ("C_ContentTracking.IsTracking", no),
-        ("C_LFGList.GetSearchResults", no_search_results),
         (
             "C_TransmogCollection.GetCategoryAppearances",
             category_appearances,
