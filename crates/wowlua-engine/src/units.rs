@@ -1176,6 +1176,9 @@ pub fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
         ("UnitGUID", unit_guid),
         ("UnitTokenFromGUID", unit_token_from_guid),
         ("UnitName", unit_name),
+        // As `UnitName` (recorded alike for the player: its first and last
+        // name; unverified for a renamed unit, a vehicle's).
+        ("UnitNameUnmodified", unit_name),
         ("UnitLevel", unit_level),
         ("UnitClass", unit_class),
         ("UnitRace", unit_race),
@@ -1495,8 +1498,12 @@ fn unit_from(vm: &mut Vm, data: Option<TableRef>, player_guid: Option<String>) -
         class,
         class_name,
         race: text(vm, "race", if player { "Human" } else { "" }),
-        faction_group: match get(vm, "factionGroup") {
-            Value::Str(s) => Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
+        // Its faction, else a world profile's character's (`faction`: a
+        // race of either, the Skyborne, recorded Horde).
+        faction_group: match (get(vm, "factionGroup"), get(vm, "faction")) {
+            (Value::Str(s), _) | (_, Value::Str(s)) => {
+                Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned())
+            }
             _ => None,
         },
         sex: num(vm, "sex", 1.0),
@@ -2606,18 +2613,49 @@ fn enter_combat(vm: &mut Vm, me: UnitId, usability: bool) {
 fn control_leave_combat(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
     engine_mut(vm).units.list[me.0].in_combat = false;
-    if me == PLAYER && engine(vm).units.threat_situation {
-        // Off the threat lists first (recorded).
+    // The living creatures whose threat lists the player was on (one
+    // giving up, alive: their lists told by the server after the rest of
+    // the moment, the player's health too; recorded: talents, a fox's).
+    let living: Vec<UnitId> = engine(vm)
+        .units
+        .list
+        .iter()
+        .enumerate()
+        .filter(|(_, u)| u.threat.is_some() && !u.dead)
+        .map(|(i, _)| UnitId(i))
+        .collect();
+    let situation = me == PLAYER && engine(vm).units.threat_situation;
+    if situation {
         engine_mut(vm).units.threat_situation = false;
         for u in engine_mut(vm).units.list.iter_mut() {
             u.threat = None;
         }
-        fire_unit(vm, "UNIT_THREAT_SITUATION_UPDATE", PLAYER, &[]);
+        // Off the threat lists first (recorded: the wolf's, dead).
+        if living.is_empty() {
+            fire_unit(vm, "UNIT_THREAT_SITUATION_UPDATE", PLAYER, &[]);
+        }
     }
     if me == PLAYER {
         player_out_of_combat(vm);
         crate::actions::update_usability(vm);
     }
+    if situation && !living.is_empty() {
+        let ids = living.iter().map(|id| Value::Num(id.0 as f64)).collect();
+        let told = vm.native_with("threatDropped", threat_dropped, ids);
+        crate::clock::after_engine(vm, 0.0, told);
+    }
+    Ok(vec![])
+}
+
+/// Off living creatures' threat lists: each list's update, then the
+/// player's situation.
+fn threat_dropped(vm: &mut Vm, c: NativeCall) -> Ret {
+    for v in c.upvals.iter().copied() {
+        if let Value::Num(n) = v {
+            fire_unit(vm, "UNIT_THREAT_LIST_UPDATE", UnitId(n as usize), &[]);
+        }
+    }
+    fire_unit(vm, "UNIT_THREAT_SITUATION_UPDATE", PLAYER, &[]);
     Ok(vec![])
 }
 

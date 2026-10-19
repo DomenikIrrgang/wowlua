@@ -56,7 +56,7 @@ const LOG_AFTER: f64 = 0.08;
 const POI_AFTER: f64 = 0.477;
 /// How near the player must be to talk to an NPC, in yards (unverified:
 /// 9.9 was too far).
-const INTERACT_RANGE: f64 = 5.0;
+pub(crate) const INTERACT_RANGE: f64 = 5.0;
 /// The player's interaction type of a quest giver
 /// (`Enum.PlayerInteractionType.QuestGiver`).
 const QUEST_GIVER: f64 = 4.0;

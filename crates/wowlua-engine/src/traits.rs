@@ -21,7 +21,9 @@
 //! config's trees paying in its currency, then (when it unlocked others)
 //! the unlocked nodes and its edges' targets again; applying: a round
 //! trip, `SPELLS_CHANGED`, then the committed nodes, every tree's currency,
-//! `TRAIT_CONFIG_UPDATED`, `PLAYER_TALENT_UPDATE`.
+//! `TRAIT_CONFIG_UPDATED`, `PLAYER_TALENT_UPDATE` (a talent changing the
+//! damage done: `PLAYER_DAMAGE_DONE_MODS` before the nodes,
+//! `DAMAGE_DONE_MODS`).
 //!
 //! Unverified: an edge is met by its source at its last rank (the classic
 //! rule; recorded only met at 5 of 5); the unlocked nodes' order (the
@@ -46,6 +48,13 @@ const COMMIT_AFTER_GENERIC: f64 = 0.499;
 const COMMIT_AFTER: f64 = 0.068;
 /// `Enum.TraitConfigType.Generic`.
 const GENERIC: f64 = 3.0;
+/// The talents' spells that change the player's damage done, applied:
+/// `PLAYER_DAMAGE_DONE_MODS("player")` as many times, before the nodes'
+/// changes (recorded: Thundering Strikes, 1% critical strike chance with
+/// all spells and attacks, four at its first rank; the legacy nodes' none).
+/// Unverified: at its other ranks, other talents' (their spells' effects
+/// not known to the engine).
+const DAMAGE_DONE_MODS: &[(i64, usize)] = &[(16255, 4)];
 /// Each class's talent tree, in the client's order, all paying in the
 /// class talents' currency (recorded: a shaman's rank bought fired
 /// `TRAIT_TREE_CURRENCY_INFO_UPDATED` for these, each answering it).
@@ -379,6 +388,26 @@ impl<'a> Model<'a> {
 
     fn rank(&self, config: i64, node: i64, staged: bool) -> i64 {
         self.committed(config, node) + if staged { self.staged(config, node) } else { 0 }
+    }
+
+    /// The spells of a node's entries (their definitions').
+    fn node_spells(&self, config: i64, node: i64) -> Vec<i64> {
+        let entries = self
+            .recorded_node(config, node)
+            .map(|n| n.nums("entryIDs"))
+            .unwrap_or_default();
+        entries
+            .into_iter()
+            .filter_map(|e| {
+                let def = self
+                    .first(&format!("C_Traits.GetEntryInfo({config}, {e})"))?
+                    .num("definitionID")? as i64;
+                Some(
+                    self.first(&format!("C_Traits.GetDefinitionInfo({def})"))?
+                        .num("spellID")? as i64,
+                )
+            })
+            .collect()
     }
 
     fn entry_max_ranks(&self, config: i64, entry: i64) -> i64 {
@@ -869,10 +898,46 @@ fn get_tree_currency_info(vm: &mut Vm, c: NativeCall) -> Ret {
             return Ok(vec![]);
         };
         let exclude = vm.hidden(c.arg(3)).truthy();
+        if config == INSPECT && inspected(vm).is_none() {
+            return Ok(answer(vm, bare_tree_currency(vm, tree, exclude)));
+        }
         let (key, config, _) = resolve(vm, config);
         let rv = Model::new(&key, &engine(vm).world.traits).tree_currency(config, tree, exclude);
         Ok(answer(vm, rv))
     })
+}
+
+/// An inspected player's tree without its recorded character (the test
+/// named none): its currency as the tree's owner's with nothing bought
+/// (as its nodes, `Model::node`; unverified: its points then all
+/// unspent).
+fn bare_tree_currency(vm: &Vm, tree: i64, exclude: bool) -> Option<Rv> {
+    let wanted = |call: &str| -> Option<i64> {
+        call.strip_prefix("C_Traits.GetTreeCurrencyInfo(")?
+            .strip_suffix(&format!(", {tree}, false)"))?
+            .parse()
+            .ok()
+    };
+    let mut hosts: Vec<(&str, i64)> = data()
+        .keys()
+        .filter_map(|(class, call)| Some((*class, wanted(call)?)))
+        .collect();
+    // The tree's owner: a config holding it (every class's config answers
+    // of the class trees); the same on every run (the data's order is a
+    // hash map's).
+    hosts.sort_unstable();
+    let owns = |(class, config): &(&str, i64)| {
+        Model::new(class, &engine(vm).world.traits)
+            .trees(*config)
+            .contains(&tree)
+    };
+    let (class, config) = hosts.iter().find(|h| owns(h)).or(hosts.first()).copied()?;
+    let bare = Model {
+        class: class.to_string(),
+        state: &engine(vm).world.traits,
+        bare: true,
+    };
+    bare.tree_currency(config, tree, exclude)
 }
 
 fn can_purchase_rank(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -1080,6 +1145,15 @@ fn applied(vm: &mut Vm, c: NativeCall) -> Ret {
         let t = traits_mut(vm);
         t.staged.remove(&(config, *n));
         t.committed.insert((config, *n), rank);
+    }
+    let mods: usize = nodes
+        .iter()
+        .flat_map(|n| model(vm).node_spells(config, *n))
+        .filter_map(|s| DAMAGE_DONE_MODS.iter().find(|(id, _)| *id == s))
+        .map(|(_, count)| count)
+        .sum();
+    for _ in 0..mods {
+        crate::units::fire_unit(vm, "PLAYER_DAMAGE_DONE_MODS", PLAYER, &[]);
     }
     for n in nodes {
         fire(vm, "TRAIT_NODE_CHANGED", &[Value::Num(n as f64)]);
