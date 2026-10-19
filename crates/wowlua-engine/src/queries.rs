@@ -104,10 +104,11 @@ fn no_absorbs(_vm: &mut Vm, _c: NativeCall) -> Ret {
 /// An item check of a system camelot does not have (azerite, corruption,
 /// cosmetics, curios, decor, relics, conduits): false for an item, nil for
 /// none (`C_Item.IsCorruptedItem(0)`).
-fn not_that_item(_vm: &mut Vm, c: NativeCall) -> Ret {
+fn not_that_item(vm: &mut Vm, c: NativeCall) -> Ret {
+    // A text naming no item: nil (the full probe: "x"; "item:6948" false).
     let item = match c.arg(1) {
         Value::Num(n) => n > 0.0,
-        Value::Str(_) => true,
+        Value::Str(_) => crate::gamedata::item_id(vm, c.arg(1)).is_some(),
         _ => false,
     };
     Ok(vec![if item { Value::Bool(false) } else { Value::Nil }])

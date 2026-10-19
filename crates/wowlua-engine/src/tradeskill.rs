@@ -292,7 +292,7 @@ fn window(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![]);
     };
     let Some(open) = state(vm).open.clone() else {
-        return crate::recorded::recorded(vm, c);
+        return not_in_window(vm, c, &name);
     };
     let calls = crate::recorded::call_variants(vm, &name, &c);
     let key = if !state(vm).ready && LISTS.contains(&name.as_str()) {
@@ -319,8 +319,221 @@ fn window(vm: &mut Vm, c: NativeCall) -> Ret {
                 v.to_value(vm)
             })
             .collect()),
-        None => crate::recorded::recorded(vm, c),
+        None => not_in_window(vm, c, &name),
     }
+}
+
+/// Every recorded window's answer to a call, where they all agree (a
+/// setting or game data the window does not change).
+fn agreed(call: &str) -> Option<&'static str> {
+    static BY_CALL: OnceLock<HashMap<&'static str, Option<&'static str>>> = OnceLock::new();
+    BY_CALL
+        .get_or_init(|| {
+            let mut out: HashMap<&'static str, Option<&'static str>> = HashMap::new();
+            for ((_, call), answer) in data() {
+                out.entry(*call)
+                    .and_modify(|a| {
+                        if *a != Some(*answer) {
+                            *a = None;
+                        }
+                    })
+                    .or_insert(Some(*answer));
+            }
+            out
+        })
+        .get(call)
+        .copied()
+        .flatten()
+}
+
+/// A call the open window did not record, or any with none open: the
+/// client's general answer, else what every recorded window answered
+/// alike (the full probe, no window open: the filters, the professions'
+/// slots and skill lines as the windows had them; the recipe lists, the
+/// inventory slot filters and readiness are the window's own, not
+/// these), else a recipe's answer from its spell (`unrecorded_recipe`).
+fn not_in_window(vm: &mut Vm, c: NativeCall, name: &str) -> Ret {
+    if let Some(values) = crate::recorded::lookup(vm, name, &c) {
+        return Ok(values);
+    }
+    // The recipe lists without a window: none (an empty list, the
+    // categories nothing), whatever the arguments.
+    match name {
+        "C_TradeSkillUI.GetAllRecipeIDs" | "C_TradeSkillUI.GetFilteredRecipeIDs" => {
+            return Ok(vec![Value::Table(vm.new_table())]);
+        }
+        "C_TradeSkillUI.GetCategories" => return Ok(vec![]),
+        _ => {}
+    }
+    const WINDOWS_OWN: &[&str] = &[
+        "C_TradeSkillUI.IsInventorySlotFiltered",
+        "C_TradeSkillUI.GetFilterableInventorySlotName",
+        "C_TradeSkillUI.IsTradeSkillReady",
+    ];
+    if !WINDOWS_OWN.contains(&name) {
+        let calls = crate::recorded::call_variants(vm, name, &c);
+        if let Some(answer) = calls.iter().find_map(|call| agreed(call)) {
+            return Ok(crate::recorded::parse_answer(vm, answer));
+        }
+    }
+    if let Some(values) = unrecorded(vm, name, &c) {
+        return Ok(values);
+    }
+    crate::recorded::recorded(vm, c)
+}
+
+/// `C_TradeSkillUI.GetAllFilterableInventorySlotsCount()`: the open
+/// window's; none open, 0 (the full probe, whatever the arguments; the
+/// answers battery's 12 older: the newest recording wins).
+fn all_filterable_slots_count(vm: &mut Vm, c: NativeCall) -> Ret {
+    if state(vm).open.is_some() {
+        return window(vm, c);
+    }
+    Ok(vec![Value::Num(0.0)])
+}
+
+/// The icon the client gives a recipe's output without its spell
+/// (the full probe: recipes 0, -1, 2147483647).
+const NO_OUTPUT_ICON: f64 = 136243.0;
+
+fn set_all(vm: &mut Vm, t: wowlua_vm::TableRef, fields: Vec<(&str, Value)>) {
+    for (k, v) in fields {
+        let key = vm.str(k);
+        let _ = vm.heap.table_mut(t).set(key, v);
+    }
+}
+
+/// The calls of recipes (spells) no window recorded, as the client answers
+/// them (the full probe: recipe 1, the spell "Word of Recall (OLD)", and
+/// IDs of no spell): their info, output and schematic from the spell's
+/// name and icon, or empty. The professions' display names "Unknown" for a
+/// skill line not recorded; the secondary professions' slots (cooking 5,
+/// fishing 10) fixed, the others' none. Unverified: a real recipe of a
+/// profession no window recorded (its reagents, skill, category).
+fn unrecorded(vm: &mut Vm, name: &str, c: &NativeCall) -> Option<Vec<Value>> {
+    let id = match vm.hidden(c.arg(1)) {
+        Value::Num(n) => Some(n.trunc() as i64),
+        _ => None,
+    };
+    let spell = id.and_then(|id| {
+        let t = crate::gamedata::spell_data(vm, id)
+            .or_else(|| crate::gamedata::scanned_spell(vm, id))?;
+        let k = vm.str("name");
+        let n = vm.heap.table(t).get(k);
+        let k = vm.str("iconID");
+        let icon = match vm.heap.table(t).get(k) {
+            Value::Num(i) => i,
+            _ => 0.0,
+        };
+        Some((n, icon))
+    });
+    let t = vm.new_table();
+    match name {
+        "C_TradeSkillUI.GetRecipeInfo" => {
+            let mut fields: Vec<(&str, Value)> = [
+                "alwaysUsesLowestQuality",
+                "canSkillUp",
+                "disabled",
+                "favorite",
+                "firstCraft",
+                "hasSingleItemOutput",
+                "isDummyRecipe",
+                "isEnchantingRecipe",
+                "isGatheringRecipe",
+                "isRecraft",
+                "isSalvageRecipe",
+                "learned",
+                "supportsCraftingStats",
+                "supportsQualities",
+            ]
+            .into_iter()
+            .map(|k| (k, Value::Bool(false)))
+            .collect();
+            for k in [
+                "categoryID",
+                "itemLevel",
+                "maxTrivialLevel",
+                "numSkillUps",
+                "skillLineAbilityID",
+            ] {
+                fields.push((k, Value::Num(0.0)));
+            }
+            fields.push(("craftable", Value::Bool(true)));
+            match spell {
+                Some((n, icon)) => fields.extend([
+                    ("canCreateMultiple", Value::Bool(false)),
+                    ("name", n),
+                    ("icon", Value::Num(icon)),
+                    ("recipeID", Value::Num(id? as f64)),
+                    ("relativeDifficulty", Value::Num(0.0)),
+                ]),
+                None => {
+                    let empty = vm.str("");
+                    fields.extend([
+                        ("canCreateMultiple", Value::Bool(true)),
+                        ("name", empty),
+                        ("recipeID", Value::Num(0.0)),
+                    ])
+                }
+            }
+            set_all(vm, t, fields);
+        }
+        "C_TradeSkillUI.GetRecipeOutputItemData" => {
+            let icon = spell.map_or(NO_OUTPUT_ICON, |(_, i)| i);
+            set_all(vm, t, vec![("icon", Value::Num(icon))]);
+        }
+        "C_TradeSkillUI.GetRecipeSchematic" => {
+            let slots = vm.new_table();
+            let mut fields = vec![
+                ("hasCraftingOperationInfo", Value::Bool(false)),
+                ("reagentSlotSchematics", Value::Table(slots)),
+                ("recipeType", Value::Num(1.0)),
+            ];
+            match spell {
+                Some((n, icon)) => fields.extend([
+                    ("icon", Value::Num(icon)),
+                    ("isRecraft", Value::Bool(c.arg(2).truthy())),
+                    ("name", n),
+                    ("quantityMax", Value::Num(6.0)),
+                    ("quantityMin", Value::Num(1.0)),
+                    ("recipeID", Value::Num(id? as f64)),
+                ]),
+                None => {
+                    let empty = vm.str("");
+                    fields.extend([
+                        ("icon", Value::Num(0.0)),
+                        ("isRecraft", Value::Bool(false)),
+                        ("name", empty),
+                        ("quantityMax", Value::Num(0.0)),
+                        ("quantityMin", Value::Num(0.0)),
+                        ("recipeID", Value::Num(0.0)),
+                    ])
+                }
+            }
+            set_all(vm, t, fields);
+        }
+        // No list to link (the windows differ; none open: no).
+        "C_TradeSkillUI.CanTradeSkillListLink" => return Some(vec![Value::Bool(false)]),
+        "C_TradeSkillUI.GetTradeSkillDisplayName" => {
+            id?;
+            return Some(vec![vm.str("Unknown")]);
+        }
+        "C_TradeSkillUI.GetProfessionSlots" => {
+            let slots: &[f64] = match id {
+                Some(5) => &[26.0, 27.0],
+                Some(10) => &[28.0, 29.0, 30.0],
+                _ => &[],
+            };
+            for (i, s) in slots.iter().enumerate() {
+                let _ = vm
+                    .heap
+                    .table_mut(t)
+                    .set(Value::Num(i as f64 + 1.0), Value::Num(*s));
+            }
+        }
+        _ => return None,
+    }
+    Some(vec![Value::Table(t)])
 }
 
 /// A recipe's requirements where the player is: a spell focus's (type 0)
@@ -1304,6 +1517,10 @@ pub fn behaviours(flavor: &str) -> Vec<(&'static str, NativeFn)> {
                 can_show_crafting_ui,
             ),
             ("C_TradeSkillUI.CloseTradeSkill", close_trade_skill),
+            (
+                "C_TradeSkillUI.GetAllFilterableInventorySlotsCount",
+                all_filterable_slots_count,
+            ),
             ("C_TradeSkillUI.GetCraftableCount", get_craftable_count),
             ("C_TradeSkillUI.CraftRecipe", craft_recipe),
         ])

@@ -241,6 +241,30 @@ fn made_link(vm: &mut Vm, id: i64, context: &str, bonuses: &[i64]) -> Option<Str
     ))
 }
 
+/// `C_Item.GetDelvePreviewItemLink(itemID, context)`'s link: any ID's,
+/// with the delve's bonus (3524) and the context given (a number's), the
+/// item's name and quality where known, else none and common; ID 0 an
+/// empty link without the bonus (the full probe: IDs -1 to 2147483647).
+pub fn delve_preview_link(vm: &mut Vm, id: i64, context: Option<i64>) -> String {
+    let data = item_data(vm, id);
+    let name = data
+        .map(|d| field(vm, d, "name"))
+        .and_then(|n| text(vm, n))
+        .unwrap_or_default();
+    let quality = data
+        .and_then(|d| num(field(vm, d, "quality")))
+        .unwrap_or(1.0) as usize;
+    let level = engine(vm).units.list[units::PLAYER.0].level;
+    let spec = link_specialization(vm).map_or(String::new(), |s| format!("{s}"));
+    if id == 0 {
+        return format!("|cnIQ{quality}:|Hitem:::::::::{level}:{spec}:::::::::|h[{name}]|h|r");
+    }
+    let context = context.map_or(String::new(), |c| c.to_string());
+    format!(
+        "|cnIQ{quality}:|Hitem:{id}::::::::{level}:{spec}::{context}:1:3524::::::|h[{name}]|h|r"
+    )
+}
+
 /// An item's link in a context (a quest's dialog and reward: "11"), with
 /// bonuses.
 pub fn link_in_context(vm: &mut Vm, id: i64, context: &str, bonuses: &[i64]) -> Option<String> {
@@ -511,26 +535,40 @@ fn bag_slot(vm: &mut Vm, c: &NativeCall) -> Option<Held> {
         .cloned()
 }
 
+/// The keyring (`Enum.BagIndex.Keyring`, -1): always there, 32 slots,
+/// empty unless the profile holds it (the full probe: its 32 slots free,
+/// named `KEYRING`; unverified: a lower level's keyring).
+pub(crate) const KEYRING: i64 = -1;
+const KEYRING_SLOTS: usize = 32;
+
+/// A bag's slots and free slots: the profile's, the keyring's; none for
+/// no bag there.
+pub(crate) fn bag_space(vm: &Vm, bag: i64) -> Option<(usize, Vec<usize>)> {
+    match engine(vm).world.character.bags.get(&bag) {
+        Some(b) => Some((
+            b.slots,
+            (1..=b.slots).filter(|s| !b.items.contains_key(s)).collect(),
+        )),
+        None if bag == KEYRING => Some((KEYRING_SLOTS, (1..=KEYRING_SLOTS).collect())),
+        None => None,
+    }
+}
+
 fn get_container_num_slots(vm: &mut Vm, c: NativeCall) -> Ret {
     let bag = num(c.arg(1)).unwrap_or(-99.0) as i64;
-    let n = engine(vm)
-        .world
-        .character
-        .bags
-        .get(&bag)
-        .map_or(0, |b| b.slots);
+    let n = bag_space(vm, bag).map_or(0, |(n, _)| n);
     Ok(vec![Value::Num(n as f64)])
 }
 
+/// `C_Container.GetContainerNumFreeSlots(bag)`: the free slots and the
+/// bag's family; no bag there: 0 and no family (the full probe: the
+/// unbought bag slots, the bank's tabs, the other negative indexes).
 fn get_container_num_free_slots(vm: &mut Vm, c: NativeCall) -> Ret {
     let bag = num(c.arg(1)).unwrap_or(-99.0) as i64;
-    let free = engine(vm)
-        .world
-        .character
-        .bags
-        .get(&bag)
-        .map_or(0, |b| b.slots.saturating_sub(b.items.len()));
-    Ok(vec![Value::Num(free as f64), Value::Num(0.0)])
+    Ok(match bag_space(vm, bag) {
+        Some((_, free)) => vec![Value::Num(free.len() as f64), Value::Num(0.0)],
+        None => vec![Value::Num(0.0), Value::Nil],
+    })
 }
 
 fn get_container_item_id(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -539,11 +577,11 @@ fn get_container_item_id(vm: &mut Vm, c: NativeCall) -> Ret {
         .unwrap_or_default())
 }
 
+/// `C_Container.GetContainerItemLink(bag, slot)`: the item's link; nil
+/// for an empty slot or no bag (the full probe).
 fn get_container_item_link(vm: &mut Vm, c: NativeCall) -> Ret {
-    Ok(bag_slot(vm, &c)
-        .and_then(|h| link_of(vm, &h))
-        .map(|l| vec![l])
-        .unwrap_or_default())
+    let link = bag_slot(vm, &c).and_then(|h| link_of(vm, &h));
+    Ok(vec![link.unwrap_or(Value::Nil)])
 }
 
 /// `C_Container.GetContainerItemInfo(bag, slot)`: a `ContainerItemInfo`.
@@ -584,8 +622,10 @@ fn get_container_item_info(vm: &mut Vm, c: NativeCall) -> Ret {
 /// the bank's tabs (bags 6 on) with `includeBank` only (the documentation's
 /// argument, false by default; unverified: not recorded).
 fn get_item_count(vm: &mut Vm, c: NativeCall) -> Ret {
-    let id = match vm.hidden(c.arg(1)) {
-        Value::Num(n) => n as i64,
+    // An ID, link or item text (the full probe: "item:6948" counted);
+    // none below 1 (an empty slot's 0).
+    let id = match crate::gamedata::item_id(vm, c.arg(1)) {
+        Some(id) if id > 0 => id,
         _ => return Ok(vec![Value::Num(0.0)]),
     };
     let bank = vm.hidden(c.arg(2)).truthy();
@@ -746,14 +786,18 @@ pub fn control_set_item_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_Container.GetItemCooldown(itemID)`: its running cooldown's start and
-/// duration, enabled (unverified: none recorded).
+/// duration, enabled for an item; 0 for an ID naming none (the full probe:
+/// -1 to 2147483647 0, the Hearthstone and a crate 1; unverified: an item
+/// the engine has no data for).
 fn get_item_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
-    let cd = num(c.arg(1)).and_then(|id| item_cooldown(vm, id as i64));
+    let id = num(c.arg(1)).map(|id| id as i64);
+    let cd = id.and_then(|id| item_cooldown(vm, id));
     let (start, duration) = cd.unwrap_or((0.0, 0.0));
+    let item = cd.is_some() || id.is_some_and(|id| item_data(vm, id).is_some());
     Ok(vec![
         Value::Num(start),
         Value::Num(duration),
-        Value::Num(1.0),
+        Value::Num(if item { 1.0 } else { 0.0 }),
     ])
 }
 
@@ -1093,8 +1137,9 @@ fn get_minimap_zone_text(vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 fn get_best_map_for_unit(vm: &mut Vm, c: NativeCall) -> Ret {
+    // Another unit (none, the target, a GUID): nil (the full probe).
     if units::unit_arg(vm, &c, 1) != Some(units::PLAYER) {
-        return Ok(vec![]);
+        return Ok(vec![Value::Nil]);
     }
     // Behind a loading screen: none (recorded).
     if engine(vm).world.loading_screen {
@@ -1110,15 +1155,50 @@ fn get_best_map_for_unit(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_Map.GetPlayerMapPosition(mapID, unit)`: a vector (`x`, `y`,
-/// `GetXY`) on the player's map.
+/// `GetXY`) on the player's map, or on a map holding it (the position
+/// moved by the map's recorded rectangle on it, `C_Map.GetMapRectOnMap`);
+/// nil for another unit or map (the full probe: the player on its zone
+/// and continent, nil for the other units and maps; the continent's
+/// position within 0.0005 of the rectangle's, the player not still).
+/// Unverified: map 0 (the client gave a position near the zone's).
 fn get_player_map_position(vm: &mut Vm, c: NativeCall) -> Ret {
     let p = engine(vm).world.character.position.clone();
-    let on_map = num(c.arg(1)).is_some_and(|m| Some(m) == p.map_id);
-    let (Some(x), Some(y)) = (p.x, p.y) else {
+    let (Some(x), Some(y), Some(map)) = (p.x, p.y, p.map_id) else {
         return Ok(vec![]);
     };
-    if !on_map || units::unit_arg(vm, &c, 2) != Some(units::PLAYER) {
-        return Ok(vec![]);
+    if units::unit_arg(vm, &c, 2) != Some(units::PLAYER) {
+        return Ok(vec![Value::Nil]);
+    }
+    let asked = num(c.arg(1));
+    let (x, y) = if asked == Some(map) {
+        (x, y)
+    } else {
+        let rect = asked
+            .filter(|a| *a > 0.0 && a.fract() == 0.0)
+            .and_then(|a| {
+                let call = format!("C_Map.GetMapRectOnMap({}, {})", map as i64, a as i64);
+                match crate::recorded::lookup_text(vm, &call)?.as_slice() {
+                    &[
+                        Value::Num(x0),
+                        Value::Num(x1),
+                        Value::Num(y0),
+                        Value::Num(y1),
+                    ] if x1 > x0 && y1 > y0 => Some((x0, x1, y0, y1)),
+                    _ => None,
+                }
+            });
+        match rect {
+            Some((x0, x1, y0, y1)) => (x0 + x * (x1 - x0), y0 + y * (y1 - y0)),
+            None => return Ok(vec![Value::Nil]),
+        }
+    };
+    // A `Vector2DMixin` (Blizzard's `CreateVector2D`, the client's).
+    let create = vm.get_global("CreateVector2D");
+    if !create.is_nil()
+        && let Ok(r) = vm.call(create, &[Value::Num(x), Value::Num(y)])
+        && let Some(v @ Value::Table(_)) = r.first().copied()
+    {
+        return Ok(vec![v]);
     }
     let v = vm.new_table();
     for (k, n) in [("x", x), ("y", y)] {
@@ -1392,10 +1472,20 @@ fn bag_name(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(bag) = num(c.arg(1)).map(|b| b as i64) else {
         return Ok(vec![Value::Nil]);
     };
-    if bag == 0 {
-        let name = match vm.get_global("BACKPACK_TOOLTIP") {
+    // The backpack, the keyring, the bank's tabs (the character's and the
+    // account's): their general names (the full probe, the bank tabs
+    // unbought; unverified: a bought tab's own name).
+    let general = match bag {
+        0 => Some(("BACKPACK_TOOLTIP", "Backpack")),
+        KEYRING => Some(("KEYRING", "Keyring")),
+        6..=14 => Some(("BANK", "Bank")),
+        15..=23 => Some(("ACCOUNT_BANK_PANEL_TITLE", "Account Bank")),
+        _ => None,
+    };
+    if let Some((global, text)) = general {
+        let name = match vm.get_global(global) {
             Value::Str(s) => Value::Str(s),
-            _ => vm.str("Backpack"),
+            _ => vm.str(text),
         };
         return Ok(vec![name]);
     }

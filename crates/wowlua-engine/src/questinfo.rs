@@ -491,12 +491,11 @@ fn is_on_quest(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(on)])
 }
 
-/// `C_QuestLog.IsUnitOnQuest(unit, questID)`: the player's log; other
-/// units' logs are not known (false).
-fn is_unit_on_quest(vm: &mut Vm, c: NativeCall) -> Ret {
-    let player = units::unit_arg(vm, &c, 1) == Some(units::PLAYER);
-    let on = player && num_of(vm, c.arg(2)).is_some_and(|q| on_quest(vm, q as i64));
-    Ok(vec![Value::Bool(on)])
+/// `C_QuestLog.IsUnitOnQuest(unit, questID)`: false, the player too (the
+/// full probe: "player" on two quests in its log false; it was the
+/// player's log before); other units' logs are not known (false).
+fn is_unit_on_quest(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(false)])
 }
 
 /// `C_QuestLog.ReadyForTurnIn(questID)`: a quest in the log with every
@@ -516,14 +515,15 @@ fn get_num_quest_objectives(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_QuestLog.GetTitleForLogIndex(questLogIndex)`: the entry's title (a
-/// header's too), else nil.
+/// header's too); an index with no entry "" (the full probe: 0 and
+/// 2147483647); nil without one.
 fn get_title_for_log_index(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(i) = num_of(vm, c.arg(1)) else {
         return Ok(vec![Value::Nil]);
     };
     match log_entries(vm).into_iter().find(|e| e.index == i as i64) {
         Some(e) => Ok(vec![vm.str(&e.title)]),
-        None => Ok(vec![Value::Nil]),
+        None => Ok(vec![vm.str("")]),
     }
 }
 
@@ -603,10 +603,58 @@ fn get_max_num_quests_can_accept(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(40.0)])
 }
 
-/// `C_QuestLog.ShouldShowQuestRewards(questID)`: true (no quest hides its
-/// rewards in the engine's world).
-fn should_show_quest_rewards(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(true)])
+/// `C_QuestLog.ShouldShowQuestRewards(questID)`: a quest in the log (no
+/// quest hides its rewards in the engine's world) or 0, yes; another no
+/// (the full probe: 1, -1, 2147483647 no).
+fn should_show_quest_rewards(vm: &mut Vm, c: NativeCall) -> Ret {
+    let show = num_of(vm, c.arg(1)).is_some_and(|q| q == 0.0 || on_quest(vm, q as i64));
+    Ok(vec![Value::Bool(show)])
+}
+
+/// `C_QuestLog.GetQuestLogPortraitGiver([logIndex])`: a quest's entry in
+/// the log no portrait (`0, "", "", 0, nil`); a header, no entry or none
+/// asked, nothing (the full probe: index 2 a quest, 1 a header).
+/// Unverified: no index with a quest selected.
+fn quest_log_portrait_giver(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(i) = num_of(vm, c.arg(1)).filter(|i| i.fract() == 0.0) else {
+        return Ok(vec![]);
+    };
+    let info = stat_at(vm, "questLogInfo", i as i64).and_then(|a| a.first().cloned());
+    let quest = info
+        .as_ref()
+        .is_some_and(|i| matches!(answer_field(i, "isHeader"), Some(Answer::Bool(false))));
+    if !quest {
+        return Ok(vec![]);
+    }
+    let empty = vm.str("");
+    Ok(vec![
+        Value::Num(0.0),
+        empty,
+        empty,
+        Value::Num(0.0),
+        Value::Nil,
+    ])
+}
+
+/// `C_QuestInfoSystem.GetQuestRewardCurrencies(questID)` and
+/// `GetQuestRewardSpells`: none for a quest ID (from 0); nothing for a
+/// fraction, a negative or none (the full probe: 0, 1, logged quests a
+/// list; -1, 1.5, 2147483647, nil nothing). Unverified: where the quests'
+/// IDs end (here below a million).
+fn quest_reward_list(vm: &mut Vm, c: NativeCall) -> Ret {
+    let quest =
+        num_of(vm, c.arg(1)).is_some_and(|q| q.fract() == 0.0 && (0.0..1_000_000.0).contains(&q));
+    if !quest {
+        return Ok(vec![]);
+    }
+    Ok(vec![Value::Table(vm.new_table())])
+}
+
+/// `C_QuestLog.GetQuestType(questID)`: 0 for a quest of no type (the full
+/// probe: every ID but a dungeon quest's, 6481 1; game data the engine
+/// lacks).
+fn get_quest_type(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(0.0)])
 }
 
 /// `C_QuestLog.SetSelectedQuest(questID)`: the log's selection
@@ -1303,6 +1351,11 @@ fn get_map_info_at_position(vm: &mut Vm, c: NativeCall) -> Ret {
     ) else {
         return Ok(vec![]);
     };
+    // A point on the map's edge or off it: nothing (the full probe: 0, 1,
+    // -1, 1.5 and 2147483647 on either axis).
+    if !(x > 0.0 && x < 1.0 && y > 0.0 && y < 1.0) {
+        return Ok(vec![]);
+    }
     let map = map as i64;
     let mut best: Option<(f64, Value)> = None;
     let children = crate::recorded::lookup_text(vm, &format!("C_Map.GetMapChildrenInfo({map})"));
@@ -1504,7 +1557,10 @@ fn set_recipe_tracked(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `C_TradeSkillUI.GetRecipeItemLink(recipeID)`: the link of what the
 /// recipe makes (its `GetRecipeOutputItemData`'s `hyperlink`, the
-/// professions' recorded answer), else nil.
+/// professions' recorded answer); else the recipe's spell as an enchant
+/// link and its ID (`|cffffd000|Henchant:1|h[Word of Recall (OLD)]|h|r`,
+/// 1), nothing for no spell (the full probe: spells 1 and 6462, IDs -1, 0
+/// and 2 nothing).
 fn get_recipe_item_link(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(id) = num_of(vm, c.arg(1)) else {
         return Ok(vec![Value::Nil]);
@@ -1514,14 +1570,21 @@ fn get_recipe_item_link(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![Value::Nil]);
     };
     let f = field(vm, ns, "GetRecipeOutputItemData");
-    if f.is_nil() {
-        return Ok(vec![Value::Nil]);
+    if !f.is_nil()
+        && let Some(Value::Table(t)) = vm.call(f, &[Value::Num(id)])?.first().copied()
+    {
+        let link = field(vm, t, "hyperlink");
+        if !link.is_nil() {
+            return Ok(vec![link]);
+        }
     }
-    let out = vm.call(f, &[Value::Num(id)])?;
-    match out.first().copied() {
-        Some(Value::Table(t)) => Ok(vec![field(vm, t, "hyperlink")]),
-        _ => Ok(vec![Value::Nil]),
-    }
+    let id = id.trunc() as i64;
+    let spell = crate::gamedata::spell_name(vm, id);
+    let Some(name) = text_of(vm, spell) else {
+        return Ok(vec![]);
+    };
+    let link = format!("|cffffd000|Henchant:{id}|h[{name}]|h|r");
+    Ok(vec![vm.str(&link), Value::Num(id as f64)])
 }
 
 /// `C_TradeSkillUI.IsRecipeRepeating()`: a craft of several running
@@ -1570,6 +1633,15 @@ fn no(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(false)])
 }
 
+fn yes(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(true)])
+}
+
+/// The obliterum forge's spell (Obliterate, 193024: the full probe).
+fn obliterate_spell_id(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(193024.0)])
+}
+
 fn zero(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(0.0)])
 }
@@ -1599,7 +1671,11 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetQuestObjectiveInfo", get_quest_objective_info),
         ("GetQuestLink", get_quest_link),
         ("GetBindLocation", get_bind_location),
-        ("C_QuestLog.GetQuestLogPortraitGiver", no_portrait),
+        (
+            "C_QuestLog.GetQuestLogPortraitGiver",
+            quest_log_portrait_giver,
+        ),
+        ("C_QuestLog.GetQuestType", get_quest_type),
         ("GetQuestLogPortraitTurnIn", no_portrait),
         // What no quest in the engine's world rewards or has (as the
         // dialog's own answers, `quests.rs`; unverified): no artifact
@@ -1681,12 +1757,22 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         // Lists that may be documented as returning nothing: empty
         // (Blizzard's code iterates them).
         ("C_QuestLog.GetAbandonQuestItems", empty_list),
+        // None: nothing, whatever the quest (the full probe; Blizzard's
+        // quest info tests it for nil).
         (
             "C_QuestLog.GetQuestLogMajorFactionReputationRewards",
+            nothing,
+        ),
+        (
+            "C_QuestInfoSystem.GetQuestRewardCurrencies",
+            quest_reward_list,
+        ),
+        ("C_QuestInfoSystem.GetQuestRewardSpells", quest_reward_list),
+        // An option's widgets: none (the full probe, any option).
+        (
+            "C_GossipInfo.GetOptionUIWidgetSetsAndTypesByOptionID",
             empty_list,
         ),
-        ("C_QuestInfoSystem.GetQuestRewardCurrencies", empty_list),
-        ("C_QuestInfoSystem.GetQuestRewardSpells", empty_list),
         (
             "C_QuestOffer.GetQuestOfferMajorFactionReputationRewards",
             empty_list,
@@ -1790,13 +1876,20 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_TradeSkillUI.IsRecipeRepeating", is_recipe_repeating),
         ("C_TradeSkillUI.GetRecipeItemLevelFilter", zeros),
         ("C_TradeSkillUI.IsRecipeSearchInProgress", no),
-        ("C_TradeSkillUI.IsRecipeCategoryFiltered", no),
         ("C_TradeSkillUI.CanObliterateCursorItem", no),
-        ("C_TradeSkillUI.GetAllFilterableInventorySlots", empty_list),
-        ("C_TradeSkillUI.GetFilterableInventorySlots", empty_list),
-        ("C_TradeSkillUI.GetObliterateSpellID", zero),
-        ("C_TradeSkillUI.GetPendingObliterateItemID", none),
-        ("C_TradeSkillUI.GetPendingObliterateItemLink", none),
+        // No window open: nothing (the full probe); the obliterum forge's
+        // spell (193024) and no item pending; a recraft's reagents valid,
+        // no quality reagent link, no profession for an ability (the full
+        // probe, whatever the arguments).
+        ("C_TradeSkillUI.IsRecipeCategoryFiltered", nothing),
+        ("C_TradeSkillUI.GetAllFilterableInventorySlots", nothing),
+        ("C_TradeSkillUI.GetFilterableInventorySlots", nothing),
+        ("C_TradeSkillUI.GetObliterateSpellID", obliterate_spell_id),
+        ("C_TradeSkillUI.GetPendingObliterateItemID", nothing),
+        ("C_TradeSkillUI.GetPendingObliterateItemLink", nothing),
+        ("C_TradeSkillUI.IsRecraftReagentValid", yes),
+        ("C_TradeSkillUI.GetRecipeQualityReagentLink", none),
+        ("C_TradeSkillUI.GetProfessionNameForSkillLineAbility", none),
         ("C_TradeSkillUI.GetSubCategories", nothing),
     ];
     // Accepted, without an effect the engine shows (filters the recorded
@@ -1874,10 +1967,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         "C_TradeSkillUI.GetOriginalCraftRecipeID",
         "C_TradeSkillUI.GetRecraftItems",
         "C_TradeSkillUI.GetSkillLineForGear",
-        "C_TradeSkillUI.IsRecraftReagentValid",
         "C_TradeSkillUI.GetItemCraftedQualityByItemInfo",
         "C_TradeSkillUI.GetProfessionByInventorySlot",
-        "C_TradeSkillUI.GetProfessionNameForSkillLineAbility",
         "C_TradeSkillUI.GetRecraftRemovalWarnings",
         "C_TradeSkillUI.CanStoreEnchantInItem",
         "C_TradeSkillUI.CheckRespecNPC",
@@ -1893,7 +1984,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         "C_TradeSkillUI.GetReagentDifficultyText",
         "C_TradeSkillUI.GetReagentSlotStatus",
         "C_TradeSkillUI.GetRecipeInfoForSkillLineAbility",
-        "C_TradeSkillUI.GetRecipeQualityReagentLink",
         "C_TradeSkillUI.GetSalvagableItemIDs",
         "C_TradeSkillUI.IsRecraftItemEquipped",
         "C_TradeSkillUI.RecraftLimitCategoryValid",
@@ -1961,7 +2051,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         "C_QuestLog.GetNextWaypoint",
         "C_QuestLog.GetNextWaypointForMap",
         "C_QuestLog.GetQuestAdditionalHighlights",
-        "C_QuestLog.GetQuestType",
         "C_QuestLog.GetSuggestedGroupSize",
         "C_QuestLog.IsImportantQuest",
         "C_QuestLog.IsMetaQuest",
@@ -2021,7 +2110,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         "C_GossipInfo.GetCompletedOptionDescriptionString",
         "C_GossipInfo.GetCustomGossipDescriptionString",
         "C_GossipInfo.GetPoiInfo",
-        "C_GossipInfo.GetOptionUIWidgetSetsAndTypesByOptionID",
         "C_Map.GetBountySetMaps",
         "C_Map.GetMapGroupMembersInfo",
         "C_Map.GetMapHighlightInfoAtPosition",

@@ -37,7 +37,9 @@ fn zero(_vm: &mut Vm, _c: NativeCall) -> Ret {
 
 /// Whether `id` names no map: 0 or below, or one the client has no info on
 /// (`C_Map.GetMapInfo` recorded giving nothing: the cosmic map 946, which
-/// Forever lacks). A map never recorded counts as a map (unverified).
+/// Forever lacks). A map never recorded is none either: the maps probe
+/// recorded every map, and the full probe's maps 1 and 2147483647 have no
+/// quests on them as no map has.
 fn no_map(vm: &mut Vm, id: Value) -> bool {
     let Value::Num(n) = id else {
         return true;
@@ -46,7 +48,52 @@ fn no_map(vm: &mut Vm, id: Value) -> bool {
         return true;
     }
     let call = format!("C_Map.GetMapInfo({})", n as i64);
-    crate::recorded::lookup_text(vm, &call).is_some_and(|v| v.is_empty())
+    crate::recorded::lookup_text(vm, &call).is_none_or(|v| v.is_empty())
+}
+
+/// A `Vector2DMixin` (Blizzard's `CreateVector2D`, as the client's map
+/// positions are), else its fields.
+pub(crate) fn vector2d(vm: &mut Vm, x: f64, y: f64) -> Ret {
+    let create = vm.get_global("CreateVector2D");
+    if create.is_nil() {
+        let t = vm.new_table();
+        for (k, n) in [("x", x), ("y", y)] {
+            let key = vm.str(k);
+            let _ = vm.heap.table_mut(t).set(key, Value::Num(n));
+        }
+        return Ok(vec![Value::Table(t)]);
+    }
+    let r = vm.call(create, &[Value::Num(x), Value::Num(y)])?;
+    Ok(vec![r.first().copied().unwrap_or(Value::Nil)])
+}
+
+/// `C_Map.GetMapPosFromWorldPos(instanceID, worldPosition [,
+/// overrideUiMapID])`: the instance's continent and the point's position
+/// on it (`world_rect`'s inverse); none for another instance or an
+/// override other than 0 (the full probe: instance 1 on Kalimdor, 0 on
+/// the Eastern Kingdoms; positions within 1e-7 of the client's, the
+/// continents' corners unverified). Unverified: an override naming a map.
+fn map_pos_from_world_pos(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (Value::Num(instance), Value::Table(pos)) = (c.arg(1), c.arg(2)) else {
+        return Ok(vec![]);
+    };
+    if !matches!(c.arg(3), Value::Nil) && !matches!(c.arg(3), Value::Num(n) if n == 0.0) {
+        return Ok(vec![]);
+    }
+    let (Some(x), Some(y)) = (raw_num(vm, pos, "x"), raw_num(vm, pos, "y")) else {
+        return Ok(vec![]);
+    };
+    let instance = instance.trunc();
+    let Some(&(map, ..)) = CONTINENTS.iter().find(|c| c.1 == instance) else {
+        return Ok(vec![]);
+    };
+    let Some((_, left, top, width, height)) = world_rect(vm, map) else {
+        return Ok(vec![]);
+    };
+    let (u, v) = ((left - y) / width, (top - x) / height);
+    let mut out = vec![Value::Num(map as f64)];
+    out.extend(vector2d(vm, u, v)?);
+    Ok(out)
 }
 
 /// `C_ContentTracking.GetTrackablesOnMap(type, mapID)`: success (0) and
@@ -175,6 +222,73 @@ fn world_pos_from_map_pos(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Num(instance), vector])
 }
 
+/// `C_Map.GetMapChildrenInfo(uiMapID [, mapType [, allDescendants]])`: as
+/// recorded, else the recorded children (all descendants' with the third
+/// argument) of that type; nothing for a map not recorded (the full
+/// probe: Warsong Gulch, type 6, under the Barrens for type 6, none for
+/// the other types and for a text).
+fn map_children_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some(values) = crate::recorded::lookup(vm, "C_Map.GetMapChildrenInfo", &c) {
+        return Ok(values);
+    }
+    let Value::Num(map) = c.arg(1) else {
+        return Ok(vec![]);
+    };
+    let map = map.trunc() as i64;
+    let call = if c.arg(3).truthy() {
+        format!("C_Map.GetMapChildrenInfo({map}, nil, true)")
+    } else {
+        format!("C_Map.GetMapChildrenInfo({map})")
+    };
+    let Some(Value::Table(all)) =
+        crate::recorded::lookup_text(vm, &call).and_then(|v| v.first().copied())
+    else {
+        return Ok(vec![]);
+    };
+    let kind = match c.arg(2) {
+        Value::Nil => return Ok(vec![Value::Table(all)]),
+        Value::Num(k) => Some(k),
+        _ => None,
+    };
+    let entries: Vec<Value> = vm.heap.table(all).entries().map(|(_, v)| v).collect();
+    let out = vm.new_table();
+    let mut n = 0.0;
+    for child in entries {
+        let Value::Table(t) = child else { continue };
+        if kind.is_some() && raw_num(vm, t, "mapType") == kind {
+            n += 1.0;
+            let _ = vm.heap.table_mut(out).set(Value::Num(n), child);
+        }
+    }
+    Ok(vec![Value::Table(out)])
+}
+
+/// `C_Map.GetMapArtLayerTextures(uiMapID, layerIndex)`: as recorded (a
+/// fraction as its whole number); another layer of a recorded map none,
+/// no map nothing (the full probe: layers 0 and 2147483647 empty).
+fn map_art_layer_textures(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some(values) = crate::recorded::lookup(vm, "C_Map.GetMapArtLayerTextures", &c) {
+        return Ok(values);
+    }
+    let Value::Num(map) = c.arg(1) else {
+        return Ok(vec![]);
+    };
+    let call = format!("C_Map.GetMapArtLayerTextures({}, 1)", map.trunc() as i64);
+    if crate::recorded::lookup_text(vm, &call).is_none() {
+        return Ok(vec![]);
+    }
+    Ok(vec![Value::Table(vm.new_table())])
+}
+
+/// `C_Map.GetMapArtBackgroundAtlas(uiMapID)`: as recorded, else nil (the
+/// full probe: no map).
+fn map_art_background_atlas(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(
+        crate::recorded::lookup(vm, "C_Map.GetMapArtBackgroundAtlas", &c)
+            .unwrap_or_else(|| vec![Value::Nil]),
+    )
+}
+
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
         // A list, empty (recorded `{}`).
@@ -209,6 +323,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         // No housing neighbourhood, no battleground flags (recorded).
         ("C_Housing.IsOnNeighborhoodMap", no),
         ("C_Map.GetWorldPosFromMapPos", world_pos_from_map_pos),
+        ("C_Map.GetMapPosFromWorldPos", map_pos_from_world_pos),
+        ("C_Map.GetMapChildrenInfo", map_children_info),
+        ("C_Map.GetMapArtLayerTextures", map_art_layer_textures),
+        ("C_Map.GetMapArtBackgroundAtlas", map_art_background_atlas),
         ("GetNumBattlefieldFlagPositions", zero),
     ]
 }

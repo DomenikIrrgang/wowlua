@@ -96,7 +96,8 @@ return info.name, info.iconID, info.castTime, C_Spell.GetSpellName(5), C_Spell.G
 
 /// Item data the engine estimates where nothing was recorded (AtlasLoot's
 /// login and price buttons ask them): the subclasses the answers probe
-/// skipped, and an icon for any item.
+/// skipped, and an icon for any item (the question mark's for item 0 too:
+/// the full probe, newer than the estimate of none).
 #[test]
 fn unrecorded_item_classes_and_icons() {
     let mut vm = vm();
@@ -114,7 +115,7 @@ return a, tostring(b), (C_Item.GetItemSubClassInfo(5, 0)), (C_Item.GetItemSubCla
             "Reagent",
             "Permanent",
             "134400",
-            "nil"
+            "134400"
         ]
     );
 }

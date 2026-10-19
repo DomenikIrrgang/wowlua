@@ -355,9 +355,14 @@ fn documented(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `C_Item.GetItemQualityColor(quality)`: the quality's color (the
 /// client's recorded `qualityColors`, `facts.rs`) and its hex
-/// (`ffRRGGBB`); white for an unknown quality (unverified).
+/// (`ffRRGGBB`); white for an unknown quality (unverified), a text as 0
+/// (the full probe: "x" poor's grey).
 fn get_item_quality_color(vm: &mut Vm, c: NativeCall) -> Ret {
-    let color = num(vm, c.arg(1))
+    let quality = match vm.hidden(c.arg(1)) {
+        Value::Str(_) => Some(0.0),
+        _ => num(vm, c.arg(1)),
+    };
+    let color = quality
         .filter(|q| *q >= 0.0)
         .and_then(|q| crate::facts::QUALITY_COLORS.get(q as usize))
         .map_or([1.0, 1.0, 1.0], |c| [c[0], c[1], c[2]]);
@@ -382,13 +387,38 @@ fn get_item_level_color(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(rgb([channel(163), channel(53), channel(238)]))
 }
 
-/// `C_Item.GetItemSpell(item)`: the item's use spell (its data's `spell`,
-/// as `inventory.rs` casts it): its name and ID; nothing without one.
+/// Use spells the client gave items whose data (a snapshot's) does not
+/// hold one: the Hearthstone's (the full probe:
+/// `C_Item.GetFirstTriggeredSpellForItem(6948)` and `GetItemSpell` 8690).
+const KNOWN_USE_SPELLS: &[(i64, f64)] = &[(6948, 8690.0)];
+
+/// An item's use spell: its data's `spell` (as `inventory.rs` casts it),
+/// else one the client named (`KNOWN_USE_SPELLS`, answered by the info
+/// functions only, not cast).
+fn use_spell(vm: &mut Vm, id: i64) -> Option<f64> {
+    data_num(vm, id, "spell").or_else(|| {
+        crate::gamedata::item_data(vm, id)?;
+        KNOWN_USE_SPELLS
+            .iter()
+            .find(|(i, _)| *i == id)
+            .map(|(_, s)| *s)
+    })
+}
+
+/// `C_Item.GetFirstTriggeredSpellForItem(itemID, quality)`: its use spell,
+/// else nil (the full probe).
+fn get_first_triggered_spell(vm: &mut Vm, c: NativeCall) -> Ret {
+    let spell = item_of(vm, c.arg(1)).and_then(|id| use_spell(vm, id));
+    Ok(vec![spell.map_or(Value::Nil, Value::Num)])
+}
+
+/// `C_Item.GetItemSpell(item)`: the item's use spell (`use_spell`): its
+/// name and ID; nothing without one.
 fn get_item_spell(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(id) = item_of(vm, c.arg(1)) else {
         return Ok(vec![]);
     };
-    let Some(spell) = data_num(vm, id, "spell") else {
+    let Some(spell) = use_spell(vm, id) else {
         return Ok(vec![]);
     };
     let name = crate::gamedata::spell_name(vm, spell as i64);
@@ -423,21 +453,25 @@ fn is_usable_item(vm: &mut Vm, c: NativeCall) -> Ret {
     if crate::gamedata::item_data(vm, id).is_none() {
         return unusable();
     }
-    let kind = data_num(vm, id, "spell").is_some() || crate::inventory::slot_for(vm, id).is_some();
+    let kind = use_spell(vm, id).is_some() || crate::inventory::slot_for(vm, id).is_some();
     let min = data_num(vm, id, "minLevel").unwrap_or(0.0);
     let usable = kind && min <= player_level(vm);
     Ok(vec![Value::Bool(usable), Value::Bool(false)])
 }
 
 /// `C_Item.GetItemCooldown(item)`: its running cooldown's start and
-/// duration (the cooldowns `character.rs` keeps), the timer enabled.
+/// duration (the cooldowns `character.rs` keeps), the timer enabled for an
+/// item with a use spell (the full probe: the Hearthstone yes; a crate
+/// without one, no item, no).
 fn get_item_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
-    let cd = item_of(vm, c.arg(1)).and_then(|id| character::item_cooldown(vm, id));
+    let id = item_of(vm, c.arg(1));
+    let cd = id.and_then(|id| character::item_cooldown(vm, id));
     let (start, duration) = cd.unwrap_or((0.0, 0.0));
+    let enabled = cd.is_some() || id.is_some_and(|id| use_spell(vm, id).is_some());
     Ok(vec![
         Value::Num(start),
         Value::Num(duration),
-        Value::Bool(true),
+        Value::Bool(enabled),
     ])
 }
 
@@ -505,14 +539,17 @@ fn get_item_stat_delta(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `C_Item.IsEquippedItem(item)`: the player wears it.
 fn is_equipped_item(vm: &mut Vm, c: NativeCall) -> Ret {
-    let worn = item_of(vm, c.arg(1)).is_some_and(|id| {
-        engine(vm)
-            .world
-            .character
-            .equipment
-            .values()
-            .any(|h| h.id == id)
-    });
+    // No item below 1 (an empty slot's 0, the full probe).
+    let worn = item_of(vm, c.arg(1))
+        .filter(|id| *id > 0)
+        .is_some_and(|id| {
+            engine(vm)
+                .world
+                .character
+                .equipment
+                .values()
+                .any(|h| h.id == id)
+        });
     Ok(vec![Value::Bool(worn)])
 }
 
@@ -587,9 +624,23 @@ fn get_item_inventory_type_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `C_Item.GetItemInventorySlotKey(inventoryType)`: its `INVTYPE_` name;
 /// empty for one unknown.
 fn get_item_inventory_slot_key(vm: &mut Vm, c: NativeCall) -> Ret {
-    let t = num(vm, c.arg(1)).unwrap_or(-1.0);
+    // Not a number: as 0 (the full probe: "x" `INVTYPE_NON_EQUIP_IGNORE`).
+    let t = match vm.hidden(c.arg(1)) {
+        Value::Num(n) => n,
+        _ => 0.0,
+    };
+    // The types after the relic (the full probe).
+    const MORE: &[(&str, f64)] = &[
+        ("INVTYPE_PROFESSION_TOOL", 29.0),
+        ("INVTYPE_PROFESSION_GEAR", 30.0),
+        ("INDEX_EQUIPABLESPELL_OFFENSIVE_TYPE", 31.0),
+        ("INDEX_EQUIPABLESPELL_UTILITY_TYPE", 32.0),
+        ("INDEX_EQUIPABLESPELL_DEFENSIVE_TYPE", 33.0),
+        ("INDEX_EQUIPABLESPELL_WEAPON_TYPE", 34.0),
+    ];
     let name = INVENTORY_TYPES
         .iter()
+        .chain(MORE)
         .find(|(_, n)| *n == t)
         .map_or("", |(name, _)| *name);
     Ok(vec![vm.str(name)])
@@ -656,18 +707,22 @@ fn is_item_bind_to_account_until_equip(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(b == Some(9.0))])
 }
 
-/// `C_Item.GetItemIDForItemInfo(item)`: its ID.
+/// `C_Item.GetItemIDForItemInfo(item)`: its ID; 0 for a text naming no
+/// item (the full probe: "x").
 fn get_item_id_for_item_info(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(match item_of(vm, c.arg(1)) {
         Some(id) => vec![Value::Num(id as f64)],
+        None if matches!(c.arg(1), Value::Str(_)) => vec![Value::Num(0.0)],
         None => vec![],
     })
 }
 
-/// `C_Item.GetItemCreationContext(item)`: its ID and no creation context.
+/// `C_Item.GetItemCreationContext(item)`: its ID and no creation context
+/// (a text naming no item: 0, the full probe).
 fn get_item_creation_context(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(match item_of(vm, c.arg(1)) {
         Some(id) => vec![Value::Num(id as f64), vm.str("")],
+        None if matches!(c.arg(1), Value::Str(_)) => vec![Value::Num(0.0), vm.str("")],
         None => vec![],
     })
 }
@@ -697,16 +752,28 @@ fn get_item_uniqueness_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_Item.GetDelvePreviewItemQuality(itemID, context)`: the item's own
-/// quality (no delves here), poor without data.
+/// quality (no delves here), common without data (the full probe: IDs -1
+/// to 2147483647 all 1).
 fn get_delve_preview_item_quality(vm: &mut Vm, c: NativeCall) -> Ret {
     let q = num(vm, c.arg(1)).and_then(|id| data_num(vm, id as i64, "quality"));
-    Ok(vec![Value::Num(q.unwrap_or(0.0))])
+    Ok(vec![Value::Num(q.unwrap_or(1.0))])
+}
+
+/// `C_Item.GetDelvePreviewItemLink(itemID, context)`: a link for any ID
+/// (`character::delve_preview_link`).
+fn get_delve_preview_item_link(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(id) = num(vm, c.arg(1)) else {
+        return Ok(vec![Value::Nil]);
+    };
+    let context = num(vm, c.arg(2)).map(|n| n as i64);
+    let link = character::delve_preview_link(vm, id as i64, context);
+    Ok(vec![vm.str(&link)])
 }
 
 /// `C_Item.IsHelpfulItem(item)`: one with a use spell (unverified: the
 /// spell's target not asked); `IsHarmfulItem`: none here.
 fn is_helpful_item(vm: &mut Vm, c: NativeCall) -> Ret {
-    let yes = item_of(vm, c.arg(1)).is_some_and(|id| data_num(vm, id, "spell").is_some());
+    let yes = item_of(vm, c.arg(1)).is_some_and(|id| use_spell(vm, id).is_some());
     Ok(vec![Value::Bool(yes)])
 }
 
@@ -847,18 +914,14 @@ fn has_container_item(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_Container.GetContainerFreeSlots(bag)`: the empty slots' indexes;
-/// nothing for no bag there.
+/// none for no bag there (the full probe: an empty list for every index).
 fn get_container_free_slots(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(bag) = num(vm, c.arg(1)) else {
         return Ok(vec![]);
     };
-    let free: Vec<Value> = match engine(vm).world.character.bags.get(&(bag as i64)) {
-        Some(b) => (1..=b.slots)
-            .filter(|s| !b.items.contains_key(s))
-            .map(|s| Value::Num(s as f64))
-            .collect(),
-        None => return Ok(vec![]),
-    };
+    let free: Vec<Value> = crate::character::bag_space(vm, bag as i64)
+        .map(|(_, free)| free.into_iter().map(|s| Value::Num(s as f64)).collect())
+        .unwrap_or_default();
     Ok(vec![Value::Table(list(vm, &free))])
 }
 
@@ -898,16 +961,24 @@ fn get_container_item_equipment_set_info(vm: &mut Vm, _c: NativeCall) -> Ret {
 /// `armor / (armor + 400 + 85 * level)`, beyond level 59 `85 * 4.5` more
 /// per level, at most 75 % (recorded: 1149 armor against level 0 is
 /// 0.70318…, as against level 1; 0 armor 0).
+/// The client works it in single precision on a whole level (the full
+/// probe: 1 armor against 1.5 as against 1, each answer a float's), and a
+/// level whose constant leaves a 32-bit integer's range gives a constant of
+/// 1 (2147483647: 1 armor 0.5, 1.5 armor 0.6; unverified: the threshold).
 fn armor_effectiveness(armor: f64, level: f64) -> f64 {
     if armor <= 0.0 {
         return 0.0;
     }
-    let level = level.max(1.0);
+    let level = level.trunc().max(1.0);
     let mut k = 400.0 + 85.0 * level;
     if level > 59.0 {
         k += 4.5 * 85.0 * (level - 59.0);
     }
-    (armor / (armor + k)).min(0.75)
+    if k > f64::from(i32::MAX) {
+        k = 1.0;
+    }
+    let (a, k) = (armor as f32, k as f32);
+    f64::from((a / (a + k)).min(0.75))
 }
 
 /// `C_PaperDollInfo.GetArmorEffectiveness(armor, attackerLevel)`.
@@ -981,7 +1052,9 @@ fn is_inventory_slot_enabled(vm: &mut Vm, c: NativeCall) -> Ret {
     let profession = ["prof", "cooking", "fishing"]
         .iter()
         .any(|p| name.starts_with(p));
-    Ok(vec![Value::Bool(!name.is_empty() && !profession)])
+    // No slot by that name: no (the full probe: "x"; unverified: the
+    // client's own list of names, here any `…Slot`).
+    Ok(vec![Value::Bool(name.ends_with("slot") && !profession)])
 }
 
 /// `C_PaperDollInfo.CursorCanGoInSlot(slot)`: the cursor's item may be
@@ -993,10 +1066,12 @@ fn cursor_can_go_in_slot(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_PaperDollInfo.CanAutoEquipCursorItem()`: the cursor's item has a
-/// gear slot.
+/// gear slot; with none on the cursor, yes (the full probe).
 fn can_auto_equip_cursor_item(vm: &mut Vm, _c: NativeCall) -> Ret {
-    let yes = crate::cursor::held_item(vm)
-        .is_some_and(|(h, _)| crate::inventory::slot_for(vm, h.id).is_some());
+    let yes = match crate::cursor::held_item(vm) {
+        Some((h, _)) => crate::inventory::slot_for(vm, h.id).is_some(),
+        None => true,
+    };
     Ok(vec![Value::Bool(yes)])
 }
 
@@ -1222,6 +1297,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Item.IsItemInRange", nil),
         ("C_Item.ItemHasRange", no),
         ("C_Item.IsEquippedItem", is_equipped_item),
+        ("C_Item.IsEquippedItemType", is_equipped_item_type),
         ("C_Item.IsItemKeystoneByID", no),
         ("C_Item.PickupItem", pickup_item),
         ("C_Item.EquipItemByName", equip_item_by_name),
@@ -1230,7 +1306,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Item.GetItemGemID", nothing),
         ("C_Item.GetItemNumSockets", zero),
         ("C_Item.GetItemNumAddedSockets", zero),
-        ("C_Item.GetItemUpgradeInfo", nil),
+        ("C_Item.GetItemUpgradeInfo", get_item_upgrade_info),
         ("C_Item.IsConsumableItem", is_consumable_item),
         ("C_Item.IsCurrentItem", is_current_item),
         (
@@ -1258,9 +1334,15 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Item.GetItemSetInfo", get_item_set_info),
         ("C_Item.GetItemLearnTransmogSet", nil),
         ("C_Item.GetLimitedCurrencyItemInfo", nothing),
-        ("C_Item.GetFirstTriggeredSpellForItem", nil),
+        (
+            "C_Item.GetFirstTriggeredSpellForItem",
+            get_first_triggered_spell,
+        ),
         ("C_Item.GetSetBonusesForSpecializationByItemID", nothing),
-        ("C_Item.GetDelvePreviewItemLink", nil),
+        (
+            "C_Item.GetDelvePreviewItemLink",
+            get_delve_preview_item_link,
+        ),
         (
             "C_Item.GetDelvePreviewItemQuality",
             get_delve_preview_item_quality,
@@ -1270,7 +1352,9 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Item.IsAnimaItemByID", no),
         ("C_Item.IsArtifactPowerItem", no),
         ("C_Item.IsItemSpecificToPlayerClass", no),
-        ("C_Item.DoesItemContainSpec", no),
+        // Yes, whatever the item, class and specialization (the full
+        // probe; unverified for an item made for one specialization).
+        ("C_Item.DoesItemContainSpec", yes),
         // C_Item by location.
         ("C_Item.GetCurrentItemLevel", get_current_item_level),
         (
@@ -1353,7 +1437,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Container.HasContainerItem", has_container_item),
         ("C_Container.IsBattlePayItem", no),
         ("C_Container.SocketContainerItem", no),
-        ("C_Container.GetMaxArenaCurrency", zero),
+        ("C_Container.GetMaxArenaCurrency", max_arena_currency),
         ("C_Container.PlayerHasHearthstone", player_has_hearthstone),
         ("C_Container.UseHearthstone", use_hearthstone),
         (
@@ -1413,7 +1497,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             "C_PaperDollInfo.IsInventorySlotEnabled",
             is_inventory_slot_enabled,
         ),
-        ("C_PaperDollInfo.GetInspectGuildInfo", documented),
+        ("C_PaperDollInfo.GetInspectGuildInfo", inspect_guild_info),
         (
             "C_PaperDollInfo.GetInspectAzeriteItemEmpoweredChoices",
             nothing,
@@ -1428,7 +1512,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Bank.DepositMoney", accept),
         ("C_Bank.WithdrawMoney", accept),
         ("C_Bank.DoesBankTypeSupportMoneyTransfer", no),
-        ("C_Bank.DoesBankTypeSupportAutoDeposit", no),
+        (
+            "C_Bank.DoesBankTypeSupportAutoDeposit",
+            supports_auto_deposit,
+        ),
         ("C_Bank.AutoDepositItemsIntoBank", accept),
         ("C_Bank.ShouldUsePlayerBagsInBank", no),
         ("C_Bank.BankBagTypeAndIDToInvSlot", bank_bag_inv_slot),
@@ -1537,10 +1624,77 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     ]
 }
 
-/// `C_Item.GetItemSetInfo(setID)`: no item sets known here, an empty name
+fn yes(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(true)])
+}
+
+/// `C_PaperDollInfo.GetInspectGuildInfo(unit)`: the documented empty
+/// values for a unit; nothing for a text naming none (the full probe: ""
+/// and "x").
+fn inspect_guild_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    if units::unit_arg(vm, &c, 1).is_none() {
+        return Ok(vec![]);
+    }
+    documented(vm, c)
+}
+
+/// `C_Item.IsEquippedItemType(type)`: a worn item of that type or
+/// subtype (its data's `type`, `subType`: "Shields", "Mail"); the empty
+/// type yes (the full probe: "" yes, "x" no; unverified otherwise).
+fn is_equipped_item_type(vm: &mut Vm, c: NativeCall) -> Ret {
+    let wanted = text(vm, c.arg(1)).unwrap_or_default();
+    if wanted.is_empty() {
+        return Ok(vec![Value::Bool(true)]);
+    }
+    let worn: Vec<i64> = engine(vm)
+        .world
+        .character
+        .equipment
+        .values()
+        .map(|h| h.id)
+        .collect();
+    let yes = worn.into_iter().any(|id| {
+        ["type", "subType"].iter().any(|k| {
+            let v = character::item_field(vm, id, k);
+            text(vm, v).is_some_and(|t| t == wanted)
+        })
+    });
+    Ok(vec![Value::Bool(yes)])
+}
+
+/// `C_Container.GetMaxArenaCurrency()`: 10000 (the full probe).
+fn max_arena_currency(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(10000.0)])
+}
+
+/// `C_Bank.DoesBankTypeSupportAutoDeposit(bankType)`: the character's bank
+/// (`Enum.BankType.Character`, 0) yes (the full probe); the others no
 /// (unverified).
-fn get_item_set_info(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![vm.str("")])
+fn supports_auto_deposit(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(num(vm, c.arg(1)) == Some(0.0))])
+}
+
+/// `C_Item.GetItemUpgradeInfo(item)`: an item with data no upgrades (all
+/// 0), else nil (the full probe: the Hearthstone, a crate; no item).
+fn get_item_upgrade_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    let known =
+        item_of(vm, c.arg(1)).is_some_and(|id| crate::gamedata::item_data(vm, id).is_some());
+    if !known {
+        return Ok(vec![Value::Nil]);
+    }
+    let t = vm.new_table();
+    for k in ["currentLevel", "maxItemLevel", "maxLevel"] {
+        let key = vm.str(k);
+        let _ = vm.heap.table_mut(t).set(key, Value::Num(0.0));
+    }
+    Ok(vec![Value::Table(t)])
+}
+
+/// `C_Item.GetItemSetInfo(setID)`: no item sets known here, nil (the full
+/// probe: nil for sets that are none; set 1 "The Gladiator", game data
+/// the engine lacks).
+fn get_item_set_info(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Nil])
 }
 
 #[cfg(test)]

@@ -1156,7 +1156,11 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
         };
         match (stats.get(stat.key), index) {
             (Some(Entry::One(v)), None) => Some(v.clone()),
-            (Some(Entry::ByIndex(m)), Some(i)) if i.fract() == 0.0 => {
+            // A fraction asks for the whole number's (the client's
+            // conversion: the full probe's `1.5`s answered as `1`), but a
+            // spellbook slot's (`GetSpellBookItemLink(1.5, 0)`: nothing).
+            (Some(Entry::ByIndex(m)), Some(i)) if stat.ask != Slot || i.fract() == 0.0 => {
+                let i = i.trunc();
                 let v = m.get(&(i as i64)).cloned();
                 // For the attribute's effective value only (as the sheet
                 // asks it); unverified for others.
@@ -1206,8 +1210,43 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
         // No forms without a snapshot's (the function is undocumented, so
         // without a documented empty answer).
         None if stat.key == "shapeshiftForms" => Ok(vec![Value::Num(0.0)]),
-        None => Ok(empty(vm, stat.function)),
+        None => Ok(match unrecorded(vm, stat.key, index) {
+            Some(values) => values,
+            None => empty(vm, stat.function),
+        }),
     }
+}
+
+/// A quest's or faction's stat for one the profile does not hold, as the
+/// client answers any (the full probe, every number asked): a quest's
+/// classification `Normal` (7), its difficulty for the player `Fair`
+/// (`Enum.RelativeContentDifficulty`, 2); a faction's friendship (an ID
+/// from 1) a friendship of none, all empty. Unverified: a real quest's or
+/// faction's own (game data the engine lacks).
+fn unrecorded(vm: &mut Vm, key: &str, index: Option<f64>) -> Option<Vec<Value>> {
+    Some(match key {
+        // Even without a quest (`GetQuestClassification(nil, 1)`: 7).
+        "questClassification" => vec![Value::Num(7.0)],
+        "questContentDifficulty" => vec![Value::Num(2.0)],
+        "factionFriendship" if index? >= 1.0 => {
+            let t = vm.new_table();
+            for (k, v) in [
+                ("friendshipFactionID", Value::Num(0.0)),
+                ("maxRep", Value::Num(0.0)),
+                ("reaction", vm.str("")),
+                ("reactionThreshold", Value::Num(0.0)),
+                ("reversedColor", Value::Bool(false)),
+                ("standing", Value::Num(0.0)),
+                ("text", vm.str("")),
+                ("texture", Value::Num(0.0)),
+            ] {
+                let key = vm.str(k);
+                let _ = vm.heap.table_mut(t).set(key, v);
+            }
+            vec![Value::Table(t)]
+        }
+        _ => return None,
+    })
 }
 
 /// The player's spellbook slot holding `spell` (the recorded items'
@@ -1360,7 +1399,8 @@ fn quest_id_for_log_index(vm: &mut Vm, c: NativeCall) -> Ret {
             _ => None,
         }
     });
-    Ok(vec![id.map_or(Value::Nil, Value::Num)])
+    // No entry there: 0 (the full probe: index 0 and 2147483647).
+    Ok(vec![Value::Num(id.unwrap_or(0.0))])
 }
 
 /// `GetNumQuestLeaderBoards(logIndex)`: the quest's objectives, derived

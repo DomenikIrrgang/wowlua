@@ -365,8 +365,9 @@ fn get_coin_texture_string(vm: &mut Vm, c: NativeCall) -> Ret {
         Value::Num(n) => n.max(0.0).floor() as i64,
         _ => 0,
     };
+    // A whole height (the full probe: 1.5 written as 1).
     let height = match c.arg(2) {
-        Value::Num(h) => h,
+        Value::Num(h) => h.trunc(),
         _ => 14.0,
     };
     let icon =
@@ -387,10 +388,17 @@ fn get_coin_texture_string(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `C_Map.GetAreaInfo(areaID)`: the area's name as the client answered
 /// (`data/camelot-answers.txt`: the zones and capitals probed, 1637
-/// "Orgrimmar"); else none, noted as unanswered.
+/// "Orgrimmar"); an ID naming no area nil (the full probe: -1, 0,
+/// 2147483647; unverified: where the areas' IDs end, here a million);
+/// else none, noted as unanswered.
 fn get_area_info(vm: &mut Vm, c: NativeCall) -> Ret {
     if let Some(v) = crate::recorded::lookup(vm, "C_Map.GetAreaInfo", &c) {
         return Ok(v);
+    }
+    if let Value::Num(n) = vm.hidden(c.arg(1))
+        && !(1.0..1_000_000.0).contains(&n)
+    {
+        return Ok(vec![Value::Nil]);
     }
     crate::note_default(vm, "C_Map.GetAreaInfo", &c, 1);
     Ok(vec![vm.str("")])
