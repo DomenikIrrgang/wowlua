@@ -62,19 +62,79 @@ fn fire(vm: &mut Vm, event: &str, args: &[Value]) {
     widgets::fire_event(vm, event, args);
 }
 
-/// The inventory's load: for each item worn or carried, the player's
-/// equipped spells, the backpack's update and `UNIT_INVENTORY_CHANGED`.
+/// The inventory's load, one block per item in its GUID's order (the
+/// snapshot's `guid`s): the player's equipped spells, the item's bag's
+/// update (a worn item's: the backpack's), `UNIT_INVENTORY_CHANGED`; an
+/// equipped bag's block updates no bag, and the last of them every bag's
+/// update, `BAG_CONTAINER_UPDATE` and `PLAYERBANKSLOTS_CHANGED(1)`
+/// (recorded: a hearthstone's loading screen; unverified: GUIDs ordered
+/// by their counter, the recording's few blocks more than items).
+///
+/// Without GUIDs a stand-in: each block the backpack's (blocks in another
+/// order than the client's match the recording less than this).
 fn inventory(vm: &mut Vm) {
-    let items = {
+    /// Where an item is: worn, an equipped bag, in a bag.
+    #[derive(Clone, Copy)]
+    enum Place {
+        Worn,
+        Bag,
+        In(i64),
+    }
+    let (items, bags) = {
         let ch = &engine(vm).world.character;
-        ch.equipment.len() + ch.bags.values().map(|b| b.items.len()).sum::<usize>()
+        // Inventory slots from 31 hold bags (`CONTAINER_BAG_OFFSET` 30).
+        let worn = ch.equipment.iter().map(|(slot, h)| {
+            let place = if *slot > 30 { Place::Bag } else { Place::Worn };
+            (h.guid.clone(), place)
+        });
+        let carried = ch.bags.iter().flat_map(|(b, bag)| {
+            bag.items
+                .values()
+                .map(move |h| (h.guid.clone(), Place::In(*b)))
+        });
+        let items: Vec<(Option<String>, Place)> = worn.chain(carried).collect();
+        let bags: Vec<i64> = ch.bags.keys().copied().filter(|b| *b > 0).collect();
+        (items, bags)
     };
     let player = vm.str("player");
-    for _ in 0..items {
+    let block = |vm: &mut Vm, bag: Option<i64>| {
         crate::character::equipped_spells_changed(vm);
-        fire(vm, "BAG_UPDATE", &[Value::Num(0.0)]);
-        fire(vm, "BAG_UPDATE", &[Value::Num(-1.0)]);
+        if let Some(bag) = bag {
+            crate::character::bag_updated(vm, bag);
+        }
         fire(vm, "UNIT_INVENTORY_CHANGED", &[player]);
+    };
+    if items.is_empty() || items.iter().any(|(g, _)| g.is_none()) {
+        for _ in 0..items.len() {
+            block(vm, Some(0));
+        }
+        return;
+    }
+    // By the GUID's counter, its last part.
+    let counter = |g: &Option<String>| {
+        g.as_deref()
+            .and_then(|g| g.rsplit('-').next())
+            .and_then(|c| u64::from_str_radix(c, 16).ok())
+            .unwrap_or(0)
+    };
+    let mut items = items;
+    items.sort_by_key(|(g, _)| counter(g));
+    let last_bag = items.iter().rposition(|(_, p)| matches!(p, Place::Bag));
+    for (i, (_, place)) in items.iter().enumerate() {
+        match place {
+            Place::Worn => block(vm, Some(0)),
+            Place::In(b) => block(vm, Some(*b)),
+            Place::Bag => {
+                block(vm, None);
+                if Some(i) == last_bag {
+                    for b in &bags {
+                        crate::character::bag_updated(vm, *b);
+                    }
+                    fire(vm, "BAG_CONTAINER_UPDATE", &[]);
+                    fire(vm, "PLAYERBANKSLOTS_CHANGED", &[Value::Num(1.0)]);
+                }
+            }
+        }
     }
 }
 
