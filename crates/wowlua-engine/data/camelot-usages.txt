@@ -7,9 +7,14 @@
 # above 0), nonneg (0 or above), string (a string or a number), strictstr
 # (a string), table, required (any value but nil), guid (a GUID or 0),
 # any; `?` lets it be nil or left out; never (every value the probe tried
-# refused); companion ("CRITTER" or "MOUNT", unverified).
+# refused); companion ("CRITTER" or "MOUNT", unverified); optnumber (a
+# number or none, refused with Lua's own "number expected": message `-`);
+# questitem ("required", "choice" or "reward"); taxislot (refused while no
+# flight map is open).
 # Each check is the loosest that explains every answer, a usage's named
 # arguments preferring any value but nil: untried values are unverified.
+# A function's further lines check after its first's, with their own
+# messages (`C_Garrison.GetPlots(1)`: "Unknown follower type").
 ArchaeologyGetIconInfo	number	Usage: ArchaeologyGetIconInfo(index)
 ArcheologyGetVisibleBlobID	number	Usage: ArcheologyGetVisibleBlobID(index)
 BNGetFOFInfo	required,required,required	Usage: BNGetFOFInfo(mutual, non, index)
@@ -17,14 +22,17 @@ BNIsBlocked	number	Usage: BNIsBlocked(ID)
 BNIsFriend	number	Usage: BNIsFriend(bnetIdAccount)
 BNIsSelf	number	Usage: BNIsSelf(presenceID)
 C_AdventureJournal.GetReward	number	Usage: C_AdventureJournal.GetReward( index )
+C_AdventureJournal.GetReward	index	Invalid adventure journal index.
 C_AdventureMap.GetMapInsetDetailTileInfo	required,required	Usage: GetMapInsetDetailTileInfo(insetIndex, tileIndex)
 C_AdventureMap.GetMapInsetInfo	number	Usage: GetMapInsetInfo(insetIndex)
 C_AdventureMap.GetQuestInfo	number	Usage: GetQuestInfo(questID)
 C_AdventureMap.GetQuestOfferInfo	number	Usage: GetQuestOfferInfo(offerIndex)
 C_AdventureMap.GetZoneChoiceInfo	number	Usage: GetZoneChoiceInfo(choiceIndex)
 C_Garrison.GetFollowerAbilityIsTrait	number	Usage: GetFollowerAbilityIsTrait(garrAbilityID)
+C_Garrison.GetFollowerAbilityIsTrait	never	Invalid garrAbilityID
 C_Garrison.GetFollowerAbilityLink	number	Usage: GetFollowerAbilityLink(abilityID)
 C_Garrison.GetFollowerAbilityName	number	Usage: GetFollowerAbilityName(garrAbilityID)
+C_Garrison.GetFollowerAbilityName	never	Invalid garrAbilityID
 C_Garrison.GetFollowerBiasForMission	required,strictstr	Usage: GetFollowerBiasForMission(missionID, followerID)
 C_Garrison.GetFollowerClassSpec	never	Usage: GetFollowerClassSpec(followerID)
 C_Garrison.GetFollowerClassSpecAtlas	number	Usage: GetFollowerClassSpecAtlas(garrSpecID)
@@ -45,6 +53,7 @@ C_Garrison.GetFollowerModelItems	never	Usage: GetFollowerModelItems(followerID)
 C_Garrison.GetFollowerName	never	Usage: GetFollowerName(followerID)
 C_Garrison.GetFollowerNameByID	number	Usage: GetFollowerNameByID(garrFollowerID)
 C_Garrison.GetFollowerPortraitIconID	number	Usage: GetFollowerPortraitIconID(followerID)
+C_Garrison.GetFollowerPortraitIconID	never	Invalid followerID
 C_Garrison.GetFollowerPortraitIconIDByID	number	Usage: GetFollowerPortraitIconIDByID(garrFollowerID)
 C_Garrison.GetFollowerQuality	never	Usage: GetFollowerQuality(followerID)
 C_Garrison.GetFollowerQualityTable	number	Usage: GetFollowerQualityTable(garrFollowerTypeID)
@@ -67,6 +76,7 @@ C_Garrison.GetFollowersSpellsForMission	number	Usage: GetFollowersSpellsForMissi
 C_Garrison.GetFollowersTraitsForMission	number	Usage: GetFollowersTraitsForMission(missionID)
 C_Garrison.GetGarrisonInfo	number	Usage: GetGarrisonInfo(garrisonType)
 C_Garrison.GetGarrisonUpgradeCost	number	Usage: GetGarrisonUpgradeCost(followerType)
+C_Garrison.GetGarrisonUpgradeCost	never	Unknown follower type
 C_Garrison.GetInProgressMissions	number	Usage: GetInProgressMissions([missionList,] garrFollowerTypeID)
 C_Garrison.GetLandingPageItems	number	Usage: GetLandingPageItems(garrTypeID [, noSort])
 C_Garrison.GetLandingPageShipmentInfo	number	Usage: GetLandingPageShipmentInfo(buildingID)
@@ -93,9 +103,11 @@ C_Garrison.GetPartyMentorLevels	number	Usage: GetPartyMentorLevels(missionID)
 C_Garrison.GetPartyMissionInfo	number	Usage: GetPartyMissionInfo(missionID)
 C_Garrison.GetPendingShipmentInfo	number	Usage: GetPendingShipmentInfo(index)
 C_Garrison.GetPlots	number	Usage: GetPlots(followerType)
+C_Garrison.GetPlots	never	Unknown follower type
 C_Garrison.GetPlotsForBuilding	number	Usage: GetPlotsForBuilding(buildingID)
 C_Garrison.GetPossibleFollowersForBuilding	required,required	Usage: GetPossibleFollowersForBuilding(followerType, plotInstanceID)
 C_Garrison.GetRecruitAbilities	number	Usage: GetRecruitAbilities(index)
+C_Garrison.GetRecruitAbilities	index	GetRecruitAbilities(index) expects index from 1 to GARRISON_NUM_AVAILABLE_RECRUITS
 C_Garrison.GetRecruiterAbilityList	never	Usage: GetRecruiterAbilityList(traits)
 C_Heirloom.CanHeirloomUpgradeFromPending	number	Usage: CanHeirloomUpgradeFromPending(heirloomItemID)
 C_Heirloom.GetHeirloomInfo	number	Usage: GetHeirloomInfo(itemID)
@@ -158,6 +170,7 @@ C_TradeSkillUI.IsRecipeFavorite	number	Usage: IsRecipeFavorite(recipeID)
 C_TradeSkillUI.IsRecipeSourceTypeFiltered	index	Usage: IsRecipeSourceTypeFiltered(sourceType)
 C_Trophy.MonumentGetTrophyInfoByIndex	number	Usage: MonumentGetTrophyIDByIndex(index)
 C_WowTokenPublic.GetListedAuctionableTokenInfo	number	Usage: GetListedAuctionableTokenInfo(index)
+C_WowTokenPublic.GetListedAuctionableTokenInfo	never	GetListedAuctionableTokenInfo: Invalid index
 CanAffordMerchantItem	number	Usage: CanAffordMerchantItem(index)
 CanComplainInboxItem	number	Usage: InboxItemCanComplain(index)
 CanEditGuildTabInfo	number	Usage: CanEditGuildTabInfo(tab)
@@ -205,6 +218,7 @@ GetBattlefieldStatus	number	Usage: GetBattlefieldStatus(id)
 GetBattlefieldTeamInfo	number	Usage: GetBattlefieldTeamInfo(index)
 GetBattlefieldTimeWaited	number	Usage: GetBattlefieldTimeWaited(id)
 GetBinding	number	Usage: GetBinding(index, [AlwaysIncludeGamepad])
+GetBinding	index	GetBinding: out of range index
 GetBindingAction	required	Usage: GetBindingAction("KEY"[, checkOverride, context])
 GetBindingKey	required	Usage: GetBindingKey("COMMAND", ["AlwaysIncludeGamepad"])
 GetBuybackItemInfo	number	Usage: GetBuybackItemInfo(slot)
@@ -295,8 +309,11 @@ GetPromotionRank	number	Usage: GetGetPromotionRank(index)
 GetPvpTalentInfoByID	number,number?	Usage: GetTalentInfoByID(talentID, specGroupIndex [, isInspect, inspectUnit])
 GetPvpTalentInfoBySpecialization	number,number?,number?	Usage: GetTalentInfoBySpecialization(specGroupIndex, tier, column)
 GetPvpTalentLink	number	Usage: GetTalentLink(talentID)
+GetQuestCurrencyID	required,required	Invalid arguments in GetQuestCurrencyID("type", index)
 GetQuestExpansion	number	Usage: GetQuestExpansion(questID
 GetQuestFactionGroup	number	Usage: GetQuestFactionGroup(questID
+GetQuestItemInfo	questitem,required	Invalid quest item in GetQuestItemInfo("type", index)
+GetQuestItemInfoLootType	questitem,required	Invalid quest item in GetQuestItemInfoLootType("type", index)
 GetQuestItemLink	required,required	Usage: GetQuestItemLink("type", index)
 GetQuestLink	number	Usage: GetQuestLink(questID)
 GetQuestLogChoiceInfo	number	Usage: GetQuestLogRewardInfo(index)
@@ -304,7 +321,9 @@ GetQuestLogChoiceInfoLootType	number	Usage: GetQuestLogChoiceInfoLootType(index)
 GetQuestLogItemDrop	number	Usage: GetQuestLogItemDrop(index)
 GetQuestLogItemLink	required,required	Usage: GetQuestLogItemLink("type", index)
 GetQuestLogLeaderBoard	number	Usage: GetQuestLogLeaderBoard(index)
+GetQuestLogRewardArtifactXP	optnumber	-
 GetQuestLogRewardFactionInfo	number	Usage: GetQuestLogRewardFactionInfo(questIndex)
+GetQuestLogRewardHonor	optnumber	-
 GetQuestLogRewardInfo	number	Usage: GetQuestLogRewardInfo(index, [questID])
 GetQuestLogSpecialItemCooldown	number	Usage: GetQuestLogSpecialItemCooldown(index)
 GetQuestLogSpecialItemInfo	number	Usage: GetQuestLogSpecialItemInfo(index)
@@ -406,9 +425,11 @@ Sound_GameSystem_GetOutputDriverNameByIndex	number	Usage: Sound_GetOutputDriverN
 SpellCanTargetGarrisonFollowerAbility	required,number	Usage: SpellCanTargetGarrisonFollowerAbility(followerID, garrAbilityID)
 SpellCanTargetUnit	required	Usage: SpellCanTargetUnit("unit")
 TaxiNodeCost	number	Usage: TaxiNodeCost(slot)
+TaxiNodeCost	taxislot	Invalid taxi node slot
 TaxiNodeGetType	number	Usage: TaxiNodeGetType(slot)
 TaxiNodeName	number	Usage: TaxiNodeName(slot)
 TaxiNodePosition	number	Usage: TaxiNodePosition(slot)
+TaxiNodePosition	taxislot	Invalid taxi node slot
 UnitHasIncomingResurrection	required	Usage: UnitHasIncomingResurrection("unit")
 UnitHasLFGDeserter	required	Usage: UnitHasLFGDeserter("unit")
 UnitHasLFGRandomCooldown	required	Usage: UnitHasLFGRandomCooldown("unit")

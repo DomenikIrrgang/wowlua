@@ -40,6 +40,10 @@ enum Family {
     Locale,
     /// A font object (a widget).
     FontObject,
+    /// Any value, nil too, but not none (`luaL_checkany`).
+    LuaAny,
+    /// A string or a number (`luaL_checkstring`).
+    LuaString,
     /// A garrison follower's ID.
     FollowerId,
     /// A number in `min..=max`, refused with the usage alone otherwise.
@@ -650,6 +654,18 @@ fn checked(api: &Api, f: &Function, arg: Json, n: usize, method: bool) -> Checke
     if f.name == "C_StringUtil.GetDefaultAbbreviationBreakpoints" && n == 1 {
         family = Family::Locale;
     }
+    // The encodings' values are Lua's own checks: `C_EncodingUtil.
+    // SerializeJSON()` "value expected" (`SerializeJSON(nil)` answers),
+    // `DeserializeJSON({})` "string expected, got table" (the full probe).
+    match (f.name, n) {
+        ("C_EncodingUtil.SerializeJSON" | "C_EncodingUtil.SerializeCBOR", 1) => {
+            family = Family::LuaAny;
+        }
+        ("C_EncodingUtil.DeserializeJSON" | "C_EncodingUtil.DeserializeCBOR", 1) => {
+            family = Family::LuaString;
+        }
+        _ => {}
+    }
     // The client's own C types of documented numbers (the full probe).
     if ty == "number" && !method {
         match number_kind(f.name, n) {
@@ -717,7 +733,62 @@ fn checked_arguments<'f>(api: &Api, f: &'f Function, first: usize) -> &'f [Check
 
 /// Checks a call's arguments as the client does.
 pub fn check(vm: &mut Vm, api: &Api, f: &Function, c: &NativeCall) -> Result<(), LuaError> {
-    check_from(vm, api, f, c, 1)
+    check_from(vm, api, f, c, 1)?;
+    own_check(vm, f, c)
+}
+
+/// Documented functions' own checks after the bindings': the C code's
+/// error, without a position, and for an addon's call the taint line the
+/// client adds ("Lua Taint: *** ForceTaint_Strong ***", as recorded for
+/// `SetMinMaxValues`). From the full probe (`/stdtest engine fullprobe`):
+/// `UnitStat(unit, 0)` and `(unit, 2147483647)` refused, 1 taken (the
+/// stats run to 5, unverified); `GetCombatRating(2147483647)` refused,
+/// 0 and 1 taken; `GetMirrorTimerInfo(0)` refused, 1 taken (three timers,
+/// unverified), `GetMirrorTimerProgress("x")` refused; `GetSpellBonusDamage
+/// (0)` refused, 1 taken (seven schools, unverified); a secure addon's
+/// CPU or memory usage refused (`GetAddOnCPUUsage("Blizzard_AuctionHouseUI")`).
+fn own_check(vm: &mut Vm, f: &Function, c: &NativeCall) -> Result<(), LuaError> {
+    let num = |vm: &Vm, i: usize| vm.tonumber(vm.hidden(c.arg(i))).unwrap_or(0.0).trunc();
+    let text = |vm: &Vm, i: usize| match vm.hidden(c.arg(i)) {
+        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        _ => String::new(),
+    };
+    let refused: Option<String> = match f.name {
+        "UnitStat" if !(1.0..=5.0).contains(&num(vm, 2)) => {
+            Some("UnitStat(): Invalid stat index in UnitStat".into())
+        }
+        "GetCombatRating" | "GetCombatRatingBonus" | "GetCombatRatingBonusForCombatRatingValue"
+            if num(vm, 1) > 32.0 =>
+        {
+            Some(format!("{}(): ratingIndex is in the range 1 .. 32", f.name))
+        }
+        "GetMirrorTimerInfo" if !(1.0..=3.0).contains(&num(vm, 1)) => {
+            Some("GetMirrorTimerInfo(): ERROR: Invalid timer (Ex: \"BREATH\"".into())
+        }
+        "GetMirrorTimerProgress"
+            if !matches!(text(vm, 1).as_str(), "BREATH" | "EXHAUSTION" | "FEIGNDEATH") =>
+        {
+            Some("GetMirrorTimerProgress(): ERROR: Invalid timer (Ex: \"BREATH\"".into())
+        }
+        "GetSpellBonusDamage" if !(1.0..=7.0).contains(&num(vm, 1)) => {
+            Some("GetSpellBonusDamage(): Usage: GetSpellBonusDamage(school)".into())
+        }
+        "GetAddOnCPUUsage" if text(vm, 1).starts_with("Blizzard_") => {
+            Some("GetAddOnCPUUsage(): Cannot get CPU usage for secure AddOns".into())
+        }
+        "GetAddOnMemoryUsage" if text(vm, 1).starts_with("Blizzard_") => {
+            Some("GetAddOnMemoryUsage(): Cannot get memory usage for secure AddOns".into())
+        }
+        _ => None,
+    };
+    let Some(mut msg) = refused else {
+        return Ok(());
+    };
+    if !crate::protection::blizzard_caller(vm) {
+        msg.push_str("\nLua Taint: *** ForceTaint_Strong ***");
+    }
+    let v = vm.str(&msg);
+    Err(vm.raise(v))
 }
 
 /// [`check`] with the documented arguments from argument `first` on (2 for
@@ -737,6 +808,27 @@ pub fn check_from(
         let n = at;
         at += checked.width();
         let (arg, family) = (&checked.arg, checked.family);
+        if family == Family::LuaAny {
+            if !c.has(n) {
+                return Err(fail(
+                    vm,
+                    api,
+                    f,
+                    n,
+                    Some(Refusal::Lua("value expected".into())),
+                ));
+            }
+            continue;
+        }
+        if family == Family::LuaString {
+            let v = vm.hidden(c.arg(n));
+            if !matches!(v, Value::Str(_) | Value::Num(_)) {
+                let got = if c.has(n) { v.type_name() } else { "no value" };
+                let text = format!("string expected, got {got}");
+                return Err(fail(vm, api, f, n, Some(Refusal::Lua(text))));
+            }
+            continue;
+        }
         if family == Family::Packed {
             for (k, member) in checked.members.iter().enumerate() {
                 let v = vm.hidden(c.arg(n + k));
@@ -828,6 +920,8 @@ fn missing_field(vm: &mut Vm, api: &Api, arg: &Json, table: Value) -> Option<Str
 }
 
 enum Refusal {
+    /// Lua's own message alone (`luaL_checkany`).
+    Lua(String),
     Field(String),
     Text(String),
     Message(&'static str),
@@ -858,7 +952,7 @@ fn refuses_secret(vm: &Vm, f: &Function, arg: &Json) -> Option<&'static str> {
 fn refuses_type(vm: &mut Vm, family: Family, v: Value) -> Option<Refusal> {
     let is_str = matches!(v, Value::Str(_) | Value::Num(_));
     match family {
-        Family::Any | Family::Packed => None,
+        Family::Any | Family::Packed | Family::LuaAny | Family::LuaString => None,
         Family::ScriptObject => crate::widgets::widget_of(vm, v)
             .is_none()
             .then_some(Refusal::Type),
@@ -1178,6 +1272,7 @@ fn fail(vm: &mut Vm, api: &Api, f: &Function, n: usize, why: Option<Refusal>) ->
         Some(Refusal::Field(field)) => format!("Current Field: [{field}], {usage}"),
         Some(Refusal::Message(text)) => format!("{text} - {usage}"),
         Some(Refusal::Text(text)) => format!("{text} - {usage}"),
+        Some(Refusal::Lua(text)) => text.clone(),
         Some(Refusal::SpellBank(bank)) => format!(
             "Invalid spellBank value {bank}. Must be an Enum.SpellBookSpellBank value. - {usage}"
         ),
@@ -1232,6 +1327,12 @@ enum Usage {
     Never,
     /// Any value but nil.
     Required,
+    /// A number or none (`luaL_optnumber`): Lua's own message.
+    OptNumber,
+    /// A quest window item's type ("required", "choice", "reward").
+    QuestItem,
+    /// A taxi node's slot: refused while no flight map is open.
+    TaxiSlot,
     /// A GUID (`BattlePet-…`), or 0, which reads as none
     /// (`C_PetJournal.PetIsHurt(0)` answers, `1` and `"x"` are refused;
     /// a GUID of the right kind unverified: the probe passed none).
@@ -1246,9 +1347,10 @@ struct UsageChecks {
     message: &'static str,
 }
 
-/// The undocumented functions' checks by name, camelot's (the full probe's).
-fn usage_checks() -> &'static std::collections::HashMap<&'static str, UsageChecks> {
-    static CHECKS: std::sync::OnceLock<std::collections::HashMap<&'static str, UsageChecks>> =
+/// The undocumented functions' checks by name, in order, camelot's (the
+/// full probe's).
+fn usage_checks() -> &'static std::collections::HashMap<&'static str, Vec<UsageChecks>> {
+    static CHECKS: std::sync::OnceLock<std::collections::HashMap<&'static str, Vec<UsageChecks>>> =
         std::sync::OnceLock::new();
     CHECKS.get_or_init(|| {
         let mut out = std::collections::HashMap::new();
@@ -1276,13 +1378,18 @@ fn usage_checks() -> &'static std::collections::HashMap<&'static str, UsageCheck
                         "companion" => Usage::Companion,
                         "never" => Usage::Never,
                         "required" => Usage::Required,
+                        "optnumber" => Usage::OptNumber,
+                        "questitem" => Usage::QuestItem,
+                        "taxislot" => Usage::TaxiSlot,
                         "guid" => Usage::Guid,
                         _ => Usage::Any,
                     };
                     (usage, optional)
                 })
                 .collect();
-            out.insert(name, UsageChecks { args, message });
+            out.entry(name)
+                .or_insert_with(Vec::new)
+                .push(UsageChecks { args, message });
         }
         out
     })
@@ -1331,16 +1438,35 @@ fn usage_checked(vm: &mut Vm, c: NativeCall) -> Result<Vec<Value>, LuaError> {
         Some(&Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
         _ => String::new(),
     };
-    let Some(checks) = usage_checks().get(name.as_str()) else {
+    let Some(all) = usage_checks().get(name.as_str()) else {
         return Err(vm.error("an undocumented function without its checks"));
     };
+    for checks in all {
+        usage_check(vm, checks, &c)?;
+    }
+    let inner = crate::engine(vm).usage_checked.get(name.as_str()).copied();
+    match inner {
+        Some(f) => f(vm, c),
+        None => Err(vm.error(&format!("{name} is not mocked"))),
+    }
+}
+
+/// One of an undocumented function's checks.
+fn usage_check(vm: &mut Vm, checks: &UsageChecks, c: &NativeCall) -> Result<(), LuaError> {
     for (i, &(usage, optional)) in checks.args.iter().enumerate() {
         let v = vm.hidden(c.arg(i + 1));
+        if usage == Usage::OptNumber {
+            if !v.is_nil() && vm.tonumber(v).is_none() {
+                return Err(vm.type_arg_error(i + 1, "number", Some(v)));
+            }
+            continue;
+        }
         let ok = match (usage, v) {
             (Usage::Any, _) => true,
             (Usage::Never, _) => false,
+            (Usage::TaxiSlot, _) => crate::engine(vm).world.taxis.open.is_some(),
             (_, Value::Nil) => optional,
-            (Usage::Required, _) => true,
+            (Usage::Required | Usage::OptNumber, _) => true,
             (Usage::Guid, Value::Num(n)) => n == 0.0,
             (Usage::Guid, Value::Str(s)) => {
                 let b = vm.str_bytes(s);
@@ -1356,14 +1482,14 @@ fn usage_checked(vm: &mut Vm, c: NativeCall) -> Result<Vec<Value>, LuaError> {
             (Usage::Table, v) => matches!(v, Value::Table(_)),
             (Usage::Companion, Value::Str(s)) => matches!(vm.str_bytes(s), b"CRITTER" | b"MOUNT"),
             (Usage::Companion, _) => false,
+            (Usage::QuestItem, Value::Str(s)) => {
+                matches!(vm.str_bytes(s), b"required" | b"choice" | b"reward")
+            }
+            (Usage::QuestItem, _) => false,
         };
         if !ok {
             return Err(vm.error(checks.message));
         }
     }
-    let inner = crate::engine(vm).usage_checked.get(name.as_str()).copied();
-    match inner {
-        Some(f) => f(vm, c),
-        None => Err(vm.error(&format!("{name} is not mocked"))),
-    }
+    Ok(())
 }
