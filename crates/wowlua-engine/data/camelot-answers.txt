@@ -683,6 +683,12 @@ C_BattleNet.IsFriendTagSupportedForCurrentGameType(9)	1: boolean true
 C_CatalogShop.HasNewProducts()	1: boolean false
 C_CatalogShop.IsShop2Enabled()	1: boolean false
 C_ChatInfo.AreOutgoingAddonChatMessagesRestricted()	1: boolean true
+C_ChatInfo.GetChannelRuleset(1)	1: number 0
+C_ChatInfo.GetChannelRuleset(2)	1: number 0
+C_ChatInfo.GetChannelRuleset(3)	1: number 0
+C_ChatInfo.GetChannelRuleset(4)	1: number 0
+C_ChatInfo.GetChannelRuleset(5)	1: number 0
+C_ChatInfo.GetChannelRuleset(6)	1: number 0
 C_ChatInfo.GetChannelShortcutForChannelID(0)	1: nil nil
 C_ClassColor.GetClassColor("ADVENTURER")	0: 
 C_ClassColor.GetClassColor("DEATHKNIGHT")	0: 
@@ -1065,6 +1071,9 @@ C_Item.GetItemSubClassInfo(9, 6)	2: string Alchemy, boolean false
 C_Item.GetItemSubClassInfo(9, 7)	2: string First Aid, boolean false
 C_Item.GetItemSubClassInfo(9, 8)	2: string Enchanting, boolean false
 C_Item.GetItemSubClassInfo(9, 9)	2: string Fishing, boolean false
+C_Item.GetWeaponEnchantInfo(0)	1: {1={charges=number 0,enchantID=number 0,enchantIconID=number 0,enchantType=number 0,hasEnchant=boolean false,timeLeft=number 0},2={charges=number 0,enchantID=number 0,enchantIconID=number 0,enchantType=number 0,hasEnchant=boolean false,timeLeft=number 0}}
+C_Item.GetWeaponEnchantInfo(1)	1: {}
+C_Item.GetWeaponEnchantInfo(2)	1: {}
 C_KeyBindings.GetBindingContextForAction("INTERACTTARGET")	1: number 0
 C_KeyBindings.GetBindingIndex("INTERACTTARGET")	1: number 183
 C_KeyBindings.GetCustomBindingType(1)	1: nil nil
@@ -3171,6 +3180,15 @@ C_PaperDollInfo.GetInventorySlotInfo("Prof0ToolSlot")	3: number 20, number 47602
 C_PaperDollInfo.GetInventorySlotInfo("Prof1Gear0Slot")	3: number 24, number 4760248, boolean false
 C_PaperDollInfo.GetInventorySlotInfo("Prof1Gear1Slot")	3: number 25, number 4760248, boolean false
 C_PaperDollInfo.GetInventorySlotInfo("Prof1ToolSlot")	3: number 23, number 4760248, boolean false
+C_PaperDollInfo.GetInventorySlotInfoForInvSlot(1)	4: number 1, number 136516, boolean false, string HeadSlot
+C_PaperDollInfo.GetInventorySlotInfoForInvSlot(12)	4: number 12, number 136514, boolean false, string Finger1Slot
+C_PaperDollInfo.GetInventorySlotInfoForInvSlot(13)	4: number 13, number 136528, boolean false, string Trinket0Slot
+C_PaperDollInfo.GetInventorySlotInfoForInvSlot(14)	4: number 14, number 136528, boolean false, string Trinket1Slot
+C_PaperDollInfo.GetInventorySlotInfoForInvSlot(17)	4: number 17, number 136524, boolean false, string SecondaryHandSlot
+C_PaperDollInfo.GetInventorySlotInfoForInvSlot(18)	4: number 18, number 136520, boolean true, string RangedSlot
+C_PaperDollInfo.GetInventorySlotInfoForInvSlot(19)	4: number 19, number 136527, boolean false, string TabardSlot
+C_PaperDollInfo.GetInventorySlotInfoForInvSlot(2)	4: number 2, number 136519, boolean false, string NeckSlot
+C_PaperDollInfo.GetInventorySlotInfoForInvSlot(7)	4: number 7, number 136517, boolean false, string LegsSlot
 C_PartyInfo.AllowedToDoPartyConversion(true)	1: boolean false
 C_PartyInfo.IsRaidListSupported()	1: boolean true
 C_PerksActivities.GetTrackedPerksActivities()	1: {trackedIDs={}}
@@ -3443,6 +3461,10 @@ C_ToyBox.HasFavorites()	1: boolean false
 C_ToyBoxInfo.HasAnyToy()	1: boolean false
 C_TradeSkillUI.AnyRecipeCategoriesFiltered()	1: boolean false
 C_TradeSkillUI.AreAnyInventorySlotsFiltered()	1: boolean false
+C_TradeSkillUI.CanTradeSkillShowCraftingUI(2550)	1: boolean true
+C_TradeSkillUI.CanTradeSkillShowCraftingUI(2656)	1: boolean true
+C_TradeSkillUI.CanTradeSkillShowCraftingUI(3100)	1: boolean true
+C_TradeSkillUI.CanTradeSkillShowCraftingUI(3273)	1: boolean true
 C_TradeSkillUI.GetAllFilterableInventorySlotsCount()	1: number 0
 C_TradeSkillUI.GetBaseProfessionInfo()	1: {expansionName=string ,isPrimaryProfession=boolean false,maxSkillLevel=number 0,professionID=number 0,professionName=string ,skillLevel=number 0,skillModifier=number 0,sourceCounter=number 0}
 C_TradeSkillUI.GetChildProfessionInfo()	1: {expansionName=string ,isPrimaryProfession=boolean false,maxSkillLevel=number 0,professionID=number 0,professionName=string ,skillLevel=number 0,skillModifier=number 0,sourceCounter=number 0}
@@ -3452,6 +3474,10 @@ C_TradeSkillUI.GetOnlyShowMakeableRecipes()	1: boolean false
 C_TradeSkillUI.GetOnlyShowMakeableRecipes(nil)	1: boolean false
 C_TradeSkillUI.GetOnlyShowSkillUpRecipes()	1: boolean false
 C_TradeSkillUI.GetOnlyShowSkillUpRecipes(nil)	1: boolean false
+C_TradeSkillUI.GetProfessionInfoBySkillLineID(129)	1: {expansionName=string Unknown,isPrimaryProfession=boolean false,maxSkillLevel=number 0,profession=number 0,professionID=number 129,professionName=string First Aid,skillLevel=number 0,skillModifier=number 0,sourceCounter=number 0}
+C_TradeSkillUI.GetProfessionInfoBySkillLineID(164)	1: {expansionName=string Unknown,isPrimaryProfession=boolean true,maxSkillLevel=number 0,profession=number 1,professionID=number 164,professionName=string Blacksmithing,skillLevel=number 0,skillModifier=number 0,sourceCounter=number 0}
+C_TradeSkillUI.GetProfessionInfoBySkillLineID(185)	1: {expansionName=string Unknown,isPrimaryProfession=boolean false,maxSkillLevel=number 0,profession=number 5,professionID=number 185,professionName=string Cooking,skillLevel=number 0,skillModifier=number 0,sourceCounter=number 0}
+C_TradeSkillUI.GetProfessionInfoBySkillLineID(186)	1: {expansionName=string Unknown,isPrimaryProfession=boolean true,maxSkillLevel=number 0,profession=number 6,professionID=number 186,professionName=string Mining,skillLevel=number 0,skillModifier=number 0,sourceCounter=number 0}
 C_TradeSkillUI.GetProfessionSkillLineID(0)	1: number 129
 C_TradeSkillUI.GetProfessionSkillLineID(1)	1: number 164
 C_TradeSkillUI.GetProfessionSkillLineID(10)	1: number 356
@@ -3468,6 +3494,18 @@ C_TradeSkillUI.GetProfessionSkillLineID(7)	1: number 197
 C_TradeSkillUI.GetProfessionSkillLineID(8)	1: number 202
 C_TradeSkillUI.GetProfessionSkillLineID(9)	1: number 333
 C_TradeSkillUI.GetRecipeItemNameFilter()	1: string 
+C_TradeSkillUI.IsAnyRecipeFromSource(1)	1: boolean false
+C_TradeSkillUI.IsAnyRecipeFromSource(10)	1: boolean false
+C_TradeSkillUI.IsAnyRecipeFromSource(11)	1: boolean false
+C_TradeSkillUI.IsAnyRecipeFromSource(12)	1: boolean false
+C_TradeSkillUI.IsAnyRecipeFromSource(2)	1: boolean false
+C_TradeSkillUI.IsAnyRecipeFromSource(3)	1: boolean false
+C_TradeSkillUI.IsAnyRecipeFromSource(4)	1: boolean false
+C_TradeSkillUI.IsAnyRecipeFromSource(5)	1: boolean false
+C_TradeSkillUI.IsAnyRecipeFromSource(6)	1: boolean false
+C_TradeSkillUI.IsAnyRecipeFromSource(7)	1: boolean false
+C_TradeSkillUI.IsAnyRecipeFromSource(8)	1: boolean false
+C_TradeSkillUI.IsAnyRecipeFromSource(9)	1: boolean false
 C_TradeSkillUI.IsGuildTradeSkillsEnabled()	1: boolean false
 C_TradeSkillUI.IsNPCCrafting()	1: boolean false
 C_TradeSkillUI.IsTradeSkillGuild()	1: boolean false
@@ -7549,6 +7587,15 @@ C_TransmogCollection.GetAppearanceCameraID(93751)	1: number 550
 C_TransmogCollection.GetAppearanceCameraID(93767)	1: number 550
 C_TransmogCollection.GetAppearanceCameraID(93775)	1: number 550
 C_TransmogCollection.GetAppearanceCameraID(94153)	1: number 244
+C_TransmogCollection.GetAppearanceSourceInfo(157337)	1: {canHaveIllusion=boolean false,category=number 2,icon=number 135036,ignoreModelAttachmentChecksForIllusion=boolean false,isCollected=boolean true,itemAppearanceID=number 64330,itemLink=string |cnIQ2:|Hitem:3480::::::::21:1486:::1:3524::::::|h[Rough Bronze Shoulders]|h|r,itemSubclass=number 3,sourceType=number 6,transmoglink=string |cffff80ff|Htransmogappearance:157337|h[Rough Bronze Shoulders]|h|r}
+C_TransmogCollection.GetAppearanceSourceInfo(158142)	1: {canHaveIllusion=boolean false,category=number 3,icon=number 133755,ignoreModelAttachmentChecksForIllusion=boolean false,isCollected=boolean true,itemAppearanceID=number 64969,itemLink=string |cnIQ2:|Hitem:5343::::::::21:1486:::1:3524::::::|h[Barkeeper's Cloak]|h|r,itemSubclass=number 1,sourceType=number 2,transmoglink=string |cffff80ff|Htransmogappearance:158142|h[Barkeeper's Cloak]|h|r}
+C_TransmogCollection.GetAppearanceSourceInfo(158325)	1: {canHaveIllusion=boolean false,category=number 5,icon=number 132719,ignoreModelAttachmentChecksForIllusion=boolean false,isCollected=boolean true,itemAppearanceID=number 65092,itemLink=string |cnIQ1:|Hitem:6125::::::::21:1486:::1:3524::::::|h[Brawler's Harness]|h|r,itemSubclass=number 0,transmoglink=string |cffff80ff|Htransmogappearance:158325|h[Brawler's Harness]|h|r}
+C_TransmogCollection.GetAppearanceSourceInfo(161280)	1: {canHaveIllusion=boolean false,category=number 7,icon=number 132606,ignoreModelAttachmentChecksForIllusion=boolean false,isCollected=boolean true,itemAppearanceID=number 67105,itemLink=string |cnIQ3:|Hitem:14147::::::::21:1486:::1:3524::::::|h[Cavedweller Bracers]|h|r,itemSubclass=number 3,sourceType=number 4,transmoglink=string |cffff80ff|Htransmogappearance:161280|h[Cavedweller Bracers]|h|r}
+C_TransmogCollection.GetAppearanceSourceInfo(298030)	1: {canHaveIllusion=boolean false,category=number 11,icon=number 132582,ignoreModelAttachmentChecksForIllusion=boolean false,isCollected=boolean true,itemAppearanceID=number 65649,itemLink=string |cnIQ3:|Hitem:250621::::::::21:1486:::1:3524::::::|h[Strange Copper Boots]|h|r,itemSubclass=number 3,sourceType=number 6,transmoglink=string |cffff80ff|Htransmogappearance:298030|h[Strange Copper Boots]|h|r}
+C_TransmogCollection.GetAppearanceSourceInfo(306401)	1: {canHaveIllusion=boolean false,category=number 9,icon=number 132510,ignoreModelAttachmentChecksForIllusion=boolean false,isCollected=boolean true,itemAppearanceID=number 129952,itemLink=string |cnIQ3:|Hitem:271201::::::::21:1486:::1:3524::::::|h[Atrophic Girdle]|h|r,itemSubclass=number 3,transmoglink=string |cffff80ff|Htransmogappearance:306401|h[Atrophic Girdle]|h|r}
+C_TransmogCollection.GetAppearanceSourceInfo(306405)	1: {canHaveIllusion=boolean false,category=number 4,icon=number 132637,ignoreModelAttachmentChecksForIllusion=boolean false,isCollected=boolean true,itemAppearanceID=number 129953,itemLink=string |cnIQ3:|Hitem:271205::::::::21:1486:::1:3524::::::|h[Abomination Bones]|h|r,itemSubclass=number 3,transmoglink=string |cffff80ff|Htransmogappearance:306405|h[Abomination Bones]|h|r}
+C_TransmogCollection.GetAppearanceSourceInfo(306408)	1: {canHaveIllusion=boolean false,category=number 8,icon=number 132938,ignoreModelAttachmentChecksForIllusion=boolean false,isCollected=boolean true,itemAppearanceID=number 129954,itemLink=string |cnIQ3:|Hitem:271208::::::::21:1486:::1:3524::::::|h[Grip of Fear]|h|r,itemSubclass=number 3,transmoglink=string |cffff80ff|Htransmogappearance:306408|h[Grip of Fear]|h|r}
+C_TransmogCollection.GetAppearanceSourceInfo(306416)	1: {canHaveIllusion=boolean false,category=number 15,icon=number 133728,ignoreModelAttachmentChecksForIllusion=boolean false,isCollected=boolean true,itemAppearanceID=number 130067,itemLink=string |cnIQ3:|Hitem:271216::::::::21:1486:::1:3524::::::|h[Scepter of the Abandoned]|h|r,itemSubclass=number 4,transmoglink=string |cffff80ff|Htransmogappearance:306416|h[Scepter of the Abandoned]|h|r}
 C_TransmogCollection.GetAppearanceSources(11257, 1)	1: {1={canDisplayOnPlayer=boolean false,categoryID=number 1,invType=number 2,isCollected=boolean false,isValidSourceForPlayer=boolean false,itemID=number 44803,itemModID=number 0,playerCanCollect=boolean false,sourceID=number 21598,sourceType=number 4,visualID=number 11257}}
 C_TransmogCollection.GetAppearanceSources(114757, 19)	1: {1={canDisplayOnPlayer=boolean false,categoryID=number 19,invType=number 24,isCollected=boolean false,isValidSourceForPlayer=boolean false,itemID=number 276897,itemModID=number 0,playerCanCollect=boolean false,sourceID=number 309910,sourceType=number 2,visualID=number 114757}}
 C_TransmogCollection.GetAppearanceSources(114767, 9)	1: {1={canDisplayOnPlayer=boolean false,categoryID=number 9,invType=number 7,isCollected=boolean false,isValidSourceForPlayer=boolean false,itemID=number 260196,itemModID=number 0,playerCanCollect=boolean false,sourceID=number 302087,sourceType=number 2,visualID=number 114767}}
@@ -11446,6 +11493,32 @@ C_TransmogCollection.GetCategoryTotal(6)	1: number 25
 C_TransmogCollection.GetCategoryTotal(7)	1: number 260
 C_TransmogCollection.GetCategoryTotal(8)	1: number 365
 C_TransmogCollection.GetCategoryTotal(9)	1: number 324
+C_TransmogCollection.GetFilteredCategoryCollectedCount(1)	1: number 1
+C_TransmogCollection.GetFilteredCategoryCollectedCount(10)	1: number 45
+C_TransmogCollection.GetFilteredCategoryCollectedCount(11)	1: number 39
+C_TransmogCollection.GetFilteredCategoryCollectedCount(14)	1: number 13
+C_TransmogCollection.GetFilteredCategoryCollectedCount(18)	1: number 18
+C_TransmogCollection.GetFilteredCategoryCollectedCount(2)	1: number 4
+C_TransmogCollection.GetFilteredCategoryCollectedCount(3)	1: number 22
+C_TransmogCollection.GetFilteredCategoryCollectedCount(4)	1: number 29
+C_TransmogCollection.GetFilteredCategoryCollectedCount(5)	1: number 13
+C_TransmogCollection.GetFilteredCategoryCollectedCount(6)	1: number 1
+C_TransmogCollection.GetFilteredCategoryCollectedCount(7)	1: number 30
+C_TransmogCollection.GetFilteredCategoryCollectedCount(8)	1: number 26
+C_TransmogCollection.GetFilteredCategoryCollectedCount(9)	1: number 27
+C_TransmogCollection.GetFilteredCategoryTotal(1)	1: number 237
+C_TransmogCollection.GetFilteredCategoryTotal(10)	1: number 323
+C_TransmogCollection.GetFilteredCategoryTotal(11)	1: number 373
+C_TransmogCollection.GetFilteredCategoryTotal(14)	1: number 89
+C_TransmogCollection.GetFilteredCategoryTotal(18)	1: number 118
+C_TransmogCollection.GetFilteredCategoryTotal(2)	1: number 228
+C_TransmogCollection.GetFilteredCategoryTotal(3)	1: number 161
+C_TransmogCollection.GetFilteredCategoryTotal(4)	1: number 439
+C_TransmogCollection.GetFilteredCategoryTotal(5)	1: number 44
+C_TransmogCollection.GetFilteredCategoryTotal(6)	1: number 25
+C_TransmogCollection.GetFilteredCategoryTotal(7)	1: number 260
+C_TransmogCollection.GetFilteredCategoryTotal(8)	1: number 365
+C_TransmogCollection.GetFilteredCategoryTotal(9)	1: number 324
 C_TransmogCollection.GetIllusions()	1: {}
 C_TransmogCollection.GetLatestAppearance()	0: 
 C_TransmogCollection.GetValidAppearanceSourcesForClass(11257, 2, 1)	1: {1={canDisplayOnPlayer=boolean false,categoryID=number 1,invType=number 2,isCollected=boolean false,isValidSourceForPlayer=boolean false,itemID=number 44803,itemModID=number 0,playerCanCollect=boolean false,sourceID=number 21598,sourceType=number 4,visualID=number 11257}}
@@ -15232,6 +15305,12 @@ C_TransmogOutfitInfo.IsTransmogEnabled()	1: boolean true
 C_TransmogSets.GetAllSets()	1: {1={classMask=number 0,collected=boolean false,description=string Green,expansionID=number 9,favorite=boolean false,grantAsPrecedingVariant=boolean false,hiddenUntilCollected=boolean true,label=string Snugglefin Murloc Romper,limitedTimeSet=boolean false,name=string Green Snugglefin Murloc Romper,patchID=number 100207,setID=number 3634,uiOrder=number 1640,validForCharacter=boolean true}}
 C_UI.DoesAnyDisplayHaveNotch()	1: boolean false
 C_UI.ShouldUIParentAvoidNotch()	1: boolean true
+C_UIWidgetManager.GetAllWidgetsBySetID(1)	1: {}
+C_UIWidgetManager.GetAllWidgetsBySetID(2)	1: {}
+C_UIWidgetManager.GetAllWidgetsBySetID(240)	1: {}
+C_UIWidgetManager.GetAllWidgetsBySetID(252)	1: {}
+C_UIWidgetManager.GetAllWidgetsBySetID(283)	1: {}
+C_UIWidgetManager.GetAllWidgetsBySetID(514)	1: {}
 C_UIWidgetManager.GetObjectiveTrackerWidgetSetID()	1: number 240
 C_UIWidgetManager.GetWidgetSetInfo(0)	0: 
 C_UIWidgetManager.GetWidgetSetInfo(1)	1: {layoutDirection=number 0,verticalPadding=number 0}
@@ -19627,6 +19706,20 @@ GetTotemInfo(2)	7: boolean false, string , number 0, number 0, nil nil, number 0
 GetTotemInfo(3)	7: boolean false, string , number 0, number 0, nil nil, number 0, number 0
 GetTotemInfo(4)	7: boolean false, string , number 0, number 0, nil nil, number 0, number 0
 GetTutorialsEnabled()	1: boolean false
+GetUICameraInfo(238)	10: number 0, number -0.0065784379839897, number -0.039473701268435, number 1.4199998378754, number -0.93000036478043, number 0, number 0, number -1, number -1, boolean true
+GetUICameraInfo(249)	10: number 0.75, number 0.019737182185054, number -0.0065795322880149, number -1.3750156164169, number -1.3964680433273, number 0, number 0, number -1, number -1, boolean true
+GetUICameraInfo(542)	10: number 3.2105250358582, number 0.2105259001255, number -1.6644748449326, number -0.25770100951195, number -0.12444443255663, number 0.031323239207268, number 0, number 0, number 0, boolean false
+GetUICameraInfo(543)	10: number 3.2368416786194, number -0.22368209064007, number -1.5328943729401, number 0.62557274103165, number 0.021428983658552, number 0.0052221636287868, number 0, number 3, number 1866, boolean false
+GetUICameraInfo(544)	10: number 2.9868423938751, number -0.072367832064629, number -1.1052621603012, number -2.0859024524689, number 0, number 0, number 0, number 0, number 1002, boolean false
+GetUICameraInfo(545)	10: number 2.9276311397552, number 0.098684191703796, number -1.2631573677063, number 0.76555675268173, number 0.017777763307095, number 0.071110844612122, number 0, number 0, number 0, boolean false
+GetUICameraInfo(546)	10: number 3.1644728183746, number 0.052633874118328, number -1.4013154506683, number 0.6719805598259, number 0, number -0.13333311676979, number 0, number 0, number 0, boolean false
+GetUICameraInfo(547)	10: number 3.4802629947662, number 0.11842279881239, number -1.2171026468277, number 0.69684791564941, number -0.37333312630653, number -0.1955554485321, number 0, number 0, number 1155, boolean false
+GetUICameraInfo(548)	10: number 3.6381566524506, number 0.54605543613434, number -1.0263174772263, number 0.80642473697662, number 0, number -0.0088894385844469, number 0, number 0, number 0, boolean false
+GetUICameraInfo(549)	10: number 3.3552634716034, number -0.41447198390961, number -1.0657877922058, number 0.47505754232407, number 0.088889002799988, number 0, number 0, number 1, number 799, boolean false
+GetUICameraInfo(550)	10: number 3.5847954750061, number 0.072372160851955, number -1.0986825227737, number 0.40986397862434, number 0, number 0.07449646294117, number 0, number 0, number 722, boolean false
+GetUICameraInfo(551)	10: number 3.0065777301788, number 0.098686218261719, number -0.81578779220581, number 1.117461681366, number 0, number 0, number 0, number 0, number 0, boolean false
+GetUICameraInfo(552)	10: number 2.9736838340759, number 0.0065801134333014, number -0.23684145510197, number -0.61111164093018, number 0, number 0, number 0, number 0, number 0, boolean false
+GetUICameraInfo(690)	10: number 3.0263161659241, number 0.085526466369629, number -1.3749994039536, number 0.77234143018723, number -0.18575525283813, number -0.15277715027332, number 0, number 0, number 0, boolean false
 GetWorldElapsedTimers()	1: number 0
 HasArtifactEquipped()	1: boolean false
 HasPetUI()	2: boolean false, boolean false

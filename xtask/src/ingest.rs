@@ -341,6 +341,14 @@ fn stamps_of(state: &mlua::Table) -> Stamps {
 const STATIC: &[&str] = &[
     // Game data.
     "GetChatTypeIndex",
+    "GetUICameraInfo",
+    "C_PaperDollInfo.GetInventorySlotInfoForInvSlot",
+    "C_TradeSkillUI.GetProfessionInfoBySkillLineID",
+    "C_TradeSkillUI.CanTradeSkillShowCraftingUI",
+    // The account's transmog collection.
+    "C_TransmogCollection.GetFilteredCategoryCollectedCount",
+    "C_TransmogCollection.GetFilteredCategoryTotal",
+    "C_TransmogCollection.GetAppearanceSourceInfo",
     "C_Map.",
     "C_GameRules.",
     "GetBuildOption",
@@ -505,6 +513,10 @@ const STATIC: &[&str] = &[
 /// vehicle, summons, queue, totem, pet…). The engine's models take over
 /// as they come.
 const BASELINE: &[&str] = &[
+    "C_ChatInfo.GetChannelRuleset",
+    "C_UIWidgetManager.GetAllWidgetsBySetID",
+    "C_TradeSkillUI.IsAnyRecipeFromSource",
+    "C_Item.GetWeaponEnchantInfo",
     "C_ActionBar.HasAssistedCombatActionButtons",
     "C_ActionBar.HasBonusActionBar",
     "C_ActionBar.HasExtraActionBar",
