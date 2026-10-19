@@ -51,7 +51,10 @@ local packed = E.CompressString(string.rep('ab', 50))
 return b64, E.DecodeBase64(b64), E.EncodeHex('AZ'), E.DecodeHex('415a'), t[2], t[3].a, j.a,
     E.DecompressString(packed) == string.rep('ab', 50)",
     );
-    assert_eq!(r, ["aGVsbG8=", "hello", "415a", "AZ", "2", "x", "1", "true"]);
+    assert_eq!(
+        r,
+        ["aGVsbG8=", "hello", "415a", "AZ", "2", "x", "1", "true"]
+    );
 }
 
 #[test]

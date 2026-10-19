@@ -62,6 +62,7 @@ pub mod recorded;
 pub mod social;
 pub mod spellinfo;
 pub mod stats;
+pub mod systeminfo;
 pub mod taxi;
 pub mod tooltip;
 pub mod tradeskill;
@@ -863,6 +864,7 @@ fn fill_ins() -> Vec<(&'static str, NativeFn)> {
         .chain(collections::behaviours())
         .chain(extras::behaviours())
         .chain(globalsinfo::behaviours())
+        .chain(systeminfo::behaviours())
         .collect()
 }
 

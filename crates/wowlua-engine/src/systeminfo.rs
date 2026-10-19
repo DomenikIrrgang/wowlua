@@ -669,9 +669,7 @@ fn enable_all_addons(vm: &mut Vm, _c: NativeCall) -> Ret {
             .table(t)
             .entries()
             .map(|(k, _)| k)
-            .filter(|k| {
-                matches!(k, Value::Str(s) if vm.str_bytes(*s).starts_with(b"disabled:"))
-            })
+            .filter(|k| matches!(k, Value::Str(s) if vm.str_bytes(*s).starts_with(b"disabled:")))
             .collect()
     };
     let t = state(vm);
@@ -762,7 +760,11 @@ fn get_addon_security(vm: &mut Vm, c: NativeCall) -> Ret {
 fn get_addon_interface_version(vm: &mut Vm, c: NativeCall) -> Ret {
     let v = addon(vm, c.arg(1))
         .and_then(|n| metadata(vm, &n, "Interface"))
-        .and_then(|i| i.split(',').next().and_then(|s| s.trim().parse::<f64>().ok()))
+        .and_then(|i| {
+            i.split(',')
+                .next()
+                .and_then(|s| s.trim().parse::<f64>().ok())
+        })
         .unwrap_or(0.0);
     Ok(vec![Value::Num(v)])
 }
@@ -944,7 +946,9 @@ fn honor_points() -> Fields {
         (s("currencyListDepth"), n(0.0)),
         (
             s("description"),
-            s("Honor is gained by killing members of the opposite faction in PvP combat. You can use honor points to purchase special items."),
+            s(
+                "Honor is gained by killing members of the opposite faction in PvP combat. You can use honor points to purchase special items.",
+            ),
         ),
         (s("discovered"), b(false)),
         (s("iconFileID"), n(2173920.0)),
@@ -1005,7 +1009,9 @@ fn link_currency_id(vm: &Vm, v: Value) -> Option<f64> {
 
 /// `C_CurrencyInfo.GetCurrencyIDFromLink(link)`: its ID, else 0.
 fn get_currency_id_from_link(vm: &mut Vm, c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(link_currency_id(vm, c.arg(1)).unwrap_or(0.0))])
+    Ok(vec![Value::Num(
+        link_currency_id(vm, c.arg(1)).unwrap_or(0.0),
+    )])
 }
 
 fn get_currency_info_from_link(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -2174,12 +2180,7 @@ fn deserialize_cbor(vm: &mut Vm, c: NativeCall) -> Ret {
 /// A Lua value as JSON: lists as arrays, other tables as objects (keys as
 /// strings), integers without a fraction (unverified: an empty table's
 /// kind, the key order).
-fn to_json(
-    vm: &Vm,
-    v: Value,
-    depth: usize,
-    lenient: bool,
-) -> Result<serde_json::Value, String> {
+fn to_json(vm: &Vm, v: Value, depth: usize, lenient: bool) -> Result<serde_json::Value, String> {
     use serde_json::Value as J;
     if depth > 100 {
         return Err("table nesting too deep".into());
@@ -2269,10 +2270,12 @@ fn deserialize_json(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(src) = bytes_arg(vm, &c, 1) else {
         return Ok(vec![Value::Nil]);
     };
-    Ok(vec![match serde_json::from_slice::<serde_json::Value>(&src) {
-        Ok(j) => from_json(vm, &j),
-        Err(_) => Value::Nil,
-    }])
+    Ok(vec![
+        match serde_json::from_slice::<serde_json::Value>(&src) {
+            Ok(j) => from_json(vm, &j),
+            Err(_) => Value::Nil,
+        },
+    ])
 }
 
 // ------------------------------------------------------- registration
@@ -2400,7 +2403,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             get_addon_optional_dependencies,
         ),
         ("C_AddOns.GetAddOnSecurity", get_addon_security),
-        ("C_AddOns.GetAddOnInterfaceVersion", get_addon_interface_version),
+        (
+            "C_AddOns.GetAddOnInterfaceVersion",
+            get_addon_interface_version,
+        ),
         ("C_AddOns.IsAddOnLoadable", is_addon_loadable),
         ("C_AddOns.IsAddOnDefaultEnabled", is_addon_default_enabled),
         ("C_AddOns.DoesAddOnHaveLoadError", no),
@@ -2426,7 +2432,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ),
         ("C_KeyBindings.GetTurnStrafeStyle", get_turn_strafe_style),
         ("C_KeyBindings.SetTurnStrafeStyle", set_turn_strafe_style),
-        ("C_KeyBindings.UpdateTurnStrafeBindingsForCharacter", nothing),
+        (
+            "C_KeyBindings.UpdateTurnStrafeBindingsForCharacter",
+            nothing,
+        ),
         // Combat ratings.
         ("GetHaste", get_haste),
         ("GetMastery", get_mastery),
@@ -2440,24 +2449,45 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("CanBeRaidTarget", can_be_raid_target),
         // Currencies.
         ("C_CurrencyInfo.GetCurrencyInfo", get_currency_info),
-        ("C_CurrencyInfo.GetCurrencyInfoFromLink", get_currency_info_from_link),
-        ("C_CurrencyInfo.GetCurrencyIDFromLink", get_currency_id_from_link),
+        (
+            "C_CurrencyInfo.GetCurrencyInfoFromLink",
+            get_currency_info_from_link,
+        ),
+        (
+            "C_CurrencyInfo.GetCurrencyIDFromLink",
+            get_currency_id_from_link,
+        ),
         ("C_CurrencyInfo.GetCurrencyLink", get_currency_link),
         ("C_CurrencyInfo.GetCurrencyListLink", get_currency_list_link),
-        ("C_CurrencyInfo.GetBasicCurrencyInfo", get_basic_currency_info),
-        ("C_CurrencyInfo.GetCurrencyDescription", get_currency_description),
-        ("C_CurrencyInfo.PlayerHasMaxQuantity", player_has_max_quantity),
+        (
+            "C_CurrencyInfo.GetBasicCurrencyInfo",
+            get_basic_currency_info,
+        ),
+        (
+            "C_CurrencyInfo.GetCurrencyDescription",
+            get_currency_description,
+        ),
+        (
+            "C_CurrencyInfo.PlayerHasMaxQuantity",
+            player_has_max_quantity,
+        ),
         (
             "C_CurrencyInfo.PlayerHasMaxWeeklyQuantity",
             player_has_max_weekly_quantity,
         ),
-        ("C_CurrencyInfo.IsAccountWideCurrency", is_account_wide_currency),
+        (
+            "C_CurrencyInfo.IsAccountWideCurrency",
+            is_account_wide_currency,
+        ),
         (
             "C_CurrencyInfo.IsAccountTransferableCurrency",
             is_account_transferable_currency,
         ),
         ("C_CurrencyInfo.CanTransferCurrency", can_transfer_currency),
-        ("C_CurrencyInfo.DoesWarModeBonusApply", does_war_mode_bonus_apply),
+        (
+            "C_CurrencyInfo.DoesWarModeBonusApply",
+            does_war_mode_bonus_apply,
+        ),
         ("C_CurrencyInfo.GetAzeriteCurrencyID", azerite_currency_id),
         (
             "C_CurrencyInfo.GetWarResourcesCurrencyID",
@@ -2478,14 +2508,26 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_CurrencyInfo.GetCurrencyContainerInfo", nothing),
         ("C_CurrencyInfo.GetFactionGrantedByCurrency", nil),
         ("C_CurrencyInfo.IsAccountCharacterCurrencyDataReady", no),
-        ("C_CurrencyInfo.RequestCurrencyDataForAccountCharacters", nothing),
-        ("C_CurrencyInfo.FetchCurrencyDataFromAccountCharacters", empty_table),
-        ("C_CurrencyInfo.FetchCurrencyTransferTransactions", empty_table),
+        (
+            "C_CurrencyInfo.RequestCurrencyDataForAccountCharacters",
+            nothing,
+        ),
+        (
+            "C_CurrencyInfo.FetchCurrencyDataFromAccountCharacters",
+            empty_table,
+        ),
+        (
+            "C_CurrencyInfo.FetchCurrencyTransferTransactions",
+            empty_table,
+        ),
         ("C_CurrencyInfo.IsCurrencyTransferInProgress", no),
         ("C_CurrencyInfo.IsCurrencyTransferTransactionDataReady", no),
         ("C_CurrencyInfo.GetCostToTransferCurrency", nil),
         ("C_CurrencyInfo.GetMaxTransferableAmountFromQuantity", nil),
-        ("C_CurrencyInfo.RequestCurrencyFromAccountCharacter", nothing),
+        (
+            "C_CurrencyInfo.RequestCurrencyFromAccountCharacter",
+            nothing,
+        ),
         ("C_CurrencyInfo.SetCurrencyUnused", nothing),
         ("C_CurrencyInfo.SetCurrencyBackpack", nothing),
         ("C_CurrencyInfo.SetCurrencyBackpackByID", nothing),
@@ -2499,13 +2541,19 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Reputation.GetGuildRepExpirationTime", nil),
         ("C_Reputation.GetFactionParagonInfo", nothing),
         ("C_Reputation.IsFactionParagon", no),
-        ("C_Reputation.RequestFactionParagonPreloadRewardData", nothing),
+        (
+            "C_Reputation.RequestFactionParagonPreloadRewardData",
+            nothing,
+        ),
         ("C_Reputation.SetSelectedFaction", set_selected_faction),
         (
             "C_Reputation.SetWatchedFactionByIndex",
             set_watched_faction_by_index,
         ),
-        ("C_Reputation.SetWatchedFactionByID", set_watched_faction_by_id),
+        (
+            "C_Reputation.SetWatchedFactionByID",
+            set_watched_faction_by_id,
+        ),
         ("C_Reputation.ToggleFactionAtWar", toggle_faction_at_war),
         ("C_Reputation.IsFactionActive", is_faction_active),
         ("C_Reputation.SetFactionActive", set_faction_active),
@@ -2523,8 +2571,14 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             "C_Reputation.SetLegacyReputationsShown",
             set_legacy_reputations_shown,
         ),
-        ("C_Reputation.GetReputationSortType", get_reputation_sort_type),
-        ("C_Reputation.SetReputationSortType", set_reputation_sort_type),
+        (
+            "C_Reputation.GetReputationSortType",
+            get_reputation_sort_type,
+        ),
+        (
+            "C_Reputation.SetReputationSortType",
+            set_reputation_sort_type,
+        ),
         // Renown: none on Forever.
         ("C_MajorFactions.HasMaximumRenown", no),
         ("C_MajorFactions.GetMajorFactionProgressionInfo", nil),
@@ -2589,8 +2643,14 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Minimap.ClearMinimapInsetInfo", nothing),
         ("C_Minimap.GetDrawGroundTextures", draw_ground_textures),
         ("C_Minimap.SetDrawGroundTextures", set_draw_ground_textures),
-        ("C_Minimap.IsRotateMinimapIgnored", is_rotate_minimap_ignored),
-        ("C_Minimap.SetIgnoreRotateMinimap", set_ignore_rotate_minimap),
+        (
+            "C_Minimap.IsRotateMinimapIgnored",
+            is_rotate_minimap_ignored,
+        ),
+        (
+            "C_Minimap.SetIgnoreRotateMinimap",
+            set_ignore_rotate_minimap,
+        ),
         // Model scenes: no model data (documented: the active scene calls
         // do nothing in public clients).
         ("C_ModelInfo.GetModelSceneInfoByID", nothing),
@@ -2672,7 +2732,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             set_all_collection_filters,
         ),
         ("C_HeirloomInfo.SetAllSourceFilters", set_all_source_filters),
-        ("C_HeirloomInfo.SetDefaultFilters", set_default_heirloom_filters),
+        (
+            "C_HeirloomInfo.SetDefaultFilters",
+            set_default_heirloom_filters,
+        ),
         // The combat log.
         ("CombatLogClearEntries", nothing),
         ("CombatLogGetRetentionTime", combat_log_get_retention_time),
@@ -2680,19 +2743,31 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("CombatLog_Object_IsA", combat_log_object_is_a),
         ("CombatTextSetActiveUnit", nothing),
         // Secrets.
-        ("C_Secrets.ShouldActionCooldownBeSecret", secret_while_restricted),
+        (
+            "C_Secrets.ShouldActionCooldownBeSecret",
+            secret_while_restricted,
+        ),
         (
             "C_Secrets.ShouldSpellBookItemCooldownBeSecret",
             secret_while_restricted,
         ),
         ("C_Secrets.ShouldTotemSlotBeSecret", secret_while_restricted),
-        ("C_Secrets.ShouldTotemSpellBeSecret", secret_while_restricted),
-        ("C_Secrets.ShouldUnitAuraIndexBeSecret", secret_while_restricted),
+        (
+            "C_Secrets.ShouldTotemSpellBeSecret",
+            secret_while_restricted,
+        ),
+        (
+            "C_Secrets.ShouldUnitAuraIndexBeSecret",
+            secret_while_restricted,
+        ),
         (
             "C_Secrets.ShouldUnitAuraInstanceBeSecret",
             secret_while_restricted,
         ),
-        ("C_Secrets.ShouldUnitAuraSlotBeSecret", secret_while_restricted),
+        (
+            "C_Secrets.ShouldUnitAuraSlotBeSecret",
+            secret_while_restricted,
+        ),
         (
             "C_Secrets.ShouldUnitThreatStateBeSecret",
             secret_while_restricted,
@@ -2701,8 +2776,14 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             "C_Secrets.ShouldUnitThreatValuesBeSecret",
             secret_while_restricted,
         ),
-        ("C_Secrets.ShouldUnitSpellCastBeSecret", unit_spell_cast_secret),
-        ("C_Secrets.ShouldUnitComparisonBeSecret", unit_comparison_secret),
+        (
+            "C_Secrets.ShouldUnitSpellCastBeSecret",
+            unit_spell_cast_secret,
+        ),
+        (
+            "C_Secrets.ShouldUnitComparisonBeSecret",
+            unit_comparison_secret,
+        ),
         ("C_Secrets.CanCompareUnitTokens", can_compare_unit_tokens),
         // Utilities.
         ("C_EventUtils.IsCallbackEvent", is_callback_event),
