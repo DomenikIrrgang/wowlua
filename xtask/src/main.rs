@@ -20,6 +20,9 @@
 //!   WoW installation.
 //! - `cargo xtask fullprobe-plan [--stats]`: the plan of `/stdtest engine
 //!   fullprobe` from camelot's documentation (`tests/ingame/src/fullprobeplan.lua`).
+//! - `cargo xtask methodprobe-plan [--stats]`: the plan of `/stdtest engine
+//!   methodprobe`, every widget method on fresh widgets
+//!   (`tests/ingame/src/methodprobeplan.lua`).
 
 use anyhow::{Context, Result, bail};
 use std::fs;
@@ -30,6 +33,7 @@ mod fixture;
 mod fullprobe;
 mod ingest;
 mod lua51;
+mod methodprobe;
 mod packager_diff;
 mod parse_stats;
 mod profile;
@@ -78,6 +82,16 @@ fn main() -> Result<()> {
                 write_if_changed(&root.join(fullprobe::PLAN), &fullprobe::generate(&root)?)
             }
         }
+        "methodprobe-plan" => {
+            if std::env::args().nth(2).as_deref() == Some("--stats") {
+                methodprobe::stats(&root)
+            } else {
+                write_if_changed(
+                    &root.join(methodprobe::PLAN),
+                    &methodprobe::generate(&root)?,
+                )
+            }
+        }
         "runtime" => {
             let slices = runtime::generate(&root)?;
             for stale in stale_runtime_files(&root, &slices)? {
@@ -100,6 +114,11 @@ fn main() -> Result<()> {
                 &root.join(fullprobe::PLAN),
                 &fullprobe::generate(&root)?,
                 "fullprobe-plan",
+            )?;
+            check_current(
+                &root.join(methodprobe::PLAN),
+                &methodprobe::generate(&root)?,
+                "methodprobe-plan",
             )?;
             let slices = runtime::generate(&root)?;
             if let Some(stale) = stale_runtime_files(&root, &slices)?.first() {

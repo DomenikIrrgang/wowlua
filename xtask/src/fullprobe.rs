@@ -62,6 +62,11 @@ pub struct Docs {
     pub aliases: HashMap<String, String>,
     /// Callback types (functions).
     pub callbacks: HashSet<String>,
+    /// Script objects' methods by the documentation's class
+    /// (`Slider` → `SetValue` → its documentation).
+    pub methods: BTreeMap<String, BTreeMap<String, Json>>,
+    /// The documentation's classes and their bases (`Slider` → `Frame`).
+    pub bases: HashMap<String, Vec<String>>,
 }
 
 impl Docs {
@@ -77,7 +82,25 @@ impl Docs {
             structures: HashMap::new(),
             aliases: HashMap::new(),
             callbacks: HashSet::new(),
+            methods: BTreeMap::new(),
+            bases: HashMap::new(),
         };
+        for (class, info) in data
+            .get("classes")
+            .and_then(Json::as_object)
+            .into_iter()
+            .flatten()
+        {
+            let bases = info
+                .get("bases")
+                .and_then(Json::as_array)
+                .into_iter()
+                .flatten()
+                .filter_map(Json::as_str)
+                .map(str::to_string)
+                .collect();
+            docs.bases.insert(class.clone(), bases);
+        }
         for system in data
             .get("systems")
             .and_then(Json::as_array)
@@ -116,6 +139,18 @@ impl Docs {
                 }
             }
             if system.get("Type").and_then(Json::as_str) == Some("ScriptObject") {
+                let class = system.get("Class").and_then(Json::as_str).unwrap_or("");
+                let methods = docs.methods.entry(class.to_string()).or_default();
+                for f in system
+                    .get("Functions")
+                    .and_then(Json::as_array)
+                    .into_iter()
+                    .flatten()
+                {
+                    if let Some(name) = f.get("Name").and_then(Json::as_str) {
+                        methods.insert(name.to_string(), f.clone());
+                    }
+                }
                 continue;
             }
             let namespace = system.get("Namespace").and_then(Json::as_str);
@@ -966,7 +1001,7 @@ pub struct Pool {
     pub wrong: Option<String>,
 }
 
-fn push(values: &mut Vec<String>, v: impl Into<String>) {
+pub(crate) fn push(values: &mut Vec<String>, v: impl Into<String>) {
     let v = v.into();
     if !values.contains(&v) {
         values.push(v);
@@ -975,7 +1010,7 @@ fn push(values: &mut Vec<String>, v: impl Into<String>) {
 
 /// The base of a type, through the aliases: `number`, `string`, `boolean`,
 /// `unit`, `guid`, an enum's or structure's name, a mixin, a widget, `any`.
-fn base(docs: &Docs, ty: &str, depth: usize) -> String {
+pub(crate) fn base(docs: &Docs, ty: &str, depth: usize) -> String {
     let builtin = match ty {
         "number" | "luaIndex" | "BigUInteger" | "BigInteger" | "WOWMONEY" | "fileID"
         | "normalizedValue" | "SingleColorValue" | "uiFontHeight" | "Seconds" | "time_t"
@@ -1352,6 +1387,19 @@ fn structure(docs: &Docs, name: &str, depth: usize) -> String {
 
 /// A documented query's calls (each an argument list's source).
 pub fn matrix(docs: &Docs, function: &str, doc: &Json, request: bool) -> Vec<String> {
+    matrix_with(doc, request, CAP, &|arg, names| {
+        pool(docs, function, arg, names)
+    })
+}
+
+/// A documented function's calls with the arguments' pools `pool` gives
+/// (from an argument and every argument's name), at most `cap`.
+pub fn matrix_with(
+    doc: &Json,
+    request: bool,
+    cap: usize,
+    pool: &dyn Fn(&Json, &[String]) -> Pool,
+) -> Vec<String> {
     let args: Vec<&Json> = doc
         .get("Arguments")
         .and_then(Json::as_array)
@@ -1366,10 +1414,7 @@ pub fn matrix(docs: &Docs, function: &str, doc: &Json, request: bool) -> Vec<Str
                 .to_string()
         })
         .collect();
-    let pools: Vec<Pool> = args
-        .iter()
-        .map(|a| pool(docs, function, a, &names))
-        .collect();
+    let pools: Vec<Pool> = args.iter().map(|a| pool(a, &names)).collect();
     let mut out: Vec<String> = Vec::new();
     let add = |list: Vec<String>, out: &mut Vec<String>| {
         let call = list.join(", ");
@@ -1465,7 +1510,7 @@ pub fn matrix(docs: &Docs, function: &str, doc: &Json, request: bool) -> Vec<Str
             }
         }
     }
-    out.truncate(CAP);
+    out.truncate(cap);
     out
 }
 
@@ -1766,7 +1811,7 @@ impl Plan {
 
 /// A Lua string literal: in long brackets of level 2 or more (as the
 /// answers battery writes its calls), quoted when it has a line break.
-fn lua_string(text: &str) -> String {
+pub(crate) fn lua_string(text: &str) -> String {
     if text.contains('\n') {
         return format!("{text:?}");
     }

@@ -31,6 +31,9 @@ fn build() -> tempfile::TempDir {
         "fullprobe.wowlua",
         "fullprobeplan.lua",
         "fullprobeplan.d.wowlua",
+        "methodprobe.wowlua",
+        "methodprobeplan.lua",
+        "methodprobeplan.d.wowlua",
     ] {
         fs::copy(repo().join("tests/ingame/src").join(file), src.join(file)).unwrap();
     }
@@ -47,7 +50,10 @@ fn build() -> tempfile::TempDir {
     .unwrap();
     fs::write(
         src.join("main.wowlua"),
-        "import fullProbe, replay, literalCalls from \"/fullprobe\"\n_G.StdTestFullProbe = fullProbe\n_G.StdTestFullProbeReplay = replay\n_G.StdTestFullProbeLiteral = literalCalls\n",
+        "import fullProbe, replay, literalCalls from \"/fullprobe\"\n\
+         import * as method from \"/methodprobe\"\n\
+         _G.StdTestFullProbe = fullProbe\n_G.StdTestFullProbeReplay = replay\n_G.StdTestFullProbeLiteral = literalCalls\n\
+         _G.StdTestMethodProbe = method.methodProbe\n_G.StdTestMethodProbeReplay = method.replay\n",
     )
     .unwrap();
     let mut cmd = Command::cargo_bin("wowlua").unwrap();
@@ -127,6 +133,9 @@ struct Client {
     fake: String,
     sessions: usize,
     crashes: usize,
+    /// The probe: its run in `StdTestState` and its command.
+    probe: &'static str,
+    command: &'static str,
 }
 
 const SERIALIZE: &str = r#"
@@ -156,6 +165,17 @@ impl Client {
             fake: "\"orig\"".into(),
             sessions: 0,
             crashes: 0,
+            probe: "fullProbe",
+            command: "StdTestFullProbe",
+        }
+    }
+
+    /// The method probe's client.
+    fn method(out: PathBuf, setup: &str) -> Client {
+        Client {
+            probe: "methodProbe",
+            command: "StdTestMethodProbe",
+            ..Client::new(out, setup)
         }
     }
 
@@ -207,7 +227,7 @@ impl Client {
             &[Value::Bool(initial), Value::Bool(!initial)],
         );
         if let Some(c) = command {
-            run(&mut vm, &format!("StdTestFullProbe({c:?})"));
+            run(&mut vm, &format!("{}({c:?})", self.command));
         }
         let end = self.frames(&mut vm, frames);
         (vm, end)
@@ -225,7 +245,10 @@ impl Client {
             }
             let ended = run(
                 vm,
-                "local fp = StdTestState.fullProbe return tostring(fp ~= nil and fp.endKind ~= nil)",
+                &format!(
+                    "local fp = StdTestState.{} return tostring(fp ~= nil and fp.endKind ~= nil)",
+                    self.probe
+                ),
             ) == "true";
             if ended {
                 self.saved = run(vm, SERIALIZE);
@@ -244,7 +267,10 @@ impl Client {
             let (mut vm, e) = self.session(initial, None, 600);
             let done = run(
                 &mut vm,
-                "local fp = StdTestState.fullProbe return tostring(fp.done == true)",
+                &format!(
+                    "local fp = StdTestState.{} return tostring(fp.done == true)",
+                    self.probe
+                ),
             );
             if done == "true" && e == End::Saved {
                 return vm;
@@ -258,9 +284,16 @@ impl Client {
 
 /// `StdTestState.engineFullProbe` of a session.
 fn results(vm: &mut Vm) -> BTreeMap<String, String> {
+    answers(vm, "engineFullProbe")
+}
+
+/// A probe's answers (`StdTestState[key]`) of a session.
+fn answers(vm: &mut Vm, key: &str) -> BTreeMap<String, String> {
     let all = run(
         vm,
-        "local out = {} for k, v in pairs(StdTestState.engineFullProbe or {}) do out[#out + 1] = k .. '\\0' .. v end table.sort(out) return table.concat(out, '\\1')",
+        &format!(
+            "local out = {{}} for k, v in pairs(StdTestState.{key} or {{}}) do out[#out + 1] = k .. '\\0' .. v end table.sort(out) return table.concat(out, '\\1')"
+        ),
     );
     all.split('\u{1}')
         .filter(|s| !s.is_empty())
@@ -448,4 +481,164 @@ fn the_generated_plan_runs_in_the_engine() {
         started.elapsed().as_secs_f64()
     );
     assert!(summary.starts_with("0 0 "), "{summary}");
+}
+
+/// The method probe's tiny plan: a frame's and a texture's methods, a
+/// kind whose making ends the session, a placeholder without a value.
+const METHOD_SETUP: &str = r#"
+StdTestMethodProbePlan = {
+    segmentSize = 4,
+    kinds = {
+        { "Frame", "return CreateFrame(\"Frame\", nil, P)" },
+        { "Texture", "return P:CreateTexture()" },
+        { "Crashy", "StdTestCrashedNow = true return CreateFrame(\"Frame\", nil, P)" },
+    },
+    calls = {
+        { "Frame", "SetAlpha", "0", "GetAlpha()", "\"x\"", "GetAlpha()" },
+        { "Frame", "GetParent", "", "" },
+        { "Frame", "IsVisible", "", "" },
+        { "Frame", "Show", "", "IsVisible()" },
+        { "Frame", "SetPoint", "\"TOPLEFT\", F(), \"BOTTOMRIGHT\", 1, 2", "GetPoint()" },
+        { "Frame", "SetAttribute", "\"x\", 7", "GetAttribute(#1)" },
+        { "Crashy", "Show", "", "", "1", "" },
+        { "Texture", "SetTexture", "{NOSUCHVALUE}", "" },
+        { "Frame", "SetParent", "nil", "GetParent()" },
+        { "Frame", "NoSuchMethod", "", "" },
+    },
+    risky = { { "Frame", "SetAlpha", "2", "GetAlpha()" } },
+    skipped = {},
+}
+"#;
+
+#[test]
+fn the_method_probe_calls_each_method_on_a_fresh_hidden_widget() {
+    let dir = build();
+    let mut client = Client::method(dir.path().join("dist/dev/StdTest"), METHOD_SETUP);
+    let (_, end) = client.session(false, Some(""), 10);
+    assert_eq!(end, End::Saved, "the start reloads");
+    let mut vm = client.until_done(end, 60);
+    let r = answers(&mut vm, "engineMethodProbe");
+    let get = |k: &str| r.get(k).map(String::as_str).unwrap_or("<missing>");
+    assert_eq!(
+        get("Frame:SetAlpha(0) -> GetAlpha()"),
+        "0:  || GetAlpha(): 1: number 0"
+    );
+    assert!(
+        get("Frame:SetAlpha(\"x\") -> GetAlpha()").starts_with("error: "),
+        "{r:?}"
+    );
+    assert_eq!(
+        get("Frame:SetAlpha(2) -> GetAlpha()"),
+        "0:  || GetAlpha(): 1: number 1"
+    );
+    // Each widget under its own hidden parent: never visible.
+    assert_eq!(get("Frame:GetParent()"), "1: widget parent");
+    assert_eq!(get("Frame:IsVisible()"), "1: boolean false");
+    assert_eq!(
+        get("Frame:Show() -> IsVisible()"),
+        "0:  || IsVisible(): 1: boolean false"
+    );
+    assert_eq!(
+        get("Frame:SetPoint(\"TOPLEFT\", F(), \"BOTTOMRIGHT\", 1, 2) -> GetPoint()"),
+        "0:  || GetPoint(): 5: string TOPLEFT, widget F1, string BOTTOMRIGHT, number 1, number 2"
+    );
+    assert_eq!(
+        get("Frame:SetAttribute(\"x\", 7) -> GetAttribute(#1)"),
+        "0:  || GetAttribute(#1): 1: number 7"
+    );
+    assert_eq!(get("Crashy:Show()"), "crashed");
+    assert_eq!(
+        get("Crashy:Show(1)"),
+        "skipped: Crashy:Show crashed the client on Crashy:Show()"
+    );
+    assert_eq!(
+        get("Texture:SetTexture({NOSUCHVALUE})"),
+        "unresolved: {NOSUCHVALUE}"
+    );
+    assert!(
+        get("Frame:NoSuchMethod()").contains("NoSuchMethod"),
+        "{r:?}"
+    );
+    // The player's own names, for ingest to scrub.
+    assert!(r.contains_key("UnitName(\"player\")"), "{r:?}");
+    // The engine answers recorded keys as the run did.
+    let replayed = run(
+        &mut vm,
+        "local r = StdTestMethodProbeReplay({ 'Frame:GetParent()', 'Frame:SetAttribute(\"x\", 7) -> GetAttribute(#1)' }) return r['Frame:GetParent()'] .. '|' .. r['Frame:SetAttribute(\"x\", 7) -> GetAttribute(#1)']",
+    );
+    assert_eq!(
+        replayed,
+        "1: widget parent|0:  || GetAttribute(#1): 1: number 7"
+    );
+    assert_ne!(
+        run(
+            &mut vm,
+            "return tostring(StdTestState.engineStamps.methodprobe)"
+        ),
+        "nil"
+    );
+    // The full probe's run is untouched; one probe runs at a time.
+    assert_eq!(
+        run(&mut vm, "return tostring(StdTestState.fullProbe)"),
+        "nil"
+    );
+}
+
+/// One probe at a time: the full probe waits while the method probe runs.
+#[test]
+fn one_probe_runs_at_a_time() {
+    let dir = build();
+    let mut client = Client::method(dir.path().join("dist/dev/StdTest"), METHOD_SETUP);
+    // The start: the method probe running, its first reload asked for.
+    let (mut vm, end) = client.session(false, Some(""), 0);
+    assert_eq!(end, End::Saved);
+    assert_eq!(
+        run(&mut vm, "return tostring(StdTestState.methodProbe.running)"),
+        "true"
+    );
+    run(&mut vm, "StdTestFullProbe('')");
+    assert_eq!(
+        run(&mut vm, "return tostring(StdTestState.fullProbe)"),
+        "nil"
+    );
+    run(&mut vm, "StdTestMethodProbe('reset')");
+    assert_eq!(
+        run(&mut vm, "return tostring(StdTestState.methodProbe)"),
+        "nil"
+    );
+}
+
+/// The generated method plan runs to its end in the engine: every call
+/// compiles, none ends the session.
+#[test]
+fn the_generated_method_plan_runs_in_the_engine() {
+    let dir = build();
+    let mut client = Client::method(
+        dir.path().join("dist/dev/StdTest"),
+        "StdTestMethodProbePlan = nil",
+    );
+    let (_, end) = client.session(false, Some(""), 10);
+    assert_eq!(end, End::Saved, "the start reloads");
+    let started = std::time::Instant::now();
+    let mut vm = client.until_done(end, 400);
+    let r = answers(&mut vm, "engineMethodProbe");
+    let syntax: Vec<&String> = r
+        .iter()
+        .filter(|(_, v)| *v == "syntax")
+        .map(|(k, _)| k)
+        .collect();
+    assert!(syntax.is_empty(), "calls that do not compile: {syntax:?}");
+    let summary = run(
+        &mut vm,
+        "local fp = StdTestState.methodProbe return #fp.crashed .. ' ' .. fp.total",
+    );
+    let made = r.values().filter(|v| v.starts_with("make error")).count();
+    let errors = r.values().filter(|v| v.starts_with("error")).count();
+    eprintln!(
+        "{} answers ({made} widgets not made, {errors} errors) in {} sessions, {:.1} s; crashed, calls: {summary}",
+        r.len(),
+        client.sessions,
+        started.elapsed().as_secs_f64()
+    );
+    assert!(summary.starts_with("0 "), "{summary}");
 }

@@ -42,6 +42,9 @@ fn build() -> tempfile::TempDir {
         "fullprobe.wowlua",
         "fullprobeplan.lua",
         "fullprobeplan.d.wowlua",
+        "methodprobe.wowlua",
+        "methodprobeplan.lua",
+        "methodprobeplan.d.wowlua",
     ] {
         fs::copy(repo().join("tests/ingame/src").join(file), src.join(file)).unwrap();
     }
@@ -58,7 +61,7 @@ fn build() -> tempfile::TempDir {
     .unwrap();
     fs::write(
         src.join("main.wowlua"),
-        "import engineProbe from \"/engineprobe\"\nimport replay, literalCalls from \"/fullprobe\"\n_G.StdTestEngineProbe = engineProbe\n_G.StdTestFullProbeReplay = replay\n_G.StdTestFullProbeLiteral = literalCalls\n",
+        "import engineProbe from \"/engineprobe\"\nimport replay, literalCalls from \"/fullprobe\"\nimport * as method from \"/methodprobe\"\n_G.StdTestEngineProbe = engineProbe\n_G.StdTestFullProbeReplay = replay\n_G.StdTestFullProbeLiteral = literalCalls\n_G.StdTestMethodProbeReplay = method.replay\n_G.StdTestMethodProbeLiteral = method.literalCalls\n",
     )
     .unwrap();
     let mut cmd = Command::cargo_bin("wowlua").unwrap();
@@ -2099,6 +2102,163 @@ return matched, #keys, table.concat(top, "\n"), table.concat(diffs, "\n")
     assert!(
         matched >= FULLPROBE_MATCHED,
         "{matched} of {total} full probe answers as the client gave them (was {FULLPROBE_MATCHED})"
+    );
+}
+
+/// How many of the client's answers to the method probe (`/stdtest engine
+/// methodprobe`: every widget method called with many arguments on a fresh
+/// hidden widget, a setter read back) the engine gives as well, each
+/// recorded call asked again with the recorded character's world. Until
+/// the client's run is ingested (`forever-camelot-methodprobe.lua`), a fresh
+/// widget's getters the client recorded (`data/camelot-widget-defaults.txt`,
+/// made under UIParent; the frame level left out, which the hidden parent
+/// changes) stand in for it (synthetic: the number changes with the first
+/// real run). Only ever raised.
+const METHODPROBE_MATCHED: usize = 757;
+
+#[test]
+fn the_engine_answers_the_method_probe_as_the_client_did() {
+    let Some(ui) = wowlua_test::ui_source_in(&repo().join("target/types-src"), "camelot") else {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    };
+    let dir = build();
+    let out = dir.path().join("dist/dev/StdTest");
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    let report = wowlua_engine::ui::load(&mut vm, &ui.interface, ui.strings.as_deref());
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let mut vm = client_in(vm, &out);
+    let controls = wowlua_engine::controls::table(&mut vm);
+    wowlua_test::profile::apply(
+        &mut vm,
+        controls,
+        &repo().join("crates/wowlua-engine/tests/client/forever-camelot-character.json"),
+    )
+    .expect("the character's profile");
+    let name = vm.str("StdTest");
+    wowlua_engine::widgets::fire_event(&mut vm, "ADDON_LOADED", &[name, Value::Bool(false)]);
+    wowlua_engine::widgets::fire_event(&mut vm, "PLAYER_LOGIN", &[]);
+    wowlua_engine::widgets::fire_event(
+        &mut vm,
+        "PLAYER_ENTERING_WORLD",
+        &[Value::Bool(true), Value::Bool(false)],
+    );
+    wowlua_engine::widgets::fire_event(&mut vm, "VARIABLES_LOADED", &[]);
+    wowlua_engine::clock::advance_frames(&mut vm, 10, 1000.0 / 60.0);
+    let client = repo().join("crates/wowlua-engine/tests/client");
+    let recorded = client.join("forever-camelot-methodprobe.lua");
+    let seed = !recorded.exists();
+    let src = if seed {
+        // `Type:Getter()` of the plan, as the fresh widget's defaults.
+        let defaults = fs::read_to_string(
+            repo().join("crates/wowlua-engine/data/camelot-widget-defaults.txt"),
+        )
+        .expect("the widget defaults");
+        let mut lua = String::from("return {\n");
+        for line in defaults.lines().filter(|l| !l.starts_with('#')) {
+            let mut parts = line.splitn(3, '\t');
+            let (Some(kind), Some(getter), Some(answer)) =
+                (parts.next(), parts.next(), parts.next())
+            else {
+                continue;
+            };
+            if getter == "GetFrameLevel" {
+                continue;
+            }
+            lua.push_str(&format!(
+                "    [{:?}] = {:?},\n",
+                format!("{kind}:{getter}()"),
+                answer
+            ));
+        }
+        lua.push_str("}\n");
+        lua.into_bytes()
+    } else {
+        fs::read(&recorded).expect("the fixture")
+    };
+    let f = vm.load(&src, "=fixture").expect("compiles");
+    let r = vm.call(f, &[]).expect("runs");
+    vm.set_global("StdTestMethodProbeFixture", r[0]);
+    vm.set_global("StdTestMethodProbeSeed", Value::Bool(seed));
+    // `WOWLUA_METHODPROBE=Frame:SetPoint` shows that method's differences
+    // (`*`: every method's), `WOWLUA_METHODPROBE_LIMIT` how many.
+    let show = std::env::var("WOWLUA_METHODPROBE").unwrap_or_default();
+    let limit = std::env::var("WOWLUA_METHODPROBE_LIMIT")
+        .ok()
+        .and_then(|n| n.parse::<usize>().ok())
+        .unwrap_or(8);
+    let show = vm.str(&show);
+    vm.set_global("StdTestMethodProbeShow", show);
+    vm.set_global("StdTestMethodProbeLimit", Value::Num(limit as f64));
+    let compare = br#"
+local fixture = StdTestMethodProbeFixture
+local only
+if StdTestMethodProbeSeed then
+    only = {}
+    for _, c in ipairs(StdTestMethodProbeLiteral()) do only[c] = true end
+end
+local keys = {}
+for k, v in pairs(fixture) do
+    if (only == nil or only[k]) and v ~= "crashed" and not v:find("^unresolved: ") and not v:find("^skipped: ") then
+        keys[#keys + 1] = k
+    end
+end
+table.sort(keys)
+local ours = StdTestMethodProbeReplay(keys)
+local matched, missed, diffs = 0, {}, {}
+for _, k in ipairs(keys) do
+    local mine = ours[k] or "<missing>"
+    for _, kind in ipairs({ "function", "table", "userdata", "thread" }) do
+        mine = mine:gsub(kind .. ": 0x%x+", kind)
+    end
+    if fixture[k]:find("string <scrubbed>", 1, true) then
+        mine = mine:gsub("string [^,}|]*", "string <scrubbed>")
+    end
+    if mine == fixture[k] then
+        matched = matched + 1
+    else
+        local name = k:match("^([%w_]+:[%w_]+)") or k
+        missed[name] = (missed[name] or 0) + 1
+        if #diffs < StdTestMethodProbeLimit and (StdTestMethodProbeShow == "*" or StdTestMethodProbeShow == name) then
+            diffs[#diffs + 1] = k .. "\n    client: " .. fixture[k]:sub(1, 240) .. "\n    ours:   " .. mine:sub(1, 240)
+        end
+    end
+end
+local list = {}
+for n, c in pairs(missed) do list[#list + 1] = { n, c } end
+table.sort(list, function(a, b) if a[2] ~= b[2] then return a[2] > b[2] end return a[1] < b[1] end)
+local top = {}
+for i = 1, math.min(40, #list) do top[i] = string.format("%5d %s", list[i][2], list[i][1]) end
+return matched, #keys, table.concat(top, "\n"), table.concat(diffs, "\n")
+"#;
+    let f = vm
+        .load_as(compare, "@Interface/AddOns/StdTest/test.lua", "StdTest")
+        .expect("compiles");
+    let r = match vm.call(f, &[]) {
+        Ok(r) => r,
+        Err(e) => panic!("{}", text(&vm, e.value)),
+    };
+    let number = |v: &Value| match v {
+        Value::Num(n) => *n as usize,
+        other => panic!("a number: {other:?}"),
+    };
+    let (matched, total) = (number(&r[0]), number(&r[1]));
+    let (top, diffs) = (text(&vm, r[2]), text(&vm, r[3]));
+    if !diffs.is_empty() {
+        eprintln!("{diffs}");
+    }
+    eprintln!(
+        "{matched} of {total} method probe answers as the client gave them ({}); the most missed:\n{top}",
+        if seed {
+            "a fresh widget's recorded getters, until the client's run is ingested"
+        } else {
+            "the client's run"
+        }
+    );
+    assert!(
+        matched >= METHODPROBE_MATCHED,
+        "{matched} of {total} method probe answers as the client gave them (was {METHODPROBE_MATCHED})"
     );
 }
 
