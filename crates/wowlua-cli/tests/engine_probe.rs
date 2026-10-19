@@ -826,12 +826,12 @@ fn play_scenario(name: &str) -> Option<(Vec<String>, Vec<String>, Vec<String>)> 
     let fixtures = repo().join("crates/wowlua-engine/tests/client/scenarios");
     let recording = fs::read_to_string(fixtures.join(format!("{name}.lua"))).unwrap_or_default();
     // The session's clock as the client's (its answers' times are the
-    // session's): begun as long before the recording as logging in and
-    // ten frames take.
+    // session's): begun as long before the recording as a /reload and ten
+    // frames take.
     let session_start = session_start(&recording);
     let mut vm = Vm::wow();
     if let Some(start) = session_start {
-        let before = wowlua_engine::login::duration(false) + 10.0 / 60.0;
+        let before = wowlua_engine::login::duration(true) + 10.0 / 60.0;
         vm.clock.elapsed_ms = (start - before) * 1000.0;
     }
     wowlua_engine::install(&mut vm, "camelot").expect("installs");
@@ -846,8 +846,11 @@ fn play_scenario(name: &str) -> Option<(Vec<String>, Vec<String>, Vec<String>)> 
     )
     .expect("the character's world");
     // Logged in as the client logs in (the recorded login: the chat
-    // windows set up, …), as `wowlua test` does.
-    wowlua_engine::login::login(&mut vm, "StdTest", true, false);
+    // windows set up, …), as `wowlua test` does: after a /reload, as each
+    // recording ends with one (recorded: Blizzard_PlayerChoice loading at
+    // the session's first PLAYER_CHOICE_UPDATE, taxi's and hearth's, which
+    // a fresh login's would have loaded at once).
+    wowlua_engine::login::login(&mut vm, "StdTest", true, true);
     wowlua_engine::clock::advance_frames(&mut vm, 10, 1000.0 / 60.0);
     if let Some(start) = session_start {
         let now = wowlua_engine::clock::now(&vm);
@@ -1380,7 +1383,7 @@ fn the_engine_plays_hearth_as_the_client_did() {
 
 /// How many of the taxi scenario's lines the engine plays as the client
 /// did: only ever up.
-const TAXI_MATCHED: usize = 1236;
+const TAXI_MATCHED: usize = 1237;
 
 /// The taxi scenario: a flight from Orgrimmar to the Crossroads.
 #[test]
@@ -1451,7 +1454,7 @@ fn the_engine_plays_talents_as_the_client_did() {
 
 /// How many of the profession scenario's lines the engine plays as the
 /// client did: only ever up.
-const PROFESSION_MATCHED: usize = 2164;
+const PROFESSION_MATCHED: usize = 2266;
 
 /// The profession scenario: a vein mined, a profession's window, crafts.
 #[test]

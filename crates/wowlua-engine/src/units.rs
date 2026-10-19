@@ -1310,6 +1310,7 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("gather", crate::loot::control_gather),
         ("openTradeSkill", crate::tradeskill::control_open),
         ("craftSkillUps", crate::tradeskill::control_skill_ups),
+        ("craftTimings", crate::tradeskill::control_timings),
         ("setSpellFocus", crate::tradeskill::control_spell_focus),
         ("interact", crate::quests::control_interact),
         ("die", crate::death::control_die),

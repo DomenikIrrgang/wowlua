@@ -109,6 +109,12 @@ export interface MockUnit
     --- Which crafts of `recipe` to come raise the profession's skill, in
     --- order (the server's chance).
     function craftSkillUps(recipe: number, ups: boolean[])
+    --- A recording's timings of the crafts' casts to come, in order (the
+    --- server's answers, seconds): each cast's `start` after its request
+    --- or the last cast's success, its `success` after its start, its
+    --- `item` after its success (0: with it), the bags' packet (`bags`)
+    --- after its item; what one leaves out is the engine's.
+    function craftTimings(timings: { start?: number, success?: number, item?: number, bags?: number }[])
     --- The spell focuses near the player (`{ "Forge" }`): a recipe needing
     --- one can be made.
     function setSpellFocus(names: string[])

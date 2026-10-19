@@ -126,6 +126,18 @@ pub struct Craft {
     pub count: i64,
 }
 
+/// A recording's timing of a craft's cast (`craftTimings`), in seconds:
+/// its start after its request or the last cast's success, its success
+/// after its start, its item after its success, the bags' packet after its
+/// item. What one leaves out is the engine's.
+#[derive(Clone, Copy, Default)]
+pub struct Timing {
+    pub start: Option<f64>,
+    pub success: Option<f64>,
+    pub item: Option<f64>,
+    pub bags: Option<f64>,
+}
+
 #[derive(Default)]
 pub struct TradeSkill {
     /// The window open: its profession (upper case).
@@ -155,6 +167,9 @@ pub struct TradeSkill {
     pub skill_ups: HashMap<i64, VecDeque<bool>>,
     /// Items made so far (their GUIDs' counter).
     pub made: u64,
+    /// The recorded timings of the casts to come, and the running one's.
+    pub timings: VecDeque<Timing>,
+    pub timing: Option<Timing>,
     /// The windows shown this session.
     pub shown: u32,
 }
@@ -563,7 +578,8 @@ fn craft_recipe(vm: &mut Vm, c: NativeCall) -> Ret {
             count,
         });
         s.next = Some(recipe);
-        later(vm, delay, "craftCast", craft_cast, vec![r]);
+        let start = start_after(vm);
+        later(vm, start, "craftCast", craft_cast, vec![r]);
         return Ok(vec![]);
     }
     let now = crate::clock::now(vm);
@@ -708,6 +724,7 @@ fn start_craft(vm: &mut Vm, recipe: i64, announce: bool) -> Ret {
     let id = recipe as f64;
     let done = vm.native_with("crafted", crafted as NativeFn, vec![Value::Num(id)]);
     crate::casting::mark_craft(vm);
+    take_timing(vm);
     if announce {
         crate::casting::cast_at(vm, PLAYER, id, look, false, false, None, Some(done))?;
     } else {
@@ -740,6 +757,7 @@ fn held_start(vm: &mut Vm, c: NativeCall) -> Ret {
     let id = recipe as f64;
     let done = vm.native_with("crafted", crafted as NativeFn, vec![Value::Num(id)]);
     crate::casting::mark_craft(vm);
+    take_timing(vm);
     crate::casting::cast_at(vm, PLAYER, id, look, false, false, None, Some(done))?;
     if let Some(old) = refused {
         let g = crate::casting::cast_guid(vm, 3, old as f64);
@@ -836,7 +854,9 @@ fn crafted(vm: &mut Vm, c: NativeCall) -> Ret {
     };
     let held = state_mut(vm).held.take();
     let delay = crate::clock::server_delay(vm);
+    let timing = state_mut(vm).timing.take().unwrap_or_default();
     let r = Value::Num(recipe);
+    let queued_bags = BAGS_AFTER_SUCCESS - QUEUED_ITEM_AFTER;
     if left > 0 {
         begin(vm, recipe as i64);
         crate::casting::cast_changed(vm, PLAYER);
@@ -844,33 +864,44 @@ fn crafted(vm: &mut Vm, c: NativeCall) -> Ret {
         if let Some((q, _, g)) = &dropped {
             let_go(vm, *q, g, false);
         }
+        // The item with the success: before the cooldowns (recorded).
+        let after = item_made(vm, recipe, timing, QUEUED_ITEM_AFTER, queued_bags);
         crate::loot::gather_cooldowns(vm, recipe, true);
         if dropped.is_some() {
             another_action(vm);
             stopped(vm);
         }
-        later(vm, QUEUED_ITEM_AFTER, "craftedItem", made, vec![r]);
+        if let Some((after, bags)) = after {
+            later(vm, after, "craftedItem", made, vec![r, Value::Num(bags)]);
+        }
+        let start = start_after(vm);
         if let Some((h, n)) = held {
             let upvals = vec![Value::Num(h as f64), Value::Num(n as f64)];
-            later(vm, delay, "craftHeld", held_start, upvals);
+            later(vm, start, "craftHeld", held_start, upvals);
         }
         state_mut(vm).next = Some(recipe as i64);
-        later(vm, delay, "craftCast", craft_cast, vec![r]);
+        later(vm, start, "craftCast", craft_cast, vec![r]);
         return Ok(vec![]);
     }
     state_mut(vm).craft = None;
-    if count > 1 {
+    let later_item = if count > 1 {
+        let after = item_made(vm, recipe, timing, QUEUED_ITEM_AFTER, queued_bags);
         crate::loot::gather_cooldowns(vm, recipe, true);
         stopped(vm);
-        later(vm, QUEUED_ITEM_AFTER, "craftedItem", made, vec![r]);
+        after
     } else {
-        make(vm, recipe as i64, BAGS_AFTER);
+        let after = item_made(vm, recipe, timing, 0.0, BAGS_AFTER);
         crate::loot::gather_cooldowns(vm, recipe, true);
+        after
+    };
+    if let Some((after, bags)) = later_item {
+        later(vm, after, "craftedItem", made, vec![r, Value::Num(bags)]);
     }
     // Unverified: what follows the last cast, one held.
     if let Some((h, n)) = held {
         let upvals = vec![Value::Num(h as f64), Value::Num(n as f64)];
-        later(vm, delay, "craftHeld", held_start, upvals);
+        let start = start_after(vm);
+        later(vm, start, "craftHeld", held_start, upvals);
     } else if let Some((q, n, _)) = state_mut(vm).queued.take() {
         state_mut(vm).asked = Some((q, n));
         let upvals = vec![Value::Num(q as f64), Value::Num(n as f64)];
@@ -880,8 +911,78 @@ fn crafted(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn made(vm: &mut Vm, c: NativeCall) -> Ret {
-    if let Some(Value::Num(recipe)) = c.upvals.first().copied() {
-        make(vm, recipe as i64, BAGS_AFTER_SUCCESS - QUEUED_ITEM_AFTER);
+    if let (Some(Value::Num(recipe)), Some(Value::Num(bags))) =
+        (c.upvals.first().copied(), c.upvals.get(1).copied())
+    {
+        make(vm, recipe as i64, bags);
+    }
+    Ok(vec![])
+}
+
+/// The cast's item: made now if it comes with the success, else when
+/// (its delay and the bags' after it returned); the recording's timing,
+/// else `item` and `bags`.
+fn item_made(vm: &mut Vm, recipe: f64, timing: Timing, item: f64, bags: f64) -> Option<(f64, f64)> {
+    let item = timing.item.unwrap_or(item);
+    let bags = timing.bags.unwrap_or(bags);
+    if item <= 0.0 {
+        make(vm, recipe as i64, bags);
+        return None;
+    }
+    Some((item, bags))
+}
+
+/// The next cast's start after its request or the last success: the
+/// recording's, else a round trip.
+fn start_after(vm: &Vm) -> f64 {
+    state(vm)
+        .timings
+        .front()
+        .and_then(|t| t.start)
+        .unwrap_or_else(|| crate::clock::server_delay(vm))
+}
+
+/// A cast starting: its recorded timing taken (its success's time).
+fn take_timing(vm: &mut Vm) {
+    let timing = state_mut(vm).timings.pop_front();
+    if let Some(s) = timing.and_then(|t| t.success) {
+        engine_mut(vm).units.casting.succeeds_after = Some(s);
+    }
+    state_mut(vm).timing = timing;
+}
+
+/// `player:craftTimings({ { start?, success?, item?, bags? }, … })`: a
+/// recording's timings of the crafts' casts to come, in order (the
+/// server's answers): each cast's start after its request or the last
+/// success, its success after its start, its item after its success (0:
+/// with it), the bags' packet after its item.
+pub fn control_timings(vm: &mut Vm, c: NativeCall) -> Ret {
+    let me = units::this(vm, &c)?;
+    if me != PLAYER {
+        return Err(vm.error("craftTimings: the player's"));
+    }
+    let Value::Table(t) = c.arg(2) else {
+        return Err(vm.error("craftTimings: a list of timings expected"));
+    };
+    let n = vm.heap.table(t).border();
+    for i in 1..=n {
+        let Value::Table(e) = vm.heap.table(t).get(Value::Num(i as f64)) else {
+            continue;
+        };
+        let mut get = |k: &str| {
+            let key = vm.str(k);
+            match vm.heap.table(e).get(key) {
+                Value::Num(x) => Some(x),
+                _ => None,
+            }
+        };
+        let timing = Timing {
+            start: get("start"),
+            success: get("success"),
+            item: get("item"),
+            bags: get("bags"),
+        };
+        state_mut(vm).timings.push_back(timing);
     }
     Ok(vec![])
 }
