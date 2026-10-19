@@ -256,6 +256,11 @@ fn usability(vm: &mut Vm, a: &Action) -> (bool, bool) {
             return (a.usable.0 && !in_combat, false);
         }
     }
+    // A spell only out of combat (data `outOfCombat`; recorded: Redemption
+    // unusable once in combat, not short of mana).
+    if a.kind == "spell" && in_combat && data_field(vm, false, a.id, "outOfCombat").truthy() {
+        return (false, false);
+    }
     if a.kind == "spell"
         && let Value::Num(cost) = data_field(vm, false, a.id, "powerCost")
     {

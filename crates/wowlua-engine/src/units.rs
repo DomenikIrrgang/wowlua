@@ -1995,11 +1995,12 @@ pub(crate) fn clear_target(vm: &mut Vm) {
 /// Unverified: what decides the order.
 pub(crate) fn died(vm: &mut Vm, me: UnitId, lootable: bool) {
     // A corpse is out of combat and targets no one (recorded: its
-    // `targettarget` gone when retargeted).
+    // `targettarget` gone when retargeted), its target dropped once the
+    // player's held presses on it failed (recorded: theirs told to
+    // `targettarget` too).
     {
         let u = &mut engine_mut(vm).units.list[me.0];
         u.in_combat = false;
-        u.target = None;
         u.threat = None;
     }
     let instance = identity_restricted(vm);
@@ -2016,9 +2017,12 @@ pub(crate) fn died(vm: &mut Vm, me: UnitId, lootable: bool) {
     let g = event_guid(vm, me);
     fire(vm, "UNIT_DIED", &[g]);
     if engine(vm).units.target == Some(me) {
+        crate::casting::target_died(vm);
+        engine_mut(vm).units.list[me.0].target = None;
         fire(vm, "PLAYER_TARGET_DIED", &[]);
         clear_target(vm);
     }
+    engine_mut(vm).units.list[me.0].target = None;
     if !instance {
         loot(vm);
     }
@@ -2026,10 +2030,33 @@ pub(crate) fn died(vm: &mut Vm, me: UnitId, lootable: bool) {
     fire_unit(vm, "UNIT_HEALTH", me, &[]);
 }
 
+/// `unit:setPower(n, { frequent? })`: its power now `n`
+/// (`UNIT_POWER_UPDATE`); `frequent`: a regeneration tick's, told by
+/// `UNIT_POWER_FREQUENT` alone (recorded: mana's every ~0.1 s).
 fn control_set_power(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
     let n = vm.check_number(&c, 2)?;
-    set_power(vm, me, n);
+    let frequent = match c.arg(3) {
+        Value::Table(t) => {
+            let k = vm.str("frequent");
+            vm.heap.table(t).get(k).truthy()
+        }
+        _ => false,
+    };
+    if !frequent {
+        set_power(vm, me, n);
+        return Ok(vec![]);
+    }
+    let kind = {
+        let u = &mut engine_mut(vm).units.list[me.0];
+        u.power = n.clamp(0.0, u.power_max.max(0.0));
+        u.power_type
+    };
+    let token = vm.str(power_token(kind).unwrap_or("MANA"));
+    fire_unit(vm, "UNIT_POWER_FREQUENT", me, &[token]);
+    if me == PLAYER {
+        crate::actions::update_usability(vm);
+    }
     Ok(vec![])
 }
 

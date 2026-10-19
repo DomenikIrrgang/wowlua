@@ -15,10 +15,42 @@ local cat = e.spawnUnit({
     creatureType = "Beast", creatureTypeID = 1, creatureFamily = "Cat", creatureFamilyID = 2,
 })
 cat:showNameplate()
-e.defineSpell(1311656, { name = "Seal of Fury", targeted = false })
-e.defineSpell(26573, { name = "Consecration", targeted = false })
-e.defineSpell(853, { name = "Hammer of Justice", cooldown = 60 })
-e.defineSpell(20271, { name = "Judgement", cooldown = 8 })
+-- What each spell does as it lands, and the cooldowns its packet tells
+-- (recorded). The seal replaces the one on.
+local seal
+e.defineSpell(1311656, {
+    name = "Seal of Fury", targeted = false,
+    onCast = function()
+        if seal then player:removeAura(seal) end
+        seal = player:applyAura({ spellId = 1311656, name = "Seal of Fury", icon = 135957, duration = 30, auraInstanceID = not seal and 41 or nil })
+    end,
+})
+-- Each one's cooldown category (recorded with its cooldown events).
+e.defineSpell(26573, { name = "Consecration", targeted = false, category = 932 })
+e.defineSpell(853, {
+    name = "Hammer of Justice", cooldown = 60, category = 32,
+    cooldowns = { { 853, 32, 133 }, { 1324513 }, { 1260198, 0, 0 }, { 1311654, 0, 0 } },
+    -- The stun, a swing landing with it (the seal's holy damage, a drain).
+    onCast = function()
+        player:swing(cat, 40, { speed = 2.6 })
+        player:hit(cat, 39, { school = 32 })
+        player:hit(cat, 12, { school = 2 })
+        cat:applyAura({ spellId = 853, name = "Hammer of Justice", duration = 6, harmful = true, source = player })
+    end,
+})
+e.defineSpell(1866, { category = 2404 })
+-- Judgement: the kill (its holy damage the blow), the seal consumed.
+e.defineSpell(20271, {
+    name = "Judgement", cooldown = 8,
+    cooldowns = { { 20232, 0, 0 }, { 20271, 0, 0 }, { 1311655, 0, 0 } },
+    onCast = function()
+        cat:kill({ by = player, lootable = true, amount = 54, school = 2 })
+        if seal then player:removeAura(seal) seal = nil end
+    end,
+})
+-- Redemption (slot 54): out of combat only, its mana cost (unrecorded:
+-- what the fight's spending left below it, the regeneration crossed).
+e.defineSpell(7328, { name = "Redemption", powerCost = 300, outOfCombat = true })
 -- Judgement off the global cooldown (recorded: its slot not on it).
 e.setSpellTraits({ offGlobalCooldown = { 20271 } })
 local now = 0
@@ -41,9 +73,6 @@ local SEAL = { 1311654, 0, 0 }
 local steps = {}
 -- The seal: its aura when the server answers.
 steps[#steps + 1] = { 1.927, function() e.setLatency(0.286) player:useSpell(1311656) end }
-steps[#steps + 1] = { 2.213, function()
-    player:applyAura({ spellId = 1311656, name = "Seal of Fury", icon = 135957, duration = 30, auraInstanceID = 41 })
-end }
 steps[#steps + 1] = { 4.789, function() player:softTarget(cat, "enemy") end }
 -- Consecration under the cat: the cat targeted as it lands, the fight
 -- begins, the ground's aura on it ticking every half second.
@@ -55,7 +84,8 @@ steps[#steps + 1] = { 5.329, function()
     cat:target(player)
 end }
 -- The cat's claws; the consecrated ground's holy damage; its ticks.
-local claws = { { 5.759, 9 }, { 7.596, 8 }, { 8.819, 8 }, { 10.272, 9 }, { 11.767, 8 }, { 13.604, 7 }, { 14.741, 8 } }
+-- (Each claw lands 0.43 s before its combat text, recorded.)
+local claws = { { 5.329, 9 }, { 7.166, 8 }, { 8.389, 8 }, { 9.842, 9 }, { 11.337, 8 }, { 13.174, 7 }, { 14.311, 8 } }
 local burns = { { 6.352, 7 }, { 7.348, 8 }, { 8.386, 7 }, { 9.328, 7 }, { 11.334, 7 }, { 12.346, 8 }, { 13.266, 11, "CRITICAL" } }
 local ticks = { 5.833, 6.835, 7.857, 8.899, 9.846, 10.851, 11.842, 12.846 }
 for _, c in ipairs(claws) do steps[#steps + 1] = { c[1], function() cat:swing(player, c[2]) end } end
@@ -85,10 +115,6 @@ steps[#steps + 1] = { 12.951, function()
 end }
 -- The seal again; the ground's aura gone.
 steps[#steps + 1] = { 13.122, function() e.setLatency(0.382) player:useSpell(1311656) end }
-steps[#steps + 1] = { 13.504, function()
-    player:removeAura(41)
-    player:applyAura({ spellId = 1311656, name = "Seal of Fury", icon = 135957, duration = 30 })
-end }
 steps[#steps + 1] = { 13.957, function() cat:removeAura(consecration) end }
 steps[#steps + 1] = { 14.311, function()
     if redoubt then player:updateAura(redoubt, { cooldowns = { { 20128 } } }) end
@@ -96,28 +122,34 @@ end }
 -- Hammer of Justice: the stun, a swing, then pressed again on its
 -- cooldown.
 steps[#steps + 1] = { 15.185, function() e.setLatency(0.377) player:useSpell(853) end }
-steps[#steps + 1] = { 15.562, function()
-    player:swing(cat, 40, { speed = 2.6 })
-    player:hit(cat, 39, { school = 32 })
-    player:hit(cat, 12, { school = 2, cooldowns = { { 1324513 }, { 1260198, 0, 0 }, SEAL } })
-    cat:applyAura({ spellId = 853, name = "Hammer of Justice", duration = 6, harmful = true, source = player })
-end }
 steps[#steps + 1] = { 15.696, function() player:useSpell(853) end }
 steps[#steps + 1] = { 15.722, function() player:hit(player, 39, { kind = "HEAL" }) end }
 steps[#steps + 1] = { 15.863, function() player:useSpell(853) end }
 -- Judgement kills it, stunned.
 steps[#steps + 1] = { 16.419, function() e.setLatency(0.378) player:useSpell(20271) end }
-steps[#steps + 1] = { 16.797, function()
-    cat:kill({ by = player, lootable = true, amount = 54, school = 2 })
-end }
+-- Pressed again during the last moments (a key with both spells): held
+-- by the client, failing when the cat dies.
+steps[#steps + 1] = { 16.524, function() player:useSpell(1866) end }
+steps[#steps + 1] = { 16.641, function() player:useSpell(1866) end }
+steps[#steps + 1] = { 16.649, function() player:useSpell(20271) end }
+steps[#steps + 1] = { 16.782, function() player:useSpell(20271) end }
 -- The mana's changes (costs, regeneration: its values secret) and the
 -- cat's threat list as the client told them (recorded times).
 local mana = 700
-for _, t in ipairs({ 0.352, 2.322, 5.329, 10.354, 10.489, 10.851, 11.334, 11.842, 12.346, 12.456, 12.846, 13.102, 13.382, 13.504, 15.562, 16.797, 22.667, 24.708 }) do
+for _, t in ipairs({ 0.352, 2.322, 5.329, 10.354, 10.489, 10.851, 11.334, 11.842, 12.346, 12.456, 12.846, 13.102, 13.382, 13.504, 15.562 }) do
     mana = mana == 700 and 690 or 700
     local m = mana
     steps[#steps + 1] = { t, function() player:setPower(m) end }
 end
+-- Judgement's cost leaves too little for Redemption; a regeneration tick
+-- gives enough back (22.434), then the updates.
+steps[#steps + 1] = { 16.797, function() player:setPower(250) end }
+steps[#steps + 1] = { 22.434, function() player:setPower(305, { frequent = true }) end }
+steps[#steps + 1] = { 22.667, function() player:setPower(310) end }
+steps[#steps + 1] = { 24.708, function() player:setPower(320) end }
+-- The fight over: auto attack off, then out of combat.
+steps[#steps + 1] = { 17.165, function() player:stopAttack() end }
+steps[#steps + 1] = { 17.377, function() player:leaveCombat() end }
 for i, t in ipairs({ 6.483, 7.684, 8.899, 10.111, 11.334, 12.456, 13.750, 14.965, 16.092 }) do
     steps[#steps + 1] = { t, function() cat:setThreat(10 + i) end }
 end

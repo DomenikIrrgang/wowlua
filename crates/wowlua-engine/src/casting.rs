@@ -52,6 +52,9 @@ pub struct Casting {
     /// The player's spells on cooldown: when each is ready again (the
     /// clock's), from its data's `cooldown` (seconds).
     pub ready_at: HashMap<i64, f64>,
+    /// The player's presses the server has not answered yet, in order:
+    /// the spell and the client's cast GUID for it.
+    pub pending: Vec<(f64, String)>,
 }
 
 fn field(vm: &mut Vm, t: TableRef, key: &str) -> Value {
@@ -371,6 +374,12 @@ pub(crate) fn spell_field(vm: &mut Vm, id: f64, key: &str) -> Value {
 /// cooldown's category, or 0 off it), the stance bar's.
 fn cooldown_events(vm: &mut Vm, id: f64, category: f64, bags: bool) {
     let fire = |vm: &mut Vm, e: &str, args: &[Value]| crate::widgets::fire_event(vm, e, args);
+    // The spell's own cooldown category (data `category`; recorded:
+    // Consecration's 932, Hammer of Justice's 32), else 0.
+    let own = match spell_field(vm, id, "category") {
+        Value::Num(n) => n,
+        _ => 0.0,
+    };
     fire(vm, "ACTIONBAR_UPDATE_COOLDOWN", &[]);
     fire(vm, "ACTIONBAR_UPDATE_STATE", &[]);
     if bags {
@@ -382,7 +391,7 @@ fn cooldown_events(vm: &mut Vm, id: f64, category: f64, bags: bool) {
         &[
             Value::Num(id),
             Value::Nil,
-            Value::Num(0.0),
+            Value::Num(own),
             Value::Num(category),
             Value::Nil,
         ],
@@ -439,25 +448,71 @@ pub fn control_use_spell(vm: &mut Vm, c: NativeCall) -> Ret {
         crate::clock::after_engine(vm, delay, later);
         return Ok(vec![]);
     }
-    let category = if spell_field(vm, id, "offGCD").truthy() {
-        0.0
-    } else {
-        GCD_CATEGORY
-    };
+    // Off the global cooldown: by data or trait (Judgement's, recorded).
+    let off = spell_field(vm, id, "offGCD").truthy()
+        || crate::actions::has_trait(vm, Value::Num(id), "offGlobalCooldown");
+    let category = if off { 0.0 } else { GCD_CATEGORY };
     cast_changed(vm, me);
-    // The global cooldown from the key press (recorded: the bar's spells
-    // on it in the first cooldown events).
-    if category == GCD_CATEGORY {
+    if off {
+        // Its press tells only that (recorded: Judgement pressed).
+        fire(vm, "ACTIONBAR_UPDATE_STATE", &[]);
+    } else {
+        // The global cooldown from the key press (recorded: the bar's
+        // spells on it in the first cooldown events).
         crate::actions::start_global_cooldown(vm);
+        cooldown_events(vm, id, category, false);
     }
-    cooldown_events(vm, id, category, false);
+    // Waiting for the server's answer, with the client's own cast GUID.
+    let guid = client_guid(vm, id);
+    engine_mut(vm)
+        .units
+        .casting
+        .pending
+        .push((id, guid.clone()));
+    let g = vm.str(&guid);
     let later = vm.native_with(
         "spellUsed",
         spell_used as NativeFn,
-        vec![Value::Num(id), Value::Num(category)],
+        vec![Value::Num(id), Value::Num(category), g],
     );
     crate::clock::after_engine(vm, delay, later);
     Ok(vec![])
+}
+
+/// A cast GUID of the client's own (`Cast-2-0-0-0-…`: a press it refused
+/// or one it held, recorded).
+fn client_guid(vm: &mut Vm, id: f64) -> String {
+    let n = {
+        let c = &mut engine_mut(vm).units.casting;
+        c.next += 1;
+        c.next
+    };
+    format!("Cast-2-0-0-0-{}-{:010X}", id as i64, n)
+}
+
+/// The player's target died: the presses on it still waiting for the
+/// server fail, in order (`UNIT_SPELLCAST_FAILED` with each one's client
+/// cast GUID, `CURRENT_SPELL_CAST_CHANGED`; recorded: two Judgements and
+/// two of another spell pressed during the fight's last swing).
+pub fn target_died(vm: &mut Vm) {
+    let pending = std::mem::take(&mut engine_mut(vm).units.casting.pending);
+    let mut kept = Vec::new();
+    for (id, guid) in pending {
+        let untargeted = matches!(spell_field(vm, id, "targeted"), Value::Bool(false));
+        if untargeted {
+            kept.push((id, guid));
+            continue;
+        }
+        let g = vm.str(&guid);
+        units::fire_unit(
+            vm,
+            "UNIT_SPELLCAST_FAILED",
+            units::PLAYER,
+            &[g, Value::Num(id), Value::Nil],
+        );
+        cast_changed(vm, units::PLAYER);
+    }
+    engine_mut(vm).units.casting.pending = kept;
 }
 
 /// The client refusing the player's spell: `UNIT_SPELLCAST_FAILED` with
@@ -465,12 +520,8 @@ pub fn control_use_spell(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `ACTIONBAR_UPDATE_STATE`, `UI_ERROR_MESSAGE(code, text)` (recorded).
 fn refuse(vm: &mut Vm, id: f64, code: f64, text: &str) {
     let me = units::PLAYER;
-    let n = {
-        let c = &mut engine_mut(vm).units.casting;
-        c.next += 1;
-        c.next
-    };
-    let g = vm.str(&format!("Cast-2-0-0-0-{}-{:010X}", id as i64, n));
+    let g = client_guid(vm, id);
+    let g = vm.str(&g);
     units::fire_unit(
         vm,
         "UNIT_SPELLCAST_FAILED",
@@ -489,12 +540,56 @@ fn spell_used(vm: &mut Vm, c: NativeCall) -> Ret {
     let (Value::Num(id), Value::Num(category)) = (c.upvals[0], c.upvals[1]) else {
         return Ok(vec![]);
     };
+    // A press failed meanwhile (its target died) has no answer.
+    if let Some(Value::Str(g)) = c.upvals.get(2).copied() {
+        let guid = String::from_utf8_lossy(vm.str_bytes(g)).into_owned();
+        let pending = &mut engine_mut(vm).units.casting.pending;
+        let Some(i) = pending.iter().position(|(_, p)| *p == guid) else {
+            return Ok(vec![]);
+        };
+        pending.remove(i);
+    }
     if let Value::Num(cd) = spell_field(vm, id, "cooldown") {
         let at = crate::clock::now(vm) + cd;
         engine_mut(vm).units.casting.ready_at.insert(id as i64, at);
     }
     instant(vm, id);
-    cooldown_events(vm, id, category, true);
+    // What it does as it lands (data `onCast`, a test's function: the
+    // damage, the kill, the auras), in the same packet, before its
+    // cooldowns (recorded: Judgement's kill, then its cooldowns).
+    if let f @ Value::Func(_) = spell_field(vm, id, "onCast") {
+        vm.call(f, &[])?;
+    }
+    // Its cooldowns: the data's list of spells told (`cooldowns = { {
+    // spell, a?, b? } }`; recorded: Judgement's three), else its own.
+    let listed = spell_field(vm, id, "cooldowns");
+    if matches!(listed, Value::Table(_)) {
+        crate::widgets::fire_event(vm, "ACTIONBAR_UPDATE_COOLDOWN", &[]);
+        crate::widgets::fire_event(vm, "ACTIONBAR_UPDATE_STATE", &[]);
+        if let Value::Table(list) = listed {
+            crate::widgets::fire_event(vm, "BAG_UPDATE_COOLDOWN", &[]);
+            let n = vm.heap.table(list).border();
+            for i in 1..=n {
+                let Value::Table(e) = vm.heap.table(list).get(Value::Num(i as f64)) else {
+                    continue;
+                };
+                let t = vm.heap.table(e);
+                let (spell, a, b) = (
+                    t.get(Value::Num(1.0)),
+                    t.get(Value::Num(2.0)),
+                    t.get(Value::Num(3.0)),
+                );
+                crate::widgets::fire_event(
+                    vm,
+                    "SPELL_UPDATE_COOLDOWN",
+                    &[spell, Value::Nil, a, b, Value::Nil],
+                );
+            }
+            crate::widgets::fire_event(vm, "UPDATE_SHAPESHIFT_COOLDOWN", &[]);
+        }
+    } else {
+        cooldown_events(vm, id, category, true);
+    }
     Ok(vec![])
 }
 

@@ -24,7 +24,9 @@ export interface MockUnit
     --- `school`, 1 physical by default); `lootable`: `UNIT_LOOT`. Its
     --- auras go with it.
     function kill(opts: { by?: MockUnit, lootable?: boolean, amount?: number, school?: number }?)
-    function setPower(powerType: number, amount: number)
+    --- Its power now (`UNIT_POWER_UPDATE`); `frequent`: a regeneration
+    --- tick's, `UNIT_POWER_FREQUENT` alone.
+    function setPower(amount: number, opts: { frequent?: boolean }?)
     function enterCombat()
     function leaveCombat()
     --- The player's auto attack on (`PLAYER_ENTER_COMBAT`) and off
@@ -795,7 +797,12 @@ export function provideLibrary(major: string, impl: table, minor: number?)
 end
 
 --- A spell's data (decision T203). `cooldown` (seconds): pressing it
---- again sooner is refused ("Spell is not ready yet.").
+--- again sooner is refused ("Spell is not ready yet."); `category`: its
+--- cooldown category (`SPELL_UPDATE_COOLDOWN`'s third value);
+--- `outOfCombat`: unusable in combat; `onCast`: a function run as the
+--- cast lands (its damage, kill, auras), before its cooldowns;
+--- `cooldowns = { { spell, a?, b? } }`: the spells its landing tells
+--- (else itself). Presses waiting for the server fail if the target dies.
 export function defineSpell(id: number, data: table)
     engine().defineSpell(id, data)
 end
