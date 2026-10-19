@@ -755,6 +755,9 @@ impl Vm {
         let mut nargs = nargs;
         let f = match self.reg(func) {
             Value::Func(f) => f,
+            v @ Value::Secret(_) if self.can_access_secrets() => {
+                return self.secret_call(func, v, nargs, nresults, from_lua);
+            }
             other => {
                 // `__call`
                 let tm = self.get_tm_slot(other, self.names.call);
@@ -910,6 +913,39 @@ impl Vm {
                 Ok(false)
             }
         }
+    }
+
+    /// A secret callee called by code that may use secrets (decision T195):
+    /// the value it hides is called, in a nested run, and its results are
+    /// secret again, as everything secure code computes from a secret.
+    /// Blizzard's target frame needs it: `AuraUtil.SetAuraBorderColor`
+    /// indexes `DEBUFF_DISPLAY_INFO` with an aura's secret dispel type and
+    /// calls the secret color's `GetRGBA`. Unverified: addon code always
+    /// runs tainted, so no probe sees a secure call of a secret.
+    fn secret_call(
+        &mut self,
+        func: usize,
+        callee: Value,
+        nargs: usize,
+        nresults: i32,
+        from_lua: bool,
+    ) -> Result<bool, LuaError> {
+        self.cur.stack[func].v = self.hidden(callee);
+        self.call_at(func, nargs, -1, from_lua)?;
+        let n = self.cur.top - func;
+        for i in func..func + n {
+            let v = self.cur.stack[i].v;
+            self.cur.stack[i].v = self.secret_wrap(v);
+        }
+        if nresults < 0 {
+            return Ok(false);
+        }
+        let wanted = nresults as usize;
+        self.ensure_stack(func + wanted + 1);
+        for i in n..wanted {
+            self.set_fresh(func + i, Value::Nil);
+        }
+        Ok(false)
     }
 
     /// Returns from the top frame with the `n` values at `from`; true if it
