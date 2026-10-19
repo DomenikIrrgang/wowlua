@@ -568,13 +568,19 @@ return bought",
         ]
     );
     wowlua_engine::clock::advance(&mut vm, 0.5);
+    run(
+        &mut vm,
+        "Full = table.concat(Seen, ' ')
+Cost, Needed = GetRepairAllCost()
+Seen = {}
+RepairAllItems()",
+    );
+    // The repair's answer a round trip later (recorded: `/stdtest engine
+    // scenario vendor`).
+    wowlua_engine::clock::advance(&mut vm, 0.5);
     let r = run(
         &mut vm,
-        "local full = table.concat(Seen, ' ')
-local cost, needed = GetRepairAllCost()
-Seen = {}
-RepairAllItems()
-return full, cost, tostring(needed), table.concat(Seen, ' '), GetMoney(), select('#', GetRepairAllCost())",
+        "return Full, Cost, tostring(Needed), table.concat(Seen, ' '), GetMoney(), select('#', GetRepairAllCost())",
     );
     assert_eq!(
         r,

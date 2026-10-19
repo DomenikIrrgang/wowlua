@@ -71,6 +71,8 @@ export interface MockUnit
     function setRole(role: ("TANK" | "HEALER" | "DAMAGER")?)
     --- A group member logging in or out (`UnitIsConnected`, the roster).
     function setOnline(online: boolean)
+    --- An aura on it (`UNIT_AURA`), its instance ID; `quiet = true`: there
+    --- already (a snapshot's), untold.
     function applyAura(data: table): number
     function removeAura(auraInstanceID: number)
     --- The aura changed in place (a periodic effect's tick:
@@ -341,6 +343,12 @@ export function spawnUnit(data: UnitData): MockUnit
     return engine().spawnUnit(data)
 end
 
+--- The unit a token names now (`"target"`: a world profile's, say); nil
+--- when none.
+export function unitOf(token: string): MockUnit?
+    return engine().unitOf(token)
+end
+
 --- The player's data (a world profile's character), firing no events.
 export function setPlayer(data: UnitData)
     engine().setPlayer(data)
@@ -359,12 +367,18 @@ end
 
 --- An item a vendor sells: `price` for `stack` of it (`available`: -1
 --- unlimited).
-export type MerchantItem = { id: number, price?: number, stack?: number, available?: number, maxStack?: number, usable?: boolean }
+--- `itemAfter`: a bought one's data (a new slot's) that many seconds after
+--- the purchase's answer, the server's (the money told before the item
+--- then; by default its data at once).
+export type MerchantItem = { id: number, price?: number, stack?: number, available?: number, maxStack?: number, usable?: boolean, itemAfter?: number }
 
 --- Opens a vendor's window (`MERCHANT_SHOW`, then `MERCHANT_UPDATE`): the
---- vendor is the `npc` unit. Buying, selling and buying back go through
---- the client's API, answered by the server 0.4 s later.
-export function openMerchant(data: { name?: string, items?: MerchantItem[], canRepair?: boolean, repairCost?: number })
+--- vendor is the `npc` unit. Buying, selling, buying back and repairing go
+--- through the client's API, answered by the server a round trip later.
+--- `cached`: the goods' data known (a visit before: no filter updates);
+--- `repairMoneyAfter`: a repair's money told after that many items'
+--- durability (the server's packets; by default after all).
+export function openMerchant(data: { name?: string, items?: MerchantItem[], canRepair?: boolean, repairCost?: number, damaged?: number, cached?: boolean, repairMoneyAfter?: number })
     engine().openMerchant(data)
 end
 

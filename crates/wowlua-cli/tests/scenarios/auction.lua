@@ -523,6 +523,11 @@ local browse = {
     { itemKey = { battlePetSpeciesID = 0, itemID = 4349, itemLevel = 25, itemSuffix = 0 }, minPrice = 200, totalQuantity = 17, containsOwnerItem = false },
 }
 local infoReceived = { 6299, 2515, 4603, 2679, 6362, 252031, 2519, 3033, 8068, 3745, 252028, 2516, 279962, 117, 5465 }
+-- Thunder Bluff's NPCs soft targeted all along (who, unrecorded: the soft
+-- friend's events alone tell, twelve; one stands in): Blessing of
+-- Protection unusable from the start (the snapshot), never told usable.
+local friend = e.spawnUnit({ name = "Thunder Bluff Brave", reaction = "friendly" })
+player:softTarget(friend, "friend")
 e.defineAuctionHouse(stampi, {
     browse = browse,
     infoReceived = infoReceived,
@@ -580,10 +585,12 @@ end
 local function world(...) e.fireEvent(...) end
 at(0.522) world("UPDATE_EXHAUSTION")
 at(6.250) world("ENCHANT_SPELL_COMPLETED", false, nil)
--- At the auctioneer: the round trip 0.315 s.
-e.setLatency(0.315)
+-- At the auctioneer: the round trip 0.315 s, the target's echo 0.477 s
+-- (UNIT_TARGET, after the house opened).
 at(8.489)
+e.setLatency(0.477)
 player:target(stampi)
+e.setLatency(0.315)
 stampi:setDistance(3)
 player:interact(stampi)
 at(9.0)
@@ -602,8 +609,16 @@ at(14.334) if shot then press(shot) end
 e.setLatency(0.381)
 at(15.287) press(AuctionHouseFrame.CommoditiesBuyFrame.BuyDisplay.BuyButton)
 at(16.118) press(AuctionHouseFrame.BuyDialog.BuyNowButton)
+-- The mail's news again (the server's, 0.45 s after the purchase's).
+at(17.312) world("UPDATE_PENDING_MAIL")
 at(17.6)
 check("one Light Shot bought", GetMoney() == 21681)
+-- Back to the browse results (a panel button's click, recorded); tooltip
+-- data updated after it (the client's, its cause unmodelled).
+at(18.698) press(AuctionHouseFrame.CommoditiesBuyFrame.BackButton)
+for _, step in ipairs({ { 18.852, 1073 }, { 18.866, 1076 }, { 18.866, 1075 }, { 18.874, 1078 }, { 18.887, 1081 }, { 18.887, 1082 }, { 18.894, 1084 }, { 18.959, 1089 } }) do
+    at(step[1]) world("TOOLTIP_DATA_UPDATE", step[2])
+end
 at(19.435) press(AuctionHouseFrame.SellTab)
 at(20.349) player:wear()
 -- The gloves put up: their search, then posted.

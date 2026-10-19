@@ -1355,7 +1355,7 @@ fn the_engine_plays_trainer_as_the_client_did() {
 
 /// How many of the vendor scenario's lines the engine plays as the client
 /// did: only ever up.
-const VENDOR_MATCHED: usize = 536;
+const VENDOR_MATCHED: usize = 572;
 
 /// The vendor scenario: goods sold, bought, bought back; too little money;
 /// a repair.
@@ -1369,8 +1369,10 @@ fn the_engine_plays_vendor_as_the_client_did() {
 /// screen (one per item, in the server's order: the items' GUIDs, not in
 /// the snapshot), `Blizzard_PlayerChoice` loading at the first loading
 /// screen, the active talent config, the account's Edit Mode layouts, the
-/// aura instance IDs (not in the snapshot).
-const HEARTH_MATCHED: usize = 1395;
+/// aura instance IDs (not in the snapshot), Blessing of Protection told
+/// unusable at a usability check after an NPC was soft targeted in Thunder
+/// Bluff (the soft friend's change during the loading screen's replay).
+const HEARTH_MATCHED: usize = 1396;
 
 /// The hearth scenario: a Hearthstone cast, the loading screen.
 #[test]
@@ -1390,7 +1392,7 @@ fn the_engine_plays_taxi_as_the_client_did() {
 
 /// How many of the mail scenario's lines the engine plays as the client
 /// did: only ever up.
-const MAIL_MATCHED: usize = 369;
+const MAIL_MATCHED: usize = 376;
 
 /// The mail scenario: the inbox, an item taken, a letter sent.
 #[test]
@@ -1400,7 +1402,7 @@ fn the_engine_plays_mail_as_the_client_did() {
 
 /// How many of the bank scenario's lines the engine plays as the client
 /// did: only ever up.
-const BANK_MATCHED: usize = 553;
+const BANK_MATCHED: usize = 555;
 
 /// The bank scenario: items moved in and out, a tab bought.
 #[test]
@@ -1410,7 +1412,7 @@ fn the_engine_plays_bank_as_the_client_did() {
 
 /// How many of the auction scenario's lines the engine plays as the
 /// client did: only ever up.
-const AUCTION_MATCHED: usize = 365;
+const AUCTION_MATCHED: usize = 382;
 
 /// The auction scenario: browsing, buying a commodity, posting an item.
 #[test]

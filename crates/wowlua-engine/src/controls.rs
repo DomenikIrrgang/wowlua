@@ -318,6 +318,7 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("areaChanged", crate::character::control_area_changed),
         ("spend", spend),
         ("spawnUnit", units::spawn),
+        ("unitOf", units::control_unit_of),
         ("setPlayer", units::set_player),
         ("setBag", crate::character::control_set_bag),
         (
