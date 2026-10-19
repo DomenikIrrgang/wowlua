@@ -105,10 +105,12 @@ mock.enterInstance()
 return issecretvalue(UnitName('target')), issecretvalue(UnitName('party1')), UnitName('party1'), issecretvalue(UnitGUID('player')),
     issecretvalue(UnitHealthMax('party1')), issecretvalue(UnitHealthMax('target')), GetNumGroupMembers(), IsInGroup()",
     );
+    // A party member's maximum health is secret too (recorded through
+    // `target`, scenario group).
     assert_eq!(
         r,
         [
-            "true", "false", "Friend", "false", "false", "true", "2", "true"
+            "true", "false", "Friend", "false", "true", "true", "2", "true"
         ]
     );
 }

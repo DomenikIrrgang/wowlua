@@ -93,20 +93,20 @@ fn system(vm: &mut Vm, text: &str) {
     crate::chat::game_message(vm, "CHAT_MSG_SYSTEM", text, None);
 }
 
-/// The unit a name or unit token names.
+/// The unit a name or unit token names: another's name first, exactly as
+/// written (a recording's scrubbed names are the player's own, "Player":
+/// typed, they name the other), then a token.
 fn unit_named(vm: &mut Vm, v: Value) -> Option<UnitId> {
     let Value::Str(s) = vm.hidden(v) else {
         return None;
     };
     let text = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
-    if let Some(id) = units::resolve(&engine(vm).units, &text) {
-        return Some(id);
-    }
     let name = text.split('-').next().unwrap_or(&text).to_string();
     let list = &engine(vm).units.list;
-    (1..list.len())
+    let named = (1..list.len())
         .find(|&i| list[i].name == name || full_name(vm, UnitId(i)) == name)
-        .map(UnitId)
+        .map(UnitId);
+    named.or_else(|| units::resolve(&engine(vm).units, &text))
 }
 
 /// The party's ID as `GROUP_JOINED` tells it (a session's; the harness

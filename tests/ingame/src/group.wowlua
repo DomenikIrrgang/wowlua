@@ -73,6 +73,10 @@ const BY_UNIT: string[] = {
     "UnitIsVisible",
     "UnitInRange",
     "UnitIsDeadOrGhost",
+    "UnitHealth",
+    "UnitHealthMax",
+    "UnitPower",
+    "UnitPowerMax",
     "GetReadyCheckStatus",
     "GetPartyAssignment",
 }

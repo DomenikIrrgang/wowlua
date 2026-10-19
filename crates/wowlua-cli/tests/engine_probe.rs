@@ -1257,7 +1257,7 @@ fn the_engine_plays_death_as_the_client_did() {
 
 /// How many of the flight scenario's lines the engine plays as the client
 /// did: only ever up.
-const FLIGHT_MATCHED: usize = 255;
+const FLIGHT_MATCHED: usize = 259;
 
 /// The flight scenario: a flight master's gossip, the taxi map looked at.
 #[test]
@@ -1302,7 +1302,7 @@ fn the_engine_plays_hearth_as_the_client_did() {
 
 /// How many of the taxi scenario's lines the engine plays as the client
 /// did: only ever up.
-const TAXI_MATCHED: usize = 1224;
+const TAXI_MATCHED: usize = 1228;
 
 /// The taxi scenario: a flight from Orgrimmar to the Crossroads.
 #[test]
@@ -1342,7 +1342,7 @@ fn the_engine_plays_auction_as_the_client_did() {
 
 /// How many of the group scenario's lines the engine plays as the client
 /// did: only ever up.
-const GROUP_MATCHED: usize = 231;
+const GROUP_MATCHED: usize = 237;
 
 /// The group scenario: an invitation, a party, following, a trade.
 #[test]
@@ -1382,7 +1382,7 @@ fn the_engine_plays_profession_as_the_client_did() {
 
 /// How many of the legacy scenario's lines the engine plays as the client
 /// did: only ever up.
-const LEGACY_MATCHED: usize = 110;
+const LEGACY_MATCHED: usize = 119;
 
 /// The legacy scenario: the legacy system's tree, five ranks bought and
 /// applied.

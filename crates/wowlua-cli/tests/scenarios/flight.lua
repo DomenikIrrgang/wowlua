@@ -6,7 +6,8 @@
 -- (~0.3 s). The map's nodes as the client answered them.
 local e = __engine
 local player = e.player
-e.setLatency(0.3)
+-- The targets' echoes 0.395 s and 0.426 s later (recorded).
+e.setLatency(0.4)
 -- The worn gear's durability (the recording's answers).
 for slot, d in pairs({ [5] = { 50, 60 }, [6] = { 17, 20 }, [7] = { 38, 45 }, [8] = { 16, 20 }, [9] = { 16, 20 }, [10] = { 17, 20 }, [16] = { 68, 75 } }) do
     player:setDurability(slot, d[1], d[2])
@@ -14,14 +15,16 @@ end
 local other = e.spawnUnit({
     name = "Otherplayer", lastName = "Othername", guid = "Player-0000-00000000", player = true,
     level = 17, reaction = "friendly", class = "HUNTER", classID = 3, sex = 2, powerType = 0,
-    race = "Orc", creatureType = "Humanoid", creatureTypeID = 7, pvp = true,
+    race = "Orc", creatureType = "Humanoid", creatureTypeID = 7,
 })
 local tal = e.spawnUnit({
     name = "Tal", guid = "Creature-0-4615-1-2-2995-E0D69E7BFE", npcID = 2995, level = 55, classification = "elite",
     reaction = "friendly", class = "WARRIOR", classID = 1, sex = 2, powerType = 1,
-    creatureType = "Humanoid", creatureTypeID = 7, factionGroup = "Horde",
+    creatureType = "Humanoid", creatureTypeID = 7, factionGroup = "Horde", pvp = true,
 })
 e.defineGossip(tal, {
+    -- The text with the interaction (recorded).
+    textAfter = 0,
     text = "When mounted on the back of a wind rider, one sees that its reputation for strength and speed is well earned.",
     options = { { name = "I need a ride.", icon = 132057, gossipOptionID = 98025, opens = "taxi" } },
 })

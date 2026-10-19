@@ -9,9 +9,11 @@
 //! round trip later and what the option opens (`opens = "trainer"`: the
 //! NPC's trainer, `trainer.rs`).
 //!
+//! `textAfter = 0` (the flight masters' recordings): `GOSSIP_SHOW` with
+//! the interaction, before its event.
+//!
 //! Unverified: closing the gossip without choosing, an option that opens
-//! nothing, quests in a gossip, the text's packet's delay beyond this
-//! recording's.
+//! nothing, quests in a gossip, when the text comes with the interaction.
 
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, NativeFn, TableRef, Value, Vm};
@@ -70,10 +72,45 @@ pub fn has(vm: &Vm, npc: UnitId) -> bool {
 pub fn interact(vm: &mut Vm, npc: UnitId) {
     let delay = crate::clock::server_delay(vm);
     let id = Value::Num(npc.0 as f64);
+    // The text's packet's delay: the gossip's `textAfter`, else the
+    // trainer's; 0: with the interaction, before it (recorded at two
+    // flight masters, the text perhaps known; unverified when).
+    let after = engine(vm)
+        .world
+        .gossip
+        .defined
+        .get(&npc.0)
+        .copied()
+        .map(|t| field(vm, t, "textAfter"));
+    let after = match after {
+        Some(Value::Num(n)) => n,
+        _ => TEXT_AFTER,
+    };
+    if after <= 0.0 {
+        let both = vm.native_with("gossipAtOnce", text_then_interaction as NativeFn, vec![id]);
+        crate::clock::after_engine(vm, delay, both);
+        return;
+    }
     let shown = vm.native_with("gossipInteraction", interaction as NativeFn, vec![id]);
     crate::clock::after_engine(vm, delay, shown);
     let text = vm.native_with("gossipShown", shown_text as NativeFn, vec![id]);
-    crate::clock::after_engine(vm, delay + TEXT_AFTER, text);
+    crate::clock::after_engine(vm, delay + after, text);
+}
+
+/// The text known: `GOSSIP_SHOW` then the interaction's frame event.
+fn text_then_interaction(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(npc) = npc_of(&c) else {
+        return Ok(vec![]);
+    };
+    engine_mut(vm).units.npc = Some(npc);
+    engine_mut(vm).world.gossip.open = Some(npc);
+    fire(vm, "GOSSIP_SHOW", &[Value::Nil]);
+    fire(
+        vm,
+        "PLAYER_INTERACTION_MANAGER_FRAME_SHOW",
+        &[Value::Num(GOSSIP)],
+    );
+    Ok(vec![])
 }
 
 fn npc_of(c: &NativeCall) -> Option<UnitId> {

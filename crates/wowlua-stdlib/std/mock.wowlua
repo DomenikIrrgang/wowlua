@@ -790,8 +790,10 @@ export function defineQuest(id: number, data: table)
 end
 
 --- An NPC's gossip: `{ text, options = { { name, icon, gossipOptionID,
---- opens } } }` (`opens = "trainer"`: its trainer). `unit:interact` opens
---- it; choosing an option closes it and opens what the option does.
+--- opens } }, textAfter? }` (`opens = "trainer"`: its trainer).
+--- `unit:interact` opens it (its text `textAfter` seconds after the
+--- interaction, 0.472 by default; 0: at once, before it); choosing an
+--- option closes it and opens what the option does.
 export function defineGossip(npc: MockUnit, data: table)
     engine().defineGossip(npc, data)
 end

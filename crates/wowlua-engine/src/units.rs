@@ -507,9 +507,10 @@ pub fn secret_results_flagged(vm: &Vm, flags: u32, c: &NativeCall) -> bool {
             || flag("SecretWhenUnitSpellCastRestricted");
     };
     // Another's maximum health and power: secret, another player's too
-    // (recorded, scenario flight); the player's and the group's not.
+    // (recorded, scenario flight), a party member's too (scenario group,
+    // targeted); the player's not.
     if (flag("SecretWhenUnitHealthMaxRestricted") || flag("SecretWhenUnitPowerMaxRestricted"))
-        && !ours(u, id)
+        && id != PLAYER
     {
         return true;
     }
@@ -523,12 +524,12 @@ pub fn secret_results_flagged(vm: &Vm, flags: u32, c: &NativeCall) -> bool {
         return true;
     }
     // Another unit's power is secret even out of combat (the scenarios: a
-    // wolf's, another player's out of combat; none targeted, 0); the
-    // player's in combat, and the player's rage always (every scenario,
-    // out of combat too). Unverified: the group's; the player's other
+    // wolf's, another player's out of combat, a party member's; none
+    // targeted, 0); the player's in combat, and the player's rage always
+    // (every scenario, out of combat too). Unverified: the player's other
     // powers out of combat.
     if flag("SecretWhenUnitPowerRestricted")
-        && (!ours(u, id)
+        && (id != PLAYER
             || active(u, &[COMBAT, MAP, ENCOUNTER, CHALLENGE_MODE, PVP_MATCH])
             || (id == PLAYER && u.list[id.0].power_type == 1.0))
     {
@@ -667,8 +668,8 @@ fn unit_race(vm: &mut Vm, c: NativeCall) -> Ret {
     })
 }
 
-/// A race's file name and ID (the client's races; only the Undead's
-/// recorded, the others unverified).
+/// A race's file name and ID (the client's races; the Undead's and the
+/// Skyborne's recorded, the others unverified).
 fn race_file_and_id(race: &str) -> (String, Option<f64>) {
     const RACES: &[(&str, &str, f64)] = &[
         ("Human", "Human", 1.0),
@@ -683,6 +684,8 @@ fn race_file_and_id(race: &str) -> (String, Option<f64>) {
         ("Blood Elf", "BloodElf", 10.0),
         ("Draenei", "Draenei", 11.0),
         ("Worgen", "Worgen", 22.0),
+        // A druid's (recorded, scenario group).
+        ("Windshaper Skyborne", "Skyborne", 96.0),
     ];
     match RACES
         .iter()
@@ -700,6 +703,7 @@ fn race_name(race: &str) -> String {
         ("Scourge", "Undead"),
         ("NightElf", "Night Elf"),
         ("BloodElf", "Blood Elf"),
+        ("Skyborne", "Windshaper Skyborne"),
     ];
     NAMES
         .iter()

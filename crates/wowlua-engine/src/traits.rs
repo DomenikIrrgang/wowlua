@@ -16,9 +16,10 @@
 //! `entryIDsWithCommittedRanks` holds what was committed before the
 //! session, a commit's ranks not even at its answer; a condition's
 //! `spentAmountRequired` is what is still to spend (met: 0, without its
-//! tooltip); buying fires `TRAIT_NODE_CHANGED` for the node, the nodes it
-//! unlocks, its edges' targets, then `TRAIT_TREE_CURRENCY_INFO_UPDATED` for
-//! each of the config's trees paying in its currency; applying: a round
+//! tooltip); buying fires `TRAIT_NODE_CHANGED` for the node and its edges'
+//! targets, then `TRAIT_TREE_CURRENCY_INFO_UPDATED` for each of the
+//! config's trees paying in its currency, then (when it unlocked others)
+//! the unlocked nodes and its edges' targets again; applying: a round
 //! trip, `SPELLS_CHANGED`, then the committed nodes, every tree's currency,
 //! `TRAIT_CONFIG_UPDATED`, `PLAYER_TALENT_UPDATE`.
 //!
@@ -970,13 +971,8 @@ fn purchase_rank(vm: &mut Vm, c: NativeCall) -> Ret {
             (m.targets(config, node), currencies)
         };
         fire(vm, "TRAIT_NODE_CHANGED", &[Value::Num(node as f64)]);
-        for ((n, a), (_, b)) in before.iter().zip(after.iter()) {
-            if *n != node && !targets.contains(n) && a != b {
-                fire(vm, "TRAIT_NODE_CHANGED", &[Value::Num(*n as f64)]);
-            }
-        }
-        for t in targets {
-            fire(vm, "TRAIT_NODE_CHANGED", &[Value::Num(t as f64)]);
+        for t in &targets {
+            fire(vm, "TRAIT_NODE_CHANGED", &[Value::Num(*t as f64)]);
         }
         let mut seen = Vec::new();
         for tree in currencies {
@@ -987,6 +983,22 @@ fn purchase_rank(vm: &mut Vm, c: NativeCall) -> Ret {
                     "TRAIT_TREE_CURRENCY_INFO_UPDATED",
                     &[Value::Num(tree as f64)],
                 );
+            }
+        }
+        // The nodes it unlocked, after the currencies, then its edges'
+        // targets again (recorded: the legacy druid's fifth point).
+        let unlocked: Vec<i64> = before
+            .iter()
+            .zip(after.iter())
+            .filter(|((n, a), (_, b))| *n != node && !targets.contains(n) && a != b)
+            .map(|((n, _), _)| *n)
+            .collect();
+        if !unlocked.is_empty() {
+            for n in unlocked {
+                fire(vm, "TRAIT_NODE_CHANGED", &[Value::Num(n as f64)]);
+            }
+            for t in targets {
+                fire(vm, "TRAIT_NODE_CHANGED", &[Value::Num(t as f64)]);
             }
         }
         Ok(vec![Value::Bool(true)])
