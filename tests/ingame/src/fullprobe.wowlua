@@ -395,6 +395,8 @@ export type FullProbe = {
     total: number,
     segment: { from: number, to: number }?,
     careful: { to: number, size: number }[],
+    deferred: { from: number, to: number }[]?,
+    deferredTo: number?,
     segmentSize: number,
     endKind: string?,
     reloading: boolean?,
@@ -534,7 +536,11 @@ end
 --- the user asked to, when the client refuses).
 local function planReload(run: FullProbe)
     const size = segmentSize(run)
-    run.segment = { from = run.cursor, to = math.min(run.cursor + size, run.total + 1) }
+    local to = math.min(run.cursor + size, run.total + 1)
+    if run.deferredTo ~= nil then
+        to = math.min(to, run.deferredTo)
+    end
+    run.segment = { from = run.cursor, to = to }
     run.reloading = true
     run.reloadAt = time()
     stamp("fullprobe")
@@ -611,8 +617,22 @@ local function runSegment(run: FullProbe)
         if run.cursor >= to then
             driver:SetScript("OnUpdate", nil)
             run.workSeconds = run.workSeconds + (GetTime() - started)
-            if run.cursor > run.total then
-                finish(run)
+            const rangeDone = run.deferredTo ~= nil and run.cursor >= run.deferredTo
+            if run.cursor > run.total or rangeDone then
+                -- The stretches a crash put off come last, one at a time,
+                -- in smaller steps; then the run ends.
+                run.deferredTo = nil
+                const pending = run.deferred ?? {}
+                const r = table.remove(pending, 1)
+                if r == nil then
+                    finish(run)
+                else
+                    run.cursor = r.from
+                    run.deferredTo = r.to
+                    run.careful[#run.careful + 1] = { to = r.to, size = math.max(1, math.ceil((r.to - r.from) / 16)) }
+                    say(`fullprobe: the calls a crash put off: {r.from} to {r.to - 1} ({#pending} more stretches after them)`)
+                    planReload(run)
+                end
             else
                 planReload(run)
             end
@@ -638,6 +658,15 @@ local function crashed(run: FullProbe)
             say(`|cffff4040fullprobe: {e.text} crashed the client; skipped (and {e.fn}'s other calls)|r`)
         end
         run.cursor = segment.from + 1
+    elseif run.deferredTo == nil then
+        -- Put off to the end: the rest first, so one crash costs no more
+        -- restarts until everything else is done.
+        run.deferred = run.deferred ?? {}
+        const pending = run.deferred :: { from: number, to: number }[]
+        pending[#pending + 1] = { from = segment.from, to = segment.to }
+        run.cursor = segment.to
+        run.careful = {}
+        say(`|cffffd200fullprobe: the client stopped in calls {segment.from} to {segment.to - 1}; they run at the end, going on with the rest|r`)
     else
         run.careful[#run.careful + 1] = { to = segment.to, size = math.max(1, math.ceil(size / 16)) }
         run.cursor = segment.from
@@ -738,6 +767,7 @@ local function start()
         cursor = 1,
         total = 0,
         careful = {},
+        deferred = {},
         segmentSize = plan().segmentSize ?? SEGMENT,
         crashed = {},
         crashedFunctions = {},
