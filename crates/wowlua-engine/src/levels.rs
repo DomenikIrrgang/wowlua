@@ -178,9 +178,13 @@ fn gained(vm: &mut Vm, c: NativeCall) -> Ret {
     let old = engine(vm).units.list[units::PLAYER.0].level;
     let old_max = stat(vm, "xpMax").unwrap_or(xp);
     let health = num(vm, t, "health");
+    // The health full at the new maximum (the packet's `UNIT_HEALTH`; no
+    // aura state's change told, `quest` 70.006, the player full before;
+    // unverified from a wounded player).
     {
         let p = &mut engine_mut(vm).units.list[units::PLAYER.0];
         p.health_max += health;
+        p.health = p.health_max;
     }
     let player = units::PLAYER;
     units::fire_unit(vm, "UNIT_MAXHEALTH", player, &[]);

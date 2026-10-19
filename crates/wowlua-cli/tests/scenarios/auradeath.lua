@@ -18,6 +18,7 @@ player:setName("Player", "Lastname")
 local cat = e.spawnUnit({
     name = "Savannah Highmane", guid = "Creature-0-4621-1-21-3243-03C97F1DA4", npcID = 3243, level = 12,
     reaction = "hostile", sex = 2, powerType = 1, health = 300, maxHealth = 300,
+    class = "WARRIOR", classID = 1,
     creatureType = "Beast", creatureTypeID = 1, creatureFamily = "Cat", creatureFamilyID = 2,
 })
 cat:showNameplate()
@@ -39,7 +40,11 @@ e.defineSpell(1311656, {
 -- Each one's cooldown category (recorded with its cooldown events).
 -- Consecration's slots told changed as it is sent and 7.937 s later
 -- (recorded).
-e.defineSpell(26573, { name = "Consecration", targeted = false, category = 932, slotChanges = { 0, 7.937 } })
+-- Its answer's cooldowns: its own, and its ground's tick's (recorded).
+e.defineSpell(26573, {
+    name = "Consecration", targeted = false, category = 932, slotChanges = { 0, 7.937 },
+    cooldowns = { { 26573, 932, 133 }, { 1280353 } },
+})
 e.defineSpell(853, {
     name = "Hammer of Justice", cooldown = 60, category = 32,
     cooldowns = { { 853, 32, 133 }, { 1324513 }, { 1260198, 0, 0 }, { 1311654, 0, 0 } },
@@ -51,9 +56,11 @@ e.defineSpell(853, {
         player:applyAura({ spellId = 0, name = "Unknown", auraInstanceID = 45 })
         cat:applyAura({ spellId = 853, name = "Hammer of Justice", duration = 6, harmful = true, source = player, stuns = true })
         player:setPower(695)
-        player:swing(cat, 40, { speed = 2.6, textAfter = 0.43 })
-        player:hit(cat, 39, { school = 32 })
-        player:hit(cat, 12, { school = 2 })
+        -- The cat's health past 35, 25 and 20 percent: its aura states
+        -- told once, with the next moment's packets (`tellAuraStates`).
+        player:swing(cat, 40, { speed = 2.6, textAfter = 0.43, statesAfter = true })
+        player:hit(cat, 39, { school = 32, statesAfter = true })
+        player:hit(cat, 12, { school = 2, statesAfter = true })
     end,
 })
 e.defineSpell(1866, { category = 2404 })
@@ -64,7 +71,7 @@ e.defineSpell(20271, {
     cooldowns = { { 20232, 0, 0 }, { 20271, 0, 0 }, { 1311655, 0, 0 } },
     onCast = function()
         player:setPower(250)
-        cat:kill({ by = player, lootable = true, amount = 54, school = 2 })
+        cat:kill({ by = player, lootable = true, amount = 54, school = 2, flagsAfter = 0.208 })
         if seal then player:removeAura(seal) seal = nil end
     end,
 })
@@ -99,7 +106,7 @@ steps[#steps + 1] = { 4.789, function() player:softTarget(cat, "enemy") end }
 local consecration
 steps[#steps + 1] = { 4.957, function() e.setLatency(0.372) player:useSpell(26573) end }
 steps[#steps + 1] = { 5.329, function()
-    player:target(cat)
+    player:target(cat, { echo = false }) -- (none recorded)
     -- (Its end told at 13.957, recorded: its duration left out.)
     consecration = cat:applyAura({ spellId = 26573, name = "Consecration", harmful = true, source = player })
     cat:target(player)
@@ -126,7 +133,7 @@ steps[#steps + 1] = { 10.030, function() player:target(cat) player:softTarget(ni
 steps[#steps + 1] = { 10.354, function()
     player:hit(cat, 7, { school = 2 })
     player:setPower(695)
-    player:swing(cat, 43, { speed = 2.6, textAfter = 0.534 })
+    player:swing(cat, 43, { speed = 2.6, textAfter = 0.534, statesAfter = 0.135 })
     player:startAttack()
     player:setPower(700)
     player:hit(cat, 12, { school = 2, aura = consecration, cooldowns = { BURN[1], BURN[2], SEAL } })
@@ -141,11 +148,14 @@ steps[#steps + 1] = { 11.334, function()
     cat:swing(player, 8, { textAfter = 0.433 })
     player:hit(cat, 7, { school = 2 })
     player:setPower(690)
+    -- Redoubt's stats: the damage done mods (recorded, by both tokens).
+    e.fireEvent("PLAYER_DAMAGE_DONE_MODS", "player")
+    e.fireEvent("PLAYER_DAMAGE_DONE_MODS", "targettarget")
     redoubt = player:applyAura({ spellId = 20128, name = "Redoubt" })
     cat:updateAura(consecration, { cooldowns = { BURN[1], BURN[2], { 20128 } } })
 end }
 steps[#steps + 1] = { 12.951, function()
-    player:swing(cat, 47, { speed = 2.6, textAfter = 0.431 })
+    player:swing(cat, 47, { speed = 2.6, textAfter = 0.431, statesAfter = 0.315 })
     player:hit(cat, 12, { school = 2, cooldowns = { SEAL } })
 end }
 -- The seal again; the ground's aura gone.
@@ -199,13 +209,19 @@ end
 -- updates.
 steps[#steps + 1] = { 22.434, function() player:setPower(305, { frequent = true }) end }
 steps[#steps + 1] = { 22.667, function() player:setPower(310) end }
-steps[#steps + 1] = { 24.708, function() player:setPower(320) end }
+steps[#steps + 1] = { 24.708, function()
+    player:setPower(320)
+    -- The damage done mods again, unexplained (recorded).
+    e.fireEvent("PLAYER_DAMAGE_DONE_MODS", "player")
+end }
 steps[#steps + 1] = { 24.275, function() player:removeAura(45) end }
 -- A proc the server cast failing quietly (1310927; what it is unknown),
 -- after the seal's blows and the drain's heal.
 for _, t in ipairs({ 13.102, 15.722 }) do
     steps[#steps + 1] = { t, function() player:spellFailedQuiet(1310927) end }
 end
+-- The Hammer of Justice's aura states after them (recorded).
+steps[#steps + 1] = { 15.722, function() e.tellAuraStates() end }
 -- The fight over: the last Judgement's refusal (auto attack off and on
 -- with it), then out of combat.
 steps[#steps + 1] = { 17.165, function()

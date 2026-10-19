@@ -232,6 +232,8 @@ pub fn flush(vm: &mut Vm) {
         for unit in std::mem::take(&mut engine_mut(vm).batch.turns) {
             crate::units::told_turn(vm, crate::units::UnitId(unit));
         }
+        // The target's aura states with its update (aurastates.rs).
+        crate::aurastates::tell_owed(vm);
         // The actions' usability first (its `ACTIONBAR_UPDATE_USABLE`
         // batched with the rest).
         match std::mem::take(&mut engine_mut(vm).batch.usability) {

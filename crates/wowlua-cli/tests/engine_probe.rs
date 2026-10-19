@@ -1325,7 +1325,7 @@ fn align(ours: &[String], theirs: &[String]) -> (usize, Vec<String>, Vec<String>
 
 /// How many of the combat scenario's lines the engine plays as the client
 /// did: only ever up.
-const COMBAT_MATCHED: usize = 764;
+const COMBAT_MATCHED: usize = 772;
 
 /// The combat scenario: a wolf targeted, fought, killed and looted.
 #[test]
@@ -1335,7 +1335,7 @@ fn the_engine_plays_combat_as_the_client_did() {
 
 /// How many of the death scenario's lines the engine plays as the client
 /// did: only ever up.
-const DEATH_MATCHED: usize = 1619;
+const DEATH_MATCHED: usize = 1628;
 
 /// The death scenario: a fight lost, the spirit released, the corpse taken.
 #[test]
@@ -1355,7 +1355,7 @@ fn the_engine_plays_flight_as_the_client_did() {
 
 /// How many of the auradeath scenario's lines the engine plays as the
 /// client did: only ever up.
-const AURADEATH_MATCHED: usize = 1257;
+const AURADEATH_MATCHED: usize = 1279;
 
 /// The auradeath scenario: a fight with a seal, Consecration, a stun, a
 /// Judgement's kill; the stunned cat's death taking its auras.
@@ -1515,7 +1515,7 @@ fn the_engine_plays_items_as_the_client_did() {
 
 /// How many of the quest scenario's lines the engine plays as the client
 /// did: only ever up.
-const QUEST_MATCHED: usize = 5493;
+const QUEST_MATCHED: usize = 5524;
 
 /// The quest scenario: a quest taken, eight wolves hunted for its item (a
 /// level gained), the quest turned in.

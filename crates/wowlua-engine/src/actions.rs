@@ -526,24 +526,46 @@ fn get_action_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
             .filter(|(start, length)| start + length > now),
         _ => None,
     };
+    // Or one its use began (the data's `cooldown`; recorded: `combat`'s
+    // instant spell on slot 10 still active 10 s on, `auradeath`'s
+    // Judgement); with the global cooldown its use began too, told with
+    // the global cooldown's category, not on it (recorded once, combat
+    // 5.663).
+    let used = match &a {
+        Some(a) if a.kind == "spell" && own.is_none() => num(a.id).and_then(|id| {
+            let Value::Num(cd) = crate::casting::spell_field(vm, id, "cooldown") else {
+                return None;
+            };
+            let at = engine(vm)
+                .units
+                .casting
+                .ready_at
+                .get(&(id as i64))
+                .copied()?;
+            (at > now).then_some((at - cd, cd))
+        }),
+        _ => None,
+    };
     let gcd_end = gcd.map(|(s, l)| s + l);
-    if let Some((start, length)) = own
+    if let Some((start, length)) = own.or(used)
         && gcd_end.is_none_or(|end| start + length > end)
     {
-        let t = table(
-            vm,
-            &[
-                ("startTime", Value::Num(start)),
-                ("duration", Value::Num(length)),
-                ("isEnabled", Value::Bool(true)),
-                ("modRate", Value::Num(1.0)),
-                ("isActive", Value::Bool(true)),
-                (
-                    "timeUntilEndOfStartRecovery",
-                    Value::Num(((start + length - now) * 1000.0).round() / 1000.0),
-                ),
-            ],
-        );
+        let mut fields = vec![
+            ("startTime", Value::Num(start)),
+            ("duration", Value::Num(length)),
+            ("isEnabled", Value::Bool(true)),
+            ("modRate", Value::Num(1.0)),
+            ("isActive", Value::Bool(true)),
+            (
+                "timeUntilEndOfStartRecovery",
+                Value::Num(((start + length - now) * 1000.0).round() / 1000.0),
+            ),
+        ];
+        if used.is_some() && gcd.is_some() {
+            fields.push(("isOnGCD", Value::Bool(false)));
+            fields.push(("activeCategory", Value::Num(GLOBAL_COOLDOWN)));
+        }
+        let t = table(vm, &fields);
         return Ok(vec![t]);
     }
     if let Some((start, length)) = gcd {

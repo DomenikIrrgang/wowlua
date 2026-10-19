@@ -147,6 +147,8 @@ pub struct Units {
     next_guid: u64,
     /// Spells units are casting.
     pub casting: crate::casting::Casting,
+    /// The server's aura states the client told (`aurastates.rs`).
+    pub aura_states: crate::aurastates::AuraStates,
 }
 
 pub const PLAYER: UnitId = UnitId(0);
@@ -802,6 +804,27 @@ fn unit_not_special(vm: &mut Vm, c: NativeCall) -> Ret {
     with_unit_or(vm, &c, Value::Bool(false), |_, _| vec![Value::Bool(false)])
 }
 
+/// `UnitIsTrivial(unit)`: a creature grey to the player, too low to give
+/// experience (warcraft.wiki.gg's API_UnitIsTrivial: "at level 60, units
+/// level 47 and under"). Recorded: a level 12 cat trivial to a level 21
+/// paladin (`auradeath`), level 1 to 3 creatures not to level 1 and 2
+/// warriors. The grey level by the classic experience formula (below 6
+/// none; to 39 the level less a tenth of it and 5; above, less a fifth
+/// and 1): unverified between those.
+fn unit_is_trivial(vm: &mut Vm, c: NativeCall) -> Ret {
+    let me = engine(vm).units.list[PLAYER.0].level;
+    let grey = if me < 6.0 {
+        0.0
+    } else if me < 40.0 {
+        me - (me / 10.0).floor() - 5.0
+    } else {
+        me - (me / 5.0).floor() - 1.0
+    };
+    with_unit_or(vm, &c, Value::Bool(false), |_, u| {
+        vec![Value::Bool(!u.player && u.level > 0.0 && u.level <= grey)]
+    })
+}
+
 /// `UnitHasPowerType(unit, powerType)`: the unit's power is of that type
 /// (unverified: a unit's other powers, a druid's mana in a form).
 fn unit_has_power_type(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -1312,7 +1335,7 @@ pub fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
         ("UnitIsQuestBoss", unit_not_special),
         ("UnitIsBossMob", unit_not_special),
         ("UnitIsOtherPlayersPet", unit_not_special),
-        ("UnitIsTrivial", unit_not_special),
+        ("UnitIsTrivial", unit_is_trivial),
         ("UnitIsWildBattlePet", unit_not_special),
         // No battle pet companions; nobody feigns death; no cast has a
         // target the engine knows (the documentation: false then).
@@ -1931,9 +1954,17 @@ fn control_soft_target(vm: &mut Vm, c: NativeCall) -> Ret {
 /// The player's target now `new`: `PLAYER_TARGET_CHANGED`, the server's
 /// echo (`UNIT_TARGET("player")`) a round trip later.
 fn set_player_target(vm: &mut Vm, new: Option<UnitId>) {
+    // The same target again: told to the UI, not to the server (no flags,
+    // no echo: recorded, `auradeath` 10.030, the cat targeted again).
+    let same = new.is_some() && engine(vm).units.target == new;
     engine_mut(vm).units.target = new;
     engine_mut(vm).units.list[PLAYER.0].target = new;
     fire(vm, "PLAYER_TARGET_CHANGED", &[]);
+    if same {
+        engine_mut(vm).units.echo = None;
+        crate::actions::update_target_usability(vm);
+        return;
+    }
     // A hostile target on someone: that one's flags, by its tokens with
     // targettarget (recorded, `talents`: the fox on the player targeted,
     // UNIT_FLAGS for player and targettarget; as when the target turns on
@@ -2022,13 +2053,26 @@ fn control_mouseover(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-fn change_health(vm: &mut Vm, id: UnitId, delta: f64) {
-    {
-        let u = &mut engine_mut(vm).units.list[id.0];
-        u.health = (u.health + delta).clamp(0.0, u.health_max);
-        u.dead = u.health <= 0.0;
-    }
+fn change_health(vm: &mut Vm, id: UnitId, delta: f64, states_after: Option<f64>) {
+    let before = crate::aurastates::health_states(vm, id);
+    set_health_quietly(vm, id, delta);
+    crate::aurastates::health_changed(vm, id, before, states_after);
     fire_unit(vm, "UNIT_HEALTH", id, &[]);
+}
+
+/// The unit's health changed by `delta`, not told.
+fn set_health_quietly(vm: &mut Vm, id: UnitId, delta: f64) {
+    let u = &mut engine_mut(vm).units.list[id.0];
+    u.health = (u.health + delta).clamp(0.0, u.health_max);
+    u.dead = u.health <= 0.0;
+}
+
+/// A test's option's number, if given.
+fn number_field(v: Value) -> Option<f64> {
+    match v {
+        Value::Num(n) => Some(n),
+        _ => None,
+    }
 }
 
 /// `unit:setName(name [, lastName])`: a WoW Forever character's first and
@@ -2049,14 +2093,28 @@ fn control_set_name(vm: &mut Vm, c: NativeCall) -> Ret {
 fn control_damage(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
     let n = vm.check_number(&c, 2)?;
-    change_health(vm, me, -n);
+    let after = states_after_arg(vm, &c, 3);
+    change_health(vm, me, -n, after);
     Ok(vec![])
+}
+
+/// A control's options' `statesAfter` (argument `i`): the health's aura
+/// states told that many seconds later (aurastates.rs).
+fn states_after_arg(vm: &mut Vm, c: &NativeCall, i: usize) -> Option<f64> {
+    match c.arg(i) {
+        Value::Table(t) => {
+            let k = vm.str("statesAfter");
+            crate::aurastates::after_option(vm.heap.table(t).get(k))
+        }
+        _ => None,
+    }
 }
 
 fn control_heal(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
     let n = vm.check_number(&c, 2)?;
-    change_health(vm, me, n);
+    let after = states_after_arg(vm, &c, 3);
+    change_health(vm, me, n, after);
     Ok(vec![])
 }
 
@@ -2083,6 +2141,7 @@ fn control_kill(vm: &mut Vm, c: NativeCall) -> Ret {
     kill_xp(vm, me, &opts, false);
     engine_mut(vm).units.list[me.0].loot = opts.loot.clone();
     died(vm, me, opts.lootable);
+    kill_flags_later(vm, &opts);
     Ok(vec![])
 }
 
@@ -2102,6 +2161,24 @@ pub(crate) struct Kill {
     /// The death told this long after the killing blow (`diesAfter`, as
     /// recorded; else with it).
     pub dies_after: Option<f64>,
+    /// The player's flags told these seconds after the kill.
+    pub flags_after: Option<f64>,
+}
+
+/// The player's flags a moment after its kill, still in combat
+/// (`flagsAfter`; recorded: `combat` 0.125 s, `auradeath` 0.208, `quest`
+/// 0.257 to 0.625, after the target's clearing echoed at the same moment;
+/// what changes unknown).
+fn kill_flags_later(vm: &mut Vm, k: &Kill) {
+    if let Some(after) = k.flags_after {
+        let later = vm.native("killFlags", kill_flags);
+        crate::clock::after_engine(vm, after, later);
+    }
+}
+
+fn kill_flags(vm: &mut Vm, _c: NativeCall) -> Ret {
+    fire_unit(vm, "UNIT_FLAGS", PLAYER, &[]);
+    Ok(vec![])
 }
 
 impl Kill {
@@ -2116,6 +2193,7 @@ impl Kill {
                 school: 1.0,
                 xp_after: None,
                 dies_after: None,
+                flags_after: None,
             });
         };
         let field = |vm: &mut Vm, k: &str| {
@@ -2163,6 +2241,10 @@ impl Kill {
         };
         let echo = field(vm, "echo");
         set_echo(vm, echo);
+        let flags_after = match field(vm, "flagsAfter") {
+            Value::Num(n) => Some(n),
+            _ => None,
+        };
         let xp_after = match field(vm, "xpAfter") {
             Value::Num(n) => Some(n),
             _ => None,
@@ -2174,6 +2256,7 @@ impl Kill {
         Ok(Kill {
             xp_after,
             dies_after,
+            flags_after,
             by,
             lootable,
             xp,
@@ -2488,7 +2571,8 @@ fn control_swing(vm: &mut Vm, c: NativeCall) -> Ret {
         let spent = field(vm, "spent");
         let power = field(vm, "power");
         let kill = field(vm, "kill");
-        return swing_with_spell(vm, victim, amount, &kind, spent, power, kill);
+        let after = crate::aurastates::after_option(field(vm, "statesAfter"));
+        return swing_with_spell(vm, victim, amount, &kind, (spent, power), kill, after);
     }
     if me == PLAYER {
         let speed = match field(vm, "speed") {
@@ -2528,14 +2612,24 @@ fn control_swing(vm: &mut Vm, c: NativeCall) -> Ret {
     if let Value::Num(p) = field(vm, "power") {
         set_power(vm, me, p);
     }
+    // The victim's health; its aura states told before its power, or
+    // `statesAfter` seconds later (aurastates.rs).
+    let states_after = crate::aurastates::after_option(field(vm, "statesAfter"));
+    let wounded = lands && amount > 0.0;
+    if wounded {
+        let before = crate::aurastates::health_states(vm, victim);
+        set_health_quietly(vm, victim, -amount);
+        crate::aurastates::health_changed(vm, victim, before, states_after);
+    }
     if let Value::Num(p) = field(vm, "victimPower") {
         set_power(vm, victim, p);
     }
-    if lands && amount > 0.0 {
-        change_health(vm, victim, -amount);
+    if wounded {
+        fire_unit(vm, "UNIT_HEALTH", victim, &[]);
     }
     if victim == PLAYER && matches!(kind.as_str(), "DODGE" | "PARRY" | "BLOCK") {
-        avoided(vm);
+        let length = number_field(field(vm, "stateFor"));
+        avoided(vm, states_after, length);
     }
     // Its text's indicator (`indicator`: "CRITICAL", "GLANCING"; recorded,
     // the quest's).
@@ -2569,7 +2663,7 @@ fn control_swing(vm: &mut Vm, c: NativeCall) -> Ret {
 /// (`ACTIONBAR_UPDATE_COOLDOWN`, `BAG_UPDATE_COOLDOWN`,
 /// `SPELL_UPDATE_COOLDOWN(spell)`, `UPDATE_SHAPESHIFT_COOLDOWN`; recorded
 /// at each of the quest scenario's).
-fn avoided(vm: &mut Vm) {
+fn avoided(vm: &mut Vm, states_after: Option<f64>, length: Option<f64>) {
     let spells: Vec<(i64, wowlua_vm::TableRef)> = engine(vm)
         .world
         .data
@@ -2596,6 +2690,7 @@ fn avoided(vm: &mut Vm) {
             ],
         );
         fire(vm, "UPDATE_SHAPESHIFT_COOLDOWN", &[]);
+        crate::aurastates::defended(vm, states_after, length);
     }
 }
 
@@ -2620,6 +2715,7 @@ fn swing_kill(vm: &mut Vm, me: UnitId, victim: UnitId, k: Kill, power: Value) ->
     }
     engine_mut(vm).units.list[victim.0].loot = k.loot.clone();
     died(vm, victim, k.lootable);
+    kill_flags_later(vm, &k);
     kill_xp(vm, victim, &k, true);
     if crate::actions::usability_changed(vm) {
         fire(vm, "ACTIONBAR_UPDATE_USABLE", &[]);
@@ -2650,9 +2746,9 @@ fn swing_with_spell(
     victim: UnitId,
     amount: f64,
     kind: &str,
-    spent: Value,
-    power: Value,
+    (spent, power): (Value, Value),
     kill: Value,
+    states_after: Option<f64>,
 ) -> Ret {
     let kill = match kill {
         Value::Table(_) => Some(Kill::of(vm, kill)?),
@@ -2680,6 +2776,7 @@ fn swing_with_spell(
     let lands = kind == "WOUND" || kind == "BLOCK" || kind == "ABSORB";
     let dealt = if lands { amount } else { 0.0 };
     crate::damagemeter::damage(vm, Some(PLAYER), victim, dealt, spell);
+    let states = crate::aurastates::health_states(vm, victim);
     {
         let u = &mut engine_mut(vm).units.list[victim.0];
         u.health = (u.health - dealt).max(0.0);
@@ -2705,6 +2802,7 @@ fn swing_with_spell(
     if let Value::Num(p) = power {
         set_power_quietly(vm, PLAYER, p);
     }
+    crate::aurastates::health_changed(vm, victim, states, states_after);
     if let Some(k) = &kill {
         // The experience with the blow, or its recorded delay after.
         match (k.xp, k.xp_after) {
@@ -2730,6 +2828,7 @@ fn swing_with_spell(
             }
             None => died(vm, victim, k.lootable),
         }
+        kill_flags_later(vm, k);
     }
     let changed = crate::actions::usability_changed(vm);
     fire(vm, "ACTIONBAR_UPDATE_COOLDOWN", &[]);
@@ -2776,6 +2875,7 @@ fn died_later(vm: &mut Vm, c: NativeCall) -> Ret {
             school: 1.0,
             xp_after: None,
             dies_after: None,
+            flags_after: None,
         };
         kill_xp(vm, victim, &k, true);
     }
@@ -2848,6 +2948,7 @@ fn control_hit(vm: &mut Vm, c: NativeCall) -> Ret {
         }
     }
     let lands = kind == "WOUND" || kind == "BLOCK" || kind == "ABSORB";
+    let states = crate::aurastates::health_states(vm, victim);
     if lands && amount > 0.0 {
         let u = &mut engine_mut(vm).units.list[victim.0];
         u.health = (u.health - amount).clamp(0.0, u.health_max);
@@ -2875,6 +2976,8 @@ fn control_hit(vm: &mut Vm, c: NativeCall) -> Ret {
         crate::auras::fire_updated(vm, victim, id);
     }
     let any = triggered_cooldowns(vm, cooldowns);
+    let after = crate::aurastates::after_option(field(vm, "statesAfter"));
+    crate::aurastates::health_changed(vm, victim, states, after);
     if (lands && amount > 0.0) || heals {
         fire_unit(vm, "UNIT_HEALTH", victim, &[]);
     }
