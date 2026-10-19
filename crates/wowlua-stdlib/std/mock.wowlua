@@ -782,7 +782,9 @@ export function defineGossip(npc: MockUnit, data: table)
 end
 
 --- An NPC's trainer: `{ greeting, services = { { spell, name, icon, level,
---- rank, cost, skillLine, skillLineIndex, rankData } } }`. Buying a
+--- rank, cost, skillLine, skillLineIndex, rankData } } }`, or `{ class =
+--- "WARRIOR" }`: the class's services as the client listed them (the
+--- NPC's own list if recorded), each one's state the character's. Buying a
 --- service teaches the spell (onto the action bar's first empty slot).
 export function defineTrainer(npc: MockUnit, data: table)
     engine().defineTrainer(npc, data)

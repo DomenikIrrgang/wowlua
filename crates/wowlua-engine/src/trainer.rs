@@ -15,13 +15,29 @@
 //! the list updated, the spells changed; the money's packet after it.
 //! `CloseTrainer()`: `TRAINER_CLOSED()` and the interaction's hides.
 //!
-//! Unverified: a profession trainer, service filters, a spell bought
-//! without room on the bar (none pushed?), the spellbook's new entry (not
-//! kept), the money packet's delay beyond this recording.
+//! `defineTrainer(npc, { class = "WARRIOR" })`: the class's services as
+//! the client listed them (`/stdtest engine trainer`,
+//! `data/camelot-trainers.txt`: the NPC's own list if recorded, a
+//! starting zone's teaching fewer, else the class's), each one's state the
+//! character's: "used" once known (a lower rank too, once a higher one
+//! is), "available" from its level with the abilities it needs known,
+//! else "unavailable". The list is the services the type filters let
+//! through (available and unavailable on, used off: recorded) as the
+//! window opened or a filter changed; a service learned meanwhile stays.
+//!
+//! Unverified: a profession trainer, the filters' list kept until the
+//! window reopens, a spell bought without room on the bar (none pushed?),
+//! the spellbook's new entry (not kept), the money packet's delay beyond
+//! this recording, the class's spellbook tabs (Classic's), the recorded
+//! services the probing character knew (their level 0: unknown).
+
+use std::collections::HashMap;
+use std::sync::OnceLock;
 
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, NativeFn, TableRef, Value, Vm};
 
+use crate::traits::Rv;
 use crate::units::{self, UnitId};
 use crate::{engine, engine_mut, widgets};
 
@@ -44,7 +60,19 @@ pub struct Trainers {
     pub ranks_loaded: bool,
     /// The spells learned here.
     pub learned: std::collections::BTreeSet<i64>,
+    /// The type filters off ("available", "unavailable", "used"; recorded:
+    /// only "used").
+    pub filtered_out: Option<std::collections::BTreeSet<&'static str>>,
+    /// The open trainer's recorded data (a class trainer's), if any.
+    pub key: Option<&'static str>,
+    /// Its services shown (their indices in its data), as the window
+    /// opened or a filter changed.
+    pub shown: Vec<usize>,
 }
+
+/// The type filters off by default (recorded: every class trainer's).
+const FILTERED_OUT: &[&str] = &["used"];
+const FILTERS: [&str; 3] = ["available", "unavailable", "used"];
 
 #[derive(Clone, Debug)]
 struct Service {
@@ -58,6 +86,131 @@ struct Service {
     line_index: f64,
     /// The tooltip data its rank waits for (`rankData`), if any.
     rank_data: Option<f64>,
+    /// A recorded trainer's: its key and index in the data.
+    recorded: Option<(&'static str, usize)>,
+    /// The abilities it needs (`"Thunder Clap (Rank 1)"`).
+    abilities: Vec<String>,
+}
+
+/// The recorded trainers' answers, by key and call.
+fn data() -> &'static HashMap<(&'static str, &'static str), &'static str> {
+    static DATA: OnceLock<HashMap<(&'static str, &'static str), &'static str>> = OnceLock::new();
+    DATA.get_or_init(|| {
+        include_str!("../data/camelot-trainers.txt")
+            .lines()
+            .filter(|l| !l.starts_with('#'))
+            .filter_map(|l| {
+                let (key, rest) = l.split_once('\t')?;
+                let (call, answer) = rest.split_once('\t')?;
+                Some((
+                    (key, crate::recorded::unescape(call)),
+                    crate::recorded::unescape(answer),
+                ))
+            })
+            .collect()
+    })
+}
+
+fn recorded(key: &str, call: &str) -> Vec<Rv> {
+    data()
+        .get(&(key, call))
+        .map(|a| Rv::answer(a))
+        .unwrap_or_default()
+}
+
+/// A recorded trainer's service, as the data has it.
+#[derive(Clone, Debug)]
+struct Listed {
+    spell: i64,
+    name: String,
+    icon: f64,
+    level: f64,
+    rank: Option<String>,
+    cost: f64,
+    line: String,
+    abilities: Vec<String>,
+}
+
+/// A recorded trainer's services, in its order.
+fn listed(key: &'static str) -> &'static [Listed] {
+    static LISTS: OnceLock<std::sync::Mutex<HashMap<&'static str, &'static [Listed]>>> =
+        OnceLock::new();
+    let lists = LISTS.get_or_init(Default::default);
+    let mut lists = lists.lock().unwrap_or_else(|e| e.into_inner());
+    lists.entry(key).or_insert_with(|| {
+        let n = match recorded(key, "GetNumTrainerServices()").first() {
+            Some(Rv::Num(n)) => *n as usize,
+            _ => 0,
+        };
+        let numf = |v: Option<&Rv>| match v {
+            Some(Rv::Num(n)) => *n,
+            _ => 0.0,
+        };
+        let text = |v: Option<&Rv>| match v {
+            Some(Rv::Str(s)) => Some(s.clone()),
+            _ => None,
+        };
+        let list: Vec<Listed> = (1..=n)
+            .map(|i| {
+                let info = recorded(key, &format!("GetTrainerServiceInfo({i})"));
+                let tip = recorded(key, &format!("C_TooltipInfo.GetTrainerService({i})"));
+                let abilities =
+                    numf(recorded(key, &format!("GetTrainerServiceNumAbilityReq({i})")).first())
+                        as usize;
+                Listed {
+                    spell: numf(tip.first().and_then(|t| t.get("id"))) as i64,
+                    name: text(info.first()).unwrap_or_default(),
+                    icon: numf(info.get(2)),
+                    level: numf(recorded(key, &format!("GetTrainerServiceLevelReq({i})")).first()),
+                    rank: text(info.get(4)),
+                    cost: numf(recorded(key, &format!("GetTrainerServiceCost({i})")).first()),
+                    line: text(recorded(key, &format!("GetTrainerServiceSkillLine({i})")).first())
+                        .unwrap_or_default(),
+                    abilities: (1..=abilities)
+                        .filter_map(|j| {
+                            text(
+                                recorded(key, &format!("GetTrainerServiceAbilityReq({i}, {j})"))
+                                    .first(),
+                            )
+                        })
+                        .collect(),
+                }
+            })
+            .collect();
+        Box::leak(list.into_boxed_slice())
+    })
+}
+
+/// The data's key for a class trainer: the NPC's own list, else the
+/// class's.
+fn key_for(vm: &Vm, npc: UnitId, class: &str) -> Option<&'static str> {
+    let guid = &engine(vm).units.list[npc.0].guid;
+    let own = guid.split('-').nth(5).map(|id| format!("{class}-{id}"));
+    let keys = || data().keys().map(|(k, _)| *k);
+    own.and_then(|own| keys().find(|k| *k == own))
+        .or_else(|| keys().find(|k| *k == class))
+}
+
+/// The class's spellbook tabs after General, by skill line (Classic's;
+/// unverified: Forever's beyond the warrior's Fury 3).
+const TABS: &[(&str, [&str; 3])] = &[
+    ("WARRIOR", ["Arms", "Fury", "Protection"]),
+    ("DRUID", ["Balance", "Feral Combat", "Restoration"]),
+    ("HUNTER", ["Beast Mastery", "Marksmanship", "Survival"]),
+    ("MAGE", ["Arcane", "Fire", "Frost"]),
+    ("PALADIN", ["Holy", "Protection", "Retribution"]),
+    ("PRIEST", ["Discipline", "Holy", "Shadow Magic"]),
+    ("ROGUE", ["Assassination", "Combat", "Subtlety"]),
+    ("SHAMAN", ["Elemental Combat", "Enhancement", "Restoration"]),
+    ("WARLOCK", ["Affliction", "Demonology", "Destruction"]),
+];
+
+fn tab_of(key: &str, line: &str) -> f64 {
+    let class = key.split('-').next().unwrap_or(key);
+    TABS.iter()
+        .find(|(c, _)| *c == class)
+        .and_then(|(_, tabs)| tabs.iter().position(|t| *t == line))
+        .map_or(1.0, |i| i as f64 + 2.0)
 }
 
 fn fire(vm: &mut Vm, e: &str, args: &[Value]) {
@@ -77,7 +230,8 @@ fn num(v: Value) -> Option<f64> {
 }
 
 /// `defineTrainer(npc, { greeting, services = { { spell, name, icon,
-/// level, rank, cost, skillLine, skillLineIndex } } })`.
+/// level, rank, cost, skillLine, skillLineIndex } } })`, or `{ class }`:
+/// the class's recorded services.
 pub fn control_define(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(npc) = units::handle_of(vm, c.arg(1)) else {
         return Err(vm.error("defineTrainer: an NPC expected"));
@@ -95,13 +249,23 @@ pub fn open(vm: &mut Vm, npc: UnitId) {
     if !engine(vm).world.trainers.defined.contains_key(&npc.0) {
         return;
     }
+    let data = engine(vm).world.trainers.defined[&npc.0];
+    let key = match field(vm, data, "class") {
+        Value::Str(c) => {
+            let class = String::from_utf8_lossy(vm.str_bytes(c)).to_uppercase();
+            key_for(vm, npc, &class)
+        }
+        _ => None,
+    };
     {
         let t = &mut engine_mut(vm).world.trainers;
         t.open = Some(npc);
         t.listed = false;
         t.selected = None;
         t.ranks_loaded = false;
+        t.key = key;
     }
+    refilter(vm);
     engine_mut(vm).units.npc = Some(npc);
     fire(vm, "TRAINER_SHOW", &[]);
     fire(
@@ -133,10 +297,147 @@ fn ranks_loaded(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// A recorded trainer's list: the services the filters let through.
+fn refilter(vm: &mut Vm) {
+    let Some(key) = engine(vm).world.trainers.key else {
+        return;
+    };
+    let shown: Vec<usize> = listed(key)
+        .iter()
+        .enumerate()
+        .filter(|(_, l)| {
+            let state = state_of(vm, key, l);
+            !filtered_out(vm).contains(&state)
+        })
+        .map(|(i, _)| i)
+        .collect();
+    engine_mut(vm).world.trainers.shown = shown;
+}
+
+fn filtered_out(vm: &Vm) -> std::collections::BTreeSet<&'static str> {
+    engine(vm)
+        .world
+        .trainers
+        .filtered_out
+        .clone()
+        .unwrap_or_else(|| FILTERED_OUT.iter().copied().collect())
+}
+
+/// Whether the character knows a recorded service's spell (`has`: the
+/// spells it has): it, or a higher rank of it (unverified: the spellbook
+/// keeping lower ranks).
+fn knows(key: &'static str, l: &Listed, has: &dyn Fn(i64) -> bool) -> bool {
+    let rank = |r: &Option<String>| {
+        r.as_deref()
+            .and_then(|r| r.strip_prefix("Rank "))
+            .and_then(|n| n.parse::<u32>().ok())
+    };
+    has(l.spell)
+        || rank(&l.rank).is_some_and(|mine| {
+            listed(key).iter().any(|o| {
+                o.name == l.name && rank(&o.rank).is_some_and(|r| r > mine) && has(o.spell)
+            })
+        })
+}
+
+/// Abilities by name: what the character knows outside the trainer's
+/// list (a starting spell, a quest's).
+type Named<'a> = &'a dyn Fn(&str) -> bool;
+
+/// An ability a service needs (`"Thunder Clap (Rank 1)"`, `"Parry"`),
+/// known: the trainer's service of it, else by name (`named`).
+fn ability_known(
+    key: &'static str,
+    ability: &str,
+    has: &dyn Fn(i64) -> bool,
+    named: Named,
+) -> bool {
+    let mut taught = false;
+    let known = listed(key).iter().any(|o| {
+        let full = match &o.rank {
+            Some(r) if !r.is_empty() => format!("{} ({r})", o.name),
+            _ => o.name.clone(),
+        };
+        let this = full == ability || o.name == ability;
+        taught |= this;
+        this && knows(key, o, has)
+    });
+    known || (!taught && named(ability))
+}
+
+/// A service's state for a character of `level` having the spells `has`.
+fn state_for(
+    key: &'static str,
+    l: &Listed,
+    level: f64,
+    has: &dyn Fn(i64) -> bool,
+    named: Named,
+) -> &'static str {
+    if knows(key, l, has) {
+        "used"
+    } else if level >= l.level
+        && l.abilities
+            .iter()
+            .all(|a| ability_known(key, a, has, named))
+    {
+        "available"
+    } else {
+        "unavailable"
+    }
+}
+
+/// A service's state for the player: its level, its spells (learned, in
+/// the spellbook).
+fn state_of(vm: &Vm, key: &'static str, l: &Listed) -> &'static str {
+    let has = |spell: i64| {
+        engine(vm).world.trainers.learned.contains(&spell)
+            || crate::stats::spellbook_slot_of(vm, spell as f64).is_some()
+    };
+    let named = |ability: &str| crate::stats::spellbook_has_named(vm, ability);
+    let level = engine(vm).units.list[units::PLAYER.0].level;
+    state_for(key, l, level, &has, &named)
+}
+
+/// An ability a service needs, known to the player.
+fn player_knows_ability(vm: &Vm, key: &'static str, ability: &str) -> bool {
+    let has = |spell: i64| {
+        engine(vm).world.trainers.learned.contains(&spell)
+            || crate::stats::spellbook_slot_of(vm, spell as f64).is_some()
+    };
+    let named = |ability: &str| crate::stats::spellbook_has_named(vm, ability);
+    ability_known(key, ability, &has, &named)
+}
+
 fn services(vm: &mut Vm) -> Vec<Service> {
     let t = &engine(vm).world.trainers;
     if !t.listed {
         return vec![];
+    }
+    if let Some(key) = t.key {
+        let shown = t.shown.clone();
+        let list = listed(key);
+        return shown
+            .into_iter()
+            .map(|i| {
+                let l = &list[i];
+                Service {
+                    spell: l.spell,
+                    name: vm.str(&l.name),
+                    icon: Value::Num(l.icon),
+                    level: l.level,
+                    rank: match &l.rank {
+                        Some(r) => vm.str(r),
+                        None => Value::Nil,
+                    },
+                    cost: l.cost,
+                    skill_line: vm.str(&l.line),
+                    line_index: tab_of(key, &l.line),
+                    rank_data: None,
+                    recorded: Some((key, i + 1)),
+                    abilities: l.abilities.clone(),
+                }
+            })
+            .collect();
     }
     let Some(data) = t.open.and_then(|n| t.defined.get(&n.0).copied()) else {
         return vec![];
@@ -160,6 +461,8 @@ fn services(vm: &mut Vm) -> Vec<Service> {
             skill_line: field(vm, s, "skillLine"),
             line_index: num(field(vm, s, "skillLineIndex")).unwrap_or(1.0),
             rank_data: num(field(vm, s, "rankData")),
+            recorded: None,
+            abilities: Vec::new(),
         });
     }
     out
@@ -172,6 +475,9 @@ fn service(vm: &mut Vm, c: &NativeCall) -> Option<(usize, Service)> {
 }
 
 fn kind(vm: &Vm, s: &Service) -> &'static str {
+    if let Some((key, i)) = s.recorded {
+        return state_of(vm, key, &listed(key)[i - 1]);
+    }
     if engine(vm).world.trainers.learned.contains(&s.spell) {
         "used"
     } else if engine(vm).units.list[units::PLAYER.0].level >= s.level {
@@ -226,26 +532,130 @@ fn get_trainer_service_skill_line(vm: &mut Vm, c: NativeCall) -> Ret {
 
 fn get_trainer_greeting_text(vm: &mut Vm, _c: NativeCall) -> Ret {
     let t = &engine(vm).world.trainers;
+    let key = t.key;
     let greeting = t
         .open
         .and_then(|n| t.defined.get(&n.0).copied())
         .map(|d| field(vm, d, "greeting"));
-    Ok(vec![match greeting {
-        Some(Value::Str(s)) => Value::Str(s),
-        _ => vm.str(""),
-    }])
+    Ok(match (greeting, key) {
+        (Some(Value::Str(s)), _) => vec![Value::Str(s)],
+        (_, Some(key)) => answer_values(vm, key, "GetTrainerGreetingText()"),
+        _ => vec![vm.str("")],
+    })
+}
+
+/// A recorded answer as values (its colors Blizzard's, `CreateColor`'s).
+fn answer_values(vm: &mut Vm, key: &str, call: &str) -> Vec<Value> {
+    match data().get(&(key, call)) {
+        Some(answer) => crate::recorded::parse_answer(vm, answer),
+        None => Vec::new(),
+    }
+}
+
+/// A recorded service's answer to `name(i, …)` as its data has it; an
+/// explicit service's `otherwise`.
+fn per_service(
+    vm: &mut Vm,
+    c: &NativeCall,
+    name: &str,
+    otherwise: fn(&mut Vm, &Service) -> Vec<Value>,
+) -> Ret {
+    let Some((_, s)) = service(vm, c) else {
+        return Ok(vec![]);
+    };
+    match s.recorded {
+        Some((key, i)) => Ok(answer_values(vm, key, &format!("{name}({i})"))),
+        None => Ok(otherwise(vm, &s)),
+    }
+}
+
+fn get_trainer_service_description(vm: &mut Vm, c: NativeCall) -> Ret {
+    per_service(vm, &c, "GetTrainerServiceDescription", |_, _| vec![])
+}
+
+fn get_trainer_service_icon(vm: &mut Vm, c: NativeCall) -> Ret {
+    per_service(vm, &c, "GetTrainerServiceIcon", |_, s| vec![s.icon])
+}
+
+fn get_trainer_service_item_link(vm: &mut Vm, c: NativeCall) -> Ret {
+    per_service(vm, &c, "GetTrainerServiceItemLink", |_, _| vec![])
+}
+
+fn get_trainer_service_skill_req(vm: &mut Vm, c: NativeCall) -> Ret {
+    per_service(vm, &c, "GetTrainerServiceSkillReq", |_, _| vec![])
+}
+
+fn get_trainer_service_tooltip(vm: &mut Vm, c: NativeCall) -> Ret {
+    per_service(vm, &c, "C_TooltipInfo.GetTrainerService", |_, _| vec![])
+}
+
+/// `GetTrainerServiceLevelReq(i)`: the level it needs.
+fn get_trainer_service_level_req(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some((_, s)) = service(vm, &c) else {
+        return Ok(vec![]);
+    };
+    Ok(vec![Value::Num(s.level)])
+}
+
+fn get_trainer_service_num_ability_req(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some((_, s)) = service(vm, &c) else {
+        return Ok(vec![Value::Num(0.0)]);
+    };
+    Ok(vec![Value::Num(s.abilities.len() as f64)])
+}
+
+/// `GetTrainerServiceAbilityReq(i, j)`: the ability's name, whether it is
+/// known.
+fn get_trainer_service_ability_req(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some((_, s)) = service(vm, &c) else {
+        return Ok(vec![]);
+    };
+    let (Some((key, _)), Value::Num(j)) = (s.recorded, vm.hidden(c.arg(2))) else {
+        return Ok(vec![]);
+    };
+    let Some(ability) = s.abilities.get((j as usize).wrapping_sub(1)) else {
+        return Ok(vec![]);
+    };
+    let known = player_knows_ability(vm, key, ability);
+    Ok(vec![vm.str(ability), Value::Bool(known)])
+}
+
+/// `GetTrainerServiceTypeFilter(type)`: whether it is shown.
+fn get_trainer_service_type_filter(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Str(t) = vm.hidden(c.arg(1)) else {
+        return Ok(vec![Value::Bool(false)]);
+    };
+    let t = String::from_utf8_lossy(vm.str_bytes(t)).into_owned();
+    Ok(vec![Value::Bool(!filtered_out(vm).contains(t.as_str()))])
+}
+
+/// `SetTrainerServiceTypeFilter(type, on)`: the list again, its update
+/// (unverified).
+fn set_trainer_service_type_filter(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Str(t) = vm.hidden(c.arg(1)) else {
+        return Ok(vec![]);
+    };
+    let t = String::from_utf8_lossy(vm.str_bytes(t)).into_owned();
+    let Some(t) = FILTERS.iter().copied().find(|f| *f == t) else {
+        return Ok(vec![]);
+    };
+    let on = vm.hidden(c.arg(2)).truthy();
+    let mut off = filtered_out(vm);
+    if on {
+        off.remove(t);
+    } else {
+        off.insert(t);
+    }
+    engine_mut(vm).world.trainers.filtered_out = Some(off);
+    if engine(vm).world.trainers.open.is_some() {
+        refilter(vm);
+        fire(vm, "TRAINER_UPDATE", &[]);
+    }
+    Ok(vec![])
 }
 
 fn no(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(false)])
-}
-
-fn yes(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(true)])
-}
-
-fn zero(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(0.0)])
 }
 
 fn nothing(_vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -407,14 +817,120 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("SelectTrainerService", select_trainer_service),
         ("BuyTrainerService", buy_trainer_service),
         ("CloseTrainer", close_trainer),
-        // What a class trainer's services have (unverified: not
-        // recorded): no skill or ability required, no step, every filter
-        // on.
-        ("GetTrainerServiceSkillReq", nothing),
-        ("GetTrainerServiceNumAbilityReq", zero),
-        ("GetTrainerServiceAbilityReq", nothing),
+        // A class trainer's: a recorded one's as its data has them; an
+        // explicit one's (unverified) no skill or ability required, no
+        // step.
+        ("GetTrainerServiceSkillReq", get_trainer_service_skill_req),
+        (
+            "GetTrainerServiceNumAbilityReq",
+            get_trainer_service_num_ability_req,
+        ),
+        (
+            "GetTrainerServiceAbilityReq",
+            get_trainer_service_ability_req,
+        ),
         ("GetTrainerServiceStepIndex", nothing),
-        ("GetTrainerServiceTypeFilter", yes),
+        (
+            "GetTrainerServiceTypeFilter",
+            get_trainer_service_type_filter,
+        ),
+        (
+            "SetTrainerServiceTypeFilter",
+            set_trainer_service_type_filter,
+        ),
+        (
+            "GetTrainerServiceDescription",
+            get_trainer_service_description,
+        ),
+        ("GetTrainerServiceIcon", get_trainer_service_icon),
+        ("GetTrainerServiceItemLink", get_trainer_service_item_link),
+        ("GetTrainerServiceLevelReq", get_trainer_service_level_req),
+        (
+            "C_TooltipInfo.GetTrainerService",
+            get_trainer_service_tooltip,
+        ),
         ("GetTrainerTradeskillRankValues", nothing),
     ]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Every recorded class trainer's services again from the character:
+    /// each one's state, level and needed abilities as listed, the
+    /// character knowing the services listed used, at its level (recorded,
+    /// else the one that fits).
+    #[test]
+    fn the_recorded_services_follow_from_the_character() {
+        let mut keys: Vec<&'static str> = data().keys().map(|(k, _)| *k).collect();
+        keys.sort_unstable();
+        keys.dedup();
+        assert!(!keys.is_empty());
+        let mut wrong = Vec::new();
+        for key in keys {
+            let list = listed(key);
+            let theirs: Vec<(String, Vec<(String, bool)>)> = (1..=list.len())
+                .map(|i| {
+                    let info = recorded(key, &format!("GetTrainerServiceInfo({i})"));
+                    let state = match info.get(1) {
+                        Some(Rv::Str(s)) => s.clone(),
+                        _ => String::new(),
+                    };
+                    let abilities = (1..=list[i - 1].abilities.len())
+                        .map(|j| {
+                            match recorded(key, &format!("GetTrainerServiceAbilityReq({i}, {j})"))
+                                .as_slice()
+                            {
+                                [Rv::Str(n), Rv::Bool(met)] => (n.clone(), *met),
+                                _ => (String::new(), false),
+                            }
+                        })
+                        .collect();
+                    (state, abilities)
+                })
+                .collect();
+            let used: Vec<i64> = list
+                .iter()
+                .zip(&theirs)
+                .filter(|(_, (s, _))| s == "used")
+                .map(|(l, _)| l.spell)
+                .collect();
+            let has = |spell: i64| used.contains(&spell);
+            // Abilities outside the list (the spellbook's): as recorded.
+            let named = |ability: &str| {
+                theirs
+                    .iter()
+                    .flat_map(|(_, a)| a)
+                    .any(|(n, met)| n == ability && *met)
+            };
+            let ours = |level: f64| -> Vec<(String, Vec<(String, bool)>)> {
+                list.iter()
+                    .map(|l| {
+                        (
+                            state_for(key, l, level, &has, &named).to_string(),
+                            l.abilities
+                                .iter()
+                                .map(|a| (a.clone(), ability_known(key, a, &has, &named)))
+                                .collect(),
+                        )
+                    })
+                    .collect()
+            };
+            let misses = |l: f64| ours(l).iter().zip(&theirs).filter(|(o, t)| o != t).count();
+            let level = match recorded(key, r#"UnitLevel("player")"#).first() {
+                Some(Rv::Num(n)) => *n,
+                _ => (1..=60)
+                    .map(f64::from)
+                    .min_by_key(|l| misses(*l))
+                    .unwrap_or(1.0),
+            };
+            for (i, (o, t)) in ours(level).iter().zip(&theirs).enumerate() {
+                if o != t {
+                    wrong.push(format!("{key} {} at {level}: {o:?}, recorded {t:?}", i + 1));
+                }
+            }
+        }
+        assert!(wrong.is_empty(), "{}", wrong.join("\n"));
+    }
 }

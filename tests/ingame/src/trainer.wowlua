@@ -3,10 +3,11 @@
 -- back): name, rank, state, cost, level and skill asked, the abilities
 -- needed, icon, description, the spell it teaches (its tooltip's) and,
 -- once loaded, the spells' info, description, cooldown and cost; into
--- StdTestState.engineTrainerAnswers[key][call] (the class's for a class
--- trainer, the profession's for another) in the answers probe's form
--- (`cargo xtask ingest` writes each one's fixture). The services' states
--- are the character's: its level, its spells.
+-- StdTestState.engineTrainerAnswers[key][call] (the class's and the
+-- trainer NPC's for a class trainer, `WARRIOR-911`; the profession's for
+-- another) in the answers probe's form (`cargo xtask ingest` writes each
+-- one's fixture). The services' states are the character's: its level
+-- (recorded), its spells (each taught one's known or not, recorded).
 import state from "/state"
 import say from "/harness"
 
@@ -77,6 +78,8 @@ const BY_SPELL: string[] = {
     "C_Spell.GetSpellCharges",
     "C_Spell.IsSpellPassive",
     "GetSpellBaseCooldown",
+    "C_SpellBook.IsSpellKnown",
+    "IsPlayerSpell",
 }
 
 export function trainerProbe()
@@ -124,6 +127,7 @@ export function trainerProbe()
     for _, call in ipairs(PLAIN) do
         ask(`{call}()`)
     end
+    ask(`UnitLevel("player")`, "player")
     const spells: number[] = {}
     const seenSpell: { [number]: boolean } = {}
     const n = G.GetNumTrainerServices() ?? 0
@@ -145,9 +149,12 @@ export function trainerProbe()
     for _, f in ipairs(filters) do
         G.SetTrainerServiceTypeFilter(f, before[f])
     end
-    -- A class trainer's services are the class's; another's its own.
+    -- A class trainer's services are the class's and the NPC's (a
+    -- starting zone's teaches fewer); another's its own.
     local _, class = UnitClass("player")
-    local key = class
+    const npc = UnitGUID("npc")
+    const npcID = type(npc) == "string" and not issecretvalue(npc) and npc:match("^%a+%-%d+%-%d+%-%d+%-%d+%-(%d+)") or "unknown"
+    local key = `{class}-{npcID}`
     if G.IsTradeskillTrainer() then
         key = `trade:{G.GetTrainerServiceSkillLine(1) or "unknown"}`
     end

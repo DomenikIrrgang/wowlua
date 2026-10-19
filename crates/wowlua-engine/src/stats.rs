@@ -951,6 +951,25 @@ pub fn gain_xp(vm: &mut Vm, amount: f64) {
     units::fire_unit(vm, "PLAYER_XP_UPDATE", units::PLAYER, &[]);
 }
 
+/// Whether the spellbook has an ability by its name (`"Fireball (Rank
+/// 1)"`: its name and subtext; `"Parry"`: its name).
+pub fn spellbook_has_named(vm: &Vm, ability: &str) -> bool {
+    let Some(Entry::ByIndex(names)) = engine(vm).world.character.stats.get("spellBookItemName")
+    else {
+        return false;
+    };
+    names.values().any(|n| match n.as_slice() {
+        [Answer::Str(name), rest @ ..] => {
+            let sub = match rest.first() {
+                Some(Answer::Str(s)) if !s.is_empty() => Some(s.as_str()),
+                _ => None,
+            };
+            ability == name || sub.is_some_and(|sub| ability == format!("{name} ({sub})"))
+        }
+        _ => false,
+    })
+}
+
 /// A skill line's rank (`C_SkillInfo.GetSkillLineInfo`'s entry with that
 /// `skillID`).
 pub fn skill_rank(vm: &Vm, skill: i64) -> Option<f64> {

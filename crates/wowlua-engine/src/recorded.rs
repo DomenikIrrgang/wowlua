@@ -175,7 +175,7 @@ pub(crate) fn split_top(text: &str, sep: char) -> Vec<&str> {
 
 /// An answer's values: `n: v1, v2, …` (a string may hold ", ": values
 /// start with their type).
-fn parse_answer(vm: &mut Vm, answer: &str) -> Vec<Value> {
+pub(crate) fn parse_answer(vm: &mut Vm, answer: &str) -> Vec<Value> {
     let Some((count, rest)) = answer.split_once(": ") else {
         return Vec::new();
     };
