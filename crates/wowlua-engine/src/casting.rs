@@ -117,6 +117,59 @@ fn sent(vm: &mut Vm, unit: UnitId, guid: Value, spell_id: f64, on: Option<UnitId
         unit,
         &[target, guid, Value::Num(spell_id)],
     );
+    slot_changes(vm, spell_id);
+}
+
+/// A spell's slots told changed as it is sent (its data's `slotChanges`:
+/// the seconds after, one per time; recorded: Seal of Fury's slot twice at
+/// once, Consecration's at once and 7.937 s later; unverified: which
+/// spells, and why).
+fn slot_changes(vm: &mut Vm, spell_id: f64) {
+    let Value::Table(t) = spell_field(vm, spell_id, "slotChanges") else {
+        return;
+    };
+    let n = vm.heap.table(t).border();
+    let times: Vec<f64> = (1..=n)
+        .filter_map(|i| match vm.heap.table(t).get(Value::Num(i as f64)) {
+            Value::Num(x) => Some(x),
+            _ => None,
+        })
+        .collect();
+    for after in times {
+        if after <= 0.0 {
+            slots_changed(vm, spell_id);
+        } else {
+            let later = vm.native_with(
+                "spellSlotsChanged",
+                slots_changed_later,
+                vec![Value::Num(spell_id)],
+            );
+            crate::clock::after_engine(vm, after, later);
+        }
+    }
+}
+
+fn slots_changed_later(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Value::Num(id) = c.upvals[0] {
+        slots_changed(vm, id);
+    }
+    Ok(vec![])
+}
+
+/// `ACTIONBAR_SLOT_CHANGED(slot)` for each slot holding the spell.
+fn slots_changed(vm: &mut Vm, spell_id: f64) {
+    let mut slots: Vec<i64> = engine(vm)
+        .world
+        .character
+        .actions
+        .iter()
+        .filter(|(_, a)| a.kind == "spell" && matches!(a.id, Value::Num(n) if n == spell_id))
+        .map(|(s, _)| *s)
+        .collect();
+    slots.sort_unstable();
+    for s in slots {
+        crate::widgets::fire_event(vm, "ACTIONBAR_SLOT_CHANGED", &[Value::Num(s as f64)]);
+    }
 }
 
 /// A cast event for each of the unit's tokens: another unit's cast GUID
@@ -663,6 +716,29 @@ pub fn cast_guid(vm: &mut Vm, kind: u8, id: f64) -> String {
         c.next
     };
     format!("Cast-{kind}-4621-0-1-{}-{:010X}", id as i64, n)
+}
+
+/// `player:spellFailedQuiet(spellID)`: a spell the server cast for the
+/// player (a proc) failing without a word: `UNIT_SPELLCAST_FAILED_QUIET`
+/// with its own GUID, `CURRENT_SPELL_CAST_CHANGED(true)`,
+/// `ACTIONBAR_UPDATE_STATE()` (recorded: auradeath's 1310927 after the
+/// seal's procs; unverified: what fails it).
+pub fn control_spell_failed_quiet(vm: &mut Vm, c: NativeCall) -> Ret {
+    let me = units::this(vm, &c)?;
+    let id = vm.check_number(&c, 2)?;
+    let g = new_guid(vm, id);
+    let g = vm.str(&g);
+    fire_cast(
+        vm,
+        "UNIT_SPELLCAST_FAILED_QUIET",
+        me,
+        &[g, Value::Num(id), Value::Nil],
+    );
+    if me == units::PLAYER {
+        crate::widgets::fire_event(vm, "CURRENT_SPELL_CAST_CHANGED", &[Value::Bool(true)]);
+        crate::widgets::fire_event(vm, "ACTIONBAR_UPDATE_STATE", &[]);
+    }
+    Ok(vec![])
 }
 
 /// A new cast GUID for the player's spell `id`.

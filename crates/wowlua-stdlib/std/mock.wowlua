@@ -95,6 +95,9 @@ export interface MockUnit
     --- answered by the server 0.4 s later. The player's with no cast yet:
     --- a craft's next cast, asked of the server, given up.
     function interruptCast()
+    --- A spell the server cast for the player (a proc) failing quietly
+    --- (`UNIT_SPELLCAST_FAILED_QUIET`, `CURRENT_SPELL_CAST_CHANGED(true)`).
+    function spellFailedQuiet(spell: number)
     --- The player starts or stops moving (`PLAYER_STARTED_MOVING`,
     --- `PLAYER_STOPPED_MOVING`); meanwhile a spell with a cast time is
     --- refused ("Can't do that while moving").
@@ -870,7 +873,9 @@ end
 --- `outOfCombat`: unusable in combat; `onCast`: a function run as the
 --- cast lands (its damage, kill, auras), before its cooldowns;
 --- `cooldowns = { { spell, a?, b? } }`: the spells its landing tells
---- (else itself). Presses waiting for the server fail if the target dies.
+--- (else itself); `slotChanges = { seconds }`: its slots told changed
+--- (`ACTIONBAR_SLOT_CHANGED`) that long after it is sent. Presses waiting
+--- for the server fail if the target dies.
 export function defineSpell(id: number, data: table)
     engine().defineSpell(id, data)
 end

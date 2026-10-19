@@ -16,17 +16,24 @@ local cat = e.spawnUnit({
 })
 cat:showNameplate()
 -- What each spell does as it lands, and the cooldowns its packet tells
--- (recorded). The seal replaces the one on.
-local seal
+-- (recorded). The seal replaces the one on (the snapshot's first, 37), in
+-- one update.
+local seal = 37
 e.defineSpell(1311656, {
     name = "Seal of Fury", targeted = false,
+    -- Its slot told changed twice as it is sent (recorded).
+    slotChanges = { 0, 0 },
     onCast = function()
-        if seal then player:removeAura(seal) end
-        seal = player:applyAura({ spellId = 1311656, name = "Seal of Fury", icon = 135957, duration = 30, auraInstanceID = not seal and 41 or nil })
+        seal = player:applyAura({
+            spellId = 1311656, name = "Seal of Fury", icon = 135957, duration = 30,
+            auraInstanceID = seal == 37 and 41 or nil, replaces = seal,
+        })
     end,
 })
 -- Each one's cooldown category (recorded with its cooldown events).
-e.defineSpell(26573, { name = "Consecration", targeted = false, category = 932 })
+-- Consecration's slots told changed as it is sent and 7.937 s later
+-- (recorded).
+e.defineSpell(26573, { name = "Consecration", targeted = false, category = 932, slotChanges = { 0, 7.937 } })
 e.defineSpell(853, {
     name = "Hammer of Justice", cooldown = 60, category = 32,
     cooldowns = { { 853, 32, 133 }, { 1324513 }, { 1260198, 0, 0 }, { 1311654, 0, 0 } },
@@ -35,6 +42,9 @@ e.defineSpell(853, {
         player:swing(cat, 40, { speed = 2.6 })
         player:hit(cat, 39, { school = 32 })
         player:hit(cat, 12, { school = 2 })
+        -- An aura on the player with it, secret in the recording: which one
+        -- is unknown (instance 45, gone at 24.275).
+        player:applyAura({ spellId = 0, name = "Unknown", auraInstanceID = 45 })
         cat:applyAura({ spellId = 853, name = "Hammer of Justice", duration = 6, harmful = true, source = player })
     end,
 })
@@ -104,10 +114,11 @@ steps[#steps + 1] = { 10.354, function()
     player:swing(cat, 43, { speed = 2.6 })
     player:hit(cat, 12, { school = 2, aura = consecration, cooldowns = { BURN[1], BURN[2], SEAL } })
 end }
--- Struck, the paladin's Redoubt (its proc's cooldown; its aura).
+-- Struck, the paladin's Redoubt (its proc's cooldown; its aura: not gone
+-- by the recording's end, its duration unrecorded).
 local redoubt
 steps[#steps + 1] = { 11.334, function()
-    redoubt = player:applyAura({ spellId = 20128, name = "Redoubt", duration = 10 })
+    redoubt = player:applyAura({ spellId = 20128, name = "Redoubt" })
 end }
 steps[#steps + 1] = { 12.951, function()
     player:swing(cat, 47, { speed = 2.6 })
@@ -147,6 +158,12 @@ steps[#steps + 1] = { 16.797, function() player:setPower(250) end }
 steps[#steps + 1] = { 22.434, function() player:setPower(305, { frequent = true }) end }
 steps[#steps + 1] = { 22.667, function() player:setPower(310) end }
 steps[#steps + 1] = { 24.708, function() player:setPower(320) end }
+steps[#steps + 1] = { 24.275, function() player:removeAura(45) end }
+-- A proc the server cast failing quietly (1310927; what it is unknown),
+-- after the seal's blows and the drain's heal.
+for _, t in ipairs({ 10.354, 13.102, 15.722 }) do
+    steps[#steps + 1] = { t, function() player:spellFailedQuiet(1310927) end }
+end
 -- The fight over: auto attack off, then out of combat.
 steps[#steps + 1] = { 17.165, function() player:stopAttack() end }
 steps[#steps + 1] = { 17.377, function() player:leaveCombat() end }

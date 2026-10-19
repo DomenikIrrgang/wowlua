@@ -1331,6 +1331,10 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("castSpell", crate::casting::control_cast),
         ("useSpell", crate::casting::control_use_spell),
         ("interruptCast", crate::casting::control_interrupt),
+        (
+            "spellFailedQuiet",
+            crate::casting::control_spell_failed_quiet,
+        ),
         ("setMoving", crate::casting::control_set_moving),
         ("setDistance", crate::character::control_set_distance),
         ("setMoney", crate::character::control_set_money),

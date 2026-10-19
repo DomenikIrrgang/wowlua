@@ -171,8 +171,9 @@ fn fire_update(vm: &mut Vm, id: UnitId, added: Option<&Aura>, removed: &[f64]) {
 
 /// `unit:applyAura({ spellId, name, icon, duration, applications, harmful,
 /// source, dispelName, stealable, boss, raid, points, auraInstanceID,
-/// sourceUnit, expirationTime })`: the aura's instance ID (`auraInstanceID`,
-/// `sourceUnit` and `expirationTime` as a snapshot has them).
+/// sourceUnit, expirationTime, replaces })`: the aura's instance ID
+/// (`auraInstanceID`, `sourceUnit` and `expirationTime` as a snapshot has
+/// them; `replaces`: an aura it takes the place of, in one update).
 pub fn control_apply(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = units::this(vm, &c)?;
     let Value::Table(data) = c.arg(2) else {
@@ -257,8 +258,19 @@ pub fn apply(vm: &mut Vm, me: UnitId, data: TableRef) -> f64 {
             _ => None,
         },
     };
+    // Replacing another (`replaces`: its instance): one update, the new
+    // added and the old removed (recorded: a seal cast again).
+    let mut removed = Vec::new();
+    if let Value::Num(old) = field(vm, data, "replaces") {
+        let auras = &mut engine_mut(vm).units.auras;
+        let before = auras.len();
+        auras.retain(|a| !(a.unit == me && a.instance == old));
+        if auras.len() != before {
+            removed.push(old);
+        }
+    }
     engine_mut(vm).units.auras.push(aura.clone());
-    fire_update(vm, me, Some(&aura), &[]);
+    fire_update(vm, me, Some(&aura), &removed);
     // Gone when it runs out, the server's word a moment later (recorded:
     // a food's aura 0.086 s after its expiration).
     if expiration > now {
