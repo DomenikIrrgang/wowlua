@@ -96,8 +96,14 @@ export interface MockUnit
     --- a craft's next cast, asked of the server, given up.
     function interruptCast()
     --- A spell the server cast for the player (a proc) failing quietly
-    --- (`UNIT_SPELLCAST_FAILED_QUIET`, `CURRENT_SPELL_CAST_CHANGED(true)`).
-    function spellFailedQuiet(spell: number)
+    --- (`UNIT_SPELLCAST_FAILED_QUIET`, `CURRENT_SPELL_CAST_CHANGED(true)`);
+    --- `client`: a press of the player's, by its client cast GUID.
+    function spellFailedQuiet(spell: number, opts: { client?: boolean }?)
+    --- The player's cast of `spell` refused, `error` told
+    --- (`UNIT_SPELLCAST_FAILED`, `UI_ERROR_MESSAGE`): a client error's
+    --- name (`"SPELL_COOLDOWN"`) or a spell failure's (`"TARGETS_DEAD"`);
+    --- by the server, or the client (`client`).
+    function castFailed(spell: number, opts: { error: string, client?: boolean })
     --- The player starts or stops moving (`PLAYER_STARTED_MOVING`,
     --- `PLAYER_STOPPED_MOVING`); meanwhile a spell with a cast time is
     --- refused ("Can't do that while moving").

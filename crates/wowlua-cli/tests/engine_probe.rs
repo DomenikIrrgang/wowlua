@@ -1323,7 +1323,7 @@ fn the_engine_plays_flight_as_the_client_did() {
 
 /// How many of the auradeath scenario's lines the engine plays as the
 /// client did: only ever up.
-const AURADEATH_MATCHED: usize = 1088;
+const AURADEATH_MATCHED: usize = 1249;
 
 /// The auradeath scenario: a fight with a seal, Consecration, a stun, a
 /// Judgement's kill; the stunned cat's death taking its auras.

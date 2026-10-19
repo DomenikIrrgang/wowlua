@@ -165,6 +165,32 @@ fn merge_aura_update(vm: &mut Vm, old: TableRef, new: TableRef) {
     }
 }
 
+/// An aura update's fields secret if auras are restricted at the frame's
+/// end (recorded: Consecration's on the cat in the frame the fight began,
+/// auradeath).
+fn secret_if_restricted(vm: &mut Vm, info: TableRef) {
+    use crate::units;
+    let restricted = units::active(
+        &engine(vm).units,
+        &[
+            units::COMBAT,
+            units::ENCOUNTER,
+            units::CHALLENGE_MODE,
+            units::PVP_MATCH,
+        ],
+    );
+    if !restricted {
+        return;
+    }
+    let fields: Vec<(Value, Value)> = vm.heap.table(info).entries().collect();
+    for (k, v) in fields {
+        if !matches!(v, Value::Secret(_)) {
+            let w = vm.secret_wrap(v);
+            let _ = vm.heap.table_mut(info).set(k, w);
+        }
+    }
+}
+
 /// The frame's end: the events owed, in their names' order (those its
 /// handlers cause after them).
 pub fn flush(vm: &mut Vm) {
@@ -225,6 +251,11 @@ pub fn flush(vm: &mut Vm) {
         // right before the batched events in 59 of 60 frames).
         owed.sort_by_key(|(name, _)| (name != "UNIT_AURA", name.to_ascii_lowercase()));
         for (name, args) in owed {
+            if name == "UNIT_AURA"
+                && let Some(Value::Table(info)) = args.get(1)
+            {
+                secret_if_restricted(vm, *info);
+            }
             widgets::fire_now(vm, &name, &args);
         }
         widgets::keep_as(vm, FIRING, Value::Nil);

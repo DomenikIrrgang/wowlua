@@ -1330,6 +1330,7 @@ fn handle_meta(vm: &mut Vm) -> TableRef {
         ("removeAura", crate::auras::control_remove),
         ("castSpell", crate::casting::control_cast),
         ("useSpell", crate::casting::control_use_spell),
+        ("castFailed", crate::casting::control_cast_failed),
         ("interruptCast", crate::casting::control_interrupt),
         (
             "spellFailedQuiet",
@@ -2532,6 +2533,13 @@ fn control_hit(vm: &mut Vm, c: NativeCall) -> Ret {
         u.health = (u.health - amount).clamp(0.0, u.health_max);
         u.dead = u.health <= 0.0;
     }
+    // A heal: the health up, told as a wound's (recorded: a drain's heal on
+    // the player, auradeath).
+    let heals = kind == "HEAL" && amount > 0.0;
+    if heals {
+        let u = &mut engine_mut(vm).units.list[victim.0];
+        u.health = (u.health + amount).min(u.health_max);
+    }
     let kind = vm.str(&kind);
     let indicator = vm.str(&indicator);
     fire_unit(
@@ -2544,7 +2552,7 @@ fn control_hit(vm: &mut Vm, c: NativeCall) -> Ret {
         crate::auras::fire_updated(vm, victim, id);
     }
     let any = triggered_cooldowns(vm, cooldowns);
-    if lands && amount > 0.0 {
+    if (lands && amount > 0.0) || heals {
         fire_unit(vm, "UNIT_HEALTH", victim, &[]);
     }
     if any {

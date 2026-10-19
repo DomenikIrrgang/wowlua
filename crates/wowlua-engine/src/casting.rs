@@ -738,15 +738,26 @@ pub fn cast_guid(vm: &mut Vm, kind: u8, id: f64) -> String {
     format!("Cast-{kind}-4621-0-1-{}-{:010X}", id as i64, n)
 }
 
-/// `player:spellFailedQuiet(spellID)`: a spell the server cast for the
-/// player (a proc) failing without a word: `UNIT_SPELLCAST_FAILED_QUIET`
-/// with its own GUID, `CURRENT_SPELL_CAST_CHANGED(true)`,
-/// `ACTIONBAR_UPDATE_STATE()` (recorded: auradeath's 1310927 after the
-/// seal's procs; unverified: what fails it).
+/// `player:spellFailedQuiet(spellID, { client? })`: a spell the server
+/// cast for the player (a proc) failing without a word:
+/// `UNIT_SPELLCAST_FAILED_QUIET` with its own GUID,
+/// `CURRENT_SPELL_CAST_CHANGED(true)`, `ACTIONBAR_UPDATE_STATE()`
+/// (recorded: auradeath's 1310927 after the seal's procs; unverified: what
+/// fails it). `client`: a press of the player's the server dropped so,
+/// told with the client's cast GUID (recorded: auradeath's spell 1866
+/// pressed twice while Judgement flew, the second's answer).
 pub fn control_spell_failed_quiet(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = units::this(vm, &c)?;
     let id = vm.check_number(&c, 2)?;
-    let g = new_guid(vm, id);
+    let client = match c.arg(3) {
+        Value::Table(t) => field(vm, t, "client").truthy(),
+        _ => false,
+    };
+    let g = if client {
+        client_guid(vm, id)
+    } else {
+        new_guid(vm, id)
+    };
     let g = vm.str(&g);
     fire_cast(
         vm,
@@ -758,6 +769,65 @@ pub fn control_spell_failed_quiet(vm: &mut Vm, c: NativeCall) -> Ret {
         crate::widgets::fire_event(vm, "CURRENT_SPELL_CAST_CHANGED", &[Value::Bool(true)]);
         crate::widgets::fire_event(vm, "ACTIONBAR_UPDATE_STATE", &[]);
     }
+    Ok(vec![])
+}
+
+/// `player:castFailed(spellID, { error, client? })`: the player's cast of
+/// `spellID` refused, the reason `error` told: a client error's name
+/// (`"SPELL_COOLDOWN"`: `LE_GAME_ERR_SPELL_COOLDOWN`, `ERR_SPELL_COOLDOWN`)
+/// or a spell failure's (`"TARGETS_DEAD"`: `LE_GAME_ERR_SPELL_FAILED_S`,
+/// `SPELL_FAILED_TARGETS_DEAD`). By the server (a cast GUID of its own):
+/// `UNIT_SPELLCAST_FAILED`, `CURRENT_SPELL_CAST_CHANGED`, a spell on the
+/// global cooldown's cooldown events again, `ACTIONBAR_UPDATE_STATE`,
+/// `UI_ERROR_MESSAGE` (recorded: auradeath's presses while Judgement
+/// flew, answered after the kill; the cooldown events from one sample,
+/// unverified). `client`: by the client (its own cast GUID, no cooldown
+/// events; recorded: the presses after the kill, out of range).
+pub fn control_cast_failed(vm: &mut Vm, c: NativeCall) -> Ret {
+    let me = units::this(vm, &c)?;
+    if me != units::PLAYER {
+        return Err(vm.error("castFailed: the player's"));
+    }
+    let id = vm.check_number(&c, 2)?;
+    let Value::Table(opts) = c.arg(3) else {
+        return Err(vm.error("castFailed: { error = name } expected"));
+    };
+    let client = field(vm, opts, "client").truthy();
+    let name = match field(vm, opts, "error") {
+        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        _ => return Err(vm.error("castFailed: an error's name expected")),
+    };
+    let (mut code, mut text) = (
+        vm.get_global(&format!("LE_GAME_ERR_{name}")),
+        vm.get_global(&format!("ERR_{name}")),
+    );
+    if code.is_nil() || text.is_nil() {
+        code = vm.get_global("LE_GAME_ERR_SPELL_FAILED_S");
+        text = vm.get_global(&format!("SPELL_FAILED_{name}"));
+    }
+    if code.is_nil() || text.is_nil() {
+        return Err(vm.error(&format!("castFailed: no client error {name}")));
+    }
+    let g = if client {
+        client_guid(vm, id)
+    } else {
+        new_guid(vm, id)
+    };
+    let g = vm.str(&g);
+    units::fire_unit(
+        vm,
+        "UNIT_SPELLCAST_FAILED",
+        me,
+        &[g, Value::Num(id), Value::Nil],
+    );
+    cast_changed(vm, me);
+    let off = spell_field(vm, id, "offGCD").truthy()
+        || crate::actions::has_trait(vm, Value::Num(id), "offGlobalCooldown");
+    if !client && !off {
+        cooldown_events(vm, id, GCD_CATEGORY, true);
+    }
+    crate::widgets::fire_event(vm, "ACTIONBAR_UPDATE_STATE", &[]);
+    crate::widgets::fire_event(vm, "UI_ERROR_MESSAGE", &[code, text]);
     Ok(vec![])
 }
 
