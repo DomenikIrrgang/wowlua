@@ -813,11 +813,20 @@ pub fn create_frame(vm: &mut Vm, c: NativeCall) -> Ret {
                 .contains_key(&t.to_ascii_lowercase())
         });
     // The ID before the templates and OnLoad (Blizzard's action buttons
-    // read it there for their slot).
+    // read it there for their slot). An ID that is no number is ignored
+    // (unverified: DetailsFramework's fill panel passes a template's name
+    // there, in Details!'s options window, as the client's other checks of
+    // CreateFrame are its own, none a Lua argument error).
     if c.has(5) && !c.arg(5).is_nil() {
-        let id = vm.check_number(&c, 5)?;
-        let w = widget_of(vm, frame).expect("a widget");
-        store(vm, w, "ID", &[Value::Num(id)]);
+        let id = match c.arg(5) {
+            Value::Num(n) => Some(n),
+            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).trim().parse().ok(),
+            _ => None,
+        };
+        if let Some(id) = id {
+            let w = widget_of(vm, frame).expect("a widget");
+            store(vm, w, "ID", &[Value::Num(id)]);
+        }
     }
     // A type or template declared with `allowUntaintedCreation` is built
     // untainted, its scripts compiled and its mixins copied as Blizzard's

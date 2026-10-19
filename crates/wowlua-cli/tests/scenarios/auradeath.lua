@@ -6,6 +6,9 @@
 -- its death takes its auras. Each step at its recorded time (a key: when
 -- the client acted), each cast's answer its recorded round trip later.
 local e = __engine
+-- The damage meter's sessions numbered on from the client's before the
+-- recording (its first: 2).
+e.setDamageMeterSession(2)
 -- As in the client's frames, some events wait for the frame's end, each
 -- once, in their names' order (`setFrameBatching`).
 e.setFrameBatching(true)

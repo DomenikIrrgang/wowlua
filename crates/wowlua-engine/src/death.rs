@@ -122,6 +122,11 @@ pub fn control_die(vm: &mut Vm, c: NativeCall) -> Ret {
         &format!("|cff71d5ff|Hdeath:{n}|h[You died.]|h"),
         None,
     );
+    // The killing blow and the death on the damage meter (recorded: its
+    // `DamageTaken`, then `Deaths`).
+    let left = engine(vm).units.list[PLAYER.0].health;
+    crate::damagemeter::damage(vm, None, PLAYER, left, 0.0);
+    crate::damagemeter::died(vm, PLAYER);
     {
         let p = &mut engine_mut(vm).units.list[PLAYER.0];
         p.dead = true;

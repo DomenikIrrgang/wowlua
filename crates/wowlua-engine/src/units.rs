@@ -457,7 +457,7 @@ pub fn active(u: &Units, types: &[usize]) -> bool {
 }
 
 /// Whether a unit is under the player's control or in the group.
-fn ours(u: &Units, id: UnitId) -> bool {
+pub(crate) fn ours(u: &Units, id: UnitId) -> bool {
     id == PLAYER || u.group.contains(&id)
 }
 
@@ -1981,6 +1981,9 @@ fn control_kill(vm: &mut Vm, c: NativeCall) -> Ret {
     let opts = Kill::of(vm, c.arg(2))?;
     let amount = opts.amount.unwrap_or(engine(vm).units.list[me.0].health);
     let blow = opts.by.map(|by| (by, amount));
+    if let Some(by) = opts.by {
+        crate::damagemeter::damage(vm, Some(by), me, amount, 0.0);
+    }
     {
         let u = &mut engine_mut(vm).units.list[me.0];
         u.health = 0.0;
@@ -2383,6 +2386,10 @@ fn control_swing(vm: &mut Vm, c: NativeCall) -> Ret {
         k @ Value::Table(_) => Some(Kill::of(vm, k)?),
         _ => None,
     };
+    let lands = kind == "WOUND" || kind == "BLOCK" || kind == "ABSORB";
+    if lands {
+        crate::damagemeter::damage(vm, Some(me), victim, amount, crate::damagemeter::MELEE);
+    }
     if let Some(k) = kill {
         let power = field(vm, "power");
         return swing_kill(vm, me, victim, k, power);
@@ -2402,7 +2409,6 @@ fn control_swing(vm: &mut Vm, c: NativeCall) -> Ret {
     if let Value::Num(p) = field(vm, "victimPower") {
         set_power(vm, victim, p);
     }
-    let lands = kind == "WOUND" || kind == "BLOCK" || kind == "ABSORB";
     if lands && amount > 0.0 {
         change_health(vm, victim, -amount);
     }
@@ -2551,6 +2557,7 @@ fn swing_with_spell(
     );
     let lands = kind == "WOUND" || kind == "BLOCK" || kind == "ABSORB";
     let dealt = if lands { amount } else { 0.0 };
+    crate::damagemeter::damage(vm, Some(PLAYER), victim, dealt, spell);
     {
         let u = &mut engine_mut(vm).units.list[victim.0];
         u.health = (u.health - dealt).max(0.0);
@@ -2664,6 +2671,10 @@ fn control_hit(vm: &mut Vm, c: NativeCall) -> Ret {
     };
     let aura = field(vm, "aura");
     let cooldowns = field(vm, "cooldowns");
+    let spell = match field(vm, "spell") {
+        Value::Num(n) => n,
+        _ => 0.0,
+    };
     for id in [me, victim] {
         if !engine(vm).units.list[id.0].in_combat {
             enter_combat(vm, id, false);
@@ -2681,6 +2692,9 @@ fn control_hit(vm: &mut Vm, c: NativeCall) -> Ret {
     if heals {
         let u = &mut engine_mut(vm).units.list[victim.0];
         u.health = (u.health + amount).min(u.health_max);
+        crate::damagemeter::heal(vm, me, victim, amount, spell);
+    } else if lands {
+        crate::damagemeter::damage(vm, Some(me), victim, amount, spell);
     }
     let kind = vm.str(&kind);
     let indicator = vm.str(&indicator);
@@ -2796,6 +2810,7 @@ fn enter_combat(vm: &mut Vm, me: UnitId, usability: bool) {
         if usability {
             crate::actions::update_usability(vm);
         }
+        crate::damagemeter::combat_began(vm);
     }
 }
 
@@ -2889,6 +2904,7 @@ pub(crate) fn player_out_of_combat(vm: &mut Vm) {
     set_restriction(vm, COMBAT, false);
     fire(vm, "PLAYER_REGEN_ENABLED", &[]);
     fire_unit(vm, "UNIT_FLAGS", PLAYER, &[]);
+    crate::damagemeter::combat_ended(vm);
 }
 
 fn control_show_nameplate(vm: &mut Vm, c: NativeCall) -> Ret {

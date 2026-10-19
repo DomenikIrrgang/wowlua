@@ -362,6 +362,10 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("endEncounter", crate::encounters::control_end),
         ("setPet", crate::pets::control_set_pet),
         ("setRestriction", units::set_restriction_control),
+        (
+            "setDamageMeterSession",
+            crate::damagemeter::control_set_session,
+        ),
     ] {
         let native = vm.native(key, f);
         let k = vm.heap.intern(key.as_bytes());

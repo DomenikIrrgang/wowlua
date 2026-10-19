@@ -61,6 +61,12 @@ pub struct Registry {
     /// The addon whose UI code is loading (not Blizzard's): its Lua and
     /// XML scripts compile as its code, carrying its taint.
     pub code_of: Option<String>,
+    /// What an addon's files' chunk names start with while it loads: the
+    /// `test.addons`' `Interface/AddOns/<Name>/`, as the client names them
+    /// (`debugstack` in a recording: `Interface/AddOns/StdTest/src/
+    /// engineprobe.lua:806`; libraries find their folder there). None for
+    /// the addon tested, whose files keep the names its sources map from.
+    pub chunk_prefix: Option<String>,
     /// The addon each of its templates came from, by lower-case name: their
     /// scripts are its code wherever they are applied.
     pub template_addons: HashMap<String, String>,
@@ -862,6 +868,19 @@ pub fn load_user_addon(
     engine_mut(vm).world.ui.code_of = saved;
 }
 
+/// Another addon of the user's (one of the `test.addons`): as
+/// [`load_user_addon`], its files named as the client names them
+/// (`Interface/AddOns/<name>/<file>`).
+pub fn load_other_user_addon(vm: &mut Vm, dir: &Path, toc: &Path, name: &str, table: Value) {
+    let saved = engine_mut(vm)
+        .world
+        .ui
+        .chunk_prefix
+        .replace(format!("Interface/AddOns/{name}/"));
+    load_user_addon(vm, dir, toc, name, table, &HashSet::new());
+    engine_mut(vm).world.ui.chunk_prefix = saved;
+}
+
 /// One file of an addon of the user's (`rel`: relative to `dir`), as its
 /// code: see [`load_user_addon`].
 pub fn load_user_file(vm: &mut Vm, dir: &Path, rel: &str, name: &str, table: Value) {
@@ -878,6 +897,10 @@ fn load_file(vm: &mut Vm, interface_root: &Path, path: &Path, addon: &str, addon
         .unwrap_or(path)
         .to_string_lossy()
         .replace('\\', "/");
+    let shown = match &engine(vm).world.ui.chunk_prefix {
+        Some(prefix) => format!("{prefix}{shown}"),
+        None => shown,
+    };
     let ext = path
         .extension()
         .and_then(|e| e.to_str())

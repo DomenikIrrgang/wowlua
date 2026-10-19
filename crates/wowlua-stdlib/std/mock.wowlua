@@ -87,8 +87,9 @@ export interface MockUnit
     --- A spell's or periodic effect's hit, its combat text at once: `school`
     --- (1 physical, 2 holy, …), `indicator` ("CRITICAL"), `kind` ("WOUND",
     --- "HEAL"); `aura`: the victim's aura it updates; `cooldowns = { {
-    --- spell, a?, b? } }`: the triggered spells' `SPELL_UPDATE_COOLDOWN`s.
-    function hit(victim: MockUnit, amount: number, opts: { school?: number, indicator?: string, kind?: string, aura?: number, cooldowns?: table }?)
+    --- spell, a?, b? } }`: the triggered spells' `SPELL_UPDATE_COOLDOWN`s;
+    --- `spell`: the spell the damage meter counts it under.
+    function hit(victim: MockUnit, amount: number, opts: { school?: number, indicator?: string, kind?: string, aura?: number, cooldowns?: table, spell?: number }?)
     --- Starts casting (`UNIT_SPELLCAST_START`, or `CHANNEL_START`); it ends
     --- `castTime` seconds later (the spell data's, else 1.5).
     function castSpell(spellID: number, opts: { castTime?: number, channel?: boolean, notInterruptible?: boolean }?)
@@ -704,6 +705,13 @@ end
 --- names' order; off: those owed fired now.
 export function setFrameBatching(on: boolean)
     engine().setFrameBatching(on)
+end
+
+--- The ID the damage meter's next combat session gets (1 by default; the
+--- client numbers them on from its earlier ones). The sessions
+--- (`C_DamageMeter`) count the blows and heals of the player's fights.
+export function setDamageMeterSession(id: number)
+    engine().setDamageMeterSession(id)
 end
 
 --- Simulated work of `ms` milliseconds (`debugprofilestop` moves).

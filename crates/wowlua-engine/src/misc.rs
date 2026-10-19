@@ -115,12 +115,6 @@ fn get_guild_club_id(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Nil])
 }
 
-/// `C_DamageMeter.GetSessionDurationSeconds(type)`: none before a session
-/// (unverified: the engine keeps no damage meter sessions).
-fn get_session_duration_seconds(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Nil])
-}
-
 /// The spell an identifier names: its ID (a name only when the player's
 /// current cast has it).
 fn spell_id(vm: &mut Vm, v: Value) -> Option<f64> {
@@ -497,10 +491,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Calendar.GetNumDayEvents", get_num_day_events),
         ("C_Calendar.GetDayEvent", get_day_event),
         ("C_Club.GetGuildClubId", get_guild_club_id),
-        (
-            "C_DamageMeter.GetSessionDurationSeconds",
-            get_session_duration_seconds,
-        ),
         ("C_Spell.IsCurrentSpell", is_current_spell),
         ("C_Spell.GetSpellLevelLearned", get_spell_level_learned),
         ("C_Widget.IsWidget", is_widget),
