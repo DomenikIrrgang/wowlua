@@ -308,8 +308,38 @@ pub fn lookup_text(vm: &mut Vm, call: &str) -> Option<Vec<Value>> {
 pub fn lookup(vm: &mut Vm, name: &str, c: &NativeCall) -> Option<Vec<Value>> {
     let answer = call_variants(vm, name, c)
         .iter()
-        .find_map(|call| answers().get(call.as_str()))?;
+        .find_map(|call| answers().get(call.as_str()).copied())
+        .or_else(|| without_arguments(name))?;
     Some(parse_answer(vm, answer))
+}
+
+/// A function recorded only as called without arguments takes none: the
+/// client ignores what it is given (the full probe: 501 of 509 such calls
+/// with arguments answered as the call without, e.g.
+/// `C_TradeSkillUI.IsTradeSkillGuild("player")`, `AntiAliasingSupported(1,
+/// 1)`; the others a count that changed between the recordings).
+fn without_arguments(name: &str) -> Option<&'static str> {
+    static ONLY: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
+    ONLY.get_or_init(|| {
+        let mut with_args = std::collections::HashSet::new();
+        let mut bare = HashMap::new();
+        for (call, answer) in answers() {
+            let Some((f, args)) = call.split_once('(') else {
+                continue;
+            };
+            if args == ")" {
+                bare.insert(f, *answer);
+            } else if args.trim_end_matches(')').split(", ").all(|a| a == "nil") {
+                // `F(nil)`: as `F()`.
+            } else {
+                with_args.insert(f);
+            }
+        }
+        bare.retain(|f, _| !with_args.contains(f));
+        bare
+    })
+    .get(name)
+    .copied()
 }
 
 /// A call as the engine writes it, then without its trailing tables and
@@ -329,6 +359,20 @@ pub fn call_variants(vm: &Vm, name: &str, c: &NativeCall) -> Vec<String> {
     while matches!(args.last(), Some(&"nil" | &"{}")) {
         args.pop();
         out.push(format!("{name}({})", args.join(", ")));
+    }
+    // A fraction asks for its whole number's answer (the client's integer
+    // conversion: the full probe's 23 calls with 1.5 that have a recorded
+    // call with 1 all answered as it, `C_Item.GetItemClassInfo(1.5)`
+    // "Container").
+    let whole: Vec<String> = args
+        .iter()
+        .map(|a| match a.parse::<f64>() {
+            Ok(n) if n.fract() != 0.0 && n.is_finite() => format!("{}", n.trunc() as i64),
+            _ => (*a).to_string(),
+        })
+        .collect();
+    if whole.iter().zip(&args).any(|(w, a)| w != a) {
+        out.push(format!("{name}({})", whole.join(", ")));
     }
     out
 }

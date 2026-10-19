@@ -1163,7 +1163,8 @@ fn get_item_search_results_quantity(vm: &mut Vm, c: NativeCall) -> Ret {
         "quantity",
     )
     .iter()
-    .sum();
+    .fold(0.0, |a, b| a + b);
+    // From +0 (an empty sum is 0, the full probe; `sum` gives -0).
     Ok(vec![Value::Num(total)])
 }
 

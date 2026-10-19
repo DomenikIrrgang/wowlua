@@ -739,8 +739,47 @@ fn copy(vm: &mut Vm, from: TableRef) -> TableRef {
 
 // The answers.
 
+/// Away from the house: ready (the full probe); at it, once its first
+/// message is answered.
 fn is_ready(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(ah(vm).open.is_some() && ah(vm).ready)])
+    Ok(vec![Value::Bool(ah(vm).open.is_none() || ah(vm).ready)])
+}
+
+fn nil_one(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Nil])
+}
+
+/// `C_AuctionHouse.GetReplicateItemInfo(index)`: no replicated item (none
+/// asked): the documented returns empty, its count and quality -1 (the
+/// full probe).
+fn replicate_item_info(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    let n = |v: f64| Value::Num(v);
+    Ok(vec![
+        Value::Nil,
+        Value::Nil,
+        n(-1.0),
+        n(-1.0),
+        Value::Nil,
+        n(0.0),
+        Value::Nil,
+        n(0.0),
+        n(0.0),
+        n(0.0),
+        n(0.0),
+        Value::Nil,
+        Value::Nil,
+        Value::Nil,
+        Value::Nil,
+        n(0.0),
+        n(0.0),
+        Value::Nil,
+    ])
+}
+
+/// `C_AuctionHouse.HasFullBidResults()`: at the house, true (the engine's
+/// lists are whole, recorded); away, false (the full probe).
+fn has_full_bid_results(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(ah(vm).open.is_some())])
 }
 
 /// `C_AuctionHouse.SendBrowseQuery(query)`: everything (as recorded:
@@ -775,8 +814,12 @@ fn request_more_browse_results(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// Away from the house: true (the full probe; nothing to browse).
 fn has_full_browse_results(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(ah(vm).browsed && ah(vm).browse_full)])
+    let away = ah(vm).open.is_none();
+    Ok(vec![Value::Bool(
+        away || (ah(vm).browsed && ah(vm).browse_full),
+    )])
 }
 
 /// `C_AuctionHouse.QueryOwnedAuctions(sorts)`: the player's auctions
@@ -1011,8 +1054,9 @@ fn get_commodity_search_result_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(i) = num(vm.hidden(c.arg(2))) else {
         return Ok(vec![]);
     };
+    // No such row: nil (the full probe, no search made).
     let Some(row) = rows.get((i as usize).wrapping_sub(1)).copied() else {
-        return Ok(vec![]);
+        return Ok(vec![Value::Nil]);
     };
     let r = copy(vm, row);
     let (since, owners) = ah(vm).searched.get(&id).copied().unwrap_or((0.0, false));
@@ -1123,9 +1167,10 @@ fn get_item_search_result_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(i) = num(vm.hidden(c.arg(2))) else {
         return Ok(vec![]);
     };
+    // No such row: nil (the full probe, no search made).
     Ok(match rows.get((i as usize).wrapping_sub(1)) {
         Some(r) => vec![Value::Table(*r)],
-        None => vec![],
+        None => vec![Value::Nil],
     })
 }
 
@@ -1410,6 +1455,13 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_AuctionHouse.GetNumOwnedAuctionTypes", zero),
         ("C_AuctionHouse.GetNumBidTypes", zero),
         ("C_AuctionHouse.IsThrottledMessageSystemReady", is_ready),
+        ("C_AuctionHouse.HasFullBidResults", has_full_bid_results),
+        // No auctions of the player's: no largest buyout (0), no bidder
+        // asked (nil); no replicate item: nothing named, its count and
+        // quality -1 (the full probe, any index).
+        ("C_AuctionHouse.GetMaxOwnedAuctionBuyout", zero),
+        ("C_AuctionHouse.RequestOwnedAuctionBidderInfo", nil_one),
+        ("C_AuctionHouse.GetReplicateItemInfo", replicate_item_info),
         ("C_AuctionHouse.HasFavorites", no),
         // The player's auctions not asked for (`QueryOwnedAuctions`): none
         // told, even after a post (recorded).

@@ -145,8 +145,13 @@ fn probed_item(vm: &mut Vm, id: i64) -> Option<TableRef> {
     Some(t)
 }
 
-/// An item's data: defined, else probed (`probed_item`).
+/// An item's data: defined, else probed (`probed_item`). No ID below 1
+/// names an item (a snapshot's empty ammo slot holds item 0; the full
+/// probe: item 0 exists for no item function).
 pub fn item_data(vm: &mut Vm, id: i64) -> Option<TableRef> {
+    if id < 1 {
+        return None;
+    }
     match engine(vm).world.data.items.get(&id).copied() {
         Some(t) => Some(t),
         None => probed_item(vm, id),
@@ -675,8 +680,13 @@ fn get_item_info_instant(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(id) = item_id(vm, c.arg(1)) else {
         return Ok(vec![]);
     };
+    // No item below 1: nothing (the full probe: -1, 0).
     let Some(t) = item_data(vm, id) else {
-        return Ok(vec![Value::Num(id as f64)]);
+        return Ok(if id < 1 {
+            vec![]
+        } else {
+            vec![Value::Num(id as f64)]
+        });
     };
     let mut out = vec![Value::Num(id as f64)];
     for k in [
@@ -692,10 +702,15 @@ fn get_item_info_instant(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(out)
 }
 
+/// A cached item's field; nil for no item (the full probe: "x", -1),
+/// nothing for one not loaded yet.
 fn item_field(vm: &mut Vm, c: &NativeCall, key: &str) -> Ret {
     match cached_item(vm, c) {
         Some(t) => Ok(vec![field(vm, t, key)]),
-        None => Ok(vec![]),
+        None => {
+            let known = item_id(vm, c.arg(1)).is_some_and(|id| item_data(vm, id).is_some());
+            Ok(if known { vec![] } else { vec![Value::Nil] })
+        }
     }
 }
 
@@ -724,22 +739,17 @@ const QUESTION_MARK_ICON: f64 = 134400.0;
 /// item table without loading the item (as `GetItemInfoInstant` does), so
 /// an item it has always answers one, and the engine cannot know which;
 /// AtlasLoot's price buttons ask again until they get an icon (a stack
-/// overflow on nothing). The full probe asks it for 0 and -1.
+/// overflow on nothing). The full probe: the question mark for -1, 0 and
+/// a text naming no item too.
 fn get_item_icon_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
-    let Some(id) = item_id(vm, c.arg(1)) else {
-        return Ok(vec![]);
-    };
-    if let Some(t) = item_data(vm, id) {
+    let id = item_id(vm, c.arg(1));
+    if let Some(t) = id.and_then(|id| item_data(vm, id)) {
         return Ok(vec![field(vm, t, "icon")]);
     }
     if let Some(values) = crate::recorded::lookup(vm, "C_Item.GetItemIconByID", &c) {
         return Ok(values);
     }
-    Ok(if id > 0 {
-        vec![Value::Num(QUESTION_MARK_ICON)]
-    } else {
-        vec![]
-    })
+    Ok(vec![Value::Num(QUESTION_MARK_ICON)])
 }
 
 /// `C_Item.DoesItemExistByID(item)`: a defined item (not `missing`),
@@ -757,7 +767,16 @@ fn does_item_exist_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
     };
     match defined {
         Some(t) => Ok(vec![Value::Bool(!field(vm, t, "missing").truthy())]),
-        None => Ok(crate::recorded::client_answer(vm, &c)),
+        // Else as the client answered, else no (the full probe: "x", -1,
+        // 0; unverified: an item that exists unknown to the engine).
+        None => {
+            let answer = crate::recorded::client_answer(vm, &c);
+            Ok(if answer.is_empty() {
+                vec![Value::Bool(false)]
+            } else {
+                answer
+            })
+        }
     }
 }
 
@@ -841,6 +860,37 @@ fn get_item_subclass_info(vm: &mut Vm, c: NativeCall) -> Ret {
     crate::recorded::recorded(vm, c)
 }
 
+/// `C_Item.GetItemClassInfo(classID)`: as the client answered (a fraction
+/// as its whole number), else nil (the full probe: -1, 2147483647).
+fn get_item_class_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(crate::recorded::lookup(vm, "C_Item.GetItemClassInfo", &c)
+        .unwrap_or_else(|| vec![Value::Nil]))
+}
+
+/// `C_Item.GetItemInventorySlotInfo(inventoryType)`: as the client
+/// answered; the profession tool's and gear's (29, 30) their
+/// `INVTYPE_PROFESSION_*` strings (the full probe), else as an unrecorded
+/// call answers.
+fn get_item_inventory_slot_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some(values) = crate::recorded::lookup(vm, "C_Item.GetItemInventorySlotInfo", &c) {
+        return Ok(values);
+    }
+    let global = match vm.hidden(c.arg(1)) {
+        Value::Num(n) if n.trunc() == 29.0 => Some(("INVTYPE_PROFESSION_TOOL", "Profession Tool")),
+        Value::Num(n) if n.trunc() == 30.0 => {
+            Some(("INVTYPE_PROFESSION_GEAR", "Profession Equipment"))
+        }
+        _ => None,
+    };
+    if let Some((name, text)) = global {
+        return Ok(vec![match vm.get_global(name) {
+            Value::Str(s) => Value::Str(s),
+            _ => vm.str(text),
+        }]);
+    }
+    crate::recorded::recorded(vm, c)
+}
+
 /// The functions with behaviour here.
 /// `C_Spell.GetOverrideSpell(spell)`: the spell itself (unverified: no
 /// override modelled).
@@ -877,6 +927,11 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             is_spell_known_or_in_spellbook,
         ),
         ("C_Item.GetItemSubClassInfo", get_item_subclass_info),
+        ("C_Item.GetItemClassInfo", get_item_class_info),
+        (
+            "C_Item.GetItemInventorySlotInfo",
+            get_item_inventory_slot_info,
+        ),
         ("C_Item.GetItemInfo", get_item_info),
         ("C_Item.GetItemInfoInstant", get_item_info_instant),
         ("C_Item.GetItemNameByID", get_item_name_by_id),

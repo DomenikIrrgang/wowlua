@@ -150,10 +150,6 @@ fn nothing(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-fn empty_list(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Table(vm.new_table())])
-}
-
 /// `UnitAlliedRaceInfo(unit)`: no allied races on WoW Forever.
 fn two_falses(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(false), Value::Bool(false)])
@@ -165,13 +161,6 @@ fn three_nils(_vm: &mut Vm, _c: NativeCall) -> Ret {
 
 fn three_zeros(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(0.0); 3])
-}
-
-/// Not eligible, no reason (`C_PlayerInfo.IsPlayerEligibleForNPE`,
-/// `CanPlayerUseMountEquipment`: no new player experience or mount
-/// equipment on WoW Forever).
-fn no_with_reason(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(false), vm.str("")])
 }
 
 // ------------------------------------------------------- unit states
@@ -723,8 +712,9 @@ fn player_info_get_sex(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `C_PlayerInfo.IsConnected([playerLocation])`: logged in; nil for a
 /// location naming no one.
 fn player_info_is_connected(vm: &mut Vm, c: NativeCall) -> Ret {
+    // No location: nil (the full probe; it was the player's before).
     let id = if vm.hidden(c.arg(1)).is_nil() {
-        Some(PLAYER)
+        None
     } else {
         located(vm, c.arg(1))
     };
@@ -746,7 +736,9 @@ fn get_display_id(_vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// `C_PlayerInfo.GetPlayerCharacterData()`: the player's race's name and
-/// file and its sex (`Enum.UnitSex`), no alternate form, no atlas known.
+/// file and its sex (`Enum.UnitSex`), no alternate form, the character
+/// creation's race icon (the full probe: "raceicon128-undead-male" for an
+/// Undead man; unverified for other races and women).
 fn get_player_character_data(vm: &mut Vm, _c: NativeCall) -> Ret {
     let (race, sex) = {
         let u = &engine(vm).units.list[PLAYER.0];
@@ -754,11 +746,23 @@ fn get_player_character_data(vm: &mut Vm, _c: NativeCall) -> Ret {
     };
     let (file, _) = units::race_file_and_id(&race);
     let name = units::race_name(&race);
+    let atlas = format!(
+        "raceicon128-{}-{}",
+        name.to_lowercase()
+            .chars()
+            .filter(char::is_ascii_alphanumeric)
+            .collect::<String>(),
+        if sex_enum(sex) == 1.0 {
+            "female"
+        } else {
+            "male"
+        }
+    );
     let t = vm.new_table();
     for (k, v) in [
         ("name", vm.str(&name)),
         ("fileName", vm.str(&file)),
-        ("createScreenIconAtlas", vm.str("")),
+        ("createScreenIconAtlas", vm.str(&atlas)),
         ("sex", Value::Num(sex_enum(sex))),
     ] {
         let k = vm.str(k);
@@ -778,9 +782,39 @@ fn get_gliding_info(_vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// `C_PlayerInfo.GetPlayerMythicPlusRatingSummary(unit)`: an empty summary
-/// (no mythic+ on WoW Forever).
-fn get_mythic_plus_rating_summary(vm: &mut Vm, _c: NativeCall) -> Ret {
+/// (no mythic+ on WoW Forever); nothing for another unit or none (the
+/// full probe: "target", "pet", a GUID; unverified: a party member's).
+fn get_mythic_plus_rating_summary(vm: &mut Vm, c: NativeCall) -> Ret {
+    if units::unit_arg(vm, &c, 1) != Some(PLAYER) {
+        return Ok(vec![]);
+    }
     Ok(vec![structure_default(vm, "MythicPlusRatingSummary")])
+}
+
+/// `C_PlayerInfo.CanUseItem(itemID)`: an item the engine knows yes, none
+/// no (the full probe: IDs -1 to 2147483647 no, the Hearthstone yes).
+fn can_use_item(vm: &mut Vm, c: NativeCall) -> Ret {
+    let known = match vm.hidden(c.arg(1)) {
+        Value::Num(n) => crate::gamedata::item_data(vm, n as i64).is_some(),
+        _ => false,
+    };
+    Ok(vec![Value::Bool(known)])
+}
+
+/// The new player experience's refusals, as the client words them for a
+/// character past its levels (the full probe, level 21).
+fn not_npe(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let text = vm.str("The player is not within the level range for the NPE Tutorial.");
+    Ok(vec![Value::Bool(false), text])
+}
+
+fn not_npe_v2(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let text = vm.str("The player is not within the level range for the NPEv2 Tutorial.");
+    Ok(vec![Value::Bool(false), text])
+}
+
+fn yes_with_reason(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(true), vm.str("")])
 }
 
 // ----------------------------------------------------------------- pet
@@ -1244,25 +1278,28 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         // Recorded: slots 8 and 10 true (the others unverified).
         ("C_PlayerInfo.HasVisibleInvSlot", yes),
         ("C_PlayerInfo.IsDisplayRaceNative", native),
-        ("C_PlayerInfo.CanUseItem", native),
+        ("C_PlayerInfo.CanUseItem", can_use_item),
         ("C_PlayerInfo.IsCharacterBankEnabled", native),
         ("C_PlayerInfo.IsExpansionLandingPageUnlockedForPlayer", no),
         ("C_PlayerInfo.IsPlayerInChromieTime", no),
-        ("C_PlayerInfo.CanPlayerEnterChromieTime", no),
-        ("C_PlayerInfo.CanPlayerUseMountEquipment", no_with_reason),
-        ("C_PlayerInfo.IsPlayerEligibleForNPE", no_with_reason),
-        ("C_PlayerInfo.IsPlayerEligibleForNPEv2", no_with_reason),
-        ("C_PlayerInfo.IsTravelersLogAvailable", no),
+        // As the client answered (the full probe; facts of Forever's
+        // account and systems, unverified for another account).
+        ("C_PlayerInfo.CanPlayerEnterChromieTime", yes),
+        ("C_PlayerInfo.CanPlayerUseMountEquipment", yes_with_reason),
+        ("C_PlayerInfo.IsPlayerEligibleForNPE", not_npe),
+        ("C_PlayerInfo.IsPlayerEligibleForNPEv2", not_npe_v2),
+        ("C_PlayerInfo.IsTravelersLogAvailable", yes),
         ("C_PlayerInfo.IsTradingPostAvailable", no),
         ("C_PlayerInfo.IsReturningCharacter", no),
-        ("C_PlayerInfo.IsTutorialsTabAvailable", no),
+        ("C_PlayerInfo.IsTutorialsTabAvailable", yes),
         ("C_PlayerInfo.IsMirrorImage", no),
         ("C_PlayerInfo.CanPlayerUseAreaLoot", no),
-        ("C_PlayerInfo.HasAccountInventoryLock", no),
-        ("C_PlayerInfo.IsAccountBankEnabled", no),
+        ("C_PlayerInfo.HasAccountInventoryLock", yes),
+        ("C_PlayerInfo.IsAccountBankEnabled", yes),
         ("C_PlayerInfo.IsPlayerInTimerunningHeroicWorldTier", no),
         ("C_PlayerInfo.IsSelfFoundActive", no),
-        ("C_PlayerInfo.GetInstancesUnlockedAtLevel", empty_list),
+        // Nothing, whatever the level (the full probe).
+        ("C_PlayerInfo.GetInstancesUnlockedAtLevel", nothing),
         ("C_PlayerInfo.GetPetStableCreatureDisplayInfoID", zero),
         // The pet.
         ("IsPetActive", is_pet_active),

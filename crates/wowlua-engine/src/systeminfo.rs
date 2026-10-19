@@ -1046,14 +1046,15 @@ fn currency_link(f: &[(Answer, Answer)], amount: f64) -> String {
     )
 }
 
-/// `C_CurrencyInfo.GetCurrencyLink(type [, amount])`: "" for a currency
-/// not known here.
+/// `C_CurrencyInfo.GetCurrencyLink(type [, amount])`: nil for a currency
+/// not known here (the full probe: IDs -1 to 2147483647).
 fn get_currency_link(vm: &mut Vm, c: NativeCall) -> Ret {
     let amount = num(vm, c.arg(2)).unwrap_or(0.0);
-    let link = currency_arg(vm, &c)
-        .map(|f| currency_link(&f, amount))
-        .unwrap_or_default();
-    Ok(vec![vm.str(&link)])
+    let link = currency_arg(vm, &c).map(|f| currency_link(&f, amount));
+    Ok(vec![match link {
+        Some(l) => vm.str(&l),
+        None => Value::Nil,
+    }])
 }
 
 /// `C_CurrencyInfo.GetCurrencyListLink(index)`: the list entry's link.
@@ -1095,11 +1096,13 @@ fn get_basic_currency_info(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Table(t)])
 }
 
-/// `C_CurrencyInfo.GetCurrencyDescription(type)`: "" for one not known.
+/// `C_CurrencyInfo.GetCurrencyDescription(type)`: nil for one not known
+/// (the full probe).
 fn get_currency_description(vm: &mut Vm, c: NativeCall) -> Ret {
-    let d = currency_arg(vm, &c)
-        .and_then(|f| field_str(&f, "description"))
-        .unwrap_or_default();
+    let Some(f) = currency_arg(vm, &c) else {
+        return Ok(vec![Value::Nil]);
+    };
+    let d = field_str(&f, "description").unwrap_or_default();
     Ok(vec![vm.str(&d)])
 }
 
@@ -1131,14 +1134,21 @@ fn is_account_transferable_currency(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_CurrencyInfo.CanTransferCurrency(id)`: no (no account transfers on
-/// Forever; unverified the reason, none).
-fn can_transfer_currency(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(false), Value::Nil])
+/// Forever); a currency not known: `InvalidCurrency` (5, the full probe),
+/// a known one no reason (unverified).
+fn can_transfer_currency(vm: &mut Vm, c: NativeCall) -> Ret {
+    let reason = if currency_arg(vm, &c).is_some() {
+        Value::Nil
+    } else {
+        Value::Num(5.0)
+    };
+    Ok(vec![Value::Bool(false), reason])
 }
 
-/// `C_CurrencyInfo.DoesWarModeBonusApply(id)`: no war mode.
+/// `C_CurrencyInfo.DoesWarModeBonusApply(id)`: no war mode, both nil (the
+/// full probe, currencies not held; unverified for one held).
 fn does_war_mode_bonus_apply(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(false), Value::Bool(false)])
+    Ok(vec![Value::Nil, Value::Nil])
 }
 
 /// The retail currencies' IDs the client still answers (Azerite 1553,
@@ -1169,24 +1179,28 @@ fn get_player_currency_category_info(vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// `C_CurrencyInfo.GetCoinIcon(amount)`: the largest coin's icon (the
-/// money frame's gold 237618, silver 237620, copper 237617; unverified).
+/// full probe: copper 133788, gold 133785, `INV_Misc_Coin_*`; silver
+/// 133787 unverified, between them).
 fn get_coin_icon(vm: &mut Vm, c: NativeCall) -> Ret {
     let amount = num(vm, c.arg(1)).unwrap_or(0.0);
     let icon = if amount >= 10000.0 {
-        237618.0
+        133785.0
     } else if amount >= 100.0 {
-        237620.0
+        133787.0
     } else {
-        237617.0
+        133788.0
     };
     Ok(vec![Value::Num(icon)])
 }
 
 /// `C_CurrencyInfo.GetCoinText(amount [, separator])`: "1 Gold, 2 Silver,
-/// 3 Copper" by the `GOLD_AMOUNT` strings, parts that are 0 left out, 0
-/// as copper (unverified).
+/// 3 Copper" by the `GOLD_AMOUNT` strings, parts that are 0 left out; 0
+/// as nothing ("", the full probe).
 fn get_coin_text(vm: &mut Vm, c: NativeCall) -> Ret {
     let amount = num(vm, c.arg(1)).unwrap_or(0.0).max(0.0).floor() as i64;
+    if amount == 0 {
+        return Ok(vec![vm.str("")]);
+    }
     let sep = text(vm, c.arg(2)).unwrap_or_else(|| ", ".into());
     let mut part = |global: &str, fallback: &str, n: i64| {
         let f = vm.get_global(global);
@@ -2744,7 +2758,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_CurrencyInfo.IsCurrencyContainer", no),
         ("C_CurrencyInfo.GetCurrencyContainerInfo", nothing),
         ("C_CurrencyInfo.GetFactionGrantedByCurrency", nil),
-        ("C_CurrencyInfo.IsAccountCharacterCurrencyDataReady", no),
+        // Ready (the full probe, after login).
+        ("C_CurrencyInfo.IsAccountCharacterCurrencyDataReady", yes),
         (
             "C_CurrencyInfo.RequestCurrencyDataForAccountCharacters",
             nothing,
@@ -2758,7 +2773,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             empty_table,
         ),
         ("C_CurrencyInfo.IsCurrencyTransferInProgress", no),
-        ("C_CurrencyInfo.IsCurrencyTransferTransactionDataReady", no),
+        ("C_CurrencyInfo.IsCurrencyTransferTransactionDataReady", yes),
         ("C_CurrencyInfo.GetCostToTransferCurrency", nil),
         ("C_CurrencyInfo.GetMaxTransferableAmountFromQuantity", nil),
         (
@@ -2775,7 +2790,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Reputation.GetFactionDataByID", get_faction_data_by_id),
         // Recorded: nil (no guild reputation on Forever).
         ("C_Reputation.GetGuildFactionData", nil),
-        ("C_Reputation.GetGuildRepExpirationTime", nil),
+        // No guild reputation to expire: 0 (the full probe).
+        ("C_Reputation.GetGuildRepExpirationTime", zero),
         ("C_Reputation.GetFactionParagonInfo", nothing),
         ("C_Reputation.IsFactionParagon", no),
         (

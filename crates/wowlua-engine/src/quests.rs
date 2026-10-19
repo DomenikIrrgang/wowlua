@@ -1500,8 +1500,19 @@ fn zeros(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(0.0), Value::Num(0.0)])
 }
 
+/// `C_QuestLog.CanAbandonQuest(questID)`: a quest's ID yes, in the log or
+/// not; 0, a negative or a fraction no (the full probe: 1, 1063, 6481 yes;
+/// 0, -1, 1.5, 2147483647 no; recorded 0 no). Unverified: where the
+/// quests' IDs end (here a million), a quest that cannot be abandoned.
+fn can_abandon_quest(vm: &mut Vm, c: NativeCall) -> Ret {
+    let yes = matches!(vm.hidden(c.arg(1)),
+        Value::Num(q) if q.fract() == 0.0 && (1.0..1_000_000.0).contains(&q));
+    Ok(vec![Value::Bool(yes)])
+}
+
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
+        ("C_QuestLog.CanAbandonQuest", can_abandon_quest),
         // What a quest without them shows (unverified: not recorded):
         // no currencies, no hidden item (`0`), the parchment, not failed,
         // no criteria spell, no group, no skill points, artifact power or
