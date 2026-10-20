@@ -4294,13 +4294,30 @@ local function widgetStub()
     b:SetText("x")
     expect(s).toHaveBeenCalledWith(b, "x")
 end
+
+@test("a call that leaves out an optional argument")
+local function leftOut()
+    local s = mock.spy(function(_name: string, _member: string?) end)
+    s("guildInvite")
+    expect(s).toHaveBeenCalledWith("guildInvite")
+end
 "#,
+            ),
+            (
+                "tests/unselected.test.wowlua",
+                "error(\"loaded though no filter selects it\")\n",
             ),
         ],
     );
+    // Filtered: a file no filter can select is not loaded.
+    let (ok, text) = test(dir.path(), &["mock.test"]);
+    assert!(!ok, "{text}");
+    assert!(!text.contains("loaded though"), "{text}");
+    assert!(text.contains("9 passed, 1 failed"), "{text}");
     let (ok, text) = test(dir.path(), &[]);
     assert!(!ok, "{text}");
-    assert!(text.contains("8 passed, 1 failed"), "{text}");
+    assert!(text.contains("loaded though"), "{text}");
+    assert!(text.contains("9 passed, 1 failed"), "{text}");
     assert!(text.contains("✗ not a frame"), "{text}");
     assert!(text.contains("expected a frame, got nil"), "{text}");
 }

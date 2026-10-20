@@ -386,9 +386,13 @@ wowlua test [filter…] [--flavor <f>] [-u] [--watch] [--coverage] [--reporter <
 
 - Each test file runs once **per manifest flavor** by default. `--flavor`
   restricts the run, and `@flavors` restricts individual tests.
-- Each file and flavor runs in a fresh VM. Files run in parallel.
+- Each file and flavor runs in a fresh VM. Files run in parallel, one a
+  core, or `--jobs` at once.
 - `filter` keeps the test files and tests whose path or name contains it;
-  several keep those that contain any of them.
+  several keep those that contain any of them. A file whose path and
+  source contain none of them is not loaded (a test's name is written in
+  its file); a filter on a name made at run time (a group's prefix, a
+  case's values) finds only the files whose source holds it.
 - A test file that does not compile (its errors all in test files) is left
   out and the others run: its errors are shown and it fails the run when
   the run selects it (no filter, or one in its path); a filtered run that

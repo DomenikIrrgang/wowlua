@@ -115,11 +115,13 @@ pub fn apply_func(types: &mut Types, f: &Func, s: &Subst) -> Func {
     match &f.rest {
         Some(Rest::Pack(p)) if s.packs.contains_key(p) => {
             let pack = s.packs[p].clone();
+            // One that takes nil may be left out, as a declared `T?`
+            // parameter may (a spy's `(A...)` of `(name, member: M?)`).
             for t in pack.types {
                 out.params.push(Param {
                     name: None,
                     ty: t,
-                    optional: false,
+                    optional: types.is_optional(t),
                 });
             }
             out.rest = pack.rest;

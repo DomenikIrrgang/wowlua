@@ -4,6 +4,16 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ## Unreleased
 
+### Changed
+
+- `wowlua test` with a filter loads only the test files whose path or source contains it (a test's name is written in its file), so a filtered run of a large suite takes seconds instead of loading every file's emulated client
+- `wowlua test` runs `--jobs` test files at once when given (or `WOWLUA_JOBS`, `build.jobs`), else one a core
+
+### Fixed
+
+- `toHaveBeenCalledWith` lets a call leave out an optional argument the spied function takes (`spy("guildInvite")` for `(name: string, member: Member?)`), as a call of the function does, instead of E2007
+- `wowlua test` with Blizzard's UI: wheeling the quest log no longer raises "Division by zero" (its bottom shadow's atlas size)
+
 ## [0.9.3] - 2026-10-21
 
 M9 so far: what writing SuuUI's unit tests turned up in the test runner,

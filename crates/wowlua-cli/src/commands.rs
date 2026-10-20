@@ -604,7 +604,14 @@ fn test_once(
         .iter()
         .filter_map(|f| wowlua_flavors::table().resolve(f).map(|f| f.id.clone()))
         .collect();
-    let threads = std::thread::available_parallelism().map_or(1, |n| n.get());
+    // Test files at once: `--jobs` (or `WOWLUA_JOBS`, `build.jobs`) when
+    // given, else one a core (each is a whole emulated client).
+    let jobs = global.jobs();
+    let threads = if jobs.explicit {
+        jobs.threads.get()
+    } else {
+        std::thread::available_parallelism().map_or(1, |n| n.get())
+    };
     let mut ok = true;
     let (mut passed, mut failed, mut skipped, mut files) = (0, 0, 0, 0);
     let mut snaps = wowlua_test::SnapshotSummary::default();

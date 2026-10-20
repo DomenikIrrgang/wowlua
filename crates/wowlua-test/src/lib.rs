@@ -102,6 +102,7 @@ pub fn run(suite: &Suite, filters: &[String], jobs: usize) -> Vec<FileResult> {
         .tests
         .iter()
         .filter(|t| t.role == TestRole::Test)
+        .filter(|t| selectable(suite, t, filters))
         .collect();
     let next = std::sync::atomic::AtomicUsize::new(0);
     let results = std::sync::Mutex::new(Vec::new());
@@ -127,6 +128,20 @@ pub fn run(suite: &Suite, filters: &[String], jobs: usize) -> Vec<FileResult> {
         .map(|(_, r)| r)
         .filter(|r| r.error.is_some() || !r.tests.is_empty() || filters.is_empty())
         .collect()
+}
+
+/// Whether `filters` may select a test of `file`: one is in its path, or
+/// anywhere in its source (a test's name is written there: `@test("…")`,
+/// the function's name, a group's). A file no filter can select is not
+/// loaded: each is a whole emulated client, Blizzard's UI and all.
+fn selectable(suite: &Suite, file: &TestFile, filters: &[String]) -> bool {
+    if filters.is_empty() || filters.iter().any(|f| file.rel.contains(f.as_str())) {
+        return true;
+    }
+    match std::fs::read_to_string(suite.root.join(&file.rel)) {
+        Ok(text) => filters.iter().any(|f| text.contains(f.as_str())),
+        Err(_) => true,
+    }
 }
 
 /// What the addon's files' chunk names start with: the client names an
