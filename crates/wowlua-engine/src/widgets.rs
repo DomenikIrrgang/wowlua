@@ -89,6 +89,8 @@ pub struct Widget {
     pub width: f64,
     pub height: f64,
     pub scale: f64,
+    /// `SetIgnoreParentScale(true)`: its effective scale is its own.
+    pub ignore_parent_scale: bool,
     pub alpha: f64,
     /// Set from a secret (its alpha aspect secret: `GetAlpha` too).
     pub secret_alpha: bool,
@@ -139,6 +141,13 @@ pub struct World {
     pub resized: Vec<WidgetId>,
     /// The same widgets, by index: whether one is already among them.
     pub resizing: std::collections::HashSet<usize>,
+    /// A widget's points, size, scale or parent changed since the last
+    /// frame: the frame looks for sizes that followed (`OnSizeChanged` of
+    /// a frame sized by its anchors).
+    pub layout_changed: bool,
+    /// The laid-out size each anchored widget with an `OnSizeChanged`
+    /// handler last had, by index.
+    pub laid_out: HashMap<usize, (f64, f64)>,
     /// The widgets a keyboard setting (`KeyboardEnabled`) was ever stored
     /// for, in order, each once: the only ones that can take keys
     /// (`input::keyboard_frames`).
@@ -574,6 +583,7 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         width: 0.0,
         height: 0.0,
         scale: 1.0,
+        ignore_parent_scale: false,
         alpha: 1.0,
         secret_alpha: false,
         text: None,
@@ -1779,6 +1789,7 @@ fn set_parent(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     if let Some(p) = parent {
         world.widgets[p.0].children.push(id);
     }
+    world.layout_changed = true;
     let after = visible(engine(vm), id);
     if before != after {
         run_script(vm, id, if after { "OnShow" } else { "OnHide" }, &[]);
@@ -2243,6 +2254,7 @@ fn set_point(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         x,
         y,
     });
+    layout_changed(vm);
     Ok(vec![])
 }
 
@@ -2256,11 +2268,13 @@ fn set_to_defaults(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     w.points.clear();
     w.width = 0.0;
     w.height = 0.0;
+    layout_changed(vm);
     Ok(vec![])
 }
 
 fn clear_all_points(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     engine_mut(vm).world.widgets[id.0].points.clear();
+    layout_changed(vm);
     Ok(vec![])
 }
 
@@ -2280,6 +2294,7 @@ fn set_all_points(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
             y: 0.0,
         });
     }
+    layout_changed(vm);
     Ok(vec![])
 }
 
@@ -2400,16 +2415,25 @@ fn resize(vm: &mut Vm, id: WidgetId, w: Option<f64>, h: Option<f64>) {
     // `OnUpdate` (also when resized in `OnUpdate`), a frame without points
     // never gets one (`/stdtest engine`).
     let world = &mut engine_mut(vm).world;
+    if new != old {
+        world.layout_changed = true;
+    }
     if new != old && world.resizing.insert(id.0) {
         world.resized.push(id);
     }
 }
 
-/// `OnSizeChanged` for the widgets resized since the last frame.
+/// `OnSizeChanged` for the widgets resized since the last frame: those
+/// `SetSize` resized, then those whose size follows their anchors and
+/// changed with them (a `SetAllPoints` child of a resized frame, a
+/// template's part anchored at both ends), with their laid-out size, as
+/// the client runs it whenever the rectangle's size changes (SuuUI's
+/// tests; unverified: their order).
 pub fn run_size_changes(vm: &mut Vm) {
     let world = &mut engine_mut(vm).world;
     world.resizing.clear();
     let resized = std::mem::take(&mut world.resized);
+    let mut told = std::collections::HashSet::new();
     for id in resized {
         let w = &engine(vm).world.widgets[id.0];
         if w.points.is_empty() {
@@ -2420,8 +2444,61 @@ pub fn run_size_changes(vm: &mut Vm) {
         // its secure ones (the documentation's `UntrustedLayoutScriptExecution`;
         // unverified by a probe).
         let trusted_only = w.forbidden_aspects & crate::protection::UNTRUSTED_LAYOUT_SCRIPTS != 0;
+        told.insert(id.0);
         run_script_of(vm, id, "OnSizeChanged", &size, trusted_only);
     }
+    if !std::mem::take(&mut engine_mut(vm).world.layout_changed) {
+        return;
+    }
+    // The anchored widgets that listen, each one's size now.
+    let key = vm.heap.intern(b"OnSizeChanged");
+    let watching: Vec<WidgetId> = {
+        let e = engine(vm);
+        e.world
+            .widgets
+            .iter()
+            .enumerate()
+            .filter(|(_, w)| !w.points.is_empty())
+            .filter(|(_, w)| {
+                !vm.heap.table(w.scripts).get_str(key).is_nil()
+                    || !vm.heap.table(w.hooks).get_str(key).is_nil()
+            })
+            .map(|(i, _)| WidgetId(i))
+            .collect()
+    };
+    let mut known = HashMap::new();
+    let mut changed = Vec::new();
+    for id in watching {
+        let Some(b) = bounds_in(vm, id, 0, &mut known) else {
+            continue;
+        };
+        let s = effective_scale(engine(vm), id);
+        let now = (b.2 / s, b.3 / s);
+        let w = &engine(vm).world.widgets[id.0];
+        let set = (w.width, w.height);
+        let before = engine_mut(vm)
+            .world
+            .laid_out
+            .insert(id.0, now)
+            .unwrap_or(set);
+        let moved = (now.0 - before.0).abs() > 1e-6 || (now.1 - before.1).abs() > 1e-6;
+        if moved && !told.contains(&id.0) {
+            changed.push((id, now));
+        }
+    }
+    for (id, (width, height)) in changed {
+        let trusted_only = engine(vm).world.widgets[id.0].forbidden_aspects
+            & crate::protection::UNTRUSTED_LAYOUT_SCRIPTS
+            != 0;
+        let size = [Value::Num(width), Value::Num(height)];
+        run_script_of(vm, id, "OnSizeChanged", &size, trusted_only);
+    }
+}
+
+/// A widget's points, size, scale or parent changed: the next frame
+/// looks for sizes that followed ([`run_size_changes`]).
+pub(crate) fn layout_changed(vm: &mut Vm) {
+    engine_mut(vm).world.layout_changed = true;
 }
 
 /// The `OnTextChanged(false)` this frame's `SetText` owes, in the frames'
@@ -2596,6 +2673,7 @@ fn set_scale(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         ));
     }
     engine_mut(vm).world.widgets[id.0].scale = s;
+    layout_changed(vm);
     Ok(vec![])
 }
 
@@ -2603,13 +2681,17 @@ fn get_scale(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(engine(vm).world.widgets[id.0].scale)])
 }
 
-/// The scale times its parents' scales.
+/// The scale times its parents' scales, up to one that ignores its
+/// parent's (`SetIgnoreParentScale(true)`).
 pub fn effective_scale(e: &Engine, id: WidgetId) -> f64 {
     let mut s = 1.0;
     let mut cur = Some(id);
     while let Some(c) = cur {
         let w = &e.world.widgets[c.0];
         s *= w.scale;
+        if w.ignore_parent_scale {
+            break;
+        }
         cur = w.parent;
     }
     s
@@ -2617,6 +2699,33 @@ pub fn effective_scale(e: &Engine, id: WidgetId) -> f64 {
 
 fn get_effective_scale(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(effective_scale(engine(vm), id))])
+}
+
+/// `SetIgnoreParentScale(ignore)`: the effective scale its own, or its
+/// parents' too again.
+fn set_ignore_parent_scale(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let on = c.arg(2).truthy();
+    engine_mut(vm).world.widgets[id.0].ignore_parent_scale = on;
+    layout_changed(vm);
+    store(vm, id, "IgnoreParentScale", &[Value::Bool(on)]);
+    Ok(vec![])
+}
+
+fn is_ignoring_parent_scale(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(
+        engine(vm).world.widgets[id.0].ignore_parent_scale,
+    )])
+}
+
+/// `IsIgnoringParentAlpha()`: what `SetIgnoreParentAlpha` set (the
+/// generic setter keeps it as `IgnoreParentAlpha`, which the generic
+/// `IsX` rule, reading `IgnoringParentAlpha`, misses).
+fn is_ignoring_parent_alpha(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let props = engine(vm).world.widgets[id.0].props;
+    let on = stored_args(vm, props, "IgnoreParentAlpha")
+        .and_then(|v| v.first().copied())
+        .is_some_and(|v| v.truthy());
+    Ok(vec![Value::Bool(on)])
 }
 
 /// `SetAlpha(alpha)`: a secret too, even from tainted code (the API
@@ -2631,6 +2740,26 @@ fn set_alpha(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     // Kept in eight bits, read back as a float: 0.5 is 128/255
     // (`/stdtest engine`).
     let a = byte_float(a);
+    let w = &mut engine_mut(vm).world.widgets[id.0];
+    w.alpha = a;
+    w.secret_alpha = secret;
+    Ok(vec![])
+}
+
+/// `SetAlphaFromBoolean(value [, alphaIfTrue [, alphaIfFalse]])`: the
+/// alpha one of the two picks (1 and 0 by default; unverified), a secret
+/// `value` or alpha making the alpha secret, as `SetAlpha` with a secret.
+fn set_alpha_from_boolean(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let which = c.arg(2);
+    let on = vm.hidden(which).truthy();
+    let (picked, default) = if on { (c.arg(3), 1.0) } else { (c.arg(4), 0.0) };
+    let secret = matches!(which, Value::Secret(_)) || matches!(picked, Value::Secret(_));
+    let a = match vm.hidden(picked) {
+        Value::Nil => default,
+        Value::Num(n) => n,
+        _ => return Err(vm.arg_error(if on { 3 } else { 4 }, "number expected")),
+    };
+    let a = byte_float(a.clamp(0.0, 1.0));
     let w = &mut engine_mut(vm).world.widgets[id.0];
     w.alpha = a;
     w.secret_alpha = secret;
@@ -3241,12 +3370,17 @@ fn get_id(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 
 /// `GetStringWidth()`: six units a character at the font's height 12
 /// (a stand-in: the client measures glyphs).
+/// `GetStringWidth()` and the like: six units a byte; a secret text's
+/// width is secret too, as in the client (SuuUI's tests).
 fn get_string_width(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    let len = match engine(vm).world.widgets[id.0].text {
+    let text = engine(vm).world.widgets[id.0].text;
+    let secret = matches!(text, Some(Value::Secret(_)));
+    let len = match text.map(|t| vm.hidden(t)) {
         Some(Value::Str(s)) => vm.str_bytes(s).len(),
         _ => 0,
     };
-    Ok(vec![Value::Num(len as f64 * 6.0)])
+    let width = Value::Num(len as f64 * 6.0);
+    Ok(vec![if secret { vm.secret_wrap(width) } else { width }])
 }
 
 // --------------------------------------------------------------- fonts
@@ -3334,6 +3468,34 @@ fn click(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     run_script(vm, id, "OnClick", &[button, Value::Bool(false)]);
     run_script(vm, id, "PostClick", &[button, Value::Bool(false)]);
     Ok(vec![])
+}
+
+/// `RegisterForClicks(...)`: the clicks that run the button's `OnClick`
+/// (`"LeftButtonUp"`, `"AnyDown"`, …; none: no click does), kept for
+/// the user's clicks (`mock.click`).
+fn register_for_clicks(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let args: Vec<Value> = c.args.iter().skip(1).copied().collect();
+    store(vm, id, "RegisterForClicks", &args);
+    Ok(vec![])
+}
+
+/// Whether a user's click of `button` (`"LeftButton"`, …), going down or
+/// up, runs the button's `OnClick`: as `RegisterForClicks` registered it,
+/// by default the left button's up click.
+pub fn registered_click(vm: &mut Vm, id: WidgetId, button: &str, down: bool) -> bool {
+    let props = engine(vm).world.widgets[id.0].props;
+    let way = if down { "Down" } else { "Up" };
+    let Some(list) = stored_args(vm, props, "RegisterForClicks") else {
+        return button == "LeftButton" && !down;
+    };
+    list.iter().any(|&v| match v {
+        Value::Str(s) => {
+            let s = String::from_utf8_lossy(vm.str_bytes(s));
+            s.eq_ignore_ascii_case(&format!("Any{way}"))
+                || s.eq_ignore_ascii_case(&format!("{button}{way}"))
+        }
+        _ => false,
+    })
 }
 
 // ---------------------------------------------------- moving and state
@@ -3489,6 +3651,7 @@ pub fn drag(vm: &mut Vm, id: WidgetId, dx: f64, dy: f64) {
             x: (b.0 + dx) / s,
             y: (b.1 + dy) / s,
         }];
+        layout_changed(vm);
     }
     run_script(vm, id, "OnDragStop", &[]);
 }
@@ -3519,6 +3682,7 @@ pub fn size_by(vm: &mut Vm, grip: WidgetId, dw: f64, dh: f64) {
             x: b.0 / s,
             y: (b.1 + b.3) / s,
         }];
+        layout_changed(vm);
     }
     run_script(vm, grip, "OnMouseUp", &[left]);
 }
@@ -3784,6 +3948,27 @@ fn button_texture(vm: &mut Vm, id: WidgetId, kind: &str) -> Value {
     t
 }
 
+/// Forgets what a setter stored (`GetX` then answers as before any `SetX`).
+pub(crate) fn unstore(vm: &mut Vm, id: WidgetId, stem: &str) {
+    let props = engine(vm).world.widgets[id.0].props;
+    let key = vm.str(stem);
+    let _ = vm.heap.table_mut(props).set(key, Value::Nil);
+}
+
+/// A texture's file (`SetTexture(file, …)`): kept, and the atlas it had
+/// is gone (`GetAtlas` nil, as in the client).
+pub(crate) fn set_texture_file(vm: &mut Vm, id: WidgetId, args: &[Value]) {
+    store(vm, id, "Texture", args);
+    unstore(vm, id, "Atlas");
+}
+
+/// `Texture:SetTexture(file, …)`: [`set_texture_file`]; it worked.
+fn set_texture(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let args: Vec<Value> = c.args.iter().skip(1).copied().collect();
+    set_texture_file(vm, id, &args);
+    Ok(vec![Value::Bool(true)])
+}
+
 /// `SetXTexture(asset)`: a texture widget becomes the button's, a file its
 /// texture's; `SetXAtlas(atlas, …)` the atlas of its texture.
 fn set_button_texture(vm: &mut Vm, id: WidgetId, c: &NativeCall, kind: &str, atlas: bool) -> Ret {
@@ -3809,14 +3994,18 @@ fn set_button_texture(vm: &mut Vm, id: WidgetId, c: &NativeCall, kind: &str, atl
     let t = button_texture(vm, id, kind);
     if let Some(tid) = widget_of(vm, t) {
         let args: Vec<Value> = c.args.iter().skip(1).copied().collect();
-        store(vm, tid, if atlas { "Atlas" } else { "Texture" }, &args);
         if atlas {
+            store(vm, tid, "Atlas", &args);
             crate::measures::apply_atlas_size(vm, tid, &args);
+        } else {
+            set_texture_file(vm, tid, &args);
         }
     }
     if atlas {
         let args: Vec<Value> = c.args.iter().skip(1).copied().collect();
         store(vm, id, &format!("{kind}Atlas"), &args);
+    } else {
+        unstore(vm, id, &format!("{kind}Atlas"));
     }
     crate::buttons::refresh_states(vm, id);
     Ok(vec![])
@@ -3923,7 +4112,12 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("SetScale", set_scale),
         ("GetScale", get_scale),
         ("GetEffectiveScale", get_effective_scale),
+        ("SetIgnoreParentScale", set_ignore_parent_scale),
+        ("IsIgnoringParentScale", is_ignoring_parent_scale),
+        ("IsIgnoringParentAlpha", is_ignoring_parent_alpha),
         ("SetAlpha", set_alpha),
+        ("SetAlphaFromBoolean", set_alpha_from_boolean),
+        ("SetTexture", set_texture),
         ("GetAlpha", get_alpha),
         ("GetLeft", get_left),
         ("GetRight", get_right),
@@ -3952,6 +4146,7 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("ExecuteAttribute", execute_attribute),
         ("IsProtected", is_protected),
         ("Click", click),
+        ("RegisterForClicks", register_for_clicks),
         ("IsForbidden", is_forbidden),
         ("SetFontObject", set_font_object),
         ("GetFrameLevel", get_frame_level),

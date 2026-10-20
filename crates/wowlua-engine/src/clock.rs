@@ -213,7 +213,7 @@ fn schedule(vm: &mut Vm, seconds: f64, callback: Value, runs: f64, handle: bool)
     if seconds <= 0.0
         && let Some(target) = engine(vm).timers.advancing
     {
-        due = due.max(target + 1e-9);
+        due = due.max(target + NEXT_RUN);
     }
     let index = engine(vm).timers.list.len();
     engine_mut(vm).timers.active.push(index);
@@ -289,6 +289,17 @@ pub fn catch_up(vm: &mut Vm) {
     }
 }
 
+/// A time in whole microseconds. Timers come due by it, so the noise of
+/// their sums (`now + 1`, a ticker's `due + every`: 4.733000000000001)
+/// does not put one a hair past the end of the advance it is due in.
+fn micros(seconds: f64) -> i64 {
+    (seconds * 1e6).round() as i64
+}
+
+/// When a timer set or set again without a delay during a run of timers
+/// is due: just after the run's end (the next run), never within it.
+const NEXT_RUN: f64 = 1e-6;
+
 /// Advances the clock by `seconds`, running due timers in the order they
 /// come due (each at its time).
 pub fn advance(vm: &mut Vm, seconds: f64) {
@@ -313,7 +324,7 @@ pub fn advance(vm: &mut Vm, seconds: f64) {
             .active
             .iter()
             .map(|&i| (i, &timers.list[i]))
-            .filter(|(_, t)| t.due <= target)
+            .filter(|(_, t)| micros(t.due) <= micros(target))
             .min_by(|a, b| a.1.due.total_cmp(&b.1.due).then(a.0.cmp(&b.0)))
             .map(|(i, t)| (TimerId(i), t.due));
         let Some((id, due)) = next else { break };
@@ -332,7 +343,7 @@ pub fn advance(vm: &mut Vm, seconds: f64) {
             t.due = if t.every > 0.0 {
                 t.due + t.every
             } else {
-                target + 1e-9
+                target + NEXT_RUN
             };
         }
         fire(vm, id);

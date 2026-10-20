@@ -348,6 +348,38 @@ fn get_horizontal_scroll(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     scroll_offset(vm, id, "HorizontalScroll")
 }
 
+/// `SetVerticalScroll(offset)` / `SetHorizontalScroll(offset)`: the offset
+/// kept; a change runs `OnVerticalScroll(offset)` /
+/// `OnHorizontalScroll(offset)` at once, as Blizzard's scroll templates
+/// rely on (unverified: whether setting the same offset runs it too).
+fn set_scroll(vm: &mut Vm, id: WidgetId, c: NativeCall, stem: &str, script: &str) -> Ret {
+    let offset = match vm.hidden(c.arg(2)) {
+        Value::Num(n) => n,
+        _ => return Err(vm.arg_error(2, "number expected")),
+    };
+    let props = engine(vm).world.widgets[id.0].props;
+    let old = widgets::stored_args(vm, props, stem)
+        .and_then(|v| v.first().copied())
+        .and_then(|v| match v {
+            Value::Num(n) => Some(n),
+            _ => None,
+        })
+        .unwrap_or(0.0);
+    widgets::store(vm, id, stem, &[Value::Num(offset)]);
+    if offset != old {
+        widgets::run_script(vm, id, script, &[Value::Num(offset)]);
+    }
+    Ok(vec![])
+}
+
+fn set_vertical_scroll(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    set_scroll(vm, id, c, "VerticalScroll", "OnVerticalScroll")
+}
+
+fn set_horizontal_scroll(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    set_scroll(vm, id, c, "HorizontalScroll", "OnHorizontalScroll")
+}
+
 /// `Button:GetFontString()`: the font string set (`SetFontString`, a
 /// template's `<ButtonText>`), else nil.
 fn get_font_string(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
@@ -379,6 +411,8 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
         ("GetVertTile", get_vert_tile),
         ("GetVerticalScroll", get_vertical_scroll),
         ("GetHorizontalScroll", get_horizontal_scroll),
+        ("SetVerticalScroll", set_vertical_scroll),
+        ("SetHorizontalScroll", set_horizontal_scroll),
         ("GetFontString", get_font_string),
     ]
 }
