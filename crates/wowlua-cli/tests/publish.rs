@@ -441,12 +441,17 @@ fn publish_checks_before_uploading() {
         .stderr(predicate::str::contains("W6010").not())
         .stderr(predicate::str::contains("cf-secret").not());
     assert!(mock.requests().iter().all(|r| r.method == "GET"));
-    // A missing token stops the publish before any upload.
+    // A missing token stops the publish before any upload. Looking for it
+    // where `wowlua login` saves it is said first: the OS credential store
+    // may wait for the user to allow it.
     wowlua(&e.project, &e.home)
         .env("CF_API_TOKEN", "cf-secret")
         .arg("publish")
         .assert()
         .failure()
+        .stderr(predicate::str::contains(
+            "Reading the wago token `wowlua login` saved\n",
+        ))
         .stderr(predicate::str::contains("error[E4201]"))
         .stderr(predicate::str::contains("WAGO_API_TOKEN"));
     assert!(mock.requests().iter().all(|r| r.method == "GET"));

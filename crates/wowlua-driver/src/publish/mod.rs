@@ -35,6 +35,9 @@ pub struct PublishRequest {
     /// `--deny-warnings`: W6010 (minified code for an addon site) stops the
     /// publish before any upload.
     pub deny_warnings: bool,
+    /// Progress lines: a token read from what `wowlua login` saved (the OS
+    /// credential store may wait for the user to allow it).
+    pub status: Option<crate::Status>,
 }
 
 /// What happened.
@@ -189,7 +192,7 @@ pub fn publish(
         return None;
     }
     let http = http::Http::default();
-    let tokens = Tokens::new(&repo, packager);
+    let tokens = Tokens::new(&repo, packager, request.status.clone());
     if !request.dry_run {
         archive_maps(&packaged);
     }
@@ -227,10 +230,11 @@ struct Tokens {
     /// The packager's `.env` file, in packager mode.
     dotenv: BTreeMap<String, String>,
     packager: bool,
+    status: Option<crate::Status>,
 }
 
 impl Tokens {
-    fn new(repo: &Path, packager: bool) -> Self {
+    fn new(repo: &Path, packager: bool, status: Option<crate::Status>) -> Self {
         let dotenv = if packager {
             [repo.join(".env"), PathBuf::from(".env")]
                 .iter()
@@ -240,7 +244,11 @@ impl Tokens {
         } else {
             BTreeMap::new()
         };
-        Tokens { dotenv, packager }
+        Tokens {
+            dotenv,
+            packager,
+            status,
+        }
     }
 
     /// A variable of the `.env` file or the environment. The packager's
@@ -286,10 +294,27 @@ impl Tokens {
             return self.var(env).ok_or_else(|| env.clone());
         }
         let names = self.names(target.target_type);
+        let kind = type_name(target.target_type);
         names
             .iter()
             .find_map(|n| self.var(n))
-            .or_else(|| crate::credentials::get(type_name(target.target_type)))
+            .or_else(|| {
+                // Said first: the OS credential store may wait for the user
+                // without a word (a macOS Keychain dialog, when another
+                // wowlua binary saved the token).
+                if let Some(status) = &self.status {
+                    let store = if crate::credentials::uses_store() {
+                        " (the OS credential store may ask you to allow wowlua)"
+                    } else {
+                        ""
+                    };
+                    (status.0)(
+                        "Reading",
+                        &format!("the {kind} token `wowlua login` saved{store}"),
+                    );
+                }
+                crate::credentials::get(kind)
+            })
             .ok_or_else(|| {
                 names
                     .iter()
@@ -677,6 +702,7 @@ fn publish_native(
     }
     let title = |z: &Zip| crate::packaging::plain_title(&project_of(projects, z).manifest.title());
     let release = packaged.release;
+    let dry_run = request.dry_run;
     let run = |job: &Job| -> Outcome {
         let upload = Upload {
             http,
@@ -687,7 +713,7 @@ fn publish_native(
             release,
             changelog: job.changelog.as_ref(),
             packager: false,
-            dry_run: request.dry_run,
+            dry_run,
         };
         match job.target.target_type {
             TargetType::Curseforge => sites::curseforge(&upload, &job.relations),

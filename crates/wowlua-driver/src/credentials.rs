@@ -20,6 +20,11 @@ fn keyring_enabled() -> bool {
     std::env::var("WOWLUA_NO_KEYRING").map_or(true, |v| v.is_empty() || v == "0")
 }
 
+/// Whether [`get`] asks the OS credential store (not `WOWLUA_NO_KEYRING`).
+pub fn uses_store() -> bool {
+    keyring_enabled()
+}
+
 fn entry(kind: &str) -> Option<keyring::Entry> {
     keyring_enabled()
         .then(|| keyring::Entry::new(SERVICE, kind).ok())

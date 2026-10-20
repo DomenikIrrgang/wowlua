@@ -61,7 +61,10 @@ Tokens are never stored in `wowlua.json`. They come, in order of precedence,
 from the target's environment variable, from the OS credential store (filled
 by `wowlua login <type>`), or, where no credential store exists, from
 `config.json` ([Package manager §10.11](package-manager.md#1011-security)).
-A missing token is error E4201. Default variables:
+A missing token is error E4201. Before reading what `wowlua login` saved,
+`wowlua publish` says so (`Reading the curseforge token …`): the OS
+credential store may wait for the user to allow it (a macOS Keychain
+dialog). Default variables:
 
 | Target | Default env vars, in order |
 |--------|-----------------|
