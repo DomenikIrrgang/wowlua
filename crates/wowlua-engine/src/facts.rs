@@ -803,12 +803,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         // The shapeshift forms are the character's stats (`stats.rs`,
         // `shapeshiftForms`: the paladin's two auras, as the client's
         // `probe.loadCalls` answered), none without a snapshot.
-        ("GuildControlGetNumRanks", zero),
         ("BNGetNumFriends", four_zeros),
         ("C_MountJournal.GetNumMountsNeedingFanfare", zero),
         ("C_PetJournal.GetNumPetsNeedingFanfare", zero),
         ("GetSpellConfirmationPromptsInfo", empty_list),
-        ("IsGuildLeader", no),
         // Not a convention kiosk.
         ("Kiosk.IsEnabled", no),
         // No money on the cursor, no trade: Blizzard's money frames

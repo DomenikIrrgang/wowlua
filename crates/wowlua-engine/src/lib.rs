@@ -40,6 +40,7 @@ pub mod framescript;
 pub mod gamedata;
 pub mod globalsinfo;
 pub mod gossip;
+pub mod guild;
 pub mod healcalc;
 pub mod input;
 pub mod inspect;
@@ -302,6 +303,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         .chain(pets::behaviours())
         .chain(conditionals::behaviours())
         .chain(lfg::behaviours())
+        .chain(guild::behaviours())
         .chain([
             ("import", ui::build::import as NativeFn),
             (
@@ -540,6 +542,11 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         args::install_usages(vm);
     }
     units::install(vm);
+    // The camelot character leads a guild, as the recorded one does
+    // (`guild.rs`; decision: the default character is in a guild).
+    if flavor == "camelot" {
+        engine_mut(vm).world.chat.guild = Some(guild::Guild::recorded());
+    }
     // The CVars' defaults (camelot's, recorded by `/stdtest engine`; other
     // flavors: the deprecation fallbacks, which the client has).
     let cvars: Vec<(String, String)> = if flavor == "camelot" {

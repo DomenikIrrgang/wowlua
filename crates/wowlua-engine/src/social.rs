@@ -2,11 +2,8 @@
 //! voice chat, the who list, chat lines and channels' odds and ends.
 //!
 //! The engine's character has no friends, no Battle.net friends, no
-//! ignores, no communities, no voice channels and no guild unless
-//! `joinGuild` says so (`chat.guild`). In a guild it is the guild's only
-//! member, of a placeholder guild "Guild" at the rank "Member" (index 1;
-//! unverified: the engine keeps no guild data, such answers are noted as
-//! unanswered). Battle.net is connected (recorded: `BNFeaturesEnabled`
+//! ignores, no communities but its guild's, no voice channels; its guild
+//! is `guild.rs`'s. Battle.net is connected (recorded: `BNFeaturesEnabled`
 //! true, `BNGetInfo` with a BattleTag). Voice chat is enabled and not
 //! logged in (recorded: `C_VoiceChat.IsLoggedIn` false); its settings are
 //! the `Voice…` CVars (recorded defaults: volumes 50, VAD sensitivity 43,
@@ -83,15 +80,6 @@ fn text(vm: &Vm, v: Value) -> Option<String> {
     }
 }
 
-fn in_guild(vm: &Vm) -> bool {
-    engine(vm).world.chat.guild
-}
-
-/// Whether `v` is a unit token naming the player.
-fn is_player_unit(vm: &Vm, v: Value) -> bool {
-    text(vm, v).is_some_and(|t| units::resolve(&engine(vm).units, &t) == Some(units::PLAYER))
-}
-
 /// The player's realm as `GetNormalizedRealmName` gives it (the engine's
 /// placeholder "Realm" when the world gives none; no spaces).
 fn player_realm(vm: &Vm) -> String {
@@ -101,22 +89,6 @@ fn player_realm(vm: &Vm) -> String {
         .unwrap_or_else(|| "Realm".into())
         .replace([' ', '-'], "")
 }
-
-/// The name others know the player by (as `chat`'s: on WoW Forever the
-/// first and last name, else Name-Realm).
-fn player_full_name(vm: &Vm) -> String {
-    let p = &engine(vm).units.list[units::PLAYER.0];
-    match &p.last_name {
-        Some(last) => format!("{} {last}", p.name),
-        None => format!("{}-{}", p.name, player_realm(vm)),
-    }
-}
-
-/// The placeholder guild's name and the player's rank in it.
-const GUILD_NAME: &str = "Guild";
-const GUILD_RANK: &str = "Member";
-/// `rankIndex` (0 is the guild master).
-const GUILD_RANK_INDEX: f64 = 1.0;
 
 /// A `Voice…` CVar as a number, else its recorded default.
 fn cvar_number(vm: &mut Vm, name: &str, default: f64) -> f64 {
@@ -169,109 +141,6 @@ fn ambiguate(vm: &mut Vm, c: NativeCall) -> Ret {
 
 // ---------------------------------------------------------------- guild
 
-/// `GetGuildInfo(unit)`: the guild's name, the rank's name and index, and
-/// the realm (nil for the player's own); for a unit in no guild nil, nil,
-/// 0, nil (the full probe: "x", -1, 0, 1, 2 so; outside a guild the
-/// player's unverified, taken as the same) (warcraft.wiki.gg's shape; the
-/// placeholder guild for the player in one, noted as unanswered).
-fn get_guild_info(vm: &mut Vm, c: NativeCall) -> Ret {
-    if !in_guild(vm) || !is_player_unit(vm, c.arg(1)) {
-        return Ok(vec![Value::Nil, Value::Nil, Value::Num(0.0), Value::Nil]);
-    }
-    crate::note_default(vm, "GetGuildInfo", &c, 1);
-    Ok(vec![
-        vm.str(GUILD_NAME),
-        vm.str(GUILD_RANK),
-        Value::Num(GUILD_RANK_INDEX),
-        Value::Nil,
-    ])
-}
-
-/// `GetNumGuildMembers()`: members, online, online and on mobile: the
-/// player alone in a guild, else none (unverified).
-fn get_num_guild_members(vm: &mut Vm, _c: NativeCall) -> Ret {
-    // The total and those online: two (SuuUI probe social).
-    let n = if in_guild(vm) { 1.0 } else { 0.0 };
-    Ok(vec![Value::Num(n); 2])
-}
-
-/// `GetGuildRosterInfo(index)`: the member's name, rank name and index,
-/// level, class name, zone, notes, online, status, class file,
-/// achievement points and rank, mobile, can be resurrected by scroll,
-/// guild standing, GUID (warcraft.wiki.gg's order; unverified): the
-/// player as the only member; for an index no member has the empty row
-/// (the full probe, in a guild: -1 and 0 nil, nil, 0, 0, nil × 5, a status
-/// text, nil, 0, 0, false, false, 0, nil; outside a guild unverified,
-/// taken as the same).
-fn get_guild_roster_info(vm: &mut Vm, c: NativeCall) -> Ret {
-    let index = match vm.hidden(c.arg(1)) {
-        Value::Num(n) => n,
-        _ => 0.0,
-    };
-    if !in_guild(vm) || index != 1.0 {
-        let (nil, zero) = (Value::Nil, Value::Num(0.0));
-        let status = vm.str("");
-        return Ok(vec![
-            nil,
-            nil,
-            zero,
-            zero,
-            nil,
-            nil,
-            nil,
-            nil,
-            nil,
-            status,
-            nil,
-            zero,
-            zero,
-            Value::Bool(false),
-            Value::Bool(false),
-            zero,
-            nil,
-        ]);
-    }
-    crate::note_default(vm, "GetGuildRosterInfo", &c, 1);
-    let name = player_full_name(vm);
-    let p = &engine(vm).units.list[units::PLAYER.0];
-    let (level, class_name, class, guid) = (
-        p.level,
-        p.class_name.clone(),
-        p.class.clone(),
-        p.guid.clone(),
-    );
-    let zone = engine(vm).world.character.position.zone.clone();
-    Ok(vec![
-        vm.str(&name),
-        vm.str(GUILD_RANK),
-        Value::Num(GUILD_RANK_INDEX),
-        Value::Num(level),
-        vm.str(&class_name),
-        vm.str(&zone),
-        vm.str(""),
-        vm.str(""),
-        Value::Bool(true),
-        Value::Num(0.0),
-        vm.str(&class),
-        // No achievement points, standing 3 (SuuUI probe social: five
-        // members of a guild, each so).
-        Value::Num(-1.0),
-        Value::Num(1.0),
-        Value::Bool(false),
-        Value::Bool(false),
-        Value::Num(3.0),
-        vm.str(&guid),
-    ])
-}
-
-/// `GetGuildRosterLastOnline(index)`: an online member's (the player's)
-/// and no member's time away, four nils (the full probe: 1, the player,
-/// and -1, 0 so; an offline member's years, months, days and hours
-/// unverified here).
-fn get_guild_roster_last_online(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Nil; 4])
-}
-
 /// `BNGetDisplayName(id)`: a text for any account ID, empty here with no
 /// friends (the full probe: -1, 0, 1, 2 answered a string, its text
 /// blanked; unverified: empty).
@@ -297,64 +166,6 @@ fn guild_control_set_rank(vm: &mut Vm, c: NativeCall) -> Ret {
         crate::globalsinfo::put(vm, "guildControlRank", Value::Num(n.trunc()));
     }
     Ok(vec![])
-}
-
-/// `GuildControlGetRankName(rankOrder)`: the player's rank's name at its
-/// order (index + 1) in a guild, else "" (unverified).
-fn guild_control_get_rank_name(vm: &mut Vm, c: NativeCall) -> Ret {
-    let order = match vm.hidden(c.arg(1)) {
-        Value::Num(n) => n,
-        _ => 0.0,
-    };
-    let name = if in_guild(vm) && order == GUILD_RANK_INDEX + 1.0 {
-        GUILD_RANK
-    } else {
-        ""
-    };
-    Ok(vec![vm.str(name)])
-}
-
-/// `GetNumMembersInRank(rankOrder)`: the player at their rank in a guild
-/// (unverified).
-fn get_num_members_in_rank(vm: &mut Vm, c: NativeCall) -> Ret {
-    let order = match vm.hidden(c.arg(1)) {
-        Value::Num(n) => n,
-        _ => 0.0,
-    };
-    let n = if in_guild(vm) && order == GUILD_RANK_INDEX + 1.0 {
-        1.0
-    } else {
-        0.0
-    };
-    Ok(vec![Value::Num(n)])
-}
-
-/// `C_GuildInfo.GetGuildRankOrder(guid)`: the player's rank order in a
-/// guild, 0 for anyone else (unverified).
-fn get_guild_rank_order(vm: &mut Vm, c: NativeCall) -> Ret {
-    let guid = text(vm, c.arg(1)).unwrap_or_default();
-    let me = guid == engine(vm).units.list[units::PLAYER.0].guid;
-    let order = if in_guild(vm) && me {
-        GUILD_RANK_INDEX + 1.0
-    } else {
-        0.0
-    };
-    Ok(vec![Value::Num(order)])
-}
-
-/// `C_GuildInfo.MemberExistsByName(name)`: the player's own name in a
-/// guild (unverified).
-fn member_exists_by_name(vm: &mut Vm, c: NativeCall) -> Ret {
-    let name = text(vm, c.arg(1)).unwrap_or_default();
-    let p = &engine(vm).units.list[units::PLAYER.0];
-    let me = name.eq_ignore_ascii_case(&p.name) || name.eq_ignore_ascii_case(&player_full_name(vm));
-    Ok(vec![Value::Bool(in_guild(vm) && me)])
-}
-
-/// Being in a guild: `CanGuildInvite` (recorded true for a member),
-/// `C_GuildInfo.CanSpeakInGuildChat` (unverified).
-fn guild_member(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(in_guild(vm))])
 }
 
 /// `GetGuildFactionGroup()`: the player's faction, 0 for the Horde, 1 for
@@ -598,19 +409,9 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     let mut out: Vec<(&'static str, NativeFn)> = vec![
         ("Ambiguate", ambiguate),
         // ------------------------------------------------ guild
-        ("GetGuildInfo", get_guild_info),
-        ("GetNumGuildMembers", get_num_guild_members),
-        ("GetGuildRosterInfo", get_guild_roster_info),
-        ("GetGuildRosterLastOnline", get_guild_roster_last_online),
         ("BNGetDisplayName", bn_get_display_name),
         ("GuildControlGetRank", guild_control_get_rank),
         ("GuildControlSetRank", guild_control_set_rank),
-        ("GuildControlGetRankName", guild_control_get_rank_name),
-        ("GetNumMembersInRank", get_num_members_in_rank),
-        ("C_GuildInfo.GetGuildRankOrder", get_guild_rank_order),
-        ("C_GuildInfo.MemberExistsByName", member_exists_by_name),
-        ("CanGuildInvite", guild_member),
-        ("C_GuildInfo.CanSpeakInGuildChat", guild_member),
         ("GetGuildFactionGroup", get_guild_faction_group),
         ("GetGuildCharterCost", get_guild_charter_cost),
         // ------------------------------------------------ Battle.net
@@ -715,9 +516,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     // friends, clubs, members, messages, tickets, applicants, allies,
     // voice voices or processes, chat bubbles (unverified).
     let lists: &[&str] = &[
-        "C_Club.GetStreams",
-        "C_Club.GetSubscribedClubs",
-        "C_Club.GetClubMembers",
         "C_Club.GetClubStreamNotificationSettings",
         "C_Club.GetMessageRanges",
         "C_Club.GetMessagesBefore",
@@ -740,7 +538,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         "C_RecentAllies.SearchRecentAllies",
         "C_VoiceChat.GetRemoteTtsVoices",
         "C_VoiceChat.GetProcesses",
-        "C_GuildInfo.GuildControlGetRankFlags",
         "C_ChatBubbles.GetAllChatBubbles",
     ];
     // Counts of nothing, amounts of none (unverified; a guild bank, its
@@ -768,19 +565,14 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         "C_Club.IsRestricted",
         // `Enum.PlayerClubRequestStatus.None`.
         "C_ClubFinder.GetPlayerClubApplicationStatus",
-        "GetGuildBankMoney",
-        "GetGuildBankWithdrawMoney",
         "GetGuildBankWithdrawGoldLimit",
-        "GetGuildBankTabCost",
         "GetGuildBankBonusDepositMoney",
-        "GetNumGuildBankTabs",
         "GetNumGuildBankMoneyTransactions",
         "GetNumGuildBankTransactions",
         "GetNumGuildChallenges",
         "GetNumGuildEvents",
         "GetNumGuildNews",
         "GetNumGuildRewards",
-        "GetNumGuildTradeSkill",
         "GetGuildAchievementNumMembers",
         "GetGuildNewsSort",
         "GetGuildRosterLargestAchievementPoints",
@@ -788,10 +580,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     ];
     // Unknown IDs, no one selected, nothing found: nil (unverified).
     let nils: &[&str] = &[
-        "C_Club.GetClubInfo",
-        "C_Club.GetMemberInfoForSelf",
-        "C_Club.GetMemberInfo",
-        "C_Club.GetStreamInfo",
         "C_Club.GetMessageInfo",
         "C_Club.GetInvitationInfo",
         "C_Club.GetStreamViewMarker",
@@ -849,7 +637,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         // The club finder is off (recorded `IsCommunityFinderEnabled`,
         // `IsEnabled` false).
         "C_ClubFinder.ShouldShowClubFinder",
-        "C_Club.AreMembersReady",
         "C_Club.IsAccountMuted",
         "C_Club.IsSubscribedToStream",
         "C_Club.RequestMoreMessagesBefore",
@@ -858,21 +645,12 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         "C_Club.DoesCommunityHaveMembersOfTheOppositeFaction",
         "C_Club.FocusStream",
         "C_Club.IsBeginningOfStream",
-        // A rank without rights: no officer.
-        "C_GuildInfo.IsGuildOfficer",
-        "C_GuildInfo.CanEditOfficerNote",
-        "C_GuildInfo.CanViewOfficerNote",
-        "C_GuildInfo.IsGuildRankAssignmentAllowed",
-        "CanGuildDemote",
-        "CanGuildPromote",
-        "CanGuildRemove",
         // Classic has no guild events, news, reputation (recorded
         // `C_Reputation.GetGuildFactionData` nil).
         "C_GuildInfo.AreGuildEventsEnabled",
         "C_GuildInfo.IsEncounterGuildNewsEnabled",
         "C_GuildInfo.IsGuildReputationEnabled",
         "C_GuildInfo.IsDiscordStreamSeparate",
-        "C_GuildInfo.RequestPreferredPlaySettings",
         "C_GuildInfo.RequestRenameStatus",
         "C_GuildInfo.SetPreferredPlaySettings",
         "C_ChatInfo.IsChatLineCensored",
@@ -904,14 +682,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         "IsInGuildGroup",
         "GetGuildRosterShowOffline",
     ];
-    // Empty texts: no message of the day, no info text.
-    let texts: &[&str] = &[
-        "GetGuildRosterMOTD",
-        "C_GuildInfo.GetMOTD",
-        "C_GuildInfo.GetInfoText",
-        "GetGuildInfoText",
-        "C_VoiceChat.GetMemberGUID",
-    ];
+    // Empty texts.
+    let texts: &[&str] = &["C_VoiceChat.GetMemberGUID"];
     // The documentation's empty structures and pairs: no privileges, no
     // limits, a posting not found, play settings not loaded.
     let documented: &[&str] = &[
@@ -919,7 +691,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         "C_Club.GetClubLimits",
         "C_ClubFinder.GetRecruitingClubInfoFromFinderGUID",
         "C_GuildInfo.GetPreferredPlaySettings",
-        "C_GuildInfo.GetPreferredPlaySettingsFeatures",
     ];
     // Two of nothing.
     let pairs: &[(&str, NativeFn)] = &[
@@ -965,22 +736,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         "GetGuildRecipeMember",
         "GetGuildTabardFiles",
         "GetGuildMemberRecipes",
-        "GetGuildTradeSkillInfo",
         "BNGetBlockedInfo",
         "BNGetFOFInfo",
         // Guild actions.
-        "C_GuildInfo.GuildRoster",
-        "C_GuildInfo.SetNote",
-        "C_GuildInfo.SetMOTD",
-        "C_GuildInfo.SetInfoText",
-        "C_GuildInfo.SetLeader",
         "C_GuildInfo.Invite",
-        "C_GuildInfo.Demote",
-        "C_GuildInfo.Promote",
-        "C_GuildInfo.Uninvite",
-        "C_GuildInfo.Leave",
-        "C_GuildInfo.Disband",
-        "C_GuildInfo.RemoveFromGuild",
         "C_GuildInfo.RequestGuildRename",
         "C_GuildInfo.RequestGuildRenameRefund",
         "C_GuildInfo.RequestRenameNameCheck",
@@ -995,15 +754,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         "GuildControlShiftRankUp",
         "GuildNewsSetSticky",
         "GuildNewsSort",
-        "GuildDemote",
-        "GuildDisband",
         "GuildInvite",
-        "GuildLeave",
         "GuildMasterAbsent",
-        "GuildPromote",
-        "GuildSetLeader",
-        "GuildSetMOTD",
-        "GuildUninvite",
         // Friends, ignores, who.
         "C_FriendList.AddFriend",
         "C_FriendList.AddOrRemoveFriend",

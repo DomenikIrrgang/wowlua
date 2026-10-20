@@ -221,6 +221,14 @@ pub fn teleport(vm: &mut Vm, map: f64, place: Option<wowlua_vm::TableRef>) {
                 continue;
             }
             "GROUP_BUFF_VISUAL_ALERTS_CHANGED" => continue,
+            // The guild's: its bank's withdrawal and its Discord lobby
+            // told again, in a guild only (recorded once, `hearth`, the
+            // player a guild's leader; unverified outside one).
+            "GUILDBANK_UPDATE_WITHDRAWMONEY" | "DISCORD_GUILD_LOBBY_UPDATE"
+                if !crate::guild::in_guild(vm) =>
+            {
+                continue;
+            }
             _ => {}
         }
         let mut values = Vec::new();

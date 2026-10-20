@@ -3,7 +3,8 @@
 # after PLAYER_ENTERING_WORLD: time from its start, event and arguments (as
 # recorded; $-names the test's world fills in: the inventory's load, the maps,
 # the group buffs, Edit Mode's layouts). The session and the cursor are left
-# out, as in the login's data.
+# out, as in the login's data, but for the guild's own two events (replayed in
+# a guild only).
 0.000	LOADING_SCREEN_ENABLED	
 0.000	PLAYER_CHOICE_UPDATE	
 2.182	TAXIMAP_CLOSED	
@@ -152,6 +153,7 @@
 4.331	CHANNEL_UI_UPDATE	
 4.331	CHANNEL_UI_UPDATE	
 4.331	UPDATE_PENDING_MAIL	
+4.331	GUILDBANK_UPDATE_WITHDRAWMONEY	
 4.447	PVP_BRAWL_INFO_UPDATED	
 4.447	PVP_SPECIAL_EVENT_INFO_UPDATED	
 4.447	LFG_LIST_AVAILABILITY_UPDATE	
@@ -161,6 +163,7 @@
 4.447	LFG_UPDATE_RANDOM_INFO	
 4.447	GARRISON_LANDINGPAGE_SHIPMENTS	
 4.447	QUEST_LOG_UPDATE	
+4.515	DISCORD_GUILD_LOBBY_UPDATE	
 4.579	UPDATE_INSTANCE_INFO	
 4.719	UNIT_NAME_UPDATE	string softfriend
 4.719	UNIT_NAME_UPDATE	string softinteract

@@ -1012,14 +1012,109 @@ export function sentAddonMessages(): table[]
     return engine().sentAddonMessages()
 end
 
-export function joinGuild()
-    engine().joinGuild()
-end
-
 --- A message of the server's own (`CHAT_MSG_SYSTEM`): a friend coming
 --- online, going offline.
 export function systemMessage(text: string)
     engine().systemMessage(text)
+end
+
+-- -------------------------------------------------------------- the guild
+
+--- Another member of the player's guild: its name (and WoW Forever's last
+--- name), GUID (the engine's own by default), class by file (`WARRIOR`
+--- by default) and race, level (1), rank index (0 the leader; the lowest
+--- rank by default), zone, public and officer notes, whether online
+--- (offline by default) and away (`status` 1) or busy (2), and an offline
+--- member's time away (`lastOnline`: years, months, days, hours).
+export type GuildMemberData = {
+    name: string,
+    lastName?: string,
+    guid?: string,
+    class?: string,
+    race?: string,
+    level?: number,
+    rank?: number,
+    zone?: string,
+    note?: string,
+    officerNote?: string,
+    online?: boolean,
+    status?: number,
+    lastOnline?: number[],
+    achievementPoints?: number,
+    achievementRank?: number,
+}
+
+--- A member's changes (`updateGuildMember`): the fields given replace its
+--- own.
+export type GuildMemberChanges = {
+    name?: string,
+    lastName?: string,
+    guid?: string,
+    class?: string,
+    race?: string,
+    level?: number,
+    rank?: number,
+    zone?: string,
+    note?: string,
+    officerNote?: string,
+    online?: boolean,
+    status?: number,
+    lastOnline?: number[],
+    achievementPoints?: number,
+    achievementRank?: number,
+}
+
+--- A guild rank: its name and rights (`flags[n]` the right
+--- `GuildControlGetRankFlags` numbers n: 1 hear guild chat, 2 speak, 3
+--- and 4 officer chat, 5 promote, 6 demote, 7 invite, 8 remove, 9 set the
+--- message of the day, 10 edit public notes, 11 and 12 view and edit
+--- officer notes, 13 modify the guild's info, 15 bank repairs, 16
+--- withdraw gold, 19 modify bank tabs, 22 officer). Without `flags` the
+--- first rank has the leader's rights, the others guild chat alone.
+export type GuildRankData = { name: string, flags?: { [number]: boolean } }
+
+--- A guild for `joinGuild`: its name ("Guild"), the player's rank index
+--- (0, its leader), its ranks (the leader's first; by default Guild
+--- Master, Officer, Veteran, Member, Initiate), its other members (none),
+--- message of the day, info text, bank money (copper) and bank tabs.
+export type GuildData = {
+    name?: string,
+    rank?: number,
+    ranks?: GuildRankData[],
+    members?: GuildMemberData[],
+    motd?: string,
+    info?: string,
+    bankMoney?: number,
+    bankTabs?: number,
+}
+
+--- The player in a guild (`PLAYER_GUILD_UPDATE`). With nothing given, the
+--- recorded character's, the camelot character's from the start: its
+--- leader among 26 other members, all offline. With a table, that guild.
+export function joinGuild(guild: GuildData?)
+    engine().joinGuild(guild)
+end
+
+--- The player in no guild (`PLAYER_GUILD_UPDATE`).
+export function leaveGuild()
+    engine().leaveGuild()
+end
+
+--- Another member of the player's guild (`GUILD_ROSTER_UPDATE` a round
+--- trip later); its handle.
+export function defineGuildMember(member: GuildMemberData): number
+    return engine().defineGuildMember(member)
+end
+
+--- The member changed: online, a level, a rank, notes
+--- (`GUILD_ROSTER_UPDATE`).
+export function updateGuildMember(handle: number, changes: GuildMemberChanges)
+    engine().updateGuildMember(handle, changes)
+end
+
+--- The member left the guild (`GUILD_ROSTER_UPDATE`).
+export function removeGuildMember(handle: number)
+    engine().removeGuildMember(handle)
 end
 
 -- ------------------------------------------------------------- the client

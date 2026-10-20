@@ -1266,7 +1266,6 @@ const NOTHING_HERE: &[(&str, NativeFn)] = &[
     ("C_LFGList.GetAdvancedFilter", documented),
     ("C_PartyInfo.GetRestrictPings", documented),
     ("C_Calendar.EventGetInviteSortCriterion", documented),
-    ("C_Calendar.GetDefaultGuildFilter", documented),
     ("C_EncounterJournal.GetSlotFilter", documented),
     ("C_MythicPlus.GetSeasonBestForMap", documented),
     ("C_PartyInfo.GetMinItemLevel", documented),

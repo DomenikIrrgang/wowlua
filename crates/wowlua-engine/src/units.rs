@@ -157,7 +157,7 @@ pub struct Units {
 pub const PLAYER: UnitId = UnitId(0);
 
 /// A class file's ID (`UnitClass`'s third result).
-fn class_id(class: &str) -> f64 {
+pub(crate) fn class_id(class: &str) -> f64 {
     const CLASSES: &[&str] = &[
         "WARRIOR",
         "PALADIN",
