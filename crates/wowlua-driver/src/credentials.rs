@@ -2,7 +2,7 @@
 //! store (macOS Keychain, Windows Credential Manager, Secret Service), or,
 //! where none is available, `tokens` in `$WOWLUA_HOME/config.json` (mode
 //! 0600, W4326). `WOWLUA_NO_KEYRING=1` skips the credential store, and
-//! reading a token skips it without a terminal.
+//! without a terminal reading, saving and removing a token skip it too.
 
 use serde_json::Value;
 use std::path::PathBuf;
@@ -15,6 +15,9 @@ const SERVICE: &str = "wowlua";
 pub enum Saved {
     CredentialStore,
     Config,
+    /// In `config.json` because there is no terminal: a later publish
+    /// without one reads only there.
+    ConfigNoTerminal,
 }
 
 fn keyring_enabled() -> bool {
@@ -148,9 +151,12 @@ pub fn get(kind: &str) -> Result<String, Unread> {
     )
 }
 
-/// Saves a token: in the credential store, else in `config.json`.
+/// Saves a token: in the credential store (with a terminal), else in
+/// `config.json`.
 pub fn set(kind: &str, token: &str) -> Result<Saved, String> {
-    if let Some(e) = entry(kind)
+    let store = current_store_use();
+    if store == StoreUse::Read
+        && let Some(e) = entry(kind)
         && e.set_password(token).is_ok()
     {
         // A token saved before in `config.json` would be stale.
@@ -171,7 +177,11 @@ pub fn set(kind: &str, token: &str) -> Result<Saved, String> {
     }
     tokens[kind] = Value::String(token.to_string());
     write_config(&config)?;
-    Ok(Saved::Config)
+    Ok(if store == StoreUse::NoTerminal {
+        Saved::ConfigNoTerminal
+    } else {
+        Saved::Config
+    })
 }
 
 fn remove_from_config(kind: &str) -> Result<bool, String> {
@@ -186,9 +196,11 @@ fn remove_from_config(kind: &str) -> Result<bool, String> {
     Ok(removed)
 }
 
-/// Removes a saved token; `false` when there was none.
+/// Removes a saved token; `false` when there was none. Without a terminal
+/// only from `config.json`.
 pub fn remove(kind: &str) -> Result<bool, String> {
-    let from_store = entry(kind).is_some_and(|e| e.delete_credential().is_ok());
+    let from_store = current_store_use() == StoreUse::Read
+        && entry(kind).is_some_and(|e| e.delete_credential().is_ok());
     let from_config = remove_from_config(kind)?;
     Ok(from_store || from_config)
 }

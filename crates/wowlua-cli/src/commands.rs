@@ -387,6 +387,16 @@ pub fn login(out: &Output, site: crate::Site, token: Option<String>, no_verify: 
             );
             true
         }
+        Ok(Saved::ConfigNoTerminal) => {
+            out.status(
+                "Saved",
+                format!(
+                    "the {} token in config.json (readable only by you): without a terminal, wowlua does not use the OS credential store",
+                    site.title()
+                ),
+            );
+            true
+        }
         Ok(Saved::Config) => {
             report(
                 out,

@@ -737,6 +737,29 @@ fn login_saves_tokens_for_publish() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("no token given"));
+    // Without a terminal (as here), the credential store is not used even
+    // when it is on: the token goes to `config.json`, where a publish
+    // without a terminal reads it, and no W4326.
+    wowlua(&e.project, &e.home)
+        .env_remove("WOWLUA_NO_KEYRING")
+        .args(["login", "wago", "--token", "wago-background", "--no-verify"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("W4326").not())
+        .stderr(predicate::str::contains(
+            "Saved the Wago token in config.json (readable only by you): without a terminal",
+        ));
+    let config: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(e.home.join("config.json")).unwrap()).unwrap();
+    assert_eq!(config["tokens"]["wago"], "wago-background");
+    wowlua(&e.project, &e.home)
+        .env_remove("WOWLUA_NO_KEYRING")
+        .args(["logout", "wago"])
+        .assert()
+        .success();
+    let config: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(e.home.join("config.json")).unwrap()).unwrap();
+    assert!(config["tokens"].get("wago").is_none(), "{config}");
 }
 
 #[test]

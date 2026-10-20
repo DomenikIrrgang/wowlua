@@ -421,8 +421,10 @@ files, but no `dist/`, tests or dev files.
 - **Tokens.** `wowlua login <type>` stores tokens in the OS credential store
   (macOS Keychain, Windows Credential Manager, Secret Service on Linux; service
   `wowlua`, account = the site type); `wowlua logout <type>` removes them.
-  Environment variables take precedence. Without a terminal, `wowlua
-  publish` does not read the credential store. Only when no credential store is
-  available are tokens written to `config.json`, created with permissions
-  `0600`, with warning W4326. Tokens are redacted in all output, including
+  Environment variables take precedence. Without a terminal (standard input
+  or standard error not a terminal), wowlua does not use the credential
+  store: `wowlua publish` reads tokens from `config.json` only, `wowlua login`
+  saves them there (permissions `0600`) and says so, and `wowlua logout`
+  removes them from there. Otherwise tokens are written to `config.json` only
+  when no credential store is available, with warning W4326. Tokens are redacted in all output, including
   `-v` and `--dry-run`.
