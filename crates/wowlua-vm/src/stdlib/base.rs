@@ -401,6 +401,30 @@ fn next(vm: &mut Vm, c: NativeCall) -> Ret {
             vm.rt_error("attempted to iterate a table that cannot be indexed with secret keys")
         );
     }
+    // A table kept from tainted code (`settablesecurity`'s
+    // `DisallowTaintedAccess`): not iterated while tainted (the full probe,
+    // 1.60.1: StdTest's walk of `GetGlobalEnvironment()` stopped so, at a
+    // Blizzard table under it, naming StdTest, the iterating code's taint,
+    // though a `loadstring` chunk had run before; unverified: indexing it,
+    // the name in other cases).
+    if vm.heap.table(t).security & crate::table::DISALLOW_TAINTED_ACCESS != 0
+        && !vm.taint().stack.is_secure()
+    {
+        let own = vm
+            .cur
+            .frames
+            .last()
+            .map(|f| vm.heap.func(f.closure).taint())
+            .filter(|t| !t.is_secure())
+            .and_then(|t| vm.taint_name(t));
+        let by = match own {
+            Some(name) => format!("execution tainted by '{name}'"),
+            None => vm.tainted_by(),
+        };
+        return Err(vm.rt_error(&format!(
+            "attempted to iterate a table that cannot be accessed while tainted ({by})"
+        )));
+    }
     match vm.heap.table(t).next_slot(c.arg(2)) {
         Ok(Some((k, v))) => {
             // Keys are stored secure; the value is copied.

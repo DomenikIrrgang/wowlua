@@ -42,7 +42,7 @@ impl Vm {
     }
 
     /// "execution tainted by 'X'", as the client's secret errors end.
-    fn tainted_by(&self) -> String {
+    pub(crate) fn tainted_by(&self) -> String {
         let name = self.taint_name(self.cur.taint.stack).unwrap_or_default();
         format!("execution tainted by '{name}'")
     }

@@ -458,6 +458,9 @@ export type ChannelData = {
     zoneChannelID?: number,
     channelType?: number,
     regional?: boolean,
+    --- Its number when higher than the one after the channel before (a
+    --- channel left keeps its number free).
+    number?: number,
 }
 
 --- The chat channels the player is in, numbered in order
@@ -1253,6 +1256,21 @@ end
 --- (`readAfter`), a taken item's data after its bag packet (`itemAfter`).
 export function defineMailbox(mailbox: MockUnit, data: table)
     engine().defineMailbox(mailbox, data)
+end
+
+--- Unread mail waiting (`HasNewMail`), sent by `senders`
+--- (`GetLatestThreeSenders`, the latest first); nil or `{}`: none. A
+--- world's state: no event.
+export function setNewMail(senders: string[]?)
+    engine().setNewMail(senders)
+end
+
+--- The character's saved equipment sets: `{ { name, icon, items = {
+--- [slot] = itemID }, ignored = { slot, … }, spec, id }, … }`, their IDs
+--- from 0 in order unless given (`C_EquipmentSet`; worn, in the bags or
+--- lost by the character's gear and bags). A world's state: no event.
+export function setEquipmentSets(sets: { name: string, icon?: number, items?: { [number]: number }, ignored?: number[], spec?: number, id?: number }[])
+    engine().setEquipmentSets(sets)
 end
 
 --- A banker and the character's bank tabs: `{ tabs = { { name, icon,

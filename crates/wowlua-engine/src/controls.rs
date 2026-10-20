@@ -323,6 +323,8 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("defineTrainer", crate::trainer::control_define),
         ("defineTaxi", crate::taxi::control_define),
         ("defineMailbox", crate::mail::control_define),
+        ("setNewMail", crate::mail::control_set_new_mail),
+        ("setEquipmentSets", crate::equipsets::control_set),
         ("defineBank", crate::bank::control_define),
         ("defineAuctionHouse", crate::auction::control_define),
         ("nearCorpse", crate::death::control_near_corpse),

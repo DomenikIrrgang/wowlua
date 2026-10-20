@@ -3763,8 +3763,15 @@ local function item()
     mock.defineItem(1, { name = "Not loaded" })
     expect(mock.showTooltip("item", { id = 1 })[1]).toContain("Retrieving item information")
     mock.defineItem(19019, { name = "Thunderfury, Blessed Blade of the Windseeker", quality = 5, itemLevel = 80 }, { cached = true })
+    -- No item level line (WoW Forever's item tooltips have none); the
+    -- issue reporter's line, as on units, the item's link known.
     local lines = mock.showTooltip("item", { id = 19019 })
-    expect(lines).toEqual({ "Thunderfury, Blessed Blade of the Windseeker", "Item Level 80", "Demo: item 19019" })
+    expect(lines).toEqual({
+        "Thunderfury, Blessed Blade of the Windseeker",
+        " ",
+        "|c0042b1fePress F6 to submit an issue for this Item",
+        "Demo: item 19019",
+    })
     expect(GameTooltip).toBeShown()
 end
 

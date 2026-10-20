@@ -402,11 +402,14 @@ fn get_session_time(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(crate::clock::now(vm).floor())])
 }
 
-/// The daily reset at 15:00 UTC, the weekly one on Tuesdays then (the US
-/// realms'; unverified for Forever).
-const DAILY_RESET: i64 = 15 * 3600;
-/// 1970-01-06 (a Tuesday) 15:00 UTC.
-const WEEKLY_RESET: i64 = 5 * 86400 + 15 * 3600;
+/// The daily reset at 16:00 UTC, the weekly one on Tuesdays then (the full
+/// probe, 1.60.1: `GetWeeklyResetStartTime()` 1791907200, Tuesday 13
+/// October 2026 16:00 UTC; `GetSecondsUntilDailyReset()` 79296 in the
+/// session whose `GetCurrentCalendarTime()` was 10:57 on the Pacific
+/// realm, 17:57 UTC, both the next 16:00).
+const DAILY_RESET: i64 = 16 * 3600;
+/// 1970-01-06 (a Tuesday) 16:00 UTC.
+const WEEKLY_RESET: i64 = 5 * 86400 + 16 * 3600;
 
 fn now_secs(vm: &Vm) -> i64 {
     vm.clock.now.floor() as i64
@@ -1601,6 +1604,22 @@ fn tracked_filters(vm: &mut Vm) -> u64 {
     crate::framescript::cvar_get(vm, "minimapTrackedInfov4")
         .and_then(|v| v.trim().parse().ok())
         .unwrap_or(0)
+}
+
+/// `C_Minimap.IsFilteredOut(filterType)`: a tracking filter's bit not
+/// tracked; 0 and a number of more bits none (the full probe, 1.60.1:
+/// every filter of `Enum.MinimapTrackingFilter` out exactly when its bit
+/// was clear in `minimapTrackedInfov4`, 10552047; 16777217 not out).
+fn is_filtered_out(vm: &mut Vm, c: NativeCall) -> Ret {
+    let filter = num(vm, c.arg(1)).map_or(0, |n| n.max(0.0) as u64);
+    let out = filter.is_power_of_two() && tracked_filters(vm) & filter == 0;
+    Ok(vec![Value::Bool(out)])
+}
+
+/// `C_Minimap.IsTrackingAccountCompletedQuests()`: its filter's bit
+/// tracked (the full probe, 1.60.1: true with 2097152 set).
+fn tracking_account_completed_quests(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(tracked_filters(vm) & 2_097_152 != 0)])
 }
 
 /// Whether a tracking type is on: a spell's while its aura is on the
@@ -3074,7 +3093,11 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Minimap.GetDefaultTrackingValue", no),
         ("C_Minimap.IsTrackingBattlePets", no),
         ("C_Minimap.IsTrackingHiddenQuests", no),
-        ("C_Minimap.IsTrackingAccountCompletedQuests", no),
+        (
+            "C_Minimap.IsTrackingAccountCompletedQuests",
+            tracking_account_completed_quests,
+        ),
+        ("C_Minimap.IsFilteredOut", is_filtered_out),
         ("C_Minimap.GetNumQuestPOIWorldEffects", zero),
         ("C_Minimap.GetPOITextureCoords", four_zeros),
         ("C_Minimap.GetUiMapID", get_minimap_ui_map_id),

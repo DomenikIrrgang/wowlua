@@ -402,6 +402,7 @@ fn join_channel(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![Value::Num(ch.zone_channel_id), n]);
     }
     let channel = crate::channels::Channel {
+        number: crate::channels::next_number(&engine(vm).world.character.channels),
         name: name.clone(),
         full_name: name.clone(),
         category: "CHANNEL_CATEGORY_CUSTOM".to_string(),
