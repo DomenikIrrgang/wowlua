@@ -38,6 +38,9 @@ pub struct FlavorDocs {
     /// The UI files only load-on-demand addons load (their globals exist
     /// only once the addon is loaded): path (lowercase, `/`) → addon.
     pub lod_files: std::collections::HashMap<String, String>,
+    /// The number globals the flavor's client defines itself (`LE_*`,
+    /// `NUM_LE_*`), when recorded.
+    pub number_globals: Vec<String>,
 }
 
 /// Where the annotations are short: `Frame:GetAttribute` also takes
@@ -70,16 +73,97 @@ fn widget_corrections(classes: &mut indexmap::IndexMap<String, model::Class>) {
 /// documentation says the callback), and their callbacks receive it.
 /// `TimerHandle` and `TickerHandle` are declared by the compiler.
 fn corrections(d: &mut Decls) {
-    let Some(timer) = d.namespaces.get_mut("C_Timer") else {
-        return;
-    };
-    for (name, handle) in [("NewTimer", "TimerHandle"), ("NewTicker", "TickerHandle")] {
-        for sig in timer.functions.get_mut(name).into_iter().flatten() {
-            sig.returns = vec![handle.to_string()];
-            if let Some(callback) = sig.params.iter_mut().find(|p| p.name == "callback") {
-                callback.ty = format!("(handle: {handle}) -> ()");
+    if let Some(timer) = d.namespaces.get_mut("C_Timer") {
+        for (name, handle) in [("NewTimer", "TimerHandle"), ("NewTicker", "TickerHandle")] {
+            for sig in timer.functions.get_mut(name).into_iter().flatten() {
+                sig.returns = vec![handle.to_string()];
+                if let Some(callback) = sig.params.iter_mut().find(|p| p.name == "callback") {
+                    callback.ty = format!("(handle: {handle}) -> ()");
+                }
             }
         }
+    }
+    // Blizzard_SharedTalentUI (loaded at login) replaces
+    // `C_Traits.GetConditionInfo` with a wrapper taking
+    // `(configID, condID, ignoreFontColor, traitTreeName)` that adds the
+    // formatted `tooltipText` (`Blizzard_SharedTalentUtil.lua`; recorded:
+    // `C_Traits.GetConditionInfo(…)` answers `tooltipText=string |cffff2020
+    // Spend 30 more …`, the trait fixtures).
+    for sig in d
+        .namespaces
+        .get_mut("C_Traits")
+        .and_then(|ns| ns.functions.get_mut("GetConditionInfo"))
+        .into_iter()
+        .flatten()
+    {
+        if sig.params.len() == 2 {
+            sig.params.push(param("ignoreFontColor", "boolean", true));
+            sig.params.push(param("traitTreeName", "string", true));
+        }
+    }
+    if let Some(fields) = d.interfaces.get_mut("TraitCondInfo")
+        && !fields.iter().any(|(n, _, _)| n == "tooltipText")
+    {
+        fields.push(("tooltipText".into(), "string".into(), true));
+    }
+    // A channel message's target is the channel's number: Blizzard's chat
+    // edit box sends `C_ChatInfo.SendChatMessage(text, "CHANNEL", language,
+    // self:GetChannelTarget())`, the number `GetChannelName` answered
+    // (`ChatFrameEditBox.lua`).
+    for sig in d
+        .namespaces
+        .get_mut("C_ChatInfo")
+        .and_then(|ns| ns.functions.get_mut("SendChatMessage"))
+        .into_iter()
+        .flatten()
+    {
+        channel_target(sig);
+    }
+}
+
+/// `SendChatMessage`'s `target` also takes a channel number.
+fn channel_target(sig: &mut model::Sig) {
+    if let Some(target) = sig.params.iter_mut().find(|p| p.name == "target")
+        && target.ty == "string"
+    {
+        target.ty = "string | number".into();
+    }
+}
+
+fn param(name: &str, ty: &str, optional: bool) -> model::ParamDecl {
+    model::ParamDecl {
+        name: name.into(),
+        ty: ty.into(),
+        optional,
+    }
+}
+
+/// Where the annotations are wrong about functions Blizzard does not
+/// document: parameters the client and Blizzard's code leave out.
+fn annotation_corrections(d: &mut Decls) {
+    // (function, parameter), each with its evidence.
+    let optional: &[(&str, &str)] = &[
+        // Blizzard_TrainerUI calls `SetTrainerServiceTypeFilter(filter,
+        // not IsSelected(filter))`.
+        ("SetTrainerServiceTypeFilter", "exclusive"),
+        // Blizzard's own definitions (Deprecated_SpellBook.lua) read
+        // `isPet and Enum.SpellBookSpellBank.Pet or …`.
+        ("IsSpellKnown", "isPet"),
+        ("IsSpellKnownOrOverridesKnown", "isPet"),
+        // Like `JoinPermanentChannel`'s and `JoinTemporaryChannel`'s
+        // (Blizzard's ChannelList calls `JoinPermanentChannel(channelName)`);
+        // the wiki brackets it too (unverified: no client recording).
+        ("JoinChannelByName", "hasVoice"),
+    ];
+    for (function, name) in optional {
+        for sig in d.functions.get_mut(*function).into_iter().flatten() {
+            if let Some(p) = sig.params.iter_mut().find(|p| p.name == *name) {
+                p.optional = true;
+            }
+        }
+    }
+    for sig in d.functions.get_mut("SendChatMessage").into_iter().flatten() {
+        channel_target(sig);
     }
 }
 
@@ -154,6 +238,7 @@ pub fn generate(
         }
     }
     let mut shared = luals::convert(annotations);
+    annotation_corrections(&mut shared);
     // Blizzard's data wins: drop what any flavor's documentation defines,
     // and what the compiler declares itself.
     let mut bliz_functions: HashSet<String> = HashSet::new();
@@ -201,6 +286,19 @@ pub fn generate(
                 let Some(targets) = target.methods.get_mut(method) else {
                     continue;
                 };
+                // Results the annotations leave out come from Blizzard's
+                // documentation (`Minimap:GetZoom()`: `zoomFactor`).
+                if let Some(doc) = sigs.first()
+                    && !doc.returns.is_empty()
+                    && targets
+                        .iter()
+                        .all(|t| t.returns.is_empty() && t.ret_vararg.is_none())
+                {
+                    for t in targets.iter_mut() {
+                        t.returns = doc.returns.clone();
+                        t.ret_vararg = doc.ret_vararg.clone();
+                    }
+                }
                 for sig in sigs {
                     for (i, p) in sig.params.iter().enumerate() {
                         if !p.ty.contains("Secret<") {
@@ -217,6 +315,47 @@ pub fn generate(
                     }
                 }
             }
+        }
+    }
+    // Tooltip methods Blizzard's `TooltipDataHandler.lua` defines pass their
+    // arguments to a documented `C_TooltipInfo` function and take its
+    // parameters (`MailFrame.lua` calls `GameTooltip:SetInboxItem(
+    // InboxFrame.openMailID, index)`), where the annotations have fewer or
+    // untyped ones.
+    if let Some(tooltip) = shared.classes.get_mut("GameTooltip") {
+        let accessors: BTreeSet<(String, String)> = flavors
+            .iter()
+            .flat_map(|f| framexml::tooltip_accessors(&f.ui_lua))
+            .collect();
+        for (method, getter) in accessors {
+            let Some(doc) = per_flavor.iter().find_map(|(_, _, d)| {
+                d.namespaces
+                    .get("C_TooltipInfo")
+                    .and_then(|ns| ns.functions.get(&getter))
+                    .and_then(|sigs| sigs.first())
+            }) else {
+                continue;
+            };
+            let Some(sigs) = tooltip.methods.get_mut(&method) else {
+                continue;
+            };
+            for sig in sigs.iter_mut() {
+                // Annotations with more parameters stay (a flavor's own
+                // `SetTalent(talentIndex, isInspect, talentGroup, …)`).
+                if sig.params.len() < doc.params.len()
+                    || sig.params.len() == doc.params.len()
+                        && sig.params.iter().any(|p| p.ty == "any")
+                {
+                    sig.params = doc.params.clone();
+                    sig.vararg = doc.vararg.clone();
+                }
+            }
+            let mut seen = Vec::new();
+            sigs.retain(|s| {
+                let new = !seen.contains(s);
+                seen.push(s.clone());
+                new
+            });
         }
     }
     // Classes only Blizzard knows stay in the flavor files; methods of
@@ -318,6 +457,11 @@ pub fn generate(
             g.entry(s.clone())
                 .or_insert_with(|| ("string".into(), None));
         }
+        // The number globals the client defines itself.
+        for n in &f.number_globals {
+            g.entry(n.clone())
+                .or_insert_with(|| ("number".into(), None));
+        }
         g.retain(|n, _| {
             !skip.contains(n)
                 && !d.functions.contains_key(n)
@@ -326,8 +470,15 @@ pub fn generate(
                 && !shared.functions.contains_key(n)
                 && !shared.namespaces.contains_key(n)
                 && !shared.globals.contains_key(n)
-                && !shared.classes.contains_key(n)
         });
+        // A global table the annotations name a class after is of that
+        // class (`ItemLocation = {}` with `ItemLocation:CreateFromBagAndSlot`);
+        // a frame keeps its widget type (`NamePlateDriverFrame`).
+        for (n, (ty, _)) in g.iter_mut() {
+            if shared.classes.contains_key(n) && ty == "table" {
+                *ty = n.clone();
+            }
+        }
         ui_globals.push(g);
     }
     if let Some(first) = ui_globals.first().cloned() {
