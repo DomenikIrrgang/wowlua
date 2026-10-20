@@ -4,6 +4,9 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ## Unreleased
 
+### Fixed
+
+- `wowlua test` names the addon's files, its test files and the runtime as the client does (`Interface/AddOns/<Name>/src/x.lua`), so `debugstack()`, `GetSourceLocation()` and error messages show the client's names; the reports still show source paths
 ## [0.9.1] - 2026-10-20
 
 M9 so far, released before the milestone closes: wowlua's emulation of the WoW

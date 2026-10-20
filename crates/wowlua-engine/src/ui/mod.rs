@@ -64,8 +64,8 @@ pub struct Registry {
     /// What an addon's files' chunk names start with while it loads: the
     /// `test.addons`' `Interface/AddOns/<Name>/`, as the client names them
     /// (`debugstack` in a recording: `Interface/AddOns/StdTest/src/
-    /// engineprobe.lua:806`; libraries find their folder there). None for
-    /// the addon tested, whose files keep the names its sources map from.
+    /// engineprobe.lua:806`; libraries find their folder there). The test
+    /// runner sets it for the addon tested too.
     pub chunk_prefix: Option<String>,
     /// The addon each of its templates came from, by lower-case name: their
     /// scripts are its code wherever they are applied.

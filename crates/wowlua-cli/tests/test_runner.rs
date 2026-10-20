@@ -1140,6 +1140,68 @@ end
     assert!(out.contains("2 passed, 0 failed"), "{out}");
 }
 
+/// The addon's own files, the test files and the runtime are named as the
+/// client names them too (`Interface/AddOns/Demo/src/main.lua`): stacks
+/// and error messages carry those names, and the failures show the source
+/// paths, also for a name Lua shortened with `...` at the front.
+#[test]
+fn chunk_names_as_the_client() {
+    let dir = project(
+        r#""standard": {}"#,
+        &[
+            (
+                "src/main.wowlua",
+                "const G = _G :: any\nG.MainStack = debugstack(1, 1, 0)\nG.Fail = function() error(\"from src\") end\n",
+            ),
+            (
+                "tests/names.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+
+const G = _G :: any
+
+@test("as in the client")
+local function named()
+    expect(G.MainStack).toBe("[Interface/AddOns/Demo/src/main.lua]:2: in main chunk\n")
+    expect(select(2, pcall(G.Fail))).toBe("Interface/AddOns/Demo/src/main.lua:3: from src")
+    expect(string.find(debugstack(1, 1, 0), "[Interface/AddOns/Demo/tests/names.test.lua]:9:", 1, true)).toBe(1)
+    expect(select(2, pcall(error, "here", 1))).toBe("here")
+end
+
+@test("an addon file's failure")
+local function fails()
+    G.Fail()
+end
+"#,
+            ),
+            (
+                "tests/some/deeply/nested/a_rather_long_file_name.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+
+@test("a shortened name's failure")
+local function shortened()
+    expect((select(2, pcall(function() error("x") end)))).toBe(".../some/deeply/nested/a_rather_long_file_name.test.lua:5: x")
+    error("boom")
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(!ok, "{out}");
+    assert!(out.contains("1 passed, 2 failed"), "{out}");
+    assert!(
+        out.contains("from src\n       at src/main.wowlua:3"),
+        "{out}"
+    );
+    assert!(
+        out.contains(
+            "boom\n       at tests/some/deeply/nested/a_rather_long_file_name.test.wowlua:6"
+        ),
+        "{out}"
+    );
+    assert!(!out.contains("Interface/AddOns"), "{out}");
+}
+
 /// `mock.reloadUI()`: the test runs again in a fresh VM with the
 /// SavedVariables as the client writes them (`/stdtest sv`), logged in as
 /// a reload; the file's next test runs where the file was.
