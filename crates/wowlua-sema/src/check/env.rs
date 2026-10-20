@@ -1377,13 +1377,18 @@ impl<'p> Env<'p> {
                         },
                     );
                 }
-                TableTypeField::NamedString { key, ty, .. } => {
-                    let t = self.resolve(ty, scope);
+                TableTypeField::NamedString {
+                    key, optional, ty, ..
+                } => {
+                    let mut t = self.resolve(ty, scope);
+                    if optional {
+                        t = self.types.optional(t);
+                    }
                     record.fields.insert(
                         String::from_utf8_lossy(&key.value()).into(),
                         Field {
                             ty: t,
-                            optional: false,
+                            optional,
                             readonly: false,
                         },
                     );

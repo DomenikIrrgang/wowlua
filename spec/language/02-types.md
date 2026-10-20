@@ -98,7 +98,7 @@ type Anchor =
 | `{ [K]: V }` | Map from `K` to `V` |
 | `{ x: number, y: number }` | Record. `,` or `;` separate fields. |
 | `{ name: string, label?: string }` | `label` is optional: `string?`, may be absent |
-| `{ ["end"]: number, ["my-key"]: string }` | Record fields whose keys are reserved words or not identifiers |
+| `{ ["end"]: number, ["my-key"]?: string }` | Record fields whose keys are reserved words or not identifiers (`?:` makes one optional) |
 | `{ x: number, [string]: any }` | Record with an indexer for other keys |
 | `{ [number]: string, n: number }` | Table used both as an array and a record (e.g. the result of `{ ..., n = select("#", ...) }`) |
 

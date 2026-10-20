@@ -194,6 +194,7 @@ typeparam    ::= Name [ "extends" type ]
 tabletype    ::= "{" [ tablefield { ( "," | ";" ) tablefield } [ "," | ";" ] ] "}"
 tablefield   ::= Name [ "?" ] ":" type
                | "[" type "]" ":" type                        (* "[" String "]" names a field *)
+               | "[" String "]" "?" ":" type                  (* an optional named field *)
                | type                                         (* only as the sole field: array *)
 
 functype     ::= [ typeparams ] "(" [ paramtypes ] ")" "->" rettype

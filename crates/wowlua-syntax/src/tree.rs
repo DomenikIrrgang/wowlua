@@ -358,6 +358,7 @@ pub(crate) enum TableTypeFieldData {
     },
     NamedString {
         key: u32,
+        optional: bool,
         ty: u32,
         span: Sp,
     },

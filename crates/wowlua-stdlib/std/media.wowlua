@@ -31,6 +31,11 @@ const own: { [string]: { [string]: MediaPath } } = {
     sound = {},
 }
 
+-- The table of a kind's own media: every kind has one.
+local function ownOf(kind: MediaType): { [string]: MediaPath }
+    return own[kind] :: { [string]: MediaPath }
+end
+
 type Registration = { kind: MediaType, name: string, path: MediaPath }
 local waiting: Registration[] = {}
 local shared: LibSharedMedia? = nil
@@ -88,7 +93,7 @@ lookups[#lookups + 1] = on("ADDON_LOADED", find)
 
 --- Registers media under a name (with LibSharedMedia for every addon).
 export function register(kind: MediaType, name: string, path: MediaPath)
-    own[kind][name] = path
+    ownOf(kind)[name] = path
     if shared then
         shared:Register(kind, name, path)
     else
@@ -104,7 +109,7 @@ export function fetch(kind: MediaType, name: string?, opts: { noDefault?: boolea
         return shared:Fetch(kind, name, opts?.noDefault)
     end
     if name then
-        const path = own[kind][name]
+        const path = ownOf(kind)[name]
         if path then
             return path
         end
@@ -121,7 +126,7 @@ export function list(kind: MediaType): string[]
         return shared:List(kind)
     end
     const names: string[] = {}
-    for name in pairs(own[kind]) do
+    for name in pairs(ownOf(kind)) do
         names[#names + 1] = name
     end
     table.sort(names)

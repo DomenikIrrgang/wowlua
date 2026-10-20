@@ -1,13 +1,16 @@
 //! Substitution of type and pack parameters (generic instantiation).
 
 use super::types::*;
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 /// What each type and pack parameter stands for.
 #[derive(Clone, Debug, Default)]
 pub struct Subst {
     pub types: FxHashMap<ParamId, TypeId>,
     pub packs: FxHashMap<ParamId, Pack>,
+    /// Type parameters bound only from parameters of function types
+    /// (inference, `Checker::unify`): any other position replaces them.
+    pub weak: FxHashSet<ParamId>,
 }
 
 impl Subst {

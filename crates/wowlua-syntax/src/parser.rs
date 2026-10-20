@@ -2405,10 +2405,14 @@ impl<'a> Parser<'a> {
                         let t = self.advance();
                         let key = self.string_lit(&t);
                         self.bump();
-                        self.expect(T::Colon, ":")?;
+                        let optional = self.eat(T::QuestionColon);
+                        if !optional {
+                            self.expect(T::Colon, ":")?;
+                        }
                         let ty = self.ty()?;
                         TableTypeFieldData::NamedString {
                             key,
+                            optional,
                             ty: self.push_type(ty),
                             span: sp(self.span_from(start)),
                         }

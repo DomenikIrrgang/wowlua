@@ -1624,4 +1624,285 @@ mod tests {
         ok("enum E { X, Y }\nlocal e: E = E.X\nlocal n: number = E.Y\n");
         err("enum E { X, Y }\nlocal e: E = 3\n", "E2001");
     }
+
+    /// Checks several `.wowlua` modules (path, source) of one package: the
+    /// errors, as `code: message`.
+    fn check_modules(modules: &[(&str, &str)], mode: Mode) -> Vec<String> {
+        let mut db = SourceDb::new();
+        let mut parses = Vec::new();
+        for (path, text) in wowlua_stdlib_files() {
+            let file = db.add(path, text.to_string());
+            parses.push((
+                path.to_string(),
+                wowlua_syntax::parse(text.as_bytes(), file),
+            ));
+        }
+        let decls = parses.len();
+        for (path, text) in modules {
+            let file = db.add(*path, text.to_string());
+            let p = wowlua_syntax::parse(text.as_bytes(), file);
+            assert!(!p.has_errors(), "{path}: {:?}", p.diagnostics);
+            parses.push((path.to_string(), p));
+        }
+        let inputs: Vec<FileInput> = parses
+            .iter()
+            .enumerate()
+            .map(|(i, (path, p))| FileInput {
+                src_rel: path.clone(),
+                kind: if i < decls {
+                    FileKind::Declaration
+                } else {
+                    FileKind::Wowlua
+                },
+                parse: Some(p),
+                xml: None,
+                meta: None,
+                main_of: None,
+                globals: Default::default(),
+                usage: None,
+                prepared: None,
+            })
+            .collect();
+        let analysis = crate::analyze(&inputs, None);
+        let settings: Vec<Option<FileSettings>> = (0..inputs.len())
+            .map(|i| {
+                (i >= decls).then_some(FileSettings {
+                    mode,
+                    pure_lua: false,
+                })
+            })
+            .collect();
+        let mut d = analysis.diagnostics.clone();
+        d.extend(check_package(
+            &inputs,
+            &analysis,
+            &settings,
+            &HashSet::new(),
+            None,
+        ));
+        d.iter()
+            .filter(|x| x.is_error())
+            .map(|x| format!("{}: {}", x.code.unwrap_or("-"), x.message))
+            .collect()
+    }
+
+    /// An export's type is the annotation of an annotated `const`, and a
+    /// table has the fields assigned to it after its declaration, sealed
+    /// (spec §2.4.2, §5.5).
+    #[test]
+    fn export_types() {
+        // The annotation's optional fields, not the literal's sealed type.
+        let tok = "export type Tok = { version: number, vision?: { [string]: number } }\nexport const a: Tok = { version = 2 }\n";
+        let errs = check_modules(
+            &[
+                ("t.wowlua", tok),
+                ("main.wowlua", "import a from \"./t\"\na.vision = {}\n"),
+            ],
+            Mode::Strict,
+        );
+        assert!(errs.is_empty(), "{errs:#?}");
+        // A plain annotated `const` reads as its annotation too.
+        strict_ok(
+            "const H: { [string]: (...any) -> () } = { A = function() end }\nfor _, h in pairs(H) do h(1) end\n",
+        );
+        strict_ok("const N: number = 5\nconst M: 5 = N\nprint(M)\n");
+        // Fields added after the literal are typed for importers, and the
+        // table is sealed.
+        let chat = "export const chat = { joined = false }\nfunction chat.Hide(n: number): number return n end\nchat.count = 1\nexport local other = {}\nfunction other.Show(): string return \"\" end\n";
+        let errs = check_modules(
+            &[
+                ("t.wowlua", chat),
+                (
+                    "main.wowlua",
+                    "import chat, other from \"./t\"\nlocal s: string = chat.Hide(1)\nlocal c: string = chat.count\nchat.Nope()\nlocal n: number = other.Show()\nprint(s, c, n, chat.joined)\n",
+                ),
+            ],
+            Mode::Strict,
+        );
+        assert_eq!(errs.len(), 4, "{errs:#?}");
+        assert!(errs[0].starts_with("E2001: `number`"), "{errs:#?}");
+        assert!(errs[1].starts_with("E2001: `number`"), "{errs:#?}");
+        assert!(
+            errs[2].starts_with("E2003") && errs[2].contains("`Nope`"),
+            "{errs:#?}"
+        );
+        assert!(errs[3].starts_with("E2001: `string`"), "{errs:#?}");
+    }
+
+    /// A callback taking a wider type than the other arguments bind does
+    /// not widen the type argument (parameters are contravariant).
+    #[test]
+    fn callback_parameters_do_not_widen_type_arguments() {
+        strict_ok(
+            "local rows: { name: string, ms: number }[] = {}\ntable.sort(rows, function(a: { ms: number }, b: { ms: number }): boolean return a.ms > b.ms end)\n",
+        );
+        // Bound only by the callback, then by a later argument.
+        strict_ok(
+            "local function call<T>(f: (v: T) -> (), v: T) f(v) end\ncall(function(v: number?) end, 1)\n",
+        );
+        strict_err(
+            "local function call<T>(f: (v: T) -> (), v: T) f(v) end\ncall(function(v: number) end, \"x\")\n",
+            "E2001",
+        );
+        // A comparator that cannot take the elements still fails.
+        strict_err(
+            "local rows: { name: string }[] = {}\ntable.sort(rows, function(a: { ms: number }, b: { ms: number }): boolean return a.ms > b.ms end)\n",
+            "E2001",
+        );
+    }
+
+    /// A table's own method replaces the one `setmetatable`'s `__index`
+    /// gives (spec §2.4.6), as Lua finds it first.
+    #[test]
+    fn own_methods_replace_index_fallbacks() {
+        let base = "local Base = {}\nfunction Base:Layout(count: number) print(count) end\nfunction Base:Other(): number return 1 end\nlocal Derived = setmetatable({}, { __index = Base })\n";
+        strict_ok(&format!(
+            "{base}function Derived:Layout() print(\"own\") end\nfunction Derived:Refresh() self:Layout() end\nlocal n: number = Derived:Other()\nprint(n)\n"
+        ));
+        strict_err(
+            &format!("{base}function Derived:Layout() print(\"own\") end\nDerived:Layout(1)\n"),
+            "E2006",
+        );
+        // An assigned field too, and the fallback still checks its calls.
+        strict_ok(&format!(
+            "{base}Derived.Layout = function(self: any, s: string) print(s) end\nDerived:Layout(\"x\")\n"
+        ));
+        strict_err(&format!("{base}Derived:Layout()\n"), "E2007");
+    }
+
+    /// Reading or writing a field of a function, number or boolean is an
+    /// error however the key is written.
+    #[test]
+    fn indexing_a_function_is_an_error() {
+        let g = "local function g(): number return 1 end\n";
+        for access in [
+            "g[1] = true\n",
+            "g.x = 1\n",
+            "print(g.y)\n",
+            "print(g[2])\n",
+            "local n = 1\nn.x = 2\n",
+        ] {
+            strict_err(&format!("{g}{access}"), "E2003");
+        }
+        strict_err("local f: function = print\nf.q = 1\n", "E2003");
+        strict_ok(
+            "local t: { [number]: boolean } = {}\nt[1] = true\nprint(t[1], (\"x\"):upper())\n",
+        );
+    }
+
+    /// Mismatches say what does not fit: the missing field (and the `?:`
+    /// form), the missing return value, the argument a function passed on
+    /// lacks, the union member an assertion cannot cover.
+    #[test]
+    fn diagnostics_name_what_does_not_fit() {
+        let messages = |src: &str| codes(&check_source(src, Mode::Strict));
+        let d = messages(
+            "local function f(opts: { layer: string?, sublevel: number? }?) print(opts) end\nf({ layer = \"BACKGROUND\" })\n",
+        );
+        assert_eq!(d.len(), 1, "{d:#?}");
+        assert!(
+            d[0].ends_with(": the field `sublevel` is missing (`sublevel: number?` must be present; write `sublevel?: number` for a field that may be absent)"),
+            "{d:#?}"
+        );
+        let d = messages(
+            "type O = { kind: string, size: number }\nlocal function f(o: O) print(o) end\nlocal x = { kind = \"x\", size = \"big\" }\nf(x)\n",
+        );
+        assert!(
+            d.iter()
+                .any(|m| m.ends_with(": the field `size` is `string`, not `number`")),
+            "{d:#?}"
+        );
+        let d = messages(
+            "local function rect(): (number?, number, number, number)\n    return nil\nend\nprint(rect())\n",
+        );
+        assert_eq!(
+            d,
+            vec![
+                "E2001: missing return value 2 of type `number` (the function returns 4 values; one left out is `nil`)"
+            ]
+        );
+        let d = messages(
+            "local function j(name: string, b: number, voice: boolean) print(name, b, voice) end\nprint(pcall(j, \"x\"))\n",
+        );
+        assert_eq!(d, vec!["E2007: missing argument `b` of type `number`"]);
+        // The given arguments are checked with a missing one; extra ones
+        // are allowed, as Lua drops them.
+        let d = messages(
+            "local function j(name: string, n: number) print(name, n) end\nprint(pcall(j, 1))\nprint(pcall(j, \"x\", 2, 3))\n",
+        );
+        assert_eq!(
+            d,
+            vec![
+                "E2001: `1` is not assignable to `string`",
+                "E2007: missing argument `n` of type `number`"
+            ]
+        );
+        let d = messages(
+            "local function cast(pct: number | { r: number })\n    local p = pct :: number?\n    print(p)\nend\ncast(1)\n",
+        );
+        assert_eq!(
+            d,
+            vec![
+                "E2015: cannot assert `number | { r: number }` as `number?` (neither type fits the other: `{ r: number }` does not fit `number?`, and `nil` does not fit `number | { r: number }`)"
+            ]
+        );
+    }
+
+    /// A field named by a string key may be optional (spec §2.2.4).
+    #[test]
+    fn optional_string_keyed_fields() {
+        strict_ok(
+            "type D = { kind: string, [\"not\"]?: boolean }\nlocal a: D = { kind = \"x\" }\nlocal b: D = { kind = \"x\", [\"not\"] = true }\nlocal n: boolean? = a[\"not\"]\nprint(b, n)\n",
+        );
+        strict_err(
+            "type D = { kind: string, [\"not\"]?: boolean }\nlocal a: D = { kind = \"x\" }\nlocal n: boolean = a[\"not\"]\n",
+            "E2001",
+        );
+        strict_err(
+            "type D = { kind: string, [\"not\"]: boolean }\nlocal a: D = { kind = \"x\" }\n",
+            "E2001",
+        );
+    }
+
+    /// A list literal fits a record with a numeric indexer whose named
+    /// fields are optional (spec §2.2.4), element by element.
+    #[test]
+    fn list_literals_for_records_with_a_numeric_indexer() {
+        strict_ok(
+            "type By = { [number]: any, talent?: boolean, what?: string }\nlocal x: By = { \"MAGE\" }\nlocal w: By = { \"DRUID\", 2, talent = true }\nprint(x, w)\n",
+        );
+        strict_ok(
+            "type Ns = { [number]: string, n?: number }\nlocal ns: Ns = { \"a\", \"b\" }\nlocal s: string? = ns[1]\nprint(s)\n",
+        );
+        strict_err(
+            "type Ns = { [number]: string, n?: number }\nlocal ns: Ns = { \"a\", 2 }\n",
+            "E2001",
+        );
+        // A required named field is still required.
+        strict_err(
+            "type Ns = { [number]: string, n: number }\nlocal ns: Ns = { \"a\" }\n",
+            "E2001",
+        );
+    }
+
+    /// `{ [any]: any }` is every table (spec §2.6): namespaces, class and
+    /// enum tables iterate with `pairs` (spec §3.4.3).
+    #[test]
+    fn every_table_is_a_map_of_any() {
+        strict_ok("enum E { X, Y }\nfor k, v in pairs(E) do print(k, v) end\n");
+        strict_ok(
+            "class C\n x: number = 1\nend\nfor k, v in pairs(C) do print(k, v) end\nfor k, v in pairs(C.new()) do print(k, v) end\n",
+        );
+        strict_ok("for k, v in pairs(string) do print(k, v) end\n");
+        // An enum value is a number, not a table.
+        strict_err(
+            "enum E { X, Y }\nlocal m: { [any]: any } = E.X\nprint(m)\n",
+            "E2001",
+        );
+        // `table` stays a map of `any` keys only (spec §2.6).
+        strict_err(
+            "local t: table = {}\nlocal m: { [string]: any } = t\nprint(m)\n",
+            "E2001",
+        );
+    }
 }
