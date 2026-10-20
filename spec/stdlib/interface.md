@@ -58,6 +58,12 @@ Semantics:
 - A built-in resize grip (bottom-right) is created when `resize` is given
   without `grip`, with the client's chat-frame size grabber textures
   (decision S17).
+- **Secrets:** a position, size or scale that reads as secret (a frame
+  anchored to a restricted one) is neither saved nor applied: `save` (and a
+  drag or wheel notch) does nothing while it does, and `reset` restores only
+  the anchors, size and scale that were readable when `movable` was called.
+  A stored position that cannot be read (secret, or with secret fields) is
+  not applied. `lock` ignores a secret.
 
 ### Edit Mode
 
@@ -191,7 +197,7 @@ menu.open(anchor, generator)                  -- open immediately at a frame
 |-----|-----------|-------|
 | `open` | `(owner: Frame, gen: (m: MenuBuilder) -> ())` | Opens at the cursor, owned by `owner` |
 | `attach` | `(frame: Frame, gen: (m: MenuBuilder) -> (), opts?: { button: string? })` | Opens on a mouse-up of `button` (default the right button); the frame must receive mouse input |
-| `MenuBuilder` | `title(text)`, `button(text, onClick)`, `checkbox(text, isChecked, toggle)`, `radio(text, isSelected, select)`, `divider()`, `spacer()`, `submenu(text, gen)`, `disabled(text)` | All return the builder, so calls can be chained |
+| `MenuBuilder` | `title(text)`, `button(text, onClick)`, `checkbox(text, isChecked, toggle)`, `radio(text, isSelected, select)`, `divider()`, `spacer()`, `submenu(text, gen)`, `disabled(text)` | All return the builder, so calls can be chained. `text` is `string \| Secret<string>`: MenuUtil measures it, so a secret shows as `UNKNOWN`. A secret `isChecked`/`isSelected` answer reads as unchecked. |
 
 The generator runs every time the menu opens, so it always reflects current
 state. The menus are Blizzard's own (they close on Escape and outside
@@ -229,7 +235,10 @@ row from a `FramePool` of the given widget class (real instances, constructed
 with the list's frame as their only argument), and `reset` runs when a row is
 released. The list fills `parent`, with a scroll bar on the right. A left
 click on a row selects its entry. Callbacks run through the stdlib error
-policy.
+policy. Entries reach `init` and `onSelect` as they are, secret ones too (the
+list never compares or sorts them); a `data` table that cannot be read
+(secret, `canaccesstable`) shows empty, and `scrollTo` ignores a secret
+index.
 
 ## dialog
 
@@ -264,10 +273,10 @@ dialog.import({
 
 | API | Signature | Notes |
 |-----|-----------|-------|
-| `confirm` | `(opts: { text: string, accept: string?, cancel: string?, onAccept: () -> (), onCancel: (() -> ())? })` | |
-| `prompt` | `(opts: { text: string, default: string?, validate: ((v: string) -> boolean)?, onAccept: (v: string) -> (), onCancel: (() -> ())? })` | |
-| `export` | `(opts: { title: string, value: string })` | Read-only multi-line box, text pre-selected for Ctrl+C |
-| `import` | `(opts: { title: string, onImport: (text: string) -> string? })` | A returned string is shown as an error and the dialog stays open |
+| `confirm` | `(opts: { text: string \| Secret<string>, accept: string?, cancel: string?, onAccept: () -> (), onCancel: (() -> ())? })` | A secret `accept`/`cancel` label shows the default (buttons refuse secrets) |
+| `prompt` | `(opts: { text: string \| Secret<string>, default: (string \| Secret<string>)?, validate: ((v: string) -> boolean \| Secret<boolean>)?, onAccept: (v: string) -> (), onCancel: (() -> ())? })` | A secret `default` is left out (edit boxes refuse secrets); a secret `validate` answer counts as no |
+| `export` | `(opts: { title: string \| Secret<string>, value: string \| Secret<string> })` | Read-only multi-line box, text pre-selected for Ctrl+C. A secret `value` shows an empty box. |
+| `import` | `(opts: { title: string \| Secret<string>, onImport: (text: string) -> string? })` | A returned string is shown as an error and the dialog stays open |
 | `close` | `()` | Closes the current dialog |
 
 - One dialog is visible per addon at a time. Opening another replaces the
@@ -360,13 +369,13 @@ local c = color.lerp(color.hex("ff0000"), color.hex("00ff00"), 0.25)
 | `Color` | type | What `CreateColor` returns: the API's `colorRGBA` (a `ColorMixin` with `r`, `g`, `b`, `a`). The functions below return it where this table says `ColorMixin`. |
 | `hex` | `(hex: string) -> ColorMixin` | `"rrggbb"` or `"aarrggbb"`, with an optional `#`. Literal arguments are validated (E8390) and folded to `CreateColor(r, g, b, a)` with constant components. |
 | `rgb` | `(r: number, g: number, b: number, a: number?) -> ColorMixin` | Components 0–1 |
-| `toHex` | `(c: ColorMixin, withAlpha?: boolean) -> string` | |
+| `toHex` | `(c: ColorMixin, withAlpha?: boolean) -> string` | White (`ffffff`) for a color with secret components (colors the client derives from secrets, such as curve results) |
 | `class` | `(classFile: string) -> ColorMixin?` | Prefers `CUSTOM_CLASS_COLORS` (ClassColors addon) when present, then the client's class colors. A new color each call. |
 | `quality` | `(quality: number) -> ColorMixin?` | Item quality colors |
-| `wrap` | `(text: string \| Secret<string>, c: ColorMixin) -> string \| Secret<string>` | Uses concatenation only, so secret strings are allowed |
+| `wrap` | `(text: string \| Secret<string>, c: ColorMixin \| Secret<ColorMixin>) -> string \| Secret<string>` | Uses concatenation only, so secret strings are allowed. A secret color, or one with secret components, is left to the client's `C_ColorUtil.WrapTextInColor`; without it the text comes back uncolored. |
 | `colorize` | `(hex: string, text: string) -> string` | |
 | `strip` | `(text: string) -> string` | Removes `\|cAARRGGBB`, `\|cnNAME:` and `\|r` escape sequences |
-| `lerp` | `(a: ColorMixin, b: ColorMixin, t: number) -> ColorMixin` | |
+| `lerp` | `(a: ColorMixin, b: ColorMixin, t: number) -> ColorMixin` | The nearer of `a` and `b` when either has secret components |
 
 ## media
 
@@ -389,8 +398,8 @@ media.onRegistered(function(kind: MediaType, name: string) refreshDropdowns() en
 
 | API | Signature | Notes |
 |-----|-----------|-------|
-| `register` | `(kind: MediaType, name: string, path: string \| number)` | Paths from `asset()` are checked at compile time ([Build metadata](../language/06-meta.md)) |
-| `fetch` | `(kind: MediaType, name: string?, opts?: { noDefault: boolean? }) -> (string \| number)?` | Unknown names return the kind's default unless `noDefault`: the client's `STANDARD_TEXT_FONT`, its status bar, tooltip border and tooltip background; sounds have none. With LibSharedMedia, its defaults. |
+| `register` | `(kind: MediaType, name: string, path: string \| number)` | Paths from `asset()` are checked at compile time ([Build metadata](../language/06-meta.md)). A secret name cannot be a key and is not registered. |
+| `fetch` | `(kind: MediaType, name: string?, opts?: { noDefault: boolean? }) -> (string \| number)?` | Unknown names (and secret ones) return the kind's default unless `noDefault`: the client's `STANDARD_TEXT_FONT`, its status bar, tooltip border and tooltip background; sounds have none. With LibSharedMedia, its defaults. |
 | `list` | `(kind: MediaType) -> string[]` | Sorted |
 | `onRegistered` | `(fn: (kind: MediaType, name: string) -> ()) -> Subscription` | Fires for this addon's registrations, and with LibSharedMedia for every addon's |
 | `MediaType` | `"font" \| "statusbar" \| "border" \| "background" \| "sound"` | Unknown literal kinds are E8400 |
@@ -415,10 +424,10 @@ alert.warn("Interrupt!", { sound = SOUNDKIT.RAID_WARNING, flash = true })
 
 | API | Signature | Notes |
 |-----|-----------|-------|
-| `sound` | `(ref: SoundRef, channel?: SoundChannel) -> boolean` | A number below 1000000 is a sound kit (`PlaySound`); other numbers and paths go to `PlaySoundFile`, and names are looked up in `wowlua:media` first. The channel defaults to `"Master"`. Returns whether it plays. |
+| `sound` | `(ref: SoundRef, channel?: SoundChannel) -> boolean` | A number below 1000000 is a sound kit (`PlaySound`); other numbers and paths go to `PlaySoundFile`, and names are looked up in `wowlua:media` first. The channel defaults to `"Master"`. Returns whether it plays. The client refuses secrets: a secret `ref` does not play, a secret channel is `"Master"`. |
 | `flash` | `()` | Flashes the client's taskbar icon (`FlashClientIcon`) |
-| `raidWarning` | `(text: string, color?: Color)` | Text in the middle of the screen through `RaidWarningFrame`, orange by default |
-| `warn` | `(text: string, opts?: { sound?, channel?, flash?, color?, throttle? })` | A raid warning with an optional sound and flash. The same text again within `throttle` seconds (default 1) does nothing. |
+| `raidWarning` | `(text: string \| Secret<string>, color?: Color)` | Text in the middle of the screen through `RaidWarningFrame`, orange by default |
+| `warn` | `(text: string \| Secret<string>, opts?: { sound?, channel?, flash?, color?, throttle? })` | A raid warning with an optional sound and flash. The same text again within `throttle` seconds (default 1) does nothing. A secret text cannot be a key, so it is never throttled; a secret `throttle` is 1, a secret `flash` is no. |
 | `SoundRef`, `SoundChannel` | `number \| string`, `"Master" \| "SFX" \| "Music" \| "Ambience" \| "Dialog"` | |
 
 ## links
@@ -438,7 +447,7 @@ end)
 
 | API | Signature | Notes |
 |-----|-----------|-------|
-| `link` | `(text: string, data: string, color?: Color) -> string` | `\|Haddon:<Addon>:<data>\|h[text]\|h`, colored like spell links by default. `data` may not contain `\|` (runtime error). |
+| `link` | `<S extends string \| Secret<string>>(text: S, data: string \| Secret<string>, color?: Color) -> S` | `\|Haddon:<Addon>:<data>\|h[text]\|h`, colored like spell links by default. `data` may not contain `\|` (runtime error). A secret text gives a secret link; secret data cannot be checked, so it gives `[text]` without a link. |
 | `onClick` | `(fn: (data: string, button: string) -> ()) -> Subscription` | The link's `data` and the mouse button |
 
 Clicks arrive through the client's `EventRegistry` callback `SetItemRef`,

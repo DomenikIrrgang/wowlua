@@ -1,18 +1,21 @@
 -- wowlua:debug (spec §7.1): the run-time parts of the debugging helpers.
 -- The compiler folds most calls to constants, adds their source location,
 -- or removes them with their arguments, depending on the build profile.
+import * as secret from "wowlua:secret"
+
 local addonName, ns = ...
 local wl = ns.__wowlua
 
--- A value for `dump`: tables one level deep, secret values hidden.
+-- A value for `dump`: tables one level deep, secret values hidden (a table
+-- addons may not index shows as itself).
 local function show(v: any, deep: boolean): string
-    if issecretvalue and issecretvalue(v) then
+    if secret.isSecret(v) then
         return "<secret>"
     end
     if type(v) == "string" then
         return string.format("%q", v)
     end
-    if type(v) ~= "table" or not deep then
+    if type(v) ~= "table" or not deep or not secret.readable(v) then
         return tostring(v)
     end
     local parts = {}
@@ -30,8 +33,9 @@ local function fail(message: string)
     error(addonName .. ": " .. message, 0)
 end
 
+-- (A secret condition cannot be tested: it passes.)
 export function assert(condition: any, message: string?, location: string?)
-    if not condition then
+    if not secret.isSecret(condition) and not condition then
         fail((location ?? "?") .. ": assertion failed" .. (message and (": " .. message) or ""))
     end
 end

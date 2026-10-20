@@ -3,15 +3,18 @@
 -- table that taints Blizzard's dialogs). They look like the client's popups
 -- (decisions S17, S29) unless `setTheme` restyles them, close on Escape
 -- (UISpecialFrames, decision S11), and one shows per addon at a time:
--- opening another cancels the current one.
+-- opening another cancels the current one. Texts and titles may be
+-- secret (font strings show them); buttons and edit boxes refuse secrets,
+-- so secret labels, defaults and export values are replaced.
 import * as frames from "wowlua:frames"
 import type WidgetTheme from "wowlua:frames"
 import callIn, report from "wowlua:errors"
+import * as secret from "wowlua:secret"
 
 local addonName = ...
 
 export type ConfirmOptions = {
-    text: string,
+    text: string | Secret<string>,
     accept?: string,
     cancel?: string,
     onAccept: () -> (),
@@ -19,17 +22,20 @@ export type ConfirmOptions = {
 }
 
 export type PromptOptions = {
-    text: string,
-    default?: string,
-    validate?: (value: string) -> boolean,
+    text: string | Secret<string>,
+    --- A secret default is left out (edit boxes refuse secrets).
+    default?: string | Secret<string>,
+    --- A secret answer counts as no.
+    validate?: (value: string) -> (boolean | Secret<boolean>),
     onAccept: (value: string) -> (),
     onCancel?: () -> (),
 }
 
-export type ExportOptions = { title: string, value: string }
+--- A secret `value` shows an empty box.
+export type ExportOptions = { title: string | Secret<string>, value: string | Secret<string> }
 
 export type ImportOptions = {
-    title: string,
+    title: string | Secret<string>,
     --- A returned string is shown as an error and the dialog stays open.
     onImport: (text: string) -> string?,
     onCancel?: () -> (),
@@ -195,8 +201,8 @@ export function confirm(opts: ConfirmOptions)
     d.text:SetText(opts.text)
     d.edit:Hide()
     d.frame:SetHeight(110)
-    d.accept:SetText(opts.accept ?? ACCEPT)
-    d.cancel:SetText(opts.cancel ?? CANCEL)
+    d.accept:SetText(secret.known(opts.accept, ACCEPT))
+    d.cancel:SetText(secret.known(opts.cancel, CANCEL))
     d.accept:SetScript("OnClick", function()
         d:done()
         callIn({ component = "dialog: onAccept" }, opts.onAccept)
@@ -210,13 +216,13 @@ export function prompt(opts: PromptOptions)
     const d = getPopup()
     d.text:SetText(opts.text)
     d.edit:Show()
-    d.edit:SetText(opts.default ?? "")
+    d.edit:SetText(secret.known(opts.default, ""))
     d.frame:SetHeight(140)
     d.accept:SetText(ACCEPT)
     d.cancel:SetText(CANCEL)
     const validate = opts.validate
     local function valid(): boolean
-        return validate == nil or validate(d.edit:GetText()) == true
+        return validate == nil or secret.flag(validate(d.edit:GetText()))
     end
     local function submit()
         if not valid() then
@@ -241,14 +247,15 @@ end
 export function export(opts: ExportOptions)
     replace()
     const d = getTextDialog()
+    const value = secret.known(opts.value, "")
     d.text:SetText(opts.title)
-    d.edit:SetText(opts.value)
+    d.edit:SetText(value)
     d.accept:Hide()
     d.cancel:SetText(CLOSE)
     -- Read-only: typing restores the value.
     d.edit:SetScript("OnTextChanged", function(_: EditBox, byUser: boolean)
         if byUser then
-            d.edit:SetText(opts.value)
+            d.edit:SetText(value)
             d.edit:HighlightText()
         end
     end)

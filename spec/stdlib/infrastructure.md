@@ -74,7 +74,7 @@ end)
 |-----|-----------|-------|
 | `call` | `function call<A..., R...>(fn: (A...) -> R..., ...: A...): (boolean, R...)` | Isolated call. On error, it reports and returns `false`. |
 | `wrap` | `function wrap<A...>(fn: (A...) -> ()): (A...) -> ()` | Returns an isolated function. The return values of `fn` are discarded. |
-| `report` | `(err: any, context: { [string]: any }?)` | Reports through the policy. Non-string errors are converted with `tostring`. The context's `component` and `module` name the source in debug builds, and its `owner` goes to the listeners. |
+| `report` | `(err: any, context: { [string]: any }?)` | Reports through the policy. Non-string errors are converted with `tostring`. A secret error, or a secret `tostring` result, is reported as `<secret>`. The context's `component` and `module` name the source in debug builds, and its `owner` goes to the listeners. |
 | `onError` | `(fn: (msg: string, info: ErrorInfo) -> ()) -> Subscription` | Addon-level listener, e.g. to show a warning in the UI. A one-parameter listener fits too. |
 | `ErrorInfo` | `{ component: string?, owner: any?, stack: string? }` | What a listener learns besides the message (policy 8) |
 | `configure` | `(opts: { rateLimit: number? })` | |
@@ -130,7 +130,8 @@ Semantics:
 - Handlers run in subscription order through the error policy. `fire` iterates a
   snapshot: a handler subscribed during `fire` waits for the next `fire`, and a
   handler cancelled during `fire` (by an earlier handler) is skipped for the
-  rest of it, as CallbackHandler does.
+  rest of it, as CallbackHandler does. Arguments are passed on unchanged,
+  secrets included.
 - Owners are held in a weak-keyed table, so a registry never keeps an owner
   alive by itself. Lua 5.1 has no ephemerons, though: a handler closure that
   references its owner keeps the owner alive. Call `offAll(owner)` explicitly
@@ -189,7 +190,9 @@ Semantics:
 - **Budget scope:** every addon has its own copy of the module (T10), so
   budgets are per addon, not global.
 - **Errors:** a failing job is reported through the error policy, ends with
-  status `"failed"`, and calls `onError`. Other jobs are unaffected.
+  status `"failed"`, and calls `onError`. Other jobs are unaffected. A secret
+  message is reported as `job <name>: <secret>`; `onError` gets it unchanged.
+  Payloads (`waitFor`) and results pass through unchanged, secrets included.
 - **Combat:** with `pauseInCombat`, the job is paused on
   `PLAYER_REGEN_DISABLED` and resumed after `PLAYER_REGEN_ENABLED`.
 - **Lua 5.1 limitation:** a coroutine cannot yield across `pcall`, `xpcall`,
@@ -204,8 +207,12 @@ Semantics:
 
 ## table
 
-`wowlua:table` holds the table helpers addons keep rewriting. Secret values
-are copied as they are and never equal anything (comparing them would error).
+`wowlua:table` holds the table helpers addons keep rewriting. Values the
+addon may not read (secrets, and tables whose security keeps addons out,
+`secret.readable`) are never walked, compared or used as keys, since that
+would error: they are copied as they are, never equal anything, are never
+found, and sort after everything else in their order. A table argument the
+addon may not read reads as empty.
 
 ```wowlua
 import * as tbl from "wowlua:table"
@@ -216,6 +223,11 @@ tbl.defaults(db.window, { width = 300, height = 200 })
 if not tbl.equal(a, b) then … end
 for _, key in ipairs(tbl.keys(map)) do … end       -- sorted when all numbers or all strings
 local names = tbl.map(units, function(u: Unit) return u.name end)
+
+-- Stable, and safe in combat: auras whose expiration is secret go last.
+tbl.sort(auras, tbl.by(function(a: AuraData) return a.expirationTime end))
+tbl.sort(members, tbl.by(function(m: Member) return m.role end))   -- keeps the name order within a role
+local at = tbl.insertSorted(queue, entry, tbl.by(function(e: Entry) return e.at end))
 ```
 
 | API | Signature | Notes |
@@ -224,10 +236,77 @@ local names = tbl.map(units, function(u: Unit) return u.name end)
 | `shallowCopy` | `<T extends table>(t: T) -> T` | |
 | `merge` | `<T extends table>(target: T, source: table) -> T` | Copies `source` in: nested tables merge, other values replace |
 | `defaults` | `<T extends table>(target: T, defaults: table) -> T` | Fills in what `target` lacks, nested too |
-| `equal` | `(a: any, b: any) -> boolean` | Deep |
+| `equal` | `(a: any, b: any) -> boolean` | Deep; secrets never equal |
 | `keys`, `values` | `<K, V>(t: { [K]: V }, less?: (a: K, b: K) -> boolean) -> K[]`, `<K, V>(t: { [K]: V }) -> V[]` | `keys` is sorted by `less` when given, else when the keys are all numbers or all strings |
 | `count`, `isEmpty` | `(t: table) -> number`, `-> boolean` | All entries, not just the array part |
-| `filter`, `map`, `find`, `contains` | list helpers | `find` returns the element and its index |
+| `filter`, `map`, `find`, `contains` | list helpers | `find` returns the element and its index; `contains` never finds a secret |
+| `sort` | `<T>(list: T[], less?: Less<T>) -> T[]` | In place, returns `list`. **Stable** (merge sort; insertion sort up to 12 elements, without garbage). An inconsistent `less` gives some order, never "invalid order function for sorting". Secret elements never reach `less`; they go last, in their order. Default: numbers and strings ascending, values of different types by type name. |
+| `by` | `<T>(key: (v: T) -> unknown, descending?: boolean) -> Less<T>` | An order by a key: numbers and strings, ascending unless `descending`; elements whose key is nil or secret go last, in their order |
+| `order` | `<T>(less?: Less<T>) -> Less<T>` | `less` behind the guard `sort` uses (secrets after everything, never handed to `less`), for ordered structures of the addon's own |
+| `insertSorted` | `<T>(list: T[], value: T, less?: Less<T>) -> number` | Inserts behind the elements equal to `value` (binary search); returns the position. A secret goes last. |
+| `searchSorted` | `<T>(list: T[], value: T, less?: Less<T>) -> number?` | The first element equal to `value` (neither before nor after it) by binary search; a secret is never found |
+| `Less<T>` | `(a: T, b: T) -> boolean` | Whether `a` goes before `b` |
+
+## collections
+
+`wowlua:collections` holds the containers addons keep writing for combat
+data. They store secret values as they are and never compare, index or use
+them as keys: a `Heap` orders secrets after every other value, an
+`LruCache` ignores secret keys.
+
+```wowlua
+import RingBuffer, Heap, LruCache from "wowlua:collections"
+import by from "wowlua:table"
+
+local damage = RingBuffer.new(30)                 -- the last 30 hits
+damage:push(amount)                               -- a secret amount is kept as it is
+
+local expiring: Heap<AuraData> = Heap.new(by(function(a: AuraData) return a.expirationTime end))
+expiring:push(aura)
+local next = expiring:peek()                      -- secret expirations come last
+
+local items: LruCache<number, ItemInfo> = LruCache.new(200)
+items:set(id, info)
+```
+
+| API | Signature | Notes |
+|-----|-----------|-------|
+| `RingBuffer<T>` | `RingBuffer.new(capacity: number)` | The last `capacity` values, oldest first; slots are reused, so pushing makes no garbage |
+| | `push(v: T) -> T?` | Appends; returns the value it pushed out of a full buffer |
+| | `shift() -> T?`, `pop() -> T?` | Removes the oldest, the newest |
+| | `at(i: number) -> T?` | 1 is the oldest, -1 the newest |
+| | `size()`, `isFull()`, `clear()`, `each() -> (() -> T?)`, `toList() -> T[]`, `capacity` | `each` and `toList` go oldest first |
+| `Heap<T>` | `Heap.new(less?: Less<T>)` | A binary heap: `pop` gives the smallest by `less` (default: numbers and strings ascending; `table.by` for a key). Secrets never reach `less` and come out after all others. |
+| | `push(v: T)`, `pop() -> T?`, `peek() -> T?` | `O(log n)` |
+| | `remove(v: T) -> boolean` | Removes that value (the same value, not an equal one); a secret is never found |
+| | `size()`, `clear()` | |
+| `LruCache<K, V>` | `LruCache.new(capacity: number)` | At most `capacity` entries; a new key in a full cache drops the least recently used one (`get` and `set` are uses, `has` is not). Entries are reused, so a full cache makes no garbage. |
+| | `get(key: K) -> V?`, `set(key: K, value: V?)`, `has(key: K) -> boolean`, `delete(key: K) -> boolean` | `set` with nil deletes. A secret key finds nothing and is not stored (a secret cannot be a table key); values may be secret. |
+| | `size()`, `clear()`, `capacity` | |
+
+## utf8
+
+`wowlua:utf8` counts characters, not bytes: WoW's Lua 5.1 has no `utf8`
+library, and `string.sub` cuts names with umlauts, Cyrillic or Hangul in the
+middle of a character. A byte that starts no valid sequence counts as one
+character, so every string works. A secret string cannot be read:
+`truncate` returns it whole (a FontString can still cut it on screen, with
+its width and `SetWordWrap(false)`), and the other functions read it as
+empty.
+
+```wowlua
+import * as utf8 from "wowlua:utf8"
+
+nameText:SetText(utf8.truncate(UnitName(unit) ?? "", 10))   -- in combat too: a secret name passes whole
+local initial = utf8.sub(name, 1, 1)                     -- "Ä", not half of it
+```
+
+| API | Signature | Notes |
+|-----|-----------|-------|
+| `len` | `(s: string) -> number` | Characters; 0 for a secret |
+| `sub` | `(s: string, i: number, j?: number) -> string` | Characters `i` to `j`, positions as `string.sub` counts them (negative from the end); "" for a secret |
+| `truncate` | `(s: string \| Secret<string>, max: number, ellipsis?: string) -> string \| Secret<string>` | At most `max` characters, `ellipsis` (default none) included when it cuts; a secret returned whole |
+| `chars` | `(s: string) -> (() -> string?)` | An iterator over the characters; none for a secret |
 
 ## format
 
@@ -239,11 +318,11 @@ supported client has.
 
 | API | Signature | Notes |
 |-----|-----------|-------|
-| `duration` | `(seconds: number, opts?: { noSeconds?, long?, units? }) -> string` | "1 Hr 5 Min" (`long`: unit words; `units` at most, default 2) |
+| `duration` | `(seconds: number, opts?: { noSeconds?, long?, units? }) -> string` | "1 Hr 5 Min" (`long`: unit words; `units` at most, default 2). Secret options count as unset. |
 | `short` | `(seconds: number) -> string` | The largest unit, like aura and cooldown times |
 | `clock` | `(seconds: number, hours?: boolean) -> string` | "3:07", "1:03:07" |
 | `date` | `(at?: number) -> string` | The locale's short date (default today) |
-| `money` | `(copper: number, opts?: { text?, separate? }) -> string` | Coin icons, or with `text` the client's words |
+| `money` | `(copper: number, opts?: { text?, separate? }) -> string` | Coin icons, or with `text` the client's words. Secret options count as unset. |
 | `number` | `(n: number \| Secret<number>) -> string \| Secret<string>` | Thousands separators |
 | `abbreviate` | `(n: number \| Secret<number>) -> string \| Secret<string>` | "8.5K"; a secret gives a secret string |
 | `percent` | `(fraction: number, decimals?: number) -> string` | "46%" |

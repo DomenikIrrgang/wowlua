@@ -220,8 +220,9 @@ export function onUnit(event: string, units: string[], handler: (...any) -> (), 
     local seen: { [string]: boolean } = {}
     local single: string? = nil
     for _, unit in ipairs(units) do
-        -- A unit listed twice would get its events twice.
-        if seen[unit] then
+        -- A unit listed twice would get its events twice. A secret unit
+        -- cannot be a key, nor registered by an addon: it is skipped.
+        if secret.isSecret(unit) or seen[unit] then
             continue
         end
         seen[unit] = true
@@ -242,7 +243,8 @@ end
 --- at other units without subscribing again.
 export interface UnitWatch
     active: boolean
-    --- Registers every event for `unit` (and `unit2`); nil unregisters them.
+    --- Registers every event for `unit` (and `unit2`); nil (or a secret)
+    --- unregisters them.
     function setUnit(unit: string?, unit2: string?)
     function cancel()
 end
@@ -286,7 +288,12 @@ class Watch implements UnitWatch
     end
 
     function setUnit(unit: string?, unit2: string?)
-        if unit == nil then
+        -- A secret unit cannot be compared, nor registered by an addon: it
+        -- reads as none.
+        if secret.isSecret(unit) then
+            unit = nil
+        end
+        if unit == nil or secret.isSecret(unit2) then
             unit2 = nil
         end
         if not self.active or (unit == self.unit and unit2 == self.unit2) then

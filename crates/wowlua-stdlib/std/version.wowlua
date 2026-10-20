@@ -10,6 +10,7 @@ import on from "wowlua:events"
 import type Subscription from "wowlua:events"
 import after from "wowlua:timer"
 import callIn from "wowlua:errors"
+import * as secret from "wowlua:secret"
 
 local addonName = ...
 
@@ -123,12 +124,17 @@ local function announce(where: comm.DistributionValue, target: string?)
     channel:send(`{PROTOCOL}:{addonName}:{build.version}`, where, target)
 end
 
+-- A secret sender (wowlua:comm hands it on) still tells of a newer
+-- version, but is not recorded among the peers nor answered.
 channel:onMessage(function(msg: string, sender: string)
     local protocol, name, theirs = msg:match("^(%d+):([^:]+):(.+)$")
     if protocol ~= PROTOCOL or name ~= addonName or not theirs then
         return
     end
-    peerVersions[sender] = theirs
+    const hidden = secret.isSecret(sender)
+    if not hidden then
+        peerVersions[sender] = theirs
+    end
     const order = compare(theirs, build.version)
     if order > 0 and compare(theirs, newestSeen) > 0 then
         newestSeen = theirs
@@ -138,7 +144,7 @@ channel:onMessage(function(msg: string, sender: string)
                 callIn({ component = "version: onNewer" }, l.fn, theirs, sender)
             end
         end
-    elseif order < 0 and not answered[sender] then
+    elseif order < 0 and not hidden and not answered[sender] then
         answered[sender] = true
         announce(comm.Distribution.Whisper, sender)
     end
@@ -174,16 +180,16 @@ end
 local grouped = false
 on("PLAYER_LOGIN", function()
     after(10, function()
-        if IsInGuild() then
+        if secret.flag(IsInGuild()) then
             announce(comm.Distribution.Guild)
         end
     end)
 end)
 on("GROUP_ROSTER_UPDATE", function()
-    const now = IsInGroup()
+    const now = secret.flag(IsInGroup())
     if now and not grouped then
         after(3, function()
-            if IsInGroup() then
+            if secret.flag(IsInGroup()) then
                 announce(comm.Distribution.Group)
             end
         end)

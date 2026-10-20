@@ -2,6 +2,7 @@
 -- decorators `@throttle`, `@debounce` and `@nextFrame`. Decorated methods
 -- keep their state per instance (weak keys on `self`).
 import callIn from "wowlua:errors"
+import * as secret from "wowlua:secret"
 
 -- The error contexts of the callbacks, made once.
 local contexts = {
@@ -32,8 +33,8 @@ export interface Repeating
     --- Starts ticking (the first tick one interval later); nothing if running.
     function start()
     function stop()
-    --- `start()` when `running`, else `stop()`.
-    function setRunning(running: boolean)
+    --- `start()` when `running`, else `stop()` (a secret reads as false).
+    function setRunning(running: boolean | Secret<boolean>)
     function isRunning(): boolean
 end
 
@@ -63,8 +64,8 @@ class RepeatingTimer implements Repeating
         end
     end
 
-    function setRunning(running: boolean)
-        if running then
+    function setRunning(running: boolean | Secret<boolean>)
+        if secret.flag(running) then
             self:start()
         else
             self:stop()

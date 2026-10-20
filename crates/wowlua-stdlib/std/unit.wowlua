@@ -152,10 +152,11 @@ export function classColor(unit: UnitToken): Color?
 end
 
 --- The group's unit tokens: `raid1..raidN` in a raid, `party1..party4` in a
---- party, and `player` (with `includePlayer`, or alone when solo).
+--- party, and `player` (with `includePlayer`, or alone when solo). Secret
+--- options and answers count as no.
 export function group(opts: GroupOptions?): () -> UnitToken?
     const tokens: UnitToken[] = {}
-    const pets = opts?.includePets == true
+    const pets = secret.flag(opts?.includePets)
     local function add(token: UnitToken, pet: UnitToken)
         if exists(token) then
             tokens[#tokens + 1] = token
@@ -164,7 +165,7 @@ export function group(opts: GroupOptions?): () -> UnitToken?
             end
         end
     end
-    const withPlayer = opts?.includePlayer == true
+    const withPlayer = secret.flag(opts?.includePlayer)
     if secret.flag(IsInRaid()) then
         for i = 1, 40 do
             const token = `raid{i}`
@@ -330,9 +331,13 @@ end
 --- who joins and leaves. Starts on first use; members whose GUID is secret
 --- keep their last known entry.
 export const roster = {
-    --- The member with this GUID; nil when not in the group.
-    byGuid = function(guid: string): RosterMember?
+    --- The member with this GUID; nil when not in the group or the GUID
+    --- is secret (combat log GUIDs can be).
+    byGuid = function(guid: string | Secret<string>): RosterMember?
         current()
+        if secret.isSecret(guid) then
+            return nil
+        end
         return byGuidMap[guid]
     end,
     --- The member behind a unit token of the group.

@@ -2,12 +2,15 @@
 -- Compartment entry and an LDB launcher from one declaration, created at
 -- PLAYER_LOGIN. The minimap button is LibDBIcon's when that library is
 -- loaded, else a built-in one; its position uses LibDBIcon's table shape
--- (`hide`, `minimapPos`), so switching between them keeps it.
+-- (`hide`, `minimapPos`), so switching between them keeps it. Secret icons,
+-- labels and texts are not published (LibDataBroker compares them, the
+-- compartment's menu measures them): the previous value stays.
 import isLoggedIn from "wowlua:lifecycle"
 import on from "wowlua:events"
 import type Subscription from "wowlua:events"
 import callIn from "wowlua:errors"
 import type WidgetTheme from "wowlua:frames"
+import * as secret from "wowlua:secret"
 
 local addonName, ns = ...
 local wl = ns.__wowlua
@@ -52,7 +55,7 @@ local function position(): Position?
         return nil
     end
     local t = m.store[m.key]
-    if type(t) ~= "table" then
+    if type(t) ~= "table" or not secret.readable(t) then
         t = {}
         m.store[m.key] = t
     end
@@ -107,7 +110,7 @@ local function place()
     if not (button and t) then
         return
     end
-    local angle = math.rad(t.minimapPos ?? 225)
+    local angle = math.rad(secret.known(t.minimapPos, 225))
     local x, y = math.cos(angle), math.sin(angle)
     local quadrant = y >= 0 and (x >= 0 and 1 or 2) or (x < 0 and 3 or 4)
     local shape = GetMinimapShape and GetMinimapShape() or "ROUND"
@@ -242,23 +245,28 @@ local function applyVisibility()
         return
     end
     if libIcon then
-        if t.hide then
+        if secret.flag(t.hide) then
             libIcon:Hide(addonName)
         else
             libIcon:Show(addonName)
         end
     elseif button then
-        button:SetShown(not t.hide)
+        button:SetShown(not secret.flag(t.hide))
     end
 end
 
 -- Surfaces ---------------------------------------------------------------------
+
+-- What a secret icon shows instead.
+const QUESTION_MARK = "Interface\\Icons\\INV_Misc_QuestionMark"
 
 local function create()
     local o = opts
     if not o then
         return
     end
+    o.icon = secret.known(o.icon, QUESTION_MARK)
+    o.label = secret.known(o.label, addonName)
     -- LibStub is embedded by addons: it may be missing.
     local libStub = _G.LibStub :: typeof(LibStub)?
     local ldb = libStub and libStub("LibDataBroker-1.1", true)
@@ -323,7 +331,7 @@ end
 
 --- Changes the icon everywhere.
 export function setIcon(icon: string)
-    if not opts then
+    if not opts or secret.isSecret(icon) then
         return
     end
     opts.icon = icon
@@ -340,7 +348,7 @@ end
 
 --- Changes the label everywhere.
 export function setLabel(label: string)
-    if not opts then
+    if not opts or secret.isSecret(label) then
         return
     end
     opts.label = label
@@ -356,7 +364,7 @@ end
 --- Shows or hides the minimap button (stored with its position).
 export function showMinimap(show: boolean)
     local t = position()
-    if not t then
+    if not t or secret.isSecret(show) then
         return
     end
     t.hide = not show
@@ -411,9 +419,9 @@ class DataSource
         const o = self.opts
         const object = ldb:NewDataObject(self.name, {
             type = "data source",
-            text = o.text,
-            label = o.label ?? self.name,
-            icon = o.icon,
+            text = secret.known(o.text, ""),
+            label = secret.known(o.label, self.name),
+            icon = not secret.isSecret(o.icon) and o.icon or nil,
             OnClick = function(_: any, mouse: string)
                 if o.onClick then
                     callIn({ component = "launcher: data source onClick" }, o.onClick, mouse)
@@ -432,6 +440,9 @@ class DataSource
     end
 
     function setText(text: string)
+        if secret.isSecret(text) then
+            return
+        end
         self.opts.text = text
         if self.object then
             self.object.text = text
@@ -439,6 +450,9 @@ class DataSource
     end
 
     function setIcon(icon: string)
+        if secret.isSecret(icon) then
+            return
+        end
         self.opts.icon = icon
         if self.object then
             self.object.icon = icon
@@ -446,6 +460,9 @@ class DataSource
     end
 
     function setLabel(label: string)
+        if secret.isSecret(label) then
+            return
+        end
         self.opts.label = label
         if self.object then
             self.object.label = label

@@ -42,12 +42,13 @@ end
 
 const legacyCooldown = _G.GetSpellCooldown :: ((spell: SpellRef) -> (number, number, number, number?))?
 
---- The spell's cooldown (secret times on restricted clients).
+--- The spell's cooldown (secret times on restricted clients); nil when
+--- the client hands back a secret table or one addons may not index.
 export function cooldown(spell: SpellRef): CooldownInfo?
     const modern = (C_Spell :: table).GetSpellCooldown :: ((spell: SpellRef) -> any)?
     if modern then
         const c = modern(spell)
-        if c == nil or secret.isSecret(c) then
+        if not secret.readable(c) then
             return nil
         end
         return {
@@ -91,7 +92,12 @@ end
 --- Charges, for spells that have them: the counts and times may be secret
 --- on restricted clients; `maxCharges` and `isActive` stay readable.
 export function charges(spell: SpellRef): SpellChargeInfoSecret?
-    return C_Spell.GetSpellCharges(spell)
+    const c = C_Spell.GetSpellCharges(spell)
+    -- A table addons may not index is no answer they can use.
+    if not secret.readable(c) then
+        return nil
+    end
+    return c
 end
 
 --- Whether the player (or, with `isPet`, the pet) knows the spell.

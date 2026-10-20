@@ -1,0 +1,64 @@
+-- wowlua:table's ordering, wowlua:collections and wowlua:utf8, against the
+-- client's own secrets: on WoW: Forever the player's health is secret even
+-- out of combat, so these run on real secrets there.
+import * as tbl from "wowlua:table"
+import RingBuffer, Heap, LruCache from "wowlua:collections"
+import * as utf8 from "wowlua:utf8"
+import * as secret from "wowlua:secret"
+import suite, say from "/harness"
+
+local s = suite("ordering, collections and utf8")
+
+s:test("a stable sort; secrets never reach the order", function(t)
+    const hp = UnitHealth("player")
+    if not secret.isSecret(hp) then
+        say("ordering: the player's health is not secret here")
+    end
+    const list: any[] = { 3, hp, 1, 2 }
+    tbl.sort(list)
+    t:ok(not secret.isSecret(list[1]) and list[1] == 1, "the smallest first")
+    if secret.isSecret(hp) then
+        t:ok(secret.isSecret(list[4]), "the secret went last")
+    end
+    const rows = { { n = "a", k = 2 }, { n = "b", k = hp }, { n = "c", k = 1 }, { n = "d", k = 2 } }
+    tbl.sort(rows, tbl.by(function(r: any) return r.k end))
+    const order = `{rows[1].n}{rows[2].n}{rows[3].n}{rows[4].n}`
+    t:ok(not secret.isSecret(hp) or order == "cadb", `by a key, secret keys last: {order}`)
+    t:eq(tbl.searchSorted({ 1, 3, 5 }, 3), 2, "a sorted search")
+end)
+
+s:test("collections keep secrets without reading them", function(t)
+    const hp = UnitHealth("player")
+    const ring: RingBuffer<any> = RingBuffer.new(2)
+    ring:push(1)
+    ring:push(hp)
+    ring:push(3)
+    t:eq(ring:size(), 2, "the oldest went")
+    t:ok(secret.isSecret(hp) == secret.isSecret(ring:at(1)), "the value is kept as it is")
+    const heap: Heap<any> = Heap.new()
+    heap:push(hp)
+    heap:push(5)
+    heap:push(4)
+    if secret.isSecret(hp) then
+        t:eq(heap:pop(), 4, "readable values first")
+        t:eq(heap:pop(), 5, "in order")
+        t:ok(secret.isSecret(heap:pop()), "the secret last")
+    end
+    const cache: LruCache<any, number> = LruCache.new(2)
+    const name = UnitName("player") ?? ""
+    cache:set(name, 1)
+    t:ok(cache:has(name) ~= secret.isSecret(name), "a secret key is not stored")
+end)
+
+s:test("utf8 by characters; a secret name passes truncate whole", function(t)
+    t:eq(utf8.len("Jäger"), 5, "five characters")
+    t:eq(utf8.sub("Jäger", 2, 2), "ä", "a whole character")
+    t:eq(utf8.truncate("Jäger", 4, "..."), "J...", "cut with an ellipsis")
+    const name = UnitName("player") ?? ""
+    const short = utf8.truncate(name, 3)
+    t:ok(secret.isSecret(short) == secret.isSecret(name), "a secret stays secret")
+    const text = UIParent:CreateFontString(nil, "ARTWORK", "GameFontNormal")
+    text:SetText(short)
+    text:Hide()
+    t:ok(true, "a font string took the name")
+end)

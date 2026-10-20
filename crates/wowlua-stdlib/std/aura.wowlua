@@ -17,10 +17,10 @@ export type AuraFilter = string
 -- Reads ------------------------------------------------------------------------
 
 -- One aura, or nil when there is none, the client refuses (secret auras in
--- combat) or hands back a secret table.
+-- combat) or hands back a secret table or one addons may not index.
 local function read(unit: UnitToken, index: number, filter: AuraFilter): AuraData?
     local ok, a = pcall(C_UnitAuras.GetAuraDataByIndex, unit, index, filter)
-    if not ok or secret.isSecret(a) then
+    if not ok or secret.isSecret(a) or not secret.readable(a) then
         return nil
     end
     return a
@@ -30,7 +30,11 @@ end
 --- clients with secret auras).
 export function readable(unit: UnitToken): boolean
     local ok, a = pcall(C_UnitAuras.GetAuraDataByIndex, unit, 1, "HELPFUL")
-    return ok and not secret.isSecret(a)
+    if not ok or secret.isSecret(a) then
+        return false
+    end
+    -- No aura at all is readable too.
+    return a == nil or secret.readable(a)
 end
 
 --- Every aura matching `filter`; nothing when they cannot be read.
@@ -42,12 +46,13 @@ export function each(unit: UnitToken, filter: AuraFilter): () -> AuraData?
     end
 end
 
---- `fn` for each aura until it returns true (no iterator allocated).
+--- `fn` for each aura until it returns true (no iterator allocated; a
+--- secret answer does not stop).
 export function forEach(unit: UnitToken, filter: AuraFilter, fn: (a: AuraData) -> boolean?)
     local i = 1
     while true do
         const a = read(unit, i, filter)
-        if not a or fn(a) == true then
+        if not a or secret.flag(fn(a)) then
             return
         end
         i += 1
@@ -89,7 +94,7 @@ end
 --- An aura by its instance ID (from `UNIT_AURA`'s changes).
 export function byInstanceId(unit: UnitToken, id: number): AuraData?
     local ok, a = pcall(C_UnitAuras.GetAuraDataByAuraInstanceID, unit, id)
-    if not ok or secret.isSecret(a) then
+    if not ok or secret.isSecret(a) or not secret.readable(a) then
         return nil
     end
     return a
@@ -238,7 +243,10 @@ local function set(list: any[]?): { [any]: boolean }?
     end
     const out: { [any]: boolean } = {}
     for _, v in ipairs(list) do
-        out[v] = true
+        -- A secret cannot be a key (nor matched by the engine): skipped.
+        if not secret.isSecret(v) then
+            out[v] = true
+        end
     end
     return out
 end
@@ -347,11 +355,13 @@ class Container implements AuraContainer
     constructor(engine: EngineFrame, opts: ContainerOptions)
         self.engine = engine
         self.frame = engine
-        self.lazy = opts.lazy == true
+        self.lazy = secret.flag(opts.lazy)
         -- A rectangle to lay out in from the start.
         engine:SetSize(1, 1)
-        const size = opts.size ?? 30
-        const spacing = opts.spacing ?? 2
+        -- Counts and sizes are compared and given to buttons, which refuse
+        -- secrets from addon code: a secret one reads as the default.
+        const size = secret.known(opts.size, 30)
+        const spacing = secret.known(opts.spacing, 2)
         self:setFlow(opts.anchor ?? "TOPLEFT", opts.growth)
         if opts.lineWidth then
             self:setLineWidth(opts.lineWidth)
@@ -360,10 +370,10 @@ class Container implements AuraContainer
             const g: GroupState = {
                 group = group,
                 filter = canonical(group.filter),
-                max = group.max ?? 16,
+                max = secret.known(group.max, 16),
                 spells = group.spells,
-                size = group.size ?? size,
-                spacing = group.spacing ?? spacing,
+                size = secret.known(group.size, size),
+                spacing = secret.known(group.spacing, spacing),
                 -- A lazy group added later keeps its place.
                 order = group.order ?? i,
                 added = false,
@@ -421,7 +431,7 @@ class Container implements AuraContainer
 
     function setGroupMax(key: string, max: number)
         const g = self.groups[key]
-        if not g then
+        if not g or secret.isSecret(max) then
             return
         end
         g.max = max
@@ -456,7 +466,7 @@ class Container implements AuraContainer
 
     function setGroupSize(key: string, size: number)
         const g = self.groups[key]
-        if not g or g.size == size then
+        if not g or secret.isSecret(size) or g.size == size then
             return
         end
         g.size = size

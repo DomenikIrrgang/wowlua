@@ -1,0 +1,358 @@
+-- wowlua:collections (spec stdlib "collections"): the containers addons
+-- keep rewriting for combat data: a ring buffer (the last N values, without
+-- garbage), a heap (the next aura or cooldown to expire) and an LRU cache
+-- (item and spell lookups). They store secret values as they are and never
+-- compare, index or hash them: a heap orders secrets after everything else,
+-- a cache ignores secret keys.
+import * as secret from "wowlua:secret"
+import type Less from "wowlua:table"
+import order from "wowlua:table"
+
+-- Ring buffer ---------------------------------------------------------------
+
+--- The last `capacity` values pushed, oldest first: a push into a full
+--- buffer drops the oldest. Slots are reused, so pushing makes no garbage.
+export class RingBuffer<T>
+    readonly capacity: number
+    private items: { [number]: T } = {}
+    -- The oldest value's slot, and how many values there are.
+    private head: number = 1
+    private n: number = 0
+
+    constructor(capacity: number)
+        if capacity < 1 then
+            error("RingBuffer: the capacity must be at least 1", 3)
+        end
+        self.capacity = floor(capacity)
+    end
+
+    private function slot(i: number): number
+        return (self.head + i - 2) % self.capacity + 1
+    end
+
+    --- Appends `v`; returns the value it pushed out, if the buffer was full.
+    function push(v: T): T?
+        if v == nil then
+            return nil
+        end
+        if self.n < self.capacity then
+            self.n += 1
+            self.items[self:slot(self.n)] = v
+            return nil
+        end
+        const dropped = self.items[self.head]
+        self.items[self.head] = v
+        self.head = self.head % self.capacity + 1
+        return dropped
+    end
+
+    --- Removes and returns the oldest value.
+    function shift(): T?
+        if self.n == 0 then
+            return nil
+        end
+        const v = self.items[self.head]
+        self.items[self.head] = nil
+        self.head = self.head % self.capacity + 1
+        self.n -= 1
+        return v
+    end
+
+    --- Removes and returns the newest value.
+    function pop(): T?
+        if self.n == 0 then
+            return nil
+        end
+        const at = self:slot(self.n)
+        const v = self.items[at]
+        self.items[at] = nil
+        self.n -= 1
+        return v
+    end
+
+    --- The `i`th value: 1 is the oldest, -1 the newest.
+    function at(i: number): T?
+        if i < 0 then
+            i = self.n + i + 1
+        end
+        if i < 1 or i > self.n then
+            return nil
+        end
+        return self.items[self:slot(i)]
+    end
+
+    function size(): number
+        return self.n
+    end
+
+    function isFull(): boolean
+        return self.n == self.capacity
+    end
+
+    function clear()
+        for i = 1, self.n do
+            self.items[self:slot(i)] = nil
+        end
+        self.head = 1
+        self.n = 0
+    end
+
+    --- An iterator over the values, oldest first.
+    function each(): () -> T?
+        local i = 0
+        return function(): T?
+            i += 1
+            return self:at(i)
+        end
+    end
+
+    --- The values in a new list, oldest first.
+    function toList(): T[]
+        const out: T[] = {}
+        for i = 1, self.n do
+            out[i] = self.items[self:slot(i)] :: T
+        end
+        return out
+    end
+end
+
+-- Heap ----------------------------------------------------------------------
+
+--- A priority queue: `pop` returns the smallest value by `less` (default:
+--- numbers and strings ascending; `table.by` orders by a key). Secret values
+--- never reach `less` and come out after all others.
+export class Heap<T>
+    private items: T[] = {}
+    private readonly less: Less<T>
+
+    constructor(less: Less<T>?)
+        self.less = order(less)
+    end
+
+    private function up(i: number)
+        local items, less = self.items, self.less
+        while i > 1 do
+            const parent = floor(i / 2)
+            if not less(items[i], items[parent]) then
+                return
+            end
+            items[i], items[parent] = items[parent], items[i]
+            i = parent
+        end
+    end
+
+    private function down(i: number)
+        local items, less = self.items, self.less
+        const n = #items
+        while true do
+            local smallest = i
+            local l, r = 2 * i, 2 * i + 1
+            if l <= n and less(items[l], items[smallest]) then
+                smallest = l
+            end
+            if r <= n and less(items[r], items[smallest]) then
+                smallest = r
+            end
+            if smallest == i then
+                return
+            end
+            items[i], items[smallest] = items[smallest], items[i]
+            i = smallest
+        end
+    end
+
+    function push(v: T)
+        if v == nil then
+            return
+        end
+        self.items[#self.items + 1] = v
+        self:up(#self.items)
+    end
+
+    --- Removes and returns the smallest value.
+    function pop(): T?
+        const items = self.items
+        const n = #items
+        if n == 0 then
+            return nil
+        end
+        const top = items[1]
+        const last = table.remove(items) :: T
+        if n > 1 then
+            items[1] = last
+            self:down(1)
+        end
+        return top
+    end
+
+    --- The smallest value, left in the heap.
+    function peek(): T?
+        return self.items[1]
+    end
+
+    --- Removes `v` (the same value, not an equal one); whether it was there.
+    --- A secret is never found.
+    function remove(v: T): boolean
+        if secret.isSecret(v) then
+            return false
+        end
+        const items = self.items
+        const n = #items
+        for i = 1, n do
+            const x = items[i]
+            if not secret.isSecret(x) and x == v then
+                const last = table.remove(items) :: T
+                if i < n then
+                    items[i] = last
+                    self:down(i)
+                    self:up(i)
+                end
+                return true
+            end
+        end
+        return false
+    end
+
+    function size(): number
+        return #self.items
+    end
+
+    function clear()
+        self.items = {}
+    end
+end
+
+-- LRU cache -----------------------------------------------------------------
+
+-- One entry, in the cache's list from the most to the least recently used.
+type Entry<K, V> = { key: K, value: V, newer?: Entry<K, V>, older?: Entry<K, V> }
+
+--- At most `capacity` values by key: a `set` into a full cache drops the
+--- least recently used entry (`get` and `set` count as uses). Keys may not
+--- be secret (a secret cannot be a table key): `get` and `has` find
+--- nothing for one and `set` ignores it. Values may be secret.
+export class LruCache<K, V>
+    readonly capacity: number
+    private entries: { [K]: Entry<K, V> } = {}
+    private newest?: Entry<K, V>
+    private oldest?: Entry<K, V>
+    private n: number = 0
+
+    constructor(capacity: number)
+        if capacity < 1 then
+            error("LruCache: the capacity must be at least 1", 3)
+        end
+        self.capacity = floor(capacity)
+    end
+
+    private function unlink(e: Entry<K, V>)
+        local newer, older = e.newer, e.older
+        if newer then
+            newer.older = older
+        else
+            self.newest = older
+        end
+        if older then
+            older.newer = newer
+        else
+            self.oldest = newer
+        end
+        e.newer = nil
+        e.older = nil
+    end
+
+    private function link(e: Entry<K, V>)
+        const newest = self.newest
+        e.older = newest
+        if newest then
+            newest.newer = e
+        end
+        self.newest = e
+        if not self.oldest then
+            self.oldest = e
+        end
+    end
+
+    --- The value for `key`, now the most recently used.
+    function get(key: K): V?
+        if key == nil or secret.isSecret(key) then
+            return nil
+        end
+        const e = self.entries[key]
+        if not e then
+            return nil
+        end
+        if e ~= self.newest then
+            self:unlink(e)
+            self:link(e)
+        end
+        return e.value
+    end
+
+    --- Whether `key` has a value (not counted as a use).
+    function has(key: K): boolean
+        if key == nil or secret.isSecret(key) then
+            return false
+        end
+        return self.entries[key] ~= nil
+    end
+
+    --- Stores `value` for `key`; nil deletes it.
+    function set(key: K, value: V?)
+        if key == nil or secret.isSecret(key) then
+            return
+        end
+        if value == nil then
+            self:delete(key)
+            return
+        end
+        local e: Entry<K, V>? = self.entries[key]
+        if e then
+            e.value = value
+            if e ~= self.newest then
+                self:unlink(e)
+                self:link(e)
+            end
+            return
+        end
+        if self.n >= self.capacity then
+            -- The least recently used entry's table carries the new one.
+            e = self.oldest :: Entry<K, V>
+            self:unlink(e)
+            self.entries[e.key] = nil
+            e.key = key
+            e.value = value
+        else
+            e = { key = key, value = value }
+            self.n += 1
+        end
+        self.entries[key] = e
+        self:link(e)
+    end
+
+    --- Removes `key`; whether it had a value.
+    function delete(key: K): boolean
+        if key == nil or secret.isSecret(key) then
+            return false
+        end
+        const e = self.entries[key]
+        if not e then
+            return false
+        end
+        self:unlink(e)
+        self.entries[key] = nil
+        self.n -= 1
+        return true
+    end
+
+    function size(): number
+        return self.n
+    end
+
+    function clear()
+        self.entries = {}
+        self.newest = nil
+        self.oldest = nil
+        self.n = 0
+    end
+end

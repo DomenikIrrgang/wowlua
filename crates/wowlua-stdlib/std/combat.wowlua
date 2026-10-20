@@ -6,6 +6,7 @@
 -- function.
 import on, Subscription from "wowlua:events"
 import callIn from "wowlua:errors"
+import * as secret from "wowlua:secret"
 
 type Args = { [number]: any, n: number }
 -- `slot`: the map the entry is found in by `key` while it waits.
@@ -73,11 +74,15 @@ end
 
 --- Runs `fn` now out of combat, else once combat ends. Calls with the
 --- same `key` while in combat keep the first one's place in the queue, and
---- only the latest function runs.
+--- only the latest function runs. A secret key cannot be a table key: the
+--- call is queued on its own.
 export function defer(fn: () -> (), key: any?)
     if not InCombatLockdown() then
         fn()
         return
+    end
+    if secret.isSecret(key) then
+        key = nil
     end
     enqueue(fn, pack(), key, deferred)
 end

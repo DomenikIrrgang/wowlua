@@ -28,7 +28,7 @@ onCombatChange(function(entering: boolean) … end)
 | API | Meaning |
 |-----|---------|
 | `@outOfCombat` | If `InCombatLockdown()` is false, the call runs immediately. Otherwise it is queued and runs after `PLAYER_REGEN_ENABLED`. Repeated queued calls to the same function (per receiver for methods) are coalesced, and the last arguments win. The function must return nothing (E8030). |
-| `defer(fn, key?)` | The same for an anonymous function. Without a key calls are not coalesced; calls with the same `key` (any value but nil) are: the first keeps its place in the queue, and only the latest function runs. |
+| `defer(fn, key?)` | The same for an anonymous function. Without a key calls are not coalesced; calls with the same `key` (any value but nil) are: the first keeps its place in the queue, and only the latest function runs. A secret key cannot be a table key: such a call is queued as one without a key. |
 | `inCombat(): boolean` | `InCombatLockdown()`: combat **lockdown**, by design. Whether the player is fighting (`UnitAffectingCombat("player")`, secret on some clients) is a different question that this module does not answer. |
 | `onCombatChange(fn): Subscription` | Called with `true` on `PLAYER_REGEN_DISABLED` and `false` on `PLAYER_REGEN_ENABLED` |
 
@@ -41,6 +41,7 @@ Queue semantics:
   remaining entries stay queued for the next flush.
 - A queued function that errors is reported through `geterrorhandler()` without
   blocking the rest of the queue.
+- Queued arguments are only stored, so secrets reach the call unchanged.
 
 ## secure
 
@@ -79,6 +80,7 @@ Semantics (decision S35):
   `target=unit` are accepted. A `visibility` value other than `show` or `hide`
   is E8441. Arguments (`mod:shift`, `form:1/2`) are not checked.
 
+## hooks
 
 `wowlua:hooks` provides post-hooks through `hooksecurefunc` and `HookScript`.
 These do not taint the hooked Blizzard function itself, but the hook body still
@@ -128,6 +130,8 @@ hook(GameTooltip, "SetSpellByID", function(tip: GameTooltip, id: number) … end
   `hook(obj, "Method", fn)`, `if _G.Name then` around `hook("Name", fn)`).
   Such a test does not silence W8102: where the addon has not loaded yet, the
   test fails and the hook is never installed.
+- **Arguments.** The hook gets the hooked call's arguments unchanged; on
+  clients with secret values they may be secret.
 - **No removal, no pre-hooks.** Hooks are post-hooks and cannot be removed (a WoW
   API limitation). The module intentionally provides **no** pre-hooks or
   replacement hooks, because replacing Blizzard functions taints secure code.
@@ -154,7 +158,7 @@ channel:send(largePayload, "WHISPER", "Name-Realm", { priority = comm.Priority.B
 | API | Meaning |
 |-----|---------|
 | `open(prefix: string): Channel` | Registers the prefix through `C_ChatInfo.RegisterAddonMessagePrefix`. Prefixes over the API length limit are error E8050 (checked at compile time for literals). |
-| `Channel:send(msg, distribution, target?, opts?): SendStatus` | Sends a string of any length. Messages over the per-message size limit are split into chunks and reassembled by receivers. Returns `SendStatus.Sent`, `Queued` (throttled or in lockdown) or `Dropped` (only with `opts.dropInLockdown`). |
+| `Channel:send(msg, distribution, target?, opts?): SendStatus` | Sends a string of any length. Messages over the per-message size limit are split into chunks and reassembled by receivers. Returns `SendStatus.Sent`, `Queued` (throttled or in lockdown) or `Dropped` (with `opts.dropInLockdown`, out of a group for `Group`, or for a secret `msg`, `distribution` or `target`, which the client refuses). |
 | `Channel:onMessage(fn)` | Receives complete, reassembled messages |
 | `Channel:sendObject(value, …)` / `onObject(fn)` | Serializes with `wowlua:serialize` (and optionally compresses) |
 | `opts.priority` | A `Priority`: `Alert`, `Normal`, `Bulk` |
@@ -198,7 +202,7 @@ flavors. The module treats chat as locked whenever
 messages stay queued (or are dropped with `opts.dropInLockdown`). While the
 queue is non-empty and chat is locked, the module re-checks the lockdown state
 once per second and drains the queue when it ends. `comm.inLockdown()` exposes
-the state.
+the state; a secret answer counts as locked.
 
 ### Wire format
 
@@ -215,6 +219,9 @@ one group:
   on receipt.
 - The sender passed to handlers is normalized with `Ambiguate(sender, "none")`.
   With `receiveOwn = false`, messages whose sender is the player are filtered out.
+- A message with a secret prefix or text is ignored. A secret sender is passed
+  to handlers as it is (not normalized, not filtered); it cannot key
+  reassembly, so only single-chunk messages arrive from one.
 
 **AceComm compatibility** (decision S16). `comm.open(prefix, { format =
 "acecomm" })` switches a channel to AceComm-3.0's chunk markers and reassembly
@@ -259,6 +266,8 @@ Semantics:
   for all addons; a message is `1:<Addon>:<version>`. The addon tells its guild
   10 seconds after login and each group 3 seconds after joining it. A player
   who announces an older version is whispered this one's, once per session.
+  A secret sender (see [comm](#comm)) still reaches `onNewer`, but is neither
+  listed in `peers()` nor answered.
 - Messages for other addons, and other protocol versions, are ignored.
 
 ## serialize
@@ -298,11 +307,11 @@ end
 
 | API | Meaning |
 |-----|---------|
-| `encode` / `decode` | Compact binary format: nil, booleans, numbers (integer and float paths), strings (with deduplication), tables (array and hash parts, nested, cycles rejected). Functions, userdata and threads are errors. `encode` raises a clear error on secret values (checked with `issecretvalue` where available). |
+| `encode` / `decode` | Compact binary format: nil, booleans, numbers (integer and float paths), strings (with deduplication), tables (array and hash parts, nested, cycles rejected). Functions, userdata and threads are errors. A secret, or a table addons may not index (`canaccesstable`), encodes as nil (a table leaves its key out); `decode` returns false for a secret string. |
 | `compress` / `decompress` | DEFLATE (RFC 1951) in pure Lua. `decompress` returns `nil` on corrupt input. |
 | `toPrintable` / `fromPrintable` | Encoding into a chat-safe alphabet. `fromPrintable` returns `nil` on invalid input. |
 | `toAddonChannel` / `fromAddonChannel` | Encoding safe for addon message channels (escapes `\0`) |
-| `exportString` / `importString` | Versioned, checksummed export strings with a configurable prefix (e.g. `"!MYADDON:1!"`) |
+| `exportString` / `importString` | Versioned, checksummed export strings with a configurable prefix (e.g. `"!MYADDON:1!"`). `importString` returns false for a secret string. |
 
 `decode` and `importString` never execute code (no `loadstring`), so importing
 strings from other players is safe. Depth and size limits guard against

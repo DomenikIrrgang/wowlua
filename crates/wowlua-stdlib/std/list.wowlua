@@ -6,6 +6,7 @@
 import FramePool from "wowlua:pool"
 import type Pool from "wowlua:pool"
 import callIn from "wowlua:errors"
+import * as secret from "wowlua:secret"
 
 export type ListOptions<T, R> = {
     rowHeight: number,
@@ -132,8 +133,12 @@ class List<T, R> implements ListView<T>
     function setData(data: T[])
         self.entries = data
         const slots: Slot<T>[] = {}
-        for i, entry in ipairs(data) do
-            slots[i] = { entry = entry, index = i }
+        -- Entries are only handed on (secret ones too); a secret list
+        -- cannot be walked and shows empty.
+        if secret.readable(data) then
+            for i, entry in ipairs(data) do
+                slots[i] = { entry = entry, index = i }
+            end
         end
         self.box:SetDataProvider(CreateDataProvider(slots))
     end
@@ -156,6 +161,9 @@ class List<T, R> implements ListView<T>
     end
 
     function scrollTo(index: number)
+        if secret.isSecret(index) then
+            return
+        end
         self.box:ScrollToElementDataIndex(index)
     end
 

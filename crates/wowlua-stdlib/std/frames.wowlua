@@ -4,12 +4,15 @@
 -- in (a frame near the right edge stays there when the screen size
 -- changes), and restored once the store is loaded. With `editMode` the
 -- frame joins the client's Edit Mode: it shows the selection overlay there,
--- keeps a position per Edit Mode layout and is locked outside it.
+-- keeps a position per Edit Mode layout and is locked outside it. A
+-- position, size or scale that reads as secret (anchored to a restricted
+-- frame) is neither saved nor applied.
 import isLoaded from "wowlua:lifecycle"
 import callIn from "wowlua:errors"
 import defer from "wowlua:combat"
 import handle from "wowlua:saved"
 import type SavedHandle from "wowlua:saved"
+import * as secret from "wowlua:secret"
 
 local _, ns = ...
 local wl = ns.__wowlua
@@ -85,13 +88,27 @@ local function held(modifier: Modifier?): boolean
     return true
 end
 
--- The frame's position in UIParent units, anchored at its screen third.
-local function measure(frame: Frame): FramePosition
-    const s = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
-    const left = (frame:GetLeft() ?? 0) * s
-    const right = (frame:GetRight() ?? 0) * s
-    const bottom = (frame:GetBottom() ?? 0) * s
-    const top = (frame:GetTop() ?? 0) * s
+-- `v` when it is a number that can be read.
+local function number(v: unknown): number?
+    if secret.isSecret(v) or type(v) ~= "number" then
+        return nil
+    end
+    return v :: number
+end
+
+-- The frame's position in UIParent units, anchored at its screen third;
+-- nil while it reads as secret.
+local function measure(frame: Frame): FramePosition?
+    const scale = number(frame:GetEffectiveScale())
+    local l, r, b, t = frame:GetLeft(), frame:GetRight(), frame:GetBottom(), frame:GetTop()
+    if scale == nil or secret.isSecret(l) or secret.isSecret(r) or secret.isSecret(b) or secret.isSecret(t) then
+        return nil
+    end
+    const s = scale / UIParent:GetEffectiveScale()
+    const left = (l ?? 0) * s
+    const right = (r ?? 0) * s
+    const bottom = (b ?? 0) * s
+    const top = (t ?? 0) * s
     const width = UIParent:GetWidth()
     const height = UIParent:GetHeight()
     const cx = (left + right) / 2
@@ -117,9 +134,13 @@ end
 
 -- Anchors the frame at `pos` (UIParent units, converted to the frame's).
 local function place(frame: Frame, pos: FramePosition)
-    const s = frame:GetEffectiveScale() / UIParent:GetEffectiveScale()
+    local scale, x, y = number(frame:GetEffectiveScale()), number(pos.x), number(pos.y)
+    if scale == nil or x == nil or y == nil or secret.isSecret(pos.point) or secret.isSecret(pos.relativePoint) then
+        return
+    end
+    const s = scale / UIParent:GetEffectiveScale()
     frame:ClearAllPoints()
-    frame:SetPoint(pos.point, UIParent, pos.relativePoint, pos.x / s, pos.y / s)
+    frame:SetPoint(pos.point, UIParent, pos.relativePoint, x / s, y / s)
 end
 
 -- The client's Edit Mode selection overlay (EditModeSystemSelectionTemplate).
@@ -151,11 +172,12 @@ class Movable implements MovableHandle
     -- A drag or resize the mouse started (only those save).
     private active: boolean = false
     private grip?: Frame
-    -- The frame as it was set up: its anchors, size and scale.
+    -- The frame as it was set up: its anchors, size and scale (those that
+    -- read as secret are left out).
     private readonly points: any[][] = {}
-    private readonly width: number
-    private readonly height: number
-    private readonly scale: number
+    private readonly width?: number
+    private readonly height?: number
+    private readonly scale?: number
     private selection?: Selection
     private editing: boolean = false
 
@@ -163,10 +185,15 @@ class Movable implements MovableHandle
         self.frame = frame
         self.opts = opts
         for i = 1, frame:GetNumPoints() do
-            self.points[i] = { frame:GetPoint(i) }
+            const p: any[] = { frame:GetPoint(i) }
+            if not (secret.isSecret(p[1]) or secret.isSecret(p[2]) or secret.isSecret(p[3])
+                or secret.isSecret(p[4]) or secret.isSecret(p[5])) then
+                self.points[#self.points + 1] = p
+            end
         end
-        self.width, self.height = frame:GetSize()
-        self.scale = frame:GetScale()
+        local width, height = frame:GetSize()
+        self.width, self.height = number(width), number(height)
+        self.scale = number(frame:GetScale())
         frame:SetMovable(true)
         frame:EnableMouse(true)
         frame:RegisterForDrag(opts.button ?? "LeftButton")
@@ -331,15 +358,22 @@ class Movable implements MovableHandle
         if self:blocked() or not held(self.opts.scaleWheel) then
             return
         end
-        const range = self.opts.scaleRange ?? { 0.5, 2 }
-        const scale = math.max(range[1], math.min(range[2], self.frame:GetScale() + delta * WHEEL_STEP))
+        const current = number(self.frame:GetScale())
         const pos = measure(self.frame)
+        if current == nil or pos == nil then
+            return
+        end
+        const range = self.opts.scaleRange ?? { 0.5, 2 }
+        const scale = math.max(range[1], math.min(range[2], current + delta * WHEEL_STEP))
         self.frame:SetScale(scale)
         place(self.frame, pos)
         self:save()
     end
 
     function lock(locked: boolean)
+        if secret.isSecret(locked) then
+            return
+        end
         self.locked = locked
         self.grip?:SetShown(not self:blocked())
     end
@@ -348,16 +382,42 @@ class Movable implements MovableHandle
         return self.locked
     end
 
+    -- The saved position, unless it cannot be read.
+    private function stored(): FramePosition?
+        const pos = self.opts.store[self.opts.key] :: FramePosition?
+        if pos == nil or type(pos) ~= "table" or not secret.readable(pos) then
+            return nil
+        end
+        return pos
+    end
+
+    -- The saved positions per layout, unless they cannot be read.
+    private function layouts(): { [string]: FramePosition }?
+        const layouts = self:stored()?.layouts
+        if layouts == nil or type(layouts) ~= "table" or not secret.readable(layouts) then
+            return nil
+        end
+        return layouts
+    end
+
     function save()
         const pos = measure(self.frame)
-        pos.scale = self.frame:GetScale()
+        const scale = number(self.frame:GetScale())
+        if pos == nil or scale == nil then
+            return
+        end
+        pos.scale = scale
         if self.opts.resize then
-            pos.width, pos.height = self.frame:GetSize()
+            local width, height = self.frame:GetSize()
+            pos.width, pos.height = number(width), number(height)
+            if pos.width == nil or pos.height == nil then
+                return
+            end
         end
         const name = self:layout()
         if name then
             -- Kept: the other layouts' positions.
-            const layouts = (self.opts.store[self.opts.key] :: FramePosition?)?.layouts ?? {}
+            const layouts = self:layouts() ?? {}
             layouts[name] = pos
             self.opts.store[self.opts.key] = {
                 point = pos.point,
@@ -370,27 +430,33 @@ class Movable implements MovableHandle
                 layouts = layouts,
             }
         else
-            local layouts = (self.opts.store[self.opts.key] :: FramePosition?)?.layouts
-            pos.layouts = layouts
+            pos.layouts = self:layouts()
             self.opts.store[self.opts.key] = pos
         end
         self:changed(pos)
     end
 
     function restore()
-        local pos = self.opts.store[self.opts.key] :: FramePosition?
+        local pos = self:stored()
         if not pos then
             return
         end
         const name = self:layout()
-        if name and pos.layouts?.[name] then
-            pos = pos.layouts[name]
+        if name then
+            const own = self:layouts()?.[name]
+            if own and type(own) == "table" and secret.readable(own) then
+                pos = own
+            end
         end
         defer(function()
             const frame = self.frame
-            frame:SetScale(pos.scale ?? self.scale)
-            if self.opts.resize and pos.width and pos.height then
-                frame:SetSize(pos.width, pos.height)
+            const scale = number(pos.scale) ?? self.scale
+            if scale then
+                frame:SetScale(scale)
+            end
+            local width, height = number(pos.width), number(pos.height)
+            if self.opts.resize and width and height then
+                frame:SetSize(width, height)
             end
             place(frame, pos)
         end)
@@ -400,8 +466,12 @@ class Movable implements MovableHandle
         self.opts.store[self.opts.key] = nil
         defer(function()
             const frame = self.frame
-            frame:SetScale(self.scale)
-            frame:SetSize(self.width, self.height)
+            if self.scale then
+                frame:SetScale(self.scale)
+            end
+            if self.width and self.height then
+                frame:SetSize(self.width, self.height)
+            end
             frame:ClearAllPoints()
             for _, p in ipairs(self.points) do
                 frame:SetPoint(unpack(p))
@@ -502,7 +572,7 @@ export function styleText(text: FontString, role: TextRole, theme: WidgetTheme?)
     end
     if file or theme?.font?.size then
         local path, size, flags = text:GetFont()
-        text:SetFont(file ?? path ?? "Fonts\\FRIZQT__.TTF", theme?.font?.size ?? size ?? 12, (flags ?? "") :: any)
+        text:SetFont(file ?? secret.known(path, "Fonts\\FRIZQT__.TTF"), theme?.font?.size ?? secret.known(size, 12), secret.known(flags, "") :: any)
     end
     const colors = theme?.colors
     local color: ThemeColor? = nil

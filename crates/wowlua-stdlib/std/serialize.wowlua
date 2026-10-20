@@ -3,6 +3,8 @@
 -- addon-channel-safe encoding, and checksummed export strings. Decoding
 -- never runs code, and limits guard against malicious input. Bits are
 -- handled with arithmetic (no `bit` library), as in LibDeflate.
+import * as secret from "wowlua:secret"
+
 local byte, char, sub, concat = string.byte, string.char, string.sub, table.concat
 local floor = math.floor
 
@@ -71,7 +73,9 @@ local function writeVarint(out: string[], n: number)
     out[#out + 1] = char(n)
 end
 
---- Encodes nil, booleans, numbers, strings and tables of them.
+--- Encodes nil, booleans, numbers, strings and tables of them. A secret,
+--- or a table addons may not index, cannot be read: it encodes as nil (a
+--- table leaves its key out).
 export function encode(value: any): string
     local out: string[] = { char(FORMAT) }
     local strings: { [string]: number } = {}
@@ -79,9 +83,7 @@ export function encode(value: any): string
     local active: { [any]: boolean } = {}
     local function write(v: any, depth: number)
         local t = type(v)
-        if issecretvalue and issecretvalue(v) then
-            error("serialize.encode: secret values cannot be encoded", 0)
-        elseif t == "nil" then
+        if t == "nil" or not secret.readable(v) then
             out[#out + 1] = char(T_NIL)
         elseif t == "boolean" then
             out[#out + 1] = char(v and T_TRUE or T_FALSE)
@@ -139,8 +141,8 @@ export function encode(value: any): string
                 write(v[i], depth + 1)
             end
             local keys = {}
-            for k in pairs(v) do
-                if not (type(k) == "number" and k >= 1 and k <= n and k == floor(k)) then
+            for k, x in pairs(v) do
+                if secret.readable(x) and not (type(k) == "number" and k >= 1 and k <= n and k == floor(k)) then
                     keys[#keys + 1] = k
                 end
             end
@@ -162,6 +164,8 @@ end
 export function decode(s: string): (boolean, any)
     if type(s) ~= "string" then
         return false, "not a string"
+    elseif secret.isSecret(s) then
+        return false, "a secret string cannot be read"
     end
     local pos = 1
     local len = #s
@@ -921,6 +925,9 @@ end
 
 --- Reverses `toPrintable`; nil if `s` holds other characters.
 export function fromPrintable(s: string): string?
+    if secret.isSecret(s) then
+        return nil
+    end
     s = s:match("^%s*(.-)%s*$") ?? s
     local n = #s
     if n % 4 == 1 then
@@ -996,6 +1003,8 @@ end
 export function importString(s: string): (boolean, any)
     if type(s) ~= "string" then
         return false, "not a string"
+    elseif secret.isSecret(s) then
+        return false, "a secret string cannot be read"
     end
     local prefix, version, body = s:match("^%s*!([^:!]+):(%d+)!(.-)%s*$")
     if not (prefix and version and body) then

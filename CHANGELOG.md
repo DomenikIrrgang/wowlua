@@ -11,9 +11,12 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `wowlua:callbacks`: `registry:off(name, handler)` cancels every subscription of a function, and `offAll(owner, name?)` only an owner's subscriptions to `name`; both checked against the event type (E8420)
 - `wowlua:combat`: `defer(fn, key)`: calls with one key keep the first one's place in the queue, and only the latest function runs
 - `wowlua:log`: `configure({ prefix, chatLevel })` sets the chat prefix of the default sink and `print`, and the lowest level the default sink writes to chat (`"off"`: none)
-- `wowlua:secret`: `readable(v)` narrows to a present, not secret value (`Plain`)
+- `wowlua:secret`: `readable(v)` narrows to a present value that may be looked into (`Plain`): not nil, not a secret, and not a table whose security keeps addons out
 - `wowlua:slash`: `Router:add(name, command, owner?)` (checked like the definitions, E8112), `remove`, `removeAll(owner)` and `commands()`; `router(defs, { order = "added" })` lists help in the order commands were added
 - `wowlua:table`: `copy(t, { shared = false })` gives every nested table a copy of its own; `keys(t, less)` sorts by a comparator
+- `wowlua:table`: a stable `sort` that never raises "invalid order function", `by` (order by a key), `order`, and the binary-search helpers `insertSorted` and `searchSorted`; secret elements and keys never reach a comparator and sort last
+- `wowlua:collections`: `RingBuffer`, `Heap` and `LruCache`, which store secret values without reading them
+- `wowlua:utf8`: `len`, `sub`, `truncate` and `chars` by characters, not bytes; a secret string passes `truncate` whole
 - `wowlua:aura`: containers take `lazy` groups (added to the engine once `setGroupMax` gives them room), `exclude` spell IDs, a group's own `spacing`, `order` and `gap`, `setGroupFilter` and `setGroupSize` (buttons resized out of combat); `aura.hasContainers()`
 - Spec: the unchecked cast (`local f: T = e :: any`) and `@unchecked` next to the runtime checks
 - `wowlua:events`: `watchUnit(events, handler, owner?)`: unit events on one frame of the watch's own, pointed at other units with `setUnit(unit?, unit2?)` without subscribing again (`nil` unregisters); the handler gets the event name first
@@ -27,6 +30,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Changed
 
+- The standard library's tests run with the addon's code tainted, as the client runs it, so secret values refuse there what they refuse in game
 - `wowlua:errors`' isolated calls, `wowlua:events`' dispatch, `wowlua:hooks`' hooks and `wowlua:timer`'s callbacks allocate nothing when the callback succeeds (an event handler's dispatch made about 550 bytes of garbage before)
 - `wowlua:callbacks`: a handler cancelled during a `fire` is skipped for the rest of it (handlers added during a `fire` still wait for the next one)
 - `wowlua:events`: a handler cancelled during a dispatch is skipped for the rest of it, as in `wowlua:callbacks` (handlers added during a dispatch still wait for the next one)
@@ -36,7 +40,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `wowlua:secret`: `known<T, F>(v, fallback: F): T | F`: the fallback may be of another type, so `known(name, nil)` is a `string?`
 - Generic inference binds `T` through a `T | Secret<T>` parameter (the secret members through `Secret<T>`, the rest to `T`)
 - `wowlua:secure`: `state` without a function only registers the driver (for an `_onstate-<name>` snippet) and hooks nothing
-- `wowlua:spell`: `charges` returns `SpellChargeInfoSecret?`, the readable table the client answers, whose counts and times may be secret on restricted clients
+- `wowlua:spell`: `charges` returns `SpellChargeInfoSecret?`, the readable table the client answers, whose counts and times may be secret on restricted clients (nil when it hands back a table addons may not index)
 - A module's top-level `function f()` is a hoisted local of the module in the compiled code too, as the checker already treated it, never a global; write `_G.f = f` (or assign a declared global) for a real one
 - `table` (a value `type(x) == "table"` narrowed) is assignable to every map whose values are `any`: `{ [string]: any }`, `{ [number]: any }`
 - A type predicate's branch that no member of its argument reaches (a second `if not issecretvalue(c) and c then` after the first returned, the `else` of a predicate every member fits) is unreachable: the argument is `never` there and nothing in it is reported; also for `canaccessvalue`
@@ -86,6 +90,16 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - WoW API declarations: `UnitName`, `UnitFullName`, `UnitNameUnmodified` and `UnitNameFromGUID` answer optional names and realms (`nil, nil` for a unit that does not exist)
 - WoW API declarations: named frames of Blizzard's XML are typed by their mixins and widget type (`ChatFrame1: PrimaryChatFrameMixin & … & Frame` has `ApplySystemAnchor`), and the mixins are declared with the methods their Lua defines (parameters `any`)
 - W8040 is not reported inside an existence test of the hooked member (`if obj.Method then hook(obj, "Method", fn) end`); W8102 still is
+- The standard library is safe with secret values throughout: no module compares, indexes, measures or truth-tests a value the client may hand back as a secret, or a table whose security keeps addons out. Values only carried pass through unchanged; where an operation needs the value, it is skipped or read as unknown, as each module's chapter now says. Among the paths that raised in game before:
+  - `wowlua:table`: `merge` and `defaults` walked secret tables; `contains` compared secrets
+  - `wowlua:saved`: profile copies and migrations walked secret tables
+  - `wowlua:serialize`: `encode` refused any value holding a secret (now encoded as nil); `decode` and `fromPrintable` of a secret string
+  - `wowlua:comm` and `wowlua:version`: a secret message, target, prefix or sender
+  - `wowlua:errors`: an error whose `tostring` is secret ended in "error in error handling" and was never reported
+  - `wowlua:aura`: aura tables addons may not index reached `find`; a secret spell ID in a container's `spells`
+  - `wowlua:unit`, `wowlua:format`, `wowlua:menu`, `wowlua:dialog`, `wowlua:launcher`, `wowlua:alert`: secret booleans in options and answers
+  - `wowlua:tooltip`, `wowlua:color`, `wowlua:links`, `wowlua:media`, `wowlua:pool`, `wowlua:list`, `wowlua:frames`, `wowlua:settings`, `wowlua:slash`, `wowlua:reflect`, `wowlua:debug`: secret links, colors, names, keys, indexes, positions and conditions
+- `wowlua:test` and `wowlua:mock`: a matcher, spy, snapshot or wait given a secret fails with a message saying so instead of raising inside the framework; new matcher `toBeSecret`
 
 ## [0.9.1] - 2026-10-20
 

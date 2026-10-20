@@ -51,8 +51,8 @@ import * as debug from "wowlua:debug"
 
 | Export | Kind | Effect | When disabled |
 |--------|------|--------|---------------|
-| `assert(cond, msg?)` | statement | Raises an error with message and source location if `cond` is falsy. Narrows like Lua's `assert`. | Removed (`assertions = false`) |
-| `dump(expr, ...)` | statement | Prints each expression's **source text** and value: `dump(x + y)` prints `src/a.wowlua:12 x + y = 42`. Tables are printed one level deep. | Removed (`debug = false`) |
+| `assert(cond, msg?)` | statement | Raises an error with message and source location if `cond` is falsy. Narrows like Lua's `assert`. A secret `cond` cannot be tested and passes. | Removed (`assertions = false`) |
+| `dump(expr, ...)` | statement | Prints each expression's **source text** and value: `dump(x + y)` prints `src/a.wowlua:12 x + y = 42`. Tables are printed one level deep, secret values as `<secret>`; a table addons may not index (`canaccesstable`) prints as itself. | Removed (`debug = false`) |
 | `todo(msg?)` | expression, `never` | Raises "not implemented". Warning W7001 in release builds. | Kept |
 | `unreachable(msg?)` | expression, `never` | Raises "unreachable code reached". | Kept, without the message text in minified builds |
 | `location()` | expression | Folds to a string literal `"src/a.wowlua:12 (onLogin)"`. | Kept (constant) |
@@ -495,6 +495,10 @@ reflect.enumName(Direction, 2)   -- "Down"
 reflect.enumEntries(Direction)   -- { {name = "Up", value = 1}, … } in declaration order
 reflect.enumFrom(Direction, raw) -- Direction? (checked conversion)
 ```
+
+A secret (or a table addons may not index) has no class and is no enum
+member: these return nil, false or an empty list, as the full-metadata
+functions (§7.8.2) do for it.
 
 ### 7.8.2 Full metadata
 

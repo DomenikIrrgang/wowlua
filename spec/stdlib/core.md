@@ -83,8 +83,8 @@ end
 | `@event(...names)` | One name: the handler receives `EventArgs<E>`. Several names: the handler receives the name first (typed as the union of the names), then `...any`. Names may mix WoW events and messages. |
 | `@unitEvent(name, ...units)` | WoW events only. Uses `RegisterUnitEvent`, which filters by at most two units, so any number of units is registered in pairs (see *Unit events*). A unit listed twice counts once. |
 | `on`, `once` | Dynamic registration. `owner` allows `offAll(owner)`, and error listeners get it ([`wowlua:errors`](infrastructure.md#errors)). |
-| `onUnit` | Dynamic version of `@unitEvent`: one subscription for all its units. No units is a runtime error. |
-| `watchUnit(events, handler, owner?)` | Unit events on one frame of the watch's own, for objects that show one unit at a time and change it (unit frames, nameplates). `setUnit(unit?, unit2?)` registers every event for that unit (or two) with `RegisterUnitEvent`, replacing the previous units without subscribing again; `setUnit(nil)` unregisters them. The handler gets the event name first (typed as the union of the literal names), then the payload. Names are checked as for `onUnit` (E8003). |
+| `onUnit` | Dynamic version of `@unitEvent`: one subscription for all its units. No units is a runtime error. A secret unit cannot be a key nor registered by addon code (`RegisterUnitEvent` refuses secrets from tainted code): it is skipped. |
+| `watchUnit(events, handler, owner?)` | Unit events on one frame of the watch's own, for objects that show one unit at a time and change it (unit frames, nameplates). `setUnit(unit?, unit2?)` registers every event for that unit (or two) with `RegisterUnitEvent`, replacing the previous units without subscribing again; `setUnit(nil)` unregisters them, and so does a secret unit, which cannot be compared or registered (a secret `unit2` reads as none). The handler gets the event name first (typed as the union of the literal names), then the payload. Names are checked as for `onUnit` (E8003). |
 | `@bucket(interval, ...names)`, `onBucket` | Coalesces bursts (like AceBucket): the first of the events starts an `interval`-second wait, and the handler then gets one `BucketCounts`: `args` counts by first argument (the units of unit events, the bags of `BAG_UPDATE`), `events` by event. |
 | `off(sub)`, `offAll(owner, name?)` | Unregister. `offAll` cancels every subscription and watch of `owner`; with a name (checked, E8003), only the owner's handlers of that event or message: a watch stops watching that event and keeps the others, a bucket stops collecting it. `offAll(nil)` is a runtime error: it would cancel every subscription without an owner, the standard library's own included. |
 | `send(name, ...)` | Dispatches a **message** synchronously to this addon's handlers. Passing a WoW event is error E8001. |
@@ -109,6 +109,9 @@ end
   through `geterrorhandler()` and the remaining handlers still run (see the
   error policy in [`wowlua:errors`](infrastructure.md#errors)); error listeners
   get the handler's `owner`.
+- **Secret values.** Payloads are passed on unchanged, secrets included; the
+  module reads none of them except a bucket's first argument (below). Units
+  are read: secret ones are skipped (`onUnit`) or read as none (`setUnit`).
 - **Changes during dispatch.** A handler registered inside a handler waits for
   the next dispatch. A handler cancelled inside a handler (`off`, `offAll`,
   `cancel`) is skipped for the rest of the current dispatch, on every frame of
@@ -267,6 +270,7 @@ end
 | Help | `help` and an empty message print one line per command: `/<cmd> <command> <args> - <help>`. Output goes through `print` from `wowlua:log`. An unknown command prints the help and `dispatch` returns `false`. |
 | Help order | Sorted by name by default. With `{ order = "added" }`, in the order the commands were added: the definitions first (sorted by name, as a table has no order), then each `add`. `commands()` lists them in the same order, with their `usage` (name and arguments), `help`, `aliases` and `owner`. |
 | Adding and removing | `add(name, command, owner?)` adds a command at run time; a literal `command` is checked as the definitions are (E8112), and a name or alias already taken (case-insensitive) is an error. `remove(name)` removes a command and its aliases (nothing when there is none); `removeAll(owner)` removes every command added with that owner. |
+| Secrets | Slash input is never secret. A secret `msg` (chat text handed to `dispatch`) cannot be read: nothing runs, nothing is printed, and `dispatch` returns `false`. |
 
 ## saved
 
@@ -369,7 +373,9 @@ end
   defaults are removed **recursively**: scalars are compared with `==`, nested
   tables are stripped key by key, and tables that end up empty and have a table
   default are removed. Values for which `issecretvalue(v)` is true are dropped
-  (they cannot be saved) and reported once in debug builds.
+  (they cannot be saved) and reported once in debug builds. Tables addons may
+  not index (`canaccesstable`) are kept unstripped; profile copies and lazy
+  defaults carry secrets and such tables as they are.
 - `stripDefaults = false` keeps every value.
 
 ### Migrations
@@ -431,13 +437,14 @@ local function saveSearch(text: string) … end
 |-----|---------|
 | `after(sec, fn): TimerHandle` | One-shot timer (`C_Timer.NewTimer`). The handle has `Cancel()` and `IsCancelled()`. |
 | `every(sec, fn, iterations?): TickerHandle` | Repeating timer (`C_Timer.NewTicker`). `fn` receives the ticker. |
-| `repeating(sec, fn): Repeating` | A repeating timer that stops and starts again, stopped at first. `start()` starts a `C_Timer.NewTicker` (the first tick one interval later) and does nothing while running; `stop()` cancels it; `setRunning(running)` is one or the other; `isRunning()`. |
+| `repeating(sec, fn): Repeating` | A repeating timer that stops and starts again, stopped at first. `start()` starts a `C_Timer.NewTicker` (the first tick one interval later) and does nothing while running; `stop()` cancels it; `setRunning(running)` is one or the other (a secret `running`, such as a yes/no unit query's answer on restricted clients, reads as false); `isRunning()`. |
 | `nextFrame(fn)` / `@nextFrame` | Run on the next frame. As a decorator, repeated calls before the next frame are coalesced, and the last call's arguments win. |
 | `@throttle(sec)` | The first call runs immediately. Later calls within `sec` collapse into one trailing call with the latest arguments. |
 | `@debounce(sec)` | Runs `sec` seconds after the last call, with the latest arguments. |
 
 Decorated methods keep **per-instance state** in a weak-keyed table indexed by
-`self`, so each object has its own throttle. Functions decorated with
+`self`, so each object has its own throttle. Arguments are only stored and
+passed on, so secrets reach the call unchanged. Functions decorated with
 `@throttle`, `@debounce` or `@nextFrame` must return nothing (E8030), because
 calls may be deferred.
 

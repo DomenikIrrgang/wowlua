@@ -7,6 +7,7 @@
 import on from "wowlua:events"
 import report, callIn from "wowlua:errors"
 import toAddonChannel, fromAddonChannel, encode, decode, compress, decompress from "wowlua:serialize"
+import * as secret from "wowlua:secret"
 
 --- Where a message goes; `GROUP` picks the current group's channel.
 export enum Distribution {
@@ -111,7 +112,12 @@ end
 
 --- Whether addon chat is locked down (patch 12.0 and later).
 export function inLockdown(): boolean
-    return C_ChatInfo.InChatMessagingLockdown ~= nil and C_ChatInfo.InChatMessagingLockdown() and true or false
+    if C_ChatInfo.InChatMessagingLockdown == nil then
+        return false
+    end
+    -- (A secret answer is unknown: taken as locked.)
+    local locked = C_ChatInfo.InChatMessagingLockdown()
+    return secret.isSecret(locked) or locked == true
 end
 
 -- The channel `GROUP` means now, or nil out of a group.
@@ -119,13 +125,13 @@ local function resolve(distribution: string): string?
     if distribution ~= Distribution.Group then
         return distribution
     end
-    if IsInGroup and LE_PARTY_CATEGORY_INSTANCE and IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then
+    if IsInGroup and LE_PARTY_CATEGORY_INSTANCE and secret.flag(IsInGroup(LE_PARTY_CATEGORY_INSTANCE)) then
         return "INSTANCE_CHAT"
     end
-    if IsInRaid and IsInRaid() then
+    if IsInRaid and secret.flag(IsInRaid()) then
         return "RAID"
     end
-    if IsInGroup and IsInGroup() then
+    if IsInGroup and secret.flag(IsInGroup()) then
         return "PARTY"
     end
     return nil
@@ -191,7 +197,8 @@ local function transmit(c: Chunk): Outcome
     local send = c.logged and C_ChatInfo.SendAddonMessageLogged or C_ChatInfo.SendAddonMessage
     -- Older clients return a boolean, newer ones a result code.
     local result: any = send(c.channel.prefix, c.text, c.distribution, c.target)
-    if result == nil or result == true or result == 0 then
+    -- (A secret result is unknown: taken as sent.)
+    if secret.isSecret(result) or result == nil or result == true or result == 0 then
         return Outcome.Sent
     end
     if result == 3 or result == 8 or result == 11 then
@@ -279,7 +286,7 @@ local function sendChunks(channel: CommChannel, chunks: string[], distribution: 
         for _, text in ipairs(chunks) do
             local function done(_: any, didSend: boolean?)
                 pending -= 1
-                if didSend ~= false then
+                if secret.isSecret(didSend) or didSend ~= false then
                     delivered({ channel = channel, text = text, distribution = distribution, target = target, logged = logged, message = message })
                 end
             end
@@ -332,28 +339,34 @@ local function deliver(channel: CommChannel, msg: string, sender: string, distri
     end
 end
 
+-- A secret prefix or text cannot be read: the message is ignored. A secret
+-- sender is handed on as it is (not ambiguated), but keys no reassembly:
+-- only single-chunk messages arrive from one.
 local function receive(prefix: string, text: string, distribution: string, sender: string)
+    if secret.isSecret(prefix) or secret.isSecret(text) then
+        return
+    end
     local channel = CommChannel.byPrefix[prefix]
     if not channel or type(text) ~= "string" or #text == 0 then
         return
     end
-    local who = Ambiguate and Ambiguate(sender, "none") or sender
+    local hidden = secret.isSecret(sender)
+    local who = sender
+    if Ambiguate and not hidden then
+        who = Ambiguate(sender, "none")
+    end
     -- (A secret name cannot be compared: then nothing is filtered.)
     local name = UnitName("player")
-    local me: string? = nil
-    if not issecretvalue then
-        -- Clients without secret values.
-        me = name :: string
-    elseif not issecretvalue(name) then
-        me = name
-    end
-    if not channel.receiveOwn and me ~= nil and who == me then
+    if not channel.receiveOwn and not hidden and not secret.isSecret(name) and who == name then
         return
     end
-    local key = who .. "\000" .. prefix
+    local key = hidden and "" or who .. "\000" .. prefix
     local control = text:byte(1) ?? 0
     local body = text:sub(2)
     if channel.format == Format.AceComm then
+        if hidden and control <= 3 then
+            return
+        end
         if control == 1 then
             partial[key] = { body }
         elseif control == 2 or control == 3 then
@@ -375,6 +388,8 @@ local function receive(prefix: string, text: string, distribution: string, sende
     end
     if control == 1 then
         deliver(channel, fromAddonChannel(body), who, distribution)
+    elseif hidden then
+        return
     elseif control == 2 then
         partial[key] = { body }
     elseif control == 3 or control == 4 then
@@ -424,6 +439,10 @@ class CommChannel implements Channel
     end
 
     function send(msg: string, distribution: DistributionValue, target: string?, opts: SendOptions?): SendStatus
+        -- The client refuses secrets (and chunking needs the length).
+        if secret.isSecret(msg) or secret.isSecret(distribution) or secret.isSecret(target) then
+            return SendStatus.Dropped
+        end
         local dist = resolve(distribution)
         if not dist then
             return SendStatus.Dropped

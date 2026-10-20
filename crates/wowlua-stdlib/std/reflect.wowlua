@@ -1,5 +1,9 @@
 -- wowlua:reflect (spec §7.8): class identity (always available) and the
--- full metadata of `@reflect` classes and functions.
+-- full metadata of `@reflect` classes and functions. A secret (or a table
+-- addons may not index) has no class, metadata or enum member: the answers
+-- are nil, false or empty.
+import * as secret from "wowlua:secret"
+
 local _, ns = ...
 local wl = ns.__wowlua
 
@@ -51,23 +55,23 @@ local function registry()
 end
 
 local function super(cls: any): any
-    return type(cls) == "table" and rawget(cls, "__super") or nil
+    return type(cls) == "table" and secret.readable(cls) and rawget(cls, "__super") or nil
 end
 
 export function isInstance(value: any, cls: any): boolean
     local check = wl.isInstance
-    return check ~= nil and check(value, cls)
+    return check ~= nil and secret.readable(value) and secret.readable(cls) and check(value, cls)
 end
 
 export function classOf(value: any): any
     local get = wl.classOf
-    return get and get(value) or nil
+    return get and secret.readable(value) and get(value) or nil
 end
 
 -- The class name of an instance or a class.
 export function className(value: any): string?
     local cls = classOf(value)
-    if cls == nil and type(value) == "table" and rawget(value, "__name") then
+    if cls == nil and type(value) == "table" and secret.readable(value) and rawget(value, "__name") then
         cls = value
     end
     return cls and rawget(cls, "__name") or nil
@@ -78,6 +82,9 @@ export function superclass(cls: any): any
 end
 
 export function isSubclass(cls: any, base: any): boolean
+    if not (secret.readable(cls) and secret.readable(base)) then
+        return false
+    end
     local c = cls
     while c do
         if c == base then
@@ -110,6 +117,9 @@ local function order(e: any): string[]
 end
 
 export function enumName(e: any, value: any): string?
+    if not (secret.readable(e) and secret.readable(value)) then
+        return nil
+    end
     for _, name in ipairs(order(e)) do
         if rawget(e, name) == value then
             return name
@@ -120,6 +130,9 @@ end
 
 export function enumEntries(e: any): { name: string, value: any }[]
     local out = {}
+    if not secret.readable(e) then
+        return out
+    end
     for _, name in ipairs(order(e)) do
         out[#out + 1] = { name = name, value = rawget(e, name) }
     end
@@ -132,6 +145,9 @@ export function enumFrom(e: any, raw: any): any
 end
 
 local function meta(cls: any): ClassMeta?
+    if not secret.readable(cls) then
+        return nil
+    end
     local reg = registry()
     -- The registry holds what the compiler generated for `@reflect` classes.
     local m = reg?.classes[cls]
@@ -186,6 +202,9 @@ export function decorators(cls: any, member: string?): DecoratorInfo[]?
 end
 
 export function functionInfo(fn: any): FunctionInfo?
+    if secret.isSecret(fn) then
+        return nil
+    end
     local reg = registry()
     local info = reg?.functions[fn]
     return info and info :: FunctionInfo or nil

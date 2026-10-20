@@ -4,20 +4,23 @@
 -- `OnTooltipSet*` scripts are hooked and the item, spell or unit is read
 -- from the tooltip. Post-hooks only: handlers add to tooltips, they cannot
 -- suppress or replace what the client shows.
+import * as secret from "wowlua:secret"
 import callIn from "wowlua:errors"
 
 --- An `Enum.TooltipDataType` name: `"Item"`, `"Spell"`, `"Unit"`, … (the
 --- compiler checks it per flavor, E8330 and E8300).
 export type TooltipKind = string
 
---- What a tooltip shows, the same on every client.
+--- What a tooltip shows, the same on every client. `id`, `unit` and
+--- `link` are nil when the client's are secret; `guid` is passed through.
 export type TooltipData = {
     kind: TooltipKind,
     id?: number,
     guid?: string | Secret<string>,
     unit?: string,
     link?: string,
-    --- The client's tooltip data, where it has the data system.
+    --- The client's tooltip data, where it has the data system (and addons
+    --- may read it).
     raw?: table,
 }
 
@@ -47,6 +50,15 @@ const SCRIPTS: { [string]: string } = {
     Unit = "OnTooltipSetUnit",
 }
 const STANDARD_TOOLTIPS = { "GameTooltip", "ItemRefTooltip", "ShoppingTooltip1", "ShoppingTooltip2" }
+
+-- `v`, or nil when it is secret: the fields typed without secrets are for
+-- lookups, which a secret refuses.
+local function nonSecret<T>(v: T | Secret<T> | nil): T?
+    if secret.isSecret(v) then
+        return nil
+    end
+    return v
+end
 
 --- A registered handler. Hooks cannot be removed: disabling one stops
 --- calling its handler.
@@ -91,15 +103,18 @@ end
 local function read(kind: TooltipKind, tip: GameTooltip, data: TooltipData): TooltipData
     const getters = tip :: Getters
     if kind == "Item" then
-        local _, link = getters:GetItem()
+        local _, shown = getters:GetItem()
+        const link = nonSecret(shown)
         data.link = data.link ?? link
         data.id = data.id ?? (link and tonumber(link:match("item:(%d+)")))
     elseif kind == "Spell" then
         -- Clients return the spell id second or (with a rank) third.
         local _, a, b = getters:GetSpell()
+        a, b = nonSecret(a), nonSecret(b)
         data.id = data.id ?? (type(a) == "number" and a or type(b) == "number" and b or nil)
     elseif kind == "Unit" then
-        local _, unit = getters:GetUnit()
+        local _, token = getters:GetUnit()
+        const unit = nonSecret(token)
         data.unit = unit
         if unit and not data.guid then
             data.guid = UnitGUID(unit)
@@ -114,11 +129,12 @@ end
 local function fromData(kind: TooltipKind, raw: table, data: TooltipData): TooltipData
     const r = raw :: any
     if kind == "Item" then
-        if r.guid and C_Item.GetItemLinkByGUID then
+        -- The client takes no secret GUID here.
+        if r.guid and not secret.isSecret(r.guid) and C_Item.GetItemLinkByGUID then
             data.link = C_Item.GetItemLinkByGUID(r.guid) ?? data.link
         end
     elseif kind == "Unit" then
-        data.unit = r.guid and UnitTokenFromGUID and UnitTokenFromGUID(r.guid) or nil
+        data.unit = nonSecret(r.guid and UnitTokenFromGUID and UnitTokenFromGUID(r.guid) or nil)
     end
     return data
 end
@@ -136,7 +152,11 @@ local function listen(kind: TooltipKind)
         if tip:IsForbidden() then
             return
         end
-        const data: TooltipData = { kind = kind, id = raw.id, guid = raw.guid, link = raw.hyperlink, raw = raw }
+        if not secret.readable(raw) then
+            dispatch(kind, tip, { kind = kind })
+            return
+        end
+        const data: TooltipData = { kind = kind, id = nonSecret(raw.id), guid = raw.guid, link = nonSecret(raw.hyperlink), raw = raw }
         dispatch(kind, tip, fromData(kind, raw, data))
     end)
 end

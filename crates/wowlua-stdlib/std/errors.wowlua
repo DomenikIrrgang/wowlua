@@ -30,11 +30,17 @@ local function deliver(message: string)
     end
 end
 
+-- A secret cannot be read: its message is "<secret>". A `__tostring` may
+-- give a secret too.
 local function text(err: any): string
     if issecretvalue and issecretvalue(err) then
         return "<secret>"
     end
-    return tostring(err)
+    local s = tostring(err)
+    if issecretvalue and issecretvalue(s) then
+        return "<secret>"
+    end
+    return s
 end
 
 -- The module of a file of this addon (`src/core/cache.lua` is `core/cache`):
