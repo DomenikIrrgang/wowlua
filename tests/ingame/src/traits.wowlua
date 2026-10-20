@@ -6,6 +6,7 @@
 -- (`cargo xtask ingest` writes each class's fixture). The answers are the
 -- character's: its ranks, its currencies, its level's conditions.
 import state from "/state"
+import stamp from "/state"
 import say from "/harness"
 
 local function pack(...: any): { n: number, [number]: any }
@@ -294,6 +295,7 @@ export function traitsProbe()
     local _, class = UnitClass("player")
     st.engineTraitAnswers = st.engineTraitAnswers ?? {}
     st.engineTraitAnswers[class] = out
+    stamp(`traits:{class}`)
     say(`engine traits: {#configs} configs, {#trees} trees, {nodes} nodes for {class}; the talents' spells in a moment`)
     -- The talents' spells, once loaded: info, description, cost.
     for _, spell in ipairs(spells) do

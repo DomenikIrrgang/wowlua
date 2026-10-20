@@ -40,9 +40,18 @@ fn num(v: Value) -> Option<f64> {
     }
 }
 
-/// The slot asked about: `None` for slot 0 and below (no answer).
+/// The last action slot the bars answer for: past it, as for slot 0 and
+/// below, the slot functions answer nothing (the full probe, 1.60.1: slot
+/// 2147483647 answered nothing; unverified: the limit, somewhere above the
+/// recorded slot 200).
+pub(crate) const LAST_SLOT: f64 = 1000.0;
+
+/// The slot asked about: `None` for slot 0 and below and past the last
+/// (no answer).
 fn slot(c: &NativeCall) -> Option<i64> {
-    num(c.arg(1)).filter(|n| *n >= 1.0).map(|n| n as i64)
+    num(c.arg(1))
+        .filter(|n| (1.0..=LAST_SLOT).contains(n))
+        .map(|n| n as i64)
 }
 
 /// The global cooldown's category (`Enum`-less: the spells' start
@@ -51,6 +60,9 @@ pub const GLOBAL_COOLDOWN: f64 = 133.0;
 /// The global cooldown's length (recorded: 1.5 s).
 pub const GLOBAL_COOLDOWN_LENGTH: f64 = 1.5;
 
+/// Auto Attack's spell.
+const AUTO_ATTACK: f64 = 6603.0;
+
 /// The global cooldown starts (a cast begun).
 pub fn start_global_cooldown(vm: &mut Vm) {
     let now = crate::clock::now(vm);
@@ -58,9 +70,12 @@ pub fn start_global_cooldown(vm: &mut Vm) {
 }
 
 /// `setSpellTraits({ offGlobalCooldown = { id, … }, tracking = { … },
-/// profession = { … } })`: what the client knows of the character's spells
-/// and the engine does not (recorded: Judgement off the global cooldown,
-/// Find Minerals and Sense Undead tracking, the crafts professions).
+/// profession = { … }, partyOrSelf = { … }, interruptible = { … },
+/// weapon = { … } })`: what the client knows of the character's spells and
+/// the engine does not (recorded: Judgement off the global cooldown, Find
+/// Minerals and Sense Undead tracking, the crafts professions, the
+/// Sharpening Wheel's craft interruptible, Holy Strike a weapon's; probed:
+/// Blessing of Protection on the player or a member in reach only).
 pub fn control_set_spell_traits(vm: &mut Vm, c: NativeCall) -> Ret {
     let Value::Table(t) = c.arg(1) else {
         return Err(vm.error("setSpellTraits: a table of trait lists expected"));
@@ -116,11 +131,103 @@ fn has_action(vm: &mut Vm, c: NativeCall) -> Ret {
     })
 }
 
+/// `C_ActionBar.IsItemAction(slot)`: an item there (recorded; nothing for
+/// a slot there is not: the full probe, 1.60.1).
+fn is_item_action(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(s) = slot(&c) else {
+        return Ok(vec![]);
+    };
+    let item = action(vm, s).is_some_and(|a| a.kind == "item");
+    Ok(vec![Value::Bool(item)])
+}
+
+/// The gamepad bars' first slot (the items recording: slot 184 mirrors
+/// 12).
+const GAMEPAD_SLOTS: i64 = 181;
+
+/// `C_ActionBar.FindSpellActionButtons(spellID [, setToSearch])`: the slots
+/// holding the spell, in order, or nothing; `Enum.ActionBarSet` All (3, the
+/// default), Mkb (1: not the gamepad bars, recorded: slot 200 left out),
+/// Gamepad (2, unverified). Unverified: overridden spells.
+///
+/// The full probe (1.60.1): set 0 searched every bar as 3 did; a spell's
+/// name stands for its spell, a string naming none for spell 0; a macro
+/// casting nothing (a `/whisper`) was found as holding spell 0.
+fn find_spell_action_buttons(vm: &mut Vm, c: NativeCall) -> Ret {
+    let spell = match c.arg(1) {
+        Value::Num(n) => n,
+        v @ Value::Str(_) => crate::spellinfo::spell_of(vm, v).unwrap_or(0.0),
+        _ => return Ok(vec![]),
+    };
+    let set = num(c.arg(2)).unwrap_or(3.0);
+    let held: Vec<(i64, Action)> = engine(vm)
+        .world
+        .character
+        .actions
+        .iter()
+        .map(|(s, a)| (*s, a.clone()))
+        .collect();
+    let mut slots: Vec<i64> = Vec::new();
+    for (s, a) in held {
+        let holds = match a.kind.as_str() {
+            "spell" => num(a.id),
+            "macro" => Some(crate::spellinfo::macro_spell(vm, a.id).unwrap_or(0.0)),
+            _ => None,
+        };
+        let in_set = match set as i64 {
+            1 => s < GAMEPAD_SLOTS,
+            2 => s >= GAMEPAD_SLOTS,
+            0 | 3 => true,
+            _ => false,
+        };
+        if holds == Some(spell) && in_set {
+            slots.push(s);
+        }
+    }
+    if slots.is_empty() {
+        return Ok(vec![]);
+    }
+    let list = vm.new_table();
+    for (i, s) in slots.into_iter().enumerate() {
+        let _ = vm
+            .heap
+            .table_mut(list)
+            .set(Value::Num(i as f64 + 1.0), Value::Num(s as f64));
+    }
+    Ok(vec![Value::Table(list)])
+}
+
+/// `GetActionInfo(slot)`: the action's type, ID and sub type; an item's
+/// type and ID alone (recorded: slots 181 and 184).
 fn get_action_info(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(match slot(&c).and_then(|s| action(vm, s)) {
+        Some(a) if a.kind == "item" => vec![vm.str(&a.kind), a.id],
         Some(a) => vec![vm.str(&a.kind), a.id, a.sub_type],
         None => vec![],
     })
+}
+
+/// `UseAction(slot, unit, button, isKeyPress)` (an action button's click,
+/// Blizzard's `SecureActionButton_OnClick`): a spell action pressed as
+/// the player presses a spell (`casting::use_spell`, recorded). Other
+/// actions (items, macros) do nothing yet (unverified).
+fn use_action(vm: &mut Vm, c: NativeCall) -> Ret {
+    match slot(&c).and_then(|s| action(vm, s)) {
+        Some(a) if a.kind == "spell" => match num(a.id) {
+            Some(id) => crate::casting::use_spell(vm, id),
+            None => Ok(vec![]),
+        },
+        _ => Ok(vec![]),
+    }
+}
+
+/// `C_ActionBar.GetSpell(slot)`: a spell action's spell; 0 for another
+/// slot (documented never nil; unverified: a macro's spell).
+fn get_spell(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(vec![match slot(&c).and_then(|s| action(vm, s)) {
+        Some(a) if a.kind == "spell" => a.id,
+        _ => Value::Num(0.0),
+    }])
 }
 
 fn get_action_texture(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -130,10 +237,12 @@ fn get_action_texture(vm: &mut Vm, c: NativeCall) -> Ret {
     })
 }
 
+/// `GetActionText(slot)`: a macro's name; nothing for a slot without text
+/// (the full probe, 1.60.1: a spell's slot).
 fn get_action_text(vm: &mut Vm, c: NativeCall) -> Ret {
-    Ok(match slot(&c) {
-        Some(s) => vec![action(vm, s).map_or(Value::Nil, |a| a.text)],
-        None => vec![],
+    Ok(match slot(&c).and_then(|s| action(vm, s)) {
+        Some(a) if !a.text.is_nil() => vec![a.text],
+        _ => vec![],
     })
 }
 
@@ -177,7 +286,7 @@ fn data_field(vm: &mut Vm, item: bool, id: Value, key: &str) -> Value {
 /// profile's), but food and drink not in combat, and a spell with a power
 /// cost (its data's `powerCost`) only with that much of the player's
 /// power (`/stdtest engine scenario combat`: Tough Jerky, Heroic Strike).
-fn usability(vm: &mut Vm, a: &Action) -> (bool, bool) {
+pub(crate) fn usability(vm: &mut Vm, a: &Action) -> (bool, bool) {
     // Dead or a ghost: nothing (recorded, every action at the death).
     let p = &engine(vm).units.list[crate::units::PLAYER.0];
     if p.dead || p.ghost {
@@ -196,7 +305,42 @@ fn usability(vm: &mut Vm, a: &Action) -> (bool, bool) {
             return (false, false);
         }
     }
+    // A weapon's strike (trait `weapon`): unusable with no main hand, or
+    // while the inventory loads (recorded: Holy Strike told usable once it
+    // loaded after a loading screen; unverified: unarmed).
+    if a.kind == "spell" && has_trait(vm, a.id, "weapon") {
+        let w = &engine(vm).world;
+        if w.inventory_loading || !w.character.equipment.contains_key(&16) {
+            return (false, false);
+        }
+    }
     let in_combat = engine(vm).units.list[crate::units::PLAYER.0].in_combat;
+    // A spell on the player or a group member in reach only (trait
+    // `partyOrSelf`; probed: Blessing of Protection usable targeting the
+    // player, not with no target, an NPC, or a member in another zone;
+    // recorded: usable on a member nearby). With no target, the soft
+    // friend decides (probed: unusable with a friendly NPC soft targeted;
+    // recorded, `profession`, on the road); with neither, usable (probed
+    // in the open world, away from anyone). A player soft friend while not
+    // grouped is (recorded, `group`: usable with the druid soft targeted,
+    // unusable once the party formed without it; unverified: a player
+    // targeted).
+    if a.kind == "spell" && has_trait(vm, a.id, "partyOrSelf") {
+        let grouped = crate::party::grouped(vm);
+        let e = engine(vm);
+        let u = &e.units;
+        let ok = match u.target.or(u.soft[1]) {
+            None => true,
+            Some(crate::units::PLAYER) => true,
+            Some(t) if u.target.is_none() && !grouped && u.list[t.0].player => true,
+            Some(t) => {
+                let m = &u.list[t.0];
+                let here = &e.world.character.position.zone;
+                u.group.contains(&t) && m.online && m.zone.as_ref().is_none_or(|z| z == here)
+            }
+        };
+        return (ok, false);
+    }
     if a.kind == "item" {
         let class = data_field(vm, true, a.id, "classID");
         let sub = data_field(vm, true, a.id, "subclassID");
@@ -204,6 +348,11 @@ fn usability(vm: &mut Vm, a: &Action) -> (bool, bool) {
         if food {
             return (a.usable.0 && !in_combat, false);
         }
+    }
+    // A spell only out of combat (data `outOfCombat`; recorded: Redemption
+    // unusable once in combat, not short of mana).
+    if a.kind == "spell" && in_combat && data_field(vm, false, a.id, "outOfCombat").truthy() {
+        return (false, false);
     }
     if a.kind == "spell"
         && let Value::Num(cost) = data_field(vm, false, a.id, "powerCost")
@@ -228,11 +377,58 @@ pub fn update_usability(vm: &mut Vm) {
 /// whether any did (the bars' `ACTIONBAR_UPDATE_USABLE` is the caller's:
 /// after a spell's swing it comes after the cooldowns, recorded).
 pub fn usability_changed(vm: &mut Vm) -> bool {
+    // Batching frames: checked at the frame's end (`batch`).
+    if crate::batch::owe_usability(vm, true) {
+        return false;
+    }
+    usability_changed_of(vm, &|_, _| true)
+}
+
+/// After the player's target changed: the actions on a target's kind
+/// alone (`partyOrSelf`), others' changes left for their own moment
+/// (recorded: a warrior's rage-bound spell told after a kill's loot).
+pub fn update_target_usability(vm: &mut Vm) {
+    if crate::batch::owe_usability(vm, false) {
+        return;
+    }
+    target_usability_changed(vm);
+}
+
+/// The target-bound actions' usability now (`update_target_usability`).
+pub(crate) fn target_usability_changed(vm: &mut Vm) {
+    let target_bound =
+        |vm: &Vm, a: &Action| a.kind == "spell" && has_trait(vm, a.id, "partyOrSelf");
+    if usability_changed_of(vm, &target_bound) {
+        widgets::fire_event(vm, "ACTIONBAR_UPDATE_USABLE", &[]);
+    }
+}
+
+/// The bars reloaded (a loading screen's `ACTIONBAR_SLOT_CHANGED(0)`): each
+/// action's usability as it is now, untold (recorded, `hearth`: Holy
+/// Strike told usable once the inventory loaded, never told unusable;
+/// Blessing of Protection told unusable after the load, the soft friend
+/// dropped at the loading screen never told).
+pub fn bars_reloaded(vm: &mut Vm) {
     let actions: Vec<(i64, Action)> = engine(vm)
         .world
         .character
         .actions
         .iter()
+        .map(|(k, a)| (*k, a.clone()))
+        .collect();
+    for (slot, a) in actions {
+        let now = usability(vm, &a);
+        engine_mut(vm).world.character.usable_seen.insert(slot, now);
+    }
+}
+
+fn usability_changed_of(vm: &mut Vm, which: &dyn Fn(&Vm, &Action) -> bool) -> bool {
+    let actions: Vec<(i64, Action)> = engine(vm)
+        .world
+        .character
+        .actions
+        .iter()
+        .filter(|(_, a)| which(vm, a))
         .map(|(k, a)| (*k, a.clone()))
         .collect();
     let mut changed = Vec::new();
@@ -282,6 +478,13 @@ fn not_for_slot(_vm: &mut Vm, c: NativeCall) -> Ret {
     })
 }
 
+/// `IsAutoCastPetAction`, `IsEnabledAutoCastPetAction`,
+/// `IsEquippedGearOutfitAction`: false for any slot, 0 and past the last
+/// too (the full probe, 1.60.1; unverified: a pet's action on the bars).
+fn never(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(false)])
+}
+
 /// `IsAttackAction(slot)`: whether the slot holds Auto Attack (spell
 /// 6603; unverified for a filled slot: the recording's were empty).
 fn is_attack_action(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -306,18 +509,101 @@ fn get_action_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![]);
     };
     let a = action(vm, s);
-    let enabled = a.is_some() && !engine(vm).world.loading_screen;
+    // A macro casting nothing is not enabled (`macros.rs`).
+    let enabled = a.as_ref().is_some_and(|a| {
+        a.kind != "macro" || num(a.id).is_some_and(|i| crate::macros::casts_something(vm, i))
+    }) && !engine(vm).world.loading_screen;
     // An empty slot's cooldown is plain in combat too (recorded).
     if a.is_none() {
         engine_mut(vm).plain_results = true;
     }
     let now = crate::clock::now(vm);
+    // Off the global cooldown: Auto Attack, a spell on the next swing (the
+    // combat recording's Heroic Strike), a trait's or the data's.
+    let off = |vm: &mut Vm, id: Value| {
+        num(id) == Some(AUTO_ATTACK)
+            || has_trait(vm, id, "offGlobalCooldown")
+            || num(id).is_some_and(|id| {
+                crate::casting::spell_field(vm, id, "nextSwing").truthy()
+                    || crate::casting::spell_field(vm, id, "offGCD").truthy()
+            })
+    };
     let gcd = match (&a, engine(vm).world.global_cooldown) {
         (Some(a), Some((start, length))) if a.kind == "spell" && start + length > now => {
-            (!has_trait(vm, a.id, "offGlobalCooldown")).then_some((start, length))
+            (!off(vm, a.id)).then_some((start, length))
         }
         _ => None,
     };
+    // An item of a food's category just used (`inventory.rs`).
+    if let Some(a) = &a
+        && a.kind == "item"
+        && let Some((category, start, length)) = engine(vm).units.casting.category_cooldown
+        && start + length > now
+        && num(data_field(vm, true, a.id, "cooldownCategory")) == Some(category)
+    {
+        let t = table(
+            vm,
+            &[
+                ("startTime", Value::Num(start)),
+                ("duration", Value::Num(length)),
+                ("isEnabled", Value::Bool(true)),
+                ("modRate", Value::Num(1.0)),
+                ("isActive", Value::Bool(true)),
+            ],
+        );
+        return Ok(vec![t]);
+    }
+    // Its own cooldown, running since before the snapshot (recorded: a
+    // warrior's three-minute spell on its slot until it ended), longer
+    // than the global one: told without the global cooldown's fields.
+    let own = match &a {
+        Some(a) if a.kind == "spell" => num(a.id)
+            .and_then(|id| crate::stats::recorded_cooldown(vm, id))
+            .filter(|(start, length)| start + length > now),
+        _ => None,
+    };
+    // Or one its use began (the data's `cooldown`; recorded: `combat`'s
+    // instant spell on slot 10 still active 10 s on, `auradeath`'s
+    // Judgement); with the global cooldown its use began too, told with
+    // the global cooldown's category, not on it (recorded once, combat
+    // 5.663).
+    let used = match &a {
+        Some(a) if a.kind == "spell" && own.is_none() => num(a.id).and_then(|id| {
+            let Value::Num(cd) = crate::casting::spell_field(vm, id, "cooldown") else {
+                return None;
+            };
+            let at = engine(vm)
+                .units
+                .casting
+                .ready_at
+                .get(&(id as i64))
+                .copied()?;
+            (at > now).then_some((at - cd, cd))
+        }),
+        _ => None,
+    };
+    let gcd_end = gcd.map(|(s, l)| s + l);
+    if let Some((start, length)) = own.or(used)
+        && gcd_end.is_none_or(|end| start + length > end)
+    {
+        let mut fields = vec![
+            ("startTime", Value::Num(start)),
+            ("duration", Value::Num(length)),
+            ("isEnabled", Value::Bool(true)),
+            ("modRate", Value::Num(1.0)),
+            ("isActive", Value::Bool(true)),
+            (
+                "timeUntilEndOfStartRecovery",
+                Value::Num(((start + length - now) * 1000.0).round() / 1000.0),
+            ),
+        ];
+        if used.is_some() && gcd.is_some() {
+            fields.push(("isOnGCD", Value::Bool(false)));
+            fields.push(("activeCategory", Value::Num(GLOBAL_COOLDOWN)));
+        }
+        let t = table(vm, &fields);
+        return Ok(vec![t]);
+    }
     if let Some((start, length)) = gcd {
         let t = table(
             vm,
@@ -450,8 +736,15 @@ pub fn control_set_action(vm: &mut Vm, c: NativeCall) -> Ret {
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
         ("C_ActionBar.HasAction", has_action),
+        ("C_ActionBar.IsItemAction", is_item_action),
+        (
+            "C_ActionBar.FindSpellActionButtons",
+            find_spell_action_buttons,
+        ),
         ("HasAction", has_action),
         ("GetActionInfo", get_action_info),
+        ("UseAction", use_action),
+        ("C_ActionBar.GetSpell", get_spell),
         ("C_ActionBar.GetActionTexture", get_action_texture),
         ("GetActionTexture", get_action_texture),
         ("GetActionText", get_action_text),
@@ -469,9 +762,9 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_ActionBar.IsAttackAction", is_attack_action),
         ("IsAttackAction", is_attack_action),
         // No pet actions or outfits on the bars yet (recorded false).
-        ("C_ActionBar.IsAutoCastPetAction", not_for_slot),
-        ("C_ActionBar.IsEnabledAutoCastPetAction", not_for_slot),
-        ("C_ActionBar.IsEquippedGearOutfitAction", not_for_slot),
+        ("C_ActionBar.IsAutoCastPetAction", never),
+        ("C_ActionBar.IsEnabledAutoCastPetAction", never),
+        ("C_ActionBar.IsEquippedGearOutfitAction", never),
         ("C_ActionBar.IsAssistedCombatAction", not_assisted),
         ("C_ActionBar.GetActionCooldown", get_action_cooldown),
         ("C_ActionBar.GetActionCharges", get_action_charges),

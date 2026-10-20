@@ -36,6 +36,26 @@ pub struct Input {
     /// Modifier keys held that a keyboard frame kept: its `OnKeyUp` comes
     /// with their release.
     pub held_by: Vec<(String, WidgetId)>,
+    /// Where the mouse is on the screen (`GetCursorPosition`, in the
+    /// screen's units: a frame's position times its effective scale).
+    pub cursor: (f64, f64),
+}
+
+/// `setCursorPosition(x, y)`: the mouse moved there (screen units, as
+/// `GetCursorPosition` answers; a frame's point times its effective
+/// scale). No events: what is under it is `hover`'s.
+pub fn control_set_cursor_position(vm: &mut Vm, c: NativeCall) -> Ret {
+    let x = vm.check_number(&c, 1)?;
+    let y = vm.check_number(&c, 2)?;
+    engine_mut(vm).world.input.cursor = (x, y);
+    Ok(vec![])
+}
+
+/// `GetCursorPosition()`: the mouse's place (`setCursorPosition`; the
+/// screen's corner, 0, 0, until it is set).
+fn get_cursor_position(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let (x, y) = engine(vm).world.input.cursor;
+    Ok(vec![Value::Num(x), Value::Num(y)])
 }
 
 /// Runs `f` as the user's action.
@@ -299,7 +319,7 @@ pub fn control_type(vm: &mut Vm, c: NativeCall) -> Ret {
             let mut text = text_of(vm, id);
             text.push(ch);
             let v = vm.str(&text);
-            engine_mut(vm).world.widgets[id.0].text = Some(v);
+            widgets::store_text(vm, id, Some(v));
             let ch = vm.str(&ch.to_string());
             widgets::run_script(vm, id, "OnChar", &[ch]);
             widgets::run_script(vm, id, "OnTextChanged", &[Value::Bool(true)]);
@@ -332,14 +352,29 @@ pub fn edit_box_key(vm: &mut Vm, key: &str) -> bool {
 /// script, keeps no key from the bindings).
 fn keyboard_frames(vm: &mut Vm) -> Vec<WidgetId> {
     let mut frames: Vec<(usize, i64, usize)> = Vec::new();
-    for i in 0..engine(vm).world.widgets.len() {
+    // Only a widget a keyboard setting was stored for can take keys
+    // (`World::keyboard`); the stem interned as when every widget but an
+    // edit box was looked at, at the first (nothing here collects it).
+    let e = engine(vm);
+    if !e
+        .world
+        .widgets
+        .iter()
+        .any(|w| !widgets::is_a(e, &w.class, "EditBox"))
+    {
+        return Vec::new();
+    }
+    let key = vm.str("KeyboardEnabled");
+    let keyboard = engine(vm).world.keyboard.clone();
+    for i in keyboard {
         let id = WidgetId(i);
-        let class = engine(vm).world.widgets[i].class.clone();
-        if widgets::is_a(engine(vm), &class, "EditBox") {
+        let e = engine(vm);
+        let w = &e.world.widgets[i];
+        if widgets::is_a(e, &w.class, "EditBox") {
             continue;
         }
-        let props = engine(vm).world.widgets[i].props;
-        let on = widgets::stored_args(vm, props, "KeyboardEnabled")
+        let props = w.props;
+        let on = widgets::stored_args_at(vm, props, key)
             .and_then(|v| v.first().copied())
             .is_some_and(|v| v.truthy());
         if on && widgets::visible(engine(vm), id) {
@@ -498,6 +533,7 @@ fn get_current_keyboard_focus(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
+        ("GetCursorPosition", get_cursor_position),
         ("GetMouseFoci", get_mouse_foci),
         ("GetMouseFocus", get_mouse_focus),
         ("GetCurrentKeyBoardFocus", get_current_keyboard_focus),

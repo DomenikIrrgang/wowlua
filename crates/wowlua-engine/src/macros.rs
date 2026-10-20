@@ -2,7 +2,12 @@
 //! 138), each a name, an icon and a body. A world profile's `macros`
 //! (recorded by `/stdtest snapshot`) and `mock.setMacros` set them;
 //! Blizzard's macro window creates, edits and deletes them
-//! (`UPDATE_MACROS`). The fresh character has none.
+//! (`UPDATE_MACROS`). The fresh character has none. An edited macro's
+//! action slots are told changed after `UPDATE_MACROS`, then the bars'
+//! cooldowns (recorded once, scenario macro: the macro window saving the
+//! account macro on slot 64 as its tab changed). A macro that casts
+//! nothing is no enabled action (its cooldown's `isEnabled` false;
+//! recorded once, an empty macro; unverified for one that only talks).
 //!
 //! Unverified: the order a new or renamed macro takes (kept by name, as
 //! the client lists them), `GetMacroInfo`'s answer beyond name, icon and
@@ -81,6 +86,26 @@ fn get(vm: &Vm, (character, i): (bool, usize)) -> Macro {
     }
 }
 
+/// Whether the macro at `index` casts or uses something (a `/cast` or
+/// `/use` line; see the module).
+pub fn casts_something(vm: &Vm, index: f64) -> bool {
+    let Some(at) = find(vm, Value::Num(index)) else {
+        return false;
+    };
+    get(vm, at).body.lines().any(|l| {
+        let l = l.trim_start().to_lowercase();
+        [
+            "/cast",
+            "/use",
+            "/castsequence",
+            "/castrandom",
+            "/userandom",
+        ]
+        .iter()
+        .any(|c| l.starts_with(c))
+    })
+}
+
 fn get_num_macros(vm: &mut Vm, _c: NativeCall) -> Ret {
     let m = &engine(vm).world.character.macros;
     Ok(vec![
@@ -100,7 +125,8 @@ fn get_macro_info(vm: &mut Vm, c: NativeCall) -> Ret {
 
 fn get_macro_body(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(at) = find(vm, c.arg(1)) else {
-        return Ok(vec![Value::Nil]);
+        // No such macro: nothing (the full probe).
+        return Ok(vec![]);
     };
     let m = get(vm, at);
     Ok(vec![vm.str(&m.body)])
@@ -178,6 +204,21 @@ fn edit_macro(vm: &mut Vm, c: NativeCall) -> Ret {
     target.remove(i);
     let j = place(target, m);
     widgets::fire_event(vm, "UPDATE_MACROS", &[]);
+    let index = index_of(character, i);
+    let slots: Vec<i64> = engine(vm)
+        .world
+        .character
+        .actions
+        .iter()
+        .filter(|(_, a)| a.kind == "macro" && matches!(a.id, Value::Num(n) if n == index))
+        .map(|(s, _)| *s)
+        .collect();
+    if !slots.is_empty() {
+        for s in slots {
+            widgets::fire_event(vm, "ACTIONBAR_SLOT_CHANGED", &[Value::Num(s as f64)]);
+        }
+        widgets::fire_event(vm, "ACTIONBAR_UPDATE_COOLDOWN", &[]);
+    }
     Ok(vec![Value::Num(index_of(character, j))])
 }
 

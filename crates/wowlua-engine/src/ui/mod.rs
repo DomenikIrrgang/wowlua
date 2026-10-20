@@ -61,9 +61,30 @@ pub struct Registry {
     /// The addon whose UI code is loading (not Blizzard's): its Lua and
     /// XML scripts compile as its code, carrying its taint.
     pub code_of: Option<String>,
+    /// What an addon's files' chunk names start with while it loads: the
+    /// `test.addons`' `Interface/AddOns/<Name>/`, as the client names them
+    /// (`debugstack` in a recording: `Interface/AddOns/StdTest/src/
+    /// engineprobe.lua:806`; libraries find their folder there). The test
+    /// runner sets it for the addon tested too.
+    pub chunk_prefix: Option<String>,
     /// The addon each of its templates came from, by lower-case name: their
     /// scripts are its code wherever they are applied.
     pub template_addons: HashMap<String, String>,
+    /// Templates and intrinsic types declared under `<ScopedModifier
+    /// allowUntaintedCreation="true">`, by lower-case name: frames made
+    /// from them are built untainted, whoever calls `CreateFrame`.
+    pub untainted_creation: HashSet<String>,
+    /// Inside such a modifier while the UI code loads.
+    in_untainted_creation: bool,
+    /// Inside a `<ScopedModifier forbidden="true">` (or `fullLockdown`)
+    /// while the UI code loads.
+    pub in_forbidden: bool,
+    /// Building a file's own (not virtual) elements as the UI code loads.
+    pub building_file: u32,
+    /// The secure delegates `<Mixin secureDelegates="true">` made, by the
+    /// function they call: every frame shares them (each kept, so the
+    /// function it holds is never collected).
+    pub mixin_delegates: HashMap<wowlua_vm::FuncRef, Value>,
     /// Every Blizzard addon of the UI code, by lower-case name: what
     /// `C_AddOns.LoadAddOn` can load later.
     available: HashMap<String, Addon>,
@@ -347,7 +368,16 @@ fn load_addon_files(vm: &mut Vm, root: &Path, t: &Target, addon: &Addon, only_bo
     if addon.secure {
         vm.globals = secure_env(vm);
     }
+    // Blizzard's code and file names, also when an addon's file loading
+    // calls `C_AddOns.LoadAddOn` (it would otherwise compile as that
+    // addon's code, tainted, and be named inside its folder).
+    let ui = &mut engine_mut(vm).world.ui;
+    let code_of = ui.code_of.take();
+    let chunk_prefix = ui.chunk_prefix.take();
     load_addon_files_in(vm, root, t, addon, only_bootstrap);
+    let ui = &mut engine_mut(vm).world.ui;
+    ui.code_of = code_of;
+    ui.chunk_prefix = chunk_prefix;
     vm.globals = main_globals;
 }
 
@@ -396,9 +426,24 @@ fn secure_env(vm: &mut Vm) -> wowlua_vm::TableRef {
     let unwrap = vm.native("secretunwrap", secret_unwrap);
     let k = vm.heap.intern(b"secretunwrap");
     vm.heap.table_mut(env).set_str(k, unwrap);
+    // `GetForbiddenObjectTable(object)` (documented `SecureOnly`): an
+    // object's forbidden partition. Partitions are not modelled, so an
+    // object is its own (the aura containers' inbound checks compare the
+    // two).
+    let forbidden = vm.native("GetForbiddenObjectTable", forbidden_object_table);
+    let k = vm.heap.intern(b"GetForbiddenObjectTable");
+    vm.heap.table_mut(env).set_str(k, forbidden);
     crate::widgets::keep(vm, Value::Table(env));
     engine_mut(vm).world.ui.secure_env = Some(env);
     env
+}
+
+fn forbidden_object_table(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
+    let object = c.arg(1);
+    if crate::widgets::widget_of(vm, object).is_none() {
+        return Err(vm.error("Usage: local forbiddenTable = GetForbiddenObjectTable(object)"));
+    }
+    Ok(vec![object])
 }
 
 /// `secretunwrap(...)`: its arguments, secrets revealed.
@@ -654,6 +699,175 @@ pub fn load_addon(vm: &mut Vm, name: &str) -> Option<bool> {
     Some(true)
 }
 
+/// An addon folder a test loads besides the addon under test (the
+/// manifest's `test.addons`), as the client reads it for the flavor.
+#[derive(Clone, Debug)]
+pub struct UserAddon {
+    /// The folder's name, the addon's.
+    pub name: String,
+    pub dir: PathBuf,
+    /// The TOC the client reads: the flavor's own (`<Name>_Mainline.toc`),
+    /// else `<Name>.toc`.
+    pub toc: PathBuf,
+    /// The TOC's metadata (`## Title: …`), its inline conditions met.
+    pub metadata: Vec<(String, String)>,
+    /// `Dependencies`, `RequiredDeps` (and their short forms).
+    pub deps: Vec<String>,
+    /// `LoadOnDemand: 1`: known, loaded by `C_AddOns.LoadAddOn`.
+    pub on_demand: bool,
+    /// `SavedVariables` and `SavedVariablesPerCharacter`.
+    pub saved: Vec<String>,
+    /// The client loads it in this game (`AllowLoadGameType`,
+    /// `ExcludeLoadGameType`, `AllowLoad`).
+    pub allowed: bool,
+}
+
+/// Reads an addon folder as the client does for `flavor`: the flavor's
+/// TOC (the suffixes the Blizzard addons' are read with), else the plain
+/// one. An error if the folder has neither.
+pub fn read_user_addon(flavor: &str, dir: &Path) -> Result<UserAddon, String> {
+    let t = Target::new(flavor);
+    let name = dir
+        .file_name()
+        .and_then(|n| n.to_str())
+        .map(str::to_string)
+        .ok_or_else(|| format!("{}: not an addon folder", dir.display()))?;
+    let toc = t
+        .suffixes
+        .iter()
+        .map(|s| format!("{name}{s}.toc"))
+        .chain(std::iter::once(format!("{name}.toc")))
+        .map(|f| resolve(dir, &f))
+        .find(|p| p.is_file())
+        .ok_or_else(|| format!("{}: no {name}.toc for {flavor}", dir.display()))?;
+    read_user_toc(flavor, &name, dir, &toc)
+}
+
+/// An addon named `name` in `dir` as its TOC `toc` describes it for
+/// `flavor` (see [`read_user_addon`]).
+pub fn read_user_toc(
+    flavor: &str,
+    name: &str,
+    dir: &Path,
+    toc: &Path,
+) -> Result<UserAddon, String> {
+    let t = Target::new(flavor);
+    let name = name.to_string();
+    let toc = toc.to_path_buf();
+    let text = std::fs::read_to_string(&toc).map_err(|e| format!("{}: {e}", toc.display()))?;
+    let parsed = wowlua_toc::parse(&text);
+    let on = |v: &str| v.trim() == "1" || v.trim().eq_ignore_ascii_case("true");
+    let list = |keys: &[&str]| -> Vec<String> {
+        keys.iter()
+            .flat_map(|k| directive(&parsed, &t, k))
+            .flat_map(|v| v.split(','))
+            .map(|n| n.trim().to_string())
+            .filter(|n| !n.is_empty())
+            .collect()
+    };
+    let in_game = |key: &str| {
+        parsed
+            .directives
+            .iter()
+            .filter(|d| d.key.eq_ignore_ascii_case(key))
+            .map(|d| {
+                d.value.split(',').any(|v| {
+                    t.game_types
+                        .iter()
+                        .any(|g| g.eq_ignore_ascii_case(v.trim()))
+                })
+            })
+            .collect::<Vec<bool>>()
+    };
+    let allow_load: Vec<String> = directive(&parsed, &t, "AllowLoad")
+        .iter()
+        .map(|v| v.trim().to_ascii_lowercase())
+        .collect();
+    let allowed = in_game("AllowLoadGameType").iter().all(|b| *b)
+        && !in_game("ExcludeLoadGameType").iter().any(|b| *b)
+        && (allow_load.is_empty() || allow_load.iter().any(|a| a == "game" || a == "both"));
+    let metadata = parsed
+        .directives
+        .iter()
+        .filter(|d| t.allows(&d.conditions))
+        .map(|d| (d.key.clone(), d.value.trim().to_string()))
+        .collect();
+    Ok(UserAddon {
+        deps: list(&["Dep", "Dependencies", "RequiredDep", "RequiredDeps"]),
+        on_demand: directive(&parsed, &t, "LoadOnDemand").iter().any(|v| on(v)),
+        saved: list(&["SavedVariables", "SavedVariablesPerCharacter"]),
+        allowed,
+        metadata,
+        name,
+        dir: dir.to_path_buf(),
+        toc,
+    })
+}
+
+/// The client's load order of addons: as given, each after those of its
+/// dependencies the list has (a cycle's first stays first).
+pub fn user_addon_order(addons: Vec<UserAddon>) -> Vec<UserAddon> {
+    fn visit(i: usize, all: &[UserAddon], seen: &mut Vec<bool>, order: &mut Vec<usize>) {
+        if seen[i] {
+            return;
+        }
+        seen[i] = true;
+        for d in &all[i].deps {
+            if let Some(j) = all.iter().position(|a| a.name.eq_ignore_ascii_case(d)) {
+                visit(j, all, seen, order);
+            }
+        }
+        order.push(i);
+    }
+    let mut seen = vec![false; addons.len()];
+    let mut order = Vec::new();
+    for i in 0..addons.len() {
+        visit(i, &addons, &mut seen, &mut order);
+    }
+    order.into_iter().map(|i| addons[i].clone()).collect()
+}
+
+/// Whether the loaded UI code has a Blizzard addon of this name (loaded or
+/// loadable).
+pub fn is_blizzard_addon(vm: &Vm, name: &str) -> bool {
+    engine(vm)
+        .world
+        .ui
+        .available
+        .contains_key(&name.to_ascii_lowercase())
+}
+
+/// A Blizzard addon of the loaded UI code as `C_AddOns` tells it: its
+/// name, its TOC's title, whether it loads on demand, its required
+/// dependencies (in the TOC's order).
+pub struct BlizzardAddon {
+    pub name: String,
+    pub title: Option<String>,
+    pub on_demand: bool,
+    pub deps: Vec<String>,
+}
+
+/// The loaded UI code's Blizzard addon of this name, any case.
+pub fn blizzard_addon(vm: &Vm, name: &str) -> Option<BlizzardAddon> {
+    let a = engine(vm)
+        .world
+        .ui
+        .available
+        .get(&name.to_ascii_lowercase())?;
+    let title = a
+        .toc
+        .directives
+        .iter()
+        .find(|d| d.key.eq_ignore_ascii_case("Title"))
+        .map(|d| d.value.clone());
+    Some(BlizzardAddon {
+        name: a.name.clone(),
+        title,
+        on_demand: a.on_demand,
+        deps: a.deps.clone(),
+    })
+}
+
 /// Loads an addon of the user's from its folder as the client does: the
 /// files its TOC lists, in order, as the addon's code (its taint), with
 /// `table` as the addon table; `skip`: files (relative to `dir`) already
@@ -694,6 +908,19 @@ pub fn load_user_addon(
     engine_mut(vm).world.ui.code_of = saved;
 }
 
+/// Another addon of the user's (one of the `test.addons`): as
+/// [`load_user_addon`], its files named as the client names them
+/// (`Interface/AddOns/<name>/<file>`).
+pub fn load_other_user_addon(vm: &mut Vm, dir: &Path, toc: &Path, name: &str, table: Value) {
+    let saved = engine_mut(vm)
+        .world
+        .ui
+        .chunk_prefix
+        .replace(format!("Interface/AddOns/{name}/"));
+    load_user_addon(vm, dir, toc, name, table, &HashSet::new());
+    engine_mut(vm).world.ui.chunk_prefix = saved;
+}
+
 /// One file of an addon of the user's (`rel`: relative to `dir`), as its
 /// code: see [`load_user_addon`].
 pub fn load_user_file(vm: &mut Vm, dir: &Path, rel: &str, name: &str, table: Value) {
@@ -710,6 +937,10 @@ fn load_file(vm: &mut Vm, interface_root: &Path, path: &Path, addon: &str, addon
         .unwrap_or(path)
         .to_string_lossy()
         .replace('\\', "/");
+    let shown = match &engine(vm).world.ui.chunk_prefix {
+        Some(prefix) => format!("{prefix}{shown}"),
+        None => shown,
+    };
     let ext = path
         .extension()
         .and_then(|e| e.to_str())
@@ -818,13 +1049,32 @@ fn process_ui(
                     font_named(vm, name, f);
                 }
             }
-            "scopedmodifier" => process_ui(vm, interface_root, dir, cx, el, addon, addon_table),
+            "scopedmodifier" => {
+                // `allowUntaintedCreation` (Blizzard_AuraContainer's
+                // intrinsic and its custom container template): what is
+                // declared within is built untainted (see
+                // `widgets::create_frame`). Blizzard's code only (an
+                // addon's XML would make its own code secure; unverified).
+                let ui = &mut engine_mut(vm).world.ui;
+                let outer = ui.in_untainted_creation;
+                let outer_forbidden = ui.in_forbidden;
+                ui.in_untainted_creation |=
+                    el.flag("allowUntaintedCreation") && ui.code_of.is_none();
+                ui.in_forbidden |= el.flag("forbidden") || el.flag("fullLockdown");
+                process_ui(vm, interface_root, dir, cx, el, addon, addon_table);
+                let ui = &mut engine_mut(vm).world.ui;
+                ui.in_untainted_creation = outer;
+                ui.in_forbidden = outer_forbidden;
+            }
             _ => {
                 if (el.flag("virtual") || el.flag("intrinsic"))
                     && let Some(name) = el.attr("name")
                 {
                     let globals = vm.globals;
                     let ui = &mut engine_mut(vm).world.ui;
+                    if ui.in_untainted_creation {
+                        ui.untainted_creation.insert(name.to_ascii_lowercase());
+                    }
                     ui.template_files
                         .insert(name.to_ascii_lowercase(), cx.file.to_string());
                     ui.template_envs.insert(name.to_ascii_lowercase(), globals);
@@ -854,7 +1104,18 @@ fn font_named(vm: &mut Vm, name: &str, el: &Element) {
         {
             let mut a = vec![f];
             a.extend_from_slice(args);
-            let _ = vm.call(m, &a);
+            // A font the engine cannot build is the loader's error.
+            if let Err(e) = vm.call(m, &a) {
+                let msg = match e.value {
+                    Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+                    _ => "?".into(),
+                };
+                engine_mut(vm)
+                    .world
+                    .ui
+                    .errors
+                    .push(format!("{name} {method}: {msg}"));
+            }
         }
     };
     // What the font inherits: the parent font's face, color, shadow and
@@ -1016,18 +1277,63 @@ fn load_global_strings(vm: &mut Vm, path: &Path) {
 /// (`GlobalStrings.lua`: `NAME = "text"` lines) if given; `ADDON_LOADED`
 /// fires for each addon.
 /// `CreateSecureDelegate(f)`: a C function calling `f` (Blizzard's code
-/// only, while it loads; whether the call is secure for a tainted caller is
-/// unverified).
+/// only, while it loads).
 fn create_secure_delegate(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
-    fn call_delegate(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
-        let f = c.upvals.first().copied().unwrap_or(Value::Nil);
-        vm.call(f, &c.args)
-    }
     let f = c.arg(1);
     if !matches!(f, Value::Func(_)) {
         return Err(vm.error("Usage: CreateSecureDelegate(func)"));
     }
-    Ok(vec![vm.native_with("delegate", call_delegate, vec![f])])
+    Ok(vec![secure_delegate(vm, f, false)])
+}
+
+/// A secure delegate of `f`: as the client documents `CreateSecureDelegate`,
+/// it "invokes the original function in a protected call context with
+/// secure execution taint, and supports passing and returning values
+/// directly". The arguments go in as values of that secure execution (were
+/// they to keep a tainted caller's taint, the first one read would taint
+/// it again), and the caller's taint is back after, the results taking it.
+/// A mixin's delegates (`<Mixin secureDelegates="true">`) stay at the
+/// caller's taint when a tainted caller passes a secret: Blizzard's
+/// ScriptErrorsFrame says secure mixin methods "drop their ability to
+/// elevate to an untainted state if any input parameter is secret from a
+/// tainted context", unlike a delegate of its own. Unverified: errors
+/// reach the caller (Blizzard's inbound methods validate with `assert`).
+pub fn secure_delegate(vm: &mut Vm, f: Value, mixin: bool) -> Value {
+    // The delegate is Blizzard's, whoever's frame needs it made.
+    let saved = vm.taint().saved();
+    vm.taint_mut().stack = wowlua_vm::Taint::SECURE;
+    let d = vm.native_with("delegate", call_delegate, vec![f, Value::Bool(mixin)]);
+    vm.taint_mut().restore(saved);
+    d
+}
+
+fn call_delegate(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
+    let f = c.upvals.first().copied().unwrap_or(Value::Nil);
+    let mixin = c.upvals.get(1).copied().is_some_and(Value::truthy);
+    let tainted = !vm.taint().stack.is_secure();
+    if mixin && tainted && c.args.iter().any(|v| matches!(v, Value::Secret(_))) {
+        return vm.call(f, &c.args);
+    }
+    let saved = vm.taint().saved();
+    vm.taint_mut().stack = wowlua_vm::Taint::SECURE;
+    let args: Vec<wowlua_vm::Slot> = c.args.iter().map(|&v| wowlua_vm::Slot::secure(v)).collect();
+    let r = vm.call_slots(wowlua_vm::Slot::secure(f), &args);
+    vm.taint_mut().restore(saved);
+    let results = r?;
+    Ok(results.into_iter().map(|s| s.v).collect())
+}
+
+/// What starts an error the client dropped without a report in the
+/// engine's list (`secureexecuterange`'s callbacks: the client runs on
+/// silently, but code that failed is a failure all the same).
+pub const DROPPED: &str = "secureexecuterange dropped: ";
+
+/// `Vm::on_dropped_error`: the error in the engine's list, marked
+/// (`DROPPED`), with its stack.
+pub fn dropped_error(vm: &mut Vm, message: String, stack: String) {
+    let ui = &mut engine_mut(vm).world.ui;
+    ui.errors.push(format!("{DROPPED}{message}"));
+    ui.error_stacks.push(format!("{DROPPED}{message}\n{stack}"));
 }
 
 pub fn load(vm: &mut Vm, interface: &Path, global_strings: Option<&Path>) -> Report {

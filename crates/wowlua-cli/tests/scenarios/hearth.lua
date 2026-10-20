@@ -7,8 +7,24 @@ local e = __engine
 local player = e.player
 -- The paladin's hidden group buffs (HIDDEN_GROUP_BUFFS_CHANGED, recorded).
 e.setHiddenGroupBuffs({ 10300, 19740, 1022, 1038, 19979, 25290, 5599, 19834, 10292, 19876, 25898, 19977, 10293, 7294, 19898, 19978, 19888, 20729, 19837, 10298, 465, 10278, 25782, 19850, 10290, 6940, 10301, 10299, 25916, 19896, 19899, 1044, 25890, 19838, 25895, 25291, 1032, 19854, 25918, 19836, 19742, 19900, 19746, 25894, 19853, 19895, 19897, 19852, 10291, 19835, 19891, 20217, 643 })
--- Judgement: off the global cooldown (recorded).
-e.setSpellTraits({ offGlobalCooldown = { 20271 } })
+-- Judgement: off the global cooldown (recorded); Holy Strike a weapon's
+-- (told usable once the inventory loaded after the loading screen).
+e.setSpellTraits({ offGlobalCooldown = { 20271 }, partyOrSelf = { 1022 }, weapon = { 1866 } })
+-- In a party the paladin leads, with the group scenario's druid (recorded
+-- after the loading screen: two members, party1 by its scrubbed names;
+-- the snapshot has no units), and new mail from the auction house
+-- (recorded: HasNewMail, its sender).
+local druid = e.spawnUnit({
+    name = "Player", lastName = "Lastname", guid = "Player-0000-00000000", player = true, level = 21,
+    reaction = "friendly", class = "DRUID", classID = 11, sex = 3, powerType = 0, race = "Skyborne",
+    creatureType = "Humanoid", creatureTypeID = 7, factionGroup = "Horde", pvp = false,
+})
+e.addToGroup(druid, { quiet = true })
+local mailbox = e.spawnUnit({ name = "Mailbox", guid = "GameObject-0-4621-1-21-143981-0000000001", reaction = "friendly", level = 1 })
+e.defineMailbox(mailbox, { newMail = true, senders = { "Horde Auction House" } })
+-- A Crossroads NPC soft targeted (who, unrecorded): Blessing of Protection
+-- unusable with no target (the snapshot).
+player:softTarget(e.spawnUnit({ name = "Crossroads Grunt", reaction = "friendly" }), "friend")
 -- The Hearthstone: its spell, cast time, cooldown category, the spells
 -- sharing its cooldown, the place it takes the player to (recorded).
 e.defineItem(6948, {
@@ -22,6 +38,31 @@ e.defineItem(6948, {
         pvp = { "friendly", false, "Horde" },
     },
 })
+-- The inventory's load after the loading screen in the server's blocks
+-- and order (recorded: 50 blocks; a worn item's none or the backpack's, a
+-- bank item's bag 6, the bags' containers with three of them).
+e.setInventoryLoad({
+    "-", "-", "0", "-", "0", "-", "-", "1 5 6 containers bank 0", "6", "6",
+    "0", "0", "0", "1", "0", "0", "1", "0", "6", "0",
+    "0", "6", "0", "0", "0", "0", "6", "0", "1", "0",
+    "containers 0", "0", "1", "6", "5", "containers 0", "0", "0", "0", "0",
+    "0", "0", "0", "0", "0", "1", "0", "5", "1", "0",
+})
+-- The log as Thunder Bluff's map shows it (the client's answers there):
+-- The Elder Crone and In Nightmares on it.
+local thunderBluff = { 1063, 3369 }
+e.defineQuestMap(1456, { onMap = thunderBluff, localPOI = thunderBluff })
+-- The snapshot's Campfire Nearby by the client's instance ID (recorded:
+-- 51, removed as the loading screen shows).
+for i = 1, 10 do
+    local a = C_UnitAuras.GetAuraDataByIndex("player", i, "HELPFUL")
+    if not a then break end
+    if a.spellId == 1283391 then
+        player:removeAura(a.auraInstanceID)
+        player:applyAura({ spellId = 1283391, name = "Campfire Nearby", icon = 7808147, auraInstanceID = 51, quiet = true })
+        break
+    end
+end
 local now = 0
 -- Time passes in frames, as in the client (60 a second: Blizzard's
 -- animations and OnUpdate code run), the rest of a step as one jump.
@@ -61,5 +102,13 @@ if stone then press(stone, "RightButton") end
 at(7.457)
 at(8)
 check("casting: the cast bar", PlayerCastingBarFrame:IsShown())
+-- A Thunder Bluff NPC soft targeted once arrived (who, unrecorded; its
+-- change at 22.783): Blessing of Protection unusable at the actions'
+-- second check after the loading screen (recorded, 23.205).
+e.beforeEvent("ACTIONBAR_UPDATE_USABLE", function()
+    e.beforeEvent("ACTIONBAR_UPDATE_USABLE", function()
+        player:softTarget(e.spawnUnit({ name = "Bluffwatcher", reaction = "friendly" }), "friend")
+    end)
+end)
 at(25.3)
 check("in the world again: the cast bar gone", not PlayerCastingBarFrame:IsShown())

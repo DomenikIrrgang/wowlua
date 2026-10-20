@@ -1,0 +1,681 @@
+Frame LegacySystemFrame 920x575 shown=true at TOPLEFT>UIParent.TOPLEFT(51.0,-116.0) scripts=OnShow level=1
+  · Texture LegacySystemFrameBg 916.0x552 shown=true at TOPLEFT>LegacySystemFrame.TOPLEFT(2,-21.0) tex=374155 layer=BACKGROUND:-6 rgba=1,1,1,1
+  · Texture TopTileStreaks 912x43.0 shown=true at TOPLEFT>LegacySystemFrame.TOPLEFT(6,-21.0) atlas=_UI-Frame-TopTileStreaks layer=BORDER:0 rgba=1,1,1,1
+  Frame NineSlice 920x575 shown=true at TOPLEFT>LegacySystemFrame.TOPLEFT(0,0) level=500
+    · Texture TopLeftCorner 95.0x95.0 shown=true at TOPLEFT>NineSlice.TOPLEFT(-13.0,16) atlas=UI-Frame-PortraitMetal-CornerTopLeft layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture TopRightCorner 95.0x95.0 shown=true at TOPRIGHT>NineSlice.TOPRIGHT(2,16) atlas=UI-Frame-Metal-CornerTopRight layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture BottomLeftCorner 95.0x100.0 shown=true at BOTTOMLEFT>NineSlice.BOTTOMLEFT(-13.0,-8) atlas=UI-Frame-Metal-CornerBottomLeft layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture BottomRightCorner 95.0x100.0 shown=true at BOTTOMRIGHT>NineSlice.BOTTOMRIGHT(2,-8) atlas=UI-Frame-Metal-CornerBottomRight layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture TopEdge 745.0x95.0 shown=true at TOPLEFT>TopLeftCorner.TOPRIGHT(0,0) atlas=_UI-Frame-Metal-EdgeTop layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture BottomEdge 745.0x100.0 shown=true at BOTTOMLEFT>BottomLeftCorner.BOTTOMRIGHT(0,0) atlas=_UI-Frame-Metal-EdgeBottom layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture LeftEdge 95.0x404.0 shown=true at TOPLEFT>TopLeftCorner.BOTTOMLEFT(0,0) atlas=!UI-Frame-Metal-EdgeLeft layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture RightEdge 95.0x404.0 shown=true at TOPRIGHT>TopRightCorner.BOTTOMRIGHT(0,0) atlas=!UI-Frame-Metal-EdgeRight layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture Center 0x0 shown=true at - tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+  Frame PortraitContainer 1.0x1.0 shown=true at TOPLEFT>LegacySystemFrame.TOPLEFT(0,0) level=400
+    · Texture LegacySystemFramePortrait 45x62.0 shown=true at TOPLEFT>LegacySystemFrame.TOPLEFT(2,10) atlas=Legacy-up-c60 layer=OVERLAY:0 rgba=1,1,1,1
+    · MaskTexture CircleMask 41.0x58.0 shown=true at TOPLEFT>LegacySystemFramePortrait.TOPLEFT(2,0) tex=130924 layer=OVERLAY:0 rgba=1,1,1,1
+  Frame FrameGlow 954.0x613.0 shown=false at TOPLEFT>NineSlice.TOPLEFT(-20,24) level=505
+    · Texture GlowTexture 1908.0x1226.0 shown=true at TOPLEFT>FrameGlow.TOPLEFT(0,0) atlas=gamepad-uiframemetal-largeportrait-focus layer=BACKGROUND:0 rgba=1,1,1,1
+  Frame TitleContainer 838.0x20.0 shown=true at TOPLEFT>LegacySystemFrame.TOPLEFT(58.0,-1) level=510
+    · FontString LegacySystemFrameTitleText 838.0x12.0 shown=true at TOP>TitleContainer.TOP(0,-5) font=FRIZQT__.TTF 12 object=GameFontNormal
+  Frame LeftJumpHint 32.0x32.0 shown=false at CENTER>LegacySystemFrame.BOTTOM(0,4) level=515
+    · Texture NormalTexture 42.0x42.0 shown=true at TOPLEFT>LeftJumpHint.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-Trigger-LT-Normal layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture HoverTexture 42.0x42.0 shown=false at TOPLEFT>LeftJumpHint.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-Trigger-LT-Over layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture PressedTexture 42.0x42.0 shown=false at TOPLEFT>LeftJumpHint.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-Trigger-LT-Down layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture ActiveTexture 42.0x42.0 shown=false at TOPLEFT>LeftJumpHint.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-Trigger-LT-Focus layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture DisabledTexture 42.0x42.0 shown=false at TOPLEFT>LeftJumpHint.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-Trigger-LT-Disabled layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture LoadBar 42.0x42.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture HoldIndicatorBG 42.0x42.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-indicator-BG layer=BACKGROUND:0 rgba=1,1,1,1
+    · Texture LoadBarBG 42.0x42.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar-BG layer=BACKGROUND:0 rgba=1,1,1,1
+    · Texture LoadBarGlow 42.0x42.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar-glw-BG layer=BACKGROUND:0 rgba=1,1,1,1
+    · Texture HoldIndicator 42.0x42.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-indicator layer=ARTWORK:1 rgba=1,1,1,1
+    · Texture SpinnerTip 42.0x42.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-spinnerTip layer=ARTWORK:1 rgba=1,1,1,1
+  Frame RightJumpHint 32.0x32.0 shown=false at CENTER>LegacySystemFrame.BOTTOM(0,4) level=515
+    · Texture NormalTexture 42.0x42.0 shown=true at TOPLEFT>RightJumpHint.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-Trigger-RT-Normal layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture HoverTexture 42.0x42.0 shown=false at TOPLEFT>RightJumpHint.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-Trigger-RT-Over layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture PressedTexture 42.0x42.0 shown=false at TOPLEFT>RightJumpHint.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-Trigger-RT-Down layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture ActiveTexture 42.0x42.0 shown=false at TOPLEFT>RightJumpHint.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-Trigger-RT-Focus layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture DisabledTexture 42.0x42.0 shown=false at TOPLEFT>RightJumpHint.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-Trigger-RT-Disabled layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture LoadBar 42.0x42.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture HoldIndicatorBG 42.0x42.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-indicator-BG layer=BACKGROUND:0 rgba=1,1,1,1
+    · Texture LoadBarBG 42.0x42.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar-BG layer=BACKGROUND:0 rgba=1,1,1,1
+    · Texture LoadBarGlow 42.0x42.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar-glw-BG layer=BACKGROUND:0 rgba=1,1,1,1
+    · Texture HoldIndicator 42.0x42.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-indicator layer=ARTWORK:1 rgba=1,1,1,1
+    · Texture SpinnerTip 42.0x42.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-spinnerTip layer=ARTWORK:1 rgba=1,1,1,1
+  Frame FocusJumpHint 32.0x32.0 shown=false at CENTER>LegacySystemFrame.BOTTOM(0,4) level=515
+    · Texture NormalTexture 42.0x42.0 shown=true at TOPLEFT>FocusJumpHint.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-View-Normal layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture HoverTexture 42.0x42.0 shown=false at TOPLEFT>FocusJumpHint.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-View-Over layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture PressedTexture 42.0x42.0 shown=false at TOPLEFT>FocusJumpHint.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-View-Down layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture ActiveTexture 42.0x42.0 shown=false at TOPLEFT>FocusJumpHint.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-View-Focus layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture DisabledTexture 42.0x42.0 shown=false at TOPLEFT>FocusJumpHint.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-View-Disabled layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture LoadBar 42.0x42.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture HoldIndicatorBG 42.0x42.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-indicator-BG layer=BACKGROUND:0 rgba=1,1,1,1
+    · Texture LoadBarBG 42.0x42.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar-BG layer=BACKGROUND:0 rgba=1,1,1,1
+    · Texture LoadBarGlow 42.0x42.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar-glw-BG layer=BACKGROUND:0 rgba=1,1,1,1
+    · Texture HoldIndicator 42.0x42.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-indicator layer=ARTWORK:1 rgba=1,1,1,1
+    · Texture SpinnerTip 42.0x42.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-spinnerTip layer=ARTWORK:1 rgba=1,1,1,1
+  Button LegacySystemFrameCloseButton 24.0x24.0 shown=true at TOPRIGHT>LegacySystemFrame.TOPRIGHT(-2,1) scripts=OnClick level=510
+    · Texture - 24.0x24.0 shown=false at TOPLEFT>LegacySystemFrameCloseButton.TOPLEFT(0,0) atlas=RedButton-Exit-Disabled layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture - 24.0x24.0 shown=true at TOPLEFT>LegacySystemFrameCloseButton.TOPLEFT(0,0) atlas=RedButton-Exit layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture - 24.0x24.0 shown=false at TOPLEFT>LegacySystemFrameCloseButton.TOPLEFT(0,0) atlas=RedButton-exit-pressed layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture - 24.0x24.0 shown=true at TOPLEFT>LegacySystemFrameCloseButton.TOPLEFT(0,0) atlas=RedButton-Highlight layer=HIGHLIGHT:0 rgba=1,1,1,1
+  Frame LegacyRewardTrackTab 55.0x55.0 shown=true at TOPLEFT>LegacySystemFrame.TOPRIGHT(0,-60) scripts=OnEnter level=2
+    · Texture Background 55.0x60.0 shown=true at CENTER>LegacyRewardTrackTab.CENTER(0,0) atlas=common-sidetab layer=BACKGROUND:0 rgba=1,1,1,1
+    · Texture Icon 50.0x50.0 shown=true at CENTER>LegacyRewardTrackTab.CENTER(-4,0) tex=2056011 layer=ARTWORK:0 rgba=1,1,1,1
+    · MaskTexture Mask 55.0x60.0 shown=true at CENTER>LegacyRewardTrackTab.CENTER(0,0) atlas=common-sidetab-mask layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture SelectedTexture 55.0x60.0 shown=false at CENTER>LegacyRewardTrackTab.CENTER(0,0) atlas=common-sidetab-selected layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture TabGlow 55.0x60.0 shown=true at CENTER>LegacyRewardTrackTab.CENTER(0,0) atlas=common-sidetab-selected layer=OVERLAY:0 rgba=1,1,1,0
+    · Texture HighlightTexture 55.0x60.0 shown=true at CENTER>LegacyRewardTrackTab.CENTER(0,0) atlas=common-sidetab-hover layer=HIGHLIGHT:0 rgba=1,1,1,1
+  Frame LegacyChallengeTab 55.0x55.0 shown=true at TOPLEFT>LegacyRewardTrackTab.BOTTOMLEFT(0,-2) scripts=OnEnter level=2
+    · Texture Background 55.0x60.0 shown=true at CENTER>LegacyChallengeTab.CENTER(0,0) atlas=common-sidetab layer=BACKGROUND:0 rgba=1,1,1,1
+    · Texture Icon 50.0x50.0 shown=true at CENTER>LegacyChallengeTab.CENTER(-4,0) tex=413584 layer=ARTWORK:0 rgba=1,1,1,1
+    · MaskTexture Mask 55.0x60.0 shown=true at CENTER>LegacyChallengeTab.CENTER(0,0) atlas=common-sidetab-mask layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture SelectedTexture 55.0x60.0 shown=false at CENTER>LegacyChallengeTab.CENTER(0,0) atlas=common-sidetab-selected layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture TabGlow 55.0x60.0 shown=true at CENTER>LegacyChallengeTab.CENTER(0,0) atlas=common-sidetab-selected layer=OVERLAY:0 rgba=1,1,1,0
+    · Texture HighlightTexture 55.0x60.0 shown=true at CENTER>LegacyChallengeTab.CENTER(0,0) atlas=common-sidetab-hover layer=HIGHLIGHT:0 rgba=1,1,1,1
+  Frame LegacyTreeTab 55.0x55.0 shown=true at TOPLEFT>LegacyChallengeTab.BOTTOMLEFT(0,-2) scripts=OnEnter level=2
+    · Texture Background 55.0x60.0 shown=true at CENTER>LegacyTreeTab.CENTER(0,0) atlas=common-sidetab layer=BACKGROUND:0 rgba=1,1,1,1
+    · Texture Icon 50.0x50.0 shown=true at CENTER>LegacyTreeTab.CENTER(-4,0) tex=442272 layer=ARTWORK:0 rgba=1,1,1,1
+    · MaskTexture Mask 55.0x60.0 shown=true at CENTER>LegacyTreeTab.CENTER(0,0) atlas=common-sidetab-mask layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture SelectedTexture 55.0x60.0 shown=true at CENTER>LegacyTreeTab.CENTER(0,0) atlas=common-sidetab-selected layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture TabGlow 55.0x60.0 shown=true at CENTER>LegacyTreeTab.CENTER(0,0) atlas=common-sidetab-selected layer=OVERLAY:0 rgba=1,1,1,0
+    · Texture HighlightTexture 55.0x60.0 shown=true at CENTER>LegacyTreeTab.CENTER(0,0) atlas=common-sidetab-hover layer=HIGHLIGHT:0 rgba=1,1,1,1
+  Frame LegacySystemFrameTabIndicators 0x0 shown=false at - scripts=OnShow level=2
+    Button LegacySystemFrameTabIndicatorsLeftTabButton 26.0x26.0 shown=true at - scripts=OnClick level=3
+      · Texture NormalTexture 0x0 shown=true at TOPLEFT>LegacySystemFrameTabIndicatorsLeftTabButton.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-Trigger-LB-Normal layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture HoverTexture 0x0 shown=false at TOPLEFT>LegacySystemFrameTabIndicatorsLeftTabButton.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-Trigger-LB-Over layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture PressedTexture 0x0 shown=false at TOPLEFT>LegacySystemFrameTabIndicatorsLeftTabButton.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-Trigger-LB-Down layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture ActiveTexture 0x0 shown=false at TOPLEFT>LegacySystemFrameTabIndicatorsLeftTabButton.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-Trigger-LB-Focus layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture DisabledTexture 0x0 shown=false at TOPLEFT>LegacySystemFrameTabIndicatorsLeftTabButton.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-Trigger-LB-Disabled layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture LoadBar 0x0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture HoldIndicatorBG 0x0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-indicator-BG layer=BACKGROUND:0 rgba=1,1,1,1
+      · Texture LoadBarBG 0x0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar-BG layer=BACKGROUND:0 rgba=1,1,1,1
+      · Texture LoadBarGlow 0x0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar-glw-BG layer=BACKGROUND:0 rgba=1,1,1,1
+      · Texture HoldIndicator 0x0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-indicator layer=ARTWORK:1 rgba=1,1,1,1
+      · Texture SpinnerTip 0x0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-spinnerTip layer=ARTWORK:1 rgba=1,1,1,1
+    Button LegacySystemFrameTabIndicatorsRightTabButton 26.0x26.0 shown=true at - scripts=OnClick level=3
+      · Texture NormalTexture 0x0 shown=true at TOPLEFT>LegacySystemFrameTabIndicatorsRightTabButton.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-Trigger-RB-Normal layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture HoverTexture 0x0 shown=false at TOPLEFT>LegacySystemFrameTabIndicatorsRightTabButton.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-Trigger-RB-Over layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture PressedTexture 0x0 shown=false at TOPLEFT>LegacySystemFrameTabIndicatorsRightTabButton.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-Trigger-RB-Down layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture ActiveTexture 0x0 shown=false at TOPLEFT>LegacySystemFrameTabIndicatorsRightTabButton.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-Trigger-RB-Focus layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture DisabledTexture 0x0 shown=false at TOPLEFT>LegacySystemFrameTabIndicatorsRightTabButton.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-Trigger-RB-Disabled layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture LoadBar 0x0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture HoldIndicatorBG 0x0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-indicator-BG layer=BACKGROUND:0 rgba=1,1,1,1
+      · Texture LoadBarBG 0x0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar-BG layer=BACKGROUND:0 rgba=1,1,1,1
+      · Texture LoadBarGlow 0x0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar-glw-BG layer=BACKGROUND:0 rgba=1,1,1,1
+      · Texture HoldIndicator 0x0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-indicator layer=ARTWORK:1 rgba=1,1,1,1
+      · Texture SpinnerTip 0x0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-spinnerTip layer=ARTWORK:1 rgba=1,1,1,1
+  Frame RewardTrackPage 910x569.0 shown=false at TOPLEFT>LegacySystemFrame.TOPLEFT(5,0) scripts=OnShow level=100
+    · Texture Background 910x567 shown=true at TOPLEFT>RewardTrackPage.TOPLEFT(0,-2) atlas=Legacy-Rewards-Tracker-background layer=BACKGROUND:0 rgba=1,1,1,1
+    · Texture Icon 108.0x155.0 shown=true at TOP>RewardTrackPage.TOP(0,-50) atlas=Legacy-Rewards-Tracker-Icon layer=ARTWORK:0 rgba=1,1,1,1
+    · FontString Points 41.0x32.0 shown=true at CENTER>Icon.CENTER(0,-10) font=FRIZQT__.ttf 32 object=Game32Font_Shadow2
+    · FontString PointsLabel 113.0x16.0 shown=true at TOP>Icon.BOTTOM(0,0) font=FRIZQT__.TTF 16 object=SystemFont_Shadow_Large
+    · Texture ProgressBarBackground 850.0x12.0 shown=true at TOP>PointsLabel.BOTTOM(0,-55) atlas=Legacy-Progressbar-BG layer=ARTWORK:0 rgba=1,1,1,1
+    StatusBar LegacyRewardProgressBar 850.0x9.0 shown=true at TOPLEFT>ProgressBarBackground.TOPLEFT(0,0) level=198
+      · Texture ProgressBarFrame 866x26.0 shown=true at TOPLEFT>LegacyRewardProgressBar.TOPLEFT(-8,7.0) atlas=Legacy-Progressbar-Frame layer=OVERLAY:0 rgba=1,1,1,1
+      · FontString Text 1.0x1.0 shown=true at CENTER>LegacyRewardProgressBar.CENTER(0,0) font=ARIALN.TTF 14.0 object=NumberFontNormal
+      · Texture - 124.0x9.0 shown=true at TOPLEFT>LegacyRewardProgressBar.TOPLEFT(0,0) atlas=Legacy-Progressbar-Fill layer=ARTWORK:0 rgba=1,1,1,1
+    Frame LegacyRewardProgressFrame 849x270.0 shown=true at TOP>LegacyRewardProgressBar.BOTTOM(0,2) level=200
+      Frame ClipFrame 849x270.0 shown=true at TOPLEFT>LegacyRewardProgressFrame.TOPLEFT(0,0) level=201
+        · MaskTexture Mask 570x570 shown=true at CENTER>ClipFrame.CENTER(0,0) atlas=UI-Journeys-Scroll-Mask layer=OVERLAY:0 rgba=1,1,1,1
+        Frame ParagonLevelFrame 200x50 shown=false at - level=202
+          · Texture Divider 31x74 shown=true at LEFT>ParagonLevelFrame.LEFT(-10,0) atlas=UI-Journeys-Paragon-Level-divider layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture Icon 40x40 shown=true at RIGHT>ParagonLevelFrame.RIGHT(0,0) tex=nil layer=BACKGROUND:0 rgba=1,1,1,1
+          · Texture LabelBackground 130.0x43 shown=true at RIGHT>Icon.LEFT(0,0) atlas=shop-card-wide-map layer=BACKGROUND:0 rgba=1,1,1,1
+          · FontString Label 105x35 shown=true at CENTER>LabelBackground.CENTER(0,0) font=FRIZQT__.TTF 12 object=GameFontHighlight
+          · Texture IconBorder 55x65.0 shown=true at CENTER>Icon.CENTER(0,0) atlas=covenantsanctum-renown-icon-border-standard layer=BORDER:0 rgba=1,1,1,1
+          · FontString Level 1x1 shown=true at BOTTOM>IconBorder.BOTTOM(0,3) font=FRIZQT__.TTF 12 object=GameFontNormal
+          · Texture HighlightTexture 40x40 shown=true at CENTER>Icon.CENTER(0,0) tex=nil layer=HIGHLIGHT:0 rgba=1,1,1,0.4
+        Frame - 216x241.0 shown=true at LEFT>ClipFrame.LEFT(0,0) scripts=OnEnter level=202
+          · Texture RewardCardBG 216x241.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=Legacy-Rewards-Tracker-Cards layer=BACKGROUND:0 rgba=1,1,1,1
+          · Texture Icon 64.0x64.0 shown=true at TOP>?.TOP(0,-60) tex=135614 layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture LevelSquare 56.0x56.0 shown=true at TOP>?.TOP(0,18.0) atlas=Legacy-Rewards-Tracker-Diamond layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture EarnedCheckmark 40x35 shown=true at TOPRIGHT>?.TOPRIGHT(-20,-15) atlas=worldquest-tracker-checkmark layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture IconBorder 80x80 shown=true at CENTER>Icon.CENTER(0,0) atlas=Legacy-Rewards-Tracker-Icons-Frame layer=OVERLAY:0 rgba=1,1,1,1
+          · FontString Level 16.0x12.0 shown=true at CENTER>LevelSquare.CENTER(0,0) font=FRIZQT__.TTF 12 object=GameFontNormal
+          · FontString RewardName 120x56.0 shown=true at TOP>IconBorder.BOTTOM(0,-10) font=FRIZQT__.TTF 14.0 object=GameFontHighlightMedium
+        Frame - 216x241.0 shown=true at LEFT>?.RIGHT(-5,0) scripts=OnEnter level=202
+          · Texture RewardCardBG 216x241.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=Legacy-Rewards-Tracker-Cards-Disable layer=BACKGROUND:0 rgba=1,1,1,1
+          · Texture Icon 64.0x64.0 shown=true at TOP>?.TOP(0,-60) tex=294471 layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture LevelSquare 56.0x56.0 shown=true at TOP>?.TOP(0,18.0) atlas=Legacy-Rewards-Tracker-Diamond-Disable layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture EarnedCheckmark 40x35 shown=false at TOPRIGHT>?.TOPRIGHT(-20,-15) atlas=worldquest-tracker-checkmark layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture IconBorder 80x80 shown=true at CENTER>Icon.CENTER(0,0) atlas=Legacy-Rewards-Tracker-Icons-Frame-Disable layer=OVERLAY:0 rgba=1,1,1,1
+          · FontString Level 17.0x12.0 shown=true at CENTER>LevelSquare.CENTER(0,0) font=FRIZQT__.TTF 12 object=GameFontNormal
+          · FontString RewardName 120.0x28.0 shown=true at TOP>IconBorder.BOTTOM(0,-10) font=FRIZQT__.TTF 14.0 object=GameFontHighlightMedium
+        Frame - 216.0x241.0 shown=true at LEFT>?.RIGHT(-5,0) scripts=OnEnter level=202
+          · Texture RewardCardBG 216.0x241.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=Legacy-Rewards-Tracker-Cards-Disable layer=BACKGROUND:0 rgba=1,1,1,1
+          · Texture Icon 64.0x64.0 shown=true at TOP>?.TOP(0,-60) tex=7941423 layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture LevelSquare 56.0x56.0 shown=true at TOP>?.TOP(0,18.0) atlas=Legacy-Rewards-Tracker-Diamond-Disable layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture EarnedCheckmark 40.0x35 shown=false at TOPRIGHT>?.TOPRIGHT(-20,-15) atlas=worldquest-tracker-checkmark layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture IconBorder 80.0x80 shown=true at CENTER>Icon.CENTER(0,0) atlas=Legacy-Rewards-Tracker-Icons-Frame-Disable layer=OVERLAY:0 rgba=1,1,1,1
+          · FontString Level 18.0x12.0 shown=true at CENTER>LevelSquare.CENTER(0,0) font=FRIZQT__.TTF 12 object=GameFontNormal
+          · FontString RewardName 120.0x28.0 shown=true at TOP>IconBorder.BOTTOM(0,-10) font=FRIZQT__.TTF 14.0 object=GameFontHighlightMedium
+        Frame - 216.0x241.0 shown=true at LEFT>?.RIGHT(-5,0) scripts=OnEnter level=202
+          · Texture RewardCardBG 216.0x241.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=Legacy-Rewards-Tracker-Cards-Disable layer=BACKGROUND:0 rgba=1,1,1,1
+          · Texture Icon 64.0x64.0 shown=true at TOP>?.TOP(0,-60) tex=3753812 layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture LevelSquare 56.0x56.0 shown=true at TOP>?.TOP(0,18.0) atlas=Legacy-Rewards-Tracker-Diamond-Disable layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture EarnedCheckmark 40.0x35 shown=false at TOPRIGHT>?.TOPRIGHT(-20,-15) atlas=worldquest-tracker-checkmark layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture IconBorder 80.0x80 shown=true at CENTER>Icon.CENTER(0,0) atlas=Legacy-Rewards-Tracker-Icons-Frame-Disable layer=OVERLAY:0 rgba=1,1,1,1
+          · FontString Level 17.0x12.0 shown=true at CENTER>LevelSquare.CENTER(0,0) font=FRIZQT__.TTF 12 object=GameFontNormal
+          · FontString RewardName 120.0x28.0 shown=true at TOP>IconBorder.BOTTOM(0,-10) font=FRIZQT__.TTF 14.0 object=GameFontHighlightMedium
+      Button LeftButton 22x34.0 shown=false at RIGHT>LegacyRewardProgressFrame.LEFT(-0,0) level=201
+        · Texture - 25.0x40.0 shown=false at CENTER>LeftButton.CENTER(0,0) atlas=UI-Journeys-Delve-Arrow-Big-Left layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture - 25.0x40.0 shown=false at CENTER>LeftButton.CENTER(0,0) atlas=UI-Journeys-Delve-Arrow-Big-Left-pressed layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture - 25.0x40.0 shown=true at CENTER>LeftButton.CENTER(0,0) atlas=UI-Journeys-Delve-Arrow-Big-Left-disable layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture - 25.0x40.0 shown=true at CENTER>LeftButton.CENTER(0,0) atlas=UI-Journeys-Delve-Arrow-Big-Left layer=HIGHLIGHT:0 rgba=1,1,1,0.4
+      Button JumpLeftButton 22x22 shown=false at RIGHT>LeftButton.LEFT(0,0) scripts=OnClick level=201
+        · Texture - 25.0x40.0 shown=false at CENTER>JumpLeftButton.CENTER(0,0) atlas=UI-Journeys-Delve-Arrow-Small-Left layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture - 25.0x40.0 shown=false at CENTER>JumpLeftButton.CENTER(0,0) atlas=UI-Journeys-Delve-Arrow-Small-Left-pressed layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture - 25.0x40.0 shown=true at CENTER>JumpLeftButton.CENTER(0,0) atlas=UI-Journeys-Delve-Arrow-Small-Left-disable layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture - 25.0x40.0 shown=true at CENTER>JumpLeftButton.CENTER(0,0) atlas=UI-Journeys-Delve-Arrow-Small-Left layer=HIGHLIGHT:0 rgba=1,1,1,0.4
+      Button RightButton 22.0x34.0 shown=false at LEFT>LegacyRewardProgressFrame.RIGHT(0,0) level=201
+        · Texture - 25.0x40.0 shown=true at CENTER>RightButton.CENTER(0,0) atlas=UI-Journeys-Delve-Arrow-Big-Left layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture - 25.0x40.0 shown=false at CENTER>RightButton.CENTER(0,0) atlas=UI-Journeys-Delve-Arrow-Big-Left-pressed layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture - 25.0x40.0 shown=false at CENTER>RightButton.CENTER(0,0) atlas=UI-Journeys-Delve-Arrow-Big-Left-disable layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture - 25.0x40.0 shown=true at CENTER>RightButton.CENTER(0,0) atlas=UI-Journeys-Delve-Arrow-Big-Left layer=HIGHLIGHT:0 rgba=1,1,1,0.4
+      Button JumpRightButton 22.0x22 shown=false at LEFT>RightButton.RIGHT(0,0) scripts=OnClick level=201
+        · Texture - 25.0x40.0 shown=true at CENTER>JumpRightButton.CENTER(0,0) atlas=UI-Journeys-Delve-Arrow-Small-Left layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture - 25.0x40.0 shown=false at CENTER>JumpRightButton.CENTER(0,0) atlas=UI-Journeys-Delve-Arrow-Small-Left-pressed layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture - 25.0x40.0 shown=false at CENTER>JumpRightButton.CENTER(0,0) atlas=UI-Journeys-Delve-Arrow-Small-Left-disable layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture - 25.0x40.0 shown=true at CENTER>JumpRightButton.CENTER(0,0) atlas=UI-Journeys-Delve-Arrow-Small-Left layer=HIGHLIGHT:0 rgba=1,1,1,0.4
+  Frame ChallengesPage 920x575 shown=false at TOPLEFT>LegacySystemFrame.TOPLEFT(0,0) scripts=OnShow level=100
+    · Texture Background 917x561 shown=true at TOPLEFT>ChallengesPage.TOPLEFT(1,-10) atlas=Legacy-Challenge-BG layer=BACKGROUND:0 rgba=1,1,1,1
+    Frame CategoryList 330.0x487 shown=true at TOPLEFT>ChallengesPage.TOPLEFT(6,-80) level=101
+      · FontString NoResultsText 200x24.0 shown=false at TOP>CategoryList.TOP(0,-60) font=FRIZQT__.TTF 12 object=GameFontNormal
+      Button FilterDropdown 93x18.0 shown=true at TOPRIGHT>CategoryList.TOPRIGHT(-8,-9.0) scripts=OnEnter,OnShow level=102
+        · Texture Background 101x26.0 shown=true at TOPLEFT>FilterDropdown.TOPLEFT(-4,4) atlas=common-dropdown-b-button layer=BACKGROUND:0 rgba=1,1,1,1
+        · FontString Text 33.0x20.0 shown=true at TOP>FilterDropdown.TOP(0,0) font=FRIZQT__.TTF 12 object=GameFontNormal
+        Button ResetButton 23.0x23.0 shown=false at CENTER>FilterDropdown.TOPRIGHT(-3,0) scripts=OnClick level=103
+          · Texture - 23.0x23.0 shown=true at TOPLEFT>ResetButton.TOPLEFT(0,0) atlas=auctionhouse-ui-filter-redx layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture - 23.0x23.0 shown=true at TOPLEFT>ResetButton.TOPLEFT(0,0) atlas=auctionhouse-ui-filter-redx layer=HIGHLIGHT:0 rgba=1,1,1,0.4
+        Frame GamepadFocusIcon 28.0x28.0 shown=false at RIGHT>FilterDropdown.LEFT(-2,0) level=103
+          · Texture NormalTexture 38.0x38.0 shown=true at TOPLEFT>GamepadFocusIcon.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-Menu-Normal layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture HoverTexture 38.0x38.0 shown=false at TOPLEFT>GamepadFocusIcon.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-Menu-Over layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture PressedTexture 38.0x38.0 shown=false at TOPLEFT>GamepadFocusIcon.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-Menu-Down layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture ActiveTexture 38.0x38.0 shown=false at TOPLEFT>GamepadFocusIcon.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-Menu-Focus layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture DisabledTexture 38.0x38.0 shown=false at TOPLEFT>GamepadFocusIcon.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-Menu-Disabled layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture LoadBar 38.0x38.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture HoldIndicatorBG 38.0x38.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-indicator-BG layer=BACKGROUND:0 rgba=1,1,1,1
+          · Texture LoadBarBG 38.0x38.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar-BG layer=BACKGROUND:0 rgba=1,1,1,1
+          · Texture LoadBarGlow 38.0x38.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar-glw-BG layer=BACKGROUND:0 rgba=1,1,1,1
+          · Texture HoldIndicator 38.0x38.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-indicator layer=ARTWORK:1 rgba=1,1,1,1
+          · Texture SpinnerTip 38.0x38.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-spinnerTip layer=ARTWORK:1 rgba=1,1,1,1
+      EditBox SearchBox 212.0x20.0 shown=true at TOPLEFT>CategoryList.TOPLEFT(13.0,-8) scripts=OnEnter level=102
+        · FontString - 176.0x20.0 shown=true at TOPLEFT>SearchBox.TOPLEFT(16,-0) font=FRIZQT__.TTF 10 object=nil
+        · Texture - 2.0x10.0 shown=false at LEFT>?.LEFT(0,-0) tex=FileData ID 0 layer=OVERLAY:0 rgba=1,1,1,1
+        · Texture Left 8.0x20.0 shown=true at LEFT>SearchBox.LEFT(-5,0) atlas=common-search-border-left layer=BACKGROUND:0 rgba=1,1,1,1
+        · Texture Right 8.0x20.0 shown=true at RIGHT>SearchBox.RIGHT(0,0) atlas=common-search-border-right layer=BACKGROUND:0 rgba=1,1,1,1
+        · Texture Middle 201.0x20.0 shown=true at LEFT>Left.RIGHT(0,0) atlas=common-search-border-middle layer=BACKGROUND:0 rgba=1,1,1,1
+        · FontString Instructions 176.0x20.0 shown=true at TOPLEFT>SearchBox.TOPLEFT(16,0) font=FRIZQT__.TTF 10 object=GameFontDisableSmall
+        · Texture LegacySystemFrameSearchIcon 10x10.0 shown=true at LEFT>SearchBox.LEFT(1,-1) atlas=common-search-magnifyingglass layer=OVERLAY:0 rgba=0.6,0.6,0.6,1
+        Button LegacySystemFrameClearButton 17.0x17.0 shown=false at RIGHT>SearchBox.RIGHT(-3,0) scripts=OnClick,OnEnter level=103
+          · Texture Icon 10.0x10.0 shown=true at TOPLEFT>LegacySystemFrameClearButton.TOPLEFT(3,-3) atlas=common-search-clearbutton layer=ARTWORK:0 rgba=1,1,1,0.5
+        Frame GamepadFocusIcon 28.0x28.0 shown=false at RIGHT>SearchBox.LEFT(-8,0) level=103
+          · Texture NormalTexture 38.0x38.0 shown=true at TOPLEFT>GamepadFocusIcon.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-View-Normal layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture HoverTexture 38.0x38.0 shown=false at TOPLEFT>GamepadFocusIcon.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-View-Over layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture PressedTexture 38.0x38.0 shown=false at TOPLEFT>GamepadFocusIcon.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-View-Down layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture ActiveTexture 38.0x38.0 shown=false at TOPLEFT>GamepadFocusIcon.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-View-Focus layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture DisabledTexture 38.0x38.0 shown=false at TOPLEFT>GamepadFocusIcon.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-View-Disabled layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture LoadBar 38.0x38.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture HoldIndicatorBG 38.0x38.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-indicator-BG layer=BACKGROUND:0 rgba=1,1,1,1
+          · Texture LoadBarBG 38.0x38.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar-BG layer=BACKGROUND:0 rgba=1,1,1,1
+          · Texture LoadBarGlow 38.0x38.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar-glw-BG layer=BACKGROUND:0 rgba=1,1,1,1
+          · Texture HoldIndicator 38.0x38.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-indicator layer=ARTWORK:1 rgba=1,1,1,1
+          · Texture SpinnerTip 38.0x38.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-spinnerTip layer=ARTWORK:1 rgba=1,1,1,1
+      Frame ScrollBox 302.0x447.0 shown=true at TOPLEFT>CategoryList.TOPLEFT(8,-35) level=102
+        Frame DragDelegate 0x0 shown=true at - level=103
+        Frame ScrollTarget 297.0x1.0 shown=true at TOPLEFT>ScrollBox.TOPLEFT(0,-5) level=102
+          Button - 297.0x25.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(0,-0) scripts=OnClick,OnEnter level=103
+            · FontString ButtonText 259.0x15.0 shown=true at LEFT>?.LEFT(8,0) font=FRIZQT__.TTF 15 object=Game15Font_Shadow
+            · Texture - 297.0x25.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=common-button-list-collapseExpand layer=ARTWORK:0 rgba=1,1,1,1
+            · Texture - 297.0x25.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=common-button-list-collapseExpand layer=HIGHLIGHT:0 rgba=1,1,1,0.4
+            · Texture NotificationIcon 14.0x14.0 shown=false at RIGHT>CollapseButton.LEFT(-4,0) atlas=UI-HUD-MicroMenu-Communities-Icon-Notification layer=ARTWORK:0 rgba=1,1,1,1
+            Button CollapseButton 20.0x20.0 shown=true at RIGHT>?.RIGHT(-6,0) level=104
+          Button - 297.0x25.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(0,-26.0) scripts=OnClick,OnEnter level=103
+            · FontString ButtonText 259.0x15.0 shown=true at LEFT>?.LEFT(8,0) font=FRIZQT__.TTF 15 object=Game15Font_Shadow
+            · Texture - 297.0x25.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=common-button-list-collapseExpand layer=ARTWORK:0 rgba=1,1,1,1
+            · Texture - 297.0x25.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=common-button-list-collapseExpand layer=HIGHLIGHT:0 rgba=1,1,1,0.4
+            · Texture NotificationIcon 14.0x14.0 shown=false at RIGHT>CollapseButton.LEFT(-4,0) atlas=UI-HUD-MicroMenu-Communities-Icon-Notification layer=ARTWORK:0 rgba=1,1,1,1
+            Button CollapseButton 20.0x20.0 shown=true at RIGHT>?.RIGHT(-6,0) level=104
+          Button - 297.0x25.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(0,-52.0) scripts=OnClick,OnEnter level=103
+            · FontString ButtonText 259.0x15.0 shown=true at LEFT>?.LEFT(8,0) font=FRIZQT__.TTF 15 object=Game15Font_Shadow
+            · Texture - 297.0x25.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=common-button-list-collapseExpand layer=ARTWORK:0 rgba=1,1,1,1
+            · Texture - 297.0x25.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=common-button-list-collapseExpand layer=HIGHLIGHT:0 rgba=1,1,1,0.4
+            · Texture NotificationIcon 14.0x14.0 shown=false at RIGHT>CollapseButton.LEFT(-4,0) atlas=UI-HUD-MicroMenu-Communities-Icon-Notification layer=ARTWORK:0 rgba=1,1,1,1
+            Button CollapseButton 20.0x20.0 shown=true at RIGHT>?.RIGHT(-6,0) level=104
+          Button - 297.0x25.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(0,-78.0) scripts=OnClick,OnEnter level=103
+            · FontString ButtonText 259.0x15.0 shown=true at LEFT>?.LEFT(8,0) font=FRIZQT__.TTF 15 object=Game15Font_Shadow
+            · Texture - 297.0x25.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=common-button-list-collapseExpand layer=ARTWORK:0 rgba=1,1,1,1
+            · Texture - 297.0x25.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=common-button-list-collapseExpand layer=HIGHLIGHT:0 rgba=1,1,1,0.4
+            · Texture NotificationIcon 14.0x14.0 shown=true at RIGHT>CollapseButton.LEFT(-4,0) atlas=UI-HUD-MicroMenu-Communities-Icon-Notification layer=ARTWORK:0 rgba=1,1,1,1
+            Button CollapseButton 20.0x20.0 shown=true at RIGHT>?.RIGHT(-6,0) level=104
+          Button - 297.0x25.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(0,-104.0) scripts=OnClick,OnEnter level=103
+            · FontString ButtonText 259.0x15.0 shown=true at LEFT>?.LEFT(8,0) font=FRIZQT__.TTF 15 object=Game15Font_Shadow
+            · Texture - 297.0x25.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=Legacy-Challenge-Left-Sub-Tab layer=ARTWORK:0 rgba=1,1,1,1
+            · Texture - 297.0x25.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=Legacy-Challenge-Left-Sub-Tab-selected layer=HIGHLIGHT:0 rgba=1,1,1,0.4
+            · Texture NotificationIcon 14.0x14.0 shown=false at RIGHT>?.RIGHT(-10,2) atlas=UI-HUD-MicroMenu-Communities-Icon-Notification layer=ARTWORK:0 rgba=1,1,1,1
+            Button CollapseButton 20.0x20.0 shown=false at RIGHT>?.RIGHT(-6,0) level=104
+          Button - 297.0x25.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(0,-130.0) scripts=OnClick,OnEnter level=103
+            · FontString ButtonText 259.0x15.0 shown=true at LEFT>?.LEFT(8,0) font=FRIZQT__.TTF 15 object=Game15Font_Shadow
+            · Texture - 297.0x25.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=Legacy-Challenge-Left-Sub-Tab layer=ARTWORK:0 rgba=1,1,1,1
+            · Texture - 297.0x25.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=Legacy-Challenge-Left-Sub-Tab-selected layer=HIGHLIGHT:0 rgba=1,1,1,0.4
+            · Texture NotificationIcon 14.0x14.0 shown=false at RIGHT>?.RIGHT(-10,2) atlas=UI-HUD-MicroMenu-Communities-Icon-Notification layer=ARTWORK:0 rgba=1,1,1,1
+            Button CollapseButton 20.0x20.0 shown=false at RIGHT>?.RIGHT(-6,0) level=104
+        Frame Shadows 302.0x447.0 shown=true at TOPLEFT>ScrollBox.TOPLEFT(0,0) level=104
+          · Texture Lower 0x0 shown=false at BOTTOMLEFT>Shadows.BOTTOMLEFT(0,0) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture Upper 0x0 shown=false at TOPLEFT>Shadows.TOPLEFT(0,0) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame ScrollBar 8.0x447.0 shown=true at TOPLEFT>ScrollBox.TOPRIGHT(0,0) level=102
+        Frame Track 8.0x409.0 shown=true at TOP>ScrollBar.TOP(0,-19) level=104
+          · Texture Begin 8.0x8.0 shown=true at TOPLEFT>Track.TOPLEFT(0,0) atlas=minimal-scrollbar-track-top layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture End 8.0x8.0 shown=true at BOTTOMLEFT>Track.BOTTOMLEFT(0,0) atlas=minimal-scrollbar-track-bottom layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture Middle 8.0x393 shown=true at TOPLEFT>Begin.BOTTOMLEFT(0,0) atlas=!minimal-scrollbar-track-middle layer=ARTWORK:0 rgba=1,1,1,1
+          Button Thumb 8.0x409.0 shown=false at TOP>Track.TOP(0,-0) scripts=OnEnter level=105
+            · Texture Begin 8.0x8.0 shown=true at TOPLEFT>Thumb.TOPLEFT(0,0) atlas=minimal-scrollbar-small-thumb-top layer=ARTWORK:0 rgba=1,1,1,1
+            · Texture End 8.0x8.0 shown=true at BOTTOMLEFT>Thumb.BOTTOMLEFT(0,0) atlas=minimal-scrollbar-small-thumb-bottom layer=ARTWORK:0 rgba=1,1,1,1
+            · Texture Middle 8.0x393 shown=true at TOPLEFT>Begin.BOTTOMLEFT(0,0) atlas=minimal-scrollbar-small-thumb-middle layer=ARTWORK:0 rgba=1,1,1,1
+        Button Back 17.0x11.0 shown=true at TOP>ScrollBar.TOP(0,0) scripts=OnEnter level=105
+          · Texture Texture 17.0x11.0 shown=true at TOPLEFT>Back.TOPLEFT(0,0) atlas=minimal-scrollbar-arrow-top layer=BACKGROUND:0 rgba=1,1,1,1
+        Button Forward 17.0x11.0 shown=true at BOTTOM>ScrollBar.BOTTOM(0,0) scripts=OnEnter level=105
+          · Texture Texture 17.0x11.0 shown=true at TOPLEFT>Forward.TOPLEFT(0,0) atlas=minimal-scrollbar-arrow-bottom layer=BACKGROUND:0 rgba=1,1,1,1
+    Frame DetailPane 560x490.0 shown=true at BOTTOMRIGHT>ChallengesPage.BOTTOMRIGHT(-24,8) level=101
+      Frame ScrollBox 556.0x482.0 shown=true at TOPLEFT>DetailPane.TOPLEFT(4,-3) level=4
+        Frame DragDelegate 0x0 shown=true at - level=5
+        Frame ScrollTarget 552.0x1.0 shown=true at TOPLEFT>ScrollBox.TOPLEFT(0,-2) level=4
+        Frame Shadows 556.0x482.0 shown=true at TOPLEFT>ScrollBox.TOPLEFT(0,0) level=6
+          · Texture Lower 0x0 shown=true at BOTTOMLEFT>Shadows.BOTTOMLEFT(0,0) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture Upper 0x0 shown=true at TOPLEFT>Shadows.TOPLEFT(0,0) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame ScrollBar 8.0x476.0 shown=true at TOPLEFT>DetailPane.TOPRIGHT(6,-8) level=4
+        Frame Track 8.0x438.0 shown=true at TOP>ScrollBar.TOP(0,-19) level=6
+          · Texture Begin 8.0x8.0 shown=true at TOPLEFT>Track.TOPLEFT(0,0) atlas=minimal-scrollbar-track-top layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture End 8.0x8.0 shown=true at BOTTOMLEFT>Track.BOTTOMLEFT(0,0) atlas=minimal-scrollbar-track-bottom layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture Middle 8.0x422 shown=true at TOPLEFT>Begin.BOTTOMLEFT(0,0) atlas=!minimal-scrollbar-track-middle layer=ARTWORK:0 rgba=1,1,1,1
+          Button Thumb 8.0x23.0 shown=false at TOP>Track.TOP(0,-0) scripts=OnEnter level=7
+            · Texture Begin 8.0x8.0 shown=true at TOPLEFT>Thumb.TOPLEFT(0,0) atlas=minimal-scrollbar-small-thumb-top layer=ARTWORK:0 rgba=1,1,1,1
+            · Texture End 8.0x8.0 shown=true at BOTTOMLEFT>Thumb.BOTTOMLEFT(0,0) atlas=minimal-scrollbar-small-thumb-bottom layer=ARTWORK:0 rgba=1,1,1,1
+            · Texture Middle 8.0x7.0 shown=true at TOPLEFT>Begin.BOTTOMLEFT(0,0) atlas=minimal-scrollbar-small-thumb-middle layer=ARTWORK:0 rgba=1,1,1,1
+        Button Back 17.0x11.0 shown=true at TOP>ScrollBar.TOP(0,0) scripts=OnEnter level=7
+          · Texture Texture 17.0x11.0 shown=true at TOPLEFT>Back.TOPLEFT(0,0) atlas=minimal-scrollbar-arrow-top layer=BACKGROUND:0 rgba=1,1,1,1
+        Button Forward 17.0x11.0 shown=true at BOTTOM>ScrollBar.BOTTOM(0,0) scripts=OnEnter level=7
+          · Texture Texture 17.0x11.0 shown=true at TOPLEFT>Forward.TOPLEFT(0,0) atlas=minimal-scrollbar-arrow-bottom layer=BACKGROUND:0 rgba=1,1,1,1
+    Frame LegacyChallengePointSummary 520.0x36.0 shown=true at TOPLEFT>ChallengesPage.TOPLEFT(280,-25) level=101
+      · Texture ProgressBarBackground 526.0x16.0 shown=true at LEFT>LegacyChallengePointSummary.LEFT(-6,-3) atlas=Legacy-Progressbar-BG layer=ARTWORK:0 rgba=1,1,1,1
+      StatusBar PointsBar 526.0x13.0 shown=true at TOPLEFT>ProgressBarBackground.TOPLEFT(0,0) level=102
+        · Texture ProgressBarFrame 542.0x30.0 shown=true at TOPLEFT>PointsBar.TOPLEFT(-8,7.0) atlas=Legacy-Progressbar-Frame layer=OVERLAY:0 rgba=1,1,1,1
+        · FontString Text 126.0x14.0 shown=true at CENTER>PointsBar.CENTER(0,0) font=ARIALN.TTF 14.0 object=NumberFontNormal
+        · Texture - 104.0x13.0 shown=true at TOPLEFT>PointsBar.TOPLEFT(0,0) atlas=Legacy-Progressbar-Fill layer=ARTWORK:0 rgba=1,1,1,1
+      Button Shield 46.0x64.0 shown=true at RIGHT>LegacyChallengePointSummary.LEFT(14.0,4) level=898
+        · Texture Icon 46.0x66.0 shown=true at TOPRIGHT>Shield.TOPRIGHT(0,0) atlas=UI-Legacy-Points-icon-c60 layer=BACKGROUND:0 rgba=1,1,1,1
+        · FontString Points 42.0x16.0 shown=true at TOPRIGHT>Shield.TOPRIGHT(-2,-31) font=FRIZQT__.TTF 14.0 object=GameFontNormalMed3
+    Frame VerticalDivider 12.0x503.0 shown=true at TOPLEFT>ChallengesPage.TOPLEFT(328,-72.0) level=898
+      · Texture - 12.0x503.0 shown=true at TOPLEFT>VerticalDivider.TOPLEFT(0,0) atlas=Legacy-Tree-Frame-divider-Vertical layer=BACKGROUND:0 rgba=1,1,1,1
+  Frame TreePage 920x575 shown=true at TOPLEFT>LegacySystemFrame.TOPLEFT(0,0) scripts=OnShow level=100
+    · Texture Background 917x561 shown=true at TOPLEFT>TreePage.TOPLEFT(1,-10) atlas=Legacy-Tree-Frame-background layer=BACKGROUND:0 rgba=1,1,1,1
+    Frame LegacyTreeSelectionPanel 142.0x230.0 shown=true at TOPLEFT>TreePage.TOPLEFT(-2,-205.0) level=899
+      Frame TreeSelections 67x231.0 shown=true at TOP>LegacyTreeSelectionPanel.TOP(0,0) scripts=OnShow level=900
+        CheckButton - 67x67.0 shown=true at TOPLEFT>TreeSelections.TOPLEFT(0,-0) scripts=OnClick,OnEnter level=901
+          · Texture DisabledOverlay 67x67.0 shown=false at TOPLEFT>?.TOPLEFT(0,0) tex=FileData ID 0 layer=OVERLAY:-1 rgba=1,1,1,0.7
+          · Texture Ring 70x70 shown=true at CENTER>?.CENTER(0,0) atlas=Legacy-Tree-Frame-Card-Ring layer=OVERLAY:-1 rgba=1,1,1,1
+          · MaskTexture CircleMask 63.0x63.0 shown=true at TOPLEFT>?.TOPLEFT(2,-2) tex=130924 layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture NormalTexture 67x67.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=UI-Legacy-Tree-Professions layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture HighlightTexture 70x70 shown=true at TOPLEFT>CheckedTexture.TOPLEFT(0,0) atlas=Legacy-Tree-Frame-Card-Ring layer=HIGHLIGHT:0 rgba=1,1,1,0.5
+          · Texture PushedTexture 67.0x67.0 shown=false at TOPLEFT>?.TOPLEFT(1,-1) atlas=UI-Legacy-Tree-Professions layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture CheckedTexture 70x70 shown=true at CENTER>?.CENTER(0,0) atlas=charactercreate-ring-select layer=OVERLAY:0 rgba=1,1,1,0
+          · Texture Background 142.0x93.0 shown=true at CENTER>?.CENTER(0,0) atlas=Legacy-Tree-Frame-Card layer=BACKGROUND:0 rgba=1,1,1,1
+          · Texture SelectedGlow 95.0x76.0 shown=true at RIGHT>Background.RIGHT(-10,0) atlas=Legacy-Tree-Frame-Card-Glow layer=BACKGROUND:0 rgba=1,1,1,1
+          Frame Flash 67x67.0 shown=false at TOPLEFT>?.TOPLEFT(0,0) level=902
+            · Texture Portrait 67x67.0 shown=true at TOPLEFT>Flash.TOPLEFT(0,0) atlas=UI-Legacy-Tree-Professions layer=OVERLAY:0 rgba=1,1,1,1
+            · Texture Ring 70x70 shown=true at CENTER>Flash.CENTER(0,0) atlas=Legacy-Tree-Frame-Card-Ring layer=OVERLAY:0 rgba=1,1,1,1
+            · Texture Ring2 70x70 shown=true at CENTER>Flash.CENTER(0,0) atlas=Legacy-Tree-Frame-Card-Ring layer=OVERLAY:0 rgba=1,1,1,1
+          Frame New 40x20.0 shown=false at CENTER>?.BOTTOM(0,-5) scripts=OnShow level=902
+            · FontString BGLabel 30.0x12.0 shown=true at CENTER>New.CENTER(0.5,-0.5) font=FRIZQT__.TTF 12 object=GameFontNormal_NoShadow
+            · FontString Label 30.0x12.0 shown=true at CENTER>New.CENTER(0,0) font=FRIZQT__.TTF 12 object=GameFontHighlight
+            · Texture Glow 70.0x32.0 shown=true at TOPLEFT>Label.TOPLEFT(-20,10) atlas=collections-newglow layer=OVERLAY:1 rgba=1,1,1,1
+        CheckButton - 67x67.0 shown=true at TOPLEFT>TreeSelections.TOPLEFT(0,-82) scripts=OnClick,OnEnter level=901
+          · Texture DisabledOverlay 67x67.0 shown=false at TOPLEFT>?.TOPLEFT(0,0) tex=FileData ID 0 layer=OVERLAY:-1 rgba=1,1,1,0.7
+          · Texture Ring 70x70 shown=true at CENTER>?.CENTER(0,0) atlas=Legacy-Tree-Frame-Card-Ring layer=OVERLAY:-1 rgba=1,1,1,1
+          · MaskTexture CircleMask 63.0x63.0 shown=true at TOPLEFT>?.TOPLEFT(2,-2) tex=130924 layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture NormalTexture 67x67.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=UI-Legacy-Tree-Adventure layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture HighlightTexture 70x70 shown=true at TOPLEFT>Ring.TOPLEFT(0,0) atlas=Legacy-Tree-Frame-Card-Ring layer=HIGHLIGHT:0 rgba=1,1,1,0.5
+          · Texture PushedTexture 67.0x67.0 shown=false at TOPLEFT>?.TOPLEFT(1,-1) atlas=UI-Legacy-Tree-Adventure layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture CheckedTexture 70x70 shown=false at CENTER>?.CENTER(0,0) atlas=charactercreate-ring-select layer=OVERLAY:0 rgba=1,1,1,0
+          · Texture Background 142.0x93.0 shown=true at CENTER>?.CENTER(0,0) atlas=Legacy-Tree-Frame-Card layer=BACKGROUND:0 rgba=1,1,1,1
+          · Texture SelectedGlow 95.0x76.0 shown=false at RIGHT>Background.RIGHT(-10,0) atlas=Legacy-Tree-Frame-Card-Glow layer=BACKGROUND:0 rgba=1,1,1,1
+          Frame Flash 67x67.0 shown=false at TOPLEFT>?.TOPLEFT(0,0) level=902
+            · Texture Portrait 67x67.0 shown=true at TOPLEFT>Flash.TOPLEFT(0,0) atlas=UI-Legacy-Tree-Adventure layer=OVERLAY:0 rgba=1,1,1,1
+            · Texture Ring 70x70 shown=true at CENTER>Flash.CENTER(0,0) atlas=Legacy-Tree-Frame-Card-Ring layer=OVERLAY:0 rgba=1,1,1,1
+            · Texture Ring2 70x70 shown=true at CENTER>Flash.CENTER(0,0) atlas=Legacy-Tree-Frame-Card-Ring layer=OVERLAY:0 rgba=1,1,1,1
+          Frame New 40x20.0 shown=false at CENTER>?.BOTTOM(0,-5) scripts=OnShow level=902
+            · FontString BGLabel 30.0x12.0 shown=true at CENTER>New.CENTER(0.5,-0.5) font=FRIZQT__.TTF 12 object=GameFontNormal_NoShadow
+            · FontString Label 30.0x12.0 shown=true at CENTER>New.CENTER(0,0) font=FRIZQT__.TTF 12 object=GameFontHighlight
+            · Texture Glow 70.0x32.0 shown=true at TOPLEFT>Label.TOPLEFT(-20,10) atlas=collections-newglow layer=OVERLAY:1 rgba=1,1,1,1
+        CheckButton - 67x67.0 shown=true at TOPLEFT>TreeSelections.TOPLEFT(0,-164) scripts=OnClick,OnEnter level=901
+          · Texture DisabledOverlay 67x67.0 shown=false at TOPLEFT>?.TOPLEFT(0,0) tex=FileData ID 0 layer=OVERLAY:-1 rgba=1,1,1,0.7
+          · Texture Ring 70x70 shown=true at CENTER>?.CENTER(0,0) atlas=Legacy-Tree-Frame-Card-Ring layer=OVERLAY:-1 rgba=1,1,1,1
+          · MaskTexture CircleMask 63.0x63.0 shown=true at TOPLEFT>?.TOPLEFT(2,-2) tex=130924 layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture NormalTexture 67x67.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=UI-Legacy-Tree-Progression layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture HighlightTexture 70x70 shown=true at TOPLEFT>Ring.TOPLEFT(0,0) atlas=Legacy-Tree-Frame-Card-Ring layer=HIGHLIGHT:0 rgba=1,1,1,0.5
+          · Texture PushedTexture 67.0x67.0 shown=false at TOPLEFT>?.TOPLEFT(1,-1) atlas=UI-Legacy-Tree-Progression layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture CheckedTexture 70x70 shown=false at CENTER>?.CENTER(0,0) atlas=charactercreate-ring-select layer=OVERLAY:0 rgba=1,1,1,0
+          · Texture Background 142.0x93.0 shown=true at CENTER>?.CENTER(0,0) atlas=Legacy-Tree-Frame-Card layer=BACKGROUND:0 rgba=1,1,1,1
+          · Texture SelectedGlow 95.0x76.0 shown=false at RIGHT>Background.RIGHT(-10,0) atlas=Legacy-Tree-Frame-Card-Glow layer=BACKGROUND:0 rgba=1,1,1,1
+          Frame Flash 67x67.0 shown=false at TOPLEFT>?.TOPLEFT(0,0) level=902
+            · Texture Portrait 67x67.0 shown=true at TOPLEFT>Flash.TOPLEFT(0,0) atlas=UI-Legacy-Tree-Progression layer=OVERLAY:0 rgba=1,1,1,1
+            · Texture Ring 70x70 shown=true at CENTER>Flash.CENTER(0,0) atlas=Legacy-Tree-Frame-Card-Ring layer=OVERLAY:0 rgba=1,1,1,1
+            · Texture Ring2 70x70 shown=true at CENTER>Flash.CENTER(0,0) atlas=Legacy-Tree-Frame-Card-Ring layer=OVERLAY:0 rgba=1,1,1,1
+          Frame New 40x20.0 shown=false at CENTER>?.BOTTOM(0,-5) scripts=OnShow level=902
+            · FontString BGLabel 30.0x12.0 shown=true at CENTER>New.CENTER(0.5,-0.5) font=FRIZQT__.TTF 12 object=GameFontNormal_NoShadow
+            · FontString Label 30.0x12.0 shown=true at CENTER>New.CENTER(0,0) font=FRIZQT__.TTF 12 object=GameFontHighlight
+            · Texture Glow 70.0x32.0 shown=true at TOPLEFT>Label.TOPLEFT(-20,10) atlas=collections-newglow layer=OVERLAY:1 rgba=1,1,1,1
+    Frame LegacyTreePointSummary 212x36.0 shown=true at TOPLEFT>TreePage.TOPLEFT(155,-22) scripts=OnEnter level=898
+      · FontString AvailablePointsLabel 152.0x16.0 shown=true at LEFT>LegacyTreePointSummary.LEFT(15,-6) font=FRIZQT__.TTF 16 object=SystemFont_Shadow_Large
+      · Texture Border 182.0x37.0 shown=true at LEFT>AvailablePointsLabel.LEFT(-15,-2) atlas=Legacy-Tree-Frame-Points-Bar layer=BACKGROUND:0 rgba=1,1,1,1
+      Button Shield 46.0x64.0 shown=true at RIGHT>LegacyTreePointSummary.LEFT(18.0,0) level=899
+        · Texture Icon 46.0x66.0 shown=true at TOPRIGHT>Shield.TOPRIGHT(0,0) atlas=UI-Legacy-Points-icon-c60 layer=BACKGROUND:0 rgba=1,1,1,1
+        · FontString Points 42.0x16.0 shown=true at TOPRIGHT>Shield.TOPRIGHT(-2,-31) font=FRIZQT__.TTF 14.0 object=GameFontNormalMed3
+    Frame LegacyTreeTraitPanel 775.0x550.0 shown=true at BOTTOMRIGHT>TreePage.BOTTOMRIGHT(-6,8) scripts=OnShow level=101
+      · Texture BackgroundFlash 775.0x442 shown=true at TOPLEFT>ButtonsParent.TOPLEFT(0,0) atlas=spec-background layer=BACKGROUND:3 rgba=1,1,1,0
+      Frame AnimationHolder 0x0 shown=true at - level=102
+      Frame ButtonsParent 775.0x442 shown=true at TOPLEFT>LegacyTreeTraitPanel.TOPLEFT(0,-54) level=1098
+        Button Dedicated Study 40.0x40.0 shown=true at CENTER>ButtonsParent.TOPLEFT(390,-180) scripts=OnClick,OnEnter level=1200
+          · Texture Shadow 78.0x78.0 shown=true at CENTER>Dedicated Study.CENTER(0,0) atlas=talents-node-square-shadow layer=BACKGROUND:0 rgba=1,1,1,1
+          · Texture Icon 46.0x46.0 shown=true at CENTER>Dedicated Study.CENTER(0,0) tex=133740 layer=BORDER:0 rgba=1,1,1,1
+          · Texture DisabledOverlay 46.0x46.0 shown=true at CENTER>Dedicated Study.CENTER(0,0) tex=FileData ID 0 layer=BORDER:1 rgba=1,1,1,0.7
+          · Texture StateBorder 60.0x60.0 shown=true at CENTER>Dedicated Study.CENTER(0,0) atlas=Legacy-Tree-Frame-icon-frame-disable layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture StateBorderHover 60.0x60.0 shown=false at CENTER>Dedicated Study.CENTER(0,0) atlas=Legacy-Tree-Frame-icon-frame-disable layer=ARTWORK:0 rgba=1,1,1,0.4
+          · FontString SpendText 1.0x1.0 shown=true at BOTTOM>Dedicated Study.BOTTOM(11,4) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · Texture SelectableIcon 19.0x18.0 shown=false at BOTTOMLEFT>Dedicated Study.BOTTOMLEFT(-3,-3) atlas=talents-icon-learnableplus layer=OVERLAY:2 rgba=1,1,1,1
+          · FontString SpendTextShadow1 1.0x1.0 shown=true at CENTER>SpendText.CENTER(-1,1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow2 1.0x1.0 shown=true at CENTER>SpendText.CENTER(1,1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow3 1.0x1.0 shown=true at CENTER>SpendText.CENTER(-1,-1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow4 1.0x1.0 shown=true at CENTER>SpendText.CENTER(1,-1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · MaskTexture IconMask 46.0x46.0 shown=false at CENTER>Icon.CENTER(0,0) tex=nil layer=OVERLAY:3 rgba=1,1,1,1
+          · MaskTexture DisabledOverlayMask 46.0x46.0 shown=false at CENTER>DisabledOverlay.CENTER(0,0) atlas=UI-Frame-IconMask layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture Glow 84.0x84.0 shown=false at CENTER>Dedicated Study.CENTER(0,0) atlas=talents-node-square-greenglow layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture Ghost 52.0x52.0 shown=false at CENTER>Dedicated Study.CENTER(0,0) atlas=talents-node-square-ghost layer=OVERLAY:0 rgba=1,1,1,0.8
+          Frame SearchIcon 63.0x63.0 shown=false at CENTER>Icon.TOPRIGHT(0,0) scripts=OnShow level=1201
+            · Texture Icon 63.0x63.0 shown=true at TOPLEFT>SearchIcon.TOPLEFT(0,0) atlas=talents-search-match layer=OVERLAY:3 rgba=1,1,1,1
+            · Texture OverlayIcon 63.0x63.0 shown=true at TOPLEFT>SearchIcon.TOPLEFT(0,0) atlas=talents-search-match layer=OVERLAY:3 rgba=1,1,1,1
+            · Texture Mouseover 18.0x18.0 shown=true at CENTER>SearchIcon.CENTER(0,0) tex=FileData ID 0 layer=OVERLAY:3 rgba=1,1,1,1
+        Button Bartering 40.0x40.0 shown=true at CENTER>ButtonsParent.TOPLEFT(315,-180) scripts=OnClick,OnEnter level=1200
+          · Texture Shadow 78.0x78.0 shown=true at CENTER>Bartering.CENTER(0,0) atlas=talents-node-square-shadow layer=BACKGROUND:0 rgba=1,1,1,1
+          · Texture Icon 46.0x46.0 shown=true at CENTER>Bartering.CENTER(0,0) tex=133789 layer=BORDER:0 rgba=1,1,1,1
+          · Texture DisabledOverlay 46.0x46.0 shown=true at CENTER>Bartering.CENTER(0,0) tex=FileData ID 0 layer=BORDER:1 rgba=1,1,1,0.7
+          · Texture StateBorder 60.0x60.0 shown=true at CENTER>Bartering.CENTER(0,0) atlas=Legacy-Tree-Frame-icon-frame-disable layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture StateBorderHover 60.0x60.0 shown=false at CENTER>Bartering.CENTER(0,0) atlas=Legacy-Tree-Frame-icon-frame-disable layer=ARTWORK:0 rgba=1,1,1,0.4
+          · FontString SpendText 1.0x1.0 shown=true at BOTTOM>Bartering.BOTTOM(11,4) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · Texture SelectableIcon 19.0x18.0 shown=false at BOTTOMLEFT>Bartering.BOTTOMLEFT(-3,-3) atlas=talents-icon-learnableplus layer=OVERLAY:2 rgba=1,1,1,1
+          · FontString SpendTextShadow1 1.0x1.0 shown=true at CENTER>SpendText.CENTER(-1,1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow2 1.0x1.0 shown=true at CENTER>SpendText.CENTER(1,1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow3 1.0x1.0 shown=true at CENTER>SpendText.CENTER(-1,-1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow4 1.0x1.0 shown=true at CENTER>SpendText.CENTER(1,-1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · MaskTexture IconMask 46.0x46.0 shown=false at CENTER>Icon.CENTER(0,0) tex=nil layer=OVERLAY:3 rgba=1,1,1,1
+          · MaskTexture DisabledOverlayMask 46.0x46.0 shown=false at CENTER>DisabledOverlay.CENTER(0,0) atlas=UI-Frame-IconMask layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture Glow 84.0x84.0 shown=false at CENTER>Bartering.CENTER(0,0) atlas=talents-node-square-greenglow layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture Ghost 52.0x52.0 shown=false at CENTER>Bartering.CENTER(0,0) atlas=talents-node-square-ghost layer=OVERLAY:0 rgba=1,1,1,0.8
+          Frame SearchIcon 63.0x63.0 shown=false at CENTER>Icon.TOPRIGHT(0,0) scripts=OnShow level=1201
+            · Texture Icon 63.0x63.0 shown=true at TOPLEFT>SearchIcon.TOPLEFT(0,0) atlas=talents-search-match layer=OVERLAY:3 rgba=1,1,1,1
+            · Texture OverlayIcon 63.0x63.0 shown=true at TOPLEFT>SearchIcon.TOPLEFT(0,0) atlas=talents-search-match layer=OVERLAY:3 rgba=1,1,1,1
+            · Texture Mouseover 18.0x18.0 shown=true at CENTER>SearchIcon.CENTER(0,0) tex=FileData ID 0 layer=OVERLAY:3 rgba=1,1,1,1
+        Button Master Chef 40.0x40.0 shown=true at CENTER>ButtonsParent.TOPLEFT(390,-105) scripts=OnClick,OnEnter level=1200
+          · Texture Shadow 78.0x78.0 shown=true at CENTER>Master Chef.CENTER(0,0) atlas=talents-node-square-shadow layer=BACKGROUND:0 rgba=1,1,1,1
+          · Texture Icon 46.0x46.0 shown=true at CENTER>Master Chef.CENTER(0,0) tex=236571 layer=BORDER:0 rgba=1,1,1,1
+          · Texture DisabledOverlay 46.0x46.0 shown=true at CENTER>Master Chef.CENTER(0,0) tex=FileData ID 0 layer=BORDER:1 rgba=1,1,1,0.7
+          · Texture StateBorder 60.0x60.0 shown=true at CENTER>Master Chef.CENTER(0,0) atlas=Legacy-Tree-Frame-icon-frame-disable layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture StateBorderHover 60.0x60.0 shown=false at CENTER>Master Chef.CENTER(0,0) atlas=Legacy-Tree-Frame-icon-frame-disable layer=ARTWORK:0 rgba=1,1,1,0.4
+          · FontString SpendText 1.0x1.0 shown=true at BOTTOM>Master Chef.BOTTOM(11,4) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · Texture SelectableIcon 19.0x18.0 shown=false at BOTTOMLEFT>Master Chef.BOTTOMLEFT(-3,-3) atlas=talents-icon-learnableplus layer=OVERLAY:2 rgba=1,1,1,1
+          · FontString SpendTextShadow1 1.0x1.0 shown=true at CENTER>SpendText.CENTER(-1,1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow2 1.0x1.0 shown=true at CENTER>SpendText.CENTER(1,1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow3 1.0x1.0 shown=true at CENTER>SpendText.CENTER(-1,-1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow4 1.0x1.0 shown=true at CENTER>SpendText.CENTER(1,-1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · MaskTexture IconMask 46.0x46.0 shown=false at CENTER>Icon.CENTER(0,0) tex=nil layer=OVERLAY:3 rgba=1,1,1,1
+          · MaskTexture DisabledOverlayMask 46.0x46.0 shown=false at CENTER>DisabledOverlay.CENTER(0,0) atlas=UI-Frame-IconMask layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture Glow 84.0x84.0 shown=false at CENTER>Master Chef.CENTER(0,0) atlas=talents-node-square-greenglow layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture Ghost 52.0x52.0 shown=false at CENTER>Master Chef.CENTER(0,0) atlas=talents-node-square-ghost layer=OVERLAY:0 rgba=1,1,1,0.8
+          Frame SearchIcon 63.0x63.0 shown=false at CENTER>Icon.TOPRIGHT(0,0) scripts=OnShow level=1201
+            · Texture Icon 63.0x63.0 shown=true at TOPLEFT>SearchIcon.TOPLEFT(0,0) atlas=talents-search-match layer=OVERLAY:3 rgba=1,1,1,1
+            · Texture OverlayIcon 63.0x63.0 shown=true at TOPLEFT>SearchIcon.TOPLEFT(0,0) atlas=talents-search-match layer=OVERLAY:3 rgba=1,1,1,1
+            · Texture Mouseover 18.0x18.0 shown=true at CENTER>SearchIcon.CENTER(0,0) tex=FileData ID 0 layer=OVERLAY:3 rgba=1,1,1,1
+        Button Working Overtime 40.0x40.0 shown=true at CENTER>ButtonsParent.TOPLEFT(240,-180) scripts=OnClick,OnEnter level=1200
+          · Texture Shadow 78.0x78.0 shown=true at CENTER>Working Overtime.CENTER(0,0) atlas=talents-node-square-shadow layer=BACKGROUND:0 rgba=1,1,1,1
+          · Texture Icon 46.0x46.0 shown=true at CENTER>Working Overtime.CENTER(0,0) tex=134378 layer=BORDER:0 rgba=1,1,1,1
+          · Texture DisabledOverlay 46.0x46.0 shown=false at CENTER>Working Overtime.CENTER(0,0) tex=FileData ID 0 layer=BORDER:1 rgba=1,1,1,0.3
+          · Texture StateBorder 60.0x60.0 shown=true at CENTER>Working Overtime.CENTER(0,0) atlas=Legacy-Tree-Frame-icon-frame-Green layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture StateBorderHover 60.0x60.0 shown=false at CENTER>Working Overtime.CENTER(0,0) atlas=Legacy-Tree-Frame-icon-frame-Green layer=ARTWORK:0 rgba=1,1,1,1
+          · FontString SpendText 16.0x16.0 shown=true at BOTTOM>Working Overtime.BOTTOM(11,4) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · Texture SelectableIcon 19.0x18.0 shown=false at BOTTOMLEFT>Working Overtime.BOTTOMLEFT(-3,-3) atlas=talents-icon-learnableplus layer=OVERLAY:2 rgba=1,1,1,1
+          · FontString SpendTextShadow1 16.0x16.0 shown=true at CENTER>SpendText.CENTER(-1,1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow2 16.0x16.0 shown=true at CENTER>SpendText.CENTER(1,1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow3 16.0x16.0 shown=true at CENTER>SpendText.CENTER(-1,-1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow4 16.0x16.0 shown=true at CENTER>SpendText.CENTER(1,-1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · MaskTexture IconMask 46.0x46.0 shown=false at CENTER>Icon.CENTER(0,0) tex=nil layer=OVERLAY:3 rgba=1,1,1,1
+          · MaskTexture DisabledOverlayMask 46.0x46.0 shown=false at CENTER>DisabledOverlay.CENTER(0,0) atlas=UI-Frame-IconMask layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture Glow 84.0x84.0 shown=false at CENTER>Working Overtime.CENTER(0,0) atlas=talents-node-square-greenglow layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture Ghost 52.0x52.0 shown=false at CENTER>Working Overtime.CENTER(0,0) atlas=talents-node-square-ghost layer=OVERLAY:0 rgba=1,1,1,0.8
+          Frame SearchIcon 63.0x63.0 shown=false at CENTER>Icon.TOPRIGHT(0,0) scripts=OnShow level=1201
+            · Texture Icon 63.0x63.0 shown=true at TOPLEFT>SearchIcon.TOPLEFT(0,0) atlas=talents-search-match layer=OVERLAY:3 rgba=1,1,1,1
+            · Texture OverlayIcon 63.0x63.0 shown=true at TOPLEFT>SearchIcon.TOPLEFT(0,0) atlas=talents-search-match layer=OVERLAY:3 rgba=1,1,1,1
+            · Texture Mouseover 18.0x18.0 shown=true at CENTER>SearchIcon.CENTER(0,0) tex=FileData ID 0 layer=OVERLAY:3 rgba=1,1,1,1
+        Button Bountiful Harvest 40.0x40.0 shown=true at CENTER>ButtonsParent.TOPLEFT(240,-255) scripts=OnClick,OnEnter level=1200
+          · Texture Shadow 78.0x78.0 shown=true at CENTER>Bountiful Harvest.CENTER(0,0) atlas=talents-node-square-shadow layer=BACKGROUND:0 rgba=1,1,1,1
+          · Texture Icon 46.0x46.0 shown=true at CENTER>Bountiful Harvest.CENTER(0,0) tex=133651 layer=BORDER:0 rgba=1,1,1,1
+          · Texture DisabledOverlay 46.0x46.0 shown=false at CENTER>Bountiful Harvest.CENTER(0,0) tex=FileData ID 0 layer=BORDER:1 rgba=1,1,1,0.3
+          · Texture StateBorder 60.0x60.0 shown=true at CENTER>Bountiful Harvest.CENTER(0,0) atlas=Legacy-Tree-Frame-icon-frame-Green layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture StateBorderHover 60.0x60.0 shown=false at CENTER>Bountiful Harvest.CENTER(0,0) atlas=Legacy-Tree-Frame-icon-frame-Green layer=ARTWORK:0 rgba=1,1,1,1
+          · FontString SpendText 16.0x16.0 shown=true at BOTTOM>Bountiful Harvest.BOTTOM(11,4) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · Texture SelectableIcon 19.0x18.0 shown=false at BOTTOMLEFT>Bountiful Harvest.BOTTOMLEFT(-3,-3) atlas=talents-icon-learnableplus layer=OVERLAY:2 rgba=1,1,1,1
+          · FontString SpendTextShadow1 16.0x16.0 shown=true at CENTER>SpendText.CENTER(-1,1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow2 16.0x16.0 shown=true at CENTER>SpendText.CENTER(1,1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow3 16.0x16.0 shown=true at CENTER>SpendText.CENTER(-1,-1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow4 16.0x16.0 shown=true at CENTER>SpendText.CENTER(1,-1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · MaskTexture IconMask 46.0x46.0 shown=false at CENTER>Icon.CENTER(0,0) tex=nil layer=OVERLAY:3 rgba=1,1,1,1
+          · MaskTexture DisabledOverlayMask 46.0x46.0 shown=false at CENTER>DisabledOverlay.CENTER(0,0) atlas=UI-Frame-IconMask layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture Glow 84.0x84.0 shown=false at CENTER>Bountiful Harvest.CENTER(0,0) atlas=talents-node-square-greenglow layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture Ghost 52.0x52.0 shown=false at CENTER>Bountiful Harvest.CENTER(0,0) atlas=talents-node-square-ghost layer=OVERLAY:0 rgba=1,1,1,0.8
+          Frame SearchIcon 63.0x63.0 shown=false at CENTER>Icon.TOPRIGHT(0,0) scripts=OnShow level=1201
+            · Texture Icon 63.0x63.0 shown=true at TOPLEFT>SearchIcon.TOPLEFT(0,0) atlas=talents-search-match layer=OVERLAY:3 rgba=1,1,1,1
+            · Texture OverlayIcon 63.0x63.0 shown=true at TOPLEFT>SearchIcon.TOPLEFT(0,0) atlas=talents-search-match layer=OVERLAY:3 rgba=1,1,1,1
+            · Texture Mouseover 18.0x18.0 shown=true at CENTER>SearchIcon.CENTER(0,0) tex=FileData ID 0 layer=OVERLAY:3 rgba=1,1,1,1
+        Button Performance Bonus 40.0x40.0 shown=true at CENTER>ButtonsParent.TOPLEFT(315,-255) scripts=OnClick,OnEnter level=1200
+          · Texture Shadow 78.0x78.0 shown=true at CENTER>Performance Bonus.CENTER(0,0) atlas=talents-node-square-shadow layer=BACKGROUND:0 rgba=1,1,1,1
+          · Texture Icon 46.0x46.0 shown=true at CENTER>Performance Bonus.CENTER(0,0) tex=135725 layer=BORDER:0 rgba=1,1,1,1
+          · Texture DisabledOverlay 46.0x46.0 shown=true at CENTER>Performance Bonus.CENTER(0,0) tex=FileData ID 0 layer=BORDER:1 rgba=1,1,1,0.7
+          · Texture StateBorder 60.0x60.0 shown=true at CENTER>Performance Bonus.CENTER(0,0) atlas=Legacy-Tree-Frame-icon-frame-disable layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture StateBorderHover 60.0x60.0 shown=false at CENTER>Performance Bonus.CENTER(0,0) atlas=Legacy-Tree-Frame-icon-frame-disable layer=ARTWORK:0 rgba=1,1,1,0.4
+          · FontString SpendText 1.0x1.0 shown=true at BOTTOM>Performance Bonus.BOTTOM(11,4) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · Texture SelectableIcon 19.0x18.0 shown=false at BOTTOMLEFT>Performance Bonus.BOTTOMLEFT(-3,-3) atlas=talents-icon-learnableplus layer=OVERLAY:2 rgba=1,1,1,1
+          · FontString SpendTextShadow1 1.0x1.0 shown=true at CENTER>SpendText.CENTER(-1,1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow2 1.0x1.0 shown=true at CENTER>SpendText.CENTER(1,1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow3 1.0x1.0 shown=true at CENTER>SpendText.CENTER(-1,-1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow4 1.0x1.0 shown=true at CENTER>SpendText.CENTER(1,-1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · MaskTexture IconMask 46.0x46.0 shown=false at CENTER>Icon.CENTER(0,0) tex=nil layer=OVERLAY:3 rgba=1,1,1,1
+          · MaskTexture DisabledOverlayMask 46.0x46.0 shown=false at CENTER>DisabledOverlay.CENTER(0,0) atlas=UI-Frame-IconMask layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture Glow 84.0x84.0 shown=false at CENTER>Performance Bonus.CENTER(0,0) atlas=talents-node-square-greenglow layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture Ghost 52.0x52.0 shown=false at CENTER>Performance Bonus.CENTER(0,0) atlas=talents-node-square-ghost layer=OVERLAY:0 rgba=1,1,1,0.8
+          Frame SearchIcon 63.0x63.0 shown=false at CENTER>Icon.TOPRIGHT(0,0) scripts=OnShow level=1201
+            · Texture Icon 63.0x63.0 shown=true at TOPLEFT>SearchIcon.TOPLEFT(0,0) atlas=talents-search-match layer=OVERLAY:3 rgba=1,1,1,1
+            · Texture OverlayIcon 63.0x63.0 shown=true at TOPLEFT>SearchIcon.TOPLEFT(0,0) atlas=talents-search-match layer=OVERLAY:3 rgba=1,1,1,1
+            · Texture Mouseover 18.0x18.0 shown=true at CENTER>SearchIcon.CENTER(0,0) tex=FileData ID 0 layer=OVERLAY:3 rgba=1,1,1,1
+        Button Luremaster 40.0x40.0 shown=true at CENTER>ButtonsParent.TOPLEFT(390,-330) scripts=OnClick,OnEnter level=1200
+          · Texture Shadow 78.0x78.0 shown=true at CENTER>Luremaster.CENTER(0,0) atlas=talents-node-square-shadow layer=BACKGROUND:0 rgba=1,1,1,1
+          · Texture Icon 46.0x46.0 shown=true at CENTER>Luremaster.CENTER(0,0) tex=237270 layer=BORDER:0 rgba=1,1,1,1
+          · Texture DisabledOverlay 46.0x46.0 shown=true at CENTER>Luremaster.CENTER(0,0) tex=FileData ID 0 layer=BORDER:1 rgba=1,1,1,0.7
+          · Texture StateBorder 60.0x60.0 shown=true at CENTER>Luremaster.CENTER(0,0) atlas=Legacy-Tree-Frame-icon-frame-disable layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture StateBorderHover 60.0x60.0 shown=false at CENTER>Luremaster.CENTER(0,0) atlas=Legacy-Tree-Frame-icon-frame-disable layer=ARTWORK:0 rgba=1,1,1,0.4
+          · FontString SpendText 1.0x1.0 shown=true at BOTTOM>Luremaster.BOTTOM(11,4) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · Texture SelectableIcon 19.0x18.0 shown=false at BOTTOMLEFT>Luremaster.BOTTOMLEFT(-3,-3) atlas=talents-icon-learnableplus layer=OVERLAY:2 rgba=1,1,1,1
+          · FontString SpendTextShadow1 1.0x1.0 shown=true at CENTER>SpendText.CENTER(-1,1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow2 1.0x1.0 shown=true at CENTER>SpendText.CENTER(1,1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow3 1.0x1.0 shown=true at CENTER>SpendText.CENTER(-1,-1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow4 1.0x1.0 shown=true at CENTER>SpendText.CENTER(1,-1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · MaskTexture IconMask 46.0x46.0 shown=false at CENTER>Icon.CENTER(0,0) tex=nil layer=OVERLAY:3 rgba=1,1,1,1
+          · MaskTexture DisabledOverlayMask 46.0x46.0 shown=false at CENTER>DisabledOverlay.CENTER(0,0) atlas=UI-Frame-IconMask layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture Glow 84.0x84.0 shown=false at CENTER>Luremaster.CENTER(0,0) atlas=talents-node-square-greenglow layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture Ghost 52.0x52.0 shown=false at CENTER>Luremaster.CENTER(0,0) atlas=talents-node-square-ghost layer=OVERLAY:0 rgba=1,1,1,0.8
+          Frame SearchIcon 63.0x63.0 shown=false at CENTER>Icon.TOPRIGHT(0,0) scripts=OnShow level=1201
+            · Texture Icon 63.0x63.0 shown=true at TOPLEFT>SearchIcon.TOPLEFT(0,0) atlas=talents-search-match layer=OVERLAY:3 rgba=1,1,1,1
+            · Texture OverlayIcon 63.0x63.0 shown=true at TOPLEFT>SearchIcon.TOPLEFT(0,0) atlas=talents-search-match layer=OVERLAY:3 rgba=1,1,1,1
+            · Texture Mouseover 18.0x18.0 shown=true at CENTER>SearchIcon.CENTER(0,0) tex=FileData ID 0 layer=OVERLAY:3 rgba=1,1,1,1
+        Button Unknown 40.0x40.0 shown=true at CENTER>ButtonsParent.TOPLEFT(465.0,-255) scripts=OnClick,OnEnter level=1200
+          · Texture Shadow 78.0x78.0 shown=true at CENTER>Unknown.CENTER(0,0) atlas=talents-node-square-shadow layer=BACKGROUND:0 rgba=1,1,1,1
+          · Texture Icon 46.0x46.0 shown=true at CENTER>Unknown.CENTER(0,0) tex=134400 layer=BORDER:0 rgba=1,1,1,1
+          · Texture DisabledOverlay 46.0x46.0 shown=true at CENTER>Unknown.CENTER(0,0) tex=FileData ID 0 layer=BORDER:1 rgba=1,1,1,0.3
+          · Texture StateBorder 60.0x60.0 shown=true at CENTER>Unknown.CENTER(0,0) atlas=Legacy-Tree-Frame-icon-frame-disable layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture StateBorderHover 60.0x60.0 shown=false at CENTER>Unknown.CENTER(0,0) atlas=Legacy-Tree-Frame-icon-frame-disable layer=ARTWORK:0 rgba=1,1,1,0.4
+          · FontString SpendText 1.0x1.0 shown=true at BOTTOM>Unknown.BOTTOM(11,4) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · Texture SelectableIcon 19.0x18.0 shown=false at BOTTOMLEFT>Unknown.BOTTOMLEFT(-3,-3) atlas=talents-icon-learnableplus layer=OVERLAY:2 rgba=1,1,1,1
+          · FontString SpendTextShadow1 1.0x1.0 shown=true at CENTER>SpendText.CENTER(-1,1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow2 1.0x1.0 shown=true at CENTER>SpendText.CENTER(1,1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow3 1.0x1.0 shown=true at CENTER>SpendText.CENTER(-1,-1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow4 1.0x1.0 shown=true at CENTER>SpendText.CENTER(1,-1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · MaskTexture IconMask 46.0x46.0 shown=false at CENTER>Icon.CENTER(0,0) tex=nil layer=OVERLAY:3 rgba=1,1,1,1
+          · MaskTexture DisabledOverlayMask 46.0x46.0 shown=false at CENTER>DisabledOverlay.CENTER(0,0) atlas=UI-Frame-IconMask layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture Glow 84.0x84.0 shown=false at CENTER>Unknown.CENTER(0,0) atlas=talents-node-square-greenglow layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture Ghost 52.0x52.0 shown=false at CENTER>Unknown.CENTER(0,0) atlas=talents-node-square-ghost layer=OVERLAY:0 rgba=1,1,1,0.8
+          Frame SearchIcon 63.0x63.0 shown=false at CENTER>Icon.TOPRIGHT(0,0) scripts=OnShow level=1201
+            · Texture Icon 63.0x63.0 shown=true at TOPLEFT>SearchIcon.TOPLEFT(0,0) atlas=talents-search-match layer=OVERLAY:3 rgba=1,1,1,1
+            · Texture OverlayIcon 63.0x63.0 shown=true at TOPLEFT>SearchIcon.TOPLEFT(0,0) atlas=talents-search-match layer=OVERLAY:3 rgba=1,1,1,1
+            · Texture Mouseover 18.0x18.0 shown=true at CENTER>SearchIcon.CENTER(0,0) tex=FileData ID 0 layer=OVERLAY:3 rgba=1,1,1,1
+        Button Unknown 40.0x40.0 shown=true at CENTER>ButtonsParent.TOPLEFT(390,-255) scripts=OnClick,OnEnter level=1200
+          · Texture Shadow 78.0x78.0 shown=true at CENTER>Unknown.CENTER(0,0) atlas=talents-node-square-shadow layer=BACKGROUND:0 rgba=1,1,1,1
+          · Texture Icon 46.0x46.0 shown=true at CENTER>Unknown.CENTER(0,0) tex=134400 layer=BORDER:0 rgba=1,1,1,1
+          · Texture DisabledOverlay 46.0x46.0 shown=true at CENTER>Unknown.CENTER(0,0) tex=FileData ID 0 layer=BORDER:1 rgba=1,1,1,0.3
+          · Texture StateBorder 60.0x60.0 shown=true at CENTER>Unknown.CENTER(0,0) atlas=Legacy-Tree-Frame-icon-frame-disable layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture StateBorderHover 60.0x60.0 shown=false at CENTER>Unknown.CENTER(0,0) atlas=Legacy-Tree-Frame-icon-frame-disable layer=ARTWORK:0 rgba=1,1,1,0.4
+          · FontString SpendText 1.0x1.0 shown=true at BOTTOM>Unknown.BOTTOM(11,4) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · Texture SelectableIcon 19.0x18.0 shown=false at BOTTOMLEFT>Unknown.BOTTOMLEFT(-3,-3) atlas=talents-icon-learnableplus layer=OVERLAY:2 rgba=1,1,1,1
+          · FontString SpendTextShadow1 1.0x1.0 shown=true at CENTER>SpendText.CENTER(-1,1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow2 1.0x1.0 shown=true at CENTER>SpendText.CENTER(1,1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow3 1.0x1.0 shown=true at CENTER>SpendText.CENTER(-1,-1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · FontString SpendTextShadow4 1.0x1.0 shown=true at CENTER>SpendText.CENTER(1,-1) font=ARIALN.TTF 16 object=SystemFont16_Shadow_ThickOutline
+          · MaskTexture IconMask 46.0x46.0 shown=false at CENTER>Icon.CENTER(0,0) tex=nil layer=OVERLAY:3 rgba=1,1,1,1
+          · MaskTexture DisabledOverlayMask 46.0x46.0 shown=false at CENTER>DisabledOverlay.CENTER(0,0) atlas=UI-Frame-IconMask layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture Glow 84.0x84.0 shown=false at CENTER>Unknown.CENTER(0,0) atlas=talents-node-square-greenglow layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture Ghost 52.0x52.0 shown=false at CENTER>Unknown.CENTER(0,0) atlas=talents-node-square-ghost layer=OVERLAY:0 rgba=1,1,1,0.8
+          Frame SearchIcon 63.0x63.0 shown=false at CENTER>Icon.TOPRIGHT(0,0) scripts=OnShow level=1201
+            · Texture Icon 63.0x63.0 shown=true at TOPLEFT>SearchIcon.TOPLEFT(0,0) atlas=talents-search-match layer=OVERLAY:3 rgba=1,1,1,1
+            · Texture OverlayIcon 63.0x63.0 shown=true at TOPLEFT>SearchIcon.TOPLEFT(0,0) atlas=talents-search-match layer=OVERLAY:3 rgba=1,1,1,1
+            · Texture Mouseover 18.0x18.0 shown=true at CENTER>SearchIcon.CENTER(0,0) tex=FileData ID 0 layer=OVERLAY:3 rgba=1,1,1,1
+        Frame - 0x0 shown=true at - level=1199
+          · Line Line 36.0x0 shown=true at - level=nil
+          · Texture ArrowHead 14.0x12.0 shown=true at CENTER>Unknown.CENTER(-24.0,0.0) atlas=talents-arrow-head-gray layer=OVERLAY:1 rgba=1,1,1,1
+          · Texture GhostArrowHead 14.0x12.0 shown=false at CENTER>Unknown.CENTER(-24.0,0.0) atlas=talents-arrow-head-ghost layer=OVERLAY:1 rgba=1,1,1,0.8
+          · Line GhostLine 36.0x0 shown=false at - level=nil
+        Frame - 0x0 shown=true at - level=1199
+          · Line Line 36.0x0 shown=true at - level=nil
+          · Texture ArrowHead 14.0x12.0 shown=true at CENTER>Performance Bonus.CENTER(-24.0,0.0) atlas=talents-arrow-head-locked layer=OVERLAY:1 rgba=1,1,1,1
+          · Texture GhostArrowHead 14.0x12.0 shown=false at CENTER>Performance Bonus.CENTER(-24.0,0.0) atlas=talents-arrow-head-ghost layer=OVERLAY:1 rgba=1,1,1,0.8
+          · Line GhostLine 36.0x0 shown=false at - level=nil
+        Frame - 0x0 shown=true at - level=1199
+          · Line Line 36.0x0 shown=true at - level=nil
+          · Texture ArrowHead 14.0x12.0 shown=true at CENTER>Dedicated Study.CENTER(-24.0,0.0) atlas=talents-arrow-head-locked layer=OVERLAY:1 rgba=1,1,1,1
+          · Texture GhostArrowHead 14.0x12.0 shown=false at CENTER>Dedicated Study.CENTER(-24.0,0.0) atlas=talents-arrow-head-ghost layer=OVERLAY:1 rgba=1,1,1,0.8
+          · Line GhostLine 36.0x0 shown=false at - level=nil
+      Frame SelectionChoiceFrame 1x1 shown=false at - scripts=OnShow level=2000
+      Frame DisabledOverlay 775.0x442 shown=false at TOPLEFT>ButtonsParent.TOPLEFT(0,0) level=4098
+        · Texture GrayOverlay 775.0x442 shown=true at TOPLEFT>DisabledOverlay.TOPLEFT(0,0) tex=FileData ID 0 layer=OVERLAY:0 rgba=1,1,1,0.4
+      Frame CommitSpinner 110x110.0 shown=false at CENTER>DisabledOverlay.CENTER(0,0) scripts=OnShow level=4099
+        · Texture Ring 110x110.0 shown=true at TOPLEFT>CommitSpinner.TOPLEFT(0,0) atlas=Spinner_Ring layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture Sparks 110x110.0 shown=true at TOPLEFT>CommitSpinner.TOPLEFT(0,0) atlas=Spinner_Sparks layer=ARTWORK:0 rgba=1,1,1,1
+      CheckButton SelectedTreeIcon 110.0x110.0 shown=true at LEFT>LegacyTreeTraitPanel.LEFT(55,20) scripts=OnClick,OnEnter level=102
+        · Texture DisabledOverlay 110.0x110.0 shown=false at TOPLEFT>SelectedTreeIcon.TOPLEFT(0,0) tex=FileData ID 0 layer=OVERLAY:-1 rgba=1,1,1,0.7
+        · Texture Ring 130.0x130.0 shown=true at CENTER>SelectedTreeIcon.CENTER(0,0) atlas=Legacy-Tree-Frame-Ring-big layer=OVERLAY:-1 rgba=1,1,1,1
+        · MaskTexture CircleMask 106.0x106.0 shown=true at TOPLEFT>SelectedTreeIcon.TOPLEFT(2,-2) tex=130924 layer=OVERLAY:0 rgba=1,1,1,1
+        · Texture NormalTexture 110.0x110.0 shown=true at TOPLEFT>SelectedTreeIcon.TOPLEFT(0,0) atlas=UI-Legacy-Tree-Professions layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture HighlightTexture 110.0x110.0 shown=true at TOPLEFT>SelectedTreeIcon.TOPLEFT(0,0) tex=nil layer=HIGHLIGHT:0 rgba=1,1,1,0.5
+        · Texture PushedTexture 110.0x110.0 shown=false at TOPLEFT>SelectedTreeIcon.TOPLEFT(1,-1) atlas=UI-Legacy-Tree-Professions layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture CheckedTexture 99.0x99.0 shown=false at CENTER>SelectedTreeIcon.CENTER(0,0) atlas=charactercreate-ring-select layer=OVERLAY:0 rgba=1,1,1,1
+        · FontString SelectedTreeLabel 113.0x20.0 shown=true at BOTTOM>SelectedTreeIcon.TOP(0,32) font=FRIZQT__.TTF 20 object=SystemFont_Shadow_Huge1
+        Frame Flash 110.0x110.0 shown=false at TOPLEFT>SelectedTreeIcon.TOPLEFT(0,0) level=103
+          · Texture Portrait 110.0x110.0 shown=true at TOPLEFT>Flash.TOPLEFT(0,0) atlas=UI-Legacy-Tree-Professions layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture Ring 130.0x130.0 shown=true at CENTER>Flash.CENTER(0,0) atlas=Legacy-Tree-Frame-Ring-big layer=OVERLAY:0 rgba=1,1,1,1
+          · Texture Ring2 130.0x130.0 shown=true at CENTER>Flash.CENTER(0,0) atlas=Legacy-Tree-Frame-Ring-big layer=OVERLAY:0 rgba=1,1,1,1
+        Frame New 40.0x20.0 shown=false at CENTER>SelectedTreeIcon.BOTTOM(0,-5) scripts=OnShow level=103
+          · FontString BGLabel 30.0x12.0 shown=true at CENTER>New.CENTER(0.5,-0.5) font=FRIZQT__.TTF 12 object=GameFontNormal_NoShadow
+          · FontString Label 30.0x12.0 shown=true at CENTER>New.CENTER(0,0) font=FRIZQT__.TTF 12 object=GameFontHighlight
+          · Texture Glow 70.0x32.0 shown=true at TOPLEFT>Label.TOPLEFT(-20,10) atlas=collections-newglow layer=OVERLAY:1 rgba=1,1,1,1
+      Frame SpentPointsFrame 30.0x30.0 shown=true at CENTER>SelectedTreeIcon.BOTTOM(0,-3) level=298
+        · Texture Background 64x64.0 shown=true at CENTER>SpentPointsFrame.CENTER(0,0) atlas=Legacy-Tree-Frame-level-circle layer=BACKGROUND:1 rgba=1,1,1,1
+        · FontString Text 16.0x24.0 shown=true at CENTER>SpentPointsFrame.CENTER(0,-1) font=FRIZQT__.ttf 24 object=SystemFont_Huge2
+      Button ApplyButton 164.0x22 shown=true at BOTTOM>LegacyTreeTraitPanel.BOTTOM(0,10) scripts=OnClick,OnEnter,OnShow level=102
+        · Texture Left 12.0x22 shown=true at TOPLEFT>ApplyButton.TOPLEFT(0,0) tex=130824 layer=BACKGROUND:0 rgba=1,1,1,1
+        · Texture Right 12.0x22 shown=true at TOPRIGHT>ApplyButton.TOPRIGHT(0,0) tex=130824 layer=BACKGROUND:0 rgba=1,1,1,1
+        · Texture Middle 140.0x22 shown=true at TOPLEFT>Left.TOPRIGHT(0,0) tex=130824 layer=BACKGROUND:0 rgba=1,1,1,1
+        · FontString LegacySystemFrameText 96x12.0 shown=true at CENTER>ApplyButton.CENTER(0,0) font=FRIZQT__.TTF 12 object=GameFontDisable
+        · Texture - 164.0x22 shown=true at TOPLEFT>ApplyButton.TOPLEFT(0,0) tex=130826 layer=HIGHLIGHT:0 rgba=1,1,1,1
+        Frame Controller 0x0 shown=true at - scripts=OnShow level=103
+        Frame YellowGlow 188.0x1.0 shown=false at LEFT>ApplyButton.LEFT(-12,0) level=103
+          · Texture Left 25.0x49.0 shown=true at LEFT>YellowGlow.LEFT(0,0) atlas=newplayertutorial-yellowglow-redbutton-left layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture Right 25.0x49.0 shown=true at RIGHT>YellowGlow.RIGHT(0,0) atlas=newplayertutorial-yellowglow-redbutton-right layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture Middle 138.0x49.0 shown=true at TOPLEFT>Left.TOPRIGHT(0,0) atlas=newplayertutorial-yellowglow-redbutton-middle layer=ARTWORK:0 rgba=1,1,1,1
+      Frame GamepadResetButton 30.0x30.0 shown=false at LEFT>ApplyButton.RIGHT(14.0,0) level=102
+        · Texture NormalTexture 40.0x40.0 shown=true at TOPLEFT>GamepadResetButton.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-ButtonY-Normal layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture HoverTexture 40.0x40.0 shown=false at TOPLEFT>GamepadResetButton.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-ButtonY-Over layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture PressedTexture 40.0x40.0 shown=false at TOPLEFT>GamepadResetButton.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-ButtonY-Down layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture ActiveTexture 40.0x40.0 shown=false at TOPLEFT>GamepadResetButton.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-ButtonY-Focus layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture DisabledTexture 40.0x40.0 shown=false at TOPLEFT>GamepadResetButton.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-ButtonY-Disabled layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture LoadBar 40.0x40.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture HoldIndicatorBG 40.0x40.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-indicator-BG layer=BACKGROUND:0 rgba=1,1,1,1
+        · Texture LoadBarBG 40.0x40.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar-BG layer=BACKGROUND:0 rgba=1,1,1,1
+        · Texture LoadBarGlow 40.0x40.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar-glw-BG layer=BACKGROUND:0 rgba=1,1,1,1
+        · Texture HoldIndicator 40.0x40.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-indicator layer=ARTWORK:1 rgba=1,1,1,1
+        · Texture SpinnerTip 40.0x40.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-spinnerTip layer=ARTWORK:1 rgba=1,1,1,1
+      Button ResetButton 25.0x25.0 shown=true at LEFT>ApplyButton.RIGHT(14.0,0) scripts=OnClick,OnEnter level=102
+        · Texture Icon 20.0x20.0 shown=true at CENTER>ResetButton.CENTER(0,0) atlas=talents-button-reset layer=OVERLAY:0 rgba=1,1,1,1
+        · Texture - 20.0x20.0 shown=true at TOPLEFT>Icon.TOPLEFT(0,0) atlas=talents-button-reset layer=HIGHLIGHT:0 rgba=1,1,1,1
+        Frame Controller 0x0 shown=true at - scripts=OnShow level=103
+      Frame GamepadUndoButton 30.0x30.0 shown=false at CENTER>ResetButton.CENTER(0,0) level=102
+        · Texture NormalTexture 40.0x40.0 shown=true at TOPLEFT>GamepadUndoButton.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-ButtonY-Normal layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture HoverTexture 40.0x40.0 shown=false at TOPLEFT>GamepadUndoButton.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-ButtonY-Over layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture PressedTexture 40.0x40.0 shown=false at TOPLEFT>GamepadUndoButton.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-ButtonY-Down layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture ActiveTexture 40.0x40.0 shown=false at TOPLEFT>GamepadUndoButton.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-ButtonY-Focus layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture DisabledTexture 40.0x40.0 shown=false at TOPLEFT>GamepadUndoButton.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-ButtonY-Disabled layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture LoadBar 40.0x40.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture HoldIndicatorBG 40.0x40.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-indicator-BG layer=BACKGROUND:0 rgba=1,1,1,1
+        · Texture LoadBarBG 40.0x40.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar-BG layer=BACKGROUND:0 rgba=1,1,1,1
+        · Texture LoadBarGlow 40.0x40.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar-glw-BG layer=BACKGROUND:0 rgba=1,1,1,1
+        · Texture HoldIndicator 40.0x40.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-indicator layer=ARTWORK:1 rgba=1,1,1,1
+        · Texture SpinnerTip 40.0x40.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-spinnerTip layer=ARTWORK:1 rgba=1,1,1,1
+      Button UndoButton 25.0x25.0 shown=false at CENTER>ResetButton.CENTER(0,0) scripts=OnClick,OnEnter level=102
+        · Texture Icon 20.0x20.0 shown=true at CENTER>UndoButton.CENTER(0,0) atlas=Legacy-Tree-Frame-reset-button layer=OVERLAY:0 rgba=1,1,1,1
+        · Texture - 20.0x20.0 shown=true at TOPLEFT>Icon.TOPLEFT(0,0) atlas=Legacy-Tree-Frame-reset-button layer=HIGHLIGHT:0 rgba=1,1,1,1
+        Frame Controller 0x0 shown=true at - scripts=OnShow level=103
+      EditBox SearchBox 184.0x30.0 shown=true at TOPRIGHT>LegacyTreeTraitPanel.TOPRIGHT(-10,-15) scripts=OnEnter level=102
+        · FontString - 148.0x30.0 shown=true at TOPLEFT>SearchBox.TOPLEFT(16,-0) font=FRIZQT__.TTF 10 object=nil
+        · Texture - 2.0x10.0 shown=false at LEFT>?.LEFT(0,-0) tex=FileData ID 0 layer=OVERLAY:0 rgba=1,1,1,1
+        · Texture Left 8.0x20.0 shown=true at LEFT>SearchBox.LEFT(-5,0) atlas=common-search-border-left layer=BACKGROUND:0 rgba=1,1,1,1
+        · Texture Right 8.0x20.0 shown=true at RIGHT>SearchBox.RIGHT(0,0) atlas=common-search-border-right layer=BACKGROUND:0 rgba=1,1,1,1
+        · Texture Middle 173.0x20.0 shown=true at LEFT>Left.RIGHT(0,0) atlas=common-search-border-middle layer=BACKGROUND:0 rgba=1,1,1,1
+        · FontString Instructions 148.0x30.0 shown=true at TOPLEFT>SearchBox.TOPLEFT(16,0) font=FRIZQT__.TTF 10 object=GameFontDisableSmall
+        · Texture LegacySystemFrameSearchIcon 10.0x10.0 shown=true at LEFT>SearchBox.LEFT(1,-1) atlas=common-search-magnifyingglass layer=OVERLAY:0 rgba=0.6,0.6,0.6,1
+        Button LegacySystemFrameClearButton 17.0x17.0 shown=false at RIGHT>SearchBox.RIGHT(-3,0) scripts=OnClick,OnEnter level=103
+          · Texture Icon 10.0x10.0 shown=true at TOPLEFT>LegacySystemFrameClearButton.TOPLEFT(3,-3) atlas=common-search-clearbutton layer=ARTWORK:0 rgba=1,1,1,0.5
+        Frame GamepadFocusIcon 28.0x28.0 shown=false at RIGHT>SearchBox.LEFT(-8,0) level=103
+          · Texture NormalTexture 38.0x38.0 shown=true at TOPLEFT>GamepadFocusIcon.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-View-Normal layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture HoverTexture 38.0x38.0 shown=false at TOPLEFT>GamepadFocusIcon.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-View-Over layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture PressedTexture 38.0x38.0 shown=false at TOPLEFT>GamepadFocusIcon.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-View-Down layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture ActiveTexture 38.0x38.0 shown=false at TOPLEFT>GamepadFocusIcon.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-View-Focus layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture DisabledTexture 38.0x38.0 shown=false at TOPLEFT>GamepadFocusIcon.TOPLEFT(-5,5) atlas=Gamepad-Xbox1-View-Disabled layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture LoadBar 38.0x38.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar layer=ARTWORK:0 rgba=1,1,1,1
+          · Texture HoldIndicatorBG 38.0x38.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-indicator-BG layer=BACKGROUND:0 rgba=1,1,1,1
+          · Texture LoadBarBG 38.0x38.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar-BG layer=BACKGROUND:0 rgba=1,1,1,1
+          · Texture LoadBarGlow 38.0x38.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-loadBar-glw-BG layer=BACKGROUND:0 rgba=1,1,1,1
+          · Texture HoldIndicator 38.0x38.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-indicator layer=ARTWORK:1 rgba=1,1,1,1
+          · Texture SpinnerTip 38.0x38.0 shown=false at TOPLEFT>NormalTexture.TOPLEFT(0,0) atlas=gamepad-press&hold-spinnerTip layer=ARTWORK:1 rgba=1,1,1,1
+      Frame SearchPreviewContainer 176x0 shown=false at TOPRIGHT>SearchBox.BOTTOMRIGHT(-4,2) scripts=OnShow level=2098
+        · Texture Background 0x0 shown=true at TOPLEFT>SearchPreviewContainer.TOPLEFT(0,0) atlas=_search-rowbg layer=BACKGROUND:0 rgba=1,1,1,1
+        · Texture BorderAnchor 14.0x14.0 shown=true at LEFT>SearchPreviewContainer.LEFT(-7.0,0) atlas=UI-Frame-BotCornerLeft layer=OVERLAY:0 rgba=1,1,1,1
+        · Texture BotRightCorner 11x11 shown=true at RIGHT>SearchPreviewContainer.RIGHT(4,0) atlas=UI-Frame-BotCornerRight layer=OVERLAY:0 rgba=1,1,1,1
+        · Texture BottomBorder 256x9.0 shown=true at BOTTOMLEFT>BorderAnchor.BOTTOMRIGHT(0,0) atlas=_UI-Frame-Bot layer=OVERLAY:0 rgba=1,1,1,1
+        · Texture LeftBorder 16x256 shown=true at TOP>SearchPreviewContainer.TOP(0,2) atlas=!UI-Frame-LeftTile layer=OVERLAY:0 rgba=1,1,1,1
+        · Texture RightBorder 10x256 shown=true at TOP>SearchPreviewContainer.TOP(0,2) atlas=!UI-Frame-RightTile layer=OVERLAY:0 rgba=1,1,1,1
+        Frame ScrollBox 0x0 shown=true at TOPLEFT>SearchPreviewContainer.TOPLEFT(0,0) level=5
+          Frame DragDelegate 0x0 shown=true at - level=6
+          Frame ScrollTarget 1x1 shown=true at TOPLEFT>ScrollBox.TOPLEFT(0,0) level=5
+          Frame Shadows 0x0 shown=true at TOPLEFT>ScrollBox.TOPLEFT(0,0) level=7
+            · Texture Lower 0x0 shown=true at BOTTOMLEFT>Shadows.BOTTOMLEFT(0,0) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+            · Texture Upper 0x0 shown=true at TOPLEFT>Shadows.TOPLEFT(0,0) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+        Frame OverflowCount 176x16 shown=false at BOTTOMLEFT>SearchPreviewContainer.BOTTOMLEFT(0,5) level=2099
+          · FontString Text 400x1 shown=true at TOPLEFT>OverflowCount.TOPLEFT(9.0,0) font=FRIZQT__.TTF 10 object=GameFontDisableSmall
+    Frame VerticalDivider 12.0x503.0 shown=true at TOPLEFT>TreePage.TOPLEFT(128,-72.0) level=898
+      · Texture VerticalDivider 12.0x503.0 shown=true at TOPLEFT>VerticalDivider.TOPLEFT(0,0) atlas=Legacy-Tree-Frame-divider-Vertical layer=BACKGROUND:0 rgba=1,1,1,1

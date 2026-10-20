@@ -16,15 +16,18 @@
 //! `entryIDsWithCommittedRanks` holds what was committed before the
 //! session, a commit's ranks not even at its answer; a condition's
 //! `spentAmountRequired` is what is still to spend (met: 0, without its
-//! tooltip); buying fires `TRAIT_NODE_CHANGED` for the node, the nodes it
-//! unlocks, its edges' targets, then `TRAIT_TREE_CURRENCY_INFO_UPDATED` for
-//! each of the config's trees paying in its currency; applying: a round
+//! tooltip); buying fires `TRAIT_NODE_CHANGED` for the node and its edges'
+//! targets, then `TRAIT_TREE_CURRENCY_INFO_UPDATED` for each of the
+//! config's trees paying in its currency, then (when it unlocked others)
+//! the unlocked nodes and its edges' targets again; applying: a round
 //! trip, `SPELLS_CHANGED`, then the committed nodes, every tree's currency,
-//! `TRAIT_CONFIG_UPDATED`, `PLAYER_TALENT_UPDATE`.
+//! `TRAIT_CONFIG_UPDATED`, `PLAYER_TALENT_UPDATE` (a talent changing the
+//! damage done: `PLAYER_DAMAGE_DONE_MODS` before the nodes,
+//! `DAMAGE_DONE_MODS`).
 //!
 //! Unverified: an edge is met by its source at its last rank (the classic
 //! rule; recorded only met at 5 of 5); the unlocked nodes' order (the
-//! recording's 110303, 110305, 110304: here the tree's); a met condition's
+//! recording's 110303, 110305, 110304: here those without edges first); a met condition's
 //! points (the probe's spent points: at most); refunds, rollbacks,
 //! selection nodes; the second stage of a commit (0.5 s after the first in
 //! the legacy recording, 0.07 s in the talents one).
@@ -45,6 +48,13 @@ const COMMIT_AFTER_GENERIC: f64 = 0.499;
 const COMMIT_AFTER: f64 = 0.068;
 /// `Enum.TraitConfigType.Generic`.
 const GENERIC: f64 = 3.0;
+/// The talents' spells that change the player's damage done, applied:
+/// `PLAYER_DAMAGE_DONE_MODS("player")` as many times, before the nodes'
+/// changes (recorded: Thundering Strikes, 1% critical strike chance with
+/// all spells and attacks, four at its first rank; the legacy nodes' none).
+/// Unverified: at its other ranks, other talents' (their spells' effects
+/// not known to the engine).
+const DAMAGE_DONE_MODS: &[(i64, usize)] = &[(16255, 4)];
 /// Each class's talent tree, in the client's order, all paying in the
 /// class talents' currency (recorded: a shaman's rank bought fired
 /// `TRAIT_TREE_CURRENCY_INFO_UPDATED` for these, each answering it).
@@ -94,7 +104,7 @@ impl Rv {
     }
 
     /// An answer's values (`n: v1, v2`).
-    fn answer(text: &str) -> Vec<Rv> {
+    pub(crate) fn answer(text: &str) -> Vec<Rv> {
         let Some((count, rest)) = text.split_once(": ") else {
             return Vec::new();
         };
@@ -215,6 +225,10 @@ fn data() -> &'static HashMap<(&'static str, &'static str), &'static str> {
             .filter_map(|l| {
                 let (class, rest) = l.split_once('\t')?;
                 let (call, answer) = rest.split_once('\t')?;
+                let (call, answer) = (
+                    crate::recorded::unescape(call),
+                    crate::recorded::unescape(answer),
+                );
                 Some(((class, call), answer))
             })
             .collect()
@@ -232,10 +246,34 @@ pub struct Traits {
     pub start: BTreeMap<(i64, i64), i64>,
     /// Renown by major faction (`e.setRenown`).
     pub renown: BTreeMap<i64, f64>,
+    /// The recorded character playing (`e.setTraitCharacter`).
+    pub character: Option<String>,
+}
+
+/// Any class's answer to a call (data by call).
+/// A recorded answer's values, parsed once: the answers are the build's.
+fn parsed(answer: &'static str) -> &'static [Rv] {
+    type Parsed = HashMap<(usize, usize), &'static [Rv]>;
+    static PARSED: OnceLock<std::sync::Mutex<Parsed>> = OnceLock::new();
+    let mut parsed = PARSED
+        .get_or_init(Default::default)
+        .lock()
+        .unwrap_or_else(std::sync::PoisonError::into_inner);
+    parsed
+        .entry((answer.as_ptr() as usize, answer.len()))
+        .or_insert_with(|| Box::leak(Rv::answer(answer).into_boxed_slice()))
+}
+
+pub(crate) fn owner_answer(call: &str) -> Option<&'static &'static str> {
+    static BY_CALL: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
+    BY_CALL
+        .get_or_init(|| data().iter().map(|((_, c), a)| (*c, *a)).collect())
+        .get(call)
 }
 
 /// A character's recorded trait data and the engine's ranks.
 pub struct Model<'a> {
+    /// The recorded character (`CLASS-configID`).
     class: String,
     state: &'a Traits,
     /// Every rank 0 (a node asked through a config without it).
@@ -253,17 +291,24 @@ impl<'a> Model<'a> {
 
     /// Whether the class's configs were recorded.
     fn known(&self) -> bool {
-        data().keys().any(|(c, _)| *c == self.class)
+        static CLASSES: OnceLock<std::collections::HashSet<&'static str>> = OnceLock::new();
+        CLASSES
+            .get_or_init(|| data().keys().map(|(c, _)| *c).collect())
+            .contains(self.class.as_str())
     }
 
-    fn recorded(&self, call: &str) -> Option<Vec<Rv>> {
+    /// The class's recorded answer, else the class's whose it is (each
+    /// node, entry and spell kept from the class owning its tree; an
+    /// answer every class gave alike kept once).
+    fn recorded(&self, call: &str) -> Option<&'static [Rv]> {
         data()
             .get(&(self.class.as_str(), call))
-            .map(|a| Rv::answer(a))
+            .or_else(|| owner_answer(call))
+            .map(|a| parsed(a))
     }
 
     fn first(&self, call: &str) -> Option<Rv> {
-        self.recorded(call)?.into_iter().next()
+        self.recorded(call)?.first().cloned()
     }
 
     fn recorded_node(&self, config: i64, node: i64) -> Option<Rv> {
@@ -343,6 +388,26 @@ impl<'a> Model<'a> {
 
     fn rank(&self, config: i64, node: i64, staged: bool) -> i64 {
         self.committed(config, node) + if staged { self.staged(config, node) } else { 0 }
+    }
+
+    /// The spells of a node's entries (their definitions').
+    fn node_spells(&self, config: i64, node: i64) -> Vec<i64> {
+        let entries = self
+            .recorded_node(config, node)
+            .map(|n| n.nums("entryIDs"))
+            .unwrap_or_default();
+        entries
+            .into_iter()
+            .filter_map(|e| {
+                let def = self
+                    .first(&format!("C_Traits.GetEntryInfo({config}, {e})"))?
+                    .num("definitionID")? as i64;
+                Some(
+                    self.first(&format!("C_Traits.GetDefinitionInfo({def})"))?
+                        .num("spellID")? as i64,
+                )
+            })
+            .collect()
     }
 
     fn entry_max_ranks(&self, config: i64, entry: i64) -> i64 {
@@ -529,17 +594,23 @@ impl<'a> Model<'a> {
             .is_some_and(|t| t.flag("cannotRefund"))
     }
 
-    /// The config of the class recorded holding a node.
-    fn host(&self, node: i64) -> Option<i64> {
+    /// The class and config recorded holding a node (the tree's owner's).
+    fn host(&self, node: i64) -> Option<(String, i64)> {
         let suffix = format!(", {node})");
-        data().keys().find_map(|(class, call)| {
-            (*class == self.class)
-                .then(|| {
-                    call.strip_prefix("C_Traits.GetNodeInfo(")?
-                        .strip_suffix(&suffix)
-                })
-                .flatten()
-                .and_then(|c| c.parse().ok())
+        let found = |call: &str| -> Option<i64> {
+            call.strip_prefix("C_Traits.GetNodeInfo(")?
+                .strip_suffix(&suffix)?
+                .parse()
+                .ok()
+        };
+        let mine = data()
+            .keys()
+            .filter(|(class, _)| *class == self.class)
+            .find_map(|(class, call)| found(call).map(|c| (class.to_string(), c)));
+        mine.or_else(|| {
+            data()
+                .keys()
+                .find_map(|(class, call)| found(call).map(|c| (class.to_string(), c)))
         })
     }
 
@@ -548,10 +619,14 @@ impl<'a> Model<'a> {
     /// node as with nothing of its tree bought, never to buy (recorded: the
     /// druid's class config asked of its legacy nodes).
     pub fn node(&self, config: i64, node: i64) -> Option<Rv> {
-        if self.recorded_node(config, node).is_none() {
-            let host = self.host(node)?;
+        // A node of a tree the config does not hold (recorded so, or not).
+        if !self.bare && self.tree_of(config, node).is_none() {
+            let (class, host) = match self.recorded_node(config, node) {
+                Some(_) => (self.class.clone(), config),
+                None => self.host(node)?,
+            };
             let bare = Model {
-                class: self.class.clone(),
+                class,
                 state: self.state,
                 bare: true,
             };
@@ -678,10 +753,64 @@ impl<'a> Model<'a> {
     }
 }
 
-fn model(vm: &Vm) -> Model<'_> {
-    let class = &engine(vm).units.list[PLAYER.0].class;
-    Model::new(class, &engine(vm).world.traits)
+/// The character whose recorded trait data is the player's: the test's
+/// (`e.setTraitCharacter`), else the class's first recorded one.
+fn character(vm: &Vm) -> String {
+    let traits = &engine(vm).world.traits;
+    if let Some(c) = &traits.character {
+        return c.clone();
+    }
+    let prefix = format!("{}-", engine(vm).units.list[PLAYER.0].class.to_uppercase());
+    // The first of the class's, in order: those with the prefix start at
+    // the first key not before it.
+    let keys = characters();
+    let at = keys.partition_point(|k| *k < prefix.as_str());
+    keys.get(at)
+        .filter(|k| k.starts_with(&prefix))
+        .map_or(prefix, |k| k.to_string())
 }
+
+/// The recorded characters' keys, in order, each once.
+fn characters() -> &'static [&'static str] {
+    static KEYS: OnceLock<Vec<&'static str>> = OnceLock::new();
+    KEYS.get_or_init(|| {
+        let mut keys: Vec<&str> = data().keys().map(|(k, _)| *k).collect();
+        keys.sort_unstable();
+        keys.dedup();
+        keys
+    })
+}
+
+fn model(vm: &Vm) -> Model<'_> {
+    let key = character(vm);
+    Model::new(&key, &engine(vm).world.traits)
+}
+
+/// The inspected config (`-1`): the recorded character the test named
+/// and its class config.
+fn inspected(vm: &mut Vm) -> Option<(String, i64)> {
+    let config = crate::inspect::trait_character(vm)?;
+    let suffix = format!("-{config}");
+    let key = data()
+        .keys()
+        .map(|(k, _)| *k)
+        .find(|k| k.ends_with(&suffix))?;
+    Some((key.to_string(), config))
+}
+
+/// A config asked of: the inspected's (`-1`) as its recorded character's
+/// own, else the player's (whether it is the inspected's).
+fn resolve(vm: &mut Vm, config: i64) -> (String, i64, bool) {
+    if config == INSPECT
+        && let Some((key, real)) = inspected(vm)
+    {
+        return (key, real, true);
+    }
+    (character(vm), config, false)
+}
+
+/// The inspected config's ID.
+const INSPECT: i64 = -1;
 
 fn traits_mut(vm: &mut Vm) -> &mut Traits {
     &mut engine_mut(vm).world.traits
@@ -708,14 +837,69 @@ fn recorded(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(name) = crate::recorded::called_name(vm, &c) else {
         return Ok(vec![]);
     };
-    let call = crate::call_text(vm, &name, &c, 1);
-    let m = model(vm);
+    // The active config: the active spec group's combat config, as the
+    // character's stats have it (recorded: 3 of 3 characters asked, the
+    // shaman's 5999541, the druid's 22147 and the paladin's 73810, each
+    // the snapshot's `GetCombatConfigIDForSpecGroup(1)`); else the
+    // recorded character's.
+    if name == "C_ClassTalents.GetActiveConfigID"
+        && let Some(id) = crate::stats::active_combat_config(vm)
+    {
+        return Ok(vec![Value::Num(id)]);
+    }
+    let mut call = crate::call_text(vm, &name, &c, 1);
+    let mut key = character(vm);
+    // The inspected config's calls: its recorded character's own.
+    if call.contains("(-1")
+        && let Some((k, real)) = inspected(vm)
+    {
+        call = call.replacen("(-1", &format!("({real}"), 1);
+        key = k;
+    }
+    let m = Model::new(&key, &engine(vm).world.traits);
     if m.known()
         && let Some(values) = m.recorded(&call)
     {
         return Ok(values.iter().map(|v| v.to_value(vm)).collect());
     }
+    if let Some(values) = unknown_tree(vm, &name, &call) {
+        return Ok(values);
+    }
     crate::recorded::recorded(vm, c)
+}
+
+/// A tree or config the client lacks (the full probe, 1.60.1: IDs -1, 0,
+/// 1, 1.5 and 2147483647): no nodes, no increased data, the hash of
+/// nothing (MD5 of no bytes), no edits ("You can't do that right now.",
+/// `ERR_CLIENT_LOCKED_OUT`), variation 0. Not for a call the recordings
+/// answer.
+fn unknown_tree(vm: &mut Vm, name: &str, call: &str) -> Option<Vec<Value>> {
+    if crate::recorded::answers().contains_key(call) {
+        return None;
+    }
+    Some(match name {
+        "C_Traits.GetTreeNodes" | "C_Traits.GetIncreasedTraitData" => {
+            vec![Value::Table(vm.new_table())]
+        }
+        "C_Traits.GetTreeHash" => {
+            const EMPTY_MD5: [u8; 16] = [
+                212, 29, 140, 217, 143, 0, 178, 4, 233, 128, 9, 152, 236, 248, 66, 126,
+            ];
+            let t = vm.new_table();
+            for (i, b) in EMPTY_MD5.iter().enumerate() {
+                let _ = vm
+                    .heap
+                    .table_mut(t)
+                    .set(Value::Num(i as f64 + 1.0), Value::Num(f64::from(*b)));
+            }
+            vec![Value::Table(t)]
+        }
+        "C_Traits.CanEditConfig" => {
+            vec![Value::Bool(false), vm.str("You can't do that right now.")]
+        }
+        "C_Traits.GetConfigVariationID" => vec![Value::Num(0.0)],
+        _ => return None,
+    })
 }
 
 /// A behaviour of the model for a recorded class, else the general one.
@@ -733,7 +917,13 @@ fn get_node_info(vm: &mut Vm, c: NativeCall) -> Ret {
         let (Some(config), Some(node)) = (int(vm, &c, 1), int(vm, &c, 2)) else {
             return Ok(vec![]);
         };
-        let rv = model(vm).node(config, node);
+        let (key, config, viewed) = resolve(vm, config);
+        let mut rv = Model::new(&key, &engine(vm).world.traits).node(config, node);
+        // Another's talents viewed: nothing to buy or take back.
+        if viewed && let Some(info) = rv.as_mut() {
+            info.set("canPurchaseRank", Rv::Bool(false));
+            info.set("canRefundRank", Rv::Bool(false));
+        }
         Ok(answer(vm, rv))
     })
 }
@@ -743,7 +933,8 @@ fn get_condition_info(vm: &mut Vm, c: NativeCall) -> Ret {
         let (Some(config), Some(cond)) = (int(vm, &c, 1), int(vm, &c, 2)) else {
             return Ok(vec![]);
         };
-        let rv = model(vm).condition(config, cond);
+        let (key, config, _) = resolve(vm, config);
+        let rv = Model::new(&key, &engine(vm).world.traits).condition(config, cond);
         Ok(answer(vm, rv))
     })
 }
@@ -754,9 +945,55 @@ fn get_tree_currency_info(vm: &mut Vm, c: NativeCall) -> Ret {
             return Ok(vec![]);
         };
         let exclude = vm.hidden(c.arg(3)).truthy();
-        let rv = model(vm).tree_currency(config, tree, exclude);
+        if config == INSPECT && inspected(vm).is_none() {
+            // No recorded tree either: no currencies (the full probe,
+            // 1.60.1: `GetTreeCurrencyInfo(-1, 1, true)` {}).
+            let Some(rv) = bare_tree_currency(vm, tree, exclude) else {
+                return Ok(vec![Value::Table(vm.new_table())]);
+            };
+            return Ok(answer(vm, Some(rv)));
+        }
+        let (key, config, _) = resolve(vm, config);
+        let rv = Model::new(&key, &engine(vm).world.traits).tree_currency(config, tree, exclude);
+        // A tree the client lacks: no currencies (the full probe, 1.60.1).
+        if rv.is_none() {
+            return Ok(vec![Value::Table(vm.new_table())]);
+        }
         Ok(answer(vm, rv))
     })
+}
+
+/// An inspected player's tree without its recorded character (the test
+/// named none): its currency as the tree's owner's with nothing bought
+/// (as its nodes, `Model::node`; unverified: its points then all
+/// unspent).
+fn bare_tree_currency(vm: &Vm, tree: i64, exclude: bool) -> Option<Rv> {
+    let wanted = |call: &str| -> Option<i64> {
+        call.strip_prefix("C_Traits.GetTreeCurrencyInfo(")?
+            .strip_suffix(&format!(", {tree}, false)"))?
+            .parse()
+            .ok()
+    };
+    let mut hosts: Vec<(&str, i64)> = data()
+        .keys()
+        .filter_map(|(class, call)| Some((*class, wanted(call)?)))
+        .collect();
+    // The tree's owner: a config holding it (every class's config answers
+    // of the class trees); the same on every run (the data's order is a
+    // hash map's).
+    hosts.sort_unstable();
+    let owns = |(class, config): &(&str, i64)| {
+        Model::new(class, &engine(vm).world.traits)
+            .trees(*config)
+            .contains(&tree)
+    };
+    let (class, config) = hosts.iter().find(|h| owns(h)).or(hosts.first()).copied()?;
+    let bare = Model {
+        class: class.to_string(),
+        state: &engine(vm).world.traits,
+        bare: true,
+    };
+    bare.tree_currency(config, tree, exclude)
 }
 
 fn can_purchase_rank(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -855,13 +1092,8 @@ fn purchase_rank(vm: &mut Vm, c: NativeCall) -> Ret {
             (m.targets(config, node), currencies)
         };
         fire(vm, "TRAIT_NODE_CHANGED", &[Value::Num(node as f64)]);
-        for ((n, a), (_, b)) in before.iter().zip(after.iter()) {
-            if *n != node && !targets.contains(n) && a != b {
-                fire(vm, "TRAIT_NODE_CHANGED", &[Value::Num(*n as f64)]);
-            }
-        }
-        for t in targets {
-            fire(vm, "TRAIT_NODE_CHANGED", &[Value::Num(t as f64)]);
+        for t in &targets {
+            fire(vm, "TRAIT_NODE_CHANGED", &[Value::Num(*t as f64)]);
         }
         let mut seen = Vec::new();
         for tree in currencies {
@@ -872,6 +1104,29 @@ fn purchase_rank(vm: &mut Vm, c: NativeCall) -> Ret {
                     "TRAIT_TREE_CURRENCY_INFO_UPDATED",
                     &[Value::Num(tree as f64)],
                 );
+            }
+        }
+        // The nodes it unlocked, after the currencies, then its edges'
+        // targets again (recorded: the legacy druid's fifth point). Those
+        // with edges of their own after the others, each in the tree's
+        // order (recorded once: 110303 and 110305, then 110304 with its
+        // edge; unverified, as is any order key the one sample fits).
+        let mut unlocked: Vec<i64> = before
+            .iter()
+            .zip(after.iter())
+            .filter(|((n, a), (_, b))| *n != node && !targets.contains(n) && a != b)
+            .map(|((n, _), _)| *n)
+            .collect();
+        {
+            let m = model(vm);
+            unlocked.sort_by_key(|n| !m.targets(config, *n).is_empty());
+        }
+        if !unlocked.is_empty() {
+            for n in unlocked {
+                fire(vm, "TRAIT_NODE_CHANGED", &[Value::Num(n as f64)]);
+            }
+            for t in targets {
+                fire(vm, "TRAIT_NODE_CHANGED", &[Value::Num(t as f64)]);
             }
         }
         Ok(vec![Value::Bool(true)])
@@ -929,8 +1184,7 @@ fn commit(vm: &mut Vm, config: i64) -> Ret {
 }
 
 fn committed(vm: &mut Vm, c: NativeCall) -> Ret {
-    crate::character::group_buffs_changed(vm);
-    fire(vm, "SPELLS_CHANGED", &[]);
+    crate::batch::spells_changed(vm);
     let generic = model(vm)
         .first(&format!("C_Traits.GetConfigInfo({})", config_of(&c)))
         .and_then(|i| i.num("type"))
@@ -953,6 +1207,15 @@ fn applied(vm: &mut Vm, c: NativeCall) -> Ret {
         let t = traits_mut(vm);
         t.staged.remove(&(config, *n));
         t.committed.insert((config, *n), rank);
+    }
+    let mods: usize = nodes
+        .iter()
+        .flat_map(|n| model(vm).node_spells(config, *n))
+        .filter_map(|s| DAMAGE_DONE_MODS.iter().find(|(id, _)| *id == s))
+        .map(|(_, count)| count)
+        .sum();
+    for _ in 0..mods {
+        crate::units::fire_unit(vm, "PLAYER_DAMAGE_DONE_MODS", PLAYER, &[]);
     }
     for n in nodes {
         fire(vm, "TRAIT_NODE_CHANGED", &[Value::Num(n as f64)]);
@@ -1032,6 +1295,24 @@ pub fn control_set_trait_ranks(vm: &mut Vm, c: NativeCall) -> Ret {
         state.committed.insert((config as i64, node), rank);
         state.start.insert((config as i64, node), rank);
     }
+    Ok(vec![])
+}
+
+/// `e.setTraitCharacter(configID)`: the recorded character (named by its
+/// class config's ID) whose trait data is the player's.
+pub fn control_set_trait_character(vm: &mut Vm, c: NativeCall) -> Ret {
+    let config = vm.check_number(&c, 1)? as i64;
+    let suffix = format!("-{config}");
+    let Some(key) = data()
+        .keys()
+        .map(|(k, _)| *k)
+        .find(|k| k.ends_with(&suffix))
+    else {
+        return Err(vm.error(&format!(
+            "setTraitCharacter: no character recorded with config {config}"
+        )));
+    };
+    traits_mut(vm).character = Some(key.to_string());
     Ok(vec![])
 }
 
@@ -1115,6 +1396,85 @@ mod tests {
             }
         }
         out.join("; ")
+    }
+
+    /// A fixture's entries (`["call"] = "answer",`, Lua's escapes).
+    fn fixture(text: &str) -> Vec<(String, String)> {
+        fn lua(s: &str) -> String {
+            let mut out = Vec::new();
+            let b = s.as_bytes();
+            let mut i = 0;
+            while i < b.len() {
+                if b[i] == b'\\' && i + 1 < b.len() {
+                    i += 1;
+                    match b[i] {
+                        b'n' => out.push(b'\n'),
+                        b'r' => out.push(b'\r'),
+                        b'0'..=b'9' => {
+                            let end = (i + 3).min(b.len());
+                            let digits: String = s[i..end]
+                                .chars()
+                                .take_while(|c| c.is_ascii_digit())
+                                .collect();
+                            out.push(digits.parse::<u8>().unwrap_or(b'?'));
+                            i += digits.len() - 1;
+                        }
+                        c => out.push(c),
+                    }
+                } else {
+                    out.push(b[i]);
+                }
+                i += 1;
+            }
+            String::from_utf8_lossy(&out).into_owned()
+        }
+        text.lines()
+            .filter_map(|l| {
+                let l = l.trim().strip_prefix("[\"")?.strip_suffix("\",")?;
+                let (k, v) = l.split_once("\"] = \"")?;
+                Some((lua(k), lua(v)))
+            })
+            .collect()
+    }
+
+    /// Another class's node asked through the class config answers as with
+    /// nothing of its tree bought, never to buy: the druid's recording of
+    /// every other class's tree, worked out from their owners'.
+    #[test]
+    fn another_class_s_nodes_follow_from_their_owners() {
+        let state = Traits::default();
+        let m = Model::new("DRUID-2839888", &state);
+        let recorded = fixture(include_str!(
+            "../tests/client/forever-camelot-traits-druid-2839888.lua"
+        ));
+        let mut checked = 0;
+        let mut wrong = Vec::new();
+        for (call, answer) in &recorded {
+            let Some(inner) = call
+                .strip_prefix("C_Traits.GetNodeInfo(")
+                .and_then(|r| r.strip_suffix(')'))
+            else {
+                continue;
+            };
+            let args: Vec<i64> = inner.split(", ").filter_map(|a| a.parse().ok()).collect();
+            // Only nodes of trees the druid's configs do not hold.
+            if m.recorded_node(args[0], args[1]).is_some() {
+                continue;
+            }
+            let ours = m.node(args[0], args[1]);
+            let theirs = Rv::answer(answer).into_iter().next();
+            if ours != theirs {
+                wrong.push(format!("{call}: {}", differences(&ours, &theirs)));
+            }
+            checked += 1;
+        }
+        assert!(checked > 100, "{checked}");
+        assert!(
+            wrong.is_empty(),
+            "{} of {checked}:\n{}",
+            wrong.len(),
+            wrong.join("\n")
+        );
     }
 
     /// The recorded configs' answers again from the ranks: every node,

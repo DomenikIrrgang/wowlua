@@ -1,0 +1,231 @@
+--- `/stdtest engine methodprobe [stop | status | reset]`: every widget method
+--- of the client called with many arguments (the plan, methodprobeplan.lua,
+--- from `cargo xtask methodprobe-plan`), each on a fresh widget of its kind,
+--- a setter's value read back with its getter; each answer into
+--- StdTestState.engineMethodProbe[call]. The full probe's runner drives it
+--- (fullprobe.wowlua: a few calls a frame, out of combat, a reload after
+--- each segment, a crash's stretch run again at the end in smaller steps),
+--- with its own run (StdTestState.methodProbe).
+---
+--- Nothing shows and nothing of Blizzard's is touched: every widget is made
+--- under a hidden frame (`P`, a fresh one for each call, under a hidden
+--- root without a parent); the arguments name only widgets made there too
+--- (`F()`, `T()`, a font object Blizzard's code made is only read). After a
+--- call the widget gives up the keyboard's focus and its events, an
+--- animation stops, and a frame left without a parent goes back under the
+--- root, hidden.
+---
+--- A call's key: `Kind:Method(arguments)`, and ` -> Getter(…)` for the
+--- read-back (`#1` the call's first argument). Its answer: the call's (the
+--- answers battery's form, widgets as `widget self`, `widget parent`,
+--- `widget F1`, or their type), and ` || Getter(…): ` the read-back's.
+import call, describe, pack, resolve, register, command, setWidgetNames from "/fullprobe"
+import type Entry, Probe from "/fullprobe"
+import * as defaultPlan from "/methodprobeplan"
+
+const G = _G :: any
+
+--- The plan: the tests' (`StdTestMethodProbePlan`) or the generated one.
+local function plan(): any
+    return G.StdTestMethodProbePlan ?? defaultPlan
+end
+
+--- The Lua making each kind of widget.
+local function makers(): { [string]: string }
+    const out: { [string]: string } = {}
+    for _, k in ipairs((plan().kinds or {}) :: string[][]) do
+        out[k[1]] = k[2]
+    end
+    return out
+end
+
+--- The plan's calls in order, filled in with the character's values.
+local function entries(values: { [string]: string }): Entry[]
+    const p = plan()
+    const out: Entry[] = {}
+    local function add(list: any[])
+        for _, c in ipairs(list) do
+            const kind = c[1] :: string
+            const method = c[2] :: string
+            local i = 3
+            while c[i] ~= nil do
+                local args, missing = resolve(c[i] :: string, values)
+                const back = c[i + 1] :: string?
+                local text = `{kind}:{method}({args})`
+                if back ~= nil and back ~= "" then
+                    text = `{text} -> {back}`
+                end
+                out[#out + 1] = { text = text, fn = `{kind}:{method}`, setter = false, missing = missing }
+                i = i + 2
+            end
+        end
+    end
+    add((p.calls or {}) :: any[])
+    add((p.risky or {}) :: any[])
+    return out
+end
+
+--- A key's parts: the kind, the method, the arguments, the read-back.
+local function parse(key: string): (string?, string?, string?, string?)
+    local head, back = key:match("^(.-) %-> ([%w_]+%([#%d, ]*%))$")
+    const whole = head ?? key
+    local kind, method, args = whole:match("^([%w_]+):([%w_]+)%((.*)%)$")
+    return kind, method, args, back
+end
+
+--- The hidden frame every widget is made under (one a session).
+local root: any = nil
+
+local function hiddenRoot(): any
+    if root == nil then
+        root = CreateFrame("Frame")
+        root:Hide()
+    end
+    return root
+end
+
+--- After a call: the widget lets go of the keyboard and its events, stops
+--- animating, and is back under the hidden root if it lost its parent.
+local function cleanup(w: any)
+    pcall(function()
+        if type(w) ~= "table" then
+            return
+        end
+        if w.ClearFocus ~= nil then
+            w:ClearFocus()
+        end
+        if w.UnregisterAllEvents ~= nil then
+            w:UnregisterAllEvents()
+        end
+        if w.Stop ~= nil and w.IsPlaying ~= nil then
+            w:Stop()
+        end
+        if w.IsObjectType ~= nil and w:IsObjectType("Frame") and w:GetParent() == nil then
+            w:Hide()
+            w:SetParent(hiddenRoot())
+        end
+    end)
+end
+
+--- A recorded key's answer: a fresh widget of its kind, the call, the
+--- read-back; a key of another form (the player's name, for ingest) is
+--- called as it is.
+local function answer(key: string): (string, boolean)
+    local kind, method, args, back = parse(key)
+    if kind == nil or method == nil or args == nil then
+        return call(key), true
+    end
+    const make = makers()[kind]
+    if make == nil then
+        return `no kind {kind}`, true
+    end
+    const makeChunk = loadstring("local P, F, T, S, M, L, A = ... " .. make)
+    const argsChunk = loadstring("local W, P, F, T, S, M, L, A, pack = ... return pack(" .. args .. ")")
+    const callChunk = loadstring("local W, a = ... return W:" .. method .. "(unpack(a, 1, a.n))")
+    local backChunk: any = nil
+    if back ~= nil then
+        const source = (back:gsub("#(%d+)", "a[%1]"))
+        backChunk = loadstring("local W, a = ... return W:" .. source)
+        if backChunk == nil then
+            return "syntax", true
+        end
+    end
+    if makeChunk == nil or argsChunk == nil or callChunk == nil then
+        return "syntax", true
+    end
+    const R = hiddenRoot()
+    local okParent, P = pcall(CreateFrame, "Frame", nil, R)
+    if not okParent then
+        return `parent error: {tostring(P)}`, true
+    end
+    const names: { [any]: string } = {}
+    const counts: { [string]: number } = {}
+    local function maker(letter: string, f: () -> any): () -> any
+        return function(): any
+            const o = f()
+            counts[letter] = (counts[letter] or 0) + 1
+            names[o] = `{letter}{counts[letter]}`
+            return o
+        end
+    end
+    const F = maker("F", function(): any return CreateFrame("Frame", nil, P) end)
+    const T = maker("T", function(): any return P:CreateTexture() end)
+    const S = maker("S", function(): any return P:CreateFontString() end)
+    const M = maker("M", function(): any return P:CreateMaskTexture() end)
+    const L = maker("L", function(): any return P:CreateLine() end)
+    const A = maker("A", function(): any return P:CreateAnimationGroup() end)
+    local okWidget, W = pcall(makeChunk :: any, P, F, T, S, M, L, A)
+    if not okWidget then
+        return `make error: {tostring(W)}`, true
+    end
+    names[R] = "root"
+    names[P] = "parent"
+    if W ~= nil then
+        names[W] = "self"
+    end
+    setWidgetNames(names)
+    local text: string
+    local okArgs, a = pcall(argsChunk :: any, W, P, F, T, S, M, L, A, pack)
+    if not okArgs then
+        text = `arguments error: {tostring(a)}`
+    else
+        local ok, packed = pcall(function(): any return pack((callChunk :: any)(W, a)) end)
+        text = describe(ok, packed)
+        if backChunk ~= nil then
+            local okBack, backPacked = pcall(function(): any return pack(backChunk(W, a)) end)
+            text = `{text} || {back}: {describe(okBack, backPacked)}`
+        end
+    end
+    setWidgetNames(nil)
+    cleanup(W)
+    return text, true
+end
+
+const probe: Probe = {
+    name = "methodprobe",
+    stateKey = "methodProbe",
+    resultsKey = "engineMethodProbe",
+    plan = plan,
+    entries = entries,
+    answer = answer,
+    -- The player's own names, as the full probe asks them: ingest scrubs
+    -- them (and the realm's and guild's) from the answers.
+    begin = function(out: { [string]: string })
+        for _, c in ipairs({
+            "UnitName(\"player\")",
+            "UnitGUID(\"player\")",
+            "GetRealmName()",
+            "GetNormalizedRealmName()",
+            "GetGuildInfo(\"player\")",
+        }) do
+            out[c] = call(c)
+        end
+    end,
+}
+register(probe)
+
+--- `/stdtest engine methodprobe [stop | status | reset]`.
+export function methodProbe(arg: string?)
+    command(probe, arg)
+end
+
+--- The answers to recorded keys, for the engine's tests: what the client's
+--- run would have written.
+export function replay(keys: string[]): { [string]: string }
+    const out: { [string]: string } = {}
+    for _, key in ipairs(keys) do
+        out[key] = (answer(key))
+    end
+    return out
+end
+
+--- The plan's calls without a placeholder (the same in every world).
+export function literalCalls(): string[]
+    const out: string[] = {}
+    for _, e in ipairs(entries({})) do
+        if e.missing == nil then
+            out[#out + 1] = e.text
+        end
+    end
+    return out
+end

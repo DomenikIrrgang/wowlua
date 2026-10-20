@@ -138,7 +138,15 @@ fn securecallmethod(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// Calls `f(key, value, ...)` for each entry; errors are dropped, and the
-/// taint is restored after each call (`luaL_secureforeach`).
+/// taint is restored after each call (`luaL_secureforeach`). Recorded
+/// (Forever 1.60.1, `forever-camelot.lua`): a callback's error reaches no
+/// error handler (`secureexecuterange({ 1 }, function() error('in range')
+/// end)` showed no handler call, where `securecall`'s did) and the next
+/// entries still run (`n` counted 2 of 2 failing calls); warcraft.wiki.gg's
+/// API_secureexecuterange says so too ("errors ... are discarded"), and
+/// Blizzard's CallbackRegistry wraps each callback in `securecallfunction`
+/// for its errors to be reported. The host still hears of each one
+/// (`Vm::on_dropped_error`).
 fn secureexecuterange(vm: &mut Vm, c: NativeCall) -> Ret {
     let t = vm.check_table(&c, 1)?;
     if !matches!(c.arg(2), Value::Func(_)) {
@@ -147,6 +155,9 @@ fn secureexecuterange(vm: &mut Vm, c: NativeCall) -> Ret {
     let saved = vm.taint().saved();
     let f = c.slot(2);
     let extra = c.slots(3);
+    let dropped = vm
+        .on_dropped_error
+        .map(|_| vm.native("dropped", dropped_error));
     let mut key = Value::Nil;
     loop {
         let next = match vm.heap.table(t).next_slot(key) {
@@ -158,13 +169,32 @@ fn secureexecuterange(vm: &mut Vm, c: NativeCall) -> Ret {
         let mut args = vec![vm.taint_mut().copy(fk), vm.taint_mut().copy(v)];
         args.extend(extra.iter().copied());
         let f = vm.taint_mut().copy(f);
-        let outer = vm.errfunc.take();
+        let outer = std::mem::replace(&mut vm.errfunc, dropped);
         let _ = vm.call_slots(f, &args);
         vm.errfunc = outer;
         vm.taint_mut().restore(saved);
         key = k;
     }
     Ok(vec![])
+}
+
+/// The handler of a call whose error the client drops: tells the host
+/// (`Vm::on_dropped_error`) the error and where it was raised, while the
+/// stack still shows it.
+fn dropped_error(vm: &mut Vm, c: NativeCall) -> Ret {
+    let message = match c.arg(1) {
+        v @ (Value::Str(_) | Value::Num(_)) => {
+            let mut b = Vec::new();
+            vm.append_strlike(&mut b, v);
+            String::from_utf8_lossy(&b).into_owned()
+        }
+        _ => "UNKNOWN ERROR".to_string(),
+    };
+    let stack = vm.traceback(1);
+    if let Some(hook) = vm.on_dropped_error {
+        hook(vm, message, stack);
+    }
+    Ok(vec![c.arg(1)])
 }
 
 /// `hooksecurefunc([t,] name, hook)`: replaces `t[name]` with a secure
@@ -218,6 +248,21 @@ fn securehook(vm: &mut Vm, c: NativeCall) -> Ret {
     let args: Vec<Slot> = c.slots(1).iter().map(|&a| vm.taint_mut().copy(a)).collect();
     let original = vm.taint_mut().copy(original);
     let results = vm.call_slots(original, &args)?;
+    // An untrusted hook does not see the secrets passed to an object whose
+    // untrusted layout scripts are forbidden: the user's client (build
+    // 70450) shows no error from ElvUI's `SetSize` hook on its aura
+    // containers (`DisableUntrustedLayoutScriptsTemplate`) when Blizzard's
+    // flow layout sizes them with `secretwrap`ped values, where the hook's
+    // `mover:SetSize(width, height)` would refuse them. Unverified (one
+    // sample, inferred from the aspect's documentation, "Restricts
+    // execution of layout scripts"): the hook is not called at all.
+    if let Some(forbidden) = vm.untrusted_layout_forbidden
+        && !(hook.t.is_secure() && function_taint(vm, hook.v).is_secure())
+        && c.args.iter().any(|a| matches!(a, Value::Secret(_)))
+        && forbidden(vm, c.arg(1))
+    {
+        return Ok(vm.return_slots(results));
+    }
     // The hook: protected, through the error handler, its taint undone.
     let saved = vm.taint().saved();
     let args: Vec<Slot> = c.slots(1).iter().map(|&a| vm.taint_mut().copy(a)).collect();
@@ -228,6 +273,14 @@ fn securehook(vm: &mut Vm, c: NativeCall) -> Ret {
     vm.errfunc = outer;
     vm.taint_mut().restore(saved);
     Ok(vm.return_slots(results))
+}
+
+/// A function's own taint (secure for anything else).
+fn function_taint(vm: &Vm, v: Value) -> Taint {
+    match v {
+        Value::Func(f) => vm.heap.func(f).taint(),
+        _ => Taint::SECURE,
+    }
 }
 
 /// Keeps numbers, strings and booleans; anything else becomes nil.
@@ -281,7 +334,12 @@ impl Vm {
     /// `f_errorhandler`): non-string errors become "UNKNOWN ERROR", and a
     /// `*:` source names the frame of the function that failed.
     pub fn error_handler_proxy(&mut self) -> Value {
-        self.native("errorhandler", error_handler_proxy)
+        if let Some(f) = self.errfunc_proxy {
+            return f;
+        }
+        let f = self.native("errorhandler", error_handler_proxy);
+        self.errfunc_proxy = Some(f);
+        f
     }
 }
 

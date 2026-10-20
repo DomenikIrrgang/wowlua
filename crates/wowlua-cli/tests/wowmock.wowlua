@@ -48,9 +48,6 @@ function securecallfunction(fn: Handler, ...: any): ...any
     end
 end
 
-function debugstack(): string
-    return ""
-end
 -- The client has `date`, `time` and `difftime`, and no `os` table (as on
 -- WoW: Forever); wowlua's VM has them already.
 -- The client's language (`Mock.locale`).
@@ -939,6 +936,18 @@ const AURA_CONTAINER: { [string]: any } = {
     SetAuraGroupCandidateFilters = function(self: any, key: string, filters: table)
         auraGroup(self, key).options.candidateFilters = filters
     end,
+    SetAuraGroupFilterString = function(self: any, key: string, filter: string)
+        auraGroup(self, key).filter = filter
+    end,
+    SetAuraGroupLayout = function(self: any, key: string, layout: table)
+        auraGroup(self, key).options.layout = layout
+    end,
+    GetAuraGroupFrameCount = function(self: any, key: string): number
+        return #auraGroup(self, key).buttons
+    end,
+    GetAuraGroupFrame = function(self: any, key: string, index: number): any
+        return auraGroup(self, key).buttons[index]
+    end,
     -- The engine reads auras itself: restricted reads do not stop it. (The
     -- mock's secret spell IDs hide no number, so they match no spell list;
     -- and the mock runs with the addon's taint, so it must not read them.)
@@ -948,9 +957,11 @@ const AURA_CONTAINER: { [string]: any } = {
             const filters = g.options.candidateFilters ?? {}
             for _, a in ipairs(Mock.auras[self.unit ?? ""] ?? {}) do
                 const spells = filters.includeSpellIDs
+                const excluded = filters.excludeSpellIDs
                 const types = filters.includeDispelTypes
                 if auraMatches(a, g.filter) and #ids < (g.options.maxFrameCount ?? 16)
                     and (not spells or (not issecretvalue(a.spellId) and spells[a.spellId]))
+                    and not (excluded and not issecretvalue(a.spellId) and excluded[a.spellId])
                     and (not types or types[a.dispelName ?? ""]) then
                     ids[#ids + 1] = a.spellId
                     if not g.buttons[#ids] then
@@ -967,6 +978,16 @@ const AURA_CONTAINER: { [string]: any } = {
 }
 
 Mock.auraContainers = {}
+-- The engine's container template (Blizzard_AuraContainer's), which this
+-- client has no UI code for.
+Mock.noAuraContainers = false
+const templateInfo = C_XMLUtil.GetTemplateInfo
+C_XMLUtil.GetTemplateInfo = function(name: string): any
+    if name == "CustomAuraContainerTemplate" and not Mock.noAuraContainers then
+        return { type = "AuraContainer", width = 0, height = 0 }
+    end
+    return templateInfo(name)
+end
 __engine.defineFrameType("AuraContainer", "Frame", function(frame: any)
     mixin(frame, AURA_CONTAINER)
     frame.groups = {}

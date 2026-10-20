@@ -194,10 +194,22 @@ impl Formatter<'_> {
                     p.push(self.ty(ty));
                     Doc::concat(p)
                 }
-                TableTypeField::NamedString { key, ty, span } => {
-                    let open_b = self.tok("[", span.start);
+                TableTypeField::NamedString {
+                    key,
+                    optional,
+                    readonly,
+                    ty,
+                    span,
+                } => {
+                    let open_b = if readonly {
+                        let word = self.tok("readonly", span.start);
+                        Doc::concat(vec![word, txt(" [")])
+                    } else {
+                        self.tok("[", span.start)
+                    };
                     let k = self.string(key);
-                    Doc::concat(vec![open_b, Doc::text(k), txt("]: "), self.ty(ty)])
+                    let colon = if optional { "]?: " } else { "]: " };
+                    Doc::concat(vec![open_b, Doc::text(k), txt(colon), self.ty(ty)])
                 }
                 TableTypeField::Indexer { key, value } => {
                     let open_b = self.tok("[", self.prev_token(key.span().start));

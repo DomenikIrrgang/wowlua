@@ -12,15 +12,57 @@ use wowlua_vm::{NativeCall, Value, Vm};
 
 use crate::engine;
 
-fn answers() -> &'static HashMap<&'static str, &'static str> {
+pub(crate) fn answers() -> &'static HashMap<&'static str, &'static str> {
     static ANSWERS: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
     ANSWERS.get_or_init(|| {
         include_str!("../data/camelot-answers.txt")
             .lines()
             .filter(|l| !l.starts_with('#'))
             .filter_map(|l| l.split_once('\t'))
+            .map(|(c, a)| (unescape(c), unescape(a)))
             .collect()
     })
+}
+
+/// The trainers' recorded answers (`/stdtest engine trainer`,
+/// `data/camelot-trainers.txt`): by call, any trainer's.
+fn trainer_answer(call: &str) -> Option<&'static str> {
+    static BY_CALL: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
+    BY_CALL
+        .get_or_init(|| {
+            include_str!("../data/camelot-trainers.txt")
+                .lines()
+                .filter(|l| !l.starts_with('#'))
+                .filter_map(|l| {
+                    let (_, rest) = l.split_once('\t')?;
+                    let (call, answer) = rest.split_once('\t')?;
+                    Some((unescape(call), unescape(answer)))
+                })
+                .collect()
+        })
+        .get(call)
+        .copied()
+}
+
+/// A call the probes of game data recorded (a profession window's, a
+/// class's trees', a trainer's): its answer, any character's.
+pub fn probed(call: &str) -> Option<&'static str> {
+    crate::tradeskill::any_answer(call)
+        .or_else(|| crate::traits::owner_answer(call).copied())
+        .or_else(|| trainer_answer(call))
+}
+
+/// A data file's field as written (`cargo xtask ingest`): its line breaks,
+/// tabs and carriage returns kept as their symbols (␤ ␉ ␍) back.
+pub fn unescape(field: &'static str) -> &'static str {
+    if !field.contains(['\u{2424}', '\u{2409}', '\u{240D}']) {
+        return field;
+    }
+    let text = field
+        .replace('\u{2424}', "\n")
+        .replace('\u{2409}', "\t")
+        .replace('\u{240D}', "\r");
+    Box::leak(text.into_boxed_str())
 }
 
 /// The functions with recorded answers.
@@ -110,7 +152,9 @@ fn parse_value(vm: &mut Vm, text: &str) -> Value {
     }
 }
 
-/// `text` split at `sep` outside braces.
+/// `text` (a table's entries, `key=value`) split at `sep` outside braces
+/// where the next entry's key follows: a string value may hold the
+/// separator ("Sentinel Hill, Westfall", a flight point's name).
 pub(crate) fn split_top(text: &str, sep: char) -> Vec<&str> {
     let mut out = Vec::new();
     let (mut depth, mut start) = (0i32, 0);
@@ -118,7 +162,7 @@ pub(crate) fn split_top(text: &str, sep: char) -> Vec<&str> {
         match ch {
             '{' => depth += 1,
             '}' => depth -= 1,
-            c if c == sep && depth == 0 => {
+            c if c == sep && depth == 0 && key_follows(&text[i + c.len_utf8()..]) => {
                 out.push(&text[start..i]);
                 start = i + 1;
             }
@@ -131,9 +175,17 @@ pub(crate) fn split_top(text: &str, sep: char) -> Vec<&str> {
     out
 }
 
+/// Whether `text` starts with a table key and its `=` (a name or a number).
+fn key_follows(text: &str) -> bool {
+    let key = text
+        .find(|c: char| !(c.is_ascii_alphanumeric() || c == '_' || c == '.' || c == '-'))
+        .unwrap_or(text.len());
+    key > 0 && text[key..].starts_with('=')
+}
+
 /// An answer's values: `n: v1, v2, …` (a string may hold ", ": values
 /// start with their type).
-fn parse_answer(vm: &mut Vm, answer: &str) -> Vec<Value> {
+pub(crate) fn parse_answer(vm: &mut Vm, answer: &str) -> Vec<Value> {
     let Some((count, rest)) = answer.split_once(": ") else {
         return Vec::new();
     };
@@ -201,6 +253,11 @@ pub fn recorded(vm: &mut Vm, c: NativeCall) -> Ret {
     if let Some(values) = lookup(vm, &name, &c) {
         return Ok(values);
     }
+    // A call the recording lacks: the client's answer with nothing there
+    // (an unknown chat type's index 0, the full probe).
+    if let Some(answer) = crate::blanks::answer(&name) {
+        return Ok(parse_answer(vm, answer));
+    }
     crate::note_default(vm, &name, &c, 1);
     Ok(match documented {
         Some(doc) => {
@@ -254,23 +311,189 @@ pub fn lookup_text(vm: &mut Vm, call: &str) -> Option<Vec<Value>> {
 /// and nils (Blizzard's code passes a transmog location or a nil
 /// variation that the probes leave out).
 pub fn lookup(vm: &mut Vm, name: &str, c: &NativeCall) -> Option<Vec<Value>> {
+    let answer = call_variants(vm, name, c)
+        .iter()
+        .find_map(|call| answers().get(call.as_str()))?;
+    Some(parse_answer(vm, answer))
+}
+
+/// A call as the engine writes it, then without its trailing tables and
+/// nils one by one: how a recording may hold it (Blizzard's code passes a
+/// transmog location, a nil recipe level, that the probes leave out).
+pub fn call_variants(vm: &Vm, name: &str, c: &NativeCall) -> Vec<String> {
     let call = crate::call_text(vm, name, c, 1);
-    if let Some(answer) = answers().get(call.as_str()) {
-        return Some(parse_answer(vm, answer));
-    }
-    let mut args: Vec<&str> = call
-        .strip_prefix(name)?
-        .strip_prefix('(')?
-        .strip_suffix(')')?
-        .split(", ")
-        .filter(|a| !a.is_empty())
-        .collect();
+    let mut out = vec![call.clone()];
+    let Some(inner) = call
+        .strip_prefix(name)
+        .and_then(|r| r.strip_prefix('('))
+        .and_then(|r| r.strip_suffix(')'))
+    else {
+        return out;
+    };
+    let mut args: Vec<&str> = inner.split(", ").filter(|a| !a.is_empty()).collect();
     while matches!(args.last(), Some(&"nil" | &"{}")) {
         args.pop();
-        let shorter = format!("{name}({})", args.join(", "));
-        if let Some(answer) = answers().get(shorter.as_str()) {
-            return Some(parse_answer(vm, answer));
+        out.push(format!("{name}({})", args.join(", ")));
+    }
+    // Arguments past those the function takes: the client ignores them
+    // (the full probe: `IsPartyLFG("player")`, `AntiAliasingSupported(1,
+    // 1)` answered as without them, every function taking none).
+    if let Some(n) = arity(vm, name)
+        && args.len() > n
+    {
+        args.truncate(n);
+        out.push(format!("{name}({})", args.join(", ")));
+    }
+    // A number with a fraction as its whole part, as the client takes an
+    // integer (the full probe: `GetCombatRating(1.5)`,
+    // `C_SpellBook.GetSpellBookItemInfo(1.5, 0)` answered as with 1).
+    let whole: Vec<String> = args
+        .iter()
+        .map(|a| match a.parse::<f64>() {
+            Ok(n) if n.fract() != 0.0 && n.is_finite() => format!("{}", n.trunc() as i64),
+            _ => (*a).to_string(),
+        })
+        .collect();
+    if whole.iter().zip(&args).any(|(w, a)| w != a) {
+        out.push(format!("{name}({})", whole.join(", ")));
+    }
+    // An enumeration's value that is no number read as 0, as the client's
+    // bindings take it (the full probe: `C_CombatAudioAlert.
+    // GetCategoryVolume("x")`, `C_TradeSkillUI.GetProfessionSkillLineID("x")`,
+    // `C_Item.GetWeaponEnchantInfo("x")` answered as with 0).
+    if let Some(kinds) = enum_arguments(vm, name) {
+        let read: Vec<String> = whole
+            .iter()
+            .enumerate()
+            .map(|(i, a)| {
+                if !kinds.get(i).copied().unwrap_or(false) || a == "nil" || a.parse::<f64>().is_ok()
+                {
+                    return a.clone();
+                }
+                let quoted = a.strip_prefix('"').and_then(|s| s.strip_suffix('"'));
+                match quoted.and_then(|s| s.trim().parse::<f64>().ok()) {
+                    Some(n) => format!("{}", n.trunc() as i64),
+                    None => "0".to_string(),
+                }
+            })
+            .collect();
+        if read != whole {
+            out.push(format!("{name}({})", read.join(", ")));
         }
     }
-    None
+    out
+}
+
+/// Which of a documented function's arguments are enumerations' values.
+fn enum_arguments(vm: &Vm, name: &str) -> Option<&'static [bool]> {
+    static ENUMS: OnceLock<HashMap<&'static str, Vec<bool>>> = OnceLock::new();
+    let engine = crate::Engine::of(vm)?;
+    // The recorded answers are camelot's: its documentation's.
+    if engine.flavor != "camelot" {
+        return None;
+    }
+    let api = engine.api;
+    let all = ENUMS.get_or_init(|| {
+        api.functions
+            .iter()
+            .filter_map(|f| {
+                let kinds: Vec<bool> = f
+                    .doc
+                    .get("Arguments")
+                    .and_then(serde_json::Value::as_array)?
+                    .iter()
+                    .map(|a| {
+                        a.get("Type")
+                            .and_then(serde_json::Value::as_str)
+                            .is_some_and(|t| api.enum_names.contains(t))
+                    })
+                    .collect();
+                kinds.contains(&true).then_some((f.name, kinds))
+            })
+            .collect()
+    });
+    all.get(name).map(Vec::as_slice)
+}
+
+/// How many arguments a function with recorded answers takes: its
+/// documentation's, else none when every recorded call of it has none
+/// (the answers battery asks a function with arguments with them) or
+/// every one, without and with arguments, got the same answer
+/// (`GetCategoryList()` and `GetCategoryList(true)`: the full probe's
+/// `GetCategoryList(1)` answered as they).
+fn arity(vm: &Vm, name: &str) -> Option<usize> {
+    static ARGLESS: OnceLock<std::collections::HashSet<&'static str>> = OnceLock::new();
+    let argless = ARGLESS.get_or_init(|| {
+        // Each function's argless call, and whether its calls with
+        // arguments all answered as it.
+        let mut answer: HashMap<&str, &str> = HashMap::new();
+        for (call, a) in answers() {
+            if let Some(f) = call.strip_suffix("()") {
+                answer.insert(f, a);
+            }
+        }
+        let mut with_args = std::collections::HashSet::new();
+        for (call, a) in answers() {
+            if call.ends_with("()") {
+                continue;
+            }
+            if let Some((f, _)) = call.split_once('(')
+                && answer.get(f) != Some(a)
+            {
+                with_args.insert(f);
+            }
+        }
+        answer
+            .into_keys()
+            .filter(|f| !with_args.contains(f))
+            .collect()
+    });
+    // The recorded answers are camelot's: its documentation's arities.
+    static DOCUMENTED: OnceLock<HashMap<&'static str, usize>> = OnceLock::new();
+    let engine = crate::Engine::of(vm)?;
+    if engine.flavor != "camelot" {
+        return None;
+    }
+    let api = engine.api;
+    let documented = DOCUMENTED.get_or_init(|| {
+        api.functions
+            .iter()
+            .map(|f| {
+                let n = f
+                    .doc
+                    .get("Arguments")
+                    .and_then(serde_json::Value::as_array)
+                    .map_or(0, Vec::len);
+                (f.name, n)
+            })
+            .collect()
+    });
+    if let Some(&n) = documented.get(name) {
+        return Some(n);
+    }
+    if argless.contains(name) {
+        return Some(0);
+    }
+    // Else as many as the most any recorded call passed (the full probe:
+    // `GetChatWindowInfo(1, 1)` answered as the recorded `(1)`).
+    static MOST: OnceLock<HashMap<&'static str, usize>> = OnceLock::new();
+    MOST.get_or_init(|| {
+        let mut most: HashMap<&'static str, usize> = HashMap::new();
+        for call in answers().keys() {
+            let Some((f, rest)) = call.split_once('(') else {
+                continue;
+            };
+            let inner = rest.strip_suffix(')').unwrap_or(rest);
+            let n = if inner.is_empty() {
+                0
+            } else {
+                inner.split(", ").count()
+            };
+            let m = most.entry(f).or_insert(0);
+            *m = (*m).max(n);
+        }
+        most
+    })
+    .get(name)
+    .copied()
 }

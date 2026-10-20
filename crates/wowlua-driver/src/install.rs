@@ -51,7 +51,17 @@ fn default_install_paths() -> Vec<PathBuf> {
             PathBuf::from(r"C:\Program Files\World of Warcraft"),
         ]
     } else {
-        Vec::new()
+        // Battle.net under Wine: Lutris's prefix, then the default one.
+        let Some(home) = dirs::home_dir() else {
+            return Vec::new();
+        };
+        ["Games/battlenet", "Games/battle-net", ".wine"]
+            .iter()
+            .map(|prefix| {
+                home.join(prefix)
+                    .join("drive_c/Program Files (x86)/World of Warcraft")
+            })
+            .collect()
     }
 }
 

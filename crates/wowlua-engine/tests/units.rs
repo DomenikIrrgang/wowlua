@@ -105,10 +105,12 @@ mock.enterInstance()
 return issecretvalue(UnitName('target')), issecretvalue(UnitName('party1')), UnitName('party1'), issecretvalue(UnitGUID('player')),
     issecretvalue(UnitHealthMax('party1')), issecretvalue(UnitHealthMax('target')), GetNumGroupMembers(), IsInGroup()",
     );
+    // A party member's maximum health is secret too (recorded through
+    // `target`, scenario group).
     assert_eq!(
         r,
         [
-            "true", "false", "Friend", "false", "false", "true", "2", "true"
+            "true", "false", "Friend", "false", "true", "true", "2", "true"
         ]
     );
 }
@@ -286,25 +288,30 @@ return table.concat(seen, ' | ')",
     );
 }
 
-/// A secure CVar is refused to addons (`ADDON_ACTION_FORBIDDEN`, recorded
-/// for `SoftTargetEnemy`); others change, and `GetCVarInfo` gives the flags.
+/// A secure CVar is refused to addons in combat (`ADDON_ACTION_FORBIDDEN`,
+/// recorded for `SoftTargetEnemy`), changed out of combat (the user's
+/// word); others change, and `GetCVarInfo` gives the flags.
 #[test]
 fn secure_cvars_refuse_addons() {
     let mut vm = vm();
     let r = run(
         &mut vm,
-        "local refused = C_CVar.SetCVar('SoftTargetEnemy', 3)
+        "C_CVar.SetCVar('SoftTargetEnemy', 3)
+local outside = C_CVar.GetCVar('SoftTargetEnemy')
+mock.player:enterCombat()
+local refused = C_CVar.SetCVar('SoftTargetEnemy', 1)
 local soft = C_CVar.GetCVar('SoftTargetEnemy')
 C_CVar.SetCVar('autoLootDefault', 1)
 local r = mock.refusals()
 local _, default, _, _, _, secure, readOnly = C_CVar.GetCVarInfo('SoftTargetEnemy')
-return tostring(refused), soft, C_CVar.GetCVar('autoLootDefault'), #r, r[1].event, r[1].addon, default, tostring(secure), tostring(readOnly)",
+return outside, tostring(refused), soft, C_CVar.GetCVar('autoLootDefault'), #r, r[1].event, r[1].addon, default, tostring(secure), tostring(readOnly)",
     );
     assert_eq!(
         r,
         [
+            "3",
             "nil",
-            "1",
+            "3",
             "1",
             "1",
             "ADDON_ACTION_FORBIDDEN",
@@ -444,8 +451,7 @@ return unpack(out)",
     assert_eq!(
         r,
         [
-            "PLAYER_MONEY MERCHANT_SHOW PLAYER_INTERACTION_MANAGER_FRAME_SHOW(5) MERCHANT_FILTER_ITEM_UPDATE(6256) \
-             MERCHANT_FILTER_ITEM_UPDATE(6529) MERCHANT_UPDATE",
+            "PLAYER_MONEY MERCHANT_SHOW PLAYER_INTERACTION_MANAGER_FRAME_SHOW(5)",
             "2",
             "Fishing Pole",
             "23",
@@ -561,13 +567,19 @@ return bought",
         ]
     );
     wowlua_engine::clock::advance(&mut vm, 0.5);
+    run(
+        &mut vm,
+        "Full = table.concat(Seen, ' ')
+Cost, Needed = GetRepairAllCost()
+Seen = {}
+RepairAllItems()",
+    );
+    // The repair's answer a round trip later (recorded: `/stdtest engine
+    // scenario vendor`).
+    wowlua_engine::clock::advance(&mut vm, 0.5);
     let r = run(
         &mut vm,
-        "local full = table.concat(Seen, ' ')
-local cost, needed = GetRepairAllCost()
-Seen = {}
-RepairAllItems()
-return full, cost, tostring(needed), table.concat(Seen, ' '), GetMoney(), select('#', GetRepairAllCost())",
+        "return Full, Cost, tostring(Needed), table.concat(Seen, ' '), GetMoney(), select('#', GetRepairAllCost())",
     );
     assert_eq!(
         r,
@@ -580,5 +592,30 @@ return full, cost, tostring(needed), table.concat(Seen, ' '), GetMoney(), select
             "890",
             "2"
         ]
+    );
+}
+
+#[test]
+fn item_cooldowns_run_out() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "mock.setBag(0, { slots = 3, items = { [1] = { id = 6948, cooldown = { remaining = 600, duration = 3600 } }, [2] = 117 } })
+local now = GetTime()
+local s, d, e = C_Container.GetContainerItemCooldown(0, 1)
+local _, d2, e2 = C_Container.GetContainerItemCooldown(0, 2)
+local _, d3, e3 = C_Container.GetContainerItemCooldown(0, 3)
+local _, d4 = C_Container.GetItemCooldown(6948)
+mock.setItemCooldown(117, 10)
+local _, d5 = C_Container.GetContainerItemCooldown(0, 2)
+mock.advanceTime(11)
+local _, d6 = C_Container.GetContainerItemCooldown(0, 2)
+return now - s, d, e, d2, e2, d3, e3, d4, d5, d6",
+    );
+    // The Hearthstone an hour long, 600 s left: started 3000 s ago; an
+    // item without one enabled; an empty slot not (recorded).
+    assert_eq!(
+        r,
+        ["3000", "3600", "1", "0", "1", "0", "0", "3600", "10", "0"]
     );
 }

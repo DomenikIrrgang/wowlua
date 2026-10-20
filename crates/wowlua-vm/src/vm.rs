@@ -7,7 +7,7 @@ use std::rc::Rc;
 
 use crate::compiler;
 use crate::error::LuaError;
-use crate::function::{Function, LuaFunction, NativeCall, NativeFn, NativeFunction, Upval};
+use crate::function::{Args, Function, LuaFunction, NativeCall, NativeFn, NativeFunction, Upval};
 use crate::heap::{FuncRef, Heap, StrRef, TableRef, ThreadRef, UpvalRef};
 use crate::number::{fmt_num, str2num};
 use crate::proto::{ArithOp, Op, Proto, Rk};
@@ -175,6 +175,11 @@ pub struct Vm {
     pub clock: Clock,
     /// `geterrorhandler`/`seterrorhandler` and the print handler (WoW).
     pub error_handler: Value,
+    /// Told of each error a client function drops without a report (the
+    /// error and the stack where it was raised): `secureexecuterange`'s
+    /// callbacks fail without a trace in the client, but the host's tests
+    /// see them (code that fails is a failure even where nobody hears it).
+    pub on_dropped_error: Option<fn(&mut Vm, String, String)>,
     pub heap: Heap,
     pub(crate) cur: ThreadState,
     pub(crate) current: ThreadRef,
@@ -188,14 +193,27 @@ pub struct Vm {
     pub(crate) secret_used: bool,
     /// Where taint came from (`crate::origin`).
     pub(crate) origins: crate::origin::Origins,
+    /// `WOWLUA_TAINT_TRACE`: log where execution becomes tainted
+    /// (`crate::origin`); `1` or `all` for every site, else only sites
+    /// whose source contains the text.
+    pub taint_trace: Option<String>,
     /// The host's state (the engine's, spec emulator §17.6), for its
     /// natives.
     pub host: Option<Box<dyn std::any::Any>>,
+    /// The host's answer to whether an object keeps secrets its layout
+    /// passes from untrusted code (`hooksecurefunc`'s hooks on it: the
+    /// engine's `UntrustedLayoutScriptExecution`).
+    pub untrusted_layout_forbidden: Option<fn(&Vm, Value) -> bool>,
     /// The running native may take secrets' values even while tainted
     /// (`tostring`, `string.format`, `strjoin`: their results are secret).
     pub(crate) secret_reveal: bool,
     pub(crate) cstack: Vec<CEntry>,
     pub(crate) errfunc: Option<Value>,
+    /// The error handler proxy (`error_handler_proxy`), made once and kept
+    /// alive: a handler saved while a nested call from the engine or a
+    /// `pcall` runs is held only by Rust, and the collector freed a fresh
+    /// one under AtlasLoot's login (a stale handle when it was restored).
+    pub(crate) errfunc_proxy: Option<Value>,
     in_errfunc: bool,
     output: Output,
     /// Coverage counts, when on ([`Vm::enable_coverage`]).
@@ -240,6 +258,31 @@ impl Default for Vm {
     }
 }
 
+/// A native call's arguments, their taints and their origins, in order
+/// (up to [`Args`]' size in one pass over the slots, in place).
+fn split_slots(slots: &[Slot]) -> (Args<Value>, Args<Taint>, Args<Origin>) {
+    const N: usize = 6;
+    if slots.len() > N {
+        return (
+            slots.iter().map(|s| s.v).collect(),
+            slots.iter().map(|s| s.t).collect(),
+            slots.iter().map(|s| s.o).collect(),
+        );
+    }
+    let mut v = [Value::Nil; N];
+    let mut t = [Taint::SECURE; N];
+    let mut o = [Origin::NONE; N];
+    for (i, s) in slots.iter().enumerate() {
+        (v[i], t[i], o[i]) = (s.v, s.t, s.o);
+    }
+    let n = slots.len();
+    (
+        Args::from_buf_and_len(v, n),
+        Args::from_buf_and_len(t, n),
+        Args::from_buf_and_len(o, n),
+    )
+}
+
 impl Vm {
     /// A VM with Lua 5.1's base library and the standard libraries.
     pub fn new() -> Vm {
@@ -272,11 +315,17 @@ impl Vm {
             c_depth: 0,
             secret_used: false,
             origins: Default::default(),
+            taint_trace: std::env::var("WOWLUA_TAINT_TRACE")
+                .ok()
+                .filter(|v| !v.is_empty() && v != "0"),
             host: None,
+            untrusted_layout_forbidden: None,
             secret_reveal: false,
             cstack: Vec::new(),
             errfunc: None,
+            errfunc_proxy: None,
             in_errfunc: false,
+            on_dropped_error: None,
             coverage: None,
             cov_frame: None,
             output: Box::new(|bytes| {
@@ -494,7 +543,8 @@ impl Vm {
     /// A native's results as they are, taints included: sets
     /// [`result_taints`](Self::result_taints) and returns the values.
     pub fn return_slots(&mut self, slots: Vec<Slot>) -> Vec<Value> {
-        self.result_taints = slots.iter().map(|s| s.t).collect();
+        self.result_taints.clear();
+        self.result_taints.extend(slots.iter().map(|s| s.t));
         slots.into_iter().map(|s| s.v).collect()
     }
 
@@ -722,6 +772,9 @@ impl Vm {
         let mut nargs = nargs;
         let f = match self.reg(func) {
             Value::Func(f) => f,
+            v @ Value::Secret(_) if self.can_access_secrets() => {
+                return self.secret_call(func, v, nargs, nresults, from_lua);
+            }
             other => {
                 // `__call`
                 let tm = self.get_tm_slot(other, self.names.call);
@@ -796,10 +849,8 @@ impl Vm {
             Function::Native(nf) => {
                 let (native, upvals, upval_taints) =
                     (nf.f, nf.upvals.clone(), nf.upval_taints.clone());
-                let slots = &self.cur.stack[func + 1..func + 1 + nargs];
-                let args = slots.iter().map(|s| s.v).collect();
-                let taints = slots.iter().map(|s| s.t).collect();
-                let origins = slots.iter().map(|s| s.o).collect();
+                let (args, taints, origins) =
+                    split_slots(&self.cur.stack[func + 1..func + 1 + nargs]);
                 // Nested calls from the native go above its arguments.
                 self.cur.top = func + 1 + nargs;
                 self.cstack.push(CEntry {
@@ -853,38 +904,65 @@ impl Vm {
                 } else {
                     self.cur.taint.origin
                 };
-                let results: Vec<Slot> = results
-                    .into_iter()
-                    .enumerate()
-                    .map(|(i, v)| Slot {
-                        v,
-                        t: taints.get(i).copied().unwrap_or(write),
-                        o: origin,
-                    })
-                    .collect();
-                self.place_results(func, &results, nresults);
+                // Into the caller's registers (`luaD_poscall`), each with
+                // its taint.
+                let n = if nresults < 0 {
+                    results.len()
+                } else {
+                    nresults as usize
+                };
+                self.ensure_stack(func + n + 1);
+                for i in 0..n {
+                    match results.get(i) {
+                        Some(&v) => {
+                            let t = taints.get(i).copied().unwrap_or(write);
+                            self.set_copy(func + i, Slot { v, t, o: origin });
+                        }
+                        None => self.set_fresh(func + i, Value::Nil),
+                    }
+                }
+                if nresults < 0 {
+                    self.cur.top = func + n;
+                }
+                // The buffer back, empty, for the next call's.
+                self.result_taints = taints;
+                self.result_taints.clear();
                 Ok(false)
             }
         }
     }
 
-    /// Moves results to the caller's registers (`luaD_poscall`).
-    fn place_results(&mut self, func: usize, results: &[Slot], nresults: i32) {
-        let n = if nresults < 0 {
-            results.len()
-        } else {
-            nresults as usize
-        };
-        self.ensure_stack(func + n + 1);
-        for i in 0..n {
-            match results.get(i) {
-                Some(&s) => self.set_copy(func + i, s),
-                None => self.set_fresh(func + i, Value::Nil),
-            }
+    /// A secret callee called by code that may use secrets (decision T195):
+    /// the value it hides is called, in a nested run, and its results are
+    /// secret again, as everything secure code computes from a secret.
+    /// Blizzard's target frame needs it: `AuraUtil.SetAuraBorderColor`
+    /// indexes `DEBUFF_DISPLAY_INFO` with an aura's secret dispel type and
+    /// calls the secret color's `GetRGBA`. Unverified: addon code always
+    /// runs tainted, so no probe sees a secure call of a secret.
+    fn secret_call(
+        &mut self,
+        func: usize,
+        callee: Value,
+        nargs: usize,
+        nresults: i32,
+        from_lua: bool,
+    ) -> Result<bool, LuaError> {
+        self.cur.stack[func].v = self.hidden(callee);
+        self.call_at(func, nargs, -1, from_lua)?;
+        let n = self.cur.top - func;
+        for i in func..func + n {
+            let v = self.cur.stack[i].v;
+            self.cur.stack[i].v = self.secret_wrap(v);
         }
         if nresults < 0 {
-            self.cur.top = func + n;
+            return Ok(false);
         }
+        let wanted = nresults as usize;
+        self.ensure_stack(func + wanted + 1);
+        for i in n..wanted {
+            self.set_fresh(func + i, Value::Nil);
+        }
+        Ok(false)
     }
 
     /// Returns from the top frame with the `n` values at `from`; true if it
@@ -1006,11 +1084,17 @@ impl Vm {
     }
 
     fn run(&mut self) -> Result<(), LuaError> {
+        // The running frame's prototype, kept from one frame to the next
+        // when it is the same function's (a recursion, a loop's calls).
+        let mut proto = self.cur.frames[self.cur.frames.len() - 1].proto.clone();
         'frame: loop {
             let fi = self.cur.frames.len() - 1;
-            let (closure, proto, base) = {
+            let (closure, base) = {
                 let f = &self.cur.frames[fi];
-                (f.closure, f.proto.clone(), f.base)
+                if !Rc::ptr_eq(&proto, &f.proto) {
+                    proto = f.proto.clone();
+                }
+                (f.closure, f.base)
             };
             // (Re)entering a Lua frame: its closure's taint taints the
             // execution and fixes it while the frame runs.
@@ -1024,9 +1108,10 @@ impl Vm {
                 None => None,
             };
             let k = &proto.constants[..];
+            let code = &proto.code[..];
             loop {
                 let pc = self.cur.frames[fi].pc;
-                let op = proto.code[pc];
+                let op = code[pc];
                 self.cur.frames[fi].pc = pc + 1;
                 if let Some(ci) = self.cov_frame
                     && let Some(c) = self.coverage.as_mut()
@@ -2426,6 +2511,32 @@ impl Vm {
             }
         }
         out
+    }
+
+    /// The addon a C error's "Lua Taint:" line names: none while execution
+    /// is secure, else the taint of the innermost Lua function (the code
+    /// that made the failing call) when it is tainted, else the execution's.
+    /// The user's client (build 70450, ElvUI): ElvUI's Minimap.lua calls
+    /// `FontString:SetText` with a string ElvUI_Libraries' `utf8sub` made,
+    /// after a C call (`SetTextColor`), under ElvUI_Libraries'
+    /// CallbackHandler; the execution's taint is then ElvUI_Libraries (a
+    /// read after a C call taints it, `luaD_precall` having cleared the
+    /// fixed taint), and the client names ElvUI. Unverified: one sample;
+    /// the client may instead keep the fixed taint across C calls.
+    pub fn error_taint(&self) -> Taint {
+        let stack = self.cur.taint.stack;
+        if stack.is_secure() {
+            return stack;
+        }
+        match self
+            .cur
+            .frames
+            .last()
+            .map(|f| self.heap.func(f.closure).taint())
+        {
+            Some(t) if !t.is_secure() => t,
+            _ => stack,
+        }
     }
 }
 

@@ -20,9 +20,31 @@ export type Command = {
     run: (...any) -> (),
 }
 
+--- A command as `commands()` lists it: `usage` is its name and arguments.
+export type CommandInfo = {
+    name: string,
+    usage: string,
+    help?: string,
+    aliases: string[],
+    owner?: any,
+}
+
+--- `order`: how `help` and `commands()` list the commands, by name
+--- (default) or in the order they were added (the definitions first).
+export type RouterOptions = { order?: "name" | "added" }
+
 export interface Router
     function dispatch(msg: string): boolean
     function help(): string
+    --- Adds a command (checked like the definitions; a name or alias that is
+    --- taken is an error), owned by `owner` for `removeAll`.
+    function add(name: string, command: Command, owner: any?)
+    --- Removes a command and its aliases (nothing when there is none).
+    function remove(name: string)
+    --- Removes every command `owner` added.
+    function removeAll(owner: any)
+    --- The commands, in help order.
+    function commands(): CommandInfo[]
 end
 
 type Handler = (msg: string, editBox: EditBox?) -> ()
@@ -152,30 +174,104 @@ local function usage(name: string, command: Command): string
 end
 
 class SlashRouter implements Router
-    private readonly defs: { [string]: Command }
+    private defs: { [string]: Command } = {}
     -- Command names and aliases, lowercase, to command names.
     private byName: { [string]: string } = {}
+    -- Command names in the order they came (the definitions' first, by
+    -- name: a table has no order), and their owners.
+    private names: string[] = {}
+    private owners: { [string]: any } = {}
+    private readonly order: "name" | "added"
 
-    constructor(defs: { [string]: Command })
-        self.defs = defs
-        for name, command in pairs(defs) do
-            self.byName[name:lower()] = name
-            for _, alias in ipairs(command.aliases ?? {}) do
-                self.byName[alias:lower()] = name
+    constructor(defs: { [string]: Command }, opts: RouterOptions?)
+        self.order = opts?.order ?? "name"
+        const initial: string[] = {}
+        for name in pairs(defs) do
+            initial[#initial + 1] = name
+        end
+        table.sort(initial)
+        for _, name in ipairs(initial) do
+            self:insert(name, assert(defs[name]), nil)
+        end
+    end
+
+    private function insert(name: string, command: Command, owner: any)
+        self.defs[name] = command
+        self.owners[name] = owner
+        self.names[#self.names + 1] = name
+        self.byName[name:lower()] = name
+        for _, alias in ipairs(command.aliases ?? {}) do
+            self.byName[alias:lower()] = name
+        end
+    end
+
+    function add(name: string, command: Command, owner: any?)
+        for _, key in ipairs({ name, unpack(command.aliases ?? {}) }) do
+            const taken = self.byName[key:lower()]
+            if taken then
+                error(`router: "{key}" is taken by the command "{taken}"`, 2)
+            end
+        end
+        self:insert(name, command, owner)
+    end
+
+    function remove(name: string)
+        if not self.defs[name] then
+            return
+        end
+        self.defs[name] = nil
+        self.owners[name] = nil
+        for i, n in ipairs(self.names) do
+            if n == name then
+                table.remove(self.names, i)
+                break
+            end
+        end
+        for key, n in pairs(self.byName) do
+            if n == name then
+                self.byName[key] = nil
             end
         end
     end
 
-    function help(): string
-        local names: string[] = {}
-        for name in pairs(self.defs) do
-            names[#names + 1] = name
+    function removeAll(owner: any)
+        if owner == nil then
+            error("removeAll: the owner is nil", 2)
         end
-        table.sort(names)
+        const owned: string[] = {}
+        for _, name in ipairs(self.names) do
+            if self.owners[name] == owner then
+                owned[#owned + 1] = name
+            end
+        end
+        for _, name in ipairs(owned) do
+            self:remove(name)
+        end
+    end
+
+    function commands(): CommandInfo[]
+        const names = { unpack(self.names) }
+        if self.order == "name" then
+            table.sort(names)
+        end
+        const out: CommandInfo[] = {}
+        for i, name in ipairs(names) do
+            const command = assert(self.defs[name])
+            out[i] = {
+                name = name,
+                usage = usage(name, command),
+                help = command.help,
+                aliases = command.aliases ?? {},
+                owner = self.owners[name],
+            }
+        end
+        return out
+    end
+
+    function help(): string
         local lines: string[] = {}
-        for _, name in ipairs(names) do
-            local command = assert(self.defs[name])
-            lines[#lines + 1] = usage(name, command) .. (command.help and " - " .. command.help or "")
+        for i, c in ipairs(self:commands()) do
+            lines[i] = c.usage .. (c.help and " - " .. c.help or "")
         end
         return table.concat(lines, "\n")
     end
@@ -265,7 +361,8 @@ class SlashRouter implements Router
     end
 end
 
---- A router: `router:dispatch(msg)` runs the matching command.
-export function router(defs: { [string]: Command }): Router
-    return SlashRouter.new(defs)
+--- A router: `router:dispatch(msg)` runs the matching command; more come
+--- and go with `add` and `remove`.
+export function router(defs: { [string]: Command }, opts: RouterOptions?): Router
+    return SlashRouter.new(defs, opts)
 end

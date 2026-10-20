@@ -148,6 +148,256 @@ return table.concat(LoadLog, ','), tostring(FamilyLoaded), tostring(LazyLoaded),
     );
 }
 
+/// A secure addon's API for addons, as Blizzard_AuraContainer builds it: a
+/// template under `allowUntaintedCreation` is built untainted for an
+/// addon (its scripts and `OnLoad` Blizzard's), and its inbound mixin's
+/// `secureDelegates` run untainted for a tainted caller, unless it passes
+/// a secret; `CreateSecureDelegate` elevates even then.
+#[test]
+fn untainted_creation_and_secure_delegates() {
+    let interface = tree(
+        "delegates",
+        &[
+            (
+                "AddOns/Blizzard_Box/Blizzard_Box.toc",
+                "## UseSecureEnvironment: 1\nBox.lua\nBox.xml [LoadIntoEnvironment global]\nExport.lua [LoadIntoEnvironment global]\n",
+            ),
+            (
+                "AddOns/Blizzard_Box/Box.lua",
+                "local _, addonTable = ...
+local Shared = {}
+function Shared:SetValue(v) self.value = v self.setSecure = issecure() end
+function Shared:IsOwn() return GetForbiddenObjectTable(self) == self end
+BoxInbound = { SetValue = Shared.SetValue, IsOwn = Shared.IsOwn }
+BoxPrivate = { SetValue = Shared.SetValue, IsOwn = Shared.IsOwn }
+function BoxPrivate:OnLoad() self.loadSecure = issecure() end
+function BoxPrivate:OnUpdate() self.updateSecure = issecure() end
+addonTable.Delegate = CreateSecureDelegate(function(x) return issecure(), x ~= nil end)
+",
+            ),
+            (
+                "AddOns/Blizzard_Box/Export.lua",
+                "local _, addonTable = ...\nBoxDelegate = addonTable.Delegate\n",
+            ),
+            (
+                "AddOns/Blizzard_Box/Box.xml",
+                r#"<Ui>
+  <ScopedModifier allowUntaintedCreation="true">
+    <Frame name="BoxTemplate" virtual="true">
+      <Mixins>
+        <Mixin key="BoxInbound" source="secure" secureDelegates="true"/>
+        <Mixin key="BoxPrivate" source="secure"/>
+      </Mixins>
+      <Scripts><OnLoad method="OnLoad"/><OnUpdate method="OnUpdate"/></Scripts>
+    </Frame>
+  </ScopedModifier>
+  <Frame name="PlainBoxTemplate" virtual="true">
+    <Mixins><Mixin key="BoxPrivate" source="secure"/></Mixins>
+    <Scripts><OnLoad method="OnLoad"/></Scripts>
+  </Frame>
+</Ui>"#,
+            ),
+        ],
+    );
+    let mut vm = vm("camelot");
+    let report = wowlua_engine::ui::load(&mut vm, &interface, None);
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let r = run(
+        &mut vm,
+        "Box = CreateFrame('Frame', nil, UIParent, 'BoxTemplate')
+local plain = CreateFrame('Frame', nil, UIParent, 'PlainBoxTemplate')
+Box:SetValue({})
+local set, value = tostring(Box.setSecure), tostring(issecurevariable(Box, 'value'))
+local after = tostring(issecure())
+Box:SetValue(secretwrap(1))
+local elevated, given = BoxDelegate(secretwrap(1))
+return tostring(Box.loadSecure), tostring(plain.loadSecure), set, value, after,
+    tostring(Box.setSecure), tostring(elevated), tostring(given), tostring(Box:IsOwn()),
+    tostring(GetForbiddenObjectTable)",
+    );
+    assert_eq!(
+        r,
+        [
+            "true", "false", "true", "true", "false", "false", "true", "true", "true", "nil"
+        ]
+    );
+    wowlua_engine::clock::advance_frames(&mut vm, 1, 16.0);
+    assert_eq!(run(&mut vm, "return tostring(Box.updateSecure)"), ["true"]);
+}
+
+/// An intrinsic type declared with `allowUntaintedCreation` (Blizzard's
+/// `AuraContainer`), made by an addon while the addon loads: its `method`
+/// scripts are Blizzard's, not the loading addon's code, so its `OnLoad`
+/// runs untainted, as when the addon makes one later (the client: SuuUI
+/// makes its aura containers while it loads, without an error).
+#[test]
+fn untainted_intrinsics_made_while_an_addon_loads() {
+    let interface = tree(
+        "intrinsic-untainted",
+        &[
+            (
+                "AddOns/Blizzard_Box/Blizzard_Box.toc",
+                "## UseSecureEnvironment: 1\nBox.lua\nBox.xml [LoadIntoEnvironment global]\n",
+            ),
+            (
+                "AddOns/Blizzard_Box/Box.lua",
+                "BoxPrivate = {}
+function BoxPrivate:OnLoad_Intrinsic() self.loadSecure = issecure() end
+",
+            ),
+            (
+                "AddOns/Blizzard_Box/Box.xml",
+                r#"<Ui>
+  <ScopedModifier allowUntaintedCreation="true">
+    <Frame name="BoxFrame" intrinsic="true">
+      <Mixins><Mixin key="BoxPrivate" source="secure"/></Mixins>
+      <Scripts><OnLoad method="OnLoad_Intrinsic"/></Scripts>
+    </Frame>
+  </ScopedModifier>
+</Ui>"#,
+            ),
+        ],
+    );
+    let mut vm = vm("camelot");
+    let report = wowlua_engine::ui::load(&mut vm, &interface, None);
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let addon = interface.parent().unwrap().join("MyAddon");
+    std::fs::create_dir_all(&addon).unwrap();
+    std::fs::write(
+        addon.join("main.lua"),
+        "AtLoad = CreateFrame('BoxFrame', nil, UIParent)\n",
+    )
+    .unwrap();
+    let table = Value::Table(vm.new_table());
+    wowlua_engine::ui::load_user_file(&mut vm, &addon, "main.lua", "MyAddon", table);
+    assert_eq!(
+        run(
+            &mut vm,
+            "local later = CreateFrame('BoxFrame', nil, UIParent)
+return tostring(AtLoad.loadSecure), tostring(later.loadSecure), tostring(issecure())"
+        ),
+        ["true", "true", "false"]
+    );
+}
+
+/// A load-on-demand Blizzard addon an addon loads while it loads is
+/// Blizzard's code, as when the addon loads one later: its functions stay
+/// secure and its files keep their names (spec §17.7: Blizzard's Lua files
+/// run as secure code with their addon's name).
+#[test]
+fn blizzard_addons_loaded_while_an_addon_loads() {
+    let interface = tree(
+        "lod-while-loading",
+        &[
+            (
+                "AddOns/Blizzard_Early/Blizzard_Early.toc",
+                "## LoadOnDemand: 1\nEarly.lua\n",
+            ),
+            (
+                "AddOns/Blizzard_Early/Early.lua",
+                "function EarlyShow() end\nEarlySource = debugstack(1, 1, 0)\n",
+            ),
+            (
+                "AddOns/Blizzard_Late/Blizzard_Late.toc",
+                "## LoadOnDemand: 1\nLate.lua\n",
+            ),
+            ("AddOns/Blizzard_Late/Late.lua", "function LateShow() end\n"),
+        ],
+    );
+    let mut vm = vm("camelot");
+    let report = wowlua_engine::ui::load(&mut vm, &interface, None);
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let addon = interface.parent().unwrap().join("MyAddon");
+    std::fs::create_dir_all(&addon).unwrap();
+    std::fs::write(
+        addon.join("main.lua"),
+        "C_AddOns.LoadAddOn('Blizzard_Early')\nMyAddonGlobal = 1\n",
+    )
+    .unwrap();
+    let table = Value::Table(vm.new_table());
+    // Named as the client names the addon's files, as the test runner does.
+    wowlua_engine::engine_mut(&mut vm).world.ui.chunk_prefix =
+        Some("Interface/AddOns/MyAddon/".into());
+    wowlua_engine::ui::load_user_file(&mut vm, &addon, "main.lua", "MyAddon", table);
+    wowlua_engine::engine_mut(&mut vm).world.ui.chunk_prefix = None;
+    assert_eq!(
+        run(
+            &mut vm,
+            "C_AddOns.LoadAddOn('Blizzard_Late')
+return tostring(issecurevariable('EarlyShow')), tostring(issecurevariable('LateShow')),
+    tostring(issecurevariable('MyAddonGlobal')), EarlySource"
+        ),
+        [
+            "true",
+            "true",
+            "false",
+            "[Interface/AddOns/Blizzard_Early/Early.lua]:2: in main chunk\n..."
+        ]
+    );
+}
+
+/// A frame whose untrusted layout scripts are forbidden (ElvUI's aura
+/// containers inherit `DisableUntrustedLayoutScriptsTemplate`): an addon's
+/// `SetSize` hook does not see the secrets Blizzard's layout sizes it with
+/// (the user's client: no error from ElvUI's hook), but sees the addon's
+/// own sizes; its tainted `OnSizeChanged` does not run, a secure one does.
+#[test]
+fn forbidden_untrusted_layout_scripts() {
+    let interface = tree(
+        "aspects",
+        &[
+            (
+                "AddOns/Blizzard_Aspects/Blizzard_Aspects.toc",
+                "Layout.lua\nTemplates.xml\n",
+            ),
+            (
+                "AddOns/Blizzard_Aspects/Layout.lua",
+                "function LayoutIt(f) f:SetSize(secretwrap(30, 40)) end\nfunction SecureSized(f) f.secureSized = true end\n",
+            ),
+            (
+                "AddOns/Blizzard_Aspects/Templates.xml",
+                r#"<Ui>
+  <Frame name="DisableUntrustedLayoutScriptsTemplate" virtual="true">
+    <ForbiddenAspects><ForbiddenAspect aspect="UntrustedLayoutScriptExecution"/></ForbiddenAspects>
+  </Frame>
+</Ui>"#,
+            ),
+        ],
+    );
+    let mut vm = vm("camelot");
+    let report = wowlua_engine::ui::load(&mut vm, &interface, None);
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    run(
+        &mut vm,
+        "Kept = CreateFrame('Frame', nil, UIParent, 'DisableUntrustedLayoutScriptsTemplate')
+Plain = CreateFrame('Frame', nil, UIParent)
+local mover = CreateFrame('Frame', nil, UIParent)
+Seen, Errors = {}, {}
+seterrorhandler(function(e) Errors[#Errors + 1] = e end)
+for _, f in ipairs({ Kept, Plain }) do
+    f:SetPoint('CENTER')
+    hooksecurefunc(f, 'SetSize', function(self, w, h)
+        Seen[#Seen + 1] = self == Kept and 'kept' or 'plain'
+        mover:SetSize(w, h)
+    end)
+    f:SetScript('OnSizeChanged', function(self) Seen[#Seen + 1] = 'size' end)
+    f:HookScript('OnSizeChanged', SecureSized)
+end",
+    );
+    for name in ["Kept", "Plain"] {
+        let layout = vm.get_global("LayoutIt");
+        let frame = vm.get_global(name);
+        vm.call_from_engine(layout, &[frame]);
+    }
+    wowlua_engine::clock::advance_frames(&mut vm, 1, 16.0);
+    let r = run(
+        &mut vm,
+        "Kept:SetSize(1, 2)
+return table.concat(Seen, ','), #Errors, tostring(Kept.secureSized), tostring(Plain.secureSized)",
+    );
+    assert_eq!(r, ["plain,size,kept", "1", "true", "true"]);
+}
+
 /// The flavor's own UI code, if `cargo xtask types` fetched it: loads, and
 /// says how many errors remain.
 #[test]

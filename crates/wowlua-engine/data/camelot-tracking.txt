@@ -1,0 +1,33 @@
+# WoW Forever 1.60.1's minimap tracking types as a level 21 paladin with
+# mining had them (/stdtest engine answers' check "Minimap tracking names":
+# each C_Minimap.GetTrackingInfo(i)'s name and type for 1 to
+# GetNumTrackingTypes(), 25): the name, a tab, the type, a tab, the
+# filter: a spell's ID (the paladin's spellbook: Sense Undead, Find
+# Minerals), else the Enum.MinimapTrackingFilter its name means (the
+# documented enum's names; unverified: GetTrackingFilter not recorded).
+# Kept by hand from the check's fixture.
+Sense Undead	spell	5502
+Find Minerals	spell	2580
+Auctioneer	other	1
+Banker	other	2
+Banker	other	4194304
+Barber	other	262144
+Battlemaster	other	4
+Flight Master	other	8
+Food & Drink	other	16
+Innkeeper	other	32
+Item Upgrade	other	524288
+Mailbox	other	64
+Class Trainer	other	8388608
+Profession Trainers	other	128
+Reagents	other	256
+Repair	other	512
+Stable Master	other	2048
+Transmogrifier	other	4096
+Low-Level Quests	other	1024
+Account Completed Quests	other	2097152
+Points of Interest	other	8192
+Target	other	16384
+Focus Target	other	32768
+Track Quest POIs	other	65536
+Track Digsites	other	131072

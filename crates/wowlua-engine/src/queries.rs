@@ -37,13 +37,54 @@ fn cvar_bitfield(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![Value::Bool(false)]);
     };
     let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
-    let value = framescript::cvar_get(vm, &name).unwrap_or_default();
+    // A CVar the client lacks: nil (the full probe, 1.60.1: "x" and "").
+    let Some(value) = framescript::cvar_get(vm, &name) else {
+        return Ok(vec![Value::Nil]);
+    };
     let i = (index as i64 - 1).max(0) as usize;
     let header = value.bytes().take_while(|b| *b < b'@').count();
     let set = value.as_bytes()[header..]
         .get(i / 6)
         .is_some_and(|ch| (ch.wrapping_sub(b'@') >> (i % 6)) & 1 == 1);
     Ok(vec![Value::Bool(set)])
+}
+
+/// `C_CVar.SetCVarBitfield(name, index, value)`: bit `index` set or
+/// cleared in the encoding `GetCVarBitfield` reads, characters added as
+/// `@` (no bits) to reach it, then set as `SetCVar` sets it, told by
+/// `CVAR_UPDATE(name, value)` only when the value changed (the user's
+/// probe: setting `closedInfoFrames` bit 30 told it and returned true;
+/// six scenarios where Blizzard's bags close a tutorial's bit already set
+/// told nothing). Unverified: the characters the client adds.
+fn set_cvar_bitfield(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (Value::Str(name), Some(index)) = (c.arg(1), num(c.arg(2))) else {
+        return Ok(vec![Value::Bool(false)]);
+    };
+    let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
+    // Bits count from 1 (the full probe, 1.60.1: index 0 failed so).
+    if index < 1.0 {
+        let msg = vm.str("Predicate check failed: IsIndexInRange");
+        return Err(vm.raise(msg));
+    }
+    let before = framescript::cvar_get(vm, &name).unwrap_or_default();
+    let mut value = before.clone().into_bytes();
+    let i = (index as i64 - 1).max(0) as usize;
+    let header = value.iter().take_while(|b| **b < b'@').count();
+    while value.len() <= header + i / 6 {
+        value.push(b'@');
+    }
+    let at = header + i / 6;
+    let bit = 1u8 << (i % 6);
+    let bits = value[at].wrapping_sub(b'@');
+    let bits = if c.arg(3).truthy() {
+        bits | bit
+    } else {
+        bits & !bit
+    };
+    value[at] = b'@' + bits;
+    let text = String::from_utf8_lossy(&value).into_owned();
+    let changed = text != before;
+    framescript::set_cvar_text(vm, &name, text, changed)
 }
 
 /// `UnitIsHumanPlayer(unit)`: a player unit that exists (an NPC or no
@@ -71,13 +112,37 @@ fn no_absorbs(_vm: &mut Vm, _c: NativeCall) -> Ret {
 /// An item check of a system camelot does not have (azerite, corruption,
 /// cosmetics, curios, decor, relics, conduits): false for an item, nil for
 /// none (`C_Item.IsCorruptedItem(0)`).
-fn not_that_item(_vm: &mut Vm, c: NativeCall) -> Ret {
+fn not_that_item(vm: &mut Vm, c: NativeCall) -> Ret {
+    // A text naming no item: nil (the full probe: "x"; "item:6948" false).
     let item = match c.arg(1) {
         Value::Num(n) => n > 0.0,
-        Value::Str(_) => true,
+        Value::Str(_) => crate::gamedata::item_id(vm, c.arg(1)).is_some(),
         _ => false,
     };
     Ok(vec![if item { Value::Bool(false) } else { Value::Nil }])
+}
+
+/// `IsInventoryItemProfessionBag(unit, slot)`: a worn bag is no
+/// profession bag; an empty slot answers nothing (recorded), and a slot
+/// not a bag's (the full probe: the shoulders' 3, worn, nothing; the bags'
+/// slots as `C_Container.ContainerIDToInventoryID` gives them).
+fn is_inventory_item_profession_bag(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Num(slot) = c.arg(2) else {
+        return Ok(vec![]);
+    };
+    if !(31.0..=35.0).contains(&slot) && !(64.0..=69.0).contains(&slot) {
+        return Ok(vec![]);
+    }
+    let worn = engine(vm)
+        .world
+        .character
+        .equipment
+        .contains_key(&(slot as i64));
+    Ok(if worn {
+        vec![Value::Bool(false)]
+    } else {
+        vec![]
+    })
 }
 
 fn no(_vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -97,19 +162,38 @@ fn no_toy(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(-1.0)])
 }
 
-/// `C_Container.GetContainerItemCooldown(bag, slot)`: no cooldown; enabled
-/// except in the reagent bag (bag 5; recorded).
-fn container_item_cooldown(_vm: &mut Vm, c: NativeCall) -> Ret {
-    let reagents = num(c.arg(1)) == Some(5.0);
+/// `C_Container.GetContainerItemCooldown(bag, slot)`: the item's running
+/// cooldown's start and duration, enabled; an empty slot not (recorded:
+/// a Hearthstone's hour, every other item 0, 0, 1, empty slots 0, 0, 0).
+fn container_item_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
+    let held = match (num(c.arg(1)), num(c.arg(2))) {
+        (Some(bag), Some(slot)) => engine(vm)
+            .world
+            .character
+            .bags
+            .get(&(bag as i64))
+            .and_then(|b| b.items.get(&(slot as usize)))
+            .map(|h| h.id),
+        _ => None,
+    };
+    let Some(id) = held else {
+        return Ok(vec![Value::Num(0.0), Value::Num(0.0), Value::Num(0.0)]);
+    };
+    let (start, duration) = crate::character::item_cooldown(vm, id).unwrap_or((0.0, 0.0));
     Ok(vec![
-        Value::Num(0.0),
-        Value::Num(0.0),
-        Value::Num(if reagents { 0.0 } else { 1.0 }),
+        Value::Num(start),
+        Value::Num(duration),
+        Value::Num(1.0),
     ])
 }
 
-/// `IsInventoryItemLocked(slot)`: the equipped item's lock.
+/// `IsInventoryItemLocked(slot)`: the equipped item's lock; a slot below
+/// 0 or past the inventory's nothing (the full probe: -1 and 6462 nothing,
+/// 0, 1, 2 and no number false; the bound, 256, unverified).
 fn inventory_item_locked(vm: &mut Vm, c: NativeCall) -> Ret {
+    if num(c.arg(1)).is_some_and(|slot| !(0.0..256.0).contains(&slot)) {
+        return Ok(vec![]);
+    }
     let locked = num(c.arg(1)).is_some_and(|slot| {
         engine(vm)
             .world
@@ -220,12 +304,26 @@ fn lua_number(n: f64) -> String {
 }
 
 /// `BreakUpLargeNumbers(n, natural)`: a whole number with its digits
-/// grouped; a fraction to one decimal (`999.99` → `1000.0`), or rounded
-/// whole with `natural` (recorded). Unverified: fractions from 1000.
+/// grouped; a fraction to one decimal (`999.99` → `1000.0`), or cut whole
+/// with `natural` (recorded `12.345` → `12`; the full probe `1.5` → `1`),
+/// which from a billion names it in words to one decimal (the full probe:
+/// 2147483647 → `2.1 billion`, `THIRD_NUMBER`; 1234 still `1,234`; the
+/// millions, trillions and the decimal's rounding unverified). Unverified:
+/// fractions from 1000.
 fn break_up_large_numbers(vm: &mut Vm, c: NativeCall) -> Ret {
     let n = num(c.arg(1)).unwrap_or(0.0);
     let natural = matches!(c.arg(2), Value::Bool(true));
-    let text = if n.fract() == 0.0 || natural {
+    let text = if natural && n.abs() >= 1e9 {
+        let (scale, word, fallback) = if n.abs() >= 1e12 {
+            (1e12, "FOURTH_NUMBER", "trillion")
+        } else {
+            (1e9, "THIRD_NUMBER", "billion")
+        };
+        let word = global_text(vm, word, fallback);
+        format!("{:.1} {word}", n / scale)
+    } else if natural {
+        grouped(vm, n.trunc())
+    } else if n.fract() == 0.0 {
         grouped(vm, n)
     } else {
         format!("{n:.1}")
@@ -235,7 +333,7 @@ fn break_up_large_numbers(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `AbbreviateLargeNumbers(n)`: by its whole digits, from 9 the millions
 /// (`123 M`), from 6 the thousands (`1234 K`), else broken up (recorded).
-fn abbreviate_large_numbers(vm: &mut Vm, c: NativeCall) -> Ret {
+pub(crate) fn abbreviate_large_numbers(vm: &mut Vm, c: NativeCall) -> Ret {
     let n = num(c.arg(1)).unwrap_or(0.0);
     let digits = format!("{}", n.abs().trunc() as u64).len();
     let sign = if n < 0.0 { "-" } else { "" };
@@ -255,9 +353,18 @@ fn abbreviate_large_numbers(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `AbbreviateNumbers(n)`: from 1000 by the breakpoints (`1.2K`, `12K`,
 /// `1.2M`, `1.2B`; one decimal below ten of a unit, truncated); smaller
-/// numbers and negatives as Lua writes them (recorded).
-fn abbreviate_numbers(vm: &mut Vm, c: NativeCall) -> Ret {
-    let n = num(c.arg(1)).unwrap_or(0.0);
+/// numbers and negatives as Lua writes them (recorded). A secret number's
+/// text is secret (SuuUI probe group: `AbbreviateNumbers(UnitHealth(u))`
+/// secret, eight samples).
+pub(crate) fn abbreviate_numbers(vm: &mut Vm, c: NativeCall) -> Ret {
+    let secret = matches!(c.arg(1), Value::Secret(_));
+    let n = num(vm.hidden(c.arg(1))).unwrap_or(0.0);
+    let text = abbreviated(vm, n);
+    let v = vm.str(&text);
+    Ok(vec![if secret { vm.secret_wrap(v) } else { v }])
+}
+
+fn abbreviated(vm: &mut Vm, n: f64) -> String {
     let units = [
         (1e12, "FOURTH_NUMBER_CAP_NO_SPACE", "T"),
         (1e9, "THIRD_NUMBER_CAP_NO_SPACE", "B"),
@@ -272,11 +379,10 @@ fn abbreviate_numbers(vm: &mut Vm, c: NativeCall) -> Ret {
                 (n / (unit / 10.0)).trunc() / 10.0
             };
             let cap = global_text(vm, cap, fallback);
-            let text = format!("{}{cap}", lua_number(value));
-            return Ok(vec![vm.str(&text)]);
+            return format!("{}{cap}", lua_number(value));
         }
     }
-    Ok(vec![vm.str(&lua_number(n))])
+    lua_number(n)
 }
 
 /// `C_TransmogCollection.GetCategoryAppearances(category, location)`: the
@@ -296,16 +402,19 @@ fn category_appearances(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_TransmogCollection.GetClassFilter()`: the player's class (recorded
-/// for a paladin: 2).
+/// for a paladin: 2) until `SetClassFilter` sets one.
 fn transmog_class_filter(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(
-        engine(vm).units.list[units::PLAYER.0].class_id,
-    )])
+    let set = crate::collections::transmog_class_filter(vm);
+    Ok(vec![Value::Num(set.unwrap_or_else(|| {
+        engine(vm).units.list[units::PLAYER.0].class_id
+    }))])
 }
 
 /// `C_TransmogCollection.GetValidAppearanceSourcesForClass(appearance,
 /// class, category, location)`: as recorded for the class; for a class not
-/// recorded, all the appearance's sources (unverified); else none.
+/// recorded, all the appearance's sources (unverified); else none, and
+/// nothing for an appearance the recordings do not hold (the full probe,
+/// 1.60.1: appearance 1 nothing).
 fn class_appearance_sources(vm: &mut Vm, c: NativeCall) -> Ret {
     let (Some(visual), Some(class)) = (num(c.arg(1)), num(c.arg(2))) else {
         return Ok(vec![]);
@@ -319,15 +428,15 @@ fn class_appearance_sources(vm: &mut Vm, c: NativeCall) -> Ret {
         "C_TransmogCollection.GetValidAppearanceSourcesForClass({visual}, {class}{category})"
     );
     let all = format!("C_TransmogCollection.GetAppearanceSources({visual}{category})");
-    Ok(crate::recorded::lookup_text(vm, &exact)
-        .or_else(|| crate::recorded::lookup_text(vm, &all))
-        .unwrap_or_else(|| vec![Value::Table(vm.new_table())]))
-}
-
-/// `C_LFGList.GetFilteredSearchResults()`, `GetSearchResults()`: no groups
-/// found (no search made; the recording's were other players' listings).
-fn no_search_results(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(0.0), Value::Table(vm.new_table())])
+    if let Some(v) =
+        crate::recorded::lookup_text(vm, &exact).or_else(|| crate::recorded::lookup_text(vm, &all))
+    {
+        return Ok(v);
+    }
+    if !crate::collections::appearance_known(visual) {
+        return Ok(vec![]);
+    }
+    Ok(vec![Value::Table(vm.new_table())])
 }
 
 /// A color's code: `ff` and its red, green and blue as hex, rounded (as
@@ -391,10 +500,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             "C_ColorUtil.GenerateTextColorCode",
             generate_text_color_code,
         ),
-        ("C_LFGList.GetFilteredSearchResults", no_search_results),
         // Nothing tracked (unverified).
         ("C_ContentTracking.IsTracking", no),
-        ("C_LFGList.GetSearchResults", no_search_results),
         (
             "C_TransmogCollection.GetCategoryAppearances",
             category_appearances,
@@ -412,12 +519,24 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetTasksTable", empty_table),
         ("C_CombatLog.DoesObjectMatchFilter", combat_log_filter),
         ("C_CVar.GetCVarBitfield", cvar_bitfield),
+        ("C_CVar.SetCVarBitfield", set_cvar_bitfield),
         ("UnitIsHumanPlayer", unit_is_player_online),
         ("UnitGetIncomingHeals", incoming_heals),
         ("UnitGetTotalAbsorbs", no_absorbs),
         ("UnitGetTotalHealAbsorbs", no_absorbs),
-        ("UnitIsVisible", unit_exists),
         ("UnitIsInInteractRange", unit_exists),
+        // No new appearances, glyphs, press-and-hold spells, spell
+        // overlays, waypoint texts (recorded, every call).
+        ("C_TransmogCollection.IsNewAppearance", no),
+        ("HasAttachedGlyph", no),
+        ("IsSpellValidForPendingGlyph", nil),
+        ("C_Spell.IsPressHoldReleaseSpell", no),
+        ("C_SpellActivationOverlay.IsSpellOverlayed", no),
+        ("C_QuestLog.GetNextWaypointText", nothing),
+        (
+            "IsInventoryItemProfessionBag",
+            is_inventory_item_profession_bag,
+        ),
         // Nothing of these for any unit yet (recorded for the player
         // alone and absent party members).
         ("UnitHasVehicleUI", no),

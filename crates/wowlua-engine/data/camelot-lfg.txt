@@ -1,0 +1,258 @@
+# WoW Forever 1.60.1 (70450)'s group finder (C_LFGList, its vanilla-style UI):
+# game data only, from SuuUI's `/suu probe lfg` (2026-10-14) and `/suu probe
+# social` SavedVariables (an extraction script kept outside the repository;
+# no player, realm, GUID or chat text). Tab-separated lines, by kind:
+#   category  <id> <field=value>...      GetAvailableCategories() order, GetLfgCategoryInfo
+#   group     <categoryID> <groupID> <name>   GetAvailableActivityGroups(cat) order, GetActivityGroupInfo's name
+#   activity  <id> <field=value>...      GetAvailableActivities(cat, group) order; every field
+#             recorded for the activities `/suu probe social` showed in full, else only
+#             fullName, minLevel, maxLevelSuggestion, maxNumPlayers, groupFinderActivityGroupID
+#             and categoryID (the lfg probe's summary)
+#   ungrouped <categoryID> <id>,...       GetAvailableActivities(cat) (no group): the first six recorded
+#   languages <locale>,...               GetAvailableLanguageSearchFilter()
+#   defaultLanguages <locale>,...        GetDefaultLanguageSearchFilter()'s true keys
+#   savedLanguages <locale>,...          GetLanguageSearchFilter()'s true keys (none saved)
+#   function  <name>                     C_LFGList's functions (pairs over the namespace)
+#   entryField <field=value>             GetActiveEntryInfo() while listed (Deadmines, by the UI)
+#   resultField <name>                   a search result's fields (GetSearchResultInfo; values not kept)
+#   memberCountField <name>              GetSearchResultMemberCounts' fields
+#   verdict   <call> <from> <outcome>    the probes' tests: the call, what ran it, what the client did
+category	2	allowCrossFaction=false	autoChooseActivity=false	name=Dungeons	preferCurrentArea=false	separateRecommended=false	showPlaystyleDropdown=false
+group	2	285	Dungeons
+activity	796	fullName=Wailing Caverns	shortName=Wailing Caverns	categoryID=2	groupFinderActivityGroupID=285	ilvlSuggestion=0	filters=166	minLevel=0	minLevelSuggestion=15	maxLevelSuggestion=24	maxNumPlayers=5	displayType=1	orderIndex=0	useHonorLevel=false	showQuickJoinToast=false	isMythicPlusActivity=false	isRatedPvpActivity=false	isCurrentRaidActivity=false	isPvpActivity=false	isMythicActivity=false	allowCrossFaction=true	isHeroicActivity=false	isNormalActivity=true	mapID=43	difficultyID=1	redirectedDifficultyID=1	useDungeonRoleExpectations=true
+activity	797	fullName=Scholomance	shortName=Scholomance	categoryID=2	groupFinderActivityGroupID=285	ilvlSuggestion=0	filters=165	minLevel=0	minLevelSuggestion=58	maxLevelSuggestion=60	maxNumPlayers=5	displayType=1	orderIndex=0	useHonorLevel=false	showQuickJoinToast=false	isMythicPlusActivity=false	isRatedPvpActivity=false	isCurrentRaidActivity=false	isPvpActivity=false	isMythicActivity=false	allowCrossFaction=true	isHeroicActivity=false	isNormalActivity=true	mapID=289	difficultyID=1	redirectedDifficultyID=1	useDungeonRoleExpectations=true
+activity	798	fullName=Ragefire Chasm	shortName=Ragefire Chasm	categoryID=2	groupFinderActivityGroupID=285	ilvlSuggestion=0	filters=166	minLevel=0	minLevelSuggestion=13	maxLevelSuggestion=18	maxNumPlayers=5	displayType=1	orderIndex=0	useHonorLevel=false	showQuickJoinToast=false	isMythicPlusActivity=false	isRatedPvpActivity=false	isCurrentRaidActivity=false	isPvpActivity=false	isMythicActivity=false	allowCrossFaction=true	isHeroicActivity=false	isNormalActivity=true	mapID=389	difficultyID=1	redirectedDifficultyID=1	useDungeonRoleExpectations=true
+activity	799	fullName=Deadmines	shortName=Deadmines	categoryID=2	groupFinderActivityGroupID=285	ilvlSuggestion=0	filters=166	minLevel=0	minLevelSuggestion=17	maxLevelSuggestion=26	maxNumPlayers=5	displayType=1	orderIndex=0	useHonorLevel=false	showQuickJoinToast=false	isMythicPlusActivity=false	isRatedPvpActivity=false	isCurrentRaidActivity=false	isPvpActivity=false	isMythicActivity=false	allowCrossFaction=true	isHeroicActivity=false	isNormalActivity=true	mapID=36	difficultyID=1	redirectedDifficultyID=1	useDungeonRoleExpectations=true
+activity	800	fullName=Shadowfang Keep	shortName=Shadowfang Keep	categoryID=2	groupFinderActivityGroupID=285	ilvlSuggestion=0	filters=166	minLevel=0	minLevelSuggestion=20	maxLevelSuggestion=30	maxNumPlayers=5	displayType=1	orderIndex=0	useHonorLevel=false	showQuickJoinToast=false	isMythicPlusActivity=false	isRatedPvpActivity=false	isCurrentRaidActivity=false	isPvpActivity=false	isMythicActivity=false	allowCrossFaction=true	isHeroicActivity=false	isNormalActivity=true	mapID=33	difficultyID=1	redirectedDifficultyID=1	useDungeonRoleExpectations=true
+activity	801	fullName=Blackfathom Deeps	shortName=Blackfathom Deeps	categoryID=2	groupFinderActivityGroupID=285	ilvlSuggestion=0	filters=165	minLevel=0	minLevelSuggestion=24	maxLevelSuggestion=32	maxNumPlayers=5	displayType=1	orderIndex=0	useHonorLevel=false	showQuickJoinToast=false	isMythicPlusActivity=false	isRatedPvpActivity=false	isCurrentRaidActivity=false	isPvpActivity=false	isMythicActivity=false	allowCrossFaction=true	isHeroicActivity=false	isNormalActivity=true	mapID=48	difficultyID=1	redirectedDifficultyID=1	useDungeonRoleExpectations=true
+activity	803	fullName=Gnomeregan	categoryID=2	groupFinderActivityGroupID=285	minLevel=0	maxLevelSuggestion=38	maxNumPlayers=5
+activity	804	fullName=Razorfen Kraul	categoryID=2	groupFinderActivityGroupID=285	minLevel=0	maxLevelSuggestion=38	maxNumPlayers=5
+activity	805	fullName=Scarlet Monastery - Graveyard	categoryID=2	groupFinderActivityGroupID=285	minLevel=0	maxLevelSuggestion=38	maxNumPlayers=5
+activity	806	fullName=Razorfen Downs	categoryID=2	groupFinderActivityGroupID=285	minLevel=0	maxLevelSuggestion=46	maxNumPlayers=5
+activity	807	fullName=Uldaman	categoryID=2	groupFinderActivityGroupID=285	minLevel=0	maxLevelSuggestion=51	maxNumPlayers=5
+activity	808	fullName=Zul'Farrak	categoryID=2	groupFinderActivityGroupID=285	minLevel=0	maxLevelSuggestion=54	maxNumPlayers=5
+activity	809	fullName=Maraudon	categoryID=2	groupFinderActivityGroupID=285	minLevel=0	maxLevelSuggestion=55	maxNumPlayers=5
+activity	810	fullName=Sunken Temple	categoryID=2	groupFinderActivityGroupID=285	minLevel=0	maxLevelSuggestion=60	maxNumPlayers=5
+activity	811	fullName=Blackrock Depths	categoryID=2	groupFinderActivityGroupID=285	minLevel=0	maxLevelSuggestion=60	maxNumPlayers=5
+activity	812	fullName=Lower Blackrock Spire	categoryID=2	groupFinderActivityGroupID=285	minLevel=0	maxLevelSuggestion=60	maxNumPlayers=5
+activity	813	fullName=Dire Maul (East)	categoryID=2	groupFinderActivityGroupID=285	minLevel=0	maxLevelSuggestion=60	maxNumPlayers=5
+activity	814	fullName=Dire Maul (West)	categoryID=2	groupFinderActivityGroupID=285	minLevel=0	maxLevelSuggestion=60	maxNumPlayers=5
+activity	815	fullName=Dire Maul (North)	categoryID=2	groupFinderActivityGroupID=285	minLevel=0	maxLevelSuggestion=60	maxNumPlayers=5
+activity	816	fullName=Stratholme (Main Gate)	categoryID=2	groupFinderActivityGroupID=285	minLevel=0	maxLevelSuggestion=60	maxNumPlayers=5
+activity	827	fullName=Scarlet Monastery - Armory	categoryID=2	groupFinderActivityGroupID=285	minLevel=0	maxLevelSuggestion=44	maxNumPlayers=5
+activity	828	fullName=Scarlet Monastery - Cathedral	categoryID=2	groupFinderActivityGroupID=285	minLevel=0	maxLevelSuggestion=46	maxNumPlayers=5
+activity	829	fullName=Scarlet Monastery - Library	categoryID=2	groupFinderActivityGroupID=285	minLevel=0	maxLevelSuggestion=41	maxNumPlayers=5
+activity	837	fullName=Upper Blackrock Spire	categoryID=2	groupFinderActivityGroupID=285	minLevel=0	maxLevelSuggestion=60	maxNumPlayers=10
+activity	1603	fullName=Stratholme (Service Gate)	categoryID=2	groupFinderActivityGroupID=285	minLevel=0	maxLevelSuggestion=60	maxNumPlayers=5
+activity	1981	fullName=Excavation Site: Wetlands	categoryID=2	groupFinderActivityGroupID=285	minLevel=0	maxLevelSuggestion=33	maxNumPlayers=5
+activity	1982	fullName=Ruins of Lordaeron	categoryID=2	groupFinderActivityGroupID=285	minLevel=0	maxLevelSuggestion=22	maxNumPlayers=5
+activity	1983	fullName=City of Dalaran	categoryID=2	groupFinderActivityGroupID=285	minLevel=0	maxLevelSuggestion=35	maxNumPlayers=5
+activity	1984	fullName=Hall of Thanes	categoryID=2	groupFinderActivityGroupID=285	minLevel=0	maxLevelSuggestion=20	maxNumPlayers=5
+category	116	allowCrossFaction=false	autoChooseActivity=false	name=Quests & Zones	preferCurrentArea=false	separateRecommended=false	showPlaystyleDropdown=false
+group	116	296	Kalimdor
+group	116	295	Eastern Kingdoms
+activity	874	fullName=Durotar	categoryID=116	groupFinderActivityGroupID=296	minLevel=0	maxLevelSuggestion=14	maxNumPlayers=0
+activity	875	fullName=Mulgore	categoryID=116	groupFinderActivityGroupID=296	minLevel=0	maxLevelSuggestion=14	maxNumPlayers=0
+activity	876	fullName=The Barrens	categoryID=116	groupFinderActivityGroupID=296	minLevel=0	maxLevelSuggestion=30	maxNumPlayers=0
+activity	877	fullName=Stonetalon Mountains	categoryID=116	groupFinderActivityGroupID=296	minLevel=0	maxLevelSuggestion=32	maxNumPlayers=0
+activity	878	fullName=Thousand Needles	categoryID=116	groupFinderActivityGroupID=296	minLevel=0	maxLevelSuggestion=40	maxNumPlayers=0
+activity	879	fullName=Desolace	categoryID=116	groupFinderActivityGroupID=296	minLevel=0	maxLevelSuggestion=44	maxNumPlayers=0
+activity	880	fullName=Feralas	categoryID=116	groupFinderActivityGroupID=296	minLevel=0	maxLevelSuggestion=54	maxNumPlayers=0
+activity	881	fullName=Dustwallow Marsh	categoryID=116	groupFinderActivityGroupID=296	minLevel=0	maxLevelSuggestion=50	maxNumPlayers=0
+activity	882	fullName=Tanaris	categoryID=116	groupFinderActivityGroupID=296	minLevel=0	maxLevelSuggestion=54	maxNumPlayers=0
+activity	883	fullName=Un'Goro Crater	categoryID=116	groupFinderActivityGroupID=296	minLevel=0	maxLevelSuggestion=60	maxNumPlayers=0
+activity	884	fullName=Silithus	categoryID=116	groupFinderActivityGroupID=296	minLevel=0	maxLevelSuggestion=60	maxNumPlayers=0
+activity	885	fullName=Teldrassil	categoryID=116	groupFinderActivityGroupID=296	minLevel=0	maxLevelSuggestion=14	maxNumPlayers=0
+activity	886	fullName=Darkshore	categoryID=116	groupFinderActivityGroupID=296	minLevel=0	maxLevelSuggestion=24	maxNumPlayers=0
+activity	887	fullName=Ashenvale	categoryID=116	groupFinderActivityGroupID=296	minLevel=0	maxLevelSuggestion=34	maxNumPlayers=0
+activity	888	fullName=Felwood	categoryID=116	groupFinderActivityGroupID=296	minLevel=0	maxLevelSuggestion=60	maxNumPlayers=0
+activity	889	fullName=Azshara	categoryID=116	groupFinderActivityGroupID=296	minLevel=0	maxLevelSuggestion=60	maxNumPlayers=0
+activity	890	fullName=Winterspring	categoryID=116	groupFinderActivityGroupID=296	minLevel=0	maxLevelSuggestion=63	maxNumPlayers=0
+activity	1991	fullName=Mount Hyjal	categoryID=116	groupFinderActivityGroupID=296	minLevel=0	maxLevelSuggestion=60	maxNumPlayers=0
+activity	853	fullName=Elwynn Forest	categoryID=116	groupFinderActivityGroupID=295	minLevel=0	maxLevelSuggestion=14	maxNumPlayers=0
+activity	854	fullName=Westfall	categoryID=116	groupFinderActivityGroupID=295	minLevel=0	maxLevelSuggestion=24	maxNumPlayers=0
+activity	855	fullName=Duskwood	categoryID=116	groupFinderActivityGroupID=295	minLevel=0	maxLevelSuggestion=34	maxNumPlayers=0
+activity	856	fullName=Dun Morogh	categoryID=116	groupFinderActivityGroupID=295	minLevel=0	maxLevelSuggestion=14	maxNumPlayers=0
+activity	857	fullName=Loch Modan	categoryID=116	groupFinderActivityGroupID=295	minLevel=0	maxLevelSuggestion=24	maxNumPlayers=0
+activity	858	fullName=Wetlands	categoryID=116	groupFinderActivityGroupID=295	minLevel=0	maxLevelSuggestion=34	maxNumPlayers=0
+activity	859	fullName=Stranglethorn Vale	categoryID=116	groupFinderActivityGroupID=295	minLevel=0	maxLevelSuggestion=50	maxNumPlayers=0
+activity	860	fullName=Blasted Lands	categoryID=116	groupFinderActivityGroupID=295	minLevel=0	maxLevelSuggestion=60	maxNumPlayers=0
+activity	861	fullName=Swamp of Sorrows	categoryID=116	groupFinderActivityGroupID=295	minLevel=0	maxLevelSuggestion=50	maxNumPlayers=0
+activity	862	fullName=Redridge Mountains	categoryID=116	groupFinderActivityGroupID=295	minLevel=0	maxLevelSuggestion=30	maxNumPlayers=0
+activity	863	fullName=Burning Steppes	categoryID=116	groupFinderActivityGroupID=295	minLevel=0	maxLevelSuggestion=60	maxNumPlayers=0
+activity	864	fullName=Searing Gorge	categoryID=116	groupFinderActivityGroupID=295	minLevel=0	maxLevelSuggestion=60	maxNumPlayers=0
+activity	865	fullName=Badlands	categoryID=116	groupFinderActivityGroupID=295	minLevel=0	maxLevelSuggestion=50	maxNumPlayers=0
+activity	866	fullName=Arathi Highlands	categoryID=116	groupFinderActivityGroupID=295	minLevel=0	maxLevelSuggestion=44	maxNumPlayers=0
+activity	867	fullName=Hillsbrad Foothills	categoryID=116	groupFinderActivityGroupID=295	minLevel=0	maxLevelSuggestion=34	maxNumPlayers=0
+activity	868	fullName=Hinterlands	shortName=Hinterlands	categoryID=116	groupFinderActivityGroupID=295	ilvlSuggestion=0	filters=165	minLevel=0	minLevelSuggestion=38	maxLevelSuggestion=54	maxNumPlayers=0	displayType=4	orderIndex=0	useHonorLevel=false	showQuickJoinToast=false	isMythicPlusActivity=false	isRatedPvpActivity=false	isCurrentRaidActivity=false	isPvpActivity=false	isMythicActivity=false	allowCrossFaction=true	isHeroicActivity=false	isNormalActivity=false	mapID=0	difficultyID=0	redirectedDifficultyID=0	useDungeonRoleExpectations=false
+activity	869	fullName=Western Plaguelands	shortName=Western Plaguelands	categoryID=116	groupFinderActivityGroupID=295	ilvlSuggestion=0	filters=165	minLevel=0	minLevelSuggestion=48	maxLevelSuggestion=60	maxNumPlayers=0	displayType=4	orderIndex=0	useHonorLevel=false	showQuickJoinToast=false	isMythicPlusActivity=false	isRatedPvpActivity=false	isCurrentRaidActivity=false	isPvpActivity=false	isMythicActivity=false	allowCrossFaction=true	isHeroicActivity=false	isNormalActivity=false	mapID=0	difficultyID=0	redirectedDifficultyID=0	useDungeonRoleExpectations=false
+activity	870	fullName=Eastern Plaguelands	shortName=Eastern Plaguelands	categoryID=116	groupFinderActivityGroupID=295	ilvlSuggestion=0	filters=165	minLevel=0	minLevelSuggestion=53	maxLevelSuggestion=63	maxNumPlayers=0	displayType=4	orderIndex=0	useHonorLevel=false	showQuickJoinToast=false	isMythicPlusActivity=false	isRatedPvpActivity=false	isCurrentRaidActivity=false	isPvpActivity=false	isMythicActivity=false	allowCrossFaction=true	isHeroicActivity=false	isNormalActivity=false	mapID=0	difficultyID=0	redirectedDifficultyID=0	useDungeonRoleExpectations=false
+activity	871	fullName=Tirisfal Glades	shortName=Tirisfal Glades	categoryID=116	groupFinderActivityGroupID=295	ilvlSuggestion=0	filters=166	minLevel=0	minLevelSuggestion=1	maxLevelSuggestion=14	maxNumPlayers=0	displayType=4	orderIndex=0	useHonorLevel=false	showQuickJoinToast=false	isMythicPlusActivity=false	isRatedPvpActivity=false	isCurrentRaidActivity=false	isPvpActivity=false	isMythicActivity=false	allowCrossFaction=true	isHeroicActivity=false	isNormalActivity=false	mapID=0	difficultyID=0	redirectedDifficultyID=0	useDungeonRoleExpectations=false
+activity	872	fullName=Silverpine Forest	shortName=Silverpine Forest	categoryID=116	groupFinderActivityGroupID=295	ilvlSuggestion=0	filters=165	minLevel=0	minLevelSuggestion=8	maxLevelSuggestion=24	maxNumPlayers=0	displayType=4	orderIndex=0	useHonorLevel=false	showQuickJoinToast=false	isMythicPlusActivity=false	isRatedPvpActivity=false	isCurrentRaidActivity=false	isPvpActivity=false	isMythicActivity=false	allowCrossFaction=true	isHeroicActivity=false	isNormalActivity=false	mapID=0	difficultyID=0	redirectedDifficultyID=0	useDungeonRoleExpectations=false
+activity	873	fullName=Alterac Mountains	categoryID=116	groupFinderActivityGroupID=295	minLevel=0	maxLevelSuggestion=44	maxNumPlayers=0
+activity	1989	fullName=Riverglades	shortName=Riverglades	categoryID=116	groupFinderActivityGroupID=295	ilvlSuggestion=0	filters=165	minLevel=0	minLevelSuggestion=33	maxLevelSuggestion=54	maxNumPlayers=0	displayType=4	orderIndex=0	useHonorLevel=false	showQuickJoinToast=false	isMythicPlusActivity=false	isRatedPvpActivity=false	isCurrentRaidActivity=false	isPvpActivity=false	isMythicActivity=false	allowCrossFaction=true	isHeroicActivity=false	isNormalActivity=false	mapID=0	difficultyID=0	redirectedDifficultyID=0	useDungeonRoleExpectations=false
+category	120	allowCrossFaction=false	autoChooseActivity=true	name=Custom	preferCurrentArea=false	separateRecommended=false	showPlaystyleDropdown=false
+activity	1064	fullName=Custom	shortName=Custom	categoryID=120	groupFinderActivityGroupID=0	ilvlSuggestion=0	filters=165	minLevel=0	minLevelSuggestion=0	maxLevelSuggestion=0	maxNumPlayers=0	displayType=5	orderIndex=0	useHonorLevel=false	showQuickJoinToast=false	isMythicPlusActivity=false	isRatedPvpActivity=false	isCurrentRaidActivity=false	isPvpActivity=false	isMythicActivity=false	allowCrossFaction=true	isHeroicActivity=false	isNormalActivity=false	mapID=0	difficultyID=0	redirectedDifficultyID=0	useDungeonRoleExpectations=false
+ungrouped	2	796,797,798,799,800,801
+ungrouped	116	1989,872,871,870,869,868
+ungrouped	120	1064
+languages	enUS,koKR,frFR,deDE,zhCN,esES,zhTW,esMX,ruRU,ptBR,itIT
+defaultLanguages	enUS
+savedLanguages	
+function	AcceptInvite
+function	ApplyToGroup
+function	CanActiveEntryUseAutoAccept
+function	CanCreateQuestGroup
+function	CanCreateScenarioGroup
+function	CancelApplication
+function	ClearApplicationTextFields
+function	ClearCreationTextFields
+function	ClearSearchResults
+function	ClearSearchTextFields
+function	ConfirmCensoredActiveEntry
+function	CopyActiveEntryInfoToCreationFields
+function	CreateListing
+function	CreateScenarioListing
+function	DeclineApplicant
+function	DeclineInvite
+function	DoesCensoredTextMatch
+function	DoesEntryTitleMatchPrebuiltTitle
+function	GetActiveEntryInfo
+function	GetActivityFullName
+function	GetActivityGroupInfo
+function	GetActivityIDForQuestID
+function	GetActivityInfoExpensive
+function	GetActivityInfoTable
+function	GetAdvancedFilter
+function	GetApplicantBestDungeonScore
+function	GetApplicantDungeonScoreForListing
+function	GetApplicantInfo
+function	GetApplicantMemberInfo
+function	GetApplicantMemberStats
+function	GetApplicantPvpRatingInfoForListing
+function	GetApplicants
+function	GetApplicationInfo
+function	GetApplications
+function	GetAvailableActivities
+function	GetAvailableActivityGroups
+function	GetAvailableCategories
+function	GetAvailableLanguageSearchFilter
+function	GetAvailableRoles
+function	GetDefaultLanguageSearchFilter
+function	GetFilteredSearchResults
+function	GetGroupLeaverCountsByRole
+function	GetKeystoneForActivity
+function	GetLanguageSearchFilter
+function	GetLfgCategoryInfo
+function	GetNumApplicants
+function	GetNumApplications
+function	GetNumInvitedApplicantMembers
+function	GetNumPendingApplicantMembers
+function	GetOwnedKeystoneActivityAndGroupAndLevel
+function	GetPlaystyleString
+function	GetPremadeGroupFinderStyle
+function	GetRoleCheckInfo
+function	GetSearchResultEncounterInfo
+function	GetSearchResultFriends
+function	GetSearchResultInfo
+function	GetSearchResultLeaderInfo
+function	GetSearchResultMemberCounts
+function	GetSearchResultPlayerInfo
+function	GetSearchResults
+function	HasActiveEntryInfo
+function	HasActivityList
+function	HasSearchResultInfo
+function	InviteApplicant
+function	IsCensoredActiveEntryUnresolved
+function	IsCurrentlyApplying
+function	IsPlayerAuthenticatedForLFG
+function	IsPlayerValidForEndgameFieldEdits
+function	IsPremadeGroupFinderEnabled
+function	ListingUsesEndgameEditRestrictions
+function	RefreshApplicants
+function	RemoveApplicant
+function	RemoveListing
+function	ReportGroupAsAdvertisement
+function	RequestAvailableActivities
+function	RevealCensoredActiveEntry
+function	RevealCensoredSearchResult
+function	SaveAdvancedFilter
+function	SaveLanguageSearchFilter
+function	Search
+function	SetApplicantMemberRole
+function	SetEntryTitle
+function	SetSearchToActivity
+function	SetSearchToQuestID
+function	SetSearchToScenarioID
+function	UpdateListing
+function	ValidateRequiredDungeonScore
+function	ValidateRequiredPvpRatingForActivity
+entryField	activityIDs={799}
+entryField	autoAccept=false
+entryField	censored=false
+entryField	comment=
+entryField	duration=1794
+entryField	generalPlaystyle=0
+entryField	isCrossFactionListing=false
+entryField	name=
+entryField	newPlayerFriendly=false
+entryField	privateGroup=false
+entryField	requiredHonorLevel=0
+entryField	requiredItemLevel=0
+entryField	voiceChat=
+entryField	voiceMode=0
+resultField	activityIDs
+resultField	age
+resultField	autoAccept
+resultField	censored
+resultField	comment
+resultField	crossFactionListing
+resultField	generalPlaystyle
+resultField	hasSelf
+resultField	isDelisted
+resultField	isWarMode
+resultField	leaderDungeonScoreInfo
+resultField	leaderFactionGroup
+resultField	leaderName
+resultField	leaderOverallDungeonScore
+resultField	leaderPvpRatingInfo
+resultField	name
+resultField	newPlayerFriendly
+resultField	numBNetFriends
+resultField	numCharFriends
+resultField	numGuildMates
+resultField	numMembers
+resultField	partyGUID
+resultField	playstyle
+resultField	requiredDungeonScore
+resultField	requiredHonorLevel
+resultField	requiredItemLevel
+resultField	requiredPvpRating
+resultField	searchResultID
+resultField	voiceChat
+resultField	voiceMode
+memberCountField	DAMAGER
+memberCountField	DAMAGER_REMAINING
+memberCountField	DRUID
+memberCountField	HEALER
+memberCountField	HEALER_REMAINING
+memberCountField	HUNTER
+memberCountField	MAGE
+memberCountField	NOROLE
+memberCountField	PALADIN
+memberCountField	PRIEST
+memberCountField	ROGUE
+memberCountField	SHAMAN
+memberCountField	TANK
+memberCountField	TANK_REMAINING
+memberCountField	WARLOCK
+memberCountField	WARRIOR
+memberCountField	classesByRole.DAMAGER	DRUID,HUNTER,MAGE,PALADIN,PRIEST,ROGUE,SHAMAN,WARLOCK,WARRIOR
+memberCountField	classesByRole.HEALER	DRUID,HUNTER,MAGE,PALADIN,PRIEST,ROGUE,SHAMAN,WARLOCK,WARRIOR
+memberCountField	classesByRole.TANK	DRUID,HUNTER,MAGE,PALADIN,PRIEST,ROGUE,SHAMAN,WARLOCK,WARRIOR
+verdict	Search	timer (C_Timer.After, pcall)	blocked: ADDON_ACTION_BLOCKED(<addon>, UNKNOWN()); no results event before the probe was saved (its 10 s wait unfinished)
+verdict	UpdateListing	click (OnClick, pcall, after Search)	blocked: ADDON_ACTION_BLOCKED(<addon>, UNKNOWN())
+verdict	Search	click (OnClick, pcall)	allowed: LFG_LIST_SEARCH_RESULTS_RECEIVED() 1 s after the click's ADDON_ACTION_BLOCKED, results > 0
+verdict	Search	the Group Finder's OnShow hook (opened with its key)	allowed: LFG_LIST_SEARCH_RESULTS_RECEIVED() 1 s after opening, nothing blocked
+verdict	Search	a slash command (pcall)	allowed: no results; LFG_LIST_SEARCH_RESULTS_RECEIVED, results > 0; GetSearchResultMemberInfo missing
+verdict	RemoveListing	click (OnClick, pcall)	allowed: LFG_LIST_ACTIVE_ENTRY_UPDATE(nil), HasActiveEntryInfo true before, false 2 s after; nothing blocked

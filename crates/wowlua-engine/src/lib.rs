@@ -5,49 +5,81 @@
 
 pub mod achievements;
 pub mod actions;
+pub mod actions2;
 pub mod animations;
 pub mod api;
 pub mod args;
 pub mod auction;
 pub mod auras;
+pub mod aurastates;
 pub mod bank;
 pub mod bars;
+pub mod batch;
 pub mod bindings;
+pub mod blanks;
+pub mod buttons;
 pub mod casting;
 pub mod channels;
 pub mod character;
 pub mod chat;
 pub mod clock;
+pub mod collections;
+pub mod conditionals;
+pub mod content;
 pub mod controls;
 pub mod cursor;
 pub mod curves;
+pub mod damagemeter;
 pub mod death;
 pub mod editmode;
+pub mod encounters;
+pub mod equipsets;
+pub mod extras;
 pub mod facts;
+pub mod formatters;
 pub mod framescript;
 pub mod gamedata;
+pub mod globalsinfo;
 pub mod gossip;
+pub mod guild;
+pub mod healcalc;
 pub mod input;
 pub mod inspect;
 pub mod inventory;
+pub mod iteminfo;
 pub mod itemlocation;
+pub mod leftovers2;
 pub mod levels;
+pub mod lfg;
 pub mod login;
 pub mod loot;
 pub mod macros;
 pub mod mail;
+pub mod maps;
+pub mod measures;
 pub mod merchant;
+pub mod methods2;
+pub mod methods3;
+pub mod misc;
+pub mod objects2;
 pub mod party;
+pub mod pets;
 pub mod protection;
 pub mod queries;
+pub mod questinfo;
 pub mod quests;
 pub mod recorded;
+pub mod social;
+pub mod spellinfo;
 pub mod stats;
+pub mod systeminfo;
 pub mod taxi;
 pub mod tooltip;
+pub mod tradeskill;
 pub mod trainer;
 pub mod traits;
 pub mod ui;
+pub mod unitinfo;
 pub mod units;
 pub mod widgetdata;
 pub mod widgets;
@@ -65,12 +97,25 @@ pub struct Engine {
     pub plain_results: bool,
     /// Behaviour by function name (`C_Timer.After`).
     behaviours: HashMap<&'static str, NativeFn>,
+    /// The functions answered by a fill-in (`fill_ins`): secure code's
+    /// calls of them are still noted for the probes, as defaulted ones.
+    fill_ins: std::collections::HashSet<&'static str>,
     /// Widget methods' behaviour by name (`Show`), or by class and name
-    /// (`Button:Click`) where a class differs.
-    methods: HashMap<&'static str, widgets::MethodFn>,
+    /// (`Button:Click`) where a class differs. Looked up, never iterated:
+    /// its hasher is not observable.
+    methods: rustc_hash::FxHashMap<&'static str, widgets::MethodFn>,
+    /// Each class's lineage (`widgets::lineage`), worked out once: the
+    /// documentation's classes do not change.
+    pub(crate) lineages: std::cell::RefCell<rustc_hash::FxHashMap<String, std::rc::Rc<[String]>>>,
     pub world: widgets::World,
     pub timers: clock::Timers,
+    /// The events owed at the frame's end (`batch`).
+    pub batch: batch::Batch,
+    /// The damage meter's sessions (`damagemeter`).
+    pub damage_meter: damagemeter::DamageMeter,
     pub units: units::Units,
+    /// The action bar page (`conditionals`).
+    pub bars: conditionals::Bars,
     /// Animation groups playing.
     pub animations: animations::Animations,
     /// Protected actions refused so far.
@@ -92,6 +137,9 @@ pub struct Engine {
     /// Documented namespaces only Blizzard's secure code has (none of their
     /// functions in the client's addon environment: `C_PingSecure`).
     pub secure_namespaces: Vec<(wowlua_vm::StrRef, Value)>,
+    /// The behaviours of undocumented functions that check their arguments
+    /// first (`args::install_usages`), by name.
+    pub(crate) usage_checked: HashMap<&'static str, NativeFn>,
 }
 
 impl Engine {
@@ -201,72 +249,109 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
     } else {
         Vec::new()
     };
+    // The engine's own behaviours, the recorded answers first: any
+    // behaviour of the engine's own takes their place (and a fill-in's that
+    // a setter of its changes, `OVER_RECORDED`).
+    let own: HashMap<&'static str, NativeFn> = recorded::behaviours(flavor)
+        .into_iter()
+        .chain(traits::recorded_behaviours(flavor))
+        .filter(|(name, _)| !OVER_RECORDED.contains(name))
+        .chain(clock::behaviours())
+        .chain(units::behaviours())
+        .chain(units::more_behaviours())
+        .chain(curves::behaviours())
+        .chain(healcalc::behaviours())
+        .chain(damagemeter::behaviours())
+        .chain(formatters::behaviours())
+        .chain(widgets::functions())
+        .chain(auras::behaviours())
+        .chain(gamedata::behaviours())
+        .chain(character::behaviours())
+        .chain(stats::behaviours())
+        .chain(actions::behaviours())
+        .chain(editmode::behaviours())
+        .chain(channels::behaviours())
+        .chain(macros::behaviours())
+        .chain(cursor::behaviours())
+        .chain(input::behaviours())
+        .chain(casting::behaviours())
+        .chain(merchant::behaviours())
+        .chain(loot::behaviours())
+        .chain(quests::behaviours())
+        .chain(gossip::behaviours())
+        .chain(trainer::behaviours())
+        .chain(taxi::behaviours())
+        .chain(maps::behaviours())
+        .chain(misc::behaviours())
+        .chain(mail::behaviours())
+        .chain(bank::behaviours())
+        .chain(auction::behaviours())
+        .chain(itemlocation::behaviours())
+        .chain(death::behaviours())
+        .chain(inventory::behaviours())
+        .chain(queries::behaviours())
+        .chain(objects2::behaviours())
+        .chain(party::behaviours())
+        .chain(inspect::behaviours())
+        .chain(traits::behaviours(flavor))
+        .chain(achievements::behaviours())
+        .chain(tradeskill::behaviours(flavor))
+        .chain(tooltip::behaviours())
+        .chain(chat::behaviours())
+        .chain(bindings::behaviours())
+        .chain(facts::behaviours())
+        .chain(equipsets::behaviours())
+        .chain(encounters::behaviours())
+        .chain(pets::behaviours())
+        .chain(conditionals::behaviours())
+        .chain(lfg::behaviours())
+        .chain(guild::behaviours())
+        .chain([
+            ("import", ui::build::import as NativeFn),
+            (
+                "C_XMLUtil.GetTemplateInfo",
+                ui::build::template_info as NativeFn,
+            ),
+        ])
+        .chain(framescript::functions())
+        .collect();
+    // The fill-ins answer only what nothing else does.
+    let fill = fill_ins();
+    let fill_ins: std::collections::HashSet<&'static str> = fill
+        .iter()
+        .map(|(name, _)| *name)
+        .filter(|name| !own.contains_key(name))
+        .collect();
     vm.host = Some(Box::new(Engine {
         flavor: flavor.to_string(),
         api,
-        // The recorded answers first: any behaviour of the engine's own
-        // takes their place.
-        behaviours: recorded::behaviours(flavor)
+        behaviours: fill.into_iter().chain(own).collect(),
+        fill_ins,
+        // The fill-in methods first: the engine's own take their place.
+        methods: methods2::methods()
             .into_iter()
-            .chain(traits::recorded_behaviours(flavor))
-            .chain(clock::behaviours())
-            .chain(units::behaviours())
-            .chain(units::more_behaviours())
-            .chain(curves::behaviours())
-            .chain(widgets::functions())
-            .chain(auras::behaviours())
-            .chain(gamedata::behaviours())
-            .chain(character::behaviours())
-            .chain(stats::behaviours())
-            .chain(actions::behaviours())
-            .chain(editmode::behaviours())
-            .chain(channels::behaviours())
-            .chain(macros::behaviours())
-            .chain(cursor::behaviours())
-            .chain(input::behaviours())
-            .chain(casting::behaviours())
-            .chain(merchant::behaviours())
-            .chain(loot::behaviours())
-            .chain(quests::behaviours())
-            .chain(gossip::behaviours())
-            .chain(trainer::behaviours())
-            .chain(taxi::behaviours())
-            .chain(mail::behaviours())
-            .chain(bank::behaviours())
-            .chain(auction::behaviours())
-            .chain(itemlocation::behaviours())
-            .chain(death::behaviours())
-            .chain(inventory::behaviours())
-            .chain(queries::behaviours())
-            .chain(party::behaviours())
-            .chain(inspect::behaviours())
-            .chain(traits::behaviours(flavor))
-            .chain(achievements::behaviours())
-            .chain(tooltip::behaviours())
-            .chain(chat::behaviours())
-            .chain(bindings::behaviours())
-            .chain(facts::behaviours())
-            .chain([
-                ("import", ui::build::import as NativeFn),
-                (
-                    "C_XMLUtil.GetTemplateInfo",
-                    ui::build::template_info as NativeFn,
-                ),
-            ])
-            .chain(framescript::functions())
-            .collect(),
-        methods: widgets::behaviours()
-            .into_iter()
+            .chain(methods3::methods())
+            .chain(widgets::behaviours())
             .chain(curves::methods())
+            .chain(objects2::methods())
+            .chain(clock::methods())
+            .chain(healcalc::methods())
+            .chain(formatters::methods())
             .chain(framescript::methods())
             .chain(animations::methods())
             .chain(tooltip::methods())
             .chain(input::methods())
             .chain(bars::methods())
+            .chain(buttons::methods())
+            .chain(measures::methods())
             .collect(),
+        lineages: Default::default(),
         world: widgets::World::default(),
         timers: clock::Timers::default(),
+        batch: batch::Batch::default(),
+        damage_meter: Default::default(),
         units: units::Units::default(),
+        bars: Default::default(),
         refusals: Vec::new(),
         animations: Default::default(),
         defaulted: Default::default(),
@@ -276,7 +361,9 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         secure_tables,
         main_globals: vm.globals,
         secure_namespaces: Vec::new(),
+        usage_checked: HashMap::new(),
     }));
+    vm.untrusted_layout_forbidden = Some(protection::untrusted_layout_forbidden);
     // Protected functions the documentation lacks.
     for &name in protection::PROTECTED {
         let (ns, short) = match name.split_once('.') {
@@ -300,13 +387,24 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             None => {}
         }
     }
+    // Functions needing the user's action the documentation lacks.
+    for &name in protection::HARDWARE {
+        if !name.contains('.') && vm.get_global(name).is_nil() {
+            let upval = vm.str(name);
+            let native = vm.native_with(name, protection::hardware_global, vec![upval]);
+            vm.set_global(name, native);
+        }
+    }
     // Functions with behaviour the documentation lacks (`IsInGroup`): the
     // client has them (camelot's inventory; other flavors unverified).
-    let names: Vec<(&'static str, NativeFn)> = engine(vm)
+    // By name: the globals made in the same order every run (a map's
+    // order is random; `pairs(_G)` and the handles followed it).
+    let mut names: Vec<(&'static str, NativeFn)> = engine(vm)
         .behaviours
         .iter()
         .map(|(&n, &f)| (n, f))
         .collect();
+    names.sort_by_key(|(n, _)| *n);
     for (name, f) in names {
         let (ns, short) = match name.split_once('.') {
             Some((ns, short)) => (Some(ns), short),
@@ -348,10 +446,16 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         };
         let key = vm.heap.intern(short.as_bytes());
         if !vm.heap.table(table).get_str(key).is_nil() {
-            engine_mut(vm)
-                .behaviours
-                .entry(name)
-                .or_insert(facts::recorded_call);
+            // A recorded answer takes a fill-in's place.
+            let engine = engine_mut(vm);
+            if engine.fill_ins.contains(name) && !OVER_RECORDED.contains(&name) {
+                engine.behaviours.insert(name, facts::recorded_call);
+            } else {
+                engine
+                    .behaviours
+                    .entry(name)
+                    .or_insert(facts::recorded_call);
+            }
             continue;
         }
         let upval = vm.str(name);
@@ -435,7 +539,16 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
             }
         }
     }
+    // The undocumented functions' own argument checks (camelot's).
+    if flavor == "camelot" {
+        args::install_usages(vm);
+    }
     units::install(vm);
+    // The camelot character leads a guild, as the recorded one does
+    // (`guild.rs`; decision: the default character is in a guild).
+    if flavor == "camelot" {
+        engine_mut(vm).world.chat.guild = Some(guild::Guild::recorded());
+    }
     // The CVars' defaults (camelot's, recorded by `/stdtest engine`; other
     // flavors: the deprecation fallbacks, which the client has).
     let cvars: Vec<(String, String)> = if flavor == "camelot" {
@@ -490,6 +603,9 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         }
     }
     widgets::create(vm, "Frame", Some("WorldFrame".into()), None);
+    // The errors the client drops without a report are the engine's
+    // errors too (`ui::DROPPED`).
+    vm.on_dropped_error = Some(ui::dropped_error);
     Ok(())
 }
 
@@ -625,7 +741,12 @@ pub fn defaults(vm: &mut Vm, api: &api::Api, doc: &serde_json::Value) -> Vec<Val
 
 /// A documented value's empty value: a structure with its fields' (to a
 /// depth), a number 0, a string "", false, an empty table.
-fn default_value(vm: &mut Vm, api: &api::Api, r: &serde_json::Value, depth: usize) -> Value {
+pub(crate) fn default_value(
+    vm: &mut Vm,
+    api: &api::Api,
+    r: &serde_json::Value,
+    depth: usize,
+) -> Value {
     let nilable = r.get("Nilable").and_then(serde_json::Value::as_bool) == Some(true);
     let ty = r
         .get("Type")
@@ -634,7 +755,12 @@ fn default_value(vm: &mut Vm, api: &api::Api, r: &serde_json::Value, depth: usiz
     if nilable {
         return Value::Nil;
     }
-    let ty = api.aliases.get(ty).map(String::as_str).unwrap_or(ty);
+    // `Seconds` (declared `any`) a number: SuuUI probe timeline,
+    // `C_EncounterTimeline` answered 0.
+    let ty = match ty {
+        "Seconds" => "number",
+        _ => api.aliases.get(ty).map(String::as_str).unwrap_or(ty),
+    };
     match ty {
         "bool" | "boolean" => Value::Bool(false),
         "string" | "cstring" => vm.str(""),
@@ -664,9 +790,12 @@ fn default_value(vm: &mut Vm, api: &api::Api, r: &serde_json::Value, depth: usiz
             .and_then(|(_, f)| f.first().map(|(_, v)| Value::Num(*v)))
             .unwrap_or(Value::Num(0.0)),
         _ if ty.contains("string") => vm.str(""),
-        // Numbers by their alias; other types are objects.
+        // Numbers by their alias; other types are objects. By their names
+        // `normalizedValue` and `FrameTime` too (unverified).
         "number" | "luaIndex" | "uiUnit" | "fileID" | "time_t" | "BigInteger" | "BigUInteger"
-        | "WOWMONEY" | "SingleColorValue" | "uiFontHeight" => Value::Num(0.0),
+        | "WOWMONEY" | "SingleColorValue" | "uiFontHeight" | "normalizedValue" | "FrameTime" => {
+            Value::Num(0.0)
+        }
         // An object of its mixin (`ColorMixin`), when Blizzard's code
         // defined it.
         _ if r.get("Mixin").is_some() => {
@@ -757,6 +886,86 @@ pub(crate) fn call_text(vm: &Vm, name: &str, c: &NativeCall, first: usize) -> St
     format!("{name}({})", args.join(", "))
 }
 
+/// Fill-ins whose answer a setter of theirs changes: they take the place
+/// of the recorded answer, which they give until set (the dungeon
+/// difficulty recorded 1, the action bar toggles, the heirloom and wardrobe filters recorded
+/// checked, nothing super-tracked, no map pin).
+const OVER_RECORDED: &[&str] = &[
+    // The tracked filters' rule (`systeminfo.rs`), over the one recorded
+    // filter.
+    "C_Minimap.IsFilteredOut",
+    // A rule over the recorded calls (the full probe: any sex, numbers
+    // taken whole, the pets' class 0).
+    "GetSpecializationInfoForClassID",
+    // An inspected unit's none (the full probe).
+    "GetNumSpecializations",
+    // The full probe's constants (`leftovers2.rs`), the recorded calls'
+    // answers for every argument.
+    "C_PetBattles.CanPetSwapIn",
+    "C_KeyBindings.GetBindingContextForAction",
+    "C_GameRules.GetGameRuleAsFrameStrata",
+    "C_SpecializationInfo.GetNumSpecializationsForClassID",
+    "C_SpecializationInfo.GetPvpTalentSlotInfo",
+    "C_ContentTracking.GetTrackablesOnMap",
+    "C_Club.ShouldAllowClubType",
+    "C_Club.GetAvatarIdList",
+    "GetDungeonDifficultyID",
+    // The full probe's answers over the load's (an older build's): no
+    // error callstack height set (nil), no expansion trial (false, nil).
+    "GetErrorCallstackHeight",
+    "GetExpansionTrialInfo",
+    // Rules over the recorded calls, asking them first: a game message's
+    // name from its index (the full probe: 1 `ERR_SYSTEM`), a monitor of
+    // none.
+    "GetGameMessageInfo",
+    "GetMonitorName",
+    "GetActionBarToggles",
+    "C_Heirloom.GetCollectedHeirloomFilter",
+    "C_Heirloom.GetUncollectedHeirloomFilter",
+    "C_Heirloom.GetClassAndSpecFilters",
+    "C_HeirloomInfo.IsUsingDefaultFilters",
+    "C_HeirloomInfo.SetDefaultFilters",
+    "C_TransmogCollection.IsUsingDefaultFilters",
+    "C_SuperTrack.GetSuperTrackedQuestID",
+    "C_SuperTrack.GetSuperTrackedMapPin",
+    "C_SuperTrack.GetSuperTrackedContent",
+    "C_SuperTrack.GetSuperTrackedVignette",
+    "C_Map.GetUserWaypointPositionForMap",
+    // The journal's mounts: the recorded ones' info and the full probe's
+    // (`collections.rs`).
+    "C_MountJournal.GetMountInfoByID",
+    "C_MountJournal.GetMountInfoExtraByID",
+    // A rule over the one recorded call (the full probe: the joined
+    // channels' shortcuts, nil past them).
+    "C_ChatInfo.GetChannelShortcutForChannelID",
+    // Nothing at load (recorded), nil once logged in (the full probe).
+    "C_VoiceChat.GetActiveChannelID",
+    "C_QuestSession.GetSessionBeginDetails",
+];
+
+/// The fill-in modules' behaviours: answers for functions no recording
+/// or model of the engine answers, from Blizzard's documentation and UI
+/// code, warcraft.wiki.gg and the functions' names (unverified).
+fn fill_ins() -> Vec<(&'static str, NativeFn)> {
+    unitinfo::behaviours()
+        .into_iter()
+        .chain(spellinfo::behaviours())
+        .chain(iteminfo::behaviours())
+        .chain(social::behaviours())
+        .chain(content::behaviours())
+        .chain(questinfo::behaviours())
+        .chain(collections::behaviours())
+        .chain(extras::behaviours())
+        .chain(globalsinfo::behaviours())
+        .chain(systeminfo::behaviours())
+        .chain(actions2::behaviours())
+        .chain(leftovers2::behaviours())
+        // Last: what the client answers with nothing there (the full
+        // probe) takes the place of the guesses above.
+        .chain(blanks::behaviours())
+        .collect()
+}
+
 /// Every API function: its behaviour, or the "not mocked" error.
 fn api_function(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(Value::Num(i)) = c.upvals.first().copied() else {
@@ -774,7 +983,17 @@ fn api_function(vm: &mut Vm, c: NativeCall) -> Ret {
         protection::refuse(vm, "ADDON_ACTION_FORBIDDEN", action);
         return Ok(defaults(vm, api, &f.doc));
     }
+    if protection::refuses_without_user(vm, f.name) {
+        return Ok(defaults(vm, api, &f.doc));
+    }
+    // Nothing, by the documentation's requirements (`extras`).
+    if extras::silent_unchecked(&f.doc) {
+        return Ok(vec![]);
+    }
     args::check(vm, api, f, &c)?;
+    if extras::silent_checked(&f.doc) {
+        return Ok(vec![]);
+    }
     let Some(behaviour) = behaviour else {
         // Blizzard's code gets empty values; the addon's code an error.
         if protection::blizzard_caller(vm) {
@@ -786,7 +1005,11 @@ fn api_function(vm: &mut Vm, c: NativeCall) -> Ret {
     };
     // The client's secrecy: results secret as the function's documentation
     // and the restrictions active say; a return marked never secret stays.
-    let secret = units::secret_results(vm, &f.doc, &c);
+    let flags = *f.secret_flags.get_or_init(|| units::secret_flags(&f.doc));
+    let secret = units::secret_results_flagged(vm, flags, &c);
+    if engine_mut(vm).fill_ins.contains(f.name) && protection::blizzard_caller(vm) {
+        note_default(vm, f.name, &c, 1);
+    }
     let results = behaviour(vm, c)?;
     // A behaviour may say its answer has nothing to hide (an empty action
     // slot's cooldown, recorded plain in combat).
@@ -798,8 +1021,7 @@ fn api_function(vm: &mut Vm, c: NativeCall) -> Ret {
         .doc
         .get("Returns")
         .and_then(serde_json::Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+        .map_or(&[][..], Vec::as_slice);
     Ok(results
         .into_iter()
         .enumerate()
@@ -833,6 +1055,23 @@ fn api_function(vm: &mut Vm, c: NativeCall) -> Ret {
                     {
                         continue;
                     }
+                    let k = vm.str(name);
+                    let fv = vm.heap.table(t).get(k);
+                    if !fv.is_nil() {
+                        let w = vm.secret_wrap(fv);
+                        let _ = vm.heap.table_mut(t).set(k, w);
+                    }
+                }
+                return v;
+            }
+            // A curve's color stays a readable color, its channels secret
+            // (`UnitHealthPercent(unit, true, colorCurve)`: ElvUI's oUF
+            // health bars call `GetRGB` on it, error-free in the client;
+            // unverified by a probe).
+            if ty == Some("LuaCurveEvaluatedResult")
+                && let Value::Table(t) = v
+            {
+                for name in ["r", "g", "b", "a"] {
                     let k = vm.str(name);
                     let fv = vm.heap.table(t).get(k);
                     if !fv.is_nil() {

@@ -1,0 +1,17 @@
+declare module "/methodprobeplan"
+    --- Each kind of widget: { name, the Lua making one (a chunk given P, its
+    --- hidden parent, and the makers F, T, S, M, L, A) }.
+    const kinds: { [number]: { [number]: string } }
+    --- Each probed method: { kind, method, arguments, read-back, … } (Lua
+    --- sources; a read-back "" for none, `#1` the call's first argument).
+    const calls: { [number]: { [number]: string } }
+    --- The calls with boundary numbers, after all others.
+    const risky: { [number]: { [number]: string } }
+    --- Each skipped method or kind and why: { name, reason }.
+    const skipped: { [number]: { [number]: string } }
+    --- Calls between two reloads.
+    const segmentSize: number
+    --- The plan's version (a run on another plan goes on at its first
+    --- call without an answer).
+    const version: string
+end

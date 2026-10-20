@@ -45,7 +45,7 @@ s:test("collections keep secrets without reading them", function(t)
         t:ok(secret.isSecret(heap:pop()), "the secret last")
     end
     const cache: LruCache<any, number> = LruCache.new(2)
-    const name = UnitName("player")
+    const name = UnitName("player") ?? ""
     cache:set(name, 1)
     t:ok(cache:has(name) ~= secret.isSecret(name), "a secret key is not stored")
 end)
@@ -54,7 +54,7 @@ s:test("utf8 by characters; a secret name passes truncate whole", function(t)
     t:eq(utf8.len("Jäger"), 5, "five characters")
     t:eq(utf8.sub("Jäger", 2, 2), "ä", "a whole character")
     t:eq(utf8.truncate("Jäger", 4, "..."), "J...", "cut with an ellipsis")
-    const name = UnitName("player")
+    const name = UnitName("player") ?? ""
     const short = utf8.truncate(name, 3)
     t:ok(secret.isSecret(short) == secret.isSecret(name), "a secret stays secret")
     const text = UIParent:CreateFontString(nil, "ARTWORK", "GameFontNormal")

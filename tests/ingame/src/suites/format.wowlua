@@ -14,6 +14,12 @@ s:test("table helpers", function(t)
     t:eq(filled.a, 5, "kept")
     t:eq(filled.b, 2, "filled")
     t:eq(table.concat(tbl.keys({ b = 1, a = 2 }), ","), "a,b", "sorted keys")
+    const frame = CreateFrame("Frame")
+    t:eq(tbl.copy({ [frame] = 1 })[frame], 1, "a frame as a key stays itself")
+    const shared = { 1 }
+    const apart = tbl.copy({ a = shared, b = shared }, { shared = false })
+    t:ok(apart.a ~= apart.b, "shared = false: a table of its own each")
+    t:eq(table.concat(tbl.keys({ b = 1, a = 2 }, function(x: string, y: string) return x > y end), ","), "b,a", "keys by a comparator")
 end)
 
 s:test("the client's formats", function(t)

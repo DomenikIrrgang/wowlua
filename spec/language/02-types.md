@@ -98,7 +98,8 @@ type Anchor =
 | `{ [K]: V }` | Map from `K` to `V` |
 | `{ x: number, y: number }` | Record. `,` or `;` separate fields. |
 | `{ name: string, label?: string }` | `label` is optional: `string?`, may be absent |
-| `{ ["end"]: number, ["my-key"]: string }` | Record fields whose keys are reserved words or not identifiers |
+| `{ ["end"]: number, ["my-key"]?: string }` | Record fields whose keys are reserved words or not identifiers (`?:` makes one optional) |
+| `{ readonly id: number, readonly ["end"]: number }` | Read-only fields: assigning one is E2010 |
 | `{ x: number, [string]: any }` | Record with an indexer for other keys |
 | `{ [number]: string, n: number }` | Table used both as an array and a record (e.g. the result of `{ ..., n = select("#", ...) }`) |
 
@@ -153,7 +154,9 @@ Type arguments are **always inferred at call sites**. An inferred type
 argument that does not satisfy its constraint is error E2014. There is no explicit
 call syntax like `f<number>(x)`, because in Lua `f < number > (x)` is a valid
 comparison expression. Expected types also drive inference:
-`local s: Stack<number> = Stack.new()`.
+`local s: Stack<number> = Stack.new()`. A parameter `T | Secret<T>` (or
+`T | Secret<T> | nil`) binds `T` from both parts of an argument: passing
+`string | Secret<string>` binds `T` to `string`.
 
 **Variance** (decision L34). For generic classes, interfaces and aliases:
 
@@ -174,6 +177,13 @@ local defaults = { scale = 1, locked = false }
 type Settings = typeof(defaults)    -- { scale: number, locked: boolean }
 ```
 
+The expression is typed where the alias stands, so it may only refer to
+names declared before it. A `typeof` alias has its type once its file has been
+checked up to it: in the file's later annotations and in the modules checked
+after it (importers, and a library's consumers, spec §5.4.4). Uses before
+that point, such as a hoisted function's signature or another alias that
+refers to it, read it as `any`.
+
 ### 2.2.8 Type predicates
 
 A function whose return type is `param is T` narrows its argument in the
@@ -183,8 +193,20 @@ caller:
   with its current type);
 - where the call is **falsy** (`else` branch, `if not p(x)`, after
   `if p(x) then return end`), the argument is narrowed by **excluding** the
-  members of its union type that are assignable to `T`. If the argument's type
-  is not a union, it is unchanged.
+  members of its union type that are assignable to `T`. A member that is a
+  supertype of `T` (`Frame` for `f is Button`) or `any` may be either, so it
+  stays in both.
+- a branch that **no member reaches** (every member excluded, as in a second
+  `if not issecretvalue(c) and c then … end` after the first returned, or the
+  `else` of a predicate every member fits) leaves the argument `never`: the
+  branch is **unreachable**, and nothing in it is reported. (Whether the code
+  after the `if` runs still depends only on `return`, `break` and calls that
+  never return, so it is not W1005.) The same holds for `canaccessvalue`
+  (§2.11).
+
+A generic predicate's type parameters are inferred from the argument's
+narrowed type: `plain<V>(v: V | Secret<V> | nil): v is V` called with a
+`number | Secret<number>` narrows it to `number`.
 
 ```wowlua
 local function isButton(f: Frame): f is Button
@@ -271,6 +293,7 @@ Inference is local and bidirectional. There is no whole-program inference.
 | Construct | Inferred type |
 |-----------|---------------|
 | `local x = 5` | declared type `number` (literal widened) |
+| `local y = ok and t` (`ok: boolean`, `t: T`) | `false \| T` (`false` and `true` beside types other than `nil` and booleans are not widened) |
 | `const X = 5` | `5` (literal kept) |
 | `local t = { a = 1, b = "x" }` | `{ a: number, b: string }` |
 | `local t = { 1, 2, 3 }` | `number[]` |
@@ -503,6 +526,19 @@ other locals are their declared type inside closures. A local
 narrowed to `nil` that a closure assigns is its declared type again after any
 call, which may run that closure.
 
+**Loops.** A local a loop body assigns may hold the body's values when the
+loop starts again. A declared local keeps its narrowing at the loop start
+(as the members of its declared type it fits: `0` in a `number?` is `number`)
+when every path back to the start, the end of the body and `continue`, leaves
+it within that narrowing; its `break` paths then join the flow after the loop.
+Otherwise, and for unannotated locals, the loop body sees the declared type
+(`any` for an unannotated local).
+
+**Fields through a narrowed local.** Assigning a field of an annotated local
+(`item.x = 1`) checks against the members of its declared type that its
+narrowed value fits: inside `if item then`, an `Item | false` local is an
+`Item`.
+
 ## 2.6 Assignability
 
 `S` is assignable to `T` when:
@@ -527,8 +563,15 @@ call, which may run that closure.
 - `S` is a record and `T` is an interface that `S` structurally satisfies
   (interfaces are **structural**);
 - `S` is an enum member type and `T` is that enum or its underlying primitive;
-- `S` is `table` and `T` is `{ [any]: any }`, or `S` is `function` and `T` is
-  `(...any) -> ...any` (the types every table and every function have);
+- `S` is `table` and `T` is a map whose values are `any` (`{ [any]: any }`,
+  `{ [string]: any }`, `{ [number]: any }`), or `S` is `function` and `T` is
+  `(...any) -> ...any` (the types every table and every function have). A map
+  with typed values (`{ [string]: number }`) needs a cast;
+- `S` is an array of `E` and `T` is a record whose named fields are all
+  optional and whose indexer takes numbers as keys and `E` as values
+  (`string[]` fits `{ [number]: any, talent?: boolean }`); a record without an
+  indexer takes an array only beside an array type in an intersection
+  (`string[]` fits `any[] & { jewel?: boolean }`, not `{ name?: string }`);
 - `S` is a record with a numeric indexer (`{ [number]: V, n: number }`) and `T`
   is an array of `V`'s supertype: the table used both as an array and a
   record (§2.2.4).
@@ -569,7 +612,17 @@ The global environment (`_G`) is modelled as a set of **declared globals**:
   and decision T83). A function is declared for a flavor only when that
   flavor's client has it (decision T85),
 - the globals of Blizzard's UI code (FrameXML functions, tables, mixins and
-  named frames) and its global strings (decision T84),
+  named frames) and its global strings (decision T84). A named frame of the
+  XML is typed by its mixins and its widget type, the most specific first
+  (`ChatFrame1: PrimaryChatFrameMixin & FloatingChatFrameMixin & … & Frame`):
+  the mixins of its `mixin` and `secureMixin` attributes, then those of the
+  templates it inherits, in order, and of its intrinsic type
+  (`<ScrollingMessageFrame>`). A member is looked up in the parts in order, so
+  a mixin's method comes before the widget's, as in the client. These mixins
+  are declared as classes with the functions their Lua defines (`function
+  M:F(a, b)` a method, `function M.F(a)` a function field); the parameters
+  are untyped (`any`) and the results any values. A mixin made with
+  `CreateFromMixins(A, B)` extends `A` and has `B`'s functions,
 - the Lua 5.1 standard library as available in WoW, and `LibStub`
   (decision T86). WoW has no `os`, `io`, `debug` or `package` library; it
   keeps `date`, `time` and `difftime` as globals. Its additions to `string`
@@ -594,7 +647,7 @@ guard (`if max > 0 then … end`).
 
 Reading an undeclared global is warning W1001 in basic mode and error E1001
 in strict mode. **Assigning** an undeclared global, including through
-`function foo()` in a module, is warning W1002 in basic mode and error E1002 in
+`function foo()` in a script, is warning W1002 in basic mode and error E1002 in
 strict mode. In pure Lua files both are always warnings (§2.1). Accidental
 globals are a common source of addon bugs and taint. Explicit
 `_G.name = value` or `_G["name"]` is always allowed.
@@ -700,10 +753,10 @@ wowlua models this with the type `Secret<T>`:
 
 | Rule | Detail |
 |------|--------|
-| Sources | API return values and event payload fields that Blizzard's API documentation marks as possibly secret are typed `T \| Secret<T>` by the generated `wow-api` types, for the flavors where restrictions apply. |
+| Sources | API return values and event payload fields that Blizzard's API documentation marks as possibly secret are typed `T \| Secret<T>` by the generated `wow-api` types, for the flavors where restrictions apply. A documented structure such a function returns is a readable table whose fields may be secret, as the client answers: the function returns the structure's companion `<Name>Secret` (`C_Spell.GetSpellCooldown` returns `SpellCooldownInfoSecret?`), whose fields are `T \| Secret<T>` except those documented `NeverSecret`, and whose lists of structures hold companions. Functions that never answer secrets keep the plain structure (`C_Spell.GetItemCooldown` returns `SpellCooldownInfo?`). |
 | Allowed operations | Assignment, passing as an argument where the parameter accepts `Secret<T>`, `..` (the result is `string \| Secret<string>`), `string.format`, `tostring`, `type()`, truthiness of non-boolean secrets |
 | Errors | Arithmetic, comparison, `#`, indexing, calling, use as a table key, or a boolean test on `Secret<boolean>`: error E2040 in strict mode and warning W2040 in basic mode and in pure Lua files |
-| Narrowing | `issecretvalue(v)` is declared as the predicate `v is Secret<unknown>`, and `canaccessvalue(v)` as its complement. The false branch of `issecretvalue` and the true branch of `canaccessvalue` remove all `Secret<…>` members (§2.2.8). |
+| Narrowing | `issecretvalue(v)` is declared as the predicate `v is Secret<unknown>`, and the global `canaccessvalue(v)` narrows as its complement (declared returning `boolean`; a local of that name does not narrow). The false branch of `issecretvalue` and the true branch of `canaccessvalue` remove all `Secret<…>` members (§2.2.8); the true branch of `issecretvalue` and the false branch of `canaccessvalue` keep only them. |
 | Widget setters | Declared to accept `T \| Secret<T>` where Blizzard documents secret support, so values can be displayed without being read |
 | Assignability | `Secret<T>` is not assignable to `T`. `T` is assignable to `T \| Secret<T>`. |
 | Erasure | Purely static. No runtime cost. |

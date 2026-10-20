@@ -20,6 +20,13 @@ pub struct Function {
     pub system: &'static str,
     /// Its documentation entry: `Arguments`, `Returns` and the flags.
     pub doc: Json,
+    /// Its arguments as the client checks them (`crate::args`), worked out
+    /// on the first call: from the first argument on, and from the second
+    /// (a method's, after `self`).
+    pub checked_arguments: [OnceLock<Vec<crate::args::Checked>>; 2],
+    /// The secrecy flags its documentation sets (`units::secret_flags`),
+    /// read on the first call.
+    pub secret_flags: OnceLock<u32>,
 }
 
 /// A widget class: its bases (from the annotations), its `CreateFrame`
@@ -29,6 +36,10 @@ pub struct Class {
     pub bases: Vec<String>,
     pub widget: Option<String>,
     pub methods: Vec<usize>,
+    /// A script object the client gives Lua as a userdata (its system's
+    /// `ObjectType = "Userdata"`: curves, numeric formatters, durations),
+    /// not as a table holding one at `[0]` as a frame.
+    pub userdata: bool,
 }
 
 pub struct Api {
@@ -126,6 +137,14 @@ pub fn api(flavor: &str) -> Option<&'static Api> {
             }
         }
     }
+    // Events the client knows that neither the documentation nor Ketho's
+    // event list names: `UPDATE_EXPANSION_LEVEL` (`C_EventUtils.
+    // IsEventValid` true in WoW Forever, probed 2026-10-19; Blizzard's
+    // StatusTrackingManagerOverrides.lua and ElvUI's experience bar
+    // register it).
+    if flavor == "camelot" {
+        parsed.events.insert("UPDATE_EXPANSION_LEVEL".to_string());
+    }
     // Frame types the client has that the documentation lacks or gives no
     // base (`/stdtest engine`: each a Frame by IsObjectType).
     for name in ["Browser", "OffScreenFrame", "AuraContainer", "Checkout"] {
@@ -136,6 +155,22 @@ pub fn api(flavor: &str) -> Option<&'static Api> {
         if class.widget.is_none() {
             class.widget = Some(name.to_string());
         }
+    }
+    // Events the client has that the documentation lacks (camelot): an
+    // addon's frame registers them and gets them.
+    if flavor == "camelot" {
+        // SuuUI probe lfg (lang): a frame registered it and got it after
+        // `C_AccountServices.RequestPreferredPlaySettings()`; the login
+        // recording has it too (`data/camelot-login.txt`).
+        parsed
+            .events
+            .insert("PREFERRED_PLAY_SETTINGS_UPDATED".to_string());
+    }
+    // A nameplate (the client makes them in code, `NAME_PLATE_CREATED`):
+    // a frame with the hit-test methods (unverified: no probe of its type).
+    let class = parsed.classes.entry("NamePlate".to_string()).or_default();
+    if class.bases.is_empty() {
+        class.bases.push("Frame".to_string());
     }
     // A model scene's actor has its base's methods (`ClearModel`, `Show`)
     // and an object's (`GetParent`: its scene); the documentation gives
@@ -231,6 +266,9 @@ fn parse(gz: &[u8]) -> Api {
         let system_env = str_of(system, "Environment");
         if kind == "ScriptObject" {
             let class = str_of(system, "Class").unwrap_or_else(|| sname.to_string());
+            if str_of(system, "ObjectType").as_deref() == Some("Userdata") {
+                api.classes.entry(class.clone()).or_default().userdata = true;
+            }
             for f in list(system, "Functions") {
                 let Some(short) = str_of(&f, "Name") else {
                     continue;
@@ -241,6 +279,8 @@ fn parse(gz: &[u8]) -> Api {
                     namespace: Some(leak(&class)),
                     system: sname,
                     doc: f,
+                    checked_arguments: Default::default(),
+                    secret_flags: OnceLock::new(),
                 });
                 let index = api.methods.len() - 1;
                 api.classes
@@ -255,10 +295,14 @@ fn parse(gz: &[u8]) -> Api {
                 let Some(short) = str_of(&f, "Name") else {
                     continue;
                 };
-                // A function may name its own namespace.
-                let namespace = str_of(&f, "Namespace")
-                    .filter(|n| !n.is_empty())
-                    .or_else(|| system_namespace.clone());
+                // A function may name its own namespace, an empty one the
+                // globals (`GetArenaOpponentSpec` in `C_PvP`'s system: the
+                // full probe's global checks its arguments as documented).
+                let namespace = match str_of(&f, "Namespace") {
+                    Some(n) if n.is_empty() => None,
+                    Some(n) => Some(n),
+                    None => system_namespace.clone(),
+                };
                 // Blizzard's secure code only: addons do not have it.
                 let env = str_of(&f, "Environment").or_else(|| system_env.clone());
                 if env.as_deref() == Some("SecureOnly") {
@@ -277,6 +321,8 @@ fn parse(gz: &[u8]) -> Api {
                     namespace: namespace.as_deref().map(leak),
                     system: sname,
                     doc: f,
+                    checked_arguments: Default::default(),
+                    secret_flags: OnceLock::new(),
                 });
             }
         }

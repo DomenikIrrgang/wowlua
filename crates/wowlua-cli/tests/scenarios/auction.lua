@@ -7,11 +7,14 @@ local e = __engine
 local player = e.player
 -- The paladin's hidden group buffs (HIDDEN_GROUP_BUFFS_CHANGED, recorded).
 e.setHiddenGroupBuffs({ 10300, 19740, 1022, 1038, 19979, 25290, 5599, 19834, 10292, 19876, 25898, 19977, 10293, 7294, 19898, 19978, 19888, 20729, 19837, 10298, 465, 10278, 25782, 19850, 10290, 6940, 10301, 10299, 25916, 19896, 19899, 1044, 25890, 19838, 25895, 25291, 1032, 19854, 25918, 19836, 19742, 19900, 19746, 25894, 19853, 19895, 19897, 19852, 10291, 19835, 19891, 20217, 643 })
-e.setSpellTraits({ offGlobalCooldown = { 20271 }, tracking = { 2580, 5502 }, profession = { 3100, 2656 } })
+e.setSpellTraits({ offGlobalCooldown = { 20271 }, tracking = { 2580, 5502 }, profession = { 3100, 2656 }, partyOrSelf = { 1022 } })
 e.defineItem(8067, { name = "Crafted Light Shot", quality = 1, icon = 132384, stackCount = 200, classID = 6, subclassID = 3, link = "|cnIQ1:|Hitem:8067::::::::21:1486:::::::::|h[Crafted Light Shot]|h|r" }, { cached = true })
+-- The WoW Token's info (an item the client has, not sold on Forever), not
+-- cached: fetched as the house's UI asks it. Its info's fields unrecorded.
+e.defineItem(122284, {}, { cached = false, delay = 0.034 })
 local stampi = e.spawnUnit({
     name = "Auctioneer Stampi", guid = "Creature-0-4615-1-6-8674-2B5E93E430", npcID = 8674, level = 50,
-    reaction = "neutral", class = "WARRIOR", classID = 1, sex = 2, powerType = 1,
+    reaction = "neutral", playerReaction = "friendly", class = "WARRIOR", classID = 1, sex = 2, powerType = 1,
     creatureType = "Humanoid", creatureTypeID = 7, factionGroup = "Horde", pvp = true,
 })
 -- What the house's searches found (the recording's answers): the browse
@@ -520,6 +523,11 @@ local browse = {
     { itemKey = { battlePetSpeciesID = 0, itemID = 4349, itemLevel = 25, itemSuffix = 0 }, minPrice = 200, totalQuantity = 17, containsOwnerItem = false },
 }
 local infoReceived = { 6299, 2515, 4603, 2679, 6362, 252031, 2519, 3033, 8068, 3745, 252028, 2516, 279962, 117, 5465 }
+-- Thunder Bluff's NPCs soft targeted all along (who, unrecorded: the soft
+-- friend's events alone tell, twelve; one stands in): Blessing of
+-- Protection unusable from the start (the snapshot), never told usable.
+local friend = e.spawnUnit({ name = "Thunder Bluff Brave", reaction = "friendly" })
+player:softTarget(friend, "friend")
 e.defineAuctionHouse(stampi, {
     browse = browse,
     infoReceived = infoReceived,
@@ -577,10 +585,12 @@ end
 local function world(...) e.fireEvent(...) end
 at(0.522) world("UPDATE_EXHAUSTION")
 at(6.250) world("ENCHANT_SPELL_COMPLETED", false, nil)
--- At the auctioneer: the round trip 0.315 s.
-e.setLatency(0.315)
+-- At the auctioneer: the round trip 0.315 s, the target's echo 0.477 s
+-- (UNIT_TARGET, after the house opened).
 at(8.489)
+e.setLatency(0.477)
 player:target(stampi)
+e.setLatency(0.315)
 stampi:setDistance(3)
 player:interact(stampi)
 at(9.0)
@@ -599,8 +609,16 @@ at(14.334) if shot then press(shot) end
 e.setLatency(0.381)
 at(15.287) press(AuctionHouseFrame.CommoditiesBuyFrame.BuyDisplay.BuyButton)
 at(16.118) press(AuctionHouseFrame.BuyDialog.BuyNowButton)
+-- The mail's news again (the server's, 0.45 s after the purchase's).
+at(17.312) world("UPDATE_PENDING_MAIL")
 at(17.6)
 check("one Light Shot bought", GetMoney() == 21681)
+-- Back to the browse results (a panel button's click, recorded); tooltip
+-- data updated after it (the client's, its cause unmodelled).
+at(18.698) press(AuctionHouseFrame.CommoditiesBuyFrame.BackButton)
+for _, step in ipairs({ { 18.852, 1073 }, { 18.866, 1076 }, { 18.866, 1075 }, { 18.874, 1078 }, { 18.887, 1081 }, { 18.887, 1082 }, { 18.894, 1084 }, { 18.959, 1089 } }) do
+    at(step[1]) world("TOOLTIP_DATA_UPDATE", step[2])
+end
 at(19.435) press(AuctionHouseFrame.SellTab)
 at(20.349) player:wear()
 -- The gloves put up: their search, then posted.
@@ -617,3 +635,7 @@ at(30.5)
 check("the auction house closed", not AuctionHouseFrame:IsShown())
 at(37.332) world("UPDATE_EXHAUSTION") player:wear()
 at(39.8)
+-- /reload: the session ends (the camera turned meanwhile: its pitch
+-- saved as it was then).
+e.setCVar("cameraSavedPitch", "34.575909")
+at(39.883) ReloadUI()

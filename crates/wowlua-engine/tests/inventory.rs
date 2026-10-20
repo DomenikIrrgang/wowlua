@@ -175,6 +175,21 @@ fn every_function_of_the_client_exists_with_its_kind() {
         repo().join("crates/wowlua-engine/tests/client/forever-camelot-engine.lua"),
     )
     .expect("the engine fixture");
+    // The addons the client's session had loaded (the battery's
+    // `blizzardNow`: one may open a panel first, its addon's globals then
+    // defined), loaded here too.
+    if let Some(now) = engine_fixture
+        .lines()
+        .find_map(|l| l.trim().strip_prefix("[\"probe.blizzardNow\"] = \""))
+    {
+        for name in now.trim_end_matches("\",").split_whitespace() {
+            let src = format!(
+                "if not C_AddOns.IsAddOnLoaded({name:?}) then C_AddOns.LoadAddOn({name:?}) end"
+            );
+            let f = vm.load(src.as_bytes(), "=load").expect("compiles");
+            let _ = vm.call(f, &[]);
+        }
+    }
     let mut scalars = Vec::new();
     let mut scalar_total = 0;
     for line in engine_fixture.lines() {

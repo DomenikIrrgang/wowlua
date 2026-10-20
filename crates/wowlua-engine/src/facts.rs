@@ -196,10 +196,6 @@ pub fn recorded_call(vm: &mut Vm, c: NativeCall) -> Ret {
 
 // ------------------------------------------------- the neutral world
 
-fn nothing(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Nil])
-}
-
 fn no(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(false)])
 }
@@ -215,7 +211,11 @@ fn zero(_vm: &mut Vm, _c: NativeCall) -> Ret {
 /// No group: no members of any role.
 fn group_member_counts(vm: &mut Vm, _c: NativeCall) -> Ret {
     let t = vm.new_table();
-    for role in ["TANK", "HEALER", "DAMAGER", "NOROLE"] {
+    // By role and by class, the client's nine classes (the full probe).
+    for role in [
+        "TANK", "HEALER", "DAMAGER", "NOROLE", "WARRIOR", "PALADIN", "HUNTER", "ROGUE", "PRIEST",
+        "SHAMAN", "MAGE", "WARLOCK", "DRUID",
+    ] {
         let k = vm.str(role);
         let _ = vm.heap.table_mut(t).set(k, Value::Num(0.0));
     }
@@ -242,31 +242,31 @@ fn net_stats(_vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// `GetMirrorTimerInfo(index)`: no timer runs (`"UNKNOWN"`, which
-/// Blizzard's MirrorTimer.lua skips; the other values unverified).
+/// Blizzard's MirrorTimer.lua skips): seven values, the pause a number
+/// (the full probe: "UNKNOWN", 0, 0, 0, 0, "", 0).
 fn mirror_timer_info(vm: &mut Vm, _c: NativeCall) -> Ret {
     let unknown = vm.str("UNKNOWN");
     let empty = vm.str("");
-    Ok(vec![
-        unknown,
-        Value::Num(0.0),
-        Value::Num(0.0),
-        Value::Num(0.0),
-        Value::Bool(false),
-        empty,
-    ])
-}
-
-fn no_role(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![vm.str("NONE")])
+    let zero = Value::Num(0.0);
+    Ok(vec![unknown, zero, zero, zero, zero, empty, zero])
 }
 
 fn zeros(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(0.0), Value::Num(0.0)])
 }
 
-/// An empty backpack: its 16 slots.
-fn free_bag_slots(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(16.0)])
+/// The free slots of the backpack and the four bags (the full probe,
+/// 1.60.1: 2, the backpack's two, its other bag full; unverified: the
+/// reagent bag left out, which was full).
+fn free_bag_slots(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let free: usize = engine(vm)
+        .world
+        .character
+        .bags
+        .range(0..=4)
+        .map(|(_, b)| b.slots.saturating_sub(b.items.len()))
+        .sum();
+    Ok(vec![Value::Num(free as f64)])
 }
 
 /// Noon.
@@ -292,12 +292,28 @@ fn zone_pvp_info(vm: &mut Vm, _c: NativeCall) -> Ret {
     }
 }
 
-/// The continent the player is on (its name and ID; recorded after a
-/// Hearthstone: "Kalimdor", 1), else outside any: the 11 results empty.
+/// The instance the player is in (`encounters.rs`); else the continent
+/// the player is on (its name and ID; recorded after a Hearthstone:
+/// "Kalimdor", 1), else outside any: the 11 results empty.
 fn instance_info(vm: &mut Vm, _c: NativeCall) -> Ret {
+    if let Some(info) = crate::encounters::instance_info(vm) {
+        return Ok(info);
+    }
     let (empty, none) = (vm.str(""), vm.str("none"));
     let zero = Value::Num(0.0);
-    let (name, id) = match engine(vm).world.character.position.instance.clone() {
+    // Outside an instance: the continent the map lies on (the full probe:
+    // "Kalimdor", instance 1, in the Barrens; Eastern Kingdoms' 0
+    // unverified).
+    let position = engine(vm).world.character.position.clone();
+    let continent = position
+        .map_id
+        .and_then(|m| crate::maps::world_rect(vm, m as i64))
+        .and_then(|(instance, ..)| match instance as i64 {
+            0 => Some(("Eastern Kingdoms".to_string(), 0.0)),
+            1 => Some(("Kalimdor".to_string(), 1.0)),
+            _ => None,
+        });
+    let (name, id) = match position.instance.or(continent) {
         Some((n, id)) => (vm.str(&n), Value::Num(id)),
         None => (empty, zero),
     };
@@ -332,6 +348,119 @@ fn screen_height(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(widgets::SCREEN.1)])
 }
 
+/// `SetPortraitTexture(texture, unit [, disableMasking])`,
+/// `C_NamePlate.SetNamePlateSize(width, height)`: what the client draws,
+/// which the engine does not (nothing to read back: unverified that the
+/// portrait leaves the texture's file as it was).
+fn not_drawn(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![])
+}
+
+/// `C_PlayerInteractionManager.IsInteractingWithNpcOfType(type)`: that
+/// interaction is open (its `PLAYER_INTERACTION_MANAGER_FRAME_SHOW` told,
+/// its hide not yet).
+fn interacting_with(vm: &mut Vm, c: NativeCall) -> Ret {
+    // An enumeration's value: a non-number reads as 0, `None`, which is
+    // the type while no interaction is open (the full probe, 1.60.1: 0 and
+    // "x" true, 1 to 57 false, nothing open; unverified with one open).
+    let n = vm.tonumber(vm.hidden(c.arg(1))).unwrap_or(0.0).trunc();
+    let interactions = &engine(vm).world.interactions;
+    let open = if n == 0.0 {
+        interactions.is_empty()
+    } else {
+        interactions.contains(&n.to_bits())
+    };
+    Ok(vec![Value::Bool(open)])
+}
+
+/// `GetScreenWidth()`: UIParent's width, as `GetScreenHeight` its height.
+fn screen_width(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(widgets::SCREEN.0)])
+}
+
+/// The role `C_SpecializationInfo.GetSpecializationInfo(index)` answers
+/// for the player's specialization at that index (its fifth value).
+fn role_at(vm: &mut Vm, index: f64) -> Result<Value, wowlua_vm::LuaError> {
+    let ns = vm.get_global("C_SpecializationInfo");
+    let Value::Table(ns) = ns else {
+        return Ok(Value::Nil);
+    };
+    let k = vm.str("GetSpecializationInfo");
+    let f = vm.heap.table(ns).get(k);
+    let info = vm.call(f, &[Value::Num(index)])?;
+    Ok(info.get(4).copied().unwrap_or(Value::Nil))
+}
+
+/// The role of the player's (first) specialization, if it has one.
+pub(crate) fn own_specialization_role(vm: &mut Vm) -> Option<String> {
+    match role_at(vm, 1.0) {
+        Ok(Value::Str(s)) => Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
+        _ => None,
+    }
+}
+
+/// What `GetSpecializationRole(specIndex [, isInspect, isPet])` asks
+/// about: nothing for an index past the class's specializations (the
+/// full probe: -1, 0 and 2 nothing, 1 "DAMAGER"), an inspected unit's
+/// role 0, a number (`(1, 1)`, `GetSpecializationRoleEnum` alike;
+/// unverified why), a pet's none (unverified), else the player's.
+enum SpecRole {
+    Nothing,
+    Inspected,
+    Pet,
+    Own(Value),
+}
+
+fn spec_role(vm: &mut Vm, c: &NativeCall) -> Result<SpecRole, wowlua_vm::LuaError> {
+    let index = vm.tonumber(vm.hidden(c.arg(1))).unwrap_or(0.0).trunc();
+    // The class's one specialization (`GetNumSpecializations()`, the full
+    // probe: 1).
+    if index != 1.0 {
+        return Ok(SpecRole::Nothing);
+    }
+    if vm.hidden(c.arg(2)).truthy() {
+        return Ok(SpecRole::Inspected);
+    }
+    if vm.hidden(c.arg(3)).truthy() {
+        return Ok(SpecRole::Pet);
+    }
+    Ok(SpecRole::Own(role_at(vm, index)?))
+}
+
+/// `GetSpecializationRole(specIndex [, isInspect, isPet])`: the role
+/// `C_SpecializationInfo.GetSpecializationInfo(specIndex)` answers (its
+/// fifth value, recorded "DAMAGER" for the default warrior), as
+/// [`spec_role`] tells. Unverified: that the client's answers agree for
+/// every class.
+fn specialization_role(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(match spec_role(vm, &c)? {
+        SpecRole::Nothing => vec![],
+        SpecRole::Inspected => vec![Value::Num(0.0)],
+        SpecRole::Pet => vec![Value::Nil],
+        SpecRole::Own(role) => vec![role],
+    })
+}
+
+/// `GetSpecializationRoleEnum(specIndex [, isInspect, isPet])`: the role
+/// as `Enum.LFGRole` (recorded 2 for 1), as `GetSpecializationRole`.
+fn specialization_role_enum(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(match spec_role(vm, &c)? {
+        SpecRole::Nothing => vec![],
+        SpecRole::Inspected => vec![Value::Num(0.0)],
+        SpecRole::Pet => vec![Value::Nil],
+        SpecRole::Own(Value::Str(s)) => {
+            let n = match vm.str_bytes(s) {
+                b"TANK" => 0.0,
+                b"HEALER" => 1.0,
+                b"DAMAGER" => 2.0,
+                _ => -1.0,
+            };
+            vec![Value::Num(n)]
+        }
+        SpecRole::Own(_) => vec![Value::Nil],
+    })
+}
+
 /// The font objects made, in order: by name, else as `tostring` gives
 /// them (the client lists unnamed ones so).
 fn fonts(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -355,7 +484,7 @@ fn fonts(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 /// Each item quality's color (`/stdtest engine`, `qualityColors`): red,
 /// green, blue, alpha.
-const QUALITY_COLORS: [[f64; 4]; 9] = [
+pub(crate) const QUALITY_COLORS: [[f64; 4]; 9] = [
     [0.61568629741669, 0.61568629741669, 0.61568629741669, 1.0],
     [1.0, 1.0, 1.0, 1.0],
     [0.11764706671238, 1.0, 0.0, 1.0],
@@ -369,8 +498,13 @@ const QUALITY_COLORS: [[f64; 4]; 9] = [
 
 /// `C_ColorOverrides.GetColorForQuality(quality)`: a `ColorMixin` color
 /// (camelot's; an unknown quality gives nothing, unverified).
+///
+/// A string reads as quality 0 (the full probe, 1.60.1: "x" the poor gray).
 fn color_for_quality(vm: &mut Vm, c: NativeCall) -> Ret {
-    let q = vm.check_int(&c, 1)?;
+    let q = match vm.hidden(c.arg(1)) {
+        Value::Str(_) => 0,
+        _ => vm.check_int(&c, 1)?,
+    };
     let Some(rgba) = usize::try_from(q).ok().and_then(|q| QUALITY_COLORS.get(q)) else {
         return Ok(vec![Value::Nil]);
     };
@@ -470,11 +604,22 @@ fn rec_field<'a>(fields: &'a [(String, Rec)], key: &str) -> Option<&'a Rec> {
 /// (0-based inventory slot): the primary transmog slot of that inventory
 /// slot's name, else nothing. The client checks no argument (`/stdtest
 /// argcheck`: a number for `'x'`, `{}`): a non-number counts as 0.
+///
+/// The slot taken from 1 past a 32-bit integer is refused with the usage
+/// (the full probe, 1.60.1: 2147483647 refused, -1 nothing; unverified
+/// why).
 fn outfit_slot_from_inventory_slot(vm: &mut Vm, c: NativeCall) -> Ret {
     let inv = match vm.hidden(c.arg(1)) {
         Value::Num(n) => n.trunc(),
         _ => 0.0,
     } + 1.0;
+    if inv > 2_147_483_647.0 {
+        return Err(crate::args::refuse(
+            vm,
+            "C_TransmogOutfitInfo.GetTransmogOutfitSlotFromInventorySlot",
+            1,
+        ));
+    }
     let Some((name, ..)) = INVENTORY_SLOTS.iter().find(|(_, id, ..)| *id == inv) else {
         return Ok(vec![]);
     };
@@ -493,17 +638,27 @@ fn outfit_slot_from_inventory_slot(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `C_TransmogOutfitInfo.GetLinkedSlotInfo(slot)`: a slot with a secondary
 /// of the same name (shoulders): `{primarySlotInfo, secondarySlotInfo}`,
-/// else nothing.
+/// the same for either of the two, else nothing (the full probe, 1.60.1:
+/// slots 1 and 2 alike; a string as slot 0, nothing).
 fn linked_slot_info(vm: &mut Vm, c: NativeCall) -> Ret {
-    let slot = vm.check_int(&c, 1)? as f64;
+    let slot = match vm.hidden(c.arg(1)) {
+        Value::Num(n) => n.trunc(),
+        _ => 0.0,
+    };
     let locs = slot_locations();
-    let Some(primary) = locs
+    let Some(at) = locs
         .iter()
         .find(|l| matches!(rec_field(l, "slot"), Some(Rec::Num(n)) if *n == slot))
     else {
         return Ok(vec![]);
     };
-    let name = rec_field(primary, "slotName").cloned();
+    let name = rec_field(at, "slotName").cloned();
+    let Some(primary) = locs.iter().find(|l| {
+        rec_field(l, "slotName").cloned() == name
+            && matches!(rec_field(l, "isSecondary"), Some(Rec::Bool(false)))
+    }) else {
+        return Ok(vec![]);
+    };
     let Some(secondary) = locs.iter().find(|l| {
         rec_field(l, "slotName").cloned() == name
             && matches!(rec_field(l, "isSecondary"), Some(Rec::Bool(true)))
@@ -515,6 +670,49 @@ fn linked_slot_info(vm: &mut Vm, c: NativeCall) -> Ret {
         ("secondarySlotInfo".into(), Rec::Table((*secondary).clone())),
     ]);
     Ok(vec![build(vm, &info)])
+}
+
+/// `C_TransmogOutfitInfo.GetSlotGroupInfo()`: the transmogrifier's three
+/// columns of slots, each its primary slots' locations in slot order (the
+/// head to the wrists, the hands to the feet, the weapons) and no illusion
+/// slots (the full probe, 1.60.1).
+fn slot_group_info(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let mut locs: Vec<(f64, &'static Vec<(String, Rec)>)> = slot_locations()
+        .into_iter()
+        .filter(|l| matches!(rec_field(l, "isSecondary"), Some(Rec::Bool(false))))
+        .filter_map(|l| match rec_field(l, "slot") {
+            Some(Rec::Num(n)) => Some((*n, l)),
+            _ => None,
+        })
+        .collect();
+    locs.sort_by(|a, b| a.0.total_cmp(&b.0));
+    let mut groups: Vec<Rec> = Vec::new();
+    for position in 0..3 {
+        let in_group = |slot: f64| match position {
+            0 => slot <= 7.0,
+            1 => (8.0..=11.0).contains(&slot),
+            _ => slot >= 12.0,
+        };
+        let slots: Vec<(String, Rec)> = locs
+            .iter()
+            .filter(|(slot, _)| in_group(*slot))
+            .enumerate()
+            .map(|(i, (_, l))| ((i + 1).to_string(), Rec::Table((*l).clone())))
+            .collect();
+        groups.push(Rec::Table(vec![
+            ("appearanceSlotInfo".into(), Rec::Table(slots)),
+            ("illusionSlotInfo".into(), Rec::Table(Vec::new())),
+            ("position".into(), Rec::Num(f64::from(position))),
+        ]));
+    }
+    let list = Rec::Table(
+        groups
+            .into_iter()
+            .enumerate()
+            .map(|(i, g)| ((i + 1).to_string(), g))
+            .collect(),
+    );
+    Ok(vec![build(vm, &list)])
 }
 
 /// `C_Log.LogErrorMessage(message)`: the client's log of Lua errors
@@ -544,6 +742,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             outfit_slot_from_inventory_slot,
         ),
         ("C_TransmogOutfitInfo.GetLinkedSlotInfo", linked_slot_info),
+        ("C_TransmogOutfitInfo.GetSlotGroupInfo", slot_group_info),
         ("C_PaperDollInfo.GetInventorySlotInfo", inventory_slot_info),
         ("GetInventorySlotInfo", inventory_slot_info),
         ("GetGlobalEnvironment", global_environment),
@@ -556,44 +755,66 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_PvP.GetZonePVPInfo", zone_pvp_info),
         ("C_PetJournal.GetNumPets", zeros),
         ("C_VoiceChat.GetTtsVoices", empty_list),
-        ("GetCursorPosition", zeros),
         ("GetFonts", fonts),
         ("GetGameTime", game_time),
         ("C_Sound.PlaySound", play_sound),
         ("GetInstanceInfo", instance_info),
         ("GetPhysicalScreenSize", physical_screen_size),
         ("GetRealmName", realm_name),
+        // The same without spaces: the placeholder has none.
+        ("GetNormalizedRealmName", realm_name),
         ("GetScreenHeight", screen_height),
+        ("GetScreenWidth", screen_width),
+        ("SetPortraitTexture", not_drawn),
+        ("C_NamePlate.SetNamePlateSize", not_drawn),
+        ("GetSpecializationRole", specialization_role),
+        ("GetSpecializationRoleEnum", specialization_role_enum),
+        // The neutral world: no follower dungeon, keystone, house editor,
+        // garrison, friend online or warband bank gold.
+        ("C_LFGInfo.IsInLFGFollowerDungeon", no),
+        ("C_ChallengeMode.IsChallengeModeActive", no),
+        ("C_HouseEditor.IsHouseEditorActive", no),
+        ("C_Garrison.IsOnGarrisonMap", no),
+        ("C_FriendList.GetNumOnlineFriends", zero),
+        ("C_Bank.FetchDepositedMoney", zero),
+        // No item is new (`C_NewItems.IsNewItem`): nothing to clear. No
+        // cast has a target the engine knows: no target's class.
+        ("C_NewItems.ClearAll", not_drawn),
+        // The bags' search: nothing the engine filters by (unverified:
+        // the client's `INVENTORY_SEARCH_UPDATE`).
+        ("C_Container.SetItemSearch", not_drawn),
+        // The engine measures no addon's time (unverified: the profiler
+        // disabled answers 0 too).
+        ("C_AddOnProfiler.GetAddOnMetric", zero),
+        ("UnitSpellTargetClass", not_drawn),
+        // Keyboard and mouse.
+        ("IsUsingGamepad", no),
+        (
+            "C_PlayerInteractionManager.IsInteractingWithNpcOfType",
+            interacting_with,
+        ),
         ("GetActiveLootRollIDs", empty_list),
         ("C_LFGList.GetApplications", empty_list),
         // No pet battle, no nameplates.
         ("C_PetBattles.GetNumPets", zero),
-        ("C_PetBattles.GetHealth", zero),
-        ("C_PetBattles.GetMaxHealth", zero),
+        // (Health, level and experience are the full probe's,
+        // `leftovers2.rs`.)
         ("C_PetBattles.GetPower", zero),
         ("C_PetBattles.GetSpeed", zero),
-        ("C_PetBattles.GetLevel", zero),
-        ("C_PetBattles.GetXP", zeros),
-        ("C_NamePlate.GetNamePlateForUnit", nothing),
-        ("C_NamePlate.GetNamePlates", empty_list),
         ("C_LFGListRoles.GetSavedRoles", saved_roles),
         ("GetGroupMemberCounts", group_member_counts),
         ("GetNetStats", net_stats),
         ("GetMirrorTimerInfo", mirror_timer_info),
-        // No group, no role.
-        ("UnitGroupRolesAssigned", no_role),
         // The probed character's (`loadCalls`); the neutral world's 0.
         ("GetMaxBattlefieldID", zero),
-        ("GetNumLanguages", zero),
-        // No forms (a warrior's stances aside: unverified).
-        ("GetNumShapeshiftForms", zero),
-        ("GuildControlGetNumRanks", zero),
+        ("GetNumLanguages", crate::globalsinfo::get_num_languages),
+        // The shapeshift forms are the character's stats (`stats.rs`,
+        // `shapeshiftForms`: the paladin's two auras, as the client's
+        // `probe.loadCalls` answered), none without a snapshot.
         ("BNGetNumFriends", four_zeros),
-        ("C_LFGList.GetAvailableCategories", empty_list),
         ("C_MountJournal.GetNumMountsNeedingFanfare", zero),
         ("C_PetJournal.GetNumPetsNeedingFanfare", zero),
         ("GetSpellConfirmationPromptsInfo", empty_list),
-        ("IsGuildLeader", no),
         // Not a convention kiosk.
         ("Kiosk.IsEnabled", no),
         // No money on the cursor, no trade: Blizzard's money frames

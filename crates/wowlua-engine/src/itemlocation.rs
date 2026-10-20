@@ -95,9 +95,23 @@ fn get_stack_count(vm: &mut Vm, c: NativeCall) -> Ret {
     })
 }
 
+/// `C_Item.IsBound(location)`: a bag item as it was given; a worn item
+/// bound, as wearing binds it (the full probe, 1.60.1: the recorded
+/// character's shoulders; unverified: an item that never binds, its data's
+/// `bindType` 0, left unbound).
 fn is_bound(vm: &mut Vm, c: NativeCall) -> Ret {
-    let bound = held_at(vm, c.arg(1)).is_some_and(|h| h.bound);
+    let worn = field(vm, c.arg(1), "equipmentSlotIndex").is_some();
+    let bound = held_at(vm, c.arg(1)).is_some_and(|h| {
+        h.bound || (worn && num_of(character::item_field(vm, h.id, "bindType")) != Some(0.0))
+    });
     Ok(vec![Value::Bool(bound)])
+}
+
+fn num_of(v: Value) -> Option<f64> {
+    match v {
+        Value::Num(n) => Some(n),
+        _ => None,
+    }
 }
 
 fn is_locked(vm: &mut Vm, c: NativeCall) -> Ret {

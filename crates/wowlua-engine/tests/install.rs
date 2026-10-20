@@ -23,7 +23,7 @@ fn documented_functions_exist_and_are_not_mocked() {
     // Addon code: a function without behaviour fails.
     let f = vm
         .load_as(
-            b"return type(C_Calendar.GetNumGuildEvents), select(2, pcall(C_Calendar.GetNumGuildEvents)), type(GetTime), type(secretwrap)",
+            b"return type(IsCollisionEnabled), select(2, pcall(IsCollisionEnabled)), type(GetTime), type(secretwrap)",
             "@MyAddon/main.lua",
             "MyAddon",
         )
@@ -41,7 +41,7 @@ fn documented_functions_exist_and_are_not_mocked() {
         r,
         [
             "function",
-            "C_Calendar.GetNumGuildEvents is not mocked",
+            "IsCollisionEnabled is not mocked",
             "function",
             "function"
         ]
@@ -49,8 +49,8 @@ fn documented_functions_exist_and_are_not_mocked() {
     // Secure code (a fresh execution): its documented results' empty values.
     let mut vm = Vm::wow();
     wowlua_engine::install(&mut vm, "camelot").expect("installs");
-    let r = run(&mut vm, "return C_Calendar.GetNumGuildEvents()");
-    assert_eq!(r, ["Num(0.0)"]);
+    let r = run(&mut vm, "return IsCollisionEnabled()");
+    assert_eq!(r, ["Bool(false)"]);
 }
 
 #[test]

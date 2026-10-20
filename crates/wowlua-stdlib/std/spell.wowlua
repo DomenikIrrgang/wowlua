@@ -48,7 +48,7 @@ export function cooldown(spell: SpellRef): CooldownInfo?
     const modern = (C_Spell :: table).GetSpellCooldown :: ((spell: SpellRef) -> any)?
     if modern then
         const c = modern(spell)
-        if c == nil or not secret.readable(c) then
+        if not secret.readable(c) then
             return nil
         end
         return {
@@ -89,10 +89,12 @@ export function cooldownDuration(spell: SpellRef, ignoreGCD: boolean?): LuaDurat
     return f(spell, ignoreGCD)
 end
 
---- Charges, for spells that have them.
-export function charges(spell: SpellRef): SpellChargeInfo?
+--- Charges, for spells that have them: the counts and times may be secret
+--- on restricted clients; `maxCharges` and `isActive` stay readable.
+export function charges(spell: SpellRef): SpellChargeInfoSecret?
     const c = C_Spell.GetSpellCharges(spell)
-    if secret.isSecret(c) then
+    -- A table addons may not index is no answer they can use.
+    if not secret.readable(c) then
         return nil
     end
     return c

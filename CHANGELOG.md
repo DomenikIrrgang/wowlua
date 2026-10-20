@@ -4,7 +4,106 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ## Unreleased
 
-Work toward M9 on `main`, not in a release yet: wowlua's emulation of the WoW
+### Added
+
+- A field named by a string key may be optional: `{ ["not"]?: boolean }`
+- A function over the 60-upvalue limit reads its excess imports through the module registry, as the spec describes, instead of failing with E5001
+- `wowlua:callbacks`: `registry:off(name, handler)` cancels every subscription of a function, and `offAll(owner, name?)` only an owner's subscriptions to `name`; both checked against the event type (E8420)
+- `wowlua:combat`: `defer(fn, key)`: calls with one key keep the first one's place in the queue, and only the latest function runs
+- `wowlua:log`: `configure({ prefix, chatLevel })` sets the chat prefix of the default sink and `print`, and the lowest level the default sink writes to chat (`"off"`: none)
+- `wowlua:secret`: `readable(v)` narrows to a present value that may be looked into (`Plain`): not nil, not a secret, and not a table whose security keeps addons out
+- `wowlua:slash`: `Router:add(name, command, owner?)` (checked like the definitions, E8112), `remove`, `removeAll(owner)` and `commands()`; `router(defs, { order = "added" })` lists help in the order commands were added
+- `wowlua:table`: `copy(t, { shared = false })` gives every nested table a copy of its own; `keys(t, less)` sorts by a comparator
+- `wowlua:table`: a stable `sort` that never raises "invalid order function", `by` (order by a key), `order`, and the binary-search helpers `insertSorted` and `searchSorted`; secret elements and keys never reach a comparator and sort last
+- `wowlua:collections`: `RingBuffer`, `Heap` and `LruCache`, which store secret values without reading them
+- `wowlua:utf8`: `len`, `sub`, `truncate` and `chars` by characters, not bytes; a secret string passes `truncate` whole
+- `wowlua:aura`: containers take `lazy` groups (added to the engine once `setGroupMax` gives them room), `exclude` spell IDs, a group's own `spacing`, `order` and `gap`, `setGroupFilter` and `setGroupSize` (buttons resized out of combat); `aura.hasContainers()`
+- Spec: the unchecked cast (`local f: T = e :: any`) and `@unchecked` next to the runtime checks
+- `wowlua:events`: `watchUnit(events, handler, owner?)`: unit events on one frame of the watch's own, pointed at other units with `setUnit(unit?, unit2?)` without subscribing again (`nil` unregisters); the handler gets the event name first
+- `wowlua:events`: `offAll(owner, name?)` cancels only the owner's handlers of one event or message (a watch stops watching that event)
+- `wowlua:errors`: listeners get `(msg, info)` with `info = { component?, owner?, stack? }`: the stdlib component, the owner of the failing handler (events, callback registries, hooks with `opts.owner`) and the stack, taken only when an error happens
+- `wowlua:timer`: `repeating(sec, fn)`, a repeating timer with `start`, `stop`, `setRunning(running)` and `isRunning()` (stopped at first; the first tick one interval after each start)
+- A string-keyed field may be read-only: `{ readonly ["end"]: number }`
+- E1016: an export that redeclares a module-level name (`local items = {}` then `export function items()`, a forward-declared `local f` then `export function f()`), and a name exported twice
+- W1036: a module of an import cycle that reads an export without a type annotation (or a `typeof` alias) of a module of the cycle checked after it, where it is `any`, is told to annotate it there
+- W1036 also for a `typeof` alias of a later module of the cycle used through a namespace import (`local c: qn.Conf`), and for an unannotated file-level local a test file's `import internal` reads; annotated locals and functions read that way have their types
+
+### Changed
+
+- The standard library's tests run with the addon's code tainted, as the client runs it, so secret values refuse there what they refuse in game
+- `wowlua:errors`' isolated calls, `wowlua:events`' dispatch, `wowlua:hooks`' hooks and `wowlua:timer`'s callbacks allocate nothing when the callback succeeds (an event handler's dispatch made about 550 bytes of garbage before)
+- `wowlua:callbacks`: a handler cancelled during a `fire` is skipped for the rest of it (handlers added during a `fire` still wait for the next one)
+- `wowlua:events`: a handler cancelled during a dispatch is skipped for the rest of it, as in `wowlua:callbacks` (handlers added during a dispatch still wait for the next one)
+- `wowlua:events`: `onUnit` and `@unitEvent` take any number of units, registered in pairs on frames of their own (WoW filters a frame by two units at most); E8100 is gone
+- `wowlua:table`: `copy` keeps keys as they are (a frame or a table used as a key stays itself), as Blizzard's `CopyTable` does
+- `wowlua:secret`: `flag` takes any value and answers by truthiness, so legacy `1`/`nil` answers work
+- `wowlua:secret`: `known<T, F>(v, fallback: F): T | F`: the fallback may be of another type, so `known(name, nil)` is a `string?`
+- Generic inference binds `T` through a `T | Secret<T>` parameter (the secret members through `Secret<T>`, the rest to `T`)
+- `wowlua:secure`: `state` without a function only registers the driver (for an `_onstate-<name>` snippet) and hooks nothing
+- `wowlua:spell`: `charges` returns `SpellChargeInfoSecret?`, the readable table the client answers, whose counts and times may be secret on restricted clients (nil when it hands back a table addons may not index)
+- A module's top-level `function f()` is a hoisted local of the module in the compiled code too, as the checker already treated it, never a global; write `_G.f = f` (or assign a declared global) for a real one
+- `table` (a value `type(x) == "table"` narrowed) is assignable to every map whose values are `any`: `{ [string]: any }`, `{ [number]: any }`
+- A type predicate's branch that no member of its argument reaches (a second `if not issecretvalue(c) and c then` after the first returned, the `else` of a predicate every member fits) is unreachable: the argument is `never` there and nothing in it is reported; also for `canaccessvalue`
+
+### Fixed
+
+- An import cycle in a package no longer makes other imports `any`: standard-library modules, library packages and the modules a cycle imports keep their types, and the modules of a cycle see each other's annotated exports
+- `wowlua test` names the addon's files, its test files and the runtime as the client does (`Interface/AddOns/<Name>/src/x.lua`), so `debugstack()`, `GetSourceLocation()` and error messages show the client's names; the reports still show source paths
+- W4306's help names where a wowlua library's license comes from (a `LICENSE` file or the package's `license`), not only `lua-library.license-files`
+- `wowlua publish` says when it reads a token `wowlua login` saved, instead of waiting without a word while the OS credential store asks to allow it
+- `wowlua publish` names the packaged zips as soon as packaging finishes, not after the uploads
+- `wowlua publish` without a terminal (standard input or standard error not one) never waits for an OS credential store dialog: on every platform it then reads tokens only from the environment and `config.json`, and E4201 says why and how to fix it
+- `wowlua login` and `logout` without a terminal save and remove tokens in `config.json`, where a publish without a terminal finds them, instead of the OS credential store
+- `wowlua test` with Blizzard's UI: an aura container (`wowlua:aura`'s `container`, or Blizzard's `AuraContainer`) made while the addon loads takes its groups without errors; the intrinsic type's scripts no longer compile as the loading addon's code, so `AddAuraGroup` no longer fails on `CancelSignal` and a secret `SetSize`
+- `wowlua test` with Blizzard's UI: a Blizzard addon the addon loads with `C_AddOns.LoadAddOn` while it loads is Blizzard's secure code, as when a test loads it, not the addon's (its functions were tainted and its files named inside the addon's folder); Blizzard's scripts compile untainted whoever's code makes them
+- A wowlua library inside a workspace (a member, or a path dependency in its folder) without a license of its own has the workspace root's (its `LICENSE` file or package `license`), so no W4306
+- A wowlua library path dependency in a sub-folder of a package outside a workspace has the package's license too (the package counts as its own workspace)
+- `export const x: T = { … }` and an annotated plain `const` have the annotation's type, not the literal's
+- An exported table has the fields assigned to it after its declaration (`function chat.Hide() … end`), sealed, for importers
+- A callback taking a wider parameter type no longer widens a type argument (`table.sort(rows, function(a: { ms: number }, …) … end)`)
+- Namespaces, enum tables, class tables and instances are tables for `{ [any]: any }`, so `pairs(Enum.X)` and `pairs(C_X or {})` check
+- A list literal fits a record with a numeric indexer and optional named fields (`{ [number]: any, talent?: boolean }`)
+- An array value fits a record whose named fields are all optional and whose numeric indexer takes its elements, also in an intersection (`any[] & { jewel?: boolean }`)
+- `type X = typeof(v)` is the type of `v` in the file's later annotations, for importers and for a library's consumers, instead of `any`; a type-only import of such a module orders the check
+- A declaration `@if` removes no longer hides a kept declaration of the same name in its scope (alternatives for different builds, a hoisted export)
+- A table's own method replaces the one `setmetatable`'s `__index` gives it
+- Reading or writing a field of a function, number or boolean is E2003 with any key, not only a `.` read
+- No false W1003 for a forward-declared local that a module's `function name()` defines
+- E2001 names the missing or mismatched field of a record (and hints at `x?: T`), and the first missing return value; E2015 names the union member that does not fit; a function passed to `pcall` with too few arguments is E2007 naming the argument
+- `canaccessvalue(v)` narrows as the complement of `issecretvalue`: its true branch drops `Secret<…>`, in an `if` and in an `and` chain
+- `cond and x` with a boolean `cond` is `false | x` in an inferred local or result, so `if y then` leaves `x`, not `true | x`; so are the results `pcall` passes on (`local ok, r = pcall(f)`)
+- A generic predicate (`plain<V>(v: V | Secret<V> | nil): v is V`) infers its type parameters from the argument and narrows to them
+- A declared local narrowed before a loop (`n = 0` on a `number?`) keeps its narrowing in the loop when the body keeps it; `break` paths count after the loop
+- Assigning a field through a narrowed annotated local (`if item then item.x = 1 end` on an `Item | false`) checks against the members it can be, not `false`
+- E2005 on a local a closure reads says when the closure sees it as declared because it is assigned after its declaration (`opts = opts or {}`); E2015 on a possibly secret value points to `canaccessvalue` and `issecretvalue`
+- `wowlua:aura`: `setGroupSpells` keeps the group's dispel types
+- WoW API declarations: big integers (auction house prices, `GetCancelCost`, bank tab costs, order IDs) and UI sizes (`C_NamePlate.SetNamePlateSize`) are numbers, not strings
+- WoW API declarations: `issecrettable`, `canaccessallvalues`, `mapvalues` and the other secret-value functions take any value, not a function
+- WoW API declarations: a structure a possibly secret function returns (`C_Spell.GetSpellCooldown`, `C_ActionBar.GetActionCooldown`, charges, loss of control) is a readable table with possibly secret fields, as the client answers, not a possibly secret table: its companion `<Name>Secret` (`SpellCooldownInfoSecret`), so functions that never answer secrets keep the plain structure (`C_Spell.GetItemCooldown`, `C_LossOfControl.GetActiveLossOfControlData`)
+- WoW API declarations: functions the annotations know only by name (`SelectActiveQuest`, `GetQuestLogCompletionText`, …) take and answer any values instead of none
+- WoW API declarations: `GameTooltip`'s data methods (`SetInboxItem(mailIndex, attachmentIndex)`, `SetSendMailItem(index)`, …) take the parameters of their `C_TooltipInfo` function; widget methods the annotations give no results get Blizzard's documented ones (`Minimap:GetZoom()`)
+- WoW API declarations: optional `hasVoice` of `JoinChannelByName`, `exclusive` of `SetTrainerServiceTypeFilter` and `isPet` of `IsSpellKnown`; `SendChatMessage`'s target takes a channel number; `C_Traits.GetConditionInfo` has its UI wrapper's parameters and `tooltipText`
+- WoW API declarations: camelot declares the client's own number globals (`LE_PARTY_CATEGORY_INSTANCE`, `NUM_LE_*`, …), and globals the annotations also name as a class (`ItemLocation`, `NamePlateDriverFrame`)
+- `wowlua:errors`: `call` and `wrap` are generic as the spec declares them, so `errors.call(f, …)` checks the arguments against `f` and returns its results typed, not `any`
+- `wowlua:errors`: debug builds append the module ID to a report (`[core/cache]`, before the component), as the spec says
+- `wowlua:events`: `onUnit` of an event the client lacks (shared flavor mode) no longer raises; its handler is never called, as with `on`
+- WoW API declarations: `UnitName`, `UnitFullName`, `UnitNameUnmodified` and `UnitNameFromGUID` answer optional names and realms (`nil, nil` for a unit that does not exist)
+- WoW API declarations: named frames of Blizzard's XML are typed by their mixins and widget type (`ChatFrame1: PrimaryChatFrameMixin & … & Frame` has `ApplySystemAnchor`), and the mixins are declared with the methods their Lua defines (parameters `any`)
+- W8040 is not reported inside an existence test of the hooked member (`if obj.Method then hook(obj, "Method", fn) end`); W8102 still is
+- The standard library is safe with secret values throughout: no module compares, indexes, measures or truth-tests a value the client may hand back as a secret, or a table whose security keeps addons out. Values only carried pass through unchanged; where an operation needs the value, it is skipped or read as unknown, as each module's chapter now says. Among the paths that raised in game before:
+  - `wowlua:table`: `merge` and `defaults` walked secret tables; `contains` compared secrets
+  - `wowlua:saved`: profile copies and migrations walked secret tables
+  - `wowlua:serialize`: `encode` refused any value holding a secret (now encoded as nil); `decode` and `fromPrintable` of a secret string
+  - `wowlua:comm` and `wowlua:version`: a secret message, target, prefix or sender
+  - `wowlua:errors`: an error whose `tostring` is secret ended in "error in error handling" and was never reported
+  - `wowlua:aura`: aura tables addons may not index reached `find`; a secret spell ID in a container's `spells`
+  - `wowlua:unit`, `wowlua:format`, `wowlua:menu`, `wowlua:dialog`, `wowlua:launcher`, `wowlua:alert`: secret booleans in options and answers
+  - `wowlua:tooltip`, `wowlua:color`, `wowlua:links`, `wowlua:media`, `wowlua:pool`, `wowlua:list`, `wowlua:frames`, `wowlua:settings`, `wowlua:slash`, `wowlua:reflect`, `wowlua:debug`: secret links, colors, names, keys, indexes, positions and conditions
+- `wowlua:test` and `wowlua:mock`: a matcher, spy, snapshot or wait given a secret fails with a message saying so instead of raising inside the framework; new matcher `toBeSecret`
+
+## [0.9.1] - 2026-10-20
+
+M9 so far, released before the milestone closes: wowlua's emulation of the WoW
 client, and the test framework that runs on it. The language server, the VS
 Code extension and the milestones after M9 are planned; see the
 [roadmap](spec/roadmap.md).
@@ -14,20 +113,20 @@ Code extension and the milestones after M9 are planned; see the
 - `wowlua-vm`, a Lua 5.1 VM in Rust: the corpus compiles to `luac`'s bytecode and lines, and the Lua 5.1 test suite passes (S1)
 - WoW's Lua environment in the VM: taint and secure execution with taint reports, secret values, the client's limits and call depths (S2)
 - `wowlua-engine`: the WoW API from Blizzard's documentation with its argument checks, frames, events, timers, units, auras and protected actions; Blizzard's UI code loads as secure code, and on WoW: Forever it logs in and runs without an error, as the client's does (S3)
-- `wowlua test`: a package's test files run per flavor in the emulated client, with the addon loaded from its TOC as the client loads it; `test.blizzard-ui` loads Blizzard's UI first; `--watch` ([docs](docs/getting-started.md#test-it), S4)
+- `wowlua test`: a package's test files run per flavor in the emulated client, with the addon loaded from its TOC as the client loads it; `test.blizzard-ui` loads Blizzard's UI first, `test.addons` other addons' folders, each as its own addon; `--watch` ([docs](docs/getting-started.md#test-it), S4)
 - `wowlua:test`: tests, hooks, `@skip`, `@only`, `@flavors`, `@cases`, `describe`, typed matchers, widget matchers, snapshots (`-u` updates them), custom matchers and compile-time tests with `@expectError` (S4)
 - `wowlua:mock`: units, combat, time and events of a simulated world, spies, stubs and fakes, waiting, printed output and errors, `mock.module`, user input (click, hover, drag, typing, key bindings), casting, vendors, `mock.reloadUI`, and taint assertions (`toBeBlocked`, `toBeSecure`) (S4)
 - World profiles: a test file starts with the character, money, gear, bags, place, auras and units of `tests/profiles/<name>.json`; `/stdtest snapshot` records one in the client (S4)
 - `import internal` reaches a module's private declarations from tests (S4)
 - Coverage and reports: `wowlua test --coverage` (lines, statements, branches, functions, conditions), `test.coverage` minimums, and the `junit`, `tap`, `json`, `github`, `lcov`, `cobertura`, `coverage-json` and `html` reporters (S5)
 - The three examples have tests
-- The standard library's tests run in the VM, on the engine, with the addon's code tainted as the client runs it, so secret values refuse there what they refuse in game
+- The standard library's tests run in the VM, on the engine
 - `-j, --jobs` (`WOWLUA_JOBS`, `build.jobs`) and `build.jobs-memory`: the worker threads of a build and the memory they may take
 - Lua compile results are kept between runs in the cache (`build.compile-cache`, `build.compile-cache-size`, `WOWLUA_NO_COMPILE_CACHE`)
-- `wowlua:table`: a stable `sort` that never raises "invalid order function", `by` (order by a key), `order`, and the binary-search helpers `insertSorted` and `searchSorted`; secret elements and keys never reach a comparator and sort last
-- `wowlua:collections`: `RingBuffer`, `Heap` and `LruCache`, which store secret values without reading them
-- `wowlua:utf8`: `len`, `sub`, `truncate` and `chars` by characters, not bytes; a secret string passes `truncate` whole
-- `wowlua:secret.readable`: whether a value may be looked into (not a secret, and not a table whose security keeps addons out)
+- The emulated client answers WoW: Forever's whole native API and its widget methods; answers come from client recordings where there are any, from models of the game's state (bags, mail, quests, auras, the group finder…) and otherwise from Blizzard's documentation (S4)
+- Twenty-four recorded client scenarios replay in the engine (bank, vendor, mail, auction, taxi, talents, professions, quests, combat, death, the group finder, repair, bags, the quest log…), checked line by line against the client (S4)
+- SuuUI, Ellesmere UI and ElvUI run in `wowlua test` with Blizzard's UI as in the client, ElvUI with exactly the client's errors (S4)
+- `/stdtest engine answers`, `/stdtest engine fullprobe` and `/stdtest engine methodprobe` (every widget method on fresh hidden widgets) ask the client the engine's open questions; `cargo xtask ingest` turns the answers into the engine's data (S4)
 
 ### Changed
 
@@ -46,16 +145,6 @@ Code extension and the milestones after M9 are planned; see the
 - `check.lints` accepts the warning forms of name and type errors (`"W2001": "allow"`)
 - `wowlua dev` ignores the output folder `build.out` names, not only `dist/`
 - Field assignments of an annotated variable are checked against its declared type
-- The standard library is safe with secret values throughout: no module compares, indexes, measures or truth-tests a value the client may hand back as a secret, or a table whose security keeps addons out. Values only carried pass through unchanged; where an operation needs the value, it is skipped or read as unknown, as each module's chapter now says. Among the paths that raised in game before:
-  - `wowlua:table`: `merge` and `defaults` walked secret tables; `contains` compared secrets
-  - `wowlua:saved`: profile copies and migrations walked secret tables
-  - `wowlua:serialize`: `encode` refused any value holding a secret (now encoded as nil); `decode` and `fromPrintable` of a secret string
-  - `wowlua:comm` and `wowlua:version`: a secret message, target, prefix or sender
-  - `wowlua:errors`: an error whose `tostring` is secret ended in "error in error handling" and was never reported
-  - `wowlua:aura`: aura tables addons may not index reached `find`; a secret spell ID in a container's `spells`
-  - `wowlua:unit`, `wowlua:format`, `wowlua:menu`, `wowlua:dialog`, `wowlua:launcher`, `wowlua:alert`: secret booleans in options and answers
-  - `wowlua:tooltip`, `wowlua:color`, `wowlua:links`, `wowlua:media`, `wowlua:pool`, `wowlua:list`, `wowlua:frames`, `wowlua:settings`, `wowlua:slash`, `wowlua:reflect`, `wowlua:debug`: secret links, colors, names, keys, indexes, positions and conditions
-- `wowlua:test` and `wowlua:mock`: a matcher, spy, snapshot or wait given a secret fails with a message saying so instead of raising inside the framework; new matcher `toBeSecret`
 
 ## [0.9.0] - 2026-10-15
 
@@ -218,6 +307,7 @@ M0, the foundation: an existing Lua addon builds and installs from a
 - `wowlua.lock` with the pinned flavor table
 - Release binaries for macOS, Linux and Windows on GitHub Releases
 
+[0.9.1]: https://github.com/DomenikIrrgang/wowlua/releases/tag/v0.9.1
 [0.9.0]: https://github.com/DomenikIrrgang/wowlua/releases/tag/v0.9.0
 [0.8.2]: https://github.com/DomenikIrrgang/wowlua/releases/tag/v0.8.2
 [0.8.1]: https://github.com/DomenikIrrgang/wowlua/releases/tag/v0.8.1

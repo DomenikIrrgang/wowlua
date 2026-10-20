@@ -37,7 +37,7 @@ local byName = C_Spell.GetSpellInfo('Fireball')
 local cd = C_Spell.GetSpellCooldown(133)
 return info.name, info.iconID, info.maxRange, info.spellID, byName.spellID, C_Spell.GetSpellName(133),
     C_Spell.GetSpellLink(133), tostring(C_SpellBook.IsSpellKnown(133)), tostring(C_SpellBook.IsSpellKnown(133, 1)),
-    cd.duration, tostring(cd.isEnabled), tostring((C_Spell.GetSpellInfo(999))), tostring(C_Spell.IsSpellDataCached(133))",
+    cd.duration, tostring(cd.isEnabled), tostring((C_Spell.GetSpellInfo(2))), tostring(C_Spell.IsSpellDataCached(133))",
     );
     assert_eq!(
         r,
@@ -48,13 +48,74 @@ return info.name, info.iconID, info.maxRange, info.spellID, byName.spellID, C_Sp
             "133",
             "133",
             "Fireball",
-            "|cff71d5ff|Hspell:133|h[Fireball]|h|r",
+            "|cff71d5ff|Hspell:133:0|h[Fireball]|h|r",
             "true",
             "false",
             "0",
             "true",
             "nil",
             "true"
+        ]
+    );
+}
+
+/// Spells nobody defined answer from the client's spell table
+/// (`data/camelot-spells.txt`, SuuUI's scan): names, ranks where read,
+/// icons where read (else `Interface\Icons\Temp`'s); probed spells win
+/// (1038 is the trainers' Salvation, the scan's Blessing of Salvation).
+#[test]
+fn spells_from_the_client_spell_table() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local info = C_Spell.GetSpellInfo(355)
+return info.name, info.iconID, info.castTime, C_Spell.GetSpellName(5), C_Spell.GetSpellTexture(5),
+    C_Spell.GetSpellSubtext(768), C_Spell.GetSpellSubtext(355), C_Spell.GetSpellLink(355),
+    tostring(C_Spell.DoesSpellExist(355)), tostring(C_Spell.DoesSpellExist(2)), tostring(C_Spell.IsSpellDataCached(355)),
+    C_Spell.GetSpellName(1038), tostring((C_Spell.GetSpellName(2)))",
+    );
+    assert_eq!(
+        r,
+        [
+            "Taunt",
+            "136080",
+            "0",
+            "Death Touch",
+            "136235",
+            "Shapeshift",
+            "",
+            "|cff71d5ff|Hspell:355:0|h[Taunt]|h|r",
+            "true",
+            "false",
+            "true",
+            "Salvation",
+            "nil"
+        ]
+    );
+}
+
+/// Item data the engine estimates where nothing was recorded (AtlasLoot's
+/// login and price buttons ask them): the subclasses the answers probe
+/// skipped, and an icon for any item (the question mark's for item 0 too:
+/// the full probe, newer than the estimate of none).
+#[test]
+fn unrecorded_item_classes_and_icons() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local a, b = C_Item.GetItemSubClassInfo(3, 0)
+return a, tostring(b), (C_Item.GetItemSubClassInfo(5, 0)), (C_Item.GetItemSubClassInfo(14, 0)),
+    C_Item.GetItemIconByID(23247), tostring((C_Item.GetItemIconByID(0)))",
+    );
+    assert_eq!(
+        r,
+        [
+            "Jewelry(OBSOLETE)",
+            "false",
+            "Reagent",
+            "Permanent",
+            "134400",
+            "134400"
         ]
     );
 }

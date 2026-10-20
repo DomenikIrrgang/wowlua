@@ -6,7 +6,8 @@
 -- (~0.3 s). The map's nodes as the client answered them.
 local e = __engine
 local player = e.player
-e.setLatency(0.3)
+-- The targets' echoes 0.395 s and 0.426 s later (recorded).
+e.setLatency(0.4)
 -- The worn gear's durability (the recording's answers).
 for slot, d in pairs({ [5] = { 50, 60 }, [6] = { 17, 20 }, [7] = { 38, 45 }, [8] = { 16, 20 }, [9] = { 16, 20 }, [10] = { 17, 20 }, [16] = { 68, 75 } }) do
     player:setDurability(slot, d[1], d[2])
@@ -14,12 +15,12 @@ end
 local other = e.spawnUnit({
     name = "Otherplayer", lastName = "Othername", guid = "Player-0000-00000000", player = true,
     level = 17, reaction = "friendly", class = "HUNTER", classID = 3, sex = 2, powerType = 0,
-    race = "Orc", creatureType = "Humanoid", creatureTypeID = 7, pvp = true,
+    race = "Orc", creatureType = "Humanoid", creatureTypeID = 7,
 })
 local tal = e.spawnUnit({
     name = "Tal", guid = "Creature-0-4615-1-2-2995-E0D69E7BFE", npcID = 2995, level = 55, classification = "elite",
     reaction = "friendly", class = "WARRIOR", classID = 1, sex = 2, powerType = 1,
-    creatureType = "Humanoid", creatureTypeID = 7, factionGroup = "Horde",
+    creatureType = "Humanoid", creatureTypeID = 7, factionGroup = "Horde", pvp = true,
 })
 e.defineGossip(tal, {
     text = "When mounted on the back of a wind rider, one sees that its reputation for strength and speed is well earned.",
@@ -129,11 +130,26 @@ tal:setDistance(3)
 player:interact(tal)
 at(3.0)
 check("the gossip shown", GossipFrame:IsShown())
+-- The world's own, not modelled: the server's events as recorded.
+local function world(...) e.fireEvent(...) end
+-- ENCHANT_SPELL_COMPLETED now and then, its cause unknown.
+at(3.732) world("ENCHANT_SPELL_COMPLETED", false, nil)
 local option = button(GossipFrame, "I need a ride.")
 check("the gossip's option shown", option ~= nil)
+-- The option chosen: the map 0.372 s later (recorded).
+e.setLatency(0.372)
 at(5.676) if option then press(option) end
+e.setLatency(0.4)
+-- With the map, in its frame, the server's cooldown for a spell (416262,
+-- not the player's), as on the taxi's flight (416221).
+at(6.06)
+world("ACTIONBAR_UPDATE_COOLDOWN")
+world("BAG_UPDATE_COOLDOWN")
+world("SPELL_UPDATE_COOLDOWN", 416262, nil, nil, nil, nil)
+world("UPDATE_SHAPESHIFT_COOLDOWN")
 at(6.5)
 check("the taxi map shown", TaxiFrame and TaxiFrame:IsShown())
+at(8.276) world("ENCHANT_SPELL_COMPLETED", false, nil)
 at(11.995) player:wear()
 at(13.557) if TaxiFrame then HideUIPanel(TaxiFrame) end
 at(14)

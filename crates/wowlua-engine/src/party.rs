@@ -16,9 +16,9 @@
 //!
 //! Unverified: a party of more than two, leaving, a raid, roles, the loot
 //! method's choice (group loot, uncommon: recorded), trading items or
-//! money, the action bar's usability with a party (the paladin's
-//! Blessing of Protection unusable alone in a party: recorded, not
-//! modelled).
+//! money. The action bar's usability with a party: the paladin's Blessing
+//! of Protection unusable alone in a party with a soft friend outside it
+//! (recorded; `actions.rs`).
 
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, NativeFn, Value, Vm};
@@ -93,20 +93,20 @@ fn system(vm: &mut Vm, text: &str) {
     crate::chat::game_message(vm, "CHAT_MSG_SYSTEM", text, None);
 }
 
-/// The unit a name or unit token names.
+/// The unit a name or unit token names: another's name first, exactly as
+/// written (a recording's scrubbed names are the player's own, "Player":
+/// typed, they name the other), then a token.
 fn unit_named(vm: &mut Vm, v: Value) -> Option<UnitId> {
     let Value::Str(s) = vm.hidden(v) else {
         return None;
     };
     let text = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
-    if let Some(id) = units::resolve(&engine(vm).units, &text) {
-        return Some(id);
-    }
     let name = text.split('-').next().unwrap_or(&text).to_string();
     let list = &engine(vm).units.list;
-    (1..list.len())
+    let named = (1..list.len())
         .find(|&i| list[i].name == name || full_name(vm, UnitId(i)) == name)
-        .map(UnitId)
+        .map(UnitId);
+    named.or_else(|| units::resolve(&engine(vm).units, &text))
 }
 
 /// The party's ID as `GROUP_JOINED` tells it (a session's; the harness
@@ -168,6 +168,9 @@ fn formed(vm: &mut Vm, c: NativeCall) -> Ret {
     let guid = party_guid(vm);
     fire(vm, "GROUP_JOINED", &[Value::Num(1.0), guid]);
     fire(vm, "CHANNEL_UI_UPDATE", &[]);
+    // The actions on a group (recorded: Blessing of Protection's re-told
+    // here, the bars' update after the difficulty's).
+    crate::actions::usability_changed(vm);
     fire(vm, "PLAYER_DIFFICULTY_CHANGED", &[]);
     fire(vm, "CHANNEL_UI_UPDATE", &[]);
     for _ in 0..3 {
@@ -198,7 +201,16 @@ pub fn control_join_group(vm: &mut Vm, c: NativeCall) -> Ret {
         }
     }
     party_mut(vm).formed = true;
-    units::fire_unit(vm, "UNIT_FACTION", me, &[]);
+    // Its faction by its group token alone (recorded: party1's, not the
+    // soft friend's it also was; unverified: other tokens).
+    let tokens: Vec<String> = units::tokens_of(&engine(vm).units, me)
+        .into_iter()
+        .filter(|t| t.starts_with("party") || t.starts_with("raid"))
+        .collect();
+    for t in tokens {
+        let t = vm.str(&t);
+        fire(vm, "UNIT_FACTION", &[t]);
+    }
     let format = global(vm, "ERR_JOINED_GROUP_S", "%s joins the party.");
     let name = full_name(vm, me);
     system(vm, &format.replacen("%s", &name, 1));
@@ -376,11 +388,177 @@ fn nothing(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// The player leading a group of its own making (`mock.addToGroup`).
+pub fn lead(vm: &mut Vm) {
+    let p = party_mut(vm);
+    p.formed = true;
+    p.leader = true;
+}
+
+/// `GetRaidRosterInfo(index)`: name, rank, subgroup, level, class, file
+/// name, zone, online, dead, role, master looter, combat role; in a party
+/// too (recorded): the player first, then the members in joining order;
+/// the full name ("Name Lastname" on Forever); the leader's rank 2, the
+/// others' 0; each member's zone (out of sight: its own); an offline
+/// member's level 0 and zone "Offline"; dead a ghost too; the chosen role
+/// last. An index past the members, or 0: a placeholder (recorded: `nil,
+/// 0, 1, 1, nil × 6, false, "NONE"`). Unverified: solo; assistants; a
+/// cross-realm member's realm.
+fn get_raid_roster_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    let placeholder = |vm: &mut Vm| {
+        let mut out = vec![
+            Value::Nil,
+            Value::Num(0.0),
+            Value::Num(1.0),
+            Value::Num(1.0),
+        ];
+        out.extend([Value::Nil; 6]);
+        out.push(Value::Bool(false));
+        out.push(vm.str("NONE"));
+        out
+    };
+    let index = match c.arg(1) {
+        Value::Num(n) if n >= 1.0 && n.fract() == 0.0 => n as usize,
+        _ => return Ok(placeholder(vm)),
+    };
+    let unit = {
+        let u = &engine(vm).units;
+        if !grouped(vm) {
+            None
+        } else if index == 1 {
+            Some(PLAYER)
+        } else {
+            u.group.get(index - 2).copied()
+        }
+    };
+    let Some(unit) = unit else {
+        return Ok(placeholder(vm));
+    };
+    let rank = if unit == PLAYER && party(vm).leader {
+        2.0
+    } else {
+        0.0
+    };
+    let subgroup = {
+        let u = &engine(vm).units;
+        if u.raid {
+            units::subgroup(u, unit)
+        } else {
+            1.0
+        }
+    };
+    let here = engine(vm).world.character.position.zone.clone();
+    let offline = global(vm, "PLAYER_OFFLINE", "Offline");
+    let name = full_name(vm, unit);
+    let (level, class_name, class, dead, zone, role, online) = {
+        let u = &engine(vm).units.list[unit.0];
+        (
+            if u.online { u.level } else { 0.0 },
+            if u.player {
+                u.class_name.clone()
+            } else {
+                u.name.clone()
+            },
+            u.class.clone(),
+            u.dead || u.ghost,
+            if u.online {
+                u.zone.clone().unwrap_or(here)
+            } else {
+                offline
+            },
+            u.role.clone().unwrap_or_else(|| "NONE".to_string()),
+            u.online,
+        )
+    };
+    Ok(vec![
+        vm.str(&name),
+        Value::Num(rank),
+        Value::Num(subgroup),
+        Value::Num(level),
+        vm.str(&class_name),
+        vm.str(&class),
+        vm.str(&zone),
+        Value::Bool(online),
+        Value::Bool(dead),
+        Value::Nil,
+        Value::Bool(false),
+        vm.str(&role),
+    ])
+}
+
+/// `C_PartyInfo.ConvertToParty()`: the leader's raid of five or fewer a
+/// party again (`GROUP_ROSTER_UPDATE`; unverified: its other events).
+fn convert_to_party(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let small = engine(vm).units.group.len() < 5;
+    if party(vm).leader && engine(vm).units.raid && small {
+        engine_mut(vm).units.raid = false;
+        fire(vm, "GROUP_ROSTER_UPDATE", &[]);
+    }
+    Ok(vec![])
+}
+
+/// `C_PartyInfo.GetLootMethod()`: group loot (recorded in a party and a
+/// raid, as the party was formed with; unverified: solo, other methods).
+fn get_loot_method(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(3.0), Value::Nil, Value::Nil])
+}
+
+/// `C_PartyInfo.IsPartyFull()`: a party of five (recorded: not with two;
+/// unverified: full, a raid).
+fn is_party_full(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let u = &engine(vm).units;
+    Ok(vec![Value::Bool(!u.raid && u.group.len() >= 4)])
+}
+
+/// `GetPartyAssignment(assignment, unit [, exactMatch])`: no one is the
+/// main tank or assist (unverified: assigning); any other assignment the
+/// recorded error.
+fn get_party_assignment(vm: &mut Vm, c: NativeCall) -> Ret {
+    // Asked with nothing, its usage (the full probe: the text up to its
+    // first comma blanked, `...` for it).
+    if c.arg(1).is_nil() {
+        return Err(vm.error("Usage: GetPartyAssignment(...,\"raidmember\"] [,exactMatch])"));
+    }
+    let valid = match c.arg(1) {
+        Value::Str(s) => {
+            let a = String::from_utf8_lossy(vm.str_bytes(s)).to_ascii_uppercase();
+            a == "MAINTANK" || a == "MAINASSIST"
+        }
+        _ => false,
+    };
+    if !valid {
+        return Err(vm.error("GetPartyAssignment(): Invalid party assignment"));
+    }
+    Ok(vec![Value::Bool(false)])
+}
+
+/// `C_PartyInfo.ConvertToRaid()`: the leader's party a raid
+/// (`GROUP_ROSTER_UPDATE`; unverified: its other events and messages).
+fn convert_to_raid(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let leading = party(vm).leader && !engine(vm).units.group.is_empty();
+    if leading && !engine(vm).units.raid {
+        engine_mut(vm).units.raid = true;
+        fire(vm, "GROUP_ROSTER_UPDATE", &[]);
+    }
+    Ok(vec![])
+}
+
+fn no(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(false)])
+}
+
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
         ("C_PartyInfo.InviteUnit", invite_unit),
         ("InviteUnit", invite_unit),
         ("UnitIsGroupLeader", unit_is_group_leader),
+        ("GetRaidRosterInfo", get_raid_roster_info),
+        ("C_PartyInfo.ConvertToRaid", convert_to_raid),
+        ("C_PartyInfo.ConvertToParty", convert_to_party),
+        ("C_PartyInfo.GetLootMethod", get_loot_method),
+        ("C_PartyInfo.IsPartyFull", is_party_full),
+        ("C_PartyInfo.CanFormCrossFactionParties", no),
+        ("GetPartyAssignment", get_party_assignment),
         ("FollowUnit", follow_unit),
         ("InitiateTrade", initiate_trade),
         ("CloseTrade", close_trade),

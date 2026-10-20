@@ -1,5 +1,6 @@
 -- wowlua:hooks: post-hooks with hooksecurefunc and HookScript in the client.
 import hook, hookScript from "wowlua:hooks"
+import * as errors from "wowlua:errors"
 import suite from "/harness"
 
 local seen: string[] = {}
@@ -8,6 +9,7 @@ local seen: string[] = {}
 _G.StdTestAdd = function(a: number, b: number): (number, string) return a + b, "sum" end
 _G.StdTestObject = { get = function(_: table, k: string): string return k .. "!" end }
 _G.StdTestDecorated = function(_: number) end
+_G.StdTestOwned = { run = function(_: table) end }
 local frame = CreateFrame("Frame", "StdTestHookFrame", UIParent)
 frame:Hide()
 
@@ -59,6 +61,17 @@ s:test("methods, objects and Blizzard widgets", function(t)
     frame:Show()
     frame:Hide()
     t:eq(hidden, 1, "hookScript on a frame object")
+end)
+
+s:test("a hook's owner reaches error listeners", function(t)
+    local owner = {}
+    local heard: any = nil
+    local listener = errors.onError(function(_: string, info: errors.ErrorInfo) heard = info.owner end)
+    hook("StdTestOwned", "run", function() error("owned hook failed") end, { owner = owner })
+    _G.StdTestOwned:run()
+    listener:cancel()
+    t:ok(t:reported("owned hook failed"), "the failing hook is reported")
+    t:ok(heard == owner, "with its owner")
 end)
 
 s:test("missing targets are refused", function(t)

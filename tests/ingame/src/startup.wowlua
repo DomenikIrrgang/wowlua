@@ -5,6 +5,7 @@
 -- Unarmed, the recorder stops at that ADDON_LOADED (the saved variables say
 -- whether it is armed only then).
 import state from "/state"
+import stamp from "/state"
 import say from "/harness"
 
 --- A payload value in full: tables to depth 3 (keys sorted), else type
@@ -83,8 +84,10 @@ recorder:SetScript("OnEvent", function(_: any, event: string, ...: any)
             const st = state() :: any
             if initial then
                 st.engineStartupLogin = list
+                stamp("login")
             else
                 st.engineStartup = list
+                stamp("reload")
             end
             st.armStartup = nil
             recorder:UnregisterAllEvents()
@@ -99,3 +102,42 @@ export function armStartup()
     st.armStartup = true
     say("engine startup: armed; /reload, or log out and back in (the login is recorded), then /reload")
 end
+
+--- The classic expansion checks at each stage of loading (always on, into
+--- StdTestState.expansionTimes): LibDualSpec's Cataclysm branch ran in the
+--- client although `ClassicExpansionAtMost(3)` answers false once in the
+--- world, so the answers may differ while addons load.
+const expansionTimes: { [string]: string } = {}
+local function captureExpansion(label: string)
+    const parts: string[] = {}
+    for level = 0, 11 do
+        local okLeast, least = pcall(ClassicExpansionAtLeast, level)
+        local okMost, most = pcall(ClassicExpansionAtMost, level)
+        parts[#parts + 1] = `{level}:{okLeast and tostring(least) or "err"}/{okMost and tostring(most) or "err"}`
+    end
+    local okLevel, level = pcall(function(): any return GetClassicExpansionLevel and GetClassicExpansionLevel() end)
+    expansionTimes[label] = `{table.concat(parts, " ")} level={okLevel and tostring(level) or "err"}`
+end
+captureExpansion("file")
+const expansionWatch = CreateFrame("Frame")
+expansionWatch:RegisterEvent("ADDON_LOADED")
+expansionWatch:RegisterEvent("PLAYER_LOGIN")
+expansionWatch:RegisterEvent("PLAYER_ENTERING_WORLD")
+expansionWatch:SetScript("OnEvent", function(_: any, event: string, ...: any)
+    if event == "ADDON_LOADED" then
+        if (...) ~= "StdTest" then
+            return
+        end
+        captureExpansion("addonLoaded")
+        const st = state() :: any
+        st.expansionTimes = expansionTimes
+    elseif event == "PLAYER_LOGIN" then
+        captureExpansion("login")
+    else
+        captureExpansion("enteringWorld")
+        C_Timer.After(2, function()
+            captureExpansion("inWorld")
+            expansionWatch:UnregisterAllEvents()
+        end)
+    end
+end)

@@ -187,6 +187,12 @@ pub fn open(vm: &mut Vm) {
     // The client's loadstring taints its caller.
     let loadstring = vm.native("loadstring", loadstring_tainting);
     vm.set_global("loadstring", loadstring);
+    // Its untainting twin, read by Blizzard's restricted environment
+    // (RestrictedExecution.lua builds secure snippets with it; the client's
+    // secure group headers work, so it is there; unverified: whether
+    // addons see it).
+    let untainted = vm.native("loadstring_untainted", crate::stdlib::base::loadstring);
+    vm.set_global("loadstring_untainted", untainted);
     // The client's string.split, string.join and string.concat are other
     // function objects than strsplit, strjoin and strconcat (string.trim is
     // strtrim).

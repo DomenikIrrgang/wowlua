@@ -257,7 +257,7 @@
       "texture": 135964,
       "type": "spell",
       "usable": [
-        false,
+        true,
         false
       ]
     },
@@ -323,7 +323,7 @@
       "texture": 135964,
       "type": "spell",
       "usable": [
-        false,
+        true,
         false
       ]
     },
@@ -464,85 +464,50 @@
   "auras": [
     {
       "applications": 0,
+      "auraInstanceID": 3,
       "duration": 0,
+      "expirationTime": 0,
+      "icon": 136025,
+      "isHelpful": true,
+      "name": "Find Minerals",
+      "sourceUnit": "player",
+      "spellId": 2580
+    },
+    {
+      "applications": 0,
+      "auraInstanceID": 1,
+      "duration": 0,
+      "expirationTime": 0,
       "icon": 135893,
       "isHelpful": true,
       "name": "Devotion Aura",
+      "sourceUnit": "player",
       "spellId": 643
     }
   ],
   "bags": {
     "0": {
-      "items": [
-        {
+      "items": {
+        "1": {
           "bound": true,
           "count": 1,
           "id": 6948,
           "link": "|cnIQ1:|Hitem:6948::::::::21:1486::75:::::::|h[Hearthstone]|h|r"
         },
-        {
-          "bound": false,
-          "count": 1,
-          "id": 279968,
-          "link": "|cnIQ1:|Hitem:279968::::::::21:1486:::::::::|h[First Aid Kit]|h|r"
-        },
-        {
-          "bound": false,
-          "count": 1,
-          "id": 279944,
-          "link": "|cnIQ1:|Hitem:279944::::::::21:1486:::::::::|h[Sharpening Wheel]|h|r"
-        },
-        {
-          "bound": false,
-          "count": 1,
-          "id": 6529,
-          "link": "|cnIQ1:|Hitem:6529::::::::21:1486:::::::::|h[Shiny Bauble]|h|r"
-        },
-        {
-          "bound": false,
-          "count": 1,
-          "id": 5956,
-          "link": "|cnIQ1:|Hitem:5956::::::::21:1486::14:::::::|h[Blacksmith Hammer]|h|r"
-        },
-        {
-          "bound": true,
-          "count": 1,
-          "id": 253664,
-          "link": "|cnIQ1:|Hitem:253664::::::::21:1486::::::::Player-0000-00000000:|h[Linen Reagent Bag]|h|r"
-        },
-        {
-          "bound": false,
-          "count": 1,
-          "id": 4471,
-          "link": "|cnIQ1:|Hitem:4471::::::::21:1486:::::::::|h[Flint and Tinder]|h|r"
-        },
-        {
-          "bound": true,
-          "count": 1,
-          "id": 251382,
-          "link": "|cnIQ3:|Hitem:251382::::::::21:1486::1:::::::|h[Plans: Protector's Silvered Chain Helm]|h|r"
-        },
-        {
-          "bound": true,
-          "count": 1,
-          "id": 286176,
-          "link": "|cnIQ1:|Hitem:286176::::::::21:1486::11:::::::|h[Executor's Motivator]|h|r",
-          "questItem": true
-        },
-        {
+        "10": {
           "bound": false,
           "count": 1,
           "id": 248682,
           "link": "|cnIQ1:|Hitem:248682::::::::21:1486:::::::::|h[Waylaid Crate: Apprentice Herbs]|h|r"
         },
-        {
+        "11": {
           "bound": true,
           "count": 1,
           "id": 277566,
           "link": "|cnIQ1:|Hitem:277566::::::::21:1486:::::::::|h[Yelmak's Potion]|h|r",
           "questItem": true
         },
-        {
+        "12": {
           "bound": true,
           "count": 1,
           "id": 3317,
@@ -550,68 +515,105 @@
           "questActive": true,
           "questID": 460
         },
-        {
+        "13": {
           "bound": false,
           "count": 1,
           "id": 248685,
           "link": "|cnIQ1:|Hitem:248685::::::::21:1486:::::::::|h[Waylaid Crate: Apprentice Curiosities]|h|r"
         },
-        {
+        "14": {
           "bound": false,
-          "count": 7,
+          "count": 3,
           "id": 2771,
           "link": "|cnIQ1:|Hitem:2771::::::::21:1486:::::::::|h[Tin Ore]|h|r"
         },
-        {
+        "15": {
           "bound": true,
           "count": 1,
           "id": 16603,
           "link": "|cnIQ1:|Hitem:16603::::::::21:1486::11:::::::|h[Enchanted Resonite Crystal]|h|r",
           "questItem": true
         },
-        {
+        "16": {
           "bound": true,
           "count": 1,
           "id": 14544,
           "link": "|cnIQ1:|Hitem:14544::::::::21:1486:::::::::|h[Lieutenant's Insignia]|h|r",
           "questItem": true
         },
-        {
+        "17": {
           "bound": true,
           "count": 1,
           "id": 10649,
           "link": "|cnIQ1:|Hitem:10649::::::::21:1486:::::::::|h[Nightmare Shard]|h|r",
           "questItem": true
         },
-        {
+        "18": {
           "bound": true,
           "count": 13,
           "id": 6443,
           "link": "|cnIQ1:|Hitem:6443::::::::21:1486:::::::::|h[Deviate Hide]|h|r",
           "questItem": true
         },
-        {
+        "19": {
           "bound": true,
           "count": 1,
           "id": 5088,
           "link": "|cnIQ1:|Hitem:5088::::::::21:1486:::::::::|h[Control Console Operating Manual]|h|r"
         },
-        {
+        "2": {
+          "bound": false,
+          "count": 1,
+          "id": 279968,
+          "link": "|cnIQ1:|Hitem:279968::::::::21:1486:::::::::|h[First Aid Kit]|h|r"
+        },
+        "20": {
           "bound": false,
           "count": 6,
           "id": 5075,
           "link": "|cnIQ1:|Hitem:5075::::::::21:1486:::::::::|h[Blood Shard]|h|r"
+        },
+        "3": {
+          "bound": false,
+          "count": 2,
+          "id": 279944,
+          "link": "|cnIQ1:|Hitem:279944::::::::21:1486:::::::::|h[Sharpening Wheel]|h|r"
+        },
+        "5": {
+          "bound": false,
+          "count": 1,
+          "id": 5956,
+          "link": "|cnIQ1:|Hitem:5956::::::::21:1486::14:::::::|h[Blacksmith Hammer]|h|r"
+        },
+        "7": {
+          "bound": false,
+          "count": 1,
+          "id": 4471,
+          "link": "|cnIQ1:|Hitem:4471::::::::21:1486:::::::::|h[Flint and Tinder]|h|r"
+        },
+        "8": {
+          "bound": true,
+          "count": 1,
+          "id": 251382,
+          "link": "|cnIQ3:|Hitem:251382::::::::21:1486::1:::::::|h[Plans: Protector's Silvered Chain Helm]|h|r"
+        },
+        "9": {
+          "bound": true,
+          "count": 1,
+          "id": 286176,
+          "link": "|cnIQ1:|Hitem:286176::::::::21:1486::11:::::::|h[Executor's Motivator]|h|r",
+          "questItem": true
         }
-      ],
+      },
       "slots": 20
     },
     "1": {
       "items": {
-        "1": {
-          "bound": false,
+        "2": {
+          "bound": true,
           "count": 1,
-          "id": 2375,
-          "link": "|cnIQ1:|Hitem:2375::::::::21:1486::14:::::::|h[Battered Leather Gloves]|h|r"
+          "id": 277115,
+          "link": "|cnIQ1:|Hitem:277115::::::::21:1486:::::::::|h[Apprentice's Mining Pack]|h|r"
         },
         "3": {
           "bound": false,
@@ -640,28 +642,34 @@
       },
       "slots": 6
     },
-    "2": {
+    "5": {
       "items": {
-        "2": {
+        "1": {
           "bound": false,
           "count": 1,
-          "id": 2840,
-          "link": "|cnIQ1:|Hitem:2840::::::::21:1486:::::::::|h[Copper Bar]|h|r"
+          "id": 2835,
+          "link": "|cnIQ1:|Hitem:2835::::::::21:1486:::::::::|h[Rough Stone]|h|r"
         },
-        "3": {
+        "2": {
           "bound": false,
-          "count": 13,
+          "count": 14,
           "id": 2770,
           "link": "|cnIQ1:|Hitem:2770::::::::21:1486:::::::::|h[Copper Ore]|h|r"
         },
-        "4": {
+        "5": {
+          "bound": false,
+          "count": 8,
+          "id": 2841,
+          "link": "|cnIQ1:|Hitem:2841::::::::21:1486:::::::::|h[Bronze Bar]|h|r"
+        },
+        "6": {
           "bound": false,
           "count": 9,
           "id": 2836,
           "link": "|cnIQ1:|Hitem:2836::::::::21:1486:::::::::|h[Coarse Stone]|h|r"
         }
       },
-      "slots": 4
+      "slots": 6
     }
   },
   "bindings": {
@@ -823,6 +831,7 @@
   "character": {
     "class": "PALADIN",
     "faction": "Horde",
+    "lastName": "Lastname",
     "level": 21,
     "maxHealth": 776,
     "maxPower": 710,
@@ -897,7 +906,7 @@
     "autoLootDefault": "1",
     "cameraDistanceMaxZoomFactor": "2",
     "cameraSavedDistance": "30.000000",
-    "cameraSavedPitch": "32.326313",
+    "cameraSavedPitch": "26.315310",
     "cameraSmoothStyle": "0",
     "cameraView": "1",
     "categorizeTrainerUI": "1",
@@ -917,7 +926,7 @@
     "farclip": "7000",
     "ffxAntiAliasingMode": "0",
     "flaggedTutorials": "v21###&###%###=###'",
-    "gameTip": "44",
+    "gameTip": "4",
     "giQuality": "3",
     "groundEffectDensity": "48",
     "groundEffectDist": "200",
@@ -945,6 +954,7 @@
     "nameplateSelectedAlpha": "1",
     "nameplateSelectedScale": "1",
     "nameplateShowEnemies": "1",
+    "nameplateShowFriendlyNpcs": "1",
     "nameplateShowFriendlyPlayers": "1",
     "nameplateShowOnlyNameForFriendlyPlayerUnits": "1",
     "nameplateSize": "3",
@@ -970,7 +980,6 @@
     "reputationsCollapsed": "v21",
     "rippleDetail": "1",
     "seenAlliedRaceUnlocks": "1",
-    "serviceTypeFilter": "7",
     "shadowBlendCascades": "1",
     "shadowMode": "3",
     "shadowNumCascades": "3",
@@ -992,7 +1001,7 @@
     "toyBoxCollectedFilters": "\u0002B",
     "trackedAchievements": "v21",
     "trackedPerksActivities": "v21",
-    "trackedProfessionRecipes": "v21##?]##Fc",
+    "trackedProfessionRecipes": "v21#%IM##?]##Fc",
     "trackedProfessionRecraftRecipes": "v21",
     "trackedWorldQuests": "v21",
     "uiScale": "0.6599999666214",
@@ -1008,8 +1017,10 @@
       "id": 0
     },
     "10": {
+      "durability": 35,
       "id": 271208,
-      "link": "|cnIQ3:|Hitem:271208:8484:::::::21:1486::1::1:28:5256:::::|h[Grip of Fear]|h|r"
+      "link": "|cnIQ3:|Hitem:271208:8484:::::::21:1486::1::1:28:5256:::::|h[Grip of Fear]|h|r",
+      "maxDurability": 35
     },
     "11": {
       "id": 279867,
@@ -1020,58 +1031,59 @@
       "link": "|cnIQ2:|Hitem:5343::::::::21:1486::11:::::::|h[Barkeeper's Cloak]|h|r"
     },
     "16": {
+      "durability": 69,
       "id": 271216,
-      "link": "|cnIQ3:|Hitem:271216::::::::21:1486::1::1:28:5256:::::|h[Scepter of the Abandoned]|h|r"
+      "link": "|cnIQ3:|Hitem:271216::::::::21:1486::1::1:28:5256:::::|h[Scepter of the Abandoned]|h|r",
+      "maxDurability": 70
     },
     "3": {
+      "durability": 48,
       "id": 3480,
-      "link": "|cnIQ2:|Hitem:3480::::::::21:1486::::::::Player-0000-00000000:|h[Rough Bronze Shoulders]|h|r"
+      "link": "|cnIQ2:|Hitem:3480::::::::21:1486::::::::Player-0000-00000000:|h[Rough Bronze Shoulders]|h|r",
+      "maxDurability": 50
     },
     "31": {
       "id": 279939,
       "link": "|cnIQ1:|Hitem:279939::::::::21:1486:::::::::|h[Collecting Basket]|h|r"
     },
-    "32": {
-      "id": 277115,
-      "link": "|cnIQ1:|Hitem:277115::::::::21:1486:::::::::|h[Apprentice's Mining Pack]|h|r"
+    "35": {
+      "id": 253664,
+      "link": "|cnIQ1:|Hitem:253664::::::::21:1486::::::::Player-0000-00000000:|h[Linen Reagent Bag]|h|r"
     },
     "4": {
       "id": 6125,
       "link": "|cnIQ1:|Hitem:6125::::::::21:1486::75:::::::|h[Brawler's Harness]|h|r"
     },
     "5": {
+      "durability": 93,
       "id": 271205,
-      "link": "|cnIQ3:|Hitem:271205:8484:::::::21:1486::1::1:28:5256:::::|h[Abomination Bones]|h|r"
+      "link": "|cnIQ3:|Hitem:271205:8484:::::::21:1486::1::1:28:5256:::::|h[Abomination Bones]|h|r",
+      "maxDurability": 95
     },
     "6": {
+      "durability": 35,
       "id": 271201,
-      "link": "|cnIQ3:|Hitem:271201::::::::21:1486::1::1:28:5256:::::|h[Atrophic Girdle]|h|r"
+      "link": "|cnIQ3:|Hitem:271201::::::::21:1486::1::1:28:5256:::::|h[Atrophic Girdle]|h|r",
+      "maxDurability": 35
     },
     "8": {
+      "durability": 37,
       "id": 250621,
-      "link": "|cnIQ3:|Hitem:250621:8484:::::::21:1486::::::::Player-0000-00000000:|h[Strange Copper Boots]|h|r"
+      "link": "|cnIQ3:|Hitem:250621:8484:::::::21:1486::::::::Player-0000-00000000:|h[Strange Copper Boots]|h|r",
+      "maxDurability": 40
     },
     "9": {
+      "durability": 30,
       "id": 14147,
-      "link": "|cnIQ3:|Hitem:14147:924:::::::21:1486::1:::::::|h[Cavedweller Bracers]|h|r"
+      "link": "|cnIQ3:|Hitem:14147:924:::::::21:1486::1:::::::|h[Cavedweller Bracers]|h|r",
+      "maxDurability": 30
     }
   },
   "channels": {
     "joined": [
       {
-        "name": "LookingForGroup",
-        "fullName": "LookingForGroup",
-        "category": "CHANNEL_CATEGORY_WORLD",
-        "disabled": false,
-        "shortcut": "LookingForGroup",
-        "instanceID": 0,
-        "zoneChannelID": 26,
-        "channelType": 0,
-        "regional": false
-      },
-      {
         "name": "General",
-        "fullName": "General - Thunder Bluff",
+        "fullName": "General - The Barrens",
         "category": "CHANNEL_CATEGORY_WORLD",
         "disabled": false,
         "shortcut": "General",
@@ -1082,9 +1094,9 @@
       },
       {
         "name": "Trade",
-        "fullName": "Trade - English",
+        "fullName": "Trade",
         "category": "CHANNEL_CATEGORY_WORLD",
-        "disabled": false,
+        "disabled": true,
         "shortcut": "Trade",
         "instanceID": 0,
         "zoneChannelID": 2,
@@ -1093,7 +1105,7 @@
       },
       {
         "name": "LocalDefense",
-        "fullName": "LocalDefense - Thunder Bluff",
+        "fullName": "LocalDefense - The Barrens",
         "category": "CHANNEL_CATEGORY_WORLD",
         "disabled": false,
         "shortcut": "LocalDefense",
@@ -1104,9 +1116,9 @@
       },
       {
         "name": "Services",
-        "fullName": "Trade (Services) - English",
+        "fullName": "Services",
         "category": "CHANNEL_CATEGORY_WORLD",
-        "disabled": false,
+        "disabled": true,
         "shortcut": "Services",
         "instanceID": 0,
         "zoneChannelID": 42,
@@ -1115,9 +1127,9 @@
       },
       {
         "name": "TradeLocal",
-        "fullName": "Trade (Local) - Thunder Bluff",
+        "fullName": "TradeLocal",
         "category": "CHANNEL_CATEGORY_WORLD",
-        "disabled": false,
+        "disabled": true,
         "shortcut": "TradeLocal",
         "instanceID": 0,
         "zoneChannelID": 46,
@@ -1189,21 +1201,6 @@
       "subType": "Quest",
       "subclassID": 0,
       "type": "Quest"
-    },
-    "2375": {
-      "classID": 4,
-      "equipLoc": "INVTYPE_HAND",
-      "icon": 132952,
-      "itemLevel": 10,
-      "link": "|cnIQ1:|Hitem:2375::::::::21:1486:::::::::|h[Battered Leather Gloves]|h|r",
-      "minLevel": 5,
-      "name": "Battered Leather Gloves",
-      "quality": 1,
-      "sellPrice": 34,
-      "stackCount": 1,
-      "subType": "Leather",
-      "subclassID": 2,
-      "type": "Armor"
     },
     "248682": {
       "classID": 0,
@@ -1289,6 +1286,7 @@
       "minLevel": 0,
       "name": "Trevan's Weapon Notes",
       "quality": 1,
+      "readable": true,
       "sellPrice": 0,
       "stackCount": 1,
       "subType": "Quest",
@@ -1475,6 +1473,21 @@
       "subclassID": 8,
       "type": "Consumable"
     },
+    "2835": {
+      "classID": 7,
+      "equipLoc": "INVTYPE_NON_EQUIP_IGNORE",
+      "icon": 135232,
+      "itemLevel": 5,
+      "link": "|cnIQ1:|Hitem:2835::::::::21:1486:::::::::|h[Rough Stone]|h|r",
+      "minLevel": 0,
+      "name": "Rough Stone",
+      "quality": 1,
+      "sellPrice": 2,
+      "stackCount": 20,
+      "subType": "Metal & Stone",
+      "subclassID": 7,
+      "type": "Trade Goods"
+    },
     "2836": {
       "classID": 7,
       "equipLoc": "INVTYPE_NON_EQUIP_IGNORE",
@@ -1490,16 +1503,16 @@
       "subclassID": 7,
       "type": "Trade Goods"
     },
-    "2840": {
+    "2841": {
       "classID": 7,
       "equipLoc": "INVTYPE_NON_EQUIP_IGNORE",
-      "icon": 133216,
-      "itemLevel": 10,
-      "link": "|cnIQ1:|Hitem:2840::::::::21:1486:::::::::|h[Copper Bar]|h|r",
+      "icon": 133227,
+      "itemLevel": 20,
+      "link": "|cnIQ1:|Hitem:2841::::::::21:1486:::::::::|h[Bronze Bar]|h|r",
       "minLevel": 0,
-      "name": "Copper Bar",
+      "name": "Bronze Bar",
       "quality": 1,
-      "sellPrice": 10,
+      "sellPrice": 50,
       "stackCount": 20,
       "subType": "Metal & Stone",
       "subclassID": 7,
@@ -1619,6 +1632,7 @@
       "minLevel": 0,
       "name": "Control Console Operating Manual",
       "quality": 1,
+      "readable": true,
       "sellPrice": 0,
       "stackCount": 1,
       "subType": "Quest",
@@ -1684,21 +1698,6 @@
       "subType": "Quest",
       "subclassID": 0,
       "type": "Quest"
-    },
-    "6529": {
-      "classID": 0,
-      "equipLoc": "INVTYPE_NON_EQUIP_IGNORE",
-      "icon": 134335,
-      "itemLevel": 10,
-      "link": "|cnIQ1:|Hitem:6529::::::::21:1486:::::::::|h[Shiny Bauble]|h|r",
-      "minLevel": 0,
-      "name": "Shiny Bauble",
-      "quality": 1,
-      "sellPrice": 12,
-      "stackCount": 20,
-      "subType": "Other",
-      "subclassID": 8,
-      "type": "Consumable"
     },
     "6948": {
       "classID": 15,
@@ -1852,6 +1851,54 @@
       "count": 0
     },
     {
+      "boards": [
+        [
+          "0/1 Steelsnap's Rib",
+          "item",
+          false
+        ]
+      ],
+      "count": 1
+    },
+    {
+      "boards": {},
+      "count": 0
+    },
+    {
+      "boards": [
+        [
+          "13/20 Deviate Hide",
+          "item",
+          false
+        ]
+      ],
+      "count": 1
+    },
+    {
+      "boards": [
+        [
+          "0/10 Serpentbloom",
+          "item",
+          false
+        ]
+      ],
+      "count": 1
+    },
+    {
+      "boards": [
+        [
+          "0/1 99-Year-Old Port",
+          "item",
+          false
+        ]
+      ],
+      "count": 1
+    },
+    {
+      "boards": {},
+      "count": 0
+    },
+    {
       "boards": {},
       "count": 0
     },
@@ -1948,54 +1995,6 @@
     {
       "boards": [
         [
-          "0/1 Steelsnap's Rib",
-          "item",
-          false
-        ]
-      ],
-      "count": 1
-    },
-    {
-      "boards": {},
-      "count": 0
-    },
-    {
-      "boards": [
-        [
-          "13/20 Deviate Hide",
-          "item",
-          false
-        ]
-      ],
-      "count": 1
-    },
-    {
-      "boards": [
-        [
-          "0/10 Serpentbloom",
-          "item",
-          false
-        ]
-      ],
-      "count": 1
-    },
-    {
-      "boards": [
-        [
-          "0/1 99-Year-Old Port",
-          "item",
-          false
-        ]
-      ],
-      "count": 1
-    },
-    {
-      "boards": {},
-      "count": 0
-    },
-    {
-      "boards": [
-        [
           "1/1 Collect the note from Trevan",
           "item",
           true
@@ -2036,13 +2035,13 @@
       ]
     ]
   },
-  "money": 32872,
+  "money": 19471,
   "position": {
-    "mapID": 1456,
-    "subZone": "",
-    "x": 0.4702032208442688,
-    "y": 0.5879166126251221,
-    "zone": "Thunder Bluff"
+    "mapID": 1413,
+    "subZone": "The Crossroads",
+    "x": 0.5091331601142883,
+    "y": 0.2920482158660889,
+    "zone": "The Barrens"
   },
   "stats": {
     "activeSpecGroup": [
@@ -4663,7 +4662,7 @@
       "8": [
         "Mining",
         136248,
-        83,
+        86,
         150,
         2,
         53,
@@ -4831,6 +4830,57 @@
         true
       ]
     },
+    "questCompletionText": [
+      [],
+      [
+        "Speak with Magatha in Thunder Bluff."
+      ],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [
+        "Bring the new orders to Ziz Fizziks in the Stonetalon Mountains."
+      ],
+      [],
+      [
+        "Access the control console at the Venture Company research site."
+      ],
+      [
+        "Bring the Nightmare Shard to Hamuul Runetotem on Elder Rise."
+      ],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [
+        "Speak to Je'neu Sancrea in Ashenvale."
+      ],
+      [],
+      [
+        "Give Yelmak's Potion to Whuut."
+      ],
+      [],
+      [],
+      [],
+      [],
+      [
+        "Retrieve the contents of one of the Dalaran wizards' crates. You will find Pyrewood Village to the south."
+      ],
+      [],
+      [
+        "Bring Alaric's Head to his grave."
+      ],
+      [],
+      [],
+      []
+    ],
     "questContentDifficulty": {
       "1013": [
         4
@@ -5281,10 +5331,10 @@
     ],
     "questLogIndex": {
       "1013": [
-        19
+        25
       ],
       "1014": [
-        20
+        26
       ],
       "1063": [
         2
@@ -5299,25 +5349,25 @@
         10
       ],
       "1131": [
-        27
+        15
       ],
       "1486": [
-        29
+        17
       ],
       "3369": [
         13
       ],
       "437": [
-        23
+        29
       ],
       "460": [
-        24
+        30
       ],
       "477": [
-        22
+        28
       ],
       "516": [
-        25
+        31
       ],
       "6282": [
         9
@@ -5332,7 +5382,7 @@
         3
       ],
       "6562": [
-        15
+        21
       ],
       "86576": [
         8
@@ -5344,13 +5394,13 @@
         33
       ],
       "959": [
-        31
+        19
       ],
       "962": [
-        30
+        18
       ],
       "97275": [
-        17
+        23
       ]
     },
     "questLogInfo": [
@@ -5416,7 +5466,7 @@
         {
           "difficultyLevel": 20,
           "frequency": 0,
-          "hasLocalPOI": false,
+          "hasLocalPOI": true,
           "isAbandonOnDisable": false,
           "isAutoComplete": false,
           "isBounty": false,
@@ -5424,7 +5474,7 @@
           "isHeader": false,
           "isHidden": false,
           "isInternalOnly": false,
-          "isOnMap": false,
+          "isOnMap": true,
           "isScaling": true,
           "isStory": false,
           "isTask": false,
@@ -5445,7 +5495,7 @@
         {
           "difficultyLevel": 23,
           "frequency": 0,
-          "hasLocalPOI": false,
+          "hasLocalPOI": true,
           "isAbandonOnDisable": false,
           "isAutoComplete": false,
           "isBounty": false,
@@ -5453,7 +5503,7 @@
           "isHeader": false,
           "isHidden": false,
           "isInternalOnly": false,
-          "isOnMap": false,
+          "isOnMap": true,
           "isScaling": true,
           "isStory": false,
           "isTask": false,
@@ -5474,7 +5524,7 @@
         {
           "difficultyLevel": 23,
           "frequency": 0,
-          "hasLocalPOI": false,
+          "hasLocalPOI": true,
           "isAbandonOnDisable": false,
           "isAutoComplete": false,
           "isBounty": false,
@@ -5482,7 +5532,7 @@
           "isHeader": false,
           "isHidden": false,
           "isInternalOnly": false,
-          "isOnMap": false,
+          "isOnMap": true,
           "isScaling": true,
           "isStory": false,
           "isTask": false,
@@ -5532,7 +5582,7 @@
         {
           "difficultyLevel": 25,
           "frequency": 0,
-          "hasLocalPOI": false,
+          "hasLocalPOI": true,
           "isAbandonOnDisable": false,
           "isAutoComplete": false,
           "isBounty": false,
@@ -5540,7 +5590,7 @@
           "isHeader": false,
           "isHidden": false,
           "isInternalOnly": false,
-          "isOnMap": false,
+          "isOnMap": true,
           "isScaling": true,
           "isStory": false,
           "isTask": false,
@@ -5561,7 +5611,7 @@
         {
           "difficultyLevel": 26,
           "frequency": 0,
-          "hasLocalPOI": false,
+          "hasLocalPOI": true,
           "isAbandonOnDisable": false,
           "isAutoComplete": false,
           "isBounty": false,
@@ -5569,7 +5619,7 @@
           "isHeader": false,
           "isHidden": false,
           "isInternalOnly": false,
-          "isOnMap": false,
+          "isOnMap": true,
           "isScaling": true,
           "isStory": false,
           "isTask": false,
@@ -5590,7 +5640,7 @@
         {
           "difficultyLevel": 26,
           "frequency": 0,
-          "hasLocalPOI": false,
+          "hasLocalPOI": true,
           "isAbandonOnDisable": false,
           "isAutoComplete": false,
           "isBounty": false,
@@ -5598,7 +5648,7 @@
           "isHeader": false,
           "isHidden": false,
           "isInternalOnly": false,
-          "isOnMap": false,
+          "isOnMap": true,
           "isScaling": true,
           "isStory": false,
           "isTask": false,
@@ -5619,7 +5669,7 @@
         {
           "difficultyLevel": 27,
           "frequency": 0,
-          "hasLocalPOI": false,
+          "hasLocalPOI": true,
           "isAbandonOnDisable": false,
           "isAutoComplete": false,
           "isBounty": false,
@@ -5627,7 +5677,7 @@
           "isHeader": false,
           "isHidden": false,
           "isInternalOnly": false,
-          "isOnMap": false,
+          "isOnMap": true,
           "isScaling": true,
           "isStory": false,
           "isTask": false,
@@ -5677,7 +5727,7 @@
         {
           "difficultyLevel": 14,
           "frequency": 0,
-          "hasLocalPOI": false,
+          "hasLocalPOI": true,
           "isAbandonOnDisable": false,
           "isAutoComplete": false,
           "isBounty": false,
@@ -5685,7 +5735,7 @@
           "isHeader": false,
           "isHidden": false,
           "isInternalOnly": false,
-          "isOnMap": false,
+          "isOnMap": true,
           "isScaling": true,
           "isStory": false,
           "isTask": false,
@@ -5735,6 +5785,180 @@
         {
           "difficultyLevel": 0,
           "hasLocalPOI": false,
+          "headerSortKey": 1073743462,
+          "isAbandonOnDisable": false,
+          "isAutoComplete": false,
+          "isBounty": false,
+          "isCollapsed": false,
+          "isHeader": true,
+          "isHidden": false,
+          "isInternalOnly": false,
+          "isOnMap": true,
+          "isScaling": false,
+          "isStory": false,
+          "isTask": false,
+          "level": 0,
+          "overridesSortOrder": false,
+          "questClassification": 7,
+          "questID": 0,
+          "questLogIndex": 14,
+          "readyForTranslation": false,
+          "sortAsNormalQuest": true,
+          "startEvent": false,
+          "suggestedGroup": 0,
+          "title": "Thunder Bluff",
+          "useMinimalHeader": false
+        }
+      ],
+      [
+        {
+          "difficultyLevel": 30,
+          "frequency": 0,
+          "hasLocalPOI": true,
+          "isAbandonOnDisable": false,
+          "isAutoComplete": false,
+          "isBounty": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "isHidden": false,
+          "isInternalOnly": false,
+          "isOnMap": true,
+          "isScaling": true,
+          "isStory": false,
+          "isTask": false,
+          "level": 30,
+          "overridesSortOrder": false,
+          "questClassification": 7,
+          "questID": 1131,
+          "questLogIndex": 15,
+          "readyForTranslation": true,
+          "sortAsNormalQuest": true,
+          "startEvent": false,
+          "suggestedGroup": 0,
+          "title": "Steelsnap",
+          "useMinimalHeader": false
+        }
+      ],
+      [
+        {
+          "difficultyLevel": 0,
+          "hasLocalPOI": false,
+          "headerSortKey": 1073742542,
+          "isAbandonOnDisable": false,
+          "isAutoComplete": false,
+          "isBounty": false,
+          "isCollapsed": false,
+          "isHeader": true,
+          "isHidden": false,
+          "isInternalOnly": false,
+          "isOnMap": true,
+          "isScaling": false,
+          "isStory": false,
+          "isTask": false,
+          "level": 0,
+          "overridesSortOrder": false,
+          "questClassification": 7,
+          "questID": 0,
+          "questLogIndex": 16,
+          "readyForTranslation": false,
+          "sortAsNormalQuest": true,
+          "startEvent": false,
+          "suggestedGroup": 0,
+          "title": "Wailing Caverns",
+          "useMinimalHeader": false
+        }
+      ],
+      [
+        {
+          "difficultyLevel": 17,
+          "frequency": 0,
+          "hasLocalPOI": true,
+          "isAbandonOnDisable": false,
+          "isAutoComplete": false,
+          "isBounty": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "isHidden": false,
+          "isInternalOnly": false,
+          "isOnMap": true,
+          "isScaling": true,
+          "isStory": false,
+          "isTask": false,
+          "level": 17,
+          "overridesSortOrder": false,
+          "questClassification": 7,
+          "questID": 1486,
+          "questLogIndex": 17,
+          "readyForTranslation": true,
+          "sortAsNormalQuest": true,
+          "startEvent": false,
+          "suggestedGroup": 0,
+          "title": "Deviate Hides",
+          "useMinimalHeader": false
+        }
+      ],
+      [
+        {
+          "difficultyLevel": 18,
+          "frequency": 0,
+          "hasLocalPOI": true,
+          "isAbandonOnDisable": false,
+          "isAutoComplete": false,
+          "isBounty": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "isHidden": false,
+          "isInternalOnly": false,
+          "isOnMap": true,
+          "isScaling": true,
+          "isStory": false,
+          "isTask": false,
+          "level": 18,
+          "overridesSortOrder": false,
+          "questClassification": 7,
+          "questID": 962,
+          "questLogIndex": 18,
+          "readyForTranslation": true,
+          "sortAsNormalQuest": true,
+          "startEvent": false,
+          "suggestedGroup": 0,
+          "title": "Serpentbloom",
+          "useMinimalHeader": false
+        }
+      ],
+      [
+        {
+          "difficultyLevel": 18,
+          "frequency": 0,
+          "hasLocalPOI": true,
+          "isAbandonOnDisable": false,
+          "isAutoComplete": false,
+          "isBounty": false,
+          "isCollapsed": false,
+          "isHeader": false,
+          "isHidden": false,
+          "isInternalOnly": false,
+          "isOnMap": true,
+          "isScaling": true,
+          "isStory": false,
+          "isTask": false,
+          "level": 18,
+          "overridesSortOrder": false,
+          "questClassification": 7,
+          "questID": 959,
+          "questLogIndex": 19,
+          "readyForTranslation": true,
+          "sortAsNormalQuest": true,
+          "startEvent": false,
+          "suggestedGroup": 0,
+          "title": "Trouble at the Docks",
+          "useMinimalHeader": false
+        }
+      ],
+      [
+        {
+          "difficultyLevel": 0,
+          "hasLocalPOI": false,
           "headerSortKey": 1073742543,
           "isAbandonOnDisable": false,
           "isAutoComplete": false,
@@ -5751,7 +5975,7 @@
           "overridesSortOrder": false,
           "questClassification": 7,
           "questID": 0,
-          "questLogIndex": 14,
+          "questLogIndex": 20,
           "readyForTranslation": false,
           "sortAsNormalQuest": true,
           "startEvent": false,
@@ -5780,7 +6004,7 @@
           "overridesSortOrder": false,
           "questClassification": 7,
           "questID": 6562,
-          "questLogIndex": 15,
+          "questLogIndex": 21,
           "readyForTranslation": true,
           "sortAsNormalQuest": true,
           "startEvent": false,
@@ -5809,7 +6033,7 @@
           "overridesSortOrder": false,
           "questClassification": 7,
           "questID": 0,
-          "questLogIndex": 16,
+          "questLogIndex": 22,
           "readyForTranslation": false,
           "sortAsNormalQuest": true,
           "startEvent": false,
@@ -5838,7 +6062,7 @@
           "overridesSortOrder": false,
           "questClassification": 7,
           "questID": 97275,
-          "questLogIndex": 17,
+          "questLogIndex": 23,
           "readyForTranslation": true,
           "sortAsNormalQuest": true,
           "startEvent": false,
@@ -5867,7 +6091,7 @@
           "overridesSortOrder": false,
           "questClassification": 7,
           "questID": 0,
-          "questLogIndex": 18,
+          "questLogIndex": 24,
           "readyForTranslation": false,
           "sortAsNormalQuest": true,
           "startEvent": false,
@@ -5896,7 +6120,7 @@
           "overridesSortOrder": false,
           "questClassification": 7,
           "questID": 1013,
-          "questLogIndex": 19,
+          "questLogIndex": 25,
           "readyForTranslation": true,
           "sortAsNormalQuest": true,
           "startEvent": false,
@@ -5925,7 +6149,7 @@
           "overridesSortOrder": false,
           "questClassification": 7,
           "questID": 1014,
-          "questLogIndex": 20,
+          "questLogIndex": 26,
           "readyForTranslation": true,
           "sortAsNormalQuest": true,
           "startEvent": false,
@@ -5954,7 +6178,7 @@
           "overridesSortOrder": false,
           "questClassification": 7,
           "questID": 0,
-          "questLogIndex": 21,
+          "questLogIndex": 27,
           "readyForTranslation": false,
           "sortAsNormalQuest": true,
           "startEvent": false,
@@ -5983,7 +6207,7 @@
           "overridesSortOrder": false,
           "questClassification": 7,
           "questID": 477,
-          "questLogIndex": 22,
+          "questLogIndex": 28,
           "readyForTranslation": true,
           "sortAsNormalQuest": true,
           "startEvent": false,
@@ -6012,7 +6236,7 @@
           "overridesSortOrder": false,
           "questClassification": 7,
           "questID": 437,
-          "questLogIndex": 23,
+          "questLogIndex": 29,
           "readyForTranslation": true,
           "sortAsNormalQuest": true,
           "startEvent": false,
@@ -6041,7 +6265,7 @@
           "overridesSortOrder": false,
           "questClassification": 7,
           "questID": 460,
-          "questLogIndex": 24,
+          "questLogIndex": 30,
           "readyForTranslation": true,
           "sortAsNormalQuest": true,
           "startEvent": false,
@@ -6070,186 +6294,12 @@
           "overridesSortOrder": false,
           "questClassification": 7,
           "questID": 516,
-          "questLogIndex": 25,
-          "readyForTranslation": true,
-          "sortAsNormalQuest": true,
-          "startEvent": false,
-          "suggestedGroup": 0,
-          "title": "Beren's Peril",
-          "useMinimalHeader": false
-        }
-      ],
-      [
-        {
-          "difficultyLevel": 0,
-          "hasLocalPOI": false,
-          "headerSortKey": 1073743462,
-          "isAbandonOnDisable": false,
-          "isAutoComplete": false,
-          "isBounty": false,
-          "isCollapsed": true,
-          "isHeader": true,
-          "isHidden": false,
-          "isInternalOnly": false,
-          "isOnMap": false,
-          "isScaling": false,
-          "isStory": false,
-          "isTask": false,
-          "level": 0,
-          "overridesSortOrder": false,
-          "questClassification": 7,
-          "questID": 0,
-          "questLogIndex": 26,
-          "readyForTranslation": false,
-          "sortAsNormalQuest": true,
-          "startEvent": false,
-          "suggestedGroup": 0,
-          "title": "Thunder Bluff",
-          "useMinimalHeader": false
-        }
-      ],
-      [
-        {
-          "difficultyLevel": 30,
-          "frequency": 0,
-          "hasLocalPOI": false,
-          "isAbandonOnDisable": false,
-          "isAutoComplete": false,
-          "isBounty": false,
-          "isCollapsed": true,
-          "isHeader": false,
-          "isHidden": false,
-          "isInternalOnly": false,
-          "isOnMap": false,
-          "isScaling": true,
-          "isStory": false,
-          "isTask": false,
-          "level": 30,
-          "overridesSortOrder": false,
-          "questClassification": 7,
-          "questID": 1131,
-          "questLogIndex": 27,
-          "readyForTranslation": true,
-          "sortAsNormalQuest": true,
-          "startEvent": false,
-          "suggestedGroup": 0,
-          "title": "Steelsnap",
-          "useMinimalHeader": false
-        }
-      ],
-      [
-        {
-          "difficultyLevel": 0,
-          "hasLocalPOI": false,
-          "headerSortKey": 1073742542,
-          "isAbandonOnDisable": false,
-          "isAutoComplete": false,
-          "isBounty": false,
-          "isCollapsed": true,
-          "isHeader": true,
-          "isHidden": false,
-          "isInternalOnly": false,
-          "isOnMap": false,
-          "isScaling": false,
-          "isStory": false,
-          "isTask": false,
-          "level": 0,
-          "overridesSortOrder": false,
-          "questClassification": 7,
-          "questID": 0,
-          "questLogIndex": 28,
-          "readyForTranslation": false,
-          "sortAsNormalQuest": true,
-          "startEvent": false,
-          "suggestedGroup": 0,
-          "title": "Wailing Caverns",
-          "useMinimalHeader": false
-        }
-      ],
-      [
-        {
-          "difficultyLevel": 17,
-          "frequency": 0,
-          "hasLocalPOI": false,
-          "isAbandonOnDisable": false,
-          "isAutoComplete": false,
-          "isBounty": false,
-          "isCollapsed": true,
-          "isHeader": false,
-          "isHidden": false,
-          "isInternalOnly": false,
-          "isOnMap": false,
-          "isScaling": true,
-          "isStory": false,
-          "isTask": false,
-          "level": 17,
-          "overridesSortOrder": false,
-          "questClassification": 7,
-          "questID": 1486,
-          "questLogIndex": 29,
-          "readyForTranslation": true,
-          "sortAsNormalQuest": true,
-          "startEvent": false,
-          "suggestedGroup": 0,
-          "title": "Deviate Hides",
-          "useMinimalHeader": false
-        }
-      ],
-      [
-        {
-          "difficultyLevel": 18,
-          "frequency": 0,
-          "hasLocalPOI": false,
-          "isAbandonOnDisable": false,
-          "isAutoComplete": false,
-          "isBounty": false,
-          "isCollapsed": true,
-          "isHeader": false,
-          "isHidden": false,
-          "isInternalOnly": false,
-          "isOnMap": false,
-          "isScaling": true,
-          "isStory": false,
-          "isTask": false,
-          "level": 18,
-          "overridesSortOrder": false,
-          "questClassification": 7,
-          "questID": 962,
-          "questLogIndex": 30,
-          "readyForTranslation": true,
-          "sortAsNormalQuest": true,
-          "startEvent": false,
-          "suggestedGroup": 0,
-          "title": "Serpentbloom",
-          "useMinimalHeader": false
-        }
-      ],
-      [
-        {
-          "difficultyLevel": 18,
-          "frequency": 0,
-          "hasLocalPOI": false,
-          "isAbandonOnDisable": false,
-          "isAutoComplete": false,
-          "isBounty": false,
-          "isCollapsed": true,
-          "isHeader": false,
-          "isHidden": false,
-          "isInternalOnly": false,
-          "isOnMap": false,
-          "isScaling": true,
-          "isStory": false,
-          "isTask": false,
-          "level": 18,
-          "overridesSortOrder": false,
-          "questClassification": 7,
-          "questID": 959,
           "questLogIndex": 31,
           "readyForTranslation": true,
           "sortAsNormalQuest": true,
           "startEvent": false,
           "suggestedGroup": 0,
-          "title": "Trouble at the Docks",
+          "title": "Beren's Peril",
           "useMinimalHeader": false
         }
       ],
@@ -7269,7 +7319,7 @@
       2
     ],
     "restedXP": [
-      38830
+      45434
     ],
     "selectedFaction": [
       12
@@ -7467,7 +7517,7 @@
           "modifier": 0,
           "name": "Mining",
           "parentSkillLineID": 186,
-          "rank": 83,
+          "rank": 86,
           "rankCost": 0,
           "skillID": 2946,
           "skillLineCategoryID": 11,
@@ -7487,7 +7537,7 @@
           "modifier": 0,
           "name": "Mining",
           "parentSkillLineID": 0,
-          "rank": 83,
+          "rank": 86,
           "rankCost": 0,
           "skillID": 186,
           "skillLineCategoryID": 11,

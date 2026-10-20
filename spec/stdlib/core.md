@@ -19,7 +19,7 @@ messages alike. A name declared both as an event and as a message is error
 E2058.
 
 ```wowlua
-import event, unitEvent, on, once, off, send from "wowlua:events"
+import event, unitEvent, on, once, off, send, watchUnit from "wowlua:events"
 
 @event("PLAYER_ENTERING_WORLD")
 local function onEnterWorld(isInitialLogin: boolean, isReloadingUi: boolean)
@@ -29,12 +29,19 @@ end
 @event("BAG_UPDATE", "BAG_UPDATE_DELAYED")          -- several names: the handler gets the name first
 local function onBags(e: "BAG_UPDATE" | "BAG_UPDATE_DELAYED", ...any) … end
 
-@unitEvent("UNIT_HEALTH", "player", "target")      -- at most two units
+@unitEvent("UNIT_HEALTH", "player", "party1", "party2")   -- any number of units
 local function onHealth(unit: UnitToken) … end
 
 local sub = on("PLAYER_REGEN_DISABLED", function() hideWindow() end)
 once("PLAYER_LOGIN", function() … end)
 off(sub)                                            -- or sub:cancel()
+
+-- one frame per nameplate, pointed at whichever unit it shows
+local watch = watchUnit({ "UNIT_HEALTH", "UNIT_MAXHEALTH" }, function(event: "UNIT_HEALTH" | "UNIT_MAXHEALTH", unit: UnitToken)
+    plate:update(event)
+end, plate)
+watch:setUnit("nameplate3")                         -- nil unregisters
+watch:cancel()
 
 -- messages
 declare message MYADDON_SETTINGS_CHANGED(key: string, value: any)
@@ -54,12 +61,19 @@ declare module "wowlua:events"
         function cancel()
     end
 
+    interface UnitWatch
+        active: boolean
+        function setUnit(unit: UnitToken?, unit2: UnitToken?)
+        function cancel()
+    end
+
     function on<E extends EventName | MessageName>(event: E, handler: (EventArgs<E>...) -> (), owner: any?): Subscription
     function once<E extends EventName | MessageName>(event: E, handler: (EventArgs<E>...) -> (), owner: any?): Subscription
     function onUnit<E extends EventName>(event: E, units: UnitToken[], handler: (EventArgs<E>...) -> (), owner: any?): Subscription
+    function watchUnit<E extends EventName>(events: E[], handler: (event: E, ...any) -> (), owner: any?): UnitWatch
     function onBucket(events: (EventName | MessageName) | (EventName | MessageName)[], interval: number, handler: (counts: BucketCounts) -> (), owner: any?): Subscription
     function off(sub: Subscription)
-    function offAll(owner: any)
+    function offAll(owner: any, name: (EventName | MessageName)?)
     function send<M extends MessageName>(name: M, ...: EventArgs<M>...)   -- EventArgs<M> is a type pack
 end
 ```
@@ -67,11 +81,12 @@ end
 | API | Meaning |
 |-----|---------|
 | `@event(...names)` | One name: the handler receives `EventArgs<E>`. Several names: the handler receives the name first (typed as the union of the names), then `...any`. Names may mix WoW events and messages. |
-| `@unitEvent(name, ...units)` | WoW events only. Uses `RegisterUnitEvent` with **one or two** units (the API's limit). More than two units is error E8100. |
-| `on`, `once` | Dynamic registration. `owner` allows `offAll(owner)`. |
-| `onUnit` | Dynamic version of `@unitEvent`. More than two units is a runtime error. |
+| `@unitEvent(name, ...units)` | WoW events only. Uses `RegisterUnitEvent`, which filters by at most two units, so any number of units is registered in pairs (see *Unit events*). A unit listed twice counts once. |
+| `on`, `once` | Dynamic registration. `owner` allows `offAll(owner)`, and error listeners get it ([`wowlua:errors`](infrastructure.md#errors)). |
+| `onUnit` | Dynamic version of `@unitEvent`: one subscription for all its units. No units is a runtime error. A secret unit cannot be a key nor registered by addon code (`RegisterUnitEvent` refuses secrets from tainted code): it is skipped. |
+| `watchUnit(events, handler, owner?)` | Unit events on one frame of the watch's own, for objects that show one unit at a time and change it (unit frames, nameplates). `setUnit(unit?, unit2?)` registers every event for that unit (or two) with `RegisterUnitEvent`, replacing the previous units without subscribing again; `setUnit(nil)` unregisters them, and so does a secret unit, which cannot be compared or registered (a secret `unit2` reads as none). The handler gets the event name first (typed as the union of the literal names), then the payload. Names are checked as for `onUnit` (E8003). |
 | `@bucket(interval, ...names)`, `onBucket` | Coalesces bursts (like AceBucket): the first of the events starts an `interval`-second wait, and the handler then gets one `BucketCounts`: `args` counts by first argument (the units of unit events, the bags of `BAG_UPDATE`), `events` by event. |
-| `off(sub)`, `offAll(owner)` | Unregister. `offAll(nil)` is a runtime error: it would cancel every subscription without an owner, the standard library's own included. |
+| `off(sub)`, `offAll(owner, name?)` | Unregister. `offAll` cancels every subscription and watch of `owner`; with a name (checked, E8003), only the owner's handlers of that event or message: a watch stops watching that event and keeps the others, a bucket stops collecting it. `offAll(nil)` is a runtime error: it would cancel every subscription without an owner, the standard library's own included. |
 | `send(name, ...)` | Dispatches a **message** synchronously to this addon's handlers. Passing a WoW event is error E8001. |
 
 ### Semantics
@@ -79,20 +94,28 @@ end
 - **Registration with the game.** A WoW event is registered on the module's
   shared hidden frame while at least one plain handler exists, and unregistered
   when none remain. Messages are never registered with the game.
-- **Unit events.** WoW keeps **one unit filter per frame and event**, and a
-  plain `RegisterEvent` for the same event would clear the filter. So every
-  `@unitEvent` / `onUnit` registration gets its **own hidden frame**, taken from
-  an internal pool. Two registrations with the same event and the same unit set
+- **Unit events.** WoW keeps **one unit filter per frame and event**, of at
+  most two units, and a plain `RegisterEvent` for the same event would clear
+  the filter. So every `@unitEvent` / `onUnit` registration gets **its own
+  hidden frames**, one per pair of its units (the last one alone when their
+  number is odd). Two registrations with the same event and the same pair
   share a frame. Unit filters never interfere with each other or with plain
-  `@event` handlers.
-- **Order and isolation.** Handlers run in registration order. Each handler runs
-  isolated, so an error is reported through `geterrorhandler()` and the
-  remaining handlers still run (see the error policy in
-  [`wowlua:errors`](infrastructure.md#errors)).
+  `@event` handlers. A watch has one frame for all its events; a cancelled
+  watch's frame is reused by the next watch.
+- **Order and isolation.** Handlers of one frame run in registration order;
+  the game gives an event to frames in the order each first registered an
+  event (so the plain handlers' shared frame, registered first, before a unit
+  registration's frame). Each handler runs isolated, so an error is reported
+  through `geterrorhandler()` and the remaining handlers still run (see the
+  error policy in [`wowlua:errors`](infrastructure.md#errors)); error listeners
+  get the handler's `owner`.
 - **Secret values.** Payloads are passed on unchanged, secrets included; the
-  module reads none of them except a bucket's first argument (below).
-- **Changes during dispatch.** Registering or unregistering inside a handler
-  takes effect after the current dispatch.
+  module reads none of them except a bucket's first argument (below). Units
+  are read: secret ones are skipped (`onUnit`) or read as none (`setUnit`).
+- **Changes during dispatch.** A handler registered inside a handler waits for
+  the next dispatch. A handler cancelled inside a handler (`off`, `offAll`,
+  `cancel`) is skipped for the rest of the current dispatch, on every frame of
+  a unit registration, as CallbackHandler does.
 - **Static methods.** `@event` on a static class method registers at class
   definition. Instance methods cannot be decorated with `@event` (E8002). Use
   `on(event, function(...) self:handle(...) end, self)` in the constructor and
@@ -180,6 +203,12 @@ local commands = router({
 
 @slash("/kt", "/killtracker")
 local function onRouted(msg: string) commands:dispatch(msg) end
+
+-- Commands that come and go: added by a module, removed with it.
+commands:add("errors", { args = { "rest" }, run = function(filter: string) showErrors(filter) end,
+                         help = "List errors" }, errorsModule)
+commands:removeAll(errorsModule)
+for _, c in ipairs(commands:commands()) do palette:add(c.name, c.help) end
 ```
 
 ### `@slash`
@@ -214,12 +243,19 @@ declare module "wowlua:slash"
         run: (...any) -> ()                      -- checked against args/flags (intrinsic)
     end
 
+    type CommandInfo = { name: string, usage: string, help?: string, aliases: string[], owner?: any }
+    type RouterOptions = { order?: "name" | "added" }
+
     interface Router
         function dispatch(msg: string): boolean
         function help(): string
+        function add(name: string, command: Command, owner: any?)
+        function remove(name: string)
+        function removeAll(owner: any)
+        function commands(): CommandInfo[]
     end
 
-    function router(commands: { [string]: Command }): Router
+    function router(commands: { [string]: Command }, opts: RouterOptions?): Router
 end
 ```
 
@@ -231,7 +267,9 @@ end
 | Flags | `--name` tokens anywhere after the command set `flags.name = true`, except inside a `"rest"` argument's text (which starts at the first token after the arguments before it, as typed). Unknown flags are a usage error. |
 | Calling `run` | Positional values in order, then the flags table **last** if `flags` is declared. The compiler checks `run`'s parameter types against `args` and `flags` (intrinsic check, E8112 for a mismatch or an invalid `ArgSpec`). |
 | Errors | A conversion or arity error prints `Usage: /<cmd> <command> <args>` for that command and returns `true`. |
-| Help | `help` and an empty message print one line per command, sorted by name: `/<cmd> <command> <args> - <help>`. Output goes through `print` from `wowlua:log`. An unknown command prints the help and `dispatch` returns `false`. |
+| Help | `help` and an empty message print one line per command: `/<cmd> <command> <args> - <help>`. Output goes through `print` from `wowlua:log`. An unknown command prints the help and `dispatch` returns `false`. |
+| Help order | Sorted by name by default. With `{ order = "added" }`, in the order the commands were added: the definitions first (sorted by name, as a table has no order), then each `add`. `commands()` lists them in the same order, with their `usage` (name and arguments), `help`, `aliases` and `owner`. |
+| Adding and removing | `add(name, command, owner?)` adds a command at run time; a literal `command` is checked as the definitions are (E8112), and a name or alias already taken (case-insensitive) is an error. `remove(name)` removes a command and its aliases (nothing when there is none); `removeAll(owner)` removes every command added with that owner. |
 | Secrets | Slash input is never secret. A secret `msg` (chat text handed to `dispatch`) cannot be read: nothing runs, nothing is printed, and `dispatch` returns `false`. |
 
 ## saved
@@ -372,11 +410,14 @@ end
 **native** `C_Timer` handles, typed by the `wow-api` packages.
 
 ```wowlua
-import after, every, throttle, debounce, nextFrame from "wowlua:timer"
+import after, every, repeating, throttle, debounce, nextFrame from "wowlua:timer"
 
 local t = after(2, function() print("2s later") end)
 local tick = every(1, function(ticker: TickerHandle) update() end, 10)   -- 10 iterations
 t:Cancel()
+
+local poll = repeating(0.2, function() refreshRange() end)   -- stopped until started
+poll:setRunning(UnitExists("target"))
 
 class Window
     @throttle(0.2)
@@ -396,6 +437,7 @@ local function saveSearch(text: string) … end
 |-----|---------|
 | `after(sec, fn): TimerHandle` | One-shot timer (`C_Timer.NewTimer`). The handle has `Cancel()` and `IsCancelled()`. |
 | `every(sec, fn, iterations?): TickerHandle` | Repeating timer (`C_Timer.NewTicker`). `fn` receives the ticker. |
+| `repeating(sec, fn): Repeating` | A repeating timer that stops and starts again, stopped at first. `start()` starts a `C_Timer.NewTicker` (the first tick one interval later) and does nothing while running; `stop()` cancels it; `setRunning(running)` is one or the other (a secret `running`, such as a yes/no unit query's answer on restricted clients, reads as false); `isRunning()`. |
 | `nextFrame(fn)` / `@nextFrame` | Run on the next frame. As a decorator, repeated calls before the next frame are coalesced, and the last call's arguments win. |
 | `@throttle(sec)` | The first call runs immediately. Later calls within `sec` collapse into one trailing call with the latest arguments. |
 | `@debounce(sec)` | Runs `sec` seconds after the last call, with the latest arguments. |
@@ -405,3 +447,17 @@ Decorated methods keep **per-instance state** in a weak-keyed table indexed by
 passed on, so secrets reach the call unchanged. Functions decorated with
 `@throttle`, `@debounce` or `@nextFrame` must return nothing (E8030), because
 calls may be deferred.
+
+Coalescing several kinds of work on the next frame needs no flusher of its
+own: one `@nextFrame` function per kind coalesces each kind, and all of them
+run on the next frame in the order they were first called.
+
+```wowlua
+@nextFrame
+local function cooldownPass() … end
+@nextFrame
+local function usablePass() … end
+
+on("SPELL_UPDATE_COOLDOWN", function() cooldownPass() end)
+on("SPELL_UPDATE_USABLE", function() usablePass() end)
+```

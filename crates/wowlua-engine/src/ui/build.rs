@@ -73,6 +73,7 @@ const FLAG_ATTRS: &[(&str, &str)] = &[
     ("obeyStepOnDrag", "SetObeyStepOnDrag"),
     ("reverseFill", "SetReverseFill"),
     ("rotatesTexture", "SetRotatesTexture"),
+    ("useParentLevel", "SetUsingParentLevel"),
 ];
 
 /// String and number attributes passed to a setter.
@@ -84,6 +85,8 @@ const VALUE_ATTRS: &[(&str, &str)] = &[
     ("file", "SetTexture"),
     ("atlas", "SetAtlas"),
     ("letters", "SetMaxLetters"),
+    // SuuUI probe chat: ChatFrame1EditBox kept 32 (its template's).
+    ("historyLines", "SetHistoryLines"),
     ("alpha", "SetAlpha"),
     ("scale", "SetScale"),
     ("orientation", "SetOrientation"),
@@ -196,7 +199,27 @@ pub fn top_level(vm: &mut Vm, cx: &Context, el: &Rc<Element>) {
         let g = vm.get_global(p);
         widgets::widget_of(vm, g)
     });
+    engine_mut(vm).world.ui.building_file += 1;
     build(vm, cx, el, parent);
+    engine_mut(vm).world.ui.building_file -= 1;
+}
+
+/// A widget a secure addon's file builds as it loads is forbidden only
+/// within a `<ScopedModifier forbidden="true">` (or under a forbidden
+/// parent): Blizzard wraps the store's, the ping system's, the token's
+/// and the checkout's frames in one, and leaves the catalog shop's out,
+/// which ElvUI skins (`CatalogShopFrame:StripTextures()`) at every login,
+/// error-free in the client as far as known. Unverified by a probe;
+/// frames secure code makes at run time stay forbidden.
+fn unforbid_file_widget(vm: &mut Vm, id: WidgetId, parent: Option<WidgetId>) {
+    let e = engine(vm);
+    if e.world.ui.building_file == 0 || !e.world.widgets[id.0].forbidden {
+        return;
+    }
+    let parent_forbidden = parent.is_some_and(|p| e.world.widgets[p.0].forbidden);
+    if !e.world.ui.in_forbidden && !parent_forbidden {
+        engine_mut(vm).world.widgets[id.0].forbidden = false;
+    }
 }
 
 /// The name an element gives its widget, `$parent` replaced by the nearest
@@ -227,7 +250,15 @@ pub fn build(
     parent: Option<WidgetId>,
 ) -> Option<Value> {
     let class = class_of(vm, &el.tag)?;
-    let name = el.attr("name").map(|n| resolve_name(vm, n, parent));
+    // A child marked virtual is still built, but its name makes no global
+    // (SuuUI probe bankSlots: camelot's BankFrame.xml marks its purchase
+    // button so; `BankFrame.BankPanel.PurchaseButton` is a shown Button,
+    // `BankFramePurchaseButton` nil). Unverified: its `GetName`, and
+    // whether the name also makes a template.
+    let name = el
+        .attr("name")
+        .filter(|_| !el.flag("virtual"))
+        .map(|n| resolve_name(vm, n, parent));
     // The client's UIParent is the screen the engine already has.
     let existing = name
         .as_deref()
@@ -239,6 +270,9 @@ pub fn build(
         None => widgets::create(vm, &class, name, parent),
     };
     let id = widgets::widget_of(vm, frame)?;
+    if existing.is_none() {
+        unforbid_file_widget(vm, id, parent);
+    }
     engine_mut(vm).world.widgets[id.0].frame = true;
     // An intrinsic type's own element comes first.
     let intrinsic = engine(vm)
@@ -251,6 +285,7 @@ pub fn build(
         apply_as_intrinsic(vm, cx, frame, id, &i);
     }
     apply(vm, cx, frame, id, el);
+    fill_parent_if_unplaced(vm, cx, el, frame, id);
     widgets::run_script(vm, id, "OnLoad", &[]);
     // Built visible: shown (unverified that the client runs OnShow here;
     // Blizzard's PersonalResourceDisplay sets itself up in OnShow).
@@ -318,8 +353,31 @@ pub fn apply_intrinsic(vm: &mut Vm, frame: Value, el: &Rc<Element>) {
     let Some(id) = widgets::widget_of(vm, frame) else {
         return;
     };
-    let cx = Context { file: "?" };
+    // As a template's: its file, its globals, and its scripts its addon's
+    // code (or Blizzard's), whoever creates the frame. An addon creating
+    // Blizzard's `AuraContainer` while it loads would otherwise compile
+    // the intrinsic's `method` handlers as its own code, and the
+    // container's `OnLoad_Intrinsic` would run tainted (the client: SuuUI
+    // makes aura containers while it loads, without an error).
+    let key = el.attr("name").map(str::to_ascii_lowercase);
+    let ui = &engine(vm).world.ui;
+    let file = key.as_ref().and_then(|k| ui.template_files.get(k)).cloned();
+    let env = key.as_ref().and_then(|k| ui.template_envs.get(k)).copied();
+    let addon = key
+        .as_ref()
+        .and_then(|k| ui.template_addons.get(k))
+        .cloned();
+    let cx = Context {
+        file: file.as_deref().unwrap_or("?"),
+    };
+    let globals = vm.globals;
+    if let Some(env) = env {
+        vm.globals = env;
+    }
+    let code_of = std::mem::replace(&mut engine_mut(vm).world.ui.code_of, addon);
     apply_as_intrinsic(vm, &cx, frame, id, el);
+    engine_mut(vm).world.ui.code_of = code_of;
+    vm.globals = globals;
 }
 
 /// An intrinsic type's element: its scripts stay, whatever the widget sets.
@@ -350,6 +408,17 @@ fn table_of(v: Value) -> Option<TableRef> {
         Value::Table(t) => Some(t),
         _ => None,
     }
+}
+
+/// The secure delegate of a mixin's function, made once and shared.
+fn mixin_delegate(vm: &mut Vm, f: wowlua_vm::FuncRef) -> Value {
+    if let Some(&d) = engine(vm).world.ui.mixin_delegates.get(&f) {
+        return d;
+    }
+    let d = super::secure_delegate(vm, Value::Func(f), true);
+    widgets::keep(vm, d);
+    engine_mut(vm).world.ui.mixin_delegates.insert(f, d);
+    d
 }
 
 /// Which part of an element `apply_in` applies: its attributes, mixins and
@@ -430,13 +499,21 @@ fn apply_in(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Eleme
                         k = key;
                     }
                 }
-                _ => cx.error(vm, el.line, format!("mixin {m} is not a table")),
+                // Not defined: skipped, without an error (recorded: the
+                // camelot tutorial's keyboard frame, its mixins' file
+                // missing from the client, loads without one).
+                _ => engine_mut(vm)
+                    .world
+                    .warnings
+                    .push(format!("{}:{}: mixin {m} is not a table", cx.file, el.line)),
             }
         }
     }
     // `<Mixins><Mixin key="X" [source="secure"]/></Mixins>`: from the
-    // globals, or the secure environment's (partitions and secure
-    // delegates not modelled).
+    // globals, or the secure environment's; with `secureDelegates`, its
+    // functions as secure delegates (`super::secure_delegate`: the custom
+    // aura container's inbound API, called by addons). Partitions are not
+    // modelled.
     for list in el
         .children
         .iter()
@@ -447,6 +524,7 @@ fn apply_in(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Eleme
             let secure = m
                 .attr("source")
                 .is_some_and(|s| s.eq_ignore_ascii_case("secure"));
+            let delegates = m.flag("secureDelegates");
             let globals = vm.globals;
             if secure && let Some(env) = engine(vm).world.ui.secure_env {
                 vm.globals = env;
@@ -457,6 +535,23 @@ fn apply_in(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Eleme
                 Value::Table(src) => {
                     let mut k = Value::Nil;
                     while let Some((key, v)) = vm.heap.table(src).next(k).ok().flatten() {
+                        let v =
+                            match v {
+                                Value::Func(f) if delegates => mixin_delegate(vm, f),
+                                // The private mixin shares the inbound one's
+                                // functions (both made from a shared mixin): in
+                                // the client they land in another partition, the
+                                // delegate staying what addons call.
+                                Value::Func(f)
+                                    if engine(vm).world.ui.mixin_delegates.get(&f).is_some_and(
+                                        |d| d.raw_eq(vm.heap.table(table).get(key)),
+                                    ) =>
+                                {
+                                    k = key;
+                                    continue;
+                                }
+                                v => v,
+                            };
                         let _ = vm.heap.table_mut(table).set(key, v);
                         k = key;
                     }
@@ -501,8 +596,16 @@ fn apply_in(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Eleme
     if el.flag("hidden") {
         engine_mut(vm).world.widgets[id.0].shown = false;
     }
+    // Explicitly protected, as frames from a secure template are
+    // (`IsProtected` true, true; `/stdtest engine`): Blizzard's restricted
+    // environment hands out managed environments to those alone, and runs
+    // a group header's configuration on children of an addon's templates
+    // that inherit SecureFrameTemplate (oUF's headers, error-free in the
+    // client).
     if el.flag("protected") {
-        engine_mut(vm).world.widgets[id.0].protected = true;
+        let w = &mut engine_mut(vm).world.widgets[id.0];
+        w.protected = true;
+        w.explicitly_protected = true;
     }
     if let Some(n) = el.number("id") {
         call_method(vm, cx, el.line, frame, "SetID", &[Value::Num(n)]);
@@ -521,8 +624,34 @@ fn apply_in(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Eleme
                 Ok(n) => Value::Num(n),
                 Err(_) => vm.str(v),
             };
+            // `useAtlasSize` sizes the texture as its atlas is
+            // (`SetAtlas(atlas, true)`).
+            if *attr == "atlas" && el.flag("useAtlasSize") {
+                call_method(vm, cx, el.line, frame, method, &[v, Value::Bool(true)]);
+                continue;
+            }
             call_method(vm, cx, el.line, frame, method, &[v]);
         }
+    }
+    // A texture's `alpha` is its vertex color's too (SuuUI probe trees: the
+    // character window's side tabs' `TabGlow`, `alpha="0"`, the model
+    // controls' highlights, `alpha="0.4"`, and a statistics row's texture,
+    // `alpha="0.3"`, report it as `GetVertexColor`'s alpha, their color
+    // white).
+    // Unverified: `GetAlpha` (kept as `SetAlpha` set it), and the alpha
+    // `SetVertexColor` set before.
+    if let Some(a) = el.number("alpha")
+        && matches!(
+            engine(vm).world.widgets[id.0].class.as_str(),
+            "Texture" | "MaskTexture" | "Line"
+        )
+    {
+        let props = engine(vm).world.widgets[id.0].props;
+        let mut rgba = widgets::stored_args(vm, props, "VertexColor")
+            .filter(|v| v.len() == 4)
+            .unwrap_or_else(|| vec![Value::Num(1.0); 4]);
+        rgba[3] = Value::Num(a);
+        widgets::store(vm, id, "VertexColor", &rgba);
     }
     // A slider's or a status bar's range, then its value.
     if el.attr("minValue").is_some() || el.attr("maxValue").is_some() {
@@ -579,7 +708,7 @@ fn apply_in(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Eleme
         } else {
             vm.str(text)
         };
-        engine_mut(vm).world.widgets[id.0].text = Some(v);
+        crate::widgets::store_text(vm, id, Some(v));
     }
     for child in el
         .children
@@ -691,9 +820,22 @@ fn apply_child(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, child: &Rc
             }
         }
         "layers" => {
+            // A region takes its `<Layer>`'s level (ARTWORK when none) and
+            // sublevel, its own `textureSubLevel` first (SuuUI probe
+            // trees: the client's regions report them, a `<HighlightTexture>`
+            // HIGHLIGHT, set elsewhere).
             for layer in &child.children {
+                let level = layer.attr("level").unwrap_or("ARTWORK").to_string();
                 for region in &layer.children {
-                    build(vm, cx, region, Some(id));
+                    let built = build(vm, cx, region, Some(id));
+                    let sublevel = region
+                        .number("textureSubLevel")
+                        .or_else(|| layer.number("textureSubLevel"))
+                        .unwrap_or(0.0);
+                    if let Some(rid) = built.and_then(|r| widgets::widget_of(vm, r)) {
+                        let l = vm.str(&level);
+                        widgets::store(vm, rid, "DrawLayer", &[l, Value::Num(sublevel)]);
+                    }
                 }
             }
         }
@@ -789,6 +931,15 @@ fn apply_child(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, child: &Rc
                 set_script(vm, cx, id, s);
             }
         }
+        // The template's forbidden aspects (`DisableUntrustedLayoutScriptsTemplate`).
+        "forbiddenaspects" => {
+            let flags = child
+                .children
+                .iter()
+                .filter_map(|a| a.attr("aspect"))
+                .fold(0, |f, name| f | crate::protection::aspect_flag(name));
+            crate::protection::add_aspects(vm, id, flags);
+        }
         "buttontext" => {
             if let Some(fs) = build_as(vm, cx, child, "FontString", Some(id)) {
                 call_method(vm, cx, child.line, frame, "SetFontString", &[fs]);
@@ -845,11 +996,27 @@ fn apply_child(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, child: &Rc
             build(vm, cx, child, Some(id));
         }
         _ => {
-            if let Some((_, method)) = TEXTURE_SLOTS
+            if let Some((slot, method)) = TEXTURE_SLOTS
                 .iter()
                 .find(|(t, _)| t.eq_ignore_ascii_case(tag))
             {
                 if let Some(tex) = build_as(vm, cx, child, "Texture", Some(id)) {
+                    // A button state's texture in its state's layer.
+                    if let Some(state) = slot.strip_suffix("Texture").filter(|s| {
+                        [
+                            "Normal",
+                            "Pushed",
+                            "Disabled",
+                            "Highlight",
+                            "Checked",
+                            "DisabledChecked",
+                        ]
+                        .contains(s)
+                    }) && let Some(tid) = widgets::widget_of(vm, tex)
+                    {
+                        let layer = vm.str(crate::buttons::state_layer(state));
+                        widgets::store(vm, tid, "DrawLayer", &[layer, Value::Num(0.0)]);
+                    }
                     call_method(vm, cx, child.line, frame, method, &[tex]);
                 }
             } else if let Some((_, method)) =
@@ -877,18 +1044,45 @@ fn build_as(
     let name = el.attr("name").map(|n| resolve_name(vm, n, parent));
     let region = widgets::create(vm, class, name, parent);
     let id = widgets::widget_of(vm, region)?;
+    unforbid_file_widget(vm, id, parent);
     apply(vm, cx, region, id, el);
+    fill_parent_if_unplaced(vm, cx, el, region, id);
     Some(region)
 }
 
+/// A texture the XML neither anchors nor sizes fills its parent (SuuUI
+/// probe trees: such textures, slot icons, glows, a button's state
+/// textures, report `TOPLEFT` on their parent's and its size; textures
+/// made from Lua stay unplaced). Unverified: font strings, lines, and
+/// whether the client places them at creation or later.
+fn fill_parent_if_unplaced(vm: &mut Vm, cx: &Context, el: &Element, region: Value, id: WidgetId) {
+    let w = &engine(vm).world.widgets[id.0];
+    if !matches!(w.class.as_str(), "Texture" | "MaskTexture")
+        || w.parent.is_none()
+        || !w.points.is_empty()
+        || w.width != 0.0
+        || w.height != 0.0
+    {
+        return;
+    }
+    call_method(vm, cx, el.line, region, "SetAllPoints", &[]);
+}
+
 /// Compiles UI code: as the loading addon's ([`Registry::code_of`]), or
-/// as Blizzard's.
+/// as Blizzard's, secure whatever the running code's taint (an addon's
+/// `C_AddOns.LoadAddOn` or `CreateFrame` with Blizzard's template).
 ///
 /// [`Registry::code_of`]: super::Registry::code_of
 pub(crate) fn load_chunk(vm: &mut Vm, src: &[u8], chunk: &str) -> Result<Value, String> {
     match engine(vm).world.ui.code_of.clone() {
         Some(addon) => vm.load_as(src, chunk, &addon),
-        None => vm.load(src, chunk),
+        None => {
+            let saved = vm.taint().saved();
+            vm.taint_mut().stack = wowlua_vm::Taint::SECURE;
+            let r = vm.load(src, chunk);
+            vm.taint_mut().restore(saved);
+            r
+        }
     }
 }
 
@@ -923,13 +1117,23 @@ fn set_script(vm: &mut Vm, cx: &Context, id: WidgetId, s: &Element) {
         }
         g
     } else if let Some(m) = s.attr("method") {
-        let src = format!("return function(self, ...) return self[{m:?}](self, ...) end");
+        // A method the frame lacks does nothing (recorded: the camelot
+        // tutorial's keyboard frame, its mixin's file missing from the
+        // client, loads without an error).
+        let src = format!(
+            "return function(self, ...) local f = self[{m:?}] if f ~= nil then return f(self, ...) end end"
+        );
         match compile(vm, cx, s.line, &src) {
             Some(f) => f,
             None => return,
         }
-    } else if !s.text.trim().is_empty() {
-        // Lines as in the file.
+    } else {
+        // Lines as in the file. An empty element is a handler doing
+        // nothing, replacing the inherited one (ElvUI's popup template
+        // "removes the scripts added from GameDialogMixin" with empty
+        // ones and logs in without StaticPopup_OnShow's error in the
+        // client; Blizzard's artifact frame swallows the wheel with
+        // `<OnMouseWheel />`; unverified whether GetScript answers it).
         let src = format!(
             "{}return function({}) {} end",
             "\n".repeat(s.line.saturating_sub(1)),
@@ -940,8 +1144,6 @@ fn set_script(vm: &mut Vm, cx: &Context, id: WidgetId, s: &Element) {
             Some(f) => f,
             None => return,
         }
-    } else {
-        return;
     };
     // An intrinsic type's own handlers stay, whatever the widget sets
     // (`ScrollingMessageFrame`'s `OnPreLoad`, before the frame's OnLoad).
@@ -956,6 +1158,8 @@ fn set_script(vm: &mut Vm, cx: &Context, id: WidgetId, s: &Element) {
         let key = vm.str(&widgets::intrinsic_key(&order.to_ascii_lowercase(), name));
         let _ = vm.heap.table_mut(props).set(key, handler);
         engine_mut(vm).world.widgets[id.0].intrinsic_scripts = true;
+        // (Its handlers count for every script: `has_handler`.)
+        engine_mut(vm).world.updates(id.0);
         return;
     }
     let order = s.attr("inherit").map(str::to_ascii_lowercase);
@@ -971,6 +1175,7 @@ fn set_script(vm: &mut Vm, cx: &Context, id: WidgetId, s: &Element) {
         _ => handler,
     };
     vm.heap.table_mut(scripts).set_str(key, f);
+    crate::widgets::script_stored(vm, id, name);
     crate::widgets::key_script_set(vm, id, name);
 }
 
@@ -1067,8 +1272,9 @@ pub fn import(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
 pub fn template_info(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
     let name = vm.check_str(&c, 1)?;
     let name = String::from_utf8_lossy(vm.str_bytes(name)).to_ascii_lowercase();
+    // A template the client lacks: nothing (the full probe, 1.60.1).
     let Some(el) = engine(vm).world.ui.templates.get(&name).cloned() else {
-        return Ok(vec![Value::Nil]);
+        return Ok(vec![]);
     };
     // The size: this template's, else the first inherited one's.
     fn size_of(vm: &Vm, el: &Element, depth: usize) -> Option<(f64, f64)> {

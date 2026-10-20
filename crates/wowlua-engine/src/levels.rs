@@ -136,8 +136,7 @@ pub fn level_up(vm: &mut Vm, xp: f64) {
             Value::Nil,
         ],
     );
-    group_buffs(vm);
-    fire(vm, "SPELLS_CHANGED", &[]);
+    crate::batch::spells_changed(vm);
     fire(vm, "UPDATE_SHAPESHIFT_COOLDOWN", &[]);
     let next = vm.native("levelBuffs", buffs_again as NativeFn);
     crate::clock::after_engine(vm, 1.0 / 60.0, next);
@@ -178,9 +177,13 @@ fn gained(vm: &mut Vm, c: NativeCall) -> Ret {
     let old = engine(vm).units.list[units::PLAYER.0].level;
     let old_max = stat(vm, "xpMax").unwrap_or(xp);
     let health = num(vm, t, "health");
+    // The health full at the new maximum (the packet's `UNIT_HEALTH`; no
+    // aura state's change told, `quest` 70.006, the player full before;
+    // unverified from a wounded player).
     {
         let p = &mut engine_mut(vm).units.list[units::PLAYER.0];
         p.health_max += health;
+        p.health = p.health_max;
     }
     let player = units::PLAYER;
     units::fire_unit(vm, "UNIT_MAXHEALTH", player, &[]);
@@ -242,8 +245,7 @@ fn gained(vm: &mut Vm, c: NativeCall) -> Ret {
     );
     fire(vm, "QUEST_LOG_UPDATE", &[]);
     fire(vm, "SKILL_LINE_SPECS_RANKS_CHANGED", &[]);
-    group_buffs(vm);
-    fire(vm, "SPELLS_CHANGED", &[]);
+    crate::batch::spells_changed(vm);
     units::fire_unit(vm, "UNIT_HEALTH", player, &[]);
     units::fire_unit(vm, "UNIT_MAXHEALTH", player, &[]);
     Ok(vec![])

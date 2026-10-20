@@ -76,6 +76,8 @@ pub struct Character {
     pub money: f64,
     /// By inventory slot ID (1 head … 19 tabard).
     pub equipment: BTreeMap<i64, Held>,
+    /// Items' running cooldowns: start (the clock's), duration.
+    pub item_cooldowns: BTreeMap<i64, (f64, f64)>,
     /// By bag ID (0 the backpack).
     pub bags: BTreeMap<i64, Bag>,
     pub position: Position,
@@ -91,6 +93,8 @@ pub struct Character {
     pub macros: crate::macros::Macros,
     /// What the cursor holds (`cursor.rs`).
     pub cursor: crate::cursor::Cursor,
+    /// The saved equipment sets (`equipsets.rs`).
+    pub equipment_sets: Vec<crate::equipsets::EquipmentSet>,
 }
 
 impl Default for Character {
@@ -106,6 +110,7 @@ impl Default for Character {
         Character {
             money: 0.0,
             equipment: BTreeMap::new(),
+            item_cooldowns: BTreeMap::new(),
             bags,
             position: Position::default(),
             stats: crate::stats::defaults(),
@@ -114,6 +119,7 @@ impl Default for Character {
             channels: Default::default(),
             macros: Default::default(),
             cursor: Default::default(),
+            equipment_sets: Vec::new(),
         }
     }
 }
@@ -172,9 +178,10 @@ fn held_of(vm: &mut Vm, v: Value) -> Option<Held> {
     }
 }
 
-/// The item data a test defined for `id` (`defineItem`).
-fn item_data(vm: &Vm, id: i64) -> Option<TableRef> {
-    engine(vm).world.data.items.get(&id).copied()
+/// The item data a test defined for `id` (`defineItem`), else the
+/// probes recorded.
+fn item_data(vm: &mut Vm, id: i64) -> Option<TableRef> {
+    crate::gamedata::item_data(vm, id)
 }
 
 /// The quality colors of the client's `ITEM_QUALITY_COLORS` (poor to
@@ -235,6 +242,30 @@ fn made_link(vm: &mut Vm, id: i64, context: &str, bonuses: &[i64]) -> Option<Str
     Some(format!(
         "|c{color}|Hitem:{id}::::::::{level}:::::|h[{name}]|h|r"
     ))
+}
+
+/// `C_Item.GetDelvePreviewItemLink(itemID, context)`'s link: any ID's,
+/// with the delve's bonus (3524) and the context given (a number's), the
+/// item's name and quality where known, else none and common; ID 0 an
+/// empty link without the bonus (the full probe: IDs -1 to 2147483647).
+pub fn delve_preview_link(vm: &mut Vm, id: i64, context: Option<i64>) -> String {
+    let data = item_data(vm, id);
+    let name = data
+        .map(|d| field(vm, d, "name"))
+        .and_then(|n| text(vm, n))
+        .unwrap_or_default();
+    let quality = data
+        .and_then(|d| num(field(vm, d, "quality")))
+        .unwrap_or(1.0) as usize;
+    let level = engine(vm).units.list[units::PLAYER.0].level;
+    let spec = link_specialization(vm).map_or(String::new(), |s| format!("{s}"));
+    if id == 0 {
+        return format!("|cnIQ{quality}:|Hitem:::::::::{level}:{spec}:::::::::|h[{name}]|h|r");
+    }
+    let context = context.map_or(String::new(), |c| c.to_string());
+    format!(
+        "|cnIQ{quality}:|Hitem:{id}::::::::{level}:{spec}::{context}:1:3524::::::|h[{name}]|h|r"
+    )
 }
 
 /// An item's link in a context (a quest's dialog and reward: "11"), with
@@ -345,7 +376,19 @@ fn equipped(vm: &mut Vm, c: &NativeCall) -> Option<Held> {
     engine(vm).world.character.equipment.get(&slot).cloned()
 }
 
+/// Whether a call names no slot (nil) for a unit there is: the client
+/// answers as for an empty slot of its own (the full probe:
+/// `GetInventoryItemID("player")` 0, its quality and texture nil, broken
+/// and unusable false; a unit not there, `("x")`, nothing but a nil
+/// texture).
+fn no_slot(vm: &Vm, c: &NativeCall) -> bool {
+    c.arg(2).is_nil() && units::unit_arg(vm, c, 1).is_some()
+}
+
 fn get_inventory_item_id(vm: &mut Vm, c: NativeCall) -> Ret {
+    if no_slot(vm, &c) {
+        return Ok(vec![Value::Num(0.0)]);
+    }
     Ok(equipped(vm, &c)
         .map(|h| vec![Value::Num(h.id as f64)])
         .unwrap_or_default())
@@ -363,19 +406,30 @@ fn get_inventory_item_link(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn get_inventory_item_texture(vm: &mut Vm, c: NativeCall) -> Ret {
+    // No slot, or a unit not there: nil (the full probe, `("player")` and
+    // `("x")`).
+    if c.arg(2).is_nil() {
+        return Ok(vec![Value::Nil]);
+    }
     Ok(equipped(vm, &c)
         .map(|h| vec![item_field(vm, h.id, "icon")])
         .unwrap_or_default())
 }
 
 fn get_inventory_item_quality(vm: &mut Vm, c: NativeCall) -> Ret {
+    if no_slot(vm, &c) {
+        return Ok(vec![Value::Nil]);
+    }
     Ok(equipped(vm, &c)
         .map(|h| vec![item_field(vm, h.id, "quality")])
         .unwrap_or_default())
 }
 
+/// `GetInventoryItemCount(unit, slot)`: the worn item's count, 1 where
+/// none is (the full probe: `("player")` and `("x")` 1, as a worn piece's;
+/// unverified for an empty slot of the player's).
 fn get_inventory_item_count(vm: &mut Vm, c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(equipped(vm, &c).map_or(0.0, |h| h.count))])
+    Ok(vec![Value::Num(equipped(vm, &c).map_or(1.0, |h| h.count))])
 }
 
 /// `unit:equip(slot, item)` / `unit:equip(slot, nil)` (the player):
@@ -507,26 +561,40 @@ fn bag_slot(vm: &mut Vm, c: &NativeCall) -> Option<Held> {
         .cloned()
 }
 
+/// The keyring (`Enum.BagIndex.Keyring`, -1): always there, 32 slots,
+/// empty unless the profile holds it (the full probe: its 32 slots free,
+/// named `KEYRING`; unverified: a lower level's keyring).
+pub(crate) const KEYRING: i64 = -1;
+const KEYRING_SLOTS: usize = 32;
+
+/// A bag's slots and free slots: the profile's, the keyring's; none for
+/// no bag there.
+pub(crate) fn bag_space(vm: &Vm, bag: i64) -> Option<(usize, Vec<usize>)> {
+    match engine(vm).world.character.bags.get(&bag) {
+        Some(b) => Some((
+            b.slots,
+            (1..=b.slots).filter(|s| !b.items.contains_key(s)).collect(),
+        )),
+        None if bag == KEYRING => Some((KEYRING_SLOTS, (1..=KEYRING_SLOTS).collect())),
+        None => None,
+    }
+}
+
 fn get_container_num_slots(vm: &mut Vm, c: NativeCall) -> Ret {
     let bag = num(c.arg(1)).unwrap_or(-99.0) as i64;
-    let n = engine(vm)
-        .world
-        .character
-        .bags
-        .get(&bag)
-        .map_or(0, |b| b.slots);
+    let n = bag_space(vm, bag).map_or(0, |(n, _)| n);
     Ok(vec![Value::Num(n as f64)])
 }
 
+/// `C_Container.GetContainerNumFreeSlots(bag)`: the free slots and the
+/// bag's family; no bag there: 0 and no family (the full probe: the
+/// unbought bag slots, the bank's tabs, the other negative indexes).
 fn get_container_num_free_slots(vm: &mut Vm, c: NativeCall) -> Ret {
     let bag = num(c.arg(1)).unwrap_or(-99.0) as i64;
-    let free = engine(vm)
-        .world
-        .character
-        .bags
-        .get(&bag)
-        .map_or(0, |b| b.slots.saturating_sub(b.items.len()));
-    Ok(vec![Value::Num(free as f64), Value::Num(0.0)])
+    Ok(match bag_space(vm, bag) {
+        Some((_, free)) => vec![Value::Num(free.len() as f64), Value::Num(0.0)],
+        None => vec![Value::Num(0.0), Value::Nil],
+    })
 }
 
 fn get_container_item_id(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -535,11 +603,11 @@ fn get_container_item_id(vm: &mut Vm, c: NativeCall) -> Ret {
         .unwrap_or_default())
 }
 
+/// `C_Container.GetContainerItemLink(bag, slot)`: the item's link; nil
+/// for an empty slot or no bag (the full probe).
 fn get_container_item_link(vm: &mut Vm, c: NativeCall) -> Ret {
-    Ok(bag_slot(vm, &c)
-        .and_then(|h| link_of(vm, &h))
-        .map(|l| vec![l])
-        .unwrap_or_default())
+    let link = bag_slot(vm, &c).and_then(|h| link_of(vm, &h));
+    Ok(vec![link.unwrap_or(Value::Nil)])
 }
 
 /// `C_Container.GetContainerItemInfo(bag, slot)`: a `ContainerItemInfo`.
@@ -576,26 +644,32 @@ fn get_container_item_info(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Table(t)])
 }
 
-/// `C_Item.GetItemCount(item)`: in the bags (and equipped).
+/// `C_Item.GetItemCount(item, includeBank)`: in the bags (and equipped);
+/// the bank's tabs (bags 6 on) with `includeBank` only (the documentation's
+/// argument, false by default; unverified: not recorded).
 fn get_item_count(vm: &mut Vm, c: NativeCall) -> Ret {
-    let id = match vm.hidden(c.arg(1)) {
-        Value::Num(n) => n as i64,
+    // An ID, link or item text (the full probe: "item:6948" counted);
+    // none below 1 (an empty slot's 0).
+    let id = match crate::gamedata::item_id(vm, c.arg(1)) {
+        Some(id) if id > 0 => id,
         _ => return Ok(vec![Value::Num(0.0)]),
     };
+    let bank = vm.hidden(c.arg(2)).truthy();
     let ch = &engine(vm).world.character;
     let in_bags: f64 = ch
         .bags
-        .values()
-        .flat_map(|b| b.items.values())
+        .iter()
+        .filter(|(b, _)| bank || carried(**b))
+        .flat_map(|(_, b)| b.items.values())
         .filter(|h| h.id == id)
         .map(|h| h.count)
-        .sum();
+        .fold(0.0, |a, b| a + b);
     let worn: f64 = ch
         .equipment
         .values()
         .filter(|h| h.id == id)
         .map(|h| h.count)
-        .sum();
+        .fold(0.0, |a, b| a + b);
     Ok(vec![Value::Num(in_bags + worn)])
 }
 
@@ -646,6 +720,17 @@ pub fn control_set_bag(vm: &mut Vm, c: NativeCall) -> Ret {
                 for slot in 1..=slots {
                     let v = vm.heap.table(list).get(Value::Num(slot as f64));
                     if let Some(h) = held_of(vm, v) {
+                        // A snapshot's running cooldown: `{ remaining,
+                        // duration }`.
+                        if let Value::Table(item) = v
+                            && let Value::Table(cd) = field(vm, item, "cooldown")
+                            && let (Some(left), Some(duration)) = (
+                                num(field(vm, cd, "remaining")),
+                                num(field(vm, cd, "duration")),
+                            )
+                        {
+                            set_item_cooldown(vm, h.id, duration, left);
+                        }
                         items.insert(slot, h);
                     }
                 }
@@ -690,6 +775,56 @@ pub fn control_set_bag(vm: &mut Vm, c: NativeCall) -> Ret {
         widgets::fire_event(vm, "ITEM_COUNT_CHANGED", &[Value::Num(id as f64)]);
     }
     Ok(vec![])
+}
+
+/// An item's cooldown: `duration` seconds, `left` of them to run.
+pub fn set_item_cooldown(vm: &mut Vm, id: i64, duration: f64, left: f64) {
+    let now = crate::clock::now(vm);
+    let cds = &mut engine_mut(vm).world.character.item_cooldowns;
+    if duration > 0.0 && left > 0.0 {
+        cds.insert(id, (now - (duration - left), duration));
+    } else {
+        cds.remove(&id);
+    }
+}
+
+/// An item's running cooldown: its start and duration.
+pub fn item_cooldown(vm: &Vm, id: i64) -> Option<(f64, f64)> {
+    let now = crate::clock::now(vm);
+    engine(vm)
+        .world
+        .character
+        .item_cooldowns
+        .get(&id)
+        .copied()
+        .filter(|(start, duration)| start + duration > now)
+}
+
+/// `mock.setItemCooldown(itemID, duration, remaining?)`: the item's
+/// cooldown (all of it to run by default; 0: none).
+pub fn control_set_item_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = vm.check_int(&c, 1)?;
+    let duration = vm.check_number(&c, 2)?;
+    let left = num(c.arg(3)).unwrap_or(duration);
+    set_item_cooldown(vm, id, duration, left);
+    widgets::fire_event(vm, "BAG_UPDATE_COOLDOWN", &[]);
+    Ok(vec![])
+}
+
+/// `C_Container.GetItemCooldown(itemID)`: its running cooldown's start and
+/// duration, enabled for an item; 0 for an ID naming none (the full probe:
+/// -1 to 2147483647 0, the Hearthstone and a crate 1; unverified: an item
+/// the engine has no data for).
+fn get_item_cooldown(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = num(c.arg(1)).map(|id| id as i64);
+    let cd = id.and_then(|id| item_cooldown(vm, id));
+    let (start, duration) = cd.unwrap_or((0.0, 0.0));
+    let item = cd.is_some() || id.is_some_and(|id| item_data(vm, id).is_some());
+    Ok(vec![
+        Value::Num(start),
+        Value::Num(duration),
+        Value::Num(if item { 1.0 } else { 0.0 }),
+    ])
 }
 
 /// A bag the player carries (the backpack, the bags, the reagent bag; not
@@ -835,6 +970,25 @@ pub fn bag_for(vm: &mut Vm, id: i64, count: f64) -> Option<i64> {
     new_slot_bags(vm, id).into_iter().find(|b| free.contains(b))
 }
 
+/// The bags `take_from_bags` would change, taking nothing yet.
+pub fn bags_to_take(vm: &Vm, id: i64, count: f64) -> Vec<i64> {
+    let mut left = count;
+    let mut changed = Vec::new();
+    let bags = &engine(vm).world.character.bags;
+    for (bag, b) in bags.iter().rev().filter(|(b, _)| carried(**b)) {
+        for held in b.items.values().rev().filter(|h| h.id == id) {
+            if left <= 0.0 {
+                break;
+            }
+            left -= held.count.min(left);
+            if !changed.contains(bag) {
+                changed.push(*bag);
+            }
+        }
+    }
+    changed
+}
+
 /// `count` of item `id` taken from the bags (the last stacks first,
 /// unverified); the bags changed.
 pub fn take_from_bags(vm: &mut Vm, id: i64, count: f64) -> Vec<i64> {
@@ -869,6 +1023,19 @@ pub fn take_from_bags(vm: &mut Vm, id: i64, count: f64) -> Vec<i64> {
 }
 
 /// How many of item `id` the bags hold (not the bank's).
+/// The first bag slot holding item `id` (the carried bags in order).
+pub fn first_slot_of(vm: &Vm, id: i64) -> Option<(i64, usize)> {
+    engine(vm)
+        .world
+        .character
+        .bags
+        .iter()
+        .filter(|(b, _)| carried(**b))
+        .flat_map(|(b, bag)| bag.items.iter().map(move |(s, h)| (*b, *s, h.id)))
+        .find(|(_, _, held)| *held == id)
+        .map(|(b, s, _)| (b, s))
+}
+
 pub fn count_in_bags(vm: &Vm, id: i64) -> f64 {
     engine(vm)
         .world
@@ -879,7 +1046,8 @@ pub fn count_in_bags(vm: &Vm, id: i64) -> f64 {
         .flat_map(|(_, b)| b.items.values())
         .filter(|h| h.id == id)
         .map(|h| h.count)
-        .sum()
+        // Not `sum`: nothing held is 0, not its -0.
+        .fold(0.0, |a, b| a + b)
 }
 
 /// The link of item `id` in `bag` made in a context (a quest reward's).
@@ -896,12 +1064,41 @@ pub fn set_context(vm: &mut Vm, bag: i64, id: i64, context: &str) {
     }
 }
 
-/// `HIDDEN_GROUP_BUFFS_CHANGED(list)` (the class's hidden group buffs,
-/// `e.setHiddenGroupBuffs`: a shaman's 68, a level 1 warrior's none,
-/// recorded) and `GROUP_BUFF_VISUAL_ALERTS_CHANGED({})`.
+/// The class's hidden group buffs: the test's (`e.setHiddenGroupBuffs`),
+/// else the player's class's as recorded (`data/camelot-hidden-group-buffs.txt`:
+/// a paladin's, a druid's, a shaman's), else none (a level 1 warrior's,
+/// recorded; other classes unverified).
+fn hidden_group_buffs(vm: &Vm) -> Vec<f64> {
+    if let Some(ids) = &engine(vm).world.hidden_group_buffs {
+        return ids.clone();
+    }
+    let class = &engine(vm).units.list[units::PLAYER.0].class;
+    include_str!("../data/camelot-hidden-group-buffs.txt")
+        .lines()
+        .filter(|l| !l.starts_with('#'))
+        .filter_map(|l| l.split_once('\t'))
+        .find(|(c, _)| c == class)
+        .map(|(_, ids)| ids.split(',').filter_map(|i| i.parse().ok()).collect())
+        .unwrap_or_default()
+}
+
+/// `C_UnitAuras.GetHiddenGroupBuffs()`: the class's (`hidden_group_buffs`).
+fn get_hidden_group_buffs(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let list = vm.new_table();
+    for (i, id) in hidden_group_buffs(vm).into_iter().enumerate() {
+        let _ = vm
+            .heap
+            .table_mut(list)
+            .set(Value::Num((i + 1) as f64), Value::Num(id));
+    }
+    Ok(vec![Value::Table(list)])
+}
+
+/// `HIDDEN_GROUP_BUFFS_CHANGED(list)` (the class's hidden group buffs) and
+/// `GROUP_BUFF_VISUAL_ALERTS_CHANGED({})`.
 pub fn group_buffs_changed(vm: &mut Vm) {
     let list = vm.new_table();
-    let ids = engine(vm).world.hidden_group_buffs.clone();
+    let ids = hidden_group_buffs(vm);
     for (i, id) in ids.into_iter().enumerate() {
         let _ = vm
             .heap
@@ -929,7 +1126,7 @@ pub fn control_set_hidden_group_buffs(vm: &mut Vm, c: NativeCall) -> Ret {
             _ => None,
         })
         .collect();
-    engine_mut(vm).world.hidden_group_buffs = ids;
+    engine_mut(vm).world.hidden_group_buffs = Some(ids);
     Ok(vec![])
 }
 
@@ -982,6 +1179,23 @@ fn get_zone_text(vm: &mut Vm, c: NativeCall) -> Ret {
     zone_text(|p| &p.zone)(vm, c)
 }
 
+/// `GetRealZoneText([instanceID])`: the zone; given an instance ID, that
+/// instance's name: the continents' (the full probe: 0 "Eastern
+/// Kingdoms", 1 and 1.5 "Kalimdor", others "").
+fn get_real_zone_text(vm: &mut Vm, c: NativeCall) -> Ret {
+    match vm.hidden(c.arg(1)) {
+        Value::Num(n) => {
+            let name = match n.trunc() as i64 {
+                0 if n >= 0.0 => "Eastern Kingdoms",
+                1 => "Kalimdor",
+                _ => "",
+            };
+            Ok(vec![vm.str(name)])
+        }
+        _ => get_zone_text(vm, c),
+    }
+}
+
 fn get_sub_zone_text(vm: &mut Vm, c: NativeCall) -> Ret {
     zone_text(|p| &p.sub_zone)(vm, c)
 }
@@ -998,8 +1212,9 @@ fn get_minimap_zone_text(vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 fn get_best_map_for_unit(vm: &mut Vm, c: NativeCall) -> Ret {
+    // Another unit (none, the target, a GUID): nil (the full probe).
     if units::unit_arg(vm, &c, 1) != Some(units::PLAYER) {
-        return Ok(vec![]);
+        return Ok(vec![Value::Nil]);
     }
     // Behind a loading screen: none (recorded).
     if engine(vm).world.loading_screen {
@@ -1015,15 +1230,50 @@ fn get_best_map_for_unit(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `C_Map.GetPlayerMapPosition(mapID, unit)`: a vector (`x`, `y`,
-/// `GetXY`) on the player's map.
+/// `GetXY`) on the player's map, or on a map holding it (the position
+/// moved by the map's recorded rectangle on it, `C_Map.GetMapRectOnMap`);
+/// nil for another unit or map (the full probe: the player on its zone
+/// and continent, nil for the other units and maps; the continent's
+/// position within 0.0005 of the rectangle's, the player not still).
+/// Unverified: map 0 (the client gave a position near the zone's).
 fn get_player_map_position(vm: &mut Vm, c: NativeCall) -> Ret {
     let p = engine(vm).world.character.position.clone();
-    let on_map = num(c.arg(1)).is_some_and(|m| Some(m) == p.map_id);
-    let (Some(x), Some(y)) = (p.x, p.y) else {
+    let (Some(x), Some(y), Some(map)) = (p.x, p.y, p.map_id) else {
         return Ok(vec![]);
     };
-    if !on_map || units::unit_arg(vm, &c, 2) != Some(units::PLAYER) {
-        return Ok(vec![]);
+    if units::unit_arg(vm, &c, 2) != Some(units::PLAYER) {
+        return Ok(vec![Value::Nil]);
+    }
+    let asked = num(c.arg(1));
+    let (x, y) = if asked == Some(map) {
+        (x, y)
+    } else {
+        let rect = asked
+            .filter(|a| *a > 0.0 && a.fract() == 0.0)
+            .and_then(|a| {
+                let call = format!("C_Map.GetMapRectOnMap({}, {})", map as i64, a as i64);
+                match crate::recorded::lookup_text(vm, &call)?.as_slice() {
+                    &[
+                        Value::Num(x0),
+                        Value::Num(x1),
+                        Value::Num(y0),
+                        Value::Num(y1),
+                    ] if x1 > x0 && y1 > y0 => Some((x0, x1, y0, y1)),
+                    _ => None,
+                }
+            });
+        match rect {
+            Some((x0, x1, y0, y1)) => (x0 + x * (x1 - x0), y0 + y * (y1 - y0)),
+            None => return Ok(vec![Value::Nil]),
+        }
+    };
+    // A `Vector2DMixin` (Blizzard's `CreateVector2D`, the client's).
+    let create = vm.get_global("CreateVector2D");
+    if !create.is_nil()
+        && let Ok(r) = vm.call(create, &[Value::Num(x), Value::Num(y)])
+        && let Some(v @ Value::Table(_)) = r.first().copied()
+    {
+        return Ok(vec![v]);
     }
     let v = vm.new_table();
     for (k, n) in [("x", x), ("y", y)] {
@@ -1046,10 +1296,23 @@ fn vector_xy(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn unit_position(vm: &mut Vm, c: NativeCall) -> Ret {
-    if units::unit_arg(vm, &c, 1) != Some(units::PLAYER) {
-        return Ok(vec![]);
+    // A unit that does not exist (or a GUID): three nils and instance 0
+    // (the full probe); another unit's nothing (unverified).
+    match units::unit_arg(vm, &c, 1) {
+        None => return Ok(vec![Value::Nil, Value::Nil, Value::Nil, Value::Num(0.0)]),
+        Some(id) if id != units::PLAYER => return Ok(vec![]),
+        _ => {}
     }
-    Ok(match engine(vm).world.character.position.world {
+    let p = engine(vm).world.character.position.clone();
+    // Not given: the map position's place on its map's world rectangle
+    // (`maps::world_rect`), the documentation's returns not nilable.
+    // Unverified: never recorded; the height (z) unknown, 0.
+    let derived = || -> Option<(f64, f64, f64, f64)> {
+        let (map, u, v) = (p.map_id?, p.x?, p.y?);
+        let (instance, left, top, width, height) = crate::maps::world_rect(vm, map as i64)?;
+        Some((top - v * height, left - u * width, 0.0, instance))
+    };
+    Ok(match p.world.or_else(derived) {
         Some((y, x, z, instance)) => vec![
             Value::Num(y),
             Value::Num(x),
@@ -1252,11 +1515,13 @@ fn unit_distance_squared(vm: &mut Vm, c: NativeCall) -> Ret {
     }
 }
 
-/// `unit:setDistance(yards)` (`nil`: unknown).
+/// `unit:setDistance(yards)` (`nil`: unknown); an NPC walked away from
+/// closes its gossip (`gossip::moved_away`).
 pub fn control_set_distance(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = units::this(vm, &c)?;
     let d = num(c.arg(2));
     engine_mut(vm).units.list[me.0].distance = d;
+    crate::gossip::moved_away(vm, me, d);
     Ok(vec![])
 }
 
@@ -1286,10 +1551,20 @@ fn bag_name(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(bag) = num(c.arg(1)).map(|b| b as i64) else {
         return Ok(vec![Value::Nil]);
     };
-    if bag == 0 {
-        let name = match vm.get_global("BACKPACK_TOOLTIP") {
+    // The backpack, the keyring, the bank's tabs (the character's and the
+    // account's): their general names (the full probe, the bank tabs
+    // unbought; unverified: a bought tab's own name).
+    let general = match bag {
+        0 => Some(("BACKPACK_TOOLTIP", "Backpack")),
+        KEYRING => Some(("KEYRING", "Keyring")),
+        6..=14 => Some(("BANK", "Bank")),
+        15..=23 => Some(("ACCOUNT_BANK_PANEL_TITLE", "Account Bank")),
+        _ => None,
+    };
+    if let Some((global, text)) = general {
+        let name = match vm.get_global(global) {
             Value::Str(s) => Value::Str(s),
-            _ => vm.str("Backpack"),
+            _ => vm.str(text),
         };
         return Ok(vec![name]);
     }
@@ -1322,8 +1597,12 @@ fn inventory_item_cooldown(_vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// `GetInventoryItemBroken(unit, slot)`, `GetInventoryItemEquippedUnusable(
-/// unit, slot)`: whole and usable (recorded; unverified otherwise).
-fn inventory_item_no(_vm: &mut Vm, _c: NativeCall) -> Ret {
+/// unit, slot)`: whole and usable (recorded; unverified otherwise); a
+/// unit not there, nothing (the full probe: `("x")`).
+fn inventory_item_no(vm: &mut Vm, c: NativeCall) -> Ret {
+    if units::unit_arg(vm, &c, 1).is_none() {
+        return Ok(vec![]);
+    }
     Ok(vec![Value::Bool(false)])
 }
 
@@ -1332,6 +1611,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
         ("GetMoney", get_money),
         ("IsResting", is_resting),
+        ("C_UnitAuras.GetHiddenGroupBuffs", get_hidden_group_buffs),
         (
             "C_Container.GetContainerItemQuestInfo",
             container_item_quest_info,
@@ -1339,6 +1619,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Container.GetBagName", bag_name),
         ("GetInventoryAlertStatus", inventory_alert_status),
         ("GetInventoryItemCooldown", inventory_item_cooldown),
+        ("C_Container.GetItemCooldown", get_item_cooldown),
         ("GetInventoryItemBroken", inventory_item_no),
         ("GetInventoryItemEquippedUnusable", inventory_item_no),
         ("GetInventoryItemID", get_inventory_item_id),
@@ -1360,7 +1641,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Item.GetItemCount", get_item_count),
         ("GetItemCount", get_item_count),
         ("GetZoneText", get_zone_text),
-        ("GetRealZoneText", get_zone_text),
+        ("GetRealZoneText", get_real_zone_text),
         ("GetSubZoneText", get_sub_zone_text),
         ("GetMinimapZoneText", get_minimap_zone_text),
         ("C_Map.GetBestMapForUnit", get_best_map_for_unit),

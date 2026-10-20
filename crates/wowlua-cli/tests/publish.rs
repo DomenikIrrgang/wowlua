@@ -441,14 +441,29 @@ fn publish_checks_before_uploading() {
         .stderr(predicate::str::contains("W6010").not())
         .stderr(predicate::str::contains("cf-secret").not());
     assert!(mock.requests().iter().all(|r| r.method == "GET"));
-    // A missing token stops the publish before any upload.
-    wowlua(&e.project, &e.home)
+    // A missing token stops the publish before any upload. Looking for it
+    // where `wowlua login` saves it is said first: the OS credential store
+    // may wait for the user to allow it. The zips are named as soon as
+    // they are packaged, before that.
+    let output = wowlua(&e.project, &e.home)
         .env("CF_API_TOKEN", "cf-secret")
         .arg("publish")
         .assert()
         .failure()
+        .stderr(predicate::str::contains(
+            "Reading the wago token `wowlua login` saved\n",
+        ))
         .stderr(predicate::str::contains("error[E4201]"))
-        .stderr(predicate::str::contains("WAGO_API_TOKEN"));
+        .stderr(predicate::str::contains("WAGO_API_TOKEN"))
+        .get_output()
+        .stderr
+        .clone();
+    let stderr = String::from_utf8_lossy(&output);
+    let packaged = stderr.find("Packaged MyAddon-1.0.0-cf.zip").expect(&stderr);
+    assert!(
+        packaged < stderr.find("Reading the wago token").unwrap(),
+        "{stderr}"
+    );
     assert!(mock.requests().iter().all(|r| r.method == "GET"));
     // A dirty tree needs `--allow-dirty`.
     write(
@@ -722,6 +737,29 @@ fn login_saves_tokens_for_publish() {
         .assert()
         .failure()
         .stderr(predicate::str::contains("no token given"));
+    // Without a terminal (as here), the credential store is not used even
+    // when it is on: the token goes to `config.json`, where a publish
+    // without a terminal reads it, and no W4326.
+    wowlua(&e.project, &e.home)
+        .env_remove("WOWLUA_NO_KEYRING")
+        .args(["login", "wago", "--token", "wago-background", "--no-verify"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("W4326").not())
+        .stderr(predicate::str::contains(
+            "Saved the Wago token in config.json (readable only by you): without a terminal",
+        ));
+    let config: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(e.home.join("config.json")).unwrap()).unwrap();
+    assert_eq!(config["tokens"]["wago"], "wago-background");
+    wowlua(&e.project, &e.home)
+        .env_remove("WOWLUA_NO_KEYRING")
+        .args(["logout", "wago"])
+        .assert()
+        .success();
+    let config: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(e.home.join("config.json")).unwrap()).unwrap();
+    assert!(config["tokens"].get("wago").is_none(), "{config}");
 }
 
 #[test]

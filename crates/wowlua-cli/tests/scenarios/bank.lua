@@ -8,7 +8,7 @@ local e = __engine
 local player = e.player
 -- The paladin's hidden group buffs (HIDDEN_GROUP_BUFFS_CHANGED, recorded).
 e.setHiddenGroupBuffs({ 10300, 19740, 1022, 1038, 19979, 25290, 5599, 19834, 10292, 19876, 25898, 19977, 10293, 7294, 19898, 19978, 19888, 20729, 19837, 10298, 465, 10278, 25782, 19850, 10290, 6940, 10301, 10299, 25916, 19896, 19899, 1044, 25890, 19838, 25895, 25291, 1032, 19854, 25918, 19836, 19742, 19900, 19746, 25894, 19853, 19895, 19897, 19852, 10291, 19835, 19891, 20217, 643 })
-e.setSpellTraits({ offGlobalCooldown = { 20271 }, tracking = { 2580, 5502 }, profession = { 3100, 2656 } })
+e.setSpellTraits({ offGlobalCooldown = { 20271 }, tracking = { 2580, 5502 }, profession = { 3100, 2656 }, partyOrSelf = { 1022 } })
 -- The bank's items (the recording's answers).
 e.defineItem(1210, { name = "Shadowgem", quality = 2, icon = 134074, stackCount = 20, classID = 7, subclassID = 4, link = "|cnIQ2:|Hitem:1210::::::::21:1486:::::::::|h[Shadowgem]|h|r" })
 e.defineItem(249391, { name = "Pyrite", quality = 2, icon = 961627, stackCount = 20, classID = 7, subclassID = 4, link = "|cnIQ2:|Hitem:249391::::::::21:1486:::::::::|h[Pyrite]|h|r" })
@@ -16,7 +16,7 @@ e.defineItem(3470, { name = "Rough Grinding Stone", quality = 1, icon = 135243, 
 e.defineItem(2840, { name = "Copper Bar", quality = 1, icon = 133216, stackCount = 20, classID = 7, subclassID = 7, link = "|cnIQ1:|Hitem:2840::::::::21:1486:::::::::|h[Copper Bar]|h|r" })
 local atepa = e.spawnUnit({
     name = "Atepa", guid = "Creature-0-4615-1-6-8357-2B5E93E430", npcID = 8357, level = 45,
-    reaction = "neutral", class = "WARRIOR", classID = 1, sex = 2, powerType = 1,
+    reaction = "neutral", playerReaction = "friendly", class = "WARRIOR", classID = 1, sex = 2, powerType = 1,
     creatureType = "Humanoid", creatureTypeID = 7, factionGroup = "Horde", pvp = true,
 })
 -- The character's two tabs: the first's items as the client answered them
@@ -32,6 +32,12 @@ e.defineBank(atepa, {
         { name = "Tab 2", icon = 134400, slots = 48 },
     },
 })
+-- Thunder Bluff's NPCs soft targeted all along (who, unrecorded: the soft
+-- friend's events alone tell, eight; one stands in): Blessing of
+-- Protection unusable from the start (the snapshot) to the end, never told
+-- usable, not even with the banker's target cleared (68.934 s).
+local friend = e.spawnUnit({ name = "Thunder Bluff Brave", reaction = "friendly" })
+player:softTarget(friend, "friend")
 local now = 0
 -- Time passes in frames, as in the client (60 a second: Blizzard's
 -- animations and OnUpdate code run), the rest of a step as one jump.
@@ -84,10 +90,12 @@ at(41.025) world("ENCHANT_SPELL_COMPLETED", false, nil)
 at(44.503) world("ENCHANT_SPELL_COMPLETED", false, nil)
 at(47.319) world("UPDATE_EXHAUSTION")
 at(50.034) wear()
--- At the banker: the round trip 0.257 s.
-e.setLatency(0.257)
+-- At the banker: the round trip 0.257 s, the target's echo 0.581 s
+-- (UNIT_TARGET, after the bank opened).
 at(53.082)
+e.setLatency(0.581)
 player:target(atepa)
+e.setLatency(0.257)
 atepa:setDistance(3)
 player:interact(atepa)
 at(53.8)
@@ -117,3 +125,7 @@ at(69.0)
 check("the bank closed", not BankFrame:IsShown())
 at(70.269) world("ENCHANT_SPELL_COMPLETED", false, nil)
 at(70.5)
+-- /reload: the session ends (the camera turned meanwhile: its pitch
+-- saved as it was then).
+e.setCVar("cameraSavedPitch", "27.375853")
+at(70.525) ReloadUI()

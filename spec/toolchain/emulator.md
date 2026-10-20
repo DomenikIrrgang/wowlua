@@ -161,6 +161,25 @@ The client's security model, in the VM:
   execution, the read that tainted it. Tests can also assert that a value or
   a handler stays secure, and get the same chain when it does not (decision
   T197).
+- **Taint trace.** `WOWLUA_TAINT_TRACE=1` (or `all`) prints to stderr each
+  new site where secure execution became tainted, and each site where secure
+  code stored a tainted value, with the chain behind it and the Lua calls
+  leading there. Each is printed once per site and cause. Any other value
+  keeps only the sites whose source contains it
+  (`WOWLUA_TAINT_TRACE=Blizzard_AuraContainer`). This finds where Blizzard's
+  code picks up an addon's taint before anything is refused:
+
+  ```text
+  taint: secure code stored a value tainted by SuuUI
+    written by Set
+      Interface/AddOns/Blizzard_SharedXMLBase/Flags.lua:71
+      while tainted by SuuUI, after reading
+    upvalue 'channels'
+      at Interface/AddOns/Blizzard_SharedXMLBase/Flags.lua:71
+      at Interface/AddOns/Blizzard_SharedXML/MixinUtil.lua:398
+      at ...d_AuraContainer/Blizzard_AuraContainerFlowLayout.lua:23
+      at src/UI/Auras.lua:321
+  ```
 
 ## 17.5 Secret values
 
@@ -194,7 +213,8 @@ as the client has them (probed on WoW Forever 1.60.1, `/stdtest probe`):
   `securecopy` behave as in the client.
 - **Secure code** may use secrets; what it computes from one is secret again
   (decision T195, from Blizzard's documentation: addon code cannot observe
-  it).
+  it). That includes calling a secret function: the function it hides runs
+  and its results are secret.
 
 The engine returns secrets where the client does: from the documentation's
 `SecretReturns`, `SecretArguments` and `SecretWhen…` flags, under the
@@ -274,7 +294,10 @@ takes the flavor's `Interface` folder and its global strings:
   `[TextLocale]` name the flavor's folders (`Mainline`, `Camelot`, `enUS`).
   `ADDON_LOADED` fires after each addon.
 - **Global strings** come first, from the client's `GlobalStrings` dump.
-- **Lua files** run as secure code with the addon's name and table.
+- **Lua files** run as secure code with the addon's name and table, also
+  when an addon's code loads a load-on-demand one (`C_AddOns.LoadAddOn`)
+  while the addon loads: Blizzard's files and scripts compile as Blizzard's
+  code whoever runs when they load, and keep their own file names.
 - **XML** builds widgets as the client does: virtual elements are templates
   (for `inherits` and `CreateFrame`), intrinsic ones frame types; an
   element's templates apply first, then its attributes, mixins, `parentKey`
@@ -282,6 +305,21 @@ takes the flavor's `Interface` folder and its global strings:
   scripts (`function`, `method` or a body; `inherit="prepend"` / `"append"`);
   `OnLoad` runs once the widget and its children are built. Fonts and font
   families become font objects.
+- **Secure APIs for addons** (Blizzard_AuraContainer's custom containers):
+  a type or template declared under `<ScopedModifier
+  allowUntaintedCreation="true">` is built untainted for any caller of
+  `CreateFrame`: its mixins, its scripts (compiled as Blizzard's) and its
+  `OnLoad`, also when an addon creates it while the addon loads (an
+  intrinsic type's scripts, like a template's, are the code of the addon
+  that declared it, never the caller's). A `<Mixin secureDelegates="true">` puts secure delegates on the
+  frame: they call the mixin's function untainted, with the arguments as
+  untainted values, and give the caller's taint back after. A tainted
+  caller passing a secret gets no elevation from a mixin's delegates
+  (Blizzard's ScriptErrorsFrame says so), but does from
+  `CreateSecureDelegate`'s. Partitions are not modelled: an object is its
+  own `GetForbiddenObjectTable` (secure code only), and the delegate stays
+  on the frame where a later private mixin has the same function.
+  Unverified: errors in a delegate reach its caller.
 - **Gaps.** Without game data or a recording, Blizzard's code gets empty
   values from functions that have no behaviour: secure code calling such a
   function gets its documented results' empty values (nil where nilable,

@@ -269,6 +269,19 @@ got nil)`. A class instance check needs the class in scope in that file;
 where only its type is imported, the check is `type(v) == "table"`. The
 standard library's own functions are never checked.
 
+Opting out where a value is knowingly incomplete (a frame whose mixin
+methods are added after it is created, for example):
+
+- **Unchecked cast.** A local's annotation is never checked, and `:: any`
+  is not checkable, so `local f: Panel = CreateFrame("Frame") :: any` is a
+  cast without a runtime check, also under `"all"`. Inline, `(e :: any)`
+  passes anywhere.
+- **`@unchecked`** on a function exempts its parameters, e.g. a builder that
+  takes half-built objects.
+
+Both keep the rest of the profile's checks, unlike lowering
+`runtime-checks` for the whole build.
+
 ## 7.6 Error locations
 
 - **Dev builds** emit one Lua file per source file with **line numbers

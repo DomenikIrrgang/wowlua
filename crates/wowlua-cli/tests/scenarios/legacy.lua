@@ -2,7 +2,6 @@
 -- level 21 druid opens the spellbook, then the legacy system, picks a
 -- tree, buys five ranks of a node and applies them
 -- (scenarios/legacy.lua). Each step at its recorded time. Not yet: the
--- spellbook's TOOLTIP_DATA_UPDATE(939) (6.916, its cause unknown); the
 -- order of the nodes the fifth rank unlocks (the client's 110303, 110305,
 -- 110304; the engine's the tree's).
 local e = __engine
@@ -24,6 +23,8 @@ for id, item in pairs({
 }) do
     e.defineItem(id, item, { cached = true })
 end
+-- The recorded character's trait data (its class config's ID).
+e.setTraitCharacter(22147)
 local now = 0
 -- Time passes in frames, as in the client (60 a second: Blizzard's
 -- animations and OnUpdate code run), the rest of a step as one jump.
@@ -46,6 +47,9 @@ local function press(frame, button)
 end
 e.setLatency(0.35)
 at(4.812) press(PlayerSpellsMicroButton)
+-- A tooltip's data update with the spellbook open, its cause unknown: as
+-- recorded.
+at(6.916) e.fireEvent("TOOLTIP_DATA_UPDATE", 939)
 at(10.210) press(LegacyMicroButton)
 at(12.455) press(LegacySystemFrame and LegacySystemFrame.LegacyChallengeTab)
 at(13.235) press(LegacySystemFrame and LegacySystemFrame.LegacyTreeTab)

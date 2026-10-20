@@ -28,8 +28,10 @@ impl Element {
 
     /// A boolean attribute (`"true"`, any case).
     pub fn flag(&self, name: &str) -> bool {
+        // Spaces around it ignored (SuuUI probe trees: InputIconTexture.xml's
+        // `hidden="true "` textures hidden in the client).
         self.attr(name)
-            .is_some_and(|v| v.eq_ignore_ascii_case("true"))
+            .is_some_and(|v| v.trim().eq_ignore_ascii_case("true"))
     }
 
     /// A number attribute.
@@ -53,7 +55,29 @@ fn line_of(text: &str, offset: usize) -> usize {
         + 1
 }
 
-fn element(text: &str, start: &BytesStart, offset: usize) -> Element {
+/// [`line_of`] for offsets read in order: counted on from the last.
+struct Lines<'a> {
+    text: &'a str,
+    at: usize,
+    line: usize,
+}
+
+impl Lines<'_> {
+    fn of(&mut self, offset: usize) -> usize {
+        let offset = offset.min(self.text.len());
+        if offset < self.at {
+            return line_of(self.text, offset);
+        }
+        self.line += self.text.as_bytes()[self.at..offset]
+            .iter()
+            .filter(|&&b| b == b'\n')
+            .count();
+        self.at = offset;
+        self.line
+    }
+}
+
+fn element(lines: &mut Lines, start: &BytesStart, offset: usize) -> Element {
     let attrs = start
         .attributes()
         .flatten()
@@ -76,7 +100,7 @@ fn element(text: &str, start: &BytesStart, offset: usize) -> Element {
         attrs,
         children: Vec::new(),
         text: String::new(),
-        line: line_of(text, offset),
+        line: lines.of(offset),
     }
 }
 
@@ -84,6 +108,11 @@ fn element(text: &str, start: &BytesStart, offset: usize) -> Element {
 pub fn parse(text: &str) -> Result<Rc<Element>, String> {
     let text = text.strip_prefix('\u{feff}').unwrap_or(text);
     let mut reader = Reader::from_str(text);
+    let mut lines = Lines {
+        text,
+        at: 0,
+        line: 1,
+    };
     let mut stack: Vec<Element> = vec![Element {
         tag: "#document".into(),
         ..Element::default()
@@ -94,9 +123,9 @@ pub fn parse(text: &str) -> Result<Rc<Element>, String> {
             .read_event()
             .map_err(|e| format!("line {}: {e}", line_of(text, offset)))?;
         match event {
-            Event::Start(s) => stack.push(element(text, &s, offset)),
+            Event::Start(s) => stack.push(element(&mut lines, &s, offset)),
             Event::Empty(s) => {
-                let e = element(text, &s, offset);
+                let e = element(&mut lines, &s, offset);
                 if let Some(parent) = stack.last_mut() {
                     parent.children.push(Rc::new(e));
                 }

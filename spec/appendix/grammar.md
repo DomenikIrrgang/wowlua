@@ -192,8 +192,9 @@ typeparam    ::= Name [ "extends" type ]
                | Name "..."                                   (* pack parameter *)
 
 tabletype    ::= "{" [ tablefield { ( "," | ";" ) tablefield } [ "," | ";" ] ] "}"
-tablefield   ::= Name [ "?" ] ":" type
+tablefield   ::= [ "readonly" ] Name [ "?" ] ":" type
                | "[" type "]" ":" type                        (* "[" String "]" names a field *)
+               | [ "readonly" ] "[" String "]" [ "?" ] ":" type   (* a named field *)
                | type                                         (* only as the sole field: array *)
 
 functype     ::= [ typeparams ] "(" [ paramtypes ] ")" "->" rettype

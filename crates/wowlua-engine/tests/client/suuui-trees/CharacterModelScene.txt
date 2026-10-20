@@ -1,0 +1,49 @@
+ModelScene CharacterModelScene 398x428.0 shown=true at TOPLEFT>TopBackgroundStrip.BOTTOMLEFT(0,0) scripts=OnEnter level=50
+  · Texture CharacterModelFrameBackgroundTopLeft 319x299.0 shown=true at TOPLEFT>CharacterModelScene.TOPLEFT(0,0) tex=131105 layer=BACKGROUND:0 rgba=1,1,1,1
+  · Texture CharacterModelFrameBackgroundTopRight 80x299.0 shown=true at TOPRIGHT>CharacterModelScene.TOPRIGHT(0,0) tex=131106 layer=BACKGROUND:0 rgba=1,1,1,1
+  · Texture CharacterModelFrameBackgroundBotLeft 319x130.0 shown=true at BOTTOMLEFT>CharacterModelScene.BOTTOMLEFT(0,0) tex=131107 layer=BACKGROUND:0 rgba=1,1,1,1
+  · Texture CharacterModelFrameBackgroundBotRight 80x130.0 shown=true at BOTTOMRIGHT>CharacterModelScene.BOTTOMRIGHT(0,0) tex=131108 layer=BACKGROUND:0 rgba=1,1,1,1
+  · Texture BackgroundOverlay 398x428.0 shown=true at TOPLEFT>CharacterModelScene.TOPLEFT(0,0) atlas=UI-Character-Info-RaceBG-Overlay layer=BORDER:0 rgba=1,1,1,1
+  Frame ControlFrame 132x32.0 shown=true at TOP>CharacterFrameLeftPaneHost.TOP(0,-40) scripts=OnEnter,OnShow level=51
+    Button zoomInButton 32.0x32.0 shown=true at LEFT>ControlFrame.LEFT(0,0) scripts=OnClick,OnEnter level=52
+      · Texture Icon 16.0x16.0 shown=true at CENTER>zoomInButton.CENTER(0,0) atlas=common-icon-zoomin layer=OVERLAY:0 rgba=1,1,1,1
+      · Texture NormalTexture 32.0x32.0 shown=true at TOPLEFT>zoomInButton.TOPLEFT(0,0) atlas=common-button-square-gray-up layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture HighlightTexture 16.0x16.0 shown=true at TOPLEFT>Icon.TOPLEFT(0,0) tex=nil layer=HIGHLIGHT:0 rgba=1,1,1,0.4
+      · Texture PushedTexture 32.0x32.0 shown=false at TOPLEFT>zoomInButton.TOPLEFT(1,-1) atlas=common-button-square-gray-down layer=ARTWORK:0 rgba=1,1,1,1
+    Button zoomOutButton 32.0x32.0 shown=true at LEFT>zoomInButton.RIGHT(-6,0) scripts=OnClick,OnEnter level=52
+      · Texture Icon 16.0x16.0 shown=true at CENTER>zoomOutButton.CENTER(0,0) atlas=common-icon-zoomout layer=OVERLAY:0 rgba=1,1,1,1
+      · Texture NormalTexture 32.0x32.0 shown=true at TOPLEFT>zoomOutButton.TOPLEFT(0,0) atlas=common-button-square-gray-up layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture HighlightTexture 16.0x16.0 shown=true at TOPLEFT>Icon.TOPLEFT(0,0) tex=nil layer=HIGHLIGHT:0 rgba=1,1,1,0.4
+      · Texture PushedTexture 32.0x32.0 shown=false at TOPLEFT>zoomOutButton.TOPLEFT(1,-1) atlas=common-button-square-gray-down layer=ARTWORK:0 rgba=1,1,1,1
+    Button rotateLeftButton 32.0x32.0 shown=true at LEFT>zoomOutButton.RIGHT(-6,0) scripts=OnClick,OnEnter level=52
+      · Texture Icon 16.0x16.0 shown=true at CENTER>rotateLeftButton.CENTER(0,0) atlas=common-icon-rotateleft layer=OVERLAY:0 rgba=1,1,1,1
+      · Texture NormalTexture 32.0x32.0 shown=true at TOPLEFT>rotateLeftButton.TOPLEFT(0,0) atlas=common-button-square-gray-up layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture HighlightTexture 16.0x16.0 shown=true at TOPLEFT>Icon.TOPLEFT(0,0) tex=nil layer=HIGHLIGHT:0 rgba=1,1,1,0.4
+      · Texture PushedTexture 32.0x32.0 shown=false at TOPLEFT>rotateLeftButton.TOPLEFT(1,-1) atlas=common-button-square-gray-down layer=ARTWORK:0 rgba=1,1,1,1
+    Button rotateRightButton 32.0x32.0 shown=true at LEFT>rotateLeftButton.RIGHT(-6,0) scripts=OnClick,OnEnter level=52
+      · Texture Icon 16.0x16.0 shown=true at CENTER>rotateRightButton.CENTER(0,0) atlas=common-icon-rotateright layer=OVERLAY:0 rgba=1,1,1,1
+      · Texture NormalTexture 32.0x32.0 shown=true at TOPLEFT>rotateRightButton.TOPLEFT(0,0) atlas=common-button-square-gray-up layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture HighlightTexture 16.0x16.0 shown=true at TOPLEFT>Icon.TOPLEFT(0,0) tex=nil layer=HIGHLIGHT:0 rgba=1,1,1,0.4
+      · Texture PushedTexture 32.0x32.0 shown=false at TOPLEFT>rotateRightButton.TOPLEFT(1,-1) atlas=common-button-square-gray-down layer=ARTWORK:0 rgba=1,1,1,1
+    Button resetButton 32.0x32.0 shown=true at LEFT>rotateRightButton.RIGHT(-6,0) scripts=OnClick,OnEnter level=52
+      · Texture Icon 16.0x16.0 shown=true at CENTER>resetButton.CENTER(0,0) atlas=common-icon-undo layer=OVERLAY:0 rgba=1,1,1,1
+      · Texture NormalTexture 32.0x32.0 shown=true at TOPLEFT>resetButton.TOPLEFT(0,0) atlas=common-button-square-gray-up layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture HighlightTexture 16.0x16.0 shown=true at TOPLEFT>Icon.TOPLEFT(0,0) tex=nil layer=HIGHLIGHT:0 rgba=1,1,1,0.4
+      · Texture PushedTexture 32.0x32.0 shown=false at TOPLEFT>resetButton.TOPLEFT(1,-1) atlas=common-button-square-gray-down layer=ARTWORK:0 rgba=1,1,1,1
+  Frame GearEnchantAnimation 128x128.0 shown=false at CENTER>CharacterModelScene.CENTER(0,0) level=51
+    Frame FrameFX 128x128.0 shown=true at CENTER>GearEnchantAnimation.CENTER(0,0) level=52
+      · Texture PurpleGlow 414x415 shown=true at CENTER>FrameFX.CENTER(0,0) atlas=GearEnchantFX_CharUI_DarkGold layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture BlueGlow 414x415 shown=true at CENTER>FrameFX.CENTER(0,0) atlas=GearEnchantFX_CharUI_Gold layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture Sparkles 373x369.0 shown=false at CENTER>FrameFX.CENTER(0,0) atlas=GearEnchantFX_CharUI_Sparkles layer=ARTWORK:0 rgba=1,1,1,1
+      · MaskTexture Mask 512x512 shown=true at CENTER>FrameFX.CENTER(0,0) atlas=GearEnchantFX_CharUI_Mask layer=ARTWORK:0 rgba=1,1,1,1
+    Frame TopFrame 128x128.0 shown=true at CENTER>GearEnchantAnimation.CENTER(0,0) level=52
+      · Texture Frame 233.0x323 shown=true at CENTER>TopFrame.CENTER(0,0) atlas=GearEnchantFX_CharUI_Frame layer=OVERLAY:0 rgba=1,1,1,1
+  Frame PetPaperDollPetHappinessInfo 24.0x23.0 shown=false at TOPLEFT>CharacterFrameLeftPaneHost.TOPLEFT(22,-60) level=51
+    · Texture Texture 24.0x23.0 shown=true at TOPLEFT>PetPaperDollPetHappinessInfo.TOPLEFT(0,0) tex=nil layer=BACKGROUND:0 rgba=1,1,1,1
+  Frame PetPaperDollFrameExpBar 257x29.0 shown=false at BOTTOM>CharacterFrameLeftPaneHost.BOTTOM(0,20) level=51
+    · Texture - 257x29.0 shown=true at TOPLEFT>PetPaperDollFrameExpBar.TOPLEFT(0,0) atlas=common-stat-bar-BG layer=BACKGROUND:0 rgba=1,1,1,1
+    · Texture Fill 240.0x15.0 shown=true at LEFT>PetPaperDollFrameExpBar.LEFT(0,0) atlas=common-stat-bar-green layer=BORDER:0 rgba=1,1,1,1
+    · MaskTexture Mask 257x29.0 shown=true at LEFT>PetPaperDollFrameExpBar.LEFT(0,0) atlas=common-stat-bar-Mask layer=BORDER:0 rgba=1,1,1,1
+    · FontString Text 257x20.0 shown=true at LEFT>PetPaperDollFrameExpBar.LEFT(0,0) font=FRIZQT__.TTF 12 object=GameFontHighlight
+  Frame GamepadFocusIndicator 0x0 shown=false at - level=51
+    · Texture - 65.0x28.0 shown=true at BOTTOM>CharacterModelScene.TOP(0,-20) atlas=helptip-arrow layer=OVERLAY:0 rgba=1,1,1,1

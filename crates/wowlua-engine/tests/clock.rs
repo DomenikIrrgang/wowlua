@@ -43,6 +43,32 @@ return table.concat(log, ' '), ticks, tostring(t:IsCancelled()), tostring(timer:
 }
 
 #[test]
+fn timed_signal_maps_signal_keys_when_due() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local log = {}
+local map = C_Timer.NewTimedSignalMap(function(key) log[#log + 1] = key .. '@' .. GetTime() end)
+map:SignalAfter(1, 3)
+map:SignalAt(2, 1)
+map:SignalAfter(3, 2)
+map:SignalAfter(3, 4)
+map:SignalAt(4, 2)
+map:CancelSignal(4)
+local count, has = map:GetSignalCount(), tostring(map:HasSignal(3))
+local nextKey, nextTime = map:GetNextSignal()
+local time3 = map:GetSignalTime(3)
+mock.advanceTime(5)
+return table.concat(log, ' '), count, has, nextKey, nextTime, time3, map:GetSignalCount(),
+    tostring(map:GetSignalTime(1)), select('#', map:GetNextSignal())",
+    );
+    assert_eq!(
+        r,
+        ["2@1 1@3 3@4", "3", "true", "2", "1", "4", "0", "nil", "0"]
+    );
+}
+
+#[test]
 fn on_update_runs_per_frame_for_visible_frames() {
     let mut vm = vm();
     let r = run(
@@ -56,6 +82,32 @@ mock.nextFrame()
 return n, string.format('%.1f', total)",
     );
     assert_eq!(r, ["3", "0.3"]);
+}
+
+/// An `OnUpdate` given during a frame: a widget after the one running gets
+/// its turn in that frame, one before it and one made in it the next.
+#[test]
+fn on_update_given_during_a_frame_runs_in_creation_order() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local log = {}
+local a, b, c = CreateFrame('Frame'), CreateFrame('Frame'), CreateFrame('Frame')
+local function logger(name) return function() log[#log + 1] = name end end
+b:SetScript('OnUpdate', function()
+    log[#log + 1] = 'b'
+    if not a:GetScript('OnUpdate') then
+        a:SetScript('OnUpdate', logger('a'))
+        c:SetScript('OnUpdate', logger('c'))
+        CreateFrame('Frame'):SetScript('OnUpdate', logger('d'))
+    end
+end)
+mock.nextFrame()
+log[#log + 1] = '|'
+mock.nextFrame()
+return table.concat(log, ' ')",
+    );
+    assert_eq!(r, ["b c | a b c d"]);
 }
 
 #[test]

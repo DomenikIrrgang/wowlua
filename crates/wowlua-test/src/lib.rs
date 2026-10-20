@@ -35,6 +35,8 @@ pub struct Suite<'a> {
     pub blizzard_ui: Option<UiSource>,
     /// `test.profile`: the world profile of files that name none.
     pub profile: Option<String>,
+    /// `test.addons`: other addons' folders, loaded before the addon.
+    pub addons: Vec<PathBuf>,
     /// `-u`: rewrite the snapshots that differ.
     pub update_snapshots: bool,
     /// `--coverage`: count what the addon's files run.
@@ -126,14 +128,40 @@ pub fn run(suite: &Suite, filter: Option<&str>, jobs: usize) -> Vec<FileResult> 
         .collect()
 }
 
-/// Whether coverage counts a chunk: the addon's own files (`src/…`), not
-/// test files.
-fn counted(chunk: &str) -> bool {
-    chunk.starts_with("src/") && !chunk.ends_with(".test.lua")
+/// What the addon's files' chunk names start with: the client names an
+/// addon's files `Interface/AddOns/<Name>/<path>` (`debugstack` in a
+/// recording: `Interface/AddOns/StdTest/src/engineprobe.lua:806`).
+fn chunk_prefix(build: &BuildOutput) -> String {
+    format!("Interface/AddOns/{}/", build.addon_name)
 }
 
-/// The source path of an output file (`src/x.lua` → `src/x.wowlua`).
+/// Loads files of the addon with the names the client gives them
+/// ([`chunk_prefix`]); what loads later (Blizzard's addons on demand) is
+/// named as before.
+fn named_as_client(vm: &mut Vm, build: &BuildOutput, load: impl FnOnce(&mut Vm)) {
+    let saved = wowlua_engine::engine_mut(vm)
+        .world
+        .ui
+        .chunk_prefix
+        .replace(chunk_prefix(build));
+    load(vm);
+    wowlua_engine::engine_mut(vm).world.ui.chunk_prefix = saved;
+}
+
+/// Whether coverage counts a chunk: the addon's own files (`src/…`), not
+/// test files.
+fn counted(prefix: &str, chunk: &str) -> bool {
+    chunk
+        .strip_prefix(prefix)
+        .is_some_and(|rest| rest.starts_with("src/") && !rest.ends_with(".test.lua"))
+}
+
+/// The source path of an output file (`src/x.lua` → `src/x.wowlua`), by
+/// its path in the AddOn folder or its chunk name.
 fn source_of(suite: &Suite, output: &str) -> String {
+    let output = output
+        .strip_prefix(chunk_prefix(suite.build).as_str())
+        .unwrap_or(output);
     let src = suite.src.trim_end_matches('/');
     let (prefix, rest) = if let Some(rest) = output.strip_prefix("src/") {
         (
@@ -181,14 +209,40 @@ pub fn split_failure(message: &str, stack: &str) -> (String, Option<String>) {
 }
 
 /// Error messages and stacks with source paths: the test profile keeps
-/// lines, so `src/x.lua:12` is `src/x.wowlua:12`.
+/// lines, so `Interface/AddOns/Demo/src/x.lua:12` is `src/x.wowlua:12`.
+/// A chunk name Lua shortened (`...ns/Demo/src/x.lua`, past 52 bytes) is
+/// the addon's file it ends, when only one does; other addons' files stay.
 fn to_sources(suite: &Suite, text: &str) -> String {
-    let re = regex::Regex::new(
-        r"\[?(?:Interface/AddOns/[^/]+/)?((?:src|tests|wowlua)/[\w./@-]+\.lua)\]?(:\d+)",
-    )
-    .expect("a valid pattern");
+    let re = regex::Regex::new(r"\[?(\.\.\.)?([\w./@-]+\.lua)\]?(:\d+)").expect("a valid pattern");
+    let prefix = chunk_prefix(suite.build);
+    let own = |path: &str| -> Option<String> {
+        if let Some(rest) = path.strip_prefix(prefix.as_str()) {
+            return Some(rest.to_string());
+        }
+        ["src/", "tests/", "wowlua/"]
+            .iter()
+            .any(|p| path.starts_with(p))
+            .then(|| path.to_string())
+    };
+    let ending = |tail: &str| -> Option<String> {
+        let files = suite.build.files.keys();
+        let tests = suite.build.tests.iter().map(|t| &t.path);
+        let mut found = files
+            .chain(tests)
+            .filter(|f| f.ends_with(".lua") && format!("{prefix}{f}").ends_with(tail));
+        let first = found.next()?;
+        found.all(|f| f == first).then(|| first.clone())
+    };
     re.replace_all(text, |c: &regex::Captures| {
-        format!("{}{}", source_of(suite, &c[1]), &c[2])
+        let path = if c.get(1).is_some() {
+            ending(&c[2])
+        } else {
+            own(&c[2])
+        };
+        match path {
+            Some(path) => format!("{}{}", source_of(suite, &path), &c[3]),
+            None => c[0].to_string(),
+        }
     })
     .into_owned()
 }
@@ -277,7 +331,10 @@ fn run_file(suite: &Suite, file: &TestFile, filter: Option<&str>) -> FileResult 
 /// The counts of a VM's run, by source file.
 fn coverage_of(suite: &Suite, vm: &Vm) -> Option<coverage::Report> {
     let cov = vm.coverage.as_ref()?;
-    let map = |chunk: &str| -> Option<String> { counted(chunk).then(|| source_of(suite, chunk)) };
+    let prefix = chunk_prefix(suite.build);
+    let map = |chunk: &str| -> Option<String> {
+        counted(&prefix, chunk).then(|| source_of(suite, chunk))
+    };
     Some(coverage::collect(vm, cov, &suite.root, &map))
 }
 
@@ -298,6 +355,11 @@ struct Reload {
     elapsed_ms: f64,
 }
 
+/// What fails a test on an error the client drops without a report
+/// (`secureexecuterange`'s callbacks): code that failed, though no error
+/// handler heard it.
+const DROPPED_FAILURE: &str = "an error was dropped without a report (as the client drops it)";
+
 fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loaded, String> {
     let build = suite.build;
     let dir = &build.dir;
@@ -309,10 +371,12 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
         vm.clock.elapsed_ms = r.elapsed_ms;
     }
     if suite.coverage {
-        vm.enable_coverage(Box::new(|chunk: &[u8]| {
-            counted(&String::from_utf8_lossy(
-                chunk.strip_prefix(b"@").unwrap_or(chunk),
-            ))
+        let prefix = chunk_prefix(build);
+        vm.enable_coverage(Box::new(move |chunk: &[u8]| {
+            counted(
+                &prefix,
+                &String::from_utf8_lossy(chunk.strip_prefix(b"@").unwrap_or(chunk)),
+            )
         }));
     }
     if let Some(ui) = &suite.blizzard_ui {
@@ -328,6 +392,7 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
     vm.set_output(natives::print_sink);
     natives::install_print(&mut vm);
     vm.error_handler = vm.native("errorhandler", natives::error_handler);
+    vm.on_dropped_error = Some(natives::dropped_error);
     // The addon table, with the runtime's table holding the mock's engine.
     let ns = vm.new_table();
     let wl = vm.new_table();
@@ -361,7 +426,7 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
     }
     let toc = toc_path(build, &suite.flavor).ok_or("the build has no TOC file")?;
     let toc_text = std::fs::read_to_string(dir.join(&toc)).map_err(|e| e.to_string())?;
-    let saved = saved::names(&wowlua_toc::parse(&toc_text));
+    let mut saved = saved::names(&wowlua_toc::parse(&toc_text));
     let listed: Vec<String> = wowlua_toc::parse(&toc_text)
         .files
         .iter()
@@ -381,7 +446,9 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
     if let Some(runtime) = listed.iter().position(|p| p == "wowlua/runtime.lua") {
         let before = errors_before(&vm);
         for path in &listed[..=runtime] {
-            wowlua_engine::ui::load_user_file(&mut vm, dir, path, &name, table);
+            named_as_client(&mut vm, build, |vm| {
+                wowlua_engine::ui::load_user_file(vm, dir, path, &name, table)
+            });
             loaded.insert(path.clone());
         }
         check(&mut vm, before, "loading the runtime")?;
@@ -392,13 +459,31 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
         closure(build, &mock.path, &mut order);
         for path in order {
             if loaded.insert(path.to_string()) {
-                wowlua_engine::ui::load_user_file(&mut vm, dir, path, &name, table);
+                named_as_client(&mut vm, build, |vm| {
+                    wowlua_engine::ui::load_user_file(vm, dir, path, &name, table)
+                });
             }
         }
     }
     check(&mut vm, before, "loading the mocks")?;
+    // The other addons (`test.addons`), as the client loads them first.
+    for addon in other_addons(suite)? {
+        saved.extend(addon.saved.iter().cloned());
+        let before = errors_before(&vm);
+        load_other_addon(&mut vm, &addon)?;
+        check(
+            &mut vm,
+            before,
+            &format!("loading the addon {}", addon.name),
+        )?;
+    }
+    // The addon itself, known to the addon functions as its TOC says.
+    let own = wowlua_engine::ui::read_user_toc(&suite.flavor, &name, dir, &dir.join(&toc))?;
+    wowlua_engine::bindings::add_own_addon(&mut vm, &own, table, bindings.exists());
     let before = errors_before(&vm);
-    wowlua_engine::ui::load_user_addon(&mut vm, dir, &dir.join(&toc), &name, table, &loaded);
+    named_as_client(&mut vm, build, |vm| {
+        wowlua_engine::ui::load_user_addon(vm, dir, &dir.join(&toc), &name, table, &loaded)
+    });
     loaded.extend(listed);
     check(&mut vm, before, "loading the addon")?;
     let before = errors_before(&vm);
@@ -406,7 +491,9 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
     closure(build, &file.path, &mut order);
     for path in order {
         if loaded.insert(path.to_string()) {
-            wowlua_engine::ui::load_user_file(&mut vm, dir, path, &name, table);
+            named_as_client(&mut vm, build, |vm| {
+                wowlua_engine::ui::load_user_file(vm, dir, path, &name, table)
+            });
         }
     }
     check(&mut vm, before, "loading the test file")?;
@@ -432,6 +519,41 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
         saved,
         reloaded_coverage: Vec::new(),
     })
+}
+
+/// The `test.addons` the client loads in this game, in its load order.
+fn other_addons(suite: &Suite) -> Result<Vec<wowlua_engine::ui::UserAddon>, String> {
+    let mut list = Vec::new();
+    for dir in &suite.addons {
+        let addon = wowlua_engine::ui::read_user_addon(&suite.flavor, dir)
+            .map_err(|e| format!("test.addons: {e}"))?;
+        // The client leaves out an addon for other games (unverified:
+        // whether its addon list shows it).
+        if addon.allowed {
+            list.push(addon);
+        }
+    }
+    Ok(wowlua_engine::ui::user_addon_order(list))
+}
+
+/// One of the `test.addons`, known to the client with its own addon table:
+/// its `Bindings.xml` read, then its files (unless on demand), after the
+/// Blizzard addons it depends on.
+fn load_other_addon(vm: &mut Vm, addon: &wowlua_engine::ui::UserAddon) -> Result<(), String> {
+    let table = Value::Table(vm.new_table());
+    let bindings = addon.dir.join("Bindings.xml");
+    if bindings.exists() {
+        wowlua_engine::bindings::load_bindings_xml(vm, &bindings, Some(&addon.name))?;
+    }
+    wowlua_engine::bindings::add_user_addon(vm, addon, table, bindings.exists());
+    if addon.on_demand {
+        return Ok(());
+    }
+    for dep in &addon.deps {
+        wowlua_engine::ui::load_addon(vm, dep);
+    }
+    wowlua_engine::ui::load_other_user_addon(vm, &addon.dir, &addon.toc, &addon.name, table);
+    Ok(())
 }
 
 /// The TOC the client would read for the flavor: the flavor's own
@@ -667,8 +789,11 @@ fn run_one(suite: &Suite, file: &TestFile, state: &mut Loaded, p: &Planned) -> O
     if let Some(o) = drive_inner(&mut state.vm, tests, job) {
         return o;
     }
-    // The first pass ends: its teardown runs in the file's VM.
+    // The first pass ends: its teardown runs in the file's VM. An addon's
+    // `ReloadUI()` ended its session (`PLAYER_LOGOUT`, nothing running
+    // after): the file's next tests go on in it as after `mock.reloadUI`.
     let mut saved = saved::capture(&mut state.vm, &state.saved);
+    wowlua_engine::engine_mut(&mut state.vm).world.logged_out = false;
     let mut clock = (state.vm.clock.now, state.vm.clock.elapsed_ms);
     if let Some(o @ Outcome::Fail { .. }) = drive_inner(&mut state.vm, tests, job) {
         return o;
@@ -696,6 +821,13 @@ fn run_one(suite: &Suite, file: &TestFile, state: &mut Loaded, p: &Planned) -> O
             break failed(format!(
                 "an error reached the error handler while reloading:\n{}",
                 pending.join("\n")
+            ));
+        }
+        let dropped = natives::unread_dropped();
+        if !dropped.is_empty() {
+            break failed(format!(
+                "{DROPPED_FAILURE} while reloading:\n{}",
+                dropped.join("\n")
             ));
         }
         let tests = fresh.tests;
@@ -779,6 +911,14 @@ fn run_tests(
         ));
         return;
     }
+    let dropped = natives::unread_dropped();
+    if !dropped.is_empty() {
+        result.error = Some(to_sources(
+            suite,
+            &format!("{DROPPED_FAILURE} while loading:\n{}", dropped.join("\n")),
+        ));
+        return;
+    }
     match start(vm, tests, "beforeAll", None, None) {
         Ok(job) => {
             if let Outcome::Fail { message, .. } = drive(vm, tests, job) {
@@ -811,10 +951,16 @@ fn run_tests(
         // does a protected action refused because of taint (with its taint
         // chain) that no test expected (`toBeBlocked`, `mock.refusals()`).
         let unread = natives::unread_errors();
+        let dropped = natives::unread_dropped();
         let refused = natives::unread_refusals(vm);
         if outcome == Outcome::Pass && !unread.is_empty() {
             outcome = Outcome::Fail {
                 message: format!("an error reached the error handler: {}", unread.join("\n")),
+                stack: String::new(),
+            };
+        } else if outcome == Outcome::Pass && !dropped.is_empty() {
+            outcome = Outcome::Fail {
+                message: format!("{DROPPED_FAILURE}: {}", dropped.join("\n")),
                 stack: String::new(),
             };
         } else if outcome == Outcome::Pass && !refused.is_empty() {

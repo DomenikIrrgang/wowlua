@@ -5,6 +5,7 @@
 -- sizes of the mount, pet, toy and heirloom collections. Read-only calls
 -- only. Its size decides how the engine keeps it.
 import state from "/state"
+import stamp from "/state"
 import say from "/harness"
 
 local function pack(...: any): { n: number, [number]: any }
@@ -109,5 +110,6 @@ export function collectionsProbe()
         ask(call)
     end
     st.engineCollectionAnswers = out
+    stamp("collections")
     say(`engine collections: {#categories} categories, {appearances} appearances, {math.floor(bytes / 1024)} KB; type /reload so the file is written`)
 end

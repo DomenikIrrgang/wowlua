@@ -52,6 +52,7 @@ warning forms of Â§B.2's pure Lua files (`W2001`). `wowlua explain
 | E1013 | Module specifier case does not match the file on disk |
 | E1014 | Import or usage cycle containing a load-time edge (run-time-only cycles are allowed) |
 | E1015 | Module not found |
+| E1016 | An `export` redeclares a module-level name (a `local`, function, import, â€¦), or a name is exported twice |
 | E1020 | Reference to a declaration removed by `@if` or static elimination |
 | E1031 | Duplicate (non-ambient) interface in the same scope |
 | E1032 | Top-level `return` in a module |
@@ -172,6 +173,7 @@ is reported as the warning with the same number (`E2001` â†’ `W2001`, `E2030` â†
 | W1033 | Load order cannot be determined (dynamic names, several writers, external names); files keep their source order |
 | W1034 | Name read at load time but only defined at run time |
 | W1035 | Usage-analysis dependency contradicts `build.load-order`; the listed order is kept (contradicting imports are E1035) |
+| W1036 | A module of an import cycle reads an export (or, with `import internal`, a file-level local) of a module of the cycle checked after it that has no type annotation (or a `typeof` type alias it has not reached): it is `any` there |
 | W2040 | Forbidden operation on a possibly secret value (basic mode) |
 | W2055 | Too many arguments to an unannotated function (basic mode). Replaces the second meaning of W2006. |
 | W2060 | Division or modulo by a literal zero: WoW raises "Division by zero" (any mode) |
@@ -202,7 +204,7 @@ is reported as the warning with the same number (`E2001` â†’ `W2001`, `E2030` â†
 | W7001 | `todo()` in a release build |
 | W7010 | Reflection metadata requested but `reflection = "none"` |
 | W8011 | Slash command collides with a Blizzard command |
-| W8040 | Hook target not declared |
+| W8040 | Hook target not declared (not reported inside an existence test of the same member, `if obj.Method then`) |
 | W8062 | Locale is missing translations (summary per locale) |
 | W8101 | Event not available in every selected flavor (shared flavor mode); registered with a runtime validity check |
 | W8102 | Hook target belongs to a load-on-demand addon but `opts.addon` is missing |
@@ -228,7 +230,6 @@ is reported as the warning with the same number (`E2001` â†’ `W2001`, `E2030` â†
 | E8063 | Locale string uses different placeholders than the base locale |
 | E8070 | Settings control bound to a field of the wrong type |
 | E8080 | `launcher.register` called more than once (compile time for top-level calls, otherwise at runtime) |
-| E8100 | `@unitEvent` with more than two units (`RegisterUnitEvent` limit) |
 | E8101 | Invalid slash command name (must start with `/`, no whitespace) |
 | E8102 | `saved.bind` name is not a string literal |
 | E8103 | SavedVariable bound twice with `saved.bind` |
@@ -237,7 +238,7 @@ is reported as the warning with the same number (`E2001` â†’ `W2001`, `E2030` â†
 | E8106 | Base locale file missing |
 | E8107 | Settings dropdown option value not in the field's type |
 | E8108 | `wowlua:test` / `wowlua:mock` imported outside a test file |
-| E8112 | Slash router: invalid `ArgSpec`, or `run` parameters don't match `args`/`flags` |
+| E8112 | Slash router (`router`, `Router:add`): invalid `ArgSpec`, or `run` parameters don't match `args`/`flags` |
 | E8113 | Settings control key not found in the store's type |
 | E8114 | `settings.register` called more than once |
 | E8115 | Locale file is not a JSON object of strings |

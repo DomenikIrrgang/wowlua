@@ -143,7 +143,11 @@ fn node_field(vm: &mut Vm, c: &NativeCall, key: &str) -> Ret {
     })
 }
 
+/// No such node (the map closed): "INVALID" (the full probe).
 fn taxi_node_name(vm: &mut Vm, c: NativeCall) -> Ret {
+    if node(vm, &c).is_none() {
+        return Ok(vec![vm.str("INVALID")]);
+    }
     node_field(vm, &c, "name")
 }
 
@@ -151,7 +155,11 @@ fn taxi_node_cost(vm: &mut Vm, c: NativeCall) -> Ret {
     node_field(vm, &c, "cost")
 }
 
+/// No such node: none (the full probe).
 fn get_num_routes(vm: &mut Vm, c: NativeCall) -> Ret {
+    if node(vm, &c).is_none() {
+        return Ok(vec![Value::Num(0.0)]);
+    }
     node_field(vm, &c, "routes")
 }
 
@@ -197,6 +205,14 @@ fn hops(vm: &mut Vm, c: &NativeCall) -> Vec<usize> {
     }
 }
 
+/// `TaxiIsDirectFlight(slot)`: a node one hop away (its path from the
+/// current node two slots long: `GetNumRoutes` 1). Unverified (no
+/// recording): Blizzard's classic taxi frame draws a line to each node it
+/// calls direct and closes the map when none is (`DrawOneHopLines`).
+fn taxi_is_direct_flight(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(hops(vm, &c).len() == 2)])
+}
+
 /// A route's (`TaxiGetNodeSlot(node, route, source)`) end's slot.
 fn route_end(vm: &mut Vm, c: &NativeCall, source: bool) -> Option<usize> {
     let Value::Num(route) = vm.hidden(c.arg(2)) else {
@@ -214,14 +230,16 @@ fn taxi_get_node_slot(vm: &mut Vm, c: NativeCall) -> Ret {
     let source = c.arg(3).truthy();
     Ok(match route_end(vm, &c, source) {
         Some(s) => vec![Value::Num(s as f64)],
-        None => vec![],
+        // No such route (the map closed): slot 1 (the full probe).
+        None => vec![Value::Num(1.0)],
     })
 }
 
 /// A route end's map position (`TaxiGetSrcX`, `…Y`, `TaxiGetDestX`, `…Y`).
 fn route_xy(vm: &mut Vm, c: &NativeCall, source: bool, key: &str) -> Ret {
     let Some(slot) = route_end(vm, c, source) else {
-        return Ok(vec![]);
+        // No such route (the map closed): 0 (the full probe).
+        return Ok(vec![Value::Num(0.0)]);
     };
     let Some(t) = list(vm, "nodes").get(slot - 1).copied() else {
         return Ok(vec![]);
@@ -295,8 +313,20 @@ fn get_all_taxi_nodes(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Table(out)])
 }
 
-/// `C_TaxiMap.GetTaxiNodesForMap(mapID)`: every node the map shows.
-fn get_taxi_nodes_for_map(vm: &mut Vm, _c: NativeCall) -> Ret {
+/// `C_TaxiMap.GetTaxiNodesForMap(mapID)`: every node the map shows. A
+/// world map's are the client's (`/stdtest engine maps`, every map of
+/// Forever's world recorded): each map of a continent lists all of that
+/// continent's nodes (Kalimdor's 38, the Eastern Kingdoms' 36, both
+/// factions', none undiscovered), Azeroth (947) both continents', Alterac
+/// Valley its two, the rest none; the positions are the client's on each
+/// map. A flight map never recorded (1464) shows the open flight master's
+/// nodes (the test's `mapNodes`). Unverified: another character's
+/// undiscovered nodes; a world map's answer while a flight master's map is
+/// open (recorded closed).
+fn get_taxi_nodes_for_map(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some(values) = crate::recorded::lookup(vm, "C_TaxiMap.GetTaxiNodesForMap", &c) {
+        return Ok(values);
+    }
     let out = vm.new_table();
     for (i, n) in list(vm, "mapNodes").into_iter().enumerate() {
         let e = vm.new_table();
@@ -463,6 +493,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("CloseTaxiMap", close_taxi_map),
         ("TakeTaxiNode", take_taxi_node),
         ("TaxiGetNodeSlot", taxi_get_node_slot),
+        ("TaxiIsDirectFlight", taxi_is_direct_flight),
         ("TaxiGetSrcX", taxi_get_src_x),
         ("TaxiGetSrcY", taxi_get_src_y),
         ("TaxiGetDestX", taxi_get_dest_x),

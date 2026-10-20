@@ -363,6 +363,7 @@ pub fn analyze(files: &[FileInput], meta: Option<&Meta>) -> Analysis {
             }
         }
         if info.is_module {
+            export_redeclarations(parse, &info, f.meta.or(meta), &mut analysis.diagnostics);
             for s in parse.view().block().stmts() {
                 if matches!(s.kind(), StmtKind::Return(_)) {
                     analysis.diagnostics.push(
@@ -1054,7 +1055,111 @@ fn file_locals(parse: &Parse) -> Vec<String> {
 }
 
 /// The names an `export` statement declares.
-fn exported_names_of(inner: Stmt<'_>) -> Vec<String> {
+/// The value names a top-level statement of a module declares: its
+/// locals, functions, constants, classes, enums and imported bindings.
+fn module_level_names(s: Stmt<'_>) -> Vec<Name<'_>> {
+    match s.kind() {
+        StmtKind::Local { names, .. } => names.iter().map(|n| n.name).collect(),
+        StmtKind::LocalFunction { name, .. } | StmtKind::Const { name, .. } => vec![name],
+        StmtKind::LocalDestructure { fields, .. } => fields.iter().map(|f| f.name).collect(),
+        // `function t.f()` assigns a field; `function f()` declares `f`.
+        StmtKind::Function { name, .. } if name.path().len() == 1 && name.method().is_none() => {
+            vec![name.path().at(0)]
+        }
+        StmtKind::Class(c) => vec![c.name()],
+        StmtKind::Enum(e) => vec![e.name()],
+        StmtKind::Import(i) if !i.type_only() => match i.clause() {
+            ImportClause::Namespace(n) => vec![n],
+            ImportClause::Names(specs) => {
+                specs.iter().map(|sp| sp.alias.unwrap_or(sp.name)).collect()
+            }
+            ImportClause::SideEffect => Vec::new(),
+        },
+        _ => Vec::new(),
+    }
+}
+
+/// E1016: an export shares its name with another top-level declaration of
+/// the module (spec §5.1), so one of them shadows the other. A declaration
+/// under `@if` counts where the build keeps it (alternatives for different
+/// builds may share a name).
+fn export_redeclarations(
+    parse: &Parse,
+    info: &ModuleInfo,
+    meta: Option<&Meta>,
+    out: &mut Vec<Diagnostic>,
+) {
+    let kind_of = |n: &str| info.meta_bindings.get(n).copied();
+    // Kept: no `@if`, or every `@if` condition statically true.
+    let kept = |s: Stmt<'_>| {
+        s.decorators().iter().all(|d| match meta::if_condition(d) {
+            None => true,
+            Some(cond) => match (cond, meta) {
+                (Some(cond), Some(meta)) => {
+                    meta::static_value(cond, meta, &kind_of, &|_| None).is_some_and(|c| c.truthy())
+                }
+                _ => false,
+            },
+        })
+    };
+    // Every declared name, and whether it is exported.
+    let mut decls: Vec<(Name<'_>, bool)> = Vec::new();
+    for s in parse.view().block().stmts() {
+        if !kept(s) {
+            continue;
+        }
+        match s.kind() {
+            StmtKind::Export(inner) => {
+                if kept(inner) {
+                    decls.extend(module_level_names(inner).into_iter().map(|n| (n, true)));
+                }
+            }
+            _ => decls.extend(module_level_names(s).into_iter().map(|n| (n, false))),
+        }
+    }
+    let mut reported: HashSet<&str> = HashSet::new();
+    for (i, &(export, exported)) in decls.iter().enumerate() {
+        if !exported {
+            continue;
+        }
+        let name = export.text();
+        // A second export of a name is reported where it is; a local,
+        // function or import anywhere else, at the export.
+        let earlier_export = decls[..i]
+            .iter()
+            .find(|(n, e)| *e && n.text() == name)
+            .map(|&(n, _)| n);
+        let other_local = decls
+            .iter()
+            .find(|(n, e)| !*e && n.text() == name)
+            .map(|&(n, _)| n);
+        let diagnostic = if let Some(local) = other_local {
+            Diagnostic::error(
+                "E1016",
+                format!("the export `{name}` redeclares a module-level name"),
+            )
+            .with_label(export.span(), "exported here")
+            .with_label(local.span(), "also declared here")
+            .with_help(
+                "an export is a module-level local of its own, so the two shadow each other and \
+                 code meant for one reads the other: rename one of them (an export needs no \
+                 forward declaration, it is hoisted)",
+            )
+        } else if let Some(first) = earlier_export {
+            Diagnostic::error("E1016", format!("`{name}` is exported twice"))
+                .with_label(export.span(), "exported again here")
+                .with_label(first.span(), "first exported here")
+                .with_help("a module exports a name once: rename or remove one of them")
+        } else {
+            continue;
+        };
+        if reported.insert(name) {
+            out.push(diagnostic);
+        }
+    }
+}
+
+pub(crate) fn exported_names_of(inner: Stmt<'_>) -> Vec<String> {
     match inner.kind() {
         StmtKind::Local { names, .. } => names.iter().map(|n| n.name.text().to_string()).collect(),
         StmtKind::Function { name, .. } => vec![name.path().at(0).text().to_string()],

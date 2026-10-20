@@ -16,9 +16,20 @@ e.defineItem(263509, {
     equipLoc = "INVTYPE_NON_EQUIP_IGNORE", sellPrice = 100,
     link = "|cnIQ1:|Hitem:263509::::::::11:1489:::::::::|h[Skywall Souffle]|h|r",
     spell = 1248377, castSpells = { 433 }, cooldownCategory = 11,
+    -- Eating, then Well Fed 10 s later: 10 more health (recorded; the
+    -- session's aura instances).
+    aura = { spellId = 433, name = "Food", icon = 134062, duration = 18, auraInstanceID = 47 },
+    wellFed = {
+        maxHealth = 10, cooldowns = { 1243969, 1248406 },
+        aura = { spellId = 1248406, name = "Well Fed", icon = 133943, duration = 900, auraInstanceID = 51 },
+    },
 })
--- Tough Jerky on the bars (slots 12, 184): food too.
-e.defineItem(117, { name = "Tough Jerky", quality = 1, icon = 133972, stackCount = 20, classID = 0, subclassID = 5 })
+-- Tough Jerky on the bars (slots 12, 184): food too, of the souffle's
+-- cooldown category (inferred: its slots changed as the souffle was eaten).
+e.defineItem(117, {
+    name = "Tough Jerky", quality = 1, icon = 133972, stackCount = 20, classID = 0, subclassID = 5,
+    cooldownCategory = 11,
+})
 local now = 0
 -- Time passes in frames, as in the client (60 a second: Blizzard's
 -- animations and OnUpdate code run), the rest of a step as one jump.
@@ -58,19 +69,28 @@ local function leftClick(bag, slot)
     check(("bag %d slot %d shown"):format(bag, slot), b ~= nil)
     if b then press(b, "LeftButton") end
 end
+-- Tooltips' data updates as the mouse passed over the bags, not
+-- modelled: as recorded.
+local function tooltip(id) e.fireEvent("TOOLTIP_DATA_UPDATE", id) end
+at(1.463) tooltip(376)
+at(12.882) tooltip(427)
 -- The hammer: refused.
 at(18.489) rightClick(1, 4)
 at(19.5)
+at(19.543) tooltip(584)
 check("the hammer stays in its bag", C_Container.GetContainerItemID(1, 4) == 1514)
 -- The shirts swapped, and back.
 at(21.172) rightClick(1, 5)
 at(22.1)
 check("the airy shirt worn", GetInventoryItemID("player", 4) == 273815)
 at(22.746) rightClick(1, 5)
+at(26.734) tooltip(734)
+at(26.748) tooltip(735)
 -- Eaten.
 at(28.193) rightClick(0, 7)
 at(30)
 check("one souffle fewer", C_Container.GetContainerItemInfo(0, 7).stackCount == 2)
+at(35.906) tooltip(758)
 -- A shirt picked up and put back.
 at(38.320) leftClick(1, 5)
 at(38.949) leftClick(1, 5)

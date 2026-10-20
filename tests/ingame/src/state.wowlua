@@ -13,3 +13,16 @@ export function state(): RunState
     end
     return StdTestState
 end
+
+--- Stamps a probe's result `part` (`"answers"`, `"trainer:WARRIOR-911"`,
+--- `"scenario:quest"`): when, and on which client, it was recorded
+--- (`StdTestState.engineStamps`; `cargo xtask ingest` takes a part only
+--- when it is newer than the repository's).
+export function stamp(part: string)
+    const st = state() :: any
+    st.engineStamps = st.engineStamps ?? {}
+    st.engineStamps[part] = {
+        at = date("%Y-%m-%d %H:%M:%S"),
+        client = `{(GetBuildInfo())} ({select(2, GetBuildInfo())})`,
+    }
+end

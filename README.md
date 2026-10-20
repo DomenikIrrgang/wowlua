@@ -21,7 +21,8 @@
   <a href="docs/README.md">docs</a> ·
   <a href="spec/README.md">specification</a> ·
   <a href="spec/roadmap.md">roadmap</a> ·
-  <a href="https://github.com/DomenikIrrgang/wowlua/releases">releases</a>
+  <a href="https://github.com/DomenikIrrgang/wowlua/releases">releases</a> ·
+  <a href="https://discord.gg/Dn795czPYk">discord</a>
 </p>
 
 ---
@@ -163,7 +164,7 @@ The specification lives in [`spec/`](spec/README.md); implementation follows the
 | M6 | Package manager | done · 2026-10-12 |
 | M7 | Optimization and publishing | done · 2026-10-13 |
 | M8 | Standard library | done · 2026-10-15 |
-| M9 | Test runner, language server, formatter | planned |
+| M9 | Test runner, language server, formatter | in progress (test runner and emulated client in 0.9.1) |
 | M10 | Registry | planned |
 | M11 | Performance optimization | planned |
 

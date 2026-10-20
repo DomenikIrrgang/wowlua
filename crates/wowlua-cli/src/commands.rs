@@ -282,35 +282,17 @@ pub fn publish(out: &Output, global: &GlobalArgs, args: crate::PublishArgs) -> b
         dry_run: args.dry_run,
         tag: args.tag,
         deny_warnings: global.deny_warnings,
+        status: Some(out.status_sink()),
     };
     let report = wowlua_driver::publish::publish(&mut session, &projects, &request);
     for project in &projects {
         apply_lints(&mut session, project);
     }
+    // The "Packaged" lines were said as soon as the zips were ready.
     let Some(report) = report else {
         out.flush(&mut session);
         return false;
     };
-    if let Some(p) = &report.packaged {
-        for zip in &p.zips {
-            out.status(
-                "Packaged",
-                format!(
-                    "{} ({}{}) → {}",
-                    zip.file_name,
-                    p.release.as_str(),
-                    if zip.nolib { ", nolib" } else { "" },
-                    relative(&zip.path)
-                ),
-            );
-        }
-        if p.zips.is_empty() {
-            out.status(
-                "Note",
-                "no publish targets: add one under `publish.targets` (see `wowlua explain` or the manual)",
-            );
-        }
-    }
     for o in &report.outcomes {
         let (label, text) = match (o.ok, o.skipped, args.dry_run) {
             (true, true, _) => (
@@ -402,6 +384,16 @@ pub fn login(out: &Output, site: crate::Site, token: Option<String>, no_verify: 
             out.status(
                 "Saved",
                 format!("the {} token in the OS credential store", site.title()),
+            );
+            true
+        }
+        Ok(Saved::ConfigNoTerminal) => {
+            out.status(
+                "Saved",
+                format!(
+                    "the {} token in config.json (readable only by you): without a terminal, wowlua does not use the OS credential store",
+                    site.title()
+                ),
             );
             true
         }
@@ -710,6 +702,12 @@ fn test_once(
                 src: project.manifest.manifest.build.src.clone(),
                 blizzard_ui,
                 profile: test_settings.profile.clone(),
+                // Relative to the package root, or absolute.
+                addons: test_settings
+                    .addons
+                    .iter()
+                    .map(|a| project.root().join(a))
+                    .collect(),
                 update_snapshots: args.update_snapshots,
                 coverage: args.coverage,
             };

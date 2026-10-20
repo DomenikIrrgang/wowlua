@@ -12,20 +12,31 @@ type Fn = (...any) -> ...any
 
 --- A unit of the simulated world (`mock.player`, `mock.spawnUnit`).
 export interface MockUnit
-    --- Targets, focuses or mouses over `unit` (`PLAYER_TARGET_CHANGED`, …).
-    function target(unit: MockUnit?)
+    --- Targets, focuses or mouses over `unit` (`PLAYER_TARGET_CHANGED`, …);
+    --- the player's target told back by the server (`UNIT_TARGET`) a round
+    --- trip later, or `echo` seconds (`false`: not).
+    function target(unit: MockUnit?, opts: { echo?: number | boolean }?)
     function focus(unit: MockUnit?)
     function mouseover(unit: MockUnit?)
     --- The player's soft target of `kind` (by default the enemy for a
     --- hostile or neutral unit, else the friend; `nil` clears it):
-    --- `PLAYER_SOFT_ENEMY_CHANGED`, `…_FRIEND_CHANGED`, `…_INTERACT_CHANGED`.
-    function softTarget(unit: MockUnit?, kind: ("enemy" | "friend" | "interact")?)
-    function damage(amount: number)
-    function heal(amount: number)
+    --- `PLAYER_SOFT_ENEMY_CHANGED`, `…_FRIEND_CHANGED`, `…_INTERACT_CHANGED`;
+    --- a soft friend's actions' usability `usableAfter` seconds later (a
+    --- recording's; else at once).
+    function softTarget(unit: MockUnit?, kind: ("enemy" | "friend" | "interact")?, opts: { usableAfter?: number }?)
+    --- Its health down or up; `statesAfter`: its aura states' change told
+    --- that many seconds later (the server's next update), else at once.
+    function damage(amount: number, opts: { statesAfter?: number | boolean }?)
+    function heal(amount: number, opts: { statesAfter?: number | boolean }?)
     --- Dies (`UNIT_DIED`); `by` the player or the group: `PARTY_KILL` and
-    --- the killing blow's `UNIT_COMBAT`; `lootable`: `UNIT_LOOT`.
-    function kill(opts: { by?: MockUnit, lootable?: boolean }?)
-    function setPower(powerType: number, amount: number)
+    --- the killing blow's `UNIT_COMBAT` (`amount`, else the health left;
+    --- `school`, 1 physical by default); `lootable`: `UNIT_LOOT`. Its
+    --- auras go with it; `flagsAfter`: the player's flags told these
+    --- seconds after (the server's, still in combat).
+    function kill(opts: { by?: MockUnit, lootable?: boolean, amount?: number, school?: number, flagsAfter?: number }?)
+    --- Its power now (`UNIT_POWER_UPDATE`); `frequent`: a regeneration
+    --- tick's, `UNIT_POWER_FREQUENT` alone.
+    function setPower(amount: number, opts: { frequent?: boolean }?)
     function enterCombat()
     function leaveCombat()
     --- The player's auto attack on (`PLAYER_ENTER_COMBAT`) and off
@@ -35,14 +46,28 @@ export interface MockUnit
     --- A melee swing landing on `victim`: `PLAYER_SWING` for the player's,
     --- both in combat, the attacker's then the victim's power (`power`,
     --- `victimPower`: rage), the victim's health, and the combat text
-    --- (`UNIT_COMBAT`) a moment later. `kind`: `WOUND` (default), `PARRY`,
-    --- `DODGE`, `MISS`, `BLOCK`.
+    --- (`UNIT_COMBAT`) a moment later (`textAfter` seconds, 0.4 by
+    --- default); `combat = false`: no one put in combat. `kind`: `WOUND` (default), `PARRY`, `DODGE`, `MISS`, `BLOCK`;
+    --- `indicator`: the text's (`"CRITICAL"`, `"GLANCING"`). The victim's
+    --- health's aura states (below 20, 25, 35, 50 percent, above 75, 80:
+    --- `PET_BAR_UPDATE_USABLE`) told with the blow (the target's at the
+    --- frame's end), or `statesAfter` seconds later (`true`: when
+    --- `mock.tellAuraStates` tells it); the player's dodge, parry or block with a
+    --- `procOnAvoid` spell known turns its defensive state on (told the
+    --- same way) for `stateFor` seconds (5 by default).
     --- The player's skill `name` up to `rank` ("Your skill in … has
-    --- increased", the stats' events).
-    function raiseSkill(name: string, rank: number)
+    --- increased", the stats' events); more `name2, rank2` pairs: skills up
+    --- in the same packet (their messages, then the stats' events once).
+    function raiseSkill(name: string, rank: number, ...: string | number)
     --- `kill`: the swing kills (`PARTY_KILL`, the death, the experience's
-    --- message, its update a round trip later; `loot`: the corpse's items).
-    function swing(victim: MockUnit, amount: number, opts: { kind?: string, power?: number, victimPower?: number, speed?: number, kill?: { xp?: number, loot?: table } }?)
+    --- message, its update a round trip later; `loot`: the corpse's items;
+    --- `echo`: the target's clearing told back after these seconds;
+    --- `xpAfter`: the experience's update after these seconds;
+    --- `diesAfter`: with a queued spell's swing, the death, the
+    --- experience's message and the corpse's loot after these seconds;
+    --- `flagsAfter`: the player's `UNIT_FLAGS` these seconds after, as
+    --- for `kill`).
+    function swing(victim: MockUnit, amount: number, opts: { kind?: string, power?: number, victimPower?: number, speed?: number, textAfter?: number, combat?: boolean, indicator?: string, statesAfter?: number | boolean, stateFor?: number, kill?: { xp?: number, loot?: table, echo?: number | boolean, xpAfter?: number, diesAfter?: number, flagsAfter?: number } }?)
     --- The player talks to an NPC: a round trip later its quest dialog
     --- opens (`QUEST_DETAIL` for a quest it offers, `QUEST_PROGRESS` for
     --- one in the log); too far (`setDistance` above 5 yards): the
@@ -53,23 +78,89 @@ export interface MockUnit
     --- releases the spirit (`RepopMe`), `mock.nearCorpse` and its popup
     --- take the corpse back (`RetrieveCorpse`).
     function die(opts: { durability?: table, ghostAura?: number }?)
+    --- Its resurrection spell lands on dead `target` (`health`: what it
+    --- comes back with, half its maximum by default). The player is
+    --- offered it (`RESURRECT_REQUEST`, Blizzard's popup; accepted, alive
+    --- a round trip later: `PLAYER_ALIVE`); another unit lives at once
+    --- (`UNIT_HEALTH`, `UNIT_FLAGS`).
+    function resurrect(target: MockUnit, opts: { health?: number }?)
     function showNameplate()
     function hideNameplate()
     function despawn()
-    --- The unit's tokens (`"target"`, `"nameplate1"`, …).
-    function token(): string[]
+    --- The unit's first token (`"player"`, `"nameplate1"` before
+    --- `"target"`, …), nil when none names it.
+    function token(): string?
     function setName(name: string, lastName: string?)
+    --- The group role it chose (`UnitGroupRolesAssigned`, the raid
+    --- roster's combat role); nil none.
+    function setRole(role: ("TANK" | "HEALER" | "DAMAGER")?)
+    --- A group member logging in or out (`UnitIsConnected`, the roster).
+    function setOnline(online: boolean)
+    --- An aura on it (`UNIT_AURA`), its instance ID; `quiet = true`: there
+    --- already (a snapshot's), untold.
     function applyAura(data: table): number
     function removeAura(auraInstanceID: number)
+    --- The aura changed in place (a periodic effect's tick:
+    --- `updatedAuraInstanceIDs`); `cooldowns`: the spells it triggered, as
+    --- for `hit`.
+    function updateAura(auraInstanceID: number, opts: { cooldowns?: table }?)
+    --- A spell's or periodic effect's hit, its combat text at once: `school`
+    --- (1 physical, 2 holy, …), `indicator` ("CRITICAL"), `kind` ("WOUND",
+    --- "HEAL"); `aura`: the victim's aura it updates; `cooldowns = { {
+    --- spell, a?, b? } }`: the triggered spells' `SPELL_UPDATE_COOLDOWN`s;
+    --- `spell`: the spell the damage meter counts it under; `statesAfter`:
+    --- as for `swing`.
+    function hit(victim: MockUnit, amount: number, opts: { school?: number, indicator?: string, kind?: string, aura?: number, cooldowns?: table, spell?: number, statesAfter?: number | boolean }?)
     --- Starts casting (`UNIT_SPELLCAST_START`, or `CHANNEL_START`); it ends
     --- `castTime` seconds later (the spell data's, else 1.5).
     function castSpell(spellID: number, opts: { castTime?: number, channel?: boolean, notInterruptible?: boolean }?)
     --- The player gathers a world object (a vein, a herb): `spell` cast on
-    --- it, at its success its `loot` in the window (`auto`: autoloot).
-    function gather(object: MockUnit, opts: { spell: number, castTime?: number, loot?: { id: number, count?: number }[], auto?: boolean })
+    --- it, at its success its `loot` in the window (`auto`: autoloot). A
+    --- recording's timing: `succeedsAfter` (the success, seconds after the
+    --- cast's start; else at its end), `slotsAfter` (each slot's item,
+    --- seconds after the window opened), `bagsAfter` (the bags' packets,
+    --- each seconds after the item that set it off, in order),
+    --- `flagsAfter` (the looting flags, seconds after the last item; else
+    --- a round trip).
+    function gather(object: MockUnit, opts: { spell: number, castTime?: number, loot?: { id: number, count?: number }[], auto?: boolean, succeedsAfter?: number, slotsAfter?: number[], bagsAfter?: number[], flagsAfter?: number })
+    --- The player clicks a profession's spell: its window open, as the
+    --- client recorded `profession`'s (`"Blacksmithing"`, `"Mining"`).
+    function openTradeSkill(spell: number, profession: string)
     --- Interrupts the cast (`UNIT_SPELLCAST_INTERRUPTED`); the player's is
-    --- answered by the server 0.4 s later.
+    --- answered by the server 0.4 s later. The player's with no cast yet:
+    --- a craft's next cast, asked of the server, given up.
     function interruptCast()
+    --- A spell the server cast for the player (a proc) failing quietly
+    --- (`UNIT_SPELLCAST_FAILED_QUIET`, `CURRENT_SPELL_CAST_CHANGED(true)`);
+    --- `client`: a press of the player's, by its client cast GUID.
+    function spellFailedQuiet(spell: number, opts: { client?: boolean }?)
+    --- The player's cast of `spell` refused, `error` told
+    --- (`UNIT_SPELLCAST_FAILED`, `UI_ERROR_MESSAGE`): a client error's
+    --- name (`"SPELL_COOLDOWN"`) or a spell failure's (`"TARGETS_DEAD"`);
+    --- by the server, or the client (`client`).
+    function castFailed(spell: number, opts: { error: string, client?: boolean })
+    --- The player starts or stops moving (`PLAYER_STARTED_MOVING`,
+    --- `PLAYER_STOPPED_MOVING`); meanwhile a spell with a cast time is
+    --- refused ("Can't do that while moving").
+    function setMoving(moving: boolean)
+    --- Which crafts of `recipe` to come raise the profession's skill, in
+    --- order (the server's chance).
+    function craftSkillUps(recipe: number, ups: boolean[])
+    --- A recording's timings of the crafts' casts to come, in order (the
+    --- server's answers, seconds): each cast's `start` after its request
+    --- or the last cast's success, its `success` after its start, its
+    --- `item` after its success (0: with it), the bags' packet (`bags`)
+    --- after its item, a new slot's item data (`data`, its own packet;
+    --- else with the bags') after its item; the bags' packet split (its
+    --- first `split` bag changes, the item's first, the rest and the
+    --- reagents' taking `rest` seconds after), a
+    --- used-up reagent's removal after its item (`spent`; else with it),
+    --- a new slot's bag told before the item's push (`slotFirst`); what
+    --- one leaves out is the engine's.
+    function craftTimings(timings: { start?: number, success?: number, item?: number, bags?: number, data?: number, split?: number, rest?: number, spent?: number, slotFirst?: boolean }[])
+    --- The spell focuses near the player (`{ "Forge" }`): a recipe needing
+    --- one can be made.
+    function setSpellFocus(names: string[])
     --- How far from the player, in yards (`nil`: unknown).
     function setDistance(yards: number?)
     --- A worn item's durability (the player; `GetInventoryItemDurability`,
@@ -82,7 +173,9 @@ export interface MockUnit
     function setMoney(copper: number)
     --- The player's stats given (the others stay), each change told by its
     --- event (`UNIT_STATS`, `PLAYER_XP_UPDATE`, …):
-    --- `setStats({ xp = 0, stat = { [1] = { 67, 67, 22, 0 } } })`.
+    --- `setStats({ xp = 0, stat = { [1] = { 67, 67, 22, 0 } } })`. The
+    --- player's pet's (`mock.setPet`) too: the unit's own stats
+    --- (`UnitDamage("pet")`, …).
     function setStats(stats: PlayerStats)
     --- The player's item in an inventory slot (`nil`: none):
     --- `PLAYER_EQUIPMENT_CHANGED`, `UNIT_INVENTORY_CHANGED`.
@@ -227,6 +320,8 @@ export type HeldItem = {
     questItem?: boolean,
     questID?: number,
     questActive?: boolean,
+    --- Its running cooldown (a snapshot's): seconds left, its length.
+    cooldown?: { remaining: number, duration: number },
 }
 
 --- What `spawnUnit` takes.
@@ -238,6 +333,9 @@ export type UnitData = {
     race?: string,
     sex?: number,
     reaction?: "hostile" | "neutral" | "friendly",
+    --- The player's reaction toward it, when not the unit's own (a faction
+    --- NPC's by the player's standing).
+    playerReaction?: "hostile" | "neutral" | "friendly",
     player?: boolean,
     health?: number,
     healthMax?: number,
@@ -251,6 +349,14 @@ export type UnitData = {
     lastName?: string,
     classID?: number,
     npcID?: number,
+    --- The group role it chose.
+    role?: "TANK" | "HEALER" | "DAMAGER",
+    --- Where it is when not where the player is (a group member's roster
+    --- zone; out of sight: `UnitIsVisible` false).
+    zone?: string,
+    --- false: an offline player character (`UnitIsConnected` false; the
+    --- roster's level 0, zone "Offline").
+    online?: boolean,
 }
 
 local function engine(): any
@@ -288,9 +394,21 @@ export function spawnUnit(data: UnitData): MockUnit
     return engine().spawnUnit(data)
 end
 
+--- The unit a token names now (`"target"`: a world profile's, say); nil
+--- when none.
+export function unitOf(token: string): MockUnit?
+    return engine().unitOf(token)
+end
+
 --- The player's data (a world profile's character), firing no events.
 export function setPlayer(data: UnitData)
     engine().setPlayer(data)
+end
+
+--- An item's cooldown: `duration` seconds, `remaining` of them to run
+--- (all by default; 0: none). `BAG_UPDATE_COOLDOWN`.
+export function setItemCooldown(itemID: number, duration: number, remaining: number?)
+    engine().setItemCooldown(itemID, duration, remaining)
 end
 
 --- A bag's contents (`nil`: no bag): `BAG_UPDATE`, `BAG_UPDATE_DELAYED`.
@@ -300,12 +418,21 @@ end
 
 --- An item a vendor sells: `price` for `stack` of it (`available`: -1
 --- unlimited).
-export type MerchantItem = { id: number, price?: number, stack?: number, available?: number, maxStack?: number, usable?: boolean }
+--- `itemAfter`: a bought one's data (a new slot's) that many seconds after
+--- the purchase's answer, the server's (the money told before the item
+--- then; by default its data at once).
+export type MerchantItem = { id: number, price?: number, stack?: number, available?: number, maxStack?: number, usable?: boolean, itemAfter?: number }
 
 --- Opens a vendor's window (`MERCHANT_SHOW`, then `MERCHANT_UPDATE`): the
---- vendor is the `npc` unit. Buying, selling and buying back go through
---- the client's API, answered by the server 0.4 s later.
-export function openMerchant(data: { name?: string, items?: MerchantItem[], canRepair?: boolean, repairCost?: number })
+--- vendor is the `npc` unit. Buying, selling, buying back and repairing go
+--- through the client's API, answered by the server a round trip later.
+--- `cached`: the goods' data known (a visit before: no filter updates);
+--- `repairMoneyAfter`: a repair's money told after that many items'
+--- durability (the server's packets; by default after all);
+--- `repairCosts`: what mending each worn slot's item costs (`{ [slot] =
+--- copper }`: `GetRepairAllCost` sums the damaged ones', the repair
+--- cursor's click on one mends it alone).
+export function openMerchant(data: { name?: string, items?: MerchantItem[], canRepair?: boolean, repairCost?: number, damaged?: number, cached?: boolean, repairMoneyAfter?: number, repairCosts?: { [number]: number } })
     engine().openMerchant(data)
 end
 
@@ -342,6 +469,9 @@ export type ChannelData = {
     zoneChannelID?: number,
     channelType?: number,
     regional?: boolean,
+    --- Its number when higher than the one after the channel before (a
+    --- channel left keeps its number free).
+    number?: number,
 }
 
 --- The chat channels the player is in, numbered in order
@@ -357,6 +487,84 @@ export type MacroData = { name: string, icon?: number | string, body?: string }
 --- (`UPDATE_MACROS`).
 export function setMacros(macros: { account?: MacroData[], character?: MacroData[] })
     engine().setMacros(macros)
+end
+
+--- A player of another group's group finder listing: its class by file
+--- (`WARRIOR`; `className` the class's name by default), its level (1 by
+--- default), its zone (`area`), its assigned role (`NONE` by default) and
+--- the roles it would take (its assigned one's by default).
+export type LFGMember = {
+    name: string,
+    class: string,
+    className?: string,
+    level?: number,
+    area?: string,
+    role?: "TANK" | "HEALER" | "DAMAGER" | "NONE",
+    roles?: { tank?: boolean, healer?: boolean, dps?: boolean },
+}
+
+--- Another group's or player's listing in the group finder: its activities
+--- (`C_LFGList`'s activity IDs), its title (`name`) and description
+--- (`comment`), seconds listed (`age`), the playstyle
+--- (`Enum.LFGEntryGeneralPlaystyle`), the voice chat (`voiceMode`), whether
+--- it takes new players and accepts at once; its members, the leader first.
+export type LFGListingData = {
+    activities: number[],
+    comment?: string,
+    name?: string,
+    age?: number,
+    playstyle?: number,
+    newPlayerFriendly?: boolean,
+    voiceMode?: number,
+    autoAccept?: boolean,
+    members: LFGMember[],
+}
+
+--- A listing's changes (`updateLFGListing`): the fields given replace its
+--- own (`members` the whole list).
+export type LFGListingChanges = {
+    activities?: number[],
+    comment?: string,
+    name?: string,
+    age?: number,
+    playstyle?: number,
+    newPlayerFriendly?: boolean,
+    voiceMode?: number,
+    autoAccept?: boolean,
+    members?: LFGMember[],
+}
+
+--- Another group's or player's listing on the group finder's server: the
+--- searches (`C_LFGList.Search`) of its category and activities find it,
+--- each numbering its results anew (`lfgSearchResultID`). Its handle.
+export function defineLFGListing(data: LFGListingData): number
+    return engine().defineLFGListing(data)
+end
+
+--- The listing changed: later searches find it so; when the last search
+--- found it, its result changes and the server tells it
+--- (`LFG_LIST_SEARCH_RESULT_UPDATED(searchResultID)`). Whether it was told.
+export function updateLFGListing(handle: number, changes: LFGListingChanges): boolean
+    return engine().updateLFGListing(handle, changes)
+end
+
+--- The listing delisted: later searches do not find it; when the last
+--- search found it, its result is told delisted (`isDelisted`,
+--- `LFG_LIST_SEARCH_RESULT_UPDATED`). Whether it was told.
+export function removeLFGListing(handle: number): boolean
+    return engine().removeLFGListing(handle)
+end
+
+--- The listing's `searchResultID` among the last search's results; nil
+--- when that search did not find it.
+export function lfgSearchResultID(handle: number): number?
+    return engine().lfgSearchResultID(handle)
+end
+
+--- The next search fails: `LFG_LIST_SEARCH_FAILED(reason)` for its answer,
+--- no results.
+export function failLFGSearch(reason: string?)
+    engine().failLFGSearch(reason)
 end
 
 --- The API calls Blizzard's code made that the engine had no answer for
@@ -421,11 +629,14 @@ export function areaChanged()
 end
 
 --- What the client knows of the character's spells: those off the global
---- cooldown, the tracking ones, the professions'.
+--- cooldown, the tracking ones, the professions', those usable on the
+--- player or a group member in reach only (`partyOrSelf`: Blessing of
+--- Protection; re-told as the target or the soft friend changes).
 export function setSpellTraits(traits: {
     offGlobalCooldown?: number[],
     tracking?: number[],
     profession?: number[],
+    partyOrSelf?: number[],
 })
     engine().setSpellTraits(traits)
 end
@@ -436,26 +647,84 @@ export function setTraitRanks(configID: number, ranks: { [number]: number })
     engine().setTraitRanks(configID, ranks)
 end
 
+--- The recorded character (named by its class config's ID) whose trait
+--- data is the player's: a class may have several recorded.
+export function setTraitCharacter(configID: number)
+    engine().setTraitCharacter(configID)
+end
+
 --- A major faction's renown (`C_MajorFactions.GetCurrentRenownLevel`: the
 --- legacy system opens at 1 or more).
 export function setRenown(factionID: number, level: number)
     engine().setRenown(factionID, level)
 end
 
---- The player's group: `mock.group:add(unit)` (`partyN`, `raidN`).
+--- The player's group: `mock.group:add(unit, raid?)` (`partyN`; with
+--- `raid`, the group a raid: `raidN`), or `mock.group:add(unit, { raid?,
+--- subgroup?, quiet? })` (its raid subgroup, else five to one in joining
+--- order; `quiet`: in the group already, no `GROUP_ROSTER_UPDATE`).
+--- A group the player makes this way the player leads;
+--- `C_PartyInfo.ConvertToRaid()` / `ConvertToParty()` change it.
 export const group = {
-    add = function(_: any, unit: MockUnit)
-        engine().addToGroup(unit)
+    add = function(_: any, unit: MockUnit, opts: (boolean | { raid?: boolean, subgroup?: number, quiet?: boolean })?)
+        engine().addToGroup(unit, opts)
     end,
 }
 
---- Enters a restricted instance of `kind` (`"raid"`, `"party"`, `"pvp"`, …).
-export function enterInstance(kind: string)
-    engine().enterInstance(kind)
+--- Enters a restricted instance of `kind` (`"raid"`, `"party"`, `"pvp"`, …):
+--- `IsInInstance`, `GetInstanceInfo` (`opts`: its `name`, `instanceID`,
+--- `difficultyID`, `difficultyName`, `maxPlayers`; a normal dungeon's or
+--- raid's by default), `UPDATE_INSTANCE_INFO`, `PLAYER_DIFFICULTY_CHANGED`.
+export function enterInstance(kind: string?, opts: { name?: string, instanceID?: number, difficultyID?: number, difficultyName?: string, maxPlayers?: number }?)
+    engine().enterInstance(kind, opts)
 end
 
+--- Leaves the instance (an encounter under way ends, not won).
 export function leaveInstance()
     engine().leaveInstance()
+end
+
+--- A boss encounter begins: `ENCOUNTER_START(id, name, difficultyID,
+--- groupSize)` (the instance's by default), then the `bosses` on the
+--- `boss1`.. tokens (Blizzard's boss frames) and
+--- `INSTANCE_ENCOUNTER_ENGAGE_UNIT`;
+--- `C_InstanceEncounter.IsEncounterInProgress()` true.
+export function startEncounter(data: { id: number, name: string, difficultyID?: number, groupSize?: number, bosses?: MockUnit[] })
+    engine().startEncounter(data)
+end
+
+--- The encounter ends: won (`success`), `BOSS_KILL(id, name)`; then
+--- `ENCOUNTER_END(id, name, difficultyID, groupSize, success, status)`
+--- (each boss's creature ID, name and health left in percent), the boss
+--- tokens cleared, `INSTANCE_ENCOUNTER_ENGAGE_UNIT`.
+export function endEncounter(success: boolean)
+    engine().endEncounter(success)
+end
+
+--- A slot of the pet's bar (`mock.setPet`'s `actions`): a spell
+--- (`spell`, `name`, `icon`, `autocast`, `autocastAllowed`) or a command
+--- (`token`: `"PET_ACTION_ATTACK"`, …, `texture`: its texture's global).
+export type PetAction = {
+    spell?: number,
+    name?: string,
+    icon?: number | string,
+    autocast?: boolean,
+    autocastAllowed?: boolean,
+    token?: string,
+    texture?: string,
+    active?: boolean,
+}
+
+--- The player's pet (`nil`: dismissed): `UNIT_PET("player")`,
+--- `PET_BAR_UPDATE`, `UNIT_HAPPINESS("pet")`; Blizzard's pet frame and
+--- pet bar. A hunter's (`hunter`, by default) has its `happiness` (1 to
+--- 3, happy by default), `loyalty` and experience (`xp` of `xpMax`); its
+--- bar is a hunter's (attack, follow, stay, four spells, the three modes)
+--- with `actions` in their slots. Called again for the same pet, it
+--- changes what `opts` gives (`UNIT_HAPPINESS`, `UNIT_PET_EXPERIENCE`,
+--- `PET_BAR_UPDATE`).
+export function setPet(pet: MockUnit?, opts: { hunter?: boolean, happiness?: number, loyalty?: string, xp?: number, xpMax?: number, actions?: { [number]: PetAction } }?)
+    engine().setPet(pet, opts)
 end
 
 --- Turns one of the client's addon restrictions on or off.
@@ -494,7 +763,10 @@ wl.reloadSignal = reloadSignal
 --- `/reload`: the test's pass ends here. The runner keeps the TOC's
 --- SavedVariables (as the client writes them), loads everything again in a
 --- fresh VM, logs in and runs the test again from the top, with
---- `reloads()` one higher. The file's other tests go on as before.
+--- `reloads()` one higher. The file's other tests go on as before. Code
+--- that calls `ReloadUI()` itself ends the session there (`PLAYER_LOGOUT`
+--- and the rest; nothing of it runs after) and the pass at the test's
+--- next wait, as here.
 export function reloadUI()
     if coroutine.running() == nil then
         error("mock.reloadUI runs inside a test", 2)
@@ -518,6 +790,12 @@ export function setLatency(seconds: number)
     engine().setLatency(seconds)
 end
 
+--- The profile's snapshot was taken now: the cooldowns it recorded end
+--- their recorded time left from here.
+export function snapshotTaken()
+    engine().snapshotTaken()
+end
+
 export function advanceTime(sec: number)
     engine().advanceTime(sec)
 end
@@ -532,6 +810,22 @@ export function advanceFrames(n: number, ms: number?)
     engine().advanceFrames(n, ms)
 end
 
+--- The client's batching of a frame's events (off by default: each event
+--- as the control causing it fires it). On: `ACTIONBAR_UPDATE_*`,
+--- `SPELL_UPDATE_COOLDOWN`, `UNIT_HEALTH`, the threat updates and the like
+--- wait for the frame's end (the clock's next move), each once, in their
+--- names' order; off: those owed fired now.
+export function setFrameBatching(on: boolean)
+    engine().setFrameBatching(on)
+end
+
+--- The ID the damage meter's next combat session gets (1 by default; the
+--- client numbers them on from its earlier ones). The sessions
+--- (`C_DamageMeter`) count the blows and heals of the player's fights.
+export function setDamageMeterSession(id: number)
+    engine().setDamageMeterSession(id)
+end
+
 --- Simulated work of `ms` milliseconds (`debugprofilestop` moves).
 export function spend(ms: number)
     engine().spend(ms)
@@ -539,11 +833,22 @@ end
 
 -- ------------------------------------------------------------ waiting
 
+-- The session ended (`ReloadUI` in an addon's or Blizzard's code): as at
+-- `reloadUI`, the test's pass ends.
+local function reloaded()
+    if engine().loggedOut() then
+        coroutine.yield(waitToken, "reload", 0)
+        error(reloadSignal, 0)
+    end
+end
+
 local function wait(kind: string, amount: number)
     if coroutine.running() == nil then
         error("mock.wait… runs inside a test", 3)
     end
+    reloaded()
     coroutine.yield(waitToken, kind, amount)
+    reloaded()
 end
 
 --- Lets `n` frames pass (decision T216).
@@ -622,7 +927,8 @@ end
 
 -- -------------------------------------------------------------- the user
 
---- Runs a slash command line as the player typed it.
+--- Runs a slash command line as the player typed it (a hardware event, as
+--- a click or a key press).
 export function slash(line: string)
     engine().slash(line)
 end
@@ -681,10 +987,37 @@ export function wheel(frame: any, delta: number)
     engine().wheel(frame, delta)
 end
 
+--- The order this session's server tells the bags' updates in (a move's,
+--- a sort's): `{ bag, … }` first, the default's after.
+export function setBagOrder(bags: number[])
+    engine().setBagOrder(bags)
+end
+
+--- A split stack's data this long after the server's answer (seconds; nil:
+--- at once): its slot reads empty till then.
+export function setItemDataDelay(seconds: number?)
+    engine().setItemDataDelay(seconds)
+end
+
+--- Where the next `C_Container.SortBags` puts the bags' items (the
+--- server's sort): `{ [bag] = { [slot] = { id, count, shownFirst, after } } }`
+--- (a merged stack shown first with `shownFirst`, its `count` `after`
+--- seconds later).
+export function setSortResult(bags: table)
+    engine().setSortResult(bags)
+end
+
 --- The modifier keys held (the left ones): `MODIFIER_STATE_CHANGED`;
 --- `IsShiftKeyDown` and the others follow.
 export function setModifiers(keys: { shift?: boolean, ctrl?: boolean, alt?: boolean })
     engine().setModifiers(keys)
+end
+
+--- Moves the mouse to (`x`, `y`) on the screen (`GetCursorPosition`'s
+--- units: a frame's point times its effective scale); no events (what is
+--- under it is `hover`'s).
+export function setCursorPosition(x: number, y: number)
+    engine().setCursorPosition(x, y)
 end
 
 --- A key binding the client knows (from `Bindings.xml`).
@@ -713,8 +1046,109 @@ export function sentAddonMessages(): table[]
     return engine().sentAddonMessages()
 end
 
-export function joinGuild()
-    engine().joinGuild()
+--- A message of the server's own (`CHAT_MSG_SYSTEM`): a friend coming
+--- online, going offline.
+export function systemMessage(text: string)
+    engine().systemMessage(text)
+end
+
+-- -------------------------------------------------------------- the guild
+
+--- Another member of the player's guild: its name (and WoW Forever's last
+--- name), GUID (the engine's own by default), class by file (`WARRIOR`
+--- by default) and race, level (1), rank index (0 the leader; the lowest
+--- rank by default), zone, public and officer notes, whether online
+--- (offline by default) and away (`status` 1) or busy (2), and an offline
+--- member's time away (`lastOnline`: years, months, days, hours).
+export type GuildMemberData = {
+    name: string,
+    lastName?: string,
+    guid?: string,
+    class?: string,
+    race?: string,
+    level?: number,
+    rank?: number,
+    zone?: string,
+    note?: string,
+    officerNote?: string,
+    online?: boolean,
+    status?: number,
+    lastOnline?: number[],
+    achievementPoints?: number,
+    achievementRank?: number,
+}
+
+--- A member's changes (`updateGuildMember`): the fields given replace its
+--- own.
+export type GuildMemberChanges = {
+    name?: string,
+    lastName?: string,
+    guid?: string,
+    class?: string,
+    race?: string,
+    level?: number,
+    rank?: number,
+    zone?: string,
+    note?: string,
+    officerNote?: string,
+    online?: boolean,
+    status?: number,
+    lastOnline?: number[],
+    achievementPoints?: number,
+    achievementRank?: number,
+}
+
+--- A guild rank: its name and rights (`flags[n]` the right
+--- `GuildControlGetRankFlags` numbers n: 1 hear guild chat, 2 speak, 3
+--- and 4 officer chat, 5 promote, 6 demote, 7 invite, 8 remove, 9 set the
+--- message of the day, 10 edit public notes, 11 and 12 view and edit
+--- officer notes, 13 modify the guild's info, 15 bank repairs, 16
+--- withdraw gold, 19 modify bank tabs, 22 officer). Without `flags` the
+--- first rank has the leader's rights, the others guild chat alone.
+export type GuildRankData = { name: string, flags?: { [number]: boolean } }
+
+--- A guild for `joinGuild`: its name ("Guild"), the player's rank index
+--- (0, its leader), its ranks (the leader's first; by default Guild
+--- Master, Officer, Veteran, Member, Initiate), its other members (none),
+--- message of the day, info text, bank money (copper) and bank tabs.
+export type GuildData = {
+    name?: string,
+    rank?: number,
+    ranks?: GuildRankData[],
+    members?: GuildMemberData[],
+    motd?: string,
+    info?: string,
+    bankMoney?: number,
+    bankTabs?: number,
+}
+
+--- The player in a guild (`PLAYER_GUILD_UPDATE`). With nothing given, the
+--- recorded character's, the camelot character's from the start: its
+--- leader among 26 other members, all offline. With a table, that guild.
+export function joinGuild(guild: GuildData?)
+    engine().joinGuild(guild)
+end
+
+--- The player in no guild (`PLAYER_GUILD_UPDATE`).
+export function leaveGuild()
+    engine().leaveGuild()
+end
+
+--- Another member of the player's guild (`GUILD_ROSTER_UPDATE` a round
+--- trip later); its handle.
+export function defineGuildMember(member: GuildMemberData): number
+    return engine().defineGuildMember(member)
+end
+
+--- The member changed: online, a level, a rank, notes
+--- (`GUILD_ROSTER_UPDATE`).
+export function updateGuildMember(handle: number, changes: GuildMemberChanges)
+    engine().updateGuildMember(handle, changes)
+end
+
+--- The member left the guild (`GUILD_ROSTER_UPDATE`).
+export function removeGuildMember(handle: number)
+    engine().removeGuildMember(handle)
 end
 
 -- ------------------------------------------------------------- the client
@@ -762,12 +1196,27 @@ export function provideLibrary(major: string, impl: table, minor: number?)
     stub.minors[major] = minor ?? 1
 end
 
---- A spell's data (decision T203).
+--- A spell's data (decision T203). `cooldown` (seconds): pressing it
+--- again sooner is refused ("Spell is not ready yet."); `category`: its
+--- cooldown category (`SPELL_UPDATE_COOLDOWN`'s third value);
+--- `outOfCombat`: unusable in combat; `onCast`: a function run as the
+--- cast lands (its damage, kill, auras), before its cooldowns;
+--- `cooldowns = { { spell, a?, b? } }`: the spells its landing tells
+--- (else itself); `slotChanges = { seconds }`: its slots told changed
+--- (`ACTIONBAR_SLOT_CHANGED`) that long after it is sent. Presses waiting
+--- for the server fail if the target dies.
 export function defineSpell(id: number, data: table)
     engine().defineSpell(id, data)
 end
 
---- An item's data; `opts.cached = false` makes it load (`delay`).
+--- An item's data; `opts.cached = false` makes it load (`delay`). A
+--- consumable's use: `spell`, `castSpells`, `cooldownCategory`; its
+--- `aura` (an `applyAura` table: food's eating, run out after its
+--- duration); food's `wellFed = { aura, maxHealth?, cooldowns?, after? }`
+--- (eaten `after` seconds, 10 by default: the buff). Gear's `worn = {
+--- maxHealth?, maxMana?, stats?, attackPower? }`: what wearing it adds (the
+--- player's maximums, how many stats change, whether the attack power
+--- does), told as it goes on and off; `bindType` 1 or 2: bound once worn.
 export function defineItem(id: number, data: table, opts: table?)
     engine().defineItem(id, data, opts)
 end
@@ -781,15 +1230,36 @@ export function defineQuest(id: number, data: table)
     engine().defineQuest(id, data)
 end
 
+--- The quest log as the client shows it while the map for quest POIs is
+--- `mapID` (the server's data): `{ first = headerTitle(s), top = {
+--- headerTitle, … }, expanded = { headerTitle, … }, onMap = { questID, …
+--- }, localPOI = { questID, … }, quests = { questID, … } }`; `first`'s
+--- headers move to the top, shown expanded, `top`'s after them (their own
+--- state), `expanded`'s show expanded in their place; `quests`: the logged
+--- quests whose map (`GetQuestUiMapID`) it is. `nil`: the map shows the
+--- log as the snapshot's map does. A view defined or dropped for the map
+--- shown applies at once.
+export function defineQuestMap(mapID: number, data: table?)
+    engine().defineQuestMap(mapID, data)
+end
+
 --- An NPC's gossip: `{ text, options = { { name, icon, gossipOptionID,
---- opens } } }` (`opens = "trainer"`: its trainer). `unit:interact` opens
---- it; choosing an option closes it and opens what the option does.
+--- opens, merchant? } }, textAfter?, availableQuests? }` (`opens =
+--- "trainer"`: its trainer; `"taxi"`; `"merchant"`: its vendor window,
+--- `merchant` as `openMerchant` takes it; `availableQuests = { {
+--- questID, title } }`: the quests it offers).
+--- `unit:interact` opens it (its text with the interaction by default;
+--- `textAfter` seconds later, as a class trainer's came); choosing an
+--- option closes it and opens what the option does; the NPC moved out of
+--- reach (`setDistance`) closes it.
 export function defineGossip(npc: MockUnit, data: table)
     engine().defineGossip(npc, data)
 end
 
 --- An NPC's trainer: `{ greeting, services = { { spell, name, icon, level,
---- rank, cost, skillLine, skillLineIndex, rankData } } }`. Buying a
+--- rank, cost, skillLine, skillLineIndex, rankData } } }`, or `{ class =
+--- "WARRIOR" }`: the class's services as the client listed them (the
+--- NPC's own list if recorded), each one's state the character's. Buying a
 --- service teaches the spell (onto the action bar's first empty slot).
 export function defineTrainer(npc: MockUnit, data: table)
     engine().defineTrainer(npc, data)
@@ -804,11 +1274,34 @@ end
 
 --- A mailbox and its inbox: `{ letters = { { packageIcon, stationeryIcon,
 --- sender, subject, money, cod, daysLeft, wasRead, wasReturned,
---- textCreated, canReply, isGM, text, items = { { id, count } }, invoice =
---- { type, itemName, playerName, … }, auction } }, newMail, senders }`;
---- `player:interact(mailbox)` opens it.
+--- textCreated, canReply, isGM, text, items = { { id, count, itemAfter } },
+--- invoice = { type, itemName, playerName, … }, auction, retrieving,
+--- readAfter } }, newMail, senders, fetched, received, namesAfter,
+--- dataAfter, bagAfter, goneAfter }`; `player:interact(mailbox)` opens it.
+--- `fetched = false`: the inbox not fetched yet this session (empty till
+--- the server's); `retrieving`: a letter's items' data not with the client
+--- ("Retrieving data") till `dataAfter` seconds after the inbox, the
+--- `received` items' `GET_ITEM_INFO_RECEIVED` then; the server's delays:
+--- the invoices' names (`namesAfter`), a taken item's bag packet
+--- (`bagAfter`), an emptied letter's going (`goneAfter`), a letter's read
+--- (`readAfter`), a taken item's data after its bag packet (`itemAfter`).
 export function defineMailbox(mailbox: MockUnit, data: table)
     engine().defineMailbox(mailbox, data)
+end
+
+--- Unread mail waiting (`HasNewMail`), sent by `senders`
+--- (`GetLatestThreeSenders`, the latest first); nil or `{}`: none. A
+--- world's state: no event.
+export function setNewMail(senders: string[]?)
+    engine().setNewMail(senders)
+end
+
+--- The character's saved equipment sets: `{ { name, icon, items = {
+--- [slot] = itemID }, ignored = { slot, … }, spec, id }, … }`, their IDs
+--- from 0 in order unless given (`C_EquipmentSet`; worn, in the bags or
+--- lost by the character's gear and bags). A world's state: no event.
+export function setEquipmentSets(sets: { name: string, icon?: number, items?: { [number]: number }, ignored?: number[], spec?: number, id?: number }[])
+    engine().setEquipmentSets(sets)
 end
 
 --- A banker and the character's bank tabs: `{ tabs = { { name, icon,
@@ -823,6 +1316,11 @@ end
 --- … }, commodities = { [itemID] = { { auctionID, quantity, unitPrice,
 --- timeLeftSeconds, owners, … } } }, items = { [itemID] = { … } }, deposit,
 --- nextAuctionID, mailSender }`; `player:interact(auctioneer)` opens it.
+--- A browse query with a `searchString` finds the `browse` rows whose
+--- item's name holds it, all of them at once; without one, every row and
+--- more on the server (`RequestMoreBrowseResults` adds none). The
+--- player's posted auctions are told once asked (`QueryOwnedAuctions`:
+--- `OWNED_AUCTIONS_UPDATED`); `CancelAuction` sends one back by mail.
 export function defineAuctionHouse(auctioneer: MockUnit, data: table)
     engine().defineAuctionHouse(auctioneer, data)
 end
@@ -831,6 +1329,16 @@ end
 --- (`DELETE_ITEM_CONFIRM`, Blizzard's popup; `DeleteCursorItem` deletes it).
 export function clickWorld()
     engine().clickWorld()
+end
+
+--- The server's blocks of a loading screen's inventory, in its order: one
+--- per block, the bag the block's item updates last (`"0"`: the backpack,
+--- then `BAG_UPDATE(-1)`; `"-"`: none), after what the block tells before
+--- the item (`"1"`, `"5"`, ...: a bag's `BAG_UPDATE`; `"containers"`:
+--- `BAG_CONTAINER_UPDATE`; `"bank"`: `PLAYERBANKSLOTS_CHANGED(1)`), e.g.
+--- `{ "-", "0", "1 5 containers 0" }`. Without it, a block per item.
+export function setInventoryLoad(blocks: string[])
+    engine().setInventoryLoad(blocks)
 end
 
 --- The class's hidden group buffs (`HIDDEN_GROUP_BUFFS_CHANGED`' list).
@@ -847,6 +1355,31 @@ end
 --- `UI_ERROR_MESSAGE` with the client's code and text).
 export function gameError(name: string)
     engine().gameError(name)
+end
+
+--- `fn` runs once just before the engine next fires event `name`: a
+--- world event among a server packet's events.
+export function beforeEvent(name: string, fn: () -> ())
+    engine().beforeEvent(name, fn)
+end
+
+--- The server's update owing an aura state change (a blow's
+--- `statesAfter`) comes now, after the moment's other packets.
+export function tellAuraStates()
+    engine().tellAuraStates()
+end
+
+--- The creatures' turns on the player owed to the moment's end (their
+--- `UNIT_TARGET`, their flags) told now: their packet came before the
+--- moment's other updates.
+export function tellTurns()
+    engine().tellTurns()
+end
+
+--- A CVar the client changed without telling (the camera's pitch as it
+--- turned): no `CVAR_UPDATE`.
+export function setCVar(name: string, value: string)
+    engine().setCVar(name, value)
 end
 
 --- A level: `{ xpMax, health, power, talents, pvpTalentSlots, strength,
@@ -923,7 +1456,9 @@ export function printed(): string[]
 end
 
 --- The errors that reached the error handler. Reading them marks them as
---- expected: errors no test reads fail the test.
+--- expected: errors no test reads fail the test. (Errors the client drops
+--- without a report, a `secureexecuterange` callback's, are not here: they
+--- always fail the test.)
 export function errors(): string[]
     return engine().errors()
 end

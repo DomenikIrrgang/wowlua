@@ -7,7 +7,7 @@
 
 use std::collections::BTreeMap;
 use std::fs;
-use std::path::Path;
+use std::path::{Path, PathBuf};
 
 use assert_cmd::Command;
 use wowlua_vm::{Value, Vm};
@@ -35,15 +35,23 @@ fn build() -> tempfile::TempDir {
         "tradeskill.wowlua",
         "achievements.wowlua",
         "trainer.wowlua",
+        "group.wowlua",
         "startup.wowlua",
         "scenario.wowlua",
         "snapshot.wowlua",
+        "fullprobe.wowlua",
+        "fullprobeplan.lua",
+        "fullprobeplan.d.wowlua",
+        "methodprobe.wowlua",
+        "methodprobeplan.lua",
+        "methodprobeplan.d.wowlua",
     ] {
         fs::copy(repo().join("tests/ingame/src").join(file), src.join(file)).unwrap();
     }
     fs::write(
         src.join("state.wowlua"),
-        "export function state(): table\n    if type(StdTestState) ~= \"table\" then StdTestState = {} end\n    return StdTestState\nend\n",
+        "export function state(): table\n    if type(StdTestState) ~= \"table\" then StdTestState = {} end\n    return StdTestState\nend\n\
+         export function stamp(part: string)\n    local st = state() :: any\n    st.engineStamps = st.engineStamps or {}\n    st.engineStamps[part] = { at = date(\"%Y-%m-%d %H:%M:%S\") }\nend\n",
     )
     .unwrap();
     fs::write(
@@ -53,7 +61,7 @@ fn build() -> tempfile::TempDir {
     .unwrap();
     fs::write(
         src.join("main.wowlua"),
-        "import engineProbe from \"/engineprobe\"\n_G.StdTestEngineProbe = engineProbe\n",
+        "import engineProbe from \"/engineprobe\"\nimport replay, literalCalls from \"/fullprobe\"\nimport * as method from \"/methodprobe\"\n_G.StdTestEngineProbe = engineProbe\n_G.StdTestFullProbeReplay = replay\n_G.StdTestFullProbeLiteral = literalCalls\n_G.StdTestMethodProbeReplay = method.replay\n_G.StdTestMethodProbeLiteral = method.literalCalls\n",
     )
     .unwrap();
     let mut cmd = Command::cargo_bin("wowlua").unwrap();
@@ -206,6 +214,9 @@ fn compared(key: &str) -> bool {
         "probe.client",
         "probe.getTime",
         "probe.units.",
+        // The class's: the engine's per class, checked by
+        // `the_hidden_group_buffs_are_the_recorded_class_s`.
+        "probe.loadCalls.C_UnitAuras.GetHiddenGroupBuffs",
         "probe.widgets.AuraContainer.",
         // Session values: addresses, the UI scale, the screen.
         "probe.widgets.UIParent.getters.Get",
@@ -320,6 +331,42 @@ fn same(key: &str, expected: &str, mine: &str) -> bool {
         return count(expected) == count(mine) && values(expected) == values(mine);
     }
     false
+}
+
+/// The engine's hidden group buffs for the battery's character's class are
+/// the ones the client gave it (`data/camelot-hidden-group-buffs.txt`).
+#[test]
+fn the_hidden_group_buffs_are_the_recorded_class_s() {
+    let theirs = fixture();
+    let class = theirs["probe.units.UnitClass(player)"]
+        .split(", ")
+        .nth(1)
+        .and_then(|c| c.strip_prefix("string "))
+        .expect("the class")
+        .to_string();
+    let ids = |s: &str| -> std::collections::BTreeSet<String> {
+        s.split(|c: char| !c.is_ascii_digit())
+            .filter(|x| !x.is_empty())
+            .map(String::from)
+            .collect()
+    };
+    let recorded = &theirs["probe.loadCalls.C_UnitAuras.GetHiddenGroupBuffs"];
+    let recorded: std::collections::BTreeSet<String> = recorded
+        .split("number ")
+        .skip(1)
+        .filter_map(|x| x.split(|c: char| !c.is_ascii_digit()).next())
+        .map(String::from)
+        .collect();
+    let data =
+        fs::read_to_string(repo().join("crates/wowlua-engine/data/camelot-hidden-group-buffs.txt"))
+            .expect("the data");
+    let ours = data
+        .lines()
+        .filter_map(|l| l.split_once('\t'))
+        .find(|(c, _)| *c == class)
+        .map(|(_, list)| ids(list))
+        .unwrap_or_default();
+    assert_eq!(ours, recorded, "{class}");
 }
 
 #[test]
@@ -747,7 +794,8 @@ __engine.pressKey("J")"#,
 
 /// The session's clock (`GetTime()`) as the recording began: recorded
 /// (`startTime`), else the first global cooldown's start where it is read
-/// (the frame the cast began; recordings before `startTime`).
+/// (the frame the cast began; recordings before `startTime`), else the
+/// player's first cast's start as its `UNIT_SPELLCAST_START` reads it.
 fn session_start(recording: &str) -> Option<f64> {
     let recorded = regex::Regex::new(r#"\["startTime"\] = "([0-9.]+)""#).unwrap();
     if let Some(c) = recorded.captures(recording) {
@@ -757,10 +805,36 @@ fn session_start(recording: &str) -> Option<f64> {
         r#"= "([0-9.]+) = C_ActionBar\.GetActionCooldown\(\d+\) -> 1: \{activeCategory=number 133,[^}]*isOnGCD=boolean true,[^}]*startTime=number ([0-9.]+),"#,
     )
     .unwrap();
-    gcd.captures_iter(recording)
-        .filter_map(|c| Some((c[1].parse::<f64>().ok()?, c[2].parse::<f64>().ok()?)))
-        .min_by(|a, b| a.0.total_cmp(&b.0))
-        .map(|(at, started)| started - at)
+    let cast = regex::Regex::new(
+        r#"= "([0-9.]+) = UnitCastingInfo\(\\"player\\"\) -> 11: string [^,]*, string [^,]*, number [0-9]+, number ([0-9]+),"#,
+    )
+    .unwrap();
+    let first = |re: &regex::Regex, scale: f64| {
+        re.captures_iter(recording)
+            .filter_map(|c| Some((c[1].parse::<f64>().ok()?, c[2].parse::<f64>().ok()?)))
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(at, started)| started / scale - at)
+    };
+    // Else an aura the player gained with a duration: applied at its
+    // event, its expiration the session's time plus the duration.
+    let aura = regex::Regex::new(
+        r#"= "([0-9.]+) UNIT_AURA\(string player; \{addedAuras=\{1=\{[^}]*duration=number ([0-9.]+),expirationTime=number ([0-9.]+),"#,
+    )
+    .unwrap();
+    let applied = || {
+        aura.captures_iter(recording)
+            .filter_map(|c| {
+                let at = c[1].parse::<f64>().ok()?;
+                let duration = c[2].parse::<f64>().ok()?;
+                let expires = c[3].parse::<f64>().ok()?;
+                (duration > 0.0).then_some((at, expires - duration))
+            })
+            .min_by(|a, b| a.0.total_cmp(&b.0))
+            .map(|(at, started)| started - at)
+    };
+    first(&gcd, 1.0)
+        .or_else(|| first(&cast, 1000.0))
+        .or_else(applied)
 }
 
 /// A scenario (`/stdtest engine scenario <name>`) played in the engine:
@@ -777,12 +851,12 @@ fn play_scenario(name: &str) -> Option<(Vec<String>, Vec<String>, Vec<String>)> 
     let fixtures = repo().join("crates/wowlua-engine/tests/client/scenarios");
     let recording = fs::read_to_string(fixtures.join(format!("{name}.lua"))).unwrap_or_default();
     // The session's clock as the client's (its answers' times are the
-    // session's): begun as long before the recording as logging in and
-    // ten frames take.
+    // session's): begun as long before the recording as a /reload and ten
+    // frames take.
     let session_start = session_start(&recording);
     let mut vm = Vm::wow();
     if let Some(start) = session_start {
-        let before = wowlua_engine::login::duration(false) + 10.0 / 60.0;
+        let before = wowlua_engine::login::duration(true) + 10.0 / 60.0;
         vm.clock.elapsed_ms = (start - before) * 1000.0;
     }
     wowlua_engine::install(&mut vm, "camelot").expect("installs");
@@ -797,8 +871,11 @@ fn play_scenario(name: &str) -> Option<(Vec<String>, Vec<String>, Vec<String>)> 
     )
     .expect("the character's world");
     // Logged in as the client logs in (the recorded login: the chat
-    // windows set up, …), as `wowlua test` does.
-    wowlua_engine::login::login(&mut vm, "StdTest", true, false);
+    // windows set up, …), as `wowlua test` does: after a /reload, as each
+    // recording ends with one (recorded: Blizzard_PlayerChoice loading at
+    // the session's first PLAYER_CHOICE_UPDATE, taxi's and hearth's, which
+    // a fresh login's would have loaded at once).
+    wowlua_engine::login::login(&mut vm, "StdTest", true, true);
     wowlua_engine::clock::advance_frames(&mut vm, 10, 1000.0 / 60.0);
     if let Some(start) = session_start {
         let now = wowlua_engine::clock::now(&vm);
@@ -830,6 +907,23 @@ function note(...) local t = {} for i = 1, select('#', ...) do t[i] = tostring((
     let script =
         fs::read_to_string(repo().join(format!("crates/wowlua-cli/tests/scenarios/{name}.lua")))
             .expect("the play script");
+    // A full collection every N frames and before each other step of time
+    // (`WOWLUA_SCENARIO_GC=N`, 1 by default): what the engine holds
+    // unrooted goes stale.
+    if let Ok(every) = std::env::var("WOWLUA_SCENARIO_GC") {
+        let every: usize = every.parse().unwrap_or(1).max(1);
+        addon(
+            &mut vm,
+            &format!(
+                "local e = __engine local frames, time = e.advanceFrames, e.advanceTime \
+                 e.advanceFrames = function(n, ms) \
+                     local i = 0 \
+                     while i < n do collectgarbage('collect') \
+                         local k = math.min({every}, n - i) frames(k, ms) i = i + k end end \
+                 e.advanceTime = function(...) collectgarbage('collect') return time(...) end"
+            ),
+        );
+    }
     addon(&mut vm, &script);
     addon(&mut vm, "StdTestEngineProbe('scenario stop')");
     let f = vm
@@ -933,8 +1027,71 @@ function note(...) local t = {} for i = 1, select('#', ...) do t[i] = tostring((
                 .join("\n")
         );
     }
+    // Both logs with their times, for fitting a script's steps.
+    if let Ok(dir) = std::env::var("WOWLUA_SCENARIO_DUMP") {
+        let dir = Path::new(&dir);
+        fs::write(
+            dir.join(format!("{name}-engine-timed.txt")),
+            ours.join("\n"),
+        )
+        .expect("writes");
+        fs::write(
+            dir.join(format!("{name}-client-timed.txt")),
+            theirs.join("\n"),
+        )
+        .expect("writes");
+    }
+    let meter = |log: &[String]| -> Vec<String> {
+        log.iter()
+            .filter(|l| l.contains(" DAMAGE_METER_"))
+            .cloned()
+            .collect()
+    };
+    METER_LINES.with(|m| *m.borrow_mut() = (meter(&ours), meter(&theirs)));
     let compared = |log: &[String]| -> Vec<String> { scenario_lines(log) };
-    Some((compared(&ours), compared(&theirs), errors))
+    let theirs = compared(&theirs);
+    let ours = asked_as_recorded(compared(&ours), &theirs);
+    Some((ours, theirs, errors))
+}
+
+/// The engine's answers less those the recording's recorder did not ask:
+/// a call after an event the client's log has, but never after it (the
+/// recorder's asks added since, e.g. `UnitOnTaxi` on `UNIT_FLAGS`).
+fn asked_as_recorded(ours: Vec<String>, theirs: &[String]) -> Vec<String> {
+    fn pairs(log: &[String]) -> Vec<(String, String)> {
+        let mut event = String::new();
+        let mut out = Vec::new();
+        for l in log {
+            match l.strip_prefix("= ") {
+                Some(answer) => {
+                    let call = answer.split_once(" -> ").map_or(answer, |(c, _)| c);
+                    out.push((event.clone(), call.to_string()));
+                }
+                None => event = l.split('(').next().unwrap_or(l).to_string(),
+            }
+        }
+        out
+    }
+    let asked: std::collections::HashSet<(String, String)> = pairs(theirs).into_iter().collect();
+    let events: std::collections::HashSet<&str> = theirs
+        .iter()
+        .filter(|l| !l.starts_with("= "))
+        .map(|l| l.split('(').next().unwrap_or(l))
+        .collect();
+    let mut event = String::new();
+    ours.into_iter()
+        .filter(|l| match l.strip_prefix("= ") {
+            Some(answer) => {
+                let call = answer.split_once(" -> ").map_or(answer, |(c, _)| c);
+                !events.contains(event.as_str())
+                    || asked.contains(&(event.clone(), call.to_string()))
+            }
+            None => {
+                event = l.split('(').next().unwrap_or(l).to_string();
+                true
+            }
+        })
+        .collect()
 }
 
 /// Where the engine's world at a scenario's end differs from the client's
@@ -1031,6 +1188,9 @@ fn scenario_lines(log: &[String]) -> Vec<String> {
     out
 }
 
+/// A pattern compiled on first use.
+type Pattern = std::sync::LazyLock<regex::Regex>;
+
 fn scenario_line(line: &str) -> Option<String> {
     let body = line.split_once(' ').map_or(line, |(_, b)| b);
     const NOISE: &[&str] = &[
@@ -1080,22 +1240,38 @@ fn scenario_line(line: &str) -> Option<String> {
         return None;
     }
     // Players' GUIDs as the recordings have them (scrubbed); a chat
-    // message's line number (the session's).
-    let guid = regex::Regex::new(r"Player-\d+-[0-9A-F]{8}").unwrap();
-    let line =
+    // message's line number (the session's). (Each pattern compiled once:
+    // a scenario has thousands of lines.)
+    static GUID: Pattern = Pattern::new(|| regex::Regex::new(r"Player-\d+-[0-9A-F]{8}").unwrap());
+    static LINE: Pattern = Pattern::new(|| {
         regex::Regex::new(r"^(CHAT_MSG_.*; number )\d+(; (?:nil nil|string [^;]*); number 0;)")
-            .unwrap();
+            .unwrap()
+    });
+    let (guid, line) = (&*GUID, &*LINE);
     let body = guid.replace_all(body, "Player-0000-00000000");
     // A cast's GUID by its kind and spell (its server, map and number are
     // the session's).
-    let cast = regex::Regex::new(r"Cast-(\d+)-\d+-\d+-\d+-(\d+)-[0-9A-F]+").unwrap();
+    static CAST: Pattern =
+        Pattern::new(|| regex::Regex::new(r"Cast-(\d+)-\d+-\d+-\d+-(\d+)-[0-9A-F]+").unwrap());
+    let cast = &*CAST;
     let body = cast.replace_all(&body, "Cast-$1-$2");
     // A party's ID, the session's.
-    let party = regex::Regex::new(r"Party-\d+-\d+-[0-9A-F]+").unwrap();
+    static PARTY: Pattern = Pattern::new(|| regex::Regex::new(r"Party-\d+-\d+-[0-9A-F]+").unwrap());
+    let party = &*PARTY;
     let body = party.replace_all(&body, "Party-<id>");
     // A cast bar's ID, the session's.
-    let bar = regex::Regex::new(r"CastBar-[0-9A-F]+").unwrap();
+    static BAR: Pattern = Pattern::new(|| regex::Regex::new(r"CastBar-[0-9A-F]+").unwrap());
+    let bar = &*BAR;
     let body = bar.replace_all(&body, "CastBar-<id>");
+    // An item's GUID, the server's (a made item's: the session's).
+    static ITEM: Pattern = Pattern::new(|| regex::Regex::new(r"Item-\d+-0-[0-9A-F]{16}").unwrap());
+    let item = &*ITEM;
+    let body = item.replace_all(&body, "Item-<id>");
+    // A value's address, the session's (the ingest drops the client's).
+    static ADDRESS: Pattern = Pattern::new(|| {
+        regex::Regex::new(r"(function|table|userdata|thread): 0x[0-9a-f]+").unwrap()
+    });
+    let body = ADDRESS.replace_all(&body, "$1");
     let body = line.replace(&body, "${1}<line>${2}").into_owned();
     // An answer's trailing nils dropped (the first recordings' recorder
     // lost them).
@@ -1152,7 +1328,7 @@ fn align(ours: &[String], theirs: &[String]) -> (usize, Vec<String>, Vec<String>
 
 /// How many of the combat scenario's lines the engine plays as the client
 /// did: only ever up.
-const COMBAT_MATCHED: usize = 725;
+const COMBAT_MATCHED: usize = 778;
 
 /// The combat scenario: a wolf targeted, fought, killed and looted.
 #[test]
@@ -1162,7 +1338,7 @@ fn the_engine_plays_combat_as_the_client_did() {
 
 /// How many of the death scenario's lines the engine plays as the client
 /// did: only ever up.
-const DEATH_MATCHED: usize = 1373;
+const DEATH_MATCHED: usize = 1647;
 
 /// The death scenario: a fight lost, the spirit released, the corpse taken.
 #[test]
@@ -1172,7 +1348,7 @@ fn the_engine_plays_death_as_the_client_did() {
 
 /// How many of the flight scenario's lines the engine plays as the client
 /// did: only ever up.
-const FLIGHT_MATCHED: usize = 255;
+const FLIGHT_MATCHED: usize = 277;
 
 /// The flight scenario: a flight master's gossip, the taxi map looked at.
 #[test]
@@ -1180,9 +1356,31 @@ fn the_engine_plays_flight_as_the_client_did() {
     plays_as_the_client_did("flight", FLIGHT_MATCHED);
 }
 
+/// How many of the auradeath scenario's lines the engine plays as the
+/// client did: only ever up.
+const AURADEATH_MATCHED: usize = 1284;
+
+/// The auradeath scenario: a fight with a seal, Consecration, a stun, a
+/// Judgement's kill; the stunned cat's death taking its auras.
+#[test]
+fn the_engine_plays_auradeath_as_the_client_did() {
+    plays_as_the_client_did("auradeath", AURADEATH_MATCHED);
+}
+
+/// How many of the gossip2 scenario's lines the engine plays as the client
+/// did: only ever up.
+const GOSSIP2_MATCHED: usize = 167;
+
+/// The gossip2 scenario: a merchant's gossip, his goods browsed, his gossip
+/// again, closed with Escape.
+#[test]
+fn the_engine_plays_gossip2_as_the_client_did() {
+    plays_as_the_client_did("gossip2", GOSSIP2_MATCHED);
+}
+
 /// How many of the trainer scenario's lines the engine plays as the client
 /// did: only ever up.
-const TRAINER_MATCHED: usize = 171;
+const TRAINER_MATCHED: usize = 176;
 
 /// The trainer scenario: its gossip, its services, one bought.
 #[test]
@@ -1192,7 +1390,7 @@ fn the_engine_plays_trainer_as_the_client_did() {
 
 /// How many of the vendor scenario's lines the engine plays as the client
 /// did: only ever up.
-const VENDOR_MATCHED: usize = 530;
+const VENDOR_MATCHED: usize = 572;
 
 /// The vendor scenario: goods sold, bought, bought back; too little money;
 /// a repair.
@@ -1202,12 +1400,12 @@ fn the_engine_plays_vendor_as_the_client_did() {
 }
 
 /// How many of the hearth scenario's lines the engine plays as the client
-/// did: only ever up. Not yet: the inventory's packets after the loading
-/// screen (one per item, in the server's order: the items' GUIDs, not in
-/// the snapshot), `Blizzard_PlayerChoice` loading at the first loading
-/// screen, the active talent config, the account's Edit Mode layouts, the
-/// aura instance IDs (not in the snapshot).
-const HEARTH_MATCHED: usize = 1395;
+/// did: only ever up. Not yet: the active talent config, the account's
+/// Edit Mode layouts, the aura instance IDs, the party the player was in
+/// and its new mail (not in the snapshot), Blessing of Protection told
+/// unusable at a usability check after an NPC was soft targeted in Thunder
+/// Bluff (the soft friend's change during the loading screen's replay).
+const HEARTH_MATCHED: usize = 1612;
 
 /// The hearth scenario: a Hearthstone cast, the loading screen.
 #[test]
@@ -1217,7 +1415,7 @@ fn the_engine_plays_hearth_as_the_client_did() {
 
 /// How many of the taxi scenario's lines the engine plays as the client
 /// did: only ever up.
-const TAXI_MATCHED: usize = 1224;
+const TAXI_MATCHED: usize = 1237;
 
 /// The taxi scenario: a flight from Orgrimmar to the Crossroads.
 #[test]
@@ -1227,7 +1425,7 @@ fn the_engine_plays_taxi_as_the_client_did() {
 
 /// How many of the mail scenario's lines the engine plays as the client
 /// did: only ever up.
-const MAIL_MATCHED: usize = 369;
+const MAIL_MATCHED: usize = 376;
 
 /// The mail scenario: the inbox, an item taken, a letter sent.
 #[test]
@@ -1237,7 +1435,7 @@ fn the_engine_plays_mail_as_the_client_did() {
 
 /// How many of the bank scenario's lines the engine plays as the client
 /// did: only ever up.
-const BANK_MATCHED: usize = 537;
+const BANK_MATCHED: usize = 555;
 
 /// The bank scenario: items moved in and out, a tab bought.
 #[test]
@@ -1247,7 +1445,7 @@ fn the_engine_plays_bank_as_the_client_did() {
 
 /// How many of the auction scenario's lines the engine plays as the
 /// client did: only ever up.
-const AUCTION_MATCHED: usize = 289;
+const AUCTION_MATCHED: usize = 382;
 
 /// The auction scenario: browsing, buying a commodity, posting an item.
 #[test]
@@ -1257,7 +1455,7 @@ fn the_engine_plays_auction_as_the_client_did() {
 
 /// How many of the group scenario's lines the engine plays as the client
 /// did: only ever up.
-const GROUP_MATCHED: usize = 231;
+const GROUP_MATCHED: usize = 262;
 
 /// The group scenario: an invitation, a party, following, a trade.
 #[test]
@@ -1267,7 +1465,7 @@ fn the_engine_plays_group_as_the_client_did() {
 
 /// How many of the inspect scenario's lines the engine plays as the
 /// client did: only ever up.
-const INSPECT_MATCHED: usize = 236;
+const INSPECT_MATCHED: usize = 286;
 
 /// The inspect scenario: another player's gear and talents.
 #[test]
@@ -1277,9 +1475,10 @@ fn the_engine_plays_inspect_as_the_client_did() {
 
 /// How many of the talents scenario's lines the engine plays as the client
 /// did: only ever up.
-const TALENTS_MATCHED: usize = 69;
+const TALENTS_MATCHED: usize = 875;
 
-/// The talents scenario: a class talent bought and applied.
+/// The talents scenario: a class talent bought and applied; a trainer's
+/// gossip, a fox's attack, a walk, a druid followed and its talents viewed.
 #[test]
 fn the_engine_plays_talents_as_the_client_did() {
     plays_as_the_client_did("talents", TALENTS_MATCHED);
@@ -1287,7 +1486,7 @@ fn the_engine_plays_talents_as_the_client_did() {
 
 /// How many of the profession scenario's lines the engine plays as the
 /// client did: only ever up.
-const PROFESSION_MATCHED: usize = 358;
+const PROFESSION_MATCHED: usize = 2338;
 
 /// The profession scenario: a vein mined, a profession's window, crafts.
 #[test]
@@ -1297,7 +1496,7 @@ fn the_engine_plays_profession_as_the_client_did() {
 
 /// How many of the legacy scenario's lines the engine plays as the client
 /// did: only ever up.
-const LEGACY_MATCHED: usize = 110;
+const LEGACY_MATCHED: usize = 123;
 
 /// The legacy scenario: the legacy system's tree, five ranks bought and
 /// applied.
@@ -1308,7 +1507,7 @@ fn the_engine_plays_legacy_as_the_client_did() {
 
 /// How many of the items scenario's lines the engine plays as the client
 /// did: only ever up.
-const ITEMS_MATCHED: usize = 302;
+const ITEMS_MATCHED: usize = 357;
 
 /// The items scenario: gear worn and taken off by right-click and drag,
 /// a two-handed weapon refused (bags full), food eaten, an item deleted.
@@ -1319,13 +1518,164 @@ fn the_engine_plays_items_as_the_client_did() {
 
 /// How many of the quest scenario's lines the engine plays as the client
 /// did: only ever up.
-const QUEST_MATCHED: usize = 4573;
+const QUEST_MATCHED: usize = 5746;
 
 /// The quest scenario: a quest taken, eight wolves hunted for its item (a
 /// level gained), the quest turned in.
 #[test]
 fn the_engine_plays_quest_as_the_client_did() {
     plays_as_the_client_did("quest", QUEST_MATCHED);
+}
+
+/// How many of the lfg scenario's lines the engine plays as the client
+/// did: only ever up.
+const LFG_MATCHED: usize = 100;
+
+/// The lfg scenario: the group finder opened, four listings posted from
+/// Blizzard's listing panel and delisted from the browse tab's results.
+#[test]
+fn the_engine_plays_lfg_as_the_client_did() {
+    plays_as_the_client_did("lfg", LFG_MATCHED);
+}
+
+/// How many of the mail2 scenario's lines the engine plays as the client
+/// did: only ever up. Not yet: another player's death (the world's), told
+/// inside the taken item's packet.
+const MAIL2_MATCHED: usize = 219;
+
+/// The mail2 scenario: the inbox's first fetch of a session, a sold
+/// auction's money and a won auction's item taken.
+#[test]
+fn the_engine_plays_mail2_as_the_client_did() {
+    plays_as_the_client_did("mail2", MAIL2_MATCHED);
+}
+
+/// How many of the repair scenario's lines the engine plays as the client
+/// did: only ever up.
+const REPAIR_MATCHED: usize = 364;
+
+/// The repair scenario: a vendor's gossip, one item mended with the repair
+/// cursor, the rest with Repair All.
+#[test]
+fn the_engine_plays_repair_as_the_client_did() {
+    plays_as_the_client_did("repair", REPAIR_MATCHED);
+}
+
+/// How many of the bags scenario's lines the engine plays as the client
+/// did: only ever up.
+const BAGS_MATCHED: usize = 1253;
+
+/// The bags scenario: every bag opened, a stack split and dropped, an item
+/// moved to another bag, the bags sorted.
+#[test]
+fn the_engine_plays_bags_as_the_client_did() {
+    plays_as_the_client_did("bags", BAGS_MATCHED);
+}
+
+thread_local! {
+    /// The last scenario played's damage meter events, with their times:
+    /// the engine's and the client's (left out of the compared lines).
+    static METER_LINES: std::cell::RefCell<(Vec<String>, Vec<String>)> =
+        const { std::cell::RefCell::new((Vec::new(), Vec::new())) };
+}
+
+/// How many of the fights' damage meter events (with their times) the
+/// engine tells as the client did: only ever up.
+const DAMAGE_METER_MATCHED: usize = 557;
+
+/// The damage meter's updates in every recorded fight (`combat`, `quest`,
+/// `death`, `auradeath`, `talents`): each blow's, each session's begin,
+/// at the client's times.
+#[test]
+fn the_engine_tells_the_damage_meter_as_the_client_did() {
+    let mut matched = 0;
+    for name in ["combat", "quest", "death", "auradeath", "talents"] {
+        if play_scenario(name).is_none() {
+            eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+            return;
+        }
+        let (ours, theirs) = METER_LINES.with(|m| m.borrow().clone());
+        let (n, only_ours, only_theirs) = align(&ours, &theirs);
+        eprintln!(
+            "{name}: {n} of {} damage meter events\nonly the client's:\n{}\nonly the engine's:\n{}",
+            theirs.len(),
+            only_theirs.join("\n"),
+            only_ours.join("\n")
+        );
+        matched += n;
+    }
+    assert!(
+        matched >= DAMAGE_METER_MATCHED,
+        "{matched} damage meter events as the client's (was {DAMAGE_METER_MATCHED})"
+    );
+}
+
+/// How many of the questlog scenario's lines the engine plays as the
+/// client did: only ever up.
+const QUESTLOG_MATCHED: usize = 424;
+
+/// The questlog scenario: the quest log opened, its zones collapsed and
+/// expanded one by one and all at once, two quests selected.
+#[test]
+fn the_engine_plays_questlog_as_the_client_did() {
+    plays_as_the_client_did("questlog", QUESTLOG_MATCHED);
+}
+
+/// How many of the actionbar scenario's lines the engine plays as the
+/// client did: only ever up.
+const ACTIONBAR_MATCHED: usize = 140;
+
+/// The actionbar scenario: a spell dragged from the spellbook onto an
+/// empty action slot, that button onto a filled one (swapped), one
+/// shift-dragged off and back.
+#[test]
+fn the_engine_plays_actionbar_as_the_client_did() {
+    plays_as_the_client_did("actionbar", ACTIONBAR_MATCHED);
+}
+
+/// How many of the equip scenario's lines the engine plays as the client
+/// did: only ever up.
+const EQUIP_MATCHED: usize = 205;
+
+/// The equip scenario: gloves dragged from the character window into a
+/// bag, worn again by right-click, a bag item's comparison tooltip.
+#[test]
+fn the_engine_plays_equip_as_the_client_did() {
+    plays_as_the_client_did("equip", EQUIP_MATCHED);
+}
+
+/// How many of the tracking scenario's lines the engine plays as the
+/// client did: only ever up.
+const TRACKING_MATCHED: usize = 139;
+
+/// The tracking scenario: the minimap's tracking menu, Find Minerals on
+/// and off, a town's tracking types on and off, the minimap zoomed.
+#[test]
+fn the_engine_plays_tracking_as_the_client_did() {
+    plays_as_the_client_did("tracking", TRACKING_MATCHED);
+}
+
+/// How many of the macro scenario's lines the engine plays as the client
+/// did: only ever up.
+const MACRO_MATCHED: usize = 54;
+
+/// The macro scenario: a character macro made, dragged onto an empty
+/// action slot and off again, deleted.
+#[test]
+fn the_engine_plays_macro_as_the_client_did() {
+    plays_as_the_client_did("macro", MACRO_MATCHED);
+}
+
+/// How many of the mapnav scenario's lines the engine plays as the client
+/// did: only ever up (all of them; Kalimdor's view of the quest log is the
+/// play script's recorded data).
+const MAPNAV_MATCHED: usize = 149;
+
+/// The mapnav scenario: the world map, zoomed out to Kalimdor and back
+/// into the Barrens, a user waypoint placed, super-tracked and removed.
+#[test]
+fn the_engine_plays_mapnav_as_the_client_did() {
+    plays_as_the_client_did("mapnav", MAPNAV_MATCHED);
 }
 
 /// A scenario played: no error of Blizzard's, every UI check passed, the
@@ -1387,7 +1737,21 @@ fn plays_as_the_client_did(name: &str, ratchet: usize) {
 /// gives as well: the calls Blizzard's UI made that the engine could not
 /// answer, asked again with the recorded character's world. Only ever
 /// raised (decision: the engine answers every call as the client does).
-const ANSWERS_MATCHED: usize = 5152;
+const ANSWERS_MATCHED: usize = 6127;
+
+/// An answer as `cargo xtask ingest` writes the client's: UTF-8 as it is,
+/// any other byte (a binary answer, `C_EncodingUtil.SerializeCBOR`'s) as
+/// `\xNN`.
+fn escaped_bytes(bytes: &[u8]) -> String {
+    let mut out = String::new();
+    for chunk in bytes.utf8_chunks() {
+        out.push_str(chunk.valid());
+        for b in chunk.invalid() {
+            out.push_str(&format!("\\x{b:02x}"));
+        }
+    }
+    out
+}
 
 #[test]
 fn the_engine_answers_blizzards_calls_as_the_client_did() {
@@ -1441,7 +1805,7 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
         .filter_map(|(k, v)| match (k, v) {
             (Value::Str(k), Value::Str(v)) => Some((
                 String::from_utf8_lossy(vm.str_bytes(k)).into_owned(),
-                String::from_utf8_lossy(vm.str_bytes(v)).into_owned(),
+                escaped_bytes(vm.str_bytes(v)),
             )),
             _ => None,
         })
@@ -1468,9 +1832,21 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
         })
         .collect();
     let address = regex::Regex::new(r"(function|table|userdata|thread): 0x[0-9a-f]+").unwrap();
+    // The social systems' strings, blanked as ingest blanks the client's
+    // (as the full probe compares them).
+    let social = regex::Regex::new(r"string [^,}]*").unwrap();
     let ours: BTreeMap<String, String> = ours
         .into_iter()
-        .map(|(k, v)| (k, address.replace_all(&v, "$1").into_owned()))
+        .map(|(k, v)| {
+            let v = address.replace_all(&v, "$1").into_owned();
+            let v = match theirs.get(&k) {
+                Some(t) if t.contains("string <scrubbed>") => {
+                    social.replace_all(&v, "string <scrubbed>").into_owned()
+                }
+                _ => v,
+            };
+            (k, v)
+        })
         .collect();
     // `WOWLUA_ANSWERS=GetFontInfo` shows that function's differences (`*`:
     // every function's).
@@ -1553,7 +1929,7 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
         .filter_map(|(k, v)| match (k, v) {
             (Value::Str(k), Value::Str(v)) => Some((
                 String::from_utf8_lossy(vm.str_bytes(k)).into_owned(),
-                String::from_utf8_lossy(vm.str_bytes(v)).into_owned(),
+                escaped_bytes(vm.str_bytes(v)),
             )),
             _ => None,
         })
@@ -1598,6 +1974,462 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
     assert!(
         matched >= ANSWERS_MATCHED,
         "{matched} of {} answered as the client did (was {ANSWERS_MATCHED})",
+        theirs.len()
+    );
+}
+
+/// How many of the client's answers to the full probe (`/stdtest engine
+/// fullprobe`: every C function called with many arguments, the curated
+/// settings set, read back and restored) the engine gives as well, each
+/// recorded call asked again with the recorded character's world (the
+/// last snapshot before the probe and what its answers say changed,
+/// `tests/fullprobe-state.lua`). Until
+/// the client's run is ingested (`forever-camelot-fullprobe.lua`), the
+/// answers battery's answers to the plan's calls without placeholders
+/// stand in for it (synthetic: the number changes with the first real
+/// run). Only ever raised, but for the plan's own changes: retail systems
+/// left out of it took 19 matched calls with them (762 of 792 before).
+const FULLPROBE_MATCHED: usize = 33075;
+
+#[test]
+fn the_engine_answers_the_full_probe_as_the_client_did() {
+    let Some(ui) = wowlua_test::ui_source_in(&repo().join("target/types-src"), "camelot") else {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    };
+    let dir = build();
+    let out = dir.path().join("dist/dev/StdTest");
+    let mut vm = Vm::wow();
+    // The clock as one of the probe's sessions had it when it was asked
+    // (`GetServerTime()` 1792432924, within that second; `GetTime()`
+    // 206668.464), ten frames before (the login's below), on a Pacific
+    // realm (`GetServerTimeLocal()` seven hours before). Each session had
+    // its own moment: only answers of the day and month follow it in the
+    // others.
+    let login = 10.0 / 60.0;
+    vm.clock.now = 1_792_432_924.5 - login;
+    vm.clock.utc_offset = -7 * 3600;
+    vm.clock.elapsed_ms = (206_668.464 - login) * 1000.0;
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    let report = wowlua_engine::ui::load(&mut vm, &ui.interface, ui.strings.as_deref());
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let mut vm = client_in(vm, &out);
+    let controls = wowlua_engine::controls::table(&mut vm);
+    // The character's world as the probe found it: the last snapshot
+    // recorded before it (`mapnav`'s end, 00:43; the probe ran from about
+    // 01:00 to 02:44, recorded.txt and its own clock answers), then what
+    // the probe's own answers say changed since, set with the engine's
+    // controls (`tests/fullprobe-state.lua`, each with its evidence).
+    wowlua_test::profile::apply(
+        &mut vm,
+        controls,
+        &repo().join("crates/wowlua-engine/tests/client/scenarios/mapnav-after.json"),
+    )
+    .expect("the character's profile");
+    let state = fs::read_to_string(repo().join("crates/wowlua-cli/tests/fullprobe-state.lua"))
+        .expect("the probe's state script");
+    addon(&mut vm, &state);
+    // The client has StdTest installed: `C_AddOns` knows it by its TOC,
+    // its title and notes the real manifest's (this build's has none).
+    let toc = fs::read_to_string(out.join("StdTest_Camelot.toc"))
+        .or_else(|_| fs::read_to_string(out.join("StdTest.toc")))
+        .expect("a TOC");
+    let mut metadata: Vec<String> = toc
+        .lines()
+        .filter_map(|l| l.strip_prefix("## ")?.split_once(':'))
+        .map(|(k, v)| format!("[{:?}] = {:?}", k.trim(), v.trim()))
+        .collect();
+    let manifest: serde_json::Value = serde_json::from_str(
+        &fs::read_to_string(repo().join("tests/ingame/wowlua.json")).expect("the manifest"),
+    )
+    .expect("parses");
+    for (key, field) in [("Title", "title"), ("Notes", "notes")] {
+        if let Some(v) = manifest["addon"][field].as_str() {
+            metadata.push(format!("[{key:?}] = {v:?}"));
+        }
+    }
+    addon(
+        &mut vm,
+        &format!(
+            "__engine.defineAddon('StdTest', {{ metadata = {{ {} }} }})",
+            metadata.join(", ")
+        ),
+    );
+    let name = vm.str("StdTest");
+    wowlua_engine::widgets::fire_event(&mut vm, "ADDON_LOADED", &[name, Value::Bool(false)]);
+    wowlua_engine::widgets::fire_event(&mut vm, "PLAYER_LOGIN", &[]);
+    wowlua_engine::widgets::fire_event(
+        &mut vm,
+        "PLAYER_ENTERING_WORLD",
+        &[Value::Bool(true), Value::Bool(false)],
+    );
+    wowlua_engine::widgets::fire_event(&mut vm, "VARIABLES_LOADED", &[]);
+    wowlua_engine::clock::advance_frames(&mut vm, 10, 1000.0 / 60.0);
+    let client = repo().join("crates/wowlua-engine/tests/client");
+    let recorded = client.join("forever-camelot-fullprobe.lua");
+    let (path, seed) = if recorded.exists() {
+        (recorded, false)
+    } else {
+        (client.join("forever-camelot-answers.lua"), true)
+    };
+    let src = fs::read(&path).expect("the fixture");
+    let f = vm.load(&src, "=fixture").expect("compiles");
+    let r = vm.call(f, &[]).expect("runs");
+    vm.set_global("StdTestFullProbeFixture", r[0]);
+    vm.set_global("StdTestFullProbeSeed", Value::Bool(seed));
+    // `WOWLUA_FULLPROBE=GetSpellInfo` shows that function's differences
+    // (`*`: every function's), `WOWLUA_FULLPROBE_LIMIT` how many.
+    let show = std::env::var("WOWLUA_FULLPROBE").unwrap_or_default();
+    let limit = std::env::var("WOWLUA_FULLPROBE_LIMIT")
+        .ok()
+        .and_then(|n| n.parse::<usize>().ok())
+        .unwrap_or(8);
+    let show = vm.str(&show);
+    vm.set_global("StdTestFullProbeShow", show);
+    vm.set_global("StdTestFullProbeLimit", Value::Num(limit as f64));
+    // `WOWLUA_FULLPROBE_WIDTH`: how much of each answer to show (240).
+    let width = std::env::var("WOWLUA_FULLPROBE_WIDTH")
+        .ok()
+        .and_then(|n| n.parse::<usize>().ok())
+        .unwrap_or(240);
+    vm.set_global("StdTestFullProbeWidth", Value::Num(width as f64));
+    let escape = vm.native("StdTestFullProbeEscape", escaped_answer);
+    vm.set_global("StdTestFullProbeEscape", escape);
+    let compare = br#"
+local fixture = StdTestFullProbeFixture
+local only
+if StdTestFullProbeSeed then
+    only = {}
+    for _, c in ipairs(StdTestFullProbeLiteral()) do only[c] = true end
+end
+local keys = {}
+for k, v in pairs(fixture) do
+    if (only == nil or only[k]) and v ~= "crashed" and not v:find("^unresolved: ") and not v:find("^skipped: ") then
+        keys[#keys + 1] = k
+    end
+end
+table.sort(keys)
+local ours = StdTestFullProbeReplay(keys)
+local matched, missed, diffs = 0, {}, {}
+for _, k in ipairs(keys) do
+    -- Bytes that are not UTF-8 written `\xf6`, as ingest writes the client's.
+    local mine = StdTestFullProbeEscape(ours[k] or "<missing>")
+    for _, kind in ipairs({ "function", "table", "userdata", "thread" }) do
+        mine = mine:gsub(kind .. ": 0x%x+", kind)
+    end
+    -- The social systems' strings, blanked as ingest blanks the client's.
+    if fixture[k]:find("string <scrubbed>", 1, true) then
+        mine = mine:gsub("string [^,}]*", "string <scrubbed>")
+    end
+    -- A script object prints its type and address (`LuaDurationObject:
+    -- 0x...`), the address each run's own.
+    local theirs = fixture[k]:gsub("(Lua%a+Object): 0x%x+", "%1")
+    mine = mine:gsub("(Lua%a+Object): 0x%x+", "%1")
+    -- A tooltip data's instance ID counts the session's tooltip data so
+    -- far: the client's sessions asked in the plan's order with a reload
+    -- after each segment, the replay in one session in another order.
+    theirs = theirs:gsub("dataInstanceID=number %d+", "dataInstanceID=number N")
+    mine = mine:gsub("dataInstanceID=number %d+", "dataInstanceID=number N")
+    if mine == theirs then
+        matched = matched + 1
+    else
+        local name = k:match("^set ([%w_.:]+)") or k:match("^([%w_.:]+)") or k
+        missed[name] = (missed[name] or 0) + 1
+        if #diffs < StdTestFullProbeLimit and (StdTestFullProbeShow == "*" or StdTestFullProbeShow == name) then
+            diffs[#diffs + 1] = k .. "\n    client: " .. fixture[k]:sub(1, StdTestFullProbeWidth) .. "\n    ours:   " .. mine:sub(1, StdTestFullProbeWidth)
+        end
+    end
+end
+local list = {}
+for n, c in pairs(missed) do list[#list + 1] = { n, c } end
+table.sort(list, function(a, b) if a[2] ~= b[2] then return a[2] > b[2] end return a[1] < b[1] end)
+local top = {}
+for i = 1, math.min(40, #list) do top[i] = string.format("%5d %s", list[i][2], list[i][1]) end
+return matched, #keys, table.concat(top, "\n"), table.concat(diffs, "\n")
+"#;
+    let f = vm
+        .load_as(compare, "@Interface/AddOns/StdTest/test.lua", "StdTest")
+        .expect("compiles");
+    let r = match vm.call(f, &[]) {
+        Ok(r) => r,
+        Err(e) => panic!("{}", text(&vm, e.value)),
+    };
+    let number = |v: &Value| match v {
+        Value::Num(n) => *n as usize,
+        other => panic!("a number: {other:?}"),
+    };
+    let (matched, total) = (number(&r[0]), number(&r[1]));
+    let (top, diffs) = (text(&vm, r[2]), text(&vm, r[3]));
+    if !diffs.is_empty() {
+        eprintln!("{diffs}");
+    }
+    eprintln!(
+        "{matched} of {total} full probe answers as the client gave them ({}); the most missed:\n{top}",
+        if seed {
+            "the answers battery's, until the client's run is ingested"
+        } else {
+            "the client's run"
+        }
+    );
+    assert!(
+        matched >= FULLPROBE_MATCHED,
+        "{matched} of {total} full probe answers as the client gave them (was {FULLPROBE_MATCHED})"
+    );
+}
+
+/// How many of the client's answers to the method probe (`/stdtest engine
+/// methodprobe`: every widget method called with many arguments on a fresh
+/// hidden widget, a setter read back) the engine gives as well, each
+/// recorded call asked again with the recorded character's world. Until
+/// the client's run is ingested (`forever-camelot-methodprobe.lua`), a fresh
+/// widget's getters the client recorded (`data/camelot-widget-defaults.txt`,
+/// made under UIParent; the frame level left out, which the hidden parent
+/// changes) stand in for it (synthetic: the number changes with the first
+/// real run). Only ever raised.
+const METHODPROBE_MATCHED: usize = 757;
+
+#[test]
+fn the_engine_answers_the_method_probe_as_the_client_did() {
+    let Some(ui) = wowlua_test::ui_source_in(&repo().join("target/types-src"), "camelot") else {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    };
+    let dir = build();
+    let out = dir.path().join("dist/dev/StdTest");
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    let report = wowlua_engine::ui::load(&mut vm, &ui.interface, ui.strings.as_deref());
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let mut vm = client_in(vm, &out);
+    let controls = wowlua_engine::controls::table(&mut vm);
+    wowlua_test::profile::apply(
+        &mut vm,
+        controls,
+        &repo().join("crates/wowlua-engine/tests/client/forever-camelot-character.json"),
+    )
+    .expect("the character's profile");
+    let name = vm.str("StdTest");
+    wowlua_engine::widgets::fire_event(&mut vm, "ADDON_LOADED", &[name, Value::Bool(false)]);
+    wowlua_engine::widgets::fire_event(&mut vm, "PLAYER_LOGIN", &[]);
+    wowlua_engine::widgets::fire_event(
+        &mut vm,
+        "PLAYER_ENTERING_WORLD",
+        &[Value::Bool(true), Value::Bool(false)],
+    );
+    wowlua_engine::widgets::fire_event(&mut vm, "VARIABLES_LOADED", &[]);
+    wowlua_engine::clock::advance_frames(&mut vm, 10, 1000.0 / 60.0);
+    let client = repo().join("crates/wowlua-engine/tests/client");
+    let recorded = client.join("forever-camelot-methodprobe.lua");
+    let seed = !recorded.exists();
+    let src = if seed {
+        // `Type:Getter()` of the plan, as the fresh widget's defaults.
+        let defaults = fs::read_to_string(
+            repo().join("crates/wowlua-engine/data/camelot-widget-defaults.txt"),
+        )
+        .expect("the widget defaults");
+        let mut lua = String::from("return {\n");
+        for line in defaults.lines().filter(|l| !l.starts_with('#')) {
+            let mut parts = line.splitn(3, '\t');
+            let (Some(kind), Some(getter), Some(answer)) =
+                (parts.next(), parts.next(), parts.next())
+            else {
+                continue;
+            };
+            if getter == "GetFrameLevel" {
+                continue;
+            }
+            lua.push_str(&format!(
+                "    [{:?}] = {:?},\n",
+                format!("{kind}:{getter}()"),
+                answer
+            ));
+        }
+        lua.push_str("}\n");
+        lua.into_bytes()
+    } else {
+        fs::read(&recorded).expect("the fixture")
+    };
+    let f = vm.load(&src, "=fixture").expect("compiles");
+    let r = vm.call(f, &[]).expect("runs");
+    vm.set_global("StdTestMethodProbeFixture", r[0]);
+    vm.set_global("StdTestMethodProbeSeed", Value::Bool(seed));
+    // `WOWLUA_METHODPROBE=Frame:SetPoint` shows that method's differences
+    // (`*`: every method's), `WOWLUA_METHODPROBE_LIMIT` how many.
+    let show = std::env::var("WOWLUA_METHODPROBE").unwrap_or_default();
+    let limit = std::env::var("WOWLUA_METHODPROBE_LIMIT")
+        .ok()
+        .and_then(|n| n.parse::<usize>().ok())
+        .unwrap_or(8);
+    let show = vm.str(&show);
+    vm.set_global("StdTestMethodProbeShow", show);
+    vm.set_global("StdTestMethodProbeLimit", Value::Num(limit as f64));
+    let compare = br#"
+local fixture = StdTestMethodProbeFixture
+local only
+if StdTestMethodProbeSeed then
+    only = {}
+    for _, c in ipairs(StdTestMethodProbeLiteral()) do only[c] = true end
+end
+local keys = {}
+for k, v in pairs(fixture) do
+    if (only == nil or only[k]) and v ~= "crashed" and not v:find("^unresolved: ") and not v:find("^skipped: ") then
+        keys[#keys + 1] = k
+    end
+end
+table.sort(keys)
+local ours = StdTestMethodProbeReplay(keys)
+local matched, missed, diffs = 0, {}, {}
+for _, k in ipairs(keys) do
+    local mine = ours[k] or "<missing>"
+    for _, kind in ipairs({ "function", "table", "userdata", "thread" }) do
+        mine = mine:gsub(kind .. ": 0x%x+", kind)
+    end
+    if fixture[k]:find("string <scrubbed>", 1, true) then
+        mine = mine:gsub("string [^,}|]*", "string <scrubbed>")
+    end
+    if mine == fixture[k] then
+        matched = matched + 1
+    else
+        local name = k:match("^([%w_]+:[%w_]+)") or k
+        missed[name] = (missed[name] or 0) + 1
+        if #diffs < StdTestMethodProbeLimit and (StdTestMethodProbeShow == "*" or StdTestMethodProbeShow == name) then
+            diffs[#diffs + 1] = k .. "\n    client: " .. fixture[k]:sub(1, 240) .. "\n    ours:   " .. mine:sub(1, 240)
+        end
+    end
+end
+local list = {}
+for n, c in pairs(missed) do list[#list + 1] = { n, c } end
+table.sort(list, function(a, b) if a[2] ~= b[2] then return a[2] > b[2] end return a[1] < b[1] end)
+local top = {}
+for i = 1, math.min(40, #list) do top[i] = string.format("%5d %s", list[i][2], list[i][1]) end
+return matched, #keys, table.concat(top, "\n"), table.concat(diffs, "\n")
+"#;
+    let f = vm
+        .load_as(compare, "@Interface/AddOns/StdTest/test.lua", "StdTest")
+        .expect("compiles");
+    let r = match vm.call(f, &[]) {
+        Ok(r) => r,
+        Err(e) => panic!("{}", text(&vm, e.value)),
+    };
+    let number = |v: &Value| match v {
+        Value::Num(n) => *n as usize,
+        other => panic!("a number: {other:?}"),
+    };
+    let (matched, total) = (number(&r[0]), number(&r[1]));
+    let (top, diffs) = (text(&vm, r[2]), text(&vm, r[3]));
+    if !diffs.is_empty() {
+        eprintln!("{diffs}");
+    }
+    eprintln!(
+        "{matched} of {total} method probe answers as the client gave them ({}); the most missed:\n{top}",
+        if seed {
+            "a fresh widget's recorded getters, until the client's run is ingested"
+        } else {
+            "the client's run"
+        }
+    );
+    assert!(
+        matched >= METHODPROBE_MATCHED,
+        "{matched} of {total} method probe answers as the client gave them (was {METHODPROBE_MATCHED})"
+    );
+}
+
+/// How many of the client's map answers (`/stdtest engine maps`: each
+/// map's data and what it holds) the engine gives as well, the probe run
+/// in the engine with the recorded character's world. Only ever raised.
+const MAPS_MATCHED: usize = 3028;
+
+#[test]
+fn the_engine_answers_the_maps_as_the_client_did() {
+    // Blizzard's UI is loaded, as in the client: its `CreateVector2D` makes
+    // the positions (an area POI's, a flight point's).
+    let Some(ui) = wowlua_test::ui_source_in(&repo().join("target/types-src"), "camelot") else {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    };
+    let dir = build();
+    let out = dir.path().join("dist/dev/StdTest");
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    let report = wowlua_engine::ui::load(&mut vm, &ui.interface, ui.strings.as_deref());
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let mut vm = client_in(vm, &out);
+    let controls = wowlua_engine::controls::table(&mut vm);
+    wowlua_test::profile::apply(
+        &mut vm,
+        controls,
+        &repo().join("crates/wowlua-engine/tests/client/forever-camelot-character.json"),
+    )
+    .expect("the character's profile");
+    addon(&mut vm, "StdTestEngineProbe('maps')");
+    let f = vm
+        .load(
+            b"local out = {} for k, v in pairs(StdTestState.engineMapAnswers) do out[k] = v end return out",
+            "=maps",
+        )
+        .expect("compiles");
+    let r = vm.call(f, &[]).expect("runs");
+    let Value::Table(t) = r[0] else {
+        panic!("a table")
+    };
+    // Addresses as the recording keeps them: none (a vector's methods).
+    let address = regex::Regex::new(r"(function|table|userdata|thread): 0x[0-9a-f]+").unwrap();
+    let ours: BTreeMap<String, String> = vm
+        .heap
+        .table(t)
+        .entries()
+        .filter_map(|(k, v)| match (k, v) {
+            (Value::Str(k), Value::Str(v)) => Some((
+                text(&vm, Value::Str(k)),
+                address
+                    .replace_all(&text(&vm, Value::Str(v)), "$1")
+                    .into_owned(),
+            )),
+            _ => None,
+        })
+        .collect();
+    let src = fs::read(repo().join("crates/wowlua-engine/tests/client/forever-camelot-maps.lua"))
+        .expect("the fixture");
+    let mut fixture_vm = Vm::new();
+    let f = fixture_vm.load(&src, "=fixture").expect("compiles");
+    let r = fixture_vm.call(f, &[]).expect("runs");
+    let Value::Table(t) = r[0] else {
+        panic!("a table")
+    };
+    let theirs: Vec<(String, String)> = fixture_vm
+        .heap
+        .table(t)
+        .entries()
+        .filter_map(|(k, v)| match (k, v) {
+            (Value::Str(k), Value::Str(v)) => Some((
+                text(&fixture_vm, Value::Str(k)),
+                text(&fixture_vm, Value::Str(v)),
+            )),
+            _ => None,
+        })
+        .collect();
+    let missed: Vec<String> = theirs
+        .iter()
+        .filter(|(call, answer)| ours.get(call) != Some(answer))
+        .map(|(call, answer)| {
+            let mine = ours.get(call).map_or("<not asked>", String::as_str);
+            format!("{call}\n    client: {answer}\n    ours:   {mine}")
+        })
+        .collect();
+    let matched = theirs.len() - missed.len();
+    eprintln!(
+        "{matched} of {} map answers as the client gave them; missed:\n{}",
+        theirs.len(),
+        missed
+            .iter()
+            .take(20)
+            .cloned()
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+    assert!(
+        matched >= MAPS_MATCHED,
+        "{matched} of {} map answers as the client gave them (was {MAPS_MATCHED})",
         theirs.len()
     );
 }
@@ -1656,8 +2488,21 @@ return table.concat(out, '\\n')",
     assert_eq!(ours.lines().collect::<Vec<_>>(), expected);
 }
 
+/// The cursor recording's character: its own snapshot once the probe
+/// records one (`forever-camelot-cursor-character.json`), else the shared
+/// one it was recorded with.
+fn cursor_character() -> PathBuf {
+    let client = repo().join("crates/wowlua-engine/tests/client");
+    let own = client.join("forever-camelot-cursor-character.json");
+    if own.is_file() {
+        own
+    } else {
+        client.join("forever-camelot-character.json")
+    }
+}
+
 /// The cursor (`/stdtest engine cursor`): each step's state and the events
-/// between, as the client recorded them for the recorded character.
+/// between, as the client recorded them for its character.
 #[test]
 fn the_cursor_moves_as_the_client_recorded() {
     let dir = build();
@@ -1666,12 +2511,8 @@ fn the_cursor_moves_as_the_client_recorded() {
     wowlua_engine::install(&mut vm, "camelot").expect("installs");
     let mut vm = client_in(vm, &out);
     let controls = wowlua_engine::controls::table(&mut vm);
-    wowlua_test::profile::apply(
-        &mut vm,
-        controls,
-        &repo().join("crates/wowlua-engine/tests/client/forever-camelot-character.json"),
-    )
-    .expect("the character's profile");
+    wowlua_test::profile::apply(&mut vm, controls, &cursor_character())
+        .expect("the character's profile");
     addon(&mut vm, "StdTestEngineProbe('cursor')");
     wowlua_engine::clock::advance_frames(&mut vm, 90, 1000.0 / 60.0);
     let f = vm
@@ -1705,4 +2546,177 @@ fn the_cursor_moves_as_the_client_recorded() {
     lines.sort();
     let theirs: Vec<String> = lines.into_iter().map(|(_, v)| v).collect();
     assert_eq!(ours.lines().collect::<Vec<_>>(), theirs);
+}
+
+/// [`escaped_bytes`] for the full probe's comparison: a string's bytes that
+/// are not UTF-8 written `\xf6`, as ingest writes the client's answers.
+fn escaped_answer(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
+    let Some(Value::Str(s)) = c.args.first().copied() else {
+        return Ok(vec![c.args.first().copied().unwrap_or(Value::Nil)]);
+    };
+    let bytes = vm.str_bytes(s);
+    if std::str::from_utf8(bytes).is_ok() {
+        return Ok(vec![Value::Str(s)]);
+    }
+    let out = escaped_bytes(bytes);
+    Ok(vec![vm.str(&out)])
+}
+
+fn yes(_vm: &mut Vm, _c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
+    Ok(vec![Value::Bool(true)])
+}
+
+/// Blizzard's UI logs in without an error with tutorials on (a fresh
+/// account's: `GetTutorialsEnabled()`, `showNPETutorials`): the new player
+/// experience loads, as it did on such an account's client (recorded: no
+/// Blizzard error), though its keyboard frame's mixin is missing from the
+/// client's files.
+#[test]
+fn blizzard_ui_logs_in_with_tutorials_on() {
+    let Some(ui) = wowlua_test::ui_source_in(&repo().join("target/types-src"), "camelot") else {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    };
+    let dir = build();
+    let out = dir.path().join("dist/dev/StdTest");
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    let report = wowlua_engine::ui::load(&mut vm, &ui.interface, ui.strings.as_deref());
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let mut vm = client_in(vm, &out);
+    let tutorials = vm.native("GetTutorialsEnabled", yes);
+    vm.set_global("GetTutorialsEnabled", tutorials);
+    addon(&mut vm, "__engine.setCVar('showNPETutorials', '1')");
+    let errors_before = wowlua_engine::engine(&vm).world.ui.errors.len();
+    wowlua_engine::login::login(&mut vm, "StdTest", true, false);
+    wowlua_engine::clock::advance_frames(&mut vm, 60, 1000.0 / 60.0);
+    let errors = wowlua_engine::engine(&vm).world.ui.errors[errors_before..].to_vec();
+    assert!(errors.is_empty(), "{errors:#?}");
+    let f = vm
+        .load(
+            b"return C_AddOns.IsAddOnLoaded('Blizzard_NewPlayerExperience')",
+            "=check",
+        )
+        .expect("compiles");
+    let loaded = vm.call(f, &[]).expect("runs");
+    assert!(
+        matches!(loaded.first(), Some(Value::Bool(true))),
+        "the new player experience loaded"
+    );
+}
+
+/// The recorded group answers: each label's (`party`, `raid`) calls and
+/// answers.
+fn group_fixture() -> BTreeMap<String, BTreeMap<String, String>> {
+    let mut out = BTreeMap::new();
+    for label in ["party", "raid"] {
+        let src = fs::read(repo().join(format!(
+            "crates/wowlua-engine/tests/client/forever-camelot-group-{label}.lua"
+        )))
+        .expect("the fixture");
+        let mut vm = Vm::new();
+        let f = vm.load(&src, "=fixture").expect("compiles");
+        let r = vm.call(f, &[]).expect("runs");
+        let Value::Table(t) = r[0] else {
+            panic!("a table")
+        };
+        let calls: BTreeMap<String, String> = vm
+            .heap
+            .table(t)
+            .entries()
+            .map(|(k, v)| (text(&vm, k), text(&vm, v)))
+            .collect();
+        out.insert(label.to_string(), calls);
+    }
+    out
+}
+
+/// `/stdtest engine group` played in the engine as the client recorded it
+/// (70450): the paladin, dead, leading a party with an offline druid of the
+/// user's (both on damage), then the party made a raid; every call's
+/// answer the client's.
+#[test]
+fn the_engine_answers_the_group_as_the_client_did() {
+    let Some(ui) = wowlua_test::ui_source_in(&repo().join("target/types-src"), "camelot") else {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    };
+    let dir = build();
+    let out = dir.path().join("dist/dev/StdTest");
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    let report = wowlua_engine::ui::load(&mut vm, &ui.interface, ui.strings.as_deref());
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let mut vm = client_in(vm, &out);
+    let controls = wowlua_engine::controls::table(&mut vm);
+    wowlua_test::profile::apply(
+        &mut vm,
+        controls,
+        &repo().join("crates/wowlua-engine/tests/client/scenarios/group-before.json"),
+    )
+    .expect("the character's world");
+    wowlua_engine::login::login(&mut vm, "StdTest", true, false);
+    wowlua_engine::clock::advance_frames(&mut vm, 10, 1000.0 / 60.0);
+    // As recorded (16:55): a nameplate shown, the player dead, the druid
+    // offline, both on damage; probed as a party, made a raid, probed.
+    addon(
+        &mut vm,
+        r#"local e = __engine
+e.spawnUnit({ name = "Plainstrider", level = 12, reaction = "hostile" }):showNameplate()
+e.player:setName("Player", "Lastname")
+e.player:setRole("DAMAGER")
+GroupDruid = e.spawnUnit({
+    name = "Member1", lastName = "Member1Last", player = true, level = 21, class = "DRUID", classID = 11,
+    reaction = "friendly", role = "DAMAGER", online = false,
+})
+e.addToGroup(GroupDruid)
+e.player:die()
+e.advanceFrames(10, 1000 / 60)
+StdTestEngineProbe("group")
+C_PartyInfo.ConvertToRaid()
+e.advanceFrames(60, 1000 / 60)
+StdTestEngineProbe("group")"#,
+    );
+    let f = vm
+        .load(
+            b"local out = {} for label, calls in pairs(StdTestState.engineGroupAnswers) do local t = {} for k, v in pairs(calls) do t[k] = v end out[label] = t end return out",
+            "=group",
+        )
+        .expect("compiles");
+    let r = vm.call(f, &[]).expect("runs");
+    let Value::Table(t) = r[0] else {
+        panic!("a table")
+    };
+    let mut ours: BTreeMap<String, BTreeMap<String, String>> = BTreeMap::new();
+    for (label, calls) in vm.heap.table(t).entries() {
+        let Value::Table(calls) = calls else { continue };
+        ours.insert(
+            text(&vm, label),
+            vm.heap
+                .table(calls)
+                .entries()
+                .map(|(k, v)| (text(&vm, k), text(&vm, v)))
+                .collect(),
+        );
+    }
+    let mut differences = Vec::new();
+    for (label, calls) in group_fixture() {
+        let mine = ours.get(&label);
+        for (call, answer) in calls {
+            let got = mine
+                .and_then(|m| m.get(&call))
+                .map_or("<missing>", String::as_str);
+            if got != answer {
+                differences.push(format!(
+                    "{label} {call}\n    client: {answer}\n    ours:   {got}"
+                ));
+            }
+        }
+    }
+    assert!(
+        differences.is_empty(),
+        "{} differences:\n{}",
+        differences.len(),
+        differences.join("\n")
+    );
 }

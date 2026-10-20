@@ -39,6 +39,8 @@ pub enum Ask {
     /// `f(slot, bank)`: by the player's spellbook slot (the pet's bank:
     /// nothing recorded yet).
     Slot,
+    /// `f(flyoutID, slot)`: by `flyoutID * 100 + slot`.
+    FlyoutSlot,
 }
 
 /// A stat: its key in a profile, the function that reports it, how it is
@@ -517,6 +519,12 @@ pub const STATS: &[Stat] = &[
         Some("QUEST_LOG_UPDATE"),
     ),
     stat(
+        "questCompletionText",
+        "GetQuestLogCompletionText",
+        Index,
+        Some("QUEST_LOG_UPDATE"),
+    ),
+    stat(
         "selectedQuest",
         "C_QuestLog.GetSelectedQuest",
         Plain,
@@ -587,6 +595,16 @@ pub const STATS: &[Stat] = &[
         "spellBookItemFlyoutMember",
         "C_SpellBook.IsSpellBookItemLooseFlyoutMember",
         Slot,
+        Some("SPELLS_CHANGED"),
+    ),
+    // The spellbook's flyouts: each one's name, description, slot count and
+    // whether it is known; each slot's spell, its override, known, name,
+    // slot spell (`/stdtest engine snapshot`).
+    stat("flyoutInfo", "GetFlyoutInfo", Index, Some("SPELLS_CHANGED")),
+    stat(
+        "flyoutSlot",
+        "GetFlyoutSlotInfo",
+        FlyoutSlot,
         Some("SPELLS_CHANGED"),
     ),
     // Each logged quest's details (by quest ID; the special item by log
@@ -767,6 +785,15 @@ pub enum Entry {
 /// The player's stats, by key.
 pub type Stats = BTreeMap<&'static str, Entry>;
 
+/// The player's stats, or its pet's.
+fn stats_of(vm: &Vm, pet: bool) -> &Stats {
+    if pet {
+        &engine(vm).world.pets.stats
+    } else {
+        &engine(vm).world.character.stats
+    }
+}
+
 /// The default character's (stand-ins, see the module's note).
 pub fn defaults() -> Stats {
     let mut s = Stats::new();
@@ -875,10 +902,13 @@ fn by_index(vm: &mut Vm, t: TableRef) -> BTreeMap<i64, Vec<Answer>> {
 
 /// `mock.player:setStats(stats)`: sets the stats given (by key; a value
 /// or the function's answer as a list; indexed stats by index), each
-/// change told by its event (unverified).
+/// change told by its event (unverified). The player's pet's too
+/// (`mock.setPet`): the unit's own stats only (unverified).
 pub fn control_set_stats(vm: &mut Vm, c: NativeCall) -> Ret {
-    if units::this(vm, &c)? != units::PLAYER {
-        return Err(vm.error("unit:setStats: only the player has that"));
+    let me = units::this(vm, &c)?;
+    let pet = me != units::PLAYER;
+    if pet && engine(vm).units.pet != Some(me) {
+        return Err(vm.error("unit:setStats: only the player and its pet have that"));
     }
     let Value::Table(t) = c.arg(2) else {
         return Err(vm.error("unit:setStats: a table of stats expected"));
@@ -893,21 +923,28 @@ pub fn control_set_stats(vm: &mut Vm, c: NativeCall) -> Ret {
         let Some(stat) = STATS.iter().find(|s| s.key == key) else {
             return Err(vm.error(&format!("unit:setStats: no stat {key:?}")));
         };
+        if pet && !matches!(stat.ask, Unit | UnitIndex) {
+            return Err(vm.error(&format!("unit:setStats: {key} is the player's")));
+        }
         let entry = match (stat.ask, v) {
-            (UnitIndex | Index | ForStat | Location | Slot, Value::Table(inner)) => {
-                let mut map = match engine(vm).world.character.stats.get(stat.key) {
+            (UnitIndex | Index | ForStat | Location | Slot | FlyoutSlot, Value::Table(inner)) => {
+                let mut map = match stats_of(vm, pet).get(stat.key) {
                     Some(Entry::ByIndex(m)) => m.clone(),
                     _ => BTreeMap::new(),
                 };
                 map.extend(by_index(vm, inner));
                 Entry::ByIndex(map)
             }
-            (UnitIndex | Index | ForStat | Location | Slot, _) => {
+            (UnitIndex | Index | ForStat | Location | Slot | FlyoutSlot, _) => {
                 return Err(vm.error(&format!("unit:setStats: {key} is by index ({{ [1] = … }})")));
             }
             (_, v) => Entry::One(answers_of(vm, v)),
         };
-        engine_mut(vm).world.character.stats.insert(stat.key, entry);
+        if pet {
+            engine_mut(vm).world.pets.stats.insert(stat.key, entry);
+        } else {
+            engine_mut(vm).world.character.stats.insert(stat.key, entry);
+        }
         if let Some(e) = stat.event
             && !events.contains(&e)
         {
@@ -918,8 +955,8 @@ pub fn control_set_stats(vm: &mut Vm, c: NativeCall) -> Ret {
         let unit_event = event.starts_with("UNIT_") || event.ends_with("XP_UPDATE");
         if unit_event {
             // For each token naming the player (`targettarget` too:
-            // `/stdtest engine scenario combat`).
-            units::fire_unit(vm, event, units::PLAYER, &[]);
+            // `/stdtest engine scenario combat`), or the pet.
+            units::fire_unit(vm, event, me, &[]);
         } else {
             widgets::fire_event(vm, event, &[]);
         }
@@ -951,6 +988,95 @@ pub fn gain_xp(vm: &mut Vm, amount: f64) {
     units::fire_unit(vm, "PLAYER_XP_UPDATE", units::PLAYER, &[]);
 }
 
+/// Whether the spellbook has an ability by its name (`"Fireball (Rank
+/// 1)"`: its name and subtext; `"Parry"`: its name).
+pub fn spellbook_has_named(vm: &Vm, ability: &str) -> bool {
+    let Some(Entry::ByIndex(names)) = engine(vm).world.character.stats.get("spellBookItemName")
+    else {
+        return false;
+    };
+    names.values().any(|n| match n.as_slice() {
+        [Answer::Str(name), rest @ ..] => {
+            let sub = match rest.first() {
+                Some(Answer::Str(s)) if !s.is_empty() => Some(s.as_str()),
+                _ => None,
+            };
+            ability == name || sub.is_some_and(|sub| ability == format!("{name} ({sub})"))
+        }
+        _ => false,
+    })
+}
+
+/// A skill line's rank (`C_SkillInfo.GetSkillLineInfo`'s entry with that
+/// `skillID`).
+/// The active spec group's combat config
+/// (`C_SpecializationInfo.GetCombatConfigIDForSpecGroup`), if the
+/// character's stats have it.
+pub fn active_combat_config(vm: &Vm) -> Option<f64> {
+    let stats = &engine(vm).world.character.stats;
+    let group = match stats.get("activeSpecGroup") {
+        Some(Entry::One(v)) => match v.first() {
+            Some(Answer::Num(n)) => *n as i64,
+            _ => 1,
+        },
+        _ => 1,
+    };
+    match stats.get("combatConfig") {
+        Some(Entry::ByIndex(by)) => match by.get(&group).and_then(|v| v.first()) {
+            Some(Answer::Num(n)) => Some(*n),
+            _ => None,
+        },
+        _ => None,
+    }
+}
+
+pub fn skill_rank(vm: &Vm, skill: i64) -> Option<f64> {
+    let Some(Entry::ByIndex(lines)) = engine(vm).world.character.stats.get("skillLine") else {
+        return None;
+    };
+    lines.values().flatten().find_map(|a| match a {
+        Answer::Table(fields) if table_num(fields, "skillID") == Some(skill as f64) => {
+            table_num(fields, "rank")
+        }
+        _ => None,
+    })
+}
+
+fn table_num(fields: &[(Answer, Answer)], key: &str) -> Option<f64> {
+    fields.iter().find_map(|(k, v)| match (k, v) {
+        (Answer::Str(k), Answer::Num(n)) if k == key => Some(*n),
+        _ => None,
+    })
+}
+
+/// Skill lines raised to `rank`: their entries, and a profession's
+/// (`GetProfessionInfo`'s rank, third, for its line, seventh).
+pub fn raise_skill_lines(vm: &mut Vm, skills: &[i64], rank: f64) {
+    let stats = &mut engine_mut(vm).world.character.stats;
+    if let Some(Entry::ByIndex(lines)) = stats.get_mut("skillLine") {
+        for a in lines.values_mut().flatten() {
+            if let Answer::Table(fields) = a
+                && table_num(fields, "skillID").is_some_and(|id| skills.contains(&(id as i64)))
+            {
+                for (k, v) in fields.iter_mut() {
+                    if matches!(k, Answer::Str(k) if k == "rank") {
+                        *v = Answer::Num(rank);
+                    }
+                }
+            }
+        }
+    }
+    if let Some(Entry::ByIndex(professions)) = stats.get_mut("professionInfo") {
+        for info in professions.values_mut() {
+            if matches!(info.get(6), Some(Answer::Num(id)) if skills.contains(&(*id as i64)))
+                && info.len() > 2
+            {
+                info[2] = Answer::Num(rank);
+            }
+        }
+    }
+}
+
 fn num(v: Value) -> Option<f64> {
     match v {
         Value::Num(n) => Some(n),
@@ -976,11 +1102,85 @@ fn location_key(vm: &mut Vm, v: Value) -> Option<f64> {
 
 /// The documented empty values of `name` (no stat for this call).
 fn empty(vm: &mut Vm, name: &str) -> Vec<Value> {
+    // The client's answer with nothing there, if the full probe settled it.
+    if let Some(answer) = crate::blanks::answer(name) {
+        return crate::recorded::parse_answer(vm, answer);
+    }
     let api = engine(vm).api;
     match api.functions.iter().find(|f| f.name == name) {
         Some(f) => crate::defaults(vm, api, &f.doc),
         None => Vec::new(),
     }
+}
+
+/// A flyout's name, from the spellbook item that holds it (its
+/// `actionID`).
+fn flyout_name(vm: &Vm, id: f64) -> Option<String> {
+    let Some(Entry::ByIndex(items)) = engine(vm).world.character.stats.get("spellBookItem") else {
+        return None;
+    };
+    items.values().find_map(|answer| match answer.first() {
+        Some(Answer::Table(fields)) => {
+            let field = |name: &str| {
+                fields.iter().find_map(|(k, v)| match k {
+                    Answer::Str(k) if k == name => Some(v),
+                    _ => None,
+                })
+            };
+            let flyout = matches!(field("itemType"), Some(Answer::Num(t)) if *t == 4.0)
+                && matches!(field("actionID"), Some(Answer::Num(a)) if *a == id);
+            match field("name") {
+                Some(Answer::Str(n)) if flyout => Some(n.clone()),
+                _ => None,
+            }
+        }
+        _ => None,
+    })
+}
+
+/// A cooldown viewer category's set without `allowUnlearned`: only the
+/// cooldowns the player knows (their recorded info's `isKnown`), in order
+/// (the full probe, 1.60.1: `GetCooldownViewerCategorySet(0)`, `(0,
+/// false)` and `(0, nil)` 4 of the 12 `(0, true)` gives, every category
+/// as its recorded entries' `isKnown` says).
+fn known_cooldowns(vm: &Vm, values: Vec<Answer>) -> Vec<Answer> {
+    let Some(Entry::ByIndex(info)) = engine(vm).world.character.stats.get("cooldownViewerInfo")
+    else {
+        return values;
+    };
+    let known = |id: &Answer| {
+        let Answer::Num(id) = id else {
+            return false;
+        };
+        matches!(info.get(&(*id as i64)).and_then(|a| a.first()), Some(Answer::Table(fields))
+        if fields.iter().any(|(k, v)| {
+            matches!(k, Answer::Str(k) if k == "isKnown") && *v == Answer::Bool(true)
+        }))
+    };
+    values
+        .into_iter()
+        .map(|v| match v {
+            Answer::Table(entries) => {
+                let mut ids: Vec<(f64, Answer)> = entries
+                    .into_iter()
+                    .filter_map(|(k, v)| match k {
+                        Answer::Num(i) => Some((i, v)),
+                        _ => None,
+                    })
+                    .collect();
+                ids.sort_by(|a, b| a.0.total_cmp(&b.0));
+                Answer::Table(
+                    ids.into_iter()
+                        .map(|(_, v)| v)
+                        .filter(known)
+                        .enumerate()
+                        .map(|(i, v)| (Answer::Num(i as f64 + 1.0), v))
+                        .collect(),
+                )
+            }
+            other => other,
+        })
+        .collect()
 }
 
 /// A stat's function: the player's recorded answer.
@@ -998,24 +1198,74 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(stat) = name.and_then(|n| STATS.iter().find(|s| s.function == n)) else {
         return Ok(vec![]);
     };
+    // An inspected unit's or pet's groups: none (the full probe:
+    // `GetNumSpecGroups(isInspect)` 0 with any argument, 1 without).
+    if stat.function == "GetNumSpecGroups" && !c.arg(1).is_nil() {
+        return Ok(vec![Value::Num(0.0)]);
+    }
+    // A spellbook item's link with a glyph: nothing (the full probe:
+    // glyph 1, 1.5 and 2147483647 nothing, -1, 0 and nil the link;
+    // unverified: a glyph the spell takes).
+    if stat.function == "C_SpellBook.GetSpellBookItemLink"
+        && matches!(c.arg(3), Value::Num(g) if g > 0.0)
+    {
+        return Ok(vec![]);
+    }
+    if stat.key == "specializationInfo"
+        && let Some(values) = other_specialization(vm, &c)
+    {
+        return Ok(values);
+    }
+    // The unit asked about: the player, or its pet (its own stats).
+    let asked = units::unit_arg(vm, &c, 1);
+    let pet = matches!(stat.ask, Unit | UnitIndex)
+        && asked.is_some()
+        && asked == engine(vm).units.pet
+        && asked != Some(units::PLAYER);
     let player = match stat.ask {
-        Unit | UnitIndex => units::unit_arg(vm, &c, 1) == Some(units::PLAYER),
+        Unit | UnitIndex => asked == Some(units::PLAYER) || pet,
         _ => true,
     };
     let index = match stat.ask {
-        UnitIndex => num(c.arg(2)),
+        // An enumeration's index not a number reads as 0 (the full probe:
+        // `UnitResistance("player", "x")` answered as 0's armor).
+        UnitIndex => num(c.arg(2)).or(matches!(c.arg(2), Value::Str(_)).then_some(0.0)),
         Index | ForStat => num(c.arg(1)),
         Location => location_key(vm, c.arg(1)),
+        FlyoutSlot => num(c.arg(1)).zip(num(c.arg(2))).map(|(f, i)| f * 100.0 + i),
         // The player's bank (0) only.
         Slot if matches!(c.arg(2), Value::Num(b) if b == 0.0) => num(c.arg(1)),
         _ => None,
     };
+    // An index is truncated (the full probe, 1.60.1: the spellbook's item
+    // and skill line 1.5 answered as 1).
+    let index = index.map(f64::trunc);
+    // The cooldown viewer's category, an enumeration's value: a non-number
+    // read as 0 (the full probe: `GetCooldownViewerCategorySet("x", true)`
+    // answered category 0's).
+    let index = match stat.key {
+        "cooldownViewerSet" => index.or(Some(0.0)),
+        _ => index,
+    };
+    // A spellbook item's link with a glyph above 0: none (the full probe,
+    // 1.60.1: glyph 1, 1.5 and 2147483647 nothing, -1 the link).
+    if stat.key == "spellBookItemLink" && matches!(c.arg(3), Value::Num(g) if g > 0.0) {
+        return Ok(vec![]);
+    }
     let found = if player {
         let ch = &engine(vm).world.character;
-        match (ch.stats.get(stat.key), index) {
+        let stats = if pet {
+            &engine(vm).world.pets.stats
+        } else {
+            &ch.stats
+        };
+        match (stats.get(stat.key), index) {
             (Some(Entry::One(v)), None) => Some(v.clone()),
-            (Some(Entry::ByIndex(m)), Some(i)) if i.fract() == 0.0 => {
-                let v = m.get(&(i as i64)).cloned();
+            // An index with a fraction as its whole part (the full probe:
+            // `GetCombatRating(1.5)`, `C_SpellBook.GetSpellBookItemInfo(1.5,
+            // 0)` answered as with 1).
+            (Some(Entry::ByIndex(m)), Some(i)) => {
+                let v = m.get(&(i.trunc() as i64)).cloned();
                 // For the attribute's effective value only (as the sheet
                 // asks it); unverified for others.
                 if stat.ask == ForStat {
@@ -1025,6 +1275,17 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
                     };
                     match (effective, num(c.arg(2))) {
                         (Some(Answer::Num(e)), Some(value)) if *e == value => v,
+                        // Another value: the recorded one's rate per point,
+                        // the value taken whole, none below 0 (the full
+                        // probe: strength 67 recorded 134, and 1 and 1.5
+                        // answer 2, 2147483647 4294967294, -1 and 0 0;
+                        // unverified for a rate not whole).
+                        (Some(Answer::Num(e)), Some(value)) if *e > 0.0 => match v.as_deref() {
+                            Some([Answer::Num(at)]) => {
+                                Some(vec![Answer::Num(at / e * value.trunc().max(0.0))])
+                            }
+                            _ => None,
+                        },
                         _ => None,
                     }
                 } else {
@@ -1035,6 +1296,12 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
         }
     } else {
         None
+    };
+    let found = match found {
+        Some(values) if stat.key == "cooldownViewerSet" && !c.arg(2).truthy() => {
+            Some(known_cooldowns(vm, values))
+        }
+        other => other,
     };
     match found {
         Some(values) => Ok(values.iter().map(|a| value_of(vm, a)).collect()),
@@ -1048,8 +1315,108 @@ fn answer(vm: &mut Vm, c: NativeCall) -> Ret {
                 },
             )
         }
-        None => Ok(empty(vm, stat.function)),
+        // A flyout not recorded: its spellbook item's name, no slots
+        // (unverified; the snapshot records flyouts since this).
+        None if stat.key == "flyoutInfo" && player => {
+            let id = num(c.arg(1));
+            let name = id.and_then(|id| flyout_name(vm, id));
+            crate::note_default(vm, stat.function, &c, 1);
+            // One the spellbook lacks: no name, no slots, unknown (the
+            // client knows every flyout; unverified).
+            Ok(match name {
+                Some(n) => vec![vm.str(&n), vm.str(""), Value::Num(0.0), Value::Bool(true)],
+                None => vec![vm.str(""), vm.str(""), Value::Num(0.0), Value::Bool(false)],
+            })
+        }
+        // No forms without a snapshot's (the function is undocumented, so
+        // without a documented empty answer).
+        None if stat.key == "shapeshiftForms" => Ok(vec![Value::Num(0.0)]),
+        None => Ok(match unrecorded(vm, stat.key, index) {
+            Some(values) => values,
+            None => empty(vm, stat.function),
+        }),
     }
+}
+
+/// A quest's or faction's stat for one the profile does not hold, as the
+/// client answers any (the full probe, every number asked): a quest's
+/// classification `Normal` (7), its difficulty for the player `Fair`
+/// (`Enum.RelativeContentDifficulty`, 2); a faction's friendship (an ID
+/// from 1) a friendship of none, all empty. Unverified: a real quest's or
+/// faction's own (game data the engine lacks).
+fn unrecorded(vm: &mut Vm, key: &str, index: Option<f64>) -> Option<Vec<Value>> {
+    Some(match key {
+        // Even without a quest (`GetQuestClassification(nil, 1)`: 7).
+        "questClassification" => vec![Value::Num(7.0)],
+        "questContentDifficulty" => vec![Value::Num(2.0)],
+        "factionFriendship" if index? >= 1.0 => {
+            let t = vm.new_table();
+            for (k, v) in [
+                ("friendshipFactionID", Value::Num(0.0)),
+                ("maxRep", Value::Num(0.0)),
+                ("reaction", vm.str("")),
+                ("reactionThreshold", Value::Num(0.0)),
+                ("reversedColor", Value::Bool(false)),
+                ("standing", Value::Num(0.0)),
+                ("text", vm.str("")),
+                ("texture", Value::Num(0.0)),
+            ] {
+                let key = vm.str(k);
+                let _ = vm.heap.table_mut(t).set(key, v);
+            }
+            vec![Value::Table(t)]
+        }
+        _ => return None,
+    })
+}
+
+/// `C_SpecializationInfo.GetSpecializationInfo(index, isInspect, isPet,
+/// …)` for another than the player's recorded specs (the full probe,
+/// 1.60.1): inspecting nobody, or an index without a spec, gives the empty
+/// spec (ID 0, no texts, recommended); the pet's first spec is the
+/// stable's "Default" (`C_StableInfo.GetAvailablePetSpecInfos`' 1493),
+/// asked even without a pet. Unverified: a hunter's pet's other specs.
+fn other_specialization(vm: &mut Vm, c: &NativeCall) -> Option<Vec<Value>> {
+    let empty = || {
+        vec![
+            Value::Num(0.0),
+            Value::Nil,
+            Value::Nil,
+            Value::Nil,
+            Value::Nil,
+            Value::Nil,
+            Value::Num(0.0),
+            Value::Nil,
+            Value::Num(0.0),
+            Value::Bool(true),
+        ]
+    };
+    let index = num(c.arg(1)).map(f64::trunc);
+    if c.arg(2).truthy() {
+        return Some(empty());
+    }
+    if c.arg(3).truthy() {
+        if index != Some(1.0) {
+            return Some(empty());
+        }
+        return Some(vec![
+            Value::Num(1493.0),
+            vm.str("Default"),
+            vm.str("I'm a pet!"),
+            Value::Num(6642732.0),
+            vm.str("DAMAGER"),
+            Value::Num(2.0),
+            Value::Num(0.0),
+            Value::Nil,
+            Value::Num(0.0),
+            Value::Bool(true),
+        ]);
+    }
+    let recorded = match engine(vm).world.character.stats.get("specializationInfo") {
+        Some(Entry::ByIndex(m)) => index.is_some_and(|i| m.contains_key(&(i as i64))),
+        _ => true,
+    };
+    (!recorded).then(empty)
 }
 
 /// The player's spellbook slot holding `spell` (the recorded items'
@@ -1070,6 +1437,43 @@ pub fn spellbook_slot_of(vm: &Vm, spell: f64) -> Option<i64> {
                 .then_some(*slot),
             _ => None,
         })
+}
+
+/// A spell's cooldown running when the snapshot was taken (its spellbook
+/// item's `spellBookItemCooldown`): start and duration on the client's
+/// clock, which the engine's is.
+pub fn recorded_cooldown(vm: &Vm, spell: f64) -> Option<(f64, f64)> {
+    let slot = spellbook_slot_of(vm, spell)?;
+    let Some(Entry::ByIndex(items)) = engine(vm)
+        .world
+        .character
+        .stats
+        .get("spellBookItemCooldown")
+    else {
+        return None;
+    };
+    let Some(Answer::Table(fields)) = items.get(&slot)?.first() else {
+        return None;
+    };
+    let get = |name: &str| {
+        fields.iter().find_map(|(k, v)| match (k, v) {
+            (Answer::Str(k), Answer::Num(n)) if k == name => Some(*n),
+            _ => None,
+        })
+    };
+    let (start, duration) = (get("startTime")?, get("duration")?);
+    // Its time left at the snapshot, counted from the snapshot's moment
+    // when the test told it (`snapshotTaken`: the engine's clock need not
+    // be the client's; recorded: a warrior's spell off its cooldown 59.6 s
+    // into the quest's recording, as the snapshot's time left said).
+    let start = match (
+        engine(vm).world.snapshot_at,
+        get("timeUntilEndOfStartRecovery"),
+    ) {
+        (Some(at), Some(left)) => at + left - duration,
+        _ => start,
+    };
+    (duration > 0.0).then_some((start, duration))
 }
 
 /// The recorded spellbook item of `spell` (its `GetSpellBookItemInfo`).
@@ -1093,8 +1497,14 @@ pub fn spellbook_item_at(vm: &mut Vm, slot: i64) -> Option<Value> {
 
 /// `C_SpellBook.FindSpellBookSlotForSpell(spellID, …)`: its slot and bank
 /// (the player's); nothing for a spell not in the book.
+///
+/// A spell's name finds its spell (the full probe, 1.60.1: "Attack" slot 1).
 fn find_spellbook_slot(vm: &mut Vm, c: NativeCall) -> Ret {
-    Ok(match num(c.arg(1)).and_then(|s| spellbook_slot_of(vm, s)) {
+    let spell = match c.arg(1) {
+        v @ Value::Str(_) => crate::spellinfo::spell_of(vm, v),
+        v => num(v),
+    };
+    Ok(match spell.and_then(|s| spellbook_slot_of(vm, s)) {
         Some(slot) => vec![Value::Num(slot as f64), Value::Num(0.0)],
         None => vec![],
     })
@@ -1102,7 +1512,7 @@ fn find_spellbook_slot(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `C_SpellBook.IsSpellInSpellBook(spellID [, bank])`: in the player's
 /// book (unverified: overrides, the pet's bank).
-fn is_spell_in_spellbook(vm: &mut Vm, c: NativeCall) -> Ret {
+pub(crate) fn is_spell_in_spellbook(vm: &mut Vm, c: NativeCall) -> Ret {
     let pet = matches!(c.arg(2), Value::Num(b) if b == 1.0);
     let found = !pet
         && num(c.arg(1))
@@ -1165,7 +1575,8 @@ fn quest_id_for_log_index(vm: &mut Vm, c: NativeCall) -> Ret {
             _ => None,
         }
     });
-    Ok(vec![id.map_or(Value::Nil, Value::Num)])
+    // No entry there: 0 (the full probe: index 0 and 2147483647).
+    Ok(vec![Value::Num(id.unwrap_or(0.0))])
 }
 
 /// `GetNumQuestLeaderBoards(logIndex)`: the quest's objectives, derived
@@ -1181,13 +1592,15 @@ fn num_quest_leader_boards(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `GetQuestLogLeaderBoard(i, logIndex)`: the objective's text, type and
 /// whether it is finished (derived as `GetNumQuestLeaderBoards`).
 fn quest_log_leader_board(vm: &mut Vm, c: NativeCall) -> Ret {
+    // No such objective: three nils (the full probe).
+    let none = || Ok(vec![Value::Nil; 3]);
     let (Some(i), Some(log)) = (num(c.arg(1)), num(c.arg(2))) else {
-        return Ok(vec![]);
+        return none();
     };
     let Some(objective) =
         quest_objectives(vm, log).and_then(|o| o.get((i as usize).wrapping_sub(1)).cloned())
     else {
-        return Ok(vec![]);
+        return none();
     };
     Ok(["text", "type", "finished"]
         .iter()

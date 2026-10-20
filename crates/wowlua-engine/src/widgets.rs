@@ -8,7 +8,8 @@
 //!
 //! As `/stdtest engine` recorded on WoW Forever 1.60.1 (fixture
 //! `tests/client/forever-camelot-engine.lua`, checked by `wowlua-cli`'s
-//! `tests/engine_probe.rs`): events reach frames in registration order;
+//! `tests/engine_probe.rs`): events reach frames in the order they first
+//! registered one;
 //! `OnShow` / `OnHide` run children first; `SetScript` clears the hooks;
 //! each class has its own method functions; methods check `self` and their
 //! documented arguments first (counting `self` as #1, usage `self:Name(…)`,
@@ -31,6 +32,12 @@ use crate::{Engine, engine, engine_mut};
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub struct WidgetId(pub usize);
 
+/// A script object's userdata payload (a curve, a numeric formatter, a
+/// duration): the widget it is. Its own type, so a frame's `[0]` is not
+/// taken for one.
+#[derive(Clone, Copy, Debug)]
+pub struct ScriptObject(pub WidgetId);
+
 /// One anchor: `point`, the frame it is relative to, its point, offsets.
 #[derive(Clone, Debug)]
 pub struct Point {
@@ -44,8 +51,11 @@ pub struct Point {
 pub struct Widget {
     /// The class whose methods it has (`Frame`, `Button`, `FontString`).
     pub class: String,
-    /// The Lua object.
+    /// The Lua object (a script object's: the engine's own record, its
+    /// userdata is [`Widget::object`]).
     pub table: TableRef,
+    /// A script object's userdata: what Lua gets.
+    pub object: Option<wowlua_vm::heap::UdRef>,
     /// Its scripts (`OnEvent` → function) and hooks (`OnEvent` → list), in
     /// Lua tables the registry keeps.
     pub scripts: TableRef,
@@ -58,16 +68,21 @@ pub struct Widget {
     pub shown: bool,
     /// Registered events, with the units of unit events.
     pub events: HashMap<String, Option<Vec<String>>>,
-    /// When each event was registered (the dispatch order).
-    pub event_order: HashMap<String, u64>,
-    /// `RegisterAllEvents`: when (every event comes, in that place of the
-    /// registration order; the combat log's not, restricted).
+    /// `RegisterAllEvents`: when (every event comes; the combat log's not,
+    /// restricted).
     pub all_events: Option<u64>,
+    /// When it first registered an event, `RegisterAllEvents` too (its
+    /// place in the dispatch order: 0 never).
+    pub first_registration: u64,
     /// `IsProtected`'s second result: protected by a secure template.
     pub explicitly_protected: bool,
     /// Made by Blizzard's secure code (`UseSecureEnvironment`): addon code
     /// may not use it (WoW Forever's `StoreFrame`).
     pub forbidden: bool,
+    /// Its forbidden aspects (`Enum.ForbiddenAspect` flags) from its
+    /// templates' `<ForbiddenAspects>` and secure `AddForbiddenAspects`
+    /// calls (`crate::protection::forbidden_aspects`).
+    pub forbidden_aspects: u32,
     /// Has an intrinsic type's handlers (`intrinsic_key`).
     pub intrinsic_scripts: bool,
     pub points: Vec<Point>,
@@ -75,6 +90,8 @@ pub struct Widget {
     pub height: f64,
     pub scale: f64,
     pub alpha: f64,
+    /// Set from a secret (its alpha aspect secret: `GetAlpha` too).
+    pub secret_alpha: bool,
     pub text: Option<Value>,
     pub attributes: TableRef,
     pub protected: bool,
@@ -93,6 +110,22 @@ pub struct Widget {
 #[derive(Default)]
 pub struct World {
     pub widgets: Vec<Widget>,
+    /// Loose files' IDs given out (`GetFileIDFromPath`), by normalized path.
+    pub file_ids: std::collections::HashMap<String, f64>,
+    /// The NPC interactions open (`Enum.PlayerInteractionType`, as bits),
+    /// from `PLAYER_INTERACTION_MANAGER_FRAME_SHOW`/`_HIDE`.
+    pub interactions: Vec<u64>,
+    /// The widgets given an `OnUpdate` (set, hooked or from XML) or an
+    /// intrinsic type's handlers, ever: the ones a frame looks at, each
+    /// checked as its turn comes (most of the UI's widgets never update);
+    /// in order, each once (`World::updates`).
+    pub updating: Vec<usize>,
+    /// The widgets that ever registered for events: the ones an event
+    /// looks at.
+    pub listening: std::collections::BTreeSet<usize>,
+    /// The duration text bindings made (`C_DurationUtil.
+    /// CreateDurationTextBinding`): each frame looks at them.
+    pub text_bindings: Vec<WidgetId>,
     classes: HashMap<String, TableRef>,
     /// Templates and frame types tests (or stand-ins for Blizzard's UI
     /// code) define: name → (base class, function applied to the frame),
@@ -104,6 +137,12 @@ pub struct World {
     /// Widgets whose size changed since the last frame (`OnSizeChanged`
     /// runs with the next frame, not at `SetSize`).
     pub resized: Vec<WidgetId>,
+    /// The same widgets, by index: whether one is already among them.
+    pub resizing: std::collections::HashSet<usize>,
+    /// The widgets a keyboard setting (`KeyboardEnabled`) was ever stored
+    /// for, in order, each once: the only ones that can take keys
+    /// (`input::keyboard_frames`).
+    pub keyboard: Vec<usize>,
     /// Edit boxes Lua set the text of this frame: `OnTextChanged(false)`
     /// runs once each after the frame's `OnUpdate`, not at `SetText`, with
     /// the last text, also when it did not change, the last box set first
@@ -123,14 +162,23 @@ pub struct World {
     pub trainers: crate::trainer::Trainers,
     pub taxis: crate::taxi::Taxis,
     pub death: crate::death::Death,
+    /// The instance the player is in and its encounter (`encounters.rs`).
+    pub encounters: crate::encounters::Encounters,
+    /// The player's pet's state (`pets.rs`).
+    pub pets: crate::pets::Pets,
     /// The class's hidden group buffs (`HIDDEN_GROUP_BUFFS_CHANGED`).
-    pub hidden_group_buffs: Vec<f64>,
+    pub hidden_group_buffs: Option<Vec<f64>>,
     /// The player rests (an inn, a city: `setResting`).
     pub resting: bool,
+    /// The session ended (`ReloadUI`, logging out).
+    pub logged_out: bool,
     /// A loading screen up, the world not entered yet: no map.
     pub loading_screen: bool,
     /// A loading screen's inventory, not loaded yet.
     pub inventory_loading: bool,
+    /// The server's blocks of a loading screen's inventory, in its order
+    /// (`setInventoryLoad`).
+    pub inventory_load: Option<Vec<String>>,
     /// The player on a flight.
     pub on_taxi: bool,
     /// The sounds played (`C_Sound.PlaySound`'s handles).
@@ -149,6 +197,8 @@ pub struct World {
     pub traits: crate::traits::Traits,
     /// The achievement search's results.
     pub achievements: crate::achievements::Achievements,
+    /// The profession window open, the craft running.
+    pub tradeskill: crate::tradeskill::TradeSkill,
     /// The global cooldown running: its start (`GetTime`) and length.
     pub global_cooldown: Option<(f64, f64)>,
     /// Spells by trait (`setSpellTraits`: `offGlobalCooldown`,
@@ -165,6 +215,9 @@ pub struct World {
     /// The time a request takes to come back from the server
     /// (`mock.setLatency`; `None`: 0.4 s).
     pub latency: Option<f64>,
+    /// When the profile's snapshot was taken on the engine's clock
+    /// (`snapshotTaken`): its cooldowns' time left counts from then.
+    pub snapshot_at: Option<f64>,
     /// The slider whose thumb the user drags.
     pub dragging_thumb: Option<WidgetId>,
     /// Edit Mode's saved layouts and active one.
@@ -198,6 +251,22 @@ pub struct World {
     pub merchant: crate::merchant::Merchant,
     /// The mouse's and the keyboard's focus.
     pub input: crate::input::Input,
+    /// The group finder: the player's listing, the searches (`lfg.rs`).
+    pub lfg: crate::lfg::Lfg,
+}
+
+impl World {
+    /// Widget `i` among those a frame looks at (`updating`).
+    pub fn updates(&mut self, i: usize) {
+        insert_sorted(&mut self.updating, i);
+    }
+}
+
+/// `i` in a list kept in order, once.
+fn insert_sorted(list: &mut Vec<usize>, i: usize) {
+    if let Err(at) = list.binary_search(&i) {
+        list.insert(at, i);
+    }
 }
 
 /// UIParent's size in screen units at scale 1: 1920 x 1080, as WoW Forever
@@ -220,12 +289,29 @@ pub fn keep(vm: &mut Vm, v: Value) {
     let _ = vm.heap.table_mut(list).set(Value::Num(n), v);
 }
 
+/// Keeps `v` alive as `name`'s, in place of what was kept as it before (a
+/// value the engine replaces: Edit Mode's saved layouts).
+pub fn keep_as(vm: &mut Vm, name: &str, v: Value) {
+    let registry = vm.registry;
+    let key = vm.heap.intern(b"wowlua.engine.named");
+    let named = match vm.heap.table(registry).get_str(key) {
+        Value::Table(t) => t,
+        _ => {
+            let t = vm.new_table();
+            vm.heap.table_mut(registry).set_str(key, Value::Table(t));
+            t
+        }
+    };
+    let k = vm.str(name);
+    let _ = vm.heap.table_mut(named).set(k, v);
+}
+
 /// An error the client's C code raises: no position, and with `taint_line`
 /// a "Lua Taint: <addon>" line while execution is tainted (as recorded by
-/// `/stdtest engine`).
+/// `/stdtest engine`), naming `Vm::error_taint`'s addon.
 pub fn c_error(vm: &mut Vm, msg: &str, taint_line: bool) -> LuaError {
     let mut text = msg.to_string();
-    if taint_line && let Some(name) = vm.taint_name(vm.taint().stack) {
+    if taint_line && let Some(name) = vm.taint_name(vm.error_taint()) {
         text.push_str(&format!("\nLua Taint: {name}"));
     }
     let v = vm.str(&text);
@@ -234,6 +320,14 @@ pub fn c_error(vm: &mut Vm, msg: &str, taint_line: bool) -> LuaError {
 
 /// The widget a value is, if it is one.
 pub fn widget_of(vm: &Vm, v: Value) -> Option<WidgetId> {
+    if let Value::Userdata(u) = v {
+        return vm
+            .heap
+            .userdata(u)
+            .data
+            .downcast_ref::<ScriptObject>()
+            .map(|o| o.0);
+    }
     let Value::Table(t) = v else { return None };
     let Value::Userdata(u) = vm.heap.table(t).get(Value::Num(0.0)) else {
         return None;
@@ -242,7 +336,18 @@ pub fn widget_of(vm: &Vm, v: Value) -> Option<WidgetId> {
 }
 
 /// The class `name` and its bases, nearest first.
-pub(crate) fn lineage(e: &Engine, name: &str) -> Vec<String> {
+pub(crate) fn lineage(e: &Engine, name: &str) -> std::rc::Rc<[String]> {
+    if let Some(known) = e.lineages.borrow().get(name) {
+        return known.clone();
+    }
+    let out: std::rc::Rc<[String]> = lineage_of(e, name).into();
+    e.lineages
+        .borrow_mut()
+        .insert(name.to_string(), out.clone());
+    out
+}
+
+fn lineage_of(e: &Engine, name: &str) -> Vec<String> {
     let mut out = Vec::new();
     let mut todo = vec![name.to_string()];
     while let Some(c) = todo.pop() {
@@ -268,6 +373,23 @@ pub fn canonical_class(e: &Engine, name: &str) -> Option<String> {
         .map(|(k, _)| k.clone())
 }
 
+/// Whether class `name` is a script object the client makes a userdata.
+pub fn is_userdata_class(e: &Engine, name: &str) -> bool {
+    lineage(e, name)
+        .iter()
+        .any(|c| e.api.classes.get(c).is_some_and(|c| c.userdata))
+}
+
+/// The Lua value widget `id` is: its table, or a script object's
+/// userdata.
+pub fn value_of(e: &Engine, id: WidgetId) -> Value {
+    let w = &e.world.widgets[id.0];
+    match w.object {
+        Some(u) => Value::Userdata(u),
+        None => Value::Table(w.table),
+    }
+}
+
 /// Whether class `name` is or derives from `base` (`IsObjectType`).
 pub fn is_a(e: &Engine, name: &str, base: &str) -> bool {
     lineage(e, name)
@@ -275,9 +397,35 @@ pub fn is_a(e: &Engine, name: &str, base: &str) -> bool {
         .any(|c| c.eq_ignore_ascii_case(base))
 }
 
+/// Methods the documentation or the declarations give a class whose
+/// client list was not recorded, that the client's class lacks (camelot).
+/// SuuUI probe minimap: the Minimap's metatable's methods about textures,
+/// blips, the player, icons, arrows, POIs, zoom, pings, rotation and masks
+/// are 20, none of these among them.
+const ABSENT_METHODS: &[(&str, &str)] = &[
+    ("Minimap", "SetBlipTexture"),
+    ("Minimap", "SetCorpsePOIArrowTexture"),
+    ("Minimap", "SetIconTexture"),
+    ("Minimap", "SetPOIArrowTexture"),
+    ("Minimap", "SetPlayerTexture"),
+    ("Minimap", "SetQuestBlobOutsideSelectedTexture"),
+    ("Minimap", "SetStaticPOIArrowTexture"),
+    ("Minimap", "SetTaskBlobOutsideSelectedTexture"),
+];
+
 /// The metatable of class `name`, made on first use: `__index` holds the
 /// methods of the class and its bases (the nearest class's wins).
 pub fn class_meta(vm: &mut Vm, name: &str) -> TableRef {
+    // An aura container is a frame (Blizzard_AuraContainer's intrinsic of
+    // a `Frame`): the client names it one and gives it exactly a frame's
+    // methods (`/stdtest engine`), and ElvUI, which adds its API to the
+    // frame type's methods once, calls it on its aura containers
+    // error-free in the client. Unverified: the shared table itself.
+    let name = if name == "AuraContainer" {
+        "Frame"
+    } else {
+        name
+    };
     if let Some(&t) = engine(vm).world.classes.get(name) {
         return t;
     }
@@ -368,6 +516,15 @@ pub fn class_meta(vm: &mut Vm, name: &str) -> TableRef {
         keep(vm, native);
         vm.heap.table_mut(methods).set_str(key, native);
     }
+    // Methods documented or declared that the client's class lacks.
+    if engine(vm).flavor == "camelot" {
+        for &(class, short) in ABSENT_METHODS {
+            if class == name {
+                let key = vm.heap.intern(short.as_bytes());
+                vm.heap.table_mut(methods).set_str(key, Value::Nil);
+            }
+        }
+    }
     let meta = vm.new_table();
     let index = vm.heap.intern(b"__index");
     vm.heap
@@ -404,6 +561,7 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
     let w = Widget {
         class: class.to_string(),
         table,
+        object: None,
         scripts,
         hooks,
         props,
@@ -417,13 +575,15 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         height: 0.0,
         scale: 1.0,
         alpha: 1.0,
+        secret_alpha: false,
         text: None,
         attributes,
         protected: false,
-        event_order: HashMap::new(),
         all_events: None,
+        first_registration: 0,
         explicitly_protected: false,
         forbidden: false,
+        forbidden_aspects: 0,
         intrinsic_scripts: false,
         moving: false,
         sizing: false,
@@ -433,11 +593,6 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
         scroll_parent: None,
     };
     let mut w = w;
-    // A font string starts 1 x 1 (`/stdtest engine`).
-    if class == "FontString" {
-        w.width = 1.0;
-        w.height = 1.0;
-    }
     // Secure code's widgets are forbidden; their names are the addons'
     // globals all the same (`StoreFrame`).
     let main = engine(vm).main_globals;
@@ -457,24 +612,114 @@ pub fn create(vm: &mut Vm, class: &str, name: Option<String>, parent: Option<Wid
     if class == "Font" {
         store(vm, id, "TextColor", &[Value::Num(1.0); 4]);
     }
+    // Regions the client makes with the widget (`/stdtest engine`: a new
+    // edit box has 2, a new cooldown 1). A cooldown's is its countdown
+    // text (ElvUI takes it as `cooldown:GetRegions()`); an edit box's
+    // first its text, then a texture (ElvUI's color picker sets the font
+    // of `HexBox:GetRegions()`, error-free in the client; unverified: the
+    // second's type).
+    match class {
+        "EditBox" => {
+            create(vm, "FontString", None, Some(id));
+            create(vm, "Texture", None, Some(id));
+        }
+        "Cooldown" => {
+            let fs = create(vm, "FontString", None, Some(id));
+            store(vm, id, "\u{0}CountdownFontString", &[fs]);
+            // Centered a unit low, in SystemFont_Shadow_Large_Outline (SuuUI
+            // probe trees: the equipment slots' cooldowns, from
+            // CooldownFrameTemplate, and the PvP rank frame's own
+            // `<Cooldown>` report it so).
+            if let Some(fid) = widget_of(vm, fs) {
+                engine_mut(vm).world.widgets[fid.0].points.push(Point {
+                    point: "CENTER".into(),
+                    relative: None,
+                    relative_point: "CENTER".into(),
+                    x: 0.0,
+                    y: -1.0,
+                });
+                let font = vm.get_global("SystemFont_Shadow_Large_Outline");
+                if widget_of(vm, font)
+                    .is_some_and(|f| engine(vm).world.widgets[f.0].class == "Font")
+                {
+                    store(vm, fid, "FontObject", &[font]);
+                }
+            }
+        }
+        _ => {}
+    }
+    // A script object the documentation calls a userdata is one, with its
+    // class's methods (`ObjectType = "Userdata"`: `type(curve)` is
+    // "userdata", and `securecopy` passes it on where it refuses a frame,
+    // as SuuUI's aura button options with curves and formatters run
+    // error-free in the client). It keeps fields as a frame does
+    // (Blizzard's `TimerUtil.CreateTimedSignalCallbackMap` defines a
+    // method on its signal map): reads and writes go to the record behind
+    // it, its class's methods below. Its metatable is hidden: `getmetatable`
+    // gives false (recorded for a curve; the other script objects' taken to
+    // be alike, unverified).
+    if is_userdata_class(engine(vm), class) {
+        let own = vm.new_table();
+        let index = vm.heap.intern(b"__index");
+        let newindex = vm.heap.intern(b"__newindex");
+        let hidden = vm.heap.intern(b"__metatable");
+        vm.heap.table_mut(own).set_str(index, Value::Table(table));
+        vm.heap
+            .table_mut(own)
+            .set_str(newindex, Value::Table(table));
+        vm.heap.table_mut(own).set_str(hidden, Value::Bool(false));
+        // A duration prints as the client's `LuaDurationObject: 0x…` (the
+        // full probe, 1.60.1; unverified: the other script objects' names).
+        if class == "DurationObject" {
+            let k = vm.heap.intern(b"__tostring");
+            let f = vm.native_with("__tostring", duration_tostring, vec![]);
+            vm.heap.table_mut(own).set_str(k, f);
+        }
+        keep(vm, Value::Table(own));
+        let ud = vm.heap.alloc_userdata(Userdata {
+            serial: 0,
+            meta: Some(own),
+            env: None,
+            data: Box::new(ScriptObject(id)),
+        });
+        keep(vm, Value::Userdata(ud));
+        engine_mut(vm).world.widgets[id.0].object = Some(ud);
+        return Value::Userdata(ud);
+    }
     Value::Table(table)
 }
 
-/// Addon code may not use a forbidden widget (unverified wording).
+/// `tostring(duration)`: its type and address, as the client prints it.
+fn duration_tostring(vm: &mut Vm, c: NativeCall) -> Ret {
+    let raw = vm.raw_tostring(c.arg(1));
+    let text = String::from_utf8_lossy(&raw).replacen("userdata", "LuaDurationObject", 1);
+    Ok(vec![vm.str(&text)])
+}
+
+/// Addon code may not use a forbidden widget (unverified wording). The
+/// error names the documented method's usage (made only for the error:
+/// every method call comes here).
 fn refuse_forbidden(
     vm: &mut Vm,
     id: WidgetId,
     short: &str,
-    usage: Option<String>,
+    documented: Option<&crate::api::Function>,
 ) -> Result<(), LuaError> {
+    // Attributes stay open: Blizzard's "Inbound" files talk to a forbidden
+    // frame through them from any code (`StoreFrame:SetAttribute("action",
+    // ...)`, `StoreFrame_IsShown`'s `GetAttribute("isshown")`; the user's
+    // probe: StoreFrame forbidden, the shop's old path taken, SuuUI
+    // error-free; unverified for other methods).
     if engine(vm).world.widgets[id.0].forbidden
-        && short != "IsForbidden"
+        && !matches!(short, "IsForbidden" | "GetAttribute" | "SetAttribute")
         && crate::protection::tainted(vm)
     {
         // `/stdtest engine`: "calling 'GetObjectType' on bad self (Attempt
         // to access forbidden object from code tainted by an AddOn - Usage:
         // local objectType = self:GetObjectType())".
-        let usage = usage.map(|u| format!(" - {u}")).unwrap_or_default();
+        let usage = documented
+            .map(|f| format!(" - {}", crate::args::usage(f)))
+            .unwrap_or_default();
         let msg = format!(
             "calling '{short}' on bad self (Attempt to access forbidden object from code tainted by an AddOn{usage})"
         );
@@ -601,23 +846,76 @@ pub fn create_frame(vm: &mut Vm, c: NativeCall) -> Ret {
                 .contains_key(&t.to_ascii_lowercase())
         });
     // The ID before the templates and OnLoad (Blizzard's action buttons
-    // read it there for their slot).
+    // read it there for their slot). An ID that is no number is ignored
+    // (unverified: DetailsFramework's fill panel passes a template's name
+    // there, in Details!'s options window, as the client's other checks of
+    // CreateFrame are its own, none a Lua argument error).
     if c.has(5) && !c.arg(5).is_nil() {
-        let id = vm.check_number(&c, 5)?;
-        let w = widget_of(vm, frame).expect("a widget");
-        store(vm, w, "ID", &[Value::Num(id)]);
+        let id = match c.arg(5) {
+            Value::Num(n) => Some(n),
+            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).trim().parse().ok(),
+            _ => None,
+        };
+        if let Some(id) = id {
+            let w = widget_of(vm, frame).expect("a widget");
+            store(vm, w, "ID", &[Value::Num(id)]);
+        }
     }
-    if let Some((_, el)) = intrinsic {
+    // A type or template declared with `allowUntaintedCreation` is built
+    // untainted, its scripts compiled and its mixins copied as Blizzard's
+    // code would, then the caller's taint is back. Evidence: the client
+    // runs the custom aura container's layout (its `OnUpdate` script, a
+    // `method` handler, calling `SetSize` with secrets, allowed only
+    // untainted) without an error for an addon's container (SuuUI), and
+    // the attribute's name. Unverified: a frame mixing such a template
+    // with others is built untainted as a whole.
+    let untainted = {
+        let ui = &engine(vm).world.ui;
+        intrinsic.is_some() && ui.untainted_creation.contains(&kind.to_ascii_lowercase())
+            || templates
+                .iter()
+                .any(|t| ui.untainted_creation.contains(&t.to_ascii_lowercase()))
+    };
+    let saved = vm.taint().saved();
+    if untainted {
+        vm.taint_mut().stack = wowlua_vm::Taint::SECURE;
+    }
+    let built = build_from_xml(vm, frame, intrinsic.map(|(_, el)| el), &templates, from_xml);
+    if untainted {
+        vm.taint_mut().restore(saved);
+    }
+    built?;
+    Ok(vec![frame])
+}
+
+/// A new frame's intrinsic type and templates applied, then its `OnLoad`
+/// (templates of the UI code run it once applied).
+fn build_from_xml(
+    vm: &mut Vm,
+    frame: Value,
+    intrinsic: Option<std::rc::Rc<crate::ui::xml::Element>>,
+    templates: &[String],
+    from_xml: bool,
+) -> Result<(), LuaError> {
+    if let Some(el) = intrinsic {
         crate::ui::build::apply_intrinsic(vm, frame, &el);
     }
     for t in templates {
-        apply_template(vm, frame, &t)?;
+        apply_template(vm, frame, t)?;
     }
-    // Templates of the UI code run their OnLoad once applied.
     if from_xml && let Some(id) = widget_of(vm, frame) {
         run_script(vm, id, "OnLoad", &[]);
+        // Built visible from XML: shown, as a frame of an XML file is
+        // (`ui::build`; warcraft.wiki.gg's UIHANDLER_OnShow, "if a frame is
+        // defined in XML then OnShow also fires after OnLoad unless hidden
+        // at the time"). Unverified for CreateFrame's templates: Auctionator
+        // sets itself up in the OnShow of a frame it creates under the
+        // shown auction house.
+        if visible(engine(vm), id) {
+            run_script(vm, id, "OnShow", &[]);
+        }
     }
-    Ok(vec![frame])
+    Ok(())
 }
 
 /// Applies template `name` to a frame: the function a test defined for it
@@ -637,11 +935,12 @@ pub fn apply_template(vm: &mut Vm, frame: Value, name: &str) -> Result<(), LuaEr
             if !crate::ui::build::apply_template(vm, frame, name) {
                 // A template of Blizzard's code only warns while it is not
                 // loaded; any other name fails as in the client (decided
-                // 2026-10-16, `/stdtest engine`).
-                if !engine(vm)
-                    .api
-                    .templates
-                    .contains(&name.to_ascii_lowercase())
+                // 2026-10-16, `/stdtest engine`). With Blizzard's UI loaded,
+                // one its loaded files lack fails too (SuuUI probe bags:
+                // `BankItemButtonGenericTemplate`, a vanilla game type's).
+                let e = engine(vm);
+                if !e.world.ui.loaded.is_empty()
+                    || !e.api.templates.contains(&name.to_ascii_lowercase())
                 {
                     return Err(c_error(
                         vm,
@@ -669,7 +968,7 @@ fn method(vm: &mut Vm, c: NativeCall) -> Ret {
     // `self`, as the client checks it (`/stdtest engine`).
     let id = match c.arg(1) {
         Value::Nil => return Err(vm.api_arg_error(1, &crate::args::usage(f))),
-        Value::Table(_) => match widget_of(vm, c.arg(1)) {
+        Value::Table(_) | Value::Userdata(_) => match widget_of(vm, c.arg(1)) {
             Some(id) => id,
             None => {
                 let msg = format!("Wrong object type for function - {}", crate::args::usage(f));
@@ -684,7 +983,7 @@ fn method(vm: &mut Vm, c: NativeCall) -> Ret {
             return Err(vm.api_arg_error(1, &msg));
         }
     };
-    refuse_forbidden(vm, id, f.short, Some(crate::args::usage(f)))?;
+    refuse_forbidden(vm, id, f.short, Some(f))?;
     // The documented arguments first (`/stdtest engine blocked`: a bad
     // argument errors on a blocked frame), but where the client's method takes more
     // than the documentation lists (`SetPoint(point, x, y)`): its
@@ -775,14 +1074,21 @@ pub fn recorded_default(
     getter: &str,
 ) -> Option<&'static Vec<crate::widgetdata::Recorded>> {
     let data = crate::widgetdata::data(&e.flavor)?;
-    lineage(e, class)
-        .iter()
-        .find_map(|c| data.defaults.get(&(c.clone(), getter.to_string())))
+    let mut key = (String::new(), getter.to_string());
+    lineage(e, class).iter().find_map(|c| {
+        c.clone_into(&mut key.0);
+        data.defaults.get(&key)
+    })
 }
 
 /// The stored arguments of setter `stem`, if it ran.
 pub fn stored_args(vm: &mut Vm, props: TableRef, stem: &str) -> Option<Vec<Value>> {
     let key = vm.str(stem);
+    stored_args_at(vm, props, key)
+}
+
+/// [`stored_args`] by the stem's string.
+pub fn stored_args_at(vm: &mut Vm, props: TableRef, key: Value) -> Option<Vec<Value>> {
     let Value::Table(list) = vm.heap.table(props).get(key) else {
         return None;
     };
@@ -810,8 +1116,7 @@ fn stored(vm: &mut Vm, id: WidgetId, f: &crate::api::Function, c: &NativeCall) -
         .doc
         .get("Returns")
         .and_then(serde_json::Value::as_array)
-        .cloned()
-        .unwrap_or_default();
+        .map_or(&[][..], Vec::as_slice);
     let setter = short
         .strip_prefix("Set")
         .map(str::to_string)
@@ -879,9 +1184,13 @@ fn stored(vm: &mut Vm, id: WidgetId, f: &crate::api::Function, c: &NativeCall) -
 pub fn has_script(e: &Engine, class: &str, script: &str) -> bool {
     // The client's answers where recorded (camelot: `/stdtest engine`).
     if let Some(data) = crate::widgetdata::data(&e.flavor)
-        && let Some(&yes) = lineage(e, class)
-            .iter()
-            .find_map(|c| data.scripts.get(&(c.clone(), script.to_string())))
+        && let Some(&yes) = {
+            let mut key = (String::new(), script.to_string());
+            lineage(e, class).iter().find_map(|c| {
+                c.clone_into(&mut key.0);
+                data.scripts.get(&key)
+            })
+        }
     {
         return yes;
     }
@@ -910,6 +1219,15 @@ pub fn intrinsic_key(order: &str, script: &str) -> String {
 }
 
 pub fn run_script(vm: &mut Vm, id: WidgetId, script: &str, args: &[Value]) {
+    run_script_of(vm, id, script, args, false);
+}
+
+/// [`run_script`], with `trusted_only` only the secure handlers and hooks
+/// (an object's forbidden untrusted layout scripts).
+fn run_script_of(vm: &mut Vm, id: WidgetId, script: &str, args: &[Value], trusted_only: bool) {
+    let untrusted = |vm: &Vm, f: Value| {
+        trusted_only && matches!(f, Value::Func(r) if !vm.heap.func(r).taint().is_secure())
+    };
     let (table, scripts, hooks, props, has_intrinsic) = {
         let w = &engine(vm).world.widgets[id.0];
         (w.table, w.scripts, w.hooks, w.props, w.intrinsic_scripts)
@@ -929,7 +1247,7 @@ pub fn run_script(vm: &mut Vm, id: WidgetId, script: &str, args: &[Value]) {
         vm.call_from_engine(pre, &call);
     }
     let f = vm.heap.table(scripts).get_str(key);
-    if !f.is_nil() {
+    if !f.is_nil() && !untrusted(vm, f) {
         vm.call_from_engine(f, &call);
     }
     let post = intrinsic(vm, "postcall");
@@ -940,7 +1258,9 @@ pub fn run_script(vm: &mut Vm, id: WidgetId, script: &str, args: &[Value]) {
         let n = vm.heap.table(list).border();
         for k in 1..=n {
             let h = vm.heap.table(list).get(Value::Num(k as f64));
-            vm.call_from_engine(h, &call);
+            if !untrusted(vm, h) {
+                vm.call_from_engine(h, &call);
+            }
         }
     }
 }
@@ -997,10 +1317,19 @@ fn set_script(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let f = c.arg(3);
     vm.heap.table_mut(scripts).set_str(key, f);
     vm.heap.table_mut(hooks).set_str(key, Value::Nil);
+    script_stored(vm, id, &s);
     if !f.is_nil() {
         key_script_set(vm, id, &s);
     }
     Ok(vec![])
+}
+
+/// A script stored for a widget (set, hooked or from XML): an `OnUpdate`
+/// makes it one a frame looks at.
+pub fn script_stored(vm: &mut Vm, id: WidgetId, script: &str) {
+    if script == "OnUpdate" {
+        engine_mut(vm).world.updates(id.0);
+    }
 }
 
 /// A key script given (set or hooked) turns the keyboard on; taking it
@@ -1042,6 +1371,7 @@ fn hook_script(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     };
     let n = vm.heap.table(list).border() as f64 + 1.0;
     let _ = vm.heap.table_mut(list).set(Value::Num(n), c.arg(3));
+    script_stored(vm, id, &s);
     key_script_set(vm, id, &s);
     Ok(vec![])
 }
@@ -1097,17 +1427,18 @@ fn event_name(vm: &mut Vm, c: &NativeCall, op: &str) -> Result<String, LuaError>
     Ok(e)
 }
 
-/// Registers an event, keeping when it was first registered (frames get
-/// events in registration order); false if it already was.
+/// Registers an event, keeping when the frame first registered one
+/// (frames get events in that order); false if it already was.
 fn register(vm: &mut Vm, id: WidgetId, event: String, units: Option<Vec<String>>) -> bool {
     let world = &mut engine_mut(vm).world;
     world.next_registration += 1;
     let seq = world.next_registration;
+    world.listening.insert(id.0);
     let w = &mut world.widgets[id.0];
-    let fresh = !w.events.contains_key(&event);
-    if fresh {
-        w.event_order.insert(event.clone(), seq);
+    if w.first_registration == 0 {
+        w.first_registration = seq;
     }
+    let fresh = !w.events.contains_key(&event);
     w.events.insert(event, units);
     fresh
 }
@@ -1135,7 +1466,6 @@ fn unregister_event(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let e = String::from_utf8_lossy(vm.str_bytes(e)).into_owned();
     let w = &mut engine_mut(vm).world.widgets[id.0];
     w.events.remove(&e);
-    w.event_order.remove(&e);
     Ok(vec![])
 }
 
@@ -1144,7 +1474,11 @@ fn register_all_events(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let world = &mut engine_mut(vm).world;
     world.next_registration += 1;
     let seq = world.next_registration;
+    world.listening.insert(id.0);
     world.widgets[id.0].all_events = Some(seq);
+    if world.widgets[id.0].first_registration == 0 {
+        world.widgets[id.0].first_registration = seq;
+    }
     Ok(vec![])
 }
 
@@ -1157,7 +1491,6 @@ fn restricted_event(event: &str) -> bool {
 fn unregister_all_events(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let w = &mut engine_mut(vm).world.widgets[id.0];
     w.events.clear();
-    w.event_order.clear();
     w.all_events = None;
     Ok(vec![])
 }
@@ -1182,35 +1515,57 @@ fn is_event_registered(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 /// (unverified); a unit event only where the unit (the first argument)
 /// is one the widget registered.
 pub fn fire_event(vm: &mut Vm, event: &str, args: &[Value]) {
+    // One the client batches to the frame's end: owed (`batch`).
+    if crate::batch::defer(vm, event, args) {
+        return;
+    }
+    fire_now(vm, event, args);
+}
+
+/// Fires `event` now, batched or not (`fire_event`).
+pub fn fire_now(vm: &mut Vm, event: &str, args: &[Value]) {
+    crate::batch::run_before(vm, event);
     let unit = match args.first() {
         Some(Value::Str(s)) => Some(String::from_utf8_lossy(vm.str_bytes(*s)).into_owned()),
         _ => None,
     };
-    // In registration order (`/stdtest engine order`).
-    let mut targets: Vec<(u64, WidgetId)> = engine(vm)
-        .world
-        .widgets
+    // In the order the frames first registered an event, whichever
+    // (`/stdtest engine order`: the registrations' order, not the frames'
+    // creation; recorded, `inspect` 11.157: the event registry's frame,
+    // registering `INSPECT_READY` only after the recorder's
+    // `RegisterAllEvents` but registered for others since the UI loaded,
+    // got it first: the talents it loaded told before; ordered by each
+    // event's registration that one fails, with `RegisterAllEvents` frames
+    // last `profession` loses 12 lines).
+    let world = &engine(vm).world;
+    let mut targets: Vec<(u64, WidgetId)> = world
+        .listening
         .iter()
-        .enumerate()
+        .map(|&i| (i, &world.widgets[i]))
         .filter(|(_, w)| match w.events.get(event) {
             Some(None) => true,
             Some(Some(units)) => unit.as_ref().is_some_and(|u| units.contains(u)),
             None => w.all_events.is_some() && !restricted_event(event),
         })
-        .map(|(i, w)| {
-            let seq = w
-                .event_order
-                .get(event)
-                .copied()
-                .or(w.all_events)
-                .unwrap_or(0);
-            (seq, WidgetId(i))
-        })
+        .map(|(i, w)| (w.first_registration, WidgetId(i)))
         .collect();
     targets.sort_by_key(|(seq, _)| *seq);
     let targets: Vec<WidgetId> = targets.into_iter().map(|(_, id)| id).collect();
     if event == "PLAYER_LOGIN" {
         engine_mut(vm).world.logged_in = true;
+    }
+    // The interactions open, as the client tells them (asked by
+    // `C_PlayerInteractionManager.IsInteractingWithNpcOfType`).
+    if let (true, Some(Value::Num(n))) = (
+        event.starts_with("PLAYER_INTERACTION_MANAGER_FRAME_"),
+        args.first().copied(),
+    ) {
+        let open = &mut engine_mut(vm).world.interactions;
+        if event.ends_with("_SHOW") && !open.contains(&n.to_bits()) {
+            open.push(n.to_bits());
+        } else if event.ends_with("_HIDE") {
+            open.retain(|&o| o != n.to_bits());
+        }
     }
     if event == "ADDON_LOADED"
         && let Some(Value::Str(s)) = args.first()
@@ -1353,6 +1708,13 @@ fn get_debug_name(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![vm.str(&name)])
 }
 
+/// `GetObjectTable()`: the object's own table (Blizzard's aura containers
+/// hand it to an addon's button initializer, which builds on it as on the
+/// frame; unverified: a forbidden object's).
+fn get_object_table(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Table(engine(vm).world.widgets[id.0].table)])
+}
+
 fn get_object_type(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let class = engine(vm).world.widgets[id.0].class.clone();
     // As the client names them (`/stdtest engine`).
@@ -1468,6 +1830,21 @@ fn create_region(vm: &mut Vm, id: WidgetId, c: NativeCall, class: &str) -> Ret {
         None => None,
     };
     let region = create(vm, class, name, Some(id));
+    // `CreateTexture(name, layer, inherits, sublevel)`: the layer given (a
+    // fresh region's recorded default otherwise).
+    if let Some(layer) = vm.opt_str(&c, 3)? {
+        let rid = widget_of(vm, region).expect("a widget");
+        let sublevel = match c.arg(5) {
+            Value::Num(n) => n,
+            _ => 0.0,
+        };
+        store(
+            vm,
+            rid,
+            "DrawLayer",
+            &[Value::Str(layer), Value::Num(sublevel)],
+        );
+    }
     // `CreateFontString(name, layer, inherits)`: a font object's font, or
     // a template.
     if let Some(t) = vm.opt_str(&c, 4)? {
@@ -1801,7 +2178,11 @@ const POINTS: &[&str] = &[
 
 fn set_point(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let class = engine(vm).world.widgets[id.0].class.clone();
-    let Value::Str(point) = c.arg(2) else {
+    // Secrets are the values they hide here: the method refused them
+    // before, unless allowed (untainted, as Blizzard's aura containers
+    // anchor their buttons: `SetPoint(secretwrap(...))`).
+    let arg = |vm: &Vm, n: usize| vm.hidden(c.arg(n));
+    let Value::Str(point) = arg(vm, 2) else {
         return Err(c_error(
             vm,
             &format!(
@@ -1820,7 +2201,7 @@ fn set_point(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         ));
     }
     // SetPoint(point [, relativeTo [, relativePoint]] [, x, y])
-    let (relative, relative_point, x, y) = match c.arg(3) {
+    let (relative, relative_point, x, y) = match arg(vm, 3) {
         Value::Num(_) => (
             None,
             point.clone(),
@@ -1836,11 +2217,11 @@ fn set_point(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
                 }
                 v => Some(v),
             };
-            let rp = match c.arg(4) {
+            let rp = match arg(vm, 4) {
                 Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).to_uppercase(),
                 _ => point.clone(),
             };
-            let (xi, yi) = if matches!(c.arg(4), Value::Num(_)) {
+            let (xi, yi) = if matches!(arg(vm, 4), Value::Num(_)) {
                 (4, 5)
             } else {
                 (5, 6)
@@ -1862,6 +2243,19 @@ fn set_point(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         x,
         y,
     });
+    Ok(vec![])
+}
+
+/// `SetToDefaults()` of a region or frame: its anchors cleared, its size
+/// 0 by 0 (Blizzard's Compositor.lua: "The anchors were already cleared
+/// in SetToDefaults()", "SetToDefaults() will set the frame's size to
+/// 0,0"; its menus' pooled textures are anchored anew after it).
+/// Unverified: what else it resets.
+fn set_to_defaults(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let w = &mut engine_mut(vm).world.widgets[id.0];
+    w.points.clear();
+    w.width = 0.0;
+    w.height = 0.0;
     Ok(vec![])
 }
 
@@ -2006,21 +2400,27 @@ fn resize(vm: &mut Vm, id: WidgetId, w: Option<f64>, h: Option<f64>) {
     // `OnUpdate` (also when resized in `OnUpdate`), a frame without points
     // never gets one (`/stdtest engine`).
     let world = &mut engine_mut(vm).world;
-    if new != old && !world.resized.contains(&id) {
+    if new != old && world.resizing.insert(id.0) {
         world.resized.push(id);
     }
 }
 
 /// `OnSizeChanged` for the widgets resized since the last frame.
 pub fn run_size_changes(vm: &mut Vm) {
-    let resized = std::mem::take(&mut engine_mut(vm).world.resized);
+    let world = &mut engine_mut(vm).world;
+    world.resizing.clear();
+    let resized = std::mem::take(&mut world.resized);
     for id in resized {
         let w = &engine(vm).world.widgets[id.0];
         if w.points.is_empty() {
             continue;
         }
         let size = [Value::Num(w.width), Value::Num(w.height)];
-        run_script(vm, id, "OnSizeChanged", &size);
+        // An object whose untrusted layout scripts are forbidden runs only
+        // its secure ones (the documentation's `UntrustedLayoutScriptExecution`;
+        // unverified by a probe).
+        let trusted_only = w.forbidden_aspects & crate::protection::UNTRUSTED_LAYOUT_SCRIPTS != 0;
+        run_script_of(vm, id, "OnSizeChanged", &size, trusted_only);
     }
 }
 
@@ -2040,19 +2440,136 @@ pub fn run_text_changes(vm: &mut Vm) {
 /// A region's size: as laid out when its points give it one (two opposite
 /// points, `SetAllPoints`), else as set (unverified: recorded for fresh,
 /// unanchored widgets only).
-fn laid_out_size(vm: &mut Vm, id: WidgetId) -> (f64, f64) {
+pub(crate) fn laid_out_size(vm: &mut Vm, id: WidgetId) -> (f64, f64) {
     let (w, h, anchored) = {
         let r = &engine(vm).world.widgets[id.0];
         (r.width, r.height, !r.points.is_empty())
     };
-    if !anchored {
+    let s = effective_scale(engine(vm), id);
+    match bounds(vm, id, 0).filter(|_| anchored) {
+        Some(b) => (b.2 / s, b.3 / s),
+        None => unplaced_size(vm, id, w, h),
+    }
+}
+
+/// A widget's size without a rectangle: as set, a font string's sides
+/// not set its text's ([`text_extent`]).
+fn unplaced_size(vm: &Vm, id: WidgetId, w: f64, h: f64) -> (f64, f64) {
+    if engine(vm).world.widgets[id.0].class != "FontString" || (w != 0.0 && h != 0.0) {
         return (w, h);
     }
-    let s = effective_scale(engine(vm), id);
-    match bounds(vm, id, 0) {
-        Some(b) => (b.2 / s, b.3 / s),
-        None => (w, h),
+    let w = if w == 0.0 {
+        text_extent(vm, id, None).0
+    } else {
+        w
+    };
+    let h = if h == 0.0 {
+        text_extent(vm, id, Some(w)).1
+    } else {
+        h
+    };
+    (w, h)
+}
+
+/// The stored arguments of setter `stem`, read without interning (for the
+/// layout, which only reads the world).
+fn stored_ref(vm: &Vm, props: TableRef, stem: &str) -> Option<Vec<Value>> {
+    let key = vm.heap.interned(stem.as_bytes())?;
+    let Value::Table(list) = vm.heap.table(props).get(Value::Str(key)) else {
+        return None;
+    };
+    let n = vm.heap.interned(b"n")?;
+    let count = match vm.heap.table(list).get(Value::Str(n)) {
+        Value::Num(n) => n as usize,
+        _ => 0,
+    };
+    Some(
+        (1..=count)
+            .map(|k| vm.heap.table(list).get(Value::Num(k as f64)))
+            .collect(),
+    )
+}
+
+/// A font string's font height, its own font's or its font object's.
+fn font_height(vm: &Vm, id: WidgetId) -> f64 {
+    let mut cur = id;
+    for _ in 0..32 {
+        let props = engine(vm).world.widgets[cur.0].props;
+        if let Some(v) = stored_ref(vm, props, "Font") {
+            return match v.get(1) {
+                Some(Value::Num(h)) => *h,
+                _ => 0.0,
+            };
+        }
+        match stored_ref(vm, props, "FontObject")
+            .and_then(|v| v.first().copied())
+            .and_then(|f| widget_of(vm, f))
+        {
+            Some(n) => cur = n,
+            None => break,
+        }
     }
+    0.0
+}
+
+/// A font string's text as the engine's text model lays it out: its
+/// widest line at six units a byte (as `GetStringWidth`, its color escapes
+/// left out), its lines, each
+/// wrapped at `width` when given and wrapping, at the font's height with
+/// the spacing between them (as `GetStringHeight`). Without text, 1 by 1.
+///
+/// SuuUI probe trees: the client's font strings report their text's size
+/// on the sides neither their size nor two points set (the character
+/// window's check box labels 158 wide, as set, by 12, their font's height;
+/// two-line texts 24; empty ones 1, as a new font string is 1 by 1,
+/// `/stdtest engine`). Unverified: the widths, the client measuring glyphs.
+fn text_extent(vm: &Vm, id: WidgetId, width: Option<f64>) -> (f64, f64) {
+    let w = &engine(vm).world.widgets[id.0];
+    let text = match w.text.map(|v| vm.hidden(v)) {
+        Some(Value::Str(s)) => String::from_utf8_lossy(vm.heap.str_bytes(s)).into_owned(),
+        Some(Value::Num(n)) => format!("{n}"),
+        _ => String::new(),
+    };
+    if text.is_empty() {
+        return (1.0, 1.0);
+    }
+    let wraps = stored_ref(vm, w.props, "WordWrap")
+        .and_then(|v| v.first().copied())
+        .is_none_or(|v| v.truthy());
+    let spacing = match stored_ref(vm, w.props, "Spacing").and_then(|v| v.first().copied()) {
+        Some(Value::Num(s)) => s,
+        _ => 0.0,
+    };
+    // Color escapes take no room (`|cAARRGGBB`, `|r`).
+    let shown_len = |l: &str| {
+        let b = l.as_bytes();
+        let (mut n, mut i) = (0, 0);
+        while i < b.len() {
+            match (b[i], b.get(i + 1)) {
+                (b'|', Some(b'c' | b'C')) if i + 10 <= b.len() => i += 10,
+                (b'|', Some(b'r' | b'R')) => i += 2,
+                _ => {
+                    n += 1;
+                    i += 1;
+                }
+            }
+        }
+        n
+    };
+    let widths: Vec<f64> = text
+        .split('\n')
+        .map(|l| shown_len(l) as f64 * 6.0)
+        .collect();
+    let widest = widths.iter().copied().fold(0.0, f64::max);
+    let lines: f64 = widths
+        .iter()
+        .map(|&lw| match width {
+            Some(width) if wraps && width > 0.0 && lw > width => (lw / width).ceil(),
+            _ => 1.0,
+        })
+        .sum();
+    let h = lines * font_height(vm, id) + (lines - 1.0) * spacing;
+    (widest, h)
 }
 
 fn get_width(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
@@ -2102,17 +2619,28 @@ fn get_effective_scale(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(effective_scale(engine(vm), id))])
 }
 
+/// `SetAlpha(alpha)`: a secret too, even from tainted code (the API
+/// documentation: `AllowedWhenTainted`, adding the alpha aspect); the
+/// region's alpha then reads back secret.
 fn set_alpha(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
-    let a = number_arg(vm, &c, 2)?;
+    let secret = matches!(c.arg(2), Value::Secret(_));
+    let a = match vm.hidden(c.arg(2)) {
+        Value::Num(n) if secret => n,
+        _ => number_arg(vm, &c, 2)?,
+    };
     // Kept in eight bits, read back as a float: 0.5 is 128/255
     // (`/stdtest engine`).
     let a = byte_float(a);
-    engine_mut(vm).world.widgets[id.0].alpha = a;
+    let w = &mut engine_mut(vm).world.widgets[id.0];
+    w.alpha = a;
+    w.secret_alpha = secret;
     Ok(vec![])
 }
 
 fn get_alpha(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(engine(vm).world.widgets[id.0].alpha)])
+    let w = &engine(vm).world.widgets[id.0];
+    let (a, secret) = (Value::Num(w.alpha), w.secret_alpha);
+    Ok(vec![if secret { vm.secret_wrap(a) } else { a }])
 }
 
 /// Where an anchor point sits along a width and height (0 to 1).
@@ -2139,6 +2667,27 @@ fn anchor(point: &str) -> (f64, f64) {
 /// `LEFT` and a `RIGHT` point give the width, a `TOP` and a `BOTTOM` the
 /// height); otherwise the size set, placed by the axis's first point.
 pub fn bounds(vm: &Vm, id: WidgetId, depth: usize) -> Option<(f64, f64, f64, f64)> {
+    bounds_in(vm, id, depth, &mut HashMap::new())
+}
+
+/// A rectangle (left, bottom, width, height), as [`bounds`] gives it.
+type Rect = (f64, f64, f64, f64);
+
+/// The rectangles worked out in one [`bounds`], by widget and depth.
+type KnownBounds = HashMap<(usize, usize), Option<Rect>>;
+
+/// [`bounds`], each widget's at a depth worked out once (two points on the
+/// same frame ask for it twice, and so on up the chain).
+fn bounds_in(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -> Option<Rect> {
+    if let Some(&b) = known.get(&(id.0, depth)) {
+        return b;
+    }
+    let b = bounds_of(vm, id, depth, known);
+    known.insert((id.0, depth), b);
+    b
+}
+
+fn bounds_of(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -> Option<Rect> {
     let e = engine(vm);
     let w = &e.world.widgets[id.0];
     if w.name.as_deref() == Some("UIParent") || depth > 64 {
@@ -2149,7 +2698,7 @@ pub fn bounds(vm: &Vm, id: WidgetId, depth: usize) -> Option<(f64, f64, f64, f64
     // top left (unverified: the scroll offsets are not applied).
     if w.points.is_empty() {
         let p = w.scroll_parent?;
-        let r = bounds(vm, p, depth + 1)?;
+        let r = bounds_in(vm, p, depth + 1, known)?;
         let (width, height) = (w.width * s, w.height * s);
         return Some((r.0, r.1 + r.3 - height, width, height));
     }
@@ -2165,9 +2714,15 @@ pub fn bounds(vm: &Vm, id: WidgetId, depth: usize) -> Option<(f64, f64, f64, f64
             Some(v) => widget_of(vm, v),
             None => w.parent,
         };
-        let r = rel
-            .and_then(|r| bounds(vm, r, depth + 1))
-            .unwrap_or((0.0, 0.0, SCREEN.0, SCREEN.1));
+        // Anchored to a frame without a rectangle, it has none either
+        // (SuuUI probe trees: the gamepad tab buttons of the character
+        // window, sized but never placed, and their textures set to fill
+        // them report no points' size, 0 by 0, where the engine gave them
+        // the screen's).
+        let r = match rel {
+            Some(r) => bounds_in(vm, r, depth + 1, known)?,
+            None => (0.0, 0.0, SCREEN.0, SCREEN.1),
+        };
         let (rx, ry) = anchor(&p.relative_point);
         let ax = r.0 + rx * r.2 + p.x * s;
         let ay = r.1 + ry * r.3 + p.y * s;
@@ -2188,13 +2743,23 @@ pub fn bounds(vm: &Vm, id: WidgetId, depth: usize) -> Option<(f64, f64, f64, f64
         };
         slot.get_or_insert(ay);
     }
-    let (width, height) = (w.width * s, w.height * s);
+    let text = w.class == "FontString";
+    let width = if text && w.width == 0.0 {
+        text_extent(vm, id, None).0 * s
+    } else {
+        w.width * s
+    };
     let (x, width) = match (left, right, center_x) {
         (Some(l), Some(r), _) => (l, r - l),
         (Some(l), None, _) => (l, width),
         (None, Some(r), _) => (r - width, width),
         (None, None, Some(c)) => (c - width / 2.0, width),
         (None, None, None) => (0.0, width),
+    };
+    let height = if text && w.height == 0.0 {
+        text_extent(vm, id, Some(width / s)).1 * s
+    } else {
+        w.height * s
     };
     let (y, height) = match (bottom, top, center_y) {
         (Some(b), Some(t), _) => (b, t - b),
@@ -2360,15 +2925,53 @@ fn set_text(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         };
         if let Some(fid) = widget_of(vm, fs) {
             let t = kept_text(vm, c.arg(2));
-            engine_mut(vm).world.widgets[fid.0].text = t;
+            store_text(vm, fid, t);
         }
     }
     let t = kept_text(vm, c.arg(2));
-    engine_mut(vm).world.widgets[id.0].text = t;
+    store_text(vm, id, t);
     if is_a(engine(vm), &class, "EditBox") && !engine(vm).world.text_set.contains(&id) {
         engine_mut(vm).world.text_set.push(id);
     }
     Ok(vec![])
+}
+
+/// `region:SetDrawLayer(layer [, sublevel])`: kept, the sublevel 0 when
+/// not given (documented `Default = 0`; `GetDrawLayer` then answers both,
+/// as Blizzard's menus' radio entries need: the compositor's textures are
+/// set to `"ARTWORK"` alone, then raised a sublevel).
+fn set_draw_layer(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let sublevel = match c.arg(3) {
+        Value::Num(n) => n,
+        _ => 0.0,
+    };
+    store(vm, id, "DrawLayer", &[c.arg(2), Value::Num(sublevel)]);
+    Ok(vec![])
+}
+
+/// `fontString:SetTextToFit([text])`: its text set as `SetText` sets it
+/// (the documented `text`; Blizzard's menus' entries are labelled so),
+/// then its width the text's (the name; unverified).
+fn set_text_to_fit(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    set_text(vm, id, c)?;
+    let len = match engine(vm).world.widgets[id.0].text {
+        Some(Value::Str(s)) => vm.str_bytes(s).len(),
+        _ => 0,
+    };
+    resize(vm, id, Some(len as f64 * 6.0), None);
+    Ok(vec![])
+}
+
+/// A widget's text set, kept alive while it is the widget's (its
+/// properties hold it: the collector sees them, not the widget).
+pub fn store_text(vm: &mut Vm, id: WidgetId, text: Option<Value>) {
+    let props = engine(vm).world.widgets[id.0].props;
+    let key = vm.str("\u{0}text");
+    let _ = vm
+        .heap
+        .table_mut(props)
+        .set(key, text.unwrap_or(Value::Nil));
+    engine_mut(vm).world.widgets[id.0].text = text;
 }
 
 /// A text as a widget keeps it: a number as its string (`SetText(1)` reads
@@ -2408,7 +3011,7 @@ fn set_number(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         format!("{n}")
     };
     let t = vm.str(&text);
-    engine_mut(vm).world.widgets[id.0].text = Some(t);
+    store_text(vm, id, Some(t));
     if !engine(vm).world.text_set.contains(&id) {
         engine_mut(vm).world.text_set.push(id);
     }
@@ -2452,7 +3055,7 @@ fn set_formatted_text(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let f = vm.heap.table(string).get(key);
     let args: Vec<Value> = c.args.iter().skip(1).copied().collect();
     let r = vm.call(f, &args)?;
-    engine_mut(vm).world.widgets[id.0].text = r.first().copied();
+    store_text(vm, id, r.first().copied());
     Ok(vec![])
 }
 
@@ -2553,6 +3156,22 @@ fn get_frame_level(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(frame_level(vm, id))])
 }
 
+/// `SetUsingParentLevel(using)`: kept; using its parent's, a frame drops
+/// the level set before (SuuUI probe trees: `InsetFrameTemplate`'s
+/// `NineSlice`, `useParentLevel` over `NineSlicePanelTemplate`'s
+/// `frameLevel="500"`, at its inset's level 2). Unverified: a level set
+/// after.
+fn set_using_parent_level(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let using = c.arg(2).truthy();
+    store(vm, id, "UsingParentLevel", &[Value::Bool(using)]);
+    if using {
+        let props = engine(vm).world.widgets[id.0].props;
+        let key = vm.str("FrameLevel");
+        let _ = vm.heap.table_mut(props).set(key, Value::Nil);
+    }
+    Ok(vec![])
+}
+
 /// A frame's level: what `SetFrameLevel` set, else one above the parent
 /// (unverified).
 pub fn frame_level(vm: &mut Vm, id: WidgetId) -> f64 {
@@ -2567,8 +3186,13 @@ pub fn frame_level(vm: &mut Vm, id: WidgetId) -> f64 {
             level = *n;
             break;
         }
+        // One using its parent's level is at it (SuuUI probe trees: the
+        // character frame's panes, `useParentLevel`, at its level 1).
+        let using = stored_args(vm, props, "UsingParentLevel")
+            .and_then(|v| v.first().copied())
+            .is_some_and(|v| v.truthy());
         cur = engine(vm).world.widgets[w.0].parent;
-        if cur.is_some() {
+        if cur.is_some() && !using {
             depth += 1.0;
         }
     }
@@ -2669,7 +3293,7 @@ fn set_font_object(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 }
 
 /// `GetFont()`: the widget's own font, else its font object's.
-fn get_font(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+pub(crate) fn get_font(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let mut cur = id;
     for _ in 0..32 {
         let props = engine(vm).world.widgets[cur.0].props;
@@ -2771,6 +3395,9 @@ fn set_enabled_to(vm: &mut Vm, id: WidgetId, on: bool) {
     let was = std::mem::replace(&mut w.enabled, on);
     let class = w.class.clone();
     let script = if on { "OnEnable" } else { "OnDisable" };
+    if was != on {
+        crate::buttons::refresh_states(vm, id);
+    }
     if was != on && has_script(engine(vm), &class, script) {
         run_script(vm, id, script, &[]);
     }
@@ -2796,21 +3423,33 @@ fn is_enabled(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 }
 
 /// `SetVertexColor(r, g, b [, a])`: alpha 1 when left out; white until set
-/// (unverified).
+/// (unverified). Secrets too, even from tainted code, as `SetAlpha` (the
+/// API documentation: `AllowedWhenTainted`, adding the vertex color
+/// aspect); the color then reads back secret (unverified: each channel,
+/// and the alpha aspect the documentation also names).
 fn set_vertex_color(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let secret = (2..=5).any(|i| matches!(c.arg(i), Value::Secret(_)));
     let mut rgba = [1.0; 4];
     for (i, v) in rgba.iter_mut().enumerate().take(3) {
-        *v = number_arg(vm, &c, i + 2)?;
+        *v = match vm.hidden(c.arg(i + 2)) {
+            Value::Num(n) if secret => n,
+            _ => number_arg(vm, &c, i + 2)?,
+        };
     }
-    rgba[3] = vm.opt_number(&c, 5, 1.0)?;
+    rgba[3] = match vm.hidden(c.arg(5)) {
+        Value::Num(n) if secret => n,
+        _ => vm.opt_number(&c, 5, 1.0)?,
+    };
     let rgba = rgba.map(byte_float);
     let props = engine(vm).world.widgets[id.0].props;
     let list = vm.new_table();
     for (i, v) in rgba.iter().enumerate() {
-        let _ = vm
-            .heap
-            .table_mut(list)
-            .set(Value::Num(i as f64 + 1.0), Value::Num(*v));
+        let v = if secret {
+            vm.secret_wrap(Value::Num(*v))
+        } else {
+            Value::Num(*v)
+        };
+        let _ = vm.heap.table_mut(list).set(Value::Num(i as f64 + 1.0), v);
     }
     let n = vm.str("n");
     let _ = vm.heap.table_mut(list).set(n, Value::Num(4.0));
@@ -3076,10 +3715,15 @@ fn enumerate_frames(vm: &mut Vm, c: NativeCall) -> Ret {
             None => return Ok(vec![Value::Nil]),
         },
     };
+    // Addon code is not handed forbidden frames (unverified: ElvUI's
+    // toolkit asks every enumerated frame's `GetObjectType` before
+    // `IsForbidden`, error-free in the client, where that call on a
+    // forbidden frame errors, `/stdtest engine`).
+    let addon = crate::protection::tainted(vm);
     let e = engine(vm);
     let next = e.world.widgets[start.min(e.world.widgets.len())..]
         .iter()
-        .find(|w| is_a(e, &w.class, "Frame"))
+        .find(|w| is_a(e, &w.class, "Frame") && !(addon && w.forbidden))
         .map(|w| Value::Table(w.table));
     Ok(vec![next.unwrap_or(Value::Nil)])
 }
@@ -3099,6 +3743,9 @@ pub type MethodFn = fn(&mut Vm, WidgetId, NativeCall) -> Ret;
 
 /// Stores `args` as setter `stem`'s on a widget's properties.
 pub(crate) fn store(vm: &mut Vm, id: WidgetId, stem: &str, args: &[Value]) {
+    if stem == "KeyboardEnabled" {
+        insert_sorted(&mut engine_mut(vm).world.keyboard, id.0);
+    }
     let props = engine(vm).world.widgets[id.0].props;
     let list = vm.new_table();
     // A fixed-height font keeps its height as set.
@@ -3130,11 +3777,7 @@ fn button_texture(vm: &mut Vm, id: WidgetId, kind: &str) -> Value {
     }
     let t = create(vm, "Texture", None, Some(id));
     if let Some(tid) = widget_of(vm, t) {
-        let layer = vm.str(if kind == "Highlight" {
-            "HIGHLIGHT"
-        } else {
-            "ARTWORK"
-        });
+        let layer = vm.str(crate::buttons::state_layer(kind));
         store(vm, tid, "DrawLayer", &[layer, Value::Num(0.0)]);
     }
     store(vm, id, &stem, &[t]);
@@ -3145,19 +3788,37 @@ fn button_texture(vm: &mut Vm, id: WidgetId, kind: &str) -> Value {
 /// texture's; `SetXAtlas(atlas, …)` the atlas of its texture.
 fn set_button_texture(vm: &mut Vm, id: WidgetId, c: &NativeCall, kind: &str, atlas: bool) -> Ret {
     let asset = c.arg(2);
-    if !atlas && widget_of(vm, asset).is_some() {
+    if !atlas && let Some(new) = widget_of(vm, asset) {
+        // The texture it replaces is hidden, back in ARTWORK (SuuUI probe
+        // trees: the ammo slot's `<HighlightTexture>` replaces its
+        // ItemButton's, which reports hidden in ARTWORK; one sample).
+        let props = engine(vm).world.widgets[id.0].props;
+        let old = stored_args(vm, props, &format!("{kind}Texture"))
+            .and_then(|v| v.first().copied())
+            .and_then(|v| widget_of(vm, v))
+            .filter(|old| *old != new);
+        if let Some(old) = old {
+            engine_mut(vm).world.widgets[old.0].shown = false;
+            let layer = vm.str("ARTWORK");
+            store(vm, old, "DrawLayer", &[layer, Value::Num(0.0)]);
+        }
         store(vm, id, &format!("{kind}Texture"), &[asset]);
+        crate::buttons::refresh_states(vm, id);
         return Ok(vec![]);
     }
     let t = button_texture(vm, id, kind);
     if let Some(tid) = widget_of(vm, t) {
         let args: Vec<Value> = c.args.iter().skip(1).copied().collect();
         store(vm, tid, if atlas { "Atlas" } else { "Texture" }, &args);
+        if atlas {
+            crate::measures::apply_atlas_size(vm, tid, &args);
+        }
     }
     if atlas {
         let args: Vec<Value> = c.args.iter().skip(1).copied().collect();
         store(vm, id, &format!("{kind}Atlas"), &args);
     }
+    crate::buttons::refresh_states(vm, id);
     Ok(vec![])
 }
 
@@ -3222,6 +3883,7 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("IsVisible", is_visible),
         ("GetName", get_name),
         ("GetDebugName", get_debug_name),
+        ("GetObjectTable", get_object_table),
         ("GetObjectType", get_object_type),
         ("IsObjectType", is_object_type),
         ("GetParent", get_parent),
@@ -3270,6 +3932,8 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("GetCenter", get_center),
         ("GetRect", get_rect),
         ("SetText", set_text),
+        ("SetTextToFit", set_text_to_fit),
+        ("SetDrawLayer", set_draw_layer),
         ("SetNormalFontObject", set_normal_font_object),
         ("SetParentKey", set_parent_key),
         ("GetTextScale", get_text_scale),
@@ -3291,6 +3955,8 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("IsForbidden", is_forbidden),
         ("SetFontObject", set_font_object),
         ("GetFrameLevel", get_frame_level),
+        ("SetUsingParentLevel", set_using_parent_level),
+        ("SetToDefaults", set_to_defaults),
         ("GetID", get_id),
         ("GetStringWidth", get_string_width),
         ("GetTextWidth", get_string_width),

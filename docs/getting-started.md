@@ -85,8 +85,9 @@ result.
 
 - It finds the installation from `--wow <path>`, the `WOWLUA_WOW_PATH`
   environment variable, `wow.path` in `~/.wowlua/config.json`, or the
-  Battle.net default folder on macOS and Windows. On Linux, set one of the
-  first three.
+  Battle.net default folder: on macOS and Windows, and on Linux in a Wine
+  prefix (Lutris's `~/Games/battlenet`, or `~/.wine`). Elsewhere, set one
+  of the first three.
 - It never overwrites an AddOn folder it did not install, such as the same
   addon from an addon manager. That is error E4331, unless you pass `--force`.
 - A failed build leaves the installed AddOn alone, so the last working version
@@ -214,9 +215,6 @@ spies and stubs. `wowlua test --watch` runs again on every change, and
 `--coverage` measures which lines ran. See
 [Tooling §16.1](../spec/toolchain/tooling.md#161-test-runner-wowlua-test) for
 everything a test can do.
-
-`wowlua test` is newer than release 0.9.0. Until a release includes it, build
-wowlua [from source](install.md#from-source) to use it.
 
 ## Build a release
 

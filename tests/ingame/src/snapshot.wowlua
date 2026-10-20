@@ -5,6 +5,7 @@
 -- `cargo xtask profile <StdTest.lua> <out.json>` writes the profile with
 -- the player's name, realm and GUIDs scrubbed. Read-only calls only.
 import state from "/state"
+import stamp from "/state"
 import say from "/harness"
 
 local G = _G :: any
@@ -91,6 +92,13 @@ local function bags(items: { [number]: table }): table
                 const info = C_Container.GetContainerItemInfo(bag, slot)
                 if info then
                     const quest = C_Container.GetContainerItemQuestInfo(bag, slot)
+                    -- A running cooldown: what is left of it, and its length.
+                    local cooldown: table? = nil
+                    local start, duration = C_Container.GetContainerItemCooldown(bag, slot)
+                    if not issecretvalue(start) and not issecretvalue(duration)
+                        and type(duration) == "number" and duration > 0 then
+                        cooldown = { remaining = start + duration - GetTime(), duration = duration }
+                    end
                     contents[slot] = {
                         id = info.itemID,
                         count = info.stackCount,
@@ -99,6 +107,7 @@ local function bags(items: { [number]: table }): table
                         questItem = quest and quest.isQuestItem or nil,
                         questID = quest and quest.questID or nil,
                         questActive = quest and quest.isActive or nil,
+                        cooldown = cooldown,
                     }
                     itemData(items, info.itemID)
                     if info.isReadable then
@@ -233,6 +242,7 @@ const STATS: { key: string, fn: string, ask: string }[] = {
     { key = "backpackCurrency", fn = "C_CurrencyInfo.GetBackpackCurrencyInfo", ask = "index" },
     { key = "questLogEntries", fn = "C_QuestLog.GetNumQuestLogEntries", ask = "plain" },
     { key = "questLogInfo", fn = "C_QuestLog.GetInfo", ask = "index" },
+    { key = "questCompletionText", fn = "GetQuestLogCompletionText", ask = "index" },
     { key = "selectedQuest", fn = "C_QuestLog.GetSelectedQuest", ask = "plain" },
     { key = "questWatches", fn = "C_QuestLog.GetNumQuestWatches", ask = "plain" },
     { key = "questWatchID", fn = "C_QuestLog.GetQuestIDForQuestWatchIndex", ask = "index" },
@@ -245,6 +255,8 @@ const STATS: { key: string, fn: string, ask: string }[] = {
     { key = "spellBookItemCooldown", fn = "C_SpellBook.GetSpellBookItemCooldown", ask = "slot" },
     { key = "spellBookItemAutoCast", fn = "C_SpellBook.GetSpellBookItemAutoCast", ask = "slot" },
     { key = "spellBookItemFlyoutMember", fn = "C_SpellBook.IsSpellBookItemLooseFlyoutMember", ask = "slot" },
+    { key = "flyoutInfo", fn = "GetFlyoutInfo", ask = "index" },
+    { key = "flyoutSlot", fn = "GetFlyoutSlotInfo", ask = "flyoutSlot" },
     { key = "questFailed", fn = "C_QuestLog.IsFailed", ask = "index" },
     { key = "questElite", fn = "C_QuestLog.IsEliteQuest", ask = "index" },
     { key = "questDifficulty", fn = "C_QuestLog.GetQuestDifficultyLevel", ask = "index" },
@@ -285,6 +297,27 @@ const INDICES: { [string]: number[] } = {
     spellBookSkillLine = { 1, 2, 3, 4, 5, 6, 7, 8 },
 }
 
+--- The spellbook's flyouts: their IDs (`actionID` of the items of type
+--- Flyout).
+local function flyoutIDs(): number[]
+    const book = C_SpellBook :: any
+    const out: number[] = {}
+    local last = 0
+    for line = 1, book.GetNumSpellBookSkillLines() do
+        const info = book.GetSpellBookSkillLineInfo(line)
+        if info then
+            last = math.max(last, info.itemIndexOffset + info.numSpellBookItems)
+        end
+    end
+    for slot = 1, last do
+        const item = book.GetSpellBookItemInfo(slot, 0)
+        if item and item.itemType == Enum.SpellBookItemType.Flyout and item.actionID then
+            out[#out + 1] = item.actionID
+        end
+    end
+    return out
+end
+
 --- The indices the client's own counts give (a stat not in `INDICES` and
 --- not here: the 31 combat ratings).
 local function counted(key: string): number[]?
@@ -315,7 +348,7 @@ local function counted(key: string): number[]?
         return upTo(A.C_CurrencyInfo.GetCurrencyListSize())
     elseif key == "backpackCurrency" then
         return upTo(3)
-    elseif key == "questLogInfo" then
+    elseif key == "questLogInfo" or key == "questCompletionText" then
         return upTo(A.C_QuestLog.GetNumQuestLogEntries())
     elseif key == "questWatchID" then
         return upTo(A.C_QuestLog.GetNumQuestWatches())
@@ -354,6 +387,10 @@ local function counted(key: string): number[]?
             end
         end
         return out
+    end
+    -- The spellbook's flyouts, by ID.
+    if key == "flyoutInfo" then
+        return flyoutIDs()
     end
     return nil
 end
@@ -431,6 +468,17 @@ local function stats(): table
                             if ok and r.n > 0 then
                                 byIndex[slot * 100 + kind * 10 + modification] = r
                             end
+                        end
+                    end
+                end
+            elseif ask == "flyoutSlot" then
+                -- Each flyout's slots, by `id * 100 + slot`.
+                for _, id in ipairs(flyoutIDs()) do
+                    local _, _, n = (_G :: any).GetFlyoutInfo(id)
+                    for j = 1, n ?? 0 do
+                        local ok, r = pcall(function(): table return results(f(id, j)) end)
+                        if ok then
+                            byIndex[id * 100 + j] = r
                         end
                     end
                 end
@@ -668,5 +716,6 @@ export function snapshot()
     const failed = profile.errors :: string[]
     const st = state() :: any
     st.snapshot = profile
+    stamp("snapshot")
     say(`snapshot: recorded{#failed > 0 and ` ({#failed} parts failed)` or ""}; type /reload so the file is written`)
 end

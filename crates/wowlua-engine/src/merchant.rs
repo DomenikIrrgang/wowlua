@@ -5,8 +5,9 @@
 //!
 //! Verified against the client (`/stdtest engine record merchant` and
 //! `/stdtest engine merchant`, Forever 70425): `MERCHANT_SHOW`,
-//! `PLAYER_INTERACTION_MANAGER_FRAME_SHOW(5)`, then a frame later the items'
-//! `MERCHANT_FILTER_ITEM_UPDATE(itemID)` and `MERCHANT_UPDATE`; closing:
+//! `PLAYER_INTERACTION_MANAGER_FRAME_SHOW(5)`, then a frame later the
+//! unloaded items' `MERCHANT_FILTER_ITEM_UPDATE(itemID)` and
+//! `MERCHANT_UPDATE` (none for loaded items: the vendor scenario); closing:
 //! `MERCHANT_CLOSED`, `PLAYER_INTERACTION_MANAGER_FRAME_HIDE(5)` and `(0)`;
 //! the server's answers to a purchase, a sale and a buyback (their events
 //! and order; a sale locks the item at once); `C_MerchantFrame.GetItemInfo`'s
@@ -18,15 +19,18 @@
 //! purchase's price for stacks (the price per `stackCount`), which bag slot
 //! a purchase fills (a stack of the item, else the first free slot), the
 //! buyback list's order (the latest last) and size (12), and that the
-//! filter update fires for every item. The client's answer to a purchase
+//! filter update fires for every unloaded item. The client's answer to a purchase
 //! orders `PLAYER_MONEY` and the bag's update differently from one time to
-//! the next (the server's packets); the first recording's order is kept.
+//! the next (the server's packets): the first recording's order when the
+//! item's data come at once, `/stdtest engine scenario vendor`'s when they
+//! come a packet later (the goods' `itemAfter`).
 //! Recorded too (`/stdtest engine record vendor2`): `ITEM_PUSH` with the
 //! bag's inventory slot, `CHAT_MSG_LOOT`, "Inventory is full." (3), a
-//! repair's `UPDATE_INVENTORY_DURABILITY` per item then `PLAYER_MONEY`.
+//! repair's `UPDATE_INVENTORY_DURABILITY` per item and `PLAYER_MONEY`
+//! (`repairMoneyAfter`).
 
 use wowlua_vm::stdlib::Ret;
-use wowlua_vm::{NativeCall, NativeFn, TableRef, Value, Vm};
+use wowlua_vm::{LuaError, NativeCall, NativeFn, TableRef, Value, Vm};
 
 use crate::character::{self, Held};
 use crate::{engine, engine_mut, units, widgets};
@@ -47,6 +51,9 @@ pub struct Goods {
     pub available: f64,
     pub max_stack: f64,
     pub usable: bool,
+    /// A bought one's data after the purchase's answer (seconds), the
+    /// server's (`itemAfter`).
+    pub item_after: Option<f64>,
 }
 
 #[derive(Clone, Debug)]
@@ -68,6 +75,11 @@ pub struct Merchant {
     /// The damaged items a repair mends (one `UPDATE_INVENTORY_DURABILITY`
     /// each).
     pub damaged: f64,
+    /// A repair's money told after this many items' durability.
+    pub repair_money_after: Option<usize>,
+    /// What mending each worn slot's item costs while it is damaged (the
+    /// vendor's `repairCosts`; the server's prices, by the item).
+    pub repair_costs: std::collections::BTreeMap<i64, f64>,
     /// The chat's line IDs (`CHAT_MSG_LOOT`).
     pub line: f64,
 }
@@ -102,6 +114,13 @@ pub fn control_open(vm: &mut Vm, c: NativeCall) -> Ret {
     let Value::Table(data) = c.arg(1) else {
         return Err(vm.error("mock.openMerchant: a table of the vendor's data expected"));
     };
+    open(vm, data, None)?;
+    Ok(vec![])
+}
+
+/// A vendor's window opened (`openMerchant`'s table): by `npc` (a gossip's
+/// option), else by an NPC of its name.
+pub fn open(vm: &mut Vm, data: TableRef, npc: Option<units::UnitId>) -> Result<(), LuaError> {
     let mut items = Vec::new();
     if let Value::Table(list) = field(vm, data, "items") {
         let n = vm.heap.table(list).border();
@@ -124,6 +143,7 @@ pub fn control_open(vm: &mut Vm, c: NativeCall) -> Ret {
                 available: num(field(vm, t, "available")).unwrap_or(-1.0),
                 max_stack,
                 usable: usable.is_nil() || usable.truthy(),
+                item_after: num(field(vm, t, "itemAfter")),
             });
         }
     }
@@ -135,10 +155,22 @@ pub fn control_open(vm: &mut Vm, c: NativeCall) -> Ret {
     let repair_cost = num(field(vm, data, "repairCost")).unwrap_or(0.0);
     let damaged =
         num(field(vm, data, "damaged")).unwrap_or(if repair_cost > 0.0 { 1.0 } else { 0.0 });
+    let money_after = num(field(vm, data, "repairMoneyAfter")).map(|n| n.max(0.0) as usize);
+    let mut repair_costs = std::collections::BTreeMap::new();
+    if let Value::Table(costs) = field(vm, data, "repairCosts") {
+        for (k, v) in vm.heap.table(costs).entries() {
+            if let (Value::Num(slot), Value::Num(cost)) = (k, v) {
+                repair_costs.insert(slot as i64, cost);
+            }
+        }
+    }
     if merchant(vm).open {
         close(vm);
     }
-    let npc = units::spawn_named(vm, &name);
+    let npc = match npc {
+        Some(n) => n,
+        None => units::spawn_named(vm, &name),
+    };
     engine_mut(vm).units.npc = Some(npc);
     {
         let m = merchant_mut(vm);
@@ -147,6 +179,8 @@ pub fn control_open(vm: &mut Vm, c: NativeCall) -> Ret {
         m.can_repair = can_repair;
         m.repair_cost = repair_cost;
         m.damaged = damaged;
+        m.repair_money_after = money_after;
+        m.repair_costs = repair_costs;
     }
     fire(vm, "MERCHANT_SHOW", &[]);
     fire(
@@ -154,21 +188,43 @@ pub fn control_open(vm: &mut Vm, c: NativeCall) -> Ret {
         "PLAYER_INTERACTION_MANAGER_FRAME_SHOW",
         &[Value::Num(5.0)],
     );
-    let later = vm.native("merchantFilled", filled);
-    crate::clock::after_engine(vm, 1.0 / 60.0, later);
-    Ok(vec![])
+    // The goods' data loading (a first visit, `gossip2`): their filter
+    // updates a frame later; `cached = true`, the client had them (a visit
+    // before, `vendor`: none, no item's data loaded).
+    if !field(vm, data, "cached").truthy() {
+        let later = vm.native("merchantFilled", filled);
+        crate::clock::after_engine(vm, 1.0 / 60.0, later);
+    }
+    Ok(())
 }
 
-/// A frame after opening: the items' filter updates, `MERCHANT_UPDATE`.
+/// A frame after opening: the filter updates of the goods whose data was
+/// not loaded, with `MERCHANT_UPDATE` before the last of them. Recorded:
+/// gossip2's twelve unloaded goods (their links empty) each fired one, the
+/// update between the eleventh and the twelfth; vendor's eight loaded
+/// goods fired none and no update. Unverified (one sample each): where the
+/// update falls for other counts.
 fn filled(vm: &mut Vm, _c: NativeCall) -> Ret {
     if !merchant(vm).open {
         return Ok(vec![]);
     }
     let ids: Vec<i64> = merchant(vm).items.iter().map(|g| g.id).collect();
-    for id in ids {
+    let loading: Vec<i64> = ids
+        .into_iter()
+        .filter(|&id| character::item_field(vm, id, "name").is_nil())
+        .collect();
+    let Some((&last, rest)) = loading.split_last() else {
+        return Ok(vec![]);
+    };
+    for &id in rest {
         fire(vm, "MERCHANT_FILTER_ITEM_UPDATE", &[Value::Num(id as f64)]);
     }
     fire(vm, "MERCHANT_UPDATE", &[]);
+    fire(
+        vm,
+        "MERCHANT_FILTER_ITEM_UPDATE",
+        &[Value::Num(last as f64)],
+    );
     Ok(vec![])
 }
 
@@ -178,6 +234,9 @@ fn close(vm: &mut Vm) {
     }
     merchant_mut(vm).open = false;
     engine_mut(vm).units.npc = None;
+    // The repair cursor gone with the window (the next visit's opens out
+    // of repair mode: `repair`, unverified beyond its sample).
+    crate::actions2::end_repair_mode(vm);
     fire(vm, "MERCHANT_CLOSED", &[]);
     fire(
         vm,
@@ -241,10 +300,16 @@ fn item_info(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// A merchant's goods' links: in the vendor's context (14, recorded:
 /// `/stdtest engine scenario vendor`).
+/// `GetMerchantItemLink(i)`: the goods' link in the vendor's context; none
+/// for an item whose data is not loaded, no name (recorded: gossip2's
+/// goods).
 fn item_link(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(g) = goods(vm, &c) else {
         return Ok(vec![]);
     };
+    if character::item_field(vm, g.id, "name").is_nil() {
+        return Ok(vec![]);
+    }
     let link = character::link_in_context(vm, g.id, "14", &[]);
     Ok(link.map(|l| vec![vm.str(&l)]).unwrap_or_default())
 }
@@ -262,29 +327,20 @@ fn item_id(vm: &mut Vm, c: NativeCall) -> Ret {
         .unwrap_or_default())
 }
 
+/// No such goods (no merchant open): 1 (the full probe).
 fn item_max_stack(vm: &mut Vm, c: NativeCall) -> Ret {
-    Ok(goods(vm, &c)
-        .map(|g| vec![Value::Num(g.max_stack)])
-        .unwrap_or_default())
+    let n = goods(vm, &c).map_or(1.0, |g| g.max_stack);
+    Ok(vec![Value::Num(n)])
 }
 
-/// `GetMerchantItemCostInfo(i)`: no extended costs.
-fn cost_info(vm: &mut Vm, c: NativeCall) -> Ret {
-    Ok(goods(vm, &c)
-        .map(|_| vec![Value::Num(0.0)])
-        .unwrap_or_default())
+/// `GetMerchantItemCostInfo(i)`: no extended costs, no such goods none
+/// either (the full probe).
+fn cost_info(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(0.0)])
 }
 
 fn nothing(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
-}
-
-fn no(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(false)])
-}
-
-fn yes(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(true)])
 }
 
 /// `GetMerchantFilter()`: 2 (recorded open and closed).
@@ -297,29 +353,113 @@ fn can_repair(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(m.open && m.can_repair)])
 }
 
+/// The worn slots whose items are damaged, with what mending each costs
+/// (the vendor's `repairCosts`).
+fn priced_damage(vm: &Vm) -> Vec<(i64, f64)> {
+    let e = engine(vm);
+    e.world
+        .merchant
+        .repair_costs
+        .iter()
+        .filter(|(slot, _)| {
+            e.world
+                .character
+                .equipment
+                .get(slot)
+                .and_then(|h| h.durability)
+                .is_some_and(|(d, m)| d < m)
+        })
+        .map(|(s, c)| (*s, *c))
+        .collect()
+}
+
+/// What mending everything costs now: the damaged items' prices when the
+/// vendor names them (`repair`: 254 at the first visit, 228 after the
+/// boots' 26), else the vendor's `repairCost`.
+fn repair_cost_now(vm: &Vm) -> f64 {
+    if merchant(vm).repair_costs.is_empty() {
+        return merchant(vm).repair_cost;
+    }
+    priced_damage(vm).iter().map(|(_, c)| c).sum()
+}
+
 /// `GetRepairAllCost()`: at a vendor that repairs, the cost and whether
 /// anything needs it; elsewhere 0 alone (`/stdtest engine merchant`).
 fn repair_all_cost(vm: &mut Vm, _c: NativeCall) -> Ret {
     let m = merchant(vm);
     if m.open && m.can_repair {
-        Ok(vec![
-            Value::Num(m.repair_cost),
-            Value::Bool(m.repair_cost > 0.0),
-        ])
+        let cost = repair_cost_now(vm);
+        Ok(vec![Value::Num(cost), Value::Bool(cost > 0.0)])
     } else {
         Ok(vec![Value::Num(0.0)])
     }
 }
 
-/// `RepairAllItems()`: `UPDATE_INVENTORY_DURABILITY` for each damaged item,
-/// then `PLAYER_MONEY` (`/stdtest engine record vendor2`; at once here,
-/// the server's delay unrecorded).
+/// An item mended with the repair cursor (`PickupInventoryItem(slot)` in
+/// repair mode): a round trip later its durability full,
+/// `UPDATE_INVENTORY_DURABILITY` then `PLAYER_MONEY` (recorded once:
+/// `repair`'s boots, 26 copper, 0.353 s); nothing for an item not damaged,
+/// unpriced or too dear (unverified: the client's errors not told).
+pub fn repair_slot(vm: &mut Vm, slot: i64) {
+    let Some((_, cost)) = priced_damage(vm).into_iter().find(|(s, _)| *s == slot) else {
+        return;
+    };
+    if engine(vm).world.character.money < cost {
+        return;
+    }
+    later(
+        vm,
+        "merchantSlotRepaired",
+        slot_repaired,
+        vec![Value::Num(slot as f64), Value::Num(cost)],
+    );
+}
+
+fn slot_repaired(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (slot, cost) = (upval(&c, 0) as i64, upval(&c, 1));
+    if !merchant(vm).open || engine(vm).world.character.money < cost {
+        return Ok(vec![]);
+    }
+    let Some(h) = engine_mut(vm).world.character.equipment.get_mut(&slot) else {
+        return Ok(vec![]);
+    };
+    let Some((d, m)) = h.durability else {
+        return Ok(vec![]);
+    };
+    if d >= m {
+        return Ok(vec![]);
+    }
+    h.durability = Some((m, m));
+    engine_mut(vm).world.character.money -= cost;
+    fire(vm, "UPDATE_INVENTORY_DURABILITY", &[]);
+    fire(vm, "PLAYER_MONEY", &[]);
+    Ok(vec![])
+}
+
+/// `RepairAllItems()`: a round trip later (recorded: `vendor`), every item
+/// mended, `UPDATE_INVENTORY_DURABILITY` for each damaged one and
+/// `PLAYER_MONEY` among them after `repairMoneyAfter` of them (the
+/// merchant's data, the server's packets: recorded after all four in
+/// `/stdtest engine record vendor2`, after the first in `vendor`; by
+/// default after all).
 fn repair_all(vm: &mut Vm, _c: NativeCall) -> Ret {
     let (open, can, cost) = {
         let m = merchant(vm);
-        (m.open, m.can_repair, m.repair_cost)
+        (m.open, m.can_repair, repair_cost_now(vm))
     };
     if !open || !can || cost <= 0.0 || engine(vm).world.character.money < cost {
+        return Ok(vec![]);
+    }
+    later(vm, "merchantRepaired", repaired, vec![]);
+    Ok(vec![])
+}
+
+fn repaired(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let (open, cost) = {
+        let m = merchant(vm);
+        (m.open, repair_cost_now(vm))
+    };
+    if !open || cost <= 0.0 || engine(vm).world.character.money < cost {
         return Ok(vec![]);
     }
     engine_mut(vm).world.character.money -= cost;
@@ -333,10 +473,17 @@ fn repair_all(vm: &mut Vm, _c: NativeCall) -> Ret {
     };
     merchant_mut(vm).repair_cost = 0.0;
     merchant_mut(vm).damaged = 0.0;
-    for _ in 0..damaged as usize {
+    let damaged = damaged as usize;
+    let money_after = merchant(vm).repair_money_after.unwrap_or(damaged);
+    for i in 0..damaged {
+        if i == money_after {
+            fire(vm, "PLAYER_MONEY", &[]);
+        }
         fire(vm, "UPDATE_INVENTORY_DURABILITY", &[]);
     }
-    fire(vm, "PLAYER_MONEY", &[]);
+    if money_after >= damaged {
+        fire(vm, "PLAYER_MONEY", &[]);
+    }
     Ok(vec![])
 }
 
@@ -379,7 +526,17 @@ fn num_buyback(vm: &mut Vm, _c: NativeCall) -> Ret {
 /// isUsable, isBound.
 fn buyback_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(s) = sold(vm, &c) else {
-        return Ok(vec![]);
+        // Nothing sold there: the empty slot's values (the full probe).
+        let (zero, one) = (Value::Num(0.0), Value::Num(1.0));
+        return Ok(vec![
+            Value::Nil,
+            Value::Nil,
+            zero,
+            one,
+            zero,
+            one,
+            Value::Nil,
+        ]);
     };
     let name = character::item_field(vm, s.held.id, "name");
     let icon = character::item_field(vm, s.held.id, "icon");
@@ -436,6 +593,7 @@ fn buy(vm: &mut Vm, c: NativeCall) -> Ret {
             Value::Num(g.id as f64),
             Value::Num(quantity),
             Value::Num(cost),
+            g.item_after.map_or(Value::Nil, Value::Num),
         ],
     );
     Ok(vec![])
@@ -522,14 +680,49 @@ fn bought(vm: &mut Vm, c: NativeCall) -> Ret {
         }
     }
     let icon = character::item_field(vm, id, "icon");
+    let push = |vm: &mut Vm| {
+        fire(
+            vm,
+            "ITEM_PUSH",
+            &[Value::Num(character::bag_inventory_slot(bag)), icon],
+        );
+        loot_message(vm, id, quantity, "14");
+        fire(vm, "BAG_NEW_ITEMS_UPDATED", &[]);
+    };
     fire(vm, "MERCHANT_UPDATE", &[]);
-    fire(
-        vm,
-        "ITEM_PUSH",
-        &[Value::Num(character::bag_inventory_slot(bag)), icon],
-    );
-    loot_message(vm, id, quantity, "14");
-    fire(vm, "BAG_NEW_ITEMS_UPDATED", &[]);
+    // The item's data a packet later (the goods' `itemAfter`), as the
+    // client told it in `/stdtest engine scenario vendor` (a new slot): the
+    // money, the bag, the item pushed; the slot reading empty till its
+    // data come, the equipped spells', the bag's and the inventory's
+    // updates then (as a looted item's), no count's change.
+    let stacked = engine(vm).world.character.bags[&bag].items[&slot].count > quantity;
+    if let Some(Value::Num(after)) = c.upvals.get(3).copied()
+        && !stacked
+    {
+        if let Some(h) = engine_mut(vm)
+            .world
+            .character
+            .bags
+            .get_mut(&bag)
+            .and_then(|b| b.items.get_mut(&slot))
+        {
+            h.arriving = true;
+        }
+        fire(vm, "PLAYER_MONEY", &[]);
+        bag_update(vm, bag);
+        push(vm);
+        fire(vm, "BAG_UPDATE_DELAYED", &[]);
+        let native = vm.native_with(
+            "merchantItemData",
+            item_data_arrived,
+            vec![Value::Num(bag as f64), Value::Num(slot as f64)],
+        );
+        crate::clock::after_engine(vm, after, native);
+        return Ok(vec![]);
+    }
+    // Its data at once (`/stdtest engine record merchant`): the item
+    // pushed, the bag, the inventory, the money, the bag again, its count.
+    push(vm);
     bag_update(vm, bag);
     let player = vm.str("player");
     fire(vm, "UNIT_INVENTORY_CHANGED", &[player]);
@@ -537,6 +730,19 @@ fn bought(vm: &mut Vm, c: NativeCall) -> Ret {
     bag_update(vm, bag);
     fire(vm, "BAG_UPDATE_DELAYED", &[]);
     fire(vm, "ITEM_COUNT_CHANGED", &[Value::Num(id as f64)]);
+    Ok(vec![])
+}
+
+/// A bought item's data come: its slot reads it; the equipped spells',
+/// the bag's and the inventory's updates (recorded, as a looted item's).
+pub(crate) fn item_data_arrived(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (bag, slot) = (upval(&c, 0) as i64, upval(&c, 1) as usize);
+    character::arrived(vm, bag, slot);
+    character::equipped_spells_changed(vm);
+    bag_update(vm, bag);
+    let player = vm.str("player");
+    fire(vm, "UNIT_INVENTORY_CHANGED", &[player]);
+    fire(vm, "BAG_UPDATE_DELAYED", &[]);
     Ok(vec![])
 }
 
@@ -688,6 +894,9 @@ fn sold_answer(vm: &mut Vm, c: NativeCall) -> Ret {
         }
     }
     fire(vm, "PLAYER_MONEY", &[]);
+    // The inventory changed: the equipped spells' changes before the bag's
+    // (recorded: each of `vendor`'s four sales).
+    character::equipped_spells_changed(vm);
     bag_update(vm, bag);
     fire(vm, "MERCHANT_UPDATE", &[]);
     fire(vm, "BAG_UPDATE_DELAYED", &[]);
@@ -746,7 +955,9 @@ fn buyback(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// The buyback, as the server answers it: back where it was when free.
+/// The buyback, as the server answers it: placed as a purchase is, not
+/// back where it was (recorded: a claw sold from slot 7 bought back into
+/// the first free slot, 6).
 fn bought_back(vm: &mut Vm, c: NativeCall) -> Ret {
     let i = upval(&c, 0) as usize;
     let list = &mut merchant_mut(vm).buyback;
@@ -754,17 +965,7 @@ fn bought_back(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![]);
     }
     let s = list.remove(i - 1);
-    let free = engine(vm)
-        .world
-        .character
-        .bags
-        .get(&s.bag)
-        .is_some_and(|b| !b.items.contains_key(&s.slot));
-    let Some((bag, slot)) = (if free {
-        Some((s.bag, s.slot))
-    } else {
-        place(vm, s.held.id, s.held.count)
-    }) else {
+    let Some((bag, slot)) = place(vm, s.held.id, s.held.count) else {
         merchant_mut(vm).buyback.insert(i - 1, s);
         return Ok(vec![]);
     };
@@ -777,6 +978,8 @@ fn bought_back(vm: &mut Vm, c: NativeCall) -> Ret {
         }
     }
     fire(vm, "PLAYER_MONEY", &[]);
+    // The equipped spells' changes, as a sale's (recorded).
+    character::equipped_spells_changed(vm);
     let at = [Value::Num(bag as f64), Value::Num(slot as f64)];
     fire(vm, "ITEM_LOCK_CHANGED", &at);
     fire(vm, "ITEM_UNLOCKED", &at);
@@ -801,8 +1004,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("CanMerchantRepair", can_repair),
         ("GetRepairAllCost", repair_all_cost),
         ("RepairAllItems", repair_all),
-        ("CanGuildBankRepair", yes),
-        ("InRepairMode", no),
+        ("InRepairMode", crate::actions2::in_repair_mode),
         (
             "C_MerchantFrame.IsSellAllJunkEnabled",
             sell_all_junk_enabled,

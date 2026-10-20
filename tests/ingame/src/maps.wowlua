@@ -1,9 +1,12 @@
 -- /stdtest engine maps: the client's map data (every map from the world
 -- map and the player's map, down through their children) as Blizzard's UI
 -- asks it, into StdTestState.engineMapAnswers[call]
--- in the answers probe's form (`cargo xtask ingest` merges them). Static
--- data only: no positions, exploration or quests.
+-- in the answers probe's form (`cargo xtask ingest` merges them). The
+-- static data, and what each map holds (POIs, flight points, graveyards,
+-- the explored areas; what goes on there: delves, events, invasions,
+-- bounties): no positions or quests.
 import state from "/state"
+import stamp from "/state"
 import say from "/harness"
 
 local function pack(...: any): { n: number, [number]: any }
@@ -60,13 +63,48 @@ const BY_ID: string[] = {
     "CanSetUserWaypointOnMap",
 }
 
+--- What each map holds, asked by its ID alone (as the world map's data
+--- providers ask it).
+const CONTENT: string[] = {
+    "C_AreaPoiInfo.GetAreaPOIForMap",
+    "C_AreaPoiInfo.GetQuestHubsForMap",
+    "C_AreaPoiInfo.GetDelvesForMap",
+    "C_AreaPoiInfo.GetEventsForMap",
+    "C_EncounterJournal.GetDungeonEntrancesForMap",
+    "C_TaxiMap.ShouldMapShowTaxiNodes",
+    "C_TaxiMap.GetTaxiNodesForMap",
+    "C_TaskQuest.DoesMapShowTaskQuestObjectives",
+    "C_TaskQuest.GetQuestsOnMap",
+    "C_DeathInfo.GetGraveyardsForMap",
+    "C_DeathInfo.GetCorpseMapPosition",
+    "C_MapExplorationInfo.GetExploredMapTextures",
+    "C_FogOfWar.GetFogOfWarForMap",
+    "C_Map.GetMapHighlightPulseInfo",
+    "C_Map.GetUserWaypointPositionForMap",
+    "C_ContributionCollector.GetContributionCollectorsForMap",
+    "C_Garrison.GetGarrisonPlotsInstancesForMap",
+    "C_GossipInfo.GetPoiForUiMapID",
+    "C_InvasionInfo.GetInvasionForUiMapID",
+    "C_Navigation.GetNextWaypointForMap",
+    "C_ResearchInfo.GetDigSitesForMap",
+    "C_PvP.GetBattlefieldVehicles",
+    "C_PvP.GetOutdoorPvPWaitTime",
+    "C_QuestLog.GetBountiesForMapID",
+    "C_QuestLog.GetBountySetInfoForMapID",
+    "C_QuestLog.GetZoneStoryInfo",
+    "C_QuestLine.GetAvailableQuestLines",
+    "C_QuestLine.GetForceVisibleQuests",
+}
+
 export function mapsProbe()
     const st = state() :: any
     const out: { [string]: string } = {}
     const M = C_Map :: any
     local asked = 0
     local function ask(call: string, ...: any)
-        const f = M[(call:match("^C_Map%.(%w+)")) :: string]
+        local ns, name = call:match("^([%w_]+)%.(%w+)")
+        const space = (_G :: any)[ns :: string]
+        const f = space and space[name :: string]
         if f == nil then
             return
         end
@@ -123,6 +161,23 @@ export function mapsProbe()
         if group then
             ask(`C_Map.GetMapGroupMembersInfo({group})`, group)
         end
+        -- What it holds; each area POI's and quest hub's details.
+        for _, name in ipairs(CONTENT) do
+            ask(`{name}({id})`, id)
+        end
+        for _, kind in ipairs({ 0, 3 }) do
+            ask(`C_ContentTracking.GetTrackablesOnMap({kind}, {id})`, kind, id)
+        end
+        const A = C_AreaPoiInfo :: any
+        const pois: number[] = {}
+        for _, list in ipairs({ A.GetAreaPOIForMap(id) ?? {}, A.GetQuestHubsForMap(id) ?? {} }) do
+            for _, poi in ipairs(list :: number[]) do
+                pois[#pois + 1] = poi
+            end
+        end
+        for _, poi in ipairs(pois) do
+            ask(`C_AreaPoiInfo.GetAreaPOIInfo({id}, {poi})`, id, poi)
+        end
         -- Its rectangle on each map above it.
         local info = M.GetMapInfo(id)
         while info and info.parentMapID and info.parentMapID > 0 do
@@ -131,5 +186,6 @@ export function mapsProbe()
         end
     end
     st.engineMapAnswers = out
+    stamp("maps")
     say(`engine maps: {#ids} maps, {asked} calls recorded; type /reload so the file is written`)
 end

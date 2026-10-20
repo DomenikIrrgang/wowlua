@@ -18,8 +18,9 @@
 //! An item an objective asks for, looted: `QUEST_WATCH_UPDATE(id)` before
 //! the item's push, "Tough Wolf Meat: 1/8" (`UI_INFO_MESSAGE(317, …)`)
 //! after, "Objective Complete." (314) when the quest is; the log tells the
-//! new count with the server's next packet (`UNIT_QUEST_LOG_CHANGED`, a
-//! frame later `QUEST_LOG_UPDATE`; till then the old count).
+//! new count with the loot's bags' packet, before its updates
+//! (`UNIT_QUEST_LOG_CHANGED`, a frame later `QUEST_LOG_UPDATE`; till then
+//! the old count).
 //!
 //! `CompleteQuest()` (the progress panel's Continue): the server closes
 //! the panel (`QUEST_FINISHED` and the interaction's hides) and opens the
@@ -49,14 +50,11 @@ use crate::{engine, engine_mut, widgets};
 const TURNED_IN_AFTER: f64 = 0.05;
 const REWARDED_AFTER: f64 = 0.186;
 const BAGS_AFTER: f64 = 0.355;
-/// The log's packet after an item an objective asks for (recorded 0.06 to
-/// 0.16 s; one value).
-const LOG_AFTER: f64 = 0.08;
 /// The map's points of interest after a quest is accepted (recorded).
 const POI_AFTER: f64 = 0.477;
 /// How near the player must be to talk to an NPC, in yards (unverified:
 /// 9.9 was too far).
-const INTERACT_RANGE: f64 = 5.0;
+pub(crate) const INTERACT_RANGE: f64 = 5.0;
 /// The player's interaction type of a quest giver
 /// (`Enum.PlayerInteractionType.QuestGiver`).
 const QUEST_GIVER: f64 = 4.0;
@@ -94,6 +92,32 @@ pub struct Quests {
     pub completed: BTreeSet<i64>,
     /// Whether the engine keeps the log (once a quest was accepted).
     pub kept: bool,
+    /// A looted item's log packet owed, told with the bags' (`tell_log`).
+    pub log_owed: bool,
+    /// The log as other maps show it (`defineQuestMap`), by map.
+    pub map_views: std::collections::BTreeMap<i64, MapView>,
+    /// The log as the snapshot's map shows it, kept while another's shows.
+    pub base_log: Option<Vec<(&'static str, Entry)>>,
+    /// The headers the shown map's view shows expanded whatever their own
+    /// state.
+    pub forced: Vec<String>,
+    /// The headers the player collapsed or expanded (by title).
+    pub manual_headers: BTreeSet<String>,
+}
+
+/// A map's view of the log (`defineQuestMap(mapID, { first, top,
+/// expanded, onMap, localPOI, quests })`): the headers it shows first
+/// (expanded), the headers after them (their own state), the headers it
+/// shows expanded in their place, the quests on it and with a place on it,
+/// the quests whose map it is.
+#[derive(Clone, Debug, Default)]
+pub struct MapView {
+    pub first: Vec<String>,
+    pub top: Vec<String>,
+    pub expanded: Vec<String>,
+    pub on_map: BTreeSet<i64>,
+    pub local_poi: BTreeSet<i64>,
+    pub quests: BTreeSet<i64>,
 }
 
 /// An objective, as defined: `{ item = 750, required = 8, text = "Tough
@@ -305,7 +329,7 @@ fn dialog_opened(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-fn open(vm: &mut Vm, npc: UnitId, quest: i64, panel: Panel) {
+pub(crate) fn open(vm: &mut Vm, npc: UnitId, quest: i64, panel: Panel) {
     engine_mut(vm).units.npc = Some(npc);
     engine_mut(vm).world.quests.dialog = Some(Dialog { npc, quest, panel });
     match panel {
@@ -346,9 +370,10 @@ fn dialog_data(vm: &Vm) -> Option<(Dialog, TableRef)> {
 
 // ------------------------------------------------------------- the dialog
 
+/// A dialog's text; with none open an empty one (the full probe).
 fn dialog_text(vm: &mut Vm, key: &str) -> Ret {
     let Some((_, t)) = dialog_data(vm) else {
-        return Ok(vec![]);
+        return Ok(vec![vm.str("")]);
     };
     let s = text(vm, t, key);
     Ok(vec![vm.str(&s)])
@@ -369,7 +394,7 @@ fn get_objective_text(vm: &mut Vm, _c: NativeCall) -> Ret {
 /// The progress text names the player as the client does ("Hey <name>.").
 fn get_progress_text(vm: &mut Vm, _c: NativeCall) -> Ret {
     let Some((_, t)) = dialog_data(vm) else {
-        return Ok(vec![]);
+        return Ok(vec![vm.str("")]);
     };
     let s = text(vm, t, "progress");
     let name = engine(vm).units.list[units::PLAYER.0].name.clone();
@@ -379,7 +404,7 @@ fn get_progress_text(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 fn get_reward_text(vm: &mut Vm, _c: NativeCall) -> Ret {
     let Some((_, t)) = dialog_data(vm) else {
-        return Ok(vec![]);
+        return Ok(vec![vm.str("")]);
     };
     let s = text(vm, t, "completion");
     let name = engine(vm).units.list[units::PLAYER.0].name.clone();
@@ -409,8 +434,9 @@ fn get_reward_xp(vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// No title rewarded: nothing (recorded).
+/// No title rewarded: nil (the full probe).
 fn get_reward_title(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![])
+    Ok(vec![Value::Nil])
 }
 
 fn count_of(vm: &mut Vm, key: &str) -> Ret {
@@ -458,9 +484,22 @@ fn zero(_vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// No portrait: `0, "", "", 0` (recorded).
+/// No portrait: the giver's five values, the turn-in's three (the full
+/// probe: 0, "", "", 0, nil and 0, "", "").
 fn get_quest_portrait(vm: &mut Vm, _c: NativeCall) -> Ret {
     let empty = vm.str("");
-    Ok(vec![Value::Num(0.0), empty, empty, Value::Num(0.0)])
+    Ok(vec![
+        Value::Num(0.0),
+        empty,
+        empty,
+        Value::Num(0.0),
+        Value::Nil,
+    ])
+}
+
+fn get_quest_portrait_turn_in(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let empty = vm.str("");
+    Ok(vec![Value::Num(0.0), empty, empty])
 }
 
 /// The item a dialog's list names: `choice`, `reward` or `required`.
@@ -512,7 +551,7 @@ fn get_quest_item_info(vm: &mut Vm, c: NativeCall) -> Ret {
 /// bonus (3524), as recorded for these items.
 fn get_quest_item_link(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some((id, _)) = listed(vm, &c) else {
-        return Ok(vec![]);
+        return Ok(vec![Value::Nil]);
     };
     let link = crate::character::link_in_context(vm, id, "11", &[3524]);
     Ok(vec![link.map_or(Value::Nil, |l| vm.str(&l))])
@@ -635,6 +674,7 @@ fn on_map(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     sync_log(vm);
     fire(vm, "QUEST_POI_UPDATE", &[]);
+    crate::questinfo::quest_poi_arrived(vm, id)?;
     Ok(vec![])
 }
 
@@ -830,7 +870,10 @@ fn rewarded(vm: &mut Vm, c: NativeCall) -> Ret {
     for bag in bags {
         crate::character::bag_updated(vm, bag);
     }
-    fire(vm, "BAG_UPDATE_DELAYED", &[]);
+    // At once, not at the frame's end as a loot's (recorded once,
+    // `quest` 122.368: the log's updates after it, out of their names'
+    // order; unverified).
+    widgets::fire_now(vm, "BAG_UPDATE_DELAYED", &[]);
     sync_log(vm);
     fire(vm, "QUEST_LOG_UPDATE", &[]);
     {
@@ -918,7 +961,9 @@ fn reward_in_bags(vm: &mut Vm, c: NativeCall) -> Ret {
     units::fire_unit(vm, "UNIT_INVENTORY_CHANGED", units::PLAYER, &[]);
     fire(vm, "PLAYER_AVG_ITEM_LEVEL_UPDATE", &[]);
     fire(vm, "PLAYER_AVG_ITEM_LEVEL_UPDATE", &[]);
-    fire(vm, "BAG_UPDATE_DELAYED", &[]);
+    // At once, as the turn-in's (recorded once, `quest` 122.537: the
+    // health's maximum after it; unverified).
+    widgets::fire_now(vm, "BAG_UPDATE_DELAYED", &[]);
     units::fire_unit(vm, "UNIT_MAXHEALTH", units::PLAYER, &[]);
     if let Some(target) = engine(vm).units.target {
         units::fire_unit(vm, "UNIT_MAXHEALTH", target, &[]);
@@ -1014,17 +1059,23 @@ pub fn after_item(vm: &mut Vm, item: i64) {
             let text = global(vm, "ERR_QUEST_UNKNOWN_COMPLETE", "Objective Complete.");
             game_error(vm, "ERR_QUEST_UNKNOWN_COMPLETE", &text);
         }
-        let later = vm.native("questLogChanged", log_changed as NativeFn);
-        crate::clock::after_engine(vm, LOG_AFTER, later);
+        engine_mut(vm).world.quests.log_owed = true;
     }
 }
 
-fn log_changed(vm: &mut Vm, _c: NativeCall) -> Ret {
-    sync_log(vm);
-    units::fire_unit(vm, "UNIT_QUEST_LOG_CHANGED", units::PLAYER, &[]);
-    let next = vm.native("questLogUpdated", log_updated as NativeFn);
-    crate::clock::after_engine(vm, 1.0 / 60.0, next);
-    Ok(vec![])
+/// The log's packet owed by a looted item, told right before the loot's
+/// bags' packet (`loot`). Recorded, `quest`: 7 of its 8 loots of a wanted
+/// item (at 22.417, 32.346, 46.868, 59.260, 71.558, 83.708 and 92.693)
+/// tell `UNIT_QUEST_LOG_CHANGED` in the bags' moment, before their
+/// `BAG_UPDATE`s, 0 to 0.37 s after the item; one (103.043) with the next
+/// item's push, unexplained.
+pub fn tell_log(vm: &mut Vm) {
+    if std::mem::take(&mut engine_mut(vm).world.quests.log_owed) {
+        sync_log(vm);
+        units::fire_unit(vm, "UNIT_QUEST_LOG_CHANGED", units::PLAYER, &[]);
+        let next = vm.native("questLogUpdated", log_updated as NativeFn);
+        crate::clock::after_engine(vm, 1.0 / 60.0, next);
+    }
 }
 
 /// `UI_INFO_MESSAGE(LE_GAME_ERR_<name>, text)`.
@@ -1060,7 +1111,7 @@ fn structure(fields: Vec<(&str, Answer)>) -> Answer {
 
 /// The log as the character's stats tell it: a header per zone, then its
 /// quests (`C_QuestLog.GetInfo`'s fields as recorded).
-fn sync_log(vm: &mut Vm) {
+pub(crate) fn sync_log(vm: &mut Vm) {
     if !engine(vm).world.quests.kept {
         return;
     }
@@ -1073,6 +1124,17 @@ fn sync_log(vm: &mut Vm) {
     let mut watch_ids = std::collections::BTreeMap::new();
     let mut watch_types = std::collections::BTreeMap::new();
     let mut headers: Vec<String> = Vec::new();
+    // A header on the map when one of its quests is (as in a map's view
+    // below; recorded in quest: Northshire Valley's header on the map with
+    // Wolves Across the Border, 19 of 19 answers after it was).
+    let mut headers_on_map: Vec<String> = Vec::new();
+    for l in &log {
+        if l.on_map
+            && let Some(t) = data(vm, l.id)
+        {
+            headers_on_map.push(text(vm, t, "header"));
+        }
+    }
     let mut index = 0i64;
     for (w, l) in log.iter().enumerate() {
         let Some(t) = data(vm, l.id) else { continue };
@@ -1095,7 +1157,7 @@ fn sync_log(vm: &mut Vm) {
                     ("isHeader", b(true)),
                     ("isHidden", b(false)),
                     ("isInternalOnly", b(false)),
-                    ("isOnMap", b(false)),
+                    ("isOnMap", b(headers_on_map.contains(&header))),
                     ("isScaling", b(false)),
                     ("isStory", b(false)),
                     ("isTask", b(false)),
@@ -1210,33 +1272,356 @@ fn num_quest_log_entries(vm: &mut Vm, _c: NativeCall) -> Ret {
 /// Blizzard's quest log compares it with 0).
 fn get_quest_ui_map_id(vm: &mut Vm, c: NativeCall) -> Ret {
     let map = match vm.hidden(c.arg(1)) {
-        Value::Num(id) => data(vm, id as i64).and_then(|t| num(vm, t, "uiMapID")),
+        Value::Num(id) => data(vm, id as i64)
+            .and_then(|t| num(vm, t, "uiMapID"))
+            .or_else(|| {
+                // A logged quest's map, as a map's view names it.
+                engine(vm)
+                    .world
+                    .quests
+                    .map_views
+                    .iter()
+                    .find(|(_, v)| v.quests.contains(&(id as i64)))
+                    .map(|(m, _)| *m as f64)
+            }),
         _ => None,
     };
     Ok(vec![Value::Num(map.unwrap_or(0.0))])
+}
+
+// ------------------------------------------------- the log as a map shows it
+
+/// The stats a log index keys (moved with their entries).
+const BY_LOG_INDEX: [&str; 3] = ["questLogInfo", "questCompletionText", "questSpecialItem"];
+
+/// A title or a list of titles (`first = "Orgrimmar"` or `first = {
+/// "Blackfathom Deeps", "Orgrimmar" }`).
+fn titles(vm: &mut Vm, t: TableRef, key: &str) -> Vec<String> {
+    match field(vm, t, key) {
+        Value::Table(list) => {
+            let n = vm.heap.table(list).border();
+            (1..=n)
+                .filter_map(|i| {
+                    let v = vm.heap.table(list).get(Value::Num(i as f64));
+                    text_of(vm, v)
+                })
+                .collect()
+        }
+        v => text_of(vm, v).into_iter().collect(),
+    }
+}
+
+fn ids(vm: &mut Vm, t: TableRef, key: &str) -> BTreeSet<i64> {
+    let mut out = BTreeSet::new();
+    if let Value::Table(list) = field(vm, t, key) {
+        let n = vm.heap.table(list).border();
+        for i in 1..=n {
+            if let Value::Num(id) = vm.heap.table(list).get(Value::Num(i as f64)) {
+                out.insert(id as i64);
+            }
+        }
+    }
+    out
+}
+
+/// `defineQuestMap(mapID, { first = headerTitle(s), top = { headerTitle,
+/// … }, expanded = { headerTitle, … }, onMap = { questID, … }, localPOI = {
+/// questID, … }, quests = { questID, … } })`: the log as the client's
+/// shows it while the map for quest POIs is that map (the server's data:
+/// which quests are on it); `quests`, the quests whose map
+/// (`GetQuestUiMapID`) it is. `nil` for the table: the map shows the
+/// snapshot's log again. A view defined or dropped for the map shown
+/// applies at once (no update of its own: the script tells it).
+pub fn control_define_map(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(map) = (match c.arg(1) {
+        Value::Num(n) => Some(n as i64),
+        _ => None,
+    }) else {
+        return Err(vm.error("defineQuestMap: a map ID expected"));
+    };
+    let t = match c.arg(2) {
+        Value::Table(t) => t,
+        Value::Nil => {
+            engine_mut(vm).world.quests.map_views.remove(&map);
+            reapply_if_shown(vm, map);
+            return Ok(vec![]);
+        }
+        _ => return Err(vm.error("defineQuestMap: a table of the map's log expected")),
+    };
+    let view = MapView {
+        first: titles(vm, t, "first"),
+        top: titles(vm, t, "top"),
+        expanded: titles(vm, t, "expanded"),
+        on_map: ids(vm, t, "onMap"),
+        local_poi: ids(vm, t, "localPOI"),
+        quests: ids(vm, t, "quests"),
+    };
+    engine_mut(vm).world.quests.map_views.insert(map, view);
+    reapply_if_shown(vm, map);
+    Ok(vec![])
+}
+
+/// A redefined view of the map for quest POIs shown: the log as it shows
+/// it now.
+fn reapply_if_shown(vm: &mut Vm, map: i64) {
+    if crate::questinfo::poi_map(vm) as i64 == map {
+        quest_map_changed(vm, map as f64);
+    }
+}
+
+fn set_field(answer: &mut Answer, key: &str, v: Answer) {
+    if let Answer::Table(fields) = answer {
+        for (k, old) in fields.iter_mut() {
+            if matches!(k, Answer::Str(k) if k == key) {
+                *old = v;
+                return;
+            }
+        }
+    }
+}
+
+fn get_field<'a>(answer: &'a Answer, key: &str) -> Option<&'a Answer> {
+    match answer {
+        Answer::Table(fields) => fields
+            .iter()
+            .find(|(k, _)| matches!(k, Answer::Str(k) if k == key))
+            .map(|(_, v)| v),
+        _ => None,
+    }
+}
+
+fn is_header(a: &Answer) -> bool {
+    get_field(a, "isHeader") == Some(&Answer::Bool(true))
+}
+
+fn title_of(a: &Answer) -> String {
+    match get_field(a, "title") {
+        Some(Answer::Str(s)) => s.clone(),
+        _ => String::new(),
+    }
+}
+
+/// The map for quest POIs changed (`C_QuestLog.SetMapForQuestPOIs`): the
+/// log as that map shows it, as recorded in `questlog` (a quest's details
+/// showing Ashenvale, twice; in `mapnav`, Kalimdor's two headers first and
+/// a third expanded in its place): the map's headers first, shown expanded
+/// whatever their own state (that state kept for the other maps), the
+/// quests' `isOnMap` and `hasLocalPOI` the map's, a header on the map when
+/// one of its quests is, every entry's `questLogIndex` its new place (and
+/// what the log index keys moved along); the snapshot's map's log back for
+/// a map without a view, the headers collapsed or expanded meanwhile kept.
+pub fn quest_map_changed(vm: &mut Vm, map: f64) -> bool {
+    if engine(vm).world.quests.kept {
+        return false;
+    }
+    let view = engine(vm)
+        .world
+        .quests
+        .map_views
+        .get(&(map as i64))
+        .cloned();
+    if view.is_none() && engine(vm).world.quests.base_log.is_none() {
+        return false;
+    }
+    restore_base_log(vm);
+    let Some(view) = view else {
+        return true;
+    };
+    let stats = &mut engine_mut(vm).world.character.stats;
+    let saved: Vec<(&'static str, Entry)> = BY_LOG_INDEX
+        .iter()
+        .chain(["questLogIndex"].iter())
+        .filter_map(|k| stats.get(k).map(|e| (*k, e.clone())))
+        .collect();
+    let Some(Entry::ByIndex(log)) = stats.get("questLogInfo").cloned() else {
+        return true;
+    };
+    // The blocks: a header and its quests, in order; the map's first.
+    let mut blocks: Vec<Vec<i64>> = Vec::new();
+    for (i, a) in &log {
+        match a.first() {
+            Some(a) if is_header(a) || blocks.is_empty() => blocks.push(vec![*i]),
+            _ => blocks.last_mut().expect("a block").push(*i),
+        }
+    }
+    let header_title = |b: &Vec<i64>| {
+        log.get(&b[0])
+            .and_then(|a| a.first())
+            .filter(|a| is_header(a))
+            .map(title_of)
+    };
+    // The headers moved up, in the view's order, before the others.
+    let mut moved: Vec<Vec<i64>> = Vec::new();
+    for title in view.first.iter().chain(view.top.iter()) {
+        if let Some(p) = blocks
+            .iter()
+            .position(|b| header_title(b).as_ref() == Some(title))
+        {
+            moved.push(blocks.remove(p));
+        }
+    }
+    moved.append(&mut blocks);
+    let blocks = moved;
+    let forced_titles: Vec<&String> = view.first.iter().chain(view.expanded.iter()).collect();
+    let forced: BTreeSet<i64> = blocks
+        .iter()
+        .filter(|b| header_title(b).is_some_and(|t| forced_titles.contains(&&t)))
+        .map(|b| b[0])
+        .collect();
+    let order: Vec<i64> = blocks.concat();
+    let mut info = std::collections::BTreeMap::new();
+    let mut indices = std::collections::BTreeMap::new();
+    let mut in_forced = false;
+    for (place, old) in order.iter().enumerate() {
+        let new = (place + 1) as i64;
+        let mut answers = log[old].clone();
+        let Some(a) = answers.first_mut() else {
+            continue;
+        };
+        if is_header(a) {
+            in_forced = forced.contains(old);
+        }
+        set_field(a, "questLogIndex", Answer::Num(new as f64));
+        if in_forced {
+            set_field(a, "isCollapsed", Answer::Bool(false));
+        }
+        if !is_header(a)
+            && let Some(Answer::Num(id)) = get_field(a, "questID").cloned()
+        {
+            let id = id as i64;
+            set_field(a, "isOnMap", Answer::Bool(view.on_map.contains(&id)));
+            set_field(a, "hasLocalPOI", Answer::Bool(view.local_poi.contains(&id)));
+            indices.insert(id, vec![Answer::Num(new as f64)]);
+        }
+        info.insert(new, answers);
+    }
+    // A header on the map when one of its quests is.
+    let mut header: Option<i64> = None;
+    let mut on: std::collections::BTreeMap<i64, bool> = std::collections::BTreeMap::new();
+    for (i, a) in &info {
+        let Some(a) = a.first() else { continue };
+        if is_header(a) {
+            header = Some(*i);
+            on.insert(*i, false);
+        } else if get_field(a, "isOnMap") == Some(&Answer::Bool(true))
+            && let Some(h) = header
+        {
+            on.insert(h, true);
+        }
+    }
+    for (h, is_on) in on {
+        if let Some(a) = info.get_mut(&h).and_then(|a| a.first_mut()) {
+            set_field(a, "isOnMap", Answer::Bool(is_on));
+        }
+    }
+    let forced_title: Vec<String> = forced
+        .iter()
+        .filter_map(|i| log.get(i))
+        .filter_map(|a| a.first())
+        .map(title_of)
+        .collect();
+    for key in &BY_LOG_INDEX[1..] {
+        if let Some(Entry::ByIndex(by)) = stats.get(key).cloned() {
+            let moved = order
+                .iter()
+                .enumerate()
+                .filter_map(|(place, old)| by.get(old).map(|v| ((place + 1) as i64, v.clone())))
+                .collect();
+            stats.insert(key, Entry::ByIndex(moved));
+        }
+    }
+    stats.insert("questLogInfo", Entry::ByIndex(info));
+    if !indices.is_empty() {
+        stats.insert("questLogIndex", Entry::ByIndex(indices));
+    }
+    let q = &mut engine_mut(vm).world.quests;
+    q.base_log = Some(saved);
+    q.forced = forced_title;
+    true
+}
+
+/// The snapshot's map's log back (if another map's shows), each header's
+/// collapsed state as the shown view left it (the forced header's its
+/// own).
+fn restore_base_log(vm: &mut Vm) {
+    let Some(saved) = engine_mut(vm).world.quests.base_log.take() else {
+        return;
+    };
+    let forced = std::mem::take(&mut engine_mut(vm).world.quests.forced);
+    let stats = &mut engine_mut(vm).world.character.stats;
+    // Each header's state in the view, by its title.
+    let mut collapsed: std::collections::BTreeMap<String, bool> = std::collections::BTreeMap::new();
+    if let Some(Entry::ByIndex(log)) = stats.get("questLogInfo") {
+        for a in log.values().filter_map(|a| a.first()) {
+            if is_header(a) {
+                let c = get_field(a, "isCollapsed") == Some(&Answer::Bool(true));
+                collapsed.insert(title_of(a), c);
+            }
+        }
+    }
+    for (k, e) in saved {
+        stats.insert(k, e);
+    }
+    if let Some(Entry::ByIndex(log)) = stats.get_mut("questLogInfo") {
+        let mut state: Option<bool> = None;
+        for a in log.values_mut().filter_map(|a| a.first_mut()) {
+            if is_header(a) {
+                let title = title_of(a);
+                state = if forced.contains(&title) {
+                    None
+                } else {
+                    collapsed.get(&title).copied()
+                };
+            }
+            if let Some(c) = state {
+                set_field(a, "isCollapsed", Answer::Bool(c));
+            }
+        }
+    }
 }
 
 fn nothing(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// None: nil (the full probe: `GetQuestBackgroundMaterial()` with no dialog).
+fn nil(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Nil])
+}
+
+/// No skill rewarded: three nils (the full probe).
+fn three_nils(_vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Nil; 3])
+}
+
 fn zeros(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(0.0), Value::Num(0.0)])
 }
 
+/// `C_QuestLog.CanAbandonQuest(questID)`: a quest's ID yes, in the log or
+/// not; 0, a negative or a fraction no (the full probe: 1, 1063, 6481 yes;
+/// 0, -1, 1.5, 2147483647 no; recorded 0 no). Unverified: where the
+/// quests' IDs end (here a million), a quest that cannot be abandoned.
+fn can_abandon_quest(vm: &mut Vm, c: NativeCall) -> Ret {
+    let yes = matches!(vm.hidden(c.arg(1)),
+        Value::Num(q) if q.fract() == 0.0 && (1.0..1_000_000.0).contains(&q));
+    Ok(vec![Value::Bool(yes)])
+}
+
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
+        ("C_QuestLog.CanAbandonQuest", can_abandon_quest),
         // What a quest without them shows (unverified: not recorded):
         // no currencies, no hidden item (`0`), the parchment, not failed,
         // no criteria spell, no group, no skill points, artifact power or
         // honor, an item's loot type (0).
         ("GetNumQuestCurrencies", zero),
         ("IsQuestItemHidden", zero),
-        ("GetQuestBackgroundMaterial", nothing),
+        ("GetQuestBackgroundMaterial", nil),
         ("IsCurrentQuestFailed", no),
         ("GetCriteriaSpell", nothing),
         ("GetSuggestedGroupSize", zero),
-        ("GetRewardSkillPoints", nothing),
+        ("GetRewardSkillPoints", three_nils),
         ("GetRewardArtifactXP", zeros),
         ("GetRewardHonor", zero),
         ("GetQuestItemInfoLootType", zero),
@@ -1260,7 +1645,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("QuestFlagsPVP", no),
         ("GetQuestMoneyToGet", zero),
         ("GetQuestPortraitGiver", get_quest_portrait),
-        ("GetQuestPortraitTurnIn", get_quest_portrait),
+        ("GetQuestPortraitTurnIn", get_quest_portrait_turn_in),
         ("GetQuestItemInfo", get_quest_item_info),
         ("GetQuestItemLink", get_quest_item_link),
         ("IsQuestCompletable", is_quest_completable),

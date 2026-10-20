@@ -10,7 +10,7 @@
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, NativeFn, Value, Vm};
 
-use crate::{engine, engine_mut};
+use crate::{engine, engine_mut, widgets};
 
 /// The account's layouts: the active one's index, the saved ones (a Lua
 /// list of layout infos, as `SaveLayouts` gave them).
@@ -85,6 +85,7 @@ fn save_layouts(vm: &mut Vm, c: NativeCall) -> Ret {
     let active = vm.heap.table(info).get(k_active);
     let layouts = vm.heap.table(info).get(k_layouts);
     let saved = copy(vm, layouts);
+    widgets::keep_as(vm, "editModeLayouts", saved);
     let e = &mut engine_mut(vm).world.edit_mode;
     if let Value::Num(a) = active {
         e.active = Some(a);

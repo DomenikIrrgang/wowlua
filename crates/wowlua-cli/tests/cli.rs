@@ -794,6 +794,33 @@ fn module_errors() {
             "",
             "E1037",
         ),
+        // A module's own `function f()` is hoisted like an export.
+        (
+            "print(f())\nfunction f() return 1 end\nexport local a = 1\n",
+            "",
+            "E1037",
+        ),
+        (
+            "local items = {}\nexport function items() return 1 end\n",
+            "",
+            "E1016",
+        ),
+        (
+            "export function items() return 1 end\nlocal items = {}\n",
+            "",
+            "E1016",
+        ),
+        ("export local a = 1\nexport local a = 2\n", "", "E1016"),
+        (
+            "export function f() end\nexport function f() end\n",
+            "",
+            "E1016",
+        ),
+        (
+            "import a from \"/b\"\nexport function a() end\n",
+            "export local a = 1\n",
+            "E1016",
+        ),
     ];
     for (main, b, code) in cases {
         let dir = tempfile::tempdir().unwrap();
@@ -814,6 +841,273 @@ fn module_errors() {
             .code(1)
             .stderr(predicate::str::contains(format!("error[{code}]")));
     }
+}
+
+/// An export may share its name with a declaration `@if` removes from the
+/// build, not with one it keeps; a forward-declared local is defined by
+/// `function name()`, not redeclared (spec §5.1).
+#[test]
+fn exports_beside_conditional_declarations() {
+    let build = |main: &str| {
+        let dir = tempfile::tempdir().unwrap();
+        write(
+            dir.path(),
+            &[
+                (
+                    "wowlua.json",
+                    "{ \"package\": { \"name\": \"cond\", \"version\": \"1.0.0\" } }\n",
+                ),
+                ("src/main.wowlua", main),
+            ],
+        );
+        let out = wowlua(dir.path())
+            .args(["build", "--message-format", "short"])
+            .output()
+            .unwrap();
+        let ran = out
+            .status
+            .success()
+            .then(|| run_addon(&dir.path().join("dist/dev/Cond"), "Cond"));
+        (ran, String::from_utf8_lossy(&out.stderr).into_owned())
+    };
+    let (ran, stderr) = build(
+        "import build from \"wowlua:meta\"\n@if(not build.debug)\nlocal items = {}\nexport function items() return 1 end\nlocal g\nfunction g() return 3 end\nprint(items(), g())\n",
+    );
+    assert_eq!(ran.as_deref(), Some("1 3"), "{stderr}");
+    // Alternatives for different builds.
+    let (ran, stderr) = build(
+        "import build from \"wowlua:meta\"\n@if(build.debug)\nexport function f() return 1 end\n@if(not build.debug)\nexport function f() return 2 end\nprint(f())\n",
+    );
+    assert_eq!(ran.as_deref(), Some("1"), "{stderr}");
+    let (ran, stderr) = build(
+        "import build from \"wowlua:meta\"\n@if(build.debug)\nlocal items = {}\nexport function items() return 1 end\n",
+    );
+    assert!(ran.is_none() && stderr.contains("error[E1016]"), "{stderr}");
+}
+
+/// A module's top-level `function name()` is a local of the module,
+/// hoisted, and never a global; a script's is a global (spec §5.1).
+#[test]
+fn module_functions_are_module_local() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"loc\", \"version\": \"1.0.0\" } }\n",
+            ),
+            (
+                "src/main.wowlua",
+                "export function run(): number return helper() + later() end\nfunction helper(): number return 1 end\nfunction later(): number return 2 end\nprint(\"module\", run(), rawget(_G, \"helper\"), rawget(_G, \"later\"))\n",
+            ),
+            (
+                "src/plain.wowlua",
+                "function scriptGlobal() return 1 end\nprint(\"script\", rawget(_G, \"scriptGlobal\") == scriptGlobal)\n",
+            ),
+        ],
+    );
+    wowlua(dir.path()).arg("build").assert().success();
+    let out = run_addon(&dir.path().join("dist/dev/Loc"), "Loc");
+    let mut lines: Vec<&str> = out.lines().collect();
+    lines.sort_unstable();
+    assert_eq!(lines, ["module 3 nil nil", "script true"], "{out}");
+}
+
+/// An import cycle anywhere in the package leaves every other import its
+/// type: standard-library modules and the modules a cycle imports are
+/// checked before their importers, and the modules of a cycle see each
+/// other's exports as their annotations declare them (spec §5.4.4).
+#[test]
+fn import_cycles_keep_import_types() {
+    let manifest = "{ \"package\": { \"name\": \"cyc\", \"version\": \"1.0.0\" }, \"check\": { \"mode\": \"strict\" } }\n";
+    // The errors `wowlua check` reports, as `file:line: code`.
+    let check = |files: &[(&str, &str)]| -> Vec<String> {
+        let dir = tempfile::tempdir().unwrap();
+        let mut all = vec![("wowlua.json", manifest)];
+        all.extend_from_slice(files);
+        write(dir.path(), &all);
+        let out = wowlua(dir.path())
+            .args(["check", "--message-format", "short"])
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let mut found: Vec<String> = stderr
+            .lines()
+            .filter_map(|l| {
+                let (at, rest) = l.split_once(": error[")?;
+                let (file, line) = at.rsplit_once(':')?.0.rsplit_once(':')?;
+                let code = &rest[..rest.find(']')?];
+                Some(format!("{file}:{line}: {code}"))
+            })
+            .collect();
+        found.sort();
+        found
+    };
+    // A run-time cycle between two modules, and a third file that imports
+    // the standard library.
+    let cycle = [
+        (
+            "src/P.wowlua",
+            "import q from \"./Q\"\nexport function p(): number return q() end\nexport function s(): string local early: string = q return early end\n",
+        ),
+        (
+            "src/Q.wowlua",
+            "import p from \"./P\"\nexport function q(): number return 1 end\nexport function r(): number return p() end\nexport function t(): string local late: string = p return late end\n",
+        ),
+    ];
+    let mut files = cycle.to_vec();
+    files.push((
+        "src/A.wowlua",
+        "import after from \"wowlua:timer\"\nimport isSecret from \"wowlua:secret\"\nlocal n: number = after\nlocal function f(v: string | Secret<string>): string\n    if isSecret(v) then return \"?\" end\n    return v:lower()\nend\nprint(n, f(\"x\"))\n",
+    ));
+    assert_eq!(
+        check(&files),
+        [
+            "src/A.wowlua:3: E2001",
+            "src/P.wowlua:3: E2001",
+            "src/Q.wowlua:4: E2001"
+        ]
+    );
+    // The standard library imported inside a module of the cycle: by
+    // namespace, and its predicate through a local alias.
+    let mut files = cycle.to_vec();
+    files[1] = (
+        "src/Q.wowlua",
+        "import p from \"./P\"\nimport * as secret from \"wowlua:secret\"\nexport function q(): number return 1 end\nexport function r(): number return p() end\nconst isSecret = secret.isSecret\nlocal function f(v: string | Secret<string>): string\n    if isSecret(v) then return \"?\" end\n    return v:lower()\nend\nlocal function g(v: string | Secret<string>): string\n    if not secret.isSecret(v) then return v:upper() end\n    return \"?\"\nend\nlocal n: number = secret.isSecret\nprint(n, f(\"x\"), g(\"y\"))\n",
+    );
+    assert_eq!(
+        check(&files),
+        ["src/P.wowlua:3: E2001", "src/Q.wowlua:14: E2001"]
+    );
+    // A load-time cycle (E1014) does not hide the types either.
+    let files = [
+        (
+            "src/main.wowlua",
+            "import a from \"/b\"\nexport local m: number = a\nlocal s: string = a\nprint(s)\n",
+        ),
+        (
+            "src/b.wowlua",
+            "import m from \"/main\"\nimport after from \"wowlua:timer\"\nexport local a: number = m\nlocal t: string = m\nlocal n: number = after\nprint(t, n)\n",
+        ),
+    ];
+    assert_eq!(
+        check(&files),
+        [
+            "src/b.wowlua:3: E1014",
+            "src/b.wowlua:4: E2001",
+            "src/b.wowlua:5: E2001",
+            "src/main.wowlua:3: E2001"
+        ]
+    );
+}
+
+/// Inside an import cycle, a module checked before another of the cycle
+/// reads that one's exports without a type annotation as `any`: W1036
+/// where they are imported or read, once (spec §5.4.4), also a `typeof`
+/// alias through a namespace import (`qn.Conf`) and a file-level local
+/// `import internal` reads. A `typeof` alias gets its type once its module
+/// is checked (spec §2.2.7).
+#[test]
+fn import_cycles_warn_about_untyped_exports() {
+    let manifest = "{ \"package\": { \"name\": \"cyc\", \"version\": \"1.0.0\" }, \"check\": { \"mode\": \"strict\" } }\n";
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            ("wowlua.json", manifest),
+            (
+                "src/P.wowlua",
+                "import q, items from \"./Q\"\nimport * as qn from \"./Q\"\nimport type Conf from \"./Q\"\nexport function p(): number return q() end\nlocal function f() return items, qn.items, qn.items, qn.r(), qn.q() end\nlocal c: Conf = 1\nlocal d: qn.Conf = 1\nlocal e: qn.Conf = 2\nprint(f, c, d, e)\n",
+            ),
+            (
+                "src/Q.wowlua",
+                "import p from \"./P\"\nexport function q(): number return 1 end\nexport function r(): number return p() end\nexport local items = { a = 1 }\nlocal defaults = { n = 1 }\nexport type Conf = typeof(defaults)\nlocal bad: string = p\nlocal ok: Conf = { n = 2 }\nlocal c: Conf = 1\nprint(bad, ok, c)\n",
+            ),
+            (
+                "src/main.wowlua",
+                "import type Conf from \"./Q\"\nimport items from \"./Q\"\nlocal c: Conf = 1\nlocal n: string = items\nprint(c, n)\n",
+            ),
+        ],
+    );
+    let out = wowlua(dir.path())
+        .args(["check", "--message-format", "short"])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let mut found: Vec<String> = stderr
+        .lines()
+        .filter_map(|l| {
+            let (at, rest) = l
+                .split_once(": error[")
+                .or_else(|| l.split_once(": warning["))?;
+            let (file, line) = at.rsplit_once(':')?.0.rsplit_once(':')?;
+            let code = &rest[..rest.find(']')?];
+            Some(format!("{file}:{line}: {code}"))
+        })
+        .collect();
+    found.sort();
+    assert_eq!(
+        found,
+        [
+            "src/P.wowlua:1: W1036",
+            "src/P.wowlua:3: W1036",
+            "src/P.wowlua:5: W1036",
+            "src/P.wowlua:7: W1036",
+            "src/Q.wowlua:7: E2001",
+            "src/Q.wowlua:9: E2001",
+            "src/main.wowlua:3: E2001",
+            "src/main.wowlua:4: E2001",
+        ],
+        "{stderr}"
+    );
+    // `import internal` in a cycle of test helpers: an annotated local or a
+    // function has its type, an unannotated local is `any` (W1036).
+    fs::remove_dir_all(dir.path().join("src")).unwrap();
+    write(
+        dir.path(),
+        &[
+            ("src/main.wowlua", "print(1)\n"),
+            (
+                "tests/a.wowlua",
+                "import internal hidden, typed, helper from \"./b\"\nexport function a(): number return 1 end\nlocal s: string = typed\nlocal h: string = helper()\nprint(hidden, s, h)\n",
+            ),
+            (
+                "tests/b.wowlua",
+                "import a from \"./a\"\nlocal hidden = { n = 1 }\nlocal typed: number = 2\nlocal function helper(): number return a() end\nprint(hidden, typed, helper)\n",
+            ),
+            (
+                "tests/x.test.wowlua",
+                "import test from \"wowlua:test\"\nimport a from \"./a\"\n@test\nlocal function t() print(a()) end\n",
+            ),
+        ],
+    );
+    let out = wowlua(dir.path())
+        .args(["test", "--message-format", "short"])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let mut found: Vec<String> = stderr
+        .lines()
+        .filter_map(|l| {
+            let (at, rest) = l
+                .split_once(": error[")
+                .or_else(|| l.split_once(": warning["))?;
+            let (file, line) = at.rsplit_once(':')?.0.rsplit_once(':')?;
+            let code = &rest[..rest.find(']')?];
+            Some(format!("{file}:{line}: {code}"))
+        })
+        .collect();
+    found.sort();
+    assert_eq!(
+        found,
+        [
+            "tests/a.wowlua:1: W1036",
+            "tests/a.wowlua:3: E2001",
+            "tests/a.wowlua:4: E2001",
+        ],
+        "{stderr}"
+    );
 }
 
 /// Build metadata, static conditions, `@if` and per-flavor output (spec
@@ -1067,6 +1361,84 @@ fn check_lua_flavors_share_what_checks_the_same() {
             "src/typename.lua:2:7: warning[W1001]: `typeName` is not a declared global",
             "src/union.lua:2:18: warning[W2001]: `GameTooltip | UIParent` is not assignable to `string`",
             "src/haste.lua:2:11: warning[W2040]: `number | Secret<number>` may be a secret value; narrow it with `canaccessvalue` or `issecretvalue` first",
+        ],
+        "{stderr}"
+    );
+}
+
+/// Camelot's declarations take the calls Blizzard's code makes and the
+/// values the client answers (SuuUI's port, report C25 to C37): money and
+/// sizes are numbers, tooltip data methods take their `C_TooltipInfo`
+/// function's parameters, a spell cooldown is a readable table with possibly
+/// secret fields (C34: an item cooldown's are plain), the client's own
+/// number globals are declared, named frames have their mixins' methods
+/// (C35), a unit's name may be absent.
+#[test]
+fn camelot_declarations_follow_the_client() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "client", "version": "1.0.0" },
+  "flavors": { "camelot": {} },
+  "check": { "mode": "strict" } }
+"#,
+            ),
+            (
+                "src/main.wowlua",
+                r#"local _, _, _, _, _, _, _, _, _, buyout = C_AuctionHouse.GetReplicateItemInfo(0)
+local cancel: number = C_AuctionHouse.GetCancelCost(1) + buyout
+GameTooltip:SetInboxItem(1, 2)
+GameTooltip:SetSendMailItem(1)
+local zoom: number = Minimap:GetZoom()
+local maxZoom = Minimap:GetZoomLevels() - 1
+C_NamePlate.SetNamePlateSize(140, 30)
+local list: number[] = {}
+local secretTable: boolean = issecrettable(list)
+SelectActiveQuest(1)
+local completion = GetQuestLogCompletionText(1)
+JoinChannelByName("LookingForGroup")
+SetTrainerServiceTypeFilter("available", true)
+C_ChatInfo.SendChatMessage("hi", "CHANNEL", nil, 1)
+local known: boolean = IsSpellKnown(1)
+local tab = C_Bank.FetchNextPurchasableBankTabData(0)
+local tabCost: number = tab and tab.tabCost or 0
+local condition = C_Traits.GetConditionInfo(1, 2, true)
+local conditionText: string? = condition and condition.tooltipText
+local cooldown = C_Spell.GetSpellCooldown(1)
+local active: boolean = cooldown ~= nil and cooldown.isActive
+local started = cooldown and cooldown.startTime > 0
+local party: number = LE_PARTY_CATEGORY_INSTANCE
+local location = ItemLocation:CreateFromBagAndSlot(0, 1)
+NamePlateDriverFrame:Show()
+local itemCooldown = C_Spell.GetItemCooldown(1)
+local itemStarted = itemCooldown and itemCooldown.startTime > 0
+ChatFrame1:ApplySystemAnchor()
+ChatFrame1:AddMessage("hi", 1, 1, 1)
+PlayerFrame:ApplySystemAnchor()
+local unitName, unitRealm = UnitName("party2")
+local named: string = unitName
+print(cancel, zoom, maxZoom, secretTable, completion, known, tabCost, conditionText, active, started, party, location, itemStarted, unitRealm, named)
+"#,
+            ),
+        ],
+    );
+    let assert = wowlua(dir.path())
+        .args(["check", "--message-format", "short"])
+        .assert()
+        .failure();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    let diagnostics: Vec<&str> = stderr.lines().filter(|l| l.starts_with("src/")).collect();
+    // Only the spell cooldown's start time may be secret (an item's never
+    // is), and a unit's name may be absent.
+    assert_eq!(
+        diagnostics,
+        [
+            "src/main.wowlua:22:30: error[E2040]: `number | Secret<number>` may be a secret value; narrow it with `canaccessvalue` or `issecretvalue` first",
+            "src/main.wowlua:22:30: error[E2001]: cannot compare `number | Secret<number>` with `0`",
+            "src/main.wowlua:32:7: error[E2001]: `nil | string | Secret<string>` is not assignable to `string`",
         ],
         "{stderr}"
     );
@@ -1852,7 +2224,7 @@ onLogin(3)
 #[test]
 fn log_module() {
     let dir = tempfile::tempdir().unwrap();
-    let main = r#"import log, warn, history, setLevel, sink, print as chat from "wowlua:log"
+    let main = r#"import log, warn, history, setLevel, sink, configure, print as chat from "wowlua:log"
 import * as Log from "wowlua:log"
 
 local function costly(): string
@@ -1870,6 +2242,14 @@ for _, e in ipairs(history()) do
     _G.print(e.level, e.message, e.location)
 end
 chat("Hello")
+-- A prefix of its own, and info and above to chat; then nothing to chat.
+setLevel("debug")
+configure({ prefix = "|cffaabbccL|r ", chatLevel = "info" })
+log.info("shown")
+log.debug("quiet")
+chat("Hi")
+configure({ chatLevel = "off" })
+warn("silent")
 "#;
     write(
         dir.path(),
@@ -1894,6 +2274,11 @@ chat("Hello")
             "info ready src/main.wowlua:11",
             "warn low mana src/main.wowlua:12",
             "|cff33ff99Logs|r: Hello",
+            "|cffaabbccL|r |cfff1eadb[info]|r shown",
+            "sink info shown",
+            "sink debug quiet",
+            "|cffaabbccL|r Hi",
+            "sink warn silent",
         ]
         .join("\n")
     );
@@ -1909,6 +2294,8 @@ chat("Hello")
             "sink warn low mana",
             "warn low mana nil",
             "|cff33ff99Logs|r: Hello",
+            "|cffaabbccL|r Hi",
+            "sink warn silent",
         ]
         .join("\n")
     );

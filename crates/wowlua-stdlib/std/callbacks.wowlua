@@ -1,11 +1,13 @@
 -- wowlua:callbacks (spec stdlib "callbacks"): publish/subscribe on objects,
 -- like CallbackHandler. Handlers run through the error policy, `fire`
--- iterates a snapshot, and owners are held weakly. With
+-- iterates a snapshot (a handler cancelled meanwhile is skipped), and
+-- owners are held weakly. With
 -- `compat = "CallbackHandler"` a registry also offers RegisterCallback,
 -- UnregisterCallback and UnregisterAllCallbacks for plain Lua consumers.
--- The compiler checks `on`, `once` and `fire` against the event type `E`:
--- names are its keys (E8420), handlers and arguments its function types.
-import callIn from "wowlua:errors"
+-- The compiler checks `on`, `once`, `off`, `offAll` and `fire` against the
+-- event type `E`: names are its keys (E8420), handlers and arguments its
+-- function types.
+import callOwned from "wowlua:errors"
 import Subscription from "wowlua:events"
 
 export type RegistryOptions = { compat?: "CallbackHandler" }
@@ -14,9 +16,10 @@ export type RegistryOptions = { compat?: "CallbackHandler" }
 export interface Registry<E>
     function on(name: string, handler: (...any) -> (), owner: any?): Subscription
     function once(name: string, handler: (...any) -> (), owner: any?): Subscription
-    function off(sub: Subscription)
-    --- Cancels every subscription of `owner`.
-    function offAll(owner: any)
+    --- Cancels `sub`, or with a name every subscription of `handler` to it.
+    function off(target: Subscription | string, handler: ((...any) -> ())?)
+    --- Cancels every subscription of `owner` (to `name` only, when given).
+    function offAll(owner: any, name: string?)
     function fire(name: string, ...: any)
     --- Whether any handler is subscribed to `name`.
     function has(name: string): boolean
@@ -30,13 +33,16 @@ end
 class Handler implements Subscription
     active: boolean = true
     readonly fn: (...any) -> ()
+    -- The function `on` or `once` was given (`off(name, handler)` finds it).
+    readonly given: (...any) -> ()
     private readonly registry: CallbackRegistry<any>
     private readonly name: string
 
-    constructor(registry: CallbackRegistry<any>, name: string, fn: (...any) -> ())
+    constructor(registry: CallbackRegistry<any>, name: string, fn: (...any) -> (), given: (...any) -> ())
         self.registry = registry
         self.name = name
         self.fn = fn
+        self.given = given
     end
 
     function cancel()
@@ -76,20 +82,20 @@ class CallbackRegistry<E> implements Registry<E>
         end
     end
 
-    private function subscribe(name: string, fn: (...any) -> (), owner: any): Handler
+    private function subscribe(name: string, fn: (...any) -> (), owner: any, given: (...any) -> ()): Handler
         local list = self.handlers[name]
         if not list then
             list = {}
             self.handlers[name] = list
         end
-        local handler = Handler.new(self, name, fn)
+        local handler = Handler.new(self, name, fn, given)
         self.owners[handler] = owner
         list[#list + 1] = handler
         return handler
     end
 
     function on(name: string, fn: (...any) -> (), owner: any?): Subscription
-        return self:subscribe(name, fn, owner)
+        return self:subscribe(name, fn, owner, fn)
     end
 
     function once(name: string, fn: (...any) -> (), owner: any?): Subscription
@@ -97,23 +103,20 @@ class CallbackRegistry<E> implements Registry<E>
         sub = self:subscribe(name, function(...: any)
             sub:cancel()
             fn(...)
-        end, owner)
+        end, owner, fn)
         return sub
     end
 
-    function off(sub: Subscription)
-        sub:cancel()
-    end
-
-    function offAll(owner: any)
-        if owner == nil then
-            error("offAll: the owner is nil", 2)
-        end
+    -- Cancels the handlers of `name` (every name when nil) that `keep`
+    -- selects; collected first, as cancelling edits the lists.
+    private function cancelWhere(name: string?, keep: (h: Handler) -> boolean)
         local subs: Handler[] = {}
-        for _, list in pairs(self.handlers) do
-            for _, h in ipairs(list) do
-                if self.owners[h] == owner then
-                    subs[#subs + 1] = h
+        for n, list in pairs(self.handlers) do
+            if name == nil or n == name then
+                for _, h in ipairs(list) do
+                    if keep(h) then
+                        subs[#subs + 1] = h
+                    end
                 end
             end
         end
@@ -122,13 +125,35 @@ class CallbackRegistry<E> implements Registry<E>
         end
     end
 
+    function off(target: Subscription | string, handler: ((...any) -> ())?)
+        if type(target) ~= "string" then
+            target:cancel()
+            return
+        end
+        if handler == nil then
+            error("off: the handler is nil", 2)
+        end
+        self:cancelWhere(target, function(h: Handler): boolean return h.given == handler end)
+    end
+
+    function offAll(owner: any, name: string?)
+        if owner == nil then
+            error("offAll: the owner is nil", 2)
+        end
+        self:cancelWhere(name, function(h: Handler): boolean return self.owners[h] == owner end)
+    end
+
+    -- A snapshot: handlers added meanwhile wait for the next `fire`, and
+    -- handlers cancelled meanwhile are skipped.
     function fire(name: string, ...: any)
         local list = self.handlers[name]
         if not list then
             return
         end
         for _, h in ipairs({ unpack(list) }) do
-            callIn({ component = "callbacks: " .. name }, h.fn, ...)
+            if h.active then
+                callOwned({ component = "callbacks: " .. name }, self.owners[h], h.fn, ...)
+            end
         end
     end
 
@@ -169,7 +194,7 @@ class CallbackRegistry<E> implements Registry<E>
             if old then
                 old:cancel()
             end
-            subs[name] = self:subscribe(name, fn, owner)
+            subs[name] = self:subscribe(name, fn, owner, fn)
         end
         self.UnregisterCallback = function(owner: any, name: string)
             local subs = byOwner[owner]

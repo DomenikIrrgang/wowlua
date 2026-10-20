@@ -199,6 +199,20 @@ fn set_latency(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `snapshotTaken()`: the profile's snapshot was taken now (its
+/// cooldowns' time left counts from here).
+fn snapshot_taken(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let now = crate::clock::now(vm);
+    crate::engine_mut(vm).world.snapshot_at = Some(now);
+    Ok(vec![])
+}
+
+/// `loggedOut()`: whether the session ended (`ReloadUI`, the addon's or
+/// Blizzard's): the test runner reloads.
+fn logged_out(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(crate::engine(vm).world.logged_out)])
+}
+
 fn wheel(vm: &mut Vm, c: NativeCall) -> Ret {
     let id = widget_arg(vm, &c, 1)?;
     let delta = vm.check_number(&c, 2)?;
@@ -266,6 +280,9 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("fireUnitEvent", fire_unit_event),
         ("advanceTime", advance_time),
         ("setLatency", set_latency),
+        ("snapshotTaken", snapshot_taken),
+        ("loggedOut", logged_out),
+        ("setFrameBatching", crate::batch::control_set),
         ("nextFrame", next_frame),
         ("advanceFrames", advance_frames),
         ("warnings", warnings),
@@ -282,7 +299,12 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("slash", crate::chat::slash_control),
         ("receiveAddonMessage", crate::chat::receive_control),
         ("sentAddonMessages", crate::chat::sent_control),
-        ("joinGuild", crate::chat::join_guild_control),
+        ("joinGuild", crate::guild::control_join),
+        ("leaveGuild", crate::guild::control_leave),
+        ("defineGuildMember", crate::guild::control_define_member),
+        ("updateGuildMember", crate::guild::control_update_member),
+        ("removeGuildMember", crate::guild::control_remove_member),
+        ("systemMessage", crate::chat::system_message_control),
         ("defineBinding", crate::bindings::define_binding),
         ("pressBinding", crate::bindings::press_binding),
         ("pressKey", crate::bindings::press_key),
@@ -290,35 +312,63 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("defineSpell", crate::gamedata::define_spell),
         ("defineItem", crate::gamedata::define_item),
         ("defineQuest", crate::quests::control_define),
+        ("defineQuestMap", crate::quests::control_define_map),
+        ("setBagOrder", crate::cursor::control_set_bag_order),
+        (
+            "setItemDataDelay",
+            crate::cursor::control_set_item_data_delay,
+        ),
+        ("setSortResult", crate::cursor::control_set_sort_result),
         ("defineGossip", crate::gossip::control_define),
         ("defineTrainer", crate::trainer::control_define),
         ("defineTaxi", crate::taxi::control_define),
         ("defineMailbox", crate::mail::control_define),
+        ("setNewMail", crate::mail::control_set_new_mail),
+        ("setEquipmentSets", crate::equipsets::control_set),
         ("defineBank", crate::bank::control_define),
         ("defineAuctionHouse", crate::auction::control_define),
         ("nearCorpse", crate::death::control_near_corpse),
         ("gameError", game_error),
+        ("tellAuraStates", crate::aurastates::control_tell),
+        ("tellTurns", crate::batch::control_tell_turns),
+        ("beforeEvent", crate::batch::control_before_event),
+        ("setCVar", crate::framescript::control_set_cvar),
         ("clickWorld", crate::inventory::control_click_world),
         (
             "setHiddenGroupBuffs",
             crate::character::control_set_hidden_group_buffs,
         ),
+        ("setInventoryLoad", crate::login::control_set_inventory_load),
         ("defineLevel", crate::levels::control_define),
         ("setSpellTraits", crate::actions::control_set_spell_traits),
         ("setTraitRanks", crate::traits::control_set_trait_ranks),
+        (
+            "setTraitCharacter",
+            crate::traits::control_set_trait_character,
+        ),
         ("setRenown", crate::traits::control_set_renown),
         ("newWmoChunk", crate::character::control_new_wmo_chunk),
         ("setResting", crate::character::control_set_resting),
         ("areaChanged", crate::character::control_area_changed),
         ("spend", spend),
         ("spawnUnit", units::spawn),
+        ("unitOf", units::control_unit_of),
         ("setPlayer", units::set_player),
         ("setBag", crate::character::control_set_bag),
+        (
+            "setItemCooldown",
+            crate::character::control_set_item_cooldown,
+        ),
         ("defaultedCalls", defaulted_calls),
         ("openMerchant", crate::merchant::control_open),
         ("setAction", crate::actions::control_set_action),
         ("setChannels", crate::channels::control_set_channels),
         ("setMacros", crate::macros::control_set_macros),
+        ("defineLFGListing", crate::lfg::control_define),
+        ("updateLFGListing", crate::lfg::control_update),
+        ("removeLFGListing", crate::lfg::control_remove),
+        ("lfgSearchResultID", crate::lfg::control_search_result_id),
+        ("failLFGSearch", crate::lfg::control_fail_search),
         ("closeMerchant", crate::merchant::control_close),
         ("sell", crate::merchant::control_sell),
         ("moveTo", crate::character::control_move_to),
@@ -327,10 +377,21 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("slide", crate::input::control_slide),
         ("type", crate::input::control_type),
         ("setModifiers", crate::input::control_set_modifiers),
+        (
+            "setCursorPosition",
+            crate::input::control_set_cursor_position,
+        ),
         ("addToGroup", units::add_to_group),
-        ("enterInstance", units::enter_instance),
-        ("leaveInstance", units::leave_instance),
+        ("enterInstance", crate::encounters::control_enter_instance),
+        ("leaveInstance", crate::encounters::control_leave_instance),
+        ("startEncounter", crate::encounters::control_start),
+        ("endEncounter", crate::encounters::control_end),
+        ("setPet", crate::pets::control_set_pet),
         ("setRestriction", units::set_restriction_control),
+        (
+            "setDamageMeterSession",
+            crate::damagemeter::control_set_session,
+        ),
     ] {
         let native = vm.native(key, f);
         let k = vm.heap.intern(key.as_bytes());

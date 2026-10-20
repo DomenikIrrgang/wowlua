@@ -1,39 +1,53 @@
 -- wowlua:combat (spec stdlib "combat"): work that must wait for the end of
 -- combat lockdown. Queued calls run in FIFO order on PLAYER_REGEN_ENABLED;
 -- repeated calls to one `@outOfCombat` function (per receiver for methods)
--- keep their first place in the queue and take the latest arguments.
+-- keep their first place in the queue and take the latest arguments, and
+-- `defer` calls with one key keep the first place and run the latest
+-- function.
 import on, Subscription from "wowlua:events"
 import callIn from "wowlua:errors"
+import * as secret from "wowlua:secret"
 
 type Args = { [number]: any, n: number }
-type Entry = { fn: (...any) -> ...any, args: Args, key: any, done: boolean }
+-- `slot`: the map the entry is found in by `key` while it waits.
+type Entry = { fn: (...any) -> ...any, args: Args, key: any, slot: { [any]: Entry }?, done: boolean }
 
 local queue: Entry[] = {}
 -- Queued `@outOfCombat` calls: function → receiver (or the function) → entry.
 local pending: { [any]: { [any]: Entry } } = {}
+-- Queued `defer` calls by their key.
+local deferred: { [any]: Entry } = {}
 
 local function pack(...: any): Args
     return { n = select("#", ...), ... }
 end
 
-local function enqueue(fn: (...any) -> ...any, key: any, args: Args)
-    if key ~= nil then
-        local byKey = pending[fn]
-        if not byKey then
-            byKey = setmetatable({}, { __mode = "k" })
-            pending[fn] = byKey
-        end
-        local entry = byKey[key]
+-- Queues a call; with a `key`, a waiting entry of `slot` with that key
+-- keeps its place and takes the new function and arguments.
+local function enqueue(fn: (...any) -> ...any, args: Args, key: any, slot: { [any]: Entry }?)
+    if key ~= nil and slot then
+        local entry = slot[key]
         if entry and not entry.done then
+            entry.fn = fn
             entry.args = args
             return
         end
-        entry = { fn = fn, args = args, key = key, done = false }
-        byKey[key] = entry
+        entry = { fn = fn, args = args, key = key, slot = slot, done = false }
+        slot[key] = entry
         queue[#queue + 1] = entry
         return
     end
-    queue[#queue + 1] = { fn = fn, args = args, key = nil, done = false }
+    queue[#queue + 1] = { fn = fn, args = args, key = nil, slot = nil, done = false }
+end
+
+-- The waiting `@outOfCombat` calls of `fn`, by receiver (weakly).
+local function pendingOf(fn: (...any) -> ...any): { [any]: Entry }
+    local byKey = pending[fn]
+    if not byKey then
+        byKey = setmetatable({}, { __mode = "k" })
+        pending[fn] = byKey
+    end
+    return byKey
 end
 
 local function flush()
@@ -45,9 +59,8 @@ local function flush()
         local entry = queue[1]
         table.remove(queue, 1)
         entry.done = true
-        local byKey = pending[entry.fn]
-        if entry.key ~= nil and byKey then
-            byKey[entry.key] = nil
+        if entry.slot and entry.key ~= nil then
+            entry.slot[entry.key] = nil
         end
         callIn({ component = "combat: queued call" }, entry.fn, unpack(entry.args, 1, entry.args.n))
     end
@@ -59,13 +72,19 @@ export function inCombat(): boolean
     return InCombatLockdown() and true or false
 end
 
---- Runs `fn` now out of combat, else once combat ends.
-export function defer(fn: () -> ())
+--- Runs `fn` now out of combat, else once combat ends. Calls with the
+--- same `key` while in combat keep the first one's place in the queue, and
+--- only the latest function runs. A secret key cannot be a table key: the
+--- call is queued on its own.
+export function defer(fn: () -> (), key: any?)
     if not InCombatLockdown() then
         fn()
         return
     end
-    enqueue(fn, nil, pack())
+    if secret.isSecret(key) then
+        key = nil
+    end
+    enqueue(fn, pack(), key, deferred)
 end
 
 --- `@outOfCombat`: the call runs now out of combat, else queued (coalesced).
@@ -75,7 +94,7 @@ export function outOfCombat(fn: (...any) -> ...any, ctx: DecoratorContext?): (..
         if not InCombatLockdown() then
             return fn(...)
         end
-        enqueue(fn, method and (...) or fn, pack(...))
+        enqueue(fn, pack(...), method and (...) or fn, pendingOf(fn))
     end
 end
 

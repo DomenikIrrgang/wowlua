@@ -1,0 +1,117 @@
+Frame ReputationFrame 631.0x484.0 shown=false at TOPLEFT>CharacterFrame.TOPLEFT(0,0) scripts=OnShow level=1
+  Button filterDropdown 120.0x25.0 shown=false at TOPRIGHT>CharacterFrameLeftPaneHost.TOPRIGHT(-42.0,-10) scripts=OnEnter,OnShow level=2
+    · Texture Background 136x41.0 shown=true at TOPLEFT>filterDropdown.TOPLEFT(-8,7.0) atlas=common-dropdown-textholder layer=BACKGROUND:0 rgba=1,1,1,1
+    · Texture Arrow 27.0x27.0 shown=true at RIGHT>filterDropdown.RIGHT(1,-3) atlas=common-dropdown-a-button layer=OVERLAY:0 rgba=1,1,1,1
+    · FontString Text 86.0x10.0 shown=true at TOPLEFT>filterDropdown.TOPLEFT(8,-8) font=FRIZQT__.TTF 12 object=GameFontHighlight
+  Frame ScrollBox 363.0x409.0 shown=true at TOPLEFT>CharacterFrameLeftPaneHost.TOPLEFT(10,-40) level=2
+    Frame DragDelegate 0x0 shown=true at - level=3
+    Frame ScrollTarget 343.0x1.0 shown=true at TOPLEFT>ScrollBox.TOPLEFT(10,-10) level=2
+      Button - 343.0x28.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(0,-0) scripts=OnClick level=3
+        · Texture - 343.0x28.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=common-button-list-collapseExpand layer=BACKGROUND:0 rgba=1,1,1,1
+        · Texture - 343.0x28.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=common-button-list-collapseExpand layer=HIGHLIGHT:0 rgba=1,1,1,0.3
+        · Texture StateIcon 13.0x4.0 shown=true at RIGHT>?.RIGHT(-8,-1) atlas=common-button-list-minus layer=BORDER:0 rgba=1,1,1,1
+        · FontString Name 40x15.0 shown=true at LEFT>?.LEFT(10,0) font=FRIZQT__.TTF 12 object=GameFontNormalLeft
+      Button - 341x30.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(2,-31.0) scripts=OnClick,OnEnter,OnShow level=3
+        Frame Content 341x30.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) level=4
+      Button - 341x30.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(2,-64.0) scripts=OnClick,OnEnter,OnShow level=3
+        Frame Content 341x30.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) level=4
+      Button - 341x30.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(2,-97.0) scripts=OnClick,OnEnter,OnShow level=3
+        Frame Content 341x30.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) level=4
+      Button - 341x30.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(2,-130.0) scripts=OnClick,OnEnter,OnShow level=3
+        Frame Content 341x30.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) level=4
+      Button - 343.0x28.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(0,-163.0) scripts=OnClick level=3
+        · Texture - 343.0x28.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=common-button-list-collapseExpand layer=BACKGROUND:0 rgba=1,1,1,1
+        · Texture - 343.0x28.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=common-button-list-collapseExpand layer=HIGHLIGHT:0 rgba=1,1,1,0.3
+        · Texture StateIcon 13.0x4.0 shown=true at RIGHT>?.RIGHT(-8,-1) atlas=common-button-list-minus layer=BORDER:0 rgba=1,1,1,1
+        · FontString Name 132x15.0 shown=true at LEFT>?.LEFT(10,0) font=FRIZQT__.TTF 12 object=GameFontNormalLeft
+      Button - 341x30.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(2,-194.0) scripts=OnClick,OnEnter,OnShow level=3
+        Frame Content 341x30.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) level=4
+      Button - 341x30.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(2,-227.0) scripts=OnClick,OnEnter,OnShow level=3
+        Frame Content 341x30.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) level=4
+      Button - 341x30.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(2,-260.0) scripts=OnClick,OnEnter,OnShow level=3
+        Frame Content 341x30.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) level=4
+      Button - 341x30.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(2,-293.0) scripts=OnClick,OnEnter,OnShow level=3
+        Frame Content 341x30.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) level=4
+      Button - 341x30.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(2,-326.0) scripts=OnClick,OnEnter,OnShow level=3
+        Frame Content 341x30.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) level=4
+      Button - 343.0x28.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(0,-359.0) scripts=OnClick level=3
+        · Texture - 343.0x28.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=common-button-list-collapseExpand layer=BACKGROUND:0 rgba=1,1,1,1
+        · Texture - 343.0x28.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) atlas=common-button-list-collapseExpand layer=HIGHLIGHT:0 rgba=1,1,1,0.3
+        · Texture StateIcon 13.0x4.0 shown=true at RIGHT>?.RIGHT(-8,-1) atlas=common-button-list-minus layer=BORDER:0 rgba=1,1,1,1
+        · FontString Name 38.0x15.0 shown=true at LEFT>?.LEFT(10,0) font=FRIZQT__.TTF 12 object=GameFontNormalLeft
+      Button - 341x30.0 shown=true at TOPLEFT>ScrollTarget.TOPLEFT(2,-390.0) scripts=OnClick,OnEnter,OnShow level=3
+        Frame Content 341x30.0 shown=true at TOPLEFT>?.TOPLEFT(0,0) level=4
+    Frame Shadows 363.0x409.0 shown=true at TOPLEFT>ScrollBox.TOPLEFT(0,0) level=4
+      · Texture Lower 0x0 shown=true at BOTTOMLEFT>Shadows.BOTTOMLEFT(0,0) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture Upper 0x0 shown=false at TOPLEFT>Shadows.TOPLEFT(0,0) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+    Frame - 1.0x1.0 shown=true at TOP>ScrollBox.TOP(0,0) level=6
+      · Texture - 384x8.0 shown=true at CENTER>?.CENTER(0,0) atlas=UI-Character-Info-ScrollLine-Long layer=OVERLAY:0 rgba=1,1,1,1
+    Frame - 1.0x1.0 shown=true at BOTTOM>ScrollBox.BOTTOM(0,0) level=6
+      · Texture - 384x8.0 shown=true at CENTER>?.CENTER(0,0) atlas=UI-Character-Info-ScrollLine-Long layer=OVERLAY:0 rgba=1,1,1,1
+  Frame ScrollBar 8.0x403.0 shown=true at TOPLEFT>ScrollBox.TOPRIGHT(5,-2) level=2
+    Frame Track 8.0x365.0 shown=true at TOP>ScrollBar.TOP(0,-19) level=4
+      · Texture Begin 8.0x8.0 shown=true at TOPLEFT>Track.TOPLEFT(0,0) atlas=minimal-scrollbar-track-top layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture End 8.0x8.0 shown=true at BOTTOMLEFT>Track.BOTTOMLEFT(0,0) atlas=minimal-scrollbar-track-bottom layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture Middle 8.0x349.0 shown=true at TOPLEFT>Begin.BOTTOMLEFT(0,0) atlas=!minimal-scrollbar-track-middle layer=ARTWORK:0 rgba=1,1,1,1
+      Button Thumb 8.0x315.6 shown=true at TOP>Track.TOP(0,-0) scripts=OnEnter level=5
+        · Texture Begin 8.0x8.0 shown=true at TOPLEFT>Thumb.TOPLEFT(0,0) atlas=minimal-scrollbar-small-thumb-top layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture End 8.0x8.0 shown=true at BOTTOMLEFT>Thumb.BOTTOMLEFT(0,0) atlas=minimal-scrollbar-small-thumb-bottom layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture Middle 8.0x299.6 shown=true at TOPLEFT>Begin.BOTTOMLEFT(0,0) atlas=minimal-scrollbar-small-thumb-middle layer=ARTWORK:0 rgba=1,1,1,1
+    Button Back 17.0x11.0 shown=true at TOP>ScrollBar.TOP(0,0) scripts=OnEnter level=5
+      · Texture Texture 17.0x11.0 shown=true at TOPLEFT>Back.TOPLEFT(0,0) atlas=minimal-scrollbar-arrow-top layer=BACKGROUND:0 rgba=1,1,1,1
+    Button Forward 17.0x11.0 shown=true at BOTTOM>ScrollBar.BOTTOM(0,0) scripts=OnEnter level=5
+      · Texture Texture 17.0x11.0 shown=true at TOPLEFT>Forward.TOPLEFT(0,0) atlas=minimal-scrollbar-arrow-bottom layer=BACKGROUND:0 rgba=1,1,1,1
+  Frame ReputationDetailFrame 205.0x436.0 shown=true at TOPLEFT>CharacterFrameRightPaneHost.TOPLEFT(16,-14.0) scripts=OnShow level=2
+    · FontString Title 195.0x1.0 shown=true at TOP>ReputationDetailFrame.TOP(0,0) font=FRIZQT__.TTF 14.0 object=GameFontNormalMed3
+    · FontString Subtitle 195.0x1.0 shown=false at TOP>Title.BOTTOM(0,-3) font=FRIZQT__.TTF 12 object=GameFontHighlight
+    · FontString EmptyText 170.0x24.0 shown=true at CENTER>ReputationDetailFrame.CENTER(0,30) font=FRIZQT__.TTF 12 object=GameFontDisable
+    · Texture Divider 210.0x7.0 shown=false at TOP>Subtitle.BOTTOM(0,-4) atlas=UI-Character-Info-ScrollLine layer=BORDER:0 rgba=1,1,1,1
+    Frame Description 191.0x1.0 shown=false at TOP>StandingBar.BOTTOM(0,-8) level=3
+      Frame ScrollBox 191.0x1.0 shown=true at TOPLEFT>Description.TOPLEFT(0,0) level=4
+        Frame DragDelegate 0x0 shown=true at - level=5
+        Frame ScrollTarget 191.0x1.0 shown=true at TOPLEFT>ScrollBox.TOPLEFT(0,0) level=4
+        Frame Shadows 191.0x1.0 shown=true at TOPLEFT>ScrollBox.TOPLEFT(0,0) level=6
+    Frame DescriptionScrollBar 8.0x0 shown=true at TOPLEFT>Description.TOPRIGHT(4,-1) level=3
+      Frame Track 8.0x0 shown=true at TOP>DescriptionScrollBar.TOP(0,-19) level=5
+        · Texture Begin 8.0x8.0 shown=true at TOPLEFT>Track.TOPLEFT(0,0) atlas=minimal-scrollbar-track-top layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture End 8.0x8.0 shown=true at BOTTOMLEFT>Track.BOTTOMLEFT(0,0) atlas=minimal-scrollbar-track-bottom layer=ARTWORK:0 rgba=1,1,1,1
+        · Texture Middle 8.0x0 shown=true at TOPLEFT>Begin.BOTTOMLEFT(0,0) atlas=!minimal-scrollbar-track-middle layer=ARTWORK:0 rgba=1,1,1,1
+        Button Thumb 8x0 shown=false at TOP>Track.TOP(0,-0) scripts=OnEnter level=6
+      Button Back 17.0x11.0 shown=true at TOP>DescriptionScrollBar.TOP(0,0) scripts=OnEnter level=6
+        · Texture Texture 17.0x11.0 shown=true at TOPLEFT>Back.TOPLEFT(0,0) atlas=minimal-scrollbar-arrow-top layer=BACKGROUND:0 rgba=1,1,1,1
+      Button Forward 17.0x11.0 shown=true at BOTTOM>DescriptionScrollBar.BOTTOM(0,0) scripts=OnEnter level=6
+        · Texture Texture 17.0x11.0 shown=true at TOPLEFT>Forward.TOPLEFT(0,0) atlas=minimal-scrollbar-arrow-bottom layer=BACKGROUND:0 rgba=1,1,1,1
+    Frame Content 195x0 shown=true at TOP>Description.BOTTOM(0,-6) scripts=OnShow level=3
+    Frame Footer 205.0x108.0 shown=false at BOTTOMLEFT>ReputationDetailFrame.BOTTOMLEFT(0,0) level=3
+    Frame StandingBar 180.0x29.0 shown=false at TOP>Divider.BOTTOM(0,-6) level=3
+      · Texture - 180.0x29.0 shown=true at TOPLEFT>StandingBar.TOPLEFT(0,0) atlas=common-stat-bar-BG layer=BACKGROUND:0 rgba=1,1,1,1
+      · Texture Fill 164.9x15.0 shown=true at LEFT>StandingBar.LEFT(0,0) atlas=common-stat-bar-white layer=BORDER:0 rgba=0.9,0.7,0,1
+      · MaskTexture Mask 180.0x29.0 shown=true at LEFT>StandingBar.LEFT(0,0) atlas=common-stat-bar-Mask layer=BORDER:0 rgba=1,1,1,1
+      · FontString Text 180.0x20.0 shown=true at LEFT>StandingBar.LEFT(0,0) font=FRIZQT__.TTF 12 object=GameFontHighlight
+      Frame BonusIcon 16.0x16.0 shown=false at CENTER>StandingBar.LEFT(4,0) scripts=OnEnter level=4
+        · Texture Texture 16.0x16.0 shown=true at TOPLEFT>BonusIcon.TOPLEFT(0,0) tex=838818 layer=ARTWORK:0 rgba=1,1,1,1
+    CheckButton AtWarCheckbox 26.0x26.0 shown=false at TOPLEFT>Footer.TOPLEFT(-4,0) scripts=OnClick,OnEnter level=3
+      · FontString Label 158.0x12.0 shown=true at LEFT>AtWarCheckbox.RIGHT(2,0) font=FRIZQT__.TTF 12 object=GameFontNormal
+      · Texture - 26.0x26.0 shown=true at TOPLEFT>AtWarCheckbox.TOPLEFT(0,0) atlas=checkbox-minimal layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 26.0x26.0 shown=false at TOPLEFT>AtWarCheckbox.TOPLEFT(0,0) atlas=checkbox-minimal layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 32.0x32.0 shown=false at TOPLEFT>AtWarCheckbox.TOPLEFT(3,-5) tex=130754 layer=OVERLAY:0 rgba=1,1,1,1
+      · Texture - 26.0x26.0 shown=false at TOPLEFT>AtWarCheckbox.TOPLEFT(0,0) atlas=checkmark-minimal-disabled layer=OVERLAY:0 rgba=1,1,1,1
+    CheckButton MakeInactiveCheckbox 26.0x26.0 shown=false at TOPLEFT>AtWarCheckbox.BOTTOMLEFT(0,-2) scripts=OnClick,OnEnter level=3
+      · FontString Label 158.0x12.0 shown=true at LEFT>MakeInactiveCheckbox.RIGHT(2,0) font=FRIZQT__.TTF 12 object=GameFontNormal
+      · Texture - 26.0x26.0 shown=true at TOPLEFT>MakeInactiveCheckbox.TOPLEFT(0,0) atlas=checkbox-minimal layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 26.0x26.0 shown=false at TOPLEFT>MakeInactiveCheckbox.TOPLEFT(0,0) atlas=checkbox-minimal layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 26.0x26.0 shown=false at TOPLEFT>MakeInactiveCheckbox.TOPLEFT(0,0) atlas=checkmark-minimal layer=OVERLAY:0 rgba=1,1,1,1
+      · Texture - 26.0x26.0 shown=false at TOPLEFT>MakeInactiveCheckbox.TOPLEFT(0,0) atlas=checkmark-minimal-disabled layer=OVERLAY:0 rgba=1,1,1,1
+    CheckButton WatchFactionCheckbox 26.0x26.0 shown=false at TOPLEFT>MakeInactiveCheckbox.BOTTOMLEFT(0,-2) scripts=OnClick,OnEnter level=3
+      · FontString Label 158.0x12.0 shown=true at LEFT>WatchFactionCheckbox.RIGHT(2,0) font=FRIZQT__.TTF 12 object=GameFontNormal
+      · Texture - 26.0x26.0 shown=true at TOPLEFT>WatchFactionCheckbox.TOPLEFT(0,0) atlas=checkbox-minimal layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 26.0x26.0 shown=false at TOPLEFT>WatchFactionCheckbox.TOPLEFT(0,0) atlas=checkbox-minimal layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 26.0x26.0 shown=false at TOPLEFT>WatchFactionCheckbox.TOPLEFT(0,0) atlas=checkmark-minimal layer=OVERLAY:0 rgba=1,1,1,1
+      · Texture - 26.0x26.0 shown=false at TOPLEFT>WatchFactionCheckbox.TOPLEFT(0,0) atlas=checkmark-minimal-disabled layer=OVERLAY:0 rgba=1,1,1,1
+    Button ViewRenownButton 140x18.0 shown=false at TOP>WatchFactionCheckbox.BOTTOM(60,-8) scripts=OnClick,OnEnter,OnShow level=3
+      · Texture Left 114.0x128.0 shown=true at TOPLEFT>ViewRenownButton.TOPLEFT(0,0) atlas=128-GoldRedButton-Left-Disabled layer=BACKGROUND:0 rgba=1,1,1,1
+      · Texture Right 292x128.0 shown=true at TOPRIGHT>ViewRenownButton.TOPRIGHT(0,0) atlas=128-GoldRedButton-Right-Disabled layer=BACKGROUND:0 rgba=1,1,1,1
+      · Texture Center 82.9x18.0 shown=true at TOPLEFT>Left.TOPRIGHT(0,0) atlas=_128-GoldRedButton-Center-Disabled layer=BACKGROUND:0 rgba=1,1,1,1
+      · Texture - 140x18.0 shown=true at TOPLEFT>ViewRenownButton.TOPLEFT(0,0) atlas=128-GoldRedButton-Highlight layer=HIGHLIGHT:0 rgba=1,1,1,1
+      · FontString - 71.0x10.0 shown=true at CENTER>ViewRenownButton.CENTER(0,0) font=FRIZQT__.TTF 10 object=GameFontDisableSmall
+      Frame Controller 0x0 shown=true at - scripts=OnShow level=4

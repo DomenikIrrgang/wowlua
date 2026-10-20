@@ -15,6 +15,11 @@ struct State {
     /// How many of `errors` a test has read (`mock.errors()`) or the runner
     /// reported.
     read: usize,
+    /// The errors the client drops without a report (`secureexecuterange`'s
+    /// callbacks), with their stacks: no test sees them (`mock.errors()` is
+    /// what reached the error handler), the runner fails on them.
+    dropped: Vec<String>,
+    dropped_read: usize,
     /// How many of the engine's refusals of protected actions a test has
     /// read (`mock.refusals()`, `toBeBlocked`) or the runner reported.
     refusals_read: usize,
@@ -47,7 +52,7 @@ pub fn take_printed() -> String {
 pub fn unread_errors() -> Vec<String> {
     STATE.with(|s| {
         let mut s = s.borrow_mut();
-        let unread = (s.read..s.errors.len())
+        let unread: Vec<String> = (s.read..s.errors.len())
             .map(|i| match s.stacks.get(i) {
                 Some(stack) if !stack.is_empty() => format!("{}\n{stack}", s.errors[i]),
                 _ => s.errors[i].clone(),
@@ -56,6 +61,29 @@ pub fn unread_errors() -> Vec<String> {
         s.read = s.errors.len();
         unread
     })
+}
+
+/// The errors the client dropped since the last read, marked read.
+pub fn unread_dropped() -> Vec<String> {
+    STATE.with(|s| {
+        let mut s = s.borrow_mut();
+        let unread = s.dropped[s.dropped_read..].to_vec();
+        s.dropped_read = s.dropped.len();
+        unread
+    })
+}
+
+/// `Vm::on_dropped_error`: an error the client drops, for the runner.
+pub fn dropped_error(_vm: &mut Vm, message: String, stack: String) {
+    STATE.with(|s| {
+        let mut s = s.borrow_mut();
+        let text = format!("{}{message}", wowlua_engine::ui::DROPPED);
+        s.dropped.push(if stack.is_empty() {
+            text
+        } else {
+            format!("{text}\n{stack}")
+        });
+    });
 }
 
 /// The error handler: records the error (with the stack of where it was

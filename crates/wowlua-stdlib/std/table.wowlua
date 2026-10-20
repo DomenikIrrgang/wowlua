@@ -6,7 +6,8 @@
 -- else: nothing here compares, indexes or walks them (that would error).
 import * as secret from "wowlua:secret"
 
--- A deep copy that keeps shared and cyclic references shared.
+-- A deep copy of the values (keys are kept as they are) that keeps shared
+-- and cyclic references shared.
 local function deep(v: any, seen: { [table]: table }): any
     if type(v) ~= "table" or not secret.readable(v) then
         return v
@@ -18,7 +19,7 @@ local function deep(v: any, seen: { [table]: table }): any
     const out: table = {}
     seen[v] = out
     for k, x in pairs(v) do
-        out[deep(k, seen)] = deep(x, seen)
+        out[k] = deep(x, seen)
     end
     return out
 end
@@ -28,8 +29,46 @@ local function walkable(v: unknown): boolean
     return type(v) == "table" and secret.readable(v)
 end
 
---- A deep copy (nested tables copied, cycles kept, metatables dropped).
-export function copy<T>(t: T): T
+-- A deep copy of the values where every occurrence of a table becomes a
+-- table of its own; `path` holds the tables being copied. A cycle gives
+-- false (no copy).
+local function separate(v: any, path: { [table]: boolean }): (boolean, any)
+    if type(v) ~= "table" or not secret.readable(v) then
+        return true, v
+    end
+    if path[v] then
+        return false, nil
+    end
+    path[v] = true
+    const out: table = {}
+    for k, x in pairs(v) do
+        local ok, copied = separate(x, path)
+        if not ok then
+            return false, nil
+        end
+        out[k] = copied
+    end
+    path[v] = nil
+    return true, out
+end
+
+export type CopyOptions = {
+    --- `false`: every occurrence of a nested table gets a table of its own
+    --- (no two places of the copy share one; a cycle is an error).
+    shared?: boolean,
+}
+
+--- A deep copy: nested values copied, keys kept as they are, metatables
+--- dropped. Shared and cyclic references stay shared unless
+--- `opts.shared` is false.
+export function copy<T>(t: T, opts: CopyOptions?): T
+    if opts?.shared == false then
+        local ok, copied = separate(t, {})
+        if not ok then
+            error("copy: the table contains itself, which `shared = false` cannot copy", 2)
+        end
+        return copied
+    end
     return deep(t, {})
 end
 
@@ -105,14 +144,19 @@ export function equal(a: any, b: any): boolean
     return true
 end
 
---- The keys, sorted when they are all numbers or all strings.
-export function keys<K, V>(t: { [K]: V }): K[]
+--- The keys, sorted by `less` when given, else when they are all numbers
+--- or all strings.
+export function keys<K, V>(t: { [K]: V }, less: ((a: K, b: K) -> boolean)?): K[]
     const out: K[] = {}
     if not secret.readable(t) then
         return out
     end
     for k in pairs(t) do
         out[#out + 1] = k
+    end
+    if less then
+        table.sort(out, less)
+        return out
     end
     local sortable = true
     const first = type(out[1])

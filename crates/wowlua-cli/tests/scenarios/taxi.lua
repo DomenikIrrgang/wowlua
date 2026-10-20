@@ -11,7 +11,7 @@ e.setHiddenGroupBuffs({ 10300, 19740, 1022, 1038, 19979, 25290, 5599, 19834, 102
 -- Judgement off the global cooldown; Find Minerals and Sense Undead
 -- tracking (usable on the taxi); Blacksmithing and Smelting professions
 -- (usable all the flight): as recorded.
-e.setSpellTraits({ offGlobalCooldown = { 20271 }, tracking = { 2580, 5502 }, profession = { 3100, 2656 } })
+e.setSpellTraits({ offGlobalCooldown = { 20271 }, tracking = { 2580, 5502 }, profession = { 3100, 2656 }, partyOrSelf = { 1022 } })
 local doras = e.spawnUnit({
     name = "Doras", guid = "Creature-0-6782-1-4-3310-54D6D229C9", npcID = 3310, level = 55, classification = "elite",
     reaction = "friendly", class = "WARRIOR", classID = 1, sex = 2, powerType = 1,
@@ -138,9 +138,12 @@ local function place(zone, subZone, mapID, more)
     for k, v in pairs(more or {}) do p[k] = v end
     e.moveTo(p)
 end
+-- Targeting Doras: the server's echo with its next update, 0.666 s
+-- later, after Doras's own turn (recorded).
+e.setLatency(0.667)
+at(1.801) player:target(doras)
 -- Talking to Doras: the round trip then 0.445 s.
 e.setLatency(0.445)
-at(1.801) player:target(doras)
 doras:setDistance(3)
 player:interact(doras)
 player:softTarget(doras, "friend")
@@ -156,8 +159,9 @@ at(6.5)
 check("the gossip shown", GossipFrame:IsShown())
 local option = button(GossipFrame, "I need a ride.")
 check("the gossip's option shown", option ~= nil)
--- The option chosen: the round trip then 0.487 s.
-e.setLatency(0.487)
+-- The option chosen: the round trip then 0.487 s, the map's packet after
+-- Doras's turn of the same moment (recorded).
+e.setLatency(0.4875)
 at(6.855) if option then press(option) end
 at(7.342) doras:target(player)
 at(7.821) doras:target(someone)
@@ -192,7 +196,9 @@ at(28.162) place("Durotar", "Southfury River", 1411)
 at(28.495) place("Orgrimmar", "Orgrimmar", 1454, { pvp = { "friendly", false, "Horde" } })
 at(29.761) world("REQUEST_CEMETERY_LIST_RESPONSE", false)
 at(30.162) place("The Barrens", "Southfury River", 1414)
-at(30.195) world("WEATHER_CHANGED")
+-- The weather in the frame of the map's updates, after them (recorded
+-- 30.194).
+at(30.213) world("WEATHER_CHANGED")
 -- Out of the city: its trade channels left, no longer resting.
 at(30.395)
 world("CHANNEL_UI_UPDATE")
@@ -242,7 +248,9 @@ at(82.703) servers()
 at(84.736) place("The Barrens", "Grol'dom Farm", 1413)
 at(91.403) e.areaChanged()
 at(92.070) e.newWmoChunk()
-at(96.970) cleared()
+-- Cleared once more, the server's echo never came (recorded: none till
+-- the end).
+at(96.970) e.setLatency(1000) cleared() e.setLatency(0.48)
 at(99.070) place("The Barrens", "", 1413)
 at(99.403) place("The Barrens", "Gold Road", 1413)
 at(102.403) place("The Barrens", "", 1413)
@@ -254,6 +262,10 @@ check("still flying", UnitOnTaxi("player") and not HasFullControl())
 at(120.0)
 check("landed", not UnitOnTaxi("player") and HasFullControl())
 check("landed: the fare paid", GetMoney() == 31712)
+-- By the Crossroads' campfire (the session's aura instance, recorded).
+at(120.801) player:applyAura({ spellId = 1283391, name = "Campfire Nearby", icon = 7808147, auraInstanceID = 39 })
 -- At the Crossroads, standing.
 at(127.234) player:wear()
+-- An aura gone from the soft friend (the world's, recorded).
+at(209.156) world("UNIT_AURA", "softfriend", { isFullUpdate = false, removedAuraInstanceIDs = { 29 } })
 at(216.2)

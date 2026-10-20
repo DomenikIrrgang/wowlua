@@ -1,0 +1,1087 @@
+Frame PaperDollItemsFrame 631.0x484.0 shown=true at TOPLEFT>PaperDollFrame.TOPLEFT(0,0) level=100
+  Button CharacterHeadSlot 37x37.0 shown=true at TOPLEFT>CharacterFrameLeftPaneHost.TOPLEFT(24,-60) scripts=OnClick,OnEnter,OnShow level=101
+    · Texture CharacterHeadSlotIconTexture 37x37.0 shown=true at TOPLEFT>CharacterHeadSlot.TOPLEFT(0,0) tex=136516 layer=BORDER:0 rgba=1,1,1,1
+    · FontString CharacterHeadSlotCount 1.0x1.0 shown=false at BOTTOMRIGHT>CharacterHeadSlot.BOTTOMRIGHT(-5,2) font=ARIALN.TTF 14.0 object=NumberFontNormal
+    · FontString CharacterHeadSlotStock 1.0x1.0 shown=false at TOPLEFT>CharacterHeadSlot.TOPLEFT(0,-2) font=ARIALN.TTF 14.0 object=NumberFontNormalYellow
+    · Texture CharacterHeadSlotSearchOverlay 37x37.0 shown=false at TOPLEFT>CharacterHeadSlot.TOPLEFT(0,0) tex=FileData ID 0 layer=OVERLAY:4 rgba=1,1,1,1
+    · Texture ItemContextOverlay 37x37.0 shown=false at TOPLEFT>CharacterHeadSlot.TOPLEFT(0,0) tex=nil layer=OVERLAY:5 rgba=1,1,1,1
+    · Texture IconBorder 37x37.0 shown=false at CENTER>CharacterHeadSlot.CENTER(0,0) tex=651080 layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture IconOverlay 37x37.0 shown=false at CENTER>CharacterHeadSlot.CENTER(0,0) tex=nil layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture IconOverlay2 37x37.0 shown=false at CENTER>CharacterHeadSlot.CENTER(0,0) tex=nil layer=OVERLAY:2 rgba=1,1,1,1
+    · Texture CharacterHeadSlotNormalTexture 64x64.0 shown=true at CENTER>CharacterHeadSlot.CENTER(0,-1) tex=130841 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture PushedTexture 37x37.0 shown=false at TOPLEFT>CharacterHeadSlot.TOPLEFT(0,0) tex=130839 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture HighlightTexture 37x37.0 shown=true at TOPLEFT>CharacterHeadSlot.TOPLEFT(0,0) tex=130718 layer=HIGHLIGHT:0 rgba=1,1,1,1
+    · Texture CorruptedHighlightTexture 66x66.0 shown=false at CENTER>CharacterHeadSlot.CENTER(0,0) atlas=Nzoth-charactersheet-item-glow layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture AzeriteTexture 0x0 shown=false at CENTER>CharacterHeadSlot.CENTER(0,0) tex=nil layer=BORDER:-1 rgba=1,1,1,1
+    · Texture AugmentBorderAnimTexture 37x37.0 shown=false at TOPLEFT>CharacterHeadSlot.TOPLEFT(0,0) atlas=GearEnchant_IconBorder layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture ignoreTexture 40x40.0 shown=false at CENTER>CharacterHeadSlot.CENTER(0,0) tex=255353 layer=OVERLAY:0 rgba=1,1,1,1
+    Frame RankFrame 31.0x21.0 shown=false at CENTER>CharacterHeadSlot.BOTTOM(0,5) level=102
+      · Texture Texture 31.0x21.0 shown=true at CENTER>RankFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-NeckLevelBorder layer=OVERLAY:4 rgba=1,1,1,1
+      · FontString Label 1.0x1.0 shown=true at CENTER>RankFrame.CENTER(0,1) font=FRIZQT__.TTF 12 object=GameFontNormal
+    Frame AvailableTraitFrame 37x37.0 shown=false at TOPLEFT>CharacterHeadSlot.TOPLEFT(0,0) level=102
+      · Texture SmokeRightUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeLeftUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,-4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeTopUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeBottomUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(-4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeRight 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeLeft 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeTop 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeBottom 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture StarTopLeft 10x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomLeft 10x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopLeftUnderlay 10x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarTopRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomLeftUnderlay 10x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture ItemGlow 35x35 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-ItemGlow layer=BORDER:2 rgba=1,1,1,1
+      · Texture BorderGlow 53x41.0 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Glow layer=BORDER:-2 rgba=1,1,1,1
+    Cooldown CharacterHeadSlotCooldown 37x37.0 shown=false at TOPLEFT>CharacterHeadSlot.TOPLEFT(0,0) level=102
+      · FontString - 1.0x1.0 shown=true at CENTER>CharacterHeadSlotCooldown.CENTER(0,-1) font=FRIZQT__.TTF 16 object=SystemFont_Shadow_Large_Outline
+    Button CharacterHeadSlotPopoutButton 20x43.0 shown=false at LEFT>CharacterHeadSlot.RIGHT(5,0) scripts=OnClick,OnEnter,OnShow level=98
+      · Texture - 20x43.0 shown=true at TOPLEFT>CharacterHeadSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20x43.0 shown=false at TOPLEFT>CharacterHeadSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide-Pressed layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20x43.0 shown=true at TOPLEFT>CharacterHeadSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=HIGHLIGHT:0 rgba=1,1,1,1
+    Frame BorderFrame 1.0x1.0 shown=true at CENTER>CharacterHeadSlot.CENTER(0,0) level=99
+      · Texture - 55x55.0 shown=true at CENTER>BorderFrame.CENTER(0,0) atlas=UI-Character-Info-GearSlot layer=BACKGROUND:0 rgba=1,1,1,1
+    Frame SocketDisplay 0x0 shown=false at RIGHT>CharacterHeadSlot.RIGHT(7.0,0) scripts=OnShow level=102
+      Frame Slot1 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot1.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot1.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot2 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot2.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot2.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot3 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot3.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot3.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+  Button CharacterNeckSlot 37x37.0 shown=true at TOPLEFT>CharacterHeadSlot.BOTTOMLEFT(0,-6) scripts=OnClick,OnEnter,OnShow level=101
+    · Texture CharacterNeckSlotIconTexture 37x37.0 shown=true at TOPLEFT>CharacterNeckSlot.TOPLEFT(0,0) tex=136519 layer=BORDER:0 rgba=1,1,1,1
+    · FontString CharacterNeckSlotCount 1.0x1.0 shown=false at BOTTOMRIGHT>CharacterNeckSlot.BOTTOMRIGHT(-5,2) font=ARIALN.TTF 14.0 object=NumberFontNormal
+    · FontString CharacterNeckSlotStock 1.0x1.0 shown=false at TOPLEFT>CharacterNeckSlot.TOPLEFT(0,-2) font=ARIALN.TTF 14.0 object=NumberFontNormalYellow
+    · Texture CharacterNeckSlotSearchOverlay 37x37.0 shown=false at TOPLEFT>CharacterNeckSlot.TOPLEFT(0,0) tex=FileData ID 0 layer=OVERLAY:4 rgba=1,1,1,1
+    · Texture ItemContextOverlay 37x37.0 shown=false at TOPLEFT>CharacterNeckSlot.TOPLEFT(0,0) tex=nil layer=OVERLAY:5 rgba=1,1,1,1
+    · Texture IconBorder 37x37.0 shown=false at CENTER>CharacterNeckSlot.CENTER(0,0) tex=651080 layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture IconOverlay 37x37.0 shown=false at CENTER>CharacterNeckSlot.CENTER(0,0) tex=nil layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture IconOverlay2 37x37.0 shown=false at CENTER>CharacterNeckSlot.CENTER(0,0) tex=nil layer=OVERLAY:2 rgba=1,1,1,1
+    · Texture CharacterNeckSlotNormalTexture 64x64.0 shown=true at CENTER>CharacterNeckSlot.CENTER(0,-1) tex=130841 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture PushedTexture 37x37.0 shown=false at TOPLEFT>CharacterNeckSlot.TOPLEFT(0,0) tex=130839 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture HighlightTexture 37x37.0 shown=true at TOPLEFT>CharacterNeckSlot.TOPLEFT(0,0) tex=130718 layer=HIGHLIGHT:0 rgba=1,1,1,1
+    · Texture CorruptedHighlightTexture 66x66.0 shown=false at CENTER>CharacterNeckSlot.CENTER(0,0) atlas=Nzoth-charactersheet-item-glow layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture AzeriteTexture 0x0 shown=false at CENTER>CharacterNeckSlot.CENTER(0,0) tex=nil layer=BORDER:-1 rgba=1,1,1,1
+    · Texture AugmentBorderAnimTexture 37x37.0 shown=false at TOPLEFT>CharacterNeckSlot.TOPLEFT(0,0) atlas=GearEnchant_IconBorder layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture ignoreTexture 40x40.0 shown=false at CENTER>CharacterNeckSlot.CENTER(0,0) tex=255353 layer=OVERLAY:0 rgba=1,1,1,1
+    Frame RankFrame 31.0x21.0 shown=false at CENTER>CharacterNeckSlot.BOTTOM(0,5) level=102
+      · Texture Texture 31.0x21.0 shown=true at CENTER>RankFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-NeckLevelBorder layer=OVERLAY:4 rgba=1,1,1,1
+      · FontString Label 1.0x1.0 shown=true at CENTER>RankFrame.CENTER(0,1) font=FRIZQT__.TTF 12 object=GameFontNormal
+    Frame AvailableTraitFrame 37x37.0 shown=false at TOPLEFT>CharacterNeckSlot.TOPLEFT(0,0) level=102
+      · Texture SmokeRightUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeLeftUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,-4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeTopUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeBottomUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(-4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeRight 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeLeft 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeTop 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeBottom 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture StarTopLeft 10x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomLeft 10x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopLeftUnderlay 10x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarTopRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomLeftUnderlay 10x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture ItemGlow 35x35 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-ItemGlow layer=BORDER:2 rgba=1,1,1,1
+      · Texture BorderGlow 53x41.0 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Glow layer=BORDER:-2 rgba=1,1,1,1
+    Cooldown CharacterNeckSlotCooldown 37x37.0 shown=false at TOPLEFT>CharacterNeckSlot.TOPLEFT(0,0) level=102
+      · FontString - 1.0x1.0 shown=true at CENTER>CharacterNeckSlotCooldown.CENTER(0,-1) font=FRIZQT__.TTF 16 object=SystemFont_Shadow_Large_Outline
+    Button CharacterNeckSlotPopoutButton 20x43.0 shown=false at LEFT>CharacterNeckSlot.RIGHT(5,0) scripts=OnClick,OnEnter,OnShow level=98
+      · Texture - 20x43.0 shown=true at TOPLEFT>CharacterNeckSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20x43.0 shown=false at TOPLEFT>CharacterNeckSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide-Pressed layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20x43.0 shown=true at TOPLEFT>CharacterNeckSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=HIGHLIGHT:0 rgba=1,1,1,1
+    Frame BorderFrame 1.0x1.0 shown=true at CENTER>CharacterNeckSlot.CENTER(0,0) level=99
+      · Texture - 55x55.0 shown=true at CENTER>BorderFrame.CENTER(0,0) atlas=UI-Character-Info-GearSlot layer=BACKGROUND:0 rgba=1,1,1,1
+    Frame SocketDisplay 0x0 shown=false at RIGHT>CharacterNeckSlot.RIGHT(7.0,0) scripts=OnShow level=102
+      Frame Slot1 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot1.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot1.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot2 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot2.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot2.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot3 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot3.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot3.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+  Button CharacterShoulderSlot 37x37.0 shown=true at TOPLEFT>CharacterNeckSlot.BOTTOMLEFT(0,-6) scripts=OnClick,OnEnter,OnShow level=101
+    · Texture CharacterShoulderSlotIconTexture 37x37.0 shown=true at TOPLEFT>CharacterShoulderSlot.TOPLEFT(0,0) tex=135036 layer=BORDER:0 rgba=1,1,1,1
+    · FontString CharacterShoulderSlotCount 1.0x1.0 shown=false at BOTTOMRIGHT>CharacterShoulderSlot.BOTTOMRIGHT(-5,2) font=ARIALN.TTF 14.0 object=NumberFontNormal
+    · FontString CharacterShoulderSlotStock 1.0x1.0 shown=false at TOPLEFT>CharacterShoulderSlot.TOPLEFT(0,-2) font=ARIALN.TTF 14.0 object=NumberFontNormalYellow
+    · Texture CharacterShoulderSlotSearchOverlay 37x37.0 shown=false at TOPLEFT>CharacterShoulderSlot.TOPLEFT(0,0) tex=FileData ID 0 layer=OVERLAY:4 rgba=1,1,1,1
+    · Texture ItemContextOverlay 37x37.0 shown=false at TOPLEFT>CharacterShoulderSlot.TOPLEFT(0,0) tex=nil layer=OVERLAY:5 rgba=1,1,1,1
+    · Texture IconBorder 37x37.0 shown=true at CENTER>CharacterShoulderSlot.CENTER(0,0) tex=651080 layer=OVERLAY:0 rgba=0.1,0.7,0,1
+    · Texture IconOverlay 37x37.0 shown=false at CENTER>CharacterShoulderSlot.CENTER(0,0) tex=nil layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture IconOverlay2 37x37.0 shown=false at CENTER>CharacterShoulderSlot.CENTER(0,0) tex=nil layer=OVERLAY:2 rgba=1,1,1,1
+    · Texture CharacterShoulderSlotNormalTexture 64x64.0 shown=true at CENTER>CharacterShoulderSlot.CENTER(0,-1) tex=130841 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture PushedTexture 37x37.0 shown=false at TOPLEFT>CharacterShoulderSlot.TOPLEFT(0,0) tex=130839 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture HighlightTexture 37x37.0 shown=true at TOPLEFT>CharacterShoulderSlot.TOPLEFT(0,0) tex=130718 layer=HIGHLIGHT:0 rgba=1,1,1,1
+    · Texture CorruptedHighlightTexture 66x66.0 shown=false at CENTER>CharacterShoulderSlot.CENTER(0,0) atlas=Nzoth-charactersheet-item-glow layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture AzeriteTexture 0x0 shown=false at CENTER>CharacterShoulderSlot.CENTER(0,0) tex=nil layer=BORDER:-1 rgba=1,1,1,1
+    · Texture AugmentBorderAnimTexture 37x37.0 shown=false at TOPLEFT>CharacterShoulderSlot.TOPLEFT(0,0) atlas=GearEnchant_IconBorder layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture ignoreTexture 40x40.0 shown=false at CENTER>CharacterShoulderSlot.CENTER(0,0) tex=255353 layer=OVERLAY:0 rgba=1,1,1,1
+    Frame RankFrame 31.0x21.0 shown=false at CENTER>CharacterShoulderSlot.BOTTOM(0,5) level=102
+      · Texture Texture 31.0x21.0 shown=true at CENTER>RankFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-NeckLevelBorder layer=OVERLAY:4 rgba=1,1,1,1
+      · FontString Label 1.0x1.0 shown=true at CENTER>RankFrame.CENTER(0,1) font=FRIZQT__.TTF 12 object=GameFontNormal
+    Frame AvailableTraitFrame 37x37.0 shown=false at TOPLEFT>CharacterShoulderSlot.TOPLEFT(0,0) level=102
+      · Texture SmokeRightUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeLeftUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,-4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeTopUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeBottomUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(-4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeRight 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeLeft 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeTop 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeBottom 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture StarTopLeft 10x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomLeft 10x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopLeftUnderlay 10x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarTopRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomLeftUnderlay 10x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture ItemGlow 35x35 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-ItemGlow layer=BORDER:2 rgba=1,1,1,1
+      · Texture BorderGlow 53x41.0 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Glow layer=BORDER:-2 rgba=1,1,1,1
+    Cooldown CharacterShoulderSlotCooldown 37x37.0 shown=false at TOPLEFT>CharacterShoulderSlot.TOPLEFT(0,0) level=102
+      · FontString - 1.0x1.0 shown=true at CENTER>CharacterShoulderSlotCooldown.CENTER(0,-1) font=FRIZQT__.TTF 16 object=SystemFont_Shadow_Large_Outline
+    Button CharacterShoulderSlotPopoutButton 20x43.0 shown=false at LEFT>CharacterShoulderSlot.RIGHT(5,0) scripts=OnClick,OnEnter,OnShow level=98
+      · Texture - 20x43.0 shown=true at TOPLEFT>CharacterShoulderSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20x43.0 shown=false at TOPLEFT>CharacterShoulderSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide-Pressed layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20x43.0 shown=true at TOPLEFT>CharacterShoulderSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=HIGHLIGHT:0 rgba=1,1,1,1
+    Frame BorderFrame 1.0x1.0 shown=true at CENTER>CharacterShoulderSlot.CENTER(0,0) level=99
+      · Texture - 55x55.0 shown=true at CENTER>BorderFrame.CENTER(0,0) atlas=UI-Character-Info-GearSlot layer=BACKGROUND:0 rgba=1,1,1,1
+    Frame SocketDisplay 0x0 shown=false at RIGHT>CharacterShoulderSlot.RIGHT(7.0,0) scripts=OnShow level=102
+      Frame Slot1 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot1.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot1.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot2 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot2.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot2.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot3 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot3.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot3.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+  Button CharacterBackSlot 37x37.0 shown=true at TOPLEFT>CharacterShoulderSlot.BOTTOMLEFT(0,-6) scripts=OnClick,OnEnter,OnShow level=101
+    · Texture CharacterBackSlotIconTexture 37x37.0 shown=true at TOPLEFT>CharacterBackSlot.TOPLEFT(0,0) tex=133755 layer=BORDER:0 rgba=1,1,1,1
+    · FontString CharacterBackSlotCount 1.0x1.0 shown=false at BOTTOMRIGHT>CharacterBackSlot.BOTTOMRIGHT(-5,2) font=ARIALN.TTF 14.0 object=NumberFontNormal
+    · FontString CharacterBackSlotStock 1.0x1.0 shown=false at TOPLEFT>CharacterBackSlot.TOPLEFT(0,-2) font=ARIALN.TTF 14.0 object=NumberFontNormalYellow
+    · Texture CharacterBackSlotSearchOverlay 37x37.0 shown=false at TOPLEFT>CharacterBackSlot.TOPLEFT(0,0) tex=FileData ID 0 layer=OVERLAY:4 rgba=1,1,1,1
+    · Texture ItemContextOverlay 37x37.0 shown=false at TOPLEFT>CharacterBackSlot.TOPLEFT(0,0) tex=nil layer=OVERLAY:5 rgba=1,1,1,1
+    · Texture IconBorder 37x37.0 shown=true at CENTER>CharacterBackSlot.CENTER(0,0) tex=651080 layer=OVERLAY:0 rgba=0.1,0.7,0,1
+    · Texture IconOverlay 37x37.0 shown=false at CENTER>CharacterBackSlot.CENTER(0,0) tex=nil layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture IconOverlay2 37x37.0 shown=false at CENTER>CharacterBackSlot.CENTER(0,0) tex=nil layer=OVERLAY:2 rgba=1,1,1,1
+    · Texture CharacterBackSlotNormalTexture 64x64.0 shown=true at CENTER>CharacterBackSlot.CENTER(0,-1) tex=130841 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture PushedTexture 37x37.0 shown=false at TOPLEFT>CharacterBackSlot.TOPLEFT(0,0) tex=130839 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture HighlightTexture 37x37.0 shown=true at TOPLEFT>CharacterBackSlot.TOPLEFT(0,0) tex=130718 layer=HIGHLIGHT:0 rgba=1,1,1,1
+    · Texture CorruptedHighlightTexture 66x66.0 shown=false at CENTER>CharacterBackSlot.CENTER(0,0) atlas=Nzoth-charactersheet-item-glow layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture AzeriteTexture 0x0 shown=false at CENTER>CharacterBackSlot.CENTER(0,0) tex=nil layer=BORDER:-1 rgba=1,1,1,1
+    · Texture AugmentBorderAnimTexture 37x37.0 shown=false at TOPLEFT>CharacterBackSlot.TOPLEFT(0,0) atlas=GearEnchant_IconBorder layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture ignoreTexture 40x40.0 shown=false at CENTER>CharacterBackSlot.CENTER(0,0) tex=255353 layer=OVERLAY:0 rgba=1,1,1,1
+    Frame RankFrame 31.0x21.0 shown=false at CENTER>CharacterBackSlot.BOTTOM(0,5) level=102
+      · Texture Texture 31.0x21.0 shown=true at CENTER>RankFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-NeckLevelBorder layer=OVERLAY:4 rgba=1,1,1,1
+      · FontString Label 1.0x1.0 shown=true at CENTER>RankFrame.CENTER(0,1) font=FRIZQT__.TTF 12 object=GameFontNormal
+    Frame AvailableTraitFrame 37x37.0 shown=false at TOPLEFT>CharacterBackSlot.TOPLEFT(0,0) level=102
+      · Texture SmokeRightUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeLeftUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,-4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeTopUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeBottomUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(-4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeRight 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeLeft 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeTop 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeBottom 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture StarTopLeft 10x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomLeft 10x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopLeftUnderlay 10x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarTopRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomLeftUnderlay 10x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture ItemGlow 35x35 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-ItemGlow layer=BORDER:2 rgba=1,1,1,1
+      · Texture BorderGlow 53x41.0 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Glow layer=BORDER:-2 rgba=1,1,1,1
+    Cooldown CharacterBackSlotCooldown 37x37.0 shown=false at TOPLEFT>CharacterBackSlot.TOPLEFT(0,0) level=102
+      · FontString - 1.0x1.0 shown=true at CENTER>CharacterBackSlotCooldown.CENTER(0,-1) font=FRIZQT__.TTF 16 object=SystemFont_Shadow_Large_Outline
+    Button CharacterBackSlotPopoutButton 20x43.0 shown=false at LEFT>CharacterBackSlot.RIGHT(5,0) scripts=OnClick,OnEnter,OnShow level=98
+      · Texture - 20x43.0 shown=true at TOPLEFT>CharacterBackSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20x43.0 shown=false at TOPLEFT>CharacterBackSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide-Pressed layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20x43.0 shown=true at TOPLEFT>CharacterBackSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=HIGHLIGHT:0 rgba=1,1,1,1
+    Frame BorderFrame 1.0x1.0 shown=true at CENTER>CharacterBackSlot.CENTER(0,0) level=99
+      · Texture - 55x55.0 shown=true at CENTER>BorderFrame.CENTER(0,0) atlas=UI-Character-Info-GearSlot layer=BACKGROUND:0 rgba=1,1,1,1
+    Frame SocketDisplay 0x0 shown=false at RIGHT>CharacterBackSlot.RIGHT(7.0,0) scripts=OnShow level=102
+      Frame Slot1 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot1.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot1.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot2 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot2.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot2.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot3 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot3.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot3.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+  Button CharacterChestSlot 37x37.0 shown=true at TOPLEFT>CharacterBackSlot.BOTTOMLEFT(0,-6) scripts=OnClick,OnEnter,OnShow level=101
+    · Texture CharacterChestSlotIconTexture 37x37.0 shown=true at TOPLEFT>CharacterChestSlot.TOPLEFT(0,0) tex=132637 layer=BORDER:0 rgba=1,1,1,1
+    · FontString CharacterChestSlotCount 1.0x1.0 shown=false at BOTTOMRIGHT>CharacterChestSlot.BOTTOMRIGHT(-5,2) font=ARIALN.TTF 14.0 object=NumberFontNormal
+    · FontString CharacterChestSlotStock 1.0x1.0 shown=false at TOPLEFT>CharacterChestSlot.TOPLEFT(0,-2) font=ARIALN.TTF 14.0 object=NumberFontNormalYellow
+    · Texture CharacterChestSlotSearchOverlay 37x37.0 shown=false at TOPLEFT>CharacterChestSlot.TOPLEFT(0,0) tex=FileData ID 0 layer=OVERLAY:4 rgba=1,1,1,1
+    · Texture ItemContextOverlay 37x37.0 shown=false at TOPLEFT>CharacterChestSlot.TOPLEFT(0,0) tex=nil layer=OVERLAY:5 rgba=1,1,1,1
+    · Texture IconBorder 37x37.0 shown=true at CENTER>CharacterChestSlot.CENTER(0,0) tex=651080 layer=OVERLAY:0 rgba=0,0.6,0.9,1
+    · Texture IconOverlay 37x37.0 shown=false at CENTER>CharacterChestSlot.CENTER(0,0) tex=nil layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture IconOverlay2 37x37.0 shown=false at CENTER>CharacterChestSlot.CENTER(0,0) tex=nil layer=OVERLAY:2 rgba=1,1,1,1
+    · Texture CharacterChestSlotNormalTexture 64x64.0 shown=true at CENTER>CharacterChestSlot.CENTER(0,-1) tex=130841 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture PushedTexture 37x37.0 shown=false at TOPLEFT>CharacterChestSlot.TOPLEFT(0,0) tex=130839 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture HighlightTexture 37x37.0 shown=true at TOPLEFT>CharacterChestSlot.TOPLEFT(0,0) tex=130718 layer=HIGHLIGHT:0 rgba=1,1,1,1
+    · Texture CorruptedHighlightTexture 66x66.0 shown=false at CENTER>CharacterChestSlot.CENTER(0,0) atlas=Nzoth-charactersheet-item-glow layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture AzeriteTexture 0x0 shown=false at CENTER>CharacterChestSlot.CENTER(0,0) tex=nil layer=BORDER:-1 rgba=1,1,1,1
+    · Texture AugmentBorderAnimTexture 37x37.0 shown=false at TOPLEFT>CharacterChestSlot.TOPLEFT(0,0) atlas=GearEnchant_IconBorder layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture ignoreTexture 40x40.0 shown=false at CENTER>CharacterChestSlot.CENTER(0,0) tex=255353 layer=OVERLAY:0 rgba=1,1,1,1
+    Frame RankFrame 31.0x21.0 shown=false at CENTER>CharacterChestSlot.BOTTOM(0,5) level=102
+      · Texture Texture 31.0x21.0 shown=true at CENTER>RankFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-NeckLevelBorder layer=OVERLAY:4 rgba=1,1,1,1
+      · FontString Label 1.0x1.0 shown=true at CENTER>RankFrame.CENTER(0,1) font=FRIZQT__.TTF 12 object=GameFontNormal
+    Frame AvailableTraitFrame 37x37.0 shown=false at TOPLEFT>CharacterChestSlot.TOPLEFT(0,0) level=102
+      · Texture SmokeRightUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeLeftUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,-4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeTopUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeBottomUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(-4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeRight 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeLeft 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeTop 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeBottom 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture StarTopLeft 10x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomLeft 10x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopLeftUnderlay 10x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarTopRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomLeftUnderlay 10x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture ItemGlow 35x35 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-ItemGlow layer=BORDER:2 rgba=1,1,1,1
+      · Texture BorderGlow 53x41.0 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Glow layer=BORDER:-2 rgba=1,1,1,1
+    Cooldown CharacterChestSlotCooldown 37x37.0 shown=false at TOPLEFT>CharacterChestSlot.TOPLEFT(0,0) level=102
+      · FontString - 1.0x1.0 shown=true at CENTER>CharacterChestSlotCooldown.CENTER(0,-1) font=FRIZQT__.TTF 16 object=SystemFont_Shadow_Large_Outline
+    Button CharacterChestSlotPopoutButton 20x43.0 shown=false at LEFT>CharacterChestSlot.RIGHT(5,0) scripts=OnClick,OnEnter,OnShow level=98
+      · Texture - 20x43.0 shown=true at TOPLEFT>CharacterChestSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20x43.0 shown=false at TOPLEFT>CharacterChestSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide-Pressed layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20x43.0 shown=true at TOPLEFT>CharacterChestSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=HIGHLIGHT:0 rgba=1,1,1,1
+    Frame BorderFrame 1.0x1.0 shown=true at CENTER>CharacterChestSlot.CENTER(0,0) level=99
+      · Texture - 55x55.0 shown=true at CENTER>BorderFrame.CENTER(0,0) atlas=UI-Character-Info-GearSlot layer=BACKGROUND:0 rgba=1,1,1,1
+    Frame SocketDisplay 0x0 shown=false at RIGHT>CharacterChestSlot.RIGHT(7.0,0) scripts=OnShow level=102
+      Frame Slot1 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot1.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot1.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot2 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot2.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot2.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot3 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot3.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot3.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+  Button CharacterShirtSlot 37x37.0 shown=true at TOPLEFT>CharacterChestSlot.BOTTOMLEFT(0,-6) scripts=OnClick,OnEnter,OnShow level=101
+    · Texture CharacterShirtSlotIconTexture 37x37.0 shown=true at TOPLEFT>CharacterShirtSlot.TOPLEFT(0,0) tex=132719 layer=BORDER:0 rgba=1,1,1,1
+    · FontString CharacterShirtSlotCount 1.0x1.0 shown=false at BOTTOMRIGHT>CharacterShirtSlot.BOTTOMRIGHT(-5,2) font=ARIALN.TTF 14.0 object=NumberFontNormal
+    · FontString CharacterShirtSlotStock 1.0x1.0 shown=false at TOPLEFT>CharacterShirtSlot.TOPLEFT(0,-2) font=ARIALN.TTF 14.0 object=NumberFontNormalYellow
+    · Texture CharacterShirtSlotSearchOverlay 37x37.0 shown=false at TOPLEFT>CharacterShirtSlot.TOPLEFT(0,0) tex=FileData ID 0 layer=OVERLAY:4 rgba=1,1,1,1
+    · Texture ItemContextOverlay 37x37.0 shown=false at TOPLEFT>CharacterShirtSlot.TOPLEFT(0,0) tex=nil layer=OVERLAY:5 rgba=1,1,1,1
+    · Texture IconBorder 37x37.0 shown=true at CENTER>CharacterShirtSlot.CENTER(0,0) tex=651080 layer=OVERLAY:0 rgba=0.7,0.7,0.7,1
+    · Texture IconOverlay 37x37.0 shown=false at CENTER>CharacterShirtSlot.CENTER(0,0) tex=nil layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture IconOverlay2 37x37.0 shown=false at CENTER>CharacterShirtSlot.CENTER(0,0) tex=nil layer=OVERLAY:2 rgba=1,1,1,1
+    · Texture CharacterShirtSlotNormalTexture 64x64.0 shown=true at CENTER>CharacterShirtSlot.CENTER(0,-1) tex=130841 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture PushedTexture 37x37.0 shown=false at TOPLEFT>CharacterShirtSlot.TOPLEFT(0,0) tex=130839 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture HighlightTexture 37x37.0 shown=true at TOPLEFT>CharacterShirtSlot.TOPLEFT(0,0) tex=130718 layer=HIGHLIGHT:0 rgba=1,1,1,1
+    · Texture CorruptedHighlightTexture 66x66.0 shown=false at CENTER>CharacterShirtSlot.CENTER(0,0) atlas=Nzoth-charactersheet-item-glow layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture AzeriteTexture 0x0 shown=false at CENTER>CharacterShirtSlot.CENTER(0,0) tex=nil layer=BORDER:-1 rgba=1,1,1,1
+    · Texture AugmentBorderAnimTexture 37x37.0 shown=false at TOPLEFT>CharacterShirtSlot.TOPLEFT(0,0) atlas=GearEnchant_IconBorder layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture ignoreTexture 40x40.0 shown=false at CENTER>CharacterShirtSlot.CENTER(0,0) tex=255353 layer=OVERLAY:0 rgba=1,1,1,1
+    Frame RankFrame 31.0x21.0 shown=false at CENTER>CharacterShirtSlot.BOTTOM(0,5) level=102
+      · Texture Texture 31.0x21.0 shown=true at CENTER>RankFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-NeckLevelBorder layer=OVERLAY:4 rgba=1,1,1,1
+      · FontString Label 1.0x1.0 shown=true at CENTER>RankFrame.CENTER(0,1) font=FRIZQT__.TTF 12 object=GameFontNormal
+    Frame AvailableTraitFrame 37x37.0 shown=false at TOPLEFT>CharacterShirtSlot.TOPLEFT(0,0) level=102
+      · Texture SmokeRightUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeLeftUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,-4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeTopUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeBottomUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(-4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeRight 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeLeft 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeTop 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeBottom 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture StarTopLeft 10x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomLeft 10x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopLeftUnderlay 10x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarTopRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomLeftUnderlay 10x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture ItemGlow 35x35 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-ItemGlow layer=BORDER:2 rgba=1,1,1,1
+      · Texture BorderGlow 53x41.0 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Glow layer=BORDER:-2 rgba=1,1,1,1
+    Cooldown CharacterShirtSlotCooldown 37x37.0 shown=false at TOPLEFT>CharacterShirtSlot.TOPLEFT(0,0) level=102
+      · FontString - 1.0x1.0 shown=true at CENTER>CharacterShirtSlotCooldown.CENTER(0,-1) font=FRIZQT__.TTF 16 object=SystemFont_Shadow_Large_Outline
+    Button CharacterShirtSlotPopoutButton 20x43.0 shown=false at LEFT>CharacterShirtSlot.RIGHT(5,0) scripts=OnClick,OnEnter,OnShow level=98
+      · Texture - 20x43.0 shown=true at TOPLEFT>CharacterShirtSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20x43.0 shown=false at TOPLEFT>CharacterShirtSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide-Pressed layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20x43.0 shown=true at TOPLEFT>CharacterShirtSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=HIGHLIGHT:0 rgba=1,1,1,1
+    Frame BorderFrame 1.0x1.0 shown=true at CENTER>CharacterShirtSlot.CENTER(0,0) level=99
+      · Texture - 55x55.0 shown=true at CENTER>BorderFrame.CENTER(0,0) atlas=UI-Character-Info-GearSlot layer=BACKGROUND:0 rgba=1,1,1,1
+    Frame SocketDisplay 0x0 shown=false at RIGHT>CharacterShirtSlot.RIGHT(7.0,0) scripts=OnShow level=102
+      Frame Slot1 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot1.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot1.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot2 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot2.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot2.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot3 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot3.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot3.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+  Button CharacterTabardSlot 37x37.0 shown=true at TOPLEFT>CharacterShirtSlot.BOTTOMLEFT(0,-6) scripts=OnClick,OnEnter,OnShow level=101
+    · Texture CharacterTabardSlotIconTexture 37x37.0 shown=true at TOPLEFT>CharacterTabardSlot.TOPLEFT(0,0) tex=136527 layer=BORDER:0 rgba=1,1,1,1
+    · FontString CharacterTabardSlotCount 1.0x1.0 shown=false at BOTTOMRIGHT>CharacterTabardSlot.BOTTOMRIGHT(-5,2) font=ARIALN.TTF 14.0 object=NumberFontNormal
+    · FontString CharacterTabardSlotStock 1.0x1.0 shown=false at TOPLEFT>CharacterTabardSlot.TOPLEFT(0,-2) font=ARIALN.TTF 14.0 object=NumberFontNormalYellow
+    · Texture CharacterTabardSlotSearchOverlay 37x37.0 shown=false at TOPLEFT>CharacterTabardSlot.TOPLEFT(0,0) tex=FileData ID 0 layer=OVERLAY:4 rgba=1,1,1,1
+    · Texture ItemContextOverlay 37x37.0 shown=false at TOPLEFT>CharacterTabardSlot.TOPLEFT(0,0) tex=nil layer=OVERLAY:5 rgba=1,1,1,1
+    · Texture IconBorder 37x37.0 shown=false at CENTER>CharacterTabardSlot.CENTER(0,0) tex=651080 layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture IconOverlay 37x37.0 shown=false at CENTER>CharacterTabardSlot.CENTER(0,0) tex=nil layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture IconOverlay2 37x37.0 shown=false at CENTER>CharacterTabardSlot.CENTER(0,0) tex=nil layer=OVERLAY:2 rgba=1,1,1,1
+    · Texture CharacterTabardSlotNormalTexture 64x64.0 shown=true at CENTER>CharacterTabardSlot.CENTER(0,-1) tex=130841 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture PushedTexture 37x37.0 shown=false at TOPLEFT>CharacterTabardSlot.TOPLEFT(0,0) tex=130839 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture HighlightTexture 37x37.0 shown=true at TOPLEFT>CharacterTabardSlot.TOPLEFT(0,0) tex=130718 layer=HIGHLIGHT:0 rgba=1,1,1,1
+    · Texture CorruptedHighlightTexture 66x66.0 shown=false at CENTER>CharacterTabardSlot.CENTER(0,0) atlas=Nzoth-charactersheet-item-glow layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture AzeriteTexture 0x0 shown=false at CENTER>CharacterTabardSlot.CENTER(0,0) tex=nil layer=BORDER:-1 rgba=1,1,1,1
+    · Texture AugmentBorderAnimTexture 37x37.0 shown=false at TOPLEFT>CharacterTabardSlot.TOPLEFT(0,0) atlas=GearEnchant_IconBorder layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture ignoreTexture 40x40.0 shown=false at CENTER>CharacterTabardSlot.CENTER(0,0) tex=255353 layer=OVERLAY:0 rgba=1,1,1,1
+    Frame RankFrame 31.0x21.0 shown=false at CENTER>CharacterTabardSlot.BOTTOM(0,5) level=102
+      · Texture Texture 31.0x21.0 shown=true at CENTER>RankFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-NeckLevelBorder layer=OVERLAY:4 rgba=1,1,1,1
+      · FontString Label 1.0x1.0 shown=true at CENTER>RankFrame.CENTER(0,1) font=FRIZQT__.TTF 12 object=GameFontNormal
+    Frame AvailableTraitFrame 37x37.0 shown=false at TOPLEFT>CharacterTabardSlot.TOPLEFT(0,0) level=102
+      · Texture SmokeRightUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeLeftUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,-4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeTopUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeBottomUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(-4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeRight 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeLeft 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeTop 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeBottom 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture StarTopLeft 10x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomLeft 10x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopLeftUnderlay 10x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarTopRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomLeftUnderlay 10x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture ItemGlow 35x35 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-ItemGlow layer=BORDER:2 rgba=1,1,1,1
+      · Texture BorderGlow 53x41.0 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Glow layer=BORDER:-2 rgba=1,1,1,1
+    Cooldown CharacterTabardSlotCooldown 37x37.0 shown=false at TOPLEFT>CharacterTabardSlot.TOPLEFT(0,0) level=102
+      · FontString - 1.0x1.0 shown=true at CENTER>CharacterTabardSlotCooldown.CENTER(0,-1) font=FRIZQT__.TTF 16 object=SystemFont_Shadow_Large_Outline
+    Button CharacterTabardSlotPopoutButton 20x43.0 shown=false at LEFT>CharacterTabardSlot.RIGHT(5,0) scripts=OnClick,OnEnter,OnShow level=98
+      · Texture - 20x43.0 shown=true at TOPLEFT>CharacterTabardSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20x43.0 shown=false at TOPLEFT>CharacterTabardSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide-Pressed layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20x43.0 shown=true at TOPLEFT>CharacterTabardSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=HIGHLIGHT:0 rgba=1,1,1,1
+    Frame BorderFrame 1.0x1.0 shown=true at CENTER>CharacterTabardSlot.CENTER(0,0) level=99
+      · Texture - 55x55.0 shown=true at CENTER>BorderFrame.CENTER(0,0) atlas=UI-Character-Info-GearSlot layer=BACKGROUND:0 rgba=1,1,1,1
+    Frame SocketDisplay 0x0 shown=false at RIGHT>CharacterTabardSlot.RIGHT(7.0,0) scripts=OnShow level=102
+      Frame Slot1 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot1.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot1.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot2 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot2.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot2.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot3 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot3.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot3.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+  Button CharacterWristSlot 37x37.0 shown=true at TOPLEFT>CharacterTabardSlot.BOTTOMLEFT(0,-6) scripts=OnClick,OnEnter,OnShow level=101
+    · Texture CharacterWristSlotIconTexture 37x37.0 shown=true at TOPLEFT>CharacterWristSlot.TOPLEFT(0,0) tex=132606 layer=BORDER:0 rgba=1,1,1,1
+    · FontString CharacterWristSlotCount 1.0x1.0 shown=false at BOTTOMRIGHT>CharacterWristSlot.BOTTOMRIGHT(-5,2) font=ARIALN.TTF 14.0 object=NumberFontNormal
+    · FontString CharacterWristSlotStock 1.0x1.0 shown=false at TOPLEFT>CharacterWristSlot.TOPLEFT(0,-2) font=ARIALN.TTF 14.0 object=NumberFontNormalYellow
+    · Texture CharacterWristSlotSearchOverlay 37x37.0 shown=false at TOPLEFT>CharacterWristSlot.TOPLEFT(0,0) tex=FileData ID 0 layer=OVERLAY:4 rgba=1,1,1,1
+    · Texture ItemContextOverlay 37x37.0 shown=false at TOPLEFT>CharacterWristSlot.TOPLEFT(0,0) tex=nil layer=OVERLAY:5 rgba=1,1,1,1
+    · Texture IconBorder 37x37.0 shown=true at CENTER>CharacterWristSlot.CENTER(0,0) tex=651080 layer=OVERLAY:0 rgba=0,0.6,0.9,1
+    · Texture IconOverlay 37x37.0 shown=false at CENTER>CharacterWristSlot.CENTER(0,0) tex=nil layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture IconOverlay2 37x37.0 shown=false at CENTER>CharacterWristSlot.CENTER(0,0) tex=nil layer=OVERLAY:2 rgba=1,1,1,1
+    · Texture CharacterWristSlotNormalTexture 64x64.0 shown=true at CENTER>CharacterWristSlot.CENTER(0,-1) tex=130841 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture PushedTexture 37x37.0 shown=false at TOPLEFT>CharacterWristSlot.TOPLEFT(0,0) tex=130839 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture HighlightTexture 37x37.0 shown=true at TOPLEFT>CharacterWristSlot.TOPLEFT(0,0) tex=130718 layer=HIGHLIGHT:0 rgba=1,1,1,1
+    · Texture CorruptedHighlightTexture 66x66 shown=false at CENTER>CharacterWristSlot.CENTER(0,0) atlas=Nzoth-charactersheet-item-glow layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture AzeriteTexture 0x0 shown=false at CENTER>CharacterWristSlot.CENTER(0,0) tex=nil layer=BORDER:-1 rgba=1,1,1,1
+    · Texture AugmentBorderAnimTexture 37x37.0 shown=false at TOPLEFT>CharacterWristSlot.TOPLEFT(0,0) atlas=GearEnchant_IconBorder layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture ignoreTexture 40x40 shown=false at CENTER>CharacterWristSlot.CENTER(0,0) tex=255353 layer=OVERLAY:0 rgba=1,1,1,1
+    Frame RankFrame 31.0x21.0 shown=false at CENTER>CharacterWristSlot.BOTTOM(0,5) level=102
+      · Texture Texture 31.0x21.0 shown=true at CENTER>RankFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-NeckLevelBorder layer=OVERLAY:4 rgba=1,1,1,1
+      · FontString Label 1.0x1.0 shown=true at CENTER>RankFrame.CENTER(0,1) font=FRIZQT__.TTF 12 object=GameFontNormal
+    Frame AvailableTraitFrame 37x37.0 shown=false at TOPLEFT>CharacterWristSlot.TOPLEFT(0,0) level=102
+      · Texture SmokeRightUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeLeftUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,-4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeTopUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeBottomUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(-4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeRight 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeLeft 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeTop 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeBottom 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture StarTopLeft 10x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomLeft 10x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopLeftUnderlay 10x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarTopRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomLeftUnderlay 10x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture ItemGlow 35x35 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-ItemGlow layer=BORDER:2 rgba=1,1,1,1
+      · Texture BorderGlow 53x41.0 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Glow layer=BORDER:-2 rgba=1,1,1,1
+    Cooldown CharacterWristSlotCooldown 37x37.0 shown=false at TOPLEFT>CharacterWristSlot.TOPLEFT(0,0) level=102
+      · FontString - 1.0x1.0 shown=true at CENTER>CharacterWristSlotCooldown.CENTER(0,-1) font=FRIZQT__.TTF 16 object=SystemFont_Shadow_Large_Outline
+    Button CharacterWristSlotPopoutButton 20x43.0 shown=false at LEFT>CharacterWristSlot.RIGHT(5,0) scripts=OnClick,OnEnter,OnShow level=98
+      · Texture - 20x43.0 shown=true at TOPLEFT>CharacterWristSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20x43.0 shown=false at TOPLEFT>CharacterWristSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide-Pressed layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20x43.0 shown=true at TOPLEFT>CharacterWristSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=HIGHLIGHT:0 rgba=1,1,1,1
+    Frame BorderFrame 1.0x1.0 shown=true at CENTER>CharacterWristSlot.CENTER(0,0) level=99
+      · Texture - 55x55.0 shown=true at CENTER>BorderFrame.CENTER(0,0) atlas=UI-Character-Info-GearSlot layer=BACKGROUND:0 rgba=1,1,1,1
+    Frame SocketDisplay 0x0 shown=false at RIGHT>CharacterWristSlot.RIGHT(7.0,0) scripts=OnShow level=102
+      Frame Slot1 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot1.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot1.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot2 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot2.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot2.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot3 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot3.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot3.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+  Button CharacterHandsSlot 37.0x37.0 shown=true at TOPRIGHT>CharacterFrameLeftPaneHost.TOPRIGHT(-20,-60) scripts=OnClick,OnEnter,OnShow level=101
+    · Texture CharacterHandsSlotIconTexture 37.0x37.0 shown=true at TOPLEFT>CharacterHandsSlot.TOPLEFT(0,0) tex=132938 layer=BORDER:0 rgba=1,1,1,1
+    · FontString CharacterHandsSlotCount 1.0x1.0 shown=false at BOTTOMRIGHT>CharacterHandsSlot.BOTTOMRIGHT(-5,2) font=ARIALN.TTF 14.0 object=NumberFontNormal
+    · FontString CharacterHandsSlotStock 1.0x1.0 shown=false at TOPLEFT>CharacterHandsSlot.TOPLEFT(0,-2) font=ARIALN.TTF 14.0 object=NumberFontNormalYellow
+    · Texture CharacterHandsSlotSearchOverlay 37.0x37.0 shown=false at TOPLEFT>CharacterHandsSlot.TOPLEFT(0,0) tex=FileData ID 0 layer=OVERLAY:4 rgba=1,1,1,1
+    · Texture ItemContextOverlay 37.0x37.0 shown=false at TOPLEFT>CharacterHandsSlot.TOPLEFT(0,0) tex=nil layer=OVERLAY:5 rgba=1,1,1,1
+    · Texture IconBorder 37.0x37.0 shown=true at CENTER>CharacterHandsSlot.CENTER(0,0) tex=651080 layer=OVERLAY:0 rgba=0,0.6,0.9,1
+    · Texture IconOverlay 37.0x37.0 shown=false at CENTER>CharacterHandsSlot.CENTER(0,0) tex=nil layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture IconOverlay2 37.0x37.0 shown=false at CENTER>CharacterHandsSlot.CENTER(0,0) tex=nil layer=OVERLAY:2 rgba=1,1,1,1
+    · Texture CharacterHandsSlotNormalTexture 64.0x64.0 shown=true at CENTER>CharacterHandsSlot.CENTER(0,-1) tex=130841 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture PushedTexture 37.0x37.0 shown=false at TOPLEFT>CharacterHandsSlot.TOPLEFT(0,0) tex=130839 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture HighlightTexture 37.0x37.0 shown=true at TOPLEFT>CharacterHandsSlot.TOPLEFT(0,0) tex=130718 layer=HIGHLIGHT:0 rgba=1,1,1,1
+    · Texture CorruptedHighlightTexture 66.0x66.0 shown=false at CENTER>CharacterHandsSlot.CENTER(0,0) atlas=Nzoth-charactersheet-item-glow layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture AzeriteTexture 0x0 shown=false at CENTER>CharacterHandsSlot.CENTER(0,0) tex=nil layer=BORDER:-1 rgba=1,1,1,1
+    · Texture AugmentBorderAnimTexture 37.0x37.0 shown=false at TOPLEFT>CharacterHandsSlot.TOPLEFT(0,0) atlas=GearEnchant_IconBorder layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture ignoreTexture 40.0x40.0 shown=false at CENTER>CharacterHandsSlot.CENTER(0,0) tex=255353 layer=OVERLAY:0 rgba=1,1,1,1
+    Frame RankFrame 31.0x21.0 shown=false at CENTER>CharacterHandsSlot.BOTTOM(0,5) level=102
+      · Texture Texture 31.0x21.0 shown=true at CENTER>RankFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-NeckLevelBorder layer=OVERLAY:4 rgba=1,1,1,1
+      · FontString Label 1.0x1.0 shown=true at CENTER>RankFrame.CENTER(0,1) font=FRIZQT__.TTF 12 object=GameFontNormal
+    Frame AvailableTraitFrame 37.0x37.0 shown=false at TOPLEFT>CharacterHandsSlot.TOPLEFT(0,0) level=102
+      · Texture SmokeRightUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeLeftUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,-4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeTopUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeBottomUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(-4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeRight 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeLeft 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeTop 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeBottom 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture StarTopLeft 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomLeft 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopLeftUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarTopRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomLeftUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture ItemGlow 35x35 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-ItemGlow layer=BORDER:2 rgba=1,1,1,1
+      · Texture BorderGlow 53x41.0 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Glow layer=BORDER:-2 rgba=1,1,1,1
+    Cooldown CharacterHandsSlotCooldown 37.0x37.0 shown=false at TOPLEFT>CharacterHandsSlot.TOPLEFT(0,0) level=102
+      · FontString - 1.0x1.0 shown=true at CENTER>CharacterHandsSlotCooldown.CENTER(0,-1) font=FRIZQT__.TTF 16 object=SystemFont_Shadow_Large_Outline
+    Button CharacterHandsSlotPopoutButton 20.0x43.0 shown=false at RIGHT>CharacterHandsSlot.LEFT(-5,0) scripts=OnClick,OnEnter,OnShow level=98
+      · Texture - 20.0x43.0 shown=true at TOPLEFT>CharacterHandsSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20.0x43.0 shown=false at TOPLEFT>CharacterHandsSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide-Pressed layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20.0x43.0 shown=true at TOPLEFT>CharacterHandsSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=HIGHLIGHT:0 rgba=1,1,1,1
+    Frame BorderFrame 1.0x1.0 shown=true at CENTER>CharacterHandsSlot.CENTER(0,0) level=99
+      · Texture - 55.0x55.0 shown=true at CENTER>BorderFrame.CENTER(0,0) atlas=UI-Character-Info-GearSlot layer=BACKGROUND:0 rgba=1,1,1,1
+    Frame SocketDisplay 0x0 shown=false at LEFT>CharacterHandsSlot.LEFT(-7.0,0) scripts=OnShow level=102
+      Frame Slot1 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot1.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot1.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot2 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot2.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot2.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot3 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot3.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot3.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+  Button CharacterWaistSlot 37.0x37.0 shown=true at TOPLEFT>CharacterHandsSlot.BOTTOMLEFT(0,-6) scripts=OnClick,OnEnter,OnShow level=101
+    · Texture CharacterWaistSlotIconTexture 37.0x37.0 shown=true at TOPLEFT>CharacterWaistSlot.TOPLEFT(0,0) tex=132510 layer=BORDER:0 rgba=1,1,1,1
+    · FontString CharacterWaistSlotCount 1.0x1.0 shown=false at BOTTOMRIGHT>CharacterWaistSlot.BOTTOMRIGHT(-5,2) font=ARIALN.TTF 14.0 object=NumberFontNormal
+    · FontString CharacterWaistSlotStock 1.0x1.0 shown=false at TOPLEFT>CharacterWaistSlot.TOPLEFT(0,-2) font=ARIALN.TTF 14.0 object=NumberFontNormalYellow
+    · Texture CharacterWaistSlotSearchOverlay 37.0x37.0 shown=false at TOPLEFT>CharacterWaistSlot.TOPLEFT(0,0) tex=FileData ID 0 layer=OVERLAY:4 rgba=1,1,1,1
+    · Texture ItemContextOverlay 37.0x37.0 shown=false at TOPLEFT>CharacterWaistSlot.TOPLEFT(0,0) tex=nil layer=OVERLAY:5 rgba=1,1,1,1
+    · Texture IconBorder 37.0x37.0 shown=true at CENTER>CharacterWaistSlot.CENTER(0,0) tex=651080 layer=OVERLAY:0 rgba=0,0.6,0.9,1
+    · Texture IconOverlay 37.0x37.0 shown=false at CENTER>CharacterWaistSlot.CENTER(0,0) tex=nil layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture IconOverlay2 37.0x37.0 shown=false at CENTER>CharacterWaistSlot.CENTER(0,0) tex=nil layer=OVERLAY:2 rgba=1,1,1,1
+    · Texture CharacterWaistSlotNormalTexture 64.0x64.0 shown=true at CENTER>CharacterWaistSlot.CENTER(0,-1) tex=130841 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture PushedTexture 37.0x37.0 shown=false at TOPLEFT>CharacterWaistSlot.TOPLEFT(0,0) tex=130839 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture HighlightTexture 37.0x37.0 shown=true at TOPLEFT>CharacterWaistSlot.TOPLEFT(0,0) tex=130718 layer=HIGHLIGHT:0 rgba=1,1,1,1
+    · Texture CorruptedHighlightTexture 66.0x66.0 shown=false at CENTER>CharacterWaistSlot.CENTER(0,0) atlas=Nzoth-charactersheet-item-glow layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture AzeriteTexture 0x0 shown=false at CENTER>CharacterWaistSlot.CENTER(0,0) tex=nil layer=BORDER:-1 rgba=1,1,1,1
+    · Texture AugmentBorderAnimTexture 37.0x37.0 shown=false at TOPLEFT>CharacterWaistSlot.TOPLEFT(0,0) atlas=GearEnchant_IconBorder layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture ignoreTexture 40.0x40.0 shown=false at CENTER>CharacterWaistSlot.CENTER(0,0) tex=255353 layer=OVERLAY:0 rgba=1,1,1,1
+    Frame RankFrame 31.0x21.0 shown=false at CENTER>CharacterWaistSlot.BOTTOM(0,5) level=102
+      · Texture Texture 31.0x21.0 shown=true at CENTER>RankFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-NeckLevelBorder layer=OVERLAY:4 rgba=1,1,1,1
+      · FontString Label 1.0x1.0 shown=true at CENTER>RankFrame.CENTER(0,1) font=FRIZQT__.TTF 12 object=GameFontNormal
+    Frame AvailableTraitFrame 37.0x37.0 shown=false at TOPLEFT>CharacterWaistSlot.TOPLEFT(0,0) level=102
+      · Texture SmokeRightUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeLeftUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,-4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeTopUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeBottomUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(-4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeRight 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeLeft 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeTop 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeBottom 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture StarTopLeft 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomLeft 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopLeftUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarTopRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomLeftUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture ItemGlow 35x35 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-ItemGlow layer=BORDER:2 rgba=1,1,1,1
+      · Texture BorderGlow 53x41.0 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Glow layer=BORDER:-2 rgba=1,1,1,1
+    Cooldown CharacterWaistSlotCooldown 37.0x37.0 shown=false at TOPLEFT>CharacterWaistSlot.TOPLEFT(0,0) level=102
+      · FontString - 1.0x1.0 shown=true at CENTER>CharacterWaistSlotCooldown.CENTER(0,-1) font=FRIZQT__.TTF 16 object=SystemFont_Shadow_Large_Outline
+    Button CharacterWaistSlotPopoutButton 20.0x43.0 shown=false at RIGHT>CharacterWaistSlot.LEFT(-5,0) scripts=OnClick,OnEnter,OnShow level=98
+      · Texture - 20.0x43.0 shown=true at TOPLEFT>CharacterWaistSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20.0x43.0 shown=false at TOPLEFT>CharacterWaistSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide-Pressed layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20.0x43.0 shown=true at TOPLEFT>CharacterWaistSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=HIGHLIGHT:0 rgba=1,1,1,1
+    Frame BorderFrame 1.0x1.0 shown=true at CENTER>CharacterWaistSlot.CENTER(0,0) level=99
+      · Texture - 55.0x55.0 shown=true at CENTER>BorderFrame.CENTER(0,0) atlas=UI-Character-Info-GearSlot layer=BACKGROUND:0 rgba=1,1,1,1
+    Frame SocketDisplay 0x0 shown=false at LEFT>CharacterWaistSlot.LEFT(-7.0,0) scripts=OnShow level=102
+      Frame Slot1 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot1.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot1.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot2 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot2.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot2.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot3 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot3.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot3.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+  Button CharacterLegsSlot 37.0x37.0 shown=true at TOPLEFT>CharacterWaistSlot.BOTTOMLEFT(0,-6) scripts=OnClick,OnEnter,OnShow level=101
+    · Texture CharacterLegsSlotIconTexture 37.0x37.0 shown=true at TOPLEFT>CharacterLegsSlot.TOPLEFT(0,0) tex=136517 layer=BORDER:0 rgba=1,1,1,1
+    · FontString CharacterLegsSlotCount 1.0x1.0 shown=false at BOTTOMRIGHT>CharacterLegsSlot.BOTTOMRIGHT(-5,2) font=ARIALN.TTF 14.0 object=NumberFontNormal
+    · FontString CharacterLegsSlotStock 1.0x1.0 shown=false at TOPLEFT>CharacterLegsSlot.TOPLEFT(0,-2) font=ARIALN.TTF 14.0 object=NumberFontNormalYellow
+    · Texture CharacterLegsSlotSearchOverlay 37.0x37.0 shown=false at TOPLEFT>CharacterLegsSlot.TOPLEFT(0,0) tex=FileData ID 0 layer=OVERLAY:4 rgba=1,1,1,1
+    · Texture ItemContextOverlay 37.0x37.0 shown=false at TOPLEFT>CharacterLegsSlot.TOPLEFT(0,0) tex=nil layer=OVERLAY:5 rgba=1,1,1,1
+    · Texture IconBorder 37.0x37.0 shown=false at CENTER>CharacterLegsSlot.CENTER(0,0) tex=651080 layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture IconOverlay 37.0x37.0 shown=false at CENTER>CharacterLegsSlot.CENTER(0,0) tex=nil layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture IconOverlay2 37.0x37.0 shown=false at CENTER>CharacterLegsSlot.CENTER(0,0) tex=nil layer=OVERLAY:2 rgba=1,1,1,1
+    · Texture CharacterLegsSlotNormalTexture 64.0x64.0 shown=true at CENTER>CharacterLegsSlot.CENTER(0,-1) tex=130841 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture PushedTexture 37.0x37.0 shown=false at TOPLEFT>CharacterLegsSlot.TOPLEFT(0,0) tex=130839 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture HighlightTexture 37.0x37.0 shown=true at TOPLEFT>CharacterLegsSlot.TOPLEFT(0,0) tex=130718 layer=HIGHLIGHT:0 rgba=1,1,1,1
+    · Texture CorruptedHighlightTexture 66.0x66.0 shown=false at CENTER>CharacterLegsSlot.CENTER(0,0) atlas=Nzoth-charactersheet-item-glow layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture AzeriteTexture 0x0 shown=false at CENTER>CharacterLegsSlot.CENTER(0,0) tex=nil layer=BORDER:-1 rgba=1,1,1,1
+    · Texture AugmentBorderAnimTexture 37.0x37.0 shown=false at TOPLEFT>CharacterLegsSlot.TOPLEFT(0,0) atlas=GearEnchant_IconBorder layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture ignoreTexture 40.0x40.0 shown=false at CENTER>CharacterLegsSlot.CENTER(0,0) tex=255353 layer=OVERLAY:0 rgba=1,1,1,1
+    Frame RankFrame 31.0x21.0 shown=false at CENTER>CharacterLegsSlot.BOTTOM(0,5) level=102
+      · Texture Texture 31.0x21.0 shown=true at CENTER>RankFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-NeckLevelBorder layer=OVERLAY:4 rgba=1,1,1,1
+      · FontString Label 1.0x1.0 shown=true at CENTER>RankFrame.CENTER(0,1) font=FRIZQT__.TTF 12 object=GameFontNormal
+    Frame AvailableTraitFrame 37.0x37.0 shown=false at TOPLEFT>CharacterLegsSlot.TOPLEFT(0,0) level=102
+      · Texture SmokeRightUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeLeftUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,-4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeTopUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeBottomUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(-4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeRight 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeLeft 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeTop 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeBottom 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture StarTopLeft 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomLeft 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopLeftUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarTopRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomLeftUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture ItemGlow 35x35 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-ItemGlow layer=BORDER:2 rgba=1,1,1,1
+      · Texture BorderGlow 53x41.0 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Glow layer=BORDER:-2 rgba=1,1,1,1
+    Cooldown CharacterLegsSlotCooldown 37.0x37.0 shown=false at TOPLEFT>CharacterLegsSlot.TOPLEFT(0,0) level=102
+      · FontString - 1.0x1.0 shown=true at CENTER>CharacterLegsSlotCooldown.CENTER(0,-1) font=FRIZQT__.TTF 16 object=SystemFont_Shadow_Large_Outline
+    Button CharacterLegsSlotPopoutButton 20.0x43.0 shown=false at RIGHT>CharacterLegsSlot.LEFT(-5,0) scripts=OnClick,OnEnter,OnShow level=98
+      · Texture - 20.0x43.0 shown=true at TOPLEFT>CharacterLegsSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20.0x43.0 shown=false at TOPLEFT>CharacterLegsSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide-Pressed layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20.0x43.0 shown=true at TOPLEFT>CharacterLegsSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=HIGHLIGHT:0 rgba=1,1,1,1
+    Frame BorderFrame 1.0x1.0 shown=true at CENTER>CharacterLegsSlot.CENTER(0,0) level=99
+      · Texture - 55.0x55.0 shown=true at CENTER>BorderFrame.CENTER(0,0) atlas=UI-Character-Info-GearSlot layer=BACKGROUND:0 rgba=1,1,1,1
+    Frame SocketDisplay 0x0 shown=false at LEFT>CharacterLegsSlot.LEFT(-7.0,0) scripts=OnShow level=102
+      Frame Slot1 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot1.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot1.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot2 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot2.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot2.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot3 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot3.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot3.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+  Button CharacterFeetSlot 37.0x37.0 shown=true at TOPLEFT>CharacterLegsSlot.BOTTOMLEFT(0,-6) scripts=OnClick,OnEnter,OnShow level=101
+    · Texture CharacterFeetSlotIconTexture 37.0x37.0 shown=true at TOPLEFT>CharacterFeetSlot.TOPLEFT(0,0) tex=132582 layer=BORDER:0 rgba=1,1,1,1
+    · FontString CharacterFeetSlotCount 1.0x1.0 shown=false at BOTTOMRIGHT>CharacterFeetSlot.BOTTOMRIGHT(-5,2) font=ARIALN.TTF 14.0 object=NumberFontNormal
+    · FontString CharacterFeetSlotStock 1.0x1.0 shown=false at TOPLEFT>CharacterFeetSlot.TOPLEFT(0,-2) font=ARIALN.TTF 14.0 object=NumberFontNormalYellow
+    · Texture CharacterFeetSlotSearchOverlay 37.0x37.0 shown=false at TOPLEFT>CharacterFeetSlot.TOPLEFT(0,0) tex=FileData ID 0 layer=OVERLAY:4 rgba=1,1,1,1
+    · Texture ItemContextOverlay 37.0x37.0 shown=false at TOPLEFT>CharacterFeetSlot.TOPLEFT(0,0) tex=nil layer=OVERLAY:5 rgba=1,1,1,1
+    · Texture IconBorder 37.0x37.0 shown=true at CENTER>CharacterFeetSlot.CENTER(0,0) tex=651080 layer=OVERLAY:0 rgba=0,0.6,0.9,1
+    · Texture IconOverlay 37.0x37.0 shown=false at CENTER>CharacterFeetSlot.CENTER(0,0) tex=nil layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture IconOverlay2 37.0x37.0 shown=false at CENTER>CharacterFeetSlot.CENTER(0,0) tex=nil layer=OVERLAY:2 rgba=1,1,1,1
+    · Texture CharacterFeetSlotNormalTexture 64.0x64.0 shown=true at CENTER>CharacterFeetSlot.CENTER(0,-1) tex=130841 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture PushedTexture 37.0x37.0 shown=false at TOPLEFT>CharacterFeetSlot.TOPLEFT(0,0) tex=130839 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture HighlightTexture 37.0x37.0 shown=true at TOPLEFT>CharacterFeetSlot.TOPLEFT(0,0) tex=130718 layer=HIGHLIGHT:0 rgba=1,1,1,1
+    · Texture CorruptedHighlightTexture 66.0x66.0 shown=false at CENTER>CharacterFeetSlot.CENTER(0,0) atlas=Nzoth-charactersheet-item-glow layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture AzeriteTexture 0x0 shown=false at CENTER>CharacterFeetSlot.CENTER(0,0) tex=nil layer=BORDER:-1 rgba=1,1,1,1
+    · Texture AugmentBorderAnimTexture 37.0x37.0 shown=false at TOPLEFT>CharacterFeetSlot.TOPLEFT(0,0) atlas=GearEnchant_IconBorder layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture ignoreTexture 40.0x40.0 shown=false at CENTER>CharacterFeetSlot.CENTER(0,0) tex=255353 layer=OVERLAY:0 rgba=1,1,1,1
+    Frame RankFrame 31.0x21.0 shown=false at CENTER>CharacterFeetSlot.BOTTOM(0,5) level=102
+      · Texture Texture 31.0x21.0 shown=true at CENTER>RankFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-NeckLevelBorder layer=OVERLAY:4 rgba=1,1,1,1
+      · FontString Label 1.0x1.0 shown=true at CENTER>RankFrame.CENTER(0,1) font=FRIZQT__.TTF 12 object=GameFontNormal
+    Frame AvailableTraitFrame 37.0x37.0 shown=false at TOPLEFT>CharacterFeetSlot.TOPLEFT(0,0) level=102
+      · Texture SmokeRightUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeLeftUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,-4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeTopUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeBottomUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(-4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeRight 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeLeft 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeTop 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeBottom 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture StarTopLeft 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomLeft 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopLeftUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarTopRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomLeftUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture ItemGlow 35x35 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-ItemGlow layer=BORDER:2 rgba=1,1,1,1
+      · Texture BorderGlow 53x41.0 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Glow layer=BORDER:-2 rgba=1,1,1,1
+    Cooldown CharacterFeetSlotCooldown 37.0x37.0 shown=false at TOPLEFT>CharacterFeetSlot.TOPLEFT(0,0) level=102
+      · FontString - 1.0x1.0 shown=true at CENTER>CharacterFeetSlotCooldown.CENTER(0,-1) font=FRIZQT__.TTF 16 object=SystemFont_Shadow_Large_Outline
+    Button CharacterFeetSlotPopoutButton 20.0x43.0 shown=false at RIGHT>CharacterFeetSlot.LEFT(-5,0) scripts=OnClick,OnEnter,OnShow level=98
+      · Texture - 20.0x43.0 shown=true at TOPLEFT>CharacterFeetSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20.0x43.0 shown=false at TOPLEFT>CharacterFeetSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide-Pressed layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20.0x43.0 shown=true at TOPLEFT>CharacterFeetSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=HIGHLIGHT:0 rgba=1,1,1,1
+    Frame BorderFrame 1.0x1.0 shown=true at CENTER>CharacterFeetSlot.CENTER(0,0) level=99
+      · Texture - 55.0x55.0 shown=true at CENTER>BorderFrame.CENTER(0,0) atlas=UI-Character-Info-GearSlot layer=BACKGROUND:0 rgba=1,1,1,1
+    Frame SocketDisplay 0x0 shown=false at LEFT>CharacterFeetSlot.LEFT(-7.0,0) scripts=OnShow level=102
+      Frame Slot1 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot1.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot1.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot2 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot2.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot2.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot3 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot3.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot3.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+  Button CharacterFinger0Slot 37.0x37.0 shown=true at TOPLEFT>CharacterFeetSlot.BOTTOMLEFT(0,-6) scripts=OnClick,OnEnter,OnShow level=101
+    · Texture CharacterFinger0SlotIconTexture 37.0x37.0 shown=true at TOPLEFT>CharacterFinger0Slot.TOPLEFT(0,0) tex=133361 layer=BORDER:0 rgba=1,1,1,1
+    · FontString CharacterFinger0SlotCount 1.0x1.0 shown=false at BOTTOMRIGHT>CharacterFinger0Slot.BOTTOMRIGHT(-5,2) font=ARIALN.TTF 14.0 object=NumberFontNormal
+    · FontString CharacterFinger0SlotStock 1.0x1.0 shown=false at TOPLEFT>CharacterFinger0Slot.TOPLEFT(0,-2) font=ARIALN.TTF 14.0 object=NumberFontNormalYellow
+    · Texture CharacterFinger0SlotSearchOverlay 37.0x37.0 shown=false at TOPLEFT>CharacterFinger0Slot.TOPLEFT(0,0) tex=FileData ID 0 layer=OVERLAY:4 rgba=1,1,1,1
+    · Texture ItemContextOverlay 37.0x37.0 shown=false at TOPLEFT>CharacterFinger0Slot.TOPLEFT(0,0) tex=nil layer=OVERLAY:5 rgba=1,1,1,1
+    · Texture IconBorder 37.0x37.0 shown=true at CENTER>CharacterFinger0Slot.CENTER(0,0) tex=651080 layer=OVERLAY:0 rgba=0.1,0.7,0,1
+    · Texture IconOverlay 37.0x37.0 shown=false at CENTER>CharacterFinger0Slot.CENTER(0,0) tex=nil layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture IconOverlay2 37.0x37.0 shown=false at CENTER>CharacterFinger0Slot.CENTER(0,0) tex=nil layer=OVERLAY:2 rgba=1,1,1,1
+    · Texture CharacterFinger0SlotNormalTexture 64.0x64.0 shown=true at CENTER>CharacterFinger0Slot.CENTER(0,-1) tex=130841 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture PushedTexture 37.0x37.0 shown=false at TOPLEFT>CharacterFinger0Slot.TOPLEFT(0,0) tex=130839 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture HighlightTexture 37.0x37.0 shown=true at TOPLEFT>CharacterFinger0Slot.TOPLEFT(0,0) tex=130718 layer=HIGHLIGHT:0 rgba=1,1,1,1
+    · Texture CorruptedHighlightTexture 66.0x66.0 shown=false at CENTER>CharacterFinger0Slot.CENTER(0,0) atlas=Nzoth-charactersheet-item-glow layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture AzeriteTexture 0x0 shown=false at CENTER>CharacterFinger0Slot.CENTER(0,0) tex=nil layer=BORDER:-1 rgba=1,1,1,1
+    · Texture AugmentBorderAnimTexture 37.0x37.0 shown=false at TOPLEFT>CharacterFinger0Slot.TOPLEFT(0,0) atlas=GearEnchant_IconBorder layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture ignoreTexture 40.0x40.0 shown=false at CENTER>CharacterFinger0Slot.CENTER(0,0) tex=255353 layer=OVERLAY:0 rgba=1,1,1,1
+    Frame RankFrame 31.0x21.0 shown=false at CENTER>CharacterFinger0Slot.BOTTOM(0,5) level=102
+      · Texture Texture 31.0x21.0 shown=true at CENTER>RankFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-NeckLevelBorder layer=OVERLAY:4 rgba=1,1,1,1
+      · FontString Label 1.0x1.0 shown=true at CENTER>RankFrame.CENTER(0,1) font=FRIZQT__.TTF 12 object=GameFontNormal
+    Frame AvailableTraitFrame 37.0x37.0 shown=false at TOPLEFT>CharacterFinger0Slot.TOPLEFT(0,0) level=102
+      · Texture SmokeRightUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeLeftUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,-4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeTopUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeBottomUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(-4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeRight 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeLeft 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeTop 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeBottom 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture StarTopLeft 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomLeft 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopLeftUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarTopRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomLeftUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture ItemGlow 35x35 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-ItemGlow layer=BORDER:2 rgba=1,1,1,1
+      · Texture BorderGlow 53x41.0 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Glow layer=BORDER:-2 rgba=1,1,1,1
+    Cooldown CharacterFinger0SlotCooldown 37.0x37.0 shown=false at TOPLEFT>CharacterFinger0Slot.TOPLEFT(0,0) level=102
+      · FontString - 1.0x1.0 shown=true at CENTER>CharacterFinger0SlotCooldown.CENTER(0,-1) font=FRIZQT__.TTF 16 object=SystemFont_Shadow_Large_Outline
+    Button CharacterFinger0SlotPopoutButton 20.0x43.0 shown=false at RIGHT>CharacterFinger0Slot.LEFT(-5,0) scripts=OnClick,OnEnter,OnShow level=98
+      · Texture - 20.0x43.0 shown=true at TOPLEFT>CharacterFinger0SlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20.0x43.0 shown=false at TOPLEFT>CharacterFinger0SlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide-Pressed layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20.0x43.0 shown=true at TOPLEFT>CharacterFinger0SlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=HIGHLIGHT:0 rgba=1,1,1,1
+    Frame BorderFrame 1.0x1.0 shown=true at CENTER>CharacterFinger0Slot.CENTER(0,0) level=99
+      · Texture - 55.0x55.0 shown=true at CENTER>BorderFrame.CENTER(0,0) atlas=UI-Character-Info-GearSlot layer=BACKGROUND:0 rgba=1,1,1,1
+    Frame SocketDisplay 0x0 shown=false at LEFT>CharacterFinger0Slot.LEFT(-7.0,0) scripts=OnShow level=102
+      Frame Slot1 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot1.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot1.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot2 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot2.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot2.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot3 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot3.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot3.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+  Button CharacterFinger1Slot 37.0x37.0 shown=true at TOPLEFT>CharacterFinger0Slot.BOTTOMLEFT(0,-6) scripts=OnClick,OnEnter,OnShow level=101
+    · Texture CharacterFinger1SlotIconTexture 37.0x37.0 shown=true at TOPLEFT>CharacterFinger1Slot.TOPLEFT(0,0) tex=136514 layer=BORDER:0 rgba=1,1,1,1
+    · FontString CharacterFinger1SlotCount 1.0x1.0 shown=false at BOTTOMRIGHT>CharacterFinger1Slot.BOTTOMRIGHT(-5,2) font=ARIALN.TTF 14.0 object=NumberFontNormal
+    · FontString CharacterFinger1SlotStock 1.0x1.0 shown=false at TOPLEFT>CharacterFinger1Slot.TOPLEFT(0,-2) font=ARIALN.TTF 14.0 object=NumberFontNormalYellow
+    · Texture CharacterFinger1SlotSearchOverlay 37.0x37.0 shown=false at TOPLEFT>CharacterFinger1Slot.TOPLEFT(0,0) tex=FileData ID 0 layer=OVERLAY:4 rgba=1,1,1,1
+    · Texture ItemContextOverlay 37.0x37.0 shown=false at TOPLEFT>CharacterFinger1Slot.TOPLEFT(0,0) tex=nil layer=OVERLAY:5 rgba=1,1,1,1
+    · Texture IconBorder 37.0x37.0 shown=false at CENTER>CharacterFinger1Slot.CENTER(0,0) tex=651080 layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture IconOverlay 37.0x37.0 shown=false at CENTER>CharacterFinger1Slot.CENTER(0,0) tex=nil layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture IconOverlay2 37.0x37.0 shown=false at CENTER>CharacterFinger1Slot.CENTER(0,0) tex=nil layer=OVERLAY:2 rgba=1,1,1,1
+    · Texture CharacterFinger1SlotNormalTexture 64.0x64.0 shown=true at CENTER>CharacterFinger1Slot.CENTER(0,-1) tex=130841 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture PushedTexture 37.0x37.0 shown=false at TOPLEFT>CharacterFinger1Slot.TOPLEFT(0,0) tex=130839 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture HighlightTexture 37.0x37.0 shown=true at TOPLEFT>CharacterFinger1Slot.TOPLEFT(0,0) tex=130718 layer=HIGHLIGHT:0 rgba=1,1,1,1
+    · Texture CorruptedHighlightTexture 66.0x66.0 shown=false at CENTER>CharacterFinger1Slot.CENTER(0,0) atlas=Nzoth-charactersheet-item-glow layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture AzeriteTexture 0x0 shown=false at CENTER>CharacterFinger1Slot.CENTER(0,0) tex=nil layer=BORDER:-1 rgba=1,1,1,1
+    · Texture AugmentBorderAnimTexture 37.0x37.0 shown=false at TOPLEFT>CharacterFinger1Slot.TOPLEFT(0,0) atlas=GearEnchant_IconBorder layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture ignoreTexture 40.0x40.0 shown=false at CENTER>CharacterFinger1Slot.CENTER(0,0) tex=255353 layer=OVERLAY:0 rgba=1,1,1,1
+    Frame RankFrame 31.0x21.0 shown=false at CENTER>CharacterFinger1Slot.BOTTOM(0,5) level=102
+      · Texture Texture 31.0x21.0 shown=true at CENTER>RankFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-NeckLevelBorder layer=OVERLAY:4 rgba=1,1,1,1
+      · FontString Label 1.0x1.0 shown=true at CENTER>RankFrame.CENTER(0,1) font=FRIZQT__.TTF 12 object=GameFontNormal
+    Frame AvailableTraitFrame 37.0x37.0 shown=false at TOPLEFT>CharacterFinger1Slot.TOPLEFT(0,0) level=102
+      · Texture SmokeRightUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeLeftUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,-4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeTopUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeBottomUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(-4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeRight 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeLeft 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeTop 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeBottom 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture StarTopLeft 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomLeft 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopLeftUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarTopRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomLeftUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture ItemGlow 35x35 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-ItemGlow layer=BORDER:2 rgba=1,1,1,1
+      · Texture BorderGlow 53x41.0 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Glow layer=BORDER:-2 rgba=1,1,1,1
+    Cooldown CharacterFinger1SlotCooldown 37.0x37.0 shown=false at TOPLEFT>CharacterFinger1Slot.TOPLEFT(0,0) level=102
+      · FontString - 1.0x1.0 shown=true at CENTER>CharacterFinger1SlotCooldown.CENTER(0,-1) font=FRIZQT__.TTF 16 object=SystemFont_Shadow_Large_Outline
+    Button CharacterFinger1SlotPopoutButton 20.0x43.0 shown=false at RIGHT>CharacterFinger1Slot.LEFT(-5,0) scripts=OnClick,OnEnter,OnShow level=98
+      · Texture - 20.0x43.0 shown=true at TOPLEFT>CharacterFinger1SlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20.0x43.0 shown=false at TOPLEFT>CharacterFinger1SlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide-Pressed layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20.0x43.0 shown=true at TOPLEFT>CharacterFinger1SlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=HIGHLIGHT:0 rgba=1,1,1,1
+    Frame BorderFrame 1.0x1.0 shown=true at CENTER>CharacterFinger1Slot.CENTER(0,0) level=99
+      · Texture - 55.0x55.0 shown=true at CENTER>BorderFrame.CENTER(0,0) atlas=UI-Character-Info-GearSlot layer=BACKGROUND:0 rgba=1,1,1,1
+    Frame SocketDisplay 0x0 shown=false at LEFT>CharacterFinger1Slot.LEFT(-7.0,0) scripts=OnShow level=102
+      Frame Slot1 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot1.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot1.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot2 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot2.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot2.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot3 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot3.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot3.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+  Button CharacterTrinket0Slot 37.0x37.0 shown=true at TOPLEFT>CharacterFinger1Slot.BOTTOMLEFT(0,-6) scripts=OnClick,OnEnter,OnShow level=101
+    · Texture CharacterTrinket0SlotIconTexture 37.0x37.0 shown=true at TOPLEFT>CharacterTrinket0Slot.TOPLEFT(0,0) tex=136528 layer=BORDER:0 rgba=1,1,1,1
+    · FontString CharacterTrinket0SlotCount 1.0x1.0 shown=false at BOTTOMRIGHT>CharacterTrinket0Slot.BOTTOMRIGHT(-5,2) font=ARIALN.TTF 14.0 object=NumberFontNormal
+    · FontString CharacterTrinket0SlotStock 1.0x1.0 shown=false at TOPLEFT>CharacterTrinket0Slot.TOPLEFT(0,-2) font=ARIALN.TTF 14.0 object=NumberFontNormalYellow
+    · Texture CharacterTrinket0SlotSearchOverlay 37.0x37.0 shown=false at TOPLEFT>CharacterTrinket0Slot.TOPLEFT(0,0) tex=FileData ID 0 layer=OVERLAY:4 rgba=1,1,1,1
+    · Texture ItemContextOverlay 37.0x37.0 shown=false at TOPLEFT>CharacterTrinket0Slot.TOPLEFT(0,0) tex=nil layer=OVERLAY:5 rgba=1,1,1,1
+    · Texture IconBorder 37.0x37.0 shown=false at CENTER>CharacterTrinket0Slot.CENTER(0,0) tex=651080 layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture IconOverlay 37.0x37.0 shown=false at CENTER>CharacterTrinket0Slot.CENTER(0,0) tex=nil layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture IconOverlay2 37.0x37.0 shown=false at CENTER>CharacterTrinket0Slot.CENTER(0,0) tex=nil layer=OVERLAY:2 rgba=1,1,1,1
+    · Texture CharacterTrinket0SlotNormalTexture 64.0x64.0 shown=true at CENTER>CharacterTrinket0Slot.CENTER(0,-1) tex=130841 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture PushedTexture 37.0x37.0 shown=false at TOPLEFT>CharacterTrinket0Slot.TOPLEFT(0,0) tex=130839 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture HighlightTexture 37.0x37.0 shown=true at TOPLEFT>CharacterTrinket0Slot.TOPLEFT(0,0) tex=130718 layer=HIGHLIGHT:0 rgba=1,1,1,1
+    · Texture CorruptedHighlightTexture 66.0x66.0 shown=false at CENTER>CharacterTrinket0Slot.CENTER(0,0) atlas=Nzoth-charactersheet-item-glow layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture AzeriteTexture 0x0 shown=false at CENTER>CharacterTrinket0Slot.CENTER(0,0) tex=nil layer=BORDER:-1 rgba=1,1,1,1
+    · Texture AugmentBorderAnimTexture 37.0x37.0 shown=false at TOPLEFT>CharacterTrinket0Slot.TOPLEFT(0,0) atlas=GearEnchant_IconBorder layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture ignoreTexture 40.0x40.0 shown=false at CENTER>CharacterTrinket0Slot.CENTER(0,0) tex=255353 layer=OVERLAY:0 rgba=1,1,1,1
+    Frame RankFrame 31.0x21.0 shown=false at CENTER>CharacterTrinket0Slot.BOTTOM(0,5) level=102
+      · Texture Texture 31.0x21.0 shown=true at CENTER>RankFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-NeckLevelBorder layer=OVERLAY:4 rgba=1,1,1,1
+      · FontString Label 1.0x1.0 shown=true at CENTER>RankFrame.CENTER(0,1) font=FRIZQT__.TTF 12 object=GameFontNormal
+    Frame AvailableTraitFrame 37.0x37.0 shown=false at TOPLEFT>CharacterTrinket0Slot.TOPLEFT(0,0) level=102
+      · Texture SmokeRightUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeLeftUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,-4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeTopUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeBottomUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(-4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeRight 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeLeft 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeTop 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeBottom 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture StarTopLeft 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomLeft 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopLeftUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarTopRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomLeftUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture ItemGlow 35x35 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-ItemGlow layer=BORDER:2 rgba=1,1,1,1
+      · Texture BorderGlow 53x41.0 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Glow layer=BORDER:-2 rgba=1,1,1,1
+    Cooldown CharacterTrinket0SlotCooldown 37.0x37.0 shown=false at TOPLEFT>CharacterTrinket0Slot.TOPLEFT(0,0) level=102
+      · FontString - 1.0x1.0 shown=true at CENTER>CharacterTrinket0SlotCooldown.CENTER(0,-1) font=FRIZQT__.TTF 16 object=SystemFont_Shadow_Large_Outline
+    Button CharacterTrinket0SlotPopoutButton 20.0x43.0 shown=false at RIGHT>CharacterTrinket0Slot.LEFT(-5,0) scripts=OnClick,OnEnter,OnShow level=98
+      · Texture - 20.0x43.0 shown=true at TOPLEFT>CharacterTrinket0SlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20.0x43.0 shown=false at TOPLEFT>CharacterTrinket0SlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide-Pressed layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20.0x43.0 shown=true at TOPLEFT>CharacterTrinket0SlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=HIGHLIGHT:0 rgba=1,1,1,1
+    Frame BorderFrame 1.0x1.0 shown=true at CENTER>CharacterTrinket0Slot.CENTER(0,0) level=99
+      · Texture - 55.0x55.0 shown=true at CENTER>BorderFrame.CENTER(0,0) atlas=UI-Character-Info-GearSlot layer=BACKGROUND:0 rgba=1,1,1,1
+    Frame SocketDisplay 0x0 shown=false at LEFT>CharacterTrinket0Slot.LEFT(-7.0,0) scripts=OnShow level=102
+      Frame Slot1 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot1.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot1.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot2 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot2.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot2.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot3 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot3.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot3.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+  Button CharacterTrinket1Slot 37.0x37.0 shown=true at TOPLEFT>CharacterTrinket0Slot.BOTTOMLEFT(0,-6) scripts=OnClick,OnEnter,OnShow level=101
+    · Texture CharacterTrinket1SlotIconTexture 37.0x37.0 shown=true at TOPLEFT>CharacterTrinket1Slot.TOPLEFT(0,0) tex=136528 layer=BORDER:0 rgba=1,1,1,1
+    · FontString CharacterTrinket1SlotCount 1.0x1.0 shown=false at BOTTOMRIGHT>CharacterTrinket1Slot.BOTTOMRIGHT(-5,2) font=ARIALN.TTF 14.0 object=NumberFontNormal
+    · FontString CharacterTrinket1SlotStock 1.0x1.0 shown=false at TOPLEFT>CharacterTrinket1Slot.TOPLEFT(0,-2) font=ARIALN.TTF 14.0 object=NumberFontNormalYellow
+    · Texture CharacterTrinket1SlotSearchOverlay 37.0x37.0 shown=false at TOPLEFT>CharacterTrinket1Slot.TOPLEFT(0,0) tex=FileData ID 0 layer=OVERLAY:4 rgba=1,1,1,1
+    · Texture ItemContextOverlay 37.0x37.0 shown=false at TOPLEFT>CharacterTrinket1Slot.TOPLEFT(0,0) tex=nil layer=OVERLAY:5 rgba=1,1,1,1
+    · Texture IconBorder 37.0x37.0 shown=false at CENTER>CharacterTrinket1Slot.CENTER(0,0) tex=651080 layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture IconOverlay 37.0x37.0 shown=false at CENTER>CharacterTrinket1Slot.CENTER(0,0) tex=nil layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture IconOverlay2 37.0x37.0 shown=false at CENTER>CharacterTrinket1Slot.CENTER(0,0) tex=nil layer=OVERLAY:2 rgba=1,1,1,1
+    · Texture CharacterTrinket1SlotNormalTexture 64.0x64.0 shown=true at CENTER>CharacterTrinket1Slot.CENTER(0,-1) tex=130841 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture PushedTexture 37.0x37.0 shown=false at TOPLEFT>CharacterTrinket1Slot.TOPLEFT(0,0) tex=130839 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture HighlightTexture 37.0x37.0 shown=true at TOPLEFT>CharacterTrinket1Slot.TOPLEFT(0,0) tex=130718 layer=HIGHLIGHT:0 rgba=1,1,1,1
+    · Texture CorruptedHighlightTexture 66.0x66 shown=false at CENTER>CharacterTrinket1Slot.CENTER(0,0) atlas=Nzoth-charactersheet-item-glow layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture AzeriteTexture 0x0 shown=false at CENTER>CharacterTrinket1Slot.CENTER(0,0) tex=nil layer=BORDER:-1 rgba=1,1,1,1
+    · Texture AugmentBorderAnimTexture 37.0x37.0 shown=false at TOPLEFT>CharacterTrinket1Slot.TOPLEFT(0,0) atlas=GearEnchant_IconBorder layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture ignoreTexture 40.0x40 shown=false at CENTER>CharacterTrinket1Slot.CENTER(0,0) tex=255353 layer=OVERLAY:0 rgba=1,1,1,1
+    Frame RankFrame 31.0x21.0 shown=false at CENTER>CharacterTrinket1Slot.BOTTOM(0,5) level=102
+      · Texture Texture 31.0x21.0 shown=true at CENTER>RankFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-NeckLevelBorder layer=OVERLAY:4 rgba=1,1,1,1
+      · FontString Label 1.0x1.0 shown=true at CENTER>RankFrame.CENTER(0,1) font=FRIZQT__.TTF 12 object=GameFontNormal
+    Frame AvailableTraitFrame 37.0x37.0 shown=false at TOPLEFT>CharacterTrinket1Slot.TOPLEFT(0,0) level=102
+      · Texture SmokeRightUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeLeftUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,-4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeTopUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeBottomUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(-4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeRight 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeLeft 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeTop 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeBottom 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture StarTopLeft 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomLeft 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopLeftUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarTopRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomLeftUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture ItemGlow 35x35 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-ItemGlow layer=BORDER:2 rgba=1,1,1,1
+      · Texture BorderGlow 53x41.0 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Glow layer=BORDER:-2 rgba=1,1,1,1
+    Cooldown CharacterTrinket1SlotCooldown 37.0x37.0 shown=false at TOPLEFT>CharacterTrinket1Slot.TOPLEFT(0,0) level=102
+      · FontString - 1.0x1.0 shown=true at CENTER>CharacterTrinket1SlotCooldown.CENTER(0,-1) font=FRIZQT__.TTF 16 object=SystemFont_Shadow_Large_Outline
+    Button CharacterTrinket1SlotPopoutButton 20.0x43.0 shown=false at RIGHT>CharacterTrinket1Slot.LEFT(-5,0) scripts=OnClick,OnEnter,OnShow level=98
+      · Texture - 20.0x43.0 shown=true at TOPLEFT>CharacterTrinket1SlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20.0x43.0 shown=false at TOPLEFT>CharacterTrinket1SlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide-Pressed layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 20.0x43.0 shown=true at TOPLEFT>CharacterTrinket1SlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullSide layer=HIGHLIGHT:0 rgba=1,1,1,1
+    Frame BorderFrame 1.0x1.0 shown=true at CENTER>CharacterTrinket1Slot.CENTER(0,0) level=99
+      · Texture - 55.0x55.0 shown=true at CENTER>BorderFrame.CENTER(0,0) atlas=UI-Character-Info-GearSlot layer=BACKGROUND:0 rgba=1,1,1,1
+    Frame SocketDisplay 0x0 shown=false at LEFT>CharacterTrinket1Slot.LEFT(-7.0,0) scripts=OnShow level=102
+      Frame Slot1 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot1.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot1.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot2 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot2.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot2.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot3 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot3.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot3.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+  Button CharacterMainHandSlot 37.0x37.0 shown=true at BOTTOM>CharacterFrameLeftPaneHost.BOTTOM(-40,30) scripts=OnClick,OnEnter,OnShow level=101
+    · Texture CharacterMainHandSlotIconTexture 37.0x37.0 shown=true at TOPLEFT>CharacterMainHandSlot.TOPLEFT(0,0) tex=133728 layer=BORDER:0 rgba=1,1,1,1
+    · FontString CharacterMainHandSlotCount 1.0x1.0 shown=false at BOTTOMRIGHT>CharacterMainHandSlot.BOTTOMRIGHT(-5,2) font=ARIALN.TTF 14.0 object=NumberFontNormal
+    · FontString CharacterMainHandSlotStock 1.0x1.0 shown=false at TOPLEFT>CharacterMainHandSlot.TOPLEFT(0,-2) font=ARIALN.TTF 14.0 object=NumberFontNormalYellow
+    · Texture CharacterMainHandSlotSearchOverlay 37.0x37.0 shown=false at TOPLEFT>CharacterMainHandSlot.TOPLEFT(0,0) tex=FileData ID 0 layer=OVERLAY:4 rgba=1,1,1,1
+    · Texture ItemContextOverlay 37.0x37.0 shown=false at TOPLEFT>CharacterMainHandSlot.TOPLEFT(0,0) tex=nil layer=OVERLAY:5 rgba=1,1,1,1
+    · Texture IconBorder 37.0x37.0 shown=true at CENTER>CharacterMainHandSlot.CENTER(0,0) tex=651080 layer=OVERLAY:0 rgba=0,0.6,0.9,1
+    · Texture IconOverlay 37.0x37.0 shown=false at CENTER>CharacterMainHandSlot.CENTER(0,0) tex=nil layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture IconOverlay2 37.0x37.0 shown=false at CENTER>CharacterMainHandSlot.CENTER(0,0) tex=nil layer=OVERLAY:2 rgba=1,1,1,1
+    · Texture CharacterMainHandSlotNormalTexture 64.0x64.0 shown=true at CENTER>CharacterMainHandSlot.CENTER(0,-1) tex=130841 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture PushedTexture 37.0x37.0 shown=false at TOPLEFT>CharacterMainHandSlot.TOPLEFT(0,0) tex=130839 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture HighlightTexture 37.0x37.0 shown=true at TOPLEFT>CharacterMainHandSlot.TOPLEFT(0,0) tex=130718 layer=HIGHLIGHT:0 rgba=1,1,1,1
+    · Texture CorruptedHighlightTexture 66x66 shown=false at CENTER>CharacterMainHandSlot.CENTER(0,0) atlas=Nzoth-charactersheet-item-glow layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture AzeriteTexture 0x0 shown=false at CENTER>CharacterMainHandSlot.CENTER(0,0) tex=nil layer=BORDER:-1 rgba=1,1,1,1
+    · Texture AugmentBorderAnimTexture 37.0x37.0 shown=false at TOPLEFT>CharacterMainHandSlot.TOPLEFT(0,0) atlas=GearEnchant_IconBorder layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture ignoreTexture 40x40.0 shown=false at CENTER>CharacterMainHandSlot.CENTER(0,0) tex=255353 layer=OVERLAY:0 rgba=1,1,1,1
+    Frame RankFrame 31.0x21.0 shown=false at CENTER>CharacterMainHandSlot.BOTTOM(0,5) level=102
+      · Texture Texture 31.0x21.0 shown=true at CENTER>RankFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-NeckLevelBorder layer=OVERLAY:4 rgba=1,1,1,1
+      · FontString Label 1.0x1.0 shown=true at CENTER>RankFrame.CENTER(0,1) font=FRIZQT__.TTF 12 object=GameFontNormal
+    Frame AvailableTraitFrame 37.0x37.0 shown=false at TOPLEFT>CharacterMainHandSlot.TOPLEFT(0,0) level=102
+      · Texture SmokeRightUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeLeftUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,-4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeTopUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeBottomUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(-4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeRight 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeLeft 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeTop 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeBottom 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture StarTopLeft 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomLeft 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopLeftUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarTopRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomLeftUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture ItemGlow 35x35 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-ItemGlow layer=BORDER:2 rgba=1,1,1,1
+      · Texture BorderGlow 53x41.0 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Glow layer=BORDER:-2 rgba=1,1,1,1
+    Cooldown CharacterMainHandSlotCooldown 37.0x37.0 shown=false at TOPLEFT>CharacterMainHandSlot.TOPLEFT(0,0) level=102
+      · FontString - 1.0x1.0 shown=true at CENTER>CharacterMainHandSlotCooldown.CENTER(0,-1) font=FRIZQT__.TTF 16 object=SystemFont_Shadow_Large_Outline
+    Button CharacterMainHandSlotPopoutButton 43.0x20.0 shown=false at BOTTOM>CharacterMainHandSlot.TOP(0,5) scripts=OnClick,OnEnter,OnShow level=98
+      · Texture - 43.0x20.0 shown=true at TOPLEFT>CharacterMainHandSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullUp layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 43.0x20.0 shown=false at TOPLEFT>CharacterMainHandSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullUp-Pressed layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 43.0x20.0 shown=true at TOPLEFT>CharacterMainHandSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullUp layer=HIGHLIGHT:0 rgba=1,1,1,1
+    Frame BorderFrame 1.0x1.0 shown=true at CENTER>CharacterMainHandSlot.CENTER(0,0) level=99
+      · Texture - 55.0x55.0 shown=true at CENTER>BorderFrame.CENTER(0,0) atlas=UI-Character-Info-GearSlot layer=BACKGROUND:0 rgba=1,1,1,1
+    Frame SocketDisplay 0x0 shown=false at TOP>CharacterMainHandSlot.TOP(0,7.0) scripts=OnShow level=102
+      Frame Slot1 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot1.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot1.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot2 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot2.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot2.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot3 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot3.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot3.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+  Button CharacterSecondaryHandSlot 37.0x37.0 shown=true at TOPLEFT>CharacterMainHandSlot.TOPRIGHT(6,0) scripts=OnClick,OnEnter,OnShow level=101
+    · Texture CharacterSecondaryHandSlotIconTexture 37.0x37.0 shown=true at TOPLEFT>CharacterSecondaryHandSlot.TOPLEFT(0,0) tex=136524 layer=BORDER:0 rgba=1,1,1,1
+    · FontString CharacterSecondaryHandSlotCount 1.0x1.0 shown=false at BOTTOMRIGHT>CharacterSecondaryHandSlot.BOTTOMRIGHT(-5,2) font=ARIALN.TTF 14.0 object=NumberFontNormal
+    · FontString CharacterSecondaryHandSlotStock 1.0x1.0 shown=false at TOPLEFT>CharacterSecondaryHandSlot.TOPLEFT(0,-2) font=ARIALN.TTF 14.0 object=NumberFontNormalYellow
+    · Texture CharacterSecondaryHandSlotSearchOverlay 37.0x37.0 shown=false at TOPLEFT>CharacterSecondaryHandSlot.TOPLEFT(0,0) tex=FileData ID 0 layer=OVERLAY:4 rgba=1,1,1,1
+    · Texture ItemContextOverlay 37.0x37.0 shown=false at TOPLEFT>CharacterSecondaryHandSlot.TOPLEFT(0,0) tex=nil layer=OVERLAY:5 rgba=1,1,1,1
+    · Texture IconBorder 37.0x37.0 shown=false at CENTER>CharacterSecondaryHandSlot.CENTER(0,0) tex=651080 layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture IconOverlay 37.0x37.0 shown=false at CENTER>CharacterSecondaryHandSlot.CENTER(0,0) tex=nil layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture IconOverlay2 37.0x37.0 shown=false at CENTER>CharacterSecondaryHandSlot.CENTER(0,0) tex=nil layer=OVERLAY:2 rgba=1,1,1,1
+    · Texture CharacterSecondaryHandSlotNormalTexture 64.0x64.0 shown=true at CENTER>CharacterSecondaryHandSlot.CENTER(0,-1) tex=130841 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture PushedTexture 37.0x37.0 shown=false at TOPLEFT>CharacterSecondaryHandSlot.TOPLEFT(0,0) tex=130839 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture HighlightTexture 37.0x37.0 shown=true at TOPLEFT>CharacterSecondaryHandSlot.TOPLEFT(0,0) tex=130718 layer=HIGHLIGHT:0 rgba=1,1,1,1
+    · Texture CorruptedHighlightTexture 66x66 shown=false at CENTER>CharacterSecondaryHandSlot.CENTER(0,0) atlas=Nzoth-charactersheet-item-glow layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture AzeriteTexture 0x0 shown=false at CENTER>CharacterSecondaryHandSlot.CENTER(0,0) tex=nil layer=BORDER:-1 rgba=1,1,1,1
+    · Texture AugmentBorderAnimTexture 37.0x37.0 shown=false at TOPLEFT>CharacterSecondaryHandSlot.TOPLEFT(0,0) atlas=GearEnchant_IconBorder layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture ignoreTexture 40x40.0 shown=false at CENTER>CharacterSecondaryHandSlot.CENTER(0,0) tex=255353 layer=OVERLAY:0 rgba=1,1,1,1
+    Frame RankFrame 31.0x21.0 shown=false at CENTER>CharacterSecondaryHandSlot.BOTTOM(0,5) level=102
+      · Texture Texture 31.0x21.0 shown=true at CENTER>RankFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-NeckLevelBorder layer=OVERLAY:4 rgba=1,1,1,1
+      · FontString Label 1.0x1.0 shown=true at CENTER>RankFrame.CENTER(0,1) font=FRIZQT__.TTF 12 object=GameFontNormal
+    Frame AvailableTraitFrame 37.0x37.0 shown=false at TOPLEFT>CharacterSecondaryHandSlot.TOPLEFT(0,0) level=102
+      · Texture SmokeRightUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeLeftUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,-4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeTopUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeBottomUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(-4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeRight 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeLeft 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeTop 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeBottom 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture StarTopLeft 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomLeft 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopLeftUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarTopRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomLeftUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture ItemGlow 35x35 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-ItemGlow layer=BORDER:2 rgba=1,1,1,1
+      · Texture BorderGlow 53x41.0 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Glow layer=BORDER:-2 rgba=1,1,1,1
+    Cooldown CharacterSecondaryHandSlotCooldown 37.0x37.0 shown=false at TOPLEFT>CharacterSecondaryHandSlot.TOPLEFT(0,0) level=102
+      · FontString - 1.0x1.0 shown=true at CENTER>CharacterSecondaryHandSlotCooldown.CENTER(0,-1) font=FRIZQT__.TTF 16 object=SystemFont_Shadow_Large_Outline
+    Button CharacterSecondaryHandSlotPopoutButton 43.0x20.0 shown=false at BOTTOM>CharacterSecondaryHandSlot.TOP(0,5) scripts=OnClick,OnEnter,OnShow level=98
+      · Texture - 43.0x20.0 shown=true at TOPLEFT>CharacterSecondaryHandSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullUp layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 43.0x20.0 shown=false at TOPLEFT>CharacterSecondaryHandSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullUp-Pressed layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 43.0x20.0 shown=true at TOPLEFT>CharacterSecondaryHandSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullUp layer=HIGHLIGHT:0 rgba=1,1,1,1
+    Frame BorderFrame 1.0x1.0 shown=true at CENTER>CharacterSecondaryHandSlot.CENTER(0,0) level=99
+      · Texture - 55.0x55.0 shown=true at CENTER>BorderFrame.CENTER(0,0) atlas=UI-Character-Info-GearSlot layer=BACKGROUND:0 rgba=1,1,1,1
+    Frame SocketDisplay 0x0 shown=false at TOP>CharacterSecondaryHandSlot.TOP(0,7.0) scripts=OnShow level=102
+      Frame Slot1 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot1.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot1.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot2 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot2.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot2.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot3 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot3.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot3.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+  Button CharacterRangedSlot 37.0x37.0 shown=true at TOPLEFT>CharacterSecondaryHandSlot.TOPRIGHT(6,0) scripts=OnClick,OnEnter,OnShow level=101
+    · Texture CharacterRangedSlotIconTexture 37.0x37.0 shown=true at TOPLEFT>CharacterRangedSlot.TOPLEFT(0,0) tex=136522 layer=BORDER:0 rgba=1,1,1,1
+    · FontString CharacterRangedSlotCount 1.0x1.0 shown=false at BOTTOMRIGHT>CharacterRangedSlot.BOTTOMRIGHT(-5,2) font=ARIALN.TTF 14.0 object=NumberFontNormal
+    · FontString CharacterRangedSlotStock 1.0x1.0 shown=false at TOPLEFT>CharacterRangedSlot.TOPLEFT(0,-2) font=ARIALN.TTF 14.0 object=NumberFontNormalYellow
+    · Texture CharacterRangedSlotSearchOverlay 37.0x37.0 shown=false at TOPLEFT>CharacterRangedSlot.TOPLEFT(0,0) tex=FileData ID 0 layer=OVERLAY:4 rgba=1,1,1,1
+    · Texture ItemContextOverlay 37.0x37.0 shown=false at TOPLEFT>CharacterRangedSlot.TOPLEFT(0,0) tex=nil layer=OVERLAY:5 rgba=1,1,1,1
+    · Texture IconBorder 37.0x37.0 shown=false at CENTER>CharacterRangedSlot.CENTER(0,0) tex=651080 layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture IconOverlay 37.0x37.0 shown=false at CENTER>CharacterRangedSlot.CENTER(0,0) tex=nil layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture IconOverlay2 37.0x37.0 shown=false at CENTER>CharacterRangedSlot.CENTER(0,0) tex=nil layer=OVERLAY:2 rgba=1,1,1,1
+    · Texture CharacterRangedSlotNormalTexture 64x64.0 shown=true at CENTER>CharacterRangedSlot.CENTER(0,-1) tex=130841 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture PushedTexture 37.0x37.0 shown=false at TOPLEFT>CharacterRangedSlot.TOPLEFT(0,0) tex=130839 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture HighlightTexture 37.0x37.0 shown=true at TOPLEFT>CharacterRangedSlot.TOPLEFT(0,0) tex=130718 layer=HIGHLIGHT:0 rgba=1,1,1,1
+    · Texture CorruptedHighlightTexture 66x66 shown=false at CENTER>CharacterRangedSlot.CENTER(0,0) atlas=Nzoth-charactersheet-item-glow layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture AzeriteTexture 0x0 shown=false at CENTER>CharacterRangedSlot.CENTER(0,0) tex=nil layer=BORDER:-1 rgba=1,1,1,1
+    · Texture AugmentBorderAnimTexture 37.0x37.0 shown=false at TOPLEFT>CharacterRangedSlot.TOPLEFT(0,0) atlas=GearEnchant_IconBorder layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture ignoreTexture 40x40.0 shown=false at CENTER>CharacterRangedSlot.CENTER(0,0) tex=255353 layer=OVERLAY:0 rgba=1,1,1,1
+    Frame RankFrame 31.0x21.0 shown=false at CENTER>CharacterRangedSlot.BOTTOM(0,5) level=102
+      · Texture Texture 31.0x21.0 shown=true at CENTER>RankFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-NeckLevelBorder layer=OVERLAY:4 rgba=1,1,1,1
+      · FontString Label 1.0x1.0 shown=true at CENTER>RankFrame.CENTER(0,1) font=FRIZQT__.TTF 12 object=GameFontNormal
+    Frame AvailableTraitFrame 37.0x37.0 shown=false at TOPLEFT>CharacterRangedSlot.TOPLEFT(0,0) level=102
+      · Texture SmokeRightUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeLeftUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,-4) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeTopUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeBottomUnderlay 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(-4,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:-1 rgba=1,1,1,1
+      · Texture SmokeRight 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.RIGHT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeLeft 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.LEFT(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeTop 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.TOP(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture SmokeBottom 9.0x32.0 shown=true at CENTER>AvailableTraitFrame.BOTTOM(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Smoke layer=BORDER:0 rgba=1,1,1,1
+      · Texture StarTopLeft 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomLeft 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarBottomRight 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:3 rgba=1,1,1,1
+      · Texture StarTopLeftUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPLEFT(2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarTopRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.TOPRIGHT(-2,-2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomLeftUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMLEFT(2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture StarBottomRightUnderlay 10.0x10.0 shown=true at CENTER>AvailableTraitFrame.BOTTOMRIGHT(-2,2) atlas=AzeriteArmor-CharacterInfo-Border-TitanStar layer=BORDER:1 rgba=1,1,1,0.5
+      · Texture ItemGlow 35x35 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-ItemGlow layer=BORDER:2 rgba=1,1,1,1
+      · Texture BorderGlow 53x41.0 shown=true at CENTER>AvailableTraitFrame.CENTER(0,0) atlas=AzeriteArmor-CharacterInfo-Border-Glow layer=BORDER:-2 rgba=1,1,1,1
+    Cooldown CharacterRangedSlotCooldown 37.0x37.0 shown=false at TOPLEFT>CharacterRangedSlot.TOPLEFT(0,0) level=102
+      · FontString - 1.0x1.0 shown=true at CENTER>CharacterRangedSlotCooldown.CENTER(0,-1) font=FRIZQT__.TTF 16 object=SystemFont_Shadow_Large_Outline
+    Button CharacterRangedSlotPopoutButton 43.0x20.0 shown=false at BOTTOM>CharacterRangedSlot.TOP(0,5) scripts=OnClick,OnEnter,OnShow level=98
+      · Texture - 43.0x20.0 shown=true at TOPLEFT>CharacterRangedSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullUp layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 43.0x20.0 shown=false at TOPLEFT>CharacterRangedSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullUp-Pressed layer=ARTWORK:0 rgba=1,1,1,1
+      · Texture - 43.0x20.0 shown=true at TOPLEFT>CharacterRangedSlotPopoutButton.TOPLEFT(0,0) atlas=UI-Character-Info-Button-PullUp layer=HIGHLIGHT:0 rgba=1,1,1,1
+    Frame BorderFrame 1.0x1.0 shown=true at CENTER>CharacterRangedSlot.CENTER(0,0) level=99
+      · Texture - 55x55.0 shown=true at CENTER>BorderFrame.CENTER(0,0) atlas=UI-Character-Info-GearSlot layer=BACKGROUND:0 rgba=1,1,1,1
+    Frame SocketDisplay 0x0 shown=false at TOP>CharacterRangedSlot.TOP(0,7.0) scripts=OnShow level=102
+      Frame Slot1 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot1.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot1.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot2 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot2.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot2.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+      Frame Slot3 11x11 shown=true at - level=103
+        · Texture Slot 0x0 shown=true at TOPLEFT>Slot3.TOPLEFT(0,0) atlas=character-emptysocket layer=BORDER:0 rgba=1,1,1,1
+        · Texture Gem 0x0 shown=false at TOPLEFT>Slot3.TOPLEFT(2,-2) tex=nil layer=ARTWORK:0 rgba=1,1,1,1
+  Button CharacterAmmoSlot 27.0x27.0 shown=false at LEFT>CharacterRangedSlot.RIGHT(19,0) scripts=OnClick,OnEnter,OnShow level=101
+    · Texture CharacterAmmoSlotIconTexture 27.0x27.0 shown=true at TOPLEFT>CharacterAmmoSlot.TOPLEFT(0,0) tex=136520 layer=BORDER:0 rgba=1,1,1,1
+    · FontString CharacterAmmoSlotCount 1.0x1.0 shown=false at BOTTOMRIGHT>CharacterAmmoSlot.BOTTOMRIGHT(-5,2) font=ARIALN.TTF 14.0 object=NumberFontNormal
+    · FontString CharacterAmmoSlotStock 1.0x1.0 shown=false at TOPLEFT>CharacterAmmoSlot.TOPLEFT(0,-2) font=ARIALN.TTF 14.0 object=NumberFontNormalYellow
+    · Texture CharacterAmmoSlotSearchOverlay 27.0x27.0 shown=false at TOPLEFT>CharacterAmmoSlot.TOPLEFT(0,0) tex=FileData ID 0 layer=OVERLAY:4 rgba=1,1,1,1
+    · Texture ItemContextOverlay 27.0x27.0 shown=false at TOPLEFT>CharacterAmmoSlot.TOPLEFT(0,0) tex=nil layer=OVERLAY:5 rgba=1,1,1,1
+    · Texture IconBorder 37.0x37.0 shown=false at CENTER>CharacterAmmoSlot.CENTER(0,0) tex=651080 layer=OVERLAY:0 rgba=1,1,1,1
+    · Texture IconOverlay 37.0x37.0 shown=false at CENTER>CharacterAmmoSlot.CENTER(0,0) tex=nil layer=OVERLAY:1 rgba=1,1,1,1
+    · Texture IconOverlay2 37.0x37.0 shown=false at CENTER>CharacterAmmoSlot.CENTER(0,0) tex=nil layer=OVERLAY:2 rgba=1,1,1,1
+    · Texture CharacterAmmoSlotNormalTexture 64.0x64.0 shown=false at CENTER>CharacterAmmoSlot.CENTER(0,-1) tex=130841 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture PushedTexture 27.0x27.0 shown=false at TOPLEFT>CharacterAmmoSlot.TOPLEFT(0,0) tex=130839 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture HighlightTexture 27.0x27.0 shown=false at TOPLEFT>CharacterAmmoSlot.TOPLEFT(0,0) tex=130718 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture - 44x44 shown=true at CENTER>CharacterAmmoSlot.CENTER(0,0) atlas=UI-Character-Info-GearSlotSmall layer=BACKGROUND:0 rgba=1,1,1,1
+    · Texture CharacterAmmoSlotIconTexture 27.0x27.0 shown=true at TOPLEFT>CharacterAmmoSlot.TOPLEFT(0,0) tex=nil layer=BORDER:0 rgba=1,1,1,1
+    · FontString CharacterAmmoSlotCount 1.0x1.0 shown=false at BOTTOMRIGHT>CharacterAmmoSlot.BOTTOMRIGHT(-1,2) font=ARIALN.TTF 14.0 object=NumberFontNormal
+    · Texture CharacterAmmoSlotNormalTexture 47.0x47.0 shown=true at CENTER>CharacterAmmoSlot.CENTER(0,-1) tex=130841 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture - 27.0x27.0 shown=false at TOPLEFT>CharacterAmmoSlot.TOPLEFT(0,0) tex=130839 layer=ARTWORK:0 rgba=1,1,1,1
+    · Texture - 27.0x27.0 shown=true at TOPLEFT>CharacterAmmoSlot.TOPLEFT(0,0) tex=130718 layer=HIGHLIGHT:0 rgba=1,1,1,1
+    Cooldown CharacterAmmoSlotCooldown 27.0x27.0 shown=false at TOPLEFT>CharacterAmmoSlot.TOPLEFT(0,0) level=102
+      · FontString - 1.0x1.0 shown=true at CENTER>CharacterAmmoSlotCooldown.CENTER(0,-1) font=FRIZQT__.TTF 16 object=SystemFont_Shadow_Large_Outline
+    Frame - 1.0x1.0 shown=true at RIGHT>CharacterAmmoSlot.LEFT(0,0) level=102
+      · Texture - 33x23.0 shown=true at RIGHT>?.RIGHT(6,0) atlas=UI-Character-Info-GearSlot-Arrow layer=OVERLAY:0 rgba=1,1,1,1

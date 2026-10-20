@@ -187,7 +187,7 @@ pub(crate) fn cvar_get(vm: &mut Vm, name: &str) -> Option<String> {
         .map(|(_, v)| v.clone())
 }
 
-fn cvar_set(vm: &mut Vm, name: &str, value: String) {
+pub(crate) fn cvar_set(vm: &mut Vm, name: &str, value: String) {
     let cvars = &mut engine_mut(vm).world.cvars;
     match cvars.iter_mut().find(|(k, _)| k.eq_ignore_ascii_case(name)) {
         Some(slot) => slot.1 = value,
@@ -324,14 +324,32 @@ fn get_cvar_info(vm: &mut Vm, c: NativeCall) -> Ret {
     ])
 }
 
-/// `SetCVar(name, value)`: a secure CVar is refused to addons
+/// `SetCVar(name, value)`: a secure CVar is refused to addons in combat
 /// (`ADDON_ACTION_FORBIDDEN`, recorded for `SoftTargetEnemy` set from
-/// `/run`), a read-only one not changed (unverified: its result), one the
+/// `/run`; out of combat allowed, the user's word: SuuUI sets the
+/// nameplates' secure CVars then without a refusal), a read-only one not
+/// changed (unverified: its result), one the
 /// client does not have neither (recorded: Blizzard's talents frame sets
 /// `heroTalentsCollapse`, which camelot lacks, and no `CVAR_UPDATE` comes;
 /// unverified: the result).
+///
+/// No value sets "0" (the full probe, 1.60.1: ten switches read "0" after
+/// `SetCVar(name)`; unverified: a CVar whose range lacks 0, the camera's
+/// zoom factor kept its 2).
 fn set_cvar(vm: &mut Vm, c: NativeCall) -> Ret {
     let name = string_arg(vm, &c, 1)?;
+    let text = match c.arg(2) {
+        Value::Nil => "0".to_string(),
+        v => value_text(vm, v),
+    };
+    set_cvar_text(vm, &name, text, true)
+}
+
+/// Sets a CVar as `C_CVar.SetCVar` does: an unknown one ignored, a secure
+/// one refused to tainted code in combat, a read-only one not set, else
+/// set and, when `tell`, told (`CVAR_UPDATE`).
+pub(crate) fn set_cvar_text(vm: &mut Vm, name: &str, text: String, tell: bool) -> Ret {
+    let name = name.to_string();
     // Camelot's CVars are the client's (recorded); other flavors' unknown.
     let world = &engine(vm).world;
     let unknown = engine(vm).flavor == "camelot"
@@ -347,7 +365,7 @@ fn set_cvar(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![]);
     }
     let (_, secure, read_only) = cvar_flags(vm, &name);
-    if secure && crate::protection::tainted(vm) {
+    if secure && engine(vm).units.lockdown && crate::protection::tainted(vm) {
         let action = crate::protection::action_name(vm);
         crate::protection::refuse(vm, "ADDON_ACTION_FORBIDDEN", action);
         return Ok(vec![]);
@@ -355,19 +373,51 @@ fn set_cvar(vm: &mut Vm, c: NativeCall) -> Ret {
     if read_only {
         return Ok(vec![Value::Bool(false)]);
     }
-    let text = value_text(vm, c.arg(2));
+    // The camera's zoom factor keeps a value below 1 or no number, the set
+    // answered as done (the full probe, 1.60.1: "0", "" and "abc" left 2,
+    // "1" and "1.5" taken; the upper bound unverified).
+    if name.eq_ignore_ascii_case("cameraDistanceMaxZoomFactor")
+        && text.trim().parse::<f64>().map_or(true, |n| n < 1.0)
+    {
+        return Ok(vec![Value::Bool(true)]);
+    }
+    // Set to what it is: not told (recorded twice: the world map's first
+    // showing after a reload sets `miniWorldMap` to its value, no
+    // `CVAR_UPDATE`; scenarios tracking and mapnav).
+    let unchanged = cvar_get(vm, &name).is_some_and(|v| v == text);
     cvar_set(vm, &name, text.clone());
+    if !tell || unchanged {
+        return Ok(vec![Value::Bool(true)]);
+    }
     let n = vm.str(&name);
     let v = vm.str(&text);
     widgets::fire_event(vm, "CVAR_UPDATE", &[n, v]);
     Ok(vec![Value::Bool(true)])
 }
 
+/// `setCVar(name, value)`: a CVar the client changed without telling (the
+/// camera's pitch as it turned): no `CVAR_UPDATE`.
+pub(crate) fn control_set_cvar(vm: &mut Vm, c: NativeCall) -> Ret {
+    let name = string_arg(vm, &c, 1)?;
+    let text = value_text(vm, c.arg(2));
+    cvar_set(vm, &name, text);
+    Ok(vec![])
+}
+
 // ---------------------------------------------------------------- others
 
-/// `C_Texture.GetAtlasInfo(atlas)`: a stand-in (64 x 64, whole texture).
+/// `C_Texture.GetAtlasInfo(atlas)`: a stand-in (64 x 64, whole texture);
+/// the size of a recorded atlas (`measures::atlas`).
+///
+/// The empty name is no atlas: nothing (the full probe, 1.60.1).
 fn atlas_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let name = vm.check_str(&c, 1)?;
+    if vm.str_bytes(name).is_empty() {
+        return Ok(vec![]);
+    }
+    let known = crate::measures::atlas(&String::from_utf8_lossy(vm.str_bytes(name)));
+    let width = known.and_then(|a| a.width).unwrap_or(64.0);
+    let height = known.and_then(|a| a.height).unwrap_or(64.0);
     let t = vm.new_table();
     let set = |vm: &mut Vm, k: &str, v: Value| {
         let key = vm.str(k);
@@ -375,8 +425,8 @@ fn atlas_info(vm: &mut Vm, c: NativeCall) -> Ret {
     };
     set(vm, "elementName", Value::Str(name));
     for (k, v) in [
-        ("width", 64.0),
-        ("height", 64.0),
+        ("width", width),
+        ("height", height),
         ("leftTexCoord", 0.0),
         ("rightTexCoord", 1.0),
         ("topTexCoord", 0.0),
@@ -390,6 +440,14 @@ fn atlas_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let file = vm.str("Interface\\Buttons\\WHITE8X8");
     set(vm, "filename", file);
     Ok(vec![Value::Table(t)])
+}
+
+/// `C_Texture.GetAtlasExists(atlas)`: every name but the empty one (the
+/// full probe, 1.60.1: "" false; unverified: the client's whole list,
+/// "x" false too, which the engine cannot tell from an atlas it lacks).
+fn atlas_exists(vm: &mut Vm, c: NativeCall) -> Ret {
+    let empty = matches!(vm.hidden(c.arg(1)), Value::Str(s) if vm.str_bytes(s).is_empty());
+    Ok(vec![Value::Bool(!empty)])
 }
 
 fn truthy(_vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -406,6 +464,21 @@ fn build_info(vm: &mut Vm, _c: NativeCall) -> Ret {
         (c.version.clone(), c.interface)
     });
     let v = vm.str(&version);
+    // Camelot's: the recorded client's build and date, then an empty text
+    // and a space (the full probe, 1.60.1: "70450", "Oct 15 2026", 16001,
+    // "", " ").
+    if flavor == "camelot" {
+        let (build, date) = (vm.str("70450"), vm.str("Oct 15 2026"));
+        let (empty, space) = (vm.str(""), vm.str(" "));
+        return Ok(vec![
+            v,
+            build,
+            date,
+            Value::Num(f64::from(interface)),
+            empty,
+            space,
+        ]);
+    }
     let build = vm.str("0");
     let date = vm.str("");
     let info = vm.str(&format!("{version}.0"));
@@ -424,6 +497,11 @@ fn build_info(vm: &mut Vm, _c: NativeCall) -> Ret {
 fn is_addon_loaded(vm: &mut Vm, c: NativeCall) -> Ret {
     let name = match vm.hidden(c.arg(1)) {
         Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).to_lowercase(),
+        // An index into the addons the client knows (`GetNumAddOns`).
+        Value::Num(n) if n >= 1.0 => match engine(vm).world.bindings.addons.get(n as usize - 1) {
+            Some(a) => a.name.to_lowercase(),
+            None => return Ok(vec![Value::Bool(false), Value::Bool(false)]),
+        },
         _ => return Ok(vec![Value::Bool(false), Value::Bool(false)]),
     };
     let loaded = engine(vm).world.loaded_addons.contains(&name);
@@ -514,11 +592,13 @@ pub fn functions() -> Vec<(&'static str, NativeFn)> {
         ("ConsoleGetAllCommands", console_get_all_commands),
         ("C_CVar.RegisterCVar", register_cvar),
         ("C_CVar.SetCVar", set_cvar),
+        ("C_UI.Reload", crate::login::reload_ui),
         ("C_Texture.GetAtlasInfo", atlas_info),
-        ("C_Texture.GetAtlasExists", truthy),
+        ("C_Texture.GetAtlasExists", atlas_exists),
         ("C_InputInterfaceStyle.GetCurrentStyle", zero),
         ("C_Glue.IsOnGlueScreen", falsy),
-        ("IsMacClient", falsy),
+        // The recorded client's (Forever on macOS: its key texts too).
+        ("IsMacClient", truthy),
         ("GetBuildInfo", build_info),
         ("IsLoggedIn", is_logged_in),
         ("C_AddOns.IsAddOnLoaded", is_addon_loaded),

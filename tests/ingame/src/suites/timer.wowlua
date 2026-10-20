@@ -1,5 +1,5 @@
 -- wowlua:timer on the client's C_Timer and frame clock.
-import after, every, throttle, debounce, nextFrame from "wowlua:timer"
+import after, every, repeating, throttle, debounce, nextFrame from "wowlua:timer"
 import suite from "/harness"
 
 type Call = { v: number, at: number }
@@ -63,6 +63,28 @@ s:test("every repeats, gets its ticker, stops", function(t)
     t:wait(0.8)
     t:eq(limited, 3, "three iterations")
     t:eq(ticks, 2, "cancelled from inside")
+end)
+
+s:test("repeating starts, stops and starts again", function(t)
+    local ticks: number[] = {}
+    local r = repeating(0.1, function() ticks[#ticks + 1] = GetTime() end)
+    t:ok(not r:isRunning(), "stopped at first")
+    t:wait(0.25)
+    t:eq(#ticks, 0, "no ticks before a start")
+    local started = GetTime()
+    r:start()
+    r:start()
+    t:ok(r:isRunning(), "running")
+    t:waitFor(function() return #ticks >= 3 end, 3, "three ticks")
+    t:ok(ticks[1] ~= nil and ticks[1] - started >= 0.09, "the first tick one interval after the start")
+    r:setRunning(false)
+    t:ok(not r:isRunning(), "stopped")
+    local count = #ticks
+    t:wait(0.3)
+    t:eq(#ticks, count, "no ticks while stopped")
+    r:setRunning(true)
+    t:waitFor(function() return #ticks > count end, 3, "ticking again")
+    r:stop()
 end)
 
 s:test("timer callbacks are isolated", function(t)

@@ -24,9 +24,22 @@
 //! `CloseMail`: `SECURE_TRANSFER_CANCEL` and the interaction's hides; the
 //! server's `UPDATE_PENDING_MAIL` a round trip later.
 //!
+//! Recorded too (`/stdtest engine scenario mail2`, the inbox's first fetch
+//! of a session): the inbox empty (`GetInboxNumItems` 0) till the server's
+//! first `MAIL_INBOX_UPDATE`; auction letters whose items' data the client
+//! lacks read "Retrieving data" (no invoice, their items unnamed) till the
+//! data come (`GET_ITEM_INFO_RECEIVED`, another update); a sold auction's
+//! money taken (`TakeInboxMoney`): the letter closed, the update,
+//! `MAIL_SUCCESS`, then with the letter's going the money's
+//! `PLAYER_MONEY`; an item whose data come a packet later (as a bought
+//! one's, `merchant.rs`): the bag's packet with the slot empty, the
+//! item's after. The server's delays differ from one session to the next:
+//! the mailbox's data name them (`namesAfter`, `dataAfter`, `bagAfter`,
+//! `goneAfter`; a letter's `readAfter`, an item's `itemAfter`).
+//!
 //! Unverified: `GetInboxText`'s values (not recorded), deleting and
-//! returning letters, money and COD letters, more than one attachment, a
-//! letter one can answer, the postage beyond one item (30 copper).
+//! returning letters, COD letters, more than one attachment, a letter one
+//! can answer, the postage beyond one item (30 copper).
 
 use std::collections::BTreeMap;
 
@@ -39,11 +52,14 @@ use crate::{character, engine, engine_mut, widgets};
 
 /// `Enum.PlayerInteractionType.MailInfo`.
 const MAILBOX: f64 = 17.0;
-/// The invoices' players' names, after the inbox (recorded).
+/// The invoices' players' names, after the inbox (recorded: `mail`; the
+/// mailbox's `namesAfter`).
 const NAMES_AFTER: f64 = 0.536;
-/// A taken item's bag packet after the take (recorded).
+/// A taken item's bag packet after the take (recorded: `mail`; the
+/// mailbox's `bagAfter`).
 const BAG_AFTER: f64 = 0.134;
-/// An emptied auction letter gone after the take (recorded).
+/// An emptied auction letter gone after the take (recorded: `mail`; the
+/// mailbox's `goneAfter`).
 const GONE_AFTER: f64 = 0.268;
 /// After a letter's sending: the spells' update, then the money and bags'
 /// (recorded).
@@ -73,6 +89,43 @@ pub struct Mail {
     pub new_mail: bool,
     /// Senders of mail on its way (an auction's: "Horde Auction House").
     pub senders: Vec<String>,
+    /// The inbox fetched this session (the mailbox's `fetched`, true when
+    /// not given: a mailbox opened before).
+    pub fetched: bool,
+    /// The server's delays, the mailbox's (seconds).
+    pub timing: Timing,
+    /// The items whose data the client gets with the letters' (the
+    /// mailbox's `received`).
+    pub received: Vec<i64>,
+}
+
+/// The server's delays at a mailbox (as recorded in `mail` by default).
+#[derive(Clone, Copy)]
+pub struct Timing {
+    /// The invoices' players' names after the inbox.
+    pub names: f64,
+    /// The letters' items' data after the inbox.
+    pub data: f64,
+    /// A taken item's bag packet after the take.
+    pub bag: f64,
+    /// An emptied auction letter gone after the take.
+    pub gone: f64,
+}
+
+impl Default for Timing {
+    fn default() -> Self {
+        Timing {
+            names: NAMES_AFTER,
+            data: 0.0,
+            bag: BAG_AFTER,
+            gone: GONE_AFTER,
+        }
+    }
+}
+
+/// The mailbox's delays.
+pub(crate) fn timing(vm: &Vm) -> Timing {
+    mail(vm).timing
 }
 
 fn fire(vm: &mut Vm, e: &str, args: &[Value]) {
@@ -111,11 +164,13 @@ fn mail_mut(vm: &mut Vm) -> &mut Mail {
 
 /// `defineMailbox(unit, { letters = { { packageIcon, stationeryIcon,
 /// sender, subject, money, cod, daysLeft, wasRead, wasReturned,
-/// textCreated, canReply, isGM, text, items = { { id, count } },
+/// textCreated, canReply, isGM, text, items = { { id, count, itemAfter } },
 /// invoice = { type, itemName, playerName, bid, buyout, deposit,
 /// consignment, moneyDelay, etaHour, etaMin, count, commerceAuction },
-/// auction } }, newMail, senders })`: a mailbox and the inbox it holds
-/// (`auction`: the letter goes once emptied).
+/// auction, retrieving, readAfter } }, newMail, senders, fetched,
+/// received, namesAfter, dataAfter, bagAfter, goneAfter })`: a mailbox and
+/// the inbox it holds (`auction`: the letter goes once emptied;
+/// `retrieving`: its items' data not yet with the client).
 pub fn control_define(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(unit) = units::handle_of(vm, c.arg(1)) else {
         return Err(vm.error("defineMailbox: a mailbox's unit expected"));
@@ -134,11 +189,35 @@ pub fn control_define(vm: &mut Vm, c: NativeCall) -> Ret {
         }
     }
     let new_mail = field(vm, t, "newMail").truthy();
+    let fetched = !matches!(field(vm, t, "fetched"), Value::Bool(false));
+    let mut timing = Timing::default();
+    for (key, slot) in [
+        ("namesAfter", &mut timing.names),
+        ("dataAfter", &mut timing.data),
+        ("bagAfter", &mut timing.bag),
+        ("goneAfter", &mut timing.gone),
+    ] {
+        if let Some(n) = num(field(vm, t, key)) {
+            *slot = n;
+        }
+    }
+    let mut received = Vec::new();
+    if let Value::Table(r) = field(vm, t, "received") {
+        let n = vm.heap.table(r).border();
+        for i in 1..=n {
+            if let Some(id) = num(vm.heap.table(r).get(Value::Num(i as f64))) {
+                received.push(id as i64);
+            }
+        }
+    }
     let m = mail_mut(vm);
     m.boxes.insert(unit.0, t);
     m.letters = letters;
     m.new_mail = new_mail;
     m.attached = vec![None; ATTACHMENTS];
+    m.fetched = fetched;
+    m.timing = timing;
+    m.received = received;
     Ok(vec![])
 }
 
@@ -149,6 +228,25 @@ pub fn mail_coming(vm: &mut Vm, sender: &str) {
     if !m.senders.iter().any(|s| s == sender) {
         m.senders.insert(0, sender.to_string());
     }
+}
+
+/// `mock.setNewMail(senders)`: unread mail waiting (`HasNewMail`), sent by
+/// `senders` (`GetLatestThreeSenders`, the latest first); nil or none: no
+/// new mail. A world's state, as a snapshot would hold it: no event.
+pub fn control_set_new_mail(vm: &mut Vm, c: NativeCall) -> Ret {
+    let mut senders = Vec::new();
+    if let Value::Table(t) = c.arg(1) {
+        let n = vm.heap.table(t).border();
+        for i in 1..=n {
+            if let Value::Str(s) = vm.heap.table(t).get(Value::Num(i as f64)) {
+                senders.push(String::from_utf8_lossy(vm.str_bytes(s)).into_owned());
+            }
+        }
+    }
+    let m = mail_mut(vm);
+    m.new_mail = !senders.is_empty();
+    m.senders = senders;
+    Ok(vec![])
 }
 
 pub fn has(vm: &Vm, unit: UnitId) -> bool {
@@ -186,16 +284,53 @@ fn check_inbox(vm: &mut Vm, _c: NativeCall) -> Ret {
         return Ok(vec![]);
     }
     let delay = crate::clock::server_delay(vm);
-    later(vm, delay, "mailInbox", inbox_updated, vec![]);
-    if !mail(vm).names {
-        later(vm, delay + NAMES_AFTER, "mailNames", names_known, vec![]);
+    let timing = timing(vm);
+    later(vm, delay, "mailInbox", inbox_fetched, vec![]);
+    let letters = mail(vm).letters.clone();
+    if letters.iter().any(|t| retrieving(vm, *t)) {
+        later(vm, delay + timing.data, "mailData", data_known, vec![]);
     }
+    if !mail(vm).names {
+        later(vm, delay + timing.names, "mailNames", names_known, vec![]);
+    }
+    Ok(vec![])
+}
+
+/// The server's inbox: its letters known.
+fn inbox_fetched(vm: &mut Vm, _c: NativeCall) -> Ret {
+    mail_mut(vm).fetched = true;
+    fire(vm, "MAIL_INBOX_UPDATE", &[]);
     Ok(vec![])
 }
 
 fn inbox_updated(vm: &mut Vm, _c: NativeCall) -> Ret {
     fire(vm, "MAIL_INBOX_UPDATE", &[]);
     Ok(vec![])
+}
+
+/// The letters' items' data come: each `received` item's
+/// `GET_ITEM_INFO_RECEIVED(id, true)`, the letters no longer retrieving,
+/// the inbox's update (`mail2`: 0.006 s and 0.011 s after the inbox).
+fn data_known(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let received = std::mem::take(&mut mail_mut(vm).received);
+    for id in received {
+        fire(
+            vm,
+            "GET_ITEM_INFO_RECEIVED",
+            &[Value::Num(id as f64), Value::Bool(true)],
+        );
+    }
+    let letters = mail(vm).letters.clone();
+    for t in letters {
+        set(vm, t, "retrieving", Value::Nil);
+    }
+    fire(vm, "MAIL_INBOX_UPDATE", &[]);
+    Ok(vec![])
+}
+
+/// A letter whose items' data the client lacks yet.
+fn retrieving(vm: &mut Vm, t: TableRef) -> bool {
+    field(vm, t, "retrieving").truthy()
 }
 
 fn names_known(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -205,6 +340,9 @@ fn names_known(vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 fn letter(vm: &mut Vm, c: &NativeCall) -> Option<(usize, TableRef)> {
+    if !mail(vm).fetched {
+        return None;
+    }
     let Value::Num(i) = vm.hidden(c.arg(1)) else {
         return None;
     };
@@ -241,7 +379,12 @@ fn attachment(vm: &mut Vm, t: TableRef, a: usize) -> Option<(i64, f64)> {
 }
 
 fn get_inbox_num_items(vm: &mut Vm, _c: NativeCall) -> Ret {
-    let n = mail(vm).letters.len() as f64;
+    let m = mail(vm);
+    let n = if m.fetched {
+        m.letters.len() as f64
+    } else {
+        0.0
+    };
     Ok(vec![Value::Num(n), Value::Num(n)])
 }
 
@@ -274,7 +417,13 @@ fn get_latest_three_senders(vm: &mut Vm, _c: NativeCall) -> Ret {
 /// item's count and link (recorded).
 fn get_inbox_header_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some((_, t)) = letter(vm, &c) else {
-        return Ok(vec![]);
+        // No such letter: its fifteen values empty, the money, cost and
+        // days 0 (the full probe).
+        let mut out = vec![Value::Nil; 15];
+        for v in &mut out[4..7] {
+            *v = Value::Num(0.0);
+        }
+        return Ok(out);
     };
     let items = items_of(vm, t);
     let first = items.first().copied();
@@ -282,14 +431,25 @@ fn get_inbox_header_info(vm: &mut Vm, c: NativeCall) -> Ret {
         Some((_, id, _)) => character::item_field(vm, id, "icon"),
         None => Value::Nil,
     };
+    let pending = retrieving(vm, t);
     let link = match first {
         Some((_, id, _)) => match character::link_in_context(vm, id, "", &[]) {
+            // Retrieving: the link without its name (`|h[]|h`, recorded).
+            Some(l) if pending => vm.str(&unnamed(&l)),
             Some(l) => vm.str(&l),
             None => Value::Nil,
         },
         None => Value::Nil,
     };
-    let get = |vm: &mut Vm, k: &str| field(vm, t, k);
+    let get = |vm: &mut Vm, k: &str| {
+        if pending && k == "subject" {
+            return match vm.get_global("RETRIEVING_DATA") {
+                Value::Str(s) => Value::Str(s),
+                _ => vm.str("Retrieving data"),
+            };
+        }
+        field(vm, t, k)
+    };
     let flag = |vm: &mut Vm, k: &str| Value::Bool(field(vm, t, k).truthy());
     let count = if items.is_empty() {
         Value::Nil
@@ -319,9 +479,24 @@ fn get_inbox_header_info(vm: &mut Vm, c: NativeCall) -> Ret {
 /// till the names are known), else the seven of none (recorded).
 fn get_inbox_invoice_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some((_, t)) = letter(vm, &c) else {
-        return Ok(vec![]);
+        // No such letter: as one without an invoice (the full probe).
+        let zero = Value::Num(0.0);
+        return Ok(vec![
+            Value::Nil,
+            Value::Nil,
+            Value::Nil,
+            zero,
+            zero,
+            zero,
+            zero,
+        ]);
     };
-    let Value::Table(inv) = field(vm, t, "invoice") else {
+    let invoice = match field(vm, t, "invoice") {
+        // Retrieving: none yet (recorded).
+        Value::Table(_) if retrieving(vm, t) => Value::Nil,
+        v => v,
+    };
+    let Value::Table(inv) = invoice else {
         let zero = Value::Num(0.0);
         return Ok(vec![
             Value::Nil,
@@ -352,18 +527,34 @@ fn get_inbox_item(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some((id, count)) = attachment(vm, t, a) else {
         return Ok(vec![]);
     };
-    let name = character::item_field(vm, id, "name");
     let icon = character::item_field(vm, id, "icon");
-    let quality = character::item_field(vm, id, "quality");
+    // Retrieving: unnamed, no quality, not usable (recorded).
+    let (name, quality, usable) = if retrieving(vm, t) {
+        (vm.str(""), Value::Nil, false)
+    } else {
+        (
+            character::item_field(vm, id, "name"),
+            character::item_field(vm, id, "quality"),
+            true,
+        )
+    };
     Ok(vec![
         name,
         Value::Num(id as f64),
         icon,
         Value::Num(count),
         quality,
-        Value::Bool(true),
+        Value::Bool(usable),
         Value::Bool(false),
     ])
+}
+
+/// A link with its name taken out.
+fn unnamed(link: &str) -> String {
+    match (link.find("|h["), link.rfind("]|h")) {
+        (Some(a), Some(b)) if a + 3 <= b => format!("{}{}", &link[..a + 3], &link[b..]),
+        _ => link.to_string(),
+    }
 }
 
 fn get_inbox_item_link(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -398,7 +589,10 @@ fn get_inbox_text(vm: &mut Vm, c: NativeCall) -> Ret {
     };
     if !field(vm, t, "wasRead").truthy() {
         set(vm, t, "wasRead", Value::Bool(true));
-        let delay = crate::clock::server_delay(vm);
+        // The server's update a round trip later (`mail`), or the letter's
+        // `readAfter` (`mail2`: at once, the click's frame, both letters).
+        let delay =
+            num(field(vm, t, "readAfter")).unwrap_or_else(|| crate::clock::server_delay(vm));
         later(vm, delay, "mailRead", inbox_updated, vec![]);
     }
     let invoice = matches!(field(vm, t, "invoice"), Value::Table(_));
@@ -477,11 +671,14 @@ fn taken(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some((id, count)) = attachment(vm, t, a) else {
         return Ok(vec![]);
     };
+    let mut item_after = None;
     if let Value::Table(l) = field(vm, t, "items")
         && let Value::Table(item) = vm.heap.table(l).get(Value::Num(a as f64))
     {
         set(vm, item, "taken", Value::Bool(true));
+        item_after = num(field(vm, item, "itemAfter"));
     }
+    let timing = timing(vm);
     let emptied = items_of(vm, t).is_empty();
     let goes = emptied && field(vm, t, "auction").truthy();
     if goes {
@@ -500,21 +697,35 @@ fn taken(vm: &mut Vm, c: NativeCall) -> Ret {
     );
     crate::merchant::loot_message(vm, id, count, "");
     fire(vm, "BAG_NEW_ITEMS_UPDATED", &[]);
-    later(
-        vm,
-        BAG_AFTER,
-        "mailBag",
-        bag_packet,
-        vec![
-            Value::Num(bag as f64),
-            slot.map_or(Value::Nil, |s| Value::Num(s as f64)),
-            Value::Num(id as f64),
-        ],
-    );
+    match (slot, item_after) {
+        // A new slot whose item's data come a packet later.
+        (Some(slot), Some(after)) => later(
+            vm,
+            timing.bag,
+            "mailBagEmpty",
+            bag_packet_empty,
+            vec![
+                Value::Num(bag as f64),
+                Value::Num(slot as f64),
+                Value::Num(after),
+            ],
+        ),
+        _ => later(
+            vm,
+            timing.bag,
+            "mailBag",
+            bag_packet,
+            vec![
+                Value::Num(bag as f64),
+                slot.map_or(Value::Nil, |s| Value::Num(s as f64)),
+                Value::Num(id as f64),
+            ],
+        ),
+    }
     if goes {
         later(
             vm,
-            GONE_AFTER,
+            timing.gone,
             "mailGone",
             letter_gone,
             vec![Value::Num(i as f64)],
@@ -523,8 +734,27 @@ fn taken(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// The bags' packet before the new slot's item's data (`mail2`, as a
+/// bought item's in `merchant.rs`): the bag's update, its slot still
+/// empty; the item's data `after` seconds later (the merchant's arrival:
+/// the spells', the bag's and the inventory's updates, no count's).
+fn bag_packet_empty(vm: &mut Vm, c: NativeCall) -> Ret {
+    let bag = num(c.upvals[0]).unwrap_or(0.0) as i64;
+    let after = num(c.upvals[2]).unwrap_or(0.0);
+    character::bag_updated(vm, bag);
+    fire(vm, "BAG_UPDATE_DELAYED", &[]);
+    later(
+        vm,
+        after,
+        "mailItemData",
+        crate::merchant::item_data_arrived,
+        vec![c.upvals[0], c.upvals[1]],
+    );
+    Ok(vec![])
+}
+
 /// The bags' packet: the spells' update, the bag's, the count's.
-fn bag_packet(vm: &mut Vm, c: NativeCall) -> Ret {
+pub(crate) fn bag_packet(vm: &mut Vm, c: NativeCall) -> Ret {
     let bag = num(c.upvals[0]).unwrap_or(0.0) as i64;
     if let Some(slot) = num(c.upvals[1]) {
         character::arrived(vm, bag, slot as usize);
@@ -851,6 +1081,5 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Mail.IsCommandPending", no),
         ("C_Mail.CanCheckInbox", yes),
         ("C_Mail.SetOpeningAll", nothing),
-        ("C_Mail.GetCraftingOrderMailInfo", nothing),
     ]
 }

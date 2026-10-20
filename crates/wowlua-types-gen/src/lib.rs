@@ -38,6 +38,9 @@ pub struct FlavorDocs {
     /// The UI files only load-on-demand addons load (their globals exist
     /// only once the addon is loaded): path (lowercase, `/`) → addon.
     pub lod_files: std::collections::HashMap<String, String>,
+    /// The number globals the flavor's client defines itself (`LE_*`,
+    /// `NUM_LE_*`), when recorded.
+    pub number_globals: Vec<String>,
 }
 
 /// Where the annotations are short: `Frame:GetAttribute` also takes
@@ -70,17 +73,125 @@ fn widget_corrections(classes: &mut indexmap::IndexMap<String, model::Class>) {
 /// documentation says the callback), and their callbacks receive it.
 /// `TimerHandle` and `TickerHandle` are declared by the compiler.
 fn corrections(d: &mut Decls) {
-    let Some(timer) = d.namespaces.get_mut("C_Timer") else {
-        return;
-    };
-    for (name, handle) in [("NewTimer", "TimerHandle"), ("NewTicker", "TickerHandle")] {
-        for sig in timer.functions.get_mut(name).into_iter().flatten() {
-            sig.returns = vec![handle.to_string()];
-            if let Some(callback) = sig.params.iter_mut().find(|p| p.name == "callback") {
-                callback.ty = format!("(handle: {handle}) -> ()");
+    if let Some(timer) = d.namespaces.get_mut("C_Timer") {
+        for (name, handle) in [("NewTimer", "TimerHandle"), ("NewTicker", "TickerHandle")] {
+            for sig in timer.functions.get_mut(name).into_iter().flatten() {
+                sig.returns = vec![handle.to_string()];
+                if let Some(callback) = sig.params.iter_mut().find(|p| p.name == "callback") {
+                    callback.ty = format!("(handle: {handle}) -> ()");
+                }
             }
         }
     }
+    // Blizzard_SharedTalentUI (loaded at login) replaces
+    // `C_Traits.GetConditionInfo` with a wrapper taking
+    // `(configID, condID, ignoreFontColor, traitTreeName)` that adds the
+    // formatted `tooltipText` (`Blizzard_SharedTalentUtil.lua`; recorded:
+    // `C_Traits.GetConditionInfo(…)` answers `tooltipText=string |cffff2020
+    // Spend 30 more …`, the trait fixtures).
+    for sig in d
+        .namespaces
+        .get_mut("C_Traits")
+        .and_then(|ns| ns.functions.get_mut("GetConditionInfo"))
+        .into_iter()
+        .flatten()
+    {
+        if sig.params.len() == 2 {
+            sig.params.push(param("ignoreFontColor", "boolean", true));
+            sig.params.push(param("traitTreeName", "string", true));
+        }
+    }
+    if let Some(fields) = d.interfaces.get_mut("TraitCondInfo")
+        && !fields.iter().any(|(n, _, _)| n == "tooltipText")
+    {
+        fields.push(("tooltipText".into(), "string".into(), true));
+    }
+    // A channel message's target is the channel's number: Blizzard's chat
+    // edit box sends `C_ChatInfo.SendChatMessage(text, "CHANNEL", language,
+    // self:GetChannelTarget())`, the number `GetChannelName` answered
+    // (`ChatFrameEditBox.lua`).
+    for sig in d
+        .namespaces
+        .get_mut("C_ChatInfo")
+        .and_then(|ns| ns.functions.get_mut("SendChatMessage"))
+        .into_iter()
+        .flatten()
+    {
+        channel_target(sig);
+    }
+    unit_names(d);
+}
+
+/// The unit name functions answer nothing for a unit that does not exist,
+/// and no realm for one of the player's realm or no player, though the
+/// documentation says `Nilable = false` (recorded on camelot:
+/// `UnitName("party2")` answers `nil, nil` in a party of two, the group
+/// fixtures; `UnitFullName("target")` without a target `nil, nil`;
+/// `UnitFullName("none")` and `UnitNameFromGUID` of a creature a name and
+/// `nil`, the full probe). Other flavors' clients are documented alike
+/// (unverified by a recording).
+fn unit_names(d: &mut Decls) {
+    for name in [
+        "UnitName",
+        "UnitFullName",
+        "UnitNameUnmodified",
+        "UnitNameFromGUID",
+    ] {
+        for sig in d.functions.get_mut(name).into_iter().flatten() {
+            for r in sig.returns.iter_mut() {
+                if !r.ends_with('?') {
+                    *r = model::optional(r);
+                }
+            }
+        }
+    }
+}
+
+/// `SendChatMessage`'s `target` also takes a channel number.
+fn channel_target(sig: &mut model::Sig) {
+    if let Some(target) = sig.params.iter_mut().find(|p| p.name == "target")
+        && target.ty == "string"
+    {
+        target.ty = "string | number".into();
+    }
+}
+
+fn param(name: &str, ty: &str, optional: bool) -> model::ParamDecl {
+    model::ParamDecl {
+        name: name.into(),
+        ty: ty.into(),
+        optional,
+    }
+}
+
+/// Where the annotations are wrong about functions Blizzard does not
+/// document: parameters the client and Blizzard's code leave out.
+fn annotation_corrections(d: &mut Decls) {
+    // (function, parameter), each with its evidence.
+    let optional: &[(&str, &str)] = &[
+        // Blizzard_TrainerUI calls `SetTrainerServiceTypeFilter(filter,
+        // not IsSelected(filter))`.
+        ("SetTrainerServiceTypeFilter", "exclusive"),
+        // Blizzard's own definitions (Deprecated_SpellBook.lua) read
+        // `isPet and Enum.SpellBookSpellBank.Pet or …`.
+        ("IsSpellKnown", "isPet"),
+        ("IsSpellKnownOrOverridesKnown", "isPet"),
+        // Like `JoinPermanentChannel`'s and `JoinTemporaryChannel`'s
+        // (Blizzard's ChannelList calls `JoinPermanentChannel(channelName)`);
+        // the wiki brackets it too (unverified: no client recording).
+        ("JoinChannelByName", "hasVoice"),
+    ];
+    for (function, name) in optional {
+        for sig in d.functions.get_mut(*function).into_iter().flatten() {
+            if let Some(p) = sig.params.iter_mut().find(|p| p.name == *name) {
+                p.optional = true;
+            }
+        }
+    }
+    for sig in d.functions.get_mut("SendChatMessage").into_iter().flatten() {
+        channel_target(sig);
+    }
+    unit_names(d);
 }
 
 /// Generates the declarations. `skip`: global names the compiler declares
@@ -154,6 +265,7 @@ pub fn generate(
         }
     }
     let mut shared = luals::convert(annotations);
+    annotation_corrections(&mut shared);
     // Blizzard's data wins: drop what any flavor's documentation defines,
     // and what the compiler declares itself.
     let mut bliz_functions: HashSet<String> = HashSet::new();
@@ -201,6 +313,19 @@ pub fn generate(
                 let Some(targets) = target.methods.get_mut(method) else {
                     continue;
                 };
+                // Results the annotations leave out come from Blizzard's
+                // documentation (`Minimap:GetZoom()`: `zoomFactor`).
+                if let Some(doc) = sigs.first()
+                    && !doc.returns.is_empty()
+                    && targets
+                        .iter()
+                        .all(|t| t.returns.is_empty() && t.ret_vararg.is_none())
+                {
+                    for t in targets.iter_mut() {
+                        t.returns = doc.returns.clone();
+                        t.ret_vararg = doc.ret_vararg.clone();
+                    }
+                }
                 for sig in sigs {
                     for (i, p) in sig.params.iter().enumerate() {
                         if !p.ty.contains("Secret<") {
@@ -217,6 +342,47 @@ pub fn generate(
                     }
                 }
             }
+        }
+    }
+    // Tooltip methods Blizzard's `TooltipDataHandler.lua` defines pass their
+    // arguments to a documented `C_TooltipInfo` function and take its
+    // parameters (`MailFrame.lua` calls `GameTooltip:SetInboxItem(
+    // InboxFrame.openMailID, index)`), where the annotations have fewer or
+    // untyped ones.
+    if let Some(tooltip) = shared.classes.get_mut("GameTooltip") {
+        let accessors: BTreeSet<(String, String)> = flavors
+            .iter()
+            .flat_map(|f| framexml::tooltip_accessors(&f.ui_lua))
+            .collect();
+        for (method, getter) in accessors {
+            let Some(doc) = per_flavor.iter().find_map(|(_, _, d)| {
+                d.namespaces
+                    .get("C_TooltipInfo")
+                    .and_then(|ns| ns.functions.get(&getter))
+                    .and_then(|sigs| sigs.first())
+            }) else {
+                continue;
+            };
+            let Some(sigs) = tooltip.methods.get_mut(&method) else {
+                continue;
+            };
+            for sig in sigs.iter_mut() {
+                // Annotations with more parameters stay (a flavor's own
+                // `SetTalent(talentIndex, isInspect, talentGroup, …)`).
+                if sig.params.len() < doc.params.len()
+                    || sig.params.len() == doc.params.len()
+                        && sig.params.iter().any(|p| p.ty == "any")
+                {
+                    sig.params = doc.params.clone();
+                    sig.vararg = doc.vararg.clone();
+                }
+            }
+            let mut seen = Vec::new();
+            sigs.retain(|s| {
+                let new = !seen.contains(s);
+                seen.push(s.clone());
+                new
+            });
         }
     }
     // Classes only Blizzard knows stay in the flavor files; methods of
@@ -304,19 +470,28 @@ pub fn generate(
     let widget_classes: HashSet<String> = shared.classes.keys().cloned().collect();
     // Each with the load-on-demand addon that alone defines it, if any.
     let mut ui_globals: Vec<indexmap::IndexMap<String, (String, Option<String>)>> = Vec::new();
+    // Each flavor's mixin classes its named frames are typed with.
+    let mut ui_mixins: Vec<indexmap::IndexMap<String, model::Class>> = Vec::new();
     for (f, (_, _, d)) in flavors.iter().zip(&per_flavor) {
-        let lod = framexml::lod_origins(&f.ui_lua, &f.ui_xml, &f.lod_files, &widget_classes);
-        let mut g: indexmap::IndexMap<String, (String, Option<String>)> =
-            framexml::globals(&f.ui_lua, &f.ui_xml, &widget_classes)
-                .into_iter()
-                .map(|(n, ty)| {
-                    let addon = lod.get(&n).cloned();
-                    (n, (ty, addon))
-                })
-                .collect();
+        let lod = framexml::lod_origins(&f.ui_lua, &f.ui_xml, &f.lod_files);
+        let ui = framexml::ui_globals(&f.ui_lua, &f.ui_xml, &widget_classes);
+        ui_mixins.push(ui.mixins);
+        let mut g: indexmap::IndexMap<String, (String, Option<String>)> = ui
+            .globals
+            .into_iter()
+            .map(|(n, ty)| {
+                let addon = lod.get(&n).cloned();
+                (n, (ty, addon))
+            })
+            .collect();
         for s in &f.strings {
             g.entry(s.clone())
                 .or_insert_with(|| ("string".into(), None));
+        }
+        // The number globals the client defines itself.
+        for n in &f.number_globals {
+            g.entry(n.clone())
+                .or_insert_with(|| ("number".into(), None));
         }
         g.retain(|n, _| {
             !skip.contains(n)
@@ -326,8 +501,15 @@ pub fn generate(
                 && !shared.functions.contains_key(n)
                 && !shared.namespaces.contains_key(n)
                 && !shared.globals.contains_key(n)
-                && !shared.classes.contains_key(n)
         });
+        // A global table the annotations name a class after is of that
+        // class (`ItemLocation = {}` with `ItemLocation:CreateFromBagAndSlot`);
+        // a frame keeps its widget type (`NamePlateDriverFrame`).
+        for (n, (ty, _)) in g.iter_mut() {
+            if shared.classes.contains_key(n) && ty == "table" {
+                *ty = n.clone();
+            }
+        }
         ui_globals.push(g);
     }
     if let Some(first) = ui_globals.first().cloned() {
@@ -384,7 +566,20 @@ pub fn generate(
     let shared_defs = shared.defined_types();
     let shared_refs = shared.referenced_types();
     let mut out_flavors = Vec::new();
-    for (id, source, mut d) in per_flavor {
+    for ((id, source, mut d), mixins) in per_flavor.into_iter().zip(ui_mixins) {
+        // The mixin classes of the UI code's named frames, where nothing
+        // else declares the name (not the engine's: they are no widgets).
+        let mut mixin_names: HashSet<String> = HashSet::new();
+        for (name, class) in mixins {
+            if !shared_defs.contains(&name)
+                && !d.classes.contains_key(&name)
+                && !d.interfaces.contains_key(&name)
+                && !d.aliases.contains_key(&name)
+            {
+                mixin_names.insert(name.clone());
+                d.classes.insert(name, class);
+            }
+        }
         // Names referred to but declared nowhere become `any` (the
         // compiler's own declarations define some).
         let mut defined: BTreeSet<String> = shared_defs.clone();
@@ -411,6 +606,7 @@ pub fn generate(
                 .classes
                 .iter()
                 .chain(d.classes.iter())
+                .filter(|(name, _)| !mixin_names.contains(*name))
                 .map(|(name, c)| {
                     (
                         name.clone(),

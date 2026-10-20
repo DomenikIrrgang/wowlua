@@ -88,7 +88,7 @@ libraries such as Ace3, LibDBIcon or LibSerialize.
 | Decorator | Module | Target | Effect |
 |-----------|--------|--------|--------|
 | `@event(name, ...)` | `wowlua:events` | function, static method | Handles one or more WoW events or messages. Only WoW events are registered with the game. |
-| `@unitEvent(name, unit, unit?)` | `wowlua:events` | function, static method | `RegisterUnitEvent` for one or two units, on its own frame |
+| `@unitEvent(name, ...units)` | `wowlua:events` | function, static method | `RegisterUnitEvent` for any number of units, on frames of its own (one per pair) |
 | `@bucket(interval, name, ...)` | `wowlua:events` | function, static method | Coalesces bursts of events; the handler gets their counts |
 | `@onLoad` | `wowlua:lifecycle` | function | Runs once this addon's SavedVariables are loaded (`ADDON_LOADED` for this addon) |
 | `@onLogin` | `wowlua:lifecycle` | function | Runs on `PLAYER_LOGIN`, or right after `@onLoad` if already logged in (load-on-demand addons) |
@@ -136,8 +136,8 @@ All standard-library callbacks (event handlers, lifecycle hooks, timers,
 deferred calls, comm handlers, settings callbacks) follow one error policy,
 defined by [`wowlua:errors`](infrastructure.md#errors):
 
-- each callback runs isolated (`securecallfunction`), so one failing handler
-  never stops the others;
+- each callback runs isolated (`xpcall` with the policy's handler), so one
+  failing handler never stops the others;
 - errors are passed to `geterrorhandler()` (and so to BugSack and similar
   addons), with the addon name as prefix;
 - a failing lifecycle hook does not stop the remaining hooks of its phase.

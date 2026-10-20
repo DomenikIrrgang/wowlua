@@ -8,7 +8,7 @@ local e = __engine
 local player = e.player
 -- The paladin's hidden group buffs (HIDDEN_GROUP_BUFFS_CHANGED, recorded).
 e.setHiddenGroupBuffs({ 10300, 19740, 1022, 1038, 19979, 25290, 5599, 19834, 10292, 19876, 25898, 19977, 10293, 7294, 19898, 19978, 19888, 20729, 19837, 10298, 465, 10278, 25782, 19850, 10290, 6940, 10301, 10299, 25916, 19896, 19899, 1044, 25890, 19838, 25895, 25291, 1032, 19854, 25918, 19836, 19742, 19900, 19746, 25894, 19853, 19895, 19897, 19852, 10291, 19835, 19891, 20217, 643 })
-e.setSpellTraits({ offGlobalCooldown = { 20271 }, tracking = { 2580, 5502 }, profession = { 3100, 2656 } })
+e.setSpellTraits({ offGlobalCooldown = { 20271 }, tracking = { 2580, 5502 }, profession = { 3100, 2656 }, partyOrSelf = { 1022 } })
 e.setLatency(0.453)
 local druid = e.spawnUnit({
     name = "Player", lastName = "Lastname", guid = "Player-0000-00000000", player = true, level = 21,
@@ -81,6 +81,15 @@ check("in a party", IsInGroup() and UnitIsGroupLeader("player"))
 at(7.606) druid:joinGroup()
 at(8.0)
 check("two in the party", GetNumGroupMembers() == 2)
+-- Tooltips' data updates as the mouse passed over the party frame, not
+-- modelled: as recorded.
+at(8.735) for id = 817, 821 do e.fireEvent("TOOLTIP_DATA_UPDATE", id) end
+-- The campfire nearby, on the druid, later on the paladin following it
+-- (the session's aura instances, recorded).
+local function campfire(unit, instance)
+    unit:applyAura({ spellId = 1283391, name = "Campfire Nearby", icon = 7808147, auraInstanceID = instance })
+end
+at(8.832) campfire(druid, 21)
 at(9.499) e.newWmoChunk()
 -- Targeted on its party frame.
 at(10.525)
@@ -90,6 +99,7 @@ check("the druid targeted", UnitIsUnit("target", "party1"))
 -- Followed from the target's menu.
 at(18.536) press(TargetFrame, "RightButton")
 at(19.419) press(menuEntry("Follow"))
+at(19.480) campfire(player, 51)
 -- Asked to trade from the menu; the druid accepted; the window closed.
 at(20.077) press(TargetFrame, "RightButton")
 at(22.593) press(menuEntry("Trade"))
@@ -97,6 +107,10 @@ at(23.331) druid:openTrade()
 at(23.5)
 check("the trade window open", TradeFrame and TradeFrame:IsShown())
 at(23.736) e.pressKey("ESCAPE")
+-- The druid within the paladin's Devotion Aura (recorded).
+at(23.900) druid:applyAura({
+    spellId = 643, name = "Devotion Aura", icon = 135893, source = player, auraInstanceID = 23,
+})
 at(24.2)
 check("the trade window closed", not TradeFrame:IsShown())
 at(25.4)
