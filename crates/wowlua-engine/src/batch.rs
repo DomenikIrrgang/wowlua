@@ -43,8 +43,16 @@ const BATCHED: &[&str] = &[
     // Recorded once: a tracking spell's aura's, between the bags' and the
     // spells' cooldowns (scenario tracking).
     "MINIMAP_UPDATE_TRACKING",
+    // Recorded once, `quest`'s level up (69.677): the player's
+    // specialization's update between the bags' and the spells' cooldowns
+    // (unverified).
+    "PLAYER_SPECIALIZATION_CHANGED",
     "SPELL_UPDATE_COOLDOWN",
     "SPELL_UPDATE_USABLE",
+    // Recorded twice, `quest`'s level up (69.677, 70.006): after the
+    // spells' usability, before the shapeshift bar's cooldown and the
+    // health, the group buffs' changes right before it (`spells_changed`).
+    "SPELLS_CHANGED",
     // Recorded twice, `death`: the corpse's tracking at the spirit's
     // release and at the resurrection, between the spells' usability and
     // the health; the shapeshift bar's usability after the health (the
@@ -296,6 +304,9 @@ pub fn flush(vm: &mut Vm) {
         // right before the batched events in 59 of 60 frames).
         owed.sort_by_key(|(name, _)| (name != "UNIT_AURA", name.to_ascii_lowercase()));
         for (name, args) in owed {
+            if name == "SPELLS_CHANGED" {
+                crate::character::group_buffs_changed(vm);
+            }
             if name == "UNIT_AURA"
                 && let Some(Value::Table(info)) = args.get(1)
             {
@@ -306,6 +317,15 @@ pub fn flush(vm: &mut Vm) {
         widgets::keep_as(vm, FIRING, Value::Nil);
     }
     engine_mut(vm).batch.flushing = false;
+}
+
+/// The player's spells changed: the group buffs' changes, then
+/// `SPELLS_CHANGED`; batched, both at the frame's end (see `BATCHED`).
+pub fn spells_changed(vm: &mut Vm) {
+    if !engine(vm).batch.on {
+        crate::character::group_buffs_changed(vm);
+    }
+    widgets::fire_event(vm, "SPELLS_CHANGED", &[]);
 }
 
 /// `setFrameBatching(on)`: the client's batching of a frame's events on

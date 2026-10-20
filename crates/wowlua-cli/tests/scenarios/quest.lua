@@ -316,7 +316,7 @@ at(57.376) player:wear()
 at(57.638) player:swing(u_848ad88022, 17, { spent = 5, power = 5, kill = { flagsAfter = 0.625, xpAfter = 0.241, echo = 0.625, xp = 52, loot = { { id = 750 }, { id = 2672 }, { id = 4865 } } } })
 at(57.985) player:stopAttack()
 at(58.293) player:target(u_848ad88022, { echo = 0.359 })
-at(58.352) player:loot(u_848ad88022, { auto = true, dataAfter = { 0.92 }, slotsAfter = { 0.388, 0.388, 0.388 } })
+at(58.352) player:loot(u_848ad88022, { auto = true, bagsAfter = { 0.159 }, bagsAlone = { [2] = 0 }, logAfter = { 0 }, dataAfter = { 0.92 }, slotsAfter = { 0.390, 0.390, 0.390 } })
 at(58.652) player:leaveCombat()
 at(58.768) bystander("Creature-0-6782-0-7-69-A50EDA3B96", 69, "Timber Wolf")
 at(58.910) CloseLoot() -- walked off
@@ -409,7 +409,7 @@ at(82.292) player:stopAttack()
 -- told twice more as the attack stops (recorded).
 at(82.416) strike(0)
 at(82.416) player:startAttack()
-at(82.515) player:loot(u_fed254bade, { auto = true, bagsAfter = { 0.113, 0.231 }, dataAfter = { 0.278 }, slotsAfter = { 0.530, 0.688, 0.845 } })
+at(82.515) player:loot(u_fed254bade, { auto = true, bagsAfter = { 0.113, 0.074 }, bagsAlone = { [2] = 0.436 }, dataAfter = { 0.278 }, slotsAfter = { 0.530, 0.688, 0.845 } })
 -- The health and rage regained in the first slot's bags' moment, before
 -- the log's word (recorded, 83.708).
 at(82.515) e.beforeEvent("UNIT_QUEST_LOG_CHANGED", function()

@@ -1184,8 +1184,7 @@ fn commit(vm: &mut Vm, config: i64) -> Ret {
 }
 
 fn committed(vm: &mut Vm, c: NativeCall) -> Ret {
-    crate::character::group_buffs_changed(vm);
-    fire(vm, "SPELLS_CHANGED", &[]);
+    crate::batch::spells_changed(vm);
     let generic = model(vm)
         .first(&format!("C_Traits.GetConfigInfo({})", config_of(&c)))
         .and_then(|i| i.num("type"))

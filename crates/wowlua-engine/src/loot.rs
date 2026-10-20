@@ -90,6 +90,9 @@ pub struct Loot {
     /// A recording's delays of the quest log's word (`logAfter`) after the
     /// wanted item that owes it, in order; without one, with the bags.
     pub log_after: Vec<f64>,
+    /// Slots whose item's bag update comes in a packet of its own, these
+    /// seconds after the item (`bagsAlone`, a recording's).
+    pub bags_alone: Vec<(usize, f64)>,
 }
 
 /// A table's numbers in order (`{ 0.08, 0.12 }`).
@@ -130,7 +133,10 @@ fn later(vm: &mut Vm, seconds: f64, name: &'static str, f: NativeFn, upvals: Vec
 /// (`bagsAfter`, `dataAfter`: a recording's, in order); a quest's log's
 /// word (`UNIT_QUEST_LOG_CHANGED`) with the bags' packet, or `logAfter`
 /// seconds after the wanted item (a recording's, in order: `quest`
-/// 103.043, with the next item's push).
+/// 103.043, with the next item's push); `bagsAlone = { [slot] = seconds }`:
+/// that slot's item's bag update in a packet of its own, these seconds
+/// after the item (a recording's: `quest` 84.188, a stack's grown count
+/// with the new item's data, its packet after the next item's).
 pub fn control_loot(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = units::this(vm, &c)?;
     if me != units::PLAYER {
@@ -155,6 +161,16 @@ pub fn control_loot(vm: &mut Vm, c: NativeCall) -> Ret {
     engine_mut(vm).world.loot.data_after = numbers(vm, data);
     let log = opt_field(vm, opts, "logAfter");
     engine_mut(vm).world.loot.log_after = numbers(vm, log);
+    let mut alone = Vec::new();
+    if let Value::Table(t) = opt_field(vm, opts, "bagsAlone") {
+        let entries: Vec<(Value, Value)> = vm.heap.table(t).entries().collect();
+        for (k, v) in entries {
+            if let (Value::Num(slot), Value::Num(after)) = (k, v) {
+                alone.push((slot as usize, after));
+            }
+        }
+    }
+    engine_mut(vm).world.loot.bags_alone = alone;
     later(
         vm,
         delay,
@@ -510,7 +526,21 @@ fn taken(vm: &mut Vm, c: NativeCall) -> Ret {
         let delay = crate::clock::server_delay(vm);
         later(vm, delay, "lootFlags", loot_flags, vec![]);
     }
-    {
+    let alone = {
+        let l = &mut engine_mut(vm).world.loot;
+        l.bags_alone
+            .iter()
+            .position(|(s, _)| *s == slot)
+            .map(|i| l.bags_alone.remove(i).1)
+    };
+    if let Some(after) = alone {
+        let upvals = vec![
+            Value::Num(item.id as f64),
+            Value::Num(bag as f64),
+            Value::Bool(new_slot.is_none()),
+        ];
+        later(vm, after, "lootBagsAlone", bags_told_alone, upvals);
+    } else {
         let l = &mut engine_mut(vm).world.loot;
         l.bags.push(Placed {
             id: item.id,
@@ -518,7 +548,7 @@ fn taken(vm: &mut Vm, c: NativeCall) -> Ret {
             stacked: new_slot.is_none(),
         });
     }
-    if !engine(vm).world.loot.bags_due {
+    if alone.is_none() && !engine(vm).world.loot.bags_due {
         engine_mut(vm).world.loot.bags_due = true;
         let l = &mut engine_mut(vm).world.loot;
         let after = if l.bags_after.is_empty() {
@@ -558,12 +588,35 @@ fn log_told(vm: &mut Vm, _c: NativeCall) -> Ret {
 /// spells' changes first, its count after), the corpse emptied; a quest's
 /// log changed by an item first (`quests::tell_log`).
 fn bags_told(vm: &mut Vm, _c: NativeCall) -> Ret {
-    crate::quests::tell_log(vm);
     let placed = {
         let l = &mut engine_mut(vm).world.loot;
         l.bags_due = false;
         std::mem::take(&mut l.bags)
     };
+    tell_bags(vm, &placed, true);
+    Ok(vec![])
+}
+
+/// An item's bag update in a packet of its own (`bagsAlone`), without the
+/// corpse's emptying (recorded: `quest` 59.260 and 84.188, the corpse
+/// emptied with the other items' packet).
+fn bags_told_alone(vm: &mut Vm, c: NativeCall) -> Ret {
+    let (Value::Num(id), Value::Num(bag)) = (c.upvals[0], c.upvals[1]) else {
+        return Ok(vec![]);
+    };
+    let placed = Placed {
+        id: id as i64,
+        bag: bag as i64,
+        stacked: c.upvals[2].truthy(),
+    };
+    tell_bags(vm, &[placed], false);
+    Ok(vec![])
+}
+
+/// A bags' packet's events for the items `placed` (`emptied`: the corpse's
+/// emptying with it, if owed).
+fn tell_bags(vm: &mut Vm, placed: &[Placed], emptied: bool) {
+    crate::quests::tell_log(vm);
     for p in placed.iter().filter(|p| p.stacked) {
         crate::character::equipped_spells_changed(vm);
         crate::character::bag_updated(vm, p.bag);
@@ -576,7 +629,7 @@ fn bags_told(vm: &mut Vm, _c: NativeCall) -> Ret {
     for p in placed.iter().filter(|p| !p.stacked) {
         crate::character::bag_updated(vm, p.bag);
     }
-    if let Some(corpse) = engine_mut(vm).world.loot.emptied.take() {
+    if emptied && let Some(corpse) = engine_mut(vm).world.loot.emptied.take() {
         // A unit's corpse emptied is told; a world object is no unit.
         let g = engine(vm).units.list[corpse.0].guid.clone();
         if !g.starts_with("GameObject-") {
@@ -596,7 +649,6 @@ fn bags_told(vm: &mut Vm, _c: NativeCall) -> Ret {
     if wanted {
         fire(vm, "QUEST_LOG_UPDATE", &[]);
     }
-    Ok(vec![])
 }
 
 /// The new slots' item data: each slot reads its item; the equipped
