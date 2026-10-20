@@ -2009,10 +2009,33 @@ fn control_soft_target(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     // A soft friend is where a spell on a friend lands without a target
     // (recorded, `profession`: Blessing of Protection unusable once a
-    // friendly NPC was soft targeted, 0.2 s later; unverified: the delay).
+    // friendly NPC was soft targeted, 0.2 s later, with the next packet
+    // of the NPC's auras; `usableAfter`: a recording's delay).
     if i == 1 {
-        crate::actions::update_target_usability(vm);
+        let after = match c.arg(4) {
+            Value::Table(t) => {
+                let k = vm.str("usableAfter");
+                match vm.heap.table(t).get(k) {
+                    Value::Num(n) => Some(n),
+                    _ => None,
+                }
+            }
+            _ => None,
+        };
+        match after {
+            Some(after) => {
+                let f = vm.native("softFriendUsable", soft_friend_usable);
+                crate::clock::after_engine(vm, after, f);
+            }
+            None => crate::actions::update_target_usability(vm),
+        }
     }
+    Ok(vec![])
+}
+
+/// The soft friend's usability told later (`softTarget`'s `usableAfter`).
+fn soft_friend_usable(vm: &mut Vm, _c: NativeCall) -> Ret {
+    crate::actions::update_target_usability(vm);
     Ok(vec![])
 }
 

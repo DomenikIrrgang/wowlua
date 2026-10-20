@@ -150,7 +150,8 @@ at(142.908) e.moveTo({ zone = "The Barrens", subZone = "The Crossroads", mapID =
 local npc = e.spawnUnit({ name = "Crossroads Grunt", reaction = "friendly" })
 local caster = e.spawnUnit({ name = "Crossroads Caster", reaction = "friendly", powerType = 0, power = 1000, maxPower = 1000 })
 local other = e.spawnUnit({ name = "Crossroads Peon", reaction = "friendly" })
-at(145.408) player:softTarget(npc, "friend")
+-- Its actions' usability with the aura's packet 0.2 s later (recorded).
+at(145.408) player:softTarget(npc, "friend", { usableAfter = 0.2 })
 -- An aura gone from it, ENCHANT_SPELL_COMPLETED (its cause unknown): the
 -- world's, as recorded.
 at(145.608) world("UNIT_AURA", "softfriend", { isFullUpdate = false, removedAuraInstanceIDs = { 1 } })

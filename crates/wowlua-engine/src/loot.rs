@@ -194,7 +194,8 @@ fn later(vm: &mut Vm, seconds: f64, name: &'static str, f: NativeFn, upvals: Vec
 /// window closes) but its item comes these seconds later, in one packet
 /// with its bag update first and the corpse's emptying (a recording's:
 /// `combat` 22.478, the last slot's push 0.055 s after `LOOT_CLOSED`,
-/// the other item's bags' packet between).
+/// the other item's bags' packet between); `flagsAfter`: the looting
+/// flags' word these seconds after the last item (else a round trip).
 pub fn control_loot(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = units::this(vm, &c)?;
     if me != units::PLAYER {
