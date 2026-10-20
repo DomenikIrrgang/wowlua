@@ -7,7 +7,7 @@
 -- The compiler checks `on`, `once`, `off`, `offAll` and `fire` against the
 -- event type `E`: names are its keys (E8420), handlers and arguments its
 -- function types.
-import callIn from "wowlua:errors"
+import callOwned from "wowlua:errors"
 import Subscription from "wowlua:events"
 
 export type RegistryOptions = { compat?: "CallbackHandler" }
@@ -152,7 +152,7 @@ class CallbackRegistry<E> implements Registry<E>
         end
         for _, h in ipairs({ unpack(list) }) do
             if h.active then
-                callIn({ component = "callbacks: " .. name }, h.fn, ...)
+                callOwned({ component = "callbacks: " .. name }, self.owners[h], h.fn, ...)
             end
         end
     end

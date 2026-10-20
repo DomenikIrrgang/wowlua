@@ -188,7 +188,6 @@ pub(crate) static CODES: &[CodeInfo] = &[
     CodeInfo { code: "E8063", summary: "Locale string uses different placeholders than the base locale" },
     CodeInfo { code: "E8070", summary: "Settings control bound to a field of the wrong type" },
     CodeInfo { code: "E8080", summary: "`launcher.register` called more than once (compile time for top-level calls, otherwise at runtime)" },
-    CodeInfo { code: "E8100", summary: "`@unitEvent` with more than two units (`RegisterUnitEvent` limit)" },
     CodeInfo { code: "E8101", summary: "Invalid slash command name (must start with `/`, no whitespace)" },
     CodeInfo { code: "W8101", summary: "Event not available in every selected flavor (shared flavor mode); registered with a runtime validity check" },
     CodeInfo { code: "E8102", summary: "`saved.bind` name is not a string literal" },

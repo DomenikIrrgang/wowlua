@@ -16,11 +16,17 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `wowlua:table`: `copy(t, { shared = false })` gives every nested table a copy of its own; `keys(t, less)` sorts by a comparator
 - `wowlua:aura`: containers take `lazy` groups (added to the engine once `setGroupMax` gives them room), `exclude` spell IDs, a group's own `spacing`, `order` and `gap`, `setGroupFilter` and `setGroupSize` (buttons resized out of combat); `aura.hasContainers()`
 - Spec: the unchecked cast (`local f: T = e :: any`) and `@unchecked` next to the runtime checks
+- `wowlua:events`: `watchUnit(events, handler, owner?)`: unit events on one frame of the watch's own, pointed at other units with `setUnit(unit?, unit2?)` without subscribing again (`nil` unregisters); the handler gets the event name first
+- `wowlua:events`: `offAll(owner, name?)` cancels only the owner's handlers of one event or message (a watch stops watching that event)
+- `wowlua:errors`: listeners get `(msg, info)` with `info = { component?, owner?, stack? }`: the stdlib component, the owner of the failing handler (events, callback registries, hooks with `opts.owner`) and the stack, taken only when an error happens
+- `wowlua:timer`: `repeating(sec, fn)`, a repeating timer with `start`, `stop`, `setRunning(running)` and `isRunning()` (stopped at first; the first tick one interval after each start)
 
 ### Changed
 
 - `wowlua:errors`' isolated calls, `wowlua:events`' dispatch, `wowlua:hooks`' hooks and `wowlua:timer`'s callbacks allocate nothing when the callback succeeds (an event handler's dispatch made about 550 bytes of garbage before)
 - `wowlua:callbacks`: a handler cancelled during a `fire` is skipped for the rest of it (handlers added during a `fire` still wait for the next one)
+- `wowlua:events`: a handler cancelled during a dispatch is skipped for the rest of it, as in `wowlua:callbacks` (handlers added during a dispatch still wait for the next one)
+- `wowlua:events`: `onUnit` and `@unitEvent` take any number of units, registered in pairs on frames of their own (WoW filters a frame by two units at most); E8100 is gone
 - `wowlua:table`: `copy` keeps keys as they are (a frame or a table used as a key stays itself), as Blizzard's `CopyTable` does
 - `wowlua:secret`: `flag` takes any value and answers by truthiness, so legacy `1`/`nil` answers work
 - `wowlua:secret`: `known<T, F>(v, fallback: F): T | F`: the fallback may be of another type, so `known(name, nil)` is a `string?`
@@ -56,6 +62,9 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - WoW API declarations: `GameTooltip`'s data methods (`SetInboxItem(mailIndex, attachmentIndex)`, `SetSendMailItem(index)`, …) take the parameters of their `C_TooltipInfo` function; widget methods the annotations give no results get Blizzard's documented ones (`Minimap:GetZoom()`)
 - WoW API declarations: optional `hasVoice` of `JoinChannelByName`, `exclusive` of `SetTrainerServiceTypeFilter` and `isPet` of `IsSpellKnown`; `SendChatMessage`'s target takes a channel number; `C_Traits.GetConditionInfo` has its UI wrapper's parameters and `tooltipText`
 - WoW API declarations: camelot declares the client's own number globals (`LE_PARTY_CATEGORY_INSTANCE`, `NUM_LE_*`, …), and globals the annotations also name as a class (`ItemLocation`, `NamePlateDriverFrame`)
+- `wowlua:errors`: `call` and `wrap` are generic as the spec declares them, so `errors.call(f, …)` checks the arguments against `f` and returns its results typed, not `any`
+- `wowlua:errors`: debug builds append the module ID to a report (`[core/cache]`, before the component), as the spec says
+- `wowlua:events`: `onUnit` of an event the client lacks (shared flavor mode) no longer raises; its handler is never called, as with `on`
 
 ## [0.9.1] - 2026-10-20
 

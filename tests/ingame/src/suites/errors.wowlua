@@ -1,6 +1,9 @@
 -- wowlua:errors: the error policy against the client's error handler.
 import * as errors from "wowlua:errors"
+import on, send from "wowlua:events"
 import suite from "/harness"
+
+declare message STDTEST_OWNED()
 
 local s = suite("errors")
 
@@ -39,6 +42,22 @@ s:test("listeners hear reports until cancelled", function(t)
     t:eq(#heard, 1, "cancelled listener not called")
 end)
 
+s:test("listeners learn the component, the owner and the stack", function(t)
+    local owner = {}
+    local info: errors.ErrorInfo? = nil
+    local listener = errors.onError(function(_: string, i: errors.ErrorInfo) info = i end)
+    local sub = on("STDTEST_OWNED", function() error("owned failure") end, owner)
+    send("STDTEST_OWNED")
+    sub:cancel()
+    listener:cancel()
+    t:ok(info ~= nil and info.owner == owner, "the handler's owner")
+    t:eq(info and info.component, "events: STDTEST_OWNED handler", "the component")
+    local stack = info and info.stack
+    t:ok(stack ~= nil and stack:find("suites/errors.lua", 1, true) ~= nil, "the stack where it failed")
+    -- Debug builds name the module, then the component.
+    t:ok(t:reported("owned failure [suites/errors] [events: STDTEST_OWNED handler]"), "the module ID")
+end)
+
 s:test("a broken listener does not loop", function(t)
     local sub = errors.onError(function() error("listener failed") end)
     errors.report("with a broken listener")
@@ -58,5 +77,12 @@ s:test("the rate limit holds repeats back and counts them", function(t)
     errors.report("repeated")
     errors.configure({ rateLimit = 0 })
     t:eq(errors.count() - before, 2, "reported again after the window")
-    t:ok(t:reported("StdTest: repeated (2 more)"), "with the count of repeats")
+    -- (Debug builds name the module before the count.)
+    local counted = false
+    for _, e in ipairs(t:errors()) do
+        if e:find("StdTest: repeated", 1, true) and e:find(" (2 more)", 1, true) then
+            counted = true
+        end
+    end
+    t:ok(counted, "with the count of repeats")
 end)

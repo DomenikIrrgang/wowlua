@@ -30,7 +30,12 @@ follows it.
 3. **Reporting.** Errors go to `geterrorhandler()`, so the default error frame
    and error-collecting addons (BugSack/BugGrabber) capture them. Messages are
    prefixed `"<AddonName>: "`. In debug builds, the module ID and the stdlib
-   component (`events: PLAYER_LOGIN handler`) are appended.
+   component (`events: PLAYER_LOGIN handler`) are appended:
+   `"MyAddon: …/src/core/cache.lua:12: boom [core/cache] [events: PLAYER_LOGIN handler]"`.
+   The module ID is the context's `module` if given, else the module of the
+   error's location (`path.lua:line`), else the first module on the stack
+   outside the standard library; it is worked out only when an error is
+   reported.
 4. **Rate limiting.** An identical message from the same source is reported at
    most once per `errors.configure({ rateLimit = 10 })` seconds. Suppressed
    repeats are counted and reported with the next report ("… (12 more)").
@@ -45,6 +50,11 @@ follows it.
    half-migrated table.
 7. **No loops.** Errors raised inside `errors.onError` listeners are passed
    straight to `geterrorhandler()` and are not re-dispatched.
+8. **Attribution.** Listeners get an `ErrorInfo` with each report: the stdlib
+   component, the `owner` the failing handler was registered with (event,
+   message and callback-registry handlers, watches, buckets, and hooks with
+   `opts.owner`; timers have none), and the stack where it failed
+   (`debugstack`, taken only when an error happens).
 
 ### API
 
@@ -54,15 +64,19 @@ import * as errors from "wowlua:errors"
 local safeRefresh = errors.wrap(refresh)          -- isolated version of a function
 local ok, result = errors.call(compute, 1, 2)    -- (boolean, ...results)
 errors.report("unexpected state", { module = "sync" })
-errors.onError(function(msg: string) statusIcon:SetVertexColor(1, 0, 0) end)
+errors.onError(function(msg: string, info: errors.ErrorInfo)
+    statusIcon:SetVertexColor(1, 0, 0)
+    faults:add(info.owner and nameOf(info.owner) or "core", msg, info.stack)
+end)
 ```
 
 | API | Signature | Notes |
 |-----|-----------|-------|
 | `call` | `function call<A..., R...>(fn: (A...) -> R..., ...: A...): (boolean, R...)` | Isolated call. On error, it reports and returns `false`. |
 | `wrap` | `function wrap<A...>(fn: (A...) -> ()): (A...) -> ()` | Returns an isolated function. The return values of `fn` are discarded. |
-| `report` | `(err: any, context: { [string]: any }?)` | Reports through the policy. Non-string errors are converted with `tostring`. |
-| `onError` | `(fn: (msg: string) -> ()) -> Subscription` | Addon-level listener, e.g. to show a warning in the UI |
+| `report` | `(err: any, context: { [string]: any }?)` | Reports through the policy. Non-string errors are converted with `tostring`. The context's `component` and `module` name the source in debug builds, and its `owner` goes to the listeners. |
+| `onError` | `(fn: (msg: string, info: ErrorInfo) -> ()) -> Subscription` | Addon-level listener, e.g. to show a warning in the UI. A one-parameter listener fits too. |
+| `ErrorInfo` | `{ component: string?, owner: any?, stack: string? }` | What a listener learns besides the message (policy 8) |
 | `configure` | `(opts: { rateLimit: number? })` | |
 | `count` | `() -> number` | Errors reported by this addon since load |
 

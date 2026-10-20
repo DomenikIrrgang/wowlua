@@ -10,6 +10,7 @@ local contexts = {
     nextFrame = { component = "timer: nextFrame" },
     throttle = { component = "timer: @throttle" },
     debounce = { component = "timer: @debounce" },
+    repeating = { component = "timer: repeating" },
 }
 
 --- A one-shot timer; the handle has `Cancel()` and `IsCancelled()`.
@@ -24,6 +25,61 @@ export function every(sec: number, fn: (ticker: TickerHandle) -> (), iterations:
     return C_Timer.NewTicker(sec, function(ticker: TickerHandle)
         callIn(contexts.every, fn, ticker)
     end, iterations)
+end
+
+--- A repeating timer that stops and starts again (`repeating`).
+export interface Repeating
+    --- Starts ticking (the first tick one interval later); nothing if running.
+    function start()
+    function stop()
+    --- `start()` when `running`, else `stop()`.
+    function setRunning(running: boolean)
+    function isRunning(): boolean
+end
+
+class RepeatingTimer implements Repeating
+    private readonly interval: number
+    private readonly tick: () -> ()
+    private ticker: TickerHandle? = nil
+
+    constructor(sec: number, fn: () -> ())
+        self.interval = sec
+        self.tick = function()
+            callIn(contexts.repeating, fn)
+        end
+    end
+
+    function start()
+        if not self.ticker then
+            self.ticker = C_Timer.NewTicker(self.interval, self.tick)
+        end
+    end
+
+    function stop()
+        local ticker = self.ticker
+        if ticker then
+            self.ticker = nil
+            ticker:Cancel()
+        end
+    end
+
+    function setRunning(running: boolean)
+        if running then
+            self:start()
+        else
+            self:stop()
+        end
+    end
+
+    function isRunning(): boolean
+        return self.ticker ~= nil
+    end
+end
+
+--- A repeating timer, stopped until `start` or `setRunning(true)`: a
+--- `C_Timer` ticker while it runs.
+export function repeating(sec: number, fn: () -> ()): Repeating
+    return RepeatingTimer.new(sec, fn)
 end
 
 type Args = { [number]: any, n: number }

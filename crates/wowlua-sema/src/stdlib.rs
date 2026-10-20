@@ -471,17 +471,6 @@ impl Ctx<'_> {
                     if let Some(first) = args.first() {
                         self.event_name(first, true);
                     }
-                    let units = args.len().saturating_sub(1);
-                    if !(1..=2).contains(&units) {
-                        self.error(
-                            "E8100",
-                            d.span(),
-                            format!(
-                                "`@unitEvent` takes one or two units (WoW's limit), not {units}"
-                            ),
-                            "here",
-                        );
-                    }
                 }
                 "slash.slash" => {
                     for a in &args {
@@ -918,18 +907,19 @@ impl Ctx<'_> {
                 if let Some(first) = args.first() {
                     self.event_name(first, true);
                 }
-                if let Some(ExprKind::Table(fields)) = args.get(1).map(|a| a.kind())
-                    && !(1..=2).contains(&fields.len())
-                {
-                    self.error(
-                        "E8100",
-                        args.at(1).span(),
-                        format!(
-                            "`onUnit` takes one or two units (WoW's limit), not {}",
-                            fields.len()
-                        ),
-                        "here",
-                    );
+            }
+            "events.watchUnit" => {
+                if let Some(ExprKind::Table(fields)) = args.first().map(|a| a.kind()) {
+                    for field in fields {
+                        if let TableField::Positional(v) = field {
+                            self.event_name(v, true);
+                        }
+                    }
+                }
+            }
+            "events.offAll" => {
+                if let Some(name) = args.get(1) {
+                    self.event_name(name, false);
                 }
             }
             "events.send" => {

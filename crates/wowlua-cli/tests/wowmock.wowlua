@@ -48,9 +48,6 @@ function securecallfunction(fn: Handler, ...: any): ...any
     end
 end
 
-function debugstack(): string
-    return ""
-end
 -- The client has `date`, `time` and `difftime`, and no `os` table (as on
 -- WoW: Forever); wowlua's VM has them already.
 -- The client's language (`Mock.locale`).

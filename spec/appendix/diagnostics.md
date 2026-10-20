@@ -228,7 +228,6 @@ is reported as the warning with the same number (`E2001` â†’ `W2001`, `E2030` â†
 | E8063 | Locale string uses different placeholders than the base locale |
 | E8070 | Settings control bound to a field of the wrong type |
 | E8080 | `launcher.register` called more than once (compile time for top-level calls, otherwise at runtime) |
-| E8100 | `@unitEvent` with more than two units (`RegisterUnitEvent` limit) |
 | E8101 | Invalid slash command name (must start with `/`, no whitespace) |
 | E8102 | `saved.bind` name is not a string literal |
 | E8103 | SavedVariable bound twice with `saved.bind` |
