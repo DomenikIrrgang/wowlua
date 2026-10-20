@@ -552,23 +552,79 @@ impl Checker<'_, '_> {
             }
             super::subst::apply(&mut self.env.types, target, &s)
         };
+        // Each member is `T` (true branch), not `T` (false branch), or may
+        // be either: an `any`, or a supertype of `T` (narrowed to `T`). A
+        // branch no member reaches is `never`: unreachable.
         let mut yes = Vec::new();
         let mut no = Vec::new();
         for m in self.env.types.members(current) {
-            if self.env.assignable(m, target, super::query::Mode::Strict) {
-                yes.push(m);
-            } else {
-                no.push(m);
+            let open = match self.env.types.get(m) {
+                Ty::Any | Ty::Error => Some(m),
+                Ty::Unknown => Some(target),
+                _ => None,
+            };
+            match open {
+                Some(narrowed) => {
+                    yes.push(narrowed);
+                    no.push(m);
+                }
+                None if self.env.assignable(m, target, super::query::Mode::Strict) => yes.push(m),
+                None if self.env.assignable(target, m, super::query::Mode::Strict) => {
+                    yes.push(target);
+                    no.push(m);
+                }
+                None => no.push(m),
             }
         }
-        let yes = if yes.is_empty() {
-            target
-        } else {
-            self.env.types.union(&yes)
+        let yes = self.env.types.union(&yes);
+        // `v is any` excludes nothing.
+        let no = match self.env.types.get(target) {
+            Ty::Any | Ty::Unknown | Ty::Error => current,
+            _ => self.env.types.union(&no),
         };
-        let no = self.env.types.union(&no);
         t_flow.insert(v, yes);
-        f_flow.insert(v, if no == Types::NEVER { current } else { no });
+        f_flow.insert(v, no);
+    }
+
+    /// Does a type predicate (or `canaccessvalue`) in `cond` leave one of
+    /// its arguments `never` in `flow`, the flow where `cond` is true or
+    /// false: is that branch unreachable (spec §2.2.8)?
+    pub fn excluded_by_predicate(&mut self, cond: Expr<'_>, flow: &Flow) -> bool {
+        let mut args = Vec::new();
+        wowlua_syntax::visit::walk_expr_shallow(cond, &mut |e| {
+            let ExprKind::Call { callee, args: a } = e.kind() else {
+                return;
+            };
+            args.push((callee, a));
+        });
+        for (callee, a) in args {
+            let index = if matches!(callee.kind(), ExprKind::Name(n) if n.text() == "canaccessvalue")
+                && self.lookup_var("canaccessvalue").is_none()
+            {
+                0
+            } else {
+                let callee_ty = self.peek_type(callee);
+                match self.env.types.get(callee_ty) {
+                    Ty::Func(f) => match f.predicate {
+                        Some((index, _)) => index,
+                        None => continue,
+                    },
+                    _ => continue,
+                }
+            };
+            let Some(arg) = a.exprs().get(index) else {
+                continue;
+            };
+            let v = match arg.kind() {
+                ExprKind::Name(n) => self.lookup_var(n.text()),
+                ExprKind::Field { .. } | ExprKind::OptField { .. } => self.field_var(arg, false),
+                _ => None,
+            };
+            if v.is_some_and(|v| flow.get(&v) == Some(&Types::NEVER)) {
+                return true;
+            }
+        }
+        false
     }
 
     /// `canaccessvalue(x)`, the complement of the predicate `issecretvalue`
@@ -601,14 +657,10 @@ impl Checker<'_, '_> {
                 _ => plain.push(m),
             }
         }
-        if secret.is_empty() {
-            return;
-        }
+        // A branch no member reaches is `never`: unreachable.
         let plain = self.env.types.union(&plain);
         let secret = self.env.types.union(&secret);
-        if plain != Types::NEVER {
-            t_flow.insert(v, plain);
-        }
+        t_flow.insert(v, plain);
         f_flow.insert(v, secret);
     }
 }

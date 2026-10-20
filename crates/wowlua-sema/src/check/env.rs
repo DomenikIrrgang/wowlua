@@ -173,6 +173,9 @@ pub struct Env<'p> {
     lazy_aliases: FxHashMap<DefId, (TypeAlias<'p>, Option<usize>)>,
     /// Types of `typeof(expr)` expressions, by span (set by the checker).
     pub typeof_types: FxHashMap<(u32, u32), TypeId>,
+    /// Top-level aliases whose bodies use `typeof(expr)`, with their file,
+    /// until the file's check reaches them (spec §2.2.7): `any` until then.
+    pub typeof_aliases: FxHashMap<DefId, usize>,
     /// Name spans of the definitions of renamable methods, with their class.
     pub renamable_defs: Vec<(wowlua_span::Span, DefId)>,
 }
@@ -438,6 +441,9 @@ impl<'p> Env<'p> {
                     Def::new(a.name().text(), DefKind::Alias),
                     false,
                 );
+                if !src.declaration && uses_typeof(a.ty()) {
+                    self.typeof_aliases.insert(id, src.index);
+                }
                 pending.push((id, Pending::Alias(a, src.index)));
             }
             StmtKind::Interface(i) => {
@@ -565,6 +571,15 @@ impl<'p> Env<'p> {
             module,
             ..Scope::default()
         };
+        self.def_type_params(def, a.type_params(), &mut scope);
+        let body = self.resolve(a.ty(), &scope);
+        self.def_mut(def).alias = Some(body);
+    }
+
+    /// Resolves an alias's body again in `scope`, once its `typeof(expr)`
+    /// parts have their types (spec §2.2.7).
+    pub fn resolve_alias_again(&mut self, def: DefId, a: TypeAlias<'_>, scope: &Scope) {
+        let mut scope = scope.clone();
         self.def_type_params(def, a.type_params(), &mut scope);
         let body = self.resolve(a.ty(), &scope);
         self.def_mut(def).alias = Some(body);
@@ -1378,7 +1393,11 @@ impl<'p> Env<'p> {
                     );
                 }
                 TableTypeField::NamedString {
-                    key, optional, ty, ..
+                    key,
+                    optional,
+                    readonly,
+                    ty,
+                    ..
                 } => {
                     let mut t = self.resolve(ty, scope);
                     if optional {
@@ -1389,7 +1408,7 @@ impl<'p> Env<'p> {
                         Field {
                             ty: t,
                             optional,
-                            readonly: false,
+                            readonly,
                         },
                     );
                 }
@@ -1568,6 +1587,13 @@ enum Pending<'a> {
     DeclClass(TypeParams<'a>, Option<Type<'a>>, DeclMembers<'a>, usize),
     Enum(EnumDecl<'a>, usize),
     Namespace(NsMembers<'a>, usize, String),
+}
+
+/// Does a type use `typeof(expr)` anywhere?
+pub fn uses_typeof(t: Type<'_>) -> bool {
+    let mut exprs = Vec::new();
+    super::body::typeof_exprs(t, &mut exprs);
+    !exprs.is_empty()
 }
 
 fn widget_arg(d: Decorator<'_>) -> Option<String> {

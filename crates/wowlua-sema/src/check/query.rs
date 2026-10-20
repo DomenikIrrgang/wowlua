@@ -391,6 +391,9 @@ impl Env<'_> {
             {
                 true
             }
+            // `table` (a value `type(x) == "table"` narrowed) is any map whose
+            // values are `any`: `{ [string]: any }`, `{ [number]: any }`.
+            (Ty::Table, Ty::Map(_, v)) if v == Types::ANY => true,
             (Ty::Named(d, _), Ty::Map(k, v))
                 if k == Types::ANY
                     && v == Types::ANY
@@ -441,6 +444,15 @@ impl Env<'_> {
                 }
                 None => r.fields.is_empty(),
             },
+            // An array is a record whose named fields are all optional and
+            // whose numeric indexer, if any, takes its elements.
+            (Ty::Array(e), Ty::Record(target)) => {
+                target.fields.values().all(|f| f.optional)
+                    && target.indexer.is_none_or(|(k, v)| {
+                        self.assignable_in(Types::NUMBER, k, mode, assuming)
+                            && self.element(e, v, mode, assuming)
+                    })
+            }
             (_, Ty::Record(target)) => self.satisfies_record(s, &target, mode, assuming),
             (Ty::Named(sd, sargs), Ty::Named(td, targs)) => {
                 if sd == td {

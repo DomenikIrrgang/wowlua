@@ -493,6 +493,40 @@ impl<'e, 'p> Checker<'e, 'p> {
         self.env.resolve(t, &scope)
     }
 
+    /// A top-level alias using `typeof(expr)` gets its body where the file
+    /// reaches it, with the expressions' types there (spec §2.2.7): later
+    /// annotations, and the modules checked after this one, see it.
+    fn typeof_alias(&mut self, a: TypeAlias<'_>) {
+        // Top-level aliases only (function bodies have none of their own).
+        let Some(module) = self.scope.module.filter(|_| self.fns.len() == 1) else {
+            return;
+        };
+        let Some(def) = self
+            .env
+            .module_types
+            .get(&module)
+            .and_then(|t| t.get(a.name().text()))
+            .copied()
+        else {
+            return;
+        };
+        if self.env.typeof_aliases.get(&def) != Some(&module) {
+            return;
+        }
+        self.env.typeof_aliases.remove(&def);
+        let mut exprs: Vec<Expr<'_>> = Vec::new();
+        typeof_exprs(a.ty(), &mut exprs);
+        for e in exprs {
+            let ty = self.infer(e);
+            let ty = self.env.types.widen(ty);
+            self.env
+                .typeof_types
+                .insert((e.span().start, e.span().end), ty);
+        }
+        let scope = self.scope.clone();
+        self.env.resolve_alias_again(def, a, &scope);
+    }
+
     /// The type of `...` in the current function.
     pub fn current_vararg(&self) -> Option<TypeId> {
         self.fns.last().and_then(|f| f.vararg)
@@ -670,6 +704,16 @@ impl<'e, 'p> Checker<'e, 'p> {
         self.push_scope();
         self.block_stmts(b);
         self.pop_scope();
+    }
+
+    /// A branch no value reaches (spec §2.2.8): checked for its effects on
+    /// the file's types, with nothing reported. Whether the code after it
+    /// runs still follows `return`, `break` and `error` only.
+    fn unreachable_block(&mut self, b: Block<'_>) {
+        let (own, env) = (self.diagnostics.len(), self.env.diagnostics.len());
+        self.block(b);
+        self.diagnostics.truncate(own);
+        self.env.diagnostics.truncate(env);
     }
 
     fn block_stmts(&mut self, b: Block<'_>) {
@@ -1010,21 +1054,35 @@ impl<'e, 'p> Checker<'e, 'p> {
                 let mut clauses: Vec<(Expr<'_>, Block<'_>)> = vec![(cond, then_block)];
                 clauses.extend(elseifs.iter());
                 let mut ends: Vec<(Flow, bool, super::flavors::Guard)> = Vec::new();
+                // A type predicate that leaves its argument `never` makes a
+                // branch unreachable (spec §2.2.8): from then on, every
+                // later clause and the `else` too.
+                let mut rest_unreachable = false;
                 for (c, b) in clauses {
                     self.mark_probes(c);
                     self.infer(c);
                     let (t_flow, f_flow) = self.narrow(c, &self.flow.clone());
                     let (t_guard, f_guard) = self.narrow_guard(c, &self.guard.clone());
+                    let unreachable = rest_unreachable || self.excluded_by_predicate(c, &t_flow);
+                    rest_unreachable = rest_unreachable || self.excluded_by_predicate(c, &f_flow);
                     let entry_live = self.live;
                     self.flow = t_flow;
                     self.guard = t_guard;
-                    self.block(b);
+                    if unreachable {
+                        self.unreachable_block(b);
+                    } else {
+                        self.block(b);
+                    }
                     ends.push((self.flow.clone(), self.live, self.guard.clone()));
                     self.flow = f_flow;
                     self.guard = f_guard;
                     self.live = entry_live;
                 }
                 match else_block {
+                    Some(b) if rest_unreachable => {
+                        self.unreachable_block(b);
+                        ends.push((self.flow.clone(), self.live, self.guard.clone()));
+                    }
                     Some(b) => {
                         self.block(b);
                         ends.push((self.flow.clone(), self.live, self.guard.clone()));
@@ -1212,10 +1270,8 @@ impl<'e, 'p> Checker<'e, 'p> {
                 self.flow.insert(id, narrowed);
             }
             StmtKind::Class(c) => self.class_body(c),
-            StmtKind::Enum(_)
-            | StmtKind::Interface(_)
-            | StmtKind::TypeAlias(_)
-            | StmtKind::Declare(_) => {}
+            StmtKind::TypeAlias(a) => self.typeof_alias(a),
+            StmtKind::Enum(_) | StmtKind::Interface(_) | StmtKind::Declare(_) => {}
             StmtKind::Import(_) => {}
             StmtKind::Export(inner) => {
                 self.stmt(inner);
@@ -1995,7 +2051,7 @@ fn calls_setfenv(b: Block<'_>) -> bool {
 }
 
 /// The `typeof(expr)` parts of a type.
-fn typeof_exprs<'t>(t: Type<'t>, out: &mut Vec<Expr<'t>>) {
+pub(crate) fn typeof_exprs<'t>(t: Type<'t>, out: &mut Vec<Expr<'t>>) {
     match t.kind() {
         TypeKind::Typeof(e) => out.push(e),
         TypeKind::Paren(i) | TypeKind::Optional(i) | TypeKind::Array(i) => typeof_exprs(i, out),

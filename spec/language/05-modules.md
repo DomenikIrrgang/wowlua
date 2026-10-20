@@ -24,11 +24,24 @@ end
 Rules:
 
 - `export function name()` declares a **module-local** function and exports it.
-  It does not create a global, unlike a bare `function name()`. Only a plain name
-  may follow `export function` (not `t.f` or `t:m`, E0118).
-- **Hoisting** (decision L24). All top-level exported functions, classes and
-  enums are pre-declared as locals at the top of the module, so they can refer
-  to each other regardless of source order:
+  Only a plain name may follow `export function` (not `t.f` or `t:m`, E0118).
+- A module's other top-level `function name()` is **module-local** too: it is
+  hoisted like an exported one and never creates a global, so a module cannot
+  create a global by accident. When a top-level `local name` comes before it,
+  `function name()` defines that local, as in Lua. A real global is assigned
+  explicitly: `_G.name = name`, or `name = function() … end` for a declared
+  global (`declare global name: () -> ()`, [Types §2.8](02-types.md#28-globals)).
+  Scripts keep Lua's meaning (below).
+- An export names a module-level local of its own, so it cannot share its name
+  with another top-level declaration of the module (a `local`, `local function`,
+  `function name()`, `const`, class, enum or import), and a name is exported
+  once: either is error E1016 (`local items = {}` followed by
+  `export function items()` would make the two shadow each other). A
+  declaration `@if` removes from the build does not count, so alternatives for
+  different builds may share a name.
+- **Hoisting** (decision L24). All top-level functions, classes and enums of a
+  module, exported or not, are pre-declared as locals at the top of the module,
+  so they can refer to each other regardless of source order:
   ```wowlua
   export function isEven(n: number): boolean return n == 0 or isOdd(n - 1) end
   export function isOdd(n: number): boolean return n ~= 0 and isEven(n - 1) end
@@ -272,8 +285,14 @@ of a cycle are checked in source order. One checked before a module of its
 cycle that it imports sees that module's exported functions with their
 signatures, its classes, enums and constants, and its exported `local`s and
 `const`s with their annotated types; an unannotated or decorated exported
-value reads as `any` there. A cycle never changes the types of other imports,
-such as standard-library modules or the modules the cycle imports.
+value reads as `any` there, which is warning W1036 where it is imported by
+name or first read through a namespace import (`b.items`), telling to
+annotate it in its module. A `typeof(…)` type alias of a module checked later
+reads as `any` the same way (W1036 at its import). Each module is still
+checked once. A cycle never changes the types of other imports, such as
+standard-library modules or the modules the cycle imports. A type-only import
+of a module with a `typeof(…)` alias orders the check too (that module is
+checked first), unless it would close a cycle.
 
 ### 5.4.5 Ties, ambiguity and overrides
 
