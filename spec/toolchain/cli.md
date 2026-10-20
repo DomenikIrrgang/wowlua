@@ -366,6 +366,7 @@ this file ([Package manager §10.11](package-manager.md#1011-security)).
 
 `WOWLUA_NO_KEYRING=1` makes `login`, `logout` and `publish` skip the OS
 credential store and use `config.json` only (headless machines, tests).
+`publish` without a terminal skips it too ([Publishing §11.1.3](publishing.md#1113-tokens)).
 
 Environment variables override config values: `WOWLUA_HOME`,
 `WOWLUA_WOW_PATH`, `WOWLUA_JOBS` and `WOWLUA_JOBS_MEMORY` (MiB),

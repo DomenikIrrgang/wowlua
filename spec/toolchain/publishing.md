@@ -65,11 +65,12 @@ A missing token is error E4201. Before reading what `wowlua login` saved,
 `wowlua publish` says so (`Reading the curseforge token …`): the OS
 credential store may wait for the user to allow it (a macOS Keychain
 dialog). Without a terminal (standard input or standard error is not one),
-wowlua turns off the macOS Keychain's prompts for this read, so a background
-job never waits for a dialog nobody answers: a token that would need the
-user's approval counts as missing, and E4201 says so, with the fixes (run
-`wowlua publish` in a terminal once and allow wowlua to read it, or set the
-variable). `wowlua publish` names the packaged zips (`Packaged …`) as soon
+wowlua does not read the OS credential store at all, on every platform, so
+a background job never waits for a dialog nobody answers: the token then
+comes only from the environment variable or `config.json`. A token missing
+then is E4201 saying so, with the fixes (set the variable, run
+`wowlua publish` in a terminal, or save the token in `config.json` with
+`WOWLUA_NO_KEYRING=1 wowlua login <type>`). `wowlua publish` names the packaged zips (`Packaged …`) as soon
 as packaging finishes, before it reads tokens. Default variables:
 
 | Target | Default env vars, in order |
