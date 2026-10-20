@@ -153,7 +153,9 @@ Type arguments are **always inferred at call sites**. An inferred type
 argument that does not satisfy its constraint is error E2014. There is no explicit
 call syntax like `f<number>(x)`, because in Lua `f < number > (x)` is a valid
 comparison expression. Expected types also drive inference:
-`local s: Stack<number> = Stack.new()`.
+`local s: Stack<number> = Stack.new()`. A parameter `T | Secret<T>` (or
+`T | Secret<T> | nil`) binds `T` from both parts of an argument: passing
+`string | Secret<string>` binds `T` to `string`.
 
 **Variance** (decision L34). For generic classes, interfaces and aliases:
 

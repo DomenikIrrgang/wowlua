@@ -86,6 +86,8 @@ interface MockClient
     warnings: string[]
     flashes: number
     auraContainers: any[]
+    --- A client without aura containers (no container template).
+    noAuraContainers: boolean
     auraChanged: (unit: string) -> ()
     --- Units by token (`player`, `target`, `party1`, …): what the unit
     --- functions return; values may be `secret()`s.

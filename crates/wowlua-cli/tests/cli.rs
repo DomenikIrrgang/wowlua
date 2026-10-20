@@ -1940,7 +1940,7 @@ onLogin(3)
 #[test]
 fn log_module() {
     let dir = tempfile::tempdir().unwrap();
-    let main = r#"import log, warn, history, setLevel, sink, print as chat from "wowlua:log"
+    let main = r#"import log, warn, history, setLevel, sink, configure, print as chat from "wowlua:log"
 import * as Log from "wowlua:log"
 
 local function costly(): string
@@ -1958,6 +1958,14 @@ for _, e in ipairs(history()) do
     _G.print(e.level, e.message, e.location)
 end
 chat("Hello")
+-- A prefix of its own, and info and above to chat; then nothing to chat.
+setLevel("debug")
+configure({ prefix = "|cffaabbccL|r ", chatLevel = "info" })
+log.info("shown")
+log.debug("quiet")
+chat("Hi")
+configure({ chatLevel = "off" })
+warn("silent")
 "#;
     write(
         dir.path(),
@@ -1982,6 +1990,11 @@ chat("Hello")
             "info ready src/main.wowlua:11",
             "warn low mana src/main.wowlua:12",
             "|cff33ff99Logs|r: Hello",
+            "|cffaabbccL|r |cfff1eadb[info]|r shown",
+            "sink info shown",
+            "sink debug quiet",
+            "|cffaabbccL|r Hi",
+            "sink warn silent",
         ]
         .join("\n")
     );
@@ -1997,6 +2010,8 @@ chat("Hello")
             "sink warn low mana",
             "warn low mana nil",
             "|cff33ff99Logs|r: Hello",
+            "|cffaabbccL|r Hi",
+            "sink warn silent",
         ]
         .join("\n")
     );

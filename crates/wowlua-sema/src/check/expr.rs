@@ -448,6 +448,7 @@ impl Checker<'_, '_> {
                     None => self.method_type(o, name.text(), name.span()),
                 };
                 let m = self.registry_method_type(o, name.text(), args, m);
+                self.check_router_add(o, name.text(), args);
                 let results = self.call(m, Some(o), args, e.span(), expected);
                 self.forget_passed(Some(obj), args);
                 if opt || chained {
@@ -2680,9 +2681,10 @@ impl Checker<'_, '_> {
     /// A standard-library call typed by its event or message: the handler
     /// of `on`, `once` and `onUnit` gets the event's parameters, and `send`
     /// takes the message's.
-    /// `registry:on/once/fire(name, …)` on a `callbacks.Registry<E>`: `name`
-    /// must be a literal key of `E` (E8420); the handler, or the arguments,
-    /// are checked against `E[name]` (spec stdlib "callbacks").
+    /// `registry:on/once/off/offAll/fire(…)` on a `callbacks.Registry<E>`:
+    /// an event name must be a literal key of `E` (E8420); the handler, or
+    /// the arguments, are checked against `E[name]` (spec stdlib
+    /// "callbacks"). `off` takes a subscription, or a name and a handler.
     fn registry_method_type(
         &mut self,
         o: TypeId,
@@ -2690,7 +2692,7 @@ impl Checker<'_, '_> {
         args: Args<'_>,
         m: TypeId,
     ) -> TypeId {
-        if !matches!(method, "on" | "once" | "fire") {
+        if !matches!(method, "on" | "once" | "off" | "offAll" | "fire") {
             return m;
         }
         let Ty::Named(d, targs) = self.env.types.get(o).clone() else {
@@ -2706,10 +2708,16 @@ impl Checker<'_, '_> {
             return m;
         }
         let exprs = args.exprs();
-        let Some(first) = exprs.first() else {
+        // `offAll(owner, name?)`: the name is the second argument.
+        let at = if method == "offAll" { 1 } else { 0 };
+        let Some(first) = exprs.get(at) else {
             return m;
         };
         let ExprKind::String(lit) = first.kind() else {
+            if method == "off" {
+                // `off(sub)`: a subscription, and nothing after it.
+                return self.registry_off_subscription(m);
+            }
             let msg = format!(
                 "the event name of `{method}` must be a string literal naming a key of `{}`",
                 self.env.display(events)
@@ -2726,6 +2734,9 @@ impl Checker<'_, '_> {
             self.report("E8420", first.span(), msg);
             return m;
         };
+        if method == "offAll" {
+            return m;
+        }
         let (Ty::Func(f), Some(h)) = (self.env.types.get(m).clone(), self.as_func(handler)) else {
             return m;
         };
@@ -2736,7 +2747,53 @@ impl Checker<'_, '_> {
             f.rest = h.rest;
         } else if let Some(p) = f.params.get_mut(1) {
             p.ty = handler;
+            if method == "off" {
+                // `off(name, handler)`: a name needs its handler.
+                p.optional = false;
+                f.params[0].ty = Types::STRING;
+            }
         }
+        self.env.types.func(f)
+    }
+
+    /// `router:add(name, command, owner?)` on a `slash.Router`: a literal
+    /// command is checked as `router`'s are (E8112, spec stdlib "slash").
+    fn check_router_add(&mut self, o: TypeId, method: &str, args: Args<'_>) {
+        if method != "add" {
+            return;
+        }
+        let Ty::Named(d, _) = self.env.types.get(o).clone() else {
+            return;
+        };
+        if self.env.declared.slash_router() != Some(d) {
+            return;
+        }
+        let Some(command) = args.exprs().get(1) else {
+            return;
+        };
+        for (span, message, _) in crate::stdlib::router_command_problems(command) {
+            self.report("E8112", span, message);
+        }
+    }
+
+    /// `registry:off(sub)`: `off`'s type without the name form, so that a
+    /// name that is no literal, or a handler after a subscription, is
+    /// reported.
+    fn registry_off_subscription(&mut self, m: TypeId) -> TypeId {
+        let Ty::Func(f) = self.env.types.get(m).clone() else {
+            return m;
+        };
+        let mut f = std::sync::Arc::unwrap_or_clone(f);
+        let Some(target) = f.params.first().map(|p| p.ty) else {
+            return m;
+        };
+        if let Ty::Union(ms) = self.env.types.get(target).clone() {
+            let rest: Vec<TypeId> = ms.iter().copied().filter(|&t| t != Types::STRING).collect();
+            if let [sub] = rest.as_slice() {
+                f.params[0].ty = *sub;
+            }
+        }
+        f.params.truncate(1);
         self.env.types.func(f)
     }
 
@@ -3156,7 +3213,6 @@ impl Checker<'_, '_> {
                 }
             }
             (Ty::Array(a), Ty::Array(b)) => self.unify_at(a, b, s, false, contra),
-            (Ty::Secret(a), Ty::Secret(b)) => self.unify_at(a, b, s, widen, contra),
             (Ty::Map(k1, v1), Ty::Map(k2, v2)) => {
                 self.unify_at(k1, k2, s, false, contra);
                 self.unify_at(v1, v2, s, false, contra);
@@ -3166,9 +3222,24 @@ impl Checker<'_, '_> {
                 self.unify_at(v, e, s, false, contra);
             }
             (Ty::Map(k, v), Ty::Record(r)) => {
-                if let Some((rk, rv)) = r.indexer {
+                if let Some((rk, rv)) = r.indexer
+                    && r.fields.is_empty()
+                {
                     self.unify_at(k, rk, s, false, contra);
                     self.unify_at(v, rv, s, false, contra);
+                } else if let Some((rk, rv)) = r.indexer {
+                    // Both an indexer and named fields (`{ [1] = true, b =
+                    // true }`): the keys are the indexer's and the names.
+                    let mut keys: Vec<TypeId> =
+                        r.fields.keys().map(|n| self.env.types.str(n)).collect();
+                    keys.push(rk);
+                    let mut vals: Vec<TypeId> = r.fields.values().map(|f| f.ty).collect();
+                    vals.push(rv);
+                    let ku = self.env.types.union(&keys);
+                    let ku = self.env.types.widen(ku);
+                    let vu = self.env.types.union(&vals);
+                    self.unify_at(k, ku, s, true, contra);
+                    self.unify_at(v, vu, s, true, contra);
                 } else if !r.fields.is_empty() {
                     let keys: Vec<TypeId> =
                         r.fields.keys().map(|n| self.env.types.str(n)).collect();
@@ -3181,37 +3252,46 @@ impl Checker<'_, '_> {
                 }
             }
             (Ty::Union(ps), _) => {
-                // `T?` against `X?`, `V | Secret<V>` against
-                // `number | Secret<number>`: the actual members the pattern
-                // names (`nil`) are dropped, those of the same kind as a
-                // structured member (`Secret<V>`) bind through it, and the
-                // rest bind the pattern's one bare parameter.
-                let bare: Vec<TypeId> = ps
+                // `T?` against `X?`: bind T to the non-nil part.
+                let non_nil: Vec<TypeId> =
+                    ps.iter().copied().filter(|&x| x != Types::NIL).collect();
+                if non_nil.len() == 1 {
+                    let a = self.env.types.non_nil(actual);
+                    self.unify_at(non_nil[0], a, s, widen, contra);
+                    return;
+                }
+                // `T | Secret<T>` (and `nil`) against `X | Secret<X>`: the
+                // secret members bind through `Secret<T>`, the rest bind T.
+                let (params, others): (Vec<TypeId>, Vec<TypeId>) = non_nil
                     .iter()
-                    .copied()
-                    .filter(|&x| matches!(self.env.types.get(x), Ty::Param(_)))
-                    .collect();
-                let mut rest = Vec::new();
-                for a in self.env.types.members(actual) {
-                    if ps.contains(&a) {
-                        continue;
-                    }
-                    let through = ps
-                        .iter()
-                        .copied()
-                        .find(|&p| same_kind(self.env.types.get(p), self.env.types.get(a)));
-                    match through {
-                        Some(p) => self.unify_at(p, a, s, widen, contra),
-                        None => rest.push(a),
+                    .partition(|&&x| matches!(self.env.types.get(x), Ty::Param(_)));
+                let [param] = params.as_slice() else {
+                    return;
+                };
+                let [secret] = others.as_slice() else {
+                    return;
+                };
+                if !matches!(self.env.types.get(*secret), Ty::Secret(_)) {
+                    return;
+                }
+                let members = match self.env.types.get(actual).clone() {
+                    Ty::Union(ms) => ms,
+                    _ => vec![actual],
+                };
+                let mut plain = Vec::new();
+                for m in members {
+                    match self.env.types.get(m) {
+                        Ty::Nil => {}
+                        Ty::Secret(_) => self.unify_at(*secret, m, s, widen, contra),
+                        _ => plain.push(m),
                     }
                 }
-                if let [only] = bare[..]
-                    && !rest.is_empty()
-                {
-                    let a = self.env.types.union(&rest);
-                    self.unify_at(only, a, s, widen, contra);
+                if !plain.is_empty() {
+                    let u = self.env.types.union(&plain);
+                    self.unify_at(*param, u, s, widen, contra);
                 }
             }
+            (Ty::Secret(p), Ty::Secret(a)) => self.unify_at(p, a, s, widen, contra),
             (Ty::Named(d1, a1), Ty::Named(d2, a2)) if d1 == d2 => {
                 for (x, y) in a1.iter().zip(&a2) {
                     self.unify_at(*x, *y, s, false, contra);
@@ -3406,17 +3486,4 @@ pub fn is_multi(e: Expr<'_>) -> bool {
             | ExprKind::OptMethod { .. }
             | ExprKind::Vararg
     )
-}
-
-/// A pattern member and an actual member of the same structured kind, which
-/// unify part by part (`Secret<V>` and `Secret<number>`).
-fn same_kind(pattern: &Ty, actual: &Ty) -> bool {
-    match (pattern, actual) {
-        (Ty::Secret(_), Ty::Secret(_))
-        | (Ty::Array(_), Ty::Array(_))
-        | (Ty::Map(..), Ty::Map(..))
-        | (Ty::Func(_), Ty::Func(_)) => true,
-        (Ty::Named(a, _), Ty::Named(b, _)) => a == b,
-        _ => false,
-    }
 }

@@ -39,6 +39,25 @@ s:test("on, once, off, offAll, has", function(t)
     t:ok(not pcall(r.offAll, r, nil), "offAll(nil) is refused")
 end)
 
+s:test("off by name and function, offAll by owner and name", function(t)
+    local r: callbacks.Registry<KillEvents> = callbacks.registry()
+    local got: string[] = {}
+    local owner = {}
+    local onKill = function(n: number) got[#got + 1] = `fn {n}` end
+    r:on("Kill", onKill)
+    r:once("Kill", onKill)
+    r:on("Kill", function(n: number) got[#got + 1] = `owner {n}` end, owner)
+    r:on("Reset", function() got[#got + 1] = "reset" end, owner)
+    r:fire("Kill", 1)
+    r:off("Kill", onKill)
+    r:offAll(owner, "Kill")
+    r:fire("Kill", 2)
+    r:fire("Reset")
+    t:eq(table.concat(got, ", "), "fn 1, fn 1, owner 1, reset", "removed by function, then by owner and name")
+    t:eq(r:has("Kill"), false, "nothing left for Kill")
+    t:ok(not pcall(r.off, r, "Kill", nil), "off(name, nil) is refused")
+end)
+
 s:test("isolated handlers, snapshot fires", function(t)
     local r: callbacks.Registry<TickEvents> = callbacks.registry()
     local log: string[] = {}
@@ -56,7 +75,7 @@ s:test("isolated handlers, snapshot fires", function(t)
     second = r:on("Tick", function() log[#log + 1] = "two" end)
     r:fire("Tick")
     r:fire("Tick")
-    t:eq(table.concat(log, " "), "one two one late", "changes apply to the next fire")
+    t:eq(table.concat(log, " "), "one one late", "added handlers wait for the next fire, cancelled ones are skipped")
     t:ok(t:reported("callback broke"), "the error is reported")
 end)
 

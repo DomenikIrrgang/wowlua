@@ -168,6 +168,13 @@ pub fn check_package_full(
         .and_then(|t| t.get("Registry"))
         .copied();
     env.declared.set_callbacks_registry(registry);
+    let router = files
+        .iter()
+        .position(|f| f.src_rel == format!("{}slash.wowlua", crate::STDLIB_PREFIX))
+        .and_then(|i| env.module_types.get(&i))
+        .and_then(|t| t.get("Router"))
+        .copied();
+    env.declared.set_slash_router(router);
     // Shared mode: APIs only some flavors declare are known (as `any`), so
     // that their uses report E2030.
     if let Some(shared) = shared {
@@ -1957,6 +1964,11 @@ mod tests {
         strict_err(
             "local rows: { name: string }[] = {}\ntable.sort(rows, function(a: { ms: number }, b: { ms: number }): boolean return a.ms > b.ms end)\n",
             "E2001",
+        );
+        // A table with an indexer and named fields binds the key from both,
+        // not from the callback.
+        strict_ok(
+            "local function keys<K, V>(t: { [K]: V }, less: (a: K, b: K) -> boolean): K[] return {} end\nlocal ks = keys({ [1] = true, b = true }, function(a: number | string, b: number | string): boolean return tostring(a) < tostring(b) end)\nprint(ks)\n",
         );
     }
 

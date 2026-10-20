@@ -493,6 +493,66 @@ end
     assert!(!text.contains("raised"), "{text}");
 }
 
+/// `wowlua:aura` against Blizzard's own aura containers (camelot's UI
+/// code, skipped without it): `hasContainers` finds the template, and the
+/// container has every method the stdlib's containers call.
+#[test]
+fn aura_containers_in_blizzard_ui() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");
+    if !source.join("camelot/Interface").exists() {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    }
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            (
+                "src/main.wowlua",
+                "import * as aura from \"wowlua:aura\"\nexport const has = aura.hasContainers()\n",
+            ),
+            (
+                "tests/aura.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+import has from "/main"
+
+@test("the engine's containers")
+local function containers()
+    expect(has).toBe(true)
+    const engine = CreateFrame("AuraContainer", nil, UIParent, "CustomAuraContainerTemplate") :: any
+    for _, method in ipairs({
+        "AddAuraGroup", "SetAuraGroupMaxFrameCount", "SetAuraGroupCandidateFilters",
+        "SetAuraGroupFilterString", "SetAuraGroupLayout", "GetAuraGroupFrameCount",
+        "GetAuraGroupFrame", "SetUnit", "UpdateAllAuras", "SetFlowLayoutAnchorPoint",
+        "SetFlowLayoutGrowthDirection", "SetFlowLayoutMaximumLineSize",
+    }) do
+        expect(type(engine[method])).toBe("function")
+    end
+end
+"#,
+            ),
+        ],
+    );
+    let manifest = dir.path().join("wowlua.json");
+    let text = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        text.replacen('{', r#"{ "test": { "blizzard-ui": true },"#, 1),
+    )
+    .unwrap();
+    let out = wowlua(dir.path())
+        .arg("test")
+        .env("WOWLUA_UI_SOURCE", &source)
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.status.success(), "{text}");
+    assert!(text.contains("1 passed, 0 failed"), "{text}");
+}
+
 /// Typed matchers (decision T214) and cases (T215) are checked when the
 /// tests compile.
 #[test]
