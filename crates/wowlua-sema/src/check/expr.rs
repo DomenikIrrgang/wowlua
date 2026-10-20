@@ -7,6 +7,7 @@ use super::env::{DefKind, FnSig, MemberKind, Visibility};
 use super::subst::{self, Subst};
 use super::types::*;
 use super::types::{Field, Func, Types};
+use rustc_hash::FxHashSet;
 use wowlua_span::Span;
 use wowlua_syntax::view::*;
 
@@ -203,11 +204,36 @@ impl Checker<'_, '_> {
                     && !self.env.assignable(to, from, self.mode)
                     && !self.comparable(from, to)
                 {
-                    let msg = format!(
+                    let mut msg = format!(
                         "cannot assert `{}` as `{}`",
                         self.env.display(from),
                         self.env.display(to)
                     );
+                    // Which members of a union keep each direction from
+                    // holding.
+                    let mut why = Vec::new();
+                    for (a, b) in [(from, to), (to, from)] {
+                        let members = self.env.types.members(a);
+                        if members.len() < 2 {
+                            continue;
+                        }
+                        if let Some(&m) = members
+                            .iter()
+                            .find(|&&m| !self.env.assignable(m, b, self.mode))
+                        {
+                            why.push(format!(
+                                "`{}` does not fit `{}`",
+                                self.env.display(m),
+                                self.env.display(b)
+                            ));
+                        }
+                    }
+                    if !why.is_empty() {
+                        msg.push_str(&format!(
+                            " (neither type fits the other: {})",
+                            why.join(", and ")
+                        ));
+                    }
                     self.report("E2015", e.span(), msg);
                 }
                 single(to)
@@ -674,7 +700,14 @@ impl Checker<'_, '_> {
                         let opt = self.env.types.optional(vt);
                         self.check_assignable(t.span(), value, opt);
                     }
-                    _ => {}
+                    _ => {
+                        let members = self.env.types.members(o);
+                        if let Some(&m) = members.iter().find(|&&m| self.unindexable(m)) {
+                            let msg =
+                                format!("cannot index a value of type `{}`", self.env.display(m));
+                            self.report("E2003", key.span(), msg);
+                        }
+                    }
                 }
             }
             _ => {
@@ -705,14 +738,26 @@ impl Checker<'_, '_> {
         value: TypeId,
         declared: Option<TypeId>,
     ) {
+        // An unannotated `const` is "declared" as its literal: an open one
+        // is the table it started as, which `o` extends.
         if let Some(d) = declared
             && d != o
+            && !matches!(self.env.types.get(d), Ty::Record(r) if r.open)
         {
             return self.assign_field(d, name, span, value, None);
         }
         let members = self.env.types.members(o);
         for m in members {
             match self.env.types.get(m).clone() {
+                // A field read through `__index`: the table's own replaces it.
+                Ty::Record(_)
+                    if self
+                        .fallback_fields
+                        .get(&m)
+                        .is_some_and(|f| f.contains(name)) =>
+                {
+                    self.extend_open(m, name, value)
+                }
                 Ty::Record(r) => match r.fields.get(name) {
                     Some(f) => {
                         if f.readonly {
@@ -789,9 +834,22 @@ impl Checker<'_, '_> {
                         self.check_assignable(span, value, mem.ty);
                     }
                 }
+                _ if self.unindexable(m) => {
+                    let msg = format!("cannot index a value of type `{}`", self.env.display(m));
+                    self.report("E2003", span, msg);
+                }
                 _ => {}
             }
         }
+    }
+
+    /// A value Lua cannot index (functions, numbers, booleans): reading or
+    /// writing one of its fields is an error at run time.
+    pub(crate) fn unindexable(&self, t: TypeId) -> bool {
+        matches!(
+            self.env.types.get(t),
+            Ty::Func(_) | Ty::Function | Ty::Number | Ty::Num(_) | Ty::Boolean | Ty::Bool(_)
+        )
     }
 
     pub fn compound_result(
@@ -853,6 +911,16 @@ impl Checker<'_, '_> {
             }
         }
         let exp_ty = exp.map(|t| self.env.types.get(t).clone());
+        // An expected record's indexer for numeric keys types the list part
+        // (`{ [number]: V, n?: number }`, spec §2.2.4).
+        let list_of_record = match &exp_ty {
+            Some(Ty::Record(r)) => r.indexer.and_then(|(k, v)| {
+                self.env
+                    .assignable(Types::NUMBER, k, super::query::Mode::Basic)
+                    .then_some(v)
+            }),
+            _ => None,
+        };
         let mut record = Record {
             open: exp.is_none(),
             ..Record::default()
@@ -928,7 +996,7 @@ impl Checker<'_, '_> {
                     let want = match &exp_ty {
                         Some(Ty::Array(e)) => Some(*e),
                         Some(Ty::Map(_, v)) => Some(*v),
-                        _ => None,
+                        _ => list_of_record,
                     };
                     if i + 1 == fields.len() && is_multi(value) {
                         let p = self.expr_inner(value, want).into_pack();
@@ -940,6 +1008,11 @@ impl Checker<'_, '_> {
                         }
                     } else {
                         let t = self.check(value, want);
+                        // A record's indexer is not compared as a whole: each
+                        // element is checked, as a named field is.
+                        if let Some(w) = list_of_record {
+                            self.check_assignable(value.span(), t, w);
+                        }
                         array.push(t);
                     }
                 }
@@ -963,7 +1036,7 @@ impl Checker<'_, '_> {
         let want_elem = match &exp_ty {
             Some(Ty::Array(e)) => Some(*e),
             Some(Ty::Map(_, v)) => Some(*v),
-            _ => None,
+            _ => list_of_record,
         };
         let elem = if array.is_empty() {
             None
@@ -992,7 +1065,9 @@ impl Checker<'_, '_> {
             return t;
         }
         match (elem, record.fields.is_empty(), record.indexer) {
-            (Some(e), true, None) => self.env.types.array(e),
+            // A list for a record with a numeric indexer is that record
+            // without its (optional) named fields, not an array.
+            (Some(e), true, None) if list_of_record.is_none() => self.env.types.array(e),
             (Some(e), _, None) => {
                 record.indexer = Some((Types::NUMBER, e));
                 self.env.types.record(record)
@@ -1351,6 +1426,11 @@ impl Checker<'_, '_> {
                 Ty::Secret(_) => {
                     self.check_secret(m, span);
                     Types::ANY
+                }
+                _ if self.unindexable(m) => {
+                    let msg = format!("cannot index a value of type `{}`", self.env.display(m));
+                    self.report("E2003", key.span(), msg);
+                    Types::ERROR
                 }
                 _ => Types::ANY,
             };
@@ -2650,6 +2730,9 @@ impl Checker<'_, '_> {
         let generic = !f.type_params.is_empty();
         // First pass: infer type arguments from the non-function arguments.
         let mut s = Subst::default();
+        // Arguments from this position on were checked as a call of a
+        // function passed with them (`pcall(f, a, b)`).
+        let mut passed_from: Option<usize> = None;
         let mut arg_types: Vec<Option<TypeId>> = vec![None; exprs.len()];
         if generic {
             // Parameters that do not mention the type parameters type their
@@ -2733,7 +2816,19 @@ impl Checker<'_, '_> {
                     let from_bound = || bound.as_ref().and_then(|b| b.types.get(k).copied());
                     pack.types.push(t.or_else(from_bound).unwrap_or(Types::ANY));
                 }
-                s.packs.insert(*p, pack);
+                // A function passed on with its arguments (`pcall(f, a, b)`):
+                // the arguments are checked as a call of it, so a missing
+                // one is E2007 rather than a mismatch of the function.
+                let passed = bound.is_some() && pack.rest.is_none() && report;
+                if passed
+                    && let Some(af) = self.passed_function(f, &arg_types, *p)
+                    && self.check_passed_args(&af, &exprs, fixed, &arg_types, span)
+                {
+                    s.packs.insert(*p, bound.expect("bound"));
+                    passed_from = Some(fixed);
+                } else {
+                    s.packs.insert(*p, pack);
+                }
             }
             // Unbound parameters are `any`.
             for p in &f.type_params {
@@ -2799,6 +2894,7 @@ impl Checker<'_, '_> {
                 }
             };
             match p {
+                _ if passed_from.is_some_and(|from| i >= from) => {}
                 Some(pt) => {
                     if report {
                         self.check_assignable(e.span(), t, pt);
@@ -2827,7 +2923,7 @@ impl Checker<'_, '_> {
         } else {
             n_args
         };
-        if report && supplied != usize::MAX {
+        if report && supplied != usize::MAX && passed_from.is_none() {
             for p in f.params.iter().skip(supplied) {
                 if !p.optional {
                     let name = p
@@ -2847,6 +2943,61 @@ impl Checker<'_, '_> {
         Some(f.ret)
     }
 
+    /// The function argument whose parameters bind the pack `p` (the `f` of
+    /// `pcall(f, ...)`), if it has a known signature.
+    fn passed_function(&self, f: &Func, arg_types: &[Option<TypeId>], p: ParamId) -> Option<Func> {
+        f.params.iter().enumerate().find_map(|(j, param)| {
+            let Ty::Func(pf) = self.env.types.get(param.ty) else {
+                return None;
+            };
+            if pf.rest != Some(Rest::Pack(p)) || !pf.params.is_empty() {
+                return None;
+            }
+            match self.env.types.get((*arg_types.get(j)?)?) {
+                Ty::Func(af) if af.type_params.is_empty() => Some(Func::clone(af)),
+                _ => None,
+            }
+        })
+    }
+
+    /// Checks the arguments from position `fixed` on as a call of `af`
+    /// when they leave out one it needs (E2007, and E2001 for the given
+    /// ones). Extra arguments are allowed, as before. Whether it reported.
+    fn check_passed_args(
+        &mut self,
+        af: &Func,
+        exprs: &Exprs<'_>,
+        fixed: usize,
+        arg_types: &[Option<TypeId>],
+        span: Span,
+    ) -> bool {
+        let given = arg_types.len().saturating_sub(fixed);
+        let Some(missing) = af.params.iter().skip(given).find(|p| !p.optional) else {
+            return false;
+        };
+        for (k, param) in af.params.iter().enumerate().take(given) {
+            let (Some(t), e) = (arg_types[fixed + k], exprs.at(fixed + k)) else {
+                continue;
+            };
+            // Literal tables and functions take a direct call's parameter
+            // type as their context; they were typed without it here.
+            if !matches!(e.kind(), ExprKind::Table(_) | ExprKind::Function(_)) {
+                self.check_assignable(e.span(), t, param.ty);
+            }
+        }
+        let name = missing
+            .name
+            .as_deref()
+            .map(|n| format!(" `{n}`"))
+            .unwrap_or_default();
+        let msg = format!(
+            "missing argument{name} of type `{}`",
+            self.env.display(missing.ty)
+        );
+        self.report("E2007", span, msg);
+        true
+    }
+
     /// The parameter type at argument position `i`.
     fn param_at(&self, f: &Func, i: usize) -> Option<TypeId> {
         match f.params.get(i) {
@@ -2862,14 +3013,27 @@ impl Checker<'_, '_> {
     /// Infers type arguments: binds parameters in `pattern` to the
     /// corresponding parts of `actual`.
     pub fn unify(&mut self, pattern: TypeId, actual: TypeId, s: &mut Subst) {
-        self.unify_at(pattern, actual, s, true);
+        self.unify_at(pattern, actual, s, true, false);
     }
 
     /// `widen`: a literal binds as its base type (`"x"` as `string`). Not
     /// inside a table's element or value type, which is declared (literal
     /// tables widen their own entries) and invariant: `{ [string]: false }`
     /// binds `V` to `false`, not `boolean`.
-    fn unify_at(&mut self, pattern: TypeId, actual: TypeId, s: &mut Subst, widen: bool) {
+    ///
+    /// `contra`: `pattern` is a parameter of a function type (an odd number
+    /// of them deep). A function that takes a wider type fits (parameters
+    /// are contravariant), so such a binding only stands in where no other
+    /// position binds the parameter: `sort(rows, function(a: { ms: number },
+    /// b: { ms: number }) … end)` binds `V` to the rows' type.
+    fn unify_at(
+        &mut self,
+        pattern: TypeId,
+        actual: TypeId,
+        s: &mut Subst,
+        widen: bool,
+        contra: bool,
+    ) {
         match (
             self.env.types.get(pattern).clone(),
             self.env.types.get(actual).clone(),
@@ -2880,30 +3044,41 @@ impl Checker<'_, '_> {
                 } else {
                     actual
                 };
+                let weak = s.weak.contains(&p);
                 match s.types.get(&p).copied() {
+                    // A parameter position does not widen another's binding.
+                    Some(_) if contra && !weak => {}
+                    // Another position replaces a parameter position's.
+                    Some(_) if !contra && weak => {
+                        s.weak.remove(&p);
+                        s.types.insert(p, widened);
+                    }
                     Some(existing) if existing != widened => {
                         let u = self.env.types.union(&[existing, widened]);
                         s.types.insert(p, u);
                     }
                     Some(_) => {}
                     None => {
+                        if contra {
+                            s.weak.insert(p);
+                        }
                         s.types.insert(p, widened);
                     }
                 }
             }
-            (Ty::Array(a), Ty::Array(b)) => self.unify_at(a, b, s, false),
+            (Ty::Array(a), Ty::Array(b)) => self.unify_at(a, b, s, false, contra),
             (Ty::Map(k1, v1), Ty::Map(k2, v2)) => {
-                self.unify_at(k1, k2, s, false);
-                self.unify_at(v1, v2, s, false);
+                self.unify_at(k1, k2, s, false, contra);
+                self.unify_at(v1, v2, s, false, contra);
             }
             (Ty::Map(k, v), Ty::Array(e)) => {
-                self.unify(k, Types::NUMBER, s);
-                self.unify_at(v, e, s, false);
+                self.unify_at(k, Types::NUMBER, s, true, contra);
+                self.unify_at(v, e, s, false, contra);
             }
             (Ty::Map(k, v), Ty::Record(r)) => {
                 if let Some((rk, rv)) = r.indexer {
-                    self.unify_at(k, rk, s, false);
-                    self.unify_at(v, rv, s, false);
+                    self.unify_at(k, rk, s, false, contra);
+                    self.unify_at(v, rv, s, false, contra);
                 } else if !r.fields.is_empty() {
                     let keys: Vec<TypeId> =
                         r.fields.keys().map(|n| self.env.types.str(n)).collect();
@@ -2911,8 +3086,8 @@ impl Checker<'_, '_> {
                     let ku = self.env.types.union(&keys);
                     let ku = self.env.types.widen(ku);
                     let vu = self.env.types.union(&vals);
-                    self.unify(k, ku, s);
-                    self.unify(v, vu, s);
+                    self.unify_at(k, ku, s, true, contra);
+                    self.unify_at(v, vu, s, true, contra);
                 }
             }
             (Ty::Union(ps), _) => {
@@ -2921,17 +3096,17 @@ impl Checker<'_, '_> {
                     ps.iter().copied().filter(|&x| x != Types::NIL).collect();
                 if non_nil.len() == 1 {
                     let a = self.env.types.non_nil(actual);
-                    self.unify_at(non_nil[0], a, s, widen);
+                    self.unify_at(non_nil[0], a, s, widen, contra);
                 }
             }
             (Ty::Named(d1, a1), Ty::Named(d2, a2)) if d1 == d2 => {
                 for (x, y) in a1.iter().zip(&a2) {
-                    self.unify_at(*x, *y, s, false);
+                    self.unify_at(*x, *y, s, false, contra);
                 }
             }
             (Ty::Func(pf), Ty::Func(af)) => {
                 for (pp, ap) in pf.params.iter().zip(&af.params) {
-                    self.unify(pp.ty, ap.ty, s);
+                    self.unify_at(pp.ty, ap.ty, s, true, !contra);
                 }
                 // `(A...) -> …`: the pack is the remaining parameters.
                 if let Some(Rest::Pack(p)) = &pf.rest
@@ -2949,7 +3124,7 @@ impl Checker<'_, '_> {
                     s.packs.insert(*p, rest);
                 }
                 for (pr, ar) in pf.ret.types.iter().zip(&af.ret.types) {
-                    self.unify(*pr, *ar, s);
+                    self.unify_at(*pr, *ar, s, true, contra);
                 }
                 if let Some(Rest::Pack(p)) = &pf.ret.rest {
                     s.packs.insert(*p, af.ret.clone());
@@ -2958,7 +3133,7 @@ impl Checker<'_, '_> {
             (Ty::Record(pr), Ty::Record(ar)) => {
                 for (n, f) in pr.fields.iter() {
                     if let Some(af) = ar.fields.get(n) {
-                        self.unify(f.ty, af.ty, s);
+                        self.unify_at(f.ty, af.ty, s, true, contra);
                     }
                 }
             }
@@ -3043,12 +3218,14 @@ impl Checker<'_, '_> {
         let Ty::Record(mut r) = self.env.types.get(tt).clone() else {
             return tt;
         };
+        let mut fallback: FxHashSet<Box<str>> = FxHashSet::default();
         if let Some(i) = index
             && let Ty::Record(ir) = self.env.types.get(i).clone()
         {
             for (k, f) in ir.fields.iter() {
                 if !r.fields.contains_key(k) {
                     r.fields.insert(k.into(), *f);
+                    fallback.insert(k.into());
                 }
             }
             if ir.open || r.indexer.is_none() {
@@ -3058,7 +3235,11 @@ impl Checker<'_, '_> {
             r.indexer = Some((Types::STRING, Types::ANY));
         }
         r.open = false;
-        self.env.types.record(r)
+        let t = self.env.types.record(r);
+        if !fallback.is_empty() {
+            self.fallback_fields.insert(t, fallback);
+        }
+        t
     }
 
     pub fn is_super(&self, e: Expr<'_>) -> bool {

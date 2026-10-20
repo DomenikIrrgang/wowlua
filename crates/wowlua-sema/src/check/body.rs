@@ -135,6 +135,13 @@ pub struct Checker<'e, 'p> {
     pub(crate) classes: Vec<(DefId, bool)>,
     /// Exported values of this module.
     pub exports: FxHashMap<Box<str>, TypeId>,
+    /// The exported locals, in order: their types are recorded once the
+    /// top level has run (fields added after the declaration included).
+    export_vars: Vec<(Box<str>, VarId)>,
+    /// By the type `setmetatable` gave: the fields read through the
+    /// metatable's `__index` (spec §2.4.6). A table's own definition
+    /// replaces them, as it does at run time.
+    pub(crate) fallback_fields: FxHashMap<TypeId, FxHashSet<Box<str>>>,
     /// Name spans of accesses to renamable methods (`rename-private`), with
     /// the class that declares the method.
     pub private_methods: FxHashMap<wowlua_span::Span, DefId>,
@@ -258,6 +265,8 @@ impl<'e, 'p> Checker<'e, 'p> {
             chain_inner: FxHashMap::default(),
             classes: Vec::new(),
             exports: FxHashMap::default(),
+            export_vars: Vec::new(),
+            fallback_fields: FxHashMap::default(),
             private_methods: FxHashMap::default(),
             global_classes: FxHashSet::default(),
             reassigned,
@@ -306,12 +315,53 @@ impl<'e, 'p> Checker<'e, 'p> {
 
     /// A type mismatch (E2001).
     pub fn mismatch(&mut self, span: Span, s: TypeId, t: TypeId) {
-        let msg = format!(
+        let mut msg = format!(
             "`{}` is not assignable to `{}`",
             self.env.display(s),
             self.env.display(t)
         );
+        if let Some(why) = self.record_mismatch(s, t) {
+            msg.push_str(": ");
+            msg.push_str(&why);
+        }
         self.report("E2001", span, msg);
+    }
+
+    /// Why record `s` does not fit the record of `t` (`t` may be optional):
+    /// the first required field it lacks or whose type does not fit.
+    fn record_mismatch(&mut self, s: TypeId, t: TypeId) -> Option<String> {
+        let Ty::Record(source) = self.env.types.get(s).clone() else {
+            return None;
+        };
+        let target = self.env.types.non_nil(t);
+        let Ty::Record(target) = self.env.types.get(target).clone() else {
+            return None;
+        };
+        for (name, f) in target.fields.iter() {
+            match source.fields.get(name) {
+                None if !f.optional => {
+                    let mut why = format!("the field `{name}` is missing");
+                    // `x: T?` must be present; `x?: T` may be absent (§2.2.4).
+                    if self.env.types.is_optional(f.ty) {
+                        let inner = self.env.types.non_nil(f.ty);
+                        why.push_str(&format!(
+                            " (`{name}: {0}?` must be present; write `{name}?: {0}` for a field that may be absent)",
+                            self.env.display(inner)
+                        ));
+                    }
+                    return Some(why);
+                }
+                Some(sf) if !self.env.assignable(sf.ty, f.ty, self.mode) => {
+                    return Some(format!(
+                        "the field `{name}` is `{}`, not `{}`",
+                        self.env.display(sf.ty),
+                        self.env.display(f.ty)
+                    ));
+                }
+                _ => {}
+            }
+        }
+        None
     }
 
     pub fn check_assignable(&mut self, span: Span, s: TypeId, t: TypeId) {
@@ -517,6 +567,14 @@ impl<'e, 'p> Checker<'e, 'p> {
         self.top_vararg = Some((Types::STRING, ns_ty));
         self.hoist(parse.view().block());
         self.block_stmts(parse.view().block());
+        // Importers read an export after the module's top level has run
+        // (spec §5.5), so a table has the fields assigned to it since its
+        // declaration, and it has escaped: it is sealed (spec §2.4.2).
+        for (name, v) in std::mem::take(&mut self.export_vars) {
+            let t = self.var_type(v);
+            let t = self.sealed(t);
+            self.exports.insert(name, t);
+        }
         // A module's file-level locals, for `import internal` (kept with
         // the exports, under `INTERNAL` + name).
         if self.is_module {
@@ -1075,7 +1133,9 @@ impl<'e, 'p> Checker<'e, 'p> {
                 if let (Some(d), Some(v)) = (declared, value) {
                     self.check_assignable(v.span(), t, d);
                 }
-                // `const` keeps literal types (spec §2.4).
+                // `const` keeps literal types (spec §2.4). An annotated one
+                // narrows as an annotated `local` does: to the annotation's
+                // literals and members, not to a table literal's own type.
                 let id = self.declare(
                     name.text(),
                     Some(declared.unwrap_or(t)),
@@ -1083,7 +1143,18 @@ impl<'e, 'p> Checker<'e, 'p> {
                     true,
                     Some(name.span()),
                 );
-                self.flow.insert(id, t);
+                let narrowed = match declared {
+                    Some(d)
+                        if d != Types::ANY
+                            && t != Types::ANY
+                            && self.env.assignable(t, d, self.mode) =>
+                    {
+                        self.narrow_to_assigned(d, t)
+                    }
+                    Some(d) => d,
+                    None => t,
+                };
+                self.flow.insert(id, narrowed);
             }
             StmtKind::Class(c) => self.class_body(c),
             StmtKind::Enum(_)
@@ -1095,8 +1166,7 @@ impl<'e, 'p> Checker<'e, 'p> {
                 self.stmt(inner);
                 for name in exported_names(inner) {
                     if let Some(v) = self.lookup_var(&name) {
-                        let t = self.var_type(v);
-                        self.exports.insert(name.into(), t);
+                        self.export_vars.push((name.into(), v));
                     }
                 }
             }
@@ -1408,6 +1478,19 @@ impl<'e, 'p> Checker<'e, 'p> {
                 },
             };
             let at = values.get(i).map(|v| v.span()).unwrap_or(span);
+            // A value left out is `nil`: the first one that cannot be is
+            // named, once.
+            let missing = got.types.len() <= i && got.rest.is_none();
+            if missing && !self.env.assignable(have, want, self.mode) {
+                let msg = format!(
+                    "missing return value {} of type `{}` (the function returns {} values; one left out is `nil`)",
+                    i + 1,
+                    self.env.display(want),
+                    expected.types.len()
+                );
+                self.report("E2001", at, msg);
+                break;
+            }
             self.check_assignable(at, have, want);
         }
         if expected.rest.is_none()
@@ -1578,11 +1661,44 @@ impl<'e, 'p> Checker<'e, 'p> {
         }
     }
 
+    /// `t` with an open table sealed.
+    fn sealed(&mut self, t: TypeId) -> TypeId {
+        match self.env.types.get(t) {
+            Ty::Record(r) if r.open => {
+                let mut r = r.clone();
+                r.open = false;
+                self.env.types.record(r)
+            }
+            _ => t,
+        }
+    }
+
     /// Adds a field to an open table, or checks it against a sealed one.
+    /// A field read through `__index` is replaced by the table's own.
     pub fn extend_open(&mut self, owner: TypeId, name: &str, value: TypeId) {
         let Ty::Record(mut r) = self.env.types.get(owner).clone() else {
             return;
         };
+        let fallback = self
+            .fallback_fields
+            .get(&owner)
+            .is_some_and(|f| f.contains(name));
+        if fallback {
+            let mut rest = self.fallback_fields[&owner].clone();
+            rest.remove(name);
+            r.fields.insert(
+                name.into(),
+                Field {
+                    ty: self.env.types.widen(value),
+                    optional: false,
+                    readonly: false,
+                },
+            );
+            let new = self.env.types.record(r);
+            self.fallback_fields.insert(new, rest);
+            self.retype_owner(owner, new);
+            return;
+        }
         if !r.open || r.fields.contains_key(name) {
             return;
         }
@@ -1604,6 +1720,14 @@ impl<'e, 'p> Checker<'e, 'p> {
         );
         // The owner's local now has the extended type.
         let new = self.env.types.record(r);
+        if let Some(rest) = self.fallback_fields.get(&owner).cloned() {
+            self.fallback_fields.insert(new, rest);
+        }
+        self.retype_owner(owner, new);
+    }
+
+    /// The locals typed `owner` now have the type `new`.
+    fn retype_owner(&mut self, owner: TypeId, new: TypeId) {
         let vars: Vec<VarId> = self
             .flow
             .iter()

@@ -11,6 +11,7 @@ mod decorate;
 mod instrument;
 mod reflect;
 mod scope;
+mod upvalues;
 
 pub(crate) use instrument::FnMarks;
 
@@ -261,6 +262,7 @@ pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered,
         fn_names: Vec::new(),
         next_fn_name: None,
         module_tables: HashMap::new(),
+        import_locals: Vec::new(),
         next_fn_marks: FnMarks::default(),
         class_marks: None,
         fn_marks: HashMap::new(),
@@ -347,6 +349,7 @@ pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered,
         },
         comments: lowerer.comments(),
     };
+    upvalues::limit(&mut chunk, &lowerer.import_locals);
     wowlua_luair::hygiene::apply(&mut chunk);
     let reads_meta = lowerer.meta_read.get();
     debug_assert!(lowerer.meta_used.is_empty() || reads_meta);
@@ -662,6 +665,8 @@ struct Lowerer<'a> {
     /// Imported modules → the local holding their export table, and
     /// whether that local is a generated name (else the user's binding).
     module_tables: HashMap<String, (String, bool)>,
+    /// The locals imports bind, for the upvalue limit (spec §5.5).
+    import_locals: Vec<upvalues::ImportLocal>,
     /// Profiling and tracing marks of the next function `func` lowers.
     next_fn_marks: FnMarks,
     /// Marks of the class being lowered (`@profile` on a class).
@@ -1694,6 +1699,11 @@ impl<'a> Lowerer<'a> {
                 self.declare(name.text(), binding);
                 self.module_tables
                     .insert(id.clone(), (name.text().to_string(), false));
+                self.import_locals.push(upvalues::ImportLocal {
+                    name: name.text().to_string(),
+                    module: id.clone(),
+                    export: None,
+                });
                 let value = self.require(&id, lazy, pos);
                 vec![local(self.ident(*name), value, pos)]
             }
@@ -1743,6 +1753,11 @@ impl<'a> Lowerer<'a> {
                 if lazy {
                     let table = self.temp("m");
                     self.module_tables.insert(id.clone(), (table.clone(), true));
+                    self.import_locals.push(upvalues::ImportLocal {
+                        name: table.clone(),
+                        module: id.clone(),
+                        export: None,
+                    });
                     let value = self.require(&id, true, pos);
                     for spec in &values {
                         let local_name = spec.alias.unwrap_or(spec.name);
@@ -1777,6 +1792,11 @@ impl<'a> Lowerer<'a> {
                 for spec in &values {
                     let local_name = spec.alias.unwrap_or(spec.name);
                     self.declare(local_name.text(), Binding::Import);
+                    self.import_locals.push(upvalues::ImportLocal {
+                        name: local_name.text().to_string(),
+                        module: id.clone(),
+                        export: Some(spec.name.text().to_string()),
+                    });
                 }
                 for (name, binding) in kinds {
                     self.declare(&name, binding);

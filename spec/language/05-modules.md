@@ -351,8 +351,10 @@ print(clamp(5, 0, 1))
 - **Upvalue limit.** Imports are locals of the module chunk, so functions capture
   them as upvalues (at most 60 per function in Lua 5.1). If a function would
   exceed the limit, the compiler reads the excess imports through their module
-  tables instead, which works like a lazy binding. If the limit is still
-  exceeded, that is error E5001 naming the function.
+  tables instead, which works like a lazy binding: the function and the
+  functions nested in it read `__wl.modules["ui/window"].Window`, which costs
+  the one upvalue `__wl`. The last imports are moved first. If the limit is
+  still exceeded, that is error E5001 naming the function.
 - In bundled output ([Optimization](../toolchain/optimization.md#153-bundling)),
   each module body becomes a function inside the single output file and the
   same registry is used, so module semantics are identical in both layouts.

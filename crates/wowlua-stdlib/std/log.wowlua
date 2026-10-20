@@ -16,7 +16,7 @@ export enum Level {
 --- A level: a member of the enum, or its string.
 export type LevelValue = Level | "trace" | "debug" | "info" | "warn" | "error" | "off"
 
-const RANKS: { [string]: number } = { trace = 0, debug = 1, info = 2, warn = 3, error = 4, off = 5 }
+const RANKS: { warn: number, [string]: number } = { trace = 0, debug = 1, info = 2, warn = 3, error = 4, off = 5 }
 const COLORS: { [string]: string } = { trace = "7a7264", debug = "a39b8b", info = "f1eadb", warn = "ffb23f", error = "ff9a80" }
 
 local compiled = RANKS[wl.logLevel ?? "trace"] ?? 0

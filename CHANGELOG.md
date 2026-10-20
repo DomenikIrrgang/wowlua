@@ -4,16 +4,30 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ## Unreleased
 
+### Added
+
+- A field named by a string key may be optional: `{ ["not"]?: boolean }`
+- A function over the 60-upvalue limit reads its excess imports through the module registry, as the spec describes, instead of failing with E5001
+
+### Changed
+
+- `wowlua:errors`' isolated calls, `wowlua:events`' dispatch, `wowlua:hooks`' hooks and `wowlua:timer`'s callbacks allocate nothing when the callback succeeds (an event handler's dispatch made about 550 bytes of garbage before)
+
 ### Fixed
 
 - An import cycle in a package no longer makes other imports `any`: standard-library modules, library packages and the modules a cycle imports keep their types, and the modules of a cycle see each other's annotated exports
 - `wowlua test` names the addon's files, its test files and the runtime as the client does (`Interface/AddOns/<Name>/src/x.lua`), so `debugstack()`, `GetSourceLocation()` and error messages show the client's names; the reports still show source paths
 - W4306's help names where a wowlua library's license comes from (a `LICENSE` file or the package's `license`), not only `lua-library.license-files`
 - `wowlua publish` says when it reads a token `wowlua login` saved, instead of waiting without a word while the OS credential store asks to allow it
-
-### Changed
-
-- `wowlua:errors`' isolated calls, `wowlua:events`' dispatch, `wowlua:hooks`' hooks and `wowlua:timer`'s callbacks allocate nothing when the callback succeeds (an event handler's dispatch made about 550 bytes of garbage before)
+- `export const x: T = { … }` and an annotated plain `const` have the annotation's type, not the literal's
+- An exported table has the fields assigned to it after its declaration (`function chat.Hide() … end`), sealed, for importers
+- A callback taking a wider parameter type no longer widens a type argument (`table.sort(rows, function(a: { ms: number }, …) … end)`)
+- Namespaces, enum tables, class tables and instances are tables for `{ [any]: any }`, so `pairs(Enum.X)` and `pairs(C_X or {})` check
+- A list literal fits a record with a numeric indexer and optional named fields (`{ [number]: any, talent?: boolean }`)
+- A table's own method replaces the one `setmetatable`'s `__index` gives it
+- Reading or writing a field of a function, number or boolean is E2003 with any key, not only a `.` read
+- No false W1003 for a forward-declared local that a module's `function name()` defines
+- E2001 names the missing or mismatched field of a record (and hints at `x?: T`), and the first missing return value; E2015 names the union member that does not fit; a function passed to `pcall` with too few arguments is E2007 naming the argument
 
 ## [0.9.1] - 2026-10-20
 

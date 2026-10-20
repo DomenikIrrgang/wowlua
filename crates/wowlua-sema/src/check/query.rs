@@ -384,8 +384,20 @@ impl Env<'_> {
             (Ty::Named(d, _), Ty::Table) => self.def(d).kind != DefKind::Enum,
             (Ty::Func(_) | Ty::Function, Ty::Function) => true,
             // Basic mode: values typed only `table` / `function` are trusted.
-            // `{ [any]: any }` is every table.
-            (Ty::Table, Ty::Map(k, v)) if k == Types::ANY && v == Types::ANY => true,
+            // `{ [any]: any }` is every table: class tables, namespaces and
+            // enum tables (`pairs(Enum.X)`) and instances included.
+            (Ty::Table | Ty::ClassOf(_) | Ty::Module(_), Ty::Map(k, v))
+                if k == Types::ANY && v == Types::ANY =>
+            {
+                true
+            }
+            (Ty::Named(d, _), Ty::Map(k, v))
+                if k == Types::ANY
+                    && v == Types::ANY
+                    && matches!(self.def(d).kind, DefKind::Class | DefKind::Interface) =>
+            {
+                true
+            }
             (Ty::Table, Ty::Record(_) | Ty::Array(_) | Ty::Map(..) | Ty::Named(..)) => {
                 mode == Mode::Basic
             }

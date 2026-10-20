@@ -76,7 +76,7 @@ fn statements_and_expressions() {
 fn declarations() {
     ok("@global('MyAddon')\nlocal function f() end");
     ok("@event('PLAYER_LOGIN') @profile\nfunction M.onLogin() end");
-    ok("type Point = { x: number, y: number, [string]: any, ['end']: number }");
+    ok("type Point = { x: number, y: number, [string]: any, ['end']: number, ['not']?: boolean }");
     ok("type F = <T>(x: T, ...string) -> (T, number)");
     ok("type U = | 'a' | 'b'");
     ok("type P<T...> = (T...) -> ()");
