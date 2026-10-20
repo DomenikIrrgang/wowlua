@@ -2102,9 +2102,19 @@ impl Checker<'_, '_> {
                 |ty| matches!(ty, Ty::Function | Ty::Func(_) | Ty::Intersection(_)),
                 "a function",
             ),
+            // A frame typed by its mixins (`MerchantFrame`) is a widget.
             "toBeShown" | "toBeVisible" | "toHaveText" | "toHaveSize" | "toBeAnchoredTo"
             | "toHaveLines" => (
-                |ty| matches!(ty, Ty::Table | Ty::Record(_) | Ty::Named(..) | Ty::Map(..)),
+                |ty| {
+                    matches!(
+                        ty,
+                        Ty::Table
+                            | Ty::Record(_)
+                            | Ty::Named(..)
+                            | Ty::Map(..)
+                            | Ty::Intersection(_)
+                    )
+                },
                 "a widget",
             ),
             _ => return None,
@@ -2519,10 +2529,42 @@ impl Checker<'_, '_> {
         self.report("W8102", first.span(), msg);
     }
 
+    /// Whether an enclosing existence test checked the hooked member:
+    /// `if _G.Name then` (or `if Name then`) for `hook("Name", fn)`, `if
+    /// obj.Method then` for `hook(obj, "Method", fn)`.
+    fn hook_target_tested(&self, target: Expr<'_>, method: Option<&str>) -> bool {
+        // `_G.X` and `X` name the same global.
+        let global = |path: &str| path.strip_prefix("_G.").unwrap_or(path).to_string();
+        let path = match target.kind() {
+            ExprKind::String(lit) => Some(String::from_utf8_lossy(&lit.value()).into_owned()),
+            _ => self.api_path_of(target),
+        };
+        if let Some(path) = path {
+            let key = match method {
+                Some(m) => global(&format!("{path}.{m}")),
+                None => global(&path),
+            };
+            return self.guard.present.iter().any(|p| global(p) == key);
+        }
+        let Some(method) = method else { return false };
+        match target.kind() {
+            ExprKind::Name(n) => self
+                .lookup_var(n.text())
+                .is_some_and(|v| self.guard.fields.contains(&(v, method.to_string()))),
+            _ => self.field_path(target).is_some_and(|(root, path)| {
+                self.guard
+                    .fields
+                    .contains(&(root, format!("{path}.{method}")))
+            }),
+        }
+    }
+
     /// A hook's target exists (W8040): `hook(name, fn)` and `@hook(name)`
     /// name a global function, `hook(target, method, …)` a method of the
-    /// target, `hookScript(frame, …)` a frame. A target of a load-on-demand
-    /// addon needs `opts.addon` and a name (W8102).
+    /// target, `hookScript(frame, …)` a frame. An enclosing existence test
+    /// of the member stands for its declaration. A target of a
+    /// load-on-demand addon needs `opts.addon` and a name (W8102), tested or
+    /// not.
     pub(crate) fn check_hook_target(&mut self, id: &str, args: Exprs<'_>, decorator: bool) {
         let literal = |e: Expr<'_>| match e.kind() {
             ExprKind::String(lit) => Some(String::from_utf8_lossy(&lit.value()).into_owned()),
@@ -2537,6 +2579,13 @@ impl Checker<'_, '_> {
         };
         let Some(first) = args.first() else { return };
         let method = args.get(1).and_then(literal);
+        // `hookScript`'s target is the frame itself.
+        let member = (id != "hooks.hookScript")
+            .then_some(method.as_deref())
+            .flatten();
+        if self.hook_target_tested(first, member) {
+            return;
+        }
         let global_only = id == "hooks.hook" && method.is_none();
         if global_only || id == "hooks.hookScript" {
             if let Some(name) = literal(first)
@@ -2585,6 +2634,16 @@ impl Checker<'_, '_> {
                     && self.env.instance_member(d, &targs, &method).is_none()
                     && self.env.def(d).indexer.is_none()
             }
+            // A frame typed by its mixins (`ChatFrame1`): no part declares
+            // the member.
+            Ty::Intersection(parts) => parts.iter().all(|&p| match self.env.types.get(p).clone() {
+                Ty::Named(d, targs) => {
+                    self.env.def(d).kind != DefKind::Enum
+                        && self.env.instance_member(d, &targs, &method).is_none()
+                        && self.env.def(d).indexer.is_none()
+                }
+                _ => false,
+            }),
             _ => matches!(
                 self.member_type(target, &method, method_expr.span(), true),
                 None | Some(Types::ERROR)

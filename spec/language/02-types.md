@@ -589,7 +589,17 @@ The global environment (`_G`) is modelled as a set of **declared globals**:
   and decision T83). A function is declared for a flavor only when that
   flavor's client has it (decision T85),
 - the globals of Blizzard's UI code (FrameXML functions, tables, mixins and
-  named frames) and its global strings (decision T84),
+  named frames) and its global strings (decision T84). A named frame of the
+  XML is typed by its mixins and its widget type, the most specific first
+  (`ChatFrame1: PrimaryChatFrameMixin & FloatingChatFrameMixin & … & Frame`):
+  the mixins of its `mixin` and `secureMixin` attributes, then those of the
+  templates it inherits, in order, and of its intrinsic type
+  (`<ScrollingMessageFrame>`). A member is looked up in the parts in order, so
+  a mixin's method comes before the widget's, as in the client. These mixins
+  are declared as classes with the functions their Lua defines (`function
+  M:F(a, b)` a method, `function M.F(a)` a function field); the parameters
+  are untyped (`any`) and the results any values. A mixin made with
+  `CreateFromMixins(A, B)` extends `A` and has `B`'s functions,
 - the Lua 5.1 standard library as available in WoW, and `LibStub`
   (decision T86). WoW has no `os`, `io`, `debug` or `package` library; it
   keeps `date`, `time` and `difftime` as globals. Its additions to `string`
@@ -720,7 +730,7 @@ wowlua models this with the type `Secret<T>`:
 
 | Rule | Detail |
 |------|--------|
-| Sources | API return values and event payload fields that Blizzard's API documentation marks as possibly secret are typed `T \| Secret<T>` by the generated `wow-api` types, for the flavors where restrictions apply. |
+| Sources | API return values and event payload fields that Blizzard's API documentation marks as possibly secret are typed `T \| Secret<T>` by the generated `wow-api` types, for the flavors where restrictions apply. A documented structure such a function returns is a readable table whose fields may be secret, as the client answers: the function returns the structure's companion `<Name>Secret` (`C_Spell.GetSpellCooldown` returns `SpellCooldownInfoSecret?`), whose fields are `T \| Secret<T>` except those documented `NeverSecret`, and whose lists of structures hold companions. Functions that never answer secrets keep the plain structure (`C_Spell.GetItemCooldown` returns `SpellCooldownInfo?`). |
 | Allowed operations | Assignment, passing as an argument where the parameter accepts `Secret<T>`, `..` (the result is `string \| Secret<string>`), `string.format`, `tostring`, `type()`, truthiness of non-boolean secrets |
 | Errors | Arithmetic, comparison, `#`, indexing, calling, use as a table key, or a boolean test on `Secret<boolean>`: error E2040 in strict mode and warning W2040 in basic mode and in pure Lua files |
 | Narrowing | `issecretvalue(v)` is declared as the predicate `v is Secret<unknown>`, and the global `canaccessvalue(v)` narrows as its complement (declared returning `boolean`; a local of that name does not narrow). The false branch of `issecretvalue` and the true branch of `canaccessvalue` remove all `Secret<…>` members (§2.2.8); the true branch of `issecretvalue` and the false branch of `canaccessvalue` keep only them. |

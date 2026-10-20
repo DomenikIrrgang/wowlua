@@ -37,20 +37,24 @@ pub fn read(files: &[(String, String)]) -> Result<Decls, String> {
     // table: its fields are secret but those documented `NeverSecret`
     // (`C_ActionBar.GetActionCooldown(1)` in combat answers `{duration=
     // secret number, isActive=boolean false, …}`, the quest scenario's
-    // recording; the engine answers the same).
+    // recording; the engine answers the same). Such a function returns the
+    // structure's companion `<Name>Secret` with those fields; functions
+    // that never answer secrets keep the plain structure
+    // (`C_Spell.GetItemCooldown` shares `SpellCooldownInfo`).
     // Lists stay readable, their structures' fields secret (the damage
     // meter's sessions: Details! reads `issecretvalue(session.
     // combatSources[1].name)`; unverified by a recording).
     let mut pending: Vec<String> = structures.secret_fields.iter().cloned().collect();
-    let mut done: HashSet<String> = HashSet::new();
+    let mut companions: HashMap<String, Vec<(String, String, bool)>> = HashMap::new();
     while let Some(name) = pending.pop() {
-        if !done.insert(name.clone()) {
+        if companions.contains_key(&name) {
             continue;
         }
         let never = &structures.never_secret[&name];
-        let Some(fields) = out.interfaces.get_mut(&name) else {
+        let Some(fields) = out.interfaces.get(&name) else {
             continue;
         };
+        let mut fields = fields.clone();
         for (field, ty, _) in fields.iter_mut() {
             if never.contains(field) || ty.contains("Secret<") {
                 continue;
@@ -58,6 +62,7 @@ pub fn read(files: &[(String, String)]) -> Result<Decls, String> {
             if let Some(element) = ty.strip_suffix("[]") {
                 if structures.never_secret.contains_key(element) {
                     pending.push(element.to_string());
+                    *ty = format!("{}[]", secret_companion(element));
                 } else if !element.contains(['(', '|']) {
                     *ty = format!("({element} | Secret<{element}>)[]");
                 }
@@ -65,8 +70,30 @@ pub fn read(files: &[(String, String)]) -> Result<Decls, String> {
             }
             *ty = format!("{ty} | Secret<{ty}>");
         }
+        companions.insert(name, fields);
+    }
+    // Each companion follows its structure.
+    let interfaces = std::mem::take(&mut out.interfaces);
+    for (name, fields) in interfaces {
+        let companion = companions.remove(&name);
+        out.interfaces.insert(name.clone(), fields);
+        if let Some(c) = companion {
+            let cname = secret_companion(&name);
+            if structures.never_secret.contains_key(&cname) || out.aliases.contains_key(&cname) {
+                return Err(format!(
+                    "`{cname}` is documented; it can't be `{name}`'s companion"
+                ));
+            }
+            out.interfaces.insert(cname, c);
+        }
     }
     Ok(out)
+}
+
+/// The companion of a structure possibly secret functions return: its
+/// fields may be secret (`SpellCooldownInfo` → `SpellCooldownInfoSecret`).
+pub fn secret_companion(structure: &str) -> String {
+    format!("{structure}Secret")
 }
 
 /// What the documentation says about its structures' secrecy.
@@ -74,7 +101,8 @@ pub fn read(files: &[(String, String)]) -> Result<Decls, String> {
 struct Structures {
     /// Each structure's fields documented `NeverSecret`.
     never_secret: HashMap<String, HashSet<String>>,
-    /// The structures possibly secret functions return.
+    /// The structures possibly secret functions return (each gets a
+    /// companion).
     secret_fields: BTreeSet<String>,
 }
 
@@ -391,6 +419,7 @@ fn function_sig(f: &Table, structures: &mut Structures) -> Sig {
             let mut ty = field_type(r);
             if secret && structures.never_secret.contains_key(&ty) {
                 structures.secret_fields.insert(ty.clone());
+                ty = secret_companion(&ty);
             } else if secret && ty != "any" {
                 ty = format!("{ty} | Secret<{ty}>");
             }
@@ -545,6 +574,12 @@ APIDocumentation:AddDocumentationTable({
           SecretWhenCooldownsRestricted = true,
           Arguments = { { Name = "spellID", Type = "number", Nilable = false } },
           Returns = { { Name = "info", Type = "SpellCooldownInfo", Nilable = false } } },
+        { Name = "GetItemCooldown", Type = "Function", MayReturnNothing = true,
+          Arguments = { { Name = "itemID", Type = "number", Nilable = false } },
+          Returns = { { Name = "info", Type = "SpellCooldownInfo", Nilable = false } } },
+        { Name = "GetSession", Type = "Function", SecretReturns = true,
+          Arguments = {},
+          Returns = { { Name = "session", Type = "Session", Nilable = false } } },
         { Name = "GetSpellName", Type = "Function", SecretReturns = true,
           Arguments = { { Name = "spellID", Type = "number", Nilable = false } },
           Returns = { { Name = "name", Type = "cstring", Nilable = false } } },
@@ -560,29 +595,69 @@ APIDocumentation:AddDocumentationTable({
             { Name = "startTime", Type = "number", Nilable = false },
             { Name = "isActive", Type = "bool", Nilable = false, NeverSecret = true },
         } },
+        { Name = "Session", Type = "Structure", Fields = {
+            { Name = "sources", Type = "table", InnerType = "Source", Nilable = false },
+            { Name = "ids", Type = "table", InnerType = "number", Nilable = false },
+        } },
+        { Name = "Source", Type = "Structure", Fields = {
+            { Name = "name", Type = "cstring", Nilable = false },
+        } },
     },
 })
 "#;
 
-    /// A possibly secret function's structure is a readable table with
-    /// secret fields, but those documented `NeverSecret`; other results
-    /// are wholly secret. Big integers and UI sizes are numbers, a Lua
-    /// value reference any value.
+    /// A possibly secret function returns its structure's companion, a
+    /// readable table with secret fields but those documented
+    /// `NeverSecret`; a function that never answers secrets keeps the plain
+    /// structure. Lists of structures in a companion hold companions. Other
+    /// results are wholly secret. Big integers and UI sizes are numbers, a
+    /// Lua value reference any value.
     #[test]
     fn secret_structures_and_number_types() {
         let d = read(&[("doc.lua".into(), DOC.into())]).unwrap();
         let ns = &d.namespaces["C_Spell"].functions;
-        assert_eq!(ns["GetSpellCooldown"][0].returns, ["SpellCooldownInfo?"]);
+        assert_eq!(
+            ns["GetSpellCooldown"][0].returns,
+            ["SpellCooldownInfoSecret?"]
+        );
+        assert_eq!(ns["GetItemCooldown"][0].returns, ["SpellCooldownInfo?"]);
+        assert_eq!(ns["GetSession"][0].returns, ["SessionSecret"]);
         assert_eq!(ns["GetSpellName"][0].returns, ["string | Secret<string>"]);
+        let field = |name: &str, ty: &str| (name.to_string(), ty.to_string(), false);
         assert_eq!(
             d.interfaces["SpellCooldownInfo"],
+            [field("startTime", "number"), field("isActive", "boolean")]
+        );
+        assert_eq!(
+            d.interfaces["SpellCooldownInfoSecret"],
             [
-                (
-                    "startTime".to_string(),
-                    "number | Secret<number>".to_string(),
-                    false
-                ),
-                ("isActive".to_string(), "boolean".to_string(), false),
+                field("startTime", "number | Secret<number>"),
+                field("isActive", "boolean"),
+            ]
+        );
+        assert_eq!(
+            d.interfaces["SessionSecret"],
+            [
+                field("sources", "SourceSecret[]"),
+                field("ids", "(number | Secret<number>)[]"),
+            ]
+        );
+        assert_eq!(d.interfaces["Source"], [field("name", "string")]);
+        assert_eq!(
+            d.interfaces["SourceSecret"],
+            [field("name", "string | Secret<string>")]
+        );
+        // Each companion follows its structure.
+        let names: Vec<&String> = d.interfaces.keys().collect();
+        assert_eq!(
+            names,
+            [
+                "SpellCooldownInfo",
+                "SpellCooldownInfoSecret",
+                "Session",
+                "SessionSecret",
+                "Source",
+                "SourceSecret",
             ]
         );
         assert_eq!(ns["GetCost"][0].params[0].ty, "number");

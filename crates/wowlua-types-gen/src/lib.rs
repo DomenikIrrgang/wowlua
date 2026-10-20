@@ -119,6 +119,32 @@ fn corrections(d: &mut Decls) {
     {
         channel_target(sig);
     }
+    unit_names(d);
+}
+
+/// The unit name functions answer nothing for a unit that does not exist,
+/// and no realm for one of the player's realm or no player, though the
+/// documentation says `Nilable = false` (recorded on camelot:
+/// `UnitName("party2")` answers `nil, nil` in a party of two, the group
+/// fixtures; `UnitFullName("target")` without a target `nil, nil`;
+/// `UnitFullName("none")` and `UnitNameFromGUID` of a creature a name and
+/// `nil`, the full probe). Other flavors' clients are documented alike
+/// (unverified by a recording).
+fn unit_names(d: &mut Decls) {
+    for name in [
+        "UnitName",
+        "UnitFullName",
+        "UnitNameUnmodified",
+        "UnitNameFromGUID",
+    ] {
+        for sig in d.functions.get_mut(name).into_iter().flatten() {
+            for r in sig.returns.iter_mut() {
+                if !r.ends_with('?') {
+                    *r = model::optional(r);
+                }
+            }
+        }
+    }
 }
 
 /// `SendChatMessage`'s `target` also takes a channel number.
@@ -165,6 +191,7 @@ fn annotation_corrections(d: &mut Decls) {
     for sig in d.functions.get_mut("SendChatMessage").into_iter().flatten() {
         channel_target(sig);
     }
+    unit_names(d);
 }
 
 /// Generates the declarations. `skip`: global names the compiler declares
@@ -443,16 +470,20 @@ pub fn generate(
     let widget_classes: HashSet<String> = shared.classes.keys().cloned().collect();
     // Each with the load-on-demand addon that alone defines it, if any.
     let mut ui_globals: Vec<indexmap::IndexMap<String, (String, Option<String>)>> = Vec::new();
+    // Each flavor's mixin classes its named frames are typed with.
+    let mut ui_mixins: Vec<indexmap::IndexMap<String, model::Class>> = Vec::new();
     for (f, (_, _, d)) in flavors.iter().zip(&per_flavor) {
-        let lod = framexml::lod_origins(&f.ui_lua, &f.ui_xml, &f.lod_files, &widget_classes);
-        let mut g: indexmap::IndexMap<String, (String, Option<String>)> =
-            framexml::globals(&f.ui_lua, &f.ui_xml, &widget_classes)
-                .into_iter()
-                .map(|(n, ty)| {
-                    let addon = lod.get(&n).cloned();
-                    (n, (ty, addon))
-                })
-                .collect();
+        let lod = framexml::lod_origins(&f.ui_lua, &f.ui_xml, &f.lod_files);
+        let ui = framexml::ui_globals(&f.ui_lua, &f.ui_xml, &widget_classes);
+        ui_mixins.push(ui.mixins);
+        let mut g: indexmap::IndexMap<String, (String, Option<String>)> = ui
+            .globals
+            .into_iter()
+            .map(|(n, ty)| {
+                let addon = lod.get(&n).cloned();
+                (n, (ty, addon))
+            })
+            .collect();
         for s in &f.strings {
             g.entry(s.clone())
                 .or_insert_with(|| ("string".into(), None));
@@ -535,7 +566,20 @@ pub fn generate(
     let shared_defs = shared.defined_types();
     let shared_refs = shared.referenced_types();
     let mut out_flavors = Vec::new();
-    for (id, source, mut d) in per_flavor {
+    for ((id, source, mut d), mixins) in per_flavor.into_iter().zip(ui_mixins) {
+        // The mixin classes of the UI code's named frames, where nothing
+        // else declares the name (not the engine's: they are no widgets).
+        let mut mixin_names: HashSet<String> = HashSet::new();
+        for (name, class) in mixins {
+            if !shared_defs.contains(&name)
+                && !d.classes.contains_key(&name)
+                && !d.interfaces.contains_key(&name)
+                && !d.aliases.contains_key(&name)
+            {
+                mixin_names.insert(name.clone());
+                d.classes.insert(name, class);
+            }
+        }
         // Names referred to but declared nowhere become `any` (the
         // compiler's own declarations define some).
         let mut defined: BTreeSet<String> = shared_defs.clone();
@@ -562,6 +606,7 @@ pub fn generate(
                 .classes
                 .iter()
                 .chain(d.classes.iter())
+                .filter(|(name, _)| !mixin_names.contains(*name))
                 .map(|(name, c)| {
                     (
                         name.clone(),

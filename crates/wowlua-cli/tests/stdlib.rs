@@ -2759,6 +2759,52 @@ defer(function() header:Show() end, "header")
     );
 }
 
+/// An enclosing existence test of the hooked member stands for its
+/// declaration (no W8040), but a target of a load-on-demand addon still
+/// needs `opts.addon` (W8102): before the addon loads, the test fails and
+/// the hook is never installed.
+#[test]
+fn hooks_inside_existence_tests() {
+    let stderr = check(
+        r#"import hook, hookScript from "wowlua:hooks"
+if _G.StdNoSuchFunction then
+    hook("StdNoSuchFunction", function() end)
+end
+if ChatFrame1.StdNoSuchMethod then
+    hook(ChatFrame1, "StdNoSuchMethod", function() end)
+end
+local frame = ChatFrame1
+if frame.StdOtherMethod ~= nil then
+    hook(frame, "StdOtherMethod", function() end)
+end
+if _G.CollectionsJournal_UpdateSelectedTab then
+    hook("CollectionsJournal_UpdateSelectedTab", function() end)
+end
+hook(ChatFrame1, "StdNoSuchMethod", function() end)
+if ChatFrame1 then
+    hook(ChatFrame1, "StdNoSuchMethod", function() end)
+end
+if _G.StdNoSuchFunction then
+    hookScript("StdNoSuchFrame", "OnShow", function() end)
+end
+"#,
+    );
+    let found: Vec<String> = stderr
+        .lines()
+        .filter(|l| l.starts_with("src/main.wowlua"))
+        .filter_map(|l| {
+            let line = l.split(':').nth(1)?;
+            let code = l.split("warning[").nth(1)?.split(']').next()?;
+            Some(format!("{line} {code}"))
+        })
+        .collect();
+    assert_eq!(
+        found,
+        ["13 W8102", "15 W8040", "17 W8040", "20 W8040"],
+        "{stderr}"
+    );
+}
+
 /// The standard library's modules type-check clean, also in a strict
 /// project, and their exports are typed for the code importing them.
 #[test]

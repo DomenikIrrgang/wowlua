@@ -123,7 +123,11 @@ hook(GameTooltip, "SetSpellByID", function(tip: GameTooltip, id: number) … end
   (`ErrorInfo.owner`, [`wowlua:errors`](infrastructure.md#errors)).
 - **Signatures.** The hook's parameters are checked against the hooked
   function's declared signature, with the receiver first for method hooks.
-  Hooking a name that is not declared is warning W8040.
+  Hooking a name that is not declared is warning W8040, unless an enclosing
+  existence test checks the same member (`if obj.Method then` around
+  `hook(obj, "Method", fn)`, `if _G.Name then` around `hook("Name", fn)`).
+  Such a test does not silence W8102: where the addon has not loaded yet, the
+  test fails and the hook is never installed.
 - **No removal, no pre-hooks.** Hooks are post-hooks and cannot be removed (a WoW
   API limitation). The module intentionally provides **no** pre-hooks or
   replacement hooks, because replacing Blizzard functions taints secure code.

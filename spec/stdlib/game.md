@@ -229,7 +229,7 @@ local cd = spell.cooldown(133)       -- SpellCooldownInfo?
 | `cooldown` | `(spell) -> CooldownInfo?` | `startTime`, `duration`, `modRate` (each `number \| Secret<number>`: secret in combat on restricted clients), `isEnabled`, `isActive` (readable there), `isOnGCD?`. Falls back to the global `GetSpellCooldown` where `C_Spell.GetSpellCooldown` is missing. |
 | `onCooldown` | `(spell) -> boolean` | Whether it is cooling down: `isActive`, readable in combat too |
 | `cooldownDuration` | `(spell, ignoreGCD?: boolean) -> LuaDurationObject?` | For secret-safe display with `Cooldown:SetCooldownFromDurationObject`; `nil` where the client has no duration objects |
-| `charges` | `(spell) -> SpellChargeInfo?` | |
+| `charges` | `(spell) -> SpellChargeInfoSecret?` | `currentCharges`, `cooldownStartTime`, `cooldownDuration`, `chargeModRate` (each `number \| Secret<number>`: secret in combat on restricted clients), `maxCharges`, `isActive` (readable there) |
 | `isKnown` | `(spellId: number, isPet?: boolean) -> boolean` | `C_SpellBook.IsSpellKnown`, in the player's or the pet's spellbook |
 
 ## item

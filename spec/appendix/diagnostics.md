@@ -202,7 +202,7 @@ is reported as the warning with the same number (`E2001` â†’ `W2001`, `E2030` â†
 | W7001 | `todo()` in a release build |
 | W7010 | Reflection metadata requested but `reflection = "none"` |
 | W8011 | Slash command collides with a Blizzard command |
-| W8040 | Hook target not declared |
+| W8040 | Hook target not declared (not reported inside an existence test of the same member, `if obj.Method then`) |
 | W8062 | Locale is missing translations (summary per locale) |
 | W8101 | Event not available in every selected flavor (shared flavor mode); registered with a runtime validity check |
 | W8102 | Hook target belongs to a load-on-demand addon but `opts.addon` is missing |

@@ -180,7 +180,7 @@ pub(crate) static CODES: &[CodeInfo] = &[
     CodeInfo { code: "E8020", summary: "`saved.bind` on a SavedVariable not declared in the manifest" },
     CodeInfo { code: "E8021", summary: "Profiles enabled without the per-character profile SavedVariable (`<name>PerChar`)" },
     CodeInfo { code: "E8030", summary: "Deferred-call decorator on a function that returns values" },
-    CodeInfo { code: "W8040", summary: "Hook target not declared" },
+    CodeInfo { code: "W8040", summary: "Hook target not declared (not reported inside an existence test of the same member, `if obj.Method then`)" },
     CodeInfo { code: "E8050", summary: "Addon message prefix too long" },
     CodeInfo { code: "E8060", summary: "Invalid locale key" },
     CodeInfo { code: "E8061", summary: "Locale file defines a key unknown to the base locale" },
