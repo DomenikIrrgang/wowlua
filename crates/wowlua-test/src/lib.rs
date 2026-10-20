@@ -11,6 +11,7 @@ mod natives;
 pub mod profile;
 pub mod reports;
 mod saved;
+pub mod scenario;
 mod snapshots;
 
 pub use snapshots::Summary as SnapshotSummary;

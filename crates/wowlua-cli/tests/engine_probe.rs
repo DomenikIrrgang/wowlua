@@ -941,23 +941,7 @@ function note(...) local t = {} for i = 1, select('#', ...) do t[i] = tostring((
         .map(|i| text(&vm, vm.heap.table(t).get(Value::Num(i as f64))))
         .collect();
     let src = fs::read(fixtures.join(format!("{name}.lua"))).expect("the recording");
-    let f = vm.load(&src, "=recording").expect("compiles");
-    let r = vm.call(f, &[]).expect("runs");
-    let Value::Table(t) = r[0] else {
-        panic!("a table")
-    };
-    let mut theirs: Vec<(String, String)> = vm
-        .heap
-        .table(t)
-        .entries()
-        .filter_map(|(k, v)| match (k, v) {
-            (Value::Str(k), Value::Str(_)) => Some((text(&vm, Value::Str(k)), text(&vm, v))),
-            _ => None,
-        })
-        .filter(|(k, _)| k.bytes().all(|b| b.is_ascii_digit()))
-        .collect();
-    theirs.sort();
-    let theirs: Vec<String> = theirs.into_iter().map(|(_, v)| v).collect();
+    let theirs = wowlua_test::scenario::recording(&src).expect("the recording");
     let mut errors: Vec<String> =
         wowlua_engine::engine(&vm).world.ui.errors[errors_before..].to_vec();
     // The stacks of errors from tainted code (`WOWLUA_SCENARIO_TAINT`;
@@ -1048,7 +1032,7 @@ function note(...) local t = {} for i = 1, select('#', ...) do t[i] = tostring((
             .collect()
     };
     METER_LINES.with(|m| *m.borrow_mut() = (meter(&ours), meter(&theirs)));
-    let compared = |log: &[String]| -> Vec<String> { scenario_lines(log) };
+    let compared = |log: &[String]| -> Vec<String> { wowlua_test::scenario::lines(log) };
     let theirs = compared(&theirs);
     let ours = asked_as_recorded(compared(&ours), &theirs);
     Some((ours, theirs, errors))
@@ -1161,135 +1145,6 @@ fn end_state_differences(vm: &Vm, after: &Path) -> Vec<String> {
         }
     }
     out
-}
-
-/// A scenario log's line as compared: without its time; none for the
-/// world's noise and the recordings' own mistakes.
-/// A log's lines as compared: each `scenario_line`'s, the answers to the
-/// player's moving left out with it (`UnitOnTaxi` after
-/// `PLAYER_STARTED_MOVING`, every frame while following).
-fn scenario_lines(log: &[String]) -> Vec<String> {
-    let mut out = Vec::new();
-    let mut after_moving = false;
-    for l in log {
-        let body = l.split_once(' ').map_or(l.as_str(), |(_, b)| b);
-        if body.starts_with("= ") {
-            if after_moving {
-                continue;
-            }
-        } else {
-            after_moving = body.starts_with("PLAYER_STARTED_MOVING")
-                || body.starts_with("PLAYER_STOPPED_MOVING");
-        }
-        if let Some(line) = scenario_line(l) {
-            out.push(line);
-        }
-    }
-    out
-}
-
-/// A pattern compiled on first use.
-type Pattern = std::sync::LazyLock<regex::Regex>;
-
-fn scenario_line(line: &str) -> Option<String> {
-    let body = line.split_once(' ').map_or(line, |(_, b)| b);
-    const NOISE: &[&str] = &[
-        "NAME_PLATE_",
-        "UNIT_POWER_FREQUENT",
-        "SPELL_UPDATE_USABLE",
-        "DAMAGE_METER_",
-        "WORLD_CURSOR_",
-        "CURSOR_CHANGED",
-        "UPDATE_MOUSEOVER_UNIT",
-        "GLOBAL_",
-        "MODIFIER_STATE_CHANGED",
-        "CONSOLE_MESSAGE",
-        "PLAYER_SOFT_",
-        "ACTION_RANGE_CHECK_UPDATE",
-        "CRITERIA_UPDATE",
-        "PLAYER_STARTED_",
-        "PLAYER_STOPPED_",
-        "ITEM_DATA_LOAD_RESULT",
-        "SPELL_DATA_LOAD_RESULT",
-        "QUEST_DATA_LOAD_RESULT",
-        "ADDON_ACTION_BLOCKED",
-        "SPELL_ACTIVATION_OVERLAY_HIDE",
-        "UNIT_HAPPINESS",
-    ];
-    if NOISE.iter().any(|n| body.starts_with(n))
-        || body.contains("nameplate")
-        || body.contains("softinteract")
-    {
-        return None;
-    }
-    // The recordings' mistaken asks (fixed in the recorder since), and the
-    // asks a protected call blocks in combat.
-    const MISTAKEN: &[&str] = &[
-        "= UnitIsEnemy(",
-        "= UnitIsFriend(",
-        "= UnitCanAttack(",
-        "= UnitCanAssist(",
-        "= UnitIsCivilian(",
-        "= GetSpellCooldown(",
-        "= C_Spell.GetSpellCooldown(",
-        "= GetLootMethod(",
-        "= C_PartyInfo.GetLootMethod(",
-        "= CheckInteractDistance(",
-    ];
-    if MISTAKEN.iter().any(|m| body.starts_with(m)) {
-        return None;
-    }
-    // Players' GUIDs as the recordings have them (scrubbed); a chat
-    // message's line number (the session's). (Each pattern compiled once:
-    // a scenario has thousands of lines.)
-    static GUID: Pattern = Pattern::new(|| regex::Regex::new(r"Player-\d+-[0-9A-F]{8}").unwrap());
-    static LINE: Pattern = Pattern::new(|| {
-        regex::Regex::new(r"^(CHAT_MSG_.*; number )\d+(; (?:nil nil|string [^;]*); number 0;)")
-            .unwrap()
-    });
-    let (guid, line) = (&*GUID, &*LINE);
-    let body = guid.replace_all(body, "Player-0000-00000000");
-    // A cast's GUID by its kind and spell (its server, map and number are
-    // the session's).
-    static CAST: Pattern =
-        Pattern::new(|| regex::Regex::new(r"Cast-(\d+)-\d+-\d+-\d+-(\d+)-[0-9A-F]+").unwrap());
-    let cast = &*CAST;
-    let body = cast.replace_all(&body, "Cast-$1-$2");
-    // A party's ID, the session's.
-    static PARTY: Pattern = Pattern::new(|| regex::Regex::new(r"Party-\d+-\d+-[0-9A-F]+").unwrap());
-    let party = &*PARTY;
-    let body = party.replace_all(&body, "Party-<id>");
-    // A cast bar's ID, the session's.
-    static BAR: Pattern = Pattern::new(|| regex::Regex::new(r"CastBar-[0-9A-F]+").unwrap());
-    let bar = &*BAR;
-    let body = bar.replace_all(&body, "CastBar-<id>");
-    // An item's GUID, the server's (a made item's: the session's).
-    static ITEM: Pattern = Pattern::new(|| regex::Regex::new(r"Item-\d+-0-[0-9A-F]{16}").unwrap());
-    let item = &*ITEM;
-    let body = item.replace_all(&body, "Item-<id>");
-    // A value's address, the session's (the ingest drops the client's).
-    static ADDRESS: Pattern = Pattern::new(|| {
-        regex::Regex::new(r"(function|table|userdata|thread): 0x[0-9a-f]+").unwrap()
-    });
-    let body = ADDRESS.replace_all(&body, "$1");
-    let body = line.replace(&body, "${1}<line>${2}").into_owned();
-    // An answer's trailing nils dropped (the first recordings' recorder
-    // lost them).
-    if let Some((call, answer)) = body.split_once(" -> ")
-        && let Some((n, values)) = answer.split_once(": ")
-        && n.parse::<usize>().is_ok()
-    {
-        let mut list: Vec<&str> = if values.is_empty() {
-            vec![]
-        } else {
-            values.split(", ").collect()
-        };
-        while list.last() == Some(&"nil nil") {
-            list.pop();
-        }
-        return Some(format!("{call} -> {}: {}", list.len(), list.join(", ")));
-    }
-    Some(body)
 }
 
 /// The longest common subsequence of two logs: the lines in both, in
@@ -2145,7 +2000,10 @@ for n, c in pairs(missed) do list[#list + 1] = { n, c } end
 table.sort(list, function(a, b) if a[2] ~= b[2] then return a[2] > b[2] end return a[1] < b[1] end)
 local top = {}
 for i = 1, math.min(40, #list) do top[i] = string.format("%5d %s", list[i][2], list[i][1]) end
-return matched, #keys, table.concat(top, "\n"), table.concat(diffs, "\n")
+local all = {}
+for n, c in pairs(missed) do all[#all + 1] = n .. "\t" .. c end
+table.sort(all)
+return matched, #keys, table.concat(top, "\n"), table.concat(diffs, "\n"), table.concat(all, "\n")
 "#;
     let f = vm
         .load_as(compare, "@Interface/AddOns/StdTest/test.lua", "StdTest")
@@ -2171,10 +2029,35 @@ return matched, #keys, table.concat(top, "\n"), table.concat(diffs, "\n")
             "the client's run"
         }
     );
+    // `WOWLUA_COVERAGE_WRITE=1`: the misses by function for the coverage
+    // report (`cargo xtask coverage-report`).
+    if std::env::var_os("WOWLUA_COVERAGE_WRITE").is_some() {
+        write_misses(
+            "fullprobe-misses.txt",
+            "full probe",
+            matched,
+            total,
+            &text(&vm, r[4]),
+        );
+    }
     assert!(
         matched >= FULLPROBE_MATCHED,
         "{matched} of {total} full probe answers as the client gave them (was {FULLPROBE_MATCHED})"
     );
+}
+
+/// A probe's answers the engine does not give as the client did, by
+/// function (`name<TAB>count` lines), for the coverage report: written to
+/// `crates/wowlua-cli/tests/<file>` with the matched and total counts.
+fn write_misses(file: &str, probe: &str, matched: usize, total: usize, misses: &str) {
+    let out = format!(
+        "# The {probe}'s answers the engine does not give as the client did, by\n\
+         # function: written by its test with WOWLUA_COVERAGE_WRITE=1, read by\n\
+         # `cargo xtask coverage-report`.\n\
+         matched\t{matched}\ntotal\t{total}\n{misses}{}",
+        if misses.is_empty() { "" } else { "\n" }
+    );
+    fs::write(repo().join("crates/wowlua-cli/tests").join(file), out).expect("writes");
 }
 
 /// How many of the client's answers to the method probe (`/stdtest engine
@@ -2302,7 +2185,10 @@ for n, c in pairs(missed) do list[#list + 1] = { n, c } end
 table.sort(list, function(a, b) if a[2] ~= b[2] then return a[2] > b[2] end return a[1] < b[1] end)
 local top = {}
 for i = 1, math.min(40, #list) do top[i] = string.format("%5d %s", list[i][2], list[i][1]) end
-return matched, #keys, table.concat(top, "\n"), table.concat(diffs, "\n")
+local all = {}
+for n, c in pairs(missed) do all[#all + 1] = n .. "\t" .. c end
+table.sort(all)
+return matched, #keys, table.concat(top, "\n"), table.concat(diffs, "\n"), table.concat(all, "\n")
 "#;
     let f = vm
         .load_as(compare, "@Interface/AddOns/StdTest/test.lua", "StdTest")
@@ -2328,6 +2214,17 @@ return matched, #keys, table.concat(top, "\n"), table.concat(diffs, "\n")
             "the client's run"
         }
     );
+    // `WOWLUA_COVERAGE_WRITE=1`: the misses by function for the coverage
+    // report (`cargo xtask coverage-report`).
+    if std::env::var_os("WOWLUA_COVERAGE_WRITE").is_some() {
+        write_misses(
+            "methodprobe-misses.txt",
+            "method probe",
+            matched,
+            total,
+            &text(&vm, r[4]),
+        );
+    }
     assert!(
         matched >= METHODPROBE_MATCHED,
         "{matched} of {total} method probe answers as the client gave them (was {METHODPROBE_MATCHED})"

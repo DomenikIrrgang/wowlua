@@ -1,0 +1,13 @@
+# The method probe's answers the engine does not give as the client did, by
+# function: written by its test with WOWLUA_COVERAGE_WRITE=1, read by
+# `cargo xtask coverage-report`.
+matched	757
+total	765
+Button:GetText	1
+CheckButton:GetText	1
+ContainedAlertFrame:GetText	1
+DropdownButton:GetText	1
+EventFrame:IsMouseClickEnabled	1
+EventFrame:IsMouseMotionEnabled	1
+FontString:GetFont	1
+FontString:GetText	1
