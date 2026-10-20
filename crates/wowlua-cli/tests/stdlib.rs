@@ -406,6 +406,111 @@ print("count", StdCount())
     assert!(out.contains(&"count 11".to_string()), "{out:?}");
 }
 
+/// The isolated calls of events, hooks and timers allocate nothing when
+/// the callback succeeds (the client's `xpcall` passes the arguments on);
+/// a failing one is reported with its own context, also when nested.
+#[test]
+fn isolated_calls_allocate_nothing() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import on, onUnit, send from "wowlua:events"
+import call, callIn from "wowlua:errors"
+import hook from "wowlua:hooks"
+import every from "wowlua:timer"
+local C = Mock.check
+
+declare message STD_ALLOC(a: number, b: number)
+local n = 0
+local function count(_a: any, _b: any)
+    n += 1
+end
+on("STD_ALLOC", count)
+on("STD_ALLOC", count)
+-- The mock's own allocations (its `hooksecurefunc`, `Mock.fire`) are
+-- measured on code without the standard library.
+onUnit("UNIT_HEALTH", { "player" }, count)
+local raw = CreateFrame("Frame")
+raw:RegisterUnitEvent("UNIT_MAXHEALTH", "player")
+raw:SetScript("OnEvent", count)
+local t = { M = function(_self: any, _a: any) end }
+hook(t, "M", count)
+local u = { M = function(_self: any, _a: any) end }
+hooksecurefunc(u, "M", count)
+_G.StdRawTicker = function(): TickerHandle
+    return C_Timer.NewTicker(1, function() n += 1 end)
+end
+_G.StdTicker = function(): TickerHandle
+    return every(1, function() n += 1 end)
+end
+local context = { component = "test" }
+
+-- What `fn` allocates, run 100 times with the collector stopped.
+local function garbage(fn: () -> ()): number
+    fn()
+    collectgarbage("collect")
+    collectgarbage("stop")
+    local before = collectgarbage("count")
+    for _ = 1, 100 do
+        fn()
+    end
+    local after = collectgarbage("count")
+    collectgarbage("restart")
+    return after - before
+end
+_G.StdGarbage = garbage
+
+C(garbage(function() send("STD_ALLOC", 1, 2) end) == 0, "a message dispatch")
+C(garbage(function() callIn(context, count, 1, 2) end) == 0, "callIn")
+C(garbage(function() call(count, 1, 2) end) == 0, "call")
+C(garbage(function() t:M(1) end) == garbage(function() u:M(1) end), "a hooked call")
+local ok, a, b = callIn(context, function(x: number, y: number?) return x, y end, 1, nil)
+C(ok == true and a == 1 and b == nil, "callIn returns the results")
+
+declare message STD_FAIL()
+on("STD_FAIL", function() error("handler boom") end)
+on("STD_FAIL", function() print("next handler") end)
+send("STD_FAIL")
+t.M = function(_self: any) end
+hook(t, "M", function() error("hook boom") end)
+t:M()
+callIn({ component = "outer" }, function()
+    call(function() error("inner boom") end)
+    error("outer boom")
+end)
+"#,
+        )],
+        "",
+        r#"local C = Mock.check
+local unit = StdGarbage(function() Mock.fire("UNIT_HEALTH", "player") end)
+local rawUnit = StdGarbage(function() Mock.fire("UNIT_MAXHEALTH", "player") end)
+C(unit == rawUnit, "a unit event dispatch")
+local ticker = StdRawTicker()
+local rawTick = StdGarbage(function() Mock.advance(1) end)
+ticker:Cancel()
+ticker = StdTicker()
+local tick = StdGarbage(function() Mock.advance(1) end)
+-- (The engine's own timers vary by a few bytes.)
+C(tick <= rawTick, "a ticker's tick")
+ticker:Cancel()
+"#,
+    );
+    assert!(out.contains(&"next handler".to_string()), "{out:?}");
+    let reported = errors(&out);
+    let one = |text: &str, context: &str| {
+        reported
+            .iter()
+            .any(|r| r.starts_with("Std: ") && r.contains(text) && r.ends_with(context))
+    };
+    assert!(
+        one("handler boom", " [events: STD_FAIL handler]"),
+        "{reported:?}"
+    );
+    assert!(one("hook boom", " [hooks: M]"), "{reported:?}");
+    assert!(one("inner boom", "inner boom"), "{reported:?}");
+    assert!(one("outer boom", " [outer]"), "{reported:?}");
+}
+
 // ----------------------------------------------------------------- events --
 
 #[test]

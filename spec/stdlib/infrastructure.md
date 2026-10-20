@@ -16,9 +16,13 @@ follows it.
    job bodies, and menu, dialog, list and settings callbacks. An error in one
    never prevents other handlers from running, and never breaks the stdlib's
    own state.
-2. **Mechanism.** Isolation uses `xpcall` with a closure that captures the
-   arguments (Lua 5.1's `xpcall` passes none) and a handler of the policy's
-   own, in every flavor. `securecallfunction` is not used: it hands errors to
+2. **Mechanism.** Isolation uses `xpcall` with the policy's own handler, in
+   every flavor. The client's `xpcall` passes the arguments on (unlike Lua
+   5.1's; a recorded client answer, and Blizzard's `ExecuteFrameScript` in
+   `FunctionUtil.lua` relies on it in every flavor), so a call that succeeds
+   allocates nothing: no closure, no table of arguments, the context of the
+   innermost call kept for the one handler. Where `xpcall` passes none, a
+   closure carries them. `securecallfunction` is not used: it hands errors to
    `geterrorhandler()` directly, which would bypass the prefix, the rate limit
    and the listeners below. Job bodies run in coroutines, so their errors are
    taken from `coroutine.resume`'s results with the coroutine's stack

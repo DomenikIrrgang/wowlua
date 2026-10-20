@@ -23,8 +23,9 @@ local function install(addon: string?, fn: () -> ())
 end
 
 local function isolated(fn: any, what: string): any
+    local context = { component = "hooks: " .. what }
     return function(...)
-        callIn({ component = "hooks: " .. what }, fn, ...)
+        callIn(context, fn, ...)
     end
 end
 

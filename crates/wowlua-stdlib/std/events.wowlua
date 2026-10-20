@@ -42,18 +42,32 @@ local function isGameEvent(name: string): boolean
     return valid
 end
 
-local function run(list: Handler[], context: string, ...: any)
-    -- A snapshot: changes during the dispatch apply to the next one.
-    local snapshot = { unpack(list) }
-    for _, h in ipairs(snapshot) do
-        callIn({ component = context }, h.fn, ...)
+-- The error context of each name's handlers, made once.
+local contexts: { [string]: { component: string } } = {}
+
+local function contextOf(name: string): { component: string }
+    local context = contexts[name]
+    if not context then
+        context = { component = "events: " .. name .. " handler" }
+        contexts[name] = context
+    end
+    return context
+end
+
+-- Handler lists are never changed in place: registering or unregistering
+-- makes a new list, and a dispatch runs the list it started with, so
+-- changes during it apply to the next one without a copy per dispatch.
+local function run(list: Handler[], name: string, ...: any)
+    local context = contextOf(name)
+    for _, h in ipairs(list) do
+        callIn(context, h.fn, ...)
     end
 end
 
 local function dispatch(name: string, ...: any)
     local list = handlers[name]
     if list then
-        run(list, "events: " .. name .. " handler", ...)
+        run(list, name, ...)
     end
 end
 
@@ -61,24 +75,48 @@ driver:SetScript("OnEvent", function(_, name: string, ...: any)
     dispatch(name, ...)
 end)
 
-local function remove(list: Handler[], sub: Subscription): boolean
-    for i, h in ipairs(list) do
-        if h.sub == sub then
-            table.remove(list, i)
-            return true
+-- `list` with `h` added, as a new list.
+local function with(list: Handler[]?, h: Handler): Handler[]
+    local copy: Handler[] = {}
+    if list then
+        for i, x in ipairs(list) do
+            copy[i] = x
         end
     end
-    return false
+    copy[#copy + 1] = h
+    return copy
+end
+
+-- `list` without `sub`'s handler, as a new list; nil when it has none.
+local function without(list: Handler[], sub: Subscription): Handler[]?
+    for i, h in ipairs(list) do
+        if h.sub == sub then
+            local copy: Handler[] = {}
+            for j, x in ipairs(list) do
+                if j ~= i then
+                    copy[#copy + 1] = x
+                end
+            end
+            return copy
+        end
+    end
+    return nil
 end
 
 local function cancel(name: string, sub: Subscription)
     sub.active = false
     local list = handlers[name]
-    if list and remove(list, sub) and #list == 0 then
-        handlers[name] = nil
-        if isGameEvent(name) then
-            driver:UnregisterEvent(name)
-        end
+    local rest = list and without(list, sub)
+    if not rest then
+        return
+    end
+    if #rest > 0 then
+        handlers[name] = rest
+        return
+    end
+    handlers[name] = nil
+    if isGameEvent(name) then
+        driver:UnregisterEvent(name)
     end
 end
 
@@ -88,14 +126,10 @@ local function subscribe(name: string, fn: (...any) -> (), owner: any): Subscrip
         cancel = function(self: Subscription) cancel(name, self) end,
     }
     local list = handlers[name]
-    if not list then
-        list = {}
-        handlers[name] = list
-        if isGameEvent(name) then
-            driver:RegisterEvent(name)
-        end
+    handlers[name] = with(list, { fn = fn, owner = owner, sub = sub })
+    if not list and isGameEvent(name) then
+        driver:RegisterEvent(name)
     end
-    list[#list + 1] = { fn = fn, owner = owner, sub = sub }
     return sub
 end
 
@@ -123,10 +157,11 @@ export function onUnit(event: string, units: string[], handler: (...any) -> (), 
     local entry = unitFrames[key]
     if not entry then
         local frame = CreateFrame("Frame")
-        entry = { frame = frame, handlers = {} }
+        local none: Handler[] = {}
+        entry = { frame = frame, handlers = none }
         unitFrames[key] = entry
         frame:SetScript("OnEvent", function(_, name: string, ...: any)
-            run(entry.handlers, "events: " .. name .. " handler", ...)
+            run(entry.handlers, name, ...)
         end)
     end
     if #entry.handlers == 0 then
@@ -136,12 +171,16 @@ export function onUnit(event: string, units: string[], handler: (...any) -> (), 
         active = true,
         cancel = function(self: Subscription)
             self.active = false
-            if remove(entry.handlers, self) and #entry.handlers == 0 then
-                entry.frame:UnregisterEvent(event)
+            local rest = without(entry.handlers, self)
+            if rest then
+                entry.handlers = rest
+                if #rest == 0 then
+                    entry.frame:UnregisterEvent(event)
+                end
             end
         end,
     }
-    entry.handlers[#entry.handlers + 1] = { fn = handler, owner = owner, sub = sub }
+    entry.handlers = with(entry.handlers, { fn = handler, owner = owner, sub = sub })
     return sub
 end
 
@@ -184,6 +223,8 @@ export function send(name: string, ...: any)
     dispatch(name, ...)
 end
 
+local bucketContext = { component = "events: bucket handler" }
+
 --- What a bucket collected: counts by first argument (units, bag IDs) and
 --- by event.
 export type BucketCounts = { args: { [any]: number }, events: { [string]: number } }
@@ -216,7 +257,7 @@ export function onBucket(events: string | string[], interval: number, handler: (
         const counts = pending
         pending = nil
         if counts and bucket.active then
-            callIn({ component = "events: bucket handler" }, handler, counts)
+            callIn(bucketContext, handler, counts)
         end
     end
     for _, name in ipairs(names) do
