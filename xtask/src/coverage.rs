@@ -783,7 +783,6 @@ struct Rule {
     /// The module, by its path below `src` (`auras`, `ui/build`).
     module: String,
     file: String,
-    line: usize,
     summary: String,
 }
 
@@ -838,36 +837,35 @@ fn unverified_rules(root: &Path) -> Result<Vec<Rule>> {
         let text = fs::read_to_string(&path)?;
         // Comment paragraphs: consecutive comment lines up to an empty
         // one; a trailing comment is one of its own.
-        let mut block: Vec<(usize, String)> = Vec::new();
-        let mut flush = |block: &mut Vec<(usize, String)>| {
-            if let Some(&(line, _)) = block
+        let mut block: Vec<String> = Vec::new();
+        let mut flush = |block: &mut Vec<String>| {
+            if block
                 .iter()
-                .find(|(_, t)| t.to_ascii_lowercase().contains("unverified"))
+                .any(|t| t.to_ascii_lowercase().contains("unverified"))
             {
-                let joined: Vec<&str> = block.iter().map(|(_, t)| t.as_str()).collect();
+                let joined: Vec<&str> = block.iter().map(String::as_str).collect();
                 rules.push(Rule {
                     module: module.clone(),
                     file: file.clone(),
-                    line,
                     summary: first_sentence(&joined.join(" ")),
                 });
             }
             block.clear();
         };
-        for (i, line) in text.lines().enumerate() {
+        for line in text.lines() {
             let trimmed = line.trim_start();
             if let Some(rest) = trimmed.strip_prefix("//") {
                 let rest = rest.trim_start_matches(['/', '!']).trim();
                 if rest.is_empty() {
                     flush(&mut block);
                 } else {
-                    block.push((i + 1, rest.to_string()));
+                    block.push(rest.to_string());
                 }
                 continue;
             }
             flush(&mut block);
             if let Some((_, comment)) = line.split_once(" // ") {
-                block.push((i + 1, comment.trim().to_string()));
+                block.push(comment.trim().to_string());
                 flush(&mut block);
             }
         }
@@ -884,7 +882,8 @@ fn write_unverified(out: &mut String, rules: &[Rule]) {
          documentation or UI code, warcraft.wiki.gg, elune or the function's name, not \
          on a probe of the client. An in-game probe confirms or corrects each \
          ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first \
-         sentence.\n",
+         sentence, in the file's order; the file is cited without a line number so the \
+         page changes only when a rule is added, removed or reworded.\n",
         thousands(rules.len())
     )
     .unwrap();
@@ -897,11 +896,9 @@ fn write_unverified(out: &mut String, rules: &[Rule]) {
         for r in list {
             writeln!(
                 out,
-                "- [{}:{}](../{}#L{}): {}",
+                "- [{}](../{}): {}",
                 r.file.trim_start_matches(&format!("{ENGINE_SRC}/")),
-                r.line,
                 r.file,
-                r.line,
                 r.summary
             )
             .unwrap();
