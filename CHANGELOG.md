@@ -4,8 +4,20 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ## Unreleased
 
+## [0.9.2] - 2026-10-20
+
+M9 so far: what porting SuuUI (a 137k-line UI replacement) to strict wowlua
+turned up in the checker, the WoW API declarations, the standard library and
+the tooling, a standard library safe with secret values throughout, and the
+emulated client closer to the real one. The language server, the VS Code
+extension and the milestones after M9 are planned; see the
+[roadmap](spec/roadmap.md).
+
 ### Added
 
+- The emulated client answers 33,075 of the 33,727 calls the client answered in its full probe, and 25 of the 29 recorded scenarios replay line for line (combat, auradeath, inspect, legacy and mail2 among them; quest, profession, death and hearth within a few lines) (S4)
+- The default camelot character leads a guild, as the recorded one does (ranks and rights, roster, bank, club); `mock.joinGuild`, `leaveGuild` and `defineGuildMember` choose another (S4)
+- `/stdtest engine methodprobe` asks the client every widget method of every widget kind, as the full probe does for the API (S4)
 - A field named by a string key may be optional: `{ ["not"]?: boolean }`
 - A function over the 60-upvalue limit reads its excess imports through the module registry, as the spec describes, instead of failing with E5001
 - `wowlua:callbacks`: `registry:off(name, handler)` cancels every subscription of a function, and `offAll(owner, name?)` only an owner's subscriptions to `name`; both checked against the event type (E8420)
@@ -307,6 +319,7 @@ M0, the foundation: an existing Lua addon builds and installs from a
 - `wowlua.lock` with the pinned flavor table
 - Release binaries for macOS, Linux and Windows on GitHub Releases
 
+[0.9.2]: https://github.com/DomenikIrrgang/wowlua/releases/tag/v0.9.2
 [0.9.1]: https://github.com/DomenikIrrgang/wowlua/releases/tag/v0.9.1
 [0.9.0]: https://github.com/DomenikIrrgang/wowlua/releases/tag/v0.9.0
 [0.8.2]: https://github.com/DomenikIrrgang/wowlua/releases/tag/v0.8.2
