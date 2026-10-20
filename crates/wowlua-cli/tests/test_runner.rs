@@ -494,8 +494,10 @@ end
 }
 
 /// `wowlua:aura` against Blizzard's own aura containers (camelot's UI
-/// code, skipped without it): `hasContainers` finds the template, and the
-/// container has every method the stdlib's containers call.
+/// code, skipped without it): `hasContainers` finds the template, the
+/// container has every method the stdlib's containers call, and one made
+/// while the addon loads takes its groups without an error (the engine's
+/// intrinsic stays Blizzard's code).
 #[test]
 fn aura_containers_in_blizzard_ui() {
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");
@@ -508,16 +510,25 @@ fn aura_containers_in_blizzard_ui() {
         &[
             (
                 "src/main.wowlua",
-                "import * as aura from \"wowlua:aura\"\nexport const has = aura.hasContainers()\n",
+                r#"import * as aura from "wowlua:aura"
+export const has = aura.hasContainers()
+export const early = aura.container(UIParent, {
+    unit = "player",
+    groups = { { key = "buffs", filter = "HELPFUL", max = 4 }, { key = "debuffs", filter = "HARMFUL", max = 2, size = 24 } },
+})
+"#,
             ),
             (
                 "tests/aura.test.wowlua",
                 r#"import test, expect from "wowlua:test"
-import has from "/main"
+import has, early from "/main"
 
 @test("the engine's containers")
 local function containers()
     expect(has).toBe(true)
+    const made = early.frame :: any
+    expect(made:GetAuraGroupFrameCount("buffs") > 0).toBe(true)
+    expect(made:GetAuraGroupFrameCount("debuffs") > 0).toBe(true)
     const engine = CreateFrame("AuraContainer", nil, UIParent, "CustomAuraContainerTemplate") :: any
     for _, method in ipairs({
         "AddAuraGroup", "SetAuraGroupMaxFrameCount", "SetAuraGroupCandidateFilters",

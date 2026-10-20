@@ -443,8 +443,9 @@ fn publish_checks_before_uploading() {
     assert!(mock.requests().iter().all(|r| r.method == "GET"));
     // A missing token stops the publish before any upload. Looking for it
     // where `wowlua login` saves it is said first: the OS credential store
-    // may wait for the user to allow it.
-    wowlua(&e.project, &e.home)
+    // may wait for the user to allow it. The zips are named as soon as
+    // they are packaged, before that.
+    let output = wowlua(&e.project, &e.home)
         .env("CF_API_TOKEN", "cf-secret")
         .arg("publish")
         .assert()
@@ -453,7 +454,16 @@ fn publish_checks_before_uploading() {
             "Reading the wago token `wowlua login` saved\n",
         ))
         .stderr(predicate::str::contains("error[E4201]"))
-        .stderr(predicate::str::contains("WAGO_API_TOKEN"));
+        .stderr(predicate::str::contains("WAGO_API_TOKEN"))
+        .get_output()
+        .stderr
+        .clone();
+    let stderr = String::from_utf8_lossy(&output);
+    let packaged = stderr.find("Packaged MyAddon-1.0.0-cf.zip").expect(&stderr);
+    assert!(
+        packaged < stderr.find("Reading the wago token").unwrap(),
+        "{stderr}"
+    );
     assert!(mock.requests().iter().all(|r| r.method == "GET"));
     // A dirty tree needs `--allow-dirty`.
     write(

@@ -772,38 +772,54 @@ pub fn reachable(session: &mut Session, lib: &LuaLib, roots: &[String]) -> BTree
 /// The license text of a wowlua library: its license files, else its
 /// manifest's `license`.
 pub fn wowlua_license_text(lib: &WowluaLib) -> Option<String> {
-    let mut parts = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(&lib.dir) {
-        let mut names: Vec<PathBuf> = entries
-            .flatten()
-            .map(|e| e.path())
-            .filter(|p| {
-                let n = p
-                    .file_name()
-                    .map(|n| n.to_string_lossy().to_ascii_lowercase())
-                    .unwrap_or_default();
-                p.is_file()
-                    && (n.starts_with("license")
-                        || n.starts_with("licence")
-                        || n.starts_with("copying"))
-            })
-            .collect();
-        names.sort();
-        for p in names {
-            if let Ok(bytes) = std::fs::read(&p) {
-                parts.push(String::from_utf8_lossy(&bytes).trim_end().to_string());
-            }
-        }
-    }
-    if parts.is_empty() {
-        return lib
-            .manifest
+    license_files_text(&lib.dir).or_else(|| {
+        lib.manifest
             .package
             .as_ref()
             .and_then(|p| p.license.clone())
-            .map(|id| format!("License: {id}"));
-    }
-    Some(parts.join("\n\n"))
+            .map(|id| format!("License: {id}"))
+    })
+}
+
+/// The license the workspace's own wowlua libraries inherit when they have
+/// none: the `LICENSE` or `COPYING` files of the workspace root, else its
+/// package's `license`.
+pub fn workspace_license_text(root: &Path) -> Option<String> {
+    license_files_text(root).or_else(|| {
+        let text = std::fs::read_to_string(root.join(wowlua_manifest::MANIFEST_FILE)).ok()?;
+        let manifest: serde_json::Value = serde_json::from_str(&text).ok()?;
+        manifest
+            .pointer("/package/license")
+            .and_then(serde_json::Value::as_str)
+            .map(|id| format!("License: {id}"))
+    })
+}
+
+/// The `LICENSE*`, `LICENCE*` and `COPYING*` files of `dir`, joined in name
+/// order. `None` if there are none.
+fn license_files_text(dir: &Path) -> Option<String> {
+    let entries = std::fs::read_dir(dir).ok()?;
+    let mut names: Vec<PathBuf> = entries
+        .flatten()
+        .map(|e| e.path())
+        .filter(|p| {
+            let n = p
+                .file_name()
+                .map(|n| n.to_string_lossy().to_ascii_lowercase())
+                .unwrap_or_default();
+            p.is_file()
+                && (n.starts_with("license")
+                    || n.starts_with("licence")
+                    || n.starts_with("copying"))
+        })
+        .collect();
+    names.sort();
+    let parts: Vec<String> = names
+        .iter()
+        .filter_map(|p| std::fs::read(p).ok())
+        .map(|bytes| String::from_utf8_lossy(&bytes).trim_end().to_string())
+        .collect();
+    (!parts.is_empty()).then(|| parts.join("\n\n"))
 }
 
 /// The license text of a library for `LICENSES.txt`: its license files, or

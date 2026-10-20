@@ -805,6 +805,86 @@ fn wowlua_library_without_a_license() {
     assert!(licenses.contains("Shared, all rights given."), "{licenses}");
 }
 
+/// A wowlua library inside a workspace (a member, or a path dependency in
+/// its folder) without a license of its own has the workspace root's: its
+/// package's `license`, or its `LICENSE` file (spec §13.8, §14.8.6).
+#[test]
+fn workspace_libraries_inherit_the_root_license() {
+    let e = env();
+    let lib = r#"{ "package": { "name": "shared", "version": "0.1.0", "kind": "library" } }"#;
+    let greet = "export function greet(): string\n    return \"hi\"\nend\n";
+    let root = |license: &str| {
+        format!(
+            r#"{{ "package": {{ "name": "my-addon", "version": "1.0.0"{license} }},
+  "dependencies": {{ "shared": {{ "path": "libs/shared" }}, "extra": {{ "path": "vendor/extra" }} }},
+  "workspace": {{ "members": ["libs/*"] }} }}"#
+        )
+    };
+    write(
+        &e.project,
+        &[
+            ("wowlua.json", &root("")),
+            ("libs/shared/wowlua.json", lib),
+            ("libs/shared/src/init.wowlua", greet),
+            (
+                "vendor/extra/wowlua.json",
+                r#"{ "package": { "name": "extra", "version": "0.1.0", "kind": "library" } }"#,
+            ),
+            ("vendor/extra/src/init.wowlua", greet),
+            (
+                "src/main.wowlua",
+                "import greet from \"shared\"\nimport * as extra from \"extra\"\nprint(greet(), extra.greet())\n",
+            ),
+        ],
+    );
+    // Without any license, both are reported.
+    wowlua(&e.project, &e.home)
+        .arg("build")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "warning[W4306]: embedded libraries without a recognizable license file or header: shared, extra",
+        ));
+    // The root package's `license`.
+    write(
+        &e.project,
+        &[("wowlua.json", &root(r#", "license": "MIT""#))],
+    );
+    wowlua(&e.project, &e.home)
+        .arg("build")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("W4306").not());
+    let licenses = read_lf(e.project.join("dist/dev/MyAddon/LICENSES.txt")).unwrap();
+    assert!(
+        licenses.contains("== shared (libs/shared) ==\n\nLicense: MIT"),
+        "{licenses}"
+    );
+    assert_eq!(licenses.matches("License: MIT").count(), 2, "{licenses}");
+    // The root's `LICENSE` file wins over its `license`; a library's own
+    // license wins over the root's.
+    write(
+        &e.project,
+        &[
+            ("LICENSE", "The suite's license.\n"),
+            ("vendor/extra/LICENSE", "Extra's own license.\n"),
+        ],
+    );
+    wowlua(&e.project, &e.home)
+        .arg("build")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("W4306").not());
+    let licenses = read_lf(e.project.join("dist/dev/MyAddon/LICENSES.txt")).unwrap();
+    assert_eq!(
+        licenses.matches("The suite's license.").count(),
+        1,
+        "{licenses}"
+    );
+    assert!(licenses.contains("Extra's own license."), "{licenses}");
+    assert!(!licenses.contains("License: MIT"), "{licenses}");
+}
+
 /// A library's exported values keep their types in the addon, also when
 /// the addon's own modules import each other (spec §10.5.1, §5.4.4).
 #[test]
