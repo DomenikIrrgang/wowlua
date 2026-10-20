@@ -142,3 +142,14 @@ screenshot).
 4. `/run for i=3,10 do print(GetGuildTradeSkillInfo(i)) end`
 5. `/dump C_Club.GetClubInfo(C_Club.GetGuildClubId())` and
    `/dump C_Club.GetClubPrivileges(C_Club.GetGuildClubId())`.
+
+## Regressions and other flavors
+
+1. With SuuUI's current bags, open the spellbook, enter combat (a training
+   dummy is enough) and press Escape: the spells window should close, with no
+   "Interface action failed" in chat. Confirms the fix the regression test
+   `suuui_bag_calls_taint_escape_in_combat` stands for.
+2. On a classic flavor's client (vanilla, tbc, wrath or mists), run the
+   function inventory probe as on camelot, so the engine knows which of the
+   old global names (`GetItemCount`, `InviteUnit`, `UseContainerItem`, ...)
+   that client really defines.

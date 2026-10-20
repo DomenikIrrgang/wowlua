@@ -2271,6 +2271,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Situations (one /dump each, whenever it happens)
 - Replay leftovers
 - The guild
+- Regressions and other flavors
 
 ## In-game regressions
 
