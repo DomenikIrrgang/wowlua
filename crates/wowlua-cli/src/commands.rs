@@ -288,30 +288,11 @@ pub fn publish(out: &Output, global: &GlobalArgs, args: crate::PublishArgs) -> b
     for project in &projects {
         apply_lints(&mut session, project);
     }
+    // The "Packaged" lines were said as soon as the zips were ready.
     let Some(report) = report else {
         out.flush(&mut session);
         return false;
     };
-    if let Some(p) = &report.packaged {
-        for zip in &p.zips {
-            out.status(
-                "Packaged",
-                format!(
-                    "{} ({}{}) → {}",
-                    zip.file_name,
-                    p.release.as_str(),
-                    if zip.nolib { ", nolib" } else { "" },
-                    relative(&zip.path)
-                ),
-            );
-        }
-        if p.zips.is_empty() {
-            out.status(
-                "Note",
-                "no publish targets: add one under `publish.targets` (see `wowlua explain` or the manual)",
-            );
-        }
-    }
     for o in &report.outcomes {
         let (label, text) = match (o.ok, o.skipped, args.dry_run) {
             (true, true, _) => (

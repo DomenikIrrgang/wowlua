@@ -35,8 +35,9 @@ pub struct PublishRequest {
     /// `--deny-warnings`: W6010 (minified code for an addon site) stops the
     /// publish before any upload.
     pub deny_warnings: bool,
-    /// Progress lines: a token read from what `wowlua login` saved (the OS
-    /// credential store may wait for the user to allow it).
+    /// Progress lines: the zips as soon as they are packaged, and a token
+    /// read from what `wowlua login` saved (the OS credential store may wait
+    /// for the user to allow it).
     pub status: Option<crate::Status>,
 }
 
@@ -191,6 +192,32 @@ pub fn publish(
     if minified_site_targets(session, projects, &packaged, &repo) && request.deny_warnings {
         return None;
     }
+    // Said before reading tokens and uploading, which can take a while.
+    if let Some(status) = &request.status {
+        let cwd = std::env::current_dir().unwrap_or_default();
+        for zip in &packaged.zips {
+            (status.0)(
+                "Packaged",
+                &format!(
+                    "{} ({}{}) → {}",
+                    zip.file_name,
+                    packaged.release.as_str(),
+                    if zip.nolib { ", nolib" } else { "" },
+                    zip.path
+                        .strip_prefix(&cwd)
+                        .unwrap_or(&zip.path)
+                        .to_string_lossy()
+                        .replace('\\', "/")
+                ),
+            );
+        }
+        if packaged.zips.is_empty() {
+            (status.0)(
+                "Note",
+                "no publish targets: add one under `publish.targets` (see `wowlua explain` or the manual)",
+            );
+        }
+    }
     let http = http::Http::default();
     let tokens = Tokens::new(&repo, packager, request.status.clone());
     if !request.dry_run {
@@ -288,40 +315,85 @@ impl Tokens {
         }
     }
 
-    /// A target's token and the variable to name when it is missing.
-    fn of(&self, target: &Target) -> Result<String, String> {
+    /// A target's token, or the variable to name when it is missing.
+    fn of(&self, target: &Target) -> Result<String, MissingToken> {
         if let Some(env) = &target.token_env {
-            return self.var(env).ok_or_else(|| env.clone());
+            return self.var(env).ok_or_else(|| MissingToken {
+                var: env.clone(),
+                needs_approval: false,
+            });
         }
         let names = self.names(target.target_type);
         let kind = type_name(target.target_type);
-        names
-            .iter()
-            .find_map(|n| self.var(n))
-            .or_else(|| {
-                // Said first: the OS credential store may wait for the user
-                // without a word (a macOS Keychain dialog, when another
-                // wowlua binary saved the token).
-                if let Some(status) = &self.status {
-                    let store = if crate::credentials::uses_store() {
-                        " (the OS credential store may ask you to allow wowlua)"
-                    } else {
-                        ""
-                    };
-                    (status.0)(
-                        "Reading",
-                        &format!("the {kind} token `wowlua login` saved{store}"),
-                    );
-                }
-                crate::credentials::get(kind)
-            })
-            .ok_or_else(|| {
-                names
-                    .iter()
-                    .find(|n| n.contains("_API_") || **n == "GITHUB_TOKEN")
-                    .unwrap_or(&names[0])
-                    .to_string()
-            })
+        if let Some(token) = names.iter().find_map(|n| self.var(n)) {
+            return Ok(token);
+        }
+        // Said first: the OS credential store may wait for the user without
+        // a word (a macOS Keychain dialog, when another wowlua binary saved
+        // the token).
+        if let Some(status) = &self.status {
+            let store = if crate::credentials::may_ask() {
+                " (the OS credential store may ask you to allow wowlua)"
+            } else {
+                ""
+            };
+            (status.0)(
+                "Reading",
+                &format!("the {kind} token `wowlua login` saved{store}"),
+            );
+        }
+        crate::credentials::get(kind).map_err(|why| MissingToken {
+            var: names
+                .iter()
+                .find(|n| n.contains("_API_") || **n == "GITHUB_TOKEN")
+                .unwrap_or(&names[0])
+                .to_string(),
+            needs_approval: why == crate::credentials::Unread::NeedsApproval,
+        })
+    }
+}
+
+/// A target without a token.
+struct MissingToken {
+    /// The variable to set.
+    var: String,
+    /// The OS credential store would have asked the user to allow reading
+    /// the saved token, and there was no terminal to answer from.
+    needs_approval: bool,
+}
+
+impl MissingToken {
+    /// E4201 for the publish target `name` of the site type `kind`.
+    fn error(&self, name: &str, kind: &str) -> Diagnostic {
+        if self.needs_approval {
+            return Diagnostic::error(
+                "E4201",
+                format!(
+                    "no API token for the publish target `{name}`: the OS credential store asked for approval to read the one `wowlua login` saved, and there is no terminal to give it"
+                ),
+            )
+            .with_help(format!(
+                "run `wowlua publish` in a terminal once and allow wowlua to read the token (\"Always Allow\"), or set `{}`",
+                self.var
+            ));
+        }
+        Diagnostic::error(
+            "E4201",
+            format!("no API token for the publish target `{name}`"),
+        )
+        .with_help(format!("set `{}`, or run `wowlua login {kind}`", self.var))
+    }
+
+    /// Why a converted packager project skips the target.
+    fn skipped(&self) -> String {
+        if self.needs_approval {
+            format!(
+                "no token (`{}`; the OS credential store asked for approval to read the saved one, without a terminal)",
+                self.var
+            )
+        } else {
+            format!("no token (`{}`)", self.var)
+        }
     }
 }
 
@@ -641,17 +713,8 @@ fn publish_native(
         };
         let token = match tokens.of(&target) {
             Ok(t) => t,
-            Err(var) => {
-                session.push(
-                    Diagnostic::error(
-                        "E4201",
-                        format!("no API token for the publish target `{name}`"),
-                    )
-                    .with_help(format!(
-                        "set `{var}`, or run `wowlua login {}`",
-                        type_name(target.target_type)
-                    )),
-                );
+            Err(missing) => {
+                session.push(missing.error(name, type_name(target.target_type)));
                 missing_token = true;
                 String::new()
             }
@@ -887,9 +950,9 @@ fn publish_like_the_packager(
                 let skipped = |why: String| Outcome::skipped(name, &zip.file_name, &why);
                 let token = match tokens.of(target) {
                     Ok(t) => t,
-                    Err(var) => {
+                    Err(missing) => {
                         // The packager skips sites it has no token for.
-                        report.outcomes.push(skipped(format!("no token (`{var}`)")));
+                        report.outcomes.push(skipped(missing.skipped()));
                         continue;
                     }
                 };
@@ -1039,5 +1102,36 @@ mod tests {
         assert_eq!(env["WAGO_API_TOKEN"], "x y");
         assert_eq!(env["wowi_token"], "plain");
         assert_eq!(env.len(), 3);
+    }
+
+    /// A token the OS credential store wanted approval for is missing
+    /// (E4201), and the error says why and how to fix it.
+    #[test]
+    fn a_token_needing_approval_says_why() {
+        let missing = |needs_approval| MissingToken {
+            var: "CF_API_TOKEN".into(),
+            needs_approval,
+        };
+        let plain = missing(false).error("cf", "curseforge");
+        assert_eq!(plain.code, Some("E4201"));
+        assert_eq!(plain.message, "no API token for the publish target `cf`");
+        assert_eq!(
+            plain.help.as_deref(),
+            Some("set `CF_API_TOKEN`, or run `wowlua login curseforge`")
+        );
+        let approval = missing(true).error("cf", "curseforge");
+        assert_eq!(approval.code, Some("E4201"));
+        assert!(
+            approval
+                .message
+                .ends_with("the OS credential store asked for approval to read the one `wowlua login` saved, and there is no terminal to give it"),
+            "{}",
+            approval.message
+        );
+        let help = approval.help.unwrap_or_default();
+        assert!(help.contains("in a terminal once"), "{help}");
+        assert!(help.contains("`CF_API_TOKEN`"), "{help}");
+        assert_eq!(missing(false).skipped(), "no token (`CF_API_TOKEN`)");
+        assert!(missing(true).skipped().contains("asked for approval"));
     }
 }

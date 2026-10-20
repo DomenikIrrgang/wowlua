@@ -364,7 +364,10 @@ user error otherwise:
    collisions with reserved names, E4308 for case collisions).
 9. **Licenses.** Every embedded library contributed license text to
    `LICENSES.txt`; a library without a recognizable license file or header is
-   warning W4306.
+   warning W4306. A wowlua library inside a workspace (a member, or a path
+   dependency in the workspace root's folder) without a license of its own
+   has the workspace root's ([Code generation §14.8.6](codegen.md#1486-licenses)),
+   so it gets W4306 only when the workspace has none either.
 
 ## 13.9 Caching and incremental builds
 

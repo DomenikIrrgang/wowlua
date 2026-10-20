@@ -338,7 +338,11 @@ E4334, because the client would read only one of them.
 - **`LICENSES.txt`.** Every build contains a generated `LICENSES.txt` with one
   section per embedded component: each library (its `LICENSE`/`COPYING` file,
   its manifest `license`, or its preserved header), the standard-library
-  modules used, and the wowlua runtime. The runtime and standard library are
+  modules used, and the wowlua runtime. A wowlua library inside a workspace
+  (a member, or a path dependency in the workspace root's folder) with none
+  of these has the workspace root's license: its `LICENSE`/`COPYING` files,
+  else its package's `license`. A Lua library never inherits one, since a
+  copy of someone else's code in the repository is not under its license. The runtime and standard library are
   released under the **MIT license** (decision T40). Its notice is included in
   `LICENSES.txt`, and addon authors may use any license for their own code.
 - Library license files are copied as part of the library
