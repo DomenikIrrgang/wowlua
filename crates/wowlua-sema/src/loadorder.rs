@@ -4,6 +4,7 @@
 //! late definitions (W1034) and usage edges that contradict
 //! `build.load-order` (W1035: the listed order wins, decision T70).
 
+use crate::order::strongly_connected;
 use crate::usage::{CallTarget, FileUsage, Key, Markers, Path, file_usage, xml_file_usage};
 use crate::{Analysis, FileInput, FileKind, Target};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -914,7 +915,7 @@ pub fn analyze_with(
     // with run-time edges are allowed).
     let n = files.len();
     let lt_edges: Vec<Edge> = edges.iter().filter(|e| e.load_time).cloned().collect();
-    let lt_sccs = strongly_connected(n, &lt_edges);
+    let lt_sccs = strongly_connected(n, lt_edges.iter().map(|e| (e.from, e.to)));
     let mut lt_cycle = vec![usize::MAX; n];
     for (c, members) in lt_sccs.iter().enumerate().filter(|(_, m)| m.len() > 1) {
         for &m in members {
@@ -947,7 +948,7 @@ pub fn analyze_with(
     }
     // Run-time imports constrain the order where they can; inside a cycle
     // they become lazy bindings.
-    let sccs = strongly_connected(n, &edges);
+    let sccs = strongly_connected(n, edges.iter().map(|e| (e.from, e.to)));
     let mut component = vec![usize::MAX; n];
     for (c, members) in sccs.iter().enumerate() {
         for &m in members {
@@ -1016,64 +1017,4 @@ fn canon_path<'a>(same_table: &'a FxHashMap<Key, Key>, path: &'a Path) -> Cow<'a
     } else {
         Cow::Owned((r.clone(), path.1.clone()))
     }
-}
-
-/// The strongly connected components of the file graph.
-fn strongly_connected(n: usize, edges: &[Edge]) -> Vec<Vec<usize>> {
-    let mut next: Vec<Vec<usize>> = vec![Vec::new(); n];
-    for e in edges {
-        next[e.from].push(e.to);
-    }
-    // Iterative Tarjan.
-    let mut index = vec![usize::MAX; n];
-    let mut low = vec![0usize; n];
-    let mut on_stack = vec![false; n];
-    let mut stack: Vec<usize> = Vec::new();
-    let mut counter = 0;
-    let mut out = Vec::new();
-    for root in 0..n {
-        if index[root] != usize::MAX {
-            continue;
-        }
-        let mut call: Vec<(usize, usize)> = vec![(root, 0)];
-        index[root] = counter;
-        low[root] = counter;
-        counter += 1;
-        stack.push(root);
-        on_stack[root] = true;
-        while let Some(&mut (v, ref mut i)) = call.last_mut() {
-            if *i < next[v].len() {
-                let w = next[v][*i];
-                *i += 1;
-                if index[w] == usize::MAX {
-                    index[w] = counter;
-                    low[w] = counter;
-                    counter += 1;
-                    stack.push(w);
-                    on_stack[w] = true;
-                    call.push((w, 0));
-                } else if on_stack[w] {
-                    low[v] = low[v].min(index[w]);
-                }
-            } else {
-                call.pop();
-                if let Some(&(parent, _)) = call.last() {
-                    low[parent] = low[parent].min(low[v]);
-                }
-                if low[v] == index[v] {
-                    let mut members = Vec::new();
-                    while let Some(w) = stack.pop() {
-                        on_stack[w] = false;
-                        members.push(w);
-                        if w == v {
-                            break;
-                        }
-                    }
-                    members.sort();
-                    out.push(members);
-                }
-            }
-        }
-    }
-    out
 }

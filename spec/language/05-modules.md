@@ -266,6 +266,15 @@ Cycles are found over **all** edges:
 
 Type-only imports never create edges.
 
+**Types across a cycle.** A module is type-checked before the modules that
+import it, so importers see its exports with their checked types. The modules
+of a cycle are checked in source order. One checked before a module of its
+cycle that it imports sees that module's exported functions with their
+signatures, its classes, enums and constants, and its exported `local`s and
+`const`s with their annotated types; an unannotated or decorated exported
+value reads as `any` there. A cycle never changes the types of other imports,
+such as standard-library modules or the modules the cycle imports.
+
 ### 5.4.5 Ties, ambiguity and overrides
 
 - **Source order** breaks ties: the position in `build.load-order` for listed

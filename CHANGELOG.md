@@ -4,6 +4,10 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ## Unreleased
 
+### Fixed
+
+- An import cycle in a package no longer makes other imports `any`: standard-library modules, library packages and the modules a cycle imports keep their types, and the modules of a cycle see each other's annotated exports
+
 ## [0.9.1] - 2026-10-20
 
 M9 so far, released before the milestone closes: wowlua's emulation of the WoW
