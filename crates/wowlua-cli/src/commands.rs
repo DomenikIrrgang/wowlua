@@ -157,6 +157,7 @@ pub fn build(out: &Output, global: &GlobalArgs, args: &BuildArgs) -> bool {
         jobs: global.jobs(),
         keep_code: true,
         tests: false,
+        left_out: Vec::new(),
     };
     let result = load_and_build_all(out, &mut session, global, &request);
     let ok = out.flush(&mut session);
@@ -455,6 +456,7 @@ pub fn toc(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<String
         jobs: global.jobs(),
         keep_code: true,
         tests: false,
+        left_out: Vec::new(),
     };
     let result = load_and_build(out, &mut session, global, &request, None);
     let ok = out.flush(&mut session);
@@ -490,7 +492,10 @@ pub fn check(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<Stri
         only: None,
         jobs: global.jobs(),
         keep_code: false,
-        tests: false,
+        // The test side too (test files, mocks, helpers), as `wowlua test`
+        // compiles it.
+        tests: true,
+        left_out: Vec::new(),
     };
     let result = load_and_build_all(out, &mut session, global, &request);
     let ok = out.flush(&mut session);
@@ -584,7 +589,7 @@ fn test_once(
 ) -> (bool, Option<(PathBuf, PathBuf)>) {
     use termcolor::Color;
     let started = Instant::now();
-    let filter = args.filter.as_deref();
+    let filters = args.filter.as_slice();
     let mut session = Session::new();
     let Some(projects) = wowlua_driver::load_projects(&mut session, &load_options(out, global))
     else {
@@ -640,10 +645,10 @@ fn test_once(
         // flavor guards need them all); split mode builds each.
         let shared_mode = project.manifest.manifest.build.flavor_mode
             == wowlua_manifest::model::FlavorMode::Shared;
-        let mut shared: Option<Option<BuildOutput>> = None;
+        let mut shared: Option<Option<(BuildOutput, Vec<String>)>> = None;
         for flavor in selected.clone() {
-            let owned: Option<BuildOutput>;
-            let build: &BuildOutput = if shared_mode {
+            let owned: Option<(BuildOutput, Vec<String>)>;
+            let (build, left_out): (&BuildOutput, &[String]) = if shared_mode {
                 if shared.is_none() {
                     // All the package's flavors: shared code compiles for them all.
                     let all = project.manifest.flavors.clone();
@@ -657,7 +662,7 @@ fn test_once(
                     ));
                 }
                 match shared.as_ref().and_then(Option::as_ref) {
-                    Some(b) => b,
+                    Some((b, l)) => (b, l.as_slice()),
                     None => {
                         ok = false;
                         continue;
@@ -673,7 +678,7 @@ fn test_once(
                     &flavor,
                 );
                 match &owned {
-                    Some(b) => b,
+                    Some((b, l)) => (b, l.as_slice()),
                     None => {
                         ok = false;
                         continue;
@@ -711,7 +716,8 @@ fn test_once(
                 update_snapshots: args.update_snapshots,
                 coverage: args.coverage,
             };
-            let results = wowlua_test::run(&suite, filter, threads);
+            let mut results = wowlua_test::run(&suite, filters, threads);
+            results.extend(not_compiling(out, left_out, filters, &flavor));
             for result in &results {
                 if let Some(c) = &result.coverage {
                     let key = if args.coverage_per_flavor {
@@ -881,7 +887,9 @@ fn test_once(
 }
 
 /// A test build of `project` for `flavors` in `<out>/.test/<dir>/<Name>`
-/// (its diagnostics shown); `None` when it fails.
+/// (its diagnostics shown); `None` when it fails. A test file that does
+/// not compile, when the errors are all in test files, is left out and the
+/// rest built again (its errors shown): the build and the files left out.
 fn test_build(
     out: &Output,
     global: &GlobalArgs,
@@ -889,30 +897,95 @@ fn test_build(
     project: &Project,
     flavors: Vec<String>,
     dir: &str,
-) -> Option<BuildOutput> {
-    let request = BuildRequest {
-        profile: "test".into(),
-        flavors: Some(flavors),
-        out_dir: Some(wowlua_test::build_dir(
-            &project.manifest.out_dir(),
-            dir,
-            &project.addon_name(),
-        )),
-        write: true,
-        nolib: false,
-        minify: None,
-        bundle: None,
-        only: None,
-        jobs: global.jobs(),
-        keep_code: true,
-        tests: true,
-    };
-    let build = wowlua_driver::build(session, project, &request);
-    apply_lints(session, project);
-    if !out.flush(session) {
-        return None;
+) -> Option<(BuildOutput, Vec<String>)> {
+    let mut left_out: Vec<String> = Vec::new();
+    loop {
+        let request = BuildRequest {
+            profile: "test".into(),
+            flavors: Some(flavors.clone()),
+            out_dir: Some(wowlua_test::build_dir(
+                &project.manifest.out_dir(),
+                dir,
+                &project.addon_name(),
+            )),
+            write: true,
+            nolib: false,
+            minify: None,
+            bundle: None,
+            only: None,
+            jobs: global.jobs(),
+            keep_code: true,
+            tests: true,
+            left_out: left_out.clone(),
+        };
+        let build = wowlua_driver::build(session, project, &request);
+        apply_lints(session, project);
+        if let Some(broken) = broken_test_files(session)
+            && !broken.iter().all(|b| left_out.contains(b))
+        {
+            out.show(session);
+            left_out.extend(broken);
+            continue;
+        }
+        if !out.flush(session) {
+            return None;
+        }
+        return build.map(|b| (b, left_out));
     }
-    build
+}
+
+/// The test files left out of a run because they do not compile: a failed
+/// file each when the run selects it (no filter, or one in its path), else
+/// a note (a filtered run is not held up by another's half-written file).
+fn not_compiling(
+    out: &Output,
+    left_out: &[String],
+    filters: &[String],
+    flavor: &str,
+) -> Vec<wowlua_test::FileResult> {
+    let mut results = Vec::new();
+    for file in left_out {
+        if filters.is_empty() || filters.iter().any(|f| file.contains(f.as_str())) {
+            results.push(wowlua_test::FileResult {
+                file: file.clone(),
+                flavor: flavor.to_string(),
+                tests: Vec::new(),
+                error: Some(
+                    "it does not compile (its errors are above); the other test files ran".into(),
+                ),
+                printed: String::new(),
+                seconds: 0.0,
+                snapshots: wowlua_test::SnapshotSummary::default(),
+                coverage: None,
+            });
+        } else {
+            out.status("Skipped", format!("{file}, which does not compile"));
+        }
+    }
+    results
+}
+
+/// The test files (`*.test.wowlua`, package-relative) the session's errors
+/// are in, when every error is in one; `None` without errors, or with one
+/// elsewhere (the addon, a mock or helper: nothing could run).
+fn broken_test_files(session: &Session) -> Option<Vec<String>> {
+    let mut files: Vec<String> = Vec::new();
+    for d in session.diagnostics.iter().filter(|d| d.is_error()) {
+        let path = d
+            .labels
+            .first()
+            .map(|l| session.db.get(l.span.file).path().to_path_buf())
+            .or_else(|| d.path.clone())?;
+        let path = path.to_string_lossy().replace('\\', "/");
+        let path = path.strip_prefix("./").unwrap_or(&path).to_string();
+        if !path.ends_with(".test.wowlua") {
+            return None;
+        }
+        if !files.contains(&path) {
+            files.push(path);
+        }
+    }
+    (!files.is_empty()).then_some(files)
 }
 
 /// One test file's results, as the `pretty` reporter shows them.
@@ -1030,6 +1103,7 @@ pub fn compile(out: &Output, global: &GlobalArgs, args: &crate::CompileArgs) -> 
         jobs: global.jobs(),
         keep_code: true,
         tests: false,
+        left_out: Vec::new(),
     };
     let build = wowlua_driver::build(&mut session, &project, &request);
     apply_lints(&mut session, &project);
@@ -1231,6 +1305,7 @@ pub fn install(out: &Output, global: &GlobalArgs, profile: &str, target: &Instal
         jobs: global.jobs(),
         keep_code: true,
         tests: false,
+        left_out: Vec::new(),
     };
     let Some(built) = load_and_build_all(out, &mut session, global, &request) else {
         out.flush(&mut session);
@@ -1532,6 +1607,7 @@ pub fn dev(
         jobs: global.jobs(),
         keep_code: true,
         tests: false,
+        left_out: Vec::new(),
     };
     let install = install_request(target, link);
     // What one build compiled, for the next ones.
@@ -1656,6 +1732,7 @@ fn apply_fixes(out: &Output, global: &GlobalArgs, lints_only: bool) -> Option<us
         jobs: global.jobs(),
         keep_code: true,
         tests: false,
+        left_out: Vec::new(),
     };
     let mut total = 0;
     let mut files: std::collections::BTreeSet<PathBuf> = Default::default();
@@ -1716,6 +1793,7 @@ pub fn lint(out: &Output, global: &GlobalArgs, fix: bool) -> bool {
         jobs: global.jobs(),
         keep_code: true,
         tests: false,
+        left_out: Vec::new(),
     };
     let Some(project) = wowlua_driver::load_project(&mut session, &load_options(out, global))
     else {
@@ -1780,6 +1858,7 @@ pub fn fix(out: &Output, global: &GlobalArgs, manifest: bool) -> bool {
         jobs: global.jobs(),
         keep_code: true,
         tests: false,
+        left_out: Vec::new(),
     };
     let _ = load_and_build(out, &mut session, global, &request, None);
     out.flush(&mut session)

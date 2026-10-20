@@ -739,6 +739,25 @@ impl<'e, 'p> Checker<'e, 'p> {
         }
     }
 
+    /// Whether `name` names a type here: a built-in one, a type
+    /// parameter, the module's or an imported type, or a declared one.
+    fn names_type(&self, name: &str) -> bool {
+        matches!(
+            name,
+            "any"
+                | "unknown"
+                | "never"
+                | "boolean"
+                | "number"
+                | "string"
+                | "table"
+                | "thread"
+                | "userdata"
+                | "nil"
+        ) || self.scope.params.iter().any(|(n, _)| n.as_ref() == name)
+            || self.env.lookup_type(name, &self.scope).is_some()
+    }
+
     /// `@cases(list)` of `wowlua:test` (decision T215): every case fits the
     /// test function's parameters (E8120).
     fn check_cases(&mut self, s: Stmt<'_>) {
@@ -802,7 +821,9 @@ impl<'e, 'p> Checker<'e, 'p> {
             }
             for (i, v) in values.iter().enumerate() {
                 let Some(p) = sig.params.get(i) else { break };
-                let t = self.infer(*v);
+                // Typed by the parameter, as an argument is (a literal
+                // field fits a literal union: `{ state = "idle" }`).
+                let t = self.check(*v, Some(p.ty));
                 if !self.env.assignable(t, p.ty, self.mode) {
                     let msg = format!(
                         "case {n}: `{}` is not assignable to `{}` (parameter `{}`)",
@@ -922,6 +943,21 @@ impl<'e, 'p> Checker<'e, 'p> {
     fn stmt_inner(&mut self, s: Stmt<'_>) {
         match s.kind() {
             StmtKind::Local { names, values } => {
+                // `local a, b: any, any = …` declares a third local `any`:
+                // a name after an annotated one that names a type is a
+                // misplaced annotation list (E2060).
+                let mut annotated = false;
+                for n in names.iter() {
+                    let name = n.name.text();
+                    if n.ty.is_some() {
+                        annotated = true;
+                    } else if annotated && self.names_type(name) {
+                        let msg = format!(
+                            "`{name}` is declared as a local, but it names a type: annotate each name (`local a: T, b: U`)"
+                        );
+                        self.report("E2060", n.name.span(), msg);
+                    }
+                }
                 let expected: Vec<Option<TypeId>> = names
                     .iter()
                     .map(|n| n.ty.as_ref().map(|t| self.annotation(*t)))

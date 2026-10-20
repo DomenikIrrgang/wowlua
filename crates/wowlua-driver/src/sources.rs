@@ -255,6 +255,69 @@ pub fn discover_tests(root: &Path, src: &str, out: &str, exclude: &GlobSet) -> V
     found
 }
 
+/// The file-level locals the test side reads through `import internal`
+/// (spec Tooling §16.1.3.1), by the module's source path (`src_rel`): a
+/// local only tests read is not unused (W1003), in any build.
+pub fn internal_reads(
+    root: &Path,
+    src: &str,
+    out: &str,
+    exclude: &GlobSet,
+) -> std::collections::HashMap<String, Vec<String>> {
+    use wowlua_syntax::view::{ImportClause, StmtKind};
+    let mut reads: std::collections::HashMap<String, Vec<String>> = Default::default();
+    let mut db = wowlua_span::SourceDb::new();
+    for test in discover_tests(root, src, out, exclude) {
+        let Ok(bytes) = std::fs::read(&test.abs) else {
+            continue;
+        };
+        if !bytes.windows(8).any(|w| w == b"internal") {
+            continue;
+        }
+        let file = db.add(test.rel.clone(), String::new());
+        let parse = wowlua_syntax::parse(&bytes, file);
+        for s in parse.view().block().stmts() {
+            let StmtKind::Import(i) = s.kind() else {
+                continue;
+            };
+            if !i.internal() {
+                continue;
+            }
+            let ImportClause::Names(specs) = i.clause() else {
+                continue;
+            };
+            let spec = String::from_utf8_lossy(&i.from().value()).into_owned();
+            let base = if let Some(rest) = spec.strip_prefix('/') {
+                rest.to_string()
+            } else if spec.starts_with("./") || spec.starts_with("../") {
+                let dir = test.src_rel.rsplit_once('/').map_or("", |(d, _)| d);
+                format!("{dir}/{spec}")
+            } else {
+                continue;
+            };
+            let mut parts: Vec<&str> = Vec::new();
+            for part in base.split('/') {
+                match part {
+                    "" | "." => {}
+                    ".." => {
+                        parts.pop();
+                    }
+                    p => parts.push(p),
+                }
+            }
+            let path = parts.join("/");
+            let names: Vec<String> = specs.iter().map(|s| s.name.text().to_string()).collect();
+            for module in [format!("{path}.wowlua"), format!("{path}/init.wowlua")] {
+                reads
+                    .entry(module)
+                    .or_default()
+                    .extend(names.iter().cloned());
+            }
+        }
+    }
+    reads
+}
+
 /// Source files under `src`, sorted by path.
 pub fn discover_sources(root: &Path, src: &str, out: &str, exclude: &GlobSet) -> Vec<Source> {
     let src_dir = root.join(src);

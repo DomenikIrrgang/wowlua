@@ -93,6 +93,21 @@ impl Output {
     /// Renders and drains the session's diagnostics. Returns `true` if the
     /// command may continue (no errors, and no warnings with
     /// `--deny-warnings`).
+    /// Shows the session's diagnostics without the closing summary (the
+    /// run goes on: `wowlua test` without a test file that does not
+    /// compile).
+    pub fn show(&self, session: &mut Session) {
+        let items: Vec<_> = session
+            .take_diagnostics()
+            .into_vec()
+            .into_iter()
+            .filter(|d| !(self.quiet && d.severity == Severity::Note))
+            .collect();
+        let _ = self
+            .renderer
+            .emit_stderr_with_summary(&session.db, &items, false);
+    }
+
     pub fn flush(&self, session: &mut Session) -> bool {
         let diagnostics = session.take_diagnostics();
         let fail = diagnostics.should_fail(self.deny_warnings);

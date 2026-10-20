@@ -87,6 +87,7 @@ warning forms of §B.2's pure Lua files (`W2001`). `wowlua explain
 | E2056 | Type pack used in an invalid position |
 | E2058 | Name declared both as `declare event` and `declare message` |
 | E2059 | Default value in a `declare event` / `declare message` parameter |
+| E2060 | A local after an annotated one is named after a type (`local a, b: T, U`: the annotations go on each name, `local a: T, b: U`) |
 | E3001 | `super(...)` missing, repeated, or after use of `self` |
 | E3002 | Cannot instantiate an abstract class |
 | E3003 | Abstract method not implemented |
