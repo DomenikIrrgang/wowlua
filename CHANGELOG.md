@@ -8,10 +8,24 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 - A field named by a string key may be optional: `{ ["not"]?: boolean }`
 - A function over the 60-upvalue limit reads its excess imports through the module registry, as the spec describes, instead of failing with E5001
+- `wowlua:callbacks`: `registry:off(name, handler)` cancels every subscription of a function, and `offAll(owner, name?)` only an owner's subscriptions to `name`; both checked against the event type (E8420)
+- `wowlua:combat`: `defer(fn, key)`: calls with one key keep the first one's place in the queue, and only the latest function runs
+- `wowlua:log`: `configure({ prefix, chatLevel })` sets the chat prefix of the default sink and `print`, and the lowest level the default sink writes to chat (`"off"`: none)
+- `wowlua:secret`: `readable(v)` narrows to a present, not secret value (`Plain`)
+- `wowlua:slash`: `Router:add(name, command, owner?)` (checked like the definitions, E8112), `remove`, `removeAll(owner)` and `commands()`; `router(defs, { order = "added" })` lists help in the order commands were added
+- `wowlua:table`: `copy(t, { shared = false })` gives every nested table a copy of its own; `keys(t, less)` sorts by a comparator
+- `wowlua:aura`: containers take `lazy` groups (added to the engine once `setGroupMax` gives them room), `exclude` spell IDs, a group's own `spacing`, `order` and `gap`, `setGroupFilter` and `setGroupSize` (buttons resized out of combat); `aura.hasContainers()`
+- Spec: the unchecked cast (`local f: T = e :: any`) and `@unchecked` next to the runtime checks
 
 ### Changed
 
 - `wowlua:errors`' isolated calls, `wowlua:events`' dispatch, `wowlua:hooks`' hooks and `wowlua:timer`'s callbacks allocate nothing when the callback succeeds (an event handler's dispatch made about 550 bytes of garbage before)
+- `wowlua:callbacks`: a handler cancelled during a `fire` is skipped for the rest of it (handlers added during a `fire` still wait for the next one)
+- `wowlua:table`: `copy` keeps keys as they are (a frame or a table used as a key stays itself), as Blizzard's `CopyTable` does
+- `wowlua:secret`: `flag` takes any value and answers by truthiness, so legacy `1`/`nil` answers work
+- `wowlua:secret`: `known<T, F>(v, fallback: F): T | F`: the fallback may be of another type, so `known(name, nil)` is a `string?`
+- Generic inference binds `T` through a `T | Secret<T>` parameter (the secret members through `Secret<T>`, the rest to `T`)
+- `wowlua:secure`: `state` without a function only registers the driver (for an `_onstate-<name>` snippet) and hooks nothing
 
 ### Fixed
 
@@ -28,6 +42,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - Reading or writing a field of a function, number or boolean is E2003 with any key, not only a `.` read
 - No false W1003 for a forward-declared local that a module's `function name()` defines
 - E2001 names the missing or mismatched field of a record (and hints at `x?: T`), and the first missing return value; E2015 names the union member that does not fit; a function passed to `pcall` with too few arguments is E2007 naming the argument
+- `wowlua:aura`: `setGroupSpells` keeps the group's dispel types
 
 ## [0.9.1] - 2026-10-20
 

@@ -1,5 +1,6 @@
 //! The names the declarations give: global values, global types, event and
-//! message handlers, on-demand globals and the callbacks registry. Every
+//! message handlers, on-demand globals, the callbacks registry and the
+//! slash router. Every
 //! read goes through an accessor that can record it, so a check can tell
 //! what it read of a flavor's declarations (#6); the maps are private, so
 //! a read that does not record does not compile.
@@ -17,6 +18,7 @@ pub enum Root {
     Handler(Box<str>),
     OnDemand(Box<str>),
     CallbacksRegistry,
+    SlashRouter,
 }
 
 /// What a check read: the names it looked up (with whether they were
@@ -62,6 +64,7 @@ pub struct Declared {
     handlers: FxHashMap<Box<str>, Func>,
     on_demand: FxHashMap<Box<str>, String>,
     callbacks_registry: Option<DefId>,
+    slash_router: Option<DefId>,
     /// While recording, what was read.
     reads: RefCell<Option<Reads>>,
 }
@@ -155,6 +158,11 @@ impl Declared {
         self.callbacks_registry
     }
 
+    pub fn slash_router(&self) -> Option<DefId> {
+        self.note(|| Root::SlashRouter, self.slash_router.is_some());
+        self.slash_router
+    }
+
     pub fn set_global(&mut self, name: Box<str>, ty: TypeId) {
         self.globals.insert(name, ty);
     }
@@ -178,6 +186,10 @@ impl Declared {
 
     pub fn set_callbacks_registry(&mut self, def: Option<DefId>) {
         self.callbacks_registry = def;
+    }
+
+    pub fn set_slash_router(&mut self, def: Option<DefId>) {
+        self.slash_router = def;
     }
 
     /// Every global value, without recording: for tests and tools that
@@ -204,6 +216,7 @@ impl Declared {
             Root::Handler(n) => Peeked::Func(self.handlers.get(n)),
             Root::OnDemand(n) => Peeked::Text(self.on_demand.get(n).map(String::as_str)),
             Root::CallbacksRegistry => Peeked::Def(self.callbacks_registry),
+            Root::SlashRouter => Peeked::Def(self.slash_router),
         }
     }
 }

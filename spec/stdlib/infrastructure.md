@@ -90,6 +90,8 @@ export class Tracker
 end
 
 local sub = tracker.events:on("KillRecorded", function(count: number) label:SetText(count) end, owner)
+tracker.events:off("KillRecorded", onKill)        -- every subscription of `onKill`
+tracker.events:offAll(owner, "Reset")             -- the owner's, to one name
 tracker.events:offAll(owner)
 ```
 
@@ -98,21 +100,23 @@ tracker.events:offAll(owner)
 | `registry` | `function registry<E>(opts: RegistryOptions?): Registry<E>` | `E` is inferred from the expected type (the field annotation above) |
 | `Registry<E>:on` | `(name, handler, owner?) -> Subscription` | `name` must be a literal key of `E` (E8420). `handler` is checked against `E[name]`. |
 | `Registry<E>:once` | same | |
-| `Registry<E>:off` / `offAll(owner)` | | |
+| `Registry<E>:off` | `(sub)` or `(name, handler)` | With a name, cancels every subscription of `handler` to it (also through `once`); `name` must be a literal key of `E` (E8420) and `handler` matches `E[name]` |
+| `Registry<E>:offAll` | `(owner, name?)` | Every subscription of `owner`, or only those to `name` (a literal key of `E`, E8420) |
 | `Registry<E>:fire` | `(name, ...args)` | Arguments are checked against `E[name]`'s parameters |
 | `Registry<E>:has` | `(name) -> boolean` | Whether any handler is subscribed |
 | `RegistryOptions` | `{ compat: "CallbackHandler"? }` | Also provides CallbackHandler-style methods (`RegisterCallback(owner, name, methodOrFn)`, `UnregisterCallback`, `UnregisterAllCallbacks`) for plain Lua consumers |
 
-Typing: the language has no indexed-access types, so `on`, `once` and `fire`
-are `@intrinsic`-checked. The compiler resolves `E[name]` for literal names and
+Typing: the language has no indexed-access types, so `on`, `once`, `off`,
+`offAll` and `fire` are `@intrinsic`-checked. The compiler resolves `E[name]` for literal names and
 checks handlers and arguments with the normal assignability rules (E2001 for
 mismatches).
 
 Semantics:
 
 - Handlers run in subscription order through the error policy. `fire` iterates a
-  snapshot, so subscribing or unsubscribing during `fire` takes effect for the
-  next `fire`.
+  snapshot: a handler subscribed during `fire` waits for the next `fire`, and a
+  handler cancelled during `fire` (by an earlier handler) is skipped for the
+  rest of it, as CallbackHandler does.
 - Owners are held in a weak-keyed table, so a registry never keeps an owner
   alive by itself. Lua 5.1 has no ephemerons, though: a handler closure that
   references its owner keeps the owner alive. Call `offAll(owner)` explicitly
@@ -192,7 +196,8 @@ are copied as they are and never equal anything (comparing them would error).
 ```wowlua
 import * as tbl from "wowlua:table"
 
-local copy = tbl.copy(profile)                     -- deep; cycles kept
+local copy = tbl.copy(profile)                     -- deep; cycles kept, keys as they are
+local fresh = tbl.copy(preset, { shared = false }) -- no two places share a table
 tbl.defaults(db.window, { width = 300, height = 200 })
 if not tbl.equal(a, b) then … end
 for _, key in ipairs(tbl.keys(map)) do … end       -- sorted when all numbers or all strings
@@ -201,12 +206,12 @@ local names = tbl.map(units, function(u: Unit) return u.name end)
 
 | API | Signature | Notes |
 |-----|-----------|-------|
-| `copy` | `<T>(t: T) -> T` | Deep; shared and cyclic references stay shared; metatables dropped |
+| `copy` | `<T>(t: T, opts: CopyOptions?) -> T` | Deep: values are copied, keys are kept as they are (a frame or table used as a key stays itself, as in Blizzard's `CopyTable`); metatables dropped. Shared and cyclic references stay shared, unless `opts.shared` is `false`: then every occurrence of a nested table gets a table of its own (no two places of the copy share one, e.g. for SavedVariables), and a cycle is an error. |
 | `shallowCopy` | `<T extends table>(t: T) -> T` | |
 | `merge` | `<T extends table>(target: T, source: table) -> T` | Copies `source` in: nested tables merge, other values replace |
 | `defaults` | `<T extends table>(target: T, defaults: table) -> T` | Fills in what `target` lacks, nested too |
 | `equal` | `(a: any, b: any) -> boolean` | Deep |
-| `keys`, `values` | `<K, V>(t: { [K]: V }) -> K[]`, `-> V[]` | `keys` is sorted when it can be |
+| `keys`, `values` | `<K, V>(t: { [K]: V }, less?: (a: K, b: K) -> boolean) -> K[]`, `<K, V>(t: { [K]: V }) -> V[]` | `keys` is sorted by `less` when given, else when the keys are all numbers or all strings |
 | `count`, `isEmpty` | `(t: table) -> number`, `-> boolean` | All entries, not just the array part |
 | `filter`, `map`, `find`, `contains` | list helpers | `find` returns the element and its index |
 
