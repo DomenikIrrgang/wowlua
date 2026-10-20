@@ -10,6 +10,10 @@ declare global on: any
 declare global once: any
 @intrinsic("events.onUnit")
 declare global onUnit: any
+@intrinsic("events.watchUnit")
+declare global watchUnit: any
+@intrinsic("events.offAll")
+declare global offAll: any
 @intrinsic("events.send")
 declare global send: any
 @intrinsic("events.bucket")

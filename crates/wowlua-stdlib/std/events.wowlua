@@ -2,7 +2,7 @@
 -- messages. WoW events are registered on a shared hidden frame while
 -- handlers exist; unit events get frames of their own, so their unit filters
 -- never clear each other. Messages are dispatched in Lua only.
-import callIn from "wowlua:errors"
+import callOwned from "wowlua:errors"
 import * as secret from "wowlua:secret"
 
 export interface Subscription
@@ -18,8 +18,9 @@ type Handler = {
 
 -- Handlers by event or message name, in registration order.
 local handlers: { [string]: Handler[] } = {}
--- Unit-event registrations: one frame per event and unit set.
-local unitFrames: { [string]: { frame: Frame, handlers: Handler[] } } = {}
+-- Unit-event registrations: one frame per event and pair of units.
+type UnitEntry = { frame: Frame, event: string, unit: string, unit2: string?, handlers: Handler[] }
+local unitFrames: { [string]: UnitEntry } = {}
 local driver = CreateFrame("Frame")
 local gameEvents: { [string]: boolean } = {}
 
@@ -42,6 +43,15 @@ local function isGameEvent(name: string): boolean
     return valid
 end
 
+-- `RegisterUnitEvent` for one unit or two.
+local function registerUnits(frame: Frame, event: string, unit: string, unit2: string?)
+    if unit2 then
+        frame:RegisterUnitEvent(event, unit, unit2)
+    else
+        frame:RegisterUnitEvent(event, unit)
+    end
+end
+
 -- The error context of each name's handlers, made once.
 local contexts: { [string]: { component: string } } = {}
 
@@ -55,12 +65,15 @@ local function contextOf(name: string): { component: string }
 end
 
 -- Handler lists are never changed in place: registering or unregistering
--- makes a new list, and a dispatch runs the list it started with, so
--- changes during it apply to the next one without a copy per dispatch.
+-- makes a new list, and a dispatch runs the list it started with, so a
+-- handler added during it waits for the next one without a copy per
+-- dispatch. A handler cancelled during it (by an earlier one) is skipped.
 local function run(list: Handler[], name: string, ...: any)
     local context = contextOf(name)
     for _, h in ipairs(list) do
-        callIn(context, h.fn, ...)
+        if h.sub.active then
+            callOwned(context, h.owner, h.fn, ...)
+        end
     end
 end
 
@@ -148,70 +161,238 @@ export function once(event: string, handler: (...any) -> (), owner: any?): Subsc
     return sub
 end
 
---- `RegisterUnitEvent` for one or two units, on a frame of its own.
-export function onUnit(event: string, units: string[], handler: (...any) -> (), owner: any?): Subscription
-    if #units < 1 or #units > 2 then
-        error("onUnit: one or two units (WoW's limit), not " .. #units, 2)
-    end
-    local key = event .. "\0" .. table.concat(units, "\0")
+-- The frame of `event` for `unit` (and `unit2`), shared by equal pairs.
+local function unitEntry(event: string, unit: string, unit2: string?): UnitEntry
+    local key = event .. "\0" .. unit .. "\0" .. (unit2 ?? "")
     local entry = unitFrames[key]
     if not entry then
         local frame = CreateFrame("Frame")
         local none: Handler[] = {}
-        entry = { frame = frame, handlers = none }
-        unitFrames[key] = entry
+        const e: UnitEntry = { frame = frame, event = event, unit = unit, unit2 = unit2, handlers = none }
         frame:SetScript("OnEvent", function(_, name: string, ...: any)
-            run(entry.handlers, name, ...)
+            run(e.handlers, name, ...)
         end)
+        unitFrames[key] = e
+        entry = e
     end
-    if #entry.handlers == 0 then
-        entry.frame:RegisterUnitEvent(event, units[1], units[2])
-    end
-    local sub: Subscription = {
-        active = true,
-        cancel = function(self: Subscription)
-            self.active = false
+    return entry
+end
+
+--- An `onUnit` subscription: one handler on the frame of each pair.
+class UnitSubscription implements Subscription
+    active: boolean = true
+    readonly entries: UnitEntry[] = {}
+
+    function cancel()
+        if not self.active then
+            return
+        end
+        self.active = false
+        for _, entry in ipairs(self.entries) do
             local rest = without(entry.handlers, self)
             if rest then
                 entry.handlers = rest
-                if #rest == 0 then
-                    entry.frame:UnregisterEvent(event)
+                if #rest == 0 and isGameEvent(entry.event) then
+                    entry.frame:UnregisterEvent(entry.event)
                 end
             end
-        end,
-    }
-    entry.handlers = with(entry.handlers, { fn = handler, owner = owner, sub = sub })
+        end
+    end
+
+    function attach(entry: UnitEntry, h: Handler)
+        self.entries[#self.entries + 1] = entry
+        -- In flavors without the event, the handler is never called.
+        if #entry.handlers == 0 and isGameEvent(entry.event) then
+            registerUnits(entry.frame, entry.event, entry.unit, entry.unit2)
+        end
+        entry.handlers = with(entry.handlers, h)
+    end
+end
+
+--- `RegisterUnitEvent` for any number of units: WoW filters a frame by at
+--- most two, so each pair gets a frame of its own.
+export function onUnit(event: string, units: string[], handler: (...any) -> (), owner: any?): Subscription
+    if #units == 0 then
+        error("onUnit: no units", 2)
+    end
+    const sub = UnitSubscription.new()
+    const h: Handler = { fn = handler, owner = owner, sub = sub }
+    local seen: { [string]: boolean } = {}
+    local single: string? = nil
+    for _, unit in ipairs(units) do
+        -- A unit listed twice would get its events twice.
+        if seen[unit] then
+            continue
+        end
+        seen[unit] = true
+        if single then
+            sub:attach(unitEntry(event, single, unit), h)
+            single = nil
+        else
+            single = unit
+        end
+    end
+    if single then
+        sub:attach(unitEntry(event, single, nil), h)
+    end
     return sub
+end
+
+--- A unit watch (`watchUnit`): its events on a frame of its own, pointed
+--- at other units without subscribing again.
+export interface UnitWatch
+    active: boolean
+    --- Registers every event for `unit` (and `unit2`); nil unregisters them.
+    function setUnit(unit: string?, unit2: string?)
+    function cancel()
+end
+
+-- Frames of cancelled watches, for the next ones.
+local spareFrames: Frame[] = {}
+-- The watch of each frame in use.
+local watchOf: { [Frame]: Watch } = {}
+-- The active watches, for `offAll`.
+local watches: { [Watch]: boolean } = setmetatable({}, { __mode = "k" })
+
+local function onWatchEvent(frame: Frame, name: string, ...: any)
+    local w = watchOf[frame]
+    if w then
+        w:dispatch(name, ...)
+    end
+end
+
+class Watch implements UnitWatch
+    active: boolean = true
+    readonly owner: any
+    private readonly names: string[] = {}
+    private readonly fn: (...any) -> ()
+    private frame: Frame? = nil
+    private unit: string? = nil
+    private unit2: string? = nil
+
+    constructor(names: string[], fn: (...any) -> (), owner: any)
+        self.fn = fn
+        self.owner = owner
+        for _, name in ipairs(names) do
+            -- In flavors without the event, the handler is never called.
+            if isGameEvent(name) then
+                self.names[#self.names + 1] = name
+            end
+        end
+    end
+
+    function dispatch(name: string, ...: any)
+        callOwned(contextOf(name), self.owner, self.fn, name, ...)
+    end
+
+    function setUnit(unit: string?, unit2: string?)
+        if unit == nil then
+            unit2 = nil
+        end
+        if not self.active or (unit == self.unit and unit2 == self.unit2) then
+            return
+        end
+        self.unit, self.unit2 = unit, unit2
+        local frame = self.frame
+        if unit == nil then
+            if frame then
+                frame:UnregisterAllEvents()
+            end
+            return
+        end
+        if not frame then
+            frame = table.remove(spareFrames) ?? CreateFrame("Frame")
+            frame:SetScript("OnEvent", onWatchEvent)
+            watchOf[frame] = self
+            self.frame = frame
+        end
+        -- Registering again replaces the units (Blizzard's
+        -- CompactUnitFrame_UpdateUnitEvents relies on it).
+        for _, name in ipairs(self.names) do
+            registerUnits(frame, name, unit, unit2)
+        end
+    end
+
+    --- Stops watching `name` only (`offAll(owner, name)`).
+    function drop(name: string)
+        for i, n in ipairs(self.names) do
+            if n == name then
+                table.remove(self.names, i)
+                if self.frame and self.unit then
+                    self.frame:UnregisterEvent(name)
+                end
+                return
+            end
+        end
+    end
+
+    function cancel()
+        if not self.active then
+            return
+        end
+        self.active = false
+        watches[self] = nil
+        local frame = self.frame
+        if frame then
+            frame:UnregisterAllEvents()
+            watchOf[frame] = nil
+            spareFrames[#spareFrames + 1] = frame
+            self.frame = nil
+        end
+    end
+end
+
+--- Unit events on a frame of the watch's own, re-pointed with `setUnit`
+--- (unit frames, nameplates); `handler` gets the event name first.
+export function watchUnit(events: string[], handler: (...any) -> (), owner: any?): UnitWatch
+    const w = Watch.new(events, handler, owner)
+    watches[w] = true
+    return w
 end
 
 export function off(sub: Subscription)
     sub:cancel()
 end
 
---- Cancels every subscription registered with `owner`.
-export function offAll(owner: any)
+--- Cancels every subscription registered with `owner`, or only those to
+--- `name`.
+export function offAll(owner: any, name: string?)
     -- nil would match every subscription without an owner, the standard
     -- library's own among them.
     if owner == nil then
         error("offAll: the owner is nil", 2)
     end
     local subs: Subscription[] = {}
-    for _, list in pairs(handlers) do
-        for _, h in ipairs(list) do
+    local function collect(list: Handler[]?)
+        for _, h in ipairs(list ?? {}) do
             if h.owner == owner then
                 subs[#subs + 1] = h.sub
             end
         end
     end
+    if name then
+        collect(handlers[name])
+    else
+        for _, list in pairs(handlers) do
+            collect(list)
+        end
+    end
     for _, entry in pairs(unitFrames) do
-        for _, h in ipairs(entry.handlers) do
-            if h.owner == owner then
-                subs[#subs + 1] = h.sub
-            end
+        if name == nil or entry.event == name then
+            collect(entry.handlers)
         end
     end
     for _, sub in ipairs(subs) do
         sub:cancel()
+    end
+    for w in pairs(watches) do
+        if w.owner == owner then
+            if name then
+                w:drop(name)
+            else
+                w:cancel()
+            end
+        end
     end
 end
 
@@ -257,7 +438,7 @@ export function onBucket(events: string | string[], interval: number, handler: (
         const counts = pending
         pending = nil
         if counts and bucket.active then
-            callIn(bucketContext, handler, counts)
+            callOwned(bucketContext, owner, handler, counts)
         end
     end
     for _, name in ipairs(names) do
@@ -300,7 +481,7 @@ export function event(...: string)
     end
 end
 
---- `@unitEvent(name, unit, unit?)`.
+--- `@unitEvent(name, ...units)`.
 export function unitEvent(name: string, ...: string)
     local units = { ... }
     return function(fn: (...any) -> (), ctx: DecoratorContext?)

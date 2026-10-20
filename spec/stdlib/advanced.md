@@ -99,6 +99,9 @@ local function onPlayerFrameShow(frame: Frame) … end
 -- a target that only exists once a load-on-demand addon has loaded
 @hook("PlayerSpellsFrame", "Show", { addon = "Blizzard_PlayerSpells" })
 local function afterSpellbookShow(frame: Frame) … end
+
+-- whose hook it is, for error listeners
+hook(GameTooltip, "SetSpellByID", function(tip: GameTooltip, id: number) … end, { owner = spellModule })
 ```
 
 | API | Lowering |
@@ -116,6 +119,8 @@ local function afterSpellbookShow(frame: Frame) … end
   immediately if it already has. Use a string target for objects that don't
   exist before then. Hooking a target that the type declarations attribute to a
   load-on-demand addon without `opts.addon` is warning W8102.
+- **Owner.** `opts.owner` is passed to error listeners when the hook fails
+  (`ErrorInfo.owner`, [`wowlua:errors`](infrastructure.md#errors)).
 - **Signatures.** The hook's parameters are checked against the hooked
   function's declared signature, with the receiver first for method hooks.
   Hooking a name that is not declared is warning W8040.

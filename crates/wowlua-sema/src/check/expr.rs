@@ -2708,6 +2708,45 @@ impl Checker<'_, '_> {
         self.env.types.func(f)
     }
 
+    /// `watchUnit(names, handler, owner?)`: with a literal list of names,
+    /// the handler gets one of them first (as with several `@event` names),
+    /// then anything.
+    fn watch_unit_type(&mut self, mut f: Func, exprs: Exprs<'_>) -> Option<TypeId> {
+        let ExprKind::Table(fields) = exprs.first()?.kind() else {
+            return None;
+        };
+        let mut names = Vec::new();
+        for field in fields {
+            let TableField::Positional(v) = field else {
+                return None;
+            };
+            let ExprKind::String(lit) = v.kind() else {
+                return None;
+            };
+            let name = String::from_utf8_lossy(&lit.value()).into_owned();
+            self.check_event_available(&name, v.span());
+            names.push(self.env.types.str(&name));
+        }
+        if names.is_empty() {
+            return None;
+        }
+        let event = self.env.types.union(&names);
+        let handler = self.env.types.func(Func {
+            type_params: Vec::new(),
+            params: vec![super::types::Param {
+                name: Some("event".into()),
+                ty: event,
+                optional: false,
+            }],
+            rest: Some(Rest::Variadic(Types::ANY)),
+            ret: Pack::any(),
+            predicate: None,
+            unannotated: false,
+        });
+        f.params.get_mut(1)?.ty = handler;
+        Some(self.env.types.func(f))
+    }
+
     fn stdlib_call_type(&mut self, callee: Expr<'_>, args: Args<'_>, c: TypeId) -> TypeId {
         if let Some(t) = self.matcher_call_type(callee, c) {
             return t;
@@ -2741,6 +2780,9 @@ impl Checker<'_, '_> {
                 }
             }
             return c;
+        }
+        if id == "events.watchUnit" {
+            return self.watch_unit_type(f, exprs).unwrap_or(c);
         }
         let (name, name_span) = match exprs.first().map(|e| (e.kind(), e.span())) {
             Some((ExprKind::String(lit), span)) => {
