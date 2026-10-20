@@ -1955,6 +1955,11 @@ fn core_modules_are_checked_at_compile_time() {
             "import router from \"wowlua:slash\"\nlocal r = router({})\nr:add(\"go\", { args = { \"rest\", \"number\" }, run = function(a: string, b: number) end })\n",
             "E8112",
         ),
+        // `known`'s fallback joins the result's type.
+        (
+            "import * as secret from \"wowlua:secret\"\nlocal function f(name: string | Secret<string>)\n    local b: boolean = secret.known(name, \"?\")\n    print(b)\nend\nf(\"x\")\n",
+            "E2001",
+        ),
         // A registry's names and handlers in `off` and `offAll`.
         (
             "import * as callbacks from \"wowlua:callbacks\"\ninterface Ev\n    Kill: (n: number) -> ()\nend\nlocal r: callbacks.Registry<Ev> = callbacks.registry()\nr:off(\"Kil\", function(n: number) end)\n",
@@ -2223,6 +2228,15 @@ events:off("Kill", onKill)
 events:off(sub)
 events:offAll(owner, "Kill")
 events:offAll(owner)
+
+-- `known`: the value's type, joined with the fallback's.
+local function show(name: string | Secret<string>, hp: number | Secret<number>)
+    local maybe: string? = secret.known(name, nil)
+    local sure: string = secret.known(name, "?")
+    local n: number = secret.known(hp, 0)
+    print(maybe, sure, n)
+end
+show("x", 1)
 
 -- Truthy flags from legacy answers, and the readable narrowing.
 local inRaid: boolean = secret.flag(UnitInRaid("player"))
@@ -3492,6 +3506,43 @@ print("locked again", at(box))
 }
 
 // ----------------------------------------------------------------- secret --
+
+/// `secret.known(v, fallback)` is typed `T | F`: a nil fallback keeps the
+/// result optional, a value of `T` makes it plain (strict mode).
+#[test]
+fn secret_known_joins_the_fallback_type() {
+    let dir = project(&[(
+        "src/main.wowlua",
+        r#"import * as secret from "wowlua:secret"
+local function show(name: string | Secret<string>)
+    local maybe: string? = secret.known(name, nil)
+    local sure: string = secret.known(name, "?")
+    local wrong: string = secret.known(name, nil)
+    print(maybe, sure, wrong)
+end
+show("x")
+"#,
+    )]);
+    let manifest = dir.path().join("wowlua.json");
+    let text = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        text.replacen('{', r#"{ "check": { "mode": "strict" },"#, 1),
+    )
+    .unwrap();
+    let assert = wowlua(dir.path())
+        .args(["build", "--message-format", "short"])
+        .assert();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    let errors: Vec<&str> = stderr.lines().filter(|l| l.contains("error[")).collect();
+    assert_eq!(errors.len(), 1, "{stderr}");
+    assert!(
+        errors[0].contains("E2001")
+            && errors[0].contains("main.wowlua:5")
+            && errors[0].contains("string?"),
+        "{stderr}"
+    );
+}
 
 /// `wowlua:secret`: helpers that test for secrecy before anything else.
 #[test]

@@ -26,6 +26,7 @@ import * as secret from "wowlua:secret"
 local hp = UnitHealth("target")                       -- number | Secret<number>
 bar:SetValue(secret.amount(hp))                       -- secrets pass, nil becomes 0
 local shown = secret.known(hp, 0)                     -- number: 0 when secret
+local name = secret.known(UnitName("target"), nil)    -- string?: nil when secret
 if secret.flag(UnitIsUnit("target", "focus")) then … end   -- a secret boolean reads as false
 if secret.flag(UnitInRaid("player")) then … end       -- legacy 1/nil answers too
 if not secret.isSecret(hp) then print(hp + 1) end     -- narrows like issecretvalue
@@ -35,7 +36,7 @@ if secret.readable(hp) and hp > 0 then … end          -- present and not secre
 | API | Signature | Notes |
 |-----|-----------|-------|
 | `isSecret` | `(v: unknown) -> v is Secret<unknown>` | `issecretvalue`, or `false` where the client has none |
-| `known` | `<T>(v: T \| Secret<T> \| nil, fallback: T) -> T` | `fallback` when `v` is secret or nil |
+| `known` | `<T, F>(v: T \| Secret<T> \| nil, fallback: F) -> T \| F` | `fallback` when `v` is secret or nil. The fallback may be of another type: on a `string \| Secret<string>`, `known(v, nil)` is a `string?` and `known(v, "?")` a `string`. |
 | `flag` | `(v: unknown) -> boolean` | For conditions, by truthiness (so legacy `1`/`nil` answers work): a secret reads as `false` |
 | `readable` | `(v: unknown) -> v is Plain` | Whether `v` is present and not secret; narrows to `Plain` (`string \| number \| boolean \| table \| function`), so `number \| Secret<number> \| nil` becomes `number`. Not generic yet: generic predicates do not infer their type parameter. |
 | `amount` | `(v: number \| Secret<number> \| nil) -> number \| Secret<number>` | For widgets that take secrets: nil becomes 0 |

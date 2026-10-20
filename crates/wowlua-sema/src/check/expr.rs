@@ -2979,8 +2979,40 @@ impl Checker<'_, '_> {
                 if non_nil.len() == 1 {
                     let a = self.env.types.non_nil(actual);
                     self.unify_at(non_nil[0], a, s, widen);
+                    return;
+                }
+                // `T | Secret<T>` (and `nil`) against `X | Secret<X>`: the
+                // secret members bind through `Secret<T>`, the rest bind T.
+                let (params, others): (Vec<TypeId>, Vec<TypeId>) = non_nil
+                    .iter()
+                    .partition(|&&x| matches!(self.env.types.get(x), Ty::Param(_)));
+                let [param] = params.as_slice() else {
+                    return;
+                };
+                let [secret] = others.as_slice() else {
+                    return;
+                };
+                if !matches!(self.env.types.get(*secret), Ty::Secret(_)) {
+                    return;
+                }
+                let members = match self.env.types.get(actual).clone() {
+                    Ty::Union(ms) => ms,
+                    _ => vec![actual],
+                };
+                let mut plain = Vec::new();
+                for m in members {
+                    match self.env.types.get(m) {
+                        Ty::Nil => {}
+                        Ty::Secret(_) => self.unify_at(*secret, m, s, widen),
+                        _ => plain.push(m),
+                    }
+                }
+                if !plain.is_empty() {
+                    let u = self.env.types.union(&plain);
+                    self.unify_at(*param, u, s, widen);
                 }
             }
+            (Ty::Secret(p), Ty::Secret(a)) => self.unify_at(p, a, s, widen),
             (Ty::Named(d1, a1), Ty::Named(d2, a2)) if d1 == d2 => {
                 for (x, y) in a1.iter().zip(&a2) {
                     self.unify_at(*x, *y, s, false);
