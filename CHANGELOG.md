@@ -4,6 +4,10 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ## Unreleased
 
+### Fixed
+
+- `IsModifiedClick` takes a modified click's `BUTTONn` part for the button of the click running (Blizzard's `CHATLINK` is `SHIFT-BUTTON1`): a Shift-click is a chat link in `wowlua test`, as in the game, instead of never
+
 ## [0.9.4] - 2026-10-21
 
 M9 so far: faster filtered test runs for large suites, found while

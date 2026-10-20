@@ -39,6 +39,9 @@ pub struct Input {
     /// Where the mouse is on the screen (`GetCursorPosition`, in the
     /// screen's units: a frame's position times its effective scale).
     pub cursor: (f64, f64),
+    /// The mouse button of the user's click running (`"LeftButton"`, …):
+    /// a modified click's `BUTTONn` part (`IsModifiedClick`).
+    pub clicking: Option<String>,
 }
 
 /// `setCursorPosition(x, y)`: the mouse moved there (screen units, as
@@ -220,6 +223,7 @@ pub fn control_click(vm: &mut Vm, c: NativeCall) -> Ret {
             Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
             _ => String::new(),
         };
+        let outer = engine_mut(vm).world.input.clicking.replace(name.clone());
         // An enabled button's click, down or up as it registered for
         // clicks (`RegisterForClicks`: by default the left button's up
         // click; a secure action button acting on the key down,
@@ -251,6 +255,7 @@ pub fn control_click(vm: &mut Vm, c: NativeCall) -> Ret {
         widgets::run_script(vm, id, "OnMouseUp", &[button, Value::Bool(true)]);
         clicked(vm, false);
         widgets::fire_event(vm, "GLOBAL_MOUSE_UP", &[button]);
+        engine_mut(vm).world.input.clicking = outer;
     });
     Ok(vec![])
 }

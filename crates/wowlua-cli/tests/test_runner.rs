@@ -4562,10 +4562,26 @@ local function submenu()
     mock.advanceFrames(30)
     expect(rowWithText("Child") ~= nil).toBe(true)
 end
+
+@test("a Shift-click is a chat link: CHATLINK's SHIFT-BUTTON1 by the click's button")
+local function chatLink()
+    local b = CreateFrame("Button", nil, UIParent)
+    b:SetSize(20, 20); b:SetPoint("CENTER")
+    b:RegisterForClicks("AnyUp")
+    local seen: any[] = {}
+    b:SetScript("OnClick", function(_b: Button, button: string) seen[#seen + 1] = `{button} {IsModifiedClick("CHATLINK")}` end)
+    expect(GetModifiedClick("CHATLINK")).toBe("SHIFT-BUTTON1")
+    mock.click(b)
+    mock.setModifiers({ shift = true })
+    mock.click(b)
+    mock.click(b, "RightButton")
+    mock.setModifiers({ shift = false })
+    expect(seen).toEqual({ "LeftButton false", "LeftButton true", "RightButton false" })
+end
 "#,
     )]) else {
         return;
     };
     assert!(ok, "{text}");
-    assert!(text.contains("2 passed, 0 failed"), "{text}");
+    assert!(text.contains("3 passed, 0 failed"), "{text}");
 }

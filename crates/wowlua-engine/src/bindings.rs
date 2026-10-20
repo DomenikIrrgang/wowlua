@@ -1092,13 +1092,35 @@ fn is_modified_click(vm: &mut Vm, c: NativeCall) -> Ret {
     if key == "NONE" {
         return Ok(vec![Value::Bool(false)]);
     }
+    // A `BUTTONn` part (Blizzard's defaults: `CHATLINK` is `SHIFT-BUTTON1`)
+    // is the button of the click running, the left one `BUTTON1`;
+    // asked outside a click, the modifiers alone (unverified).
+    let clicking = engine(vm).world.input.clicking.clone();
     let on = key.split('-').all(|part| match part {
         "SHIFT" => held[0],
         "CTRL" => held[1],
         "ALT" => held[2],
+        button if button.starts_with("BUTTON") => {
+            let n = &button["BUTTON".len()..];
+            match clicking.as_deref() {
+                None => true,
+                Some(b) => mouse_button_number(b).is_some_and(|m| m == n),
+            }
+        }
         _ => false,
     });
     Ok(vec![Value::Bool(on)])
+}
+
+/// A mouse button's number in a binding (`LeftButton`: `"1"`, `RightButton`:
+/// `"2"`, `MiddleButton`: `"3"`, `Button4`: `"4"`).
+fn mouse_button_number(button: &str) -> Option<&str> {
+    match button {
+        "LeftButton" => Some("1"),
+        "RightButton" => Some("2"),
+        "MiddleButton" => Some("3"),
+        b => b.strip_prefix("Button"),
+    }
 }
 
 /// A global string, if the UI's strings define it.
