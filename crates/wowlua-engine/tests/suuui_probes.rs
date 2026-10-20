@@ -62,7 +62,13 @@ fn run(vm: &mut Vm, src: &str) -> Vec<String> {
 
 #[test]
 fn the_preferred_play_settings_arrive_as_their_event() {
-    let mut vm = ui_vm().unwrap_or_else(vm);
+    // Logged in either way: the request is answered only after the login
+    // (without the UI code, as on CI, the plain engine logs in here).
+    let mut vm = ui_vm().unwrap_or_else(|| {
+        let mut vm = vm();
+        wowlua_engine::login::login(&mut vm, "MyAddon", false, false);
+        vm
+    });
     let r = run(
         &mut vm,
         "local f = CreateFrame('Frame')
