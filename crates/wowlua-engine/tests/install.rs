@@ -73,3 +73,33 @@ fn every_flavor_installs() {
         wowlua_engine::install(&mut vm, flavor).expect("installs");
     }
 }
+
+/// The `C_` functions' old global names camelot's client lacks (its
+/// inventory, forever-camelot-functions.tsv) are not defined there, the
+/// `C_` functions are; Blizzard's deprecation files' action functions
+/// stand in as the engine's until its UI code loads; another flavor keeps
+/// the old names (unverified).
+#[test]
+fn camelot_lacks_the_old_global_names() {
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    let r = run(
+        &mut vm,
+        "return type(GetItemCount), type(GetMouseFocus), type(InviteUnit), type(PickupContainerItem),
+            type(PickupSpell), type(PickupSpellBookItem), type(RunMacroText), type(SplitContainerItem),
+            type(UseContainerItem), type(UseItemByName),
+            type(C_Item.GetItemCount), type(GetMouseFoci), type(C_PartyInfo.InviteUnit),
+            type(C_Container.PickupContainerItem), type(C_Spell.PickupSpell), type(C_Container.UseContainerItem),
+            type(HasAction), type(GetActionText)",
+    );
+    let mut expected = vec!["nil"; 10];
+    expected.extend(["function"; 8]);
+    assert_eq!(r, expected);
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "vanilla").expect("installs");
+    let r = run(
+        &mut vm,
+        "return type(GetItemCount), type(PickupContainerItem)",
+    );
+    assert_eq!(r, ["function", "function"]);
+}

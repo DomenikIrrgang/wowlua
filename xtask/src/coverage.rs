@@ -22,6 +22,8 @@ const ENGINE_SRC: &str = "crates/wowlua-engine/src";
 const GAPS: &str = "crates/wowlua-engine/data/coverage-gaps.md";
 const REGRESSIONS: &str = "crates/wowlua-engine/data/coverage-regressions.txt";
 const PROBES: &str = "tests/ingame/PROBES.md";
+/// The client's every function, C or Lua (`/stdtest inventory`).
+const INVENTORY: &str = "crates/wowlua-vm/tests/client/forever-camelot-functions.tsv";
 const FULLPROBE_MISSES: &str = "crates/wowlua-cli/tests/fullprobe-misses.txt";
 const METHODPROBE_MISSES: &str = "crates/wowlua-cli/tests/methodprobe-misses.txt";
 
@@ -57,7 +59,9 @@ pub fn generate(root: &Path) -> Result<String> {
         &verification,
         &unverified,
     )?;
-    behaviour(&mut out, &functions, &methods);
+    let inventory_path = root.join(INVENTORY);
+    let inventory = fs::read_to_string(&inventory_path).with_context(|| INVENTORY.to_string())?;
+    behaviour(&mut out, &functions, &methods, &inventory);
     verification.write(&mut out);
     write_unverified(&mut out, &unverified);
     let gaps = fs::read_to_string(root.join(GAPS)).with_context(|| GAPS.to_string())?;
@@ -344,7 +348,7 @@ fn summary(
 
 // ----------------------------------------------------------- behaviour
 
-fn behaviour(out: &mut String, functions: &[Entry], methods: &[Entry]) {
+fn behaviour(out: &mut String, functions: &[Entry], methods: &[Entry], inventory: &str) {
     out.push_str("## API behaviour\n\n");
     out.push_str(
         "Each function's answer comes from one place, the first of these that has one \
@@ -396,11 +400,34 @@ fn behaviour(out: &mut String, functions: &[Entry], methods: &[Entry]) {
         out.push_str(&c.row(label));
     }
     out.push('\n');
-    let engine_only: Vec<String> = functions
+    // The client's Lua functions: Blizzard's UI code defines them (its
+    // deprecation files' `HasAction`), the engine's natives stand in until
+    // it loads.
+    let lua: BTreeSet<&str> = inventory
+        .lines()
+        .filter_map(|l| l.strip_suffix("\tLua"))
+        .collect();
+    let (blizzard, engine_only): (Vec<&Entry>, Vec<&Entry>) = functions
         .iter()
         .filter(|e| e.group == Group::EngineOnly)
-        .map(|e| format!("`{}`", e.name))
-        .collect();
+        .partition(|e| lua.contains(e.name.as_str()));
+    let quoted = |list: &[&Entry]| -> String {
+        list.iter()
+            .map(|e| format!("`{}`", e.name))
+            .collect::<Vec<_>>()
+            .join(", ")
+    };
+    if !blizzard.is_empty() {
+        writeln!(
+            out,
+            "Of the engine's own, Blizzard's UI code defines these in the client (Lua \
+             functions in the client's inventory, its deprecation files' wrappers of the \
+             `C_` functions); the engine's natives stand in for them until that code \
+             loads: {}.\n",
+            quoted(&blizzard)
+        )
+        .unwrap();
+    }
     if !engine_only.is_empty() {
         writeln!(
             out,
@@ -408,7 +435,7 @@ fn behaviour(out: &mut String, functions: &[Entry], methods: &[Entry]) {
              client's inventory lacks them, so an addon's call of one works in `wowlua \
              test` and fails in the game (behaviour the engine shares between flavors, \
              or protected functions it adds): {}.\n",
-            engine_only.join(", ")
+            quoted(&engine_only)
         )
         .unwrap();
     }
@@ -783,7 +810,6 @@ struct Rule {
     /// The module, by its path below `src` (`auras`, `ui/build`).
     module: String,
     file: String,
-    line: usize,
     summary: String,
 }
 
@@ -838,36 +864,35 @@ fn unverified_rules(root: &Path) -> Result<Vec<Rule>> {
         let text = fs::read_to_string(&path)?;
         // Comment paragraphs: consecutive comment lines up to an empty
         // one; a trailing comment is one of its own.
-        let mut block: Vec<(usize, String)> = Vec::new();
-        let mut flush = |block: &mut Vec<(usize, String)>| {
-            if let Some(&(line, _)) = block
+        let mut block: Vec<String> = Vec::new();
+        let mut flush = |block: &mut Vec<String>| {
+            if block
                 .iter()
-                .find(|(_, t)| t.to_ascii_lowercase().contains("unverified"))
+                .any(|t| t.to_ascii_lowercase().contains("unverified"))
             {
-                let joined: Vec<&str> = block.iter().map(|(_, t)| t.as_str()).collect();
+                let joined: Vec<&str> = block.iter().map(String::as_str).collect();
                 rules.push(Rule {
                     module: module.clone(),
                     file: file.clone(),
-                    line,
                     summary: first_sentence(&joined.join(" ")),
                 });
             }
             block.clear();
         };
-        for (i, line) in text.lines().enumerate() {
+        for line in text.lines() {
             let trimmed = line.trim_start();
             if let Some(rest) = trimmed.strip_prefix("//") {
                 let rest = rest.trim_start_matches(['/', '!']).trim();
                 if rest.is_empty() {
                     flush(&mut block);
                 } else {
-                    block.push((i + 1, rest.to_string()));
+                    block.push(rest.to_string());
                 }
                 continue;
             }
             flush(&mut block);
             if let Some((_, comment)) = line.split_once(" // ") {
-                block.push((i + 1, comment.trim().to_string()));
+                block.push(comment.trim().to_string());
                 flush(&mut block);
             }
         }
@@ -884,7 +909,8 @@ fn write_unverified(out: &mut String, rules: &[Rule]) {
          documentation or UI code, warcraft.wiki.gg, elune or the function's name, not \
          on a probe of the client. An in-game probe confirms or corrects each \
          ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first \
-         sentence.\n",
+         sentence, in the file's order; the file is cited without a line number so the \
+         page changes only when a rule is added, removed or reworded.\n",
         thousands(rules.len())
     )
     .unwrap();
@@ -897,11 +923,9 @@ fn write_unverified(out: &mut String, rules: &[Rule]) {
         for r in list {
             writeln!(
                 out,
-                "- [{}:{}](../{}#L{}): {}",
+                "- [{}](../{}): {}",
                 r.file.trim_start_matches(&format!("{ENGINE_SRC}/")),
-                r.line,
                 r.file,
-                r.line,
                 r.summary
             )
             .unwrap();
