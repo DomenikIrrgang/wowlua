@@ -37,6 +37,14 @@ s:test("a state driver", function(t)
     sub:cancel()
 end)
 
+s:test("a driver without a function", function(t)
+    const f = CreateFrame("Frame")
+    const sub = secure.state(f, "stdonly", "[nocombat] calm; fight")
+    t:wait(0.3)
+    t:eq(f:GetAttribute("state-stdonly"), "calm", "the driver sets the attribute")
+    sub:cancel()
+end)
+
 local g = suite("secure (guided)", "guided")
 
 g:test("a state driver follows Shift", function(t)

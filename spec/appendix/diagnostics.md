@@ -237,7 +237,7 @@ is reported as the warning with the same number (`E2001` â†’ `W2001`, `E2030` â†
 | E8106 | Base locale file missing |
 | E8107 | Settings dropdown option value not in the field's type |
 | E8108 | `wowlua:test` / `wowlua:mock` imported outside a test file |
-| E8112 | Slash router: invalid `ArgSpec`, or `run` parameters don't match `args`/`flags` |
+| E8112 | Slash router (`router`, `Router:add`): invalid `ArgSpec`, or `run` parameters don't match `args`/`flags` |
 | E8113 | Settings control key not found in the store's type |
 | E8114 | `settings.register` called more than once |
 | E8115 | Locale file is not a JSON object of strings |

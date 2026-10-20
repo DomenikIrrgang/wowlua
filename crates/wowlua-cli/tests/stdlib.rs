@@ -1009,6 +1009,10 @@ local s = StdC.step("twice")
 StdC.defer(s)
 StdC.defer(s)
 StdC.apply(2)
+-- With a key: the first call's place, the latest function.
+StdC.defer(StdC.step("key a1"), "a")
+StdC.defer(StdC.step("key b"), "b")
+StdC.defer(StdC.step("key a2"), "a")
 -- Combat starts again in the middle of the flush: the rest waits.
 StdC.defer(StdC.restart)
 StdC.defer(StdC.step("after restart"))
@@ -1029,6 +1033,8 @@ Mock.fire("PLAYER_REGEN_ENABLED")
             "apply 2",
             "step twice",
             "step twice",
+            "step key a2",
+            "step key b",
             "restart",
             "in combat again true",
             "step after restart",
@@ -1686,6 +1692,62 @@ fn slash_router_help() {
     assert_eq!(out[0..9], out[9..18], "{out:?}");
 }
 
+/// Commands added and removed at run time, with owners; help and
+/// `commands()` in the order they were added (`order = "added"`).
+#[test]
+fn slash_router_commands_come_and_go() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import slash, router from "wowlua:slash"
+local owner = {}
+local cmds = router({ zeta = { run = function() print("zeta") end, help = "Defined first" } }, { order = "added" })
+cmds:add("beta", { args = { "number" }, run = function(n: number) print("beta", n) end, help = "B", aliases = { "b" } }, owner)
+cmds:add("alpha", { run = function() print("alpha") end }, owner)
+cmds:add("solo", { run = function() print("solo") end })
+_G.StdCmds = cmds
+_G.StdOwner = owner
+@slash("/std")
+local function onCommand(msg: string) print("->", cmds:dispatch(msg)) end
+"#,
+        )],
+        "",
+        r#"Mock.slash("/std b 2")
+Mock.slash("/std help")
+for _, c in ipairs(StdCmds:commands()) do print(c.name, c.usage, c.help, #c.aliases, c.owner == StdOwner) end
+print(pcall(StdCmds.add, StdCmds, "other", { run = function() end, aliases = { "B" } }))
+StdCmds:removeAll(StdOwner)
+StdCmds:remove("solo")
+StdCmds:remove("nothing")
+Mock.slash("/std b 2")
+"#,
+    );
+    let out: Vec<String> = plain(&out)
+        .iter()
+        .map(|l| l.replace("|cff33ff99Std|r: ", ""))
+        .collect();
+    assert_eq!(
+        out,
+        [
+            "beta 2",
+            "-> true",
+            "zeta - Defined first",
+            "beta <number> - B",
+            "alpha",
+            "solo",
+            "-> true",
+            "zeta zeta Defined first 0 false",
+            "beta beta <number> B 1 true",
+            "alpha alpha nil 0 true",
+            "solo solo nil 0 false",
+            "false router: \"B\" is taken by the command \"beta\"",
+            // Only zeta is left: the help, and not dispatched.
+            "zeta - Defined first",
+            "-> false",
+        ],
+        "{out:?}"
+    );
+}
 // -------------------------------------------------------------- callbacks --
 
 #[test]
@@ -1707,7 +1769,8 @@ events:offAll(owner)
 events:fire("Kill", 3)
 events:fire("Nobody", 1)
 
--- Changes during a fire apply to the next one.
+-- A handler added during a fire waits for the next one; one cancelled
+-- during a fire is skipped at once.
 local late: any = nil
 local second: any = nil
 events:on("Tick", function()
@@ -1723,6 +1786,20 @@ events:fire("Tick")
 local sub = events:on("Solo", function() end)
 sub:cancel()
 print("solo", events:has("Solo"), sub.active)
+
+-- Removal by name and function (every subscription of it, `once` too),
+-- and by owner and name.
+local onKill = function(n: number) print("by function", n) end
+events:on("Kill", onKill)
+events:once("Kill", onKill)
+events:on("Reset", function() print("reset kept") end, owner)
+events:on("Kill", function(n: number) print("owner's kill", n) end, owner)
+events:fire("Kill", 20)
+events:off("Kill", onKill)
+events:offAll(owner, "Kill")
+events:fire("Kill", 21)
+events:fire("Reset")
+events:offAll(owner)
 
 -- A plain Lua consumer, CallbackHandler style.
 local consumer: any = {}
@@ -1763,10 +1840,13 @@ print("compat", plainRegistry.RegisterCallback == nil)
             "first kill 1",
             "kill 2",
             "tick 1",
-            "tick 2",
             "tick 1",
             "tick late",
             "solo false false",
+            "by function 20",
+            "by function 20",
+            "owner's kill 20",
+            "reset kept",
             "method true Kill 4",
             "method arg x Kill 5",
             "default method Kill 6",
@@ -1865,6 +1945,40 @@ fn core_modules_are_checked_at_compile_time() {
         (
             "import router from \"wowlua:slash\"\nlocal r = router({ go = { args = { \"number\" }, flags = { \"all\" }, run = function(a) end } })\n",
             "E8112",
+        ),
+        // Commands added later are checked alike.
+        (
+            "import router from \"wowlua:slash\"\nlocal r = router({})\nr:add(\"go\", { args = { \"number\" }, run = function(a: number, b: string) end })\n",
+            "E8112",
+        ),
+        (
+            "import router from \"wowlua:slash\"\nlocal r = router({})\nr:add(\"go\", { args = { \"rest\", \"number\" }, run = function(a: string, b: number) end })\n",
+            "E8112",
+        ),
+        // A registry's names and handlers in `off` and `offAll`.
+        (
+            "import * as callbacks from \"wowlua:callbacks\"\ninterface Ev\n    Kill: (n: number) -> ()\nend\nlocal r: callbacks.Registry<Ev> = callbacks.registry()\nr:off(\"Kil\", function(n: number) end)\n",
+            "E8420",
+        ),
+        (
+            "import * as callbacks from \"wowlua:callbacks\"\ninterface Ev\n    Kill: (n: number) -> ()\nend\nlocal r: callbacks.Registry<Ev> = callbacks.registry()\nr:offAll({}, \"Kil\")\n",
+            "E8420",
+        ),
+        (
+            "import * as callbacks from \"wowlua:callbacks\"\ninterface Ev\n    Kill: (n: number) -> ()\nend\nlocal r: callbacks.Registry<Ev> = callbacks.registry()\nr:off(\"Kill\", function(n: string) end)\n",
+            "E2001",
+        ),
+        (
+            "import * as callbacks from \"wowlua:callbacks\"\ninterface Ev\n    Kill: (n: number) -> ()\nend\nlocal r: callbacks.Registry<Ev> = callbacks.registry()\nr:off(\"Kill\")\n",
+            "E2007",
+        ),
+        (
+            "import * as callbacks from \"wowlua:callbacks\"\ninterface Ev\n    Kill: (n: number) -> ()\nend\nlocal r: callbacks.Registry<Ev> = callbacks.registry()\nlocal sub = r:on(\"Kill\", function() end)\nr:off(sub, function() end)\n",
+            "E2006",
+        ),
+        (
+            "import * as callbacks from \"wowlua:callbacks\"\ninterface Ev\n    Kill: (n: number) -> ()\nend\nlocal r: callbacks.Registry<Ev> = callbacks.registry()\nlocal name = \"Kill\"\nr:off(name, function() end)\n",
+            "E2001",
         ),
         (
             "import * as saved from \"wowlua:saved\"\nlocal n = \"StdDB\"\nlocal db = saved.bind(n, { version = 1, defaults = {} })\n",
@@ -2078,6 +2192,52 @@ hook("PlayerSpellsFrame", "Show", function() end, { addon = "Blizzard_PlayerSpel
 local function shown() end
 local frame = CreateFrame("Frame", "StdOwnFrame")
 hookScript("StdOwnFrame", "OnShow", function() end)
+"#,
+        ),
+        (
+            "src/later.wowlua",
+            r#"import router from "wowlua:slash"
+import * as callbacks from "wowlua:callbacks"
+import * as secret from "wowlua:secret"
+import * as tbl from "wowlua:table"
+import * as log from "wowlua:log"
+import * as secure from "wowlua:secure"
+import defer from "wowlua:combat"
+
+-- Commands that come and go, listed in the order they were added.
+local owner = {}
+local r = router({}, { order = "added" })
+r:add("go", { args = { "number", "rest" }, run = function(a: number, b: string) end }, owner)
+r:add("stop", { run = function() end, help = "Stop" })
+for _, c in ipairs(r:commands()) do print(c.name, c.usage, c.help, #c.aliases) end
+r:remove("stop")
+r:removeAll(owner)
+
+interface Ev
+    Kill: (n: number) -> ()
+end
+local events: callbacks.Registry<Ev> = callbacks.registry()
+local onKill = function(n: number) end
+local sub = events:on("Kill", onKill, owner)
+events:off("Kill", onKill)
+events:off(sub)
+events:offAll(owner, "Kill")
+events:offAll(owner)
+
+-- Truthy flags from legacy answers, and the readable narrowing.
+local inRaid: boolean = secret.flag(UnitInRaid("player"))
+local level = UnitLevel("player")
+if secret.readable(level) and level > 10 then print(inRaid) end
+
+local copied = tbl.copy({ a = { 1 } }, { shared = false })
+local names = tbl.keys({ [1] = true, b = true }, function(a: number | string, b: number | string) return tostring(a) < tostring(b) end)
+print(copied, names)
+
+log.configure({ prefix = "|cff9fd3c7Std|r ", chatLevel = "debug" })
+local header = CreateFrame("Frame", nil, UIParent, "SecureHandlerStateTemplate")
+local paging = secure.state(header, "page", "[mod:shift] 2; 1")
+paging:cancel()
+defer(function() header:Show() end, "header")
 "#,
         ),
         (
@@ -3350,11 +3510,18 @@ local s = Mock.secret()
 print(secret.isSecret(s), secret.isSecret(1), secret.known(s, 5), secret.known(nil, 6), secret.known(7, 0))
 print(secret.flag(s), secret.flag(true), secret.flag(nil), secret.flag(false))
 print(secret.amount(s) == s, secret.amount(nil), secret.amount(3))
+-- `flag` by truthiness (legacy 1/nil answers); `readable`: present, not secret.
+print(secret.flag(1), secret.flag(0), secret.flag("yes"), secret.readable(s), secret.readable(nil), secret.readable(false), secret.readable(0))
 "#,
     );
     assert_eq!(
         plain(&out),
-        ["true false 5 6 7", "false true false false", "true 0 3",]
+        [
+            "true false 5 6 7",
+            "false true false false",
+            "true 0 3",
+            "true true true false false true true",
+        ]
     );
 }
 
@@ -3607,6 +3774,90 @@ print("again", engine.unit, engine:IsShown())
     );
 }
 
+/// `aura.container`'s group options and setters: `exclude`, per-group
+/// size, spacing, order and gap, lazy groups (added once they have room,
+/// keeping their place and what was set meanwhile), a new filter, spells
+/// that keep the dispel types, and sizes applied out of combat;
+/// `hasContainers`.
+#[test]
+fn aura_container_groups_change_later() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as aura from "wowlua:aura"
+_G.StdAura = aura
+_G.StdContainer = aura.container(UIParent, {
+    unit = "player",
+    lazy = true,
+    size = 20,
+    spacing = 3,
+    groups = {
+        { key = "debuffs", filter = "HARMFUL", exclude = { 116 } },
+        { key = "later", filter = "HELPFUL", max = 0, dispelTypes = { "Curse" }, spacing = 1, gap = 5 },
+        { key = "first", filter = "HELPFUL|PLAYER", order = 0, size = 16 },
+    },
+})
+"#,
+        )],
+        AURA_SETUP,
+        r#"Mock.loadAddon("Std")
+local c = StdContainer
+local engine = c.frame
+print("has", StdAura.hasContainers())
+local function groups()
+    local parts = {}
+    for _, g in ipairs(engine.groups) do
+        local l = g.options.layout
+        parts[#parts + 1] = `{g.key}:{g.filter}:{l.layoutIndex}:{l.elementWidth}:{l.elementSpacing}:{tostring(l.groupSpacing)}`
+    end
+    print(table.concat(parts, " "))
+end
+groups()
+c:refresh()
+print("debuffs", table.concat(engine.showing.debuffs, " "))
+-- What a lazy group gets before it has room waits for it.
+c:setGroupFilter("later", "HARMFUL")
+c:setGroupSpells("later", { 980, 116 })
+c:setGroupMax("later", 2)
+groups()
+c:refresh()
+print("later", table.concat(engine.showing.later, " "))
+c:setGroupFilter("debuffs", "HELPFUL|PLAYER")
+c:refresh()
+print("debuffs now", engine.groups[1].filter, table.concat(engine.showing.debuffs, " "))
+-- Sizes wait for the end of combat; new buttons take the latest.
+local button = engine.groups[2].buttons[1]
+print("size", button:GetSize())
+Mock.fire("PLAYER_REGEN_DISABLED")
+c:setGroupSize("first", 30)
+c:setGroupSize("first", 32)
+print("in combat", button:GetWidth(), engine.groups[2].options.layout.elementWidth)
+Mock.fire("PLAYER_REGEN_ENABLED")
+print("after combat", button:GetSize())
+Mock.auras.player[#Mock.auras.player + 1] = { name = "Mark", spellId = 1126, auraInstanceID = 6, isHelpful = true, isFromPlayerOrPlayerPet = true, applications = 0 }
+c:refresh()
+print("new button", engine.groups[2].buttons[2]:GetSize())
+Mock.noAuraContainers = true
+print("has", StdAura.hasContainers())
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "has true",
+            "debuffs:HARMFUL:1:20:3:nil first:HELPFUL|PLAYER:0:16:3:nil",
+            "debuffs 980",
+            "debuffs:HARMFUL:1:20:3:nil first:HELPFUL|PLAYER:0:16:3:nil later:HARMFUL:2:20:1:5",
+            "later 980",
+            "debuffs now HELPFUL|PLAYER 1459",
+            "size 16 16",
+            "in combat 16 32",
+            "after combat 32 32",
+            "new button 32 32",
+            "has false",
+        ]
+    );
+}
 // ------------------------------------------------------------------ spell --
 
 /// `wowlua:spell`: spell data, cooldowns with secret times (still telling
@@ -4173,6 +4424,18 @@ local doubled = tbl.map({ 1, 2, 3 }, function(v) return v * 2 end)
 local odd = tbl.filter({ 1, 2, 3, 4 }, function(v) return v % 2 == 1 end)
 local found, at = tbl.find({ "a", "b" }, function(v) return v == "b" end)
 print(table.concat(doubled, ","), table.concat(odd, ","), found, at, tbl.contains({ "x" }, "x"))
+-- Keys are kept as they are (a frame or a table as a key stays itself).
+local frame = CreateFrame("Frame")
+local key = {}
+local byKey = tbl.copy({ [frame] = 1, [key] = { 2 } })
+print(byKey[frame], byKey[key][1], byKey[key] ~= nil)
+-- `shared = false`: no two places share a table; a cycle is an error.
+local shared = { 1 }
+local both = { a = shared, b = shared }
+local kept, apart = tbl.copy(both), tbl.copy(both, { shared = false })
+print(kept.a == kept.b, apart.a == apart.b, apart.a[1], apart.a ~= shared)
+print(pcall(tbl.copy, t, { shared = false }))
+print(table.concat(tbl.keys({ [2] = 1, b = 2, [1] = 3 }, function(x, y) return tostring(x) < tostring(y) end), ","))
 "#,
     );
     assert_eq!(
@@ -4184,6 +4447,10 @@ print(table.concat(doubled, ","), table.concat(odd, ","), found, at, tbl.contain
             "true false false",
             "a,b,c 3 true",
             "2,4,6 1,3 b 2 true",
+            "1 2 true",
+            "true false 1 true",
+            "false copy: the table contains itself, which `shared = false` cannot copy",
+            "1,2,b",
         ]
     );
 }
@@ -4564,6 +4831,12 @@ Mock.fire("GROUP_ROSTER_UPDATE")
 secure.visibility(box, nil)
 Mock.fire("PLAYER_REGEN_DISABLED")
 print("no driver", box:IsShown(), #Mock.stateDrivers)
+-- Without `fn`, only the driver (for an `_onstate-<name>` snippet).
+Mock.fire("PLAYER_REGEN_ENABLED")
+local page = secure.state(box, "page", "[mod:shift] 2; 1")
+print("driver only", #Mock.stateDrivers, box:GetAttribute("state-page"))
+page:cancel()
+print("removed", #Mock.stateDrivers)
 print(secure.evaluate("[combat] a; b"), secure.evaluate("[nocombat] a"))
 print(#Mock.errors)
 "#,
@@ -4579,7 +4852,9 @@ print(#Mock.errors)
             "state group",
             "state fast",
             "no driver false 0",
-            "a nil",
+            "driver only 1 1",
+            "removed 0",
+            "b a",
             "0",
         ]
     );

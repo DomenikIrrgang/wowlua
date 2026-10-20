@@ -168,6 +168,13 @@ pub fn check_package_full(
         .and_then(|t| t.get("Registry"))
         .copied();
     env.declared.set_callbacks_registry(registry);
+    let router = files
+        .iter()
+        .position(|f| f.src_rel == format!("{}slash.wowlua", crate::STDLIB_PREFIX))
+        .and_then(|i| env.module_types.get(&i))
+        .and_then(|t| t.get("Router"))
+        .copied();
+    env.declared.set_slash_router(router);
     // Shared mode: APIs only some flavors declare are known (as `any`), so
     // that their uses report E2030.
     if let Some(shared) = shared {

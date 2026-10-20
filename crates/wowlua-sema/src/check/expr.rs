@@ -366,6 +366,7 @@ impl Checker<'_, '_> {
                     None => self.method_type(o, name.text(), name.span()),
                 };
                 let m = self.registry_method_type(o, name.text(), args, m);
+                self.check_router_add(o, name.text(), args);
                 let results = self.call(m, Some(o), args, e.span(), expected);
                 self.forget_passed(Some(obj), args);
                 if opt || chained {
@@ -2511,9 +2512,10 @@ impl Checker<'_, '_> {
     /// A standard-library call typed by its event or message: the handler
     /// of `on`, `once` and `onUnit` gets the event's parameters, and `send`
     /// takes the message's.
-    /// `registry:on/once/fire(name, …)` on a `callbacks.Registry<E>`: `name`
-    /// must be a literal key of `E` (E8420); the handler, or the arguments,
-    /// are checked against `E[name]` (spec stdlib "callbacks").
+    /// `registry:on/once/off/offAll/fire(…)` on a `callbacks.Registry<E>`:
+    /// an event name must be a literal key of `E` (E8420); the handler, or
+    /// the arguments, are checked against `E[name]` (spec stdlib
+    /// "callbacks"). `off` takes a subscription, or a name and a handler.
     fn registry_method_type(
         &mut self,
         o: TypeId,
@@ -2521,7 +2523,7 @@ impl Checker<'_, '_> {
         args: Args<'_>,
         m: TypeId,
     ) -> TypeId {
-        if !matches!(method, "on" | "once" | "fire") {
+        if !matches!(method, "on" | "once" | "off" | "offAll" | "fire") {
             return m;
         }
         let Ty::Named(d, targs) = self.env.types.get(o).clone() else {
@@ -2537,10 +2539,16 @@ impl Checker<'_, '_> {
             return m;
         }
         let exprs = args.exprs();
-        let Some(first) = exprs.first() else {
+        // `offAll(owner, name?)`: the name is the second argument.
+        let at = if method == "offAll" { 1 } else { 0 };
+        let Some(first) = exprs.get(at) else {
             return m;
         };
         let ExprKind::String(lit) = first.kind() else {
+            if method == "off" {
+                // `off(sub)`: a subscription, and nothing after it.
+                return self.registry_off_subscription(m);
+            }
             let msg = format!(
                 "the event name of `{method}` must be a string literal naming a key of `{}`",
                 self.env.display(events)
@@ -2557,6 +2565,9 @@ impl Checker<'_, '_> {
             self.report("E8420", first.span(), msg);
             return m;
         };
+        if method == "offAll" {
+            return m;
+        }
         let (Ty::Func(f), Some(h)) = (self.env.types.get(m).clone(), self.as_func(handler)) else {
             return m;
         };
@@ -2567,7 +2578,53 @@ impl Checker<'_, '_> {
             f.rest = h.rest;
         } else if let Some(p) = f.params.get_mut(1) {
             p.ty = handler;
+            if method == "off" {
+                // `off(name, handler)`: a name needs its handler.
+                p.optional = false;
+                f.params[0].ty = Types::STRING;
+            }
         }
+        self.env.types.func(f)
+    }
+
+    /// `router:add(name, command, owner?)` on a `slash.Router`: a literal
+    /// command is checked as `router`'s are (E8112, spec stdlib "slash").
+    fn check_router_add(&mut self, o: TypeId, method: &str, args: Args<'_>) {
+        if method != "add" {
+            return;
+        }
+        let Ty::Named(d, _) = self.env.types.get(o).clone() else {
+            return;
+        };
+        if self.env.declared.slash_router() != Some(d) {
+            return;
+        }
+        let Some(command) = args.exprs().get(1) else {
+            return;
+        };
+        for (span, message, _) in crate::stdlib::router_command_problems(command) {
+            self.report("E8112", span, message);
+        }
+    }
+
+    /// `registry:off(sub)`: `off`'s type without the name form, so that a
+    /// name that is no literal, or a handler after a subscription, is
+    /// reported.
+    fn registry_off_subscription(&mut self, m: TypeId) -> TypeId {
+        let Ty::Func(f) = self.env.types.get(m).clone() else {
+            return m;
+        };
+        let mut f = std::sync::Arc::unwrap_or_clone(f);
+        let Some(target) = f.params.first().map(|p| p.ty) else {
+            return m;
+        };
+        if let Ty::Union(ms) = self.env.types.get(target).clone() {
+            let rest: Vec<TypeId> = ms.iter().copied().filter(|&t| t != Types::STRING).collect();
+            if let [sub] = rest.as_slice() {
+                f.params[0].ty = *sub;
+            }
+        }
+        f.params.truncate(1);
         self.env.types.func(f)
     }
 

@@ -41,15 +41,19 @@ end
 
 --- Evaluates a macro conditional on `frame` as the state `name` and calls
 --- `fn(value)` with each new value (the first right away), also in combat.
-export function state(frame: Frame, name: string, conditional: string, fn: (value: string) -> ()): Subscription
+--- Without `fn` only the driver is registered (for an `_onstate-<name>`
+--- snippet), and nothing is hooked.
+export function state(frame: Frame, name: string, conditional: string, fn: ((value: string) -> ())?): Subscription
     const watch = StateWatch.new(frame, name)
-    -- The driver sets the attribute `state-<name>` (names are lowercase).
-    const attribute = `state-{name:lower()}`
-    frame:HookScript("OnAttributeChanged", function(_: any, key: string, value: any)
-        if watch.active and key == attribute then
-            callIn({ component = "secure: state" }, fn, tostring(value))
-        end
-    end)
+    if fn then
+        -- The driver sets the attribute `state-<name>` (names are lowercase).
+        const attribute = `state-{name:lower()}`
+        frame:HookScript("OnAttributeChanged", function(_: any, key: string, value: any)
+            if watch.active and key == attribute then
+                callIn({ component = "secure: state" }, fn, tostring(value))
+            end
+        end)
+    end
     combat.defer(function()
         if watch.active then
             RegisterStateDriver(frame, name, conditional)

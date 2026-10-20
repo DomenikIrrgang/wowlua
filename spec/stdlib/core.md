@@ -180,6 +180,12 @@ local commands = router({
 
 @slash("/kt", "/killtracker")
 local function onRouted(msg: string) commands:dispatch(msg) end
+
+-- Commands that come and go: added by a module, removed with it.
+commands:add("errors", { args = { "rest" }, run = function(filter: string) showErrors(filter) end,
+                         help = "List errors" }, errorsModule)
+commands:removeAll(errorsModule)
+for _, c in ipairs(commands:commands()) do palette:add(c.name, c.help) end
 ```
 
 ### `@slash`
@@ -214,12 +220,19 @@ declare module "wowlua:slash"
         run: (...any) -> ()                      -- checked against args/flags (intrinsic)
     end
 
+    type CommandInfo = { name: string, usage: string, help?: string, aliases: string[], owner?: any }
+    type RouterOptions = { order?: "name" | "added" }
+
     interface Router
         function dispatch(msg: string): boolean
         function help(): string
+        function add(name: string, command: Command, owner: any?)
+        function remove(name: string)
+        function removeAll(owner: any)
+        function commands(): CommandInfo[]
     end
 
-    function router(commands: { [string]: Command }): Router
+    function router(commands: { [string]: Command }, opts: RouterOptions?): Router
 end
 ```
 
@@ -231,7 +244,9 @@ end
 | Flags | `--name` tokens anywhere after the command set `flags.name = true`, except inside a `"rest"` argument's text (which starts at the first token after the arguments before it, as typed). Unknown flags are a usage error. |
 | Calling `run` | Positional values in order, then the flags table **last** if `flags` is declared. The compiler checks `run`'s parameter types against `args` and `flags` (intrinsic check, E8112 for a mismatch or an invalid `ArgSpec`). |
 | Errors | A conversion or arity error prints `Usage: /<cmd> <command> <args>` for that command and returns `true`. |
-| Help | `help` and an empty message print one line per command, sorted by name: `/<cmd> <command> <args> - <help>`. Output goes through `print` from `wowlua:log`. An unknown command prints the help and `dispatch` returns `false`. |
+| Help | `help` and an empty message print one line per command: `/<cmd> <command> <args> - <help>`. Output goes through `print` from `wowlua:log`. An unknown command prints the help and `dispatch` returns `false`. |
+| Help order | Sorted by name by default. With `{ order = "added" }`, in the order the commands were added: the definitions first (sorted by name, as a table has no order), then each `add`. `commands()` lists them in the same order, with their `usage` (name and arguments), `help`, `aliases` and `owner`. |
+| Adding and removing | `add(name, command, owner?)` adds a command at run time; a literal `command` is checked as the definitions are (E8112), and a name or alias already taken (case-insensitive) is an error. `remove(name)` removes a command and its aliases (nothing when there is none); `removeAll(owner)` removes every command added with that owner. |
 
 ## saved
 
@@ -401,3 +416,17 @@ Decorated methods keep **per-instance state** in a weak-keyed table indexed by
 `self`, so each object has its own throttle. Functions decorated with
 `@throttle`, `@debounce` or `@nextFrame` must return nothing (E8030), because
 calls may be deferred.
+
+Coalescing several kinds of work on the next frame needs no flusher of its
+own: one `@nextFrame` function per kind coalesces each kind, and all of them
+run on the next frame in the order they were first called.
+
+```wowlua
+@nextFrame
+local function cooldownPass() … end
+@nextFrame
+local function usablePass() … end
+
+on("SPELL_UPDATE_COOLDOWN", function() cooldownPass() end)
+on("SPELL_UPDATE_USABLE", function() usablePass() end)
+```

@@ -65,6 +65,22 @@ s:test("router: commands, aliases, typed arguments", function(t)
     t:eq(table.concat(got, " | "), "show | show | scale 1.5 | scale -2 | mode heal true | mode tank false | mode tank nil", "converted")
 end)
 
+s:test("router: commands added and removed", function(t)
+    got = {}
+    const owner = {}
+    const later = router({}, { order = "added" })
+    later:add("zulu", { run = function() record("zulu") end, help = "Z" }, owner)
+    later:add("alpha", { args = { "number" }, run = function(n: number) record("alpha", n) end, aliases = { "a" } })
+    later:dispatch("a 3")
+    t:eq(later:help(), "zulu - Z\nalpha <number>", "help in the order added")
+    t:ok(not pcall(later.add, later, "A", { run = function() end }), "a taken name is refused")
+    later:removeAll(owner)
+    later:remove("alpha")
+    t:eq(#later:commands(), 0, "all removed")
+    t:eq(later:dispatch("a 3"), false, "not dispatched any more")
+    t:eq(table.concat(got, " | "), "alpha 3", "ran once")
+end)
+
 s:test("router: rest text, quotes and flags", function(t)
     got = {}
     commands:dispatch([[say "two words" hello there  friend  ]])
