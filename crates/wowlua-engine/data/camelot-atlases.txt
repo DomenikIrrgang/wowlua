@@ -173,6 +173,10 @@ newplayertutorial-yellowglow-redbutton-middle
 newplayertutorial-yellowglow-redbutton-right	25	49
 Nzoth-charactersheet-item-glow	66	66
 pvpqueue-sidebar-honorbar-background
+# The quest log scroll frame's bottom shadow (its height divides an offset):
+# the size from Ketho's BlizzardInterfaceResources, forever c5a49d394564
+# (AtlasInfo.lua), not probed.
+QuestLog-Frame-Gradient-bottom	307	66
 RedButton-Condense
 RedButton-Condense-disabled
 RedButton-Condense-Pressed
