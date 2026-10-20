@@ -870,7 +870,10 @@ fn rewarded(vm: &mut Vm, c: NativeCall) -> Ret {
     for bag in bags {
         crate::character::bag_updated(vm, bag);
     }
-    fire(vm, "BAG_UPDATE_DELAYED", &[]);
+    // At once, not at the frame's end as a loot's (recorded once,
+    // `quest` 122.368: the log's updates after it, out of their names'
+    // order; unverified).
+    widgets::fire_now(vm, "BAG_UPDATE_DELAYED", &[]);
     sync_log(vm);
     fire(vm, "QUEST_LOG_UPDATE", &[]);
     {
@@ -958,7 +961,9 @@ fn reward_in_bags(vm: &mut Vm, c: NativeCall) -> Ret {
     units::fire_unit(vm, "UNIT_INVENTORY_CHANGED", units::PLAYER, &[]);
     fire(vm, "PLAYER_AVG_ITEM_LEVEL_UPDATE", &[]);
     fire(vm, "PLAYER_AVG_ITEM_LEVEL_UPDATE", &[]);
-    fire(vm, "BAG_UPDATE_DELAYED", &[]);
+    // At once, as the turn-in's (recorded once, `quest` 122.537: the
+    // health's maximum after it; unverified).
+    widgets::fire_now(vm, "BAG_UPDATE_DELAYED", &[]);
     units::fire_unit(vm, "UNIT_MAXHEALTH", units::PLAYER, &[]);
     if let Some(target) = engine(vm).units.target {
         units::fire_unit(vm, "UNIT_MAXHEALTH", target, &[]);

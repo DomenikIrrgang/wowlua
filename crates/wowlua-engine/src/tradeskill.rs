@@ -138,6 +138,14 @@ pub struct Timing {
     pub item: Option<f64>,
     pub bags: Option<f64>,
     pub data: Option<f64>,
+    /// The bags' packet split: its first changes (`split`, the item's
+    /// first), the rest and the reagents' taking these seconds after
+    /// (`rest`).
+    pub split: Option<(usize, f64)>,
+    /// A used-up reagent's removal after the item (`spent`; else with it).
+    pub spent: Option<f64>,
+    /// A new slot's bag told before the item's push (`slotFirst`).
+    pub slot_first: bool,
 }
 
 #[derive(Default)]
@@ -172,6 +180,14 @@ pub struct TradeSkill {
     /// The recorded timings of the casts to come, and the running one's.
     pub timings: VecDeque<Timing>,
     pub timing: Option<Timing>,
+    /// The bags' packet's split of the item being made (`Timing::split`).
+    pub split: Option<(usize, f64)>,
+    /// When the item being made's used-up reagents' removal is told after
+    /// it (`Timing::spent`).
+    pub spent: Option<f64>,
+    /// The item being made's new slot told before its push
+    /// (`Timing::slot_first`).
+    pub slot_first: bool,
     /// The windows shown this session.
     pub shown: u32,
 }
@@ -1090,6 +1106,9 @@ fn crafted(vm: &mut Vm, c: NativeCall) -> Ret {
     let held = state_mut(vm).held.take();
     let delay = crate::clock::server_delay(vm);
     let timing = state_mut(vm).timing.take().unwrap_or_default();
+    state_mut(vm).split = timing.split;
+    state_mut(vm).spent = timing.spent;
+    state_mut(vm).slot_first = timing.slot_first;
     let r = Value::Num(recipe);
     let queued_bags = BAGS_AFTER_SUCCESS - QUEUED_ITEM_AFTER;
     if left > 0 {
@@ -1235,6 +1254,12 @@ pub fn control_timings(vm: &mut Vm, c: NativeCall) -> Ret {
             item: get("item"),
             bags: get("bags"),
             data: get("data"),
+            split: get("split").zip(get("rest")).map(|(k, r)| (k as usize, r)),
+            spent: get("spent"),
+            slot_first: {
+                let key = vm.str("slotFirst");
+                vm.heap.table(e).get(key).truthy()
+            },
         };
         state_mut(vm).timings.push_back(timing);
     }
@@ -1256,6 +1281,14 @@ fn make(vm: &mut Vm, recipe: i64, bags_after: f64, data_after: Option<f64>) {
         .collect();
     let placed = crate::character::push_to_bags(vm, output, quantity);
     let (bag, new_slot) = placed.unwrap_or((0, None));
+    // A new slot's bag told at once, before the push in a recording's
+    // (`slotFirst`: `profession` 205.375, the first tin bar).
+    let told = new_slot.is_some()
+        && bag == crate::character::REAGENT_BAG
+        && std::mem::take(&mut state_mut(vm).slot_first);
+    if told {
+        crate::character::bag_updated(vm, bag);
+    }
     let icon = crate::character::item_field(vm, output, "icon");
     fire(
         vm,
@@ -1317,26 +1350,67 @@ fn make(vm: &mut Vm, recipe: i64, bags_after: f64, data_after: Option<f64>) {
     // A new slot's bag told at once (recorded: the first copper and bronze
     // bars; unverified: the wheel's in the backpack, told later only).
     if new_slot.is_some() && bag == crate::character::REAGENT_BAG {
-        crate::character::bag_updated(vm, bag);
+        if !told {
+            crate::character::bag_updated(vm, bag);
+        }
         fire(vm, "BAG_UPDATE_DELAYED", &[]);
     }
     // The reagents taken; the bags changed, in order (a bag once per slot
     // changed), the item's last.
     let mut changes: Vec<i64> = Vec::new();
+    let mut emptied: Vec<i64> = Vec::new();
+    // The bags' packet split (a recording's): the item's change first, the
+    // reagents taken and told with the rest (recorded once, `profession`
+    // 192.501: the first part's bag read the ore not yet taken).
+    let split = state_mut(vm).split.take();
+    let mut owed: Vec<(i64, f64)> = Vec::new();
     for (id, count) in &reagents {
-        changes.extend(crate::character::take_from_bags(vm, *id, *count));
+        if split.is_some() {
+            changes.extend(crate::character::bags_to_take(vm, *id, *count));
+            owed.push((*id, *count));
+            continue;
+        }
+        let bags = crate::character::take_from_bags(vm, *id, *count);
+        // A reagent used up: its slots' removal told with the item or a
+        // moment after (`spent`, a recording's: the equipped spells', the
+        // reagent bag's inventory's), their bags' updates bare at the
+        // bags' packet's end, after the item's (recorded twice:
+        // `profession` 37.943, the wheel taking the last copper bar, its
+        // removal 0.151 s after the item, its bag's update bare at 38.364;
+        // 232.767 and 233.007, the last bronze bar taking the last copper
+        // and tin bars, with the item).
+        if crate::character::count_in_bags(vm, *id) == 0.0 {
+            emptied.extend(bags);
+        } else {
+            changes.extend(bags);
+        }
     }
     let taken = changes.len();
+    let removed: Vec<Value> = emptied.iter().map(|b| Value::Num(*b as f64)).collect();
+    match state_mut(vm).spent.take() {
+        Some(after) if after > 0.0 => later(vm, after, "craftSpent", spent_told, removed),
+        _ => tell_spent(vm, &removed),
+    }
     // A new slot's item data in its own packet (recorded: the first tin
     // and bronze bars'), else with the bags'.
     let data_after = data_after.filter(|_| new_slot.is_some());
     if let (Some(after), Some(slot)) = (data_after, new_slot) {
         let upvals = vec![Value::Num(bag as f64), Value::Num(slot as f64)];
         later(vm, after, "craftItemData", item_data, upvals);
+    } else if split.is_some() {
+        changes.insert(0, bag);
     } else {
         changes.push(bag);
     }
     let new_slot = if data_after.is_some() { None } else { new_slot };
+    // The used-up reagents' updates last, the skill-up after them.
+    let bare = emptied.len();
+    let taken = if bare > 0 || split.is_some() {
+        changes.len() + bare
+    } else {
+        taken
+    };
+    changes.extend(emptied);
     let skill_up = state_mut(vm)
         .skill_ups
         .get_mut(&recipe)
@@ -1348,13 +1422,42 @@ fn make(vm: &mut Vm, recipe: i64, bags_after: f64, data_after: Option<f64>) {
         Value::Num(if skill_up { recipe as f64 } else { 0.0 }),
         Value::Num(bag as f64),
         Value::Num(new_slot.map_or(-1.0, |s| s as f64)),
+        Value::Num(bare as f64),
     ];
+    let n = changes.len();
+    let first = split.map_or(n, |(k, _)| k.min(n));
+    upvals.extend([
+        Value::Num(0.0),
+        Value::Num(first as f64),
+        Value::Num(split.map_or(-1.0, |(_, r)| r)),
+        Value::Num(owed.len() as f64),
+    ]);
     upvals.extend(changes.iter().map(|b| Value::Num(*b as f64)));
+    for (id, count) in owed {
+        upvals.extend([Value::Num(id as f64), Value::Num(count)]);
+    }
     for (id, n) in before {
         upvals.push(Value::Num(id as f64));
         upvals.push(Value::Num(n));
     }
     later(vm, bags_after, "craftBags", craft_bags, upvals);
+}
+
+/// Used-up reagents' slots removed (in these bags): the equipped spells'
+/// change for each, the reagent bag's inventory's.
+fn tell_spent(vm: &mut Vm, bags: &[Value]) {
+    for b in bags {
+        crate::character::equipped_spells_changed(vm);
+        if b.raw_eq(Value::Num(crate::character::REAGENT_BAG as f64)) {
+            units::fire_unit(vm, "UNIT_INVENTORY_CHANGED", PLAYER, &[]);
+        }
+    }
+}
+
+fn spent_told(vm: &mut Vm, c: NativeCall) -> Ret {
+    let bags = c.upvals.to_vec();
+    tell_spent(vm, &bags);
+    Ok(vec![])
 }
 
 /// A new slot's item data: the slot read, the equipped spells', its bag's
@@ -1387,17 +1490,33 @@ fn craft_bags(vm: &mut Vm, c: NativeCall) -> Ret {
         _ => 0.0,
     };
     let (n, taken, skill_recipe) = (num(0) as usize, num(1) as usize, num(2) as i64);
+    // The changes told now (`from..to`), the rest `rest` seconds later.
+    let (from, to, rest) = (num(6) as usize, num(7) as usize, num(8));
     // The item's new slot read with it.
-    if num(4) >= 0.0 {
+    if from == 0 && num(4) >= 0.0 {
         crate::character::arrived(vm, num(3) as i64, num(4) as usize);
     }
-    const HEAD: usize = 5;
+    const HEAD: usize = 10;
+    let bare = num(5) as usize;
     let changes: Vec<i64> = (0..n).map(|i| num(HEAD + i) as i64).collect();
+    // Reagents owed to the packet's last part (`make`'s split), taken now.
+    let owed = num(9) as usize;
+    if to == n {
+        for k in 0..owed {
+            let (id, count) = (num(HEAD + n + 2 * k), num(HEAD + n + 2 * k + 1));
+            crate::character::take_from_bags(vm, id as i64, count);
+        }
+    }
     let mut skill = None;
-    let mut previous = None;
-    for (i, bag) in changes.into_iter().enumerate() {
+    let mut previous = from.checked_sub(1).map(|i| changes[i]);
+    for (i, bag) in changes.into_iter().enumerate().take(to).skip(from) {
         if i == taken && skill_recipe != 0 {
             skill = skill_up(vm, skill_recipe);
+        }
+        // A used-up reagent's: its bag's update alone (`make`).
+        if i + bare >= n {
+            crate::character::bag_updated(vm, bag);
+            continue;
         }
         let reagent_bag = bag == crate::character::REAGENT_BAG;
         if reagent_bag || previous != Some(bag) {
@@ -1409,13 +1528,23 @@ fn craft_bags(vm: &mut Vm, c: NativeCall) -> Ret {
             units::fire_unit(vm, "UNIT_INVENTORY_CHANGED", PLAYER, &[]);
         }
     }
+    // The packet split (a recording's, `craftTimings`' `split`): the rest
+    // later, the packet's end with it.
+    if to < n {
+        let mut upvals = c.upvals.to_vec();
+        upvals[6] = Value::Num(to as f64);
+        upvals[7] = Value::Num(n as f64);
+        upvals[8] = Value::Num(-1.0);
+        later(vm, rest, "craftBags", craft_bags, upvals);
+        return Ok(vec![]);
+    }
     // The item's bag told apart (its data's own packet): the skill-up
     // after the reagents still.
     if taken >= n && skill_recipe != 0 {
         skill = skill_up(vm, skill_recipe);
     }
     fire(vm, "BAG_UPDATE_DELAYED", &[]);
-    for pair in c.upvals[HEAD + n..].chunks(2) {
+    for pair in c.upvals[HEAD + n + 2 * owed..].chunks(2) {
         if let [Value::Num(id), Value::Num(before)] = pair {
             let now = crate::character::count_in_bags(vm, *id as i64);
             if now != *before && now > 0.0 && *before > 0.0 {

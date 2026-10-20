@@ -17,8 +17,10 @@ export interface MockUnit
     function mouseover(unit: MockUnit?)
     --- The player's soft target of `kind` (by default the enemy for a
     --- hostile or neutral unit, else the friend; `nil` clears it):
-    --- `PLAYER_SOFT_ENEMY_CHANGED`, `…_FRIEND_CHANGED`, `…_INTERACT_CHANGED`.
-    function softTarget(unit: MockUnit?, kind: ("enemy" | "friend" | "interact")?)
+    --- `PLAYER_SOFT_ENEMY_CHANGED`, `…_FRIEND_CHANGED`, `…_INTERACT_CHANGED`;
+    --- a soft friend's actions' usability `usableAfter` seconds later (a
+    --- recording's; else at once).
+    function softTarget(unit: MockUnit?, kind: ("enemy" | "friend" | "interact")?, opts: { usableAfter?: number }?)
     --- Its health down or up; `statesAfter`: its aura states' change told
     --- that many seconds later (the server's next update), else at once.
     function damage(amount: number, opts: { statesAfter?: number | boolean }?)
@@ -114,8 +116,10 @@ export interface MockUnit
     --- recording's timing: `succeedsAfter` (the success, seconds after the
     --- cast's start; else at its end), `slotsAfter` (each slot's item,
     --- seconds after the window opened), `bagsAfter` (the bags' packets,
-    --- each seconds after the item that set it off, in order).
-    function gather(object: MockUnit, opts: { spell: number, castTime?: number, loot?: { id: number, count?: number }[], auto?: boolean, succeedsAfter?: number, slotsAfter?: number[], bagsAfter?: number[] })
+    --- each seconds after the item that set it off, in order),
+    --- `flagsAfter` (the looting flags, seconds after the last item; else
+    --- a round trip).
+    function gather(object: MockUnit, opts: { spell: number, castTime?: number, loot?: { id: number, count?: number }[], auto?: boolean, succeedsAfter?: number, slotsAfter?: number[], bagsAfter?: number[], flagsAfter?: number })
     --- The player clicks a profession's spell: its window open, as the
     --- client recorded `profession`'s (`"Blacksmithing"`, `"Mining"`).
     function openTradeSkill(spell: number, profession: string)
@@ -144,9 +148,13 @@ export interface MockUnit
     --- or the last cast's success, its `success` after its start, its
     --- `item` after its success (0: with it), the bags' packet (`bags`)
     --- after its item, a new slot's item data (`data`, its own packet;
-    --- else with the bags') after its item; what one leaves out is the
-    --- engine's.
-    function craftTimings(timings: { start?: number, success?: number, item?: number, bags?: number, data?: number }[])
+    --- else with the bags') after its item; the bags' packet split (its
+    --- first `split` bag changes, the item's first, the rest and the
+    --- reagents' taking `rest` seconds after), a
+    --- used-up reagent's removal after its item (`spent`; else with it),
+    --- a new slot's bag told before the item's push (`slotFirst`); what
+    --- one leaves out is the engine's.
+    function craftTimings(timings: { start?: number, success?: number, item?: number, bags?: number, data?: number, split?: number, rest?: number, spent?: number, slotFirst?: boolean }[])
     --- The spell focuses near the player (`{ "Forge" }`): a recipe needing
     --- one can be made.
     function setSpellFocus(names: string[])

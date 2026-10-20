@@ -4,7 +4,7 @@
 //! then each unit's auras' update is told (`UNIT_AURA`, one per unit
 //! token), then the batched events, each once (the same event with the
 //! same values), in the order of their names (case aside; one name's in
-//! the order they came).
+//! the order they came, the items' counts in their slots').
 //!
 //! Recorded: in every scenario recording (20 of them, 369 frames with two
 //! or more of these events) the frame's `ACTIONBAR_UPDATE_COOLDOWN`,
@@ -38,8 +38,18 @@ const BATCHED: &[&str] = &[
     "ACTIONBAR_UPDATE_STATE",
     "ACTIONBAR_UPDATE_USABLE",
     "BAG_UPDATE_COOLDOWN",
+    // A bags' packet's end and its items' counts (recorded: `profession`
+    // 8.473, the looting flags between the bags' updates and these;
+    // 192.501 and 195.765, the next cast's start between, its actions'
+    // cooldowns before them and the spells' after, in their names' order;
+    // `quest` 32.346, the flags and the soft target between; `combat`
+    // 22.423, the spells' usability after). Not a quest's turn-in's or
+    // reward's (`quests`). The counts in their slots' order
+    // (`counts_in_slot_order`).
+    "BAG_UPDATE_DELAYED",
     "DAMAGE_METER_COMBAT_SESSION_UPDATED",
     "DAMAGE_METER_CURRENT_SESSION_UPDATED",
+    "ITEM_COUNT_CHANGED",
     // Recorded once: a tracking spell's aura's, between the bags' and the
     // spells' cooldowns (scenario tracking).
     "MINIMAP_UPDATE_TRACKING",
@@ -58,6 +68,11 @@ const BATCHED: &[&str] = &[
     // the health; the shapeshift bar's usability after the health (the
     // resurrection's).
     "SUPER_TRACKING_CHANGED",
+    // A profession's window opened by its spell: after the actions' state
+    // (recorded: `profession` 25.395, 39.546, 41.004 and 167.288; the
+    // list's update after it, 25.395 and 41.004).
+    "TRADE_SKILL_DATA_SOURCE_CHANGING",
+    "TRADE_SKILL_LIST_UPDATE",
     "UI_ERROR_MESSAGE",
     "UI_INFO_MESSAGE",
     "UNIT_HEALTH",
@@ -65,6 +80,10 @@ const BATCHED: &[&str] = &[
     "UNIT_THREAT_SITUATION_UPDATE",
     "UPDATE_SHAPESHIFT_COOLDOWN",
     "UPDATE_SHAPESHIFT_USABLE",
+    // A craft's cast stopped (refused, interrupted, done): its frame's
+    // last (recorded: `profession`, 8 of 8, after the error message, the
+    // actions' state or the shapeshift bar's cooldown).
+    "UPDATE_TRADESKILL_CAST_STOPPED",
 ];
 
 #[derive(Default)]
@@ -141,6 +160,26 @@ pub fn defer(vm: &mut Vm, event: &str, args: &[Value]) -> bool {
     if !engine(vm).batch.on || !(aura || BATCHED.contains(&event)) {
         return false;
     }
+    owe(vm, event, args);
+    true
+}
+
+/// `event` at the frame's end, once (batching on), else now: one the
+/// client batches only when a batched event causes it, a quest's log
+/// updated by the items counted (`QUEST_LOG_UPDATE` after the frame's
+/// `ITEM_COUNT_CHANGED`s, once: recorded, `quest` 32.346, 59.451, 71.558,
+/// 92.693 and 103.161; see `loot::bags_end`).
+pub fn fire_at_end(vm: &mut Vm, event: &str, args: &[Value]) {
+    if engine(vm).batch.on {
+        owe(vm, event, args);
+    } else {
+        widgets::fire_now(vm, event, args);
+    }
+}
+
+/// `event` owed to the frame's end, once (unless the same is owed).
+fn owe(vm: &mut Vm, event: &str, args: &[Value]) {
+    let aura = event == "UNIT_AURA";
     let list = pending(vm);
     let name = vm.str(event);
     let n = engine(vm).batch.count;
@@ -159,14 +198,14 @@ pub fn defer(vm: &mut Vm, event: &str, args: &[Value]) -> bool {
             if let (Value::Table(old), Value::Table(new)) = (t.get(Value::Num(4.0)), args[1]) {
                 merge_aura_update(vm, old, new);
             }
-            return true;
+            return;
         }
         if args
             .iter()
             .enumerate()
             .all(|(k, a)| t.get(Value::Num(k as f64 + 3.0)).raw_eq(*a))
         {
-            return true;
+            return;
         }
     }
     let e = vm.new_table();
@@ -183,7 +222,6 @@ pub fn defer(vm: &mut Vm, event: &str, args: &[Value]) -> bool {
         .table_mut(list)
         .set(Value::Num(n as f64 + 1.0), Value::Table(e));
     engine_mut(vm).batch.count = n + 1;
-    true
 }
 
 /// One `UNIT_AURA` update telling another's changes too: its lists
@@ -303,6 +341,7 @@ pub fn flush(vm: &mut Vm) {
         // The auras' updates first, in the order they came (recorded:
         // right before the batched events in 59 of 60 frames).
         owed.sort_by_key(|(name, _)| (name != "UNIT_AURA", name.to_ascii_lowercase()));
+        counts_in_slot_order(vm, &mut owed);
         for (name, args) in owed {
             if name == "SPELLS_CHANGED" {
                 crate::character::group_buffs_changed(vm);
@@ -317,6 +356,49 @@ pub fn flush(vm: &mut Vm) {
         widgets::keep_as(vm, FIRING, Value::Nil);
     }
     engine_mut(vm).batch.flushing = false;
+}
+
+/// The frame's item counts (`ITEM_COUNT_CHANGED`) in their slots' order
+/// within a bag, the bags in the order their first count came.
+///
+/// Recorded: `quest`'s 6 frames with counts from two loot packets (32.346
+/// to 103.161), the later packet's first when its slot comes first;
+/// `profession`'s crafts 9 of 11 (each craft's in the order its bags'
+/// packet told them, the reagent bag's after the backpack's or before;
+/// the bronze bars' with a skill-up, 226.578 and 229.792, the bar's count
+/// before its reagents' though its slot comes after: unexplained).
+fn counts_in_slot_order(vm: &Vm, owed: &mut [(String, Vec<Value>)]) {
+    let at: Vec<usize> = (0..owed.len())
+        .filter(|&i| owed[i].0 == "ITEM_COUNT_CHANGED")
+        .collect();
+    if at.len() < 2 {
+        return;
+    }
+    let mut bags: Vec<i64> = Vec::new();
+    let mut keyed: Vec<((usize, usize), usize)> = Vec::new();
+    for (k, &i) in at.iter().enumerate() {
+        let place = match owed[i].1.first() {
+            Some(Value::Num(id)) => crate::character::first_slot_of(vm, *id as i64),
+            _ => None,
+        };
+        let key = match place {
+            Some((bag, slot)) => {
+                let n = bags.iter().position(|b| *b == bag).unwrap_or_else(|| {
+                    bags.push(bag);
+                    bags.len() - 1
+                });
+                (n, slot)
+            }
+            // Gone from the bags: where it came.
+            None => (usize::MAX, k),
+        };
+        keyed.push((key, i));
+    }
+    keyed.sort_by_key(|(key, _)| *key);
+    let events: Vec<_> = keyed.iter().map(|(_, j)| owed[*j].clone()).collect();
+    for (&i, e) in at.iter().zip(events) {
+        owed[i] = e;
+    }
 }
 
 /// The player's spells changed: the group buffs' changes, then
