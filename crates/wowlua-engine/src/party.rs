@@ -388,6 +388,55 @@ fn nothing(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `C_PartyInfo.LeaveParty()`: the player leaves the group a round trip
+/// later ([`leave`]); alone, nothing.
+fn leave_party(vm: &mut Vm, _c: NativeCall) -> Ret {
+    if grouped(vm) {
+        let delay = crate::clock::server_delay(vm);
+        later(vm, delay, "partyLeft", left, vec![]);
+    }
+    Ok(vec![])
+}
+
+fn left(vm: &mut Vm, _c: NativeCall) -> Ret {
+    leave(vm, "ERR_LEFT_GROUP_YOU", "You leave the group.");
+    Ok(vec![])
+}
+
+/// The player's group is gone (left, or its last member removed): the
+/// server's message (`message`, a global string, else `default`),
+/// `GROUP_LEFT`, the roster and the leader (unverified: the client's
+/// events and their order).
+pub fn leave(vm: &mut Vm, message: &str, default: &str) {
+    if !grouped(vm) {
+        return;
+    }
+    {
+        let u = &mut engine_mut(vm).units;
+        for id in std::mem::take(&mut u.group) {
+            u.list[id.0].subgroup = None;
+        }
+        u.raid = false;
+    }
+    {
+        let p = party_mut(vm);
+        p.formed = false;
+        p.leader = false;
+    }
+    let text = global(vm, message, default);
+    system(vm, &text);
+    let guid = party_guid(vm);
+    fire(vm, "GROUP_LEFT", &[Value::Num(1.0), guid]);
+    fire(vm, "GROUP_ROSTER_UPDATE", &[]);
+    fire(vm, "PARTY_LEADER_CHANGED", &[]);
+}
+
+/// `mock.group:leave()`: the player leaves the group now.
+pub fn control_leave_group(vm: &mut Vm, _c: NativeCall) -> Ret {
+    leave(vm, "ERR_LEFT_GROUP_YOU", "You leave the group.");
+    Ok(vec![])
+}
+
 /// The player leading a group of its own making (`mock.addToGroup`).
 pub fn lead(vm: &mut Vm) {
     let p = party_mut(vm);
@@ -555,6 +604,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetRaidRosterInfo", get_raid_roster_info),
         ("C_PartyInfo.ConvertToRaid", convert_to_raid),
         ("C_PartyInfo.ConvertToParty", convert_to_party),
+        ("C_PartyInfo.LeaveParty", leave_party),
         ("C_PartyInfo.GetLootMethod", get_loot_method),
         ("C_PartyInfo.IsPartyFull", is_party_full),
         ("C_PartyInfo.CanFormCrossFactionParties", no),

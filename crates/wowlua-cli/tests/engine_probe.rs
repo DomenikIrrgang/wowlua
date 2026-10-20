@@ -2560,7 +2560,7 @@ fn the_engine_answers_the_group_as_the_client_did() {
         &mut vm,
         r#"local e = __engine
 e.spawnUnit({ name = "Plainstrider", level = 12, reaction = "hostile" }):showNameplate()
-e.player:setName("Player", "Lastname")
+e.player:setName("Player", "Lastname", { quiet = true })
 e.player:setRole("DAMAGER")
 GroupDruid = e.spawnUnit({
     name = "Member1", lastName = "Member1Last", player = true, level = 21, class = "DRUID", classID = 11,

@@ -17,7 +17,7 @@ e.setFrameBatching(true)
 local player = e.player
 e.setLatency(0.3)
 -- The warrior's names as the recording has them, scrubbed.
-player:setName("Player", "Lastname")
+player:setName("Player", "Lastname", { quiet = true })
 -- The warrior's Defensive State: its cooldown told when the warrior dodges,
 -- parries or blocks (recorded).
 e.defineSpell(5302, { name = "Defensive State", procOnAvoid = true })

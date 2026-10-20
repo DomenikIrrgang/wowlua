@@ -123,7 +123,7 @@ at(37.169) world("QUEST_LOG_UPDATE")
 -- A fox attacks the walking shaman; targeted; its hits taken until it
 -- gives up. (Each hit at the health's update, its combat text recorded
 -- later: the order kept.)
-player:setName("Player", "Lastname")
+player:setName("Player", "Lastname", { quiet = true })
 local vuldren = e.spawnUnit({
     name = "Vuldren", guid = "Creature-0-4615-2991-3-250868-4DDC3583E7", npcID = 250868, level = 6,
     reaction = "hostile", class = "WARRIOR", classID = 1, sex = 1, powerType = 1,

@@ -14,7 +14,7 @@ e.setDamageMeterSession(2)
 e.setFrameBatching(true)
 local player = e.player
 e.setLatency(0.37)
-player:setName("Player", "Lastname")
+player:setName("Player", "Lastname", { quiet = true })
 local cat = e.spawnUnit({
     name = "Savannah Highmane", guid = "Creature-0-4621-1-21-3243-03C97F1DA4", npcID = 3243, level = 12,
     reaction = "hostile", sex = 2, powerType = 1, health = 300, maxHealth = 300,
