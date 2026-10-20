@@ -99,6 +99,7 @@ type Anchor =
 | `{ x: number, y: number }` | Record. `,` or `;` separate fields. |
 | `{ name: string, label?: string }` | `label` is optional: `string?`, may be absent |
 | `{ ["end"]: number, ["my-key"]?: string }` | Record fields whose keys are reserved words or not identifiers (`?:` makes one optional) |
+| `{ readonly id: number, readonly ["end"]: number }` | Read-only fields: assigning one is E2010 |
 | `{ x: number, [string]: any }` | Record with an indexer for other keys |
 | `{ [number]: string, n: number }` | Table used both as an array and a record (e.g. the result of `{ ..., n = select("#", ...) }`) |
 
@@ -176,6 +177,13 @@ local defaults = { scale = 1, locked = false }
 type Settings = typeof(defaults)    -- { scale: number, locked: boolean }
 ```
 
+The expression is typed where the alias stands, so it may only refer to
+names declared before it. A `typeof` alias has its type once its file has been
+checked up to it: in the file's later annotations and in the modules checked
+after it (importers, and a library's consumers, spec §5.4.4). Uses before
+that point, such as a hoisted function's signature or another alias that
+refers to it, read it as `any`.
+
 ### 2.2.8 Type predicates
 
 A function whose return type is `param is T` narrows its argument in the
@@ -185,8 +193,16 @@ caller:
   with its current type);
 - where the call is **falsy** (`else` branch, `if not p(x)`, after
   `if p(x) then return end`), the argument is narrowed by **excluding** the
-  members of its union type that are assignable to `T`. If the argument's type
-  is not a union, it is unchanged.
+  members of its union type that are assignable to `T`. A member that is a
+  supertype of `T` (`Frame` for `f is Button`) or `any` may be either, so it
+  stays in both.
+- a branch that **no member reaches** (every member excluded, as in a second
+  `if not issecretvalue(c) and c then … end` after the first returned, or the
+  `else` of a predicate every member fits) leaves the argument `never`: the
+  branch is **unreachable**, and nothing in it is reported. (Whether the code
+  after the `if` runs still depends only on `return`, `break` and calls that
+  never return, so it is not W1005.) The same holds for `canaccessvalue`
+  (§2.11).
 
 A generic predicate's type parameters are inferred from the argument's
 narrowed type: `plain<V>(v: V | Secret<V> | nil): v is V` called with a
@@ -547,8 +563,15 @@ narrowed value fits: inside `if item then`, an `Item | false` local is an
 - `S` is a record and `T` is an interface that `S` structurally satisfies
   (interfaces are **structural**);
 - `S` is an enum member type and `T` is that enum or its underlying primitive;
-- `S` is `table` and `T` is `{ [any]: any }`, or `S` is `function` and `T` is
-  `(...any) -> ...any` (the types every table and every function have);
+- `S` is `table` and `T` is a map whose values are `any` (`{ [any]: any }`,
+  `{ [string]: any }`, `{ [number]: any }`), or `S` is `function` and `T` is
+  `(...any) -> ...any` (the types every table and every function have). A map
+  with typed values (`{ [string]: number }`) needs a cast;
+- `S` is an array of `E` and `T` is a record whose named fields are all
+  optional and whose indexer takes numbers as keys and `E` as values
+  (`string[]` fits `{ [number]: any, talent?: boolean }`); a record without an
+  indexer takes an array only beside an array type in an intersection
+  (`string[]` fits `any[] & { jewel?: boolean }`, not `{ name?: string }`);
 - `S` is a record with a numeric indexer (`{ [number]: V, n: number }`) and `T`
   is an array of `V`'s supertype: the table used both as an array and a
   record (§2.2.4).
@@ -624,7 +647,7 @@ guard (`if max > 0 then … end`).
 
 Reading an undeclared global is warning W1001 in basic mode and error E1001
 in strict mode. **Assigning** an undeclared global, including through
-`function foo()` in a module, is warning W1002 in basic mode and error E1002 in
+`function foo()` in a script, is warning W1002 in basic mode and error E1002 in
 strict mode. In pure Lua files both are always warnings (§2.1). Accidental
 globals are a common source of addon bugs and taint. Explicit
 `_G.name = value` or `_G["name"]` is always allowed.

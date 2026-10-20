@@ -52,6 +52,7 @@ warning forms of §B.2's pure Lua files (`W2001`). `wowlua explain
 | E1013 | Module specifier case does not match the file on disk |
 | E1014 | Import or usage cycle containing a load-time edge (run-time-only cycles are allowed) |
 | E1015 | Module not found |
+| E1016 | An `export` redeclares a module-level name (a `local`, function, import, …), or a name is exported twice |
 | E1020 | Reference to a declaration removed by `@if` or static elimination |
 | E1031 | Duplicate (non-ambient) interface in the same scope |
 | E1032 | Top-level `return` in a module |
@@ -172,6 +173,7 @@ is reported as the warning with the same number (`E2001` → `W2001`, `E2030` �
 | W1033 | Load order cannot be determined (dynamic names, several writers, external names); files keep their source order |
 | W1034 | Name read at load time but only defined at run time |
 | W1035 | Usage-analysis dependency contradicts `build.load-order`; the listed order is kept (contradicting imports are E1035) |
+| W1036 | A module of an import cycle reads an export of a module of the cycle checked after it that has no type annotation (or a `typeof` type alias it has not reached): it is `any` there |
 | W2040 | Forbidden operation on a possibly secret value (basic mode) |
 | W2055 | Too many arguments to an unannotated function (basic mode). Replaces the second meaning of W2006. |
 | W2060 | Division or modulo by a literal zero: WoW raises "Division by zero" (any mode) |

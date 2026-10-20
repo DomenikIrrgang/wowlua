@@ -1244,10 +1244,12 @@ pub enum TableTypeField<'t> {
         readonly: bool,
         ty: Type<'t>,
     },
-    /// `["end"]: T` names a field (`["end"]?: T`, an optional one).
+    /// `["end"]: T` names a field (`["end"]?: T`, an optional one;
+    /// `readonly ["end"]: T`, a read-only one).
     NamedString {
         key: Str<'t>,
         optional: bool,
+        readonly: bool,
         ty: Type<'t>,
         span: Span,
     },
@@ -1274,11 +1276,13 @@ impl<'t> TableTypeField<'t> {
             tree::TableTypeFieldData::NamedString {
                 key,
                 optional,
+                readonly,
                 ty,
                 span: s,
             } => TableTypeField::NamedString {
                 key: Str::new(t, key),
                 optional,
+                readonly,
                 ty: Type::new(t, ty),
                 span: span(t, s),
             },

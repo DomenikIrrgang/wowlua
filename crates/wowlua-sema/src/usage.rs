@@ -267,8 +267,16 @@ pub fn file_usage(parse: &Parse, markers: &Markers) -> FileUsage {
 
 fn file_usage_inner(parse: &Parse, markers: &Markers) -> FileUsage {
     let mut w = Walker::new(markers);
-    // Top-level classes and enums are hoisted locals.
-    for s in parse.view().block().stmts() {
+    let block = parse.view().block();
+    let module = block
+        .stmts()
+        .iter()
+        .any(|s| matches!(s.kind(), StmtKind::Import(_) | StmtKind::Export(_)));
+    // Top-level classes and enums are hoisted locals, and so are a module's
+    // top-level functions (spec §5.1), except one that defines a local
+    // declared above it (`local f` … `function f()`).
+    let mut locals: FxHashSet<&str> = FxHashSet::default();
+    for s in block.stmts() {
         let kind = match s.kind() {
             StmtKind::Export(inner) => inner.kind(),
             k => k,
@@ -276,10 +284,28 @@ fn file_usage_inner(parse: &Parse, markers: &Markers) -> FileUsage {
         match kind {
             StmtKind::Class(c) => w.declare(c.name().text(), Local::Plain),
             StmtKind::Enum(e) => w.declare(e.name().text(), Local::Plain),
+            StmtKind::Function { name, .. }
+                if module
+                    && matches!(s.kind(), StmtKind::Function { .. })
+                    && name.path().len() == 1
+                    && name.method().is_none()
+                    && !locals.contains(name.path().at(0).text()) =>
+            {
+                w.declare(name.path().at(0).text(), Local::Plain);
+            }
+            StmtKind::Local { names, .. } => {
+                locals.extend(names.iter().map(|n| n.name.text()));
+            }
+            StmtKind::LocalDestructure { fields, .. } => {
+                locals.extend(fields.iter().map(|f| f.name.text()));
+            }
+            StmtKind::LocalFunction { name, .. } | StmtKind::Const { name, .. } => {
+                locals.insert(name.text());
+            }
             _ => {}
         }
     }
-    w.block(parse.view().block());
+    w.block(block);
     w.out
 }
 

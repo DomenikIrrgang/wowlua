@@ -794,6 +794,33 @@ fn module_errors() {
             "",
             "E1037",
         ),
+        // A module's own `function f()` is hoisted like an export.
+        (
+            "print(f())\nfunction f() return 1 end\nexport local a = 1\n",
+            "",
+            "E1037",
+        ),
+        (
+            "local items = {}\nexport function items() return 1 end\n",
+            "",
+            "E1016",
+        ),
+        (
+            "export function items() return 1 end\nlocal items = {}\n",
+            "",
+            "E1016",
+        ),
+        ("export local a = 1\nexport local a = 2\n", "", "E1016"),
+        (
+            "export function f() end\nexport function f() end\n",
+            "",
+            "E1016",
+        ),
+        (
+            "import a from \"/b\"\nexport function a() end\n",
+            "export local a = 1\n",
+            "E1016",
+        ),
     ];
     for (main, b, code) in cases {
         let dir = tempfile::tempdir().unwrap();
@@ -814,6 +841,77 @@ fn module_errors() {
             .code(1)
             .stderr(predicate::str::contains(format!("error[{code}]")));
     }
+}
+
+/// An export may share its name with a declaration `@if` removes from the
+/// build, not with one it keeps; a forward-declared local is defined by
+/// `function name()`, not redeclared (spec §5.1).
+#[test]
+fn exports_beside_conditional_declarations() {
+    let build = |main: &str| {
+        let dir = tempfile::tempdir().unwrap();
+        write(
+            dir.path(),
+            &[
+                (
+                    "wowlua.json",
+                    "{ \"package\": { \"name\": \"cond\", \"version\": \"1.0.0\" } }\n",
+                ),
+                ("src/main.wowlua", main),
+            ],
+        );
+        let out = wowlua(dir.path())
+            .args(["build", "--message-format", "short"])
+            .output()
+            .unwrap();
+        let ran = out
+            .status
+            .success()
+            .then(|| run_addon(&dir.path().join("dist/dev/Cond"), "Cond"));
+        (ran, String::from_utf8_lossy(&out.stderr).into_owned())
+    };
+    let (ran, stderr) = build(
+        "import build from \"wowlua:meta\"\n@if(not build.debug)\nlocal items = {}\nexport function items() return 1 end\nlocal g\nfunction g() return 3 end\nprint(items(), g())\n",
+    );
+    assert_eq!(ran.as_deref(), Some("1 3"), "{stderr}");
+    // Alternatives for different builds.
+    let (ran, stderr) = build(
+        "import build from \"wowlua:meta\"\n@if(build.debug)\nexport function f() return 1 end\n@if(not build.debug)\nexport function f() return 2 end\nprint(f())\n",
+    );
+    assert_eq!(ran.as_deref(), Some("1"), "{stderr}");
+    let (ran, stderr) = build(
+        "import build from \"wowlua:meta\"\n@if(build.debug)\nlocal items = {}\nexport function items() return 1 end\n",
+    );
+    assert!(ran.is_none() && stderr.contains("error[E1016]"), "{stderr}");
+}
+
+/// A module's top-level `function name()` is a local of the module,
+/// hoisted, and never a global; a script's is a global (spec §5.1).
+#[test]
+fn module_functions_are_module_local() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"loc\", \"version\": \"1.0.0\" } }\n",
+            ),
+            (
+                "src/main.wowlua",
+                "export function run(): number return helper() + later() end\nfunction helper(): number return 1 end\nfunction later(): number return 2 end\nprint(\"module\", run(), rawget(_G, \"helper\"), rawget(_G, \"later\"))\n",
+            ),
+            (
+                "src/plain.wowlua",
+                "function scriptGlobal() return 1 end\nprint(\"script\", rawget(_G, \"scriptGlobal\") == scriptGlobal)\n",
+            ),
+        ],
+    );
+    wowlua(dir.path()).arg("build").assert().success();
+    let out = run_addon(&dir.path().join("dist/dev/Loc"), "Loc");
+    let mut lines: Vec<&str> = out.lines().collect();
+    lines.sort_unstable();
+    assert_eq!(lines, ["module 3 nil nil", "script true"], "{out}");
 }
 
 /// An import cycle anywhere in the package leaves every other import its
@@ -901,6 +999,64 @@ fn import_cycles_keep_import_types() {
             "src/b.wowlua:5: E2001",
             "src/main.wowlua:3: E2001"
         ]
+    );
+}
+
+/// Inside an import cycle, a module checked before another of the cycle
+/// reads that one's exports without a type annotation as `any`: W1036
+/// where they are imported or read, once (spec §5.4.4). A `typeof` alias
+/// gets its type once its module is checked (spec §2.2.7).
+#[test]
+fn import_cycles_warn_about_untyped_exports() {
+    let manifest = "{ \"package\": { \"name\": \"cyc\", \"version\": \"1.0.0\" }, \"check\": { \"mode\": \"strict\" } }\n";
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            ("wowlua.json", manifest),
+            (
+                "src/P.wowlua",
+                "import q, items from \"./Q\"\nimport * as qn from \"./Q\"\nimport type Conf from \"./Q\"\nexport function p(): number return q() end\nlocal function f() return items, qn.items, qn.items, qn.r(), qn.q() end\nlocal c: Conf = 1\nprint(f, c)\n",
+            ),
+            (
+                "src/Q.wowlua",
+                "import p from \"./P\"\nexport function q(): number return 1 end\nexport function r(): number return p() end\nexport local items = { a = 1 }\nlocal defaults = { n = 1 }\nexport type Conf = typeof(defaults)\nlocal bad: string = p\nlocal ok: Conf = { n = 2 }\nlocal c: Conf = 1\nprint(bad, ok, c)\n",
+            ),
+            (
+                "src/main.wowlua",
+                "import type Conf from \"./Q\"\nimport items from \"./Q\"\nlocal c: Conf = 1\nlocal n: string = items\nprint(c, n)\n",
+            ),
+        ],
+    );
+    let out = wowlua(dir.path())
+        .args(["check", "--message-format", "short"])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let mut found: Vec<String> = stderr
+        .lines()
+        .filter_map(|l| {
+            let (at, rest) = l
+                .split_once(": error[")
+                .or_else(|| l.split_once(": warning["))?;
+            let (file, line) = at.rsplit_once(':')?.0.rsplit_once(':')?;
+            let code = &rest[..rest.find(']')?];
+            Some(format!("{file}:{line}: {code}"))
+        })
+        .collect();
+    found.sort();
+    assert_eq!(
+        found,
+        [
+            "src/P.wowlua:1: W1036",
+            "src/P.wowlua:3: W1036",
+            "src/P.wowlua:5: W1036",
+            "src/Q.wowlua:7: E2001",
+            "src/Q.wowlua:9: E2001",
+            "src/main.wowlua:3: E2001",
+            "src/main.wowlua:4: E2001",
+        ],
+        "{stderr}"
     );
 }
 

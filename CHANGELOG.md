@@ -20,6 +20,9 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `wowlua:events`: `offAll(owner, name?)` cancels only the owner's handlers of one event or message (a watch stops watching that event)
 - `wowlua:errors`: listeners get `(msg, info)` with `info = { component?, owner?, stack? }`: the stdlib component, the owner of the failing handler (events, callback registries, hooks with `opts.owner`) and the stack, taken only when an error happens
 - `wowlua:timer`: `repeating(sec, fn)`, a repeating timer with `start`, `stop`, `setRunning(running)` and `isRunning()` (stopped at first; the first tick one interval after each start)
+- A string-keyed field may be read-only: `{ readonly ["end"]: number }`
+- E1016: an export that redeclares a module-level name (`local items = {}` then `export function items()`, a forward-declared `local f` then `export function f()`), and a name exported twice
+- W1036: a module of an import cycle that reads an export without a type annotation (or a `typeof` alias) of a module of the cycle checked after it, where it is `any`, is told to annotate it there
 
 ### Changed
 
@@ -33,6 +36,9 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - Generic inference binds `T` through a `T | Secret<T>` parameter (the secret members through `Secret<T>`, the rest to `T`)
 - `wowlua:secure`: `state` without a function only registers the driver (for an `_onstate-<name>` snippet) and hooks nothing
 - `wowlua:spell`: `charges` returns `SpellChargeInfoSecret?`, the readable table the client answers, whose counts and times may be secret on restricted clients
+- A module's top-level `function f()` is a hoisted local of the module in the compiled code too, as the checker already treated it, never a global; write `_G.f = f` (or assign a declared global) for a real one
+- `table` (a value `type(x) == "table"` narrowed) is assignable to every map whose values are `any`: `{ [string]: any }`, `{ [number]: any }`
+- A type predicate's branch that no member of its argument reaches (a second `if not issecretvalue(c) and c then` after the first returned, the `else` of a predicate every member fits) is unreachable: the argument is `never` there and nothing in it is reported; also for `canaccessvalue`
 
 ### Fixed
 
@@ -49,6 +55,9 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - A callback taking a wider parameter type no longer widens a type argument (`table.sort(rows, function(a: { ms: number }, …) … end)`)
 - Namespaces, enum tables, class tables and instances are tables for `{ [any]: any }`, so `pairs(Enum.X)` and `pairs(C_X or {})` check
 - A list literal fits a record with a numeric indexer and optional named fields (`{ [number]: any, talent?: boolean }`)
+- An array value fits a record whose named fields are all optional and whose numeric indexer takes its elements, also in an intersection (`any[] & { jewel?: boolean }`)
+- `type X = typeof(v)` is the type of `v` in the file's later annotations, for importers and for a library's consumers, instead of `any`; a type-only import of such a module orders the check
+- A declaration `@if` removes no longer hides a kept declaration of the same name in its scope (alternatives for different builds, a hoisted export)
 - A table's own method replaces the one `setmetatable`'s `__index` gives it
 - Reading or writing a field of a function, number or boolean is E2003 with any key, not only a `.` read
 - No false W1003 for a forward-declared local that a module's `function name()` defines

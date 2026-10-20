@@ -935,6 +935,47 @@ fn library_values_keep_their_types_beside_an_import_cycle() {
         ));
 }
 
+/// A library's `typeof` alias is the type of its expression in the addon,
+/// and in the library's own later annotations (spec §2.2.7, §10.5.1).
+#[test]
+fn library_typeof_aliases_keep_their_types() {
+    let e = env();
+    write(
+        &e.root.join("mylib"),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "mylib", "version": "1.0.0", "kind": "library", "license": "MIT" } }"#,
+            ),
+            (
+                "src/Core.wowlua",
+                "local defaults = { scale = 1, locked = false }\nexport type Settings = typeof(defaults)\nexport function make(): Settings\n    local s: Settings = { scale = 2, locked = true }\n    return s\nend\n",
+            ),
+        ],
+    );
+    write(
+        &e.project,
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "my-addon", "version": "1.0.0" },
+  "check": { "mode": "strict" },
+  "dependencies": { "mylib": { "path": "../mylib" } } }"#,
+            ),
+            (
+                "src/main.wowlua",
+                "import type Settings from \"mylib/Core\"\nlocal s: Settings = { scale = 1, locked = \"no\" }\nprint(s)\n",
+            ),
+        ],
+    );
+    wowlua(&e.project, &e.home)
+        .args(["check", "--message-format", "short"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("src/main.wowlua:2:"))
+        .stderr(predicate::str::contains("error[E2001]"));
+}
+
 #[test]
 fn wowlua_library_is_compiled_into_the_addon() {
     let e = env();
