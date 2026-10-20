@@ -591,6 +591,20 @@ pub fn generate(root: &Path, dir: &Path) -> Result<()> {
         let ui_sha = git(&["rev-parse", "HEAD"], Some(&dir.join(&flavor)))?;
         // In full: the test runner fetches this commit (`test.blizzard-ui`).
         let ui_commit = ui_sha.trim();
+        // The engine's record of the number globals the client defines
+        // itself (`/stdtest engine`, `scalars`), where there is one.
+        let number_globals: Vec<String> = fs::read_to_string(
+            root.join(format!("crates/wowlua-engine/data/{flavor}-globals.txt")),
+        )
+        .map(|text| {
+            text.lines()
+                .filter(|l| !l.starts_with('#'))
+                .filter_map(|l| l.split('\t').next())
+                .filter(|n| !n.is_empty())
+                .map(str::to_string)
+                .collect()
+        })
+        .unwrap_or_default();
         flavors.push(wowlua_types_gen::FlavorDocs {
             id: flavor,
             source: format!("wow-ui-source {build}, commit {ui_commit}; global string and API names from Ketho's BlizzardInterfaceResources {branch} {commit}"),
@@ -607,6 +621,7 @@ pub fn generate(root: &Path, dir: &Path) -> Result<()> {
                     .context("event names missing: run `cargo xtask types fetch`")?,
             )),
             lod_files,
+            number_globals,
         });
     }
     let mut annotations = Vec::new();

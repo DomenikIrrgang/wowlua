@@ -1054,17 +1054,17 @@ end
 
 declare interface AddOnProfilerCallEvent
     name: string
-    allocatedBytes: string
-    deallocatedBytes: string
+    allocatedBytes: number
+    deallocatedBytes: number
     elapsedMilliseconds: number
-    elapsedTicks: string
+    elapsedTicks: number
 end
 
 declare interface AddOnProfilerCallResults
     elapsedMilliseconds: number
-    elapsedTicks: string
-    allocatedBytes: string
-    deallocatedBytes: string
+    elapsedTicks: number
+    allocatedBytes: number
+    deallocatedBytes: number
     events: AddOnProfilerCallEvent[]
 end
 
@@ -1304,9 +1304,9 @@ declare interface BidInfo
     itemKey: ItemKey
     itemLink?: string
     timeLeft: AuctionHouseTimeLeftBand
-    minBid?: string
-    bidAmount?: string
-    buyoutAmount?: string
+    minBid?: number
+    bidAmount?: number
+    buyoutAmount?: number
     bidder?: string
 end
 
@@ -1314,14 +1314,14 @@ declare interface BrowseResultInfo
     itemKey: ItemKey
     appearanceLink?: string
     totalQuantity: number
-    minPrice: string
+    minPrice: number
     containsOwnerItem: boolean
 end
 
 declare interface CommoditySearchResultInfo
     itemID: number
     quantity: number
-    unitPrice: string
+    unitPrice: number
     auctionID: number
     owners: string[]
     totalNumberOfOwners: number
@@ -1363,9 +1363,9 @@ declare interface ItemSearchResultInfo
     containsAccountItem: boolean
     containsSocketedItem: boolean
     bidder?: string
-    minBid?: string
-    bidAmount?: string
-    buyoutAmount?: string
+    minBid?: number
+    bidAmount?: number
+    buyoutAmount?: number
     timeLeftSeconds?: number
 end
 
@@ -1377,8 +1377,8 @@ declare interface OwnedAuctionInfo
     quantity: number
     timeLeftSeconds?: number
     timeLeft?: AuctionHouseTimeLeftBand
-    bidAmount?: string
-    buyoutAmount?: string
+    bidAmount?: number
+    buyoutAmount?: number
     bidder?: string
 end
 
@@ -1390,10 +1390,10 @@ declare interface ReplicateItemInfo
     usable?: boolean
     level: number
     levelType?: string
-    minBid: string
-    minIncrement: string
-    buyoutPrice: string
-    bidAmount: string
+    minBid: number
+    minIncrement: number
+    buyoutPrice: number
+    bidAmount: number
     highBidder?: string
     bidderFullName?: string
     owner?: string
@@ -1570,7 +1570,7 @@ declare interface BankTabData
 end
 
 declare interface PurchasableBankTabData
-    tabCost: string
+    tabCost: number
     canAfford: boolean
     purchasePromptTitle: string
     purchasePromptBody: string
@@ -2131,8 +2131,8 @@ declare interface ClubInfo
     clubType: ClubType
     avatarId: number
     memberCount?: number
-    favoriteTimeStamp?: string
-    joinTime?: string
+    favoriteTimeStamp?: number
+    joinTime?: number
     socialQueueingEnabled?: boolean
     crossFaction?: boolean
 end
@@ -2190,8 +2190,8 @@ declare interface ClubMemberInfo
 end
 
 declare interface ClubMessageIdentifier
-    epoch: string
-    position: string
+    epoch: number
+    position: number
 end
 
 declare interface ClubMessageInfo
@@ -2273,7 +2273,7 @@ declare interface ClubStreamInfo
     subject: string
     leadersAndModeratorsOnly: boolean
     streamType: ClubStreamType
-    creationTime: string
+    creationTime: number
 end
 
 declare interface ClubStreamNotificationSetting
@@ -2285,8 +2285,8 @@ declare interface ClubTicketInfo
     ticketId: string
     allowedRedeemCount: number
     currentRedeemCount: number
-    creationTime: string
-    expirationTime: string
+    creationTime: number
+    expirationTime: number
     defaultStreamId?: ClubStreamId
     creator: ClubMemberInfo
 end
@@ -2303,7 +2303,7 @@ declare interface ClubFinderApplicantInfo
     specIds: number[]
     requestStatus: PlayerClubRequestStatus
     lookupSuccess: boolean
-    lastUpdatedTime: string
+    lastUpdatedTime: number
     faction: number
 end
 
@@ -2346,7 +2346,7 @@ declare interface RecruitingClubInfo
     cacheRequested: number
     lastPosterGUID: string
     clubId: ClubId
-    lastUpdatedTime: string
+    lastUpdatedTime: number
     isCrossFaction: boolean
     realmName?: string
 end
@@ -2536,7 +2536,7 @@ declare interface VendorTrackingInfo
     creatureName: string
     zoneName?: string
     currencyType?: number
-    cost?: string
+    cost?: number
 end
 
 declare interface ContributionAppearance
@@ -2761,7 +2761,7 @@ declare interface CraftingOrderCustomerSearchResults
 end
 
 declare interface CraftingOrderInfo
-    orderID: string
+    orderID: number
     itemID: number
     spellID: number
     skillLineAbilityID: number
@@ -2950,42 +2950,42 @@ end
 
 declare interface DamageMeterCombatSession
     combatSources: DamageMeterCombatSource[]
-    maxAmount?: number
-    totalAmount?: number
-    durationSeconds?: number
+    maxAmount?: number | Secret<number>
+    totalAmount?: number | Secret<number>
+    durationSeconds?: number | Secret<number>
 end
 
 declare interface DamageMeterCombatSessionSource
     combatSpells: DamageMeterCombatSpell[]
-    maxAmount?: number
-    totalAmount?: number
+    maxAmount?: number | Secret<number>
+    totalAmount?: number | Secret<number>
 end
 
 declare interface DamageMeterCombatSource
-    sourceGUID?: string
-    sourceCreatureID?: number
-    name: string
+    sourceGUID?: string | Secret<string>
+    sourceCreatureID?: number | Secret<number>
+    name: string | Secret<string>
     classFilename: string
     specIconID: number
-    totalAmount: number
-    amountPerSecond: number
+    totalAmount: number | Secret<number>
+    amountPerSecond: number | Secret<number>
     isLocalPlayer: boolean
     deathRecapID: number
-    deathTimeSeconds: number
+    deathTimeSeconds: number | Secret<number>
     classification: string
-    sourceDisplayType: DamageMeterSourceDisplayType
-    factionGroup?: string
+    sourceDisplayType: DamageMeterSourceDisplayType | Secret<DamageMeterSourceDisplayType>
+    factionGroup?: string | Secret<string>
 end
 
 declare interface DamageMeterCombatSpell
-    spellID: number
-    totalAmount: number
-    amountPerSecond: number
-    creatureName: string
-    overkillAmount: number
-    isAvoidable: boolean
-    isDeadly: boolean
-    combatSpellDetails: DamageMeterCombatSpellUnitDetails
+    spellID: number | Secret<number>
+    totalAmount: number | Secret<number>
+    amountPerSecond: number | Secret<number>
+    creatureName: string | Secret<string>
+    overkillAmount: number | Secret<number>
+    isAvoidable: boolean | Secret<boolean>
+    isDeadly: boolean | Secret<boolean>
+    combatSpellDetails: DamageMeterCombatSpellUnitDetails | Secret<DamageMeterCombatSpellUnitDetails>
 end
 
 declare interface DamageMeterCombatSpellUnitDetails
@@ -3216,14 +3216,14 @@ end
 declare interface EncounterTimelineEventInfo
     id: EncounterTimelineEventID
     source: EncounterTimelineEventSource
-    spellName: string
-    spellID: number
-    iconFileID: number
+    spellName: string | Secret<string>
+    spellID: number | Secret<number>
+    iconFileID: number | Secret<number>
     duration: Seconds
     maxQueueDuration: Seconds
-    icons: EncounterEventIconmask
-    severity: EncounterEventSeverity
-    isApproximate: boolean
+    icons: EncounterEventIconmask | Secret<EncounterEventIconmask>
+    severity: EncounterEventSeverity | Secret<EncounterEventSeverity>
+    isApproximate: boolean | Secret<boolean>
 end
 
 declare interface EncounterTimelineScriptEventRequest
@@ -4003,7 +4003,7 @@ declare interface HousingBlueprintGroup
 end
 
 declare interface HousingBlueprintInfo
-    blueprintID: string
+    blueprintID: number
     shareCode: string
     name: string
     blueprintType: HousingBlueprintType
@@ -4803,17 +4803,17 @@ declare interface LoreTextEntry
 end
 
 declare interface LossOfControlData
-    locType: string
-    spellID: number
-    displayText: string
-    iconTexture: number
-    startTime?: number
-    timeRemaining?: number
-    duration?: number
-    lockoutSchool: number
+    locType: string | Secret<string>
+    spellID: number | Secret<number>
+    displayText: string | Secret<string>
+    iconTexture: number | Secret<number>
+    startTime?: number | Secret<number>
+    timeRemaining?: number | Secret<number>
+    duration?: number | Secret<number>
+    lockoutSchool: number | Secret<number>
     priority: number
     displayType: number
-    auraInstanceID?: number
+    auraInstanceID?: number | Secret<number>
 end
 
 declare interface LuaColorCurvePoint
@@ -6331,6 +6331,7 @@ declare interface TraitCondInfo
     spentAmountRequired?: number
     tooltipFormat?: string
     traitCondAccountElementID?: number
+    tooltipText?: string
 end
 
 declare interface TraitConfigInfo
@@ -6772,29 +6773,29 @@ declare interface SpellInfo
 end
 
 declare interface SpellChargeInfo
-    currentCharges: number
+    currentCharges: number | Secret<number>
     maxCharges: number
-    cooldownStartTime: number
-    cooldownDuration: number
-    chargeModRate: number
+    cooldownStartTime: number | Secret<number>
+    cooldownDuration: number | Secret<number>
+    chargeModRate: number | Secret<number>
     isActive: boolean
 end
 
 declare interface SpellCooldownInfo
-    startTime: number
-    duration: number
+    startTime: number | Secret<number>
+    duration: number | Secret<number>
     isEnabled: boolean
     isActive: boolean
-    modRate: number
-    activeCategory?: number
-    timeUntilEndOfStartRecovery?: number
+    modRate: number | Secret<number>
+    activeCategory?: number | Secret<number>
+    timeUntilEndOfStartRecovery?: number | Secret<number>
     isOnGCD?: boolean
 end
 
 declare interface SpellLossOfControlInfo
-    startTime: number
-    duration: number
-    modRate: number
+    startTime: number | Secret<number>
+    duration: number | Secret<number>
+    modRate: number | Secret<number>
     isActive: boolean
     shouldReplaceNormalCooldown: boolean
 end
@@ -7522,15 +7523,15 @@ declare interface AnchorBinding
     point: FramePoint
     relativeTo: ScriptRegion
     relativePoint: FramePoint
-    offsetX: string
-    offsetY: string
+    offsetX: number
+    offsetY: number
 end
 
 declare interface uiBoundsRect
-    left: string
-    bottom: string
-    width: string
-    height: string
+    left: number
+    bottom: number
+    width: number
+    height: number
 end
 
 declare interface UITextureSliceData
@@ -8388,9 +8389,9 @@ end
 
 declare interface PrivateAuraIconInfo
     iconAnchor: AnchorBinding
-    iconWidth: string
-    iconHeight: string
-    borderScale?: string
+    iconWidth: number
+    iconHeight: number
+    borderScale?: number
 end
 
 declare interface UnitAuraSoundInfo
@@ -8417,9 +8418,9 @@ declare interface UnitPrivateAuraAnchorInfo
     showCooldownEdge?: boolean
     showCountdownNumbers?: boolean
     showDispelIcon?: boolean
-    iconWidth?: string
-    iconHeight?: string
-    borderScale?: string
+    iconWidth?: number
+    iconHeight?: number
+    borderScale?: number
     isContainer?: boolean
     parent: Frame
 end
@@ -9131,9 +9132,9 @@ end
 declare class MapScene
     function GetMaxCharacterSlotCount(): number
     function GetModelDrawLayer(): (DrawLayer, number)
-    function GetViewInsets(): (string, string, string, string)
+    function GetViewInsets(): (number, number, number, number)
     function SetModelDrawLayer(layer: DrawLayer)
-    function SetViewInsets(left: string, right: string, top: string, bottom: string)
+    function SetViewInsets(left: number, right: number, top: number, bottom: number)
 end
 
 declare class ModelFFX
@@ -9278,15 +9279,15 @@ declare function CreateFontFamily(name: string, members: CreateFontFamilyMemberI
 declare function GetFontInfo(fontObject: Font): FontScriptInfo?
 declare function GetFonts(): string[]
 declare function AddSourceLocationExclude(fileName: string)
-declare function canaccessallvalues(...: function): boolean
+declare function canaccessallvalues(...: any): boolean
 declare function canaccesssecrets(): boolean
-declare function canaccesstable(table: function): boolean
+declare function canaccesstable(table: any): boolean
 declare function CreateFrameWithOptions(options: CreateFrameOptions): Frame
 declare function CreateFromMixins(...: LuaValueVariant): LuaValueVariant
-declare function CreateSecureDelegate(luaFunction: function, options: SecureDelegateOptions?): function
+declare function CreateSecureDelegate(luaFunction: any, options: SecureDelegateOptions?): any
 declare function CreateWindow(popupStyle: boolean?, topMost: boolean?): Window?
 declare function dropsecretaccess()
-declare function dumpobject(value: function?): function?
+declare function dumpobject(value: any?): any?
 declare function GetCallstackHeight(): number
 declare function GetCurrentEventID(): number?
 declare function GetErrorCallstackHeight(): number?
@@ -9294,18 +9295,18 @@ declare function GetEventTime(eventProfileIndex: number): (number?, number?, str
 declare function GetForbiddenObjectTable(object: FrameScriptObject): FrameScriptObject
 declare function GetScriptBucketThrottleLimits(): ScriptBucketThrottleLimits
 declare function GetSourceLocation(): string?
-declare function hasanysecretvalues(...: function): boolean
-declare function issecrettable(table: function): boolean
-declare function mapvalues(func: function, ...: function): (...function)
+declare function hasanysecretvalues(...: any): boolean
+declare function issecrettable(table: any): boolean
+declare function mapvalues(func: any, ...: any): (...any)
 declare function Mixin(object: LuaValueVariant, ...: LuaValueVariant): LuaValueVariant
 declare function RegisterEventCallback(eventName: string, callback: EventCallbackType)
 declare function RegisterUnitEventCallback(eventName: string, callback: EventCallbackType, unit: string)
 declare function RunScript(text: string)
-declare function scrubsecretvalues(...: function): (...function)
-declare function secretunwrap(...: function): (...function)
-declare function secretwrap(...: function): (...function)
-declare function securecallmethod(object: function, method: string, ...: function): (...function)
-declare function securecopy(value: function?, options: SecureCopyOptions?): function
+declare function scrubsecretvalues(...: any): (...any)
+declare function secretunwrap(...: any): (...any)
+declare function secretwrap(...: any): (...any)
+declare function securecallmethod(object: any, method: string, ...: any): (...any)
+declare function securecopy(value: any?, options: SecureCopyOptions?): any
 declare function SetErrorCallstackHeight(height: number?)
 declare function settablesecurity(table: LuaValueVariant, option: TableSecurityOption)
 declare function UnregisterEventCallback(eventName: string, callback: EventCallbackType)
@@ -9359,7 +9360,7 @@ declare function IsShiftKeyDown(): boolean
 declare function IsUsingGamepad(): boolean
 declare function IsUsingMouse(): boolean
 declare function MakeModifiers(): number
-declare function SetCursorPosition(xPosition: string, yPosition: string)
+declare function SetCursorPosition(xPosition: number, yPosition: number)
 declare function SimulateMouseClick(button: string)
 declare function SimulateMouseDown(button: string)
 declare function SimulateMouseUp(button: string)
@@ -9401,7 +9402,7 @@ declare function SetEuropeanNumbers(enabled: boolean)
 declare function GetMirrorTimerInfo(timerIndex: number): (string?, number?, number?, number?, number?, string?, number?)
 declare function GetMirrorTimerProgress(timerName: string): number?
 declare function CancelPreloadingMovie(movieId: number)
-declare function GetMovieDownloadProgress(movieId: number): (boolean, string, string)
+declare function GetMovieDownloadProgress(movieId: number): (boolean, number, number)
 declare function IsMovieLocal(movieId: number): boolean
 declare function IsMoviePlayable(movieId: number): boolean
 declare function IsMovieReadable(movieId: number): boolean
@@ -9918,139 +9919,139 @@ declare function AcknowledgeAutoAcceptQuest()
 declare function ArchaeologyGetIconInfo(index: number)
 declare function ArchaeologyMapUpdateAll(uiMapID: number): number
 declare function ArcheologyGetVisibleBlobID(index: number): number
-declare function AreTalentsLocked()
-declare function AttachGlyphToSpell(spellID: any?)
-declare function BattlefieldMgrEntryInviteResponse(queueId: any?, accept: any?)
-declare function BattlefieldMgrExitRequest(queueId: any?)
-declare function BattlefieldMgrQueueInviteResponse(queueId: any?, accept: any?)
-declare function BattlefieldMgrQueueRequest()
+declare function AreTalentsLocked(...: any): (...any)
+declare function AttachGlyphToSpell(spellID: any?, ...: any): (...any)
+declare function BattlefieldMgrEntryInviteResponse(queueId: any?, accept: any?, ...: any): (...any)
+declare function BattlefieldMgrExitRequest(queueId: any?, ...: any): (...any)
+declare function BattlefieldMgrQueueInviteResponse(queueId: any?, accept: any?, ...: any): (...any)
+declare function BattlefieldMgrQueueRequest(...: any): (...any)
 declare function CanItemBeSocketedToArtifact(itemID: number): boolean
 declare function CanScanResearchSite(): boolean
 declare function CanSolveArtifact(): boolean
 declare function CanSwitchVehicleSeats(): boolean
-declare function CancelMasterLootRoll(slot: any?)
-declare function ClearAutoAcceptQuestSound()
-declare function ClearFailedPVPTalentIDs()
-declare function ClearFailedTalentIDs()
-declare function ClickWorldMapActionButton()
-declare function CloseGuildRegistrar()
+declare function CancelMasterLootRoll(slot: any?, ...: any): (...any)
+declare function ClearAutoAcceptQuestSound(...: any): (...any)
+declare function ClearFailedPVPTalentIDs(...: any): (...any)
+declare function ClearFailedTalentIDs(...: any): (...any)
+declare function ClickWorldMapActionButton(...: any): (...any)
+declare function CloseGuildRegistrar(...: any): (...any)
 declare function CloseResearch()
-declare function DoMasterLootRoll(slot: any?)
+declare function DoMasterLootRoll(slot: any?, ...: any): (...any)
 declare function GetAchievementGuildRep(id: number): (boolean, boolean, number)
 declare function GetActiveArtifactByRace(branchIndex: number, artifactIndex: number): (string, string, string, string, string, number, string)
-declare function GetActiveQuestID(index: any?)
+declare function GetActiveQuestID(index: any?, ...: any): (...any)
 declare function GetArchaeologyInfo(): string
 declare function GetArchaeologyRaceInfo(raceIndex: number): (string, number, number, number, number, number)
 declare function GetArchaeologyRaceInfoByID(branchID: number): (string, number, number, number, number, number)
 declare function GetArtifactInfoByRace(raceIndex: number, artifactIndex: number): (string, string, number, string, string, number, string, number, number)
 declare function GetArtifactProgress(): (number, number, number)
-declare function GetCurrentGlyphNameForSpell(spellID: any?)
-declare function GetEquipmentNameFromSpell()
-declare function GetFailedPVPTalentIDs()
-declare function GetFailedTalentIDs()
-declare function GetFollowerTypeIDFromSpell()
+declare function GetCurrentGlyphNameForSpell(spellID: any?, ...: any): (...any)
+declare function GetEquipmentNameFromSpell(...: any): (...any)
+declare function GetFailedPVPTalentIDs(...: any): (...any)
+declare function GetFailedTalentIDs(...: any): (...any)
+declare function GetFollowerTypeIDFromSpell(...: any): (...any)
 declare function GetGuildAchievementMemberInfo(achievementID: number, index: number): string?
 declare function GetGuildAchievementMembers(achievementID: number)
 declare function GetGuildAchievementNumMembers(achievementID: number): number
 declare function GetItemLevelColor(): (number, number, number)
-declare function GetJournalInfoForSpellConfirmation(spellID: any?)
+declare function GetJournalInfoForSpellConfirmation(spellID: any?, ...: any): (...any)
 declare function GetMaxTalentTier(): number
-declare function GetMerchantFilter()
+declare function GetMerchantFilter(...: any): (...any)
 declare function GetNumArchaeologyRaces(): number
 declare function GetNumArtifactsByRace(raceIndex: number): number
-declare function GetNumBattlefieldVehicles(index: any?)
+declare function GetNumBattlefieldVehicles(index: any?, ...: any): (...any)
 declare function GetNumBattlegroundTypes(): number
-declare function GetNumQuestLogRewardFactions()
-declare function GetNumQuestLogTasks()
-declare function GetNumTreasurePickerItems()
-declare function GetNumUnspentPvpTalents()
-declare function GetPendingGlyphName()
-declare function GetPlayerTradeCurrency()
+declare function GetNumQuestLogRewardFactions(...: any): (...any)
+declare function GetNumQuestLogTasks(...: any): (...any)
+declare function GetNumTreasurePickerItems(...: any): (...any)
+declare function GetNumUnspentPvpTalents(...: any): (...any)
+declare function GetPendingGlyphName(...: any): (...any)
+declare function GetPlayerTradeCurrency(...: any): (...any)
 declare function GetPvpTalentInfoByID(talentID: number, specGroupIndex: number?, isInspect: boolean?, inspectedUnit: string?): (number, string, number, boolean, boolean, number, boolean, number, number, boolean, boolean)
-declare function GetPvpTalentInfoBySpecialization()
-declare function GetPvpTalentLink()
-declare function GetQuestExpansion(questID: any?)
-declare function GetQuestItemInfoLootType(type: any?, index: any?)
-declare function GetQuestLogChoiceInfoLootType(index: any?)
-declare function GetQuestLogCriteriaSpell()
-declare function GetQuestLogRewardArtifactXP()
-declare function GetQuestLogRewardFactionInfo(questIndex: any?)
-declare function GetQuestLogRewardSkillPoints()
+declare function GetPvpTalentInfoBySpecialization(...: any): (...any)
+declare function GetPvpTalentLink(...: any): (...any)
+declare function GetQuestExpansion(questID: any?, ...: any): (...any)
+declare function GetQuestItemInfoLootType(type: any?, index: any?, ...: any): (...any)
+declare function GetQuestLogChoiceInfoLootType(index: any?, ...: any): (...any)
+declare function GetQuestLogCriteriaSpell(...: any): (...any)
+declare function GetQuestLogRewardArtifactXP(...: any): (...any)
+declare function GetQuestLogRewardFactionInfo(questIndex: any?, ...: any): (...any)
+declare function GetQuestLogRewardSkillPoints(...: any): (...any)
 declare function GetQuestObjectiveInfo(questID: number, objectiveIndex: number, displayComplete: boolean): (string, string, boolean, number, number)
-declare function GetQuestPOIBlobCount(questID: any?)
+declare function GetQuestPOIBlobCount(questID: any?, ...: any): (...any)
 declare function GetQuestProgressBarPercent(questID: number): number
-declare function GetRewardArtifactXP()
-declare function GetRewardNumSkillUps()
-declare function GetRewardPackArtifactPower(rewardPackID: any?)
-declare function GetRewardPackCurrencies(rewardPackID: any?)
-declare function GetRewardPackItems(rewardPackID: any?)
-declare function GetRewardPackMoney(rewardPackID: any?)
-declare function GetRewardPackTitle(rewardPackID: any?)
-declare function GetRewardPackTitleName(titleID: any?)
-declare function GetRewardSkillLineID()
-declare function GetRewardSkillPoints()
+declare function GetRewardArtifactXP(...: any): (...any)
+declare function GetRewardNumSkillUps(...: any): (...any)
+declare function GetRewardPackArtifactPower(rewardPackID: any?, ...: any): (...any)
+declare function GetRewardPackCurrencies(rewardPackID: any?, ...: any): (...any)
+declare function GetRewardPackItems(rewardPackID: any?, ...: any): (...any)
+declare function GetRewardPackMoney(rewardPackID: any?, ...: any): (...any)
+declare function GetRewardPackTitle(rewardPackID: any?, ...: any): (...any)
+declare function GetRewardPackTitleName(titleID: any?, ...: any): (...any)
+declare function GetRewardSkillLineID(...: any): (...any)
+declare function GetRewardSkillPoints(...: any): (...any)
 declare function GetSelectedArtifactInfo(): (string, string, number, number, string, number, number, number)
-declare function GetSpellsForCharacterUpgradeTier(tierIndex: any?)
-declare function GetSuggestedGroupSize()
-declare function GetTalentInfoBySpecialization(specIndex: any?, tier: any?, column: any?)
-declare function GetTargetTradeCurrency()
+declare function GetSpellsForCharacterUpgradeTier(tierIndex: any?, ...: any): (...any)
+declare function GetSuggestedGroupSize(...: any): (...any)
+declare function GetTalentInfoBySpecialization(specIndex: any?, tier: any?, column: any?, ...: any): (...any)
+declare function GetTargetTradeCurrency(...: any): (...any)
 declare function GetTaskInfo(questID: number): (boolean, boolean, number)
-declare function GetTaskPOIs()
-declare function GetTasksTable()
-declare function GetTreasurePickerItemInfo(index: any?, questID: any?)
-declare function GetWorldMapActionButtonSpellInfo()
+declare function GetTaskPOIs(...: any): (...any)
+declare function GetTasksTable(...: any): (...any)
+declare function GetTreasurePickerItemInfo(index: any?, questID: any?, ...: any): (...any)
+declare function GetWorldMapActionButtonSpellInfo(...: any): (...any)
 declare function GetWorldPVPQueueStatus(index: number): (string, string?, number, number, number, number, boolean)
-declare function HasArtifactEquipped()
-declare function HasAttachedGlyph(spellID: any?)
-declare function HasPendingGlyphCast()
+declare function HasArtifactEquipped(...: any): (...any)
+declare function HasAttachedGlyph(spellID: any?, ...: any): (...any)
+declare function HasPendingGlyphCast(...: any): (...any)
 declare function IsArtifactCompletionHistoryAvailable(): boolean
-declare function IsBreadcrumbQuest(questID: any?)
-declare function IsCastingGlyph()
-declare function IsPendingGlyphRemoval()
-declare function IsQuestIDValidSpellTarget(questID: any?)
-declare function IsQuestSequenced(questID: any?)
-declare function IsSpecializationActivateSpell()
-declare function IsSpellValidForPendingGlyph(spellID: any?)
-declare function IsStoryQuest(questID: any?)
+declare function IsBreadcrumbQuest(questID: any?, ...: any): (...any)
+declare function IsCastingGlyph(...: any): (...any)
+declare function IsPendingGlyphRemoval(...: any): (...any)
+declare function IsQuestIDValidSpellTarget(questID: any?, ...: any): (...any)
+declare function IsQuestSequenced(questID: any?, ...: any): (...any)
+declare function IsSpecializationActivateSpell(...: any): (...any)
+declare function IsSpellValidForPendingGlyph(spellID: any?, ...: any): (...any)
+declare function IsStoryQuest(questID: any?, ...: any): (...any)
 declare function IsVehicleAimAngleAdjustable(): boolean
 declare function IsVehicleAimPowerAdjustable(): boolean
 declare function ItemAddedToArtifact(index: number): boolean
-declare function ItemCanTargetGarrisonFollowerAbility()
-declare function JoinRatedSoloShuffle()
+declare function ItemCanTargetGarrisonFollowerAbility(...: any): (...any)
+declare function JoinRatedSoloShuffle(...: any): (...any)
 declare function LearnPvpTalent(talentID: number, slotIndex: number)
-declare function LearnPvpTalents()
+declare function LearnPvpTalents(...: any): (...any)
 declare function PetDefensiveAssistMode()
-declare function PickupPvpTalent()
-declare function PlayAutoAcceptQuestSound()
-declare function ProcessQuestLogRewardFactions()
+declare function PickupPvpTalent(...: any): (...any)
+declare function PlayAutoAcceptQuestSound(...: any): (...any)
+declare function ProcessQuestLogRewardFactions(...: any): (...any)
 declare function QuestGetAutoAccept(): boolean
-declare function QuestGetAutoLaunched()
-declare function QuestHasPOIInfo(questID: any?)
-declare function QuestIsFromAdventureMap()
+declare function QuestGetAutoLaunched(...: any): (...any)
+declare function QuestHasPOIInfo(questID: any?, ...: any): (...any)
+declare function QuestIsFromAdventureMap(...: any): (...any)
 declare function QuestIsFromAreaTrigger(): boolean
 declare function QuestIsWeekly(): boolean
-declare function QuestLogRewardHasTreasurePicker()
-declare function ReleaseAction()
+declare function QuestLogRewardHasTreasurePicker(...: any): (...any)
+declare function ReleaseAction(...: any): (...any)
 declare function RemoveItemFromArtifact(): boolean
-declare function RemovePvpTalent()
-declare function RequestBottomLeftActionBar()
-declare function ResetSetMerchantFilter()
+declare function RemovePvpTalent(...: any): (...any)
+declare function RequestBottomLeftActionBar(...: any): (...any)
+declare function ResetSetMerchantFilter(...: any): (...any)
 declare function SetFocusedAchievement(id: number?)
-declare function SetMerchantFilter()
+declare function SetMerchantFilter(...: any): (...any)
 declare function SetSelectedArtifact(raceIndex: number, index: number?)
-declare function SetTradeCurrency(type: any?, amount: any?)
+declare function SetTradeCurrency(type: any?, amount: any?, ...: any): (...any)
 declare function SocketItemToArtifact(): boolean
 declare function SolveArtifact()
 declare function SortBGList(): boolean
-declare function SpellCanTargetGarrisonFollower()
-declare function SpellCanTargetGarrisonFollowerAbility()
-declare function SpellCanTargetGarrisonMission()
-declare function SpellCanTargetQuest()
-declare function StartSoloShuffleWarGameByName()
-declare function StartSpectatorSoloShuffleWarGame()
+declare function SpellCanTargetGarrisonFollower(...: any): (...any)
+declare function SpellCanTargetGarrisonFollowerAbility(...: any): (...any)
+declare function SpellCanTargetGarrisonMission(...: any): (...any)
+declare function SpellCanTargetQuest(...: any): (...any)
+declare function StartSoloShuffleWarGameByName(...: any): (...any)
+declare function StartSpectatorSoloShuffleWarGame(...: any): (...any)
 declare function SummonRandomCritter()
-declare function SurrenderArena()
-declare function UseWorldMapActionButtonSpellOnQuest()
+declare function SurrenderArena(...: any): (...any)
+declare function UseWorldMapActionButtonSpellOnQuest(...: any): (...any)
 
 declare global Clamp: (...any) -> ...any
 declare global CountTable: (...any) -> ...any
@@ -15455,6 +15456,7 @@ declare global ObjectCache_Create: (...any) -> ...any
 declare global QuestCache: any
 declare global SpellBookItemLocation: table
 declare global SpellBookItemLocationMixin: table
+declare global UiMapPoint: UiMapPoint
 declare global AchievementObjectiveTrackerMixin: any
 declare global AdventureObjectiveTrackerMixin: any
 declare global AutoQuestPopupTrackerMixin: table
@@ -18542,7 +18544,6 @@ declare global ZoneAbilityFrameUpdater: table
 declare global ZoneAbilityFrameMixin: table
 declare global ZoneAbilityFrameSpellButtonMixin: any
 declare global GetInventorySlotInfo: any
-declare global UIThemeContainerFrame: Frame
 @onDemand("Blizzard_AccountStore")
 declare global AccountStoreFrame: Frame
 @onDemand("Blizzard_AccountStore")
@@ -18601,8 +18602,6 @@ declare global ArrowCalloutFrameManager: Frame
 declare global ArtifactFrameUnderlay: Frame
 @onDemand("Blizzard_ArtifactUI")
 declare global ArtifactFrame: Frame
-declare global AuraButton: Button
-declare global AuraContainer: Frame
 declare global AuraButtonTooltip: GameTooltip
 @onDemand("Blizzard_AzeriteEssenceUI")
 declare global AzeriteEssenceUI: Frame
@@ -28496,6 +28495,1594 @@ declare global XP_TEXT_BANKED_XP_HEADER: string
 declare global YOU_COLLECTED_LABEL: string
 declare global ZM_PROG_COMP_NAME: string
 declare global _RK_TEST: string
+declare global LE_ACTIONBAR_STATE_MAIN: number
+declare global LE_ACTIONBAR_STATE_OVERRIDE: number
+declare global LE_AURORA_STATE_CONNECTED: number
+declare global LE_AURORA_STATE_CONNECTING: number
+declare global LE_AURORA_STATE_DISCONNECTING: number
+declare global LE_AURORA_STATE_ENTER_CAPTCHA: number
+declare global LE_AURORA_STATE_ENTER_EXTRA_AUTH: number
+declare global LE_AURORA_STATE_LEGAL_AGREEMENT: number
+declare global LE_AURORA_STATE_NONE: number
+declare global LE_AURORA_STATE_SELECT_ACCOUNT: number
+declare global LE_AURORA_STATE_WAITING_FOR_NETWORK: number
+declare global LE_AUTH_AUTHENTICATOR: number
+declare global LE_AUTH_NONE: number
+declare global LE_CHARACTER_UNDELETE_RESULT_ERROR_CHAR_CREATE: number
+declare global LE_CHARACTER_UNDELETE_RESULT_ERROR_COOLDOWN: number
+declare global LE_CHARACTER_UNDELETE_RESULT_ERROR_DISABLED: number
+declare global LE_CHARACTER_UNDELETE_RESULT_ERROR_DRACTHYR_LEVEL_REQUIREMENT: number
+declare global LE_CHARACTER_UNDELETE_RESULT_ERROR_NAME_TAKEN_BY_THIS_ACCOUNT: number
+declare global LE_CHARACTER_UNDELETE_RESULT_ERROR_NAME_TAKEN_BY_THIS_ACCOUNT_REGIONAL: number
+declare global LE_CHARACTER_UNDELETE_RESULT_ERROR_UNKNOWN: number
+declare global LE_CHARACTER_UNDELETE_RESULT_OK: number
+declare global LE_CHARACTER_UPGRADE_RESULT_BOX_LEVEL: number
+declare global LE_CHARACTER_UPGRADE_RESULT_DB_ERROR: number
+declare global LE_CHARACTER_UPGRADE_RESULT_INVALID_CHARACTER: number
+declare global LE_CHARACTER_UPGRADE_RESULT_NOT_FRESH_CHARACTER: number
+declare global LE_CHARACTER_UPGRADE_RESULT_OK: number
+declare global LE_CHARACTER_UPGRADE_RESULT_TRIAL_ACCOUNT: number
+declare global LE_CHARACTER_UPGRADE_RESULT_TRIAL_BOOST_DISABLED: number
+declare global LE_CHARACTER_UPGRADE_RESULT_TRIAL_THROTTLE_ACCOUNT: number
+declare global LE_CHARACTER_UPGRADE_RESULT_TRIAL_THROTTLE_DAY: number
+declare global LE_CHARACTER_UPGRADE_RESULT_TRIAL_THROTTLE_HOUR: number
+declare global LE_CHARACTER_UPGRADE_RESULT_TRIAL_THROTTLE_WEEK: number
+declare global LE_CHARACTER_UPGRADE_RESULT_UPGRADE_PENDING: number
+declare global LE_EXPANSION_BATTLE_FOR_AZEROTH: number
+declare global LE_EXPANSION_BURNING_CRUSADE: number
+declare global LE_EXPANSION_CATACLYSM: number
+declare global LE_EXPANSION_CLASSIC: number
+declare global LE_EXPANSION_DRAGONFLIGHT: number
+declare global LE_EXPANSION_LEGION: number
+declare global LE_EXPANSION_LEVEL_CURRENT: number
+declare global LE_EXPANSION_LEVEL_PREVIOUS: number
+declare global LE_EXPANSION_MIDNIGHT: number
+declare global LE_EXPANSION_MISTS_OF_PANDARIA: number
+declare global LE_EXPANSION_SHADOWLANDS: number
+declare global LE_EXPANSION_WAR_WITHIN: number
+declare global LE_EXPANSION_WARLORDS_OF_DRAENOR: number
+declare global LE_EXPANSION_WRATH_OF_THE_LICH_KING: number
+declare global LE_FRAME_TUTORIAL_9_0_GRRISON_LANDING_PAGE_BUTTON_CALLINGS: number
+declare global LE_FRAME_TUTORIAL_9_0_GRRISON_LANDING_PAGE_CALLINGS: number
+declare global LE_FRAME_TUTORIAL_9_0_JAILERS_TOWER_BUFFS: number
+declare global LE_FRAME_TUTORIAL_ANIMA_DIVERSION_ACTIVATE_LOCATION: number
+declare global LE_FRAME_TUTORIAL_ANIMA_DIVERSION_FILL_BAR: number
+declare global LE_FRAME_TUTORIAL_ANIMA_DIVERSION_REINFORCE_LOCATION: number
+declare global LE_FRAME_TUTORIAL_ANIMA_DIVERSION_SPEND_ANIMA: number
+declare global LE_FRAME_TUTORIAL_ARTIFACT_APPEARANCE_TAB: number
+declare global LE_FRAME_TUTORIAL_ARTIFACT_KNOWLEDGE: number
+declare global LE_FRAME_TUTORIAL_ARTIFACT_KNOWLEDGE_LEVEL_LIMIT: number
+declare global LE_FRAME_TUTORIAL_ARTIFACT_RELIC_MATCH: number
+declare global LE_FRAME_TUTORIAL_ASSISTED_HIGHLIGHT_ENABLED_POPUP: number
+declare global LE_FRAME_TUTORIAL_AZERITE_FIRST_POWER_LOCKED_IN: number
+declare global LE_FRAME_TUTORIAL_AZERITE_ITEM_IN_BAG: number
+declare global LE_FRAME_TUTORIAL_AZERITE_ITEM_IN_SLOT: number
+declare global LE_FRAME_TUTORIAL_AZERITE_RESPEC: number
+declare global LE_FRAME_TUTORIAL_BAG_SETTINGS: number
+declare global LE_FRAME_TUTORIAL_BAG_SLOTS_AUTHENTICATOR: number
+declare global LE_FRAME_TUTORIAL_BONUS_ROLL_ENCOUNTER_JOURNAL_LINK: number
+declare global LE_FRAME_TUTORIAL_BOOSTED_SPELL_BOOK: number
+declare global LE_FRAME_TUTORIAL_BOUNTY_FINISHED: number
+declare global LE_FRAME_TUTORIAL_BOUNTY_INTRO: number
+declare global LE_FRAME_TUTORIAL_BRAWL: number
+declare global LE_FRAME_TUTORIAL_CAMPAIGN_LORE_TEXT: number
+declare global LE_FRAME_TUTORIAL_CHAT_CHANNELS: number
+declare global LE_FRAME_TUTORIAL_CLEAN_UP_BAGS: number
+declare global LE_FRAME_TUTORIAL_CLUB_FINDER_LINKING: number
+declare global LE_FRAME_TUTORIAL_CLUB_FINDER_NEW_APPLICANTS_GUILD_LEADER: number
+declare global LE_FRAME_TUTORIAL_CLUB_FINDER_NEW_COMMUNITY_LEADER: number
+declare global LE_FRAME_TUTORIAL_CLUB_FINDER_NEW_GUILD_LEADER: number
+declare global LE_FRAME_TUTORIAL_CLUB_FINDER_NEW_LANGUAGE_FILTER: number
+declare global LE_FRAME_TUTORIAL_CORE_ABILITITES: number
+declare global LE_FRAME_TUTORIAL_CORRUPTION_CLEANSER: number
+declare global LE_FRAME_TUTORIAL_COVENANT_RENOWN_PROGRESS: number
+declare global LE_FRAME_TUTORIAL_COVENANT_RENOWN_REWARDS: number
+declare global LE_FRAME_TUTORIAL_COVENANT_RESERVOIR_DEPOSIT: number
+declare global LE_FRAME_TUTORIAL_COVENANT_RESERVOIR_FEATURES: number
+declare global LE_FRAME_TUTORIAL_CROSS_FACTION_COMMUNITY: number
+declare global LE_FRAME_TUTORIAL_CROSS_FACTION_GROUP_FINDER: number
+declare global LE_FRAME_TUTORIAL_CROSS_FACTION_INVITE: number
+declare global LE_FRAME_TUTORIAL_DRACTHYR_EMPOWERED: number
+declare global LE_FRAME_TUTORIAL_DRACTHYR_ESSENCE: number
+declare global LE_FRAME_TUTORIAL_DRACTHYR_LOW_HEALTH: number
+declare global LE_FRAME_TUTORIAL_DRAGON_RIDING_ACTIONBAR: number
+declare global LE_FRAME_TUTORIAL_DRAGON_RIDING_GLYPHS: number
+declare global LE_FRAME_TUTORIAL_DRAGON_RIDING_SKILLS: number
+declare global LE_FRAME_TUTORIAL_DRIVE_START_JOB: number
+declare global LE_FRAME_TUTORIAL_DRIVE_TURBO_METER: number
+declare global LE_FRAME_TUTORIAL_EDIT_MODE_MANAGER: number
+declare global LE_FRAME_TUTORIAL_EMBER_COURT_MAP: number
+declare global LE_FRAME_TUTORIAL_EQUIP_REAGENT_BAG: number
+declare global LE_FRAME_TUTORIAL_EYE_OF_JAILER: number
+declare global LE_FRAME_TUTORIAL_FIRST_PROFESSION: number
+declare global LE_FRAME_TUTORIAL_FIRST_RUNEFORGE_LEGENDARY_POWER: number
+declare global LE_FRAME_TUTORIAL_FOLLOWER_DUNGEON_SEEN: number
+declare global LE_FRAME_TUTORIAL_FRIENDS_LIST_QUICK_JOIN: number
+declare global LE_FRAME_TUTORIAL_GAME_TIME_AUCTION_HOUSE: number
+declare global LE_FRAME_TUTORIAL_GARRISON_BUILDING: number
+declare global LE_FRAME_TUTORIAL_GARRISON_LANDING: number
+declare global LE_FRAME_TUTORIAL_GARRISON_MISSION_LIST: number
+declare global LE_FRAME_TUTORIAL_GARRISON_MISSION_PAGE: number
+declare global LE_FRAME_TUTORIAL_GARRISON_ZONE_ABILITY: number
+declare global LE_FRAME_TUTORIAL_GLYPH: number
+declare global LE_FRAME_TUTORIAL_GREAT_VAULT_CLASS_SETS: number
+declare global LE_FRAME_TUTORIAL_HEIRLOOM_JOURNAL: number
+declare global LE_FRAME_TUTORIAL_HEIRLOOM_JOURNAL_LEVEL: number
+declare global LE_FRAME_TUTORIAL_HEIRLOOM_JOURNAL_TAB: number
+declare global LE_FRAME_TUTORIAL_HERO_TALENT_NONE_SPENT: number
+declare global LE_FRAME_TUTORIAL_HONOR_TALENT_FIRST_TALENT: number
+declare global LE_FRAME_TUTORIAL_HONOR_TALENT_HONOR_LEVELS: number
+declare global LE_FRAME_TUTORIAL_HOW_TO_SUPERTRACK: number
+declare global LE_FRAME_TUTORIAL_HUD_REVAMP_BAG_CHANGES: number
+declare global LE_FRAME_TUTORIAL_HUD_REVAMP_LFG_QUEUE_CHANGES: number
+declare global LE_FRAME_TUTORIAL_HUD_REVAMP_TRACKING_CHANGES: number
+declare global LE_FRAME_TUTORIAL_HUD_REVAMP_UNIT_FRAME_CHANGES: number
+declare global LE_FRAME_TUTORIAL_IGNORE_QUEST: number
+declare global LE_FRAME_TUTORIAL_INVENTORY_FIXUP_CHECK_EXPANSION_LEGION: number
+declare global LE_FRAME_TUTORIAL_INVENTORY_FIXUP_EXPANSION_LEGION: number
+declare global LE_FRAME_TUTORIAL_ISLANDS_QUEUE_BUTTON: number
+declare global LE_FRAME_TUTORIAL_ISLANDS_QUEUE_INFO_FRAME: number
+declare global LE_FRAME_TUTORIAL_JOURNEYS_TAB: number
+declare global LE_FRAME_TUTORIAL_KEY_RANGE_GROUP_FINDER: number
+declare global LE_FRAME_TUTORIAL_LFG_LIST: number
+declare global LE_FRAME_TUTORIAL_LINK_TRANSMOG_CUSTOM_SET: number
+declare global LE_FRAME_TUTORIAL_LOOT_HISTORY_ROLL: number
+declare global LE_FRAME_TUTORIAL_LOREWALKING_QUESTS_HIDDEN: number
+declare global LE_FRAME_TUTORIAL_MAJOR_FACTION_RENOWN_PROGRESS: number
+declare global LE_FRAME_TUTORIAL_MOUNT_COLLECTION_DRAGONRIDING: number
+declare global LE_FRAME_TUTORIAL_MOUNT_EQUIPMENT_SLOT_FRAME: number
+declare global LE_FRAME_TUTORIAL_NEWCOMER_GRADUATION: number
+declare global LE_FRAME_TUTORIAL_NEWCOMER_GRADUATION_REMINDER: number
+declare global LE_FRAME_TUTORIAL_OPTIONAL_REAGENT_CRAFTING: number
+declare global LE_FRAME_TUTORIAL_PERKS_PROGRAM_ACTIVITIES_INTRO: number
+declare global LE_FRAME_TUTORIAL_PERKS_PROGRAM_ACTIVITIES_MAX_INFLUENCE: number
+declare global LE_FRAME_TUTORIAL_PERKS_PROGRAM_ACTIVITIES_OPEN: number
+declare global LE_FRAME_TUTORIAL_PERKS_PROGRAM_ACTIVITIES_TRACKING: number
+declare global LE_FRAME_TUTORIAL_PERKS_PROGRAM_FREEZE_ITEM: number
+declare global LE_FRAME_TUTORIAL_PERKS_PROGRAM_HIDE_ARMOR: number
+declare global LE_FRAME_TUTORIAL_PERKS_PROGRAM_NEW_COLLECTION_ITEM: number
+declare global LE_FRAME_TUTORIAL_PERKS_PROGRAM_OVERWRITE_FROZEN_ITEM: number
+declare global LE_FRAME_TUTORIAL_PET_JOURNAL: number
+declare global LE_FRAME_TUTORIAL_PLAYER_SPELLS_MINIMIZE: number
+declare global LE_FRAME_TUTORIAL_PROFESSION_FINISHING_REAGENTS: number
+declare global LE_FRAME_TUTORIAL_PROFESSION_OPTIONAL_REAGENTS_NEW: number
+declare global LE_FRAME_TUTORIAL_PROFESSION_QUALITY_BAR: number
+declare global LE_FRAME_TUTORIAL_PROFESSION_QUALITY_REAGENTS: number
+declare global LE_FRAME_TUTORIAL_PROFESSIONS: number
+declare global LE_FRAME_TUTORIAL_PROFESSIONS_CO_OPTIONAL_REAGENTS: number
+declare global LE_FRAME_TUTORIAL_PROFESSIONS_CO_ORDER_PLACED: number
+declare global LE_FRAME_TUTORIAL_PROFESSIONS_CO_QUALITY_REAGENTS: number
+declare global LE_FRAME_TUTORIAL_PROFESSIONS_RECRAFT: number
+declare global LE_FRAME_TUTORIAL_PROFESSIONS_SPEC_CHOICE: number
+declare global LE_FRAME_TUTORIAL_PVP_SPECIAL_EVENT: number
+declare global LE_FRAME_TUTORIAL_PVP_TALENTS_FIRST_UNLOCK: number
+declare global LE_FRAME_TUTORIAL_PVP_WARMODE_UNLOCK: number
+declare global LE_FRAME_TUTORIAL_QUEST_SESSION: number
+declare global LE_FRAME_TUTORIAL_REAGENT_BANK_UNLOCK: number
+declare global LE_FRAME_TUTORIAL_RELIC_FORGE_LEARN_TRAIT: number
+declare global LE_FRAME_TUTORIAL_RELIC_FORGE_PREVIEW_RELIC: number
+declare global LE_FRAME_TUTORIAL_RELIC_FORGE_SOCKETED_RELIC: number
+declare global LE_FRAME_TUTORIAL_REPUTATION_EXALTED_PLUS: number
+declare global LE_FRAME_TUTORIAL_RUNECARVER_SCRAPPING: number
+declare global LE_FRAME_TUTORIAL_RUNEFORGE_LEGENDARY_CRAFT: number
+declare global LE_FRAME_TUTORIAL_SETTINGS_SEARCH: number
+declare global LE_FRAME_TUTORIAL_SOULBIND_CONDUIT_INSTALL: number
+declare global LE_FRAME_TUTORIAL_SOULBIND_CONDUIT_LEARN: number
+declare global LE_FRAME_TUTORIAL_SOULBIND_ENHANCED_CONDUIT: number
+declare global LE_FRAME_TUTORIAL_SOULBIND_PATH_SELECT: number
+declare global LE_FRAME_TUTORIAL_SPEC: number
+declare global LE_FRAME_TUTORIAL_SPEC_CHANGES: number
+declare global LE_FRAME_TUTORIAL_SPEECH_TO_TEXT: number
+declare global LE_FRAME_TUTORIAL_SPELLBOOK: number
+declare global LE_FRAME_TUTORIAL_TALENT: number
+declare global LE_FRAME_TUTORIAL_TALENT_CHANGES: number
+declare global LE_FRAME_TUTORIAL_TALENT_STARTER_HELP: number
+declare global LE_FRAME_TUTORIAL_TEXT_TO_SPEECH: number
+declare global LE_FRAME_TUTORIAL_TORGHAST_DOMINANCE_BAR: number
+declare global LE_FRAME_TUTORIAL_TORGHAST_DOMINANCE_BAR_CUTOFF: number
+declare global LE_FRAME_TUTORIAL_TORGHAST_EARN_TOWER_KNOWLEDGE: number
+declare global LE_FRAME_TUTORIAL_TORGHAST_REROLL: number
+declare global LE_FRAME_TUTORIAL_TORGHAST_SPEND_TOWER_KNOWLEDGE: number
+declare global LE_FRAME_TUTORIAL_TOYBOX: number
+declare global LE_FRAME_TUTORIAL_TOYBOX_FAVORITE: number
+declare global LE_FRAME_TUTORIAL_TOYBOX_MOUSEWHEEL_PAGING: number
+declare global LE_FRAME_TUTORIAL_TRADESKILL_RANK_STAR: number
+declare global LE_FRAME_TUTORIAL_TRADESKILL_UNLEARNED_TAB: number
+declare global LE_FRAME_TUTORIAL_TRANSMOG_CUSTOM_SET_DROPDOWN: number
+declare global LE_FRAME_TUTORIAL_TRANSMOG_JOURNAL_TAB: number
+declare global LE_FRAME_TUTORIAL_TRANSMOG_MODEL_CLICK: number
+declare global LE_FRAME_TUTORIAL_TRANSMOG_SETS_TAB: number
+declare global LE_FRAME_TUTORIAL_TRANSMOG_SETS_VENDOR_TAB: number
+declare global LE_FRAME_TUTORIAL_TRANSMOG_SPECS_BUTTON: number
+declare global LE_FRAME_TUTORIAL_TRIAL_BANKED_XP: number
+declare global LE_FRAME_TUTORIAL_UPGRADEABLE_ITEM_IN_SLOT: number
+declare global LE_FRAME_TUTORIAL_VIEWABLE_ARTIFACT: number
+declare global LE_FRAME_TUTORIAL_WARDROBE_TRACKING_INTERFACE: number
+declare global LE_FRAME_TUTORIAL_WARFRONT_CONSTRUCTION: number
+declare global LE_FRAME_TUTORIAL_WARFRONT_RESOURCES: number
+declare global LE_FRAME_TUTORIAL_WHAT_HAS_CHANGED: number
+declare global LE_FRAME_TUTORIAL_WORLD_MAP_ACTIVITY_TRACKER_LIST: number
+declare global LE_FRAME_TUTORIAL_WORLD_MAP_FRAME: number
+declare global LE_FRAME_TUTORIAL_WORLD_MAP_THREAT_ICON: number
+declare global LE_FRAME_TUTORIAL_WRAPPED_COLLECTION_ITEMS: number
+declare global LE_GAME_ERR_2HANDED_EQUIPPED: number
+declare global LE_GAME_ERR_2HSKILLNOTFOUND: number
+declare global LE_GAME_ERR_ABILITY_COOLDOWN: number
+declare global LE_GAME_ERR_ACCOUNT_MONEY_LOCKED: number
+declare global LE_GAME_ERR_ACCOUNT_SILENCED: number
+declare global LE_GAME_ERR_ACTIVATE_SOULBIND_FAILED_REST_AREA: number
+declare global LE_GAME_ERR_ACTIVATE_SOULBIND_S: number
+declare global LE_GAME_ERR_AFFECTING_COMBAT: number
+declare global LE_GAME_ERR_AGE_RESTRICTED_MAIL_MINOR: number
+declare global LE_GAME_ERR_AGE_RESTRICTED_MAIL_UNVERIFIED: number
+declare global LE_GAME_ERR_ALREADY_IN_ARENA_TEAM_S: number
+declare global LE_GAME_ERR_ALREADY_IN_GROUP_S: number
+declare global LE_GAME_ERR_ALREADY_IN_GUILD: number
+declare global LE_GAME_ERR_ALREADY_IN_GUILD_S: number
+declare global LE_GAME_ERR_ALREADY_INVITED_TO_GUILD_S: number
+declare global LE_GAME_ERR_ALREADY_PICKPOCKETED: number
+declare global LE_GAME_ERR_ALREADY_TRADING: number
+declare global LE_GAME_ERR_ALREADY_USING_LFG_LIST: number
+declare global LE_GAME_ERR_AMMO_ONLY: number
+declare global LE_GAME_ERR_APPEARANCE_ALREADY_LEARNED: number
+declare global LE_GAME_ERR_APPROACHING_NO_PLAY_TIME: number
+declare global LE_GAME_ERR_APPROACHING_NO_PLAY_TIME_2: number
+declare global LE_GAME_ERR_APPROACHING_PARTIAL_PLAY_TIME: number
+declare global LE_GAME_ERR_APPROACHING_PARTIAL_PLAY_TIME_2: number
+declare global LE_GAME_ERR_ARENA_EXPIRED_CAIS: number
+declare global LE_GAME_ERR_ARENA_JOIN_RANGE_INDEX: number
+declare global LE_GAME_ERR_ARENA_TEAM_CHANGE_FAILED_QUEUED: number
+declare global LE_GAME_ERR_ARENA_TEAM_PARTY_SIZE: number
+declare global LE_GAME_ERR_ARENA_TEAM_PERMISSIONS: number
+declare global LE_GAME_ERR_ARTIFACT_RELIC_DOES_NOT_MATCH_ARTIFACT: number
+declare global LE_GAME_ERR_ATTACK_CHANNEL: number
+declare global LE_GAME_ERR_ATTACK_CHARMED: number
+declare global LE_GAME_ERR_ATTACK_CONFUSED: number
+declare global LE_GAME_ERR_ATTACK_DEAD: number
+declare global LE_GAME_ERR_ATTACK_FLEEING: number
+declare global LE_GAME_ERR_ATTACK_MOUNTED: number
+declare global LE_GAME_ERR_ATTACK_NO_ACTIONS: number
+declare global LE_GAME_ERR_ATTACK_PACIFIED: number
+declare global LE_GAME_ERR_ATTACK_PREVENTED_BY_MECHANIC_S: number
+declare global LE_GAME_ERR_ATTACK_PVP_TARGET_WHILE_UNFLAGGED: number
+declare global LE_GAME_ERR_ATTACK_STUNNED: number
+declare global LE_GAME_ERR_AUCTION_ALREADY_BID: number
+declare global LE_GAME_ERR_AUCTION_BID_PLACED: number
+declare global LE_GAME_ERR_AUCTION_DATABASE_ERROR: number
+declare global LE_GAME_ERR_AUCTION_HIGHER_BID: number
+declare global LE_GAME_ERR_AUCTION_OUTBID_S: number
+declare global LE_GAME_ERR_AUCTION_REMOVED_S: number
+declare global LE_GAME_ERR_AUCTION_WON_S: number
+declare global LE_GAME_ERR_AUTOFOLLOW_TOO_FAR: number
+declare global LE_GAME_ERR_AUTOLOOT_MONEY_S: number
+declare global LE_GAME_ERR_AZERITE_ESSENCE_SELECTION_FAILED_CANT_REMOVE_ESSENCE: number
+declare global LE_GAME_ERR_AZERITE_ESSENCE_SELECTION_FAILED_CONDITION_FAILED: number
+declare global LE_GAME_ERR_AZERITE_ESSENCE_SELECTION_FAILED_ESSENCE_NOT_UNLOCKED: number
+declare global LE_GAME_ERR_AZERITE_ESSENCE_SELECTION_FAILED_HEART_LEVEL_TOO_LOW: number
+declare global LE_GAME_ERR_AZERITE_ESSENCE_SELECTION_FAILED_NOT_AT_FORGE: number
+declare global LE_GAME_ERR_AZERITE_ESSENCE_SELECTION_FAILED_NOT_EQUIPPED: number
+declare global LE_GAME_ERR_AZERITE_ESSENCE_SELECTION_FAILED_REST_AREA: number
+declare global LE_GAME_ERR_AZERITE_ESSENCE_SELECTION_FAILED_SLOT_LOCKED: number
+declare global LE_GAME_ERR_BAD_ON_USE_ENCHANT: number
+declare global LE_GAME_ERR_BAD_PLAYER_NAME_S: number
+declare global LE_GAME_ERR_BADATTACKFACING: number
+declare global LE_GAME_ERR_BADATTACKPOS: number
+declare global LE_GAME_ERR_BAG_FULL: number
+declare global LE_GAME_ERR_BAG_IN_BAG: number
+declare global LE_GAME_ERR_BANK_FULL: number
+declare global LE_GAME_ERR_BANK_NOT_ACCESSIBLE: number
+declare global LE_GAME_ERR_BANK_TAB_INVALID_NAME: number
+declare global LE_GAME_ERR_BANK_TAB_INVALID_TEXT: number
+declare global LE_GAME_ERR_BANK_TAB_NOT_UNLOCKED: number
+declare global LE_GAME_ERR_BANKSLOT_FAILED_TOO_MANY: number
+declare global LE_GAME_ERR_BANKSLOT_INSUFFICIENT_FUNDS: number
+declare global LE_GAME_ERR_BANKSLOT_NOTBANKER: number
+declare global LE_GAME_ERR_BATTLEDGROUND_QUEUED_FOR_RATED: number
+declare global LE_GAME_ERR_BATTLEFIELD_TEAM_PARTY_SIZE: number
+declare global LE_GAME_ERR_BATTLEGROUND_ALREADY_IN: number
+declare global LE_GAME_ERR_BATTLEGROUND_CANNOT_QUEUE_FOR_RATED: number
+declare global LE_GAME_ERR_BATTLEGROUND_DUPE_QUEUE: number
+declare global LE_GAME_ERR_BATTLEGROUND_INFO_THROTTLED: number
+declare global LE_GAME_ERR_BATTLEGROUND_INVITATION_DECLINED: number
+declare global LE_GAME_ERR_BATTLEGROUND_INVITATION_DECLINED_BY: number
+declare global LE_GAME_ERR_BATTLEGROUND_JOIN_DISQUALIFIED: number
+declare global LE_GAME_ERR_BATTLEGROUND_JOIN_DISQUALIFIED_NO_NAME: number
+declare global LE_GAME_ERR_BATTLEGROUND_JOIN_FAILED: number
+declare global LE_GAME_ERR_BATTLEGROUND_JOIN_GROUP_QUEUE_WITHOUT_HEALER: number
+declare global LE_GAME_ERR_BATTLEGROUND_JOIN_LEVELUP: number
+declare global LE_GAME_ERR_BATTLEGROUND_JOIN_MERCENARY: number
+declare global LE_GAME_ERR_BATTLEGROUND_JOIN_MUST_COMPLETE_QUEST: number
+declare global LE_GAME_ERR_BATTLEGROUND_JOIN_NO_VALID_SPEC_FOR_ROLE: number
+declare global LE_GAME_ERR_BATTLEGROUND_JOIN_RANGE_INDEX: number
+declare global LE_GAME_ERR_BATTLEGROUND_JOIN_RATED_TOO_MANY_HEALERS: number
+declare global LE_GAME_ERR_BATTLEGROUND_JOIN_REQUIRES_LEVEL: number
+declare global LE_GAME_ERR_BATTLEGROUND_JOIN_RESPEC: number
+declare global LE_GAME_ERR_BATTLEGROUND_JOIN_TIMED_OUT: number
+declare global LE_GAME_ERR_BATTLEGROUND_JOIN_TOO_MANY_DAMAGE: number
+declare global LE_GAME_ERR_BATTLEGROUND_JOIN_TOO_MANY_HEALERS: number
+declare global LE_GAME_ERR_BATTLEGROUND_JOIN_TOO_MANY_TANKS: number
+declare global LE_GAME_ERR_BATTLEGROUND_JOIN_XP_GAIN: number
+declare global LE_GAME_ERR_BATTLEGROUND_NOT_IN_BATTLEGROUND: number
+declare global LE_GAME_ERR_BATTLEGROUND_NOT_IN_TEAM: number
+declare global LE_GAME_ERR_BATTLEGROUND_PLAYERS_FROM_DIFFERENT_REALMS: number
+declare global LE_GAME_ERR_BATTLEGROUND_TEAM_LEFT_QUEUE: number
+declare global LE_GAME_ERR_BATTLEGROUND_TOO_MANY_QUEUES: number
+declare global LE_GAME_ERR_BATTLETAG_FRIEND_ADDED_S: number
+declare global LE_GAME_ERR_BATTLETAG_FRIEND_NOT_ALLOWED: number
+declare global LE_GAME_ERR_BATTLETAG_FRIEND_NOT_FOUND: number
+declare global LE_GAME_ERR_BATTLETAG_FRIEND_NOT_VALID: number
+declare global LE_GAME_ERR_BATTLETAG_FRIEND_REMOVED_S: number
+declare global LE_GAME_ERR_BATTLETAG_FRIEND_SUCCESS: number
+declare global LE_GAME_ERR_BATTLETAG_FRIEND_THROTTLED: number
+declare global LE_GAME_ERR_BG_DEVELOPER_ONLY: number
+declare global LE_GAME_ERR_BG_PLAYER_JOINED_SS: number
+declare global LE_GAME_ERR_BG_PLAYER_LEFT_S: number
+declare global LE_GAME_ERR_BN_BROADCAST_THROTTLE: number
+declare global LE_GAME_ERR_BN_FRIEND_ALREADY: number
+declare global LE_GAME_ERR_BN_FRIEND_BLOCKED: number
+declare global LE_GAME_ERR_BN_FRIEND_LIST_FULL: number
+declare global LE_GAME_ERR_BN_FRIEND_REQUEST_SENT: number
+declare global LE_GAME_ERR_BN_FRIEND_SELF: number
+declare global LE_GAME_ERR_BONUS_ROLL_EMPTY: number
+declare global LE_GAME_ERR_BUG_SUBMITTED_SUCCESSFULLY: number
+declare global LE_GAME_ERR_BUTTON_LOCKED: number
+declare global LE_GAME_ERR_CALENDAR_EVENT_ALERT_S: number
+declare global LE_GAME_ERR_CANNOT_ABANDON_LAST_PET: number
+declare global LE_GAME_ERR_CANNOTCREATEDIRECTORY: number
+declare global LE_GAME_ERR_CANNOTCREATEFILE: number
+declare global LE_GAME_ERR_CANT_BE_DISENCHANTED: number
+declare global LE_GAME_ERR_CANT_BE_OBLITERATED: number
+declare global LE_GAME_ERR_CANT_BE_RECRAFTED: number
+declare global LE_GAME_ERR_CANT_BE_SCRAPPED: number
+declare global LE_GAME_ERR_CANT_BULK_SELL_ITEM_WITH_REFUND: number
+declare global LE_GAME_ERR_CANT_BUY_QUANTITY: number
+declare global LE_GAME_ERR_CANT_CAGE_PET_YET: number
+declare global LE_GAME_ERR_CANT_DELETE_IN_ACCOUNT_BANK: number
+declare global LE_GAME_ERR_CANT_DO_THAT_CHALLENGE_MODE_ACTIVE: number
+declare global LE_GAME_ERR_CANT_DO_THAT_IN_A_GROUP: number
+declare global LE_GAME_ERR_CANT_DO_THAT_RIGHT_NOW: number
+declare global LE_GAME_ERR_CANT_EQUIP_EVER: number
+declare global LE_GAME_ERR_CANT_EQUIP_LEVEL_I: number
+declare global LE_GAME_ERR_CANT_EQUIP_NEED_TALENT: number
+declare global LE_GAME_ERR_CANT_EQUIP_RANK: number
+declare global LE_GAME_ERR_CANT_EQUIP_RATING: number
+declare global LE_GAME_ERR_CANT_EQUIP_REPUTATION: number
+declare global LE_GAME_ERR_CANT_EQUIP_SKILL: number
+declare global LE_GAME_ERR_CANT_HAVE_MORE_PETS: number
+declare global LE_GAME_ERR_CANT_HAVE_MORE_PETS_OF_THAT_TYPE: number
+declare global LE_GAME_ERR_CANT_INTERACT_SHAPESHIFTED: number
+declare global LE_GAME_ERR_CANT_SPEAK_LANGAGE: number
+declare global LE_GAME_ERR_CANT_STACK: number
+declare global LE_GAME_ERR_CANT_SWAP: number
+declare global LE_GAME_ERR_CANT_TARGET_UNFRIENDLY_IN_OVERWORLD: number
+declare global LE_GAME_ERR_CANT_TRADE_ACCOUNT_ITEM: number
+declare global LE_GAME_ERR_CANT_TRADE_GOLD: number
+declare global LE_GAME_ERR_CANT_USE_DISARMED: number
+declare global LE_GAME_ERR_CANT_USE_ITEM: number
+declare global LE_GAME_ERR_CANT_USE_ITEM_IN_ARENA: number
+declare global LE_GAME_ERR_CANT_USE_ITEM_IN_RATED_BATTLEGROUND: number
+declare global LE_GAME_ERR_CANT_USE_PROFANITY: number
+declare global LE_GAME_ERR_CANT_WRAP_BAGS: number
+declare global LE_GAME_ERR_CANT_WRAP_BOUND: number
+declare global LE_GAME_ERR_CANT_WRAP_EQUIPPED: number
+declare global LE_GAME_ERR_CANT_WRAP_STACKABLE: number
+declare global LE_GAME_ERR_CANT_WRAP_UNIQUE: number
+declare global LE_GAME_ERR_CANT_WRAP_WRAPPED: number
+declare global LE_GAME_ERR_CHALLENGE_MODE_ALREADY_COMPLETE: number
+declare global LE_GAME_ERR_CHALLENGE_MODE_DISABLED: number
+declare global LE_GAME_ERR_CHALLENGE_MODE_ENABLED: number
+declare global LE_GAME_ERR_CHALLENGE_MODE_FULL: number
+declare global LE_GAME_ERR_CHALLENGE_MODE_IN_PROGRESS: number
+declare global LE_GAME_ERR_CHALLENGE_MODE_INCORRECT_KEYSTONE: number
+declare global LE_GAME_ERR_CHALLENGE_MODE_PERIOD_RESET_SS: number
+declare global LE_GAME_ERR_CHALLENGE_MODE_RESET_COOLDOWN_S: number
+declare global LE_GAME_ERR_CHALLENGE_MODE_RESET_KEYSTONE: number
+declare global LE_GAME_ERR_CHARACTER_BANK_NOT_CONVERTED: number
+declare global LE_GAME_ERR_CHARTER_NEIGHBORHOOD_OWNERSHIP_TRANSFER_SUCCESS: number
+declare global LE_GAME_ERR_CHARTER_NEIGHBORHOOD_RENAME: number
+declare global LE_GAME_ERR_CHARTER_NEIGHBORHOOD_RENAME_NOTIFICATION_SS: number
+declare global LE_GAME_ERR_CHARTER_SIGNATURE_RECEIVED: number
+declare global LE_GAME_ERR_CHARTER_SIGNATURE_REMOVED: number
+declare global LE_GAME_ERR_CHARTER_SIGNATURE_REQUEST_FAILED_DUPLICATE_SIGNATURE: number
+declare global LE_GAME_ERR_CHARTER_SIGNATURE_REQUEST_FAILED_GENERIC: number
+declare global LE_GAME_ERR_CHARTER_SIGNATURE_REQUEST_FAILED_MISSING_EXPANSION: number
+declare global LE_GAME_ERR_CHARTER_SIGNATURE_REQUEST_SENT: number
+declare global LE_GAME_ERR_CHARTER_SYSTEM_REQUEST_FAILED_GENERIC: number
+declare global LE_GAME_ERR_CHAT_PLAYER_AMBIGUOUS_S: number
+declare global LE_GAME_ERR_CHAT_PLAYER_NOT_FOUND_S: number
+declare global LE_GAME_ERR_CHAT_RAID_RESTRICTED_TRIAL: number
+declare global LE_GAME_ERR_CHAT_RESTRICTED_TRIAL: number
+declare global LE_GAME_ERR_CHAT_THROTTLED: number
+declare global LE_GAME_ERR_CHAT_WHILE_DEAD: number
+declare global LE_GAME_ERR_CHEST_IN_USE: number
+declare global LE_GAME_ERR_CLAIMED_CHALLENGE_MODE_REWARD: number
+declare global LE_GAME_ERR_CLAIMED_CHALLENGE_MODE_REWARD_OLD: number
+declare global LE_GAME_ERR_CLAIMED_PVP_REWARD: number
+declare global LE_GAME_ERR_CLICK_ON_ITEM_TO_FEED: number
+declare global LE_GAME_ERR_CLIENT_LOCKED_OUT: number
+declare global LE_GAME_ERR_CLIENT_ON_TRANSPORT: number
+declare global LE_GAME_ERR_CLUB_FINDER_ERROR_APPLY_CLUB: number
+declare global LE_GAME_ERR_CLUB_FINDER_ERROR_CANCEL_APPLICATION: number
+declare global LE_GAME_ERR_CLUB_FINDER_ERROR_POST_CLUB: number
+declare global LE_GAME_ERR_CLUB_FINDER_ERROR_RESPOND_APPLICANT: number
+declare global LE_GAME_ERR_CLUB_FINDER_ERROR_TYPE_ACCEPT_APPLICATION: number
+declare global LE_GAME_ERR_CLUB_FINDER_ERROR_TYPE_APPLICANT_LIST: number
+declare global LE_GAME_ERR_CLUB_FINDER_ERROR_TYPE_APPLICANT_LIST_NO_PERM: number
+declare global LE_GAME_ERR_CLUB_FINDER_ERROR_TYPE_FINDER_NOT_AVAILABLE: number
+declare global LE_GAME_ERR_CLUB_FINDER_ERROR_TYPE_FLAGGED_DESCRIPTION_CHANGE: number
+declare global LE_GAME_ERR_CLUB_FINDER_ERROR_TYPE_FLAGGED_RENAME: number
+declare global LE_GAME_ERR_CLUB_FINDER_ERROR_TYPE_GET_POSTING_IDS: number
+declare global LE_GAME_ERR_CLUB_FINDER_ERROR_TYPE_JOIN_APPLICATION: number
+declare global LE_GAME_ERR_CLUB_FINDER_ERROR_TYPE_NO_INVITE_PERMISSIONS: number
+declare global LE_GAME_ERR_CLUB_FINDER_ERROR_TYPE_NO_POSTING_PERMISSIONS: number
+declare global LE_GAME_ERR_CLUB_FINDER_ERROR_TYPE_REALM_NOT_ELIGIBLE: number
+declare global LE_GAME_ERR_CLUB_FINDER_SEARCHING_TOO_FAST: number
+declare global LE_GAME_ERR_COMBAT_DAMAGE_SSI: number
+declare global LE_GAME_ERR_COMMAND_NEEDS_TARGET: number
+declare global LE_GAME_ERR_COMPLETED_TRANSMOG_SET_S: number
+declare global LE_GAME_ERR_COMSAT_CONNECT_FAIL: number
+declare global LE_GAME_ERR_COMSAT_DISCONNECT: number
+declare global LE_GAME_ERR_COMSAT_RECONNECT_ATTEMPT: number
+declare global LE_GAME_ERR_CORPSE_IS_NOT_IN_INSTANCE: number
+declare global LE_GAME_ERR_CROSS_FACTION_GROUP_JOINED: number
+declare global LE_GAME_ERR_CROSS_REALM_RAID_INVITE: number
+declare global LE_GAME_ERR_CURRENCY_NOT_TRADABLE: number
+declare global LE_GAME_ERR_CURRENCY_SPELL_SLOT_MISMATCH: number
+declare global LE_GAME_ERR_CURRENCY_TRANSFER_CHARACTER_LOGGED_IN: number
+declare global LE_GAME_ERR_CURRENCY_TRANSFER_DISABLED: number
+declare global LE_GAME_ERR_CURRENCY_TRANSFER_INSUFFICIENT_CURRENCY: number
+declare global LE_GAME_ERR_CURRENCY_TRANSFER_INVALID_CHARACTER: number
+declare global LE_GAME_ERR_CURRENCY_TRANSFER_INVALID_CURRENCY: number
+declare global LE_GAME_ERR_CURRENCY_TRANSFER_MAX_QUANTITY: number
+declare global LE_GAME_ERR_CURRENCY_TRANSFER_NO_VALID_SOURCE: number
+declare global LE_GAME_ERR_CURRENCY_TRANSFER_SERVER_ERROR: number
+declare global LE_GAME_ERR_CURRENCY_TRANSFER_TRANSACTION_IN_PROGRESS: number
+declare global LE_GAME_ERR_CURRENCY_TRANSFER_UNMET_REQUIREMENTS: number
+declare global LE_GAME_ERR_DEATHBIND_SUCCESS_S: number
+declare global LE_GAME_ERR_DEATHBINDALREADYBOUND: number
+declare global LE_GAME_ERR_DECLINE_GROUP_REQUEST_S: number
+declare global LE_GAME_ERR_DECLINE_GROUP_S: number
+declare global LE_GAME_ERR_DESTROY_NONEMPTY_BAG: number
+declare global LE_GAME_ERR_DIFFICULTY_CHANGE_ALREADY_STARTED: number
+declare global LE_GAME_ERR_DIFFICULTY_CHANGE_COMBAT: number
+declare global LE_GAME_ERR_DIFFICULTY_CHANGE_COMBAT_COOLDOWN_S: number
+declare global LE_GAME_ERR_DIFFICULTY_CHANGE_COOLDOWN_S: number
+declare global LE_GAME_ERR_DIFFICULTY_CHANGE_ENCOUNTER: number
+declare global LE_GAME_ERR_DIFFICULTY_CHANGE_HEROIC_INSTANCE_ALREADY_RUNNING: number
+declare global LE_GAME_ERR_DIFFICULTY_CHANGE_OTHER_HEROIC_S: number
+declare global LE_GAME_ERR_DIFFICULTY_CHANGE_PLAYER_BUSY: number
+declare global LE_GAME_ERR_DIFFICULTY_CHANGE_PLAYER_ON_VEHICLE: number
+declare global LE_GAME_ERR_DIFFICULTY_CHANGE_WORLDSTATE: number
+declare global LE_GAME_ERR_DIFFICULTY_DISABLED_IN_LFG: number
+declare global LE_GAME_ERR_DISMOUNT_NOPET: number
+declare global LE_GAME_ERR_DISMOUNT_NOTMOUNTED: number
+declare global LE_GAME_ERR_DISMOUNT_NOTYOURPET: number
+declare global LE_GAME_ERR_DOOR_LOCKED: number
+declare global LE_GAME_ERR_DROP_BOUND_ITEM: number
+declare global LE_GAME_ERR_DUEL_CANCELLED: number
+declare global LE_GAME_ERR_DUEL_REQUESTED: number
+declare global LE_GAME_ERR_DUEL_TO_THE_DEATH_FORFEIT: number
+declare global LE_GAME_ERR_DUNGEON_DIFFICULTY_CHANGED_S: number
+declare global LE_GAME_ERR_DUNGEON_DIFFICULTY_FAILED: number
+declare global LE_GAME_ERR_EMBLEMERROR_NOTABARDGEOSET: number
+declare global LE_GAME_ERR_ENDEAVOR_REWARD_AVAILABLE: number
+declare global LE_GAME_ERR_EQUIP_TRADE_ITEM: number
+declare global LE_GAME_ERR_EQUIPABLESPELLS_SLOTS_FULL: number
+declare global LE_GAME_ERR_EQUIPMENT_MANAGER_BAGS_FULL: number
+declare global LE_GAME_ERR_EQUIPMENT_MANAGER_COMBAT_SWAP_S: number
+declare global LE_GAME_ERR_EQUIPMENT_MANAGER_MISSING_ITEM_S: number
+declare global LE_GAME_ERR_EXHAUSTION_EXHAUSTED: number
+declare global LE_GAME_ERR_EXHAUSTION_NORMAL: number
+declare global LE_GAME_ERR_EXHAUSTION_RESTED: number
+declare global LE_GAME_ERR_EXHAUSTION_TIRED: number
+declare global LE_GAME_ERR_EXHAUSTION_WELLRESTED: number
+declare global LE_GAME_ERR_FEATURE_RESTRICTED_TRIAL: number
+declare global LE_GAME_ERR_FEIGN_DEATH_RESISTED: number
+declare global LE_GAME_ERR_FILTERING_YOU_S: number
+declare global LE_GAME_ERR_FISH_ESCAPED: number
+declare global LE_GAME_ERR_FISH_NOT_HOOKED: number
+declare global LE_GAME_ERR_FOLLOWER_DUNGEON_INVALID_TRANSFER_REQUEST: number
+declare global LE_GAME_ERR_FOOD_COOLDOWN: number
+declare global LE_GAME_ERR_FRIEND_ADDED_S: number
+declare global LE_GAME_ERR_FRIEND_ALREADY_S: number
+declare global LE_GAME_ERR_FRIEND_DB_ERROR: number
+declare global LE_GAME_ERR_FRIEND_DELETED: number
+declare global LE_GAME_ERR_FRIEND_ERROR: number
+declare global LE_GAME_ERR_FRIEND_LIST_FULL: number
+declare global LE_GAME_ERR_FRIEND_NOT_FOUND: number
+declare global LE_GAME_ERR_FRIEND_OFFLINE_S: number
+declare global LE_GAME_ERR_FRIEND_ONLINE_SS: number
+declare global LE_GAME_ERR_FRIEND_REMOVED_S: number
+declare global LE_GAME_ERR_FRIEND_SELF: number
+declare global LE_GAME_ERR_FRIEND_WRONG_FACTION: number
+declare global LE_GAME_ERR_FULL_NAME_REQUIRED: number
+declare global LE_GAME_ERR_GARRISON_BUILDING_EXISTS: number
+declare global LE_GAME_ERR_GARRISON_COMPLETE_MISSION_WRONG_FOLLOWER_TYPE: number
+declare global LE_GAME_ERR_GARRISON_INVALID_BUILDINGID: number
+declare global LE_GAME_ERR_GARRISON_INVALID_PLOT: number
+declare global LE_GAME_ERR_GARRISON_INVALID_PLOT_BUILDING: number
+declare global LE_GAME_ERR_GARRISON_NOT_ENOUGH_CURRENCY: number
+declare global LE_GAME_ERR_GARRISON_NOT_ENOUGH_GOLD: number
+declare global LE_GAME_ERR_GARRISON_REQUIRES_BLUEPRINT: number
+declare global LE_GAME_ERR_GENERIC_NO_TARGET: number
+declare global LE_GAME_ERR_GENERIC_NO_VALID_TARGETS: number
+declare global LE_GAME_ERR_GENERIC_STUNNED: number
+declare global LE_GAME_ERR_GENERIC_THROTTLE: number
+declare global LE_GAME_ERR_GLYPH_TARGET_NOT_AVAILABLE: number
+declare global LE_GAME_ERR_GLYPH_WIPE_ERROR: number
+declare global LE_GAME_ERR_GMRESPONSE_DB_ERROR: number
+declare global LE_GAME_ERR_GROUP_ACTION_THROTTLED: number
+declare global LE_GAME_ERR_GROUP_DISBANDED: number
+declare global LE_GAME_ERR_GROUP_FULL: number
+declare global LE_GAME_ERR_GROUP_JOIN_BATTLEGROUND_DEAD: number
+declare global LE_GAME_ERR_GROUP_JOIN_BATTLEGROUND_DESERTERS: number
+declare global LE_GAME_ERR_GROUP_JOIN_BATTLEGROUND_FAIL: number
+declare global LE_GAME_ERR_GROUP_JOIN_BATTLEGROUND_S: number
+declare global LE_GAME_ERR_GROUP_JOIN_BATTLEGROUND_TOO_MANY: number
+declare global LE_GAME_ERR_GROUP_SWAP_FAILED: number
+declare global LE_GAME_ERR_GUILD_ACCEPT: number
+declare global LE_GAME_ERR_GUILD_BANK_BOUND_ITEM: number
+declare global LE_GAME_ERR_GUILD_BANK_CONJURED_ITEM: number
+declare global LE_GAME_ERR_GUILD_BANK_EQUIPPED_ITEM: number
+declare global LE_GAME_ERR_GUILD_BANK_FULL: number
+declare global LE_GAME_ERR_GUILD_BANK_NOT_AVAILABLE: number
+declare global LE_GAME_ERR_GUILD_BANK_QUEST_ITEM: number
+declare global LE_GAME_ERR_GUILD_BANK_REALM_MISMATCH: number
+declare global LE_GAME_ERR_GUILD_BANK_SELF_FOUND: number
+declare global LE_GAME_ERR_GUILD_BANK_VOUCHER_FAILED: number
+declare global LE_GAME_ERR_GUILD_BANK_WARBANDS_BANK_SOURCE: number
+declare global LE_GAME_ERR_GUILD_BANK_WRAPPED_ITEM: number
+declare global LE_GAME_ERR_GUILD_BANK_WRONG_TAB: number
+declare global LE_GAME_ERR_GUILD_CANT_DEMOTE_S: number
+declare global LE_GAME_ERR_GUILD_CANT_PROMOTE_S: number
+declare global LE_GAME_ERR_GUILD_CREATE_S: number
+declare global LE_GAME_ERR_GUILD_DECLINE_AUTO_S: number
+declare global LE_GAME_ERR_GUILD_DECLINE_S: number
+declare global LE_GAME_ERR_GUILD_DEMOTE_SS: number
+declare global LE_GAME_ERR_GUILD_DEMOTE_SSS: number
+declare global LE_GAME_ERR_GUILD_DISBAND_S: number
+declare global LE_GAME_ERR_GUILD_DISBAND_SELF: number
+declare global LE_GAME_ERR_GUILD_DISBANDED: number
+declare global LE_GAME_ERR_GUILD_FOUNDER_S: number
+declare global LE_GAME_ERR_GUILD_INTERNAL: number
+declare global LE_GAME_ERR_GUILD_INVITE_BAD_SUPER_DISTRICT: number
+declare global LE_GAME_ERR_GUILD_INVITE_S: number
+declare global LE_GAME_ERR_GUILD_INVITE_SELF: number
+declare global LE_GAME_ERR_GUILD_JOIN_S: number
+declare global LE_GAME_ERR_GUILD_LEADER_CHANGED_SS: number
+declare global LE_GAME_ERR_GUILD_LEADER_IS_S: number
+declare global LE_GAME_ERR_GUILD_LEADER_LEAVE: number
+declare global LE_GAME_ERR_GUILD_LEADER_REPLACED: number
+declare global LE_GAME_ERR_GUILD_LEADER_S: number
+declare global LE_GAME_ERR_GUILD_LEADER_SELF: number
+declare global LE_GAME_ERR_GUILD_LEAVE_S: number
+declare global LE_GAME_ERR_GUILD_NAME_EXISTS_S: number
+declare global LE_GAME_ERR_GUILD_NAME_INVALID: number
+declare global LE_GAME_ERR_GUILD_NEIGHBORHOOD_BUILT_HOUSE_S: number
+declare global LE_GAME_ERR_GUILD_NEIGHBORHOOD_NEW_SUBDIVISION: number
+declare global LE_GAME_ERR_GUILD_NEIGHBORHOOD_RENAME_S: number
+declare global LE_GAME_ERR_GUILD_NEIGHBORHOOD_SOLD_HOUSE_S: number
+declare global LE_GAME_ERR_GUILD_NEW_LEADER_NOT_ALLIED: number
+declare global LE_GAME_ERR_GUILD_NEW_LEADER_WRONG_REALM: number
+declare global LE_GAME_ERR_GUILD_NOT_ALLIED: number
+declare global LE_GAME_ERR_GUILD_NOT_ENOUGH_MONEY: number
+declare global LE_GAME_ERR_GUILD_NOT_IN_A_GUILD: number
+declare global LE_GAME_ERR_GUILD_PERMISSIONS: number
+declare global LE_GAME_ERR_GUILD_PLAYER_NOT_FOUND_S: number
+declare global LE_GAME_ERR_GUILD_PLAYER_NOT_IN_GUILD: number
+declare global LE_GAME_ERR_GUILD_PLAYER_NOT_IN_GUILD_S: number
+declare global LE_GAME_ERR_GUILD_PROMOTE_SSS: number
+declare global LE_GAME_ERR_GUILD_QUIT_S: number
+declare global LE_GAME_ERR_GUILD_RANK_IN_USE: number
+declare global LE_GAME_ERR_GUILD_RANK_TOO_HIGH_S: number
+declare global LE_GAME_ERR_GUILD_RANK_TOO_LOW_S: number
+declare global LE_GAME_ERR_GUILD_RANKS_LOCKED: number
+declare global LE_GAME_ERR_GUILD_REMOVE_SELF: number
+declare global LE_GAME_ERR_GUILD_REMOVE_SS: number
+declare global LE_GAME_ERR_GUILD_TOO_MUCH_MONEY: number
+declare global LE_GAME_ERR_GUILD_TRIAL_ACCOUNT_TRIAL: number
+declare global LE_GAME_ERR_GUILD_TRIAL_ACCOUNT_VETERAN: number
+declare global LE_GAME_ERR_GUILD_UNDELETABLE_DUE_TO_LEVEL: number
+declare global LE_GAME_ERR_GUILD_WITHDRAW_LIMIT: number
+declare global LE_GAME_ERR_GUILDEMBLEM_INVALID_TABARD_COLORS: number
+declare global LE_GAME_ERR_GUILDEMBLEM_INVALIDVENDOR: number
+declare global LE_GAME_ERR_GUILDEMBLEM_NOGUILD: number
+declare global LE_GAME_ERR_GUILDEMBLEM_NOTENOUGHMONEY: number
+declare global LE_GAME_ERR_GUILDEMBLEM_NOTGUILDMASTER: number
+declare global LE_GAME_ERR_GUILDEMBLEM_SAME: number
+declare global LE_GAME_ERR_GUILDEMBLEM_SUCCESS: number
+declare global LE_GAME_ERR_HAS_RESTRICTION: number
+declare global LE_GAME_ERR_HOUSE_MOVED: number
+declare global LE_GAME_ERR_HOUSING_ACTION_NOENTRY: number
+declare global LE_GAME_ERR_HOUSING_ACTION_UNAVAILABLE: number
+declare global LE_GAME_ERR_HOUSING_EXTERIOR_FAILSAFE_RESET: number
+declare global LE_GAME_ERR_HOUSING_RESULT_COSMETIC_OWNER_NOT_IN_GUILD: number
+declare global LE_GAME_ERR_HOUSING_RESULT_MISSING_EXPANSION_ACCESS: number
+declare global LE_GAME_ERR_HOUSING_RESULT_MISSING_PRIVATE_NEIGHBORHOOD_INVITE: number
+declare global LE_GAME_ERR_HOUSING_RESULT_NEIGHBORHOOD_NOT_FOUND: number
+declare global LE_GAME_ERR_HOUSING_RESULT_PERMISSION_DENIED: number
+declare global LE_GAME_ERR_HOUSING_RESULT_PLOT_NOT_VACANT: number
+declare global LE_GAME_ERR_HOUSING_RESULT_PLOT_RESERVED: number
+declare global LE_GAME_ERR_IGNORE_ADDED_S: number
+declare global LE_GAME_ERR_IGNORE_ALREADY_S: number
+declare global LE_GAME_ERR_IGNORE_AMBIGUOUS: number
+declare global LE_GAME_ERR_IGNORE_DELETED: number
+declare global LE_GAME_ERR_IGNORE_FULL: number
+declare global LE_GAME_ERR_IGNORE_NOT_FOUND: number
+declare global LE_GAME_ERR_IGNORE_REMOVED_S: number
+declare global LE_GAME_ERR_IGNORE_SELF: number
+declare global LE_GAME_ERR_IGNORING_YOU_S: number
+declare global LE_GAME_ERR_IN_BATTLEGROUND_RESPEC: number
+declare global LE_GAME_ERR_IN_NON_RANDOM_BG: number
+declare global LE_GAME_ERR_IN_RANDOM_BG: number
+declare global LE_GAME_ERR_INFORM_SUGGEST_INVITE_S: number
+declare global LE_GAME_ERR_INFORM_SUGGEST_INVITE_SS: number
+declare global LE_GAME_ERR_INITIATE_TRADE_S: number
+declare global LE_GAME_ERR_INSPECT_S: number
+declare global LE_GAME_ERR_INSTANCE_GROUP_ADDED_S: number
+declare global LE_GAME_ERR_INSTANCE_GROUP_JOINED_WITH_PARTY: number
+declare global LE_GAME_ERR_INSTANCE_GROUP_JOINED_WITH_RAID: number
+declare global LE_GAME_ERR_INSTANCE_GROUP_REMOVED_S: number
+declare global LE_GAME_ERR_INSUFF_TRACKED_CURRENCY_IS: number
+declare global LE_GAME_ERR_INTERNAL_BAG_ERROR: number
+declare global LE_GAME_ERR_INTERNAL_ERROR: number
+declare global LE_GAME_ERR_INV_FULL: number
+declare global LE_GAME_ERR_INVALID_ATTACK_TARGET: number
+declare global LE_GAME_ERR_INVALID_FOLLOW_PVP_COMBAT: number
+declare global LE_GAME_ERR_INVALID_FOLLOW_TARGET: number
+declare global LE_GAME_ERR_INVALID_FOLLOW_TARGET_PVP_COMBAT: number
+declare global LE_GAME_ERR_INVALID_GLYPH_SLOT: number
+declare global LE_GAME_ERR_INVALID_INSPECT_TARGET: number
+declare global LE_GAME_ERR_INVALID_ITEM_TARGET: number
+declare global LE_GAME_ERR_INVALID_PROMOTION_CODE: number
+declare global LE_GAME_ERR_INVALID_QUEST_TARGET: number
+declare global LE_GAME_ERR_INVALID_RAID_TARGET: number
+declare global LE_GAME_ERR_INVALID_TELEPORT_LOCATION: number
+declare global LE_GAME_ERR_INVENTORY_TRADE_TOO_MANY_UNIQUE_ITEM: number
+declare global LE_GAME_ERR_INVITE_IN_COMBAT: number
+declare global LE_GAME_ERR_INVITE_NO_PARTY_SERVER: number
+declare global LE_GAME_ERR_INVITE_PARTY_BUSY: number
+declare global LE_GAME_ERR_INVITE_PARTY_BUSY_PENDING_REQUEST: number
+declare global LE_GAME_ERR_INVITE_PARTY_BUSY_PENDING_SUGGEST: number
+declare global LE_GAME_ERR_INVITE_PLAYER_S: number
+declare global LE_GAME_ERR_INVITE_RESTRICTED_TRIAL: number
+declare global LE_GAME_ERR_INVITE_SELF: number
+declare global LE_GAME_ERR_INVITE_UNKNOWN_REALM: number
+declare global LE_GAME_ERR_INVITED_ALREADY_IN_GROUP_SS: number
+declare global LE_GAME_ERR_INVITED_TO_GROUP_SS: number
+declare global LE_GAME_ERR_INVITED_TO_GUILD: number
+declare global LE_GAME_ERR_INVITED_TO_GUILD_SSS: number
+declare global LE_GAME_ERR_INVITED_TO_NEIGHBORHOOD: number
+declare global LE_GAME_ERR_ITEM_CANT_BE_DESTROYED: number
+declare global LE_GAME_ERR_ITEM_COOLDOWN: number
+declare global LE_GAME_ERR_ITEM_INTERACTION_NO_CONVERSION_OUTPUT: number
+declare global LE_GAME_ERR_ITEM_INTERACTION_NOT_ENOUGH_CURRENCY: number
+declare global LE_GAME_ERR_ITEM_INTERACTION_NOT_ENOUGH_GOLD: number
+declare global LE_GAME_ERR_ITEM_INVENTORY_FULL_SATCHEL: number
+declare global LE_GAME_ERR_ITEM_IS_BATTLE_PAY_LOCKED: number
+declare global LE_GAME_ERR_ITEM_LOCKED: number
+declare global LE_GAME_ERR_ITEM_MAX_COUNT: number
+declare global LE_GAME_ERR_ITEM_MAX_COUNT_EQUIPPED_SOCKETED: number
+declare global LE_GAME_ERR_ITEM_MAX_COUNT_SOCKETED: number
+declare global LE_GAME_ERR_ITEM_MAX_LIMIT_CATEGORY_COUNT_EXCEEDED_IS: number
+declare global LE_GAME_ERR_ITEM_MAX_LIMIT_CATEGORY_EQUIPPED_EXCEEDED_IS: number
+declare global LE_GAME_ERR_ITEM_MAX_LIMIT_CATEGORY_SOCKETED_EXCEEDED_IS: number
+declare global LE_GAME_ERR_ITEM_MOD_APPEARANCE_GROUP_ALREADY_KNOWN: number
+declare global LE_GAME_ERR_ITEM_NOT_FOUND: number
+declare global LE_GAME_ERR_ITEM_UNIQUE_EQUIPPABLE: number
+declare global LE_GAME_ERR_ITEM_UNIQUE_EQUIPPABLE_SOCKETED: number
+declare global LE_GAME_ERR_ITEM_UPGRADE_ITEM_TOO_LOW_LEVEL: number
+declare global LE_GAME_ERR_ITEM_UPGRADE_NO_MORE_UPGRADES: number
+declare global LE_GAME_ERR_ITEM_UPGRADE_NO_PATH: number
+declare global LE_GAME_ERR_JOIN_LFG_OBJECT_FAILED: number
+declare global LE_GAME_ERR_JOIN_SINGLE_SCENARIO_S: number
+declare global LE_GAME_ERR_JOINED_GROUP_S: number
+declare global LE_GAME_ERR_KILLED_BY_S: number
+declare global LE_GAME_ERR_LEARN_ABILITY_S: number
+declare global LE_GAME_ERR_LEARN_COMPANION_S: number
+declare global LE_GAME_ERR_LEARN_HEIRLOOM_S: number
+declare global LE_GAME_ERR_LEARN_MOUNT_S: number
+declare global LE_GAME_ERR_LEARN_PASSIVE_S: number
+declare global LE_GAME_ERR_LEARN_RECIPE_S: number
+declare global LE_GAME_ERR_LEARN_SPELL_S: number
+declare global LE_GAME_ERR_LEARN_TOY_S: number
+declare global LE_GAME_ERR_LEARN_TRANSMOG_S: number
+declare global LE_GAME_ERR_LEARN_WARBAND_SCENE_S: number
+declare global LE_GAME_ERR_LEFT_GROUP_S: number
+declare global LE_GAME_ERR_LEFT_GROUP_YOU: number
+declare global LE_GAME_ERR_LEGACY_RAID_DIFFICULTY_CHANGED_S: number
+declare global LE_GAME_ERR_LEGACY_WIPE_ERROR_CLASS_POINTS: number
+declare global LE_GAME_ERR_LEVEL_LINKING_RESULT_LINKED: number
+declare global LE_GAME_ERR_LEVEL_LINKING_RESULT_UNLINKED: number
+declare global LE_GAME_ERR_LFG_CANT_USE_BATTLEGROUND: number
+declare global LE_GAME_ERR_LFG_CANT_USE_DUNGEONS: number
+declare global LE_GAME_ERR_LFG_DEAD: number
+declare global LE_GAME_ERR_LFG_DESERTER_PARTY: number
+declare global LE_GAME_ERR_LFG_DESERTER_PLAYER: number
+declare global LE_GAME_ERR_LFG_FARM_LIMIT: number
+declare global LE_GAME_ERR_LFG_GET_INFO_TIMEOUT: number
+declare global LE_GAME_ERR_LFG_GROUP_FULL: number
+declare global LE_GAME_ERR_LFG_INVALID_SLOT: number
+declare global LE_GAME_ERR_LFG_JOINED_BATTLEFIELD_QUEUE: number
+declare global LE_GAME_ERR_LFG_JOINED_FLEX_QUEUE: number
+declare global LE_GAME_ERR_LFG_JOINED_LIST: number
+declare global LE_GAME_ERR_LFG_JOINED_QUEUE: number
+declare global LE_GAME_ERR_LFG_JOINED_RF_QUEUE: number
+declare global LE_GAME_ERR_LFG_JOINED_SCENARIO_QUEUE: number
+declare global LE_GAME_ERR_LFG_JOINED_TRAINING_GROUNDS_QUEUE: number
+declare global LE_GAME_ERR_LFG_JOINED_WORLD_PVP_QUEUE: number
+declare global LE_GAME_ERR_LFG_LEADER_IS_LFM_S: number
+declare global LE_GAME_ERR_LFG_LEFT_LIST: number
+declare global LE_GAME_ERR_LFG_LEFT_QUEUE: number
+declare global LE_GAME_ERR_LFG_LOREWALKING: number
+declare global LE_GAME_ERR_LFG_MEMBERS_NOT_PRESENT: number
+declare global LE_GAME_ERR_LFG_MISMATCHED_SLOTS: number
+declare global LE_GAME_ERR_LFG_MISMATCHED_SLOTS_LOCAL_XREALM: number
+declare global LE_GAME_ERR_LFG_NO_CROSS_FACTION_PARTIES: number
+declare global LE_GAME_ERR_LFG_NO_LFG_OBJECT: number
+declare global LE_GAME_ERR_LFG_NO_ROLES_SELECTED: number
+declare global LE_GAME_ERR_LFG_NO_SLOTS_PARTY: number
+declare global LE_GAME_ERR_LFG_NO_SLOTS_PLAYER: number
+declare global LE_GAME_ERR_LFG_NO_SLOTS_SELECTED: number
+declare global LE_GAME_ERR_LFG_NO_SPEC: number
+declare global LE_GAME_ERR_LFG_PARTY_PLAYERS_FROM_DIFFERENT_REALMS: number
+declare global LE_GAME_ERR_LFG_PENDING: number
+declare global LE_GAME_ERR_LFG_PLAYER_DECLINED_READY_CHECK: number
+declare global LE_GAME_ERR_LFG_PLAYER_DECLINED_ROLE_CHECK: number
+declare global LE_GAME_ERR_LFG_PROPOSAL_DECLINED_PARTY: number
+declare global LE_GAME_ERR_LFG_PROPOSAL_DECLINED_SELF: number
+declare global LE_GAME_ERR_LFG_PROPOSAL_FAILED: number
+declare global LE_GAME_ERR_LFG_RANDOM_COOLDOWN_PARTY: number
+declare global LE_GAME_ERR_LFG_RANDOM_COOLDOWN_PLAYER: number
+declare global LE_GAME_ERR_LFG_READY_CHECK_ABORTED: number
+declare global LE_GAME_ERR_LFG_READY_CHECK_FAILED: number
+declare global LE_GAME_ERR_LFG_READY_CHECK_FAILED_TIMEOUT: number
+declare global LE_GAME_ERR_LFG_READY_CHECK_INITIATED: number
+declare global LE_GAME_ERR_LFG_REASON_TOO_MANY_LFG: number
+declare global LE_GAME_ERR_LFG_REMOVED_FACTION_CHANGE: number
+declare global LE_GAME_ERR_LFG_REMOVED_LEVELUP: number
+declare global LE_GAME_ERR_LFG_REMOVED_XP_TOGGLE: number
+declare global LE_GAME_ERR_LFG_ROLE_CHECK_ABORTED: number
+declare global LE_GAME_ERR_LFG_ROLE_CHECK_FAILED: number
+declare global LE_GAME_ERR_LFG_ROLE_CHECK_FAILED_NOT_VIABLE: number
+declare global LE_GAME_ERR_LFG_ROLE_CHECK_FAILED_TIMEOUT: number
+declare global LE_GAME_ERR_LFG_ROLE_CHECK_INITIATED: number
+declare global LE_GAME_ERR_LFG_TOO_FEW_MEMBERS: number
+declare global LE_GAME_ERR_LFG_TOO_MANY_MEMBERS: number
+declare global LE_GAME_ERR_LOGGING_OUT: number
+declare global LE_GAME_ERR_LOGOUT_FAILED: number
+declare global LE_GAME_ERR_LOOT_BAD_FACING: number
+declare global LE_GAME_ERR_LOOT_CANT_LOOT_THAT: number
+declare global LE_GAME_ERR_LOOT_CANT_LOOT_THAT_NOW: number
+declare global LE_GAME_ERR_LOOT_DIDNT_KILL: number
+declare global LE_GAME_ERR_LOOT_GONE: number
+declare global LE_GAME_ERR_LOOT_LOCKED: number
+declare global LE_GAME_ERR_LOOT_MASTER_INV_FULL: number
+declare global LE_GAME_ERR_LOOT_MASTER_OTHER: number
+declare global LE_GAME_ERR_LOOT_MASTER_UNIQUE_ITEM: number
+declare global LE_GAME_ERR_LOOT_NO_UI: number
+declare global LE_GAME_ERR_LOOT_NOTSTANDING: number
+declare global LE_GAME_ERR_LOOT_PLAYER_NOT_FOUND: number
+declare global LE_GAME_ERR_LOOT_ROLL_PENDING: number
+declare global LE_GAME_ERR_LOOT_SPEC_CHANGED_S: number
+declare global LE_GAME_ERR_LOOT_STUNNED: number
+declare global LE_GAME_ERR_LOOT_TOO_FAR: number
+declare global LE_GAME_ERR_LOOT_WHILE_INVULNERABLE: number
+declare global LE_GAME_ERR_MAIL_ATTACHMENT_EXPIRED: number
+declare global LE_GAME_ERR_MAIL_BAG: number
+declare global LE_GAME_ERR_MAIL_BOUND_ITEM: number
+declare global LE_GAME_ERR_MAIL_CANT_SEND_REALM: number
+declare global LE_GAME_ERR_MAIL_CANT_SEND_SUPERDISTRICT: number
+declare global LE_GAME_ERR_MAIL_CONJURED_ITEM: number
+declare global LE_GAME_ERR_MAIL_DATABASE_ERROR: number
+declare global LE_GAME_ERR_MAIL_DELETE_ITEM_ERROR: number
+declare global LE_GAME_ERR_MAIL_INVALID_ATTACHMENT: number
+declare global LE_GAME_ERR_MAIL_INVALID_ATTACHMENT_SLOT: number
+declare global LE_GAME_ERR_MAIL_LIMITED_DURATION_ITEM: number
+declare global LE_GAME_ERR_MAIL_QUEST_ITEM: number
+declare global LE_GAME_ERR_MAIL_REACHED_CAP: number
+declare global LE_GAME_ERR_MAIL_RECEPIENT_CANT_RECEIVE_MAIL: number
+declare global LE_GAME_ERR_MAIL_RECEPIENT_IS_SELF_FOUND_CANNOT_RECEIVE_MAIL: number
+declare global LE_GAME_ERR_MAIL_SENT: number
+declare global LE_GAME_ERR_MAIL_TARGET_CANNOT_RECEIVE_MAIL: number
+declare global LE_GAME_ERR_MAIL_TARGET_IS_TRIAL: number
+declare global LE_GAME_ERR_MAIL_TARGET_NOT_FOUND: number
+declare global LE_GAME_ERR_MAIL_TEMP_RETURN_OUTAGE: number
+declare global LE_GAME_ERR_MAIL_TO_SELF: number
+declare global LE_GAME_ERR_MAIL_TOO_MANY_ATTACHMENTS: number
+declare global LE_GAME_ERR_MAIL_WRAPPED_COD: number
+declare global LE_GAME_ERR_MAX_SOCKETS: number
+declare global LE_GAME_ERR_MEETING_STONE_GROUP_FULL: number
+declare global LE_GAME_ERR_MEETING_STONE_IN_PROGRESS: number
+declare global LE_GAME_ERR_MEETING_STONE_IN_QUEUE_S: number
+declare global LE_GAME_ERR_MEETING_STONE_INVALID_LEVEL: number
+declare global LE_GAME_ERR_MEETING_STONE_LEFT_QUEUE_S: number
+declare global LE_GAME_ERR_MEETING_STONE_MEMBER_ADDED_S: number
+declare global LE_GAME_ERR_MEETING_STONE_MEMBER_STILL_IN_QUEUE: number
+declare global LE_GAME_ERR_MEETING_STONE_MUST_BE_LEADER: number
+declare global LE_GAME_ERR_MEETING_STONE_NEED_PARTY: number
+declare global LE_GAME_ERR_MEETING_STONE_NO_RAID_GROUP: number
+declare global LE_GAME_ERR_MEETING_STONE_NOT_FOUND: number
+declare global LE_GAME_ERR_MEETING_STONE_NOT_LEADER: number
+declare global LE_GAME_ERR_MEETING_STONE_OTHER_MEMBER_LEFT: number
+declare global LE_GAME_ERR_MEETING_STONE_PARTY_KICKED_FROM_QUEUE: number
+declare global LE_GAME_ERR_MEETING_STONE_SUCCESS: number
+declare global LE_GAME_ERR_MEETING_STONE_TARGET_IN_VEHICLE: number
+declare global LE_GAME_ERR_MEETING_STONE_TARGET_INVALID_LEVEL: number
+declare global LE_GAME_ERR_MEETING_STONE_TARGET_NOT_IN_PARTY: number
+declare global LE_GAME_ERR_MOUNT_ALREADYMOUNTED: number
+declare global LE_GAME_ERR_MOUNT_FORCEDDISMOUNT: number
+declare global LE_GAME_ERR_MOUNT_INVALIDMOUNTEE: number
+declare global LE_GAME_ERR_MOUNT_LOOTING: number
+declare global LE_GAME_ERR_MOUNT_NO_FAVORITES: number
+declare global LE_GAME_ERR_MOUNT_NO_MOUNTS: number
+declare global LE_GAME_ERR_MOUNT_NOTMOUNTABLE: number
+declare global LE_GAME_ERR_MOUNT_NOTYOURPET: number
+declare global LE_GAME_ERR_MOUNT_OTHER: number
+declare global LE_GAME_ERR_MOUNT_RACECANTMOUNT: number
+declare global LE_GAME_ERR_MOUNT_SHAPESHIFTED: number
+declare global LE_GAME_ERR_MOUNT_TOOFARAWAY: number
+declare global LE_GAME_ERR_MOVIE_RECORDING_WARNING_COMPRESSING: number
+declare global LE_GAME_ERR_MOVIE_RECORDING_WARNING_DISK_FULL: number
+declare global LE_GAME_ERR_MOVIE_RECORDING_WARNING_NO_MOVIE: number
+declare global LE_GAME_ERR_MOVIE_RECORDING_WARNING_PERF: number
+declare global LE_GAME_ERR_MOVIE_RECORDING_WARNING_REQUIREMENTS: number
+declare global LE_GAME_ERR_MULTI_CAST_ACTION_TOTEM_S: number
+declare global LE_GAME_ERR_MUST_EQUIP_ARTIFACT: number
+declare global LE_GAME_ERR_MUST_EQUIP_ITEM: number
+declare global LE_GAME_ERR_MUST_REPAIR_DURABILITY: number
+declare global LE_GAME_ERR_NAME_CONSECUTIVE_SPACES: number
+declare global LE_GAME_ERR_NAME_DECLENSION_DOESNT_MATCH_BASE_NAME: number
+declare global LE_GAME_ERR_NAME_INVALID: number
+declare global LE_GAME_ERR_NAME_INVALID_SPACE: number
+declare global LE_GAME_ERR_NAME_MIXED_LANGUAGES: number
+declare global LE_GAME_ERR_NAME_NO_NAME: number
+declare global LE_GAME_ERR_NAME_PROFANE: number
+declare global LE_GAME_ERR_NAME_RESERVED: number
+declare global LE_GAME_ERR_NAME_RUSSIAN_CONSECUTIVE_SILENT_CHARACTERS: number
+declare global LE_GAME_ERR_NAME_RUSSIAN_SILENT_CHARACTER_AT_BEGINNING_OR_END: number
+declare global LE_GAME_ERR_NAME_THREE_CONSECUTIVE: number
+declare global LE_GAME_ERR_NAME_TOO_LONG: number
+declare global LE_GAME_ERR_NAME_TOO_SHORT: number
+declare global LE_GAME_ERR_NEIGHBORHOOD_OWNER_TRANSFERRED_S: number
+declare global LE_GAME_ERR_NEW_GUIDE_S: number
+declare global LE_GAME_ERR_NEW_GUIDE_YOU: number
+declare global LE_GAME_ERR_NEW_LEADER_S: number
+declare global LE_GAME_ERR_NEW_LEADER_YOU: number
+declare global LE_GAME_ERR_NEW_LOOT_MASTER_S: number
+declare global LE_GAME_ERR_NEW_PARTY_NEIGHBORHOOD_RESERVATION: number
+declare global LE_GAME_ERR_NEWTAXIPATH: number
+declare global LE_GAME_ERR_NO_ACCOUNT_BANK_HERE: number
+declare global LE_GAME_ERR_NO_ACCOUNT_INVENTORY_LOCK: number
+declare global LE_GAME_ERR_NO_ATTACK_TARGET: number
+declare global LE_GAME_ERR_NO_BANK_HERE: number
+declare global LE_GAME_ERR_NO_BANK_SLOT: number
+declare global LE_GAME_ERR_NO_CHALLENGE_MODE_REWARD: number
+declare global LE_GAME_ERR_NO_DOMINATIONSHARD_OVERWRITE: number
+declare global LE_GAME_ERR_NO_GUILD_CHARTER: number
+declare global LE_GAME_ERR_NO_IMMEDIATE_CONTAINER_IN_ACCOUNT_BANK: number
+declare global LE_GAME_ERR_NO_ITEMS_WHILE_SHAPESHIFTED: number
+declare global LE_GAME_ERR_NO_LOOT: number
+declare global LE_GAME_ERR_NO_LOOT_IN_CHALLENGE_MODE: number
+declare global LE_GAME_ERR_NO_OPEN_IMMEDIATE_CONTAINER_IN_ACCOUNT_BANK: number
+declare global LE_GAME_ERR_NO_OWNED_HOUSE_IN_THIS_NEIGHBORHOOD_MAP: number
+declare global LE_GAME_ERR_NO_PET: number
+declare global LE_GAME_ERR_NO_PVP_REWARD: number
+declare global LE_GAME_ERR_NO_REFUNDABLE_ITEM_IN_ACCOUNT_BANK: number
+declare global LE_GAME_ERR_NO_REPLY_TARGET: number
+declare global LE_GAME_ERR_NO_SALVAGED_ITEMS_IN_ACCOUNT_BANK: number
+declare global LE_GAME_ERR_NO_SLOT_AVAILABLE: number
+declare global LE_GAME_ERR_NO_SOULBOUND_ITEM_IN_ACCOUNT_BANK: number
+declare global LE_GAME_ERR_NO_SPEC: number
+declare global LE_GAME_ERR_NOAMMO_S: number
+declare global LE_GAME_ERR_NOEMOTEWHILERUNNING: number
+declare global LE_GAME_ERR_NOT_A_BAG: number
+declare global LE_GAME_ERR_NOT_BARBER_SITTING: number
+declare global LE_GAME_ERR_NOT_DURING_ARENA_MATCH: number
+declare global LE_GAME_ERR_NOT_ENOUGH_ARENA_POINTS: number
+declare global LE_GAME_ERR_NOT_ENOUGH_CURRENCY: number
+declare global LE_GAME_ERR_NOT_ENOUGH_HONOR_POINTS: number
+declare global LE_GAME_ERR_NOT_ENOUGH_MONEY: number
+declare global LE_GAME_ERR_NOT_ENOUGH_PURCHASED_GAME_TIME: number
+declare global LE_GAME_ERR_NOT_EQUIPPABLE: number
+declare global LE_GAME_ERR_NOT_HAPPY_ENOUGH: number
+declare global LE_GAME_ERR_NOT_IN_BATTLEGROUND: number
+declare global LE_GAME_ERR_NOT_IN_COMBAT: number
+declare global LE_GAME_ERR_NOT_IN_GROUP: number
+declare global LE_GAME_ERR_NOT_IN_INSTANCE_GROUP: number
+declare global LE_GAME_ERR_NOT_IN_NPE: number
+declare global LE_GAME_ERR_NOT_IN_PET_BATTLE: number
+declare global LE_GAME_ERR_NOT_IN_RAID: number
+declare global LE_GAME_ERR_NOT_IN_RATED_BATTLEGROUND: number
+declare global LE_GAME_ERR_NOT_LEADER: number
+declare global LE_GAME_ERR_NOT_ON_TOURNAMENT_REALM: number
+declare global LE_GAME_ERR_NOT_OWNER: number
+declare global LE_GAME_ERR_NOT_SAME_ACCOUNT: number
+declare global LE_GAME_ERR_NOT_WHILE_DISARMED: number
+declare global LE_GAME_ERR_NOT_WHILE_FALLING: number
+declare global LE_GAME_ERR_NOT_WHILE_FATIGUED: number
+declare global LE_GAME_ERR_NOT_WHILE_HOUSE_EDIT: number
+declare global LE_GAME_ERR_NOT_WHILE_HOUSE_INSPECT_MODE: number
+declare global LE_GAME_ERR_NOT_WHILE_MOUNTED: number
+declare global LE_GAME_ERR_NOT_WHILE_MOVING: number
+declare global LE_GAME_ERR_NOT_WHILE_SHAPESHIFTED: number
+declare global LE_GAME_ERR_NOTYOURPET: number
+declare global LE_GAME_ERR_OBJECT_IS_BUSY: number
+declare global LE_GAME_ERR_ONLY_ONE_AMMO: number
+declare global LE_GAME_ERR_ONLY_ONE_BOLT: number
+declare global LE_GAME_ERR_ONLY_ONE_QUIVER: number
+declare global LE_GAME_ERR_OUT_OF_ALTERNATE_ENCOUNTER: number
+declare global LE_GAME_ERR_OUT_OF_ALTERNATE_MOUNT: number
+declare global LE_GAME_ERR_OUT_OF_ALTERNATE_QUEST: number
+declare global LE_GAME_ERR_OUT_OF_ARCANE_CHARGES: number
+declare global LE_GAME_ERR_OUT_OF_BALANCE: number
+declare global LE_GAME_ERR_OUT_OF_CHI: number
+declare global LE_GAME_ERR_OUT_OF_COMBO_POINTS: number
+declare global LE_GAME_ERR_OUT_OF_ENERGY: number
+declare global LE_GAME_ERR_OUT_OF_ESSENCE: number
+declare global LE_GAME_ERR_OUT_OF_FOCUS: number
+declare global LE_GAME_ERR_OUT_OF_FURY: number
+declare global LE_GAME_ERR_OUT_OF_HAPPINESS: number
+declare global LE_GAME_ERR_OUT_OF_HEALTH: number
+declare global LE_GAME_ERR_OUT_OF_HOLY_POWER: number
+declare global LE_GAME_ERR_OUT_OF_INSANITY: number
+declare global LE_GAME_ERR_OUT_OF_LUNAR_POWER: number
+declare global LE_GAME_ERR_OUT_OF_MAELSTROM: number
+declare global LE_GAME_ERR_OUT_OF_MANA: number
+declare global LE_GAME_ERR_OUT_OF_PAIN: number
+declare global LE_GAME_ERR_OUT_OF_POWER_DISPLAY: number
+declare global LE_GAME_ERR_OUT_OF_RAGE: number
+declare global LE_GAME_ERR_OUT_OF_RANGE: number
+declare global LE_GAME_ERR_OUT_OF_RUNE_BLOOD: number
+declare global LE_GAME_ERR_OUT_OF_RUNE_CHROMATIC: number
+declare global LE_GAME_ERR_OUT_OF_RUNE_FROST: number
+declare global LE_GAME_ERR_OUT_OF_RUNE_UNHOLY: number
+declare global LE_GAME_ERR_OUT_OF_RUNES: number
+declare global LE_GAME_ERR_OUT_OF_RUNIC_POWER: number
+declare global LE_GAME_ERR_OUT_OF_SHADOW_ORBS: number
+declare global LE_GAME_ERR_OUT_OF_SOUL_SHARDS: number
+declare global LE_GAME_ERR_PARENTAL_CONTROLS_CHAT_MUTED: number
+declare global LE_GAME_ERR_PARTY_ALREADY_IN_BATTLEGROUND_QUEUE: number
+declare global LE_GAME_ERR_PARTY_CONFIRMING_BATTLEGROUND_QUEUE: number
+declare global LE_GAME_ERR_PARTY_CONVERTED_TO_RAID: number
+declare global LE_GAME_ERR_PARTY_LFG_BOOT_COOLDOWN_S: number
+declare global LE_GAME_ERR_PARTY_LFG_BOOT_DISALLOWED_BY_MAP: number
+declare global LE_GAME_ERR_PARTY_LFG_BOOT_DUNGEON_COMPLETE: number
+declare global LE_GAME_ERR_PARTY_LFG_BOOT_IN_PROGRESS: number
+declare global LE_GAME_ERR_PARTY_LFG_BOOT_INPATIENT_TIMER_S: number
+declare global LE_GAME_ERR_PARTY_LFG_BOOT_LIMIT: number
+declare global LE_GAME_ERR_PARTY_LFG_BOOT_LOOT_ROLLS: number
+declare global LE_GAME_ERR_PARTY_LFG_BOOT_NOT_ELIGIBLE_S: number
+declare global LE_GAME_ERR_PARTY_LFG_BOOT_TOO_FEW_PLAYERS: number
+declare global LE_GAME_ERR_PARTY_LFG_BOOT_VOTE_FAILED: number
+declare global LE_GAME_ERR_PARTY_LFG_BOOT_VOTE_REGISTERED: number
+declare global LE_GAME_ERR_PARTY_LFG_BOOT_VOTE_SUCCEEDED: number
+declare global LE_GAME_ERR_PARTY_LFG_INVITE_RAID_LOCKED: number
+declare global LE_GAME_ERR_PARTY_LFG_TELEPORT_IN_COMBAT: number
+declare global LE_GAME_ERR_PARTY_MEMBER_SILENCED: number
+declare global LE_GAME_ERR_PARTY_MEMBER_SILENCED_LFG_DELIST: number
+declare global LE_GAME_ERR_PARTY_PRIVATE_GROUP_ONLY: number
+declare global LE_GAME_ERR_PARTY_ROLE_NOT_AVAILABLE: number
+declare global LE_GAME_ERR_PARTY_TARGET_AMBIGUOUS: number
+declare global LE_GAME_ERR_PARTY_TIME_RUNNING_SEASON_ID_MUST_MATCH: number
+declare global LE_GAME_ERR_PASSIVE_ABILITY: number
+declare global LE_GAME_ERR_PET_BROKEN: number
+declare global LE_GAME_ERR_PET_JOURNAL_ALREADY_IN_LOADOUT: number
+declare global LE_GAME_ERR_PET_LEARN_ABILITY_S: number
+declare global LE_GAME_ERR_PET_LEARN_SPELL_S: number
+declare global LE_GAME_ERR_PET_NOT_RENAMEABLE: number
+declare global LE_GAME_ERR_PET_SPEC_WIPE_ERROR: number
+declare global LE_GAME_ERR_PET_SPELL_AFFECTING_COMBAT: number
+declare global LE_GAME_ERR_PET_SPELL_ALREADY_KNOWN_S: number
+declare global LE_GAME_ERR_PET_SPELL_DEAD: number
+declare global LE_GAME_ERR_PET_SPELL_NOPATH: number
+declare global LE_GAME_ERR_PET_SPELL_NOT_BEHIND: number
+declare global LE_GAME_ERR_PET_SPELL_OUT_OF_RANGE: number
+declare global LE_GAME_ERR_PET_SPELL_ROOTED: number
+declare global LE_GAME_ERR_PET_SPELL_TARGETS_DEAD: number
+declare global LE_GAME_ERR_PET_SPELL_UNLEARNED_S: number
+declare global LE_GAME_ERR_PET_TOO_HIGH_LEVEL_TO_UNCAGE: number
+declare global LE_GAME_ERR_PETBATTLE_ALL_PETS_DEAD: number
+declare global LE_GAME_ERR_PETBATTLE_CREATE_FAILED: number
+declare global LE_GAME_ERR_PETBATTLE_DECLINED: number
+declare global LE_GAME_ERR_PETBATTLE_GAME_ROUNDS_LIMIT_WARNING: number
+declare global LE_GAME_ERR_PETBATTLE_GAME_TIME_LIMIT_WARNING: number
+declare global LE_GAME_ERR_PETBATTLE_IN_BATTLE: number
+declare global LE_GAME_ERR_PETBATTLE_INTERNAL: number
+declare global LE_GAME_ERR_PETBATTLE_INVALID_LOADOUT: number
+declare global LE_GAME_ERR_PETBATTLE_NO_ACCOUNT_LOCK: number
+declare global LE_GAME_ERR_PETBATTLE_NO_PETS_IN_SLOTS: number
+declare global LE_GAME_ERR_PETBATTLE_NOT_A_TRAINER: number
+declare global LE_GAME_ERR_PETBATTLE_NOT_HERE: number
+declare global LE_GAME_ERR_PETBATTLE_NOT_HERE_OBSTRUCTED: number
+declare global LE_GAME_ERR_PETBATTLE_NOT_HERE_ON_TRANSPORT: number
+declare global LE_GAME_ERR_PETBATTLE_NOT_HERE_UNEVEN_GROUND: number
+declare global LE_GAME_ERR_PETBATTLE_NOT_WHILE_DEAD: number
+declare global LE_GAME_ERR_PETBATTLE_NOT_WHILE_FLYING: number
+declare global LE_GAME_ERR_PETBATTLE_NOT_WHILE_IN_COMBAT: number
+declare global LE_GAME_ERR_PETBATTLE_NOT_WHILE_IN_MATCHED_BATTLE: number
+declare global LE_GAME_ERR_PETBATTLE_OPPONENT_NOT_AVAILABLE: number
+declare global LE_GAME_ERR_PETBATTLE_QUEUE_ALREADY_QUEUED: number
+declare global LE_GAME_ERR_PETBATTLE_QUEUE_JOIN_FAILED: number
+declare global LE_GAME_ERR_PETBATTLE_QUEUE_JOURNAL_LOCK: number
+declare global LE_GAME_ERR_PETBATTLE_QUEUE_NOT_WHILE_NEUTRAL: number
+declare global LE_GAME_ERR_PETBATTLE_QUEUE_OPPONENT_DECLINED: number
+declare global LE_GAME_ERR_PETBATTLE_QUEUE_PROPOSAL_DECLINED: number
+declare global LE_GAME_ERR_PETBATTLE_QUEUE_PROPOSAL_TIMEOUT: number
+declare global LE_GAME_ERR_PETBATTLE_QUEUE_QUEUED: number
+declare global LE_GAME_ERR_PETBATTLE_QUEUE_REMOVED: number
+declare global LE_GAME_ERR_PETBATTLE_QUEUE_REQUEUED_INTERNAL: number
+declare global LE_GAME_ERR_PETBATTLE_QUEUE_REQUEUED_REMOVED: number
+declare global LE_GAME_ERR_PETBATTLE_QUEUE_SLOT_CANT_BATTLE: number
+declare global LE_GAME_ERR_PETBATTLE_QUEUE_SLOT_DEAD: number
+declare global LE_GAME_ERR_PETBATTLE_QUEUE_SLOT_EMPTY: number
+declare global LE_GAME_ERR_PETBATTLE_QUEUE_SLOT_LOCKED: number
+declare global LE_GAME_ERR_PETBATTLE_QUEUE_SLOT_NO_PET: number
+declare global LE_GAME_ERR_PETBATTLE_QUEUE_SLOT_NO_SPECIES: number
+declare global LE_GAME_ERR_PETBATTLE_QUEUE_SLOT_NO_TRACKER: number
+declare global LE_GAME_ERR_PETBATTLE_QUEUE_SLOT_REVOKED: number
+declare global LE_GAME_ERR_PETBATTLE_RESTRICTED_ACCOUNT: number
+declare global LE_GAME_ERR_PETBATTLE_TARGET_INVALID: number
+declare global LE_GAME_ERR_PETBATTLE_TARGET_NOT_CAPTURABLE: number
+declare global LE_GAME_ERR_PETBATTLE_TARGET_OUT_OF_RANGE: number
+declare global LE_GAME_ERR_PETBATTLE_WILD_PET_TAPPED: number
+declare global LE_GAME_ERR_PETITION_ALREADY_SIGNED: number
+declare global LE_GAME_ERR_PETITION_ALREADY_SIGNED_BY_S: number
+declare global LE_GAME_ERR_PETITION_ALREADY_SIGNED_OTHER: number
+declare global LE_GAME_ERR_PETITION_CREATOR: number
+declare global LE_GAME_ERR_PETITION_DECLINED_S: number
+declare global LE_GAME_ERR_PETITION_FULL: number
+declare global LE_GAME_ERR_PETITION_IN_GUILD: number
+declare global LE_GAME_ERR_PETITION_NOT_ENOUGH_SIGNATURES: number
+declare global LE_GAME_ERR_PETITION_NOT_SAME_SERVER: number
+declare global LE_GAME_ERR_PETITION_OFFERED_S: number
+declare global LE_GAME_ERR_PETITION_RESTRICTED_ACCOUNT_TRIAL: number
+declare global LE_GAME_ERR_PETITION_SIGNED: number
+declare global LE_GAME_ERR_PETITION_SIGNED_S: number
+declare global LE_GAME_ERR_PLAY_TIME_EXCEEDED: number
+declare global LE_GAME_ERR_PLAYER_BUSY_S: number
+declare global LE_GAME_ERR_PLAYER_CHOICE_ERROR_PENDING_CHOICE: number
+declare global LE_GAME_ERR_PLAYER_DEAD: number
+declare global LE_GAME_ERR_PLAYER_DIED_S: number
+declare global LE_GAME_ERR_PLAYER_DIFFICULTY_CHANGED_S: number
+declare global LE_GAME_ERR_PLAYER_IS_NEUTRAL: number
+declare global LE_GAME_ERR_PLAYER_IS_SELF_FOUND_CANNOT_SEND_MAIL: number
+declare global LE_GAME_ERR_PLAYER_IS_SELF_FOUND_CANNOT_TRADE: number
+declare global LE_GAME_ERR_PLAYER_IS_SELF_FOUND_CANNOT_USE_AUCTION_HOUSE: number
+declare global LE_GAME_ERR_PLAYER_SILENCED: number
+declare global LE_GAME_ERR_PLAYER_SILENCED_ECHO: number
+declare global LE_GAME_ERR_PLAYER_UNSILENCED: number
+declare global LE_GAME_ERR_PLAYER_UNSILENCED_ECHO: number
+declare global LE_GAME_ERR_PLAYER_WRONG_FACTION: number
+declare global LE_GAME_ERR_PLUNDERSTORM_CANNOT_QUEUE: number
+declare global LE_GAME_ERR_POTION_COOLDOWN: number
+declare global LE_GAME_ERR_PROFANE_CHAT_NAME: number
+declare global LE_GAME_ERR_PROFESSIONS_RECIPE_DISCOVERY_S: number
+declare global LE_GAME_ERR_PROFICIENCY_GAINED_S: number
+declare global LE_GAME_ERR_PROFICIENCY_NEEDED: number
+declare global LE_GAME_ERR_PURCHASE_LEVEL_TOO_LOW: number
+declare global LE_GAME_ERR_PVP_KILL_DISHONORABLE: number
+declare global LE_GAME_ERR_PVP_KILL_HONORABLE: number
+declare global LE_GAME_ERR_PVP_MAP_NOT_FOUND: number
+declare global LE_GAME_ERR_PVP_MAP_NOT_SET: number
+declare global LE_GAME_ERR_PVP_PLAYER_ABANDONED: number
+declare global LE_GAME_ERR_PVP_TOGGLE_OFF: number
+declare global LE_GAME_ERR_PVP_TOGGLE_ON: number
+declare global LE_GAME_ERR_PVP_TRAINING_GROUNDS_DISABLED: number
+declare global LE_GAME_ERR_PVP_WARMODE_TOGGLE_OFF: number
+declare global LE_GAME_ERR_PVP_WARMODE_TOGGLE_ON: number
+declare global LE_GAME_ERR_QUEST_ACCEPTED_S: number
+declare global LE_GAME_ERR_QUEST_ADD_FOUND_SII: number
+declare global LE_GAME_ERR_QUEST_ADD_ITEM_SII: number
+declare global LE_GAME_ERR_QUEST_ADD_KILL_SII: number
+declare global LE_GAME_ERR_QUEST_ADD_PLAYER_KILL_SII: number
+declare global LE_GAME_ERR_QUEST_ALREADY_DONE: number
+declare global LE_GAME_ERR_QUEST_ALREADY_DONE_DAILY: number
+declare global LE_GAME_ERR_QUEST_ALREADY_ON: number
+declare global LE_GAME_ERR_QUEST_COMPLETE_S: number
+declare global LE_GAME_ERR_QUEST_FAILED_BAG_FULL_S: number
+declare global LE_GAME_ERR_QUEST_FAILED_CAIS: number
+declare global LE_GAME_ERR_QUEST_FAILED_EXPANSION: number
+declare global LE_GAME_ERR_QUEST_FAILED_LOW_LEVEL: number
+declare global LE_GAME_ERR_QUEST_FAILED_MAX_COUNT_S: number
+declare global LE_GAME_ERR_QUEST_FAILED_MISSING_ITEMS: number
+declare global LE_GAME_ERR_QUEST_FAILED_NOT_ENOUGH_MONEY: number
+declare global LE_GAME_ERR_QUEST_FAILED_S: number
+declare global LE_GAME_ERR_QUEST_FAILED_SPELL: number
+declare global LE_GAME_ERR_QUEST_FAILED_TOO_MANY_DAILY_QUESTS_I: number
+declare global LE_GAME_ERR_QUEST_FAILED_WRONG_RACE: number
+declare global LE_GAME_ERR_QUEST_FORCE_REMOVED_S: number
+declare global LE_GAME_ERR_QUEST_HAS_IN_PROGRESS: number
+declare global LE_GAME_ERR_QUEST_LOG_FULL: number
+declare global LE_GAME_ERR_QUEST_MUST_CHOOSE: number
+declare global LE_GAME_ERR_QUEST_NEED_PREREQS: number
+declare global LE_GAME_ERR_QUEST_NEED_PREREQS_CUSTOM: number
+declare global LE_GAME_ERR_QUEST_OBJECTIVE_COMPLETE_S: number
+declare global LE_GAME_ERR_QUEST_ONLY_ONE_TIMED: number
+declare global LE_GAME_ERR_QUEST_PET_BATTLE_VICTORIES_PVP_II: number
+declare global LE_GAME_ERR_QUEST_PUSH_ACCEPTED_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_ALREADY_DONE_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_ALREADY_DONE_TO_RECIPIENT_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_BUSY_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_CLASS_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_CLASS_TO_RECIPIENT_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_CROSS_FACTION_RESTRICTED_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_DEAD_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_DEAD_TO_RECIPIENT_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_DECLINED_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_DIFFERENT_SERVER_DAILY_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_DIFFERENT_SERVER_DAILY_TO_RECIPIENT_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_EXPANSION_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_EXPANSION_TO_RECIPIENT_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_HIGH_FACTION_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_HIGH_FACTION_TO_RECIPIENT_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_HIGH_LEVEL_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_HIGH_LEVEL_TO_RECIPIENT_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_INVALID_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_INVALID_TO_RECIPIENT_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_LOG_FULL_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_LOG_FULL_TO_RECIPIENT_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_LOW_FACTION_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_LOW_FACTION_TO_RECIPIENT_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_LOW_LEVEL_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_LOW_LEVEL_TO_RECIPIENT_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_NEW_PLAYER_EXPERIENCE_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_NEW_PLAYER_EXPERIENCE_TO_RECIPIENT_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_NOT_ALLOWED_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_NOT_DAILY_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_NOT_GARRISON_OWNER_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_NOT_GARRISON_OWNER_TO_RECIPIENT_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_NOT_IN_PARTY_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_ONQUEST_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_ONQUEST_TO_RECIPIENT_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_PREREQUISITE_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_PREREQUISITE_TO_RECIPIENT_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_RACE_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_RACE_TO_RECIPIENT_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_SUCCESS_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_TIMER_EXPIRED_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_WRONG_COVENANT_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_WRONG_COVENANT_TO_RECIPIENT_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_WRONG_FACTION_S: number
+declare global LE_GAME_ERR_QUEST_PUSH_WRONG_FACTION_TO_RECIPIENT_S: number
+declare global LE_GAME_ERR_QUEST_REWARD_EXP_I: number
+declare global LE_GAME_ERR_QUEST_REWARD_MONEY_S: number
+declare global LE_GAME_ERR_QUEST_TURN_IN_FAIL_REASON: number
+declare global LE_GAME_ERR_QUEST_UNKNOWN_COMPLETE: number
+declare global LE_GAME_ERR_QUEUED_PLUNDERSTORM: number
+declare global LE_GAME_ERR_RAID_CONVERTED_TO_PARTY: number
+declare global LE_GAME_ERR_RAID_DIFFICULTY_CHANGED_S: number
+declare global LE_GAME_ERR_RAID_DIFFICULTY_FAILED: number
+declare global LE_GAME_ERR_RAID_DISALLOWED_BY_CROSS_REALM: number
+declare global LE_GAME_ERR_RAID_DISALLOWED_BY_LEVEL: number
+declare global LE_GAME_ERR_RAID_GROUP_FULL: number
+declare global LE_GAME_ERR_RAID_GROUP_LOWLEVEL: number
+declare global LE_GAME_ERR_RAID_GROUP_ONLY: number
+declare global LE_GAME_ERR_RAID_GROUP_REQUIREMENTS_UNMATCH: number
+declare global LE_GAME_ERR_RAID_LEADER_READY_CHECK_START_S: number
+declare global LE_GAME_ERR_RAID_LOCKOUT_CHANGED_S: number
+declare global LE_GAME_ERR_RAID_MEMBER_ADDED_S: number
+declare global LE_GAME_ERR_RAID_MEMBER_REMOVED_S: number
+declare global LE_GAME_ERR_RAID_YOU_JOINED: number
+declare global LE_GAME_ERR_RAID_YOU_LEFT: number
+declare global LE_GAME_ERR_RANK_REQUIRES_AUTHENTICATOR: number
+declare global LE_GAME_ERR_READY_CHECK_IN_PROGRESS: number
+declare global LE_GAME_ERR_READY_CHECK_THROTTLED: number
+declare global LE_GAME_ERR_REAGENT_BANK_FULL: number
+declare global LE_GAME_ERR_REAGENT_BANK_LOCKED: number
+declare global LE_GAME_ERR_REAGENTBAG_ITEM_TYPE: number
+declare global LE_GAME_ERR_REAGENTBAG_WRONG_SLOT: number
+declare global LE_GAME_ERR_REALM_NOT_FOUND: number
+declare global LE_GAME_ERR_RECEIVE_ITEM_S: number
+declare global LE_GAME_ERR_RECENT_ALLY_PIN_SERVER_ERROR: number
+declare global LE_GAME_ERR_RECRUIT_A_FRIEND_ACCOUNT_LIMIT: number
+declare global LE_GAME_ERR_RECRUIT_A_FRIEND_FAILED: number
+declare global LE_GAME_ERR_RECRUIT_A_FRIEND_INSUF_EXPAN_LVL: number
+declare global LE_GAME_ERR_RECRUIT_A_FRIEND_MAP_INCOMING_TRANSFER_NOT_ALLOWED: number
+declare global LE_GAME_ERR_RECRUIT_A_FRIEND_NOT_LINKED: number
+declare global LE_GAME_ERR_RECRUIT_A_FRIEND_NOT_NOW: number
+declare global LE_GAME_ERR_RECRUIT_A_FRIEND_SUMMON_COOLDOWN: number
+declare global LE_GAME_ERR_RECRUIT_A_FRIEND_SUMMON_LEVEL_MAX: number
+declare global LE_GAME_ERR_RECRUIT_A_FRIEND_SUMMON_OFFLINE: number
+declare global LE_GAME_ERR_REFUND_RESULT_EXCEED_MAX_CURRENCY: number
+declare global LE_GAME_ERR_REMIX_INVALID_TRANSFER_REQUEST: number
+declare global LE_GAME_ERR_REMOVE_FROM_PVP_QUEUE_FACTION_CHANGE: number
+declare global LE_GAME_ERR_REMOVE_FROM_PVP_QUEUE_XP_GAIN: number
+declare global LE_GAME_ERR_REPORT_SUBMISSION_FAILED: number
+declare global LE_GAME_ERR_REPORT_SUBMITTED_SUCCESSFULLY: number
+declare global LE_GAME_ERR_REQUEST_JOIN_PLAYER_S: number
+declare global LE_GAME_ERR_REQUESTED_INVITE_TO_GROUP_SS: number
+declare global LE_GAME_ERR_REQUIRES_ACHIEVEMENT_I: number
+declare global LE_GAME_ERR_REQUIRES_EXPANSION_S: number
+declare global LE_GAME_ERR_RESTRICTED_ACCOUNT: number
+declare global LE_GAME_ERR_RESTRICTED_ACCOUNT_LFG_LIST_CLASS_TRIAL: number
+declare global LE_GAME_ERR_RESTRICTED_ACCOUNT_LFG_LIST_TRIAL: number
+declare global LE_GAME_ERR_RESTRICTED_ACCOUNT_TRIAL: number
+declare global LE_GAME_ERR_REVOKE_TRANSMOG_S: number
+declare global LE_GAME_ERR_ROLE_CHECK_ALREADY_IN_PROGRESS: number
+declare global LE_GAME_ERR_SCALING_STAT_ITEM_LEVEL_EXCEEDED: number
+declare global LE_GAME_ERR_SCALING_STAT_ITEM_LEVEL_TOO_LOW: number
+declare global LE_GAME_ERR_SET_LOOT_FREEFORALL: number
+declare global LE_GAME_ERR_SET_LOOT_GROUP: number
+declare global LE_GAME_ERR_SET_LOOT_MASTER: number
+declare global LE_GAME_ERR_SET_LOOT_METHOD_FAILED_COMBAT: number
+declare global LE_GAME_ERR_SET_LOOT_NBG: number
+declare global LE_GAME_ERR_SET_LOOT_PERSONAL: number
+declare global LE_GAME_ERR_SET_LOOT_ROUNDROBIN: number
+declare global LE_GAME_ERR_SET_LOOT_THRESHOLD_S: number
+declare global LE_GAME_ERR_SHAPESHIFT_FORM_CANNOT_EQUIP: number
+declare global LE_GAME_ERR_SKILL_GAINED_S: number
+declare global LE_GAME_ERR_SKILL_UP_SI: number
+declare global LE_GAME_ERR_SLOT_EMPTY: number
+declare global LE_GAME_ERR_SLOT_ONLY_REAGENTBAG: number
+declare global LE_GAME_ERR_SOCKETING_COGWHEEL_GEM_ONLY_IN_COGWHEELSLOT: number
+declare global LE_GAME_ERR_SOCKETING_CYPHER_GEM_ONLY_IN_CYPHERSLOT: number
+declare global LE_GAME_ERR_SOCKETING_DOMINATION_SHARD_ONLY_IN_DOMINATIONSLOT: number
+declare global LE_GAME_ERR_SOCKETING_FIBER_GEM_ONLY_IN_FIBERSLOT: number
+declare global LE_GAME_ERR_SOCKETING_FRAGRANCE_GEM_ONLY_IN_FRAGRANCESLOT: number
+declare global LE_GAME_ERR_SOCKETING_GENERIC_FAILURE: number
+declare global LE_GAME_ERR_SOCKETING_HYDRAULIC_GEM_ONLY_IN_HYDRAULICSLOT: number
+declare global LE_GAME_ERR_SOCKETING_ITEM_TOO_HIGH_LEVEL: number
+declare global LE_GAME_ERR_SOCKETING_ITEM_TOO_LOW_LEVEL: number
+declare global LE_GAME_ERR_SOCKETING_META_GEM_ONLY_IN_METASLOT: number
+declare global LE_GAME_ERR_SOCKETING_PRIMORDIAL_GEM_ONLY_IN_PRIMORDIALSLOT: number
+declare global LE_GAME_ERR_SOCKETING_PUNCHCARDBLUE_GEM_ONLY_IN_PUNCHCARDBLUESLOT: number
+declare global LE_GAME_ERR_SOCKETING_PUNCHCARDRED_GEM_ONLY_IN_PUNCHCARDREDSLOT: number
+declare global LE_GAME_ERR_SOCKETING_PUNCHCARDYELLOW_GEM_ONLY_IN_PUNCHCARDYELLOWSLOT: number
+declare global LE_GAME_ERR_SOCKETING_REQUIRES_COGWHEEL_GEM: number
+declare global LE_GAME_ERR_SOCKETING_REQUIRES_CYPHER_GEM: number
+declare global LE_GAME_ERR_SOCKETING_REQUIRES_DOMINATION_SHARD: number
+declare global LE_GAME_ERR_SOCKETING_REQUIRES_FIBER_GEM: number
+declare global LE_GAME_ERR_SOCKETING_REQUIRES_FRAGRANCE_GEM: number
+declare global LE_GAME_ERR_SOCKETING_REQUIRES_HYDRAULIC_GEM: number
+declare global LE_GAME_ERR_SOCKETING_REQUIRES_META_GEM: number
+declare global LE_GAME_ERR_SOCKETING_REQUIRES_PRIMORDIAL_GEM: number
+declare global LE_GAME_ERR_SOCKETING_REQUIRES_PUNCHCARDBLUE_GEM: number
+declare global LE_GAME_ERR_SOCKETING_REQUIRES_PUNCHCARDRED_GEM: number
+declare global LE_GAME_ERR_SOCKETING_REQUIRES_PUNCHCARDYELLOW_GEM: number
+declare global LE_GAME_ERR_SOCKETING_REQUIRES_SINGING_SEA_GEM: number
+declare global LE_GAME_ERR_SOCKETING_REQUIRES_SINGING_THUNDER_GEM: number
+declare global LE_GAME_ERR_SOCKETING_REQUIRES_SINGING_WIND_GEM: number
+declare global LE_GAME_ERR_SOCKETING_REQUIRES_TINKER_GEM: number
+declare global LE_GAME_ERR_SOCKETING_SINGINGSEA_GEM_ONLY_IN_SINGINGSEASLOT: number
+declare global LE_GAME_ERR_SOCKETING_SINGINGTHUNDER_GEM_ONLY_IN_SINGINGTHUNDERSLOT: number
+declare global LE_GAME_ERR_SOCKETING_SINGINGWIND_GEM_ONLY_IN_SINGINGWINDSLOT: number
+declare global LE_GAME_ERR_SOCKETING_TINKER_GEM_ONLY_IN_TINKERSLOT: number
+declare global LE_GAME_ERR_SOLO_JOIN_BATTLEGROUND_S: number
+declare global LE_GAME_ERR_SOLO_JOIN_TRAINING_GROUND: number
+declare global LE_GAME_ERR_SOLO_MIN_ITEM_LEVEL: number
+declare global LE_GAME_ERR_SOLO_RBG_WARGAME_GROUP_COMP: number
+declare global LE_GAME_ERR_SOLO_RBG_WARGAME_GROUP_SIZE: number
+declare global LE_GAME_ERR_SOLO_SHUFFLE_WARGAME_GROUP_COMP: number
+declare global LE_GAME_ERR_SOLO_SHUFFLE_WARGAME_GROUP_SIZE: number
+declare global LE_GAME_ERR_SOR_INVALID_COMMENT: number
+declare global LE_GAME_ERR_SOR_INVALID_EMAIL: number
+declare global LE_GAME_ERR_SOR_START_EXPERIENCE_INCOMPLETE: number
+declare global LE_GAME_ERR_SOULBIND_DUPLICATE_CONDUIT: number
+declare global LE_GAME_ERR_SOULBIND_INVALID_CONDUIT: number
+declare global LE_GAME_ERR_SOULBIND_INVALID_CONDUIT_ITEM: number
+declare global LE_GAME_ERR_SOULBIND_INVALID_TALENT: number
+declare global LE_GAME_ERR_SPEC_IS_DISABLED: number
+declare global LE_GAME_ERR_SPEC_WIPE_ERROR: number
+declare global LE_GAME_ERR_SPECIFY_MASTER_LOOTER: number
+declare global LE_GAME_ERR_SPELL_ALREADY_KNOWN_S: number
+declare global LE_GAME_ERR_SPELL_COOLDOWN: number
+declare global LE_GAME_ERR_SPELL_FAILED_ALREADY_AT_FULL_HEALTH: number
+declare global LE_GAME_ERR_SPELL_FAILED_ALREADY_AT_FULL_MANA: number
+declare global LE_GAME_ERR_SPELL_FAILED_ALREADY_AT_FULL_POWER_S: number
+declare global LE_GAME_ERR_SPELL_FAILED_ANOTHER_IN_PROGRESS: number
+declare global LE_GAME_ERR_SPELL_FAILED_CANT_FLY_HERE: number
+declare global LE_GAME_ERR_SPELL_FAILED_EQUIPPED_ITEM: number
+declare global LE_GAME_ERR_SPELL_FAILED_EQUIPPED_ITEM_CLASS_S: number
+declare global LE_GAME_ERR_SPELL_FAILED_EQUIPPED_SPECIFIC_ITEM: number
+declare global LE_GAME_ERR_SPELL_FAILED_LEVEL_REQUIREMENT: number
+declare global LE_GAME_ERR_SPELL_FAILED_NOTUNSHEATHED: number
+declare global LE_GAME_ERR_SPELL_FAILED_OPTIONAL_REAGENTS: number
+declare global LE_GAME_ERR_SPELL_FAILED_REAGENTS: number
+declare global LE_GAME_ERR_SPELL_FAILED_REAGENTS_GENERIC: number
+declare global LE_GAME_ERR_SPELL_FAILED_S: number
+declare global LE_GAME_ERR_SPELL_FAILED_SHAPESHIFT_FORM_S: number
+declare global LE_GAME_ERR_SPELL_FAILED_TOTEMS: number
+declare global LE_GAME_ERR_SPELL_FAILED_TRAINING_POINTS: number
+declare global LE_GAME_ERR_SPELL_OUT_OF_RANGE: number
+declare global LE_GAME_ERR_SPELL_UNLEARNED_S: number
+declare global LE_GAME_ERR_SPLIT_FAILED: number
+declare global LE_GAME_ERR_START_RESTRICTED_CHALLENGE_MODE: number
+declare global LE_GAME_ERR_SUGGEST_INVITE_PLAYER_S: number
+declare global LE_GAME_ERR_SUGGESTION_SUBMITTED_SUCCESSFULLY: number
+declare global LE_GAME_ERR_SYSTEM: number
+declare global LE_GAME_ERR_SYSTEM_DISABLED: number
+declare global LE_GAME_ERR_TALENT_FAILED_CANT_REMOVE_TALENT: number
+declare global LE_GAME_ERR_TALENT_FAILED_IN_COMBAT: number
+declare global LE_GAME_ERR_TALENT_FAILED_IN_MYTHIC_PLUS: number
+declare global LE_GAME_ERR_TALENT_FAILED_IN_PVP_MATCH: number
+declare global LE_GAME_ERR_TALENT_FAILED_NO_PRIMARY_TREE_SELECTED: number
+declare global LE_GAME_ERR_TALENT_FAILED_NOT_ENOUGH_TALENTS_IN_PRIMARY_TREE: number
+declare global LE_GAME_ERR_TALENT_FAILED_REST_AREA: number
+declare global LE_GAME_ERR_TALENT_FAILED_UNKNOWN: number
+declare global LE_GAME_ERR_TALENT_FAILED_UNSPENT_TALENT_POINTS: number
+declare global LE_GAME_ERR_TALENT_GRANTED_BY_AURA: number
+declare global LE_GAME_ERR_TALENT_WIPE_ERROR: number
+declare global LE_GAME_ERR_TAME_FAILED: number
+declare global LE_GAME_ERR_TARGET_IS_SELF_FOUND_CANNOT_TRADE: number
+declare global LE_GAME_ERR_TARGET_LOGGING_OUT: number
+declare global LE_GAME_ERR_TARGET_NOT_IN_GROUP_S: number
+declare global LE_GAME_ERR_TARGET_NOT_IN_INSTANCE_S: number
+declare global LE_GAME_ERR_TARGET_STUNNED: number
+declare global LE_GAME_ERR_TAXIINCOMBAT: number
+declare global LE_GAME_ERR_TAXINOPATHS: number
+declare global LE_GAME_ERR_TAXINOSUCHPATH: number
+declare global LE_GAME_ERR_TAXINOTELIGIBLE: number
+declare global LE_GAME_ERR_TAXINOTENOUGHMONEY: number
+declare global LE_GAME_ERR_TAXINOTSTANDING: number
+declare global LE_GAME_ERR_TAXINOTVISITED: number
+declare global LE_GAME_ERR_TAXINOVENDORNEARBY: number
+declare global LE_GAME_ERR_TAXIPLAYERALREADYMOUNTED: number
+declare global LE_GAME_ERR_TAXIPLAYERBUSY: number
+declare global LE_GAME_ERR_TAXIPLAYERMOVING: number
+declare global LE_GAME_ERR_TAXIPLAYERSHAPESHIFTED: number
+declare global LE_GAME_ERR_TAXISAMENODE: number
+declare global LE_GAME_ERR_TAXITOOFARAWAY: number
+declare global LE_GAME_ERR_TAXIUNSPECIFIEDSERVERERROR: number
+declare global LE_GAME_ERR_TEST_CVAR_SET_SSS: number
+declare global LE_GAME_ERR_TICKET_ALREADY_EXISTS: number
+declare global LE_GAME_ERR_TICKET_CREATE_ERROR: number
+declare global LE_GAME_ERR_TICKET_DB_ERROR: number
+declare global LE_GAME_ERR_TICKET_NO_TEXT: number
+declare global LE_GAME_ERR_TICKET_TEXT_TOO_LONG: number
+declare global LE_GAME_ERR_TICKET_UPDATE_ERROR: number
+declare global LE_GAME_ERR_TOO_FAR_TO_INTERACT: number
+declare global LE_GAME_ERR_TOO_FEW_TO_SPLIT: number
+declare global LE_GAME_ERR_TOO_MANY_ACCOUNT_BANK_TABS: number
+declare global LE_GAME_ERR_TOO_MANY_CHAT_CHANNELS: number
+declare global LE_GAME_ERR_TOO_MANY_SOCKETS: number
+declare global LE_GAME_ERR_TOO_MANY_SPECIAL_BAGS: number
+declare global LE_GAME_ERR_TOO_MUCH_GOLD: number
+declare global LE_GAME_ERR_TOOBUSYTOFOLLOW: number
+declare global LE_GAME_ERR_TOY_ALREADY_KNOWN: number
+declare global LE_GAME_ERR_TOY_USE_LIMIT_REACHED: number
+declare global LE_GAME_ERR_TRADE_BAG: number
+declare global LE_GAME_ERR_TRADE_BAG_FULL: number
+declare global LE_GAME_ERR_TRADE_BLOCKED_S: number
+declare global LE_GAME_ERR_TRADE_BOUND_ITEM: number
+declare global LE_GAME_ERR_TRADE_CANCELLED: number
+declare global LE_GAME_ERR_TRADE_COMPLETE: number
+declare global LE_GAME_ERR_TRADE_EQUIPPED_BAG: number
+declare global LE_GAME_ERR_TRADE_FACTION_SPECIFIC: number
+declare global LE_GAME_ERR_TRADE_GROUND_ITEM: number
+declare global LE_GAME_ERR_TRADE_MAX_COUNT_EXCEEDED: number
+declare global LE_GAME_ERR_TRADE_NOT_ON_TAPLIST: number
+declare global LE_GAME_ERR_TRADE_QUEST_ITEM: number
+declare global LE_GAME_ERR_TRADE_REQUEST_S: number
+declare global LE_GAME_ERR_TRADE_SELF: number
+declare global LE_GAME_ERR_TRADE_TARGET_BAG_FULL: number
+declare global LE_GAME_ERR_TRADE_TARGET_DEAD: number
+declare global LE_GAME_ERR_TRADE_TARGET_MAX_COUNT_EXCEEDED: number
+declare global LE_GAME_ERR_TRADE_TARGET_MAX_LIMIT_CATEGORY_COUNT_EXCEEDED_IS: number
+declare global LE_GAME_ERR_TRADE_TEMP_ENCHANT_BOUND: number
+declare global LE_GAME_ERR_TRADE_TOO_FAR: number
+declare global LE_GAME_ERR_TRADE_WRONG_REALM: number
+declare global LE_GAME_ERR_TRANSMOG_INVALID_ACTION_OPTED_OUT: number
+declare global LE_GAME_ERR_TRANSMOG_INVALID_ACTION_TRIAL_OF_STYLE: number
+declare global LE_GAME_ERR_TRANSMOG_SET_ALREADY_KNOWN: number
+declare global LE_GAME_ERR_TRANSMOGRIFY_CANT_EQUIP: number
+declare global LE_GAME_ERR_TRANSMOGRIFY_INVALID_DESTINATION: number
+declare global LE_GAME_ERR_TRANSMOGRIFY_INVALID_ITEM_TYPE: number
+declare global LE_GAME_ERR_TRANSMOGRIFY_INVALID_SOURCE: number
+declare global LE_GAME_ERR_TRANSMOGRIFY_LEGENDARY: number
+declare global LE_GAME_ERR_TRANSMOGRIFY_MISMATCH: number
+declare global LE_GAME_ERR_TRANSMOGRIFY_NOT_EQUIPPED: number
+declare global LE_GAME_ERR_TRANSMOGRIFY_NOT_SOULBOUND: number
+declare global LE_GAME_ERR_TRANSMOGRIFY_SAME_APPEARANCE: number
+declare global LE_GAME_ERR_TRANSMOGRIFY_SAME_ITEM: number
+declare global LE_GAME_ERR_UNHEALTHY_TIME: number
+declare global LE_GAME_ERR_UNINVITE_YOU: number
+declare global LE_GAME_ERR_UNIT_NOT_FOUND: number
+declare global LE_GAME_ERR_UNKNOWN_MACRO_OPTION_S: number
+declare global LE_GAME_ERR_USE_BAD_ANGLE: number
+declare global LE_GAME_ERR_USE_CANT_IMMUNE: number
+declare global LE_GAME_ERR_USE_CANT_OPEN: number
+declare global LE_GAME_ERR_USE_DESTROYED: number
+declare global LE_GAME_ERR_USE_LOCKED: number
+declare global LE_GAME_ERR_USE_LOCKED_WITH_ITEM_S: number
+declare global LE_GAME_ERR_USE_LOCKED_WITH_SPELL_KNOWN_SI: number
+declare global LE_GAME_ERR_USE_LOCKED_WITH_SPELL_S: number
+declare global LE_GAME_ERR_USE_OBJECT_MOVING: number
+declare global LE_GAME_ERR_USE_PREVENTED_BY_MECHANIC_S: number
+declare global LE_GAME_ERR_USE_SPELL_FOCUS: number
+declare global LE_GAME_ERR_USE_TOO_FAR: number
+declare global LE_GAME_ERR_USE_WEEKLY_REWARDS_DISABLED: number
+declare global LE_GAME_ERR_USER_SQUELCHED: number
+declare global LE_GAME_ERR_VENDOR_DOESNT_BUY: number
+declare global LE_GAME_ERR_VENDOR_HATES_YOU: number
+declare global LE_GAME_ERR_VENDOR_MISSING_TURNINS: number
+declare global LE_GAME_ERR_VENDOR_NOT_INTERESTED: number
+declare global LE_GAME_ERR_VENDOR_REFUSE_SCRAPPABLE_AZERITE: number
+declare global LE_GAME_ERR_VENDOR_SOLD_OUT: number
+declare global LE_GAME_ERR_VENDOR_TOO_FAR: number
+declare global LE_GAME_ERR_VOICE_CHAT_CHANNEL_ALREADY_EXISTS: number
+declare global LE_GAME_ERR_VOICE_CHAT_CHANNEL_NAME_TOO_LONG: number
+declare global LE_GAME_ERR_VOICE_CHAT_CHANNEL_NAME_TOO_SHORT: number
+declare global LE_GAME_ERR_VOICE_CHAT_DISABLED: number
+declare global LE_GAME_ERR_VOICE_CHAT_GENERIC_UNABLE_TO_CONNECT: number
+declare global LE_GAME_ERR_VOICE_CHAT_PARENTAL_DISABLE_ALL: number
+declare global LE_GAME_ERR_VOICE_CHAT_PARENTAL_DISABLE_MIC: number
+declare global LE_GAME_ERR_VOICE_CHAT_PLAYER_SILENCED: number
+declare global LE_GAME_ERR_VOICE_CHAT_SERVICE_LOST: number
+declare global LE_GAME_ERR_VOICE_CHAT_TARGET_NOT_FOUND: number
+declare global LE_GAME_ERR_VOICE_CHAT_TOO_MANY_REQUESTS: number
+declare global LE_GAME_ERR_VOICE_IGNORE_ADDED_S: number
+declare global LE_GAME_ERR_VOICE_IGNORE_ALREADY_S: number
+declare global LE_GAME_ERR_VOICE_IGNORE_AMBIGUOUS: number
+declare global LE_GAME_ERR_VOICE_IGNORE_DELETED: number
+declare global LE_GAME_ERR_VOICE_IGNORE_FULL: number
+declare global LE_GAME_ERR_VOICE_IGNORE_NOT_FOUND: number
+declare global LE_GAME_ERR_VOICE_IGNORE_REMOVED_S: number
+declare global LE_GAME_ERR_VOICE_IGNORE_SELF: number
+declare global LE_GAME_ERR_VOID_DEPOSIT_FULL: number
+declare global LE_GAME_ERR_VOID_STORAGE_ACCOUNT_ITEM: number
+declare global LE_GAME_ERR_VOID_STORAGE_BAG: number
+declare global LE_GAME_ERR_VOID_STORAGE_CHARGES: number
+declare global LE_GAME_ERR_VOID_STORAGE_CONJURED: number
+declare global LE_GAME_ERR_VOID_STORAGE_DURATION: number
+declare global LE_GAME_ERR_VOID_STORAGE_HOLIDAY: number
+declare global LE_GAME_ERR_VOID_STORAGE_INVALID_ITEM: number
+declare global LE_GAME_ERR_VOID_STORAGE_LOAD_FAILED: number
+declare global LE_GAME_ERR_VOID_STORAGE_LOOT: number
+declare global LE_GAME_ERR_VOID_STORAGE_MAIL: number
+declare global LE_GAME_ERR_VOID_STORAGE_QUEST: number
+declare global LE_GAME_ERR_VOID_STORAGE_REPAIR: number
+declare global LE_GAME_ERR_VOID_STORAGE_STACKABLE: number
+declare global LE_GAME_ERR_VOID_STORAGE_UNBOUND: number
+declare global LE_GAME_ERR_VOID_STORAGE_UNIQUE: number
+declare global LE_GAME_ERR_VOID_STORAGE_WRAPPED: number
+declare global LE_GAME_ERR_VOID_TRANSFER_INTERNAL_ERROR: number
+declare global LE_GAME_ERR_VOID_TRANSFER_INV_FULL: number
+declare global LE_GAME_ERR_VOID_TRANSFER_ITEM_INVALID: number
+declare global LE_GAME_ERR_VOID_TRANSFER_STORAGE_FULL: number
+declare global LE_GAME_ERR_VOID_WITHDRAW_FULL: number
+declare global LE_GAME_ERR_VOTE_TO_ABANDON_ENCOUNTER: number
+declare global LE_GAME_ERR_VOTE_TO_ABANDON_NOT_YET: number
+declare global LE_GAME_ERR_WARGAME_REQUEST_FAILURE: number
+declare global LE_GAME_ERR_WARGAME_REQUEST_SENT: number
+declare global LE_GAME_ERR_WOW_LABS_LOBBY_MATCHMAKER_ERROR_ENTER_QUEUE_FAILED: number
+declare global LE_GAME_ERR_WOW_LABS_LOBBY_MATCHMAKER_ERROR_LEAVE_QUEUE_FAILED: number
+declare global LE_GAME_ERR_WOW_LABS_PARTY_ERROR_TYPE_MAX_INVITE_SENT: number
+declare global LE_GAME_ERR_WOW_LABS_PARTY_ERROR_TYPE_PARTY_INVITE_INVALID: number
+declare global LE_GAME_ERR_WOW_LABS_PARTY_ERROR_TYPE_PARTY_IS_FULL: number
+declare global LE_GAME_ERR_WOW_LABS_PARTY_ERROR_TYPE_PLAYER_ALREADY_INVITED: number
+declare global LE_GAME_ERR_WOW_LABS_SET_WOW_LABS_AREA_ID_FAILED: number
+declare global LE_GAME_ERR_WRONG_BAG_TYPE: number
+declare global LE_GAME_ERR_WRONG_BAG_TYPE_SUBCLASS: number
+declare global LE_GAME_ERR_WRONG_SLOT: number
+declare global LE_GAME_ERR_YELL_RESTRICTED_TRIAL: number
+declare global LE_GAME_ERR_ZONE_EXPLORED: number
+declare global LE_GAME_ERR_ZONE_EXPLORED_XP: number
+declare global LE_INVITE_CONFIRMATION_QUEUE_WARNING: number
+declare global LE_INVITE_CONFIRMATION_REQUEST: number
+declare global LE_INVITE_CONFIRMATION_SUGGEST: number
+declare global LE_LFG_CATEGORY_BATTLEFIELD: number
+declare global LE_LFG_CATEGORY_FLEXRAID: number
+declare global LE_LFG_CATEGORY_LAIR: number
+declare global LE_LFG_CATEGORY_LFD: number
+declare global LE_LFG_CATEGORY_LFR: number
+declare global LE_LFG_CATEGORY_RF: number
+declare global LE_LFG_CATEGORY_SCENARIO: number
+declare global LE_LFG_CATEGORY_WORLDPVP: number
+declare global LE_LFG_LIST_DISPLAY_TYPE_CLASS_ENUMERATE: number
+declare global LE_LFG_LIST_DISPLAY_TYPE_HIDE_ALL: number
+declare global LE_LFG_LIST_DISPLAY_TYPE_PLAYER_COUNT: number
+declare global LE_LFG_LIST_DISPLAY_TYPE_ROLE_COUNT: number
+declare global LE_LFG_LIST_DISPLAY_TYPE_ROLE_ENUMERATE: number
+declare global LE_LOOT_FILTER_ALL: number
+declare global LE_LOOT_FILTER_BOE: number
+declare global LE_LOOT_FILTER_CLASS: number
+declare global LE_LOOT_FILTER_SPEC1: number
+declare global LE_LOOT_FILTER_SPEC2: number
+declare global LE_LOOT_FILTER_SPEC3: number
+declare global LE_LOOT_FILTER_SPEC4: number
+declare global LE_MOUNT_JOURNAL_FILTER_COLLECTED: number
+declare global LE_MOUNT_JOURNAL_FILTER_NOT_COLLECTED: number
+declare global LE_MOUNT_JOURNAL_FILTER_UNUSABLE: number
+declare global LE_NUM_ACTIONS_PER_PAGE: number
+declare global LE_NUM_BONUS_ACTION_PAGES: number
+declare global LE_NUM_CHARACTER_UPGRADE_RESULT: number
+declare global LE_NUM_NORMAL_ACTION_PAGES: number
+declare global LE_PAN_AND_JUMP: number
+declare global LE_PAN_FAST_SLOW: number
+declare global LE_PAN_NONE: number
+declare global LE_PAN_NONE_RANGED: number
+declare global LE_PAN_SLOW_FAST: number
+declare global LE_PAN_STEADY: number
+declare global LE_PARTY_CATEGORY_HOME: number
+declare global LE_PARTY_CATEGORY_INSTANCE: number
+declare global LE_PET_JOURNAL_FILTER_COLLECTED: number
+declare global LE_PET_JOURNAL_FILTER_NOT_COLLECTED: number
+declare global LE_PET_JOURNAL_FILTER_TYPE_BATTLE_PETS: number
+declare global LE_PET_JOURNAL_FILTER_TYPE_NON_COMBAT_PETS: number
+declare global LE_QUEST_FACTION_ALLIANCE: number
+declare global LE_QUEST_FACTION_HORDE: number
+declare global LE_REALM_RELATION_COALESCED: number
+declare global LE_REALM_RELATION_SAME: number
+declare global LE_REALM_RELATION_VIRTUAL: number
+declare global LE_SCENARIO_TYPE_BOOST_TUTORIAL: number
+declare global LE_SCENARIO_TYPE_CHALLENGE_MODE: number
+declare global LE_SCENARIO_TYPE_DEFAULT: number
+declare global LE_SCENARIO_TYPE_LEGION_INVASION: number
+declare global LE_SCENARIO_TYPE_PROVING_GROUNDS: number
+declare global LE_SCENARIO_TYPE_USE_DUNGEON_DISPLAY: number
+declare global LE_SCENARIO_TYPE_WARFRONT: number
+declare global LE_SORT_BY_LEVEL: number
+declare global LE_SORT_BY_NAME: number
+declare global LE_SORT_BY_PETTYPE: number
+declare global LE_SORT_BY_RARITY: number
+declare global LE_TICKET_STATUS_NMI: number
+declare global LE_TICKET_STATUS_OPEN: number
+declare global LE_TICKET_STATUS_RESPONSE: number
+declare global LE_TICKET_STATUS_SURVEY: number
+declare global LE_TOKEN_CHOICE_BALANCE: number
+declare global LE_TOKEN_CHOICE_SUBSCRIPTION: number
+declare global LE_TOKEN_RESULT_ERROR_AUCTIONABLE_TOKEN_OWNED: number
+declare global LE_TOKEN_RESULT_ERROR_DISABLED: number
+declare global LE_TOKEN_RESULT_ERROR_NONE_FOR_SALE: number
+declare global LE_TOKEN_RESULT_ERROR_NOT_ENOUGH_PURCHASED_GAME_TIME: number
+declare global LE_TOKEN_RESULT_ERROR_OTHER: number
+declare global LE_TOKEN_RESULT_ERROR_THROTTLE_TOKENS: number
+declare global LE_TOKEN_RESULT_ERROR_TOO_MANY_TOKENS: number
+declare global LE_TOKEN_RESULT_ERROR_TRANSACTION_IN_PROGRESS: number
+declare global LE_TOKEN_RESULT_ERROR_TRIAL_RESTRICTED: number
+declare global LE_TOKEN_RESULT_SUCCESS: number
+declare global LE_TOKEN_RESULT_SUCCESS_NO: number
+declare global LE_TRACKER_SORTING_DIFFICULTY_HIGH: number
+declare global LE_TRACKER_SORTING_DIFFICULTY_LOW: number
+declare global LE_TRACKER_SORTING_MANUAL: number
+declare global LE_TRACKER_SORTING_PROXIMITY: number
+declare global LE_TRANSMOG_SET_FILTER_COLLECTED: number
+declare global LE_TRANSMOG_SET_FILTER_PVE: number
+declare global LE_TRANSMOG_SET_FILTER_PVP: number
+declare global LE_TRANSMOG_SET_FILTER_UNCOLLECTED: number
+declare global LE_UNIT_STAT_AGILITY: number
+declare global LE_UNIT_STAT_INTELLECT: number
+declare global LE_UNIT_STAT_SPIRIT: number
+declare global LE_UNIT_STAT_STAMINA: number
+declare global LE_UNIT_STAT_STRENGTH: number
+declare global LE_VAS_PURCHASE_STATE_APPLYING_LICENSE: number
+declare global LE_VAS_PURCHASE_STATE_INVALID: number
+declare global LE_VAS_PURCHASE_STATE_PAYMENT_PENDING: number
+declare global LE_VAS_PURCHASE_STATE_PRE_PURCHASE: number
+declare global LE_VAS_PURCHASE_STATE_PROCESSING_COMPLETE: number
+declare global LE_VAS_PURCHASE_STATE_PROCESSING_FACTION_CHANGE: number
+declare global LE_VAS_PURCHASE_STATE_READY: number
+declare global LE_WOW_CONNECTION_STATE_CONNECTING: number
+declare global LE_WOW_CONNECTION_STATE_IN_QUEUE: number
+declare global LE_WOW_CONNECTION_STATE_NONE: number
+declare global NUM_LE_ACTIONBAR_VISUAL_STATES: number
+declare global NUM_LE_AURORA_STATES: number
+declare global NUM_LE_AUTHS: number
+declare global NUM_LE_CHARACTER_UNDELETE_RESULTS: number
+declare global NUM_LE_CHARACTER_UPGRADE_RESULTS: number
+declare global NUM_LE_CINEMATIC_PAN_TYPES: number
+declare global NUM_LE_EXPANSION_LEVELS: number
+declare global NUM_LE_FRAME_TUTORIALS: number
+declare global NUM_LE_GM_WEB_TICKET_STATUSS: number
+declare global NUM_LE_INVITE_REQUEST_TYPES: number
+declare global NUM_LE_LFG_CATEGORYS: number
+declare global NUM_LE_LFG_LIST_DISPLAY_TYPES: number
+declare global NUM_LE_MOUNT_JOURNAL_FILTERS: number
+declare global NUM_LE_PARTY_CATEGORYS: number
+declare global NUM_LE_PET_JOURNAL_FILTERS: number
+declare global NUM_LE_PET_SORT_PARAMETERS: number
+declare global NUM_LE_QUEST_FACTIONS: number
+declare global NUM_LE_REALM_RELATIONS: number
+declare global NUM_LE_SCENARIO_TYPES: number
+declare global NUM_LE_TOKEN_CHOICES: number
+declare global NUM_LE_TOKEN_REDEEM_TYPES: number
+declare global NUM_LE_TOKEN_RESULTS: number
+declare global NUM_LE_TRACKER_SORTINGS: number
+declare global NUM_LE_TRANSMOG_SET_FILTERS: number
+declare global NUM_LE_UNIT_STATS: number
+declare global NUM_LE_VAS_PURCHASE_STATES: number
+declare global NUM_LE_WOW_CONNECTION_STATES: number
 
 declare namespace C_AccountInfo
     function GetIDFromBattleNetAccountGUID(battleNetAccountGUID: string): number
@@ -28542,12 +30129,12 @@ declare namespace C_ActionBar
     function GetActionAutocast(actionID: number): (boolean, boolean)
     function GetActionBarPage(): number
     function GetActionChargeDuration(actionID: number): LuaDurationObject
-    function GetActionCharges(actionID: number): SpellChargeInfo | Secret<SpellChargeInfo>
-    function GetActionCooldown(actionID: number): SpellCooldownInfo | Secret<SpellCooldownInfo>
+    function GetActionCharges(actionID: number): SpellChargeInfo
+    function GetActionCooldown(actionID: number): SpellCooldownInfo
     function GetActionCooldownDuration(actionID: number, ignoreGCD: boolean?): LuaDurationObject
     function GetActionDisplayCount(actionID: number, maxDisplayCount: number?, replacementString: string?): string | Secret<string>
     function GetActionLossOfControlCooldownDuration(actionID: number): LuaDurationObject
-    function GetActionLossOfControlCooldownInfo(actionID: number): SpellLossOfControlInfo | Secret<SpellLossOfControlInfo>
+    function GetActionLossOfControlCooldownInfo(actionID: number): SpellLossOfControlInfo
     function GetActionText(actionID: number): string?
     function GetActionTexture(actionID: number): number
     function GetActionUseCount(actionID: number): number | Secret<number>
@@ -28614,7 +30201,7 @@ declare namespace C_AddOnProfiler
     function GetAddOnMetric(name: string, metric: AddOnProfilerMetric): number
     function GetApplicationMetric(metric: AddOnProfilerMetric): number
     function GetOverallMetric(metric: AddOnProfilerMetric): number
-    function GetTicksPerSecond(): string
+    function GetTicksPerSecond(): number
     function GetTopKAddOnsForMetric(metric: AddOnProfilerMetric, k: number): AddOnProfilerResult[]
     function IsEnabled(): boolean
     function MeasureCall(func: LuaValueVariant, ...: LuaValueVariant): (AddOnProfilerCallResults, ...LuaValueVariant)
@@ -28780,8 +30367,8 @@ declare namespace C_AuctionHouse
     function CancelSell()
     function CloseAuctionHouse()
     function ConfirmCommoditiesPurchase(itemID: number, quantity: number)
-    function ConfirmPostCommodity(item: ItemLocationMixin, duration: number, quantity: number, unitPrice: string)
-    function ConfirmPostItem(item: ItemLocationMixin, duration: number, quantity: number, bid: string?, buyout: string?)
+    function ConfirmPostCommodity(item: ItemLocationMixin, duration: number, quantity: number, unitPrice: number)
+    function ConfirmPostItem(item: ItemLocationMixin, duration: number, quantity: number, bid: number?, buyout: number?)
     function FavoritesAreAvailable(): boolean
     function GetAuctionInfoByID(auctionID: number): AuctionInfo?
     function GetAuctionItemSubClasses(classID: number): number[]
@@ -28790,7 +30377,7 @@ declare namespace C_AuctionHouse
     function GetBidType(bidTypeIndex: number): ItemKey?
     function GetBids(): BidInfo[]
     function GetBrowseResults(): BrowseResultInfo[]
-    function GetCancelCost(ownedAuctionID: number): string
+    function GetCancelCost(ownedAuctionID: number): number
     function GetCommoditySearchResultInfo(itemID: number, commoditySearchResultIndex: number): CommoditySearchResultInfo?
     function GetCommoditySearchResultsQuantity(itemID: number): number
     function GetExtraBrowseInfo(itemKey: ItemKey): number?
@@ -28802,13 +30389,13 @@ declare namespace C_AuctionHouse
     function GetItemKeySampleLink(itemKey: ItemKey): string?
     function GetItemSearchResultInfo(itemKey: ItemKey, itemSearchResultIndex: number): ItemSearchResultInfo?
     function GetItemSearchResultsQuantity(itemKey: ItemKey): number
-    function GetMaxBidItemBid(): string?
-    function GetMaxBidItemBuyout(): string?
-    function GetMaxCommoditySearchResultPrice(itemID: number): string?
-    function GetMaxItemSearchResultBid(itemKey: ItemKey): string?
-    function GetMaxItemSearchResultBuyout(itemKey: ItemKey): string?
-    function GetMaxOwnedAuctionBid(): string?
-    function GetMaxOwnedAuctionBuyout(): string?
+    function GetMaxBidItemBid(): number?
+    function GetMaxBidItemBuyout(): number?
+    function GetMaxCommoditySearchResultPrice(itemID: number): number?
+    function GetMaxItemSearchResultBid(itemKey: ItemKey): number?
+    function GetMaxItemSearchResultBuyout(itemKey: ItemKey): number?
+    function GetMaxOwnedAuctionBid(): number?
+    function GetMaxOwnedAuctionBuyout(): number?
     function GetNumBidTypes(): number
     function GetNumBids(): number
     function GetNumCommoditySearchResults(itemID: number): number
@@ -28821,7 +30408,7 @@ declare namespace C_AuctionHouse
     function GetOwnedAuctions(): OwnedAuctionInfo[]
     function GetQuoteDurationRemaining(): number
     function GetReplicateItemBattlePetInfo(index: number): (number?, number?)
-    function GetReplicateItemInfo(index: number): (string?, number?, number, number, boolean?, number, string?, string, string, string, string, string?, string?, string?, string?, number, number, boolean?)
+    function GetReplicateItemInfo(index: number): (string?, number?, number, number, boolean?, number, string?, number, number, number, number, string?, string?, string?, string?, number, number, boolean?)
     function GetReplicateItemLink(index: number): string?
     function GetReplicateItemTimeLeft(index: number): number
     function GetTimeLeftBandInfo(timeLeftBand: AuctionHouseTimeLeftBand): (number, number)
@@ -28837,9 +30424,9 @@ declare namespace C_AuctionHouse
     function IsSellItemValid(item: ItemLocationMixin, displayError: boolean?): boolean
     function IsThrottledMessageSystemReady(): boolean
     function MakeItemKey(itemID: number, itemLevel: number?, itemSuffix: number?, battlePetSpeciesID: number?): ItemKey
-    function PlaceBid(auctionID: number, bidAmount: string)
-    function PostCommodity(item: ItemLocationMixin, duration: number, quantity: number, unitPrice: string): boolean
-    function PostItem(item: ItemLocationMixin, duration: number, quantity: number, bid: string?, buyout: string?): boolean
+    function PlaceBid(auctionID: number, bidAmount: number)
+    function PostCommodity(item: ItemLocationMixin, duration: number, quantity: number, unitPrice: number): boolean
+    function PostItem(item: ItemLocationMixin, duration: number, quantity: number, bid: number?, buyout: number?): boolean
     function QueryBids(sorts: AuctionHouseSortType[], auctionIDs: number[])
     function QueryOwnedAuctions(sorts: AuctionHouseSortType[])
     function RefreshCommoditySearchResults(itemID: number)
@@ -29288,7 +30875,7 @@ declare namespace C_ChatInfo
     function SendAddonMessage(prefix: string, message: string, chatType: string?, target: string?): SendAddonMessageResult
     function SendAddonMessageLogged(prefix: string, message: string, chatType: string?, target: string?): SendAddonMessageResult?
     function SendCautionaryChatMessage(confirmNumber: number)
-    function SendChatMessage(message: string, chatType: SendChatMessageType?, languageID: number?, target: string?)
+    function SendChatMessage(message: string, chatType: SendChatMessageType?, languageID: number?, target: (string | number)?)
     function SwapChatChannelsByChannelIndex(firstChannelIndex: number, secondChannelIndex: number)
     function UncensorChatLine(chatLine: number)
 end
@@ -29364,7 +30951,7 @@ declare namespace C_Club
     function AdvanceStreamViewMarker(clubId: ClubId, streamId: ClubStreamId)
     function AreMembersReady(clubId: ClubId): boolean
     function AssignMemberRole(clubId: ClubId, memberId: ClubMemberOpaqueId, roleId: ClubRoleIdentifier)
-    function CanResolvePlayerLocationFromClubMessageData(clubId: ClubId, streamId: ClubStreamId, epoch: string, position: string): boolean
+    function CanResolvePlayerLocationFromClubMessageData(clubId: ClubId, streamId: ClubStreamId, epoch: number, position: number): boolean
     function ClearAutoAdvanceStreamViewMarker()
     function ClearClubPresenceSubscription()
     function CompareBattleNetDisplayName(clubId: ClubId, lhsMemberId: number, rhsMemberId: number): number
@@ -29408,7 +30995,7 @@ declare namespace C_Club
     function GetMessagesBefore(clubId: ClubId, streamId: ClubStreamId, newest: ClubMessageIdentifier, count: number): ClubMessageInfo[]
     function GetMessagesInRange(clubId: ClubId, streamId: ClubStreamId, oldest: ClubMessageIdentifier, newest: ClubMessageIdentifier): ClubMessageInfo[]
     function GetStreamInfo(clubId: ClubId, streamId: ClubStreamId): ClubStreamInfo?
-    function GetStreamViewMarker(clubId: ClubId, streamId: ClubStreamId): string?
+    function GetStreamViewMarker(clubId: ClubId, streamId: ClubStreamId): number?
     function GetStreams(clubId: ClubId): ClubStreamInfo[]
     function GetSubscribedClubs(): ClubInfo[]
     function GetTickets(clubId: ClubId): ClubTicketInfo[]
@@ -29435,7 +31022,7 @@ declare namespace C_Club
     function SetClubMemberNote(clubId: ClubId, memberId: ClubMemberOpaqueId, note: string)
     function SetClubPresenceSubscription(clubId: ClubId)
     function SetClubStreamNotificationSettings(clubId: ClubId, settings: ClubStreamNotificationSetting[])
-    function SetCommunityID(communityID: string)
+    function SetCommunityID(communityID: number)
     function SetFavorite(clubId: ClubId, isFavorite: boolean)
     function SetSocialQueueingEnabled(clubId: ClubId, enabled: boolean)
     function ShouldAllowClubType(clubType: ClubType): boolean
@@ -29879,21 +31466,21 @@ declare namespace C_CraftingOrders
     function AreOrderNotesDisabled(): boolean
     function CalculateCraftingOrderPostingFee(skillLineAbilityID: number, orderType: CraftingOrderType, orderDuration: CraftingOrderDuration): WOWMONEY
     function CanOrderSkillAbility(skillLineAbilityID: number): boolean
-    function CancelOrder(orderID: string)
-    function ClaimOrder(orderID: string, profession: Profession)
+    function CancelOrder(orderID: number)
+    function ClaimOrder(orderID: number, profession: Profession)
     function CloseCrafterCraftingOrders()
     function CloseCustomerCraftingOrders()
-    function FulfillOrder(orderID: string, crafterNote: string, profession: Profession)
+    function FulfillOrder(orderID: number, crafterNote: string, profession: Profession)
     function GetClaimedOrder(): CraftingOrderInfo?
     function GetCrafterBuckets(): CraftingOrderBucketInfo[]
     function GetCrafterOrders(): CraftingOrderInfo[]
-    function GetCraftingOrderTime(): string
+    function GetCraftingOrderTime(): number
     function GetCustomerCategories(): CraftingOrderCustomerCategory[]
     function GetCustomerOptions(params: CraftingOrderCustomerSearchParams): CraftingOrderCustomerSearchResults
     function GetCustomerOrders(): CraftingOrderInfo[]
     function GetDefaultOrdersSkillLine(): number?
     function GetMyOrders(): CraftingOrderInfo[]
-    function GetNumFavoriteCustomerOptions(): string
+    function GetNumFavoriteCustomerOptions(): number
     function GetOrderClaimInfo(profession: Profession): CraftingOrderClaimsRemainingInfo
     function GetPersonalOrdersInfo(): CraftingOrderPersonalOrdersInfo[]
     function HasFavoriteCustomerOptions(): boolean
@@ -29901,11 +31488,11 @@ declare namespace C_CraftingOrders
     function ListMyOrders(request: CraftingOrderRequestMyOrdersInfo)
     function OpenCrafterCraftingOrders()
     function OpenCustomerCraftingOrders()
-    function OrderCanBeRecrafted(orderID: string): boolean
+    function OrderCanBeRecrafted(orderID: number): boolean
     function ParseCustomerOptions()
     function PlaceNewOrder(orderInfo: NewCraftingOrderInfo)
-    function RejectOrder(orderID: string, crafterNote: string, profession: Profession)
-    function ReleaseOrder(orderID: string, profession: Profession)
+    function RejectOrder(orderID: number, crafterNote: string, profession: Profession)
+    function ReleaseOrder(orderID: number, profession: Profession)
     function RequestCrafterOrders(request: CraftingOrderRequestInfo)
     function RequestCustomerOrders(request: CraftingOrderRequestInfo)
     function SetCustomerOptionFavorited(recipeID: number, favorited: boolean)
@@ -29985,10 +31572,10 @@ end
 
 declare namespace C_DamageMeter
     function GetAvailableCombatSessions(): DamageMeterAvailableCombatSession[]
-    function GetCombatSessionFromID(sessionID: number, type: DamageMeterType): DamageMeterCombatSession | Secret<DamageMeterCombatSession>
-    function GetCombatSessionFromType(sessionType: DamageMeterSessionType, type: DamageMeterType): DamageMeterCombatSession | Secret<DamageMeterCombatSession>
-    function GetCombatSessionSourceFromID(sessionID: number, type: DamageMeterType, sourceGUID: string?, sourceCreatureID: number?): DamageMeterCombatSessionSource | Secret<DamageMeterCombatSessionSource>
-    function GetCombatSessionSourceFromType(sessionType: DamageMeterSessionType, type: DamageMeterType, sourceGUID: string?, sourceCreatureID: number?): DamageMeterCombatSessionSource | Secret<DamageMeterCombatSessionSource>
+    function GetCombatSessionFromID(sessionID: number, type: DamageMeterType): DamageMeterCombatSession
+    function GetCombatSessionFromType(sessionType: DamageMeterSessionType, type: DamageMeterType): DamageMeterCombatSession
+    function GetCombatSessionSourceFromID(sessionID: number, type: DamageMeterType, sourceGUID: string?, sourceCreatureID: number?): DamageMeterCombatSessionSource
+    function GetCombatSessionSourceFromType(sessionType: DamageMeterSessionType, type: DamageMeterType, sourceGUID: string?, sourceCreatureID: number?): DamageMeterCombatSessionSource
     function GetSessionDurationSeconds(sessionType: DamageMeterSessionType): number?
     function IsDamageMeterAvailable(): (boolean, string)
     function ResetAllCombatSessions()
@@ -29999,7 +31586,7 @@ declare namespace C_DateAndTime
     function AdjustTimeByMinutes(date: CalendarTime, minutes: number): CalendarTime
     function AdjustTimeByMonths(date: CalendarTime, months: number): CalendarTime
     function CompareCalendarTime(lhsCalendarTime: CalendarTime, rhsCalendarTime: CalendarTime): number
-    function GetCalendarTimeFromEpoch(epoch: string): CalendarTime
+    function GetCalendarTimeFromEpoch(epoch: number): CalendarTime
     function GetCurrentCalendarTime(): CalendarTime
     function GetSecondsUntilDailyReset(): number
     function GetSecondsUntilWeeklyReset(): number
@@ -30182,7 +31769,7 @@ declare namespace C_EncounterTimeline
     function GetEventColor(eventID: EncounterTimelineEventID, overrideTrigger: EncounterEventColorTrigger?): ColorMixin | Secret<ColorMixin>
     function GetEventCountBySource(source: EncounterTimelineEventSource): number
     function GetEventHighlightTime(): Seconds
-    function GetEventInfo(eventID: EncounterTimelineEventID): EncounterTimelineEventInfo | Secret<EncounterTimelineEventInfo>
+    function GetEventInfo(eventID: EncounterTimelineEventID): EncounterTimelineEventInfo
     function GetEventList(): EncounterTimelineEventID[]
     function GetEventState(eventID: EncounterTimelineEventID): EncounterTimelineEventState
     function GetEventTimeElapsed(eventID: EncounterTimelineEventID): Seconds
@@ -30789,7 +32376,7 @@ declare namespace C_HousingBlueprint
     function CanExportRoom(roomGUID: string): boolean
     function CanExportTypeFromCurrentLocation(type: HousingBlueprintType): boolean
     function CanImportTypeFromCurrentLocation(type: HousingBlueprintType): boolean
-    function DeleteBlueprint(blueprintID: string)
+    function DeleteBlueprint(blueprintID: number)
     function ExportBlueprint(type: HousingBlueprintType, name: string)
     function ExportRoomBlueprint(name: string, roomGUID: string)
     function GetBlueprintHyperlink(blueprintShareCode: string): string?
@@ -30799,7 +32386,7 @@ declare namespace C_HousingBlueprint
     function GetImportAvailability(): HousingResult
     function ImportBlueprint(shareCode: string)
     function IsShareCodeValid(shareCode: string): boolean
-    function RenameBlueprint(blueprintID: string, newName: string)
+    function RenameBlueprint(blueprintID: number, newName: string)
     function RequestBlueprintCollection()
     function RequestBlueprintContents(shareCode: string)
     function RequestBlueprintContentsForContext(shareCode: string, optionalHouseGUID: string?)
@@ -31582,7 +33169,7 @@ end
 
 declare namespace C_LossOfControl
     function GetActiveLossOfControlData(index: number): LossOfControlData?
-    function GetActiveLossOfControlDataByUnit(unitToken: string, index: number): (LossOfControlData | Secret<LossOfControlData>)?
+    function GetActiveLossOfControlDataByUnit(unitToken: string, index: number): LossOfControlData?
     function GetActiveLossOfControlDataCount(): number
     function GetActiveLossOfControlDataCountByUnit(unitToken: string): number
     function GetActiveLossOfControlDuration(unitToken: string, index: number): LuaDurationObject?
@@ -31789,15 +33376,15 @@ end
 
 declare namespace C_NamePlate
     function GetNamePlateForUnit(unitToken: UnitTokenNamePlate, includeForbidden: boolean?): NamePlateFrame
-    function GetNamePlateSize(): (string, string)
+    function GetNamePlateSize(): (number, number)
     function GetNamePlates(): NamePlateFrame[]
-    function SetNamePlateSize(width: string, height: string)
+    function SetNamePlateSize(width: number, height: number)
 end
 
 declare namespace C_NamePlateManager
-    function GetNamePlateHitTestInsets(type: NamePlateType): (string, string, string, string)
+    function GetNamePlateHitTestInsets(type: NamePlateType): (number, number, number, number)
     function IsNamePlateUnitBehindCamera(unitToken: UnitTokenNamePlate): boolean
-    function SetNamePlateHitTestInsets(type: NamePlateType, left: string, right: string, top: string, bottom: string)
+    function SetNamePlateHitTestInsets(type: NamePlateType, left: number, right: number, top: number, bottom: number)
     function SetNamePlateSimplified(unitToken: UnitTokenNamePlate, isSimplified: boolean)
 end
 
@@ -32768,7 +34355,7 @@ declare namespace C_Traits
     function ConfigHasStagedChanges(configID: number): boolean
     function GenerateImportString(configID: number): string
     function GenerateInspectImportString(target: string): string
-    function GetConditionInfo(configID: number, condID: number): TraitCondInfo?
+    function GetConditionInfo(configID: number, condID: number, ignoreFontColor: boolean?, traitTreeName: string?): TraitCondInfo?
     function GetConfigIDBySystemID(systemID: number): number?
     function GetConfigIDByTreeID(treeID: number): number?
     function GetConfigInfo(configID: number): TraitConfigInfo?
@@ -32960,15 +34547,15 @@ declare namespace C_SpellBook
     function GetSpellBookItemAutoCast(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): (boolean?, boolean?)
     function GetSpellBookItemCastCount(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): number | Secret<number>
     function GetSpellBookItemChargeDuration(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): LuaDurationObject?
-    function GetSpellBookItemCharges(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): (SpellChargeInfo | Secret<SpellChargeInfo>)?
-    function GetSpellBookItemCooldown(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): (SpellCooldownInfo | Secret<SpellCooldownInfo>)?
+    function GetSpellBookItemCharges(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): SpellChargeInfo?
+    function GetSpellBookItemCooldown(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): SpellCooldownInfo?
     function GetSpellBookItemCooldownDuration(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank, ignoreGCD: boolean?): LuaDurationObject?
     function GetSpellBookItemDescription(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): string?
     function GetSpellBookItemInfo(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): SpellBookItemInfo?
     function GetSpellBookItemLevelLearned(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): number
     function GetSpellBookItemLink(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank, glyphID: number?): string?
     function GetSpellBookItemLossOfControlCooldownDuration(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): LuaDurationObject?
-    function GetSpellBookItemLossOfControlCooldownInfo(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): (SpellLossOfControlInfo | Secret<SpellLossOfControlInfo>)?
+    function GetSpellBookItemLossOfControlCooldownInfo(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): SpellLossOfControlInfo?
     function GetSpellBookItemName(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): (string?, string?)
     function GetSpellBookItemPowerCost(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): SpellPowerCostInfo[]?
     function GetSpellBookItemSkillLineIndex(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): number?
@@ -33025,8 +34612,8 @@ declare namespace C_Spell
     function GetSpellAutoCast(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): (boolean?, boolean?)
     function GetSpellCastCount(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): number | Secret<number>
     function GetSpellChargeDuration(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): LuaDurationObject?
-    function GetSpellCharges(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): (SpellChargeInfo | Secret<SpellChargeInfo>)?
-    function GetSpellCooldown(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): (SpellCooldownInfo | Secret<SpellCooldownInfo>)?
+    function GetSpellCharges(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): SpellChargeInfo?
+    function GetSpellCooldown(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): SpellCooldownInfo?
     function GetSpellCooldownDuration(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>, ignoreGCD: (boolean | Secret<boolean>)?): LuaDurationObject?
     function GetSpellDescription(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): string?
     function GetSpellDescriptionForItemLocation(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>, itemLocation: ItemLocationMixin | Secret<ItemLocationMixin>): string?
@@ -33036,7 +34623,7 @@ declare namespace C_Spell
     function GetSpellLevelLearned(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): number
     function GetSpellLink(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>, glyphID: number?): string?
     function GetSpellLossOfControlCooldownDuration(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): LuaDurationObject?
-    function GetSpellLossOfControlCooldownInfo(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): (SpellLossOfControlInfo | Secret<SpellLossOfControlInfo>)?
+    function GetSpellLossOfControlCooldownInfo(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): SpellLossOfControlInfo?
     function GetSpellMaxCumulativeAuraApplications(spellID: SpellIdentifier | Secret<SpellIdentifier>): number | Secret<number>
     function GetSpellName(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): string?
     function GetSpellPowerCost(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): SpellPowerCostInfo[]?
@@ -33281,7 +34868,7 @@ declare namespace C_TooltipInfo
     function GetRecipeRankInfo(recipeID: number, rank: number): TooltipData?
     function GetRecipeReagentItem(recipeSpellID: number, dataSlotIndex: number): TooltipData?
     function GetRecipeResultItem(recipeID: number, reagentInfos: CraftingReagentInfo[]?, recraftItemGUID: string?, recipeLevel: number?, overrideQualityID: number?): TooltipData?
-    function GetRecipeResultItemForOrder(recipeID: number, reagentInfos: CraftingReagentInfo[]?, orderID: string?, recipeLevel: number?, overrideQualityID: number?): TooltipData?
+    function GetRecipeResultItemForOrder(recipeID: number, reagentInfos: CraftingReagentInfo[]?, orderID: number?, recipeLevel: number?, overrideQualityID: number?): TooltipData?
     function GetRuneforgeResultItem(itemGUID: string, itemLevel: number, powerID: number?, modifiers: number[]?): TooltipData?
     function GetSendMailItem(attachmentIndex: number?): TooltipData?
     function GetShapeshift(slot: number): TooltipData?
@@ -33335,7 +34922,7 @@ declare namespace C_TradeSkillUI
     function CloseTradeSkill()
     function ConfirmProfessionRespec()
     function CraftEnchant(recipeSpellID: number, numCasts: number?, craftingReagents: CraftingReagentInfo[]?, itemTarget: ItemLocationMixin?, applyConcentration: boolean?)
-    function CraftRecipe(recipeSpellID: number, numCasts: number?, craftingReagents: CraftingReagentInfo[]?, recipeLevel: number?, orderID: string?, applyConcentration: boolean?)
+    function CraftRecipe(recipeSpellID: number, numCasts: number?, craftingReagents: CraftingReagentInfo[]?, recipeLevel: number?, orderID: number?, applyConcentration: boolean?)
     function CraftSalvage(recipeSpellID: number, numCasts: number?, itemTarget: ItemLocationMixin, craftingReagents: CraftingReagentInfo[]?, applyConcentration: boolean?)
     function DoesRecraftingRecipeAcceptItem(itemLocation: ItemLocationMixin, recipeID: number): boolean
     function GetAllProfessionTradeSkillLines(): number[]
@@ -33345,7 +34932,7 @@ declare namespace C_TradeSkillUI
     function GetConcentrationCurrencyID(skillLineID: number): number
     function GetCraftableCount(recipeSpellID: number, recipeLevel: number?): number
     function GetCraftingOperationInfo(recipeID: number, craftingReagents: CraftingReagentInfo[], allocationItemGUID: string?, applyConcentration: boolean): CraftingOperationInfo?
-    function GetCraftingOperationInfoForOrder(recipeID: number, craftingReagents: CraftingReagentInfo[], orderID: string, applyConcentration: boolean): CraftingOperationInfo?
+    function GetCraftingOperationInfoForOrder(recipeID: number, craftingReagents: CraftingReagentInfo[], orderID: number, applyConcentration: boolean): CraftingOperationInfo?
     function GetCraftingReagentBonusText(recipeSpellID: number, craftingReagentIndex: number, craftingReagents: CraftingReagentInfo[], allocationItemGUID: string?): string[]
     function GetCraftingTargetItems(itemIDs: number[]): CraftingTargetItem[]
     function GetDependentReagents(reagent: CraftingReagent): CraftingReagent[]
@@ -33358,7 +34945,7 @@ declare namespace C_TradeSkillUI
     function GetItemReagentQualityByItemInfo(itemInfo: ItemInfo): number?
     function GetItemReagentQualityInfo(itemInfo: ItemInfo): CraftingQualityInfo?
     function GetItemSlotModifications(itemGUID: string): CraftingItemSlotModification[]
-    function GetItemSlotModificationsForOrder(orderID: string): CraftingItemSlotModification[]
+    function GetItemSlotModificationsForOrder(orderID: number): CraftingItemSlotModification[]
     function GetOriginalCraftRecipeID(itemGUID: string): (number?, number?)
     function GetProfessionByInventorySlot(slot: number): Profession?
     function GetProfessionChildSkillLineID(): number
@@ -33377,7 +34964,7 @@ declare namespace C_TradeSkillUI
     function GetRecipeInfo(recipeSpellID: number, recipeLevel: number?): TradeSkillRecipeInfo?
     function GetRecipeInfoForSkillLineAbility(skillLineAbilityID: number, recipeLevel: number?): TradeSkillRecipeInfo?
     function GetRecipeItemQualityInfo(recipeID: number, quality: number): CraftingQualityInfo?
-    function GetRecipeOutputItemData(recipeSpellID: number, reagents: CraftingReagentInfo[]?, allocationItemGUID: string?, overrideQualityID: number?, recraftOrderID: string?): CraftingRecipeOutputInfo
+    function GetRecipeOutputItemData(recipeSpellID: number, reagents: CraftingReagentInfo[]?, allocationItemGUID: string?, overrideQualityID: number?, recraftOrderID: number?): CraftingRecipeOutputInfo
     function GetRecipeQualityItemIDs(recipeSpellID: number): number[]?
     function GetRecipeQualityReagentLink(recipeID: number, dataSlotIndex: number, qualityIndex: number): string
     function GetRecipeRequirements(recipeID: number): CraftingRecipeRequirement[]
@@ -33410,7 +34997,7 @@ declare namespace C_TradeSkillUI
     function OpenTradeSkill(skillLineID: number): boolean
     function RecraftLimitCategoryValid(reagent: CraftingReagent): boolean
     function RecraftRecipe(itemGUID: string, craftingReagents: CraftingReagentInfo[]?, removedModifications: CraftingItemSlotModification[]?, applyConcentration: boolean?): boolean
-    function RecraftRecipeForOrder(orderID: string, itemGUID: string, craftingReagents: CraftingReagentInfo[]?, removedModifications: CraftingItemSlotModification[]?, applyConcentration: boolean?): boolean
+    function RecraftRecipeForOrder(orderID: number, itemGUID: string, craftingReagents: CraftingReagentInfo[]?, removedModifications: CraftingItemSlotModification[]?, applyConcentration: boolean?): boolean
     function SetOnlyShowAvailableForOrders(flag: boolean)
     function SetProfessionChildSkillLineID(skillLineID: number)
     function SetRecipeTracked(recipeID: number, tracked: boolean, isRecraft: boolean)
@@ -33603,7 +35190,7 @@ declare namespace C_TransmogOutfitInfo
     function GetLinkedSlotInfo(slot: TransmogOutfitSlot): TransmogOutfitLinkedSlotInfo?
     function GetMaxNumberOfTotalOutfitsForSource(source: TransmogOutfitEntrySource): number
     function GetMaxNumberOfUsableOutfits(): number
-    function GetNextOutfitCost(): string
+    function GetNextOutfitCost(): number
     function GetNumberOfOutfitsUnlockedForSource(source: TransmogOutfitEntrySource): number
     function GetOptionsForSlot(slot: TransmogOutfitSlot): (TransmogOutfitOptionInfo[]?, TransmogOutfitOptionInfo[]?)
     function GetOutfitInfo(outfitID: number): TransmogOutfitEntryInfo?
@@ -33612,7 +35199,7 @@ declare namespace C_TransmogOutfitInfo
     function GetOutfitSituation(option: TransmogSituationOption): boolean
     function GetOutfitSituationsEnabled(): boolean
     function GetOutfitsInfo(): TransmogOutfitEntryInfo[]?
-    function GetPendingTransmogCost(): (string?, number?)
+    function GetPendingTransmogCost(): (number?, number?)
     function GetSecondarySlotState(slot: TransmogOutfitSlot): boolean
     function GetSetSourcesForSlot(transmogSetID: number, slot: TransmogOutfitSlot): AppearanceSourceInfo[]?
     function GetSlotGroupInfo(): TransmogOutfitSlotGroup[]?
@@ -43693,7 +45280,7 @@ declare event AUCTION_MULTISELL_UPDATE(createdCount: number, totalToCreate: numb
 declare event BID_ADDED(bidID: number)
 declare event BIDS_UPDATED()
 declare event COMMODITY_PRICE_UNAVAILABLE()
-declare event COMMODITY_PRICE_UPDATED(updatedUnitPrice: string, updatedTotalPrice: string)
+declare event COMMODITY_PRICE_UPDATED(updatedUnitPrice: number, updatedTotalPrice: number)
 declare event COMMODITY_PURCHASE_FAILED()
 declare event COMMODITY_PURCHASE_SUCCEEDED()
 declare event COMMODITY_PURCHASED(itemID: number, quantity: number)
@@ -43973,7 +45560,7 @@ declare event CLUB_TICKET_RECEIVED(ticket: string)
 declare event CLUB_TICKETS_RECEIVED(clubId: ClubId)
 declare event CLUB_UPDATED(clubId: ClubId)
 declare event INITIAL_CLUBS_LOADED()
-declare event STREAM_VIEW_MARKER_UPDATED(clubId: ClubId, streamId: ClubStreamId, lastReadTime: string?)
+declare event STREAM_VIEW_MARKER_UPDATED(clubId: ClubId, streamId: ClubStreamId, lastReadTime: number?)
 declare event CLUB_FINDER_APPLICANT_INVITE_RECIEVED(clubFinderGUIDs: string[])
 declare event CLUB_FINDER_APPLICATIONS_UPDATED(type: ClubFinderRequestType, clubFinderGUIDs: string[])
 declare event CLUB_FINDER_CAN_WHISPER_APPLICANT(applicant: string)
@@ -44055,28 +45642,28 @@ declare event COVENANT_SANCTUM_RENOWN_LEVEL_CHANGED(newRenownLevel: number, oldR
 declare event COVENANT_CHOSEN(covenantID: number)
 declare event CRAFTING_HOUSE_DISABLED()
 declare event CRAFTINGORDERS_CAN_REQUEST()
-declare event CRAFTINGORDERS_CLAIM_ORDER_RESPONSE(result: CraftingOrderResult, orderID: string)
+declare event CRAFTINGORDERS_CLAIM_ORDER_RESPONSE(result: CraftingOrderResult, orderID: number)
 declare event CRAFTINGORDERS_CLAIMED_ORDER_ADDED()
 declare event CRAFTINGORDERS_CLAIMED_ORDER_REMOVED()
-declare event CRAFTINGORDERS_CLAIMED_ORDER_UPDATED(orderID: string)
-declare event CRAFTINGORDERS_CRAFT_ORDER_RESPONSE(result: CraftingOrderResult, orderID: string)
+declare event CRAFTINGORDERS_CLAIMED_ORDER_UPDATED(orderID: number)
+declare event CRAFTINGORDERS_CRAFT_ORDER_RESPONSE(result: CraftingOrderResult, orderID: number)
 declare event CRAFTINGORDERS_CUSTOMER_FAVORITES_CHANGED()
 declare event CRAFTINGORDERS_CUSTOMER_OPTIONS_PARSED()
 declare event CRAFTINGORDERS_DISPLAY_CRAFTER_FULFILLED_MSG(orderTypeString: string, itemNameString: string, playerNameString: string, tipAmount: WOWMONEY, quantityCrafted: number)
-declare event CRAFTINGORDERS_FULFILL_ORDER_RESPONSE(result: CraftingOrderResult, orderID: string)
+declare event CRAFTINGORDERS_FULFILL_ORDER_RESPONSE(result: CraftingOrderResult, orderID: number)
 declare event CRAFTINGORDERS_HIDE_CRAFTER()
 declare event CRAFTINGORDERS_HIDE_CUSTOMER()
 declare event CRAFTINGORDERS_ORDER_CANCEL_RESPONSE(result: CraftingOrderResult)
 declare event CRAFTINGORDERS_ORDER_PLACEMENT_RESPONSE(result: CraftingOrderResult)
-declare event CRAFTINGORDERS_REJECT_ORDER_RESPONSE(result: CraftingOrderResult, orderID: string)
-declare event CRAFTINGORDERS_RELEASE_ORDER_RESPONSE(result: CraftingOrderResult, orderID: string)
+declare event CRAFTINGORDERS_REJECT_ORDER_RESPONSE(result: CraftingOrderResult, orderID: number)
+declare event CRAFTINGORDERS_RELEASE_ORDER_RESPONSE(result: CraftingOrderResult, orderID: number)
 declare event CRAFTINGORDERS_SHOW_CRAFTER()
 declare event CRAFTINGORDERS_SHOW_CUSTOMER()
 declare event CRAFTINGORDERS_UNEXPECTED_ERROR()
-declare event CRAFTINGORDERS_UPDATE_CUSTOMER_NAME(customerName: string, orderID: string)
+declare event CRAFTINGORDERS_UPDATE_CUSTOMER_NAME(customerName: string, orderID: number)
 declare event CRAFTINGORDERS_UPDATE_ORDER_COUNT(orderType: CraftingOrderType, numOrders: number)
 declare event CRAFTINGORDERS_UPDATE_PERSONAL_ORDER_COUNTS()
-declare event CRAFTINGORDERS_UPDATE_REWARDS(npcOrderRewards: CraftingOrderRewardInfo[], orderID: string)
+declare event CRAFTINGORDERS_UPDATE_REWARDS(npcOrderRewards: CraftingOrderRewardInfo[], orderID: number)
 declare event ACCOUNT_CHARACTER_CURRENCY_DATA_RECEIVED()
 declare event ACCOUNT_MONEY()
 declare event CURRENCY_DISPLAY_UPDATE(currencyType: number?, quantity: number?, quantityChange: number?, quantityGainSource: number?, destroyReason: number?)
@@ -44360,15 +45947,15 @@ declare event HOUSING_BLUEPRINT_COLLECTION_FAILURE(result: HousingResult)
 declare event HOUSING_BLUEPRINT_COLLECTION_RECEIVED(collection: HousingBlueprintCollection)
 declare event HOUSING_BLUEPRINT_CONTENTS_FAILURE(blueprintShareCode: string, result: HousingResult)
 declare event HOUSING_BLUEPRINT_CONTENTS_RECEIVED(contentInfo: HousingBlueprintContentInfo)
-declare event HOUSING_BLUEPRINT_DELETE_FAILURE(blueprintID: string, result: HousingResult)
-declare event HOUSING_BLUEPRINT_DELETE_SUCCESS(blueprintID: string)
+declare event HOUSING_BLUEPRINT_DELETE_FAILURE(blueprintID: number, result: HousingResult)
+declare event HOUSING_BLUEPRINT_DELETE_SUCCESS(blueprintID: number)
 declare event HOUSING_BLUEPRINT_EXPORT_FAILURE(result: HousingResult)
 declare event HOUSING_BLUEPRINT_EXPORT_SUCCESS(blueprintShareCode: string)
 declare event HOUSING_BLUEPRINT_IMPORT_FAILURE(result: HousingResult)
 declare event HOUSING_BLUEPRINT_IMPORT_STARTED()
 declare event HOUSING_BLUEPRINT_IMPORT_SUCCESS()
-declare event HOUSING_BLUEPRINT_RENAME_FAILURE(blueprintID: string, result: HousingResult)
-declare event HOUSING_BLUEPRINT_RENAME_SUCCESS(blueprintID: string, name: string)
+declare event HOUSING_BLUEPRINT_RENAME_FAILURE(blueprintID: number, result: HousingResult)
+declare event HOUSING_BLUEPRINT_RENAME_SUCCESS(blueprintID: number, name: string)
 declare event HOUSING_BLUEPRINTS_AVAILABILITY_CHANGED()
 declare event HOUSING_CATALOG_CATEGORY_UPDATED(categoryID: number)
 declare event HOUSING_CATALOG_SUBCATEGORY_UPDATED(subcategoryID: number)
