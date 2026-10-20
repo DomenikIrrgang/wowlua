@@ -647,11 +647,12 @@ end
 
 --- The player's group: `mock.group:add(unit, raid?)` (`partyN`; with
 --- `raid`, the group a raid: `raidN`), or `mock.group:add(unit, { raid?,
---- subgroup? })` (its raid subgroup, else five to one in joining order).
+--- subgroup?, quiet? })` (its raid subgroup, else five to one in joining
+--- order; `quiet`: in the group already, no `GROUP_ROSTER_UPDATE`).
 --- A group the player makes this way the player leads;
 --- `C_PartyInfo.ConvertToRaid()` / `ConvertToParty()` change it.
 export const group = {
-    add = function(_: any, unit: MockUnit, opts: (boolean | { raid?: boolean, subgroup?: number })?)
+    add = function(_: any, unit: MockUnit, opts: (boolean | { raid?: boolean, subgroup?: number, quiet?: boolean })?)
         engine().addToGroup(unit, opts)
     end,
 }
@@ -1222,6 +1223,13 @@ end
 --- `statesAfter`) comes now, after the moment's other packets.
 export function tellAuraStates()
     engine().tellAuraStates()
+end
+
+--- The creatures' turns on the player owed to the moment's end (their
+--- `UNIT_TARGET`, their flags) told now: their packet came before the
+--- moment's other updates.
+export function tellTurns()
+    engine().tellTurns()
 end
 
 --- A CVar the client changed without telling (the camera's pitch as it

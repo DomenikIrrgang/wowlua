@@ -837,6 +837,16 @@ fn recorded(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(name) = crate::recorded::called_name(vm, &c) else {
         return Ok(vec![]);
     };
+    // The active config: the active spec group's combat config, as the
+    // character's stats have it (recorded: 3 of 3 characters asked, the
+    // shaman's 5999541, the druid's 22147 and the paladin's 73810, each
+    // the snapshot's `GetCombatConfigIDForSpecGroup(1)`); else the
+    // recorded character's.
+    if name == "C_ClassTalents.GetActiveConfigID"
+        && let Some(id) = crate::stats::active_combat_config(vm)
+    {
+        return Ok(vec![Value::Num(id)]);
+    }
     let mut call = crate::call_text(vm, &name, &c, 1);
     let mut key = character(vm);
     // The inspected config's calls: its recorded character's own.
@@ -1174,8 +1184,7 @@ fn commit(vm: &mut Vm, config: i64) -> Ret {
 }
 
 fn committed(vm: &mut Vm, c: NativeCall) -> Ret {
-    crate::character::group_buffs_changed(vm);
-    fire(vm, "SPELLS_CHANGED", &[]);
+    crate::batch::spells_changed(vm);
     let generic = model(vm)
         .first(&format!("C_Traits.GetConfigInfo({})", config_of(&c)))
         .and_then(|i| i.num("type"))

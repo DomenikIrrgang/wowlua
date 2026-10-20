@@ -30,6 +30,10 @@ const GHOST_ICON: f64 = 132331.0;
 const DURABILITY_LOSS: f64 = 10.0;
 /// The release's second packet after its first (recorded).
 const RELEASED_AFTER: f64 = 0.031;
+/// The corpse's place known after the release: the navigation frame made
+/// (recorded once, `death` 29.621: 0.148 s after `SUPER_TRACKING_CHANGED`;
+/// unverified).
+const CORPSE_PLACED_AFTER: f64 = 0.148;
 /// The time to release, in seconds (`GetReleaseTimeRemaining()` at the
 /// death, recorded).
 const RELEASE_TIME: f64 = 360.0;
@@ -236,6 +240,17 @@ fn released(vm: &mut Vm, _c: NativeCall) -> Ret {
     fire(vm, "UPDATE_SHAPESHIFT_COOLDOWN", &[]);
     let later = vm.native("deathGhost", ghost_flags as NativeFn);
     crate::clock::after_engine(vm, RELEASED_AFTER, later);
+    let placed = vm.native("deathCorpsePlaced", corpse_placed as NativeFn);
+    crate::clock::after_engine(vm, CORPSE_PLACED_AFTER, placed);
+    Ok(vec![])
+}
+
+/// The corpse super-tracked has its place: the navigation frame
+/// (`questinfo::navigation_frame`).
+fn corpse_placed(vm: &mut Vm, _c: NativeCall) -> Ret {
+    if ghost(vm) {
+        crate::questinfo::navigation_frame(vm)?;
+    }
     Ok(vec![])
 }
 

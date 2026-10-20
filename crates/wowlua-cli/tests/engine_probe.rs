@@ -1338,7 +1338,7 @@ fn the_engine_plays_combat_as_the_client_did() {
 
 /// How many of the death scenario's lines the engine plays as the client
 /// did: only ever up.
-const DEATH_MATCHED: usize = 1628;
+const DEATH_MATCHED: usize = 1647;
 
 /// The death scenario: a fight lost, the spirit released, the corpse taken.
 #[test]
@@ -1405,7 +1405,7 @@ fn the_engine_plays_vendor_as_the_client_did() {
 /// and its new mail (not in the snapshot), Blessing of Protection told
 /// unusable at a usability check after an NPC was soft targeted in Thunder
 /// Bluff (the soft friend's change during the loading screen's replay).
-const HEARTH_MATCHED: usize = 1595;
+const HEARTH_MATCHED: usize = 1610;
 
 /// The hearth scenario: a Hearthstone cast, the loading screen.
 #[test]
@@ -1518,7 +1518,7 @@ fn the_engine_plays_items_as_the_client_did() {
 
 /// How many of the quest scenario's lines the engine plays as the client
 /// did: only ever up.
-const QUEST_MATCHED: usize = 5524;
+const QUEST_MATCHED: usize = 5741;
 
 /// The quest scenario: a quest taken, eight wolves hunted for its item (a
 /// level gained), the quest turned in.
@@ -1737,7 +1737,7 @@ fn plays_as_the_client_did(name: &str, ratchet: usize) {
 /// gives as well: the calls Blizzard's UI made that the engine could not
 /// answer, asked again with the recorded character's world. Only ever
 /// raised (decision: the engine answers every call as the client does).
-const ANSWERS_MATCHED: usize = 6122;
+const ANSWERS_MATCHED: usize = 6123;
 
 /// An answer as `cargo xtask ingest` writes the client's: UTF-8 as it is,
 /// any other byte (a binary answer, `C_EncodingUtil.SerializeCBOR`'s) as
@@ -1975,7 +1975,7 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
 /// stand in for it (synthetic: the number changes with the first real
 /// run). Only ever raised, but for the plan's own changes: retail systems
 /// left out of it took 19 matched calls with them (762 of 792 before).
-const FULLPROBE_MATCHED: usize = 32678;
+const FULLPROBE_MATCHED: usize = 32679;
 
 #[test]
 fn the_engine_answers_the_full_probe_as_the_client_did() {

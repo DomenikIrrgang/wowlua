@@ -77,7 +77,8 @@ pub struct Unit {
     /// The player's threat on this creature (`setThreat`).
     pub threat: Option<f64>,
     /// Dead with the player on its threat list, the list's update not told
-    /// yet (told as the player leaves combat, or by `setThreat(nil)`).
+    /// yet (told as the player leaves combat, or by `setThreat(nil)`); its
+    /// `threat` kept meanwhile.
     pub listed_dead: bool,
     /// What its corpse holds (`kill({ loot })`): items and counts.
     pub loot: Vec<(i64, f64)>,
@@ -117,6 +118,8 @@ pub struct Units {
     /// The next target change's echo (`UNIT_TARGET("player")`): after
     /// these seconds, or none (`echo` of `target` or of a kill).
     pub echo: Option<Option<f64>>,
+    /// The target whose change's echo is on its way.
+    pub echoing: Option<Option<UnitId>>,
     pub list: Vec<Unit>,
     pub target: Option<UnitId>,
     pub focus: Option<UnitId>,
@@ -1882,7 +1885,11 @@ fn control_set_threat(vm: &mut Vm, c: NativeCall) -> Ret {
         engine_mut(vm).units.list[me.0].threat = None;
         engine_mut(vm).units.list[me.0].listed_dead = false;
         fire_unit(vm, "UNIT_THREAT_LIST_UPDATE", me, &[]);
-        let any = engine(vm).units.list.iter().any(|u| u.threat.is_some());
+        let any = engine(vm)
+            .units
+            .list
+            .iter()
+            .any(|u| u.threat.is_some() && !u.dead);
         if !any && engine(vm).units.threat_situation {
             engine_mut(vm).units.threat_situation = false;
             fire_unit(vm, "UNIT_THREAT_SITUATION_UPDATE", PLAYER, &[]);
@@ -1901,13 +1908,16 @@ fn control_set_threat(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// The player's threat on `mob`: whether tanking, the status, the scaled
-/// and raw percentages, the value; none without threat or alive (recorded:
+/// and raw percentages, the value; none without threat (recorded:
 /// `true, 3, 100, 255, 5` alone on a wolf's list, before it turned on the
-/// player). Unverified: others on the list (here the player is alone).
+/// player). A dead one keeps the player's entry, its last value, until the
+/// player leaves combat (recorded, `quest`: 4 of 4 corpses targeted again
+/// before the combat's end, 45, 44, 44 and 17; 4 of 4 after it, none).
+/// Unverified: others on the list (here the player is alone).
 fn threat_of(vm: &Vm, unit: UnitId, mob: UnitId) -> Option<(bool, f64, f64, f64, f64)> {
     let u = &engine(vm).units;
     let m = &u.list[mob.0];
-    if unit != PLAYER || m.dead {
+    if unit != PLAYER || (m.dead && !m.listed_dead) {
         return None;
     }
     let value = m.threat?;
@@ -2041,7 +2051,10 @@ fn set_player_target(vm: &mut Vm, new: Option<UnitId>) {
         Some(None) => return,
         None => crate::clock::server_delay(vm),
     };
-    let echo = vm.native("targetEcho", target_echo);
+    engine_mut(vm).units.echoing = Some(new);
+    crate::loot::target_echo_coming(vm);
+    let id = Value::Num(new.map_or(-1.0, |n| n.0 as f64));
+    let echo = vm.native_with("targetEcho", target_echo, vec![id]);
     crate::clock::after_engine(vm, delay, echo);
 }
 
@@ -2101,8 +2114,22 @@ fn clear_target_call(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-fn target_echo(vm: &mut Vm, _c: NativeCall) -> Ret {
+fn target_echo(vm: &mut Vm, c: NativeCall) -> Ret {
+    let echoed = match c.upvals.first() {
+        Some(Value::Num(n)) if *n >= 0.0 => Some(UnitId(*n as usize)),
+        _ => None,
+    };
+    // Its moment's loot answer first (`loot::echo_waits`).
+    if crate::loot::echo_waits(vm, echoed) {
+        let again = vm.native_with("targetEcho", target_echo, c.upvals.to_vec());
+        crate::clock::after_engine(vm, 0.0, again);
+        return Ok(vec![]);
+    }
+    if engine(vm).units.echoing == Some(echoed) {
+        engine_mut(vm).units.echoing = None;
+    }
     fire_unit(vm, "UNIT_TARGET", PLAYER, &[]);
+    crate::loot::target_echoed(vm, echoed);
     Ok(vec![])
 }
 
@@ -2203,7 +2230,7 @@ fn control_kill(vm: &mut Vm, c: NativeCall) -> Ret {
         u.health = 0.0;
         u.dead = true;
     }
-    kill_blow_of(vm, me, blow, opts.school);
+    kill_blow_of(vm, me, blow, opts.school, "");
     kill_xp(vm, me, &opts, true);
     kill_xp(vm, me, &opts, false);
     engine_mut(vm).units.list[me.0].loot = opts.loot.clone();
@@ -2357,14 +2384,16 @@ pub(crate) fn event_guid(vm: &mut Vm, id: UnitId) -> Value {
 }
 
 /// The killing blow: `PARTY_KILL(killer, victim)` for the player's or the
-/// group's, then its `UNIT_COMBAT`.
-pub(crate) fn kill_blow(vm: &mut Vm, me: UnitId, blow: Option<(UnitId, f64)>) {
-    kill_blow_of(vm, me, blow, 1.0);
-}
-
-/// The killing blow's kill and combat text, of a school (`1` physical,
-/// `2` holy: a Judgement's, recorded).
-fn kill_blow_of(vm: &mut Vm, me: UnitId, blow: Option<(UnitId, f64)>, school: f64) {
+/// group's, then its combat text, of a school (`1` physical,
+/// `2` holy: a Judgement's, recorded), its indicator (a critical one's
+/// "CRITICAL": recorded, `quest` 90.425, Heroic Strike's).
+fn kill_blow_of(
+    vm: &mut Vm,
+    me: UnitId,
+    blow: Option<(UnitId, f64)>,
+    school: f64,
+    indicator: &str,
+) {
     let Some((killer, amount)) = blow else { return };
     if ours(&engine(vm).units, killer) {
         let k = event_guid(vm, killer);
@@ -2372,12 +2401,12 @@ fn kill_blow_of(vm: &mut Vm, me: UnitId, blow: Option<(UnitId, f64)>, school: f6
         fire(vm, "PARTY_KILL", &[k, v]);
     }
     let wound = vm.str("WOUND");
-    let empty = vm.str("");
+    let indicator = vm.str(indicator);
     fire_unit(
         vm,
         "UNIT_COMBAT",
         me,
-        &[wound, empty, Value::Num(amount), Value::Num(school)],
+        &[wound, indicator, Value::Num(amount), Value::Num(school)],
     );
 }
 
@@ -2426,7 +2455,6 @@ pub(crate) fn died(vm: &mut Vm, me: UnitId, lootable: bool) {
         let u = &mut engine_mut(vm).units.list[me.0];
         u.in_combat = false;
         u.listed_dead |= u.threat.is_some();
-        u.threat = None;
     }
     let instance = identity_restricted(vm);
     let loot = |vm: &mut Vm| {
@@ -2639,7 +2667,18 @@ fn control_swing(vm: &mut Vm, c: NativeCall) -> Ret {
         let power = field(vm, "power");
         let kill = field(vm, "kill");
         let after = crate::aurastates::after_option(field(vm, "statesAfter"));
-        return swing_with_spell(vm, victim, amount, &kind, (spent, power), kill, after);
+        let indicator = match field(vm, "indicator") {
+            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+            _ => String::new(),
+        };
+        return swing_with_spell(
+            vm,
+            victim,
+            (amount, &kind, &indicator),
+            (spent, power),
+            kill,
+            after,
+        );
     }
     if me == PLAYER {
         let speed = match field(vm, "speed") {
@@ -2811,8 +2850,7 @@ fn kill_xp_later(vm: &mut Vm, c: NativeCall) -> Ret {
 fn swing_with_spell(
     vm: &mut Vm,
     victim: UnitId,
-    amount: f64,
-    kind: &str,
+    (amount, kind, indicator): (f64, &str, &str),
     (spent, power): (Value, Value),
     kill: Value,
     states_after: Option<f64>,
@@ -2845,15 +2883,18 @@ fn swing_with_spell(
     crate::damagemeter::damage(vm, Some(PLAYER), victim, dealt, spell);
     let states = crate::aurastates::health_states(vm, victim);
     {
+        // Dead with the blow, or alive till its death is told
+        // (`diesAfter`; recorded, `quest` 101.134: `UnitIsDead` false
+        // after the blow's health).
         let u = &mut engine_mut(vm).units.list[victim.0];
         u.health = (u.health - dealt).max(0.0);
-        if kill.is_some() {
+        if kill.as_ref().is_some_and(|k| k.dies_after.is_none()) {
             u.health = 0.0;
             u.dead = true;
         }
     }
     if kill.is_some() {
-        kill_blow(vm, victim, Some((PLAYER, dealt)));
+        kill_blow_of(vm, victim, Some((PLAYER, dealt)), 1.0, indicator);
     } else {
         let k = vm.str(kind);
         fire_unit(
@@ -2931,6 +2972,11 @@ fn died_later(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![]);
     };
     let victim = UnitId(victim as usize);
+    {
+        let u = &mut engine_mut(vm).units.list[victim.0];
+        u.health = 0.0;
+        u.dead = true;
+    }
     died(vm, victim, false);
     if let Value::Num(xp) = c.upvals[2] {
         let k = Kill {
@@ -3185,13 +3231,11 @@ fn control_leave_combat(vm: &mut Vm, c: NativeCall) -> Ret {
         for &u in &dropping {
             engine_mut(vm).units.list[u.0].target = None;
         }
-        player_out_of_combat(vm);
-        for u in dropping {
-            unit_target(vm, u, None);
-        }
-        // The corpses still on the player drop it (recorded: after the
-        // player's flags, `quest`, `combat`; unverified: after the living
-        // ones', never recorded together).
+        // The corpses still on the player drop it too, before the player's
+        // flags (no targettarget: recorded, `quest`'s 4 of 4 corpses
+        // targeted as the combat ended), told after them (recorded:
+        // `quest`, `combat`; unverified: after the living ones', never
+        // recorded together).
         let corpses: Vec<UnitId> = engine(vm)
             .units
             .list
@@ -3200,8 +3244,14 @@ fn control_leave_combat(vm: &mut Vm, c: NativeCall) -> Ret {
             .filter(|(_, u)| u.dead && u.target == Some(PLAYER))
             .map(|(i, _)| UnitId(i))
             .collect();
-        for id in corpses {
+        for &id in &corpses {
             engine_mut(vm).units.list[id.0].target = None;
+        }
+        player_out_of_combat(vm);
+        for u in dropping {
+            unit_target(vm, u, None);
+        }
+        for id in corpses {
             fire_unit(vm, "UNIT_TARGET", id, &[]);
             fire_unit(vm, "UNIT_FLAGS", id, &[]);
         }
@@ -3224,6 +3274,7 @@ fn control_leave_combat(vm: &mut Vm, c: NativeCall) -> Ret {
             .collect();
         for id in listed {
             engine_mut(vm).units.list[id.0].listed_dead = false;
+            engine_mut(vm).units.list[id.0].threat = None;
             if situation {
                 fire_unit(vm, "UNIT_THREAT_LIST_UPDATE", id, &[]);
             }
@@ -3417,7 +3468,10 @@ pub fn add_to_group(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(id) = handle_of(vm, c.arg(1)) else {
         return Err(vm.error("mock.addToGroup: a unit expected"));
     };
-    let (raid, subgroup) = match c.arg(2) {
+    // `quiet`: in the group already as the test begins (no update told;
+    // recorded: `hearth`'s party, its roster told first after the loading
+    // screen, Blizzard_RaidUI loading then).
+    let (raid, subgroup, quiet) = match c.arg(2) {
         Value::Table(t) => {
             let raid = vm.str("raid");
             let raid = vm.heap.table(t).get(raid).truthy();
@@ -3426,9 +3480,11 @@ pub fn add_to_group(vm: &mut Vm, c: NativeCall) -> Ret {
                 Value::Num(n) => Some(n),
                 _ => None,
             };
-            (raid, subgroup)
+            let key = vm.str("quiet");
+            let quiet = vm.heap.table(t).get(key).truthy();
+            (raid, subgroup, quiet)
         }
-        v => (v.truthy(), None),
+        v => (v.truthy(), None, false),
     };
     let forming = !crate::party::grouped(vm);
     {
@@ -3444,7 +3500,9 @@ pub fn add_to_group(vm: &mut Vm, c: NativeCall) -> Ret {
     if forming {
         crate::party::lead(vm);
     }
-    fire(vm, "GROUP_ROSTER_UPDATE", &[]);
+    if !quiet {
+        fire(vm, "GROUP_ROSTER_UPDATE", &[]);
+    }
     Ok(vec![])
 }
 

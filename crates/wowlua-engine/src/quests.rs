@@ -674,6 +674,7 @@ fn on_map(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     sync_log(vm);
     fire(vm, "QUEST_POI_UPDATE", &[]);
+    crate::questinfo::quest_poi_arrived(vm, id)?;
     Ok(vec![])
 }
 
@@ -1118,6 +1119,17 @@ pub(crate) fn sync_log(vm: &mut Vm) {
     let mut watch_ids = std::collections::BTreeMap::new();
     let mut watch_types = std::collections::BTreeMap::new();
     let mut headers: Vec<String> = Vec::new();
+    // A header on the map when one of its quests is (as in a map's view
+    // below; recorded in quest: Northshire Valley's header on the map with
+    // Wolves Across the Border, 19 of 19 answers after it was).
+    let mut headers_on_map: Vec<String> = Vec::new();
+    for l in &log {
+        if l.on_map
+            && let Some(t) = data(vm, l.id)
+        {
+            headers_on_map.push(text(vm, t, "header"));
+        }
+    }
     let mut index = 0i64;
     for (w, l) in log.iter().enumerate() {
         let Some(t) = data(vm, l.id) else { continue };
@@ -1140,7 +1152,7 @@ pub(crate) fn sync_log(vm: &mut Vm) {
                     ("isHeader", b(true)),
                     ("isHidden", b(false)),
                     ("isInternalOnly", b(false)),
-                    ("isOnMap", b(false)),
+                    ("isOnMap", b(headers_on_map.contains(&header))),
                     ("isScaling", b(false)),
                     ("isStory", b(false)),
                     ("isTask", b(false)),

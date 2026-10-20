@@ -17,8 +17,13 @@
 //! frame's `UNIT_AURA`s come right before them (59 of 60 frames), never
 //! two for a unit token (198 frames); its `ACTION_USABLE_CHANGED` once
 //! (61 frames), after the server's updates and before the auras'. Other
-//! events seem batched too (`SPELL_UPDATE_CHARGES`, `TOYS_UPDATED`,
-//! `UI_INFO_MESSAGE`: unverified, too few samples) and are fired at once.
+//! events seem batched too (`SPELL_UPDATE_CHARGES`, `TOYS_UPDATED`:
+//! unverified, too few samples) and are fired at once. `UI_INFO_MESSAGE`
+//! is batched: in all 11 recorded (quest's nine, mail's, group's) it is
+//! its frame's last but for batched events after it in their names' order
+//! (quest 46.868: `SPELL_UPDATE_USABLE` before it, `UNIT_HEALTH` after;
+//! 92.298: `SPELL_UPDATE_USABLE` before), never before a server update of
+//! its frame (quest 59.292: after the next item's push).
 //!
 //! Off unless a test turns it on (`setFrameBatching`): a test of an
 //! addon sees each event as the control that causes it fires it.
@@ -38,14 +43,23 @@ const BATCHED: &[&str] = &[
     // Recorded once: a tracking spell's aura's, between the bags' and the
     // spells' cooldowns (scenario tracking).
     "MINIMAP_UPDATE_TRACKING",
+    // Recorded once, `quest`'s level up (69.677): the player's
+    // specialization's update between the bags' and the spells' cooldowns
+    // (unverified).
+    "PLAYER_SPECIALIZATION_CHANGED",
     "SPELL_UPDATE_COOLDOWN",
     "SPELL_UPDATE_USABLE",
+    // Recorded twice, `quest`'s level up (69.677, 70.006): after the
+    // spells' usability, before the shapeshift bar's cooldown and the
+    // health, the group buffs' changes right before it (`spells_changed`).
+    "SPELLS_CHANGED",
     // Recorded twice, `death`: the corpse's tracking at the spirit's
     // release and at the resurrection, between the spells' usability and
     // the health; the shapeshift bar's usability after the health (the
     // resurrection's).
     "SUPER_TRACKING_CHANGED",
     "UI_ERROR_MESSAGE",
+    "UI_INFO_MESSAGE",
     "UNIT_HEALTH",
     "UNIT_THREAT_LIST_UPDATE",
     "UNIT_THREAT_SITUATION_UPDATE",
@@ -290,6 +304,9 @@ pub fn flush(vm: &mut Vm) {
         // right before the batched events in 59 of 60 frames).
         owed.sort_by_key(|(name, _)| (name != "UNIT_AURA", name.to_ascii_lowercase()));
         for (name, args) in owed {
+            if name == "SPELLS_CHANGED" {
+                crate::character::group_buffs_changed(vm);
+            }
             if name == "UNIT_AURA"
                 && let Some(Value::Table(info)) = args.get(1)
             {
@@ -302,6 +319,15 @@ pub fn flush(vm: &mut Vm) {
     engine_mut(vm).batch.flushing = false;
 }
 
+/// The player's spells changed: the group buffs' changes, then
+/// `SPELLS_CHANGED`; batched, both at the frame's end (see `BATCHED`).
+pub fn spells_changed(vm: &mut Vm) {
+    if !engine(vm).batch.on {
+        crate::character::group_buffs_changed(vm);
+    }
+    widgets::fire_event(vm, "SPELLS_CHANGED", &[]);
+}
+
 /// `setFrameBatching(on)`: the client's batching of a frame's events on
 /// or off (off: those owed fired now).
 pub fn control_set(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
@@ -310,6 +336,17 @@ pub fn control_set(vm: &mut Vm, c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::
         flush(vm);
     }
     engine_mut(vm).batch.on = on;
+    Ok(vec![])
+}
+
+/// `tellTurns()`: the creatures' turns owed told now, their packet before
+/// the moment's later ones (per instance, recorded: `quest` 48.121 and
+/// 86.599, a wolf's turn between the swing's power and its own blow's;
+/// `death` 12.318, after the player's rage told twice).
+pub fn control_tell_turns(vm: &mut Vm, _c: wowlua_vm::NativeCall) -> wowlua_vm::stdlib::Ret {
+    for unit in std::mem::take(&mut engine_mut(vm).batch.turns) {
+        crate::units::told_turn(vm, crate::units::UnitId(unit));
+    }
     Ok(vec![])
 }
 
