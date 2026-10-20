@@ -1069,13 +1069,20 @@ fn fill_parent_if_unplaced(vm: &mut Vm, cx: &Context, el: &Element, region: Valu
 }
 
 /// Compiles UI code: as the loading addon's ([`Registry::code_of`]), or
-/// as Blizzard's.
+/// as Blizzard's, secure whatever the running code's taint (an addon's
+/// `C_AddOns.LoadAddOn` or `CreateFrame` with Blizzard's template).
 ///
 /// [`Registry::code_of`]: super::Registry::code_of
 pub(crate) fn load_chunk(vm: &mut Vm, src: &[u8], chunk: &str) -> Result<Value, String> {
     match engine(vm).world.ui.code_of.clone() {
         Some(addon) => vm.load_as(src, chunk, &addon),
-        None => vm.load(src, chunk),
+        None => {
+            let saved = vm.taint().saved();
+            vm.taint_mut().stack = wowlua_vm::Taint::SECURE;
+            let r = vm.load(src, chunk);
+            vm.taint_mut().restore(saved);
+            r
+        }
     }
 }
 

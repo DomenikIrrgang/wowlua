@@ -49,6 +49,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `wowlua publish` names the packaged zips as soon as packaging finishes, not after the uploads
 - `wowlua publish` without a terminal (standard input or standard error not one) never waits for an OS credential store dialog: on every platform it then reads tokens only from the environment and `config.json`, and E4201 says why and how to fix it
 - `wowlua test` with Blizzard's UI: an aura container (`wowlua:aura`'s `container`, or Blizzard's `AuraContainer`) made while the addon loads takes its groups without errors; the intrinsic type's scripts no longer compile as the loading addon's code, so `AddAuraGroup` no longer fails on `CancelSignal` and a secret `SetSize`
+- `wowlua test` with Blizzard's UI: a Blizzard addon the addon loads with `C_AddOns.LoadAddOn` while it loads is Blizzard's secure code, as when a test loads it, not the addon's (its functions were tainted and its files named inside the addon's folder); Blizzard's scripts compile untainted whoever's code makes them
 - A wowlua library inside a workspace (a member, or a path dependency in its folder) without a license of its own has the workspace root's (its `LICENSE` file or package `license`), so no W4306
 - A wowlua library path dependency in a sub-folder of a package outside a workspace has the package's license too (the package counts as its own workspace)
 - `export const x: T = { … }` and an annotated plain `const` have the annotation's type, not the literal's

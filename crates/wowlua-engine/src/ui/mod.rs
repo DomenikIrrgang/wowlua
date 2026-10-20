@@ -368,7 +368,16 @@ fn load_addon_files(vm: &mut Vm, root: &Path, t: &Target, addon: &Addon, only_bo
     if addon.secure {
         vm.globals = secure_env(vm);
     }
+    // Blizzard's code and file names, also when an addon's file loading
+    // calls `C_AddOns.LoadAddOn` (it would otherwise compile as that
+    // addon's code, tainted, and be named inside its folder).
+    let ui = &mut engine_mut(vm).world.ui;
+    let code_of = ui.code_of.take();
+    let chunk_prefix = ui.chunk_prefix.take();
     load_addon_files_in(vm, root, t, addon, only_bootstrap);
+    let ui = &mut engine_mut(vm).world.ui;
+    ui.code_of = code_of;
+    ui.chunk_prefix = chunk_prefix;
     vm.globals = main_globals;
 }
 

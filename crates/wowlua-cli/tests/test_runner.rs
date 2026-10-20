@@ -493,6 +493,65 @@ end
     assert!(!text.contains("raised"), "{text}");
 }
 
+/// Test bodies are the addon's code, tainted as its main chunk is; a
+/// Blizzard addon loaded while the addon loads stays Blizzard's secure code
+/// (camelot's UI code, skipped without it).
+#[test]
+fn test_bodies_run_with_the_addons_taint() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");
+    if !source.join("camelot/Interface").exists() {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    }
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            (
+                "src/main.wowlua",
+                r#"export const chunkSecure = issecure()
+_G.DemoChunkGlobal = 1
+C_AddOns.LoadAddOn("Blizzard_MacroUI")
+"#,
+            ),
+            (
+                "tests/taint.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+import chunkSecure from "/main"
+
+@test("taint")
+local function taint()
+    _G.DemoBodyGlobal = 1
+    expect(chunkSecure).toBe(false)
+    expect(issecure()).toBe(false)
+    expect(issecurevariable("DemoChunkGlobal")).toBe(false)
+    expect(issecurevariable("DemoBodyGlobal")).toBe(false)
+    expect(issecurevariable("MacroFrame_Show")).toBe(true)
+end
+"#,
+            ),
+        ],
+    );
+    let manifest = dir.path().join("wowlua.json");
+    let text = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        text.replacen('{', r#"{ "test": { "blizzard-ui": true },"#, 1),
+    )
+    .unwrap();
+    let out = wowlua(dir.path())
+        .arg("test")
+        .env("WOWLUA_UI_SOURCE", &source)
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.status.success(), "{text}");
+    assert!(text.contains("1 passed, 0 failed"), "{text}");
+}
+
 /// `wowlua:aura` against Blizzard's own aura containers (camelot's UI
 /// code, skipped without it): `hasContainers` finds the template, the
 /// container has every method the stdlib's containers call, and one made
