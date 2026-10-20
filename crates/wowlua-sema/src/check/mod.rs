@@ -1572,6 +1572,152 @@ mod tests {
         ok(
             "local v: string | Secret<string> = \"x\"\nif issecretvalue(v) then return end\nprint(v:upper())\n",
         );
+        // `canaccessvalue` is the complement (spec §2.11): its true branch
+        // drops the secret members, in an `if` and in an `and` chain, and
+        // its false branch keeps only them.
+        strict_ok(
+            "local T: { [string]: string } = {}\nlocal function f(v: string | Secret<string>): string?\n if canaccessvalue(v) then return T[v] end\n return nil\nend\nlocal function g(c: (string | Secret<string>)?)\n local b = c and canaccessvalue(c) and c:lower()\n print(f, b)\nend\nprint(g)\n",
+        );
+        strict_err(
+            "local function f(v: string | Secret<string>)\n if not canaccessvalue(v) then print(v:upper()) end\nend\nprint(f)\n",
+            "E2040",
+        );
+        strict_ok(
+            "local function f(v: string | Secret<string>)\n if not canaccessvalue(v) then return end\n print(v:upper())\nend\nprint(f)\n",
+        );
+        // A local named `canaccessvalue` is not the global.
+        strict_err(
+            "local function canaccessvalue(v: unknown): boolean return true end\nlocal function f(v: string | Secret<string>)\n if canaccessvalue(v) then print(v:upper()) end\nend\nprint(f)\n",
+            "E2040",
+        );
+        // A generic predicate infers its type parameters from the argument
+        // (`V | Secret<V> | nil` against `number | Secret<number>`), in
+        // both branches.
+        strict_ok(
+            "local function plain<V>(v: V | Secret<V> | nil): v is V\n return (v :: any) ~= nil\nend\nlocal function use(n: number) end\nlocal function f(map: number?, level: number | Secret<number>)\n local a: number = plain(level) and level or 1\n if not plain(map) then return end\n use(map)\n use(a)\nend\nprint(f)\n",
+        );
+    }
+
+    /// `cond and x` with a boolean `cond` is `false | x`: an inferred local
+    /// keeps the `false` beside other types, so a truthiness test leaves
+    /// `x` (spec §2.4), and so do the results `pcall` passes on.
+    #[test]
+    fn boolean_literals_beside_other_types() {
+        strict_ok(
+            "local function f(): boolean return math.random() > 0.5 end\nlocal t = { x = 1 }\nlocal y = f() and t\nif y then print(y.x) end\n",
+        );
+        strict_ok(
+            "local function g(key: string): number\n local dir = (key == \"UP\" and 1) or (key == \"DOWN\" and -1)\n if not dir then return 0 end\n return dir * 2\nend\nprint(g)\n",
+        );
+        strict_ok(
+            "local fixed = 1\nlocal c = fixed and fixed ~= 2 and tostring(fixed)\nif c then print(c:upper()) end\n",
+        );
+        strict_ok(
+            "local function q(n: number): string | false\n if n > 1 then return \"x\" end\n return false\nend\nlocal ok, r = pcall(q, 2)\nif ok and r then print(r .. \"!\") end\n",
+        );
+        // An inferred result keeps it too.
+        strict_ok(
+            "local function f(ok: boolean, t: { x: number }) return ok and t end\nlocal y = f(true, { x = 1 })\nif y then print(y.x) end\n",
+        );
+        // A boolean alone still widens: the local may hold `true` later.
+        strict_ok("local done = false\ndone = true\nlocal b: boolean = done\nprint(b)\n");
+        // Literals a call's results carry stay literals past the first
+        // name too.
+        strict_ok(
+            "local function k(): \"a\" | \"b\" return \"a\" end\nlocal function use(x: \"a\" | \"b\") end\nlocal ok, v = pcall(k)\nif ok then use(v) end\n",
+        );
+    }
+
+    /// A declared local narrowed before a loop keeps its narrowing inside
+    /// when no path back to the loop start widens it (spec §2.5); `break`
+    /// paths join the flow after the loop.
+    #[test]
+    fn loop_narrowing() {
+        strict_ok(
+            "local function h(s: string?): number\n local n: number? = nil\n if s then\n  n = 0\n  for _ = 1, 3 do n = n + 1 end\n end\n return n or 1\nend\nprint(h)\n",
+        );
+        strict_ok(
+            "local function h2(xs: number[]): number[]?\n local out: number[]? = {}\n for _, x in ipairs(xs) do\n  if x < 0 then out = nil break end\n  out[#out + 1] = x\n end\n return out\nend\nprint(h2)\n",
+        );
+        // After the loop, a `break` that set it to `nil` counts.
+        strict_err(
+            "local function h3(xs: number[]): number\n local out: number[]? = {}\n for _, x in ipairs(xs) do\n  if x < 0 then out = nil break end\n end\n return #out\nend\nprint(h3)\n",
+            "E2005",
+        );
+        // A path back to the start that sets it to `nil`: the body sees
+        // the declared type, through the end of the body or `continue`.
+        strict_err(
+            "local function w(): number\n local n: number? = 0\n while math.random() > 0.5 do\n  n = n + 1\n  n = nil\n end\n return 0\nend\nprint(w)\n",
+            "E2001",
+        );
+        strict_err(
+            "local function w(): number\n local n: number? = 0\n for i = 1, 3 do\n  if i == 2 then n = nil continue end\n  n = n + 1\n end\n return 0\nend\nprint(w)\n",
+            "E2001",
+        );
+        strict_err(
+            "local function w(): number\n local n: number? = 0\n repeat\n  n = n + 1\n  if n > 3 then n = nil end\n until math.random() > 0.5\n return 0\nend\nprint(w)\n",
+            "E2001",
+        );
+        // The retried loop reports each problem once.
+        let d = check_source(
+            "local function w(): number\n local n: number? = 0\n while math.random() > 0.5 do\n  local s: string = 1\n  n = nil\n end\n return 0\nend\nprint(w)\n",
+            Mode::Strict,
+        );
+        assert_eq!(
+            d.iter().filter(|x| x.code == Some("E2001")).count(),
+            1,
+            "{:#?}",
+            codes(&d)
+        );
+    }
+
+    /// A field assignment through an annotated local checks against the
+    /// declared members its narrowed value fits: `if item then item.x = 1`
+    /// on an `Item | false` does not index `false`.
+    #[test]
+    fn field_assignment_through_narrowed_local() {
+        strict_ok(
+            "type Item = { [string]: any }\nlocal function f(k: number): Item[]\n local items: Item[] = {}\n for _ = 1, k do\n  local item: Item | false | nil\n  if k > 1 then item = { key = \"a\" } elseif k < 0 then item = false end\n  if item == false then break end\n  if item then\n   item.x = 1\n   items[#items + 1] = item\n  end\n end\n return items\nend\nprint(f)\n",
+        );
+        strict_err(
+            "type Item = { x: number }\nlocal function f(item: Item | false)\n item.x = 1\nend\nprint(f)\n",
+            "E2003",
+        );
+    }
+
+    /// Closures see a local assigned after its declaration as declared
+    /// (spec §2.5); E2005 on one says so.
+    #[test]
+    fn closure_nil_help() {
+        let d = check_source(
+            "type Opts = { onClick: () -> () }\nlocal function button(opts: Opts?)\n opts = opts or { onClick = function() end }\n local function run() opts.onClick() end\n run()\nend\nprint(button)\n",
+            Mode::Strict,
+        );
+        assert!(
+            d.iter().any(|x| x.code == Some("E2005")
+                && x.help
+                    .as_deref()
+                    .is_some_and(|h| h.contains("`opts` is assigned after its declaration"))),
+            "{d:#?}"
+        );
+    }
+
+    /// E2015 on a possibly secret value points to the secret predicates.
+    #[test]
+    fn cast_help() {
+        let d = check_source(
+            "local function f(v: string | Secret<string>)\n local s = v :: string?\n print(s)\nend\nprint(f)\n",
+            Mode::Strict,
+        );
+        assert!(
+            d.iter().any(|x| x.code == Some("E2015")
+                && x.message
+                    .contains("`Secret<string>` does not fit `string?`")
+                && x.help.as_deref().is_some_and(
+                    |h| h.contains("canaccessvalue") && h.contains(":: any :: string?")
+                )),
+            "{d:#?}"
+        );
     }
 
     #[test]

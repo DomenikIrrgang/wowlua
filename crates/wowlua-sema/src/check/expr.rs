@@ -70,7 +70,9 @@ impl Checker<'_, '_> {
     /// The type of an expression where `expected` is wanted (contextual
     /// typing, spec §2.4.3). Mismatches are reported by the caller.
     pub fn check(&mut self, e: Expr<'_>, expected: Option<TypeId>) -> TypeId {
+        let before = self.diagnostics.len();
         let values = stacker::maybe_grow(64 * 1024, 1024 * 1024, || self.expr_inner(e, expected));
+        self.explain_closure_nil(e, before);
         let t = match values {
             Values::One(t) => t,
             Values::Many(pack) => pack
@@ -88,12 +90,62 @@ impl Checker<'_, '_> {
 
     /// All values of a multi-value expression (calls, `...`).
     pub fn infer_multi(&mut self, e: Expr<'_>) -> Pack {
+        let before = self.diagnostics.len();
         let pack =
             stacker::maybe_grow(64 * 1024, 1024 * 1024, || self.expr_inner(e, None)).into_pack();
+        self.explain_closure_nil(e, before);
         let first = pack.types.first().copied().unwrap_or(Types::NIL);
         self.expr_types
             .insert((e.span().start, e.span().end), first);
         pack
+    }
+
+    /// E2005 on a local of an enclosing function that is assigned after
+    /// its declaration (`opts = opts or {}`): closures see such a local as
+    /// declared (spec §2.5), which the help says, with the ways around it.
+    fn explain_closure_nil(&mut self, e: Expr<'_>, before: usize) {
+        if self.diagnostics.len() == before {
+            return;
+        }
+        let (obj, at) = match e.kind() {
+            ExprKind::Field { obj, name } | ExprKind::Method { obj, name, .. } => {
+                (obj, name.span())
+            }
+            ExprKind::Index { obj, .. } => (obj, e.span()),
+            ExprKind::Call { callee, .. } => (callee, e.span()),
+            ExprKind::Unary {
+                op: UnOp::Len,
+                operand,
+            } => (operand, operand.span()),
+            _ => return,
+        };
+        let mut obj = obj;
+        while let ExprKind::Paren(inner) = obj.kind() {
+            obj = inner;
+        }
+        let ExprKind::Name(n) = obj.kind() else {
+            return;
+        };
+        let Some(v) = self.lookup_var(n.text()) else {
+            return;
+        };
+        let var = &self.vars[v.0 as usize];
+        if var.depth >= self.depth || var.never_reassigned {
+            return;
+        }
+        let name = n.text();
+        let help = format!(
+            "`{name}` is assigned after its declaration, so closures see it as `{}`, not as narrowed outside (spec §2.5); if it is a parameter, give it a default value (`{name}: T = …`), or copy the checked value into a new local for the closure",
+            self.env.display(var.base)
+        );
+        for d in &mut self.diagnostics[before..] {
+            if d.code == Some("E2005")
+                && d.help.is_none()
+                && d.labels.first().is_some_and(|l| l.span == at)
+            {
+                d.help = Some(help.clone());
+            }
+        }
     }
 
     /// The type an expression was checked with (for predicates).
@@ -235,6 +287,10 @@ impl Checker<'_, '_> {
                         ));
                     }
                     self.report("E2015", e.span(), msg);
+                    let help = self.cast_help(from, to);
+                    if let Some(d) = self.diagnostics.last_mut() {
+                        d.help = Some(help);
+                    }
                 }
                 single(to)
             }
@@ -429,6 +485,19 @@ impl Checker<'_, '_> {
                 })
             }
             ExprKind::Error => single(Types::ERROR),
+        }
+    }
+
+    /// E2015's help: how to get the asserted type (an assertion needs one
+    /// type assignable to the other, spec §1.4.3).
+    fn cast_help(&mut self, from: TypeId, to: TypeId) -> String {
+        let to_text = self.env.display(to);
+        if self.is_secret(from) && !self.is_secret(to) {
+            format!(
+                "narrow a possibly secret value with `canaccessvalue` or `issecretvalue` before asserting it, or force the type with `:: any :: {to_text}`"
+            )
+        } else {
+            format!("to force the type, write `:: any :: {to_text}`")
         }
     }
 
@@ -744,6 +813,26 @@ impl Checker<'_, '_> {
             && d != o
             && !matches!(self.env.types.get(d), Ty::Record(r) if r.open)
         {
+            // Where the variable is narrowed (`if item then` on an
+            // `Item | false`), the declared members its value fits.
+            let fitting: Vec<TypeId> = self
+                .env
+                .types
+                .members(d)
+                .into_iter()
+                .filter(|&dm| {
+                    self.env
+                        .types
+                        .members(o)
+                        .into_iter()
+                        .any(|om| self.env.assignable(om, dm, super::query::Mode::Strict))
+                })
+                .collect();
+            let d = if fitting.is_empty() {
+                d
+            } else {
+                self.env.types.union(&fitting)
+            };
             return self.assign_field(d, name, span, value, None);
         }
         let members = self.env.types.members(o);
@@ -3067,6 +3156,7 @@ impl Checker<'_, '_> {
                 }
             }
             (Ty::Array(a), Ty::Array(b)) => self.unify_at(a, b, s, false, contra),
+            (Ty::Secret(a), Ty::Secret(b)) => self.unify_at(a, b, s, widen, contra),
             (Ty::Map(k1, v1), Ty::Map(k2, v2)) => {
                 self.unify_at(k1, k2, s, false, contra);
                 self.unify_at(v1, v2, s, false, contra);
@@ -3091,12 +3181,35 @@ impl Checker<'_, '_> {
                 }
             }
             (Ty::Union(ps), _) => {
-                // `T?` against `X?`: bind T to the non-nil part.
-                let non_nil: Vec<TypeId> =
-                    ps.iter().copied().filter(|&x| x != Types::NIL).collect();
-                if non_nil.len() == 1 {
-                    let a = self.env.types.non_nil(actual);
-                    self.unify_at(non_nil[0], a, s, widen, contra);
+                // `T?` against `X?`, `V | Secret<V>` against
+                // `number | Secret<number>`: the actual members the pattern
+                // names (`nil`) are dropped, those of the same kind as a
+                // structured member (`Secret<V>`) bind through it, and the
+                // rest bind the pattern's one bare parameter.
+                let bare: Vec<TypeId> = ps
+                    .iter()
+                    .copied()
+                    .filter(|&x| matches!(self.env.types.get(x), Ty::Param(_)))
+                    .collect();
+                let mut rest = Vec::new();
+                for a in self.env.types.members(actual) {
+                    if ps.contains(&a) {
+                        continue;
+                    }
+                    let through = ps
+                        .iter()
+                        .copied()
+                        .find(|&p| same_kind(self.env.types.get(p), self.env.types.get(a)));
+                    match through {
+                        Some(p) => self.unify_at(p, a, s, widen, contra),
+                        None => rest.push(a),
+                    }
+                }
+                if let [only] = bare[..]
+                    && !rest.is_empty()
+                {
+                    let a = self.env.types.union(&rest);
+                    self.unify_at(only, a, s, widen, contra);
                 }
             }
             (Ty::Named(d1, a1), Ty::Named(d2, a2)) if d1 == d2 => {
@@ -3293,4 +3406,17 @@ pub fn is_multi(e: Expr<'_>) -> bool {
             | ExprKind::OptMethod { .. }
             | ExprKind::Vararg
     )
+}
+
+/// A pattern member and an actual member of the same structured kind, which
+/// unify part by part (`Secret<V>` and `Secret<number>`).
+fn same_kind(pattern: &Ty, actual: &Ty) -> bool {
+    match (pattern, actual) {
+        (Ty::Secret(_), Ty::Secret(_))
+        | (Ty::Array(_), Ty::Array(_))
+        | (Ty::Map(..), Ty::Map(..))
+        | (Ty::Func(_), Ty::Func(_)) => true,
+        (Ty::Named(a, _), Ty::Named(b, _)) => a == b,
+        _ => false,
+    }
 }

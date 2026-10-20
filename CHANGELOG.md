@@ -28,6 +28,12 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - Reading or writing a field of a function, number or boolean is E2003 with any key, not only a `.` read
 - No false W1003 for a forward-declared local that a module's `function name()` defines
 - E2001 names the missing or mismatched field of a record (and hints at `x?: T`), and the first missing return value; E2015 names the union member that does not fit; a function passed to `pcall` with too few arguments is E2007 naming the argument
+- `canaccessvalue(v)` narrows as the complement of `issecretvalue`: its true branch drops `Secret<…>`, in an `if` and in an `and` chain
+- `cond and x` with a boolean `cond` is `false | x` in an inferred local or result, so `if y then` leaves `x`, not `true | x`; so are the results `pcall` passes on (`local ok, r = pcall(f)`)
+- A generic predicate (`plain<V>(v: V | Secret<V> | nil): v is V`) infers its type parameters from the argument and narrows to them
+- A declared local narrowed before a loop (`n = 0` on a `number?`) keeps its narrowing in the loop when the body keeps it; `break` paths count after the loop
+- Assigning a field through a narrowed annotated local (`if item then item.x = 1 end` on an `Item | false`) checks against the members it can be, not `false`
+- E2005 on a local a closure reads says when the closure sees it as declared because it is assigned after its declaration (`opts = opts or {}`); E2015 on a possibly secret value points to `canaccessvalue` and `issecretvalue`
 
 ## [0.9.1] - 2026-10-20
 
