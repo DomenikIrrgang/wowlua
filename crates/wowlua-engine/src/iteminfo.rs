@@ -12,8 +12,8 @@
 //! client's item GUIDs are the server's and follow the item).
 //!
 //! Unverified unless noted: everything here but the armor effectiveness,
-//! the off-hand's weapon and the quality colors. Equipment sets are not
-//! modelled (none saved; the client's recorded character had two). Settings
+//! the off-hand's weapon and the quality colors. Equipment sets are the
+//! world's (`equipsets.rs`); making and using them is accepted. Settings
 //! of the bags (sorting direction, autosort, slot flags) are accepted and
 //! not kept.
 
@@ -1535,17 +1535,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             "C_Container.GetContainerItemEquipmentSetInfo",
             get_container_item_equipment_set_info,
         ),
-        // C_EquipmentSet (no sets saved).
+        // C_EquipmentSet (the sets themselves: `equipsets.rs`).
         ("C_EquipmentSet.CanUseEquipmentSets", can_use_equipment_sets),
-        ("C_EquipmentSet.GetEquipmentSetIDs", empty_table),
-        ("C_EquipmentSet.GetNumEquipmentSets", zero),
-        ("C_EquipmentSet.GetEquipmentSetInfo", nothing),
-        ("C_EquipmentSet.GetEquipmentSetID", nothing),
-        ("C_EquipmentSet.GetEquipmentSetAssignedSpec", nothing),
-        ("C_EquipmentSet.GetEquipmentSetForSpec", nothing),
-        ("C_EquipmentSet.GetItemIDs", nothing),
-        ("C_EquipmentSet.GetItemLocations", nothing),
-        ("C_EquipmentSet.GetIgnoredSlots", nothing),
         ("C_EquipmentSet.IsSlotIgnoredForSave", no),
         ("C_EquipmentSet.EquipmentSetContainsLockedItems", no),
         ("C_EquipmentSet.UseEquipmentSet", no),

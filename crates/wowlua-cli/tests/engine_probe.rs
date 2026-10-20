@@ -1981,13 +1981,15 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
 /// How many of the client's answers to the full probe (`/stdtest engine
 /// fullprobe`: every C function called with many arguments, the curated
 /// settings set, read back and restored) the engine gives as well, each
-/// recorded call asked again with the recorded character's world. Until
+/// recorded call asked again with the recorded character's world (the
+/// last snapshot before the probe and what its answers say changed,
+/// `tests/fullprobe-state.lua`). Until
 /// the client's run is ingested (`forever-camelot-fullprobe.lua`), the
 /// answers battery's answers to the plan's calls without placeholders
 /// stand in for it (synthetic: the number changes with the first real
 /// run). Only ever raised, but for the plan's own changes: retail systems
 /// left out of it took 19 matched calls with them (762 of 792 before).
-const FULLPROBE_MATCHED: usize = 32842;
+const FULLPROBE_MATCHED: usize = 32978;
 
 #[test]
 fn the_engine_answers_the_full_probe_as_the_client_did() {
@@ -1998,17 +2000,35 @@ fn the_engine_answers_the_full_probe_as_the_client_did() {
     let dir = build();
     let out = dir.path().join("dist/dev/StdTest");
     let mut vm = Vm::wow();
+    // The clock as one of the probe's sessions had it when it was asked
+    // (`GetServerTime()` 1792432924, within that second; `GetTime()`
+    // 206668.464), ten frames before (the login's below), on a Pacific
+    // realm (`GetServerTimeLocal()` seven hours before). Each session had
+    // its own moment: only answers of the day and month follow it in the
+    // others.
+    let login = 10.0 / 60.0;
+    vm.clock.now = 1_792_432_924.5 - login;
+    vm.clock.utc_offset = -7 * 3600;
+    vm.clock.elapsed_ms = (206_668.464 - login) * 1000.0;
     wowlua_engine::install(&mut vm, "camelot").expect("installs");
     let report = wowlua_engine::ui::load(&mut vm, &ui.interface, ui.strings.as_deref());
     assert!(report.errors.is_empty(), "{:?}", report.errors);
     let mut vm = client_in(vm, &out);
     let controls = wowlua_engine::controls::table(&mut vm);
+    // The character's world as the probe found it: the last snapshot
+    // recorded before it (`mapnav`'s end, 00:43; the probe ran from about
+    // 01:00 to 02:44, recorded.txt and its own clock answers), then what
+    // the probe's own answers say changed since, set with the engine's
+    // controls (`tests/fullprobe-state.lua`, each with its evidence).
     wowlua_test::profile::apply(
         &mut vm,
         controls,
-        &repo().join("crates/wowlua-engine/tests/client/forever-camelot-character.json"),
+        &repo().join("crates/wowlua-engine/tests/client/scenarios/mapnav-after.json"),
     )
     .expect("the character's profile");
+    let state = fs::read_to_string(repo().join("crates/wowlua-cli/tests/fullprobe-state.lua"))
+        .expect("the probe's state script");
+    addon(&mut vm, &state);
     // The client has StdTest installed: `C_AddOns` knows it by its TOC,
     // its title and notes the real manifest's (this build's has none).
     let toc = fs::read_to_string(out.join("StdTest_Camelot.toc"))
@@ -2067,6 +2087,12 @@ fn the_engine_answers_the_full_probe_as_the_client_did() {
     let show = vm.str(&show);
     vm.set_global("StdTestFullProbeShow", show);
     vm.set_global("StdTestFullProbeLimit", Value::Num(limit as f64));
+    // `WOWLUA_FULLPROBE_WIDTH`: how much of each answer to show (240).
+    let width = std::env::var("WOWLUA_FULLPROBE_WIDTH")
+        .ok()
+        .and_then(|n| n.parse::<usize>().ok())
+        .unwrap_or(240);
+    vm.set_global("StdTestFullProbeWidth", Value::Num(width as f64));
     let escape = vm.native("StdTestFullProbeEscape", escaped_answer);
     vm.set_global("StdTestFullProbeEscape", escape);
     let compare = br#"
@@ -2105,7 +2131,7 @@ for _, k in ipairs(keys) do
         local name = k:match("^set ([%w_.:]+)") or k:match("^([%w_.:]+)") or k
         missed[name] = (missed[name] or 0) + 1
         if #diffs < StdTestFullProbeLimit and (StdTestFullProbeShow == "*" or StdTestFullProbeShow == name) then
-            diffs[#diffs + 1] = k .. "\n    client: " .. fixture[k]:sub(1, 240) .. "\n    ours:   " .. mine:sub(1, 240)
+            diffs[#diffs + 1] = k .. "\n    client: " .. fixture[k]:sub(1, StdTestFullProbeWidth) .. "\n    ours:   " .. mine:sub(1, StdTestFullProbeWidth)
         end
     end
 end

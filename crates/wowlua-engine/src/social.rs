@@ -243,6 +243,9 @@ fn get_channel_shortcut(vm: &mut Vm, c: NativeCall) -> Ret {
         Value::Num(n) if n >= 1.0 => n as usize,
         _ => 0,
     };
+    // The channel's place in the list, not its number (the full probe,
+    // 1.60.1: 1 answered a shortcut with number 1 free, LookingForGroup
+    // left; which channel's unverified, the answer scrubbed).
     let joined = &engine(vm).world.character.channels.joined;
     let shortcut = index
         .checked_sub(1)
@@ -262,16 +265,21 @@ fn get_num_active_channels(vm: &mut Vm, _c: NativeCall) -> Ret {
 /// joined channels change numbers (`CHANNEL_UI_UPDATE`; unverified: the
 /// client's events).
 fn swap_chat_channels(vm: &mut Vm, c: NativeCall) -> Ret {
-    let index = |v: Value| match v {
-        Value::Num(n) if n >= 1.0 => Some(n as usize - 1),
+    let number = |v: Value| match v {
+        Value::Num(n) if n >= 1.0 => Some(n as usize),
         _ => None,
     };
-    let (Some(a), Some(b)) = (index(vm.hidden(c.arg(1))), index(vm.hidden(c.arg(2)))) else {
+    let (Some(a), Some(b)) = (number(vm.hidden(c.arg(1))), number(vm.hidden(c.arg(2)))) else {
         return Ok(vec![]);
     };
     let joined = &mut crate::engine_mut(vm).world.character.channels.joined;
-    if a < joined.len() && b < joined.len() && a != b {
-        joined.swap(a, b);
+    let place = |n: usize| joined.iter().position(|ch| ch.number == n);
+    if let (Some(i), Some(j)) = (place(a), place(b))
+        && i != j
+    {
+        joined.swap(i, j);
+        joined[i].number = a;
+        joined[j].number = b;
         crate::widgets::fire_event(vm, "CHANNEL_UI_UPDATE", &[]);
     }
     Ok(vec![])
@@ -427,8 +435,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         // ------------------------------------------------ chat
         ("C_ChatInfo.IsPartyChannelType", is_party_channel_type),
         ("C_ChatInfo.GetChannelShortcut", get_channel_shortcut),
-        // By the channel's local ID, as by its index (unverified: the two
-        // differ when a channel was left).
+        // By the channel's local ID, as by its index (unverified: the full
+        // probe's 1 answered with number 1 free, as the index).
         (
             "C_ChatInfo.GetChannelShortcutForChannelID",
             get_channel_shortcut,

@@ -402,11 +402,14 @@ fn get_session_time(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(crate::clock::now(vm).floor())])
 }
 
-/// The daily reset at 15:00 UTC, the weekly one on Tuesdays then (the US
-/// realms'; unverified for Forever).
-const DAILY_RESET: i64 = 15 * 3600;
-/// 1970-01-06 (a Tuesday) 15:00 UTC.
-const WEEKLY_RESET: i64 = 5 * 86400 + 15 * 3600;
+/// The daily reset at 16:00 UTC, the weekly one on Tuesdays then (the full
+/// probe, 1.60.1: `GetWeeklyResetStartTime()` 1791907200, Tuesday 13
+/// October 2026 16:00 UTC; `GetSecondsUntilDailyReset()` 79296 in the
+/// session whose `GetCurrentCalendarTime()` was 10:57 on the Pacific
+/// realm, 17:57 UTC, both the next 16:00).
+const DAILY_RESET: i64 = 16 * 3600;
+/// 1970-01-06 (a Tuesday) 16:00 UTC.
+const WEEKLY_RESET: i64 = 5 * 86400 + 16 * 3600;
 
 fn now_secs(vm: &Vm) -> i64 {
     vm.clock.now.floor() as i64

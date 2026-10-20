@@ -93,6 +93,8 @@ pub struct Character {
     pub macros: crate::macros::Macros,
     /// What the cursor holds (`cursor.rs`).
     pub cursor: crate::cursor::Cursor,
+    /// The saved equipment sets (`equipsets.rs`).
+    pub equipment_sets: Vec<crate::equipsets::EquipmentSet>,
 }
 
 impl Default for Character {
@@ -117,6 +119,7 @@ impl Default for Character {
             channels: Default::default(),
             macros: Default::default(),
             cursor: Default::default(),
+            equipment_sets: Vec::new(),
         }
     }
 }

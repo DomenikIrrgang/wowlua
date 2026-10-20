@@ -4,7 +4,9 @@
 //! channels by number; the channel pane's list (`GetChannelDisplayInfo`)
 //! a header for each category (Group, World, Custom, Discord; its count
 //! only when it has channels) followed by its channels; `GetChannelName`
-//! a channel's full name; General's local ID its number.
+//! a channel's full name; General's local ID its number. A channel left
+//! keeps its number free (the full probe, 1.60.1: General to TradeLocal
+//! numbered 2 to 6 after LookingForGroup, the snapshot's 1, was left).
 //!
 //! Unverified: what `GetNumGroupChannels` counts (recorded 1 without a
 //! group); collapsed headers; joining and leaving; a channel's info
@@ -18,6 +20,8 @@ use crate::{engine, engine_mut, widgets};
 /// A joined channel.
 #[derive(Clone, Debug, Default)]
 pub struct Channel {
+    /// Its number (`/1`), the first 1.
+    pub number: usize,
     /// `General`.
     pub name: String,
     /// `General - Thunder Bluff`.
@@ -36,7 +40,7 @@ pub struct Channel {
     pub regional: bool,
 }
 
-/// The channels, by number (the first is 1).
+/// The channels, in their numbers' order.
 #[derive(Clone, Debug)]
 pub struct Channels {
     pub joined: Vec<Channel>,
@@ -80,9 +84,8 @@ fn rows(vm: &Vm) -> Vec<Row> {
     for &category in CATEGORIES {
         let numbers: Vec<usize> = joined
             .iter()
-            .enumerate()
-            .filter(|(_, c)| c.category == category)
-            .map(|(i, _)| i + 1)
+            .filter(|c| c.category == category)
+            .map(|c| c.number)
             .collect();
         out.push(Row::Header {
             category,
@@ -91,6 +94,16 @@ fn rows(vm: &Vm) -> Vec<Row> {
         out.extend(numbers.into_iter().map(|number| Row::Channel { number }));
     }
     out
+}
+
+/// The joined channel numbered `number`.
+pub fn numbered(channels: &Channels, number: usize) -> Option<&Channel> {
+    channels.joined.iter().find(|c| c.number == number)
+}
+
+/// The number after the last joined channel's.
+pub fn next_number(channels: &Channels) -> usize {
+    channels.joined.iter().map(|c| c.number).max().unwrap_or(0) + 1
 }
 
 fn num(v: Value) -> Option<f64> {
@@ -103,8 +116,8 @@ fn num(v: Value) -> Option<f64> {
 fn get_channel_list(vm: &mut Vm, _c: NativeCall) -> Ret {
     let joined = engine(vm).world.character.channels.joined.clone();
     let mut out = Vec::new();
-    for (i, c) in joined.iter().enumerate() {
-        out.push(Value::Num(i as f64 + 1.0));
+    for c in &joined {
+        out.push(Value::Num(c.number as f64));
         out.push(vm.str(&c.name));
         out.push(Value::Bool(c.disabled));
     }
@@ -148,7 +161,9 @@ fn get_channel_display_info(vm: &mut Vm, c: NativeCall) -> Ret {
             ]
         }
         Row::Channel { number } => {
-            let c = engine(vm).world.character.channels.joined[number - 1].clone();
+            let Some(c) = numbered(&engine(vm).world.character.channels, number).cloned() else {
+                return Ok(vec![]);
+            };
             let name = vm.str(&c.name);
             let category = vm.str(&c.category);
             vec![
@@ -168,16 +183,16 @@ fn get_channel_display_info(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `GetChannelName(number or name)`: the number, the full name, 0, false;
 /// `0, nil, 0, false` for none.
 fn get_channel_name(vm: &mut Vm, c: NativeCall) -> Ret {
-    let joined = engine(vm).world.character.channels.joined.clone();
+    let channels = engine(vm).world.character.channels.clone();
     let found = match vm.hidden(c.arg(1)) {
-        Value::Num(n) if n >= 1.0 => joined.get(n as usize - 1).map(|ch| (n as usize, ch)),
+        Value::Num(n) if n >= 1.0 => numbered(&channels, n as usize).map(|ch| (n as usize, ch)),
         Value::Str(s) => {
             let name = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
-            joined
+            channels
+                .joined
                 .iter()
-                .enumerate()
-                .find(|(_, ch)| ch.name.eq_ignore_ascii_case(&name))
-                .map(|(i, ch)| (i + 1, ch))
+                .find(|ch| ch.name.eq_ignore_ascii_case(&name))
+                .map(|ch| (ch.number, ch))
         }
         _ => None,
     };
@@ -199,10 +214,10 @@ fn get_channel_name(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// The joined channel `v` names: its number, or its name (any case).
 fn channel_named(vm: &Vm, v: Value) -> Option<(usize, Channel)> {
-    let joined = &engine(vm).world.character.channels.joined;
+    let channels = &engine(vm).world.character.channels;
     let by_number = |n: f64| {
         (n >= 1.0)
-            .then(|| joined.get(n as usize - 1).map(|c| (n as usize, c.clone())))
+            .then(|| numbered(channels, n as usize).map(|c| (n as usize, c.clone())))
             .flatten()
     };
     match vm.hidden(v) {
@@ -211,11 +226,11 @@ fn channel_named(vm: &Vm, v: Value) -> Option<(usize, Channel)> {
             let name = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
             match name.parse::<f64>() {
                 Ok(n) => by_number(n),
-                Err(_) => joined
+                Err(_) => channels
+                    .joined
                     .iter()
-                    .enumerate()
-                    .find(|(_, c)| c.name.eq_ignore_ascii_case(&name))
-                    .map(|(i, c)| (i + 1, c.clone())),
+                    .find(|c| c.name.eq_ignore_ascii_case(&name))
+                    .map(|c| (c.number, c.clone())),
             }
         }
         _ => None,
@@ -268,8 +283,8 @@ fn general_local_id(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![
         joined
             .iter()
-            .position(|c| c.name == "General")
-            .map_or(Value::Nil, |i| Value::Num(i as f64 + 1.0)),
+            .find(|c| c.name == "General")
+            .map_or(Value::Nil, |c| Value::Num(c.number as f64)),
     ])
 }
 
@@ -291,9 +306,10 @@ fn text(vm: &Vm, v: Value) -> Option<String> {
 }
 
 /// `mock.setChannels({ joined = { { name, fullName, category, disabled,
-/// shortcut, instanceID, zoneChannelID, channelType, regional }, … },
-/// groupChannels, regionalService })`: the channels the player is in
-/// (`CHANNEL_UI_UPDATE`).
+/// shortcut, instanceID, zoneChannelID, channelType, regional, number },
+/// … }, groupChannels, regionalService })`: the channels the player is in
+/// (`CHANNEL_UI_UPDATE`), each numbered after the one before unless its
+/// `number` is higher (a channel left before it).
 pub fn control_set_channels(vm: &mut Vm, c: NativeCall) -> Ret {
     let Value::Table(t) = c.arg(1) else {
         return Err(vm.error("setChannels: a table expected"));
@@ -313,7 +329,12 @@ pub fn control_set_channels(vm: &mut Vm, c: NativeCall) -> Ret {
             let category = field(vm, ch, "category");
             let shortcut = field(vm, ch, "shortcut");
             let number = |vm: &mut Vm, k: &str| num(field(vm, ch, k)).unwrap_or(0.0);
+            let after = joined.last().map_or(0, |c: &Channel| c.number) + 1;
+            let place = num(field(vm, ch, "number"))
+                .filter(|n| *n as usize >= after)
+                .map_or(after, |n| n as usize);
             joined.push(Channel {
+                number: place,
                 full_name: text(vm, full).unwrap_or_else(|| name.clone()),
                 name,
                 category: text(vm, category)

@@ -33,6 +33,7 @@ pub mod damagemeter;
 pub mod death;
 pub mod editmode;
 pub mod encounters;
+pub mod equipsets;
 pub mod extras;
 pub mod facts;
 pub mod formatters;
@@ -299,6 +300,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         .chain(chat::behaviours())
         .chain(bindings::behaviours())
         .chain(facts::behaviours())
+        .chain(equipsets::behaviours())
         .chain(encounters::behaviours())
         .chain(pets::behaviours())
         .chain(conditionals::behaviours())

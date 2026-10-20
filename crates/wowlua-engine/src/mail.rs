@@ -230,6 +230,25 @@ pub fn mail_coming(vm: &mut Vm, sender: &str) {
     }
 }
 
+/// `mock.setNewMail(senders)`: unread mail waiting (`HasNewMail`), sent by
+/// `senders` (`GetLatestThreeSenders`, the latest first); nil or none: no
+/// new mail. A world's state, as a snapshot would hold it: no event.
+pub fn control_set_new_mail(vm: &mut Vm, c: NativeCall) -> Ret {
+    let mut senders = Vec::new();
+    if let Value::Table(t) = c.arg(1) {
+        let n = vm.heap.table(t).border();
+        for i in 1..=n {
+            if let Value::Str(s) = vm.heap.table(t).get(Value::Num(i as f64)) {
+                senders.push(String::from_utf8_lossy(vm.str_bytes(s)).into_owned());
+            }
+        }
+    }
+    let m = mail_mut(vm);
+    m.new_mail = !senders.is_empty();
+    m.senders = senders;
+    Ok(vec![])
+}
+
 pub fn has(vm: &Vm, unit: UnitId) -> bool {
     mail(vm).boxes.contains_key(&unit.0)
 }

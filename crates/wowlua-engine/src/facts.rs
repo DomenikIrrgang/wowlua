@@ -768,7 +768,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Garrison.IsOnGarrisonMap", no),
         ("C_FriendList.GetNumOnlineFriends", zero),
         ("C_Bank.FetchDepositedMoney", zero),
-        ("C_EquipmentSet.GetEquipmentSetIDs", empty_list),
         // No item is new (`C_NewItems.IsNewItem`): nothing to clear. No
         // cast has a target the engine knows: no target's class.
         ("C_NewItems.ClearAll", not_drawn),
