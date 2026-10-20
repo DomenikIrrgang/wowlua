@@ -353,8 +353,31 @@ pub fn apply_intrinsic(vm: &mut Vm, frame: Value, el: &Rc<Element>) {
     let Some(id) = widgets::widget_of(vm, frame) else {
         return;
     };
-    let cx = Context { file: "?" };
+    // As a template's: its file, its globals, and its scripts its addon's
+    // code (or Blizzard's), whoever creates the frame. An addon creating
+    // Blizzard's `AuraContainer` while it loads would otherwise compile
+    // the intrinsic's `method` handlers as its own code, and the
+    // container's `OnLoad_Intrinsic` would run tainted (the client: SuuUI
+    // makes aura containers while it loads, without an error).
+    let key = el.attr("name").map(str::to_ascii_lowercase);
+    let ui = &engine(vm).world.ui;
+    let file = key.as_ref().and_then(|k| ui.template_files.get(k)).cloned();
+    let env = key.as_ref().and_then(|k| ui.template_envs.get(k)).copied();
+    let addon = key
+        .as_ref()
+        .and_then(|k| ui.template_addons.get(k))
+        .cloned();
+    let cx = Context {
+        file: file.as_deref().unwrap_or("?"),
+    };
+    let globals = vm.globals;
+    if let Some(env) = env {
+        vm.globals = env;
+    }
+    let code_of = std::mem::replace(&mut engine_mut(vm).world.ui.code_of, addon);
     apply_as_intrinsic(vm, &cx, frame, id, el);
+    engine_mut(vm).world.ui.code_of = code_of;
+    vm.globals = globals;
 }
 
 /// An intrinsic type's element: its scripts stay, whatever the widget sets.
