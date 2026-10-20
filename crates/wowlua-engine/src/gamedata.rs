@@ -108,13 +108,19 @@ fn probed_spell(vm: &mut Vm, id: i64) -> Option<TableRef> {
     Some(t)
 }
 
-/// Items the full probe (1.60.1) asked about that no other recording
-/// holds: its `C_Item.GetItemInfo` answers (the crate its character
-/// carried).
-const PROBED_ITEMS: &[(i64, &str)] = &[(
-    6462,
-    "18: string Secure Crate, string |cnIQ1:|Hitem:6462::::::::21:1486:::::::::|h[Secure Crate]|h|r, number 1, number 1, number 0, string Quest, string Quest, number 1, string INVTYPE_NON_EQUIP_IGNORE, number 132761, number 0, number 12, number 0, number 4, number 0, nil nil, boolean false, string ",
-)];
+/// Items the full probe (1.60.1) asked about: its `C_Item.GetItemInfo`
+/// answers (the crate its character carried, which no other recording
+/// holds; the Hearthstone, whose bind type the snapshots lack).
+const PROBED_ITEMS: &[(i64, &str)] = &[
+    (
+        6462,
+        "18: string Secure Crate, string |cnIQ1:|Hitem:6462::::::::21:1486:::::::::|h[Secure Crate]|h|r, number 1, number 1, number 0, string Quest, string Quest, number 1, string INVTYPE_NON_EQUIP_IGNORE, number 132761, number 0, number 12, number 0, number 4, number 0, nil nil, boolean false, string ",
+    ),
+    (
+        6948,
+        "18: string Hearthstone, string |cnIQ1:|Hitem:6948::::::::21:1486:::::::::|h[Hearthstone]|h|r, number 1, number 1, number 0, string Miscellaneous, string Junk, number 1, string INVTYPE_NON_EQUIP_IGNORE, number 134414, number 0, number 15, number 0, number 1, number 0, nil nil, boolean false, string ",
+    ),
+];
 
 /// The fields of `C_Item.GetItemInfo`'s answer, in order.
 const ITEM_INFO_FIELDS: &[&str] = &[
@@ -167,8 +173,35 @@ pub fn item_data(vm: &mut Vm, id: i64) -> Option<TableRef> {
         return None;
     }
     match engine(vm).world.data.items.get(&id).copied() {
-        Some(t) => Some(t),
+        Some(t) => {
+            completed_item(vm, id, t);
+            Some(t)
+        }
         None => probed_item(vm, id),
+    }
+}
+
+/// A defined item without its bind type (a snapshot's, which lacks it)
+/// given the probes' recorded fields it lacks.
+fn completed_item(vm: &mut Vm, id: i64, t: TableRef) {
+    let key = vm.str("bindType");
+    if !vm.heap.table(t).get(key).is_nil() {
+        return;
+    }
+    let Some(info) = crate::recorded::probed(&format!("C_Item.GetItemInfo({id})"))
+        .or_else(|| PROBED_ITEMS.iter().find(|(i, _)| *i == id).map(|(_, a)| *a))
+    else {
+        return;
+    };
+    for (k, v) in ITEM_INFO_FIELDS
+        .iter()
+        .zip(crate::traits::Rv::answer(info).iter())
+    {
+        let k = vm.str(k);
+        if vm.heap.table(t).get(k).is_nil() {
+            let v = v.to_value(vm);
+            let _ = vm.heap.table_mut(t).set(k, v);
+        }
     }
 }
 

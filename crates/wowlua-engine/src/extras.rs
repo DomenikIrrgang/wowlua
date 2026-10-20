@@ -649,12 +649,11 @@ const TOOLTIP_SPELL: f64 = 1.0;
 const TOOLTIP_UNIT_AURA: f64 = 7.0;
 const TOOLTIP_MOUNT: f64 = 10.0;
 const TOOLTIP_PET_ACTION: f64 = 11.0;
-const TOOLTIP_TOY: f64 = 19.0;
 
 /// An item's tooltip data (`C_TooltipInfo.GetItemByID`'s, the tests' game
 /// data).
 fn item_tooltip(vm: &mut Vm, id: f64) -> Vec<Value> {
-    ask(vm, "C_TooltipInfo.GetItemByID", &[Value::Num(id)])
+    crate::tooltip::item_data_of(vm, id as i64)
 }
 
 /// A spell's tooltip data (`C_TooltipInfo.GetSpellByID`'s).
@@ -700,26 +699,10 @@ fn color(vm: &mut Vm, (r, g, b): (f64, f64, f64)) -> Value {
     Value::Table(t)
 }
 
-/// Tooltip data of one line, a name in white (a spell the game data
-/// lacks: its spellbook entry's name; the line as `tooltip.rs` writes a
-/// spell's).
+/// Tooltip data of the name line alone (a spell the game data lacks: its
+/// spellbook entry's name; the line as `tooltip.rs` writes a spell's).
 fn named_tooltip(vm: &mut Vm, ty: f64, id: f64, name: Value) -> Vec<Value> {
-    let line = vm.new_table();
-    set(vm, line, "type", Value::Num(0.0));
-    set(vm, line, "leftText", name);
-    let white = color(vm, (1.0, 1.0, 1.0));
-    set(vm, line, "leftColor", white);
-    set(vm, line, "wrapText", Value::Bool(false));
-    let lines = vm.new_table();
-    let _ = vm
-        .heap
-        .table_mut(lines)
-        .set(Value::Num(1.0), Value::Table(line));
-    let t = vm.new_table();
-    set(vm, t, "type", Value::Num(ty));
-    set(vm, t, "id", Value::Num(id));
-    set(vm, t, "lines", Value::Table(lines));
-    vec![Value::Table(t)]
+    crate::tooltip::named_data(vm, ty, id, name)
 }
 
 /// `C_DamageMeter.IsDamageMeterAvailable()`: available, no reason (SuuUI
@@ -777,22 +760,14 @@ fn tooltip_action(vm: &mut Vm, c: NativeCall) -> Ret {
     })
 }
 
-/// `C_TooltipInfo.GetInventoryItemByID`, `GetOwnedItemByID`,
-/// `GetHeirloomByItemID`, `GetItemKey(itemID, …)`: the item's.
+/// `C_TooltipInfo.GetInventoryItemByID`, `GetOwnedItemByID`: the item's
+/// (unverified: the client's only for an item the player has, with its
+/// GUID).
 fn tooltip_item_id(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(match arg_num(vm, &c, 1) {
         Some(id) => item_tooltip(vm, id),
         None => vec![],
     })
-}
-
-/// `C_TooltipInfo.GetToyByItemID(itemID)`: the item's, as a toy's data.
-fn tooltip_toy(vm: &mut Vm, c: NativeCall) -> Ret {
-    let data = match arg_num(vm, &c, 1) {
-        Some(id) => item_tooltip(vm, id),
-        None => vec![],
-    };
-    Ok(retyped(vm, data, TOOLTIP_TOY))
 }
 
 /// `C_TooltipInfo.GetMountBySpellID(spellID)`: the spell's, as a mount's
@@ -1769,9 +1744,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_TooltipInfo.GetAction", tooltip_action),
         ("C_TooltipInfo.GetInventoryItemByID", tooltip_item_id),
         ("C_TooltipInfo.GetOwnedItemByID", tooltip_item_id),
-        ("C_TooltipInfo.GetHeirloomByItemID", tooltip_item_id),
-        ("C_TooltipInfo.GetItemKey", tooltip_item_id),
-        ("C_TooltipInfo.GetToyByItemID", tooltip_toy),
         ("C_TooltipInfo.GetMountBySpellID", tooltip_mount),
         ("C_TooltipInfo.GetMerchantItem", tooltip_merchant_item),
         ("C_TooltipInfo.GetBuybackItem", tooltip_buyback_item),

@@ -255,9 +255,18 @@ fn zeros(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(0.0), Value::Num(0.0)])
 }
 
-/// An empty backpack: its 16 slots.
-fn free_bag_slots(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(16.0)])
+/// The free slots of the backpack and the four bags (the full probe,
+/// 1.60.1: 2, the backpack's two, its other bag full; unverified: the
+/// reagent bag left out, which was full).
+fn free_bag_slots(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let free: usize = engine(vm)
+        .world
+        .character
+        .bags
+        .range(0..=4)
+        .map(|(_, b)| b.slots.saturating_sub(b.items.len()))
+        .sum();
+    Ok(vec![Value::Num(free as f64)])
 }
 
 /// Noon.

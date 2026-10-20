@@ -1606,6 +1606,22 @@ fn tracked_filters(vm: &mut Vm) -> u64 {
         .unwrap_or(0)
 }
 
+/// `C_Minimap.IsFilteredOut(filterType)`: a tracking filter's bit not
+/// tracked; 0 and a number of more bits none (the full probe, 1.60.1:
+/// every filter of `Enum.MinimapTrackingFilter` out exactly when its bit
+/// was clear in `minimapTrackedInfov4`, 10552047; 16777217 not out).
+fn is_filtered_out(vm: &mut Vm, c: NativeCall) -> Ret {
+    let filter = num(vm, c.arg(1)).map_or(0, |n| n.max(0.0) as u64);
+    let out = filter.is_power_of_two() && tracked_filters(vm) & filter == 0;
+    Ok(vec![Value::Bool(out)])
+}
+
+/// `C_Minimap.IsTrackingAccountCompletedQuests()`: its filter's bit
+/// tracked (the full probe, 1.60.1: true with 2097152 set).
+fn tracking_account_completed_quests(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(tracked_filters(vm) & 2_097_152 != 0)])
+}
+
 /// Whether a tracking type is on: a spell's while its aura is on the
 /// player, a filter's while its bit is set.
 fn tracking_active(vm: &mut Vm, kind: &str, id: f64) -> bool {
@@ -3077,7 +3093,11 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_Minimap.GetDefaultTrackingValue", no),
         ("C_Minimap.IsTrackingBattlePets", no),
         ("C_Minimap.IsTrackingHiddenQuests", no),
-        ("C_Minimap.IsTrackingAccountCompletedQuests", no),
+        (
+            "C_Minimap.IsTrackingAccountCompletedQuests",
+            tracking_account_completed_quests,
+        ),
+        ("C_Minimap.IsFilteredOut", is_filtered_out),
         ("C_Minimap.GetNumQuestPOIWorldEffects", zero),
         ("C_Minimap.GetPOITextureCoords", four_zeros),
         ("C_Minimap.GetUiMapID", get_minimap_ui_map_id),

@@ -1989,7 +1989,7 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
 /// stand in for it (synthetic: the number changes with the first real
 /// run). Only ever raised, but for the plan's own changes: retail systems
 /// left out of it took 19 matched calls with them (762 of 792 before).
-const FULLPROBE_MATCHED: usize = 32978;
+const FULLPROBE_MATCHED: usize = 33075;
 
 #[test]
 fn the_engine_answers_the_full_probe_as_the_client_did() {
@@ -2125,6 +2125,11 @@ for _, k in ipairs(keys) do
     -- 0x...`), the address each run's own.
     local theirs = fixture[k]:gsub("(Lua%a+Object): 0x%x+", "%1")
     mine = mine:gsub("(Lua%a+Object): 0x%x+", "%1")
+    -- A tooltip data's instance ID counts the session's tooltip data so
+    -- far: the client's sessions asked in the plan's order with a reload
+    -- after each segment, the replay in one session in another order.
+    theirs = theirs:gsub("dataInstanceID=number %d+", "dataInstanceID=number N")
+    mine = mine:gsub("dataInstanceID=number %d+", "dataInstanceID=number N")
     if mine == theirs then
         matched = matched + 1
     else
