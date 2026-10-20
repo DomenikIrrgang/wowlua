@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,069 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,070 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -356,15 +356,13 @@ By where the function is listed:
 |------|----------:|------:|---------:|--------:|----------:|
 | Blizzard's API documentation | 5,111 | 977 | 367 | 3,693 | 74 |
 | the client's other C functions (`/stdtest inventory`) | 2,064 | 551 | 90 | 1,392 | 31 |
-| the engine's own, in neither list | 15 | 15 | 0 | 0 | 0 |
+| the engine's own, in neither list | 5 | 5 | 0 | 0 | 0 |
 
-The engine's own functions are defined in camelot's environment though the
-client's inventory lacks them, so an addon's call of one works in `wowlua test`
-and fails in the game (behaviour the engine shares between flavors, or protected
-functions it adds): `GetActionText`, `GetActionTexture`, `GetItemCount`,
-`GetMouseFocus`, `HasAction`, `InviteUnit`, `IsAttackAction`, `IsUsableAction`,
-`PickupContainerItem`, `PickupSpell`, `PickupSpellBookItem`, `RunMacroText`,
-`SplitContainerItem`, `UseContainerItem`, `UseItemByName`.
+Of the engine's own, Blizzard's UI code defines these in the client (Lua
+functions in the client's inventory, its deprecation files' wrappers of the `C_`
+functions); the engine's natives stand in for them until that code loads:
+`GetActionText`, `GetActionTexture`, `HasAction`, `IsAttackAction`,
+`IsUsableAction`.
 
 The modules that answer, by how many functions and methods:
 
@@ -398,14 +396,14 @@ The modules that answer, by how many functions and methods:
 | `queries` | model | 63 |
 | `formatters` | model | 62 |
 | `facts` | model | 57 |
-| `protection` | model | 53 |
 | `auction` | model | 52 |
+| `protection` | model | 51 |
 | `traits` | recorded | 47 |
 | `quests` | model | 41 |
 | `bindings` | model | 40 |
 | `framescript` | model | 37 |
 | `gamedata` | model | 36 |
-| `character` | model | 35 |
+| `character` | model | 34 |
 | `lfg` | model | 31 |
 | `misc` | model | 31 |
 | `mail` | model | 30 |
@@ -414,15 +412,15 @@ The modules that answer, by how many functions and methods:
 | `healcalc` | model | 26 |
 | `actions2` | fill-in | 25 |
 | `bars` | model | 25 |
-| `merchant` | model | 25 |
+| `merchant` | model | 24 |
 | `measures` | model | 23 |
 | `trainer` | model | 22 |
-| `cursor` | model | 19 |
-| `input` | model | 19 |
 | `taxi` | model | 19 |
+| `input` | model | 18 |
 | `pets` | model | 18 |
-| `party` | model | 17 |
 | `clock` | model | 16 |
+| `party` | model | 16 |
+| `cursor` | model | 15 |
 | `widgetdata` | recorded | 15 |
 | `animations` | model | 14 |
 | `bank` | model | 14 |
@@ -833,7 +831,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,069 rules unverified: each rests on Blizzard's
+The engine's code marks 1,070 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1594,12 +1592,13 @@ page changes only when a rule is added, removed or reworded.
 - [lfg.rs](../crates/wowlua-engine/src/lfg.rs): `C_LFGList.GetSearchResultMemberCounts(searchResultID)`: the members by role (`NOROLE` without one) and by class, eac...
 - [lfg.rs](../crates/wowlua-engine/src/lfg.rs): A member as `LfgSearchResultPlayerInfo` (documented; no spec on Forever, unverified).
 
-### lib (7)
+### lib (8)
 
 - [lib.rs](../crates/wowlua-engine/src/lib.rs): Functions with behaviour the documentation lacks (`IsInGroup`): the client has them (camelot's inventory; other flavo...
 - [lib.rs](../crates/wowlua-engine/src/lib.rs): The client's project ID, and the project constants (WoW Forever has these, `/stdtest engine`; other flavors unverified).
 - [lib.rs](../crates/wowlua-engine/src/lib.rs): A function's documented results as empty values: nil where nilable, false, 0, "", an empty table, none of a list (unv...
 - [lib.rs](../crates/wowlua-engine/src/lib.rs): Numbers by their alias; other types are objects.
+- [lib.rs](../crates/wowlua-engine/src/lib.rs): Globals camelot's client lacks though the engine has their behaviour: the `C_` functions' old global names (`C_Contai...
 - [lib.rs](../crates/wowlua-engine/src/lib.rs): The fill-in modules' behaviours: answers for functions no recording or model of the engine answers, from Blizzard's d...
 - [lib.rs](../crates/wowlua-engine/src/lib.rs): Refused before the arguments are checked (unverified).
 - [lib.rs](../crates/wowlua-engine/src/lib.rs): A curve's color stays a readable color, its channels secret (`UnitHealthPercent(unit, true, colorCurve)`: ElvUI's oUF...

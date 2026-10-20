@@ -300,6 +300,9 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
     vm.untrusted_layout_forbidden = Some(protection::untrusted_layout_forbidden);
     // Protected functions the documentation lacks.
     for &name in protection::PROTECTED {
+        if flavor == "camelot" && CAMELOT_ABSENT.contains(&name) {
+            continue;
+        }
         let (ns, short) = match name.split_once('.') {
             Some((ns, short)) => (Some(ns), short),
             None => (None, name),
@@ -340,6 +343,9 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         .collect();
     names.sort_by_key(|(n, _)| *n);
     for (name, f) in names {
+        if flavor == "camelot" && CAMELOT_ABSENT.contains(&name) {
+            continue;
+        }
         let (ns, short) = match name.split_once('.') {
             Some((ns, short)) => (Some(ns), short),
             None => (None, name),
@@ -819,6 +825,31 @@ pub(crate) fn call_text(vm: &Vm, name: &str, c: &NativeCall, first: usize) -> St
         .collect();
     format!("{name}({})", args.join(", "))
 }
+
+/// Globals camelot's client lacks though the engine has their behaviour:
+/// the `C_` functions' old global names (`C_Container.PickupContainerItem`
+/// keeps the behaviour) and retail's removed `GetMouseFocus`. The client's
+/// inventory (`/stdtest inventory`, forever-camelot-functions.tsv: every
+/// function of the environment, C or Lua, with Blizzard's UI loaded) has
+/// none of them; camelot's documentation names them only in their `C_`
+/// namespaces and its UI code defines none (its deprecation files define
+/// `HasAction` and the other action functions, which the engine keeps).
+/// The cursor probe (forever-camelot-cursor.lua) called the `C_` ones.
+/// Other flavors keep them (unverified: their inventories are not
+/// recorded; their UI code defines `GetItemCount` and `UseItemByName`,
+/// cata's `InviteUnit`).
+pub(crate) const CAMELOT_ABSENT: &[&str] = &[
+    "GetItemCount",
+    "GetMouseFocus",
+    "InviteUnit",
+    "PickupContainerItem",
+    "PickupSpell",
+    "PickupSpellBookItem",
+    "RunMacroText",
+    "SplitContainerItem",
+    "UseContainerItem",
+    "UseItemByName",
+];
 
 /// Fill-ins whose answer a setter of theirs changes: they take the place
 /// of the recorded answer, which they give until set (the dungeon

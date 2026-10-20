@@ -8,7 +8,7 @@ use std::collections::{BTreeSet, HashMap, HashSet};
 
 use wowlua_vm::{Value, Vm};
 
-use crate::{OVER_RECORDED, api, extras, facts, protection, widgets};
+use crate::{CAMELOT_ABSENT, OVER_RECORDED, api, extras, facts, protection, widgets};
 
 /// Where an answer comes from.
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
@@ -164,6 +164,10 @@ pub fn functions(flavor: &str) -> Result<Vec<Entry>, String> {
     extra.extend(protection::HARDWARE.iter().filter(|n| !n.contains('.')));
     for name in extra {
         if seen.contains(name) || defined(&mut vm, name) {
+            continue;
+        }
+        // Not defined in camelot's environment (`install`).
+        if flavor == "camelot" && CAMELOT_ABSENT.contains(&name) {
             continue;
         }
         seen.insert(name);
