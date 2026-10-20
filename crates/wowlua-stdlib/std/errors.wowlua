@@ -68,24 +68,52 @@ export function report(err: any, context: { [string]: any }?)
     notifying = false
 end
 
---- Calls `fn` isolated: on error, reports it and returns `false`.
-export function call(fn: (...any) -> ...any, ...: any): (boolean, ...any)
+-- The context of the innermost isolated call, for the one error handler:
+-- nothing is allocated per call. Calls nest strictly, as nothing yields
+-- across `xpcall`.
+local current: { [string]: any }? = nil
+
+local function handler(e: any): any
+    report(e, current)
+    return e
+end
+
+-- The client's `xpcall` passes the arguments on (a recorded answer:
+-- `xpcall(function(a, b) return a + b end, h, 1, 2)` is `true, 3`); plain
+-- Lua 5.1's passes none, and then a closure carries them.
+local passesArgs = select(2, xpcall(function(a: any) return a end, handler, true)) == true
+
+-- The outer call's context back, and the results passed on.
+local function finish(outer: { [string]: any }?, ...: any): (boolean, ...any)
+    current = outer
+    return ...
+end
+
+-- `fn` with its arguments, for a Lua whose `xpcall` passes none.
+local function packed(fn: (...any) -> ...any, ...: any): () -> ...any
     local n = select("#", ...)
     local args = { ... }
-    return xpcall(function() return fn(unpack(args, 1, n)) end, function(e)
-        report(e)
-        return e
-    end)
+    return function() return fn(unpack(args, 1, n)) end
+end
+
+--- Calls `fn` isolated: on error, reports it and returns `false`.
+export function call(fn: (...any) -> ...any, ...: any): (boolean, ...any)
+    local outer = current
+    current = nil
+    if passesArgs then
+        return finish(outer, xpcall(fn, handler, ...))
+    end
+    return finish(outer, xpcall(packed(fn, ...), handler))
 end
 
 --- Calls `fn` isolated, reporting with `context` (the stdlib's handlers).
 export function callIn(context: { [string]: any }, fn: (...any) -> ...any, ...: any): (boolean, ...any)
-    local n = select("#", ...)
-    local args = { ... }
-    return xpcall(function() return fn(unpack(args, 1, n)) end, function(e)
-        report(e, context)
-        return e
-    end)
+    local outer = current
+    current = context
+    if passesArgs then
+        return finish(outer, xpcall(fn, handler, ...))
+    end
+    return finish(outer, xpcall(packed(fn, ...), handler))
 end
 
 --- An isolated version of `fn` (its results are dropped).

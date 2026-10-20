@@ -3,17 +3,26 @@
 -- keep their state per instance (weak keys on `self`).
 import callIn from "wowlua:errors"
 
+-- The error contexts of the callbacks, made once.
+local contexts = {
+    after = { component = "timer: after" },
+    every = { component = "timer: every" },
+    nextFrame = { component = "timer: nextFrame" },
+    throttle = { component = "timer: @throttle" },
+    debounce = { component = "timer: @debounce" },
+}
+
 --- A one-shot timer; the handle has `Cancel()` and `IsCancelled()`.
 export function after(sec: number, fn: () -> ()): TimerHandle
     return C_Timer.NewTimer(sec, function()
-        callIn({ component = "timer: after" }, fn)
+        callIn(contexts.after, fn)
     end)
 end
 
 --- A repeating timer; `fn` receives the ticker.
 export function every(sec: number, fn: (ticker: TickerHandle) -> (), iterations: number?): TickerHandle
     return C_Timer.NewTicker(sec, function(ticker: TickerHandle)
-        callIn({ component = "timer: every" }, fn, ticker)
+        callIn(contexts.every, fn, ticker)
     end, iterations)
 end
 
@@ -50,7 +59,7 @@ end
 --- Runs `fn` on the next frame.
 local function defer(fn: () -> ())
     C_Timer.After(0, function()
-        callIn({ component = "timer: nextFrame" }, fn)
+        callIn(contexts.nextFrame, fn)
     end)
 end
 
@@ -99,7 +108,7 @@ export function throttle(sec: number)
                 s.scheduled = false
                 s.last = now()
                 local args = assert(s.args)
-                callIn({ component = "timer: @throttle" }, fn, unpack(args, 1, args.n))
+                callIn(contexts.throttle, fn, unpack(args, 1, args.n))
             end)
         end
     end
@@ -119,7 +128,7 @@ export function debounce(sec: number)
             s.timer = C_Timer.NewTimer(sec, function()
                 s.timer = nil
                 local args = assert(s.args)
-                callIn({ component = "timer: @debounce" }, fn, unpack(args, 1, args.n))
+                callIn(contexts.debounce, fn, unpack(args, 1, args.n))
             end)
         end
     end

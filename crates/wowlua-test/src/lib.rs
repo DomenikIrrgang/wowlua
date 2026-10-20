@@ -128,14 +128,40 @@ pub fn run(suite: &Suite, filter: Option<&str>, jobs: usize) -> Vec<FileResult> 
         .collect()
 }
 
-/// Whether coverage counts a chunk: the addon's own files (`src/…`), not
-/// test files.
-fn counted(chunk: &str) -> bool {
-    chunk.starts_with("src/") && !chunk.ends_with(".test.lua")
+/// What the addon's files' chunk names start with: the client names an
+/// addon's files `Interface/AddOns/<Name>/<path>` (`debugstack` in a
+/// recording: `Interface/AddOns/StdTest/src/engineprobe.lua:806`).
+fn chunk_prefix(build: &BuildOutput) -> String {
+    format!("Interface/AddOns/{}/", build.addon_name)
 }
 
-/// The source path of an output file (`src/x.lua` → `src/x.wowlua`).
+/// Loads files of the addon with the names the client gives them
+/// ([`chunk_prefix`]); what loads later (Blizzard's addons on demand) is
+/// named as before.
+fn named_as_client(vm: &mut Vm, build: &BuildOutput, load: impl FnOnce(&mut Vm)) {
+    let saved = wowlua_engine::engine_mut(vm)
+        .world
+        .ui
+        .chunk_prefix
+        .replace(chunk_prefix(build));
+    load(vm);
+    wowlua_engine::engine_mut(vm).world.ui.chunk_prefix = saved;
+}
+
+/// Whether coverage counts a chunk: the addon's own files (`src/…`), not
+/// test files.
+fn counted(prefix: &str, chunk: &str) -> bool {
+    chunk
+        .strip_prefix(prefix)
+        .is_some_and(|rest| rest.starts_with("src/") && !rest.ends_with(".test.lua"))
+}
+
+/// The source path of an output file (`src/x.lua` → `src/x.wowlua`), by
+/// its path in the AddOn folder or its chunk name.
 fn source_of(suite: &Suite, output: &str) -> String {
+    let output = output
+        .strip_prefix(chunk_prefix(suite.build).as_str())
+        .unwrap_or(output);
     let src = suite.src.trim_end_matches('/');
     let (prefix, rest) = if let Some(rest) = output.strip_prefix("src/") {
         (
@@ -183,14 +209,40 @@ pub fn split_failure(message: &str, stack: &str) -> (String, Option<String>) {
 }
 
 /// Error messages and stacks with source paths: the test profile keeps
-/// lines, so `src/x.lua:12` is `src/x.wowlua:12`.
+/// lines, so `Interface/AddOns/Demo/src/x.lua:12` is `src/x.wowlua:12`.
+/// A chunk name Lua shortened (`...ns/Demo/src/x.lua`, past 52 bytes) is
+/// the addon's file it ends, when only one does; other addons' files stay.
 fn to_sources(suite: &Suite, text: &str) -> String {
-    let re = regex::Regex::new(
-        r"\[?(?:Interface/AddOns/[^/]+/)?((?:src|tests|wowlua)/[\w./@-]+\.lua)\]?(:\d+)",
-    )
-    .expect("a valid pattern");
+    let re = regex::Regex::new(r"\[?(\.\.\.)?([\w./@-]+\.lua)\]?(:\d+)").expect("a valid pattern");
+    let prefix = chunk_prefix(suite.build);
+    let own = |path: &str| -> Option<String> {
+        if let Some(rest) = path.strip_prefix(prefix.as_str()) {
+            return Some(rest.to_string());
+        }
+        ["src/", "tests/", "wowlua/"]
+            .iter()
+            .any(|p| path.starts_with(p))
+            .then(|| path.to_string())
+    };
+    let ending = |tail: &str| -> Option<String> {
+        let files = suite.build.files.keys();
+        let tests = suite.build.tests.iter().map(|t| &t.path);
+        let mut found = files
+            .chain(tests)
+            .filter(|f| f.ends_with(".lua") && format!("{prefix}{f}").ends_with(tail));
+        let first = found.next()?;
+        found.all(|f| f == first).then(|| first.clone())
+    };
     re.replace_all(text, |c: &regex::Captures| {
-        format!("{}{}", source_of(suite, &c[1]), &c[2])
+        let path = if c.get(1).is_some() {
+            ending(&c[2])
+        } else {
+            own(&c[2])
+        };
+        match path {
+            Some(path) => format!("{}{}", source_of(suite, &path), &c[3]),
+            None => c[0].to_string(),
+        }
     })
     .into_owned()
 }
@@ -279,7 +331,10 @@ fn run_file(suite: &Suite, file: &TestFile, filter: Option<&str>) -> FileResult 
 /// The counts of a VM's run, by source file.
 fn coverage_of(suite: &Suite, vm: &Vm) -> Option<coverage::Report> {
     let cov = vm.coverage.as_ref()?;
-    let map = |chunk: &str| -> Option<String> { counted(chunk).then(|| source_of(suite, chunk)) };
+    let prefix = chunk_prefix(suite.build);
+    let map = |chunk: &str| -> Option<String> {
+        counted(&prefix, chunk).then(|| source_of(suite, chunk))
+    };
     Some(coverage::collect(vm, cov, &suite.root, &map))
 }
 
@@ -316,10 +371,12 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
         vm.clock.elapsed_ms = r.elapsed_ms;
     }
     if suite.coverage {
-        vm.enable_coverage(Box::new(|chunk: &[u8]| {
-            counted(&String::from_utf8_lossy(
-                chunk.strip_prefix(b"@").unwrap_or(chunk),
-            ))
+        let prefix = chunk_prefix(build);
+        vm.enable_coverage(Box::new(move |chunk: &[u8]| {
+            counted(
+                &prefix,
+                &String::from_utf8_lossy(chunk.strip_prefix(b"@").unwrap_or(chunk)),
+            )
         }));
     }
     if let Some(ui) = &suite.blizzard_ui {
@@ -389,7 +446,9 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
     if let Some(runtime) = listed.iter().position(|p| p == "wowlua/runtime.lua") {
         let before = errors_before(&vm);
         for path in &listed[..=runtime] {
-            wowlua_engine::ui::load_user_file(&mut vm, dir, path, &name, table);
+            named_as_client(&mut vm, build, |vm| {
+                wowlua_engine::ui::load_user_file(vm, dir, path, &name, table)
+            });
             loaded.insert(path.clone());
         }
         check(&mut vm, before, "loading the runtime")?;
@@ -400,7 +459,9 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
         closure(build, &mock.path, &mut order);
         for path in order {
             if loaded.insert(path.to_string()) {
-                wowlua_engine::ui::load_user_file(&mut vm, dir, path, &name, table);
+                named_as_client(&mut vm, build, |vm| {
+                    wowlua_engine::ui::load_user_file(vm, dir, path, &name, table)
+                });
             }
         }
     }
@@ -420,7 +481,9 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
     let own = wowlua_engine::ui::read_user_toc(&suite.flavor, &name, dir, &dir.join(&toc))?;
     wowlua_engine::bindings::add_own_addon(&mut vm, &own, table, bindings.exists());
     let before = errors_before(&vm);
-    wowlua_engine::ui::load_user_addon(&mut vm, dir, &dir.join(&toc), &name, table, &loaded);
+    named_as_client(&mut vm, build, |vm| {
+        wowlua_engine::ui::load_user_addon(vm, dir, &dir.join(&toc), &name, table, &loaded)
+    });
     loaded.extend(listed);
     check(&mut vm, before, "loading the addon")?;
     let before = errors_before(&vm);
@@ -428,7 +491,9 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
     closure(build, &file.path, &mut order);
     for path in order {
         if loaded.insert(path.to_string()) {
-            wowlua_engine::ui::load_user_file(&mut vm, dir, path, &name, table);
+            named_as_client(&mut vm, build, |vm| {
+                wowlua_engine::ui::load_user_file(vm, dir, path, &name, table)
+            });
         }
     }
     check(&mut vm, before, "loading the test file")?;

@@ -1995,7 +1995,7 @@ fn build_inner(
                     unlicensed.join(", ")
                 ),
             )
-            .with_help("check their licenses before publishing; `lua-library.license-files` can name the file"),
+            .with_help("check their licenses before publishing; a library's license is a `LICENSE` or `COPYING` file in its folder or its package's `license` (a Lua library's also its entry file's license header, or the files `lua-library.license-files` names)"),
         );
     }
     out.insert(
