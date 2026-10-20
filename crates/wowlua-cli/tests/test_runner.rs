@@ -3973,3 +3973,234 @@ end
     assert!(out.status.success(), "{text}");
     assert!(text.contains("2 passed, 0 failed"), "{text}");
 }
+
+/// Blizzard's UI with these test files: success and stdout + stderr, or
+/// `None` when the UI code is not on disk.
+fn blizzard_ui_files(files: &[(&str, &str)]) -> Option<(bool, String)> {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");
+    if !source.join("camelot/Interface").exists() {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return None;
+    }
+    let mut all = vec![("src/main.wowlua", "print(\"loaded\")\n")];
+    all.extend_from_slice(files);
+    let dir = project(r#""camelot": {}"#, &all);
+    let manifest = dir.path().join("wowlua.json");
+    let text = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        text.replacen('{', r#"{ "test": { "blizzard-ui": true },"#, 1),
+    )
+    .unwrap();
+    let out = wowlua(dir.path())
+        .arg("test")
+        .env("WOWLUA_UI_SOURCE", &source)
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    Some((out.status.success(), text))
+}
+
+/// In-game regression (spec emulator §17.8): SuuUI stood Blizzard's XP and
+/// reputation bar containers down by reparenting them under a hidden frame;
+/// opening Edit Mode then raised a Lua error (SuuUI's changelog:
+/// `StatusTrackingManager.lua:228`), as the container asks its parent,
+/// which it takes for `StatusTrackingBarManager`, for `CheckForLayoutChange`.
+/// The repro fails the same way; SuuUI's fix (the containers kept under
+/// the manager, the manager under the hidden frame) opens and closes Edit
+/// Mode without an error.
+#[test]
+fn suuui_reparented_status_bars_break_edit_mode() {
+    let Some((ok, text)) = blizzard_ui_files(&[
+        (
+            "tests/reparented.test.wowlua",
+            r#"import test from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+-- SuuUI before its fix (minimal repro): Blizzard's XP and reputation bar
+-- containers stood down as any other replaced frame, their events off,
+-- hidden and reparented under a hidden frame.
+@test("reparented status-bar containers, then Edit Mode")
+local function reparented()
+    mock.nextFrame(60)
+    local hidden = CreateFrame("Frame", nil, UIParent)
+    hidden:Hide()
+    StatusTrackingBarManager:UnregisterAllEvents()
+    for _, name in ipairs({ "MainStatusTrackingBarContainer", "SecondaryStatusTrackingBarContainer" }) do
+        local container = (_G :: any)[name]
+        container:UnregisterAllEvents()
+        container:Hide()
+        container:SetParent(hidden)
+    end
+    -- The user opens Edit Mode from the game menu.
+    mock.pressBinding("TOGGLEGAMEMENU")
+    mock.nextFrame(5)
+    local button: any = nil
+    for _, b in ipairs((_G :: any).GameMenuFrame.buttons) do
+        if b:GetText() == HUD_EDIT_MODE_MENU then button = b end
+    end
+    mock.click(button)
+    mock.nextFrame(10)
+end
+"#,
+        ),
+        (
+            "tests/kept.test.wowlua",
+            r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+local function editModeButton(): any
+    mock.pressBinding("TOGGLEGAMEMENU")
+    mock.nextFrame(5)
+    for _, b in ipairs((_G :: any).GameMenuFrame.buttons) do
+        if b:GetText() == HUD_EDIT_MODE_MENU then return b end
+    end
+    return nil
+end
+
+-- SuuUI's fix: the containers stay under StatusTrackingBarManager (Edit
+-- Mode asks their parent for the layout), only their events off; the
+-- manager goes under the hidden frame, which hides them with it.
+@test("containers kept under the manager, Edit Mode opened and closed")
+local function kept()
+    mock.nextFrame(60)
+    local hidden = CreateFrame("Frame", nil, UIParent)
+    hidden:Hide()
+    for _, name in ipairs({ "MainStatusTrackingBarContainer", "SecondaryStatusTrackingBarContainer" }) do
+        local container = (_G :: any)[name]
+        container:UnregisterAllEvents()
+    end
+    StatusTrackingBarManager:UnregisterAllEvents()
+    StatusTrackingBarManager:Hide()
+    StatusTrackingBarManager:SetParent(hidden)
+    mock.click(editModeButton())
+    mock.nextFrame(10)
+    expect(EditModeManagerFrame).toBeShown()
+    expect(EditModeManagerFrame:IsEditModeActive()).toBe(true)
+    expect(MainStatusTrackingBarContainer:GetParent()).toBe(StatusTrackingBarManager)
+    expect(MainStatusTrackingBarContainer:IsVisible()).toBe(false)
+    mock.pressKey("ESCAPE")
+    mock.nextFrame(10)
+    expect(EditModeManagerFrame).never.toBeShown()
+    expect(#mock.errors()).toBe(0)
+end
+"#,
+        ),
+    ]) else {
+        return;
+    };
+    assert!(!ok, "{text}");
+    assert!(
+        text.contains("an error reached the error handler: ...d_StatusTrackingBar/Shared/StatusTrackingManager.lua:228: attempt to call a nil value"),
+        "{text}"
+    );
+    assert!(text.contains("1 passed, 1 failed"), "{text}");
+    assert!(text.contains("PASS tests/kept.test.wowlua"), "{text}");
+}
+
+/// In-game regression (spec emulator §17.8, the taint met in combat):
+/// SuuUI's bag button called Blizzard's `ToggleAllBags`, whose code wrote
+/// the bag frames' fields as SuuUI's (its taint probe found
+/// `ContainerFrame1.size`, `Items`, `AddSlotsButton`); in combat Escape,
+/// which closes the bags first, read them and Blizzard's panel manager
+/// would not close the spells window ("Interface action failed", no
+/// `ADDON_ACTION_BLOCKED`). The repro shows the same; SuuUI's fix (its bags
+/// keep their own state through hooks, never calling Blizzard's bag
+/// functions) leaves Escape free to close it.
+#[test]
+fn suuui_bag_calls_taint_escape_in_combat() {
+    let Some((ok, text)) = blizzard_ui_files(&[
+        (
+            "tests/called.test.wowlua",
+            r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+local function chatHas(text: string): boolean
+    local frame = (_G :: any).ChatFrame1
+    for i = 1, frame:GetNumMessages() do
+        local line = frame:GetMessageInfo(i)
+        if type(line) == "string" and line:find(text, 1, true) then return true end
+    end
+    return false
+end
+
+-- SuuUI before its fix (minimal repro): its micro menu's bag button
+-- called Blizzard's `ToggleAllBags`, whose code then wrote the bag
+-- frames' fields (`size`, `Items`, `AddSlotsButton`) as the addon's.
+@test("the addon's ToggleAllBags, then Escape in combat")
+local function called()
+    mock.setBag(1, { slots = 10 })
+    mock.nextFrame(60)
+    ToggleAllBags()
+    mock.nextFrame(5)
+    expect(issecurevariable(ContainerFrame2, "Items")).toBe(false)
+    -- The user opens the spellbook, a fight starts, the user presses Escape.
+    mock.pressBinding("TOGGLESPELLBOOK")
+    mock.nextFrame(5)
+    expect(PlayerSpellsFrame).toBeShown()
+    mock.player:enterCombat()
+    mock.nextFrame(5)
+    mock.pressKey("ESCAPE")
+    mock.nextFrame(5)
+    -- As in the game: Escape closed the bags first, reading their fields
+    -- tainted it, and Blizzard's panel manager refused to close the
+    -- window ("Interface action failed", no ADDON_ACTION_BLOCKED).
+    expect(PlayerSpellsFrame).toBeShown()
+    expect(chatHas(INTERFACE_ACTION_BLOCKED)).toBe(true)
+    expect(#mock.refusals()).toBe(0)
+end
+"#,
+        ),
+        (
+            "tests/own.test.wowlua",
+            r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+local function chatHas(text: string): boolean
+    local frame = (_G :: any).ChatFrame1
+    for i = 1, frame:GetNumMessages() do
+        local line = frame:GetMessageInfo(i)
+        if type(line) == "string" and line:find(text, 1, true) then return true end
+    end
+    return false
+end
+
+-- SuuUI's fix: its bags keep their own open state, following Blizzard's
+-- bag calls through hooks, and never call them.
+@test("the addon's own bag state, then Escape in combat")
+local function own()
+    mock.setBag(1, { slots = 10 })
+    mock.nextFrame(60)
+    local bags = CreateFrame("Frame", nil, UIParent)
+    bags:Hide()
+    hooksecurefunc("ToggleAllBags", function() bags:SetShown(not bags:IsShown()) end)
+    -- The addon's bag button opens its own window only.
+    bags:Show()
+    -- The user's bag key opens Blizzard's bags too.
+    mock.pressBinding("OPENALLBAGS")
+    mock.nextFrame(5)
+    expect(ContainerFrame2).toBeShown()
+    expect(issecurevariable(ContainerFrame2, "Items")).toBe(true)
+    mock.pressBinding("TOGGLESPELLBOOK")
+    mock.nextFrame(5)
+    expect(PlayerSpellsFrame).toBeShown()
+    mock.player:enterCombat()
+    mock.nextFrame(5)
+    mock.pressKey("ESCAPE")
+    mock.nextFrame(5)
+    expect(PlayerSpellsFrame).never.toBeShown()
+    expect(ContainerFrame2).never.toBeShown()
+    expect(chatHas(INTERFACE_ACTION_BLOCKED)).toBe(false)
+end
+"#,
+        ),
+    ]) else {
+        return;
+    };
+    assert!(ok, "{text}");
+    assert!(text.contains("2 passed, 0 failed"), "{text}");
+}
