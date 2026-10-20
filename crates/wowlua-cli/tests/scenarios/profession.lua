@@ -180,11 +180,12 @@ e.setLatency(0.3)
 -- new slot's item data after the item (the first tin and bronze bars'):
 -- four copper bars, the tin the server held, four tin bars (the last
 -- interrupted), four bronze bars. The first bar's bags in the moment of
--- the next cast's start, before it (0.281 recorded for both; a
--- millisecond earlier here, as the server's answers are due at whole
--- milliseconds and those of one moment come in the order they were set).
+-- the next cast's start, split around it: one bag change before, the
+-- other after (0.281 recorded for all; its first part a millisecond
+-- earlier here, as the server's answers are due at whole milliseconds
+-- and those of one moment come in the order they were set).
 player:craftTimings({
-    { start = 0.335, success = 2.951, item = 0.068, bags = 0.280 },
+    { start = 0.335, success = 2.951, item = 0.068, bags = 0.280, split = 1, rest = 0.001 },
     { start = 0.349, success = 2.939, item = 0, bags = 0.325 },
     { start = 0.325, success = 3.030, item = 0, bags = 0.186 },
     { start = 0.299, success = 2.986, item = 0.044, bags = 0.124 },
