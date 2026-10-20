@@ -1004,6 +1004,19 @@ pub fn take_from_bags(vm: &mut Vm, id: i64, count: f64) -> Vec<i64> {
 }
 
 /// How many of item `id` the bags hold (not the bank's).
+/// The first bag slot holding item `id` (the carried bags in order).
+pub fn first_slot_of(vm: &Vm, id: i64) -> Option<(i64, usize)> {
+    engine(vm)
+        .world
+        .character
+        .bags
+        .iter()
+        .filter(|(b, _)| carried(**b))
+        .flat_map(|(b, bag)| bag.items.iter().map(move |(s, h)| (*b, *s, h.id)))
+        .find(|(_, _, held)| *held == id)
+        .map(|(b, s, _)| (b, s))
+}
+
 pub fn count_in_bags(vm: &Vm, id: i64) -> f64 {
     engine(vm)
         .world

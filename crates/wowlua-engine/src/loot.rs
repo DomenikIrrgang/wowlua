@@ -97,6 +97,9 @@ pub struct Loot {
     /// bag update and the corpse's emptying with it (`pushAfter`, a
     /// recording's).
     pub push_after: Vec<(usize, f64)>,
+    /// The looting flags' word after the last item (`flagsAfter`, a
+    /// recording's), else a round trip.
+    pub flags_after: Option<f64>,
     /// A corpse the player asked to loot, its window not yet open.
     pub asked: Option<UnitId>,
     /// The looting flags owed to the echo of targeting this corpse, or
@@ -219,6 +222,7 @@ pub fn control_loot(vm: &mut Vm, c: NativeCall) -> Ret {
     let alone = slot_seconds(vm, opts, "bagsAlone");
     engine_mut(vm).world.loot.bags_alone = alone;
     engine_mut(vm).world.loot.push_after = slot_seconds(vm, opts, "pushAfter");
+    engine_mut(vm).world.loot.flags_after = opt_seconds(vm, opts, "flagsAfter");
     {
         let l = &mut engine_mut(vm).world.loot;
         l.asked = Some(corpse);
@@ -235,6 +239,14 @@ pub fn control_loot(vm: &mut Vm, c: NativeCall) -> Ret {
         vec![Value::Num(corpse.0 as f64), Value::Bool(auto)],
     );
     Ok(vec![])
+}
+
+/// A number of seconds in the options (`flagsAfter`), if given.
+fn opt_seconds(vm: &mut Vm, opts: Option<wowlua_vm::TableRef>, key: &str) -> Option<f64> {
+    match opt_field(vm, opts, key) {
+        Value::Num(n) => Some(n),
+        _ => None,
+    }
 }
 
 /// A table of seconds by slot in the options (`bagsAlone`, `pushAfter`).
@@ -337,6 +349,7 @@ pub fn control_gather(vm: &mut Vm, c: NativeCall) -> Ret {
     let bags = opt_field(vm, opts, "bagsAfter");
     engine_mut(vm).world.loot.bags_after = numbers(vm, bags);
     engine_mut(vm).world.loot.data_after = Vec::new();
+    engine_mut(vm).world.loot.flags_after = opt_seconds(vm, opts, "flagsAfter");
     fire(vm, "CURRENT_SPELL_CAST_CHANGED", &[Value::Bool(false)]);
     fire(vm, "ACTIONBAR_UPDATE_STATE", &[]);
     let delay = crate::clock::server_delay(vm);
@@ -599,7 +612,7 @@ fn taken(vm: &mut Vm, c: NativeCall) -> Ret {
         let emptied = match corpse {
             Some(corpse) if last => {
                 engine_mut(vm).units.list[corpse.0].loot.clear();
-                let delay = crate::clock::server_delay(vm);
+                let delay = flags_delay(vm);
                 later(vm, delay, "lootFlags", loot_flags, vec![]);
                 Value::Num(corpse.0 as f64)
             }
@@ -616,15 +629,16 @@ fn taken(vm: &mut Vm, c: NativeCall) -> Ret {
         let after = engine_mut(vm).world.loot.log_after.remove(0);
         later(vm, after, "lootLog", log_told, vec![]);
     }
+    let mut flags = None;
     if last && let Some(corpse) = corpse {
         engine_mut(vm).units.list[corpse.0].loot.clear();
         engine_mut(vm).world.loot.emptied = Some(corpse);
         // No longer looting: the flags a round trip after the last item
         // (recorded: the profession's veins 0.30-0.34 s at a ping of 0.345,
         // the quest's corpses 0.26-0.28 s at 0.3; before or after the
-        // bags' packet as that comes).
-        let delay = crate::clock::server_delay(vm);
-        later(vm, delay, "lootFlags", loot_flags, vec![]);
+        // bags' packet as that comes, in its moment after its bags'
+        // updates: `profession` 8.473, `quest` 32.346).
+        flags = Some(flags_delay(vm));
     }
     let alone = {
         let l = &mut engine_mut(vm).world.loot;
@@ -675,7 +689,17 @@ fn taken(vm: &mut Vm, c: NativeCall) -> Ret {
             later(vm, after, "lootItemData", item_data_arrived, vec![]);
         }
     }
+    if let Some(delay) = flags {
+        later(vm, delay, "lootFlags", loot_flags, vec![]);
+    }
     Ok(vec![])
+}
+
+/// The looting flags' delay after the last item: a recording's
+/// (`flagsAfter`) or a round trip.
+fn flags_delay(vm: &mut Vm) -> f64 {
+    let recorded = engine_mut(vm).world.loot.flags_after.take();
+    recorded.unwrap_or_else(|| crate::clock::server_delay(vm))
 }
 
 /// A slot's item after its slot cleared (`pushAfter`): its bag update,
@@ -801,7 +825,7 @@ fn bags_end(vm: &mut Vm, placed: &[Placed]) {
     // counts (recorded, `quest`: all 7 counts of Tough Wolf Meat, none of
     // the 3 without it).
     if wanted {
-        fire(vm, "QUEST_LOG_UPDATE", &[]);
+        crate::batch::fire_at_end(vm, "QUEST_LOG_UPDATE", &[]);
     }
 }
 
@@ -824,7 +848,7 @@ fn item_data_arrived(vm: &mut Vm, _c: NativeCall) -> Ret {
     }
     fire(vm, "BAG_UPDATE_DELAYED", &[]);
     if quest {
-        fire(vm, "QUEST_LOG_UPDATE", &[]);
+        crate::batch::fire_at_end(vm, "QUEST_LOG_UPDATE", &[]);
     }
     Ok(vec![])
 }

@@ -13,6 +13,9 @@ local e = __engine
 -- The Sharpening Wheel's craft may be interrupted (recorded: its
 -- UnitCastingInfo's eighth false; the other crafts' true).
 e.setSpellTraits({ interruptible = { 1230171 } })
+-- As in the client's frames, some events wait for the frame's end, each
+-- once, in their names' order (`setFrameBatching`).
+e.setFrameBatching(true)
 local player = e.player
 e.setSpellTraits({ offGlobalCooldown = { 20271 }, tracking = { 2580, 5502 }, profession = { 3100, 2656 }, partyOrSelf = { 1022 } })
 -- The spell and the stone as the client named them (UnitCastingInfo, the
@@ -38,23 +41,24 @@ e.setLatency(0.345)
 -- third time with two rough stones). Each cast's start as recorded (the
 -- server's answer 0.364, 0.378, 0.340 and 0.348 s after the click): a
 -- moment of its own, at that time; its success, the slots' answers after
--- the window opened and each item's bags' packet after it as recorded.
+-- the window opened, each item's bags' packet after it and the looting
+-- flags after the last item as recorded.
 local ore = { { id = 2770 } }
-local function mine(t, answer, succeedsAfter, loot, slotsAfter, bagsAfter)
+local function mine(t, answer, succeedsAfter, loot, slotsAfter, bagsAfter, flagsAfter)
     e.setLatency(answer)
     at(t) player:gather(vein, {
         spell = 2576, castTime = 3.2, loot = loot, auto = true, succeedsAfter = succeedsAfter,
-        slotsAfter = slotsAfter, bagsAfter = bagsAfter,
+        slotsAfter = slotsAfter, bagsAfter = bagsAfter, flagsAfter = flagsAfter,
     })
     at(t + answer + 0.001)
     e.setLatency(0.345)
 end
 at(2.872) player:softTarget(vein, "interact")
 at(3.504) world("PLAYER_STOPPED_MOVING")
-mine(3.734, 0.364, 3.208, ore, { 0.566 }, { 0.334 })
-mine(9.672, 0.378, 3.154, ore, { 0.605 }, { 0.405 })
-mine(14.495, 0.340, 3.197, { { id = 2770 }, { id = 2835, count = 2 } }, { 0.517, 0.713 }, { 0.160, 0.036 })
-mine(19.363, 0.348, 3.192, ore, { 0.528 }, { 0.061 })
+mine(3.734, 0.364, 3.208, ore, { 0.566 }, { 0.334 }, 0.334)
+mine(9.672, 0.378, 3.154, ore, { 0.605 }, { 0.405 }, 0.304)
+mine(14.495, 0.340, 3.197, { { id = 2770 }, { id = 2835, count = 2 } }, { 0.517, 0.713 }, { 0.160, 0.036 }, 0.332)
+mine(19.363, 0.348, 3.192, ore, { 0.528 }, { 0.061 }, 0.338)
 at(24.2)
 check("the ore in the bag", C_Item.GetItemCount(2770) == 18)
 -- Blacksmithing's spell clicked on the bar: its window.
@@ -216,3 +220,5 @@ at(234.0)
 check("the bronze made", C_Item.GetItemCount(2841) == 8)
 at(235.277) e.pressKey("ESCAPE")
 at(236.0)
+-- The last frame's batched events.
+e.setFrameBatching(false)
