@@ -1328,7 +1328,7 @@ fn align(ours: &[String], theirs: &[String]) -> (usize, Vec<String>, Vec<String>
 
 /// How many of the combat scenario's lines the engine plays as the client
 /// did: only ever up.
-const COMBAT_MATCHED: usize = 772;
+const COMBAT_MATCHED: usize = 778;
 
 /// The combat scenario: a wolf targeted, fought, killed and looted.
 #[test]
