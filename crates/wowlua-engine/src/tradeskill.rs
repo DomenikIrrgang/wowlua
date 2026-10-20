@@ -141,6 +141,10 @@ pub struct Timing {
     /// The bags' packet split: its first changes (`split`), the rest
     /// these seconds after (`rest`).
     pub split: Option<(usize, f64)>,
+    /// A used-up reagent's removal after the item (`spent`; else with it).
+    pub spent: Option<f64>,
+    /// A new slot's bag told before the item's push (`slotFirst`).
+    pub slot_first: bool,
 }
 
 #[derive(Default)]
@@ -177,6 +181,12 @@ pub struct TradeSkill {
     pub timing: Option<Timing>,
     /// The bags' packet's split of the item being made (`Timing::split`).
     pub split: Option<(usize, f64)>,
+    /// When the item being made's used-up reagents' removal is told after
+    /// it (`Timing::spent`).
+    pub spent: Option<f64>,
+    /// The item being made's new slot told before its push
+    /// (`Timing::slot_first`).
+    pub slot_first: bool,
     /// The windows shown this session.
     pub shown: u32,
 }
@@ -1096,6 +1106,8 @@ fn crafted(vm: &mut Vm, c: NativeCall) -> Ret {
     let delay = crate::clock::server_delay(vm);
     let timing = state_mut(vm).timing.take().unwrap_or_default();
     state_mut(vm).split = timing.split;
+    state_mut(vm).spent = timing.spent;
+    state_mut(vm).slot_first = timing.slot_first;
     let r = Value::Num(recipe);
     let queued_bags = BAGS_AFTER_SUCCESS - QUEUED_ITEM_AFTER;
     if left > 0 {
@@ -1242,6 +1254,11 @@ pub fn control_timings(vm: &mut Vm, c: NativeCall) -> Ret {
             bags: get("bags"),
             data: get("data"),
             split: get("split").zip(get("rest")).map(|(k, r)| (k as usize, r)),
+            spent: get("spent"),
+            slot_first: {
+                let key = vm.str("slotFirst");
+                vm.heap.table(e).get(key).truthy()
+            },
         };
         state_mut(vm).timings.push_back(timing);
     }
@@ -1263,6 +1280,14 @@ fn make(vm: &mut Vm, recipe: i64, bags_after: f64, data_after: Option<f64>) {
         .collect();
     let placed = crate::character::push_to_bags(vm, output, quantity);
     let (bag, new_slot) = placed.unwrap_or((0, None));
+    // A new slot's bag told at once, before the push in a recording's
+    // (`slotFirst`: `profession` 205.375, the first tin bar).
+    let told = new_slot.is_some()
+        && bag == crate::character::REAGENT_BAG
+        && std::mem::take(&mut state_mut(vm).slot_first);
+    if told {
+        crate::character::bag_updated(vm, bag);
+    }
     let icon = crate::character::item_field(vm, output, "icon");
     fire(
         vm,
@@ -1324,7 +1349,9 @@ fn make(vm: &mut Vm, recipe: i64, bags_after: f64, data_after: Option<f64>) {
     // A new slot's bag told at once (recorded: the first copper and bronze
     // bars; unverified: the wheel's in the backpack, told later only).
     if new_slot.is_some() && bag == crate::character::REAGENT_BAG {
-        crate::character::bag_updated(vm, bag);
+        if !told {
+            crate::character::bag_updated(vm, bag);
+        }
         fire(vm, "BAG_UPDATE_DELAYED", &[]);
     }
     // The reagents taken; the bags changed, in order (a bag once per slot
@@ -1333,24 +1360,26 @@ fn make(vm: &mut Vm, recipe: i64, bags_after: f64, data_after: Option<f64>) {
     let mut emptied: Vec<i64> = Vec::new();
     for (id, count) in &reagents {
         let bags = crate::character::take_from_bags(vm, *id, *count);
-        // A reagent used up: its slots' removal told with the item (the
-        // equipped spells', the inventory's), their bags' updates bare at
-        // the bags' packet's end, after the item's (recorded once:
-        // `profession` 232.767 and 233.007, the last bronze bar taking the
-        // last copper and tin bars; unverified).
+        // A reagent used up: its slots' removal told with the item or a
+        // moment after (`spent`, a recording's: the equipped spells', the
+        // reagent bag's inventory's), their bags' updates bare at the
+        // bags' packet's end, after the item's (recorded twice:
+        // `profession` 37.943, the wheel taking the last copper bar, its
+        // removal 0.151 s after the item, its bag's update bare at 38.364;
+        // 232.767 and 233.007, the last bronze bar taking the last copper
+        // and tin bars, with the item).
         if crate::character::count_in_bags(vm, *id) == 0.0 {
-            for b in &bags {
-                crate::character::equipped_spells_changed(vm);
-                if *b == crate::character::REAGENT_BAG {
-                    units::fire_unit(vm, "UNIT_INVENTORY_CHANGED", PLAYER, &[]);
-                }
-            }
             emptied.extend(bags);
         } else {
             changes.extend(bags);
         }
     }
     let taken = changes.len();
+    let removed: Vec<Value> = emptied.iter().map(|b| Value::Num(*b as f64)).collect();
+    match state_mut(vm).spent.take() {
+        Some(after) if after > 0.0 => later(vm, after, "craftSpent", spent_told, removed),
+        _ => tell_spent(vm, &removed),
+    }
     // A new slot's item data in its own packet (recorded: the first tin
     // and bronze bars'), else with the bags'.
     let data_after = data_after.filter(|_| new_slot.is_some());
@@ -1396,6 +1425,23 @@ fn make(vm: &mut Vm, recipe: i64, bags_after: f64, data_after: Option<f64>) {
         upvals.push(Value::Num(n));
     }
     later(vm, bags_after, "craftBags", craft_bags, upvals);
+}
+
+/// Used-up reagents' slots removed (in these bags): the equipped spells'
+/// change for each, the reagent bag's inventory's.
+fn tell_spent(vm: &mut Vm, bags: &[Value]) {
+    for b in bags {
+        crate::character::equipped_spells_changed(vm);
+        if b.raw_eq(Value::Num(crate::character::REAGENT_BAG as f64)) {
+            units::fire_unit(vm, "UNIT_INVENTORY_CHANGED", PLAYER, &[]);
+        }
+    }
+}
+
+fn spent_told(vm: &mut Vm, c: NativeCall) -> Ret {
+    let bags = c.upvals.to_vec();
+    tell_spent(vm, &bags);
+    Ok(vec![])
 }
 
 /// A new slot's item data: the slot read, the equipped spells', its bag's

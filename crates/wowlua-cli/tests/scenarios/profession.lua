@@ -85,9 +85,10 @@ local function pick(recipe)
 end
 -- The wheel made: a cast of 10 s; the window closed meanwhile.
 -- Its cast 0.343 s after the click, its success 9.960 s after the cast,
--- the item with it, its bags 0.421 s after (recorded).
+-- the item with it, its bags 0.421 s after, the last copper bar's
+-- removal 0.151 s after the item (recorded).
 e.setLatency(0.343)
-player:craftTimings({ { start = 0.343, success = 9.960, item = 0, bags = 0.421 } })
+player:craftTimings({ { start = 0.343, success = 9.960, item = 0, bags = 0.421, spent = 0.151 } })
 at(27.640) press(ProfessionsFrame.CraftingPage.CreateButton)
 at(27.984) e.setLatency(0.345)
 -- The window's list updated mid-cast, its cause unknown (recorded).
@@ -183,13 +184,14 @@ e.setLatency(0.3)
 -- the next cast's start, split around it: one bag change before, the
 -- other after (0.281 recorded for all; its first part a millisecond
 -- earlier here, as the server's answers are due at whole milliseconds
--- and those of one moment come in the order they were set).
+-- and those of one moment come in the order they were set). The first
+-- tin bar's new slot told before its push (recorded).
 player:craftTimings({
     { start = 0.335, success = 2.951, item = 0.068, bags = 0.280, split = 1, rest = 0.001 },
     { start = 0.349, success = 2.939, item = 0, bags = 0.325 },
     { start = 0.325, success = 3.030, item = 0, bags = 0.186 },
     { start = 0.299, success = 2.986, item = 0.044, bags = 0.124 },
-    { start = 0.293, success = 2.906, item = 0.096, bags = 0.098, data = 0.425 },
+    { start = 0.293, success = 2.906, item = 0.096, bags = 0.098, data = 0.425, slotFirst = true },
     { start = 0.327, success = 2.932, item = 0.024, bags = 0.151 },
     { start = 0.342, success = 2.987, item = 0, bags = 0.413 },
     { start = 0.310, success = 2.940, item = 0.035, bags = 0.396 },

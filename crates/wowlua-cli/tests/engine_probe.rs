@@ -1486,7 +1486,7 @@ fn the_engine_plays_talents_as_the_client_did() {
 
 /// How many of the profession scenario's lines the engine plays as the
 /// client did: only ever up.
-const PROFESSION_MATCHED: usize = 2326;
+const PROFESSION_MATCHED: usize = 2336;
 
 /// The profession scenario: a vein mined, a profession's window, crafts.
 #[test]
