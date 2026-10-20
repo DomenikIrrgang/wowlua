@@ -46,7 +46,7 @@ pub(crate) static CODES: &[CodeInfo] = &[
     CodeInfo { code: "E1035", summary: "`build.load-order` contradicts a computed load-time dependency" },
     CodeInfo { code: "W1035", summary: "Usage-analysis dependency contradicts `build.load-order`; the listed order is kept (contradicting imports are E1035)" },
     CodeInfo { code: "E1036", summary: "Flavors need incompatible load orders and `toc-layout = \"single\"` is forced" },
-    CodeInfo { code: "W1036", summary: "A module of an import cycle reads an export of a module of the cycle checked after it that has no type annotation (or a `typeof` type alias it has not reached): it is `any` there" },
+    CodeInfo { code: "W1036", summary: "A module of an import cycle reads an export (or, with `import internal`, a file-level local) of a module of the cycle checked after it that has no type annotation (or a `typeof` type alias it has not reached): it is `any` there" },
     CodeInfo { code: "E1037", summary: "Hoisted declaration used at load time before its definition has executed" },
     CodeInfo { code: "E1038", summary: "`asset()` path is not a package asset (or case mismatch)" },
     CodeInfo { code: "E1039", summary: "`@if(flavor …)` in a `.wowlua` file in shared flavor mode" },

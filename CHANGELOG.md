@@ -23,6 +23,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - A string-keyed field may be read-only: `{ readonly ["end"]: number }`
 - E1016: an export that redeclares a module-level name (`local items = {}` then `export function items()`, a forward-declared `local f` then `export function f()`), and a name exported twice
 - W1036: a module of an import cycle that reads an export without a type annotation (or a `typeof` alias) of a module of the cycle checked after it, where it is `any`, is told to annotate it there
+- W1036 also for a `typeof` alias of a later module of the cycle used through a namespace import (`local c: qn.Conf`), and for an unannotated file-level local a test file's `import internal` reads; annotated locals and functions read that way have their types
 
 ### Changed
 

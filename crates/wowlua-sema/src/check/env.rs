@@ -176,6 +176,10 @@ pub struct Env<'p> {
     /// Top-level aliases whose bodies use `typeof(expr)`, with their file,
     /// until the file's check reaches them (spec §2.2.7): `any` until then.
     pub typeof_aliases: FxHashMap<DefId, usize>,
+    /// `M.T` type references through a namespace import to such an alias
+    /// of another module, read as `any`: the module, the name and where
+    /// (W1036, spec §5.4.4).
+    pub typeof_namespace_refs: Vec<(usize, Box<str>, wowlua_span::Span)>,
     /// Name spans of the definitions of renamable methods, with their class.
     pub renamable_defs: Vec<(wowlua_span::Span, DefId)>,
 }
@@ -1522,10 +1526,20 @@ impl<'p> Env<'p> {
                 .and_then(|ns| ns.get(path.at(0).text()))
                 .copied()
         {
-            self.module_types
+            let def = self
+                .module_types
                 .get(&m)
                 .and_then(|t| t.get(path.at(1).text()))
-                .copied()
+                .copied();
+            if let Some(d) = def
+                && self.typeof_aliases.get(&d) == Some(&m)
+                && scope.module != Some(m)
+            {
+                let name = path.at(1);
+                self.typeof_namespace_refs
+                    .push((m, name.text().into(), name.span()));
+            }
+            def
         } else {
             let full: Vec<&str> = path.iter().map(|n| n.text()).collect();
             let joined = full.join(".");
