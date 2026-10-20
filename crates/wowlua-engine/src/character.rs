@@ -970,6 +970,25 @@ pub fn bag_for(vm: &mut Vm, id: i64, count: f64) -> Option<i64> {
     new_slot_bags(vm, id).into_iter().find(|b| free.contains(b))
 }
 
+/// The bags `take_from_bags` would change, taking nothing yet.
+pub fn bags_to_take(vm: &Vm, id: i64, count: f64) -> Vec<i64> {
+    let mut left = count;
+    let mut changed = Vec::new();
+    let bags = &engine(vm).world.character.bags;
+    for (bag, b) in bags.iter().rev().filter(|(b, _)| carried(**b)) {
+        for held in b.items.values().rev().filter(|h| h.id == id) {
+            if left <= 0.0 {
+                break;
+            }
+            left -= held.count.min(left);
+            if !changed.contains(bag) {
+                changed.push(*bag);
+            }
+        }
+    }
+    changed
+}
+
 /// `count` of item `id` taken from the bags (the last stacks first,
 /// unverified); the bags changed.
 pub fn take_from_bags(vm: &mut Vm, id: i64, count: f64) -> Vec<i64> {

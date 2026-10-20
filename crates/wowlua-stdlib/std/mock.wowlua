@@ -149,7 +149,8 @@ export interface MockUnit
     --- `item` after its success (0: with it), the bags' packet (`bags`)
     --- after its item, a new slot's item data (`data`, its own packet;
     --- else with the bags') after its item; the bags' packet split (its
-    --- first `split` bag changes, the rest `rest` seconds after), a
+    --- first `split` bag changes, the item's first, the rest and the
+    --- reagents' taking `rest` seconds after), a
     --- used-up reagent's removal after its item (`spent`; else with it),
     --- a new slot's bag told before the item's push (`slotFirst`); what
     --- one leaves out is the engine's.

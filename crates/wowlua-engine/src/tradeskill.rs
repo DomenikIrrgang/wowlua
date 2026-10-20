@@ -138,8 +138,9 @@ pub struct Timing {
     pub item: Option<f64>,
     pub bags: Option<f64>,
     pub data: Option<f64>,
-    /// The bags' packet split: its first changes (`split`), the rest
-    /// these seconds after (`rest`).
+    /// The bags' packet split: its first changes (`split`, the item's
+    /// first), the rest and the reagents' taking these seconds after
+    /// (`rest`).
     pub split: Option<(usize, f64)>,
     /// A used-up reagent's removal after the item (`spent`; else with it).
     pub spent: Option<f64>,
@@ -1358,7 +1359,17 @@ fn make(vm: &mut Vm, recipe: i64, bags_after: f64, data_after: Option<f64>) {
     // changed), the item's last.
     let mut changes: Vec<i64> = Vec::new();
     let mut emptied: Vec<i64> = Vec::new();
+    // The bags' packet split (a recording's): the item's change first, the
+    // reagents taken and told with the rest (recorded once, `profession`
+    // 192.501: the first part's bag read the ore not yet taken).
+    let split = state_mut(vm).split.take();
+    let mut owed: Vec<(i64, f64)> = Vec::new();
     for (id, count) in &reagents {
+        if split.is_some() {
+            changes.extend(crate::character::bags_to_take(vm, *id, *count));
+            owed.push((*id, *count));
+            continue;
+        }
         let bags = crate::character::take_from_bags(vm, *id, *count);
         // A reagent used up: its slots' removal told with the item or a
         // moment after (`spent`, a recording's: the equipped spells', the
@@ -1386,13 +1397,15 @@ fn make(vm: &mut Vm, recipe: i64, bags_after: f64, data_after: Option<f64>) {
     if let (Some(after), Some(slot)) = (data_after, new_slot) {
         let upvals = vec![Value::Num(bag as f64), Value::Num(slot as f64)];
         later(vm, after, "craftItemData", item_data, upvals);
+    } else if split.is_some() {
+        changes.insert(0, bag);
     } else {
         changes.push(bag);
     }
     let new_slot = if data_after.is_some() { None } else { new_slot };
     // The used-up reagents' updates last, the skill-up after them.
     let bare = emptied.len();
-    let taken = if bare > 0 {
+    let taken = if bare > 0 || split.is_some() {
         changes.len() + bare
     } else {
         taken
@@ -1412,14 +1425,17 @@ fn make(vm: &mut Vm, recipe: i64, bags_after: f64, data_after: Option<f64>) {
         Value::Num(bare as f64),
     ];
     let n = changes.len();
-    let split = state_mut(vm).split.take();
     let first = split.map_or(n, |(k, _)| k.min(n));
     upvals.extend([
         Value::Num(0.0),
         Value::Num(first as f64),
         Value::Num(split.map_or(-1.0, |(_, r)| r)),
+        Value::Num(owed.len() as f64),
     ]);
     upvals.extend(changes.iter().map(|b| Value::Num(*b as f64)));
+    for (id, count) in owed {
+        upvals.extend([Value::Num(id as f64), Value::Num(count)]);
+    }
     for (id, n) in before {
         upvals.push(Value::Num(id as f64));
         upvals.push(Value::Num(n));
@@ -1480,9 +1496,17 @@ fn craft_bags(vm: &mut Vm, c: NativeCall) -> Ret {
     if from == 0 && num(4) >= 0.0 {
         crate::character::arrived(vm, num(3) as i64, num(4) as usize);
     }
-    const HEAD: usize = 9;
+    const HEAD: usize = 10;
     let bare = num(5) as usize;
     let changes: Vec<i64> = (0..n).map(|i| num(HEAD + i) as i64).collect();
+    // Reagents owed to the packet's last part (`make`'s split), taken now.
+    let owed = num(9) as usize;
+    if to == n {
+        for k in 0..owed {
+            let (id, count) = (num(HEAD + n + 2 * k), num(HEAD + n + 2 * k + 1));
+            crate::character::take_from_bags(vm, id as i64, count);
+        }
+    }
     let mut skill = None;
     let mut previous = from.checked_sub(1).map(|i| changes[i]);
     for (i, bag) in changes.into_iter().enumerate().take(to).skip(from) {
@@ -1520,7 +1544,7 @@ fn craft_bags(vm: &mut Vm, c: NativeCall) -> Ret {
         skill = skill_up(vm, skill_recipe);
     }
     fire(vm, "BAG_UPDATE_DELAYED", &[]);
-    for pair in c.upvals[HEAD + n..].chunks(2) {
+    for pair in c.upvals[HEAD + n + 2 * owed..].chunks(2) {
         if let [Value::Num(id), Value::Num(before)] = pair {
             let now = crate::character::count_in_bags(vm, *id as i64);
             if now != *before && now > 0.0 && *before > 0.0 {

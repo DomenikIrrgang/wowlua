@@ -182,8 +182,8 @@ e.setLatency(0.3)
 -- new slot's item data after the item (the first tin and bronze bars'):
 -- four copper bars, the tin the server held, four tin bars (the last
 -- interrupted), four bronze bars. The first bar's bags in the moment of
--- the next cast's start, split around it: one bag change before, the
--- other after (0.281 recorded for all; its first part a millisecond
+-- the next cast's start, split around it: the bar's bag change before,
+-- the ore taken after (0.281 recorded for all; its first part a millisecond
 -- earlier here, as the server's answers are due at whole milliseconds
 -- and those of one moment come in the order they were set). The first
 -- tin bar's new slot told before its push (recorded).
