@@ -26,6 +26,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `wowlua:secret`: `known<T, F>(v, fallback: F): T | F`: the fallback may be of another type, so `known(name, nil)` is a `string?`
 - Generic inference binds `T` through a `T | Secret<T>` parameter (the secret members through `Secret<T>`, the rest to `T`)
 - `wowlua:secure`: `state` without a function only registers the driver (for an `_onstate-<name>` snippet) and hooks nothing
+- `wowlua:spell`: `charges` returns `SpellChargeInfoSecret?`, the readable table the client answers, whose counts and times may be secret on restricted clients
 
 ### Fixed
 
@@ -45,11 +46,14 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `wowlua:aura`: `setGroupSpells` keeps the group's dispel types
 - WoW API declarations: big integers (auction house prices, `GetCancelCost`, bank tab costs, order IDs) and UI sizes (`C_NamePlate.SetNamePlateSize`) are numbers, not strings
 - WoW API declarations: `issecrettable`, `canaccessallvalues`, `mapvalues` and the other secret-value functions take any value, not a function
-- WoW API declarations: a structure a possibly secret function returns (`C_Spell.GetSpellCooldown`, `C_ActionBar.GetActionCooldown`, charges, loss of control) is a readable table with possibly secret fields, as the client answers, not a possibly secret table
+- WoW API declarations: a structure a possibly secret function returns (`C_Spell.GetSpellCooldown`, `C_ActionBar.GetActionCooldown`, charges, loss of control) is a readable table with possibly secret fields, as the client answers, not a possibly secret table: its companion `<Name>Secret` (`SpellCooldownInfoSecret`), so functions that never answer secrets keep the plain structure (`C_Spell.GetItemCooldown`, `C_LossOfControl.GetActiveLossOfControlData`)
 - WoW API declarations: functions the annotations know only by name (`SelectActiveQuest`, `GetQuestLogCompletionText`, …) take and answer any values instead of none
 - WoW API declarations: `GameTooltip`'s data methods (`SetInboxItem(mailIndex, attachmentIndex)`, `SetSendMailItem(index)`, …) take the parameters of their `C_TooltipInfo` function; widget methods the annotations give no results get Blizzard's documented ones (`Minimap:GetZoom()`)
 - WoW API declarations: optional `hasVoice` of `JoinChannelByName`, `exclusive` of `SetTrainerServiceTypeFilter` and `isPet` of `IsSpellKnown`; `SendChatMessage`'s target takes a channel number; `C_Traits.GetConditionInfo` has its UI wrapper's parameters and `tooltipText`
 - WoW API declarations: camelot declares the client's own number globals (`LE_PARTY_CATEGORY_INSTANCE`, `NUM_LE_*`, …), and globals the annotations also name as a class (`ItemLocation`, `NamePlateDriverFrame`)
+- WoW API declarations: `UnitName`, `UnitFullName`, `UnitNameUnmodified` and `UnitNameFromGUID` answer optional names and realms (`nil, nil` for a unit that does not exist)
+- WoW API declarations: named frames of Blizzard's XML are typed by their mixins and widget type (`ChatFrame1: PrimaryChatFrameMixin & … & Frame` has `ApplySystemAnchor`), and the mixins are declared with the methods their Lua defines (parameters `any`)
+- W8040 is not reported inside an existence test of the hooked member (`if obj.Method then hook(obj, "Method", fn) end`); W8102 still is
 
 ## [0.9.1] - 2026-10-20
 

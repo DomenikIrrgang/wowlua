@@ -2,7 +2,8 @@
 //! available in every selected flavor must be used inside a guard
 //! (`flavor == "…"`, `WOW_PROJECT_ID == …`, or an existence check).
 
-use super::body::Checker;
+use super::body::{Checker, VarId};
+use super::narrow::GLOBAL_ROOT;
 use std::collections::{BTreeSet, HashMap, HashSet};
 use wowlua_syntax::view::*;
 
@@ -27,6 +28,9 @@ pub struct Guard {
     pub flavors: Option<BTreeSet<String>>,
     /// APIs checked for existence.
     pub present: HashSet<String>,
+    /// Fields of locals checked for existence (`frame.Method`): the local
+    /// and the field path.
+    pub fields: HashSet<(VarId, String)>,
 }
 
 impl Guard {
@@ -39,6 +43,7 @@ impl Guard {
         Guard {
             flavors,
             present: self.present.intersection(&other.present).cloned().collect(),
+            fields: self.fields.intersection(&other.fields).cloned().collect(),
         }
     }
 }
@@ -205,7 +210,15 @@ impl Checker<'_, '_> {
                     }
                     (yes, g.clone())
                 }
-                None => (g.clone(), g.clone()),
+                None => match self.field_path(cond) {
+                    // An existence check of a local's field.
+                    Some((root, path)) if root != GLOBAL_ROOT => {
+                        let mut yes = g.clone();
+                        yes.fields.insert((root, path));
+                        (yes, g.clone())
+                    }
+                    _ => (g.clone(), g.clone()),
+                },
             },
         }
     }

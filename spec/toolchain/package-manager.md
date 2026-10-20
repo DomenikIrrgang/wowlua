@@ -333,6 +333,9 @@ The WoW API is typed by **pre-generated `types` packages**, one per flavor:
    frame types, templates), FrameXML globals and mixins, documentation links,
    and deprecations. On conflict, Blizzard's data wins for signatures, and the
    enrichment wins only where Blizzard's data is missing or untyped (`any`).
+   Blizzard's UI code adds its globals: the named frames of its XML, typed by
+   their mixins, and those mixins as classes with the functions their Lua
+   defines ([Types §2.8](../language/02-types.md#28-globals)).
 3. **Flavor availability** from per-flavor global name dumps, used to verify
    that every declared global exists in that flavor.
 

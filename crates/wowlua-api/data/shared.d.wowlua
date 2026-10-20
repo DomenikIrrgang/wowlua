@@ -12560,419 +12560,6 @@ declare global class: (...any) -> ...any
 declare global instanceOf: (...any) -> ...any
 declare global subclassOf: (...any) -> ...any
 declare global includes: (...any) -> ...any
-@onDemand("Blizzard_AccountSaveUI")
-declare global AccountSaveFrame: Frame
-@onDemand("Blizzard_AchievementUI")
-declare global AchievementFrameAchievementsObjectives: Frame
-@onDemand("Blizzard_AchievementUI")
-declare global AchievementFrame: Frame
-@onDemand("Blizzard_AchievementUI")
-declare global AchievementFrameFilterDropdown: DropdownButton
-declare global ActionBarButtonEventsFrame: Frame
-declare global ActionBarActionEventsFrame: Frame
-declare global ExtraActionBarFrame: Frame
-declare global ExtraActionButton1: CheckButton
-declare global MultiBarBottomLeft: Frame
-declare global MultiBarBottomRight: Frame
-declare global MultiBarLeft: Frame
-declare global MultiBarRight: Frame
-declare global SpellFlyout: Frame
-declare global MainMenuBarVehicleLeaveButton: Button
-declare global ActionBarController: Frame
-declare global ActionStatus: Frame
-declare global ActionStatusText: FontString
-declare global AddFriendFrame: Frame
-declare global AddFriendInfoFrame: Frame
-declare global AddFriendEntryFrame: Frame
-declare global AddFriendNameEditBox: EditBox
-declare global AddonDialogBackground: Frame
-declare global AddonDialogText: FontString
-declare global AddonDialogButton1: Button
-declare global AddonDialogButton2: Button
-declare global AddonList: Frame
-@onDemand("Blizzard_ArchaeologyUI")
-declare global ArchaeologyFrame: Frame
-@onDemand("Blizzard_AuctionHouseUI")
-declare global AuctionHouseMultisellProgressFrame: Frame
-@onDemand("Blizzard_AuctionHouseUI")
-declare global AuctionHouseFrame: Frame
-declare global AuthChallengeFrame: Frame
-declare global AutoCompleteBox: Frame
-declare global AutoCompleteInstructions: FontString
-declare global AutoCompleteButton1: Button
-declare global AutoCompleteButton2: Button
-declare global AutoCompleteButton3: Button
-declare global AutoCompleteButton4: Button
-declare global AutoCompleteButton5: Button
-declare global BNToastFrame: Frame
-declare global TimeAlertFrame: Frame
-@onDemand("Blizzard_BarbershopUI")
-declare global BarberShopFrame: Frame
-@onDemand("Blizzard_BattlefieldMap")
-declare global BattlefieldMapTab: Button
-@onDemand("Blizzard_BattlefieldMap")
-declare global BattlefieldMapFrame: Frame
-@onDemand("Blizzard_BehavioralMessaging")
-declare global BehavioralMessagingTray: Frame
-@onDemand("Blizzard_BehavioralMessaging")
-declare global BehavioralMessagingDetails: Frame
-declare global BuffFrame: Frame
-@onDemand("Blizzard_Calendar")
-declare global CalendarFrame: Frame
-@onDemand("Blizzard_Calendar")
-declare global CalendarWeekday1Background: Texture
-@onDemand("Blizzard_Calendar")
-declare global CalendarWeekday2Background: Texture
-@onDemand("Blizzard_Calendar")
-declare global CalendarWeekday3Background: Texture
-@onDemand("Blizzard_Calendar")
-declare global CalendarWeekday4Background: Texture
-@onDemand("Blizzard_Calendar")
-declare global CalendarWeekday5Background: Texture
-@onDemand("Blizzard_Calendar")
-declare global CalendarWeekday6Background: Texture
-@onDemand("Blizzard_Calendar")
-declare global CalendarWeekday7Background: Texture
-@onDemand("Blizzard_Calendar")
-declare global CalendarWeekday1Name: FontString
-@onDemand("Blizzard_Calendar")
-declare global CalendarWeekday2Name: FontString
-@onDemand("Blizzard_Calendar")
-declare global CalendarWeekday3Name: FontString
-@onDemand("Blizzard_Calendar")
-declare global CalendarWeekday4Name: FontString
-@onDemand("Blizzard_Calendar")
-declare global CalendarWeekday5Name: FontString
-@onDemand("Blizzard_Calendar")
-declare global CalendarWeekday6Name: FontString
-@onDemand("Blizzard_Calendar")
-declare global CalendarWeekday7Name: FontString
-@onDemand("Blizzard_Calendar")
-declare global CalendarMonthBackground: Texture
-@onDemand("Blizzard_Calendar")
-declare global CalendarMonthName: FontString
-@onDemand("Blizzard_Calendar")
-declare global CalendarYearBackground: Texture
-@onDemand("Blizzard_Calendar")
-declare global CalendarYearName: FontString
-@onDemand("Blizzard_Calendar")
-declare global CalendarLastDayDarkTexture: Texture
-@onDemand("Blizzard_Calendar")
-declare global CalendarWeekdaySelectedTexture: Texture
-@onDemand("Blizzard_Calendar")
-declare global CalendarTodayFrame: Frame
-@onDemand("Blizzard_Calendar")
-declare global CalendarTodayTextureGlow: Texture
-@onDemand("Blizzard_Calendar")
-declare global CalendarTodayTexture: Texture
-@onDemand("Blizzard_Calendar")
-declare global CalendarPrevMonthButton: Button
-@onDemand("Blizzard_Calendar")
-declare global CalendarNextMonthButton: Button
-@onDemand("Blizzard_Calendar")
-declare global CalendarCloseButton: Button
-@onDemand("Blizzard_Calendar")
-declare global CalendarModalDummy: Frame
-@onDemand("Blizzard_Calendar")
-declare global CalendarFrameBlocker: Frame
-@onDemand("Blizzard_Calendar")
-declare global CalendarEventFrameBlocker: Frame
-@onDemand("Blizzard_Calendar")
-declare global CalendarViewHolidayFrame: Frame
-@onDemand("Blizzard_Calendar")
-declare global CalendarViewHolidayCloseButton: Button
-@onDemand("Blizzard_Calendar")
-declare global CalendarViewRaidFrame: Frame
-@onDemand("Blizzard_Calendar")
-declare global CalendarViewRaidCloseButton: Button
-@onDemand("Blizzard_Calendar")
-declare global CalendarViewEventFrame: Frame
-@onDemand("Blizzard_Calendar")
-declare global CalendarViewEventIcon: Texture
-@onDemand("Blizzard_Calendar")
-declare global CalendarViewEventTitle: FontString
-@onDemand("Blizzard_Calendar")
-declare global CalendarViewEventCommunityName: FontString
-@onDemand("Blizzard_Calendar")
-declare global CalendarViewEventTypeName: FontString
-@onDemand("Blizzard_Calendar")
-declare global CalendarViewEventCreatorName: FontString
-@onDemand("Blizzard_Calendar")
-declare global CalendarViewEventDateLabel: FontString
-@onDemand("Blizzard_Calendar")
-declare global CalendarViewEventTimeLabel: FontString
-@onDemand("Blizzard_Calendar")
-declare global CalendarViewEventDescriptionContainer: Frame
-@onDemand("Blizzard_Calendar")
-declare global CalendarViewEventInviteListSection: Frame
-@onDemand("Blizzard_Calendar")
-declare global CalendarViewEventDivider: Texture
-@onDemand("Blizzard_Calendar")
-declare global CalendarViewEventAcceptButton: Button
-@onDemand("Blizzard_Calendar")
-declare global CalendarViewEventTentativeButton: Button
-@onDemand("Blizzard_Calendar")
-declare global CalendarViewEventDeclineButton: Button
-@onDemand("Blizzard_Calendar")
-declare global CalendarViewEventRemoveButton: Button
-@onDemand("Blizzard_Calendar")
-declare global CalendarViewEventInviteList: Frame
-@onDemand("Blizzard_Calendar")
-declare global CalendarViewEventCloseButton: Button
-@onDemand("Blizzard_Calendar")
-declare global CalendarCreateEventFrame: Frame
-@onDemand("Blizzard_Calendar")
-declare global CalendarCreateEventIcon: Texture
-@onDemand("Blizzard_Calendar")
-declare global CalendarCreateEventCommunityName: FontString
-@onDemand("Blizzard_Calendar")
-declare global CalendarCreateEventTextureName: FontString
-@onDemand("Blizzard_Calendar")
-declare global CalendarCreateEventCreatorName: FontString
-@onDemand("Blizzard_Calendar")
-declare global CalendarCreateEventDateLabel: FontString
-@onDemand("Blizzard_Calendar")
-declare global CalendarCreateEventTitleEdit: EditBox
-@onDemand("Blizzard_Calendar")
-declare global CalendarCreateEventInviteListSection: Frame
-@onDemand("Blizzard_Calendar")
-declare global CalendarCreateEventDivider: Texture
-@onDemand("Blizzard_Calendar")
-declare global CalendarCreateEventAutoApproveCheck: CheckButton
-@onDemand("Blizzard_Calendar")
-declare global CalendarCreateEventLockEventCheck: CheckButton
-@onDemand("Blizzard_Calendar")
-declare global CalendarCreateEventInviteList: Frame
-@onDemand("Blizzard_Calendar")
-declare global CalendarCreateEventInviteEdit: EditBox
-@onDemand("Blizzard_Calendar")
-declare global CalendarCreateEventInviteButton: Button
-@onDemand("Blizzard_Calendar")
-declare global CalendarCreateEventDescriptionContainer: Frame
-@onDemand("Blizzard_Calendar")
-declare global CalendarCreateEventMassInviteButton: Button
-@onDemand("Blizzard_Calendar")
-declare global CalendarCreateEventRaidInviteButton: Button
-@onDemand("Blizzard_Calendar")
-declare global CalendarCreateEventCreateButton: Button
-@onDemand("Blizzard_Calendar")
-declare global CalendarCreateEventCloseButton: Button
-@onDemand("Blizzard_Calendar")
-declare global CalendarMassInviteFrame: Frame
-@onDemand("Blizzard_Calendar")
-declare global CalendarMassInviteLevelText: FontString
-@onDemand("Blizzard_Calendar")
-declare global CalendarMassInviteRankText: FontString
-@onDemand("Blizzard_Calendar")
-declare global CalendarMassInviteMinLevelEdit: EditBox
-@onDemand("Blizzard_Calendar")
-declare global CalendarMassInviteMaxLevelEdit: EditBox
-@onDemand("Blizzard_Calendar")
-declare global CalendarMassInviteAcceptButton: Button
-@onDemand("Blizzard_Calendar")
-declare global CalendarMassInviteCloseButton: Button
-@onDemand("Blizzard_Calendar")
-declare global CalendarEventPickerFrame: Frame
-@onDemand("Blizzard_Calendar")
-declare global CalendarEventPickerCloseButton: Button
-@onDemand("Blizzard_Calendar")
-declare global CalendarTexturePickerFrame: Frame
-@onDemand("Blizzard_Calendar")
-declare global CalendarTexturePickerCancelButton: Button
-@onDemand("Blizzard_Calendar")
-declare global CalendarTexturePickerAcceptButton: Button
-@onDemand("Blizzard_Calendar")
-declare global CalendarClassButtonContainer: Frame
-@onDemand("Blizzard_Calendar")
-declare global CalendarClassTotalsButton: Button
-@onDemand("Blizzard_Calendar")
-declare global CalendarClassTotalsText: FontString
-declare global ChannelFrame: Frame
-declare global CreateChannelPopup: Frame
-declare global VoiceActivityManager: Frame
-declare global VoiceChatPromptActivateChannel: Frame
-declare global VoiceChatChannelActivatedNotification: Frame
-declare global CharacterCreateFrame: Frame
-declare global BattlegroundChatFilters: Frame
-declare global ChatConfigFrame: Frame
-declare global ChatConfigCategoryFrame: Frame
-declare global ChatConfigBackgroundFrame: Frame
-declare global ChatConfigChatSettings: Frame
-declare global ChatConfigChannelSettings: Frame
-declare global ChatConfigOtherSettings: Frame
-declare global TextToSpeechFrame: Frame
-declare global ChatConfigTextToSpeechMessageSettings: Frame
-declare global ChatConfigTextToSpeechChannelSettings: Frame
-declare global ChatConfigCombatSettings: Frame
-declare global ChatConfigMoveFilterUpButton: Button
-declare global ChatConfigMoveFilterDownButton: Button
-declare global CombatConfigMessageSources: Frame
-declare global CombatConfigMessageTypes: Frame
-declare global CombatConfigColors: Frame
-declare global CombatConfigFormatting: Frame
-declare global CombatConfigSettings: Frame
-declare global CombatLogDefaultButton: Button
-declare global TextToSpeechDefaultButton: Button
-declare global TextToSpeechCharacterSpecificButton: CheckButton
-declare global ChatAlertFrame: Frame
-declare global ChatFrameChannelButton: Button
-declare global TextToSpeechButtonFrame: Frame
-declare global TextToSpeechButton: Button
-declare global GeneralDockManager: Frame
-declare global ChatFrame1Tab: Button
-declare global ChatFrame1: Frame
-declare global ChatFrameMenuButton: DropdownButton
-declare global ChatFrame2Tab: Button
-declare global ChatFrame2: Frame
-declare global ChatFrame3Tab: Button
-declare global ChatFrame3: Frame
-declare global ChatFrame4Tab: Button
-declare global ChatFrame4: Frame
-declare global ChatFrame5Tab: Button
-declare global ChatFrame5: Frame
-declare global ChatFrame6Tab: Button
-declare global ChatFrame6: Frame
-declare global ChatFrame7Tab: Button
-declare global ChatFrame7: Frame
-declare global ChatFrame8Tab: Button
-declare global ChatFrame8: Frame
-declare global ChatFrame9Tab: Button
-declare global ChatFrame9: Frame
-declare global ChatFrame10Tab: Button
-declare global ChatFrame10: Frame
-declare global FloatingChatFrameManager: Frame
-@onDemand("Blizzard_Collections")
-declare global CollectionsJournal: Frame
-@onDemand("Blizzard_Collections")
-declare global HeirloomsJournal: Frame
-@onDemand("Blizzard_Collections")
-declare global MountJournal: Frame
-@onDemand("Blizzard_Collections")
-declare global ToyBox: Frame
-@onDemand("Blizzard_Collections")
-declare global WardrobeCollectionFrame: Frame
-@onDemand("Blizzard_Collections")
-declare global PetJournal: Frame
-declare global ColorSwatch: Texture
-declare global ColorPickerFrameHeader: Texture
-declare global ColorPickerCancelButton: Button
-declare global ColorPickerOkayButton: Button
-declare global OpacitySliderFrame: Slider
-declare global ColorPickerWheel: Frame
-declare global OpacityFrame: Frame
-declare global OpacityFrameSlider: Slider
-declare global OpacityFrameCloseButton: Button
-@onDemand("Blizzard_CombatLog")
-declare global CombatLogQuickButtonFrame_Custom: Frame
-@onDemand("Blizzard_CombatText")
-declare global CombatText: Frame
-declare global COMMENTATORRESET: Frame
-declare global COMMENTATORMOVESPEEDINCREASE: Frame
-declare global COMMENTATORMOVESPEEDDECREASE: Frame
-declare global COMMENTATORZOOMIN: Frame
-declare global COMMENTATORZOOMOUT: Frame
-declare global COMMENTATORRESETZOOM: Frame
-declare global TOGGLE_SMART_CAMERA: Frame
-declare global TOGGLE_SMART_CAMERA_LOCK: Frame
-declare global COMMENTATORLOOKATNONE: Frame
-declare global CYCLEFOLLOWTRANSITONSPEED: Frame
-declare global FORCEFOLLOWTRANSITON: Frame
-declare global TOGGLESMOOTHFOLLOWTRANSITIONS: Frame
-declare global TOGGLECAMERACOLLISION: Frame
-declare global TEAM_1_ADD_SCORE: Frame
-declare global TEAM_2_ADD_SCORE: Frame
-declare global TEAM_1_REMOVE_SCORE: Frame
-declare global TEAM_2_REMOVE_SCORE: Frame
-declare global RESET_SCORE_COUNT: Frame
-declare global SWAPUNITFRAMES: Frame
-declare global CHECK_FOR_SCOREBOARD: Frame
-declare global TOGGLE_FRAME_LOCK: Frame
-declare global COMMENTATORFOLLOW1: Frame
-declare global COMMENTATORFOLLOW2: Frame
-declare global COMMENTATORFOLLOW3: Frame
-declare global COMMENTATORFOLLOW4: Frame
-declare global COMMENTATORFOLLOW5: Frame
-declare global COMMENTATORFOLLOW6: Frame
-declare global COMMENTATORFOLLOW7: Frame
-declare global COMMENTATORFOLLOW8: Frame
-declare global COMMENTATORFOLLOW9: Frame
-declare global COMMENTATORFOLLOW10: Frame
-declare global COMMENTATORFOLLOW11: Frame
-declare global COMMENTATORFOLLOW12: Frame
-declare global COMMENTATORFOLLOW1SNAP: Frame
-declare global COMMENTATORFOLLOW2SNAP: Frame
-declare global COMMENTATORFOLLOW3SNAP: Frame
-declare global COMMENTATORFOLLOW4SNAP: Frame
-declare global COMMENTATORFOLLOW5SNAP: Frame
-declare global COMMENTATORFOLLOW6SNAP: Frame
-declare global COMMENTATORFOLLOW7SNAP: Frame
-declare global COMMENTATORFOLLOW8SNAP: Frame
-declare global COMMENTATORFOLLOW9SNAP: Frame
-declare global COMMENTATORFOLLOW10SNAP: Frame
-declare global COMMENTATORFOLLOW11SNAP: Frame
-declare global COMMENTATORFOLLOW12SNAP: Frame
-declare global COMMENTATORLOOKAT1: Frame
-declare global COMMENTATORLOOKAT2: Frame
-declare global COMMENTATORLOOKAT3: Frame
-declare global COMMENTATORLOOKAT4: Frame
-declare global COMMENTATORLOOKAT5: Frame
-declare global COMMENTATORLOOKAT6: Frame
-declare global COMMENTATORLOOKAT7: Frame
-declare global COMMENTATORLOOKAT8: Frame
-declare global COMMENTATORLOOKAT9: Frame
-declare global COMMENTATORLOOKAT10: Frame
-declare global COMMENTATORLOOKAT11: Frame
-declare global COMMENTATORLOOKAT12: Frame
-@onDemand("Blizzard_Commentator")
-declare global Commentator: Frame
-@onDemand("Blizzard_Commentator")
-declare global CommentatorEventAlertsFrame: Frame
-@onDemand("Blizzard_Commentator")
-declare global CommentatorVictoryFanfareFrame: Frame
-@onDemand("Blizzard_Commentator")
-declare global CommentatorFadeToBlackFrame: Frame
-declare global CommunitiesAvatarPickerDialog: Frame
-declare global CommunitiesFrame: Frame
-declare global ClubFinderGuildFinderFrame: Frame
-declare global ClubFinderCommunityAndGuildFinderFrame: Frame
-declare global CommunitiesSettingsDialog: Frame
-declare global CommunitiesTicketManagerDialog: Frame
-declare global CommunitiesGuildTextEditFrame: Frame
-declare global CommunitiesGuildLogFrame: Frame
-declare global CommunitiesGuildNewsFiltersFrame: Frame
-declare global CommunitiesAddDialog: Frame
-declare global CommunitiesCreateDialog: Frame
-declare global CompactRaidFrameContainer: Frame
-declare global CompactRaidFrameManager: Frame
-declare global DeveloperConsole: Frame
-declare global Background: Frame
-@onDemand("Blizzard_DebugTools")
-declare global FrameStackTooltip: GameTooltip
-@onDemand("Blizzard_DebugTools")
-declare global FrameStackHighlight: Frame
-@onDemand("Blizzard_DebugTools")
-declare global TableAttributeDisplay: Frame
-declare global DurabilityFrame: Frame
-declare global DurabilityHead: Texture
-declare global DurabilityShoulders: Texture
-declare global DurabilityChest: Texture
-declare global DurabilityWrists: Texture
-declare global DurabilityHands: Texture
-declare global DurabilityWaist: Texture
-declare global DurabilityLegs: Texture
-declare global DurabilityFeet: Texture
-declare global DurabilityWeapon: Texture
-declare global DurabilityShield: Texture
-declare global DurabilityOffWeapon: Texture
-declare global DurabilityRanged: Texture
-@onDemand("Blizzard_EncounterJournal")
-declare global EncounterJournal: Frame
-@onDemand("Blizzard_EncounterJournal")
-declare global EncounterJournalTooltip: Frame
-@onDemand("Blizzard_EventTrace")
-declare global EventTrace: Frame
-@onDemand("Blizzard_EventTrace")
-declare global EventTraceTooltip: GameTooltip
 declare global SystemFont16_Shadow_ThickOutline: Font
 declare global GlueFontNormalHuge: Font
 declare global GlueFontNormalExtraSmall: Font
@@ -13040,7 +12627,315 @@ declare global OptionsFont: Font
 declare global FactionName_Shadow_Medium: Font
 declare global FactionName_Shadow_Large: Font
 declare global FactionName_Shadow_Huge: Font
-declare global ArcheologyDigsiteProgressBar: Frame
+@onDemand("Blizzard_Kiosk")
+declare global KioskDialogHeaderFont: Font
+@onDemand("Blizzard_AccountSaveUI")
+declare global AccountSaveFrame: AccountSaveFrameMixin & Frame
+@onDemand("Blizzard_AchievementUI")
+declare global AchievementFrameAchievementsObjectives: Frame
+@onDemand("Blizzard_AchievementUI")
+declare global AchievementFrame: BackdropTemplateMixin & Frame
+@onDemand("Blizzard_AchievementUI")
+declare global AchievementFrameFilterDropdown: WowStyle1FilterDropdownMixin & DropdownButton
+declare global ExtraActionBarFrame: Frame
+declare global ActionBarController: Frame
+declare global ActionStatus: Frame
+declare global ActionStatusText: FontString
+declare global AddonDialogBackground: NineSlicePanelMixin & Frame
+declare global AddonDialogText: FontString
+declare global AuthChallengeFrame: Frame
+declare global AutoCompleteBox: TooltipBackdropTemplateMixin & Frame
+declare global AutoCompleteInstructions: FontString
+declare global AutoCompleteButton1: Button
+declare global AutoCompleteButton2: Button
+declare global AutoCompleteButton3: Button
+declare global AutoCompleteButton4: Button
+declare global AutoCompleteButton5: Button
+declare global BNToastFrame: BNToastMixin & SocialToastMixin & BackdropTemplateMixin & ContainedAlertFrameMixin & Button
+declare global TimeAlertFrame: BNetTimeAlertMixin & SocialToastMixin & BackdropTemplateMixin & ContainedAlertFrameMixin & Button
+@onDemand("Blizzard_BattlefieldMap")
+declare global BattlefieldMapTab: BattlefieldMapTabMixin & Button
+@onDemand("Blizzard_BattlefieldMap")
+declare global BattlefieldMapFrame: BattlefieldMapMixin & MapCanvasMixin & Frame
+@onDemand("Blizzard_BehavioralMessaging")
+declare global BehavioralMessagingTray: BehavioralMessagingTrayMixin & LayoutMixin & HorizontalLayoutMixin & Frame
+@onDemand("Blizzard_BehavioralMessaging")
+declare global BehavioralMessagingDetails: BehavioralMessagingDetailsMixin & Frame
+@onDemand("Blizzard_Calendar")
+declare global CalendarFrame: Frame
+@onDemand("Blizzard_Calendar")
+declare global CalendarWeekday1Background: Texture
+@onDemand("Blizzard_Calendar")
+declare global CalendarWeekday2Background: Texture
+@onDemand("Blizzard_Calendar")
+declare global CalendarWeekday3Background: Texture
+@onDemand("Blizzard_Calendar")
+declare global CalendarWeekday4Background: Texture
+@onDemand("Blizzard_Calendar")
+declare global CalendarWeekday5Background: Texture
+@onDemand("Blizzard_Calendar")
+declare global CalendarWeekday6Background: Texture
+@onDemand("Blizzard_Calendar")
+declare global CalendarWeekday7Background: Texture
+@onDemand("Blizzard_Calendar")
+declare global CalendarWeekday1Name: FontString
+@onDemand("Blizzard_Calendar")
+declare global CalendarWeekday2Name: FontString
+@onDemand("Blizzard_Calendar")
+declare global CalendarWeekday3Name: FontString
+@onDemand("Blizzard_Calendar")
+declare global CalendarWeekday4Name: FontString
+@onDemand("Blizzard_Calendar")
+declare global CalendarWeekday5Name: FontString
+@onDemand("Blizzard_Calendar")
+declare global CalendarWeekday6Name: FontString
+@onDemand("Blizzard_Calendar")
+declare global CalendarWeekday7Name: FontString
+@onDemand("Blizzard_Calendar")
+declare global CalendarMonthBackground: Texture
+@onDemand("Blizzard_Calendar")
+declare global CalendarMonthName: FontString
+@onDemand("Blizzard_Calendar")
+declare global CalendarYearBackground: Texture
+@onDemand("Blizzard_Calendar")
+declare global CalendarYearName: FontString
+@onDemand("Blizzard_Calendar")
+declare global CalendarLastDayDarkTexture: Texture
+@onDemand("Blizzard_Calendar")
+declare global CalendarWeekdaySelectedTexture: Texture
+@onDemand("Blizzard_Calendar")
+declare global CalendarTodayFrame: Frame
+@onDemand("Blizzard_Calendar")
+declare global CalendarTodayTextureGlow: Texture
+@onDemand("Blizzard_Calendar")
+declare global CalendarTodayTexture: Texture
+@onDemand("Blizzard_Calendar")
+declare global CalendarPrevMonthButton: Button
+@onDemand("Blizzard_Calendar")
+declare global CalendarNextMonthButton: Button
+@onDemand("Blizzard_Calendar")
+declare global CalendarModalDummy: Frame
+@onDemand("Blizzard_Calendar")
+declare global CalendarFrameBlocker: Frame
+@onDemand("Blizzard_Calendar")
+declare global CalendarEventFrameBlocker: Frame
+@onDemand("Blizzard_Calendar")
+declare global CalendarViewHolidayFrame: Frame
+@onDemand("Blizzard_Calendar")
+declare global CalendarViewRaidFrame: Frame
+@onDemand("Blizzard_Calendar")
+declare global CalendarViewEventFrame: Frame
+@onDemand("Blizzard_Calendar")
+declare global CalendarViewEventIcon: Texture
+@onDemand("Blizzard_Calendar")
+declare global CalendarViewEventTitle: FontString
+@onDemand("Blizzard_Calendar")
+declare global CalendarViewEventCommunityName: FontString
+@onDemand("Blizzard_Calendar")
+declare global CalendarViewEventTypeName: FontString
+@onDemand("Blizzard_Calendar")
+declare global CalendarViewEventCreatorName: FontString
+@onDemand("Blizzard_Calendar")
+declare global CalendarViewEventDateLabel: FontString
+@onDemand("Blizzard_Calendar")
+declare global CalendarViewEventTimeLabel: FontString
+@onDemand("Blizzard_Calendar")
+declare global CalendarViewEventDescriptionContainer: TooltipBackdropTemplateMixin & Frame
+@onDemand("Blizzard_Calendar")
+declare global CalendarViewEventInviteListSection: Frame
+@onDemand("Blizzard_Calendar")
+declare global CalendarViewEventDivider: Texture
+@onDemand("Blizzard_Calendar")
+declare global CalendarViewEventInviteList: TooltipBackdropTemplateMixin & Frame
+@onDemand("Blizzard_Calendar")
+declare global CalendarCreateEventFrame: Frame
+@onDemand("Blizzard_Calendar")
+declare global CalendarCreateEventIcon: Texture
+@onDemand("Blizzard_Calendar")
+declare global CalendarCreateEventCommunityName: FontString
+@onDemand("Blizzard_Calendar")
+declare global CalendarCreateEventTextureName: FontString
+@onDemand("Blizzard_Calendar")
+declare global CalendarCreateEventCreatorName: FontString
+@onDemand("Blizzard_Calendar")
+declare global CalendarCreateEventDateLabel: FontString
+@onDemand("Blizzard_Calendar")
+declare global CalendarCreateEventInviteListSection: Frame
+@onDemand("Blizzard_Calendar")
+declare global CalendarCreateEventDivider: Texture
+@onDemand("Blizzard_Calendar")
+declare global CalendarCreateEventAutoApproveCheck: CheckButton
+@onDemand("Blizzard_Calendar")
+declare global CalendarCreateEventLockEventCheck: CheckButton
+@onDemand("Blizzard_Calendar")
+declare global CalendarCreateEventInviteList: TooltipBackdropTemplateMixin & Frame
+@onDemand("Blizzard_Calendar")
+declare global CalendarCreateEventDescriptionContainer: TooltipBackdropTemplateMixin & Frame
+@onDemand("Blizzard_Calendar")
+declare global CalendarMassInviteFrame: Frame
+@onDemand("Blizzard_Calendar")
+declare global CalendarMassInviteLevelText: FontString
+@onDemand("Blizzard_Calendar")
+declare global CalendarMassInviteRankText: FontString
+@onDemand("Blizzard_Calendar")
+declare global CalendarEventPickerFrame: Frame
+@onDemand("Blizzard_Calendar")
+declare global CalendarTexturePickerFrame: Frame
+@onDemand("Blizzard_Calendar")
+declare global CalendarClassButtonContainer: Frame
+@onDemand("Blizzard_Calendar")
+declare global CalendarClassTotalsButton: Button
+@onDemand("Blizzard_Calendar")
+declare global CalendarClassTotalsText: FontString
+declare global VoiceActivityManager: VoiceActivityManagerMixin & Frame
+declare global VoiceChatPromptActivateChannel: VoiceChatActivateChannelPromptMixin & SocialToastMixin & BackdropTemplateMixin & ContainedAlertFrameMixin & Button
+declare global VoiceChatChannelActivatedNotification: VoiceChatChannelActivatedNotificationMixin & SocialToastMixin & BackdropTemplateMixin & ContainedAlertFrameMixin & Button
+declare global CharacterCreateFrame: CharacterCreateMixin & Frame
+declare global BattlegroundChatFilters: BattlegroundChatFiltersMixin & Frame
+declare global ChatConfigCategoryFrame: TooltipBackdropTemplateMixin & Frame
+declare global ChatConfigBackgroundFrame: TooltipBackdropTemplateMixin & Frame
+declare global ChatConfigChatSettings: Frame
+declare global ChatConfigChannelSettings: Frame
+declare global ChatConfigOtherSettings: Frame
+declare global TextToSpeechFrame: Frame
+declare global ChatConfigTextToSpeechMessageSettings: Frame
+declare global ChatConfigTextToSpeechChannelSettings: Frame
+declare global ChatConfigCombatSettings: Frame
+declare global ChatConfigMoveFilterUpButton: Button
+declare global ChatConfigMoveFilterDownButton: Button
+declare global CombatConfigMessageSources: Frame
+declare global CombatConfigMessageTypes: Frame
+declare global CombatConfigColors: Frame
+declare global CombatConfigFormatting: Frame
+declare global CombatConfigSettings: Frame
+declare global TextToSpeechCharacterSpecificButton: TextToSpeechCharacterSpecificButtonMixin & CheckButton
+declare global ChatAlertFrame: ChatAlertFrameMixin & AlertContainerMixin & Frame
+declare global ChatFrameChannelButton: ChannelFrameButtonMixin & VoiceToggleButtonMixin & PropertyBindingMixin & PropertyButtonMixin & Button
+declare global TextToSpeechButtonFrame: ContainedAlertFrameMixin & Button
+declare global TextToSpeechButton: TextToSpeechButtonMixin & VoiceToggleButtonMixin & PropertyBindingMixin & PropertyButtonMixin & Button
+declare global ChatFrame1Tab: Button
+declare global ChatFrameMenuButton: ChatFrameMenuButtonMixin & DropdownButton
+declare global ChatFrame2Tab: Button
+declare global ChatFrame3Tab: Button
+declare global ChatFrame4Tab: Button
+declare global ChatFrame5Tab: Button
+declare global ChatFrame6Tab: Button
+declare global ChatFrame7Tab: Button
+declare global ChatFrame8Tab: Button
+declare global ChatFrame9Tab: Button
+declare global ChatFrame10Tab: Button
+declare global FloatingChatFrameManager: Frame
+@onDemand("Blizzard_Collections")
+declare global HeirloomsJournal: HeirloomsMixin & Frame
+@onDemand("Blizzard_Collections")
+declare global MountJournal: Frame
+@onDemand("Blizzard_Collections")
+declare global ToyBox: Frame
+@onDemand("Blizzard_Collections")
+declare global WardrobeCollectionFrame: WardrobeCollectionFrameMixin & Frame
+@onDemand("Blizzard_Collections")
+declare global PetJournal: Frame
+declare global ColorSwatch: Texture
+declare global ColorPickerFrameHeader: Texture
+declare global OpacitySliderFrame: BackdropTemplateMixin & Slider
+declare global ColorPickerWheel: Frame
+declare global OpacityFrameSlider: BackdropTemplateMixin & Slider
+declare global OpacityFrameCloseButton: Button
+@onDemand("Blizzard_CombatLog")
+declare global CombatLogQuickButtonFrame_Custom: Frame
+declare global COMMENTATORRESET: Frame
+declare global COMMENTATORMOVESPEEDINCREASE: Frame
+declare global COMMENTATORMOVESPEEDDECREASE: Frame
+declare global COMMENTATORZOOMIN: Frame
+declare global COMMENTATORZOOMOUT: Frame
+declare global COMMENTATORRESETZOOM: Frame
+declare global TOGGLE_SMART_CAMERA: Frame
+declare global TOGGLE_SMART_CAMERA_LOCK: Frame
+declare global COMMENTATORLOOKATNONE: Frame
+declare global CYCLEFOLLOWTRANSITONSPEED: Frame
+declare global FORCEFOLLOWTRANSITON: Frame
+declare global TOGGLESMOOTHFOLLOWTRANSITIONS: Frame
+declare global TOGGLECAMERACOLLISION: Frame
+declare global TEAM_1_ADD_SCORE: Frame
+declare global TEAM_2_ADD_SCORE: Frame
+declare global TEAM_1_REMOVE_SCORE: Frame
+declare global TEAM_2_REMOVE_SCORE: Frame
+declare global RESET_SCORE_COUNT: Frame
+declare global SWAPUNITFRAMES: Frame
+declare global CHECK_FOR_SCOREBOARD: Frame
+declare global TOGGLE_FRAME_LOCK: Frame
+declare global COMMENTATORFOLLOW1: Frame
+declare global COMMENTATORFOLLOW2: Frame
+declare global COMMENTATORFOLLOW3: Frame
+declare global COMMENTATORFOLLOW4: Frame
+declare global COMMENTATORFOLLOW5: Frame
+declare global COMMENTATORFOLLOW6: Frame
+declare global COMMENTATORFOLLOW7: Frame
+declare global COMMENTATORFOLLOW8: Frame
+declare global COMMENTATORFOLLOW9: Frame
+declare global COMMENTATORFOLLOW10: Frame
+declare global COMMENTATORFOLLOW11: Frame
+declare global COMMENTATORFOLLOW12: Frame
+declare global COMMENTATORFOLLOW1SNAP: Frame
+declare global COMMENTATORFOLLOW2SNAP: Frame
+declare global COMMENTATORFOLLOW3SNAP: Frame
+declare global COMMENTATORFOLLOW4SNAP: Frame
+declare global COMMENTATORFOLLOW5SNAP: Frame
+declare global COMMENTATORFOLLOW6SNAP: Frame
+declare global COMMENTATORFOLLOW7SNAP: Frame
+declare global COMMENTATORFOLLOW8SNAP: Frame
+declare global COMMENTATORFOLLOW9SNAP: Frame
+declare global COMMENTATORFOLLOW10SNAP: Frame
+declare global COMMENTATORFOLLOW11SNAP: Frame
+declare global COMMENTATORFOLLOW12SNAP: Frame
+declare global COMMENTATORLOOKAT1: Frame
+declare global COMMENTATORLOOKAT2: Frame
+declare global COMMENTATORLOOKAT3: Frame
+declare global COMMENTATORLOOKAT4: Frame
+declare global COMMENTATORLOOKAT5: Frame
+declare global COMMENTATORLOOKAT6: Frame
+declare global COMMENTATORLOOKAT7: Frame
+declare global COMMENTATORLOOKAT8: Frame
+declare global COMMENTATORLOOKAT9: Frame
+declare global COMMENTATORLOOKAT10: Frame
+declare global COMMENTATORLOOKAT11: Frame
+declare global COMMENTATORLOOKAT12: Frame
+@onDemand("Blizzard_Commentator")
+declare global Commentator: CommentatorMixin & Frame
+@onDemand("Blizzard_Commentator")
+declare global CommentatorVictoryFanfareFrame: CommentatorVictoryFanfareFrameMixin & Frame
+@onDemand("Blizzard_Commentator")
+declare global CommentatorFadeToBlackFrame: FadeToBlackMixin & Frame
+declare global ClubFinderGuildFinderFrame: ClubFinderGuildAndCommunityMixin & Frame
+declare global ClubFinderCommunityAndGuildFinderFrame: ClubFinderGuildAndCommunityMixin & Frame
+declare global CommunitiesGuildTextEditFrame: Frame
+declare global CommunitiesGuildLogFrame: Frame
+declare global CommunitiesGuildNewsFiltersFrame: Frame
+declare global CompactRaidFrameManager: Frame
+declare global DeveloperConsole: DeveloperConsoleMixin & Frame
+declare global Background: Frame
+@onDemand("Blizzard_DebugTools")
+declare global FrameStackTooltip: GameTooltip
+@onDemand("Blizzard_DebugTools")
+declare global FrameStackHighlight: AnchorHighlightMixin & Frame
+@onDemand("Blizzard_DebugTools")
+declare global TableAttributeDisplay: TableInspectorMixin & Frame
+declare global DurabilityHead: Texture
+declare global DurabilityShoulders: Texture
+declare global DurabilityChest: Texture
+declare global DurabilityWrists: Texture
+declare global DurabilityHands: Texture
+declare global DurabilityWaist: Texture
+declare global DurabilityLegs: Texture
+declare global DurabilityFeet: Texture
+declare global DurabilityWeapon: Texture
+declare global DurabilityShield: Texture
+declare global DurabilityOffWeapon: Texture
+declare global DurabilityRanged: Texture
+@onDemand("Blizzard_EncounterJournal")
+declare global EncounterJournalTooltip: TooltipBackdropTemplateMixin & Frame
+@onDemand("Blizzard_EventTrace")
+declare global EventTraceTooltip: GameTooltip
 declare global MOVEANDSTEER: Frame
 declare global MOVEFORWARD: Frame
 declare global MOVEBACKWARD: Frame
@@ -13340,17 +13235,14 @@ declare global WorldStateScoreColumn6: Button
 declare global WorldStateScoreColumn7: Button
 declare global WorldStateScoreButton1: Frame
 declare global WorldStateScoreScrollFrame: ScrollFrame
-declare global WorldStateScoreFrameCloseButton: Button
 declare global WorldStateScoreFrameTab1: Button
 declare global WorldStateScoreFrameTab2: Button
 declare global WorldStateScoreFrameTab3: Button
-declare global WorldStateScoreFrameLeaveButton: Button
 declare global WorldStateScoreWinnerFrame: Frame
-declare global EquipmentFlyoutFrame: Frame
-declare global GhostFrame: Button
-declare global IconIntroTracker: Frame
+declare global GhostFrame: GhostFrameMixin & Button
+declare global IconIntroTracker: IconIntroTrackerMixin & Frame
 declare global AlertFrameSystemsRegistrar: Frame
-declare global AlertFrame: Frame
+declare global AlertFrame: AlertFrameMixin & AlertContainerMixin & Frame
 declare global CoinPickupFrame: Frame
 declare global CoinPickupGoldIcon: Texture
 declare global CoinPickupSilverIcon: Texture
@@ -13359,27 +13251,17 @@ declare global CoinPickupLabel: FontString
 declare global CoinPickupText: FontString
 declare global CoinPickupLeftButton: Button
 declare global CoinPickupRightButton: Button
-declare global CoinPickupOkayButton: Button
-declare global CoinPickupCancelButton: Button
-declare global LowHealthFrame: Frame
-declare global RatingMenuFrame: Frame
+declare global LowHealthFrame: LowHealthFrameMixin & Frame
 declare global RatingMenuAge: Texture
 declare global RatingMenuFrameText: FontString
 declare global RatingMenuDrugs: Texture
 declare global RatingMenuViolence: Texture
 declare global RatingMenuCrime: Texture
-declare global RatingMenuButtonOkay: Button
 declare global ReadyCheckFrame: Frame
-declare global ReadyCheckListenerFrame: Frame
 declare global ReadyCheckFrameText: FontString
 declare global ReadyCheckPortrait: Texture
-declare global ReadyCheckFrameYesButton: Button
-declare global ReadyCheckFrameNoButton: Button
-declare global RolePollPopup: Frame
 declare global RoleChangedFrame: Frame
-declare global StackSplitFrame: Frame
 declare global StreamingIcon: Frame
-declare global TutorialFrame: Frame
 declare global TutorialFrameText: FontString
 declare global ZoneTextFrame: Frame
 declare global ZoneTextString: FontString
@@ -13396,97 +13278,46 @@ declare global LowerBlackBar: Texture
 declare global TimerTracker: Frame
 declare global FramerateLabel: FontString
 declare global FramerateText: FontString
-declare global FriendsFrame: Frame
 declare global FriendsFrameTitleText: FontString
-declare global FriendsTabHeader: Frame
 declare global FriendsFrameBattlenetFrame: Frame
-declare global FriendsFrameStatusDropdown: DropdownButton
+declare global FriendsFrameStatusDropdown: WowStyle1DropdownMixin & DropdownButton
 declare global FriendsListFrame: Frame
-declare global FriendsFrameAddFriendButton: Button
-declare global FriendsFrameSendMessageButton: Button
 declare global WhoFrame: Frame
-declare global WhoFrameEditBox: EditBox
 declare global WhoFrameListInset: Frame
-declare global WhoFrameTotals: FontString
-declare global WhoFrameColumnHeader1: Button
-declare global WhoFrameColumnHeader2: Button
-declare global WhoFrameDropdown: DropdownButton
-declare global WhoFrameColumnHeader3: Button
-declare global WhoFrameColumnHeader4: Button
-declare global WhoFrameGroupInviteButton: Button
-declare global WhoFrameAddFriendButton: Button
-declare global WhoFrameWhoButton: Button
-declare global FriendsFrameTab1: Button
-declare global FriendsFrameTab2: Button
-declare global FriendsFrameTab3: Button
-declare global FriendsFrameTab4: Button
-declare global FriendsTooltip: Frame
-declare global FriendsFriendsFrame: Frame
-declare global FriendsFriendsFrameDropdown: DropdownButton
-@onDemand("Blizzard_GMChatUI")
-declare global GMChatFrame: Frame
+declare global WhoFrameDropdown: WowStyle1DropdownMixin & DropdownButton
+declare global FriendsTooltip: TooltipBackdropTemplateMixin & Frame
 @onDemand("Blizzard_GMChatUI")
 declare global GMChatTab: Frame
-@onDemand("Blizzard_GMChatUI")
-declare global GMChatStatusFrame: Button
-declare global GameMenuFrame: Frame
-declare global ShoppingTooltip1: GameTooltip
-declare global ShoppingTooltip2: GameTooltip
-declare global EmbeddedItemTooltip: GameTooltip
-declare global GlueMenuFrame: Frame
-declare global GlueParent: Frame
 declare global GlueParentScreenFrame: Frame
 declare global AccountLogin: Frame
 declare global LoginBackgroundModel: Frame
 declare global WorldOfWarcraftRating: Texture
-declare global ServerAlertFrame: Frame
-declare global CharacterSelect: Frame
-declare global CharacterSelectUI: Frame
 declare global CharacterUpgradeSecondChanceWarningFrame: Frame
-declare global CharacterUpgradeSecondChanceWarningBackground: Frame
-declare global UpgradePopupFrame: Frame
+declare global UpgradePopupFrame: UpgradePopupFrameMixin & BaseExpandableDialogMixin & Frame
 declare global VisibilityFramesContainer: Frame
 declare global CharSelectCharacterName: FontString
-declare global CharSelectEnterWorldButton: Button
-declare global CharacterSelectRotateLeft: Button
-declare global CharacterSelectRotateRight: Button
-declare global CharacterSelectBackButton: Button
-declare global CharacterSelectCharacterFrame: Frame
 declare global CharSelectServicesCover: Frame
-declare global CharSelectServicesFlowFrame: Frame
+declare global CharSelectServicesFlowFrame: CharSelectServicesFlowFrameMixin & Frame
 declare global CharacterServicesMaster: Frame
-declare global GameRoomBillingFrame: Frame
+declare global GameRoomBillingFrame: TooltipBackdropTemplateMixin & Frame
 declare global GameRoomBillingFrameText: FontString
-declare global CharacterSelectServerAlertFrame: Frame
-declare global PlayersOnServer: Frame
+declare global PlayersOnServer: TooltipBackdropTemplateMixin & Frame
 declare global ActivateFactionChange: Button
-declare global CharacterTemplatesFrame: Frame
-declare global CopyCharacterButton: Button
-declare global CharacterDeleteDialog: Frame
-declare global CopyCharacterFrame: Frame
+declare global CharacterTemplatesFrame: TooltipBackdropTemplateMixin & Frame
 declare global CharacterUpgradeSelectCharacterFrame: Frame
 declare global CharacterUpgradeMaxCharactersFrame: Frame
-declare global CharacterServicesCharacterSelector: Frame
+declare global CharacterServicesCharacterSelector: CharacterServicesCharacterSelectorMixin & Frame
 declare global PCTCharacterSelect: Frame
 declare global PCTDestinationSelect: Frame
 declare global PFCCharacterSelect: Frame
 declare global PNCCharacterSelect: Frame
 declare global PNCNameSelect: Frame
 declare global PRCCharacterSelect: Frame
-declare global CreditsFrame: Frame
 declare global RealmListUI: Frame
 declare global RealmList: Frame
 declare global RealmListBackground: Frame
-declare global RealmNameSort: Button
-declare global RealmTypeSort: Button
-declare global RealmCharactersSort: Button
-declare global RealmLoadSort: Button
-declare global RealmListTab1: Button
-declare global RealmListCloseButton: Button
-declare global RealmListCancelButton: Button
-declare global RealmListOkButton: Button
 declare global MovieFrameSubtitleArea: Texture
-declare global PhotosensitivityWarningFrame: Button
+declare global PhotosensitivityWarningFrame: PhotosensitivityWarningFrameMixin & Button
 declare global PromotionFrame: Frame
 declare global PromotionAwaitingFrame: Frame
 declare global ReactivateAccountDialog: Frame
@@ -13494,9 +13325,8 @@ declare global AccountReactivationInProgressDialog: Frame
 declare global GoldReactivateConfirmationDialog: Frame
 declare global TokenReactivateConfirmationDialog: Frame
 declare global SubscriptionRequestDialog: Frame
-declare global SocialContractFrame: Frame
 declare global StarterEditionPopUp: Frame
-declare global GlueContextMenu: Frame
+declare global GlueContextMenu: GlueContextMenuMixin & TooltipBackdropTemplateMixin & Frame
 declare global LFDRoleCheckPopup: Frame
 declare global LFDParentFrame: Frame
 declare global LFDQueueFrame: Frame
@@ -13507,23 +13337,20 @@ declare global LFGEventFrame: Frame
 declare global LFGInvitePopup: Frame
 declare global LFGListFrame: Frame
 declare global LFGApplicationViewerRatingColumnHeader: Button
-declare global LFGListEntryCreationGroupDropdown: DropdownButton
-declare global LFGListEntryCreationActivityDropdown: DropdownButton
-declare global LFGListCreationDescription: ScrollFrame
-declare global LFGListEntryCreationPlayStyleDropdown: DropdownButton
+declare global LFGListEntryCreationGroupDropdown: WowStyle1DropdownMixin & DropdownButton
+declare global LFGListEntryCreationActivityDropdown: WowStyle1DropdownMixin & DropdownButton
+declare global LFGListCreationDescription: LFGListCreationDescriptionMixin & ScrollFrame
+declare global LFGListEntryCreationPlayStyleDropdown: WowStyle1DropdownMixin & DropdownButton
 declare global LFGListApplicationDialog: Frame
 declare global LFGListInviteDialog: Frame
-declare global PVEFrame: Frame
 declare global GroupFinderFrame: Frame
 declare global LFGListPVEStub: Frame
 declare global PVPHelperFrame: Frame
 declare global PVPTimerFrame: Frame
-declare global PVPFramePopup: Frame
-declare global PVPReadyDialog: Frame
 declare global RaidFinderFrame: Frame
 declare global RaidFinderQueueFrame: Frame
 @onDemand("Blizzard_GuildBankUI")
-declare global GuildBankFrame: Frame
+declare global GuildBankFrame: GuildBankFrameMixin & Frame
 @onDemand("Blizzard_GuildBankUI")
 declare global GuildBankEmblemBackgroundUL: Texture
 @onDemand("Blizzard_GuildBankUI")
@@ -13553,71 +13380,45 @@ declare global GuildBankMoneyLimitLabel: FontString
 @onDemand("Blizzard_GuildBankUI")
 declare global GuildBankMoneyUnlimitedLabel: FontString
 @onDemand("Blizzard_GuildBankUI")
-declare global GuildBankMoneyFrame: Frame
+declare global GuildBankTab1: GuildBankTabMixin & Frame
 @onDemand("Blizzard_GuildBankUI")
-declare global GuildBankWithdrawMoneyFrame: Frame
+declare global GuildBankTab2: GuildBankTabMixin & Frame
 @onDemand("Blizzard_GuildBankUI")
-declare global GuildBankFrameTab1: Button
+declare global GuildBankTab3: GuildBankTabMixin & Frame
 @onDemand("Blizzard_GuildBankUI")
-declare global GuildBankFrameTab2: Button
+declare global GuildBankTab4: GuildBankTabMixin & Frame
 @onDemand("Blizzard_GuildBankUI")
-declare global GuildBankFrameTab3: Button
+declare global GuildBankTab5: GuildBankTabMixin & Frame
 @onDemand("Blizzard_GuildBankUI")
-declare global GuildBankFrameTab4: Button
+declare global GuildBankTab6: GuildBankTabMixin & Frame
 @onDemand("Blizzard_GuildBankUI")
-declare global GuildBankTab1: Frame
+declare global GuildBankTab7: GuildBankTabMixin & Frame
 @onDemand("Blizzard_GuildBankUI")
-declare global GuildBankTab2: Frame
-@onDemand("Blizzard_GuildBankUI")
-declare global GuildBankTab3: Frame
-@onDemand("Blizzard_GuildBankUI")
-declare global GuildBankTab4: Frame
-@onDemand("Blizzard_GuildBankUI")
-declare global GuildBankTab5: Frame
-@onDemand("Blizzard_GuildBankUI")
-declare global GuildBankTab6: Frame
-@onDemand("Blizzard_GuildBankUI")
-declare global GuildBankTab7: Frame
-@onDemand("Blizzard_GuildBankUI")
-declare global GuildBankTab8: Frame
+declare global GuildBankTab8: GuildBankTabMixin & Frame
 @onDemand("Blizzard_GuildBankUI")
 declare global GuildBankFrameTabCost: FontString
 @onDemand("Blizzard_GuildBankUI")
-declare global GuildBankFrameTabCostMoneyFrame: Frame
-@onDemand("Blizzard_GuildBankUI")
-declare global GuildBankMessageFrame: Frame
-@onDemand("Blizzard_GuildBankUI")
 declare global GuildBankInfo: Frame
-@onDemand("Blizzard_GuildBankUI")
-declare global GuildBankInfoSaveButton: Button
 @onDemand("Blizzard_GuildBankUI")
 declare global GuildBankInfoScrollFrame: ScrollFrame
 @onDemand("Blizzard_GuildBankUI")
 declare global GuildBankTabInfoEditBox: EditBox
-@onDemand("Blizzard_GuildBankUI")
-declare global GuildBankPopupFrame: Frame
-@onDemand("Blizzard_GuildControlUI")
-declare global GuildControlUI: Frame
 @onDemand("Blizzard_GuildControlUI")
 declare global parentLabel: FontString
-declare global HelpFrame: Frame
 declare global HelpBrowser: Frame
-declare global BrowserSettingsTooltip: Frame
+declare global BrowserSettingsTooltip: TooltipBackdropTemplateMixin & Frame
 declare global HelpOpenWebTicketButton: Button
 declare global TicketStatusFrame: Frame
 declare global TicketStatusTitleText: FontString
 declare global TicketStatusTime: FontString
 declare global TicketStatusFrameIcon: Texture
-declare global TicketStatusFrameButton: Button
+declare global TicketStatusFrameButton: TooltipBackdropTemplateMixin & Button
 declare global ReportCheatingDialog: Frame
-declare global HelpPlateTooltip: Frame
-declare global IMECandidatesFrame: Frame
+declare global IMECandidatesFrame: TooltipBackdropTemplateMixin & Frame
 @onDemand("Blizzard_InspectUI")
 declare global InspectPaperDollFrame: Frame
 @onDemand("Blizzard_InspectUI")
 declare global InspectLevelText: FontString
-@onDemand("Blizzard_InspectUI")
-declare global InspectModelFrame: PlayerModel
 @onDemand("Blizzard_InspectUI")
 declare global InspectPaperDollItemsFrame: Frame
 @onDemand("Blizzard_InspectUI")
@@ -13627,20 +13428,12 @@ declare global InspectGuildText: FontString
 @onDemand("Blizzard_InspectUI")
 declare global InspectFaction: Texture
 @onDemand("Blizzard_ItemSocketingUI")
-declare global ItemSocketingFrame: Frame
-@onDemand("Blizzard_ItemSocketingUI")
 declare global ItemSocketingScrollChild: Frame
-@onDemand("Blizzard_ItemSocketingUI")
-declare global ItemSocketingDescription: GameTooltip
-@onDemand("Blizzard_Kiosk")
-declare global KioskDialogHeaderFont: Font
-declare global ChinaAgeAppropriatenessWarning: Frame
-declare global KoreanRatings: Button
-declare global TaiwanFraudWarning: Frame
+declare global ChinaAgeAppropriatenessWarning: ChinaAgeAppropriatenessWarningMixin & Frame
+declare global KoreanRatings: KoreanRatingsMixin & Button
+declare global TaiwanFraudWarning: TaiwanFraudWarningMixin & Frame
 @onDemand("Blizzard_MacroUI")
-declare global MacroPopupFrame: Frame
-@onDemand("Blizzard_MacroUI")
-declare global MacroFrame: Frame
+declare global MacroPopupFrame: MacroPopupFrameMixin & IconSelectorPopupFrameTemplateMixin & Frame
 @onDemand("Blizzard_MacroUI")
 declare global MacroFramePortrait: Texture
 @onDemand("Blizzard_MacroUI")
@@ -13654,9 +13447,7 @@ declare global MacroFrameEnterMacroText: FontString
 @onDemand("Blizzard_MacroUI")
 declare global MacroFrameCharLimitText: FontString
 @onDemand("Blizzard_MacroUI")
-declare global MacroFrameSelectedMacroButton: CheckButton
-@onDemand("Blizzard_MacroUI")
-declare global MacroEditButton: Button
+declare global MacroFrameSelectedMacroButton: MacroButtonMixin & SelectorButtonMixin & CheckButton
 @onDemand("Blizzard_MacroUI")
 declare global MacroFrameScrollFrame: ScrollFrame
 @onDemand("Blizzard_MacroUI")
@@ -13664,23 +13455,7 @@ declare global MacroFrameText: EditBox
 @onDemand("Blizzard_MacroUI")
 declare global MacroFrameTextButton: Button
 @onDemand("Blizzard_MacroUI")
-declare global MacroCancelButton: Button
-@onDemand("Blizzard_MacroUI")
-declare global MacroSaveButton: Button
-@onDemand("Blizzard_MacroUI")
-declare global MacroFrameTextBackground: Frame
-@onDemand("Blizzard_MacroUI")
-declare global MacroFrameTab1: Button
-@onDemand("Blizzard_MacroUI")
-declare global MacroFrameTab2: Button
-@onDemand("Blizzard_MacroUI")
-declare global MacroDeleteButton: Button
-@onDemand("Blizzard_MacroUI")
-declare global MacroNewButton: Button
-@onDemand("Blizzard_MacroUI")
-declare global MacroExitButton: Button
-declare global MailFrame: Frame
-declare global InboxFrame: Frame
+declare global MacroFrameTextBackground: TooltipBackdropTemplateMixin & Frame
 declare global InboxFrameBg: Texture
 declare global InboxCurrentPage: FontString
 declare global InboxTooMuchMail: Frame
@@ -13691,8 +13466,6 @@ declare global MailItem4: Frame
 declare global MailItem5: Frame
 declare global MailItem6: Frame
 declare global MailItem7: Frame
-declare global OpenAllMail: Button
-declare global SendMailFrame: Frame
 declare global SendMailErrorText: FontString
 declare global SendMailErrorCoin: Texture
 declare global SendMailHorizontalBarLeft: Texture
@@ -13700,7 +13473,6 @@ declare global SendMailHorizontalBarLeft2: Texture
 declare global SendStationeryBackgroundLeft: Texture
 declare global SendStationeryBackgroundRight: Texture
 declare global SendMailNameEditBox: EditBox
-declare global SendMailCostMoneyFrame: Frame
 declare global SendMailSubjectEditBox: EditBox
 declare global SendMailAttachment1: Button
 declare global SendMailAttachment2: Button
@@ -13720,23 +13492,15 @@ declare global SendMailAttachment15: Button
 declare global SendMailAttachment16: Button
 declare global SendMailMoneyButton: Frame
 declare global SendMailMoneyText: FontString
-declare global SendMailMoney: Frame
 declare global SendMailSendMoneyButton: CheckButton
 declare global SendMailCODButton: CheckButton
 declare global SendMailMoneyInset: Frame
 declare global SendMailMoneyBg: Frame
-declare global SendMailMoneyFrame: Frame
-declare global SendMailCancelButton: Button
-declare global SendMailMailButton: Button
-declare global MailFrameTab1: Button
-declare global MailFrameTab2: Button
-declare global OpenMailFrame: Frame
 declare global OpenMailAttachmentText: FontString
 declare global OpenMailSenderLabel: FontString
 declare global OpenMailSubjectLabel: FontString
 declare global OpenMailSubject: FontString
 declare global OpenMailHorizontalBarLeft: Texture
-declare global OpenMailReportSpamButton: Button
 declare global OpenMailSender: Frame
 declare global OpenMailScrollFrame: ScrollFrame
 declare global OpenStationeryBackgroundLeft: Texture
@@ -13753,90 +13517,34 @@ declare global OpenMailArithmeticLine: Texture
 declare global OpenMailInvoiceAmountReceived: FontString
 declare global OpenMailInvoiceNotYetSent: FontString
 declare global OpenMailInvoiceMoneyDelay: FontString
-declare global OpenMailTransactionAmountMoneyFrame: Frame
-declare global OpenMailDepositMoneyFrame: Frame
-declare global OpenMailHouseCutMoneyFrame: Frame
-declare global OpenMailSalePriceMoneyFrame: Frame
-declare global OpenMailCancelButton: Button
-declare global OpenMailDeleteButton: Button
-declare global OpenMailReplyButton: Button
-declare global CharacterMicroButton: Button
-declare global SpellbookMicroButton: Button
-declare global TalentMicroButton: Button
-declare global QuestLogMicroButton: Button
-declare global GuildMicroButton: Button
-declare global MainMenuMicroButton: Button
-declare global HelpMicroButton: Button
-declare global AchievementMicroButton: Button
-declare global CollectionsMicroButton: Button
-declare global EJMicroButton: Button
-declare global MinimapCluster: Frame
 declare global MinimapBackdrop: Frame
 declare global MinimapCompassTexture: Texture
 @onDemand("Blizzard_MovePad")
-declare global MovePadFrame: Frame
-@onDemand("Blizzard_MovePad")
-declare global MovePadForward: CheckButton
-@onDemand("Blizzard_MovePad")
-declare global MovePadJump: Button
-@onDemand("Blizzard_MovePad")
-declare global MovePadBackward: CheckButton
-@onDemand("Blizzard_MovePad")
-declare global MovePadRotateLeft: CheckButton
-@onDemand("Blizzard_MovePad")
-declare global MovePadRotateRight: CheckButton
-@onDemand("Blizzard_MovePad")
-declare global MovePadStrafeLeft: CheckButton
-@onDemand("Blizzard_MovePad")
-declare global MovePadStrafeRight: CheckButton
-declare global NamePlateDriverFrame: Frame
-declare global OverrideActionBar: Frame
-declare global PrematchHeaderFrame: Frame
-declare global QuestTimerFrame: Frame
+declare global MovePadFrame: MovePadMixin & TooltipBackdropTemplateMixin & Frame
+declare global NamePlateDriverFrame: NamePlateDriverMixin & Frame
+declare global PrematchHeaderFrame: PrematchHeaderMixin & Frame
 declare global QuestTimerHeader: Texture
-declare global QueueStatusFrame: Frame
-declare global RaidParentFrame: Frame
-declare global RaidFrame: Frame
+declare global QueueStatusFrame: QueueStatusFrameMixin & TooltipBackdropTemplateMixin & Frame
 declare global RaidFrameAllAssistCheckButton: CheckButton
 declare global RaidFrameNotInRaid: Frame
-declare global RaidFrameConvertToRaidButton: Button
-declare global RaidFrameRaidInfoButton: Button
-declare global RaidInfoFrame: Frame
 declare global RaidInfoDetailHeader: Texture
 declare global RaidInfoDetailFooter: Texture
-declare global RaidInfoCloseButton: Button
-declare global RaidInfoCancelButton: Button
-declare global RaidWarningFrame: Frame
-declare global ReportFrame: Frame
-declare global ScriptErrorsFrame: Frame
-declare global SecureTransferDialog: Frame
-declare global SettingsPanel: Frame
-declare global SettingsTooltip: GameTooltip
-declare global UIWidgetCenterDisplayFrame: Frame
-declare global ModelPanningFrame: Frame
+declare global ReportFrame: ReportFrameMixin & ResizeLayoutMixin & Frame
+declare global SettingsPanel: SettingsPanelMixin & Frame
+declare global UIWidgetCenterDisplayFrame: WidgetCenterDisplayFrameMixin & ResizeLayoutMixin & Frame
 declare global DropDownList1: Button
 declare global DropDownList2: Button
 declare global DropDownList3: Button
-declare global ModelPreviewFrame: Frame
 declare global BasicMessageDialog: Frame
 declare global SharedTooltipDefaultContainer: GameTooltip
-declare global SimpleCheckout: Frame
-declare global SpellPickupDisplay: Frame
-declare global StaticPopup1: Frame
-declare global StaticPopup2: Frame
-declare global StaticPopup3: Frame
-declare global StaticPopup4: Frame
-declare global PetBattleQueueReadyFrame: Frame
-declare global GlueDialog: Frame
+declare global SimpleCheckout: SimpleCheckoutMixin & Frame
+declare global SpellPickupDisplay: SpellPickupDisplayMixin & CallbackRegistrantMixin & LayoutMixin & VerticalLayoutMixin & Frame
 declare global StoreStateDriverFrame: Frame
 declare global ServicesLogoutPopup: Frame
 declare global StoreDialog: Frame
-declare global StoreFrame: Frame
 declare global StoreConfirmationFrame: Frame
 declare global StoreVASValidationFrame: Frame
-declare global StoreTooltip: Frame
-@onDemand("Blizzard_TimeManager")
-declare global TimeManagerFrame: Frame
+declare global StoreTooltip: StoreTooltipBackdropMixin & NineSlicePanelMixin & Frame
 @onDemand("Blizzard_TimeManager")
 declare global TimeManagerGlobe: Texture
 @onDemand("Blizzard_TimeManager")
@@ -13855,8 +13563,6 @@ declare global TimeManagerAlarmTimeLabel: FontString
 declare global TimeManagerAlarmMessageFrame: Frame
 @onDemand("Blizzard_TimeManager")
 declare global TimeManagerAlarmMessageLabel: FontString
-@onDemand("Blizzard_TimeManager")
-declare global TimeManagerAlarmMessageEditBox: EditBox
 @onDemand("Blizzard_TimeManager")
 declare global TimeManagerAlarmEnabledButton: CheckButton
 @onDemand("Blizzard_TimeManager")
@@ -13884,62 +13590,24 @@ declare global StopwatchTabFrame: Frame
 @onDemand("Blizzard_TimeManager")
 declare global StopwatchTitle: FontString
 @onDemand("Blizzard_TimeManager")
-declare global StopwatchCloseButton: Button
-@onDemand("Blizzard_TimeManager")
 declare global StopwatchResetButton: Button
 @onDemand("Blizzard_TimeManager")
 declare global StopwatchPlayPauseButton: Button
-declare global TokenFrame: Frame
-declare global TokenFramePopup: Frame
-@onDemand("Blizzard_TrainerUI")
-declare global ClassTrainerFrame: Frame
-@onDemand("Blizzard_TrainerUI")
-declare global ClassTrainerTrainButton: Button
-declare global UIErrorsFrame: MessageFrame
-declare global BankFrame: Frame
+declare global UIErrorsFrame: UIErrorsMixin & MessageFrame
 declare global BankFrameTitleText: FontString
-declare global CharacterFrame: Frame
-declare global CharacterFrameTab1: Button
-declare global CharacterFrameTab2: Button
-declare global CharacterFrameTab3: Button
 declare global CharacterStatsPane: Frame
-declare global ContainerFrame1: Frame
-declare global ContainerFrame2: Frame
-declare global ContainerFrame3: Frame
-declare global ContainerFrame4: Frame
-declare global ContainerFrame5: Frame
-declare global ContainerFrame6: Frame
-declare global SideDressUpFrame: Frame
-declare global DressUpFrame: Frame
-declare global DressUpFrameCancelButton: Button
-declare global DressUpFrameResetButton: Button
-declare global GossipFrame: Frame
-declare global GroupLootContainer: Frame
-declare global GroupLootFrame1: Frame
-declare global GroupLootFrame2: Frame
-declare global GroupLootFrame3: Frame
-declare global GroupLootFrame4: Frame
-declare global MasterLooterFrame: Frame
-declare global GuildRegistrarFrame: Frame
 declare global GuildRegistrarFramePortrait: Texture
 declare global GuildRegistrarText: FontString
 declare global GuildRegistrarNpcNameFrame: Frame
 declare global GuildRegistrarFrameNpcNameText: FontString
 declare global GuildRegistrarGreetingFrame: Frame
-declare global GuildRegistrarFrameGoodbyeButton: Button
 declare global GuildRegistrarButton1: Button
 declare global GuildRegistrarButton2: Button
 declare global GuildRegistrarPurchaseFrame: Frame
 declare global GuildRegistrarPurchaseText: FontString
 declare global GuildRegistrarCostLabel: FontString
 declare global GuildRegistrarMoneyFrame: Frame
-declare global GuildRegistrarFrameCancelButton: Button
-declare global GuildRegistrarFramePurchaseButton: Button
 declare global GuildRegistrarFrameEditBox: EditBox
-declare global ItemRefShoppingTooltip1: GameTooltip
-declare global ItemRefShoppingTooltip2: GameTooltip
-declare global ItemRefTooltip: GameTooltip
-declare global ItemTextFrame: Frame
 declare global ItemTextMaterialTopLeft: Texture
 declare global ItemTextMaterialTopRight: Texture
 declare global ItemTextMaterialBotLeft: Texture
@@ -13951,8 +13619,6 @@ declare global ItemTextPageText: SimpleHTML
 declare global ItemTextStatusBar: StatusBar
 declare global ItemTextPrevPageButton: Button
 declare global ItemTextNextPageButton: Button
-declare global LootFrame: Frame
-declare global MerchantFrame: Frame
 declare global MerchantFramePortrait: Texture
 declare global BuybackBG: Texture
 declare global MerchantPageText: FontString
@@ -13975,16 +13641,12 @@ declare global MerchantGuildBankRepairButton: Button
 declare global MerchantBuyBackItem: Frame
 declare global MerchantMoneyInset: Frame
 declare global MerchantMoneyBg: Frame
-declare global MerchantMoneyFrame: Frame
 declare global MerchantPrevPageButton: Button
 declare global MerchantNextPageButton: Button
-declare global MerchantFrameTab1: Button
-declare global MerchantFrameTab2: Button
-declare global PaperDollFrame: Frame
 declare global CharacterLevelText: FontString
 declare global CharacterTrialLevelErrorText: FontString
 declare global PaperDollSidebarTabs: Frame
-declare global CharacterModelScene: ModelScene
+declare global CharacterModelScene: CharacterModelSceneMixin & PanningModelSceneMixin & ModelSceneMixin & ModelScene
 declare global CharacterModelFrameBackgroundTopLeft: Texture
 declare global CharacterModelFrameBackgroundTopRight: Texture
 declare global CharacterModelFrameBackgroundBotLeft: Texture
@@ -14000,8 +13662,7 @@ declare global PaperDollInnerBorderTop: Texture
 declare global PaperDollInnerBorderBottom: Texture
 declare global PaperDollInnerBorderBottom2: Texture
 declare global PaperDollItemsFrame: Frame
-declare global GearManagerPopupFrame: Frame
-declare global PetitionFrame: Frame
+declare global GearManagerPopupFrame: GearManagerPopupFrameMixin & IconSelectorPopupFrameTemplateMixin & Frame
 declare global PetitionFramePortrait: Texture
 declare global PetitionFrameCharterTitle: FontString
 declare global PetitionFrameCharterName: FontString
@@ -14020,20 +13681,12 @@ declare global PetitionFrameMemberName9: FontString
 declare global PetitionFrameInstructions: FontString
 declare global PetitionNpcNameFrame: Frame
 declare global PetitionFrameNpcNameText: FontString
-declare global PetitionFrameCancelButton: Button
-declare global PetitionFrameSignButton: Button
-declare global PetitionFrameRequestButton: Button
-declare global PetitionFrameRenameButton: Button
-declare global QuestFrame: Frame
 declare global QuestFramePortrait: Texture
 declare global QuestNpcNameFrame: Frame
 declare global QuestFrameRewardPanel: Frame
-declare global QuestFrameCompleteQuestButton: Button
 declare global QuestRewardScrollFrame: ScrollFrame
 declare global QuestRewardScrollChildFrame: Frame
 declare global QuestFrameProgressPanel: Frame
-declare global QuestFrameGoodbyeButton: Button
-declare global QuestFrameCompleteButton: Button
 declare global QuestProgressScrollFrame: ScrollFrame
 declare global QuestProgressScrollChildFrame: Frame
 declare global QuestProgressTitleText: FontString
@@ -14048,19 +13701,15 @@ declare global QuestProgressItem4: Button
 declare global QuestProgressItem5: Button
 declare global QuestProgressItem6: Button
 declare global QuestFrameDetailPanel: Frame
-declare global QuestFrameDeclineButton: Button
-declare global QuestFrameAcceptButton: Button
 declare global QuestDetailScrollFrame: ScrollFrame
 declare global QuestDetailScrollChildFrame: Frame
 declare global QuestFrameGreetingPanel: Frame
-declare global QuestFrameGreetingGoodbyeButton: Button
 declare global QuestGreetingScrollFrame: ScrollFrame
 declare global QuestGreetingScrollChildFrame: Frame
 declare global GreetingText: FontString
 declare global CurrentQuestsText: FontString
 declare global QuestGreetingFrameHorizontalBreak: Texture
 declare global AvailableQuestsText: FontString
-declare global QuestModelScene: ModelScene
 declare global QuestNPCModelNameText: FontString
 declare global QuestNPCModelNameTooltipFrame: Frame
 declare global QuestNPCModelTextScrollFrame: ScrollFrame
@@ -14095,10 +13744,8 @@ declare global QuestInfoObjectivesHeader: FontString
 declare global QuestInfoDescriptionText: FontString
 declare global QuestInfoSpacerFrame: Frame
 declare global QuestInfoSealFrame: Frame
-declare global QuestMapFrame: Frame
-declare global QuestMapDetailsScrollFrame: Frame
-declare global ReputationFrame: Frame
-declare global TabardFrame: Frame
+declare global QuestMapFrame: QuestLogMixin & Frame
+declare global QuestMapDetailsScrollFrame: EventScrollFrameMixin & ScrollFrame
 declare global TabardFramePortrait: Texture
 declare global TabardFrameOuterFrameTopLeft: Texture
 declare global TabardFrameOuterFrameTop: Texture
@@ -14116,11 +13763,7 @@ declare global TabardFrameEmblemTopLeft: Texture
 declare global TabardFrameEmblemBottomLeft: Texture
 declare global TabardFrameNameText: FontString
 declare global TabardFrameGreetingText: FontString
-declare global TabardModel: TabardModel
-declare global TabardCharacterModelRotateLeftButton: Button
-declare global TabardCharacterModelRotateRightButton: Button
-declare global TabardFrameCostFrame: Frame
-declare global TabardFrameCostMoneyFrame: Frame
+declare global TabardFrameCostFrame: TooltipBackdropTemplateMixin & Frame
 declare global TabardFrameCostLabel: FontString
 declare global TabardFrameCustomizationFrame: Frame
 declare global TabardFrameCustomizationBorder: Texture
@@ -14129,10 +13772,6 @@ declare global TabardFrameCustomization2: Frame
 declare global TabardFrameCustomization3: Frame
 declare global TabardFrameCustomization4: Frame
 declare global TabardFrameCustomization5: Frame
-declare global TabardFrameMoneyFrame: Frame
-declare global TabardFrameAcceptButton: Button
-declare global TabardFrameCancelButton: Button
-declare global TradeFrame: Frame
 declare global TradeRecipientBotLeftCorner: Texture
 declare global TradeRecipientLeftBorder: Texture
 declare global TradeRecipientBG: Texture
@@ -14162,58 +13801,32 @@ declare global TradePlayerItem5: Frame
 declare global TradePlayerItem6: Frame
 declare global TradePlayerEnchantInset: Frame
 declare global TradePlayerItem7: Frame
-declare global TradeFrameTradeButton: Button
-declare global TradeFrameCancelButton: Button
 declare global TradePlayerInputMoneyInset: Frame
-declare global TradePlayerInputMoneyFrame: Frame
 declare global TradeRecipientMoneyInset: Frame
 declare global TradeRecipientMoneyBg: Frame
-declare global TradeRecipientMoneyFrame: Frame
 declare global TaxiFrame: Frame
 declare global TaxiRouteMap: Frame
-declare global VehicleSeatIndicator: Frame
-declare global UIWidgetBelowMinimapContainerFrame: Frame
-declare global UIWidgetManager: Frame
-declare global UIWidgetTopCenterContainerFrame: Frame
-declare global ComboFrame: Frame
-declare global PetFrame: Button
+declare global UIWidgetManager: UIWidgetManagerMixin & Frame
 declare global PetPortrait: Texture
 declare global PetFrameTexture: Texture
 declare global PetFrameFlash: Texture
 declare global PetAttackModeTexture: Texture
 declare global PetHitIndicator: FontString
 declare global PetName: FontString
-declare global PetFrameHealthBar: StatusBar
-declare global PetFrameMyHealPredictionBar: Frame
-declare global PetFrameOtherHealPredictionBar: Frame
+declare global PetFrameMyHealPredictionBar: StatusBarOverlaySegmentMixin & Frame
+declare global PetFrameOtherHealPredictionBar: StatusBarOverlaySegmentMixin & Frame
 declare global PetFrameHealthBarText: FontString
 declare global PetFrameHealthBarTextLeft: FontString
 declare global PetFrameHealthBarTextRight: FontString
-declare global PetFrameManaBar: StatusBar
 declare global PetFrameManaBarText: FontString
 declare global PetFrameManaBarTextLeft: FontString
 declare global PetFrameManaBarTextRight: FontString
-declare global PetCastingBarFrame: StatusBar
-declare global PlayerFrame: Button
 declare global PlayerName: FontString
 declare global PlayerLevelText: FontString
 declare global PlayerPVPTimerText: FontString
 declare global PlayerFrameGroupIndicatorText: FontString
-declare global RuneFrame: Frame
-declare global TargetFrame: Button
-declare global FocusFrame: Button
-declare global Boss1TargetFrame: Button
-declare global Boss2TargetFrame: Button
-declare global Boss3TargetFrame: Button
-declare global Boss4TargetFrame: Button
-declare global Boss5TargetFrame: Button
-declare global TotemFrame: Frame
-declare global PlayerPowerBarAlt: Frame
 declare global PlayerBuffTimerManager: Frame
-declare global PartyMemberBuffTooltip: Frame
-declare global WorldLootObjectList: Frame
-declare global WorldMapFrame: Frame
-declare global WowTokenRedemptionFrame: Frame
+declare global WorldLootObjectList: WorldLootObjectListMixin & Frame
 declare global WowTokenDialog: Frame
 declare global ABANDON_PET: string
 declare global ABANDON_QUEST: string

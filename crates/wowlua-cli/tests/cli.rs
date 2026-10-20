@@ -1163,8 +1163,10 @@ fn check_lua_flavors_share_what_checks_the_same() {
 /// Camelot's declarations take the calls Blizzard's code makes and the
 /// values the client answers (SuuUI's port, report C25 to C37): money and
 /// sizes are numbers, tooltip data methods take their `C_TooltipInfo`
-/// function's parameters, a cooldown is a readable table with possibly
-/// secret fields, the client's own number globals are declared.
+/// function's parameters, a spell cooldown is a readable table with possibly
+/// secret fields (C34: an item cooldown's are plain), the client's own
+/// number globals are declared, named frames have their mixins' methods
+/// (C35), a unit's name may be absent.
 #[test]
 fn camelot_declarations_follow_the_client() {
     let dir = tempfile::tempdir().unwrap();
@@ -1205,7 +1207,14 @@ local started = cooldown and cooldown.startTime > 0
 local party: number = LE_PARTY_CATEGORY_INSTANCE
 local location = ItemLocation:CreateFromBagAndSlot(0, 1)
 NamePlateDriverFrame:Show()
-print(cancel, zoom, maxZoom, secretTable, completion, known, tabCost, conditionText, active, started, party, location)
+local itemCooldown = C_Spell.GetItemCooldown(1)
+local itemStarted = itemCooldown and itemCooldown.startTime > 0
+ChatFrame1:ApplySystemAnchor()
+ChatFrame1:AddMessage("hi", 1, 1, 1)
+PlayerFrame:ApplySystemAnchor()
+local unitName, unitRealm = UnitName("party2")
+local named: string = unitName
+print(cancel, zoom, maxZoom, secretTable, completion, known, tabCost, conditionText, active, started, party, location, itemStarted, unitRealm, named)
 "#,
             ),
         ],
@@ -1216,12 +1225,14 @@ print(cancel, zoom, maxZoom, secretTable, completion, known, tabCost, conditionT
         .failure();
     let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
     let diagnostics: Vec<&str> = stderr.lines().filter(|l| l.starts_with("src/")).collect();
-    // Only the cooldown's start time may be secret.
+    // Only the spell cooldown's start time may be secret (an item's never
+    // is), and a unit's name may be absent.
     assert_eq!(
         diagnostics,
         [
             "src/main.wowlua:22:30: error[E2040]: `number | Secret<number>` may be a secret value; narrow it with `canaccessvalue` or `issecretvalue` first",
             "src/main.wowlua:22:30: error[E2001]: cannot compare `number | Secret<number>` with `0`",
+            "src/main.wowlua:32:7: error[E2001]: `nil | string | Secret<string>` is not assignable to `string`",
         ],
         "{stderr}"
     );
