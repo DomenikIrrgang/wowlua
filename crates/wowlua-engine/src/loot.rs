@@ -93,6 +93,38 @@ pub struct Loot {
     /// Slots whose item's bag update comes in a packet of its own, these
     /// seconds after the item (`bagsAlone`, a recording's).
     pub bags_alone: Vec<(usize, f64)>,
+    /// A corpse the player asked to loot, its window not yet open.
+    pub asked: Option<UnitId>,
+    /// The looting flags owed to the echo of targeting this corpse, or
+    /// told with it.
+    pub flags_with_echo: Option<UnitId>,
+    pub flags_told: bool,
+}
+
+/// Looting a corpse the player is targeting anew: the player's flags
+/// (`UNIT_FLAGS`) come with the target's echo, not with the loot's
+/// `LOOT_READY` (recorded: 9 of 9, `quest`'s eight corpses and `combat`'s
+/// one, the echo before, with or after `LOOT_READY`; in its moment after
+/// it, 4 of 4). The target change's echo is on its way.
+pub fn target_echo_coming(vm: &mut Vm) {
+    flags_to_echo(vm);
+}
+
+fn flags_to_echo(vm: &mut Vm) {
+    let l = &engine(vm).world.loot;
+    let Some(corpse) = l.asked else { return };
+    if engine(vm).units.echoing == Some(Some(corpse)) {
+        engine_mut(vm).world.loot.flags_with_echo = Some(corpse);
+    }
+}
+
+/// The echo of targeting `target` told: the looting flags owed with it.
+pub fn target_echoed(vm: &mut Vm, target: Option<UnitId>) {
+    if target.is_some() && engine(vm).world.loot.flags_with_echo == target {
+        engine_mut(vm).world.loot.flags_with_echo = None;
+        engine_mut(vm).world.loot.flags_told = true;
+        units::fire_unit(vm, "UNIT_FLAGS", units::PLAYER, &[]);
+    }
 }
 
 /// A table's numbers in order (`{ 0.08, 0.12 }`).
@@ -171,6 +203,13 @@ pub fn control_loot(vm: &mut Vm, c: NativeCall) -> Ret {
         }
     }
     engine_mut(vm).world.loot.bags_alone = alone;
+    {
+        let l = &mut engine_mut(vm).world.loot;
+        l.asked = Some(corpse);
+        l.flags_with_echo = None;
+        l.flags_told = false;
+    }
+    flags_to_echo(vm);
     later(
         vm,
         delay,
@@ -382,9 +421,17 @@ const CORPSE_OPEN_AFTER: f64 = 0.25;
 /// later; an object's were).
 fn open_window(vm: &mut Vm, corpse: UnitId, auto: bool, corpse_flags: bool) {
     fill(vm, corpse, auto);
-    // Looting: the player's flags change (recorded just before).
+    // Looting: the player's flags change (recorded just before), unless
+    // they come with the target's echo (`target_echo_coming`).
     if corpse_flags {
-        units::fire_unit(vm, "UNIT_FLAGS", units::PLAYER, &[]);
+        let with_echo = {
+            let l = &mut engine_mut(vm).world.loot;
+            l.asked = None;
+            l.flags_with_echo.is_some() || std::mem::take(&mut l.flags_told)
+        };
+        if !with_echo {
+            units::fire_unit(vm, "UNIT_FLAGS", units::PLAYER, &[]);
+        }
         fire(vm, "LOOT_READY", &[Value::Bool(auto)]);
         later(
             vm,
