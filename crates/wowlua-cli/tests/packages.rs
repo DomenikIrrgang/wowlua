@@ -752,6 +752,59 @@ fn dependency_commands() {
         .stderr(predicate::str::contains("Fetched 1 package"));
 }
 
+/// W4306 for a wowlua library without a license names where its license
+/// can come from; a `LICENSE` file in its folder is one.
+#[test]
+fn wowlua_library_without_a_license() {
+    let e = env();
+    let lib = e.root.join("lib");
+    write(
+        &lib,
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "shared", "version": "0.1.0", "kind": "library" } }"#,
+            ),
+            (
+                "src/init.wowlua",
+                "export function greet(): string\n    return \"hi\"\nend\n",
+            ),
+        ],
+    );
+    write(
+        &e.project,
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "my-addon", "version": "1.0.0" },
+  "dependencies": { "shared": { "path": "../lib" } } }"#,
+            ),
+            (
+                "src/main.wowlua",
+                "import greet from \"shared\"\nprint(greet())\n",
+            ),
+        ],
+    );
+    wowlua(&e.project, &e.home)
+        .arg("build")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "warning[W4306]: embedded library without a recognizable license file or header: shared",
+        ))
+        .stderr(predicate::str::contains(
+            "a `LICENSE` or `COPYING` file in its folder or its package's `license`",
+        ));
+    write(&lib, &[("LICENSE", "Shared, all rights given.\n")]);
+    wowlua(&e.project, &e.home)
+        .arg("build")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("W4306").not());
+    let licenses = read_lf(e.project.join("dist/dev/MyAddon/LICENSES.txt")).unwrap();
+    assert!(licenses.contains("Shared, all rights given."), "{licenses}");
+}
+
 #[test]
 fn wowlua_library_is_compiled_into_the_addon() {
     let e = env();
