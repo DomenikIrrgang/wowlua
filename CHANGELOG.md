@@ -50,6 +50,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `wowlua publish` without a terminal no longer waits for a macOS Keychain dialog: a saved token that needs approval counts as missing (E4201 says why and how to fix it)
 - `wowlua test` with Blizzard's UI: an aura container (`wowlua:aura`'s `container`, or Blizzard's `AuraContainer`) made while the addon loads takes its groups without errors; the intrinsic type's scripts no longer compile as the loading addon's code, so `AddAuraGroup` no longer fails on `CancelSignal` and a secret `SetSize`
 - A wowlua library inside a workspace (a member, or a path dependency in its folder) without a license of its own has the workspace root's (its `LICENSE` file or package `license`), so no W4306
+- A wowlua library path dependency in a sub-folder of a package outside a workspace has the package's license too (the package counts as its own workspace)
 - `export const x: T = { … }` and an annotated plain `const` have the annotation's type, not the literal's
 - An exported table has the fields assigned to it after its declaration (`function chat.Hide() … end`), sealed, for importers
 - A callback taking a wider parameter type no longer widens a type argument (`table.sort(rows, function(a: { ms: number }, …) … end)`)

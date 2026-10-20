@@ -366,7 +366,8 @@ user error otherwise:
    `LICENSES.txt`; a library without a recognizable license file or header is
    warning W4306. A wowlua library inside a workspace (a member, or a path
    dependency in the workspace root's folder) without a license of its own
-   has the workspace root's ([Code generation §14.8.6](codegen.md#1486-licenses)),
+   has the workspace root's; a package without a `workspace` key counts as
+   its own workspace, so a path dependency in its folder has the package's ([Code generation §14.8.6](codegen.md#1486-licenses)),
    so it gets W4306 only when the workspace has none either.
 
 ## 13.9 Caching and incremental builds

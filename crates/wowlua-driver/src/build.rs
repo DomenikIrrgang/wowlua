@@ -1974,11 +1974,10 @@ fn build_inner(
         }
     }
     // A wowlua library inside the workspace (a member, or a path dependency
-    // in its folder) without a license of its own has the workspace's.
-    let workspace = project
-        .workspace_root
-        .as_deref()
-        .and_then(|ws| std::fs::canonicalize(ws).ok());
+    // in its folder) without a license of its own has the workspace's. A
+    // package outside a workspace counts as its own workspace.
+    let workspace =
+        std::fs::canonicalize(project.workspace_root.as_deref().unwrap_or(project.root())).ok();
     let mut workspace_license: Option<Option<String>> = None;
     for lib in &wlibs {
         let used = files
@@ -2013,7 +2012,7 @@ fn build_inner(
                     unlicensed.join(", ")
                 ),
             )
-            .with_help("check their licenses before publishing; a library's license is a `LICENSE` or `COPYING` file in its folder or its package's `license` (a Lua library's also its entry file's license header, or the files `lua-library.license-files` names; a wowlua library inside a workspace also has the workspace root's)"),
+            .with_help("check their licenses before publishing; a library's license is a `LICENSE` or `COPYING` file in its folder or its package's `license` (a Lua library's also its entry file's license header, or the files `lua-library.license-files` names; a wowlua library in the folder of a workspace, or of a package outside one, also has its root package's)"),
         );
     }
     out.insert(

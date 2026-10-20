@@ -341,7 +341,9 @@ E4334, because the client would read only one of them.
   modules used, and the wowlua runtime. A wowlua library inside a workspace
   (a member, or a path dependency in the workspace root's folder) with none
   of these has the workspace root's license: its `LICENSE`/`COPYING` files,
-  else its package's `license`. A Lua library never inherits one, since a
+  else its package's `license`. A package without a `workspace` key counts
+  as its own workspace here, so a wowlua library path dependency in its
+  folder has the package's license. A Lua library never inherits one, since a
   copy of someone else's code in the repository is not under its license. The runtime and standard library are
   released under the **MIT license** (decision T40). Its notice is included in
   `LICENSES.txt`, and addon authors may use any license for their own code.

@@ -885,6 +885,50 @@ fn workspace_libraries_inherit_the_root_license() {
     assert!(!licenses.contains("License: MIT"), "{licenses}");
 }
 
+/// A package without a `workspace` key counts as its own workspace: a
+/// wowlua library path dependency in its folder has the package's license,
+/// a vendored Lua library does not (spec §13.8, §14.8.6).
+#[test]
+fn package_folder_libraries_inherit_the_package_license() {
+    let e = env();
+    write(
+        &e.project,
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "my-addon", "version": "1.0.0", "license": "MIT" },
+  "dependencies": { "shared": { "path": "libs/shared" },
+    "vendored": { "path": "libs/vendored", "kind": "lua-library", "files": ["Vendored.lua"] } } }"#,
+            ),
+            (
+                "libs/shared/wowlua.json",
+                r#"{ "package": { "name": "shared", "version": "0.1.0", "kind": "library" } }"#,
+            ),
+            (
+                "libs/shared/src/init.wowlua",
+                "export function greet(): string\n    return \"hi\"\nend\n",
+            ),
+            ("libs/vendored/Vendored.lua", "Vendored = {}\n"),
+            (
+                "src/main.wowlua",
+                "import greet from \"shared\"\nprint(greet())\n",
+            ),
+        ],
+    );
+    wowlua(&e.project, &e.home)
+        .arg("build")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "warning[W4306]: embedded library without a recognizable license file or header: vendored",
+        ));
+    let licenses = read_lf(e.project.join("dist/dev/MyAddon/LICENSES.txt")).unwrap();
+    assert!(
+        licenses.contains("== shared (libs/shared) ==\n\nLicense: MIT"),
+        "{licenses}"
+    );
+}
+
 /// A library's exported values keep their types in the addon, also when
 /// the addon's own modules import each other (spec §10.5.1, §5.4.4).
 #[test]
