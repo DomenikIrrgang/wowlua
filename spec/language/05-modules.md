@@ -288,7 +288,11 @@ signatures, its classes, enums and constants, and its exported `local`s and
 value reads as `any` there, which is warning W1036 where it is imported by
 name or first read through a namespace import (`b.items`), telling to
 annotate it in its module. A `typeof(…)` type alias of a module checked later
-reads as `any` the same way (W1036 at its import). Each module is still
+reads as `any` the same way (W1036 at its import, or at its first use through
+a namespace import, `b.Conf`). A test file's `import internal` of a module
+checked later sees its annotated file-level locals and constants and its
+functions with their types; another local reads as `any` (W1036 at the
+import). Each module is still
 checked once. A cycle never changes the types of other imports, such as
 standard-library modules or the modules the cycle imports. A type-only import
 of a module with a `typeof(…)` alias orders the check too (that module is

@@ -749,8 +749,18 @@ fn check_file_in(
             &fresh
         }
     };
+    env.typeof_namespace_refs.clear();
     let mut checker = Checker::new(env, &info, prepared);
     checker.check_file(parse);
+    // `M.T` through a namespace import, of a `typeof` alias not reached
+    // yet: W1036 at the first use of each.
+    let mut seen: FxHashSet<(usize, Box<str>)> = FxHashSet::default();
+    for (m, name, span) in std::mem::take(&mut checker.env.typeof_namespace_refs) {
+        if seen.insert((m, name.clone())) {
+            out.diagnostics
+                .push(typeof_alias_warning(ctx.files, m, &name, span));
+        }
+    }
     for arg in &prepared.type_name_args {
         if let Some(&t) = checker.expr_types.get(&(arg.start, arg.end)) {
             out.type_names.push((*arg, checker.env.display(t)));
@@ -892,25 +902,33 @@ fn annotated_exports(
     let reported = env.diagnostics.len();
     let mut out = FxHashMap::default();
     for s in parse.view().block().stmts() {
-        let StmtKind::Export(inner) = s.kind() else {
-            continue;
+        // An export, or a file-level local (for `import internal`).
+        let (inner, prefix) = match s.kind() {
+            StmtKind::Export(inner) => (inner, ""),
+            _ => (s, body::INTERNAL),
         };
         if !s.decorators().is_empty() || !inner.decorators().is_empty() {
             continue;
         }
+        let key = |name: &str| -> Box<str> { format!("{prefix}{name}").into() };
         match inner.kind() {
             StmtKind::Function { name, func }
                 if name.path().len() == 1 && name.method().is_none() =>
             {
                 let sig = env.func_sig(&env::FnSig::of(func), &scope, false);
                 let t = env.types.func(sig);
-                out.insert(name.path().at(0).text().into(), t);
+                out.insert(key(name.path().at(0).text()), t);
+            }
+            StmtKind::LocalFunction { name, func } if !prefix.is_empty() => {
+                let sig = env.func_sig(&env::FnSig::of(func), &scope, false);
+                let t = env.types.func(sig);
+                out.insert(key(name.text()), t);
             }
             StmtKind::Local { names, .. } => {
                 for n in names.iter() {
                     if let Some(t) = n.ty {
                         let t = env.resolve(t, &scope);
-                        out.insert(n.name.text().into(), t);
+                        out.insert(key(n.name.text()), t);
                     }
                 }
             }
@@ -918,7 +936,7 @@ fn annotated_exports(
                 name, ty: Some(t), ..
             } => {
                 let t = env.resolve(t, &scope);
-                out.insert(name.text().into(), t);
+                out.insert(key(name.text()), t);
             }
             _ => {}
         }
@@ -1008,6 +1026,16 @@ fn import_types(
                         && untyped_in_cycle(analysis, exports, m, spec.name.text())
                     {
                         diagnostics.push(untyped_export(
+                            files,
+                            m,
+                            spec.name.text(),
+                            spec.name.span(),
+                        ));
+                    }
+                    if let Some(m) = later.filter(|_| internal)
+                        && untyped_internal(files, exports, m, spec.name.text())
+                    {
+                        diagnostics.push(untyped_internal_warning(
                             files,
                             m,
                             spec.name.text(),
@@ -1117,6 +1145,57 @@ fn untyped_export(
     })
 }
 
+/// A file-level local of module `m` (a module of the importer's cycle
+/// checked after it) that `import internal` reads as `any` until `m` is
+/// checked: one its annotations do not type.
+fn untyped_internal(
+    files: &[FileInput],
+    exports: &FxHashMap<usize, FxHashMap<Box<str>, TypeId>>,
+    m: usize,
+    name: &str,
+) -> bool {
+    let key = format!("{}{name}", body::INTERNAL);
+    if exports
+        .get(&m)
+        .is_some_and(|e| e.contains_key(key.as_str()))
+    {
+        return false;
+    }
+    let Some(parse) = files[m].parse else {
+        return false;
+    };
+    parse.view().block().stmts().iter().any(|s| match s.kind() {
+        StmtKind::Local { names, .. } => names.iter().any(|n| n.name.text() == name),
+        StmtKind::LocalFunction { name: n, .. } => n.text() == name,
+        StmtKind::Function { name: n, .. } => {
+            n.path().len() == 1 && n.method().is_none() && n.path().at(0).text() == name
+        }
+        StmtKind::Const { name: n, .. } => n.text() == name,
+        _ => false,
+    })
+}
+
+/// W1036 for a file-level local of a later module of the cycle that
+/// `import internal` reads.
+fn untyped_internal_warning(
+    files: &[FileInput],
+    m: usize,
+    name: &str,
+    span: wowlua_span::Span,
+) -> Diagnostic {
+    let module = crate::module_id(&files[m].src_rel);
+    Diagnostic::warning(
+        "W1036",
+        format!(
+            "`{name}` is `any` here: `{module}` is checked after this module in their import cycle, and its local `{name}` has no type annotation"
+        ),
+    )
+    .with_label(span, "read as `any`")
+    .with_help(format!(
+        "annotate it where `{module}` declares it (`local {name}: T = …`)"
+    ))
+}
+
 /// Is the export `name` of module `m` decorated?
 fn decorated_export(files: &[FileInput], m: usize, name: &str) -> bool {
     let Some(parse) = files[m].parse else {
@@ -1147,19 +1226,25 @@ fn note_typeof_alias(
     if env.typeof_aliases.get(&def) != Some(&m) {
         return;
     }
+    diagnostics.push(typeof_alias_warning(files, m, name.text(), name.span()));
+}
+
+/// W1036 for the `typeof` alias `name` of module `m`, read at `span`.
+fn typeof_alias_warning(
+    files: &[FileInput],
+    m: usize,
+    name: &str,
+    span: wowlua_span::Span,
+) -> Diagnostic {
     let module = crate::module_id(&files[m].src_rel);
-    diagnostics.push(
-        Diagnostic::warning(
-            "W1036",
-            format!(
-                "the type `{}` is `any` here: `{module}` is checked after this module in their import cycle, and `{}` is a `typeof(…)` it has not reached yet",
-                name.text(),
-                name.text()
-            ),
-        )
-        .with_label(name.span(), "read as `any`")
-        .with_help(format!("write the type out in `{module}` instead of `typeof(…)`")),
-    );
+    Diagnostic::warning(
+        "W1036",
+        format!(
+            "the type `{name}` is `any` here: `{module}` is checked after this module in their import cycle, and `{name}` is a `typeof(…)` it has not reached yet"
+        ),
+    )
+    .with_label(span, "read as `any`")
+    .with_help(format!("write the type out in `{module}` instead of `typeof(…)`"))
 }
 
 #[cfg(test)]

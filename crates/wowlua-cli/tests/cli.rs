@@ -1004,8 +1004,10 @@ fn import_cycles_keep_import_types() {
 
 /// Inside an import cycle, a module checked before another of the cycle
 /// reads that one's exports without a type annotation as `any`: W1036
-/// where they are imported or read, once (spec §5.4.4). A `typeof` alias
-/// gets its type once its module is checked (spec §2.2.7).
+/// where they are imported or read, once (spec §5.4.4), also a `typeof`
+/// alias through a namespace import (`qn.Conf`) and a file-level local
+/// `import internal` reads. A `typeof` alias gets its type once its module
+/// is checked (spec §2.2.7).
 #[test]
 fn import_cycles_warn_about_untyped_exports() {
     let manifest = "{ \"package\": { \"name\": \"cyc\", \"version\": \"1.0.0\" }, \"check\": { \"mode\": \"strict\" } }\n";
@@ -1016,7 +1018,7 @@ fn import_cycles_warn_about_untyped_exports() {
             ("wowlua.json", manifest),
             (
                 "src/P.wowlua",
-                "import q, items from \"./Q\"\nimport * as qn from \"./Q\"\nimport type Conf from \"./Q\"\nexport function p(): number return q() end\nlocal function f() return items, qn.items, qn.items, qn.r(), qn.q() end\nlocal c: Conf = 1\nprint(f, c)\n",
+                "import q, items from \"./Q\"\nimport * as qn from \"./Q\"\nimport type Conf from \"./Q\"\nexport function p(): number return q() end\nlocal function f() return items, qn.items, qn.items, qn.r(), qn.q() end\nlocal c: Conf = 1\nlocal d: qn.Conf = 1\nlocal e: qn.Conf = 2\nprint(f, c, d, e)\n",
             ),
             (
                 "src/Q.wowlua",
@@ -1051,10 +1053,58 @@ fn import_cycles_warn_about_untyped_exports() {
             "src/P.wowlua:1: W1036",
             "src/P.wowlua:3: W1036",
             "src/P.wowlua:5: W1036",
+            "src/P.wowlua:7: W1036",
             "src/Q.wowlua:7: E2001",
             "src/Q.wowlua:9: E2001",
             "src/main.wowlua:3: E2001",
             "src/main.wowlua:4: E2001",
+        ],
+        "{stderr}"
+    );
+    // `import internal` in a cycle of test helpers: an annotated local or a
+    // function has its type, an unannotated local is `any` (W1036).
+    fs::remove_dir_all(dir.path().join("src")).unwrap();
+    write(
+        dir.path(),
+        &[
+            ("src/main.wowlua", "print(1)\n"),
+            (
+                "tests/a.wowlua",
+                "import internal hidden, typed, helper from \"./b\"\nexport function a(): number return 1 end\nlocal s: string = typed\nlocal h: string = helper()\nprint(hidden, s, h)\n",
+            ),
+            (
+                "tests/b.wowlua",
+                "import a from \"./a\"\nlocal hidden = { n = 1 }\nlocal typed: number = 2\nlocal function helper(): number return a() end\nprint(hidden, typed, helper)\n",
+            ),
+            (
+                "tests/x.test.wowlua",
+                "import test from \"wowlua:test\"\nimport a from \"./a\"\n@test\nlocal function t() print(a()) end\n",
+            ),
+        ],
+    );
+    let out = wowlua(dir.path())
+        .args(["test", "--message-format", "short"])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let mut found: Vec<String> = stderr
+        .lines()
+        .filter_map(|l| {
+            let (at, rest) = l
+                .split_once(": error[")
+                .or_else(|| l.split_once(": warning["))?;
+            let (file, line) = at.rsplit_once(':')?.0.rsplit_once(':')?;
+            let code = &rest[..rest.find(']')?];
+            Some(format!("{file}:{line}: {code}"))
+        })
+        .collect();
+    found.sort();
+    assert_eq!(
+        found,
+        [
+            "tests/a.wowlua:1: W1036",
+            "tests/a.wowlua:3: E2001",
+            "tests/a.wowlua:4: E2001",
         ],
         "{stderr}"
     );

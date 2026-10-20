@@ -2539,7 +2539,6 @@ dependencies = [
  "keyring",
  "mlua",
  "regex",
- "security-framework",
  "semver",
  "serde",
  "serde_json",

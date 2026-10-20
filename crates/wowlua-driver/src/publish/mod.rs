@@ -320,7 +320,7 @@ impl Tokens {
         if let Some(env) = &target.token_env {
             return self.var(env).ok_or_else(|| MissingToken {
                 var: env.clone(),
-                needs_approval: false,
+                no_terminal: false,
             });
         }
         let names = self.names(target.target_type);
@@ -330,9 +330,9 @@ impl Tokens {
         }
         // Said first: the OS credential store may wait for the user without
         // a word (a macOS Keychain dialog, when another wowlua binary saved
-        // the token).
+        // the token). Without a terminal it is not read.
         if let Some(status) = &self.status {
-            let store = if crate::credentials::may_ask() {
+            let store = if crate::credentials::reads_store() {
                 " (the OS credential store may ask you to allow wowlua)"
             } else {
                 ""
@@ -348,7 +348,7 @@ impl Tokens {
                 .find(|n| n.contains("_API_") || **n == "GITHUB_TOKEN")
                 .unwrap_or(&names[0])
                 .to_string(),
-            needs_approval: why == crate::credentials::Unread::NeedsApproval,
+            no_terminal: why == crate::credentials::Unread::NoTerminal,
         })
     }
 }
@@ -357,23 +357,22 @@ impl Tokens {
 struct MissingToken {
     /// The variable to set.
     var: String,
-    /// The OS credential store would have asked the user to allow reading
-    /// the saved token, and there was no terminal to answer from.
-    needs_approval: bool,
+    /// There was no terminal, so the OS credential store was not read.
+    no_terminal: bool,
 }
 
 impl MissingToken {
     /// E4201 for the publish target `name` of the site type `kind`.
     fn error(&self, name: &str, kind: &str) -> Diagnostic {
-        if self.needs_approval {
+        if self.no_terminal {
             return Diagnostic::error(
                 "E4201",
                 format!(
-                    "no API token for the publish target `{name}`: the OS credential store asked for approval to read the one `wowlua login` saved, and there is no terminal to give it"
+                    "no API token for the publish target `{name}`: without a terminal, wowlua does not read the OS credential store, where `wowlua login` saves tokens"
                 ),
             )
             .with_help(format!(
-                "run `wowlua publish` in a terminal once and allow wowlua to read the token (\"Always Allow\"), or set `{}`",
+                "set `{}`, run `wowlua publish` in a terminal, or save the token in `config.json` for jobs without one (`WOWLUA_NO_KEYRING=1 wowlua login {kind}`)",
                 self.var
             ));
         }
@@ -386,9 +385,9 @@ impl MissingToken {
 
     /// Why a converted packager project skips the target.
     fn skipped(&self) -> String {
-        if self.needs_approval {
+        if self.no_terminal {
             format!(
-                "no token (`{}`; the OS credential store asked for approval to read the saved one, without a terminal)",
+                "no token (`{}`; the OS credential store is not read without a terminal)",
                 self.var
             )
         } else {
@@ -1104,13 +1103,13 @@ mod tests {
         assert_eq!(env.len(), 3);
     }
 
-    /// A token the OS credential store wanted approval for is missing
-    /// (E4201), and the error says why and how to fix it.
+    /// A token missing without a terminal (the OS credential store is not
+    /// read then) is E4201 saying why and how to fix it.
     #[test]
-    fn a_token_needing_approval_says_why() {
-        let missing = |needs_approval| MissingToken {
+    fn a_token_missing_without_a_terminal_says_why() {
+        let missing = |no_terminal| MissingToken {
             var: "CF_API_TOKEN".into(),
-            needs_approval,
+            no_terminal,
         };
         let plain = missing(false).error("cf", "curseforge");
         assert_eq!(plain.code, Some("E4201"));
@@ -1119,19 +1118,23 @@ mod tests {
             plain.help.as_deref(),
             Some("set `CF_API_TOKEN`, or run `wowlua login curseforge`")
         );
-        let approval = missing(true).error("cf", "curseforge");
-        assert_eq!(approval.code, Some("E4201"));
+        let headless = missing(true).error("cf", "curseforge");
+        assert_eq!(headless.code, Some("E4201"));
         assert!(
-            approval
+            headless
                 .message
-                .ends_with("the OS credential store asked for approval to read the one `wowlua login` saved, and there is no terminal to give it"),
+                .ends_with("without a terminal, wowlua does not read the OS credential store, where `wowlua login` saves tokens"),
             "{}",
-            approval.message
+            headless.message
         );
-        let help = approval.help.unwrap_or_default();
-        assert!(help.contains("in a terminal once"), "{help}");
+        let help = headless.help.unwrap_or_default();
         assert!(help.contains("`CF_API_TOKEN`"), "{help}");
+        assert!(help.contains("in a terminal"), "{help}");
+        assert!(
+            help.contains("`WOWLUA_NO_KEYRING=1 wowlua login curseforge`"),
+            "{help}"
+        );
         assert_eq!(missing(false).skipped(), "no token (`CF_API_TOKEN`)");
-        assert!(missing(true).skipped().contains("asked for approval"));
+        assert!(missing(true).skipped().contains("without a terminal"));
     }
 }
