@@ -94,8 +94,10 @@ at(18.782) player:setPower(0)
 player:heal(1)
 at(20.808) player:heal(1)
 -- The corpse clicked: targeted, looted with autoloot.
-at(21.077) player:target(wolf)
-player:loot(wolf, { auto = true, slotsAfter = { 0.516, 0.767 }, bagsAfter = { 0.252, 0 }, dataAfter = { 0.52 } })
+-- The target's echo (with the looting flags) 0.327 s on, the loot's
+-- answer 0.334 s (recorded).
+at(21.077) player:target(wolf, { echo = 0.327 })
+player:loot(wolf, { auto = true, opensAfter = 0.334, slotsAfter = { 0.482, 0.733 }, bagsAfter = { 0.252, 0 }, dataAfter = { 0.52 } })
 at(21.700) check("the loot window open", LootFrame:IsShown())
 at(22.921)
 -- What Blizzard's UI shows at the end.

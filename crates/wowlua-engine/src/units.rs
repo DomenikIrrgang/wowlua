@@ -2119,6 +2119,12 @@ fn target_echo(vm: &mut Vm, c: NativeCall) -> Ret {
         Some(Value::Num(n)) if *n >= 0.0 => Some(UnitId(*n as usize)),
         _ => None,
     };
+    // Its moment's loot answer first (`loot::echo_waits`).
+    if crate::loot::echo_waits(vm, echoed) {
+        let again = vm.native_with("targetEcho", target_echo, c.upvals.to_vec());
+        crate::clock::after_engine(vm, 0.0, again);
+        return Ok(vec![]);
+    }
     if engine(vm).units.echoing == Some(echoed) {
         engine_mut(vm).units.echoing = None;
     }
@@ -2224,7 +2230,7 @@ fn control_kill(vm: &mut Vm, c: NativeCall) -> Ret {
         u.health = 0.0;
         u.dead = true;
     }
-    kill_blow_of(vm, me, blow, opts.school);
+    kill_blow_of(vm, me, blow, opts.school, "");
     kill_xp(vm, me, &opts, true);
     kill_xp(vm, me, &opts, false);
     engine_mut(vm).units.list[me.0].loot = opts.loot.clone();
@@ -2378,14 +2384,16 @@ pub(crate) fn event_guid(vm: &mut Vm, id: UnitId) -> Value {
 }
 
 /// The killing blow: `PARTY_KILL(killer, victim)` for the player's or the
-/// group's, then its `UNIT_COMBAT`.
-pub(crate) fn kill_blow(vm: &mut Vm, me: UnitId, blow: Option<(UnitId, f64)>) {
-    kill_blow_of(vm, me, blow, 1.0);
-}
-
-/// The killing blow's kill and combat text, of a school (`1` physical,
-/// `2` holy: a Judgement's, recorded).
-fn kill_blow_of(vm: &mut Vm, me: UnitId, blow: Option<(UnitId, f64)>, school: f64) {
+/// group's, then its combat text, of a school (`1` physical,
+/// `2` holy: a Judgement's, recorded), its indicator (a critical one's
+/// "CRITICAL": recorded, `quest` 90.425, Heroic Strike's).
+fn kill_blow_of(
+    vm: &mut Vm,
+    me: UnitId,
+    blow: Option<(UnitId, f64)>,
+    school: f64,
+    indicator: &str,
+) {
     let Some((killer, amount)) = blow else { return };
     if ours(&engine(vm).units, killer) {
         let k = event_guid(vm, killer);
@@ -2393,12 +2401,12 @@ fn kill_blow_of(vm: &mut Vm, me: UnitId, blow: Option<(UnitId, f64)>, school: f6
         fire(vm, "PARTY_KILL", &[k, v]);
     }
     let wound = vm.str("WOUND");
-    let empty = vm.str("");
+    let indicator = vm.str(indicator);
     fire_unit(
         vm,
         "UNIT_COMBAT",
         me,
-        &[wound, empty, Value::Num(amount), Value::Num(school)],
+        &[wound, indicator, Value::Num(amount), Value::Num(school)],
     );
 }
 
@@ -2659,7 +2667,18 @@ fn control_swing(vm: &mut Vm, c: NativeCall) -> Ret {
         let power = field(vm, "power");
         let kill = field(vm, "kill");
         let after = crate::aurastates::after_option(field(vm, "statesAfter"));
-        return swing_with_spell(vm, victim, amount, &kind, (spent, power), kill, after);
+        let indicator = match field(vm, "indicator") {
+            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+            _ => String::new(),
+        };
+        return swing_with_spell(
+            vm,
+            victim,
+            (amount, &kind, &indicator),
+            (spent, power),
+            kill,
+            after,
+        );
     }
     if me == PLAYER {
         let speed = match field(vm, "speed") {
@@ -2831,8 +2850,7 @@ fn kill_xp_later(vm: &mut Vm, c: NativeCall) -> Ret {
 fn swing_with_spell(
     vm: &mut Vm,
     victim: UnitId,
-    amount: f64,
-    kind: &str,
+    (amount, kind, indicator): (f64, &str, &str),
     (spent, power): (Value, Value),
     kill: Value,
     states_after: Option<f64>,
@@ -2876,7 +2894,7 @@ fn swing_with_spell(
         }
     }
     if kill.is_some() {
-        kill_blow(vm, victim, Some((PLAYER, dealt)));
+        kill_blow_of(vm, victim, Some((PLAYER, dealt)), 1.0, indicator);
     } else {
         let k = vm.str(kind);
         fire_unit(

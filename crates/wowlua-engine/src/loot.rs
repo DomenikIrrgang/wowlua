@@ -99,6 +99,20 @@ pub struct Loot {
     /// told with it.
     pub flags_with_echo: Option<UnitId>,
     pub flags_told: bool,
+    /// When the asked corpse's `LOOT_READY` is due (the clock's
+    /// milliseconds).
+    pub open_due: Option<f64>,
+}
+
+/// Whether the echo of targeting `target` waits for the loot's answer
+/// due in its moment: `LOOT_READY` first, then the echo and the looting
+/// flags (recorded, `quest`: 4 of 4 in one moment, 21.527, 58.652,
+/// 91.432, 102.091).
+pub fn echo_waits(vm: &Vm, target: Option<UnitId>) -> bool {
+    let l = &engine(vm).world.loot;
+    target.is_some()
+        && l.flags_with_echo == target
+        && l.open_due == Some(vm.clock.elapsed_ms.round())
 }
 
 /// Looting a corpse the player is targeting anew: the player's flags
@@ -209,6 +223,7 @@ pub fn control_loot(vm: &mut Vm, c: NativeCall) -> Ret {
         l.flags_with_echo = None;
         l.flags_told = false;
     }
+    engine_mut(vm).world.loot.open_due = Some((vm.clock.elapsed_ms + delay * 1000.0).round());
     flags_to_echo(vm);
     later(
         vm,
@@ -427,6 +442,7 @@ fn open_window(vm: &mut Vm, corpse: UnitId, auto: bool, corpse_flags: bool) {
         let with_echo = {
             let l = &mut engine_mut(vm).world.loot;
             l.asked = None;
+            l.open_due = None;
             l.flags_with_echo.is_some() || std::mem::take(&mut l.flags_told)
         };
         if !with_echo {
