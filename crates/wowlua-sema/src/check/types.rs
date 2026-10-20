@@ -930,6 +930,30 @@ impl Types {
             _ => t,
         }
     }
+
+    /// `widen` for a local's value or an inferred result: a `false` or
+    /// `true` beside a type that is neither `nil` nor a boolean stays a
+    /// literal, so a truthiness test removes it (`ok and t` is `false | T`,
+    /// and where it is truthy it is `T`).
+    pub fn widen_value(&mut self, t: TypeId) -> TypeId {
+        let Ty::Union(m) = self.get(t).clone() else {
+            return self.widen(t);
+        };
+        let other = m
+            .iter()
+            .any(|&x| !matches!(self.get(x), Ty::Nil | Ty::Bool(_) | Ty::Boolean));
+        if !other {
+            return self.widen(t);
+        }
+        let widened: Vec<TypeId> = m
+            .iter()
+            .map(|&x| match self.get(x) {
+                Ty::Bool(_) => x,
+                _ => self.widen(x),
+            })
+            .collect();
+        self.union(&widened)
+    }
 }
 
 fn ordered_hash(map: &FieldMap) -> u64 {

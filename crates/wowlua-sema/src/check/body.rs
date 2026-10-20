@@ -178,6 +178,33 @@ pub struct Checker<'e, 'p> {
     /// The handler type the decorators of the statement being checked give
     /// its function (`@event("X")`): (type, what it handles).
     next_handler: Option<(Func, String)>,
+    /// The loops being checked, innermost last: the flows of their
+    /// `break`s and `continue`s.
+    loops: Vec<LoopFlows>,
+    /// While a loop is checked on trial: the base types its assignments
+    /// replaced, to restore if the trial fails.
+    base_log: Option<Vec<(VarId, TypeId)>>,
+}
+
+/// The flows that leave a loop body early.
+#[derive(Default)]
+struct LoopFlows {
+    breaks: Vec<Flow>,
+    continues: Vec<Flow>,
+}
+
+/// What a loop's trial check restores when it fails.
+struct LoopTrial {
+    flow: Flow,
+    field_vars: FxHashMap<VarId, FxHashMap<Box<str>, VarId>>,
+    live: bool,
+    in_dead: bool,
+    guard: super::flavors::Guard,
+    vars: usize,
+    diagnostics: usize,
+    env_diagnostics: usize,
+    returns: usize,
+    base_log: Option<Vec<(VarId, TypeId)>>,
 }
 
 /// What checking a file reads of its syntax before and after walking it:
@@ -287,6 +314,8 @@ impl<'e, 'p> Checker<'e, 'p> {
             intrinsics: info.intrinsics.clone(),
             import_vars: FxHashMap::default(),
             next_handler: None,
+            loops: Vec::new(),
+            base_log: None,
         };
         for (name, &t) in &info.imports {
             let id = c.declare(name, Some(t), t, true, None);
@@ -418,7 +447,7 @@ impl<'e, 'p> Checker<'e, 'p> {
         let id = VarId(self.vars.len() as u32);
         let base = match declared {
             Some(d) => d,
-            None if widen => self.env.types.widen(ty),
+            None if widen => self.env.types.widen_value(ty),
             None => ty,
         };
         self.vars.push(Var {
@@ -437,7 +466,7 @@ impl<'e, 'p> Checker<'e, 'p> {
             let t = if is_const || !widen {
                 ty
             } else {
-                self.env.types.widen(ty)
+                self.env.types.widen_value(ty)
             };
             self.flow.insert(id, t);
         }
@@ -507,11 +536,11 @@ impl<'e, 'p> Checker<'e, 'p> {
                 self.flow.insert(v, narrowed);
             }
             None => {
-                let widened = self.env.types.widen(value);
+                let widened = self.env.types.widen_value(value);
                 self.flow.insert(v, widened);
                 // The base widens to cover every assigned value.
                 let base = self.env.types.union(&[var.base, widened]);
-                self.vars[v.0 as usize].base = base;
+                self.set_base(v, base);
             }
         }
     }
@@ -886,7 +915,10 @@ impl<'e, 'p> Checker<'e, 'p> {
                     }
                     let id =
                         self.declare(n.name.text(), declared, value, false, Some(n.name.span()));
-                    if declared.is_none() && keep.get(i).copied().unwrap_or(false) {
+                    // The names past the last value take that call's other
+                    // results (`local ok, r = pcall(f)`).
+                    let kept = keep.get(i).or(keep.last()).copied().unwrap_or(false);
+                    if declared.is_none() && kept {
                         self.flow.insert(id, value);
                     }
                     if declared.is_some() && no_values {
@@ -942,30 +974,33 @@ impl<'e, 'p> Checker<'e, 'p> {
                 }
             }
             StmtKind::Do(b) => self.block(b),
-            StmtKind::While { cond, body } => {
-                self.mark_probes(cond);
-                self.infer(cond);
-                self.forget_assigned(body);
-                let (t_flow, f_flow) = self.narrow(cond, &self.flow.clone());
-                self.flow = t_flow;
-                self.block(body);
+            StmtKind::While { cond, body } => self.check_loop(body, |c, keep| {
+                c.mark_probes(cond);
+                c.infer(cond);
+                c.forget_assigned(body, keep);
+                let (t_flow, f_flow) = c.narrow(cond, &c.flow.clone());
+                c.flow = t_flow;
+                c.block(body);
+                let back = c.live.then(|| c.flow.clone());
                 // `join` reads no flow but its arguments.
-                let after_body = std::mem::take(&mut self.flow);
-                let joined = self.join(&f_flow, &after_body, true, self.live);
-                self.flow = joined;
-                self.live = true;
-            }
-            StmtKind::Repeat { body, cond } => {
-                self.forget_assigned(body);
-                self.push_scope();
-                self.block_stmts(body);
-                self.mark_probes(cond);
-                self.infer(cond);
-                let (_, f) = self.narrow(cond, &self.flow.clone());
-                let _ = f;
-                self.pop_scope();
-                self.live = true;
-            }
+                let after_body = std::mem::take(&mut c.flow);
+                let joined = c.join(&f_flow, &after_body, true, c.live);
+                c.flow = joined;
+                c.live = true;
+                back
+            }),
+            StmtKind::Repeat { body, cond } => self.check_loop(body, |c, keep| {
+                c.forget_assigned(body, keep);
+                c.push_scope();
+                c.block_stmts(body);
+                c.mark_probes(cond);
+                c.infer(cond);
+                let (_, f) = c.narrow(cond, &c.flow.clone());
+                let back = c.live.then_some(f);
+                c.pop_scope();
+                c.live = true;
+                back
+            }),
             StmtKind::If {
                 cond,
                 then_block,
@@ -1026,44 +1061,52 @@ impl<'e, 'p> Checker<'e, 'p> {
                     let t = self.infer(e);
                     self.check_assignable(e.span(), t, Types::NUMBER);
                 }
-                self.forget_assigned(body);
-                self.push_scope();
-                self.declare(
-                    var.name.text(),
-                    Some(Types::NUMBER),
-                    Types::NUMBER,
-                    false,
-                    Some(var.name.span()),
-                );
-                let entry = self.flow.clone();
-                self.block(body);
-                self.pop_scope();
-                self.flow = self.join(&entry, &self.flow.clone(), true, self.live);
-                self.live = true;
+                self.check_loop(body, |c, keep| {
+                    c.forget_assigned(body, keep);
+                    c.push_scope();
+                    c.declare(
+                        var.name.text(),
+                        Some(Types::NUMBER),
+                        Types::NUMBER,
+                        false,
+                        Some(var.name.span()),
+                    );
+                    let entry = c.flow.clone();
+                    c.block(body);
+                    c.pop_scope();
+                    let back = c.live.then(|| c.flow.clone());
+                    c.flow = c.join(&entry, &c.flow.clone(), true, c.live);
+                    c.live = true;
+                    back
+                });
             }
             StmtKind::GenericFor { vars, exprs, body } => {
                 let types = self.expr_list(exprs, &[]);
                 let loop_types = self
                     .iteration_types(&types, exprs.first().map(|e| e.span()).unwrap_or(s.span()));
-                self.forget_assigned(body);
-                self.push_scope();
-                for (i, v) in vars.iter().enumerate() {
-                    let declared = v.ty.as_ref().map(|t| self.annotation(*t));
-                    let t = loop_types.get(i).copied().unwrap_or(Types::ANY);
-                    self.declare_with(
-                        v.name.text(),
-                        declared,
-                        t,
-                        false,
-                        Some(v.name.span()),
-                        false,
-                    );
-                }
-                let entry = self.flow.clone();
-                self.block(body);
-                self.pop_scope();
-                self.flow = self.join(&entry, &self.flow.clone(), true, self.live);
-                self.live = true;
+                self.check_loop(body, |c, keep| {
+                    c.forget_assigned(body, keep);
+                    c.push_scope();
+                    for (i, v) in vars.iter().enumerate() {
+                        let declared = v.ty.as_ref().map(|t| c.annotation(*t));
+                        let t = loop_types.get(i).copied().unwrap_or(Types::ANY);
+                        c.declare_with(
+                            v.name.text(),
+                            declared,
+                            t,
+                            false,
+                            Some(v.name.span()),
+                            false,
+                        );
+                    }
+                    let entry = c.flow.clone();
+                    c.block(body);
+                    c.pop_scope();
+                    let back = c.live.then(|| c.flow.clone());
+                    c.flow = c.join(&entry, &c.flow.clone(), true, c.live);
+                    c.live = true;
+                    back
+                });
             }
             StmtKind::Function { name, func } => self.function_stmt(name, func),
             StmtKind::LocalFunction { name, func } => {
@@ -1099,7 +1142,19 @@ impl<'e, 'p> Checker<'e, 'p> {
                 }
                 self.live = false;
             }
-            StmtKind::Break | StmtKind::Continue => self.live = false,
+            StmtKind::Break | StmtKind::Continue => {
+                if self.live
+                    && let Some(l) = self.loops.last_mut()
+                {
+                    let exits = if matches!(s.kind(), StmtKind::Break) {
+                        &mut l.breaks
+                    } else {
+                        &mut l.continues
+                    };
+                    exits.push(self.flow.clone());
+                }
+                self.live = false;
+            }
             StmtKind::LocalDestructure {
                 fields, value, ty, ..
             } => {
@@ -1199,9 +1254,146 @@ impl<'e, 'p> Checker<'e, 'p> {
         }
     }
 
-    /// Locals assigned in a loop body lose their narrowing at the loop
-    /// start (the body may run again).
-    fn forget_assigned(&mut self, body: Block<'_>) {
+    /// Checks a loop. `run` checks it with the locals assigned in its body
+    /// forgetting their narrowing at the loop start, except `keep`, and
+    /// gives the flow that goes back to the start at the body's end.
+    ///
+    /// Declared locals the loop entry narrows (`n` after `n = 0`) are
+    /// first tried with that narrowing kept: the trial holds when every
+    /// path back to the loop start (the body's end, `continue`) leaves them
+    /// within it, and their `break` paths then join the flow after the
+    /// loop. Otherwise the loop is checked again with them forgotten.
+    fn check_loop(
+        &mut self,
+        body: Block<'_>,
+        mut run: impl FnMut(&mut Self, &[VarId]) -> Option<Flow>,
+    ) {
+        let keep = self.loop_kept(body);
+        if !keep.is_empty() {
+            let trial = LoopTrial {
+                flow: self.flow.clone(),
+                field_vars: self.field_vars.clone(),
+                live: self.live,
+                in_dead: self.in_dead,
+                guard: self.guard.clone(),
+                vars: self.vars.len(),
+                diagnostics: self.diagnostics.len(),
+                env_diagnostics: self.env.diagnostics.len(),
+                returns: self.fns.last().map_or(0, |f| f.returns.len()),
+                base_log: self.base_log.replace(Vec::new()),
+            };
+            // The kept narrowing, as the declared members it fits (`0`
+            // in a `number?` is tried as `number`).
+            let mut entry = Vec::new();
+            for &v in &keep {
+                let now = self.var_type(v);
+                let declared = self.vars[v.0 as usize].declared.unwrap_or(now);
+                let t = self.loosen(now, declared);
+                self.flow.insert(v, t);
+                entry.push((v, t));
+            }
+            self.loops.push(LoopFlows::default());
+            let back = run(self, &keep);
+            let exits = self.loops.pop().unwrap_or_default();
+            let holds = back.iter().chain(&exits.continues).all(|f| {
+                entry.iter().all(|&(v, t)| {
+                    let now = self.var_type_in(v, f);
+                    self.env.assignable(now, t, Mode::Strict)
+                })
+            });
+            let log = std::mem::replace(&mut self.base_log, trial.base_log);
+            if holds {
+                if let (Some(outer), Some(log)) = (&mut self.base_log, log) {
+                    outer.extend(log);
+                }
+                for b in &exits.breaks {
+                    for &(v, _) in &entry {
+                        let after = self.var_type(v);
+                        let left = self.var_type_in(v, b);
+                        if !self.env.assignable(left, after, Mode::Strict) {
+                            let u = self.env.types.union(&[after, left]);
+                            self.flow.insert(v, u);
+                        }
+                    }
+                }
+                return;
+            }
+            for (v, base) in log.unwrap_or_default().into_iter().rev() {
+                if let Some(var) = self.vars.get_mut(v.0 as usize) {
+                    var.base = base;
+                }
+            }
+            self.flow = trial.flow;
+            self.field_vars = trial.field_vars;
+            self.live = trial.live;
+            self.in_dead = trial.in_dead;
+            self.guard = trial.guard;
+            self.vars.truncate(trial.vars);
+            self.diagnostics.truncate(trial.diagnostics);
+            self.env.diagnostics.truncate(trial.env_diagnostics);
+            if let Some(f) = self.fns.last_mut() {
+                f.returns.truncate(trial.returns);
+            }
+        }
+        self.loops.push(LoopFlows::default());
+        run(self, &[]);
+        self.loops.pop();
+    }
+
+    /// The members of `declared` that a member of `t` fits, or `t` where
+    /// one fits none.
+    fn loosen(&mut self, t: TypeId, declared: TypeId) -> TypeId {
+        let members = self.env.types.members(t);
+        let out: Vec<TypeId> = self
+            .env
+            .types
+            .members(declared)
+            .into_iter()
+            .filter(|&d| {
+                members
+                    .iter()
+                    .any(|&m| self.env.assignable(m, d, Mode::Strict))
+            })
+            .collect();
+        let covered = members
+            .iter()
+            .all(|&m| out.iter().any(|&d| self.env.assignable(m, d, Mode::Strict)));
+        if out.is_empty() || !covered {
+            return t;
+        }
+        self.env.types.union(&out)
+    }
+
+    /// Replaces a local's base type (logged while a loop is on trial).
+    fn set_base(&mut self, v: VarId, t: TypeId) {
+        if let Some(log) = &mut self.base_log {
+            log.push((v, self.vars[v.0 as usize].base));
+        }
+        self.vars[v.0 as usize].base = t;
+    }
+
+    /// The declared locals a loop body assigns that the loop entry narrows
+    /// (a closure assigning one may run at any time: those are left out).
+    fn loop_kept(&self, body: Block<'_>) -> Vec<VarId> {
+        let mut out: Vec<VarId> = Self::assigned_names(body)
+            .into_iter()
+            .filter_map(|name| self.lookup_var(name))
+            .filter(|&v| {
+                let var = &self.vars[v.0 as usize];
+                var.declared.is_some_and(|d| {
+                    d != Types::ANY
+                        && !var.assigned_in_closure
+                        && var.depth == self.depth
+                        && self.flow.get(&v).is_some_and(|&t| t != d)
+                })
+            })
+            .collect();
+        out.sort();
+        out
+    }
+
+    /// The names a loop body assigns (`x = …`, `x += …`).
+    fn assigned_names<'a>(body: Block<'a>) -> FxHashSet<&'a str> {
         let mut names: FxHashSet<&str> = FxHashSet::default();
         wowlua_syntax::visit::walk_stmts(body, &mut |s| match s.kind() {
             StmtKind::Assign { targets, .. } => {
@@ -1218,8 +1410,16 @@ impl<'e, 'p> Checker<'e, 'p> {
             }
             _ => {}
         });
-        for name in names {
-            if let Some(v) = self.lookup_var(name) {
+        names
+    }
+
+    /// Locals assigned in a loop body lose their narrowing at the loop
+    /// start (the body may run again), except `keep`.
+    fn forget_assigned(&mut self, body: Block<'_>, keep: &[VarId]) {
+        for name in Self::assigned_names(body) {
+            if let Some(v) = self.lookup_var(name)
+                && !keep.contains(&v)
+            {
                 let var = self.vars[v.0 as usize].clone();
                 let t = match var.declared {
                     Some(d) => d,
@@ -1460,7 +1660,7 @@ impl<'e, 'p> Checker<'e, 'p> {
                 members.push(Types::NIL);
             }
             let u = self.env.types.union(&members);
-            types.push(self.env.types.widen(u));
+            types.push(self.env.types.widen_value(u));
         }
         let rest = packs.iter().find_map(|p| p.rest.clone());
         Pack { types, rest }
@@ -1737,7 +1937,7 @@ impl<'e, 'p> Checker<'e, 'p> {
         for v in vars {
             self.flow.insert(v, new);
             if self.vars[v.0 as usize].base == owner {
-                self.vars[v.0 as usize].base = new;
+                self.set_base(v, new);
             }
         }
     }

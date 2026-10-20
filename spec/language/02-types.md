@@ -188,6 +188,10 @@ caller:
   members of its union type that are assignable to `T`. If the argument's type
   is not a union, it is unchanged.
 
+A generic predicate's type parameters are inferred from the argument's
+narrowed type: `plain<V>(v: V | Secret<V> | nil): v is V` called with a
+`number | Secret<number>` narrows it to `number`.
+
 ```wowlua
 local function isButton(f: Frame): f is Button
     return f:GetObjectType() == "Button"
@@ -273,6 +277,7 @@ Inference is local and bidirectional. There is no whole-program inference.
 | Construct | Inferred type |
 |-----------|---------------|
 | `local x = 5` | declared type `number` (literal widened) |
+| `local y = ok and t` (`ok: boolean`, `t: T`) | `false \| T` (`false` and `true` beside types other than `nil` and booleans are not widened) |
 | `const X = 5` | `5` (literal kept) |
 | `local t = { a = 1, b = "x" }` | `{ a: number, b: string }` |
 | `local t = { 1, 2, 3 }` | `number[]` |
@@ -505,6 +510,19 @@ other locals are their declared type inside closures. A local
 narrowed to `nil` that a closure assigns is its declared type again after any
 call, which may run that closure.
 
+**Loops.** A local a loop body assigns may hold the body's values when the
+loop starts again. A declared local keeps its narrowing at the loop start
+(as the members of its declared type it fits: `0` in a `number?` is `number`)
+when every path back to the start, the end of the body and `continue`, leaves
+it within that narrowing; its `break` paths then join the flow after the loop.
+Otherwise, and for unannotated locals, the loop body sees the declared type
+(`any` for an unannotated local).
+
+**Fields through a narrowed local.** Assigning a field of an annotated local
+(`item.x = 1`) checks against the members of its declared type that its
+narrowed value fits: inside `if item then`, an `Item | false` local is an
+`Item`.
+
 ## 2.6 Assignability
 
 `S` is assignable to `T` when:
@@ -705,7 +723,7 @@ wowlua models this with the type `Secret<T>`:
 | Sources | API return values and event payload fields that Blizzard's API documentation marks as possibly secret are typed `T \| Secret<T>` by the generated `wow-api` types, for the flavors where restrictions apply. |
 | Allowed operations | Assignment, passing as an argument where the parameter accepts `Secret<T>`, `..` (the result is `string \| Secret<string>`), `string.format`, `tostring`, `type()`, truthiness of non-boolean secrets |
 | Errors | Arithmetic, comparison, `#`, indexing, calling, use as a table key, or a boolean test on `Secret<boolean>`: error E2040 in strict mode and warning W2040 in basic mode and in pure Lua files |
-| Narrowing | `issecretvalue(v)` is declared as the predicate `v is Secret<unknown>`, and `canaccessvalue(v)` as its complement. The false branch of `issecretvalue` and the true branch of `canaccessvalue` remove all `Secret<…>` members (§2.2.8). |
+| Narrowing | `issecretvalue(v)` is declared as the predicate `v is Secret<unknown>`, and the global `canaccessvalue(v)` narrows as its complement (declared returning `boolean`; a local of that name does not narrow). The false branch of `issecretvalue` and the true branch of `canaccessvalue` remove all `Secret<…>` members (§2.2.8); the true branch of `issecretvalue` and the false branch of `canaccessvalue` keep only them. |
 | Widget setters | Declared to accept `T \| Secret<T>` where Blizzard documents secret support, so values can be displayed without being read |
 | Assignability | `Secret<T>` is not assignable to `T`. `T` is assignable to `T \| Secret<T>`. |
 | Erasure | Purely static. No runtime cost. |
