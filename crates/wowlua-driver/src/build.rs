@@ -46,6 +46,9 @@ pub struct BuildRequest {
     /// `wowlua test`: the test side (test files, mocks, helpers) is compiled
     /// with the addon, outside its TOC ([`BuildOutput::tests`]).
     pub tests: bool,
+    /// Test files (`*.test.wowlua`, package-relative) left out of the test
+    /// side: ones that do not compile, so the others still run.
+    pub left_out: Vec<String>,
 }
 
 /// The files `wowlua compile` compiles.
@@ -73,6 +76,7 @@ impl BuildRequest {
             jobs: crate::parallel::Jobs::default(),
             keep_code: true,
             tests: false,
+            left_out: Vec::new(),
         }
     }
 }
@@ -346,12 +350,11 @@ fn build_inner(
             let mut found =
                 sources::discover_sources(&root, &build_cfg.src, &build_cfg.out, &exclude);
             if request.tests {
-                found.extend(sources::discover_tests(
-                    &root,
-                    &build_cfg.src,
-                    &build_cfg.out,
-                    &exclude,
-                ));
+                found.extend(
+                    sources::discover_tests(&root, &build_cfg.src, &build_cfg.out, &exclude)
+                        .into_iter()
+                        .filter(|t| !request.left_out.contains(&t.rel)),
+                );
             }
             (found, None)
         }
@@ -956,6 +959,12 @@ fn build_inner(
             lint_files.push(i);
         }
     }
+    // What the test side reads through `import internal`: read, not unused.
+    let read_by_tests = if request.only.is_none() && !lint_files.is_empty() {
+        sources::internal_reads(&root, &build_cfg.src, &build_cfg.out, &exclude)
+    } else {
+        HashMap::new()
+    };
     // Linting is pure per file: on worker threads (#8), in file order.
     request.jobs.region(
         lint_files,
@@ -963,7 +972,10 @@ fn build_inner(
         20,
         |i| {
             let parse = parsed.parses[i].as_ref().expect("linted files are parsed");
-            wowlua_sema::lint::lint(parse, &raw[&files[i].0.rel])
+            let read = read_by_tests
+                .get(&files[i].0.src_rel)
+                .map_or(&[][..], Vec::as_slice);
+            wowlua_sema::lint::lint_reading(parse, &raw[&files[i].0.rel], read)
         },
         |lints| diagnostics.extend(lints),
     );

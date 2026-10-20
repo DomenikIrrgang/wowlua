@@ -28,12 +28,12 @@ wowlua <command> [options]
 |---------|-------------|
 | `wowlua new <path> [--kind addon\|library\|lua-library\|types] [--name <Name>] [--flavors <f,…>] [--ci github]` | Create a new package from a template (§12.9) |
 | `wowlua init [--from-toc <file>] [--from-pkgmeta [<file>]]` | Create `wowlua.json` in an existing directory (§12.6) |
-| `wowlua check [--flavor <f>…] [--watch]` | Parse and type-check without emitting |
+| `wowlua check [--flavor <f>…] [--watch]` | Parse and type-check without emitting, the test side (test files, mocks, helpers) included |
 | `wowlua build [--profile <p> \| --release] [--flavor <f>…] [--watch] [--out <dir>] [--stats] [--reproducible]` | Build the AddOn into `dist/<profile>/<Name>/` |
 | `wowlua dev [--flavor <f>…] [--client <folder>…] [--link] [--wow <install>] [--force]` | Watch, build with the `dev` profile, and sync the AddOn into WoW (§12.5) |
 | `wowlua install [--profile <p> \| --release] [--flavor <f>…] [--client <folder>…] [--wow <install>] [--force]` | Build once (default profile `dev`, decision T45) and install into WoW (§12.5) |
 | `wowlua uninstall [--client <folder>…] [--wow <install>]` | Remove installed builds of this addon (§12.5) |
-| `wowlua test [filter] [--flavor <f>] [--watch] [--coverage] [--reporter <r>] [--game-data]` | Run tests ([Tooling §16.1](tooling.md#161-test-runner-wowlua-test)); `--game-data` with the data `wowlua data pull` read |
+| `wowlua test [filter…] [--flavor <f>] [--watch] [--coverage] [--reporter <r>] [--game-data]` | Run tests ([Tooling §16.1](tooling.md#161-test-runner-wowlua-test)); `--game-data` with the data `wowlua data pull` read |
 | `wowlua data pull --wow <path> [--flavor <f>]` | Read the flavor's game data from a local WoW installation into wowlua's local cache, for `wowlua test --game-data` (decision T203) |
 | `wowlua fmt [--check] [paths…]` | Format sources |
 | `wowlua lint [--fix]` | Run lints only. `--fix` applies machine-applicable fixes. |

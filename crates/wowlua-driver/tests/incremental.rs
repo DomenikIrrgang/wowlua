@@ -20,6 +20,7 @@ fn request() -> BuildRequest {
         jobs: wowlua_driver::parallel::Jobs::default(),
         keep_code: true,
         tests: false,
+        left_out: Vec::new(),
     }
 }
 

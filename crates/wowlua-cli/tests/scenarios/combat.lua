@@ -17,7 +17,7 @@ e.setFrameBatching(true)
 local player = e.player
 e.setLatency(0.3)
 -- The warrior's names as the recording has them, scrubbed.
-player:setName("Player", "Lastname")
+player:setName("Player", "Lastname", { quiet = true })
 local wolf = e.spawnUnit({
     name = "Young Wolf", guid = "Creature-0-6782-0-7-299-DEE9062BA3", npcID = 299, level = 1,
     reaction = "neutral", class = "WARRIOR", classID = 1, sex = 1, powerType = 1,

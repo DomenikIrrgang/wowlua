@@ -26,7 +26,7 @@ e.snapshotTaken()
 local player = e.player
 e.setLatency(0.3)
 -- The warrior's names as the recording has them, scrubbed.
-player:setName("Player", "Lastname")
+player:setName("Player", "Lastname", { quiet = true })
 -- The snapshot's Campfire Nearby: left behind at 63.547 (in a fight), near
 -- again at 106.436, a new instance (recorded).
 local campfire = C_UnitAuras.GetAuraDataByIndex("player", 1, "HELPFUL")

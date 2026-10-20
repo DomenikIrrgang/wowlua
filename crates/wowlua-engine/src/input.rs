@@ -216,26 +216,40 @@ pub fn control_click(vm: &mut Vm, c: NativeCall) -> Ret {
         if !edit_box {
             set_keyboard_focus(vm, None);
         }
+        let name = match vm.hidden(button) {
+            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+            _ => String::new(),
+        };
+        // An enabled button's click, down or up as it registered for
+        // clicks (`RegisterForClicks`: by default the left button's up
+        // click; a secure action button acting on the key down,
+        // `ActionButtonUseKeyDown`, registers for both). A check button's
+        // state toggles before its scripts run (as the mail's inbox reads
+        // it in `OnClick`). Unverified: the down click's place after
+        // `OnMouseDown`.
+        let clicked = |vm: &mut Vm, down: bool| {
+            if !(is(vm, "Button") && enabled) || !widgets::registered_click(vm, id, &name, down) {
+                return;
+            }
+            if is(vm, "CheckButton") {
+                let props = engine(vm).world.widgets[id.0].props;
+                let checked = widgets::stored_args(vm, props, "Checked")
+                    .and_then(|v| v.first().copied())
+                    .is_some_and(|v| v.truthy());
+                widgets::store(vm, id, "Checked", &[Value::Bool(!checked)]);
+            }
+            for script in ["PreClick", "OnClick", "PostClick"] {
+                widgets::run_script(vm, id, script, &[button, Value::Bool(down)]);
+            }
+        };
         widgets::fire_event(vm, "GLOBAL_MOUSE_DOWN", &[button]);
         widgets::run_script(vm, id, "OnMouseDown", &[button]);
         if edit_box {
             set_keyboard_focus(vm, Some(id));
         }
+        clicked(vm, true);
         widgets::run_script(vm, id, "OnMouseUp", &[button, Value::Bool(true)]);
-        // A check button's state toggles before its scripts run (as the
-        // mail's inbox reads it in `OnClick`).
-        if is(vm, "CheckButton") && enabled {
-            let props = engine(vm).world.widgets[id.0].props;
-            let checked = widgets::stored_args(vm, props, "Checked")
-                .and_then(|v| v.first().copied())
-                .is_some_and(|v| v.truthy());
-            widgets::store(vm, id, "Checked", &[Value::Bool(!checked)]);
-        }
-        if is(vm, "Button") && enabled {
-            for script in ["PreClick", "OnClick", "PostClick"] {
-                widgets::run_script(vm, id, script, &[button, Value::Bool(false)]);
-            }
-        }
+        clicked(vm, false);
         widgets::fire_event(vm, "GLOBAL_MOUSE_UP", &[button]);
     });
     Ok(vec![])

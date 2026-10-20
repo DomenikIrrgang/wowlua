@@ -84,6 +84,49 @@ fn check_payload(
     Ok(())
 }
 
+/// `sameSecret(a, b)`: whether two secrets hold the same value (the test
+/// runner's matchers; addon code cannot look). Strings, numbers and booleans
+/// by value, the rest by identity.
+fn same_secret(vm: &mut Vm, c: NativeCall) -> Ret {
+    let a = vm.hidden(c.arg(1));
+    let b = vm.hidden(c.arg(2));
+    Ok(vec![Value::Bool(a.raw_eq(b))])
+}
+
+/// `keepField(t, key)`: a function that puts `t[key]` back as it is now,
+/// its taint included (`mock.stub` and `mock.fake` restore with it: the
+/// test's own write would leave a global the client set tainted by the
+/// addon, and Blizzard's code reading it then runs tainted).
+fn keep_field(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Table(t) = c.arg(1) else {
+        return Err(vm.error("keepField: a table expected"));
+    };
+    let key = c.arg(2);
+    let kept = vm.heap.table(t).get_slot(key);
+    let restore = vm.native_slots(
+        "restore",
+        restore_field,
+        vec![
+            wowlua_vm::taint::Slot::secure(Value::Table(t)),
+            wowlua_vm::taint::Slot::secure(key),
+            kept,
+        ],
+    );
+    Ok(vec![restore])
+}
+
+fn restore_field(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Table(t) = c.upval_slot(0).v else {
+        return Ok(vec![]);
+    };
+    let key = c.upval_slot(1).v;
+    let kept = c.upval_slot(2);
+    if vm.heap.table_mut(t).set_slot(key, kept).is_err() {
+        return Err(vm.error("mock: cannot restore a field of a frozen table"));
+    }
+    Ok(vec![])
+}
+
 /// `fireUnitEvent(name, unit, ...)`: an event for a unit.
 fn fire_unit_event(vm: &mut Vm, c: NativeCall) -> Ret {
     fire_event(vm, c)
@@ -278,6 +321,8 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
     for (key, f) in [
         ("fireEvent", fire_event as wowlua_vm::NativeFn),
         ("fireUnitEvent", fire_unit_event),
+        ("sameSecret", same_secret),
+        ("keepField", keep_field),
         ("advanceTime", advance_time),
         ("setLatency", set_latency),
         ("snapshotTaken", snapshot_taken),
@@ -382,6 +427,8 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
             crate::input::control_set_cursor_position,
         ),
         ("addToGroup", units::add_to_group),
+        ("removeFromGroup", units::remove_from_group),
+        ("leaveGroup", crate::party::control_leave_group),
         ("enterInstance", crate::encounters::control_enter_instance),
         ("leaveInstance", crate::encounters::control_leave_instance),
         ("startEncounter", crate::encounters::control_start),

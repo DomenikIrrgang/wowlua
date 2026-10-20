@@ -633,6 +633,17 @@ fn apply_in(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Eleme
             call_method(vm, cx, el.line, frame, method, &[v]);
         }
     }
+    // `registerForClicks="LeftButtonUp, RightButtonUp"`: the clicks, one
+    // argument each.
+    if let Some(list) = el.attr("registerForClicks") {
+        let clicks: Vec<Value> = list
+            .split(',')
+            .map(str::trim)
+            .filter(|c| !c.is_empty())
+            .map(|c| vm.str(c))
+            .collect();
+        call_method(vm, cx, el.line, frame, "RegisterForClicks", &clicks);
+    }
     // A texture's `alpha` is its vertex color's too (SuuUI probe trees: the
     // character window's side tabs' `TabGlow`, `alpha="0"`, the model
     // controls' highlights, `alpha="0.4"`, and a statistics row's texture,

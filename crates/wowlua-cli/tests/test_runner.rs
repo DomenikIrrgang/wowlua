@@ -4204,3 +4204,351 @@ end
     assert!(ok, "{text}");
     assert!(text.contains("2 passed, 0 failed"), "{text}");
 }
+
+// --------------------------------------------- SuuUI's test findings (0.9.1)
+
+/// SuuUI's test findings: the mock library and the matchers (R2, R5, R6,
+/// R7, R8, R11, R12): a fake's global restored secure, `mock.errors()` per
+/// test, leaving a group, secrets compared by their values, a matcher's
+/// message for a value that is not a frame, `UNIT_NAME_UPDATE` from
+/// `setName`, a stub on a widget.
+#[test]
+fn suuui_findings_mock_library() {
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            ("src/main.wowlua", "print(\"loaded\")\n"),
+            (
+                "tests/mock.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+@test("a fake")
+local function faked()
+    mock.fake("GetNumGroupMembers", function(): number return 3 end)
+    expect(GetNumGroupMembers()).toBe(3)
+end
+
+@test("restored secure")
+local function restored()
+    expect("GetNumGroupMembers").toBeSecure()
+end
+
+@test("an error")
+local function anError()
+    local f = CreateFrame("Frame")
+    f:SetScript("OnEvent", function() error("boom") end)
+    f:RegisterEvent("PLAYER_REGEN_DISABLED")
+    mock.fireEvent("PLAYER_REGEN_DISABLED")
+    expect(#mock.errors()).toBe(1)
+end
+
+@test("the errors are the test's")
+local function ownErrors()
+    expect(#mock.errors()).toBe(0)
+end
+
+@test("leaving the group")
+local function leaving()
+    local friend = mock.spawnUnit({ name = "Friend", player = true })
+    mock.group:add(friend)
+    expect(IsInGroup()).toBe(true)
+    C_PartyInfo.LeaveParty()
+    mock.advanceTime(1)
+    expect(IsInGroup()).toBe(false)
+    mock.group:add(friend)
+    mock.group:remove(friend)
+    expect(IsInGroup()).toBe(false)
+end
+
+@test("secrets by their values")
+local function secrets()
+    local s = mock.spy()
+    s("player", mock.secret(true))
+    expect(s).toHaveBeenCalledWith("player", mock.secret(true))
+    expect(s).never.toHaveBeenCalledWith("player", mock.secret(false))
+end
+
+@test("not a frame")
+local function notAFrame()
+    local t: { Frame } = {}
+    expect(t[1]).never.toBeShown()
+end
+
+@test("a name change")
+local function nameChange()
+    local seen: string[] = {}
+    local f = CreateFrame("Frame")
+    f:RegisterEvent("UNIT_NAME_UPDATE")
+    f:SetScript("OnEvent", function(_f: Frame, _e: string, unit: string) seen[#seen + 1] = unit end)
+    mock.player:setName("Other")
+    mock.player:setName("Again", nil, { quiet = true })
+    expect(seen).toEqual({ "player" })
+    expect((UnitName("player"))).toBe("Again")
+end
+
+@test("a widget's stub")
+local function widgetStub()
+    local b = CreateFrame("Button", nil, UIParent)
+    local s = mock.stub(b, "SetText")
+    b:SetText("x")
+    expect(s).toHaveBeenCalledWith(b, "x")
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, text) = test(dir.path(), &[]);
+    assert!(!ok, "{text}");
+    assert!(text.contains("8 passed, 1 failed"), "{text}");
+    assert!(text.contains("✗ not a frame"), "{text}");
+    assert!(text.contains("expected a frame, got nil"), "{text}");
+}
+
+/// SuuUI's test findings: the emulated client (R4, R9, V1, V2, V4, V5, V6,
+/// V8, V9): clicks as registered, a ticker due at an advance's end, sizes
+/// that follow anchors, `SetAlphaFromBoolean`, `OnVerticalScroll`, scales
+/// and alphas ignoring the parent's, an atlas gone with a file, a secret
+/// text's width.
+#[test]
+fn suuui_findings_emulated_client() {
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            ("src/main.wowlua", "print(\"loaded\")\n"),
+            (
+                "tests/client.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+import every from "wowlua:timer"
+
+@test("clicks as registered")
+local function clicks()
+    local b = CreateFrame("Button", nil, UIParent)
+    b:SetSize(20, 20); b:SetPoint("CENTER")
+    local downs: any[] = {}
+    b:SetScript("OnClick", function(_b: Button, button: string, down: boolean) downs[#downs + 1] = `{button} {down}` end)
+    mock.click(b)
+    mock.click(b, "RightButton")
+    b:RegisterForClicks("AnyDown", "AnyUp")
+    mock.click(b, "RightButton")
+    expect(downs).toEqual({ "LeftButton false", "RightButton true", "RightButton false" })
+end
+
+@test("a clock moved by fractions")
+local function fractions()
+    for _ = 1, 37 do mock.advanceTime(0.1) end
+    mock.advanceTime(0.033)
+end
+
+@test("a tick due at the advance's end")
+local function tickAtEnd()
+    local n = 0
+    every(1, function() n += 1 end)
+    mock.advanceTime(1)
+    mock.advanceTime(1)
+    expect(n).toBe(2)
+end
+
+@test("a size that follows the anchors")
+local function anchoredSize()
+    local holder = CreateFrame("Frame", nil, UIParent); holder:SetPoint("TOPLEFT"); holder:SetSize(100, 100)
+    local inner = CreateFrame("Frame", nil, holder)
+    local sizes: number[] = {}
+    inner:SetScript("OnSizeChanged", function(_f: Frame, w: number) sizes[#sizes + 1] = w end)
+    inner:SetAllPoints(); mock.advanceFrames(1)
+    holder:SetWidth(150); mock.advanceFrames(1)
+    mock.advanceFrames(1)
+    expect(sizes).toEqual({ 100, 150 })
+end
+
+@test("alpha from a boolean")
+local function alphaFromBoolean()
+    local f = CreateFrame("Frame")
+    f:SetAlphaFromBoolean(true, 0, 1)
+    expect(f:GetAlpha()).toBe(0)
+    f:SetAlphaFromBoolean(false)
+    expect(f:GetAlpha()).toBe(0)
+    f:SetAlphaFromBoolean(true)
+    expect(f:GetAlpha()).toBe(1)
+    f:SetAlphaFromBoolean(mock.secret(false), 0, 1)
+    expect(issecretvalue(f:GetAlpha())).toBe(true)
+end
+
+@test("a scroll runs OnVerticalScroll")
+local function scrolls()
+    local s = CreateFrame("ScrollFrame", nil, UIParent); s:SetSize(200, 100)
+    local c = CreateFrame("Frame", nil, s); c:SetSize(200, 400); s:SetScrollChild(c)
+    local offsets: number[] = {}
+    s:HookScript("OnVerticalScroll", function(_s: ScrollFrame, offset: number) offsets[#offsets + 1] = offset end)
+    s:SetVerticalScroll(50)
+    s:SetVerticalScroll(50)
+    expect(offsets).toEqual({ 50 })
+    expect(s:GetVerticalScroll()).toBe(50)
+end
+
+@test("ignoring the parent's scale and alpha")
+local function ignoring()
+    local outer = CreateFrame("Frame", nil, UIParent); outer:SetScale(2)
+    local inner = CreateFrame("Frame", nil, outer)
+    inner:SetIgnoreParentScale(true)
+    inner:SetIgnoreParentAlpha(true)
+    expect(inner:IsIgnoringParentScale()).toBe(true)
+    expect(inner:IsIgnoringParentAlpha()).toBe(true)
+    expect(inner:GetEffectiveScale()).toBe(1)
+end
+
+@test("a file clears the atlas")
+local function atlasCleared()
+    local t = CreateFrame("Frame"):CreateTexture()
+    t:SetAtlas("ui-hud-minus")
+    t:SetTexture("Interface\\Buttons\\UI-PlusButton-Up")
+    expect((t :: any):GetAtlas()).toBe(nil)
+    local b = CreateFrame("Button", nil, UIParent)
+    b:SetNormalAtlas("ui-hud-minus")
+    b:SetNormalTexture("Interface\\Buttons\\UI-PlusButton-Up")
+    expect((b:GetNormalTexture() :: any):GetAtlas()).toBe(nil)
+end
+
+@test("a secret text's width")
+local function secretWidth()
+    local fs = CreateFrame("Frame", nil, UIParent):CreateFontString(nil, "OVERLAY")
+    fs:SetFont("Fonts/FRIZQT__.TTF", 12, "")
+    fs:SetText(mock.secret("Hidden"))
+    expect(issecretvalue(fs:GetUnboundedStringWidth())).toBe(true)
+    fs:SetText("Shown")
+    expect(issecretvalue(fs:GetUnboundedStringWidth())).toBe(false)
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, text) = test(dir.path(), &[]);
+    assert!(ok, "{text}");
+    assert!(text.contains("9 passed, 0 failed"), "{text}");
+}
+
+/// SuuUI's test findings: the runner and the checker (R1, R13, K1, K2,
+/// K3): a test file that does not compile is left out and the others run
+/// (a filtered run only notes it), several filters, `wowlua check` checks
+/// the test side, `@cases` typed by the parameters, a local only tests
+/// read through `import internal` is not unused, and a misplaced
+/// annotation list is E2060.
+#[test]
+fn suuui_findings_runner_and_checker() {
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            (
+                "src/main.wowlua",
+                "local hidden = 1\nlocal unused = 2\nexport function f(): number return 1 end\n",
+            ),
+            (
+                "tests/a.test.wowlua",
+                r#"import test, expect, cases from "wowlua:test"
+import internal hidden from "/main"
+
+type D = { state: "idle" | "results" }
+
+@test("cases typed by the parameters")
+@cases({ { { state = "idle" } } })
+local function typed(d: D) expect(d.state).toBe("idle") end
+
+@test("an internal read")
+local function internalRead() expect(hidden).toBe(1) end
+"#,
+            ),
+            (
+                "tests/b.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+@test("b runs")
+local function b() expect(1).toBe(1) end
+"#,
+            ),
+            (
+                "tests/broken.test.wowlua",
+                r#"import test from "wowlua:test"
+@test("broken")
+local function broken()
+    local a, b: any, any = 1, 2
+    print(a, b)
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, text) = test(dir.path(), &[]);
+    assert!(!ok, "{text}");
+    assert!(text.contains("error[E2060]"), "{text}");
+    assert!(text.contains("FAIL tests/broken.test.wowlua"), "{text}");
+    assert!(text.contains("it does not compile"), "{text}");
+    assert!(text.contains("3 passed, 0 failed"), "{text}");
+    assert!(text.contains("unused local `unused`"), "{text}");
+    assert!(!text.contains("unused local `hidden`"), "{text}");
+    assert!(!text.contains("aborting"), "{text}");
+    // Filtered: the broken file only noted; several filters.
+    let (ok, text) = test(dir.path(), &["a.test", "b runs"]);
+    assert!(ok, "{text}");
+    assert!(text.contains("3 passed, 0 failed"), "{text}");
+    assert!(text.contains("Skipped tests/broken.test.wowlua"), "{text}");
+    // `wowlua check` checks the test side.
+    let out = wowlua(dir.path()).arg("check").output().unwrap();
+    let text = String::from_utf8_lossy(&out.stderr).into_owned();
+    assert!(!out.status.success(), "{text}");
+    assert!(text.contains("error[E2060]"), "{text}");
+    assert!(!text.contains("unused local `hidden`"), "{text}");
+}
+
+/// SuuUI's test findings with Blizzard's UI (R4, V11): a secure action
+/// button registered for down and up clicks acts on the down click
+/// (`ActionButtonUseKeyDown`, on by default), and a menu's submenu opens
+/// on hover once frames pass (the menu's mouse timer is an `OnUpdate`;
+/// `mock.advanceTime` runs no frames).
+#[test]
+fn suuui_findings_with_blizzard_ui() {
+    let Some((ok, text)) = blizzard_ui_files(&[(
+        "tests/ui.test.wowlua",
+        r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+local function rowWithText(text: string): any
+    for _, f in ipairs(mock.frames()) do
+        local fr: any = f
+        if not fr:IsForbidden() and fr:IsVisible() then
+            for _, r in ipairs({ fr:GetRegions() }) do
+                local reg: any = r
+                if reg:GetObjectType() == "FontString" and reg:GetText() == text then return fr end
+            end
+        end
+    end
+    return nil
+end
+
+@test("a secure button acting on the key down")
+local function keyDown()
+    local b = CreateFrame("Button", nil, UIParent, "SecureActionButtonTemplate")
+    b:RegisterForClicks("AnyDown", "AnyUp")
+    b:SetAttribute("type", "click"); b:SetAttribute("clickbutton", (_G :: any).CharacterMicroButton)
+    b:SetSize(20, 20); b:SetPoint("CENTER"); b:Show()
+    mock.click(b)
+    expect((_G :: any).CharacterFrame).toBeShown()
+end
+
+@test("a submenu on hover")
+local function submenu()
+    local owner = CreateFrame("Frame", nil, UIParent); owner:SetSize(10, 10); owner:SetPoint("CENTER")
+    ;(_G :: any).MenuUtil.CreateContextMenu(owner, function(_o: any, root: any)
+        local parent = root:CreateButton("Parent")
+        parent:CreateButton("Child", function() end)
+    end)
+    mock.hover(rowWithText("Parent"))
+    mock.advanceFrames(30)
+    expect(rowWithText("Child") ~= nil).toBe(true)
+end
+"#,
+    )]) else {
+        return;
+    };
+    assert!(ok, "{text}");
+    assert!(text.contains("2 passed, 0 failed"), "{text}");
+}

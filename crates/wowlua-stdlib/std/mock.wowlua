@@ -90,7 +90,9 @@ export interface MockUnit
     --- The unit's first token (`"player"`, `"nameplate1"` before
     --- `"target"`, …), nil when none names it.
     function token(): string?
-    function setName(name: string, lastName: string?)
+    --- Its first and last name: `UNIT_NAME_UPDATE` for each of its tokens
+    --- when they change (`quiet = true`: its name all along, untold).
+    function setName(name: string, lastName: string?, opts: { quiet?: boolean }?)
     --- The group role it chose (`UnitGroupRolesAssigned`, the raid
     --- roster's combat role); nil none.
     function setRole(role: ("TANK" | "HEALER" | "DAMAGER")?)
@@ -665,9 +667,20 @@ end
 --- order; `quiet`: in the group already, no `GROUP_ROSTER_UPDATE`).
 --- A group the player makes this way the player leads;
 --- `C_PartyInfo.ConvertToRaid()` / `ConvertToParty()` change it.
+--- `mock.group:remove(unit, { quiet? })`: the unit leaves
+--- (`GROUP_ROSTER_UPDATE`; the last one gone, the group is disbanded:
+--- `GROUP_LEFT`). `mock.group:leave()`: the player leaves now, as
+--- `C_PartyInfo.LeaveParty()` does a round trip later ("You leave the
+--- group.", `GROUP_LEFT`, `GROUP_ROSTER_UPDATE`).
 export const group = {
     add = function(_: any, unit: MockUnit, opts: (boolean | { raid?: boolean, subgroup?: number, quiet?: boolean })?)
         engine().addToGroup(unit, opts)
+    end,
+    remove = function(_: any, unit: MockUnit, opts: { quiet?: boolean }?)
+        engine().removeFromGroup(unit, opts)
+    end,
+    leave = function(_: any)
+        engine().leaveGroup()
     end,
 }
 
@@ -1455,7 +1468,9 @@ export function printed(): string[]
     return engine().printed()
 end
 
---- The errors that reached the error handler. Reading them marks them as
+--- The errors that reached the error handler since the test began (its
+--- `@beforeEach` hooks included; the file's earlier tests' are theirs).
+--- Reading them marks them as
 --- expected: errors no test reads fail the test. (Errors the client drops
 --- without a report, a `secureexecuterange` callback's, are not here: they
 --- always fail the test.)
@@ -1493,13 +1508,26 @@ export function resetSpies()
 end
 
 --- Replaces `t[key]` with `fn` (a spy) until the test ends; returns the spy.
-export function stub(t: table, key: string, fn: Fn?): Fn
-    local original = rawget(t, key)
-    local s = spy(fn)
-    t[key] = s
-    restores[#restores + 1] = function()
-        t[key] = original
+--- `t` is any table: a module's, a widget (its method), an object. The
+--- field is put back as it was, its taint included: a global the client
+--- set stays secure for Blizzard's code after the test.
+export function stub<T>(t: T, key: string, fn: Fn?): Fn
+    local target: any = t
+    if type(target) ~= "table" then
+        error(`mock.stub: a table expected, got {type(target)}`, 2)
     end
+    local restore: () -> ()
+    if wl.mockEngine then
+        restore = wl.mockEngine.keepField(target, key)
+    else
+        local original = rawget(target, key)
+        restore = function()
+            target[key] = original
+        end
+    end
+    local s = spy(fn)
+    target[key] = s
+    restores[#restores + 1] = restore
     return s
 end
 

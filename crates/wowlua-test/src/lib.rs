@@ -95,8 +95,8 @@ pub enum Outcome {
 }
 
 /// Runs the suite's test files whose path or tests' names contain
-/// `filter` (all without one), on `jobs` threads.
-pub fn run(suite: &Suite, filter: Option<&str>, jobs: usize) -> Vec<FileResult> {
+/// any of `filters` (all without one), on `jobs` threads.
+pub fn run(suite: &Suite, filters: &[String], jobs: usize) -> Vec<FileResult> {
     let files: Vec<&TestFile> = suite
         .build
         .tests
@@ -112,7 +112,7 @@ pub fn run(suite: &Suite, filter: Option<&str>, jobs: usize) -> Vec<FileResult> 
                 loop {
                     let i = next.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
                     let Some(file) = files.get(i) else { break };
-                    let result = run_file(suite, file, filter);
+                    let result = run_file(suite, file, filters);
                     if let Ok(mut r) = results.lock() {
                         r.push((i, result));
                     }
@@ -125,7 +125,7 @@ pub fn run(suite: &Suite, filter: Option<&str>, jobs: usize) -> Vec<FileResult> 
     results
         .into_iter()
         .map(|(_, r)| r)
-        .filter(|r| r.error.is_some() || !r.tests.is_empty() || filter.is_none())
+        .filter(|r| r.error.is_some() || !r.tests.is_empty() || filters.is_empty())
         .collect()
 }
 
@@ -292,7 +292,7 @@ fn closure<'a>(build: &'a BuildOutput, path: &'a str, out: &mut Vec<&'a str>) {
     }
 }
 
-fn run_file(suite: &Suite, file: &TestFile, filter: Option<&str>) -> FileResult {
+fn run_file(suite: &Suite, file: &TestFile, filters: &[String]) -> FileResult {
     let started = Instant::now();
     let rel = file.rel.clone();
     let mut result = FileResult {
@@ -309,14 +309,14 @@ fn run_file(suite: &Suite, file: &TestFile, filter: Option<&str>) -> FileResult 
     natives::reset();
     match load(suite, file, None) {
         Ok(mut state) => {
-            run_tests(suite, file, &mut state, filter, &mut result);
+            run_tests(suite, file, &mut state, filters, &mut result);
             if let Some(mut report) = coverage_of(suite, &state.vm) {
                 for extra in &state.reloaded_coverage {
                     report.merge(extra);
                 }
                 result.coverage = Some(report);
             }
-            let all_ran = filter.is_none() && result.error.is_none();
+            let all_ran = filters.is_empty() && result.error.is_none();
             match snapshots::finish(all_ran) {
                 Ok(s) => result.snapshots = s,
                 Err(e) => result.error = Some(format!("writing the snapshots: {e}")),
@@ -700,7 +700,7 @@ fn plan(
     tests: TableRef,
     flavor: &str,
     file: &str,
-    filter: Option<&str>,
+    filters: &[String],
 ) -> Vec<Planned> {
     let count = get(vm, tests, "count");
     let n = match vm.call(count, &[]).ok().and_then(|r| r.first().copied()) {
@@ -751,9 +751,10 @@ fn plan(
                 .collect()
         };
         for (case, name) in names {
-            if let Some(f) = filter
-                && !name.contains(f)
-                && !file.contains(f)
+            if !filters.is_empty()
+                && !filters
+                    .iter()
+                    .any(|f| name.contains(f.as_str()) || file.contains(f.as_str()))
             {
                 continue;
             }
@@ -782,6 +783,8 @@ fn failed(message: String) -> Outcome {
 /// the SavedVariables kept, the clock going on; the file's VM stays the
 /// first pass's.
 fn run_one(suite: &Suite, file: &TestFile, state: &mut Loaded, p: &Planned) -> Outcome {
+    // `mock.errors()` lists this test's errors (its `@beforeEach` hooks' too).
+    natives::begin_test();
     let tests = state.tests;
     let job = match start(&mut state.vm, tests, "test", Some(p.index), p.case) {
         Ok(job) => job,
@@ -876,12 +879,12 @@ fn run_tests(
     suite: &Suite,
     file: &TestFile,
     state: &mut Loaded,
-    filter: Option<&str>,
+    filters: &[String],
     result: &mut FileResult,
 ) {
     let tests = state.tests;
     let vm = &mut state.vm;
-    let planned = plan(vm, tests, &suite.flavor, &result.file, filter);
+    let planned = plan(vm, tests, &suite.flavor, &result.file, filters);
     if planned.is_empty() {
         return;
     }

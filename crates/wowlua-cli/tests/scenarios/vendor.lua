@@ -10,7 +10,7 @@ local e = __engine
 local player = e.player
 e.setLatency(0.3)
 -- The warrior's names as the recording has them, scrubbed.
-player:setName("Player", "Lastname")
+player:setName("Player", "Lastname", { quiet = true })
 local godric = e.spawnUnit({
     name = "Godric Rothgar", guid = "Creature-0-6782-0-7-1213-835BD76D8F", npcID = 1213, level = 5,
     reaction = "friendly", class = "WARRIOR", classID = 1, sex = 2, powerType = 1,

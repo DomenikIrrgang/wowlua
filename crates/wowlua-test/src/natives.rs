@@ -15,6 +15,9 @@ struct State {
     /// How many of `errors` a test has read (`mock.errors()`) or the runner
     /// reported.
     read: usize,
+    /// Where the running test's errors start in `errors` (`mock.errors()`
+    /// lists them, not the file's earlier tests').
+    test_start: usize,
     /// The errors the client drops without a report (`secureexecuterange`'s
     /// callbacks), with their stacks: no test sees them (`mock.errors()` is
     /// what reached the error handler), the runner fails on them.
@@ -106,12 +109,21 @@ pub fn error_handler(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![v])
 }
 
-/// `mock.errors()`: every error so far, all marked read.
+/// A test begins: `mock.errors()` lists the errors from here on.
+pub fn begin_test() {
+    STATE.with(|s| {
+        let mut s = s.borrow_mut();
+        s.test_start = s.errors.len();
+    });
+}
+
+/// `mock.errors()`: the running test's errors so far (outside a test, the
+/// file's), all marked read.
 fn errors(vm: &mut Vm, _c: NativeCall) -> Ret {
     let list = STATE.with(|s| {
         let mut s = s.borrow_mut();
         s.read = s.errors.len();
-        s.errors.clone()
+        s.errors[s.test_start.min(s.errors.len())..].to_vec()
     });
     let t = vm.new_table();
     for (i, e) in list.iter().enumerate() {

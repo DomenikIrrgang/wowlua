@@ -1083,7 +1083,6 @@ const NOTHING_HERE: &[(&str, NativeFn)] = &[
     ("C_PartyInfo.UninviteUnit", nothing),
     ("C_EncounterJournal.GetSectionInfo", nothing),
     ("C_MythicPlus.GetOwnedKeystoneLevel", nothing),
-    ("C_PartyInfo.LeaveParty", nothing),
     ("C_ScenarioInfo.GetCriteriaInfo", nothing),
     ("C_ChallengeMode.GetDeathCount", nothing),
     ("C_Calendar.EventGetInvite", nothing),

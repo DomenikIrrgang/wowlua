@@ -249,14 +249,24 @@ local function fail(message: string, level: number?)
 end
 
 -- `a == b` where a secret may be involved: as tainted code may tell, values
--- of different types differ and two nils are equal; otherwise nil (unknown).
+-- of different types differ and two nils are equal; two secrets are the
+-- same when the values inside them are (the test runner looks, as the
+-- addon cannot: `mock.secret(true)` matches the secret handed on);
+-- otherwise nil (unknown).
 local function same(a: any, b: any): boolean?
     if secret.isSecret(a) or secret.isSecret(b) then
         local t = type(a)
         if t ~= type(b) then
             return false
         end
-        return t == "nil" or nil
+        if t == "nil" then
+            return true
+        end
+        local engine = wl.mockEngine
+        if engine and secret.isSecret(a) and secret.isSecret(b) then
+            return engine.sameSecret(a, b)
+        end
+        return nil
     end
     return a == b
 end
@@ -354,8 +364,9 @@ end
 --- dot (`expect(x).toBe(y)`); `never` holds the negated ones. Tests run
 --- tainted, like the addon: a matcher whose answer needs a secret's value
 --- fails, negated or not, saying so (a secret differs from a value of
---- another type; `toBeNil`, `toBeSecret`, snapshots and the truth of a
---- secret that is not a boolean need no value).
+--- another type, and two secrets compare by the values inside them;
+--- `toBeNil`, `toBeSecret`, snapshots and the truth of a secret that is
+--- not a boolean need no value).
 export type Expect<T> = {
     --- The same value (`==`).
     toBe: (expected: T) -> (),
@@ -698,10 +709,18 @@ local function matchers(value: any, negated: boolean): any
         local list = calls()
         check(#list == n, `expected {n} calls, got {#list}`, `expected a number of calls other than {n}`)
     end
+    -- The widget matchers need a widget, negated or not.
+    local function widget(method: string)
+        if type(value) ~= "table" or not secret.readable(value) or type(value[method]) ~= "function" then
+            fail(`expected a frame, got {show(value)}`, 3)
+        end
+    end
     function m.toBeShown()
+        widget("IsShown")
         check(value:IsShown() == true, `expected {show(value)} to be shown`, `expected {show(value)} to be hidden`)
     end
     function m.toBeVisible()
+        widget("IsVisible")
         check(value:IsVisible() == true, `expected {show(value)} to be visible`, `expected {show(value)} not to be visible`)
     end
     function m.toHaveText(text: string)
@@ -709,6 +728,7 @@ local function matchers(value: any, negated: boolean): any
         check(same(got, text), `expected the text {show(text)}, got {show(got)}`, `expected a text other than {show(text)}`)
     end
     function m.toHaveSize(width: number, height: number)
+        widget("GetSize")
         local w, h = value:GetSize()
         local pass: boolean? = nil
         if not secret.isSecret(w) and not secret.isSecret(h) then
@@ -717,6 +737,7 @@ local function matchers(value: any, negated: boolean): any
         check(pass, `expected the size {width} x {height}, got {show(w)} x {show(h)}`, `expected a size other than {width} x {height}`)
     end
     function m.toBeAnchoredTo(other: any, point: string?, relativePoint: string?)
+        widget("GetNumPoints")
         local found = false
         local points: string[] = {}
         for i = 1, value:GetNumPoints() do

@@ -84,7 +84,8 @@ An error while loading (a step above) fails the file, Blizzard's code's
 included (with `test.blizzard-ui`: it runs without an error in the client,
 so the engine must too). An error that reaches
 the error handler during a test (an event handler's, a timer's) fails that
-test, unless the test read it with `mock.errors()`. An error the client
+test, unless the test read it with `mock.errors()` (the errors since the
+test began, its `@beforeEach` hooks included). An error the client
 drops without a report (a `secureexecuterange` callback's: no error handler
 hears it, the next entries still run) fails the test or the file too, though
 `mock.errors()` does not list it: the code failed. The addon's
@@ -152,8 +153,11 @@ never reads a secret: messages, test names and snapshots show one as
 a secret's value (or such a table's contents) fails, negated or not,
 saying so: `toBe`, `toEqual`,
 `toContain`, `toHaveBeenCalledWith` and `toHaveText` tell a secret from a
-value of another type (a secret number is not `"x"`) and otherwise
-cannot; `toBeTruthy` and `toBeFalsy` take a secret that is not a boolean;
+value of another type (a secret number is not `"x"`), and two secrets
+apart by the values inside them (the runner looks, as the addon cannot:
+`toHaveBeenCalledWith(unit, mock.secret(true))` matches a spy handed a
+secret `true`); a secret against a plain value of its type they cannot
+tell; `toBeTruthy` and `toBeFalsy` take a secret that is not a boolean;
 `toBeNil`, `toBeSecret` and `toMatchSnapshot` take any; the other
 matchers fail on a secret value or argument. Custom matchers get secrets
 as they are (an answer that is secret fails). A `@cases` case may be or
@@ -196,7 +200,8 @@ end
 an edit box, a button's text, or a frame with one font string), `toHaveSize(w,
 h)`, `toBeAnchoredTo(other, point?, relativePoint?)`, and
 `expect(GameTooltip).toHaveLines({ … })` for a tooltip's left and right texts,
-line by line.
+line by line. A value that is not a widget fails them, negated or not
+(`expect(nil).never.toBeShown()`: "expected a frame, got nil").
 
 **Snapshots** (decision T218). `expect(v).toMatchSnapshot(name?)` compares a
 value (serialized deterministically: keys sorted, numbers with at most two
@@ -358,8 +363,11 @@ boolean fails the test (§16.1.3).
 Mocking (decision T187):
 
 - **Spies, stubs and fakes** for any function: `mock.spy(fn?)`,
-  `mock.stub(table, key, fn)`, `mock.fake(name, impl)` for an engine function,
-  restored after each test.
+  `mock.stub(t, key, fn)` (`t` any table: a module's, a widget, an object),
+  `mock.fake(name, impl)` for an engine function, restored after each test
+  as they were, taint included: a global the client set is secure again
+  (`expect(name).toBeSecure()`), so Blizzard's code reading it later does
+  not run tainted.
 - **Scenario controls** set the game's state: combat, units, group, auras,
   spells, items, time, screen, locale, CVars, other addons and libraries.
 - **Taint in tests.** A protected action refused because of taint fails the
@@ -373,13 +381,19 @@ Mocking (decision T187):
 ### 16.1.5 Running
 
 ```
-wowlua test [filter] [--flavor <f>] [-u] [--watch] [--coverage] [--reporter <r>,…] [--output <dir>] [--game-data]
+wowlua test [filter…] [--flavor <f>] [-u] [--watch] [--coverage] [--reporter <r>,…] [--output <dir>] [--game-data]
 ```
 
 - Each test file runs once **per manifest flavor** by default. `--flavor`
   restricts the run, and `@flavors` restricts individual tests.
 - Each file and flavor runs in a fresh VM. Files run in parallel.
-- `filter` keeps the test files and tests whose path or name contains it.
+- `filter` keeps the test files and tests whose path or name contains it;
+  several keep those that contain any of them.
+- A test file that does not compile (its errors all in test files) is left
+  out and the others run: its errors are shown and it fails the run when
+  the run selects it (no filter, or one in its path); a filtered run that
+  does not select it only notes it. An error in the addon, a mock or a
+  helper still stops the run.
 - The test build of each flavor goes to `<build.out>/.test/<flavor>/<Name>`
   (the AddOn folder as the client would load it, with the test side next to
   it); error locations in reports are the sources' (the `test` profile keeps

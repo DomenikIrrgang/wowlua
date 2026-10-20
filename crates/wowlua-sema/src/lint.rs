@@ -10,10 +10,16 @@ use wowlua_syntax::view::*;
 
 /// The lints of one file. `text` is the file's source.
 pub fn lint(parse: &Parse, text: &[u8]) -> Vec<Diagnostic> {
-    wowlua_syntax::deep::run(|| lint_inner(parse, text))
+    lint_reading(parse, text, &[])
 }
 
-fn lint_inner(parse: &Parse, text: &[u8]) -> Vec<Diagnostic> {
+/// [`lint`], with the file-level locals `read` elsewhere (test files'
+/// `import internal`) counted as read.
+pub fn lint_reading(parse: &Parse, text: &[u8], read: &[String]) -> Vec<Diagnostic> {
+    wowlua_syntax::deep::run(|| lint_inner(parse, text, read))
+}
+
+fn lint_inner(parse: &Parse, text: &[u8], read: &[String]) -> Vec<Diagnostic> {
     let mut l = Linter {
         text,
         words: std::cell::OnceCell::new(),
@@ -63,6 +69,13 @@ fn lint_inner(parse: &Parse, text: &[u8]) -> Vec<Diagnostic> {
     }
     for s in block.stmts() {
         l.stmt(s);
+    }
+    if !read.is_empty() {
+        for &i in &l.scopes[0] {
+            if read.iter().any(|r| *r == *l.bindings[i].name) {
+                l.bindings[i].used = true;
+            }
+        }
     }
     l.pop_scope();
     l.diagnostics

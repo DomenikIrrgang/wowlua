@@ -2192,8 +2192,10 @@ fn number_field(v: Value) -> Option<f64> {
     }
 }
 
-/// `unit:setName(name [, lastName])`: a WoW Forever character's first and
-/// last name.
+/// `unit:setName(name [, lastName [, { quiet }]])`: a WoW Forever
+/// character's first and last name; a change tells `UNIT_NAME_UPDATE` for
+/// each of the unit's tokens, as the client does (`quiet`: the unit had
+/// this name all along, nothing told).
 fn control_set_name(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
     let name = vm.check_str(&c, 2)?;
@@ -2201,9 +2203,20 @@ fn control_set_name(vm: &mut Vm, c: NativeCall) -> Ret {
     let last = vm
         .opt_str(&c, 3)?
         .map(|s| String::from_utf8_lossy(vm.str_bytes(s)).into_owned());
+    let quiet = match c.arg(4) {
+        Value::Table(t) => {
+            let k = vm.str("quiet");
+            vm.heap.table(t).get(k).truthy()
+        }
+        _ => false,
+    };
     let u = &mut engine_mut(vm).units.list[me.0];
+    let changed = u.name != name || u.last_name != last;
     u.name = name;
     u.last_name = last;
+    if changed && !quiet {
+        fire_unit(vm, "UNIT_NAME_UPDATE", me, &[]);
+    }
     Ok(vec![])
 }
 
@@ -3524,6 +3537,44 @@ pub fn add_to_group(vm: &mut Vm, c: NativeCall) -> Ret {
         crate::party::lead(vm);
     }
     if !quiet {
+        fire(vm, "GROUP_ROSTER_UPDATE", &[]);
+    }
+    Ok(vec![])
+}
+
+/// `mock.removeFromGroup(unit [, { quiet }])`: the unit leaves the
+/// player's group (`GROUP_ROSTER_UPDATE`; `quiet`: nothing told). The
+/// last member gone, the group is too ("Your group has been disbanded.",
+/// `GROUP_LEFT`; unverified: the client's events).
+pub fn remove_from_group(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(id) = handle_of(vm, c.arg(1)) else {
+        return Err(vm.error("mock.removeFromGroup: a unit expected"));
+    };
+    let quiet = match c.arg(2) {
+        Value::Table(t) => {
+            let k = vm.str("quiet");
+            vm.heap.table(t).get(k).truthy()
+        }
+        _ => false,
+    };
+    let (was, empty) = {
+        let u = &mut engine_mut(vm).units;
+        let was = u.group.contains(&id);
+        u.group.retain(|&m| m != id);
+        u.list[id.0].subgroup = None;
+        (was, u.group.is_empty())
+    };
+    if !was {
+        return Ok(vec![]);
+    }
+    if empty && !quiet {
+        crate::party::leave(vm, "ERR_GROUP_DISBANDED", "Your group has been disbanded.");
+    } else if empty {
+        engine_mut(vm).units.raid = false;
+        let p = &mut engine_mut(vm).world.party;
+        p.formed = false;
+        p.leader = false;
+    } else if !quiet {
         fire(vm, "GROUP_ROSTER_UPDATE", &[]);
     }
     Ok(vec![])
