@@ -4,16 +4,78 @@
 
 use crate::model::{Class, Decls, ParamDecl, Sig, optional};
 use mlua::{Lua, LuaOptions, StdLib, Table, Value};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 /// Reads documentation files (name, Lua source) into declarations.
 pub fn read(files: &[(String, String)]) -> Result<Decls, String> {
     let (_lua, docs) = load(files)?;
+    let docs: Vec<Table> = docs
+        .sequence_values::<Table>()
+        .collect::<Result<_, _>>()
+        .map_err(|e| e.to_string())?;
+    // The structures, each with its fields documented `NeverSecret`.
+    let mut structures = Structures::default();
+    for doc in &docs {
+        for t in list(doc, "Tables") {
+            if s(&t, "Type").as_deref() != Some("Structure") {
+                continue;
+            }
+            let Some(name) = s(&t, "Name") else { continue };
+            let never = list(&t, "Fields")
+                .iter()
+                .filter(|f| b(f, "NeverSecret"))
+                .filter_map(|f| s(f, "Name"))
+                .collect();
+            structures.never_secret.insert(name, never);
+        }
+    }
     let mut out = Decls::default();
-    for doc in docs.sequence_values::<Table>() {
-        let doc = doc.map_err(|e| e.to_string())?;
-        read_doc(&doc, &mut out);
+    for doc in &docs {
+        read_doc(doc, &mut out, &mut structures);
+    }
+    // A structure a possibly secret function returns stays a readable
+    // table: its fields are secret but those documented `NeverSecret`
+    // (`C_ActionBar.GetActionCooldown(1)` in combat answers `{duration=
+    // secret number, isActive=boolean false, …}`, the quest scenario's
+    // recording; the engine answers the same).
+    // Lists stay readable, their structures' fields secret (the damage
+    // meter's sessions: Details! reads `issecretvalue(session.
+    // combatSources[1].name)`; unverified by a recording).
+    let mut pending: Vec<String> = structures.secret_fields.iter().cloned().collect();
+    let mut done: HashSet<String> = HashSet::new();
+    while let Some(name) = pending.pop() {
+        if !done.insert(name.clone()) {
+            continue;
+        }
+        let never = &structures.never_secret[&name];
+        let Some(fields) = out.interfaces.get_mut(&name) else {
+            continue;
+        };
+        for (field, ty, _) in fields.iter_mut() {
+            if never.contains(field) || ty.contains("Secret<") {
+                continue;
+            }
+            if let Some(element) = ty.strip_suffix("[]") {
+                if structures.never_secret.contains_key(element) {
+                    pending.push(element.to_string());
+                } else if !element.contains(['(', '|']) {
+                    *ty = format!("({element} | Secret<{element}>)[]");
+                }
+                continue;
+            }
+            *ty = format!("{ty} | Secret<{ty}>");
+        }
     }
     Ok(out)
+}
+
+/// What the documentation says about its structures' secrecy.
+#[derive(Default)]
+struct Structures {
+    /// Each structure's fields documented `NeverSecret`.
+    never_secret: HashMap<String, HashSet<String>>,
+    /// The structures possibly secret functions return.
+    secret_fields: BTreeSet<String>,
 }
 
 /// The documentation tables as they are, every key kept (for the engine,
@@ -145,13 +207,13 @@ fn list(t: &Table, key: &str) -> Vec<Table> {
     }
 }
 
-fn read_doc(doc: &Table, out: &mut Decls) {
+fn read_doc(doc: &Table, out: &mut Decls, structures: &mut Structures) {
     let kind = s(doc, "Type").unwrap_or_default();
     let namespace = s(doc, "Namespace");
     let name = s(doc, "Name").unwrap_or_default();
     for f in list(doc, "Functions") {
         let Some(fname) = s(&f, "Name") else { continue };
-        let sig = function_sig(&f);
+        let sig = function_sig(&f, structures);
         match (&namespace, kind.as_str()) {
             (_, "ScriptObject") => {
                 let class = script_object_class(&name);
@@ -278,7 +340,7 @@ pub fn script_object_class(name: &str) -> String {
     }
 }
 
-fn function_sig(f: &Table) -> Sig {
+fn function_sig(f: &Table, structures: &mut Structures) -> Sig {
     // Entries with `StrideIndex` repeat: they become the variadic tail.
     let args = list(f, "Arguments");
     let fixed_args: Vec<&Table> = args.iter().take_while(|a| !has(a, "StrideIndex")).collect();
@@ -286,7 +348,8 @@ fn function_sig(f: &Table) -> Sig {
     // secrets (to the arguments not marked `NeverSecret`).
     let secret_args = s(f, "SecretArguments").as_deref() == Some("AllowedWhenTainted");
     let accept = |a: &Table, ty: String| {
-        if secret_args && !b(a, "NeverSecret") {
+        // `any` takes secrets already.
+        if secret_args && !b(a, "NeverSecret") && ty != "any" {
             format!("{ty} | Secret<{ty}>")
         } else {
             ty
@@ -326,7 +389,9 @@ fn function_sig(f: &Table) -> Sig {
         .take_while(|r| !has(r, "StrideIndex"))
         .map(|r| {
             let mut ty = field_type(r);
-            if secret {
+            if secret && structures.never_secret.contains_key(&ty) {
+                structures.secret_fields.insert(ty.clone());
+            } else if secret && ty != "any" {
                 ty = format!("{ty} | Secret<{ty}>");
             }
             if b(r, "Nilable") || may_return_nothing {
@@ -386,8 +451,12 @@ fn field_type(t: &Table) -> String {
 /// Blizzard type names → wowlua types.
 pub fn map_type(ty: &str) -> String {
     match ty {
+        // Big integers are numbers too (`C_AuctionHouse.GetCancelCost(1)`
+        // answers `number 0`, the full probe), and so are UI sizes
+        // (`uiUnit`: `SetPoint`'s offsets).
         "number" | "luaIndex" | "time_t" | "size_t" | "uint32" | "int32" | "uint64" | "int"
-        | "double" | "float" | "fileID" | "SingleColorValue" => "number".into(),
+        | "double" | "float" | "fileID" | "SingleColorValue" | "BigUInteger" | "BigInteger"
+        | "uiUnit" => "number".into(),
         "bool" | "boolean" => "boolean".into(),
         "cstring"
         | "string"
@@ -400,14 +469,13 @@ pub fn map_type(ty: &str) -> String {
         | "textureKit"
         | "WOWGUID"
         | "UnitToken"
-        | "uiUnit"
         | "UnitTokenVariant"
         | "UnitTokenType"
-        | "UnitTokenPvPRestrictedForAddOns"
-        | "BigUInteger"
-        | "BigInteger" => "string".into(),
+        | "UnitTokenPvPRestrictedForAddOns" => "string".into(),
         "table" => "table".into(),
-        "function" | "LuaValueReference" => "function".into(),
+        "function" => "function".into(),
+        // Any Lua value (`issecrettable(table)`, `mapvalues(func, ...)`).
+        "LuaValueReference" => "any".into(),
         "userdata" => "userdata".into(),
         "" => "any".into(),
         other => {
@@ -464,3 +532,61 @@ pub const FRAME_TYPES: &[&str] = &[
     "TabardModel",
     "UnitPositionFrame",
 ];
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    const DOC: &str = r#"
+APIDocumentation:AddDocumentationTable({
+    Name = "Spell", Type = "System", Namespace = "C_Spell",
+    Functions = {
+        { Name = "GetSpellCooldown", Type = "Function", MayReturnNothing = true,
+          SecretWhenCooldownsRestricted = true,
+          Arguments = { { Name = "spellID", Type = "number", Nilable = false } },
+          Returns = { { Name = "info", Type = "SpellCooldownInfo", Nilable = false } } },
+        { Name = "GetSpellName", Type = "Function", SecretReturns = true,
+          Arguments = { { Name = "spellID", Type = "number", Nilable = false } },
+          Returns = { { Name = "name", Type = "cstring", Nilable = false } } },
+        { Name = "GetCost", Type = "Function",
+          Arguments = { { Name = "width", Type = "uiUnit", Nilable = false } },
+          Returns = { { Name = "cost", Type = "BigUInteger", Nilable = false } } },
+        { Name = "IsTable", Type = "Function",
+          Arguments = { { Name = "table", Type = "LuaValueReference", Nilable = false } },
+          Returns = { { Name = "yes", Type = "bool", Nilable = false } } },
+    },
+    Tables = {
+        { Name = "SpellCooldownInfo", Type = "Structure", Fields = {
+            { Name = "startTime", Type = "number", Nilable = false },
+            { Name = "isActive", Type = "bool", Nilable = false, NeverSecret = true },
+        } },
+    },
+})
+"#;
+
+    /// A possibly secret function's structure is a readable table with
+    /// secret fields, but those documented `NeverSecret`; other results
+    /// are wholly secret. Big integers and UI sizes are numbers, a Lua
+    /// value reference any value.
+    #[test]
+    fn secret_structures_and_number_types() {
+        let d = read(&[("doc.lua".into(), DOC.into())]).unwrap();
+        let ns = &d.namespaces["C_Spell"].functions;
+        assert_eq!(ns["GetSpellCooldown"][0].returns, ["SpellCooldownInfo?"]);
+        assert_eq!(ns["GetSpellName"][0].returns, ["string | Secret<string>"]);
+        assert_eq!(
+            d.interfaces["SpellCooldownInfo"],
+            [
+                (
+                    "startTime".to_string(),
+                    "number | Secret<number>".to_string(),
+                    false
+                ),
+                ("isActive".to_string(), "boolean".to_string(), false),
+            ]
+        );
+        assert_eq!(ns["GetCost"][0].params[0].ty, "number");
+        assert_eq!(ns["GetCost"][0].returns, ["number"]);
+        assert_eq!(ns["IsTable"][0].params[0].ty, "any");
+    }
+}

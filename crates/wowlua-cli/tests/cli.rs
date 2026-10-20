@@ -1072,6 +1072,73 @@ fn check_lua_flavors_share_what_checks_the_same() {
     );
 }
 
+/// Camelot's declarations take the calls Blizzard's code makes and the
+/// values the client answers (SuuUI's port, report C25 to C37): money and
+/// sizes are numbers, tooltip data methods take their `C_TooltipInfo`
+/// function's parameters, a cooldown is a readable table with possibly
+/// secret fields, the client's own number globals are declared.
+#[test]
+fn camelot_declarations_follow_the_client() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "client", "version": "1.0.0" },
+  "flavors": { "camelot": {} },
+  "check": { "mode": "strict" } }
+"#,
+            ),
+            (
+                "src/main.wowlua",
+                r#"local _, _, _, _, _, _, _, _, _, buyout = C_AuctionHouse.GetReplicateItemInfo(0)
+local cancel: number = C_AuctionHouse.GetCancelCost(1) + buyout
+GameTooltip:SetInboxItem(1, 2)
+GameTooltip:SetSendMailItem(1)
+local zoom: number = Minimap:GetZoom()
+local maxZoom = Minimap:GetZoomLevels() - 1
+C_NamePlate.SetNamePlateSize(140, 30)
+local list: number[] = {}
+local secretTable: boolean = issecrettable(list)
+SelectActiveQuest(1)
+local completion = GetQuestLogCompletionText(1)
+JoinChannelByName("LookingForGroup")
+SetTrainerServiceTypeFilter("available", true)
+C_ChatInfo.SendChatMessage("hi", "CHANNEL", nil, 1)
+local known: boolean = IsSpellKnown(1)
+local tab = C_Bank.FetchNextPurchasableBankTabData(0)
+local tabCost: number = tab and tab.tabCost or 0
+local condition = C_Traits.GetConditionInfo(1, 2, true)
+local conditionText: string? = condition and condition.tooltipText
+local cooldown = C_Spell.GetSpellCooldown(1)
+local active: boolean = cooldown ~= nil and cooldown.isActive
+local started = cooldown and cooldown.startTime > 0
+local party: number = LE_PARTY_CATEGORY_INSTANCE
+local location = ItemLocation:CreateFromBagAndSlot(0, 1)
+NamePlateDriverFrame:Show()
+print(cancel, zoom, maxZoom, secretTable, completion, known, tabCost, conditionText, active, started, party, location)
+"#,
+            ),
+        ],
+    );
+    let assert = wowlua(dir.path())
+        .args(["check", "--message-format", "short"])
+        .assert()
+        .failure();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    let diagnostics: Vec<&str> = stderr.lines().filter(|l| l.starts_with("src/")).collect();
+    // Only the cooldown's start time may be secret.
+    assert_eq!(
+        diagnostics,
+        [
+            "src/main.wowlua:22:30: error[E2040]: `number | Secret<number>` may be a secret value; narrow it with `canaccessvalue` or `issecretvalue` first",
+            "src/main.wowlua:22:30: error[E2001]: cannot compare `number | Secret<number>` with `0`",
+        ],
+        "{stderr}"
+    );
+}
+
 /// In split mode a file compiles the same for every flavor unless it reads
 /// `wowlua:meta` or imports a value that differs: only those are stored per
 /// flavor, and what the others report is reported once.

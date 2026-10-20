@@ -1049,17 +1049,17 @@ end
 
 declare interface AddOnProfilerCallEvent
     name: string
-    allocatedBytes: string
-    deallocatedBytes: string
+    allocatedBytes: number
+    deallocatedBytes: number
     elapsedMilliseconds: number
-    elapsedTicks: string
+    elapsedTicks: number
 end
 
 declare interface AddOnProfilerCallResults
     elapsedMilliseconds: number
-    elapsedTicks: string
-    allocatedBytes: string
-    deallocatedBytes: string
+    elapsedTicks: number
+    allocatedBytes: number
+    deallocatedBytes: number
     events: AddOnProfilerCallEvent[]
 end
 
@@ -1298,9 +1298,9 @@ declare interface BidInfo
     itemKey: ItemKey
     itemLink?: string
     timeLeft: AuctionHouseTimeLeftBand
-    minBid?: string
-    bidAmount?: string
-    buyoutAmount?: string
+    minBid?: number
+    bidAmount?: number
+    buyoutAmount?: number
     bidder?: string
 end
 
@@ -1308,14 +1308,14 @@ declare interface BrowseResultInfo
     itemKey: ItemKey
     appearanceLink?: string
     totalQuantity: number
-    minPrice: string
+    minPrice: number
     containsOwnerItem: boolean
 end
 
 declare interface CommoditySearchResultInfo
     itemID: number
     quantity: number
-    unitPrice: string
+    unitPrice: number
     auctionID: number
     owners: string[]
     totalNumberOfOwners: number
@@ -1357,9 +1357,9 @@ declare interface ItemSearchResultInfo
     containsAccountItem: boolean
     containsSocketedItem: boolean
     bidder?: string
-    minBid?: string
-    bidAmount?: string
-    buyoutAmount?: string
+    minBid?: number
+    bidAmount?: number
+    buyoutAmount?: number
     timeLeftSeconds?: number
 end
 
@@ -1371,8 +1371,8 @@ declare interface OwnedAuctionInfo
     quantity: number
     timeLeftSeconds?: number
     timeLeft?: AuctionHouseTimeLeftBand
-    bidAmount?: string
-    buyoutAmount?: string
+    bidAmount?: number
+    buyoutAmount?: number
     bidder?: string
 end
 
@@ -1384,10 +1384,10 @@ declare interface ReplicateItemInfo
     usable?: boolean
     level: number
     levelType?: string
-    minBid: string
-    minIncrement: string
-    buyoutPrice: string
-    bidAmount: string
+    minBid: number
+    minIncrement: number
+    buyoutPrice: number
+    bidAmount: number
     highBidder?: string
     bidderFullName?: string
     owner?: string
@@ -1558,7 +1558,7 @@ declare interface BankTabData
 end
 
 declare interface PurchasableBankTabData
-    tabCost: string
+    tabCost: number
     canAfford: boolean
     purchasePromptTitle: string
     purchasePromptBody: string
@@ -2118,8 +2118,8 @@ declare interface ClubInfo
     clubType: ClubType
     avatarId: number
     memberCount?: number
-    favoriteTimeStamp?: string
-    joinTime?: string
+    favoriteTimeStamp?: number
+    joinTime?: number
     socialQueueingEnabled?: boolean
     crossFaction?: boolean
 end
@@ -2177,8 +2177,8 @@ declare interface ClubMemberInfo
 end
 
 declare interface ClubMessageIdentifier
-    epoch: string
-    position: string
+    epoch: number
+    position: number
 end
 
 declare interface ClubMessageInfo
@@ -2260,7 +2260,7 @@ declare interface ClubStreamInfo
     subject: string
     leadersAndModeratorsOnly: boolean
     streamType: ClubStreamType
-    creationTime: string
+    creationTime: number
 end
 
 declare interface ClubStreamNotificationSetting
@@ -2272,8 +2272,8 @@ declare interface ClubTicketInfo
     ticketId: string
     allowedRedeemCount: number
     currentRedeemCount: number
-    creationTime: string
-    expirationTime: string
+    creationTime: number
+    expirationTime: number
     defaultStreamId?: ClubStreamId
     creator: ClubMemberInfo
 end
@@ -2290,7 +2290,7 @@ declare interface ClubFinderApplicantInfo
     specIds: number[]
     requestStatus: PlayerClubRequestStatus
     lookupSuccess: boolean
-    lastUpdatedTime: string
+    lastUpdatedTime: number
     faction: number
 end
 
@@ -2333,7 +2333,7 @@ declare interface RecruitingClubInfo
     cacheRequested: number
     lastPosterGUID: string
     clubId: ClubId
-    lastUpdatedTime: string
+    lastUpdatedTime: number
     isCrossFaction: boolean
     realmName?: string
 end
@@ -2523,7 +2523,7 @@ declare interface VendorTrackingInfo
     creatureName: string
     zoneName?: string
     currencyType?: number
-    cost?: string
+    cost?: number
 end
 
 declare interface ContributionAppearance
@@ -2747,7 +2747,7 @@ declare interface CraftingOrderCustomerSearchResults
 end
 
 declare interface CraftingOrderInfo
-    orderID: string
+    orderID: number
     itemID: number
     spellID: number
     skillLineAbilityID: number
@@ -2936,42 +2936,42 @@ end
 
 declare interface DamageMeterCombatSession
     combatSources: DamageMeterCombatSource[]
-    maxAmount?: number
-    totalAmount?: number
-    durationSeconds?: number
+    maxAmount?: number | Secret<number>
+    totalAmount?: number | Secret<number>
+    durationSeconds?: number | Secret<number>
 end
 
 declare interface DamageMeterCombatSessionSource
     combatSpells: DamageMeterCombatSpell[]
-    maxAmount?: number
-    totalAmount?: number
+    maxAmount?: number | Secret<number>
+    totalAmount?: number | Secret<number>
 end
 
 declare interface DamageMeterCombatSource
-    sourceGUID?: string
-    sourceCreatureID?: number
-    name: string
+    sourceGUID?: string | Secret<string>
+    sourceCreatureID?: number | Secret<number>
+    name: string | Secret<string>
     classFilename: string
     specIconID: number
-    totalAmount: number
-    amountPerSecond: number
+    totalAmount: number | Secret<number>
+    amountPerSecond: number | Secret<number>
     isLocalPlayer: boolean
     deathRecapID: number
-    deathTimeSeconds: number
+    deathTimeSeconds: number | Secret<number>
     classification: string
-    sourceDisplayType: DamageMeterSourceDisplayType
-    factionGroup?: string
+    sourceDisplayType: DamageMeterSourceDisplayType | Secret<DamageMeterSourceDisplayType>
+    factionGroup?: string | Secret<string>
 end
 
 declare interface DamageMeterCombatSpell
-    spellID: number
-    totalAmount: number
-    amountPerSecond: number
-    creatureName: string
-    overkillAmount: number
-    isAvoidable: boolean
-    isDeadly: boolean
-    combatSpellDetails: DamageMeterCombatSpellUnitDetails
+    spellID: number | Secret<number>
+    totalAmount: number | Secret<number>
+    amountPerSecond: number | Secret<number>
+    creatureName: string | Secret<string>
+    overkillAmount: number | Secret<number>
+    isAvoidable: boolean | Secret<boolean>
+    isDeadly: boolean | Secret<boolean>
+    combatSpellDetails: DamageMeterCombatSpellUnitDetails | Secret<DamageMeterCombatSpellUnitDetails>
 end
 
 declare interface DamageMeterCombatSpellUnitDetails
@@ -3201,14 +3201,14 @@ end
 declare interface EncounterTimelineEventInfo
     id: EncounterTimelineEventID
     source: EncounterTimelineEventSource
-    spellName: string
-    spellID: number
-    iconFileID: number
+    spellName: string | Secret<string>
+    spellID: number | Secret<number>
+    iconFileID: number | Secret<number>
     duration: DurationSeconds
     maxQueueDuration: DurationSeconds
-    icons: EncounterEventIconmask
-    severity: EncounterEventSeverity
-    isApproximate: boolean
+    icons: EncounterEventIconmask | Secret<EncounterEventIconmask>
+    severity: EncounterEventSeverity | Secret<EncounterEventSeverity>
+    isApproximate: boolean | Secret<boolean>
 end
 
 declare interface EncounterTimelineScriptEventRequest
@@ -3935,7 +3935,7 @@ declare interface HousingBlueprintGroup
 end
 
 declare interface HousingBlueprintInfo
-    blueprintID: string
+    blueprintID: number
     shareCode: string
     name: string
     blueprintType: HousingBlueprintType
@@ -4708,17 +4708,17 @@ declare interface LoreTextEntry
 end
 
 declare interface LossOfControlData
-    locType: string
-    spellID: number
-    displayText: string
-    iconTexture: number
-    startTime?: number
-    timeRemaining?: number
-    duration?: number
-    lockoutSchool: number
+    locType: string | Secret<string>
+    spellID: number | Secret<number>
+    displayText: string | Secret<string>
+    iconTexture: number | Secret<number>
+    startTime?: number | Secret<number>
+    timeRemaining?: number | Secret<number>
+    duration?: number | Secret<number>
+    lockoutSchool: number | Secret<number>
     priority: number
     displayType: number
-    auraInstanceID?: number
+    auraInstanceID?: number | Secret<number>
 end
 
 declare interface LuaColorCurvePoint
@@ -6208,6 +6208,7 @@ declare interface TraitCondInfo
     spentAmountRequired?: number
     tooltipFormat?: string
     traitCondAccountElementID?: number
+    tooltipText?: string
 end
 
 declare interface TraitConfigInfo
@@ -6612,29 +6613,29 @@ declare interface SpellInfo
 end
 
 declare interface SpellChargeInfo
-    currentCharges: number
+    currentCharges: number | Secret<number>
     maxCharges: number
-    cooldownStartTime: number
-    cooldownDuration: number
-    chargeModRate: number
+    cooldownStartTime: number | Secret<number>
+    cooldownDuration: number | Secret<number>
+    chargeModRate: number | Secret<number>
     isActive: boolean
 end
 
 declare interface SpellCooldownInfo
-    startTime: number
-    duration: number
+    startTime: number | Secret<number>
+    duration: number | Secret<number>
     isEnabled: boolean
     isActive: boolean
-    modRate: number
-    activeCategory?: number
-    timeUntilEndOfStartRecovery?: number
+    modRate: number | Secret<number>
+    activeCategory?: number | Secret<number>
+    timeUntilEndOfStartRecovery?: number | Secret<number>
     isOnGCD?: boolean
 end
 
 declare interface SpellLossOfControlInfo
-    startTime: number
-    duration: number
-    modRate: number
+    startTime: number | Secret<number>
+    duration: number | Secret<number>
+    modRate: number | Secret<number>
     isActive: boolean
     shouldReplaceNormalCooldown: boolean
 end
@@ -7351,15 +7352,15 @@ declare interface AnchorBinding
     point: FramePoint
     relativeTo: ScriptRegion
     relativePoint: FramePoint
-    offsetX: string
-    offsetY: string
+    offsetX: number
+    offsetY: number
 end
 
 declare interface uiBoundsRect
-    left: string
-    bottom: string
-    width: string
-    height: string
+    left: number
+    bottom: number
+    width: number
+    height: number
 end
 
 declare interface UITextureSliceData
@@ -8217,9 +8218,9 @@ end
 
 declare interface PrivateAuraIconInfo
     iconAnchor: AnchorBinding
-    iconWidth: string
-    iconHeight: string
-    borderScale?: string
+    iconWidth: number
+    iconHeight: number
+    borderScale?: number
 end
 
 declare interface UnitAuraSoundInfo
@@ -8245,9 +8246,9 @@ declare interface UnitPrivateAuraAnchorInfo
     showCooldownEdge?: boolean
     showCountdownNumbers?: boolean
     showDispelIcon?: boolean
-    iconWidth?: string
-    iconHeight?: string
-    borderScale?: string
+    iconWidth?: number
+    iconHeight?: number
+    borderScale?: number
     isContainer?: boolean
     parent: Frame
 end
@@ -9080,9 +9081,9 @@ end
 declare class MapScene
     function GetMaxCharacterSlotCount(): number
     function GetModelDrawLayer(): (DrawLayer, number)
-    function GetViewInsets(): (string, string, string, string)
+    function GetViewInsets(): (number, number, number, number)
     function SetModelDrawLayer(layer: DrawLayer)
-    function SetViewInsets(left: string, right: string, top: string, bottom: string)
+    function SetViewInsets(left: number, right: number, top: number, bottom: number)
 end
 
 declare class ModelFFX
@@ -9213,32 +9214,32 @@ declare function CreateFontFamily(name: string, members: CreateFontFamilyMemberI
 declare function GetFontInfo(fontObject: Font): FontScriptInfo?
 declare function GetFonts(): string[]
 declare function AddSourceLocationExclude(fileName: string)
-declare function canaccessallvalues(...: function): boolean
+declare function canaccessallvalues(...: any): boolean
 declare function canaccesssecrets(): boolean
-declare function canaccesstable(table: function): boolean
+declare function canaccesstable(table: any): boolean
 declare function CreateFromMixins(...: LuaValueVariant): LuaValueVariant
-declare function CreateSecureDelegate(luaFunction: function, options: SecureDelegateOptions?): function
+declare function CreateSecureDelegate(luaFunction: any, options: SecureDelegateOptions?): any
 declare function CreateWindow(popupStyle: boolean?, topMost: boolean?): Window?
 declare function dropsecretaccess()
-declare function dumpobject(value: function?): function?
+declare function dumpobject(value: any?): any?
 declare function GetCallstackHeight(): number
 declare function GetCurrentEventID(): number?
 declare function GetErrorCallstackHeight(): number?
 declare function GetEventTime(eventProfileIndex: number): (number?, number?, string?, number?)
 declare function GetForbiddenObjectTable(object: FrameScriptObject): FrameScriptObject
 declare function GetSourceLocation(): string?
-declare function hasanysecretvalues(...: function): boolean
-declare function issecrettable(table: function): boolean
-declare function mapvalues(func: function, ...: function): (...function)
+declare function hasanysecretvalues(...: any): boolean
+declare function issecrettable(table: any): boolean
+declare function mapvalues(func: any, ...: any): (...any)
 declare function Mixin(object: LuaValueVariant, ...: LuaValueVariant): LuaValueVariant
 declare function RegisterEventCallback(eventName: string, callback: EventCallbackType)
 declare function RegisterUnitEventCallback(eventName: string, callback: EventCallbackType, unit: string)
 declare function RunScript(text: string)
-declare function scrubsecretvalues(...: function): (...function)
-declare function secretunwrap(...: function): (...function)
-declare function secretwrap(...: function): (...function)
-declare function securecallmethod(object: function, method: string, ...: function): (...function)
-declare function securecopy(value: function?, options: SecureCopyOptions?): function
+declare function scrubsecretvalues(...: any): (...any)
+declare function secretunwrap(...: any): (...any)
+declare function secretwrap(...: any): (...any)
+declare function securecallmethod(object: any, method: string, ...: any): (...any)
+declare function securecopy(value: any?, options: SecureCopyOptions?): any
 declare function SetErrorCallstackHeight(height: number?)
 declare function settablesecurity(table: LuaValueVariant, option: TableSecurityOption)
 declare function UnregisterEventCallback(eventName: string, callback: EventCallbackType)
@@ -9290,7 +9291,7 @@ declare function IsShiftKeyDown(): boolean
 declare function IsUsingGamepad(): boolean
 declare function IsUsingMouse(): boolean
 declare function MakeModifiers(): number
-declare function SetCursorPosition(xPosition: string, yPosition: string)
+declare function SetCursorPosition(xPosition: number, yPosition: number)
 declare function SimulateMouseClick(button: string)
 declare function SimulateMouseDown(button: string)
 declare function SimulateMouseUp(button: string)
@@ -9332,7 +9333,7 @@ declare function SetEuropeanNumbers(enabled: boolean)
 declare function GetMirrorTimerInfo(timerIndex: number): (string?, number?, number?, number?, number?, string?, number?)
 declare function GetMirrorTimerProgress(timerName: string): number?
 declare function CancelPreloadingMovie(movieId: number)
-declare function GetMovieDownloadProgress(movieId: number): (boolean, string, string)
+declare function GetMovieDownloadProgress(movieId: number): (boolean, number, number)
 declare function IsMovieLocal(movieId: number): boolean
 declare function IsMoviePlayable(movieId: number): boolean
 declare function IsMovieReadable(movieId: number): boolean
@@ -9815,142 +9816,142 @@ declare function AcknowledgeAutoAcceptQuest()
 declare function ArchaeologyGetIconInfo(index: number)
 declare function ArchaeologyMapUpdateAll(uiMapID: number): number
 declare function ArcheologyGetVisibleBlobID(index: number): number
-declare function AreTalentsLocked()
-declare function AttachGlyphToSpell(spellID: any?)
-declare function BNSetBlocked(ID: any?, bool: any?)
-declare function BattlefieldMgrEntryInviteResponse(queueId: any?, accept: any?)
-declare function BattlefieldMgrExitRequest(queueId: any?)
-declare function BattlefieldMgrQueueInviteResponse(queueId: any?, accept: any?)
-declare function BattlefieldMgrQueueRequest()
+declare function AreTalentsLocked(...: any): (...any)
+declare function AttachGlyphToSpell(spellID: any?, ...: any): (...any)
+declare function BNSetBlocked(ID: any?, bool: any?, ...: any): (...any)
+declare function BattlefieldMgrEntryInviteResponse(queueId: any?, accept: any?, ...: any): (...any)
+declare function BattlefieldMgrExitRequest(queueId: any?, ...: any): (...any)
+declare function BattlefieldMgrQueueInviteResponse(queueId: any?, accept: any?, ...: any): (...any)
+declare function BattlefieldMgrQueueRequest(...: any): (...any)
 declare function CanItemBeSocketedToArtifact(itemID: number): boolean
 declare function CanScanResearchSite(): boolean
 declare function CanSolveArtifact(): boolean
 declare function CanSwitchVehicleSeats(): boolean
-declare function CancelMasterLootRoll(slot: any?)
-declare function ClearAutoAcceptQuestSound()
-declare function ClearFailedPVPTalentIDs()
-declare function ClearFailedTalentIDs()
-declare function ClickWorldMapActionButton()
-declare function CloseGuildRegistrar()
+declare function CancelMasterLootRoll(slot: any?, ...: any): (...any)
+declare function ClearAutoAcceptQuestSound(...: any): (...any)
+declare function ClearFailedPVPTalentIDs(...: any): (...any)
+declare function ClearFailedTalentIDs(...: any): (...any)
+declare function ClickWorldMapActionButton(...: any): (...any)
+declare function CloseGuildRegistrar(...: any): (...any)
 declare function CloseResearch()
-declare function DoMasterLootRoll(slot: any?)
+declare function DoMasterLootRoll(slot: any?, ...: any): (...any)
 declare function GetAchievementGuildRep(id: number): (boolean, boolean, number)
 declare function GetActiveArtifactByRace(branchIndex: number, artifactIndex: number): (string, string, string, string, string, number, string)
-declare function GetActiveQuestID(index: any?)
+declare function GetActiveQuestID(index: any?, ...: any): (...any)
 declare function GetArchaeologyInfo(): string
 declare function GetArchaeologyRaceInfo(raceIndex: number): (string, number, number, number, number, number)
 declare function GetArchaeologyRaceInfoByID(branchID: number): (string, number, number, number, number, number)
 declare function GetArtifactInfoByRace(raceIndex: number, artifactIndex: number): (string, string, number, string, string, number, string, number, number)
 declare function GetArtifactProgress(): (number, number, number)
-declare function GetCurrentGlyphNameForSpell(spellID: any?)
-declare function GetEquipmentNameFromSpell()
-declare function GetFailedPVPTalentIDs()
-declare function GetFailedTalentIDs()
-declare function GetFollowerTypeIDFromSpell()
+declare function GetCurrentGlyphNameForSpell(spellID: any?, ...: any): (...any)
+declare function GetEquipmentNameFromSpell(...: any): (...any)
+declare function GetFailedPVPTalentIDs(...: any): (...any)
+declare function GetFailedTalentIDs(...: any): (...any)
+declare function GetFollowerTypeIDFromSpell(...: any): (...any)
 declare function GetGuildAchievementMemberInfo(achievementID: number, index: number): string?
 declare function GetGuildAchievementMembers(achievementID: number)
 declare function GetGuildAchievementNumMembers(achievementID: number): number
 declare function GetItemLevelColor(): (number, number, number)
-declare function GetJournalInfoForSpellConfirmation(spellID: any?)
+declare function GetJournalInfoForSpellConfirmation(spellID: any?, ...: any): (...any)
 declare function GetMaxTalentTier(): number
-declare function GetMerchantFilter()
+declare function GetMerchantFilter(...: any): (...any)
 declare function GetNumArchaeologyRaces(): number
 declare function GetNumArtifactsByRace(raceIndex: number): number
-declare function GetNumBattlefieldVehicles(index: any?)
+declare function GetNumBattlefieldVehicles(index: any?, ...: any): (...any)
 declare function GetNumBattlegroundTypes(): number
-declare function GetNumQuestLogRewardFactions()
-declare function GetNumQuestLogTasks()
-declare function GetNumTreasurePickerItems()
-declare function GetNumUnspentPvpTalents()
-declare function GetPendingGlyphName()
+declare function GetNumQuestLogRewardFactions(...: any): (...any)
+declare function GetNumQuestLogTasks(...: any): (...any)
+declare function GetNumTreasurePickerItems(...: any): (...any)
+declare function GetNumUnspentPvpTalents(...: any): (...any)
+declare function GetPendingGlyphName(...: any): (...any)
 declare function GetPetFoodTypes(): string
-declare function GetPlayerTradeCurrency()
+declare function GetPlayerTradeCurrency(...: any): (...any)
 declare function GetPvpTalentInfoByID(talentID: number, specGroupIndex: number?, isInspect: boolean?, inspectedUnit: string?): (number, string, number, boolean, boolean, number, boolean, number, number, boolean, boolean)
-declare function GetPvpTalentInfoBySpecialization()
-declare function GetPvpTalentLink()
-declare function GetQuestExpansion(questID: any?)
-declare function GetQuestItemInfoLootType(type: any?, index: any?)
-declare function GetQuestLogChoiceInfoLootType(index: any?)
-declare function GetQuestLogCriteriaSpell()
-declare function GetQuestLogRewardArtifactXP()
-declare function GetQuestLogRewardFactionInfo(questIndex: any?)
-declare function GetQuestLogRewardSkillPoints()
+declare function GetPvpTalentInfoBySpecialization(...: any): (...any)
+declare function GetPvpTalentLink(...: any): (...any)
+declare function GetQuestExpansion(questID: any?, ...: any): (...any)
+declare function GetQuestItemInfoLootType(type: any?, index: any?, ...: any): (...any)
+declare function GetQuestLogChoiceInfoLootType(index: any?, ...: any): (...any)
+declare function GetQuestLogCriteriaSpell(...: any): (...any)
+declare function GetQuestLogRewardArtifactXP(...: any): (...any)
+declare function GetQuestLogRewardFactionInfo(questIndex: any?, ...: any): (...any)
+declare function GetQuestLogRewardSkillPoints(...: any): (...any)
 declare function GetQuestObjectiveInfo(questID: number, objectiveIndex: number, displayComplete: boolean): (string, string, boolean, number, number)
-declare function GetQuestPOIBlobCount(questID: any?)
+declare function GetQuestPOIBlobCount(questID: any?, ...: any): (...any)
 declare function GetQuestProgressBarPercent(questID: number): number
-declare function GetRewardArtifactXP()
-declare function GetRewardNumSkillUps()
-declare function GetRewardPackArtifactPower(rewardPackID: any?)
-declare function GetRewardPackCurrencies(rewardPackID: any?)
-declare function GetRewardPackItems(rewardPackID: any?)
-declare function GetRewardPackMoney(rewardPackID: any?)
-declare function GetRewardPackTitle(rewardPackID: any?)
-declare function GetRewardPackTitleName(titleID: any?)
-declare function GetRewardSkillLineID()
-declare function GetRewardSkillPoints()
+declare function GetRewardArtifactXP(...: any): (...any)
+declare function GetRewardNumSkillUps(...: any): (...any)
+declare function GetRewardPackArtifactPower(rewardPackID: any?, ...: any): (...any)
+declare function GetRewardPackCurrencies(rewardPackID: any?, ...: any): (...any)
+declare function GetRewardPackItems(rewardPackID: any?, ...: any): (...any)
+declare function GetRewardPackMoney(rewardPackID: any?, ...: any): (...any)
+declare function GetRewardPackTitle(rewardPackID: any?, ...: any): (...any)
+declare function GetRewardPackTitleName(titleID: any?, ...: any): (...any)
+declare function GetRewardSkillLineID(...: any): (...any)
+declare function GetRewardSkillPoints(...: any): (...any)
 declare function GetSelectedArtifactInfo(): (string, string, number, number, string, number, number, number)
-declare function GetSpellsForCharacterUpgradeTier(tierIndex: any?)
-declare function GetSuggestedGroupSize()
-declare function GetTalentInfoBySpecialization(specIndex: any?, tier: any?, column: any?)
-declare function GetTargetTradeCurrency()
+declare function GetSpellsForCharacterUpgradeTier(tierIndex: any?, ...: any): (...any)
+declare function GetSuggestedGroupSize(...: any): (...any)
+declare function GetTalentInfoBySpecialization(specIndex: any?, tier: any?, column: any?, ...: any): (...any)
+declare function GetTargetTradeCurrency(...: any): (...any)
 declare function GetTaskInfo(questID: number): (boolean, boolean, number)
-declare function GetTaskPOIs()
-declare function GetTasksTable()
-declare function GetTreasurePickerItemInfo(index: any?, questID: any?)
-declare function GetWorldMapActionButtonSpellInfo()
+declare function GetTaskPOIs(...: any): (...any)
+declare function GetTasksTable(...: any): (...any)
+declare function GetTreasurePickerItemInfo(index: any?, questID: any?, ...: any): (...any)
+declare function GetWorldMapActionButtonSpellInfo(...: any): (...any)
 declare function GetWorldPVPQueueStatus(index: number): (string, string?, number, number, number, number, boolean)
-declare function HasArtifactEquipped()
-declare function HasAttachedGlyph(spellID: any?)
-declare function HasPendingGlyphCast()
+declare function HasArtifactEquipped(...: any): (...any)
+declare function HasAttachedGlyph(spellID: any?, ...: any): (...any)
+declare function HasPendingGlyphCast(...: any): (...any)
 declare function IsArtifactCompletionHistoryAvailable(): boolean
-declare function IsBreadcrumbQuest(questID: any?)
-declare function IsCastingGlyph()
-declare function IsPendingGlyphRemoval()
-declare function IsQuestIDValidSpellTarget(questID: any?)
-declare function IsQuestSequenced(questID: any?)
-declare function IsSpecializationActivateSpell()
-declare function IsSpellValidForPendingGlyph(spellID: any?)
-declare function IsStoryQuest(questID: any?)
+declare function IsBreadcrumbQuest(questID: any?, ...: any): (...any)
+declare function IsCastingGlyph(...: any): (...any)
+declare function IsPendingGlyphRemoval(...: any): (...any)
+declare function IsQuestIDValidSpellTarget(questID: any?, ...: any): (...any)
+declare function IsQuestSequenced(questID: any?, ...: any): (...any)
+declare function IsSpecializationActivateSpell(...: any): (...any)
+declare function IsSpellValidForPendingGlyph(spellID: any?, ...: any): (...any)
+declare function IsStoryQuest(questID: any?, ...: any): (...any)
 declare function IsVehicleAimAngleAdjustable(): boolean
 declare function IsVehicleAimPowerAdjustable(): boolean
 declare function ItemAddedToArtifact(index: number): boolean
-declare function ItemCanTargetGarrisonFollowerAbility()
-declare function JoinRatedSoloShuffle()
+declare function ItemCanTargetGarrisonFollowerAbility(...: any): (...any)
+declare function JoinRatedSoloShuffle(...: any): (...any)
 declare function LearnPvpTalent(talentID: number, slotIndex: number)
-declare function LearnPvpTalents()
+declare function LearnPvpTalents(...: any): (...any)
 declare function PetDefensiveAssistMode()
-declare function PickupPvpTalent()
-declare function PlayAutoAcceptQuestSound()
-declare function ProcessQuestLogRewardFactions()
+declare function PickupPvpTalent(...: any): (...any)
+declare function PlayAutoAcceptQuestSound(...: any): (...any)
+declare function ProcessQuestLogRewardFactions(...: any): (...any)
 declare function QuestGetAutoAccept(): boolean
-declare function QuestGetAutoLaunched()
-declare function QuestHasPOIInfo(questID: any?)
-declare function QuestIsFromAdventureMap()
+declare function QuestGetAutoLaunched(...: any): (...any)
+declare function QuestHasPOIInfo(questID: any?, ...: any): (...any)
+declare function QuestIsFromAdventureMap(...: any): (...any)
 declare function QuestIsFromAreaTrigger(): boolean
 declare function QuestIsWeekly(): boolean
-declare function QuestLogRewardHasTreasurePicker()
-declare function ReleaseAction()
+declare function QuestLogRewardHasTreasurePicker(...: any): (...any)
+declare function ReleaseAction(...: any): (...any)
 declare function RemoveItemFromArtifact(): boolean
-declare function RemovePvpTalent()
-declare function RequestBottomLeftActionBar()
-declare function ResetSetMerchantFilter()
-declare function SetBarSlotFromIntro(slot: any?)
+declare function RemovePvpTalent(...: any): (...any)
+declare function RequestBottomLeftActionBar(...: any): (...any)
+declare function ResetSetMerchantFilter(...: any): (...any)
+declare function SetBarSlotFromIntro(slot: any?, ...: any): (...any)
 declare function SetFocusedAchievement(id: number?)
-declare function SetMerchantFilter()
+declare function SetMerchantFilter(...: any): (...any)
 declare function SetSelectedArtifact(raceIndex: number, index: number?)
-declare function SetTradeCurrency(type: any?, amount: any?)
+declare function SetTradeCurrency(type: any?, amount: any?, ...: any): (...any)
 declare function SocketItemToArtifact(): boolean
 declare function SolveArtifact()
 declare function SortBGList(): boolean
-declare function SpellCanTargetGarrisonFollower()
-declare function SpellCanTargetGarrisonFollowerAbility()
-declare function SpellCanTargetGarrisonMission()
-declare function SpellCanTargetQuest()
-declare function StartSoloShuffleWarGameByName()
-declare function StartSpectatorSoloShuffleWarGame()
+declare function SpellCanTargetGarrisonFollower(...: any): (...any)
+declare function SpellCanTargetGarrisonFollowerAbility(...: any): (...any)
+declare function SpellCanTargetGarrisonMission(...: any): (...any)
+declare function SpellCanTargetQuest(...: any): (...any)
+declare function StartSoloShuffleWarGameByName(...: any): (...any)
+declare function StartSpectatorSoloShuffleWarGame(...: any): (...any)
 declare function SummonRandomCritter()
-declare function SurrenderArena()
-declare function UseWorldMapActionButtonSpellOnQuest()
+declare function SurrenderArena(...: any): (...any)
+declare function UseWorldMapActionButtonSpellOnQuest(...: any): (...any)
 
 declare global acos: (...any) -> ...any
 declare global asin: (...any) -> ...any
@@ -14877,6 +14878,7 @@ declare global ObjectCache_Create: (...any) -> ...any
 declare global QuestCache: any
 declare global SpellBookItemLocation: table
 declare global SpellBookItemLocationMixin: table
+declare global UiMapPoint: UiMapPoint
 declare global AchievementObjectiveTrackerMixin: any
 declare global AdventureObjectiveTrackerMixin: any
 declare global AutoQuestPopupTrackerMixin: table
@@ -17786,7 +17788,6 @@ declare global ZoneAbilityFrameUpdater: table
 declare global ZoneAbilityFrameMixin: table
 declare global ZoneAbilityFrameSpellButtonMixin: any
 declare global GetInventorySlotInfo: any
-declare global UIThemeContainerFrame: Frame
 declare global AccountStoreFrame: Frame
 declare global FullscreenAccountStoreContainer: Frame
 declare global MainActionBar: Frame
@@ -17821,8 +17822,6 @@ declare global ArrowCalloutFrameManager: Frame
 declare global ArtifactFrameUnderlay: Frame
 @onDemand("Blizzard_ArtifactUI")
 declare global ArtifactFrame: Frame
-declare global AuraButton: Button
-declare global AuraContainer: Frame
 declare global AuraButtonTooltip: GameTooltip
 @onDemand("Blizzard_AzeriteEssenceUI")
 declare global AzeriteEssenceUI: Frame
@@ -26472,12 +26471,12 @@ declare namespace C_ActionBar
     function GetActionAutocast(actionID: number): (boolean, boolean)
     function GetActionBarPage(): number
     function GetActionChargeDuration(actionID: number): LuaDurationObject
-    function GetActionCharges(actionID: number): SpellChargeInfo | Secret<SpellChargeInfo>
-    function GetActionCooldown(actionID: number): SpellCooldownInfo | Secret<SpellCooldownInfo>
+    function GetActionCharges(actionID: number): SpellChargeInfo
+    function GetActionCooldown(actionID: number): SpellCooldownInfo
     function GetActionCooldownDuration(actionID: number, ignoreGCD: boolean?): LuaDurationObject
     function GetActionDisplayCount(actionID: number, maxDisplayCount: number?, replacementString: string?): string | Secret<string>
     function GetActionLossOfControlCooldownDuration(actionID: number): LuaDurationObject
-    function GetActionLossOfControlCooldownInfo(actionID: number): SpellLossOfControlInfo | Secret<SpellLossOfControlInfo>
+    function GetActionLossOfControlCooldownInfo(actionID: number): SpellLossOfControlInfo
     function GetActionText(actionID: number): string?
     function GetActionTexture(actionID: number): number
     function GetActionUseCount(actionID: number): number | Secret<number>
@@ -26542,7 +26541,7 @@ declare namespace C_AddOnProfiler
     function GetAddOnMetric(name: string, metric: AddOnProfilerMetric): number
     function GetApplicationMetric(metric: AddOnProfilerMetric): number
     function GetOverallMetric(metric: AddOnProfilerMetric): number
-    function GetTicksPerSecond(): string
+    function GetTicksPerSecond(): number
     function GetTopKAddOnsForMetric(metric: AddOnProfilerMetric, k: number): AddOnProfilerResult[]
     function IsEnabled(): boolean
     function MeasureCall(func: LuaValueVariant, ...: LuaValueVariant): (AddOnProfilerCallResults, ...LuaValueVariant)
@@ -26708,8 +26707,8 @@ declare namespace C_AuctionHouse
     function CancelSell()
     function CloseAuctionHouse()
     function ConfirmCommoditiesPurchase(itemID: number, quantity: number)
-    function ConfirmPostCommodity(item: ItemLocationMixin, duration: number, quantity: number, unitPrice: string)
-    function ConfirmPostItem(item: ItemLocationMixin, duration: number, quantity: number, bid: string?, buyout: string?)
+    function ConfirmPostCommodity(item: ItemLocationMixin, duration: number, quantity: number, unitPrice: number)
+    function ConfirmPostItem(item: ItemLocationMixin, duration: number, quantity: number, bid: number?, buyout: number?)
     function FavoritesAreAvailable(): boolean
     function GetAuctionInfoByID(auctionID: number): AuctionInfo?
     function GetAuctionItemSubClasses(classID: number): number[]
@@ -26718,7 +26717,7 @@ declare namespace C_AuctionHouse
     function GetBidType(bidTypeIndex: number): ItemKey?
     function GetBids(): BidInfo[]
     function GetBrowseResults(): BrowseResultInfo[]
-    function GetCancelCost(ownedAuctionID: number): string
+    function GetCancelCost(ownedAuctionID: number): number
     function GetCommoditySearchResultInfo(itemID: number, commoditySearchResultIndex: number): CommoditySearchResultInfo?
     function GetCommoditySearchResultsQuantity(itemID: number): number
     function GetExtraBrowseInfo(itemKey: ItemKey): number?
@@ -26729,13 +26728,13 @@ declare namespace C_AuctionHouse
     function GetItemKeyRequiredLevel(itemKey: ItemKey): number?
     function GetItemSearchResultInfo(itemKey: ItemKey, itemSearchResultIndex: number): ItemSearchResultInfo?
     function GetItemSearchResultsQuantity(itemKey: ItemKey): number
-    function GetMaxBidItemBid(): string?
-    function GetMaxBidItemBuyout(): string?
-    function GetMaxCommoditySearchResultPrice(itemID: number): string?
-    function GetMaxItemSearchResultBid(itemKey: ItemKey): string?
-    function GetMaxItemSearchResultBuyout(itemKey: ItemKey): string?
-    function GetMaxOwnedAuctionBid(): string?
-    function GetMaxOwnedAuctionBuyout(): string?
+    function GetMaxBidItemBid(): number?
+    function GetMaxBidItemBuyout(): number?
+    function GetMaxCommoditySearchResultPrice(itemID: number): number?
+    function GetMaxItemSearchResultBid(itemKey: ItemKey): number?
+    function GetMaxItemSearchResultBuyout(itemKey: ItemKey): number?
+    function GetMaxOwnedAuctionBid(): number?
+    function GetMaxOwnedAuctionBuyout(): number?
     function GetNumBidTypes(): number
     function GetNumBids(): number
     function GetNumCommoditySearchResults(itemID: number): number
@@ -26748,7 +26747,7 @@ declare namespace C_AuctionHouse
     function GetOwnedAuctions(): OwnedAuctionInfo[]
     function GetQuoteDurationRemaining(): number
     function GetReplicateItemBattlePetInfo(index: number): (number?, number?)
-    function GetReplicateItemInfo(index: number): (string?, number?, number, number, boolean?, number, string?, string, string, string, string, string?, string?, string?, string?, number, number, boolean?)
+    function GetReplicateItemInfo(index: number): (string?, number?, number, number, boolean?, number, string?, number, number, number, number, string?, string?, string?, string?, number, number, boolean?)
     function GetReplicateItemLink(index: number): string?
     function GetReplicateItemTimeLeft(index: number): number
     function GetTimeLeftBandInfo(timeLeftBand: AuctionHouseTimeLeftBand): (number, number)
@@ -26764,9 +26763,9 @@ declare namespace C_AuctionHouse
     function IsSellItemValid(item: ItemLocationMixin, displayError: boolean?): boolean
     function IsThrottledMessageSystemReady(): boolean
     function MakeItemKey(itemID: number, itemLevel: number?, itemSuffix: number?, battlePetSpeciesID: number?): ItemKey
-    function PlaceBid(auctionID: number, bidAmount: string)
-    function PostCommodity(item: ItemLocationMixin, duration: number, quantity: number, unitPrice: string): boolean
-    function PostItem(item: ItemLocationMixin, duration: number, quantity: number, bid: string?, buyout: string?): boolean
+    function PlaceBid(auctionID: number, bidAmount: number)
+    function PostCommodity(item: ItemLocationMixin, duration: number, quantity: number, unitPrice: number): boolean
+    function PostItem(item: ItemLocationMixin, duration: number, quantity: number, bid: number?, buyout: number?): boolean
     function QueryBids(sorts: AuctionHouseSortType[], auctionIDs: number[])
     function QueryOwnedAuctions(sorts: AuctionHouseSortType[])
     function RefreshCommoditySearchResults(itemID: number)
@@ -27193,7 +27192,7 @@ declare namespace C_ChatInfo
     function SendAddonMessage(prefix: string, message: string, chatType: string?, target: string?): SendAddonMessageResult
     function SendAddonMessageLogged(prefix: string, message: string, chatType: string?, target: string?): SendAddonMessageResult?
     function SendCautionaryChatMessage(confirmNumber: number)
-    function SendChatMessage(message: string, chatType: SendChatMessageType?, languageID: number?, target: string?)
+    function SendChatMessage(message: string, chatType: SendChatMessageType?, languageID: number?, target: (string | number)?)
     function SwapChatChannelsByChannelIndex(firstChannelIndex: number, secondChannelIndex: number)
     function UncensorChatLine(chatLine: number)
 end
@@ -27269,7 +27268,7 @@ declare namespace C_Club
     function AdvanceStreamViewMarker(clubId: ClubId, streamId: ClubStreamId)
     function AreMembersReady(clubId: ClubId): boolean
     function AssignMemberRole(clubId: ClubId, memberId: ClubMemberOpaqueId, roleId: ClubRoleIdentifier)
-    function CanResolvePlayerLocationFromClubMessageData(clubId: ClubId, streamId: ClubStreamId, epoch: string, position: string): boolean
+    function CanResolvePlayerLocationFromClubMessageData(clubId: ClubId, streamId: ClubStreamId, epoch: number, position: number): boolean
     function ClearAutoAdvanceStreamViewMarker()
     function ClearClubPresenceSubscription()
     function CompareBattleNetDisplayName(clubId: ClubId, lhsMemberId: number, rhsMemberId: number): number
@@ -27313,7 +27312,7 @@ declare namespace C_Club
     function GetMessagesBefore(clubId: ClubId, streamId: ClubStreamId, newest: ClubMessageIdentifier, count: number): ClubMessageInfo[]
     function GetMessagesInRange(clubId: ClubId, streamId: ClubStreamId, oldest: ClubMessageIdentifier, newest: ClubMessageIdentifier): ClubMessageInfo[]
     function GetStreamInfo(clubId: ClubId, streamId: ClubStreamId): ClubStreamInfo?
-    function GetStreamViewMarker(clubId: ClubId, streamId: ClubStreamId): string?
+    function GetStreamViewMarker(clubId: ClubId, streamId: ClubStreamId): number?
     function GetStreams(clubId: ClubId): ClubStreamInfo[]
     function GetSubscribedClubs(): ClubInfo[]
     function GetTickets(clubId: ClubId): ClubTicketInfo[]
@@ -27340,7 +27339,7 @@ declare namespace C_Club
     function SetClubMemberNote(clubId: ClubId, memberId: ClubMemberOpaqueId, note: string)
     function SetClubPresenceSubscription(clubId: ClubId)
     function SetClubStreamNotificationSettings(clubId: ClubId, settings: ClubStreamNotificationSetting[])
-    function SetCommunityID(communityID: string)
+    function SetCommunityID(communityID: number)
     function SetFavorite(clubId: ClubId, isFavorite: boolean)
     function SetSocialQueueingEnabled(clubId: ClubId, enabled: boolean)
     function ShouldAllowClubType(clubType: ClubType): boolean
@@ -27784,21 +27783,21 @@ declare namespace C_CraftingOrders
     function AreOrderNotesDisabled(): boolean
     function CalculateCraftingOrderPostingFee(skillLineAbilityID: number, orderType: CraftingOrderType, orderDuration: CraftingOrderDuration): WOWMONEY
     function CanOrderSkillAbility(skillLineAbilityID: number): boolean
-    function CancelOrder(orderID: string)
-    function ClaimOrder(orderID: string, profession: Profession)
+    function CancelOrder(orderID: number)
+    function ClaimOrder(orderID: number, profession: Profession)
     function CloseCrafterCraftingOrders()
     function CloseCustomerCraftingOrders()
-    function FulfillOrder(orderID: string, crafterNote: string, profession: Profession)
+    function FulfillOrder(orderID: number, crafterNote: string, profession: Profession)
     function GetClaimedOrder(): CraftingOrderInfo?
     function GetCrafterBuckets(): CraftingOrderBucketInfo[]
     function GetCrafterOrders(): CraftingOrderInfo[]
-    function GetCraftingOrderTime(): string
+    function GetCraftingOrderTime(): number
     function GetCustomerCategories(): CraftingOrderCustomerCategory[]
     function GetCustomerOptions(params: CraftingOrderCustomerSearchParams): CraftingOrderCustomerSearchResults
     function GetCustomerOrders(): CraftingOrderInfo[]
     function GetDefaultOrdersSkillLine(): number?
     function GetMyOrders(): CraftingOrderInfo[]
-    function GetNumFavoriteCustomerOptions(): string
+    function GetNumFavoriteCustomerOptions(): number
     function GetOrderClaimInfo(profession: Profession): CraftingOrderClaimsRemainingInfo
     function GetPersonalOrdersInfo(): CraftingOrderPersonalOrdersInfo[]
     function HasFavoriteCustomerOptions(): boolean
@@ -27806,11 +27805,11 @@ declare namespace C_CraftingOrders
     function ListMyOrders(request: CraftingOrderRequestMyOrdersInfo)
     function OpenCrafterCraftingOrders()
     function OpenCustomerCraftingOrders()
-    function OrderCanBeRecrafted(orderID: string): boolean
+    function OrderCanBeRecrafted(orderID: number): boolean
     function ParseCustomerOptions()
     function PlaceNewOrder(orderInfo: NewCraftingOrderInfo)
-    function RejectOrder(orderID: string, crafterNote: string, profession: Profession)
-    function ReleaseOrder(orderID: string, profession: Profession)
+    function RejectOrder(orderID: number, crafterNote: string, profession: Profession)
+    function ReleaseOrder(orderID: number, profession: Profession)
     function RequestCrafterOrders(request: CraftingOrderRequestInfo)
     function RequestCustomerOrders(request: CraftingOrderRequestInfo)
     function SetCustomerOptionFavorited(recipeID: number, favorited: boolean)
@@ -27890,10 +27889,10 @@ end
 
 declare namespace C_DamageMeter
     function GetAvailableCombatSessions(): DamageMeterAvailableCombatSession[]
-    function GetCombatSessionFromID(sessionID: number, type: DamageMeterType): DamageMeterCombatSession | Secret<DamageMeterCombatSession>
-    function GetCombatSessionFromType(sessionType: DamageMeterSessionType, type: DamageMeterType): DamageMeterCombatSession | Secret<DamageMeterCombatSession>
-    function GetCombatSessionSourceFromID(sessionID: number, type: DamageMeterType, sourceGUID: string?, sourceCreatureID: number?): DamageMeterCombatSessionSource | Secret<DamageMeterCombatSessionSource>
-    function GetCombatSessionSourceFromType(sessionType: DamageMeterSessionType, type: DamageMeterType, sourceGUID: string?, sourceCreatureID: number?): DamageMeterCombatSessionSource | Secret<DamageMeterCombatSessionSource>
+    function GetCombatSessionFromID(sessionID: number, type: DamageMeterType): DamageMeterCombatSession
+    function GetCombatSessionFromType(sessionType: DamageMeterSessionType, type: DamageMeterType): DamageMeterCombatSession
+    function GetCombatSessionSourceFromID(sessionID: number, type: DamageMeterType, sourceGUID: string?, sourceCreatureID: number?): DamageMeterCombatSessionSource
+    function GetCombatSessionSourceFromType(sessionType: DamageMeterSessionType, type: DamageMeterType, sourceGUID: string?, sourceCreatureID: number?): DamageMeterCombatSessionSource
     function GetSessionDurationSeconds(sessionType: DamageMeterSessionType): number?
     function IsDamageMeterAvailable(): (boolean, string)
     function ResetAllCombatSessions()
@@ -27904,7 +27903,7 @@ declare namespace C_DateAndTime
     function AdjustTimeByMinutes(date: CalendarTime, minutes: number): CalendarTime
     function AdjustTimeByMonths(date: CalendarTime, months: number): CalendarTime
     function CompareCalendarTime(lhsCalendarTime: CalendarTime, rhsCalendarTime: CalendarTime): number
-    function GetCalendarTimeFromEpoch(epoch: string): CalendarTime
+    function GetCalendarTimeFromEpoch(epoch: number): CalendarTime
     function GetCurrentCalendarTime(): CalendarTime
     function GetSecondsUntilDailyReset(): number
     function GetSecondsUntilWeeklyReset(): number
@@ -28084,7 +28083,7 @@ declare namespace C_EncounterTimeline
     function GetEventColor(eventID: EncounterTimelineEventID, overrideTrigger: EncounterEventColorTrigger?): ColorMixin | Secret<ColorMixin>
     function GetEventCountBySource(source: EncounterTimelineEventSource): number
     function GetEventHighlightTime(): DurationSeconds
-    function GetEventInfo(eventID: EncounterTimelineEventID): EncounterTimelineEventInfo | Secret<EncounterTimelineEventInfo>
+    function GetEventInfo(eventID: EncounterTimelineEventID): EncounterTimelineEventInfo
     function GetEventList(): EncounterTimelineEventID[]
     function GetEventState(eventID: EncounterTimelineEventID): EncounterTimelineEventState
     function GetEventTimeElapsed(eventID: EncounterTimelineEventID): DurationSeconds
@@ -28651,7 +28650,7 @@ declare namespace C_HousingBlueprint
     function CanExportRoom(roomGUID: string): boolean
     function CanExportTypeFromCurrentLocation(type: HousingBlueprintType): boolean
     function CanImportTypeFromCurrentLocation(type: HousingBlueprintType): boolean
-    function DeleteBlueprint(blueprintID: string)
+    function DeleteBlueprint(blueprintID: number)
     function ExportBlueprint(type: HousingBlueprintType, name: string)
     function ExportRoomBlueprint(name: string, roomGUID: string)
     function GetBlueprintHyperlink(blueprintShareCode: string): string?
@@ -28661,7 +28660,7 @@ declare namespace C_HousingBlueprint
     function GetImportAvailability(): HousingResult
     function ImportBlueprint(shareCode: string)
     function IsShareCodeValid(shareCode: string): boolean
-    function RenameBlueprint(blueprintID: string, newName: string)
+    function RenameBlueprint(blueprintID: number, newName: string)
     function RequestBlueprintCollection()
     function RequestBlueprintContents(shareCode: string)
     function RequestBlueprintContentsForContext(shareCode: string, optionalHouseGUID: string?)
@@ -29396,18 +29395,18 @@ end
 
 declare namespace C_LossOfControl
     function GetActiveLossOfControlData(index: number): LossOfControlData?
-    function GetActiveLossOfControlDataByUnit(unitToken: string, index: number): (LossOfControlData | Secret<LossOfControlData>)?
+    function GetActiveLossOfControlDataByUnit(unitToken: string, index: number): LossOfControlData?
     function GetActiveLossOfControlDataCount(): number
     function GetActiveLossOfControlDataCountByUnit(unitToken: string): number
     function GetActiveLossOfControlDuration(unitToken: string, index: number): LuaDurationObject?
 end
 
 declare namespace C_TableUtil
-    function count(table: function): (number?, number?, number?)
-    function create(arraySizeHint: number, nodeSizeHint: number?): function
-    function FindIndexedMismatch(t1: function, t2: function): number?
-    function freeze(table: function)
-    function isfrozen(table: function): boolean
+    function count(table: any): (number?, number?, number?)
+    function create(arraySizeHint: number, nodeSizeHint: number?): any
+    function FindIndexedMismatch(t1: any, t2: any): number?
+    function freeze(table: any)
+    function isfrozen(table: any): boolean
 end
 
 declare namespace C_MacOptions
@@ -29607,15 +29606,15 @@ end
 
 declare namespace C_NamePlate
     function GetNamePlateForUnit(unitToken: UnitTokenNamePlate, includeForbidden: boolean?): NamePlateFrame
-    function GetNamePlateSize(): (string, string)
+    function GetNamePlateSize(): (number, number)
     function GetNamePlates(): NamePlateFrame[]
-    function SetNamePlateSize(width: string, height: string)
+    function SetNamePlateSize(width: number, height: number)
 end
 
 declare namespace C_NamePlateManager
-    function GetNamePlateHitTestInsets(type: NamePlateType): (string, string, string, string)
+    function GetNamePlateHitTestInsets(type: NamePlateType): (number, number, number, number)
     function IsNamePlateUnitBehindCamera(unitToken: UnitTokenNamePlate): boolean
-    function SetNamePlateHitTestInsets(type: NamePlateType, left: string, right: string, top: string, bottom: string)
+    function SetNamePlateHitTestInsets(type: NamePlateType, left: number, right: number, top: number, bottom: number)
     function SetNamePlateSimplified(unitToken: UnitTokenNamePlate, isSimplified: boolean)
 end
 
@@ -30557,7 +30556,7 @@ declare namespace C_Traits
     function ConfigHasStagedChanges(configID: number): boolean
     function GenerateImportString(configID: number): string
     function GenerateInspectImportString(target: string): string
-    function GetConditionInfo(configID: number, condID: number): TraitCondInfo?
+    function GetConditionInfo(configID: number, condID: number, ignoreFontColor: boolean?, traitTreeName: string?): TraitCondInfo?
     function GetConfigIDBySystemID(systemID: number): number?
     function GetConfigIDByTreeID(treeID: number): number?
     function GetConfigInfo(configID: number): TraitConfigInfo?
@@ -30724,15 +30723,15 @@ declare namespace C_SpellBook
     function GetSpellBookItemAutoCast(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): (boolean?, boolean?)
     function GetSpellBookItemCastCount(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): number | Secret<number>
     function GetSpellBookItemChargeDuration(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): LuaDurationObject?
-    function GetSpellBookItemCharges(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): (SpellChargeInfo | Secret<SpellChargeInfo>)?
-    function GetSpellBookItemCooldown(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): (SpellCooldownInfo | Secret<SpellCooldownInfo>)?
+    function GetSpellBookItemCharges(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): SpellChargeInfo?
+    function GetSpellBookItemCooldown(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): SpellCooldownInfo?
     function GetSpellBookItemCooldownDuration(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank, ignoreGCD: boolean?): LuaDurationObject?
     function GetSpellBookItemDescription(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): string?
     function GetSpellBookItemInfo(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): SpellBookItemInfo?
     function GetSpellBookItemLevelLearned(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): number
     function GetSpellBookItemLink(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank, glyphID: number?): string?
     function GetSpellBookItemLossOfControlCooldownDuration(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): LuaDurationObject?
-    function GetSpellBookItemLossOfControlCooldownInfo(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): (SpellLossOfControlInfo | Secret<SpellLossOfControlInfo>)?
+    function GetSpellBookItemLossOfControlCooldownInfo(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): SpellLossOfControlInfo?
     function GetSpellBookItemName(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): (string?, string?)
     function GetSpellBookItemPowerCost(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): SpellPowerCostInfo[]?
     function GetSpellBookItemSkillLineIndex(spellBookItemSlotIndex: number, spellBookItemSpellBank: SpellBookSpellBank): number?
@@ -30783,8 +30782,8 @@ declare namespace C_Spell
     function GetSpellAutoCast(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): (boolean?, boolean?)
     function GetSpellCastCount(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): number | Secret<number>
     function GetSpellChargeDuration(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): LuaDurationObject?
-    function GetSpellCharges(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): (SpellChargeInfo | Secret<SpellChargeInfo>)?
-    function GetSpellCooldown(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): (SpellCooldownInfo | Secret<SpellCooldownInfo>)?
+    function GetSpellCharges(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): SpellChargeInfo?
+    function GetSpellCooldown(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): SpellCooldownInfo?
     function GetSpellCooldownDuration(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>, ignoreGCD: (boolean | Secret<boolean>)?): LuaDurationObject?
     function GetSpellDescription(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): string?
     function GetSpellDescriptionForItemLocation(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>, itemLocation: ItemLocationMixin | Secret<ItemLocationMixin>): string?
@@ -30794,7 +30793,7 @@ declare namespace C_Spell
     function GetSpellLevelLearned(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): number
     function GetSpellLink(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>, glyphID: number?): string?
     function GetSpellLossOfControlCooldownDuration(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): LuaDurationObject?
-    function GetSpellLossOfControlCooldownInfo(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): (SpellLossOfControlInfo | Secret<SpellLossOfControlInfo>)?
+    function GetSpellLossOfControlCooldownInfo(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): SpellLossOfControlInfo?
     function GetSpellMaxCumulativeAuraApplications(spellID: SpellIdentifier | Secret<SpellIdentifier>): number | Secret<number>
     function GetSpellName(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): string?
     function GetSpellPowerCost(spellIdentifier: SpellIdentifier | Secret<SpellIdentifier>): SpellPowerCostInfo[]?
@@ -31029,7 +31028,7 @@ declare namespace C_TooltipInfo
     function GetRecipeRankInfo(recipeID: number, rank: number): TooltipData?
     function GetRecipeReagentItem(recipeSpellID: number, dataSlotIndex: number): TooltipData?
     function GetRecipeResultItem(recipeID: number, reagentInfos: CraftingReagentInfo[]?, recraftItemGUID: string?, recipeLevel: number?, overrideQualityID: number?): TooltipData?
-    function GetRecipeResultItemForOrder(recipeID: number, reagentInfos: CraftingReagentInfo[]?, orderID: string?, recipeLevel: number?, overrideQualityID: number?): TooltipData?
+    function GetRecipeResultItemForOrder(recipeID: number, reagentInfos: CraftingReagentInfo[]?, orderID: number?, recipeLevel: number?, overrideQualityID: number?): TooltipData?
     function GetRuneforgeResultItem(itemGUID: string, itemLevel: number, powerID: number?, modifiers: number[]?): TooltipData?
     function GetSendMailItem(attachmentIndex: number?): TooltipData?
     function GetShapeshift(slot: number): TooltipData?
@@ -31081,7 +31080,7 @@ declare namespace C_TradeSkillUI
     function CloseTradeSkill()
     function ConfirmProfessionRespec()
     function CraftEnchant(recipeSpellID: number, numCasts: number?, craftingReagents: CraftingReagentInfo[]?, itemTarget: ItemLocationMixin?, applyConcentration: boolean?)
-    function CraftRecipe(recipeSpellID: number, numCasts: number?, craftingReagents: CraftingReagentInfo[]?, recipeLevel: number?, orderID: string?, applyConcentration: boolean?)
+    function CraftRecipe(recipeSpellID: number, numCasts: number?, craftingReagents: CraftingReagentInfo[]?, recipeLevel: number?, orderID: number?, applyConcentration: boolean?)
     function CraftSalvage(recipeSpellID: number, numCasts: number?, itemTarget: ItemLocationMixin, craftingReagents: CraftingReagentInfo[]?, applyConcentration: boolean?)
     function DoesRecraftingRecipeAcceptItem(itemLocation: ItemLocationMixin, recipeID: number): boolean
     function GetAllProfessionTradeSkillLines(): number[]
@@ -31091,7 +31090,7 @@ declare namespace C_TradeSkillUI
     function GetConcentrationCurrencyID(skillLineID: number): number
     function GetCraftableCount(recipeSpellID: number, recipeLevel: number?): number
     function GetCraftingOperationInfo(recipeID: number, craftingReagents: CraftingReagentInfo[], allocationItemGUID: string?, applyConcentration: boolean): CraftingOperationInfo?
-    function GetCraftingOperationInfoForOrder(recipeID: number, craftingReagents: CraftingReagentInfo[], orderID: string, applyConcentration: boolean): CraftingOperationInfo?
+    function GetCraftingOperationInfoForOrder(recipeID: number, craftingReagents: CraftingReagentInfo[], orderID: number, applyConcentration: boolean): CraftingOperationInfo?
     function GetCraftingReagentBonusText(recipeSpellID: number, craftingReagentIndex: number, craftingReagents: CraftingReagentInfo[], allocationItemGUID: string?): string[]
     function GetCraftingTargetItems(itemIDs: number[]): CraftingTargetItem[]
     function GetDependentReagents(reagent: CraftingReagent): CraftingReagent[]
@@ -31104,7 +31103,7 @@ declare namespace C_TradeSkillUI
     function GetItemReagentQualityByItemInfo(itemInfo: ItemInfo): number?
     function GetItemReagentQualityInfo(itemInfo: ItemInfo): CraftingQualityInfo?
     function GetItemSlotModifications(itemGUID: string): CraftingItemSlotModification[]
-    function GetItemSlotModificationsForOrder(orderID: string): CraftingItemSlotModification[]
+    function GetItemSlotModificationsForOrder(orderID: number): CraftingItemSlotModification[]
     function GetOriginalCraftRecipeID(itemGUID: string): (number?, number?)
     function GetProfessionByInventorySlot(slot: number): Profession?
     function GetProfessionChildSkillLineID(): number
@@ -31123,7 +31122,7 @@ declare namespace C_TradeSkillUI
     function GetRecipeInfo(recipeSpellID: number, recipeLevel: number?): TradeSkillRecipeInfo?
     function GetRecipeInfoForSkillLineAbility(skillLineAbilityID: number, recipeLevel: number?): TradeSkillRecipeInfo?
     function GetRecipeItemQualityInfo(recipeID: number, quality: number): CraftingQualityInfo?
-    function GetRecipeOutputItemData(recipeSpellID: number, reagents: CraftingReagentInfo[]?, allocationItemGUID: string?, overrideQualityID: number?, recraftOrderID: string?): CraftingRecipeOutputInfo
+    function GetRecipeOutputItemData(recipeSpellID: number, reagents: CraftingReagentInfo[]?, allocationItemGUID: string?, overrideQualityID: number?, recraftOrderID: number?): CraftingRecipeOutputInfo
     function GetRecipeQualityItemIDs(recipeSpellID: number): number[]?
     function GetRecipeQualityReagentLink(recipeID: number, dataSlotIndex: number, qualityIndex: number): string
     function GetRecipeRequirements(recipeID: number): CraftingRecipeRequirement[]
@@ -31156,7 +31155,7 @@ declare namespace C_TradeSkillUI
     function OpenTradeSkill(skillLineID: number): boolean
     function RecraftLimitCategoryValid(reagent: CraftingReagent): boolean
     function RecraftRecipe(itemGUID: string, craftingReagents: CraftingReagentInfo[]?, removedModifications: CraftingItemSlotModification[]?, applyConcentration: boolean?): boolean
-    function RecraftRecipeForOrder(orderID: string, itemGUID: string, craftingReagents: CraftingReagentInfo[]?, removedModifications: CraftingItemSlotModification[]?, applyConcentration: boolean?): boolean
+    function RecraftRecipeForOrder(orderID: number, itemGUID: string, craftingReagents: CraftingReagentInfo[]?, removedModifications: CraftingItemSlotModification[]?, applyConcentration: boolean?): boolean
     function SetOnlyShowAvailableForOrders(flag: boolean)
     function SetProfessionChildSkillLineID(skillLineID: number)
     function SetRecipeTracked(recipeID: number, tracked: boolean, isRecraft: boolean)
@@ -31342,7 +31341,7 @@ declare namespace C_TransmogOutfitInfo
     function GetLinkedSlotInfo(slot: TransmogOutfitSlot): TransmogOutfitLinkedSlotInfo?
     function GetMaxNumberOfTotalOutfitsForSource(source: TransmogOutfitEntrySource): number
     function GetMaxNumberOfUsableOutfits(): number
-    function GetNextOutfitCost(): string
+    function GetNextOutfitCost(): number
     function GetNumberOfOutfitsUnlockedForSource(source: TransmogOutfitEntrySource): number
     function GetOutfitInfo(outfitID: number): TransmogOutfitEntryInfo?
     function GetOutfitInfoByName(name: string): TransmogOutfitEntryInfo?
@@ -31350,7 +31349,7 @@ declare namespace C_TransmogOutfitInfo
     function GetOutfitSituation(option: TransmogSituationOption): boolean
     function GetOutfitSituationsEnabled(): boolean
     function GetOutfitsInfo(): TransmogOutfitEntryInfo[]?
-    function GetPendingTransmogCost(): (string?, number?)
+    function GetPendingTransmogCost(): (number?, number?)
     function GetSecondarySlotState(slot: TransmogOutfitSlot): boolean
     function GetSetSourcesForSlot(transmogSetID: number, slot: TransmogOutfitSlot): AppearanceSourceInfo[]?
     function GetSlotGroupInfo(): TransmogOutfitSlotGroup[]?
@@ -41200,7 +41199,7 @@ declare event AUCTION_MULTISELL_UPDATE(createdCount: number, totalToCreate: numb
 declare event BID_ADDED(bidID: number)
 declare event BIDS_UPDATED()
 declare event COMMODITY_PRICE_UNAVAILABLE()
-declare event COMMODITY_PRICE_UPDATED(updatedUnitPrice: string, updatedTotalPrice: string)
+declare event COMMODITY_PRICE_UPDATED(updatedUnitPrice: number, updatedTotalPrice: number)
 declare event COMMODITY_PURCHASE_FAILED()
 declare event COMMODITY_PURCHASE_SUCCEEDED()
 declare event COMMODITY_PURCHASED(itemID: number, quantity: number)
@@ -41477,7 +41476,7 @@ declare event CLUB_TICKET_RECEIVED(ticket: string)
 declare event CLUB_TICKETS_RECEIVED(clubId: ClubId)
 declare event CLUB_UPDATED(clubId: ClubId)
 declare event INITIAL_CLUBS_LOADED()
-declare event STREAM_VIEW_MARKER_UPDATED(clubId: ClubId, streamId: ClubStreamId, lastReadTime: string?)
+declare event STREAM_VIEW_MARKER_UPDATED(clubId: ClubId, streamId: ClubStreamId, lastReadTime: number?)
 declare event CLUB_FINDER_APPLICANT_INVITE_RECIEVED(clubFinderGUIDs: string[])
 declare event CLUB_FINDER_APPLICATIONS_UPDATED(type: ClubFinderRequestType, clubFinderGUIDs: string[])
 declare event CLUB_FINDER_CAN_WHISPER_APPLICANT(applicant: string)
@@ -41559,28 +41558,28 @@ declare event COVENANT_SANCTUM_RENOWN_LEVEL_CHANGED(newRenownLevel: number, oldR
 declare event COVENANT_CHOSEN(covenantID: number)
 declare event CRAFTING_HOUSE_DISABLED()
 declare event CRAFTINGORDERS_CAN_REQUEST()
-declare event CRAFTINGORDERS_CLAIM_ORDER_RESPONSE(result: CraftingOrderResult, orderID: string)
+declare event CRAFTINGORDERS_CLAIM_ORDER_RESPONSE(result: CraftingOrderResult, orderID: number)
 declare event CRAFTINGORDERS_CLAIMED_ORDER_ADDED()
 declare event CRAFTINGORDERS_CLAIMED_ORDER_REMOVED()
-declare event CRAFTINGORDERS_CLAIMED_ORDER_UPDATED(orderID: string)
-declare event CRAFTINGORDERS_CRAFT_ORDER_RESPONSE(result: CraftingOrderResult, orderID: string)
+declare event CRAFTINGORDERS_CLAIMED_ORDER_UPDATED(orderID: number)
+declare event CRAFTINGORDERS_CRAFT_ORDER_RESPONSE(result: CraftingOrderResult, orderID: number)
 declare event CRAFTINGORDERS_CUSTOMER_FAVORITES_CHANGED()
 declare event CRAFTINGORDERS_CUSTOMER_OPTIONS_PARSED()
 declare event CRAFTINGORDERS_DISPLAY_CRAFTER_FULFILLED_MSG(orderTypeString: string, itemNameString: string, playerNameString: string, tipAmount: WOWMONEY, quantityCrafted: number)
-declare event CRAFTINGORDERS_FULFILL_ORDER_RESPONSE(result: CraftingOrderResult, orderID: string)
+declare event CRAFTINGORDERS_FULFILL_ORDER_RESPONSE(result: CraftingOrderResult, orderID: number)
 declare event CRAFTINGORDERS_HIDE_CRAFTER()
 declare event CRAFTINGORDERS_HIDE_CUSTOMER()
 declare event CRAFTINGORDERS_ORDER_CANCEL_RESPONSE(result: CraftingOrderResult)
 declare event CRAFTINGORDERS_ORDER_PLACEMENT_RESPONSE(result: CraftingOrderResult)
-declare event CRAFTINGORDERS_REJECT_ORDER_RESPONSE(result: CraftingOrderResult, orderID: string)
-declare event CRAFTINGORDERS_RELEASE_ORDER_RESPONSE(result: CraftingOrderResult, orderID: string)
+declare event CRAFTINGORDERS_REJECT_ORDER_RESPONSE(result: CraftingOrderResult, orderID: number)
+declare event CRAFTINGORDERS_RELEASE_ORDER_RESPONSE(result: CraftingOrderResult, orderID: number)
 declare event CRAFTINGORDERS_SHOW_CRAFTER()
 declare event CRAFTINGORDERS_SHOW_CUSTOMER()
 declare event CRAFTINGORDERS_UNEXPECTED_ERROR()
-declare event CRAFTINGORDERS_UPDATE_CUSTOMER_NAME(customerName: string, orderID: string)
+declare event CRAFTINGORDERS_UPDATE_CUSTOMER_NAME(customerName: string, orderID: number)
 declare event CRAFTINGORDERS_UPDATE_ORDER_COUNT(orderType: CraftingOrderType, numOrders: number)
 declare event CRAFTINGORDERS_UPDATE_PERSONAL_ORDER_COUNTS()
-declare event CRAFTINGORDERS_UPDATE_REWARDS(npcOrderRewards: CraftingOrderRewardInfo[], orderID: string)
+declare event CRAFTINGORDERS_UPDATE_REWARDS(npcOrderRewards: CraftingOrderRewardInfo[], orderID: number)
 declare event ACCOUNT_CHARACTER_CURRENCY_DATA_RECEIVED()
 declare event ACCOUNT_MONEY()
 declare event CURRENCY_DISPLAY_UPDATE(currencyType: number?, quantity: number?, quantityChange: number?, quantityGainSource: number?, destroyReason: number?)
@@ -41857,15 +41856,15 @@ declare event HOUSING_BLUEPRINT_COLLECTION_FAILURE(result: HousingResult)
 declare event HOUSING_BLUEPRINT_COLLECTION_RECEIVED(collection: HousingBlueprintCollection)
 declare event HOUSING_BLUEPRINT_CONTENTS_FAILURE(blueprintShareCode: string, result: HousingResult)
 declare event HOUSING_BLUEPRINT_CONTENTS_RECEIVED(contentInfo: HousingBlueprintContentInfo)
-declare event HOUSING_BLUEPRINT_DELETE_FAILURE(blueprintID: string, result: HousingResult)
-declare event HOUSING_BLUEPRINT_DELETE_SUCCESS(blueprintID: string)
+declare event HOUSING_BLUEPRINT_DELETE_FAILURE(blueprintID: number, result: HousingResult)
+declare event HOUSING_BLUEPRINT_DELETE_SUCCESS(blueprintID: number)
 declare event HOUSING_BLUEPRINT_EXPORT_FAILURE(result: HousingResult)
 declare event HOUSING_BLUEPRINT_EXPORT_SUCCESS(blueprintShareCode: string)
 declare event HOUSING_BLUEPRINT_IMPORT_FAILURE(result: HousingResult)
 declare event HOUSING_BLUEPRINT_IMPORT_STARTED()
 declare event HOUSING_BLUEPRINT_IMPORT_SUCCESS()
-declare event HOUSING_BLUEPRINT_RENAME_FAILURE(blueprintID: string, result: HousingResult)
-declare event HOUSING_BLUEPRINT_RENAME_SUCCESS(blueprintID: string, name: string)
+declare event HOUSING_BLUEPRINT_RENAME_FAILURE(blueprintID: number, result: HousingResult)
+declare event HOUSING_BLUEPRINT_RENAME_SUCCESS(blueprintID: number, name: string)
 declare event HOUSING_BLUEPRINTS_AVAILABILITY_CHANGED()
 declare event HOUSING_CATALOG_CATEGORY_UPDATED(categoryID: number)
 declare event HOUSING_CATALOG_SUBCATEGORY_UPDATED(subcategoryID: number)

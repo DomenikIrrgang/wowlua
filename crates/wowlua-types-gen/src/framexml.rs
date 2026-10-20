@@ -37,6 +37,35 @@ pub fn aura_filter_words(ui_lua: &[(String, String)]) -> Vec<String> {
     words.into_iter().collect()
 }
 
+/// The tooltip methods `TooltipDataHandler.lua` defines, each with the
+/// `C_TooltipInfo` function it passes its arguments to: (`SetInboxItem`,
+/// `GetInboxItem`), from its `local accessors = { … }`.
+pub fn tooltip_accessors(ui_lua: &[(String, String)]) -> Vec<(String, String)> {
+    let mut out = Vec::new();
+    for (_, text) in ui_lua {
+        let Some(at) = text.find("local accessors = {") else {
+            continue;
+        };
+        let rest = &text[at..];
+        let Some(close) = rest.find('}') else {
+            continue;
+        };
+        for line in rest[..close].lines().skip(1) {
+            let Some((method, getter)) = line.split_once('=') else {
+                continue;
+            };
+            let method = method.trim();
+            let getter = getter.trim().trim_end_matches(',').trim_matches('"');
+            if crate::model::is_ident(method) && crate::model::is_ident(getter) {
+                out.push((method.to_string(), getter.to_string()));
+            }
+        }
+    }
+    out.sort();
+    out.dedup();
+    out
+}
+
 /// The globals of one flavor's UI code: name → type text.
 pub fn globals(
     lua: &[(String, String)],
@@ -221,7 +250,11 @@ fn xml_globals(text: &str, widget_classes: &HashSet<String>, out: &mut IndexMap<
                     let value = a.value.to_string();
                     match key {
                         "name" => name = Some(value),
-                        "virtual" => virtual_ = value.eq_ignore_ascii_case("true"),
+                        // An intrinsic frame type (`DropdownButton`) is a
+                        // template, not a frame.
+                        "virtual" | "intrinsic" => {
+                            virtual_ |= value.eq_ignore_ascii_case("true");
+                        }
                         _ => {}
                     }
                 }
@@ -320,7 +353,7 @@ mod tests {
     #[test]
     fn lua_and_xml_globals() {
         let lua = "local x = 1\nFooMixin = {}\nfunction FooMixin:Bar() end\nfunction GlobalFn() end\nNAME = \"x\"\nlocal function hidden() end\ndo GameTooltipText = 1 end\n_G.Other = {}\n";
-        let xml = r#"<Ui><Frame name="MyFrame"><Frames><Button name="$parentClose"/></Frames></Frame><Frame name="Tpl" virtual="true"/><Font name="GameFontNormal" virtual="true"/><Button name="Btn"/></Ui>"#;
+        let xml = r#"<Ui><Frame name="MyFrame"><Frames><Button name="$parentClose"/></Frames></Frame><Frame name="Tpl" virtual="true"/><Font name="GameFontNormal" virtual="true"/><Button name="Btn"/><Button name="Intrinsic" intrinsic="true"/></Ui>"#;
         let classes: HashSet<String> = ["Button".to_string()].into_iter().collect();
         let g = globals(
             &[("a.lua".into(), lua.into())],
@@ -336,11 +369,24 @@ mod tests {
         assert_eq!(g["Btn"], "Button");
         assert_eq!(g["GameFontNormal"], "Font");
         assert!(!g.contains_key("x") && !g.contains_key("Tpl") && !g.contains_key("hidden"));
+        assert!(!g.contains_key("Intrinsic"));
         assert_eq!(
             global_strings(
                 "_G[\"OKAY\"] = \"Okay\";\n_G[\"1X\"] = \"\";\nUNKNOWN = \"Unknown\";\n"
             ),
             ["OKAY", "UNKNOWN"]
+        );
+    }
+
+    #[test]
+    fn tooltip_accessors_of_the_data_handler() {
+        let lua = "do\n\tlocal accessors = {\n\t\tSetInboxItem = \"GetInboxItem\",\n\t\tSetSendMailItem = \"GetSendMailItem\",\n\t};\n\tfor a, g in pairs(accessors) do end\nend\n";
+        assert_eq!(
+            tooltip_accessors(&[("TooltipDataHandler.lua".into(), lua.into())]),
+            [
+                ("SetInboxItem".to_string(), "GetInboxItem".to_string()),
+                ("SetSendMailItem".to_string(), "GetSendMailItem".to_string()),
+            ]
         );
     }
 }

@@ -1047,17 +1047,17 @@ end
 
 declare interface AddOnProfilerCallEvent
     name: string
-    allocatedBytes: string
-    deallocatedBytes: string
+    allocatedBytes: number
+    deallocatedBytes: number
     elapsedMilliseconds: number
-    elapsedTicks: string
+    elapsedTicks: number
 end
 
 declare interface AddOnProfilerCallResults
     elapsedMilliseconds: number
-    elapsedTicks: string
-    allocatedBytes: string
-    deallocatedBytes: string
+    elapsedTicks: number
+    allocatedBytes: number
+    deallocatedBytes: number
     events: AddOnProfilerCallEvent[]
 end
 
@@ -1170,9 +1170,9 @@ declare interface BidInfo
     itemKey: ItemKey
     itemLink?: string
     timeLeft: AuctionHouseTimeLeftBand
-    minBid?: string
-    bidAmount?: string
-    buyoutAmount?: string
+    minBid?: number
+    bidAmount?: number
+    buyoutAmount?: number
     bidder?: string
 end
 
@@ -1180,14 +1180,14 @@ declare interface BrowseResultInfo
     itemKey: ItemKey
     appearanceLink?: string
     totalQuantity: number
-    minPrice: string
+    minPrice: number
     containsOwnerItem: boolean
 end
 
 declare interface CommoditySearchResultInfo
     itemID: number
     quantity: number
-    unitPrice: string
+    unitPrice: number
     auctionID: number
     owners: string[]
     totalNumberOfOwners: number
@@ -1229,9 +1229,9 @@ declare interface ItemSearchResultInfo
     containsAccountItem: boolean
     containsSocketedItem: boolean
     bidder?: string
-    minBid?: string
-    bidAmount?: string
-    buyoutAmount?: string
+    minBid?: number
+    bidAmount?: number
+    buyoutAmount?: number
     timeLeftSeconds?: number
 end
 
@@ -1243,8 +1243,8 @@ declare interface OwnedAuctionInfo
     quantity: number
     timeLeftSeconds?: number
     timeLeft?: AuctionHouseTimeLeftBand
-    bidAmount?: string
-    buyoutAmount?: string
+    bidAmount?: number
+    buyoutAmount?: number
     bidder?: string
 end
 
@@ -1256,10 +1256,10 @@ declare interface ReplicateItemInfo
     usable?: boolean
     level: number
     levelType?: string
-    minBid: string
-    minIncrement: string
-    buyoutPrice: string
-    bidAmount: string
+    minBid: number
+    minIncrement: number
+    buyoutPrice: number
+    bidAmount: number
     highBidder?: string
     bidderFullName?: string
     owner?: string
@@ -1812,8 +1812,8 @@ declare interface ClubInfo
     clubType: ClubType
     avatarId: number
     memberCount?: number
-    favoriteTimeStamp?: string
-    joinTime?: string
+    favoriteTimeStamp?: number
+    joinTime?: number
     socialQueueingEnabled?: boolean
     crossFaction?: boolean
 end
@@ -1870,8 +1870,8 @@ declare interface ClubMemberInfo
 end
 
 declare interface ClubMessageIdentifier
-    epoch: string
-    position: string
+    epoch: number
+    position: number
 end
 
 declare interface ClubMessageInfo
@@ -1953,7 +1953,7 @@ declare interface ClubStreamInfo
     subject: string
     leadersAndModeratorsOnly: boolean
     streamType: ClubStreamType
-    creationTime: string
+    creationTime: number
 end
 
 declare interface ClubStreamNotificationSetting
@@ -1965,8 +1965,8 @@ declare interface ClubTicketInfo
     ticketId: string
     allowedRedeemCount: number
     currentRedeemCount: number
-    creationTime: string
-    expirationTime: string
+    creationTime: number
+    expirationTime: number
     defaultStreamId?: ClubStreamId
     creator: ClubMemberInfo
 end
@@ -1983,7 +1983,7 @@ declare interface ClubFinderApplicantInfo
     specIds: number[]
     requestStatus: PlayerClubRequestStatus
     lookupSuccess: boolean
-    lastUpdatedTime: string
+    lastUpdatedTime: number
     faction: number
 end
 
@@ -2026,7 +2026,7 @@ declare interface RecruitingClubInfo
     cacheRequested: number
     lastPosterGUID: string
     clubId: ClubId
-    lastUpdatedTime: string
+    lastUpdatedTime: number
     isCrossFaction: boolean
     realmName?: string
 end
@@ -2196,7 +2196,7 @@ declare interface VendorTrackingInfo
     creatureName: string
     zoneName?: string
     currencyType?: number
-    cost?: string
+    cost?: number
 end
 
 declare interface ContributionAppearance
@@ -4530,6 +4530,7 @@ declare interface TraitCondInfo
     spentAmountRequired?: number
     tooltipFormat?: string
     traitCondAccountElementID?: number
+    tooltipText?: string
 end
 
 declare interface TraitConfigInfo
@@ -5365,15 +5366,15 @@ declare interface AnchorBinding
     point: FramePoint
     relativeTo: ScriptRegion
     relativePoint: FramePoint
-    offsetX: string
-    offsetY: string
+    offsetX: number
+    offsetY: number
 end
 
 declare interface uiBoundsRect
-    left: string
-    bottom: string
-    width: string
-    height: string
+    left: number
+    bottom: number
+    width: number
+    height: number
 end
 
 declare interface UITextureSliceData
@@ -6217,9 +6218,9 @@ end
 
 declare interface PrivateAuraIconInfo
     iconAnchor: AnchorBinding
-    iconWidth: string
-    iconHeight: string
-    borderScale?: string
+    iconWidth: number
+    iconHeight: number
+    borderScale?: number
 end
 
 declare interface UnitAuraUpdateInfo
@@ -6235,9 +6236,9 @@ declare interface UnitPrivateAuraAnchorInfo
     auraIndex: number
     showCountdownFrame: boolean
     showCountdownNumbers: boolean
-    iconWidth?: string
-    iconHeight?: string
-    borderScale?: string
+    iconWidth?: number
+    iconHeight?: number
+    borderScale?: number
     isContainer?: boolean
     parent: Frame
 end
@@ -6655,7 +6656,7 @@ declare interface BankTabData
 end
 
 declare interface PurchasableBankTabData
-    tabCost: string
+    tabCost: number
     canAfford: boolean
     purchasePromptTitle: string
     purchasePromptBody: string
@@ -6919,7 +6920,7 @@ declare interface CraftingOrderCustomerSearchResults
 end
 
 declare interface CraftingOrderInfo
-    orderID: string
+    orderID: number
     itemID: number
     spellID: number
     skillLineAbilityID: number
@@ -7420,7 +7421,7 @@ declare interface HousingBlueprintGroup
 end
 
 declare interface HousingBlueprintInfo
-    blueprintID: string
+    blueprintID: number
     shareCode: string
     name: string
     blueprintType: HousingBlueprintType
@@ -9101,30 +9102,30 @@ declare function ClassicExpansionAtMost(expansionLevel: number): boolean
 declare function GetClassicExpansionLevel(): number
 declare function CreateFontFamily(name: string, members: CreateFontFamilyMemberInfo[]): Font
 declare function AddSourceLocationExclude(fileName: string)
-declare function canaccessallvalues(...: function): boolean
+declare function canaccessallvalues(...: any): boolean
 declare function canaccesssecrets(): boolean
-declare function canaccesstable(table: function): boolean
+declare function canaccesstable(table: any): boolean
 declare function CreateFromMixins(...: LuaValueVariant): LuaValueVariant
-declare function CreateSecureDelegate(luaFunction: function): function
+declare function CreateSecureDelegate(luaFunction: any): any
 declare function CreateWindow(popupStyle: boolean?, topMost: boolean?): Window?
 declare function dropsecretaccess()
-declare function dumpobject(value: function?): function?
+declare function dumpobject(value: any?): any?
 declare function GetCallstackHeight(): number
 declare function GetCurrentEventID(): number?
 declare function GetErrorCallstackHeight(): number?
 declare function GetEventTime(eventProfileIndex: number): (number?, number?, string?, number?)
 declare function GetSourceLocation(): string?
-declare function hasanysecretvalues(...: function): boolean
-declare function issecrettable(table: function): boolean
-declare function mapvalues(func: function, ...: function): (...function)
+declare function hasanysecretvalues(...: any): boolean
+declare function issecrettable(table: any): boolean
+declare function mapvalues(func: any, ...: any): (...any)
 declare function Mixin(object: LuaValueVariant, ...: LuaValueVariant): LuaValueVariant
 declare function RegisterEventCallback(eventName: string, callback: EventCallbackType)
 declare function RegisterUnitEventCallback(eventName: string, callback: EventCallbackType, unit: string)
 declare function RunScript(text: string)
-declare function scrubsecretvalues(...: function): (...function)
-declare function secretunwrap(...: function): (...function)
-declare function secretwrap(...: function): (...function)
-declare function securecallmethod(object: function, method: string, ...: function): (...function)
+declare function scrubsecretvalues(...: any): (...any)
+declare function secretunwrap(...: any): (...any)
+declare function secretwrap(...: any): (...any)
+declare function securecallmethod(object: any, method: string, ...: any): (...any)
 declare function SetErrorCallstackHeight(height: number?)
 declare function SetTableSecurityOption(table: LuaValueVariant, option: TableSecurityOption)
 declare function UnregisterEventCallback(eventName: string, callback: EventCallbackType)
@@ -9153,7 +9154,7 @@ declare function GetCursorPosition(): (number, number)
 declare function GetMouseFoci(): ScriptRegion[]
 declare function GetStringFromModifiers(modifiers: number): string
 declare function MakeModifiers(): number
-declare function SetCursorPosition(xPosition: string, yPosition: string)
+declare function SetCursorPosition(xPosition: number, yPosition: number)
 declare function SimulateMouseClick(button: string)
 declare function SimulateMouseDown(button: string)
 declare function SimulateMouseUp(button: string)
@@ -9531,7 +9532,7 @@ declare function IsUsingMouse(): boolean
 declare function BreakUpLargeNumbers(largeNumber: number | Secret<number>, natural: boolean?): string
 declare function CaseAccentInsensitiveParse(name: string): string
 declare function CancelPreloadingMovie(movieId: number)
-declare function GetMovieDownloadProgress(movieId: number): (boolean, string, string)
+declare function GetMovieDownloadProgress(movieId: number): (boolean, number, number)
 declare function IsMovieLocal(movieId: number): boolean
 declare function IsMoviePlayable(movieId: number): boolean
 declare function PreloadMovie(movieId: number)
@@ -9665,14 +9666,14 @@ declare function InCombatLockdown(): boolean
 @deprecated declare function IsActiveQuestLegendary(questIndex: number): boolean
 declare function AbandonSkill(skillLineID: number)
 declare function BNGetFriendInviteInfo(inviteIndex: number): (number, number, boolean, string?, number)
-declare function BNSendVerifiedBattleTagInvite()
-declare function BNSetBlocked(ID: any?, bool: any?)
+declare function BNSendVerifiedBattleTagInvite(...: any): (...any)
+declare function BNSetBlocked(ID: any?, bool: any?, ...: any): (...any)
 declare function CancelItemTempEnchantment(weaponHand: number)
 declare function GetInspectSpecialization(unit: UnitToken): number
 declare function GetInventorySlotInfo(invSlotName: InventorySlotName): (number, string, boolean)
 declare function GetPetFoodTypes(): string
 declare function GetWeaponEnchantInfo(): (boolean, number, number, number, boolean, number, number, number, boolean, number, number, number)
-declare function SetBarSlotFromIntro(slot: any?)
+declare function SetBarSlotFromIntro(slot: any?, ...: any): (...any)
 declare function GetSpellCooldown(spell: number | string): (number, number, number, number)
 declare function GetSpellCooldown(index: number, bookType: string)
 
@@ -15602,7 +15603,6 @@ declare global WorldMap_InvasionDataProviderMixin: any
 declare global WorldMapQuestShowObjectives_Toggle: (...any) -> ...any
 @onDemand("Blizzard_WowSurveyUI")
 declare global WowSurveyStatusMixin: table
-declare global UIThemeContainerFrame: Frame
 declare global MainActionBar: Frame
 declare global MainMenuBar: Frame
 declare global MainMenuBarMaxLevelBar: Frame
@@ -19973,7 +19973,7 @@ declare namespace C_AddOnProfiler
     function GetAddOnMetric(name: string, metric: AddOnProfilerMetric): number
     function GetApplicationMetric(metric: AddOnProfilerMetric): number
     function GetOverallMetric(metric: AddOnProfilerMetric): number
-    function GetTicksPerSecond(): string
+    function GetTicksPerSecond(): number
     function GetTopKAddOnsForMetric(metric: AddOnProfilerMetric, k: number): AddOnProfilerResult[]
     function IsEnabled(): boolean
     function MeasureCall(func: LuaValueVariant, ...: LuaValueVariant): (AddOnProfilerCallResults, ...LuaValueVariant)
@@ -20034,8 +20034,8 @@ declare namespace C_AuctionHouse
     function CancelSell()
     function CloseAuctionHouse()
     function ConfirmCommoditiesPurchase(itemID: number, quantity: number)
-    function ConfirmPostCommodity(item: ItemLocationMixin, duration: number, quantity: number, unitPrice: string)
-    function ConfirmPostItem(item: ItemLocationMixin, duration: number, quantity: number, bid: string?, buyout: string?)
+    function ConfirmPostCommodity(item: ItemLocationMixin, duration: number, quantity: number, unitPrice: number)
+    function ConfirmPostItem(item: ItemLocationMixin, duration: number, quantity: number, bid: number?, buyout: number?)
     function FavoritesAreAvailable(): boolean
     function GetAuctionInfoByID(auctionID: number): AuctionInfo?
     function GetAuctionItemSubClasses(classID: number): number[]
@@ -20044,7 +20044,7 @@ declare namespace C_AuctionHouse
     function GetBidType(bidTypeIndex: number): ItemKey?
     function GetBids(): BidInfo[]
     function GetBrowseResults(): BrowseResultInfo[]
-    function GetCancelCost(ownedAuctionID: number): string
+    function GetCancelCost(ownedAuctionID: number): number
     function GetCommoditySearchResultInfo(itemID: number, commoditySearchResultIndex: number): CommoditySearchResultInfo?
     function GetCommoditySearchResultsQuantity(itemID: number): number
     function GetExtraBrowseInfo(itemKey: ItemKey): number?
@@ -20055,13 +20055,13 @@ declare namespace C_AuctionHouse
     function GetItemKeyRequiredLevel(itemKey: ItemKey): number?
     function GetItemSearchResultInfo(itemKey: ItemKey, itemSearchResultIndex: number): ItemSearchResultInfo?
     function GetItemSearchResultsQuantity(itemKey: ItemKey): number
-    function GetMaxBidItemBid(): string?
-    function GetMaxBidItemBuyout(): string?
-    function GetMaxCommoditySearchResultPrice(itemID: number): string?
-    function GetMaxItemSearchResultBid(itemKey: ItemKey): string?
-    function GetMaxItemSearchResultBuyout(itemKey: ItemKey): string?
-    function GetMaxOwnedAuctionBid(): string?
-    function GetMaxOwnedAuctionBuyout(): string?
+    function GetMaxBidItemBid(): number?
+    function GetMaxBidItemBuyout(): number?
+    function GetMaxCommoditySearchResultPrice(itemID: number): number?
+    function GetMaxItemSearchResultBid(itemKey: ItemKey): number?
+    function GetMaxItemSearchResultBuyout(itemKey: ItemKey): number?
+    function GetMaxOwnedAuctionBid(): number?
+    function GetMaxOwnedAuctionBuyout(): number?
     function GetNumBidTypes(): number
     function GetNumBids(): number
     function GetNumCommoditySearchResults(itemID: number): number
@@ -20074,7 +20074,7 @@ declare namespace C_AuctionHouse
     function GetOwnedAuctions(): OwnedAuctionInfo[]
     function GetQuoteDurationRemaining(): number
     function GetReplicateItemBattlePetInfo(index: number): (number?, number?)
-    function GetReplicateItemInfo(index: number): (string?, number?, number, number, boolean?, number, string?, string, string, string, string, string?, string?, string?, string?, number, number, boolean?)
+    function GetReplicateItemInfo(index: number): (string?, number?, number, number, boolean?, number, string?, number, number, number, number, string?, string?, string?, string?, number, number, boolean?)
     function GetReplicateItemLink(index: number): string?
     function GetReplicateItemTimeLeft(index: number): number
     function GetTimeLeftBandInfo(timeLeftBand: AuctionHouseTimeLeftBand): (number, number)
@@ -20090,9 +20090,9 @@ declare namespace C_AuctionHouse
     function IsSellItemValid(item: ItemLocationMixin, displayError: boolean?): boolean
     function IsThrottledMessageSystemReady(): boolean
     function MakeItemKey(itemID: number, itemLevel: number?, itemSuffix: number?, battlePetSpeciesID: number?): ItemKey
-    function PlaceBid(auctionID: number, bidAmount: string)
-    function PostCommodity(item: ItemLocationMixin, duration: number, quantity: number, unitPrice: string): boolean
-    function PostItem(item: ItemLocationMixin, duration: number, quantity: number, bid: string?, buyout: string?): boolean
+    function PlaceBid(auctionID: number, bidAmount: number)
+    function PostCommodity(item: ItemLocationMixin, duration: number, quantity: number, unitPrice: number): boolean
+    function PostItem(item: ItemLocationMixin, duration: number, quantity: number, bid: number?, buyout: number?): boolean
     function QueryBids(sorts: AuctionHouseSortType[], auctionIDs: number[])
     function QueryOwnedAuctions(sorts: AuctionHouseSortType[])
     function RefreshCommoditySearchResults(itemID: number)
@@ -20445,7 +20445,7 @@ declare namespace C_ChatInfo
     function SendAddonMessage(prefix: string, message: string, chatType: string?, target: string?): SendAddonMessageResult
     function SendAddonMessageLogged(prefix: string, message: string, chatType: string?, target: string?): SendAddonMessageResult?
     function SendCautionaryChatMessage(confirmNumber: number)
-    function SendChatMessage(message: string, chatType: SendChatMessageType?, languageID: number?, target: string?)
+    function SendChatMessage(message: string, chatType: SendChatMessageType?, languageID: number?, target: (string | number)?)
     function SwapChatChannelsByChannelIndex(firstChannelIndex: number, secondChannelIndex: number)
     function UncensorChatLine(chatLine: number)
 end
@@ -20460,7 +20460,7 @@ declare namespace C_Club
     function AdvanceStreamViewMarker(clubId: ClubId, streamId: ClubStreamId)
     function AreMembersReady(clubId: ClubId): boolean
     function AssignMemberRole(clubId: ClubId, memberId: ClubMemberOpaqueId, roleId: ClubRoleIdentifier)
-    function CanResolvePlayerLocationFromClubMessageData(clubId: ClubId, streamId: ClubStreamId, epoch: string, position: string): boolean
+    function CanResolvePlayerLocationFromClubMessageData(clubId: ClubId, streamId: ClubStreamId, epoch: number, position: number): boolean
     function ClearAutoAdvanceStreamViewMarker()
     function ClearClubPresenceSubscription()
     function CompareBattleNetDisplayName(clubId: ClubId, lhsMemberId: number, rhsMemberId: number): number
@@ -20504,7 +20504,7 @@ declare namespace C_Club
     function GetMessagesBefore(clubId: ClubId, streamId: ClubStreamId, newest: ClubMessageIdentifier, count: number): ClubMessageInfo[]
     function GetMessagesInRange(clubId: ClubId, streamId: ClubStreamId, oldest: ClubMessageIdentifier, newest: ClubMessageIdentifier): ClubMessageInfo[]
     function GetStreamInfo(clubId: ClubId, streamId: ClubStreamId): ClubStreamInfo?
-    function GetStreamViewMarker(clubId: ClubId, streamId: ClubStreamId): string?
+    function GetStreamViewMarker(clubId: ClubId, streamId: ClubStreamId): number?
     function GetStreams(clubId: ClubId): ClubStreamInfo[]
     function GetSubscribedClubs(): ClubInfo[]
     function GetTickets(clubId: ClubId): ClubTicketInfo[]
@@ -20530,7 +20530,7 @@ declare namespace C_Club
     function SetClubMemberNote(clubId: ClubId, memberId: ClubMemberOpaqueId, note: string)
     function SetClubPresenceSubscription(clubId: ClubId)
     function SetClubStreamNotificationSettings(clubId: ClubId, settings: ClubStreamNotificationSetting[])
-    function SetCommunityID(communityID: string)
+    function SetCommunityID(communityID: number)
     function SetFavorite(clubId: ClubId, isFavorite: boolean)
     function SetSocialQueueingEnabled(clubId: ClubId, enabled: boolean)
     function ShouldAllowClubType(clubType: ClubType): boolean
@@ -20914,7 +20914,7 @@ declare namespace C_DateAndTime
     function AdjustTimeByDays(date: CalendarTime, days: number): CalendarTime
     function AdjustTimeByMinutes(date: CalendarTime, minutes: number): CalendarTime
     function CompareCalendarTime(lhsCalendarTime: CalendarTime, rhsCalendarTime: CalendarTime): number
-    function GetCalendarTimeFromEpoch(epoch: string): CalendarTime
+    function GetCalendarTimeFromEpoch(epoch: number): CalendarTime
     function GetCurrentCalendarTime(): CalendarTime
     function GetSecondsUntilDailyReset(): number
     function GetSecondsUntilWeeklyReset(): number
@@ -21895,11 +21895,11 @@ declare namespace C_LossOfControl
 end
 
 declare namespace C_TableUtil
-    function count(table: function): (number?, number?, number?)
-    function create(arraySizeHint: number, nodeSizeHint: number?): function
-    function FindIndexedMismatch(t1: function, t2: function): number?
-    function freeze(table: function)
-    function isfrozen(table: function): boolean
+    function count(table: any): (number?, number?, number?)
+    function create(arraySizeHint: number, nodeSizeHint: number?): any
+    function FindIndexedMismatch(t1: any, t2: any): number?
+    function freeze(table: any)
+    function isfrozen(table: any): boolean
 end
 
 declare namespace C_MacOptions
@@ -22037,15 +22037,15 @@ end
 
 declare namespace C_NamePlate
     function GetNamePlateForUnit(unitToken: UnitTokenNamePlate, includeForbidden: boolean?): NamePlateFrame
-    function GetNamePlateSize(): (string, string)
+    function GetNamePlateSize(): (number, number)
     function GetNamePlates(): NamePlateFrame[]
-    function SetNamePlateSize(width: string, height: string)
+    function SetNamePlateSize(width: number, height: number)
 end
 
 declare namespace C_NamePlateManager
-    function GetNamePlateHitTestInsets(type: NamePlateType): (string, string, string, string)
+    function GetNamePlateHitTestInsets(type: NamePlateType): (number, number, number, number)
     function IsNamePlateUnitBehindCamera(unitToken: UnitTokenNamePlate): boolean
-    function SetNamePlateHitTestInsets(type: NamePlateType, left: string, right: string, top: string, bottom: string)
+    function SetNamePlateHitTestInsets(type: NamePlateType, left: number, right: number, top: number, bottom: number)
     function SetNamePlateSimplified(unitToken: UnitTokenNamePlate, isSimplified: boolean)
 end
 
@@ -22584,7 +22584,7 @@ declare namespace C_Traits
     function ConfigHasStagedChanges(configID: number): boolean
     function GenerateImportString(configID: number): string
     function GenerateInspectImportString(target: string): string
-    function GetConditionInfo(configID: number, condID: number): TraitCondInfo?
+    function GetConditionInfo(configID: number, condID: number, ignoreFontColor: boolean?, traitTreeName: string?): TraitCondInfo?
     function GetConfigIDBySystemID(systemID: number): number?
     function GetConfigIDByTreeID(treeID: number): number?
     function GetConfigInfo(configID: number): TraitConfigInfo?
@@ -22952,7 +22952,7 @@ declare namespace C_TransmogOutfitInfo
     function GetLinkedSlotInfo(slot: TransmogOutfitSlot): TransmogOutfitLinkedSlotInfo?
     function GetMaxNumberOfTotalOutfitsForSource(source: TransmogOutfitEntrySource): number
     function GetMaxNumberOfUsableOutfits(): number
-    function GetNextOutfitCost(): string
+    function GetNextOutfitCost(): number
     function GetNumberOfOutfitsUnlockedForSource(source: TransmogOutfitEntrySource): number
     function GetOutfitInfo(outfitID: number): TransmogOutfitEntryInfo?
     function GetOutfitInfoByName(name: string): TransmogOutfitEntryInfo?
@@ -22960,7 +22960,7 @@ declare namespace C_TransmogOutfitInfo
     function GetOutfitSituation(option: TransmogSituationOption): boolean
     function GetOutfitSituationsEnabled(): boolean
     function GetOutfitsInfo(): TransmogOutfitEntryInfo[]?
-    function GetPendingTransmogCost(): (string?, number?)
+    function GetPendingTransmogCost(): (number?, number?)
     function GetSecondarySlotState(slot: TransmogOutfitSlot): boolean
     function GetSetSourcesForSlot(transmogSetID: number, slot: TransmogOutfitSlot): AppearanceSourceInfo[]?
     function GetSlotGroupInfo(): TransmogOutfitSlotGroup[]?
@@ -32628,7 +32628,7 @@ declare event AUCTION_OWNED_LIST_UPDATE()
 declare event BID_ADDED(bidID: number)
 declare event BIDS_UPDATED()
 declare event COMMODITY_PRICE_UNAVAILABLE()
-declare event COMMODITY_PRICE_UPDATED(updatedUnitPrice: string, updatedTotalPrice: string)
+declare event COMMODITY_PRICE_UPDATED(updatedUnitPrice: number, updatedTotalPrice: number)
 declare event COMMODITY_PURCHASE_FAILED()
 declare event COMMODITY_PURCHASE_SUCCEEDED()
 declare event COMMODITY_PURCHASED(itemID: number, quantity: number)
@@ -32888,7 +32888,7 @@ declare event CLUB_TICKET_RECEIVED(ticket: string)
 declare event CLUB_TICKETS_RECEIVED(clubId: ClubId)
 declare event CLUB_UPDATED(clubId: ClubId)
 declare event INITIAL_CLUBS_LOADED()
-declare event STREAM_VIEW_MARKER_UPDATED(clubId: ClubId, streamId: ClubStreamId, lastReadTime: string?)
+declare event STREAM_VIEW_MARKER_UPDATED(clubId: ClubId, streamId: ClubStreamId, lastReadTime: number?)
 declare event CLUB_FINDER_APPLICANT_INVITE_RECIEVED(clubFinderGUIDs: string[])
 declare event CLUB_FINDER_APPLICATIONS_UPDATED(type: ClubFinderRequestType, clubFinderGUIDs: string[])
 declare event CLUB_FINDER_CAN_WHISPER_APPLICANT(applicant: string)
