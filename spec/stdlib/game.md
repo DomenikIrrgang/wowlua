@@ -26,15 +26,19 @@ import * as secret from "wowlua:secret"
 local hp = UnitHealth("target")                       -- number | Secret<number>
 bar:SetValue(secret.amount(hp))                       -- secrets pass, nil becomes 0
 local shown = secret.known(hp, 0)                     -- number: 0 when secret
+local name = secret.known(UnitName("target"), nil)    -- string?: nil when secret
 if secret.flag(UnitIsUnit("target", "focus")) then … end   -- a secret boolean reads as false
+if secret.flag(UnitInRaid("player")) then … end       -- legacy 1/nil answers too
 if not secret.isSecret(hp) then print(hp + 1) end     -- narrows like issecretvalue
+if secret.readable(hp) and hp > 0 then … end          -- present and not secret
 ```
 
 | API | Signature | Notes |
 |-----|-----------|-------|
 | `isSecret` | `(v: unknown) -> v is Secret<unknown>` | `issecretvalue`, or `false` where the client has none |
-| `known` | `<T>(v: T \| Secret<T> \| nil, fallback: T) -> T` | `fallback` when `v` is secret or nil |
-| `flag` | `(b: boolean \| Secret<boolean> \| nil) -> boolean` | For conditions: secret and nil read as `false` |
+| `known` | `<T, F>(v: T \| Secret<T> \| nil, fallback: F) -> T \| F` | `fallback` when `v` is secret or nil. The fallback may be of another type: on a `string \| Secret<string>`, `known(v, nil)` is a `string?` and `known(v, "?")` a `string`. |
+| `flag` | `(v: unknown) -> boolean` | For conditions, by truthiness (so legacy `1`/`nil` answers work): a secret reads as `false` |
+| `readable` | `(v: unknown) -> v is Plain` | Whether `v` is present and not secret; narrows to `Plain` (`string \| number \| boolean \| table \| function`), so `number \| Secret<number> \| nil` becomes `number`. Not generic yet: generic predicates do not infer their type parameter. |
 | `amount` | `(v: number \| Secret<number> \| nil) -> number \| Secret<number>` | For widgets that take secrets: nil becomes 0 |
 
 The generated `wow-api` declarations type the arguments Blizzard documents
@@ -150,6 +154,17 @@ local box = aura.container(frame, {
     size = 26,
     growth = { "LEFT", "DOWN" },
 })
+
+-- Groups that cost nothing until they have room (the engine makes a batch
+-- of buttons for every group it has).
+if aura.hasContainers() then
+    local raid = aura.container(frame, { unit = "raid1", lazy = true, groups = {
+        { key = "buffs", filter = "HELPFUL", max = 0, exclude = { 871 }, order = 2 },
+        { key = "debuffs", filter = "HARMFUL", max = 3, size = 18, spacing = 1, order = 1 },
+    } })
+    raid:setGroupMax("buffs", 6)                -- added to the engine now
+    raid:setGroupSize("debuffs", 22)            -- the buttons resize out of combat
+end
 ```
 
 | API | Signature | Notes |
@@ -161,10 +176,11 @@ local box = aura.container(frame, {
 | `findByName` | `(unit: UnitToken, name: string, filter: AuraFilter) -> AuraData?` | Same skipping rule |
 | `byInstanceId` | `(unit: UnitToken, id: number) -> AuraData?` | `nil` when the client refuses |
 | `onChange` | `(unit: UnitToken, fn: (unit: UnitToken, changes: UnitAuraUpdateInfo?) -> ()) -> Subscription` | `UNIT_AURA` filtered to `unit` (a unit-filtered event frame, [Core: events](core.md#events)). `changes` is the client's update info; `nil` or `isFullUpdate` means rescan. |
+| `hasContainers` | `() -> boolean` | Whether this client has aura containers (`Blizzard_AuraContainer`'s `CustomAuraContainerTemplate`, through `C_XMLUtil.GetTemplateInfo`), so that a caller can check before `container` raises |
 | `container` | `(parent: Frame, opts: ContainerOptions) -> AuraContainer` | The engine's container (`CreateFrame("AuraContainer", …, "CustomAuraContainerTemplate")`, loading `Blizzard_AuraContainer`). E8300 on flavors without aura containers. |
-| `ContainerOptions` | `{ unit, groups: AuraGroup[], size?, spacing?, anchor?, growth?, lineWidth? }` | `size` 30 and `spacing` 2 by default; `anchor` the corner icons start from (`"TOPLEFT"`), `growth` `{ "RIGHT", "DOWN" }` by default; `lineWidth` before icons wrap |
-| `AuraGroup` | `{ key, filter, max?, spells?, dispelTypes?, size?, initialize? }` | `max` 16 by default; `spells`/`dispelTypes` become the engine's candidate filters (matched in combat too; spell IDs only where the client permits matching); `initialize(button: AuraButton)` builds each button once |
-| `AuraContainer` | `frame`, `setUnit(unit)`, `refresh()`, `setGroupMax(key, n)`, `setGroupSpells(key, ids?)`, `setFlow(anchor, growth?)`, `setLineWidth(width?)`, `release()` | Containers rescan when their token points at someone new (`PLAYER_TARGET_CHANGED`, `PLAYER_FOCUS_CHANGED`, boss and group changes). Engine containers cannot be freed: `release` parks one (no unit, hidden) until the next `setUnit`. |
+| `ContainerOptions` | `{ unit, groups: AuraGroup[], size?, spacing?, anchor?, growth?, lineWidth?, lazy? }` | `size` 30 and `spacing` 2 by default; `anchor` the corner icons start from (`"TOPLEFT"`), `growth` `{ "RIGHT", "DOWN" }` by default; `lineWidth` before icons wrap. With `lazy`, a group whose `max` is 0 goes to the engine only when `setGroupMax` raises it; until then the setters only record their values. |
+| `AuraGroup` | `{ key, filter, max?, spells?, exclude?, dispelTypes?, size?, spacing?, order?, gap?, initialize? }` | `max` 16 by default; `spells`, `exclude` and `dispelTypes` become the engine's candidate filters (`includeSpellIDs`, `excludeSpellIDs`, `includeDispelTypes`; matched in combat too; spell IDs only where the client permits matching). `size` and `spacing` (between the group's icons) default to the container's; `order` places the group among the groups, lower first (default: its position in `groups`, which a lazy group added later keeps); `gap` is extra space before the group. `initialize(button: AuraButton)` builds each button once, after the button is sized to the group's size. |
+| `AuraContainer` | `frame`, `setUnit(unit)`, `refresh()`, `setGroupMax(key, n)`, `setGroupSpells(key, ids?)`, `setGroupFilter(key, filter)`, `setGroupSize(key, size)`, `setFlow(anchor, growth?)`, `setLineWidth(width?)`, `release()` | Containers rescan when their token points at someone new (`PLAYER_TARGET_CHANGED`, `PLAYER_FOCUS_CHANGED`, boss and group changes). `setGroupSpells` keeps the group's `exclude` and `dispelTypes`. `setGroupSize` changes the engine's layout at once and resizes the group's existing buttons when combat ends (the buttons refuse addon code while auras are secret); new buttons take the new size. Unknown keys are ignored. Engine containers cannot be freed: `release` parks one (no unit, hidden) until the next `setUnit`. |
 | `AuraButton` | `Button & AuraButtonApi` | The engine's button: `SetIcon`, `SetApplicationCount`, `SetDurationText`, `SetDurationBar`, `SetDurationCooldown`, `AddDispelTypeTexture`, `SetSpellName`, `SetCasterName`, `SetCancelAuraButtons`, `SetHideTooltipInCombat`, `SetTooltipAnchorPoint`. Register regions only in `initialize`; the engine then drives them. |
 
 - **`AuraData`** is the type the flavor's `wow-api` declarations give
@@ -181,7 +197,13 @@ local box = aura.container(frame, {
   engine's duration text below the icon, a debuff-type border on harmful
   auras, and right click cancels the player's own buffs.
 - Engine calls are guarded: an error inside one would abort the engine's
-  whole button batch. Layout methods renamed between client builds
+  whole button batch. The engine calls used are `Blizzard_AuraContainer`'s
+  (`CustomAuraContainerSharedMixin`): `AddAuraGroup`,
+  `SetAuraGroupMaxFrameCount`, `SetAuraGroupCandidateFilters`,
+  `SetAuraGroupFilterString`, `SetAuraGroupLayout` (`elementWidth`,
+  `elementHeight`, `elementSpacing`, `lineSpacing`, `layoutIndex`,
+  `groupSpacing`), `GetAuraGroupFrameCount`, `GetAuraGroupFrame`, `SetUnit`
+  and `UpdateAllAuras`. Layout methods renamed between client builds
   (`SetFlowLayout…`/`SetAuraLayout…`) are tried in turn.
 - Iteration stops at the first missing index, matching the client APIs.
 
@@ -207,7 +229,7 @@ local cd = spell.cooldown(133)       -- SpellCooldownInfo?
 | `cooldown` | `(spell) -> CooldownInfo?` | `startTime`, `duration`, `modRate` (each `number \| Secret<number>`: secret in combat on restricted clients), `isEnabled`, `isActive` (readable there), `isOnGCD?`. Falls back to the global `GetSpellCooldown` where `C_Spell.GetSpellCooldown` is missing. |
 | `onCooldown` | `(spell) -> boolean` | Whether it is cooling down: `isActive`, readable in combat too |
 | `cooldownDuration` | `(spell, ignoreGCD?: boolean) -> LuaDurationObject?` | For secret-safe display with `Cooldown:SetCooldownFromDurationObject`; `nil` where the client has no duration objects |
-| `charges` | `(spell) -> SpellChargeInfo?` | |
+| `charges` | `(spell) -> SpellChargeInfoSecret?` | `currentCharges`, `cooldownStartTime`, `cooldownDuration`, `chargeModRate` (each `number \| Secret<number>`: secret in combat on restricted clients), `maxCharges`, `isActive` (readable there) |
 | `isKnown` | `(spellId: number, isPet?: boolean) -> boolean` | `C_SpellBook.IsSpellKnown`, in the player's or the pet's spellbook |
 
 ## item
@@ -292,6 +314,9 @@ tooltip.attach(MyAddonTooltip)       -- also apply hooks to a custom tooltip (fa
 - With the data system, forbidden tooltips (`tip:IsForbidden()`) are skipped.
   `TooltipHook` is a class; hooks run in registration order.
 - These are post-hooks only. They cannot suppress or replace tooltip content.
+- Hooks run synchronously inside the tooltip's setter (`SetSpellByID`,
+  `SetUnit`, …) on both paths, so a flag a handler sets is known right after
+  the setter returns.
 
 ## Testing
 

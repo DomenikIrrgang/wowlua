@@ -135,6 +135,13 @@ pub struct Checker<'e, 'p> {
     pub(crate) classes: Vec<(DefId, bool)>,
     /// Exported values of this module.
     pub exports: FxHashMap<Box<str>, TypeId>,
+    /// The exported locals, in order: their types are recorded once the
+    /// top level has run (fields added after the declaration included).
+    export_vars: Vec<(Box<str>, VarId)>,
+    /// By the type `setmetatable` gave: the fields read through the
+    /// metatable's `__index` (spec §2.4.6). A table's own definition
+    /// replaces them, as it does at run time.
+    pub(crate) fallback_fields: FxHashMap<TypeId, FxHashSet<Box<str>>>,
     /// Name spans of accesses to renamable methods (`rename-private`), with
     /// the class that declares the method.
     pub private_methods: FxHashMap<wowlua_span::Span, DefId>,
@@ -171,6 +178,33 @@ pub struct Checker<'e, 'p> {
     /// The handler type the decorators of the statement being checked give
     /// its function (`@event("X")`): (type, what it handles).
     next_handler: Option<(Func, String)>,
+    /// The loops being checked, innermost last: the flows of their
+    /// `break`s and `continue`s.
+    loops: Vec<LoopFlows>,
+    /// While a loop is checked on trial: the base types its assignments
+    /// replaced, to restore if the trial fails.
+    base_log: Option<Vec<(VarId, TypeId)>>,
+}
+
+/// The flows that leave a loop body early.
+#[derive(Default)]
+struct LoopFlows {
+    breaks: Vec<Flow>,
+    continues: Vec<Flow>,
+}
+
+/// What a loop's trial check restores when it fails.
+struct LoopTrial {
+    flow: Flow,
+    field_vars: FxHashMap<VarId, FxHashMap<Box<str>, VarId>>,
+    live: bool,
+    in_dead: bool,
+    guard: super::flavors::Guard,
+    vars: usize,
+    diagnostics: usize,
+    env_diagnostics: usize,
+    returns: usize,
+    base_log: Option<Vec<(VarId, TypeId)>>,
 }
 
 /// What checking a file reads of its syntax before and after walking it:
@@ -258,6 +292,8 @@ impl<'e, 'p> Checker<'e, 'p> {
             chain_inner: FxHashMap::default(),
             classes: Vec::new(),
             exports: FxHashMap::default(),
+            export_vars: Vec::new(),
+            fallback_fields: FxHashMap::default(),
             private_methods: FxHashMap::default(),
             global_classes: FxHashSet::default(),
             reassigned,
@@ -278,6 +314,8 @@ impl<'e, 'p> Checker<'e, 'p> {
             intrinsics: info.intrinsics.clone(),
             import_vars: FxHashMap::default(),
             next_handler: None,
+            loops: Vec::new(),
+            base_log: None,
         };
         for (name, &t) in &info.imports {
             let id = c.declare(name, Some(t), t, true, None);
@@ -306,12 +344,53 @@ impl<'e, 'p> Checker<'e, 'p> {
 
     /// A type mismatch (E2001).
     pub fn mismatch(&mut self, span: Span, s: TypeId, t: TypeId) {
-        let msg = format!(
+        let mut msg = format!(
             "`{}` is not assignable to `{}`",
             self.env.display(s),
             self.env.display(t)
         );
+        if let Some(why) = self.record_mismatch(s, t) {
+            msg.push_str(": ");
+            msg.push_str(&why);
+        }
         self.report("E2001", span, msg);
+    }
+
+    /// Why record `s` does not fit the record of `t` (`t` may be optional):
+    /// the first required field it lacks or whose type does not fit.
+    fn record_mismatch(&mut self, s: TypeId, t: TypeId) -> Option<String> {
+        let Ty::Record(source) = self.env.types.get(s).clone() else {
+            return None;
+        };
+        let target = self.env.types.non_nil(t);
+        let Ty::Record(target) = self.env.types.get(target).clone() else {
+            return None;
+        };
+        for (name, f) in target.fields.iter() {
+            match source.fields.get(name) {
+                None if !f.optional => {
+                    let mut why = format!("the field `{name}` is missing");
+                    // `x: T?` must be present; `x?: T` may be absent (§2.2.4).
+                    if self.env.types.is_optional(f.ty) {
+                        let inner = self.env.types.non_nil(f.ty);
+                        why.push_str(&format!(
+                            " (`{name}: {0}?` must be present; write `{name}?: {0}` for a field that may be absent)",
+                            self.env.display(inner)
+                        ));
+                    }
+                    return Some(why);
+                }
+                Some(sf) if !self.env.assignable(sf.ty, f.ty, self.mode) => {
+                    return Some(format!(
+                        "the field `{name}` is `{}`, not `{}`",
+                        self.env.display(sf.ty),
+                        self.env.display(f.ty)
+                    ));
+                }
+                _ => {}
+            }
+        }
+        None
     }
 
     pub fn check_assignable(&mut self, span: Span, s: TypeId, t: TypeId) {
@@ -368,7 +447,7 @@ impl<'e, 'p> Checker<'e, 'p> {
         let id = VarId(self.vars.len() as u32);
         let base = match declared {
             Some(d) => d,
-            None if widen => self.env.types.widen(ty),
+            None if widen => self.env.types.widen_value(ty),
             None => ty,
         };
         self.vars.push(Var {
@@ -387,7 +466,7 @@ impl<'e, 'p> Checker<'e, 'p> {
             let t = if is_const || !widen {
                 ty
             } else {
-                self.env.types.widen(ty)
+                self.env.types.widen_value(ty)
             };
             self.flow.insert(id, t);
         }
@@ -412,6 +491,40 @@ impl<'e, 'p> Checker<'e, 'p> {
         }
         let scope = self.scope.clone();
         self.env.resolve(t, &scope)
+    }
+
+    /// A top-level alias using `typeof(expr)` gets its body where the file
+    /// reaches it, with the expressions' types there (spec §2.2.7): later
+    /// annotations, and the modules checked after this one, see it.
+    fn typeof_alias(&mut self, a: TypeAlias<'_>) {
+        // Top-level aliases only (function bodies have none of their own).
+        let Some(module) = self.scope.module.filter(|_| self.fns.len() == 1) else {
+            return;
+        };
+        let Some(def) = self
+            .env
+            .module_types
+            .get(&module)
+            .and_then(|t| t.get(a.name().text()))
+            .copied()
+        else {
+            return;
+        };
+        if self.env.typeof_aliases.get(&def) != Some(&module) {
+            return;
+        }
+        self.env.typeof_aliases.remove(&def);
+        let mut exprs: Vec<Expr<'_>> = Vec::new();
+        typeof_exprs(a.ty(), &mut exprs);
+        for e in exprs {
+            let ty = self.infer(e);
+            let ty = self.env.types.widen(ty);
+            self.env
+                .typeof_types
+                .insert((e.span().start, e.span().end), ty);
+        }
+        let scope = self.scope.clone();
+        self.env.resolve_alias_again(def, a, &scope);
     }
 
     /// The type of `...` in the current function.
@@ -457,11 +570,11 @@ impl<'e, 'p> Checker<'e, 'p> {
                 self.flow.insert(v, narrowed);
             }
             None => {
-                let widened = self.env.types.widen(value);
+                let widened = self.env.types.widen_value(value);
                 self.flow.insert(v, widened);
                 // The base widens to cover every assigned value.
                 let base = self.env.types.union(&[var.base, widened]);
-                self.vars[v.0 as usize].base = base;
+                self.set_base(v, base);
             }
         }
     }
@@ -517,6 +630,14 @@ impl<'e, 'p> Checker<'e, 'p> {
         self.top_vararg = Some((Types::STRING, ns_ty));
         self.hoist(parse.view().block());
         self.block_stmts(parse.view().block());
+        // Importers read an export after the module's top level has run
+        // (spec §5.5), so a table has the fields assigned to it since its
+        // declaration, and it has escaped: it is sealed (spec §2.4.2).
+        for (name, v) in std::mem::take(&mut self.export_vars) {
+            let t = self.var_type(v);
+            let t = self.sealed(t);
+            self.exports.insert(name, t);
+        }
         // A module's file-level locals, for `import internal` (kept with
         // the exports, under `INTERNAL` + name).
         if self.is_module {
@@ -583,6 +704,16 @@ impl<'e, 'p> Checker<'e, 'p> {
         self.push_scope();
         self.block_stmts(b);
         self.pop_scope();
+    }
+
+    /// A branch no value reaches (spec §2.2.8): checked for its effects on
+    /// the file's types, with nothing reported. Whether the code after it
+    /// runs still follows `return`, `break` and `error` only.
+    fn unreachable_block(&mut self, b: Block<'_>) {
+        let (own, env) = (self.diagnostics.len(), self.env.diagnostics.len());
+        self.block(b);
+        self.diagnostics.truncate(own);
+        self.env.diagnostics.truncate(env);
     }
 
     fn block_stmts(&mut self, b: Block<'_>) {
@@ -828,7 +959,10 @@ impl<'e, 'p> Checker<'e, 'p> {
                     }
                     let id =
                         self.declare(n.name.text(), declared, value, false, Some(n.name.span()));
-                    if declared.is_none() && keep.get(i).copied().unwrap_or(false) {
+                    // The names past the last value take that call's other
+                    // results (`local ok, r = pcall(f)`).
+                    let kept = keep.get(i).or(keep.last()).copied().unwrap_or(false);
+                    if declared.is_none() && kept {
                         self.flow.insert(id, value);
                     }
                     if declared.is_some() && no_values {
@@ -884,30 +1018,33 @@ impl<'e, 'p> Checker<'e, 'p> {
                 }
             }
             StmtKind::Do(b) => self.block(b),
-            StmtKind::While { cond, body } => {
-                self.mark_probes(cond);
-                self.infer(cond);
-                self.forget_assigned(body);
-                let (t_flow, f_flow) = self.narrow(cond, &self.flow.clone());
-                self.flow = t_flow;
-                self.block(body);
+            StmtKind::While { cond, body } => self.check_loop(body, |c, keep| {
+                c.mark_probes(cond);
+                c.infer(cond);
+                c.forget_assigned(body, keep);
+                let (t_flow, f_flow) = c.narrow(cond, &c.flow.clone());
+                c.flow = t_flow;
+                c.block(body);
+                let back = c.live.then(|| c.flow.clone());
                 // `join` reads no flow but its arguments.
-                let after_body = std::mem::take(&mut self.flow);
-                let joined = self.join(&f_flow, &after_body, true, self.live);
-                self.flow = joined;
-                self.live = true;
-            }
-            StmtKind::Repeat { body, cond } => {
-                self.forget_assigned(body);
-                self.push_scope();
-                self.block_stmts(body);
-                self.mark_probes(cond);
-                self.infer(cond);
-                let (_, f) = self.narrow(cond, &self.flow.clone());
-                let _ = f;
-                self.pop_scope();
-                self.live = true;
-            }
+                let after_body = std::mem::take(&mut c.flow);
+                let joined = c.join(&f_flow, &after_body, true, c.live);
+                c.flow = joined;
+                c.live = true;
+                back
+            }),
+            StmtKind::Repeat { body, cond } => self.check_loop(body, |c, keep| {
+                c.forget_assigned(body, keep);
+                c.push_scope();
+                c.block_stmts(body);
+                c.mark_probes(cond);
+                c.infer(cond);
+                let (_, f) = c.narrow(cond, &c.flow.clone());
+                let back = c.live.then_some(f);
+                c.pop_scope();
+                c.live = true;
+                back
+            }),
             StmtKind::If {
                 cond,
                 then_block,
@@ -917,21 +1054,35 @@ impl<'e, 'p> Checker<'e, 'p> {
                 let mut clauses: Vec<(Expr<'_>, Block<'_>)> = vec![(cond, then_block)];
                 clauses.extend(elseifs.iter());
                 let mut ends: Vec<(Flow, bool, super::flavors::Guard)> = Vec::new();
+                // A type predicate that leaves its argument `never` makes a
+                // branch unreachable (spec §2.2.8): from then on, every
+                // later clause and the `else` too.
+                let mut rest_unreachable = false;
                 for (c, b) in clauses {
                     self.mark_probes(c);
                     self.infer(c);
                     let (t_flow, f_flow) = self.narrow(c, &self.flow.clone());
                     let (t_guard, f_guard) = self.narrow_guard(c, &self.guard.clone());
+                    let unreachable = rest_unreachable || self.excluded_by_predicate(c, &t_flow);
+                    rest_unreachable = rest_unreachable || self.excluded_by_predicate(c, &f_flow);
                     let entry_live = self.live;
                     self.flow = t_flow;
                     self.guard = t_guard;
-                    self.block(b);
+                    if unreachable {
+                        self.unreachable_block(b);
+                    } else {
+                        self.block(b);
+                    }
                     ends.push((self.flow.clone(), self.live, self.guard.clone()));
                     self.flow = f_flow;
                     self.guard = f_guard;
                     self.live = entry_live;
                 }
                 match else_block {
+                    Some(b) if rest_unreachable => {
+                        self.unreachable_block(b);
+                        ends.push((self.flow.clone(), self.live, self.guard.clone()));
+                    }
                     Some(b) => {
                         self.block(b);
                         ends.push((self.flow.clone(), self.live, self.guard.clone()));
@@ -968,44 +1119,52 @@ impl<'e, 'p> Checker<'e, 'p> {
                     let t = self.infer(e);
                     self.check_assignable(e.span(), t, Types::NUMBER);
                 }
-                self.forget_assigned(body);
-                self.push_scope();
-                self.declare(
-                    var.name.text(),
-                    Some(Types::NUMBER),
-                    Types::NUMBER,
-                    false,
-                    Some(var.name.span()),
-                );
-                let entry = self.flow.clone();
-                self.block(body);
-                self.pop_scope();
-                self.flow = self.join(&entry, &self.flow.clone(), true, self.live);
-                self.live = true;
+                self.check_loop(body, |c, keep| {
+                    c.forget_assigned(body, keep);
+                    c.push_scope();
+                    c.declare(
+                        var.name.text(),
+                        Some(Types::NUMBER),
+                        Types::NUMBER,
+                        false,
+                        Some(var.name.span()),
+                    );
+                    let entry = c.flow.clone();
+                    c.block(body);
+                    c.pop_scope();
+                    let back = c.live.then(|| c.flow.clone());
+                    c.flow = c.join(&entry, &c.flow.clone(), true, c.live);
+                    c.live = true;
+                    back
+                });
             }
             StmtKind::GenericFor { vars, exprs, body } => {
                 let types = self.expr_list(exprs, &[]);
                 let loop_types = self
                     .iteration_types(&types, exprs.first().map(|e| e.span()).unwrap_or(s.span()));
-                self.forget_assigned(body);
-                self.push_scope();
-                for (i, v) in vars.iter().enumerate() {
-                    let declared = v.ty.as_ref().map(|t| self.annotation(*t));
-                    let t = loop_types.get(i).copied().unwrap_or(Types::ANY);
-                    self.declare_with(
-                        v.name.text(),
-                        declared,
-                        t,
-                        false,
-                        Some(v.name.span()),
-                        false,
-                    );
-                }
-                let entry = self.flow.clone();
-                self.block(body);
-                self.pop_scope();
-                self.flow = self.join(&entry, &self.flow.clone(), true, self.live);
-                self.live = true;
+                self.check_loop(body, |c, keep| {
+                    c.forget_assigned(body, keep);
+                    c.push_scope();
+                    for (i, v) in vars.iter().enumerate() {
+                        let declared = v.ty.as_ref().map(|t| c.annotation(*t));
+                        let t = loop_types.get(i).copied().unwrap_or(Types::ANY);
+                        c.declare_with(
+                            v.name.text(),
+                            declared,
+                            t,
+                            false,
+                            Some(v.name.span()),
+                            false,
+                        );
+                    }
+                    let entry = c.flow.clone();
+                    c.block(body);
+                    c.pop_scope();
+                    let back = c.live.then(|| c.flow.clone());
+                    c.flow = c.join(&entry, &c.flow.clone(), true, c.live);
+                    c.live = true;
+                    back
+                });
             }
             StmtKind::Function { name, func } => self.function_stmt(name, func),
             StmtKind::LocalFunction { name, func } => {
@@ -1041,7 +1200,19 @@ impl<'e, 'p> Checker<'e, 'p> {
                 }
                 self.live = false;
             }
-            StmtKind::Break | StmtKind::Continue => self.live = false,
+            StmtKind::Break | StmtKind::Continue => {
+                if self.live
+                    && let Some(l) = self.loops.last_mut()
+                {
+                    let exits = if matches!(s.kind(), StmtKind::Break) {
+                        &mut l.breaks
+                    } else {
+                        &mut l.continues
+                    };
+                    exits.push(self.flow.clone());
+                }
+                self.live = false;
+            }
             StmtKind::LocalDestructure {
                 fields, value, ty, ..
             } => {
@@ -1075,7 +1246,9 @@ impl<'e, 'p> Checker<'e, 'p> {
                 if let (Some(d), Some(v)) = (declared, value) {
                     self.check_assignable(v.span(), t, d);
                 }
-                // `const` keeps literal types (spec §2.4).
+                // `const` keeps literal types (spec §2.4). An annotated one
+                // narrows as an annotated `local` does: to the annotation's
+                // literals and members, not to a table literal's own type.
                 let id = self.declare(
                     name.text(),
                     Some(declared.unwrap_or(t)),
@@ -1083,20 +1256,28 @@ impl<'e, 'p> Checker<'e, 'p> {
                     true,
                     Some(name.span()),
                 );
-                self.flow.insert(id, t);
+                let narrowed = match declared {
+                    Some(d)
+                        if d != Types::ANY
+                            && t != Types::ANY
+                            && self.env.assignable(t, d, self.mode) =>
+                    {
+                        self.narrow_to_assigned(d, t)
+                    }
+                    Some(d) => d,
+                    None => t,
+                };
+                self.flow.insert(id, narrowed);
             }
             StmtKind::Class(c) => self.class_body(c),
-            StmtKind::Enum(_)
-            | StmtKind::Interface(_)
-            | StmtKind::TypeAlias(_)
-            | StmtKind::Declare(_) => {}
+            StmtKind::TypeAlias(a) => self.typeof_alias(a),
+            StmtKind::Enum(_) | StmtKind::Interface(_) | StmtKind::Declare(_) => {}
             StmtKind::Import(_) => {}
             StmtKind::Export(inner) => {
                 self.stmt(inner);
                 for name in exported_names(inner) {
                     if let Some(v) = self.lookup_var(&name) {
-                        let t = self.var_type(v);
-                        self.exports.insert(name.into(), t);
+                        self.export_vars.push((name.into(), v));
                     }
                 }
             }
@@ -1129,9 +1310,146 @@ impl<'e, 'p> Checker<'e, 'p> {
         }
     }
 
-    /// Locals assigned in a loop body lose their narrowing at the loop
-    /// start (the body may run again).
-    fn forget_assigned(&mut self, body: Block<'_>) {
+    /// Checks a loop. `run` checks it with the locals assigned in its body
+    /// forgetting their narrowing at the loop start, except `keep`, and
+    /// gives the flow that goes back to the start at the body's end.
+    ///
+    /// Declared locals the loop entry narrows (`n` after `n = 0`) are
+    /// first tried with that narrowing kept: the trial holds when every
+    /// path back to the loop start (the body's end, `continue`) leaves them
+    /// within it, and their `break` paths then join the flow after the
+    /// loop. Otherwise the loop is checked again with them forgotten.
+    fn check_loop(
+        &mut self,
+        body: Block<'_>,
+        mut run: impl FnMut(&mut Self, &[VarId]) -> Option<Flow>,
+    ) {
+        let keep = self.loop_kept(body);
+        if !keep.is_empty() {
+            let trial = LoopTrial {
+                flow: self.flow.clone(),
+                field_vars: self.field_vars.clone(),
+                live: self.live,
+                in_dead: self.in_dead,
+                guard: self.guard.clone(),
+                vars: self.vars.len(),
+                diagnostics: self.diagnostics.len(),
+                env_diagnostics: self.env.diagnostics.len(),
+                returns: self.fns.last().map_or(0, |f| f.returns.len()),
+                base_log: self.base_log.replace(Vec::new()),
+            };
+            // The kept narrowing, as the declared members it fits (`0`
+            // in a `number?` is tried as `number`).
+            let mut entry = Vec::new();
+            for &v in &keep {
+                let now = self.var_type(v);
+                let declared = self.vars[v.0 as usize].declared.unwrap_or(now);
+                let t = self.loosen(now, declared);
+                self.flow.insert(v, t);
+                entry.push((v, t));
+            }
+            self.loops.push(LoopFlows::default());
+            let back = run(self, &keep);
+            let exits = self.loops.pop().unwrap_or_default();
+            let holds = back.iter().chain(&exits.continues).all(|f| {
+                entry.iter().all(|&(v, t)| {
+                    let now = self.var_type_in(v, f);
+                    self.env.assignable(now, t, Mode::Strict)
+                })
+            });
+            let log = std::mem::replace(&mut self.base_log, trial.base_log);
+            if holds {
+                if let (Some(outer), Some(log)) = (&mut self.base_log, log) {
+                    outer.extend(log);
+                }
+                for b in &exits.breaks {
+                    for &(v, _) in &entry {
+                        let after = self.var_type(v);
+                        let left = self.var_type_in(v, b);
+                        if !self.env.assignable(left, after, Mode::Strict) {
+                            let u = self.env.types.union(&[after, left]);
+                            self.flow.insert(v, u);
+                        }
+                    }
+                }
+                return;
+            }
+            for (v, base) in log.unwrap_or_default().into_iter().rev() {
+                if let Some(var) = self.vars.get_mut(v.0 as usize) {
+                    var.base = base;
+                }
+            }
+            self.flow = trial.flow;
+            self.field_vars = trial.field_vars;
+            self.live = trial.live;
+            self.in_dead = trial.in_dead;
+            self.guard = trial.guard;
+            self.vars.truncate(trial.vars);
+            self.diagnostics.truncate(trial.diagnostics);
+            self.env.diagnostics.truncate(trial.env_diagnostics);
+            if let Some(f) = self.fns.last_mut() {
+                f.returns.truncate(trial.returns);
+            }
+        }
+        self.loops.push(LoopFlows::default());
+        run(self, &[]);
+        self.loops.pop();
+    }
+
+    /// The members of `declared` that a member of `t` fits, or `t` where
+    /// one fits none.
+    fn loosen(&mut self, t: TypeId, declared: TypeId) -> TypeId {
+        let members = self.env.types.members(t);
+        let out: Vec<TypeId> = self
+            .env
+            .types
+            .members(declared)
+            .into_iter()
+            .filter(|&d| {
+                members
+                    .iter()
+                    .any(|&m| self.env.assignable(m, d, Mode::Strict))
+            })
+            .collect();
+        let covered = members
+            .iter()
+            .all(|&m| out.iter().any(|&d| self.env.assignable(m, d, Mode::Strict)));
+        if out.is_empty() || !covered {
+            return t;
+        }
+        self.env.types.union(&out)
+    }
+
+    /// Replaces a local's base type (logged while a loop is on trial).
+    fn set_base(&mut self, v: VarId, t: TypeId) {
+        if let Some(log) = &mut self.base_log {
+            log.push((v, self.vars[v.0 as usize].base));
+        }
+        self.vars[v.0 as usize].base = t;
+    }
+
+    /// The declared locals a loop body assigns that the loop entry narrows
+    /// (a closure assigning one may run at any time: those are left out).
+    fn loop_kept(&self, body: Block<'_>) -> Vec<VarId> {
+        let mut out: Vec<VarId> = Self::assigned_names(body)
+            .into_iter()
+            .filter_map(|name| self.lookup_var(name))
+            .filter(|&v| {
+                let var = &self.vars[v.0 as usize];
+                var.declared.is_some_and(|d| {
+                    d != Types::ANY
+                        && !var.assigned_in_closure
+                        && var.depth == self.depth
+                        && self.flow.get(&v).is_some_and(|&t| t != d)
+                })
+            })
+            .collect();
+        out.sort();
+        out
+    }
+
+    /// The names a loop body assigns (`x = …`, `x += …`).
+    fn assigned_names<'a>(body: Block<'a>) -> FxHashSet<&'a str> {
         let mut names: FxHashSet<&str> = FxHashSet::default();
         wowlua_syntax::visit::walk_stmts(body, &mut |s| match s.kind() {
             StmtKind::Assign { targets, .. } => {
@@ -1148,8 +1466,16 @@ impl<'e, 'p> Checker<'e, 'p> {
             }
             _ => {}
         });
-        for name in names {
-            if let Some(v) = self.lookup_var(name) {
+        names
+    }
+
+    /// Locals assigned in a loop body lose their narrowing at the loop
+    /// start (the body may run again), except `keep`.
+    fn forget_assigned(&mut self, body: Block<'_>, keep: &[VarId]) {
+        for name in Self::assigned_names(body) {
+            if let Some(v) = self.lookup_var(name)
+                && !keep.contains(&v)
+            {
                 let var = self.vars[v.0 as usize].clone();
                 let t = match var.declared {
                     Some(d) => d,
@@ -1390,7 +1716,7 @@ impl<'e, 'p> Checker<'e, 'p> {
                 members.push(Types::NIL);
             }
             let u = self.env.types.union(&members);
-            types.push(self.env.types.widen(u));
+            types.push(self.env.types.widen_value(u));
         }
         let rest = packs.iter().find_map(|p| p.rest.clone());
         Pack { types, rest }
@@ -1408,6 +1734,19 @@ impl<'e, 'p> Checker<'e, 'p> {
                 },
             };
             let at = values.get(i).map(|v| v.span()).unwrap_or(span);
+            // A value left out is `nil`: the first one that cannot be is
+            // named, once.
+            let missing = got.types.len() <= i && got.rest.is_none();
+            if missing && !self.env.assignable(have, want, self.mode) {
+                let msg = format!(
+                    "missing return value {} of type `{}` (the function returns {} values; one left out is `nil`)",
+                    i + 1,
+                    self.env.display(want),
+                    expected.types.len()
+                );
+                self.report("E2001", at, msg);
+                break;
+            }
             self.check_assignable(at, have, want);
         }
         if expected.rest.is_none()
@@ -1578,11 +1917,44 @@ impl<'e, 'p> Checker<'e, 'p> {
         }
     }
 
+    /// `t` with an open table sealed.
+    fn sealed(&mut self, t: TypeId) -> TypeId {
+        match self.env.types.get(t) {
+            Ty::Record(r) if r.open => {
+                let mut r = r.clone();
+                r.open = false;
+                self.env.types.record(r)
+            }
+            _ => t,
+        }
+    }
+
     /// Adds a field to an open table, or checks it against a sealed one.
+    /// A field read through `__index` is replaced by the table's own.
     pub fn extend_open(&mut self, owner: TypeId, name: &str, value: TypeId) {
         let Ty::Record(mut r) = self.env.types.get(owner).clone() else {
             return;
         };
+        let fallback = self
+            .fallback_fields
+            .get(&owner)
+            .is_some_and(|f| f.contains(name));
+        if fallback {
+            let mut rest = self.fallback_fields[&owner].clone();
+            rest.remove(name);
+            r.fields.insert(
+                name.into(),
+                Field {
+                    ty: self.env.types.widen(value),
+                    optional: false,
+                    readonly: false,
+                },
+            );
+            let new = self.env.types.record(r);
+            self.fallback_fields.insert(new, rest);
+            self.retype_owner(owner, new);
+            return;
+        }
         if !r.open || r.fields.contains_key(name) {
             return;
         }
@@ -1604,6 +1976,14 @@ impl<'e, 'p> Checker<'e, 'p> {
         );
         // The owner's local now has the extended type.
         let new = self.env.types.record(r);
+        if let Some(rest) = self.fallback_fields.get(&owner).cloned() {
+            self.fallback_fields.insert(new, rest);
+        }
+        self.retype_owner(owner, new);
+    }
+
+    /// The locals typed `owner` now have the type `new`.
+    fn retype_owner(&mut self, owner: TypeId, new: TypeId) {
         let vars: Vec<VarId> = self
             .flow
             .iter()
@@ -1613,7 +1993,7 @@ impl<'e, 'p> Checker<'e, 'p> {
         for v in vars {
             self.flow.insert(v, new);
             if self.vars[v.0 as usize].base == owner {
-                self.vars[v.0 as usize].base = new;
+                self.set_base(v, new);
             }
         }
     }
@@ -1671,7 +2051,7 @@ fn calls_setfenv(b: Block<'_>) -> bool {
 }
 
 /// The `typeof(expr)` parts of a type.
-fn typeof_exprs<'t>(t: Type<'t>, out: &mut Vec<Expr<'t>>) {
+pub(crate) fn typeof_exprs<'t>(t: Type<'t>, out: &mut Vec<Expr<'t>>) {
     match t.kind() {
         TypeKind::Typeof(e) => out.push(e),
         TypeKind::Paren(i) | TypeKind::Optional(i) | TypeKind::Array(i) => typeof_exprs(i, out),

@@ -1,5 +1,5 @@
 -- wowlua:events against the client's event system.
-import event, unitEvent, on, once, onUnit, off, offAll, send from "wowlua:events"
+import event, unitEvent, on, once, onUnit, off, offAll, send, watchUnit from "wowlua:events"
 import suite from "/harness"
 
 declare message STDTEST_PING(n: number)
@@ -61,7 +61,7 @@ s:test("messages: payload, order, once, off", function(t)
     t:ok(not pcall(offAll, nil), "offAll(nil) is refused")
 end)
 
-s:test("changes during a dispatch apply to the next one", function(t)
+s:test("handlers added during a dispatch wait, cancelled ones are skipped", function(t)
     local log: string[] = {}
     local owner = {}
     local added = false
@@ -79,7 +79,28 @@ s:test("changes during a dispatch apply to the next one", function(t)
     send("STDTEST_ORDER")
     offAll(owner)
     send("STDTEST_ORDER")
-    t:eq(table.concat(log, " "), "first second first added", "snapshot dispatch")
+    t:eq(table.concat(log, " "), "first first added", "snapshot dispatch, cancelled handlers skipped")
+end)
+
+s:test("offAll by owner and name; watches", function(t)
+    local owner = {}
+    local got: string[] = {}
+    on("STDTEST_PING", function(n: number) got[#got + 1] = `ping {n}` end, owner)
+    on("STDTEST_ORDER", function() got[#got + 1] = "order" end, owner)
+    offAll(owner, "STDTEST_PING")
+    send("STDTEST_PING", 1)
+    send("STDTEST_ORDER")
+    t:eq(table.concat(got, ","), "order", "only the named handlers are cancelled")
+    local w = watchUnit({ "UNIT_HEALTH", "UNIT_MAXHEALTH" }, function() end, owner)
+    w:setUnit("player")
+    w:setUnit("target", "player")
+    w:setUnit(nil)
+    w:setUnit("player")
+    t:eq(w.active, true, "a watch stays active while re-pointed")
+    offAll(owner)
+    send("STDTEST_ORDER")
+    t:eq(table.concat(got, ","), "order", "offAll cancels the rest")
+    t:eq(w.active, false, "and the owner's watches")
 end)
 
 s:test("a failing handler is reported, the others run", function(t)
@@ -118,12 +139,10 @@ s:test("WoW events: registered while handled", function(t)
     end
 end)
 
-s:test("unit events: limits and sending WoW events", function(t)
-    local three = { "player", "target", "focus" }
-    t:ok(not pcall(onUnit, "UNIT_HEALTH", three, function() end), "three units are refused")
+s:test("unit events: any number of units, sending WoW events", function(t)
     local none: string[] = {}
     t:ok(not pcall(onUnit, "UNIT_HEALTH", none, function() end), "no units are refused")
-    local sub = onUnit("UNIT_HEALTH", { "player", "target" }, function() end)
+    local sub = onUnit("UNIT_HEALTH", { "player", "target", "focus" }, function() end)
     sub:cancel()
     t:eq(sub.active, false, "a unit subscription cancels")
     local name = "PLAYER_" .. "LOGIN"
@@ -137,15 +156,22 @@ local g = suite("events (target)", "guided")
 g:test("unit filter and plain handler see a target change", function(t)
     local changed = 0
     local units: string[] = {}
+    local watched: string[] = {}
     local a = on("PLAYER_TARGET_CHANGED", function() changed += 1 end)
     local b = onUnit("UNIT_TARGET", { "player" }, function(unit: string) units[#units + 1] = unit end)
+    -- A watch pointed away from the player first, then at it.
+    local w = watchUnit({ "UNIT_TARGET" }, function(name: string, unit: string) watched[#watched + 1] = `{name} {unit}` end)
+    w:setUnit("focus")
+    w:setUnit("player")
     local before = seen.playerTarget
     t:ask("Change your target (target or clear any unit)")
-    t:waitFor(function() return changed > 0 and #units > 0 end, 120, "target change")
+    t:waitFor(function() return changed > 0 and #units > 0 and #watched > 0 end, 120, "target change")
     a:cancel()
     b:cancel()
+    w:cancel()
     if changed > 0 then
         t:ok(#units > 0 and units[1] == "player", "UNIT_TARGET for the player only")
         t:ok(seen.playerTarget > before, "@unitEvent handler ran")
+        t:eq(watched[1], "UNIT_TARGET player", "the watch, re-pointed, gets the name first")
     end
 end)

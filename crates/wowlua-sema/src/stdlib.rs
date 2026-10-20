@@ -471,17 +471,6 @@ impl Ctx<'_> {
                     if let Some(first) = args.first() {
                         self.event_name(first, true);
                     }
-                    let units = args.len().saturating_sub(1);
-                    if !(1..=2).contains(&units) {
-                        self.error(
-                            "E8100",
-                            d.span(),
-                            format!(
-                                "`@unitEvent` takes one or two units (WoW's limit), not {units}"
-                            ),
-                            "here",
-                        );
-                    }
                 }
                 "slash.slash" => {
                     for a in &args {
@@ -918,18 +907,19 @@ impl Ctx<'_> {
                 if let Some(first) = args.first() {
                     self.event_name(first, true);
                 }
-                if let Some(ExprKind::Table(fields)) = args.get(1).map(|a| a.kind())
-                    && !(1..=2).contains(&fields.len())
-                {
-                    self.error(
-                        "E8100",
-                        args.at(1).span(),
-                        format!(
-                            "`onUnit` takes one or two units (WoW's limit), not {}",
-                            fields.len()
-                        ),
-                        "here",
-                    );
+            }
+            "events.watchUnit" => {
+                if let Some(ExprKind::Table(fields)) = args.first().map(|a| a.kind()) {
+                    for field in fields {
+                        if let TableField::Positional(v) = field {
+                            self.event_name(v, true);
+                        }
+                    }
+                }
+            }
+            "events.offAll" => {
+                if let Some(name) = args.get(1) {
+                    self.event_name(name, false);
                 }
             }
             "events.send" => {
@@ -1119,69 +1109,78 @@ impl Ctx<'_> {
         }
     }
 
-    /// One router command: valid `args` specs, `rest` last, and `run` taking
-    /// one parameter per argument (plus the flags table).
+    /// One router command (E8112, see [`router_command_problems`]).
     fn router_command(&mut self, command: Expr<'_>) {
-        let ExprKind::Table(fields) = command.kind() else {
-            return;
-        };
-        let field = |key: &str| {
-            fields.iter().find_map(|f| match f {
-                TableField::Named { name, value, .. } if name.text() == key => Some(value),
-                _ => None,
-            })
-        };
-        let mut count = 0;
-        if let Some(ExprKind::Table(specs)) = field("args").map(|e| e.kind()) {
-            count = specs.len();
-            for (i, spec) in specs.iter().enumerate() {
-                let TableField::Positional(value) = spec else {
-                    continue;
-                };
-                let ok = match value.kind() {
-                    ExprKind::String(lit) => {
-                        let value = lit.value();
-                        let s = String::from_utf8_lossy(&value);
-                        matches!(
-                            s.as_ref(),
-                            "string" | "number" | "boolean" | "string?" | "number?" | "boolean?"
-                        ) || (s == "rest" && i + 1 == specs.len())
-                    }
-                    ExprKind::Table(choices) => choices.iter().all(|c| {
-                        matches!(c, TableField::Positional(v) if matches!(v.kind(), ExprKind::String(_)))
-                    }),
-                    _ => true,
-                };
-                if !ok {
-                    self.error(
-                        "E8112",
-                        value.span(),
-                        "an argument is \"string\", \"number\", \"boolean\" (with `?` when optional), a list of choices, or \"rest\" last".into(),
-                        "invalid",
-                    );
-                }
-            }
-        }
-        if field("flags").is_some() {
-            count += 1;
-        }
-        if let Some(run) = field("run")
-            && let ExprKind::Function(f) = run.kind()
-            && f.vararg().is_none()
-            && f.params().len() != count
-        {
-            self.error(
-                "E8112",
-                run.span(),
-                format!(
-                    "`run` takes {} parameter(s) for its arguments and flags, not {}",
-                    count,
-                    f.params().len()
-                ),
-                "here",
-            );
+        for (span, message, label) in router_command_problems(command) {
+            self.error("E8112", span, message, label);
         }
     }
+}
+
+/// What is wrong with one literal router command (`router`'s definitions,
+/// `Router:add`): invalid `args` specs, `rest` not last, and `run` not
+/// taking one parameter per argument (plus the flags table). Each problem
+/// is its span, message and label.
+pub(crate) fn router_command_problems(command: Expr<'_>) -> Vec<(Span, String, &'static str)> {
+    let mut problems = Vec::new();
+    let ExprKind::Table(fields) = command.kind() else {
+        return problems;
+    };
+    let field = |key: &str| {
+        fields.iter().find_map(|f| match f {
+            TableField::Named { name, value, .. } if name.text() == key => Some(value),
+            _ => None,
+        })
+    };
+    let mut count = 0;
+    if let Some(ExprKind::Table(specs)) = field("args").map(|e| e.kind()) {
+        count = specs.len();
+        for (i, spec) in specs.iter().enumerate() {
+            let TableField::Positional(value) = spec else {
+                continue;
+            };
+            let ok = match value.kind() {
+                ExprKind::String(lit) => {
+                    let value = lit.value();
+                    let s = String::from_utf8_lossy(&value);
+                    matches!(
+                        s.as_ref(),
+                        "string" | "number" | "boolean" | "string?" | "number?" | "boolean?"
+                    ) || (s == "rest" && i + 1 == specs.len())
+                }
+                ExprKind::Table(choices) => choices.iter().all(|c| {
+                    matches!(c, TableField::Positional(v) if matches!(v.kind(), ExprKind::String(_)))
+                }),
+                _ => true,
+            };
+            if !ok {
+                problems.push((
+                    value.span(),
+                    "an argument is \"string\", \"number\", \"boolean\" (with `?` when optional), a list of choices, or \"rest\" last".into(),
+                    "invalid",
+                ));
+            }
+        }
+    }
+    if field("flags").is_some() {
+        count += 1;
+    }
+    if let Some(run) = field("run")
+        && let ExprKind::Function(f) = run.kind()
+        && f.vararg().is_none()
+        && f.params().len() != count
+    {
+        problems.push((
+            run.span(),
+            format!(
+                "`run` takes {} parameter(s) for its arguments and flags, not {}",
+                count,
+                f.params().len()
+            ),
+            "here",
+        ));
+    }
+    problems
 }
 
 /// `return` with values in the function's own body (not nested functions).

@@ -333,6 +333,9 @@ The WoW API is typed by **pre-generated `types` packages**, one per flavor:
    frame types, templates), FrameXML globals and mixins, documentation links,
    and deprecations. On conflict, Blizzard's data wins for signatures, and the
    enrichment wins only where Blizzard's data is missing or untyped (`any`).
+   Blizzard's UI code adds its globals: the named frames of its XML, typed by
+   their mixins, and those mixins as classes with the functions their Lua
+   defines ([Types §2.8](../language/02-types.md#28-globals)).
 3. **Flavor availability** from per-flavor global name dumps, used to verify
    that every declared global exists in that flavor.
 
@@ -418,7 +421,10 @@ files, but no `dist/`, tests or dev files.
 - **Tokens.** `wowlua login <type>` stores tokens in the OS credential store
   (macOS Keychain, Windows Credential Manager, Secret Service on Linux; service
   `wowlua`, account = the site type); `wowlua logout <type>` removes them.
-  Environment variables take precedence. Only when no credential store is
-  available are tokens written to `config.json`, created with permissions
-  `0600`, with warning W4326. Tokens are redacted in all output, including
+  Environment variables take precedence. Without a terminal (standard input
+  or standard error not a terminal), wowlua does not use the credential
+  store: `wowlua publish` reads tokens from `config.json` only, `wowlua login`
+  saves them there (permissions `0600`) and says so, and `wowlua logout`
+  removes them from there. Otherwise tokens are written to `config.json` only
+  when no credential store is available, with warning W4326. Tokens are redacted in all output, including
   `-v` and `--dry-run`.

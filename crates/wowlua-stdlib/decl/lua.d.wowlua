@@ -218,4 +218,5 @@ declare function hooksecurefunc(name: string, hook: (...any) -> any)
 declare function hooksecurefunc(t: table, name: string, hook: (...any) -> any)
 declare function scrub(...: any): ...any
 declare function issecretvalue(value: unknown): value is Secret<unknown>
+-- The checker narrows a call of the global as the complement of `issecretvalue` (spec §2.11).
 declare function canaccessvalue(value: unknown): boolean

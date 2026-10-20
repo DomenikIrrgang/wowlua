@@ -16,9 +16,13 @@ follows it.
    job bodies, and menu, dialog, list and settings callbacks. An error in one
    never prevents other handlers from running, and never breaks the stdlib's
    own state.
-2. **Mechanism.** Isolation uses `xpcall` with a closure that captures the
-   arguments (Lua 5.1's `xpcall` passes none) and a handler of the policy's
-   own, in every flavor. `securecallfunction` is not used: it hands errors to
+2. **Mechanism.** Isolation uses `xpcall` with the policy's own handler, in
+   every flavor. The client's `xpcall` passes the arguments on (unlike Lua
+   5.1's; a recorded client answer, and Blizzard's `ExecuteFrameScript` in
+   `FunctionUtil.lua` relies on it in every flavor), so a call that succeeds
+   allocates nothing: no closure, no table of arguments, the context of the
+   innermost call kept for the one handler. Where `xpcall` passes none, a
+   closure carries them. `securecallfunction` is not used: it hands errors to
    `geterrorhandler()` directly, which would bypass the prefix, the rate limit
    and the listeners below. Job bodies run in coroutines, so their errors are
    taken from `coroutine.resume`'s results with the coroutine's stack
@@ -26,7 +30,12 @@ follows it.
 3. **Reporting.** Errors go to `geterrorhandler()`, so the default error frame
    and error-collecting addons (BugSack/BugGrabber) capture them. Messages are
    prefixed `"<AddonName>: "`. In debug builds, the module ID and the stdlib
-   component (`events: PLAYER_LOGIN handler`) are appended.
+   component (`events: PLAYER_LOGIN handler`) are appended:
+   `"MyAddon: …/src/core/cache.lua:12: boom [core/cache] [events: PLAYER_LOGIN handler]"`.
+   The module ID is the context's `module` if given, else the module of the
+   error's location (`path.lua:line`), else the first module on the stack
+   outside the standard library; it is worked out only when an error is
+   reported.
 4. **Rate limiting.** An identical message from the same source is reported at
    most once per `errors.configure({ rateLimit = 10 })` seconds. Suppressed
    repeats are counted and reported with the next report ("… (12 more)").
@@ -41,6 +50,11 @@ follows it.
    half-migrated table.
 7. **No loops.** Errors raised inside `errors.onError` listeners are passed
    straight to `geterrorhandler()` and are not re-dispatched.
+8. **Attribution.** Listeners get an `ErrorInfo` with each report: the stdlib
+   component, the `owner` the failing handler was registered with (event,
+   message and callback-registry handlers, watches, buckets, and hooks with
+   `opts.owner`; timers have none), and the stack where it failed
+   (`debugstack`, taken only when an error happens).
 
 ### API
 
@@ -50,15 +64,19 @@ import * as errors from "wowlua:errors"
 local safeRefresh = errors.wrap(refresh)          -- isolated version of a function
 local ok, result = errors.call(compute, 1, 2)    -- (boolean, ...results)
 errors.report("unexpected state", { module = "sync" })
-errors.onError(function(msg: string) statusIcon:SetVertexColor(1, 0, 0) end)
+errors.onError(function(msg: string, info: errors.ErrorInfo)
+    statusIcon:SetVertexColor(1, 0, 0)
+    faults:add(info.owner and nameOf(info.owner) or "core", msg, info.stack)
+end)
 ```
 
 | API | Signature | Notes |
 |-----|-----------|-------|
 | `call` | `function call<A..., R...>(fn: (A...) -> R..., ...: A...): (boolean, R...)` | Isolated call. On error, it reports and returns `false`. |
 | `wrap` | `function wrap<A...>(fn: (A...) -> ()): (A...) -> ()` | Returns an isolated function. The return values of `fn` are discarded. |
-| `report` | `(err: any, context: { [string]: any }?)` | Reports through the policy. Non-string errors are converted with `tostring`. |
-| `onError` | `(fn: (msg: string) -> ()) -> Subscription` | Addon-level listener, e.g. to show a warning in the UI |
+| `report` | `(err: any, context: { [string]: any }?)` | Reports through the policy. Non-string errors are converted with `tostring`. The context's `component` and `module` name the source in debug builds, and its `owner` goes to the listeners. |
+| `onError` | `(fn: (msg: string, info: ErrorInfo) -> ()) -> Subscription` | Addon-level listener, e.g. to show a warning in the UI. A one-parameter listener fits too. |
+| `ErrorInfo` | `{ component: string?, owner: any?, stack: string? }` | What a listener learns besides the message (policy 8) |
 | `configure` | `(opts: { rateLimit: number? })` | |
 | `count` | `() -> number` | Errors reported by this addon since load |
 
@@ -86,6 +104,8 @@ export class Tracker
 end
 
 local sub = tracker.events:on("KillRecorded", function(count: number) label:SetText(count) end, owner)
+tracker.events:off("KillRecorded", onKill)        -- every subscription of `onKill`
+tracker.events:offAll(owner, "Reset")             -- the owner's, to one name
 tracker.events:offAll(owner)
 ```
 
@@ -94,21 +114,23 @@ tracker.events:offAll(owner)
 | `registry` | `function registry<E>(opts: RegistryOptions?): Registry<E>` | `E` is inferred from the expected type (the field annotation above) |
 | `Registry<E>:on` | `(name, handler, owner?) -> Subscription` | `name` must be a literal key of `E` (E8420). `handler` is checked against `E[name]`. |
 | `Registry<E>:once` | same | |
-| `Registry<E>:off` / `offAll(owner)` | | |
+| `Registry<E>:off` | `(sub)` or `(name, handler)` | With a name, cancels every subscription of `handler` to it (also through `once`); `name` must be a literal key of `E` (E8420) and `handler` matches `E[name]` |
+| `Registry<E>:offAll` | `(owner, name?)` | Every subscription of `owner`, or only those to `name` (a literal key of `E`, E8420) |
 | `Registry<E>:fire` | `(name, ...args)` | Arguments are checked against `E[name]`'s parameters |
 | `Registry<E>:has` | `(name) -> boolean` | Whether any handler is subscribed |
 | `RegistryOptions` | `{ compat: "CallbackHandler"? }` | Also provides CallbackHandler-style methods (`RegisterCallback(owner, name, methodOrFn)`, `UnregisterCallback`, `UnregisterAllCallbacks`) for plain Lua consumers |
 
-Typing: the language has no indexed-access types, so `on`, `once` and `fire`
-are `@intrinsic`-checked. The compiler resolves `E[name]` for literal names and
+Typing: the language has no indexed-access types, so `on`, `once`, `off`,
+`offAll` and `fire` are `@intrinsic`-checked. The compiler resolves `E[name]` for literal names and
 checks handlers and arguments with the normal assignability rules (E2001 for
 mismatches).
 
 Semantics:
 
 - Handlers run in subscription order through the error policy. `fire` iterates a
-  snapshot, so subscribing or unsubscribing during `fire` takes effect for the
-  next `fire`.
+  snapshot: a handler subscribed during `fire` waits for the next `fire`, and a
+  handler cancelled during `fire` (by an earlier handler) is skipped for the
+  rest of it, as CallbackHandler does.
 - Owners are held in a weak-keyed table, so a registry never keeps an owner
   alive by itself. Lua 5.1 has no ephemerons, though: a handler closure that
   references its owner keeps the owner alive. Call `offAll(owner)` explicitly
@@ -188,7 +210,8 @@ are copied as they are and never equal anything (comparing them would error).
 ```wowlua
 import * as tbl from "wowlua:table"
 
-local copy = tbl.copy(profile)                     -- deep; cycles kept
+local copy = tbl.copy(profile)                     -- deep; cycles kept, keys as they are
+local fresh = tbl.copy(preset, { shared = false }) -- no two places share a table
 tbl.defaults(db.window, { width = 300, height = 200 })
 if not tbl.equal(a, b) then … end
 for _, key in ipairs(tbl.keys(map)) do … end       -- sorted when all numbers or all strings
@@ -197,12 +220,12 @@ local names = tbl.map(units, function(u: Unit) return u.name end)
 
 | API | Signature | Notes |
 |-----|-----------|-------|
-| `copy` | `<T>(t: T) -> T` | Deep; shared and cyclic references stay shared; metatables dropped |
+| `copy` | `<T>(t: T, opts: CopyOptions?) -> T` | Deep: values are copied, keys are kept as they are (a frame or table used as a key stays itself, as in Blizzard's `CopyTable`); metatables dropped. Shared and cyclic references stay shared, unless `opts.shared` is `false`: then every occurrence of a nested table gets a table of its own (no two places of the copy share one, e.g. for SavedVariables), and a cycle is an error. |
 | `shallowCopy` | `<T extends table>(t: T) -> T` | |
 | `merge` | `<T extends table>(target: T, source: table) -> T` | Copies `source` in: nested tables merge, other values replace |
 | `defaults` | `<T extends table>(target: T, defaults: table) -> T` | Fills in what `target` lacks, nested too |
 | `equal` | `(a: any, b: any) -> boolean` | Deep |
-| `keys`, `values` | `<K, V>(t: { [K]: V }) -> K[]`, `-> V[]` | `keys` is sorted when it can be |
+| `keys`, `values` | `<K, V>(t: { [K]: V }, less?: (a: K, b: K) -> boolean) -> K[]`, `<K, V>(t: { [K]: V }) -> V[]` | `keys` is sorted by `less` when given, else when the keys are all numbers or all strings |
 | `count`, `isEmpty` | `(t: table) -> number`, `-> boolean` | All entries, not just the array part |
 | `filter`, `map`, `find`, `contains` | list helpers | `find` returns the element and its index |
 

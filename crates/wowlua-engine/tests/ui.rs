@@ -225,6 +225,117 @@ return tostring(Box.loadSecure), tostring(plain.loadSecure), set, value, after,
     assert_eq!(run(&mut vm, "return tostring(Box.updateSecure)"), ["true"]);
 }
 
+/// An intrinsic type declared with `allowUntaintedCreation` (Blizzard's
+/// `AuraContainer`), made by an addon while the addon loads: its `method`
+/// scripts are Blizzard's, not the loading addon's code, so its `OnLoad`
+/// runs untainted, as when the addon makes one later (the client: SuuUI
+/// makes its aura containers while it loads, without an error).
+#[test]
+fn untainted_intrinsics_made_while_an_addon_loads() {
+    let interface = tree(
+        "intrinsic-untainted",
+        &[
+            (
+                "AddOns/Blizzard_Box/Blizzard_Box.toc",
+                "## UseSecureEnvironment: 1\nBox.lua\nBox.xml [LoadIntoEnvironment global]\n",
+            ),
+            (
+                "AddOns/Blizzard_Box/Box.lua",
+                "BoxPrivate = {}
+function BoxPrivate:OnLoad_Intrinsic() self.loadSecure = issecure() end
+",
+            ),
+            (
+                "AddOns/Blizzard_Box/Box.xml",
+                r#"<Ui>
+  <ScopedModifier allowUntaintedCreation="true">
+    <Frame name="BoxFrame" intrinsic="true">
+      <Mixins><Mixin key="BoxPrivate" source="secure"/></Mixins>
+      <Scripts><OnLoad method="OnLoad_Intrinsic"/></Scripts>
+    </Frame>
+  </ScopedModifier>
+</Ui>"#,
+            ),
+        ],
+    );
+    let mut vm = vm("camelot");
+    let report = wowlua_engine::ui::load(&mut vm, &interface, None);
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let addon = interface.parent().unwrap().join("MyAddon");
+    std::fs::create_dir_all(&addon).unwrap();
+    std::fs::write(
+        addon.join("main.lua"),
+        "AtLoad = CreateFrame('BoxFrame', nil, UIParent)\n",
+    )
+    .unwrap();
+    let table = Value::Table(vm.new_table());
+    wowlua_engine::ui::load_user_file(&mut vm, &addon, "main.lua", "MyAddon", table);
+    assert_eq!(
+        run(
+            &mut vm,
+            "local later = CreateFrame('BoxFrame', nil, UIParent)
+return tostring(AtLoad.loadSecure), tostring(later.loadSecure), tostring(issecure())"
+        ),
+        ["true", "true", "false"]
+    );
+}
+
+/// A load-on-demand Blizzard addon an addon loads while it loads is
+/// Blizzard's code, as when the addon loads one later: its functions stay
+/// secure and its files keep their names (spec §17.7: Blizzard's Lua files
+/// run as secure code with their addon's name).
+#[test]
+fn blizzard_addons_loaded_while_an_addon_loads() {
+    let interface = tree(
+        "lod-while-loading",
+        &[
+            (
+                "AddOns/Blizzard_Early/Blizzard_Early.toc",
+                "## LoadOnDemand: 1\nEarly.lua\n",
+            ),
+            (
+                "AddOns/Blizzard_Early/Early.lua",
+                "function EarlyShow() end\nEarlySource = debugstack(1, 1, 0)\n",
+            ),
+            (
+                "AddOns/Blizzard_Late/Blizzard_Late.toc",
+                "## LoadOnDemand: 1\nLate.lua\n",
+            ),
+            ("AddOns/Blizzard_Late/Late.lua", "function LateShow() end\n"),
+        ],
+    );
+    let mut vm = vm("camelot");
+    let report = wowlua_engine::ui::load(&mut vm, &interface, None);
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let addon = interface.parent().unwrap().join("MyAddon");
+    std::fs::create_dir_all(&addon).unwrap();
+    std::fs::write(
+        addon.join("main.lua"),
+        "C_AddOns.LoadAddOn('Blizzard_Early')\nMyAddonGlobal = 1\n",
+    )
+    .unwrap();
+    let table = Value::Table(vm.new_table());
+    // Named as the client names the addon's files, as the test runner does.
+    wowlua_engine::engine_mut(&mut vm).world.ui.chunk_prefix =
+        Some("Interface/AddOns/MyAddon/".into());
+    wowlua_engine::ui::load_user_file(&mut vm, &addon, "main.lua", "MyAddon", table);
+    wowlua_engine::engine_mut(&mut vm).world.ui.chunk_prefix = None;
+    assert_eq!(
+        run(
+            &mut vm,
+            "C_AddOns.LoadAddOn('Blizzard_Late')
+return tostring(issecurevariable('EarlyShow')), tostring(issecurevariable('LateShow')),
+    tostring(issecurevariable('MyAddonGlobal')), EarlySource"
+        ),
+        [
+            "true",
+            "true",
+            "false",
+            "[Interface/AddOns/Blizzard_Early/Early.lua]:2: in main chunk\n..."
+        ]
+    );
+}
+
 /// A frame whose untrusted layout scripts are forbidden (ElvUI's aura
 /// containers inherit `DisableUntrustedLayoutScriptsTemplate`): an addon's
 /// `SetSize` hook does not see the secrets Blizzard's layout sizes it with

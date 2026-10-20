@@ -1,11 +1,12 @@
 -- wowlua:hooks (spec stdlib "hooks"): post-hooks through hooksecurefunc and
 -- HookScript, never pre-hooks or replacements (those taint secure code).
 -- Targets may be strings naming globals; `opts.addon` installs the hook once
--- that load-on-demand addon has loaded.
+-- that load-on-demand addon has loaded, and `opts.owner` names whose hook it
+-- is to error listeners.
 import onAddonLoaded from "wowlua:lifecycle"
-import callIn from "wowlua:errors"
+import callOwned from "wowlua:errors"
 
-type Options = { addon?: string }
+type Options = { addon?: string, owner?: any }
 
 local function resolve(target: any): any
     if type(target) == "string" then
@@ -22,16 +23,17 @@ local function install(addon: string?, fn: () -> ())
     end
 end
 
-local function isolated(fn: any, what: string): any
+local function isolated(fn: any, what: string, owner: any): any
+    local context = { component = "hooks: " .. what }
     return function(...)
-        callIn({ component = "hooks: " .. what }, fn, ...)
+        callOwned(context, owner, fn, ...)
     end
 end
 
 local function hookNow(target: any, name: any, fn: any, opts: Options?)
     if name == nil then
         -- A global function: `hook(name, fn)`.
-        install(nil, function() hooksecurefunc(target, isolated(fn, target)) end)
+        install(nil, function() hooksecurefunc(target, isolated(fn, target, nil)) end)
         return
     end
     install(opts?.addon, function()
@@ -39,7 +41,7 @@ local function hookNow(target: any, name: any, fn: any, opts: Options?)
         if t == nil then
             error("hook: `" .. tostring(target) .. "` does not exist", 0)
         end
-        hooksecurefunc(t, name, isolated(fn, tostring(name)))
+        hooksecurefunc(t, name, isolated(fn, tostring(name), opts?.owner))
     end)
 end
 
@@ -49,7 +51,7 @@ local function hookScriptNow(frame: any, script: string, fn: any, opts: Options?
         if f == nil then
             error("hookScript: `" .. tostring(frame) .. "` does not exist", 0)
         end
-        f:HookScript(script, isolated(fn, script))
+        f:HookScript(script, isolated(fn, script, opts?.owner))
     end)
 end
 

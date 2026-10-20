@@ -48,6 +48,9 @@ impl<'a> Lowerer<'a> {
         let parse = self.parse;
         let used = enum_value_uses(parse);
         let mut hoisted = Vec::new();
+        // A module's top-level locals so far: `function f()` after `local f`
+        // defines that local, as in Lua.
+        let mut locals: HashSet<&str> = HashSet::new();
         for s in parse.view().block().stmts() {
             let (inner, exported) = match s.kind() {
                 StmtKind::Export(inner) => (inner, true),
@@ -60,6 +63,38 @@ impl<'a> Lowerer<'a> {
                     self.pending.insert(n.clone());
                     hoisted.push(n);
                 }
+                // A module's other top-level `function f()` is module-local
+                // too, never a global (spec §5.1).
+                StmtKind::Function { name, .. }
+                    if self.ctx.module.is_some()
+                        && name.path().len() == 1
+                        && name.method().is_none() =>
+                {
+                    let n = name.path().at(0).text();
+                    if !locals.contains(n) && !hoisted.iter().any(|h| h == n) {
+                        self.declare(n, Binding::Hoisted);
+                        self.pending.insert(n.to_string());
+                        hoisted.push(n.to_string());
+                    }
+                }
+                StmtKind::Local { names, .. } => {
+                    locals.extend(names.iter().map(|n| n.name.text()));
+                }
+                StmtKind::LocalDestructure { fields, .. } => {
+                    locals.extend(fields.iter().map(|f| f.name.text()));
+                }
+                StmtKind::LocalFunction { name, .. } | StmtKind::Const { name, .. } => {
+                    locals.insert(name.text());
+                }
+                StmtKind::Import(i) => match i.clause() {
+                    ImportClause::Names(specs) => {
+                        locals.extend(specs.iter().map(|sp| sp.alias.unwrap_or(sp.name).text()));
+                    }
+                    ImportClause::Namespace(n) => {
+                        locals.insert(n.text());
+                    }
+                    ImportClause::SideEffect => {}
+                },
                 StmtKind::Class(c) => {
                     let n = c.name().text().to_string();
                     let info = self.class_info(c);

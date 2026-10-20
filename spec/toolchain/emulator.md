@@ -294,7 +294,10 @@ takes the flavor's `Interface` folder and its global strings:
   `[TextLocale]` name the flavor's folders (`Mainline`, `Camelot`, `enUS`).
   `ADDON_LOADED` fires after each addon.
 - **Global strings** come first, from the client's `GlobalStrings` dump.
-- **Lua files** run as secure code with the addon's name and table.
+- **Lua files** run as secure code with the addon's name and table, also
+  when an addon's code loads a load-on-demand one (`C_AddOns.LoadAddOn`)
+  while the addon loads: Blizzard's files and scripts compile as Blizzard's
+  code whoever runs when they load, and keep their own file names.
 - **XML** builds widgets as the client does: virtual elements are templates
   (for `inherits` and `CreateFrame`), intrinsic ones frame types; an
   element's templates apply first, then its attributes, mixins, `parentKey`
@@ -306,7 +309,9 @@ takes the flavor's `Interface` folder and its global strings:
   a type or template declared under `<ScopedModifier
   allowUntaintedCreation="true">` is built untainted for any caller of
   `CreateFrame`: its mixins, its scripts (compiled as Blizzard's) and its
-  `OnLoad`. A `<Mixin secureDelegates="true">` puts secure delegates on the
+  `OnLoad`, also when an addon creates it while the addon loads (an
+  intrinsic type's scripts, like a template's, are the code of the addon
+  that declared it, never the caller's). A `<Mixin secureDelegates="true">` puts secure delegates on the
   frame: they call the mixin's function untainted, with the arguments as
   untainted values, and give the caller's taint back after. A tainted
   caller passing a secret gets no elevation from a mixin's delegates

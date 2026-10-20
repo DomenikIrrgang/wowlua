@@ -98,6 +98,7 @@ impl Scopes {
             Binding::Import
             | Binding::LazyImport { .. }
             | Binding::Export
+            | Binding::Hoisted
             | Binding::Removed(_)
             | Binding::ConstLocal
             | Binding::DebugOnlyRemoved => {}
@@ -112,6 +113,11 @@ impl Scopes {
 
     pub fn lookup(&self, name: &str) -> Option<&Binding> {
         self.stack.iter().rev().find_map(|s| s.names.get(name))
+    }
+
+    /// The binding of `name` in the innermost scope only.
+    pub fn lookup_here(&self, name: &str) -> Option<&Binding> {
+        self.stack.last().and_then(|s| s.names.get(name))
     }
 
     /// Remembers a `@deprecated` binding of the current scope.

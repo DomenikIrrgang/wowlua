@@ -384,8 +384,9 @@ print("count", StdCount())
     assert_eq!(has("Std: <secret>"), 1, "{reported:?}");
     // Reported once, then after the window with the count of repeats.
     assert_eq!(has("Std: repeated"), 2, "{reported:?}");
+    // (Debug builds name the module that reported it.)
     assert!(
-        reported.contains(&"Std: repeated (2 more)".to_string()),
+        reported.contains(&"Std: repeated [main] (2 more)".to_string()),
         "{reported:?}"
     );
     // The broken listener's error reaches the handler for each of the six
@@ -404,6 +405,218 @@ print("count", StdCount())
     );
     assert_eq!(has("Std: unlimited"), 2, "{reported:?}");
     assert!(out.contains(&"count 11".to_string()), "{out:?}");
+}
+
+/// Listeners get the component, the handler's owner and the stack; debug
+/// builds append the module ID (from the error's location, else the stack,
+/// or `context.module`) and the component to the report.
+#[test]
+fn errors_listeners_learn_component_owner_and_stack() {
+    let out = modes(
+        &[
+            (
+                "src/main.wowlua",
+                r#"import * as errors from "wowlua:errors"
+import on, send, watchUnit from "wowlua:events"
+import hook from "wowlua:hooks"
+import after from "wowlua:timer"
+import * as callbacks from "wowlua:callbacks"
+import fail from "./sub/thing"
+
+local owner = { name = "owner" }
+errors.onError(function(msg: string, info: errors.ErrorInfo)
+    local stack = info.stack
+    print("info", tostring(info.component), info.owner == owner, type(stack) == "string" and #stack > 0)
+end)
+-- One-parameter listeners still fit.
+errors.onError(function(msg: string) end)
+
+declare message STD_OWNED()
+on("STD_OWNED", function() error("owned boom") end, owner)
+send("STD_OWNED")
+local t = { M = function(_self: any) end }
+hook(t, "M", function() error("hook boom") end, { owner = owner })
+t:M()
+errors.report("direct", { component = "mine", owner = owner })
+errors.report("named", { module = "sync" })
+errors.report({})
+local w = watchUnit({ "UNIT_HEALTH" }, function() error("watch boom") end, owner)
+w:setUnit("player")
+after(1, function() error("timer boom") end)
+errors.call(fail)
+interface Ev
+    Boom: () -> ()
+end
+local registry: callbacks.Registry<Ev> = callbacks.registry()
+registry:on("Boom", function() error("callback boom") end, owner)
+registry:fire("Boom")
+"#,
+            ),
+            (
+                "src/sub/thing.wowlua",
+                "export function fail()\n    error(\"sub boom\")\nend\n",
+            ),
+        ],
+        "",
+        r#"Mock.fire("UNIT_HEALTH", "player")
+Mock.advance(1)
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "info events: STD_OWNED handler true true",
+            "info hooks: M true true",
+            "info mine true true",
+            "info nil false true",
+            "info nil false true",
+            "info nil false true",
+            "info callbacks: Boom true true",
+            "info events: UNIT_HEALTH handler true true",
+            "info timer: after false true",
+        ],
+        "{out:?}"
+    );
+    // The dev build's reports.
+    let reported = errors(&out);
+    let has = |text: &str, tail: &str| {
+        reported
+            .iter()
+            .any(|r| r.contains(text) && r.ends_with(tail))
+    };
+    assert!(
+        has("owned boom", " [main] [events: STD_OWNED handler]"),
+        "{reported:?}"
+    );
+    assert!(has("hook boom", " [main] [hooks: M]"), "{reported:?}");
+    // Without a location in the message, the module comes from the stack.
+    assert!(has("Std: direct", "direct [main] [mine]"), "{reported:?}");
+    assert!(has("Std: table: ", " [main]"), "{reported:?}");
+    assert!(has("Std: named", "named [sync]"), "{reported:?}");
+    assert!(has("sub boom", "sub boom [sub/thing]"), "{reported:?}");
+    assert!(has("timer boom", " [main] [timer: after]"), "{reported:?}");
+}
+
+/// The isolated calls of events, hooks and timers allocate nothing when
+/// the callback succeeds (the client's `xpcall` passes the arguments on);
+/// a failing one is reported with its own context, also when nested.
+#[test]
+fn isolated_calls_allocate_nothing() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import on, onUnit, send, watchUnit from "wowlua:events"
+import call, callIn from "wowlua:errors"
+import hook from "wowlua:hooks"
+import every, repeating from "wowlua:timer"
+local C = Mock.check
+
+declare message STD_ALLOC(a: number, b: number)
+local n = 0
+local function count(_a: any, _b: any)
+    n += 1
+end
+on("STD_ALLOC", count)
+on("STD_ALLOC", count)
+-- The mock's own allocations (its `hooksecurefunc`, `Mock.fire`) are
+-- measured on code without the standard library.
+onUnit("UNIT_HEALTH", { "player" }, count, {})
+local raw = CreateFrame("Frame")
+raw:RegisterUnitEvent("UNIT_MAXHEALTH", "player")
+raw:SetScript("OnEvent", count)
+watchUnit({ "UNIT_LEVEL" }, count, {}):setUnit("player")
+local rawLevel = CreateFrame("Frame")
+rawLevel:RegisterUnitEvent("UNIT_NAME_UPDATE", "player")
+rawLevel:SetScript("OnEvent", count)
+local t = { M = function(_self: any, _a: any) end }
+hook(t, "M", count)
+local u = { M = function(_self: any, _a: any) end }
+hooksecurefunc(u, "M", count)
+_G.StdRawTicker = function(): TickerHandle
+    return C_Timer.NewTicker(1, function() n += 1 end)
+end
+_G.StdTicker = function(): TickerHandle
+    return every(1, function() n += 1 end)
+end
+_G.StdRepeating = function(): () -> ()
+    local r = repeating(1, function() n += 1 end)
+    r:start()
+    return function() r:stop() end
+end
+local context = { component = "test" }
+
+-- What `fn` allocates, run 100 times with the collector stopped.
+local function garbage(fn: () -> ()): number
+    fn()
+    collectgarbage("collect")
+    collectgarbage("stop")
+    local before = collectgarbage("count")
+    for _ = 1, 100 do
+        fn()
+    end
+    local after = collectgarbage("count")
+    collectgarbage("restart")
+    return after - before
+end
+_G.StdGarbage = garbage
+
+C(garbage(function() send("STD_ALLOC", 1, 2) end) == 0, "a message dispatch")
+C(garbage(function() callIn(context, count, 1, 2) end) == 0, "callIn")
+C(garbage(function() call(count, 1, 2) end) == 0, "call")
+C(garbage(function() t:M(1) end) == garbage(function() u:M(1) end), "a hooked call")
+local ok, a, b = callIn(context, function(x: number, y: number?) return x, y end, 1, nil)
+C(ok == true and a == 1 and b == nil, "callIn returns the results")
+
+declare message STD_FAIL()
+on("STD_FAIL", function() error("handler boom") end)
+on("STD_FAIL", function() print("next handler") end)
+send("STD_FAIL")
+t.M = function(_self: any) end
+hook(t, "M", function() error("hook boom") end)
+t:M()
+callIn({ component = "outer" }, function()
+    call(function() error("inner boom") end)
+    error("outer boom")
+end)
+"#,
+        )],
+        "",
+        r#"local C = Mock.check
+local unit = StdGarbage(function() Mock.fire("UNIT_HEALTH", "player") end)
+local rawUnit = StdGarbage(function() Mock.fire("UNIT_MAXHEALTH", "player") end)
+C(unit == rawUnit, "a unit event dispatch")
+local watched = StdGarbage(function() Mock.fire("UNIT_LEVEL", "player") end)
+local rawWatched = StdGarbage(function() Mock.fire("UNIT_NAME_UPDATE", "player") end)
+C(watched == rawWatched, "a watch's dispatch")
+local ticker = StdRawTicker()
+local rawTick = StdGarbage(function() Mock.advance(1) end)
+ticker:Cancel()
+ticker = StdTicker()
+local tick = StdGarbage(function() Mock.advance(1) end)
+-- (The engine's own timers vary by a few bytes.)
+C(tick <= rawTick, "a ticker's tick")
+ticker:Cancel()
+local stop = StdRepeating()
+local repeated = StdGarbage(function() Mock.advance(1) end)
+C(repeated <= rawTick, "a repeating timer's tick")
+stop()
+"#,
+    );
+    assert!(out.contains(&"next handler".to_string()), "{out:?}");
+    let reported = errors(&out);
+    let one = |text: &str, context: &str| {
+        reported
+            .iter()
+            .any(|r| r.starts_with("Std: ") && r.contains(text) && r.ends_with(context))
+    };
+    assert!(
+        one("handler boom", " [main] [events: STD_FAIL handler]"),
+        "{reported:?}"
+    );
+    assert!(one("hook boom", " [main] [hooks: M]"), "{reported:?}");
+    // Without a context, only the module is named.
+    assert!(one("inner boom", "inner boom [main]"), "{reported:?}");
+    assert!(one("outer boom", " [outer]"), "{reported:?}");
 }
 
 // ----------------------------------------------------------------- events --
@@ -492,7 +705,7 @@ fn events_registration_follows_the_handlers() {
     modes(
         &[(
             "src/main.wowlua",
-            r#"import on, onUnit, send from "wowlua:events"
+            r#"import on, onUnit, send, watchUnit from "wowlua:events"
 local C = Mock.check
 
 -- The shared frame registers plain events (without a unit filter).
@@ -536,11 +749,20 @@ u2:cancel()
 C(not frame:IsEventRegistered("UNIT_HEALTH"), "unregistered without handlers")
 u3:cancel()
 
--- WoW's limit of two units, at run time too.
-local units = { "a", "b", "c" }
-C(not pcall(onUnit, "UNIT_HEALTH", units, function() end), "three units are refused")
+-- More than two units: a frame per pair (WoW filters by two at most).
+frames = #Mock.frames()
+local u4 = onUnit("UNIT_HEALTH", { "party1", "party2", "party3" }, function() end)
+C(#Mock.frames() == frames + 2, "a frame per pair")
+C(select(3, Mock.frames()[frames + 1]:IsEventRegistered("UNIT_HEALTH")) == "party2", "the first pair")
+C(select(2, Mock.frames()[frames + 2]:IsEventRegistered("UNIT_HEALTH")) == "party3", "the unit left over")
+u4:cancel()
+C(not Mock.frames()[frames + 2]:IsEventRegistered("UNIT_HEALTH"), "every pair unregistered")
 local none: string[] = {}
 C(not pcall(onUnit, "UNIT_HEALTH", none, function() end), "no units is refused")
+-- An event this client lacks (shared flavor mode): never called, no error.
+local missing = "UNIT_" .. "MISSING"
+C(pcall(onUnit, missing, { "player" }, function() end), "onUnit of a missing event")
+C(pcall(function() watchUnit({ missing, "UNIT_HEALTH" }, function() end):setUnit("player") end), "a watch of a missing event")
 
 -- Sending a WoW event is an error (a name the compiler cannot see).
 local name = "BAG_" .. "UPDATE"
@@ -570,7 +792,7 @@ local second = on("PLAYER_STARTED_MOVING", function()
     print("second")
 end)
 on("PLAYER_STARTED_MOVING", function()
-    -- Removed during the dispatch: still ran this time.
+    -- Removed during the dispatch, after it ran.
     off(second)
 end)
 once("PLAYER_STARTED_MOVING", function()
@@ -599,6 +821,165 @@ StdHoles()
             "added",
             "holes 3 nil 2 nil"
         ],
+        "{out:?}"
+    );
+}
+
+/// A handler cancelled during a dispatch (by an earlier handler) is skipped
+/// for the rest of it, on every frame of an `onUnit` subscription too.
+#[test]
+fn events_cancelled_during_a_dispatch_are_skipped() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import on, onUnit, offAll, send from "wowlua:events"
+import type Subscription from "wowlua:events"
+
+declare message STD_SKIP()
+local later: Subscription? = nil
+on("STD_SKIP", function()
+    print("first")
+    if later then
+        later:cancel()
+    end
+end)
+later = on("STD_SKIP", function() print("later") end)
+on("STD_SKIP", function() print("last") end)
+send("STD_SKIP")
+send("STD_SKIP")
+
+-- An owner's handlers, cancelled by offAll from an earlier handler.
+local owner = {}
+on("UNIT_HEALTH", function() offAll(owner) end)
+on("UNIT_HEALTH", function(unit: string) print("owned", unit) end, owner)
+onUnit("UNIT_HEALTH", { "player", "target", "focus" }, function(unit: string) print("unit", unit) end, owner)
+"#,
+        )],
+        "",
+        r#"Mock.fire("UNIT_HEALTH", "focus")
+"#,
+    );
+    assert_eq!(plain(&out), ["first", "last", "first", "last"], "{out:?}");
+}
+
+/// `onUnit` and `@unitEvent` take any number of units; `offAll` takes a
+/// name; a unit listed twice gets its events once.
+#[test]
+fn events_any_number_of_units_and_offall_by_name() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import on, onUnit, offAll, send, unitEvent, watchUnit from "wowlua:events"
+
+@unitEvent("UNIT_LEVEL", "player", "target", "focus")
+local function level(unit: string)
+    print("level", unit)
+end
+
+local owner = {}
+onUnit("UNIT_HEALTH", { "party1", "party2", "party3", "party1" }, function(unit: string) print("party", unit) end, owner)
+on("BAG_UPDATE", function(bag: number) print("bag", bag) end, owner)
+declare message STD_A()
+on("STD_A", function() print("message") end, owner)
+local w = watchUnit({ "UNIT_HEALTH", "UNIT_MAXHEALTH" }, function(event: string, unit: string) print("watch", event, unit) end, owner)
+w:setUnit("party1")
+_G.StdDropHealth = function() offAll(owner, "UNIT_HEALTH") end
+_G.StdDropAll = function()
+    offAll(owner)
+    Mock.check(w.active == false, "offAll cancels the owner's watches")
+end
+_G.StdSend = function() send("STD_A") end
+"#,
+        )],
+        "",
+        r#"Mock.fire("UNIT_LEVEL", "focus")
+Mock.fire("UNIT_HEALTH", "party1")
+Mock.fire("UNIT_HEALTH", "party3")
+StdDropHealth()
+Mock.fire("UNIT_HEALTH", "party1")
+Mock.fire("UNIT_MAXHEALTH", "party1")
+Mock.fire("BAG_UPDATE", 2)
+StdSend()
+StdDropAll()
+Mock.fire("UNIT_MAXHEALTH", "party1")
+Mock.fire("BAG_UPDATE", 3)
+StdSend()
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "level focus",
+            "party party1",
+            "watch UNIT_HEALTH party1",
+            "party party3",
+            // offAll(owner, name) leaves the owner's other events alone.
+            "watch UNIT_MAXHEALTH party1",
+            "bag 2",
+            "message",
+        ],
+        "{out:?}"
+    );
+}
+
+/// A watch registers its events on one frame of its own, re-pointed by
+/// `setUnit`; a cancelled watch's frame serves the next watch.
+#[test]
+fn events_watch_unit_repoints_one_frame() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r##"import watchUnit from "wowlua:events"
+local C = Mock.check
+
+local frames = #Mock.frames()
+local w = watchUnit({ "UNIT_HEALTH", "UNIT_MAXHEALTH" }, function(event: string, unit: string, ...: any)
+    print("watch", event, unit, select("#", ...))
+end)
+C(#Mock.frames() == frames, "no frame before a unit")
+w:setUnit("player")
+C(#Mock.frames() == frames + 1, "one frame")
+local frame = Mock.frames()[frames + 1]
+C(select(2, frame:IsEventRegistered("UNIT_MAXHEALTH")) == "player", "every event registered")
+_G.StdWatch = w
+_G.StdCheck = function(step: string)
+    if step == "repointed" then
+        C(#Mock.frames() == frames + 1, "re-pointing keeps the frame")
+        C(select(3, frame:IsEventRegistered("UNIT_HEALTH")) == "focus", "both units")
+    elseif step == "cleared" then
+        C(not frame:IsEventRegistered("UNIT_HEALTH"), "nil unregisters")
+    elseif step == "cancelled" then
+        C(w.active == false and not frame:IsEventRegistered("UNIT_HEALTH"), "cancelled")
+        local again = watchUnit({ "UNIT_HEALTH" }, function() print("again") end)
+        again:setUnit("player")
+        C(#Mock.frames() == frames + 1, "a cancelled watch's frame is reused")
+        C(select(2, frame:IsEventRegistered("UNIT_HEALTH")) == "player", "for the next watch")
+        again:cancel()
+    end
+end
+"##,
+        )],
+        "",
+        r#"Mock.fire("UNIT_HEALTH", "player")
+Mock.fire("UNIT_HEALTH", "target")
+StdWatch:setUnit("target", "focus")
+StdCheck("repointed")
+Mock.fire("UNIT_MAXHEALTH", "focus")
+Mock.fire("UNIT_HEALTH", "player")
+StdWatch:setUnit(nil)
+StdCheck("cleared")
+Mock.fire("UNIT_HEALTH", "target")
+StdWatch:setUnit("player")
+StdWatch:cancel()
+StdWatch:cancel()
+StdWatch:setUnit("target")
+StdCheck("cancelled")
+Mock.fire("UNIT_HEALTH", "target")
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        ["watch UNIT_HEALTH player 0", "watch UNIT_MAXHEALTH focus 0"],
         "{out:?}"
     );
 }
@@ -827,6 +1208,62 @@ Mock.advance(5)
     );
 }
 
+/// `repeating`: stopped until started, the first tick one interval after
+/// each start, a start while running changes nothing, errors isolated.
+#[test]
+fn timers_repeating_start_and_stop() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import repeating from "wowlua:timer"
+
+local tick = repeating(1, function() print("tick", GetTime()) end)
+Mock.check(not tick:isRunning(), "stopped at first")
+local failed = 0
+local broken = repeating(1, function()
+    failed += 1
+    error("tick boom")
+end)
+broken:start()
+_G.StdTick = tick
+_G.StdBroken = broken
+_G.StdFailed = function(): number return failed end
+"#,
+        )],
+        "",
+        r#"StdTick:start()
+Mock.advance(0.5)
+StdTick:start()
+Mock.advance(2)
+StdTick:setRunning(false)
+print("running", StdTick:isRunning())
+Mock.advance(3)
+StdTick:setRunning(true)
+print("running", StdTick:isRunning())
+Mock.advance(1)
+StdTick:stop()
+StdTick:stop()
+StdBroken:stop()
+Mock.advance(2)
+print("failed", StdFailed())
+"#,
+    );
+    // The failing timer kept ticking until stopped (at 6.5).
+    assert_eq!(
+        plain(&out),
+        [
+            "tick 1",
+            "tick 2",
+            "running false",
+            "running true",
+            "tick 6.5",
+            "failed 6"
+        ],
+        "{out:?}"
+    );
+    assert!(errors(&out)[0].contains("tick boom"), "{out:?}");
+}
+
 #[test]
 fn timers_edge_cases() {
     let out = modes(
@@ -1009,6 +1446,10 @@ local s = StdC.step("twice")
 StdC.defer(s)
 StdC.defer(s)
 StdC.apply(2)
+-- With a key: the first call's place, the latest function.
+StdC.defer(StdC.step("key a1"), "a")
+StdC.defer(StdC.step("key b"), "b")
+StdC.defer(StdC.step("key a2"), "a")
 -- Combat starts again in the middle of the flush: the rest waits.
 StdC.defer(StdC.restart)
 StdC.defer(StdC.step("after restart"))
@@ -1029,6 +1470,8 @@ Mock.fire("PLAYER_REGEN_ENABLED")
             "apply 2",
             "step twice",
             "step twice",
+            "step key a2",
+            "step key b",
             "restart",
             "in combat again true",
             "step after restart",
@@ -1686,6 +2129,62 @@ fn slash_router_help() {
     assert_eq!(out[0..9], out[9..18], "{out:?}");
 }
 
+/// Commands added and removed at run time, with owners; help and
+/// `commands()` in the order they were added (`order = "added"`).
+#[test]
+fn slash_router_commands_come_and_go() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import slash, router from "wowlua:slash"
+local owner = {}
+local cmds = router({ zeta = { run = function() print("zeta") end, help = "Defined first" } }, { order = "added" })
+cmds:add("beta", { args = { "number" }, run = function(n: number) print("beta", n) end, help = "B", aliases = { "b" } }, owner)
+cmds:add("alpha", { run = function() print("alpha") end }, owner)
+cmds:add("solo", { run = function() print("solo") end })
+_G.StdCmds = cmds
+_G.StdOwner = owner
+@slash("/std")
+local function onCommand(msg: string) print("->", cmds:dispatch(msg)) end
+"#,
+        )],
+        "",
+        r#"Mock.slash("/std b 2")
+Mock.slash("/std help")
+for _, c in ipairs(StdCmds:commands()) do print(c.name, c.usage, c.help, #c.aliases, c.owner == StdOwner) end
+print(pcall(StdCmds.add, StdCmds, "other", { run = function() end, aliases = { "B" } }))
+StdCmds:removeAll(StdOwner)
+StdCmds:remove("solo")
+StdCmds:remove("nothing")
+Mock.slash("/std b 2")
+"#,
+    );
+    let out: Vec<String> = plain(&out)
+        .iter()
+        .map(|l| l.replace("|cff33ff99Std|r: ", ""))
+        .collect();
+    assert_eq!(
+        out,
+        [
+            "beta 2",
+            "-> true",
+            "zeta - Defined first",
+            "beta <number> - B",
+            "alpha",
+            "solo",
+            "-> true",
+            "zeta zeta Defined first 0 false",
+            "beta beta <number> B 1 true",
+            "alpha alpha nil 0 true",
+            "solo solo nil 0 false",
+            "false router: \"B\" is taken by the command \"beta\"",
+            // Only zeta is left: the help, and not dispatched.
+            "zeta - Defined first",
+            "-> false",
+        ],
+        "{out:?}"
+    );
+}
 // -------------------------------------------------------------- callbacks --
 
 #[test]
@@ -1707,7 +2206,8 @@ events:offAll(owner)
 events:fire("Kill", 3)
 events:fire("Nobody", 1)
 
--- Changes during a fire apply to the next one.
+-- A handler added during a fire waits for the next one; one cancelled
+-- during a fire is skipped at once.
 local late: any = nil
 local second: any = nil
 events:on("Tick", function()
@@ -1723,6 +2223,20 @@ events:fire("Tick")
 local sub = events:on("Solo", function() end)
 sub:cancel()
 print("solo", events:has("Solo"), sub.active)
+
+-- Removal by name and function (every subscription of it, `once` too),
+-- and by owner and name.
+local onKill = function(n: number) print("by function", n) end
+events:on("Kill", onKill)
+events:once("Kill", onKill)
+events:on("Reset", function() print("reset kept") end, owner)
+events:on("Kill", function(n: number) print("owner's kill", n) end, owner)
+events:fire("Kill", 20)
+events:off("Kill", onKill)
+events:offAll(owner, "Kill")
+events:fire("Kill", 21)
+events:fire("Reset")
+events:offAll(owner)
 
 -- A plain Lua consumer, CallbackHandler style.
 local consumer: any = {}
@@ -1763,10 +2277,13 @@ print("compat", plainRegistry.RegisterCallback == nil)
             "first kill 1",
             "kill 2",
             "tick 1",
-            "tick 2",
             "tick 1",
             "tick late",
             "solo false false",
+            "by function 20",
+            "by function 20",
+            "owner's kill 20",
+            "reset kept",
             "method true Kill 4",
             "method arg x Kill 5",
             "default method Kill 6",
@@ -1827,8 +2344,34 @@ fn core_modules_are_checked_at_compile_time() {
             "E8003",
         ),
         (
-            "import onUnit from \"wowlua:events\"\nonUnit(\"UNIT_HEALTH\", { \"player\", \"target\", \"focus\" }, function() end)\n",
-            "E8100",
+            "import onUnit from \"wowlua:events\"\nonUnit(\"UNIT_HELTH\", { \"player\", \"target\", \"focus\" }, function() end)\n",
+            "E8003",
+        ),
+        (
+            "import watchUnit from \"wowlua:events\"\nwatchUnit({ \"UNIT_HEALTH\", \"UNIT_HELTH\" }, function() end)\n",
+            "E8003",
+        ),
+        (
+            "import * as events from \"wowlua:events\"\ndeclare message STD_M()\nevents.watchUnit({ \"STD_M\" }, function() end)\n",
+            "E8003",
+        ),
+        // The handler gets one of the names first.
+        (
+            "import watchUnit from \"wowlua:events\"\nwatchUnit({ \"UNIT_HEALTH\" }, function(event: number) end)\n",
+            "E2001",
+        ),
+        (
+            "import offAll from \"wowlua:events\"\noffAll({}, \"BAG_UPDAET\")\n",
+            "E8003",
+        ),
+        // `errors.call` returns the function's results, typed.
+        (
+            "import * as errors from \"wowlua:errors\"\nlocal ok, n = errors.call(function(a: number): number return a end, 1)\nlocal s: string = n\nprint(ok, s)\n",
+            "E2001",
+        ),
+        (
+            "import call from \"wowlua:errors\"\ncall(function(a: number) end, \"one\")\n",
+            "E2001",
         ),
         (
             "import send from \"wowlua:events\"\nsend(\"PLAYER_LOGIN\")\n",
@@ -1843,8 +2386,8 @@ fn core_modules_are_checked_at_compile_time() {
             "E8002",
         ),
         (
-            "import unitEvent from \"wowlua:events\"\n@unitEvent(\"UNIT_HEALTH\", \"player\", \"target\", \"focus\")\nlocal function f() end\n",
-            "E8100",
+            "import unitEvent from \"wowlua:events\"\n@unitEvent(\"UNIT_HELTH\", \"player\", \"target\", \"focus\")\nlocal function f() end\n",
+            "E8003",
         ),
         (
             "import slash from \"wowlua:slash\"\n@slash(\"std\")\nlocal function f() end\n",
@@ -1865,6 +2408,45 @@ fn core_modules_are_checked_at_compile_time() {
         (
             "import router from \"wowlua:slash\"\nlocal r = router({ go = { args = { \"number\" }, flags = { \"all\" }, run = function(a) end } })\n",
             "E8112",
+        ),
+        // Commands added later are checked alike.
+        (
+            "import router from \"wowlua:slash\"\nlocal r = router({})\nr:add(\"go\", { args = { \"number\" }, run = function(a: number, b: string) end })\n",
+            "E8112",
+        ),
+        (
+            "import router from \"wowlua:slash\"\nlocal r = router({})\nr:add(\"go\", { args = { \"rest\", \"number\" }, run = function(a: string, b: number) end })\n",
+            "E8112",
+        ),
+        // `known`'s fallback joins the result's type.
+        (
+            "import * as secret from \"wowlua:secret\"\nlocal function f(name: string | Secret<string>)\n    local b: boolean = secret.known(name, \"?\")\n    print(b)\nend\nf(\"x\")\n",
+            "E2001",
+        ),
+        // A registry's names and handlers in `off` and `offAll`.
+        (
+            "import * as callbacks from \"wowlua:callbacks\"\ninterface Ev\n    Kill: (n: number) -> ()\nend\nlocal r: callbacks.Registry<Ev> = callbacks.registry()\nr:off(\"Kil\", function(n: number) end)\n",
+            "E8420",
+        ),
+        (
+            "import * as callbacks from \"wowlua:callbacks\"\ninterface Ev\n    Kill: (n: number) -> ()\nend\nlocal r: callbacks.Registry<Ev> = callbacks.registry()\nr:offAll({}, \"Kil\")\n",
+            "E8420",
+        ),
+        (
+            "import * as callbacks from \"wowlua:callbacks\"\ninterface Ev\n    Kill: (n: number) -> ()\nend\nlocal r: callbacks.Registry<Ev> = callbacks.registry()\nr:off(\"Kill\", function(n: string) end)\n",
+            "E2001",
+        ),
+        (
+            "import * as callbacks from \"wowlua:callbacks\"\ninterface Ev\n    Kill: (n: number) -> ()\nend\nlocal r: callbacks.Registry<Ev> = callbacks.registry()\nr:off(\"Kill\")\n",
+            "E2007",
+        ),
+        (
+            "import * as callbacks from \"wowlua:callbacks\"\ninterface Ev\n    Kill: (n: number) -> ()\nend\nlocal r: callbacks.Registry<Ev> = callbacks.registry()\nlocal sub = r:on(\"Kill\", function() end)\nr:off(sub, function() end)\n",
+            "E2006",
+        ),
+        (
+            "import * as callbacks from \"wowlua:callbacks\"\ninterface Ev\n    Kill: (n: number) -> ()\nend\nlocal r: callbacks.Registry<Ev> = callbacks.registry()\nlocal name = \"Kill\"\nr:off(name, function() end)\n",
+            "E2001",
         ),
         (
             "import * as saved from \"wowlua:saved\"\nlocal n = \"StdDB\"\nlocal db = saved.bind(n, { version = 1, defaults = {} })\n",
@@ -2038,6 +2620,16 @@ local function g() end
 @unitEvent("UNIT_HEALTH", "player", "target")
 local function h(unit: string) end
 
+-- Any number of units.
+@unitEvent("UNIT_MAXHEALTH", "party1", "party2", "party3", "party4")
+local function party(unit: string) end
+onUnit("UNIT_POWER_UPDATE", { "player", "target", "focus" }, function() end)
+local watch = events.watchUnit({ "UNIT_HEALTH", "UNIT_MAXHEALTH" }, function(event: "UNIT_HEALTH" | "UNIT_MAXHEALTH", unit: string) end, {})
+watch:setUnit("player")
+watch:setUnit("target", "focus")
+watch:setUnit(nil)
+events.offAll(watch, "UNIT_HEALTH")
+
 -- A message declared in another module.
 send("STD_PING", 1)
 on("BAG_UPDATE", function() end)
@@ -2081,6 +2673,81 @@ hookScript("StdOwnFrame", "OnShow", function() end)
 "#,
         ),
         (
+            "src/later.wowlua",
+            r#"import router from "wowlua:slash"
+import * as callbacks from "wowlua:callbacks"
+import * as secret from "wowlua:secret"
+import * as tbl from "wowlua:table"
+import * as log from "wowlua:log"
+import * as secure from "wowlua:secure"
+import defer from "wowlua:combat"
+import * as errors from "wowlua:errors"
+import repeating from "wowlua:timer"
+import hook from "wowlua:hooks"
+
+-- Typed results of an isolated call; listeners learn about the error.
+local ok, n, s = errors.call(function(a: number): (number, string) return a, "" end, 1)
+local typed: number, text: string, okay: boolean = n, s, ok
+print(typed, text, okay)
+errors.wrap(function(a: number, b: string) end)(1, "")
+errors.onError(function(msg: string, info: errors.ErrorInfo)
+    local component: string? = info.component
+    local stack: string? = info.stack
+    print(msg, component, stack, info.owner)
+end)
+errors.onError(function(msg: string) end)
+local tick = repeating(0.5, function() end)
+tick:setRunning(true)
+if tick:isRunning() then tick:stop() end
+tick:start()
+hook(GameTooltip, "SetUnit", function() end, { owner = tick })
+
+-- Commands that come and go, listed in the order they were added.
+local owner = {}
+local r = router({}, { order = "added" })
+r:add("go", { args = { "number", "rest" }, run = function(a: number, b: string) end }, owner)
+r:add("stop", { run = function() end, help = "Stop" })
+for _, c in ipairs(r:commands()) do print(c.name, c.usage, c.help, #c.aliases) end
+r:remove("stop")
+r:removeAll(owner)
+
+interface Ev
+    Kill: (n: number) -> ()
+end
+local events: callbacks.Registry<Ev> = callbacks.registry()
+local onKill = function(n: number) end
+local sub = events:on("Kill", onKill, owner)
+events:off("Kill", onKill)
+events:off(sub)
+events:offAll(owner, "Kill")
+events:offAll(owner)
+
+-- `known`: the value's type, joined with the fallback's.
+local function show(name: string | Secret<string>, hp: number | Secret<number>)
+    local maybe: string? = secret.known(name, nil)
+    local sure: string = secret.known(name, "?")
+    local n: number = secret.known(hp, 0)
+    print(maybe, sure, n)
+end
+show("x", 1)
+
+-- Truthy flags from legacy answers, and the readable narrowing.
+local inRaid: boolean = secret.flag(UnitInRaid("player"))
+local level = UnitLevel("player")
+if secret.readable(level) and level > 10 then print(inRaid) end
+
+local copied = tbl.copy({ a = { 1 } }, { shared = false })
+local names = tbl.keys({ [1] = true, b = true }, function(a: number | string, b: number | string) return tostring(a) < tostring(b) end)
+print(copied, names)
+
+log.configure({ prefix = "|cff9fd3c7Std|r ", chatLevel = "debug" })
+local header = CreateFrame("Frame", nil, UIParent, "SecureHandlerStateTemplate")
+local paging = secure.state(header, "page", "[mod:shift] 2; 1")
+paging:cancel()
+defer(function() header:Show() end, "header")
+"#,
+        ),
+        (
             "src/messages.wowlua",
             "declare message STD_PING(n: number)\n",
         ),
@@ -2088,6 +2755,52 @@ hookScript("StdOwnFrame", "OnShow", function() end)
     let stderr = build(dir.path(), "dev");
     assert!(
         !stderr.contains("[E8") && !stderr.contains("[W8"),
+        "{stderr}"
+    );
+}
+
+/// An enclosing existence test of the hooked member stands for its
+/// declaration (no W8040), but a target of a load-on-demand addon still
+/// needs `opts.addon` (W8102): before the addon loads, the test fails and
+/// the hook is never installed.
+#[test]
+fn hooks_inside_existence_tests() {
+    let stderr = check(
+        r#"import hook, hookScript from "wowlua:hooks"
+if _G.StdNoSuchFunction then
+    hook("StdNoSuchFunction", function() end)
+end
+if ChatFrame1.StdNoSuchMethod then
+    hook(ChatFrame1, "StdNoSuchMethod", function() end)
+end
+local frame = ChatFrame1
+if frame.StdOtherMethod ~= nil then
+    hook(frame, "StdOtherMethod", function() end)
+end
+if _G.CollectionsJournal_UpdateSelectedTab then
+    hook("CollectionsJournal_UpdateSelectedTab", function() end)
+end
+hook(ChatFrame1, "StdNoSuchMethod", function() end)
+if ChatFrame1 then
+    hook(ChatFrame1, "StdNoSuchMethod", function() end)
+end
+if _G.StdNoSuchFunction then
+    hookScript("StdNoSuchFrame", "OnShow", function() end)
+end
+"#,
+    );
+    let found: Vec<String> = stderr
+        .lines()
+        .filter(|l| l.starts_with("src/main.wowlua"))
+        .filter_map(|l| {
+            let line = l.split(':').nth(1)?;
+            let code = l.split("warning[").nth(1)?.split(']').next()?;
+            Some(format!("{line} {code}"))
+        })
+        .collect();
+    assert_eq!(
+        found,
+        ["13 W8102", "15 W8040", "17 W8040", "20 W8040"],
         "{stderr}"
     );
 }
@@ -3333,6 +4046,43 @@ print("locked again", at(box))
 
 // ----------------------------------------------------------------- secret --
 
+/// `secret.known(v, fallback)` is typed `T | F`: a nil fallback keeps the
+/// result optional, a value of `T` makes it plain (strict mode).
+#[test]
+fn secret_known_joins_the_fallback_type() {
+    let dir = project(&[(
+        "src/main.wowlua",
+        r#"import * as secret from "wowlua:secret"
+local function show(name: string | Secret<string>)
+    local maybe: string? = secret.known(name, nil)
+    local sure: string = secret.known(name, "?")
+    local wrong: string = secret.known(name, nil)
+    print(maybe, sure, wrong)
+end
+show("x")
+"#,
+    )]);
+    let manifest = dir.path().join("wowlua.json");
+    let text = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        text.replacen('{', r#"{ "check": { "mode": "strict" },"#, 1),
+    )
+    .unwrap();
+    let assert = wowlua(dir.path())
+        .args(["build", "--message-format", "short"])
+        .assert();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    let errors: Vec<&str> = stderr.lines().filter(|l| l.contains("error[")).collect();
+    assert_eq!(errors.len(), 1, "{stderr}");
+    assert!(
+        errors[0].contains("E2001")
+            && errors[0].contains("main.wowlua:5")
+            && errors[0].contains("string?"),
+        "{stderr}"
+    );
+}
+
 /// `wowlua:secret`: helpers that test for secrecy before anything else.
 #[test]
 fn secret_helpers() {
@@ -3350,11 +4100,18 @@ local s = Mock.secret()
 print(secret.isSecret(s), secret.isSecret(1), secret.known(s, 5), secret.known(nil, 6), secret.known(7, 0))
 print(secret.flag(s), secret.flag(true), secret.flag(nil), secret.flag(false))
 print(secret.amount(s) == s, secret.amount(nil), secret.amount(3))
+-- `flag` by truthiness (legacy 1/nil answers); `readable`: present, not secret.
+print(secret.flag(1), secret.flag(0), secret.flag("yes"), secret.readable(s), secret.readable(nil), secret.readable(false), secret.readable(0))
 "#,
     );
     assert_eq!(
         plain(&out),
-        ["true false 5 6 7", "false true false false", "true 0 3",]
+        [
+            "true false 5 6 7",
+            "false true false false",
+            "true 0 3",
+            "true true true false false true true",
+        ]
     );
 }
 
@@ -3607,6 +4364,90 @@ print("again", engine.unit, engine:IsShown())
     );
 }
 
+/// `aura.container`'s group options and setters: `exclude`, per-group
+/// size, spacing, order and gap, lazy groups (added once they have room,
+/// keeping their place and what was set meanwhile), a new filter, spells
+/// that keep the dispel types, and sizes applied out of combat;
+/// `hasContainers`.
+#[test]
+fn aura_container_groups_change_later() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as aura from "wowlua:aura"
+_G.StdAura = aura
+_G.StdContainer = aura.container(UIParent, {
+    unit = "player",
+    lazy = true,
+    size = 20,
+    spacing = 3,
+    groups = {
+        { key = "debuffs", filter = "HARMFUL", exclude = { 116 } },
+        { key = "later", filter = "HELPFUL", max = 0, dispelTypes = { "Curse" }, spacing = 1, gap = 5 },
+        { key = "first", filter = "HELPFUL|PLAYER", order = 0, size = 16 },
+    },
+})
+"#,
+        )],
+        AURA_SETUP,
+        r#"Mock.loadAddon("Std")
+local c = StdContainer
+local engine = c.frame
+print("has", StdAura.hasContainers())
+local function groups()
+    local parts = {}
+    for _, g in ipairs(engine.groups) do
+        local l = g.options.layout
+        parts[#parts + 1] = `{g.key}:{g.filter}:{l.layoutIndex}:{l.elementWidth}:{l.elementSpacing}:{tostring(l.groupSpacing)}`
+    end
+    print(table.concat(parts, " "))
+end
+groups()
+c:refresh()
+print("debuffs", table.concat(engine.showing.debuffs, " "))
+-- What a lazy group gets before it has room waits for it.
+c:setGroupFilter("later", "HARMFUL")
+c:setGroupSpells("later", { 980, 116 })
+c:setGroupMax("later", 2)
+groups()
+c:refresh()
+print("later", table.concat(engine.showing.later, " "))
+c:setGroupFilter("debuffs", "HELPFUL|PLAYER")
+c:refresh()
+print("debuffs now", engine.groups[1].filter, table.concat(engine.showing.debuffs, " "))
+-- Sizes wait for the end of combat; new buttons take the latest.
+local button = engine.groups[2].buttons[1]
+print("size", button:GetSize())
+Mock.fire("PLAYER_REGEN_DISABLED")
+c:setGroupSize("first", 30)
+c:setGroupSize("first", 32)
+print("in combat", button:GetWidth(), engine.groups[2].options.layout.elementWidth)
+Mock.fire("PLAYER_REGEN_ENABLED")
+print("after combat", button:GetSize())
+Mock.auras.player[#Mock.auras.player + 1] = { name = "Mark", spellId = 1126, auraInstanceID = 6, isHelpful = true, isFromPlayerOrPlayerPet = true, applications = 0 }
+c:refresh()
+print("new button", engine.groups[2].buttons[2]:GetSize())
+Mock.noAuraContainers = true
+print("has", StdAura.hasContainers())
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "has true",
+            "debuffs:HARMFUL:1:20:3:nil first:HELPFUL|PLAYER:0:16:3:nil",
+            "debuffs 980",
+            "debuffs:HARMFUL:1:20:3:nil first:HELPFUL|PLAYER:0:16:3:nil later:HARMFUL:2:20:1:5",
+            "later 980",
+            "debuffs now HELPFUL|PLAYER 1459",
+            "size 16 16",
+            "in combat 16 32",
+            "after combat 32 32",
+            "new button 32 32",
+            "has false",
+        ]
+    );
+}
 // ------------------------------------------------------------------ spell --
 
 /// `wowlua:spell`: spell data, cooldowns with secret times (still telling
@@ -4173,6 +5014,18 @@ local doubled = tbl.map({ 1, 2, 3 }, function(v) return v * 2 end)
 local odd = tbl.filter({ 1, 2, 3, 4 }, function(v) return v % 2 == 1 end)
 local found, at = tbl.find({ "a", "b" }, function(v) return v == "b" end)
 print(table.concat(doubled, ","), table.concat(odd, ","), found, at, tbl.contains({ "x" }, "x"))
+-- Keys are kept as they are (a frame or a table as a key stays itself).
+local frame = CreateFrame("Frame")
+local key = {}
+local byKey = tbl.copy({ [frame] = 1, [key] = { 2 } })
+print(byKey[frame], byKey[key][1], byKey[key] ~= nil)
+-- `shared = false`: no two places share a table; a cycle is an error.
+local shared = { 1 }
+local both = { a = shared, b = shared }
+local kept, apart = tbl.copy(both), tbl.copy(both, { shared = false })
+print(kept.a == kept.b, apart.a == apart.b, apart.a[1], apart.a ~= shared)
+print(pcall(tbl.copy, t, { shared = false }))
+print(table.concat(tbl.keys({ [2] = 1, b = 2, [1] = 3 }, function(x, y) return tostring(x) < tostring(y) end), ","))
 "#,
     );
     assert_eq!(
@@ -4184,6 +5037,10 @@ print(table.concat(doubled, ","), table.concat(odd, ","), found, at, tbl.contain
             "true false false",
             "a,b,c 3 true",
             "2,4,6 1,3 b 2 true",
+            "1 2 true",
+            "true false 1 true",
+            "false copy: the table contains itself, which `shared = false` cannot copy",
+            "1,2,b",
         ]
     );
 }
@@ -4564,6 +5421,12 @@ Mock.fire("GROUP_ROSTER_UPDATE")
 secure.visibility(box, nil)
 Mock.fire("PLAYER_REGEN_DISABLED")
 print("no driver", box:IsShown(), #Mock.stateDrivers)
+-- Without `fn`, only the driver (for an `_onstate-<name>` snippet).
+Mock.fire("PLAYER_REGEN_ENABLED")
+local page = secure.state(box, "page", "[mod:shift] 2; 1")
+print("driver only", #Mock.stateDrivers, box:GetAttribute("state-page"))
+page:cancel()
+print("removed", #Mock.stateDrivers)
 print(secure.evaluate("[combat] a; b"), secure.evaluate("[nocombat] a"))
 print(#Mock.errors)
 "#,
@@ -4579,7 +5442,9 @@ print(#Mock.errors)
             "state group",
             "state fast",
             "no driver false 0",
-            "a nil",
+            "driver only 1 1",
+            "removed 0",
+            "b a",
             "0",
         ]
     );

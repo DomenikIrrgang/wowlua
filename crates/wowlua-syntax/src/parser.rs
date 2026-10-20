@@ -2381,8 +2381,12 @@ impl<'a> Parser<'a> {
             }
             let start = self.start_at(0);
             let readonly = self.is_word("readonly")
-                && self.kind_at(1) == T::Name
-                && matches!(self.kind_at(2), T::Colon | T::QuestionColon);
+                && ((self.kind_at(1) == T::Name
+                    && matches!(self.kind_at(2), T::Colon | T::QuestionColon))
+                    || (self.kind_at(1) == T::LBracket
+                        && matches!(self.kind_at(2), T::String | T::LongString)
+                        && self.kind_at(3) == T::RBracket
+                        && matches!(self.kind_at(4), T::Colon | T::QuestionColon)));
             if readonly {
                 self.bump();
             }
@@ -2405,10 +2409,15 @@ impl<'a> Parser<'a> {
                         let t = self.advance();
                         let key = self.string_lit(&t);
                         self.bump();
-                        self.expect(T::Colon, ":")?;
+                        let optional = self.eat(T::QuestionColon);
+                        if !optional {
+                            self.expect(T::Colon, ":")?;
+                        }
                         let ty = self.ty()?;
                         TableTypeFieldData::NamedString {
                             key,
+                            optional,
+                            readonly,
                             ty: self.push_type(ty),
                             span: sp(self.span_from(start)),
                         }

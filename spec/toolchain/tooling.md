@@ -90,6 +90,15 @@ hears it, the next entries still run) fails the test or the file too, though
 `mock.errors()` does not list it: the code failed. The addon's
 `Bindings.xml` is read before its files load, as the client does.
 
+Every file loads with the name the client gives an addon's file,
+`Interface/AddOns/<Name>/` and its path in the AddOn folder
+(`Interface/AddOns/MyAddon/src/core/tracker.lua`), the test files, the
+runtime and the `test.addons`' files too: `debugstack()`,
+`GetSourceLocation()` and error messages show it (error messages as Lua
+shortens a longer name: `...` and its last 52 bytes). The runner's reports
+show the source paths instead (`src/core/tracker.wowlua:14`), a shortened
+name's too when only one of the addon's files ends that way.
+
 `test.addons` (manifest §9.18) names other addons' folders, a test's
 neighbours as the client would load them: each folder is an addon named
 after it, read from the TOC the client picks for the flavor

@@ -880,7 +880,7 @@ local function cvarFlags(): { [string]: string }
         return { absent = "ConsoleGetAllCommands or C_CVar.GetCVarInfo" }
     end
     const cvarType = G.Enum.ConsoleCommandType and G.Enum.ConsoleCommandType.Cvar
-    const lists: { [string]: string[] } = { secure = {}, readOnly = {}, locked = {} }
+    const lists: { secure: string[], readOnly: string[], locked: string[] } = { secure = {}, readOnly = {}, locked = {} }
     for _, info in ipairs(G.ConsoleGetAllCommands() :: any[]) do
         if info.commandType == cvarType and type(info.command) == "string" then
             local ok, _, _, _, _, locked, secure, readOnly = pcall(C_CVar.GetCVarInfo, info.command)

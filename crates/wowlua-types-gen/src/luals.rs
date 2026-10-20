@@ -37,6 +37,8 @@ struct Block {
     ty: Option<String>,
     deprecated: bool,
     enum_name: Option<String>,
+    /// `---#nopage`: Ketho's mark for a function the wiki has no page for.
+    nopage: bool,
 }
 
 impl Converter {
@@ -61,6 +63,8 @@ impl Converter {
                 }
                 if let Some(t) = tag.strip_prefix('@') {
                     self.tag(t, &mut block);
+                } else if tag.trim_end() == "#nopage" {
+                    block.nopage = true;
                 }
                 continue;
             }
@@ -240,6 +244,19 @@ impl Converter {
             }));
         }
         let (returns, ret_vararg) = split_returns(&block.returns);
+        // A function without a page and without annotations has an unknown
+        // signature, not an empty one: Blizzard's code calls
+        // `SelectActiveQuest(self:GetID())`, and
+        // `GetQuestLogCompletionText(2)` answers a string (the full probe).
+        if block.nopage && block.params.is_empty() && block.returns.is_empty() {
+            return Sig {
+                params: out,
+                vararg: Some(vararg.unwrap_or_else(|| "any".into())),
+                ret_vararg: Some("any".into()),
+                deprecated: block.deprecated,
+                ..Sig::default()
+            };
+        }
         Sig {
             type_params: block.generics.clone(),
             params: out,
@@ -1003,5 +1020,23 @@ function C_Thing.Do(...) end
             d.namespaces["C_Thing"].functions["Do"][0].vararg.as_deref(),
             Some("any")
         );
+    }
+
+    /// A function the wiki has no page for (`---#nopage`) and nothing
+    /// annotates takes and answers anything; its parameter names stay.
+    #[test]
+    fn functions_without_a_page_are_untyped() {
+        let src = "---#nopage  \n---[Documentation](https://warcraft.wiki.gg/wiki/API_SelectActiveQuest)\nfunction SelectActiveQuest() end\n\n---#nopage  \nfunction AutoLootMailItem(index) end\n\n---@param x number\nfunction Typed(x) end\n";
+        let d = convert(&[("x.lua".into(), src.into())]);
+        let select = &d.functions["SelectActiveQuest"][0];
+        assert!(select.params.is_empty());
+        assert_eq!(select.vararg.as_deref(), Some("any"));
+        assert_eq!(select.ret_vararg.as_deref(), Some("any"));
+        let auto = &d.functions["AutoLootMailItem"][0];
+        assert_eq!(auto.params[0].name, "index");
+        assert_eq!(auto.vararg.as_deref(), Some("any"));
+        let typed = &d.functions["Typed"][0];
+        assert_eq!(typed.vararg, None);
+        assert_eq!(typed.ret_vararg, None);
     }
 }

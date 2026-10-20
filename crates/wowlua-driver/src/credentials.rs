@@ -1,7 +1,8 @@
 //! API tokens of `wowlua login` (Package manager §10.11): the OS credential
 //! store (macOS Keychain, Windows Credential Manager, Secret Service), or,
 //! where none is available, `tokens` in `$WOWLUA_HOME/config.json` (mode
-//! 0600, W4326). `WOWLUA_NO_KEYRING=1` skips the credential store.
+//! 0600, W4326). `WOWLUA_NO_KEYRING=1` skips the credential store, and
+//! without a terminal reading, saving and removing a token skip it too.
 
 use serde_json::Value;
 use std::path::PathBuf;
@@ -14,10 +15,52 @@ const SERVICE: &str = "wowlua";
 pub enum Saved {
     CredentialStore,
     Config,
+    /// In `config.json` because there is no terminal: a later publish
+    /// without one reads only there.
+    ConfigNoTerminal,
 }
 
 fn keyring_enabled() -> bool {
     std::env::var("WOWLUA_NO_KEYRING").map_or(true, |v| v.is_empty() || v == "0")
+}
+
+/// How [`get`] treats the OS credential store.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+enum StoreUse {
+    /// Read; it may ask the user to allow it (a dialog).
+    Read,
+    /// Turned off (`WOWLUA_NO_KEYRING`).
+    Off,
+    /// Not read, since there is no terminal: a background job never waits
+    /// for a dialog nobody answers.
+    NoTerminal,
+}
+
+/// The store is read only with a terminal on both ends (standard input and
+/// standard error), on every platform.
+fn store_use(enabled: bool, stdin_terminal: bool, stderr_terminal: bool) -> StoreUse {
+    if !enabled {
+        StoreUse::Off
+    } else if stdin_terminal && stderr_terminal {
+        StoreUse::Read
+    } else {
+        StoreUse::NoTerminal
+    }
+}
+
+fn current_store_use() -> StoreUse {
+    use std::io::IsTerminal;
+    store_use(
+        keyring_enabled(),
+        std::io::stdin().is_terminal(),
+        std::io::stderr().is_terminal(),
+    )
+}
+
+/// Whether [`get`] reads the OS credential store, which may wait for the
+/// user to allow it.
+pub fn reads_store() -> bool {
+    current_store_use() == StoreUse::Read
 }
 
 fn entry(kind: &str) -> Option<keyring::Entry> {
@@ -61,17 +104,59 @@ fn write_config(config: &Value) -> Result<(), String> {
     file.write_all(text.as_bytes()).map_err(|e| e.to_string())
 }
 
-/// The saved token of a site type (`curseforge`, `wago`, …).
-pub fn get(kind: &str) -> Option<String> {
-    entry(kind)
-        .and_then(|e| e.get_password().ok())
-        .or_else(|| read_config()["tokens"][kind].as_str().map(str::to_string))
-        .filter(|t| !t.is_empty())
+/// Why there is no saved token.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Unread {
+    /// None was saved.
+    Missing,
+    /// There is no terminal, so the OS credential store was not read, and
+    /// `config.json` has none.
+    NoTerminal,
 }
 
-/// Saves a token: in the credential store, else in `config.json`.
+/// A token from the credential store (when it was read), else from
+/// `config.json`.
+fn decide(
+    store: StoreUse,
+    stored: Option<String>,
+    config: Option<String>,
+) -> Result<String, Unread> {
+    let stored = if store == StoreUse::Read {
+        stored
+    } else {
+        None
+    };
+    stored
+        .filter(|t| !t.is_empty())
+        .or(config.filter(|t| !t.is_empty()))
+        .ok_or(if store == StoreUse::NoTerminal {
+            Unread::NoTerminal
+        } else {
+            Unread::Missing
+        })
+}
+
+/// The saved token of a site type (`curseforge`, `wago`, …). Without a
+/// terminal, only `config.json` is read.
+pub fn get(kind: &str) -> Result<String, Unread> {
+    let store = current_store_use();
+    let stored = match store {
+        StoreUse::Read => entry(kind).and_then(|e| e.get_password().ok()),
+        StoreUse::Off | StoreUse::NoTerminal => None,
+    };
+    decide(
+        store,
+        stored,
+        read_config()["tokens"][kind].as_str().map(str::to_string),
+    )
+}
+
+/// Saves a token: in the credential store (with a terminal), else in
+/// `config.json`.
 pub fn set(kind: &str, token: &str) -> Result<Saved, String> {
-    if let Some(e) = entry(kind)
+    let store = current_store_use();
+    if store == StoreUse::Read
+        && let Some(e) = entry(kind)
         && e.set_password(token).is_ok()
     {
         // A token saved before in `config.json` would be stale.
@@ -92,7 +177,11 @@ pub fn set(kind: &str, token: &str) -> Result<Saved, String> {
     }
     tokens[kind] = Value::String(token.to_string());
     write_config(&config)?;
-    Ok(Saved::Config)
+    Ok(if store == StoreUse::NoTerminal {
+        Saved::ConfigNoTerminal
+    } else {
+        Saved::Config
+    })
 }
 
 fn remove_from_config(kind: &str) -> Result<bool, String> {
@@ -107,9 +196,11 @@ fn remove_from_config(kind: &str) -> Result<bool, String> {
     Ok(removed)
 }
 
-/// Removes a saved token; `false` when there was none.
+/// Removes a saved token; `false` when there was none. Without a terminal
+/// only from `config.json`.
 pub fn remove(kind: &str) -> Result<bool, String> {
-    let from_store = entry(kind).is_some_and(|e| e.delete_credential().is_ok());
+    let from_store = current_store_use() == StoreUse::Read
+        && entry(kind).is_some_and(|e| e.delete_credential().is_ok());
     let from_config = remove_from_config(kind)?;
     Ok(from_store || from_config)
 }
@@ -150,5 +241,50 @@ pub fn verify(kind: &str, token: &str) -> Verified {
         }
         Ok(r) => Verified::Unchecked(format!("the check answered HTTP {}", r.status)),
         Err(e) => Verified::Unchecked(format!("cannot reach the site: {e}")),
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// The credential store is read only with a terminal on both ends, on
+    /// every platform, and never with `WOWLUA_NO_KEYRING`.
+    #[test]
+    fn the_store_needs_a_terminal() {
+        assert_eq!(store_use(true, true, true), StoreUse::Read);
+        assert_eq!(store_use(true, false, true), StoreUse::NoTerminal);
+        assert_eq!(store_use(true, true, false), StoreUse::NoTerminal);
+        assert_eq!(store_use(true, false, false), StoreUse::NoTerminal);
+        assert_eq!(store_use(false, true, true), StoreUse::Off);
+        assert_eq!(store_use(false, false, false), StoreUse::Off);
+    }
+
+    /// The store's token wins when it was read; otherwise `config.json`
+    /// answers, and a token missing without a terminal says why.
+    #[test]
+    fn tokens_without_a_terminal_come_from_the_config() {
+        let some = |t: &str| Some(t.to_string());
+        let read = StoreUse::Read;
+        assert_eq!(decide(read, some("store"), None), Ok("store".into()));
+        assert_eq!(
+            decide(read, some("store"), some("config")),
+            Ok("store".into())
+        );
+        assert_eq!(decide(read, None, some("config")), Ok("config".into()));
+        assert_eq!(decide(read, None, None), Err(Unread::Missing));
+        assert_eq!(decide(read, some(""), some("")), Err(Unread::Missing));
+        let none = StoreUse::NoTerminal;
+        assert_eq!(
+            decide(none, some("store"), some("config")),
+            Ok("config".into())
+        );
+        assert_eq!(decide(none, some("store"), None), Err(Unread::NoTerminal));
+        assert_eq!(decide(none, None, None), Err(Unread::NoTerminal));
+        assert_eq!(decide(StoreUse::Off, None, None), Err(Unread::Missing));
+        assert_eq!(
+            decide(StoreUse::Off, None, some("config")),
+            Ok("config".into())
+        );
     }
 }

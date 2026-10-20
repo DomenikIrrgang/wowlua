@@ -20,6 +20,7 @@ class ActionBar
 end
 
 defer(function() secureButton:SetAttribute("spell", spellName) end)
+defer(function() bar:SetPoint(…) end, "bar1:position")   -- keyed: the latest call wins
 if inCombat() then … end
 onCombatChange(function(entering: boolean) … end)
 ```
@@ -27,15 +28,15 @@ onCombatChange(function(entering: boolean) … end)
 | API | Meaning |
 |-----|---------|
 | `@outOfCombat` | If `InCombatLockdown()` is false, the call runs immediately. Otherwise it is queued and runs after `PLAYER_REGEN_ENABLED`. Repeated queued calls to the same function (per receiver for methods) are coalesced, and the last arguments win. The function must return nothing (E8030). |
-| `defer(fn)` | The same for an anonymous function (not coalesced) |
-| `inCombat(): boolean` | `InCombatLockdown()` |
+| `defer(fn, key?)` | The same for an anonymous function. Without a key calls are not coalesced; calls with the same `key` (any value but nil) are: the first keeps its place in the queue, and only the latest function runs. |
+| `inCombat(): boolean` | `InCombatLockdown()`: combat **lockdown**, by design. Whether the player is fighting (`UnitAffectingCombat("player")`, secret on some clients) is a different question that this module does not answer. |
 | `onCombatChange(fn): Subscription` | Called with `true` on `PLAYER_REGEN_DISABLED` and `false` on `PLAYER_REGEN_ENABLED` |
 
 Queue semantics:
 
 - The queue is flushed on `PLAYER_REGEN_ENABLED`, in FIFO order.
 - A coalesced call keeps the queue position of its **first** queuing. Only its
-  arguments are replaced.
+  arguments (for a keyed `defer`, its function) are replaced.
 - If combat starts again during a flush (`InCombatLockdown()` becomes true), the
   remaining entries stay queued for the next flush.
 - A queued function that errors is reported through `geterrorhandler()` without
@@ -59,8 +60,8 @@ if secure.evaluate("[group:raid] yes") then … end
 
 | API | Signature | Notes |
 |-----|-----------|-------|
-| `visibility` | `(frame: Frame, conditional: string?)` | `RegisterStateDriver(frame, "visibility", …)`; the values are `show` and `hide`. nil removes the driver; the frame stays as it is. |
-| `state` | `(frame: Frame, name: string, conditional: string, fn: (value: string) -> ()) -> Subscription` | A driver for the state `name`; `fn` gets each new value, the first right away. Cancelling removes the driver. |
+| `visibility` | `(frame: Frame, conditional: string?)` | `RegisterStateDriver(frame, "visibility", …)`; the values are `show` and `hide`. nil removes the driver (`UnregisterStateDriver`); the frame stays as it is. A constant conditional (`"show"`, `"hide"`) keeps a frame always shown or hidden. |
+| `state` | `(frame: Frame, name: string, conditional: string, fn: ((value: string) -> ())?) -> Subscription` | A driver for the state `name`; `fn` gets each new value, the first right away. Without `fn` only the driver is registered and nothing is hooked, for a header whose `_onstate-<name>` snippet does the work. Cancelling removes the driver. |
 | `evaluate` | `(conditional: string) -> string?` | What the conditional gives now (`SecureCmdOptionParse`); nil when no clause matches |
 
 Semantics (decision S35):
@@ -68,9 +69,9 @@ Semantics (decision S35):
 - **Combat.** Registering or removing a driver is blocked in combat, so it
   waits for the end of combat through `wowlua:combat`'s `defer`, in call order.
   The drivers themselves keep working in combat.
-- **Values.** `state` watches the frame's `state-<name>` attribute through
-  `OnAttributeChanged` (a hook, so it works on protected frames); `fn` runs as
-  ordinary addon code, which in combat may not touch protected frames.
+- **Values.** With `fn`, `state` watches the frame's `state-<name>` attribute
+  through `OnAttributeChanged` (a hook, so it works on protected frames); `fn`
+  runs as ordinary addon code, which in combat may not touch protected frames.
 - **Compile-time check.** A literal conditional (or one folded from `const`s) is
   parsed: brackets must pair, and each condition must be one the client knows,
   with or without `no` (`combat`, `mod`, `group`, `form`, `bonusbar`, `exists`,
@@ -98,6 +99,9 @@ local function onPlayerFrameShow(frame: Frame) … end
 -- a target that only exists once a load-on-demand addon has loaded
 @hook("PlayerSpellsFrame", "Show", { addon = "Blizzard_PlayerSpells" })
 local function afterSpellbookShow(frame: Frame) … end
+
+-- whose hook it is, for error listeners
+hook(GameTooltip, "SetSpellByID", function(tip: GameTooltip, id: number) … end, { owner = spellModule })
 ```
 
 | API | Lowering |
@@ -115,9 +119,15 @@ local function afterSpellbookShow(frame: Frame) … end
   immediately if it already has. Use a string target for objects that don't
   exist before then. Hooking a target that the type declarations attribute to a
   load-on-demand addon without `opts.addon` is warning W8102.
+- **Owner.** `opts.owner` is passed to error listeners when the hook fails
+  (`ErrorInfo.owner`, [`wowlua:errors`](infrastructure.md#errors)).
 - **Signatures.** The hook's parameters are checked against the hooked
   function's declared signature, with the receiver first for method hooks.
-  Hooking a name that is not declared is warning W8040.
+  Hooking a name that is not declared is warning W8040, unless an enclosing
+  existence test checks the same member (`if obj.Method then` around
+  `hook(obj, "Method", fn)`, `if _G.Name then` around `hook("Name", fn)`).
+  Such a test does not silence W8102: where the addon has not loaded yet, the
+  test fails and the hook is never installed.
 - **No removal, no pre-hooks.** Hooks are post-hooks and cannot be removed (a WoW
   API limitation). The module intentionally provides **no** pre-hooks or
   replacement hooks, because replacing Blizzard functions taints secure code.
@@ -331,6 +341,7 @@ Other versions of an addon read these, so they are fixed:
 
 ```wowlua
 import log, print as chat from "wowlua:log"
+import * as Log from "wowlua:log"
 
 log.info("ready")
 log.debug("cache", id, "hit", hit)
@@ -339,6 +350,11 @@ log.error("failed:", err)
 
 chat("Hello!")                                -- "|cff33ff99MyAddon|r: Hello!"
 chat.color("ff0000", "Error!")
+
+-- A branded prefix, and a debug toggle that shows debug lines in chat (the
+-- profile's `log-level` must keep them: calls below it are removed).
+Log.configure({ prefix = "|cff9fd3c7MyAddon|r ", chatLevel = "debug" })
+Log.setLevel(settings.debug and "debug" or "warn")
 ```
 
 The level functions are exported both at the top level and on the `log`
@@ -361,6 +377,8 @@ declare module "wowlua:log"
     function error(...: any)
     function setLevel(level: LevelValue)
     function sink(fn: (level: string, message: string) -> ())
+    type LogOptions = { prefix?: string, chatLevel?: LevelValue }
+    function configure(opts: LogOptions)
     function history(n: number?): { time: number, level: string, message: string, location?: string }[]
     const log: { trace: (...any) -> (), debug: (...any) -> (), info: (...any) -> (),
                  warn: (...any) -> (), error: (...any) -> () }
@@ -373,6 +391,7 @@ end
 | `trace/debug/info/warn/error(...)` | Log at the given level. Calls below the profile's `log-level` are removed at compile time, together with their arguments. Using a level function as a value (not calling it directly) is error E8118, because the compiler could not strip it. Wrap it in a function instead. |
 | `setLevel(level)` | Runtime level, which cannot go below the compiled level |
 | `sink(fn)` | Add an output. The default sink writes `warn` and above to the default chat frame and everything to the ring buffer. |
+| `configure(opts)` | Chat output. `prefix` starts every chat line of the default sink and of `print` instead of the addon's colored name (`"\|cff33ff99MyAddon\|r "`, and `"…\|r: "` for `print`). `chatLevel` is the lowest level the default sink writes to chat (`"warn"` by default, `"off"` for none; entries below the runtime level never reach a sink). Fields left out keep their value. |
 | `history(n?)` | Entries from the ring buffer. The default size is 500, configurable with the manifest key `stdlib.log.history-size`. Shown by `/wl log` in dev builds. |
 | `print(...)` | Prints to the default chat frame with the addon's colored name prefix. `print` is a callable value with fields (an intersection type). |
 | `print.color(hex, ...)`, `print.to(frame, ...)` | Colored output, or output to a specific chat frame |

@@ -493,6 +493,136 @@ end
     assert!(!text.contains("raised"), "{text}");
 }
 
+/// Test bodies are the addon's code, tainted as its main chunk is; a
+/// Blizzard addon loaded while the addon loads stays Blizzard's secure code
+/// (camelot's UI code, skipped without it).
+#[test]
+fn test_bodies_run_with_the_addons_taint() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");
+    if !source.join("camelot/Interface").exists() {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    }
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            (
+                "src/main.wowlua",
+                r#"export const chunkSecure = issecure()
+_G.DemoChunkGlobal = 1
+C_AddOns.LoadAddOn("Blizzard_MacroUI")
+"#,
+            ),
+            (
+                "tests/taint.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+import chunkSecure from "/main"
+
+@test("taint")
+local function taint()
+    _G.DemoBodyGlobal = 1
+    expect(chunkSecure).toBe(false)
+    expect(issecure()).toBe(false)
+    expect(issecurevariable("DemoChunkGlobal")).toBe(false)
+    expect(issecurevariable("DemoBodyGlobal")).toBe(false)
+    expect(issecurevariable("MacroFrame_Show")).toBe(true)
+end
+"#,
+            ),
+        ],
+    );
+    let manifest = dir.path().join("wowlua.json");
+    let text = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        text.replacen('{', r#"{ "test": { "blizzard-ui": true },"#, 1),
+    )
+    .unwrap();
+    let out = wowlua(dir.path())
+        .arg("test")
+        .env("WOWLUA_UI_SOURCE", &source)
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.status.success(), "{text}");
+    assert!(text.contains("1 passed, 0 failed"), "{text}");
+}
+
+/// `wowlua:aura` against Blizzard's own aura containers (camelot's UI
+/// code, skipped without it): `hasContainers` finds the template, the
+/// container has every method the stdlib's containers call, and one made
+/// while the addon loads takes its groups without an error (the engine's
+/// intrinsic stays Blizzard's code).
+#[test]
+fn aura_containers_in_blizzard_ui() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");
+    if !source.join("camelot/Interface").exists() {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    }
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            (
+                "src/main.wowlua",
+                r#"import * as aura from "wowlua:aura"
+export const has = aura.hasContainers()
+export const early = aura.container(UIParent, {
+    unit = "player",
+    groups = { { key = "buffs", filter = "HELPFUL", max = 4 }, { key = "debuffs", filter = "HARMFUL", max = 2, size = 24 } },
+})
+"#,
+            ),
+            (
+                "tests/aura.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+import has, early from "/main"
+
+@test("the engine's containers")
+local function containers()
+    expect(has).toBe(true)
+    const made = early.frame :: any
+    expect(made:GetAuraGroupFrameCount("buffs") > 0).toBe(true)
+    expect(made:GetAuraGroupFrameCount("debuffs") > 0).toBe(true)
+    const engine = CreateFrame("AuraContainer", nil, UIParent, "CustomAuraContainerTemplate") :: any
+    for _, method in ipairs({
+        "AddAuraGroup", "SetAuraGroupMaxFrameCount", "SetAuraGroupCandidateFilters",
+        "SetAuraGroupFilterString", "SetAuraGroupLayout", "GetAuraGroupFrameCount",
+        "GetAuraGroupFrame", "SetUnit", "UpdateAllAuras", "SetFlowLayoutAnchorPoint",
+        "SetFlowLayoutGrowthDirection", "SetFlowLayoutMaximumLineSize",
+    }) do
+        expect(type(engine[method])).toBe("function")
+    end
+end
+"#,
+            ),
+        ],
+    );
+    let manifest = dir.path().join("wowlua.json");
+    let text = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        text.replacen('{', r#"{ "test": { "blizzard-ui": true },"#, 1),
+    )
+    .unwrap();
+    let out = wowlua(dir.path())
+        .arg("test")
+        .env("WOWLUA_UI_SOURCE", &source)
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.status.success(), "{text}");
+    assert!(text.contains("1 passed, 0 failed"), "{text}");
+}
+
 /// Typed matchers (decision T214) and cases (T215) are checked when the
 /// tests compile.
 #[test]
@@ -1138,6 +1268,68 @@ end
     let (ok, out) = test(dir.path(), &[]);
     assert!(ok, "{out}");
     assert!(out.contains("2 passed, 0 failed"), "{out}");
+}
+
+/// The addon's own files, the test files and the runtime are named as the
+/// client names them too (`Interface/AddOns/Demo/src/main.lua`): stacks
+/// and error messages carry those names, and the failures show the source
+/// paths, also for a name Lua shortened with `...` at the front.
+#[test]
+fn chunk_names_as_the_client() {
+    let dir = project(
+        r#""standard": {}"#,
+        &[
+            (
+                "src/main.wowlua",
+                "const G = _G :: any\nG.MainStack = debugstack(1, 1, 0)\nG.Fail = function() error(\"from src\") end\n",
+            ),
+            (
+                "tests/names.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+
+const G = _G :: any
+
+@test("as in the client")
+local function named()
+    expect(G.MainStack).toBe("[Interface/AddOns/Demo/src/main.lua]:2: in main chunk\n")
+    expect(select(2, pcall(G.Fail))).toBe("Interface/AddOns/Demo/src/main.lua:3: from src")
+    expect(string.find(debugstack(1, 1, 0), "[Interface/AddOns/Demo/tests/names.test.lua]:9:", 1, true)).toBe(1)
+    expect(select(2, pcall(error, "here", 1))).toBe("here")
+end
+
+@test("an addon file's failure")
+local function fails()
+    G.Fail()
+end
+"#,
+            ),
+            (
+                "tests/some/deeply/nested/a_rather_long_file_name.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+
+@test("a shortened name's failure")
+local function shortened()
+    expect((select(2, pcall(function() error("x") end)))).toBe(".../some/deeply/nested/a_rather_long_file_name.test.lua:5: x")
+    error("boom")
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(!ok, "{out}");
+    assert!(out.contains("1 passed, 2 failed"), "{out}");
+    assert!(
+        out.contains("from src\n       at src/main.wowlua:3"),
+        "{out}"
+    );
+    assert!(
+        out.contains(
+            "boom\n       at tests/some/deeply/nested/a_rather_long_file_name.test.wowlua:6"
+        ),
+        "{out}"
+    );
+    assert!(!out.contains("Interface/AddOns"), "{out}");
 }
 
 /// `mock.reloadUI()`: the test runs again in a fresh VM with the

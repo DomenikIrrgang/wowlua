@@ -16,7 +16,7 @@ export enum Level {
 --- A level: a member of the enum, or its string.
 export type LevelValue = Level | "trace" | "debug" | "info" | "warn" | "error" | "off"
 
-const RANKS: { [string]: number } = { trace = 0, debug = 1, info = 2, warn = 3, error = 4, off = 5 }
+const RANKS: { warn: number, [string]: number } = { trace = 0, debug = 1, info = 2, warn = 3, error = 4, off = 5 }
 const COLORS: { [string]: string } = { trace = "7a7264", debug = "a39b8b", info = "f1eadb", warn = "ffb23f", error = "ff9a80" }
 
 local compiled = RANKS[wl.logLevel ?? "trace"] ?? 0
@@ -26,7 +26,9 @@ local buffer: { [number]: WowluaLogEntry } = {}
 local first = 1
 local count = 0
 local sinks = {}
-
+-- The default sink's lowest level, and the chat prefix (`configure`).
+local chatRank = RANKS.warn
+local prefix: string? = nil
 
 local function text(...: any): string
     local parts = {}
@@ -45,13 +47,13 @@ local function chatFrame(): ChatFrame?
     return DEFAULT_CHAT_FRAME
 end
 
--- The default sink: warn and above to the chat frame.
+-- The default sink: warn and above (`chatLevel`) to the chat frame.
 local function chatSink(level: string, message: string, location: string?)
-    if (RANKS[level] ?? 0) < RANKS.warn then
+    if (RANKS[level] ?? 0) < chatRank then
         return
     end
     local frame = chatFrame()
-    local line = "|cff33ff99" .. addonName .. "|r |cff" .. (COLORS[level] ?? "ffffff") .. "[" .. level .. "]|r " .. message
+    local line = (prefix ?? "|cff33ff99" .. addonName .. "|r ") .. "|cff" .. (COLORS[level] ?? "ffffff") .. "[" .. level .. "]|r " .. message
     if frame then
         frame:AddMessage(line)
     else
@@ -106,6 +108,26 @@ export function sink(fn: (level: string, message: string) -> ())
     sinks[#sinks + 1] = fn
 end
 
+export type LogOptions = {
+    --- Starts every chat line of the default sink and of `print`, instead
+    --- of the addon's coloured name (`"|cff33ff99MyAddon|r "`).
+    prefix?: string,
+    --- The lowest level the default sink writes to chat (default `"warn"`;
+    --- `"off"`: none). Lines below the runtime level never get there.
+    chatLevel?: LevelValue,
+}
+
+--- Sets the chat output: a prefix, and the default sink's level. Fields
+--- left out keep their value.
+export function configure(opts: LogOptions)
+    if opts.prefix ~= nil then
+        prefix = opts.prefix
+    end
+    if opts.chatLevel ~= nil then
+        chatRank = RANKS[opts.chatLevel] ?? chatRank
+    end
+end
+
 -- The newest `n` entries (all by default), oldest first.
 export function history(n: number?): { time: number, level: string, message: string, location?: string }[]
     local take = math.min(n ?? count, count)
@@ -128,7 +150,7 @@ wl.logs = {
 }
 
 local function say(frame: MessageFrame?, message: string)
-    local line = "|cff33ff99" .. addonName .. "|r: " .. message
+    local line = (prefix ?? "|cff33ff99" .. addonName .. "|r: ") .. message
     if frame then
         frame:AddMessage(line)
     else

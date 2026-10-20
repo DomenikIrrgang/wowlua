@@ -27,16 +27,29 @@ fn lint_inner(parse: &Parse, text: &[u8]) -> Vec<Diagnostic> {
         .stmts()
         .iter()
         .any(|s| matches!(s.kind(), StmtKind::Import(_) | StmtKind::Export(_)));
-    // Top-level functions of a module are hoisted locals.
+    // Top-level functions of a module are hoisted locals, except one that
+    // defines a local declared above it (`local f` … `function f()`).
     if module {
+        let mut locals: Vec<&str> = Vec::new();
         for s in block.stmts() {
             let (decorated, inner) = match s.kind() {
                 StmtKind::Export(inner) => (true, inner),
                 _ => (!s.decorators().is_empty(), s),
             };
+            match inner.kind() {
+                StmtKind::Local { names, .. } => {
+                    locals.extend(names.iter().map(|n| n.name.text()));
+                }
+                StmtKind::LocalFunction { name, .. } | StmtKind::Const { name, .. } => {
+                    locals.push(name.text());
+                }
+                _ => {}
+            }
             if let StmtKind::Function { name, .. } = &inner.kind()
                 && name.path().len() == 1
                 && name.method().is_none()
+                && !(matches!(s.kind(), StmtKind::Function { .. })
+                    && locals.contains(&name.path().at(0).text()))
             {
                 let kind = if decorated || !inner.decorators().is_empty() {
                     Kind::Exempt
@@ -1032,6 +1045,14 @@ mod tests {
         );
         assert_eq!(d.len(), 1, "{d:#?}");
         assert_eq!(d[0].1, "unused local `unused`");
+        // A function defining a forward-declared local is not a hoisted one.
+        let d = run(
+            "import _ from \"./m\"\nlocal tipBase\nlocal function tipFor(g) return tipBase(g) end\nfunction tipBase(g) return g + 1 end\nprint(tipFor(1))\n",
+        );
+        assert!(d.is_empty(), "{d:#?}");
+        let d = run("import _ from \"./m\"\nlocal f\nfunction f() end\n");
+        assert_eq!(d.len(), 1, "{d:#?}");
+        assert_eq!(d[0].1, "unused local `f`");
     }
 
     #[test]

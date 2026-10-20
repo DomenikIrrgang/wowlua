@@ -353,8 +353,31 @@ pub fn apply_intrinsic(vm: &mut Vm, frame: Value, el: &Rc<Element>) {
     let Some(id) = widgets::widget_of(vm, frame) else {
         return;
     };
-    let cx = Context { file: "?" };
+    // As a template's: its file, its globals, and its scripts its addon's
+    // code (or Blizzard's), whoever creates the frame. An addon creating
+    // Blizzard's `AuraContainer` while it loads would otherwise compile
+    // the intrinsic's `method` handlers as its own code, and the
+    // container's `OnLoad_Intrinsic` would run tainted (the client: SuuUI
+    // makes aura containers while it loads, without an error).
+    let key = el.attr("name").map(str::to_ascii_lowercase);
+    let ui = &engine(vm).world.ui;
+    let file = key.as_ref().and_then(|k| ui.template_files.get(k)).cloned();
+    let env = key.as_ref().and_then(|k| ui.template_envs.get(k)).copied();
+    let addon = key
+        .as_ref()
+        .and_then(|k| ui.template_addons.get(k))
+        .cloned();
+    let cx = Context {
+        file: file.as_deref().unwrap_or("?"),
+    };
+    let globals = vm.globals;
+    if let Some(env) = env {
+        vm.globals = env;
+    }
+    let code_of = std::mem::replace(&mut engine_mut(vm).world.ui.code_of, addon);
     apply_as_intrinsic(vm, &cx, frame, id, el);
+    engine_mut(vm).world.ui.code_of = code_of;
+    vm.globals = globals;
 }
 
 /// An intrinsic type's element: its scripts stay, whatever the widget sets.
@@ -1046,13 +1069,20 @@ fn fill_parent_if_unplaced(vm: &mut Vm, cx: &Context, el: &Element, region: Valu
 }
 
 /// Compiles UI code: as the loading addon's ([`Registry::code_of`]), or
-/// as Blizzard's.
+/// as Blizzard's, secure whatever the running code's taint (an addon's
+/// `C_AddOns.LoadAddOn` or `CreateFrame` with Blizzard's template).
 ///
 /// [`Registry::code_of`]: super::Registry::code_of
 pub(crate) fn load_chunk(vm: &mut Vm, src: &[u8], chunk: &str) -> Result<Value, String> {
     match engine(vm).world.ui.code_of.clone() {
         Some(addon) => vm.load_as(src, chunk, &addon),
-        None => vm.load(src, chunk),
+        None => {
+            let saved = vm.taint().saved();
+            vm.taint_mut().stack = wowlua_vm::Taint::SECURE;
+            let r = vm.load(src, chunk);
+            vm.taint_mut().restore(saved);
+            r
+        }
     }
 }
 

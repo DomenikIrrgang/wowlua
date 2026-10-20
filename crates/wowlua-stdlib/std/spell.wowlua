@@ -88,13 +88,10 @@ export function cooldownDuration(spell: SpellRef, ignoreGCD: boolean?): LuaDurat
     return f(spell, ignoreGCD)
 end
 
---- Charges, for spells that have them.
-export function charges(spell: SpellRef): SpellChargeInfo?
-    const c = C_Spell.GetSpellCharges(spell)
-    if secret.isSecret(c) then
-        return nil
-    end
-    return c
+--- Charges, for spells that have them: the counts and times may be secret
+--- on restricted clients; `maxCharges` and `isActive` stay readable.
+export function charges(spell: SpellRef): SpellChargeInfoSecret?
+    return C_Spell.GetSpellCharges(spell)
 end
 
 --- Whether the player (or, with `isPet`, the pet) knows the spell.

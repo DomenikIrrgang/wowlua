@@ -94,6 +94,15 @@ fn show_passes() {
     }
 }
 
+/// Fields named by a string key keep their optional and read-only markers.
+#[test]
+fn string_keyed_type_fields() {
+    let src = "type C = { kind: string, [\"not\"]?: boolean, [\"end\"]: number }\n";
+    assert_eq!(fmt(src), src);
+    let src = "type R = { readonly [\"end\"]: number, readonly [\"not\"]?: boolean }\n";
+    assert_eq!(fmt(src), src);
+}
+
 /// A returned function's body is indented once.
 #[test]
 fn returned_function_body() {

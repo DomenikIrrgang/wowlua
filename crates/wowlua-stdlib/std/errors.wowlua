@@ -9,7 +9,12 @@ local wl = ns.__wowlua
 local rateLimit = 10
 local reported = 0
 local recent: { [string]: { time: number, more: number } } = {}
-local listeners: { { fn: (string) -> (), active: boolean } } = {}
+--- What a listener learns about an error besides its message: the stdlib
+--- component that ran the failing code, the owner its handler was
+--- registered with, and the stack where it failed.
+export type ErrorInfo = { component?: string, owner?: any, stack?: string }
+
+local listeners: { { fn: (msg: string, info: ErrorInfo) -> (), active: boolean } } = {}
 local notifying = false
 
 local function now(): number
@@ -32,14 +37,77 @@ local function text(err: any): string
     return tostring(err)
 end
 
---- Reports an error through the policy.
-export function report(err: any, context: { [string]: any }?)
+-- The module of a file of this addon (`src/core/cache.lua` is `core/cache`):
+-- the longest module ID the path ends with.
+local function moduleOfFile(path: string): string?
+    path = path:gsub("\\", "/")
+    local std = path:match("wowlua/std/([%w_]+)$")
+    if std then
+        return "wowlua:" .. std
+    end
+    local best: string? = nil
+    for id in pairs(wl.modules) do
+        if (path == id or path:sub(-#id - 1) == "/" .. id) and #id > #(best ?? "") then
+            best = id
+        end
+    end
+    return best
+end
+
+-- The module of the first location in `text` that is one of this addon's
+-- modules: `path.lua:line` in messages, `[path.lua]:line` in stacks; a
+-- stack's standard-library frames are skipped for the code that called it.
+local function moduleIn(text: string, stack: boolean): string?
+    for path in text:gmatch("([^%s:\"%[%]@]+)%.lua%]?:%d+") do
+        local id = moduleOfFile(path)
+        if id and not (stack and id:sub(1, 7) == "wowlua:") then
+            return id
+        end
+    end
+    return nil
+end
+
+local function notify(message: string, info: ErrorInfo)
+    -- Listeners' own errors go straight to the handler, never back here.
+    if notifying then
+        return
+    end
+    notifying = true
+    for _, l in ipairs(listeners) do
+        if not l.active then
+            continue
+        end
+        local ok, e = pcall(l.fn, message, info)
+        if not ok then
+            deliver(text(e))
+        end
+    end
+    notifying = false
+end
+
+-- Reports `err` with what is known about it: everything here runs on
+-- errors only, never on a call that succeeds. Called by `report` or the
+-- error handler only, so the stack from level 3 is where the error was.
+local function reportWith(err: any, context: { [string]: any }?, owner: any)
     local message = text(err)
     if message:sub(1, #addonName + 2) ~= addonName .. ": " then
         message = addonName .. ": " .. message
     end
-    if wl.debug and context and context.component then
-        message = message .. " [" .. tostring(context.component) .. "]"
+    local component = context?.component
+    -- Taken only when needed: no location in the message, or listeners.
+    local stack: string? = nil
+    if wl.debug then
+        local module = context?.module ?? moduleIn(message, false)
+        if module == nil and debugstack then
+            stack = debugstack(3)
+            module = moduleIn(stack ?? "", true)
+        end
+        if module then
+            message = message .. " [" .. tostring(module) .. "]"
+        end
+        if component then
+            message = message .. " [" .. tostring(component) .. "]"
+        end
     end
     local seen = recent[message]
     local t = now()
@@ -51,47 +119,84 @@ export function report(err: any, context: { [string]: any }?)
     recent[message] = { time = t, more = 0 }
     reported += 1
     deliver(more > 0 and message .. " (" .. more .. " more)" or message)
-    -- Listeners' own errors go straight to the handler, never back here.
-    if notifying then
-        return
-    end
-    notifying = true
-    for _, l in ipairs(listeners) do
-        if not l.active then
-            continue
+    if #listeners > 0 then
+        if stack == nil and debugstack then
+            stack = debugstack(3)
         end
-        local ok, e = pcall(l.fn, message)
-        if not ok then
-            deliver(text(e))
-        end
+        notify(message, {
+            component = component and tostring(component),
+            owner = owner ?? context?.owner,
+            stack = stack,
+        })
     end
-    notifying = false
+end
+
+--- Reports an error through the policy; `context.component` and
+--- `context.module` name where it came from, `context.owner` whose it is.
+export function report(err: any, context: { [string]: any }?)
+    reportWith(err, context, nil)
+end
+
+-- The context of the innermost isolated call, for the one error handler:
+-- nothing is allocated per call. Calls nest strictly, as nothing yields
+-- across `xpcall`.
+local current: { [string]: any }? = nil
+-- The owner of the innermost isolated call's handler, likewise.
+local currentOwner: any = nil
+
+local function handler(e: any): any
+    reportWith(e, current, currentOwner)
+    return e
+end
+
+-- The client's `xpcall` passes the arguments on (a recorded answer:
+-- `xpcall(function(a, b) return a + b end, h, 1, 2)` is `true, 3`); plain
+-- Lua 5.1's passes none, and then a closure carries them.
+local passesArgs = select(2, xpcall(function(a: any) return a end, handler, true)) == true
+
+-- The outer call's context and owner back, and the results passed on.
+local function finish(outer: { [string]: any }?, outerOwner: any, ...: any): (boolean, ...any)
+    current = outer
+    currentOwner = outerOwner
+    return ...
+end
+
+-- `fn` with its arguments, for a Lua whose `xpcall` passes none.
+local function packed(fn: (...any) -> ...any, ...: any): () -> ...any
+    local n = select("#", ...)
+    local args = { ... }
+    return function() return fn(unpack(args, 1, n)) end
+end
+
+-- `fn` called isolated, with `context` and `owner` for its errors.
+local function isolate(context: { [string]: any }?, owner: any, fn: (...any) -> ...any, ...: any): (boolean, ...any)
+    local outer, outerOwner = current, currentOwner
+    current, currentOwner = context, owner
+    if passesArgs then
+        return finish(outer, outerOwner, xpcall(fn, handler, ...))
+    end
+    return finish(outer, outerOwner, xpcall(packed(fn, ...), handler))
 end
 
 --- Calls `fn` isolated: on error, reports it and returns `false`.
-export function call(fn: (...any) -> ...any, ...: any): (boolean, ...any)
-    local n = select("#", ...)
-    local args = { ... }
-    return xpcall(function() return fn(unpack(args, 1, n)) end, function(e)
-        report(e)
-        return e
-    end)
+export function call<A..., R...>(fn: (A...) -> R..., ...: A...): (boolean, R...)
+    return isolate(nil, nil, fn, ...)
 end
 
 --- Calls `fn` isolated, reporting with `context` (the stdlib's handlers).
 export function callIn(context: { [string]: any }, fn: (...any) -> ...any, ...: any): (boolean, ...any)
-    local n = select("#", ...)
-    local args = { ... }
-    return xpcall(function() return fn(unpack(args, 1, n)) end, function(e)
-        report(e, context)
-        return e
-    end)
+    return isolate(context, nil, fn, ...)
+end
+
+--- `callIn` for a handler registered with `owner`, which listeners get.
+export function callOwned(context: { [string]: any }, owner: any, fn: (...any) -> ...any, ...: any): (boolean, ...any)
+    return isolate(context, owner, fn, ...)
 end
 
 --- An isolated version of `fn` (its results are dropped).
-export function wrap(fn: (...any) -> ...any): (...any) -> ()
-    return function(...)
-        call(fn, ...)
+export function wrap<A...>(fn: (A...) -> ()): (A...) -> ()
+    return function(...: A...)
+        isolate(nil, nil, fn, ...)
     end
 end
 
@@ -101,8 +206,9 @@ export interface ErrorListener
     function cancel()
 end
 
---- Calls `fn` with every error this addon reports.
-export function onError(fn: (msg: string) -> ()): ErrorListener
+--- Calls `fn` with every error this addon reports (and what is known
+--- about it).
+export function onError(fn: (msg: string, info: ErrorInfo) -> ()): ErrorListener
     local entry = { fn = fn, active = true }
     listeners[#listeners + 1] = entry
     return {

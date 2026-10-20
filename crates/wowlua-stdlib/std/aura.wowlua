@@ -8,6 +8,7 @@ import * as secret from "wowlua:secret"
 import onUnit from "wowlua:events"
 import type Subscription from "wowlua:events"
 import report from "wowlua:errors"
+import defer from "wowlua:combat"
 
 --- `|`-separated filter words (`"HARMFUL|PLAYER"`); literal filters are
 --- checked against each targeted flavor (E8310).
@@ -130,11 +131,20 @@ export type AuraGroup = {
     max?: number,
     --- Only these spell IDs (the engine matches them, in combat too).
     spells?: number[],
+    --- Never these spell IDs.
+    exclude?: number[],
     --- Only debuffs of these types (`"Magic"`, `"Curse"`, …).
     dispelTypes?: string[],
-    --- Icon size (default: the container's).
+    --- Icon size and the space between the group's icons (default: the
+    --- container's).
     size?: number,
-    --- Builds each button once; default: the client's buff look.
+    spacing?: number,
+    --- Where the group sits among the groups, lower first (default: its
+    --- position in `groups`), and extra space before it.
+    order?: number,
+    gap?: number,
+    --- Builds each button once, after sizing it; default: the client's
+    --- buff look.
     initialize?: (button: AuraButton) -> (),
 }
 
@@ -150,6 +160,9 @@ export type ContainerOptions = {
     growth?: string[],
     --- Width before icons wrap to the next line (default: never).
     lineWidth?: number,
+    --- A group whose `max` is 0 goes to the engine only once `setGroupMax`
+    --- raises it (the engine makes a batch of buttons for every group).
+    lazy?: boolean,
 }
 
 --- A container: the engine's frame and what can change later.
@@ -159,6 +172,9 @@ export interface AuraContainer
     function refresh()
     function setGroupMax(key: string, max: number)
     function setGroupSpells(key: string, spells: number[]?)
+    function setGroupFilter(key: string, filter: AuraFilter)
+    --- The group's icon size; its buttons are resized out of combat.
+    function setGroupSize(key: string, size: number)
     function setFlow(anchor: FramePoint, growth: string[]?)
     function setLineWidth(width: number?)
     --- Hidden, without a unit and deaf until the next `setUnit` (engine
@@ -172,6 +188,10 @@ interface Engine
     function AddAuraGroup(key: string, filter: string, options: table)
     function SetAuraGroupMaxFrameCount(key: string, max: number)
     function SetAuraGroupCandidateFilters(key: string, filters: table)
+    function SetAuraGroupFilterString(key: string, filter: string)
+    function SetAuraGroupLayout(key: string, layout: table)
+    function GetAuraGroupFrameCount(key: string): number
+    function GetAuraGroupFrame(key: string, index: number): AuraButton?
     function SetUnit(unit: string)
     function UpdateAllAuras()
 end
@@ -223,20 +243,45 @@ local function set(list: any[]?): { [any]: boolean }?
     return out
 end
 
-local function candidates(group: AuraGroup): table
+-- A group as the container keeps it: its options, what changed since, and
+-- whether the engine has it yet (a lazy group without room waits).
+type GroupState = {
+    group: AuraGroup,
+    filter: string,
+    max: number,
+    spells: number[]?,
+    size: number,
+    spacing: number,
+    order: number,
+    added: boolean,
+}
+
+-- The engine's candidate filters replace each other whole: all of them.
+local function candidates(g: GroupState): table
     const filters: table = {}
-    filters.includeSpellIDs = set(group.spells)
-    filters.includeDispelTypes = set(group.dispelTypes)
+    filters.includeSpellIDs = set(g.spells)
+    filters.excludeSpellIDs = set(g.group.exclude)
+    filters.includeDispelTypes = set(g.group.dispelTypes)
     return filters
+end
+
+local function layout(g: GroupState): table
+    return {
+        elementWidth = g.size,
+        elementHeight = g.size,
+        elementSpacing = g.spacing,
+        lineSpacing = g.spacing,
+        layoutIndex = g.order,
+        groupSpacing = g.group.gap,
+    }
 end
 
 -- The client's buff look: the icon, the stack count at the bottom right,
 -- the engine's duration text below, and a debuff-type border on harmful
 -- auras; right click cancels own buffs.
-local function clientLook(group: AuraGroup, size: number): (button: AuraButton) -> ()
+local function clientLook(group: AuraGroup): (button: AuraButton) -> ()
     const harmful = group.filter:find("HARMFUL", 1, true) ~= nil
     return function(button: AuraButton)
-        button:SetSize(size, size)
         const icon = button:CreateTexture(nil, "ARTWORK")
         icon:SetAllPoints()
         pcall(button.SetIcon, button, icon)
@@ -264,6 +309,16 @@ local function clientLook(group: AuraGroup, size: number): (button: AuraButton) 
     end
 end
 
+-- Each new button: the group's size now (the layout only anchors buttons),
+-- then the group's look.
+local function initializer(g: GroupState): (button: AuraButton) -> ()
+    const look = g.group.initialize ?? clientLook(g.group)
+    return function(button: AuraButton)
+        button:SetSize(g.size, g.size)
+        look(button)
+    end
+end
+
 -- Units whose token may point at someone new, and the event saying so.
 const RESCAN: { [string]: string } = {
     target = "PLAYER_TARGET_CHANGED",
@@ -286,10 +341,13 @@ class Container implements AuraContainer
     private readonly engine: EngineFrame
     private watcher?: Frame
     private released: boolean = false
+    private readonly lazy: boolean
+    private readonly groups: { [string]: GroupState } = {}
 
     constructor(engine: EngineFrame, opts: ContainerOptions)
         self.engine = engine
         self.frame = engine
+        self.lazy = opts.lazy == true
         -- A rectangle to lay out in from the start.
         engine:SetSize(1, 1)
         const size = opts.size ?? 30
@@ -298,19 +356,40 @@ class Container implements AuraContainer
         if opts.lineWidth then
             self:setLineWidth(opts.lineWidth)
         end
-        for _, group in ipairs(opts.groups) do
-            const groupSize = group.size ?? size
-            local ok, err = pcall(engine.AddAuraGroup, engine, group.key, canonical(group.filter), {
-                maxFrameCount = group.max ?? 16,
-                candidateFilters = candidates(group),
-                initializeFrame = group.initialize ?? clientLook(group, groupSize),
-                layout = { elementWidth = groupSize, elementHeight = groupSize, elementSpacing = spacing, lineSpacing = spacing },
-            })
-            if not ok then
-                report(`aura.container: the group "{group.key}" was refused: {err}`)
-            end
+        for i, group in ipairs(opts.groups) do
+            const g: GroupState = {
+                group = group,
+                filter = canonical(group.filter),
+                max = group.max ?? 16,
+                spells = group.spells,
+                size = group.size ?? size,
+                spacing = group.spacing ?? spacing,
+                -- A lazy group added later keeps its place.
+                order = group.order ?? i,
+                added = false,
+            }
+            self.groups[group.key] = g
+            self:add(g)
         end
         self:setUnit(opts.unit)
+    end
+
+    -- Hands a group to the engine, unless it is lazy and has no room yet.
+    private function add(g: GroupState)
+        if g.added or (self.lazy and g.max <= 0) then
+            return
+        end
+        local ok, err = pcall(self.engine.AddAuraGroup, self.engine, g.group.key, g.filter, {
+            maxFrameCount = g.max,
+            candidateFilters = candidates(g),
+            initializeFrame = initializer(g),
+            layout = layout(g),
+        })
+        if ok then
+            g.added = true
+        else
+            report(`aura.container: the group "{g.group.key}" was refused: {err}`)
+        end
     end
 
     function setUnit(unit: UnitToken)
@@ -341,11 +420,61 @@ class Container implements AuraContainer
     end
 
     function setGroupMax(key: string, max: number)
-        pcall(self.engine.SetAuraGroupMaxFrameCount, self.engine, key, max)
+        const g = self.groups[key]
+        if not g then
+            return
+        end
+        g.max = max
+        if g.added then
+            pcall(self.engine.SetAuraGroupMaxFrameCount, self.engine, key, max)
+        else
+            self:add(g)
+        end
     end
 
     function setGroupSpells(key: string, spells: number[]?)
-        pcall(self.engine.SetAuraGroupCandidateFilters, self.engine, key, { includeSpellIDs = set(spells) })
+        const g = self.groups[key]
+        if not g then
+            return
+        end
+        g.spells = spells
+        if g.added then
+            pcall(self.engine.SetAuraGroupCandidateFilters, self.engine, key, candidates(g))
+        end
+    end
+
+    function setGroupFilter(key: string, filter: AuraFilter)
+        const g = self.groups[key]
+        if not g then
+            return
+        end
+        g.filter = canonical(filter)
+        if g.added then
+            pcall(self.engine.SetAuraGroupFilterString, self.engine, key, g.filter)
+        end
+    end
+
+    function setGroupSize(key: string, size: number)
+        const g = self.groups[key]
+        if not g or g.size == size then
+            return
+        end
+        g.size = size
+        if not g.added then
+            return
+        end
+        pcall(self.engine.SetAuraGroupLayout, self.engine, key, layout(g))
+        -- The buttons refuse addon code while auras are secret: their size
+        -- waits for the end of combat (the latest size, once).
+        defer(function()
+            local ok, count = pcall(self.engine.GetAuraGroupFrameCount, self.engine, key)
+            for i = 1, ok and count or 0 do
+                const button = self.engine:GetAuraGroupFrame(key, i)
+                if button then
+                    pcall(button.SetSize, button, g.size, g.size)
+                end
+            end
+        end, g)
     end
 
     function setFlow(anchor: FramePoint, growth: string[]?)
@@ -374,13 +503,25 @@ class Container implements AuraContainer
     end
 end
 
---- An engine aura container on `parent`, filled by the engine from
---- `opts.groups` (E8300 on flavors without aura containers).
-export function container(parent: Frame, opts: ContainerOptions): AuraContainer
+-- Loads the client's aura container addon where it has one.
+local function loadEngine()
     const addons = _G.C_AddOns :: { IsAddOnLoaded: (name: string) -> boolean, LoadAddOn: (name: string) -> any }?
     if addons and not addons.IsAddOnLoaded("Blizzard_AuraContainer") then
         pcall(addons.LoadAddOn, "Blizzard_AuraContainer")
     end
+end
+
+--- Whether this client has aura containers (`container` raises without).
+export function hasContainers(): boolean
+    loadEngine()
+    const xml = _G.C_XMLUtil :: { GetTemplateInfo: (name: string) -> table? }?
+    return xml ~= nil and xml.GetTemplateInfo("CustomAuraContainerTemplate") ~= nil
+end
+
+--- An engine aura container on `parent`, filled by the engine from
+--- `opts.groups` (E8300 on flavors without aura containers).
+export function container(parent: Frame, opts: ContainerOptions): AuraContainer
+    loadEngine()
     local ok, frame = pcall(CreateFrame, "AuraContainer", nil, parent, "CustomAuraContainerTemplate")
     if not ok then
         error(`aura.container: the client has no aura containers ({frame})`, 2)

@@ -168,6 +168,13 @@ pub fn check_package_full(
         .and_then(|t| t.get("Registry"))
         .copied();
     env.declared.set_callbacks_registry(registry);
+    let router = files
+        .iter()
+        .position(|f| f.src_rel == format!("{}slash.wowlua", crate::STDLIB_PREFIX))
+        .and_then(|i| env.module_types.get(&i))
+        .and_then(|t| t.get("Router"))
+        .copied();
+    env.declared.set_slash_router(router);
     // Shared mode: APIs only some flavors declare are known (as `any`), so
     // that their uses report E2030.
     if let Some(shared) = shared {
@@ -257,15 +264,42 @@ pub fn check_package_full(
     let extra_globals = &extra_globals;
     let assigned_globals = &assigned_globals;
 
-    // Modules before their importers, so export types are known.
-    let order = check_order(files.len(), &analysis.edges);
+    // Modules before their importers, so export types are known. The
+    // modules of an import cycle are checked together, in source order;
+    // the ones checked first see the others' exports as their annotations
+    // declare them.
     let mut exports: FxHashMap<usize, FxHashMap<Box<str>, TypeId>> = FxHashMap::default();
+    // Modules of a cycle not checked yet: `exports` holds only what their
+    // annotations give (W1036 where another reads the rest).
+    let mut early: FxHashSet<usize> = FxHashSet::default();
+    let checked = |i: usize| {
+        settings.get(i).copied().flatten().is_some()
+            && files[i].parse.is_some()
+            && matches!(files[i].kind, FileKind::Wowlua | FileKind::Lua)
+    };
+    let mut order = Vec::with_capacity(files.len());
+    let edges = check_edges(&env, analysis);
+    for component in crate::order::components_in_order(files.len(), &edges) {
+        if component.len() > 1 {
+            for &m in component
+                .iter()
+                .filter(|&&m| checked(m) && files[m].kind == FileKind::Wowlua)
+            {
+                if let Some(parse) = files[m].parse {
+                    let annotated = annotated_exports(&mut env, parse, m);
+                    exports.insert(m, annotated);
+                    early.insert(m);
+                }
+            }
+        }
+        order.extend(component);
+    }
     for i in order {
         let (Some(settings), Some(parse)) = (settings.get(i).copied().flatten(), files[i].parse)
         else {
             continue;
         };
-        if !matches!(files[i].kind, FileKind::Wowlua | FileKind::Lua) {
+        if !checked(i) {
             continue;
         }
         let ctx = FileCtx {
@@ -275,6 +309,7 @@ pub fn check_package_full(
             assigned_globals,
             shared,
             exports: &exports,
+            early: &early,
         };
         // A plain Lua file reads nothing of other files but the
         // declarations: a later flavor whose declarations give the same
@@ -396,6 +431,7 @@ pub fn check_package_full(
             env.types.rollback(cp);
         }
         exports.insert(i, out.exports);
+        early.remove(&i);
     }
     private_methods.extend(env.renamable_defs.iter().copied());
     // Classes reachable from globals, and every class of their hierarchies,
@@ -562,6 +598,7 @@ struct FileCtx<'a> {
     assigned_globals: &'a FxHashSet<String>,
     shared: Option<&'a flavors::SharedFlavors>,
     exports: &'a FxHashMap<usize, FxHashMap<Box<str>, TypeId>>,
+    early: &'a FxHashSet<usize>,
 }
 
 /// What checking one file gives.
@@ -679,7 +716,7 @@ fn check_file_in(
         global_classes: Vec::new(),
         exports: FxHashMap::default(),
     };
-    let imports = import_types(env, ctx.files, ctx.analysis, i, ctx.exports);
+    let imports = import_types(env, ctx, i, &mut out.diagnostics);
     let info = FileInfo {
         intrinsics: crate::stdlib::Intrinsics::of(ctx.analysis, i, parse),
         index: i,
@@ -712,8 +749,18 @@ fn check_file_in(
             &fresh
         }
     };
+    env.typeof_namespace_refs.clear();
     let mut checker = Checker::new(env, &info, prepared);
     checker.check_file(parse);
+    // `M.T` through a namespace import, of a `typeof` alias not reached
+    // yet: W1036 at the first use of each.
+    let mut seen: FxHashSet<(usize, Box<str>)> = FxHashSet::default();
+    for (m, name, span) in std::mem::take(&mut checker.env.typeof_namespace_refs) {
+        if seen.insert((m, name.clone())) {
+            out.diagnostics
+                .push(typeof_alias_warning(ctx.files, m, &name, span));
+        }
+    }
     for arg in &prepared.type_name_args {
         if let Some(&t) = checker.expr_types.get(&(arg.start, arg.end)) {
             out.type_names.push((*arg, checker.env.display(t)));
@@ -800,35 +847,124 @@ fn check_file_in(
     out
 }
 
-/// A topological order of the files over import edges, source order for
-/// ties and cycles.
-fn check_order(n: usize, edges: &[(usize, usize)]) -> Vec<usize> {
-    let rank: Vec<usize> = (0..n).collect();
-    match crate::order::stable_topo(n, &rank, edges) {
-        Ok(order) => order,
-        Err(_) => (0..n).collect(),
+/// The import edges the check order follows: the load-time and run-time
+/// ones, and a type-only import of a module with a `typeof` alias, which
+/// has its type once that module is checked (spec §2.2.7), where it adds
+/// no cycle.
+fn check_edges(env: &env::Env, analysis: &Analysis) -> Vec<(usize, usize)> {
+    let mut edges = analysis.edges.clone();
+    let typeof_modules: FxHashSet<usize> = env.typeof_aliases.values().copied().collect();
+    if typeof_modules.is_empty() {
+        return edges;
     }
+    for (i, info) in analysis.modules.iter().enumerate() {
+        let Some(info) = info else { continue };
+        for import in info.imports.iter().filter(|im| im.type_only) {
+            let Target::Module(m) = import.target else {
+                continue;
+            };
+            if m != i && typeof_modules.contains(&m) && !reaches(&edges, i, m) {
+                edges.push((m, i));
+            }
+        }
+    }
+    edges
 }
 
-/// The types of a file's imported bindings.
+/// Is `to` reachable from `from` over `edges`?
+fn reaches(edges: &[(usize, usize)], from: usize, to: usize) -> bool {
+    let mut seen: FxHashSet<usize> = FxHashSet::default();
+    let mut stack = vec![from];
+    while let Some(n) = stack.pop() {
+        if n == to {
+            return true;
+        }
+        if seen.insert(n) {
+            stack.extend(edges.iter().filter(|e| e.0 == n).map(|e| e.1));
+        }
+    }
+    false
+}
+
+/// The exports of module `m` whose types its annotations give without
+/// checking it: functions (as hoisted, spec §5.1) and annotated locals and
+/// constants. Undecorated only: a decorator can replace the value.
+fn annotated_exports(
+    env: &mut env::Env,
+    parse: &wowlua_syntax::Parse,
+    m: usize,
+) -> FxHashMap<Box<str>, TypeId> {
+    let scope = env::Scope {
+        module: Some(m),
+        ..env::Scope::default()
+    };
+    // The module's own check reports what its annotations get wrong.
+    let reported = env.diagnostics.len();
+    let mut out = FxHashMap::default();
+    for s in parse.view().block().stmts() {
+        // An export, or a file-level local (for `import internal`).
+        let (inner, prefix) = match s.kind() {
+            StmtKind::Export(inner) => (inner, ""),
+            _ => (s, body::INTERNAL),
+        };
+        if !s.decorators().is_empty() || !inner.decorators().is_empty() {
+            continue;
+        }
+        let key = |name: &str| -> Box<str> { format!("{prefix}{name}").into() };
+        match inner.kind() {
+            StmtKind::Function { name, func }
+                if name.path().len() == 1 && name.method().is_none() =>
+            {
+                let sig = env.func_sig(&env::FnSig::of(func), &scope, false);
+                let t = env.types.func(sig);
+                out.insert(key(name.path().at(0).text()), t);
+            }
+            StmtKind::LocalFunction { name, func } if !prefix.is_empty() => {
+                let sig = env.func_sig(&env::FnSig::of(func), &scope, false);
+                let t = env.types.func(sig);
+                out.insert(key(name.text()), t);
+            }
+            StmtKind::Local { names, .. } => {
+                for n in names.iter() {
+                    if let Some(t) = n.ty {
+                        let t = env.resolve(t, &scope);
+                        out.insert(key(n.name.text()), t);
+                    }
+                }
+            }
+            StmtKind::Const {
+                name, ty: Some(t), ..
+            } => {
+                let t = env.resolve(t, &scope);
+                out.insert(key(name.text()), t);
+            }
+            _ => {}
+        }
+    }
+    env.diagnostics.truncate(reported);
+    out
+}
+
+/// The types of a file's imported bindings. In an import cycle, an export
+/// of a module checked later that its annotations do not type reads as
+/// `any`: W1036 where it is imported or read (spec §5.4.4).
 fn import_types(
     env: &mut env::Env,
-    files: &[FileInput],
-    analysis: &Analysis,
+    ctx: &FileCtx<'_>,
     file: usize,
-    exports: &FxHashMap<usize, FxHashMap<Box<str>, TypeId>>,
+    diagnostics: &mut Vec<Diagnostic>,
 ) -> FxHashMap<Box<str>, TypeId> {
+    let (files, analysis, exports) = (ctx.files, ctx.analysis, ctx.exports);
     let mut out = FxHashMap::default();
     let (Some(parse), Some(info)) = (files[file].parse, &analysis.modules[file]) else {
         return out;
     };
+    // Namespace imports of later modules of the cycle: local name, module.
+    let mut later_namespaces: Vec<(&str, usize)> = Vec::new();
     for s in parse.view().block().stmts() {
         let StmtKind::Import(import) = s.kind() else {
             continue;
         };
-        if import.type_only() {
-            continue;
-        }
         let Some(resolved) = info.imports.iter().find(|r| r.start == s.span().start) else {
             continue;
         };
@@ -836,6 +972,16 @@ fn import_types(
             Target::Module(m) => Some(m),
             _ => None,
         };
+        let other = module.filter(|&m| m != file);
+        let later = other.filter(|m| ctx.early.contains(m));
+        if import.type_only() {
+            if let (Some(m), ImportClause::Names(specs)) = (other, import.clause()) {
+                for spec in specs.iter() {
+                    note_typeof_alias(env, files, m, spec.name, diagnostics);
+                }
+            }
+            continue;
+        }
         let internal = import.internal();
         let export_type = |env: &mut env::Env, name: &str| -> TypeId {
             let Some(m) = module else { return Types::ANY };
@@ -876,6 +1022,29 @@ fn import_types(
                     let local = spec.alias.as_ref().unwrap_or(&spec.name);
                     let t = export_type(env, spec.name.text());
                     out.insert(local.text().into(), t);
+                    if let Some(m) = later.filter(|_| !internal)
+                        && untyped_in_cycle(analysis, exports, m, spec.name.text())
+                    {
+                        diagnostics.push(untyped_export(
+                            files,
+                            m,
+                            spec.name.text(),
+                            spec.name.span(),
+                        ));
+                    }
+                    if let Some(m) = later.filter(|_| internal)
+                        && untyped_internal(files, exports, m, spec.name.text())
+                    {
+                        diagnostics.push(untyped_internal_warning(
+                            files,
+                            m,
+                            spec.name.text(),
+                            spec.name.span(),
+                        ));
+                    }
+                    if let Some(m) = other.filter(|_| !internal) {
+                        note_typeof_alias(env, files, m, spec.name, diagnostics);
+                    }
                 }
             }
             ImportClause::Namespace(n) => {
@@ -902,11 +1071,180 @@ fn import_types(
                     None => Types::ANY,
                 };
                 out.insert(n.text().into(), t);
+                if let Some(m) = later.filter(|_| !internal) {
+                    later_namespaces.push((n.text(), m));
+                }
             }
             ImportClause::SideEffect => {}
         }
     }
+    // `ns.name` reads through a namespace import, once per name.
+    if !later_namespaces.is_empty() {
+        let mut seen: FxHashSet<(usize, &str)> = FxHashSet::default();
+        wowlua_syntax::visit::walk_block(parse.view().block(), &mut |e| {
+            let (ExprKind::Field { obj, name } | ExprKind::OptField { obj, name }) = e.kind()
+            else {
+                return;
+            };
+            let ExprKind::Name(ns) = obj.kind() else {
+                return;
+            };
+            let Some(&(_, m)) = later_namespaces.iter().find(|(n, _)| *n == ns.text()) else {
+                return;
+            };
+            if untyped_in_cycle(analysis, exports, m, name.text()) && seen.insert((m, name.text()))
+            {
+                diagnostics.push(untyped_export(files, m, name.text(), name.span()));
+            }
+        });
+    }
     out
+}
+
+/// An export of module `m` (a module of the importer's cycle checked
+/// after it) that reads as `any` until `m` is checked: a value its
+/// annotations do not type.
+fn untyped_in_cycle(
+    analysis: &Analysis,
+    exports: &FxHashMap<usize, FxHashMap<Box<str>, TypeId>>,
+    m: usize,
+    name: &str,
+) -> bool {
+    if exports.get(&m).is_some_and(|e| e.contains_key(name)) {
+        return false;
+    }
+    matches!(
+        analysis.modules[m]
+            .as_ref()
+            .and_then(|i| i.exports.get(name)),
+        Some(Export::Value | Export::Function | Export::Const(None))
+    )
+}
+
+/// W1036 for an untyped export of a later module of the cycle.
+fn untyped_export(
+    files: &[FileInput],
+    m: usize,
+    name: &str,
+    span: wowlua_span::Span,
+) -> Diagnostic {
+    let module = crate::module_id(&files[m].src_rel);
+    Diagnostic::warning(
+        "W1036",
+        format!(
+            "`{name}` is `any` here: `{module}` is checked after this module in their import cycle, and its export `{name}` has no type annotation"
+        ),
+    )
+    .with_label(span, "read as `any`")
+    .with_help(if decorated_export(files, m, name) {
+        format!(
+            "its decorators give its type, known once `{module}` is checked: annotate it where it is read (`local f: T = {name}`)"
+        )
+    } else {
+        format!("annotate it where `{module}` exports it (`export local {name}: T = …`)")
+    })
+}
+
+/// A file-level local of module `m` (a module of the importer's cycle
+/// checked after it) that `import internal` reads as `any` until `m` is
+/// checked: one its annotations do not type.
+fn untyped_internal(
+    files: &[FileInput],
+    exports: &FxHashMap<usize, FxHashMap<Box<str>, TypeId>>,
+    m: usize,
+    name: &str,
+) -> bool {
+    let key = format!("{}{name}", body::INTERNAL);
+    if exports
+        .get(&m)
+        .is_some_and(|e| e.contains_key(key.as_str()))
+    {
+        return false;
+    }
+    let Some(parse) = files[m].parse else {
+        return false;
+    };
+    parse.view().block().stmts().iter().any(|s| match s.kind() {
+        StmtKind::Local { names, .. } => names.iter().any(|n| n.name.text() == name),
+        StmtKind::LocalFunction { name: n, .. } => n.text() == name,
+        StmtKind::Function { name: n, .. } => {
+            n.path().len() == 1 && n.method().is_none() && n.path().at(0).text() == name
+        }
+        StmtKind::Const { name: n, .. } => n.text() == name,
+        _ => false,
+    })
+}
+
+/// W1036 for a file-level local of a later module of the cycle that
+/// `import internal` reads.
+fn untyped_internal_warning(
+    files: &[FileInput],
+    m: usize,
+    name: &str,
+    span: wowlua_span::Span,
+) -> Diagnostic {
+    let module = crate::module_id(&files[m].src_rel);
+    Diagnostic::warning(
+        "W1036",
+        format!(
+            "`{name}` is `any` here: `{module}` is checked after this module in their import cycle, and its local `{name}` has no type annotation"
+        ),
+    )
+    .with_label(span, "read as `any`")
+    .with_help(format!(
+        "annotate it where `{module}` declares it (`local {name}: T = …`)"
+    ))
+}
+
+/// Is the export `name` of module `m` decorated?
+fn decorated_export(files: &[FileInput], m: usize, name: &str) -> bool {
+    let Some(parse) = files[m].parse else {
+        return false;
+    };
+    parse.view().block().stmts().iter().any(|s| {
+        let StmtKind::Export(inner) = s.kind() else {
+            return false;
+        };
+        (!s.decorators().is_empty() || !inner.decorators().is_empty())
+            && crate::exported_names_of(inner).iter().any(|n| n == name)
+    })
+}
+
+/// W1036 for an alias of a module checked later (in a cycle of imports,
+/// type-only ones included) whose body uses `typeof(expr)`: it is `any`
+/// until that module is checked.
+fn note_typeof_alias(
+    env: &env::Env,
+    files: &[FileInput],
+    m: usize,
+    name: wowlua_syntax::view::Name<'_>,
+    diagnostics: &mut Vec<Diagnostic>,
+) {
+    let Some(&def) = env.module_types.get(&m).and_then(|t| t.get(name.text())) else {
+        return;
+    };
+    if env.typeof_aliases.get(&def) != Some(&m) {
+        return;
+    }
+    diagnostics.push(typeof_alias_warning(files, m, name.text(), name.span()));
+}
+
+/// W1036 for the `typeof` alias `name` of module `m`, read at `span`.
+fn typeof_alias_warning(
+    files: &[FileInput],
+    m: usize,
+    name: &str,
+    span: wowlua_span::Span,
+) -> Diagnostic {
+    let module = crate::module_id(&files[m].src_rel);
+    Diagnostic::warning(
+        "W1036",
+        format!(
+            "the type `{name}` is `any` here: `{module}` is checked after this module in their import cycle, and `{name}` is a `typeof(…)` it has not reached yet"
+        ),
+    )
+    .with_label(span, "read as `any`")
+    .with_help(format!("write the type out in `{module}` instead of `typeof(…)`"))
 }
 
 #[cfg(test)]
@@ -1344,6 +1682,14 @@ mod tests {
             ),
             1
         );
+        // A defensive check whose other branch no value reaches does not
+        // make the code after it unreachable.
+        assert_eq!(
+            count(
+                "local function f(n: number): number\n    if not issecretvalue(n) then return n end\n    print(1)\n    return 0\nend\n"
+            ),
+            0
+        );
         assert_eq!(
             count(
                 "for i = 1, 2 do\n    if i then break end\n    print(i)\nend\nwhile true do end\nprint(1)\n"
@@ -1509,6 +1855,152 @@ mod tests {
         ok(
             "local v: string | Secret<string> = \"x\"\nif issecretvalue(v) then return end\nprint(v:upper())\n",
         );
+        // `canaccessvalue` is the complement (spec §2.11): its true branch
+        // drops the secret members, in an `if` and in an `and` chain, and
+        // its false branch keeps only them.
+        strict_ok(
+            "local T: { [string]: string } = {}\nlocal function f(v: string | Secret<string>): string?\n if canaccessvalue(v) then return T[v] end\n return nil\nend\nlocal function g(c: (string | Secret<string>)?)\n local b = c and canaccessvalue(c) and c:lower()\n print(f, b)\nend\nprint(g)\n",
+        );
+        strict_err(
+            "local function f(v: string | Secret<string>)\n if not canaccessvalue(v) then print(v:upper()) end\nend\nprint(f)\n",
+            "E2040",
+        );
+        strict_ok(
+            "local function f(v: string | Secret<string>)\n if not canaccessvalue(v) then return end\n print(v:upper())\nend\nprint(f)\n",
+        );
+        // A local named `canaccessvalue` is not the global.
+        strict_err(
+            "local function canaccessvalue(v: unknown): boolean return true end\nlocal function f(v: string | Secret<string>)\n if canaccessvalue(v) then print(v:upper()) end\nend\nprint(f)\n",
+            "E2040",
+        );
+        // A generic predicate infers its type parameters from the argument
+        // (`V | Secret<V> | nil` against `number | Secret<number>`), in
+        // both branches.
+        strict_ok(
+            "local function plain<V>(v: V | Secret<V> | nil): v is V\n return (v :: any) ~= nil\nend\nlocal function use(n: number) end\nlocal function f(map: number?, level: number | Secret<number>)\n local a: number = plain(level) and level or 1\n if not plain(map) then return end\n use(map)\n use(a)\nend\nprint(f)\n",
+        );
+    }
+
+    /// `cond and x` with a boolean `cond` is `false | x`: an inferred local
+    /// keeps the `false` beside other types, so a truthiness test leaves
+    /// `x` (spec §2.4), and so do the results `pcall` passes on.
+    #[test]
+    fn boolean_literals_beside_other_types() {
+        strict_ok(
+            "local function f(): boolean return math.random() > 0.5 end\nlocal t = { x = 1 }\nlocal y = f() and t\nif y then print(y.x) end\n",
+        );
+        strict_ok(
+            "local function g(key: string): number\n local dir = (key == \"UP\" and 1) or (key == \"DOWN\" and -1)\n if not dir then return 0 end\n return dir * 2\nend\nprint(g)\n",
+        );
+        strict_ok(
+            "local fixed = 1\nlocal c = fixed and fixed ~= 2 and tostring(fixed)\nif c then print(c:upper()) end\n",
+        );
+        strict_ok(
+            "local function q(n: number): string | false\n if n > 1 then return \"x\" end\n return false\nend\nlocal ok, r = pcall(q, 2)\nif ok and r then print(r .. \"!\") end\n",
+        );
+        // An inferred result keeps it too.
+        strict_ok(
+            "local function f(ok: boolean, t: { x: number }) return ok and t end\nlocal y = f(true, { x = 1 })\nif y then print(y.x) end\n",
+        );
+        // A boolean alone still widens: the local may hold `true` later.
+        strict_ok("local done = false\ndone = true\nlocal b: boolean = done\nprint(b)\n");
+        // Literals a call's results carry stay literals past the first
+        // name too.
+        strict_ok(
+            "local function k(): \"a\" | \"b\" return \"a\" end\nlocal function use(x: \"a\" | \"b\") end\nlocal ok, v = pcall(k)\nif ok then use(v) end\n",
+        );
+    }
+
+    /// A declared local narrowed before a loop keeps its narrowing inside
+    /// when no path back to the loop start widens it (spec §2.5); `break`
+    /// paths join the flow after the loop.
+    #[test]
+    fn loop_narrowing() {
+        strict_ok(
+            "local function h(s: string?): number\n local n: number? = nil\n if s then\n  n = 0\n  for _ = 1, 3 do n = n + 1 end\n end\n return n or 1\nend\nprint(h)\n",
+        );
+        strict_ok(
+            "local function h2(xs: number[]): number[]?\n local out: number[]? = {}\n for _, x in ipairs(xs) do\n  if x < 0 then out = nil break end\n  out[#out + 1] = x\n end\n return out\nend\nprint(h2)\n",
+        );
+        // After the loop, a `break` that set it to `nil` counts.
+        strict_err(
+            "local function h3(xs: number[]): number\n local out: number[]? = {}\n for _, x in ipairs(xs) do\n  if x < 0 then out = nil break end\n end\n return #out\nend\nprint(h3)\n",
+            "E2005",
+        );
+        // A path back to the start that sets it to `nil`: the body sees
+        // the declared type, through the end of the body or `continue`.
+        strict_err(
+            "local function w(): number\n local n: number? = 0\n while math.random() > 0.5 do\n  n = n + 1\n  n = nil\n end\n return 0\nend\nprint(w)\n",
+            "E2001",
+        );
+        strict_err(
+            "local function w(): number\n local n: number? = 0\n for i = 1, 3 do\n  if i == 2 then n = nil continue end\n  n = n + 1\n end\n return 0\nend\nprint(w)\n",
+            "E2001",
+        );
+        strict_err(
+            "local function w(): number\n local n: number? = 0\n repeat\n  n = n + 1\n  if n > 3 then n = nil end\n until math.random() > 0.5\n return 0\nend\nprint(w)\n",
+            "E2001",
+        );
+        // The retried loop reports each problem once.
+        let d = check_source(
+            "local function w(): number\n local n: number? = 0\n while math.random() > 0.5 do\n  local s: string = 1\n  n = nil\n end\n return 0\nend\nprint(w)\n",
+            Mode::Strict,
+        );
+        assert_eq!(
+            d.iter().filter(|x| x.code == Some("E2001")).count(),
+            1,
+            "{:#?}",
+            codes(&d)
+        );
+    }
+
+    /// A field assignment through an annotated local checks against the
+    /// declared members its narrowed value fits: `if item then item.x = 1`
+    /// on an `Item | false` does not index `false`.
+    #[test]
+    fn field_assignment_through_narrowed_local() {
+        strict_ok(
+            "type Item = { [string]: any }\nlocal function f(k: number): Item[]\n local items: Item[] = {}\n for _ = 1, k do\n  local item: Item | false | nil\n  if k > 1 then item = { key = \"a\" } elseif k < 0 then item = false end\n  if item == false then break end\n  if item then\n   item.x = 1\n   items[#items + 1] = item\n  end\n end\n return items\nend\nprint(f)\n",
+        );
+        strict_err(
+            "type Item = { x: number }\nlocal function f(item: Item | false)\n item.x = 1\nend\nprint(f)\n",
+            "E2003",
+        );
+    }
+
+    /// Closures see a local assigned after its declaration as declared
+    /// (spec §2.5); E2005 on one says so.
+    #[test]
+    fn closure_nil_help() {
+        let d = check_source(
+            "type Opts = { onClick: () -> () }\nlocal function button(opts: Opts?)\n opts = opts or { onClick = function() end }\n local function run() opts.onClick() end\n run()\nend\nprint(button)\n",
+            Mode::Strict,
+        );
+        assert!(
+            d.iter().any(|x| x.code == Some("E2005")
+                && x.help
+                    .as_deref()
+                    .is_some_and(|h| h.contains("`opts` is assigned after its declaration"))),
+            "{d:#?}"
+        );
+    }
+
+    /// E2015 on a possibly secret value points to the secret predicates.
+    #[test]
+    fn cast_help() {
+        let d = check_source(
+            "local function f(v: string | Secret<string>)\n local s = v :: string?\n print(s)\nend\nprint(f)\n",
+            Mode::Strict,
+        );
+        assert!(
+            d.iter().any(|x| x.code == Some("E2015")
+                && x.message
+                    .contains("`Secret<string>` does not fit `string?`")
+                && x.help.as_deref().is_some_and(
+                    |h| h.contains("canaccessvalue") && h.contains(":: any :: string?")
+                )),
+            "{d:#?}"
+        );
     }
 
     #[test]
@@ -1623,5 +2115,426 @@ mod tests {
         );
         ok("enum E { X, Y }\nlocal e: E = E.X\nlocal n: number = E.Y\n");
         err("enum E { X, Y }\nlocal e: E = 3\n", "E2001");
+    }
+
+    /// Checks several `.wowlua` modules (path, source) of one package: the
+    /// errors, as `code: message`.
+    fn check_modules(modules: &[(&str, &str)], mode: Mode) -> Vec<String> {
+        let mut db = SourceDb::new();
+        let mut parses = Vec::new();
+        for (path, text) in wowlua_stdlib_files() {
+            let file = db.add(path, text.to_string());
+            parses.push((
+                path.to_string(),
+                wowlua_syntax::parse(text.as_bytes(), file),
+            ));
+        }
+        let decls = parses.len();
+        for (path, text) in modules {
+            let file = db.add(*path, text.to_string());
+            let p = wowlua_syntax::parse(text.as_bytes(), file);
+            assert!(!p.has_errors(), "{path}: {:?}", p.diagnostics);
+            parses.push((path.to_string(), p));
+        }
+        let inputs: Vec<FileInput> = parses
+            .iter()
+            .enumerate()
+            .map(|(i, (path, p))| FileInput {
+                src_rel: path.clone(),
+                kind: if i < decls {
+                    FileKind::Declaration
+                } else {
+                    FileKind::Wowlua
+                },
+                parse: Some(p),
+                xml: None,
+                meta: None,
+                main_of: None,
+                globals: Default::default(),
+                usage: None,
+                prepared: None,
+            })
+            .collect();
+        let analysis = crate::analyze(&inputs, None);
+        let settings: Vec<Option<FileSettings>> = (0..inputs.len())
+            .map(|i| {
+                (i >= decls).then_some(FileSettings {
+                    mode,
+                    pure_lua: false,
+                })
+            })
+            .collect();
+        let mut d = analysis.diagnostics.clone();
+        d.extend(check_package(
+            &inputs,
+            &analysis,
+            &settings,
+            &HashSet::new(),
+            None,
+        ));
+        d.iter()
+            .filter(|x| x.is_error())
+            .map(|x| format!("{}: {}", x.code.unwrap_or("-"), x.message))
+            .collect()
+    }
+
+    /// A predicate branch no member of its argument reaches is unreachable:
+    /// the argument is `never` there and nothing in it is reported (spec
+    /// §2.2.8), for `v is T` predicates and `canaccessvalue`.
+    #[test]
+    fn predicate_branches_without_members_are_unreachable() {
+        strict_ok(
+            "local function f(c: string | Secret<string> | nil)\n    if not issecretvalue(c) and c then\n        print(c:lower())\n        return\n    end\n    if not issecretvalue(c) and c then\n        print(c:lower())\n        local s: number = \"x\"\n        print(s)\n    end\nend\nf(nil)\n",
+        );
+        strict_ok(
+            "local function g(v: string | Secret<string>)\n    if issecretvalue(v) then return end\n    if issecretvalue(v) then\n        print(v:upper())\n    end\n    if not canaccessvalue(v) then\n        print(v:upper())\n    end\n    print(v:lower())\nend\ng(\"a\")\n",
+        );
+        strict_ok(
+            "local function isNum(x: unknown): x is number return type(x) == \"number\" end\nlocal function h(x: number | string): string\n    if isNum(x) then return \"n\" end\n    if isNum(x) then\n        local s: string = x\n        return s\n    elseif x == \"a\" then\n        return x\n    else\n        return x\n    end\nend\nprint(h(1))\n",
+        );
+        // The `else` of a predicate every member fits.
+        strict_ok(
+            "local function isNum(x: unknown): x is number return type(x) == \"number\" end\nlocal function k(x: number): number\n    if isNum(x) then\n        return x\n    else\n        local s: string = x\n        return #s\n    end\nend\nprint(k(1))\n",
+        );
+        // A reachable branch is still checked, and a downcast still narrows.
+        strict_err(
+            "local function isNum(x: unknown): x is number return type(x) == \"number\" end\nlocal function h(x: number | string)\n    if isNum(x) then\n        local s: string = x\n        print(s)\n    end\nend\nh(1)\n",
+            "E2001",
+        );
+        strict_ok(
+            "class A\nend\nclass B extends A\n    function only(): number return 1 end\nend\nlocal function isB(a: A): a is B return a ~= nil end\nlocal function c(a: A): number\n    if isB(a) then return a:only() end\n    return 0\nend\nprint(c(A.new()))\n",
+        );
+        // `any` may be either.
+        strict_err(
+            "local function isNum(x: unknown): x is number return type(x) == \"number\" end\nlocal function a(x: any)\n    if isNum(x) then return end\n    local s: number = \"x\"\n    print(s, x)\nend\na(1)\n",
+            "E2001",
+        );
+    }
+
+    /// `type X = typeof(v)` is the type of `v` where the alias stands, in
+    /// later annotations of its file and for importers, by name or through
+    /// a type-only import (spec §2.2.7).
+    #[test]
+    fn typeof_aliases() {
+        strict_err(
+            "local defaults = { scale = 1, locked = false }\ntype S = typeof(defaults)\nlocal s: S = defaults\nlocal x: string = s\n",
+            "E2001",
+        );
+        strict_ok(
+            "local defaults = { scale = 1, locked = false }\ntype S = typeof(defaults)\nlocal s: S = { scale = 2, locked = true }\nlocal n: number = s.scale\nprint(n)\n",
+        );
+        let conf = "local defaults = { scale = 1, locked = false }\nexport type Settings = typeof(defaults)\nexport function make(): Settings return { scale = 2, locked = true } end\n";
+        let errs = check_modules(
+            &[
+                ("conf.wowlua", conf),
+                (
+                    "main.wowlua",
+                    "import type Settings from \"./conf\"\nlocal a: Settings = { scale = 1, locked = \"no\" }\nlocal b: Settings = { scale = 1, locked = true }\nprint(a, b)\n",
+                ),
+            ],
+            Mode::Strict,
+        );
+        assert!(
+            !errs.is_empty()
+                && errs
+                    .iter()
+                    .all(|e| e.starts_with("E2001") && e.contains("no")),
+            "{errs:#?}"
+        );
+        // The importer comes first in source order; the type-only import
+        // still orders the check.
+        let errs = check_modules(
+            &[
+                (
+                    "a.wowlua",
+                    "import type Settings from \"./conf\"\nlocal a: Settings = { scale = \"x\", locked = true }\nprint(a)\n",
+                ),
+                ("conf.wowlua", conf),
+            ],
+            Mode::Strict,
+        );
+        assert!(
+            !errs.is_empty() && errs.iter().all(|e| e.starts_with("E2001")),
+            "{errs:#?}"
+        );
+    }
+
+    /// An export's type is the annotation of an annotated `const`, and a
+    /// table has the fields assigned to it after its declaration, sealed
+    /// (spec §2.4.2, §5.5).
+    #[test]
+    fn export_types() {
+        // The annotation's optional fields, not the literal's sealed type.
+        let tok = "export type Tok = { version: number, vision?: { [string]: number } }\nexport const a: Tok = { version = 2 }\n";
+        let errs = check_modules(
+            &[
+                ("t.wowlua", tok),
+                ("main.wowlua", "import a from \"./t\"\na.vision = {}\n"),
+            ],
+            Mode::Strict,
+        );
+        assert!(errs.is_empty(), "{errs:#?}");
+        // A plain annotated `const` reads as its annotation too.
+        strict_ok(
+            "const H: { [string]: (...any) -> () } = { A = function() end }\nfor _, h in pairs(H) do h(1) end\n",
+        );
+        strict_ok("const N: number = 5\nconst M: 5 = N\nprint(M)\n");
+        // Fields added after the literal are typed for importers, and the
+        // table is sealed.
+        let chat = "export const chat = { joined = false }\nfunction chat.Hide(n: number): number return n end\nchat.count = 1\nexport local other = {}\nfunction other.Show(): string return \"\" end\n";
+        let errs = check_modules(
+            &[
+                ("t.wowlua", chat),
+                (
+                    "main.wowlua",
+                    "import chat, other from \"./t\"\nlocal s: string = chat.Hide(1)\nlocal c: string = chat.count\nchat.Nope()\nlocal n: number = other.Show()\nprint(s, c, n, chat.joined)\n",
+                ),
+            ],
+            Mode::Strict,
+        );
+        assert_eq!(errs.len(), 4, "{errs:#?}");
+        assert!(errs[0].starts_with("E2001: `number`"), "{errs:#?}");
+        assert!(errs[1].starts_with("E2001: `number`"), "{errs:#?}");
+        assert!(
+            errs[2].starts_with("E2003") && errs[2].contains("`Nope`"),
+            "{errs:#?}"
+        );
+        assert!(errs[3].starts_with("E2001: `string`"), "{errs:#?}");
+    }
+
+    /// A callback taking a wider type than the other arguments bind does
+    /// not widen the type argument (parameters are contravariant).
+    #[test]
+    fn callback_parameters_do_not_widen_type_arguments() {
+        strict_ok(
+            "local rows: { name: string, ms: number }[] = {}\ntable.sort(rows, function(a: { ms: number }, b: { ms: number }): boolean return a.ms > b.ms end)\n",
+        );
+        // Bound only by the callback, then by a later argument.
+        strict_ok(
+            "local function call<T>(f: (v: T) -> (), v: T) f(v) end\ncall(function(v: number?) end, 1)\n",
+        );
+        strict_err(
+            "local function call<T>(f: (v: T) -> (), v: T) f(v) end\ncall(function(v: number) end, \"x\")\n",
+            "E2001",
+        );
+        // A comparator that cannot take the elements still fails.
+        strict_err(
+            "local rows: { name: string }[] = {}\ntable.sort(rows, function(a: { ms: number }, b: { ms: number }): boolean return a.ms > b.ms end)\n",
+            "E2001",
+        );
+        // A table with an indexer and named fields binds the key from both,
+        // not from the callback.
+        strict_ok(
+            "local function keys<K, V>(t: { [K]: V }, less: (a: K, b: K) -> boolean): K[] return {} end\nlocal ks = keys({ [1] = true, b = true }, function(a: number | string, b: number | string): boolean return tostring(a) < tostring(b) end)\nprint(ks)\n",
+        );
+    }
+
+    /// A table's own method replaces the one `setmetatable`'s `__index`
+    /// gives (spec §2.4.6), as Lua finds it first.
+    #[test]
+    fn own_methods_replace_index_fallbacks() {
+        let base = "local Base = {}\nfunction Base:Layout(count: number) print(count) end\nfunction Base:Other(): number return 1 end\nlocal Derived = setmetatable({}, { __index = Base })\n";
+        strict_ok(&format!(
+            "{base}function Derived:Layout() print(\"own\") end\nfunction Derived:Refresh() self:Layout() end\nlocal n: number = Derived:Other()\nprint(n)\n"
+        ));
+        strict_err(
+            &format!("{base}function Derived:Layout() print(\"own\") end\nDerived:Layout(1)\n"),
+            "E2006",
+        );
+        // An assigned field too, and the fallback still checks its calls.
+        strict_ok(&format!(
+            "{base}Derived.Layout = function(self: any, s: string) print(s) end\nDerived:Layout(\"x\")\n"
+        ));
+        strict_err(&format!("{base}Derived:Layout()\n"), "E2007");
+    }
+
+    /// Reading or writing a field of a function, number or boolean is an
+    /// error however the key is written.
+    #[test]
+    fn indexing_a_function_is_an_error() {
+        let g = "local function g(): number return 1 end\n";
+        for access in [
+            "g[1] = true\n",
+            "g.x = 1\n",
+            "print(g.y)\n",
+            "print(g[2])\n",
+            "local n = 1\nn.x = 2\n",
+        ] {
+            strict_err(&format!("{g}{access}"), "E2003");
+        }
+        strict_err("local f: function = print\nf.q = 1\n", "E2003");
+        strict_ok(
+            "local t: { [number]: boolean } = {}\nt[1] = true\nprint(t[1], (\"x\"):upper())\n",
+        );
+    }
+
+    /// Mismatches say what does not fit: the missing field (and the `?:`
+    /// form), the missing return value, the argument a function passed on
+    /// lacks, the union member an assertion cannot cover.
+    #[test]
+    fn diagnostics_name_what_does_not_fit() {
+        let messages = |src: &str| codes(&check_source(src, Mode::Strict));
+        let d = messages(
+            "local function f(opts: { layer: string?, sublevel: number? }?) print(opts) end\nf({ layer = \"BACKGROUND\" })\n",
+        );
+        assert_eq!(d.len(), 1, "{d:#?}");
+        assert!(
+            d[0].ends_with(": the field `sublevel` is missing (`sublevel: number?` must be present; write `sublevel?: number` for a field that may be absent)"),
+            "{d:#?}"
+        );
+        let d = messages(
+            "type O = { kind: string, size: number }\nlocal function f(o: O) print(o) end\nlocal x = { kind = \"x\", size = \"big\" }\nf(x)\n",
+        );
+        assert!(
+            d.iter()
+                .any(|m| m.ends_with(": the field `size` is `string`, not `number`")),
+            "{d:#?}"
+        );
+        let d = messages(
+            "local function rect(): (number?, number, number, number)\n    return nil\nend\nprint(rect())\n",
+        );
+        assert_eq!(
+            d,
+            vec![
+                "E2001: missing return value 2 of type `number` (the function returns 4 values; one left out is `nil`)"
+            ]
+        );
+        let d = messages(
+            "local function j(name: string, b: number, voice: boolean) print(name, b, voice) end\nprint(pcall(j, \"x\"))\n",
+        );
+        assert_eq!(d, vec!["E2007: missing argument `b` of type `number`"]);
+        // The given arguments are checked with a missing one; extra ones
+        // are allowed, as Lua drops them.
+        let d = messages(
+            "local function j(name: string, n: number) print(name, n) end\nprint(pcall(j, 1))\nprint(pcall(j, \"x\", 2, 3))\n",
+        );
+        assert_eq!(
+            d,
+            vec![
+                "E2001: `1` is not assignable to `string`",
+                "E2007: missing argument `n` of type `number`"
+            ]
+        );
+        let d = messages(
+            "local function cast(pct: number | { r: number })\n    local p = pct :: number?\n    print(p)\nend\ncast(1)\n",
+        );
+        assert_eq!(
+            d,
+            vec![
+                "E2015: cannot assert `number | { r: number }` as `number?` (neither type fits the other: `{ r: number }` does not fit `number?`, and `nil` does not fit `number | { r: number }`)"
+            ]
+        );
+    }
+
+    /// A field named by a string key may be optional (spec §2.2.4).
+    #[test]
+    fn optional_string_keyed_fields() {
+        strict_ok(
+            "type D = { kind: string, [\"not\"]?: boolean }\nlocal a: D = { kind = \"x\" }\nlocal b: D = { kind = \"x\", [\"not\"] = true }\nlocal n: boolean? = a[\"not\"]\nprint(b, n)\n",
+        );
+        strict_err(
+            "type D = { kind: string, [\"not\"]?: boolean }\nlocal a: D = { kind = \"x\" }\nlocal n: boolean = a[\"not\"]\n",
+            "E2001",
+        );
+        strict_err(
+            "type D = { kind: string, [\"not\"]: boolean }\nlocal a: D = { kind = \"x\" }\n",
+            "E2001",
+        );
+        // `readonly` works on them as on named fields.
+        strict_ok(
+            "type R = { readonly [\"end\"]: number, readonly [\"not\"]?: boolean }\nlocal r: R = { [\"end\"] = 1 }\nlocal e: number = r[\"end\"]\nprint(e)\n",
+        );
+        strict_err(
+            "type R = { readonly [\"end\"]: number }\nlocal r: R = { [\"end\"] = 1 }\nr[\"end\"] = 2\n",
+            "E2010",
+        );
+    }
+
+    /// A list literal fits a record with a numeric indexer whose named
+    /// fields are optional (spec §2.2.4), element by element.
+    #[test]
+    fn list_literals_for_records_with_a_numeric_indexer() {
+        strict_ok(
+            "type By = { [number]: any, talent?: boolean, what?: string }\nlocal x: By = { \"MAGE\" }\nlocal w: By = { \"DRUID\", 2, talent = true }\nprint(x, w)\n",
+        );
+        strict_ok(
+            "type Ns = { [number]: string, n?: number }\nlocal ns: Ns = { \"a\", \"b\" }\nlocal s: string? = ns[1]\nprint(s)\n",
+        );
+        strict_err(
+            "type Ns = { [number]: string, n?: number }\nlocal ns: Ns = { \"a\", 2 }\n",
+            "E2001",
+        );
+        // A required named field is still required.
+        strict_err(
+            "type Ns = { [number]: string, n: number }\nlocal ns: Ns = { \"a\" }\n",
+            "E2001",
+        );
+    }
+
+    /// `{ [any]: any }` is every table (spec §2.6): namespaces, class and
+    /// enum tables iterate with `pairs` (spec §3.4.3).
+    #[test]
+    fn every_table_is_a_map_of_any() {
+        strict_ok("enum E { X, Y }\nfor k, v in pairs(E) do print(k, v) end\n");
+        strict_ok(
+            "class C\n x: number = 1\nend\nfor k, v in pairs(C) do print(k, v) end\nfor k, v in pairs(C.new()) do print(k, v) end\n",
+        );
+        strict_ok("for k, v in pairs(string) do print(k, v) end\n");
+        // An enum value is a number, not a table.
+        strict_err(
+            "enum E { X, Y }\nlocal m: { [any]: any } = E.X\nprint(m)\n",
+            "E2001",
+        );
+        // `table` is a map of `any` values with any key type, not a typed
+        // map (spec §2.6).
+        strict_ok(
+            "local t: table = {}\nlocal m: { [string]: any } = t\nlocal n: { [number]: any } = t\nprint(m, n)\n",
+        );
+        strict_ok(
+            "local function f(x: any)\n    if type(x) == \"table\" then\n        local m: { [string]: any } = x\n        print(m)\n    end\nend\nf({})\n",
+        );
+        strict_err(
+            "local t: table = {}\nlocal m: { [string]: number } = t\nprint(m)\n",
+            "E2001",
+        );
+        strict_err(
+            "local t: table = {}\nlocal m: { [string]: unknown } = t\nprint(m)\n",
+            "E2001",
+        );
+    }
+
+    /// An array value fits a record whose named fields are all optional and
+    /// whose numeric indexer takes its elements (spec §2.6), alone or in an
+    /// intersection with an array type.
+    #[test]
+    fn arrays_for_records_with_optional_fields() {
+        strict_ok(
+            "type By = { [number]: any, talent?: boolean, what?: string }\nlocal xs: string[] = { \"MAGE\" }\nlocal x: By = xs\nprint(x)\n",
+        );
+        strict_ok(
+            "type Art = any[] & { jewel?: boolean }\nlocal a: Art = { \"x\", 1, 2 }\nlocal b: Art = { \"y\", jewel = true }\nlocal xs: any[] = {}\nlocal c: Art = xs\nprint(a, b, c)\n",
+        );
+        strict_ok(
+            "type Ns = { [number]: string, n?: number }\nlocal xs: string[] = { \"a\" }\nlocal ns: Ns = xs\nprint(ns)\n",
+        );
+        // A required named field is still required.
+        strict_err(
+            "type Ns = { [number]: string, n: number }\nlocal xs: string[] = { \"a\" }\nlocal ns: Ns = xs\nprint(ns)\n",
+            "E2001",
+        );
+        // The indexer must take the elements.
+        strict_err(
+            "type Ns = { [number]: string, n?: number }\nlocal xs: number[] = { 1 }\nlocal ns: Ns = xs\nprint(ns)\n",
+            "E2001",
+        );
+        strict_err(
+            "type Ks = { [string]: string, n?: number }\nlocal xs: string[] = { \"a\" }\nlocal ks: Ks = xs\nprint(ks)\n",
+            "E2001",
+        );
+        // Without an indexer only beside an array type in an intersection.
+        strict_err(
+            "local xs: string[] = { \"a\" }\nlocal r: { name?: string } = xs\nprint(r)\n",
+            "E2001",
+        );
     }
 }
