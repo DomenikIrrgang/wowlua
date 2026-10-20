@@ -4,6 +4,13 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ## Unreleased
 
+## [0.9.4] - 2026-10-21
+
+M9 so far: faster filtered test runs for large suites, found while
+continuing SuuUI's unit tests on 0.9.3. The language server, the VS Code
+extension and the milestones after M9 are planned; see the
+[roadmap](spec/roadmap.md).
+
 ### Changed
 
 - `wowlua test` with a filter loads only the test files whose path or source contains it (a test's name is written in its file), so a filtered run of a large suite takes seconds instead of loading every file's emulated client
@@ -362,6 +369,7 @@ M0, the foundation: an existing Lua addon builds and installs from a
 - `wowlua.lock` with the pinned flavor table
 - Release binaries for macOS, Linux and Windows on GitHub Releases
 
+[0.9.4]: https://github.com/DomenikIrrgang/wowlua/releases/tag/v0.9.4
 [0.9.3]: https://github.com/DomenikIrrgang/wowlua/releases/tag/v0.9.3
 [0.9.2]: https://github.com/DomenikIrrgang/wowlua/releases/tag/v0.9.2
 [0.9.1]: https://github.com/DomenikIrrgang/wowlua/releases/tag/v0.9.1

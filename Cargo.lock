@@ -2487,11 +2487,11 @@ dependencies = [
 
 [[package]]
 name = "wowlua-api"
-version = "0.9.3"
+version = "0.9.4"
 
 [[package]]
 name = "wowlua-cli"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "assert_cmd",
  "clap",
@@ -2519,7 +2519,7 @@ dependencies = [
 
 [[package]]
 name = "wowlua-diagnostics"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "codespan-reporting",
  "serde_json",
@@ -2528,7 +2528,7 @@ dependencies = [
 
 [[package]]
 name = "wowlua-driver"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "blake3",
  "dirs",
@@ -2566,7 +2566,7 @@ dependencies = [
 
 [[package]]
 name = "wowlua-engine"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "flate2",
  "quick-xml",
@@ -2580,7 +2580,7 @@ dependencies = [
 
 [[package]]
 name = "wowlua-flavors"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "serde",
  "serde_json",
@@ -2588,7 +2588,7 @@ dependencies = [
 
 [[package]]
 name = "wowlua-fmt"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "regex",
  "stacker",
@@ -2599,7 +2599,7 @@ dependencies = [
 
 [[package]]
 name = "wowlua-lower"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "mlua",
  "stacker",
@@ -2613,7 +2613,7 @@ dependencies = [
 
 [[package]]
 name = "wowlua-luair"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "mlua",
  "serde_json",
@@ -2622,7 +2622,7 @@ dependencies = [
 
 [[package]]
 name = "wowlua-manifest"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "globset",
  "indexmap",
@@ -2639,7 +2639,7 @@ dependencies = [
 
 [[package]]
 name = "wowlua-pkg"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "dirs",
  "flate2",
@@ -2662,14 +2662,14 @@ dependencies = [
 
 [[package]]
 name = "wowlua-runtime"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "mlua",
 ]
 
 [[package]]
 name = "wowlua-sema"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "hashbrown",
  "indexmap",
@@ -2686,15 +2686,15 @@ dependencies = [
 
 [[package]]
 name = "wowlua-span"
-version = "0.9.3"
+version = "0.9.4"
 
 [[package]]
 name = "wowlua-stdlib"
-version = "0.9.3"
+version = "0.9.4"
 
 [[package]]
 name = "wowlua-syntax"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "mlua",
  "stacker",
@@ -2704,7 +2704,7 @@ dependencies = [
 
 [[package]]
 name = "wowlua-test"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "regex",
  "serde_json",
@@ -2721,14 +2721,14 @@ dependencies = [
 
 [[package]]
 name = "wowlua-toc"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "wowlua-flavors",
 ]
 
 [[package]]
 name = "wowlua-types-gen"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "indexmap",
  "mlua",
@@ -2740,7 +2740,7 @@ dependencies = [
 
 [[package]]
 name = "wowlua-vm"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "indexmap",
  "mlua",
@@ -2752,7 +2752,7 @@ dependencies = [
 
 [[package]]
 name = "wowlua-xml"
-version = "0.9.3"
+version = "0.9.4"
 dependencies = [
  "quick-xml",
  "wowlua-toc",
