@@ -257,15 +257,37 @@ pub fn check_package_full(
     let extra_globals = &extra_globals;
     let assigned_globals = &assigned_globals;
 
-    // Modules before their importers, so export types are known.
-    let order = check_order(files.len(), &analysis.edges);
+    // Modules before their importers, so export types are known. The
+    // modules of an import cycle are checked together, in source order;
+    // the ones checked first see the others' exports as their annotations
+    // declare them.
     let mut exports: FxHashMap<usize, FxHashMap<Box<str>, TypeId>> = FxHashMap::default();
+    let checked = |i: usize| {
+        settings.get(i).copied().flatten().is_some()
+            && files[i].parse.is_some()
+            && matches!(files[i].kind, FileKind::Wowlua | FileKind::Lua)
+    };
+    let mut order = Vec::with_capacity(files.len());
+    for component in crate::order::components_in_order(files.len(), &analysis.edges) {
+        if component.len() > 1 {
+            for &m in component
+                .iter()
+                .filter(|&&m| checked(m) && files[m].kind == FileKind::Wowlua)
+            {
+                if let Some(parse) = files[m].parse {
+                    let early = annotated_exports(&mut env, parse, m);
+                    exports.insert(m, early);
+                }
+            }
+        }
+        order.extend(component);
+    }
     for i in order {
         let (Some(settings), Some(parse)) = (settings.get(i).copied().flatten(), files[i].parse)
         else {
             continue;
         };
-        if !matches!(files[i].kind, FileKind::Wowlua | FileKind::Lua) {
+        if !checked(i) {
             continue;
         }
         let ctx = FileCtx {
@@ -800,14 +822,55 @@ fn check_file_in(
     out
 }
 
-/// A topological order of the files over import edges, source order for
-/// ties and cycles.
-fn check_order(n: usize, edges: &[(usize, usize)]) -> Vec<usize> {
-    let rank: Vec<usize> = (0..n).collect();
-    match crate::order::stable_topo(n, &rank, edges) {
-        Ok(order) => order,
-        Err(_) => (0..n).collect(),
+/// The exports of module `m` whose types its annotations give without
+/// checking it: functions (as hoisted, spec §5.1) and annotated locals and
+/// constants. Undecorated only: a decorator can replace the value.
+fn annotated_exports(
+    env: &mut env::Env,
+    parse: &wowlua_syntax::Parse,
+    m: usize,
+) -> FxHashMap<Box<str>, TypeId> {
+    let scope = env::Scope {
+        module: Some(m),
+        ..env::Scope::default()
+    };
+    // The module's own check reports what its annotations get wrong.
+    let reported = env.diagnostics.len();
+    let mut out = FxHashMap::default();
+    for s in parse.view().block().stmts() {
+        let StmtKind::Export(inner) = s.kind() else {
+            continue;
+        };
+        if !s.decorators().is_empty() || !inner.decorators().is_empty() {
+            continue;
+        }
+        match inner.kind() {
+            StmtKind::Function { name, func }
+                if name.path().len() == 1 && name.method().is_none() =>
+            {
+                let sig = env.func_sig(&env::FnSig::of(func), &scope, false);
+                let t = env.types.func(sig);
+                out.insert(name.path().at(0).text().into(), t);
+            }
+            StmtKind::Local { names, .. } => {
+                for n in names.iter() {
+                    if let Some(t) = n.ty {
+                        let t = env.resolve(t, &scope);
+                        out.insert(n.name.text().into(), t);
+                    }
+                }
+            }
+            StmtKind::Const {
+                name, ty: Some(t), ..
+            } => {
+                let t = env.resolve(t, &scope);
+                out.insert(name.text().into(), t);
+            }
+            _ => {}
+        }
     }
+    env.diagnostics.truncate(reported);
+    out
 }
 
 /// The types of a file's imported bindings.

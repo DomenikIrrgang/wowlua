@@ -76,6 +76,97 @@ fn find_cycle(n: usize, next: &[Vec<usize>], indegree: &[usize]) -> Vec<usize> {
     cycle
 }
 
+/// The strongly connected components of the graph over `0..n`, ordered so
+/// that every edge `(a, b)` between two components puts `a`'s first. Ties
+/// go to the component whose lowest node is lower, and each component
+/// lists its nodes in order: without cycles, this is `stable_topo` with
+/// `rank[i] = i`.
+pub fn components_in_order(n: usize, edges: &[(usize, usize)]) -> Vec<Vec<usize>> {
+    let sccs = strongly_connected(n, edges.iter().copied());
+    let mut component = vec![0; n];
+    for (c, members) in sccs.iter().enumerate() {
+        for &m in members {
+            component[m] = c;
+        }
+    }
+    let between: Vec<(usize, usize)> = edges
+        .iter()
+        .map(|&(a, b)| (component[a], component[b]))
+        .filter(|(a, b)| a != b)
+        .collect();
+    let rank: Vec<usize> = sccs.iter().map(|m| m[0]).collect();
+    let order = stable_topo(sccs.len(), &rank, &between).expect("components form no cycle");
+    let mut sccs: Vec<Option<Vec<usize>>> = sccs.into_iter().map(Some).collect();
+    order
+        .into_iter()
+        .map(|c| sccs[c].take().expect("each component once"))
+        .collect()
+}
+
+/// The strongly connected components of the graph over `0..n`, each
+/// sorted, in the reverse of a topological order.
+pub fn strongly_connected(
+    n: usize,
+    edges: impl IntoIterator<Item = (usize, usize)>,
+) -> Vec<Vec<usize>> {
+    let mut next: Vec<Vec<usize>> = vec![Vec::new(); n];
+    for (from, to) in edges {
+        next[from].push(to);
+    }
+    // Iterative Tarjan.
+    let mut index = vec![usize::MAX; n];
+    let mut low = vec![0usize; n];
+    let mut on_stack = vec![false; n];
+    let mut stack: Vec<usize> = Vec::new();
+    let mut counter = 0;
+    let mut out = Vec::new();
+    for root in 0..n {
+        if index[root] != usize::MAX {
+            continue;
+        }
+        let mut call: Vec<(usize, usize)> = vec![(root, 0)];
+        index[root] = counter;
+        low[root] = counter;
+        counter += 1;
+        stack.push(root);
+        on_stack[root] = true;
+        while let Some(&mut (v, ref mut i)) = call.last_mut() {
+            if *i < next[v].len() {
+                let w = next[v][*i];
+                *i += 1;
+                if index[w] == usize::MAX {
+                    index[w] = counter;
+                    low[w] = counter;
+                    counter += 1;
+                    stack.push(w);
+                    on_stack[w] = true;
+                    call.push((w, 0));
+                } else if on_stack[w] {
+                    low[v] = low[v].min(index[w]);
+                }
+            } else {
+                call.pop();
+                if let Some(&(parent, _)) = call.last() {
+                    low[parent] = low[parent].min(low[v]);
+                }
+                if low[v] == index[v] {
+                    let mut members = Vec::new();
+                    while let Some(w) = stack.pop() {
+                        on_stack[w] = false;
+                        members.push(w);
+                        if w == v {
+                            break;
+                        }
+                    }
+                    members.sort();
+                    out.push(members);
+                }
+            }
+        }
+    }
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -94,5 +185,23 @@ mod tests {
         let cycle = stable_topo(4, &[0, 1, 2, 3], &[(1, 0), (2, 1), (1, 2)]).unwrap_err();
         assert_eq!(cycle.len(), 2);
         assert!(!cycle.contains(&0));
+    }
+
+    #[test]
+    fn orders_components_and_keeps_cycles_together() {
+        // 3 and 1 import each other; 2 imports nothing, 0 imports 1.
+        assert_eq!(
+            components_in_order(4, &[(3, 1), (1, 3), (1, 0)]),
+            vec![vec![1, 3], vec![0], vec![2]]
+        );
+        // Without cycles, the same order as `stable_topo`.
+        let edges = [(3, 1), (2, 0)];
+        let flat: Vec<usize> = components_in_order(4, &edges).concat();
+        assert_eq!(Ok(flat), stable_topo(4, &[0, 1, 2, 3], &edges));
+        // A module the cycle imports comes first.
+        assert_eq!(
+            components_in_order(3, &[(0, 1), (1, 0), (2, 0)]),
+            vec![vec![2], vec![0, 1]]
+        );
     }
 }

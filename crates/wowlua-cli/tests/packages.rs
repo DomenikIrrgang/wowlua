@@ -752,6 +752,56 @@ fn dependency_commands() {
         .stderr(predicate::str::contains("Fetched 1 package"));
 }
 
+/// A library's exported values keep their types in the addon, also when
+/// the addon's own modules import each other (spec §10.5.1, §5.4.4).
+#[test]
+fn library_values_keep_their_types_beside_an_import_cycle() {
+    let e = env();
+    write(
+        &e.root.join("mylib"),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "mylib", "version": "1.0.0", "kind": "library", "license": "MIT" } }"#,
+            ),
+            (
+                "src/Core.wowlua",
+                "export function hello(n: number): number return n + 1 end\n",
+            ),
+        ],
+    );
+    write(
+        &e.project,
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "my-addon", "version": "1.0.0" },
+  "check": { "mode": "strict" },
+  "dependencies": { "mylib": { "path": "../mylib" } } }"#,
+            ),
+            (
+                "src/P.wowlua",
+                "import q from \"./Q\"\nexport function p(): number return q() end\n",
+            ),
+            (
+                "src/Q.wowlua",
+                "import p from \"./P\"\nexport function q(): number return 1 end\nexport function r(): number return p() end\n",
+            ),
+            (
+                "src/main.wowlua",
+                "import hello from \"mylib/Core\"\nlocal s: string = hello(1)\nprint(s)\n",
+            ),
+        ],
+    );
+    wowlua(&e.project, &e.home)
+        .args(["check", "--message-format", "short"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "src/main.wowlua:2:7: error[E2001]: `number` is not assignable to `string`",
+        ));
+}
+
 #[test]
 fn wowlua_library_is_compiled_into_the_addon() {
     let e = env();

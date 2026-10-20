@@ -816,6 +816,94 @@ fn module_errors() {
     }
 }
 
+/// An import cycle anywhere in the package leaves every other import its
+/// type: standard-library modules and the modules a cycle imports are
+/// checked before their importers, and the modules of a cycle see each
+/// other's exports as their annotations declare them (spec §5.4.4).
+#[test]
+fn import_cycles_keep_import_types() {
+    let manifest = "{ \"package\": { \"name\": \"cyc\", \"version\": \"1.0.0\" }, \"check\": { \"mode\": \"strict\" } }\n";
+    // The errors `wowlua check` reports, as `file:line: code`.
+    let check = |files: &[(&str, &str)]| -> Vec<String> {
+        let dir = tempfile::tempdir().unwrap();
+        let mut all = vec![("wowlua.json", manifest)];
+        all.extend_from_slice(files);
+        write(dir.path(), &all);
+        let out = wowlua(dir.path())
+            .args(["check", "--message-format", "short"])
+            .output()
+            .unwrap();
+        let stderr = String::from_utf8_lossy(&out.stderr);
+        let mut found: Vec<String> = stderr
+            .lines()
+            .filter_map(|l| {
+                let (at, rest) = l.split_once(": error[")?;
+                let (file, line) = at.rsplit_once(':')?.0.rsplit_once(':')?;
+                let code = &rest[..rest.find(']')?];
+                Some(format!("{file}:{line}: {code}"))
+            })
+            .collect();
+        found.sort();
+        found
+    };
+    // A run-time cycle between two modules, and a third file that imports
+    // the standard library.
+    let cycle = [
+        (
+            "src/P.wowlua",
+            "import q from \"./Q\"\nexport function p(): number return q() end\nexport function s(): string local early: string = q return early end\n",
+        ),
+        (
+            "src/Q.wowlua",
+            "import p from \"./P\"\nexport function q(): number return 1 end\nexport function r(): number return p() end\nexport function t(): string local late: string = p return late end\n",
+        ),
+    ];
+    let mut files = cycle.to_vec();
+    files.push((
+        "src/A.wowlua",
+        "import after from \"wowlua:timer\"\nimport isSecret from \"wowlua:secret\"\nlocal n: number = after\nlocal function f(v: string | Secret<string>): string\n    if isSecret(v) then return \"?\" end\n    return v:lower()\nend\nprint(n, f(\"x\"))\n",
+    ));
+    assert_eq!(
+        check(&files),
+        [
+            "src/A.wowlua:3: E2001",
+            "src/P.wowlua:3: E2001",
+            "src/Q.wowlua:4: E2001"
+        ]
+    );
+    // The standard library imported inside a module of the cycle: by
+    // namespace, and its predicate through a local alias.
+    let mut files = cycle.to_vec();
+    files[1] = (
+        "src/Q.wowlua",
+        "import p from \"./P\"\nimport * as secret from \"wowlua:secret\"\nexport function q(): number return 1 end\nexport function r(): number return p() end\nconst isSecret = secret.isSecret\nlocal function f(v: string | Secret<string>): string\n    if isSecret(v) then return \"?\" end\n    return v:lower()\nend\nlocal function g(v: string | Secret<string>): string\n    if not secret.isSecret(v) then return v:upper() end\n    return \"?\"\nend\nlocal n: number = secret.isSecret\nprint(n, f(\"x\"), g(\"y\"))\n",
+    );
+    assert_eq!(
+        check(&files),
+        ["src/P.wowlua:3: E2001", "src/Q.wowlua:14: E2001"]
+    );
+    // A load-time cycle (E1014) does not hide the types either.
+    let files = [
+        (
+            "src/main.wowlua",
+            "import a from \"/b\"\nexport local m: number = a\nlocal s: string = a\nprint(s)\n",
+        ),
+        (
+            "src/b.wowlua",
+            "import m from \"/main\"\nimport after from \"wowlua:timer\"\nexport local a: number = m\nlocal t: string = m\nlocal n: number = after\nprint(t, n)\n",
+        ),
+    ];
+    assert_eq!(
+        check(&files),
+        [
+            "src/b.wowlua:3: E1014",
+            "src/b.wowlua:4: E2001",
+            "src/b.wowlua:5: E2001",
+            "src/main.wowlua:3: E2001"
+        ]
+    );
+}
+
 /// Build metadata, static conditions, `@if` and per-flavor output (spec
 /// chapter 6, codegen §14.8.3).
 #[test]
