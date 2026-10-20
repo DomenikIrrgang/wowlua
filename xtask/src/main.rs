@@ -23,12 +23,15 @@
 //! - `cargo xtask methodprobe-plan [--stats]`: the plan of `/stdtest engine
 //!   methodprobe`, every widget method on fresh widgets
 //!   (`tests/ingame/src/methodprobeplan.lua`).
+//! - `cargo xtask coverage-report`: the emulator's coverage report
+//!   (`docs/emulator-coverage.md`).
 
 use anyhow::{Context, Result, bail};
 use std::fs;
 use std::path::{Path, PathBuf};
 
 mod corpus;
+mod coverage;
 mod fixture;
 mod fullprobe;
 mod ingest;
@@ -92,6 +95,9 @@ fn main() -> Result<()> {
                 )
             }
         }
+        "coverage-report" => {
+            write_if_changed(&root.join(coverage::REPORT), &coverage::generate(&root)?)
+        }
         "runtime" => {
             let slices = runtime::generate(&root)?;
             for stale in stale_runtime_files(&root, &slices)? {
@@ -119,6 +125,11 @@ fn main() -> Result<()> {
                 &root.join(methodprobe::PLAN),
                 &methodprobe::generate(&root)?,
                 "methodprobe-plan",
+            )?;
+            check_current(
+                &root.join(coverage::REPORT),
+                &coverage::generate(&root)?,
+                "coverage-report",
             )?;
             let slices = runtime::generate(&root)?;
             if let Some(stale) = stale_runtime_files(&root, &slices)?.first() {
@@ -211,7 +222,7 @@ fn main() -> Result<()> {
             }
         }
         _ => bail!(
-            "usage: cargo xtask <codes|schema|check|corpus|types|packager-diff|packager-runs>"
+            "usage: cargo xtask <codes|schema|check|coverage-report|corpus|types|packager-diff|packager-runs>"
         ),
     }
 }

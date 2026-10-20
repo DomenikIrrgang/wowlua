@@ -1,0 +1,8 @@
+# The bugs found in the game that must fail in the emulator as they failed
+# there (spec emulator §17.8): the bug, then each test that holds it
+# (`file::name`, tab-separated); a line without a test has none yet. Read by
+# `cargo xtask coverage-report`, which checks that each test exists.
+`os.date` in `wowlua:format` crashed in game: WoW Forever has no `os` table (decision S37); the VM has none either	crates/wowlua-cli/tests/stdlib.rs::format_uses_the_client_formats
+`0 / 0` in `wowlua:serialize` raised "Division by zero" in game (decision S38), as `Vm::wow` does	crates/wowlua-cli/tests/stdlib.rs::serialize_round_trips_and_rejects
+SuuUI's reparented status-bar containers broke Edit Mode
+Taint met in combat: a protected frame changed by an addon in combat is blocked, a tainted read of a secret aura fails	crates/wowlua-engine/tests/protection.rs::protected_frames_are_blocked_in_combat	crates/wowlua-engine/tests/auras.rs::tainted_reads_in_combat_fail_as_recorded

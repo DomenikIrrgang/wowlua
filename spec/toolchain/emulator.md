@@ -381,7 +381,10 @@ takes the flavor's `Interface` folder and its global strings:
   Mode, and taint met in combat.
 - **Coverage of the emulation.** A report lists which API functions have
   behaviour, which are generated only, and which rules were probed on which
-  flavor.
+  flavor: [`docs/emulator-coverage.md`](../../docs/emulator-coverage.md),
+  written by `cargo xtask coverage-report` from the engine's own tables, the
+  fixtures and the replay tests' ratchets; `cargo xtask check` fails when it
+  is out of date.
 
 ## 17.9 VM design
 

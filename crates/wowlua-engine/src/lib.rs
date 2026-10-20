@@ -27,6 +27,7 @@ pub mod collections;
 pub mod conditionals;
 pub mod content;
 pub mod controls;
+pub mod coverage;
 pub mod cursor;
 pub mod curves;
 pub mod damagemeter;
@@ -252,71 +253,17 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
     // The engine's own behaviours, the recorded answers first: any
     // behaviour of the engine's own takes their place (and a fill-in's that
     // a setter of its changes, `OVER_RECORDED`).
-    let own: HashMap<&'static str, NativeFn> = recorded::behaviours(flavor)
+    let own: HashMap<&'static str, NativeFn> = own_behaviours(flavor)
         .into_iter()
-        .chain(traits::recorded_behaviours(flavor))
-        .filter(|(name, _)| !OVER_RECORDED.contains(name))
-        .chain(clock::behaviours())
-        .chain(units::behaviours())
-        .chain(units::more_behaviours())
-        .chain(curves::behaviours())
-        .chain(healcalc::behaviours())
-        .chain(damagemeter::behaviours())
-        .chain(formatters::behaviours())
-        .chain(widgets::functions())
-        .chain(auras::behaviours())
-        .chain(gamedata::behaviours())
-        .chain(character::behaviours())
-        .chain(stats::behaviours())
-        .chain(actions::behaviours())
-        .chain(editmode::behaviours())
-        .chain(channels::behaviours())
-        .chain(macros::behaviours())
-        .chain(cursor::behaviours())
-        .chain(input::behaviours())
-        .chain(casting::behaviours())
-        .chain(merchant::behaviours())
-        .chain(loot::behaviours())
-        .chain(quests::behaviours())
-        .chain(gossip::behaviours())
-        .chain(trainer::behaviours())
-        .chain(taxi::behaviours())
-        .chain(maps::behaviours())
-        .chain(misc::behaviours())
-        .chain(mail::behaviours())
-        .chain(bank::behaviours())
-        .chain(auction::behaviours())
-        .chain(itemlocation::behaviours())
-        .chain(death::behaviours())
-        .chain(inventory::behaviours())
-        .chain(queries::behaviours())
-        .chain(objects2::behaviours())
-        .chain(party::behaviours())
-        .chain(inspect::behaviours())
-        .chain(traits::behaviours(flavor))
-        .chain(achievements::behaviours())
-        .chain(tradeskill::behaviours(flavor))
-        .chain(tooltip::behaviours())
-        .chain(chat::behaviours())
-        .chain(bindings::behaviours())
-        .chain(facts::behaviours())
-        .chain(equipsets::behaviours())
-        .chain(encounters::behaviours())
-        .chain(pets::behaviours())
-        .chain(conditionals::behaviours())
-        .chain(lfg::behaviours())
-        .chain(guild::behaviours())
-        .chain([
-            ("import", ui::build::import as NativeFn),
-            (
-                "C_XMLUtil.GetTemplateInfo",
-                ui::build::template_info as NativeFn,
-            ),
-        ])
-        .chain(framescript::functions())
+        .flat_map(|m| {
+            let recorded = m.recorded;
+            m.list
+                .into_iter()
+                .filter(move |(name, _)| !recorded || !OVER_RECORDED.contains(name))
+        })
         .collect();
     // The fill-ins answer only what nothing else does.
-    let fill = fill_ins();
+    let fill: Vec<(&'static str, NativeFn)> = fill_ins().into_iter().flat_map(|m| m.list).collect();
     let fill_ins: std::collections::HashSet<&'static str> = fill
         .iter()
         .map(|(name, _)| *name)
@@ -328,22 +275,9 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         behaviours: fill.into_iter().chain(own).collect(),
         fill_ins,
         // The fill-in methods first: the engine's own take their place.
-        methods: methods2::methods()
+        methods: method_behaviours()
             .into_iter()
-            .chain(methods3::methods())
-            .chain(widgets::behaviours())
-            .chain(curves::methods())
-            .chain(objects2::methods())
-            .chain(clock::methods())
-            .chain(healcalc::methods())
-            .chain(formatters::methods())
-            .chain(framescript::methods())
-            .chain(animations::methods())
-            .chain(tooltip::methods())
-            .chain(input::methods())
-            .chain(bars::methods())
-            .chain(buttons::methods())
-            .chain(measures::methods())
+            .flat_map(|m| m.list)
             .collect(),
         lineages: Default::default(),
         world: widgets::World::default(),
@@ -946,24 +880,144 @@ const OVER_RECORDED: &[&str] = &[
 /// The fill-in modules' behaviours: answers for functions no recording
 /// or model of the engine answers, from Blizzard's documentation and UI
 /// code, warcraft.wiki.gg and the functions' names (unverified).
-fn fill_ins() -> Vec<(&'static str, NativeFn)> {
-    unitinfo::behaviours()
-        .into_iter()
-        .chain(spellinfo::behaviours())
-        .chain(iteminfo::behaviours())
-        .chain(social::behaviours())
-        .chain(content::behaviours())
-        .chain(questinfo::behaviours())
-        .chain(collections::behaviours())
-        .chain(extras::behaviours())
-        .chain(globalsinfo::behaviours())
-        .chain(systeminfo::behaviours())
-        .chain(actions2::behaviours())
-        .chain(leftovers2::behaviours())
+pub(crate) fn fill_ins() -> Vec<Behaviours<NativeFn>> {
+    vec![
+        Behaviours::new("unitinfo", unitinfo::behaviours()),
+        Behaviours::new("spellinfo", spellinfo::behaviours()),
+        Behaviours::new("iteminfo", iteminfo::behaviours()),
+        Behaviours::new("social", social::behaviours()),
+        Behaviours::new("content", content::behaviours()),
+        Behaviours::new("questinfo", questinfo::behaviours()),
+        Behaviours::new("collections", collections::behaviours()),
+        Behaviours::new("extras", extras::behaviours()),
+        Behaviours::new("globalsinfo", globalsinfo::behaviours()),
+        Behaviours::new("systeminfo", systeminfo::behaviours()),
+        Behaviours::new("actions2", actions2::behaviours()),
+        Behaviours::new("leftovers2", leftovers2::behaviours()),
         // Last: what the client answers with nothing there (the full
         // probe) takes the place of the guesses above.
-        .chain(blanks::behaviours())
-        .collect()
+        Behaviours::new("blanks", blanks::behaviours()),
+    ]
+}
+
+/// A module's behaviours: its name, whether they answer from the client's
+/// recordings (`data/camelot-answers.txt`, the recorded talent trees), and
+/// the functions or methods with their behaviour.
+pub struct Behaviours<F> {
+    pub module: &'static str,
+    pub recorded: bool,
+    pub list: Vec<(&'static str, F)>,
+}
+
+impl<F> Behaviours<F> {
+    fn new(module: &'static str, list: Vec<(&'static str, F)>) -> Self {
+        Behaviours {
+            module,
+            recorded: false,
+            list,
+        }
+    }
+
+    fn recorded(module: &'static str, list: Vec<(&'static str, F)>) -> Self {
+        Behaviours {
+            module,
+            recorded: true,
+            list,
+        }
+    }
+}
+
+/// The engine's own behaviours by module, in the order they take each
+/// other's place (a later module's over an earlier one's): the recorded
+/// answers first.
+pub(crate) fn own_behaviours(flavor: &str) -> Vec<Behaviours<NativeFn>> {
+    vec![
+        Behaviours::recorded("recorded", recorded::behaviours(flavor)),
+        Behaviours::recorded("traits", traits::recorded_behaviours(flavor)),
+        Behaviours::new("clock", clock::behaviours()),
+        Behaviours::new("units", units::behaviours()),
+        Behaviours::new("units", units::more_behaviours()),
+        Behaviours::new("curves", curves::behaviours()),
+        Behaviours::new("healcalc", healcalc::behaviours()),
+        Behaviours::new("damagemeter", damagemeter::behaviours()),
+        Behaviours::new("formatters", formatters::behaviours()),
+        Behaviours::new("widgets", widgets::functions()),
+        Behaviours::new("auras", auras::behaviours()),
+        Behaviours::new("gamedata", gamedata::behaviours()),
+        Behaviours::new("character", character::behaviours()),
+        Behaviours::new("stats", stats::behaviours()),
+        Behaviours::new("actions", actions::behaviours()),
+        Behaviours::new("editmode", editmode::behaviours()),
+        Behaviours::new("channels", channels::behaviours()),
+        Behaviours::new("macros", macros::behaviours()),
+        Behaviours::new("cursor", cursor::behaviours()),
+        Behaviours::new("input", input::behaviours()),
+        Behaviours::new("casting", casting::behaviours()),
+        Behaviours::new("merchant", merchant::behaviours()),
+        Behaviours::new("loot", loot::behaviours()),
+        Behaviours::new("quests", quests::behaviours()),
+        Behaviours::new("gossip", gossip::behaviours()),
+        Behaviours::new("trainer", trainer::behaviours()),
+        Behaviours::new("taxi", taxi::behaviours()),
+        Behaviours::new("maps", maps::behaviours()),
+        Behaviours::new("misc", misc::behaviours()),
+        Behaviours::new("mail", mail::behaviours()),
+        Behaviours::new("bank", bank::behaviours()),
+        Behaviours::new("auction", auction::behaviours()),
+        Behaviours::new("itemlocation", itemlocation::behaviours()),
+        Behaviours::new("death", death::behaviours()),
+        Behaviours::new("inventory", inventory::behaviours()),
+        Behaviours::new("queries", queries::behaviours()),
+        Behaviours::new("objects2", objects2::behaviours()),
+        Behaviours::new("party", party::behaviours()),
+        Behaviours::new("inspect", inspect::behaviours()),
+        Behaviours::new("traits", traits::behaviours(flavor)),
+        Behaviours::new("achievements", achievements::behaviours()),
+        Behaviours::new("tradeskill", tradeskill::behaviours(flavor)),
+        Behaviours::new("tooltip", tooltip::behaviours()),
+        Behaviours::new("chat", chat::behaviours()),
+        Behaviours::new("bindings", bindings::behaviours()),
+        Behaviours::new("facts", facts::behaviours()),
+        Behaviours::new("equipsets", equipsets::behaviours()),
+        Behaviours::new("encounters", encounters::behaviours()),
+        Behaviours::new("pets", pets::behaviours()),
+        Behaviours::new("conditionals", conditionals::behaviours()),
+        Behaviours::new("lfg", lfg::behaviours()),
+        Behaviours::new("guild", guild::behaviours()),
+        Behaviours::new(
+            "ui",
+            vec![
+                ("import", ui::build::import as NativeFn),
+                (
+                    "C_XMLUtil.GetTemplateInfo",
+                    ui::build::template_info as NativeFn,
+                ),
+            ],
+        ),
+        Behaviours::new("framescript", framescript::functions()),
+    ]
+}
+
+/// The widget methods' behaviours by module, in the order they take each
+/// other's place: the fill-ins (`methods2`, `methods3`) first.
+pub(crate) fn method_behaviours() -> Vec<Behaviours<widgets::MethodFn>> {
+    vec![
+        Behaviours::new("methods2", methods2::methods()),
+        Behaviours::new("methods3", methods3::methods()),
+        Behaviours::new("widgets", widgets::behaviours()),
+        Behaviours::new("curves", curves::methods()),
+        Behaviours::new("objects2", objects2::methods()),
+        Behaviours::new("clock", clock::methods()),
+        Behaviours::new("healcalc", healcalc::methods()),
+        Behaviours::new("formatters", formatters::methods()),
+        Behaviours::new("framescript", framescript::methods()),
+        Behaviours::new("animations", animations::methods()),
+        Behaviours::new("tooltip", tooltip::methods()),
+        Behaviours::new("input", input::methods()),
+        Behaviours::new("bars", bars::methods()),
+        Behaviours::new("buttons", buttons::methods()),
+        Behaviours::new("measures", measures::methods()),
+    ]
 }
 
 /// Every API function: its behaviour, or the "not mocked" error.

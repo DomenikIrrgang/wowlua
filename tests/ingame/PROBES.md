@@ -1,0 +1,144 @@
+# In-game probes to run
+
+The probes that would close the emulator's open gaps
+([coverage report](../../docs/emulator-coverage.md)), for WoW Forever (the
+camelot flavor). Install a current StdTest build first (`wowlua install
+--client _classic_beta_` in `tests/ingame`), then `/reload` in game so it
+loads.
+
+Everything here is read-only: no item is used, nothing is bought, moved or
+sent, the character does not move, and no output stores a player's name.
+After a run that StdTest records, `/reload` writes the results to the saved
+variables; `cargo xtask ingest` then takes them into the fixtures.
+
+## The answers battery's new calls
+
+About a minute, standing anywhere, out of a group and out of combat.
+
+1. Log in (or `/reload` if the game was running) so the new StdTest loads.
+2. Type `/stdtest engine answers` and wait for the chat line `engine answers:
+   N calls recorded; type /reload so the file is written`. It can pause for a
+   few seconds (map lookups, atlases, glyph measurements).
+3. Type `/reload`, then run `cargo xtask ingest`.
+
+If the game freezes or crashes instead, the newest file in the client's
+`Errors/` folder shows where it stopped (its "Lua Stack").
+
+What it answers:
+
+- Coins: `GetCoinIcon` 0/99/9999, `C_CurrencyInfo.GetCoinIcon` 100/10000.
+- Units: `UnitStat("player", 6)`, `GetSpellBonusDamage` 2 to 8,
+  `GetMirrorTimerInfo` 2/3/4, `C_PaperDollInfo.GetTemporaryEnchantmentInfo`
+  16/17/18/20, `GetNumCompanions("MOUNT")`/`("CRITTER")`, `UnitGUID(nil)`;
+  what `UnitName`/`UnitPVPName` give for 17 unit tokens ("none", "target",
+  "softenemy"...), as nil, empty, length and whether it equals the player's
+  own (no names are stored).
+- Game rules: `C_GameRules.IsGameRuleActive` 10/213/214, and every
+  `Enum.GameRule` value in one check.
+- Commentator and timeline: `C_Commentator.GetTeamColor` 2/3;
+  `C_EncounterTimeline.GetCurrentTime()` between two `GetTime()`s.
+- Artifact: `C_ArtifactUI.GetCostForPointAtRank` ranks 2 to 10 (both
+  argument orders), `GetTotalPowerCost` for a few spans.
+- Maps: `C_Map.GetWorldPosFromMapPos` at (0,0) and (1,1) for every recorded
+  map; `C_Map.GetMapPosFromWorldPos` for 6 world points (Orgrimmar,
+  Crossroads, Mulgore, Stormwind, Ironforge, Undercity) without and with 8
+  override maps; `GetMapChildrenInfo` of 1414/1415/947 as counts and IDs;
+  which map IDs from 1 to 2500 exist.
+- Layout: `C_Texture.GetAtlasInfo` (size, file, texture coordinates, tiling)
+  for every atlas the engine knows; string width, height and unbounded width
+  of 8 texts and every printable ASCII glyph in GameFontNormal,
+  GameFontHighlightSmall, SystemFont_Shadow_Large_Outline and
+  NumberFontNormal.
+- Script objects: `CreateFrame(..., "BackdropTemplate")`;
+  `CreateAbbreviateConfig` with divisors 1/1 (raw and global abbreviation)
+  and 60 (as significand and as fraction divisor); writing a field to a
+  `C_Timer.NewTimer` and a `NewTicker` handle (both cancelled at once).
+
+## The method probe
+
+About 10 to 15 minutes, after the answers battery, out of combat, standing
+anywhere. `/stdtest engine methodprobe` calls every widget method the client
+has (about 13,000 calls on 53 widget kinds), each on a fresh widget under a
+hidden frame of its own: nothing shows, no Blizzard frame is touched, no
+setting changes. It reloads the UI by itself every 500 calls.
+
+1. Type `/stdtest engine methodprobe`. The chat says `methodprobe: N calls
+   (...)`; after each reload it prints `methodprobe: n/N calls answered`. Do
+   not type while it runs; in combat it waits. `/stdtest engine methodprobe
+   status` shows where it is, `/stdtest engine methodprobe stop` pauses it
+   (the same command goes on).
+2. It ends with `methodprobe: done, ...; reloading so the file is written`
+   and, after that reload, `methodprobe: finished`.
+3. Run `cargo xtask ingest` (it writes `forever-camelot-methodprobe.lua`).
+
+If the game freezes or crashes, start it again and log in with the same
+character. The probe notices the crash at login, sets that stretch of 500
+calls aside, goes on, and comes back to it in smaller steps until the one
+call that crashes is found and skipped. The riskiest calls (boundary numbers
+like -1 and 2^31-1) come last. More than three crashes: keep the newest file
+in `Errors/` and the output of `/stdtest engine methodprobe status`.
+
+## Before and after the next full probe
+
+- `/stdtest engine snapshot` right before `/stdtest engine fullprobe` and
+  again right after it finishes, so the replay starts from the exact state
+  (bind location, mail, macros, channels, the quest log).
+- `/run for i=1,GetNumBindings() do local c=GetBinding(i) print(i,c) end`
+  (binding command names only): the binding list.
+- `/dump C_Spell.GetSpellPowerCost(20271)`, `/dump C_Spell.GetSpellInfo(20271)`
+  and `/dump C_Spell.IsSpellHarmful(20271)` (Judgement): spell cost, range,
+  cast time and harmfulness, the data `IsHarmfulAction` needs.
+- `/run print(date("%H:%M"), date("!%H:%M"))`: the machine's time zone, for
+  `C_DateAndTime.GetCalendarTimeFromEpoch`.
+
+## Situations (one /dump each, whenever it happens)
+
+A screenshot of the output or the values typed back is enough.
+
+1. Under water (until the breath bar shows): `/dump GetMirrorTimerInfo(1)`,
+   `/dump GetMirrorTimerInfo(2)` and `/dump GetMirrorTimerProgress("BREATH")`:
+   a running breath timer.
+2. In a party: `/dump UnitGroupRolesAssigned(), UnitGroupRolesAssigned("player"), UnitGroupRolesAssigned("party1")`
+   and `/dump UnitGetAvailableRoles("party1")`: whether the no-argument form
+   follows the group role.
+3. Inside a dungeon or battleground entrance (only when going there anyway):
+   `/dump GetInstanceInfo()` and `/dump GetRealZoneText()`.
+4. With a soft target showing:
+   `/run local n=UnitName("softinteract") print(n and #n, n==UnitName("target"))`
+   (only the length is printed).
+5. With a temporary weapon enchant already on (do not use one just for
+   this): `/dump C_PaperDollInfo.GetTemporaryEnchantmentInfo(16)` and
+   `/dump GetWeaponEnchantInfo()`.
+6. In combat with a target that has a buff or debuff:
+   `/run local a=C_UnitAuras.GetAuraDataByIndex("target",1) print(a and issecrettable(a), a and issecretvalue(a.spellId), a and issecretvalue(a.duration), a and issecretvalue(a.name))`
+   and the same for `C_UnitAuras.GetPlayerAuraBySpellID(<one of your buffs' spell IDs>)`:
+   whether the aura table or only its fields are secret.
+
+## Replay leftovers
+
+- Before turning in a quest with an item reward:
+  `/run local f=CreateFrame("Frame") f:RegisterEvent("QUEST_TURNED_IN") f:SetScript("OnEvent",function() print(GetTime(), C_Container.GetContainerNumFreeSlots(0)) C_Timer.After(0.2,function() print(GetTime(), C_Container.GetContainerNumFreeSlots(0)) end) end)`:
+  when the reward takes its bag slot.
+- Around a second level-up: `/stdtest engine scenario`, to confirm the
+  specialization event is batched.
+- Queue Heroic Strike on a mob, then change target before the swing; note
+  any error text.
+- While smelting bronze with copper, tin and bronze stacks all in the bags
+  (with and without a skill-up), and once crafting with the last reagent
+  stack: `/stdtest engine scenario`. Answers the order of the item counts
+  and when a used-up stack is removed (the profession replay's leftovers).
+
+## The guild
+
+One `/dump` each, any time (names in the output can be cropped from a
+screenshot).
+
+1. `/dump C_GuildInfo.GuildControlGetRankFlags(2), C_GuildInfo.GuildControlGetRankFlags(3)`
+   and the same for 4 and 5.
+2. `/dump GuildControlGetAllowedShifts(3), GuildControlGetAllowedShifts(4), GuildControlGetAllowedShifts(5)`
+3. `/run for i=1,GetNumGuildMembers() do local _,r,ri,l,c=GetGuildRosterInfo(i) print(i,ri,l,c) end`
+   (rank index, level and class only), once with "show offline" on and once
+   off.
+4. `/run for i=3,10 do print(GetGuildTradeSkillInfo(i)) end`
+5. `/dump C_Club.GetClubInfo(C_Club.GetGuildClubId())` and
+   `/dump C_Club.GetClubPrivileges(C_Club.GetGuildClubId())`.
