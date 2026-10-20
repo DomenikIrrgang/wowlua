@@ -1,6 +1,6 @@
 //! Answers addons ask of the client that no other module models: the
 //! calendar time and month, aura containers' options completed, the
-//! guild's club, the damage meter's session length, a
+//! damage meter's session length, a
 //! spell's level and whether it is the current one, what kind of widget an
 //! object is.
 
@@ -146,15 +146,6 @@ fn get_num_day_events(_vm: &mut Vm, _c: NativeCall) -> Ret {
 /// No event: nothing (the full probe, 1.60.1: `GetDayEvent(1, 1, 1)`).
 fn get_day_event(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
-}
-
-/// `C_Club.GetGuildClubId()`: none outside a guild (unverified: a guild's
-/// club ID, noted as unanswered).
-fn get_guild_club_id(vm: &mut Vm, c: NativeCall) -> Ret {
-    if engine(vm).world.chat.guild {
-        crate::note_default(vm, "C_Club.GetGuildClubId", &c, 1);
-    }
-    Ok(vec![Value::Nil])
 }
 
 /// The spell an identifier names: its ID (a name only when the player's
@@ -552,7 +543,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ),
         ("C_Calendar.GetNumDayEvents", get_num_day_events),
         ("C_Calendar.GetDayEvent", get_day_event),
-        ("C_Club.GetGuildClubId", get_guild_club_id),
         ("C_Spell.IsCurrentSpell", is_current_spell),
         ("C_Spell.GetSpellLevelLearned", get_spell_level_learned),
         ("C_Widget.IsWidget", is_widget),

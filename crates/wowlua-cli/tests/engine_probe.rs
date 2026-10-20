@@ -1405,7 +1405,7 @@ fn the_engine_plays_vendor_as_the_client_did() {
 /// and its new mail (not in the snapshot), Blessing of Protection told
 /// unusable at a usability check after an NPC was soft targeted in Thunder
 /// Bluff (the soft friend's change during the loading screen's replay).
-const HEARTH_MATCHED: usize = 1610;
+const HEARTH_MATCHED: usize = 1612;
 
 /// The hearth scenario: a Hearthstone cast, the loading screen.
 #[test]
@@ -1737,7 +1737,7 @@ fn plays_as_the_client_did(name: &str, ratchet: usize) {
 /// gives as well: the calls Blizzard's UI made that the engine could not
 /// answer, asked again with the recorded character's world. Only ever
 /// raised (decision: the engine answers every call as the client does).
-const ANSWERS_MATCHED: usize = 6123;
+const ANSWERS_MATCHED: usize = 6127;
 
 /// An answer as `cargo xtask ingest` writes the client's: UTF-8 as it is,
 /// any other byte (a binary answer, `C_EncodingUtil.SerializeCBOR`'s) as
@@ -1832,9 +1832,21 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
         })
         .collect();
     let address = regex::Regex::new(r"(function|table|userdata|thread): 0x[0-9a-f]+").unwrap();
+    // The social systems' strings, blanked as ingest blanks the client's
+    // (as the full probe compares them).
+    let social = regex::Regex::new(r"string [^,}]*").unwrap();
     let ours: BTreeMap<String, String> = ours
         .into_iter()
-        .map(|(k, v)| (k, address.replace_all(&v, "$1").into_owned()))
+        .map(|(k, v)| {
+            let v = address.replace_all(&v, "$1").into_owned();
+            let v = match theirs.get(&k) {
+                Some(t) if t.contains("string <scrubbed>") => {
+                    social.replace_all(&v, "string <scrubbed>").into_owned()
+                }
+                _ => v,
+            };
+            (k, v)
+        })
         .collect();
     // `WOWLUA_ANSWERS=GetFontInfo` shows that function's differences (`*`:
     // every function's).
@@ -1975,7 +1987,7 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
 /// stand in for it (synthetic: the number changes with the first real
 /// run). Only ever raised, but for the plan's own changes: retail systems
 /// left out of it took 19 matched calls with them (762 of 792 before).
-const FULLPROBE_MATCHED: usize = 32679;
+const FULLPROBE_MATCHED: usize = 32842;
 
 #[test]
 fn the_engine_answers_the_full_probe_as_the_client_did() {

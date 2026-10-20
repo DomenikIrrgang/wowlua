@@ -3155,6 +3155,116 @@ end
     assert!(text.contains("2 passed, 0 failed"), "{text}");
 }
 
+/// The guild's panels with Blizzard's UI (the communities frame's guild):
+/// as the default character, its leader (the recorded guild: 27 members),
+/// as an Initiate of a guild of two and outside a guild; each display
+/// mode, a member's details, the guild control panel (the leader's):
+/// not a single Blizzard error, nothing refused.
+#[test]
+fn blizzard_ui_guild_panels() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");
+    if !source.join("camelot/Interface").exists() {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    }
+    let tests = r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+const G = _G :: any
+const MODES = { "ROSTER", "GUILD_INFO", "GUILD_BENEFITS", "GUILD_PREFERRED_PLAY_SETTINGS", "CHAT", "ROSTER" }
+
+--- The guild's panels toured; the roster's size and whether the rank
+--- editor's button showed.
+local function tour(): (number, boolean)
+    mock.pressBinding("TOGGLEGUILDTAB")
+    mock.nextFrame(10)
+    const f = G.CommunitiesFrame
+    expect(f).toBeShown()
+    expect(f:GetSelectedClubId()).toBe(C_Club.GetGuildClubId())
+    for _, mode in ipairs(MODES) do
+        f:SetDisplayMode(G.COMMUNITIES_FRAME_DISPLAY_MODES[mode])
+        mock.nextFrame(5)
+    end
+    const size = f.MemberList.ScrollBox:GetDataProvider():GetSize()
+    const row = f.MemberList.ScrollBox:FindFrameByPredicate(function(_, d: any): boolean
+        return d ~= nil and d.memberInfo ~= nil and not d.memberInfo.isSelf
+    end)
+    expect(row ~= nil).toBe(true)
+    mock.click(row)
+    mock.nextFrame(3)
+    expect(f.GuildMemberDetailFrame).toBeShown()
+    const control = f.CommunitiesControlFrame.GuildControlButton
+    const shown = control:IsShown()
+    if shown then
+        mock.click(control)
+        mock.nextFrame(5)
+        expect(G.GuildControlUI).toBeShown()
+    end
+    mock.pressBinding("TOGGLEGUILDTAB")
+    mock.nextFrame(5)
+    expect(#mock.errors()).toBe(0)
+    expect(#mock.refusals()).toBe(0)
+    return size, shown
+end
+
+@test("the leader of the recorded guild")
+local function leader()
+    mock.nextFrame(60)
+    expect(IsGuildLeader()).toBe(true)
+    local size, control = tour()
+    expect(size).toBe(27)
+    expect(control).toBe(true)
+end
+
+@test("an Initiate")
+local function initiate()
+    mock.joinGuild({ rank = 4, members = { { name = "Otherplayer", lastName = "Othername", rank = 0, online = true, class = "MAGE", level = 60 } } })
+    mock.nextFrame(60)
+    local size, control = tour()
+    expect(size).toBe(2)
+    expect(control).toBe(false)
+end
+
+@test("no guild")
+local function none()
+    mock.leaveGuild()
+    mock.nextFrame(60)
+    mock.pressBinding("TOGGLEGUILDTAB")
+    mock.nextFrame(10)
+    expect(IsInGuild()).toBe(false)
+    mock.pressBinding("TOGGLEGUILDTAB")
+    mock.nextFrame(5)
+    expect(#mock.errors()).toBe(0)
+end
+"#;
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            ("src/main.wowlua", "print(\"loaded\")\n"),
+            ("tests/guild.test.wowlua", tests),
+        ],
+    );
+    let manifest = dir.path().join("wowlua.json");
+    let text = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        text.replacen('{', r#"{ "test": { "blizzard-ui": true },"#, 1),
+    )
+    .unwrap();
+    let out = wowlua(dir.path())
+        .arg("test")
+        .env("WOWLUA_UI_SOURCE", &source)
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.status.success(), "{text}");
+    assert!(text.contains("3 passed, 0 failed"), "{text}");
+}
+
 /// The settings, every one as the player uses them: each category opened
 /// from the game menu; each row's controls clicked (checkboxes both ways,
 /// tabs, expanders), each menu's every entry chosen, dialogs confirmed,

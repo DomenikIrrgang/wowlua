@@ -513,20 +513,6 @@ fn unit_is_same_server(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(same)])
 }
 
-/// `UnitIsInMyGuild(unit)`: the player itself in a guild (the engine
-/// keeps no other guild members).
-fn unit_is_in_my_guild(vm: &mut Vm, c: NativeCall) -> Ret {
-    let me = units::unit_arg(vm, &c, 1) == Some(PLAYER);
-    Ok(vec![Value::Bool(me && engine(vm).world.chat.guild)])
-}
-
-/// `IsPlayerInGuildFromGUID(guid)`: the player's own GUID while in a
-/// guild.
-fn is_player_in_guild_from_guid(vm: &mut Vm, c: NativeCall) -> Ret {
-    let me = by_guid(vm, c.arg(1)) == Some(PLAYER);
-    Ok(vec![Value::Bool(me && engine(vm).world.chat.guild)])
-}
-
 /// `IsPlayerNeutral()`: a player of no faction (a creature's `Neutral`
 /// faction group only; the player's race always has one here).
 fn is_player_neutral(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -1308,8 +1294,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("UnitInPartyShard", unit_in_party_shard),
         ("UnitRealmRelationship", unit_realm_relationship),
         ("UnitIsSameServer", unit_is_same_server),
-        ("UnitIsInMyGuild", unit_is_in_my_guild),
-        ("IsPlayerInGuildFromGUID", is_player_in_guild_from_guid),
         ("IsPlayerNeutral", is_player_neutral),
         ("IsStealthed", is_stealthed),
         ("IsPlayerMoving", is_player_moving),

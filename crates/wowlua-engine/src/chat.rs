@@ -36,8 +36,8 @@ pub struct Sent {
 pub struct Chat {
     pub prefixes: Vec<String>,
     pub sent: Vec<Sent>,
-    /// Whether the player is in a guild (`joinGuild`).
-    pub guild: bool,
+    /// The player's guild, if any (`guild.rs`).
+    pub guild: Option<crate::guild::Guild>,
 }
 
 const MAX_PREFIX: usize = 16;
@@ -174,7 +174,7 @@ fn send(vm: &mut Vm, c: NativeCall) -> Ret {
     } else {
         match chat_type.as_str() {
             "PARTY" | "RAID" | "INSTANCE_CHAT" if !in_group => result::NOT_IN_GROUP,
-            "GUILD" | "OFFICER" if !engine(vm).world.chat.guild => result::NOT_IN_GUILD,
+            "GUILD" | "OFFICER" if !crate::guild::in_guild(vm) => result::NOT_IN_GUILD,
             "WHISPER" | "CHANNEL" if target.is_none() => result::TARGET_REQUIRED,
             "PARTY" | "RAID" | "INSTANCE_CHAT" | "GUILD" | "OFFICER" | "WHISPER" | "CHANNEL" => {
                 result::SUCCESS
@@ -336,17 +336,6 @@ pub fn system_message_control(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// `joinGuild([on])`: the player is in a guild (or not).
-pub fn join_guild_control(vm: &mut Vm, c: NativeCall) -> Ret {
-    let on = !c.has(1) || c.arg(1).truthy();
-    engine_mut(vm).world.chat.guild = on;
-    Ok(vec![])
-}
-
-fn is_in_guild(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(engine(vm).world.chat.guild)])
-}
-
 /// `slash(line)`: runs `/cmd args` as the chat box does, the user's action
 /// (a hardware event). Returns whether a command took it.
 pub fn slash_control(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -406,6 +395,5 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_ChatInfo.InChatMessagingLockdown", messaging_lockdown),
         ("C_ChatInfo.SendAddonMessage", send),
         ("C_ChatInfo.SendAddonMessageLogged", send),
-        ("IsInGuild", is_in_guild),
     ]
 }

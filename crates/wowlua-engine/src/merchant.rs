@@ -343,10 +343,6 @@ fn nothing(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-fn yes(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(true)])
-}
-
 /// `GetMerchantFilter()`: 2 (recorded open and closed).
 fn filter(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(2.0)])
@@ -1008,7 +1004,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("CanMerchantRepair", can_repair),
         ("GetRepairAllCost", repair_all_cost),
         ("RepairAllItems", repair_all),
-        ("CanGuildBankRepair", yes),
         ("InRepairMode", crate::actions2::in_repair_mode),
         (
             "C_MerchantFrame.IsSellAllJunkEnabled",

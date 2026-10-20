@@ -1,5 +1,5 @@
-//! The player's social world: no guild, friends or clubs unless the test
-//! says so; names without the player's realm; the voice CVars.
+//! The player's social world: no friends or clubs but the guild's unless
+//! the test says so; names without the player's realm; the voice CVars.
 
 use wowlua_vm::{Value, Vm};
 
@@ -51,23 +51,21 @@ return Ambiguate('Someone-' .. realm, 'none'), Ambiguate('Someone-Elsewhere', 'n
 }
 
 #[test]
-fn no_guild_no_friends_until_the_player_joins_one() {
+fn a_guild_but_no_friends() {
     let mut vm = vm();
     let r = run(
         &mut vm,
-        "return GetGuildInfo('player'), GetNumGuildMembers(), C_FriendList.GetNumFriends(),
+        "return (GetGuildInfo('player')), GetNumGuildMembers(), C_FriendList.GetNumFriends(),
     #C_Club.GetSubscribedClubs(), CanGuildInvite(), BNConnected()",
     );
-    assert_eq!(r, ["nil", "0", "0", "0", "false", "true"]);
+    assert_eq!(r, ["Guild", "27", "0", "1", "true", "true"]);
     let r = run(
         &mut vm,
-        "mock.joinGuild()
+        "mock.leaveGuild()
 local name, rank, index = GetGuildInfo('player')
-local total = GetNumGuildMembers()
-local member = GetGuildRosterInfo(1)
-return name, rank, index, total, member == nil, CanGuildInvite()",
+return name, rank, index, GetNumGuildMembers(), #C_Club.GetSubscribedClubs(), CanGuildInvite()",
     );
-    assert_eq!(r, ["Guild", "Member", "1", "1", "false", "true"]);
+    assert_eq!(r, ["nil", "nil", "0", "0", "0", "false"]);
 }
 
 #[test]
