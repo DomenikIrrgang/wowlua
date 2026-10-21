@@ -389,6 +389,10 @@ fn get_inventory_item_id(vm: &mut Vm, c: NativeCall) -> Ret {
     if no_slot(vm, &c) {
         return Ok(vec![Value::Num(0.0)]);
     }
+    // Another player's, as inspected (`inspect.rs`).
+    if let Some(id) = crate::inspect::item_id(vm, &c) {
+        return Ok(id.map(|i| vec![Value::Num(i as f64)]).unwrap_or_default());
+    }
     Ok(equipped(vm, &c)
         .map(|h| vec![Value::Num(h.id as f64)])
         .unwrap_or_default())
@@ -411,6 +415,11 @@ fn get_inventory_item_texture(vm: &mut Vm, c: NativeCall) -> Ret {
     if c.arg(2).is_nil() {
         return Ok(vec![Value::Nil]);
     }
+    if let Some(id) = crate::inspect::item_id(vm, &c) {
+        return Ok(id
+            .map(|i| vec![item_field(vm, i, "icon")])
+            .unwrap_or_default());
+    }
     Ok(equipped(vm, &c)
         .map(|h| vec![item_field(vm, h.id, "icon")])
         .unwrap_or_default())
@@ -419,6 +428,11 @@ fn get_inventory_item_texture(vm: &mut Vm, c: NativeCall) -> Ret {
 fn get_inventory_item_quality(vm: &mut Vm, c: NativeCall) -> Ret {
     if no_slot(vm, &c) {
         return Ok(vec![Value::Nil]);
+    }
+    if let Some(id) = crate::inspect::item_id(vm, &c) {
+        return Ok(id
+            .map(|i| vec![item_field(vm, i, "quality")])
+            .unwrap_or_default());
     }
     Ok(equipped(vm, &c)
         .map(|h| vec![item_field(vm, h.id, "quality")])

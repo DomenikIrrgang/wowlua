@@ -1531,6 +1531,29 @@ export function stub<T>(t: T, key: string, fn: Fn?): Fn
     return s
 end
 
+--- Sets `t[key]` to `value` (any value, `nil` too) until the test ends:
+--- a frame or a game API taken away, a field changed. The field is put
+--- back as it was, its taint included, as `stub` does it: an assignment
+--- from the test would leave Blizzard's field tainted for the rest of the
+--- file (decision T230).
+export function setField(t: table, key: any, value: any)
+    local target: any = t
+    if type(target) ~= "table" then
+        error(`mock.setField: a table expected, got {type(target)}`, 2)
+    end
+    local restore: () -> ()
+    if wl.mockEngine then
+        restore = wl.mockEngine.keepField(target, key)
+    else
+        local original = rawget(target, key)
+        restore = function()
+            target[key] = original
+        end
+    end
+    target[key] = value
+    restores[#restores + 1] = restore
+end
+
 --- Replaces exports of a module for the rest of the test file (decision
 --- T224): `target` is the module's namespace (`import * as tracker from
 --- "/tracker"`), `replacement` the exports to replace, checked against the

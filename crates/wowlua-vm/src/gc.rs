@@ -152,6 +152,17 @@ impl Vm {
             m.gray.push(Gray::Value(e));
         }
         m.gray.push(Gray::Value(self.error_handler));
+        // Coverage keeps every counted function to report it after the run,
+        // when its closures may be long gone: their constants stay too (the
+        // report reads them).
+        if let Some(c) = &self.coverage {
+            m.gray.extend(
+                c.protos
+                    .iter()
+                    .filter(|p| p.main)
+                    .map(|p| Gray::Proto(p.proto.clone())),
+            );
+        }
         m.gray.extend(
             self.to_finalize
                 .iter()

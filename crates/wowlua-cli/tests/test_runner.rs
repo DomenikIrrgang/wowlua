@@ -4207,6 +4207,66 @@ end
 
 // --------------------------------------------- SuuUI's test findings (0.9.1)
 
+/// `mock.setField` sets any field, `nil` too, until the test ends and puts it
+/// back secure, where an assignment from the test leaves it tainted
+/// (decision T230).
+#[test]
+fn set_field_puts_the_field_back_secure() {
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            (
+                "src/main.wowlua",
+                "print(\"loaded\")
+",
+            ),
+            (
+                "tests/fields.test.wowlua",
+                r##"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+@test("taken away")
+local function away()
+    mock.setField(_G, "GetNumGroupMembers", nil)
+    expect(rawget(_G, "GetNumGroupMembers")).toBeNil()
+    mock.setField(C_Timer, "NewTimer", 5)
+    expect((C_Timer :: any).NewTimer).toBe(5)
+end
+
+@test("back, secure")
+local function back()
+    expect(type(GetNumGroupMembers)).toBe("function")
+    expect("GetNumGroupMembers").toBeSecure()
+    expect(type(C_Timer.NewTimer)).toBe("function")
+    expect(C_Timer).toBeSecure("NewTimer")
+end
+
+@test("assigned back instead")
+local function assigned()
+    local G: any = _G
+    local saved = G.GetTime
+    G.GetTime = nil
+    G.GetTime = saved
+end
+
+@test("tainted after the assignment")
+local function taintedAfter()
+    expect("GetTime").never.toBeSecure()
+end
+
+@test("not a table")
+local function notTable()
+    expect(function() mock.setField(1 :: any, "x", 1) end).toThrow("mock.setField: a table expected, got number")
+end
+"##,
+            ),
+        ],
+    );
+    let (ok, text) = test(dir.path(), &[]);
+    assert!(ok, "{text}");
+    assert!(text.contains("5 passed, 0 failed"), "{text}");
+}
+
 /// SuuUI's test findings: the mock library and the matchers (R2, R5, R6,
 /// R7, R8, R11, R12): a fake's global restored secure, `mock.errors()` per
 /// test, leaving a group, secrets compared by their values, a matcher's

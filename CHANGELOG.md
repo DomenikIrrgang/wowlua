@@ -2,6 +2,18 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### New
+
+- Tests: `mock.setField(t, key, value)` sets any field, `nil` included, until the test ends, and puts it back untainted as `mock.stub` does. Taking a frame or a game API away with an assignment instead leaves Blizzard's field tainted for the rest of the file.
+
+### Fixed
+
+- Tests: an inspected player's gear has its item ID, icon and quality (`GetInventoryItemID`, `GetInventoryItemTexture`, `GetInventoryItemQuality`), not only its link.
+- `wowlua test --coverage` no longer crashes with "internal compiler error: stale handle" when code it counts (a Blizzard frame's or your addon's) is thrown away during the run.
+- An internal compiler error prints where it happened when `RUST_BACKTRACE=1` is set, for the bug report.
+
 ## 0.9.5 (2026-10-21)
 
 ### Changed

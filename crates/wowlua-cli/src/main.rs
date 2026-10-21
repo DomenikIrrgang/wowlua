@@ -546,6 +546,11 @@ fn run() -> ExitCode {
             Some(oom) => eprintln!("error: internal compiler error: {oom}"),
             None => eprintln!("error: internal compiler error: {info}"),
         }
+        // Where it happened, when asked for (`RUST_BACKTRACE=1`), for the report.
+        let trace = std::backtrace::Backtrace::capture();
+        if trace.status() == std::backtrace::BacktraceStatus::Captured {
+            eprintln!("{trace}");
+        }
         eprintln!("note: please report this at https://github.com/DomenikIrrgang/wowlua/issues");
         std::process::exit(101);
     }));

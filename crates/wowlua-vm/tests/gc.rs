@@ -144,3 +144,41 @@ fn the_outer_error_handler_survives_a_nested_engine_call() {
         "assert(#seen == 1 and seen[1]:find('boom'), tostring(seen[1]))",
     );
 }
+
+/// Coverage keeps the functions it counts for the report after the run:
+/// their constants outlive the functions' closures (a chunk that ran and
+/// was dropped, then a full collection; SuuUI's character window tests
+/// found it, reading a counted constant panicked with "stale handle").
+#[test]
+fn coverage_keeps_the_constants_of_the_functions_it_counts() {
+    let mut vm = Vm::new();
+    vm.enable_coverage(Box::new(|name| name == b"=counted"));
+    let f = vm
+        .load(
+            b"local t = { only_here_a = 1 } return function() return t.only_here_b end",
+            "=counted",
+        )
+        .expect("compiles");
+    let inner = vm.call(f, &[]).expect("runs");
+    vm.call(inner[0], &[]).expect("runs");
+    drop(inner);
+    vm.collect().expect("no finalizer errors");
+    let protos: Vec<_> = vm
+        .coverage
+        .as_ref()
+        .expect("coverage on")
+        .protos
+        .iter()
+        .map(|p| p.proto.clone())
+        .collect();
+    let mut names: Vec<String> = Vec::new();
+    for p in &protos {
+        for k in &p.constants {
+            if let wowlua_vm::Value::Str(s) = k {
+                names.push(String::from_utf8_lossy(vm.str_bytes(*s)).into_owned());
+            }
+        }
+    }
+    names.sort();
+    assert_eq!(names, ["only_here_a", "only_here_b"]);
+}

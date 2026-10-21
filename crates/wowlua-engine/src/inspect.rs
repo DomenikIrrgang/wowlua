@@ -177,6 +177,24 @@ pub fn item_link(vm: &mut Vm, c: &NativeCall) -> Option<Vec<Value>> {
     Some(vec![field(vm, item, "link")])
 }
 
+/// An inspected unit's item in a slot (`GetInventoryItemID`, `…Texture`,
+/// `…Quality`): `None` for a unit not inspected (the player's own calls
+/// answer), `Some(None)` for a slot without a link known yet, else the
+/// link's item ID (SuuUI's inspect window: the client answers these as it
+/// does the link once the inspect is in).
+pub fn item_id(vm: &mut Vm, c: &NativeCall) -> Option<Option<i64>> {
+    let link = item_link(vm, c)?;
+    let Some(Value::Str(s)) = link.first().copied() else {
+        return Some(None);
+    };
+    let text = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
+    Some(
+        text.split_once("item:")
+            .and_then(|(_, rest)| rest.split(':').next())
+            .and_then(|id| id.parse::<i64>().ok()),
+    )
+}
+
 /// `C_Traits.GetConfigInfo(-1)`: the inspected's config (the traits'
 /// behaviour asks).
 pub fn config_info(vm: &mut Vm, c: &NativeCall) -> Option<Vec<Value>> {
