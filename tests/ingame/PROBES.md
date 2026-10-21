@@ -54,6 +54,17 @@ engine cannot get otherwise.
    were on high-DPI screens and gave the 2x textures' files and
    coordinates (decision T238); a 1x screen may take the 1x textures (the
    sizes are the same either way).
+9. **A region upside down**: a frame anchored with its TOP below its
+   BOTTOM (and its LEFT right of its RIGHT): `GetHeight`, `GetWidth`,
+   `GetRect`. Why: the engine gives a negative size; Blizzard's scroll
+   boxes check for 0 only and error on a negative one (the Legacy
+   window's challenge list, SuuUI's shorter window).
+10. **Talents the engine doesn't know yet** (a probe to write):
+   `C_Traits.RefundRank` of a planned rank, `C_ClassTalents.ViewLoadout` /
+   `InitializeViewLoadout` of another class, both spec groups' configs
+   (`C_SpecializationInfo.GetCombatConfigIDForSpecGroup`), and
+   `PLAYER_TALENT_UPDATE` as level 5 is reached. Why: SuuUI's Talents
+   tests use a stand-in for these.
 
 ## The answers battery's new calls
 
