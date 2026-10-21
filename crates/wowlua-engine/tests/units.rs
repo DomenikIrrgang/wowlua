@@ -619,3 +619,17 @@ return now - s, d, e, d2, e2, d3, e3, d4, d5, d6",
         ["3000", "3600", "1", "0", "1", "0", "0", "3600", "10", "0"]
     );
 }
+
+/// The engine's groups are the player's own (home): in the instance
+/// category (`LE_PARTY_CATEGORY_INSTANCE`, 2) there is none.
+#[test]
+fn a_home_group_is_no_instance_group() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local friend = mock.spawnUnit({ name = 'Friend', player = true, reaction = 'friendly' })
+mock.addToGroup(friend, true)
+return tostring(IsInGroup()), tostring(IsInGroup(1)), tostring(IsInGroup(2)), tostring(IsInRaid(2)), GetNumGroupMembers(), GetNumGroupMembers(2)",
+    );
+    assert_eq!(r, ["true", "true", "false", "false", "2", "0"]);
+}

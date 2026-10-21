@@ -1142,18 +1142,35 @@ fn unit_in_raid(vm: &mut Vm, c: NativeCall) -> Ret {
     }])
 }
 
-fn is_in_group(vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(crate::party::grouped(vm))])
+/// `LE_PARTY_CATEGORY_INSTANCE`: a group the game made (a dungeon finder's,
+/// a battleground's). The engine's groups are the player's own (home,
+/// category 1): none in this category.
+const INSTANCE_CATEGORY: f64 = 2.0;
+
+/// Whether a call asks about the instance category (`IsInGroup(2)`, …).
+fn instance_category(vm: &Vm, c: &NativeCall) -> bool {
+    matches!(vm.hidden(c.arg(1)), Value::Num(n) if n == INSTANCE_CATEGORY)
 }
 
-fn is_in_raid(vm: &mut Vm, _c: NativeCall) -> Ret {
+/// `IsInGroup([category])`: in the player's group (a home group; in the
+/// instance category, none).
+fn is_in_group(vm: &mut Vm, c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(
+        !instance_category(vm, &c) && crate::party::grouped(vm),
+    )])
+}
+
+fn is_in_raid(vm: &mut Vm, c: NativeCall) -> Ret {
+    let instance = instance_category(vm, &c);
     let u = &engine(vm).units;
-    Ok(vec![Value::Bool(u.raid && !u.group.is_empty())])
+    Ok(vec![Value::Bool(
+        !instance && u.raid && !u.group.is_empty(),
+    )])
 }
 
-fn get_num_group_members(vm: &mut Vm, _c: NativeCall) -> Ret {
+fn get_num_group_members(vm: &mut Vm, c: NativeCall) -> Ret {
     let n = engine(vm).units.group.len();
-    let grouped = crate::party::grouped(vm);
+    let grouped = !instance_category(vm, &c) && crate::party::grouped(vm);
     Ok(vec![Value::Num(if grouped { n as f64 + 1.0 } else { 0.0 })])
 }
 
@@ -3800,10 +3817,22 @@ fn nothing(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// `UnitFullName(unit)`: the name and, on WoW Forever, the last name
-/// (`/stdtest engine comm`), else the realm.
+/// `UnitFullName(unit)`: as `UnitName` (`/stdtest engine comm`), but the player's second value is
+/// never nil: its last name on WoW Forever (recorded: `Player, Lastname`),
+/// else its realm (as the engine's chat names it, `Name-Realm`).
 fn unit_full_name(vm: &mut Vm, c: NativeCall) -> Ret {
-    unit_name(vm, c)
+    let me = unit_arg(vm, &c, 1) == Some(PLAYER);
+    let mut r = unit_name(vm, c)?;
+    if me && matches!(r.get(1), Some(Value::Nil) | None) {
+        let realm = engine(vm).units.list[PLAYER.0]
+            .realm
+            .clone()
+            .unwrap_or_else(|| "Realm".into());
+        let v = vm.str(&realm);
+        r.truncate(1);
+        r.push(v);
+    }
+    Ok(r)
 }
 
 pub fn more_behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
