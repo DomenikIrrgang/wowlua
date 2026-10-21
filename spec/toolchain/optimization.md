@@ -163,7 +163,10 @@ __wl_load("src/main", function(...) <module> end)
   which matches file semantics.
 - **Remaining differences from separate files** (documented, and checked by
   warning W6001 for the project's bundled files that call `debugstack` or
-  `debuglocals`): `debugstack()` and error messages show the bundle file name
+  `debuglocals` and spell a Lua file name in a string, such as
+  `debugstack():match("([^/]+)%.lua")`; keeping or showing a stack, and
+  reading the addon's folder `AddOns/<name>/`, which the bundle keeps, are
+  not W6001, decision T227): `debugstack()` and error messages show the bundle file name
   and line, and the stack is two levels deeper. `wowlua trace`
   maps locations back through source maps. Code that inspects its own file name
   through `debugstack`, or that uses numeric stack levels with `getfenv`,

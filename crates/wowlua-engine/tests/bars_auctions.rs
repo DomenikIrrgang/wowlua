@@ -326,3 +326,144 @@ return before, n, info.auctionID, info.itemKey.itemID, info.buyoutAmount, info.s
         ]
     );
 }
+
+/// A house selling the Light Shot as a commodity (10 at 5c), the shot and
+/// the gloves in the backpack, at an auctioneer; `{OPEN}` opens it.
+const COMMODITY_HOUSE: &str = "mock.defineItem(8067, { name = 'Crafted Light Shot', quality = 1, stackCount = 200 })
+mock.defineItem(2375, { name = 'Battered Leather Gloves', quality = 1, stackCount = 1 })
+mock.setBag(0, { slots = 16, items = { [1] = { id = 2375 }, [2] = { id = 8067, count = 20 } } })
+mock.player:setMoney(1000)
+local stampi = mock.spawnUnit({ name = 'Auctioneer Stampi', npcID = 8674, reaction = 'neutral' })
+stampi:setDistance(3)
+local function house(next)
+    return {
+        browse = { { itemKey = { itemID = 8067, itemLevel = 1, itemSuffix = 0, battlePetSpeciesID = 0 }, minPrice = 5, totalQuantity = 10, containsOwnerItem = false } },
+        commodities = { [8067] = { { auctionID = 1, quantity = 10, unitPrice = 5, timeLeftSeconds = 3600, totalNumberOfOwners = 1,
+            owners = { 'Seller' }, numOwnerItems = 0, containsOwnerItem = false, containsAccountItem = false } } },
+        deposit = 100, nextAuctionID = next,
+    }
+end
+local seen = {}
+local f = CreateFrame('Frame')
+for _, e in ipairs({ 'AUCTION_HOUSE_BROWSE_RESULTS_UPDATED', 'COMMODITY_SEARCH_RESULTS_UPDATED', 'BIDS_UPDATED' }) do f:RegisterEvent(e) end
+f:SetScript('OnEvent', function(_, e) seen[#seen + 1] = e end)
+local function open(next)
+    mock.defineAuctionHouse(stampi, house(next))
+    mock.player:interact(stampi)
+    mock.advanceTime(1)
+end
+";
+
+/// Messages sent while one is under way queue, and each goes when the one
+/// before is answered: none is left waiting (decision T229).
+#[test]
+fn queued_messages_go_one_after_another() {
+    let mut vm = vm();
+    let src = format!(
+        "{COMMODITY_HOUSE}
+mock.defineAuctionHouse(stampi, house(500))
+mock.player:interact(stampi)
+mock.advanceTime(0.4)
+-- the bids' query under way as the house opens: these two queue
+C_AuctionHouse.SendBrowseQuery({{ searchString = '', sorts = {{}}, filters = {{}}, itemClassFilters = {{}} }})
+C_AuctionHouse.SendSearchQuery({{ itemID = 8067, itemLevel = 1, itemSuffix = 0, battlePetSpeciesID = 0 }}, {{}}, true)
+mock.advanceTime(3)
+return table.concat(seen, ','), tostring(C_AuctionHouse.IsThrottledMessageSystemReady())"
+    );
+    let r = run(&mut vm, &src);
+    assert_eq!(
+        r,
+        [
+            "BIDS_UPDATED,AUCTION_HOUSE_BROWSE_RESULTS_UPDATED,COMMODITY_SEARCH_RESULTS_UPDATED,COMMODITY_SEARCH_RESULTS_UPDATED",
+            "true",
+        ]
+    );
+}
+
+/// A house defined while none is open is a fresh one: the commodity bought
+/// at the one before is offered whole again, the auctions posted there are
+/// gone, and the new `nextAuctionID` numbers the next (decision T229).
+#[test]
+fn a_house_defined_again_starts_fresh() {
+    let mut vm = vm();
+    let src = format!(
+        "{COMMODITY_HOUSE}
+open(500)
+C_AuctionHouse.SendSearchQuery({{ itemID = 8067, itemLevel = 1, itemSuffix = 0, battlePetSpeciesID = 0 }}, {{}}, true)
+mock.advanceTime(1)
+C_AuctionHouse.StartCommoditiesPurchase(8067, 4)
+mock.advanceTime(1)
+C_AuctionHouse.ConfirmCommoditiesPurchase(8067, 4)
+mock.advanceTime(2)
+C_AuctionHouse.PostItem({{ bagID = 0, slotIndex = 1 }}, 1, 1, nil, 250)
+mock.advanceTime(2)
+C_AuctionHouse.QueryOwnedAuctions({{}})
+mock.advanceTime(1)
+local owned = C_AuctionHouse.GetNumOwnedAuctions()
+C_AuctionHouse.CloseAuctionHouse()
+mock.advanceTime(1)
+open(900)
+C_AuctionHouse.SendSearchQuery({{ itemID = 8067, itemLevel = 1, itemSuffix = 0, battlePetSpeciesID = 0 }}, {{}}, true)
+mock.advanceTime(1)
+local offered = C_AuctionHouse.GetCommoditySearchResultInfo(8067, 1).quantity
+C_AuctionHouse.QueryOwnedAuctions({{}})
+mock.advanceTime(1)
+local after = C_AuctionHouse.GetNumOwnedAuctions()
+mock.setBag(0, {{ slots = 16, items = {{ [1] = {{ id = 2375 }} }} }})
+local created
+local g = CreateFrame('Frame')
+g:RegisterEvent('AUCTION_HOUSE_AUCTION_CREATED')
+g:SetScript('OnEvent', function(_, _, id) created = id end)
+C_AuctionHouse.PostItem({{ bagID = 0, slotIndex = 1 }}, 1, 1, nil, 250)
+mock.advanceTime(2)
+return owned, offered, after, created"
+    );
+    let r = run(&mut vm, &src);
+    assert_eq!(r, ["1", "10", "0", "900"]);
+}
+
+/// An item key is a new table at every call, as the client's: changing
+/// one (a sell search zeroing gear's item level) leaves the house's data
+/// as it was (decision T229).
+#[test]
+fn an_item_key_is_a_new_table_each_call() {
+    let mut vm = vm();
+    let src = format!(
+        "{COMMODITY_HOUSE}
+open(500)
+local loc = {{ bagID = 0, slotIndex = 2 }}
+local a = C_AuctionHouse.GetItemKeyFromItem(loc)
+a.itemLevel = 0
+local b = C_AuctionHouse.GetItemKeyFromItem(loc)
+return tostring(a == b), b.itemLevel"
+    );
+    let r = run(&mut vm, &src);
+    assert_eq!(r, ["false", "1"]);
+}
+
+/// `mock.defineItem` without options: cached, at item level 1;
+/// `cached = false` still loads when asked (decision T228).
+#[test]
+fn a_defined_item_is_cached_at_level_one_unless_told() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "mock.defineItem(990001, { name = 'Plain Thing' })
+mock.defineItem(990002, { name = 'Later Thing' }, { cached = false })
+mock.setBag(0, { slots = 16, items = { [1] = { id = 990001 } } })
+local name, _, _, level = C_Item.GetItemInfo(990001)
+local current = C_Item.GetCurrentItemLevel({ bagID = 0, slotIndex = 1 })
+local before = C_Item.GetItemInfo(990002)
+local loaded
+local f = CreateFrame('Frame')
+f:RegisterEvent('ITEM_DATA_LOAD_RESULT')
+f:SetScript('OnEvent', function(_, _, id, ok) loaded = id .. ' ' .. tostring(ok) end)
+C_Item.RequestLoadItemDataByID(990002)
+mock.advanceTime(1)
+return name, level, current, tostring(before), loaded, (C_Item.GetItemInfo(990002))",
+    );
+    assert_eq!(
+        r,
+        ["Plain Thing", "1", "1", "nil", "990002 true", "Later Thing"]
+    );
+}

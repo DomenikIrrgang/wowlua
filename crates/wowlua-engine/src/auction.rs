@@ -203,7 +203,10 @@ fn list(vm: &mut Vm, t: TableRef) -> Vec<TableRef> {
 /// commodities = { [itemID] = { { auctionID, quantity, unitPrice,
 /// timeLeftSeconds, totalNumberOfOwners, owners, numOwnerItems,
 /// containsOwnerItem, containsAccountItem } } }, items = { [itemID] = { …
-/// } }, deposit, nextAuctionID })`.
+/// } }, deposit, nextAuctionID })`. With no house open, a fresh house: what
+/// an earlier one was searched for, sold, bought and told of the player's
+/// auctions is gone (the data's `nextAuctionID` numbers new auctions, so
+/// none share one). An open house only takes the new data.
 pub fn control_define(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(unit) = units::handle_of(vm, c.arg(1)) else {
         return Err(vm.error("defineAuctionHouse: an auctioneer expected"));
@@ -214,6 +217,13 @@ pub fn control_define(vm: &mut Vm, c: NativeCall) -> Ret {
     widgets::keep(vm, Value::Table(t));
     let next = num(field(vm, t, "nextAuctionID")).unwrap_or(1.0);
     let a = ah_mut(vm);
+    if a.open.is_none() {
+        let houses = std::mem::take(&mut a.houses);
+        *a = AuctionHouse {
+            houses,
+            ..AuctionHouse::default()
+        };
+    }
     a.houses.insert(unit.0, t);
     a.next_auction = next;
     a.ready = true;
@@ -330,6 +340,8 @@ fn go(vm: &mut Vm, q: Query) {
 fn done(vm: &mut Vm) {
     if ah(vm).queue.is_empty() {
         later(vm, READY_AFTER, "auctionReady", ready, vec![]);
+    } else {
+        next_queued(vm);
     }
 }
 
@@ -372,7 +384,10 @@ fn key_of(vm: &mut Vm, id: i64) -> Value {
             if let Value::Table(k) = field(vm, row, "itemKey")
                 && num(field(vm, k, "itemID")) == Some(id as f64)
             {
-                return Value::Table(k);
+                // A new table each time, as the client's: a caller changing
+                // it (a sell search zeroing gear's item level) leaves the
+                // house's data as it was.
+                return Value::Table(copy(vm, k));
             }
         }
     }

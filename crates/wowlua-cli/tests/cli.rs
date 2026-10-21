@@ -1668,7 +1668,7 @@ fn bundled_builds_run_the_same() {
             ),
             (
                 "src/first.lua",
-                "local _, ns = ...\nns.order = { \"first\" }\nns.where = debugstack and debugstack(1)\n",
+                "local _, ns = ...\nns.order = { \"first\" }\nns.where = debugstack and debugstack(1):match(\"([^/]+)%.lua\")\n",
             ),
             (
                 "src/broken.lua",
@@ -3714,6 +3714,59 @@ fn load_order_shared_definitions_are_not_ambiguous() {
     let assert = wowlua(dir.path()).arg("build").assert().success();
     let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
     assert!(!stderr.contains("W1033"), "{stderr}");
+}
+
+/// Test files load after the addon (outside its TOC): a test that takes a
+/// game table away and back (`_G.C_EventUtils = nil`, `_G[name] = nil`)
+/// defines nothing for the addon, so the addon's load-time read of it is
+/// no W1034 and the dynamic write no W1033. The same writes in a source
+/// file still are.
+#[test]
+fn load_order_ignores_test_files_writes() {
+    let dir = tempfile::tempdir().unwrap();
+    let read = "local valid = not (C_EventUtils and C_EventUtils.IsEventValid) or C_EventUtils.IsEventValid(\"X\")\nprint(valid)\n";
+    let writes = "local function strip(name: string)\n    local saved = _G[name]\n    _G[name] = nil\n    _G[name] = saved\nend\nlocal function away()\n    local utils = _G.C_EventUtils\n    _G.C_EventUtils = nil\n    _G.C_EventUtils = utils\nend\n";
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"core\", \"version\": \"1.0.0\" } }\n",
+            ),
+            ("src/main.wowlua", read),
+            (
+                "tests/main.test.wowlua",
+                &format!(
+                    "import test from \"wowlua:test\"\n{writes}@test\nlocal function t() strip(\"GetTime\"); away() end\n"
+                ),
+            ),
+        ],
+    );
+    let check = |dir: &Path| {
+        let out = wowlua(dir)
+            .args(["check", "--message-format", "short"])
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&out.stderr).into_owned()
+    };
+    let stderr = check(dir.path());
+    assert!(
+        !stderr.contains("W1033") && !stderr.contains("W1034"),
+        "{stderr}"
+    );
+    // The same writes in a source file.
+    write(
+        dir.path(),
+        &[(
+            "src/reset.wowlua",
+            &format!("{writes}export function reset() strip(\"GetTime\"); away() end\n"),
+        )],
+    );
+    let stderr = check(dir.path());
+    assert!(
+        stderr.contains("W1034") && stderr.contains("W1033"),
+        "{stderr}"
+    );
 }
 
 /// Files another AddOn loads (`build.shared-files`) are shipped, not

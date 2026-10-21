@@ -191,6 +191,12 @@ any local alias) with a constant key. A *use* is a read of the same name.
   it stands.
 - Only fields of tables that the package defines take part; reads of the
   game's tables (`C_Timer.After`) order nothing.
+- **Test files** (`*.test.wowlua` and the files under `tests/`) load after the
+  addon, outside its TOC, in `wowlua test`: what they write defines nothing
+  for the addon (a test taking a game table away and back,
+  `_G.C_EventUtils = nil`, does not make the addon's load-time read of it
+  W1034), and their writes through dynamic names are no W1033. Their reads
+  and imports still order them after what they use (decision T226).
 - Fields get the same diagnostics as globals: several load-time definers are
   W1033, a field read at load time but only defined at run time is W1034.
 - **Untraceable writes:** a write into a table the analysis cannot follow

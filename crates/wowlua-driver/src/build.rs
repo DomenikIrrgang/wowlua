@@ -4498,15 +4498,39 @@ fn map_key(path: &str) -> String {
 /// Calls of `debugstack` or `debuglocals` in Lua text: code that may look at
 /// its own file name (spec optimization §15.3.1).
 fn inspects_own_file(text: &[u8]) -> bool {
+    stack_reads(text).0
+}
+
+/// Project code that takes its own file name from the stack (W6001): it
+/// calls `debugstack` or `debuglocals` and spells a Lua file name in a
+/// string (`debugstack():match("([^/]+)%.lua")`). Keeping or showing a
+/// stack (`wowlua trace` maps it back) and reading the addon's folder
+/// (`AddOns/<name>/`, the same in the bundle) are fine (decision T227).
+fn names_own_file(text: &[u8]) -> bool {
+    let (calls, names) = stack_reads(text);
+    calls && names
+}
+
+/// Whether Lua text calls `debugstack` or `debuglocals`, and whether one of
+/// its strings holds `.lua`.
+fn stack_reads(text: &[u8]) -> (bool, bool) {
+    use wowlua_syntax::token::TokenKind;
     let file = wowlua_span::SourceDb::new().add("lexed", String::new());
     let lexed = wowlua_syntax::lexer::lex(text, file);
-    lexed.tokens.iter().any(|t| {
-        t.kind == wowlua_syntax::token::TokenKind::Name
-            && matches!(
-                text.get(t.start as usize..t.end as usize),
-                Some(b"debugstack" | b"debuglocals")
-            )
-    })
+    let (mut calls, mut names) = (false, false);
+    for t in lexed.tokens.iter() {
+        let Some(bytes) = text.get(t.start as usize..t.end as usize) else {
+            continue;
+        };
+        match t.kind {
+            TokenKind::Name => calls |= matches!(bytes, b"debugstack" | b"debuglocals"),
+            TokenKind::String | TokenKind::LongString => {
+                names |= bytes.windows(4).any(|w| w.eq_ignore_ascii_case(b".lua"))
+            }
+            _ => {}
+        }
+    }
+    (calls, names)
 }
 
 /// Bundles the TOC's Lua files (spec optimization §15.3): returns the new
@@ -4658,13 +4682,13 @@ fn bundle_output(
                         && input
                             .raw
                             .get(&source.rel)
-                            .is_some_and(|t| inspects_own_file(t))
+                            .is_some_and(|t| names_own_file(t))
                         && warned.insert(source.rel.clone())
                     {
                         session.push(
                             Diagnostic::warning(
                                 "W6001",
-                                "this file calls `debugstack` or `debuglocals`, which see the bundle's file name, not this file's",
+                                "this file reads a Lua file name from `debugstack` or `debuglocals`, which see the bundle's file name, not this file's",
                             )
                             .with_path(&source.rel)
                             .with_help("`wowlua trace` maps bundle locations back; or turn bundling off with `bundle: false`"),
@@ -4871,6 +4895,36 @@ fn runtime_version() -> u32 {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// W6001 for code taking a Lua file name from the stack; not for code
+    /// keeping or showing a stack, or reading the addon's folder; the
+    /// libraries' rule (any call) unchanged.
+    #[test]
+    fn own_file_names_from_the_stack() {
+        let named: &[&str] = &[
+            "local file = debugstack(1):match(\"([^/\\\\]+)%.lua\")\n",
+            "local here = debugstack():match([[AddOns\\Mine\\(.-)%.LUA]])\n",
+            "local l = debuglocals(1)\nlocal f = 'main.lua'\n",
+        ];
+        for src in named {
+            assert!(names_own_file(src.as_bytes()), "{src}");
+        }
+        let fine: &[&str] = &[
+            // kept for a report (Fault), shown (a probe)
+            "lastStack = debugstack(2)\n",
+            "print((debugstack(3, 3, 0):gsub(\"^.*AddOns/\", \"\")))\n",
+            // the addon's folder (Modules): the same in the bundle
+            "for a in debugstack(1, 8, 0):gmatch(\"AddOns[/\\\\]([^/\\\\]+)[/\\\\]\") do print(a) end\n",
+            // a file name without a stack
+            "print(\"main.lua\")\n",
+            // only in a comment
+            "local s = debugstack(1) -- like main.lua:3\n",
+        ];
+        for src in fine {
+            assert!(!names_own_file(src.as_bytes()), "{src}");
+        }
+        assert!(inspects_own_file(b"lastStack = debugstack(2)\n"));
+    }
 
     fn flavors(ids: &[&str]) -> Vec<String> {
         ids.iter().map(|s| s.to_string()).collect()

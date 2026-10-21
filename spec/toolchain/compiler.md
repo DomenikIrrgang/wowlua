@@ -301,7 +301,9 @@ only lints, and errors that stop the analysis) on `.wowlua` files, and on
 - **W1004, shadowing.** A local, local function, loop variable or parameter
   (also of a nested function) that reuses the name of a visible local of an
   enclosing scope. Redeclaring a local in the same block (`local x = f(x)`)
-  is not reported.
+  is not reported, nor shadowing a decorated declaration that nothing reads
+  by name (a `@test` function, which its decorator runs: a local in another
+  test may take its name).
 - **W1005, unreachable code.** The first statement after `return`, `break`,
   `continue`, or a call whose type returns `never` (`error`), or after an `if`
   whose branches all end that way; once per region. Reported by the type

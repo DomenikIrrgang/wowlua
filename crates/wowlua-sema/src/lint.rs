@@ -27,6 +27,7 @@ fn lint_inner(parse: &Parse, text: &[u8], read: &[String]) -> Vec<Diagnostic> {
         groups: Vec::new(),
         scopes: vec![Vec::new()],
         diagnostics: Vec::new(),
+        deferred: Vec::new(),
     };
     let block = parse.view().block();
     let module = block
@@ -78,6 +79,11 @@ fn lint_inner(parse: &Parse, text: &[u8], read: &[String]) -> Vec<Diagnostic> {
         }
     }
     l.pop_scope();
+    for (d, o) in std::mem::take(&mut l.deferred) {
+        if l.bindings[o].used {
+            l.diagnostics.push(d);
+        }
+    }
     l.diagnostics
         .sort_by_key(|d| d.labels.first().map(|x| (x.span.start, x.span.end)));
     l.diagnostics
@@ -110,6 +116,10 @@ struct Binding {
     group: Option<usize>,
     /// Imports: the edit removing just this name.
     own_removal: Option<Edit>,
+    /// A decorated declaration (`@test local function f`): its decorator
+    /// runs it, so a local shadowing it is reported only when it is also
+    /// read by name.
+    decorated: bool,
 }
 
 /// The names one statement declares, and the edit removing the statement
@@ -128,6 +138,8 @@ struct Linter<'a> {
     groups: Vec<Group>,
     scopes: Vec<Vec<usize>>,
     diagnostics: Vec<Diagnostic>,
+    /// W1004s shadowing a decorated declaration: kept if it is read.
+    deferred: Vec<(Diagnostic, usize)>,
 }
 
 fn exempt_name(name: &str) -> bool {
@@ -371,7 +383,11 @@ impl Linter<'_> {
                 )
                 .with_label(span, "declared here")
                 .with_label(self.bindings[o].span, "shadowed local");
-                self.diagnostics.push(d);
+                if self.bindings[o].decorated {
+                    self.deferred.push((d, o));
+                } else {
+                    self.diagnostics.push(d);
+                }
             }
         }
         let i = self.bindings.len();
@@ -382,6 +398,7 @@ impl Linter<'_> {
             used: false,
             group,
             own_removal: None,
+            decorated: false,
         });
         self.scopes.last_mut().expect("a scope").push(i);
         i
@@ -412,6 +429,19 @@ impl Linter<'_> {
                 self.args(args);
             }
         }
+    }
+
+    /// Declares a statement's local, noting whether the statement is decorated.
+    fn declare_local(
+        &mut self,
+        s: Stmt<'_>,
+        name: Name<'_>,
+        kind: Kind,
+        group: Option<usize>,
+    ) -> usize {
+        let i = self.declare(name, Self::local_kind(s, kind), group, true);
+        self.bindings[i].decorated = !s.decorators().is_empty();
+        i
     }
 
     /// The kind of a declared local (decorated declarations are exempt).
@@ -447,7 +477,7 @@ impl Linter<'_> {
                 let removal = values.iter().all(pure).then(|| self.delete(s.span()));
                 let group = self.group(removal, names.len());
                 for n in names {
-                    self.declare(n.name, Self::local_kind(s, Kind::Unused), Some(group), true);
+                    self.declare_local(s, n.name, Kind::Unused, Some(group));
                 }
             }
             StmtKind::LocalDestructure { fields, ty, value } => {
@@ -463,7 +493,7 @@ impl Linter<'_> {
                     }
                 }
                 for f in fields {
-                    self.declare(f.name, Self::local_kind(s, Kind::NoFix), None, true);
+                    self.declare_local(s, f.name, Kind::NoFix, None);
                 }
             }
             StmtKind::Const { name, ty, value } => {
@@ -475,11 +505,11 @@ impl Linter<'_> {
                 }
                 let removal = value.is_none_or(pure).then(|| self.delete(s.span()));
                 let group = self.group(removal, 1);
-                self.declare(name, Self::local_kind(s, Kind::Unused), Some(group), true);
+                self.declare_local(s, name, Kind::Unused, Some(group));
             }
             StmtKind::LocalFunction { name, func } => {
                 let group = self.group(Some(self.delete(s.span())), 1);
-                self.declare(name, Self::local_kind(s, Kind::Unused), Some(group), true);
+                self.declare_local(s, name, Kind::Unused, Some(group));
                 self.func(func, false);
             }
             StmtKind::Function { name, func } => {
@@ -1080,5 +1110,20 @@ mod tests {
                 .iter()
                 .all(|d| d.0 != "W1004")
         );
+    }
+
+    /// A decorated declaration that nothing reads by name (a test, which
+    /// its decorator runs) may be shadowed; one that is read may not.
+    #[test]
+    fn shadowing_a_decorated_declaration() {
+        let shadows = |src: &str| run(src).into_iter().filter(|d| d.0 == "W1004").count();
+        let tests = "@test(\"rows\")\nlocal function rows()\n    local rows = 1\n    print(rows)\nend\n\
+                     @beforeEach\nlocal function start() end\n\
+                     @test(\"later\")\nlocal function later()\n    local start = 2\n    print(start)\nend\n";
+        assert_eq!(shadows(tests), 0, "{:#?}", run(tests));
+        let read = "@test(\"rows\")\nlocal function rows()\n    local rows = 1\n    print(rows)\nend\nprint(rows)\n";
+        assert_eq!(shadows(read), 1, "{:#?}", run(read));
+        let plain = "local function rows()\n    local rows = 1\n    print(rows)\nend\nrows()\n";
+        assert_eq!(shadows(plain), 1, "{:#?}", run(plain));
     }
 }

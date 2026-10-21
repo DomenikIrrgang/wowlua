@@ -4,8 +4,16 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ## Unreleased
 
+### Changed
+
+- W1004 no longer reports a local that shadows a decorated declaration nothing reads by name (a `@test` or `@beforeEach` function); one that is read still counts
+- The load-order analysis leaves out what test files write: a test taking a game API away and back (`_G.C_EventUtils = nil`) no longer makes the addon's load-time read of it W1034, and a test's write through a dynamic name is no W1033
+- W6001 is reported only for project code that takes a Lua file name from `debugstack` or `debuglocals` (a string holding `.lua`), not for every call: keeping a stack for a report or reading the addon's folder works the same bundled
+- `mock.defineItem` items are cached unless `cached = false`, as documented, and have `itemLevel` 1 unless given
+
 ### Fixed
 
+- `wowlua test`'s auction house: a message queued behind another is sent when that one is answered, instead of never (the game's browse list queuing a query as the house opened left every later message unanswered); `mock.defineAuctionHouse` with no house open starts a fresh house (purchases, results and the player's auctions of the one before kept their state while its auction IDs started again); item keys are new tables at each call, so changing one no longer changes the house's data
 - `IsModifiedClick` takes a modified click's `BUTTONn` part for the button of the click running (Blizzard's `CHATLINK` is `SHIFT-BUTTON1`): a Shift-click is a chat link in `wowlua test`, as in the game, instead of never
 
 ## [0.9.4] - 2026-10-21

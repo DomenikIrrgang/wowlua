@@ -222,10 +222,22 @@ pub fn analyze_with(
         })
         .collect();
 
+    // Test files load after the addon (the test runner's, outside its TOC):
+    // what they write defines nothing for it, and their writes through
+    // dynamic names make its order no less decidable. Their reads and
+    // imports still order them after what they use.
+    let test_file = |i: usize| crate::is_test_file(&files[i].src_rel);
+
     // Global and `ns` keys holding the same table (`ns.API = SuuUI`) share
     // their fields; each group is named by its smallest key.
     let mut same_table: FxHashMap<Key, Key> = FxHashMap::default();
-    for (a, b) in usages.iter().flatten().flat_map(|u| &u.table_aliases) {
+    for (a, b) in usages
+        .iter()
+        .enumerate()
+        .filter(|(i, _)| !test_file(*i))
+        .filter_map(|(_, u)| u.as_ref())
+        .flat_map(|u| &u.table_aliases)
+    {
         let (a, b) = (
             table_root(&same_table, a).clone(),
             table_root(&same_table, b).clone(),
@@ -540,6 +552,9 @@ pub fn analyze_with(
         }
     };
     for (file, u) in usages.iter().enumerate() {
+        if test_file(file) {
+            continue;
+        }
         for d in u.iter().flat_map(|u| &u.defs) {
             let lt = runs_at_load(file, file, d.function)
                 && !cannot_run(file, file, d.function, d.unless_function);
@@ -548,7 +563,7 @@ pub fn analyze_with(
     }
     for (root, parents) in exec.iter().enumerate() {
         for &(file, f) in parents.keys() {
-            if file == root {
+            if file == root || test_file(file) {
                 continue;
             }
             for d in usages[file]
@@ -618,7 +633,7 @@ pub fn analyze_with(
     // by name: (the file loading, span).
     let mut untracked: FxHashMap<&str, Vec<(usize, Span)>> = FxHashMap::default();
     for (root, parents) in exec.iter().enumerate() {
-        for &(file, f) in parents.keys() {
+        for &(file, f) in parents.keys().filter(|(file, _)| !test_file(*file)) {
             for (name, _, span) in usages[file]
                 .iter()
                 .flat_map(|u| &u.untracked_field_writes)
@@ -753,6 +768,7 @@ pub fn analyze_with(
         // The standard library's files are ordered by their imports.
         if let Some(span) = u.as_ref().and_then(|u| u.dynamic_write)
             && !ordered(file)
+            && !test_file(file)
             && !crate::is_compiler_known(&files[file].src_rel)
         {
             out.diagnostics.push(
