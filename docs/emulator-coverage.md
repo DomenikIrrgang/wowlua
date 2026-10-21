@@ -19,26 +19,26 @@ engine modules and the generated stand-ins, but no recording of their own: what
 their clients answer differently is unverified.
 
 - **API functions:** 5,037 of the 5,111 documented camelot functions have
-  behaviour (98.6%): 1,000 modelled, 360 answered from recordings, 3,677 by a
+  behaviour (98.6%): 1,000 modelled, 359 answered from recordings, 3,678 by a
   documentation-based fill-in. Of all 7,175 C functions the client has,
   documented or not, 7,070 have behaviour.
 - **Widget methods:** 1,325 of the 1,477 documented methods have behaviour
   (89.7%).
-- **Full probe:** 33,083 of the client's 33,727 answers given as the client gave
+- **Full probe:** 33,082 of the client's 33,727 answers given as the client gave
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,086 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,087 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
-| standard | 4,871 | 4,433 (91.0%) | 0 | 1,438 | 1,285 (89.4%) | none |
-| camelot | 5,111 | 5,037 (98.6%) | 360 | 1,477 | 1,325 (89.7%) | all |
-| mists | 3,221 | 2,824 (87.7%) | 0 | 1,360 | 1,214 (89.3%) | none |
-| cata | 1,927 | 1,628 (84.5%) | 0 | 1,008 | 888 (88.1%) | none |
-| wrath | 3,227 | 2,831 (87.7%) | 0 | 1,360 | 1,214 (89.3%) | none |
-| tbc | 3,220 | 2,827 (87.8%) | 0 | 1,360 | 1,214 (89.3%) | none |
-| vanilla | 3,220 | 2,827 (87.8%) | 0 | 1,360 | 1,214 (89.3%) | none |
+| standard | 4,871 | 4,434 (91.0%) | 0 | 1,438 | 1,285 (89.4%) | none |
+| camelot | 5,111 | 5,037 (98.6%) | 359 | 1,477 | 1,325 (89.7%) | all |
+| mists | 3,221 | 2,825 (87.7%) | 0 | 1,360 | 1,214 (89.3%) | none |
+| cata | 1,927 | 1,629 (84.5%) | 0 | 1,008 | 888 (88.1%) | none |
+| wrath | 3,227 | 2,832 (87.8%) | 0 | 1,360 | 1,214 (89.3%) | none |
+| tbc | 3,220 | 2,828 (87.8%) | 0 | 1,360 | 1,214 (89.3%) | none |
+| vanilla | 3,220 | 2,828 (87.8%) | 0 | 1,360 | 1,214 (89.3%) | none |
 
 ## API behaviour
 
@@ -256,7 +256,7 @@ ones together):
 | `C_QuestInfoSystem` | 9 | 1 | 0 | 8 | 0 |
 | `C_QuestItemUse` | 1 | 0 | 0 | 1 | 0 |
 | `C_QuestLine` | 7 | 2 | 0 | 5 | 0 |
-| `C_QuestLog` | 93 | 25 | 6 | 62 | 0 |
+| `C_QuestLog` | 93 | 25 | 5 | 63 | 0 |
 | `C_QuestOffer` | 4 | 0 | 0 | 4 | 0 |
 | `C_QuestSession` | 14 | 0 | 3 | 11 | 0 |
 | `C_RaidLocks` | 4 | 0 | 0 | 4 | 0 |
@@ -348,13 +348,13 @@ ones together):
 | `math` | 38 | 38 | 0 | 0 | 0 |
 | `string` | 23 | 23 | 0 | 0 | 0 |
 | `table` | 23 | 23 | 0 | 0 | 0 |
-| **All** | 7,175 | 1,566 | 446 | 5,058 | 105 |
+| **All** | 7,175 | 1,566 | 445 | 5,059 | 105 |
 
 By where the function is listed:
 
 | List | Functions | Model | Recorded | Fill-in | Generated |
 |------|----------:|------:|---------:|--------:|----------:|
-| Blizzard's API documentation | 5,111 | 1,000 | 360 | 3,677 | 74 |
+| Blizzard's API documentation | 5,111 | 1,000 | 359 | 3,678 | 74 |
 | the client's other C functions (`/stdtest inventory`) | 2,064 | 566 | 86 | 1,381 | 31 |
 | the engine's own, in neither list | 5 | 5 | 0 | 0 | 0 |
 
@@ -374,8 +374,8 @@ The modules that answer, by how many functions and methods:
 | `content` | fill-in | 522 |
 | `social` | fill-in | 388 |
 | `collections` | fill-in | 377 |
-| `recorded` | recorded | 329 |
-| `questinfo` | fill-in | 315 |
+| `recorded` | recorded | 328 |
+| `questinfo` | fill-in | 316 |
 | `systeminfo` | fill-in | 315 |
 | `leftovers2` | fill-in | 312 |
 | `iteminfo` | fill-in | 228 |
@@ -542,9 +542,9 @@ locally and CI skips them.
 
 | Comparison | Matched | Of | Ratio |
 |------------|--------:|---:|------:|
-| Full probe (`/stdtest engine fullprobe`: every C function with many arguments) | 33,083 | 33,727 | 98.1% |
+| Full probe (`/stdtest engine fullprobe`: every C function with many arguments) | 33,082 | 33,727 | 98.1% |
 | Answers battery (`/stdtest engine answers`: the calls Blizzard's UI makes) | 6,129 | 6,229 | 98.4% |
-| Method probe (`/stdtest engine methodprobe`: every widget method) | 8,394 | 13,049 | 64.3% |
+| Method probe (`/stdtest engine methodprobe`: every widget method) | 8,399 | 13,049 | 64.4% |
 | Maps (`/stdtest engine maps`: each map's data) | 3,028 | 3,028 | 100.0% |
 | Damage meter (its events in the recorded fights) | 557 | 561 | 99.3% |
 
@@ -753,7 +753,7 @@ read-back counts for its setter), from the test's misses
 | `C_QuestInfoSystem` | 155 | 155 | 100.0% |
 | `C_QuestItemUse` | 15 | 15 | 100.0% |
 | `C_QuestLine` | 94 | 94 | 100.0% |
-| `C_QuestLog` | 729 | 707 | 97.0% |
+| `C_QuestLog` | 729 | 703 | 96.4% |
 | `C_QuestOffer` | 23 | 23 | 100.0% |
 | `C_QuestSession` | 9 | 9 | 100.0% |
 | `C_RaidLocks` | 63 | 63 | 100.0% |
@@ -795,7 +795,7 @@ read-back counts for its setter), from the test's misses
 | `C_TalkingHead` | 32 | 32 | 100.0% |
 | `C_TaskQuest` | 129 | 129 | 100.0% |
 | `C_TaxiMap` | 27 | 25 | 92.6% |
-| `C_Texture` | 58 | 52 | 89.7% |
+| `C_Texture` | 58 | 55 | 94.8% |
 | `C_TimerunningUI` | 1 | 1 | 100.0% |
 | `C_TooltipComparison` | 21 | 21 | 100.0% |
 | `C_TooltipInfo` | 1,268 | 1,178 | 92.9% |
@@ -832,7 +832,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,086 rules unverified: each rests on Blizzard's
+The engine's code marks 1,087 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1814,11 +1814,12 @@ page changes only when a rule is added, removed or reworded.
 - [queries.rs](../crates/wowlua-engine/src/queries.rs): No quest pop-ups (unverified: not yet asked).
 - [queries.rs](../crates/wowlua-engine/src/queries.rs): No task quests (unverified: not yet asked).
 
-### questinfo (18)
+### questinfo (19)
 
 - [questinfo.rs](../crates/wowlua-engine/src/questinfo.rs): Unverified unless said otherwise: none of these calls was recorded with anything super-tracked, a pin set, a recipe t...
 - [questinfo.rs](../crates/wowlua-engine/src/questinfo.rs): `GetQuestLogItemLink(type, index [, questID])`: the reward's link, in the quest's context as the dialog's (`GetQuestI...
 - [questinfo.rs](../crates/wowlua-engine/src/questinfo.rs): The quest's colour for the player's level, Blizzard's `GetRelativeDifficultyColor` steps with `UnitQuestTrivialLevelR...
+- [questinfo.rs](../crates/wowlua-engine/src/questinfo.rs): `C_QuestLog.GetQuestsOnMap(mapID)`: the quests of the player's log on the map, at their places as the client recorded...
 - [questinfo.rs](../crates/wowlua-engine/src/questinfo.rs): `C_QuestLog.GetQuestLogPortraitGiver([logIndex])`: a quest's entry in the log no portrait (`0, "", "", 0, nil`); a he...
 - [questinfo.rs](../crates/wowlua-engine/src/questinfo.rs): `C_QuestInfoSystem.GetQuestRewardCurrencies(questID)` and `GetQuestRewardSpells`: none for a quest ID (from 0); nothi...
 - [questinfo.rs](../crates/wowlua-engine/src/questinfo.rs): `C_QuestLog.SetMapForQuestPOIs(uiMapID)`: kept for `C_QuestLog.GetMapForQuestPOIs()` (0 before any); another map than...

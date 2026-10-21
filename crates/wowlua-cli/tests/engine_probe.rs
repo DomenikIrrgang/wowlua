@@ -1927,8 +1927,11 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
 /// answers battery's answers to the plan's calls without placeholders
 /// stand in for it (synthetic: the number changes with the first real
 /// run). Only ever raised, but for the plan's own changes: retail systems
-/// left out of it took 19 matched calls with them (762 of 792 before).
-const FULLPROBE_MATCHED: usize = 33083;
+/// left out of it took 19 matched calls with them (762 of 792 before), and
+/// `C_QuestLog.GetQuestsOnMap` lists the log's quests only (6 calls: the
+/// probing character's log, which the default world lacks; the client's
+/// atlas tables gained 5, decision T238).
+const FULLPROBE_MATCHED: usize = 33082;
 
 #[test]
 fn the_engine_answers_the_full_probe_as_the_client_did() {
@@ -2153,7 +2156,7 @@ fn write_misses(file: &str, probe: &str, matched: usize, total: usize, misses: &
 /// made under UIParent; the frame level left out, which the hidden parent
 /// changes) stand in for it. The client's run (the beta's last day,
 /// 13,049 calls) replaced them. Only ever raised.
-const METHODPROBE_MATCHED: usize = 8394;
+const METHODPROBE_MATCHED: usize = 8399;
 
 #[test]
 fn the_engine_answers_the_method_probe_as_the_client_did() {

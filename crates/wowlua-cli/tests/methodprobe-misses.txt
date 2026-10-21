@@ -1,7 +1,7 @@
 # The method probe's answers the engine does not give as the client did, by
 # function: written by its test with WOWLUA_COVERAGE_WRITE=1, read by
 # `cargo xtask coverage-report`.
-matched	8394
+matched	8399
 total	13049
 Alpha:GetDebugName	1
 Alpha:GetInheritableForbiddenAspects	1
@@ -488,7 +488,7 @@ FontString:GetRight	1
 FontString:GetShadowColor	1
 FontString:GetSourceLocation	1
 FontString:GetTop	1
-FontString:GetUnboundedStringWidthForText	5
+FontString:GetUnboundedStringWidthForText	2
 FontString:HasScript	1
 FontString:HasSecretAspect	1
 FontString:HasSecretValues	1
@@ -530,7 +530,7 @@ FontStringWithFont:GetDrawLayer	1
 FontStringWithFont:GetFieldSize	1
 FontStringWithFont:GetFontHeight	3
 FontStringWithFont:GetLineHeight	1
-FontStringWithFont:GetUnboundedStringWidthForText	6
+FontStringWithFont:GetUnboundedStringWidthForText	4
 FontStringWithFont:GetVertexColor	1
 FontStringWithFont:SetAlpha	2
 FontStringWithFont:SetAlphaGradient	27

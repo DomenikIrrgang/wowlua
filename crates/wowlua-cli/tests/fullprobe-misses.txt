@@ -1,7 +1,7 @@
 # The full probe's answers the engine does not give as the client did, by
 # function: written by its test with WOWLUA_COVERAGE_WRITE=1, read by
 # `cargo xtask coverage-report`.
-matched	33083
+matched	33082
 total	33727
 C_ActionBar.IsActionInRange	2
 C_ActionBar.IsHarmfulAction	4
@@ -113,7 +113,7 @@ C_QuestLog.GetQuestDifficultyLevel	1
 C_QuestLog.GetQuestIDForQuestWatchIndex	1
 C_QuestLog.GetQuestObjectives	2
 C_QuestLog.GetQuestType	1
-C_QuestLog.GetQuestsOnMap	2
+C_QuestLog.GetQuestsOnMap	6
 C_QuestLog.GetTitleForQuestID	2
 C_QuestLog.IsOnMap	2
 C_QuestLog.IsPushableQuest	1
@@ -148,9 +148,7 @@ C_TTSSettings.ShouldOverrideMessage	2
 C_TaxiMap.GetTaxiNodesForMap	2
 C_Texture.GetAtlasElementID	1
 C_Texture.GetAtlasElements	1
-C_Texture.GetAtlasExists	1
 C_Texture.GetAtlasID	1
-C_Texture.GetAtlasInfo	2
 C_TooltipInfo.GetAction	2
 C_TooltipInfo.GetBagItem	4
 C_TooltipInfo.GetInventoryItem	5

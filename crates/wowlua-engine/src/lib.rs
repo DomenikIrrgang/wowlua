@@ -985,6 +985,9 @@ pub(crate) const CAMELOT_ABSENT: &[&str] = &[
 /// difficulty recorded 1, the action bar toggles, the heirloom and wardrobe filters recorded
 /// checked, nothing super-tracked, no map pin).
 const OVER_RECORDED: &[&str] = &[
+    // The log's quests at their recorded places (`questinfo.rs`): the recorded
+    // answer was the recording character's log.
+    "C_QuestLog.GetQuestsOnMap",
     // The tracked filters' rule (`systeminfo.rs`), over the one recorded
     // filter.
     "C_Minimap.IsFilteredOut",

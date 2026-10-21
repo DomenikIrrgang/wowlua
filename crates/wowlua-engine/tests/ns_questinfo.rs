@@ -114,3 +114,25 @@ return info and info.mapID, info and info.name",
     );
     assert_eq!(r, ["1412", "Mulgore"]);
 }
+
+/// `C_QuestLog.GetQuestsOnMap`: the log's quests at the places the client
+/// recorded (Mulgore's map listed quest 959 for the recording character);
+/// a recorded quest the log lacks is not listed; no map, nothing.
+#[test]
+fn quests_on_a_map_are_the_logs() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local before = #C_QuestLog.GetQuestsOnMap(1412)
+local giver = mock.spawnUnit({ name = 'Giver', reaction = 'friendly' })
+mock.defineQuest(959, { title = 'Trouble at the Docks', giver = giver })
+giver:setDistance(3)
+mock.player:interact(giver)
+mock.advanceTime(1)
+AcceptQuest()
+mock.advanceTime(1)
+local list = C_QuestLog.GetQuestsOnMap(1412)
+return before, C_QuestLog.IsOnQuest(959), #list, list[1] and list[1].questID, select('#', C_QuestLog.GetQuestsOnMap(0))",
+    );
+    assert_eq!(r, ["0", "true", "1", "959", "0"]);
+}

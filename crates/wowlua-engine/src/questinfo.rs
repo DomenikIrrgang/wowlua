@@ -630,6 +630,37 @@ fn is_completed_on_account(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(done)])
 }
 
+/// `C_QuestLog.GetQuestsOnMap(mapID)`: the quests of the player's log on
+/// the map, at their places as the client recorded them (the answers
+/// battery's character's); a recorded quest the log lacks is left out (its
+/// answer was that character's log, not the world's; the client lists the
+/// log's quests). Unverified: a logged quest the recording lacks (none).
+fn get_quests_on_map(vm: &mut Vm, c: NativeCall) -> Ret {
+    let recorded = crate::recorded::lookup(vm, "C_QuestLog.GetQuestsOnMap", &c);
+    // (no map: nothing, as recorded for 0)
+    if recorded.as_ref().is_some_and(Vec::is_empty) {
+        return Ok(vec![]);
+    }
+    let out = vm.new_table();
+    if let Some(Value::Table(list)) = recorded.and_then(|v| v.first().copied()) {
+        let key = vm.str("questID");
+        let n = vm.heap.table(list).border();
+        let mut k = 0.0;
+        for i in 1..=n {
+            let entry = vm.heap.table(list).get(Value::Num(i as f64));
+            let Value::Table(e) = entry else { continue };
+            let Value::Num(q) = vm.heap.table(e).get(key) else {
+                continue;
+            };
+            if on_quest(vm, q as i64) {
+                k += 1.0;
+                let _ = vm.heap.table_mut(out).set(Value::Num(k), entry);
+            }
+        }
+    }
+    Ok(vec![Value::Table(out)])
+}
+
 /// `C_QuestLog.GetAllCompletedQuestIDs()`: the quests completed, in order.
 fn get_all_completed_quest_ids(vm: &mut Vm, _c: NativeCall) -> Ret {
     let ids: Vec<Value> = engine(vm)
@@ -1861,6 +1892,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             "C_QuestLog.GetAllCompletedQuestIDs",
             get_all_completed_quest_ids,
         ),
+        ("C_QuestLog.GetQuestsOnMap", get_quests_on_map),
         (
             "C_QuestLog.GetMaxNumQuestsCanAccept",
             get_max_num_quests_can_accept,
