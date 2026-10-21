@@ -45,6 +45,15 @@ engine cannot get otherwise.
    `IsTruncated` for long words, hyphens, several spaces and colour codes
    at a few widths. Also kerning at more sizes than FRIZQT 17 and ARIALN
    20, and the outline font's digits.
+7. **An early landing** (needs a scenario written first): a flight with a
+   stop, `TaxiRequestEarlyLanding()` before the stop, recorded as the
+   taxi scenario was (`/stdtest engine scenario taxi`). Why: the engine
+   has no early landing; SuuUI's Land at is tested with it stubbed.
+8. **Atlases on a 1x screen**: the answers battery's atlas checks at a
+   1920x1080 screen with Windows' DPI scale at 100%. Why: both recordings
+   were on high-DPI screens and gave the 2x textures' files and
+   coordinates (decision T238); a 1x screen may take the 1x textures (the
+   sizes are the same either way).
 
 ## The answers battery's new calls
 
