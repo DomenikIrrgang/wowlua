@@ -526,3 +526,27 @@ return Seen[1]",
     );
     assert_eq!(r, ["true true"]);
 }
+
+/// Talents open at level 5, as the client's answer below it says.
+#[test]
+fn talents_open_at_level_five() {
+    let mut vm = vm();
+    wowlua_engine::controls::install(&mut vm, "E");
+    let r = run(
+        &mut vm,
+        "E.setPlayer({ level = 1 })
+local a, why = C_SpecializationInfo.CanPlayerUseTalentUI()
+E.setPlayer({ level = 5 })
+local b, none = C_SpecializationInfo.CanPlayerUseTalentSpecUI()
+return tostring(a), why, tostring(b), none",
+    );
+    assert_eq!(
+        r,
+        [
+            "false",
+            "This feature becomes available at level 5.",
+            "true",
+            ""
+        ]
+    );
+}

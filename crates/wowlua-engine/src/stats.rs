@@ -1608,6 +1608,24 @@ fn quest_log_leader_board(vm: &mut Vm, c: NativeCall) -> Ret {
         .collect())
 }
 
+/// The level talents open at (the client's answer below it: "This feature
+/// becomes available at level 5.", the default character's at level 1;
+/// every recorded character above it: available).
+const TALENT_LEVEL: f64 = 5.0;
+
+/// `C_SpecializationInfo.CanPlayerUseTalentUI()` and
+/// `CanPlayerUseTalentSpecUI()`: from level 5, as the client's answer
+/// says (the stat a profile recorded is the level it was recorded at).
+fn talent_ui(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let level = engine(vm).units.list[crate::units::PLAYER.0].level;
+    Ok(if level >= TALENT_LEVEL {
+        vec![Value::Bool(true), vm.str("")]
+    } else {
+        let why = vm.str("This feature becomes available at level 5.");
+        vec![Value::Bool(false), why]
+    })
+}
+
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     STATS
         .iter()
@@ -1621,6 +1639,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             ("GetNumQuestLeaderBoards", num_quest_leader_boards),
             ("C_QuestLog.GetQuestIDForLogIndex", quest_id_for_log_index),
             ("GetQuestLogLeaderBoard", quest_log_leader_board),
+            ("C_SpecializationInfo.CanPlayerUseTalentUI", talent_ui),
+            ("C_SpecializationInfo.CanPlayerUseTalentSpecUI", talent_ui),
         ])
         .collect()
 }
