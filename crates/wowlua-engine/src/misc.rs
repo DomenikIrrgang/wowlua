@@ -355,6 +355,28 @@ fn get_locale(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![vm.str(locale.as_deref().unwrap_or("enUS"))])
 }
 
+/// `GetText(token, gender?, ordinal?)`: the global string named `token`; for
+/// gender 3 (female) its `_FEMALE` form when there is one (Blizzard's PvP
+/// ranks, `PVP_RANK_7_0` and `PVP_RANK_7_0_FEMALE`); nil for a name that is
+/// no string (unverified: the client's ordinal forms; SuuUI's inspect
+/// window names an inspected player's rank with it).
+fn get_text(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Str(token) = vm.hidden(c.arg(1)) else {
+        return Ok(vec![Value::Nil]);
+    };
+    let token = String::from_utf8_lossy(vm.str_bytes(token)).into_owned();
+    let string = |vm: &mut Vm, name: &str| match vm.get_global(name) {
+        v @ Value::Str(_) => Some(v),
+        _ => None,
+    };
+    if matches!(vm.hidden(c.arg(2)), Value::Num(g) if g == 3.0)
+        && let Some(v) = string(vm, &format!("{token}_FEMALE"))
+    {
+        return Ok(vec![v]);
+    }
+    Ok(vec![string(vm, &token).unwrap_or(Value::Nil)])
+}
+
 /// `GetFileIDFromPath(path)`: a loose file's ID, the same for the same path
 /// (any case, either slash, with or without its extension), new ones
 /// negative counting down (probed: an addon's texture -1755; the client's
@@ -487,6 +509,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ),
         ("IsPlayerInWorld", is_player_in_world),
         ("GetLocale", get_locale),
+        ("GetText", get_text),
         ("ClassicExpansionAtLeast", classic_expansion_at_least),
         ("ClassicExpansionAtMost", classic_expansion_at_most),
         ("GetThreatStatusColor", get_threat_status_color),

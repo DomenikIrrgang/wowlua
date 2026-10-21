@@ -50,3 +50,29 @@ return GetInventoryItemID('target', 16), GetInventoryItemTexture('target', 16), 
     );
     assert_eq!(r, ["19019", "135349", "5", "5107", "1", "true", "true"]);
 }
+
+/// `GetText(token, gender)`: the global string by its name, a woman's form
+/// for gender 3 when there is one; nil for a name that is no string (the
+/// inspect window's PvP rank).
+#[test]
+fn get_text_reads_the_global_strings() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "RANK_TEST, RANK_TEST_FEMALE, PLAIN_TEST = 'Sergeant', 'Sergeant (f)', 'Plain'
+return GetText('RANK_TEST'), GetText('RANK_TEST', 2), GetText('RANK_TEST', 3), GetText('PLAIN_TEST', 3),
+    tostring(GetText('NO_SUCH_TEST')), tostring(GetText('GetTime')), PVP_RANK_7_0 == GetText('PVP_RANK_7_0')",
+    );
+    assert_eq!(
+        r,
+        [
+            "Sergeant",
+            "Sergeant",
+            "Sergeant (f)",
+            "Plain",
+            "nil",
+            "nil",
+            "true"
+        ]
+    );
+}
