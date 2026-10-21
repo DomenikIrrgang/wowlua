@@ -348,7 +348,11 @@ stays drivable during the test.
 **Raw events.** `mock.fireEvent(name, ...)` and `mock.fireUnitEvent(name,
 unit, ...)` fire any event the flavor documents, the payload checked against
 its documentation (count, types, and secrets where the documentation says);
-an event the flavor does not document is an error (decision T202).
+an event the flavor does not document is an error (decision T202). A plain
+table in the payload reaches the handlers as the client's would: a copy with
+its fields written securely, so Blizzard's handlers reading it stay secure
+(a frame or another table with a metatable is passed as it is; decision
+T239).
 
 **Game data.** Spells, items and other game data come from the tests
 (decision T203): `mock.defineSpell(id, data)` (`name`, `iconID`,

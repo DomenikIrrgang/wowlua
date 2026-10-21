@@ -499,3 +499,30 @@ return i.width, i.height, i.file, i.leftTexCoord, raw and raw.x, raw and raw.y,
         ]
     );
 }
+
+/// A payload table a test fires reaches the handlers as the client's
+/// does, its fields untainted (decision T239): Blizzard's secure handler
+/// reading it stays secure; a frame in the payload is the same frame.
+#[test]
+fn fired_payload_tables_are_the_clients() {
+    let mut vm = vm();
+    wowlua_engine::controls::install(&mut vm, "E");
+    let secure = vm
+        .load(
+            b"Seen = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('UNIT_AURA')
+f:SetScript('OnEvent', function(_, _, unit, info)
+    Seen[#Seen + 1] = tostring(info.isFullUpdate) .. ' ' .. tostring(issecure())
+end)",
+            "=Blizzard",
+        )
+        .expect("compiles");
+    vm.call(secure, &[]).expect("runs");
+    let r = run(
+        &mut vm,
+        "E.fireUnitEvent('UNIT_AURA', 'player', { isFullUpdate = true })
+return Seen[1]",
+    );
+    assert_eq!(r, ["true true"]);
+}

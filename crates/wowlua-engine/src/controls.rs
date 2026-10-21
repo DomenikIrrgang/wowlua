@@ -21,8 +21,32 @@ fn fire_event(vm: &mut Vm, c: NativeCall) -> Ret {
     if let Some(doc) = engine(vm).api.event_docs.get(&name).cloned() {
         check_payload(vm, &name, &doc, &args)?;
     }
+    // The payload as the client's: made by the client, not the test (a
+    // plain table's fields written securely, decision T239).
+    let args: Vec<Value> = args.into_iter().map(|v| client_made(vm, v, 0)).collect();
     widgets::fire_event(vm, &name, &args);
     Ok(vec![])
+}
+
+/// A payload value as the client makes it: a plain table (no metatable, so
+/// not a frame or a mixin's object) copied with every field written
+/// securely, as C code writes them; anything else as it is. A test's table
+/// keeps the test's taint in its fields, which Blizzard's handlers would
+/// read and be tainted by, where the client's never taints them.
+fn client_made(vm: &mut Vm, v: Value, depth: usize) -> Value {
+    let Value::Table(t) = v else {
+        return v;
+    };
+    if depth > 8 || vm.heap.table(t).meta.is_some() {
+        return v;
+    }
+    let out = vm.new_table();
+    let entries: Vec<(Value, Value)> = vm.heap.table(t).entries().collect();
+    for (k, field) in entries {
+        let field = client_made(vm, field, depth + 1);
+        let _ = vm.heap.table_mut(out).set(k, field);
+    }
+    Value::Table(out)
 }
 
 /// The payload's count and types against the event's documentation.
