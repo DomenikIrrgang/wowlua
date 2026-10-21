@@ -6,8 +6,8 @@
 //! stays the test's table, so any value may be a secret.
 //!
 //! As the M8 mock had them (unverified details): spell data is cached once
-//! defined unless `cached = false`, and so is an item; one defined
-//! `cached = false` arrives `delay` seconds (0.2) after
+//! defined unless `cached = false`, and so is an item unless `cached =
+//! false`, a `delay` or `missing` is given; such an item arrives `delay` seconds (0.2) after
 //! `RequestLoadItemDataByID`, firing `ITEM_DATA_LOAD_RESULT`, and
 //! `GetItemInfo` gives nothing until then and fetches it itself
 //! (`GET_ITEM_INFO_RECEIVED`). An item's `itemLevel` is 1 unless given.
@@ -61,10 +61,14 @@ fn define(vm: &mut Vm, c: &NativeCall, items: bool) -> Ret {
         if field(vm, data, "itemLevel").is_nil() {
             set(vm, data, "itemLevel", Value::Num(1.0));
         }
-        // Cached unless the test says otherwise (`cached = false`: loaded
-        // when asked), as the mock's and the profiles' docs have it; an
-        // item neither cached nor loadable would never arrive.
-        if field(vm, data, "cached").is_nil() {
+        // Cached unless the test says otherwise (`cached = false`, or a
+        // `delay` or `missing`, which only an item still to load has), as
+        // the mock's and the profiles' docs have it; an item neither cached
+        // nor loadable would never arrive.
+        if field(vm, data, "cached").is_nil()
+            && field(vm, data, "delay").is_nil()
+            && !field(vm, data, "missing").truthy()
+        {
             set(vm, data, "cached", Value::Bool(true));
         }
         engine_mut(vm).world.data.items.insert(id, data);

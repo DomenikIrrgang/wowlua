@@ -3919,7 +3919,7 @@ import * as mock from "wowlua:mock"
 
 @test("an item tooltip with the addon's line")
 local function item()
-    mock.defineItem(1, { name = "Not loaded" })
+    mock.defineItem(1, { name = "Not loaded" }, { cached = false })
     expect(mock.showTooltip("item", { id = 1 })[1]).toContain("Retrieving item information")
     mock.defineItem(19019, { name = "Thunderfury, Blessed Blade of the Windseeker", quality = 5, itemLevel = 80 }, { cached = true })
     -- No item level line (WoW Forever's item tooltips have none); the

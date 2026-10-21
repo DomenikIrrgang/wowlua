@@ -347,7 +347,7 @@ an event the flavor does not document is an error (decision T202).
 `description`, `known`, `petKnown`, `cooldown`, `charges`, ranges, `cached`),
 `mock.defineItem(id, data, { cached?, delay?, missing? })` (`GetItemInfo`'s
 fields by name, `itemLevel` 1 unless given; cached unless `cached` is
-`false`, and then `RequestLoadItemDataByID` fires `ITEM_DATA_LOAD_RESULT`
+`false` or a `delay` or `missing` is given, and then `RequestLoadItemDataByID` fires `ITEM_DATA_LOAD_RESULT`
 after `delay`, 0.2 s by default, decision T228), in the test or in `tests/mocks/`. The data
 stays the test's table, so its values may be secrets. An ID the test did not define behaves as data
 the client does not have. Optionally, tests can run with the real client's

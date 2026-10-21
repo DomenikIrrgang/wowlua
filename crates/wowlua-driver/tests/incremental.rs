@@ -450,6 +450,7 @@ fn rebuilds_write_only_what_changed() {
         ("src/b.lua", "local _, ns = ...\nprint(ns.a)\n"),
     ]);
     let mut cache = BuildCache::default();
+    #[cfg(unix)]
     let file = |rel: &str| {
         let dist = dev.root.join("dist").join("dev");
         let addon = std::fs::read_dir(&dist)
