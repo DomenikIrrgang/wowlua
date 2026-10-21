@@ -30,6 +30,7 @@ use anyhow::{Context, Result, bail};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+mod atlases;
 mod corpus;
 mod coverage;
 mod fixture;
@@ -59,6 +60,12 @@ fn main() -> Result<()> {
                 bail!("usage: cargo xtask fixture <SavedVariables/StdTest.lua> <name>");
             };
             fixture::run(&root, Path::new(&saved), &name)
+        }
+        "atlases" => {
+            let Some(dir) = std::env::args().nth(2) else {
+                bail!("usage: cargo xtask atlases <dir of the client's atlas tables as CSV>");
+            };
+            atlases::run(&root, Path::new(&dir))
         }
         "trainer-levels" => {
             let Some(dir) = std::env::args().nth(2) else {

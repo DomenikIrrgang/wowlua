@@ -298,16 +298,18 @@ f:SetResizeBounds(80, 40, 120, 60)
 f:SetMovable(true)
 f:SetScript('OnDragStart', function(self) self:StartMoving() end)
 f:SetScript('OnDragStop', function(self) self:StopMovingOrSizing() end)
-E.drag(f, 10, 20)
+local s = f:GetEffectiveScale()
+E.drag(f, 10 * s, 20 * s)
 local left, bottom = f:GetLeft(), f:GetBottom()
 local grip = CreateFrame('Button', nil, f)
 grip:SetScript('OnMouseDown', function() f:StartSizing('BOTTOMRIGHT') end)
 grip:SetScript('OnMouseUp', function() f:StopMovingOrSizing() end)
-E.sizeBy(grip, 50, 5)
+E.sizeBy(grip, 50 * s, 5 * s)
 local p = f:GetPoint(1)
 return left, bottom, f:GetWidth(), f:GetHeight(), p, f:GetTop(), #E.frames()",
     );
-    // Centered 100 x 50 on 1920 x 1080: left 910, bottom 515; moved by (10, 20).
+    // Centered 100 x 50 on 1920 x 1080: left 910, bottom 515; moved by (10, 20)
+    // (the drags in screen units: times the effective scale).
     // The top stays at 585 as the frame grows to its maximum width.
     assert_eq!(r, ["920", "535", "120", "55", "TOPLEFT", "585", "4"]);
 }
@@ -457,6 +459,43 @@ return tostring(UIParent:GetScale()), tostring(child:GetEffectiveScale()), tostr
             "true",
             "1",
             "true"
+        ]
+    );
+}
+
+/// Every atlas of the client from its own tables (decision T238): one
+/// never recorded has its size, file, coordinates and raw size (its 2x
+/// texture's, half the pixels); `useAtlasSize` takes the size; an atlas the
+/// client lacks is none.
+#[test]
+fn atlases_are_the_clients() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "function CreateVector2D(x, y) return { x = x, y = y } end -- (Blizzard's, without its UI)
+local i = C_Texture.GetAtlasInfo('questlog-main-background')
+local t = UIParent:CreateTexture()
+t:SetAtlas('QuestLog-main-background', true)
+local raw = i.rawSize
+return i.width, i.height, i.file, i.leftTexCoord, raw and raw.x, raw and raw.y,
+    t:GetWidth(), t:GetHeight(), t:GetAtlas(), select('#', C_Texture.GetAtlasInfo('x')),
+    tostring(C_Texture.GetAtlasExists('QuestLog-main-background')), tostring(C_Texture.GetAtlasExists('x'))",
+    );
+    assert_eq!(
+        r,
+        [
+            "307",
+            "510",
+            "5684770",
+            "0.30126953125",
+            "614",
+            "1020",
+            "307",
+            "510",
+            "QuestLog-main-background",
+            "0",
+            "true",
+            "false"
         ]
     );
 }

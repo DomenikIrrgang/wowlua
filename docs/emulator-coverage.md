@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,088 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,086 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -832,7 +832,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,088 rules unverified: each rests on Blizzard's
+The engine's code marks 1,086 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1262,14 +1262,12 @@ page changes only when a rule is added, removed or reworded.
 - [formatters.rs](../crates/wowlua-engine/src/formatters.rs): Hyperlinks stripped to their text: `|H…|h` and `|h` removed, the brackets of a link's text too unless kept (unverifie...
 - [formatters.rs](../crates/wowlua-engine/src/formatters.rs): `StripTextureMarkupForLooseFiles(text)`: textures by a file path removed, those by a file ID kept (unverified: what "...
 
-### framescript (9)
+### framescript (7)
 
 - [framescript.rs](../crates/wowlua-engine/src/framescript.rs): Unverified (the documentation's signatures, behaviour inferred from Blizzard's callers): event callbacks run after th...
 - [framescript.rs](../crates/wowlua-engine/src/framescript.rs): `SetCVar(name, value)`: a secure CVar is refused to addons in combat (`ADDON_ACTION_FORBIDDEN`, recorded for `SoftTar...
 - [framescript.rs](../crates/wowlua-engine/src/framescript.rs): No value sets "0" (the full probe, 1.60.1: ten switches read "0" after `SetCVar(name)`; unverified: a CVar whose rang...
 - [framescript.rs](../crates/wowlua-engine/src/framescript.rs): The camera's zoom factor keeps a value below 1 or no number, the set answered as done (the full probe, 1.60.1: "0", "...
-- [framescript.rs](../crates/wowlua-engine/src/framescript.rs): As the client gave it (the answers battery's atlas checks), else the whole of an unknown file, not tiling (unverified).
-- [framescript.rs](../crates/wowlua-engine/src/framescript.rs): `C_Texture.GetAtlasExists(atlas)`: every name but the empty one (the full probe, 1.60.1: "" false; unverified: the cl...
 - [framescript.rs](../crates/wowlua-engine/src/framescript.rs): `C_AddOns.LoadAddOn(name)`: a Blizzard addon of the loaded UI code loads (true); without it, or for another addon, (f...
 - [framescript.rs](../crates/wowlua-engine/src/framescript.rs): `C_LFGList.GetPremadeGroupFinderStyle()`: camelot's group finder is the vanilla style (the client loads Blizzard_Grou...
 - [framescript.rs](../crates/wowlua-engine/src/framescript.rs): `C_LFGInfo.IsGroupFinderEnabled()`: on camelot, yes (the client loads its group finder at login, `/stdtest engine`);...

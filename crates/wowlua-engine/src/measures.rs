@@ -93,47 +93,73 @@ pub struct Atlas {
     pub info: Option<AtlasInfo>,
 }
 
-/// An atlas's info as the client gave it.
+/// An atlas's info as the client gives it.
 pub struct AtlasInfo {
     pub file: f64,
     pub coords: [f64; 4],
     pub tiles_horizontally: bool,
     pub tiles_vertically: bool,
+    /// Its size in the file's pixels (`rawSize`), from the client's tables.
+    pub raw: Option<(f64, f64)>,
 }
 
-/// The atlas named `name` (any case), if recorded.
+/// An atlas line: name, width, height, then (when given) file, left,
+/// right, top, bottom, tiling horizontally and vertically, raw width and
+/// height.
+fn atlas_line(l: &'static str) -> (String, Atlas) {
+    let f: Vec<&str> = l.split('\t').collect();
+    let num = |i: usize| f.get(i).and_then(|v| v.parse::<f64>().ok());
+    let info = (f.len() >= 10).then(|| AtlasInfo {
+        file: num(3).unwrap_or(0.0),
+        coords: [
+            num(4).unwrap_or(0.0),
+            num(5).unwrap_or(1.0),
+            num(6).unwrap_or(0.0),
+            num(7).unwrap_or(1.0),
+        ],
+        tiles_horizontally: f[8] == "true",
+        tiles_vertically: f[9] == "true",
+        raw: num(10).zip(num(11)),
+    });
+    (
+        f[0].to_ascii_lowercase(),
+        Atlas {
+            name: f[0],
+            width: num(1),
+            height: num(2),
+            info,
+        },
+    )
+}
+
+/// The atlas named `name` (any case), if the client has it: every atlas of
+/// its tables (`data/camelot-atlases-client.txt`, decision T238), an
+/// answer recorded from the client in its place (`data/camelot-atlases.txt`;
+/// a size recorded alone keeps the tables' file and coordinates).
 pub fn atlas(name: &str) -> Option<&'static Atlas> {
     static TABLE: std::sync::OnceLock<std::collections::HashMap<String, Atlas>> =
         std::sync::OnceLock::new();
-    let table = TABLE.get_or_init(|| {
-        include_str!("../data/camelot-atlases.txt")
-            .lines()
+    let lines = |text: &'static str| {
+        text.lines()
             .filter(|l| !l.starts_with('#') && !l.is_empty())
-            .map(|l| {
-                let f: Vec<&str> = l.split('\t').collect();
-                let num = |i: usize| f.get(i).and_then(|v| v.parse::<f64>().ok());
-                let info = (f.len() >= 10).then(|| AtlasInfo {
-                    file: num(3).unwrap_or(0.0),
-                    coords: [
-                        num(4).unwrap_or(0.0),
-                        num(5).unwrap_or(1.0),
-                        num(6).unwrap_or(0.0),
-                        num(7).unwrap_or(1.0),
-                    ],
-                    tiles_horizontally: f[8] == "true",
-                    tiles_vertically: f[9] == "true",
-                });
-                (
-                    f[0].to_ascii_lowercase(),
-                    Atlas {
-                        name: f[0],
-                        width: num(1),
-                        height: num(2),
-                        info,
-                    },
-                )
-            })
-            .collect()
+            .map(atlas_line)
+    };
+    let table = TABLE.get_or_init(|| {
+        let mut table: std::collections::HashMap<String, Atlas> =
+            lines(include_str!("../data/camelot-atlases-client.txt")).collect();
+        for (key, mut recorded) in lines(include_str!("../data/camelot-atlases.txt")) {
+            if let Some(client) = table.remove(&key) {
+                recorded.width = recorded.width.or(client.width);
+                recorded.height = recorded.height.or(client.height);
+                let raw = client.info.as_ref().and_then(|i| i.raw);
+                match &mut recorded.info {
+                    Some(info) => info.raw = info.raw.or(raw),
+                    None => recorded.info = client.info,
+                }
+            }
+            table.insert(key, recorded);
+        }
+        table
     });
     table.get(&name.to_ascii_lowercase())
 }

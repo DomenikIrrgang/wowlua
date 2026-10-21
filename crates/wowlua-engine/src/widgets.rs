@@ -2678,7 +2678,14 @@ pub fn layout_scale(e: &Engine, id: WidgetId) -> f64 {
         }
         cur = w.parent;
     }
-    s / ui.map_or(1.0, |u| e.world.widgets[u.0].scale)
+    s / ui_parent_scale(e)
+}
+
+/// UIParent's scale (the screen's, decision T237).
+pub fn ui_parent_scale(e: &Engine) -> f64 {
+    e.world
+        .ui_parent
+        .map_or(1.0, |u| e.world.widgets[u.0].scale)
 }
 
 /// The scale times its parents' scales, up to one that ignores its
@@ -3655,14 +3662,16 @@ pub fn drag(vm: &mut Vm, id: WidgetId, dx: f64, dy: f64) {
         && let Some(b) = bounds(vm, m, 0)
     {
         let s = layout_scale(engine(vm), m);
+        // (the drag in screen units, rectangles in UIParent's)
+        let ui = ui_parent_scale(engine(vm));
         let screen = vm.get_global("UIParent");
         let w = &mut engine_mut(vm).world.widgets[m.0];
         w.points = vec![Point {
             point: "BOTTOMLEFT".into(),
             relative: Some(screen),
             relative_point: "BOTTOMLEFT".into(),
-            x: (b.0 + dx) / s,
-            y: (b.1 + dy) / s,
+            x: (b.0 + dx / ui) / s,
+            y: (b.1 + dy / ui) / s,
         }];
         layout_changed(vm);
     }
@@ -3679,6 +3688,8 @@ pub fn size_by(vm: &mut Vm, grip: WidgetId, dw: f64, dh: f64) {
         && let Some(b) = bounds(vm, f, 0)
     {
         let s = layout_scale(engine(vm), f);
+        // (the drag in screen units, the size in its own)
+        let own = effective_scale(engine(vm), f);
         let screen = vm.get_global("UIParent");
         let w = &mut engine_mut(vm).world.widgets[f.0];
         let (min_w, min_h, max_w, max_h) = w.resize_bounds.unwrap_or_default();
@@ -3686,8 +3697,8 @@ pub fn size_by(vm: &mut Vm, grip: WidgetId, dw: f64, dh: f64) {
             let v = v.max(min);
             if max > 0.0 { v.min(max) } else { v }
         };
-        w.width = limit(w.width + dw / s, min_w, max_w);
-        w.height = limit(w.height + dh / s, min_h, max_h);
+        w.width = limit(w.width + dw / own, min_w, max_w);
+        w.height = limit(w.height + dh / own, min_h, max_h);
         w.points = vec![Point {
             point: "TOPLEFT".into(),
             relative: Some(screen),

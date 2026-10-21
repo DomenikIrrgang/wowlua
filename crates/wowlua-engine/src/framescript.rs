@@ -406,21 +406,19 @@ pub(crate) fn control_set_cvar(vm: &mut Vm, c: NativeCall) -> Ret {
 
 // ---------------------------------------------------------------- others
 
-/// `C_Texture.GetAtlasInfo(atlas)`: a stand-in (64 x 64, whole texture);
-/// the size of a recorded atlas (`measures::atlas`).
-///
-/// The empty name is no atlas: nothing (the full probe, 1.60.1).
+/// `C_Texture.GetAtlasInfo(atlas)`: the client's atlas (its tables,
+/// `measures::atlas`, decision T238): its size, file, texture coordinates,
+/// tiling and raw size (`rawSize`, a `Vector2D`), the name as asked; an
+/// atlas the client lacks, or the empty name, nothing (the full probe,
+/// 1.60.1: "" and "x").
 fn atlas_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let name = vm.check_str(&c, 1)?;
-    if vm.str_bytes(name).is_empty() {
+    let Some(known) = crate::measures::atlas(&String::from_utf8_lossy(vm.str_bytes(name))) else {
         return Ok(vec![]);
-    }
-    let known = crate::measures::atlas(&String::from_utf8_lossy(vm.str_bytes(name)));
-    let width = known.and_then(|a| a.width).unwrap_or(64.0);
-    let height = known.and_then(|a| a.height).unwrap_or(64.0);
-    // As the client gave it (the answers battery's atlas checks), else the
-    // whole of an unknown file, not tiling (unverified).
-    let info = known.and_then(|a| a.info.as_ref());
+    };
+    let width = known.width.unwrap_or(0.0);
+    let height = known.height.unwrap_or(0.0);
+    let info = known.info.as_ref();
     let [left, right, top, bottom] = info.map_or([0.0, 1.0, 0.0, 1.0], |i| i.coords);
     let t = vm.new_table();
     let set = |vm: &mut Vm, k: &str, v: Value| {
@@ -449,17 +447,28 @@ fn atlas_info(vm: &mut Vm, c: NativeCall) -> Ret {
         "tilesVertically",
         Value::Bool(info.is_some_and(|i| i.tiles_vertically)),
     );
-    let file = vm.str("Interface\\Buttons\\WHITE8X8");
-    set(vm, "filename", file);
+    if let Some((w, h)) = info.and_then(|i| i.raw) {
+        let create = vm.get_global("CreateVector2D");
+        if !create.is_nil()
+            && let Ok(r) = vm.call(create, &[Value::Num(w), Value::Num(h)])
+            && let Some(v) = r.first().copied()
+        {
+            set(vm, "rawSize", v);
+        }
+    }
     Ok(vec![Value::Table(t)])
 }
 
-/// `C_Texture.GetAtlasExists(atlas)`: every name but the empty one (the
-/// full probe, 1.60.1: "" false; unverified: the client's whole list,
-/// "x" false too, which the engine cannot tell from an atlas it lacks).
+/// `C_Texture.GetAtlasExists(atlas)`: whether the client has it (its
+/// tables, decision T238; the full probe, 1.60.1: "" false).
 fn atlas_exists(vm: &mut Vm, c: NativeCall) -> Ret {
-    let empty = matches!(vm.hidden(c.arg(1)), Value::Str(s) if vm.str_bytes(s).is_empty());
-    Ok(vec![Value::Bool(!empty)])
+    let known = match vm.hidden(c.arg(1)) {
+        Value::Str(s) => {
+            crate::measures::atlas(&String::from_utf8_lossy(vm.str_bytes(s))).is_some()
+        }
+        _ => false,
+    };
+    Ok(vec![Value::Bool(known)])
 }
 
 /// `GetBuildInfo()`: the flavor's client version and interface (the build

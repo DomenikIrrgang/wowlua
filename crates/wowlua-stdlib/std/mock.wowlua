@@ -1070,7 +1070,9 @@ export function typeText(editBox: any, text: string)
     engine().type(editBox, text)
 end
 
---- Drags a frame (or an overlay's moving parent) by `dx`, `dy`.
+--- Drags a frame (or an overlay's moving parent) by `dx`, `dy` screen
+--- units, as `GetCursorPosition` counts them (a distance in the frame's
+--- units times its `GetEffectiveScale()`).
 export function drag(frame: any, dx: number, dy: number)
     engine().drag(frame, dx, dy)
 end
@@ -1089,7 +1091,7 @@ export function dragTo(source: any, target: any)
     engine().dragTo(source, target)
 end
 
---- Drags a resize grip by `dw`, `dh`.
+--- Drags a resize grip by `dw`, `dh` screen units (as `drag`).
 export function sizeBy(grip: any, dw: number, dh: number)
     engine().sizeBy(grip, dw, dh)
 end
