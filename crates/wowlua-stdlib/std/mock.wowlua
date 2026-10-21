@@ -346,6 +346,9 @@ export type HeldItem = {
     questActive?: boolean,
     --- Its running cooldown (a snapshot's): seconds left, its length.
     cooldown?: { remaining: number, duration: number },
+    --- Worn gear's durability, both or neither (`GetInventoryItemDurability`).
+    durability?: number,
+    maxDurability?: number,
 }
 
 --- What `spawnUnit` takes.
