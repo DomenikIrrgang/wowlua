@@ -224,6 +224,46 @@ fn empty_table(vm: &mut Vm, _id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![Value::Table(vm.new_table())])
 }
 
+/// A model's or actor's `GetItemTransmogInfoList()`: an `ItemTransmogInfo` for
+/// every equipment slot (1 to 19), Blizzard's own objects
+/// (`ItemUtil.CreateItemTransmogInfo`) when its code is loaded. Blizzard's
+/// dressing room reads the main hand's entry unchecked, so the client's list
+/// has every slot (unverified: what an undressed model's slots hold, here
+/// nothing, `appearanceID` 0; the engine dresses no model).
+fn transmog_info_list(vm: &mut Vm, _id: WidgetId, _c: NativeCall) -> Ret {
+    let list = vm.new_table();
+    let util = vm.get_global("ItemUtil");
+    let create = match util {
+        Value::Table(t) => {
+            let k = vm.str("CreateItemTransmogInfo");
+            vm.heap.table(t).get(k)
+        }
+        _ => Value::Nil,
+    };
+    for slot in 1..=19 {
+        let info = match create {
+            Value::Func(_) => vm
+                .call_from_engine(create, &[Value::Num(0.0)])
+                .and_then(|r| r.first().copied())
+                .unwrap_or(Value::Nil),
+            _ => Value::Nil,
+        };
+        let info = match info {
+            Value::Table(_) => info,
+            _ => {
+                let t = vm.new_table();
+                for key in ["appearanceID", "secondaryAppearanceID", "illusionID"] {
+                    let k = vm.str(key);
+                    let _ = vm.heap.table_mut(t).set(k, Value::Num(0.0));
+                }
+                Value::Table(t)
+            }
+        };
+        let _ = vm.heap.table_mut(list).set(Value::Num(slot as f64), info);
+    }
+    Ok(vec![Value::Table(list)])
+}
+
 /// Getters of one stored value each, by stem and default: a getter's name
 /// is `Get` (or `Is`, `Does`, …) and the setter's stem.
 macro_rules! getters {
@@ -1611,7 +1651,7 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
             "DressUpModel:GetItemTransmogInfo",
             dress_up_item_transmog_info,
         ),
-        ("DressUpModel:GetItemTransmogInfoList", empty_table),
+        ("DressUpModel:GetItemTransmogInfoList", transmog_info_list),
         (
             "DressUpModel:GetObeyHideInTransmogFlag",
             get_obey_hide_in_transmog,
@@ -1669,7 +1709,10 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
         ),
         ("ModelSceneFrameActor:GetAutoDress", get_auto_dress),
         ("ModelSceneFrameActor:GetItemTransmogInfo", nil),
-        ("ModelSceneFrameActor:GetItemTransmogInfoList", empty_table),
+        (
+            "ModelSceneFrameActor:GetItemTransmogInfoList",
+            transmog_info_list,
+        ),
         (
             "ModelSceneFrameActor:GetObeyHideInTransmogFlag",
             get_obey_hide_in_transmog,

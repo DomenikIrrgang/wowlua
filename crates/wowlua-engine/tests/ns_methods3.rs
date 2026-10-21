@@ -96,3 +96,25 @@ return p:GetHighestFrameLevel(), e:GetDisplayText(), e:GetBlinkSpeed()",
     );
     assert_eq!(r, ["9", "***", "0.5"]);
 }
+
+/// A model's or actor's `GetItemTransmogInfoList()` has an entry for every
+/// equipment slot (Blizzard's dressing room reads the main hand's
+/// unchecked); without Blizzard's `ItemUtil`, plain tables of the fields;
+/// with it, its objects.
+#[test]
+fn transmog_info_lists_have_every_slot() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local s = CreateFrame('ModelScene')
+local a = s:CreateActor()
+local list = a:GetItemTransmogInfoList()
+local n = 0
+for slot = 1, 19 do if list[slot] then n = n + 1 end end
+local plain = list[16].appearanceID
+ItemUtil = { CreateItemTransmogInfo = function(id) return { appearanceID = id, made = true } end }
+local made = CreateFrame('DressUpModel'):GetItemTransmogInfoList()[16].made
+return n, plain, tostring(made), tostring(list[20])",
+    );
+    assert_eq!(r, ["19", "0", "true", "nil"]);
+}
