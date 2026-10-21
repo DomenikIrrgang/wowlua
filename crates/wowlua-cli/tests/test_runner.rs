@@ -4207,6 +4207,66 @@ end
 
 // --------------------------------------------- SuuUI's test findings (0.9.1)
 
+/// `spawnUnit`'s declared `healthMax` and `powerMax` set the maximums, and the
+/// types know every unit field and method the engine has: a strict test
+/// uses them (decision T232).
+#[test]
+fn unit_data_and_methods_as_declared() {
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            (
+                "src/main.wowlua",
+                "print(\"loaded\")
+",
+            ),
+            (
+                "tests/units.test.wowlua",
+                r##"--!strict
+import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+@test("the declared fields")
+local function fields()
+    local wolf = mock.spawnUnit({ name = "Wolf", reaction = "friendly", health = 800, healthMax = 1000, power = 5, powerMax = 50,
+        classification = "elite", creatureType = "Beast", creatureTypeID = 1, creatureFamily = "Wolf", creatureFamilyID = 1 })
+    mock.player:target(wolf)
+    expect(UnitHealthMax("target")).toBe(mock.secret(1000))
+    expect(UnitPowerMax("target")).toBe(mock.secret(50))
+    expect(UnitClassification("target")).toBe("elite")
+    expect(UnitCreatureFamily("target")).toBe("Wolf")
+    local old = mock.spawnUnit({ name = "Old", reaction = "friendly", health = 10, maxHealth = 20, maxPower = 30 })
+    mock.player:target(old)
+    expect(UnitHealthMax("target")).toBe(mock.secret(20))
+    expect(UnitPowerMax("target")).toBe(mock.secret(30))
+    local other = mock.spawnUnit({ name = "Otherplayer", player = true, factionGroup = "Alliance", pvp = true })
+    mock.player:target(other)
+    expect(UnitFactionGroup("target")).toBe("Alliance")
+    expect(UnitIsPVP("target")).toBe(true)
+end
+
+@test("the declared methods")
+local function methods()
+    local other = mock.spawnUnit({ name = "Otherplayer", player = true, level = 60, reaction = "friendly" })
+    other:setDistance(3)
+    other:setInspect({ itemLevel = 50, items = { [1] = { link = "|cnIQ1:|Hitem:6948::::::::60:::::::::|h[Hearthstone]|h|r", cached = true } } })
+    mock.player:target(other)
+    NotifyInspect("target")
+    mock.advanceTime(2)
+    expect(GetInventoryItemID("target", 1)).toBe(6948)
+    local wolf = mock.spawnUnit({ name = "Wolf", reaction = "hostile" })
+    wolf:setThreat(5)
+    wolf:setThreat(nil)
+end
+"##,
+            ),
+        ],
+    );
+    let (ok, text) = test(dir.path(), &[]);
+    assert!(ok, "{text}");
+    assert!(text.contains("2 passed, 0 failed"), "{text}");
+}
+
 /// `mock.setField` sets any field, `nil` too, until the test ends and puts it
 /// back secure, where an assignment from the test leaves it tainted
 /// (decision T230).

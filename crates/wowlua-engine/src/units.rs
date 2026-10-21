@@ -1709,7 +1709,16 @@ fn unit_from(vm: &mut Vm, data: Option<TableRef>, player_guid: Option<String>) -
         c
     };
     let health = num(vm, "health", 100.0);
-    let health_max = num(vm, "maxHealth", health);
+    // The declared `healthMax` and `powerMax` (`UnitData`); `maxHealth` and
+    // `maxPower` as before (decision T232).
+    let health_max = match get(vm, "healthMax") {
+        Value::Num(n) => n,
+        _ => num(vm, "maxHealth", health),
+    };
+    let power_max = match get(vm, "powerMax") {
+        Value::Num(n) => n,
+        _ => num(vm, "maxPower", 100.0),
+    };
     Unit {
         guid: text(vm, "guid", &default_guid),
         name: text(vm, "name", "Unit"),
@@ -1741,7 +1750,7 @@ fn unit_from(vm: &mut Vm, data: Option<TableRef>, player_guid: Option<String>) -
         health: num(vm, "health", health_max),
         health_max,
         power: num(vm, "power", 0.0),
-        power_max: num(vm, "maxPower", 100.0),
+        power_max,
         power_type: num(vm, "powerType", 0.0),
         dead: get(vm, "dead").truthy(),
         pvp: get(vm, "pvp").truthy(),

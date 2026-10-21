@@ -10,6 +10,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- Tests: `mock.spawnUnit` and `mock.setPlayer` take `healthMax` and `powerMax` as declared (they were ignored: the unit's maximum was its current health). The types now know every unit field the engine reads (`factionGroup`, `pvp`, `classification`, the creature's type and family) and every unit method (`joinGroup`, `loot`, `openTrade`, `setInspect`, `setThreat`, `useSpell`), so strict tests can use them.
 - Tests: an inspected player's gear has its item ID, icon and quality (`GetInventoryItemID`, `GetInventoryItemTexture`, `GetInventoryItemQuality`), not only its link.
 - `wowlua test --coverage` no longer crashes with "internal compiler error: stale handle" when code it counts (a Blizzard frame's or your addon's) is thrown away during the run.
 - An internal compiler error prints where it happened when `RUST_BACKTRACE=1` is set, for the bug report.

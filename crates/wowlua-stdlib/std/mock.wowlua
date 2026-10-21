@@ -182,6 +182,28 @@ export interface MockUnit
     --- The player's item in an inventory slot (`nil`: none):
     --- `PLAYER_EQUIPMENT_CHANGED`, `UNIT_INVENTORY_CHANGED`.
     function equip(slot: number, item: number | HeldItem | nil)
+    --- The invited player joins the party (the player leading it; invite
+    --- first, and let the invitation arrive).
+    function joinGroup()
+    --- The player loots `corpse`; the window opens a round trip later
+    --- (`opts`: a recording's timings: `auto`, `opensAfter`, `slotsAfter`,
+    --- `bagsAfter`, `dataAfter`, `logAfter`, `bagsAlone`, `pushAfter`,
+    --- `flagsAfter`).
+    function loot(corpse: MockUnit, opts: table?)
+    --- The other side accepted the trade: the trade window.
+    function openTrade()
+    --- What the server knows of another player for an inspect
+    --- (`NotifyInspect`): its specialization, item level, gear (links; the
+    --- `cached` ones at once, the others' infos after), the items' infos
+    --- received in order, its talent config.
+    function setInspect(data: { spec?: number, itemLevel?: number, items?: { [number]: { link: string, cached?: boolean } },
+                                received?: number[], config?: table, traitCharacter?: number })
+    --- The player's threat on this creature, as the server tells it
+    --- (`nil`: off its list).
+    function setThreat(value: number?)
+    --- The player pressing a spell (as recorded: the power check, the
+    --- global cooldown, the cast a round trip later).
+    function useSpell(spellID: number)
 end
 
 --- A stat's answer: the client function's results in order, or its one
@@ -359,6 +381,22 @@ export type UnitData = {
     --- false: an offline player character (`UnitIsConnected` false; the
     --- roster's level 0, zone "Offline").
     online?: boolean,
+    --- `UnitFactionGroup` ("Horde", "Alliance"); `faction` the same.
+    factionGroup?: string,
+    faction?: string,
+    --- `UnitIsPVP`.
+    pvp?: boolean,
+    --- `UnitClassification`: "normal" by default, "elite", "rare",
+    --- "rareelite", "worldboss", "trivial", "minus".
+    classification?: string,
+    --- `UnitCreatureType` and `UnitCreatureFamily`, with their IDs.
+    creatureType?: string,
+    creatureTypeID?: number,
+    creatureFamily?: string,
+    creatureFamilyID?: number,
+    --- The older names of `healthMax` and `powerMax` (decision T232).
+    maxHealth?: number,
+    maxPower?: number,
 }
 
 local function engine(): any
