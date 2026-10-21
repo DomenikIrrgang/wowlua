@@ -77,7 +77,15 @@ jobs:
         run: |
           prerelease=""
           case "$GITHUB_REF_NAME" in *-*) prerelease="--prerelease" ;; esac
-          gh release create "$GITHUB_REF_NAME" --title "wowlua $GITHUB_REF_NAME" --generate-notes $prerelease \
+          # The notes are the version's CHANGELOG.md section, as SuuUI's are ("## 0.9.5 (2026-10-21)" to the next
+          # "## "): the website and Discord show them. No section, no release (CLAUDE.md, Releasing).
+          version="${GITHUB_REF_NAME#v}"
+          awk -v v="$version" '
+            /^## / { if (found) exit; if ($0 == "## " v || index($0, "## " v " (") == 1) found = 1 }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then echo "CHANGELOG.md has no section for $version"; exit 1; fi
+          gh release create "$GITHUB_REF_NAME" --title "wowlua $GITHUB_REF_NAME" --notes-file notes.md $prerelease \
             artifacts/* scripts/install.sh scripts/install.ps1
       - name: Post the release to Discord
         env:

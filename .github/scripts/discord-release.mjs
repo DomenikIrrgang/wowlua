@@ -1,6 +1,6 @@
 // Posts a release to the wowlua Discord's #releases and pings @Release pings: the version's CHANGELOG.md section,
-// with the full notes a click away. release.yml runs it after the GitHub release is made. The release's own notes
-// are generated from pull requests, so the post reads CHANGELOG.md instead.
+// with the full notes a click away. release.yml runs it after the GitHub release is made, whose notes are the same
+// section.
 //
 // Env: TAG (v0.9.0), GITHUB_REPOSITORY, DISCORD_RELEASES_WEBHOOK (secret), DISCORD_RELEASE_ROLE_ID.
 // `node .github/scripts/discord-release.mjs --dry-run` prints the message instead of posting it.
@@ -20,10 +20,11 @@ const version = TAG.replace(/^v/, "");
 const releaseUrl = `https://github.com/${GITHUB_REPOSITORY}/releases/tag/${TAG}`;
 const prerelease = version.includes("-");
 
-// "## [0.9.0] - 2026-10-15", an intro, then ### Added / Changed / Fixed with one "- " line per entry.
+// As SuuUI's: "## 0.9.5 (2026-10-21)", an optional intro, then ### New / Changed / Fixed with one "- " line per
+// entry (see CLAUDE.md, Releasing).
 const changelog = readFileSync(new URL("../../CHANGELOG.md", import.meta.url), "utf8").split(/\r?\n/);
 // Without a section the post still goes out, with the link alone: the release exists by now either way.
-const start = changelog.findIndex((l) => l.startsWith(`## [${version}]`));
+const start = changelog.findIndex((l) => l === `## ${version}` || l.startsWith(`## ${version} (`));
 if (start < 0) console.log(`CHANGELOG.md has no section for ${version}: posting the link alone.`);
 const sections = {};
 const intro = [];
@@ -39,7 +40,7 @@ for (const line of start < 0 ? [] : changelog.slice(start + 1)) {
 const short = (entry) => (entry.length > 160 ? `${entry.slice(0, 160).replace(/\s+\S*$/, "")}…` : entry);
 const plural = (n, word) => `${n} ${word}${n === 1 ? "" : "s"}`;
 const list = (title, entries) => `**${title}**\n${entries.map((e) => `• ${short(e)}`).join("\n")}`;
-const added = sections.Added ?? [];
+const added = sections.New ?? [];
 const changed = sections.Changed ?? [];
 const fixed = sections.Fixed ?? [];
 const link = `[release notes ↗](${releaseUrl})`; // links are lowercase and end in ↗, as on wowlua.dev
@@ -48,7 +49,7 @@ const link = `[release notes ↗](${releaseUrl})`; // links are lowercase and en
 const parts = [];
 if (intro.length) parts.push(intro.join(" "));
 if (added.length) {
-  parts.push(list("Added", added));
+  parts.push(list("New", added));
   const more = [changed.length && plural(changed.length, "change"), fixed.length && plural(fixed.length, "fix").replace("fixs", "fixes")].filter(Boolean);
   parts.push(more.length ? `**Also** ${more.join(" and ")}. ${link}` : link);
 } else {
