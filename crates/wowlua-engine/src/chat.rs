@@ -338,10 +338,48 @@ pub fn system_message_control(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `slash(line)`: runs `/cmd args` as the chat box does, the user's action
 /// (a hardware event). Returns whether a command took it.
+/// The default chat frame's edit box and its `SetText`, when Blizzard's chat
+/// is loaded (its `ChatFrameEditBoxBaseMixin` there: `SendText`).
+fn chat_edit_box(vm: &mut Vm) -> Option<(Value, Value)> {
+    // (through metatables: `SetText` is the widget's method)
+    let get = |vm: &mut Vm, t: Value, key: &str| -> Value {
+        if !matches!(t, Value::Table(_)) {
+            return Value::Nil;
+        }
+        let k = vm.str(key);
+        vm.index(t, k, None).unwrap_or(Value::Nil)
+    };
+    let frame = vm.get_global("DEFAULT_CHAT_FRAME");
+    let edit = get(vm, frame, "editBox");
+    let send = get(vm, edit, "SendText");
+    let set_text = get(vm, edit, "SetText");
+    match (send, set_text) {
+        (Value::Func(_), Value::Func(_)) => Some((edit, set_text)),
+        _ => None,
+    }
+}
+
 pub fn slash_control(vm: &mut Vm, c: NativeCall) -> Ret {
     let line = vm.check_str(&c, 1)?;
     let line = String::from_utf8_lossy(vm.str_bytes(line)).into_owned();
     let line = line.trim();
+    // With Blizzard's chat: the line typed into the chat's edit box and sent
+    // as the player does it (decision T233), so the client's own lookup
+    // runs: its secure commands, chat types, emotes, the commands it moved
+    // out of `SlashCmdList` into its hash tables (all of Blizzard's: they
+    // were never found), and its help line for an unknown one.
+    if let Some((edit, set_text)) = chat_edit_box(vm)
+        && let Some(id) = widgets::widget_of(vm, edit)
+    {
+        let text = vm.str(line);
+        // Typed, then Enter: the edit box's own handler sends it and closes
+        // the edit box, as the key does.
+        crate::input::as_user(vm, |vm| {
+            vm.call_from_engine(set_text, &[edit, text]);
+            widgets::run_script(vm, id, "OnEnterPressed", &[]);
+        });
+        return Ok(vec![Value::Bool(true)]);
+    }
     let (cmd, msg) = match line.split_once(char::is_whitespace) {
         Some((cmd, rest)) => (cmd.to_string(), rest.trim_start().to_string()),
         None => (line.to_string(), String::new()),

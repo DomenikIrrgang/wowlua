@@ -623,6 +623,69 @@ end
     assert!(text.contains("1 passed, 0 failed"), "{text}");
 }
 
+/// `mock.slash` with Blizzard's chat (decision T233): the line goes through
+/// the chat's edit box as typed and sent, so Blizzard's own commands run
+/// (it moves them out of `SlashCmdList` into its hash tables, where the
+/// engine's lookup never found them), an addon's command too, and an
+/// unknown one gets the client's help line.
+#[test]
+fn slash_through_blizzards_chat() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");
+    if !source.join("camelot/Interface").exists() {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    }
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            (
+                "src/main.wowlua",
+                "SLASH_DEMOSLASH1 = \"/demoslash\"\nSlashCmdList.DEMOSLASH = function(msg) DEMO_SLASHED = msg end\n",
+            ),
+            (
+                "tests/slash.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+@test("typed into the chat")
+local function typed()
+    local other = mock.spawnUnit({ name = "Otherplayer", player = true, level = 60, reaction = "friendly" })
+    other:setDistance(3)
+    mock.player:target(other)
+    expect(C_AddOns.IsAddOnLoaded("Blizzard_InspectUI")).toBe(false)
+    mock.slash("/inspect")
+    expect(C_AddOns.IsAddOnLoaded("Blizzard_InspectUI")).toBe(true)
+    mock.slash("/demoslash hello")
+    expect((_G :: any).DEMO_SLASHED).toBe("hello")
+    mock.slash("/nosuchcommand")
+    local printed = mock.printed()
+    expect(printed[#printed]).toBe(HELP_TEXT_SIMPLE)
+end
+"#,
+            ),
+        ],
+    );
+    let manifest = dir.path().join("wowlua.json");
+    let text = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        text.replacen('{', r#"{ "test": { "blizzard-ui": true },"#, 1),
+    )
+    .unwrap();
+    let out = wowlua(dir.path())
+        .arg("test")
+        .env("WOWLUA_UI_SOURCE", &source)
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.status.success(), "{text}");
+    assert!(text.contains("1 passed, 0 failed"), "{text}");
+}
+
 /// Typed matchers (decision T214) and cases (T215) are checked when the
 /// tests compile.
 #[test]

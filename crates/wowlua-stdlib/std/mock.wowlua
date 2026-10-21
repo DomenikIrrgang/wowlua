@@ -979,7 +979,9 @@ end
 -- -------------------------------------------------------------- the user
 
 --- Runs a slash command line as the player typed it (a hardware event, as
---- a click or a key press).
+--- a click or a key press): with Blizzard's chat, typed into its edit box
+--- and sent with Enter (the client's own commands, emotes and help line);
+--- without it, the handler `SlashCmdList` names (decision T233).
 export function slash(line: string)
     engine().slash(line)
 end

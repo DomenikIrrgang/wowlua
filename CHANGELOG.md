@@ -10,6 +10,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- Tests: `mock.slash` runs Blizzard's own slash commands (`/inspect` and the others the game keeps in its own lists), which it silently skipped: with Blizzard's UI the line is typed into the chat and sent, as you do in the game, so an unknown command also gets the game's help line.
 - Tests: `GetText(token, gender)` gives the global string by its name (a woman's form for gender 3), as in the game; it gave nothing.
 - Tests: `mock.spawnUnit` and `mock.setPlayer` take `healthMax` and `powerMax` as declared (they were ignored: the unit's maximum was its current health). The types now know every unit field the engine reads (`factionGroup`, `pvp`, `classification`, the creature's type and family) and every unit method (`joinGroup`, `loot`, `openTrade`, `setInspect`, `setThreat`, `useSpell`), so strict tests can use them.
 - Tests: an inspected player's gear has its item ID, icon and quality (`GetInventoryItemID`, `GetInventoryItemTexture`, `GetInventoryItemQuality`), not only its link.
