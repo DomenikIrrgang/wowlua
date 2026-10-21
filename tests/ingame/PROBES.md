@@ -65,6 +65,17 @@ engine cannot get otherwise.
    (`C_SpecializationInfo.GetCombatConfigIDForSpecGroup`), and
    `PLAYER_TALENT_UPDATE` as level 5 is reached. Why: SuuUI's Talents
    tests use a stand-in for these.
+11. **Addon messages restricted?** In a raid out of an instance and out of
+   combat: `/dump C_ChatInfo.AreOutgoingAddonChatMessagesRestricted(),
+   C_ChatInfo.InChatMessagingLockdown()`, then
+   `/dump C_ChatInfo.SendAddonMessage("SuuUI", "x", "RAID")` and whether a
+   raid member's SuuUI hears it. Why: the full probe recorded `true` for
+   the first (alone, out of combat), so the engine answers `true` always;
+   SuuUI's raid planner no longer reads it (its specs were never shared).
+12. **Moving a raid member**: as leader, `SetRaidSubgroup(i, g)`; then
+   `GetRaidRosterInfo(i)` at once and after `GROUP_ROSTER_UPDATE` (with
+   `GetTime()` at each). Why: SuuUI's probe saw the update 0.4-0.7 s
+   later; the engine moves them and fires it at once.
 
 ## The answers battery's new calls
 
