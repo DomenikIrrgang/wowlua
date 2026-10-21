@@ -79,9 +79,12 @@ const SOCIAL: &[&str] = &[
 
 impl Identity {
     fn scrub(&self, text: &str) -> String {
-        // The session's addresses (`function: 0x…`).
-        let address = regex::Regex::new(r"(function|table|userdata|thread): 0x[0-9a-f]+")
-            .expect("a valid pattern");
+        // The session's addresses (`function: 0x…` on a Mac, `function:
+        // 00000145B10B9B50` on Windows).
+        let address = regex::Regex::new(
+            r"(function|table|userdata|thread): (?:0x[0-9a-f]+|[0-9A-F]{8,16}\b)",
+        )
+        .expect("a valid pattern");
         let text = address.replace_all(text, "$1");
         let mut out = text.replace(&self.guid, "Player-0000-00000000");
         // Any other player's GUID.
@@ -1545,8 +1548,11 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
             Err(e) => identity_from_fullprobe(&state).ok_or(e)?,
         }
     };
-    let version = get("probe.client").unwrap_or_else(|| "an unknown client".into());
     let stamps = stamps_of(&state);
+    // The battery's client, else the one the parts were stamped on.
+    let version = get("probe.client")
+        .or_else(|| stamps.values().next().map(|(_, client)| client.clone()))
+        .unwrap_or_else(|| "an unknown client".into());
 
     let scrubbed: Vec<(String, String)> = battery
         .iter()
@@ -1695,8 +1701,12 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
         && gate.take(&stamps, "answers", &version).is_some()
     {
         let mut entries = Vec::new();
-        for pair in answers.pairs::<String, String>() {
+        for pair in answers.pairs::<mlua::LuaString, mlua::LuaString>() {
             let (call, answer) = pair.map_err(|e| anyhow!("{e}"))?;
+            // Text the client gives in the system's own code page (a sound
+            // device's name on Windows) or binary, as `\xNN`.
+            let call = escaped_bytes(&call.as_bytes());
+            let answer = escaped_bytes(&answer.as_bytes());
             let answer = if SOCIAL.iter().any(|p| call.starts_with(p)) {
                 blank_strings(&answer)
             } else {
