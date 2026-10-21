@@ -157,11 +157,6 @@ fn nil(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Nil])
 }
 
-/// `C_ToyBox.GetToyFromIndex(i)`: -1, no toys (camelot).
-fn no_toy(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(-1.0)])
-}
-
 /// `C_Container.GetContainerItemCooldown(bag, slot)`: the item's running
 /// cooldown's start and duration, enabled; an empty slot not (recorded:
 /// a Hearthstone's hour, every other item 0, 0, 1, empty slots 0, 0, 0).
@@ -397,8 +392,13 @@ fn category_appearances(vm: &mut Vm, c: NativeCall) -> Ret {
         "C_TransmogCollection.GetCategoryAppearances({})",
         category as i64
     );
-    Ok(crate::recorded::lookup_text(vm, &call)
-        .unwrap_or_else(|| vec![Value::Table(vm.new_table())]))
+    let values = crate::recorded::lookup_text(vm, &call)
+        .unwrap_or_else(|| vec![Value::Table(vm.new_table())]);
+    // Collected and favourite as a test set them (`collected.rs`).
+    if let Some(v) = values.first().copied() {
+        crate::collected::patch_appearances(vm, v);
+    }
+    Ok(values)
 }
 
 /// `C_TransmogCollection.GetClassFilter()`: the player's class (recorded
@@ -431,6 +431,9 @@ fn class_appearance_sources(vm: &mut Vm, c: NativeCall) -> Ret {
     if let Some(v) =
         crate::recorded::lookup_text(vm, &exact).or_else(|| crate::recorded::lookup_text(vm, &all))
     {
+        if let Some(list) = v.first().copied() {
+            crate::collected::patch_sources(vm, list);
+        }
         return Ok(v);
     }
     if !crate::collections::appearance_known(visual) {
@@ -587,7 +590,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             container_item_cooldown,
         ),
         ("IsInventoryItemLocked", inventory_item_locked),
-        ("C_ToyBox.GetToyFromIndex", no_toy),
         ("GetUnitPowerBarInfo", nothing),
     ]
 }

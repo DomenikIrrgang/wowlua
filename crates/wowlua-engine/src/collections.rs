@@ -15,7 +15,9 @@
 //! (`C_PetBattles.IsInBattle`: false): those answer the "nothing collected"
 //! state. The journals' filters and searches are kept per VM (in the
 //! registry) so that a setter's value reads back; their defaults are
-//! unverified unless said.
+//! unverified unless said. The mounts, toys and collected appearances a
+//! test or its world profile sets take the recorded ones' place
+//! (`collected.rs`).
 
 use std::collections::BTreeMap;
 use std::sync::OnceLock;
@@ -337,7 +339,7 @@ fn no_filter_answer(key: &str) -> Vec<Value> {
 macro_rules! flag_filters {
     ($($get:ident, $set:ident: $key:literal, $default:literal, $indexed:literal;)*) => {
         $(
-            fn $get(vm: &mut Vm, c: NativeCall) -> Ret {
+            pub(crate) fn $get(vm: &mut Vm, c: NativeCall) -> Ret {
                 let (key, default) = if $indexed {
                     let i = num(vm, &c, 1).unwrap_or(0.0) as i64;
                     if let Some(e) = refused_index(vm, $key, i, false) {
@@ -352,7 +354,7 @@ macro_rules! flag_filters {
                 };
                 Ok(vec![Value::Bool(flag(vm, &key, default))])
             }
-            fn $set(vm: &mut Vm, c: NativeCall) -> Ret {
+            pub(crate) fn $set(vm: &mut Vm, c: NativeCall) -> Ret {
                 let (key, on, default) = if $indexed {
                     let i = num(vm, &c, 1).unwrap_or(0.0) as i64;
                     if let Some(e) = refused_index(vm, $key, i, true) {
@@ -525,6 +527,27 @@ fn set_toy_search(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// A journal's search as set (`mount.search`, `toy.search`).
+pub(crate) fn search(vm: &mut Vm, key: &str) -> String {
+    string(vm, key)
+}
+
+/// The mount journal's collected (1), not collected (2) or unusable (3)
+/// check.
+pub(crate) fn mount_filter(vm: &mut Vm, i: i64) -> bool {
+    flag(
+        vm,
+        &format!("mount.filter.collected.{i}"),
+        default_at("mount.filter.collected.", i, true),
+    )
+}
+
+/// One of the toy box's checks (`toy.filter.collected`, `…uncollected`,
+/// `…unusable`) with its default.
+pub(crate) fn toy_filter(vm: &mut Vm, key: &str, default: bool) -> bool {
+    flag(vm, key, default)
+}
+
 fn set_mount_search(vm: &mut Vm, c: NativeCall) -> Ret {
     let s = text(vm, &c, 1);
     set_string(vm, "mount.search", &s);
@@ -614,7 +637,7 @@ fn mount_values(vm: &mut Vm, name: &str, id: i64) -> Option<Vec<Value>> {
 /// Only the mounts whose info was recorded: addons read each listed
 /// mount's info and index by its spell (ElvUI's `E.MountIDs[spellID]`), so
 /// a mount listed without info breaks them.
-fn get_mount_ids(vm: &mut Vm, _c: NativeCall) -> Ret {
+pub(crate) fn get_mount_ids(vm: &mut Vm, _c: NativeCall) -> Ret {
     let ids: Vec<Value> = MOUNT_IDS
         .iter()
         .filter(|id| mount_answer(&format!("C_MountJournal.GetMountInfoByID({id})")).is_some())
@@ -623,8 +646,12 @@ fn get_mount_ids(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![list(vm, ids)])
 }
 
-/// Whether a journal mount with recorded info casts the spell.
+/// Whether a journal mount casts the spell: a set one (`collected.rs`),
+/// else one with recorded info.
 pub(crate) fn is_mount_spell(vm: &mut Vm, spell: f64) -> bool {
+    if let Some(set) = crate::collected::is_set_mount_spell(vm, spell) {
+        return set;
+    }
     MOUNT_IDS.iter().any(|id| {
         mount_values(vm, "C_MountJournal.GetMountInfoByID", i64::from(*id))
             .and_then(|v| v.get(1).copied())
@@ -635,7 +662,7 @@ pub(crate) fn is_mount_spell(vm: &mut Vm, spell: f64) -> bool {
 /// `C_MountJournal.GetMountInfoByID(mountID)` and `GetMountInfoExtraByID`:
 /// as the client answered, else nothing, noted (the mounts' data is not
 /// recorded; none is displayed, so none is collected here).
-fn get_mount_info_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
+pub(crate) fn get_mount_info_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
     let id = num(vm, &c, 1).unwrap_or(0.0) as i64;
     if let Some(v) = mount_values(vm, "C_MountJournal.GetMountInfoByID", id) {
         return Ok(v);
@@ -643,7 +670,7 @@ fn get_mount_info_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(recorded_or_noted(vm, "C_MountJournal.GetMountInfoByID", &c).unwrap_or_default())
 }
 
-fn get_mount_info_extra_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
+pub(crate) fn get_mount_info_extra_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
     let id = num(vm, &c, 1).unwrap_or(0.0) as i64;
     if let Some(v) = mount_values(vm, "C_MountJournal.GetMountInfoExtraByID", id) {
         return Ok(v);
@@ -673,12 +700,12 @@ fn mount_all_display_info(vm: &mut Vm, id: i64) -> Option<Value> {
     Some(list(vm, [Value::Table(entry)]))
 }
 
-fn get_mount_all_display_info(vm: &mut Vm, c: NativeCall) -> Ret {
+pub(crate) fn get_mount_all_display_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let id = num(vm, &c, 1).unwrap_or(0.0) as i64;
     Ok(mount_all_display_info(vm, id).into_iter().collect())
 }
 
-fn get_all_display_ids_for_mount(vm: &mut Vm, c: NativeCall) -> Ret {
+pub(crate) fn get_all_display_ids_for_mount(vm: &mut Vm, c: NativeCall) -> Ret {
     let id = num(vm, &c, 1).unwrap_or(0.0) as i64;
     let ids: Vec<Value> = mount_display(vm, id).into_iter().collect();
     Ok(vec![list(vm, ids)])
@@ -698,14 +725,14 @@ fn displayed_mount(vm: &Vm, c: &NativeCall) -> Option<i64> {
         .flatten()
 }
 
-fn get_displayed_mount_info_extra(vm: &mut Vm, c: NativeCall) -> Ret {
+pub(crate) fn get_displayed_mount_info_extra(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(id) = displayed_mount(vm, &c) else {
         return Ok(vec![]);
     };
     Ok(mount_values(vm, "C_MountJournal.GetMountInfoExtraByID", id).unwrap_or_default())
 }
 
-fn get_displayed_mount_all_display_info(vm: &mut Vm, c: NativeCall) -> Ret {
+pub(crate) fn get_displayed_mount_all_display_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(id) = displayed_mount(vm, &c) else {
         return Ok(vec![]);
     };
@@ -715,14 +742,14 @@ fn get_displayed_mount_all_display_info(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `C_MountJournal.GetMountFromSpell(spellID)`, `GetMountFromItem(itemID)`:
 /// as recorded, else none, noted (unverified: the mounts' spells and items
 /// are not recorded).
-fn get_mount_from_spell(vm: &mut Vm, c: NativeCall) -> Ret {
+pub(crate) fn get_mount_from_spell(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(
         recorded_or_noted(vm, "C_MountJournal.GetMountFromSpell", &c)
             .unwrap_or_else(|| vec![Value::Nil]),
     )
 }
 
-fn get_mount_from_item(vm: &mut Vm, c: NativeCall) -> Ret {
+pub(crate) fn get_mount_from_item(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(recorded_or_noted(vm, "C_MountJournal.GetMountFromItem", &c)
         .unwrap_or_else(|| vec![Value::Nil]))
 }
@@ -730,7 +757,7 @@ fn get_mount_from_item(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `C_MountJournal.GetMountUsabilityByID(mountID, checkIndoors)`: not
 /// usable, none being collected, with the client's reason (the full probe,
 /// 1.60.1: mount 3126 either way), nothing for an ID not in the journal.
-fn get_mount_usability(vm: &mut Vm, c: NativeCall) -> Ret {
+pub(crate) fn get_mount_usability(vm: &mut Vm, c: NativeCall) -> Ret {
     let id = num(vm, &c, 1).unwrap_or(0.0);
     if MOUNT_IDS.iter().any(|m| f64::from(*m) == id) {
         let why = vm.str("You have not collected this mount.");
@@ -758,7 +785,7 @@ fn is_valid_mount_type(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `C_MountJournal.GetIsFavorite(index)`: not a favorite, and none can be
 /// set (no mount displayed, recorded `GetNumDisplayedMounts`: 0).
-fn mount_is_favorite(_vm: &mut Vm, _c: NativeCall) -> Ret {
+pub(crate) fn mount_is_favorite(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(false), Value::Bool(false)])
 }
 
@@ -827,7 +854,7 @@ fn get_current_title(_vm: &mut Vm, _c: NativeCall) -> Ret {
 /// `C_ToyBox.GetToyInfo(itemID)`: a missing item ID errors as recorded
 /// ("Usage: GetToyInfo(itemID)"); else as recorded, or nothing, noted
 /// (the toys' data is not recorded; the account has none).
-fn get_toy_info(vm: &mut Vm, c: NativeCall) -> Ret {
+pub(crate) fn get_toy_info(vm: &mut Vm, c: NativeCall) -> Ret {
     if num(vm, &c, 1).is_none() {
         return Err(vm.error("Usage: GetToyInfo(itemID)"));
     }
@@ -1060,13 +1087,80 @@ fn source(vm: &Vm, c: &NativeCall, n: usize) -> Option<&'static str> {
 }
 
 /// `C_TransmogCollection.GetSourceInfo(sourceID)`: the source as recorded
-/// in its appearance's sources; nothing for one not recorded (unverified:
-/// the client adds the item's name and quality).
+/// in its appearance's sources, collected as a test set, its item's name
+/// and quality while the item is loaded; nothing for one not recorded.
 fn get_source_info(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(match source(vm, &c, 1) {
-        Some(entry) => vec![entry_value(vm, entry)],
+        Some(entry) => {
+            let v = entry_value(vm, entry);
+            if let Value::Table(t) = v {
+                let collected = entry_collected(vm, entry);
+                set_field(vm, t, "isCollected", Value::Bool(collected));
+                crate::collected::fill_item(vm, t);
+            }
+            vec![v]
+        }
         None => vec![],
     })
+}
+
+/// Whether a recorded source is collected: as a test set
+/// (`collected.rs`), else as recorded.
+fn entry_collected(vm: &Vm, entry: &str) -> bool {
+    crate::collected::source_collected(
+        vm,
+        field_num(entry, "sourceID"),
+        field_bool(entry, "isCollected"),
+    )
+}
+
+/// Whether an appearance is collected: one of its sources as a test set,
+/// else as recorded (the appearance's, else its sources').
+pub(crate) fn appearance_collected(vm: &Vm, visual: i64) -> bool {
+    let siblings = appearance_sources().get(&visual);
+    if crate::collected::sources_set(vm) {
+        return siblings.is_some_and(|s| {
+            s.iter()
+                .any(|id| crate::collected::source_collected(vm, Some(*id as f64), false))
+        });
+    }
+    match appearances().get(&visual) {
+        Some(a) => field_bool(a, "isCollected"),
+        None => siblings.is_some_and(|s| {
+            s.iter()
+                .filter_map(|id| sources().get(id))
+                .any(|e| field_bool(e, "isCollected"))
+        }),
+    }
+}
+
+/// Every recorded source of an appearance, as `GetAppearanceSources`'
+/// list (`AppearanceSourceInfo`, by source ID); none for an appearance the
+/// recordings do not hold.
+pub(crate) fn appearance_source_list(vm: &mut Vm, visual: i64) -> Option<Value> {
+    let ids = appearance_sources().get(&visual)?;
+    let entries: Vec<&'static str> = ids
+        .iter()
+        .filter_map(|id| sources().get(id).copied())
+        .collect();
+    let values: Vec<Value> = entries.iter().map(|e| entry_value(vm, e)).collect();
+    Some(list(vm, values))
+}
+
+/// A category's recorded appearances (`GetCategoryAppearances`), by visual
+/// ID.
+pub(crate) fn category_visuals(category: i64) -> Vec<i64> {
+    let call = format!("C_TransmogCollection.GetCategoryAppearances({category})");
+    crate::recorded::answers()
+        .get(call.as_str())
+        .map(|answer| {
+            list_entries(answer)
+                .into_iter()
+                .filter_map(|e| field_num(e, "visualID"))
+                .map(|v| v as i64)
+                .collect()
+        })
+        .unwrap_or_default()
 }
 
 /// `C_TransmogCollection.GetSourceItemID(source)`,
@@ -1103,9 +1197,10 @@ fn effective_category(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `PlayerHasTransmogItemModifiedAppearance(source)`,
-/// `PlayerKnowsSource(source)`: collected, as recorded.
+/// `PlayerKnowsSource(source)`: collected, as a test set, else as
+/// recorded.
 fn source_collected(vm: &mut Vm, c: NativeCall) -> Ret {
-    let collected = source(vm, &c, 1).is_some_and(|e| field_bool(e, "isCollected"));
+    let collected = source(vm, &c, 1).is_some_and(|e| entry_collected(vm, e));
     Ok(vec![Value::Bool(collected)])
 }
 
@@ -1150,11 +1245,8 @@ fn get_appearance_info_by_source(vm: &mut Vm, c: NativeCall) -> Ret {
         })
         .unwrap_or_default();
     let appearance = appearances().get(&(visual as i64)).copied();
-    let source_collected = field_bool(entry, "isCollected");
-    let appearance_collected = appearance
-        .map_or(siblings.iter().any(|e| field_bool(e, "isCollected")), |a| {
-            field_bool(a, "isCollected")
-        });
+    let source_collected = entry_collected(vm, entry);
+    let appearance_collected = appearance_collected(vm, visual as i64);
     let t = vm.new_table();
     for (k, v) in [
         ("appearanceID", Value::Num(visual)),
@@ -1219,6 +1311,7 @@ fn appearance_favorite(vm: &mut Vm, visual: i64) -> bool {
     let recorded = appearances()
         .get(&visual)
         .is_some_and(|a| field_bool(a, "isFavorite"));
+    let recorded = crate::collected::favorite_default(vm, visual, recorded);
     flag(vm, &format!("transmog.favorite.{visual}"), recorded)
 }
 
@@ -1232,9 +1325,41 @@ fn set_appearance_favorite(vm: &mut Vm, c: NativeCall) -> Ret {
     let recorded = appearances()
         .get(&visual)
         .is_some_and(|a| field_bool(a, "isFavorite"));
+    let recorded = crate::collected::favorite_default(vm, visual, recorded);
     let on = truthy(vm, &c, 2);
+    let was = appearance_favorite(vm, visual);
     set_flag(vm, &format!("transmog.favorite.{visual}"), on, recorded);
+    if was != on {
+        crate::collected::appearance_favorite_changed(vm, visual, on);
+    }
     Ok(vec![])
+}
+
+/// The appearance's source a favourite's event names, and its category:
+/// its first collected source, else its first (recorded: each appearance
+/// had one collected source).
+pub(crate) fn favorite_source(vm: &Vm, visual: i64) -> (Option<f64>, Option<f64>) {
+    let entries: Vec<&'static str> = appearance_sources()
+        .get(&visual)
+        .map(|ids| {
+            ids.iter()
+                .filter_map(|id| sources().get(id).copied())
+                .collect()
+        })
+        .unwrap_or_default();
+    let entry = entries
+        .iter()
+        .find(|e| entry_collected(vm, e))
+        .or(entries.first());
+    match entry {
+        Some(e) => (field_num(e, "sourceID"), field_num(e, "categoryID")),
+        None => (None, None),
+    }
+}
+
+/// Forgets the favourites the game set (a test setting them anew).
+pub(crate) fn reset_appearance_favorites(vm: &mut Vm) {
+    reset(vm, "transmog.favorite.");
 }
 
 fn has_transmog_favorites(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -1243,6 +1368,7 @@ fn has_transmog_favorites(vm: &mut Vm, _c: NativeCall) -> Ret {
         .filter(|(_, a)| field_bool(a, "isFavorite"))
         .map(|(v, _)| *v)
         .collect();
+    let recorded: Vec<i64> = crate::collected::set_favorites(vm).unwrap_or(recorded);
     let mut any = false;
     for v in recorded {
         any |= appearance_favorite(vm, v);
@@ -1345,7 +1471,7 @@ fn player_has_transmog(vm: &mut Vm, c: NativeCall) -> Ret {
     let has = item_id(vm, &c, 1).is_some_and(|item| {
         item_sources(item, Some(modifier))
             .iter()
-            .any(|e| field_bool(e, "isCollected"))
+            .any(|e| entry_collected(vm, e))
     });
     Ok(vec![Value::Bool(has)])
 }
@@ -1354,7 +1480,7 @@ fn player_has_transmog_by_item(vm: &mut Vm, c: NativeCall) -> Ret {
     let has = item_id(vm, &c, 1).is_some_and(|item| {
         item_sources(item, None)
             .iter()
-            .any(|e| field_bool(e, "isCollected"))
+            .any(|e| entry_collected(vm, e))
     });
     Ok(vec![Value::Bool(has)])
 }

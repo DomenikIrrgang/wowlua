@@ -185,13 +185,17 @@ pub fn recorded_call(vm: &mut Vm, c: NativeCall) -> Ret {
         Some(Value::Num(i)) => engine(vm).api.functions[i as usize].name.to_string(),
         _ => return Err(vm.error("a recorded function without its name")),
     };
-    // This call's own answer first (`/stdtest engine answers`), else the
-    // answer recorded at load.
-    if let Some(values) = crate::recorded::lookup(vm, &name, &c) {
-        return Ok(values);
+    Ok(recorded_answer(vm, &name, &c))
+}
+
+/// The recorded answer to a call of `name`: this call's own (`/stdtest
+/// engine answers`), else the answer recorded at load.
+pub fn recorded_answer(vm: &mut Vm, name: &str, c: &NativeCall) -> Vec<Value> {
+    if let Some(values) = crate::recorded::lookup(vm, name, c) {
+        return values;
     }
-    let values = recorded().get(&name).cloned().unwrap_or_default();
-    Ok(values.iter().map(|v| build(vm, v)).collect())
+    let values = recorded().get(name).cloned().unwrap_or_default();
+    values.iter().map(|v| build(vm, v)).collect()
 }
 
 // ------------------------------------------------- the neutral world

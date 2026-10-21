@@ -1,7 +1,7 @@
 -- A world profile (spec Tooling §16.1.4, decision T213), applied before the
 -- addon loads: the character, game data, money, stats, gear, bags, action
--- bars, chat channels, macros, place, auras, the units around, CVars,
--- bindings and saved variables.
+-- bars, chat channels, macros, collections, place, auras, the units
+-- around, CVars, bindings and saved variables.
 local mock, profile = ...
 local function each(t, fn)
     if type(t) == "table" then
@@ -41,6 +41,16 @@ each(profile.actions, function(slot, action)
 end)
 if type(profile.macros) == "table" then
     mock.setMacros(profile.macros)
+end
+-- The collections: the mount journal, the toy box, the wardrobe.
+if type(profile.mounts) == "table" then
+    mock.setMounts(profile.mounts)
+end
+if type(profile.toys) == "table" then
+    mock.setToys(profile.toys)
+end
+if type(profile.appearances) == "table" then
+    mock.setAppearances(profile.appearances)
 end
 if type(profile.channels) == "table" then
     mock.setChannels(profile.channels)

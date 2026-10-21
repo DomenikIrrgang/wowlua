@@ -6,10 +6,12 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### New
 
+- **Collections in tests**: `mock.setMounts`, `mock.setToys` and `mock.setAppearances` give the account its mounts, toys and collected appearances, and a world profile can hold them (`mounts`, `toys`, `appearances`). The mount journal, the toy box and the wardrobe then answer from them as the game does (their filters, search, favourites and events, recorded from the game), so a collections window can be tested without stubbing every journal call. `/stdtest snapshot` records them from your character.
 - Tests: `mock.setField(t, key, value)` sets any field, `nil` included, until the test ends, and puts it back untainted as `mock.stub` does. Taking a frame or a game API away with an assignment instead leaves Blizzard's field tainted for the rest of the file.
 
 ### Fixed
 
+- Tests: `C_TransmogCollection.GetAppearanceSources(appearanceID)` without a category gives the appearance's sources, as in the game (it gave nothing), and a source has its item's name and quality once the item is loaded.
 - Tests: a key bound to a button with `SetBindingClick` or `SetOverrideBindingClick` clicks it once, as in the game: only for the clicks it registered (by default the left button's release). It clicked on both the key's press and release, so a toggle opened and closed at once.
 - Tests: a model's or actor's `GetItemTransmogInfoList()` has an entry for every slot, so Blizzard's dressing room no longer errors ("attempt to index local 'mainHandInfo'").
 - Tests: `mock.slash` runs Blizzard's own slash commands (`/inspect` and the others the game keeps in its own lists), which it silently skipped: with Blizzard's UI the line is typed into the chat and sent, as you do in the game, so an unknown command also gets the game's help line.

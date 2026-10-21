@@ -4768,3 +4768,57 @@ end
     assert!(ok, "{text}");
     assert!(text.contains("3 passed, 0 failed"), "{text}");
 }
+
+/// A world profile's collections (decision T235): the mount journal, the
+/// toy box and the wardrobe answer from its `mounts`, `toys` and
+/// `appearances`, typed for strict tests, and stay drivable.
+#[test]
+fn world_profile_collections() {
+    let profile = r#"{
+  "items": { "801": { "name": "Toy Drum", "icon": 134001, "quality": 1 } },
+  "mounts": { "11": { "name": "Brown Horse", "spellID": 458, "icon": 132261, "favorite": true }, "12": { "name": "Zebra", "spellID": 459, "collected": false } },
+  "toys": { "801": { "favorite": true } },
+  "appearances": { "collected": [21598], "favorites": [11257] }
+}"#;
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            ("src/main.wowlua", "print(\"loaded\")\n"),
+            ("tests/profiles/collector.json", profile),
+            (
+                "tests/collections.test.wowlua",
+                r#"import test, expect, config from "wowlua:test"
+import * as mock from "wowlua:mock"
+config({ profile = "collector" })
+
+@test("the profile's collections")
+local function collections()
+    expect(C_MountJournal.GetNumMounts()).toBe(2)
+    expect(C_MountJournal.GetNumDisplayedMounts()).toBe(1)
+    expect((C_MountJournal.GetDisplayedMountInfo(1))).toBe("Brown Horse")
+    expect(select(11, C_MountJournal.GetMountInfoByID(12))).toBe(false)
+    expect(PlayerHasToy(801)).toBe(true)
+    expect(select(2, C_ToyBox.GetToyInfo(801))).toBe("Toy Drum")
+    expect(C_ToyBox.GetIsFavorite(801)).toBe(true)
+    expect(C_TransmogCollection.PlayerKnowsSource(21598)).toBe(true)
+    expect(C_TransmogCollection.GetIsAppearanceFavorite(11257)).toBe(true)
+end
+
+@test("changed during the test")
+local function changed()
+    mock.setMounts({ [20] = { name = "Swift Ram", spellID = 460, usable = false } })
+    mock.setToys({ [801] = { collected = false } })
+    mock.setAppearances({ collected = {} })
+    expect(C_MountJournal.GetNumMounts()).toBe(1)
+    expect(select(5, C_MountJournal.GetMountInfoByID(20))).toBe(false)
+    expect(PlayerHasToy(801)).toBe(false)
+    expect(C_TransmogCollection.PlayerKnowsSource(21598)).toBe(false)
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    assert!(out.contains("2 passed, 0 failed"), "{out}");
+}

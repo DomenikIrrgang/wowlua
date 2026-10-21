@@ -529,6 +529,65 @@ export function setMacros(macros: { account?: MacroData[], character?: MacroData
     engine().setMacros(macros)
 end
 
+--- A mount of the journal: its spell (its name and icon the spell's
+--- unless given), `sourceType` (the journal's source index, 0 by
+--- default), the journal's `source` and `description` texts, its creature
+--- `display`, `mountType` (230 by default), `modelScene` (4), `animID`
+--- (91), `visualKit` (0), `selfMount`, `noPreview` (the player's preview
+--- off), `faction` (0 the Horde's, 1 the Alliance's; none for both),
+--- `hidden` (not shown for this character), `collected` and `usable` (both
+--- true by default), `favorite`, `steadyFlight` and the `item` that teaches
+--- it (`GetMountFromItem`).
+export type MountData = {
+    spellID: number,
+    name?: string,
+    icon?: number | string,
+    sourceType?: number,
+    source?: string,
+    description?: string,
+    display?: number,
+    mountType?: number,
+    modelScene?: number,
+    animID?: number,
+    visualKit?: number,
+    selfMount?: boolean,
+    noPreview?: boolean,
+    faction?: number,
+    hidden?: boolean,
+    collected?: boolean,
+    usable?: boolean,
+    favorite?: boolean,
+    steadyFlight?: boolean,
+    item?: number,
+}
+
+--- The mount journal's mounts by mount ID, the whole journal
+--- (`MOUNT_JOURNAL_SEARCH_UPDATED`): `C_MountJournal`'s lists, info,
+--- favourites and usability answer from them; the displayed list follows
+--- the journal's filters and search.
+export function setMounts(mounts: { [number]: MountData })
+    engine().setMounts(mounts)
+end
+
+--- A toy of the toy box: `collected` and `usable` (both true by default),
+--- `favorite`, `fanfare` (new, not yet shown). Its name, icon and quality
+--- are its item's (`mock.defineItem`).
+export type ToyData = { collected?: boolean, usable?: boolean, favorite?: boolean, fanfare?: boolean }
+
+--- The toy box's toys by item ID, the whole box (`TOYS_UPDATED`):
+--- `C_ToyBox`, `PlayerHasToy` and the box's list (through its filters and
+--- search) answer from them.
+export function setToys(toys: { [number]: ToyData })
+    engine().setToys(toys)
+end
+
+--- The wardrobe's collected sources and favourite appearances, over the
+--- flavor's recorded catalogue (`TRANSMOG_COLLECTION_UPDATED`); a part left
+--- out stays as it was.
+export function setAppearances(appearances: { collected?: number[], favorites?: number[] })
+    engine().setAppearances(appearances)
+end
+
 --- A player of another group's group finder listing: its class by file
 --- (`WARRIOR`; `className` the class's name by default), its level (1 by
 --- default), its zone (`area`), its assigned role (`NONE` by default) and

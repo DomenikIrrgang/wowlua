@@ -262,6 +262,8 @@ pub struct World {
     pub input: crate::input::Input,
     /// The group finder: the player's listing, the searches (`lfg.rs`).
     pub lfg: crate::lfg::Lfg,
+    /// The collections a test set (`collected.rs`).
+    pub collected: crate::collected::Collected,
 }
 
 impl World {
