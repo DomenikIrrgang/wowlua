@@ -81,6 +81,7 @@ pub(crate) static CODES: &[CodeInfo] = &[
     CodeInfo { code: "E2059", summary: "Default value in a `declare event` / `declare message` parameter" },
     CodeInfo { code: "E2060", summary: "A local after an annotated one is named after a type (`local a, b: T, U`: the annotations go on each name, `local a: T, b: U`)" },
     CodeInfo { code: "W2060", summary: "Division or modulo by a literal zero: WoW raises \"Division by zero\" (any mode)" },
+    CodeInfo { code: "W2061", summary: "`a and nil or b` (or `false` in the middle) is always `b`: the falsy middle value makes the `or` take over (any mode)" },
     CodeInfo { code: "E3001", summary: "`super(...)` missing, repeated, or after use of `self`" },
     CodeInfo { code: "E3002", summary: "Cannot instantiate an abstract class" },
     CodeInfo { code: "E3003", summary: "Abstract method not implemented" },

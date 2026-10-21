@@ -499,7 +499,7 @@ fn get_bounds_rect(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
                 .filter(|c| e.world.widgets[c.0].shown),
         );
     }
-    let s = widgets::effective_scale(engine(vm), id);
+    let s = widgets::layout_scale(engine(vm), id);
     Ok(match rect {
         Some(r) => vec![
             Value::Num(r.0 / s),

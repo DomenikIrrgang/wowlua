@@ -2813,10 +2813,7 @@ fn the_engine_measures_each_screen_as_the_client_did() {
         let r = vm.call(f, &[]).expect("runs");
         let ours = string_table(&vm, r[0]);
         for (k, v) in &theirs {
-            // UIParent's own scale: the engine lays out at 1 (decision
-            // T237's next step); its size and every measure follow the
-            // screen's scale already.
-            if skip(k) || k.starts_with("UIParent size") {
+            if skip(k) {
                 continue;
             }
             compared += 1;

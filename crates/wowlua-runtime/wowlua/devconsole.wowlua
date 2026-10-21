@@ -912,7 +912,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 					cells = { (open and "- " or "+ ") .. e.message, "×" .. e.count, e.time },
 					colors = { C.emberText, C.ink, C.inkMuted },
 					onClick = function()
-						openError = open and nil or e
+						if open then openError = nil else openError = e end
 						console.refresh(true)
 					end,
 					onRightClick = function()

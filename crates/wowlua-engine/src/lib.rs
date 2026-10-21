@@ -278,6 +278,7 @@ pub fn set_screen(vm: &mut Vm, screen: Screen) {
         let widget = &mut engine_mut(vm).world.widgets[id.0];
         widget.width = w;
         widget.height = h;
+        widget.scale = screen.ui_parent_scale();
         widgets::layout_changed(vm);
     }
 }
@@ -650,10 +651,12 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
     // The frames the client starts with.
     let ui = widgets::create(vm, "Frame", Some("UIParent".into()), None);
     if let Some(id) = widgets::widget_of(vm, ui) {
+        engine_mut(vm).world.ui_parent = Some(id);
         let w = &mut engine_mut(vm).world.widgets[id.0];
         let (width, height) = Screen::default().ui_parent_size();
         w.width = width;
         w.height = height;
+        w.scale = Screen::default().ui_parent_scale();
         // Anchored to the screen at both corners, and protected
         // (`/stdtest engine`).
         w.protected = true;

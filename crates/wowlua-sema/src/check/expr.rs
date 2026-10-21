@@ -1560,6 +1560,7 @@ impl Checker<'_, '_> {
             }
             BinOp::Or => {
                 self.mark_probes(lhs);
+                self.and_falsy_or(lhs);
                 let l = self.check(lhs, expected);
                 let (_, f_flow) = self.narrow(lhs, &self.flow.clone());
                 let (_, f_guard) = self.narrow_guard(lhs, &self.guard.clone());
@@ -1643,6 +1644,37 @@ impl Checker<'_, '_> {
                 Types::NUMBER
             }
         }
+    }
+
+    /// `a and nil or b` (or `false` in the middle): the `or` always takes
+    /// over, so the result is always `b` (W2061, any mode).
+    fn and_falsy_or(&mut self, lhs: Expr<'_>) {
+        let mut l = lhs;
+        while let ExprKind::Paren(inner) = l.kind() {
+            l = inner;
+        }
+        let ExprKind::Binary {
+            op: BinOp::And,
+            rhs,
+            ..
+        } = l.kind()
+        else {
+            return;
+        };
+        let mut r = rhs;
+        while let ExprKind::Paren(inner) = r.kind() {
+            r = inner;
+        }
+        let word = match r.kind() {
+            ExprKind::Nil => "nil",
+            ExprKind::False => "false",
+            _ => return,
+        };
+        self.report(
+            "W2061",
+            l.span(),
+            format!("`a and {word} or b` is always `b`: the `{word}` makes the `or` take over (write `not a and b or {word}`, or an `if`)"),
+        );
     }
 
     /// A divisor that is the literal `0` (or a `const` of it): WoW raises

@@ -421,3 +421,42 @@ return layer, sublevel, s:GetText()",
     );
     assert_eq!(r, ["ARTWORK", "0", "Learning"]);
 }
+
+/// UIParent has the screen's scale (768 over 1080 on the default screen,
+/// decision T237): its children lay out and measure in its units; a frame
+/// ignoring its parents' scale at the same scale measures alike, and a
+/// frame without a parent counts in units of the unscaled screen.
+#[test]
+fn uiparent_has_the_screens_scale() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local root = CreateFrame('Frame', nil, UIParent)
+root:SetIgnoreParentScale(true)
+root:SetScale(UIParent:GetScale())
+root:SetAllPoints(UIParent)
+local a = root:CreateFontString()
+a:SetFont('Fonts\\FRIZQT__.TTF', 14, '')
+a:SetText('A title that is long')
+local b = UIParent:CreateFontString()
+b:SetFont('Fonts\\FRIZQT__.TTF', 14, '')
+b:SetText('A title that is long')
+local lone = CreateFrame('Frame')
+lone:SetAllPoints(UIParent)
+local child = CreateFrame('Frame', nil, UIParent)
+return tostring(UIParent:GetScale()), tostring(child:GetEffectiveScale()), tostring(root:GetWidth() == UIParent:GetWidth()),
+    tostring(a:GetStringWidth() == b:GetStringWidth()), tostring(lone:GetEffectiveScale()),
+    tostring(math.abs(lone:GetWidth() - UIParent:GetWidth() * UIParent:GetScale()) < 1e-3)",
+    );
+    assert_eq!(
+        r,
+        [
+            "0.71111112833023",
+            "0.71111112833023",
+            "true",
+            "true",
+            "1",
+            "true"
+        ]
+    );
+}

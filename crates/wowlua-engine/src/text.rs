@@ -119,17 +119,13 @@ pub fn font_of(vm: &Vm, id: WidgetId) -> Font {
 }
 
 /// The screen's pixel in the region's own units: 768 over the screen's
-/// height at its effective scale, UIParent's scale included (recorded at
-/// five screens).
+/// height at its effective scale, UIParent's scale included unless it
+/// ignores its parents' (recorded at five screens).
 pub fn pixel(vm: &Vm, id: WidgetId) -> f32 {
     let e = engine(vm);
-    let screen = e.screen;
     // In single floats (the recorded widths' last digit varies by a float
     // step from this, the pixels exact: unverified how the client rounds).
-    768.0f32
-        / (screen.height as f32
-            * screen.ui_parent_scale() as f32
-            * widgets::effective_scale(e, id) as f32)
+    768.0f32 / (e.screen.height as f32 * widgets::effective_scale(e, id) as f32)
 }
 
 /// The font's glyphs at a pixel size, and the factor a size outside the

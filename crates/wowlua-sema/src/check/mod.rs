@@ -1784,6 +1784,33 @@ mod tests {
         );
     }
 
+    /// `a and nil or b` (or `false` in the middle, in parentheses alike) is
+    /// W2061 in every mode: it is always `b` (decision S39).
+    #[test]
+    fn and_falsy_or_is_always_the_last() {
+        for src in [
+            "local a, b = true, 1\nprint(a and nil or b)\n",
+            "local a, b = true, 1\nprint((a and false) or b)\n",
+            "local a, b = true, 1\nprint(a and (nil) or b)\n",
+        ] {
+            for mode in [Mode::Strict, Mode::Basic] {
+                let d = check_source(src, mode);
+                assert!(
+                    d.iter().any(|x| x.code == Some("W2061")),
+                    "{src}\n{:#?}",
+                    codes(&d)
+                );
+            }
+        }
+        let src = "local a, b = true, 1\nprint(a and b or nil, not a and b or nil, a and 0 or b, a or nil)\n";
+        let d = check_source(src, Mode::Strict);
+        assert!(
+            !d.iter().any(|x| x.code == Some("W2061")),
+            "{src}\n{:#?}",
+            codes(&d)
+        );
+    }
+
     /// A literal binds as its base type at the top level only: inside a
     /// table type the declared element type binds as it is (tables are
     /// invariant).

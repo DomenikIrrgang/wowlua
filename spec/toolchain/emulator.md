@@ -259,9 +259,10 @@ The WoW API the VM's code calls, per flavor.
   `layoutSizes`).
 - **Screen and text.** The client draws on a screen (decision T237, a
   test setting): UIParent's size and scale and the screen functions follow
-  it, and text is measured from the client's recorded glyphs at the pixel
-  size the client renders, so string widths, wrapping and truncation are
-  the client's.
+  it, every region's effective scale includes UIParent's (unless it ignores
+  its parents' scale), and text is measured from the client's recorded
+  glyphs at the pixel size the client renders at that scale, so string
+  widths, wrapping and truncation are the client's.
 - **Not mocked.** A generated function without behaviour raises
   "`<name>` is not mocked" when called, unless the project provides a mock
   (Tooling §16.1.4), so gaps are visible instead of silently returning nil.

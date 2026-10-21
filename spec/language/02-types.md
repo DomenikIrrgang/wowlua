@@ -645,6 +645,11 @@ or modulo by a literal zero (or a `const` of it) is warning W2060 in every
 mode; a divisor that is zero only at run time cannot be seen and needs a
 guard (`if max > 0 then … end`).
 
+**`a and nil or b`** (or `false` in the middle) is always `b`: Lua's
+`and`/`or` choice cannot give a falsy middle value, the `or` takes over. It
+is warning W2061 in every mode (decision S39); write `not a and b or nil`
+when `b` is never falsy, or an `if`.
+
 Reading an undeclared global is warning W1001 in basic mode and error E1001
 in strict mode. **Assigning** an undeclared global, including through
 `function foo()` in a script, is warning W1002 in basic mode and error E1002 in

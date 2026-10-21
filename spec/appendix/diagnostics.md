@@ -178,6 +178,7 @@ is reported as the warning with the same number (`E2001` â†’ `W2001`, `E2030` â†
 | W2040 | Forbidden operation on a possibly secret value (basic mode) |
 | W2055 | Too many arguments to an unannotated function (basic mode). Replaces the second meaning of W2006. |
 | W2060 | Division or modulo by a literal zero: WoW raises "Division by zero" (any mode) |
+| W2061 | `a and nil or b` (or `false` in the middle) is always `b`: the falsy middle value makes the `or` take over (any mode) |
 | W2057 | `coroutine.yield` inside a function passed to `pcall`/`xpcall`/a C callback (cannot yield across that boundary in Lua 5.1) |
 | W3021 | Lexical binding named like a core decorator is not a re-export of it (ignored in decorator position) |
 | W3030 | Use of a `@deprecated` declaration |

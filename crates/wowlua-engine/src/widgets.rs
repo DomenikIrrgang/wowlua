@@ -112,6 +112,9 @@ pub struct Widget {
 #[derive(Default)]
 pub struct World {
     pub widgets: Vec<Widget>,
+    /// UIParent (made at install): the units the engine lays regions out
+    /// in, and the scale of the screen (decision T237).
+    pub ui_parent: Option<WidgetId>,
     /// Loose files' IDs given out (`GetFileIDFromPath`), by normalized path.
     pub file_ids: std::collections::HashMap<String, f64>,
     /// The NPC interactions open (`Enum.PlayerInteractionType`, as bits),
@@ -2316,7 +2319,7 @@ fn not_for_lines(vm: &mut Vm, id: WidgetId, method: &str) -> Result<(), LuaError
 
 /// `GetRect()`: left, bottom, width and height, nothing while unanchored.
 fn get_rect(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    let s = effective_scale(engine(vm), id);
+    let s = layout_scale(engine(vm), id);
     Ok(match bounds(vm, id, 0) {
         Some(b) if !engine(vm).world.widgets[id.0].points.is_empty() => vec![
             Value::Num(b.0 / s),
@@ -2475,7 +2478,7 @@ pub fn run_size_changes(vm: &mut Vm) {
         let Some(b) = bounds_in(vm, id, 0, &mut known) else {
             continue;
         };
-        let s = effective_scale(engine(vm), id);
+        let s = layout_scale(engine(vm), id);
         let now = (b.2 / s, b.3 / s);
         let w = &engine(vm).world.widgets[id.0];
         let set = (w.width, w.height);
@@ -2525,7 +2528,7 @@ pub(crate) fn laid_out_size(vm: &mut Vm, id: WidgetId) -> (f64, f64) {
         let r = &engine(vm).world.widgets[id.0];
         (r.width, r.height, !r.points.is_empty())
     };
-    let s = effective_scale(engine(vm), id);
+    let s = layout_scale(engine(vm), id);
     match bounds(vm, id, 0).filter(|_| anchored) {
         Some(b) => (b.2 / s, b.3 / s),
         None => unplaced_size(vm, id, w, h),
@@ -2655,6 +2658,27 @@ fn set_scale(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 
 fn get_scale(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(engine(vm).world.widgets[id.0].scale)])
+}
+
+/// The scale a region is laid out at: its effective scale over UIParent's,
+/// so regions' rectangles are in UIParent's units (exact for UIParent's
+/// descendants: their scales up to it; decision T237).
+pub fn layout_scale(e: &Engine, id: WidgetId) -> f64 {
+    let ui = e.world.ui_parent;
+    let mut s = 1.0;
+    let mut cur = Some(id);
+    while let Some(c) = cur {
+        if Some(c) == ui {
+            return s;
+        }
+        let w = &e.world.widgets[c.0];
+        s *= w.scale;
+        if w.ignore_parent_scale {
+            break;
+        }
+        cur = w.parent;
+    }
+    s / ui.map_or(1.0, |u| e.world.widgets[u.0].scale)
 }
 
 /// The scale times its parents' scales, up to one that ignores its
@@ -2799,7 +2823,7 @@ fn bounds_of(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -> Op
         let (w, h) = e.screen.ui_parent_size();
         return Some((0.0, 0.0, w, h));
     }
-    let s = effective_scale(e, id);
+    let s = layout_scale(e, id);
     // A scroll child without points of its own sits at its scroll frame's
     // top left (unverified: the scroll offsets are not applied).
     if w.points.is_empty() {
@@ -2881,7 +2905,7 @@ fn bounds_of(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -> Op
 }
 
 fn edge(vm: &mut Vm, id: WidgetId, f: fn((f64, f64, f64, f64)) -> f64) -> Ret {
-    let s = effective_scale(engine(vm), id);
+    let s = layout_scale(engine(vm), id);
     Ok(vec![
         bounds(vm, id, 0).map_or(Value::Nil, |b| Value::Num(f(b) / s)),
     ])
@@ -2904,7 +2928,7 @@ fn get_top(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 }
 
 fn get_center(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    let s = effective_scale(engine(vm), id);
+    let s = layout_scale(engine(vm), id);
     Ok(match bounds(vm, id, 0) {
         Some(b) => vec![
             Value::Num((b.0 + b.2 / 2.0) / s),
@@ -3630,7 +3654,7 @@ pub fn drag(vm: &mut Vm, id: WidgetId, dx: f64, dy: f64) {
     if let Some(m) = moved
         && let Some(b) = bounds(vm, m, 0)
     {
-        let s = effective_scale(engine(vm), m);
+        let s = layout_scale(engine(vm), m);
         let screen = vm.get_global("UIParent");
         let w = &mut engine_mut(vm).world.widgets[m.0];
         w.points = vec![Point {
@@ -3654,7 +3678,7 @@ pub fn size_by(vm: &mut Vm, grip: WidgetId, dw: f64, dh: f64) {
         && engine(vm).world.widgets[f.0].sizing
         && let Some(b) = bounds(vm, f, 0)
     {
-        let s = effective_scale(engine(vm), f);
+        let s = layout_scale(engine(vm), f);
         let screen = vm.get_global("UIParent");
         let w = &mut engine_mut(vm).world.widgets[f.0];
         let (min_w, min_h, max_w, max_h) = w.resize_bounds.unwrap_or_default();
