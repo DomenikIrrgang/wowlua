@@ -54,6 +54,32 @@ What it answers:
   and 60 (as significand and as fraction divisor); writing a field to a
   `C_Timer.NewTimer` and a `NewTicker` handle (both cancelled at once).
 
+## The collections (decision T235)
+
+About a minute, on any character, out of combat; the journals may stay
+closed. A character with a mount or a toy also records the events after its
+favourite changes; without, the probe records whether the client takes an
+uncollected one's (a new character has its starting gear's appearances).
+
+1. Type `/stdtest engine journals` and wait for the chat line `engine
+   journals: ... lines; type /reload so the file is written` (about 7
+   seconds). It records the order of the mount journal's and the toy box's
+   lists (as their filters are, and with every filter on, put back after),
+   and every event the client sends when one mount's, one toy's and one
+   appearance's favourite changes. Each favourite is changed and put back,
+   a second apart; the filters are put back as they were.
+2. Type `/stdtest snapshot`: the world profile now records the mount
+   journal (every mount with its info, and which uncollected ones the
+   character can ride), the toy box (its collected toys; its checks are
+   opened for it, put back after) and the wardrobe's collected sources. A toy
+   whose item the client has not loaded is asked for: run the snapshot a
+   second time a few seconds later so its name comes along.
+3. Type `/reload`, and keep a copy of `WTF/Account/<account>/SavedVariables/StdTest.lua`.
+4. Then `/stdtest engine journals2` (about 8 seconds, any character): each
+   filter's CVar on its own, the toy box's list a second after its filters
+   change, every toy, and an appearance's favourite in three more categories,
+   on and off. Everything is put back. `/reload` after.
+
 ## The method probe
 
 About 10 to 15 minutes, after the answers battery, out of combat, standing

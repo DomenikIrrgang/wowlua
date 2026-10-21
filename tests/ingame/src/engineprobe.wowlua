@@ -29,7 +29,8 @@ import takeSnapshot from "/snapshot"
 import stamp from "/state"
 import answersProbe from "/answers"
 import mapsProbe from "/maps"
-import collectionsProbe from "/collections"
+import collectionsProbe, journalsProbe, journals2Probe from "/collections"
+import leftoversProbe from "/leftovers"
 import traitsProbe from "/traits"
 import tradeSkillProbe from "/tradeskill"
 import achievementsProbe from "/achievements"
@@ -1789,6 +1790,15 @@ export function engineProbe(arg: string?)
         return
     elseif words[1] == "collections" then
         collectionsProbe()
+        return
+    elseif words[1] == "journals" then
+        journalsProbe()
+        return
+    elseif words[1] == "journals2" then
+        journals2Probe()
+        return
+    elseif words[1] == "leftovers" then
+        leftoversProbe()
         return
     elseif words[1] == "traits" then
         traitsProbe()

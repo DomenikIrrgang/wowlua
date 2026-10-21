@@ -1,0 +1,113 @@
+-- /stdtest engine leftovers: the one-line checks PROBES.md listed, in one
+-- run (into StdTestState.engineLeftovers): the binding list (commands
+-- only), Judgement's cost, info and harmfulness, the machine's time zone,
+-- and the guild's rank flags, allowed shifts, roster (rank, level and
+-- class only, offline shown and not), trade skills and club (its texts
+-- blanked). Read-only, but for the roster's offline setting, put back.
+import state from "/state"
+import stamp from "/state"
+import say from "/harness"
+
+local function pack(...: any): { n: number, [number]: any }
+    return { n = select("#", ...), ... }
+end
+
+--- Text the guild wrote (names, descriptions, messages) blanked.
+const BLANKED: { [string]: boolean } = {
+    name = true, shortName = true, description = true, broadcast = true, motd = true, avatarId = false,
+}
+
+--- A value in full: tables to depth 3, keys sorted, secrets marked.
+local function show(v: any, depth: number): string
+    if issecretvalue(v) then
+        return `secret {type(v)}`
+    end
+    if type(v) == "string" then
+        return `string {v}`
+    end
+    if type(v) ~= "table" then
+        return `{type(v)} {tostring(v)}`
+    end
+    if depth >= 3 then
+        return "table"
+    end
+    const keys: string[] = {}
+    const values: { [string]: any } = {}
+    for k, inner in pairs(v :: table) do
+        const key = tostring(k)
+        keys[#keys + 1] = key
+        values[key] = inner
+    end
+    table.sort(keys)
+    const parts: string[] = {}
+    for _, k in ipairs(keys) do
+        const inner = values[k]
+        if BLANKED[k] and type(inner) == "string" then
+            parts[#parts + 1] = `{k}=string <{#inner} characters>`
+        else
+            parts[#parts + 1] = `{k}={show(inner, depth + 1)}`
+        end
+    end
+    return `\{{table.concat(parts, ",")}\}`
+end
+
+export function leftoversProbe()
+    const st = state() :: any
+    const out: { [string]: string } = {}
+    st.engineLeftovers = out
+    local function ask(label: string, f: () -> ...any)
+        local ok, packed = pcall(function(): ...any return pack(f()) end)
+        if not ok then
+            out[label] = `error: {tostring(packed)}`
+            return
+        end
+        const p = packed :: { n: number, [number]: any }
+        const parts: string[] = {}
+        for i = 1, p.n do
+            parts[#parts + 1] = show(p[i], 0)
+        end
+        out[label] = `{p.n}: {table.concat(parts, ", ")}`
+    end
+    -- The binding list: each binding's command and category.
+    const bindings: string[] = {}
+    for i = 1, GetNumBindings() do
+        local command, category = GetBinding(i)
+        bindings[#bindings + 1] = `{i}\t{tostring(command)}\t{tostring(category)}`
+    end
+    out["bindings"] = table.concat(bindings, "\n")
+    -- Judgement: its cost, info, harmfulness.
+    ask("C_Spell.GetSpellPowerCost(20271)", function(): ...any return C_Spell.GetSpellPowerCost(20271) end)
+    ask("C_Spell.GetSpellInfo(20271)", function(): ...any return C_Spell.GetSpellInfo(20271) end)
+    ask("C_Spell.IsSpellHarmful(20271)", function(): ...any return C_Spell.IsSpellHarmful(20271) end)
+    -- The machine's time zone.
+    ask("date(\"%H:%M\"), date(\"!%H:%M\")", function(): ...any return date("%H:%M"), date("!%H:%M") end)
+    ask("time(), GetServerTime()", function(): ...any return time(), GetServerTime() end)
+    -- The guild.
+    if IsInGuild() then
+        for rank = 1, 10 do
+            ask(`C_GuildInfo.GuildControlGetRankFlags({rank})`, function(): ...any return C_GuildInfo.GuildControlGetRankFlags(rank) end)
+            ask(`GuildControlGetAllowedShifts({rank})`, function(): ...any return GuildControlGetAllowedShifts(rank) end)
+        end
+        const offline = GetGuildRosterShowOffline()
+        for _, show_ in ipairs({ true, false }) do
+            SetGuildRosterShowOffline(show_)
+            const rows: string[] = {}
+            for i = 1, GetNumGuildMembers() do
+                local _, _, rankIndex, level, class = GetGuildRosterInfo(i)
+                rows[#rows + 1] = `{i} {tostring(rankIndex)} {tostring(level)} {tostring(class)}`
+            end
+            out[`roster offline={tostring(show_)}`] = `{GetNumGuildMembers()}: {table.concat(rows, "; ")}`
+        end
+        SetGuildRosterShowOffline(offline)
+        for i = 1, 12 do
+            ask(`GetGuildTradeSkillInfo({i})`, function(): ...any return GetGuildTradeSkillInfo(i) end)
+        end
+        const club = C_Club.GetGuildClubId() or ""
+        ask("C_Club.GetClubInfo(C_Club.GetGuildClubId())", function(): ...any return C_Club.GetClubInfo(club) end)
+        ask("C_Club.GetClubPrivileges(C_Club.GetGuildClubId())", function(): ...any return C_Club.GetClubPrivileges(club) end)
+    else
+        out["guild"] = "not in a guild"
+    end
+    stamp("leftovers")
+    say(`engine leftovers: {#bindings} bindings recorded{IsInGuild() and ", the guild too" or " (not in a guild)"}; type /reload so the file is written`)
+end

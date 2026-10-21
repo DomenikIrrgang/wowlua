@@ -113,3 +113,341 @@ export function collectionsProbe()
     stamp("collections")
     say(`engine collections: {#categories} categories, {appearances} appearances, {math.floor(bytes / 1024)} KB; type /reload so the file is written`)
 end
+
+--- A journal's list as it shows now: each entry's line.
+local function mountList(): string[]
+    const out: string[] = {}
+    for i = 1, C_MountJournal.GetNumDisplayedMounts() do
+        local name, _, _, _, isUsable, _, isFavorite, _, _, _, isCollected, mountID = C_MountJournal.GetDisplayedMountInfo(i)
+        out[#out + 1] = `{i} {tostring(mountID)} {tostring(name)} favorite={tostring(isFavorite)} collected={tostring(isCollected)} usable={tostring(isUsable)}`
+    end
+    return out
+end
+
+local function toyList(): string[]
+    const out: string[] = {}
+    for i = 1, C_ToyBox.GetNumFilteredToys() do
+        const id = C_ToyBox.GetToyFromIndex(i)
+        local _, name, _, isFavorite = C_ToyBox.GetToyInfo(id)
+        out[#out + 1] = `{i} {tostring(id)} {tostring(name)} favorite={tostring(isFavorite)} collected={tostring(PlayerHasToy(id))} usable={tostring(C_ToyBox.IsToyUsable(id))}`
+    end
+    return out
+end
+
+--- `/stdtest engine journals`: the order of the mount journal's and the
+--- toy box's lists (as their filters are, and every filter on), and every
+--- event the client sends when a mount's, a toy's and an appearance's
+--- favourite changes (each changed and put back, a second apart), into
+--- StdTestState.engineJournals (decision T235). Run it on a character with
+--- some mounts, toys and appearances; the journals may be closed.
+export function journalsProbe()
+    const st = state() :: any
+    const log: string[] = {}
+    const out: { [string]: any } = { log = log }
+    st.engineJournals = out
+    const start = GetTime()
+    local function note(what: string)
+        if #log < 1500 then
+            log[#log + 1] = `{string.format("%.3f", GetTime() - start)} {what}`
+        end
+    end
+    -- The lists as the filters are, then with every collected filter on
+    -- (put back after).
+    out.mountFilters = `collected={tostring(C_MountJournal.GetCollectedFilterSetting(1))} notCollected={tostring(C_MountJournal.GetCollectedFilterSetting(2))} unusable={tostring(C_MountJournal.GetCollectedFilterSetting(3))}`
+    out.toyFilters = `collected={tostring(C_ToyBox.GetCollectedShown())} uncollected={tostring(C_ToyBox.GetUncollectedShown())} unusable={tostring(C_ToyBox.GetUnusableShown())}`
+    out.mounts = mountList()
+    out.toys = toyList()
+    const mountWas = { C_MountJournal.GetCollectedFilterSetting(1), C_MountJournal.GetCollectedFilterSetting(2), C_MountJournal.GetCollectedFilterSetting(3) }
+    for i = 1, 3 do
+        C_MountJournal.SetCollectedFilterSetting(i, true)
+    end
+    const toyWas = { C_ToyBox.GetCollectedShown(), C_ToyBox.GetUncollectedShown(), C_ToyBox.GetUnusableShown() }
+    C_ToyBox.SetCollectedShown(true)
+    C_ToyBox.SetUncollectedShown(true)
+    C_ToyBox.SetUnusableShown(true)
+    out.mountsAll = mountList()
+    out.toysAll = toyList()
+    for i = 1, 3 do
+        C_MountJournal.SetCollectedFilterSetting(i, mountWas[i])
+    end
+    C_ToyBox.SetCollectedShown(toyWas[1])
+    C_ToyBox.SetUncollectedShown(toyWas[2])
+    C_ToyBox.SetUnusableShown(toyWas[3])
+    -- Every event from here.
+    const recorder = CreateFrame("Frame")
+    recorder:SetScript("OnEvent", function(_, event: string, ...: any)
+        if event == "COMBAT_LOG_EVENT_UNFILTERED" then
+            return
+        end
+        const parts: string[] = {}
+        for i = 1, select("#", ...) do
+            parts[#parts + 1] = show((select(i, ...)), 2)
+        end
+        note(`{event}({table.concat(parts, "; ")})`)
+    end)
+    recorder:RegisterAllEvents()
+    -- A collected mount's favourite, by its index in the list.
+    local mountID: number? = nil
+    local mountFavorite = false
+    for i = 1, C_MountJournal.GetNumDisplayedMounts() do
+        local _, canFavorite = C_MountJournal.GetIsFavorite(i)
+        if canFavorite and mountID == nil then
+            mountID = C_MountJournal.GetDisplayedMountID(i)
+            mountFavorite = (C_MountJournal.GetIsFavorite(i))
+            note(`-- C_MountJournal.SetIsFavorite({i}, {tostring(not mountFavorite)}) for mount {tostring(mountID)}`)
+            C_MountJournal.SetIsFavorite(i, not mountFavorite)
+            note("-- returned")
+        end
+    end
+    -- None collected: whether the client takes an uncollected one's (the
+    -- not collected ones shown for it, put back after).
+    local triedMount: number? = nil
+    const notCollectedWas = C_MountJournal.GetCollectedFilterSetting(2)
+    if mountID == nil then
+        C_MountJournal.SetCollectedFilterSetting(2, true)
+        if C_MountJournal.GetNumDisplayedMounts() > 0 then
+            triedMount = C_MountJournal.GetDisplayedMountID(1)
+            local fav, can = C_MountJournal.GetIsFavorite(1)
+            note(`-- uncollected mount {tostring(triedMount)}: GetIsFavorite(1) = {tostring(fav)}, {tostring(can)}; SetIsFavorite(1, true)`)
+            C_MountJournal.SetIsFavorite(1, true)
+            local after, canAfter = C_MountJournal.GetIsFavorite(1)
+            note(`-- returned; GetIsFavorite(1) = {tostring(after)}, {tostring(canAfter)}`)
+        end
+    end
+    local function putMountBack()
+        if triedMount ~= nil then
+            for i = 1, C_MountJournal.GetNumDisplayedMounts() do
+                if C_MountJournal.GetDisplayedMountID(i) == triedMount then
+                    note(`-- uncollected mount a second later: GetIsFavorite({i}) = {tostring((C_MountJournal.GetIsFavorite(i)))}`)
+                    if C_MountJournal.GetIsFavorite(i) then
+                        C_MountJournal.SetIsFavorite(i, false)
+                    end
+                end
+            end
+            C_MountJournal.SetCollectedFilterSetting(2, notCollectedWas)
+        end
+        if mountID == nil then
+            return
+        end
+        out.mountsAfterFavorite = mountList()
+        for i = 1, C_MountJournal.GetNumDisplayedMounts() do
+            if C_MountJournal.GetDisplayedMountID(i) == mountID then
+                note(`-- C_MountJournal.SetIsFavorite({i}, {tostring(mountFavorite)}) (back)`)
+                C_MountJournal.SetIsFavorite(i, mountFavorite)
+                return
+            end
+        end
+    end
+    -- A collected toy's.
+    local toyID: number? = nil
+    local toyFavorite = false
+    local function toggleToy()
+        for i = 1, C_ToyBox.GetNumFilteredToys() do
+            const id = C_ToyBox.GetToyFromIndex(i)
+            if toyID == nil and PlayerHasToy(id) then
+                toyID = id
+                toyFavorite = C_ToyBox.GetIsFavorite(id)
+                note(`-- C_ToyBox.SetIsFavorite({id}, {tostring(not toyFavorite)})`)
+                C_ToyBox.SetIsFavorite(id, not toyFavorite)
+                note("-- returned")
+            end
+        end
+        -- None collected: whether the client takes an uncollected one's.
+        if toyID == nil then
+            const shownWas = C_ToyBox.GetUncollectedShown()
+            C_ToyBox.SetUncollectedShown(true)
+            const id = C_ToyBox.GetToyFromIndex(1)
+            if id and id > 0 then
+                note(`-- uncollected toy {id}: GetIsFavorite = {tostring(C_ToyBox.GetIsFavorite(id))}; SetIsFavorite({id}, true)`)
+                C_ToyBox.SetIsFavorite(id, true)
+                note(`-- returned; GetIsFavorite = {tostring(C_ToyBox.GetIsFavorite(id))}`)
+                if C_ToyBox.GetIsFavorite(id) then
+                    C_ToyBox.SetIsFavorite(id, false)
+                end
+            end
+            C_ToyBox.SetUncollectedShown(shownWas)
+        end
+    end
+    local function putToyBack()
+        if toyID ~= nil then
+            out.toysAfterFavorite = toyList()
+            note(`-- C_ToyBox.SetIsFavorite({tostring(toyID)}, {tostring(toyFavorite)}) (back)`)
+            C_ToyBox.SetIsFavorite(toyID, toyFavorite)
+        end
+    end
+    -- A collected appearance's.
+    local visualID: number? = nil
+    local visualFavorite = false
+    local function toggleAppearance()
+        for cat = 1, 11 do
+            for _, a in ipairs(C_TransmogCollection.GetCategoryAppearances(cat) or {}) do
+                if visualID == nil and a.isCollected and not a.isHideVisual then
+                    visualID = a.visualID
+                    visualFavorite = a.isFavorite
+                    note(`-- C_TransmogCollection.SetIsAppearanceFavorite({a.visualID}, {tostring(not a.isFavorite)})`)
+                    C_TransmogCollection.SetIsAppearanceFavorite(a.visualID, not a.isFavorite)
+                    note("-- returned")
+                end
+            end
+        end
+    end
+    local function putAppearanceBack()
+        if visualID ~= nil then
+            note(`-- C_TransmogCollection.SetIsAppearanceFavorite({tostring(visualID)}, {tostring(visualFavorite)}) (back)`)
+            C_TransmogCollection.SetIsAppearanceFavorite(visualID, visualFavorite)
+        end
+    end
+    say("engine journals: recording, about 7 seconds")
+    C_Timer.After(1, function()
+        putMountBack()
+        C_Timer.After(1, function()
+            toggleToy()
+            C_Timer.After(1, function()
+                putToyBack()
+                C_Timer.After(1, function()
+                    toggleAppearance()
+                    C_Timer.After(1, function()
+                        putAppearanceBack()
+                        C_Timer.After(2, function()
+                            recorder:UnregisterAllEvents()
+                            stamp("journals")
+                            say(`engine journals: {#out.mounts} mounts, {#out.toys} toys shown, {#log} lines; type /reload so the file is written`)
+                        end)
+                    end)
+                end)
+            end)
+        end)
+    end)
+end
+
+--- `/stdtest engine journals2`: what the first journals probe left open
+--- (decision T235): the filters' CVars for each filter on its own, the toy
+--- box's list a second after its filters change (the client refilters on a
+--- later frame), every toy as a profile's `toys`, and the events of an
+--- appearance's favourite in three more categories, on and off. Every
+--- filter and favourite is put back. Into StdTestState.engineJournals2.
+export function journals2Probe()
+    const st = state() :: any
+    const log: string[] = {}
+    const out: { [string]: any } = { log = log }
+    st.engineJournals2 = out
+    const start = GetTime()
+    local function note(what: string)
+        if #log < 1500 then
+            log[#log + 1] = `{string.format("%.3f", GetTime() - start)} {what}`
+        end
+    end
+    const recorder = CreateFrame("Frame")
+    recorder:SetScript("OnEvent", function(_, event: string, ...: any)
+        if event == "COMBAT_LOG_EVENT_UNFILTERED" or event == "ACTION_RANGE_CHECK_UPDATE"
+            or event == "SPELL_ACTIVATION_OVERLAY_HIDE" or event:find("^UNIT_") then
+            return
+        end
+        const parts: string[] = {}
+        for i = 1, select("#", ...) do
+            parts[#parts + 1] = show((select(i, ...)), 2)
+        end
+        note(`{event}({table.concat(parts, "; ")})`)
+    end)
+    recorder:RegisterAllEvents()
+    -- The mount journal's filters, each on its own.
+    const mountWas = { C_MountJournal.GetCollectedFilterSetting(1), C_MountJournal.GetCollectedFilterSetting(2), C_MountJournal.GetCollectedFilterSetting(3) }
+    note(`-- mount filters {tostring(mountWas[1])} {tostring(mountWas[2])} {tostring(mountWas[3])}: cvar {tostring(C_CVar.GetCVar("mountJournalGeneralFilters"))}`)
+    for i = 1, 3 do
+        for _, on in ipairs({ false, true }) do
+            C_MountJournal.SetCollectedFilterSetting(i, on)
+            note(`-- mount filter {i} {tostring(on)}: cvar {tostring(C_CVar.GetCVar("mountJournalGeneralFilters"))} shown {C_MountJournal.GetNumDisplayedMounts()}`)
+        end
+    end
+    -- The toy box's.
+    const toyWas = { C_ToyBox.GetCollectedShown(), C_ToyBox.GetUncollectedShown(), C_ToyBox.GetUnusableShown() }
+    note(`-- toy filters {tostring(toyWas[1])} {tostring(toyWas[2])} {tostring(toyWas[3])}: cvar {tostring(C_CVar.GetCVar("toyBoxCollectedFilters"))} shown {C_ToyBox.GetNumFilteredToys()} of {C_ToyBox.GetNumToys()}`)
+    const setters = { C_ToyBox.SetCollectedShown, C_ToyBox.SetUncollectedShown, C_ToyBox.SetUnusableShown }
+    for i = 1, 3 do
+        for _, on in ipairs({ false, true }) do
+            setters[i](on)
+            note(`-- toy filter {i} {tostring(on)}: cvar {tostring(C_CVar.GetCVar("toyBoxCollectedFilters"))} shown {C_ToyBox.GetNumFilteredToys()}`)
+        end
+    end
+    C_ToyBox.SetFilterString("")
+    -- A second later: the toy box refiltered.
+    C_Timer.After(1, function()
+        note(`-- a second later: shown {C_ToyBox.GetNumFilteredToys()} of {C_ToyBox.GetNumToys()}, learned {C_ToyBox.GetNumLearnedDisplayedToys()}, total {C_ToyBox.GetNumTotalDisplayedToys()}`)
+        const toys: { [number]: table } = {}
+        const order: string[] = {}
+        for i = 1, C_ToyBox.GetNumFilteredToys() do
+            const id = C_ToyBox.GetToyFromIndex(i)
+            if id and id > 0 then
+                local _, name, icon, isFavorite, hasFanfare, quality = C_ToyBox.GetToyInfo(id)
+                order[#order + 1] = `{i} {id} {tostring(name)} favorite={tostring(isFavorite)} collected={tostring(PlayerHasToy(id))} usable={tostring(C_ToyBox.IsToyUsable(id))}`
+                toys[id] = {
+                    collected = PlayerHasToy(id),
+                    favorite = isFavorite,
+                    usable = C_ToyBox.IsToyUsable(id),
+                    fanfare = hasFanfare,
+                    name = name,
+                    icon = icon,
+                    quality = quality,
+                }
+            end
+        end
+        out.toysOrder = order
+        out.toys = toys
+        -- An uncollected toy's favourite, if there is one.
+        for id, t in pairs(toys) do
+            if not t.collected and out.toyTried == nil then
+                out.toyTried = id
+                note(`-- uncollected toy {id}: SetIsFavorite({id}, true)`)
+                C_ToyBox.SetIsFavorite(id, true)
+                note(`-- returned; GetIsFavorite = {tostring(C_ToyBox.GetIsFavorite(id))}`)
+                if C_ToyBox.GetIsFavorite(id) then
+                    C_ToyBox.SetIsFavorite(id, false)
+                end
+            end
+        end
+        for i = 1, 3 do
+            setters[i](toyWas[i])
+        end
+        for i = 1, 3 do
+            C_MountJournal.SetCollectedFilterSetting(i, mountWas[i])
+        end
+        -- Appearances in three more categories: the chest's, a weapon's,
+        -- the feet's; on, then off a second later.
+        const picked: { visual: number, favorite: boolean, cat: number }[] = {}
+        for _, cat in ipairs({ 4, 11, 14, 15, 18, 19, 22, 1, 3, 5, 6, 7, 8, 9, 10 }) do
+            if #picked < 3 then
+                for _, a in ipairs(C_TransmogCollection.GetCategoryAppearances(cat) or {}) do
+                    if #picked < 3 and a.isCollected and not a.isHideVisual and (#picked == 0 or picked[#picked].cat ~= cat) then
+                        picked[#picked + 1] = { visual = a.visualID, favorite = a.isFavorite, cat = cat }
+                    end
+                end
+            end
+        end
+        local function step(n: number)
+            const p = picked[n]
+            if p == nil then
+                C_Timer.After(1, function()
+                    recorder:UnregisterAllEvents()
+                    stamp("journals2")
+                    say(`engine journals2: {#log} lines; type /reload so the file is written`)
+                end)
+                return
+            end
+            const sources: string[] = {}
+            for _, s in ipairs(C_TransmogCollection.GetAppearanceSources(p.visual, p.cat) or {}) do
+                sources[#sources + 1] = `{s.sourceID}{s.isCollected and "*" or ""}`
+            end
+            note(`-- category {p.cat} appearance {p.visual} (sources {table.concat(sources, ",")}): SetIsAppearanceFavorite({p.visual}, {tostring(not p.favorite)})`)
+            C_TransmogCollection.SetIsAppearanceFavorite(p.visual, not p.favorite)
+            note("-- returned")
+            C_Timer.After(1, function()
+                note(`-- SetIsAppearanceFavorite({p.visual}, {tostring(p.favorite)}) (back)`)
+                C_TransmogCollection.SetIsAppearanceFavorite(p.visual, p.favorite)
+                note("-- returned")
+                C_Timer.After(1, function() step(n + 1) end)
+            end)
+        end
+        step(1)
+    end)
+    say("engine journals2: recording, about 8 seconds")
+end

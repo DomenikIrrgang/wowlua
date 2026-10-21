@@ -1,6 +1,6 @@
 -- `/stdtest snapshot`: the world the character is in, as a world profile
 -- for `wowlua test` (decision T213): the character, money, stats, gear,
--- bags, place, auras, the target, CVars that differ from their defaults
+-- bags, place, auras, the target, CVars that differ from their defaults,
 -- and the key bindings. Saved in StdTestState.snapshot (after /reload);
 -- `cargo xtask profile <StdTest.lua> <out.json>` writes the profile with
 -- the player's name, realm and GUIDs scrubbed. Read-only calls only.
@@ -507,6 +507,130 @@ local function stats(): table
     return out
 end
 
+--- The mount journal: every mount with its info, as `mock.setMounts`
+--- takes it (decision T235). Whether the character can ride one not
+--- collected is what the journal's unusable check hides (the not collected
+--- check on for it, both put back; recorded: it hid 37 of 90 uncollected
+--- mounts); a collected one's is its own.
+local function mounts(): table
+    const out: { [number]: table } = {}
+    const MJ = C_MountJournal
+    const notCollected = MJ.GetCollectedFilterSetting(2)
+    const unusable = MJ.GetCollectedFilterSetting(3)
+    MJ.SetCollectedFilterSetting(2, true)
+    MJ.SetCollectedFilterSetting(3, false)
+    const rideable: { [number]: boolean } = {}
+    for i = 1, MJ.GetNumDisplayedMounts() do
+        rideable[MJ.GetDisplayedMountID(i)] = true
+    end
+    MJ.SetCollectedFilterSetting(2, notCollected)
+    MJ.SetCollectedFilterSetting(3, unusable)
+    for _, id in ipairs(MJ.GetMountIDs()) do
+        local name, spellID, icon, _, isUsable, sourceType, isFavorite, _, faction, shouldHideOnChar, isCollected, _, isSteadyFlight =
+            MJ.GetMountInfoByID(id)
+        if name then
+            local display, description, source, isSelfMount, mountType, modelScene, animID, visualKit, noPreview =
+                MJ.GetMountInfoExtraByID(id)
+            out[id] = {
+                name = name,
+                spellID = spellID,
+                icon = icon,
+                sourceType = sourceType,
+                source = source,
+                description = description,
+                display = display,
+                mountType = mountType,
+                modelScene = modelScene,
+                animID = animID,
+                visualKit = visualKit,
+                selfMount = isSelfMount,
+                noPreview = noPreview,
+                faction = faction,
+                hidden = shouldHideOnChar,
+                collected = isCollected,
+                favorite = isFavorite,
+                usable = (isCollected and isUsable) or (not isCollected and rideable[id] == true),
+                steadyFlight = isSteadyFlight,
+            }
+        end
+    end
+    return out
+end
+
+--- The toy box: its toys as `mock.setToys` takes them. The box lists only
+--- collected toys, and only a frame after its checks change, so `/stdtest
+--- snapshot` opens its collected and unusable checks and clears its search
+--- a moment before (`openToyBox`); here the list is read as it is. A toy's
+--- item the client has not loaded yet is asked for: a second snapshot has
+--- its name.
+local function toys(items: { [number]: table }): table
+    const out: { [number]: table } = {}
+    for i = 1, C_ToyBox.GetNumFilteredToys() do
+        const id = C_ToyBox.GetToyFromIndex(i)
+        if id and id > 0 then
+            out[id] = {
+                collected = PlayerHasToy(id),
+                favorite = C_ToyBox.GetIsFavorite(id),
+                usable = C_ToyBox.IsToyUsable(id),
+                fanfare = C_ToyBoxInfo.NeedsFanfare(id),
+            }
+            if C_Item.GetItemInfo(id) then
+                itemData(items, id)
+            else
+                C_Item.RequestLoadItemDataByID(id)
+            end
+        end
+    end
+    return out
+end
+
+--- Opens the toy box's checks for the snapshot; returns how to put them
+--- back.
+local function openToyBox(): () -> ()
+    const collected = C_ToyBox.GetCollectedShown()
+    const unusable = C_ToyBox.GetUnusableShown()
+    C_ToyBox.SetCollectedShown(true)
+    C_ToyBox.SetUnusableShown(true)
+    C_ToyBox.SetFilterString("")
+    return function()
+        C_ToyBox.SetCollectedShown(collected)
+        C_ToyBox.SetUnusableShown(unusable)
+    end
+end
+
+--- The wardrobe: the collected sources of every category's collected
+--- appearances, and the favourite appearances, as `mock.setAppearances`
+--- takes them.
+local function appearances(): table
+    const sources: { [number]: boolean } = {}
+    const favorites: { [number]: boolean } = {}
+    for _, category in pairs(Enum.TransmogCollectionType) do
+        if C_TransmogCollection.GetCategoryInfo(category) then
+            for _, a in ipairs(C_TransmogCollection.GetCategoryAppearances(category) or {}) do
+                if a.isFavorite then
+                    favorites[a.visualID] = true
+                end
+                if a.isCollected then
+                    for _, s in ipairs(C_TransmogCollection.GetAppearanceSources(a.visualID, category) or {}) do
+                        if s.isCollected then
+                            sources[s.sourceID] = true
+                        end
+                    end
+                end
+            end
+        end
+    end
+    local function sorted(set: { [number]: boolean }): number[]
+        const list: number[] = {}
+        for id in pairs(set) do
+            list[#list + 1] = id
+        end
+        table.sort(list)
+        return list
+    end
+    return { collected = sorted(sources), favorites = sorted(favorites) }
+end
+
 --- The quest log's objectives as classic's functions give them (to check
 --- the engine's, which derives them from `C_QuestLog`).
 local function leaderBoards(): table
@@ -694,6 +818,9 @@ export function takeSnapshot(): { [string]: any }
         channels = channels,
         macros = macros,
         leaderBoards = leaderBoards,
+        mounts = mounts,
+        toys = function(): any return toys(items) end,
+        appearances = appearances,
     }
     const profile: { [string]: any } = {}
     const failed: string[] = {}
@@ -712,10 +839,16 @@ export function takeSnapshot(): { [string]: any }
 end
 
 export function snapshot()
-    const profile = takeSnapshot()
-    const failed = profile.errors :: string[]
-    const st = state() :: any
-    st.snapshot = profile
-    stamp("snapshot")
-    say(`snapshot: recorded{#failed > 0 and ` ({#failed} parts failed)` or ""}; type /reload so the file is written`)
+    -- The toy box lists its toys a frame after its checks change.
+    const putBack = openToyBox()
+    say("snapshot: a moment...")
+    C_Timer.After(0.5, function()
+        const profile = takeSnapshot()
+        putBack()
+        const failed = profile.errors :: string[]
+        const st = state() :: any
+        st.snapshot = profile
+        stamp("snapshot")
+        say(`snapshot: recorded{#failed > 0 and ` ({#failed} parts failed)` or ""}; type /reload so the file is written`)
+    end)
 end
