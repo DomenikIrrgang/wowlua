@@ -69,31 +69,69 @@ pub(crate) fn vector2d(vm: &mut Vm, x: f64, y: f64) -> Ret {
 
 /// `C_Map.GetMapPosFromWorldPos(instanceID, worldPosition [,
 /// overrideUiMapID])`: the instance's continent and the point's position
-/// on it (`world_rect`'s inverse); none for another instance or an
-/// override other than 0 (the full probe: instance 1 on Kalimdor, 0 on
-/// the Eastern Kingdoms; positions within 1e-7 of the client's, the
-/// continents' corners unverified). Unverified: an override naming a map.
+/// on it (`world_rect`'s inverse); with an override (not 0), that map and
+/// the position on it, outside it too, when it lies on the instance
+/// (Azeroth for either), else nothing (the full probe: instance 1 on
+/// Kalimdor, 0 on the Eastern Kingdoms; the answers battery: six points
+/// with eight overrides; positions as the client's single precision).
 fn map_pos_from_world_pos(vm: &mut Vm, c: NativeCall) -> Ret {
     let (Value::Num(instance), Value::Table(pos)) = (c.arg(1), c.arg(2)) else {
         return Ok(vec![]);
     };
-    if !matches!(c.arg(3), Value::Nil) && !matches!(c.arg(3), Value::Num(n) if n == 0.0) {
-        return Ok(vec![]);
-    }
     let (Some(x), Some(y)) = (raw_num(vm, pos, "x"), raw_num(vm, pos, "y")) else {
         return Ok(vec![]);
     };
     let instance = instance.trunc();
-    let Some(&(map, ..)) = CONTINENTS.iter().find(|c| c.1 == instance) else {
+    let over = match c.arg(3) {
+        Value::Num(n) if n != 0.0 => Some(n as i64),
+        _ => None,
+    };
+    // From the bottom right corner, in single precision, as the client
+    // computes (the answers battery's points on the continents to the last
+    // float digit; the full probe, 1.60.1: 0.46375513076782).
+    let far = |(left, top, width, height): (f64, f64, f64, f64)| {
+        let (right, bottom) = ((left - width) as f32, (top - height) as f32);
+        (
+            1.0 - (y as f32 - right) / width as f32,
+            1.0 - (x as f32 - bottom) / height as f32,
+        )
+    };
+    let Some(&(continent, ..)) = CONTINENTS.iter().find(|c| c.1 == instance) else {
         return Ok(vec![]);
     };
-    let Some((_, left, top, width, height)) = world_rect(vm, map) else {
+    let Some((_, left, top, width, height)) = world_rect(vm, continent) else {
         return Ok(vec![]);
     };
-    // The client's floats (the full probe, 1.60.1: its positions are
-    // single precision, 0.46375513076782).
-    let (u, v) = ((left - y) / width, (top - x) / height);
-    let (u, v) = (f64::from(u as f32), f64::from(v as f32));
+    let on_continent = far((left, top, width, height));
+    let (map, (u, v)) = match over {
+        None => (continent, on_continent),
+        Some(947) => {
+            let Some(&(_, left, top, width, height)) = AZEROTH.iter().find(|a| a.0 == instance)
+            else {
+                return Ok(vec![]);
+            };
+            (947, far((left, top, width, height)))
+        }
+        // A map on the continent: the continent's position within the
+        // map's recorded rectangle on it (the answers battery: to the last
+        // float digit); another map on the instance by its own rectangle.
+        Some(map) => match world_rect(vm, map) {
+            Some((i, ..)) if i != instance => return Ok(vec![]),
+            None => return Ok(vec![]),
+            Some((_, left, top, width, height)) => {
+                let call = format!("C_Map.GetMapRectOnMap({map}, {continent})");
+                match recorded_numbers(vm, &call).as_deref() {
+                    Some(&[x0, x1, y0, y1]) if x1 > x0 && y1 > y0 => {
+                        let (x0, x1, y0, y1) = (x0 as f32, x1 as f32, y0 as f32, y1 as f32);
+                        let (uc, vc) = on_continent;
+                        (map, ((uc - x0) / (x1 - x0), (vc - y0) / (y1 - y0)))
+                    }
+                    _ => (map, far((left, top, width, height))),
+                }
+            }
+        },
+    };
+    let (u, v) = (f64::from(u), f64::from(v));
     let mut out = vec![Value::Num(map as f64)];
     out.extend(vector2d(vm, u, v)?);
     Ok(out)
@@ -152,12 +190,70 @@ fn recorded_numbers(vm: &mut Vm, call: &str) -> Option<Vec<f64>> {
         .collect()
 }
 
+/// The maps' recorded corners in the world (`data/camelot-map-corners.txt`,
+/// the answers battery's "Map world corners"): by map, each corner's
+/// instance and world X and Y.
+fn recorded_corners(map: i64) -> Option<&'static [f64; 6]> {
+    static TABLE: std::sync::OnceLock<std::collections::HashMap<i64, [f64; 6]>> =
+        std::sync::OnceLock::new();
+    TABLE
+        .get_or_init(|| {
+            include_str!("../data/camelot-map-corners.txt")
+                .lines()
+                .filter(|l| !l.starts_with('#'))
+                .filter_map(|l| {
+                    let f: Vec<f64> = l
+                        .split('\t')
+                        .map(|v| v.trim().parse().ok())
+                        .collect::<Option<_>>()?;
+                    let &[map, a, b, c, d, e, g] = &f[..] else {
+                        return None;
+                    };
+                    Some((map as i64, [a, b, c, d, e, g]))
+                })
+                .collect()
+        })
+        .get(&map)
+}
+
+/// Azeroth (947), which shows both continents, each its own way: by
+/// instance, the world's Y and X at the map's left and top and the
+/// spans across it (from its recorded corners, Kalimdor's top left and the
+/// Eastern Kingdoms' bottom right, and the answers battery's positions on
+/// it, three a continent: the Eastern Kingdoms' exact, Kalimdor's spans
+/// fitted, its positions within three float steps; HereBeDragons' Classic
+/// table agrees to 0.1).
+const AZEROTH: [(f64, f64, f64, f64, f64); 2] = [
+    (
+        1.0,
+        8723.9580078125,
+        14824.525390625,
+        44878.659551,
+        29916.118368,
+    ),
+    // Its bottom right recorded (-12087.494140625, -19900.181640625), its
+    // spans the single precision ones that give its three points exactly.
+    (
+        0.0,
+        -12087.494140625 + 44688.52734375,
+        -19900.181640625 + 29795.1171875,
+        44688.52734375,
+        29795.1171875,
+    ),
+];
+
 /// A map's place in the world: its instance, the world coordinates of its
-/// top left corner and its size (`C_Map.GetMapWorldSize`, recorded). A
-/// zone's corner is its continent's moved by its recorded rectangle on it
-/// (`C_Map.GetMapRectOnMap`); a map with no rectangle on a continent (a
-/// battleground, an orphan, Azeroth) has none (unverified).
+/// top left corner and its size: as its corners were recorded, else from
+/// its size (`C_Map.GetMapWorldSize`, recorded) and its continent's corner
+/// moved by its recorded rectangle on it (`C_Map.GetMapRectOnMap`); a map
+/// with no rectangle on a continent (a battleground, an orphan) has none
+/// (unverified), Azeroth two (`AZEROTH`).
 pub(crate) fn world_rect(vm: &mut Vm, map: i64) -> Option<(f64, f64, f64, f64, f64)> {
+    if let Some(&[i0, x0, y0, i1, x1, y1]) = recorded_corners(map)
+        && i0 == i1
+    {
+        return Some((i0, y0, x0, y0 - y1, x0 - x1));
+    }
     let size = recorded_numbers(vm, &format!("C_Map.GetMapWorldSize({map})"))?;
     let &[width, height] = &size[..] else {
         return None;
@@ -201,7 +297,17 @@ fn world_pos_from_map_pos(vm: &mut Vm, c: NativeCall) -> Ret {
     let (Some(u), Some(v)) = (raw_num(vm, pos, "x"), raw_num(vm, pos, "y")) else {
         return Ok(vec![]);
     };
-    let Some((instance, left, top, width, height)) = world_rect(vm, map as i64) else {
+    // Azeroth: Kalimdor on its left half, the Eastern Kingdoms on its right
+    // (recorded: (0, 0) Kalimdor's, (1, 1) the Eastern Kingdoms'; the
+    // dividing line unverified).
+    let rect = if map as i64 == 947 {
+        let i = usize::from(u >= 0.5);
+        let (instance, left, top, width, height) = AZEROTH[i];
+        Some((instance, left, top, width, height))
+    } else {
+        world_rect(vm, map as i64)
+    };
+    let Some((instance, left, top, width, height)) = rect else {
         crate::note_default(vm, "C_Map.GetWorldPosFromMapPos", &c, 1);
         return Ok(vec![]);
     };

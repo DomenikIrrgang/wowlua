@@ -4822,3 +4822,43 @@ end
     assert!(ok, "{out}");
     assert!(out.contains("2 passed, 0 failed"), "{out}");
 }
+
+/// The machine the client runs on (decision T236): the manifest's
+/// `test.platform` for every file, a file's `config({ platform })` over it.
+#[test]
+fn test_platform_from_manifest_and_config() {
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            ("src/main.wowlua", "print(\"loaded\")\n"),
+            (
+                "tests/windows.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+
+@test("the manifest's platform")
+local function windows()
+    expect(IsWindowsClient()).toBe(true)
+    expect(IsMacClient()).toBe(false)
+end
+"#,
+            ),
+            (
+                "tests/mac.test.wowlua",
+                r#"import test, expect, config from "wowlua:test"
+config({ platform = "mac" })
+
+@test("a file's own platform")
+local function mac()
+    expect(IsMacClient()).toBe(true)
+end
+"#,
+            ),
+        ],
+    );
+    let manifest = r#"{ "package": { "name": "demo", "version": "1.0.0" }, "flavors": { "camelot": {} },
+  "addon": { "title": "Demo" }, "test": { "platform": "windows" } }"#;
+    fs::write(dir.path().join("wowlua.json"), manifest).unwrap();
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    assert!(out.contains("2 passed, 0 failed"), "{out}");
+}

@@ -714,6 +714,12 @@ fn test_once(
                 src: project.manifest.manifest.build.src.clone(),
                 blizzard_ui,
                 profile: test_settings.profile.clone(),
+                platform: match test_settings.platform {
+                    Some(wowlua_manifest::model::TestPlatform::Windows) => {
+                        wowlua_test::Platform::Windows
+                    }
+                    _ => wowlua_test::Platform::Mac,
+                },
                 // Relative to the package root, or absolute.
                 addons: test_settings
                     .addons

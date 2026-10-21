@@ -510,6 +510,19 @@ pub(crate) fn abbreviation_copy(vm: &mut Vm, v: Value) -> Result<(TableRef, bool
     } else {
         None
     };
+    // A divisor not a power of ten: the client's words, without a place,
+    // marked for the calling addon (recorded: `/stdtest engine answers`,
+    // divisors 60, from the probe's tainted code).
+    if error == Some("NotMultipleOfTen") {
+        let mut msg = String::from(
+            "CreateAbbreviateConfig(): Invalid Breakpoint - breakpoints must be a multiple of ten",
+        );
+        if !crate::protection::blizzard_caller(vm) {
+            msg.push_str("\nLua Taint: *** ForceTaint_Strong ***");
+        }
+        let v = vm.str(&msg);
+        return Err(vm.raise(v));
+    }
     if let Some(e) = error {
         return Err(vm.error(&format!("invalid abbreviation breakpoint ({e})")));
     }

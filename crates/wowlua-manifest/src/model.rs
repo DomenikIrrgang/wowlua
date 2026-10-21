@@ -917,6 +917,13 @@ pub enum QuoteStyle {
     Preserve,
 }
 
+/// The machine the emulated client runs on in tests (decision T236).
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "kebab-case")]
+pub enum TestPlatform {
+    Mac,
+    Windows,
+}
 /// `test` (spec §9.18): `wowlua test`'s settings.
 #[derive(Debug, Clone, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case", deny_unknown_fields)]
@@ -929,6 +936,11 @@ pub struct TestSettings {
     /// name none (decision T213).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub profile: Option<String>,
+    /// The machine the emulated client runs on, for test files that name
+    /// none: `mac` (the default) or `windows`; its key names, graphics and
+    /// sound answers and `IsMacClient` (decision T236).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub platform: Option<TestPlatform>,
     /// Minimum coverage and files left out of it (spec Tooling §16.1.6).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub coverage: Option<CoverageSettings>,

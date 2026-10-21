@@ -617,12 +617,13 @@ used.
 
 ## 9.18 `test`
 
-Since M9 S4 (`blizzard-ui`, `profile`, `addons`) and S5 (`coverage`, `reporters`).
+Since M9 S4 (`blizzard-ui`, `profile`, `addons`) and S5 (`coverage`, `reporters`); `platform` since decision T236.
 
 | Key | Type | Default | Meaning |
 |-----|------|---------|---------|
 | `blizzard-ui` | bool | `false` | Load the flavor's FrameXML as secure code before the addon ([WoW client emulation §17.7](emulator.md#177-blizzards-ui-code)) |
 | `profile` | string | none | The world profile (`tests/profiles/<name>.json`) of test files that name none ([Tooling §16.1.4](tooling.md#1614-wowluamock)) |
+| `platform` | `"mac"` \| `"windows"` | `"mac"` | The machine the emulated client runs on for test files that name none: the recorded answers that differ by machine (key names, graphics, sound, colours' last digits) and `IsMacClient`, `IsWindowsClient` (decision T236; a file's `config({ platform })` over it) |
 | `coverage.lines`, `.statements`, `.branches`, `.functions`, `.conditions` | number (percent) | none | Minimum coverage; a run below it fails ([Tooling §16.1.6](tooling.md#1616-coverage)) |
 | `coverage.exclude` | string[] | `[]` | Files excluded from coverage (glob patterns) |
 | `reporters` | string[] | `["pretty"]` | Default test and coverage reporters (`pretty`, `junit`, `tap`, `json`, `github`, `lcov`, `cobertura`, `coverage-json`, `html`) |

@@ -11,6 +11,33 @@ sent, the character does not move, and no output stores a player's name.
 After a run that StdTest records, `/reload` writes the results to the saved
 variables; `cargo xtask ingest` then takes them into the fixtures.
 
+## Still to run (2026-10-21, postponed)
+
+The beta's last day left these open, most needed first. Each gives data the
+engine cannot get otherwise.
+
+1. **`/stdtest engine screen` with "Use UI Scale" on and the slider all the
+   way left**, then `/reload`. Why: the scale rule with "Use UI Scale" on
+   is recorded at 1.15 only (UIParent's scale is the slider's); its lower
+   bound is not. That run was blocked last time: note the blocked
+   function's name in the message ("StdTest has been blocked from an
+   action..."): it is a taint finding (StdTest's code tainting Blizzard's
+   settings code), for the engine's taint emulation too.
+2. **A fresh Human Warrior's `/stdtest snapshot`**, twice a few seconds
+   apart, then `/reload`. Why: the engine's default world is that
+   character; the new snapshot also records its mounts, toys and wardrobe
+   (decision T235).
+3. **The replay scenarios** with a fresh character (step by step in the
+   session notes): a quest turned in for an item reward
+   (`/stdtest engine scenario turnin`), a second level-up (`levelup`),
+   Heroic Strike with a target change (`heroicstrike`), smelting bronze
+   (`smelting`, needs Mining); each `/stdtest engine scenario stop` then
+   `/reload`. Why: see "Replay leftovers" below.
+4. **The SuuUI Escape check** (by hand): see "Regressions" below.
+5. **`/stdtest engine journals`** on a character with a mount or a toy.
+   Why: the events after a collected mount's or toy's favourite changes are
+   unrecorded (the recording character had none; decision T235).
+
 ## The answers battery's new calls
 
 About a minute, standing anywhere, out of a group and out of combat.

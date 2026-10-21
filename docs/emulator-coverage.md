@@ -19,26 +19,26 @@ engine modules and the generated stand-ins, but no recording of their own: what
 their clients answer differently is unverified.
 
 - **API functions:** 5,037 of the 5,111 documented camelot functions have
-  behaviour (98.6%): 978 modelled, 367 answered from recordings, 3,692 by a
+  behaviour (98.6%): 1,000 modelled, 360 answered from recordings, 3,677 by a
   documentation-based fill-in. Of all 7,175 C functions the client has,
   documented or not, 7,070 have behaviour.
 - **Widget methods:** 1,325 of the 1,477 documented methods have behaviour
   (89.7%).
-- **Full probe:** 33,075 of the client's 33,727 answers given as the client gave
+- **Full probe:** 33,083 of the client's 33,727 answers given as the client gave
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,076 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,084 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
-| standard | 4,871 | 4,428 (90.9%) | 0 | 1,438 | 1,285 (89.4%) | none |
-| camelot | 5,111 | 5,037 (98.6%) | 367 | 1,477 | 1,325 (89.7%) | all |
-| mists | 3,221 | 2,819 (87.5%) | 0 | 1,360 | 1,214 (89.3%) | none |
-| cata | 1,927 | 1,623 (84.2%) | 0 | 1,008 | 888 (88.1%) | none |
-| wrath | 3,227 | 2,826 (87.6%) | 0 | 1,360 | 1,214 (89.3%) | none |
-| tbc | 3,220 | 2,822 (87.6%) | 0 | 1,360 | 1,214 (89.3%) | none |
-| vanilla | 3,220 | 2,822 (87.6%) | 0 | 1,360 | 1,214 (89.3%) | none |
+| standard | 4,871 | 4,433 (91.0%) | 0 | 1,438 | 1,285 (89.4%) | none |
+| camelot | 5,111 | 5,037 (98.6%) | 360 | 1,477 | 1,325 (89.7%) | all |
+| mists | 3,221 | 2,824 (87.7%) | 0 | 1,360 | 1,214 (89.3%) | none |
+| cata | 1,927 | 1,628 (84.5%) | 0 | 1,008 | 888 (88.1%) | none |
+| wrath | 3,227 | 2,831 (87.7%) | 0 | 1,360 | 1,214 (89.3%) | none |
+| tbc | 3,220 | 2,827 (87.8%) | 0 | 1,360 | 1,214 (89.3%) | none |
+| vanilla | 3,220 | 2,827 (87.8%) | 0 | 1,360 | 1,214 (89.3%) | none |
 
 ## API behaviour
 
@@ -62,7 +62,7 @@ ones together):
 
 | Namespace | Functions | Model | Recorded | Fill-in | Generated |
 |-----------|----------:|------:|---------:|--------:|----------:|
-| `(globals)` | 2,102 | 701 | 106 | 1,230 | 65 |
+| `(globals)` | 2,102 | 702 | 105 | 1,230 | 65 |
 | `C_AccountInfo` | 3 | 0 | 0 | 3 | 0 |
 | `C_AccountServices` | 10 | 0 | 4 | 6 | 0 |
 | `C_AccountStore` | 11 | 0 | 0 | 11 | 0 |
@@ -227,7 +227,7 @@ ones together):
 | `C_Minimap` | 23 | 0 | 1 | 22 | 0 |
 | `C_ModelInfo` | 8 | 0 | 0 | 8 | 0 |
 | `C_ModifiedInstance` | 1 | 0 | 0 | 1 | 0 |
-| `C_MountJournal` | 50 | 1 | 7 | 42 | 0 |
+| `C_MountJournal` | 50 | 19 | 3 | 28 | 0 |
 | `C_MythicPlus` | 21 | 0 | 1 | 20 | 0 |
 | `C_NamePlate` | 4 | 3 | 0 | 1 | 0 |
 | `C_NamePlateManager` | 4 | 0 | 1 | 3 | 0 |
@@ -308,14 +308,14 @@ ones together):
 | `C_TimerunningUI` | 1 | 0 | 0 | 1 | 0 |
 | `C_TooltipComparison` | 3 | 0 | 0 | 3 | 0 |
 | `C_TooltipInfo` | 82 | 13 | 0 | 69 | 0 |
-| `C_ToyBox` | 26 | 1 | 3 | 22 | 0 |
-| `C_ToyBoxInfo` | 6 | 0 | 1 | 5 | 0 |
+| `C_ToyBox` | 26 | 14 | 0 | 12 | 0 |
+| `C_ToyBoxInfo` | 6 | 3 | 0 | 3 | 0 |
 | `C_TradeInfo` | 4 | 0 | 0 | 4 | 0 |
 | `C_TradeSkillUI` | 146 | 70 | 0 | 76 | 0 |
 | `C_Trainer` | 3 | 0 | 0 | 3 | 0 |
 | `C_Traits` | 53 | 11 | 23 | 19 | 0 |
 | `C_Transmog` | 7 | 1 | 0 | 6 | 0 |
-| `C_TransmogCollection` | 84 | 4 | 13 | 67 | 0 |
+| `C_TransmogCollection` | 84 | 6 | 11 | 67 | 0 |
 | `C_TransmogOutfitInfo` | 69 | 3 | 4 | 62 | 0 |
 | `C_TransmogSets` | 42 | 0 | 1 | 41 | 0 |
 | `C_Trophy` | 9 | 0 | 0 | 9 | 0 |
@@ -348,14 +348,14 @@ ones together):
 | `math` | 38 | 38 | 0 | 0 | 0 |
 | `string` | 23 | 23 | 0 | 0 | 0 |
 | `table` | 23 | 23 | 0 | 0 | 0 |
-| **All** | 7,175 | 1,529 | 457 | 5,084 | 105 |
+| **All** | 7,175 | 1,566 | 446 | 5,058 | 105 |
 
 By where the function is listed:
 
 | List | Functions | Model | Recorded | Fill-in | Generated |
 |------|----------:|------:|---------:|--------:|----------:|
-| Blizzard's API documentation | 5,111 | 978 | 367 | 3,692 | 74 |
-| the client's other C functions (`/stdtest inventory`) | 2,064 | 551 | 90 | 1,392 | 31 |
+| Blizzard's API documentation | 5,111 | 1,000 | 360 | 3,677 | 74 |
+| the client's other C functions (`/stdtest inventory`) | 2,064 | 566 | 86 | 1,381 | 31 |
 | the engine's own, in neither list | 5 | 5 | 0 | 0 | 0 |
 
 Of the engine's own, Blizzard's UI code defines these in the client (Lua
@@ -372,12 +372,12 @@ The modules that answer, by how many functions and methods:
 | `widgets` | model | 651 |
 | `globalsinfo` | fill-in | 555 |
 | `content` | fill-in | 522 |
-| `collections` | fill-in | 402 |
 | `social` | fill-in | 388 |
-| `recorded` | recorded | 340 |
+| `collections` | fill-in | 377 |
+| `recorded` | recorded | 329 |
 | `questinfo` | fill-in | 315 |
-| `leftovers2` | fill-in | 314 |
-| `systeminfo` | fill-in | 314 |
+| `systeminfo` | fill-in | 315 |
+| `leftovers2` | fill-in | 312 |
 | `iteminfo` | fill-in | 228 |
 | `methods3` | fill-in | 212 |
 | `vm` | model | 198 |
@@ -393,19 +393,20 @@ The modules that answer, by how many functions and methods:
 | `tradeskill` | model | 71 |
 | `curves` | model | 70 |
 | `facts` | recorded | 70 |
-| `queries` | model | 63 |
 | `formatters` | model | 62 |
+| `queries` | model | 62 |
 | `facts` | model | 57 |
 | `auction` | model | 52 |
 | `protection` | model | 51 |
 | `traits` | recorded | 47 |
 | `quests` | model | 41 |
 | `bindings` | model | 40 |
-| `framescript` | model | 37 |
+| `collected` | model | 38 |
+| `framescript` | model | 36 |
 | `gamedata` | model | 36 |
 | `character` | model | 34 |
+| `misc` | model | 32 |
 | `lfg` | model | 31 |
-| `misc` | model | 31 |
 | `mail` | model | 30 |
 | `maps` | model | 28 |
 | `actions` | model | 27 |
@@ -541,15 +542,15 @@ locally and CI skips them.
 
 | Comparison | Matched | Of | Ratio |
 |------------|--------:|---:|------:|
-| Full probe (`/stdtest engine fullprobe`: every C function with many arguments) | 33,075 | 33,727 | 98.1% |
-| Answers battery (`/stdtest engine answers`: the calls Blizzard's UI makes) | 6,127 | 6,201 | 98.8% |
-| Method probe (a fresh widget's recorded getters, until `/stdtest engine methodprobe` is ingested) | 757 | 765 | 99.0% |
+| Full probe (`/stdtest engine fullprobe`: every C function with many arguments) | 33,083 | 33,727 | 98.1% |
+| Answers battery (`/stdtest engine answers`: the calls Blizzard's UI makes) | 6,049 | 6,229 | 97.1% |
+| Method probe (`/stdtest engine methodprobe`: every widget method) | 8,394 | 13,049 | 64.3% |
 | Maps (`/stdtest engine maps`: each map's data) | 3,028 | 3,028 | 100.0% |
 | Damage meter (its events in the recorded fights) | 557 | 561 | 99.3% |
 
 Besides these, the probe battery (`/stdtest engine`), the input, mouse and key
-replays and the answers battery's 79 checks (but those known to vary between the
-client's sessions) must match exactly, and the taint experiments (`/stdtest
+replays and the answers battery's 105 checks (but those known to vary between
+the client's sessions) must match exactly, and the taint experiments (`/stdtest
 taint`) are reproduced in full (`crates/wowlua-engine/tests/taint.rs`).
 
 ### Scenario replays
@@ -723,7 +724,7 @@ read-back counts for its setter), from the test's misses
 | `C_LossOfControl` | 51 | 51 | 100.0% |
 | `C_Macro` | 10 | 10 | 100.0% |
 | `C_Mail` | 10 | 10 | 100.0% |
-| `C_Map` | 400 | 387 | 96.8% |
+| `C_Map` | 400 | 395 | 98.8% |
 | `C_MapExplorationInfo` | 20 | 20 | 100.0% |
 | `C_MerchantFrame` | 24 | 24 | 100.0% |
 | `C_Minimap` | 102 | 102 | 100.0% |
@@ -831,7 +832,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,076 rules unverified: each rests on Blizzard's
+The engine's code marks 1,084 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -881,7 +882,6 @@ page changes only when a rule is added, removed or reworded.
 - [args.rs](../crates/wowlua-engine/src/args.rs): The check depends on the argument's documented type, as the client's C bindings differ: integers check their range, t...
 - [args.rs](../crates/wowlua-engine/src/args.rs): A font object, or the name of one (`"GameFontNormal"`; names unverified, `'x'` refused as recorded).
 - [args.rs](../crates/wowlua-engine/src/args.rs): An inventory slot: -1, 2147483647 and "x" refused, 0 to 1.5 taken (`C_PaperDollInfo.GetTemporaryEnchantmentInfo`, the...
-- [args.rs](../crates/wowlua-engine/src/args.rs): An artifact tier, read as an enumeration's value: "x" taken as 0, -1 and 2147483647 refused (`C_ArtifactUI.GetCostFor...
 - [args.rs](../crates/wowlua-engine/src/args.rs): A calendar event's ID: -1 refused with the usage alone, "x" taken as 0, 2147483647 taken (`C_Calendar.GetEventIndexIn...
 - [args.rs](../crates/wowlua-engine/src/args.rs): A garrison follower's ID: "" and "x" refused with the usage alone (`C_Garrison.GetFollowerAutoCombatSpells`, the full...
 - [args.rs](../crates/wowlua-engine/src/args.rs): A name plate's unit: a string, but neither a group member's ("party1": "Raid<n>/Party<n> unit tokens are not allowed...
@@ -897,8 +897,9 @@ page changes only when a rule is added, removed or reworded.
 - [args.rs](../crates/wowlua-engine/src/args.rs): A talent's query without its tier (the full probe: `GetTalentInfo({})` and `({ isInspect = true, isPet = true })`; un...
 - [args.rs](../crates/wowlua-engine/src/args.rs): [`check`] with the documented arguments from argument `first` on (2 for a method: `self` comes first).
 - [args.rs](../crates/wowlua-engine/src/args.rs): A spell book item's bank: a number (nil refused as well), one of `Enum.SpellBookSpellBank` (the full probe's `(1, "x"...
+- [args.rs](../crates/wowlua-engine/src/args.rs): Infinity: on Windows not a finite number, on a Mac outside the range (recorded both, `Slider:SetValue(math.huge)`, th...
 - [args.rs](../crates/wowlua-engine/src/args.rs): Whether a function's argument errors are Lua's own (`luaL_argerror`: the caller's position and the name it was called...
-- [args.rs](../crates/wowlua-engine/src/args.rs): A method's range error is Lua's own (`s:SetValue(math.huge)` called directly names itself, `/stdtest engine answers`)...
+- [args.rs](../crates/wowlua-engine/src/args.rs): A method's range or finiteness error is Lua's own (`s:SetValue(math.huge)` called directly names itself, `/stdtest en...
 - [args.rs](../crates/wowlua-engine/src/args.rs): "CRITTER" or "MOUNT" (unverified: the probe passed neither).
 - [args.rs](../crates/wowlua-engine/src/args.rs): A GUID (`BattlePet-…`), or 0, which reads as none (`C_PetJournal.PetIsHurt(0)` answers, `1` and `"x"` are refused; a...
 
@@ -952,7 +953,6 @@ page changes only when a rule is added, removed or reworded.
 
 - [bindings.rs](../crates/wowlua-engine/src/bindings.rs): Unverified: `GetBinding`'s results beyond the command and keys, and the addons' reasons and security strings.
 - [bindings.rs](../crates/wowlua-engine/src/bindings.rs): The command a key runs: a priority override's, an override's, else the key's binding (`GetBindingAction(key, true)`;...
-- [bindings.rs](../crates/wowlua-engine/src/bindings.rs): Runs a key's command, "down" or "up": a binding's code, or a `CLICK` binding's button (`OnClick(button, down)`; unver...
 - [bindings.rs](../crates/wowlua-engine/src/bindings.rs): Whether a binding command exists: a binding's (`Bindings.xml`), or a `CLICK`, `SPELL`, `MACRO` or `ITEM` one (unverif...
 - [bindings.rs](../crates/wowlua-engine/src/bindings.rs): `SetBinding(key [, command])`: whether it bound.
 - [bindings.rs](../crates/wowlua-engine/src/bindings.rs): `C_KeyBindings.GetBindingByKey(key)`: the command the key runs, nil for none (unverified: with overrides).
@@ -964,6 +964,7 @@ page changes only when a rule is added, removed or reworded.
 - [bindings.rs](../crates/wowlua-engine/src/bindings.rs): `C_AddOns.GetAddOnEnableState(name [, character])`: `All` (2) for an addon the client knows and loads, `None` (0) for...
 - [bindings.rs](../crates/wowlua-engine/src/bindings.rs): `C_UIFileAsset.IsKnownFile(asset)`: a file ID, or a path the client ships, is known (the engine has no list of the cl...
 - [bindings.rs](../crates/wowlua-engine/src/bindings.rs): `IsModifiedClick([action])`: the action's modifiers are held (`NONE`: never; no action: any modifier).
+- [bindings.rs](../crates/wowlua-engine/src/bindings.rs): A `BUTTONn` part (Blizzard's defaults: `CHATLINK` is `SHIFT-BUTTON1`) is the button of the click running, the left on...
 - [bindings.rs](../crates/wowlua-engine/src/bindings.rs): A key as the client shows it (recorded, 167 keys on the Mac client): the modifiers as written but META, which is `CMD...
 
 ### blanks (1)
@@ -1020,7 +1021,16 @@ page changes only when a rule is added, removed or reworded.
 - [clock.rs](../crates/wowlua-engine/src/clock.rs): `GetTickTime()`: the frame's seconds, as its `OnUpdate` got them (unverified: before the first frame, 0).
 - [clock.rs](../crates/wowlua-engine/src/clock.rs): `C_Timer.NewTimedSignalMap(callback)`: keys scheduled to signal at a time, as Blizzard's documentation describes the...
 
-### collections (48)
+### collected (6)
+
+- [collected.rs](../crates/wowlua-engine/src/collected.rs): The journals' lists follow their filters and searches (`collections.rs` keeps them): the mount journal's collected, n...
+- [collected.rs](../crates/wowlua-engine/src/collected.rs): The journal's list as shown: not hidden for the character, through the collected / not collected / unusable checks an...
+- [collected.rs](../crates/wowlua-engine/src/collected.rs): `GetMountUsabilityByID(mountID, checkIndoors)`: a collected usable mount's true; else false with the client's reason...
+- [collected.rs](../crates/wowlua-engine/src/collected.rs): `GetNumLearnedDisplayedToys()`, `GetNumTotalDisplayedToys()`: the toys the search and the other filters show, collect...
+- [collected.rs](../crates/wowlua-engine/src/collected.rs): `C_TransmogCollection.GetAppearanceSources(appearanceID, category, location)`: as recorded for the call; asked withou...
+- [collected.rs](../crates/wowlua-engine/src/collected.rs): An appearance's favourite changed (`SetIsAppearanceFavorite`): `TRANSMOG_COLLECTION_UPDATED(category + 1, source, app...
+
+### collections (47)
 
 - [collections.rs](../crates/wowlua-engine/src/collections.rs): What the client recorded is the source where it exists: the wardrobe's appearances and sources (`/stdtest engine coll...
 - [collections.rs](../crates/wowlua-engine/src/collections.rs): A name the client approves: any not blank (unverified: its profanity and length checks).
@@ -1039,7 +1049,6 @@ page changes only when a rule is added, removed or reworded.
 - [collections.rs](../crates/wowlua-engine/src/collections.rs): `C_PetJournal.GetPetSummonInfo(guid)`: not summonable, no error (`Enum.PetJournalError.None`), no text (unverified: n...
 - [collections.rs](../crates/wowlua-engine/src/collections.rs): `C_PetJournal.GetNumPetTypes()`: the ten pet types (humanoid to mechanical; unverified).
 - [collections.rs](../crates/wowlua-engine/src/collections.rs): `C_PetBattles.GetAttackModifier(petType, enemyPetType)`: the pet types' chart, 1.5 strong and 2/3 weak (warcraft.wiki...
-- [collections.rs](../crates/wowlua-engine/src/collections.rs): `C_TransmogCollection.GetSourceInfo(sourceID)`: the source as recorded in its appearance's sources; nothing for one n...
 - [collections.rs](../crates/wowlua-engine/src/collections.rs): `C_TransmogCollection.GetCategoryForItem(source)`, `C_TransmogOutfitInfo.GetItemModifiedAppearanceEffectiveCategory`:...
 - [collections.rs](../crates/wowlua-engine/src/collections.rs): `PlayerCanCollectSource(source)`, `AccountCanCollectSource(source)`: the item's data known for a recorded source, and...
 - [collections.rs](../crates/wowlua-engine/src/collections.rs): `C_TransmogCollection.GetAppearanceInfoBySource(source)`: its appearance's collection state from the recorded source...
@@ -1253,12 +1262,13 @@ page changes only when a rule is added, removed or reworded.
 - [formatters.rs](../crates/wowlua-engine/src/formatters.rs): Hyperlinks stripped to their text: `|H…|h` and `|h` removed, the brackets of a link's text too unless kept (unverifie...
 - [formatters.rs](../crates/wowlua-engine/src/formatters.rs): `StripTextureMarkupForLooseFiles(text)`: textures by a file path removed, those by a file ID kept (unverified: what "...
 
-### framescript (8)
+### framescript (9)
 
 - [framescript.rs](../crates/wowlua-engine/src/framescript.rs): Unverified (the documentation's signatures, behaviour inferred from Blizzard's callers): event callbacks run after th...
 - [framescript.rs](../crates/wowlua-engine/src/framescript.rs): `SetCVar(name, value)`: a secure CVar is refused to addons in combat (`ADDON_ACTION_FORBIDDEN`, recorded for `SoftTar...
 - [framescript.rs](../crates/wowlua-engine/src/framescript.rs): No value sets "0" (the full probe, 1.60.1: ten switches read "0" after `SetCVar(name)`; unverified: a CVar whose rang...
 - [framescript.rs](../crates/wowlua-engine/src/framescript.rs): The camera's zoom factor keeps a value below 1 or no number, the set answered as done (the full probe, 1.60.1: "0", "...
+- [framescript.rs](../crates/wowlua-engine/src/framescript.rs): As the client gave it (the answers battery's atlas checks), else the whole of an unknown file, not tiling (unverified).
 - [framescript.rs](../crates/wowlua-engine/src/framescript.rs): `C_Texture.GetAtlasExists(atlas)`: every name but the empty one (the full probe, 1.60.1: "" false; unverified: the cl...
 - [framescript.rs](../crates/wowlua-engine/src/framescript.rs): `C_AddOns.LoadAddOn(name)`: a Blizzard addon of the loaded UI code loads (true); without it, or for another addon, (f...
 - [framescript.rs](../crates/wowlua-engine/src/framescript.rs): `C_LFGList.GetPremadeGroupFinderStyle()`: camelot's group finder is the vanilla style (the client loads Blizzard_Grou...
@@ -1266,7 +1276,7 @@ page changes only when a rule is added, removed or reworded.
 
 ### gamedata (18)
 
-- [gamedata.rs](../crates/wowlua-engine/src/gamedata.rs): As the M8 mock had them (unverified details): spell data is cached once defined unless `cached = false`; an item arri...
+- [gamedata.rs](../crates/wowlua-engine/src/gamedata.rs): As the M8 mock had them (unverified details): spell data is cached once defined unless `cached = false`, and so is an...
 - [gamedata.rs](../crates/wowlua-engine/src/gamedata.rs): The art the client gives a spell without its own: `Interface\Icons\Temp` (the recorded smelting spells' `iconID`, 136...
 - [gamedata.rs](../crates/wowlua-engine/src/gamedata.rs): A spell no test defined and no probe recorded, from the client's spell table (`spell_table`; camelot's): a table like...
 - [gamedata.rs](../crates/wowlua-engine/src/gamedata.rs): A spell of the client's table without a description: an empty one (the full probe, 1.60.1: Attack's ""; unverified: a...
@@ -1631,11 +1641,11 @@ page changes only when a rule is added, removed or reworded.
 ### maps (6)
 
 - [maps.rs](../crates/wowlua-engine/src/maps.rs): What the world map, the quest log's map and the battlefield minimap ask of a map beyond its static data (that is reco...
-- [maps.rs](../crates/wowlua-engine/src/maps.rs): `C_Map.GetMapPosFromWorldPos(instanceID, worldPosition [, overrideUiMapID])`: the instance's continent and the point'...
 - [maps.rs](../crates/wowlua-engine/src/maps.rs): `C_ContentTracking.GetTrackablesOnMap(type, mapID)`: success (0) and none; on no map failure (`Enum.ContentTrackingRe...
 - [maps.rs](../crates/wowlua-engine/src/maps.rs): The two continents' world positions: their instance and the world coordinates of their top left corner (`left` the wo...
-- [maps.rs](../crates/wowlua-engine/src/maps.rs): A map's place in the world: its instance, the world coordinates of its top left corner and its size (`C_Map.GetMapWor...
+- [maps.rs](../crates/wowlua-engine/src/maps.rs): A map's place in the world: its instance, the world coordinates of its top left corner and its size: as its corners w...
 - [maps.rs](../crates/wowlua-engine/src/maps.rs): `C_Map.GetWorldPosFromMapPos(uiMapID, mapPosition)`: the instance and the world position (a vector, `x` the world's X...
+- [maps.rs](../crates/wowlua-engine/src/maps.rs): Azeroth: Kalimdor on its left half, the Eastern Kingdoms on its right (recorded: (0, 0) Kalimdor's, (1, 1) the Easter...
 
 ### measures (8)
 
@@ -1681,9 +1691,10 @@ page changes only when a rule is added, removed or reworded.
 - [methods2.rs](../crates/wowlua-engine/src/methods2.rs): `GetFading()`: as set, else on (unverified).
 - [methods2.rs](../crates/wowlua-engine/src/methods2.rs): `GetInsertMode()`: as set, else `BOTTOM` (unverified).
 
-### methods3 (19)
+### methods3 (20)
 
 - [methods3.rs](../crates/wowlua-engine/src/methods3.rs): The defaults are unverified unless a recording is named: they come from Blizzard's API documentation (`Blizzard_APIDo...
+- [methods3.rs](../crates/wowlua-engine/src/methods3.rs): A model's or actor's `GetItemTransmogInfoList()`: an `ItemTransmogInfo` for every equipment slot (1 to 19), Blizzard'...
 - [methods3.rs](../crates/wowlua-engine/src/methods3.rs): `Frame:CanChangeAttribute()`: not while a protected frame is locked down in combat (unverified: the documentation's n...
 - [methods3.rs](../crates/wowlua-engine/src/methods3.rs): `Frame:GetEffectivelyFlattensRenderLayers()`: its own or an ancestor's `SetFlattensRenderLayers(true)` (unverified: w...
 - [methods3.rs](../crates/wowlua-engine/src/methods3.rs): `Frame:GetRaisedFrameLevel()`: its level (unverified: the engine does not raise frames above their level).
@@ -1703,7 +1714,7 @@ page changes only when a rule is added, removed or reworded.
 - [methods3.rs](../crates/wowlua-engine/src/methods3.rs): Nothing to release (unverified).
 - [methods3.rs](../crates/wowlua-engine/src/methods3.rs): Unverified: whether the client lets addons change them (the documented empty false).
 
-### misc (14)
+### misc (15)
 
 - [misc.rs](../crates/wowlua-engine/src/misc.rs): `C_Calendar.SetAbsMonth(month, year)`: that month shown (the full probe, 1.60.1: 1, 2025 showed January 2025; unverif...
 - [misc.rs](../crates/wowlua-engine/src/misc.rs): `C_Calendar.GetMonthInfo([offsetMonths])`: the month that many from the one shown: `month, year, numDays, firstWeekda...
@@ -1713,6 +1724,7 @@ page changes only when a rule is added, removed or reworded.
 - [misc.rs](../crates/wowlua-engine/src/misc.rs): `C_Widget.IsWidget(object)`: any of the client's objects (the restricted environment's `IsValidFrame` asks `IsFrameWi...
 - [misc.rs](../crates/wowlua-engine/src/misc.rs): A documented structure's value from the one given: each field given kept (a structure's processed in turn), each miss...
 - [misc.rs](../crates/wowlua-engine/src/misc.rs): `IsPlayerInWorld()`: past the loading screen (recorded: true in the world; unverified: false behind a loading screen).
+- [misc.rs](../crates/wowlua-engine/src/misc.rs): `GetText(token, gender?, ordinal?)`: the global string named `token`; for gender 3 (female) its `_FEMALE` form when t...
 - [misc.rs](../crates/wowlua-engine/src/misc.rs): A path to no file answers nil (the full probe: `""` and `"x"`; taken here as a path without a folder, unverified for...
 - [misc.rs](../crates/wowlua-engine/src/misc.rs): `C_CurrencyInfo.GetCoinTextureString(amount [, fontHeight])`: gold, silver and copper each with its icon (`|T…:h:h:2:...
 - [misc.rs](../crates/wowlua-engine/src/misc.rs): `C_Map.GetAreaInfo(areaID)`: the area's name as the client answered (`data/camelot-answers.txt`: the zones and capita...
@@ -2271,7 +2283,9 @@ calls on 53 widget kinds).
 The probes to run in the client next, what each answers and how to run it, are
 in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 
+- Still to run (2026-10-21, postponed)
 - The answers battery's new calls
+- The collections (decision T235)
 - The method probe
 - Before and after the next full probe
 - Situations (one /dump each, whenever it happens)

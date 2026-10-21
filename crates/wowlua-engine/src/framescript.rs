@@ -418,6 +418,10 @@ fn atlas_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let known = crate::measures::atlas(&String::from_utf8_lossy(vm.str_bytes(name)));
     let width = known.and_then(|a| a.width).unwrap_or(64.0);
     let height = known.and_then(|a| a.height).unwrap_or(64.0);
+    // As the client gave it (the answers battery's atlas checks), else the
+    // whole of an unknown file, not tiling (unverified).
+    let info = known.and_then(|a| a.info.as_ref());
+    let [left, right, top, bottom] = info.map_or([0.0, 1.0, 0.0, 1.0], |i| i.coords);
     let t = vm.new_table();
     let set = |vm: &mut Vm, k: &str, v: Value| {
         let key = vm.str(k);
@@ -427,16 +431,24 @@ fn atlas_info(vm: &mut Vm, c: NativeCall) -> Ret {
     for (k, v) in [
         ("width", width),
         ("height", height),
-        ("leftTexCoord", 0.0),
-        ("rightTexCoord", 1.0),
-        ("topTexCoord", 0.0),
-        ("bottomTexCoord", 1.0),
-        ("file", 0.0),
+        ("leftTexCoord", left),
+        ("rightTexCoord", right),
+        ("topTexCoord", top),
+        ("bottomTexCoord", bottom),
+        ("file", info.map_or(0.0, |i| i.file)),
     ] {
         set(vm, k, Value::Num(v));
     }
-    set(vm, "tilesHorizontally", Value::Bool(false));
-    set(vm, "tilesVertically", Value::Bool(false));
+    set(
+        vm,
+        "tilesHorizontally",
+        Value::Bool(info.is_some_and(|i| i.tiles_horizontally)),
+    );
+    set(
+        vm,
+        "tilesVertically",
+        Value::Bool(info.is_some_and(|i| i.tiles_vertically)),
+    );
     let file = vm.str("Interface\\Buttons\\WHITE8X8");
     set(vm, "filename", file);
     Ok(vec![Value::Table(t)])
@@ -448,10 +460,6 @@ fn atlas_info(vm: &mut Vm, c: NativeCall) -> Ret {
 fn atlas_exists(vm: &mut Vm, c: NativeCall) -> Ret {
     let empty = matches!(vm.hidden(c.arg(1)), Value::Str(s) if vm.str_bytes(s).is_empty());
     Ok(vec![Value::Bool(!empty)])
-}
-
-fn truthy(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(true)])
 }
 
 /// `GetBuildInfo()`: the flavor's client version and interface (the build
@@ -597,8 +605,6 @@ pub fn functions() -> Vec<(&'static str, NativeFn)> {
         ("C_Texture.GetAtlasExists", atlas_exists),
         ("C_InputInterfaceStyle.GetCurrentStyle", zero),
         ("C_Glue.IsOnGlueScreen", falsy),
-        // The recorded client's (Forever on macOS: its key texts too).
-        ("IsMacClient", truthy),
         ("GetBuildInfo", build_info),
         ("IsLoggedIn", is_logged_in),
         ("C_AddOns.IsAddOnLoaded", is_addon_loaded),

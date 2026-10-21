@@ -10,6 +10,12 @@ use wowlua_vm::{TableRef, Taint, Value, Vm};
 
 /// The profile a test file's `config({ profile = "…" })` names.
 pub fn named_in(source: &[u8]) -> Option<String> {
+    config_text(source, "profile")
+}
+
+/// A literal text a test file's `config({ … })` gives `key` (read from its
+/// syntax, before anything loads: `profile`, `platform`).
+pub fn config_text(source: &[u8], key: &str) -> Option<String> {
     let file = wowlua_span::SourceDb::new().add("", "");
     let parse = wowlua_syntax::parse(source, file);
     parse.view().block().stmts().iter().find_map(|s| {
@@ -26,14 +32,10 @@ pub fn named_in(source: &[u8]) -> Option<String> {
             return None;
         };
         fields.iter().find_map(|f| match f {
-            TableField::Named { name, value, .. } if name.text() == "profile" => {
-                match value.kind() {
-                    ExprKind::String(lit) => {
-                        Some(String::from_utf8_lossy(&lit.value()).into_owned())
-                    }
-                    _ => None,
-                }
-            }
+            TableField::Named { name, value, .. } if name.text() == key => match value.kind() {
+                ExprKind::String(lit) => Some(String::from_utf8_lossy(&lit.value()).into_owned()),
+                _ => None,
+            },
             _ => None,
         })
     })

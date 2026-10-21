@@ -24,6 +24,9 @@ use std::time::Instant;
 use wowlua_driver::{BuildOutput, TestFile, TestRole};
 use wowlua_vm::{TableRef, Value, Vm};
 
+/// The machine the emulated client runs on (decision T236).
+pub use wowlua_engine::Platform;
+
 /// What a test run needs of a test build.
 pub struct Suite<'a> {
     pub build: &'a BuildOutput,
@@ -36,6 +39,8 @@ pub struct Suite<'a> {
     pub blizzard_ui: Option<UiSource>,
     /// `test.profile`: the world profile of files that name none.
     pub profile: Option<String>,
+    /// `test.platform`: the machine of files that name none (decision T236).
+    pub platform: wowlua_engine::Platform,
     /// `test.addons`: other addons' folders, loaded before the addon.
     pub addons: Vec<PathBuf>,
     /// `-u`: rewrite the snapshots that differ.
@@ -382,6 +387,16 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
     let name = build.addon_name.clone();
     let mut vm = Vm::wow();
     wowlua_engine::install(&mut vm, &suite.flavor)?;
+    // The machine the client runs on (decision T236): the file's
+    // `config({ platform = … })`, else the manifest's `test.platform`.
+    let source = std::fs::read(suite.root.join(&file.rel)).unwrap_or_default();
+    let platform = match profile::config_text(&source, "platform") {
+        Some(name) => wowlua_engine::Platform::parse(&name).ok_or_else(|| {
+            format!("config: platform \"{name}\" is not one of \"mac\", \"windows\"")
+        })?,
+        None => suite.platform,
+    };
+    wowlua_engine::set_platform(&mut vm, platform);
     if let Some(r) = reload {
         vm.clock.now = r.now;
         vm.clock.elapsed_ms = r.elapsed_ms;

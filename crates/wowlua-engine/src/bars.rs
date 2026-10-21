@@ -344,7 +344,10 @@ fn status_bar_color(vm: &mut Vm, id: WidgetId) -> [f64; 4] {
 fn set_status_bar_color(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let rgba = [2, 3, 4, 5].map(|i| match c.arg(i) {
         Value::Nil if i == 5 => 1.0,
-        v => widgets::byte_float(number(vm, v)),
+        v => {
+            let n = number(vm, v);
+            widgets::byte_float(vm, n)
+        }
     });
     widgets::store(vm, id, "StatusBarColor", &rgba.map(Value::Num));
     let tex = stored_or(vm, id, "StatusBarTexture", vec![])

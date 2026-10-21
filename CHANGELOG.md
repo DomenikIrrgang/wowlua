@@ -7,10 +7,15 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 ### New
 
 - **Collections in tests**: `mock.setMounts`, `mock.setToys` and `mock.setAppearances` give the account its mounts, toys and collected appearances, and a world profile can hold them (`mounts`, `toys`, `appearances`). The mount journal, the toy box and the wardrobe then answer from them as the game does (their filters, search, favourites and events, recorded from the game), so a collections window can be tested without stubbing every journal call. `/stdtest snapshot` records them from your character.
+- Tests: choose the machine the game runs on with `"test": { "platform": "windows" }` in `wowlua.json`, or `config({ platform = "windows" })` in one test file. Key names (`GetBindingText`: "Delete" on Windows, "Del" on a Mac), graphics and sound answers and `IsMacClient`/`IsWindowsClient` follow it. The Mac stays the default.
 - Tests: `mock.setField(t, key, value)` sets any field, `nil` included, until the test ends, and puts it back untainted as `mock.stub` does. Taking a frame or a game API away with an assignment instead leaves Blizzard's field tainted for the rest of the file.
 
 ### Fixed
 
+- Tests: `C_Texture.GetAtlasInfo` gives the game's size, file, texture coordinates and tiling for the atlases wowlua knows, instead of a 64 by 64 whole texture.
+- Tests: map positions match the game's (`C_Map.GetMapPosFromWorldPos` with an override map, Azeroth's world map, `GetWorldPosFromMapPos`), and the game's second Eastern Kingdoms and Kalimdor maps (1463, 1464) exist.
+- Tests: `C_GameRules.IsGameRuleActive` answers every game rule as the game does, and the artifact ranks cost what they do in the game up to rank 10.
+- Tests: some errors read as the game words them: a `CreateAbbreviateConfig` divisor that is not a power of ten, and infinity passed to a widget's number (on Windows "must be a finite number").
 - Tests: `C_TransmogCollection.GetAppearanceSources(appearanceID)` without a category gives the appearance's sources, as in the game (it gave nothing), and a source has its item's name and quality once the item is loaded.
 - Tests: a key bound to a button with `SetBindingClick` or `SetOverrideBindingClick` clicks it once, as in the game: only for the clicks it registered (by default the left button's release). It clicked on both the key's press and release, so a toggle opened and closed at once.
 - Tests: a model's or actor's `GetItemTransmogInfoList()` has an entry for every slot, so Blizzard's dressing room no longer errors ("attempt to index local 'mainHandInfo'").

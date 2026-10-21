@@ -31,6 +31,8 @@ import answersProbe from "/answers"
 import mapsProbe from "/maps"
 import collectionsProbe, journalsProbe, journals2Probe from "/collections"
 import leftoversProbe from "/leftovers"
+import screenProbe from "/screen"
+import glyphsProbe from "/glyphs"
 import traitsProbe from "/traits"
 import tradeSkillProbe from "/tradeskill"
 import achievementsProbe from "/achievements"
@@ -1799,6 +1801,12 @@ export function engineProbe(arg: string?)
         return
     elseif words[1] == "leftovers" then
         leftoversProbe()
+        return
+    elseif words[1] == "screen" then
+        screenProbe()
+        return
+    elseif words[1] == "glyphs" then
+        glyphsProbe()
         return
     elseif words[1] == "traits" then
         traitsProbe()

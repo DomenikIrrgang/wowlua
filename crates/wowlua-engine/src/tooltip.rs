@@ -293,7 +293,8 @@ fn color_get_rgb(vm: &mut Vm, c: NativeCall) -> Ret {
 /// alpha (recorded: no `a`, `ColorMixin`'s methods: a mixin's object the
 /// parts set on, not `CreateColor`'s).
 fn color(vm: &mut Vm, (r, g, b): (u8, u8, u8)) -> Value {
-    let part = |v: u8| f64::from(f32::from(v) * (1.0f32 / 255.0));
+    let platform = crate::engine(vm).platform;
+    let part = |v: u8| crate::byte_channel(platform, f32::from(v));
     let (r, g, b) = (part(r), part(g), part(b));
     let create = vm.get_global("CreateFromMixins");
     let mixin = vm.get_global("ColorMixin");

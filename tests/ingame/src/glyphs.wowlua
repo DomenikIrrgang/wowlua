@@ -1,0 +1,65 @@
+-- /stdtest engine glyphs: how the client lays text out, for the engine's
+-- text model (decision T237): for the game's fonts (FRIZQT, ARIALN,
+-- skurri, MORPHEUS) at sizes 6 to 32 by halves (FRIZQT and ARIALN also
+-- outlined), every printable glyph's width alone and twice in a row (their
+-- difference its advance), some pairs that fonts kern, and the screen the
+-- widths were measured on. Into StdTestState.engineGlyphs. Read-only.
+import state from "/state"
+import stamp from "/state"
+import say from "/harness"
+
+local function n(v: number): string
+    return string.format("%.9g", v)
+end
+
+export function glyphsProbe()
+    const st = state() :: any
+    const out: { [string]: string } = {}
+    st.engineGlyphs = out
+    local pw, ph = GetPhysicalScreenSize()
+    out["screen"] = `{n(pw)}x{n(ph)} ui {n(UIParent:GetWidth())}x{n(UIParent:GetHeight())} scale {n(UIParent:GetEffectiveScale())} dpi {n(GetScreenDPIScale())}`
+    const f = UIParent:CreateFontString(nil, "OVERLAY")
+    f:SetPoint("CENTER")
+    local function width(text: string): string
+        f:SetText(text)
+        return n(f:GetUnboundedStringWidth())
+    end
+    const fonts = {
+        { file = "Fonts\\FRIZQT__.TTF", flags = { "", "OUTLINE" } },
+        { file = "Fonts\\ARIALN.TTF", flags = { "", "OUTLINE" } },
+        { file = "Fonts\\skurri.ttf", flags = { "" } },
+        { file = "Fonts\\MORPHEUS.ttf", flags = { "" } },
+    }
+    local count = 0
+    for _, font in ipairs(fonts) do
+        for _, flags in ipairs(font.flags) do
+            for size = 6, 32, 0.5 do
+                if f:SetFont(font.file, size, flags :: any) then
+                    const one: string[] = {}
+                    const two: string[] = {}
+                    for b = 32, 126 do
+                        const g = string.char(b) == "|" and "||" or string.char(b)
+                        one[#one + 1] = width(g)
+                        two[#two + 1] = width(g .. g)
+                    end
+                    f:SetText("A")
+                    const key = `{font.file} {n(size)} {flags}`
+                    out[key] = `{table.concat(one, ",")}|{table.concat(two, ",")}|height {n(f:GetStringHeight())}`
+                    count = count + 1
+                end
+            end
+        end
+    end
+    -- Pairs that fonts kern, at FRIZQT 12 and ARIALN 14.
+    for _, spec in ipairs({ { "Fonts\\FRIZQT__.TTF", 12 }, { "Fonts\\ARIALN.TTF", 14 } }) do
+        f:SetFont(spec[1] :: string, spec[2] :: number, "")
+        const pairs: string[] = {}
+        for _, p in ipairs({ "AV", "VA", "AW", "To", "Ta", "Te", "Wa", "We", "Yo", "LT", "LV", "Fa", "r.", "y.", "P.", "Av", "ff", "fi", "Hello", "World", "Hello World", "ab", "ba" }) do
+            pairs[#pairs + 1] = `{p}={width(p)}`
+        end
+        out[`pairs {spec[1]} {spec[2]}`] = table.concat(pairs, ",")
+    end
+    f:Hide()
+    stamp("glyphs")
+    say(`engine glyphs: {count} font sizes measured; type /reload so the file is written`)
+end

@@ -1,0 +1,98 @@
+-- /stdtest engine screen: the screen as the client measures it now, added
+-- to StdTestState.engineScreens (run it again after changing the window
+-- size, the resolution, "Use UI Scale" or the UI scale slider): the
+-- window and physical sizes, the DPI scale, UIParent's size and scale,
+-- the UI scale CVars, and text widths in GameFontNormal (they snap to the
+-- screen's pixels). For the engine's screen setting (decision T237).
+import state from "/state"
+import stamp from "/state"
+import say from "/harness"
+
+local function show(...: any): string
+    const parts: string[] = {}
+    for i = 1, select("#", ...) do
+        const v = (select(i, ...))
+        if type(v) == "number" then
+            parts[#parts + 1] = string.format("%.17g", v)
+        elseif type(v) == "table" and (v :: any).x then
+            parts[#parts + 1] = string.format("%.17gx%.17g", (v :: any).x, (v :: any).y)
+        else
+            parts[#parts + 1] = tostring(v)
+        end
+    end
+    return table.concat(parts, ", ")
+end
+
+export function screenProbe()
+    const st = state() :: any
+    st.engineScreens = st.engineScreens ?? {}
+    const G = _G :: any
+    const out: { [string]: string } = {}
+    local function ask(label: string, f: () -> ...any)
+        local ok, a = pcall(function(): string return show(f()) end)
+        out[label] = ok and a or `error: {tostring(a)}`
+    end
+    ask("GetPhysicalScreenSize()", function(): ...any return GetPhysicalScreenSize() end)
+    ask("GetCurrentGameWindowSize(), (0, true), (1, false)", function(): ...any
+        const V = C_VideoOptions :: any
+        return V.GetCurrentGameWindowSize(), V.GetCurrentGameWindowSize(0, true), V.GetCurrentGameWindowSize(1, false)
+    end)
+    ask("GetScreenDPIScale()", function(): ...any return GetScreenDPIScale() end)
+    ask("GetScreenWidth(), GetScreenHeight()", function(): ...any return GetScreenWidth(), GetScreenHeight() end)
+    ask("UIParent size, scale, effective scale", function(): ...any
+        return UIParent:GetWidth(), UIParent:GetHeight(), UIParent:GetScale(), UIParent:GetEffectiveScale()
+    end)
+    ask("WorldFrame size, effective scale", function(): ...any
+        return WorldFrame:GetWidth(), WorldFrame:GetHeight(), WorldFrame:GetEffectiveScale()
+    end)
+    ask("CVars useUiScale, uiScale, uiScaleMultiplier, gxWindow, gxMaximize", function(): ...any
+        return C_CVar.GetCVar("useUiScale"), C_CVar.GetCVar("uiScale"), C_CVar.GetCVar("uiScaleMultiplier"),
+            C_CVar.GetCVar("gxWindow"), C_CVar.GetCVar("gxMaximize")
+    end)
+    ask("CVars gxWindowedResolution, gxFullscreenResolution", function(): ...any
+        return C_CVar.GetCVar("gxWindowedResolution"), C_CVar.GetCVar("gxFullscreenResolution")
+    end)
+    const f = UIParent:CreateFontString(nil, "OVERLAY")
+    f:SetPoint("CENTER")
+    f:SetFontObject(G.GameFontNormal)
+    for _, s in ipairs({ "A", "W", "Hello World", "iiiii" }) do
+        f:SetText(s)
+        out[`GameFontNormal "{s}"`] = show(f:GetUnboundedStringWidth(), f:GetStringHeight())
+    end
+    -- Each font object's size as set and as read back, and every printable
+    -- glyph's width (they snap to the screen's pixels).
+    for _, name in ipairs({ "GameFontNormal", "GameFontHighlightSmall", "SystemFont_Shadow_Large_Outline", "NumberFontNormal", "ChatBubbleFont", "CommentatorFontMedium", "GameFontNormalHuge" }) do
+        const font = G[name]
+        if font then
+            ask(`{name} GetFont, GetFontInfo height`, function(): ...any
+                local file, size, flags = font:GetFont()
+                const info = GetFontInfo(font)
+                return file, size, flags, info and info.height
+            end)
+            f:SetFontObject(font)
+            const widths: string[] = {}
+            for b = 32, 126 do
+                f:SetText(string.char(b) == "|" and "||" or string.char(b))
+                widths[#widths + 1] = string.format("%.17g", f:GetUnboundedStringWidth())
+            end
+            f:SetText("Hello World")
+            out[`{name} glyph widths 32-126, "Hello World" width and height`] =
+                `{table.concat(widths, ",")} | {string.format("%.17g, %.17g", f:GetUnboundedStringWidth(), f:GetStringHeight())}`
+        end
+    end
+    f:Hide()
+    -- Two maps the maps probe missed (the answers battery found them).
+    for _, id in ipairs({ 1463, 1464 }) do
+        ask(`C_Map.GetMapInfo({id})`, function(): ...any
+            const info = C_Map.GetMapInfo(id)
+            if info == nil then
+                return nil
+            end
+            return info.mapID, info.name, info.mapType, info.parentMapID
+        end)
+    end
+    const list = st.engineScreens :: table
+    list[#list + 1] = out
+    stamp("screen")
+    say(`engine screen: recorded ({#list} so far): {out["GetScreenWidth(), GetScreenHeight()"]}; change a setting and run it again, then /reload`)
+end

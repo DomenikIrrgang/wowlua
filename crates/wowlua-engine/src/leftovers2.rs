@@ -592,7 +592,8 @@ fn console_echo(_vm: &mut Vm, _c: NativeCall) -> Ret {
 fn console_get_color_from_type(vm: &mut Vm, c: NativeCall) -> Ret {
     // A byte times 1/255 in single precision (the client's 196 is
     // 0.76862752437592).
-    let byte = |b: f64| f64::from(b as f32 * (1.0f32 / 255.0));
+    let platform = crate::engine(vm).platform;
+    let byte = |b: f64| crate::byte_channel(platform, b as f32);
     let rgb = match arg_num(vm, &c, 1).map(|n| n as i64) {
         Some(1) => (byte(128.0), byte(196.0), 1.0),
         Some(2) => (byte(128.0), byte(128.0), byte(128.0)),

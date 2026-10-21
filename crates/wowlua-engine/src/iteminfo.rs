@@ -382,8 +382,9 @@ fn get_item_quality_color(vm: &mut Vm, c: NativeCall) -> Ret {
 /// epic quality's #a335ee as the client's floats, each channel times a
 /// float 1/255 (recorded for a level 21 character in greens and blues,
 /// 0.20784315466881 for 53; unverified: whether it ever changes).
-fn get_item_level_color(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    let channel = |v: u8| f64::from(f32::from(v) * (1.0f32 / 255.0));
+fn get_item_level_color(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let platform = crate::engine(vm).platform;
+    let channel = |v: u8| crate::byte_channel(platform, f32::from(v));
     Ok(rgb([channel(163), channel(53), channel(238)]))
 }
 

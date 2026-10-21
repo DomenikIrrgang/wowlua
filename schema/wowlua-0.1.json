@@ -1694,6 +1694,17 @@
             "null"
           ]
         },
+        "platform": {
+          "description": "The machine the emulated client runs on, for test files that name\nnone: `mac` (the default) or `windows`; its key names, graphics and\nsound answers and `IsMacClient` (decision T236).",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TestPlatform"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "coverage": {
           "description": "Minimum coverage and files left out of it (spec Tooling §16.1.6).",
           "anyOf": [
@@ -1721,6 +1732,14 @@
         }
       },
       "additionalProperties": false
+    },
+    "TestPlatform": {
+      "description": "The machine the emulated client runs on in tests (decision T236).",
+      "type": "string",
+      "enum": [
+        "mac",
+        "windows"
+      ]
     },
     "CoverageSettings": {
       "description": "`test.coverage`: minimum percentages per kind (a run below one fails),\nand glob patterns of files left out.",

@@ -1990,7 +1990,7 @@ fn select_color(vm: &mut Vm, id: WidgetId, rgb: [f64; 3]) {
 
 fn set_color_rgb(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let rgb = [2, 3, 4].map(|i| match c.arg(i) {
-        Value::Num(n) => byte_float(n),
+        Value::Num(n) => byte_float(vm, n),
         _ => 0.0,
     });
     select_color(vm, id, rgb);
@@ -2031,7 +2031,8 @@ fn set_color_hsv(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         4 => [t, p, v32],
         _ => [v32, p, q],
     };
-    let byte = |x: f32| f64::from((x * 255.0).round_ties_even() * (1.0f32 / 255.0));
+    let platform = engine(vm).platform;
+    let byte = |x: f32| crate::byte_channel(platform, (x * 255.0).round_ties_even());
     select_color(vm, id, rgb.map(byte));
     let single = |x: f64| f64::from(x as f32);
     engine_mut(vm)
@@ -2045,7 +2046,11 @@ fn get_color_hsv(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     if let Some(hsv) = engine(vm).world.color_hsv.get(&id.0) {
         return Ok(hsv.map(Value::Num).to_vec());
     }
-    let [r, g, b, _] = color_of(vm, id);
+    // From the kept bytes times the float 1/255 on either machine (recorded:
+    // the Mac's and Windows' hue, saturation and value alike, though their
+    // RGB differ in the last digits, decision T236).
+    let [r, g, b, _] = color_of(vm, id)
+        .map(|x| crate::byte_channel(crate::Platform::Mac, (x * 255.0).round() as f32));
     let max = r.max(g).max(b);
     let min = r.min(g).min(b);
     let d = max - min;
@@ -2741,7 +2746,7 @@ fn set_alpha(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     };
     // Kept in eight bits, read back as a float: 0.5 is 128/255
     // (`/stdtest engine`).
-    let a = byte_float(a);
+    let a = byte_float(vm, a);
     let w = &mut engine_mut(vm).world.widgets[id.0];
     w.alpha = a;
     w.secret_alpha = secret;
@@ -2761,7 +2766,7 @@ fn set_alpha_from_boolean(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         Value::Num(n) => n,
         _ => return Err(vm.arg_error(if on { 3 } else { 4 }, "number expected")),
     };
-    let a = byte_float(a.clamp(0.0, 1.0));
+    let a = byte_float(vm, a.clamp(0.0, 1.0));
     let w = &mut engine_mut(vm).world.widgets[id.0];
     w.alpha = a;
     w.secret_alpha = secret;
@@ -3604,7 +3609,7 @@ fn set_vertex_color(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         Value::Num(n) if secret => n,
         _ => vm.opt_number(&c, 5, 1.0)?,
     };
-    let rgba = rgba.map(byte_float);
+    let rgba = rgba.map(|v| byte_float(vm, v));
     let props = engine(vm).world.widgets[id.0].props;
     let list = vm.new_table();
     for (i, v) in rgba.iter().enumerate() {
@@ -3759,7 +3764,7 @@ fn set_scroll_child(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 fn kept(vm: &Vm, stem: &str, i: usize, v: Value) -> Value {
     match (stem, i, v) {
         ("TextColor" | "ShadowColor" | "VertexColor", 0..=3, Value::Num(n)) => {
-            Value::Num(byte_float(n))
+            Value::Num(byte_float(vm, n))
         }
         ("Font", 1, Value::Num(h)) if engine(vm).flavor == "camelot" => {
             Value::Num(kept_font_height(h))
@@ -3790,9 +3795,9 @@ pub fn kept_font_height(h: f64) -> f64 {
 /// A color component as the client keeps it: in eight bits, read back as a
 /// float (the byte times the float 1/255: `/stdtest engine` alpha 0.5 is
 /// 0.50196081399918, `answers` 0.82 is 0.81960791349411).
-pub fn byte_float(v: f64) -> f64 {
+pub fn byte_float(vm: &Vm, v: f64) -> f64 {
     let byte = (v.clamp(0.0, 1.0) * 255.0).round() as f32;
-    f64::from(byte * (1.0f32 / 255.0))
+    crate::byte_channel(engine(vm).platform, byte)
 }
 
 /// A font object's color, shadow and user scaling given to a font that

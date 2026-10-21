@@ -128,7 +128,7 @@ the file, naming the addon. Coverage counts only the addon's own files.
 | `@beforeEach`, `@afterEach`, `@beforeAll`, `@afterAll` | Hooks, per file |
 | `@skip(reason?)`, `@only` | Test selection |
 | `@flavors("standard", …)` | Run only for these flavors |
-| `config({ lifecycle: "auto" \| "manual", timeout?, profile? })` | Per-file runner settings (`profile`: the world profile, read before anything loads) |
+| `config({ lifecycle: "auto" \| "manual", timeout?, profile?, platform? })` | Per-file runner settings (`profile`: the world profile; `platform`: `"mac"` or `"windows"`, the machine the client runs on, decision T236; both read before anything loads) |
 | `describe(name, fn)` | Grouping for runtime-generated tests (`test(name)(fn)` inside `fn`) |
 | `expect(v)` | Matchers: `toBe`, `toEqual` (deep), `toBeNil`, `toBeTruthy`, `toBeFalsy`, `toBeInstanceOf`, `toContain`, `toHaveLength`, `toBeCloseTo`, `toThrow`, `toHaveBeenCalled`, `toHaveBeenCalledWith`, `toHaveBeenCalledTimes`, `toMatchSnapshot`, `toBeSecret`; for widgets `toBeShown`, `toBeVisible`, `toHaveText`, `toHaveSize`, `toBeAnchoredTo`. Negation with `expect(v).never.toBe(x)`. Type-checked (below). |
 | `@cases(list)` | Runs a test once per case, the case's values as its arguments (below) |

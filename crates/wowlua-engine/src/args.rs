@@ -159,13 +159,11 @@ fn family(api: &Api, ty: &str, arg: &Json, method: bool) -> Family {
             };
         }
         // An artifact tier, read as an enumeration's value: "x" taken as 0,
-        // -1 and 2147483647 refused (`C_ArtifactUI.GetCostForPointAtRank`,
-        // the full probe; the upper bound is unverified).
+        // 0 to 1.5 taken, -1, 2 to 10 and 2147483647 refused
+        // (`C_ArtifactUI.GetCostForPointAtRank`, the full probe and the
+        // answers battery).
         "ArtifactTiers" if !method => {
-            return Family::Enum {
-                min: 0.0,
-                max: 255.0,
-            };
+            return Family::Enum { min: 0.0, max: 1.0 };
         }
         // A calendar event's ID: -1 refused with the usage alone, "x" taken
         // as 0, 2147483647 taken (`C_Calendar.GetEventIndexInfo`, the full
@@ -1068,6 +1066,15 @@ fn refuses_type(vm: &mut Vm, family: Family, v: Value) -> Option<Refusal> {
         },
         Family::Float => match vm.tonumber(v) {
             Some(n) if n.abs() <= f64::from(f32::MAX) => None,
+            // Infinity: on Windows not a finite number, on a Mac outside
+            // the range (recorded both, `Slider:SetValue(math.huge)`, the
+            // answers battery, decision T236; unverified: NaN, a large
+            // finite number on Windows).
+            Some(n)
+                if n.is_infinite() && crate::engine(vm).platform == crate::Platform::Windows =>
+            {
+                Some(Refusal::Finite)
+            }
             _ => Some(Refusal::FloatRange),
         },
         Family::Func => (!matches!(v, Value::Func(_))).then_some(Refusal::Type),
@@ -1343,11 +1350,14 @@ fn fail(vm: &mut Vm, api: &Api, f: &Function, n: usize, why: Option<Refusal>) ->
             format!("{usage}. Secret values are {why} for this argument.")
         }
     };
-    // A method's range error is Lua's own (`s:SetValue(math.huge)` called
+    // A method's range or finiteness error is Lua's own (`s:SetValue(math.huge)` called
     // directly names itself, `/stdtest engine answers`), its others the
     // bindings' (unverified beyond the recordings).
     let named = if f.name.contains(':') {
-        matches!(why, Some(Refusal::Range(..) | Refusal::FloatRange))
+        matches!(
+            why,
+            Some(Refusal::Range(..) | Refusal::FloatRange | Refusal::Finite)
+        )
     } else {
         names_itself(api, f)
     };

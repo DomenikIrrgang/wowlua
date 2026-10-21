@@ -61,14 +61,27 @@ fn zones_sit_where_vanillas_world_map_areas_put_them() {
     );
 }
 
+/// Maps off the two continents (recorded, the answers battery's "Map world
+/// corners"): Azeroth's top left on Kalimdor and bottom right on the
+/// Eastern Kingdoms, Warsong Gulch (instance 489) and map 2524 (instance
+/// 2997) where they lie; the cosmic map and a map the client lacks none.
 #[test]
-fn a_map_off_the_continents_has_no_place() {
+fn maps_off_the_continents_lie_as_recorded() {
     let mut vm = vm();
     let src = format!(
         "{CORNERS}return corners(947), corners(1460), corners(2524), corners(946), corners(99999)"
     );
     let r = run(&mut vm, &src);
-    assert_eq!(r, ["none"; 5]);
+    assert_eq!(
+        r,
+        [
+            "1 14824.5 8724.0 -19900.2 -12087.5",
+            "489 1627.1 2041.7 862.5 895.8",
+            "2997 447.9 2918.8 -835.4 993.8",
+            "none",
+            "none"
+        ]
+    );
 }
 
 #[test]

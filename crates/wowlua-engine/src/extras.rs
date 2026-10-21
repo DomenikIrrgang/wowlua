@@ -1665,9 +1665,12 @@ fn timeline_current_time(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 /// Artifact power a trait's ranks cost, from rank 0, whatever the tier
 /// (the full probe: rank 0 100, rank 1 300, tiers 0 and 1 alike; the
-/// later ranks were not asked and cost nothing here, unverified, as a rank
-/// past the table does, 2147483647: 0).
-const ARTIFACT_RANK_COSTS: [f64; 2] = [100.0, 300.0];
+/// answers battery: ranks 2 to 10, and the totals of ranks 1 to 2, 1 to 5,
+/// 1 to 10 and 3 to 6 agree). Past rank 10 nothing here, unverified, as a
+/// rank far past the table does (2147483647: 0).
+const ARTIFACT_RANK_COSTS: [f64; 11] = [
+    100.0, 300.0, 325.0, 350.0, 375.0, 400.0, 425.0, 450.0, 525.0, 625.0, 750.0,
+];
 
 fn artifact_rank_cost(rank: f64) -> f64 {
     if rank < 0.0 {

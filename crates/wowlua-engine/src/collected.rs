@@ -675,7 +675,10 @@ fn player_has_toy(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 fn is_toy_usable(vm: &mut Vm, c: NativeCall) -> Ret {
-    Ok(vec![Value::Bool(toy_arg(vm, &c).is_some_and(|t| t.usable))])
+    // Not a toy of the account: nothing (the full probe: -1, 0, 1, 2).
+    Ok(toy_arg(vm, &c)
+        .map(|t| vec![Value::Bool(t.usable)])
+        .unwrap_or_default())
 }
 
 fn get_toy_favorite(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -716,7 +719,8 @@ fn has_any_toy(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `GetToyLink(itemID)`: a toy's item's link.
 fn get_toy_link(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(t) = toy_arg(vm, &c) else {
-        return Ok(vec![Value::Nil]);
+        // Nothing for a toy the account lacks (the full probe: -1).
+        return Ok(vec![]);
     };
     Ok(vec![
         crate::character::link_of_id(vm, t.item).unwrap_or(Value::Nil),

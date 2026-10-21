@@ -1230,7 +1230,7 @@ pub(crate) fn xml_color(vm: &mut Vm, el: &Element) -> [Value; 4] {
             }
         }
     }
-    c.map(|v| Value::Num(crate::widgets::byte_float(v)))
+    c.map(|v| Value::Num(crate::widgets::byte_float(vm, v)))
 }
 
 /// The client's global strings: the file's `NAME = "text";` lines (a line

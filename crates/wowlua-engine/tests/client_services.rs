@@ -141,3 +141,20 @@ return table.concat(Clicks, ', ')",
     );
     assert_eq!(r, ["plain LeftButton false, early LeftButton true"]);
 }
+
+/// The machine the client runs on (decision T236): the answers that differ
+/// by machine are the platform's (recorded on a Mac and on Windows), and
+/// `IsMacClient` and `IsWindowsClient` follow it; the Mac by default.
+#[test]
+fn the_platform_decides_the_machines_answers() {
+    let mut vm = vm();
+    // Blizzard's global strings for the two keys (GlobalStrings.lua).
+    run(
+        &mut vm,
+        "KEY_DELETE, KEY_DELETE_MAC, KEY_ENTER, KEY_ENTER_MAC = 'Delete', 'Del', 'Enter', 'Return'",
+    );
+    let ask = "return tostring(IsMacClient()), tostring(IsWindowsClient()), GetBindingText('DELETE'), GetBindingText('META-ENTER')";
+    assert_eq!(run(&mut vm, ask), ["true", "false", "Del", "CMD-Return"]);
+    wowlua_engine::set_platform(&mut vm, wowlua_engine::Platform::Windows);
+    assert_eq!(run(&mut vm, ask), ["false", "true", "Delete", "META-Enter"]);
+}

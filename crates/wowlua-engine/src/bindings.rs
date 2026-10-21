@@ -1142,9 +1142,11 @@ fn global_text(vm: &mut Vm, name: &str) -> Option<String> {
 /// A key as the client shows it (recorded, 167 keys on the Mac client):
 /// the modifiers as written but META, which is `CMD_KEY_TEXT`; the key its
 /// `KEY_<key>_MAC` string, else `KEY_<key>`, else itself ("CTRL-Page Up",
-/// "Help" for INSERT, "F13" for PRINTSCREEN, "Num Pad 0"). Unverified: the
-/// other platforms, `abbreviate`.
+/// "Help" for INSERT, "F13" for PRINTSCREEN, "Num Pad 0"); on Windows
+/// (recorded too, decision T236) META as written and `KEY_<key>`, else
+/// itself ("Delete", "Insert", "Print Screen"). Unverified: `abbreviate`.
 pub fn binding_text(vm: &mut Vm, key: &str) -> String {
+    let mac = crate::engine(vm).platform == crate::Platform::Mac;
     // The modifiers, then the key (which may be "-" itself: "CTRL--").
     let mut rest = key;
     let mut parts = Vec::new();
@@ -1154,14 +1156,19 @@ pub fn binding_text(vm: &mut Vm, key: &str) -> String {
             .find(|m| rest.starts_with(m) && rest.len() > m.len());
         let Some(m) = found else { break };
         let name = &m[..m.len() - 1];
-        parts.push(if name == "META" {
+        // On a Mac the Command key's name, on Windows "META" as it is
+        // (recorded on both, decision T236).
+        parts.push(if name == "META" && mac {
             global_text(vm, "CMD_KEY_TEXT").unwrap_or_else(|| "CMD".to_string())
         } else {
             name.to_string()
         });
         rest = &rest[m.len()..];
     }
-    let shown = global_text(vm, &format!("KEY_{rest}_MAC"))
+    // A Mac's own key names first (`KEY_DELETE_MAC` "Del"; Windows' "Delete").
+    let shown = mac
+        .then(|| global_text(vm, &format!("KEY_{rest}_MAC")))
+        .flatten()
         .or_else(|| global_text(vm, &format!("KEY_{rest}")))
         .unwrap_or_else(|| rest.to_string());
     parts.push(shown);

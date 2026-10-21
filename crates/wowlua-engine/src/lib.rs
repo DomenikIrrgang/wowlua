@@ -94,6 +94,9 @@ use wowlua_vm::{NativeCall, NativeFn, Value, Vm};
 /// The engine's state, kept in the VM's host slot.
 pub struct Engine {
     pub flavor: String,
+    /// The machine the client runs on (decision T236): its machine-specific
+    /// answers and `IsMacClient`.
+    pub platform: Platform,
     pub api: &'static api::Api,
     /// Set by a behaviour whose answer has nothing to hide this call.
     pub plain_results: bool,
@@ -174,6 +177,52 @@ pub fn engine_mut(vm: &mut Vm) -> &mut Engine {
         .as_mut()
         .and_then(|h| h.downcast_mut())
         .expect("the engine is installed")
+}
+
+/// The machine a test's client runs on (decision T236): the recorded
+/// answers that differ by machine (`data/camelot-answers-<platform>.txt`:
+/// key names, graphics, sound, colours' last digits) and `IsMacClient`,
+/// `IsWindowsClient`. The Mac by default, where the first recordings were
+/// made.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum Platform {
+    #[default]
+    Mac,
+    Windows,
+}
+
+impl Platform {
+    /// `"mac"` or `"windows"`, as the manifest and `config` name it.
+    pub fn parse(name: &str) -> Option<Platform> {
+        match name {
+            "mac" => Some(Platform::Mac),
+            "windows" => Some(Platform::Windows),
+            _ => None,
+        }
+    }
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Platform::Mac => "mac",
+            Platform::Windows => "windows",
+        }
+    }
+}
+
+/// A colour channel kept in eight bits, read back as the machine does it
+/// (decision T236): the Mac multiplies the byte by the float 1/255 (209 is
+/// 0.81960791349411), Windows divides it by 255 (0.81960785388947; both
+/// recorded, the answers battery's colours and `GetFontInfo`).
+pub(crate) fn byte_channel(platform: Platform, byte: f32) -> f64 {
+    match platform {
+        Platform::Mac => f64::from(byte * (1.0f32 / 255.0)),
+        Platform::Windows => f64::from(byte / 255.0f32),
+    }
+}
+
+/// Sets the machine the client runs on (after `install`).
+pub fn set_platform(vm: &mut Vm, platform: Platform) {
+    engine_mut(vm).platform = platform;
 }
 
 /// Installs a flavor's engine into a VM made with `Vm::wow`: every
@@ -272,6 +321,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         .collect();
     vm.host = Some(Box::new(Engine {
         flavor: flavor.to_string(),
+        platform: Platform::Mac,
         api,
         behaviours: fill.into_iter().chain(own).collect(),
         fill_ins,

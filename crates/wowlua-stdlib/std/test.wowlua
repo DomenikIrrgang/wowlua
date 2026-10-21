@@ -213,8 +213,10 @@ export const afterAll: any = hook("afterAll")
 --- Per-file runner settings: `lifecycle = "manual"` leaves logging in to
 --- the file (`mock.login()`); `timeout`: how long waits may take (virtual
 --- seconds, 10 by default); `profile`: the world profile the file starts
---- in (`tests/profiles/<name>.json`; read before anything loads).
-export function config(opts: { lifecycle?: "auto" | "manual", timeout?: number, profile?: string })
+--- in (`tests/profiles/<name>.json`); `platform`: the machine the client
+--- runs on, `"mac"` (the default) or `"windows"` (both read before
+--- anything loads, as literals).
+export function config(opts: { lifecycle?: "auto" | "manual", timeout?: number, profile?: string, platform?: "mac" | "windows" })
     if opts.lifecycle then
         settings.lifecycle = opts.lifecycle
     end

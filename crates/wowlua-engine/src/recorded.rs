@@ -12,16 +12,40 @@ use wowlua_vm::{NativeCall, Value, Vm};
 
 use crate::engine;
 
+fn answer_table(text: &'static str) -> HashMap<&'static str, &'static str> {
+    text.lines()
+        .filter(|l| !l.starts_with('#'))
+        .filter_map(|l| l.split_once('\t'))
+        .map(|(c, a)| (unescape(c), unescape(a)))
+        .collect()
+}
+
+/// The answers the same on every machine.
 pub(crate) fn answers() -> &'static HashMap<&'static str, &'static str> {
     static ANSWERS: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
-    ANSWERS.get_or_init(|| {
-        include_str!("../data/camelot-answers.txt")
-            .lines()
-            .filter(|l| !l.starts_with('#'))
-            .filter_map(|l| l.split_once('\t'))
-            .map(|(c, a)| (unescape(c), unescape(a)))
-            .collect()
-    })
+    ANSWERS.get_or_init(|| answer_table(include_str!("../data/camelot-answers.txt")))
+}
+
+/// The answers that differ by machine, the platform's (decision T236).
+fn platform_answers(platform: crate::Platform) -> &'static HashMap<&'static str, &'static str> {
+    static MAC: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
+    static WINDOWS: OnceLock<HashMap<&'static str, &'static str>> = OnceLock::new();
+    match platform {
+        crate::Platform::Mac => {
+            MAC.get_or_init(|| answer_table(include_str!("../data/camelot-answers-mac.txt")))
+        }
+        crate::Platform::Windows => WINDOWS
+            .get_or_init(|| answer_table(include_str!("../data/camelot-answers-windows.txt"))),
+    }
+}
+
+/// A call's recorded answer on this VM's machine: the platform's, else the
+/// one every machine gave.
+pub(crate) fn answer(vm: &Vm, call: &str) -> Option<&'static str> {
+    platform_answers(engine(vm).platform)
+        .get(call)
+        .or_else(|| answers().get(call))
+        .copied()
 }
 
 /// The trainers' recorded answers (`/stdtest engine trainer`,
@@ -69,6 +93,8 @@ pub fn unescape(field: &'static str) -> &'static str {
 pub fn functions() -> Vec<&'static str> {
     let mut names: Vec<&'static str> = answers()
         .keys()
+        .chain(platform_answers(crate::Platform::Mac).keys())
+        .chain(platform_answers(crate::Platform::Windows).keys())
         .filter_map(|call| call.split('(').next())
         .collect();
     names.sort_unstable();
@@ -301,7 +327,7 @@ pub fn client_answer(vm: &mut Vm, c: &NativeCall) -> Vec<Value> {
 /// The recorded answer to a call written as the engine writes calls
 /// (`C_X.F(1)`), if there is one.
 pub fn lookup_text(vm: &mut Vm, call: &str) -> Option<Vec<Value>> {
-    let answer = answers().get(call)?;
+    let answer = answer(vm, call)?;
     Some(parse_answer(vm, answer))
 }
 
@@ -313,7 +339,7 @@ pub fn lookup_text(vm: &mut Vm, call: &str) -> Option<Vec<Value>> {
 pub fn lookup(vm: &mut Vm, name: &str, c: &NativeCall) -> Option<Vec<Value>> {
     let answer = call_variants(vm, name, c)
         .iter()
-        .find_map(|call| answers().get(call.as_str()))?;
+        .find_map(|call| answer(vm, call))?;
     Some(parse_answer(vm, answer))
 }
 
@@ -424,29 +450,37 @@ fn enum_arguments(vm: &Vm, name: &str) -> Option<&'static [bool]> {
 fn arity(vm: &Vm, name: &str) -> Option<usize> {
     static ARGLESS: OnceLock<std::collections::HashSet<&'static str>> = OnceLock::new();
     let argless = ARGLESS.get_or_init(|| {
-        // Each function's argless call, and whether its calls with
-        // arguments all answered as it.
-        let mut answer: HashMap<&str, &str> = HashMap::new();
-        for (call, a) in answers() {
-            if let Some(f) = call.strip_suffix("()") {
-                answer.insert(f, a);
+        // On each machine (its answers over the shared ones), each
+        // function's argless call and whether its calls with arguments all
+        // answered as it; argless where both machines say so.
+        let on = |platform: crate::Platform| {
+            let mut all: HashMap<&'static str, &'static str> = answers().clone();
+            all.extend(platform_answers(platform).iter().map(|(k, v)| (*k, *v)));
+            let mut answer: HashMap<&'static str, &'static str> = HashMap::new();
+            for (&call, &a) in &all {
+                if let Some(f) = call.strip_suffix("()") {
+                    answer.insert(f, a);
+                }
             }
-        }
-        let mut with_args = std::collections::HashSet::new();
-        for (call, a) in answers() {
-            if call.ends_with("()") {
-                continue;
+            let mut with_args = std::collections::HashSet::new();
+            for (&call, &a) in &all {
+                if call.ends_with("()") {
+                    continue;
+                }
+                if let Some((f, _)) = call.split_once('(')
+                    && answer.get(f) != Some(&a)
+                {
+                    with_args.insert(f);
+                }
             }
-            if let Some((f, _)) = call.split_once('(')
-                && answer.get(f) != Some(a)
-            {
-                with_args.insert(f);
-            }
-        }
-        answer
-            .into_keys()
-            .filter(|f| !with_args.contains(f))
-            .collect()
+            answer
+                .into_keys()
+                .filter(|f| !with_args.contains(f))
+                .collect::<std::collections::HashSet<&'static str>>()
+        };
+        let mac = on(crate::Platform::Mac);
+        let windows = on(crate::Platform::Windows);
+        mac.intersection(&windows).copied().collect()
     });
     // The recorded answers are camelot's: its documentation's arities.
     static DOCUMENTED: OnceLock<HashMap<&'static str, usize>> = OnceLock::new();

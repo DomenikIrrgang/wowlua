@@ -2731,6 +2731,19 @@ fn request_preferred_play_settings(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 // ------------------------------------------------------- registration
 
+/// `IsWindowsClient()`, `IsMacClient()`: the test's platform (decision
+/// T236; recorded: the Mac's `IsMacClient` true, Windows' false).
+fn is_windows_client(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(
+        crate::engine(vm).platform == crate::Platform::Windows,
+    )])
+}
+
+fn is_mac_client(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(
+        crate::engine(vm).platform == crate::Platform::Mac,
+    )])
+}
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
         // Math (C functions on camelot).
@@ -2811,8 +2824,9 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             "C_DateAndTime.GetCalendarTimeFromEpoch",
             calendar_time_from_epoch,
         ),
-        // The client's build: a Mac client (`IsMacClient` true), public.
-        ("IsWindowsClient", no),
+        // The client's build: on the test's platform (decision T236), public.
+        ("IsWindowsClient", is_windows_client),
+        ("IsMacClient", is_mac_client),
         ("IsLinuxClient", no),
         ("IsBetaBuild", no),
         ("IsPublicBuild", yes),

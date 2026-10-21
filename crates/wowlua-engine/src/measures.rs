@@ -96,11 +96,22 @@ fn get_horizontal_scroll_range(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret
 }
 
 /// An atlas the client was seen to have: its name as the client spells
-/// it, its width and height where known (`data/camelot-atlases.txt`).
+/// it, its width and height where known, and, where the client was asked
+/// (`C_Texture.GetAtlasInfo`), its file, texture coordinates (left, right,
+/// top, bottom) and tiling (`data/camelot-atlases.txt`).
 pub struct Atlas {
     pub name: &'static str,
     pub width: Option<f64>,
     pub height: Option<f64>,
+    pub info: Option<AtlasInfo>,
+}
+
+/// An atlas's info as the client gave it.
+pub struct AtlasInfo {
+    pub file: f64,
+    pub coords: [f64; 4],
+    pub tiles_horizontally: bool,
+    pub tiles_vertically: bool,
 }
 
 /// The atlas named `name` (any case), if recorded.
@@ -112,16 +123,26 @@ pub fn atlas(name: &str) -> Option<&'static Atlas> {
             .lines()
             .filter(|l| !l.starts_with('#') && !l.is_empty())
             .map(|l| {
-                let mut f = l.split('\t');
-                let name = f.next().unwrap_or("");
-                let width = f.next().and_then(|v| v.parse().ok());
-                let height = f.next().and_then(|v| v.parse().ok());
+                let f: Vec<&str> = l.split('\t').collect();
+                let num = |i: usize| f.get(i).and_then(|v| v.parse::<f64>().ok());
+                let info = (f.len() >= 10).then(|| AtlasInfo {
+                    file: num(3).unwrap_or(0.0),
+                    coords: [
+                        num(4).unwrap_or(0.0),
+                        num(5).unwrap_or(1.0),
+                        num(6).unwrap_or(0.0),
+                        num(7).unwrap_or(1.0),
+                    ],
+                    tiles_horizontally: f[8] == "true",
+                    tiles_vertically: f[9] == "true",
+                });
                 (
-                    name.to_ascii_lowercase(),
+                    f[0].to_ascii_lowercase(),
                     Atlas {
-                        name,
-                        width,
-                        height,
+                        name: f[0],
+                        width: num(1),
+                        height: num(2),
+                        info,
                     },
                 )
             })

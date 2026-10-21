@@ -1,300 +1,299 @@
 # Atlases as WoW Forever 1.60.1 (70450) names them (GetAtlas gives this
 # spelling whatever case SetAtlas was given), from SuuUI's tree probe of
-# the character, talents and spell book, and legacy windows; with each side's
-# size where a texture sized by its atlas (useAtlasSize) showed it, that side
-# not set by two points. One per line: the name, then width and height when
-# known (- for a side not seen).
-!macropopup-left	17	-
-!macropopup-right	17	-
-!minimal-scrollbar-track-middle
-!UI-Frame-InnerLeftTile	3	-
-!UI-Frame-InnerRightTile	3	-
-!UI-Frame-LeftTile
-!UI-Frame-Metal-EdgeLeft	95	-
-!UI-Frame-Metal-EdgeRight	95	-
-!UI-Frame-RightTile
-128-GoldRedButton-Highlight
-128-GoldRedButton-Left-Disabled
-128-GoldRedButton-Right-Disabled
-128-RedButton-Highlight
-_128-GoldRedButton-Center-Disabled
-_macropopup-bottom	-	39
-_macropopup-top	-	68
-_search-rowbg
-_UI-Frame-Bot
-_UI-Frame-InnerBotTile	-	3
-_UI-Frame-InnerTopTile	-	3
-_UI-Frame-Metal-EdgeBottom	-	100
-_UI-Frame-Metal-EdgeTop	-	95
-_UI-Frame-TopTileStreaks
-_uiframe-activetab-center	-	32
-_uiframe-tab-center	-	32
-auctionhouse-ui-filter-redx
-AzeriteArmor-CharacterInfo-Border-Glow	53	41
-AzeriteArmor-CharacterInfo-Border-ItemGlow	35	35
-AzeriteArmor-CharacterInfo-Border-Smoke	9	32
-AzeriteArmor-CharacterInfo-Border-TitanStar
-AzeriteArmor-CharacterInfo-NeckLevelBorder
-character-emptysocket
-charactercreate-ring-select
-checkbox-minimal
-checkmark-minimal
-checkmark-minimal-disabled
-collections-newglow
-common-button-list-collapseExpand
-common-button-list-minus	13	4
-common-button-square-gray-down
-common-button-square-gray-up
-common-button-tertiary-normal
-common-dropdown-a-button	27	27
-common-dropdown-b-button
-common-dropdown-textholder
-common-framedivider
-common-icon-rotateleft
-common-icon-rotateright
-common-icon-undo
-common-icon-zoomin
-common-icon-zoomout
-common-insideframe
-common-mask-circle
-common-mask-semicircle-left
-common-mask-semicircle-right
-common-search-border-left
-common-search-border-middle
-common-search-border-right
-common-search-clearbutton
-common-search-magnifyingglass
-common-sidetab	55	60
-common-sidetab-hover	55	60
-common-sidetab-mask	55	60
-common-sidetab-selected	55	60
-common-stat-bar-BG
-common-stat-bar-blue
-common-stat-bar-green
-common-stat-bar-Mask
-common-stat-bar-white
-covenantsanctum-renown-icon-border-standard	55	65
-gamepad-press&hold-indicator
-gamepad-press&hold-indicator-BG
-gamepad-press&hold-loadBar
-gamepad-press&hold-loadBar-BG
-gamepad-press&hold-loadBar-glw-BG
-gamepad-press&hold-spinnerTip
-gamepad-uiframemetal-largeportrait-focus
-Gamepad-Xbox1-ButtonY-Disabled
-Gamepad-Xbox1-ButtonY-Down
-Gamepad-Xbox1-ButtonY-Focus
-Gamepad-Xbox1-ButtonY-Normal
-Gamepad-Xbox1-ButtonY-Over
-Gamepad-Xbox1-Menu-Disabled
-Gamepad-Xbox1-Menu-Down
-Gamepad-Xbox1-Menu-Focus
-Gamepad-Xbox1-Menu-Normal
-Gamepad-Xbox1-Menu-Over
-Gamepad-Xbox1-Trigger-LB-Disabled
-Gamepad-Xbox1-Trigger-LB-Down
-Gamepad-Xbox1-Trigger-LB-Focus
-Gamepad-Xbox1-Trigger-LB-Normal
-Gamepad-Xbox1-Trigger-LB-Over
-Gamepad-Xbox1-Trigger-LT-Disabled
-Gamepad-Xbox1-Trigger-LT-Down
-Gamepad-Xbox1-Trigger-LT-Focus
-Gamepad-Xbox1-Trigger-LT-Normal
-Gamepad-Xbox1-Trigger-LT-Over
-Gamepad-Xbox1-Trigger-RB-Disabled
-Gamepad-Xbox1-Trigger-RB-Down
-Gamepad-Xbox1-Trigger-RB-Focus
-Gamepad-Xbox1-Trigger-RB-Normal
-Gamepad-Xbox1-Trigger-RB-Over
-Gamepad-Xbox1-Trigger-RT-Disabled
-Gamepad-Xbox1-Trigger-RT-Down
-Gamepad-Xbox1-Trigger-RT-Focus
-Gamepad-Xbox1-Trigger-RT-Normal
-Gamepad-Xbox1-Trigger-RT-Over
-Gamepad-Xbox1-View-Disabled
-Gamepad-Xbox1-View-Down
-Gamepad-Xbox1-View-Focus
-Gamepad-Xbox1-View-Normal
-Gamepad-Xbox1-View-Over
-GearEnchant_IconBorder
-GearEnchantFX_CharUI_DarkGold	414	415
-GearEnchantFX_CharUI_Frame	233	323
-GearEnchantFX_CharUI_Gold	414	415
-GearEnchantFX_CharUI_Mask	512	512
-GearEnchantFX_CharUI_Sparkles	373	369
-heartofazeroth-animation-glowies	733	715
-heartofazeroth-animation-lensflareline
-heartofazeroth-animation-ring	511	476
-heartofazeroth-animation-ring-constellation	600	600
-heartofazeroth-animation-rune4	300	300
-heartofazeroth-animation-stars	512	512
-heartofazeroth-animation-sunburst	732	749
-heartofazeroth-animation-titans	972	810
-helptip-arrow	65	28
-Legacy-Challenge-BG
-Legacy-Challenge-Left-Sub-Tab
-Legacy-Challenge-Left-Sub-Tab-selected
-Legacy-Progressbar-BG
-Legacy-Progressbar-Fill
-Legacy-Progressbar-Frame
-Legacy-Rewards-Tracker-background
-Legacy-Rewards-Tracker-Cards
-Legacy-Rewards-Tracker-Cards-Disable
-Legacy-Rewards-Tracker-Diamond
-Legacy-Rewards-Tracker-Diamond-Disable
-Legacy-Rewards-Tracker-Icon	108	155
-Legacy-Rewards-Tracker-Icons-Frame
-Legacy-Rewards-Tracker-Icons-Frame-Disable
-Legacy-Tree-Frame-background
-Legacy-Tree-Frame-Card
-Legacy-Tree-Frame-Card-Glow	95	76
-Legacy-Tree-Frame-Card-Ring
-Legacy-Tree-Frame-divider-Vertical
-Legacy-Tree-Frame-icon-frame-disable
-Legacy-Tree-Frame-icon-frame-Green
-Legacy-Tree-Frame-level-circle	64	64
-Legacy-Tree-Frame-Points-Bar
-Legacy-Tree-Frame-reset-button	20	20
-Legacy-Tree-Frame-Ring-big
-Legacy-up-c60
-macropopup-bottomleft	18	39
-macropopup-bottomright	174	39
-macropopup-topleft	18	71
-macropopup-topright	18	71
-minimal-scrollbar-arrow-bottom
-minimal-scrollbar-arrow-top
-minimal-scrollbar-small-thumb-bottom	8	8
-minimal-scrollbar-small-thumb-middle
-minimal-scrollbar-small-thumb-top	8	8
-minimal-scrollbar-track-bottom	8	8
-minimal-scrollbar-track-top	8	8
-newplayertutorial-yellowglow-redbutton-left	25	49
-newplayertutorial-yellowglow-redbutton-middle
-newplayertutorial-yellowglow-redbutton-right	25	49
-Nzoth-charactersheet-item-glow	66	66
-pvpqueue-sidebar-honorbar-background
-# The quest log scroll frame's bottom shadow (its height divides an offset):
-# the size from Ketho's BlizzardInterfaceResources, forever c5a49d394564
-# (AtlasInfo.lua), not probed.
+# the character, talents and spell book, and legacy windows. One per line:
+# the name, then as C_Texture.GetAtlasInfo gave it (the answers battery's
+# atlas checks): width, height, file ID, left, right, top and bottom
+# texture coordinates, tiling horizontally and vertically. A line with
+# only width and height (- for a side not seen) was not asked: its size
+# where a texture sized by its atlas (useAtlasSize) showed it.
+!macropopup-left	17	256	8430048	0.2578125	0.390625	0	1	false	true
+!macropopup-right	17	256	8430048	0.40625	0.5390625	0	1	false	true
+!minimal-scrollbar-track-middle	8	1	8086478	0.015625	0.140625	0	0.0009765625	false	true
+!UI-Frame-InnerLeftTile	3	256	1723832	0.484375	0.53125	0	1	false	true
+!UI-Frame-InnerRightTile	3	256	1723832	0.5625	0.609375	0	1	false	true
+!UI-Frame-LeftTile	16	256	1723832	0.015625	0.265625	0	1	false	true
+!UI-Frame-Metal-EdgeLeft	95	128	8069114	0.001953125	0.373046875	0	1	false	true
+!UI-Frame-Metal-EdgeRight	95	128	8069114	0.376953125	0.748046875	0	1	false	true
+!UI-Frame-RightTile	10	256	1723832	0.296875	0.453125	0	1	false	true
+128-GoldRedButton-Highlight	441	128	3856481	0.001953125	0.86328125	0.3818359375	0.5068359375	false	false
+128-GoldRedButton-Left-Disabled	114	128	3856481	0.576171875	0.798828125	0.6357421875	0.7607421875	false	false
+128-GoldRedButton-Right-Disabled	292	128	3856481	0.001953125	0.572265625	0.6357421875	0.7607421875	false	false
+128-RedButton-Highlight	441	128	1536801	0.001953125	0.86328125	0.1909179688	0.2534179688	false	false
+_128-GoldRedButton-Center-Disabled	64	128	3856481	0	0.125	0.1279296875	0.2529296875	true	false
+_macropopup-bottom	256	39	8430026	0	1	0.27734375	0.4296875	true	false
+_macropopup-top	256	68	8430026	0	1	0.00390625	0.26953125	true	false
+_search-rowbg	64	27	1047875	0	0.125	0.0078125	0.21875	true	false
+_UI-Frame-Bot	256	9	1723833	0	1	0.7421875	0.8125	true	false
+_UI-Frame-InnerBotTile	256	3	1723833	0	1	0.8671875	0.890625	true	false
+_UI-Frame-InnerTopTile	256	3	1723833	0	1	0.90625	0.9296875	true	false
+_UI-Frame-Metal-EdgeBottom	128	100	8069118	0	1	0.001953125	0.392578125	true	false
+_UI-Frame-Metal-EdgeTop	128	95	8069118	0	1	0.396484375	0.767578125	true	false
+_UI-Frame-TopTileStreaks	256	43	1723833	0	1	0.0078125	0.34375	true	false
+_uiframe-activetab-center	1	42	4707839	0	0.015625	0.00390625	0.16796875	true	false
+_uiframe-tab-center	1	36	8168849	0	0.015625	0.0078125	0.2890625	true	false
+auctionhouse-ui-filter-redx	46	46	3046538	0.9404296875	0.9853515625	0.0009765625	0.0458984375	false	false
+AzeriteArmor-CharacterInfo-Border-Glow	53	41	1850060	0.76953125	0.9765625	0.373046875	0.4130859375	false	false
+AzeriteArmor-CharacterInfo-Border-ItemGlow	35	35	1850060	0.73046875	0.8671875	0.501953125	0.5361328125	false	false
+AzeriteArmor-CharacterInfo-Border-Smoke	9	32	1850060	0.56640625	0.6015625	0.12109375	0.15234375	false	false
+AzeriteArmor-CharacterInfo-Border-TitanStar	14	14	1850060	0.609375	0.6640625	0.12109375	0.134765625	false	false
+AzeriteArmor-CharacterInfo-NeckLevelBorder	52	35	1850060	0.51953125	0.72265625	0.501953125	0.5361328125	false	false
+character-emptysocket	21	21	5735000	0.4135742188	0.423828125	0.2348632812	0.2451171875	false	false
+charactercreate-ring-select	236	236	1253496	0.1372070312	0.2524414062	0.1264648438	0.2416992188	false	false
+checkbox-minimal	30	29	8086474	0.03125	0.96875	0.03125	0.9375	false	false
+checkmark-minimal	30	29	4614134	0.015625	0.484375	0.5	0.953125	false	false
+checkmark-minimal-disabled	30	29	4614134	0.515625	0.984375	0.015625	0.46875	false	false
+collections-newglow	59	37	984826	0.51171875	0.626953125	0.013671875	0.0859375	false	false
+common-button-list-collapseExpand	64	28	8124219	0.3330078125	0.4580078125	0.759765625	0.869140625	false	false
+common-button-list-minus	13	4	8124219	0.0009765625	0.0263671875	0.970703125	0.986328125	false	false
+common-button-square-gray-down	42	42	8117690	0.0009765625	0.2509765625	0.2841796875	0.5341796875	false	false
+common-button-square-gray-up	42	42	8117690	0.0009765625	0.2509765625	0.5361328125	0.7861328125	false	false
+common-button-tertiary-normal	46	34	8069106	0.001953125	0.181640625	0.826171875	0.958984375	false	false
+common-dropdown-a-button	27	27	8069110	0.470703125	0.576171875	0.673828125	0.779296875	false	false
+common-dropdown-b-button	97	26	8069110	0.001953125	0.380859375	0.357421875	0.458984375	false	false
+common-dropdown-textholder	54	41	8069110	0.626953125	0.837890625	0.001953125	0.162109375	false	false
+common-framedivider	11	50	8245172	0.03125	0.71875	0.0078125	0.7890625	false	false
+common-icon-rotateleft	20	20	3487944	0.00048828125	0.04931640625	0.7568359375	0.8544921875	false	false
+common-icon-rotateright	20	20	3487944	0.00048828125	0.04931640625	0.8564453125	0.9541015625	false	false
+common-icon-undo	25	25	3487944	0.3784179688	0.5034179688	0.2529296875	0.5029296875	false	false
+common-icon-zoomin	25	25	3487944	0.3784179688	0.5034179688	0.5048828125	0.7548828125	false	false
+common-icon-zoomout	25	25	3487944	0.6303710938	0.7553710938	0.0009765625	0.2509765625	false	false
+common-insideframe	107	107	8124459	0.00390625	0.83984375	0.00390625	0.83984375	false	false
+common-mask-circle	256	256	5757702	0	1	0	1	false	false
+common-mask-semicircle-left	256	256	5752111	0	1	0	1	false	false
+common-mask-semicircle-right	256	256	5752114	0	1	0	1	false	false
+common-search-border-left	16	40	8086476	0.88671875	0.94921875	0.0078125	0.3203125	false	false
+common-search-border-middle	224	40	8086476	0.00390625	0.87890625	0.0078125	0.3203125	false	false
+common-search-border-right	16	40	8086476	0.00390625	0.06640625	0.3359375	0.6484375	false	false
+common-search-clearbutton	20	20	6725697	0.8012695312	0.8110351562	0.05078125	0.0703125	false	false
+common-search-magnifyingglass	24	24	6725697	0.7885742188	0.8002929688	0.0009765625	0.0244140625	false	false
+common-sidetab	55	60	8124215	0.00390625	0.43359375	0.00390625	0.47265625	false	false
+common-sidetab-hover	55	60	8124215	0.00390625	0.43359375	0.48046875	0.94921875	false	false
+common-sidetab-mask	55	60	8254786	0	0.9999999404	0	1	false	false
+common-sidetab-selected	55	60	8124215	0.44140625	0.87109375	0.00390625	0.47265625	false	false
+common-stat-bar-BG	67	29	8261265	0.001953125	0.263671875	0.50390625	0.73046875	false	false
+common-stat-bar-blue	240	15	8261265	0.001953125	0.939453125	0.00390625	0.12109375	false	false
+common-stat-bar-green	240	15	8261265	0.001953125	0.939453125	0.12890625	0.24609375	false	false
+common-stat-bar-Mask	67	29	8261289	0	1	0	1	false	false
+common-stat-bar-white	240	15	8261265	0.001953125	0.939453125	0.37890625	0.49609375	false	false
+covenantsanctum-renown-icon-border-standard	55	65	3893175	0.7568359375	0.810546875	0.001953125	0.12890625	false	false
+gamepad-press&hold-indicator	78	78	8508140	0.31640625	0.62109375	0.00390625	0.30859375	false	false
+gamepad-press&hold-indicator-BG	78	78	8508140	0.00390625	0.30859375	0.00390625	0.30859375	false	false
+gamepad-press&hold-loadBar	78	78	8508140	0.00390625	0.30859375	0.31640625	0.62109375	false	false
+gamepad-press&hold-loadBar-BG	78	78	8508140	0.62890625	0.93359375	0.00390625	0.30859375	false	false
+gamepad-press&hold-loadBar-glw-BG	78	78	8508140	0.00390625	0.30859375	0.62890625	0.93359375	false	false
+gamepad-press&hold-spinnerTip	78	78	8508140	0.31640625	0.62109375	0.31640625	0.62109375	false	false
+gamepad-uiframemetal-largeportrait-focus	401	284	6227333	0.0009765625	0.392578125	0.5224609375	0.7998046875	false	false
+Gamepad-Xbox1-ButtonY-Disabled	76	75	8268365	0.0009765625	0.0751953125	0.6025390625	0.67578125	false	false
+Gamepad-Xbox1-ButtonY-Down	76	75	8268365	0.0009765625	0.0751953125	0.677734375	0.7509765625	false	false
+Gamepad-Xbox1-ButtonY-Focus	76	75	8268365	0.0009765625	0.0751953125	0.7529296875	0.826171875	false	false
+Gamepad-Xbox1-ButtonY-Normal	76	75	8268365	0.0009765625	0.0751953125	0.828125	0.9013671875	false	false
+Gamepad-Xbox1-ButtonY-Over	76	75	8268365	0.0009765625	0.0751953125	0.9033203125	0.9765625	false	false
+Gamepad-Xbox1-Menu-Disabled	76	75	8268365	0.2294921875	0.3037109375	0.376953125	0.4501953125	false	false
+Gamepad-Xbox1-Menu-Down	76	75	8268365	0.2294921875	0.3037109375	0.4521484375	0.525390625	false	false
+Gamepad-Xbox1-Menu-Focus	76	75	8268365	0.2294921875	0.3037109375	0.52734375	0.6005859375	false	false
+Gamepad-Xbox1-Menu-Normal	76	75	8268365	0.2294921875	0.3037109375	0.6025390625	0.67578125	false	false
+Gamepad-Xbox1-Menu-Over	76	75	8268365	0.2294921875	0.3037109375	0.677734375	0.7509765625	false	false
+Gamepad-Xbox1-Trigger-LB-Disabled	76	75	8268365	0.4580078125	0.5322265625	0.7529296875	0.826171875	false	false
+Gamepad-Xbox1-Trigger-LB-Down	76	75	8268365	0.4580078125	0.5322265625	0.828125	0.9013671875	false	false
+Gamepad-Xbox1-Trigger-LB-Focus	76	75	8268365	0.4580078125	0.5322265625	0.9033203125	0.9765625	false	false
+Gamepad-Xbox1-Trigger-LB-Normal	76	75	8268365	0.5341796875	0.6083984375	0.52734375	0.6005859375	false	false
+Gamepad-Xbox1-Trigger-LB-Over	76	75	8268365	0.6103515625	0.6845703125	0.52734375	0.6005859375	false	false
+Gamepad-Xbox1-Trigger-LT-Disabled	76	75	8268365	0.6865234375	0.7607421875	0.52734375	0.6005859375	false	false
+Gamepad-Xbox1-Trigger-LT-Down	76	75	8268365	0.7626953125	0.8369140625	0.52734375	0.6005859375	false	false
+Gamepad-Xbox1-Trigger-LT-Focus	76	75	8268365	0.8388671875	0.9130859375	0.52734375	0.6005859375	false	false
+Gamepad-Xbox1-Trigger-LT-Normal	76	75	8268365	0.9150390625	0.9892578125	0.52734375	0.6005859375	false	false
+Gamepad-Xbox1-Trigger-LT-Over	76	75	8268365	0.5341796875	0.6083984375	0.6025390625	0.67578125	false	false
+Gamepad-Xbox1-Trigger-RB-Disabled	76	75	8268365	0.5341796875	0.6083984375	0.677734375	0.7509765625	false	false
+Gamepad-Xbox1-Trigger-RB-Down	76	75	8268365	0.5341796875	0.6083984375	0.7529296875	0.826171875	false	false
+Gamepad-Xbox1-Trigger-RB-Focus	76	75	8268365	0.5341796875	0.6083984375	0.828125	0.9013671875	false	false
+Gamepad-Xbox1-Trigger-RB-Normal	76	75	8268365	0.5341796875	0.6083984375	0.9033203125	0.9765625	false	false
+Gamepad-Xbox1-Trigger-RB-Over	76	75	8268365	0.6103515625	0.6845703125	0.6025390625	0.67578125	false	false
+Gamepad-Xbox1-Trigger-RT-Disabled	76	75	8268365	0.6865234375	0.7607421875	0.6025390625	0.67578125	false	false
+Gamepad-Xbox1-Trigger-RT-Down	76	75	8268365	0.7626953125	0.8369140625	0.6025390625	0.67578125	false	false
+Gamepad-Xbox1-Trigger-RT-Focus	76	75	8268365	0.8388671875	0.9130859375	0.6025390625	0.67578125	false	false
+Gamepad-Xbox1-Trigger-RT-Normal	76	75	8268365	0.9150390625	0.9892578125	0.6025390625	0.67578125	false	false
+Gamepad-Xbox1-Trigger-RT-Over	76	75	8268365	0.6103515625	0.6845703125	0.677734375	0.7509765625	false	false
+Gamepad-Xbox1-View-Disabled	76	75	8268365	0.6103515625	0.6845703125	0.7529296875	0.826171875	false	false
+Gamepad-Xbox1-View-Down	76	75	8268365	0.6103515625	0.6845703125	0.828125	0.9013671875	false	false
+Gamepad-Xbox1-View-Focus	76	75	8268365	0.6103515625	0.6845703125	0.9033203125	0.9765625	false	false
+Gamepad-Xbox1-View-Normal	76	75	8268365	0.6865234375	0.7607421875	0.677734375	0.7509765625	false	false
+Gamepad-Xbox1-View-Over	76	75	8268365	0.7626953125	0.8369140625	0.677734375	0.7509765625	false	false
+GearEnchant_IconBorder	72	72	5891205	0.0009765625	0.0712890625	0.8154296875	0.8857421875	false	false
+GearEnchantFX_CharUI_DarkGold	414	415	5891205	0.0009765625	0.4052734375	0.0009765625	0.40625	false	false
+GearEnchantFX_CharUI_Frame	233	323	5891205	0.4072265625	0.634765625	0.36328125	0.6787109375	false	false
+GearEnchantFX_CharUI_Gold	414	415	5891205	0.0009765625	0.4052734375	0.408203125	0.8134765625	false	false
+GearEnchantFX_CharUI_Mask	512	512	5891207	0	1	0	1	false	false
+GearEnchantFX_CharUI_Sparkles	373	369	5891205	0.4072265625	0.771484375	0.0009765625	0.361328125	false	false
+heartofazeroth-animation-glowies	733	715	2957979	0.00048828125	0.3583984375	0.00048828125	0.349609375	false	false
+heartofazeroth-animation-lensflareline	1367	187	2957979	0.00048828125	0.66796875	0.3505859375	0.4418945312	false	false
+heartofazeroth-animation-ring	511	476	2957979	0.00048828125	0.25	0.4428710938	0.6752929688	false	false
+heartofazeroth-animation-ring-constellation	600	600	2957979	0.359375	0.65234375	0.00048828125	0.2934570312	false	false
+heartofazeroth-animation-rune4	300	300	2957979	0.5458984375	0.6923828125	0.4428710938	0.5893554688	false	false
+heartofazeroth-animation-stars	512	512	2957979	0.6533203125	0.9033203125	0.00048828125	0.2504882812	false	false
+heartofazeroth-animation-sunburst	732	749	2907423	0.4208984375	0.7783203125	0.3969726562	0.7626953125	false	false
+heartofazeroth-animation-titans	972	810	2907423	0.00048828125	0.4750976562	0.00048828125	0.3959960938	false	false
+helptip-arrow	65	28	3055481	0.0078125	0.515625	0.03125	0.90625	false	false
+Legacy-Challenge-BG	813	510	8419564	0.4750976562	0.8720703125	0.001953125	0.998046875	false	false
+Legacy-Challenge-Left-Sub-Tab	267	33	8285995	0.7358398438	0.9965820312	0.7177734375	0.7822265625	false	false
+Legacy-Challenge-Left-Sub-Tab-selected	267	33	8285995	0.4741210938	0.7348632812	0.7177734375	0.7822265625	false	false
+Legacy-Progressbar-BG	117	12	8279989	0.00048828125	0.1147460938	0.9145507812	0.9262695312	false	false
+Legacy-Progressbar-Fill	117	12	8279989	0.00048828125	0.1147460938	0.9272460938	0.9389648438	false	false
+Legacy-Progressbar-Frame	131	26	8279989	0.00048828125	0.1284179688	0.8618164062	0.8872070312	false	false
+Legacy-Rewards-Tracker-background	813	510	8279987	0.0009765625	0.794921875	0.0009765625	0.4990234375	false	false
+Legacy-Rewards-Tracker-Cards	192	214	8279989	0.7954101562	0.9829101562	0.00048828125	0.2094726562	false	false
+Legacy-Rewards-Tracker-Cards-Disable	192	214	8279989	0.7954101562	0.9829101562	0.2104492188	0.4194335938	false	false
+Legacy-Rewards-Tracker-Diamond	56	56	8279989	0.1069335938	0.1616210938	0.7094726562	0.7641601562	false	false
+Legacy-Rewards-Tracker-Diamond-Disable	56	56	8279989	0.1069335938	0.1616210938	0.7651367188	0.8198242188	false	false
+Legacy-Rewards-Tracker-Icon	108	155	8279989	0.00048828125	0.1059570312	0.7094726562	0.8608398438	false	false
+Legacy-Rewards-Tracker-Icons-Frame	80	80	8279989	0.7954101562	0.8735351562	0.4204101562	0.4985351562	false	false
+Legacy-Rewards-Tracker-Icons-Frame-Disable	80	80	8279989	0.8745117188	0.9526367188	0.4204101562	0.4985351562	false	false
+Legacy-Tree-Frame-background	813	510	8281590	0.00048828125	0.7944335938	0.0009765625	0.9970703125	false	false
+Legacy-Tree-Frame-Card	127	93	8281590	0.8081054688	0.9321289062	0.1201171875	0.3017578125	false	false
+Legacy-Tree-Frame-Card-Glow	95	76	8281590	0.8081054688	0.9008789062	0.3037109375	0.4521484375	false	false
+Legacy-Tree-Frame-Card-Ring	70	70	8281590	0.9018554688	0.9702148438	0.3037109375	0.4404296875	false	false
+Legacy-Tree-Frame-divider-Vertical	12	453	8281590	0.7954101562	0.8071289062	0.0009765625	0.8857421875	false	false
+Legacy-Tree-Frame-icon-frame-disable	60	60	8281590	0.8676757812	0.9262695312	0.0009765625	0.1181640625	false	false
+Legacy-Tree-Frame-icon-frame-Green	60	60	8281590	0.9272460938	0.9858398438	0.0009765625	0.1181640625	false	false
+Legacy-Tree-Frame-level-circle	64	64	8281590	0.8081054688	0.8706054688	0.4541015625	0.5791015625	false	false
+Legacy-Tree-Frame-Points-Bar	187	37	8281590	0.8081054688	0.9907226562	0.8369140625	0.9091796875	false	false
+Legacy-Tree-Frame-reset-button	20	20	8281590	0.9711914062	0.9907226562	0.3037109375	0.3427734375	false	false
+Legacy-Tree-Frame-Ring-big	130	130	8281590	0.8081054688	0.9350585938	0.5810546875	0.8349609375	false	false
+Legacy-up-c60	198	273	7960142	0.2021484375	0.298828125	0.4609375	0.5942382812	false	false
+macropopup-bottomleft	18	39	8430026	0.31640625	0.38671875	0.671875	0.82421875	false	false
+macropopup-bottomright	174	39	8430026	0.00390625	0.68359375	0.51171875	0.6640625	false	false
+macropopup-topleft	18	71	8430026	0.00390625	0.07421875	0.671875	0.94921875	false	false
+macropopup-topright	18	71	8430026	0.08203125	0.15234375	0.671875	0.94921875	false	false
+minimal-scrollbar-arrow-bottom	17	11	8069102	0.2421875	0.375	0.8125	0.984375	false	false
+minimal-scrollbar-arrow-top	17	11	8069102	0.6875	0.8203125	0.015625	0.1875	false	false
+minimal-scrollbar-small-thumb-bottom	8	8	8069100	0.609375	0.734375	0.484375	0.609375	false	false
+minimal-scrollbar-small-thumb-middle	8	715	8069104	0.171875	0.296875	0.0009765625	0.69921875	false	false
+minimal-scrollbar-small-thumb-top	8	8	8069100	0.3125	0.4375	0.84375	0.96875	false	false
+minimal-scrollbar-track-bottom	8	8	8069102	0.0859375	0.1484375	0.765625	0.890625	false	false
+minimal-scrollbar-track-top	8	8	8069102	0.1640625	0.2265625	0.609375	0.734375	false	false
+newplayertutorial-yellowglow-redbutton-left	25	49	1065418	0.05126953125	0.07568359375	0.880859375	0.9765625	false	false
+newplayertutorial-yellowglow-redbutton-middle	2	49	1065418	0.9809570312	0.9829101562	0.1279296875	0.2236328125	false	false
+newplayertutorial-yellowglow-redbutton-right	25	49	1065418	0.07666015625	0.1010742188	0.880859375	0.9765625	false	false
+Nzoth-charactersheet-item-glow	66	66	3176469	0.49609375	0.75390625	0.0078125	0.5234375	false	false
+pvpqueue-sidebar-honorbar-background	196	171	2123218	0.671875	0.86328125	0.59765625	0.7646484375	false	false
 QuestLog-Frame-Gradient-bottom	307	66
-RedButton-Condense
-RedButton-Condense-disabled
-RedButton-Condense-Pressed
-RedButton-Exit
-RedButton-Exit-Disabled
-RedButton-exit-pressed
-RedButton-Expand
-RedButton-Expand-Disabled
-RedButton-Expand-Pressed
-RedButton-Highlight
-shop-card-wide-map
-spec-background
-Spinner_Ring
-Spinner_Sparks
-SquareMask
-talent-background-paladin
-talents-animations-class-paladin	461	461
-talents-animations-clouds	1612	774
-talents-animations-gridburst
-talents-animations-heroclass-backgroundrunes	828	399
-talents-animations-heroclass-backplate-full-glow-expanded	286	362
-talents-animations-heroclass-backplate-intro-glow-expanded	252	282
-talents-animations-mask-filigree-activate
-talents-animations-mask-full
-talents-animations-mask-heroclass-backplatefull-expanded	308	512
-talents-animations-mask-heroclass-ring	128	128
-talents-animations-mask-specart
-talents-animations-mask-specart-mid
-talents-animations-orb-activated
-talents-animations-particles	1308	774
-talents-animations-titans	972	810
-talents-arrow-head-ghost
-talents-arrow-head-gray
-talents-arrow-head-locked
-talents-arrow-head-yellow
-Talents-Background-c60
-talents-button-reset	20	20
-Talents-divider-left-c60	591	56
-Talents-divider-right-c60	595	56
-Talents-divider-vertical-c60	2	468
-talents-heroclass-backplate-full-expanded
-talents-heroclass-backplate-intro-expanded	252	282
-talents-heroclass-backplate-minimized-bottom
-talents-heroclass-backplate-minimized-middle
-talents-heroclass-backplate-minimized-top
-talents-heroclass-ring-intro
-talents-heroclass-ring-intro-glow	252	252
-talents-heroclass-ring-intro-locked	192	192
-talents-heroclass-ring-mainpane
-talents-heroclass-ring-minimize-hide
-talents-heroclass-ring-pointsavailable
-talents-icon-learnableplus
-Talents-inner-frame-c60
-talents-node-square-ghost
-talents-node-square-gray
-talents-node-square-green
-talents-node-square-greenglow
-talents-node-square-locked
-talents-node-square-shadow
-talents-node-square-sheenmask
-talents-node-square-yellow
-talents-search-match
-talents-sheen-heroclassicon
-talents-sheen-node
-Talents-Square-Box-c60	125	45
-transfer-log-background
-UI-Character-Info-Button-PullSide
-UI-Character-Info-Button-PullSide-Pressed
-UI-Character-Info-Button-PullUp
-UI-Character-Info-Button-PullUp-Pressed
-UI-Character-Info-GearSlot	55	55
-UI-Character-Info-GearSlot-Arrow	33	23
-UI-Character-Info-GearSlotSmall	44	44
-UI-Character-Info-General-BG	398	464
-UI-Character-Info-Honor-Bar-BG-Glow
-UI-Character-Info-Honor-Bar-BG-Horde	95	95
-UI-Character-Info-Honor-Icon-Horde	75	75
-UI-Character-Info-Honor-LevelBG	350	62
-UI-Character-Info-Honor-RewardRing
-UI-Character-Info-Icon-Add	18	18
-UI-Character-Info-ItemLevel-Bounce	204	21
-UI-Character-Info-Line-Bounce	213	18
-UI-Character-Info-Paladin-BG	233	383
-UI-Character-Info-RaceBG-Overlay
-UI-Character-Info-ScrollLine	210	7
-UI-Character-Info-ScrollLine-Long	384	8
-UI-Character-Info-Stat-BG
-UI-Character-Info-Stat-StoneBG3	233	60
-UI-Character-Info-StatTab
-UI-Character-Info-StatTab-Selected
-UI-Character-Info-Title
-UI-Frame-BotCornerLeft
-UI-Frame-BotCornerRight
-UI-Frame-IconMask
-UI-Frame-InnerBotLeftCorner	6	6
-UI-Frame-InnerBotRight	6	6
-UI-Frame-InnerTopLeft	6	6
-UI-Frame-InnerTopRight	6	6
-UI-Frame-Metal-CornerBottomLeft	95	100
-UI-Frame-Metal-CornerBottomRight	95	100
-UI-Frame-Metal-CornerTopLeft	95	95
-UI-Frame-Metal-CornerTopRight	95	95
-UI-Frame-PortraitMetal-CornerTopLeft	95	95
-UI-HUD-MicroMenu-Communities-Icon-Notification
-UI-Journeys-Delve-Arrow-Big-Left	25	40
-UI-Journeys-Delve-Arrow-Big-Left-disable	25	40
-UI-Journeys-Delve-Arrow-Big-Left-pressed	25	40
-UI-Journeys-Delve-Arrow-Small-Left	25	40
-UI-Journeys-Delve-Arrow-Small-Left-disable	25	40
-UI-Journeys-Delve-Arrow-Small-Left-pressed	25	40
-UI-Journeys-Paragon-Level-divider	31	74
-UI-Journeys-Scroll-Mask
-UI-Legacy-Points-icon-c60
-UI-Legacy-Tree-Adventure
-UI-Legacy-Tree-Professions
-UI-Legacy-Tree-Progression
-uiframe-activetab-left	35	32
-uiframe-activetab-right	37	32
-uiframe-tab-left	35	32
-uiframe-tab-right	37	32
-worldquest-tracker-checkmark	40	35
+RedButton-Condense	32	32	8107305	0.001953125	0.126953125	0.00390625	0.25390625	false	false
+RedButton-Condense-disabled	32	32	8107305	0.001953125	0.126953125	0.26171875	0.51171875	false	false
+RedButton-Condense-Pressed	32	32	8107305	0.001953125	0.126953125	0.51953125	0.76953125	false	false
+RedButton-Exit	32	32	8107305	0.130859375	0.255859375	0.00390625	0.25390625	false	false
+RedButton-Exit-Disabled	32	32	8107305	0.130859375	0.255859375	0.26171875	0.51171875	false	false
+RedButton-exit-pressed	32	32	8107305	0.130859375	0.255859375	0.51953125	0.76953125	false	false
+RedButton-Expand	32	32	8107305	0.259765625	0.384765625	0.00390625	0.25390625	false	false
+RedButton-Expand-Disabled	32	32	8107305	0.259765625	0.384765625	0.26171875	0.51171875	false	false
+RedButton-Expand-Pressed	32	32	8107305	0.259765625	0.384765625	0.51953125	0.76953125	false	false
+RedButton-Highlight	32	32	8107305	0.388671875	0.513671875	0.00390625	0.25390625	false	false
+shop-card-wide-map	532	244	6725700	0.5219726562	0.7817382812	0.2412109375	0.4794921875	false	false
+spec-background	1612	856	4626004	0.00048828125	0.7875976562	0.00048828125	0.4184570312	false	false
+Spinner_Ring	142	142	5413429	0.3984375	0.67578125	0.00390625	0.55859375	false	false
+Spinner_Sparks	142	142	5413429	0.6796875	0.95703125	0.00390625	0.55859375	false	false
+SquareMask	64	64	4733159	0	1	0	1	false	false
+talent-background-paladin	2046	1177	7808138	0.00048828125	0.9995117188	0.00048828125	0.5751953125	false	false
+talents-animations-class-paladin	461	461	4734301	0.2265625	0.4516601562	0.5014648438	0.7265625	false	false
+talents-animations-clouds	1612	774	4723109	0.00048828125	0.7875976562	0.00048828125	0.3784179688	false	false
+talents-animations-gridburst	1024	1024	4734301	0.00048828125	0.5004882812	0.00048828125	0.5004882812	false	false
+talents-animations-heroclass-backgroundrunes	828	399	4741460	0.00048828125	0.4047851562	0.3969726562	0.591796875	false	false
+talents-animations-heroclass-backplate-full-glow-expanded	286	362	4741460	0.7700195312	0.9096679688	0.00048828125	0.1772460938	false	false
+talents-animations-heroclass-backplate-intro-glow-expanded	252	282	4741460	0.4057617188	0.5288085938	0.3969726562	0.5346679688	false	false
+talents-animations-mask-filigree-activate	2048	1024	4734349	0	1	0	1	false	false
+talents-animations-mask-full	1024	1024	4722778	0	1	0	1	false	false
+talents-animations-mask-heroclass-backplatefull-expanded	308	512	7531969	0.001953125	0.603515625	0.0009765625	0.5009765625	false	false
+talents-animations-mask-heroclass-ring	128	128	5790026	0	1	0	1	false	false
+talents-animations-mask-specart	2048	1024	4726182	0	1	0	1	false	false
+talents-animations-mask-specart-mid	2048	1024	4732062	0	1	0	1	false	false
+talents-animations-orb-activated	600	600	4741460	0.4760742188	0.7690429688	0.00048828125	0.2934570312	false	false
+talents-animations-particles	1308	774	4732064	0.00048828125	0.6391601562	0.3793945312	0.7573242188	false	false
+talents-animations-titans	972	810	4741460	0.00048828125	0.4750976562	0.00048828125	0.3959960938	false	false
+talents-arrow-head-ghost	14	12	4556093	0.982421875	0.99609375	0.0830078125	0.1064453125	false	false
+talents-arrow-head-gray	14	12	4556093	0.2036132812	0.2172851562	0.8662109375	0.8896484375	false	false
+talents-arrow-head-locked	14	12	4556093	0.2036132812	0.2172851562	0.8916015625	0.9150390625	false	false
+talents-arrow-head-yellow	14	12	4556093	0.2036132812	0.2172851562	0.9423828125	0.9658203125	false	false
+Talents-Background-c60	605	701	8116737	0.00048828125	0.5913085938	0.00048828125	0.6850585938	false	false
+talents-button-reset	20	20	4556093	0.9462890625	0.9658203125	0.1123046875	0.1513671875	false	false
+Talents-divider-left-c60	591	56	8116737	0.00048828125	0.5776367188	0.7416992188	0.7963867188	false	false
+Talents-divider-right-c60	595	56	8116737	0.00048828125	0.5815429688	0.6860351562	0.7407226562	false	false
+Talents-divider-vertical-c60	2	468	8116737	0.5922851562	0.5942382812	0.00048828125	0.4575195312	false	false
+talents-heroclass-backplate-full-expanded	284	362	5740409	0.4711914062	0.6098632812	0.0009765625	0.3544921875	false	false
+talents-heroclass-backplate-intro-expanded	252	282	5740409	0.4711914062	0.5942382812	0.7119140625	0.9873046875	false	false
+talents-heroclass-backplate-minimized-bottom	128	53	5740409	0.3481445312	0.4106445312	0.8564453125	0.908203125	false	false
+talents-heroclass-backplate-minimized-middle	128	186	5740409	0.2846679688	0.3471679688	0.79296875	0.974609375	false	false
+talents-heroclass-backplate-minimized-top	128	63	5740409	0.3481445312	0.4106445312	0.79296875	0.8544921875	false	false
+talents-heroclass-ring-intro	192	192	5740409	0.00048828125	0.09423828125	0.79296875	0.98046875	false	false
+talents-heroclass-ring-intro-glow	252	252	5740409	0.6108398438	0.7338867188	0.0009765625	0.2470703125	false	false
+talents-heroclass-ring-intro-locked	192	192	5740409	0.09521484375	0.1889648438	0.79296875	0.98046875	false	false
+talents-heroclass-ring-mainpane	192	192	5740409	0.1899414062	0.2836914062	0.79296875	0.98046875	false	false
+talents-heroclass-ring-minimize-hide	44	44	5740409	0.4399414062	0.4614257812	0.79296875	0.8359375	false	false
+talents-heroclass-ring-pointsavailable	56	56	5740409	0.4116210938	0.4389648438	0.79296875	0.84765625	false	false
+talents-icon-learnableplus	19	18	4556093	0.966796875	0.9853515625	0.1123046875	0.1474609375	false	false
+Talents-inner-frame-c60	170	170	8116737	0.00048828125	0.1665039062	0.7973632812	0.9633789062	false	false
+talents-node-square-ghost	52	52	4556093	0.4907226562	0.5415039062	0.2744140625	0.3759765625	false	false
+talents-node-square-gray	40	40	4556093	0.9140625	0.953125	0.0009765625	0.0791015625	false	false
+talents-node-square-green	40	40	4556093	0.9541015625	0.9931640625	0.0009765625	0.0791015625	false	false
+talents-node-square-greenglow	84	84	4556093	0.1362304688	0.2182617188	0.7001953125	0.8642578125	false	false
+talents-node-square-locked	40	40	4556093	0.09326171875	0.1323242188	0.7685546875	0.8466796875	false	false
+talents-node-square-shadow	78	78	4556093	0.630859375	0.6689453125	0.0830078125	0.1591796875	false	false
+talents-node-square-sheenmask	64	64	4731572	0	1	0	1	false	false
+talents-node-square-yellow	40	40	4556093	0.5908203125	0.6298828125	0.0830078125	0.1611328125	false	false
+talents-search-match	63	63	4556093	0.3071289062	0.3686523438	0.6767578125	0.7998046875	false	false
+talents-sheen-heroclassicon	171	75	4556093	0.7885742188	0.8720703125	0.0009765625	0.07421875	false	false
+talents-sheen-node	87	138	4556093	0.4331054688	0.4755859375	0.6884765625	0.8232421875	false	false
+Talents-Square-Box-c60	125	45	8116737	0.1674804688	0.2895507812	0.8608398438	0.9047851562	false	false
+transfer-log-background	300	284	5882640	0.4423828125	0.7353515625	0.431640625	0.986328125	false	false
+UI-Character-Info-Button-PullSide	20	43	8175459	0.00048828125	0.02001953125	0.04345703125	0.08544921875	false	false
+UI-Character-Info-Button-PullSide-Pressed	20	43	8175459	0.00048828125	0.02001953125	0.00048828125	0.04248046875	false	false
+UI-Character-Info-Button-PullUp	43	20	8175459	0.1069335938	0.1489257812	0.00048828125	0.02001953125	false	false
+UI-Character-Info-Button-PullUp-Pressed	43	20	8175459	0.06396484375	0.1059570312	0.00048828125	0.02001953125	false	false
+UI-Character-Info-GearSlot	55	55	8175459	0.02099609375	0.07470703125	0.04443359375	0.09814453125	false	false
+UI-Character-Info-GearSlot-Arrow	33	23	8175459	0.02099609375	0.05322265625	0.02099609375	0.04345703125	false	false
+UI-Character-Info-GearSlotSmall	44	44	8175459	0.02099609375	0.06396484375	0.09912109375	0.1420898438	false	false
+UI-Character-Info-General-BG	398	464	8175461	0.00048828125	0.3891601562	0.00048828125	0.4536132812	false	false
+UI-Character-Info-Honor-Bar-BG-Glow	185	185	8198435	0.4521484375	0.8134765625	0.0009765625	0.3623046875	false	false
+UI-Character-Info-Honor-Bar-BG-Horde	95	95	8198435	0.0009765625	0.1865234375	0.7060546875	0.8916015625	false	false
+UI-Character-Info-Honor-Icon-Horde	75	75	8198435	0.7822265625	0.9287109375	0.6669921875	0.8134765625	false	false
+UI-Character-Info-Honor-LevelBG	350	62	8198435	0.0009765625	0.6845703125	0.3955078125	0.5166015625	false	false
+UI-Character-Info-Honor-RewardRing	54	54	8198435	0.6865234375	0.7919921875	0.3955078125	0.5009765625	false	false
+UI-Character-Info-Icon-Add	18	18	8175459	0.00048828125	0.01806640625	0.1293945312	0.1469726562	false	false
+UI-Character-Info-ItemLevel-Bounce	204	21	8175459	0.05419921875	0.2534179688	0.02099609375	0.04150390625	false	false
+UI-Character-Info-Line-Bounce	213	18	8175459	0.1499023438	0.3579101562	0.00048828125	0.01806640625	false	false
+UI-Character-Info-Paladin-BG	233	383	8175459	0.3041992188	0.5317382812	0.09326171875	0.4672851562	false	false
+UI-Character-Info-RaceBG-Overlay	52	60	8175459	0.02099609375	0.07177734375	0.1430664062	0.2016601562	false	false
+UI-Character-Info-ScrollLine	210	7	8175459	0.7348632812	0.9399414062	0.00048828125	0.00732421875	false	false
+UI-Character-Info-ScrollLine-Long	384	8	8175459	0.3588867188	0.7338867188	0.00048828125	0.00830078125	false	false
+UI-Character-Info-Stat-BG	233	383	8175461	0.6186523438	0.8461914062	0.3754882812	0.7495117188	false	false
+UI-Character-Info-Stat-StoneBG3	233	60	8175459	0.07568359375	0.3032226562	0.9272460938	0.9858398438	false	false
+UI-Character-Info-StatTab	42	42	8175459	0.02099609375	0.06201171875	0.2475585938	0.2885742188	false	false
+UI-Character-Info-StatTab-Selected	42	42	8175459	0.02099609375	0.06201171875	0.2895507812	0.3305664062	false	false
+UI-Character-Info-Title	201	32	8175459	0.5532226562	0.7495117188	0.04443359375	0.07568359375	false	false
+UI-Frame-BotCornerLeft	14	14	1723831	0.4453125	0.5546875	0.6328125	0.7421875	false	false
+UI-Frame-BotCornerRight	11	11	1723831	0.90625	0.9921875	0.4921875	0.578125	false	false
+UI-Frame-IconMask	64	64	2443038	0	1	0	1	false	false
+UI-Frame-InnerBotLeftCorner	6	6	1723831	0.6328125	0.6796875	0.5546875	0.6015625	false	false
+UI-Frame-InnerBotRight	6	6	1723831	0.6953125	0.7421875	0.5546875	0.6015625	false	false
+UI-Frame-InnerTopLeft	6	6	1723831	0.7578125	0.8046875	0.5546875	0.6015625	false	false
+UI-Frame-InnerTopRight	6	6	1723831	0.8203125	0.8671875	0.5546875	0.6015625	false	false
+UI-Frame-Metal-CornerBottomLeft	95	100	8069116	0.0009765625	0.1865234375	0.001953125	0.392578125	false	false
+UI-Frame-Metal-CornerBottomRight	95	100	8069116	0.0009765625	0.1865234375	0.396484375	0.787109375	false	false
+UI-Frame-Metal-CornerTopLeft	95	95	8069116	0.1884765625	0.3740234375	0.001953125	0.373046875	false	false
+UI-Frame-Metal-CornerTopRight	95	95	8069116	0.1884765625	0.3740234375	0.376953125	0.748046875	false	false
+UI-Frame-PortraitMetal-CornerTopLeft	95	95	8069116	0.3759765625	0.5615234375	0.376953125	0.748046875	false	false
+UI-HUD-MicroMenu-Communities-Icon-Notification	19	19	4708813	0.8388671875	0.8759765625	0.001953125	0.076171875	false	false
+UI-Journeys-Delve-Arrow-Big-Left	25	40	7486942	0.00048828125	0.02490234375	0.00048828125	0.03955078125	false	false
+UI-Journeys-Delve-Arrow-Big-Left-disable	25	40	7486942	0.00048828125	0.02490234375	0.04052734375	0.07958984375	false	false
+UI-Journeys-Delve-Arrow-Big-Left-pressed	25	40	7486942	0.00048828125	0.02490234375	0.1723632812	0.2114257812	false	false
+UI-Journeys-Delve-Arrow-Small-Left	25	40	7486942	0.00048828125	0.02490234375	0.1323242188	0.1713867188	false	false
+UI-Journeys-Delve-Arrow-Small-Left-disable	25	40	7486942	0.00048828125	0.02490234375	0.2241210938	0.2631835938	false	false
+UI-Journeys-Delve-Arrow-Small-Left-pressed	25	40	7486942	0.00048828125	0.02490234375	0.2641601562	0.3032226562	false	false
+UI-Journeys-Paragon-Level-divider	31	74	7486942	0.3276367188	0.3579101562	0.2866210938	0.3588867188	false	false
+UI-Journeys-Scroll-Mask	512	512	7725423	0	1	0	1	false	false
+UI-Legacy-Points-icon-c60	50	73	8216397	0.0078125	0.7890625	0.00390625	0.57421875	false	false
+UI-Legacy-Tree-Adventure	200	200	8164380	0.001953125	0.392578125	0.001953125	0.392578125	false	false
+UI-Legacy-Tree-Professions	200	200	8164380	0.396484375	0.787109375	0.001953125	0.392578125	false	false
+UI-Legacy-Tree-Progression	200	200	8164380	0.001953125	0.392578125	0.396484375	0.787109375	false	false
+uiframe-activetab-left	35	42	4707839	0.015625	0.5625	0.49609375	0.66015625	false	false
+uiframe-activetab-right	37	42	4707839	0.015625	0.59375	0.32421875	0.48828125	false	false
+uiframe-tab-left	35	36	8168849	0.015625	0.5625	0.6015625	0.8828125	false	false
+uiframe-tab-right	37	36	8168849	0.015625	0.59375	0.3046875	0.5859375	false	false
+worldquest-tracker-checkmark	40	35	1339312	0.91015625	0.98828125	0.578125	0.646484375	false	false

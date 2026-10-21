@@ -31,7 +31,8 @@
 //!   `…/forever-camelot-character.json`;
 //! - the CVar flags: `crates/wowlua-engine/data/camelot-cvar-flags.txt`;
 //! - the font heights: `crates/wowlua-engine/data/camelot-font-heights.txt`;
-//! - the static functions' answers: `crates/wowlua-engine/data/camelot-answers.txt`;
+//! - the static functions' answers: `crates/wowlua-engine/data/camelot-answers.txt`,
+//!   those that differ by machine `…/camelot-answers-<platform>.txt` (decision T236);
 //! - the login: `crates/wowlua-engine/data/camelot-login.txt` (and reload);
 //! - `/stdtest engine fullprobe`: `…/forever-camelot-fullprobe.lua`;
 //! - `/stdtest engine methodprobe`: `…/forever-camelot-methodprobe.lua`.
@@ -1893,16 +1894,59 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
     // The engine's data: the repository's static answers, these added (a
     // run's answers win).
     if !data_entries.is_empty() {
-        let path = root.join("crates/wowlua-engine/data/camelot-answers.txt");
-        let mut all: std::collections::BTreeMap<String, String> = std::fs::read_to_string(&path)
-            .unwrap_or_default()
-            .lines()
-            .filter(|l| !l.starts_with('#'))
-            .filter_map(|l| l.split_once('\t'))
-            .map(|(c, a)| (c.to_string(), a.to_string()))
-            .collect();
+        let data_dir = root.join("crates/wowlua-engine/data");
+        let read = |path: &Path| -> std::collections::BTreeMap<String, String> {
+            std::fs::read_to_string(path)
+                .unwrap_or_default()
+                .lines()
+                .filter(|l| !l.starts_with('#'))
+                .filter_map(|l| l.split_once('\t'))
+                .map(|(c, a)| (c.to_string(), a.to_string()))
+                .collect()
+        };
+        let path = data_dir.join("camelot-answers.txt");
+        let mut all = read(&path);
+        // The answers that differ by machine go to the recording machine's
+        // file (decision T236): a call either platform's file holds.
+        let platform = recorded_platform(&state);
+        let machine_path = |p: &str| data_dir.join(format!("camelot-answers-{p}.txt"));
+        let mac = read(&machine_path("mac"));
+        let windows = read(&machine_path("windows"));
+        let mut own = match platform {
+            Some("mac") => mac.clone(),
+            Some(_) => windows.clone(),
+            None => Default::default(),
+        };
+        let mut unplaced = 0;
         for (call, answer) in &data_entries {
-            all.insert(data_text(call), data_text(answer));
+            let (call, answer) = (data_text(call), data_text(answer));
+            if mac.contains_key(&call) || windows.contains_key(&call) {
+                match platform {
+                    Some(_) => {
+                        own.insert(call, answer);
+                    }
+                    None => unplaced += 1,
+                }
+            } else {
+                all.insert(call, answer);
+            }
+        }
+        if unplaced > 0 {
+            println!(
+                "left out {unplaced} answers that differ by machine: the recording does not say its machine (IsMacClient)"
+            );
+        }
+        if let Some(p) = platform {
+            let mut data = format!(
+                "# WoW Forever {version} on a {p} machine: the answers that differ by\n\
+                 # machine (key names, graphics, sound, colours' last digits), consulted\n\
+                 # before camelot-answers.txt when a test runs on this platform (decision\n\
+                 # T236; cargo xtask ingest files a recording's under its platform).\n"
+            );
+            for (call, answer) in &own {
+                let _ = writeln!(data, "{call}\t{answer}");
+            }
+            write_file(&machine_path(p), &data)?;
         }
         let mut data = format!(
             "# WoW Forever {version}'s answers to calls of functions that answer from the\n\
@@ -2325,6 +2369,21 @@ pub fn run(root: &Path, saved: &Path, gate: &mut Gate) -> Result<()> {
         }
     }
     Ok(())
+}
+
+/// The machine a recording was made on, by its answers battery's
+/// `IsMacClient()`: `"mac"` or `"windows"` (decision T236).
+fn recorded_platform(state: &mlua::Table) -> Option<&'static str> {
+    let answer: String = state
+        .get::<mlua::Table>("engineAnswers")
+        .ok()?
+        .get("IsMacClient()")
+        .ok()?;
+    match answer.as_str() {
+        "1: boolean true" => Some("mac"),
+        "1: boolean false" => Some("windows"),
+        _ => None,
+    }
 }
 
 /// A recorded answer as text: UTF-8 as it is, any other byte (a binary
