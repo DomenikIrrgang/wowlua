@@ -302,8 +302,22 @@ impl Vm {
     /// (`geterrorhandler()`), the taint state restored afterwards. The
     /// results, or `None` after an error.
     pub fn call_from_engine(&mut self, f: Value, args: &[Value]) -> Option<Vec<Value>> {
+        self.call_from_engine_in(f, args, true)
+    }
+
+    /// [`Vm::call_from_engine`], within the running execution when `fresh`
+    /// is false: its taint goes on (a frame's `OnLoad` while an addon's
+    /// `CreateFrame` builds it).
+    pub fn call_from_engine_in(
+        &mut self,
+        f: Value,
+        args: &[Value],
+        fresh: bool,
+    ) -> Option<Vec<Value>> {
         let saved = self.taint().saved();
-        self.taint_mut().stack = Taint::SECURE;
+        if fresh {
+            self.taint_mut().stack = Taint::SECURE;
+        }
         let handler = self.error_handler_proxy();
         let outer = self.errfunc.replace(handler);
         let args: Vec<Slot> = args.iter().map(|&v| Slot::secure(v)).collect();

@@ -76,6 +76,9 @@ pub struct Registry {
     pub untainted_creation: HashSet<String>,
     /// Inside such a modifier while the UI code loads.
     in_untainted_creation: bool,
+    /// `CreateFrame` running its new frame's `OnLoad` and `OnShow`: within
+    /// the caller's execution, its taint going on (decision T243).
+    pub creating: bool,
     /// Inside a `<ScopedModifier forbidden="true">` (or `fullLockdown`)
     /// while the UI code loads.
     pub in_forbidden: bool,

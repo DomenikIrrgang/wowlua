@@ -908,6 +908,22 @@ fn build_from_xml(
     templates: &[String],
     from_xml: bool,
 ) -> Result<(), LuaError> {
+    // Within the caller's execution, its children's too: an addon's frame
+    // from Blizzard's template loads tainted (its handlers are Blizzard's
+    // code; decision T243).
+    let outer = std::mem::replace(&mut engine_mut(vm).world.ui.creating, true);
+    let r = build_with_scripts(vm, frame, intrinsic, templates, from_xml);
+    engine_mut(vm).world.ui.creating = outer;
+    r
+}
+
+fn build_with_scripts(
+    vm: &mut Vm,
+    frame: Value,
+    intrinsic: Option<std::rc::Rc<crate::ui::xml::Element>>,
+    templates: &[String],
+    from_xml: bool,
+) -> Result<(), LuaError> {
     if let Some(el) = intrinsic {
         crate::ui::build::apply_intrinsic(vm, frame, &el);
     }
@@ -1239,6 +1255,8 @@ fn run_script_of(vm: &mut Vm, id: WidgetId, script: &str, args: &[Value], truste
     let untrusted = |vm: &Vm, f: Value| {
         trusted_only && matches!(f, Value::Func(r) if !vm.heap.func(r).taint().is_secure())
     };
+    // (fresh: as the client calls a script; else within `CreateFrame`)
+    let fresh = !engine(vm).world.ui.creating;
     let (table, scripts, hooks, props, has_intrinsic) = {
         let w = &engine(vm).world.widgets[id.0];
         (w.table, w.scripts, w.hooks, w.props, w.intrinsic_scripts)
@@ -1255,22 +1273,22 @@ fn run_script_of(vm: &mut Vm, id: WidgetId, script: &str, args: &[Value], truste
     };
     let pre = intrinsic(vm, "precall");
     if !pre.is_nil() {
-        vm.call_from_engine(pre, &call);
+        vm.call_from_engine_in(pre, &call, fresh);
     }
     let f = vm.heap.table(scripts).get_str(key);
     if !f.is_nil() && !untrusted(vm, f) {
-        vm.call_from_engine(f, &call);
+        vm.call_from_engine_in(f, &call, fresh);
     }
     let post = intrinsic(vm, "postcall");
     if !post.is_nil() {
-        vm.call_from_engine(post, &call);
+        vm.call_from_engine_in(post, &call, fresh);
     }
     if let Value::Table(list) = vm.heap.table(hooks).get_str(key) {
         let n = vm.heap.table(list).border();
         for k in 1..=n {
             let h = vm.heap.table(list).get(Value::Num(k as f64));
             if !untrusted(vm, h) {
-                vm.call_from_engine(h, &call);
+                vm.call_from_engine_in(h, &call, fresh);
             }
         }
     }

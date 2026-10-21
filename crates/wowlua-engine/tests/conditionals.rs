@@ -229,3 +229,27 @@ return unpack(out)",
         ]
     );
 }
+
+/// A secure click handler's snippet runs on the user's click
+/// (`SecureHandlerClickTemplate`, an addon's button: Blizzard's handler
+/// code is secure).
+#[test]
+fn a_secure_click_runs_its_snippet() {
+    let Some(mut vm) = client() else {
+        eprintln!("skipped: the UI code is missing");
+        return;
+    };
+    let r = run(
+        &mut vm,
+        "local errs = {}
+seterrorhandler(function(e) errs[#errs + 1] = e end)
+local b = CreateFrame('Button', 'ToggleButton', UIParent, 'SecureHandlerClickTemplate')
+b:SetSize(20, 20)
+b:SetPoint('CENTER')
+b:RegisterForClicks('LeftButtonUp')
+b:SetAttribute('_onclick', [[ self:SetAttribute('ran', (self:GetAttribute('ran') or 0) + 1) ]])
+mock.click(b)
+return tostring(b:GetAttribute('ran')), tostring(errs[1])",
+    );
+    assert_eq!(r, ["1", "nil"]);
+}

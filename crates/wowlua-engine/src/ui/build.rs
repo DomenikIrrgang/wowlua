@@ -1100,8 +1100,16 @@ pub(crate) fn load_chunk(vm: &mut Vm, src: &[u8], chunk: &str) -> Result<Value, 
 /// Compiles Lua for a script handler; an error is the loader's.
 fn compile(vm: &mut Vm, cx: &Context, line: usize, src: &str) -> Option<Value> {
     let chunk = format!("@{}", cx.file);
+    // Blizzard's handler is made secure too, whoever makes the frame (an
+    // addon's `CreateFrame` with `SecureHandlerClickTemplate`: its OnClick
+    // runs the snippet on the user's click).
+    let blizzard = engine(vm).world.ui.code_of.is_none();
     match load_chunk(vm, src.as_bytes(), &chunk) {
-        Ok(f) => match vm.call(f, &[]) {
+        Ok(f) => match if blizzard {
+            vm.call_secure(f, &[])
+        } else {
+            vm.call(f, &[])
+        } {
             Ok(r) => r.first().copied(),
             Err(e) => {
                 let msg = message(vm, e.value);

@@ -76,6 +76,11 @@ engine cannot get otherwise.
    `GetRaidRosterInfo(i)` at once and after `GROUP_ROSTER_UPDATE` (with
    `GetTime()` at each). Why: SuuUI's probe saw the update 0.4-0.7 s
    later; the engine moves them and fires it at once.
+13. **A quest accepted with `autoQuestWatch` off**: `/run SetCVar("autoQuestWatch", 0)`,
+   accept a quest, then `/dump C_QuestLog.GetQuestWatchType(id),
+   C_SuperTrack.GetSuperTrackedQuestID()` (and `SetCVar` back to 1). Why:
+   the recording watched and focused an accepted quest; the engine always
+   does, so SuuUI's "Track accepted quests" off changes nothing in a test.
 
 ## The answers battery's new calls
 

@@ -139,7 +139,10 @@ The client's security model, in the VM:
     protected frame, in combat lockdown: `ADDON_ACTION_BLOCKED`, after the
     method's own argument checks (`/stdtest engine blocked`). A frame is
     protected through a secure template (`Secure…Template`; `IsProtected`
-    then gives `true, true`) or `mock.protect`.
+    then gives `true, true`) or `mock.protect`. A template's script
+    handlers from Blizzard's XML are Blizzard's code whoever makes the frame
+    (decision T243): an addon's `SecureHandlerClickTemplate` button runs its
+    `_onclick` snippet on the user's click.
 - **Taint reports.** A refusal reports the taint chain: the protected call,
   the secure code that became tainted, the value it read, and the addon code
   (file and line) that wrote that value, through any number of hops through
