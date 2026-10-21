@@ -257,15 +257,23 @@ pub fn action_for(vm: &Vm, key: &str) -> Option<String> {
 }
 
 /// Runs a key's command, "down" or "up": a binding's code, or a `CLICK`
-/// binding's button (`OnClick(button, down)`; unverified: on the down and
-/// the up whatever the button registered).
+/// binding's button (`OnClick(button, down)`, for the clicks it registered
+/// for, as a mouse click).
 pub fn run_command(vm: &mut Vm, command: &str, keystate: &str) {
     if let Some(target) = command.strip_prefix("CLICK ") {
         let (name, button) = target.split_once(':').unwrap_or((target, "LeftButton"));
         let frame = vm.get_global(name);
         if let Some(id) = widgets::widget_of(vm, frame) {
+            // Only the clicks the button registered for (`RegisterForClicks`:
+            // by default the left button's up), as a mouse click: a button
+            // left as it was clicks once, on the key's release, not on both
+            // (decision T234).
+            let is_down = keystate == "down";
+            if !widgets::registered_click(vm, id, button, is_down) {
+                return;
+            }
             let button = vm.str(button);
-            let down = Value::Bool(keystate == "down");
+            let down = Value::Bool(is_down);
             for script in ["PreClick", "OnClick", "PostClick"] {
                 widgets::run_script(vm, id, script, &[button, down]);
             }

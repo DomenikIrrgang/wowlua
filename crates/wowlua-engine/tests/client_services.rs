@@ -117,3 +117,27 @@ return first, last, full, second",
     let got = run(&mut vm, "return table.concat(Got, ' | ')");
     assert_eq!(got, ["full from Tamsin Ashford"]);
 }
+
+/// A `CLICK` binding clicks its button as a mouse click would: only the
+/// clicks it registered for (by default the left button's release), so a
+/// button left as it was clicks once per key press (decision T234).
+#[test]
+fn click_bindings_click_as_registered() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "Clicks = {}
+local owner = CreateFrame('Frame')
+local plain = CreateFrame('Button', 'TestPlainButton', UIParent)
+plain:SetScript('OnClick', function(_, button, down) Clicks[#Clicks + 1] = 'plain ' .. button .. ' ' .. tostring(down) end)
+local early = CreateFrame('Button', 'TestEarlyButton', UIParent)
+early:RegisterForClicks('AnyDown')
+early:SetScript('OnClick', function(_, button, down) Clicks[#Clicks + 1] = 'early ' .. button .. ' ' .. tostring(down) end)
+SetOverrideBindingClick(owner, false, 'K', 'TestPlainButton')
+SetOverrideBindingClick(owner, false, 'L', 'TestEarlyButton')
+mock.pressKey('K')
+mock.pressKey('L')
+return table.concat(Clicks, ', ')",
+    );
+    assert_eq!(r, ["plain LeftButton false, early LeftButton true"]);
+}

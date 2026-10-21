@@ -10,6 +10,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- Tests: a key bound to a button with `SetBindingClick` or `SetOverrideBindingClick` clicks it once, as in the game: only for the clicks it registered (by default the left button's release). It clicked on both the key's press and release, so a toggle opened and closed at once.
 - Tests: a model's or actor's `GetItemTransmogInfoList()` has an entry for every slot, so Blizzard's dressing room no longer errors ("attempt to index local 'mainHandInfo'").
 - Tests: `mock.slash` runs Blizzard's own slash commands (`/inspect` and the others the game keeps in its own lists), which it silently skipped: with Blizzard's UI the line is typed into the chat and sent, as you do in the game, so an unknown command also gets the game's help line.
 - Tests: `GetText(token, gender)` gives the global string by its name (a woman's form for gender 3), as in the game; it gave nothing.
