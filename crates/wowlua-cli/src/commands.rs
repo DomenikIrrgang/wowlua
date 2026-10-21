@@ -720,6 +720,15 @@ fn test_once(
                     }
                     _ => wowlua_test::Platform::Mac,
                 },
+                screen: match test_settings.screen {
+                    Some(s) => wowlua_test::Screen {
+                        width: s.width,
+                        height: s.height,
+                        dpi_scale: s.dpi_scale.unwrap_or(1.0),
+                        ui_scale: s.ui_scale,
+                    },
+                    None => wowlua_test::Screen::default(),
+                },
                 // Relative to the package root, or absolute.
                 addons: test_settings
                     .addons

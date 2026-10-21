@@ -143,7 +143,7 @@ fn run_behaviour(vm: &mut Vm, id: WidgetId, full: &str, short: &str) -> Option<V
 /// What setter `stem` stored on the font string or along its font objects
 /// (`SetFontObject`, a template's `inherits`): a font string shows its
 /// font object's setting until it sets its own (as `GetFont` reads).
-fn font_chain(vm: &mut Vm, id: WidgetId, stem: &str) -> Option<Vec<Value>> {
+pub(crate) fn font_chain(vm: &mut Vm, id: WidgetId, stem: &str) -> Option<Vec<Value>> {
     let mut cur = id;
     for _ in 0..32 {
         let p = props(vm, cur);
@@ -281,10 +281,11 @@ fn can_non_space_wrap(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     flag_or(vm, id, "NonSpaceWrap", false)
 }
 
-/// The text's width in the engine's text model (as `GetStringWidth`: six
-/// units a byte).
+/// The text's width as the client lays it out (as `GetStringWidth`,
+/// `text.rs`).
 fn string_width(vm: &Vm, id: WidgetId) -> f64 {
-    text_of(vm, id).len() as f64 * 6.0
+    let text = text_of(vm, id);
+    crate::text::width(vm, id, &text)
 }
 
 /// `GetWrappedWidth()`: the text's width, at most the laid out width when

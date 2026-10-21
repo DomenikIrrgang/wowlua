@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,084 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,088 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -543,7 +543,7 @@ locally and CI skips them.
 | Comparison | Matched | Of | Ratio |
 |------------|--------:|---:|------:|
 | Full probe (`/stdtest engine fullprobe`: every C function with many arguments) | 33,083 | 33,727 | 98.1% |
-| Answers battery (`/stdtest engine answers`: the calls Blizzard's UI makes) | 6,049 | 6,229 | 97.1% |
+| Answers battery (`/stdtest engine answers`: the calls Blizzard's UI makes) | 6,129 | 6,229 | 98.4% |
 | Method probe (`/stdtest engine methodprobe`: every widget method) | 8,394 | 13,049 | 64.3% |
 | Maps (`/stdtest engine maps`: each map's data) | 3,028 | 3,028 | 100.0% |
 | Damage meter (its events in the recorded fights) | 557 | 561 | 99.3% |
@@ -832,7 +832,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,084 rules unverified: each rests on Blizzard's
+The engine's code marks 1,088 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1647,9 +1647,10 @@ page changes only when a rule is added, removed or reworded.
 - [maps.rs](../crates/wowlua-engine/src/maps.rs): `C_Map.GetWorldPosFromMapPos(uiMapID, mapPosition)`: the instance and the world position (a vector, `x` the world's X...
 - [maps.rs](../crates/wowlua-engine/src/maps.rs): Azeroth: Kalimdor on its left half, the Eastern Kingdoms on its right (recorded: (0, 0) Kalimdor's, (1, 1) the Easter...
 
-### measures (8)
+### measures (9)
 
 - [measures.rs](../crates/wowlua-engine/src/measures.rs): What regions measure and hold beyond their setters: a font string's lines and height (on the engine's text model: 6 u...
+- [measures.rs](../crates/wowlua-engine/src/measures.rs): The string's lines: its own, each wrapped by words at the laid out width when it has one and wraps (`SetWordWrap(fals...
 - [measures.rs](../crates/wowlua-engine/src/measures.rs): A texture's atlas set (`SetAtlas(atlas, useAtlasSize)`, a button's `SetXAtlas`): with `useAtlasSize`, the texture tak...
 - [measures.rs](../crates/wowlua-engine/src/measures.rs): `GetTextureFileID()`: the file ID `SetTexture` was given; a path's ID is not known to the engine (nil, unverified).
 - [measures.rs](../crates/wowlua-engine/src/measures.rs): `EditBox:GetTextInsets()`: what `SetTextInsets` set, else none (unverified: a fresh edit box's, not recorded).
@@ -1691,7 +1692,7 @@ page changes only when a rule is added, removed or reworded.
 - [methods2.rs](../crates/wowlua-engine/src/methods2.rs): `GetFading()`: as set, else on (unverified).
 - [methods2.rs](../crates/wowlua-engine/src/methods2.rs): `GetInsertMode()`: as set, else `BOTTOM` (unverified).
 
-### methods3 (20)
+### methods3 (21)
 
 - [methods3.rs](../crates/wowlua-engine/src/methods3.rs): The defaults are unverified unless a recording is named: they come from Blizzard's API documentation (`Blizzard_APIDo...
 - [methods3.rs](../crates/wowlua-engine/src/methods3.rs): A model's or actor's `GetItemTransmogInfoList()`: an `ItemTransmogInfo` for every equipment slot (1 to 19), Blizzard'...
@@ -1701,6 +1702,7 @@ page changes only when a rule is added, removed or reworded.
 - [methods3.rs](../crates/wowlua-engine/src/methods3.rs): `Cooldown:GetCooldownDisplayDuration()`: the duration shown, in milliseconds as `GetCooldownTimes` gives it (unverifi...
 - [methods3.rs](../crates/wowlua-engine/src/methods3.rs): A cooldown made in code draws its swipe and its bling (Blizzard's code turns them off with `SetDrawSwipe(false)` / `S...
 - [methods3.rs](../crates/wowlua-engine/src/methods3.rs): `EditBox:GetDisplayText()`: the text as shown: a password's as stars (unverified: the client's mask character).
+- [methods3.rs](../crates/wowlua-engine/src/methods3.rs): `FontString:FindCharacterIndexAtCoordinate(x, y)`: the character under `x` on the text's one line, and whether `x` is...
 - [methods3.rs](../crates/wowlua-engine/src/methods3.rs): A font string's font without one set (unverified).
 - [methods3.rs](../crates/wowlua-engine/src/methods3.rs): `Model:TransformCameraSpaceToModelSpace(position)`: the position as a vector (unverified: the engine's model space is...
 - [methods3.rs](../crates/wowlua-engine/src/methods3.rs): x forward, y left, z up: yaw about z, pitch about y, roll about x (unverified signs).
@@ -1902,7 +1904,7 @@ page changes only when a rule is added, removed or reworded.
 - [stats.rs](../crates/wowlua-engine/src/stats.rs): `C_SpecializationInfo.GetSpecializationInfo(index, isInspect, isPet, …)` for another than the player's recorded specs...
 - [stats.rs](../crates/wowlua-engine/src/stats.rs): `C_SpellBook.IsSpellInSpellBook(spellID [, bank])`: in the player's book (unverified: overrides, the pet's bank).
 
-### systeminfo (67)
+### systeminfo (66)
 
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): Unverified unless a comment says recorded: most answers follow the documentation's shapes and the systems' empty stat...
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `Round(value)`: halves away from zero (Blizzard's `MathUtil.lua` in the other flavors; a C function on camelot, unver...
@@ -1910,7 +1912,6 @@ page changes only when a rule is added, removed or reworded.
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `GetCombatRatingBonusForCombatRatingValue(rating, value)`: rating 1's bonus the value's whole part, as a single-preci...
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `IsKeyDown(key)`: a modifier the engine holds (Shift, Ctrl, Alt, the left ones or either); any other key or button up...
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `IsMouselooking()`: since `MouselookStart`, until `MouselookStop` (unverified: the client also starts it with a held...
-- [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `GetScreenDPIScale()`: 1 (unverified).
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `GetFramerate()`: frames a second by the last frame's length, 60 before any frame (recorded: 166.4 on the probing mac...
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `C_DateAndTime.GetServerTimeLocal()`: the epoch seconds in the clock's local zone (unverified).
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): `GetSessionTime()`: whole seconds since the session began (`GetTime`'s start; unverified).
@@ -1978,6 +1979,12 @@ page changes only when a rule is added, removed or reworded.
 - [taxi.rs](../crates/wowlua-engine/src/taxi.rs): `defineTaxi(npc, { mapID, nodes = { { name, nodeID, x, y, state, cost, routes, hops, flightTime } }, mapNodes = { { n...
 - [taxi.rs](../crates/wowlua-engine/src/taxi.rs): `TaxiIsDirectFlight(slot)`: a node one hop away (its path from the current node two slots long: `GetNumRoutes` 1).
 - [taxi.rs](../crates/wowlua-engine/src/taxi.rs): `C_TaxiMap.GetTaxiNodesForMap(mapID)`: every node the map shows.
+
+### text (3)
+
+- [text.rs](../crates/wowlua-engine/src/text.rs): Recorded: FRIZQT, ARIALN (both plain and outlined), skurri and MORPHEUS at 8 to 45 pixels, every printable ASCII char...
+- [text.rs](../crates/wowlua-engine/src/text.rs): In single floats (the recorded widths' last digit varies by a float step from this, the pixels exact: unverified how...
+- [text.rs](../crates/wowlua-engine/src/text.rs): The visible text's lines, each wrapped by words at `max` units when it is wider (none: unwrapped).
 
 ### tooltip (11)
 
@@ -2150,7 +2157,6 @@ page changes only when a rule is added, removed or reworded.
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): `OnSizeChanged` for the widgets resized since the last frame: those `SetSize` resized, then those whose size follows...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): An object whose untrusted layout scripts are forbidden runs only its secure ones (the documentation's `UntrustedLayou...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): A region's size: as laid out when its points give it one (two opposite points, `SetAllPoints`), else as set (unverifi...
-- [widgets.rs](../crates/wowlua-engine/src/widgets.rs): SuuUI probe trees: the client's font strings report their text's size on the sides neither their size nor two points...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): `SetAlphaFromBoolean(value [, alphaIfTrue [, alphaIfFalse]])`: the alpha one of the two picks (1 and 0 by default; un...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): A scroll child without points of its own sits at its scroll frame's top left (unverified: the scroll offsets are not...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): A button's text goes to its font string, made if it has none (unverified: the client makes one so).
@@ -2166,6 +2172,7 @@ page changes only when a rule is added, removed or reworded.
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): Without a maximum, no limit (unverified).
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): Enables or disables a button, edit box or slider; `OnEnable` / `OnDisable` run when it changes (unverified).
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): `SetVertexColor(r, g, b [, a])`: alpha 1 when left out; white until set (unverified).
+- [widgets.rs](../crates/wowlua-engine/src/widgets.rs): The height camelot keeps for a font set to `h`, by machine (decision T236): the Mac's recorded for 1 to 80 (13 reads...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): Addon code is not handed forbidden frames (unverified: ElvUI's toolkit asks every enumerated frame's `GetObjectType`...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): A button's `kind` texture (`Normal`, `Highlight`): the one set, else a new texture of the button's (the highlight's i...
 

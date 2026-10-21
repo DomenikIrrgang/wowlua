@@ -8,10 +8,12 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 - **Collections in tests**: `mock.setMounts`, `mock.setToys` and `mock.setAppearances` give the account its mounts, toys and collected appearances, and a world profile can hold them (`mounts`, `toys`, `appearances`). The mount journal, the toy box and the wardrobe then answer from them as the game does (their filters, search, favourites and events, recorded from the game), so a collections window can be tested without stubbing every journal call. `/stdtest snapshot` records them from your character.
 - Tests: choose the machine the game runs on with `"test": { "platform": "windows" }` in `wowlua.json`, or `config({ platform = "windows" })` in one test file. Key names (`GetBindingText`: "Delete" on Windows, "Del" on a Mac), graphics and sound answers and `IsMacClient`/`IsWindowsClient` follow it. The Mac stays the default.
+- Tests: choose the screen the game draws on with `"test": { "screen": { "width": 2560, "height": 1440 } }` in `wowlua.json`, or `config({ screen = { ... } })` in one test file, with an optional `dpiScale` and `uiScale` ("Use UI Scale" on). UIParent's size and scale, `GetScreenWidth` and `GetPhysicalScreenSize` follow it. The default is 1920 by 1080.
 - Tests: `mock.setField(t, key, value)` sets any field, `nil` included, until the test ends, and puts it back untainted as `mock.stub` does. Taking a frame or a game API away with an assignment instead leaves Blizzard's field tainted for the rest of the file.
 
 ### Fixed
 
+- Tests: text is as wide and as tall as in the game. `GetStringWidth`, `GetUnboundedStringWidth`, wrapping, truncation and `SetTextToFit` measure each character with the game's own fonts (Friz Quadrata, Arial Narrow, Skurri and Morpheus), at the size the game draws them on your test's screen. They used a guess per character, so text-sized frames and wrapped lines were off.
 - Tests: `C_Texture.GetAtlasInfo` gives the game's size, file, texture coordinates and tiling for the atlases wowlua knows, instead of a 64 by 64 whole texture.
 - Tests: map positions match the game's (`C_Map.GetMapPosFromWorldPos` with an override map, Azeroth's world map, `GetWorldPosFromMapPos`), and the game's second Eastern Kingdoms and Kalimdor maps (1463, 1464) exist.
 - Tests: `C_GameRules.IsGameRuleActive` answers every game rule as the game does, and the artifact ranks cost what they do in the game up to rank 10.

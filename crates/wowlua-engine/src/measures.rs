@@ -11,11 +11,10 @@ use wowlua_vm::{NativeCall, Value, Vm};
 use crate::engine;
 use crate::widgets::{self, MethodFn, WidgetId};
 
-/// A character's width in the engine's text model (as `GetStringWidth`).
-const CHAR_WIDTH: f64 = 6.0;
-
-/// The string's lines: its own, each wrapped at the laid out width when
-/// it has one and wraps (`SetWordWrap(false)` keeps one each).
+/// The string's lines: its own, each wrapped by words at the laid out
+/// width when it has one and wraps (`SetWordWrap(false)` keeps one each),
+/// as the client measures text (`text.rs`, decision T237; unverified: the
+/// client's breaking rules).
 fn lines(vm: &mut Vm, id: WidgetId) -> usize {
     let text = match engine(vm).world.widgets[id.0].text {
         Some(Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
@@ -29,16 +28,8 @@ fn lines(vm: &mut Vm, id: WidgetId) -> usize {
         .and_then(|v| v.first().copied())
         .is_none_or(|v| v.truthy());
     let width = widgets::laid_out_size(vm, id).0;
-    text.split('\n')
-        .map(|line| {
-            let w = line.chars().count() as f64 * CHAR_WIDTH;
-            if wraps && width > 0.0 && w > width {
-                (w / width).ceil() as usize
-            } else {
-                1
-            }
-        })
-        .sum()
+    let max = (wraps && width > 0.0).then_some(width);
+    crate::text::wrapped_lines(vm, id, &text, max).len()
 }
 
 /// `GetNumLines()`.
@@ -46,15 +37,11 @@ fn get_num_lines(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(lines(vm, id) as f64)])
 }
 
-/// `GetStringHeight()`: its lines at the font's height, the spacing
-/// between them.
-fn get_string_height(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+/// `GetStringHeight()`: its lines at the font's line height on the screen
+/// (`text.rs`, decision T237), the spacing between them.
+fn get_string_height(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let n = lines(vm, id) as f64;
-    let font = widgets::get_font(vm, id, c)?;
-    let size = match font.get(1) {
-        Some(Value::Num(h)) => *h,
-        _ => 0.0,
-    };
+    let size = crate::text::line_height(vm, id);
     let props = engine(vm).world.widgets[id.0].props;
     let spacing = match widgets::stored_args(vm, props, "Spacing").and_then(|v| v.first().copied())
     {

@@ -434,10 +434,10 @@ fn get_camera_zoom(vm: &mut Vm, _c: NativeCall) -> Ret {
 }
 
 /// `GetDefaultScale()`: the UI scale that makes the screen 768 units high
-/// at its physical height (`widgets::SCREEN`), Blizzard's long-standing
+/// at its physical height (the screen's, decision T237), Blizzard's long-standing
 /// rule, as a C float (recorded 0.71111112833023 at 1080).
-fn get_default_scale(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    let scale = (768.0 / widgets::SCREEN.1) as f32;
+fn get_default_scale(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let scale = (768.0 / crate::engine(vm).screen.height) as f32;
     Ok(vec![Value::Num(f64::from(scale))])
 }
 

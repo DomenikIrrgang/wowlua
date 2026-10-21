@@ -37,6 +37,14 @@ engine cannot get otherwise.
 5. **`/stdtest engine journals`** on a character with a mount or a toy.
    Why: the events after a collected mount's or toy's favourite changes are
    unrecorded (the recording character had none; decision T235).
+6. **How the client breaks lines** (needs a probe written first). Why:
+   text is now measured with the client's glyphs (decision T237), but how
+   it wraps is the engine's guess: by words at spaces, a word wider than
+   the string on a line of its own unless `SetNonSpaceWrap(true)` breaks it
+   between characters. Record `GetNumLines`, `GetStringHeight` and
+   `IsTruncated` for long words, hyphens, several spaces and colour codes
+   at a few widths. Also kerning at more sizes than FRIZQT 17 and ARIALN
+   20, and the outline font's digits.
 
 ## The answers battery's new calls
 

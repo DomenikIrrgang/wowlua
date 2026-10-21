@@ -30,6 +30,28 @@ fn battery_platform() -> wowlua_engine::Platform {
     }
 }
 
+/// The screen the answers battery was recorded on (its game window's size
+/// and DPI scale), for the comparisons of that run's recordings (decision
+/// T237); the Mac's by default.
+fn battery_screen() -> wowlua_engine::Screen {
+    let fixture = repo().join("crates/wowlua-engine/tests/client/forever-camelot-answers.lua");
+    let text = fs::read_to_string(fixture).unwrap_or_default();
+    let window = regex::Regex::new(
+        r#"\["C_VideoOptions\.GetCurrentGameWindowSize\(1, false\)"\] = "[^"]*x=number ([\d.]+),y=number ([\d.]+)"#,
+    )
+    .unwrap();
+    let dpi = regex::Regex::new(r#"\["GetScreenDPIScale\(\)"\] = "1: number ([\d.]+)""#).unwrap();
+    let mut screen = wowlua_engine::Screen::default();
+    if let Some(m) = window.captures(&text) {
+        screen.width = m[1].parse().unwrap_or(screen.width);
+        screen.height = m[2].parse().unwrap_or(screen.height);
+    }
+    if let Some(m) = dpi.captures(&text) {
+        screen.dpi_scale = m[1].parse().unwrap_or(1.0);
+    }
+    screen
+}
+
 fn build() -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     let manifest = r#"{ "package": { "name": "std-test", "version": "0.1.0" },
@@ -1610,7 +1632,7 @@ fn plays_as_the_client_did(name: &str, ratchet: usize) {
 /// raised (decision: the engine answers every call as the client does);
 /// the beta's last run (Windows, 2026-10-21) asked 28 more calls, from
 /// 6201 to 6229, and its fonts' heights are a Windows screen's.
-const ANSWERS_MATCHED: usize = 6049;
+const ANSWERS_MATCHED: usize = 6129;
 
 /// An answer as `cargo xtask ingest` writes the client's: UTF-8 as it is,
 /// any other byte (a binary answer, `C_EncodingUtil.SerializeCBOR`'s) as
@@ -1638,6 +1660,7 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
     let mut vm = Vm::wow();
     wowlua_engine::install(&mut vm, "camelot").expect("installs");
     wowlua_engine::set_platform(&mut vm, battery_platform());
+    wowlua_engine::set_screen(&mut vm, battery_screen());
     let report = wowlua_engine::ui::load(&mut vm, &ui.interface, ui.strings.as_deref());
     assert!(report.errors.is_empty(), "{:?}", report.errors);
     let mut vm = client_in(vm, &out);
@@ -1839,22 +1862,26 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
         // The recording character's real realm (its name's length, 9; the
         // profile's is scrubbed) and the soft target it had then.
         "Unit names by token (kinds only)",
-        // The client's text on a Windows screen: whole pixels a glyph,
-        // advances and kerning (the screen setting's text model, decision
-        // T237, in progress; the engine counts 6 units a character).
+        // "1234567890" in the outlined font at 19 pixels is a pixel wider
+        // in the client: kerning between digits there, not recorded (the
+        // glyphs probe recorded letter pairs at one size; decision T237).
+        "Font metrics SystemFont_Shadow_Large_Outline",
+    ];
+    // Compared to six significant digits: Azeroth's positions on Kalimdor's
+    // side (its rectangle there, not recoverable exactly from the
+    // recordings, gives them within three float steps; the others exact).
+    // The fonts' measures: every pixel count exact, the conversion's last
+    // float digit not always (decision T237).
+    const CLOSE: &[&str] = &[
+        "Map pos from world points",
         "Font metrics GameFontNormal",
         "Font metrics GameFontHighlightSmall",
-        "Font metrics SystemFont_Shadow_Large_Outline",
         "Font metrics NumberFontNormal",
         "Glyph widths GameFontNormal",
         "Glyph widths GameFontHighlightSmall",
         "Glyph widths SystemFont_Shadow_Large_Outline",
         "Glyph widths NumberFontNormal",
     ];
-    // Compared to six significant digits: Azeroth's positions on Kalimdor's
-    // side (its rectangle there, not recoverable exactly from the
-    // recordings, gives them within three float steps; the others exact).
-    const CLOSE: &[&str] = &["Map pos from world points"];
     let number = regex::Regex::new(r"-?\d+\.\d+(e-?\d+)?").unwrap();
     let close = |a: &str, b: &str| {
         let (na, nb): (Vec<&str>, Vec<&str>) = (
@@ -2139,6 +2166,7 @@ fn the_engine_answers_the_method_probe_as_the_client_did() {
     let mut vm = Vm::wow();
     wowlua_engine::install(&mut vm, "camelot").expect("installs");
     wowlua_engine::set_platform(&mut vm, battery_platform());
+    wowlua_engine::set_screen(&mut vm, battery_screen());
     let report = wowlua_engine::ui::load(&mut vm, &ui.interface, ui.strings.as_deref());
     assert!(report.errors.is_empty(), "{:?}", report.errors);
     let mut vm = client_in(vm, &out);
@@ -2673,5 +2701,151 @@ StdTestEngineProbe("group")"#,
         "{} differences:\n{}",
         differences.len(),
         differences.join("\n")
+    );
+}
+
+/// A Lua table of strings (a recorded entry, or the engine's own).
+fn string_table(vm: &Vm, t: Value) -> BTreeMap<String, String> {
+    let Value::Table(t) = t else {
+        return BTreeMap::new();
+    };
+    vm.heap
+        .table(t)
+        .entries()
+        .filter_map(|(k, v)| match (k, v) {
+            (Value::Str(k), Value::Str(v)) => Some((
+                String::from_utf8_lossy(vm.str_bytes(k)).into_owned(),
+                String::from_utf8_lossy(vm.str_bytes(v)).into_owned(),
+            )),
+            _ => None,
+        })
+        .collect()
+}
+
+/// The screen probe's runs on Windows (`/stdtest engine screen`, five
+/// screens, decision T237), each played in the engine on that screen:
+/// UIParent's size and scale, the DPI scale, the fonts' sizes and every
+/// glyph's width, as the client measured them (the widths to six
+/// significant digits: their pixels exact, the conversion's last float
+/// digit not always).
+#[test]
+fn the_engine_measures_each_screen_as_the_client_did() {
+    let Some(ui) = wowlua_test::ui_source_in(&repo().join("target/types-src"), "camelot") else {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    };
+    let dir = build();
+    let out = dir.path().join("dist/dev/StdTest");
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    wowlua_engine::set_platform(&mut vm, wowlua_engine::Platform::Windows);
+    let report = wowlua_engine::ui::load(&mut vm, &ui.interface, ui.strings.as_deref());
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let mut vm = client_in(vm, &out);
+    let name = vm.str("StdTest");
+    wowlua_engine::widgets::fire_event(&mut vm, "ADDON_LOADED", &[name, Value::Bool(false)]);
+    wowlua_engine::widgets::fire_event(&mut vm, "PLAYER_LOGIN", &[]);
+    wowlua_engine::clock::advance_frames(&mut vm, 2, 1000.0 / 60.0);
+    let mut fixture_vm = Vm::wow();
+    let src =
+        fs::read(repo().join("crates/wowlua-engine/tests/client/forever-camelot-screens.lua"))
+            .expect("the screens");
+    let f = fixture_vm.load(&src, "=screens").expect("compiles");
+    let Value::Table(list) = fixture_vm.call(f, &[]).expect("runs")[0] else {
+        panic!("a list");
+    };
+    let n = fixture_vm.heap.table(list).border();
+    // Not the engine's to answer: the window (a recorded answer), the
+    // CVars (the engine's own), WorldFrame (unscaled in the client).
+    let skip = |k: &str| {
+        k.starts_with("GetCurrentGameWindowSize")
+            || k.starts_with("CVars")
+            || k.starts_with("WorldFrame")
+    };
+    let number = regex::Regex::new(r"-?\d+(\.\d+)?(e-?\d+)?").unwrap();
+    let close = |a: &str, b: &str| {
+        let (na, nb): (Vec<&str>, Vec<&str>) = (
+            number.find_iter(a).map(|m| m.as_str()).collect(),
+            number.find_iter(b).map(|m| m.as_str()).collect(),
+        );
+        number.replace_all(a, "N") == number.replace_all(b, "N")
+            && na.iter().zip(&nb).all(|(x, y)| {
+                let (x, y): (f64, f64) = (x.parse().unwrap_or(0.0), y.parse().unwrap_or(0.0));
+                (x - y).abs() <= 1e-6 * x.abs().max(y.abs()).max(1.0)
+            })
+    };
+    let mut differ = Vec::new();
+    let mut compared = 0;
+    for i in 1..=n {
+        let entry = fixture_vm.heap.table(list).get(Value::Num(i as f64));
+        let theirs = string_table(&fixture_vm, entry);
+        let nums = |k: &str| -> Vec<f64> {
+            theirs
+                .get(k)
+                .map(|s| s.split(", ").filter_map(|v| v.parse().ok()).collect())
+                .unwrap_or_default()
+        };
+        let size = nums("GetPhysicalScreenSize()");
+        let dpi = nums("GetScreenDPIScale()");
+        let cvars: Vec<String> = theirs
+            .get("CVars useUiScale, uiScale, uiScaleMultiplier, gxWindow, gxMaximize")
+            .map(|s| s.split(", ").map(str::to_string).collect())
+            .unwrap_or_default();
+        let screen = wowlua_engine::Screen {
+            width: size[0],
+            height: size[1],
+            dpi_scale: dpi[0],
+            ui_scale: (cvars.first().map(String::as_str) == Some("1"))
+                // The slider's value in hundredths (the CVar holds it as a
+                // single float's text, 1.1499999761581 for 1.15).
+                .then(|| cvars.get(1).and_then(|s| s.parse::<f64>().ok()))
+                .flatten()
+                .map(|s| (s * 100.0).round() / 100.0),
+        };
+        wowlua_engine::set_screen(&mut vm, screen);
+        addon(&mut vm, "StdTestEngineProbe('screen')");
+        let f = vm
+            .load(
+                b"return StdTestState.engineScreens[#StdTestState.engineScreens]",
+                "=screen",
+            )
+            .expect("compiles");
+        let r = vm.call(f, &[]).expect("runs");
+        let ours = string_table(&vm, r[0]);
+        for (k, v) in &theirs {
+            // UIParent's own scale: the engine lays out at 1 (decision
+            // T237's next step); its size and every measure follow the
+            // screen's scale already.
+            if skip(k) || k.starts_with("UIParent size") {
+                continue;
+            }
+            compared += 1;
+            let mine = ours.get(k).map_or("<missing>", String::as_str);
+            let fonts = k.contains("glyph widths") || k.starts_with("GameFontNormal \"");
+            // "Hello World" in the 18 and 20 point fonts kerns a pixel the
+            // engine does not know (kerning recorded at one size): its width
+            // within a pixel, the glyphs exact.
+            let kerned = |a: &str, b: &str| {
+                let (Some((ga, ha)), Some((gb, hb))) = (a.split_once(" | "), b.split_once(" | "))
+                else {
+                    return false;
+                };
+                let w = |s: &str| s.split(", ").next().and_then(|v| v.parse::<f64>().ok());
+                close(ga, gb) && w(ha).zip(w(hb)).is_some_and(|(x, y)| (x - y).abs() <= 1.0)
+            };
+            if mine != v && !(fonts && (close(mine, v) || kerned(mine, v))) {
+                differ.push(format!(
+                    "{}x{} {k}: client {v:?}, ours {mine:?}",
+                    size[0], size[1]
+                ));
+            }
+        }
+    }
+    assert!(compared > 0, "nothing compared");
+    assert!(
+        differ.is_empty(),
+        "{} differ:\n{}",
+        differ.len(),
+        differ.join("\n")
     );
 }

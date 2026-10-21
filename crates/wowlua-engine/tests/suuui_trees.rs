@@ -452,12 +452,16 @@ fs:SetText('|cffff0000Attack|r')
 local w1, h1 = fs:GetSize()
 fs:SetWidth(18)
 local w2, h2 = fs:GetSize()
+fs:SetNonSpaceWrap(true)
+local w3, h3 = fs:GetSize()
 local t = UIParent:CreateTexture()
 t:SetPoint('LEFT', fs, 'RIGHT')
 fs:SetPoint('LEFT', UIParent, 'LEFT', 10, 0)
-return ('%d %d %d %d %d %d %d'):format(w0, h0, w1, h1, w2, h2, t:GetLeft())",
+return ('%d %d %d %d %d %d %d %d'):format(w0, h0, w1, h1, w2, h2, h3, t:GetLeft())",
     );
-    assert_eq!(r, "1 1 36 12 18 24 28");
+    // A word wider than the string keeps one line (truncated) unless it
+    // may break between its characters (`SetNonSpaceWrap`).
+    assert_eq!(r, "1 1 42 12 18 12 36 28");
 }
 
 #[test]

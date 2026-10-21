@@ -1705,6 +1705,17 @@
             }
           ]
         },
+        "screen": {
+          "description": "The screen the emulated client draws on, for test files that name\nnone: its size in pixels, its DPI scale, and the UI scale when\n\"Use UI Scale\" is on; UIParent's size and the text's measures follow\nit (decision T237). The recorded Mac's 1920 x 1080 by default.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/TestScreen"
+            },
+            {
+              "type": "null"
+            }
+          ]
+        },
         "coverage": {
           "description": "Minimum coverage and files left out of it (spec Tooling §16.1.6).",
           "anyOf": [
@@ -1739,6 +1750,43 @@
       "enum": [
         "mac",
         "windows"
+      ]
+    },
+    "TestScreen": {
+      "description": "The screen the emulated client draws on in tests (decision T237).",
+      "type": "object",
+      "properties": {
+        "width": {
+          "description": "Its width in pixels.",
+          "type": "number",
+          "format": "double"
+        },
+        "height": {
+          "description": "Its height in pixels.",
+          "type": "number",
+          "format": "double"
+        },
+        "dpiScale": {
+          "description": "The system's DPI scale (`GetScreenDPIScale`), 1 by default.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        },
+        "uiScale": {
+          "description": "The UI scale with \"Use UI Scale\" on; without, the client's own.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double"
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "width",
+        "height"
       ]
     },
     "CoverageSettings": {

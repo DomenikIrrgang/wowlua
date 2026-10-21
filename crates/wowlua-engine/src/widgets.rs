@@ -280,10 +280,6 @@ fn insert_sorted(list: &mut Vec<usize>, i: usize) {
     }
 }
 
-/// UIParent's size in screen units at scale 1: 1920 x 1080, as WoW Forever
-/// had it (`/stdtest engine`).
-pub const SCREEN: (f64, f64) = (1920.0, 1080.0);
-
 /// Keeps one of the engine's Lua values alive (in a registry table).
 pub fn keep(vm: &mut Vm, v: Value) {
     let registry = vm.registry;
@@ -2557,7 +2553,7 @@ fn unplaced_size(vm: &Vm, id: WidgetId, w: f64, h: f64) -> (f64, f64) {
 
 /// The stored arguments of setter `stem`, read without interning (for the
 /// layout, which only reads the world).
-fn stored_ref(vm: &Vm, props: TableRef, stem: &str) -> Option<Vec<Value>> {
+pub(crate) fn stored_ref(vm: &Vm, props: TableRef, stem: &str) -> Option<Vec<Value>> {
     let key = vm.heap.interned(stem.as_bytes())?;
     let Value::Table(list) = vm.heap.table(props).get(Value::Str(key)) else {
         return None;
@@ -2574,39 +2570,36 @@ fn stored_ref(vm: &Vm, props: TableRef, stem: &str) -> Option<Vec<Value>> {
     )
 }
 
-/// A font string's font height, its own font's or its font object's.
-fn font_height(vm: &Vm, id: WidgetId) -> f64 {
+/// What setter `stem` stored on the region or along its font objects, as
+/// `methods2::font_chain` reads it, without changing the VM (for layout).
+pub(crate) fn font_chain_ref(vm: &Vm, id: WidgetId, stem: &str) -> Option<Vec<Value>> {
     let mut cur = id;
     for _ in 0..32 {
         let props = engine(vm).world.widgets[cur.0].props;
-        if let Some(v) = stored_ref(vm, props, "Font") {
-            return match v.get(1) {
-                Some(Value::Num(h)) => *h,
-                _ => 0.0,
-            };
+        if let Some(v) = stored_ref(vm, props, stem) {
+            return Some(v);
         }
         match stored_ref(vm, props, "FontObject")
             .and_then(|v| v.first().copied())
             .and_then(|f| widget_of(vm, f))
         {
-            Some(n) => cur = n,
-            None => break,
+            Some(n) if n != cur => cur = n,
+            _ => break,
         }
     }
-    0.0
+    None
 }
 
-/// A font string's text as the engine's text model lays it out: its
-/// widest line at six units a byte (as `GetStringWidth`, its color escapes
-/// left out), its lines, each
-/// wrapped at `width` when given and wrapping, at the font's height with
-/// the spacing between them (as `GetStringHeight`). Without text, 1 by 1.
+/// A font string's text as the client lays it out (`text.rs`, decision
+/// T237): its widest line (as `GetStringWidth`), its lines, each wrapped
+/// at `width` when given and wrapping, at the font's line height with the
+/// spacing between them (as `GetStringHeight`). Without text, 1 by 1.
 ///
 /// SuuUI probe trees: the client's font strings report their text's size
 /// on the sides neither their size nor two points set (the character
-/// window's check box labels 158 wide, as set, by 12, their font's height;
-/// two-line texts 24; empty ones 1, as a new font string is 1 by 1,
-/// `/stdtest engine`). Unverified: the widths, the client measuring glyphs.
+/// window's check box labels 158 wide, as set; two-line texts twice a
+/// line; empty ones 1, as a new font string is 1 by 1, `/stdtest
+/// engine`).
 fn text_extent(vm: &Vm, id: WidgetId, width: Option<f64>) -> (f64, f64) {
     let w = &engine(vm).world.widgets[id.0];
     let text = match w.text.map(|v| vm.hidden(v)) {
@@ -2624,35 +2617,11 @@ fn text_extent(vm: &Vm, id: WidgetId, width: Option<f64>) -> (f64, f64) {
         Some(Value::Num(s)) => s,
         _ => 0.0,
     };
-    // Color escapes take no room (`|cAARRGGBB`, `|r`).
-    let shown_len = |l: &str| {
-        let b = l.as_bytes();
-        let (mut n, mut i) = (0, 0);
-        while i < b.len() {
-            match (b[i], b.get(i + 1)) {
-                (b'|', Some(b'c' | b'C')) if i + 10 <= b.len() => i += 10,
-                (b'|', Some(b'r' | b'R')) => i += 2,
-                _ => {
-                    n += 1;
-                    i += 1;
-                }
-            }
-        }
-        n
-    };
-    let widths: Vec<f64> = text
-        .split('\n')
-        .map(|l| shown_len(l) as f64 * 6.0)
-        .collect();
-    let widest = widths.iter().copied().fold(0.0, f64::max);
-    let lines: f64 = widths
-        .iter()
-        .map(|&lw| match width {
-            Some(width) if wraps && width > 0.0 && lw > width => (lw / width).ceil(),
-            _ => 1.0,
-        })
-        .sum();
-    let h = lines * font_height(vm, id) + (lines - 1.0) * spacing;
+    // As the client lays text out (`text.rs`, decision T237).
+    let widest = crate::text::width(vm, id, &text);
+    let max = width.filter(|w| wraps && *w > 0.0);
+    let lines = crate::text::wrapped_lines(vm, id, &text, max).len() as f64;
+    let h = lines * crate::text::line_height(vm, id) + (lines - 1.0) * spacing;
     (widest, h)
 }
 
@@ -2827,7 +2796,8 @@ fn bounds_of(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -> Op
     let e = engine(vm);
     let w = &e.world.widgets[id.0];
     if w.name.as_deref() == Some("UIParent") || depth > 64 {
-        return Some((0.0, 0.0, SCREEN.0, SCREEN.1));
+        let (w, h) = e.screen.ui_parent_size();
+        return Some((0.0, 0.0, w, h));
     }
     let s = effective_scale(e, id);
     // A scroll child without points of its own sits at its scroll frame's
@@ -2857,7 +2827,10 @@ fn bounds_of(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -> Op
         // the screen's).
         let r = match rel {
             Some(r) => bounds_in(vm, r, depth + 1, known)?,
-            None => (0.0, 0.0, SCREEN.0, SCREEN.1),
+            None => {
+                let (w, h) = engine(vm).screen.ui_parent_size();
+                (0.0, 0.0, w, h)
+            }
         };
         let (rx, ry) = anchor(&p.relative_point);
         let ax = r.0 + rx * r.2 + p.x * s;
@@ -3090,11 +3063,12 @@ fn set_draw_layer(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 /// then its width the text's (the name; unverified).
 fn set_text_to_fit(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     set_text(vm, id, c)?;
-    let len = match engine(vm).world.widgets[id.0].text {
-        Some(Value::Str(s)) => vm.str_bytes(s).len(),
-        _ => 0,
+    let text = match engine(vm).world.widgets[id.0].text {
+        Some(Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        _ => String::new(),
     };
-    resize(vm, id, Some(len as f64 * 6.0), None);
+    let width = crate::text::width(vm, id, &text);
+    resize(vm, id, Some(width), None);
     Ok(vec![])
 }
 
@@ -3375,18 +3349,17 @@ fn get_id(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![v])
 }
 
-/// `GetStringWidth()`: six units a character at the font's height 12
-/// (a stand-in: the client measures glyphs).
-/// `GetStringWidth()` and the like: six units a byte; a secret text's
-/// width is secret too, as in the client (SuuUI's tests).
+/// `GetStringWidth()`, `GetUnboundedStringWidth()`: its widest line as the
+/// client lays text out (`text.rs`, decision T237); a secret text's width
+/// is secret too, as in the client (SuuUI's tests).
 fn get_string_width(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let text = engine(vm).world.widgets[id.0].text;
     let secret = matches!(text, Some(Value::Secret(_)));
-    let len = match text.map(|t| vm.hidden(t)) {
-        Some(Value::Str(s)) => vm.str_bytes(s).len(),
-        _ => 0,
+    let shown = match text.map(|t| vm.hidden(t)) {
+        Some(Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        _ => String::new(),
     };
-    let width = Value::Num(len as f64 * 6.0);
+    let width = Value::Num(crate::text::width(vm, id, &shown));
     Ok(vec![if secret { vm.secret_wrap(width) } else { width }])
 }
 
@@ -3433,13 +3406,22 @@ fn set_font_object(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// `GetFont()`: the widget's own font, else its font object's.
+/// `GetFont()`: the widget's own font, else its font object's; its size a
+/// single float (recorded: NumberFontNormal's 13.999999046325684).
 pub(crate) fn get_font(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let mut values = font_of_widget(vm, id);
+    if let Some(Value::Num(n)) = values.get_mut(1) {
+        *n = f64::from(*n as f32);
+    }
+    Ok(values)
+}
+
+fn font_of_widget(vm: &mut Vm, id: WidgetId) -> Vec<Value> {
     let mut cur = id;
     for _ in 0..32 {
         let props = engine(vm).world.widgets[cur.0].props;
         if let Some(v) = stored_args(vm, props, "Font") {
-            return Ok(v);
+            return v;
         }
         let next = stored_args(vm, props, "FontObject")
             .and_then(|v| v.first().copied())
@@ -3452,7 +3434,7 @@ pub(crate) fn get_font(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     // No font: no file, a height, no flags (`/stdtest engine`; a font
     // string's height is garbage there).
     let flags = vm.str("");
-    Ok(vec![Value::Nil, Value::Num(0.0), flags])
+    vec![Value::Nil, Value::Num(0.0), flags]
 }
 
 /// `GetLineHeight()`: the font's height (its own or a font object's).
@@ -3767,15 +3749,25 @@ fn kept(vm: &Vm, stem: &str, i: usize, v: Value) -> Value {
             Value::Num(byte_float(vm, n))
         }
         ("Font", 1, Value::Num(h)) if engine(vm).flavor == "camelot" => {
-            Value::Num(kept_font_height(h))
+            Value::Num(kept_font_height(engine(vm).platform, h))
         }
         _ => v,
     }
 }
 
-/// The height camelot keeps for a font set to `h` (recorded for 1 to 80:
-/// 13 reads back 12.999999046326; others as set).
-pub fn kept_font_height(h: f64) -> f64 {
+/// The height camelot keeps for a font set to `h`, by machine (decision
+/// T236): the Mac's recorded for 1 to 80 (13 reads back 12.999999046326);
+/// Windows' 13 13.000000953674316 and 14 13.999999046325684 (the screen
+/// probe's font objects, the same at five screens), its others as set
+/// (unverified).
+pub fn kept_font_height(platform: crate::Platform, h: f64) -> f64 {
+    if platform == crate::Platform::Windows {
+        return match h {
+            13.0 => 13.000000953674316,
+            14.0 => 13.999999046325684,
+            _ => h,
+        };
+    }
     static TABLE: std::sync::OnceLock<HashMap<i64, f64>> = std::sync::OnceLock::new();
     let table = TABLE.get_or_init(|| {
         include_str!("../data/camelot-font-heights.txt")

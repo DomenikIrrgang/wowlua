@@ -27,6 +27,9 @@ use wowlua_vm::{TableRef, Value, Vm};
 /// The machine the emulated client runs on (decision T236).
 pub use wowlua_engine::Platform;
 
+/// The screen the emulated client draws on (decision T237).
+pub use wowlua_engine::Screen;
+
 /// What a test run needs of a test build.
 pub struct Suite<'a> {
     pub build: &'a BuildOutput,
@@ -41,6 +44,8 @@ pub struct Suite<'a> {
     pub profile: Option<String>,
     /// `test.platform`: the machine of files that name none (decision T236).
     pub platform: wowlua_engine::Platform,
+    /// `test.screen`: the screen of files that name none (decision T237).
+    pub screen: wowlua_engine::Screen,
     /// `test.addons`: other addons' folders, loaded before the addon.
     pub addons: Vec<PathBuf>,
     /// `-u`: rewrite the snapshots that differ.
@@ -397,6 +402,24 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
         None => suite.platform,
     };
     wowlua_engine::set_platform(&mut vm, platform);
+    // The screen it draws on (decision T237): the file's `config({ screen
+    // = { width, height, dpiScale, uiScale } })`, else the manifest's.
+    let screen = match profile::config_numbers(&source, "screen") {
+        Some(fields) => {
+            let get = |k: &str| fields.iter().find(|(n, _)| n == k).map(|(_, v)| *v);
+            let (Some(width), Some(height)) = (get("width"), get("height")) else {
+                return Err("config: screen needs a width and a height".into());
+            };
+            wowlua_engine::Screen {
+                width,
+                height,
+                dpi_scale: get("dpiScale").unwrap_or(1.0),
+                ui_scale: get("uiScale"),
+            }
+        }
+        None => suite.screen,
+    };
+    wowlua_engine::set_screen(&mut vm, screen);
     if let Some(r) = reload {
         vm.clock.now = r.now;
         vm.clock.elapsed_ms = r.elapsed_ms;

@@ -76,6 +76,7 @@ pub mod spellinfo;
 pub mod stats;
 pub mod systeminfo;
 pub mod taxi;
+pub mod text;
 pub mod tooltip;
 pub mod tradeskill;
 pub mod trainer;
@@ -97,6 +98,8 @@ pub struct Engine {
     /// The machine the client runs on (decision T236): its machine-specific
     /// answers and `IsMacClient`.
     pub platform: Platform,
+    /// The screen it draws on (decision T237).
+    pub screen: Screen,
     pub api: &'static api::Api,
     /// Set by a behaviour whose answer has nothing to hide this call.
     pub plain_results: bool,
@@ -206,6 +209,76 @@ impl Platform {
             Platform::Mac => "mac",
             Platform::Windows => "windows",
         }
+    }
+}
+
+/// The screen the client draws on (decision T237): its size in pixels, its
+/// DPI scale, and the UI scale when "Use UI Scale" is on. The recorded
+/// Mac's by default: 1920 x 1080, DPI scale 1.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Screen {
+    pub width: f64,
+    pub height: f64,
+    pub dpi_scale: f64,
+    pub ui_scale: Option<f64>,
+}
+
+impl Default for Screen {
+    fn default() -> Self {
+        Screen {
+            width: 1920.0,
+            height: 1080.0,
+            dpi_scale: 1.0,
+            ui_scale: None,
+        }
+    }
+}
+
+impl Screen {
+    /// UIParent's scale: the UI scale when it is used, else 768 over the
+    /// screen's height times its DPI scale, at most 1; single floats
+    /// (recorded at 1280x720, 1600x900, 1920x1080 and 2560x1440 on Windows,
+    /// 1920x1080 on the Mac, and at UI scale 1.15).
+    pub fn ui_parent_scale(&self) -> f64 {
+        let s = match self.ui_scale {
+            Some(s) => s as f32,
+            // 768 times the DPI scale, over the height (recorded 0.80000001192
+            // at 2560x1440, DPI scale 1.5: dividing first gives a float more).
+            None => ((768.0f32 * self.dpi_scale as f32) / self.height as f32).min(1.0),
+        };
+        f64::from(s)
+    }
+
+    /// UIParent's size in its units: the screen at 768 units high, over
+    /// UIParent's scale, in single floats (recorded: the Mac's
+    /// 1920.0001220703 by 1080, Windows' 1365.3333740234 by 768).
+    pub fn ui_parent_size(&self) -> (f64, f64) {
+        let wide = (self.width * 768.0 / self.height) as f32;
+        // The UI scale as set (a CVar's text) divides in double precision
+        // (recorded at 1.15: 1187.246337890625); the client's own scale in
+        // single.
+        if let Some(ui) = self.ui_scale {
+            return (
+                f64::from((self.width * 768.0 / self.height / ui) as f32),
+                f64::from((768.0 / ui) as f32),
+            );
+        }
+        let s = self.ui_parent_scale() as f32;
+        (f64::from(wide / s), f64::from(768.0f32 / s))
+    }
+}
+
+/// Sets the screen the client draws on (after `install`): UIParent's size
+/// follows.
+pub fn set_screen(vm: &mut Vm, screen: Screen) {
+    engine_mut(vm).screen = screen;
+    let ui = vm.get_global("UIParent");
+    if let Some(id) = widgets::widget_of(vm, ui) {
+        let (w, h) = screen.ui_parent_size();
+        let widget = &mut engine_mut(vm).world.widgets[id.0];
+        widget.width = w;
+        widget.height = h;
+        widgets::layout_changed(vm);
     }
 }
 
@@ -322,6 +395,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
     vm.host = Some(Box::new(Engine {
         flavor: flavor.to_string(),
         platform: Platform::Mac,
+        screen: Screen::default(),
         api,
         behaviours: fill.into_iter().chain(own).collect(),
         fill_ins,
@@ -577,8 +651,9 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
     let ui = widgets::create(vm, "Frame", Some("UIParent".into()), None);
     if let Some(id) = widgets::widget_of(vm, ui) {
         let w = &mut engine_mut(vm).world.widgets[id.0];
-        w.width = widgets::SCREEN.0;
-        w.height = widgets::SCREEN.1;
+        let (width, height) = Screen::default().ui_parent_size();
+        w.width = width;
+        w.height = height;
         // Anchored to the screen at both corners, and protected
         // (`/stdtest engine`).
         w.protected = true;

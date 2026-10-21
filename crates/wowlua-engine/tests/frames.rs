@@ -212,7 +212,8 @@ local r, g, bb, a = t:GetVertexColor()
 return tostring(f:IsMovable()), tostring(f:IsMouseEnabled()), tostring(f:IsToplevel()), tostring(ok),
     select(2, fs:GetFont()), tostring(b:IsEnabled()), table.concat(Seen, ','), r .. g .. bb .. a",
     );
-    // A 14 high font keeps 13.999999046326 on camelot (`/stdtest engine`).
+    // A 14 high font keeps 13.999999046326 on camelot (`/stdtest engine`,
+    // printed to 14 digits): the single float 13.999999046325684.
     assert_eq!(
         r,
         [
@@ -220,7 +221,7 @@ return tostring(f:IsMovable()), tostring(f:IsMouseEnabled()), tostring(f:IsTople
             "true",
             "true",
             "true",
-            "13.999999046326",
+            "13.999999046325684",
             "false",
             "off",
             "1001"

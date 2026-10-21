@@ -604,29 +604,24 @@ getters! {
     get_field_size: num("FieldSize", 0.0);
 }
 
-/// The width of `text` in the engine's text model (six units a byte, as
-/// `GetStringWidth`).
-fn text_width(text: &[u8]) -> f64 {
-    text.len() as f64 * 6.0
-}
-
-/// `FontString:GetUnboundedStringWidthForText(text)`.
-fn get_unbounded_width_for_text(vm: &mut Vm, _id: WidgetId, c: NativeCall) -> Ret {
-    let w = match c.arg(2) {
-        Value::Str(s) => text_width(vm.str_bytes(s)),
-        Value::Num(n) => format!("{n}").len() as f64 * 6.0,
-        _ => 0.0,
+/// `FontString:GetUnboundedStringWidthForText(text)`: the text's width in
+/// the string's font (`text.rs`, decision T237).
+fn get_unbounded_width_for_text(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let text = match c.arg(2) {
+        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        Value::Num(n) => wowlua_vm::number::fmt_num(n),
+        _ => String::new(),
     };
-    Ok(vec![Value::Num(w)])
+    Ok(vec![Value::Num(crate::text::width(vm, id, &text))])
 }
 
 /// `FontString:FindCharacterIndexAtCoordinate(x, y)`: the character under
-/// `x` on the text model's one line, and whether `x` is within the text.
+/// `x` on the text's one line, and whether `x` is within the text
+/// (`text.rs`; unverified against the client).
 fn find_character_index(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
-    let chars = text_of(vm, id).chars().count();
+    let text = text_of(vm, id);
     let x = number(vm, c.arg(2)).unwrap_or(0.0);
-    let inside = chars > 0 && x >= 0.0 && x < chars as f64 * 6.0;
-    let index = ((x / 6.0).floor() as i64 + 1).clamp(1, chars.max(1) as i64);
+    let (index, inside) = crate::text::index_at(vm, id, &text, x);
     Ok(vec![Value::Num(index as f64), Value::Bool(inside)])
 }
 
@@ -897,8 +892,8 @@ fn html_lines(markup: &str) -> Vec<String> {
 }
 
 /// `SimpleHTML:GetContentHeight()`: its text's lines (wrapped at its laid
-/// out width, six units a character) at its font's height, as
-/// `GetStringHeight` measures a font string; 0 without text.
+/// out width as the client lays text out, `text.rs`) at its font's
+/// height, as `GetStringHeight` measures a font string; 0 without text.
 fn html_get_content_height(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let text = text_of(vm, id);
     let lines = html_lines(&text);
@@ -906,16 +901,10 @@ fn html_get_content_height(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
         return Ok(vec![Value::Num(0.0)]);
     }
     let width = widgets::laid_out_size(vm, id).0;
+    let max = (width > 0.0).then_some(width);
     let n: usize = lines
         .iter()
-        .map(|l| {
-            let w = l.chars().count() as f64 * 6.0;
-            if width > 0.0 && w > width {
-                (w / width).ceil() as usize
-            } else {
-                1
-            }
-        })
+        .map(|l| crate::text::wrapped_lines(vm, id, l, max).len())
         .sum();
     let call = call_of(vm, id, &[]);
     let size = widgets::get_font(vm, id, call)

@@ -16,7 +16,7 @@ use std::sync::OnceLock;
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, NativeFn, Value, Vm};
 
-use crate::{engine, engine_mut, widgets};
+use crate::{engine, engine_mut};
 
 /// A recorded value: the probe's text of it.
 #[derive(Clone, Debug, PartialEq)]
@@ -340,16 +340,16 @@ fn realm_name(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![vm.str("Realm")])
 }
 
-/// Not rested: state 2, normal experience.
-fn physical_screen_size(_vm: &mut Vm, _c: NativeCall) -> Ret {
+/// `GetPhysicalScreenSize()`: the screen's pixels (decision T237).
+fn physical_screen_size(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![
-        Value::Num(widgets::SCREEN.0),
-        Value::Num(widgets::SCREEN.1),
+        Value::Num(engine(vm).screen.width),
+        Value::Num(engine(vm).screen.height),
     ])
 }
 
-fn screen_height(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(widgets::SCREEN.1)])
+fn screen_height(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(engine(vm).screen.ui_parent_size().1)])
 }
 
 /// `SetPortraitTexture(texture, unit [, disableMasking])`,
@@ -378,8 +378,8 @@ fn interacting_with(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `GetScreenWidth()`: UIParent's width, as `GetScreenHeight` its height.
-fn screen_width(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(widgets::SCREEN.0)])
+fn screen_width(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(engine(vm).screen.ui_parent_size().0)])
 }
 
 /// The role `C_SpecializationInfo.GetSpecializationInfo(index)` answers

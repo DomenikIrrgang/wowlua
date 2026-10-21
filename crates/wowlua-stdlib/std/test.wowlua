@@ -214,9 +214,17 @@ export const afterAll: any = hook("afterAll")
 --- the file (`mock.login()`); `timeout`: how long waits may take (virtual
 --- seconds, 10 by default); `profile`: the world profile the file starts
 --- in (`tests/profiles/<name>.json`); `platform`: the machine the client
---- runs on, `"mac"` (the default) or `"windows"` (both read before
+--- runs on, `"mac"` (the default) or `"windows"`; `screen`: the screen it
+--- draws on, its pixels, DPI scale and the UI scale with "Use UI Scale"
+--- on (the recorded Mac's 1920 x 1080 by default; all three read before
 --- anything loads, as literals).
-export function config(opts: { lifecycle?: "auto" | "manual", timeout?: number, profile?: string, platform?: "mac" | "windows" })
+export function config(opts: {
+    lifecycle?: "auto" | "manual",
+    timeout?: number,
+    profile?: string,
+    platform?: "mac" | "windows",
+    screen?: { width: number, height: number, dpiScale?: number, uiScale?: number },
+})
     if opts.lifecycle then
         settings.lifecycle = opts.lifecycle
     end

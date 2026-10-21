@@ -41,6 +41,46 @@ pub fn config_text(source: &[u8], key: &str) -> Option<String> {
     })
 }
 
+/// The number literals of the table a test file's `config({ … })` gives
+/// `key` (read from its syntax before anything loads: `screen = { width =
+/// 1600, height = 900 }`).
+pub fn config_numbers(source: &[u8], key: &str) -> Option<Vec<(String, f64)>> {
+    let file = wowlua_span::SourceDb::new().add("", "");
+    let parse = wowlua_syntax::parse(source, file);
+    parse.view().block().stmts().iter().find_map(|s| {
+        let StmtKind::Call(call) = s.kind() else {
+            return None;
+        };
+        let ExprKind::Call { callee, args } = call.kind() else {
+            return None;
+        };
+        if !matches!(callee.kind(), ExprKind::Name(n) if n.text() == "config") {
+            return None;
+        }
+        let ExprKind::Table(fields) = args.exprs().first()?.kind() else {
+            return None;
+        };
+        fields.iter().find_map(|f| match f {
+            TableField::Named { name, value, .. } if name.text() == key => match value.kind() {
+                ExprKind::Table(inner) => Some(
+                    inner
+                        .iter()
+                        .filter_map(|f| match f {
+                            TableField::Named { name, value, .. } => match value.kind() {
+                                ExprKind::Number(n) => Some((name.text().to_string(), n.value()?)),
+                                _ => None,
+                            },
+                            _ => None,
+                        })
+                        .collect(),
+                ),
+                _ => None,
+            },
+            _ => None,
+        })
+    })
+}
+
 /// A JSON value as Lua's: objects and arrays become tables (object keys
 /// that are whole numbers become number keys), `null` nil; an array with
 /// nulls keeps its length in `n` (a recorded answer).

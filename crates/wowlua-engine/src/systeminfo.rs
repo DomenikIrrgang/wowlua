@@ -352,16 +352,21 @@ fn get_cursor_item(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 // ------------------------------------------------------------- screen
 
-/// `GetScreenWidth()`: the UI's width, as `GetScreenHeight` its height
-/// (recorded: 1920.0001220703 at 1080 high; the engine's screen is
-/// 1920 x 1080 in UI units).
-fn get_screen_width(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(widgets::SCREEN.0)])
+/// `GetScreenWidth()`: UIParent's width on the screen (decision T237;
+/// recorded: 1920.0001220703 at 1080 high on the Mac, 1365.3333740234 on
+/// Windows at four sizes).
+fn get_screen_width(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(
+        crate::engine(vm).screen.ui_parent_size().0,
+    )])
 }
 
-/// `GetScreenDPIScale()`: 1 (unverified).
-fn get_screen_dpi_scale(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(1.0)])
+/// `GetScreenDPIScale()`: the screen's (decision T237; recorded: the Mac's
+/// 1, Windows' 1.5 to 3 by the window's size on a 4K screen), a single
+/// float.
+fn get_screen_dpi_scale(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let dpi = crate::engine(vm).screen.dpi_scale as f32;
+    Ok(vec![Value::Num(f64::from(dpi))])
 }
 
 /// `C_UI.GetUIParent()`, `C_UI.GetWorldFrame()`: the frames.

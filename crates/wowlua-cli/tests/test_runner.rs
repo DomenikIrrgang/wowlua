@@ -4862,3 +4862,55 @@ end
     assert!(ok, "{out}");
     assert!(out.contains("2 passed, 0 failed"), "{out}");
 }
+
+/// The screen the client draws on (decision T237): the manifest's
+/// `test.screen`, a file's `config({ screen })` over it; UIParent's size,
+/// the DPI scale and the text's measures follow it (as recorded on
+/// Windows at 1600x900 and 2560x1440).
+#[test]
+fn test_screen_from_manifest_and_config() {
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            ("src/main.wowlua", "print(\"loaded\")\n"),
+            (
+                "tests/laptop.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+
+@test("the manifest's screen")
+local function laptop()
+    expect(GetScreenWidth()).toBe(1365.3333740234375)
+    expect(GetScreenHeight()).toBe(768)
+    expect(GetScreenDPIScale()).toBe(2.4000000953674316)
+    local w, h = GetPhysicalScreenSize()
+    expect(w).toBe(1600)
+    local f = UIParent:CreateFontString()
+    f:SetFont("Fonts\FRIZQT__.TTF", 12, "")
+    f:SetText("Hello World")
+    -- at 14 pixels: its advances and the last glyph's width, 85 pixels
+    expect(f:GetUnboundedStringWidth()).toBe(72.533332824707031)
+    expect(f:GetStringHeight()).toBe(11.946666717529297)
+end
+"#,
+            ),
+            (
+                "tests/large.test.wowlua",
+                r#"import test, expect, config from "wowlua:test"
+config({ screen = { width = 2560, height = 1440, dpiScale = 1.5 } })
+
+@test("a file's own screen")
+local function large()
+    expect(GetScreenWidth()).toBe(1706.666748046875)
+    expect(GetScreenHeight()).toBe(960)
+end
+"#,
+            ),
+        ],
+    );
+    let manifest = r#"{ "package": { "name": "demo", "version": "1.0.0" }, "flavors": { "camelot": {} },
+  "addon": { "title": "Demo" }, "test": { "screen": { "width": 1600, "height": 900, "dpiScale": 2.4 } } }"#;
+    fs::write(dir.path().join("wowlua.json"), manifest).unwrap();
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    assert!(out.contains("2 passed, 0 failed"), "{out}");
+}

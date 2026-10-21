@@ -917,6 +917,22 @@ pub enum QuoteStyle {
     Preserve,
 }
 
+/// The screen the emulated client draws on in tests (decision T237).
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "camelCase", deny_unknown_fields)]
+pub struct TestScreen {
+    /// Its width in pixels.
+    pub width: f64,
+    /// Its height in pixels.
+    pub height: f64,
+    /// The system's DPI scale (`GetScreenDPIScale`), 1 by default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dpi_scale: Option<f64>,
+    /// The UI scale with "Use UI Scale" on; without, the client's own.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub ui_scale: Option<f64>,
+}
+
 /// The machine the emulated client runs on in tests (decision T236).
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
@@ -941,6 +957,12 @@ pub struct TestSettings {
     /// sound answers and `IsMacClient` (decision T236).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub platform: Option<TestPlatform>,
+    /// The screen the emulated client draws on, for test files that name
+    /// none: its size in pixels, its DPI scale, and the UI scale when
+    /// "Use UI Scale" is on; UIParent's size and the text's measures follow
+    /// it (decision T237). The recorded Mac's 1920 x 1080 by default.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub screen: Option<TestScreen>,
     /// Minimum coverage and files left out of it (spec Tooling §16.1.6).
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub coverage: Option<CoverageSettings>,
