@@ -237,6 +237,11 @@ its secret alpha aspect: `GetAlpha` reads back a secret, and keeps doing so
 after a plain alpha is set, whose value still applies (decision T251;
 found in game). What takes the aspect away again is unverified.
 
+A protected frame anchored to a region (a texture, a font string, a line,
+a mask texture) is refused with the client's error, out of combat too:
+"Action[SetPoint] failed because[Cannot anchor protected frames to
+regions]: attempted from: Button:SetPoint." (decision T252; found in game).
+
 ## 17.6 The engine
 
 The WoW API the VM's code calls, per flavor.

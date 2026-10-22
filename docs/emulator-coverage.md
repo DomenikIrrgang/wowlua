@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,090 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,091 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -832,7 +832,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,090 rules unverified: each rests on Blizzard's
+The engine's code marks 1,091 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -2131,7 +2131,7 @@ page changes only when a rule is added, removed or reworded.
 - [units.rs](../crates/wowlua-engine/src/units.rs): `UnitIsHumanPlayer(unit)`: a player's character (unverified: as `UnitIsPlayer`).
 - [units.rs](../crates/wowlua-engine/src/units.rs): Not casting or channeling: no values.
 
-### widgets (44)
+### widgets (45)
 
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): As `/stdtest engine` recorded on WoW Forever 1.60.1 (fixture `tests/client/forever-camelot-engine.lua`, checked by `w...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): Edit boxes Lua set the text of this frame: `OnTextChanged(false)` runs once each after the frame's `OnUpdate`, not at...
@@ -2154,6 +2154,7 @@ page changes only when a rule is added, removed or reworded.
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): `CreateActor(name, template)`: a model scene's actor (its parent, not among its children: `GetNumActors`, `GetActorAt...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): `MessageFrame:AddMessage(text, r, g, b, a, messageID)`: a font string of the frame shows it (`GetFontStringByID` find...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): `SetToDefaults()` of a region or frame: its anchors cleared, its size 0 by 0 (Blizzard's Compositor.lua: "The anchors...
+- [widgets.rs](../crates/wowlua-engine/src/widgets.rs): A protected frame anchored to a region (a texture, a font string) is refused, out of combat too, with the client's er...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): `GetPointByName(point)`: the anchor of that point as `GetPoint` gives it; nothing without one.
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): `OnSizeChanged` for the widgets resized since the last frame: those `SetSize` resized, then those whose size follows...
 - [widgets.rs](../crates/wowlua-engine/src/widgets.rs): An object whose untrusted layout scripts are forbidden runs only its secure ones (the documentation's `UntrustedLayou...

@@ -12,6 +12,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- Tests: anchoring a secure (protected) frame to a texture or a font string fails with the game's error ("Cannot anchor protected frames to regions"), as it does in the game even out of combat. It used to work in tests.
 - Tests: a frame whose alpha was set from a secret value keeps reading its alpha back as a secret, as in the game, even after you set a plain alpha. Code that reads `GetAlpha()` again later (a fade from the current alpha) now fails in the test as it does in the game.
 - `wowlua test --coverage` with a filter (`wowlua test --coverage Units/Threat`) no longer fails on the coverage minimums in `wowlua.json`: they are for the whole suite, and a filtered run's totals still count every file. It used to fail even when all its tests passed.
 - Tests: a group member logging in or out (`member:setOnline(false)`) now sends `UNIT_CONNECTION`, for their target token too, as the game does. Only the roster update came before.

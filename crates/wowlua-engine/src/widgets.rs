@@ -2275,6 +2275,7 @@ fn set_point(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
             )
         }
     };
+    refuse_region_anchor(vm, id, relative, "SetPoint")?;
     let w = &mut engine_mut(vm).world.widgets[id.0];
     w.points.retain(|p| p.point != point);
     w.points.push(Point {
@@ -2313,6 +2314,7 @@ fn set_all_points(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         Value::Nil => None,
         v => Some(v),
     };
+    refuse_region_anchor(vm, id, rel, "SetAllPoints")?;
     let w = &mut engine_mut(vm).world.widgets[id.0];
     w.points.clear();
     for p in ["TOPLEFT", "BOTTOMRIGHT"] {
@@ -2326,6 +2328,35 @@ fn set_all_points(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     }
     layout_changed(vm);
     Ok(vec![])
+}
+
+/// A protected frame anchored to a region (a texture, a font string) is
+/// refused, out of combat too, with the client's error (found in game,
+/// SuuUI's spellbook: "Action[SetPoint] failed because[Cannot anchor
+/// protected frames to regions]: attempted from: Button:SetPoint.";
+/// decision T252). Unverified: `SetAllPoints`'s wording (taken to be the
+/// same, named after it).
+fn refuse_region_anchor(
+    vm: &mut Vm,
+    id: WidgetId,
+    relative: Option<Value>,
+    method: &str,
+) -> Result<(), LuaError> {
+    let Some(rel) = relative.and_then(|v| widget_of(vm, v)) else {
+        return Ok(());
+    };
+    let e = engine(vm);
+    let region = matches!(
+        e.world.widgets[rel.0].class.as_str(),
+        "Texture" | "FontString" | "Line" | "MaskTexture"
+    );
+    if !e.world.widgets[id.0].protected || !region {
+        return Ok(());
+    }
+    let class = e.world.widgets[id.0].class.clone();
+    Err(vm.error(&format!(
+        "Action[{method}] failed because[Cannot anchor protected frames to regions]: attempted from: {class}:{method}."
+    )))
 }
 
 /// A line has start and end points, not anchors (`/stdtest engine`).

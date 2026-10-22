@@ -102,3 +102,34 @@ return tostring(issecretvalue(plain:GetAlpha())), tostring(before), tostring(iss
     );
     assert_eq!(r, ["false", "true", "true", "true", "true"]);
 }
+
+/// A protected frame anchored to a region is refused, out of combat too;
+/// to a frame, or an unprotected frame to a region, it is not (T252).
+#[test]
+fn a_protected_frame_cannot_anchor_to_a_region() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local holder = CreateFrame('Frame', nil, UIParent)
+local text = holder:CreateFontString(nil, 'ARTWORK', 'GameFontNormal')
+local tex = holder:CreateTexture()
+local secure = CreateFrame('Button', nil, holder, 'SecureHandlerClickTemplate')
+local plain = CreateFrame('Button', nil, holder)
+local ok1, err1 = pcall(secure.SetPoint, secure, 'LEFT', text, 'RIGHT', 4, 0)
+local ok2, err2 = pcall(secure.SetAllPoints, secure, tex)
+local ok3 = pcall(secure.SetPoint, secure, 'LEFT', holder, 'RIGHT', 4, 0)
+local ok4 = pcall(plain.SetPoint, plain, 'LEFT', text, 'RIGHT', 4, 0)
+return tostring(ok1), tostring(err1):match('Action.*'), tostring(ok2), tostring(err2):match('Action.*'), tostring(ok3), tostring(ok4)",
+    );
+    assert_eq!(
+        r,
+        [
+            "false",
+            "Action[SetPoint] failed because[Cannot anchor protected frames to regions]: attempted from: Button:SetPoint.",
+            "false",
+            "Action[SetAllPoints] failed because[Cannot anchor protected frames to regions]: attempted from: Button:SetAllPoints.",
+            "true",
+            "true"
+        ]
+    );
+}
