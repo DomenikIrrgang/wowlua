@@ -1811,6 +1811,76 @@ mod tests {
         );
     }
 
+    /// A value read past what a `local function` can give (each `return` a
+    /// fixed number of values) is W2062 in every mode: a name in a
+    /// `local` or an assignment, or `select(n, …)` (decision S40).
+    #[test]
+    fn values_past_a_functions_results_are_nil() {
+        // SuuUI's call helper: eight values at most, whatever it is declared
+        let helper = "local function call(fn: any, ...: any): ...any
+    if type(fn) ~= \"function\" then return nil end
+    local ok, a, b, c, d, e, f, g, h = pcall(fn, ...)
+    if ok then return a, b, c, d, e, f, g, h end
+end
+";
+        for (body, word) in [
+            (
+                "local n, r, rs, lv, ml, ty, st, sc, el, tx, price = call(print)\nprint(n, r, rs, lv, ml, ty, st, sc, el, tx, price)\n",
+                "`el`",
+            ),
+            ("print(select(11, call(print)))\n", "select(11)"),
+        ] {
+            let src = format!("{helper}{body}");
+            for mode in [Mode::Strict, Mode::Basic] {
+                let d = check_source(&src, mode);
+                let w: Vec<_> = d.iter().filter(|x| x.code == Some("W2062")).collect();
+                assert_eq!(w.len(), 1, "{src}\n{:#?}", codes(&d));
+                assert!(
+                    w[0].message.contains("at most 8 values") && w[0].message.contains(word),
+                    "{}",
+                    w[0].message
+                );
+            }
+        }
+        // a fixed function: an assignment, a value list ending in its call,
+        // one that gives nothing
+        for src in [
+            "local function two() return 1, 2 end\nlocal x, y, z = 0, 0, 0\nx, y, z = two()\nprint(x, y, z)\n",
+            "local function two() return 1, 2 end\nlocal a, b, c, d = 0, two()\nprint(a, b, c, d)\n",
+            "local function none() print(1) end\nlocal v = none()\nprint(v)\n",
+            // a `_` name past the count is skipped, the next one isn't
+            "local function one() return 1 end\nlocal ok, _, link = one()\nprint(ok, link)\n",
+        ] {
+            let d = check_source(src, Mode::Strict);
+            assert!(
+                d.iter().any(|x| x.code == Some("W2062")),
+                "{src}\n{:#?}",
+                codes(&d)
+            );
+        }
+        // no warning: up to the count; a return of open length (`...`, a
+        // variadic call); the function replaced; another `select`; `'#'`
+        for src in [
+            &format!(
+                "{helper}local a, b, c, d, e, f, g, h = call(print)\nprint(a, b, c, d, e, f, g, h, select(8, call(print)))\n"
+            ) as &str,
+            "local function okThen(ok: boolean, ...: any): ...any if ok then return ... end end\nlocal function call(fn: any, ...: any): ...any return okThen(pcall(fn, ...)) end\nlocal a, b, c, d, e, f, g, h, i, j, k, l = call(print)\nprint(a, b, c, d, e, f, g, h, i, j, k, l)\n",
+            "local function two() return 1, 2 end\ntwo = function() return 1, 2, 3 end\nlocal a, b, c = two()\nprint(a, b, c)\n",
+            "local function two() return 1, 2 end\nlocal select = function(_: number, ...: any): any return ... end\nprint(select(3, two()))\n",
+            "local function two() return 1, 2 end\nprint(select('#', two()), select(2, two()))\n",
+            // a name starting with `_` wants no value (a statement kept for
+            // a decorator: `@if(…) local _x = f()`)
+            "local function none() print(1) end\nlocal _kept = none()\n",
+        ] {
+            let d = check_source(src, Mode::Strict);
+            assert!(
+                !d.iter().any(|x| x.code == Some("W2062")),
+                "{src}\n{:#?}",
+                codes(&d)
+            );
+        }
+    }
+
     /// A literal binds as its base type at the top level only: inside a
     /// table type the declared element type binds as it is (tables are
     /// invariant).

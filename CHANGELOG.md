@@ -4,6 +4,10 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ## Unreleased
 
+### New
+
+- A new warning, W2062: reading more values than a `local function` of yours can give, which are always `nil`. wowlua counts what each of its `return`s gives, even when it is declared `...any`, and warns on `local a, b, c = f()` or `select(5, f())` past that. A common case is a `pcall` helper that returns `a, b, c, d, e, f, g, h`: values 9 and up are lost. To pass every value on, return them through `...`. It found two such bugs in SuuUI.
+
 ### Fixed
 
 - Tests: an edit box lets go of the keyboard when it is hidden (or a parent of it is), as in the game. It kept the focus, so keys pressed later in the test went into the hidden box instead of opening windows with their key bindings.

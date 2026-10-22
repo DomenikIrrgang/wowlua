@@ -650,6 +650,17 @@ guard (`if max > 0 then … end`).
 is warning W2061 in every mode (decision S39); write `not a and b or nil`
 when `b` is never falsy, or an `if`.
 
+**A value read past what a function gives** is always `nil`. For a `local
+function` whose every `return` gives a fixed number of values (none ends in
+`...` or in a call that gives an open number), the most it gives is known,
+whatever its declaration says (`...any` included); a name past that in a
+`local` or an assignment whose last value is its call, or `select(n, …)`
+with a literal `n` past it, is warning W2062 in every mode (decision S40).
+A name starting with `_` takes no value it wants (as for W1003) and is
+skipped: the warning names the first other one.
+A helper meant to pass every value on returns them through `...`
+(`local function okThen(ok, ...) if ok then return ... end end`).
+
 Reading an undeclared global is warning W1001 in basic mode and error E1001
 in strict mode. **Assigning** an undeclared global, including through
 `function foo()` in a script, is warning W1002 in basic mode and error E1002 in

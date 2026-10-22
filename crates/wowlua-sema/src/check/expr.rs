@@ -159,7 +159,46 @@ impl Checker<'_, '_> {
 
     /// A list of expressions as values (the last one expands).
     pub fn expr_list(&mut self, es: Exprs<'_>, expected: &[Option<TypeId>]) -> Vec<TypeId> {
+        self.expr_list_into(es, expected, &[])
+    }
+
+    /// [`Self::expr_list`] for the names it is spread over (a `local` or an
+    /// assignment): a name past what the list's last call can give is
+    /// always `nil` (W2062).
+    pub fn expr_list_into(
+        &mut self,
+        es: Exprs<'_>,
+        expected: &[Option<TypeId>],
+        names: &[(Span, String)],
+    ) -> Vec<TypeId> {
         let pack = self.expr_pack(es, expected);
+        if let Some(last) = es.iter().next_back()
+            && let Some((callee, gives)) = self.result_cap(last)
+        {
+            let total = es.len() - 1 + gives;
+            // a name starting with `_` takes a value it doesn't want (as
+            // for W1003): the first other one past the count
+            if let Some((i, (span, name))) = names
+                .iter()
+                .enumerate()
+                .skip(total)
+                .find(|(_, (_, n))| !n.starts_with('_'))
+            {
+                let more = if names.len() > i + 1 {
+                    " (and the names after it)"
+                } else {
+                    ""
+                };
+                self.report(
+                    "W2062",
+                    *span,
+                    format!(
+                        "`{callee}` gives at most {gives} value{}: `{name}`{more} is always nil",
+                        if gives == 1 { "" } else { "s" }
+                    ),
+                );
+            }
+        }
         let mut out = pack.types.clone();
         if let Some(Rest::Variadic(t)) = pack.rest {
             while out.len() < expected.len().max(es.len()) {
@@ -168,6 +207,59 @@ impl Checker<'_, '_> {
             }
         }
         out
+    }
+
+    /// `select(n, ..., f(...))` with a literal `n` past what the values
+    /// can be, `f` a `local function` of known count: always `nil` (W2062).
+    fn select_past_results(&mut self, callee: Expr<'_>, args: Args<'_>) {
+        let ExprKind::Name(n) = callee.kind() else {
+            return;
+        };
+        if n.text() != "select" || self.lookup_var("select").is_some() {
+            return;
+        }
+        let exprs = args.exprs();
+        if exprs.len() < 2 {
+            return;
+        }
+        let (Some(first), Some(last)) = (exprs.iter().next(), exprs.iter().next_back()) else {
+            return;
+        };
+        let ExprKind::Number(lit) = first.kind() else {
+            return;
+        };
+        let Some(index) = lit.value() else {
+            return;
+        };
+        let Some((name, gives)) = self.result_cap(last) else {
+            return;
+        };
+        let count = exprs.len() - 2 + gives;
+        if index.fract() == 0.0 && index >= 1.0 && index as usize > count {
+            self.report(
+                "W2062",
+                first.span(),
+                format!(
+                    "`{name}` gives at most {gives} value{}: `select({index})` is always nil",
+                    if gives == 1 { "" } else { "s" }
+                ),
+            );
+        }
+    }
+
+    /// A call of a `local function` whose `return`s each give a fixed
+    /// number of values: its name and the most it gives (W2062).
+    fn result_cap(&self, e: Expr<'_>) -> Option<(String, usize)> {
+        let callee = match e.kind() {
+            ExprKind::Call { callee, .. } | ExprKind::OptCall { callee, .. } => callee,
+            _ => return None,
+        };
+        let ExprKind::Name(n) = callee.kind() else {
+            return None;
+        };
+        let var = self.lookup_var(n.text())?;
+        let cap = *self.result_caps.get(&var)?;
+        Some((n.text().to_string(), cap))
     }
 
     pub fn expr_pack(&mut self, es: Exprs<'_>, expected: &[Option<TypeId>]) -> Pack {
@@ -356,6 +448,7 @@ impl Checker<'_, '_> {
             }
             ExprKind::Call { callee, args } | ExprKind::OptCall { callee, args } => {
                 self.mark_callbacks(args);
+                self.select_past_results(callee, args);
                 if let ExprKind::Name(n) = callee.kind()
                     && n.text() == "super"
                     && !self.classes.is_empty()

@@ -178,6 +178,11 @@ pub struct Checker<'e, 'p> {
     /// The handler type the decorators of the statement being checked give
     /// its function (`@event("X")`): (type, what it handles).
     next_handler: Option<(Func, String)>,
+    /// The most values a `local function` can give, counted from its own
+    /// `return`s when each gives a fixed number (W2062, decision S40).
+    pub(crate) result_caps: FxHashMap<VarId, usize>,
+    /// The count of the function body just checked (see `result_caps`).
+    last_result_cap: Option<usize>,
     /// The loops being checked, innermost last: the flows of their
     /// `break`s and `continue`s.
     loops: Vec<LoopFlows>,
@@ -314,6 +319,8 @@ impl<'e, 'p> Checker<'e, 'p> {
             intrinsics: info.intrinsics.clone(),
             import_vars: FxHashMap::default(),
             next_handler: None,
+            result_caps: FxHashMap::default(),
+            last_result_cap: None,
             loops: Vec::new(),
             base_log: None,
         };
@@ -980,7 +987,11 @@ impl<'e, 'p> Checker<'e, 'p> {
                         )
                     })
                     .collect();
-                let values = self.expr_list(values, &expected);
+                let spread: Vec<(Span, String)> = names
+                    .iter()
+                    .map(|n| (n.name.span(), n.name.text().to_string()))
+                    .collect();
+                let values = self.expr_list_into(values, &expected, &spread);
                 let no_values = values.is_empty();
                 for (i, n) in names.iter().enumerate() {
                     let value = values.get(i).copied().unwrap_or(Types::NIL);
@@ -1022,7 +1033,26 @@ impl<'e, 'p> Checker<'e, 'p> {
             StmtKind::Assign { targets, values } => {
                 let expected: Vec<Option<TypeId>> =
                     targets.iter().map(|t| self.target_type(t)).collect();
-                let values = self.expr_list(values, &expected);
+                let spread: Vec<(Span, String)> = targets
+                    .iter()
+                    .map(|t| {
+                        let name = match t.kind() {
+                            ExprKind::Name(n) => n.text().to_string(),
+                            _ => "the target".to_string(),
+                        };
+                        (t.span(), name)
+                    })
+                    .collect();
+                let values = self.expr_list_into(values, &expected, &spread);
+                // A local function assigned again may hold another
+                // function: its count no longer holds (W2062).
+                for t in targets.iter() {
+                    if let ExprKind::Name(n) = t.kind()
+                        && let Some(var) = self.lookup_var(n.text())
+                    {
+                        self.result_caps.remove(&var);
+                    }
+                }
                 for (i, t) in targets.iter().enumerate() {
                     let value = values.get(i).copied().unwrap_or(Types::NIL);
                     // Classes reachable from globals keep their method names.
@@ -1217,6 +1247,9 @@ impl<'e, 'p> Checker<'e, 'p> {
                 );
                 if let Some(h) = &handler {
                     self.check_handler(actual, h, name.span());
+                }
+                if let Some(cap) = self.last_result_cap.take() {
+                    self.result_caps.insert(id, cap);
                 }
                 self.flow.insert(id, actual);
                 self.vars[id.0 as usize].base = actual;
@@ -1702,6 +1735,13 @@ impl<'e, 'p> Checker<'e, 'p> {
         });
         self.block_stmts(f.body);
         let ctx = self.fns.pop().expect("function");
+        // The most values it can give: each `return` a fixed number (none
+        // ends in `...` or a call of open length), else unknown (W2062).
+        self.last_result_cap = ctx
+            .returns
+            .iter()
+            .all(|p| p.rest.is_none())
+            .then(|| ctx.returns.iter().map(|p| p.types.len()).max().unwrap_or(0));
         let falls_through = self.live;
         self.pop_scope();
         self.depth -= 1;
