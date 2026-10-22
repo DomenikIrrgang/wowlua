@@ -96,7 +96,8 @@ export interface MockUnit
     --- The group role it chose (`UnitGroupRolesAssigned`, the raid
     --- roster's combat role); nil none.
     function setRole(role: ("TANK" | "HEALER" | "DAMAGER")?)
-    --- A group member logging in or out (`UnitIsConnected`, the roster).
+    --- A group member logging in or out (`UnitIsConnected`,
+    --- `UNIT_CONNECTION(unit, isConnected)`, the roster).
     function setOnline(online: boolean)
     --- An aura on it (`UNIT_AURA`), its instance ID; `quiet = true`: there
     --- already (a snapshot's), untold.

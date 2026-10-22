@@ -160,6 +160,36 @@ return alone, over, past, gone, highest, table.concat(seen, ' ')",
 }
 
 #[test]
+fn a_member_logging_out_tells_its_connection() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local friend = mock.spawnUnit({ name = 'Friend', player = true, reaction = 'friendly' })
+local stranger = mock.spawnUnit({ name = 'Stranger', player = true, reaction = 'friendly' })
+mock.addToGroup(friend)
+mock.player:target(friend)
+local seen = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('UNIT_CONNECTION')
+f:RegisterEvent('GROUP_ROSTER_UPDATE')
+f:SetScript('OnEvent', function(_, e, unit, on) seen[#seen + 1] = e .. (unit and ('(' .. unit .. ',' .. tostring(on) .. ')') or '') end)
+friend:setOnline(false)
+local out = table.concat(seen, ' ') .. ' ' .. tostring(UnitIsConnected('party1'))
+seen = {}
+friend:setOnline(false)
+stranger:setOnline(false)
+return out, table.concat(seen, ' ')",
+    );
+    assert_eq!(
+        r,
+        [
+            "UNIT_CONNECTION(target,false) UNIT_CONNECTION(party1,false) GROUP_ROSTER_UPDATE false",
+            "GROUP_ROSTER_UPDATE GROUP_ROSTER_UPDATE"
+        ]
+    );
+}
+
+#[test]
 fn identity_is_secret_on_restricted_maps() {
     let mut vm = vm();
     let r = run(

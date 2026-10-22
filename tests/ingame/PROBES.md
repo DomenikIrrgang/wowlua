@@ -211,6 +211,12 @@ A screenshot of the output or the values typed back is enough.
    and the same for `C_UnitAuras.GetPlayerAuraBySpellID(<one of your buffs' spell IDs>)`:
    whether the aura table or only its fields are secret.
 
+7. In a party when a member logs out or back in (decision T249): a frame
+   registered for `UNIT_CONNECTION` and `GROUP_ROSTER_UPDATE` printing each
+   with its arguments: whether `UNIT_CONNECTION("party1", false)` comes, for
+   `target` too while they're targeted, and before or after the roster
+   update.
+
 ## Replay leftovers
 
 - Before turning in a quest with an item reward:

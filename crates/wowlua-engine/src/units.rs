@@ -1265,12 +1265,18 @@ fn unit_is_visible(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(visible)])
 }
 
-/// `unit:setOnline(online)`: a group member logged in or out
-/// (`GROUP_ROSTER_UPDATE`; unverified: the client's other events).
+/// `unit:setOnline(online)`: a group member logged in or out:
+/// `UNIT_CONNECTION(unit, isConnected)` for each of its tokens (the
+/// documented event; unverified: recorded nowhere, its order), then
+/// `GROUP_ROSTER_UPDATE`.
 fn control_set_online(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
     let online = c.arg(2).truthy();
+    let changed = engine(vm).units.list[me.0].online != online;
     engine_mut(vm).units.list[me.0].online = online;
+    if changed && ours(&engine(vm).units, me) {
+        fire_unit(vm, "UNIT_CONNECTION", me, &[Value::Bool(online)]);
+    }
     if crate::party::grouped(vm) {
         fire(vm, "GROUP_ROSTER_UPDATE", &[]);
     }
