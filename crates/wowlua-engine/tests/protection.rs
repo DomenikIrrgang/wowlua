@@ -115,3 +115,35 @@ return outside, table.concat(seen, ','), #mock.refusals()",
     );
     assert_eq!(r, ["0", "MyAddon PickupSpellBookItem()", "1"]);
 }
+
+/// A frame that holds a protected frame is protected too, though not
+/// explicitly: blocked in combat, and secure code may use its handle
+/// (decision T254).
+#[test]
+fn a_frame_holding_a_protected_frame_is_protected() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local seen = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('ADDON_ACTION_BLOCKED')
+f:SetScript('OnEvent', function(_, e, addon, action) seen[#seen + 1] = action end)
+local holder = CreateFrame('Frame', nil, UIParent)
+local inner = CreateFrame('Frame', nil, holder)
+local button = CreateFrame('Button', nil, inner, 'SecureActionButtonTemplate')
+local plain = CreateFrame('Frame', nil, UIParent)
+local p1, e1 = holder:IsProtected()
+local p2, e2 = plain:IsProtected()
+mock.player:enterCombat()
+holder:Hide()
+plain:Hide()
+return tostring(p1), tostring(e1), tostring(p2), tostring(e2), table.concat(seen, ','),
+    tostring(holder:IsShown()), tostring(plain:IsShown()), tostring(holder:CanChangeAttribute())",
+    );
+    assert_eq!(
+        r,
+        [
+            "true", "false", "false", "false", "Hide()", "true", "false", "false"
+        ]
+    );
+}

@@ -139,7 +139,10 @@ The client's security model, in the VM:
     protected frame, in combat lockdown: `ADDON_ACTION_BLOCKED`, after the
     method's own argument checks (`/stdtest engine blocked`). A frame is
     protected through a secure template (`Secure…Template`; `IsProtected`
-    then gives `true, true`) or `mock.protect`. A template's script
+    then gives `true, true`) or `mock.protect`, and through a protected
+    frame it holds, however deep (`true, false`; decision T254): such a
+    parent is blocked in combat as well, and secure code may use its handle
+    then (a secure snippet sizing Blizzard's spells window). A template's script
     handlers from Blizzard's XML are Blizzard's code whoever makes the frame
     (decision T243): an addon's `SecureHandlerClickTemplate` button runs its
     `_onclick` snippet on the user's click.

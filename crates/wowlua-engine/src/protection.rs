@@ -250,8 +250,7 @@ pub fn refuses_method(vm: &mut Vm, id: WidgetId, f: &crate::api::Function) -> bo
         == Some(true)
         || f.short == "SetAttribute";
     let e = engine(vm);
-    let w = &e.world.widgets[id.0];
-    if !(protected_method && w.protected && e.units.lockdown && tainted(vm)) {
+    if !(protected_method && e.units.lockdown && tainted(vm) && widgets::protected(e, id)) {
         return false;
     }
     let action = action_name(vm);

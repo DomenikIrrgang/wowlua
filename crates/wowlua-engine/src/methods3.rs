@@ -294,7 +294,7 @@ macro_rules! getters {
 /// protected state can't change then, as the protection layer refuses).
 fn locked(vm: &Vm, id: WidgetId) -> bool {
     let e = engine(vm);
-    e.units.lockdown && e.world.widgets[id.0].protected
+    e.units.lockdown && crate::widgets::protected(e, id)
 }
 
 /// `Frame:CanChangeAttribute()`: not while a protected frame is locked

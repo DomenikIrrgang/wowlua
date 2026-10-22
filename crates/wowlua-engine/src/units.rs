@@ -1332,7 +1332,7 @@ fn is_restriction_active(vm: &mut Vm, c: NativeCall) -> Ret {
 fn check_allow_protected(vm: &mut Vm, c: NativeCall) -> Ret {
     let locked = engine(vm).units.lockdown && !vm.taint().stack.is_secure();
     let protected = match crate::widgets::widget_of(vm, c.arg(1)) {
-        Some(id) => engine(vm).world.widgets[id.0].protected,
+        Some(id) => crate::widgets::protected(engine(vm), id),
         None => true,
     };
     Ok(vec![Value::Bool(!(locked && protected))])

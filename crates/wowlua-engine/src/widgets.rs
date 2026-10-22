@@ -1643,6 +1643,23 @@ pub fn visible(e: &Engine, id: WidgetId) -> bool {
     true
 }
 
+/// Whether a widget is protected: itself (a secure template, `protected`
+/// in its XML), or as the parent of a protected frame (decision T254: in
+/// the client a frame that holds a protected frame is protected too, its
+/// `IsProtected()` true but not explicitly; found in game: the spells
+/// window, protected through its secure children).
+pub fn protected(e: &Engine, id: WidgetId) -> bool {
+    let mut stack = vec![id];
+    while let Some(w) = stack.pop() {
+        let widget = &e.world.widgets[w.0];
+        if widget.protected {
+            return true;
+        }
+        stack.extend(widget.children.iter().copied());
+    }
+    false
+}
+
 /// The widget and its descendants, children before their parent (deepest
 /// first, siblings in creation order).
 fn subtree(e: &Engine, id: WidgetId) -> Vec<WidgetId> {
@@ -3341,10 +3358,10 @@ fn get_attribute(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 }
 
 fn is_protected(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    let w = &engine(vm).world.widgets[id.0];
+    let e = engine(vm);
     Ok(vec![
-        Value::Bool(w.protected),
-        Value::Bool(w.explicitly_protected),
+        Value::Bool(protected(e, id)),
+        Value::Bool(e.world.widgets[id.0].explicitly_protected),
     ])
 }
 
