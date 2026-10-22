@@ -1600,6 +1600,47 @@ end
     assert!(out.contains("2 passed, 0 failed"), "{out}");
 }
 
+/// A multi-line `return f(…)` runs to its closing line: the `RETURN` Lua
+/// puts after the tail call never runs and is not counted (decision T260).
+#[test]
+fn coverage_counts_a_multi_line_tail_call_as_run() {
+    let dir = project(
+        r#""standard": {}"#,
+        &[
+            (
+                "src/wrap.wowlua",
+                r#"local function make(t: { [string]: number }): number
+    return t.a
+end
+
+export function wrapped(): number
+    return make({
+        a = 1,
+    })
+end
+"#,
+            ),
+            (
+                "tests/wrap.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+import wrapped from "/wrap"
+
+@test
+local function wraps()
+    expect(wrapped()).toBe(1)
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, out) = test(dir.path(), &["--coverage", "--reporter", "pretty,lcov"]);
+    assert!(ok, "{out}");
+    let lcov = fs::read_to_string(dir.path().join("dist/test/lcov.info")).unwrap();
+    assert!(lcov.contains("DA:6,1"), "{lcov}");
+    assert!(!lcov.contains("DA:8,0"), "{lcov}");
+    assert!(out.contains("coverage: lines 100.0% (6/6)"), "{out}");
+}
+
 /// Coverage (decision T188): counted by the VM in the addon's own files,
 /// with reports and thresholds.
 #[test]

@@ -207,6 +207,15 @@ fn ignored(source: &[&str]) -> Option<BTreeSet<u32>> {
     Some(out)
 }
 
+/// The `RETURN` Lua's compiler puts after a tail call: it never runs (the
+/// called function returns for it), and on a multi-line `return f(…)` it
+/// sits alone on the closing line.
+fn after_tail_call(proto: &Proto, pc: usize) -> bool {
+    pc > 0
+        && matches!(proto.code.get(pc), Some(Op::Return { .. }))
+        && matches!(proto.code.get(pc - 1), Some(Op::TailCall { .. }))
+}
+
 /// A source's lines and the lines coverage ignores.
 type Source = (Vec<String>, BTreeSet<u32>);
 
@@ -240,7 +249,7 @@ pub fn collect(
         let file = report.files.entry(path).or_default();
         let proto = &counts.proto;
         for (pc, &line) in proto.lines.iter().enumerate() {
-            if line == 0 || ignore.contains(&line) {
+            if line == 0 || ignore.contains(&line) || after_tail_call(proto, pc) {
                 continue;
             }
             let e = file.lines.entry(line).or_default();

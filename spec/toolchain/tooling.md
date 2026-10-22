@@ -443,7 +443,8 @@ instructions that run and the outcomes of conditional jumps, mapped to the
 sources (the `test` profile keeps lines): a line is covered when code on it
 ran, statements count as lines, a branch is one outcome of a conditional
 jump, a condition one on a line with several (a compound test), and the
-compiler's runtime checks and generated functions are left out. Code that
+compiler's runtime checks and generated functions are left out, as is the
+`RETURN` Lua puts after a tail call, which never runs (decision T260). Code that
 `@if` removes for the flavor under test counts as not applicable, and
 coverage of all flavors is merged unless `--coverage-per-flavor` is given
 (reports then in `<flavor>/`). `-- wowlua: coverage ignore` (the next line
