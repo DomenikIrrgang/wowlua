@@ -228,6 +228,11 @@ A screenshot of the output or the values typed back is enough.
    answers 0 and an empty list (unrecorded); SuuUI's pull countdown and
    its test timeline ride on it.
 
+9. In combat, from an addon (a `/run` counts as one): `/run C_Spell.PickupSpell(6603)`
+   (Auto Attack) and `/run PickupAction(1)`: whether either is blocked as
+   `C_SpellBook.PickupSpellBookItem` is (decision T253), then
+   `/run ClearCursor()`.
+
 ## Replay leftovers
 
 - Before turning in a quest with an item reward:

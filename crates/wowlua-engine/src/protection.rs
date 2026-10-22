@@ -156,6 +156,19 @@ pub fn refuses_without_user(vm: &mut Vm, name: &str) -> bool {
     true
 }
 
+/// Refuses a function blocked for tainted code in combat lockdown
+/// (`ADDON_ACTION_BLOCKED`); true if refused. Found in game:
+/// `C_SpellBook.PickupSpellBookItem` from SuuUI's spellbook in combat,
+/// "Blocked in combat: PickupSpellBookItem()" (decision T253).
+pub fn refuses_in_combat(vm: &mut Vm) -> bool {
+    if !(engine(vm).units.lockdown && tainted(vm)) {
+        return false;
+    }
+    let action = action_name(vm);
+    refuse(vm, "ADDON_ACTION_BLOCKED", action);
+    true
+}
+
 /// A [`HARDWARE`] function the documentation lacks: refused without the
 /// user's action; otherwise its behaviour.
 pub fn hardware_global(vm: &mut Vm, c: NativeCall) -> Ret {

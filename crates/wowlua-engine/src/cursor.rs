@@ -205,8 +205,13 @@ fn pickup_spell(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// `C_SpellBook.PickupSpellBookItem(slot, bank)`: the slot's spell.
+/// `C_SpellBook.PickupSpellBookItem(slot, bank)`: the slot's spell; for
+/// an addon in combat, blocked (decision T253; Blizzard's own code, the
+/// secure drag handlers among it, may).
 fn pickup_spellbook_item(vm: &mut Vm, c: NativeCall) -> Ret {
+    if crate::protection::refuses_in_combat(vm) {
+        return Ok(vec![]);
+    }
     let Some(slot) = num(c.arg(1)) else {
         return Ok(vec![]);
     };

@@ -94,3 +94,24 @@ return tostring(named:IsProtected()), tostring(outOfCombat), table.concat(seen, 
         ]
     );
 }
+
+/// An addon's spellbook pickup is blocked in combat (decision T253), not
+/// out of it.
+#[test]
+fn a_spellbook_pickup_is_blocked_in_combat() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local seen = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('ADDON_ACTION_BLOCKED')
+f:SetScript('OnEvent', function(_, e, addon, action) seen[#seen + 1] = addon .. ' ' .. action end)
+local bank = Enum.SpellBookSpellBank.Player
+C_SpellBook.PickupSpellBookItem(1, bank)
+local outside = #seen
+mock.player:enterCombat()
+C_SpellBook.PickupSpellBookItem(1, bank)
+return outside, table.concat(seen, ','), #mock.refusals()",
+    );
+    assert_eq!(r, ["0", "MyAddon PickupSpellBookItem()", "1"]);
+}
