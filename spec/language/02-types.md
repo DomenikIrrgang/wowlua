@@ -615,6 +615,12 @@ are resolved in two passes:
 2. The function expressions are contextually typed against the first remaining
    overload and checked.
 
+A last argument that gives several values (a call such as `unpack(t)`, or
+`...`) gives its values to the parameters from its position on, as in Lua:
+`tex:SetTexCoord(unpack(coords))` matches the four-number overload when
+`coords` is a `number[]`. Values it gives in any number fill as many of the
+remaining parameters as there are (decision L40).
+
 When no overload matches, the error (E2012) lists every overload.
 
 ## 2.8 Globals

@@ -2117,7 +2117,7 @@ impl Checker<'_, '_> {
         // Argument types without contextual typing (function expressions
         // match any function type).
         let saved_diags = self.diagnostics.len();
-        let arg_types: Vec<TypeId> = exprs
+        let mut arg_types: Vec<TypeId> = exprs
             .iter()
             .map(|e| {
                 if matches!(e.kind(), ExprKind::Function(_)) {
@@ -2127,12 +2127,29 @@ impl Checker<'_, '_> {
                 }
             })
             .collect();
+        // A last argument that gives several values (`unpack(t)`, `f()`,
+        // `...`) fills the parameters after it too, as in Lua.
+        let mut tail: Option<TypeId> = None;
+        if let Some(last) = exprs.last()
+            && is_multi(last)
+        {
+            let saved = self.flow.clone();
+            let pack = self.infer_multi(last);
+            self.flow = saved;
+            arg_types.pop();
+            arg_types.extend(pack.types.iter().copied());
+            tail = match pack.rest {
+                Some(Rest::Variadic(t)) => Some(t),
+                Some(Rest::Pack(_)) => Some(Types::ANY),
+                None => None,
+            };
+        }
         self.diagnostics.truncate(saved_diags);
         for &o in overloads {
             let Ty::Func(f) = self.env.types.get(o).clone() else {
                 continue;
             };
-            if self.accepts(&f, &arg_types) {
+            if self.accepts(&f, &arg_types, tail) {
                 return self
                     .call_func(&f, args, span, expected, true)
                     .unwrap_or_else(Pack::any);
@@ -2164,8 +2181,9 @@ impl Checker<'_, '_> {
         }
     }
 
-    /// Whether `f` accepts arguments of these types (overload filtering).
-    fn accepts(&mut self, f: &Func, args: &[TypeId]) -> bool {
+    /// Whether `f` accepts arguments of these types (overload filtering);
+    /// `tail`: any number of values of that type follow them.
+    fn accepts(&mut self, f: &Func, args: &[TypeId], tail: Option<TypeId>) -> bool {
         let f = self.instantiate_any(f);
         for (i, &a) in args.iter().enumerate() {
             let p = match f.params.get(i) {
@@ -2188,7 +2206,16 @@ impl Checker<'_, '_> {
                 return false;
             }
         }
-        f.params.iter().skip(args.len()).all(|p| p.optional)
+        match tail {
+            // The values a multiple value gives may fill the rest.
+            Some(t) => {
+                let t = self.env.types.non_nil(t);
+                let rest: Vec<TypeId> = f.params.iter().skip(args.len()).map(|p| p.ty).collect();
+                rest.into_iter()
+                    .all(|p| self.env.assignable(t, p, self.mode))
+            }
+            None => f.params.iter().skip(args.len()).all(|p| p.optional),
+        }
     }
 
     /// `f` with its type parameters as `any`.

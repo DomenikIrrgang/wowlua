@@ -22,6 +22,8 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- A WoW function with several forms (`SetTexCoord`) accepts a last argument that gives several values, as Lua passes them: `tex:SetTexCoord(unpack(coords))` was refused (E2012).
+- `Texture:GetTexture()` can give a number, the file ID of a texture set by one, as in the game; it was typed as a path only.
 - A cast of an optional value to a supertype of what it holds (`w.tabs :: Button[]` for a `TabButton[]?`) is no longer refused (E2015): a cast now also compares the value's type with its `nil` left out.
 - E2052 (a field not assigned in the constructor) says so when the field is assigned, but only after a call of one of the class's own methods on `self`, and names that call; before, it said the field was not assigned at all.
 

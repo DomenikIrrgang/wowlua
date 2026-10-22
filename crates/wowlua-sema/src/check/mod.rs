@@ -2007,6 +2007,24 @@ print(a, b, c, d, e, name, realm, more)
         );
     }
 
+    /// Overloads take a last argument's several values (decision L40).
+    #[test]
+    fn overloads_expand_the_last_argument() {
+        let pre =
+            "declare function f(a: number, b: number, c: number)\ndeclare function f(a: string)\n";
+        strict_ok(&format!(
+            "{pre}local n: number[] = {{ 1, 2, 3 }}\nf(unpack(n))\nlocal function three(): (number, number, number) return 1, 2, 3 end\nf(three())\nf(1, unpack(n))\nf(\"x\")\n"
+        ));
+        strict_err(
+            &format!("{pre}local b: boolean[] = {{}}\nf(unpack(b))\n"),
+            "E2012",
+        );
+        strict_err(
+            &format!("{pre}local function two(): (number, number) return 1, 2 end\nf(two())\n"),
+            "E2012",
+        );
+    }
+
     /// A cast also compares the expression's type with its `nil` left out
     /// (decision L39).
     #[test]

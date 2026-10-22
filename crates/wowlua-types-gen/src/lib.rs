@@ -45,8 +45,18 @@ pub struct FlavorDocs {
 
 /// Where the annotations are short: `Frame:GetAttribute` also takes
 /// `(prefix, name, suffix)`, the modified lookup Blizzard's
-/// `SecureTemplates.lua` uses.
+/// `SecureTemplates.lua` uses; `Texture:GetTexture` gives the file ID (a
+/// number) of a texture set by one, as the client does, not only a path.
 fn widget_corrections(classes: &mut indexmap::IndexMap<String, model::Class>) {
+    if let Some(texture) = classes.get_mut("TextureBase")
+        && let Some(sigs) = texture.methods.get_mut("GetTexture")
+    {
+        for sig in sigs.iter_mut() {
+            if sig.returns.len() == 1 && sig.returns[0] == "string?" {
+                sig.returns = vec!["string | number | nil".into()];
+            }
+        }
+    }
     if let Some(frame) = classes.get_mut("Frame")
         && let Some(sigs) = frame.methods.get_mut("GetAttribute")
         && sigs.iter().all(|s| s.params.len() == 1)

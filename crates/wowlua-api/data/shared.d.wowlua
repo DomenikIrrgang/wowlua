@@ -629,7 +629,7 @@ declare class TextureBase extends Region
     function GetRotation(): (number, vector2)
     function GetTexCoord(): (number, number, number, number, number, number, number, number)
     function GetTexelSnappingBias(): normalizedValue
-    function GetTexture(): string?
+    function GetTexture(): string | number | nil
     function GetTextureFileID(): fileID
     function GetTextureFilePath(): string?
     function GetTextureSliceMargins(): (number, number, number, number)
