@@ -234,6 +234,15 @@ A screenshot of the output or the values typed back is enough.
    `C_SpellBook.PickupSpellBookItem` is (decision T253), then
    `/run ClearCursor()`.
 
+10. With two part stacks of one item in your bags that together make more
+    than a full stack (by hand; it only moves your own items): drag one
+    onto the other, then split a few off a stack (Shift-click) and drop
+    them on another part stack, and drag a part stack onto a full one.
+    Whether the first fills the target and leaves the rest where it was,
+    the split part stacks, and the full stack swaps or refuses (decision
+    T256: only ten onto four of twenty is recorded). SuuUI's
+    `/suu probe bagsort` records the events of the first.
+
 ## Replay leftovers
 
 - Before turning in a quest with an item reward:

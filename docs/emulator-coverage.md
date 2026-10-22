@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,093 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,095 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -833,7 +833,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,093 rules unverified: each rests on Blizzard's
+The engine's code marks 1,095 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1129,15 +1129,17 @@ page changes only when a rule is added, removed or reworded.
 
 - [coverage.rs](../crates/wowlua-engine/src/coverage.rs): A fill-in module's answer, from the documentation, Blizzard's UI code and the function's name (`fill_ins`; unverified).
 
-### cursor (7)
+### cursor (9)
 
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): Unverified: picking up while holding something else, moving within one bag, money.
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): Whether holding it shows the action bars' grid: a spell, a macro, an item but a trade good or a quest item (recorded:...
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): `PickupAction(slot)`: the action onto the cursor, the slot emptied.
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): Takes the item at `source` onto the cursor, or puts the held item back when it came from there; another slot: moves i...
+- [cursor.rs](../crates/wowlua-engine/src/cursor.rs): Onto a part stack of the same item: stacked onto it, the target locked at once, then the cursor let go (recorded: Suu...
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): Onto another item: the two swap places, the target locked at once, then the cursor let go (recorded: `bags`, the Roug...
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): The bags as a packet tells their updates: the session's order first (`e.setBagOrder`; `bags` told bag 1, the reagent...
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): The items whose counts a packet's moves changed, as the client told them (`bags`' sort and swap): the backpack's slot...
+- [cursor.rs](../crates/wowlua-engine/src/cursor.rs): The server stacked the items (recorded once, SuuUI's `/suu probe bagsort`: ten from bag 5 onto four in bag 1): for ea...
 
 ### curves (16)
 

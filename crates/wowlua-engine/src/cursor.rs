@@ -377,11 +377,25 @@ pub(crate) fn pickup_item_at(vm: &mut Vm, source: Source) {
                     release_keeping_lock(vm);
                     move_later(vm, (fb, fs), (tb, ts));
                 }
+                // Onto a part stack of the same item: stacked onto it, the
+                // target locked at once, then the cursor let go (recorded:
+                // SuuUI's `/suu probe bagsort`, ten onto four of twenty; a
+                // part of a stack, more than fits: unverified, as much as
+                // fits, the rest left).
+                Some(other)
+                    if other.id == held.id
+                        && !other.locked
+                        && other.count < max_stack(vm, held.id) =>
+                {
+                    set_locked(vm, &Source::Bag(tb, ts), true);
+                    release_keeping_lock(vm);
+                    merge_later(vm, (fb, fs), (tb, ts), held.count);
+                }
                 // Onto another item: the two swap places, the target
                 // locked at once, then the cursor let go (recorded:
                 // `bags`, the Rough Stone onto a Sharpening Wheel; a
-                // stack of the same item, a part of a stack: unverified,
-                // nothing).
+                // part of a stack, a full stack of the same item:
+                // unverified, nothing).
                 Some(other) if other.id != held.id && held.count >= whole && !other.locked => {
                     set_locked(vm, &Source::Bag(tb, ts), true);
                     release_keeping_lock(vm);
@@ -767,6 +781,83 @@ fn split_done(vm: &mut Vm, c: NativeCall) -> Ret {
             vec![Value::Num(tb as f64), Value::Num(ts as f64)],
         );
     }
+    Ok(vec![])
+}
+
+/// How many of an item make a full stack (its data's `stackCount`).
+fn max_stack(vm: &mut Vm, id: i64) -> f64 {
+    match crate::character::item_field(vm, id, "stackCount") {
+        Value::Num(n) if n >= 1.0 => n,
+        _ => 1.0,
+    }
+}
+
+fn merge_later(vm: &mut Vm, from: (i64, usize), to: (i64, usize), count: f64) {
+    let delay = crate::clock::server_delay(vm);
+    later_native(
+        vm,
+        delay,
+        "itemStacked",
+        merge_done,
+        vec![
+            Value::Num(from.0 as f64),
+            Value::Num(from.1 as f64),
+            Value::Num(to.0 as f64),
+            Value::Num(to.1 as f64),
+            Value::Num(count),
+        ],
+    );
+}
+
+/// The server stacked the items (recorded once, SuuUI's `/suu probe
+/// bagsort`: ten from bag 5 onto four in bag 1): for each bag in the
+/// packet's order (`update_order`), the spells' update, the lock gone in
+/// the bag's slot, the bag's update; one `BAG_UPDATE_DELAYED`; the count's
+/// change as a move's (unverified). The source slot emptied, or what
+/// didn't fit left there (unverified).
+fn merge_done(vm: &mut Vm, c: NativeCall) -> Ret {
+    let n = |i: usize| num(c.upvals[i]).unwrap_or(0.0);
+    let (fb, fs, tb, ts, count) = (n(0) as i64, n(1) as usize, n(2) as i64, n(3) as usize, n(4));
+    let (Some(a), Some(b)) = (item_at(vm, fb, fs), item_at(vm, tb, ts)) else {
+        return Ok(vec![]);
+    };
+    if a.id != b.id {
+        return Ok(vec![]);
+    }
+    let moved = count
+        .min(a.count)
+        .min(max_stack(vm, b.id) - b.count)
+        .max(0.0);
+    let left = a.count - moved;
+    {
+        let bags = &mut engine_mut(vm).world.character.bags;
+        if let Some(bag) = bags.get_mut(&tb)
+            && let Some(h) = bag.items.get_mut(&ts)
+        {
+            h.count += moved;
+        }
+        if let Some(bag) = bags.get_mut(&fb) {
+            if left > 0.0 {
+                if let Some(h) = bag.items.get_mut(&fs) {
+                    h.count = left;
+                }
+            } else {
+                bag.items.remove(&fs);
+            }
+        }
+    }
+    for bag in update_order(vm, &[fb, tb]) {
+        crate::character::equipped_spells_changed(vm);
+        if bag == tb {
+            set_locked(vm, &Source::Bag(tb, ts), false);
+        }
+        if bag == fb && left > 0.0 {
+            set_locked(vm, &Source::Bag(fb, fs), false);
+        }
+        crate::character::bag_updated(vm, bag);
+    }
+    fire(vm, "BAG_UPDATE_DELAYED", &[]);
+    fire(vm, "ITEM_COUNT_CHANGED", &[Value::Num(a.id as f64)]);
     Ok(vec![])
 }
 

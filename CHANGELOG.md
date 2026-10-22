@@ -13,6 +13,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- Tests: an item put on a part stack of the same item in your bags (`C_Container.PickupContainerItem` onto it) stacks onto it, as in the game; whatever doesn't fit stays where it was. It used to stay on the cursor, so a bag sort that puts part stacks together failed in tests.
 - Tests: a frame that holds a secure (protected) frame is protected too, as in the game: `IsProtected()` gives `true, false`, showing, hiding or moving it from your addon in combat is blocked, and your secure snippets may resize or move it in combat (Blizzard's spells window among them). It used to count as a plain frame.
 - Tests: `C_SpellBook.PickupSpellBookItem` from your addon in combat is blocked ("Interface action failed"), as in the game; out of combat it still picks the spell up. To let players drag spells in combat, pick them up through Blizzard's secure drag template (`SecureHandlerDragTemplate` with an `_ondragstart` that returns `"spell", spellID`).
 - Tests: anchoring a secure (protected) frame to a texture or a font string fails with the game's error ("Cannot anchor protected frames to regions"), as it does in the game even out of combat. It used to work in tests.

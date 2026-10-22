@@ -258,6 +258,14 @@ when their time runs out, with `ENCOUNTER_TIMELINE_EVENT_ADDED`,
 event answer nothing for an ID not on it, as recorded. The IDs, the info's
 fields and the events' order follow the documentation, unverified.
 
+An item put on a part stack of the same item in the bags stacks onto it
+(decision T256; recorded by SuuUI's bag sort probe): the target slot
+locked at once, the cursor let go, and a round trip later the source's
+bag update, the target's lock gone, its bag update and
+`BAG_UPDATE_DELAYED`. A split part stacks the same way, and what doesn't
+fit stays in the source slot (both unverified); onto a full stack nothing
+happens (unverified).
+
 ## 17.6 The engine
 
 The WoW API the VM's code calls, per flavor.
