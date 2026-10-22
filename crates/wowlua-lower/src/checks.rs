@@ -26,6 +26,15 @@ impl<'a> Lowerer<'a> {
         // Arguments count from the first declared parameter (`self` of a
         // method is not one).
         for (i, p) in f.params.iter().enumerate() {
+            // A later parameter of the same name (`_: number, _: any`)
+            // hides this one: its name reads the later one's value, and
+            // the body can't read this one at all (decision T262).
+            if f.params[i + 1..]
+                .iter()
+                .any(|q| q.name.text() == p.name.text())
+            {
+                continue;
+            }
             let Some(check) = self
                 .ctx
                 .value_checks

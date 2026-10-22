@@ -2464,6 +2464,10 @@ show(pcall(strict, {}))
 show(pcall(loose :: any, "x"))
 show(pcall(inner :: any, "x"))
 show(pcall(function() return (_G.missing :: number) end))
+-- Two parameters of one name: the later one's value is the name's.
+export function pair(_: number, _: string) end
+show(pcall(pair, 1, "a"))
+show(pcall(pair :: any, 1, 2))
 "#;
     write(
         dir.path(),
@@ -2489,6 +2493,8 @@ show(pcall(function() return (_G.missing :: number) end))
             "true nil",
             "true nil",
             "true nil",
+            "true nil",
+            "false Chk: src/main.wowlua:45: bad argument #2 '_' to 'pair' (string expected, got number)",
         ]
         .join("\n")
     );

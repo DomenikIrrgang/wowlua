@@ -252,6 +252,10 @@ Details:
   default is checked against `T`, not `T?`.
 - A variadic parameter `...: T` is checked value by value (`select("#", ...)`
   values).
+- A parameter hidden by a later one of the same name (`_: number, _: any`)
+  is not checked: in Lua the name reads the later one's value, and the body
+  cannot read the hidden one (decision T262). Calls are still checked
+  statically.
 - For possibly secret types (`T | Secret<T>`), only `type()`-based checks are
   emitted, because set-membership and field checks would index the value
   ([Types §2.11](02-types.md#211-secret-values)).
