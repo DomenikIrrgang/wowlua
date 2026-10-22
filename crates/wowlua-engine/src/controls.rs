@@ -222,7 +222,8 @@ fn drag(vm: &mut Vm, c: NativeCall) -> Ret {
     let id = widget_arg(vm, &c, 1)?;
     let dx = vm.check_number(&c, 2)?;
     let dy = vm.check_number(&c, 3)?;
-    widgets::drag(vm, id, dx, dy);
+    let frames = vm.opt_number(&c, 4, 0.0)?.max(0.0) as usize;
+    widgets::drag(vm, id, dx, dy, frames);
     Ok(vec![])
 }
 

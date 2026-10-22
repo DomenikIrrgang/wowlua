@@ -114,3 +114,31 @@ return menu:GetNumPoints(), point, relativePoint, menu:GetHeight(), menu:GetBott
     );
     assert_eq!(r, ["1", "BOTTOMLEFT", "TOPLEFT", "60", "120"]);
 }
+
+#[test]
+fn a_drag_over_frames_runs_them_as_it_moves() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local f = CreateFrame('Frame', nil, UIParent)
+f:SetSize(40, 40)
+f:SetPoint('BOTTOMLEFT', 100, 100)
+f:SetMovable(true)
+f:EnableMouse(true)
+f:RegisterForDrag('LeftButton')
+f:SetScript('OnDragStart', function(self) self:StartMoving() end)
+f:SetScript('OnDragStop', function(self) self:StopMovingOrSizing() end)
+local seen = {}
+f:SetScript('OnUpdate', function(self)
+    local x = GetCursorPosition() / UIParent:GetEffectiveScale()
+    seen[#seen + 1] = math.floor(self:GetLeft() + 0.5) .. '@' .. math.floor(x + 0.5)
+end)
+local s = UIParent:GetEffectiveScale()
+mock.drag(f, 30 * s, 0, 3)
+local stepped = table.concat(seen, ' ')
+seen = {}
+mock.drag(f, 10 * s, 0)
+return stepped, #seen, math.floor(f:GetLeft() + 0.5)",
+    );
+    assert_eq!(r, ["110@130 120@140 130@150", "0", "140"]);
+}

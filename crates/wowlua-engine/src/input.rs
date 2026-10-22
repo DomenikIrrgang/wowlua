@@ -78,22 +78,26 @@ fn mouse_inside(vm: &Vm, id: WidgetId, off: [f64; 4]) -> bool {
     x >= l + left * s && x <= l + w + right * s && y >= b + bottom * s && y <= b + h + top * s
 }
 
+/// The cursor onto the widget's middle unless it is over it already (no
+/// events; a widget without a rectangle leaves it where it is).
+pub fn cursor_onto(vm: &mut Vm, id: WidgetId) {
+    if mouse_inside(vm, id, [0.0; 4]) || engine(vm).world.widgets[id.0].points.is_empty() {
+        return;
+    }
+    if let Some((l, b, w, h)) = widgets::bounds(vm, id, 0) {
+        let ui = widgets::ui_parent_scale(engine(vm));
+        let input = &mut engine_mut(vm).world.input;
+        input.cursor = ((l + w / 2.0) * ui, (b + h / 2.0) * ui);
+        input.placed = true;
+    }
+}
+
 /// The mouse moved onto `new` (`None`: off every frame): onto its middle
 /// unless it is over it already; `OnLeave` for the frame it left, then
 /// `OnEnter` for the new one (`motion` true).
 fn mouse_onto(vm: &mut Vm, new: Option<WidgetId>) {
     match new {
-        Some(id) if !mouse_inside(vm, id, [0.0; 4]) => {
-            if !engine(vm).world.widgets[id.0].points.is_empty()
-                && let Some((l, b, w, h)) = widgets::bounds(vm, id, 0)
-            {
-                let ui = widgets::ui_parent_scale(engine(vm));
-                let input = &mut engine_mut(vm).world.input;
-                input.cursor = ((l + w / 2.0) * ui, (b + h / 2.0) * ui);
-                input.placed = true;
-            }
-        }
-        Some(_) => {}
+        Some(id) => cursor_onto(vm, id),
         None => engine_mut(vm).world.input.placed = false,
     }
     let old = engine(vm).world.input.mouse_focus;

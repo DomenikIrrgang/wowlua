@@ -3743,7 +3743,11 @@ fn get_vertex_color(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 
 /// The engine's controls for the mouse: a drag of a frame by (dx, dy)
 /// screen units, if it (or, for an overlay, its parent) starts moving.
-pub fn drag(vm: &mut Vm, id: WidgetId, dx: f64, dy: f64) {
+pub fn drag(vm: &mut Vm, id: WidgetId, dx: f64, dy: f64, frames: usize) {
+    // The mouse pressed on the frame, then moved by (dx, dy) in `frames`
+    // steps, a frame after each (none: at once).
+    crate::input::cursor_onto(vm, id);
+    let from = engine(vm).world.input.cursor;
     let left = vm.str("LeftButton");
     run_script(vm, id, "OnDragStart", &[left]);
     let e = engine(vm);
@@ -3754,22 +3758,29 @@ pub fn drag(vm: &mut Vm, id: WidgetId, dx: f64, dy: f64) {
             .parent
             .filter(|p| e.world.widgets[p.0].moving)
     };
-    if let Some(m) = moved
-        && let Some(b) = bounds(vm, m, 0)
-    {
-        let s = layout_scale(engine(vm), m);
-        // (the drag in screen units, rectangles in UIParent's)
-        let ui = ui_parent_scale(engine(vm));
-        let screen = vm.get_global("UIParent");
-        let w = &mut engine_mut(vm).world.widgets[m.0];
-        w.points = vec![Point {
-            point: "BOTTOMLEFT".into(),
-            relative: Some(screen),
-            relative_point: "BOTTOMLEFT".into(),
-            x: (b.0 + dx / ui) / s,
-            y: (b.1 + dy / ui) / s,
-        }];
-        layout_changed(vm);
+    let start = moved.and_then(|m| bounds(vm, m, 0));
+    let steps = frames.max(1);
+    for k in 1..=steps {
+        let part = k as f64 / steps as f64;
+        engine_mut(vm).world.input.cursor = (from.0 + dx * part, from.1 + dy * part);
+        if let (Some(m), Some(b)) = (moved, start) {
+            let s = layout_scale(engine(vm), m);
+            // (the drag in screen units, rectangles in UIParent's)
+            let ui = ui_parent_scale(engine(vm));
+            let screen = vm.get_global("UIParent");
+            let w = &mut engine_mut(vm).world.widgets[m.0];
+            w.points = vec![Point {
+                point: "BOTTOMLEFT".into(),
+                relative: Some(screen),
+                relative_point: "BOTTOMLEFT".into(),
+                x: (b.0 + dx * part / ui) / s,
+                y: (b.1 + dy * part / ui) / s,
+            }];
+            layout_changed(vm);
+        }
+        if frames > 0 {
+            crate::clock::advance_frames(vm, 1, 1000.0 / 60.0);
+        }
     }
     run_script(vm, id, "OnDragStop", &[]);
 }
