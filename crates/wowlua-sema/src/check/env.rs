@@ -1033,9 +1033,18 @@ impl<'p> Env<'p> {
                 self.types.func(f)
             }
         };
-        let mut m = Member::field(new);
-        m.readonly = true;
-        self.def_mut(def).statics.insert("new".into(), m);
+        // A widget class on a region (`FontString`): its frame comes from
+        // `adopt`, as `CreateFrame` makes no regions (decision L43).
+        let region = self
+            .def(def)
+            .widget
+            .as_deref()
+            .is_some_and(|w| REGION_TYPES.contains(&w));
+        if !region {
+            let mut m = Member::field(new);
+            m.readonly = true;
+            self.def_mut(def).statics.insert("new".into(), m);
+        }
         // A widget class's `adopt(frame, …)`: the class built on a frame
         // that exists, of the native type its chain ends in (decision L42).
         if self.def(def).widget.is_some() {
@@ -1682,6 +1691,10 @@ pub fn uses_typeof(t: Type<'_>) -> bool {
     super::body::typeof_exprs(t, &mut exprs);
     !exprs.is_empty()
 }
+
+/// The native widget types that are regions: a frame makes them
+/// (`frame:CreateFontString()`), `CreateFrame` does not (decision L43).
+pub const REGION_TYPES: &[&str] = &["FontString", "Texture", "Line", "MaskTexture"];
 
 fn widget_arg(d: Decorator<'_>) -> Option<String> {
     if !d.is_named("widget") {

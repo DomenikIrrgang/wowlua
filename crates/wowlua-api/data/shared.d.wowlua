@@ -689,6 +689,7 @@ declare class Font extends FrameScriptObject
     function SetTextColor(colorR: number, colorG: number, colorB: number, a: SingleColorValue?)
 end
 
+@widget("FontString")
 declare class FontString extends Region
     function CalculateScreenAreaFromCharacterSpan(leftIndex: number, rightIndex: number): uiBoundsRect[]?
     function CanNonSpaceWrap(): boolean
@@ -2038,6 +2039,7 @@ declare class EventFrame extends EventFrameMixin
     function UnregisterEvent(eventName: FrameEvent): boolean
 end
 
+@widget("Line")
 declare class Line extends TextureBase
     function ClearAllPoints()
     function GetEndPoint(): (FramePoint, ScriptRegion, uiUnit, uiUnit)
@@ -2056,6 +2058,7 @@ end
 declare class LINE extends Line
 end
 
+@widget("Texture")
 declare class Texture extends TextureBase
     function AddMaskTexture(mask: SimpleMaskTexture)
     function GetMaskTexture(index: number): SimpleMaskTexture
@@ -2069,6 +2072,7 @@ end
 declare class TEXTURE extends Texture
 end
 
+@widget("MaskTexture")
 declare class MaskTexture extends TextureBase
 end
 

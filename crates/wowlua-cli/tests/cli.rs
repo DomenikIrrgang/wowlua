@@ -3174,6 +3174,7 @@ function methods:SetText(t) self.text = t end
 function methods:GetText() return self.text end
 function methods:Click() local f = self.scripts and self.scripts.OnClick; if f then f(self) end end
 function methods:GetObjectType() return self.objectType end
+function methods:CreateFontString() return setmetatable({ objectType = "FontString" }, methods) end
 function CreateFrame(kind, name, parent, template)
   local f = setmetatable({ objectType = kind, template = template }, methods)
   if name then _G[name] = f end
@@ -3256,6 +3257,16 @@ local existing = CreateFrame("Button", "Existing", UIParent)
 local a = FancyButton.adopt(existing, UIParent)
 a:Click()
 print(a == existing, a:GetText(), a.count, Plain.adopt(CreateFrame("Frame")).__class == Plain, CounterButton.new(UIParent) ~= existing)
+-- a region (a frame makes it): built with adopt only (L43)
+class Label extends FontString
+    prefix: string = "> "
+    constructor(text: string)
+        super()
+        self:SetText(self.prefix .. text)
+    end
+end
+local label = Label.adopt(CreateFrame("Frame"):CreateFontString(), "hi")
+print(label:GetText(), label:GetObjectType())
 "#,
             ),
         ],
@@ -3267,7 +3278,7 @@ print(a == existing, a:GetText(), a.count, Plain.adopt(CreateFrame("Frame")).__c
     fs::write(dist.join("Widgets.toc"), format!("mock.lua\n{toc}")).unwrap();
     assert_eq!(
         run_addon(&dist, "Widgets"),
-        "Clicked 1x Clicked 2x *3 2 3 Button UIPanelButtonTemplate\nonload row\nFrame true true\ncounter patched patched\ntrue Clicked 1x *3 1 true true"
+        "Clicked 1x Clicked 2x *3 2 3 Button UIPanelButtonTemplate\nonload row\nFrame true true\ncounter patched patched\ntrue Clicked 1x *3 1 true true\n> hi FontString"
     );
     // Widget classes cannot define metamethods or accessors.
     for (src, code) in [
@@ -3284,6 +3295,8 @@ print(a == existing, a:GetText(), a.count, Plain.adopt(CreateFrame("Frame")).__c
             "class B extends Button\nend\nprint(B.adopt(CreateFrame(\"Frame\")))\n",
             "E2001",
         ),
+        // A region class has no `new`: CreateFrame makes no regions (L43).
+        ("class L extends FontString\nend\nprint(L.new())\n", "E2003"),
     ] {
         fs::write(dir.path().join("src/main.wowlua"), src).unwrap();
         wowlua(dir.path())

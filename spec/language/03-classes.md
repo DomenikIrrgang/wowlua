@@ -408,6 +408,10 @@ Rules:
   `frame` must be of the native type the class chain ends in (`Button` for a
   class extending `Button`). A root class without a constructor of its own
   takes `frame` alone (decision L42).
+- A widget class may also extend a **region** type, `FontString`, `Texture`,
+  `Line` or `MaskTexture`, which a frame makes (`frame:CreateFontString()`)
+  and `CreateFrame` does not: such a class is built with `adopt` only, and has
+  no `new` (`Label.adopt(frame:CreateFontString(), …)`; decision L43).
 - Widget classes may extend other widget classes (`class FancyButton extends
   CounterButton`). Construction is threaded through a hidden `__ctor(cls, …)`
   so only the root creates the frame.

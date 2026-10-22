@@ -6,6 +6,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### New
 
+- A widget class can extend `FontString`, `Texture`, `Line` or `MaskTexture`: build it on the region its frame makes with `MyLabel.adopt(frame:CreateFontString(), …)`.
 - `MyButton.adopt(frame, …)` builds a widget class on a frame that already exists, such as the buttons a secure group header makes, instead of creating a new one: your constructor runs on that frame and your `@script` handlers are set.
 - `@deferred` on an interface method's callback parameter (`function on(name: string, @deferred fn: Handler)`) tells the load-order check that every implementation calls it later, so a callback registered through that interface at load time no longer makes files depend on each other.
 - `wowlua:reflect` is typed as documented: `reflect.isInstance(v, Dog)` narrows `v` to `Dog`, `reflect.classOf(dog)` gives `ClassOf<Dog>?`, and `reflect.enumFrom(Direction, raw)` gives `Direction?` (`reflect.enumEntries` gives the members as `Direction`). Before, they were `any` and `boolean`. Your own generic functions can do the same: a parameter `ClassOf<T>` now takes `T` from the class or enum passed.

@@ -519,14 +519,20 @@ pub fn map_type(ty: &str) -> String {
     }
 }
 
-/// Marks the classes of every frame type `CreateFrame` creates as widgets.
+/// Marks the classes of every frame type `CreateFrame` creates as widgets,
+/// and the regions a frame makes (`frame:CreateFontString()`), which a
+/// widget class builds on with `adopt` (decision L43).
 pub fn mark_widgets(classes: &mut indexmap::IndexMap<String, Class>) {
-    for name in FRAME_TYPES {
+    for name in FRAME_TYPES.iter().chain(REGION_TYPES) {
         if let Some(c) = classes.get_mut(*name) {
             c.widget = Some((*name).to_string());
         }
     }
 }
+
+/// Regions: made by a frame (`CreateFontString`, `CreateTexture`,
+/// `CreateLine`, `CreateMaskTexture`), not by `CreateFrame`.
+pub const REGION_TYPES: &[&str] = &["FontString", "Texture", "Line", "MaskTexture"];
 
 /// Frame types `CreateFrame` accepts.
 pub const FRAME_TYPES: &[&str] = &[
