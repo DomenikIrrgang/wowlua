@@ -30,7 +30,7 @@ pub(crate) static CODES: &[CodeInfo] = &[
     CodeInfo { code: "E1003", summary: "Undefined local or upvalue in a `wowlua` construct (e.g. a decorator argument)" },
     CodeInfo { code: "W1003", summary: "Unused local, parameter or import" },
     CodeInfo { code: "E1004", summary: "A parameter's default reads that parameter or a later one, which is not set yet (in Lua every parameter is in scope there, so the name is the parameter, not an outer one)" },
-    CodeInfo { code: "W1004", summary: "Local shadows another local" },
+    CodeInfo { code: "W1004", summary: "Local shadows another local; also a parameter named `self` inside a class's method or constructor, which hides the instance (a plain `function M:m()`'s `self` may be shadowed, as frame handlers do)" },
     CodeInfo { code: "W1005", summary: "Unreachable code" },
     CodeInfo { code: "E1010", summary: "Assignment to an exported or imported binding" },
     CodeInfo { code: "E1011", summary: "Top-level `import` after another (non-import) statement" },
