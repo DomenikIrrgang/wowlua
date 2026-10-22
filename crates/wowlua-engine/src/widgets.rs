@@ -2322,6 +2322,22 @@ fn set_to_defaults(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `ClearPoint(point)`: that point gone, the others kept (Blizzard's
+/// menus flip one this way to open above their owner).
+fn clear_point(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let Value::Str(name) = c.arg(2) else {
+        return Ok(vec![]);
+    };
+    let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
+    let points = &mut engine_mut(vm).world.widgets[id.0].points;
+    let before = points.len();
+    points.retain(|p| !p.point.eq_ignore_ascii_case(&name));
+    if points.len() != before {
+        layout_changed(vm);
+    }
+    Ok(vec![])
+}
+
 fn clear_all_points(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     engine_mut(vm).world.widgets[id.0].points.clear();
     layout_changed(vm);
@@ -4212,6 +4228,7 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("SetPoint", set_point),
         ("GetPointByName", get_point_by_name),
         ("ClearAllPoints", clear_all_points),
+        ("ClearPoint", clear_point),
         ("SetAllPoints", set_all_points),
         ("GetNumPoints", get_num_points),
         ("GetPoint", get_point),
