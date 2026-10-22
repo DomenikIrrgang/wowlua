@@ -143,6 +143,10 @@ The client's security model, in the VM:
     handlers from Blizzard's XML are Blizzard's code whoever makes the frame
     (decision T243): an addon's `SecureHandlerClickTemplate` button runs its
     `_onclick` snippet on the user's click.
+    `C_RestrictedActions.CheckAllowProtectedFunctions(object)` follows the
+    same rule for its object: false for tainted code in combat lockdown on a
+    protected frame (UIParent among them), true on an unprotected one, so an
+    addon's `GameTooltip:SetUnit` & co. show in a fight (decision T245).
 - **Taint reports.** A refusal reports the taint chain: the protected call,
   the secure code that became tainted, the value it read, and the addon code
   (file and line) that wrote that value, through any number of hops through

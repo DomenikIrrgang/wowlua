@@ -92,6 +92,27 @@ return table.concat(seen, ' '), before, issecretvalue(UnitPower('target')), InCo
     );
 }
 
+/// `CheckAllowProtectedFunctions(object)` refuses tainted code in combat
+/// only on a protected object: an addon's plain frame and a tooltip
+/// stay its to use (a tooltip shown in a fight), a secure frame and
+/// UIParent don't (decision T245).
+#[test]
+fn protected_functions_are_refused_on_protected_objects() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local plain = CreateFrame('Frame')
+local tip = CreateFrame('GameTooltip', 'MyTooltip', UIParent)
+local secure = CreateFrame('Button', nil, UIParent, 'SecureActionButtonTemplate')
+local check = C_RestrictedActions.CheckAllowProtectedFunctions
+local before = tostring(check(secure, true))
+mock.player:enterCombat()
+return before, tostring(check(plain, true)), tostring(check(tip, true)), tostring(check(secure, true)),
+    tostring(check(UIParent, true))",
+    );
+    assert_eq!(r, ["true", "true", "true", "false", "false"]);
+}
+
 #[test]
 fn identity_is_secret_on_restricted_maps() {
     let mut vm = vm();

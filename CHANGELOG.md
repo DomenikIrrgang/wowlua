@@ -10,6 +10,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- Tests: your addon's tooltips show in combat, as in the game. `GameTooltip:SetUnit`, `SetSpellByID`, `SetItemByID` and the other setters gave an empty tooltip in a fight because `C_RestrictedActions.CheckAllowProtectedFunctions` refused your addon on any frame; it now refuses only on a protected one (a secure button, UIParent).
 - Tests: an edit box lets go of the keyboard when it is hidden (or a parent of it is), as in the game. It kept the focus, so keys pressed later in the test went into the hidden box instead of opening windows with their key bindings.
 
 ## 0.9.6 (2026-10-22)

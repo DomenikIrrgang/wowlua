@@ -1313,10 +1313,18 @@ fn is_restriction_active(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(state == 2)])
 }
 
-/// Protected functions are refused for tainted code in combat lockdown.
-fn check_allow_protected(vm: &mut Vm, _c: NativeCall) -> Ret {
-    let allowed = !engine(vm).units.lockdown || vm.taint().stack.is_secure();
-    Ok(vec![Value::Bool(allowed)])
+/// `C_RestrictedActions.CheckAllowProtectedFunctions(object)`: refused only
+/// for tainted code in combat lockdown on a protected object, as its
+/// protected methods are blocked (decision T245); an unprotected frame (the
+/// game tooltip an addon shows in a fight) is allowed. No frame: refused
+/// for tainted code in lockdown, as before.
+fn check_allow_protected(vm: &mut Vm, c: NativeCall) -> Ret {
+    let locked = engine(vm).units.lockdown && !vm.taint().stack.is_secure();
+    let protected = match crate::widgets::widget_of(vm, c.arg(1)) {
+        Some(id) => engine(vm).world.widgets[id.0].protected,
+        None => true,
+    };
+    Ok(vec![Value::Bool(!(locked && protected))])
 }
 
 /// `C_Secrets.Should…BeSecret(unit)`: the same predicates the unit
