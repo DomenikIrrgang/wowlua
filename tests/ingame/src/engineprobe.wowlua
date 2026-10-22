@@ -32,6 +32,8 @@ import mapsProbe from "/maps"
 import collectionsProbe, journalsProbe, journals2Probe from "/collections"
 import leftoversProbe from "/leftovers"
 import screenProbe from "/screen"
+import wrapProbe from "/wrap"
+import talents2Probe, talentWatch from "/talents2"
 import glyphsProbe from "/glyphs"
 import traitsProbe from "/traits"
 import tradeSkillProbe from "/tradeskill"
@@ -1804,6 +1806,15 @@ export function engineProbe(arg: string?)
         return
     elseif words[1] == "screen" then
         screenProbe()
+        return
+    elseif words[1] == "wrap" then
+        wrapProbe()
+        return
+    elseif words[1] == "talents2" then
+        talents2Probe()
+        return
+    elseif words[1] == "talentwatch" then
+        talentWatch()
         return
     elseif words[1] == "glyphs" then
         glyphsProbe()

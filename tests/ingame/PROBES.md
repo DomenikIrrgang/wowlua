@@ -37,29 +37,39 @@ engine cannot get otherwise.
 5. **`/stdtest engine journals`** on a character with a mount or a toy.
    Why: the events after a collected mount's or toy's favourite changes are
    unrecorded (the recording character had none; decision T235).
-6. **How the client breaks lines** (needs a probe written first). Why:
-   text is now measured with the client's glyphs (decision T237), but how
-   it wraps is the engine's guess: by words at spaces, a word wider than
-   the string on a line of its own unless `SetNonSpaceWrap(true)` breaks it
-   between characters. Record `GetNumLines`, `GetStringHeight` and
-   `IsTruncated` for long words, hyphens, several spaces and colour codes
-   at a few widths. Also kerning at more sizes than FRIZQT 17 and ARIALN
-   20, and the outline font's digits.
-7. **An early landing** (needs a scenario written first): a flight with a
-   stop, `TaxiRequestEarlyLanding()` before the stop, recorded as the
-   taxi scenario was (`/stdtest engine scenario taxi`). Why: the engine
-   has no early landing; SuuUI's Land at is tested with it stubbed.
+6. **How the client breaks lines**: `/stdtest engine wrap` (a few
+   seconds, read-only), then `/reload`. Why: text is measured with the
+   client's glyphs (decision T237), but how it wraps is the engine's guess:
+   by words at spaces, a word wider than the string on a line of its own
+   unless `SetNonSpaceWrap(true)` breaks it between characters. It records
+   `GetNumLines`, `GetStringHeight`, `GetStringWidth` and `IsTruncated`
+   for long words, hyphens, several spaces, colour codes and sentences at
+   four widths, with and without `SetNonSpaceWrap`, free and held to two
+   lines; kerning pairs at FRIZQT 10/14/20 and ARIALN 10/12/16; the
+   outlined digits (StdTestState.engineWrap; read by hand, no ingest yet).
+7. **An early landing** (the scenario recorder as for the taxi): at a
+   flight master, pick a route with a stop on the way; type
+   `/stdtest engine scenario earlylanding`, take the flight, and before the
+   first stop `/run TaxiRequestEarlyLanding()`; once landed,
+   `/stdtest engine scenario stop` and `/reload`. Why: the engine has no
+   early landing; SuuUI's Land at is tested with it stubbed.
 8. **Atlases on a 1x screen**: the answers battery's atlas checks at a
    1920x1080 screen with Windows' DPI scale at 100%. Why: both recordings
    were on high-DPI screens and gave the 2x textures' files and
    coordinates (decision T238); a 1x screen may take the 1x textures (the
    sizes are the same either way).
-9. **Talents the engine doesn't know yet** (a probe to write):
-   `C_Traits.RefundRank` of a planned rank, `C_ClassTalents.ViewLoadout` /
-   `InitializeViewLoadout` of another class, both spec groups' configs
-   (`C_SpecializationInfo.GetCombatConfigIDForSpecGroup`), and
-   `PLAYER_TALENT_UPDATE` as level 5 is reached. Why: SuuUI's Talents
-   tests use a stand-in for these.
+9. **Talents the engine doesn't know yet**: out of combat, with an unspent
+   talent point if you have one, `/stdtest engine talents2` (two seconds),
+   then `/reload`. It records both spec groups' configs
+   (`GetCombatConfigIDForSpecGroup`), a rank planned and taken back
+   (`C_Traits.PurchaseRank`, `RefundRank`, then `RollbackConfig`: nothing
+   is applied), another class's talents in the view config
+   (`InitializeViewLoadout`, `ViewLoadout`), and the events between
+   (StdTestState.engineTalents2). On a character about to reach level 5:
+   `/stdtest engine talentwatch` first, level up, then `/reload`: every
+   `PLAYER_TALENT_UPDATE` and `PLAYER_LEVEL_UP` with the time and level
+   (StdTestState.engineTalentWatch). Why: SuuUI's Talents tests use a
+   stand-in for these.
 10. **Addon messages restricted?** In a raid out of an instance and out of
    combat: `/dump C_ChatInfo.AreOutgoingAddonChatMessagesRestricted(),
    C_ChatInfo.InChatMessagingLockdown()`, then

@@ -1,0 +1,101 @@
+-- /stdtest engine wrap: how the client breaks and cuts text, for the
+-- engine's text model (decision T237: widths are the client's glyphs, the
+-- wrapping is the engine's guess). For FRIZQT 12 and ARIALN 14: long
+-- words, hyphens, several spaces, colour codes and plain sentences at a
+-- few widths, with and without `SetNonSpaceWrap`, free to grow and held to
+-- two lines: `GetNumLines`, `GetStringHeight`, `GetStringWidth`,
+-- `IsTruncated`. Also kerning pairs at more sizes than the glyphs probe,
+-- and the outlined digits. Into StdTestState.engineWrap. Read-only: one
+-- hidden font string of its own.
+import state from "/state"
+import stamp from "/state"
+import say from "/harness"
+
+local function n(v: any): string
+    if type(v) == "number" then
+        return string.format("%.9g", v)
+    end
+    return tostring(v)
+end
+
+const TEXTS = {
+    "Hello World",
+    "Supercalifragilisticexpialidocious",
+    "a long-hyphenated-word in a line",
+    "two  spaces   then   three",
+    "|cffff0000red|r words and plain words that run on",
+    "word word word word word word word word word",
+    "x",
+    "trailing space ",
+}
+
+const WIDTHS = { 20, 45, 80, 140 }
+
+export function wrapProbe()
+    const st = state() :: any
+    const out: { [string]: string } = {}
+    st.engineWrap = out
+    local pw, ph = GetPhysicalScreenSize()
+    out["screen"] = `{n(pw)}x{n(ph)} ui {n(UIParent:GetWidth())}x{n(UIParent:GetHeight())} scale {n(UIParent:GetEffectiveScale())} dpi {n(GetScreenDPIScale())}`
+    const f = UIParent:CreateFontString(nil, "OVERLAY")
+    f:SetPoint("TOPLEFT", UIParent, "TOPLEFT", 0, 0)
+    f:SetAlpha(0)
+    local count = 0
+    for _, font in ipairs({ { "Fonts\\FRIZQT__.TTF", 12 }, { "Fonts\\ARIALN.TTF", 14 } }) do
+        f:SetFont(font[1] :: string, font[2] :: number, "")
+        for _, width in ipairs(WIDTHS) do
+            for _, nonSpace in ipairs({ false, true }) do
+                for _, text in ipairs(TEXTS) do
+                    f:SetWidth(width)
+                    f:SetHeight(0)
+                    f:SetWordWrap(true)
+                    f:SetNonSpaceWrap(nonSpace)
+                    f:SetMaxLines(0)
+                    f:SetText(text)
+                    const free = `lines {n(f:GetNumLines())} h {n(f:GetStringHeight())} w {n(f:GetStringWidth())} trunc {n(f:IsTruncated())}`
+                    f:SetMaxLines(2)
+                    f:SetText(text)
+                    const held = `lines {n(f:GetNumLines())} h {n(f:GetStringHeight())} w {n(f:GetStringWidth())} trunc {n(f:IsTruncated())}`
+                    out[`{font[1]} {font[2]} width {width} nonspace {tostring(nonSpace)} "{text}"`] = `{free} | max2 {held}`
+                    count = count + 1
+                end
+            end
+        end
+    end
+    -- Without word wrap: one line, cut.
+    f:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
+    f:SetMaxLines(0)
+    f:SetWordWrap(false)
+    for _, text in ipairs(TEXTS) do
+        f:SetWidth(45)
+        f:SetText(text)
+        out[`nowrap FRIZQT 12 width 45 "{text}"`] = `lines {n(f:GetNumLines())} h {n(f:GetStringHeight())} w {n(f:GetStringWidth())} trunc {n(f:IsTruncated())}`
+    end
+    f:SetWordWrap(true)
+    f:SetWidth(0)
+    -- Kerning pairs at more sizes than the glyphs probe (FRIZQT 17, ARIALN 20).
+    for _, spec in ipairs({ { "Fonts\\FRIZQT__.TTF", 10 }, { "Fonts\\FRIZQT__.TTF", 14 }, { "Fonts\\FRIZQT__.TTF", 20 },
+                            { "Fonts\\ARIALN.TTF", 10 }, { "Fonts\\ARIALN.TTF", 12 }, { "Fonts\\ARIALN.TTF", 16 } }) do
+        f:SetFont(spec[1] :: string, spec[2] :: number, "")
+        const list: string[] = {}
+        for _, p in ipairs({ "AV", "VA", "AW", "To", "Ta", "Te", "Wa", "We", "Yo", "LT", "LV", "Fa", "r.", "y.", "P.", "Av" }) do
+            f:SetText(p)
+            list[#list + 1] = `{p}={n(f:GetUnboundedStringWidth())}`
+        end
+        out[`pairs {spec[1]} {spec[2]}`] = table.concat(list, ",")
+    end
+    -- The outlined digits, one by one and together.
+    for _, size in ipairs({ 10, 12, 14, 18 }) do
+        f:SetFont("Fonts\\FRIZQT__.TTF", size, "OUTLINE")
+        const list: string[] = {}
+        for d = 0, 9 do
+            f:SetText(tostring(d))
+            list[#list + 1] = n(f:GetUnboundedStringWidth())
+        end
+        f:SetText("0123456789")
+        out[`outline digits FRIZQT {size}`] = `{table.concat(list, ",")} | all {n(f:GetUnboundedStringWidth())}`
+    end
+    f:Hide()
+    stamp("wrap")
+    say(`engine wrap: {count} texts measured; type /reload so the file is written`)
+end

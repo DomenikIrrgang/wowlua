@@ -1,0 +1,194 @@
+-- /stdtest engine talents2: the talent calls the engine doesn't know yet
+-- (SuuUI's Talents tests stand in for them), into
+-- StdTestState.engineTalents2:
+--   groups: both spec groups' configs
+--     (`C_SpecializationInfo.GetCombatConfigIDForSpecGroup`), the active
+--     config, its info;
+--   refund: a rank planned on the active config (`C_Traits.PurchaseRank`)
+--     and taken back (`C_Traits.RefundRank`), each answer, the node before
+--     and after, the events with their times; then `RollbackConfig`, so
+--     nothing is applied (only the staged plan changes, as Blizzard's page
+--     does before Apply). Needs an unspent point: else "nothing to plan";
+--   view: another class's talents (`C_ClassTalents.InitializeViewLoadout`
+--     of its first spec at level 60, then `ViewLoadout({}, "")`): what
+--     each answers and the view config's info.
+-- `/stdtest engine talentwatch`: until the next /reload, every
+-- `PLAYER_TALENT_UPDATE`, `PLAYER_LEVEL_UP`, `TRAIT_CONFIG_UPDATED` and
+-- `SPELLS_CHANGED` with the time and the level, into
+-- StdTestState.engineTalentWatch (for a character reaching level 5).
+-- Out of combat.
+import state from "/state"
+import stamp from "/state"
+import say from "/harness"
+
+const G = _G :: any
+
+--- A value in full: tables to depth 3, keys sorted, secrets marked.
+local function show(v: any, depth: number?): string
+    if issecretvalue(v) then
+        return `secret {type(v)}`
+    end
+    if type(v) == "string" then
+        return `string {v}`
+    end
+    if type(v) ~= "table" then
+        return `{type(v)} {tostring(v)}`
+    end
+    if (depth ?? 0) >= 3 then
+        return "table"
+    end
+    const keys: string[] = {}
+    for k in pairs(v :: table) do
+        keys[#keys + 1] = tostring(k)
+    end
+    table.sort(keys)
+    const parts: string[] = {}
+    for _, k in ipairs(keys) do
+        const inner = (v :: any)[k] ?? (v :: any)[tonumber(k) ?? 0]
+        parts[#parts + 1] = `{k}={show(inner, (depth ?? 0) + 1)}`
+    end
+    return `\{{table.concat(parts, ",")}\}`
+end
+
+local function pack(...: any): { n: number, [number]: any }
+    return { n = select("#", ...), ... }
+end
+
+--- Each value a call gives, or its error.
+local function answer(f: (...any) -> ...any, ...: any): string
+    const packed = pack(pcall(f, ...))
+    if not packed[1] then
+        return `error: {tostring(packed[2])}`
+    end
+    const parts: string[] = {}
+    for i = 2, packed.n do
+        parts[#parts + 1] = show(packed[i])
+    end
+    return `{packed.n - 1}: {table.concat(parts, ", ")}`
+end
+
+const EVENTS = { "TRAIT_NODE_CHANGED", "TRAIT_NODE_CHANGED_PARTIAL", "TRAIT_NODE_ENTRY_UPDATED",
+                 "TRAIT_TREE_CURRENCY_INFO_UPDATED", "TRAIT_CONFIG_UPDATED", "TRAIT_CONFIG_LIST_UPDATED",
+                 "PLAYER_TALENT_UPDATE", "ACTIVE_COMBAT_CONFIG_CHANGED" }
+
+export function talents2Probe()
+    if InCombatLockdown() then
+        say("engine talents2: out of combat, please")
+        return
+    end
+    const st = state() :: any
+    const out: { [string]: string } = {}
+    st.engineTalents2 = out
+    const T = G.C_Traits
+    const CT = G.C_ClassTalents
+    const SI = G.C_SpecializationInfo
+    if not (T and CT and SI) then
+        out["available"] = "no C_Traits, C_ClassTalents or C_SpecializationInfo"
+        stamp("talents2")
+        say("engine talents2: this client has no talent API")
+        return
+    end
+    -- groups
+    out["GetActiveConfigID()"] = answer(CT.GetActiveConfigID)
+    for g = 1, 2 do
+        out[`GetCombatConfigIDForSpecGroup({g})`] = answer(SI.GetCombatConfigIDForSpecGroup, g)
+    end
+    out["GetActiveSpecGroup()"] = answer(G.GetActiveSpecGroup)
+    out["GetNumSpecGroups()"] = answer(G.GetNumSpecGroups)
+    const config = CT.GetActiveConfigID()
+    out["GetConfigInfo(active)"] = answer(T.GetConfigInfo, config)
+    -- the events while a rank is planned and taken back
+    const events: string[] = {}
+    const t0 = GetTime()
+    const watch = CreateFrame("Frame")
+    for _, e in ipairs(EVENTS) do
+        pcall(watch.RegisterEvent, watch, e)
+    end
+    watch:SetScript("OnEvent", function(_: any, e: string, ...: any)
+        const args: string[] = {}
+        for i = 1, select("#", ...) do
+            args[#args + 1] = show((select(i, ...)))
+        end
+        events[#events + 1] = `{string.format("%.3f", GetTime() - t0)} {e} {table.concat(args, ", ")}`
+    end)
+    -- refund: the first node a rank can be planned on
+    local planned = false
+    const info = config and T.GetConfigInfo(config)
+    const tree = info and info.treeIDs and info.treeIDs[1]
+    if tree then
+        for _, nodeID in ipairs(T.GetTreeNodes(tree) or {}) do
+            const node = T.GetNodeInfo(config, nodeID)
+            const entry = node and node.entryIDs and node.entryIDs[1]
+            if entry and node.ranksPurchased == 0 and T.CanPurchaseRank(config, nodeID, entry) then
+                out["refund: node"] = tostring(nodeID)
+                out["refund: before"] = show(node)
+                out["refund: PurchaseRank"] = answer(T.PurchaseRank, config, nodeID)
+                out["refund: after purchase"] = show(T.GetNodeInfo(config, nodeID))
+                out["refund: RefundRank"] = answer(T.RefundRank, config, nodeID, false)
+                out["refund: after refund"] = show(T.GetNodeInfo(config, nodeID))
+                planned = true
+                break
+            end
+        end
+    end
+    if not planned then
+        out["refund"] = "nothing to plan (no unspent point, or no node open)"
+    end
+    if config then
+        out["refund: RollbackConfig"] = answer(T.RollbackConfig, config)
+    end
+    -- view: another class's first spec
+    -- (your own class: never secret)
+    const classID: any = (select(3, UnitClass("player")))
+    const other = classID == 1 and 2 or 1
+    local spec = nil
+    pcall(function()
+        spec = (GetSpecializationInfoForClassID(other, 1))
+    end)
+    out["view: class, spec"] = `{tostring(other)} {tostring(spec)}`
+    if spec then
+        out["view: InitializeViewLoadout(spec, 60)"] = answer(CT.InitializeViewLoadout, spec, 60)
+        const viewID = G.Constants and G.Constants.TraitConsts and G.Constants.TraitConsts.VIEW_TRAIT_CONFIG_ID
+        out["view: VIEW_TRAIT_CONFIG_ID"] = tostring(viewID)
+        if viewID then
+            out["view: GetConfigInfo(view)"] = answer(T.GetConfigInfo, viewID)
+        end
+        out["view: ViewLoadout({}, \"\")"] = answer(CT.ViewLoadout, {}, "")
+        if viewID then
+            out["view: GetConfigInfo(view) after ViewLoadout"] = answer(T.GetConfigInfo, viewID)
+        end
+    end
+    -- the events a moment later, then done
+    C_Timer.After(2, function()
+        watch:UnregisterAllEvents()
+        out["events"] = table.concat(events, " | ")
+        stamp("talents2")
+        say(`engine talents2: done ({#events} events); type /reload so the file is written`)
+    end)
+end
+
+local watching = false
+
+export function talentWatch()
+    if watching then
+        say("engine talentwatch: already on until /reload")
+        return
+    end
+    watching = true
+    const st = state() :: any
+    const list: string[] = st.engineTalentWatch ?? {}
+    st.engineTalentWatch = list
+    const f = CreateFrame("Frame")
+    for _, e in ipairs({ "PLAYER_TALENT_UPDATE", "PLAYER_LEVEL_UP", "TRAIT_CONFIG_UPDATED", "SPELLS_CHANGED" }) do
+        pcall(f.RegisterEvent, f, e)
+    end
+    f:SetScript("OnEvent", function(_: any, e: string, ...: any)
+        const args: string[] = {}
+        for i = 1, select("#", ...) do
+            args[#args + 1] = show((select(i, ...)))
+        end
+        list[#list + 1] = `{string.format("%.3f", GetTime())} level {UnitLevel("player")} {e} {table.concat(args, ", ")}`
+    end)
+    stamp("talentwatch")
+    say("engine talentwatch: recording until /reload")
+end
