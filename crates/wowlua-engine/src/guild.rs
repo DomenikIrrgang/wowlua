@@ -893,11 +893,11 @@ fn get_motd(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![vm.str(&motd)])
 }
 
-/// `GetGuildRosterMOTD()`: as [`get_motd`], but blocked for addons in
-/// combat lockdown, nothing answered (decision T265; found in game:
-/// `ADDON_ACTION_BLOCKED` from SuuUI's guild window opened in a fight,
-/// `UNKNOWN()` through `pcall`). `C_GuildInfo.GetMOTD` in combat:
-/// unverified, answered.
+/// `C_GuildInfo.GetMOTD()` and `GetGuildRosterMOTD()` (Blizzard's
+/// deprecated guild script makes the second the first): as [`get_motd`],
+/// but blocked for addons in combat lockdown, nothing answered (decision
+/// T265; found in game: `ADDON_ACTION_BLOCKED` from SuuUI's guild window
+/// opened in a fight, `UNKNOWN()` through `pcall`).
 fn get_roster_motd(vm: &mut Vm, c: NativeCall) -> Ret {
     if crate::protection::refuses_in_combat(vm) {
         return Ok(vec![]);
@@ -1805,7 +1805,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ),
         // Texts.
         ("GetGuildRosterMOTD", get_roster_motd),
-        ("C_GuildInfo.GetMOTD", get_motd),
+        ("C_GuildInfo.GetMOTD", get_roster_motd),
         ("GetGuildInfoText", get_info_text),
         ("C_GuildInfo.GetInfoText", get_info_text),
         ("C_GuildInfo.SetMOTD", set_motd),

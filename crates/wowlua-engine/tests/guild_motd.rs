@@ -1,4 +1,5 @@
-//! `GetGuildRosterMOTD` blocked for addons in combat (decision T265).
+//! The guild's message of the day blocked for addons in combat (decision
+//! T265).
 
 use wowlua_vm::{Value, Vm};
 
@@ -37,10 +38,18 @@ f:RegisterEvent('ADDON_ACTION_BLOCKED')
 f:SetScript('OnEvent', function(_, e, addon, action) seen[#seen + 1] = addon .. ' ' .. action end)
 local before = type(GetGuildRosterMOTD())
 mock.player:enterCombat()
-local n = select('#', pcall(GetGuildRosterMOTD))
+local n = select('#', pcall(GetGuildRosterMOTD)) + select('#', pcall(C_GuildInfo.GetMOTD))
 mock.player:leaveCombat()
 local after = type(GetGuildRosterMOTD())
 return before, n, after, table.concat(seen, ', ')",
     );
-    assert_eq!(r, ["string", "1", "string", "MyAddon UNKNOWN()"]);
+    assert_eq!(
+        r,
+        [
+            "string",
+            "2",
+            "string",
+            "MyAddon UNKNOWN(), MyAddon UNKNOWN()"
+        ]
+    );
 }

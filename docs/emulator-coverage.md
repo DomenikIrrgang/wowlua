@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,098 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,097 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -594,7 +594,7 @@ answers StdTest's recorder logged, without the world's noise.
 | vendor | 572 | 572 | 100.0% |
 | **All** | 22,097 | 22,154 | 99.7% |
 
-Recorded without a replay yet: `trade`, `unnamed`.
+Recorded without a replay yet: `trade`.
 
 ### The full probe by namespace
 
@@ -834,7 +834,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,098 rules unverified: each rests on Blizzard's
+The engine's code marks 1,097 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1381,7 +1381,7 @@ page changes only when a rule is added, removed or reworded.
 - [gossip.rs](../crates/wowlua-engine/src/gossip.rs): Unverified: an option that opens nothing, active quests in a gossip, why the trainer's text came later, why a walk aw...
 - [gossip.rs](../crates/wowlua-engine/src/gossip.rs): The NPC now `distance` away: beyond reach, its open gossip closes (recorded, walking away from a trainer: `GOSSIP_CLO...
 
-### guild (44)
+### guild (43)
 
 - [guild.rs](../crates/wowlua-engine/src/guild.rs): The engine's camelot character is in a guild as the recorded one is (the full probe, WoW Forever 1.60.1): its leader...
 - [guild.rs](../crates/wowlua-engine/src/guild.rs): The second row recorded: level 3, 24 days and an hour away, 25th by achievements.
@@ -1407,7 +1407,6 @@ page changes only when a rule is added, removed or reworded.
 - [guild.rs](../crates/wowlua-engine/src/guild.rs): `CanEditGuildTabInfo(tab)`: a tab (1 on) the rank may modify; for 0 and below nothing (the full probe: -1 and 0 no va...
 - [guild.rs](../crates/wowlua-engine/src/guild.rs): `CanSignPetition()`: true (the full probe, in a guild; unverified outside one and with a petition offered).
 - [guild.rs](../crates/wowlua-engine/src/guild.rs): `C_GuildInfo.GetPreferredPlaySettingsFeatures()` (the full probe, in a guild: true, true) and `C_GuildInfo.RequestPre...
-- [guild.rs](../crates/wowlua-engine/src/guild.rs): `GetGuildRosterMOTD()`: as [`get_motd`], but blocked for addons in combat lockdown, nothing answered (decision T265;...
 - [guild.rs](../crates/wowlua-engine/src/guild.rs): `C_GuildInfo.SetMOTD(motd)`, `GuildSetMOTD(motd)`: the message of the day, told (`GUILD_MOTD(motd)`) a round trip lat...
 - [guild.rs](../crates/wowlua-engine/src/guild.rs): `C_GuildInfo.SetInfoText(text)`, `SetGuildInfoText(text)`: the info text, for a rank that may change it (`GUILD_TEXT_...
 - [guild.rs](../crates/wowlua-engine/src/guild.rs): `C_GuildInfo.SetNote(guid, note, isPublic)`: a member's public or officer note, for a rank that may edit it (unverifi...
