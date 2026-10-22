@@ -217,6 +217,17 @@ A screenshot of the output or the values typed back is enough.
    `target` too while they're targeted, and before or after the roster
    update.
 
+8. Anywhere, once (the encounter timeline is off on Forever,
+   `C_EncounterTimeline.IsFeatureAvailable()` false): whether an addon's
+   timer still goes on it.
+   `/dump C_EncounterTimeline.AddScriptEvent({ spellID = 100, iconFileID = 132337, duration = 30, overrideName = "Probe" })`,
+   then `/dump C_EncounterTimeline.GetEventList()` and, for the ID,
+   `/dump C_EncounterTimeline.GetEventInfo(<id>)`,
+   `/dump C_EncounterTimeline.GetEventState(<id>)`,
+   `/dump C_EncounterTimeline.GetEventTimeRemaining(<id>)`. The engine
+   answers 0 and an empty list (unrecorded); SuuUI's pull countdown and
+   its test timeline ride on it.
+
 ## Replay leftovers
 
 - Before turning in a quest with an item reward:
