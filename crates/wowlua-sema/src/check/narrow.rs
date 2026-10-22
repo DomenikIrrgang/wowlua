@@ -488,6 +488,7 @@ impl Checker<'_, '_> {
             | Ty::Map(..)
             | Ty::Record(_)
             | Ty::ClassOf(_)
+            | Ty::ClassOfParam(_)
             | Ty::Module(_) => "table",
             Ty::Named(d, _) => match self.env.def(*d).kind {
                 super::env::DefKind::Enum => return None,
@@ -533,15 +534,22 @@ impl Checker<'_, '_> {
             return;
         };
         let current = self.var_type_in(v, flow);
-        // A generic predicate (`v: V | Secret<V>`, `v is V`): its type
-        // parameters are inferred from the argument's narrowed type, and
-        // the ones it does not bind are `any`.
+        // A generic predicate (`v: V | Secret<V>`, `v is V`; `isInstance(v,
+        // Dog)`): its type parameters are inferred from the arguments (the
+        // narrowed one's type as it is here), and the ones they do not bind
+        // are `any`.
         let target = if f.type_params.is_empty() {
             target
         } else {
             let mut s = super::subst::Subst::default();
-            if let Some(p) = f.params.get(index) {
-                self.unify(p.ty, current, &mut s);
+            for (i, a) in args.iter().enumerate() {
+                let Some(p) = f.params.get(i) else { break };
+                let at = if i == index {
+                    current
+                } else {
+                    self.peek_type(a)
+                };
+                self.unify(p.ty, at, &mut s);
             }
             for p in &f.type_params {
                 if self.env.params[p.0 as usize].pack {

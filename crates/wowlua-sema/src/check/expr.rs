@@ -673,6 +673,7 @@ impl Checker<'_, '_> {
                     | Ty::Map(..)
                     | Ty::Named(..)
                     | Ty::ClassOf(_)
+                    | Ty::ClassOfParam(_)
             )
         };
         tableish(self.env.types.get(a)) && tableish(self.env.types.get(b))
@@ -1415,7 +1416,7 @@ impl Checker<'_, '_> {
                 Ty::ClassOf(d) => self.static_type(d, name, span, quiet),
                 Ty::EnumMember(..) => Some(Types::ANY),
                 Ty::Module(_) => Some(Types::ANY),
-                Ty::Never | Ty::Param(_) => Some(Types::ANY),
+                Ty::Never | Ty::Param(_) | Ty::ClassOfParam(_) => Some(Types::ANY),
                 // A callable table (`LibStub`): the first part with the member.
                 Ty::Intersection(parts) => {
                     let found = parts.iter().find_map(|&p| match self.env.types.get(p) {
@@ -1862,6 +1863,7 @@ impl Checker<'_, '_> {
                     | Ty::Error
                     | Ty::Unknown
                     | Ty::Param(_)
+                    | Ty::ClassOfParam(_)
             )
         })
     }
@@ -2047,7 +2049,8 @@ impl Checker<'_, '_> {
             | Ty::Named(..)
             | Ty::Record(_)
             | Ty::Never
-            | Ty::Param(_) => {
+            | Ty::Param(_)
+            | Ty::ClassOfParam(_) => {
                 self.args_types(args, &[]);
                 Pack::any()
             }
@@ -3215,9 +3218,27 @@ impl Checker<'_, '_> {
                     self.unify(p, t, &mut s);
                 }
             }
-            // Expected results give type arguments too.
+            // Expected results give type arguments too: a parameter the
+            // arguments left open, or one whose binding fits the expected
+            // one (`local xs: (number | string)[] = list(1)`, which strict
+            // mode's invariance needs). A binding that does not fit stays,
+            // so the error names the value's type, not a union with the
+            // target (`id(5)` for a `boolean`: `number?`).
             if let (Some(exp), Some(&r)) = (expected, f.ret.types.first()) {
-                self.unify(r, exp, &mut s);
+                let mut from_exp = Subst::default();
+                self.unify(r, exp, &mut from_exp);
+                for (p, t) in from_exp.types {
+                    match s.types.get(&p).copied() {
+                        Some(bound)
+                            if !s.weak.contains(&p)
+                                && !self.env.assignable(bound, t, self.mode) => {}
+                        _ => {
+                            s.weak.remove(&p);
+                            s.types.insert(p, t);
+                        }
+                    }
+                }
+                s.packs.extend(from_exp.packs);
             }
             // The variadic tail binds a pack parameter. A function literal
             // (typed in the second pass) takes the type the pack was bound
@@ -3503,6 +3524,16 @@ impl Checker<'_, '_> {
                         s.types.insert(p, widened);
                     }
                 }
+            }
+            // `ClassOf<T>` against a class's (or an enum's) table: T is its
+            // instance type (the enum), any type arguments `any`.
+            (Ty::ClassOfParam(p), Ty::ClassOf(d))
+                if matches!(self.env.def(d).kind, DefKind::Class | DefKind::Enum) =>
+            {
+                let targs = vec![Types::ANY; self.env.def(d).params.len()];
+                let instance = self.env.types.intern(Ty::Named(d, targs));
+                let param = self.env.types.intern(Ty::Param(p));
+                self.unify_at(param, instance, s, false, contra);
             }
             (Ty::Array(a), Ty::Array(b)) => self.unify_at(a, b, s, false, contra),
             (Ty::Map(k1, v1), Ty::Map(k2, v2)) => {

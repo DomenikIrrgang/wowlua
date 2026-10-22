@@ -2516,6 +2516,52 @@ show(pcall(pair :: any, 1, 2))
     );
 }
 
+/// `wowlua:reflect`'s results are typed (decision L36): `isInstance(v, Dog)`
+/// narrows `v` to `Dog`, `classOf` gives `ClassOf<Dog>?`, and `enumFrom`
+/// and `enumEntries` give the enum.
+#[test]
+fn reflection_types() {
+    let dir = tempfile::tempdir().unwrap();
+    let main = r#"import * as reflect from "wowlua:reflect"
+class Dog
+    name: string = "rex"
+end
+enum Anchor { Top = "TOP", Bottom = "BOTTOM" }
+
+local function name(v: Dog | number): string
+    if reflect.isInstance(v, Dog) then return v.name end
+    return tostring(v)
+end
+local a: Anchor? = reflect.enumFrom(Anchor, "TOP")
+local first: Anchor = reflect.enumEntries(Anchor)[1].value
+local cls: ClassOf<Dog>? = reflect.classOf(Dog.new())
+print(name(Dog.new()), name(4), a, first, cls == Dog)
+local wrong: number = reflect.enumFrom(Anchor, "TOP")
+print(wrong)
+"#;
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"refltypes\", \"version\": \"1.0.0\" } }\n",
+            ),
+            ("src/main.wowlua", main),
+        ],
+    );
+    let out = wowlua(dir.path())
+        .args(["check", "--message-format", "short"])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let errors: Vec<&str> = stderr.lines().filter(|l| l.contains("error[")).collect();
+    assert_eq!(
+        errors,
+        ["src/main.wowlua:15:7: error[E2001]: `Anchor?` is not assignable to `number`"],
+        "{stderr}"
+    );
+}
+
 /// `wowlua:reflect` (spec §7.8): class identity, enum order, and the full
 /// metadata of `@reflect` classes and functions.
 #[test]

@@ -54,6 +54,9 @@ pub enum Ty {
     Named(DefId, Vec<TypeId>),
     /// The class value of a class (`ClassOf<T>`), or a namespace table.
     ClassOf(DefId),
+    /// `ClassOf<T>` for a type parameter `T`: binds `T` to the class (or
+    /// enum) of the table passed, and becomes that `ClassOf` once bound.
+    ClassOfParam(ParamId),
     EnumMember(DefId, u32),
     Param(ParamId),
     Secret(TypeId),
@@ -320,6 +323,7 @@ impl Ty {
             | Ty::ClassOf(_)
             | Ty::EnumMember(..)
             | Ty::Param(_)
+            | Ty::ClassOfParam(_)
             | Ty::Module(_) => Vec::new(),
             Ty::Union(m) | Ty::Intersection(m) => m.clone(),
             Ty::Array(t) | Ty::Secret(t) => vec![*t],

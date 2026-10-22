@@ -490,7 +490,7 @@ Class identity costs a field or two per class and is always emitted:
 ```wowlua
 import * as reflect from "wowlua:reflect"
 
-reflect.isInstance(v, Dog)       -- type predicate: v is Dog
+reflect.isInstance(v, Dog)       -- type predicate: v is Dog (narrows v)
 reflect.classOf(dog)             -- ClassOf<Dog>? (works for widget classes via __class)
 reflect.className(dog)           -- "Dog"
 reflect.superclass(Dog)          -- ClassOf<Animal>?

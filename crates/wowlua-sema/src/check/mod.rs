@@ -2007,6 +2007,27 @@ print(a, b, c, d, e, name, realm, more)
         );
     }
 
+    /// The expected type binds a type parameter only where it fits what
+    /// the arguments bound (decision L36): a wider expected type widens it
+    /// (strict mode's invariance needs that), a mismatch keeps the
+    /// argument's type, so the error names the value's type alone.
+    #[test]
+    fn expected_type_binds_only_where_it_fits() {
+        strict_ok(
+            "local function list<T>(x: T): T[] return { x } end\nlocal xs: (number | string)[] = list(1)\nprint(xs)\n",
+        );
+        let d = check_source(
+            "local function id<T>(x: T): T? return x end\nlocal n: boolean = id(5)\nprint(n)\n",
+            Mode::Strict,
+        );
+        let got: Vec<&str> = d.iter().map(|x| x.message.as_str()).collect();
+        assert_eq!(
+            got,
+            ["`number?` is not assignable to `boolean`"],
+            "{got:#?}"
+        );
+    }
+
     /// A literal binds as its base type at the top level only: inside a
     /// table type the declared element type binds as it is (tables are
     /// invariant).
@@ -2128,6 +2149,35 @@ print(a, b, c, d, e, name, realm, more)
         // both branches.
         strict_ok(
             "local function plain<V>(v: V | Secret<V> | nil): v is V\n return (v :: any) ~= nil\nend\nlocal function use(n: number) end\nlocal function f(map: number?, level: number | Secret<number>)\n local a: number = plain(level) and level or 1\n if not plain(map) then return end\n use(map)\n use(a)\nend\nprint(f)\n",
+        );
+    }
+
+    /// `ClassOf<T>` for a type parameter binds `T` to the class, generic
+    /// class or enum whose table is passed (decision L36); inside the
+    /// generic body it is a table. A generic predicate binds its type
+    /// parameters from every argument, so `is(v, Dog)` narrows `v` to `Dog`.
+    #[test]
+    fn class_of_type_parameters() {
+        let pre = "class Dog\n name: string = \"x\"\nend\nclass Box<T>\n item: T? = nil\nend\nenum Dir { Up, Down }\nlocal function from<T>(_c: ClassOf<T>, _v: any): T? return nil end\nlocal function is<T>(v: any, c: ClassOf<T>): v is T return v ~= c end\n";
+        strict_ok(&format!(
+            "{pre}local d: Dog? = from(Dog, 1)\nlocal b: Box<number>? = from(Box, 1)\nlocal e: Dir? = from(Dir, 2)\nlocal a = from({{}}, 1)\nlocal function keep<T>(c: ClassOf<T>): table return c end\nprint(d, b, e, a, keep(Dog))\n"
+        ));
+        strict_err(
+            &format!("{pre}local n: number? = from(Dog, 1)\nprint(n)\n"),
+            "E2001",
+        );
+        strict_err(
+            &format!("{pre}local s: string? = from(Dir, 1)\nprint(s)\n"),
+            "E2001",
+        );
+        strict_ok(&format!(
+            "{pre}local function f(v: Dog | string): string\n if is(v, Dog) then return v.name end\n return v\nend\nprint(f)\n"
+        ));
+        strict_err(
+            &format!(
+                "{pre}local function f(v: Dog | string)\n if is(v, Dog) then local n: string = v print(n) end\nend\nprint(f)\n"
+            ),
+            "E2001",
         );
     }
 

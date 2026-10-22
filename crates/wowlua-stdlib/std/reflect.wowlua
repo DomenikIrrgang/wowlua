@@ -58,12 +58,13 @@ local function super(cls: any): any
     return type(cls) == "table" and secret.readable(cls) and rawget(cls, "__super") or nil
 end
 
-export function isInstance(value: any, cls: any): boolean
+-- `value is T`: true narrows `value` to the class.
+export function isInstance<T>(value: any, cls: ClassOf<T>): value is T
     local check = wl.isInstance
     return check ~= nil and secret.readable(value) and secret.readable(cls) and check(value, cls)
 end
 
-export function classOf(value: any): any
+export function classOf<T>(value: T): ClassOf<T>?
     local get = wl.classOf
     return get and secret.readable(value) and get(value) or nil
 end
@@ -128,7 +129,7 @@ export function enumName(e: any, value: any): string?
     return nil
 end
 
-export function enumEntries(e: any): { name: string, value: any }[]
+export function enumEntries<E>(e: ClassOf<E>): { name: string, value: E }[]
     local out = {}
     if not secret.readable(e) then
         return out
@@ -140,7 +141,7 @@ export function enumEntries(e: any): { name: string, value: any }[]
 end
 
 -- `raw` as a member of `e`, or nil.
-export function enumFrom(e: any, raw: any): any
+export function enumFrom<E>(e: ClassOf<E>, raw: any): E?
     return enumName(e, raw) and raw or nil
 end
 

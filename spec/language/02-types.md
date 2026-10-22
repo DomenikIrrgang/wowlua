@@ -154,7 +154,16 @@ Type arguments are **always inferred at call sites**. An inferred type
 argument that does not satisfy its constraint is error E2014. There is no explicit
 call syntax like `f<number>(x)`, because in Lua `f < number > (x)` is a valid
 comparison expression. Expected types also drive inference:
-`local s: Stack<number> = Stack.new()`. A parameter `T | Secret<T>` (or
+`local s: Stack<number> = Stack.new()`. The expected type binds a type
+parameter the arguments left open, or replaces an argument's binding that it
+fits (`local xs: (number | string)[] = list(1)` binds `T` to
+`number | string`); a binding that does not fit stays, so `local b: boolean =
+id(5)` reports `number?`, not a union with `boolean` (decision L36). A
+parameter `ClassOf<T>` binds `T` to the class whose table is passed (any type
+arguments of a generic class `any`), or to the enum whose table is passed:
+`enumFrom<E>(e: ClassOf<E>, raw: any): E?` called with `Direction` gives
+`Direction?`. Inside the generic body a `ClassOf<T>` value is a table, and
+where nothing binds `T` it is `any`. A parameter `T | Secret<T>` (or
 `T | Secret<T> | nil`) binds `T` from both parts of an argument: passing
 `string | Secret<string>` binds `T` to `string`.
 
@@ -204,9 +213,11 @@ caller:
   never return, so it is not W1005.) The same holds for `canaccessvalue`
   (§2.11).
 
-A generic predicate's type parameters are inferred from the argument's
-narrowed type: `plain<V>(v: V | Secret<V> | nil): v is V` called with a
-`number | Secret<number>` narrows it to `number`.
+A generic predicate's type parameters are inferred from its arguments, the
+narrowed one's type as it is at the call: `plain<V>(v: V | Secret<V> | nil):
+v is V` called with a `number | Secret<number>` narrows it to `number`, and
+`reflect.isInstance<T>(v: any, cls: ClassOf<T>): v is T` called with `Dog`
+narrows `v` to `Dog`.
 
 ```wowlua
 local function isButton(f: Frame): f is Button
@@ -225,7 +236,7 @@ print(v:upper())                              -- v: string (Secret excluded)
 | Type | Meaning |
 |------|---------|
 | `Self` | Inside class and interface bodies: the type of the receiver. Used for fluent APIs and in declarations (`function SetScript(...): Self`). |
-| `ClassOf<T>` | The class value (constructor table) of instance type `T`. Calling `new` through `ClassOf<T>` is an error if `T` is abstract (E3002). |
+| `ClassOf<T>` | The class value (constructor table) of instance type `T`, or the table of enum `T`. Calling `new` through `ClassOf<T>` is an error if `T` is abstract (E3002). For a type parameter `T` it binds `T` from the table passed (§2.2.6). |
 | `EventName` | Union of all **WoW event** names (`declare event`). |
 | `MessageName` | Union of all **addon message** names (`declare message`). |
 | `EventArgs<E>` | Type pack of the payload of event or message `E`. Used by `wowlua:events`. |

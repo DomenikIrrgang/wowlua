@@ -122,9 +122,11 @@ impl Checker<'_, '_> {
                 ty => match primitive(&ty) {
                     Some(p) => types.push(p),
                     None => match ty {
-                        Ty::Named(..) | Ty::Intersection(_) | Ty::ClassOf(_) | Ty::Module(_) => {
-                            types.push("table")
-                        }
+                        Ty::Named(..)
+                        | Ty::Intersection(_)
+                        | Ty::ClassOf(_)
+                        | Ty::ClassOfParam(_)
+                        | Ty::Module(_) => types.push("table"),
                         _ => return None,
                     },
                 },

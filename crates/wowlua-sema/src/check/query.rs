@@ -118,6 +118,7 @@ impl Env<'_> {
                 }
             }
             Ty::Param(p) => self.params[p.0 as usize].name.to_string(),
+            Ty::ClassOfParam(p) => format!("ClassOf<{}>", self.params[p.0 as usize].name),
             Ty::Secret(i) => format!("Secret<{}>", d(*i)),
             Ty::Module(_) => "module".into(),
         }
@@ -386,6 +387,7 @@ impl Env<'_> {
                 | Ty::Array(_)
                 | Ty::Map(..)
                 | Ty::ClassOf(_)
+                | Ty::ClassOfParam(_)
                 | Ty::Module(_)
                 | Ty::Table,
                 Ty::Table,
@@ -395,7 +397,7 @@ impl Env<'_> {
             // Basic mode: values typed only `table` / `function` are trusted.
             // `{ [any]: any }` is every table: class tables, namespaces and
             // enum tables (`pairs(Enum.X)`) and instances included.
-            (Ty::Table | Ty::ClassOf(_) | Ty::Module(_), Ty::Map(k, v))
+            (Ty::Table | Ty::ClassOf(_) | Ty::ClassOfParam(_) | Ty::Module(_), Ty::Map(k, v))
                 if k == Types::ANY && v == Types::ANY =>
             {
                 true

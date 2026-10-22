@@ -41,6 +41,15 @@ pub fn apply(types: &mut Types, t: TypeId, s: &Subst) -> TypeId {
                 None => t,
             },
         },
+        // Bound to a class or an enum: its table; to `any` (where nothing
+        // bound it): `any`; to anything else: a table.
+        Ty::ClassOfParam(p) => match s.types.get(&p).map(|&r| types.get(r).clone()) {
+            Some(Ty::Named(d, _)) => types.intern(Ty::ClassOf(d)),
+            Some(Ty::Param(q)) => types.intern(Ty::ClassOfParam(q)),
+            Some(Ty::Any) => Types::ANY,
+            Some(_) => Types::TABLE,
+            None => t,
+        },
         Ty::Union(m) => {
             let m: Vec<TypeId> = m.iter().map(|&x| apply(types, x, s)).collect();
             types.union(&m)

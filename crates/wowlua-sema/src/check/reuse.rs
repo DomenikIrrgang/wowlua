@@ -366,6 +366,10 @@ impl Walk<'_> {
                 self.tag(24);
                 self.label(Node::Param(*p));
             }
+            Ty::ClassOfParam(p) => {
+                self.tag(27);
+                self.label(Node::Param(*p));
+            }
             Ty::Secret(t) => {
                 self.tag(25);
                 self.ty(*t);

@@ -1509,6 +1509,7 @@ impl<'p> Env<'p> {
                 "ClassOf" => {
                     return match arg_types.first().map(|&a| self.types.get(a).clone()) {
                         Some(Ty::Named(d, _)) => self.types.intern(Ty::ClassOf(d)),
+                        Some(Ty::Param(p)) => self.types.intern(Ty::ClassOfParam(p)),
                         _ => Types::TABLE,
                     };
                 }
