@@ -3167,6 +3167,9 @@ fn widget_classes_run() {
     function refresh()
         self:SetText(`Clicked {self.count}x`)
     end
+    function describe(): string
+        return "counter"
+    end
 end
 class FancyButton extends CounterButton
     stars: number = 3
@@ -3195,6 +3198,12 @@ Mixin(frame, DemoRowMixin)
 frame:OnLoad()
 local p = Plain.new("Named")
 print(p:GetObjectType(), Named == p, p.__class == Plain)
+-- a method replaced on the class reaches frames built afterwards, a
+-- subclass's too; a frame built before keeps its own (T268)
+local early = FancyButton.new(UIParent)
+local C: any = CounterButton
+C.describe = function(): string return "patched" end
+print(early:describe(), CounterButton.new(UIParent):describe(), FancyButton.new(UIParent):describe())
 "#,
             ),
         ],
@@ -3206,7 +3215,7 @@ print(p:GetObjectType(), Named == p, p.__class == Plain)
     fs::write(dist.join("Widgets.toc"), format!("mock.lua\n{toc}")).unwrap();
     assert_eq!(
         run_addon(&dist, "Widgets"),
-        "Clicked 1x Clicked 2x *3 2 3 Button UIPanelButtonTemplate\nonload row\nFrame true true"
+        "Clicked 1x Clicked 2x *3 2 3 Button UIPanelButtonTemplate\nonload row\nFrame true true\ncounter patched patched"
     );
     // Widget classes cannot define metamethods or accessors.
     for (src, code) in [

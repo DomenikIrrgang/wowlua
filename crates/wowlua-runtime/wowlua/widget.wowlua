@@ -99,9 +99,12 @@ function wl.finalizeWidget(cls: any): any
 	scriptList(cls)
 	return cls
 end
--- Applies the most-derived class's methods to a new frame.
+-- Applies the most-derived class's methods to a new frame, flattened from
+-- the class chain as it is now: a method replaced on a widget class or one
+-- of its superclasses after finalization reaches the frames constructed
+-- afterwards, as an instance of a plain class sees it (decision T268).
 function wl.mixin(frame: any, cls: any): any
-	for k, v in pairs(rawget(cls, "__mixin") or flatten(cls)) do
+	for k, v in pairs(flatten(cls)) do
 		frame[k] = v
 	end
 	frame.__class = cls

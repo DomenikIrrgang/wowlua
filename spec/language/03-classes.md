@@ -371,10 +371,15 @@ Rules:
 - Native widget types are the classes declared with `@widget("…")`. Until the
   generated `wow-api` packages provide them (milestone M4), the compiler
   declares every frame type `CreateFrame` creates (decision T77).
-- At finalization, all methods of the class and its wowlua superclasses are
-  flattened into one mixin table. Construction applies the **most-derived**
-  class's flattened mixin with a raw copy, so overrides work and virtual calls
-  in constructors dispatch to the most-derived implementation.
+- Construction applies the methods of the **most-derived** class and its
+  wowlua superclasses, flattened into one mixin, with a raw copy, so
+  overrides work and virtual calls in constructors dispatch to the
+  most-derived implementation. The mixin is flattened from the class chain
+  as it is at construction: a method replaced on a widget class or one of
+  its superclasses after the class is defined (a plugin patching it) reaches
+  the frames constructed afterwards, as instances of a plain class see it;
+  frames constructed before keep the methods they were given (decision
+  T268).
 - Widget classes may extend other widget classes (`class FancyButton extends
   CounterButton`). Construction is threaded through a hidden `__ctor(cls, …)`
   so only the root creates the frame.
