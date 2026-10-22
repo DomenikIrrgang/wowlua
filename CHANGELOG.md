@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### Fixed
+
+- Tests: an edit box lets go of the keyboard when it is hidden (or a parent of it is), as in the game. It kept the focus, so keys pressed later in the test went into the hidden box instead of opening windows with their key bindings.
+
 ## 0.9.6 (2026-10-22)
 
 ### New

@@ -1672,6 +1672,9 @@ pub fn set_shown(vm: &mut Vm, id: WidgetId, shown: bool) {
             run_script(vm, w, if now { "OnShow" } else { "OnHide" }, &[]);
         }
     }
+    if !shown {
+        crate::input::drop_hidden_focus(vm);
+    }
 }
 
 fn show(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
@@ -1812,6 +1815,9 @@ fn set_parent(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let after = visible(engine(vm), id);
     if before != after {
         run_script(vm, id, if after { "OnShow" } else { "OnHide" }, &[]);
+    }
+    if !after {
+        crate::input::drop_hidden_focus(vm);
     }
     Ok(vec![])
 }

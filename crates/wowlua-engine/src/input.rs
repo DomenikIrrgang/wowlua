@@ -300,6 +300,17 @@ pub fn control_slide(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// The keyboard focus let go once its edit box is out of sight (hidden,
+/// or a parent hidden or changed): keys reach the game again, as in the
+/// client (decision T244; unverified: `OnEditFocusLost` after `OnHide`).
+pub fn drop_hidden_focus(vm: &mut Vm) {
+    if let Some(id) = engine(vm).world.input.keyboard_focus
+        && !widgets::visible(engine(vm), id)
+    {
+        set_keyboard_focus(vm, None);
+    }
+}
+
 fn set_keyboard_focus(vm: &mut Vm, new: Option<WidgetId>) {
     let old = engine(vm).world.input.keyboard_focus;
     if old == new {

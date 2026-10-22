@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,087 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,088 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -832,7 +832,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,087 rules unverified: each rests on Blizzard's
+The engine's code marks 1,088 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1424,10 +1424,11 @@ page changes only when a rule is added, removed or reworded.
 - [healcalc.rs](../crates/wowlua-engine/src/healcalc.rs): The engine's units have no absorbs and no incoming heals (`UnitGetIncomingHeals`, `UnitGetTotalAbsorbs`: none), so th...
 - [healcalc.rs](../crates/wowlua-engine/src/healcalc.rs): `UnitGetDetailedHealPrediction(unit, healer, calculator)`: the unit's health and maximum kept in the calculator (noth...
 
-### input (3)
+### input (4)
 
 - [input.rs](../crates/wowlua-engine/src/input.rs): The key itself, pressed: to the keyboard frames as any key (`/stdtest engine keys`: `OnKeyDown("LSHIFT")`; unverified...
 - [input.rs](../crates/wowlua-engine/src/input.rs): An enabled button's click, down or up as it registered for clicks (`RegisterForClicks`: by default the left button's...
+- [input.rs](../crates/wowlua-engine/src/input.rs): The keyboard focus let go once its edit box is out of sight (hidden, or a parent hidden or changed): keys reach the g...
 - [input.rs](../crates/wowlua-engine/src/input.rs): A key the focused edit box takes, whether it took it: every key while it has the focus (unverified: typing into chat...
 
 ### inspect (1)

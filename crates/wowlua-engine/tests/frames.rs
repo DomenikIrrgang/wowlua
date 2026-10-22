@@ -550,3 +550,37 @@ return tostring(a), why, tostring(b), none",
         ]
     );
 }
+
+/// A focused edit box hidden, or a parent of it hidden, lets go of the
+/// keyboard (`OnEditFocusLost`): keys reach the game again (decision T244).
+#[test]
+fn a_hidden_edit_box_loses_the_focus() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local out = {}
+local p = CreateFrame('Frame', nil, UIParent)
+local e = CreateFrame('EditBox', nil, p)
+e:SetScript('OnEditFocusLost', function() out[#out + 1] = 'lost' end)
+e:SetFocus()
+out[#out + 1] = tostring(e:HasFocus())
+p:Hide()
+out[#out + 1] = tostring(e:HasFocus()) .. ' ' .. tostring(GetCurrentKeyBoardFocus())
+p:Show()
+e:SetFocus()
+e:Hide()
+out[#out + 1] = tostring(e:HasFocus())
+-- another frame hidden: the focus stays
+e:Show()
+e:SetFocus()
+local other = CreateFrame('Frame', nil, UIParent)
+other:Hide()
+out[#out + 1] = tostring(e:HasFocus())
+e:ClearFocus()
+return unpack(out)",
+    );
+    assert_eq!(
+        r,
+        ["true", "lost", "false nil", "lost", "false", "true", "lost"]
+    );
+}
