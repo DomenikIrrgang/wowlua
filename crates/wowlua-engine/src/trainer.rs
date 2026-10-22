@@ -843,6 +843,11 @@ fn buy_trainer_service(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// Whether the player learned the spell from a trainer in this test.
+pub(crate) fn learned(vm: &Vm, spell: f64) -> bool {
+    engine(vm).world.trainers.learned.contains(&(spell as i64))
+}
+
 fn taught(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(Value::Num(i)) = c.upvals.first().copied() else {
         return Ok(vec![]);

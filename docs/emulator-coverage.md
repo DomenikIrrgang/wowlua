@@ -356,13 +356,13 @@ By where the function is listed:
 |------|----------:|------:|---------:|--------:|----------:|
 | Blizzard's API documentation | 5,111 | 1,000 | 359 | 3,678 | 74 |
 | the client's other C functions (`/stdtest inventory`) | 2,064 | 566 | 86 | 1,381 | 31 |
-| the engine's own, in neither list | 5 | 5 | 0 | 0 | 0 |
+| the engine's own, in neither list | 6 | 5 | 0 | 1 | 0 |
 
 Of the engine's own, Blizzard's UI code defines these in the client (Lua
 functions in the client's inventory, its deprecation files' wrappers of the `C_`
 functions); the engine's natives stand in for them until that code loads:
 `GetActionText`, `GetActionTexture`, `HasAction`, `IsAttackAction`,
-`IsUsableAction`.
+`IsPlayerSpell`, `IsUsableAction`.
 
 The modules that answer, by how many functions and methods:
 
@@ -381,7 +381,7 @@ The modules that answer, by how many functions and methods:
 | `iteminfo` | fill-in | 228 |
 | `methods3` | fill-in | 212 |
 | `vm` | model | 198 |
-| `spellinfo` | fill-in | 196 |
+| `spellinfo` | fill-in | 197 |
 | `unitinfo` | fill-in | 174 |
 | `blanks` | fill-in | 154 |
 | `stats` | model | 135 |

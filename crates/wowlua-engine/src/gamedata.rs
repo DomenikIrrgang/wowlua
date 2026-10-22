@@ -559,19 +559,24 @@ fn get_spell_link(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `C_SpellBook.IsSpellKnown(spellID [, bank])`: a defined spell's
 /// `known` (`petKnown` for the pet's bank, 1), else whether the player's
 /// recorded spellbook holds it (the full probe, 1.60.1: Attack and
-/// Cannibalize known for bank 0, none and `"x"`, not for the pet's).
+/// Cannibalize known for bank 0, none and `"x"`, not for the pet's) or the
+/// player learned it from a trainer in the test.
 fn is_spell_known(vm: &mut Vm, c: NativeCall) -> Ret {
     let pet = matches!(c.arg(2), Value::Num(n) if n == 1.0);
     let Some((_, s)) = spell(vm, &c) else {
         let book = match vm.hidden(c.arg(1)) {
-            Value::Num(n) if !pet => crate::stats::spellbook_slot_of(vm, n).is_some(),
+            Value::Num(n) if !pet => {
+                crate::stats::spellbook_slot_of(vm, n).is_some() || crate::trainer::learned(vm, n)
+            }
             _ => false,
         };
         return Ok(vec![Value::Bool(book)]);
     };
     // Spell bank 1 is the pet's.
     let key = if pet { "petKnown" } else { "known" };
-    Ok(vec![Value::Bool(field(vm, s, key).truthy())])
+    let taught =
+        !pet && matches!(vm.hidden(c.arg(1)), Value::Num(n) if crate::trainer::learned(vm, n));
+    Ok(vec![Value::Bool(field(vm, s, key).truthy() || taught)])
 }
 
 /// `C_Item.IsEquippableItem(item)`: an item with an equipment slot (its

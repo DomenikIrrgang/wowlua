@@ -268,8 +268,20 @@ fn exists(vm: &mut Vm, id: f64) -> bool {
 /// `C_SpellBook.IsSpellKnown` and `IsPlayerSpell` answer.
 fn known(vm: &mut Vm, id: f64) -> bool {
     crate::stats::spellbook_slot_of(vm, id).is_some()
+        || crate::trainer::learned(vm, id)
         || yes(vm, "C_SpellBook.IsSpellKnown", &[Value::Num(id)])
         || yes(vm, "IsPlayerSpell", &[Value::Num(id)])
+}
+
+/// `IsPlayerSpell(spellID)`: true for a spell learned from a trainer in
+/// the test (as the client knows it once taught), else as recorded.
+fn is_player_spell(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some(id) = num(vm.hidden(c.arg(1)))
+        && crate::trainer::learned(vm, id)
+    {
+        return Ok(vec![Value::Bool(true)]);
+    }
+    crate::recorded::recorded(vm, c)
 }
 
 /// Off the global cooldown: Auto Attack, a trait's, a spell on the next
@@ -1492,6 +1504,7 @@ fn is_cooldown_viewer_available(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
+        ("IsPlayerSpell", is_player_spell),
         // C_Spell (`GetSpellIDForSpellIdentifier`, `GetBaseSpell`,
         // `C_SpellBook.FindSpellOverrideByID` and `FindBaseSpellByID` are
         // the game data's, `gamedata.rs`).
