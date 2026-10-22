@@ -249,6 +249,22 @@ A screenshot of the output or the values typed back is enough.
     whether a hidden frame is still under the mouse (the engine says
     yes).
 
+12. On a rogue (or a druid in cat form), in a fight with a target: a frame
+    registered for `UNIT_POWER_UPDATE`, `UNIT_POWER_FREQUENT` and
+    `PLAYER_TARGET_CHANGED` printing each with its arguments, then build
+    two combo points and
+    `/dump GetComboPoints("player", "target"), UnitPower("player", Enum.PowerType.ComboPoints), UnitPowerMax("player", Enum.PowerType.ComboPoints)`;
+    then target another creature and dump again. Why: the engine has no
+    combo points (SuuUI's finding V31): their events, and whether they stay
+    on the target or with the player.
+13. In a duel with a friend (when one happens anyway): a frame registered
+    for `UNIT_FACTION` and `PLAYER_TARGET_CHANGED` printing each with its
+    arguments, the friend targeted;
+    `/dump UnitCanAttack("player", "target"), UnitReaction("target", "player"), UnitIsEnemy("player", "target")`
+    before the duel starts, during it, and after. Why: a unit can't turn
+    hostile in the engine (SuuUI's finding V30): the events and answers as
+    it does.
+
 ## Replay leftovers
 
 - Before turning in a quest with an item reward:
