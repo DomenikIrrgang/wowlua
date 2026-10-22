@@ -22,23 +22,23 @@ their clients answer differently is unverified.
   behaviour (98.6%): 1,009 modelled, 359 answered from recordings, 3,669 by a
   documentation-based fill-in. Of all 7,175 C functions the client has,
   documented or not, 7,070 have behaviour.
-- **Widget methods:** 1,325 of the 1,477 documented methods have behaviour
-  (89.7%).
+- **Widget methods:** 1,326 of the 1,477 documented methods have behaviour
+  (89.8%).
 - **Full probe:** 33,082 of the client's 33,727 answers given as the client gave
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,095 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,096 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
-| standard | 4,871 | 4,434 (91.0%) | 0 | 1,438 | 1,285 (89.4%) | none |
-| camelot | 5,111 | 5,037 (98.6%) | 359 | 1,477 | 1,325 (89.7%) | all |
-| mists | 3,221 | 2,825 (87.7%) | 0 | 1,360 | 1,214 (89.3%) | none |
-| cata | 1,927 | 1,629 (84.5%) | 0 | 1,008 | 888 (88.1%) | none |
-| wrath | 3,227 | 2,832 (87.8%) | 0 | 1,360 | 1,214 (89.3%) | none |
-| tbc | 3,220 | 2,828 (87.8%) | 0 | 1,360 | 1,214 (89.3%) | none |
-| vanilla | 3,220 | 2,828 (87.8%) | 0 | 1,360 | 1,214 (89.3%) | none |
+| standard | 4,871 | 4,434 (91.0%) | 0 | 1,438 | 1,286 (89.4%) | none |
+| camelot | 5,111 | 5,037 (98.6%) | 359 | 1,477 | 1,326 (89.8%) | all |
+| mists | 3,221 | 2,825 (87.7%) | 0 | 1,360 | 1,215 (89.3%) | none |
+| cata | 1,927 | 1,629 (84.5%) | 0 | 1,008 | 889 (88.2%) | none |
+| wrath | 3,227 | 2,832 (87.8%) | 0 | 1,360 | 1,215 (89.3%) | none |
+| tbc | 3,220 | 2,828 (87.8%) | 0 | 1,360 | 1,215 (89.3%) | none |
+| vanilla | 3,220 | 2,828 (87.8%) | 0 | 1,360 | 1,215 (89.3%) | none |
 
 ## API behaviour
 
@@ -369,7 +369,7 @@ The modules that answer, by how many functions and methods:
 | Module | Kind | Functions and methods |
 |--------|------|----------------------:|
 | `extras` | fill-in | 1,488 |
-| `widgets` | model | 651 |
+| `widgets` | model | 652 |
 | `globalsinfo` | fill-in | 555 |
 | `content` | fill-in | 522 |
 | `social` | fill-in | 388 |
@@ -511,7 +511,7 @@ widget's recorded value where `/stdtest engine` recorded one):
 | `Scale` | 8 | 5 | 0 | 3 | 0 |
 | `ScenarioPOI` | 2 | 0 | 0 | 0 | 2 |
 | `ScriptRegion` | 55 | 41 | 0 | 8 | 6 |
-| `ScriptRegionResizing` | 13 | 10 | 0 | 0 | 3 |
+| `ScriptRegionResizing` | 13 | 11 | 0 | 0 | 2 |
 | `ScrollFrame` | 9 | 7 | 0 | 1 | 1 |
 | `SecondsFormatter` | 35 | 35 | 0 | 0 | 0 |
 | `SimpleCheckout` | 8 | 2 | 0 | 0 | 6 |
@@ -530,7 +530,7 @@ widget's recorded value where `/stdtest engine` recorded one):
 | `UnitPositionFrame` | 12 | 4 | 0 | 3 | 5 |
 | `VectorGraphics` | 4 | 1 | 0 | 0 | 3 |
 | `VertexColor` | 4 | 2 | 0 | 2 | 0 |
-| **All** | 1,477 | 967 | 13 | 345 | 152 |
+| **All** | 1,477 | 968 | 13 | 345 | 151 |
 
 ## Verification against the client
 
@@ -833,7 +833,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,095 rules unverified: each rests on Blizzard's
+The engine's code marks 1,096 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1427,12 +1427,13 @@ page changes only when a rule is added, removed or reworded.
 - [healcalc.rs](../crates/wowlua-engine/src/healcalc.rs): The engine's units have no absorbs and no incoming heals (`UnitGetIncomingHeals`, `UnitGetTotalAbsorbs`: none), so th...
 - [healcalc.rs](../crates/wowlua-engine/src/healcalc.rs): `UnitGetDetailedHealPrediction(unit, healer, calculator)`: the unit's health and maximum kept in the calculator (noth...
 
-### input (4)
+### input (5)
 
 - [input.rs](../crates/wowlua-engine/src/input.rs): The key itself, pressed: to the keyboard frames as any key (`/stdtest engine keys`: `OnKeyDown("LSHIFT")`; unverified...
 - [input.rs](../crates/wowlua-engine/src/input.rs): An enabled button's click, down or up as it registered for clicks (`RegisterForClicks`: by default the left button's...
 - [input.rs](../crates/wowlua-engine/src/input.rs): The keyboard focus let go once its edit box is out of sight (hidden, or a parent hidden or changed): keys reach the g...
 - [input.rs](../crates/wowlua-engine/src/input.rs): A key the focused edit box takes, whether it took it: every key while it has the focus (unverified: typing into chat...
+- [input.rs](../crates/wowlua-engine/src/input.rs): `IsMouseOver(top, bottom, left, right)`: the mouse over the region's rectangle grown by the offsets (`mouse_inside`),...
 
 ### inspect (1)
 

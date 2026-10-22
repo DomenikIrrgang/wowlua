@@ -39,6 +39,10 @@ pub struct Input {
     /// Where the mouse is on the screen (`GetCursorPosition`, in the
     /// screen's units: a frame's position times its effective scale).
     pub cursor: (f64, f64),
+    /// The mouse is on the screen's frames: put there by `setCursorPosition`,
+    /// `hover`, a click; off them all at first and after `hover(nil)`
+    /// (`IsMouseOver` false everywhere).
+    pub placed: bool,
     /// The mouse button of the user's click running (`"LeftButton"`, …):
     /// a modified click's `BUTTONn` part (`IsModifiedClick`).
     pub clicking: Option<String>,
@@ -50,8 +54,59 @@ pub struct Input {
 pub fn control_set_cursor_position(vm: &mut Vm, c: NativeCall) -> Ret {
     let x = vm.check_number(&c, 1)?;
     let y = vm.check_number(&c, 2)?;
-    engine_mut(vm).world.input.cursor = (x, y);
+    let input = &mut engine_mut(vm).world.input;
+    input.cursor = (x, y);
+    input.placed = true;
     Ok(vec![])
+}
+
+/// Whether the mouse is over the widget's rectangle grown by the offsets
+/// (top, bottom, left, right: in the widget's units, a positive one moving
+/// that edge up or right). A widget without points has no rectangle.
+fn mouse_inside(vm: &Vm, id: WidgetId, off: [f64; 4]) -> bool {
+    let e = engine(vm);
+    if !e.world.input.placed || e.world.widgets[id.0].points.is_empty() {
+        return false;
+    }
+    let Some((l, b, w, h)) = widgets::bounds(vm, id, 0) else {
+        return false;
+    };
+    let s = widgets::layout_scale(e, id);
+    let ui = widgets::ui_parent_scale(e);
+    let (x, y) = (e.world.input.cursor.0 / ui, e.world.input.cursor.1 / ui);
+    let [top, bottom, left, right] = off;
+    x >= l + left * s && x <= l + w + right * s && y >= b + bottom * s && y <= b + h + top * s
+}
+
+/// The mouse moved onto `new` (`None`: off every frame): onto its middle
+/// unless it is over it already; `OnLeave` for the frame it left, then
+/// `OnEnter` for the new one (`motion` true).
+fn mouse_onto(vm: &mut Vm, new: Option<WidgetId>) {
+    match new {
+        Some(id) if !mouse_inside(vm, id, [0.0; 4]) => {
+            if !engine(vm).world.widgets[id.0].points.is_empty()
+                && let Some((l, b, w, h)) = widgets::bounds(vm, id, 0)
+            {
+                let ui = widgets::ui_parent_scale(engine(vm));
+                let input = &mut engine_mut(vm).world.input;
+                input.cursor = ((l + w / 2.0) * ui, (b + h / 2.0) * ui);
+                input.placed = true;
+            }
+        }
+        Some(_) => {}
+        None => engine_mut(vm).world.input.placed = false,
+    }
+    let old = engine(vm).world.input.mouse_focus;
+    if old == new {
+        return;
+    }
+    engine_mut(vm).world.input.mouse_focus = new;
+    if let Some(o) = old {
+        widgets::run_script(vm, o, "OnLeave", &[Value::Bool(true)]);
+    }
+    if let Some(n) = new {
+        widgets::run_script(vm, n, "OnEnter", &[Value::Bool(true)]);
+    }
 }
 
 /// `GetCursorPosition()`: the mouse's place (`setCursorPosition`; the
@@ -162,24 +217,13 @@ fn label(vm: &Vm, id: WidgetId) -> String {
     }
 }
 
-/// `hover(frame)` (`nil`: away): `OnLeave` for the frame the mouse left,
-/// `OnEnter` for the new one (`motion` true).
+/// `hover(frame)` (`nil`: away): the mouse onto it (`mouse_onto`).
 pub fn control_hover(vm: &mut Vm, c: NativeCall) -> Ret {
     let new = widgets::widget_of(vm, c.arg(1));
     if !c.arg(1).is_nil() && new.is_none() {
         return Err(vm.error("mock.hover: a frame or nil expected"));
     }
-    let old = engine(vm).world.input.mouse_focus;
-    if old == new {
-        return Ok(vec![]);
-    }
-    engine_mut(vm).world.input.mouse_focus = new;
-    if let Some(o) = old {
-        widgets::run_script(vm, o, "OnLeave", &[Value::Bool(true)]);
-    }
-    if let Some(n) = new {
-        widgets::run_script(vm, n, "OnEnter", &[Value::Bool(true)]);
-    }
+    mouse_onto(vm, new);
     Ok(vec![])
 }
 
@@ -198,14 +242,7 @@ pub fn control_click(vm: &mut Vm, c: NativeCall) -> Ret {
         _ => vm.str("LeftButton"),
     };
     // The mouse is over what it clicks.
-    let old = engine(vm).world.input.mouse_focus;
-    if old != Some(id) {
-        engine_mut(vm).world.input.mouse_focus = Some(id);
-        if let Some(o) = old {
-            widgets::run_script(vm, o, "OnLeave", &[Value::Bool(true)]);
-        }
-        widgets::run_script(vm, id, "OnEnter", &[Value::Bool(true)]);
-    }
+    mouse_onto(vm, Some(id));
     as_user(vm, |vm| {
         let class = engine(vm).world.widgets[id.0].class.clone();
         let is = |vm: &Vm, kind: &str| {
@@ -279,14 +316,7 @@ pub fn control_slide(vm: &mut Vm, c: NativeCall) -> Ret {
         return Err(vm.error(&format!("mock.slide: {name} is not a slider")));
     }
     let left = vm.str("LeftButton");
-    let old = engine(vm).world.input.mouse_focus;
-    if old != Some(id) {
-        engine_mut(vm).world.input.mouse_focus = Some(id);
-        if let Some(o) = old {
-            widgets::run_script(vm, o, "OnLeave", &[Value::Bool(true)]);
-        }
-        widgets::run_script(vm, id, "OnEnter", &[Value::Bool(true)]);
-    }
+    mouse_onto(vm, Some(id));
     as_user(vm, |vm| {
         set_keyboard_focus(vm, None);
         widgets::fire_event(vm, "GLOBAL_MOUSE_DOWN", &[left]);
@@ -521,16 +551,17 @@ fn has_focus(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     )])
 }
 
-/// `IsMouseOver()`: the frame under the mouse is this one or inside it.
-fn is_mouse_over(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    let mut at = engine(vm).world.input.mouse_focus;
-    while let Some(w) = at {
-        if w == id {
-            return Ok(vec![Value::Bool(true)]);
+/// `IsMouseOver(top, bottom, left, right)`: the mouse over the region's
+/// rectangle grown by the offsets (`mouse_inside`), whatever covers it and
+/// whether it is shown (unverified).
+fn is_mouse_over(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let mut off = [0.0; 4];
+    for (i, o) in off.iter_mut().enumerate() {
+        if let Value::Num(n) = c.arg(i + 2) {
+            *o = n;
         }
-        at = engine(vm).world.widgets[w.0].parent;
     }
-    Ok(vec![Value::Bool(false)])
+    Ok(vec![Value::Bool(mouse_inside(vm, id, off))])
 }
 
 fn focus_value(vm: &mut Vm, id: Option<WidgetId>) -> Value {

@@ -243,6 +243,12 @@ A screenshot of the output or the values typed back is enough.
     T256: only ten onto four of twenty is recorded). SuuUI's
     `/suu probe bagsort` records the events of the first.
 
+11. Anywhere, once (decision T257):
+    `/run local f=CreateFrame("Frame",nil,UIParent) f:SetSize(50,50) f:SetPoint("CENTER") C_Timer.After(3,function() print(f:IsMouseOver()) f:Hide() print(f:IsMouseOver()) end)`
+    with the mouse kept in the middle of the screen for three seconds:
+    whether a hidden frame is still under the mouse (the engine says
+    yes).
+
 ## Replay leftovers
 
 - Before turning in a quest with an item reward:

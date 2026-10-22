@@ -1079,8 +1079,10 @@ export function click(frame: any, button: string?)
     engine().click(frame, button ?? "LeftButton")
 end
 
---- Moves the mouse over a frame (`nil`: away): `OnLeave` of the last one,
---- `OnEnter` of this one; `GetMouseFoci` and `IsMouseOver` follow.
+--- Moves the mouse over a frame (`nil`: away, off every frame): onto its
+--- middle unless it is over it already (`GetCursorPosition`), then
+--- `OnLeave` of the last one, `OnEnter` of this one; `GetMouseFoci`
+--- follows, and `IsMouseOver` measures the mouse against each frame.
 export function hover(frame: any?)
     engine().hover(frame)
 end
@@ -1150,8 +1152,8 @@ export function setModifiers(keys: { shift?: boolean, ctrl?: boolean, alt?: bool
 end
 
 --- Moves the mouse to (`x`, `y`) on the screen (`GetCursorPosition`'s
---- units: a frame's point times its effective scale); no events (what is
---- under it is `hover`'s).
+--- units: a frame's point times its effective scale); `IsMouseOver`
+--- follows, no events (what is under it is `hover`'s).
 export function setCursorPosition(x: number, y: number)
     engine().setCursorPosition(x, y)
 end

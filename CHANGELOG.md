@@ -13,6 +13,8 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- Tests: `ClearPoint("TOPLEFT")` removes just that point, as in the game. Before, it did nothing, so a Blizzard dropdown menu that opens upward near the bottom of the screen kept both points and came out upside down.
+- Tests: `IsMouseOver` measures the mouse against the frame, as in the game: its offsets (`IsMouseOver(12, -12, -24, 24)`) grow or shrink the area, and a child sticking out of its parent is not over the parent. `mock.hover(frame)` and `mock.click` put the mouse on the frame (`GetCursorPosition` follows), and `mock.hover(nil)` takes it off every frame. Before, `IsMouseOver` only asked whether the hovered frame was the frame or one of its children.
 - Tests: an item put on a part stack of the same item in your bags (`C_Container.PickupContainerItem` onto it) stacks onto it, as in the game; whatever doesn't fit stays where it was. It used to stay on the cursor, so a bag sort that puts part stacks together failed in tests.
 - Tests: a frame that holds a secure (protected) frame is protected too, as in the game: `IsProtected()` gives `true, false`, showing, hiding or moving it from your addon in combat is blocked, and your secure snippets may resize or move it in combat (Blizzard's spells window among them). It used to count as a plain frame.
 - Tests: `C_SpellBook.PickupSpellBookItem` from your addon in combat is blocked ("Interface action failed"), as in the game; out of combat it still picks the spell up. To let players drag spells in combat, pick them up through Blizzard's secure drag template (`SecureHandlerDragTemplate` with an `_ondragstart` that returns `"spell", spellID`).

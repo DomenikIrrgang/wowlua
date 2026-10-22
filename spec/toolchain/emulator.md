@@ -258,6 +258,17 @@ when their time runs out, with `ENCOUNTER_TIMELINE_EVENT_ADDED`,
 event answer nothing for an ID not on it, as recorded. The IDs, the info's
 fields and the events' order follow the documentation, unverified.
 
+`IsMouseOver(top, bottom, left, right)` measures the mouse against the
+region's rectangle, each edge moved by its offset (up or right for a
+positive one), whatever covers it (decision T257; documented). A region
+without points has no rectangle; a hidden one's rectangle still counts
+(unverified). The mouse is off every frame at first; the test runner's
+hover and click put it on the frame.
+
+`ClearPoint(point)` removes that one point and keeps the others (decision
+T258; documented): Blizzard's menus flip a point this way to open above
+their owner near the screen's bottom.
+
 An item put on a part stack of the same item in the bags stacks onto it
 (decision T256; recorded by SuuUI's bag sort probe): the target slot
 locked at once, the cursor let go, and a round trip later the source's
