@@ -77,6 +77,7 @@ pub mod stats;
 pub mod systeminfo;
 pub mod taxi;
 pub mod text;
+pub mod timeline;
 pub mod tooltip;
 pub mod tradeskill;
 pub mod trainer;
@@ -1146,6 +1147,7 @@ pub(crate) fn own_behaviours(flavor: &str) -> Vec<Behaviours<NativeFn>> {
         Behaviours::new("pets", pets::behaviours()),
         Behaviours::new("conditionals", conditionals::behaviours()),
         Behaviours::new("lfg", lfg::behaviours()),
+        Behaviours::new("timeline", timeline::behaviours()),
         Behaviours::new("guild", guild::behaviours()),
         Behaviours::new("collected", collected::behaviours()),
         Behaviours::new(
@@ -1209,7 +1211,7 @@ fn api_function(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![]);
     }
     args::check(vm, api, f, &c)?;
-    if extras::silent_checked(&f.doc) {
+    if extras::silent_checked(&f.doc) && !timeline::valid(vm, &c) {
         return Ok(vec![]);
     }
     let Some(behaviour) = behaviour else {

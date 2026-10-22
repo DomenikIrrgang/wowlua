@@ -217,16 +217,17 @@ A screenshot of the output or the values typed back is enough.
    `target` too while they're targeted, and before or after the roster
    update.
 
-8. Anywhere, once (the encounter timeline is off on Forever,
-   `C_EncounterTimeline.IsFeatureAvailable()` false): whether an addon's
-   timer still goes on it.
+8. Anywhere, once: an addon's timer on the encounter timeline. That it
+   goes on it is settled (2026-10-22: SuuUI's pull countdown shows on its
+   timeline in game; the engine keeps script events, decision T255); what
+   it answers is the engine's guess from the documentation:
    `/dump C_EncounterTimeline.AddScriptEvent({ spellID = 100, iconFileID = 132337, duration = 30, overrideName = "Probe" })`,
    then `/dump C_EncounterTimeline.GetEventList()` and, for the ID,
    `/dump C_EncounterTimeline.GetEventInfo(<id>)`,
    `/dump C_EncounterTimeline.GetEventState(<id>)`,
-   `/dump C_EncounterTimeline.GetEventTimeRemaining(<id>)`. The engine
-   answers 0 and an empty list (unrecorded); SuuUI's pull countdown and
-   its test timeline ride on it.
+   `/dump C_EncounterTimeline.GetEventTimeRemaining(<id>)`: the ID (the
+   engine counts from 41), the info's fields (its `spellName` the
+   `overrideName`), the state while it runs (0) and after it ran out.
 
 9. In combat, from an addon (a `/run` counts as one): `/run C_Spell.PickupSpell(6603)`
    (Auto Attack) and `/run PickupAction(1)`: whether either is blocked as

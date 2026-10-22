@@ -1530,9 +1530,10 @@ pub(crate) fn silent_unchecked(doc: &serde_json::Value) -> bool {
 
 /// Whether a documented function whose arguments passed their checks
 /// answers nothing: one that needs a timeline event
-/// (`RequiresValidTimelineEvent`), none being there (the engine has no
-/// encounter timeline events; the full probe: the 7 asked answered
-/// nothing to every event ID that passed, 0 to 2147483647).
+/// (`RequiresValidTimelineEvent`), for an ID not on the timeline (the
+/// full probe, with none there: the 7 asked answered nothing to every
+/// event ID that passed, 0 to 2147483647; an addon's script events are
+/// there, `timeline.rs`).
 pub(crate) fn silent_checked(doc: &serde_json::Value) -> bool {
     flagged(doc, "RequiresValidTimelineEvent")
 }

@@ -19,7 +19,7 @@ engine modules and the generated stand-ins, but no recording of their own: what
 their clients answer differently is unverified.
 
 - **API functions:** 5,037 of the 5,111 documented camelot functions have
-  behaviour (98.6%): 1,000 modelled, 359 answered from recordings, 3,678 by a
+  behaviour (98.6%): 1,009 modelled, 359 answered from recordings, 3,669 by a
   documentation-based fill-in. Of all 7,175 C functions the client has,
   documented or not, 7,070 have behaviour.
 - **Widget methods:** 1,325 of the 1,477 documented methods have behaviour
@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,091 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,093 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -148,7 +148,7 @@ ones together):
 | `C_EncodingUtil` | 10 | 0 | 0 | 10 | 0 |
 | `C_EncounterEvents` | 8 | 0 | 0 | 8 | 0 |
 | `C_EncounterJournal` | 22 | 0 | 1 | 21 | 0 |
-| `C_EncounterTimeline` | 34 | 12 | 0 | 22 | 0 |
+| `C_EncounterTimeline` | 34 | 21 | 0 | 13 | 0 |
 | `C_EncounterWarnings` | 10 | 0 | 0 | 10 | 0 |
 | `C_EndOfMatchUI` | 1 | 0 | 0 | 1 | 0 |
 | `C_EquipmentSet` | 23 | 9 | 0 | 14 | 0 |
@@ -348,13 +348,13 @@ ones together):
 | `math` | 38 | 38 | 0 | 0 | 0 |
 | `string` | 23 | 23 | 0 | 0 | 0 |
 | `table` | 23 | 23 | 0 | 0 | 0 |
-| **All** | 7,175 | 1,566 | 445 | 5,059 | 105 |
+| **All** | 7,175 | 1,575 | 445 | 5,050 | 105 |
 
 By where the function is listed:
 
 | List | Functions | Model | Recorded | Fill-in | Generated |
 |------|----------:|------:|---------:|--------:|----------:|
-| Blizzard's API documentation | 5,111 | 1,000 | 359 | 3,678 | 74 |
+| Blizzard's API documentation | 5,111 | 1,009 | 359 | 3,669 | 74 |
 | the client's other C functions (`/stdtest inventory`) | 2,064 | 566 | 86 | 1,381 | 31 |
 | the engine's own, in neither list | 6 | 5 | 0 | 1 | 0 |
 
@@ -368,7 +368,7 @@ The modules that answer, by how many functions and methods:
 
 | Module | Kind | Functions and methods |
 |--------|------|----------------------:|
-| `extras` | fill-in | 1,497 |
+| `extras` | fill-in | 1,488 |
 | `widgets` | model | 651 |
 | `globalsinfo` | fill-in | 555 |
 | `content` | fill-in | 522 |
@@ -434,6 +434,7 @@ The modules that answer, by how many functions and methods:
 | `gossip` | model | 9 |
 | `itemlocation` | model | 9 |
 | `loot` | model | 9 |
+| `timeline` | model | 9 |
 | `auras` | model | 8 |
 | `damagemeter` | model | 7 |
 | `macros` | model | 7 |
@@ -832,7 +833,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,091 rules unverified: each rests on Blizzard's
+The engine's code marks 1,093 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1985,6 +1986,11 @@ page changes only when a rule is added, removed or reworded.
 - [text.rs](../crates/wowlua-engine/src/text.rs): Recorded: FRIZQT, ARIALN (both plain and outlined), skurri and MORPHEUS at 8 to 45 pixels, every printable ASCII char...
 - [text.rs](../crates/wowlua-engine/src/text.rs): In single floats (the recorded widths' last digit varies by a float step from this, the pixels exact: unverified how...
 - [text.rs](../crates/wowlua-engine/src/text.rs): The visible text's lines, each wrapped by words at `max` units when it is wider (none: unwrapped).
+
+### timeline (2)
+
+- [timeline.rs](../crates/wowlua-engine/src/timeline.rs): Unverified, from the API's documentation: the IDs (here counted from after `ENCOUNTER_TIMELINE_RESERVED_EVENT_COUNT`,...
+- [timeline.rs](../crates/wowlua-engine/src/timeline.rs): `GetEventState(id)`: active or paused; an event no longer there, finished (unverified: what the client answers for an...
 
 ### tooltip (11)
 

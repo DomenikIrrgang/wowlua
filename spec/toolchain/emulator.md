@@ -250,6 +250,14 @@ only, with `ADDON_ACTION_BLOCKED`: `C_SpellBook.PickupSpellBookItem`
 (decision T253; found in game). Blizzard's own code, the secure drag
 handlers among it, may call them.
 
+The encounter timeline keeps addons' timers (`C_EncounterTimeline.
+AddScriptEvent`, decision T255; found in game though the timeline is off
+on Forever): listed, read, paused, resumed, finished, cancelled and ended
+when their time runs out, with `ENCOUNTER_TIMELINE_EVENT_ADDED`,
+`…_STATE_CHANGED` and `…_REMOVED`. The functions that require a timeline
+event answer nothing for an ID not on it, as recorded. The IDs, the info's
+fields and the events' order follow the documentation, unverified.
+
 ## 17.6 The engine
 
 The WoW API the VM's code calls, per flavor.

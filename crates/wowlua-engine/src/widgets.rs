@@ -267,6 +267,8 @@ pub struct World {
     pub lfg: crate::lfg::Lfg,
     /// The collections a test set (`collected.rs`).
     pub collected: crate::collected::Collected,
+    /// The encounter timeline's script events (`timeline.rs`).
+    pub timeline: crate::timeline::Timeline,
 }
 
 impl World {
