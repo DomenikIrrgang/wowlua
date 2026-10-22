@@ -76,6 +76,9 @@ pub struct Unit {
     pub classification: String,
     /// The player's threat on this creature (`setThreat`).
     pub threat: Option<f64>,
+    /// Others' threat on it (`setThreat(value, unit)`: group members,
+    /// pets), in the order they came on its list.
+    pub threat_others: Vec<(UnitId, f64)>,
     /// Dead with the player on its threat list, the list's update not told
     /// yet (told as the player leaves combat, or by `setThreat(nil)`); its
     /// `threat` kept meanwhile.
@@ -290,6 +293,7 @@ pub fn install(vm: &mut Vm) {
         distance: Some(0.0),
         classification: "normal".into(),
         threat: None,
+        threat_others: Vec::new(),
         listed_dead: false,
         loot: Vec::new(),
         creature_type: None,
@@ -629,6 +633,7 @@ fn clone_unit(u: &Unit) -> Unit {
         faction_group: u.faction_group.clone(),
         classification: u.classification.clone(),
         loot: u.loot.clone(),
+        threat_others: u.threat_others.clone(),
         creature_type: u.creature_type.clone(),
         creature_family: u.creature_family.clone(),
         role: u.role.clone(),
@@ -1789,6 +1794,7 @@ fn unit_from(vm: &mut Vm, data: Option<TableRef>, player_guid: Option<String>) -
         },
         classification: text(vm, "classification", "normal"),
         threat: None,
+        threat_others: Vec::new(),
         listed_dead: false,
         loot: Vec::new(),
         creature_type: match get(vm, "creatureType") {
@@ -1851,7 +1857,10 @@ fn control_target(vm: &mut Vm, c: NativeCall) -> Ret {
         }
         set_player_target(vm, new);
     } else {
+        // (a creature turning holds its list: each unit's situation told)
+        let before = situations(vm);
         unit_target(vm, me, new);
+        tell_situations(vm, &before);
     }
     Ok(vec![])
 }
@@ -1906,15 +1915,42 @@ pub(crate) fn told_turn(vm: &mut Vm, me: UnitId) {
     }
 }
 
-/// `unit:setThreat(value)`: the player's threat on a creature, as the
-/// server tells it (`/stdtest engine scenario combat`: 5, 6, 10, … as the
-/// fight went): `UNIT_THREAT_LIST_UPDATE(unit)`, the first time also
+/// `unit:setThreat(value [, who])`: the player's threat on a creature, as
+/// the server tells it (`/stdtest engine scenario combat`: 5, 6, 10, … as
+/// the fight went): `UNIT_THREAT_LIST_UPDATE(unit)`, the first time also
 /// `UNIT_THREAT_SITUATION_UPDATE(player)`. `nil`: the player off its list
 /// (its list's update; off the last list, the player's situation too:
 /// recorded, a dead wolf's list left before the player left combat,
-/// `combat`).
+/// `combat`). With `who` (a group member, a pet): that unit's threat on it
+/// instead, the list's update, and `UNIT_THREAT_SITUATION_UPDATE(unit)`
+/// for each unit whose situation it changed (unverified: the order, and
+/// the event for a unit whose status only changed on one of several
+/// lists).
 fn control_set_threat(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = this(vm, &c)?;
+    let who = match c.arg(3) {
+        Value::Nil => PLAYER,
+        v => handle_of(vm, v).ok_or_else(|| vm.error("setThreat(value, who): who is a unit"))?,
+    };
+    if who == me {
+        return Err(vm.error("setThreat: a creature isn't on its own threat list"));
+    }
+    if who != PLAYER {
+        let value = match c.arg(2) {
+            Value::Nil => None,
+            _ => Some(vm.check_number(&c, 2)?),
+        };
+        let before = situations(vm);
+        let list = &mut engine_mut(vm).units.list[me.0].threat_others;
+        list.retain(|(u, _)| *u != who);
+        if let Some(v) = value {
+            list.push((who, v));
+        }
+        fire_unit(vm, "UNIT_THREAT_LIST_UPDATE", me, &[]);
+        tell_situations(vm, &before);
+        return Ok(vec![]);
+    }
+    let before = situations(vm);
     if c.arg(2).is_nil() {
         engine_mut(vm).units.list[me.0].threat = None;
         engine_mut(vm).units.list[me.0].listed_dead = false;
@@ -1928,6 +1964,7 @@ fn control_set_threat(vm: &mut Vm, c: NativeCall) -> Ret {
             engine_mut(vm).units.threat_situation = false;
             fire_unit(vm, "UNIT_THREAT_SITUATION_UPDATE", PLAYER, &[]);
         }
+        tell_others(vm, &before);
         return Ok(vec![]);
     }
     let value = vm.check_number(&c, 2)?;
@@ -1938,24 +1975,109 @@ fn control_set_threat(vm: &mut Vm, c: NativeCall) -> Ret {
         engine_mut(vm).units.threat_situation = true;
         fire_unit(vm, "UNIT_THREAT_SITUATION_UPDATE", PLAYER, &[]);
     }
+    tell_others(vm, &before);
     Ok(vec![])
 }
 
-/// The player's threat on `mob`: whether tanking, the status, the scaled
-/// and raw percentages, the value; none without threat (recorded:
-/// `true, 3, 100, 255, 5` alone on a wolf's list, before it turned on the
-/// player). A dead one keeps the player's entry, its last value, until the
-/// player leaves combat (recorded, `quest`: 4 of 4 corpses targeted again
-/// before the combat's end, 45, 44, 44 and 17; 4 of 4 after it, none).
-/// Unverified: others on the list (here the player is alone).
+/// Every unit on a threat list, with its situation (`UnitThreatSituation`
+/// without a mob: its highest status).
+fn situations(vm: &Vm) -> Vec<(UnitId, Option<f64>)> {
+    let mut on: Vec<UnitId> = vec![PLAYER];
+    for m in &engine(vm).units.list {
+        for (u, _) in &m.threat_others {
+            if !on.contains(u) {
+                on.push(*u);
+            }
+        }
+    }
+    on.into_iter().map(|u| (u, situation(vm, u))).collect()
+}
+
+fn situation(vm: &Vm, unit: UnitId) -> Option<f64> {
+    (0..engine(vm).units.list.len())
+        .filter_map(|i| threat_of(vm, unit, UnitId(i)).map(|t| t.1))
+        .reduce(f64::max)
+}
+
+/// `UNIT_THREAT_SITUATION_UPDATE` for each unit whose situation changed
+/// since `before` (and each unit new on a list).
+fn tell_situations(vm: &mut Vm, before: &[(UnitId, Option<f64>)]) {
+    tell_changed(vm, before, true);
+}
+
+/// As `tell_situations`, for the units other than the player (whose own
+/// changes the player's path tells as recorded).
+fn tell_others(vm: &mut Vm, before: &[(UnitId, Option<f64>)]) {
+    tell_changed(vm, before, false);
+}
+
+fn tell_changed(vm: &mut Vm, before: &[(UnitId, Option<f64>)], player: bool) {
+    let mut units: Vec<UnitId> = before.iter().map(|(u, _)| *u).collect();
+    for (u, _) in situations(vm) {
+        if !units.contains(&u) {
+            units.push(u);
+        }
+    }
+    for u in units {
+        if u == PLAYER && !player {
+            continue;
+        }
+        let was = before.iter().find(|(b, _)| *b == u).and_then(|(_, s)| *s);
+        if was != situation(vm, u) {
+            fire_unit(vm, "UNIT_THREAT_SITUATION_UPDATE", u, &[]);
+        }
+    }
+}
+
+/// A unit's threat on `mob`: whether tanking, the status, the scaled and
+/// raw percentages, the value; none off its list. Alone on the list:
+/// recorded `true, 3, 100, 255, 5` (the player on a wolf's, before it
+/// turned on the player). A dead one keeps the player's entry, its last
+/// value, until the player leaves combat (recorded, `quest`: 4 of 4
+/// corpses targeted again before the combat's end, 45, 44, 44 and 17; 4
+/// of 4 after it, none). With others on it (unverified, from the API's
+/// documentation): the unit the mob targets holds it (else the highest),
+/// at 3 while no one is above it, 2 once someone is; anyone else 1 above
+/// the holder, else 0, their raw % of the holder's threat, the scaled %
+/// of what pulls it (110% in melee, 130% beyond; the player's distance
+/// to the mob, the others' taken as melee).
 fn threat_of(vm: &Vm, unit: UnitId, mob: UnitId) -> Option<(bool, f64, f64, f64, f64)> {
     let u = &engine(vm).units;
     let m = &u.list[mob.0];
-    if unit != PLAYER || (m.dead && !m.listed_dead) {
+    if m.dead && !m.listed_dead {
         return None;
     }
-    let value = m.threat?;
-    Some((true, 3.0, 100.0, 255.0, value))
+    let mut list: Vec<(UnitId, f64)> = Vec::new();
+    if let Some(v) = m.threat {
+        list.push((PLAYER, v));
+    }
+    if !m.dead {
+        list.extend(m.threat_others.iter().copied());
+    }
+    let value = list.iter().find(|(id, _)| *id == unit)?.1;
+    if list.len() == 1 {
+        return Some((true, 3.0, 100.0, 255.0, value));
+    }
+    let top = list.iter().map(|x| x.1).fold(f64::MIN, f64::max);
+    let holder = m
+        .target
+        .filter(|t| list.iter().any(|(id, _)| id == t))
+        .or_else(|| list.iter().find(|x| x.1 >= top).map(|x| x.0))?;
+    let held = list.iter().find(|(id, _)| *id == holder)?.1;
+    if unit == holder {
+        let status = if value >= top { 3.0 } else { 2.0 };
+        return Some((true, status, 100.0, 100.0, value));
+    }
+    let raw = if held > 0.0 {
+        value / held * 100.0
+    } else {
+        100.0
+    };
+    let melee = unit != PLAYER || m.distance.is_none_or(|d| d <= 5.0);
+    let pull = if melee { 1.1 } else { 1.3 };
+    let scaled = (raw / pull).min(100.0);
+    let status = if value > held { 1.0 } else { 0.0 };
+    Some((false, status, scaled, raw, value))
 }
 
 /// `UnitDetailedThreatSituation(unit, mob)`.

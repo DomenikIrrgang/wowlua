@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,088 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,089 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -832,7 +832,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,088 rules unverified: each rests on Blizzard's
+The engine's code marks 1,089 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -2083,7 +2083,7 @@ page changes only when a rule is added, removed or reworded.
 - [unitinfo.rs](../crates/wowlua-engine/src/unitinfo.rs): Recorded: slots 8 and 10 true (the others unverified).
 - [unitinfo.rs](../crates/wowlua-engine/src/unitinfo.rs): As the client answered (the full probe; facts of Forever's account and systems, unverified for another account).
 
-### units (44)
+### units (45)
 
 - [units.rs](../crates/wowlua-engine/src/units.rs): Unverified until probed: the player's defaults; GUID formats; the order of the events a change fires (a unit event fi...
 - [units.rs](../crates/wowlua-engine/src/units.rs): Each class's ID, file and name (enUS; the client's for Paladin, `UnitClass`; the others unverified).
@@ -2110,7 +2110,8 @@ page changes only when a rule is added, removed or reworded.
 - [units.rs](../crates/wowlua-engine/src/units.rs): As `UnitName` (recorded alike for the player: its first and last name; unverified for a renamed unit, a vehicle's).
 - [units.rs](../crates/wowlua-engine/src/units.rs): `unit:target(other, { echo? })`: the player's `PLAYER_TARGET_CHANGED()` at once and `UNIT_TARGET("player")` when the...
 - [units.rs](../crates/wowlua-engine/src/units.rs): On another: its flags only when the creature is the player's target (the flags come with the targettarget token: reco...
-- [units.rs](../crates/wowlua-engine/src/units.rs): The player's threat on `mob`: whether tanking, the status, the scaled and raw percentages, the value; none without th...
+- [units.rs](../crates/wowlua-engine/src/units.rs): `unit:setThreat(value [, who])`: the player's threat on a creature, as the server tells it (`/stdtest engine scenario...
+- [units.rs](../crates/wowlua-engine/src/units.rs): A unit's threat on `mob`: whether tanking, the status, the scaled and raw percentages, the value; none off its list.
 - [units.rs](../crates/wowlua-engine/src/units.rs): `unit:softTarget(other [, kind])` (the player): the soft target of `kind` ("enemy", "friend", "interact"; by default...
 - [units.rs](../crates/wowlua-engine/src/units.rs): A hostile target on someone: that one's flags, by its tokens with targettarget (recorded, `talents`: the fox on the p...
 - [units.rs](../crates/wowlua-engine/src/units.rs): `C_ClickBindings.GetEffectiveInteractionButton(button, modifiers)`: the default interaction bindings' (a unit frame's...

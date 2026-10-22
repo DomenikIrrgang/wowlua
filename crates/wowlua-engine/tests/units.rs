@@ -114,6 +114,52 @@ return before, tostring(check(plain, true)), tostring(check(tip, true)), tostrin
 }
 
 #[test]
+fn a_threat_list_with_the_group_on_it() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local mob = mock.spawnUnit({ name = 'Mob', reaction = 'hostile', distance = 3 })
+local tank = mock.spawnUnit({ name = 'Tank', player = true, reaction = 'friendly' })
+mock.addToGroup(tank)
+local seen = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('UNIT_THREAT_SITUATION_UPDATE')
+f:SetScript('OnEvent', function(_, _, unit) seen[#seen + 1] = unit end)
+local function row(unit)
+    local tanking, status, scaled, raw, value = UnitDetailedThreatSituation(unit, 'target')
+    return table.concat({ tostring(tanking), tostring(status), tostring(scaled and math.floor(scaled + 0.5)),
+        tostring(raw and math.floor(raw + 0.5)), tostring(value) }, ' ')
+end
+mock.player:target(mob)
+mob:setThreat(1000, tank)
+mob:target(tank)
+local alone = row('party1') .. ' | ' .. tostring(UnitThreatSituation('player', 'target'))
+mob:setThreat(1050)
+local over = row('player') .. ' | ' .. row('party1')
+mob:setThreat(1200)
+local past = row('player') .. ' | ' .. row('party1') .. ' | ' .. tostring(UnitThreatSituation('party1'))
+mob:setThreat(nil, tank)
+local gone = row('player') .. ' | ' .. tostring(UnitThreatSituation('party1', 'target'))
+-- no target: the highest holds it
+mob:setThreat(900, tank)
+mob:target(nil)
+local highest = row('player') .. ' | ' .. row('party1')
+return alone, over, past, gone, highest, table.concat(seen, ' ')",
+    );
+    assert_eq!(
+        r,
+        [
+            "true 3 100 255 1000 | nil",
+            "false 1 95 105 1050 | true 2 100 100 1000",
+            "false 1 100 120 1200 | true 2 100 100 1000 | 2",
+            "true 3 100 255 1200 | nil",
+            "true 3 100 100 1200 | false 0 68 75 900",
+            "party1 player targettarget party1 player targettarget party1 player targettarget party1 player party1"
+        ]
+    );
+}
+
+#[test]
 fn identity_is_secret_on_restricted_maps() {
     let mut vm = vm();
     let r = run(

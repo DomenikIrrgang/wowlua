@@ -199,8 +199,11 @@ export interface MockUnit
     function setInspect(data: { spec?: number, itemLevel?: number, items?: { [number]: { link: string, cached?: boolean } },
                                 received?: number[], config?: table, traitCharacter?: number })
     --- The player's threat on this creature, as the server tells it
-    --- (`nil`: off its list).
-    function setThreat(value: number?)
+    --- (`nil`: off its list); with `who` (a group member, a pet), that
+    --- unit's. Each unit's status follows: the one the creature targets
+    --- (else the highest) holds it, 3 while no one is above, 2 once
+    --- someone is; anyone else 1 above the holder, else 0.
+    function setThreat(value: number?, who: MockUnit?)
     --- The player pressing a spell (as recorded: the power check, the
     --- global cooldown, the cast a round trip later).
     function useSpell(spellID: number)
