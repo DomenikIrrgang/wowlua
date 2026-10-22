@@ -2168,6 +2168,23 @@ print(a, b, c, d, e, name, realm, more)
             "declare class N\n    function SetSize(w: number, h: number)\nend\nclass A extends N\n x: number\n constructor()\n  super()\n  self:SetSize(1, 2)\n  self.x = 1\n end\nend\n",
         );
         strict_ok("class A\n x: number\n constructor() self.x = 1 end\nend\n");
+        // Every path: each branch of an `if` with an `else`, a `do` block.
+        strict_ok(
+            "class A\n x: number\n y: number\n constructor(b: boolean, c: boolean)\n  if b then self.x = 1 elseif c then self.x = 2 else self.x = 3 end\n  do self.y = 1 end\n end\nend\n",
+        );
+        strict_err(
+            "class A\n x: number\n constructor(b: boolean)\n  if b then self.x = 1 end\n end\nend\n",
+            "E2052",
+        );
+        strict_err(
+            "class A\n x: number\n constructor(b: boolean, c: boolean)\n  if b then self.x = 1 elseif c then self.x = 2 else print(1) end\n end\nend\n",
+            "E2052",
+        );
+        // a branch calling the class's method first: it may read the field
+        strict_err(
+            "class A\n x: number\n constructor(b: boolean)\n  if b then self:m() self.x = 1 else self.x = 2 end\n end\n function m() print(self.x) end\nend\n",
+            "E2052",
+        );
         // Parameter properties (decision L35): fields set from the
         // constructor's parameters, with their visibility and readonly.
         strict_ok(

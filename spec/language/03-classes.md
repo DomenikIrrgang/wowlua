@@ -99,7 +99,10 @@ initializers (E3041).
 without an initializer must be assigned on every path through the constructor
 before the constructor returns or calls a method of a wowlua class on `self`
 (E2052). Calls of native methods (`self:SetSize(…)` in a widget class) do not
-end the check, because they cannot read the fields.
+end the check, because they cannot read the fields. A field assigned in every
+branch of an `if` that has an `else` is assigned after it, and so is one
+assigned in a `do` block; a call or `return` that ends the check in any branch
+ends it there.
 
 **Parameter properties** (decision L35). A parameter of a constructor with
 a body may start with `public`, `protected`, `private` and/or `readonly`.

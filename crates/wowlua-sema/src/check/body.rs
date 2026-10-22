@@ -2050,53 +2050,15 @@ impl<'e, 'p> Checker<'e, 'p> {
             } => Some(func),
             _ => None,
         });
-        let mut assigned: FxHashSet<Box<str>> = FxHashSet::default();
-        // What ended the check (`self:m()` or a return), and the fields
-        // assigned only after it, for the message.
-        let mut stop: Option<String> = None;
-        let mut later: FxHashSet<Box<str>> = FxHashSet::default();
+        let mut walk = DefiniteAssignment::default();
         if let Some(f) = ctor {
-            for s in f.body().stmts() {
-                if let StmtKind::Assign { targets, .. } = s.kind() {
-                    for t in targets {
-                        if let ExprKind::Field { obj, name } = t.kind()
-                            && matches!(obj.kind(), ExprKind::Name(n) if n.text() == "self")
-                        {
-                            if stop.is_some() {
-                                later.insert(name.text().into());
-                            } else {
-                                assigned.insert(name.text().into());
-                            }
-                        }
-                    }
-                }
-                if stop.is_some() {
-                    continue;
-                }
-                // A call of a method of wowlua code on `self` (which may read
-                // the fields) or a return ends the check; native methods
-                // (`self:SetSize(…)`) cannot read them.
-                let method = match s.kind() {
-                    StmtKind::Call(e) => match e.kind() {
-                        ExprKind::Method { obj, name, .. } if matches!(obj.kind(), ExprKind::Name(n) if n.text() == "self") => {
-                            Some(name.text())
-                        }
-                        _ => None,
-                    },
-                    _ => None,
-                };
-                let calls_own = method.is_some_and(|m| {
-                    self.env
-                        .instance_member(def, &[], m)
-                        .is_none_or(|(_, owner)| !self.env.def(owner).native)
-                });
-                if calls_own {
-                    stop = method.map(|m| format!("`self:{m}()`, which may read it"));
-                } else if matches!(s.kind(), StmtKind::Return(_)) {
-                    stop = Some("the constructor's `return`".to_string());
-                }
-            }
+            self.definite_block(def, f.body(), &mut walk);
         }
+        let DefiniteAssignment {
+            assigned,
+            stop,
+            later,
+        } = walk;
         for name in required {
             if !assigned.contains(name.text()) {
                 let msg = match &stop {
@@ -2110,6 +2072,91 @@ impl<'e, 'p> Checker<'e, 'p> {
                     ),
                 };
                 self.report("E2052", name.span(), msg);
+            }
+        }
+    }
+
+    /// One block of a constructor for [`Self::definite_assignment`]: the
+    /// fields it assigns on every path, up to a call of the class's own
+    /// method on `self` or a `return` (`stop`); an `if` with an `else`
+    /// assigns what every branch does, a `do` block what it does.
+    fn definite_block(&mut self, def: DefId, b: Block<'_>, w: &mut DefiniteAssignment) {
+        for s in b.stmts() {
+            if let StmtKind::Assign { targets, .. } = s.kind() {
+                for t in targets {
+                    if let ExprKind::Field { obj, name } = t.kind()
+                        && matches!(obj.kind(), ExprKind::Name(n) if n.text() == "self")
+                    {
+                        if w.stop.is_some() {
+                            w.later.insert(name.text().into());
+                        } else {
+                            w.assigned.insert(name.text().into());
+                        }
+                    }
+                }
+            }
+            if w.stop.is_some() {
+                continue;
+            }
+            match s.kind() {
+                StmtKind::Do(inner) => self.definite_block(def, inner, w),
+                StmtKind::If {
+                    then_block,
+                    elseifs,
+                    else_block,
+                    ..
+                } => {
+                    let mut blocks = vec![then_block];
+                    blocks.extend(elseifs.iter().map(|(_, b)| b));
+                    let complete = else_block.is_some();
+                    blocks.extend(else_block);
+                    // Each branch from what is assigned so far; what all of
+                    // them assign is assigned after the `if` when it has an
+                    // `else`. A stop in any branch ends the check.
+                    let mut all: Option<FxHashSet<Box<str>>> = None;
+                    for blk in blocks {
+                        let mut bw = DefiniteAssignment {
+                            assigned: w.assigned.clone(),
+                            stop: None,
+                            later: FxHashSet::default(),
+                        };
+                        self.definite_block(def, blk, &mut bw);
+                        if bw.stop.is_some() && w.stop.is_none() {
+                            w.stop = bw.stop.clone();
+                        }
+                        all = Some(match all {
+                            None => bw.assigned,
+                            Some(a) => a.intersection(&bw.assigned).cloned().collect(),
+                        });
+                    }
+                    if complete && w.stop.is_none() {
+                        w.assigned = all.unwrap_or_default();
+                    }
+                }
+                _ => {
+                    // A call of a method of wowlua code on `self` (which may
+                    // read the fields) or a return ends the check; native
+                    // methods (`self:SetSize(…)`) cannot read them.
+                    let method = match s.kind() {
+                        StmtKind::Call(e) => match e.kind() {
+                            ExprKind::Method { obj, name, .. } if matches!(obj.kind(), ExprKind::Name(n) if n.text() == "self") => {
+                                Some(name.text())
+                            }
+                            _ => None,
+                        },
+                        _ => None,
+                    };
+                    let calls_own = method.is_some_and(|m| {
+                        self.env
+                            .instance_member(def, &[], m)
+                            .is_none_or(|(_, owner)| !self.env.def(owner).native)
+                    });
+                    if calls_own {
+                        w.stop = method.map(|m| format!("`self:{m}()`, which may read it"));
+                    } else if matches!(s.kind(), StmtKind::Return(_)) {
+                        w.stop = Some("the constructor's `return`".to_string());
+                    }
+                }
             }
         }
     }
@@ -2203,6 +2250,15 @@ impl<'e, 'p> Checker<'e, 'p> {
     pub fn is_class_def(&self, d: DefId) -> bool {
         self.env.def(d).kind == DefKind::Class
     }
+}
+
+/// What a constructor assigns (E2052): the fields set on every path so far,
+/// what ended the check, and the fields set only after that.
+#[derive(Default)]
+struct DefiniteAssignment {
+    assigned: FxHashSet<Box<str>>,
+    stop: Option<String>,
+    later: FxHashSet<Box<str>>,
 }
 
 /// Whether the file sets the environment of its own code: `setfenv` with a
