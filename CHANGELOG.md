@@ -12,6 +12,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- `wowlua test --coverage` with a filter (`wowlua test --coverage Units/Threat`) no longer fails on the coverage minimums in `wowlua.json`: they are for the whole suite, and a filtered run's totals still count every file. It used to fail even when all its tests passed.
 - Tests: a group member logging in or out (`member:setOnline(false)`) now sends `UNIT_CONNECTION`, for their target token too, as the game does. Only the roster update came before.
 - Tests: a spell your character learns from a trainer is known afterwards, as in the game: `IsPlayerSpell` and `C_SpellBook.IsSpellKnown` say so. They kept answering as before the training.
 - Tests: your addon's tooltips show in combat, as in the game. `GameTooltip:SetUnit`, `SetSpellByID`, `SetItemByID` and the other setters gave an empty tooltip in a fight because `C_RestrictedActions.CheckAllowProtectedFunctions` refused your addon on any frame; it now refuses only on a protected one (a secure button, UIParent).

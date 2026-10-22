@@ -1706,6 +1706,10 @@ end
         out.contains("functions coverage 50.0% is below the minimum 90%"),
         "{out}"
     );
+    // A run with a filter checks part of the suite: no minimum applies.
+    let (ok, out) = test(dir.path(), &["--coverage", "math"]);
+    assert!(ok, "{out}");
+    assert!(!out.contains("is below the minimum"), "{out}");
 }
 
 /// GitHub annotations for failures.

@@ -458,7 +458,10 @@ fonts and tokens, dark and light), with every file's source, hit counts,
 branch markers and totals per file and folder.
 
 Thresholds in `test.coverage` ([Manifest §9.18](manifest.md#918-test)) set
-minimum percentages per kind; a run below one fails.
+minimum percentages per kind; a run of the whole suite below one fails. A
+run with filters (`wowlua test --coverage Units/Threat`) checks part of the
+suite while its totals still count every source file, so no minimum
+applies to it (decision T250).
 
 ## 16.2 Language server (`wowlua lsp`)
 

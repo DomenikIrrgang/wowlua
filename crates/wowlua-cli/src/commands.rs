@@ -853,7 +853,10 @@ fn test_once(
                 };
                 ok &= done;
             }
-            if let Some(s) = &settings {
+            // (a run with filters checks part of the suite: its totals still
+            // count every source line, so the thresholds are the whole
+            // suite's alone)
+            if let Some(s) = settings.as_ref().filter(|_| filters.is_empty()) {
                 let t = report.totals();
                 for (kind, min, got) in [
                     ("lines", s.lines, t.lines),
