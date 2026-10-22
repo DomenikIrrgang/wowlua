@@ -516,7 +516,11 @@ The checker narrows union types along control flow using:
   not declare (see [Build metadata §6.5](06-meta.md#65-runtime-flavor-checks-shared-mode))
 
 `assert(v)` also returns `v` without `nil` and `false`, so
-`local p = assert(t.profiles)` is non-nil.
+`local p = assert(t.profiles)` is non-nil. Like Lua's, it returns every
+argument it was given (`assert<T, A...>(value: T, ...: A...): (T, A...)`):
+`return assert(x, "msg")` returns two values, which a function declared to
+return one reports (E2001, too many values); write `return (assert(x, "msg"))`
+(decision L38).
 
 **Fields.** A field path of a local or of a declared global (`a.b`, `a.b.c`,
 `G.x`) is narrowed like a local, and assigning it narrows it by the value's

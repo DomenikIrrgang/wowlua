@@ -4,7 +4,7 @@
 -- WoW has no `os` (only the globals `date`, `time` and `difftime`), `io`,
 -- `debug` or `package` (probed in game, decision S37).
 
-declare function assert<T>(value: T, message: any?, ...: any): T
+declare function assert<T, A...>(value: T, ...: A...): (T, A...)
 declare function collectgarbage(option: string?, arg: number?): any
 declare function error(message: any, level: number?): never
 declare function gcinfo(): number

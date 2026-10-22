@@ -2007,6 +2007,20 @@ print(a, b, c, d, e, name, realm, more)
         );
     }
 
+    /// `assert` returns every argument, as Lua's does (decision L38): a
+    /// message passed on is a second result, which a function declared to
+    /// return one value reports; the first result is still the truthy value.
+    #[test]
+    fn assert_returns_its_arguments() {
+        strict_err(
+            "local function a(x: number?, k: string): number\n return assert(x, k)\nend\nprint(a)\n",
+            "E2001",
+        );
+        strict_ok(
+            "local function a(x: number?, k: string): number\n return (assert(x, k))\nend\nlocal function b(x: number?): number return assert(x) end\nlocal v, m = assert(a(1, \"k\"), \"why\")\nlocal s: string = m\nlocal n: number = v\nprint(b, s, n)\n",
+        );
+    }
+
     /// In a default every parameter is in scope, as in Lua: a name of the
     /// parameter itself or a later one is that parameter, not set yet
     /// (E1004), not an outer name it shadows; earlier parameters are set,
