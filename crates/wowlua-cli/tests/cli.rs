@@ -3984,6 +3984,38 @@ end
         .stderr(predicate::str::contains("E1014"));
 }
 
+/// `C.new(…)` at load runs C's constructor and field initializers (its
+/// superclass's too): what they read orders the files (decision T270). A
+/// default instance whose constructor reads another module's export loads
+/// after that module, though its name sorts first.
+#[test]
+fn load_order_follows_constructors() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"ctororder\", \"version\": \"1.0.0\" } }\n",
+            ),
+            (
+                "src/a_queue.wowlua",
+                "import * as log from \"/b_log\"\nclass Base\n    seen: string = log.name\nend\nexport class Queue extends Base\n    constructor(private reporter: string = log.name)\n        super()\n    end\nend\nexport const queue = Queue.new()\n",
+            ),
+            (
+                "src/b_log.wowlua",
+                "import * as q from \"/a_queue\"\nexport const name = \"log\"\nexport function size(): number return q.queue and 1 or 0 end\n",
+            ),
+        ],
+    );
+    let assert = wowlua(dir.path()).arg("build").assert().success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert!(!stderr.contains("W1034"), "{stderr}");
+    let toc = fs::read_to_string(dir.path().join("dist/dev/Ctororder/Ctororder.toc")).unwrap();
+    let pos = |name: &str| toc.find(name).unwrap_or_else(|| panic!("{name}: {toc}"));
+    assert!(pos("b_log") < pos("a_queue"), "{toc}");
+}
+
 /// Files in another flavor's folder of a variable file (`db/[Game]/…`) do
 /// not load in this flavor: they define nothing for its load order (no
 /// W1033), and a build of some flavors leaves the others' out of the TOC.

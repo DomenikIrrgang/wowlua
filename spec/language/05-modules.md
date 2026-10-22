@@ -231,7 +231,10 @@ Each edge is classified by **when** the use happens:
   instance that is certainly of a package class (`self` in that class's
   methods, a local made with `C.new(…)` or `C(…)` in the same file) is the
   class's method or a subclass's override of it, wherever in the package
-  (decision T269). An **interface** method parameter marked `@deferred`
+  (decision T269). A **construction** `C.new(…)` or `C(…)` of a class of
+  the same file, or `I.new(…)` of an imported class `I`, runs C's
+  constructor (its default parameters included) and field initializers,
+  and its superclasses' (decision T270). An **interface** method parameter marked `@deferred`
   makes a call of that method whose receiver the analysis cannot resolve
   (a field typed by the interface: `self.dispatcher:on(name, fn)`) pass it
   to run later; matched by the method's name, as the curated deferred

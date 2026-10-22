@@ -800,9 +800,20 @@ impl<'a> Walker<'a> {
                     value: Some(v),
                     ..
                 } => {
-                    self.body_function(&format!("{class} field {}", name.text()), true, &[], |w| {
-                        w.expr(v);
-                    });
+                    let id = self.body_function(
+                        &format!("{class} field {}", name.text()),
+                        true,
+                        &[],
+                        |w| {
+                            w.expr(v);
+                        },
+                    );
+                    // (run by `new`: decision T270)
+                    self.out.class_methods.push((
+                        class.clone(),
+                        format!("field:{}", name.text()),
+                        id,
+                    ));
                 }
                 ClassMemberKind::Method {
                     name,
@@ -820,7 +831,10 @@ impl<'a> Walker<'a> {
                     func,
                     has_body: true,
                 } => {
-                    self.function(func, &format!("{class} constructor"), true);
+                    let id = self.function(func, &format!("{class} constructor"), true);
+                    self.out
+                        .class_methods
+                        .push((class.clone(), "constructor".to_string(), id));
                 }
                 ClassMemberKind::Getter { name, body, .. } => {
                     self.body_function(
@@ -1511,7 +1525,16 @@ impl<'a> Walker<'a> {
                     }
                     _ => false,
                 };
-                self.record_call(Self::call_target(&c), &arg_infos, 0, e.span(), deferred);
+                // `C.new(…)` / `C(…)` of a class of this file: its
+                // constructor and field initializers (decision T270).
+                let target = match self.instance_of(e) {
+                    Some(class) => CallTarget::ClassMethod {
+                        class,
+                        method: "new".to_string(),
+                    },
+                    None => Self::call_target(&c),
+                };
+                self.record_call(target, &arg_infos, 0, e.span(), deferred);
                 Info::Other
             }
             ExprKind::Method { obj, name, args } | ExprKind::OptMethod { obj, name, args } => {

@@ -299,6 +299,33 @@ pub fn analyze_with(
         }
     }
 
+    // What `C.new(…)` runs: C's and its superclasses' constructors and
+    // field initializers, wherever in the package (decision T270).
+    let construction = |class: &str| -> Vec<(usize, usize)> {
+        let mut chain: Vec<&str> = vec![class];
+        loop {
+            let last = *chain.last().expect("class");
+            let base = usages
+                .iter()
+                .flatten()
+                .flat_map(|u| u.class_bases.iter())
+                .find(|(c, _)| c == last)
+                .map(|(_, b)| b.as_str());
+            match base {
+                Some(b) if !chain.contains(&b) => chain.push(b),
+                _ => break,
+            }
+        }
+        let mut out = Vec::new();
+        for (f, u) in usages.iter().enumerate() {
+            for (c, m, id) in u.iter().flat_map(|u| u.class_methods.iter()) {
+                if chain.contains(&c.as_str()) && (m == "constructor" || m.starts_with("field:")) {
+                    out.push((f, *id));
+                }
+            }
+        }
+        out
+    };
     let resolve = |file: usize, target: &CallTarget| -> Vec<(usize, usize)> {
         match target {
             CallTarget::Local(f) => vec![(file, *f)],
@@ -317,12 +344,30 @@ pub fn analyze_with(
                     (None, Some(f)) => f.clone(),
                     _ => return Vec::new(),
                 };
-                usages[*target_file]
+                if let Some(f) = usages[*target_file]
                     .as_ref()
                     .and_then(|u| u.exported_functions.get(&name))
-                    .map(|f| vec![(*target_file, *f)])
-                    .unwrap_or_default()
+                {
+                    return vec![(*target_file, *f)];
+                }
+                // An imported class's `new` (`import C from …`, `m.C.new(…)`;
+                // decision T270).
+                let new_of = match (export, fields.as_slice()) {
+                    (Some(_), [n]) if n == "new" => true,
+                    (None, [_, n]) if n == "new" => true,
+                    _ => false,
+                };
+                let is_class = usages[*target_file]
+                    .as_ref()
+                    .is_some_and(|u| u.class_methods.iter().any(|(c, _, _)| *c == name));
+                if new_of && is_class {
+                    return construction(&name);
+                }
+                Vec::new()
             }
+            // `new`: the class's and its superclasses' constructors and
+            // field initializers (decision T270).
+            CallTarget::ClassMethod { class, method } if method == "new" => construction(class),
             // The class's method, and its subclasses' overrides, wherever
             // in the package they are (decision T269).
             CallTarget::ClassMethod { class, method } => {

@@ -11,6 +11,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Changed
 
+- The load-order check follows `MyClass.new(…)`: what the constructor (its default arguments included) and the field initializers read while a file loads now orders the files. Before, a default instance built at load could run before the module it reads, inside an import cycle, and fail in game with no warning.
 - The load-order check follows your classes: a method called on `self`, or on an instance you made with `MyClass.new(…)` in the same file, is that class's method (or a subclass's override), so callbacks passed through your own classes no longer count as called at load. Before, such calls were unknown and could report a dependency cycle (E1014) or W1034 that wasn't real.
 - A `readonly` field can only be assigned in its initializer or in its own class's constructor, as documented: assigning it in a method, or in a subclass's constructor, is now an error (E2010).
 - A method replaced on a widget class after it is defined (`MyButton.refresh = newRefresh`, as a plugin might) now reaches the frames the class builds afterwards, its subclasses' too, as a plain class's instances see it. Frames built before keep the method they were given.
