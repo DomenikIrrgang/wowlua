@@ -4287,6 +4287,8 @@ _G.StdFrames = { db = db, changes = function() return changes end }
 "#;
 
 const FRAMES_SCRIPT: &str = r#"Mock.loadAddon("Std")
+-- (drags count screen units: the distances below are in UIParent's)
+local S = UIParent:GetEffectiveScale()
 local db = StdFrames.db
 local function show(label, pos)
     if not pos then
@@ -4296,14 +4298,14 @@ local function show(label, pos)
     print(label, pos.point, pos.relativePoint, math.floor(pos.x + 0.5), math.floor(pos.y + 0.5), pos.width or "-", pos.height or "-", pos.scale or "-")
 end
 -- Dragged into the top right third: anchored there.
-Mock.drag(StdWindow, 300, 250)
+Mock.drag(StdWindow, 300 * S, 250 * S)
 show("dragged", db.window)
 -- Resized by the built-in grip (clamped to the bounds).
 local grip = StdWindow.grip
 for _, f in ipairs(Mock.frames()) do
     if f:GetParent() == StdWindow and f:GetObjectType() == "Button" then grip = f end
 end
-Mock.sizeBy(grip, 300, 50)
+Mock.sizeBy(grip, 300 * S, 50 * S)
 show("resized", db.window)
 -- Ctrl + wheel scales around the anchor.
 Mock.wheel(StdWindow, 1)
@@ -4314,8 +4316,8 @@ Mock.modifiers.CTRL = nil
 show("scaled", db.window)
 -- Locked: nothing moves.
 StdMove:lock(true)
-Mock.drag(StdWindow, -300, 0)
-Mock.sizeBy(grip, -100, 0)
+Mock.drag(StdWindow, -300 * S, 0)
+Mock.sizeBy(grip, -100 * S, 0)
 print("locked", StdMove:isLocked(), grip:IsShown())
 show("still", db.window)
 StdMove:lock(false)
@@ -4325,17 +4327,17 @@ show("reset", db.window)
 print("anchor", StdWindow:GetPoint(1), StdWindow:GetWidth(), StdWindow:GetHeight(), StdWindow:GetScale())
 print("changes", StdFrames.changes())
 -- A modifier is needed to drag the second frame.
-Mock.drag(StdGuarded, 500, 0)
+Mock.drag(StdGuarded, 500 * S, 0)
 show("no shift", db.guarded)
 Mock.modifiers.SHIFT = true
-Mock.drag(StdGuarded, 450, 0)
+Mock.drag(StdGuarded, 450 * S, 0)
 Mock.modifiers.SHIFT = nil
 show("shift", db.guarded)
 -- Protected frames stay put in combat; a restore waits for its end.
 Mock.protect(StdGuarded)
 Mock.fire("PLAYER_REGEN_DISABLED")
 Mock.modifiers.SHIFT = true
-Mock.drag(StdGuarded, -200, 0)
+Mock.drag(StdGuarded, -200 * S, 0)
 Mock.modifiers.SHIFT = nil
 db.guarded = { point = "TOPLEFT", relativePoint = "TOPLEFT", x = 20, y = -20 }
 StdGuardedMove:restore()
@@ -4378,6 +4380,8 @@ fn frames_restore_the_saved_position_at_load() {
         r#"local p, r, rp, x, y = StdWindow:GetPoint(1)
 print("before", p, r:GetName(), rp, x, y)
 Mock.loadAddon("Std")
+-- (drags count screen units: the distances below are in UIParent's)
+local S = UIParent:GetEffectiveScale()
 local point, rel, relPoint, x, y = StdWindow:GetPoint(1)
 print("after", point, rel:GetName(), relPoint, x, y, StdWindow:GetWidth(), StdWindow:GetHeight(), StdWindow:GetScale())
 "#,
@@ -4450,28 +4454,30 @@ frames.movable(free, { store = db, key = "free", editMode = { label = "Std Free"
         )],
         "",
         r#"Mock.loadAddon("Std")
+-- (drags count screen units: the distances below are in UIParent's)
+local S = UIParent:GetEffectiveScale()
 local box, sel = StdBox, Mock.selectionOf(StdBox)
 local function at(f) local p, _, _, x, y = f:GetPoint(1) return p .. " " .. x .. " " .. y end
 print("overlay", sel ~= nil, sel:IsShown(), sel.system:GetSystemName())
-Mock.drag(box, 50, 0)
+Mock.drag(box, 50 * S, 0)
 print("locked outside", StdDB.box)
-Mock.drag(StdFree, 50, 0)
+Mock.drag(StdFree, 50 * S, 0)
 print("lock = false", StdDB.free ~= nil)
 Mock.editMode(true)
 print("in edit mode", sel:IsShown(), sel.mode)
-Mock.drag(sel, 100, 0)
+Mock.drag(sel, 100 * S, 0)
 print("Modern", at(box), StdDB.box.layouts.Modern.x, StdDB.box.x)
 Mock.script(sel, "OnMouseDown", "LeftButton")
 print("selected", sel.mode, Mock.editModeCleared)
 Mock.editModeSwitch("Raid")
 print("Raid (no own position)", at(box))
-Mock.drag(sel, 0, -100)
+Mock.drag(sel, 0, -100 * S)
 print("Raid moved", at(box), StdDB.box.layouts.Raid.y)
 Mock.editModeSwitch("Modern")
 print("Modern again", at(box))
 Mock.editMode(false)
 print("left", sel:IsShown())
-Mock.drag(box, 50, 0)
+Mock.drag(box, 50 * S, 0)
 print("locked again", at(box))
 "#,
     );
@@ -4528,11 +4534,13 @@ _G.StdFrames = { store = store }
         "",
         r#"local wrap: (v: any) -> any = (_G :: any).secretwrap
 Mock.loadAddon("Std")
+-- (drags count screen units: the distances below are in UIParent's)
+local S = UIParent:GetEffectiveScale()
 local store = StdFrames.store
 local w = StdWindow :: any
 -- Anchored to a restricted frame: its edges read as secret.
 w.GetLeft = function() return wrap(10) end
-Mock.drag(StdWindow, 100, 0)
+Mock.drag(StdWindow, 100 * S, 0)
 Mock.modifiers.CTRL = true
 Mock.wheel(StdWindow, 2)
 Mock.modifiers.CTRL = nil
