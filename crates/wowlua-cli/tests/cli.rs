@@ -1372,7 +1372,8 @@ fn check_lua_flavors_share_what_checks_the_same() {
 /// function's parameters, a spell cooldown is a readable table with possibly
 /// secret fields (C34: an item cooldown's are plain), the client's own
 /// number globals are declared, named frames have their mixins' methods
-/// (C35), a unit's name may be absent.
+/// (C35), a unit's name may be absent, the cursor's info is its kind and
+/// details.
 #[test]
 fn camelot_declarations_follow_the_client() {
     let dir = tempfile::tempdir().unwrap();
@@ -1420,7 +1421,10 @@ ChatFrame1:AddMessage("hi", 1, 1, 1)
 PlayerFrame:ApplySystemAnchor()
 local unitName, unitRealm = UnitName("party2")
 local named: string = unitName
-print(cancel, zoom, maxZoom, secretTable, completion, known, tabCost, conditionText, active, started, party, location, itemStarted, unitRealm, named)
+local cursorKind, cursorID = GetCursorInfo()
+local held: string? = cursorKind
+local heldID: number = cursorID
+print(cancel, zoom, maxZoom, secretTable, completion, known, tabCost, conditionText, active, started, party, location, itemStarted, unitRealm, named, held, heldID)
 "#,
             ),
         ],

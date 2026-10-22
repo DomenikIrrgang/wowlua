@@ -119,7 +119,21 @@ fn corrections(d: &mut Decls) {
     {
         channel_target(sig);
     }
+    cursor_info(d);
     unit_names(d);
+}
+
+/// `GetCursorInfo` is documented without results; the client answers the
+/// cursor's kind, then its details, which differ by kind, or nothing with
+/// an empty cursor (recorded on camelot: `"spell", slot, "spell",
+/// spellID`; `"macro", index`; `"item", itemID, link`; the cursor
+/// fixtures).
+fn cursor_info(d: &mut Decls) {
+    for sig in d.functions.get_mut("GetCursorInfo").into_iter().flatten() {
+        if sig.returns.is_empty() {
+            sig.returns = vec!["string?".into(), "...any".into()];
+        }
+    }
 }
 
 /// The unit name functions answer nothing for a unit that does not exist,

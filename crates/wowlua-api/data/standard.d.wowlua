@@ -19866,7 +19866,7 @@ declare function CursorHasSpell(): boolean
 declare function DeleteCursorItem()
 declare function DropCursorMoney()
 declare function EquipCursorItem(slot: number)
-declare function GetCursorInfo()
+declare function GetCursorInfo(): (string?, ...any)
 declare function GetCursorMoney(): number
 declare function PickupPlayerMoney(amount: WOWMONEY)
 declare function ResetCursor()

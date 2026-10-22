@@ -325,7 +325,10 @@ The WoW API is typed by **pre-generated `types` packages**, one per flavor:
    events with payloads, and secret-value annotations (→ `Secret<T>`, see
    [Types §2.11](../language/02-types.md#211-secret-values)). It is loaded by
    executing the documentation tables in a sandboxed Lua VM, as existing
-   community tools do.
+   community tools do. Where it is wrong or incomplete against the client
+   (a recording or Blizzard's own calls), the generator corrects it, each
+   with its evidence: `C_Timer`'s handles, the unit name functions' absent
+   values, `GetCursorInfo`'s results (decision T259), and others.
 2. **Enrichment: Ketho's vscode-wow-api annotations** (MIT). They are
    converted from LuaLS `---@` annotations and merged where they add
    information that Blizzard's documentation lacks: widget class hierarchies

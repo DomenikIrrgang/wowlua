@@ -13,6 +13,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- `GetCursorInfo()` gives the cursor's kind (`"item"`, `"spell"`, …) and its details to the checker. It was declared without results, so strict code had to read it through `any`.
 - Tests: `ClearPoint("TOPLEFT")` removes just that point, as in the game. Before, it did nothing, so a Blizzard dropdown menu that opens upward near the bottom of the screen kept both points and came out upside down.
 - Tests: `IsMouseOver` measures the mouse against the frame, as in the game: its offsets (`IsMouseOver(12, -12, -24, 24)`) grow or shrink the area, and a child sticking out of its parent is not over the parent. `mock.hover(frame)` and `mock.click` put the mouse on the frame (`GetCursorPosition` follows), and `mock.hover(nil)` takes it off every frame. Before, `IsMouseOver` only asked whether the hovered frame was the frame or one of its children.
 - Tests: an item put on a part stack of the same item in your bags (`C_Container.PickupContainerItem` onto it) stacks onto it, as in the game; whatever doesn't fit stays where it was. It used to stay on the cursor, so a bag sort that puts part stacks together failed in tests.
