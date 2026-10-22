@@ -12,6 +12,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Changed
 
+- A parameter's default can't read that parameter or a later one: in the Lua it compiles to, every parameter is in scope there and not set yet, so `function f(conf: Conf = conf)` or `constructor(private settings: Store = settings.store)` read `nil`, not the outer value wowlua checked them against. That is now an error (E1004); give the parameter another name. A function in a default may still use any parameter.
 - The load-order check follows `MyClass.new(…)`: what the constructor (its default arguments included) and the field initializers read while a file loads now orders the files. Before, a default instance built at load could run before the module it reads, inside an import cycle, and fail in game with no warning.
 - The load-order check follows your classes: a method called on `self`, or on an instance you made with `MyClass.new(…)` in the same file, is that class's method (or a subclass's override), so callbacks passed through your own classes no longer count as called at load. Before, such calls were unknown and could report a dependency cycle (E1014) or W1034 that wasn't real.
 - When a generic call's result doesn't fit where it goes, the error names the call's type alone: `local b: boolean = id(5)` reports `number?`, not `nil | boolean | number`.

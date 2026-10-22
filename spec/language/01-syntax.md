@@ -319,7 +319,12 @@ Default rules:
 
 - A default applies when the argument is `nil`, whether omitted or explicit.
 - Defaults are evaluated at call time, left to right, and may reference earlier
-  parameters.
+  parameters. Every parameter is in scope in a default, as in the Lua it
+  compiles to, so the parameter's own name or a later parameter's names that
+  parameter, which is not set yet: reading it is error E1004, also when it
+  shadows an outer name (`constructor(private settings: Store = settings.store)`
+  reads the parameter; name it differently). A function literal in a default
+  runs later and may read any parameter (decision L37).
 - A parameter with a default has type `T` inside the body and `T?` for callers.
 
 In `function t:m()`, `self` has the type of `t`.

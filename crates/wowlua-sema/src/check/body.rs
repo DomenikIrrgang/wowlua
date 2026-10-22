@@ -125,6 +125,9 @@ pub struct Checker<'e, 'p> {
     pub(crate) live: bool,
     fns: Vec<FnCtx>,
     pub depth: u32,
+    /// While a parameter's default is checked: that parameter and the ones
+    /// after it, not set yet (reading one is E1004).
+    pub(crate) unset_params: FxHashSet<VarId>,
     pub diagnostics: Vec<Diagnostic>,
     pub extra_globals: &'e FxHashSet<String>,
     pub assigned_globals: &'e FxHashSet<String>,
@@ -308,6 +311,7 @@ impl<'e, 'p> Checker<'e, 'p> {
             live: true,
             fns: Vec::new(),
             depth: 0,
+            unset_params: FxHashSet::default(),
             diagnostics: Vec::new(),
             extra_globals: info.extra_globals,
             assigned_globals: info.assigned_globals,
@@ -1770,11 +1774,25 @@ impl<'e, 'p> Checker<'e, 'p> {
                 self.self_owners.insert(id, o);
             }
         }
-        for (p, sp) in f.params.iter().zip(&sig.params) {
+        for (i, (p, sp)) in f.params.iter().zip(&sig.params).enumerate() {
             let declared = p.ty.map(|_| sp.ty);
             let t = match p.default {
                 Some(d) => {
+                    // In Lua every parameter is in scope in a default: this
+                    // one and the later ones are there, not set yet, so a
+                    // name of theirs is theirs, not an outer one (E1004).
+                    self.push_scope();
+                    let mut unset = Vec::new();
+                    for (q, sq) in f.params.iter().zip(&sig.params).skip(i) {
+                        let id = self.declare(q.name.text(), Some(sq.ty), sq.ty, false, None);
+                        self.unset_params.insert(id);
+                        unset.push(id);
+                    }
                     let dt = self.check(d, Some(sp.ty));
+                    self.pop_scope();
+                    for id in unset {
+                        self.unset_params.remove(&id);
+                    }
                     let non_nil = self.env.types.non_nil(sp.ty);
                     if p.ty.is_some() {
                         non_nil

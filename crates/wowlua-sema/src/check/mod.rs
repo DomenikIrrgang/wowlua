@@ -2007,6 +2007,29 @@ print(a, b, c, d, e, name, realm, more)
         );
     }
 
+    /// In a default every parameter is in scope, as in Lua: a name of the
+    /// parameter itself or a later one is that parameter, not set yet
+    /// (E1004), not an outer name it shadows; earlier parameters are set,
+    /// and a function literal in a default runs later (decision L37).
+    #[test]
+    fn defaults_see_every_parameter() {
+        strict_err(
+            "local conf = { size = 1 }\nlocal function f(conf: { size: number } = conf): number return conf.size end\nprint(f)\n",
+            "E1004",
+        );
+        strict_err(
+            "local function f(x: number = y, y: number = 1): number return x + y end\nprint(f)\n",
+            "E1004",
+        );
+        strict_err(
+            "class Box\n constructor(private size: number = size) end\nend\nprint(Box)\n",
+            "E1004",
+        );
+        strict_ok(
+            "local function f(n: number, m: number = n + 1, g: (() -> number)? = function(): number return k end, k: number = 2): number return m + k + (g and g() or 0) end\nprint(f)\n",
+        );
+    }
+
     /// The expected type binds a type parameter only where it fits what
     /// the arguments bound (decision L36): a wider expected type widens it
     /// (strict mode's invariance needs that), a mismatch keeps the

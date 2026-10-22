@@ -46,6 +46,7 @@ warning forms of §B.2's pure Lua files (`W2001`). `wowlua explain
 | E1001 | Undefined global read (strict mode) |
 | E1002 | Implicit global assignment (strict mode) |
 | E1003 | Undefined local or upvalue in a `wowlua` construct (e.g. a decorator argument) |
+| E1004 | A parameter's default reads that parameter or a later one, which is not set yet (in Lua every parameter is in scope there, so the name is the parameter, not an outer one) |
 | E1010 | Assignment to an exported or imported binding |
 | E1011 | Top-level `import` after another (non-import) statement |
 | E1012 | Module has no export with this name |

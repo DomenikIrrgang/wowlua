@@ -734,6 +734,19 @@ impl Checker<'_, '_> {
     /// The type of a name: a local, an import, or a global.
     pub fn name_type(&mut self, n: Name<'_>) -> TypeId {
         if let Some(v) = self.lookup_var(n.text()) {
+            // A parameter read in its own default or an earlier one's,
+            // before it is set (a function literal there runs later).
+            if self.unset_params.contains(&v) && self.vars[v.0 as usize].depth == self.depth {
+                self.report(
+                    "E1004",
+                    n.span(),
+                    format!(
+                        "`{}` here is the parameter, which is not set yet (a default reads only earlier parameters); to read an outer `{}`, give the parameter another name",
+                        n.text(),
+                        n.text()
+                    ),
+                );
+            }
             return self.var_type(v);
         }
         self.check_available(n.text(), n.span());
