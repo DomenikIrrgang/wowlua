@@ -3916,6 +3916,74 @@ fn load_order_api_functions_do_not_call_their_arguments() {
     );
 }
 
+/// A callback passed through a class (`bus:listen` → `self:register` →
+/// `self.dispatcher:on`) to an interface method whose parameter is
+/// `@deferred` runs later: no load-time cycle (decision T269). Without the
+/// mark, the call through the interface is unknown and the callback counts
+/// as called at load.
+#[test]
+fn load_order_follows_classes_and_deferred_interfaces() {
+    let dir = tempfile::tempdir().unwrap();
+    let bus = |deferred: &str| {
+        format!(
+            r#"export interface Dispatcher
+    function on(name: string, {deferred}fn: () -> ())
+end
+class Store implements Dispatcher
+    handlers: {{ [string]: () -> () }} = {{}}
+    function on(name: string, fn: () -> ())
+        self.handlers[name] = fn
+    end
+end
+export class Bus
+    constructor(private dispatcher: Dispatcher = Store.new()) end
+    private function register(name: string, fn: () -> ())
+        self.dispatcher:on(name, fn)
+    end
+    function listen(name: string, fn: () -> ())
+        self:register(name, fn)
+    end
+end
+export const bus = Bus.new()
+export function on(name: string, fn: () -> ())
+    bus:listen(name, fn)
+end
+"#
+        )
+    };
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"busorder\", \"version\": \"1.0.0\" } }\n",
+            ),
+            ("src/Bus.wowlua", &bus("@deferred ")),
+            (
+                "src/Register.wowlua",
+                "import on from \"/Bus\"\nimport * as late from \"/Late\"\nexport function ready(): boolean return true end\non(\"X\", function() print(late.value) end)\n",
+            ),
+            (
+                "src/Late.wowlua",
+                "import ready from \"/Register\"\nexport const value = ready() and 1 or 0\n",
+            ),
+        ],
+    );
+    let assert = wowlua(dir.path()).arg("build").assert().success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert!(
+        !stderr.contains("E1014") && !stderr.contains("W1034"),
+        "{stderr}"
+    );
+    // Without `@deferred` the callback may run at load: a cycle.
+    fs::write(dir.path().join("src/Bus.wowlua"), bus("")).unwrap();
+    wowlua(dir.path())
+        .args(["build", "--message-format", "short"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("E1014"));
+}
+
 /// Files in another flavor's folder of a variable file (`db/[Game]/…`) do
 /// not load in this flavor: they define nothing for its load order (no
 /// W1033), and a build of some flavors leaves the others' out of the TOC.

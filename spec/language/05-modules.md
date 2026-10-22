@@ -227,7 +227,15 @@ Each edge is classified by **when** the use happens:
     time.
 - A function passed to a **package function** counts as called only if that
   function calls the parameter, or passes it on to a callee that does
-  (per-function parameter summaries). Passed to an **unknown** callee, or to a
+  (per-function parameter summaries). A **class method** called on an
+  instance that is certainly of a package class (`self` in that class's
+  methods, a local made with `C.new(…)` or `C(…)` in the same file) is the
+  class's method or a subclass's override of it, wherever in the package
+  (decision T269). An **interface** method parameter marked `@deferred`
+  makes a call of that method whose receiver the analysis cannot resolve
+  (a field typed by the interface: `self.dispatcher:on(name, fn)`) pass it
+  to run later; matched by the method's name, as the curated deferred
+  methods are. Passed to an **unknown** callee, or to a
   parameter not marked `@deferred`, it counts as **called at load time**.
   `pcall`, `xpcall`, `securecallfunction` and `table.sort` comparators run
   immediately anyway. Wrongly assuming load-time at worst reports a cycle that

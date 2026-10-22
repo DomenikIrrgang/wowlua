@@ -323,6 +323,34 @@ pub fn analyze_with(
                     .map(|f| vec![(*target_file, *f)])
                     .unwrap_or_default()
             }
+            // The class's method, and its subclasses' overrides, wherever
+            // in the package they are (decision T269).
+            CallTarget::ClassMethod { class, method } => {
+                let mut family: HashSet<&str> = HashSet::new();
+                family.insert(class.as_str());
+                loop {
+                    let before = family.len();
+                    for u in usages.iter().flatten() {
+                        for (c, base) in &u.class_bases {
+                            if family.contains(base.as_str()) {
+                                family.insert(c.as_str());
+                            }
+                        }
+                    }
+                    if family.len() == before {
+                        break;
+                    }
+                }
+                let mut out = Vec::new();
+                for (f, u) in usages.iter().enumerate() {
+                    for (c, m, id) in u.iter().flat_map(|u| u.class_methods.iter()) {
+                        if m == method && family.contains(c.as_str()) {
+                            out.push((f, *id));
+                        }
+                    }
+                }
+                out
+            }
             CallTarget::Param(_) | CallTarget::Unknown => Vec::new(),
         }
     };
@@ -369,6 +397,22 @@ pub fn analyze_with(
         .into_iter()
         .map(|r| r.into_inner().unwrap_or_default())
         .collect();
+    // Methods the package's interfaces declare with a `@deferred` callback
+    // (decision T269): an unresolved call of one (through an interface)
+    // runs what it is passed later.
+    let interface_deferred: HashSet<&str> = usages
+        .iter()
+        .flatten()
+        .flat_map(|u| u.deferred_methods.iter().map(String::as_str))
+        .collect();
+    let deferred = |call: &crate::usage::Call, r: &Resolved| {
+        call.deferred
+            || (r.targets.is_empty()
+                && call
+                    .method
+                    .as_deref()
+                    .is_some_and(|m| interface_deferred.contains(m)))
+    };
     // An unresolved callee may call what it is passed, unless it is a
     // known API function (`type`, `tinsert`, `C_Map.GetMapInfo`) that calls
     // none of its arguments.
@@ -385,13 +429,11 @@ pub fn analyze_with(
         let mut added = Vec::new();
         for (file, u) in usages.iter().enumerate() {
             for (f, function) in u.iter().flat_map(|u| u.functions.iter().enumerate()) {
-                for (c, call) in function
-                    .calls
-                    .iter()
-                    .enumerate()
-                    .filter(|(_, c)| !c.deferred)
-                {
+                for (c, call) in function.calls.iter().enumerate() {
                     let r = &resolved[file][f][c];
+                    if deferred(call, r) {
+                        continue;
+                    }
                     for (pos, arg) in &call.args {
                         if let CallTarget::Param(p) = arg
                             && !called_params.get(&(file, f)).is_some_and(|s| s.contains(p))
@@ -416,7 +458,7 @@ pub fn analyze_with(
     let is_function = |arg: &CallTarget, targets: &[(usize, usize)]| match arg {
         CallTarget::Local(_) => true,
         CallTarget::Path(_) | CallTarget::Import { .. } => !targets.is_empty(),
-        CallTarget::Param(_) | CallTarget::Unknown => false,
+        CallTarget::Param(_) | CallTarget::ClassMethod { .. } | CallTarget::Unknown => false,
     };
 
     // For every file R: the functions that run while R loads (its top-level
@@ -469,7 +511,7 @@ pub fn analyze_with(
                     .collect();
                 let mut called: Vec<((usize, usize), HashSet<usize>)> =
                     r.targets.iter().map(|t| (*t, given.clone())).collect();
-                if !call.deferred {
+                if !deferred(call, r) {
                     for ((pos, _), targets) in call.args.iter().zip(&r.args) {
                         if calls_arg(&called_params, r, *pos) {
                             called.extend(targets.iter().map(|t| (*t, HashSet::new())));

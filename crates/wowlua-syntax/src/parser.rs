@@ -2745,7 +2745,7 @@ impl<'a> Parser<'a> {
             let name = self.name()?;
             return Ok(InterfaceMemberData::Method {
                 name,
-                sig: self.signature(false)?,
+                sig: self.signature(true)?,
             });
         }
         let readonly = self.is_word("readonly") && self.kind_at(1) == T::Name;

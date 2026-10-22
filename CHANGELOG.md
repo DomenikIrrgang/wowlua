@@ -6,10 +6,12 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### New
 
+- `@deferred` on an interface method's callback parameter (`function on(name: string, @deferred fn: Handler)`) tells the load-order check that every implementation calls it later, so a callback registered through that interface at load time no longer makes files depend on each other.
 - **Parameter properties**: a constructor's parameter can declare a field, as in TypeScript: `constructor(private sink: Sink = printer, public readonly name: string)` makes `self.sink` and `self.name` and sets them from the arguments. A field declared twice is now an error (E3046).
 
 ### Changed
 
+- The load-order check follows your classes: a method called on `self`, or on an instance you made with `MyClass.new(…)` in the same file, is that class's method (or a subclass's override), so callbacks passed through your own classes no longer count as called at load. Before, such calls were unknown and could report a dependency cycle (E1014) or W1034 that wasn't real.
 - A `readonly` field can only be assigned in its initializer or in its own class's constructor, as documented: assigning it in a method, or in a subclass's constructor, is now an error (E2010).
 - A method replaced on a widget class after it is defined (`MyButton.refresh = newRefresh`, as a plugin might) now reaches the frames the class builds afterwards, its subclasses' too, as a plain class's instances see it. Frames built before keep the method they were given.
 

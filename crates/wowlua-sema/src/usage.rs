@@ -89,6 +89,13 @@ pub enum CallTarget {
     },
     /// A parameter of the calling function (forwarded or called).
     Param(usize),
+    /// A method of a class of the package, called on an instance of it:
+    /// `self:m()` in its methods, `x:m()` on a local made with `C.new(…)`
+    /// (the class's method, or a subclass's override; decision T269).
+    ClassMethod {
+        class: String,
+        method: String,
+    },
     Unknown,
 }
 
@@ -101,6 +108,9 @@ pub struct Call {
     pub args: Vec<(usize, CallTarget)>,
     /// The callee runs passed functions later.
     pub deferred: bool,
+    /// A method call's method name: an interface of the package may mark
+    /// it `@deferred` (decision T269).
+    pub method: Option<String>,
     /// Runs only when this parameter of the caller is not a function.
     pub unless_function: Option<usize>,
 }
@@ -129,6 +139,13 @@ pub struct FileUsage {
     pub import_uses: Vec<(String, usize, Span)>,
     /// A write through a dynamic name (`_G[name] = …`, `setfenv`).
     pub dynamic_write: Option<Span>,
+    /// Methods this file's interfaces declare with a `@deferred` callback
+    /// parameter (decision T269): their callers pass it to run later.
+    pub deferred_methods: Vec<String>,
+    /// This file's class methods: (class, method, function).
+    pub class_methods: Vec<(String, String, usize)>,
+    /// This file's classes' superclasses, by name: (class, base).
+    pub class_bases: Vec<(String, String)>,
     /// Two global or `ns` keys holding the same table (`ns.API = SuuUI`):
     /// the fields of one are the fields of the other.
     pub table_aliases: Vec<(Key, Key)>,
@@ -218,6 +235,8 @@ impl Markers {
 #[derive(Clone, Debug)]
 enum Local {
     Plain,
+    /// An instance of a class of this file (`local x = C.new(…)`).
+    Instance(String),
     Function(usize),
     Param(usize),
     /// The addon table (`local _, ns = ...`).
@@ -236,12 +255,20 @@ enum Info {
     GlobalTable,
     Import(String, Vec<String>),
     Param(usize),
+    /// An instance of a class of this file.
+    Instance(String),
     VarargNs,
     Other,
 }
 
 struct Walker<'a> {
     out: FileUsage,
+    /// The method name of the call being recorded (`record_call`).
+    next_method: Option<String>,
+    /// The class whose method body is walked (its `self`).
+    class_ctx: Vec<String>,
+    /// The classes this file declares.
+    classes_here: FxHashSet<String>,
     scopes: Vec<FxHashMap<String, Local>>,
     current: usize,
     markers: &'a Markers,
@@ -359,6 +386,9 @@ impl<'a> Walker<'a> {
                 }],
                 ..FileUsage::default()
             },
+            next_method: None,
+            class_ctx: Vec::new(),
+            classes_here: FxHashSet::default(),
             scopes: vec![FxHashMap::default()],
             current: 0,
             markers,
@@ -711,11 +741,53 @@ impl<'a> Walker<'a> {
     /// A class: `extends` is read and static initializers run while the
     /// file loads; methods, accessors, the constructor and instance field
     /// initializers are functions.
+    /// The class a value is a new instance of: `C.new(…)` or `C(…)` with
+    /// `C` a class of this file.
+    fn instance_of(&self, e: Expr<'_>) -> Option<String> {
+        let (ExprKind::Call { callee, .. } | ExprKind::OptCall { callee, .. }) = e.kind() else {
+            return None;
+        };
+        let class = match callee.kind() {
+            ExprKind::Field { obj, name } if name.text() == "new" => match obj.kind() {
+                ExprKind::Name(n) => n.text(),
+                _ => return None,
+            },
+            ExprKind::Name(n) => n.text(),
+            _ => return None,
+        };
+        self.classes_here.contains(class).then(|| class.to_string())
+    }
+
+    /// An interface's methods with a `@deferred` callback parameter
+    /// (decision T269).
+    fn interface_decl(&mut self, i: InterfaceDecl<'_>) {
+        for m in &i.members() {
+            if let InterfaceMember::Method { name, sig } = m
+                && sig.params().iter().any(|p| {
+                    p.decorators().iter().any(|d| {
+                        d.path()
+                            .exactly::<1>()
+                            .is_some_and(|[n]| n.text() == "deferred")
+                    })
+                })
+            {
+                self.out.deferred_methods.push(name.text().to_string());
+            }
+        }
+    }
+
     fn class_decl(&mut self, c: ClassDecl<'_>) {
         if let Some(path) = c.extends().and_then(crate::classes::type_path) {
             self.path_read(&path, c.name().span());
+            if let Some(base) = path.last() {
+                self.out
+                    .class_bases
+                    .push((c.name().text().to_string(), base.clone()));
+            }
         }
         let class = c.name().text().to_string();
+        self.classes_here.insert(class.clone());
+        self.class_ctx.push(class.clone());
         for m in c.members() {
             let first = self.out.functions.len();
             let is_static = m.modifiers().contains(&Modifier::Static);
@@ -737,7 +809,12 @@ impl<'a> Walker<'a> {
                     func,
                     has_body: true,
                 } => {
-                    self.function(func, &format!("{class}:{}", name.text()), !is_static);
+                    let id = self.function(func, &format!("{class}:{}", name.text()), !is_static);
+                    if !is_static {
+                        self.out
+                            .class_methods
+                            .push((class.clone(), name.text().to_string(), id));
+                    }
                 }
                 ClassMemberKind::Constructor {
                     func,
@@ -766,6 +843,7 @@ impl<'a> Walker<'a> {
             }
             self.decorators(m.decorators(), first);
         }
+        self.class_ctx.pop();
     }
 
     /// A function without a `Func` (accessors, field initializers).
@@ -821,6 +899,9 @@ impl<'a> Walker<'a> {
                             Local::Ns
                         }
                         _ => match values.get(i) {
+                            Some(value) if self.instance_of(value).is_some() => {
+                                Local::Instance(self.instance_of(value).expect("instance"))
+                            }
                             Some(value) if matches!(value.kind(), ExprKind::Table(_)) => {
                                 let path = (
                                     Key::LocalTable(
@@ -1001,8 +1082,10 @@ impl<'a> Walker<'a> {
             }
             StmtKind::Const { name, value, .. } => {
                 let info = value.as_ref().map(|v| self.expr(*v));
-                let local = match info {
-                    Some(Info::Function(f)) => Local::Function(f),
+                let instance = value.and_then(|v| self.instance_of(v));
+                let local = match (info, instance) {
+                    (Some(Info::Function(f)), _) => Local::Function(f),
+                    (_, Some(class)) => Local::Instance(class),
                     _ => Local::Plain,
                 };
                 self.declare(name.text(), local);
@@ -1058,9 +1141,9 @@ impl<'a> Walker<'a> {
                 self.stmt(inner);
             }
             StmtKind::Class(c) => self.class_decl(c),
+            StmtKind::Interface(i) => self.interface_decl(i),
             StmtKind::Break
             | StmtKind::Continue
-            | StmtKind::Interface(_)
             | StmtKind::Enum(_)
             | StmtKind::TypeAlias(_)
             | StmtKind::Declare(_)
@@ -1270,6 +1353,7 @@ impl<'a> Walker<'a> {
             span,
             args,
             deferred,
+            method: self.next_method.take(),
             unless_function: self.unless_function,
         });
     }
@@ -1333,6 +1417,7 @@ impl<'a> Walker<'a> {
                 Info::Import(b, Vec::new())
             }
             Some(Local::Param(i)) => Info::Param(i),
+            Some(Local::Instance(c)) => Info::Instance(c),
             Some(Local::Plain) => Info::Other,
             None if text == "_G" => Info::GlobalTable,
             None => {
@@ -1460,9 +1545,24 @@ impl<'a> Walker<'a> {
                             fields,
                         }
                     }
+                    // `self` in a class's method (decision T269)
+                    Info::Param(0)
+                        if matches!(obj.kind(), ExprKind::Name(n) if n.text() == "self")
+                            && !self.class_ctx.is_empty() =>
+                    {
+                        CallTarget::ClassMethod {
+                            class: self.class_ctx.last().expect("class").clone(),
+                            method: name.text().to_string(),
+                        }
+                    }
+                    Info::Instance(class) => CallTarget::ClassMethod {
+                        class: class.clone(),
+                        method: name.text().to_string(),
+                    },
                     _ => CallTarget::Unknown,
                 };
                 let deferred = self.markers.deferred_methods.contains(name.text());
+                self.next_method = Some(name.text().to_string());
                 self.record_call(target, &arg_infos, 1, e.span(), deferred);
                 Info::Other
             }
