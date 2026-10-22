@@ -391,12 +391,17 @@ pub(crate) fn pickup_item_at(vm: &mut Vm, source: Source) {
                     release_keeping_lock(vm);
                     merge_later(vm, (fb, fs), (tb, ts), held.count);
                 }
-                // Onto another item: the two swap places, the target
-                // locked at once, then the cursor let go (recorded:
-                // `bags`, the Rough Stone onto a Sharpening Wheel; a
-                // part of a stack, a full stack of the same item:
-                // unverified, nothing).
-                Some(other) if other.id != held.id && held.count >= whole && !other.locked => {
+                // Onto another item, or a part stack onto a full stack of
+                // its own (seen in game, T256): the two swap places, the
+                // target locked at once, then the cursor let go
+                // (recorded: `bags`, the Rough Stone onto a Sharpening
+                // Wheel; a split part onto a full stack: unverified,
+                // nothing).
+                Some(other)
+                    if (other.id != held.id || other.count >= max_stack(vm, held.id))
+                        && held.count >= whole
+                        && !other.locked =>
+                {
                     set_locked(vm, &Source::Bag(tb, ts), true);
                     release_keeping_lock(vm);
                     swap_later(vm, (fb, fs), (tb, ts));

@@ -15,6 +15,9 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- Tests: a frame anchored upside down (its top below its bottom, or its right edge left of its left one) has a size of 0, as in the game, instead of a negative size.
+- Tests: a part stack dropped on a full stack of the same item swaps places with it, as in the game; before, nothing happened.
+- Tests: an accepted quest is watched only while the "auto quest watch" setting (`autoQuestWatch`) is on, as in the game, and a watch you remove stays removed.
 - Tests: `C_GuildInfo.GetMOTD()` (also named `GetGuildRosterMOTD()`) from your addon in combat is blocked, as in the game ("Interface action failed because of an AddOn"). Read the message of the day before the fight, or from `GUILD_MOTD`.
 - Tests: chat windows keep what Blizzard's chat code or your addon sets (`SetChatWindowName`, `SetChatWindowSize`, colour, alpha, shown, locked, docked, saved position and size), and `GetChatWindowInfo` answers it, as in the game. Before, the setters did nothing.
 - A function with two parameters of the same name and types (`function(_: number, _: string)`) no longer fails its runtime check on correct calls: the first `_` was checked against the second's value.

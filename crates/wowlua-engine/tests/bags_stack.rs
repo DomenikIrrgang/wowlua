@@ -113,4 +113,16 @@ mock.advanceTime(1)
 return C.GetContainerItemInfo(1, 2).stackCount, C.GetContainerItemInfo(1, 5).stackCount",
     );
     assert_eq!(r, ["2", "5"]);
+    // A part stack onto a full one of its own: they swap places (seen in
+    // game).
+    let r = run(
+        &mut vm,
+        "local C = C_Container
+C.PickupContainerItem(1, 2)
+C.PickupContainerItem(1, 3)
+local held = tostring((GetCursorInfo()))
+mock.advanceTime(1)
+return held, C.GetContainerItemInfo(1, 2).stackCount, C.GetContainerItemInfo(1, 3).stackCount",
+    );
+    assert_eq!(r, ["nil", "20", "2"]);
 }

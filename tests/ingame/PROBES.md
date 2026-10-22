@@ -54,33 +54,23 @@ engine cannot get otherwise.
    were on high-DPI screens and gave the 2x textures' files and
    coordinates (decision T238); a 1x screen may take the 1x textures (the
    sizes are the same either way).
-9. **A region upside down**: a frame anchored with its TOP below its
-   BOTTOM (and its LEFT right of its RIGHT): `GetHeight`, `GetWidth`,
-   `GetRect`. Why: the engine gives a negative size; Blizzard's scroll
-   boxes check for 0 only and error on a negative one (the Legacy
-   window's challenge list, SuuUI's shorter window).
-10. **Talents the engine doesn't know yet** (a probe to write):
+9. **Talents the engine doesn't know yet** (a probe to write):
    `C_Traits.RefundRank` of a planned rank, `C_ClassTalents.ViewLoadout` /
    `InitializeViewLoadout` of another class, both spec groups' configs
    (`C_SpecializationInfo.GetCombatConfigIDForSpecGroup`), and
    `PLAYER_TALENT_UPDATE` as level 5 is reached. Why: SuuUI's Talents
    tests use a stand-in for these.
-11. **Addon messages restricted?** In a raid out of an instance and out of
+10. **Addon messages restricted?** In a raid out of an instance and out of
    combat: `/dump C_ChatInfo.AreOutgoingAddonChatMessagesRestricted(),
    C_ChatInfo.InChatMessagingLockdown()`, then
    `/dump C_ChatInfo.SendAddonMessage("SuuUI", "x", "RAID")` and whether a
    raid member's SuuUI hears it. Why: the full probe recorded `true` for
    the first (alone, out of combat), so the engine answers `true` always;
    SuuUI's raid planner no longer reads it (its specs were never shared).
-12. **Moving a raid member**: as leader, `SetRaidSubgroup(i, g)`; then
+11. **Moving a raid member**: as leader, `SetRaidSubgroup(i, g)`; then
    `GetRaidRosterInfo(i)` at once and after `GROUP_ROSTER_UPDATE` (with
    `GetTime()` at each). Why: SuuUI's probe saw the update 0.4-0.7 s
    later; the engine moves them and fires it at once.
-13. **A quest accepted with `autoQuestWatch` off**: `/run SetCVar("autoQuestWatch", 0)`,
-   accept a quest, then `/dump C_QuestLog.GetQuestWatchType(id),
-   C_SuperTrack.GetSuperTrackedQuestID()` (and `SetCVar` back to 1). Why:
-   the recording watched and focused an accepted quest; the engine always
-   does, so SuuUI's "Track accepted quests" off changes nothing in a test.
 
 ## The answers battery's new calls
 
@@ -234,22 +224,7 @@ A screenshot of the output or the values typed back is enough.
    `C_SpellBook.PickupSpellBookItem` is (decision T253), then
    `/run ClearCursor()`.
 
-10. With two part stacks of one item in your bags that together make more
-    than a full stack (by hand; it only moves your own items): drag one
-    onto the other, then split a few off a stack (Shift-click) and drop
-    them on another part stack, and drag a part stack onto a full one.
-    Whether the first fills the target and leaves the rest where it was,
-    the split part stacks, and the full stack swaps or refuses (decision
-    T256: only ten onto four of twenty is recorded). SuuUI's
-    `/suu probe bagsort` records the events of the first.
-
-11. Anywhere, once (decision T257):
-    `/run local f=CreateFrame("Frame",nil,UIParent) f:SetSize(50,50) f:SetPoint("CENTER") C_Timer.After(3,function() print(f:IsMouseOver()) f:Hide() print(f:IsMouseOver()) end)`
-    with the mouse kept in the middle of the screen for three seconds:
-    whether a hidden frame is still under the mouse (the engine says
-    yes).
-
-12. On a rogue (or a druid in cat form), in a fight with a target: a frame
+10. On a rogue (or a druid in cat form), in a fight with a target: a frame
     registered for `UNIT_POWER_UPDATE`, `UNIT_POWER_FREQUENT` and
     `PLAYER_TARGET_CHANGED` printing each with its arguments, then build
     two combo points and
@@ -257,7 +232,7 @@ A screenshot of the output or the values typed back is enough.
     then target another creature and dump again. Why: the engine has no
     combo points (SuuUI's finding V31): their events, and whether they stay
     on the target or with the player.
-13. In a duel with a friend (when one happens anyway): a frame registered
+11. In a duel with a friend (when one happens anyway): a frame registered
     for `UNIT_FACTION` and `PLAYER_TARGET_CHANGED` printing each with its
     arguments, the friend targeted;
     `/dump UnitCanAttack("player", "target"), UnitReaction("target", "player"), UnitIsEnemy("player", "target")`

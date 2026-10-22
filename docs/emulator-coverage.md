@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,097 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,098 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -834,7 +834,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,097 rules unverified: each rests on Blizzard's
+The engine's code marks 1,098 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1141,7 +1141,7 @@ page changes only when a rule is added, removed or reworded.
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): `PickupAction(slot)`: the action onto the cursor, the slot emptied.
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): Takes the item at `source` onto the cursor, or puts the held item back when it came from there; another slot: moves i...
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): Onto a part stack of the same item: stacked onto it, the target locked at once, then the cursor let go (recorded: Suu...
-- [cursor.rs](../crates/wowlua-engine/src/cursor.rs): Onto another item: the two swap places, the target locked at once, then the cursor let go (recorded: `bags`, the Roug...
+- [cursor.rs](../crates/wowlua-engine/src/cursor.rs): Onto another item, or a part stack onto a full stack of its own (seen in game, T256): the two swap places, the target...
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): The bags as a packet tells their updates: the session's order first (`e.setBagOrder`; `bags` told bag 1, the reagent...
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): The items whose counts a packet's moves changed, as the client told them (`bags`' sort and swap): the backpack's slot...
 - [cursor.rs](../crates/wowlua-engine/src/cursor.rs): The server stacked the items (recorded once, SuuUI's `/suu probe bagsort`: ten from bag 5 onto four in bag 1): for ea...
@@ -1846,10 +1846,11 @@ page changes only when a rule is added, removed or reworded.
 - [questinfo.rs](../crates/wowlua-engine/src/questinfo.rs): Sharing a quest: no group member takes it (unverified).
 - [questinfo.rs](../crates/wowlua-engine/src/questinfo.rs): No corpse arrow, no item, no path (unverified).
 
-### quests (8)
+### quests (9)
 
 - [quests.rs](../crates/wowlua-engine/src/quests.rs): Unverified: more than one quest at a giver (a greeting), a quest ended elsewhere, declining, objectives other than it...
 - [quests.rs](../crates/wowlua-engine/src/quests.rs): How near the player must be to talk to an NPC, in yards (unverified: 9.9 was too far).
+- [quests.rs](../crates/wowlua-engine/src/quests.rs): The server took the quest: in the log, watched while `autoQuestWatch` is on (seen in game, decision T267: off, `GetQu...
 - [quests.rs](../crates/wowlua-engine/src/quests.rs): At once, not at the frame's end as a loot's (recorded once, `quest` 122.368: the log's updates after it, out of their...
 - [quests.rs](../crates/wowlua-engine/src/quests.rs): At once, as the turn-in's (recorded once, `quest` 122.537: the health's maximum after it; unverified).
 - [quests.rs](../crates/wowlua-engine/src/quests.rs): `DeclineQuest()`: as closing (unverified).

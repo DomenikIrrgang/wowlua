@@ -136,3 +136,34 @@ return before, C_QuestLog.IsOnQuest(959), #list, list[1] and list[1].questID, se
     );
     assert_eq!(r, ["0", "true", "1", "959", "0"]);
 }
+
+/// A quest accepted with `autoQuestWatch` off is not watched (seen in
+/// game, decision T267; Blizzard's UI still focuses it); with it on,
+/// watched; a watch removed by hand stays removed through the log's
+/// updates.
+#[test]
+fn an_accepted_quest_is_watched_as_auto_quest_watch_says() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local function take(id, name)
+    local giver = mock.spawnUnit({ name = name, reaction = 'friendly' })
+    mock.defineQuest(id, { title = name, giver = giver })
+    giver:setDistance(3)
+    mock.player:interact(giver)
+    mock.advanceTime(1)
+    AcceptQuest()
+    mock.advanceTime(1)
+    return tostring(C_QuestLog.IsOnQuest(id)) .. ' ' .. tostring((C_QuestLog.GetQuestWatchType(id)))
+end
+C_CVar.SetCVar('autoQuestWatch', '0')
+local off = take(959, 'Quartermaster Hale')
+C_CVar.SetCVar('autoQuestWatch', '1')
+local on = take(962, 'Brannoc Ironhand')
+local watches = C_QuestLog.GetNumQuestWatches()
+C_QuestLog.RemoveQuestWatch(962)
+mock.advanceTime(1)
+return off, on, watches, tostring((C_QuestLog.GetQuestWatchType(962))), C_QuestLog.GetNumQuestWatches()",
+    );
+    assert_eq!(r, ["true nil", "true 1", "1", "nil", "0"]);
+}

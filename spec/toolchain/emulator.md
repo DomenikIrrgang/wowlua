@@ -264,7 +264,7 @@ fields and the events' order follow the documentation, unverified.
 region's rectangle, each edge moved by its offset (up or right for a
 positive one), whatever covers it (decision T257; documented). A region
 without points has no rectangle; a hidden one's rectangle still counts
-(unverified). The mouse is off every frame at first; the test runner's
+(seen in game). The mouse is off every frame at first; the test runner's
 hover and click put it on the frame.
 
 The chat windows' settings are kept (decision T263): what
@@ -283,8 +283,14 @@ An item put on a part stack of the same item in the bags stacks onto it
 locked at once, the cursor let go, and a round trip later the source's
 bag update, the target's lock gone, its bag update and
 `BAG_UPDATE_DELAYED`. A split part stacks the same way, and what doesn't
-fit stays in the source slot (both unverified); onto a full stack nothing
-happens (unverified).
+fit stays in the source slot; a part stack put on a full stack of its own
+swaps places with it (all seen in game; their events unverified). A split
+part onto a full stack: nothing (unverified).
+
+An accepted quest is watched only while `autoQuestWatch` is on (decision
+T267; seen in game: off, `GetQuestWatchType` answers nothing for it, and
+Blizzard's UI still focuses it); a watch added or removed by hand stays
+so through the log's updates.
 
 ## 17.6 The engine
 
@@ -314,7 +320,10 @@ The WoW API the VM's code calls, per flavor.
 - **Layout.** A region's rectangle comes from its points as the client
   lays it out: each edge from the points that set it (a `LEFT` and a
   `RIGHT` point give the width, a `TOP` and a `BOTTOM` the height),
-  otherwise its set size placed by the axis's first point; `GetSize`,
+  otherwise its set size placed by the axis's first point. Points that
+  put the right edge left of the left one, or the top below the bottom,
+  give no size: 0, at the `LEFT` and `BOTTOM` points (decision T266; seen
+  in game). `GetSize`,
   `GetWidth` and `GetHeight` give the laid-out size of an anchored region
   (unverified beyond fresh widgets; `/stdtest engine` records
   `layoutSizes`).

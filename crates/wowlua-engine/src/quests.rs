@@ -81,6 +81,8 @@ pub struct Logged {
     pub fulfilled: Vec<f64>,
     pub on_map: bool,
     pub local_poi: bool,
+    /// On the watch list (accepted with `autoQuestWatch` on).
+    pub watched: bool,
 }
 
 #[derive(Default)]
@@ -599,6 +601,20 @@ fn accept_quest(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// A quest of the engine's log watched or not (`AddQuestWatch`,
+/// `RemoveQuestWatch`), so the log's next update keeps it so.
+pub fn set_watched(vm: &mut Vm, id: i64, on: bool) {
+    if let Some(l) = engine_mut(vm)
+        .world
+        .quests
+        .log
+        .iter_mut()
+        .find(|l| l.id == id)
+    {
+        l.watched = on;
+    }
+}
+
 fn quest_of(c: &NativeCall) -> Option<i64> {
     match c.upvals[0] {
         Value::Num(n) => Some(n as i64),
@@ -606,7 +622,10 @@ fn quest_of(c: &NativeCall) -> Option<i64> {
     }
 }
 
-/// The server took the quest: in the log, watched.
+/// The server took the quest: in the log, watched while `autoQuestWatch`
+/// is on (seen in game, decision T267: off, `GetQuestWatchType` answers
+/// nothing for it; it is focused either way; its watch list event then:
+/// unverified, none).
 fn accepted(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(id) = quest_of(&c) else {
         return Ok(vec![]);
@@ -615,6 +634,7 @@ fn accepted(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![]);
     };
     let n = objectives(vm, t).len();
+    let watched = crate::framescript::cvar_get(vm, "autoQuestWatch").is_none_or(|v| v != "0");
     {
         let q = &mut engine_mut(vm).world.quests;
         q.kept = true;
@@ -623,6 +643,7 @@ fn accepted(vm: &mut Vm, c: NativeCall) -> Ret {
             fulfilled: vec![0.0; n],
             on_map: false,
             local_poi: false,
+            watched,
         });
     }
     sync_log(vm);
@@ -635,11 +656,13 @@ fn accepted(vm: &mut Vm, c: NativeCall) -> Ret {
         &format.replacen("%s", &title, 1),
         None,
     );
-    fire(
-        vm,
-        "QUEST_WATCH_LIST_CHANGED",
-        &[Value::Num(id as f64), Value::Bool(true)],
-    );
+    if watched {
+        fire(
+            vm,
+            "QUEST_WATCH_LIST_CHANGED",
+            &[Value::Num(id as f64), Value::Bool(true)],
+        );
+    }
     fire(vm, "QUEST_ACCEPTED", &[Value::Num(id as f64)]);
     let next = vm.native("questTracked", tracked as NativeFn);
     crate::clock::after_engine(vm, 1.0 / 60.0, next);
@@ -1136,7 +1159,7 @@ pub(crate) fn sync_log(vm: &mut Vm) {
         }
     }
     let mut index = 0i64;
-    for (w, l) in log.iter().enumerate() {
+    for l in log.iter() {
         let Some(t) = data(vm, l.id) else { continue };
         let header = text(vm, t, "header");
         let classification = num(vm, t, "questClassification").unwrap_or(7.0);
@@ -1237,8 +1260,10 @@ pub(crate) fn sync_log(vm: &mut Vm) {
         complete_by.insert(l.id, vec![b(done)]);
         titles.insert(l.id, vec![s(&title)]);
         indices.insert(l.id, vec![n(index as f64)]);
-        watch_ids.insert((w + 1) as i64, vec![n(l.id as f64)]);
-        watch_types.insert(l.id, vec![n(1.0)]);
+        if l.watched {
+            watch_ids.insert((watch_ids.len() + 1) as i64, vec![n(l.id as f64)]);
+            watch_types.insert(l.id, vec![n(1.0)]);
+        }
     }
     let shown = index as f64;
     let quests = log.len() as f64;
@@ -1249,7 +1274,8 @@ pub(crate) fn sync_log(vm: &mut Vm) {
     stats.insert("questComplete", Entry::ByIndex(complete_by));
     stats.insert("questTitle", Entry::ByIndex(titles));
     stats.insert("questLogIndex", Entry::ByIndex(indices));
-    stats.insert("questWatches", Entry::One(vec![n(quests)]));
+    let watches = watch_ids.len() as f64;
+    stats.insert("questWatches", Entry::One(vec![n(watches)]));
     stats.insert("questWatchID", Entry::ByIndex(watch_ids));
     stats.insert("questWatchType", Entry::ByIndex(watch_types));
 }

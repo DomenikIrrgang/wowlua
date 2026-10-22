@@ -142,3 +142,20 @@ return stepped, #seen, math.floor(f:GetLeft() + 0.5)",
     );
     assert_eq!(r, ["110@130 120@140 130@150", "0", "140"]);
 }
+
+#[test]
+fn a_region_upside_down_has_no_size_at_its_left_and_bottom_points() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local f = CreateFrame('Frame', nil, UIParent)
+f:SetPoint('TOP', UIParent, 'CENTER', 0, -50)
+f:SetPoint('BOTTOM', UIParent, 'CENTER', 0, 50)
+f:SetPoint('LEFT', UIParent, 'CENTER', 50, 0)
+f:SetPoint('RIGHT', UIParent, 'CENTER', -50, 0)
+local cx, cy = UIParent:GetCenter()
+local l, b, w, h = f:GetRect()
+return f:GetWidth(), f:GetHeight(), l - cx, b - cy, w, h",
+    );
+    assert_eq!(r, ["0", "0", "50", "50", "0", "0"]);
+}

@@ -2985,8 +2985,12 @@ fn bounds_of(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -> Op
     } else {
         w.width * s
     };
+    // A right edge left of the left one, a top below the bottom: no size,
+    // at the left and bottom points (recorded: `GetWidth()` and
+    // `GetHeight()` 0, `GetRect()` at the LEFT and BOTTOM points'
+    // places; decision T266).
     let (x, width) = match (left, right, center_x) {
-        (Some(l), Some(r), _) => (l, r - l),
+        (Some(l), Some(r), _) => (l, (r - l).max(0.0)),
         (Some(l), None, _) => (l, width),
         (None, Some(r), _) => (r - width, width),
         (None, None, Some(c)) => (c - width / 2.0, width),
@@ -2998,7 +3002,7 @@ fn bounds_of(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -> Op
         w.height * s
     };
     let (y, height) = match (bottom, top, center_y) {
-        (Some(b), Some(t), _) => (b, t - b),
+        (Some(b), Some(t), _) => (b, (t - b).max(0.0)),
         (Some(b), None, _) => (b, height),
         (None, Some(t), _) => (t - height, height),
         (None, None, Some(c)) => (c - height / 2.0, height),

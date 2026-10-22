@@ -796,6 +796,7 @@ fn add_quest_watch(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     list.push(quest);
     set_watches(vm, &list, Some(quest), None);
+    crate::quests::set_watched(vm, quest, true);
     fire(
         vm,
         "QUEST_WATCH_LIST_CHANGED",
@@ -816,6 +817,7 @@ fn remove_quest_watch(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     list.retain(|q| *q != quest);
     set_watches(vm, &list, None, Some(quest));
+    crate::quests::set_watched(vm, quest, false);
     fire(
         vm,
         "QUEST_WATCH_LIST_CHANGED",
