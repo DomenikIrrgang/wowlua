@@ -2,7 +2,7 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
-## Unreleased
+## 0.9.6 (2026-10-22)
 
 ### New
 
@@ -11,6 +11,10 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - Tests: choose the screen the game draws on with `"test": { "screen": { "width": 2560, "height": 1440 } }` in `wowlua.json`, or `config({ screen = { ... } })` in one test file, with an optional `dpiScale` and `uiScale` ("Use UI Scale" on). UIParent's size and scale, `GetScreenWidth` and `GetPhysicalScreenSize` follow it. The default is 1920 by 1080.
 - Tests: `mock.setField(t, key, value)` sets any field, `nil` included, until the test ends, and puts it back untainted as `mock.stub` does. Taking a frame or a game API away with an assignment instead leaves Blizzard's field tainted for the rest of the file.
 - A new warning, W2061: `a and nil or b` (or `false` in the middle) always gives `b`, since the `nil` makes the `or` take over. Write an `if`, or `not a and b or nil` when `b` is never `nil` or `false`. It found three such bugs in real code.
+
+### Changed
+
+- Tests: `mock.drag(frame, dx, dy)` and `mock.sizeBy(grip, dw, dh)` move by screen units, as `GetCursorPosition` counts them: a distance in the frame's own units times its `GetEffectiveScale()`. Since UIParent now has the screen's UI scale (0.71 by default), a test that dragged by frame units moves the frame further than before: multiply its distances by the frame's effective scale.
 
 ### Fixed
 
