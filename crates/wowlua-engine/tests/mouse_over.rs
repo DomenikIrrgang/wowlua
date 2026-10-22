@@ -159,3 +159,17 @@ return f:GetWidth(), f:GetHeight(), l - cx, b - cy, w, h",
     );
     assert_eq!(r, ["0", "0", "50", "50", "0", "0"]);
 }
+
+#[test]
+fn a_child_of_a_frame_never_anchored_has_no_rectangle() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local b = CreateFrame('Button', nil, UIParent)
+b:SetSize(200, 30)
+local t = b:CreateTexture()
+t:SetAllPoints()
+return tostring(t:GetWidth()), tostring(t:GetLeft()), select('#', t:GetRect())",
+    );
+    assert_eq!(r, ["0", "nil", "0"]);
+}
