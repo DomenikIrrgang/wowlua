@@ -247,7 +247,8 @@ regions]: attempted from: Button:SetPoint." (decision T252; found in game).
 
 Some global functions are blocked for tainted code in combat lockdown
 only, with `ADDON_ACTION_BLOCKED`: `C_SpellBook.PickupSpellBookItem`
-(decision T253; found in game). Blizzard's own code, the secure drag
+(decision T253; found in game) and `GetGuildRosterMOTD` (decision T265;
+found in game). Blizzard's own code, the secure drag
 handlers among it, may call them.
 
 The encounter timeline keeps addons' timers (`C_EncounterTimeline.

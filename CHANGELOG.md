@@ -15,6 +15,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- Tests: `GetGuildRosterMOTD()` from your addon in combat is blocked, as in the game ("Interface action failed because of an AddOn"). Read the message of the day before the fight, or from `GUILD_MOTD`.
 - Tests: chat windows keep what Blizzard's chat code or your addon sets (`SetChatWindowName`, `SetChatWindowSize`, colour, alpha, shown, locked, docked, saved position and size), and `GetChatWindowInfo` answers it, as in the game. Before, the setters did nothing.
 - A function with two parameters of the same name and types (`function(_: number, _: string)`) no longer fails its runtime check on correct calls: the first `_` was checked against the second's value.
 - `wowlua test --coverage` no longer reports the closing line of a multi-line `return f({ … })` as not run.
