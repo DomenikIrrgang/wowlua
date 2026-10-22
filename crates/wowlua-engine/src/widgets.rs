@@ -269,6 +269,8 @@ pub struct World {
     pub collected: crate::collected::Collected,
     /// The encounter timeline's script events (`timeline.rs`).
     pub timeline: crate::timeline::Timeline,
+    /// The chat windows' settings set since login (`chatwindows.rs`).
+    pub chat_windows: crate::chatwindows::ChatWindows,
 }
 
 impl World {

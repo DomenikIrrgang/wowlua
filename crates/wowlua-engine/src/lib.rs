@@ -22,6 +22,7 @@ pub mod casting;
 pub mod channels;
 pub mod character;
 pub mod chat;
+pub mod chatwindows;
 pub mod clock;
 pub mod collected;
 pub mod collections;
@@ -1148,6 +1149,7 @@ pub(crate) fn own_behaviours(flavor: &str) -> Vec<Behaviours<NativeFn>> {
         Behaviours::new("conditionals", conditionals::behaviours()),
         Behaviours::new("lfg", lfg::behaviours()),
         Behaviours::new("timeline", timeline::behaviours()),
+        Behaviours::new("chatwindows", chatwindows::behaviours()),
         Behaviours::new("guild", guild::behaviours()),
         Behaviours::new("collected", collected::behaviours()),
         Behaviours::new(

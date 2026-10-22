@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,096 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,097 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -62,7 +62,7 @@ ones together):
 
 | Namespace | Functions | Model | Recorded | Fill-in | Generated |
 |-----------|----------:|------:|---------:|--------:|----------:|
-| `(globals)` | 2,102 | 702 | 105 | 1,230 | 65 |
+| `(globals)` | 2,102 | 715 | 102 | 1,220 | 65 |
 | `C_AccountInfo` | 3 | 0 | 0 | 3 | 0 |
 | `C_AccountServices` | 10 | 0 | 4 | 6 | 0 |
 | `C_AccountStore` | 11 | 0 | 0 | 11 | 0 |
@@ -348,14 +348,14 @@ ones together):
 | `math` | 38 | 38 | 0 | 0 | 0 |
 | `string` | 23 | 23 | 0 | 0 | 0 |
 | `table` | 23 | 23 | 0 | 0 | 0 |
-| **All** | 7,175 | 1,575 | 445 | 5,050 | 105 |
+| **All** | 7,175 | 1,588 | 442 | 5,040 | 105 |
 
 By where the function is listed:
 
 | List | Functions | Model | Recorded | Fill-in | Generated |
 |------|----------:|------:|---------:|--------:|----------:|
 | Blizzard's API documentation | 5,111 | 1,009 | 359 | 3,669 | 74 |
-| the client's other C functions (`/stdtest inventory`) | 2,064 | 566 | 86 | 1,381 | 31 |
+| the client's other C functions (`/stdtest inventory`) | 2,064 | 579 | 83 | 1,371 | 31 |
 | the engine's own, in neither list | 6 | 5 | 0 | 1 | 0 |
 
 Of the engine's own, Blizzard's UI code defines these in the client (Lua
@@ -370,11 +370,11 @@ The modules that answer, by how many functions and methods:
 |--------|------|----------------------:|
 | `extras` | fill-in | 1,488 |
 | `widgets` | model | 652 |
-| `globalsinfo` | fill-in | 555 |
+| `globalsinfo` | fill-in | 545 |
 | `content` | fill-in | 522 |
 | `social` | fill-in | 388 |
 | `collections` | fill-in | 377 |
-| `recorded` | recorded | 328 |
+| `recorded` | recorded | 325 |
 | `questinfo` | fill-in | 316 |
 | `systeminfo` | fill-in | 315 |
 | `leftovers2` | fill-in | 312 |
@@ -424,6 +424,7 @@ The modules that answer, by how many functions and methods:
 | `cursor` | model | 15 |
 | `animations` | model | 14 |
 | `bank` | model | 14 |
+| `chatwindows` | model | 13 |
 | `traits` | model | 13 |
 | `widgetdata` | recorded | 13 |
 | `tooltip` | model | 12 |
@@ -833,7 +834,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,096 rules unverified: each rests on Blizzard's
+The engine's code marks 1,097 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1013,6 +1014,10 @@ page changes only when a rule is added, removed or reworded.
 ### chat (1)
 
 - [chat.rs](../crates/wowlua-engine/src/chat.rs): Addon messages: `C_ChatInfo` registers prefixes and sends; a sent message is kept for the test (`sentAddonMessages`),...
+
+### chatwindows (1)
+
+- [chatwindows.rs](../crates/wowlua-engine/src/chatwindows.rs): The chat windows' settings the client keeps (decision T263): what Blizzard's chat code sets (`SetChatWindowName`, `…S...
 
 ### clock (5)
 

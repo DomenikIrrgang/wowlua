@@ -14,6 +14,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- Tests: chat windows keep what Blizzard's chat code or your addon sets (`SetChatWindowName`, `SetChatWindowSize`, colour, alpha, shown, locked, docked, saved position and size), and `GetChatWindowInfo` answers it, as in the game. Before, the setters did nothing.
 - A function with two parameters of the same name and types (`function(_: number, _: string)`) no longer fails its runtime check on correct calls: the first `_` was checked against the second's value.
 - `wowlua test --coverage` no longer reports the closing line of a multi-line `return f({ … })` as not run.
 - `GetCursorInfo()` gives the cursor's kind (`"item"`, `"spell"`, …) and its details to the checker. It was declared without results, so strict code had to read it through `any`.

@@ -265,6 +265,13 @@ without points has no rectangle; a hidden one's rectangle still counts
 (unverified). The mouse is off every frame at first; the test runner's
 hover and click put it on the frame.
 
+The chat windows' settings are kept (decision T263): what
+`SetChatWindowName`, `…Size`, `…Color`, `…Alpha`, `…Shown`, `…Locked`,
+`…Docked`, `…Uninteractable`, `…SavedPosition` and `…SavedDimensions`
+set is what `GetChatWindowInfo`, `GetChatWindowSavedPosition` and
+`GetChatWindowSavedDimensions` answer after, over the recorded answers.
+No events follow (unverified).
+
 `ClearPoint(point)` removes that one point and keeps the others (decision
 T258; documented): Blizzard's menus flip a point this way to open above
 their owner near the screen's bottom.

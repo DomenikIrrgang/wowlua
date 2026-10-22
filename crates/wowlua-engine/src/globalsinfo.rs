@@ -1051,17 +1051,7 @@ const NOTHING: &[&str] = &[
     // The world map's action button (none in the classic game).
     "ClickWorldMapActionButton",
     "UseWorldMapActionButtonSpellOnQuest",
-    // Chat windows and channels (the client keeps their settings).
-    "SetChatWindowSize",
-    "SetChatWindowColor",
-    "SetChatWindowShown",
-    "SetChatWindowDocked",
-    "SetChatWindowLocked",
-    "SetChatWindowAlpha",
-    "SetChatWindowName",
-    "SetChatWindowSavedDimensions",
-    "SetChatWindowSavedPosition",
-    "SetChatWindowUninteractable",
+    // Chat windows and channels (their settings kept: `chatwindows.rs`).
     "RedockChatWindows",
     "ResetChatWindows",
     "ResetChatColors",
