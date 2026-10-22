@@ -997,6 +997,7 @@ impl<'p> Env<'p> {
         }
         // `new`: the constructor, or the superclass's with this class's
         // instance type (spec §3.1.2).
+        let own_ctor = ctor.is_some();
         let new = match ctor {
             Some(t) => t,
             None => {
@@ -1035,6 +1036,46 @@ impl<'p> Env<'p> {
         let mut m = Member::field(new);
         m.readonly = true;
         self.def_mut(def).statics.insert("new".into(), m);
+        // A widget class's `adopt(frame, …)`: the class built on a frame
+        // that exists, of the native type its chain ends in (decision L42).
+        if self.def(def).widget.is_some() {
+            let mut d = def;
+            let mut native = None;
+            while let Some(&b) = self.def(d).bases.first() {
+                let Ty::Named(bd, _) = self.types.get(b).clone() else {
+                    break;
+                };
+                if self.def(bd).native {
+                    native = Some(b);
+                    break;
+                }
+                d = bd;
+            }
+            if let (Some(frame), Ty::Func(f)) = (native, self.types.get(new).clone()) {
+                let mut f = std::sync::Arc::unwrap_or_clone(f);
+                // a root class without a constructor of its own: its `new`
+                // takes CreateFrame's arguments, which an adopted frame has
+                // no use for
+                let root_default = !own_ctor
+                    && self.def(def).bases.first().is_some_and(
+                        |&b| matches!(self.types.get(b), Ty::Named(bd, _) if self.def(*bd).native),
+                    );
+                if root_default {
+                    f.params.clear();
+                }
+                f.params.insert(
+                    0,
+                    Param {
+                        name: Some("frame".into()),
+                        ty: frame,
+                        optional: false,
+                    },
+                );
+                let mut m = Member::field(self.types.func(f));
+                m.readonly = true;
+                self.def_mut(def).statics.insert("adopt".into(), m);
+            }
+        }
     }
 
     /// The globals of `src`'s table, as `collect_values` declares the

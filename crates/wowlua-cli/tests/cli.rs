@@ -3250,6 +3250,12 @@ local early = FancyButton.new(UIParent)
 local C: any = CounterButton
 C.describe = function(): string return "patched" end
 print(early:describe(), CounterButton.new(UIParent):describe(), FancyButton.new(UIParent):describe())
+-- a frame that exists (a secure header's button): the class built on it,
+-- its constructor run, no frame created (L42)
+local existing = CreateFrame("Button", "Existing", UIParent)
+local a = FancyButton.adopt(existing, UIParent)
+a:Click()
+print(a == existing, a:GetText(), a.count, Plain.adopt(CreateFrame("Frame")).__class == Plain, CounterButton.new(UIParent) ~= existing)
 "#,
             ),
         ],
@@ -3261,7 +3267,7 @@ print(early:describe(), CounterButton.new(UIParent):describe(), FancyButton.new(
     fs::write(dist.join("Widgets.toc"), format!("mock.lua\n{toc}")).unwrap();
     assert_eq!(
         run_addon(&dist, "Widgets"),
-        "Clicked 1x Clicked 2x *3 2 3 Button UIPanelButtonTemplate\nonload row\nFrame true true\ncounter patched patched"
+        "Clicked 1x Clicked 2x *3 2 3 Button UIPanelButtonTemplate\nonload row\nFrame true true\ncounter patched patched\ntrue Clicked 1x *3 1 true true"
     );
     // Widget classes cannot define metamethods or accessors.
     for (src, code) in [
@@ -3272,6 +3278,11 @@ print(early:describe(), CounterButton.new(UIParent):describe(), FancyButton.new(
         (
             "class B extends Frame\n get x(): number return 1 end\nend\n",
             "E3043",
+        ),
+        // `adopt` takes a frame of the class's native type (L42).
+        (
+            "class B extends Button\nend\nprint(B.adopt(CreateFrame(\"Frame\")))\n",
+            "E2001",
         ),
     ] {
         fs::write(dir.path().join("src/main.wowlua"), src).unwrap();

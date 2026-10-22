@@ -398,6 +398,13 @@ Rules:
   the frames constructed afterwards, as instances of a plain class see it;
   frames constructed before keep the methods they were given (decision
   T268).
+- `C.adopt(frame, …)` builds the class on a frame that already exists (the
+  buttons a secure group header makes, a frame from a template) instead of
+  creating one: the root class's `super(…)` takes `frame`, the constructor
+  arguments follow it, and the `@script` handlers are installed as by `new`.
+  `frame` must be of the native type the class chain ends in (`Button` for a
+  class extending `Button`). A root class without a constructor of its own
+  takes `frame` alone (decision L42).
 - Widget classes may extend other widget classes (`class FancyButton extends
   CounterButton`). Construction is threaded through a hidden `__ctor(cls, …)`
   so only the root creates the frame.

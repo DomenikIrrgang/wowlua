@@ -1,7 +1,7 @@
 -- wowlua runtime: widget (spec §3.2). Widget classes are mixins applied to
 -- frames created by CreateFrame; construction is threaded through __ctor.
 local SKIP = {
-new = true, __index = true, __name = true, __super = true, __init = true,
+new = true, adopt = true, __index = true, __name = true, __super = true, __init = true,
 __ctor = true, __initFields = true, __mixin = true
 }
 -- The `@script` handlers of a widget class and its superclasses: a handler
@@ -84,9 +84,30 @@ local function flatten(cls)
 end
 -- The class slice (required by this one) comes first.
 local class, finalize = assert(wl.class), assert(wl.finalize)
+-- `C.adopt(frame, …)`: the frame the root's `super(…)` takes for class C
+-- instead of creating one (decision L42).
+local adopting = nil
+function wl.adopted(cls)
+	local a = adopting
+	if a and a.cls == cls then
+		adopting = nil
+		return a.frame
+	end
+	return nil
+end
 function wl.widgetClass(name, super)
 	local cls = class(name, super)
 	cls.new = function(...)
+		-- (an adoption of this class that failed before its frame was taken)
+		if adopting and adopting.cls == cls then
+			adopting = nil
+		end
+		local self = cls.__ctor(cls, ...)
+		installScripts(self, cls)
+		return self
+	end
+	cls.adopt = function(frame, ...)
+		adopting = {frame = frame, cls = cls}
 		local self = cls.__ctor(cls, ...)
 		installScripts(self, cls)
 		return self

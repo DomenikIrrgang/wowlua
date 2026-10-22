@@ -748,10 +748,14 @@ impl<'a> Lowerer<'a> {
                 call(field(at(base, pos), "__ctor", pos), values, pos)
             }
             _ => {
+                // `__wl.adopted(cls) or CreateFrame(…)`: the frame `C.adopt`
+                // gave, else a new one.
                 let mut create_args = vec![self.string(widget, pos)];
                 create_args.extend(args);
                 let create = self.global("CreateFrame", None, pos);
-                let frame = call(create, create_args, pos);
+                let created = call(create, create_args, pos);
+                let adopted = self.wl_call("adopted", vec![cls_arg.clone()], pos);
+                let frame = binary(ir::BinOp::Or, adopted, created, pos);
                 self.wl_call("mixin", vec![frame, cls_arg], pos)
             }
         }
