@@ -2,14 +2,13 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
-## Unreleased
+## 0.9.7 (2026-10-23)
 
 ### New
 
-- W2062 (reading more values than a function gives) now also checks your module functions, the functions you import from your other files, and methods of a file-level table (`function M:Load()`), called as `M:Load()`, `M.Load()` or `self:Load()`. A method can be defined anywhere in the file.
+- A new warning, W2062: reading more values than a function of yours can give, which are always `nil`. wowlua counts what each of its `return`s gives, even when it is declared `...any`, and warns on `local a, b, c = f()` or `select(5, f())` past that. It checks your `local function`s, your module functions, the functions you import from your other files, and the methods of a file-level table (`function M:Load()`) called as `M:Load()`, `M.Load()` or `self:Load()`, wherever in the file they are defined. A common case is a `pcall` helper that returns `a, b, c, d, e, f, g, h`: values 9 and up are lost. To pass every value on, return them through `...`. It found two such bugs in SuuUI.
 - Tests: `mock.drag(frame, dx, dy, frames)` drags over that many frames, so code that follows the mouse in `OnUpdate` while dragging runs as it would in the game. The mouse now starts on the dragged frame and moves with it (`GetCursorPosition`).
 - Tests: `anything` and `ofType("table")` from `wowlua:test` match any value (but `nil`), or any value of a type, inside `toEqual` and `toHaveBeenCalledWith`: `expect(onShow).toHaveBeenCalledWith(anything, "TOOLTIP")`.
-- A new warning, W2062: reading more values than a `local function` of yours can give, which are always `nil`. wowlua counts what each of its `return`s gives, even when it is declared `...any`, and warns on `local a, b, c = f()` or `select(5, f())` past that. A common case is a `pcall` helper that returns `a, b, c, d, e, f, g, h`: values 9 and up are lost. To pass every value on, return them through `...`. It found two such bugs in SuuUI.
 - Tests: the encounter timeline keeps your addon's timers (`C_EncounterTimeline.AddScriptEvent`), as WoW Forever does even with its own timeline off: they are listed, readable (`GetEventInfo`, `GetEventState`, `GetEventTimeRemaining`), can be paused, resumed, finished or cancelled, and end when their time runs out, with the timeline's events.
 - Tests: `mock.postLFGListing(createData)` lists your character in the group finder, as the game's own listing panel does (the listing arrives a moment later with `LFG_LIST_ACTIVE_ENTRY_UPDATE`), and `mock.delistLFG()` takes it down again. Your addon's own `C_LFGList.CreateListing` is blocked, as in the game.
 - Tests: put a group member or a pet on a creature's threat list with `mob:setThreat(value, member)`. `UnitThreatSituation` and `UnitDetailedThreatSituation` then give each of them their status and percentages as the game does: the one the creature attacks holds it, and someone above them is about to pull. `UNIT_THREAT_SITUATION_UPDATE` tells each change. Before, only your own threat could be set, always as the holder.
