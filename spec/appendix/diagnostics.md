@@ -82,7 +82,7 @@ warning forms of §B.2's pure Lua files (`W2001`). `wowlua explain
 | E2040 | Forbidden operation on a possibly secret value (strict mode) |
 | E2050 | Missing parameter type annotation (strict mode) |
 | E2051 | Unknown field added to a sealed table (strict mode) |
-| E2052 | Non-optional class field not definitely assigned in the constructor (strict mode) |
+| E2052 | Non-optional class field not definitely assigned in the constructor (strict mode): before it returns or calls one of its own methods on `self`, which may read the field (the message names that call when the field is assigned after it) |
 | E2053 | Recursive type alias not guarded by a table or function type |
 | E2054 | Conflicting field types in merged `declare interface` declarations |
 | E2056 | Type pack used in an invalid position |

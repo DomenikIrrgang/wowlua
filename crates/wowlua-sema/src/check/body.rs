@@ -2051,6 +2051,10 @@ impl<'e, 'p> Checker<'e, 'p> {
             _ => None,
         });
         let mut assigned: FxHashSet<Box<str>> = FxHashSet::default();
+        // What ended the check (`self:m()` or a return), and the fields
+        // assigned only after it, for the message.
+        let mut stop: Option<String> = None;
+        let mut later: FxHashSet<Box<str>> = FxHashSet::default();
         if let Some(f) = ctor {
             for s in f.body().stmts() {
                 if let StmtKind::Assign { targets, .. } = s.kind() {
@@ -2058,9 +2062,16 @@ impl<'e, 'p> Checker<'e, 'p> {
                         if let ExprKind::Field { obj, name } = t.kind()
                             && matches!(obj.kind(), ExprKind::Name(n) if n.text() == "self")
                         {
-                            assigned.insert(name.text().into());
+                            if stop.is_some() {
+                                later.insert(name.text().into());
+                            } else {
+                                assigned.insert(name.text().into());
+                            }
                         }
                     }
+                }
+                if stop.is_some() {
+                    continue;
                 }
                 // A call of a method of wowlua code on `self` (which may read
                 // the fields) or a return ends the check; native methods
@@ -2079,17 +2090,25 @@ impl<'e, 'p> Checker<'e, 'p> {
                         .instance_member(def, &[], m)
                         .is_none_or(|(_, owner)| !self.env.def(owner).native)
                 });
-                if calls_own || matches!(s.kind(), StmtKind::Return(_)) {
-                    break;
+                if calls_own {
+                    stop = method.map(|m| format!("`self:{m}()`, which may read it"));
+                } else if matches!(s.kind(), StmtKind::Return(_)) {
+                    stop = Some("the constructor's `return`".to_string());
                 }
             }
         }
         for name in required {
             if !assigned.contains(name.text()) {
-                let msg = format!(
-                    "field `{}` is not assigned in the constructor (initialize it, assign it, or make it optional)",
-                    name.text()
-                );
+                let msg = match &stop {
+                    Some(at) if later.contains(name.text()) => format!(
+                        "field `{}` is assigned only after {at}; assign it before",
+                        name.text()
+                    ),
+                    _ => format!(
+                        "field `{}` is not assigned in the constructor (initialize it, assign it, or make it optional)",
+                        name.text()
+                    ),
+                };
                 self.report("E2052", name.span(), msg);
             }
         }

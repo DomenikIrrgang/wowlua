@@ -20,6 +20,10 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - A `readonly` field can only be assigned in its initializer or in its own class's constructor, as documented: assigning it in a method, or in a subclass's constructor, is now an error (E2010).
 - A method replaced on a widget class after it is defined (`MyButton.refresh = newRefresh`, as a plugin might) now reaches the frames the class builds afterwards, its subclasses' too, as a plain class's instances see it. Frames built before keep the method they were given.
 
+### Fixed
+
+- E2052 (a field not assigned in the constructor) says so when the field is assigned, but only after a call of one of the class's own methods on `self`, and names that call; before, it said the field was not assigned at all.
+
 ## 0.9.7 (2026-10-23)
 
 ### New

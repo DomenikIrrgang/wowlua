@@ -72,7 +72,7 @@ pub(crate) static CODES: &[CodeInfo] = &[
     CodeInfo { code: "W2040", summary: "Forbidden operation on a possibly secret value (basic mode)" },
     CodeInfo { code: "E2050", summary: "Missing parameter type annotation (strict mode)" },
     CodeInfo { code: "E2051", summary: "Unknown field added to a sealed table (strict mode)" },
-    CodeInfo { code: "E2052", summary: "Non-optional class field not definitely assigned in the constructor (strict mode)" },
+    CodeInfo { code: "E2052", summary: "Non-optional class field not definitely assigned in the constructor (strict mode): before it returns or calls one of its own methods on `self`, which may read the field (the message names that call when the field is assigned after it)" },
     CodeInfo { code: "E2053", summary: "Recursive type alias not guarded by a table or function type" },
     CodeInfo { code: "E2054", summary: "Conflicting field types in merged `declare interface` declarations" },
     CodeInfo { code: "W2055", summary: "Too many arguments to an unannotated function (basic mode). Replaces the second meaning of W2006." },

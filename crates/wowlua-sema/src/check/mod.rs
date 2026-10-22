@@ -2096,6 +2096,17 @@ print(a, b, c, d, e, name, realm, more)
             "class A\n x: number\n constructor()\n  self:m()\n  self.x = 1\n end\n function m() print(self.x) end\nend\n",
             "E2052",
         );
+        // The message names the call the assignment comes after.
+        let d = check_source(
+            "class A\n x: number\n constructor()\n  self:m()\n  self.x = 1\n end\n function m() print(self.x) end\nend\n",
+            Mode::Strict,
+        );
+        assert!(
+            d.iter().any(|x| x.message
+                == "field `x` is assigned only after `self:m()`, which may read it; assign it before"),
+            "{:#?}",
+            codes(&d)
+        );
         strict_ok(
             "declare class N\n    function SetSize(w: number, h: number)\nend\nclass A extends N\n x: number\n constructor()\n  super()\n  self:SetSize(1, 2)\n  self.x = 1\n end\nend\n",
         );
