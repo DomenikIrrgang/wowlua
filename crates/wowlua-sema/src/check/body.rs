@@ -61,6 +61,8 @@ pub struct FileInfo<'a> {
     pub assigned_globals: &'a FxHashSet<String>,
     /// Imported bindings: local name → type.
     pub imports: FxHashMap<Box<str>, TypeId>,
+    /// The counts of imported functions (W2062), by local name.
+    pub import_caps: FxHashMap<Box<str>, usize>,
     /// The file is a module (top-level `...` is not the addon arguments
     /// for imports; it still is in WoW).
     pub is_module: bool,
@@ -181,6 +183,19 @@ pub struct Checker<'e, 'p> {
     /// The most values a `local function` can give, counted from its own
     /// `return`s when each gives a fixed number (W2062, decision S40).
     pub(crate) result_caps: FxHashMap<VarId, usize>,
+    /// The same for the methods of a file-level table (`function M:f()`,
+    /// `function M.f()`): by the table's variable and the method's name.
+    pub(crate) method_caps: FxHashMap<(VarId, Box<str>), usize>,
+    /// A method's `self`: the table it was defined on (`function M:f()`).
+    pub(crate) self_owners: FxHashMap<VarId, VarId>,
+    /// The table of the method whose body is checked next.
+    pending_self_owner: Option<VarId>,
+    /// Uses of a call whose count wasn't known yet (a method defined
+    /// further down): judged at the file's end.
+    pub(crate) pending_caps: Vec<(super::expr::CapKey, String, super::expr::CapUse)>,
+    /// The counts of this file's exported functions (by export name, the
+    /// file-level locals under `INTERNAL` + name), for importers.
+    pub export_caps: FxHashMap<Box<str>, usize>,
     /// The count of the function body just checked (see `result_caps`).
     last_result_cap: Option<usize>,
     /// The loops being checked, innermost last: the flows of their
@@ -320,6 +335,11 @@ impl<'e, 'p> Checker<'e, 'p> {
             import_vars: FxHashMap::default(),
             next_handler: None,
             result_caps: FxHashMap::default(),
+            method_caps: FxHashMap::default(),
+            self_owners: FxHashMap::default(),
+            pending_self_owner: None,
+            pending_caps: Vec::new(),
+            export_caps: FxHashMap::default(),
             last_result_cap: None,
             loops: Vec::new(),
             base_log: None,
@@ -327,6 +347,9 @@ impl<'e, 'p> Checker<'e, 'p> {
         for (name, &t) in &info.imports {
             let id = c.declare(name, Some(t), t, true, None);
             c.import_vars.insert(name.clone(), id);
+            if let Some(&cap) = info.import_caps.get(name) {
+                c.result_caps.insert(id, cap);
+            }
         }
         c
     }
@@ -637,10 +660,19 @@ impl<'e, 'p> Checker<'e, 'p> {
         self.top_vararg = Some((Types::STRING, ns_ty));
         self.hoist(parse.view().block());
         self.block_stmts(parse.view().block());
+        // Calls of methods defined further down, now that all are known.
+        for (key, callee, use_) in std::mem::take(&mut self.pending_caps) {
+            if let Some(gives) = self.cap_of(&key) {
+                self.report_past(&callee, gives, &use_);
+            }
+        }
         // Importers read an export after the module's top level has run
         // (spec §5.5), so a table has the fields assigned to it since its
         // declaration, and it has escaped: it is sealed (spec §2.4.2).
         for (name, v) in std::mem::take(&mut self.export_vars) {
+            if let Some(&cap) = self.result_caps.get(&v) {
+                self.export_caps.insert(name.clone(), cap);
+            }
             let t = self.var_type(v);
             let t = self.sealed(t);
             self.exports.insert(name, t);
@@ -663,6 +695,10 @@ impl<'e, 'p> Checker<'e, 'p> {
                 };
                 for name in names {
                     if let Some(v) = self.lookup_var(name) {
+                        if let Some(&cap) = self.result_caps.get(&v) {
+                            self.export_caps
+                                .insert(format!("{INTERNAL}{name}").into(), cap);
+                        }
                         let t = self.var_type(v);
                         self.exports.insert(format!("{INTERNAL}{name}").into(), t);
                     }
@@ -1047,10 +1083,19 @@ impl<'e, 'p> Checker<'e, 'p> {
                 // A local function assigned again may hold another
                 // function: its count no longer holds (W2062).
                 for t in targets.iter() {
-                    if let ExprKind::Name(n) = t.kind()
-                        && let Some(var) = self.lookup_var(n.text())
-                    {
-                        self.result_caps.remove(&var);
+                    match t.kind() {
+                        ExprKind::Name(n) => {
+                            if let Some(var) = self.lookup_var(n.text()) {
+                                self.result_caps.remove(&var);
+                            }
+                        }
+                        // a table's method set again (`M.f = g`, `self.f = g`)
+                        ExprKind::Field { obj, name } => {
+                            if let Some(table) = self.cap_table(obj) {
+                                self.method_caps.remove(&(table, name.text().into()));
+                            }
+                        }
+                        _ => {}
                     }
                 }
                 for (i, t) in targets.iter().enumerate() {
@@ -1584,11 +1629,40 @@ impl<'e, 'p> Checker<'e, 'p> {
             _ => None,
         };
         let self_ty = if method { owner } else { None };
+        // A method of a file-level table: its count by table and name.
+        let table = (name.path().len() == if method { 1 } else { 2 })
+            .then(|| self.lookup_var(name.path().at(0).text()))
+            .flatten();
+        let method_name: Option<Box<str>> = table.map(|_| {
+            name.method()
+                .unwrap_or_else(|| name.path().at(1))
+                .text()
+                .into()
+        });
+        if method {
+            self.pending_self_owner = table;
+        }
         let handler = self.next_handler.take();
         let expected = expected
             .and_then(|e| self.as_func(e))
             .or_else(|| handler.as_ref().map(|h| h.0.clone()));
         let t = self.function_body(&FnSig::of(func), expected, self_ty);
+        let cap = self.last_result_cap.take();
+        if let (Some(v), Some(m)) = (table, method_name) {
+            match cap {
+                Some(c) => self.method_caps.insert((v, m), c),
+                None => self.method_caps.remove(&(v, m)),
+            };
+        } else if name.path().len() == 1
+            && !method
+            && let Some(v) = self.lookup_var(name.path().at(0).text())
+        {
+            // (a module's `function f()` is a file-level local)
+            match cap {
+                Some(c) => self.result_caps.insert(v, c),
+                None => self.result_caps.remove(&v),
+            };
+        }
         if let Some(h) = &handler {
             let span = name
                 .method()
@@ -1685,8 +1759,12 @@ impl<'e, 'p> Checker<'e, 'p> {
         self.depth += 1;
         self.live = true;
         self.push_scope();
+        let owner = self.pending_self_owner.take();
         if let Some(st) = self_ty {
-            self.declare("self", Some(st), st, false, None);
+            let id = self.declare("self", Some(st), st, false, None);
+            if let Some(o) = owner {
+                self.self_owners.insert(id, o);
+            }
         }
         for (p, sp) in f.params.iter().zip(&sig.params) {
             let declared = p.ty.map(|_| sp.ty);

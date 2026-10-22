@@ -650,12 +650,19 @@ guard (`if max > 0 then … end`).
 is warning W2061 in every mode (decision S39); write `not a and b or nil`
 when `b` is never falsy, or an `if`.
 
-**A value read past what a function gives** is always `nil`. For a `local
-function` whose every `return` gives a fixed number of values (none ends in
-`...` or in a call that gives an open number), the most it gives is known,
-whatever its declaration says (`...any` included); a name past that in a
-`local` or an assignment whose last value is its call, or `select(n, …)`
-with a literal `n` past it, is warning W2062 in every mode (decision S40).
+**A value read past what a function gives** is always `nil`. For a
+function of the package whose every `return` gives a fixed number of
+values (none ends in `...` or in a call that gives an open number), the
+most it gives is known, whatever its declaration says (`...any` included);
+a name past that in a `local` or an assignment whose last value is its
+call, or `select(n, …)` with a literal `n` past it, is warning W2062 in
+every mode (decisions S40, S41). The functions counted: a `local
+function`, a module's `function f()`, one imported from another module
+(`import f from "./m"`, `import internal`), and the methods of a
+file-level table (`function M:f()`, `function M.f()`), called as `M:f()`,
+`M.f()` or `self:f()` in `M`'s methods, wherever in the file they are
+defined. A function or method assigned again loses its count; the API's
+declared functions are not counted.
 A name starting with `_` takes no value it wants (as for W1003) and is
 skipped: the warning names the first other one.
 A helper meant to pass every value on returns them through `...`

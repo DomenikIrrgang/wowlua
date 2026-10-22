@@ -6,6 +6,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### New
 
+- W2062 (reading more values than a function gives) now also checks your module functions, the functions you import from your other files, and methods of a file-level table (`function M:Load()`), called as `M:Load()`, `M.Load()` or `self:Load()`. A method can be defined anywhere in the file.
 - Tests: `mock.drag(frame, dx, dy, frames)` drags over that many frames, so code that follows the mouse in `OnUpdate` while dragging runs as it would in the game. The mouse now starts on the dragged frame and moves with it (`GetCursorPosition`).
 - Tests: `anything` and `ofType("table")` from `wowlua:test` match any value (but `nil`), or any value of a type, inside `toEqual` and `toHaveBeenCalledWith`: `expect(onShow).toHaveBeenCalledWith(anything, "TOOLTIP")`.
 - A new warning, W2062: reading more values than a `local function` of yours can give, which are always `nil`. wowlua counts what each of its `return`s gives, even when it is declared `...any`, and warns on `local a, b, c = f()` or `select(5, f())` past that. A common case is a `pcall` helper that returns `a, b, c, d, e, f, g, h`: values 9 and up are lost. To pass every value on, return them through `...`. It found two such bugs in SuuUI.

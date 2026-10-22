@@ -269,6 +269,8 @@ pub fn check_package_full(
     // the ones checked first see the others' exports as their annotations
     // declare them.
     let mut exports: FxHashMap<usize, FxHashMap<Box<str>, TypeId>> = FxHashMap::default();
+    // Their exported functions' counts (W2062).
+    let mut export_caps: FxHashMap<usize, FxHashMap<Box<str>, usize>> = FxHashMap::default();
     // Modules of a cycle not checked yet: `exports` holds only what their
     // annotations give (W1036 where another reads the rest).
     let mut early: FxHashSet<usize> = FxHashSet::default();
@@ -309,6 +311,7 @@ pub fn check_package_full(
             assigned_globals,
             shared,
             exports: &exports,
+            export_caps: &export_caps,
             early: &early,
         };
         // A plain Lua file reads nothing of other files but the
@@ -431,6 +434,7 @@ pub fn check_package_full(
             env.types.rollback(cp);
         }
         exports.insert(i, out.exports);
+        export_caps.insert(i, out.export_caps);
         early.remove(&i);
     }
     private_methods.extend(env.renamable_defs.iter().copied());
@@ -598,6 +602,7 @@ struct FileCtx<'a> {
     assigned_globals: &'a FxHashSet<String>,
     shared: Option<&'a flavors::SharedFlavors>,
     exports: &'a FxHashMap<usize, FxHashMap<Box<str>, TypeId>>,
+    export_caps: &'a FxHashMap<usize, FxHashMap<Box<str>, usize>>,
     early: &'a FxHashSet<usize>,
 }
 
@@ -609,6 +614,7 @@ struct FileOutcome {
     private_methods: Vec<(wowlua_span::Span, types::DefId)>,
     global_classes: Vec<types::DefId>,
     exports: FxHashMap<Box<str>, TypeId>,
+    export_caps: FxHashMap<Box<str>, usize>,
 }
 
 /// Compile-time tests of `wowlua:test` (decision T219): a function with
@@ -715,8 +721,10 @@ fn check_file_in(
         private_methods: Vec::new(),
         global_classes: Vec::new(),
         exports: FxHashMap::default(),
+        export_caps: FxHashMap::default(),
     };
     let imports = import_types(env, ctx, i, &mut out.diagnostics);
+    let import_caps = import_caps(ctx, i);
     let info = FileInfo {
         intrinsics: crate::stdlib::Intrinsics::of(ctx.analysis, i, parse),
         index: i,
@@ -725,6 +733,7 @@ fn check_file_in(
         extra_globals: ctx.extra_globals,
         assigned_globals: ctx.assigned_globals,
         imports,
+        import_caps,
         is_module: ctx.analysis.modules[i]
             .as_ref()
             .is_some_and(|m| m.is_module),
@@ -830,6 +839,7 @@ fn check_file_in(
     out.global_classes
         .extend(std::mem::take(&mut checker.global_classes));
     out.exports = std::mem::take(&mut checker.exports);
+    out.export_caps = std::mem::take(&mut checker.export_caps);
     expected_errors(&info.intrinsics, parse, &mut checker.diagnostics);
     out.diagnostics.append(&mut checker.diagnostics);
     out.diagnostics.append(&mut env.diagnostics);
@@ -942,6 +952,46 @@ fn annotated_exports(
         }
     }
     env.diagnostics.truncate(reported);
+    out
+}
+
+/// The counts of a file's imported functions (W2062), by local name: those
+/// of modules checked before it (a cycle's later ones have none yet).
+fn import_caps(ctx: &FileCtx<'_>, file: usize) -> FxHashMap<Box<str>, usize> {
+    let mut out = FxHashMap::default();
+    let (Some(parse), Some(info)) = (ctx.files[file].parse, &ctx.analysis.modules[file]) else {
+        return out;
+    };
+    for s in parse.view().block().stmts() {
+        let StmtKind::Import(import) = s.kind() else {
+            continue;
+        };
+        if import.type_only() {
+            continue;
+        }
+        let Some(resolved) = info.imports.iter().find(|r| r.start == s.span().start) else {
+            continue;
+        };
+        let Target::Module(m) = resolved.target else {
+            continue;
+        };
+        let Some(caps) = ctx.export_caps.get(&m).filter(|_| m != file) else {
+            continue;
+        };
+        if let ImportClause::Names(specs) = &import.clause() {
+            for spec in specs {
+                let key = if import.internal() {
+                    format!("{}{}", body::INTERNAL, spec.name.text())
+                } else {
+                    spec.name.text().to_string()
+                };
+                if let Some(&cap) = caps.get(key.as_str()) {
+                    let local = spec.alias.as_ref().unwrap_or(&spec.name);
+                    out.insert(local.text().into(), cap);
+                }
+            }
+        }
+    }
     out
 }
 
@@ -1881,6 +1931,82 @@ end
         }
     }
 
+    /// W2062 beyond local functions (decision S41): a module's `function
+    /// f()`, an imported function, the methods of a file-level table
+    /// (`M:f()`, `M.f()`, `self:f()` in its methods); not a method set
+    /// again, nor an API function.
+    #[test]
+    fn values_past_module_functions_and_methods_are_nil() {
+        let w2062 = |modules: &[(&str, &str)]| -> Vec<String> {
+            module_diagnostics(modules, Mode::Strict)
+                .iter()
+                .filter(|x| x.code == Some("W2062"))
+                .map(|x| x.message.clone())
+                .collect()
+        };
+        let lib = "export function pair(): (number, number) return 1, 2 end
+export function open(...: any): ...any return ... end
+";
+        let main = "import pair, open from \"./lib\"
+local M = {}
+function M:two() return 1, 2 end
+function M.one() return 1 end
+function M:use()
+    local a, b, c = self:two()
+    local l1, l2 = self:late()
+    print(a, b, c, l1, l2)
+end
+function M:late() return 1 end
+local function f() return 1 end
+local x, y = pair()
+local p, q, r = pair()
+local s, t = M:two()
+local u, v = M.one()
+local o1, o2, o3 = open(1, 2, 3)
+print(x, y, p, q, r, s, t, u, v, o1, o2, o3, f)
+";
+        let got = w2062(&[("lib.wowlua", lib), ("main.wowlua", main)]);
+        assert_eq!(got.len(), 4, "{got:#?}");
+        assert!(
+            got.iter()
+                .any(|m| m.contains("`self:two` gives at most 2 values: `c`")),
+            "{got:#?}"
+        );
+        // (defined further down: judged at the file's end)
+        assert!(
+            got.iter()
+                .any(|m| m.contains("`self:late` gives at most 1 value: `l2`")),
+            "{got:#?}"
+        );
+        assert!(
+            got.iter()
+                .any(|m| m.contains("`pair` gives at most 2 values: `r`")),
+            "{got:#?}"
+        );
+        assert!(
+            got.iter()
+                .any(|m| m.contains("`M.one` gives at most 1 value: `v`")),
+            "{got:#?}"
+        );
+        // a module's own `function f()`; a method set again loses its count;
+        // an API function is never counted
+        let own = "export function f() return 1 end
+local a, b = f()
+local M = {}
+function M:two() return 1, 2 end
+M.two = function() return 1, 2, 3 end
+local c, d, e = M:two()
+local name, realm, more = UnitName(\"player\")
+print(a, b, c, d, e, name, realm, more)
+";
+        let got = w2062(&[("own.wowlua", own)]);
+        assert_eq!(got.len(), 1, "{got:#?}");
+        assert!(
+            got[0].contains("`f` gives at most 1 value: `b`"),
+            "{got:#?}"
+        );
+    }
+
     /// A literal binds as its base type at the top level only: inside a
     /// table type the declared element type binds as it is (tables are
     /// invariant).
@@ -2217,6 +2343,15 @@ end
     /// Checks several `.wowlua` modules (path, source) of one package: the
     /// errors, as `code: message`.
     fn check_modules(modules: &[(&str, &str)], mode: Mode) -> Vec<String> {
+        module_diagnostics(modules, mode)
+            .iter()
+            .filter(|x| x.is_error())
+            .map(|x| format!("{}: {}", x.code.unwrap_or("-"), x.message))
+            .collect()
+    }
+
+    /// [`check_modules`]'s diagnostics, warnings too.
+    fn module_diagnostics(modules: &[(&str, &str)], mode: Mode) -> Vec<Diagnostic> {
         let mut db = SourceDb::new();
         let mut parses = Vec::new();
         for (path, text) in wowlua_stdlib_files() {
@@ -2269,10 +2404,7 @@ end
             &HashSet::new(),
             None,
         ));
-        d.iter()
-            .filter(|x| x.is_error())
-            .map(|x| format!("{}: {}", x.code.unwrap_or("-"), x.message))
-            .collect()
+        d
     }
 
     /// A predicate branch no member of its argument reaches is unreachable:

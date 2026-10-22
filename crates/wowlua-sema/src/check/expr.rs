@@ -2,7 +2,7 @@
 //! and globals, tables, fields, operators and calls (arity, generics,
 //! overloads).
 
-use super::body::Checker;
+use super::body::{Checker, VarId};
 use super::env::{DefKind, FnSig, MemberKind, Visibility};
 use super::subst::{self, Subst};
 use super::types::*;
@@ -173,30 +173,17 @@ impl Checker<'_, '_> {
     ) -> Vec<TypeId> {
         let pack = self.expr_pack(es, expected);
         if let Some(last) = es.iter().next_back()
-            && let Some((callee, gives)) = self.result_cap(last)
+            && let Some((callee, key)) = self.cap_key(last)
+            && names.len() > es.len() - 1
         {
-            let total = es.len() - 1 + gives;
-            // a name starting with `_` takes a value it doesn't want (as
-            // for W1003): the first other one past the count
-            if let Some((i, (span, name))) = names
-                .iter()
-                .enumerate()
-                .skip(total)
-                .find(|(_, (_, n))| !n.starts_with('_'))
-            {
-                let more = if names.len() > i + 1 {
-                    " (and the names after it)"
-                } else {
-                    ""
-                };
-                self.report(
-                    "W2062",
-                    *span,
-                    format!(
-                        "`{callee}` gives at most {gives} value{}: `{name}`{more} is always nil",
-                        if gives == 1 { "" } else { "s" }
-                    ),
-                );
+            let use_ = CapUse::Names {
+                before: es.len() - 1,
+                names: names.to_vec(),
+            };
+            match self.cap_of(&key) {
+                Some(gives) => self.report_past(&callee, gives, &use_),
+                // (a method defined further down: judged at the file's end)
+                None => self.pending_caps.push((key, callee, use_)),
             }
         }
         let mut out = pack.types.clone();
@@ -231,35 +218,114 @@ impl Checker<'_, '_> {
         let Some(index) = lit.value() else {
             return;
         };
-        let Some((name, gives)) = self.result_cap(last) else {
+        let Some((name, key)) = self.cap_key(last) else {
             return;
         };
-        let count = exprs.len() - 2 + gives;
-        if index.fract() == 0.0 && index >= 1.0 && index as usize > count {
-            self.report(
-                "W2062",
-                first.span(),
-                format!(
-                    "`{name}` gives at most {gives} value{}: `select({index})` is always nil",
-                    if gives == 1 { "" } else { "s" }
-                ),
-            );
+        if index.fract() != 0.0 || index < 1.0 {
+            return;
+        }
+        let use_ = CapUse::Select {
+            before: exprs.len() - 2,
+            index,
+            span: first.span(),
+        };
+        match self.cap_of(&key) {
+            Some(gives) => self.report_past(&name, gives, &use_),
+            None => self.pending_caps.push((key, name, use_)),
         }
     }
 
-    /// A call of a `local function` whose `return`s each give a fixed
-    /// number of values: its name and the most it gives (W2062).
-    fn result_cap(&self, e: Expr<'_>) -> Option<(String, usize)> {
-        let callee = match e.kind() {
-            ExprKind::Call { callee, .. } | ExprKind::OptCall { callee, .. } => callee,
-            _ => return None,
-        };
-        let ExprKind::Name(n) = callee.kind() else {
+    /// W2062 for a use of `gives` values (see [`CapUse`]).
+    pub(crate) fn report_past(&mut self, callee: &str, gives: usize, use_: &CapUse) {
+        let s = if gives == 1 { "" } else { "s" };
+        match use_ {
+            CapUse::Names { before, names } => {
+                let total = before + gives;
+                // a name starting with `_` takes a value it doesn't want (as
+                // for W1003): the first other one past the count
+                if let Some((i, (span, name))) = names
+                    .iter()
+                    .enumerate()
+                    .skip(total)
+                    .find(|(_, (_, n))| !n.starts_with('_'))
+                {
+                    let more = if names.len() > i + 1 {
+                        " (and the names after it)"
+                    } else {
+                        ""
+                    };
+                    self.report(
+                        "W2062",
+                        *span,
+                        format!("`{callee}` gives at most {gives} value{s}: `{name}`{more} is always nil"),
+                    );
+                }
+            }
+            CapUse::Select {
+                before,
+                index,
+                span,
+            } => {
+                if *index as usize > before + gives {
+                    self.report(
+                        "W2062",
+                        *span,
+                        format!("`{callee}` gives at most {gives} value{s}: `select({index})` is always nil"),
+                    );
+                }
+            }
+        }
+    }
+
+    /// A call of a function of this file (a `local function`, a module's
+    /// `function f()`, an imported one) or a method of a file-level table
+    /// (`M:f()`, `M.f()`, `self:f()` in `M`'s methods) whose `return`s
+    /// each give a fixed number of values: its name and the most it gives
+    /// (W2062).
+    fn cap_key(&self, e: Expr<'_>) -> Option<(String, CapKey)> {
+        match e.kind() {
+            ExprKind::Call { callee, .. } | ExprKind::OptCall { callee, .. } => match callee.kind()
+            {
+                ExprKind::Name(n) => {
+                    let var = self.lookup_var(n.text())?;
+                    Some((n.text().to_string(), CapKey::Var(var)))
+                }
+                ExprKind::Field { obj, name } => {
+                    let table = self.cap_table(obj)?;
+                    Some((
+                        format!("{}.{}", obj_text(obj), name.text()),
+                        CapKey::Method(table, name.text().into()),
+                    ))
+                }
+                _ => None,
+            },
+            ExprKind::Method { obj, name, .. } | ExprKind::OptMethod { obj, name, .. } => {
+                let table = self.cap_table(obj)?;
+                Some((
+                    format!("{}:{}", obj_text(obj), name.text()),
+                    CapKey::Method(table, name.text().into()),
+                ))
+            }
+            _ => None,
+        }
+    }
+
+    /// The count a [`CapKey`] has now, if any.
+    pub(crate) fn cap_of(&self, key: &CapKey) -> Option<usize> {
+        match key {
+            CapKey::Var(v) => self.result_caps.get(v).copied(),
+            CapKey::Method(t, m) => self.method_caps.get(&(*t, m.clone())).copied(),
+        }
+    }
+
+    /// The file-level table a method is looked up on: a variable that holds
+    /// one, or a method's `self` (the table it was defined on).
+    pub(crate) fn cap_table(&self, obj: Expr<'_>) -> Option<VarId> {
+        let ExprKind::Name(n) = obj.kind() else {
             return None;
         };
         let var = self.lookup_var(n.text())?;
-        let cap = *self.result_caps.get(&var)?;
-        Some((n.text().to_string(), cap))
+        Some(self.self_owners.get(&var).copied().unwrap_or(var))
     }
 
     pub fn expr_pack(&mut self, es: Exprs<'_>, expected: &[Option<TypeId>]) -> Pack {
@@ -3713,4 +3779,35 @@ pub fn is_multi(e: Expr<'_>) -> bool {
             | ExprKind::OptMethod { .. }
             | ExprKind::Vararg
     )
+}
+
+/// What a W2062 count is kept under: a variable holding the function, or
+/// a file-level table's method.
+#[derive(Clone, Debug)]
+pub(crate) enum CapKey {
+    Var(VarId),
+    Method(VarId, Box<str>),
+}
+
+/// How a call's values are used: spread over names after `before` other
+/// values, or `select(index, …)` after `before` other arguments.
+#[derive(Clone, Debug)]
+pub(crate) enum CapUse {
+    Names {
+        before: usize,
+        names: Vec<(Span, String)>,
+    },
+    Select {
+        before: usize,
+        index: f64,
+        span: Span,
+    },
+}
+
+/// A method's table as written (`M`, `self`).
+fn obj_text(obj: Expr<'_>) -> String {
+    match obj.kind() {
+        ExprKind::Name(n) => n.text().to_string(),
+        _ => "?".to_string(),
+    }
 }
