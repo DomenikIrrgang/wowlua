@@ -22,6 +22,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- A cast of an optional value to a supertype of what it holds (`w.tabs :: Button[]` for a `TabButton[]?`) is no longer refused (E2015): a cast now also compares the value's type with its `nil` left out.
 - E2052 (a field not assigned in the constructor) says so when the field is assigned, but only after a call of one of the class's own methods on `self`, and names that call; before, it said the field was not assigned at all.
 
 ## 0.9.7 (2026-10-23)

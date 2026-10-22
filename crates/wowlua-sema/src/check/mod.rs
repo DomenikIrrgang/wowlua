@@ -2007,6 +2007,26 @@ print(a, b, c, d, e, name, realm, more)
         );
     }
 
+    /// A cast also compares the expression's type with its `nil` left out
+    /// (decision L39).
+    #[test]
+    fn casts_compare_union_members() {
+        let pre = "class A\n x: number = 1\nend\nclass B extends A\nend\nlocal bs: B[]? = nil\n";
+        strict_ok(&format!("{pre}local as = bs :: A[]\nprint(as)\n"));
+        strict_err(
+            "local s: string? = nil\nlocal n = s :: number\nprint(n)\n",
+            "E2015",
+        );
+        err(
+            "local s: string? = nil\nlocal n = s :: number\nprint(n)\n",
+            "E2015",
+        );
+        strict_err(
+            "local v: string | boolean = true\nlocal n = v :: number\nprint(n)\n",
+            "E2015",
+        );
+    }
+
     /// `assert` returns every argument, as Lua's does (decision L38): a
     /// message passed on is a second result, which a function declared to
     /// return one value reports; the first result is still the truthy value.

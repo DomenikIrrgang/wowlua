@@ -411,10 +411,7 @@ impl Checker<'_, '_> {
                     self.value_checks.insert(e.span(), c);
                 }
                 // Assertions between incomparable types (E2015).
-                if !self.env.assignable(from, to, self.mode)
-                    && !self.env.assignable(to, from, self.mode)
-                    && !self.comparable(from, to)
-                {
+                if !self.castable(from, to) {
                     let mut msg = format!(
                         "cannot assert `{}` as `{}`",
                         self.env.display(from),
@@ -660,6 +657,20 @@ impl Checker<'_, '_> {
         } else {
             format!("to force the type, write `:: any :: {to_text}`")
         }
+    }
+
+    /// `a :: b` is allowed: one fits the other or both are tables, with
+    /// `a` as it is or with its `nil` left out (`TabButton[]? :: Button[]`,
+    /// decision L39).
+    fn castable(&mut self, a: TypeId, b: TypeId) -> bool {
+        let direct = |c: &mut Self, x: TypeId, y: TypeId| {
+            c.env.assignable(x, y, c.mode) || c.env.assignable(y, x, c.mode) || c.comparable(x, y)
+        };
+        if direct(self, a, b) {
+            return true;
+        }
+        let x = self.env.types.non_nil(a);
+        x != a && direct(self, x, b)
     }
 
     fn comparable(&self, a: TypeId, b: TypeId) -> bool {

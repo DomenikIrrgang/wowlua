@@ -469,8 +469,10 @@ local ok = (x :: number) < limit          -- comparison on the cast value
 ```
 
 The asserted type must be *comparable* with the expression's type: one must
-be assignable to the other (E2015). To force an unrelated type, write
-`expr :: any :: T`.
+be assignable to the other, or both are tables (a cast between shapes), with
+the expression's type as it is or with its `nil` left out (`buttons ::
+Button[]` for a `TabButton[]?`, decision L39). Otherwise it is E2015. To force an
+unrelated type, write `expr :: any :: T`.
 
 ### 1.4.4 Bitwise and integer division
 
