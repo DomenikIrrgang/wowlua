@@ -371,6 +371,10 @@ impl Formatter<'_> {
                 parts.push(self.decorator(d));
                 parts.push(txt(" "));
             }
+            for m in p.modifiers() {
+                parts.push(txt(modifier(m)));
+                parts.push(txt(" "));
+            }
             parts.push(self.name(p.name()));
             if let Some(t) = &p.ty() {
                 parts.push(txt(": "));

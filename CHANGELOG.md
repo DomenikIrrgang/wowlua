@@ -4,8 +4,13 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ## Unreleased
 
+### New
+
+- **Parameter properties**: a constructor's parameter can declare a field, as in TypeScript: `constructor(private sink: Sink = printer, public readonly name: string)` makes `self.sink` and `self.name` and sets them from the arguments. A field declared twice is now an error (E3046).
+
 ### Changed
 
+- A `readonly` field can only be assigned in its initializer or in its own class's constructor, as documented: assigning it in a method, or in a subclass's constructor, is now an error (E2010).
 - A method replaced on a widget class after it is defined (`MyButton.refresh = newRefresh`, as a plugin might) now reaches the frames the class builds afterwards, its subclasses' too, as a plain class's instances see it. Frames built before keep the method they were given.
 
 ## 0.9.7 (2026-10-23)

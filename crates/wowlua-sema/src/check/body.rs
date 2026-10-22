@@ -135,6 +135,9 @@ pub struct Checker<'e, 'p> {
     pub(crate) chain_inner: FxHashMap<(u32, u32), TypeId>,
     /// Classes whose bodies are being checked: (def, static member).
     pub(crate) classes: Vec<(DefId, bool)>,
+    /// The class whose constructor is checked: its readonly fields may be
+    /// assigned there, nowhere else (spec §3.1.1).
+    pub(crate) ctor_of: Option<DefId>,
     /// Exported values of this module.
     pub exports: FxHashMap<Box<str>, TypeId>,
     /// The exported locals, in order: their types are recorded once the
@@ -311,6 +314,7 @@ impl<'e, 'p> Checker<'e, 'p> {
             expr_types: FxHashMap::default(),
             chain_inner: FxHashMap::default(),
             classes: Vec::new(),
+            ctor_of: None,
             exports: FxHashMap::default(),
             export_vars: Vec::new(),
             fallback_fields: FxHashMap::default(),
@@ -1980,7 +1984,9 @@ impl<'e, 'p> Checker<'e, 'p> {
                     func,
                     has_body: true,
                 } => {
+                    let saved = self.ctor_of.replace(def);
                     self.function_body(&FnSig::of(func), None, Some(instance));
+                    self.ctor_of = saved;
                 }
                 ClassMemberKind::Getter { body, ty, .. } => {
                     let fb = FnSig::accessor(body, ty, None);

@@ -2042,6 +2042,33 @@ print(a, b, c, d, e, name, realm, more)
             "declare class N\n    function SetSize(w: number, h: number)\nend\nclass A extends N\n x: number\n constructor()\n  super()\n  self:SetSize(1, 2)\n  self.x = 1\n end\nend\n",
         );
         strict_ok("class A\n x: number\n constructor() self.x = 1 end\nend\n");
+        // Parameter properties (decision L35): fields set from the
+        // constructor's parameters, with their visibility and readonly.
+        strict_ok(
+            "interface Sink\n function say(t: string)\nend\nclass L\n constructor(private sink: Sink, public readonly name: string = \"n\", protected n: number?) end\n function f(): string self.sink:say(self.name) return self.name end\nend\nlocal l = L.new({ say = function(_: any, _: string) end })\nprint(l.name, l:f())\n",
+        );
+        strict_err(
+            "class L\n constructor(private secret: string) end\nend\nprint(L.new(\"x\").secret)\n",
+            "E2011",
+        );
+        strict_err(
+            "class L\n constructor(readonly id: number) end\nend\nlocal l = L.new(1)\nl.id = 2\n",
+            "E2010",
+        );
+        strict_err(
+            "class L\n x: number = 1\n constructor(private x: number) end\nend\n",
+            "E3046",
+        );
+        // A readonly field: assigned in its own class's constructor only.
+        strict_err(
+            "class A\n readonly id: number = 1\n function f() self.id = 2 end\nend\n",
+            "E2010",
+        );
+        strict_err(
+            "class A\n constructor(readonly id: number) end\nend\nclass B extends A\n constructor() super(1) self.id = 2 end\nend\n",
+            "E2010",
+        );
+        strict_ok("class A\n readonly id: number = 1\n constructor() self.id = 2 end\nend\n");
         strict_err("print(undefinedGlobal)\n", "E1001");
         let d = check_source("pcall(function() coroutine.yield(1) end)\n", Mode::Basic);
         assert!(

@@ -44,6 +44,7 @@ open for review.
 | L32 | `local addonName, ns = ...` is typed `(string, AddonNamespace)`. `AddonNamespace` is an interface projects extend with `declare interface` (declaration merging) **(user, R1)** | Typed classic namespace sharing. |
 | L33 | Top-level `return` is an error in modules and allowed in scripts **(user, R1)** | |
 | L34 | Generic variance: covariant in basic mode, invariant for mutable positions in strict mode **(user, R1)** | Pragmatic by default, sound in strict. |
+| L35 | A constructor's parameter may be a **parameter property**: `public`/`protected`/`private` and/or `readonly` before its name declare an instance field of that name and type, assigned from the argument first (base class: before the field initializers; derived: right after `super(…)`); with a default, the field is always set. A field declared twice (a property among them) is E3046. A `readonly` field is assignable only in its initializer or its own class's constructor (methods and subclasses' constructors: E2010) **(user, M9)** | Constructor injection, the pattern SuuUI's classes use for testable dependencies (`constructor(private combat: CombatState = live, private fault: Reporter = log)`), would otherwise repeat each dependency as a field, a parameter and an assignment, as TypeScript's parameter properties avoid. Writing them showed `readonly` fields were assignable in any method of the class. |
 
 ## Toolchain
 

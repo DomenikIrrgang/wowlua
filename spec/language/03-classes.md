@@ -56,7 +56,7 @@ end
 | `protected` | fields, methods, accessors | Accessible in the class and its subclasses. |
 | `private` | fields, methods, accessors | Accessible only inside the class body. |
 | `static` | fields, methods | Belongs to the class table, not to instances. |
-| `readonly` | fields | Assignable only in its initializer or the constructor. |
+| `readonly` | fields | Assignable only in its initializer or its own class's constructor (not a method, not a subclass's constructor). |
 | `abstract` | methods (abstract classes only) | No body. Subclasses must implement it. |
 | `override` | methods, accessors | Required when overriding a superclass member (implementing an abstract method included), and an error when nothing is overridden (E3005). |
 | `overload` | method and constructor signatures | Declares an overload signature without a body (§3.1.11). |
@@ -100,6 +100,24 @@ without an initializer must be assigned on every path through the constructor
 before the constructor returns or calls a method of a wowlua class on `self`
 (E2052). Calls of native methods (`self:SetSize(…)` in a widget class) do not
 end the check, because they cannot read the fields.
+
+**Parameter properties** (decision L35). A parameter of a constructor with
+a body may start with `public`, `protected`, `private` and/or `readonly`.
+It declares an instance field of the same name, type and modifiers, and the
+constructor assigns the argument to it first: in a base class before the
+field initializers, in a derived class right after `super(…)` (before the
+derived class's field initializers). A parameter with a default gives a
+field that is always set (not optional). Its own declaration as a field
+too is E3046, as is any field declared twice. Overload signatures cannot
+have them.
+
+```wowlua
+class Log
+    lines: string[] = {}
+    constructor(private sink: Sink = printer, public readonly name: string = "log") end
+    function add(text: string) self.sink:say(`{self.name}: {text}`) end
+end
+```
 
 ### 3.1.3 Methods and `self`
 

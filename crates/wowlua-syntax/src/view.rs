@@ -625,6 +625,7 @@ impl<'t> Func<'t> {
 handle!(Param);
 debug_fields!(Param {
     decorators,
+    modifiers,
     name,
     ty,
     default
@@ -636,7 +637,34 @@ impl<'t> Param<'t> {
     }
 
     pub fn decorators(self) -> Decorators<'t> {
-        List::new(self.t, self.node().decorators, Decorator::new)
+        let n = self.node();
+        let range = Range {
+            start: n.decorators_start,
+            len: u32::from(n.decorators_len),
+        };
+        List::new(self.t, range, Decorator::new)
+    }
+
+    /// A constructor's parameter property: `public`, `protected`,
+    /// `private`, `readonly`, in that order (empty for a plain parameter;
+    /// decision L35).
+    pub fn modifiers(self) -> Vec<Modifier> {
+        let bits = self.node().property;
+        [
+            (tree::PROPERTY_PUBLIC, Modifier::Public),
+            (tree::PROPERTY_PROTECTED, Modifier::Protected),
+            (tree::PROPERTY_PRIVATE, Modifier::Private),
+            (tree::PROPERTY_READONLY, Modifier::Readonly),
+        ]
+        .into_iter()
+        .filter(|(b, _)| bits & b != 0)
+        .map(|(_, m)| m)
+        .collect()
+    }
+
+    /// Whether it is a parameter property.
+    pub fn is_property(self) -> bool {
+        self.node().property != 0
     }
 
     pub fn name(self) -> Name<'t> {

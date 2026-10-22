@@ -3237,6 +3237,67 @@ print(early:describe(), CounterButton.new(UIParent):describe(), FancyButton.new(
     }
 }
 
+/// Parameter properties (decision L35): a constructor's `private sink:
+/// Sink` declares the field and sets it from the argument, before the field
+/// initializers, in plain, derived and widget classes.
+#[test]
+fn parameter_properties_run() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"props\", \"version\": \"1.0.0\" }, \"check\": { \"mode\": \"strict\" } }\n",
+            ),
+            (
+                "src/main.wowlua",
+                r#"interface Sink
+    function say(text: string)
+end
+local printer: Sink = { say = function(_: any, text: string) print(text) end }
+class Log
+    lines: string[] = {}
+    constructor(private sink: Sink = printer, public readonly name: string = "log")
+    end
+    function add(text: string)
+        self.lines[#self.lines + 1] = text
+        self.sink:say(`{self.name}: {text}`)
+    end
+end
+class Timed extends Log
+    constructor(private started: number)
+        super(printer, "timed")
+    end
+    function since(): number
+        return self.started
+    end
+end
+class Label extends Frame
+    constructor(parent: Frame, private text: string)
+        super(nil, parent)
+    end
+    function shown(): string
+        return self.text
+    end
+end
+local log = Log.new()
+log:add("a")
+local t = Timed.new(7)
+t:add("b")
+print(t:since(), #t.lines, Label.new(UIParent, "hi"):shown())
+"#,
+            ),
+        ],
+    );
+    wowlua(dir.path()).arg("build").assert().success();
+    let dist = dir.path().join("dist/dev/Props");
+    let toc = fs::read_to_string(dist.join("Props.toc")).unwrap();
+    fs::write(dist.join("mock.lua"), MOCK_FRAMES).unwrap();
+    fs::write(dist.join("Props.toc"), format!("mock.lua\n{toc}")).unwrap();
+    assert_eq!(run_addon(&dist, "Props"), "log: a\ntimed: b\n7 1 hi");
+}
+
 /// `extends` reads the imported class while the module loads, so a cycle
 /// through a run-time use elsewhere still loads the base first.
 #[test]

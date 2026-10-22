@@ -107,6 +107,7 @@ pub(crate) static CODES: &[CodeInfo] = &[
     CodeInfo { code: "E3043", summary: "Accessor declared on a widget class" },
     CodeInfo { code: "E3044", summary: "Overload implementation does not accept every overload signature" },
     CodeInfo { code: "E3045", summary: "Statement-only `wowlua:debug` helper used as a value" },
+    CodeInfo { code: "E3046", summary: "A field declared twice in one class (a constructor's parameter property included)" },
     CodeInfo { code: "E4001", summary: "Manifest is not valid JSON" },
     CodeInfo { code: "W4001", summary: "Unknown TOC directive in `addon.toc-extra`" },
     CodeInfo { code: "E4002", summary: "Manifest does not match the schema (unknown key, wrong type)" },

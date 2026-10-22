@@ -693,7 +693,8 @@ impl Linter<'_> {
             if let Some(d) = p.default() {
                 self.expr(d);
             }
-            let kind = if p.decorators().is_empty() {
+            // (a parameter property is read by its field's assignment)
+            let kind = if p.decorators().is_empty() && !p.is_property() {
                 Kind::Positional
             } else {
                 Kind::Exempt

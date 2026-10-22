@@ -81,6 +81,9 @@ fn func(f: Func<'_>, out: &mut String) {
     out.push('(');
     for p in &f.params() {
         decorators(p.decorators(), out);
+        if p.is_property() {
+            let _ = write!(out, "{:?}", p.modifiers());
+        }
         let _ = write!(out, "{}", p.name().text());
         if let Some(t) = &p.ty() {
             ty(*t, out);

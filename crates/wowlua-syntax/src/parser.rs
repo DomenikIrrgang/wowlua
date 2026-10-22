@@ -78,6 +78,9 @@ pub(crate) struct Parser<'a> {
     /// A check was skipped because the tree is not kept: the diagnostics
     /// may be incomplete.
     pub(crate) unsure: bool,
+    /// The next parameter list is a constructor's: its parameters may be
+    /// parameter properties (`private sink: Sink`, decision L35).
+    ctor_params: bool,
 }
 
 fn is_block_follow(kind: TokenKind) -> bool {
@@ -207,6 +210,7 @@ impl<'a> Parser<'a> {
             line_hint: Cell::new(0),
             keep_tree: true,
             unsure: false,
+            ctor_params: false,
         }
     }
 
@@ -1892,10 +1896,35 @@ impl<'a> Parser<'a> {
     #[allow(clippy::type_complexity)]
     fn param_list(&mut self, declaration: bool) -> PResult<(Range, Option<(Sp, u32)>)> {
         let mut params = Vec::new();
+        let ctor = std::mem::take(&mut self.ctor_params);
         if self.check(T::RParen) {
             return Ok((Range::default(), None));
         }
         loop {
+            // A constructor's parameter property: `private sink: Sink`.
+            let mut property = 0u8;
+            while ctor
+                && self.is_modifier()
+                && !matches!(self.kind_at(1), T::RParen | T::Comma | T::Eq)
+            {
+                let at = self.pos;
+                let m = self.modifier();
+                if !matches!(
+                    m,
+                    Modifier::Public | Modifier::Private | Modifier::Protected | Modifier::Readonly
+                ) {
+                    self.pos = at;
+                    return Err(self.syntax_error(
+                        "only public, protected, private and readonly make a parameter property",
+                    ));
+                }
+                property |= match m {
+                    Modifier::Public => crate::tree::PROPERTY_PUBLIC,
+                    Modifier::Protected => crate::tree::PROPERTY_PROTECTED,
+                    Modifier::Private => crate::tree::PROPERTY_PRIVATE,
+                    _ => crate::tree::PROPERTY_READONLY,
+                };
+            }
             let decorators = if declaration && self.check(T::At) {
                 self.decorators()?
             } else {
@@ -1929,7 +1958,9 @@ impl<'a> Parser<'a> {
                 NONE
             };
             params.push(ParamNode {
-                decorators,
+                decorators_start: decorators.start,
+                decorators_len: u16::try_from(decorators.len).unwrap_or(u16::MAX),
+                property,
                 name,
                 ty,
                 default,
@@ -2601,6 +2632,7 @@ impl<'a> Parser<'a> {
                     has_body: false,
                 }
             } else {
+                self.ctor_params = true;
                 ClassMemberData::Constructor {
                     func: self.method_body(opened)?,
                     has_body: true,

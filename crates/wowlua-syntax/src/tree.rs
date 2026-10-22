@@ -154,11 +154,23 @@ pub(crate) struct FuncNode {
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct ParamNode {
-    pub decorators: Range,
+    /// The decorators: where they start and how many (a `u16`, so the node
+    /// keeps its size with `property` beside it).
+    pub decorators_start: u32,
+    pub decorators_len: u16,
+    /// A constructor's parameter property: its modifiers as bits
+    /// (`PROPERTY_*`; 0 for a plain parameter; decision L35).
+    pub property: u8,
     pub name: Sp,
     pub ty: u32,
     pub default: u32,
 }
+
+/// A parameter property's modifier bits (`ParamNode::property`).
+pub(crate) const PROPERTY_PUBLIC: u8 = 1;
+pub(crate) const PROPERTY_PROTECTED: u8 = 2;
+pub(crate) const PROPERTY_PRIVATE: u8 = 4;
+pub(crate) const PROPERTY_READONLY: u8 = 8;
 
 #[derive(Clone, Copy, Debug)]
 pub(crate) struct DecoratorNode {

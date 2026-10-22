@@ -958,6 +958,37 @@ impl<'p> Env<'p> {
                 }
                 ClassMemberKind::Constructor { func, .. } => {
                     let mut f = self.func_sig(&FnSig::of(func), &scope, false);
+                    // Parameter properties (`private sink: Sink`): fields of
+                    // the parameter's type, set from it (decision L35).
+                    for (p, sp) in func.params().iter().zip(f.params.clone()) {
+                        if !p.is_property() {
+                            continue;
+                        }
+                        let mods = p.modifiers();
+                        let visibility = if mods.contains(&Modifier::Private) {
+                            Visibility::Private
+                        } else if mods.contains(&Modifier::Protected) {
+                            Visibility::Protected
+                        } else {
+                            Visibility::Public
+                        };
+                        // (a default makes the argument optional, the field
+                        // never: it is always set)
+                        let ty = if p.default().is_some() {
+                            self.types.non_nil(sp.ty)
+                        } else {
+                            sp.ty
+                        };
+                        let member = Member {
+                            ty,
+                            kind: MemberKind::Field,
+                            optional: self.types.is_optional(ty),
+                            readonly: mods.contains(&Modifier::Readonly),
+                            visibility,
+                            renamable: false,
+                        };
+                        self.add_member(def, p.name().text(), member, false);
+                    }
                     f.type_params = self.def(def).params.clone();
                     f.ret = Pack::single(instance);
                     ctor = Some(self.types.func(f));

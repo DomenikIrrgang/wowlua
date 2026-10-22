@@ -637,6 +637,20 @@ impl<'a> Lowerer<'a> {
         out
     }
 
+    /// A constructor's parameter properties (`private sink: Sink`): each set
+    /// from its parameter, before the field initializers (decision L35).
+    fn param_property_stmts(&mut self, f: Func<'a>, pos: Pos) -> Vec<ir::Stmt> {
+        let mut out = Vec::new();
+        for p in &f.params() {
+            if p.is_property() {
+                let target = field(name_expr(ident("self", pos)), p.name().text(), pos);
+                let value = name_expr(self.ident(p.name()));
+                out.push(assign(target, value, pos));
+            }
+        }
+        out
+    }
+
     /// Opens a function scope for a generated or constructor function.
     fn enter_function(&mut self) -> (Vec<LoopInfo>, Vec<ir::Stmt>) {
         self.func_depth += 1;
@@ -671,6 +685,7 @@ impl<'a> Lowerer<'a> {
         }
         let mut stmts = self.default_params(&FnShape::of(f));
         if base.is_none() {
+            stmts.extend(self.param_property_stmts(f, pos));
             stmts.extend(self.field_init_stmts(inits, pos));
         }
         for s in &f.body().stmts() {
@@ -690,6 +705,7 @@ impl<'a> Lowerer<'a> {
                         )]
                     });
                     stmts.extend(call_stmt);
+                    stmts.extend(self.param_property_stmts(f, spos));
                     stmts.extend(self.field_init_stmts(inits, spos));
                 }
                 _ => stmts.extend(self.stmt(s)),
@@ -774,6 +790,7 @@ impl<'a> Lowerer<'a> {
                     });
                     stmts.extend(created);
                     self.declare("self", Binding::Local);
+                    stmts.extend(self.param_property_stmts(f, spos));
                     if own_inits {
                         let init = call(
                             field(name_expr(ident(name, spos)), "__initFields", spos),

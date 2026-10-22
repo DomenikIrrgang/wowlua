@@ -1029,13 +1029,12 @@ impl Checker<'_, '_> {
                     },
                 },
                 Ty::Named(d, args) => match self.env.instance_member(d, &args, name) {
-                    Some((mem, _)) => {
-                        let in_ctor_or_class = self
-                            .classes
-                            .iter()
-                            .any(|(cd, _)| *cd == d || self.env.derives(*cd, d));
+                    Some((mem, owner)) => {
+                        // A readonly field: only in its own class's
+                        // constructor (spec §3.1.1).
+                        let in_own_ctor = self.ctor_of == Some(owner);
                         if (mem.kind == MemberKind::Getter && mem.readonly)
-                            || (mem.readonly && mem.kind == MemberKind::Field && !in_ctor_or_class)
+                            || (mem.readonly && mem.kind == MemberKind::Field && !in_own_ctor)
                         {
                             self.report("E2010", span, format!("`{name}` is read-only"));
                         }

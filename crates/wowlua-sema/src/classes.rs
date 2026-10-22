@@ -230,7 +230,7 @@ pub fn members(c: ClassDecl<'_>) -> Vec<Member> {
             ClassMemberKind::Method { name, .. } => (name, MemberKind::Method),
             ClassMemberKind::Getter { name, .. } => (name, MemberKind::Getter),
             ClassMemberKind::Setter { name, .. } => (name, MemberKind::Setter),
-            ClassMemberKind::Constructor { .. } => {
+            ClassMemberKind::Constructor { func, .. } => {
                 out.push(Member {
                     name: "constructor".into(),
                     kind: MemberKind::Constructor,
@@ -239,6 +239,17 @@ pub fn members(c: ClassDecl<'_>) -> Vec<Member> {
                     is_override: false,
                     span: m.span(),
                 });
+                // its parameter properties are fields (decision L35)
+                for p in func.params().iter().filter(|p| p.is_property()) {
+                    out.push(Member {
+                        name: p.name().text().to_string(),
+                        kind: MemberKind::Field { has_value: true },
+                        is_static: false,
+                        is_abstract: false,
+                        is_override: false,
+                        span: p.name().span(),
+                    });
+                }
                 continue;
             }
         };
@@ -435,6 +446,13 @@ pub fn check_class(
                     format!("`{name}` is declared as a field and as a method or accessor"),
                 )
                 .with_label(m.span, "here"),
+            );
+        }
+        // A field declared twice (a parameter property among them; E3046).
+        if is_field && matches!(seen.get(name), Some(MemberKind::Field { .. })) {
+            out.push(
+                Diagnostic::error("E3046", format!("the field `{name}` is declared twice"))
+                    .with_label(m.span, "here"),
             );
         }
         seen.entry(name).or_insert(m.kind);
