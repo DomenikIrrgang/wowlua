@@ -171,6 +171,12 @@ impl Checker<'_, '_> {
     /// Drops the narrowing of `root`'s fields: all of them, or `prefix`
     /// and the fields below it.
     pub fn forget_fields(&mut self, root: VarId, prefix: Option<&str>) {
+        self.forget_fields_below(root, prefix, false);
+    }
+
+    /// [`Self::forget_fields`]; `below`: only the paths under `prefix`,
+    /// not `prefix` itself.
+    fn forget_fields_below(&mut self, root: VarId, prefix: Option<&str>, below: bool) {
         let Some(paths) = self.field_vars.get(&root) else {
             return;
         };
@@ -178,7 +184,7 @@ impl Checker<'_, '_> {
             .iter()
             .filter(|(path, _)| {
                 prefix.is_none_or(|p| {
-                    path.as_ref() == p
+                    (!below && path.as_ref() == p)
                         || path
                             .strip_prefix(p)
                             .is_some_and(|rest| rest.starts_with('.'))
@@ -194,7 +200,9 @@ impl Checker<'_, '_> {
     /// After a call: locals narrowed to `nil` that closures assign lose
     /// that narrowing (the call may have run such a closure), and so do the
     /// fields of locals passed to it or called as its receiver (it may
-    /// change them).
+    /// change them). A field path passed (`self.icon:SetSize(…)`) loses the
+    /// narrowing of the paths below it: the call gets its table, not the
+    /// table holding it (decision L41).
     pub fn forget_passed(&mut self, receiver: Option<Expr<'_>>, args: Args<'_>) {
         // A local narrowed to `nil` that closures assign may hold a value
         // after the call (a callback set it). No local is when the file
@@ -214,18 +222,18 @@ impl Checker<'_, '_> {
         let mut roots = Vec::new();
         let mut note = |c: &Checker<'_, '_>, e: Expr<'_>| {
             let root = match e.kind() {
-                ExprKind::Name(n) => c.lookup_var(n.text()).map(|v| (v, None)).or_else(|| {
-                    c.env
-                        .declared
-                        .has_global(n.text())
-                        .then(|| (GLOBAL_ROOT, Some(n.text().to_string())))
-                }),
-                _ => c.field_path(e).map(|(r, p)| {
-                    // A global's path: only that global's fields.
-                    let global =
-                        (r == GLOBAL_ROOT).then(|| p.split('.').next().unwrap_or("").to_string());
-                    (r, global)
-                }),
+                ExprKind::Name(n) => {
+                    c.lookup_var(n.text())
+                        .map(|v| (v, None, false))
+                        .or_else(|| {
+                            c.env
+                                .declared
+                                .has_global(n.text())
+                                .then(|| (GLOBAL_ROOT, Some(n.text().to_string()), false))
+                        })
+                }
+                // A path: what is below it.
+                _ => c.field_path(e).map(|(r, p)| (r, Some(p), true)),
             };
             if let Some(r) = root {
                 roots.push(r);
@@ -237,8 +245,8 @@ impl Checker<'_, '_> {
         for a in args.exprs() {
             note(self, a);
         }
-        for (r, prefix) in roots {
-            self.forget_fields(r, prefix.as_deref());
+        for (r, prefix, below) in roots {
+            self.forget_fields_below(r, prefix.as_deref(), below);
         }
     }
 

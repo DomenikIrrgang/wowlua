@@ -23,6 +23,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- Strict mode: after `self.icon = parent:CreateTexture()`, calling a method on the field (`self.icon:SetTexture(…)`) no longer makes the next line's `self.icon` "may be nil" again. A call that gets a field's table can't replace the field; only calls that get the table holding it forget what you set.
 - A WoW function with several forms (`SetTexCoord`) accepts a last argument that gives several values, as Lua passes them: `tex:SetTexCoord(unpack(coords))` was refused (E2012).
 - `Texture:GetTexture()` can give a number, the file ID of a texture set by one, as in the game; it was typed as a path only.
 - A cast of an optional value to a supertype of what it holds (`w.tabs :: Button[]` for a `TabButton[]?`) is no longer refused (E2015): a cast now also compares the value's type with its `nil` left out.

@@ -2007,6 +2007,25 @@ print(a, b, c, d, e, name, realm, more)
         );
     }
 
+    /// A call receiving a field path keeps that path's narrowing and its
+    /// siblings'; it forgets the paths below it (decision L41).
+    #[test]
+    fn calls_on_a_field_keep_its_narrowing() {
+        strict_ok(
+            "declare class Tex\n    function SetSize(w: number, h: number)\nend\ndeclare function newTex(): Tex\nclass A\n    icon: Tex? = nil\n    other: Tex? = nil\n    constructor()\n        self.other = newTex()\n        self.icon = newTex()\n        self.icon:SetSize(1, 1)\n        self.icon:SetSize(2, 2)\n        self.other:SetSize(1, 1)\n    end\nend\nprint(A)\n",
+        );
+        // below it: forgotten
+        strict_err(
+            "local t: { a: { b: number? } } = { a = { b = nil } }\nlocal function f(x: { b: number? }) x.b = nil end\nt.a.b = 1\nf(t.a)\nlocal n: number = t.a.b\nprint(n)\n",
+            "E2001",
+        );
+        // the root passed: all of it forgotten
+        strict_err(
+            "local t: { a: number? } = { a = nil }\nlocal function f(x: { a: number? }) x.a = nil end\nt.a = 1\nf(t)\nlocal n: number = t.a\nprint(n)\n",
+            "E2001",
+        );
+    }
+
     /// Overloads take a last argument's several values (decision L40).
     #[test]
     fn overloads_expand_the_last_argument() {

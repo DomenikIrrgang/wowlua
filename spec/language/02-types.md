@@ -526,9 +526,12 @@ return one reports (E2001, too many values); write `return (assert(x, "msg"))`
 `G.x`) is narrowed like a local, and assigning it narrows it by the value's
 `nil`-ness (to the declared type without `nil`, or to `nil`). Its narrowing
 is invalidated by an assignment to the root, to the path or to a path above
-it, and by a call that may modify the table: one that receives the root, or a
-path below it, as an argument or as its receiver (`a:m()`). Calls that do not
-receive the table keep the narrowing. A method call on a narrowed optional
+it, and by a call that may modify the table holding it: one that receives the
+root as an argument or as its receiver (`a:m()`), or a path above it (`a.b`
+for `a.b.c`). A call that receives the path itself or a sibling keeps it: it
+gets the field's table, not the one holding the field, so after `self.icon =
+tex`, `self.icon:SetSize(1, 1)` leaves `self.icon` set (decision L41). Calls
+that do not receive the table keep the narrowing. A method call on a narrowed optional
 function field (`if t.f then t:f() end`) uses the narrowed type.
 
 **Locals.** Narrowing of a local is invalidated by assignments to it. Assigning
