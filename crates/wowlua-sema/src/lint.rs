@@ -28,6 +28,7 @@ fn lint_inner(parse: &Parse, text: &[u8], read: &[String]) -> Vec<Diagnostic> {
         scopes: vec![Vec::new()],
         diagnostics: Vec::new(),
         deferred: Vec::new(),
+        class_member: false,
     };
     let block = parse.view().block();
     let module = block
@@ -120,6 +121,9 @@ struct Binding {
     /// runs it, so a local shadowing it is reported only when it is also
     /// read by name.
     decorated: bool,
+    /// The implicit `self` of a class's method or constructor (a closure's
+    /// `self` parameter hiding it is W1004).
+    class_self: bool,
 }
 
 /// The names one statement declares, and the edit removing the statement
@@ -140,6 +144,8 @@ struct Linter<'a> {
     diagnostics: Vec<Diagnostic>,
     /// W1004s shadowing a decorated declaration: kept if it is read.
     deferred: Vec<(Diagnostic, usize)>,
+    /// The next function is a class's method or constructor.
+    class_member: bool,
 }
 
 fn exempt_name(name: &str) -> bool {
@@ -365,6 +371,22 @@ impl Linter<'_> {
         group: Option<usize>,
         shadow: bool,
     ) -> usize {
+        // A parameter `self` in a class's method: the method's own `self`
+        // (the instance) is out of reach in that function.
+        if shadow
+            && text == "self"
+            && let Some(o) = self.lookup(text)
+            && self.bindings[o].class_self
+        {
+            self.diagnostics.push(
+                Diagnostic::warning(
+                    "W1004",
+                    "`self` here hides the method's own `self` (the instance); give the parameter another name",
+                )
+                .with_label(span, "declared here")
+                .with_label(self.bindings[o].span, "the method's `self`"),
+            );
+        }
         if shadow && kind != Kind::Exempt && !exempt_name(text) {
             let (current, outer) = self.scopes.split_last().expect("a scope");
             let in_current = current.iter().any(|&i| &*self.bindings[i].name == text);
@@ -399,6 +421,7 @@ impl Linter<'_> {
             group,
             own_removal: None,
             decorated: false,
+            class_self: false,
         });
         self.scopes.last_mut().expect("a scope").push(i);
         i
@@ -681,8 +704,10 @@ impl Linter<'_> {
     fn func(&mut self, f: Func<'_>, method: bool) {
         self.type_params(f.type_params());
         self.push_scope();
+        let class_member = std::mem::take(&mut self.class_member);
         if method {
-            self.declare_at("self", f.params_span(), Kind::Exempt, None, false);
+            let id = self.declare_at("self", f.params_span(), Kind::Exempt, None, false);
+            self.bindings[id].class_self = class_member;
         }
         let mut ids = Vec::new();
         for p in f.params() {
@@ -753,6 +778,7 @@ impl Linter<'_> {
                 | ClassMemberKind::Constructor { func, has_body } => {
                     let is_static = m.modifiers().contains(&Modifier::Static);
                     if has_body {
+                        self.class_member = !is_static;
                         self.func(func, !is_static);
                     } else {
                         self.signature(func);
@@ -1126,5 +1152,19 @@ mod tests {
         assert_eq!(shadows(read), 1, "{:#?}", run(read));
         let plain = "local function rows()\n    local rows = 1\n    print(rows)\nend\nrows()\n";
         assert_eq!(shadows(plain), 1, "{:#?}", run(plain));
+    }
+
+    /// A closure's `self` parameter inside a class's method or constructor
+    /// hides the instance (W1004); in a plain `function M:m()` it is the
+    /// usual handler's frame and stays allowed.
+    #[test]
+    fn self_hiding_a_class_methods_self() {
+        let shadows = |src: &str| run(src).into_iter().filter(|d| d.0 == "W1004").count();
+        let class = "class A\n    x: number = 1\n    constructor()\n        local f = function(self: any) print(self) end\n        f(1)\n    end\n    function m()\n        local g = function(self: any) print(self) end\n        g(1)\n    end\nend\nprint(A)\n";
+        assert_eq!(shadows(class), 2, "{:#?}", run(class));
+        let plain = "local M = {}\nfunction M:m()\n    local f = function(self: any) print(self) end\n    f(1)\nend\nprint(M)\n";
+        assert_eq!(shadows(plain), 0, "{:#?}", run(plain));
+        let renamed = "class A\n    function m()\n        local f = function(owner: any) print(owner, self) end\n        f(1)\n    end\nend\nprint(A)\n";
+        assert_eq!(shadows(renamed), 0, "{:#?}", run(renamed));
     }
 }

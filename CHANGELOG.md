@@ -12,6 +12,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Changed
 
+- In a class's method or constructor, a function whose parameter is named `self` (`frame:SetScript("OnEnter", function(self) … end)`) now warns (W1004): inside it, `self` is the frame, not your instance, and `self.field` reads the wrong table. Name the parameter differently. Plain `function M:m()` code is unchanged.
 - `assert` returns every argument it was given, as Lua's does, so `return assert(x, "message")` in a function that returns one value is now reported (too many values returned): it also handed the message to the caller, as a second value. Write `return (assert(x, "message"))`.
 - A parameter's default can't read that parameter or a later one: in the Lua it compiles to, every parameter is in scope there and not set yet, so `function f(conf: Conf = conf)` or `constructor(private settings: Store = settings.store)` read `nil`, not the outer value wowlua checked them against. That is now an error (E1004); give the parameter another name. A function in a default may still use any parameter.
 - The load-order check follows `MyClass.new(…)`: what the constructor (its default arguments included) and the field initializers read while a file loads now orders the files. Before, a default instance built at load could run before the module it reads, inside an import cycle, and fail in game with no warning.
