@@ -2761,7 +2761,10 @@ fn is_ignoring_parent_alpha(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 
 /// `SetAlpha(alpha)`: a secret too, even from tainted code (the API
 /// documentation: `AllowedWhenTainted`, adding the alpha aspect); the
-/// region's alpha then reads back secret.
+/// region's alpha then reads back secret, and keeps reading back secret
+/// after a plain alpha is set (found in game: SuuUI's fade read a secret
+/// alpha from a frame it had set to 1; decision T251). Unverified: what
+/// takes the aspect away again.
 fn set_alpha(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let secret = matches!(c.arg(2), Value::Secret(_));
     let a = match vm.hidden(c.arg(2)) {
@@ -2773,7 +2776,8 @@ fn set_alpha(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let a = byte_float(vm, a);
     let w = &mut engine_mut(vm).world.widgets[id.0];
     w.alpha = a;
-    w.secret_alpha = secret;
+    // Once secret, the alpha stays secret (decision T251).
+    w.secret_alpha |= secret;
     Ok(vec![])
 }
 
@@ -2793,7 +2797,7 @@ fn set_alpha_from_boolean(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let a = byte_float(vm, a.clamp(0.0, 1.0));
     let w = &mut engine_mut(vm).world.widgets[id.0];
     w.alpha = a;
-    w.secret_alpha = secret;
+    w.secret_alpha |= secret;
     Ok(vec![])
 }
 

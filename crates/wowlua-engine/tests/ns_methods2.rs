@@ -78,3 +78,27 @@ return c:GetFrameStrata(), c:GetEffectiveAlpha() == p:GetAlpha(), e:GetNumLetter
     );
     assert_eq!(r, ["HIGH", "true", "5", "true", "5"]);
 }
+
+/// An alpha set from a secret keeps reading back secret after a plain one
+/// is set (decision T251), its new value applied.
+#[test]
+fn a_secret_alpha_stays_secret() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local f = CreateFrame('Frame')
+local plain = CreateFrame('Frame')
+plain:SetAlpha(0.5)
+-- (your health's share, secret: 1)
+f:SetAlpha(UnitHealthPercent('player'))
+local before = issecretvalue(f:GetAlpha())
+f:SetAlpha(1)
+local g = CreateFrame('Frame')
+g:SetAlphaFromBoolean(UnitHealthPercent('player') ~= nil, 1, 0)
+g:SetAlpha(UnitHealthPercent('player'))
+g:SetAlpha(0.25)
+return tostring(issecretvalue(plain:GetAlpha())), tostring(before), tostring(issecretvalue(f:GetAlpha())),
+  tostring(f:HasSecretAspect(Enum.SecretAspect.Alpha)), tostring(issecretvalue(g:GetAlpha()))",
+    );
+    assert_eq!(r, ["false", "true", "true", "true", "true"]);
+}

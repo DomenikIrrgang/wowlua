@@ -232,6 +232,11 @@ records the client's by the restrictions active, in
 change with them: every conformance case gives the same result in combat on
 a restricted map as out of it.
 
+A widget's alpha set from a secret (`SetAlpha`, `SetAlphaFromBoolean`) is
+its secret alpha aspect: `GetAlpha` reads back a secret, and keeps doing so
+after a plain alpha is set, whose value still applies (decision T251;
+found in game). What takes the aspect away again is unverified.
+
 ## 17.6 The engine
 
 The WoW API the VM's code calls, per flavor.
