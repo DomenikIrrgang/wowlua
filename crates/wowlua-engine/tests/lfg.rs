@@ -261,6 +261,38 @@ return slash, SeenText()",
 }
 
 #[test]
+fn a_test_lists_the_player_as_the_games_panel_does() {
+    let mut vm = vm();
+    run(&mut vm, WATCH);
+    let r = run(
+        &mut vm,
+        "mock.postLFGListing({ activityIDs = { 799 }, isAutoAccept = true })
+local before = tostring(C_LFGList.HasActiveEntryInfo())
+mock.advanceTime(2)
+local info = C_LFGList.GetActiveEntryInfo()
+local listed = SeenText() .. ' ' .. tostring(C_LFGList.HasActiveEntryInfo()) .. ' ' .. tostring(info.activityIDs[1]) .. ' ' .. tostring(info.autoAccept)
+local delisted = tostring(mock.delistLFG())
+mock.advanceTime(2)
+return before, listed, delisted, SeenText(), tostring(C_LFGList.HasActiveEntryInfo()), tostring(mock.delistLFG())",
+    );
+    assert_eq!(
+        r,
+        [
+            "false",
+            "LFG_LIST_ACTIVE_ENTRY_UPDATE(true) true 799 true",
+            "true",
+            "LFG_LIST_ACTIVE_ENTRY_UPDATE(nil)",
+            "false",
+            "false"
+        ]
+    );
+    let err = vm.load_as(b"mock.postLFGListing({})", "@MyAddon/x.lua", "MyAddon");
+    let f = err.expect("compiles");
+    let e = vm.call_secure(f, &[]).expect_err("no activities");
+    assert!(text(&vm, e.value).contains("postLFGListing: activityIDs expected"));
+}
+
+#[test]
 fn an_addon_may_not_create_or_update_a_listing() {
     let mut vm = vm();
     run(&mut vm, WATCH);

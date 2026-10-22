@@ -1460,6 +1460,41 @@ pub fn control_remove(vm: &mut Vm, c: NativeCall) -> Ret {
     }
 }
 
+/// `postLFGListing(createData)`: the player lists themselves, as from the
+/// game's own listing panel (`C_LFGList.CreateListing`'s table): the
+/// listing a round trip later, `LFG_LIST_ACTIVE_ENTRY_UPDATE` told by the
+/// server, as Blizzard's call gets it.
+pub fn control_post(vm: &mut Vm, c: NativeCall) -> Ret {
+    if !matches!(c.arg(1), Value::Table(_)) {
+        return Err(vm.error("postLFGListing: a table expected"));
+    }
+    let created = crate::clock::now(vm);
+    let listing = listing_from(
+        vm,
+        c.arg(1),
+        Listing {
+            created,
+            ..Listing::default()
+        },
+    );
+    if listing.activity_ids.is_empty() {
+        return Err(vm.error("postLFGListing: activityIDs expected"));
+    }
+    request(vm, Answer::Created(listing));
+    Ok(vec![])
+}
+
+/// `delistLFG()`: the player's own listing withdrawn, as from the game's
+/// Delist: a round trip later, `LFG_LIST_ACTIVE_ENTRY_UPDATE(nil)`.
+/// Whether there was one.
+pub fn control_delist(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let listed = lfg(vm).listing.is_some();
+    if listed {
+        request(vm, Answer::Removed);
+    }
+    Ok(vec![Value::Bool(listed)])
+}
+
 /// `lfgSearchResultID(handle)`: its `searchResultID` among the last
 /// search's results, or nil.
 pub fn control_search_result_id(vm: &mut Vm, c: NativeCall) -> Ret {

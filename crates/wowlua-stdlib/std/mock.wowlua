@@ -669,6 +669,21 @@ export function failLFGSearch(reason: string?)
     engine().failLFGSearch(reason)
 end
 
+--- The player lists themselves, as from the game's own listing panel
+--- (`createData` as `C_LFGList.CreateListing` takes it: `activityIDs`,
+--- `generalPlaystyle`, `isAutoAccept`, `questID`, …): the listing a round
+--- trip later, `LFG_LIST_ACTIVE_ENTRY_UPDATE` from the server. An addon's
+--- own `CreateListing` is blocked.
+export function postLFGListing(createData: { [string]: any })
+    engine().postLFGListing(createData)
+end
+
+--- The player's own listing withdrawn, as from the game's Delist: a round
+--- trip later, `LFG_LIST_ACTIVE_ENTRY_UPDATE(nil)`. Whether there was one.
+export function delistLFG(): boolean
+    return engine().delistLFG()
+end
+
 --- The API calls Blizzard's code made that the engine had no answer for
 --- (they returned empty values), as `name(args)`, sorted: what the engine
 --- does not know of the client yet.

@@ -7,6 +7,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 ### New
 
 - A new warning, W2062: reading more values than a `local function` of yours can give, which are always `nil`. wowlua counts what each of its `return`s gives, even when it is declared `...any`, and warns on `local a, b, c = f()` or `select(5, f())` past that. A common case is a `pcall` helper that returns `a, b, c, d, e, f, g, h`: values 9 and up are lost. To pass every value on, return them through `...`. It found two such bugs in SuuUI.
+- Tests: `mock.postLFGListing(createData)` lists your character in the group finder, as the game's own listing panel does (the listing arrives a moment later with `LFG_LIST_ACTIVE_ENTRY_UPDATE`), and `mock.delistLFG()` takes it down again. Your addon's own `C_LFGList.CreateListing` is blocked, as in the game.
 
 ### Fixed
 

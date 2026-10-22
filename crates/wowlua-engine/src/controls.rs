@@ -441,6 +441,8 @@ pub fn table(vm: &mut Vm) -> wowlua_vm::TableRef {
         ("removeLFGListing", crate::lfg::control_remove),
         ("lfgSearchResultID", crate::lfg::control_search_result_id),
         ("failLFGSearch", crate::lfg::control_fail_search),
+        ("postLFGListing", crate::lfg::control_post),
+        ("delistLFG", crate::lfg::control_delist),
         ("closeMerchant", crate::merchant::control_close),
         ("sell", crate::merchant::control_sell),
         ("moveTo", crate::character::control_move_to),
