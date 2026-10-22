@@ -6,6 +6,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### New
 
+- Tests: `anything` and `ofType("table")` from `wowlua:test` match any value (but `nil`), or any value of a type, inside `toEqual` and `toHaveBeenCalledWith`: `expect(onShow).toHaveBeenCalledWith(anything, "TOOLTIP")`.
 - A new warning, W2062: reading more values than a `local function` of yours can give, which are always `nil`. wowlua counts what each of its `return`s gives, even when it is declared `...any`, and warns on `local a, b, c = f()` or `select(5, f())` past that. A common case is a `pcall` helper that returns `a, b, c, d, e, f, g, h`: values 9 and up are lost. To pass every value on, return them through `...`. It found two such bugs in SuuUI.
 - Tests: the encounter timeline keeps your addon's timers (`C_EncounterTimeline.AddScriptEvent`), as WoW Forever does even with its own timeline off: they are listed, readable (`GetEventInfo`, `GetEventState`, `GetEventTimeRemaining`), can be paused, resumed, finished or cancelled, and end when their time runs out, with the timeline's events.
 - Tests: `mock.postLFGListing(createData)` lists your character in the group finder, as the game's own listing panel does (the listing arrives a moment later with `LFG_LIST_ACTIVE_ENTRY_UPDATE`), and `mock.delistLFG()` takes it down again. Your addon's own `C_LFGList.CreateListing` is blocked, as in the game.
@@ -13,6 +14,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- A function with two parameters of the same name and types (`function(_: number, _: string)`) no longer fails its runtime check on correct calls: the first `_` was checked against the second's value.
 - `wowlua test --coverage` no longer reports the closing line of a multi-line `return f({ … })` as not run.
 - `GetCursorInfo()` gives the cursor's kind (`"item"`, `"spell"`, …) and its details to the checker. It was declared without results, so strict code had to read it through `any`.
 - Tests: `ClearPoint("TOPLEFT")` removes just that point, as in the game. Before, it did nothing, so a Blizzard dropdown menu that opens upward near the bottom of the screen kept both points and came out upside down.

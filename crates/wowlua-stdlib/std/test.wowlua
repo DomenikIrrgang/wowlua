@@ -54,11 +54,36 @@ local current: Entry? = nil
 local currentName = ""
 local snapshotCount = 0
 
+-- The wildcards an expected value may hold (`anything`, `ofType`): each
+-- with its test of the actual value and its name in messages.
+local wildcards: { [any]: { test: (v: any) -> boolean, name: string } } = setmetatable({}, { __mode = "k" })
+
+local function wildcard(name: string, test: (v: any) -> boolean): any
+    local w = setmetatable({}, { __tostring = function() return name end })
+    wildcards[w] = { test = test, name = name }
+    return w
+end
+
+--- An expected value that matches any value but `nil` (decision T261):
+--- `expect(spy).toHaveBeenCalledWith(1, anything)`, `toEqual({ frame =
+--- anything })`.
+export const anything: any = wildcard("anything", function(v: any): boolean return v ~= nil end)
+
+--- An expected value that matches any value of a Lua type (`"table"`,
+--- `"string"`, `"function"`, …; decision T261): `ofType("table")`.
+export function ofType(kind: string): any
+    return wildcard(`ofType("{kind}")`, function(v: any): boolean return type(v) == kind end)
+end
+
 -- A value as messages show it: strings quoted, tables one level deep,
 -- secrets as `<secret>`.
 local function show(v: any, depth: number?): string
     if secret.isSecret(v) then
         return "<secret>"
+    end
+    local w = type(v) == "table" and wildcards[v] or nil
+    if w then
+        return w.name
     end
     local t = type(v)
     if t == "string" then
@@ -290,8 +315,13 @@ local function both(a: boolean?, b: boolean?): boolean?
 end
 
 -- Deep equality; nil (unknown) when it turns on a value tests may not read
--- (a secret of the other's type, a table addons may not index).
+-- (a secret of the other's type, a table addons may not index). `b` is the
+-- expected value: a wildcard in it tests `a` instead.
 local function deepEqual(a: any, b: any, seen: { [any]: any }): boolean?
+    local w = type(b) == "table" and not secret.isSecret(b) and wildcards[b] or nil
+    if w then
+        return w.test(a)
+    end
     if secret.isSecret(a) or secret.isSecret(b) then
         return same(a, b)
     end

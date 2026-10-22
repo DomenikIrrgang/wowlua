@@ -900,6 +900,48 @@ end
     assert!(!out.contains("unused import"), "{out}");
 }
 
+/// Wildcards in expected values (decision T261): `anything` matches any
+/// value but nil, `ofType(kind)` any value of that type, in
+/// `toHaveBeenCalledWith` and `toEqual`, and messages name them.
+#[test]
+fn wildcards_match_any_value() {
+    let dir = project(
+        r#""standard": {}"#,
+        &[(
+            "tests/wild.test.wowlua",
+            r#"import test, expect, anything, ofType from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+@test("matched")
+local function matched()
+    local seen = mock.spy(function(...: any) end)
+    seen(1, CreateFrame("Frame"))
+    expect(seen).toHaveBeenCalledWith(1, anything)
+    expect(seen).toHaveBeenCalledWith(1, ofType("table"))
+    expect(seen).never.toHaveBeenCalledWith(1, ofType("string"))
+    expect(seen).never.toHaveBeenCalledWith(anything, nil)
+    expect({ id = 7, at = GetTime() }).toEqual({ id = 7, at = ofType("number") })
+    expect({ id = 7 }).never.toEqual({ id = 7, at = anything })
+end
+
+@test("a failure names the wildcard")
+local function named()
+    local seen = mock.spy(function(...: any) end)
+    seen(nil)
+    expect(seen).toHaveBeenCalledWith(anything)
+end
+"#,
+        )],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(!ok, "{out}");
+    assert!(out.contains("1 passed, 1 failed"), "{out}");
+    assert!(
+        out.contains("expected a call with (anything); its calls: (nil)"),
+        "{out}"
+    );
+}
+
 /// Snapshots (decision T218): written when missing, compared after, shown
 /// as a diff when they differ, rewritten with `-u`.
 #[test]
