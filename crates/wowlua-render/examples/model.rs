@@ -54,6 +54,7 @@ fn main() {
                 yaw: arg(5, 0.0),
                 pitch: 0.0,
                 roll: 0.0,
+                fixed_axes: false,
                 scale: 1.0,
                 alpha: 1.0,
                 animation: arg(6, 0.0) as u32,

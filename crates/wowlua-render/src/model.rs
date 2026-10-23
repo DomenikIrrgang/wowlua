@@ -234,8 +234,9 @@ fn lerp3(a: Vec3, b: Vec3, t: f32) -> Vec3 {
     ]
 }
 
-/// A rotation about Z (yaw), Y (pitch), X (roll).
-fn orientation(yaw: f32, pitch: f32, roll: f32) -> Mat4 {
+/// A rotation about Z (yaw), Y (pitch), X (roll): pitch and roll about
+/// the model's turned axes, or with `fixed` about the view's after the yaw.
+fn orientation(yaw: f32, pitch: f32, roll: f32, fixed: bool) -> Mat4 {
     let (sy, cy) = yaw.sin_cos();
     let (sp, cp) = pitch.sin_cos();
     let (sr, cr) = roll.sin_cos();
@@ -248,7 +249,11 @@ fn orientation(yaw: f32, pitch: f32, roll: f32) -> Mat4 {
     let rx: Mat4 = [
         1.0, 0.0, 0.0, 0.0, 0.0, cr, sr, 0.0, 0.0, -sr, cr, 0.0, 0.0, 0.0, 0.0, 1.0,
     ];
-    m2::mul(&m2::mul(&rz, &ry), &rx)
+    if fixed {
+        m2::mul(&m2::mul(&rx, &ry), &rz)
+    } else {
+        m2::mul(&m2::mul(&rz, &ry), &rx)
+    }
 }
 
 /// The vertical field of view of a diagonal one at an aspect ratio.
@@ -524,6 +529,7 @@ impl Renderer {
                 yaw: 0.0,
                 pitch: 0.0,
                 roll: 0.0,
+                fixed_axes: false,
                 scale: 1.0,
                 alpha: 1.0,
                 animation: 0,
@@ -582,7 +588,10 @@ impl Renderer {
             };
             let scale = actor.scale * display.scale;
             let mut world = m2::translation(actor.position);
-            world = m2::mul(&world, &orientation(actor.yaw, actor.pitch, actor.roll));
+            world = m2::mul(
+                &world,
+                &orientation(actor.yaw, actor.pitch, actor.roll, actor.fixed_axes),
+            );
             world = m2::mul(&world, &m2::scaling([scale; 3]));
             // The body's attachment points, for parts there.
             let mut body_points: Option<Body> = None;

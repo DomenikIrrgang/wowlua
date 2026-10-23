@@ -846,6 +846,41 @@ hidden:Hide()",
     assert_eq!((position, fov), ([4.0, 0.0, 1.0], 0.8));
 }
 
+/// A model frame's placed camera (`Model_ApplyUICamera`'s) draws in camera
+/// space: its model-space position and target back by 0.8171 times the
+/// frame's effective scale, the model at its own position and size, a
+/// field of view of 50 degrees across the frame's diagonal; the model's
+/// pitch and roll turn about the view's axes after its facing.
+#[test]
+fn placed_model_frame_cameras_draw_in_camera_space() {
+    use wowlua_engine::scene::ModelCamera;
+    let mut vm = vm();
+    run(
+        &mut vm,
+        "local m = CreateFrame('PlayerModel', nil, UIParent)
+m:SetSize(200, 250)
+m:SetPoint('CENTER')
+m:SetDisplayInfo(15)
+m:SetPosition(3, 0.2, -1.5)
+m:SetFacing(-0.25)
+m:SetPitch(-0.1)
+local c = m:TransformCameraSpaceToModelSpace({ x = 4, y = 0, z = 0 })
+m:SetCameraPosition(c.x, c.y, c.z)
+m:SetCameraTarget(0, 0, 0)",
+    );
+    let m = models(&mut vm);
+    let a = &m[0].actors[0];
+    assert_eq!(a.position, [3.0, 0.2, -1.5]);
+    assert!(a.fixed_axes);
+    let ModelCamera::Scene { position, fov, .. } = m[0].camera else {
+        panic!("{:?}", m[0].camera);
+    };
+    assert!((position[0] - 4.0).abs() < 1e-4, "{position:?}");
+    // 50 degrees across the diagonal of 200 by 250, vertically.
+    let vertical = 2.0 * ((25f32.to_radians()).tan() / (1.0f32 + 0.64).sqrt()).atan();
+    assert!((fov - vertical).abs() < 1e-5, "{fov}");
+}
+
 struct Scenes;
 
 impl wowlua_engine::clientdata::ClientData for Scenes {

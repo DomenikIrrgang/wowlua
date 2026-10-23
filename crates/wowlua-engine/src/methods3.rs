@@ -1030,17 +1030,30 @@ fn has_custom_camera(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(custom)])
 }
 
-/// `Model:TransformCameraSpaceToModelSpace(position)`: the position as a
-/// vector (unverified: the engine's model space is its camera space, no
-/// model being loaded).
-fn transform_camera_to_model(vm: &mut Vm, _id: WidgetId, c: NativeCall) -> Ret {
+/// What one camera-space unit is in model space at a frame's effective
+/// scale 1 (probed in WoW Forever, 2026-10-23: 0.81710201501846 at
+/// 1920x1080 and 1600x900, the same for every model).
+const CAMERA_TO_MODEL: f64 = 0.817_102_015_018_46;
+
+/// One camera-space unit of a model frame in its model space.
+pub(crate) fn camera_to_model(vm: &Vm, id: WidgetId) -> f64 {
+    CAMERA_TO_MODEL * crate::widgets::effective_scale(engine(vm), id)
+}
+
+/// `Model:TransformCameraSpaceToModelSpace(position)`: the position scaled
+/// by 0.8171 times the frame's effective scale, as a vector (probed:
+/// 0.58105 under UIParent at 0.7111; whatever the frame's size, the
+/// model, its position and its facing; `Model_ApplyUICamera` so puts the
+/// camera at 2.3242, 0, 0).
+fn transform_camera_to_model(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let scale = camera_to_model(vm, id);
     let v = c.arg(2);
     let mut xyz = [0.0; 3];
     if let Value::Table(t) = v {
         for (i, k) in ["x", "y", "z"].iter().enumerate() {
             let key = vm.str(k);
             let n = vm.heap.table(t).get(key);
-            xyz[i] = number(vm, n).unwrap_or(0.0);
+            xyz[i] = number(vm, n).unwrap_or(0.0) * scale;
         }
     }
     Ok(vec![vector3(vm, xyz[0], xyz[1], xyz[2])])

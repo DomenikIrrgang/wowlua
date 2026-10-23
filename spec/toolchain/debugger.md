@@ -324,9 +324,13 @@ T310).
   the animation, whether it is centered), as the recordings show; without
   the tables, the recordings. A model frame given a camera
   (`SetCameraPosition` and `SetCameraTarget`, as `Model_ApplyUICamera`
-  does) is seen from it (unverified: the field of view, and
-  `TransformCameraSpaceToModelSpace`, which keeps the point as it is;
-  the wardrobe's head shots sit off center: in-game probe owed).
+  does) is seen from it, in camera space (decision T334): model space is
+  camera space times 0.8171 times the frame's effective scale
+  (`TransformCameraSpaceToModelSpace` scales by it), so the camera's
+  position and target are taken back by that factor, the model stands at
+  its `SetPosition` at its own size, pitch and roll turn it about the
+  view's axes after its facing, and the field of view is 50 degrees
+  across the frame's diagonal.
 - **Fonts**: the client's TrueType fonts from the installation; without
   them, the bundled stand-in fonts (open licenses), at the same pixel
   heights. Glyph positions follow the engine's measured widths (§17.6), so

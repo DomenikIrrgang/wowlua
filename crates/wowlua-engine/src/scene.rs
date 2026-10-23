@@ -173,6 +173,10 @@ pub struct Actor {
     pub yaw: f32,
     pub pitch: f32,
     pub roll: f32,
+    /// Whether pitch and roll turn about the view's fixed axes after the
+    /// facing (a model frame's: probed in WoW Forever, 2026-10-23), not
+    /// about the model's own turned axes (a scene actor's, unverified).
+    pub fixed_axes: bool,
     pub scale: f32,
     pub alpha: f32,
     /// The animation (`AnimationData` ID, 0 standing) and its variation.
@@ -1186,6 +1190,7 @@ fn actor_of(vm: &mut Vm, id: WidgetId, frame: bool) -> Option<Actor> {
         yaw,
         pitch: num(vm, first(vm, id, "Pitch").as_ref(), 0.0) as f32,
         roll: num(vm, first(vm, id, "Roll").as_ref(), 0.0) as f32,
+        fixed_axes: frame,
         scale,
         alpha,
         animation: num(vm, anim.first(), 0.0).max(0.0) as u32,
@@ -1218,6 +1223,12 @@ fn light_of(vm: &Vm, id: WidgetId) -> Light {
     light
 }
 
+/// The field of view of a model frame's placed camera, across the frame's
+/// diagonal: 50 degrees (fitted to WoW Forever, 2026-10-23: UI camera 542
+/// on 200 by 250 and 400 by 250 frames, the model the same size to a
+/// pixel or two, larger by the diagonals' ratio in the wider frame).
+const PLACED_CAMERA_FOV: f32 = 50.0 * std::f32::consts::PI / 180.0;
+
 /// A model frame's or model scene's model item, if it shows a model.
 fn model_item(vm: &mut Vm, f: WidgetId, class: &str) -> Option<Model> {
     let e = engine(vm);
@@ -1235,14 +1246,24 @@ fn model_item(vm: &mut Vm, f: WidgetId, class: &str) -> Option<Model> {
         // A camera the code placed (`SetCameraPosition`,
         // `SetCameraTarget`: `Model_ApplyUICamera`'s), else the frame's.
         let placed = nums(vm, f, "CameraPosition", 3).zip(nums(vm, f, "CameraTarget", 3));
+        // Its position and target are in model space, the model drawn in
+        // camera space: one camera-space unit is 0.8171 times the frame's
+        // effective scale there (`TransformCameraSpaceToModelSpace`, probed).
         let camera = if let Some((p, t)) = placed {
+            let k = crate::methods3::camera_to_model(vm, f).max(1e-6) as f32;
+            let back = |v: Vec<f32>| -> Vec<f32> { v.iter().map(|c| c / k).collect() };
+            let (p, t) = (back(p), back(t));
             let forward = [t[0] - p[0], t[1] - p[1], t[2] - p[2]];
             ModelCamera::Scene {
                 position: [p[0], p[1], p[2]],
                 forward,
                 right: [forward[1], -forward[0], 0.0],
                 up: [0.0, 0.0, 1.0],
-                fov: 0.6,
+                fov: {
+                    let half = (PLACED_CAMERA_FOV / 2.0).tan();
+                    let a = rect.w / rect.h;
+                    2.0 * (half / (1.0 + a * a).sqrt()).atan()
+                },
                 near: 0.1,
                 far: 100.0,
             }
