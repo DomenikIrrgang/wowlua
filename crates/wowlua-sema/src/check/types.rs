@@ -978,13 +978,24 @@ impl Types {
                 self.union(&tys)
             }
             (Ty::Map(_, v), _) | (Ty::Array(v), _) => self.optional(v),
-            // `(A & B)[K]`: the field of whichever part has it.
+            // `(A & B)[K]`: the field of whichever part has it, else an
+            // indexer's value.
             (Ty::Intersection(ms), Ty::Str(name)) => {
                 for &m in &ms {
                     if let Ty::Record(r) = self.get(m).clone()
                         && let Some(f) = r.fields.get(&name)
                     {
                         return f.ty;
+                    }
+                }
+                for &m in &ms {
+                    let value = match self.get(m).clone() {
+                        Ty::Record(r) => r.indexer.map(|(_, v)| v),
+                        Ty::Map(_, v) => Some(v),
+                        _ => None,
+                    };
+                    if let Some(v) = value {
+                        return self.optional(v);
                     }
                 }
                 self.intern(Ty::IndexOf(o, k))
