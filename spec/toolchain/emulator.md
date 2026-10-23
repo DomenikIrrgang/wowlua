@@ -383,7 +383,9 @@ takes the flavor's `Interface` folder and its global strings:
   and `parentArray`, key values, sizes, anchors (an element's own
   `<Anchors>` take the place of its `setAllPoints`, decision T323; a
   texture with none fills its parent, sized or not, but a slider's thumb,
-  which the slider places along its length by its value, decision T326; a
+  which the slider anchors by its `LEFT` to its own `LEFT` (`TOP` to `TOP`
+  on a vertical slider), offset along its length by its value, so
+  `GetNumPoints` gives 1 and `GetPoint` that anchor, decision T326; a
   texture's `rotation` is in degrees, turning it about its center), layers,
   child frames and scripts (`function`, `method` or a body;
   `inherit="prepend"` / `"append"`);

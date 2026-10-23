@@ -355,5 +355,7 @@ player's arrow 32 by 32 UI units; neither is recorded on camelot.
 2. Open Settings, Mouse, hover the Mouse Look Speed slider with
    `/fstack` on, and note the thumb's left relative to the slider at the
    value shown, at the minimum and at the maximum (wowlua: it travels the
-   slider's width less the thumb's, by the value).
+   slider's width less the thumb's, by the value). Answered for a
+   horizontal slider made in Lua (2026-10-23): it does, by one point,
+   `LEFT` to the slider's `LEFT`; still open: a vertical slider's point.
 

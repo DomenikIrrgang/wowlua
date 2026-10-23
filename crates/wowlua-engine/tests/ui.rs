@@ -270,8 +270,8 @@ return l:GetNumPoints(), p, rp, x, y, l:GetWidth(), l:GetHeight(), f:GetNumPoint
 }
 
 /// A texture the XML does not anchor fills its parent, sized or not; a
-/// slider's thumb does not, the slider places it along its length by its
-/// value; a texture's `rotation` is in degrees.
+/// slider's thumb does not, the slider anchors it `LEFT` to its `LEFT`
+/// along its length by its value; a texture's `rotation` is in degrees.
 #[test]
 fn unanchored_textures_thumbs_and_rotation() {
     let interface = tree(
@@ -313,11 +313,26 @@ local thumb = h.Bar:GetThumbTexture()
 local hl, hb = h:GetLeft(), h:GetBottom()
 h.Bar:SetValue(5)
 local mid = thumb:GetLeft() - hl
+local p, rel, rp, x, y = thumb:GetPoint(1)
+local anchor = string.format('%s %s %s %g %g', p, tostring(rel == h.Bar), rp, x, y)
 h.Bar:SetValue(10)
 return h.Plain:GetNumPoints(), h.Sized:GetNumPoints(), h.Sized:GetWidth(), thumb:GetNumPoints(),
-    mid, thumb:GetLeft() - hl, thumb:GetBottom() - hb, string.format('%.4f', h.Turned:GetRotation())",
+    mid, thumb:GetLeft() - hl, thumb:GetBottom() - hb, string.format('%.4f', h.Turned:GetRotation()), anchor",
     );
-    assert_eq!(r, ["2", "2", "200", "0", "50", "100", "5", "1.5708"]);
+    assert_eq!(
+        r,
+        [
+            "2",
+            "2",
+            "200",
+            "1",
+            "50",
+            "100",
+            "5",
+            "1.5708",
+            "LEFT true LEFT 50 0"
+        ]
+    );
 }
 
 /// An intrinsic type declared with `allowUntaintedCreation` (Blizzard's

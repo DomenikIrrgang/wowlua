@@ -2447,7 +2447,7 @@ fn not_for_lines(vm: &mut Vm, id: WidgetId, method: &str) -> Result<(), LuaError
 fn get_rect(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let s = layout_scale(engine(vm), id);
     Ok(match bounds(vm, id, 0) {
-        Some(b) if !engine(vm).world.widgets[id.0].points.is_empty() => vec![
+        Some(b) if !reported_points(vm, id).is_empty() => vec![
             Value::Num(b.0 / s),
             Value::Num(b.1 / s),
             Value::Num(b.2 / s),
@@ -2457,18 +2457,46 @@ fn get_rect(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     })
 }
 
+/// A widget's points as `GetPoint` reports them. A slider's thumb texture
+/// without points of its own has the one the slider gives it: `LEFT` to the
+/// slider's `LEFT`, x along the free length, y 0 (probed in WoW Forever,
+/// 2026-10-23); vertical, `TOP` to `TOP` with y down (unverified).
+fn reported_points(vm: &Vm, id: WidgetId) -> Vec<Point> {
+    let w = &engine(vm).world.widgets[id.0];
+    if !w.points.is_empty() {
+        return w.points.clone();
+    }
+    let Some((slider, at, vertical)) = crate::bars::thumb_place(vm, id) else {
+        return vec![];
+    };
+    let Some(r) = bounds(vm, slider, 0) else {
+        return vec![];
+    };
+    let s = layout_scale(engine(vm), id);
+    let table = Value::Table(engine(vm).world.widgets[slider.0].table);
+    let (point, x, y) = if vertical {
+        ("TOP", 0.0, -at * (r.3 / s - w.height).max(0.0))
+    } else {
+        ("LEFT", at * (r.2 / s - w.width).max(0.0), 0.0)
+    };
+    vec![Point {
+        point: point.into(),
+        relative: Some(table),
+        relative_point: point.into(),
+        x,
+        y,
+    }]
+}
+
 fn get_num_points(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     not_for_lines(vm, id, "GetNumPoints")?;
-    Ok(vec![Value::Num(
-        engine(vm).world.widgets[id.0].points.len() as f64,
-    )])
+    Ok(vec![Value::Num(reported_points(vm, id).len() as f64)])
 }
 
 fn get_point(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     not_for_lines(vm, id, "GetPoint")?;
     let i = vm.opt_int(&c, 2, 1)?;
-    let Some(p) = engine(vm).world.widgets[id.0]
-        .points
+    let Some(p) = reported_points(vm, id)
         .get((i - 1).max(0) as usize)
         .cloned()
     else {
@@ -2495,14 +2523,12 @@ fn get_point_by_name(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         return Ok(vec![]);
     };
     let name = String::from_utf8_lossy(vm.str_bytes(name)).to_uppercase();
-    let Some(i) = engine(vm).world.widgets[id.0]
-        .points
-        .iter()
-        .position(|p| p.point.eq_ignore_ascii_case(&name))
+    let Some(p) = reported_points(vm, id)
+        .into_iter()
+        .find(|p| p.point.eq_ignore_ascii_case(&name))
     else {
         return Ok(vec![]);
     };
-    let p = engine(vm).world.widgets[id.0].points[i].clone();
     let parent = engine(vm).world.widgets[id.0]
         .parent
         .map(|p| Value::Table(engine(vm).world.widgets[p.0].table));
