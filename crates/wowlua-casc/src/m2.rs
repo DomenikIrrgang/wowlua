@@ -898,6 +898,63 @@ impl Skin {
 /// A 4×4 matrix, columns first.
 pub type Mat4 = [f32; 16];
 
+/// Where billboarded bones turn: toward the camera, with its up, in the
+/// model's space.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Facing {
+    pub toward: Vec3,
+    pub up: Vec3,
+}
+
+/// A bone's flags: faces the camera; turns about its Z axis to face it.
+const BILLBOARD: u32 = 0x8;
+const BILLBOARD_LOCK_Z: u32 = 0x40;
+
+fn norm3(v: Vec3) -> Option<Vec3> {
+    let l = (v[0] * v[0] + v[1] * v[1] + v[2] * v[2]).sqrt();
+    (l > 1e-6).then(|| [v[0] / l, v[1] / l, v[2] / l])
+}
+
+fn cross3(a: Vec3, b: Vec3) -> Vec3 {
+    [
+        a[1] * b[2] - a[2] * b[1],
+        a[2] * b[0] - a[0] * b[2],
+        a[0] * b[1] - a[1] * b[0],
+    ]
+}
+
+/// A bone's matrix billboarded: its pivot where `world` puts it, its axes
+/// (scaled as its own) X toward the camera, Z up (or, `lock_z`, its own Z
+/// kept and X turned about it toward the camera).
+fn billboard(world: &Mat4, pivot: Vec3, scale: Vec3, f: Facing, lock_z: bool) -> Mat4 {
+    let at = transform(world, pivot);
+    let axes = if lock_z {
+        norm3([world[8], world[9], world[10]]).and_then(|z| {
+            let d = f.toward[0] * z[0] + f.toward[1] * z[1] + f.toward[2] * z[2];
+            let x = norm3([
+                f.toward[0] - z[0] * d,
+                f.toward[1] - z[1] * d,
+                f.toward[2] - z[2] * d,
+            ])?;
+            Some((x, cross3(z, x), z))
+        })
+    } else {
+        norm3(f.toward).and_then(|x| {
+            let y = norm3(cross3(f.up, x))?;
+            Some((x, y, cross3(x, y)))
+        })
+    };
+    let Some((x, y, z)) = axes else {
+        return *world;
+    };
+    let r = [
+        x[0], x[1], x[2], 0.0, y[0], y[1], y[2], 0.0, z[0], z[1], z[2], 0.0, 0.0, 0.0, 0.0, 1.0,
+    ];
+    let m = mul(&translation(at), &r);
+    let m = mul(&m, &scaling(scale));
+    mul(&m, &translation([-pivot[0], -pivot[1], -pivot[2]]))
+}
+
 pub const IDENTITY: Mat4 = [
     1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0,
 ];
@@ -1064,6 +1121,19 @@ impl Model {
 
     /// Each bone's matrix at `time` of `sequence` (none: the bind pose).
     pub fn pose(&self, sequence: Option<usize>, time: u32) -> Vec<Mat4> {
+        self.pose_facing(sequence, time, None)
+    }
+
+    /// Each bone's matrix at `time` of `sequence`, billboarded bones turned
+    /// to `facing` (the camera, in the model's space): a spherical one's X
+    /// axis toward it, its Z axis up; one locked to its Z axis turned about
+    /// it only. Their children follow them.
+    pub fn pose_facing(
+        &self,
+        sequence: Option<usize>,
+        time: u32,
+        facing: Option<Facing>,
+    ) -> Vec<Mat4> {
         let n = self.bones.len();
         let mut out: Vec<Option<Mat4>> = vec![None; n];
         fn of(
@@ -1073,6 +1143,7 @@ impl Model {
             time: u32,
             out: &mut Vec<Option<Mat4>>,
             depth: u32,
+            facing: Option<Facing>,
         ) -> Mat4 {
             if let Some(v) = out[i] {
                 return v;
@@ -1097,18 +1168,26 @@ impl Model {
                 }
                 None => IDENTITY,
             };
-            let world = match b.parent {
+            let mut world = match b.parent {
                 Some(p) if (p as usize) < m.bones.len() && p as usize != i && depth < 128 => {
-                    let pm = of(m, p as usize, seq, time, out, depth + 1);
+                    let pm = of(m, p as usize, seq, time, out, depth + 1, facing);
                     mul(&pm, &local)
                 }
                 _ => local,
             };
+            if let Some(f) = facing
+                && b.flags & (BILLBOARD | BILLBOARD_LOCK_Z) != 0
+            {
+                let scale = seq
+                    .and_then(|s| b.scale.sample(s, time, &m.global_loops))
+                    .unwrap_or([1.0; 3]);
+                world = billboard(&world, b.pivot, scale, f, b.flags & BILLBOARD == 0);
+            }
             out[i] = Some(world);
             world
         }
         for i in 0..n {
-            of(self, i, sequence, time, &mut out, 0);
+            of(self, i, sequence, time, &mut out, 0, facing);
         }
         out.into_iter().map(|m| m.unwrap_or(IDENTITY)).collect()
     }
@@ -1219,5 +1298,67 @@ impl Model {
         let a = self.attachments.get(usize::try_from(i).ok()?)?;
         let bone = bones.get(a.bone as usize).copied().unwrap_or(IDENTITY);
         Some(mul(&bone, &translation(a.position)))
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn close(a: Vec3, b: Vec3) -> bool {
+        (0..3).all(|i| (a[i] - b[i]).abs() < 1e-5)
+    }
+
+    /// A spherical billboard turns its bone's X axis toward the camera, Z
+    /// up, about its pivot; one locked to Z keeps its Z axis; others and
+    /// a pose without facing stay as they are.
+    #[test]
+    fn billboarded_bones_face_the_camera() {
+        let bone = |flags: u32| Bone {
+            flags,
+            pivot: [1.0, 2.0, 0.0],
+            parent: None,
+            ..Default::default()
+        };
+        let m = Model {
+            bones: vec![bone(BILLBOARD), bone(BILLBOARD_LOCK_Z), bone(0)],
+            ..Default::default()
+        };
+        let facing = Facing {
+            toward: [0.0, 1.0, 0.0],
+            up: [0.0, 0.0, 1.0],
+        };
+        let posed = m.pose_facing(None, 0, Some(facing));
+        // The pivot stays put; X goes toward the camera (+Y), Y to -X, Z up.
+        let sphere = &posed[0];
+        assert!(close(transform(sphere, [1.0, 2.0, 0.0]), [1.0, 2.0, 0.0]));
+        assert!(close(
+            transform_dir(sphere, [1.0, 0.0, 0.0]),
+            [0.0, 1.0, 0.0]
+        ));
+        assert!(close(
+            transform_dir(sphere, [0.0, 1.0, 0.0]),
+            [-1.0, 0.0, 0.0]
+        ));
+        assert!(close(
+            transform_dir(sphere, [0.0, 0.0, 1.0]),
+            [0.0, 0.0, 1.0]
+        ));
+        // Seen from above and the side, the Z-locked bone keeps Z up.
+        let above = Facing {
+            toward: [0.0, 1.0, 1.0],
+            up: [0.0, -1.0, 1.0],
+        };
+        let posed = m.pose_facing(None, 0, Some(above));
+        assert!(close(
+            transform_dir(&posed[1], [0.0, 0.0, 1.0]),
+            [0.0, 0.0, 1.0]
+        ));
+        assert!(close(
+            transform_dir(&posed[1], [1.0, 0.0, 0.0]),
+            [0.0, 1.0, 0.0]
+        ));
+        assert_eq!(posed[2], IDENTITY);
+        assert_eq!(m.pose(None, 0)[0], IDENTITY);
     }
 }

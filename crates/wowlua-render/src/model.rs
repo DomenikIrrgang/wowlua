@@ -77,6 +77,53 @@ impl Rng {
 pub(crate) struct Body {
     points: HashMap<u32, Mat4>,
     pose: Vec<Mat4>,
+    /// Toward the camera and its up, in the scene's space.
+    facing: (Vec3, Vec3),
+}
+
+/// Toward the camera and its up in the scene's space, as the model pass
+/// will place it (`finish_model`): a scene's camera; a frame's own camera
+/// (one of the model's); else from in front (+X), turned toward the
+/// model's portrait camera by the portrait zoom.
+fn camera_facing(m: &m2::Model, camera: &ModelCamera, world: &Mat4) -> (Vec3, Vec3) {
+    let up = [0.0, 0.0, 1.0];
+    let from = |c: &m2::Camera| {
+        sub(
+            m2::transform(world, c.position),
+            m2::transform(world, c.target),
+        )
+    };
+    match camera {
+        ModelCamera::Scene { forward, up, .. } => ([-forward[0], -forward[1], -forward[2]], *up),
+        ModelCamera::Frame {
+            camera: Some(i), ..
+        } => match m.cameras.get((*i).max(0) as usize) {
+            Some(c) => (from(c), up),
+            None => ([1.0, 0.0, 0.0], up),
+        },
+        ModelCamera::Frame { portrait_zoom, .. } => match m.camera(0) {
+            Some(c) if *portrait_zoom > 0.0 => {
+                let p = from(c);
+                let l = dot(p, p).sqrt().max(1e-6);
+                let z = portrait_zoom.clamp(0.0, 1.0);
+                (
+                    lerp3([1.0, 0.0, 0.0], [p[0] / l, p[1] / l, p[2] / l], z),
+                    up,
+                )
+            }
+            _ => ([1.0, 0.0, 0.0], up),
+        },
+    }
+}
+
+/// A direction of the scene's space in a model's (its world matrix's
+/// rotation undone; scale left out, the direction's length unused).
+fn into_model(world: &Mat4, d: Vec3) -> Vec3 {
+    [
+        world[0] * d[0] + world[1] * d[1] + world[2] * d[2],
+        world[4] * d[0] + world[5] * d[1] + world[6] * d[2],
+        world[8] * d[0] + world[9] * d[1] + world[10] * d[2],
+    ]
 }
 
 /// What the model pass keeps between frames.
@@ -595,11 +642,6 @@ impl Renderer {
             let d = m.sequences[s].duration;
             if d > 0 { ms % d } else { 0 }
         });
-        // A part made for the body's skeleton takes its pose.
-        let pose = match body_points.as_ref() {
-            Some(b) if part.skinned && b.pose.len() >= m.bones.len() => b.pose.clone(),
-            _ => m.pose(seq, time),
-        };
         let mut part_world = world;
         if let Some(att) = part.attachment {
             let Some(a) = body_points.as_ref().and_then(|p| p.points.get(&att)) else {
@@ -607,6 +649,20 @@ impl Renderer {
             };
             part_world = m2::mul(&world, a);
         }
+        // Billboarded bones face the camera, in the part's own space.
+        let facing = match body_points.as_ref() {
+            Some(b) => b.facing,
+            None => camera_facing(m, camera, &world),
+        };
+        let toward = m2::Facing {
+            toward: into_model(&part_world, facing.0),
+            up: into_model(&part_world, facing.1),
+        };
+        // A part made for the body's skeleton takes its pose.
+        let pose = match body_points.as_ref() {
+            Some(b) if part.skinned && b.pose.len() >= m.bones.len() => b.pose.clone(),
+            _ => m.pose_facing(seq, time, Some(toward)),
+        };
         let skinned = m.skinned(&pose);
         if part.attachment.is_none() && body_points.is_none() {
             *body_points = Some(Body {
@@ -616,6 +672,7 @@ impl Renderer {
                     .filter_map(|a| Some((a.id, m.attachment(a.id, &pose)?)))
                     .collect(),
                 pose: pose.clone(),
+                facing,
             });
             if let Some(c) = m.camera(0) {
                 *portrait = Some((

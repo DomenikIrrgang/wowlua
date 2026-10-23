@@ -366,8 +366,12 @@ or Vulkan natively, WebGPU or WebGL 2 in the browser.
   its life; facing the camera, with the emitter's blend mode). Model files
   are read once; a frame's model textures are reused from frame to frame.
   Unverified: the particles' compressed gravity, tails and texture cells
-  over life (each particle draws its first cell). Not drawn: ribbons
-  (trails behind moving parts, as in motion), billboarded bones.
+  over life (each particle draws its first cell). Billboarded bones (a
+  spherical one, or one locked to its Z axis) face the camera as it will
+  be placed: the scene's, the model's own, or the frame's from in front
+  turned toward the portrait camera by the zoom; their children follow
+  (bones locked to X or Y as posed, unverified). Not drawn: ribbons
+  (trails behind moving parts, as in motion).
 - **Minimap** (decision T324): a `Minimap` frame shows the terrain about the
   player, under its regions: the minimap textures of the 533⅓-yard terrain
   tiles its zoom covers (466⅔, 400, 333⅓, 266⅔, 200 or 133⅓ yards across
