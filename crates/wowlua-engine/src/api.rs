@@ -144,11 +144,24 @@ pub fn api(flavor: &str) -> Option<&'static Api> {
     // register it).
     if flavor == "camelot" {
         parsed.events.insert("UPDATE_EXPANSION_LEVEL".to_string());
-        // A callback event alone (the documentation's `CallbackEvent`):
-        // `RegisterEvent("MINIMAP_PING")` is refused as an unknown event
-        // (probed in WoW Forever, 2026-10-23); `RegisterEventCallback`, as
-        // Blizzard's minimap uses it, takes it.
-        parsed.events.remove("MINIMAP_PING");
+        // Callback events alone (the documentation's `CallbackEvent`s):
+        // `RegisterEvent` refuses them as unknown and
+        // `C_EventUtils.IsEventValid` says false (probed in WoW Forever,
+        // 2026-10-23); `RegisterEventCallback`, as Blizzard's code uses
+        // them, takes them. The other callback events (`COMBAT_LOG_EVENT`,
+        // `COMBAT_LOG_EVENT_UNFILTERED`, `ENCOUNTER_STATE_CHANGED`) are
+        // events too; the three other `CLASS_TALENTS_SWITCH_TO_…` are
+        // unprobed.
+        for e in [
+            "MINIMAP_PING",
+            "COMBAT_LOG_EVENT_INTERNAL_UNFILTERED",
+            "TOOLTIP_SHOW_ITEM_COMPARISON",
+            "COMBAT_LOG_APPLY_FILTER_SETTINGS",
+            "COMBAT_LOG_REFILTER_ENTRIES",
+            "CLASS_TALENTS_SWITCH_TO_LOADOUT_BY_NAME",
+        ] {
+            parsed.events.remove(e);
+        }
     }
     // Frame types the client has that the documentation lacks or gives no
     // base (`/stdtest engine`: each a Frame by IsObjectType).

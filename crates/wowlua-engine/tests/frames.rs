@@ -1357,3 +1357,28 @@ return py - y, gx, gy, table.concat(Pinged, ' ')",
     run(&mut vm, "mock.advanceTime(6)");
     assert!(marks(&mut vm).iter().all(|m| !m.0.contains("Ping")));
 }
+
+/// The callback events the client keeps from `RegisterEvent` (probed in WoW
+/// Forever): refused as unknown, not valid; the ones that are events too
+/// register.
+#[test]
+fn callback_events_alone_are_refused() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local out = {}
+for _, e in ipairs({ 'MINIMAP_PING', 'COMBAT_LOG_EVENT', 'COMBAT_LOG_EVENT_UNFILTERED',
+    'COMBAT_LOG_EVENT_INTERNAL_UNFILTERED', 'ENCOUNTER_STATE_CHANGED', 'TOOLTIP_SHOW_ITEM_COMPARISON',
+    'COMBAT_LOG_APPLY_FILTER_SETTINGS', 'COMBAT_LOG_REFILTER_ENTRIES', 'CLASS_TALENTS_SWITCH_TO_LOADOUT_BY_NAME' }) do
+    local f = CreateFrame('Frame')
+    out[#out + 1] = tostring((pcall(f.RegisterEvent, f, e))) .. '/' .. tostring(C_EventUtils.IsEventValid(e))
+end
+return table.concat(out, ' ')",
+    );
+    assert_eq!(
+        r,
+        [
+            "false/false true/true true/true false/false true/true false/false false/false false/false false/false"
+        ]
+    );
+}

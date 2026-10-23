@@ -45,6 +45,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- `frame:RegisterEvent` refuses the events WoW Forever keeps for event callbacks alone, as the client does ("Attempt to register unknown event"): `MINIMAP_PING`, `TOOLTIP_SHOW_ITEM_COMPARISON`, `COMBAT_LOG_EVENT_INTERNAL_UNFILTERED`, `COMBAT_LOG_APPLY_FILTER_SETTINGS`, `COMBAT_LOG_REFILTER_ENTRIES` and `CLASS_TALENTS_SWITCH_TO_LOADOUT_BY_NAME`. `COMBAT_LOG_EVENT_UNFILTERED` still registers.
 - Talent points follow the character's level: one a level from level 10 (earlier with Legacy's "Talented" ranks), at most 51, so the talent window and `C_Traits.GetTreeCurrencyInfo` show what a character of that level has.
 - The default world's talent tree shows its talents: the player's talent config is the one the emulated client holds talents for (it named another, so Blizzard's talents tab drew only its backgrounds).
 - With your WoW installation at hand, an item your test doesn't define is the game's own: `C_Item.GetItemInfo`, `DoesItemExistByID` and Blizzard's item loading answer with its name, quality, icon and class from the client's tables, so Blizzard's Legacy rewards panel no longer raises "invalid itemID". Items you define stay yours.
