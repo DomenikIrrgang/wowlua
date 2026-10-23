@@ -1255,34 +1255,14 @@ fn get_best_map_for_unit(vm: &mut Vm, c: NativeCall) -> Ret {
 /// Unverified: map 0 (the client gave a position near the zone's).
 fn get_player_map_position(vm: &mut Vm, c: NativeCall) -> Ret {
     let p = engine(vm).world.character.position.clone();
-    let (Some(x), Some(y), Some(map)) = (p.x, p.y, p.map_id) else {
+    if p.x.is_none() || p.y.is_none() || p.map_id.is_none() {
         return Ok(vec![]);
-    };
+    }
     if units::unit_arg(vm, &c, 2) != Some(units::PLAYER) {
         return Ok(vec![Value::Nil]);
     }
-    let asked = num(c.arg(1));
-    let (x, y) = if asked == Some(map) {
-        (x, y)
-    } else {
-        let rect = asked
-            .filter(|a| *a > 0.0 && a.fract() == 0.0)
-            .and_then(|a| {
-                let call = format!("C_Map.GetMapRectOnMap({}, {})", map as i64, a as i64);
-                match crate::recorded::lookup_text(vm, &call)?.as_slice() {
-                    &[
-                        Value::Num(x0),
-                        Value::Num(x1),
-                        Value::Num(y0),
-                        Value::Num(y1),
-                    ] if x1 > x0 && y1 > y0 => Some((x0, x1, y0, y1)),
-                    _ => None,
-                }
-            });
-        match rect {
-            Some((x0, x1, y0, y1)) => (x0 + x * (x1 - x0), y0 + y * (y1 - y0)),
-            None => return Ok(vec![Value::Nil]),
-        }
+    let Some((x, y)) = num(c.arg(1)).and_then(|m| player_position_on(vm, m)) else {
+        return Ok(vec![Value::Nil]);
     };
     // A `Vector2DMixin` (Blizzard's `CreateVector2D`, the client's).
     let create = vm.get_global("CreateVector2D");
@@ -1301,6 +1281,36 @@ fn get_player_map_position(vm: &mut Vm, c: NativeCall) -> Ret {
     let key = vm.str("GetXY");
     let _ = vm.heap.table_mut(v).set(key, get_xy);
     Ok(vec![Value::Table(v)])
+}
+
+/// The player's place on map `asked` (0 to 1 across it): on the player's
+/// own map as it is, on a map holding it moved by the map's recorded
+/// rectangle on that map; none elsewhere.
+pub(crate) fn player_position_on(vm: &mut Vm, asked: f64) -> Option<(f64, f64)> {
+    let p = engine(vm).world.character.position.clone();
+    let (x, y, map) = (p.x?, p.y?, p.map_id?);
+    let asked = Some(asked);
+    let (x, y) = if asked == Some(map) {
+        (x, y)
+    } else {
+        let rect = asked
+            .filter(|a| *a > 0.0 && a.fract() == 0.0)
+            .and_then(|a| {
+                let call = format!("C_Map.GetMapRectOnMap({}, {})", map as i64, a as i64);
+                match crate::recorded::lookup_text(vm, &call)?.as_slice() {
+                    &[
+                        Value::Num(x0),
+                        Value::Num(x1),
+                        Value::Num(y0),
+                        Value::Num(y1),
+                    ] if x1 > x0 && y1 > y0 => Some((x0, x1, y0, y1)),
+                    _ => None,
+                }
+            });
+        let (x0, x1, y0, y1) = rect?;
+        (x0 + x * (x1 - x0), y0 + y * (y1 - y0))
+    };
+    Some((x, y))
 }
 
 fn vector_xy(vm: &mut Vm, c: NativeCall) -> Ret {

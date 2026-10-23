@@ -1474,6 +1474,42 @@ fn quest_poi_update_tooltip(_vm: &mut Vm, _id: WidgetId, _c: NativeCall) -> Ret 
     Ok(vec![Value::Nil, Value::Nil])
 }
 
+/// `UnitPositionFrame:AddUnit(unit, asset, width, height, r, g, b, a,
+/// sublayer, showFacing)`: a pin the frame draws for the unit, kept by its
+/// token until `ClearUnits` (Blizzard's map pins add the player's arrow so,
+/// on every update).
+fn add_unit(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let Value::Str(unit) = c.arg(2) else {
+        return Ok(vec![]);
+    };
+    let unit = String::from_utf8_lossy(vm.str_bytes(unit)).to_ascii_lowercase();
+    let args: Vec<Value> = c.args.iter().skip(2).copied().collect();
+    widgets::store(vm, id, &format!("Unit:{unit}"), &args);
+    Ok(vec![])
+}
+
+/// `UnitPositionFrame:ClearUnits()`: no pins.
+fn clear_units(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let props = engine(vm).world.widgets[id.0].props;
+    let keys: Vec<Value> = {
+        let mut out = Vec::new();
+        let mut k = Value::Nil;
+        while let Ok(Some((key, _))) = vm.heap.table(props).next(k) {
+            if let Value::Str(s) = key
+                && vm.str_bytes(s).starts_with(b"Unit:")
+            {
+                out.push(key);
+            }
+            k = key;
+        }
+        out
+    };
+    for k in keys {
+        let _ = vm.heap.table_mut(props).set(k, Value::Nil);
+    }
+    Ok(vec![])
+}
+
 /// `UnitPositionFrame:GetMouseOverUnits()`: no unit under the mouse.
 fn get_mouse_over_units(_vm: &mut Vm, _id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![])
@@ -1829,6 +1865,8 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
         ("NamePlate:CanChangeHitTestPoints", no),
         ("NamePlate:GetHitTestPoints", get_hit_test_points),
         ("UnitPositionFrame:GetMouseOverUnits", get_mouse_over_units),
+        ("UnitPositionFrame:AddUnit", add_unit),
+        ("UnitPositionFrame:ClearUnits", clear_units),
         (
             "UnitPositionFrame:GetPlayerPingScale",
             get_player_ping_scale,

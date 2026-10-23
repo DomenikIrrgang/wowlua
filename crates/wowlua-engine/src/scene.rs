@@ -1743,6 +1743,59 @@ fn minimap_arrow(vm: &mut Vm, f: WidgetId) -> Option<Quad> {
     })
 }
 
+/// A unit position frame's player pin (the world map's arrow): the pin
+/// `AddUnit("player", asset, width, height, …, showFacing)` gave it
+/// (`UI-WorldMapArrow`), at the player's place on its map (`SetUiMapID`)
+/// across the frame, turned as the player faces when `showFacing`; drawn
+/// by the client, no region of the frame's. Unverified: other units' pins.
+fn unit_position_player(vm: &mut Vm, f: WidgetId) -> Option<Quad> {
+    let rect = rect_of(vm, f)?;
+    let map = num(vm, first(vm, f, "UiMapID").as_ref(), 0.0);
+    let (x, y) = crate::character::player_position_on(vm, map)?;
+    let pin = args(vm, f, "Unit:player")?;
+    let texture = pin.first().and_then(|v| text_of(vm, *v))?;
+    let unit = unit_of(vm, f);
+    let size = num(vm, pin.get(1), 24.0) as f32 * unit;
+    let facing = pin.get(8).is_none_or(|v| v.truthy());
+    let (image, texcoord) = match crate::measures::atlas(&texture).and_then(|a| a.info.as_ref()) {
+        Some(info) => {
+            let c = info.coords;
+            let (l, r, t, b) = (c[0] as f32, c[1] as f32, c[2] as f32, c[3] as f32);
+            (Image::FileId(info.file as u32), [l, t, l, b, r, t, r, b])
+        }
+        None => (
+            Image::File(texture),
+            [0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0],
+        ),
+    };
+    Some(Quad {
+        widget: f.0,
+        rect: Rect {
+            x: rect.x + x as f32 * rect.w - size / 2.0,
+            y: rect.y + y as f32 * rect.h - size / 2.0,
+            w: size,
+            h: size,
+        },
+        image,
+        texcoord,
+        atlas: None,
+        atlas_texcoord: texcoord,
+        color: [1.0, 1.0, 1.0, effective_alpha(vm, f)],
+        blend: Blend::Blend,
+        desaturated: false,
+        rotation: if facing {
+            crate::unitinfo::player_facing(vm) as f32
+        } else {
+            0.0
+        },
+        tile: (false, false),
+        clip: clip_of(vm, f),
+        masks: Vec::new(),
+        unit,
+        snap: true,
+    })
+}
+
 pub fn build(vm: &mut Vm) -> Scene {
     let effects = crate::animations::effects(vm);
     EFFECTS.with(|e| *e.borrow_mut() = effects);
@@ -1864,6 +1917,11 @@ fn build_scene(vm: &mut Vm) -> Scene {
                 && let Some(t) = text_item(vm, g, true)
             {
                 items.push(Item::Text(t));
+            }
+            if widgets::is_a(engine(vm), &class, "UnitPositionFrame")
+                && let Some(q) = unit_position_player(vm, g)
+            {
+                items.push(Item::Quad(q));
             }
             if g == f && !messages.is_empty() {
                 items.extend(message_items(vm, f).into_iter().map(Item::Text));

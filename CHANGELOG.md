@@ -45,6 +45,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- The world map shows the player's arrow where the player stands, turned as the player faces (`UnitPositionFrame:AddUnit`, which Blizzard's map pins use).
 - `frame:SetFrameLevel(n)` moves the frame's children that have their own level along with it, as in game: Blizzard's dropdown and right-click menus show their entries over the menu's background (they were drawn faint underneath).
 - Tooltips show in screenshots: a tooltip lays out its lines and sizes itself as the game's does, `mock.showTooltip` places it where the default UI places a tooltip, and a `|cAARRGGBB` color code ignores its alpha byte, as in game (a line written `|c00…` was invisible).
 - A frame with `useParentLevel` is drawn together with its parent, layer by layer, as in game, and XML fonts keep their `justifyH`, `justifyV` and `spacing`: the gossip window shows its parchment and its options sit left beside their icons.

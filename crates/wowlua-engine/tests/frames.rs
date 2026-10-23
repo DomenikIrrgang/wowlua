@@ -1625,3 +1625,40 @@ return entry:GetFrameLevel(), plain:GetFrameLevel()",
     );
     assert_eq!(r, ["522", "503"]);
 }
+
+/// A unit position frame draws the player's pin (`AddUnit`) at the
+/// player's place on its map, across the frame (the world map's arrow).
+#[test]
+fn unit_position_frames_draw_the_player() {
+    let mut vm = vm();
+    wowlua_engine::controls::install(&mut vm, "mock");
+    run(
+        &mut vm,
+        "mock.moveTo({ mapID = 1429, zone = 'Elwynn Forest', x = 0.25, y = 0.75 })
+local f = CreateFrame('UnitPositionFrame', 'PinFrame', UIParent)
+f:SetSize(200, 100)
+f:SetPoint('TOPLEFT')
+f:SetUiMapID(1429)
+f:AddUnit('player', 'Interface\\\\Buttons\\\\WHITE8X8', 10, 10, 1, 1, 1, 1, 7, true)",
+    );
+    let scene = wowlua_engine::scene::build(&mut vm);
+    let id = scene
+        .items
+        .iter()
+        .find_map(|i| match i {
+            wowlua_engine::scene::Item::Quad(q)
+                if q.image
+                    == wowlua_engine::scene::Image::File("Interface\\Buttons\\WHITE8X8".into()) =>
+            {
+                Some(q.rect)
+            }
+            _ => None,
+        })
+        .expect("the player's pin");
+    let unit = id.w / 10.0;
+    let (cx, cy) = (id.x + id.w / 2.0, id.y + id.h / 2.0);
+    assert!(
+        (cx - 50.0 * unit).abs() < 0.5 && (cy - 75.0 * unit).abs() < 0.5,
+        "{id:?}"
+    );
+}
