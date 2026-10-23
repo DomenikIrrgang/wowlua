@@ -283,6 +283,35 @@ impl Env<'_> {
         None
     }
 
+    /// A class of the project's (a widget class) open only through the game's
+    /// frames it is built on: its own fields are declared, so an unknown one
+    /// is `any` nobody wrote (W2063, L51).
+    pub fn open_through_native(&self, def: DefId) -> bool {
+        if self.view(def).native() {
+            return false;
+        }
+        let mut current = Some(def);
+        let mut guard = 0;
+        while let Some(d) = current {
+            let v = self.view(d);
+            if v.indexer().is_some() {
+                return false;
+            }
+            if v.native() && (v.widget().is_some() || v.kind() == DefKind::Class) {
+                return true;
+            }
+            guard += 1;
+            if guard > 64 {
+                return false;
+            }
+            current = v.bases().first().and_then(|&b| match self.types.get(b) {
+                Ty::Named(bd, _) => Some(*bd),
+                _ => None,
+            });
+        }
+        false
+    }
+
     /// `sub` is `sup` or one of its subclasses / sub-interfaces.
     pub fn derives(&self, sub: DefId, sup: DefId) -> bool {
         let mut stack = vec![sub];

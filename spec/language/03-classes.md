@@ -357,7 +357,9 @@ A class that extends a **native widget type**, i.e. a declared class marked
 `@widget("…")` such as `Frame`, `Button` or `StatusBar`, is a *widget class*.
 WoW widgets are created by `CreateFrame` and already have a metatable, so
 widget classes are lowered as **mixins**, following Blizzard's own
-`Mixin` pattern.
+`Mixin` pattern. The game's frames take any field (`[string]: any`), and
+so does a widget class's instance; a member the class doesn't declare is
+then `any`, which W2063 reports (decision L51).
 
 ```wowlua
 export class CounterButton extends Button

@@ -312,8 +312,10 @@ only lints, and errors that stop the analysis) on `.wowlua` files, and on
   parameter without an annotation that nothing gives a type, a `local`
   without one whose value is `any`, or a generic type written without its
   type arguments (`Box` for `Box<T>`, whose arguments are then `any`;
-  decision T276). Only the project's files: not wowlua's library or a
-  dependency's. A project that keeps `any` to the places
+  decision T276), or a member a widget class (`class Toggle extends
+  Button`) doesn't declare, read or set: the game's frames are open, so it
+  passes as `any` (decision L51). Only the project's files: not wowlua's
+  library or a dependency's. A project that keeps `any` to the places
   that need it turns it on, and writes `any` where it means it (decision
   T274).
 

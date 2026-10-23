@@ -1094,6 +1094,8 @@ impl Checker<'_, '_> {
                                 span,
                                 "`__wowlua` is reserved for the wowlua runtime",
                             );
+                        } else if self.env.open_through_native(d) {
+                            self.undeclared_member(m, name, span);
                         }
                     }
                 },
@@ -1427,7 +1429,12 @@ impl Checker<'_, '_> {
                                 })
                             }
                             None => match self.env.indexer_of(d) {
-                                Some((_, v)) => Some(v),
+                                Some((_, v)) => {
+                                    if !quiet && self.env.open_through_native(d) {
+                                        self.undeclared_member(m, name, span);
+                                    }
+                                    Some(v)
+                                }
                                 None => {
                                     if !quiet {
                                         let msg = format!(
@@ -1602,7 +1609,12 @@ impl Checker<'_, '_> {
                             }
                         }
                         None => match self.env.indexer_of(d) {
-                            Some(_) => Types::ANY,
+                            Some(_) => {
+                                if self.env.open_through_native(d) {
+                                    self.undeclared_member(m, name, span);
+                                }
+                                Types::ANY
+                            }
                             None => {
                                 let msg =
                                     format!("`{}` has no method `{name}`", self.env.display(m));
@@ -1669,6 +1681,16 @@ impl Checker<'_, '_> {
             Ty::Record(r) => r.fields.get(name).map(|f| f.ty).or(Some(Types::ANY)),
             _ => Some(Types::ANY),
         }
+    }
+
+    /// A member a widget class doesn't declare, read or set through the
+    /// openness of the game's frames: `any` (W2063, L51).
+    fn undeclared_member(&mut self, t: TypeId, name: &str, span: Span) {
+        let msg = format!(
+            "`{}` doesn't declare `{name}`, so it is `any` (declare it in the class)",
+            self.env.display(t)
+        );
+        self.report("W2063", span, msg);
     }
 
     /// `t[k]` of a table type without an indexer: a number literal is a

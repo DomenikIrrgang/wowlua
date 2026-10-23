@@ -2927,6 +2927,12 @@ type Box<T> = { item: T }
 local boxed: Box = { item = 1 }
 local typed: Box<number> = { item = 1 }
 print(boxed, typed)
+class Switch extends Button
+    on: boolean = false
+end
+local sw = Switch.new(nil, UIParent)
+sw.extra = 1
+print(sw.on, sw.other, frame.anything)
 "#;
     let manifest = |lints: &str| {
         format!(
@@ -2963,6 +2969,8 @@ print(boxed, typed)
         [
             "src/main.wowlua:4:16: warning[W2063]: parameter `y` is `any`: nothing gives it a type (annotate it)",
             "src/main.wowlua:6:7: warning[W2063]: `a` is `any`: its value has no type (annotate it, or type where it comes from)",
+            "src/main.wowlua:19:4: warning[W2063]: `Switch` doesn't declare `extra`, so it is `any` (declare it in the class)",
+            "src/main.wowlua:20:17: warning[W2063]: `Switch` doesn't declare `other`, so it is `any` (declare it in the class)",
             "src/main.wowlua:12:14: warning[W2063]: `Box` is written without its type arguments, so they are `any` (write `Box<T>`)",
         ],
         "{on}"
