@@ -727,3 +727,62 @@ edge:SetColorTexture(1, 1, 1)",
     let text = order.iter().position(|k| *k == "text").expect("the text");
     assert!(order[..text].contains(&"quad"), "{order:?}");
 }
+
+/// A frame on its parent's level (`useParentLevel`) is drawn with its
+/// parent, their regions sorted together by layer and sublevel (the gossip
+/// window's parchment over its inset's marble); an XML font keeps its
+/// justification.
+#[test]
+fn parent_level_frames_interleave_and_fonts_keep_justification() {
+    let interface = tree(
+        "parent-level",
+        &[
+            ("AddOns/Blizzard_Box/Blizzard_Box.toc", "Box.xml\n"),
+            (
+                "AddOns/Blizzard_Box/Box.xml",
+                r#"<Ui>
+  <Font name="LeftFont" font="Fonts\FRIZQT__.TTF" height="12" justifyH="LEFT" virtual="true"/>
+  <Frame name="Holder" parent="UIParent">
+    <Size x="100" y="100"/>
+    <Anchors><Anchor point="CENTER"/></Anchors>
+    <Layers><Layer level="BACKGROUND">
+      <Texture parentKey="Parchment" setAllPoints="true"><Color r="1" g="0" b="0"/></Texture>
+    </Layer></Layers>
+    <Frames>
+      <Frame parentKey="Inset" useParentLevel="true" setAllPoints="true">
+        <Layers><Layer level="BACKGROUND" textureSubLevel="-5">
+          <Texture parentKey="Marble" setAllPoints="true"><Color r="0" g="0" b="1"/></Texture>
+        </Layer></Layers>
+      </Frame>
+    </Frames>
+  </Frame>
+</Ui>"#,
+            ),
+        ],
+    );
+    let mut vm = vm("camelot");
+    let report = wowlua_engine::ui::load(&mut vm, &interface, None);
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let r = run(
+        &mut vm,
+        "local t = UIParent:CreateFontString(nil, 'OVERLAY', 'LeftFont')
+return t:GetJustifyH()",
+    );
+    assert_eq!(r, ["LEFT"]);
+    let scene = wowlua_engine::scene::build(&mut vm);
+    let colors: Vec<[f32; 4]> = scene
+        .items
+        .iter()
+        .filter_map(|i| match i {
+            wowlua_engine::scene::Item::Quad(q)
+                if matches!(q.image, wowlua_engine::scene::Image::Color) =>
+            {
+                Some(q.color)
+            }
+            _ => None,
+        })
+        .collect();
+    // The inset's blue (sublevel -5) first, the holder's red over it.
+    assert_eq!(colors.len(), 2, "{colors:?}");
+    assert_eq!((colors[0][2], colors[1][0]), (1.0, 1.0), "{colors:?}");
+}

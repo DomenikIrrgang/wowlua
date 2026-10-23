@@ -1040,6 +1040,21 @@ fn is_frame(vm: &Vm, id: WidgetId) -> bool {
     !is_region(vm, id) && (w.frame || widgets::is_a(e, &w.class, "Frame"))
 }
 
+/// Whether a frame is drawn with its parent: it uses its parent's level
+/// (`useParentLevel`, `SetUsingParentLevel(true)`), in its parent's strata.
+fn merges_into_parent(vm: &mut Vm, id: WidgetId) -> bool {
+    let props = engine(vm).world.widgets[id.0].props;
+    let using = widgets::stored_args(vm, props, "UsingParentLevel")
+        .and_then(|v| v.first().copied())
+        .is_some_and(|v| v.truthy());
+    let Some(parent) = engine(vm).world.widgets[id.0].parent else {
+        return false;
+    };
+    using
+        && is_frame(vm, parent)
+        && widgets::strata_rank(vm, id) == widgets::strata_rank(vm, parent)
+}
+
 /// The visible frames, in draw order (back to front).
 fn frames_in_order(vm: &mut Vm) -> Vec<WidgetId> {
     let count = engine(vm).world.widgets.len();
@@ -1741,11 +1756,40 @@ fn build_scene(vm: &mut Vm) -> Scene {
     let order = frames_in_order(vm);
     let hover = engine(vm).world.input.mouse_focus;
     let mut items = Vec::new();
+    // A frame on its parent's level (`useParentLevel`) is drawn with its
+    // parent: their regions sorted together by layer and sublevel (the
+    // gossip window's parchment, its own `BACKGROUND`, shows over its
+    // inset's marble, the inset's `BACKGROUND` -5, as in game).
+    let merged: std::collections::HashSet<usize> = order
+        .iter()
+        .filter(|f| merges_into_parent(vm, **f))
+        .map(|f| f.0)
+        .collect();
     for f in order {
+        if merged.contains(&f.0) {
+            continue;
+        }
         let (children, class) = {
             let w = &engine(vm).world.widgets[f.0];
             (w.children.clone(), w.class.clone())
         };
+        // The frame and the frames drawn with it, the frame first.
+        let mut group = vec![f];
+        let mut k = 0;
+        while k < group.len() {
+            let kids = engine(vm).world.widgets[group[k].0].children.clone();
+            group.extend(kids.into_iter().filter(|c| merged.contains(&c.0)));
+            k += 1;
+        }
+        let children: Vec<(usize, WidgetId)> = std::iter::once(children)
+            .chain(
+                group[1..]
+                    .iter()
+                    .map(|g| engine(vm).world.widgets[g.0].children.clone()),
+            )
+            .enumerate()
+            .flat_map(|(i, cs)| cs.into_iter().map(move |c| (i, c)))
+            .collect();
         // A message frame's messages are laid out as its lines.
         let messages: Vec<usize> = engine(vm)
             .world
@@ -1758,15 +1802,15 @@ fn build_scene(vm: &mut Vm) -> Scene {
                     .collect()
             })
             .unwrap_or_default();
-        let mut regions: Vec<(usize, i32, bool, bool, usize)> = Vec::new();
-        for c in children {
+        let mut regions: Vec<(usize, i32, bool, bool, usize, usize)> = Vec::new();
+        for (owner, c) in children {
             let w = &engine(vm).world.widgets[c.0];
             if !w.shown || !is_region(vm, c) || messages.contains(&c.0) {
                 continue;
             }
             let (layer, sub) = layer_of(vm, c);
             // The highlight layer while the mouse is over the frame.
-            if layer == 4 && hover != Some(f) {
+            if layer == 4 && hover != Some(group[owner]) {
                 continue;
             }
             // Within a layer and sublevel, masked textures after the others
@@ -1778,7 +1822,7 @@ fn build_scene(vm: &mut Vm) -> Scene {
             // frame's `OVERLAY`, shows over the border's top edge, made
             // later on the same layer; a screenshot, 2026-10-23).
             let text = widgets::is_a(engine(vm), &w.class, "FontString");
-            regions.push((layer, sub, text, masked, c.0));
+            regions.push((layer, sub, text, masked, owner, c.0));
         }
         regions.sort();
         // A minimap's terrain under its regions, its player arrow over them.
@@ -1786,7 +1830,7 @@ fn build_scene(vm: &mut Vm) -> Scene {
         if minimap {
             items.extend(minimap_tiles(vm, f).into_iter().map(Item::Quad));
         }
-        for (_, _, _, _, r) in regions {
+        for (_, _, _, _, _, r) in regions {
             let id = WidgetId(r);
             let class = engine(vm).world.widgets[r].class.clone();
             if widgets::is_a(engine(vm), &class, "FontString") {
@@ -1806,18 +1850,21 @@ fn build_scene(vm: &mut Vm) -> Scene {
                 items.push(Item::Quad(q));
             }
         }
-        // A model frame's model over its regions (unverified: the
-        // client's order of a model and its frame's own regions).
-        if let Some(m) = model_item(vm, f, &class) {
-            items.push(Item::Model(m));
-        }
-        if widgets::is_a(engine(vm), &class, "EditBox")
-            && let Some(t) = text_item(vm, f, true)
-        {
-            items.push(Item::Text(t));
-        }
-        if !messages.is_empty() {
-            items.extend(message_items(vm, f).into_iter().map(Item::Text));
+        for &g in &group {
+            let class = engine(vm).world.widgets[g.0].class.clone();
+            // A model frame's model over its regions (unverified: the
+            // client's order of a model and its frame's own regions).
+            if let Some(m) = model_item(vm, g, &class) {
+                items.push(Item::Model(m));
+            }
+            if widgets::is_a(engine(vm), &class, "EditBox")
+                && let Some(t) = text_item(vm, g, true)
+            {
+                items.push(Item::Text(t));
+            }
+            if g == f && !messages.is_empty() {
+                items.extend(message_items(vm, f).into_iter().map(Item::Text));
+            }
         }
     }
     Scene {

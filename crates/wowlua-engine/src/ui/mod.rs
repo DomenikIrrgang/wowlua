@@ -1185,6 +1185,17 @@ fn font_named(vm: &mut Vm, name: &str, el: &Element) {
         };
         call(vm, "SetShadowColor", &color);
     }
+    // Its justification and spacing (`QuestFontLeft`'s `justifyH="LEFT"`:
+    // the gossip window's options were centered without it).
+    for (attr, method) in [("justifyH", "SetJustifyH"), ("justifyV", "SetJustifyV")] {
+        if let Some(v) = el.attr(attr) {
+            let v = vm.str(v);
+            call(vm, method, &[v]);
+        }
+    }
+    if let Some(n) = el.number("spacing") {
+        call(vm, "SetSpacing", &[Value::Num(n)]);
+    }
 }
 
 /// An XML font's flags as the client reports them (`GetFont`,
