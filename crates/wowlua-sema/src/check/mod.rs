@@ -2594,6 +2594,19 @@ print(a, b, c, d, e, name, realm, more)
         );
     }
 
+    /// A class declared after a `typeof` alias reads its type in its members
+    /// (decision L57).
+    #[test]
+    fn typeof_alias_in_classes() {
+        strict_err(
+            "local defaults = { scale = 1 }\ntype Settings = typeof(defaults)\nclass Box\n s: Settings\n constructor(s: Settings) self.s = s end\n function Scale(): string return self.s.scale end\nend\nprint(Box)\n",
+            "E2001",
+        );
+        strict_ok(
+            "local defaults = { scale = 1 }\ntype Settings = typeof(defaults)\nclass Box\n s: Settings\n constructor(s: Settings) self.s = s end\n function Scale(): number return self.s.scale end\nend\nprint(Box)\n",
+        );
+    }
+
     /// `select(n, …)` with a literal `n` gives the values from the n-th on
     /// (decision L54).
     #[test]

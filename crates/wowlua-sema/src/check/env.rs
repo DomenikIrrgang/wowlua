@@ -181,6 +181,9 @@ pub struct Env<'p> {
     /// Top-level aliases whose bodies use `typeof(expr)`, with their file,
     /// until the file's check reaches them (spec §2.2.7): `any` until then.
     pub typeof_aliases: FxHashMap<DefId, usize>,
+    /// The modules a `typeof` alias of has been resolved in, by the checker:
+    /// their classes' member types are resolved again where reached (L57).
+    pub typeof_resolved: rustc_hash::FxHashSet<usize>,
     /// `M.T` type references through a namespace import to such an alias
     /// of another module, read as `any`: the module, the name and where
     /// (W1036, spec §5.4.4).
@@ -596,6 +599,43 @@ impl<'p> Env<'p> {
         self.def_type_params(def, a.type_params(), &mut scope);
         let body = self.resolve(a.ty(), &scope);
         self.def_mut(def).alias = Some(body);
+    }
+
+    /// A class's field and method types resolved again in `scope` (the
+    /// class's own, as the checker has it where its file reaches the
+    /// class): its annotations may use `typeof` aliases that have their
+    /// types only now (decision L57). Members keep everything but the type.
+    pub fn refresh_member_types(&mut self, def: DefId, c: ClassDecl<'_>, scope: &Scope) {
+        for m in c.members() {
+            if m.modifiers().contains(&Modifier::Overload) {
+                continue;
+            }
+            let is_static = m.modifiers().contains(&Modifier::Static);
+            let (name, t) = match m.kind() {
+                ClassMemberKind::Field {
+                    name, optional, ty, ..
+                } => {
+                    let mut t = self.resolve(ty, scope);
+                    if optional {
+                        t = self.types.optional(t);
+                    }
+                    (name, t)
+                }
+                ClassMemberKind::Method { name, func, .. } => {
+                    let f = self.func_sig(&FnSig::of(func), scope, false);
+                    (name, self.types.func(f))
+                }
+                _ => continue,
+            };
+            let target = if is_static {
+                &mut self.def_mut(def).statics
+            } else {
+                &mut self.def_mut(def).members
+            };
+            if let Some(member) = target.get_mut(name.text()) {
+                member.ty = t;
+            }
+        }
     }
 
     fn scope_of(&self, module: usize, sources: &[Source]) -> Scope {

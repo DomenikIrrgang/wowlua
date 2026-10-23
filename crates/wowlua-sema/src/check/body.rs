@@ -586,6 +586,7 @@ impl<'e, 'p> Checker<'e, 'p> {
         }
         let scope = self.scope.clone();
         self.env.resolve_alias_again(def, a, &scope);
+        self.env.typeof_resolved.insert(module);
     }
 
     /// The type of `...` in the current function.
@@ -2089,6 +2090,14 @@ impl<'e, 'p> Checker<'e, 'p> {
             self.scope.params.push((name, p));
         }
         self.scope.self_ty = Some(instance);
+        // Member annotations may use a `typeof` alias the file resolved
+        // above (decision L57).
+        if let Some(module) = self.scope.module
+            && self.env.typeof_resolved.contains(&module)
+        {
+            let scope = self.scope.clone();
+            self.env.refresh_member_types(def, c, &scope);
+        }
         // A base whose type arguments use `typeof` (directly or through a
         // `typeof` alias) is known only where the file reaches the class
         // (`extends Module<typeof(DEFAULTS)>`, decision L45).

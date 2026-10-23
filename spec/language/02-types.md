@@ -206,9 +206,11 @@ type Settings = typeof(defaults)    -- { scale: number, locked: boolean }
 The expression is typed where the alias stands, so it may only refer to
 names declared before it. A `typeof` alias has its type once its file has been
 checked up to it: in the file's later annotations and in the modules checked
-after it (importers, and a library's consumers, spec §5.4.4). Uses before
-that point, such as a hoisted function's signature or another alias that
-refers to it, read it as `any`.
+after it (importers, and a library's consumers, spec §5.4.4). A class
+declared after it in the file has its field and method types worked out
+again where the file reaches the class, so they read the alias's type
+(decision L57). Other uses before that point, such as a hoisted function's
+signature or another alias that refers to it, read it as `any`.
 
 ### 2.2.8 Type predicates
 

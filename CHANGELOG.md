@@ -20,6 +20,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 ### Changed
 
 - `local o = opts or {}` keeps the type of `opts` (an `Options?` gives an `Options`), as do `list or {}` and `x ?? {}`: the empty table no longer turns its fields into `any`.
+- A class's fields and methods typed with a `typeof` alias (`type Api = { UnitClass: typeof(UnitClass) }`, `api: Api`) have its type inside the class's methods, where they were `any`.
 - `select(n, …)` with a number written as the index gives the types of the values from that one on: `select(2, f())` is `f`'s second result, where it was `any`.
 - A generic function's result type comes from a function you pass it when nothing else gives it: `local ok, name = pcall(function() return unit.name end)` types `name`, where it was `any`.
 - `group:CreateAnimation("Alpha")` gives an `Alpha` (and each other animation type its own), so its methods are checked; it was untyped.
