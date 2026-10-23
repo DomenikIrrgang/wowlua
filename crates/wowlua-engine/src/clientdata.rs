@@ -105,6 +105,16 @@ pub trait ClientData: Send + Sync {
     ) -> Option<u32> {
         None
     }
+    /// A transmog source (an item modified appearance,
+    /// `ItemModifiedAppearance`): its item and the inventory slot it goes
+    /// in.
+    fn appearance_source(&self, _source: u32) -> Option<(u32, u32)> {
+        None
+    }
+    /// An item's own transmog source (its first modifier's) and slot.
+    fn item_source(&self, _item: u32) -> Option<(u32, u32)> {
+        None
+    }
     /// The UI camera the wardrobe shows a weapon with
     /// (`UiCamFbackTransmogWeapon`): by item class, subclass and inventory
     /// type.
@@ -176,6 +186,16 @@ pub(crate) fn item_camera(
         return Some(cam);
     }
     d.weapon_camera(it.class, it.subclass, it.inventory_type)
+}
+
+/// A transmog source's item and slot, as the client's tables give them.
+pub(crate) fn appearance_source(vm: &Vm, source: i64) -> Option<(u32, u32)> {
+    data(vm)?.appearance_source(u32::try_from(source).ok()?)
+}
+
+/// An item's transmog source and slot, as the client's tables give them.
+pub(crate) fn item_source(vm: &Vm, item: i64) -> Option<(u32, u32)> {
+    data(vm)?.item_source(u32::try_from(item).ok()?)
 }
 
 /// An item's inventory type as the client's tables give it.

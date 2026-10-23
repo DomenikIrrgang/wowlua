@@ -1163,19 +1163,51 @@ pub(crate) fn category_visuals(category: i64) -> Vec<i64> {
         .unwrap_or_default()
 }
 
+/// An item's transmog source: the client's tables', else a recorded one's.
+pub(crate) fn source_of_item(vm: &Vm, item: i64) -> Option<u32> {
+    if let Some((source, _)) = crate::clientdata::item_source(vm, item) {
+        return Some(source);
+    }
+    sources()
+        .iter()
+        .find(|(_, e)| field_num(e, "itemID") == Some(item as f64))
+        .map(|(id, _)| *id as u32)
+}
+
+/// A source's item: recorded, else the client's tables'.
+fn item_of_source(vm: &Vm, c: &NativeCall) -> Option<f64> {
+    source(vm, c, 1)
+        .and_then(|e| field_num(e, "itemID"))
+        .or_else(|| {
+            let id = num(vm, c, 1)? as i64;
+            crate::clientdata::appearance_source(vm, id).map(|(item, _)| f64::from(item))
+        })
+}
+
+/// `C_TransmogCollection.GetSourceIcon(source)`: its item's icon (the
+/// client's tables'); nothing for an unknown source (unverified: the
+/// client's answer then).
+fn get_source_icon(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(item) = item_of_source(vm, &c) else {
+        return Ok(vec![]);
+    };
+    Ok(match crate::clientdata::item(vm, item as i64) {
+        Some(i) if i.icon > 0 => vec![Value::Num(f64::from(i.icon))],
+        _ => vec![],
+    })
+}
+
 /// `C_TransmogCollection.GetSourceItemID(source)`,
 /// `C_Transmog.GetItemIDForSource(source)`: its item.
 fn get_source_item_id(vm: &mut Vm, c: NativeCall) -> Ret {
-    Ok(
-        match source(vm, &c, 1).and_then(|e| field_num(e, "itemID")) {
-            Some(item) => vec![Value::Num(item)],
-            None => vec![],
-        },
-    )
+    Ok(match item_of_source(vm, &c) {
+        Some(item) => vec![Value::Num(item)],
+        None => vec![],
+    })
 }
 
 fn get_item_id_for_source(vm: &mut Vm, c: NativeCall) -> Ret {
-    let item = source(vm, &c, 1).and_then(|e| field_num(e, "itemID"));
+    let item = item_of_source(vm, &c);
     Ok(vec![item.map_or(Value::Nil, Value::Num)])
 }
 
@@ -2582,7 +2614,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         // Not recorded: a source's icon, holiday, drops; artifacts'
         // appearances (Forever has none); illusions (recorded
         // `GetIllusions`: none).
-        ("C_TransmogCollection.GetSourceIcon", nothing),
+        ("C_TransmogCollection.GetSourceIcon", get_source_icon),
         ("C_TransmogCollection.GetSourceRequiredHoliday", nothing),
         ("C_TransmogCollection.GetAppearanceSourceDrops", empty_table),
         ("C_TransmogCollection.GetPairedArtifactAppearance", nothing),

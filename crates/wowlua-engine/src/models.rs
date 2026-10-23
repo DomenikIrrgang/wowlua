@@ -156,13 +156,19 @@ fn by_display(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 
 /// An actor's `SetModelByUnit(unit, sheatheWeapons, autoDress, …)`: true.
 fn by_unit(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
-    set_source(vm, id, &c, "ModelByUnit", "unit", c.arg(2));
+    let before = worn_sources(vm, id);
+    by_unit_inner(vm, id, &c);
+    tell_dressed(vm, id, &before);
+    Ok(vec![Value::Bool(true)])
+}
+
+fn by_unit_inner(vm: &mut Vm, id: WidgetId, c: &NativeCall) {
+    set_source(vm, id, c, "ModelByUnit", "unit", c.arg(2));
     // Not dressed when `autoDress` is false, or the actor's auto dress
     // is off.
     if matches!(c.arg(4), Value::Bool(false)) || auto_dress_off(vm, id) {
         set_prop(vm, id, UNDRESSED, Value::Bool(true));
     }
-    Ok(vec![Value::Bool(true)])
 }
 
 /// Whether `SetAutoDress(false)` was the last word.
@@ -187,27 +193,33 @@ fn try_on(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
             t
         }
     };
+    let before = worn_sources(vm, id);
     let n = vm.heap.table(list).border();
     let _ = vm
         .heap
         .table_mut(list)
         .set(Value::Num((n + 1) as f64), item);
+    tell_dressed(vm, id, &before);
     Ok(vec![Value::Num(0.0)])
 }
 
 /// `Undress()`: nothing worn.
 fn undress(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let before = worn_sources(vm, id);
     set_prop(vm, id, TRIED, Value::Nil);
     set_prop(vm, id, UNDRESSED, Value::Bool(true));
     set_prop(vm, id, UNDRESSED_SLOTS, Value::Nil);
+    tell_dressed(vm, id, &before);
     Ok(vec![])
 }
 
 /// `Dress()`: what the unit wears.
 fn dress(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let before = worn_sources(vm, id);
     set_prop(vm, id, TRIED, Value::Nil);
     set_prop(vm, id, UNDRESSED, Value::Nil);
     set_prop(vm, id, UNDRESSED_SLOTS, Value::Nil);
+    tell_dressed(vm, id, &before);
     Ok(vec![])
 }
 
@@ -239,6 +251,90 @@ pub fn undressed_slots(vm: &Vm, id: WidgetId) -> Vec<u32> {
     (1..=19u32)
         .filter(|s| vm.heap.table(t).get(Value::Num(f64::from(*s))).truthy())
         .collect()
+}
+
+/// The transmog sources a model wears, by inventory slot: its unit's
+/// equipped items (none undressed, nor the slots `UndressSlot` emptied),
+/// then what it tried on in its slot; each item as its source in the
+/// client's tables (or the recordings').
+pub fn worn_sources(vm: &mut Vm, id: WidgetId) -> std::collections::BTreeMap<u32, u32> {
+    let mut out = std::collections::BTreeMap::new();
+    let Some((source, tried, undressed)) = source_of(vm, id) else {
+        return out;
+    };
+    if let Source::Unit(unit) = &source
+        && !undressed
+    {
+        let emptied = undressed_slots(vm, id);
+        for (slot, item) in crate::scene::look_of(vm, unit).items {
+            if !emptied.contains(&slot)
+                && let Some(s) = crate::collections::source_of_item(vm, i64::from(item))
+            {
+                out.insert(slot, s);
+            }
+        }
+    }
+    for t in tried {
+        let entry = match t.trim().parse::<u32>() {
+            // An item modified appearance's ID.
+            Ok(source) => crate::clientdata::appearance_source(vm, i64::from(source))
+                .map(|(_, slot)| (slot, source)),
+            // An item link (`item:2575:…`) or its ID.
+            Err(_) => item_of_link(&t).and_then(|item| {
+                let source = crate::collections::source_of_item(vm, i64::from(item))?;
+                let (_, slot) = crate::clientdata::item_source(vm, i64::from(item))?;
+                Some((slot, source))
+            }),
+        };
+        if let Some((slot, source)) = entry {
+            out.insert(slot, source);
+        }
+    }
+    out
+}
+
+/// The item ID of a link or an `item:` string.
+fn item_of_link(link: &str) -> Option<u32> {
+    let at = link.find("item:")? + 5;
+    link[at..].split([':', '|']).next()?.parse().ok()
+}
+
+/// Tells a model scene its actor dressed (`OnDressModel(itemModified
+/// AppearanceID, invSlot, removed)`), as the client does when an actor
+/// puts on or takes off an item: Blizzard's dressing room lists the outfit
+/// from it.
+fn tell_dressed(vm: &mut Vm, id: WidgetId, before: &std::collections::BTreeMap<u32, u32>) {
+    let Some(scene) = engine(vm).world.widgets[id.0].parent else {
+        return;
+    };
+    let class = engine(vm).world.widgets[scene.0].class.clone();
+    if !crate::widgets::is_a(engine(vm), &class, "ModelScene") {
+        return;
+    }
+    let after = worn_sources(vm, id);
+    let mut changes: Vec<(u32, u32, bool)> = Vec::new();
+    for (slot, source) in &after {
+        if before.get(slot) != Some(source) {
+            changes.push((*source, *slot, false));
+        }
+    }
+    for (slot, source) in before {
+        if !after.contains_key(slot) {
+            changes.push((*source, *slot, true));
+        }
+    }
+    for (source, slot, removed) in changes {
+        crate::widgets::run_script(
+            vm,
+            scene,
+            "OnDressModel",
+            &[
+                Value::Num(f64::from(source)),
+                Value::Num(f64::from(slot)),
+                Value::Bool(removed),
+            ],
+        );
+    }
 }
 
 /// What a model shows.

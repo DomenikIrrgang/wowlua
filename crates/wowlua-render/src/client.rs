@@ -375,6 +375,30 @@ impl wowlua_engine::clientdata::ClientData for CascClientData {
         })
     }
 
+    fn appearance_source(&self, source: u32) -> Option<(u32, u32)> {
+        self.with(|lib, casc| {
+            let item = lib
+                .table(casc, "ItemModifiedAppearance")?
+                .row(source)?
+                .int("ItemID");
+            let slot = lib.item_slot(casc, wowlua_casc::character::Worn::Appearance(source))?;
+            Some((item, slot))
+        })
+    }
+
+    fn item_source(&self, item: u32) -> Option<(u32, u32)> {
+        self.with(|lib, casc| {
+            let source = lib
+                .table(casc, "ItemModifiedAppearance")?
+                .rows_where("ItemID", item)
+                .iter()
+                .min_by_key(|r| (r.int("ItemAppearanceModifierID"), r.int("OrderIndex")))?
+                .id();
+            let slot = lib.item_slot(casc, wowlua_casc::character::Worn::Item(item))?;
+            Some((source, slot))
+        })
+    }
+
     fn transmog_camera(&self, race: u32, gender: u32, slot: u32, variation: u32) -> Option<u32> {
         self.with(|lib, casc| {
             let t = lib.table(casc, "UiCamFbackTransmogChrRace")?;

@@ -1229,6 +1229,16 @@ pub fn has_script(e: &Engine, class: &str, script: &str) -> bool {
     if script == "OnLoad" || script == "OnUpdate" {
         return true;
     }
+    // Scripts the client has that neither the probe asked about nor the
+    // documentation lists: Blizzard's dressing room sets `OnDressModel` on
+    // its model scene, the client tells it of each item an actor puts on.
+    if script == "OnDressModel"
+        && lineage(e, class)
+            .iter()
+            .any(|c| c == "ModelScene" || c == "DressUpModel")
+    {
+        return true;
+    }
     // `ScriptButton = ScriptFrame | …`: the named bases are in the lineage
     // too.
     lineage(e, class).iter().any(|c| {

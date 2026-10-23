@@ -229,8 +229,11 @@ fn empty_table(vm: &mut Vm, _id: WidgetId, _c: NativeCall) -> Ret {
 /// (`ItemUtil.CreateItemTransmogInfo`) when its code is loaded. Blizzard's
 /// dressing room reads the main hand's entry unchecked, so the client's list
 /// has every slot (unverified: what an undressed model's slots hold, here
-/// nothing, `appearanceID` 0; the engine dresses no model).
-fn transmog_info_list(vm: &mut Vm, _id: WidgetId, _c: NativeCall) -> Ret {
+/// nothing, `appearanceID` 0). A slot's `appearanceID` is the source the
+/// model wears there (`models::worn_sources`: its unit's items and what it
+/// tried on; the dressing room's outfit list reads them).
+fn transmog_info_list(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let worn = crate::models::worn_sources(vm, id);
     let list = vm.new_table();
     let util = vm.get_global("ItemUtil");
     let create = match util {
@@ -241,9 +244,10 @@ fn transmog_info_list(vm: &mut Vm, _id: WidgetId, _c: NativeCall) -> Ret {
         _ => Value::Nil,
     };
     for slot in 1..=19 {
+        let appearance = f64::from(worn.get(&slot).copied().unwrap_or(0));
         let info = match create {
             Value::Func(_) => vm
-                .call_from_engine(create, &[Value::Num(0.0)])
+                .call_from_engine(create, &[Value::Num(appearance)])
                 .and_then(|r| r.first().copied())
                 .unwrap_or(Value::Nil),
             _ => Value::Nil,
@@ -252,9 +256,13 @@ fn transmog_info_list(vm: &mut Vm, _id: WidgetId, _c: NativeCall) -> Ret {
             Value::Table(_) => info,
             _ => {
                 let t = vm.new_table();
-                for key in ["appearanceID", "secondaryAppearanceID", "illusionID"] {
+                for (key, v) in [
+                    ("appearanceID", appearance),
+                    ("secondaryAppearanceID", 0.0),
+                    ("illusionID", 0.0),
+                ] {
                     let k = vm.str(key);
-                    let _ = vm.heap.table_mut(t).set(k, Value::Num(0.0));
+                    let _ = vm.heap.table_mut(t).set(k, Value::Num(v));
                 }
                 Value::Table(t)
             }

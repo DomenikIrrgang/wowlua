@@ -1693,3 +1693,49 @@ return string.lower(t:GetAtlas()), p.maxLevel, p.renownLevel, p.renownLevelThres
         ]
     );
 }
+
+/// The client's transmog sources: item 2575 (a shirt) is source 156906.
+struct Sources;
+
+impl wowlua_engine::clientdata::ClientData for Sources {
+    fn model_scene(&self, _: u32) -> Option<wowlua_engine::clientdata::ModelScene> {
+        None
+    }
+    fn scene_camera(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneCamera> {
+        None
+    }
+    fn scene_actor(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneActor> {
+        None
+    }
+    fn actor_display(&self, _: u32) -> Option<wowlua_engine::clientdata::ActorDisplay> {
+        None
+    }
+    fn item_source(&self, item: u32) -> Option<(u32, u32)> {
+        (item == 2575).then_some((156906, 4))
+    }
+    fn appearance_source(&self, source: u32) -> Option<(u32, u32)> {
+        (source == 156906).then_some((2575, 4))
+    }
+}
+
+/// An actor's transmog list holds what it wears and tried on, and its
+/// scene is told of each item it puts on (`OnDressModel`), as in game.
+#[test]
+fn actors_list_and_tell_what_they_wear() {
+    let mut vm = vm();
+    wowlua_engine::clientdata::set(&mut vm, std::sync::Arc::new(Sources));
+    let r = run(
+        &mut vm,
+        "local s = CreateFrame('ModelScene', nil, UIParent)
+Told = {}
+s:SetScript('OnDressModel', function(_, source, slot, removed)
+    Told[#Told + 1] = source .. '@' .. slot .. (removed and '-' or '+')
+end)
+local a = s:CreateActor()
+a:SetModelByUnit('player')
+a:TryOn('item:2575')
+local list = a:GetItemTransmogInfoList()
+return list[4].appearanceID, table.concat(Told, ' '), C_TransmogCollection.GetSourceItemID(156906)",
+    );
+    assert_eq!(r, ["156906", "156906@4+", "2575"]);
+}
