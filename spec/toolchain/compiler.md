@@ -303,7 +303,9 @@ only lints, and errors that stop the analysis) on `.wowlua` files, and on
   enclosing scope. Redeclaring a local in the same block (`local x = f(x)`)
   is not reported, nor shadowing a decorated declaration that nothing reads
   by name (a `@test` function, which its decorator runs: a local in another
-  test may take its name).
+  test may take its name). A `local function` named like a local of the
+  same block is: a call meant for the earlier one, from here on and inside
+  the new function, reaches the new one (decision L68).
 - **W1005, unreachable code.** The first statement after `return`, `break`,
   `continue`, or a call whose type returns `never` (`error`), or after an `if`
   whose branches all end that way; once per region. Reported by the type

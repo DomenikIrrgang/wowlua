@@ -454,6 +454,33 @@ impl Linter<'_> {
         }
     }
 
+    /// A `local function` named like a local of the same scope (W1004):
+    /// the earlier one is out of reach from here on, inside this function
+    /// too, where a call meant for it calls this one (decision L68).
+    fn redeclared(&mut self, name: Name<'_>) {
+        let text = name.text();
+        if exempt_name(text) {
+            return;
+        }
+        let Some(current) = self.scopes.last() else {
+            return;
+        };
+        let Some(&o) = current
+            .iter()
+            .rev()
+            .find(|&&i| &*self.bindings[i].name == text)
+        else {
+            return;
+        };
+        let d = Diagnostic::warning(
+            "W1004",
+            format!("`{text}` is declared again in this scope: the earlier `{text}` is out of reach from here on, inside this function too"),
+        )
+        .with_label(name.span(), "declared again here")
+        .with_label(self.bindings[o].span, "the earlier one");
+        self.diagnostics.push(d);
+    }
+
     /// Declares a statement's local, noting whether the statement is decorated.
     fn declare_local(
         &mut self,
@@ -531,6 +558,7 @@ impl Linter<'_> {
                 self.declare_local(s, name, Kind::Unused, Some(group));
             }
             StmtKind::LocalFunction { name, func } => {
+                self.redeclared(name);
                 let group = self.group(Some(self.delete(s.span())), 1);
                 self.declare_local(s, name, Kind::Unused, Some(group));
                 self.func(func, false);
@@ -1159,6 +1187,22 @@ mod tests {
         assert_eq!(shadows(read), 1, "{:#?}", run(read));
         let plain = "local function rows()\n    local rows = 1\n    print(rows)\nend\nrows()\n";
         assert_eq!(shadows(plain), 1, "{:#?}", run(plain));
+    }
+
+    /// A `local function` declared again in the same scope (W1004,
+    /// decision L68): a call meant for the earlier one reaches the new one,
+    /// also from inside it. Re-binding a plain `local` stays allowed.
+    #[test]
+    fn local_function_declared_again() {
+        let shadows = |src: &str| run(src).into_iter().filter(|d| d.0 == "W1004").count();
+        let again = "local function rows() return 1 end\nprint(rows())\nlocal function rows() return 2 end\nprint(rows())\n";
+        assert_eq!(shadows(again), 1, "{:#?}", run(again));
+        let decorated = "local function sidebar() return 1 end\nprint(sidebar())\n@test(\"x\")\nlocal function sidebar()\n    print(sidebar())\nend\n";
+        assert_eq!(shadows(decorated), 1, "{:#?}", run(decorated));
+        let rebinding = "local x = 1\nlocal x = x + 1\nprint(x)\n";
+        assert_eq!(shadows(rebinding), 0, "{:#?}", run(rebinding));
+        let nested = "local function rows() return 1 end\nprint(rows())\ndo\n    local function rows() return 2 end\n    print(rows())\nend\n";
+        assert_eq!(shadows(nested), 1, "{:#?}", run(nested));
     }
 
     /// A closure's `self` parameter inside a class's method or constructor

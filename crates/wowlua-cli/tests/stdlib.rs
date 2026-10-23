@@ -3130,6 +3130,40 @@ defer(function() header:Show() end, "header")
     );
 }
 
+/// A function written in `hook(…)` or `hookScript(…)` gets the hooked
+/// function's parameter types: the receiver first for a method, the
+/// script's handler for `hookScript` (decision L67).
+#[test]
+fn hooks_type_their_callbacks() {
+    let stderr = check(
+        r#"import hook, hookScript from "wowlua:hooks"
+local f = CreateFrame("Frame")
+hookScript(f, "OnSizeChanged", function(frame, w, h)
+    local s: string = w
+    print(frame, s, h)
+end)
+hook(GameTooltip, "SetUnit", function(tip, unit)
+    local n: number = unit
+    print(tip, n)
+end)
+-- (the receiver is the frame; the alpha may be secret)
+hook(f, "SetAlpha", function(frame, alpha)
+    frame:SetAlpha(alpha)
+end)
+"#,
+    );
+    let found: Vec<String> = stderr
+        .lines()
+        .filter(|l| l.starts_with("src/main.wowlua"))
+        .filter_map(|l| {
+            let line = l.split(':').nth(1)?;
+            let code = l.split('[').nth(1)?.split(']').next()?;
+            Some(format!("{line} {code}"))
+        })
+        .collect();
+    assert_eq!(found, ["4 E2001", "8 E2001"], "{stderr}");
+}
+
 /// An enclosing existence test of the hooked member stands for its
 /// declaration (no W8040), but a target of a load-on-demand addon still
 /// needs `opts.addon` (W8102): before the addon loads, the test fails and

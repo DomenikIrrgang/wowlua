@@ -242,7 +242,9 @@ T222).
 A test file may import what a module does not export (decision T223):
 `import internal parse, Cache from "/tracker"` binds the module's
 file-level locals and types by name, as if exported, typed as the module has
-them; only test files may (E8119 elsewhere). The module registers the
+them; its exports are among them, with their export types (`import internal
+M, parse` may name an `export function parse` too, decision L66); only test
+files may (E8119 elsewhere). The module registers the
 locals test files read at its end (their values then), in test builds only:
 an addon build is unchanged.
 

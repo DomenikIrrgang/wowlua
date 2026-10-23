@@ -1079,6 +1079,8 @@ local cache: { [string]: Entry } = {}
 export function record(name: string, text: string)
     cache[name] = { kills = math.min(parse(text), LIMIT) }
 end
+
+export function limit(): number return LIMIT end
 "#;
     let dir = project(
         r#""standard": {}"#,
@@ -1109,6 +1111,18 @@ end
     fs::write(
         dir.path().join("tests/tracker.test.wowlua"),
         "import internal parse from \"/tracker\"\nlocal s: string = parse(\"1\")\nprint(s)\n",
+    )
+    .unwrap();
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(!ok, "{out}");
+    assert!(
+        out.contains("`number` is not assignable to `string`"),
+        "{out}"
+    );
+    // An export read through it keeps its type (decision L66).
+    fs::write(
+        dir.path().join("tests/tracker.test.wowlua"),
+        "import internal limit from \"/tracker\"\nlocal s: string = limit()\nprint(s)\n",
     )
     .unwrap();
     let (ok, out) = test(dir.path(), &[]);

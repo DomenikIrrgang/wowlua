@@ -939,6 +939,22 @@ impl<'e, 'p> Checker<'e, 'p> {
                     }
                 }
             }
+            // The exports are file-level names too: `import internal`
+            // reads them with their types (an `export function` was
+            // missing there and read as `any`, decision L66).
+            let exported: Vec<(Box<str>, TypeId)> = self
+                .exports
+                .iter()
+                .filter(|(k, _)| !k.starts_with(INTERNAL))
+                .map(|(k, &t)| (k.clone(), t))
+                .collect();
+            for (name, t) in exported {
+                let key: Box<str> = format!("{INTERNAL}{name}").into();
+                if let Some(&cap) = self.export_caps.get(&name) {
+                    self.export_caps.entry(key.clone()).or_insert(cap);
+                }
+                self.exports.entry(key).or_insert(t);
+            }
         }
         self.fns.pop();
     }

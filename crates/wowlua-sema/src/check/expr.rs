@@ -3452,6 +3452,9 @@ impl Checker<'_, '_> {
         if id == "events.watchUnit" {
             return self.watch_unit_type(f, exprs).unwrap_or(c);
         }
+        if id == "hooks.hook" || id == "hooks.hookScript" {
+            return self.hook_call_type(&id, f, exprs).unwrap_or(c);
+        }
         let (name, name_span) = match exprs.first().map(|e| (e.kind(), e.span())) {
             Some((ExprKind::String(lit), span)) => {
                 (String::from_utf8_lossy(&lit.value()).into_owned(), span)
@@ -3481,6 +3484,67 @@ impl Checker<'_, '_> {
             _ => return c,
         }
         self.env.types.func(f)
+    }
+
+    /// `hook(…, fn)` and `hookScript(…, fn)` with the hooked function's
+    /// parameters for `fn` (the receiver first for a method; a script's
+    /// handler for `hookScript`), so a function written there gets their
+    /// types (decision L67). Its results are not read.
+    fn hook_call_type(&mut self, id: &str, mut f: Func, exprs: Exprs<'_>) -> Option<TypeId> {
+        let literal = |e: Expr<'_>| match e.kind() {
+            ExprKind::String(lit) => Some(String::from_utf8_lossy(&lit.value()).into_owned()),
+            _ => None,
+        };
+        // The target: a global by its name, or the expression's type (read
+        // here without its diagnostics: the call checks it again).
+        let target_of = |c: &mut Self, e: Expr<'_>| -> Option<TypeId> {
+            if let Some(name) = literal(e) {
+                return c.env.declared.global(name.as_str());
+            }
+            let marks = (c.diagnostics.len(), c.env.diagnostics.len());
+            let t = c.peek_or_check(e);
+            c.diagnostics.truncate(marks.0);
+            c.env.diagnostics.truncate(marks.1);
+            Some(t)
+        };
+        let (at, handler) = if id == "hooks.hookScript" {
+            let script = literal(exprs.get(1)?)?;
+            let frame = target_of(self, exprs.get(0)?)?;
+            let (hooks, _) = self.env.field_of(frame, "HookScript")?;
+            let want = self.env.types.str(&script);
+            let overloads = match self.env.types.get(hooks).clone() {
+                Ty::Intersection(ms) => ms,
+                _ => vec![hooks],
+            };
+            let script_fn =
+                overloads
+                    .into_iter()
+                    .find_map(|o| match self.env.types.get(o).clone() {
+                        Ty::Func(g) if g.params.get(1).is_some_and(|p| p.ty == want) => {
+                            g.params.get(2).map(|p| p.ty)
+                        }
+                        _ => None,
+                    })?;
+            (2, script_fn)
+        } else if let Some(method) = exprs.get(1).and_then(literal) {
+            let target = target_of(self, exprs.get(0)?)?;
+            let (m, _) = self.env.field_of(target, &method)?;
+            (2, m)
+        } else {
+            let name = literal(exprs.get(0)?)?;
+            (1, self.env.declared.global(name.as_str())?)
+        };
+        let handler = self.env.types.non_nil(handler);
+        let handler = match self.env.types.get(handler).clone() {
+            Ty::Func(g) if g.type_params.is_empty() => {
+                let mut g = std::sync::Arc::unwrap_or_clone(g);
+                g.ret = Pack::any();
+                self.env.types.func(g)
+            }
+            _ => return None,
+        };
+        f.params.get_mut(at)?.ty = handler;
+        Some(self.env.types.func(f))
     }
 
     /// Checks a call of `f`: arity (E2006, W2055, E2007), argument types

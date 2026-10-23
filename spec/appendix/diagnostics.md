@@ -171,7 +171,7 @@ is reported as the warning with the same number (`E2001` â†’ `W2001`, `E2030` â†
 | W1001 | Undefined global read (basic mode) |
 | W1002 | Implicit global assignment (basic mode) |
 | W1003 | Unused local, parameter or import |
-| W1004 | Local shadows another local; also a parameter named `self` inside a class's method or constructor, which hides the instance (a plain `function M:m()`'s `self` may be shadowed, as frame handlers do) |
+| W1004 | Local shadows another local, or a `local function` is named like a local of the same block; also a parameter named `self` inside a class's method or constructor, which hides the instance (a plain `function M:m()`'s `self` may be shadowed, as frame handlers do) |
 | W1005 | Unreachable code |
 | W1033 | Load order cannot be determined (dynamic names, several writers, external names); files keep their source order |
 | W1034 | Name read at load time but only defined at run time |

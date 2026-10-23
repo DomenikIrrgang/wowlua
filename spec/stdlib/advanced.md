@@ -125,6 +125,12 @@ hook(GameTooltip, "SetSpellByID", function(tip: GameTooltip, id: number) … end
   (`ErrorInfo.owner`, [`wowlua:errors`](infrastructure.md#errors)).
 - **Signatures.** The hook's parameters are checked against the hooked
   function's declared signature, with the receiver first for method hooks.
+  A function written in a `hook(…)` or `hookScript(…)` call takes its
+  parameter types from it: `hook(GameTooltip, "SetUnit", function(tip,
+  unit) … end)` gives `tip` the tooltip's type and `unit` the method's, and
+  `hookScript(frame, "OnSizeChanged", function(self, w, h) … end)` the
+  script's handler types, as `frame:HookScript` would (decision L67). Its
+  results are not read.
   Hooking a name that is not declared is warning W8040, unless an enclosing
   existence test checks the same member (`if obj.Method then` around
   `hook(obj, "Method", fn)`, `if _G.Name then` around `hook("Name", fn)`).
