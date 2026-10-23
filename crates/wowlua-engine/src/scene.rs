@@ -191,14 +191,25 @@ fn color(vm: &Vm, v: Option<Vec<Value>>, default: [f32; 4]) -> [f32; 4] {
     }
 }
 
-/// Its alpha times its parents', up to one that ignores its parent's.
+thread_local! {
+    /// The animations' effects for the scene being built.
+    static EFFECTS: std::cell::RefCell<std::collections::HashMap<usize, crate::animations::Effect>> =
+        std::cell::RefCell::default();
+}
+
+fn effect_of(id: WidgetId) -> crate::animations::Effect {
+    EFFECTS.with(|e| e.borrow().get(&id.0).copied().unwrap_or_default())
+}
+
+/// Its alpha times its parents', up to one that ignores its parent's (a
+/// playing alpha animation's in place of a region's own).
 fn effective_alpha(vm: &Vm, id: WidgetId) -> f32 {
     let mut a = 1.0;
     let mut cur = Some(id);
     for _ in 0..256 {
         let Some(w) = cur else { break };
         let widget = &engine(vm).world.widgets[w.0];
-        a *= widget.alpha;
+        a *= effect_of(w).alpha.unwrap_or(widget.alpha);
         if first(vm, w, "IgnoreParentAlpha").is_some_and(|v| v.truthy()) {
             break;
         }
@@ -420,6 +431,14 @@ fn quad_of(vm: &Vm, id: WidgetId) -> Option<Quad> {
     let mut texcoord = texcoord_of(vm, id, base);
     let atlas = first(vm, id, "Atlas").and_then(|v| text_of(vm, v));
     let mut atlas_texcoord = texcoord_of(vm, id, None);
+    // A flip book playing: its frame's part.
+    if let Some((rows, cols, frame)) = effect_of(id).flip {
+        let (col, row) = (frame % cols, frame / cols);
+        let (u0, u1) = (col as f32 / cols as f32, (col + 1) as f32 / cols as f32);
+        let (v0, v1) = (row as f32 / rows as f32, (row + 1) as f32 / rows as f32);
+        texcoord = sub_rect(texcoord, u0, u1, v0, v1);
+        atlas_texcoord = sub_rect(atlas_texcoord, u0, u1, v0, v1);
+    }
     let mut fill_rect = rect;
     bar_fill(vm, id, &mut fill_rect, &mut atlas_texcoord);
     bar_fill(vm, id, &mut rect, &mut texcoord);
@@ -769,8 +788,30 @@ fn mouse_enabled(vm: &Vm, id: WidgetId) -> bool {
     }
 }
 
+/// The part (`u0..u1`, `v0..v1` of the unit square) of texture
+/// coordinates given by their corners (top left, bottom left, top right,
+/// bottom right).
+fn sub_rect(tc: [f32; 8], u0: f32, u1: f32, v0: f32, v1: f32) -> [f32; 8] {
+    let at = |u: f32, v: f32| {
+        [
+            tc[0] + (tc[4] - tc[0]) * u + (tc[2] - tc[0]) * v,
+            tc[1] + (tc[5] - tc[1]) * u + (tc[3] - tc[1]) * v,
+        ]
+    };
+    let [a, b, c, d] = [at(u0, v0), at(u0, v1), at(u1, v0), at(u1, v1)];
+    [a[0], a[1], b[0], b[1], c[0], c[1], d[0], d[1]]
+}
+
 /// The scene: every visible region, back to front.
 pub fn build(vm: &mut Vm) -> Scene {
+    let effects = crate::animations::effects(vm);
+    EFFECTS.with(|e| *e.borrow_mut() = effects);
+    let scene = build_scene(vm);
+    EFFECTS.with(|e| e.borrow_mut().clear());
+    scene
+}
+
+fn build_scene(vm: &mut Vm) -> Scene {
     let (width, height) = {
         let s = &engine(vm).screen;
         (s.width.round() as u32, s.height.round() as u32)

@@ -104,6 +104,11 @@ const VALUE_ATTRS: &[(&str, &str)] = &[
     ("looping", "SetLooping"),
     ("childKey", "SetChildKey"),
     ("targetKey", "SetTargetKey"),
+    ("flipBookRows", "SetFlipBookRows"),
+    ("flipBookColumns", "SetFlipBookColumns"),
+    ("flipBookFrames", "SetFlipBookFrames"),
+    ("flipBookFrameWidth", "SetFlipBookFrameWidth"),
+    ("flipBookFrameHeight", "SetFlipBookFrameHeight"),
 ];
 
 /// Parameters of inline script bodies (`...` after them, always).

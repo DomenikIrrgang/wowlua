@@ -584,3 +584,60 @@ return unpack(out)",
         ["true", "lost", "false nil", "lost", "false", "true", "lost"]
     );
 }
+
+/// What playing animations show (spec debugger §18.9): an alpha
+/// animation's value as it runs, a flip book's frame, and a group set to
+/// its final alpha keeping it when it finishes (`GetAlpha` too).
+#[test]
+fn animations_show_their_alpha_and_flip_book_frames() {
+    let mut vm = vm();
+    run(
+        &mut vm,
+        "local f = CreateFrame('Frame', 'AnimFrame', UIParent)
+f:SetSize(100, 100)
+f:SetPoint('CENTER')
+local glow = f:CreateTexture(nil, 'ARTWORK')
+glow:SetAllPoints()
+glow:SetColorTexture(1, 1, 1)
+f.Glow = glow
+local g = f:CreateAnimationGroup()
+g:SetToFinalAlpha(true)
+local fade = g:CreateAnimation('Alpha')
+fade:SetChildKey('Glow')
+fade:SetFromAlpha(1)
+fade:SetToAlpha(0)
+fade:SetDuration(1)
+local flip = g:CreateAnimation('FlipBook')
+flip:SetChildKey('Glow')
+flip:SetFlipBookRows(2)
+flip:SetFlipBookColumns(2)
+flip:SetFlipBookFrames(4)
+flip:SetDuration(1)
+AnimGroup = g
+g:Play()",
+    );
+    wowlua_engine::animations::tick(&mut vm, 0.6);
+    let fx = wowlua_engine::animations::effects(&vm);
+    let e = fx.values().next().copied().expect("the glow's effect");
+    assert!((e.alpha.unwrap() - 0.4).abs() < 1e-9, "{e:?}");
+    // 0.6 of 4 frames: the third (row 1, column 0).
+    assert_eq!(e.flip, Some((2, 2, 2)));
+    // The scene draws the third frame's quarter.
+    let scene = wowlua_engine::scene::build(&mut vm);
+    let q = scene
+        .items
+        .iter()
+        .find_map(|i| match i {
+            wowlua_engine::scene::Item::Quad(q) => Some(q.clone()),
+            _ => None,
+        })
+        .expect("the glow");
+    assert_eq!(&q.texcoord[..2], &[0.0, 0.5]);
+    assert!((q.color[3] - 0.4).abs() < 1e-6);
+    wowlua_engine::animations::tick(&mut vm, 0.6);
+    let r = run(
+        &mut vm,
+        "return tostring(AnimGroup:IsPlaying()), AnimFrame.Glow:GetAlpha()",
+    );
+    assert_eq!(r, ["false", "0"]);
+}
