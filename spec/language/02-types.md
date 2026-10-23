@@ -320,7 +320,12 @@ in its own constraints, so `Get<K extends keyof D>(key: K): D[K]` of
 `Module<D>` takes the keys of the `D` an instance or a subclass gives
 (`class Durability extends Module<typeof(DEFAULTS)>`); a base written with
 `typeof`, directly or through a `typeof` alias, is worked out where the
-file reaches the class.
+file reaches the class. A table literal passed for a parameter whose type
+parameters are constrained to literal unions (`keyof T`, `EventName`) is
+checked against the constraints, so its
+strings stay literals: `watchAll<K extends keyof D>(keys: K[], …)` called
+with `{ "line", "figure" }` binds `K` to those keys, and a name that is not
+one is E2014.
 
 ## 2.3 Type aliases and recursive types
 
