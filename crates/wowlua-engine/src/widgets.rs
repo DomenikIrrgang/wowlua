@@ -3015,7 +3015,14 @@ fn bounds_of(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -> Op
     let mut bottom = None;
     let mut top = None;
     let mut center_y = None;
-    for p in &w.points {
+    // The client keeps a slot per point and resolves them in
+    // `Enum.FramePoint`'s order, whatever order they were set in: of two
+    // points setting one edge, the earlier slot's wins (the default UI's
+    // dropdowns: their text's `TOPRIGHT`, set first, and `TOPLEFT` both
+    // set its top, and the client centers it by `TOPLEFT`'s).
+    let mut points: Vec<&Point> = w.points.iter().collect();
+    points.sort_by_key(|p| point_rank(&p.point));
+    for p in points {
         let rel = match p.relative {
             Some(v) => widget_of(vm, v),
             None => w.parent,
@@ -3082,6 +3089,25 @@ fn bounds_of(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -> Op
         (None, None, None) => (0.0, height),
     };
     Some((x, y, width, height))
+}
+
+/// A point's slot in `Enum.FramePoint`'s order.
+fn point_rank(point: &str) -> usize {
+    const ORDER: [&str; 9] = [
+        "TOPLEFT",
+        "TOP",
+        "TOPRIGHT",
+        "LEFT",
+        "CENTER",
+        "RIGHT",
+        "BOTTOMLEFT",
+        "BOTTOM",
+        "BOTTOMRIGHT",
+    ];
+    ORDER
+        .iter()
+        .position(|o| o.eq_ignore_ascii_case(point))
+        .unwrap_or(ORDER.len())
 }
 
 fn edge(vm: &mut Vm, id: WidgetId, f: fn((f64, f64, f64, f64)) -> f64) -> Ret {

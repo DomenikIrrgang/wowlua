@@ -320,7 +320,11 @@ The WoW API the VM's code calls, per flavor.
 - **Layout.** A region's rectangle comes from its points as the client
   lays it out: each edge from the points that set it (a `LEFT` and a
   `RIGHT` point give the width, a `TOP` and a `BOTTOM` the height),
-  otherwise its set size placed by the axis's first point. Points that
+  otherwise its set size placed by the axis's first point. Of two points
+  that set one edge, the one earlier in `Enum.FramePoint`'s order
+  (`TOPLEFT`, `TOP`, `TOPRIGHT`, `LEFT`, `CENTER`, `RIGHT`, `BOTTOMLEFT`,
+  `BOTTOM`, `BOTTOMRIGHT`) places it, whatever order they were set in
+  (decision T337). Points that
   put the right edge left of the left one, or the top below the bottom,
   give no size: 0, at the `LEFT` and `BOTTOM` points (decision T266; seen
   in game). `GetSize`,

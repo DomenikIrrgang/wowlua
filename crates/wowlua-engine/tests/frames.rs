@@ -1533,3 +1533,25 @@ return C_TransmogCollection.GetAppearanceCameraID(11257), C_TransmogCollection.G
     );
     assert_eq!(r, ["1957", "1957"]);
 }
+
+/// Two points setting one edge: the one earlier in `Enum.FramePoint`'s
+/// order places it, whatever order they were set in (the dropdowns' text).
+#[test]
+fn points_resolve_in_frame_point_order() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local f = CreateFrame('Frame', nil, UIParent)
+f:SetSize(120, 25)
+f:SetPoint('TOPLEFT', 100, -100)
+local arrow = f:CreateTexture()
+arrow:SetSize(20, 20)
+arrow:SetPoint('RIGHT', 0, -3)
+local text = f:CreateFontString(nil, 'OVERLAY', 'GameFontHighlight')
+text:SetHeight(10)
+text:SetPoint('TOPRIGHT', arrow, 'LEFT')
+text:SetPoint('TOPLEFT', 8, -8)
+return f:GetTop() - text:GetTop(), text:GetLeft() - f:GetLeft(), text:GetRight() - f:GetLeft()",
+    );
+    assert_eq!(r, ["8", "8", "100"]);
+}
