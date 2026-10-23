@@ -257,8 +257,8 @@ T310).
   in the client, so a table's records of unreleased content are left out.
 - **Tables** (decision T319): DB2 tables (WDC3 to WDC5: inline, bit-packed,
   palette and common fields, arrays, copies, relationship maps), their
-  fields named by the build's layout hash (as WoWDBDefs documents each
-  layout), else by a known layout of the same field count.
+  fields named by the build's layout hash, else by a known layout of the
+  same field count.
 - **Models** (decision T318): M2 models (the chunked `MD21` form) with
   their skin profile, skeleton (`.skel`) and the `.anim` files of the
   sequences shown; a creature display through `CreatureDisplayInfo` and
