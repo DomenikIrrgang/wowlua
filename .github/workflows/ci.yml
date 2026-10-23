@@ -33,6 +33,20 @@ jobs:
       - name: Generated files are up to date
         run: cargo xtask check
 
+  # The layers that are to run in the browser (decisions T212, T301): the
+  # VM, the engine, the debugger's core, the asset reader, the renderer.
+  wasm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: wasm32-unknown-unknown
+      - uses: Swatinem/rust-cache@v2
+        with:
+          save-if: ${{ github.ref == 'refs/heads/main' }}
+      - run: cargo check --target wasm32-unknown-unknown --no-default-features -p wowlua-vm -p wowlua-engine -p wowlua-debug -p wowlua-casc -p wowlua-render
+
   test:
     strategy:
       fail-fast: false

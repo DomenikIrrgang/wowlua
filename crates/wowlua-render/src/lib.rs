@@ -806,13 +806,14 @@ impl Renderer {
         );
         self.queue.submit([encoder.finish()]);
         let slice = buffer.slice(..);
-        let (tx, rx) = std::sync::mpsc::channel();
-        slice.map_async(wgpu::MapMode::Read, move |r| {
-            let _ = tx.send(r);
-        });
+        let mapped = Mapped::default();
+        let done = mapped.clone();
+        slice.map_async(wgpu::MapMode::Read, move |r| done.finish(r));
+        // Natively the poll waits for the GPU; in the browser the event
+        // loop calls back, and the future wakes.
         let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
-        rx.recv()
-            .map_err(|_| "the GPU did not answer".to_string())?
+        mapped
+            .await
             .map_err(|e| format!("reading the screenshot back: {e}"))?;
         let data = slice
             .get_mapped_range()
@@ -873,6 +874,44 @@ impl Renderer {
         self.by_key
             .get(&key)
             .map(|&t| (self.textures[t].width, self.textures[t].height))
+    }
+}
+
+/// A buffer's mapping finishing: a future the map callback completes.
+#[derive(Clone, Default)]
+struct Mapped(std::sync::Arc<std::sync::Mutex<MappedState>>);
+
+#[derive(Default)]
+struct MappedState {
+    result: Option<Result<(), wgpu::BufferAsyncError>>,
+    waker: Option<std::task::Waker>,
+}
+
+impl Mapped {
+    fn finish(&self, r: Result<(), wgpu::BufferAsyncError>) {
+        if let Ok(mut s) = self.0.lock() {
+            s.result = Some(r);
+            if let Some(w) = s.waker.take() {
+                w.wake();
+            }
+        }
+    }
+}
+
+impl std::future::Future for Mapped {
+    type Output = Result<(), wgpu::BufferAsyncError>;
+
+    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+        let Ok(mut s) = self.0.lock() else {
+            return std::task::Poll::Ready(Err(wgpu::BufferAsyncError));
+        };
+        match s.result.take() {
+            Some(r) => std::task::Poll::Ready(r),
+            None => {
+                s.waker = Some(cx.waker().clone());
+                std::task::Poll::Pending
+            }
+        }
     }
 }
 
