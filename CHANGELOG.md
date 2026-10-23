@@ -42,6 +42,11 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- `frame:GetScaledRect()` gives the rectangle times the frame's effective scale, as in game. Layouts built on it (Blizzard's action bars, `ResizeLayoutFrame`) came out too large by one over UIParent's scale, so the default UI's bars sat apart.
+- A button's normal, pushed, disabled and highlight textures that `SetNormalAtlas` or `SetNormalTexture` makes fill the button, as in game; they had no size (the default UI's micro menu buttons showed no icons).
+- `<MaskedTextures>` in XML masks the textures it names (`<MaskedTexture childKey="icon"/>`): action buttons' icons are masked and drawn over their slot art.
+- `bar:SetStatusBarTexture("atlas-name")` takes an atlas by its name, as Blizzard's bars use it (the experience bar).
+
 - Text with a named colour (`|cnNAME:text|r`, as chat links write it) shows and measures only its text; it showed part of the colour's name.
 - `font:CopyFontObject(other)` copies the other font's file, height, colours and shadow, as in game: Blizzard's chat frames lost their font when they made it their own.
 - An animation group with `setToFinalAlpha` keeps its alpha animations' end values when it finishes, so `GetAlpha` on their regions reads them, as in game; `flipBookRows`, `flipBookColumns` and `flipBookFrames` in XML are kept too.

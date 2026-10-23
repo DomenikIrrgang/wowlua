@@ -94,6 +94,9 @@ pub struct Quad {
     pub tile: (bool, bool),
     pub clip: Option<Rect>,
     pub masks: Vec<Mask>,
+    /// Screen pixels per UI unit of the region (its effective scale): a
+    /// sliced or tiled atlas's pixels are drawn this size.
+    pub unit: f32,
 }
 
 /// A run of characters of one color.
@@ -589,10 +592,22 @@ fn quad_of(vm: &Vm, id: WidgetId) -> Option<Quad> {
         blend: blend_of(vm, id),
         desaturated: first(vm, id, "Desaturated").is_some_and(|v| v.truthy()),
         rotation: num(vm, first(vm, id, "Rotation").as_ref(), 0.0) as f32,
-        tile,
+        tile: (
+            tile.0 || first(vm, id, "HorizTile").is_some_and(|v| v.truthy()),
+            tile.1 || first(vm, id, "VertTile").is_some_and(|v| v.truthy()),
+        ),
         clip: clip_of(vm, id),
         masks: masks_of(vm, id),
+        unit: unit_of(vm, id),
     })
+}
+
+/// Screen pixels per UI unit of a region.
+fn unit_of(vm: &Vm, id: WidgetId) -> f32 {
+    let (k, _) = pixel_scale(vm);
+    let e = engine(vm);
+    let ui = e.screen.ui_parent_scale();
+    (k * widgets::effective_scale(e, id) / ui.max(1e-6)) as f32
 }
 
 /// A named colour (`|cnNAME:`): the global colour object of that name
@@ -1301,7 +1316,7 @@ fn build_scene(vm: &mut Vm) -> Scene {
                     .collect()
             })
             .unwrap_or_default();
-        let mut regions: Vec<(usize, i32, usize)> = Vec::new();
+        let mut regions: Vec<(usize, i32, bool, usize)> = Vec::new();
         for c in children {
             let w = &engine(vm).world.widgets[c.0];
             if !w.shown || !is_region(vm, c) || messages.contains(&c.0) {
@@ -1312,10 +1327,14 @@ fn build_scene(vm: &mut Vm) -> Scene {
             if layer == 4 && hover != Some(f) {
                 continue;
             }
-            regions.push((layer, sub, c.0));
+            // Within a layer and sublevel, masked textures after the others
+            // (the action buttons' masked icons show over their slot art,
+            // created after them; unverified beyond that).
+            let masked = !masks_of(vm, c).is_empty();
+            regions.push((layer, sub, masked, c.0));
         }
         regions.sort();
-        for (_, _, r) in regions {
+        for (_, _, _, r) in regions {
             let id = WidgetId(r);
             let class = engine(vm).world.widgets[r].class.clone();
             if widgets::is_a(engine(vm), &class, "FontString") {

@@ -3163,7 +3163,10 @@ fn get_status_bar_texture(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 }
 
 /// `SetStatusBarTexture(asset)`: a texture widget becomes the bar's, a
-/// file or atlas its texture's.
+/// file its texture's file; an atlas's name its texture's atlas (Blizzard's
+/// bars pass atlas names: the experience bar's
+/// `UI-HUD-ExperienceBar-Fill-Experience`; unverified: what `GetTexture`
+/// answers then).
 fn set_status_bar_texture(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let asset = c.arg(2);
     if widget_of(vm, asset).is_some() {
@@ -3171,7 +3174,19 @@ fn set_status_bar_texture(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     } else {
         let t = status_bar_texture(vm, id);
         if let Some(tid) = widget_of(vm, t) {
-            store(vm, tid, "Texture", &[asset]);
+            let is_atlas = match asset {
+                Value::Str(s) => {
+                    let name = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
+                    crate::measures::atlas(&name).is_some()
+                }
+                _ => false,
+            };
+            if is_atlas {
+                store(vm, tid, "Atlas", &[asset]);
+                unstore(vm, tid, "Texture");
+            } else {
+                set_texture_file(vm, tid, &[asset]);
+            }
         }
     }
     store(vm, id, "StatusBarTexture", &[asset]);
@@ -4156,8 +4171,8 @@ pub(crate) fn store(vm: &mut Vm, id: WidgetId, stem: &str, args: &[Value]) {
 }
 
 /// A button's `kind` texture (`Normal`, `Highlight`): the one set, else a
-/// new texture of the button's (the highlight's in layer HIGHLIGHT, the
-/// others' in ARTWORK; unverified).
+/// new texture of the button's filling it (the highlight's in layer
+/// HIGHLIGHT, the others' in ARTWORK; unverified: the layers).
 fn button_texture(vm: &mut Vm, id: WidgetId, kind: &str) -> Value {
     let props = engine(vm).world.widgets[id.0].props;
     let stem = format!("{kind}Texture");
@@ -4170,6 +4185,19 @@ fn button_texture(vm: &mut Vm, id: WidgetId, kind: &str) -> Value {
     if let Some(tid) = widget_of(vm, t) {
         let layer = vm.str(crate::buttons::state_layer(kind));
         store(vm, tid, "DrawLayer", &[layer, Value::Num(0.0)]);
+        // All points on the button, as the client's state textures (the
+        // default UI's micro buttons draw their icons so).
+        let w = &mut engine_mut(vm).world.widgets[tid.0];
+        for p in ["TOPLEFT", "BOTTOMRIGHT"] {
+            w.points.push(Point {
+                point: p.into(),
+                relative: None,
+                relative_point: p.into(),
+                x: 0.0,
+                y: 0.0,
+            });
+        }
+        layout_changed(vm);
     }
     store(vm, id, &stem, &[t]);
     t

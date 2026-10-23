@@ -866,6 +866,27 @@ fn apply_child(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, child: &Rc
                 build(vm, cx, g, Some(id));
             }
         }
+        // A mask's textures (`<MaskedTexture childKey="icon"/>`, or a
+        // `target` by name): it masks each.
+        "maskedtextures" => {
+            let parent = engine(vm).world.widgets[id.0]
+                .parent
+                .map(|p| Value::Table(engine(vm).world.widgets[p.0].table));
+            for m in &child.children {
+                let target = match (m.attr("childKey"), m.attr("target"), parent) {
+                    (Some(key), _, Some(p)) => relative_key(vm, p, key),
+                    (None, Some(name), _) => {
+                        let parent_id = engine(vm).world.widgets[id.0].parent;
+                        let name = resolve_name(vm, name, parent_id);
+                        vm.get_global(&name)
+                    }
+                    _ => Value::Nil,
+                };
+                if widgets::widget_of(vm, target).is_some() {
+                    call_method(vm, cx, m.line, target, "AddMaskTexture", &[frame]);
+                }
+            }
+        }
         // A texture's coordinates: its edges, or its corners
         // (`<Rect ULx=… LRy=…/>`).
         "texcoords" => {

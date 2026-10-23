@@ -18,6 +18,7 @@ use crate::db2::Db2;
 const ATLAS_TABLE: u32 = 897470;
 const MEMBER_TABLE: u32 = 897532;
 const ELEMENT_TABLE: u32 = 1989276;
+const SLICE_TABLE: u32 = 5319042;
 
 /// An atlas: its file, its region (left, right, top, bottom, 0 to 1), its
 /// size in the file's pixels, whether it tiles.
@@ -29,6 +30,10 @@ pub struct Atlas {
     pub height: u32,
     pub tiles_horizontally: bool,
     pub tiles_vertically: bool,
+    /// Its nine-slice margins in its pixels (left, top, right, bottom) and
+    /// how the middle fills (0 stretched, 1 tiled), where the build's
+    /// `UiTextureAtlasElementSliceData` gives them.
+    pub slice: Option<([u32; 4], u8)>,
 }
 
 /// An atlas file's row: file, width, height, set, canvas.
@@ -129,6 +134,7 @@ pub fn read(casc: &Casc) -> HashMap<String, Atlas> {
             height: (b - t).max(0.0) as u32,
             tiles_horizontally: !no_tile && flags & 4 != 0,
             tiles_vertically: !no_tile && flags & 2 != 0,
+            slice: None,
         };
         if let Some(name) = m.string(i, 0).filter(|n| !n.is_empty()) {
             out.insert(name.to_ascii_lowercase(), atlas);
@@ -144,7 +150,26 @@ pub fn read(casc: &Casc) -> HashMap<String, Atlas> {
             }
         }
     }
-    for (element, (_, atlas)) in best {
+    // Slice margins by element: (ID,) element, left, top, right, bottom,
+    // mode.
+    let slices: HashMap<u32, ([u32; 4], u8)> = casc
+        .file_by_id(SLICE_TABLE)
+        .and_then(Db2::parse)
+        .map(|t| {
+            let base = usize::from(t.field_count() >= 7);
+            (0..t.len())
+                .filter_map(|i| {
+                    let f = |k: usize| t.int(i, base + k);
+                    Some((
+                        f(0)?,
+                        ([f(1)?, f(2)?, f(3)?, f(4)?], f(5).unwrap_or(0) as u8),
+                    ))
+                })
+                .collect()
+        })
+        .unwrap_or_default();
+    for (element, (_, mut atlas)) in best {
+        atlas.slice = slices.get(&element).copied();
         if let Some(name) = elements.get(&element) {
             out.insert(name.clone(), atlas);
         }

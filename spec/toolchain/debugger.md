@@ -177,7 +177,9 @@ proportion to the visible regions.
 - **Order**: frame strata (`BACKGROUND` to `TOOLTIP`), frame level, then a
   frame's regions by draw layer (`BACKGROUND`, `BORDER`, `ARTWORK`,
   `OVERLAY`, `HIGHLIGHT` while the mouse is over its button) and sublevel
-  (-8 to 7), then creation order; a frame draws before its regions'
+  (-8 to 7), then masked textures after unmasked ones (the action
+  buttons' masked icons over their slot art), then creation order; a
+  frame draws before its regions'
   children frames of the same level.
 - **Textures**: the rectangle, the image (a file path or file ID, an atlas
   as the client's tables give it, or a color), texture coordinates (four
@@ -249,7 +251,11 @@ T310).
   files (decision T316): a name is an element, drawn with its variant of
   the flavor's atlas set (camelot's `-c60`) over the default set's, at 1x;
   a variant's own name is drawn as itself. Where the tables cannot be read,
-  the engine's recorded atlases are drawn.
+  the engine's recorded atlases are drawn. An atlas with nine-slice margins
+  (`UiTextureAtlasElementSliceData`: left, top, right, bottom in its
+  pixels, the middle stretched or tiled) is drawn in pieces: its corners as
+  they are, at the region's scale, its edges and middle filled; an atlas
+  that tiles repeats at its size instead of stretching.
 - **Encrypted files** (decision T317): chunks encrypted with a key the
   client has (its `TactKeyLookup` and `TactKey` tables, and the keys its
   hotfix cache holds, `Cache/ADB/<locale>/DBCache.bin`) are decrypted in

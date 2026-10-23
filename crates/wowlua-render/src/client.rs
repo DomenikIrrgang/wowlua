@@ -169,9 +169,15 @@ impl Assets for ClientAssets {
         wowlua_casc::decode_image(&bytes)
     }
 
-    fn atlas(&mut self, name: &str) -> Option<(Image, [f32; 4])> {
+    fn atlas(&mut self, name: &str) -> Option<crate::AtlasRegion> {
         let a = self.atlases.as_ref()?.get(&name.to_ascii_lowercase())?;
-        Some((Image::FileId(a.file), a.coords))
+        Some(crate::AtlasRegion {
+            image: Image::FileId(a.file),
+            coords: a.coords,
+            size: (a.width, a.height),
+            slice: a.slice,
+            tiles: (a.tiles_horizontally, a.tiles_vertically),
+        })
     }
 
     fn file(&mut self, id: u32) -> Option<Vec<u8>> {

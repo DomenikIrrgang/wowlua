@@ -511,15 +511,19 @@ fn get_bounds_rect(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     })
 }
 
-/// `GetScaledRect()`: its rectangle in screen units (its scale applied);
-/// nothing while it is not placed.
+/// `GetScaledRect()`: its rectangle times its effective scale (`GetRect`'s
+/// in UIParent's units, times UIParent's scale); nothing while it is not
+/// placed. Blizzard's resize layouts divide it by the frame's effective
+/// scale again (`GetUnscaledFrameRect`): without the scale, the default
+/// UI's action bars grew by 1 / UIParent's scale.
 fn get_scaled_rect(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let ui = engine(vm).screen.ui_parent_scale();
     Ok(match screen_rect(vm, id) {
         Some(r) => vec![
-            Value::Num(r.0),
-            Value::Num(r.1),
-            Value::Num(r.2),
-            Value::Num(r.3),
+            Value::Num(r.0 * ui),
+            Value::Num(r.1 * ui),
+            Value::Num(r.2 * ui),
+            Value::Num(r.3 * ui),
         ],
         None => vec![],
     })

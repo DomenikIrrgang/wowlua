@@ -315,3 +315,12 @@ not known yet.
    `/run local m=WardrobeCollectionFrame.ItemsCollectionFrame.Models[1] print(m:GetCameraPosition()) print(m:GetCameraTarget()) print(m:GetPosition()) print(m:GetFacing(), m:GetPitch(), m:GetRoll()) print(m:IsUsingModelCenterToTransform()) local v=m:TransformCameraSpaceToModelSpace(CreateVector3D(4,0,0)) print(v:GetXYZ())`
 3. `/run local m=CreateFrame("PlayerModel") m:SetSize(100,100) m:SetUnit("player") print(m:GetCameraDistance(), m:GetCameraPosition()) print(m:GetCameraTarget())`
    Answers the model frame's own camera and field of view.
+
+## Textures the screenshots draw
+
+1. `/run local t=MainStatusTrackingBarContainer.bars and MainStatusTrackingBarContainer.bars[1] or nil print(t and t.StatusBar:GetStatusBarTexture():GetAtlas(), t and t.StatusBar:GetStatusBarTexture():GetTexture())`
+   with the experience bar shown: whether `SetStatusBarTexture(atlasName)`
+   makes the texture's atlas (wowlua: it does; `GetTexture` answers nil).
+2. An action button with a spell: `/run local b=ActionButton1 print(b.icon:GetDrawLayer()) print(b.SlotArt:GetDrawLayer()) print(b.icon:GetNumMaskTextures())`
+   and a screenshot of it hovered: wowlua draws a masked texture over the
+   unmasked ones of its layer and sublevel (the icon over the slot art).

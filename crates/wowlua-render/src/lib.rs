@@ -28,9 +28,9 @@ pub trait Assets {
     fn image(&mut self, image: &Image) -> Option<Rgba>;
     /// A font file's bytes (`Fonts\FRIZQT__.TTF`).
     fn font(&mut self, path: &str) -> Option<Vec<u8>>;
-    /// An atlas as the build's own tables give it: its file and region
-    /// (left, right, top, bottom); none to use the engine's.
-    fn atlas(&mut self, _name: &str) -> Option<(Image, [f32; 4])> {
+    /// An atlas as the build's own tables give it (its file, region,
+    /// size, slices, tiling); none to use the engine's.
+    fn atlas(&mut self, _name: &str) -> Option<AtlasRegion> {
         None
     }
     /// A file of the client's storage by ID (models, skins, animations).
@@ -41,6 +41,71 @@ pub trait Assets {
     fn model(&mut self, _source: &ModelSource) -> Option<Display> {
         None
     }
+}
+
+/// An atlas's part of its file.
+#[derive(Clone, Debug)]
+pub struct AtlasRegion {
+    pub image: Image,
+    /// Left, right, top, bottom (0 to 1).
+    pub coords: [f32; 4],
+    /// Its size in the file's pixels.
+    pub size: (u32, u32),
+    /// Nine-slice margins in its pixels (left, top, right, bottom) and the
+    /// middle's mode (0 stretched, 1 tiled).
+    pub slice: Option<([u32; 4], u8)>,
+    pub tiles: (bool, bool),
+}
+
+/// One axis of a sliced or tiled quad: (destination start, length, source
+/// start, length) pieces.
+fn axis_pieces(
+    start: f32,
+    len: f32,
+    src: (f32, f32),
+    px: f32,
+    margins: Option<(f32, f32)>,
+    tile_middle: bool,
+    unit: f32,
+) -> Vec<(f32, f32, f32, f32)> {
+    let (s0, s1) = src;
+    let span = s1 - s0;
+    let mut out = Vec::new();
+    // The ends, as they are (scaled down where they would overlap).
+    let (a, b) = margins.unwrap_or((0.0, 0.0));
+    let (mut da, mut db) = (a * unit, b * unit);
+    if da + db > len && da + db > 0.0 {
+        let k = len / (da + db);
+        da *= k;
+        db *= k;
+    }
+    if da > 0.0 {
+        out.push((start, da, s0, span * a / px));
+    }
+    let (ms, ml) = (start + da, len - da - db);
+    let (src_ms, src_ml) = (s0 + span * a / px, span * (px - a - b) / px);
+    if ml > 0.0 && src_ml > 0.0 {
+        let tile = (px - a - b) * unit;
+        if tile_middle && tile > 0.5 && ml / tile < 512.0 {
+            let mut at = 0.0;
+            while at < ml - 0.01 {
+                let l = tile.min(ml - at);
+                out.push((ms + at, l, src_ms, src_ml * l / tile));
+                at += tile;
+            }
+        } else {
+            out.push((ms, ml, src_ms, src_ml));
+        }
+    }
+    if db > 0.0 {
+        out.push((
+            start + len - db,
+            db,
+            s0 + span * (px - b) / px,
+            span * b / px,
+        ));
+    }
+    out
 }
 
 /// No assets: every image a placeholder, every font a stand-in.
@@ -566,17 +631,60 @@ impl Renderer {
                     // The build's atlas, where the assets know it.
                     let own = q.atlas.as_deref().and_then(|n| assets.atlas(n));
                     let (image, tc) = match &own {
-                        Some((image, [l, r, t, b])) => {
+                        Some(a_) => {
+                            let [l, r, t, b] = a_.coords;
                             let a = q.atlas_texcoord;
                             let mut tc = [0.0f32; 8];
                             for k in 0..4 {
                                 tc[k * 2] = l + a[k * 2] * (r - l);
                                 tc[k * 2 + 1] = t + a[k * 2 + 1] * (b - t);
                             }
-                            (image, tc)
+                            (&a_.image, tc)
                         }
                         None => (&q.image, q.texcoord),
                     };
+                    // A sliced or tiling atlas drawn whole (not turned, not
+                    // flipped): its pieces.
+                    let pieces: Option<Vec<(Rect, [f32; 4])>> = own.as_ref().and_then(|a_| {
+                        let plain = q.rotation == 0.0
+                            && q.atlas_texcoord == [0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0];
+                        if !plain || (a_.slice.is_none() && !a_.tiles.0 && !a_.tiles.1) {
+                            return None;
+                        }
+                        let r = s(q.rect);
+                        let unit = q.unit * scale;
+                        let [l, rr, t, b] = a_.coords;
+                        let (pw, ph) = (a_.size.0.max(1) as f32, a_.size.1.max(1) as f32);
+                        let (m, mode) = match a_.slice {
+                            Some((m, mode)) => (Some(m.map(|v| v as f32)), mode),
+                            None => (None, 0),
+                        };
+                        let xs = axis_pieces(
+                            r.x,
+                            r.w,
+                            (l, rr),
+                            pw,
+                            m.map(|m| (m[0], m[2])),
+                            if m.is_some() { mode == 1 } else { a_.tiles.0 },
+                            unit,
+                        );
+                        let ys = axis_pieces(
+                            r.y,
+                            r.h,
+                            (t, b),
+                            ph,
+                            m.map(|m| (m[1], m[3])),
+                            if m.is_some() { mode == 1 } else { a_.tiles.1 },
+                            unit,
+                        );
+                        let mut out = Vec::with_capacity(xs.len() * ys.len());
+                        for &(y, h, v0, vl) in &ys {
+                            for &(x, w, u0, ul) in &xs {
+                                out.push((Rect { x, y, w, h }, [u0, u0 + ul, v0, v0 + vl]));
+                            }
+                        }
+                        Some(out)
+                    });
                     let tex = self.texture(image, assets);
                     // The mask's image and its region (the build's atlas's
                     // where the assets know it).
@@ -584,7 +692,7 @@ impl Renderer {
                         Some(m) => {
                             let own = m.atlas.as_deref().and_then(|n| assets.atlas(n));
                             let (image, region) = match &own {
-                                Some((image, region)) => (image, *region),
+                                Some(a) => (&a.image, a.coords),
                                 None => (&m.image, m.region),
                             };
                             (self.texture(image, assets), Some(s(m.rect)), region)
@@ -620,27 +728,42 @@ impl Renderer {
                         },
                         flags,
                     };
-                    let quad = [
-                        mk(corner(r.x, r.y), [tc[0], tc[1]]),
-                        mk(corner(r.x, r.y + r.h), [tc[2], tc[3]]),
-                        mk(corner(r.x + r.w, r.y), [tc[4], tc[5]]),
-                        mk(corner(r.x + r.w, r.y + r.h), [tc[6], tc[7]]),
-                    ];
                     let pipeline = match q.blend {
                         Blend::Blend => PIPELINE_BLEND,
                         Blend::Add => PIPELINE_ADD,
                         Blend::Mod => PIPELINE_MOD,
                         Blend::Disable | Blend::AlphaKey => PIPELINE_OPAQUE,
                     };
-                    push(
-                        &mut verts,
-                        &mut batches,
-                        pipeline,
-                        tex,
-                        mask,
-                        q.clip.map(s),
-                        quad,
-                    );
+                    let quads: Vec<[Vertex; 4]> = match &pieces {
+                        Some(pieces) => pieces
+                            .iter()
+                            .map(|(p, [u0, u1, v0, v1])| {
+                                [
+                                    mk([p.x, p.y], [*u0, *v0]),
+                                    mk([p.x, p.y + p.h], [*u0, *v1]),
+                                    mk([p.x + p.w, p.y], [*u1, *v0]),
+                                    mk([p.x + p.w, p.y + p.h], [*u1, *v1]),
+                                ]
+                            })
+                            .collect(),
+                        None => vec![[
+                            mk(corner(r.x, r.y), [tc[0], tc[1]]),
+                            mk(corner(r.x, r.y + r.h), [tc[2], tc[3]]),
+                            mk(corner(r.x + r.w, r.y), [tc[4], tc[5]]),
+                            mk(corner(r.x + r.w, r.y + r.h), [tc[6], tc[7]]),
+                        ]],
+                    };
+                    for quad in quads {
+                        push(
+                            &mut verts,
+                            &mut batches,
+                            pipeline,
+                            tex,
+                            mask,
+                            q.clip.map(s),
+                            quad,
+                        );
+                    }
                 }
                 Item::Text(t) => {
                     let font = self.font(&t.font, assets);
