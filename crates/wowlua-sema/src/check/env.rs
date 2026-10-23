@@ -1678,7 +1678,28 @@ impl<'p> Env<'p> {
                 .with_label(span, "here"),
             );
         }
-        // Missing type arguments are `any`.
+        // Missing type arguments are `any` (W2063 in a module's own types:
+        // the declarations' are not the project's).
+        if args.is_empty() && expected > 0 && scope.module.is_some() {
+            let d = self.def(def);
+            let params: Vec<String> = d
+                .params
+                .iter()
+                .map(|p| self.params[p.0 as usize].name.to_string())
+                .collect();
+            self.diagnostics.push(
+                Diagnostic::warning(
+                    "W2063",
+                    format!(
+                        "`{}` is written without its type arguments, so they are `any` (write `{}<{}>`)",
+                        d.name,
+                        d.name,
+                        params.join(", ")
+                    ),
+                )
+                .with_label(span, "here"),
+            );
+        }
         let mut full_args = arg_types;
         full_args.resize(expected, Types::ANY);
         match self.def(def).kind {

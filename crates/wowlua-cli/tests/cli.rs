@@ -2901,7 +2901,8 @@ print(t, u)
 }
 
 /// `W2063` (decision T274): off unless `check.lints` turns it on; then an
-/// unannotated parameter nothing types, and a local whose value is `any`.
+/// unannotated parameter nothing types, a local whose value is `any`, and
+/// a generic type written without its type arguments (T276).
 #[test]
 fn implicit_any_lint() {
     let dir = tempfile::tempdir().unwrap();
@@ -2915,6 +2916,10 @@ local _b = t.other
 local frame = CreateFrame("Frame")
 frame:SetScript("OnUpdate", function(self, elapsed) print(self, elapsed) end)
 print(a)
+type Box<T> = { item: T }
+local boxed: Box = { item = 1 }
+local typed: Box<number> = { item = 1 }
+print(boxed, typed)
 "#;
     let manifest = |lints: &str| {
         format!(
@@ -2951,6 +2956,7 @@ print(a)
         [
             "src/main.wowlua:4:16: warning[W2063]: parameter `y` is `any`: nothing gives it a type (annotate it)",
             "src/main.wowlua:6:7: warning[W2063]: `a` is `any`: its value has no type (annotate it, or type where it comes from)",
+            "src/main.wowlua:12:14: warning[W2063]: `Box` is written without its type arguments, so they are `any` (write `Box<T>`)",
         ],
         "{on}"
     );

@@ -309,8 +309,11 @@ only lints, and errors that stop the analysis) on `.wowlua` files, and on
   whose branches all end that way; once per region. Reported by the type
   checker, so not in `--!nocheck` files.
 - **W2063, implicit `any`.** Off unless `check.lints` turns it on: a
-  parameter without an annotation that nothing gives a type, or a `local`
-  without one whose value is `any`. A project that keeps `any` to the places
+  parameter without an annotation that nothing gives a type, a `local`
+  without one whose value is `any`, or a generic type written without its
+  type arguments (`Box` for `Box<T>`, whose arguments are then `any`;
+  decision T276). Only the project's files: not wowlua's library or a
+  dependency's. A project that keeps `any` to the places
   that need it turns it on, and writes `any` where it means it (decision
   T274).
 

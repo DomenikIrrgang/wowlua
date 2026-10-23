@@ -461,6 +461,22 @@ pub fn check_package_full(
             break;
         }
     }
+    // W2063 is the project's own: not of wowlua's library or a dependency
+    // (the types those files declare are resolved with the environment).
+    let foreign: FxHashSet<wowlua_span::FileId> = files
+        .iter()
+        .filter(|f| crate::is_compiler_known(&f.src_rel) || crate::package_of(&f.src_rel).is_some())
+        .filter_map(|f| f.parse.map(|p| p.view().span().file))
+        .collect();
+    if !foreign.is_empty() {
+        diagnostics.retain(|d| {
+            d.code != Some("W2063")
+                || !d
+                    .labels
+                    .first()
+                    .is_some_and(|l| foreign.contains(&l.span.file))
+        });
+    }
     let private_methods: HashSet<wowlua_span::Span> = private_methods
         .into_iter()
         .filter(|(_, owner)| !reachable.contains(owner))
