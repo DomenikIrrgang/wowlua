@@ -265,11 +265,14 @@ takes `test` (a test file) and `filter`, or `addon: true`; and `flavor`,
 breakpoints with conditions, hit counts and log points; function
 breakpoints for functions, API calls, events, scripts and timers;
 exception breakpoints for `uncaught`, `all`, `taint` and `blocked`),
-stepping, threads (one per coroutine), stack traces, scopes, variables,
+stepping, one thread (the client runs one; a coroutine's stack goes on
+with the code that resumed it), stack traces, scopes, variables,
 `setVariable`, `evaluate` (watch, hover, repl), `pause` and `terminate`.
 Custom requests: `wowlua/screenshot` (PNG as base64), `wowlua/frameTree`,
-`wowlua/input` (click, hover, drag, type, key), `wowlua/advance`,
-`wowlua/profile` (start, stop, report).
+`wowlua/findFrames`, `wowlua/input` (click, hover, drag, type, key),
+`wowlua/advance`, `wowlua/fireEvent`, `wowlua/profile` (`start`, `stop`:
+the report). A value's taint shows in its type (`string · tainted by
+MyAddon`), a secret's value after `secret`.
 
 ### 18.12.2 `wowlua mcp`: Model Context Protocol
 

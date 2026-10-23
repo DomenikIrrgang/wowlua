@@ -115,6 +115,11 @@ pub trait Debugger {
     fn interrupted(&mut self, _vm: &mut Vm) {}
     /// Execution became tainted (`taint` breakpoints): `by` is the addon.
     fn tainted(&mut self, _vm: &mut Vm, _by: &str) {}
+    /// The engine refused a protected action (`blocked` breakpoints).
+    fn blocked(&mut self, _vm: &mut Vm, _action: &str, _addon: &str, _report: &str) {}
+    /// The host is between game frames, no Lua running: requests can be
+    /// served (and the session can pause here).
+    fn idle(&mut self, _vm: &mut Vm) {}
 }
 
 /// A step in progress: line events in frames up to this depth of this
@@ -172,6 +177,46 @@ impl Vm {
 
     pub fn has_debugger(&self) -> bool {
         self.dbg.is_some()
+    }
+
+    /// Uses `flag` as the interrupt flag (one the host shares between the
+    /// VMs of a session).
+    pub fn set_interrupt_handle(&mut self, flag: Arc<AtomicBool>) {
+        if let Some(d) = self.dbg.as_mut() {
+            d.interrupt = flag;
+        }
+    }
+
+    /// The engine refused a protected action: the debugger hears of it.
+    pub fn notify_blocked(&mut self, action: &str, addon: &str, report: &str) {
+        if self.debugger.is_some() {
+            let (a, b, c) = (action.to_string(), addon.to_string(), report.to_string());
+            self.with_debugger(|d, vm| d.blocked(vm, &a, &b, &c));
+        }
+    }
+
+    /// How the caller named the function of Lua frame `index` (`global`,
+    /// `local`, `method`, `field`, `upvalue`), when a Lua frame called it.
+    pub fn frame_name(&self, index: usize) -> Option<(&'static str, String)> {
+        let f = self.cur.frames.get(index)?;
+        if f.tail || f.entry || index == 0 {
+            return None;
+        }
+        let caller = &self.cur.frames[index - 1];
+        let pc = caller.pc.saturating_sub(1);
+        match caller.proto.code.get(pc) {
+            Some(
+                crate::proto::Op::Call { a, .. }
+                | crate::proto::Op::TailCall { a, .. }
+                | crate::proto::Op::TForLoop { a, .. },
+            ) => crate::vm::obj_name(&self.heap, &caller.proto, pc, *a),
+            _ => None,
+        }
+    }
+
+    /// A function object's taint.
+    pub fn func_taint(&self, f: FuncRef) -> crate::taint::Taint {
+        self.heap.func(f).taint()
     }
 
     /// A flag another thread (or the browser's event loop) sets to pause

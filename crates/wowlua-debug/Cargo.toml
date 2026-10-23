@@ -1,0 +1,27 @@
+[package]
+name = "wowlua-debug"
+description = "wowlua's debugger and profiler on the emulated client: breakpoints, stepping, inspection, profiles, DAP"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[features]
+default = ["native"]
+# Sessions of test files and the addon (through the test runner), and the
+# DAP server: not for the browser.
+native = ["dep:wowlua-test", "dep:wowlua-driver"]
+
+[dependencies]
+rustc-hash.workspace = true
+serde.workspace = true
+serde_json.workspace = true
+wowlua-engine.workspace = true
+wowlua-vm.workspace = true
+wowlua-driver = { workspace = true, optional = true }
+wowlua-test = { workspace = true, optional = true }
+
+[lints]
+workspace = true

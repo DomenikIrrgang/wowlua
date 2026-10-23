@@ -32,8 +32,33 @@ struct State {
     has_bindings: bool,
 }
 
+/// Where a run's output goes as it happens.
+pub type Tee = Box<dyn FnMut(Output)>;
+
 thread_local! {
     static STATE: RefCell<State> = RefCell::default();
+    static TEE: RefCell<Option<Tee>> = RefCell::default();
+}
+
+/// Something a run printed or an error it raised, as it happens.
+#[derive(Clone, Debug)]
+pub enum Output {
+    Printed(String),
+    Error { message: String, stack: String },
+}
+
+/// Sends what this thread's runs print and the errors they raise to `f`
+/// too (`None`: no more).
+pub fn set_tee(f: Option<Tee>) {
+    TEE.with(|t| *t.borrow_mut() = f);
+}
+
+fn tee(o: Output) {
+    TEE.with(|t| {
+        if let Some(f) = t.borrow_mut().as_mut() {
+            f(o);
+        }
+    });
 }
 
 pub fn reset() {
@@ -42,6 +67,7 @@ pub fn reset() {
 
 pub fn print_sink(bytes: &[u8]) {
     STATE.with(|s| s.borrow_mut().printed.extend_from_slice(bytes));
+    tee(Output::Printed(String::from_utf8_lossy(bytes).into_owned()));
 }
 
 pub fn take_printed() -> String {
@@ -101,6 +127,10 @@ pub fn error_handler(vm: &mut Vm, c: NativeCall) -> Ret {
         },
     };
     let stack = vm.traceback(1);
+    tee(Output::Error {
+        message: message.clone(),
+        stack: stack.clone(),
+    });
     STATE.with(|s| {
         let mut s = s.borrow_mut();
         s.errors.push(message);
@@ -146,6 +176,7 @@ fn record_print(vm: &mut Vm, c: NativeCall) -> Ret {
         });
     }
     let line = parts.join(" ");
+    tee(Output::Printed(format!("{line}\n")));
     STATE.with(|s| {
         let mut s = s.borrow_mut();
         s.printed.extend_from_slice(line.as_bytes());

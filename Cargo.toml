@@ -31,6 +31,7 @@ wowlua-pkg = { path = "crates/wowlua-pkg" }
 wowlua-vm = { path = "crates/wowlua-vm" }
 wowlua-engine = { path = "crates/wowlua-engine" }
 wowlua-test = { path = "crates/wowlua-test" }
+wowlua-debug = { path = "crates/wowlua-debug", default-features = false }
 
 anyhow = "1.0"
 assert_cmd = "2.2"

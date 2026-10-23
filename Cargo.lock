@@ -2506,6 +2506,7 @@ dependencies = [
  "tar",
  "tempfile",
  "termcolor",
+ "wowlua-debug",
  "wowlua-diagnostics",
  "wowlua-driver",
  "wowlua-engine",
@@ -2515,6 +2516,19 @@ dependencies = [
  "wowlua-test",
  "wowlua-vm",
  "zip",
+]
+
+[[package]]
+name = "wowlua-debug"
+version = "0.9.7"
+dependencies = [
+ "rustc-hash",
+ "serde",
+ "serde_json",
+ "wowlua-driver",
+ "wowlua-engine",
+ "wowlua-test",
+ "wowlua-vm",
 ]
 
 [[package]]

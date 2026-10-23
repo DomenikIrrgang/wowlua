@@ -227,6 +227,7 @@ pub fn action_name(vm: &Vm) -> String {
 pub fn refuse(vm: &mut Vm, event: &'static str, action: String) {
     let addon = vm.taint_name(vm.taint().stack).unwrap_or_default();
     let report = vm.execution_report();
+    vm.notify_blocked(&action, &addon, &report);
     engine_mut(vm).refusals.push(Refusal {
         event,
         addon: addon.clone(),

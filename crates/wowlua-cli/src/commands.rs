@@ -710,37 +710,15 @@ fn test_once(
             } else {
                 None
             };
-            let suite = wowlua_test::Suite {
+            let suite = make_suite(
+                &project,
                 build,
-                flavor: flavor.clone(),
-                root: project.root().to_path_buf(),
-                src: project.manifest.manifest.build.src.clone(),
+                &flavor,
                 blizzard_ui,
-                profile: test_settings.profile.clone(),
-                platform: match test_settings.platform {
-                    Some(wowlua_manifest::model::TestPlatform::Windows) => {
-                        wowlua_test::Platform::Windows
-                    }
-                    _ => wowlua_test::Platform::Mac,
-                },
-                screen: match test_settings.screen {
-                    Some(s) => wowlua_test::Screen {
-                        width: s.width,
-                        height: s.height,
-                        dpi_scale: s.dpi_scale.unwrap_or(1.0),
-                        ui_scale: s.ui_scale,
-                    },
-                    None => wowlua_test::Screen::default(),
-                },
-                // Relative to the package root, or absolute.
-                addons: test_settings
-                    .addons
-                    .iter()
-                    .map(|a| project.root().join(a))
-                    .collect(),
-                update_snapshots: args.update_snapshots,
-                coverage: args.coverage,
-            };
+                args.update_snapshots,
+                args.coverage,
+                None,
+            );
             let mut results = wowlua_test::run(&suite, filters, threads);
             results.extend(not_compiling(out, left_out, filters, &flavor));
             for result in &results {
@@ -916,6 +894,123 @@ fn test_once(
         ]);
     }
     (ok, watched)
+}
+
+/// The test runner's suite for a test build of `project`.
+fn make_suite<'a>(
+    project: &Project,
+    build: &'a BuildOutput,
+    flavor: &str,
+    blizzard_ui: Option<wowlua_test::UiSource>,
+    update_snapshots: bool,
+    coverage: bool,
+    instrument: Option<&'a (dyn Fn(&mut wowlua_vm::Vm) + Sync)>,
+) -> wowlua_test::Suite<'a> {
+    let test_settings = &project.manifest.manifest.test;
+    wowlua_test::Suite {
+        build,
+        flavor: flavor.to_string(),
+        root: project.root().to_path_buf(),
+        src: project.manifest.manifest.build.src.clone(),
+        blizzard_ui,
+        profile: test_settings.profile.clone(),
+        platform: match test_settings.platform {
+            Some(wowlua_manifest::model::TestPlatform::Windows) => wowlua_test::Platform::Windows,
+            _ => wowlua_test::Platform::Mac,
+        },
+        screen: match test_settings.screen {
+            Some(s) => wowlua_test::Screen {
+                width: s.width,
+                height: s.height,
+                dpi_scale: s.dpi_scale.unwrap_or(1.0),
+                ui_scale: s.ui_scale,
+            },
+            None => wowlua_test::Screen::default(),
+        },
+        // Relative to the package root, or absolute.
+        addons: test_settings
+            .addons
+            .iter()
+            .map(|a| project.root().join(a))
+            .collect(),
+        update_snapshots,
+        coverage,
+        instrument,
+    }
+}
+
+/// Builds the package's test build for `flavor` (its first flavor by
+/// default) and runs `f` with its suite (a debug session's, `wowlua
+/// screenshot`'s); an error when it does not build.
+pub fn with_suite(
+    out: &Output,
+    global: &GlobalArgs,
+    flavor: Option<&str>,
+    instrument: Option<&(dyn Fn(&mut wowlua_vm::Vm) + Sync)>,
+    f: &mut dyn FnMut(&wowlua_test::Suite),
+) -> Result<(), String> {
+    let mut session = Session::new();
+    let Some(projects) = wowlua_driver::load_projects(&mut session, &load_options(out, global))
+    else {
+        out.flush(&mut session);
+        return Err("the package does not load (its errors are above)".into());
+    };
+    let Some(project) = projects
+        .into_iter()
+        .find(|p| p.kind() == PackageKind::Addon)
+    else {
+        return Err("no addon package here".into());
+    };
+    let flavor = match flavor {
+        Some(f) => wowlua_flavors::table()
+            .resolve(f)
+            .map(|f| f.id.clone())
+            .ok_or_else(|| format!("unknown flavor {f}"))?,
+        None => project
+            .manifest
+            .flavors
+            .first()
+            .cloned()
+            .ok_or("the package has no flavors")?,
+    };
+    let shared_mode =
+        project.manifest.manifest.build.flavor_mode == wowlua_manifest::model::FlavorMode::Shared;
+    let (flavors, dir) = if shared_mode {
+        (project.manifest.flavors.clone(), "shared".to_string())
+    } else {
+        (vec![flavor.clone()], flavor.clone())
+    };
+    let Some((build, _)) = test_build(out, global, &mut session, &project, flavors, &dir) else {
+        return Err("the package does not build (its errors are above)".into());
+    };
+    let blizzard_ui = if project.manifest.manifest.test.blizzard_ui {
+        Some(wowlua_test::ui_source(&flavor, &|what| {
+            out.status("Fetching", what)
+        })?)
+    } else {
+        None
+    };
+    let suite = make_suite(
+        &project,
+        &build,
+        &flavor,
+        blizzard_ui,
+        false,
+        false,
+        instrument,
+    );
+    f(&suite);
+    Ok(())
+}
+
+/// The package root of the current directory's addon.
+pub fn package_root(out: &Output, global: &GlobalArgs) -> Option<PathBuf> {
+    let mut session = Session::new();
+    let projects = wowlua_driver::load_projects(&mut session, &load_options(out, global))?;
+    projects
+        .into_iter()
+        .find(|p| p.kind() == PackageKind::Addon)
+        .map(|p| p.root().to_path_buf())
 }
 
 /// A test build of `project` for `flavors` in `<out>/.test/<dir>/<Name>`

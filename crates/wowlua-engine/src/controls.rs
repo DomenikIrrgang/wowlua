@@ -231,7 +231,7 @@ fn drag(vm: &mut Vm, c: NativeCall) -> Ret {
 /// source's `OnDragStart("LeftButton")` (picking something up), then on
 /// release its `OnDragStop` and, with something on the cursor, the
 /// target's `OnReceiveDrag`. Unverified: the release's order.
-fn drag_to(vm: &mut Vm, c: NativeCall) -> Ret {
+pub fn drag_to(vm: &mut Vm, c: NativeCall) -> Ret {
     let from = widget_arg(vm, &c, 1)?;
     let to = widget_arg(vm, &c, 2)?;
     crate::input::as_user(vm, |vm| {

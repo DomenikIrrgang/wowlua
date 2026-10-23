@@ -326,3 +326,48 @@ pub fn index_at(vm: &Vm, id: WidgetId, text: &str, x: f64) -> (usize, bool) {
     }
     (chars.len().max(1), false)
 }
+
+/// Where a line's glyphs go, as the client measures them: the font's
+/// pixel size, the line height in pixels, and each character's left edge
+/// in pixels from the line's start (the renderer's text, spec debugger
+/// §18.9).
+pub struct GlyphLine {
+    pub px: i64,
+    pub line_height_px: f64,
+    pub xs: Vec<f64>,
+    pub width_px: f64,
+}
+
+pub fn glyph_line(vm: &Vm, id: WidgetId, line: &str) -> GlyphLine {
+    let font = font_of(vm, id);
+    let pixel = pixel(vm, id);
+    let px = pixel_size(&font, pixel).max(1);
+    let (row, scale) = row(&font, px);
+    let g = glyphs();
+    let chars: Vec<char> = line.chars().collect();
+    let index = |c: char| {
+        let i = c as u32;
+        if (32..=126).contains(&i) {
+            (i - 32) as usize
+        } else {
+            ('?' as u32 - 32) as usize
+        }
+    };
+    let mut xs = Vec::with_capacity(chars.len());
+    let mut x = 0.0;
+    for (i, &c) in chars.iter().enumerate() {
+        xs.push(x);
+        x += row.advances[index(c)] * scale;
+        if let Some(&next) = chars.get(i + 1)
+            && let Some(d) = g.kern.get(&(font.file.clone(), px, c, next))
+        {
+            x += d;
+        }
+    }
+    GlyphLine {
+        px,
+        line_height_px: (row.height * scale).round(),
+        xs,
+        width_px: line_px(&font, px, line),
+    }
+}

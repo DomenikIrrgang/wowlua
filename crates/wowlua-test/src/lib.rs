@@ -52,6 +52,10 @@ pub struct Suite<'a> {
     pub update_snapshots: bool,
     /// `--coverage`: count what the addon's files run.
     pub coverage: bool,
+    /// Called with each VM the run makes, once the engine is installed
+    /// and before anything loads: a debugger or the profiler attaches here
+    /// (spec debugger §18.3).
+    pub instrument: Option<&'a (dyn Fn(&mut Vm) + Sync)>,
 }
 
 fn widgets_keep(vm: &mut Vm, v: Value) {
@@ -188,7 +192,12 @@ fn source_of(suite: &Suite, output: &str) -> String {
     let output = output
         .strip_prefix(chunk_prefix(suite.build).as_str())
         .unwrap_or(output);
-    let src = suite.src.trim_end_matches('/');
+    source_path(&suite.root, &suite.src, output)
+}
+
+/// [`source_of`] by the package root and its `build.src`.
+fn source_path(root: &Path, src: &str, output: &str) -> String {
+    let src = src.trim_end_matches('/');
     let (prefix, rest) = if let Some(rest) = output.strip_prefix("src/") {
         (
             if src.is_empty() || src == "." {
@@ -205,7 +214,7 @@ fn source_of(suite: &Suite, output: &str) -> String {
     };
     let stem = rest.strip_suffix(".lua").unwrap_or(rest);
     let wowlua = format!("{prefix}{stem}.wowlua");
-    if suite.root.join(&wowlua).exists() {
+    if root.join(&wowlua).exists() {
         wowlua
     } else {
         format!("{prefix}{rest}")
@@ -317,7 +326,9 @@ fn closure<'a>(build: &'a BuildOutput, path: &'a str, out: &mut Vec<&'a str>) {
     }
 }
 
-fn run_file(suite: &Suite, file: &TestFile, filters: &[String]) -> FileResult {
+/// Runs one test file (its tests whose names contain any of `filters`)
+/// on this thread.
+pub fn run_file(suite: &Suite, file: &TestFile, filters: &[String]) -> FileResult {
     let started = Instant::now();
     let rel = file.rel.clone();
     let mut result = FileResult {
@@ -387,6 +398,67 @@ struct Reload {
 const DROPPED_FAILURE: &str = "an error was dropped without a report (as the client drops it)";
 
 fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loaded, String> {
+    let (vm, tests, saved) = load_vm(suite, Some(file), reload)?;
+    Ok(Loaded {
+        vm,
+        tests: tests.ok_or("the test file does not import `wowlua:test`")?,
+        saved,
+        reloaded_coverage: Vec::new(),
+    })
+}
+
+/// The addon loaded as the client loads it, without a test file, the
+/// player logged in (a debug session of the addon, spec debugger §18.3).
+pub fn open_addon(suite: &Suite) -> Result<Vm, String> {
+    natives::reset();
+    load_vm(suite, None, None)
+        .map(|(vm, _, _)| vm)
+        .map_err(|e| to_sources(suite, &e))
+}
+
+/// The source path (`src/x.wowlua`, `tests/x.test.wowlua`) of a chunk
+/// name of the package's own files; `None` for others' (Blizzard's,
+/// other addons').
+pub fn source_of_chunk(suite: &Suite, chunk: &str) -> Option<String> {
+    let chunk = chunk.strip_prefix('@').unwrap_or(chunk);
+    let prefix = chunk_prefix(suite.build);
+    let rest = chunk.strip_prefix(prefix.as_str())?;
+    if rest.starts_with("wowlua/") {
+        return None;
+    }
+    Some(source_of(suite, rest))
+}
+
+/// Chunk name → source path.
+pub type ChunkMapper = Box<dyn Fn(&str) -> Option<String>>;
+
+/// [`source_of_chunk`] as a function that owns what it needs (a debug
+/// session's map from chunk names to sources).
+pub fn chunk_mapper(suite: &Suite) -> ChunkMapper {
+    let prefix = chunk_prefix(suite.build);
+    let root = suite.root.clone();
+    let src = suite.src.clone();
+    Box::new(move |chunk: &str| {
+        let chunk = chunk.strip_prefix('@').unwrap_or(chunk);
+        let rest = chunk.strip_prefix(prefix.as_str())?;
+        if rest.starts_with("wowlua/") {
+            return None;
+        }
+        Some(source_path(&root, &src, rest))
+    })
+}
+
+/// What a test run sends on as it happens: printed lines and errors
+/// that reached the error handler (a debug session's console).
+pub use natives::{Output, set_tee};
+
+/// A VM loaded for `file` (or the addon alone), with `wowlua:test`'s
+/// registry when a test file loaded, and the variables the TOC saves.
+fn load_vm(
+    suite: &Suite,
+    file: Option<&TestFile>,
+    reload: Option<&Reload>,
+) -> Result<(Vm, Option<TableRef>, Vec<String>), String> {
     let build = suite.build;
     let dir = &build.dir;
     let name = build.addon_name.clone();
@@ -394,7 +466,9 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
     wowlua_engine::install(&mut vm, &suite.flavor)?;
     // The machine the client runs on (decision T236): the file's
     // `config({ platform = … })`, else the manifest's `test.platform`.
-    let source = std::fs::read(suite.root.join(&file.rel)).unwrap_or_default();
+    let source = file
+        .and_then(|f| std::fs::read(suite.root.join(&f.rel)).ok())
+        .unwrap_or_default();
     let platform = match profile::config_text(&source, "platform") {
         Some(name) => wowlua_engine::Platform::parse(&name).ok_or_else(|| {
             format!("config: platform \"{name}\" is not one of \"mac\", \"windows\"")
@@ -420,6 +494,9 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
         None => suite.screen,
     };
     wowlua_engine::set_screen(&mut vm, screen);
+    if let Some(instrument) = suite.instrument {
+        instrument(&mut vm);
+    }
     if let Some(r) = reload {
         vm.clock.now = r.now;
         vm.clock.elapsed_ms = r.elapsed_ms;
@@ -460,7 +537,6 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
     wowlua_engine::widgets::keep(&mut vm, Value::Table(ns));
     let table = Value::Table(ns);
     // The world profile, before the addon (decision T213).
-    let source = std::fs::read(suite.root.join(&file.rel)).unwrap_or_default();
     if let Some(name) = profile::named_in(&source).or_else(|| suite.profile.clone()) {
         let path = suite
             .root
@@ -540,6 +616,10 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
     });
     loaded.extend(listed);
     check(&mut vm, before, "loading the addon")?;
+    let Some(file) = file else {
+        natives::login(&mut vm, &name);
+        return Ok((vm, None, saved));
+    };
     let before = errors_before(&vm);
     let mut order = Vec::new();
     closure(build, &file.path, &mut order);
@@ -553,7 +633,7 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
     check(&mut vm, before, "loading the test file")?;
     let tests = match get(&mut vm, wl, "tests") {
         Value::Table(t) => t,
-        _ => return Err("the test file does not import `wowlua:test`".into()),
+        _ => return Ok((vm, None, saved)),
     };
     // The lifecycle (step 5), unless the file drives it.
     let settings = match get(&mut vm, tests, "settings") {
@@ -567,12 +647,7 @@ fn load(suite: &Suite, file: &TestFile, reload: Option<&Reload>) -> Result<Loade
     if !manual {
         natives::login(&mut vm, &name);
     }
-    Ok(Loaded {
-        vm,
-        tests,
-        saved,
-        reloaded_coverage: Vec::new(),
-    })
+    Ok((vm, Some(tests), saved))
 }
 
 /// The `test.addons` the client loads in this game, in its load order.

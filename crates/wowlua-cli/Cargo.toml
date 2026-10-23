@@ -19,6 +19,8 @@ wowlua-flavors.workspace = true
 wowlua-pkg.workspace = true
 wowlua-manifest.workspace = true
 wowlua-test.workspace = true
+wowlua-debug = { workspace = true, features = ["native"] }
+wowlua-vm.workspace = true
 clap.workspace = true
 notify-debouncer-mini.workspace = true
 rpassword.workspace = true

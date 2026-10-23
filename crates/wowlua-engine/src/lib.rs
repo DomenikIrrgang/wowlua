@@ -72,6 +72,7 @@ pub mod queries;
 pub mod questinfo;
 pub mod quests;
 pub mod recorded;
+pub mod scene;
 pub mod social;
 pub mod spellinfo;
 pub mod stats;

@@ -2,7 +2,9 @@
 //! AddOns. See the specification in `spec/` (chapter 12 for the CLI).
 
 mod commands;
+mod debug;
 mod output;
+mod screenshot;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
 use std::path::PathBuf;
@@ -251,6 +253,12 @@ enum Command {
     },
     /// Run the tests in the emulated client
     Test(TestArgs),
+    /// Serve the Debug Adapter Protocol: debug a test file or the addon
+    Debug {
+        /// Listen on this TCP port (default: stdio)
+        #[arg(long)]
+        port: Option<u16>,
+    },
     /// Compile files to Lua without making an AddOn folder
     Compile(CompileArgs),
     /// Format .wowlua files (and .lua files with `fmt.lua`)
@@ -587,6 +595,7 @@ fn run() -> ExitCode {
             commands::check(&out, &cli.global, &profile.name("dev"), flavor)
         }
         Command::Test(args) => commands::test(&out, &cli.global, &args),
+        Command::Debug { port } => debug::debug(&out, &cli.global, port),
         Command::Compile(args) => commands::compile(&out, &cli.global, &args),
         Command::Fmt { check, paths } => commands::fmt(&out, &cli.global, check, paths),
         Command::Dev {
