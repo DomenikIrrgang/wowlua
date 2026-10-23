@@ -623,8 +623,11 @@ fn test_once(
     let mut settings: Option<wowlua_manifest::model::CoverageSettings> = None;
     let mut reporters: Vec<String> = args.reporter.clone();
     let mut output: Option<PathBuf> = args.output.as_ref().map(|o| cwd().join(o));
-    let mut root = cwd();
-    let mut title = String::from("wowlua");
+    // The addons' roots (a report's paths are relative to their package)
+    // and the first one's name, as the reports' title: in a workspace, the
+    // root package's, not the last member's.
+    let mut roots: Vec<PathBuf> = Vec::new();
+    let mut title: Option<String> = None;
     for project in projects {
         if project.kind() != PackageKind::Addon {
             continue;
@@ -639,8 +642,8 @@ fn test_once(
         if output.is_none() {
             output = Some(project.manifest.out_dir().join("test"));
         }
-        root = project.root().to_path_buf();
-        title = project.addon_name();
+        roots.push(project.root().to_path_buf());
+        title.get_or_insert_with(|| project.addon_name());
         let selected: Vec<String> = project
             .manifest
             .flavors
@@ -847,7 +850,11 @@ fn test_once(
                     ),
                     "html" => write(
                         &format!("{prefix}coverage.html"),
-                        &wowlua_test::reports::html(report, &root, &title),
+                        &wowlua_test::reports::html(
+                            report,
+                            &roots,
+                            title.as_deref().unwrap_or("wowlua"),
+                        ),
                     ),
                     _ => true,
                 };

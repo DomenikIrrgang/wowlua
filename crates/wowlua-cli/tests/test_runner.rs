@@ -1683,6 +1683,45 @@ end
     assert!(out.contains("coverage: lines 100.0% (6/6)"), "{out}");
 }
 
+/// The HTML coverage report in a workspace: titled by the root package and
+/// with its sources, not the last member's (two addons, the root first).
+#[test]
+fn coverage_html_in_a_workspace() {
+    let dir = tempfile::tempdir().unwrap();
+    for (path, text) in [
+        (
+            "wowlua.json",
+            r#"{ "package": { "name": "main", "version": "1.0.0" }, "addon": { "title": "Main" },
+  "workspace": { "members": ["plugins/*"] } }"#,
+        ),
+        (
+            "src/main.wowlua",
+            "export function twice(n: number): number\n    return n * 2\nend\n",
+        ),
+        (
+            "tests/main.test.wowlua",
+            "import test, expect from \"wowlua:test\"\nimport twice from \"/main\"\n\n@test\nlocal function doubles()\n    expect(twice(2)).toBe(4)\nend\n",
+        ),
+        (
+            "plugins/Zed/wowlua.json",
+            r#"{ "package": { "name": "zed", "version": "1.0.0" }, "addon": { "title": "Zed" } }"#,
+        ),
+        ("plugins/Zed/src/zed.wowlua", "print(\"zed\")\n"),
+    ] {
+        let path = dir.path().join(path);
+        fs::create_dir_all(path.parent().unwrap()).unwrap();
+        fs::write(path, text).unwrap();
+    }
+    let (ok, out) = test(dir.path(), &["--coverage", "--reporter", "html"]);
+    assert!(ok, "{out}");
+    let html = fs::read_to_string(dir.path().join("dist/test/coverage.html")).unwrap();
+    assert!(html.contains("<title>Main coverage</title>"), "{html}");
+    assert!(
+        html.contains("return n * 2"),
+        "the root package's source is missing"
+    );
+}
+
 /// Coverage (decision T188): counted by the VM in the addon's own files,
 /// with reports and thresholds.
 #[test]
@@ -1750,6 +1789,22 @@ end
     assert!(!lcov.contains("SF:tests/"), "{lcov}");
     let html = fs::read_to_string(report.join("coverage.html")).unwrap();
     assert!(html.contains("<title>Demo coverage</title>") && html.contains("prefers-color-scheme"));
+    // the page draws its views from the data: every file's counts, its
+    // functions by name and its source, under wowlua's mark
+    for part in [
+        "\"p\":\"src/math.wowlua\"",
+        "\"unused\"",
+        "export function unused(): number",
+        "Where to test next",
+        "class=\"brand\"",
+        "rel=\"icon\"",
+    ] {
+        assert!(html.contains(part), "missing {part:?} in the HTML report");
+    }
+    // no `<` inside the data: a source's `</script>` can't end the script
+    let data = html.split("id=\"data\">").nth(1).unwrap();
+    let data = data.split("</script>").next().unwrap();
+    assert!(!data.contains('<'), "{data}");
     assert!(
         fs::read_to_string(report.join("cobertura.xml"))
             .unwrap()
