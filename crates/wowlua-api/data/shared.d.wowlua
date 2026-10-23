@@ -755,7 +755,7 @@ declare class FontString extends Region
     function SetFont(fontFile: FontFile, fontHeight: uiUnit, flags: TBFFlags?): boolean
     function SetFontHeight(height: uiUnit)
     function SetFontObject(font: FontObject | nil)
-    function SetFormattedText(text: string | Secret<string>, ...: string | number)
+    function SetFormattedText(text: string | Secret<string>, ...: string | number | Secret<string> | Secret<number>)
     function SetIndentedWordWrap(wrap: boolean)
     function SetJustifyH(justifyH: JustifyHorizontal)
     function SetJustifyV(justifyV: JustifyVertical)

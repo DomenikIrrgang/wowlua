@@ -768,9 +768,42 @@ fn check_file_in(
             &fresh
         }
     };
-    env.typeof_namespace_refs.clear();
-    let mut checker = Checker::new(env, &info, prepared);
-    checker.check_file(parse);
+    // Closures see the unannotated locals a closure assigns as the union of
+    // the values assigned to them: a file that has such reads is checked
+    // again with the unions the pass before found, until they hold
+    // (spec §2.4.1).
+    let env_diagnostics = env.diagnostics.len();
+    let mut seeds: Option<FxHashMap<u32, TypeId>> = None;
+    let mut pass = 0;
+    let mut forced = false;
+    let mut checker = loop {
+        pass += 1;
+        env.diagnostics.truncate(env_diagnostics);
+        env.typeof_namespace_refs.clear();
+        let mut checker = Checker::new(env, &info, prepared);
+        if let Some(s) = &seeds {
+            checker.closure_seeds = s.clone();
+        }
+        checker.check_file(parse);
+        if forced || !checker.closure_hit.get() {
+            break checker;
+        }
+        let mut finals = checker.closure_finals();
+        if seeds.as_ref() == Some(&finals) {
+            break checker;
+        }
+        if pass >= 4 {
+            // Still changing: those are `any`, one more pass.
+            let prev = seeds.unwrap_or_default();
+            for (d, t) in finals.iter_mut() {
+                if prev.get(d) != Some(t) {
+                    *t = Types::ANY;
+                }
+            }
+            forced = true;
+        }
+        seeds = Some(finals);
+    };
     // W2063 is the project's own: not of wowlua's library or a dependency.
     let rel = &ctx.files[i].src_rel;
     if crate::is_compiler_known(rel) || crate::package_of(rel).is_some() {
@@ -2419,6 +2452,58 @@ print(a, b, c, d, e, name, realm, more)
                     .as_deref()
                     .is_some_and(|h| h.contains("`opts` is assigned after its declaration"))),
             "{d:#?}"
+        );
+    }
+
+    /// Closures see an unannotated local a closure assigns as the union of
+    /// the values assigned to it, settled over passes; a bare `local x`
+    /// adds no `nil` of its own (spec §2.4.1, decision L47).
+    #[test]
+    fn closure_assigned_union() {
+        // A flag saved and restored inside the closure: `boolean`, not `any`.
+        strict_err(
+            "local painting = false\nlocal function f()\n local was = painting\n painting = true\n local s: string = was\n painting = was\n print(s)\nend\nprint(f)\n",
+            "E2001",
+        );
+        // A counter: `number`.
+        strict_err(
+            "local count = 0\nlocal function f(): string\n count = count + 1\n return count\nend\nprint(f)\n",
+            "E2001",
+        );
+        strict_ok(
+            "local count = 0\nlocal function f(): number\n count = count + 1\n return count\nend\nprint(f)\n",
+        );
+        // A forward declaration: the function assigned later, no `nil`.
+        strict_ok(
+            "local g\nlocal function f(): number return g() end\ng = function(): number return 1 end\nprint(f)\n",
+        );
+        strict_err(
+            "local g\nlocal function f(): number return g() end\ng = function(): string return \"a\" end\nprint(f)\n",
+            "E2001",
+        );
+        // A call where it is declared may have set it: still no `nil`.
+        strict_ok(
+            "type Layer = { n: number }\nlocal layer = nil\nlocal function build() layer = { n = 1 } :: Layer end\nbuild()\nlocal function show(): number\n if not layer then build() end\n return layer.n\nend\nprint(show)\n",
+        );
+        // What the closure itself assigned holds there.
+        strict_ok(
+            "local n = 0\nlocal function f(): string\n n = \"a\"\n return n\nend\nprint(f)\n",
+        );
+        // A `nil` a closure assigns counts.
+        strict_err(
+            "local n\nlocal function set() n = 1 end\nlocal function clear() n = nil end\nlocal function read(): number return n end\nprint(set, clear, read)\n",
+            "E2001",
+        );
+        // Each problem once, from the last pass.
+        let d = check_source(
+            "local count = 0\nlocal function f()\n count = count + 1\n local s: string = count\n print(s)\nend\nprint(f)\n",
+            Mode::Strict,
+        );
+        assert_eq!(
+            d.iter().filter(|x| x.code == Some("E2001")).count(),
+            1,
+            "{:#?}",
+            codes(&d)
         );
     }
 

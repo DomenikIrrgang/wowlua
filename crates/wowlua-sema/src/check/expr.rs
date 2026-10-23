@@ -3396,7 +3396,21 @@ impl Checker<'_, '_> {
                 };
                 arg_types[i] = Some(t);
                 if let Some(p) = self.param_at(f, i) {
-                    self.unify(p, t, &mut s);
+                    // A literal written here binds as its base type; a
+                    // value typed elsewhere (a name, a field, a call's
+                    // result) keeps its type, unions of literals included,
+                    // as a `local` does (spec §2.2.6).
+                    let typed_elsewhere = matches!(
+                        e.kind(),
+                        ExprKind::Call { .. }
+                            | ExprKind::OptCall { .. }
+                            | ExprKind::Method { .. }
+                            | ExprKind::OptMethod { .. }
+                            | ExprKind::Name(_)
+                            | ExprKind::Field { .. }
+                            | ExprKind::Index { .. }
+                    );
+                    self.unify_at(p, t, &mut s, !typed_elsewhere, false);
                 }
             }
             // Expected results give type arguments too: a parameter the

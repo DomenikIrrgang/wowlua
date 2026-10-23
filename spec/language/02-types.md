@@ -168,7 +168,10 @@ where nothing binds `T` it is `any`. A parameter `T | Secret<T>` (or
 `string | Secret<string>` binds `T` to `string`. A literal argument binds a
 constrained type parameter to the literal (`E extends EventName` called with
 `"UNIT_HEALTH"` binds `"UNIT_HEALTH"`) and an unconstrained one to its
-widened type (`T` binds `string`); decision L44. Inside the body, a value of a
+widened type (`T` binds `string`); a value typed elsewhere (a name, a field,
+a call's result) binds as its type, a union of literals included, as a
+`local` keeps it (`assert(tokens[k])` with `tokens: { [string]: Token }` is
+a `Token`); decision L44. Inside the body, a value of a
 constrained type parameter fits wherever its constraint does (an `E extends
 EventName` is passed on as an `EventName`).
 
@@ -371,9 +374,16 @@ valid Lua patterns valid, and a local may hold different types over time,
 while still catching misuse such as calling `:upper()` on a value that is a
 number at that point.
 
-A local declared without a value and assigned later (a forward declaration,
-`local f` … `f = function() … end`) reads as `any` inside closures, which may
-run after any of its assignments.
+Inside a closure, an unannotated local that a closure assigns, or that is
+captured and assigned later, may hold any value it is given before the closure
+runs: it reads as the union of its narrowed types where functions are made in
+its scope and the values assigned to it after one is made or from inside a
+function (decision L47). A local declared without a value or with `nil` adds no
+`nil` for a function made before it is first assigned, so a forward declaration
+(`local f` … `f = function() … end`) reads as the function. The union depends
+on what is read in closures, so a file with such reads is checked again with
+the unions the pass before found until they hold (at most four passes; a local
+whose union still changes reads as `any`).
 
 An annotated local without a value (`local x: T`) is `nil` until assigned:
 its narrowed type follows the assignments, so where some path did not assign
@@ -389,7 +399,10 @@ table is an error in strict mode (E2051) and allowed in basic mode.
 
 A field added by an assignment takes the assigned value's widened type
 (`t.enabled = true` adds `enabled: boolean`), as a literal's fields do
-without an expected type. A field added as `nil` (`t.mode = nil`) is optional
+without an expected type. A table literal held in a field of an open table
+is open too, and a field added through the path (`API.UI.B = f` after
+`API.UI = { A = g }`) is part of the outer table's type; sealing a table
+seals the tables in its fields (decision T275). A field added as `nil` (`t.mode = nil`) is optional
 and `any`.
 
 Writes with non-constant keys (`t[k] = v`) to an open table add an indexer: the
@@ -590,7 +603,8 @@ fits (a literal stays a literal where the declared type is a literal union; a
 record or interface stays as declared), except a declared `any`. A closure sees
 the narrowing of the locals that are never assigned after their declaration (it
 cannot change), except open tables, which are sealed for closures (§2.4.2);
-other locals are their declared type inside closures. A local
+other locals are their declared type inside closures (an unannotated one, the
+union of §2.4.1). A local
 narrowed to `nil` that a closure assigns is its declared type again after any
 call, which may run that closure.
 
