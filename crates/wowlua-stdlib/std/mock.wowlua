@@ -1556,13 +1556,22 @@ end
 --- code: `test.blizzard-ui`): an item (`{ id }`, `{ link }`, `{ bag,
 --- slot }`, `{ slot }` equipped), a spell (`{ id }`), a unit (`{ unit }`);
 --- the tooltip's data comes from the tests' game data, and the addons'
---- tooltip hooks run. Returns the lines' left texts.
+--- tooltip hooks run. It is placed where the default UI places a tooltip
+--- of something in the world (`GameTooltip_SetDefaultAnchor`), so a
+--- screenshot shows it. Returns the lines' left texts.
 export function showTooltip(kind: "item" | "spell" | "unit", data: { id?: number, link?: string, unit?: string, bag?: number, slot?: number }, tip: any?): string[]
     local t: any = tip ?? _G.GameTooltip
     if t == nil or t.SetItemByID == nil then
         error("mock.showTooltip needs Blizzard's UI code (test.blizzard-ui)", 2)
     end
-    t:SetOwner(_G.UIParent, "ANCHOR_NONE")
+    -- Where the default UI puts a tooltip of something hovered in the
+    -- world (`GameTooltip_SetDefaultAnchor`: bottom right, over the bars);
+    -- `ANCHOR_NONE` alone leaves it nowhere, so it is not drawn.
+    if _G.GameTooltip_SetDefaultAnchor then
+        _G.GameTooltip_SetDefaultAnchor(t, _G.UIParent)
+    else
+        t:SetOwner(_G.UIParent, "ANCHOR_NONE")
+    end
     if kind == "unit" then
         t:SetUnit(data.unit ?? "player")
     elseif kind == "spell" then

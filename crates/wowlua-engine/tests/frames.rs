@@ -1586,3 +1586,24 @@ return tostring(b:GetTextWidth() > 0), tostring(b:GetTextWidth() == fs:GetString
     );
     assert_eq!(r, ["true", "true"]);
 }
+
+/// A tooltip lays its lines out and sizes itself to them, as the client
+/// does: from its top left, one under another, a right text at its right
+/// edge (the lines have no anchors of their own).
+#[test]
+fn tooltips_lay_out_their_lines() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local t = CreateFrame('GameTooltip', 'TestTip', UIParent)
+t:SetOwner(UIParent, 'ANCHOR_NONE')
+t:SetPoint('CENTER')
+t:AddLine('First line')
+t:AddDoubleLine('Left', 'Right')
+local l1, l2, r2 = TestTipTextLeft1, TestTipTextLeft2, TestTipTextRight2
+return tostring(t:GetWidth() > l1:GetStringWidth()), string.format('%g', t:GetLeft() + 10 - l1:GetLeft()),
+    string.format('%g', t:GetTop() - 10 - l1:GetTop()), tostring(l2:GetTop() < l1:GetBottom()),
+    string.format('%g', t:GetRight() - 10 - r2:GetRight())",
+    );
+    assert_eq!(r, ["true", "0", "0", "true", "0"]);
+}

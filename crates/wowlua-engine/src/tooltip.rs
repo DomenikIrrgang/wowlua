@@ -114,6 +114,83 @@ fn hide_line(vm: &mut Vm, fs: Option<Value>) -> Result<(), wowlua_vm::LuaError> 
     Ok(())
 }
 
+/// The space around a tooltip's lines and between them, in UI units.
+const PADDING: f64 = 10.0;
+const LINE_GAP: f64 = 2.0;
+/// The least space between a line's left and right texts.
+const COLUMN_GAP: f64 = 40.0;
+
+fn number(v: Option<&Value>) -> f64 {
+    match v {
+        Some(Value::Num(n)) => *n,
+        _ => 0.0,
+    }
+}
+
+/// Lays the tooltip out as the client does: its lines from its top left,
+/// one under the other, each right text at the right edge, and the tooltip
+/// sized to them (Blizzard's templates anchor no line: a tooltip had no
+/// size and was not drawn).
+fn layout(vm: &mut Vm, id: WidgetId) -> Result<(), wowlua_vm::LuaError> {
+    let n = count(vm, id);
+    let tip = Value::Table(engine(vm).world.widgets[id.0].table);
+    let mut lines = Vec::new();
+    let (mut width, mut height) = (0.0_f64, 0.0_f64);
+    for i in 1..=n {
+        let left = line(vm, id, "Left", i);
+        let right = line(vm, id, "Right", i);
+        let measure = |vm: &mut Vm, fs: Option<Value>| -> Result<(f64, f64), wowlua_vm::LuaError> {
+            let Some(fs) = fs else { return Ok((0.0, 0.0)) };
+            let shown = call(vm, fs, "IsShown", &[])?
+                .first()
+                .is_some_and(|v| v.truthy());
+            if !shown {
+                return Ok((0.0, 0.0));
+            }
+            let w = number(call(vm, fs, "GetStringWidth", &[])?.first());
+            let h = number(call(vm, fs, "GetStringHeight", &[])?.first());
+            Ok((w, h))
+        };
+        let (lw, lh) = measure(vm, left)?;
+        let (rw, rh) = measure(vm, right)?;
+        let row = if rw > 0.0 { lw + COLUMN_GAP + rw } else { lw };
+        width = width.max(row);
+        let top = height;
+        height += lh.max(rh) + if i < n { LINE_GAP } else { 0.0 };
+        lines.push((left, right, top));
+    }
+    for (left, right, top) in lines {
+        for (fs, point) in [(left, "TOPLEFT"), (right, "TOPRIGHT")] {
+            let Some(fs) = fs else { continue };
+            let x = if point == "TOPLEFT" {
+                PADDING
+            } else {
+                -PADDING
+            };
+            let (p, rp) = (vm.str(point), vm.str(point));
+            call(vm, fs, "ClearAllPoints", &[])?;
+            call(
+                vm,
+                fs,
+                "SetPoint",
+                &[p, tip, rp, Value::Num(x), Value::Num(-PADDING - top)],
+            )?;
+        }
+    }
+    if n > 0 {
+        call(
+            vm,
+            tip,
+            "SetSize",
+            &[
+                Value::Num(width + 2.0 * PADDING),
+                Value::Num(height + 2.0 * PADDING),
+            ],
+        )?;
+    }
+    Ok(())
+}
+
 /// `tooltip:AddLine(text [, r, g, b, wrap])`.
 fn add_line(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let n = count(vm, id) + 1;
@@ -124,6 +201,7 @@ fn add_line(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     }
     let right = line(vm, id, "Right", n);
     hide_line(vm, right)?;
+    layout(vm, id)?;
     Ok(vec![])
 }
 
@@ -139,6 +217,7 @@ fn add_double_line(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     if let Some(fs) = line(vm, id, "Right", n) {
         show_line(vm, fs, c.arg(3), &right_color)?;
     }
+    layout(vm, id)?;
     Ok(vec![])
 }
 

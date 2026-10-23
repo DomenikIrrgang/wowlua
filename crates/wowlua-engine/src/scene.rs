@@ -687,11 +687,14 @@ fn colored_chars(vm: &Vm, raw: &str, base: [f32; 4]) -> Vec<(char, [f32; 4])> {
                 let byte = |i: usize| {
                     u8::from_str_radix(hex.get(i..i + 2).unwrap_or("ff"), 16).unwrap_or(255)
                 };
+                // The `AA` byte is not used: the client draws the color
+                // opaque (the beta's tooltip line
+                // `|c0042b1fePress F6 to submit an issue…` shows in game).
                 stack.push([
                     f32::from(byte(2)) / 255.0,
                     f32::from(byte(4)) / 255.0,
                     f32::from(byte(6)) / 255.0,
-                    base[3] * f32::from(byte(0)) / 255.0,
+                    base[3],
                 ]);
             }
             Some('r') => {
