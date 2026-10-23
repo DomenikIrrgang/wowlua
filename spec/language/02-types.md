@@ -325,7 +325,8 @@ parameters are constrained to literal unions (`keyof T`, `EventName`) is
 checked against the constraints, so its
 strings stay literals: `watchAll<K extends keyof D>(keys: K[], …)` called
 with `{ "line", "figure" }` binds `K` to those keys, and a name that is not
-one is E2014.
+one is E2014. (Only a list of the parameter itself, `K[]`: a table literal
+for `D[K]` takes its type from the bound `K` as usual.)
 
 ## 2.3 Type aliases and recursive types
 

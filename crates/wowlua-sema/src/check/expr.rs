@@ -2289,6 +2289,12 @@ impl Checker<'_, '_> {
     /// has one that mentions none: the context a table literal argument is
     /// checked in.
     fn constraint_context(&mut self, f: &Func, p: TypeId) -> Option<TypeId> {
+        // only a list of the parameter itself (`keys: K[]`)
+        match self.env.types.get(p) {
+            Ty::Array(e) if matches!(self.env.types.get(*e), Ty::Param(q) if f.type_params.contains(q)) =>
+                {}
+            _ => return None,
+        }
         let mut outer = Subst::default();
         for &(q, b) in &f.outer {
             outer.types.insert(q, b);
