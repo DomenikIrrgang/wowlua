@@ -68,6 +68,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 - `ItemLocation:CreateFromBagAndSlot(bag, slot)` gives an item location the game's functions take (`C_AuctionHouse.IsSellItemValid`, `C_Item.GetItemName`, …); it was a type of its own that none of them took.
 - `date("*t")` gives the time's parts (`year`, `month`, `day`, `hour`, `min`, `sec`, `wday`, `yday`, `isdst`) and `date("%H:%M")` a string; both were `any`.
+- W2062 warns about `local x, y = pos and pos:GetXY()`: an `and` or `or` keeps only one of the call's values, so `y` is always `nil`.
 - In strict mode, a name the `string` library doesn't have (`s.message`, `s:nope()`) is an error (E2003); it read as `any`. So is a named entry in a table literal where a list is expected (`{ class = "X", "Y" }` for a `string[]`), which was dropped without a word.
 - A class field typed with `typeof(…)` (`map: typeof(WorldMapFrame)? = nil`) has that type; it read as `any`.
 - In tests, `GetItemInfo` gives an item defined with `mock.defineItem` its link (it gave none, so `item.get` found nothing for it).

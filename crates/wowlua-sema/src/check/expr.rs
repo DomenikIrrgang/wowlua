@@ -172,6 +172,32 @@ impl Checker<'_, '_> {
         names: &[(Span, String)],
     ) -> Vec<TypeId> {
         let pack = self.expr_pack(es, expected);
+        // `local x, y = pos and pos:GetXY()`: an `and` or `or` keeps one of
+        // its call's values, so the names after its own are always `nil`
+        // (W2062, decision L73).
+        if let Some(last) = es.iter().next_back()
+            && names.len() > es.len()
+            && let ExprKind::Binary { op, lhs, rhs } = last.kind()
+            && matches!(op, BinOp::And | BinOp::Or)
+            && (is_multi(lhs) || is_multi(rhs))
+            && let Some((i, (span, name))) = names
+                .iter()
+                .enumerate()
+                .skip(es.len())
+                .find(|(_, (_, n))| !n.starts_with('_'))
+        {
+            let word = if op == BinOp::And { "and" } else { "or" };
+            let more = if names.len() > i + 1 {
+                " (and the names after it)"
+            } else {
+                ""
+            };
+            self.report(
+                "W2062",
+                *span,
+                format!("an `{word}` gives one value, the first of its call's: `{name}`{more} is always nil"),
+            );
+        }
         if let Some(last) = es.iter().next_back()
             && let Some((callee, key)) = self.cap_key(last)
             && names.len() > es.len() - 1

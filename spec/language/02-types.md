@@ -839,6 +839,10 @@ A name starting with `_` takes no value it wants (as for W1003) and is
 skipped: the warning names the first other one.
 A helper meant to pass every value on returns them through `...`
 (`local function okThen(ok, ...) if ok then return ... end end`).
+An `and` or `or` gives one value, so a name past an `and` or `or` of a call
+that ends a `local` or an assignment (`local x, y = pos and
+pos:GetXY()`) is W2062 too, whatever the call (decision L73): write
+`if pos then x, y = pos:GetXY() end`.
 
 Reading an undeclared global is warning W1001 in basic mode and error E1001
 in strict mode. **Assigning** an undeclared global, including through

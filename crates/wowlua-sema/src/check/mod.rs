@@ -1921,6 +1921,41 @@ mod tests {
         );
     }
 
+    /// A name past an `and` or `or` of a call is always nil: the operator
+    /// keeps one value (W2062, decision L73).
+    #[test]
+    fn and_or_keep_one_value() {
+        for src in [
+            "local function xy(): (number, number) return 1, 2 end\nlocal p = true\nlocal x, y = p and xy()\nprint(x, y)\n",
+            "local function xy(): (number, number) return 1, 2 end\nlocal x, y = nil, nil\nx, y = false or xy()\nprint(x, y)\n",
+        ] {
+            for mode in [Mode::Strict, Mode::Basic] {
+                let d = check_source(src, mode);
+                let w: Vec<_> = d.iter().filter(|x| x.code == Some("W2062")).collect();
+                assert_eq!(w.len(), 1, "{src}\n{:#?}", codes(&d));
+                assert!(
+                    w[0].message.contains("`y` is always nil"),
+                    "{}",
+                    w[0].message
+                );
+            }
+        }
+        // one name, or a name starting with `_`, or no call: nothing
+        for src in [
+            "local function xy(): (number, number) return 1, 2 end\nlocal p = true\nlocal x = p and xy()\nprint(x)\n",
+            "local function xy(): (number, number) return 1, 2 end\nlocal p = true\nlocal x, _ = p and xy()\nprint(x)\n",
+            "local p = true\nlocal x, y = p and 1\nprint(x, y)\n",
+            "local function xy(): (number, number) return 1, 2 end\nlocal p = true\nlocal x, y = (p and 1), xy()\nprint(x, y)\n",
+        ] {
+            let d = check_source(src, Mode::Strict);
+            assert!(
+                !d.iter().any(|x| x.code == Some("W2062")),
+                "{src}\n{:#?}",
+                codes(&d)
+            );
+        }
+    }
+
     /// A value read past what a `local function` can give (each `return` a
     /// fixed number of values) is W2062 in every mode: a name in a
     /// `local` or an assignment, or `select(n, …)` (decision S40).
