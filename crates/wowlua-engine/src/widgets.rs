@@ -3639,6 +3639,23 @@ fn get_id(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 /// `GetStringWidth()`, `GetUnboundedStringWidth()`: its widest line as the
 /// client lays text out (`text.rs`, decision T237); a secret text's width
 /// is secret too, as in the client (SuuUI's tests).
+/// A button's `GetTextWidth()`: its font string's
+/// text, in that font string's font (the button's own has none: Blizzard's
+/// money frames sized their coin buttons by it, and with 0 drew the amount
+/// over the item's icon).
+fn button_text_widget(vm: &mut Vm, id: WidgetId) -> WidgetId {
+    let props = engine(vm).world.widgets[id.0].props;
+    stored_args(vm, props, "FontString")
+        .and_then(|v| v.first().copied())
+        .and_then(|fs| widget_of(vm, fs))
+        .unwrap_or(id)
+}
+
+fn get_text_width(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let fs = button_text_widget(vm, id);
+    get_string_width(vm, fs, c)
+}
+
 fn get_string_width(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let text = engine(vm).world.widgets[id.0].text;
     let secret = matches!(text, Some(Value::Secret(_)));
@@ -4520,7 +4537,7 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("SetToDefaults", set_to_defaults),
         ("GetID", get_id),
         ("GetStringWidth", get_string_width),
-        ("GetTextWidth", get_string_width),
+        ("GetTextWidth", get_text_width),
         ("GetUnboundedStringWidth", get_string_width),
         ("GetFont", get_font),
         ("StartMoving", start_moving),

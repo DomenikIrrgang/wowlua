@@ -1569,3 +1569,20 @@ return b:GetText(), b:GetFontString():GetText()",
     );
     assert_eq!(r, ["Anna Specific Macros", "Anna Specific Macros"]);
 }
+
+/// A button's `GetTextWidth` is its font string's text width (the money
+/// frames size their coin buttons by it).
+#[test]
+fn a_buttons_text_width_is_its_font_strings() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local b = CreateFrame('Button', nil, UIParent)
+local fs = b:CreateFontString()
+fs:SetFont('Fonts\\\\ARIALN.TTF', 14, 'OUTLINE')
+b:SetFontString(fs)
+b:SetText('25')
+return tostring(b:GetTextWidth() > 0), tostring(b:GetTextWidth() == fs:GetStringWidth())",
+    );
+    assert_eq!(r, ["true", "true"]);
+}

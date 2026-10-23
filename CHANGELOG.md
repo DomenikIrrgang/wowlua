@@ -45,6 +45,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- `button:GetTextWidth()` measures the button's text in its font string's font, as in game: Blizzard's money displays show the amount beside each coin (a vendor's prices were drawn over the item icons).
 - Text is drawn over the textures of its own layer, as in game: window titles on Blizzard's metal frames ("Options" on the Settings panel) show again.
 - XML textures take their `<Color>` (a plain color without a file, a tint with one) and frames their `clipChildren`, as in game: the Settings panel has its background again (no more white corners or the world showing through), and its scrolling lists stop at their edges.
 - A font string without a draw layer is drawn on `OVERLAY`, as in game, so a button's text shows over its background (the Legacy challenges' categories were empty rows), and `button:SetNormalFontObject("GameFontNormal")` and its highlight and disabled versions take a font's name, as `SetFontObject` does (the text was drawn a pixel high).
