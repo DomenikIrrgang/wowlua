@@ -2607,6 +2607,29 @@ print(a, b, c, d, e, name, realm, more)
         );
     }
 
+    /// Reads on an intersection: a field from the first part that has it,
+    /// a key from the first part with numbered values (decision L60).
+    #[test]
+    fn intersection_reads() {
+        let pre =
+            "type Color = number[] & { hex: string }\nlocal c = { 1, 2, 3 } :: unknown :: Color\n";
+        strict_err(
+            &format!("{pre}local h: number = c.hex\nprint(h)\n"),
+            "E2001",
+        );
+        strict_err(&format!("{pre}local r: string = c[1]\nprint(r)\n"), "E2001");
+        let d = check_source(
+            &format!(
+                "{pre}local h: string = c.hex\nlocal r: number = c[2]\nlocal i = 3\nlocal b = c[i]\nprint(h, r, b)\n"
+            ),
+            Mode::Strict,
+        );
+        assert!(
+            d.iter().all(|x| !x.is_error() && x.code != Some("W2063")),
+            "{d:#?}"
+        );
+    }
+
     /// A record alias that refers to itself is a named structural type: its
     /// references have its fields, not `any` (decision L58).
     #[test]

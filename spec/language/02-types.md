@@ -89,6 +89,11 @@ type Anchor =
 - `A | B` is a value of either type.
 - `A & B` is a value satisfying both types, used mainly for combining table
   shapes and for function overloads in declarations.
+  Reading a field of an intersection gives the type of the first part that
+  has the field; a part that only reads it as `any` (an array asked for a
+  named field) doesn't count. A key read (`c[i]`) gives the first part's
+  with numbered values or an indexer: in `number[] & { hex: string }`,
+  `c.hex` is a `string` and `c[1]` a `number` (decision L60).
 
 ### 2.2.4 Table types
 

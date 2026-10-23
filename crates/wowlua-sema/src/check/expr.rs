@@ -1508,13 +1508,16 @@ impl Checker<'_, '_> {
                     None => Some(Types::ANY),
                 },
                 Ty::Never | Ty::ClassOfParam(_) | Ty::EventArgs(_) => Some(Types::ANY),
-                // A callable table (`LibStub`): the first part with the member.
+                // A callable table (`LibStub`), a list with fields (`number[]
+                // & { hex: string }`): the first part that has the member; a
+                // part that only reads it as `any` (an array's named field)
+                // doesn't count (decision L60).
                 Ty::Intersection(parts) => {
                     let found = parts.iter().find_map(|&p| match self.env.types.get(p) {
                         Ty::Func(_) => None,
                         _ => self
                             .member_type(p, name, span, true)
-                            .filter(|&t| t != Types::ERROR),
+                            .filter(|&t| t != Types::ERROR && t != Types::ANY),
                     });
                     Some(found.unwrap_or(Types::ANY))
                 }
@@ -1767,6 +1770,18 @@ impl Checker<'_, '_> {
         Types::ANY
     }
 
+    /// What a key read gives on one part of an intersection, if the part
+    /// has numbered values or an indexer.
+    fn indexed_part(&mut self, part: TypeId) -> Option<TypeId> {
+        match self.env.types.get(part).clone() {
+            Ty::Array(e) => Some(e),
+            Ty::Map(_, v) => Some(self.env.types.optional(v)),
+            Ty::Record(r) => r.indexer.map(|(_, v)| self.env.types.optional(v)),
+            Ty::Named(d, _) => self.env.indexer_of(d).map(|(_, v)| v),
+            _ => None,
+        }
+    }
+
     fn index_type(&mut self, o: TypeId, k: TypeId, key: Expr<'_>, span: Span) -> TypeId {
         if let ExprKind::String(s) = key.kind() {
             let name = String::from_utf8_lossy(&s.value()).into_owned();
@@ -1808,6 +1823,11 @@ impl Checker<'_, '_> {
                     self.check_secret(m, span);
                     Types::ANY
                 }
+                // the first part with numbered values or an indexer (L60)
+                Ty::Intersection(parts) => parts
+                    .iter()
+                    .find_map(|&p| self.indexed_part(p))
+                    .unwrap_or(Types::ANY),
                 _ if self.unindexable(m) => {
                     let msg = format!("cannot index a value of type `{}`", self.env.display(m));
                     self.report("E2003", key.span(), msg);
