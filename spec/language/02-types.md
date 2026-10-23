@@ -389,7 +389,10 @@ table is an error in strict mode (E2051) and allowed in basic mode.
 
 A field added by an assignment takes the assigned value's widened type
 (`t.enabled = true` adds `enabled: boolean`), as a literal's fields do
-without an expected type. A field added as `nil` (`t.mode = nil`) is optional
+without an expected type. A table literal held in a field of an open table
+is open too, and a field added through the path (`API.UI.B = f` after
+`API.UI = { A = g }`) is part of the outer table's type; sealing a table
+seals the tables in its fields (decision T275). A field added as `nil` (`t.mode = nil`) is optional
 and `any`.
 
 Writes with non-constant keys (`t[k] = v`) to an open table add an indexer: the

@@ -36,6 +36,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 - The HTML coverage report of a workspace showed no source and took the name of the last addon in it: it now shows each file's source and the root package's name.
 - Code in a branch your build removes (`if build.debug then … end` in a release, `if flavor == "vanilla" then … end` in another flavor) is no longer checked, as documented: it may use what that build doesn't have, such as an import under `@if(build.debug)`.
+- A field added to a table inside another (`API.UI.Button = button` after `API.UI = { … }`) is now part of the table other files import: they read it typed, where they got `any`, and a misspelled field there is an error.
 - `for k, v in pairs(t)` over a record type with an `unknown` indexer (`{ name?: string, [string]: unknown }`) is no longer refused (E2001).
 - Strict mode: a field your constructor sets in every branch of an `if … else … end` counts as set (E2052 said it wasn't), as does one set in a `do` block.
 - Strict mode: after `self.icon = parent:CreateTexture()`, calling a method on the field (`self.icon:SetTexture(…)`) no longer makes the next line's `self.icon` "may be nil" again. A call that gets a field's table can't replace the field; only calls that get the table holding it forget what you set.

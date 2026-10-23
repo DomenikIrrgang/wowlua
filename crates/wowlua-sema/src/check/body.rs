@@ -2228,16 +2228,35 @@ impl<'e, 'p> Checker<'e, 'p> {
         }
     }
 
-    /// `t` with an open table sealed.
+    /// `t` with an open table sealed, and the open tables in its fields.
     fn sealed(&mut self, t: TypeId) -> TypeId {
-        match self.env.types.get(t) {
-            Ty::Record(r) if r.open => {
-                let mut r = r.clone();
-                r.open = false;
-                self.env.types.record(r)
-            }
-            _ => t,
+        self.sealed_at(t, 0)
+    }
+
+    fn sealed_at(&mut self, t: TypeId, depth: u32) -> TypeId {
+        let Ty::Record(r) = self.env.types.get(t).clone() else {
+            return t;
+        };
+        if depth > 4 {
+            return t;
         }
+        let mut changed = r.open;
+        let mut fields = r.fields.clone();
+        let names: Vec<(Box<str>, Field)> = r.fields.iter().map(|(n, f)| (n.into(), *f)).collect();
+        for (name, f) in names {
+            let nt = self.sealed_at(f.ty, depth + 1);
+            if nt != f.ty {
+                fields.insert(name, Field { ty: nt, ..f });
+                changed = true;
+            }
+        }
+        if !changed {
+            return t;
+        }
+        let mut r = r;
+        r.open = false;
+        r.fields = fields;
+        self.env.types.record(r)
     }
 
     /// Adds a field to an open table, or checks it against a sealed one.
@@ -2293,20 +2312,61 @@ impl<'e, 'p> Checker<'e, 'p> {
         self.retype_owner(owner, new);
     }
 
-    /// The locals typed `owner` now have the type `new`.
+    /// The locals typed `owner` now have the type `new`, and so do the
+    /// tables holding it in a field (`API.UI.B = …` extends `API`'s `UI`, so
+    /// what `API` is exported as has it too).
     fn retype_owner(&mut self, owner: TypeId, new: TypeId) {
-        let vars: Vec<VarId> = self
-            .flow
-            .iter()
-            .filter(|(_, t)| **t == owner)
-            .map(|(v, _)| *v)
-            .collect();
-        for v in vars {
-            self.flow.insert(v, new);
-            if self.vars[v.0 as usize].base == owner {
-                self.set_base(v, new);
+        let vars: Vec<(VarId, TypeId)> = self.flow.iter().map(|(v, t)| (*v, *t)).collect();
+        for (v, t) in vars {
+            let replaced = if t == owner {
+                Some(new)
+            } else {
+                self.replace_nested(t, owner, new, 0)
+            };
+            let Some(n) = replaced else { continue };
+            self.flow.insert(v, n);
+            let base = self.vars[v.0 as usize].base;
+            if base == owner || base == t {
+                self.set_base(v, n);
             }
         }
+    }
+
+    /// `t` with the record `owner` in its fields replaced by `new`, if it
+    /// holds it.
+    fn replace_nested(
+        &mut self,
+        t: TypeId,
+        owner: TypeId,
+        new: TypeId,
+        depth: u32,
+    ) -> Option<TypeId> {
+        if depth > 4 {
+            return None;
+        }
+        let Ty::Record(r) = self.env.types.get(t).clone() else {
+            return None;
+        };
+        let mut fields = r.fields.clone();
+        let mut changed = false;
+        let names: Vec<(Box<str>, Field)> = r.fields.iter().map(|(n, f)| (n.into(), *f)).collect();
+        for (name, f) in names {
+            let nt = if f.ty == owner {
+                Some(new)
+            } else {
+                self.replace_nested(f.ty, owner, new, depth + 1)
+            };
+            if let Some(nt) = nt {
+                fields.insert(name, Field { ty: nt, ..f });
+                changed = true;
+            }
+        }
+        if !changed {
+            return None;
+        }
+        let mut r = r;
+        r.fields = fields;
+        Some(self.env.types.record(r))
     }
 
     /// The type a class's `self` field access sees (spec §3.1.3).
