@@ -45,6 +45,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- The character window's PvP tab shows your rank, rank points, the next rank's rewards and the season's cap, as in game (WoW Forever's PvP ranks, major faction 2800), with its rank ring: `texture:SetAtlas` with an atlas the game lacks leaves the texture as it was, as in game. Side panes show their descriptions (an XML font string without anchors fills its frame), and the atlas table follows the updated client (1.60.1.70532).
 - `wowlua test` no longer crashes with "stale handle" when garbage is collected while a test waits (`mock.waitSeconds` and the like): the running test could be freed between its steps. Long tests hit it most.
 - The world map shows the player's arrow where the player stands, turned as the player faces (`UnitPositionFrame:AddUnit`, which Blizzard's map pins use).
 - `frame:SetFrameLevel(n)` moves the frame's children that have their own level along with it, as in game: Blizzard's dropdown and right-click menus show their entries over the menu's background (they were drawn faint underneath).

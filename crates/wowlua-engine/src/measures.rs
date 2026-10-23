@@ -188,6 +188,19 @@ pub fn apply_atlas_size(vm: &mut Vm, id: WidgetId, args: &[Value]) {
 /// [`apply_atlas_size`] does.
 fn set_atlas(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let args: Vec<Value> = c.args.iter().skip(1).copied().collect();
+    // An atlas the client does not have leaves the texture as it was
+    // (Blizzard's PvP rank ring: its XML's `pvpqueue-sidebar-honorbar-
+    // background`, then `SetAtlas("UI-Character-Info-Honor-Bar")`, which
+    // build 70532 lacks; in game the first shows). Camelot's, whose every
+    // atlas the engine knows.
+    if engine(vm).flavor == "camelot"
+        && let Some(Value::Str(name)) = args.first().copied()
+    {
+        let name = String::from_utf8_lossy(vm.str_bytes(name)).into_owned();
+        if !name.is_empty() && atlas(&name).is_none() {
+            return Ok(vec![]);
+        }
+    }
     widgets::store(vm, id, "Atlas", &args);
     apply_atlas_size(vm, id, &args);
     Ok(vec![])

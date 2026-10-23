@@ -286,6 +286,7 @@ fn unanchored_textures_thumbs_and_rotation() {
     <Anchors><Anchor point="TOPLEFT" x="10" y="-10"/></Anchors>
     <Layers><Layer level="ARTWORK">
       <Texture parentKey="Plain"/>
+      <FontString parentKey="Label"/>
       <Texture parentKey="Sized"><Size x="40" y="20"/></Texture>
       <Texture parentKey="Turned" rotation="90"><Size x="10" y="50"/>
         <Anchors><Anchor point="CENTER"/></Anchors>
@@ -316,6 +317,7 @@ local mid = thumb:GetLeft() - hl
 local p, rel, rp, x, y = thumb:GetPoint(1)
 local anchor = string.format('%s %s %s %g %g', p, tostring(rel == h.Bar), rp, x, y)
 h.Bar:SetValue(10)
+assert(h.Label:GetNumPoints() == 2, 'an unanchored font string fills its parent')
 return h.Plain:GetNumPoints(), h.Sized:GetNumPoints(), h.Sized:GetWidth(), thumb:GetNumPoints(),
     mid, thumb:GetLeft() - hl, thumb:GetBottom() - hb, string.format('%.4f', h.Turned:GetRotation()), anchor",
     );

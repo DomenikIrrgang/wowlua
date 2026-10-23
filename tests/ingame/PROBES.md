@@ -367,3 +367,21 @@ player's arrow 32 by 32 UI units; neither is recorded on camelot.
    horizontal slider made in Lua (2026-10-23): it does, by one point,
    `LEFT` to the slider's `LEFT`; still open: a vertical slider's point.
 
+
+## Answered on the beta's last day (2026-10-24)
+
+- PvP ranks (major faction 2800): `GetMajorFactionProgressionInfo` gives
+  maxLevel 14, renownLevel 0, renownLevelThreshold 750, the weekly fields
+  0 and weekNumber -1 on a rank 0 character; ranks 1 to 4 total 750, 1650,
+  2700, 3900; rank 1's reward is the Faction Tabard (decision T345).
+- A frame anchored to UIParent has its width and left at once and on the
+  next frame alike (200, 100).
+- A frame anchored inside a frame that is sized but not placed reports
+  width 0 (the parent 200): `child 0 200` (decision T346).
+- A texture with `SetAtlas(atlas, true)`, a `LEFT` point and `SetWidth(0)`
+  reports width 0 and its atlas's height.
+- The macro window shows no "Create Macros" title in game either.
+- `|cAARRGGBB`'s alpha could not be checked from the chat box (it escapes
+  `|`); decision T342 stays a proposal.
+- Still owed: the skill bars' fill (Blizzard's `ColoredProgressBar` sets
+  its fill by `FillArea:GetWidth()`; in game a 49/105 bar looks full).

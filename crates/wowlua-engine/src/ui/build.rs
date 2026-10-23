@@ -1165,12 +1165,15 @@ fn build_as(
 /// atlas-sized cover so); a thumb not (the slider places it,
 /// `bars::thumb_place`). Unverified: a sized one in the client,
 /// font strings, lines, and whether the client places them at creation or
-/// later.
+/// later. A font string so too (Blizzard's `ScrollingFontTemplate` anchors
+/// none: the character window's side panes showed no description; in game
+/// it shows), but a button's `ButtonText`, which the button centers.
 fn fill_parent_if_unplaced(vm: &mut Vm, cx: &Context, el: &Element, region: Value, id: WidgetId) {
     let w = &engine(vm).world.widgets[id.0];
-    if !matches!(w.class.as_str(), "Texture" | "MaskTexture")
+    if !matches!(w.class.as_str(), "Texture" | "MaskTexture" | "FontString")
         || w.parent.is_none()
         || !w.points.is_empty()
+        || el.tag.eq_ignore_ascii_case("ButtonText")
     {
         return;
     }

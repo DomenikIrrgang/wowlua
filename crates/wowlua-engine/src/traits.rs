@@ -1322,6 +1322,106 @@ fn get_current_renown_level(vm: &mut Vm, c: NativeCall) -> Ret {
     crate::recorded::recorded(vm, c)
 }
 
+/// WoW Forever's PvP ranks: major faction 2800 (Blizzard's
+/// `PVP_RANK_POINTS_FACTION_ID`), probed 2026-10-24: 14 ranks, the
+/// reputation to reach ranks 1 to 4 750, 1650, 2700 and 3900, rank 14
+/// 24750 (the PvP tab's "up to a maximum of 24750 for Rank 14"). Ranks 1
+/// to 4 are 75·n·(n + 9); ranks 5 to 13 are taken so (unverified: it gives
+/// 24150 for rank 14).
+const PVP_RANKS: i64 = 2800;
+const PVP_MAX_RANK: i64 = 14;
+
+/// The reputation to reach PvP rank `level` (0 at rank 0).
+fn pvp_rank_total(level: i64) -> f64 {
+    let n = level.clamp(0, PVP_MAX_RANK);
+    if n == PVP_MAX_RANK {
+        return 24750.0;
+    }
+    75.0 * (n * (n + 9)) as f64
+}
+
+fn renown_level(vm: &mut Vm, faction: i64) -> f64 {
+    engine(vm)
+        .world
+        .traits
+        .renown
+        .get(&faction)
+        .copied()
+        .unwrap_or(0.0)
+}
+
+/// `C_MajorFactions.GetMajorFactionProgressionInfo(faction)`: for the PvP
+/// ranks, the player's rank (the test's, `e.setRenown`, else 0) and the
+/// reputation to the next, as the client answered a rank 0 character
+/// (its weekly fields 0, the week -1); else the recorded answers.
+fn get_major_faction_progression_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    if int(vm, &c, 1) != Some(PVP_RANKS) {
+        return crate::recorded::recorded(vm, c);
+    }
+    let level = renown_level(vm, PVP_RANKS);
+    let threshold = pvp_rank_total(level as i64 + 1) - pvp_rank_total(level as i64);
+    let t = vm.new_table();
+    for (k, v) in [
+        ("currentWeekProgressiveMaxLevel", 0.0),
+        ("maxLevel", PVP_MAX_RANK as f64),
+        ("renownReputationEarned", 0.0),
+        ("weekNumber", -1.0),
+        ("renownLevel", level),
+        ("previousWeekProgressiveMaxLevel", 0.0),
+        ("renownLevelThreshold", threshold),
+    ] {
+        let key = vm.str(k);
+        let _ = vm.heap.table_mut(t).set(key, Value::Num(v));
+    }
+    Ok(vec![Value::Table(t)])
+}
+
+/// `C_MajorFactions.GetTotalReputationForRenownLevel(faction, level)`:
+/// the PvP ranks' totals; else the recorded answers.
+fn get_total_reputation_for_renown_level(vm: &mut Vm, c: NativeCall) -> Ret {
+    if int(vm, &c, 1) != Some(PVP_RANKS) {
+        return crate::recorded::recorded(vm, c);
+    }
+    let level = int(vm, &c, 2).unwrap_or(0);
+    Ok(vec![Value::Num(pvp_rank_total(level))])
+}
+
+/// `C_MajorFactions.GetRenownRewardsForLevel(faction, level)`: rank 1's
+/// faction tabard for the PvP ranks (probed), none for their other ranks
+/// (unverified); else the recorded answers.
+fn get_renown_rewards_for_level(vm: &mut Vm, c: NativeCall) -> Ret {
+    if int(vm, &c, 1) != Some(PVP_RANKS) {
+        return crate::recorded::recorded(vm, c);
+    }
+    let list = vm.new_table();
+    if int(vm, &c, 2) == Some(1) {
+        let r = vm.new_table();
+        let strings = [
+            ("description", "Faction Tabard"),
+            ("toastDescription", "Faction Tabard Unlocked"),
+            ("name", "Rank 1 Rewards"),
+        ];
+        for (k, v) in strings {
+            let (key, v) = (vm.str(k), vm.str(v));
+            let _ = vm.heap.table_mut(r).set(key, v);
+        }
+        for (k, v) in [
+            ("icon", Value::Num(135026.0)),
+            ("isAccountUnlock", Value::Bool(false)),
+            ("uiOrder", Value::Num(0.0)),
+            ("renownRewardID", Value::Num(0.0)),
+        ] {
+            let key = vm.str(k);
+            let _ = vm.heap.table_mut(r).set(key, v);
+        }
+        let _ = vm
+            .heap
+            .table_mut(list)
+            .set(Value::Num(1.0), Value::Table(r));
+    }
+    Ok(vec![Value::Table(list)])
+}
+
 /// `e.setTraitRanks(config, { [node] = rank })`: the ranks committed as
 /// the session begins.
 pub fn control_set_trait_ranks(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -1435,6 +1535,18 @@ pub fn behaviours(flavor: &str) -> Vec<(&'static str, NativeFn)> {
         (
             "C_MajorFactions.GetCurrentRenownLevel",
             get_current_renown_level,
+        ),
+        (
+            "C_MajorFactions.GetMajorFactionProgressionInfo",
+            get_major_faction_progression_info,
+        ),
+        (
+            "C_MajorFactions.GetTotalReputationForRenownLevel",
+            get_total_reputation_for_renown_level,
+        ),
+        (
+            "C_MajorFactions.GetRenownRewardsForLevel",
+            get_renown_rewards_for_level,
         ),
     ]
 }

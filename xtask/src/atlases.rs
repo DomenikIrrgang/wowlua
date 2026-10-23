@@ -1,8 +1,8 @@
 //! `cargo xtask atlases <dir>`: every atlas of the client from its own
 //! tables (`UiTextureAtlas`, `UiTextureAtlasMember`,
-//! `UiTextureAtlasElement` and `UiCanvas` of build 1.60.1.70338, as CSV
+//! `UiTextureAtlasElement` and `UiCanvas` of build 1.60.1.70532, as CSV
 //! from wago.tools:
-//! `curl -o <dir>/<Table>.csv "https://wago.tools/db2/<Table>/csv?build=1.60.1.70338"`)
+//! `curl -o <dir>/<Table>.csv "https://wago.tools/db2/<Table>/csv?build=1.60.1.70532"`)
 //! into `data/camelot-atlases-client.txt`: per element (the name as
 //! `GetAtlas` spells it), its width and height, file, texture coordinates
 //! (left, right, top, bottom), tiling (horizontally, vertically) and raw
@@ -138,7 +138,7 @@ pub fn run(root: &Path, dir: &Path) -> Result<()> {
         }
     };
     let mut out = String::from(
-        "# Every atlas of WoW Forever 1.60.1 (70338) from the client's own tables\n\
+        "# Every atlas of WoW Forever 1.60.1 (70532) from the client's own tables\n\
          # (`cargo xtask atlases`, decision T238): the element's name, its width\n\
          # and height, file ID, left, right, top and bottom texture coordinates,\n\
          # tiling horizontally and vertically, raw width and height. Recorded\n\

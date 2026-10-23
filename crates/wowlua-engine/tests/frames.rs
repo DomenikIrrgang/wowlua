@@ -1662,3 +1662,34 @@ f:AddUnit('player', 'Interface\\\\Buttons\\\\WHITE8X8', 10, 10, 1, 1, 1, 1, 7, t
         "{id:?}"
     );
 }
+
+/// `SetAtlas` with an atlas the client lacks leaves the texture as it was
+/// (Blizzard's PvP rank ring); WoW Forever's PvP ranks are major faction
+/// 2800, as probed.
+#[test]
+fn unknown_atlases_and_pvp_ranks() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local t = UIParent:CreateTexture()
+t:SetAtlas('pvpqueue-sidebar-honorbar-background')
+t:SetAtlas('UI-Character-Info-Honor-Bar')
+local p = C_MajorFactions.GetMajorFactionProgressionInfo(2800)
+local r = C_MajorFactions.GetRenownRewardsForLevel(2800, 1)
+return string.lower(t:GetAtlas()), p.maxLevel, p.renownLevel, p.renownLevelThreshold,
+    C_MajorFactions.GetTotalReputationForRenownLevel(2800, 4), C_MajorFactions.GetTotalReputationForRenownLevel(2800, 14),
+    r[1].name",
+    );
+    assert_eq!(
+        r,
+        [
+            "pvpqueue-sidebar-honorbar-background",
+            "14",
+            "0",
+            "750",
+            "3900",
+            "24750",
+            "Rank 1 Rewards"
+        ]
+    );
+}
