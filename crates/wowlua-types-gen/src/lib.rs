@@ -505,6 +505,26 @@ pub fn generate(
                     }
                 }
                 for sig in sigs {
+                    // A method taking secrets takes them in its `...` too
+                    // (`FontString:SetFormattedText(format, ...)`: the
+                    // documentation names only `text`).
+                    if sig.params.iter().any(|p| p.ty.contains("Secret<")) {
+                        for t in targets.iter_mut() {
+                            if let Some(v) = &t.vararg
+                                && !v.contains("Secret<")
+                            {
+                                let secret: Vec<String> = v
+                                    .split('|')
+                                    .map(str::trim)
+                                    .filter(|m| matches!(*m, "string" | "number" | "boolean"))
+                                    .map(|m| format!("Secret<{m}>"))
+                                    .collect();
+                                if !secret.is_empty() {
+                                    t.vararg = Some(format!("{v} | {}", secret.join(" | ")));
+                                }
+                            }
+                        }
+                    }
                     for (i, p) in sig.params.iter().enumerate() {
                         if !p.ty.contains("Secret<") {
                             continue;
