@@ -615,7 +615,9 @@ local ok, n = coroutine.resume(co, items)
 
 The checker narrows union types along control flow using:
 
-- truthiness: `if x then`, `x and x.y`, `if not x then return end`
+- truthiness: `if x then`, `x and x.y`, `if not x then return end`; where
+  an `unknown` is falsy it is `false | nil`, so `x and true or false` is a
+  `boolean` (decision L63)
 - nil comparison: `x ~= nil`, `x == nil`
 - `type(x) == "string"` (and the other Lua type names)
 - literal equality: `if kind == "spell" then` on discriminated unions; a

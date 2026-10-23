@@ -54,17 +54,19 @@ impl Checker<'_, '_> {
     }
 
     /// `t` where it is falsy: `nil` or `false` (other members cannot be).
+    /// `unknown` there is `false | nil` (decision L63); `any` stays `any`.
     pub fn falsy(&mut self, t: TypeId) -> TypeId {
         let members: Vec<TypeId> = self
             .env
             .types
             .members(t)
             .into_iter()
-            .filter_map(|m| match self.env.types.get(m) {
-                Ty::Nil | Ty::Bool(false) => Some(m),
-                Ty::Boolean => Some(Types::FALSE),
-                Ty::Any | Ty::Unknown | Ty::Error => Some(m),
-                _ => None,
+            .flat_map(|m| match self.env.types.get(m) {
+                Ty::Nil | Ty::Bool(false) => vec![m],
+                Ty::Boolean => vec![Types::FALSE],
+                Ty::Unknown => vec![Types::FALSE, Types::NIL],
+                Ty::Any | Ty::Error => vec![m],
+                _ => Vec::new(),
             })
             .collect();
         self.env.types.union(&members)

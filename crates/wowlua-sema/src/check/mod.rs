@@ -2710,6 +2710,23 @@ print(a, b, c, d, e, name, realm, more)
         strict_ok("local t = { a = 1 }\nt = { b = {} }\nprint(t.b)\n");
     }
 
+    /// `unknown` where it is falsy is `false | nil` (decision L63).
+    #[test]
+    fn unknown_falsy() {
+        strict_ok(
+            "local function f(x: unknown)\n local a: boolean = x and true or false\n local c: number | false | nil = x and 1\n print(a, c)\nend\nprint(f)\n",
+        );
+        // a test narrows it
+        strict_ok(
+            "local function f(x: unknown)\n if not x then\n  local n: false | nil = x\n  print(n)\n end\nend\nprint(f)\n",
+        );
+        // where truthy it is still unknown
+        strict_err(
+            "local function f(x: unknown)\n local a: number = x or 1\n print(a)\nend\nprint(f)\n",
+            "E2001",
+        );
+    }
+
     /// `typeof(expr)` in a function's parameter and result annotations
     /// reads the expression's type (decision L62).
     #[test]
