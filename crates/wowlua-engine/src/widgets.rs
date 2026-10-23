@@ -2964,9 +2964,22 @@ fn bounds_of(vm: &Vm, id: WidgetId, depth: usize, known: &mut KnownBounds) -> Op
     // A scroll child without points of its own sits at its scroll frame's
     // top left (unverified: the scroll offsets are not applied).
     if w.points.is_empty() {
+        let (width, height) = (w.width * s, w.height * s);
+        // A slider's thumb without points: where the slider puts it, along
+        // its length by its value (`bars::thumb_place`).
+        if let Some((slider, at, vertical)) = crate::bars::thumb_place(vm, id) {
+            let r = bounds_in(vm, slider, depth + 1, known)?;
+            return Some(if vertical {
+                // The minimum at the top.
+                let top = r.1 + r.3 - at * (r.3 - height).max(0.0);
+                (r.0 + (r.2 - width) / 2.0, top - height, width, height)
+            } else {
+                let left = r.0 + at * (r.2 - width).max(0.0);
+                (left, r.1 + (r.3 - height) / 2.0, width, height)
+            });
+        }
         let p = w.scroll_parent?;
         let r = bounds_in(vm, p, depth + 1, known)?;
-        let (width, height) = (w.width * s, w.height * s);
         return Some((r.0, r.1 + r.3 - height, width, height));
     }
     // Each point's place on the screen, and which edges it sets.

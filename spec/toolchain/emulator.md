@@ -381,7 +381,10 @@ takes the flavor's `Interface` folder and its global strings:
   (for `inherits` and `CreateFrame`), intrinsic ones frame types; an
   element's templates apply first, then its attributes, mixins, `parentKey`
   and `parentArray`, key values, sizes, anchors (an element's own
-  `<Anchors>` take the place of its `setAllPoints`, decision T323), layers,
+  `<Anchors>` take the place of its `setAllPoints`, decision T323; a
+  texture with none fills its parent, sized or not, but a slider's thumb,
+  which the slider places along its length by its value, decision T326; a
+  texture's `rotation` is in degrees, turning it about its center), layers,
   child frames and scripts (`function`, `method` or a body;
   `inherit="prepend"` / `"append"`);
   `OnLoad` runs once the widget and its children are built. Fonts and font

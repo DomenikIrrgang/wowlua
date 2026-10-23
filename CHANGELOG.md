@@ -44,6 +44,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- Textures in XML without anchors fill their frame even when they have a size, sliders place their thumb by their value, and a texture's `rotation` attribute turns it: Blizzard's group finder, Settings' sliders and the group finder's divider look as in game.
 - `C_SpecializationInfo.HasPlayerEarnedATalentPoint()` follows the player's level (from level 10, earlier with Legacy's "Talented" ranks), as in game: the talents button turns on once the character reaches it.
 - `frame:GetScaledRect()` gives the rectangle times the frame's effective scale, as in game. Layouts built on it (Blizzard's action bars, `ResizeLayoutFrame`) came out too large by one over UIParent's scale, so the default UI's bars sat apart.
 - A button's normal, pushed, disabled and highlight textures that `SetNormalAtlas` or `SetNormalTexture` makes fill the button, as in game; they had no size (the default UI's micro menu buttons showed no icons).

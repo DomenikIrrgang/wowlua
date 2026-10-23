@@ -334,3 +334,15 @@ player's arrow 32 by 32 UI units; neither is recorded on camelot.
 2. The same spot with `/console rotateMinimap 1`, facing east: the terrain
    turned and the arrow up.
 
+## Unanchored textures and slider thumbs
+
+1. `/run local f=CreateFrame("Frame",nil,UIParent) f:SetSize(200,100) f:SetPoint("CENTER") local t=f:CreateTexture() t:SetSize(40,20) print(t:GetNumPoints(), t:GetSize())`
+   then the same with a texture from XML that has `<Size>` and no
+   `<Anchors>` (any addon's): wowlua fills the parent with an XML one
+   (2 points, the parent's size), leaves a Lua one unplaced.
+2. Open Settings, Mouse, and `/run local s=SettingsPanel:GetCurrentCategory() print(MouseLookSpeedSlider)`
+   is not needed: hover the Mouse Look Speed slider and
+   `/fstack`: the thumb's left relative to the slider at the value shown,
+   and at the minimum and maximum (wowlua: the slider's width less the
+   thumb's, by the value).
+

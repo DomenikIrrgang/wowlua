@@ -639,6 +639,16 @@ fn apply_in(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Eleme
             call_method(vm, cx, el.line, frame, method, &[Value::Bool(on)]);
         }
     }
+    // A texture's `rotation` is in degrees (`SetRotation` takes radians):
+    // the whole texture turns about its center (Blizzard's group finder
+    // divider, an 11 by 454 strip at 90, lies across the list's top).
+    if let Some(deg) = el.number("rotation") {
+        let class = engine(vm).world.widgets[id.0].class.clone();
+        if widgets::is_a(engine(vm), &class, "Texture") {
+            let rad = Value::Num(deg.to_radians());
+            call_method(vm, cx, el.line, frame, "SetRotation", &[rad]);
+        }
+    }
     for (attr, method) in VALUE_ATTRS {
         if let Some(v) = el.attr(attr) {
             let v = match v.trim().parse::<f64>() {
@@ -1118,19 +1128,25 @@ fn build_as(
     Some(region)
 }
 
-/// A texture the XML neither anchors nor sizes fills its parent (SuuUI
-/// probe trees: such textures, slot icons, glows, a button's state
-/// textures, report `TOPLEFT` on their parent's and its size; textures
-/// made from Lua stay unplaced). Unverified: font strings, lines, and
-/// whether the client places them at creation or later.
+/// A texture the XML does not anchor fills its parent (SuuUI probe trees:
+/// such textures, slot icons, glows, a button's state textures, report
+/// `TOPLEFT` on their parent's and its size; textures made from Lua stay
+/// unplaced), a sized one in a layer too (decision T326: Blizzard's group
+/// finder category buttons, a `ResizeLayoutFrame`, measure their
+/// atlas-sized cover so); a thumb not (the slider places it,
+/// `bars::thumb_place`). Unverified: a sized one in the client,
+/// font strings, lines, and whether the client places them at creation or
+/// later.
 fn fill_parent_if_unplaced(vm: &mut Vm, cx: &Context, el: &Element, region: Value, id: WidgetId) {
     let w = &engine(vm).world.widgets[id.0];
     if !matches!(w.class.as_str(), "Texture" | "MaskTexture")
         || w.parent.is_none()
         || !w.points.is_empty()
-        || w.width != 0.0
-        || w.height != 0.0
     {
+        return;
+    }
+    // A thumb the slider (or color select) places itself.
+    if el.tag.to_ascii_lowercase().ends_with("thumbtexture") {
         return;
     }
     call_method(vm, cx, el.line, region, "SetAllPoints", &[]);

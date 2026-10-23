@@ -269,6 +269,57 @@ return l:GetNumPoints(), p, rp, x, y, l:GetWidth(), l:GetHeight(), f:GetNumPoint
     );
 }
 
+/// A texture the XML does not anchor fills its parent, sized or not; a
+/// slider's thumb does not, the slider places it along its length by its
+/// value; a texture's `rotation` is in degrees.
+#[test]
+fn unanchored_textures_thumbs_and_rotation() {
+    let interface = tree(
+        "unanchored",
+        &[
+            ("AddOns/Blizzard_Box/Blizzard_Box.toc", "Box.xml\n"),
+            (
+                "AddOns/Blizzard_Box/Box.xml",
+                r#"<Ui>
+  <Frame name="BoxHolder" parent="UIParent">
+    <Size x="200" y="100"/>
+    <Anchors><Anchor point="TOPLEFT" x="10" y="-10"/></Anchors>
+    <Layers><Layer level="ARTWORK">
+      <Texture parentKey="Plain"/>
+      <Texture parentKey="Sized"><Size x="40" y="20"/></Texture>
+      <Texture parentKey="Turned" rotation="90"><Size x="10" y="50"/>
+        <Anchors><Anchor point="CENTER"/></Anchors>
+      </Texture>
+    </Layer></Layers>
+    <Frames>
+      <Slider parentKey="Bar" orientation="HORIZONTAL" minValue="0" maxValue="10" defaultValue="5">
+        <Size x="110" y="20"/>
+        <Anchors><Anchor point="BOTTOMLEFT"/></Anchors>
+        <ThumbTexture><Size x="10" y="10"/></ThumbTexture>
+      </Slider>
+    </Frames>
+  </Frame>
+</Ui>"#,
+            ),
+        ],
+    );
+    let mut vm = vm("camelot");
+    let report = wowlua_engine::ui::load(&mut vm, &interface, None);
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let r = run(
+        &mut vm,
+        "local h = BoxHolder
+local thumb = h.Bar:GetThumbTexture()
+local hl, hb = h:GetLeft(), h:GetBottom()
+h.Bar:SetValue(5)
+local mid = thumb:GetLeft() - hl
+h.Bar:SetValue(10)
+return h.Plain:GetNumPoints(), h.Sized:GetNumPoints(), h.Sized:GetWidth(), thumb:GetNumPoints(),
+    mid, thumb:GetLeft() - hl, thumb:GetBottom() - hb, string.format('%.4f', h.Turned:GetRotation())",
+    );
+    assert_eq!(r, ["2", "2", "200", "0", "50", "100", "5", "1.5708"]);
+}
+
 /// An intrinsic type declared with `allowUntaintedCreation` (Blizzard's
 /// `AuraContainer`), made by an addon while the addon loads: its `method`
 /// scripts are Blizzard's, not the loading addon's code, so its `OnLoad`

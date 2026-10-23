@@ -321,6 +321,38 @@ fn get_status_bar_texture(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     ])
 }
 
+/// A slider's thumb, placed by the slider as the client does when it has no
+/// points of its own: (the slider, how far along its value is from the
+/// minimum, 0 to 1, whether the slider is vertical). The thumb travels the
+/// slider's length less its own, centered across it (unverified: the
+/// client's insets and the thumb's exact span).
+pub(crate) fn thumb_place(vm: &Vm, thumb: WidgetId) -> Option<(WidgetId, f64, bool)> {
+    let slider = engine(vm).world.widgets[thumb.0].parent?;
+    if !is_slider(vm, slider) {
+        return None;
+    }
+    let props = engine(vm).world.widgets[slider.0].props;
+    let set = widgets::stored_ref(vm, props, "ThumbTexture")?;
+    if widgets::widget_of(vm, *set.first()?) != Some(thumb) {
+        return None;
+    }
+    let b = bar(vm, slider);
+    let at = if b.max > b.min {
+        ((b.value - b.min) / (b.max - b.min)).clamp(0.0, 1.0)
+    } else {
+        0.0
+    };
+    let vertical = widgets::stored_ref(vm, props, "Orientation")
+        .and_then(|v| v.first().copied())
+        .and_then(|v| match v {
+            Value::Str(s) => Some(vm.str_bytes(s).eq_ignore_ascii_case(b"VERTICAL")),
+            _ => None,
+        })
+        // A slider is vertical until told otherwise (`GetOrientation`).
+        .unwrap_or(true);
+    Some((slider, at, vertical))
+}
+
 fn set_thumb_texture(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     texture_slot(vm, id, "ThumbTexture", c.arg(2));
     Ok(vec![])
