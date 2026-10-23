@@ -19,6 +19,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Changed
 
+- A generic function keeps the type of a value you pass it when that value already has one: `assert(tokens[k])` with `tokens: { [string]: Token }` is a `Token`, not a `string`. A literal written as the argument still widens (`id("x")` is a `string`).
 - A type parameter with a constraint keeps a literal argument: `function f<K extends "a" | "b">(k: K): K` gives `"a"` for `f("a")`, where it gave `string` and reported that `string` doesn't satisfy the constraint.
 - An error naming a very long union (such as `EventName`) shows its first members and how many more there are, instead of all of them.
 
