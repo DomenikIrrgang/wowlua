@@ -45,6 +45,8 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- Models drawn with material blend 7 add their light, as in game (a totem's rune showed on a black square), and particles of the newer emitters draw no stray tails (a fire elemental showed long streaks).
+- `Minimap:GetPingPosition()` gives the ping's place from the player in widths of the minimap's view, the ping staying where it was in the world, and `C_Minimap.GetViewRadius()` follows the zoom, as in game.
 - Screenshots read your WoW installation after the client updates: a file the updated client's index lists twice is read from the entry that holds it (all textures were missing after today's camelot patch).
 - `frame:RegisterEvent` refuses the events WoW Forever keeps for event callbacks alone, as the client does ("Attempt to register unknown event"): `MINIMAP_PING`, `TOOLTIP_SHOW_ITEM_COMPARISON`, `COMBAT_LOG_EVENT_INTERNAL_UNFILTERED`, `COMBAT_LOG_APPLY_FILTER_SETTINGS`, `COMBAT_LOG_REFILTER_ENTRIES` and `CLASS_TALENTS_SWITCH_TO_LOADOUT_BY_NAME`. `COMBAT_LOG_EVENT_UNFILTERED` still registers.
 - Talent points follow the character's level: one a level from level 10 (earlier with Legacy's "Talented" ranks), at most 51, so the talent window and `C_Traits.GetTreeCurrencyInfo` show what a character of that level has.

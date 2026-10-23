@@ -1303,11 +1303,12 @@ end)
 M:PingLocation(-30, 20)
 local py = UnitPosition('party1')
 local gx, gy = M:GetPingPosition()
-return py - y, gx, gy, table.concat(Pinged, ' ')",
+return py - y, string.format('%.4f', gx), string.format('%.4f', gy), table.concat(Pinged, ' ')",
     );
     // A callback event on camelot: `RegisterEvent` refuses it, a callback
     // gets it.
-    assert_eq!(r, ["60", "-30", "20", "false player -30 20"]);
+    // In widths of the view (the minimap's 200 UI units across).
+    assert_eq!(r, ["60", "-0.1500", "0.1000", "false player -30 20"]);
     let marks = |vm: &mut Vm| -> Vec<(String, [f32; 4], [f32; 2])> {
         let scene = wowlua_engine::scene::build(vm);
         scene
@@ -1354,8 +1355,28 @@ return py - y, gx, gy, table.concat(Pinged, ' ')",
         ),
         (70.0, 80.0)
     );
+    // The ping stays where it was in the world: the player walks 60 yards
+    // north, and it is 60 yards further south of them.
+    run(
+        &mut vm,
+        "local y, x = UnitPosition('player') mock.moveTo({ world = { y = y + 60, x = x, instanceID = 0 } })",
+    );
+    let moved = run(&mut vm, "local gx, gy = M:GetPingPosition() return gx, gy");
+    let gy: f64 = moved[1].parse().unwrap();
+    assert!((gy - (0.1 - 60.0 / 466.666_666)).abs() < 1e-6, "{moved:?}");
     run(&mut vm, "mock.advanceTime(6)");
     assert!(marks(&mut vm).iter().all(|m| !m.0.contains("Ping")));
+    // The view's radius follows the zoom (probed: 233 1/3, 100, 66 2/3).
+    run(&mut vm, "Minimap = M");
+    let radius = |vm: &mut Vm, z: u32| {
+        run(
+            vm,
+            &format!("M:SetZoom({z}) return string.format('%.3f', C_Minimap.GetViewRadius())"),
+        )
+    };
+    assert_eq!(radius(&mut vm, 0), ["233.333"]);
+    assert_eq!(radius(&mut vm, 4), ["100.000"]);
+    assert_eq!(radius(&mut vm, 5), ["66.667"]);
 }
 
 /// The callback events the client keeps from `RegisterEvent` (probed in WoW

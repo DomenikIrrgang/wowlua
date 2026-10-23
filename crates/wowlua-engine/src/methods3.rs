@@ -1350,43 +1350,64 @@ fn get_max_control_point_order(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret
 
 // ------------------------------------------------------- the tail: frames
 
-/// `Minimap:GetPingPosition()`: the last ping's place, UI units from the
-/// minimap's center (`PingLocation`'s), else none (0, 0; unverified).
+/// `Minimap:GetPingPosition()`: the last ping's place from the player now,
+/// in widths of the minimap's view (east, north): the client keeps a ping
+/// where it was in the world (probed in WoW Forever, 2026-10-23: a click
+/// up and right of the center gave 0.174, 0.260 at zoom 0, its offset over
+/// the minimap's width; one from before a flight, -5.76); none, 0, 0.
 fn get_ping_position(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let ping = first(vm, id, "MinimapPing");
-    let at = match ping {
-        Some(Value::Table(t)) => {
-            let x = vm.heap.table(t).get(Value::Num(1.0));
-            let y = vm.heap.table(t).get(Value::Num(2.0));
-            (x, y)
-        }
-        _ => (Value::Num(0.0), Value::Num(0.0)),
+    let (Some(Value::Table(t)), Some((pn, pw, _, _))) = (ping, crate::character::player_world(vm))
+    else {
+        return Ok(vec![Value::Num(0.0), Value::Num(0.0)]);
     };
-    Ok(vec![at.0, at.1])
+    let get = |i: f64| match vm.heap.table(t).get(Value::Num(i)) {
+        Value::Num(n) => n,
+        _ => 0.0,
+    };
+    let (north, west) = (get(1.0), get(2.0));
+    let span = crate::scene::MINIMAP_YARDS[crate::scene::minimap_zoom(vm)];
+    Ok(vec![
+        Value::Num((pw - west) / span),
+        Value::Num((north - pn) / span),
+    ])
 }
 
 /// `Minimap:PingLocation(x, y)`: the player pings that place (UI units
-/// from the minimap's center, as Blizzard's minimap click gives them):
-/// kept with the time for the minimap to draw (`scene::minimap_ping`), and
-/// `MINIMAP_PING("player", x, y)` (the documentation names the payload y,
-/// x; the order unverified), a callback event on camelot: `RegisterEvent`
-/// refuses it (probed 2026-10-23), `RegisterEventCallback` gets it.
+/// from the minimap's center, as Blizzard's minimap click gives them): the
+/// place in the world (at the minimap's zoom, turned back with
+/// `rotateMinimap`) kept with the time, for `GetPingPosition` and the
+/// minimap to draw (`scene::minimap_ping`), and `MINIMAP_PING("player",
+/// x, y)` (the documentation names the payload y, x; the order
+/// unverified), a callback event on camelot: `RegisterEvent` refuses it
+/// (probed 2026-10-23), `RegisterEventCallback` gets it.
 fn ping_location(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let (Value::Num(x), Value::Num(y)) = (vm.hidden(c.arg(2)), vm.hidden(c.arg(3))) else {
         return Ok(vec![]);
     };
+    let Some((pn, pw, _, _)) = crate::character::player_world(vm) else {
+        return Ok(vec![]);
+    };
+    let width = crate::widgets::bounds(vm, id, 0)
+        .map_or(140.0, |b| b.2)
+        .max(1.0);
+    let ypu = crate::scene::MINIMAP_YARDS[crate::scene::minimap_zoom(vm)] / width;
+    // East and north of the player, the minimap's turn undone.
+    let (mut east, mut up) = (x * ypu, y * ypu);
+    if crate::scene::minimap_rotates(vm) {
+        let (sin, cos) = crate::unitinfo::player_facing(vm).sin_cos();
+        // The minimap turned clockwise by the facing: turned back.
+        (east, up) = (east * cos - up * sin, east * sin + up * cos);
+    }
     let t = vm.new_table();
     let now = crate::clock::now(vm);
-    for (i, v) in [x, y, now].into_iter().enumerate() {
+    for (i, v) in [pn + up, pw - east, now].into_iter().enumerate() {
         let _ = vm
             .heap
             .table_mut(t)
             .set(Value::Num(i as f64 + 1.0), Value::Num(v));
     }
     crate::widgets::store(vm, id, "MinimapPing", &[Value::Table(t)]);
-    // Told to frames that could register it and to event callbacks
-    // (`RegisterEventCallback`: on camelot it is a callback event alone,
-    // `RegisterEvent` refusing it).
     let player = vm.str("player");
     crate::widgets::fire_event(vm, "MINIMAP_PING", &[player, Value::Num(x), Value::Num(y)]);
     Ok(vec![])

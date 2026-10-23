@@ -589,8 +589,7 @@ build (a mixed Lua workload, best of seven runs): about 1 to 2 percent
 over the VM before them (37.0 ms to 37.4–38.3 ms). Version 0.10.0, not
 released yet. The VS Code extension's debugger part (`editors/vscode`,
 T331), its grammar and language server to come in M9 S8. Not yet: the
-indoor minimap; a model material's blend 7 over a texture without alpha
-(drawn opaque).
+indoor minimap.
 
 ## M13: Game data and rendering
 

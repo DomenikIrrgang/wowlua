@@ -368,7 +368,8 @@ or Vulkan natively, WebGPU or WebGL 2 in the browser.
   its life; facing the camera, with the emitter's blend mode; pulled by its
   gravity, a compressed one's direction too; its texture cell from its
   head's (or tail's) cell track over its life, or a random one where the
-  emitter says so; a tail where the emitter has one, from the particle
+  emitter says so; a tail where the emitter has one (its head-or-tail 1
+  or 2; other values, newer emitters', a head alone), from the particle
   back along its velocity times the tail length, across the view). Model
   files are read once; a frame's model textures are reused from frame to
   frame. Unverified: drag, the cell tracks' reading (interpolated, then
@@ -382,9 +383,9 @@ or Vulkan natively, WebGPU or WebGL 2 in the browser.
   and below along the bone's Z axis, the older ones pulled down by its
   gravity, with the ribbon's first texture and material, its color and
   alpha at the moment (unverified: the strip's fade along its length, its
-  texture's rows and columns). Known wrong: a batch of material blend 7
-  (BlendAdd) with a texture without alpha covers what is behind it (a
-  totem's rune drawn on black).
+  texture's rows and columns). Material blend 7 adds, never darkening
+  what is behind (in game a totem's rune, its texture without alpha, draws
+  no black; probed).
 - **Minimap** (decision T324): a `Minimap` frame shows the terrain about the
   player, under its regions: the minimap textures of the 533⅓-yard terrain
   tiles its zoom covers (466⅔, 400, 333⅓, 266⅔, 200 or 133⅓ yards across
@@ -404,10 +405,11 @@ or Vulkan natively, WebGPU or WebGL 2 in the browser.
   follows `mock.moveTo` and `SetZoom` at the next frame. Group members
   with a place in the world (a unit's `world`) are their class's blips
   (`Interface\Minimap\PartyRaidBlips`, its 8 by 4 grid in class ID order,
-  16 UI units) within its circle; a ping (`PingLocation`, kept for
-  `GetPingPosition`, `MINIMAP_PING("player", x, y)` to event callbacks:
-  on camelot a callback event alone, `RegisterEvent` refusing it) shows
-  for 5 seconds
+  16 UI units) within its circle; a ping (`PingLocation`: kept where it
+  was in the world, `GetPingPosition` its place from the player in widths
+  of the view; `MINIMAP_PING("player", x, y)` to event callbacks: on
+  camelot a callback event alone, `RegisterEvent` refusing it) shows for
+  5 seconds
   as the client's center, growing ring and turning marks (decision T329).
   Indoors nothing (the building's own map, not read), no quest areas or
   tracked objects. Unverified: the zoom sizes, the arrow's and blips'

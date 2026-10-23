@@ -368,6 +368,13 @@ impl Renderer {
                         color: c(F::Dst, F::Src),
                         alpha: keep,
                     }),
+                    // BlendAdd: adds, never darkening what is behind
+                    // (in game a texture without alpha draws no black: a
+                    // totem's rune, probed 2026-10-23).
+                    7 => Some(wgpu::BlendState {
+                        color: c(F::One, F::One),
+                        alpha: keep,
+                    }),
                     _ => Some(wgpu::BlendState {
                         color: c(F::One, F::OneMinusSrcAlpha),
                         alpha: c(F::One, F::OneMinusSrcAlpha),
@@ -983,7 +990,9 @@ impl Renderer {
                 }
                 let pos = m2::transform(&emitter, p);
                 let color = [c[0] / 255.0, c[1] / 255.0, c[2] / 255.0, a];
-                // Its head, and its tail back along its velocity.
+                // Its head, and its tail back along its velocity (1 a tail
+                // alone, 2 both; other values, which emitters of the newer
+                // kind give, a head).
                 if e.head_or_tail != 1 {
                     self.models.sprites.push(Sprite {
                         pos,
@@ -997,7 +1006,7 @@ impl Renderer {
                         corners: None,
                     });
                 }
-                if e.head_or_tail >= 1 && e.tail_length > 0.0 {
+                if matches!(e.head_or_tail, 1 | 2) && e.tail_length > 0.0 {
                     let back = [
                         p[0] - velocity[0] * e.tail_length,
                         p[1] - velocity[1] * e.tail_length,

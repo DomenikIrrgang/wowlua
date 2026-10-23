@@ -1549,11 +1549,14 @@ fn is_class_allowed_for_game_mode(vm: &mut Vm, c: NativeCall) -> Ret {
 
 // ------------------------------------------------------------ minimap
 
-/// `C_Minimap.GetViewRadius()`: the outdoor radius at zoom 0, 233 1/3
-/// yards as a C float (recorded 233.33332824707; unverified: zoom levels,
-/// indoors).
-fn get_view_radius(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(f64::from(700.0f32 / 3.0))])
+/// `C_Minimap.GetViewRadius()`: the outdoor radius at the minimap's zoom
+/// (`Minimap:GetZoom()`), as a C float: 233 1/3 yards at zoom 0 (recorded
+/// 233.33332824707), 100 at 4, 66 2/3 at 5 (probed in WoW Forever,
+/// 2026-10-23; the others by the same steps); unverified indoors.
+fn get_view_radius(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let zoom = crate::scene::minimap_zoom(vm);
+    let radius = crate::scene::MINIMAP_YARDS[zoom] / 2.0;
+    Ok(vec![Value::Num(f64::from(radius as f32))])
 }
 
 /// `C_Minimap.GetUiMapID()`: none (SuuUI probes minimap and marks: nil

@@ -1309,8 +1309,9 @@ fn model_item(vm: &mut Vm, f: WidgetId, class: &str) -> Option<Model> {
 
 /// The scene: every visible region, back to front.
 /// The yards a minimap spans outdoors at each zoom (0 to 5), as the
-/// client draws it (the long-known sizes; unverified on this client).
-const MINIMAP_YARDS: [f64; 6] = [
+/// client draws it (`C_Minimap.GetViewRadius` twice these: 233 1/3 at 0,
+/// 100 at 4, 66 2/3 at 5, probed in WoW Forever).
+pub(crate) const MINIMAP_YARDS: [f64; 6] = [
     466.0 + 2.0 / 3.0,
     400.0,
     333.0 + 1.0 / 3.0,
@@ -1353,8 +1354,17 @@ fn minimap_mask(vm: &Vm, f: WidgetId, rect: Rect) -> Option<Mask> {
     })
 }
 
+/// The minimap's zoom (the frame named `Minimap`, `SetZoom`), 0 to 5.
+pub(crate) fn minimap_zoom(vm: &mut Vm) -> usize {
+    let m = vm.get_global("Minimap");
+    match widgets::widget_of(vm, m) {
+        Some(f) => num(vm, first(vm, f, "Zoom").as_ref(), 0.0).clamp(0.0, 5.0) as usize,
+        None => 0,
+    }
+}
+
 /// Whether the minimap turns with the player (`rotateMinimap`).
-fn minimap_rotates(vm: &mut Vm) -> bool {
+pub(crate) fn minimap_rotates(vm: &mut Vm) -> bool {
     crate::framescript::cvar_get(vm, "rotateMinimap").is_some_and(|v| v.trim() == "1")
 }
 
@@ -1604,7 +1614,8 @@ const PING_SECONDS: f64 = 5.0;
 
 /// A minimap's last ping (`PingLocation`), for its first seconds: its
 /// center, a ring and the turning marks (`UI-Minimap-Ping-Center`,
-/// `-Expand`, `-Rotate`; their sizes and motion unverified).
+/// `-Expand`, `-Rotate`; their sizes and motion unverified), where in the
+/// world it was (the minimap draws it as it draws the terrain).
 fn minimap_ping(vm: &mut Vm, f: WidgetId) -> Vec<Quad> {
     let Some(rect) = rect_of(vm, f) else {
         return Vec::new();
@@ -1616,17 +1627,15 @@ fn minimap_ping(vm: &mut Vm, f: WidgetId) -> Vec<Quad> {
         Value::Num(n) => n,
         _ => 0.0,
     };
-    let (x, y, at) = (get(1.0), get(2.0), get(3.0));
+    let (north, west, at) = (get(1.0), get(2.0), get(3.0));
     let age = crate::clock::now(vm) - at;
     if !(0.0..PING_SECONDS).contains(&age) {
         return Vec::new();
     }
+    let Some(p) = minimap_point(vm, f, rect, north, west) else {
+        return Vec::new();
+    };
     let unit = unit_of(vm, f);
-    // UI units from the center, y up.
-    let p = (
-        rect.x + rect.w / 2.0 + x as f32 * unit,
-        rect.y + rect.h / 2.0 - y as f32 * unit,
-    );
     let look = MarkLook {
         alpha: effective_alpha(vm, f),
         unit,
