@@ -3512,8 +3512,18 @@ impl Checker<'_, '_> {
         for (i, e) in exprs.iter().enumerate() {
             let p = self.param_at(&f, i);
             let multi = i + 1 == n_args && is_multi(e);
+            // A table literal inferred before the call's type arguments
+            // were known (its literals widened) is checked again against
+            // its parameter where that one does not fit (`M:Set("pos",
+            // { point = "TOP" })` for `D[K]`, L45).
+            let recheck = generic
+                && matches!(e.kind(), ExprKind::Table(_))
+                && match (arg_types[i], p) {
+                    (Some(t), Some(p)) => !self.env.assignable(t, p, self.mode),
+                    _ => false,
+                };
             let t = match arg_types[i] {
-                Some(t) if !matches!(e.kind(), ExprKind::Function(_)) => t,
+                Some(t) if !matches!(e.kind(), ExprKind::Function(_)) && !recheck => t,
                 _ => {
                     if multi {
                         let pack = self.expr_inner(e, p).into_pack();

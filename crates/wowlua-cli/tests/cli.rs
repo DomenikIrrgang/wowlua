@@ -2648,6 +2648,10 @@ print(z)
 local function set<K extends keyof Defaults>(key: K, value: Defaults[K]) print(key, value) end
 set("note", "x")
 set("line", "x")
+type Place = { point: "TOP" | "BOTTOM", x: number }
+local function put<K extends keyof { at: Place }>(key: K, value: ({ at: Place })[K]) print(key, value) end
+put("at", { point = "TOP", x = 1 })
+put("at", { point = "LEFT", x = 1 })
 "#;
     write(
         dir.path(),
@@ -2665,7 +2669,11 @@ set("line", "x")
         .unwrap();
     let stderr = String::from_utf8_lossy(&out.stderr);
     let errors: Vec<&str> = stderr.lines().filter(|l| l.contains("error[")).collect();
-    assert_eq!(errors.len(), 8, "{stderr}");
+    assert_eq!(errors.len(), 10, "{stderr}");
+    assert!(
+        errors[8].starts_with("src/main.wowlua:33:21: error[E2001]: `\"LEFT\"`"),
+        "{stderr}"
+    );
     assert!(
         errors[7].starts_with(
             "src/main.wowlua:29:13: error[E2001]: `\"x\"` is not assignable to `number`"
