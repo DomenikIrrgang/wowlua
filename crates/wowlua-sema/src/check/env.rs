@@ -88,6 +88,9 @@ pub struct Def {
     /// where a member is read (`button:SetScript(…)` on a subclass gives
     /// the subclass, decision L46).
     pub self_param: Option<ParamId>,
+    /// A record alias that refers to itself (decision L58): a named type
+    /// whose values match as its body (`alias`) does.
+    pub recursive_alias: bool,
 }
 
 impl Def {
@@ -107,6 +110,7 @@ impl Def {
             indexer: None,
             span: None,
             self_param: None,
+            recursive_alias: false,
         }
     }
 }
@@ -1792,7 +1796,9 @@ impl<'p> Env<'p> {
                 // Met inside its own table body: a named structural type
                 // from here on (L58).
                 if self.def(def).alias.is_none() && self.record_aliases.contains(&def) {
-                    self.def_mut(def).kind = DefKind::Interface;
+                    let d = self.def_mut(def);
+                    d.kind = DefKind::Interface;
+                    d.recursive_alias = true;
                 }
                 if self.def(def).kind == DefKind::Interface {
                     return self.types.intern(Ty::Named(def, full_args));

@@ -2647,6 +2647,10 @@ print(a, b, c, d, e, name, realm, more)
             ),
             "E2001",
         );
+        // values match as the record does: a map of unknowns takes it
+        strict_ok(&format!(
+            "{node}local function names(n: Node): {{ [string]: unknown }} return n end\nprint(names({{ name = \"a\" }}))\n"
+        ));
         // aliases that refer to each other
         strict_err(
             "type A = { b?: B, n: number }\ntype B = { a?: A }\nlocal x: A = { n = 1 }\nlocal s: string = x.b and x.b.a and x.b.a.n or \"\"\nprint(s)\n",

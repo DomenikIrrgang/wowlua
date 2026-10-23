@@ -433,6 +433,7 @@ impl Walk<'_> {
             indexer,
             span,
             self_param: _,
+            recursive_alias: _,
         } = self.env.def_unrecorded(d);
         self.tag(b'D');
         self.bytes(name.as_bytes());
@@ -542,6 +543,7 @@ impl Walk<'_> {
             indexer,
             span,
             self_param,
+            recursive_alias,
         } = self.env.def_unrecorded(d);
         self.num(params.len() as u64);
         match self_param {
@@ -559,6 +561,7 @@ impl Walk<'_> {
         self.tag(u8::from(*is_abstract));
         self.bytes(widget.as_deref().unwrap_or("\0").as_bytes());
         self.tag(u8::from(*native));
+        self.tag(u8::from(*recursive_alias));
         self.opt_ty(indexer.map(|(k, _)| k));
         self.opt_ty(indexer.map(|(_, v)| v));
         match span {

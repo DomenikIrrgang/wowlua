@@ -363,6 +363,13 @@ impl Env<'_> {
         mode: Mode,
         assuming: &mut FxHashSet<(TypeId, TypeId)>,
     ) -> bool {
+        // A recursive record alias matches as its record does (L58).
+        if let Some(s2) = self.unfold_alias(s) {
+            return self.assignable_in(s2, t, mode, assuming);
+        }
+        if let Some(t2) = self.unfold_alias(t) {
+            return self.assignable_in(s, t2, mode, assuming);
+        }
         let st = self.types.get(s).clone();
         let tt = self.types.get(t).clone();
         match (&st, &tt) {
@@ -571,6 +578,28 @@ impl Env<'_> {
             },
             _ => false,
         }
+    }
+
+    /// A recursive record alias's body with its type arguments (L58).
+    pub fn unfold_alias(&mut self, t: TypeId) -> Option<TypeId> {
+        let Ty::Named(d, args) = self.types.get(t).clone() else {
+            return None;
+        };
+        let def = self.def(d);
+        if !def.recursive_alias {
+            return None;
+        }
+        let body = def.alias?;
+        if args.is_empty() {
+            return Some(body);
+        }
+        let params = def.params.clone();
+        Some(super::subst::substitute(
+            &mut self.types,
+            body,
+            &params,
+            &args,
+        ))
     }
 
     /// Element types of arrays, maps and type arguments: covariant in basic
