@@ -1398,8 +1398,13 @@ impl Checker<'_, '_> {
                 Ty::Array(e) => {
                     if name == "n" {
                         Some(Types::NUMBER)
-                    } else {
+                    } else if self.mode == super::query::Mode::Strict && !quiet {
+                        // An array has numbered values only (decision L49).
                         let _ = e;
+                        let msg = format!("`{}` has no field `{name}`", self.env.display(m));
+                        self.report("E2003", span, msg);
+                        Some(Types::ERROR)
+                    } else {
                         Some(Types::ANY)
                     }
                 }
@@ -1666,6 +1671,27 @@ impl Checker<'_, '_> {
         }
     }
 
+    /// `t[k]` of a table type without an indexer: a number literal is a
+    /// field it doesn't have (E2003, strict); another key reads `any`
+    /// (W2063: nothing says what it holds). Decision L49.
+    fn unindexed(&mut self, t: TypeId, key: Expr<'_>, span: Span) -> TypeId {
+        // (a table without fields may be filled with keys later: `{}`)
+        if let ExprKind::Number(n) = key.kind()
+            && self.mode == super::query::Mode::Strict
+            && matches!(self.env.types.get(t), Ty::Record(r) if !r.fields.is_empty())
+        {
+            let msg = format!("`{}` has no field `[{}]`", self.env.display(t), n.raw());
+            self.report("E2003", key.span(), msg);
+            return Types::ERROR;
+        }
+        let msg = format!(
+            "`{}` read with a key is `any`: the type has no indexer (give it one, or read a field by name)",
+            self.env.display(t)
+        );
+        self.report("W2063", span, msg);
+        Types::ANY
+    }
+
     fn index_type(&mut self, o: TypeId, k: TypeId, key: Expr<'_>, span: Span) -> TypeId {
         if let ExprKind::String(s) = key.kind() {
             let name = String::from_utf8_lossy(&s.value()).into_owned();
@@ -1686,7 +1712,7 @@ impl Checker<'_, '_> {
                 Ty::Map(_, v) => self.env.types.optional(v),
                 Ty::Record(r) => match r.indexer {
                     Some((_, v)) => self.env.types.optional(v),
-                    None => Types::ANY,
+                    None => self.unindexed(m, key, span),
                 },
                 Ty::Nil => {
                     if self.mode == super::query::Mode::Strict {
@@ -1697,7 +1723,8 @@ impl Checker<'_, '_> {
                 }
                 Ty::Named(d, _) => match self.env.indexer_of(d) {
                     Some((_, v)) => v,
-                    None => Types::ANY,
+                    None if self.env.view(d).kind() == DefKind::Enum => Types::ANY,
+                    None => self.unindexed(m, key, span),
                 },
                 Ty::Secret(_) => {
                     self.check_secret(m, span);

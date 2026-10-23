@@ -2546,6 +2546,31 @@ print(a, b, c, d, e, name, realm, more)
         ));
     }
 
+    /// Strict mode: an array's named field (not `n`) and a record's missing
+    /// number key are E2003; other keys of a table without an indexer read
+    /// `any` (W2063). Decision L49.
+    #[test]
+    fn unindexed_reads() {
+        strict_err("local xs: number[] = { 1 }\nprint(xs.label)\n", "E2003");
+        strict_ok("local xs: number[] = { 1 }\nprint(xs.n, xs[1])\n");
+        strict_err(
+            "type Art = { atlas: string }\nlocal a: Art = { atlas = \"x\" }\nprint(a[1])\n",
+            "E2003",
+        );
+        strict_ok(
+            "type Entry = { [number]: string, main?: string }\nlocal e: Entry = { \"a\", main = \"b\" }\nprint(e[1], e.main)\n",
+        );
+        // a dynamic key: `any`, W2063
+        let d = check_source(
+            "type Art = { atlas: string }\nlocal a: Art = { atlas = \"x\" }\nlocal function at(k: string) return a[k] end\nprint(at)\n",
+            Mode::Strict,
+        );
+        assert!(d.iter().any(|x| x.code == Some("W2063")), "{d:#?}");
+        // basic mode: as before
+        let d = check_source("local xs: number[] = { 1 }\nprint(xs.label)\n", Mode::Basic);
+        assert!(!d.iter().any(|x| x.code == Some("E2003")), "{d:#?}");
+    }
+
     /// E2015 on a possibly secret value points to the secret predicates.
     #[test]
     fn cast_help() {

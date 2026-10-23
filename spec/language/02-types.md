@@ -105,7 +105,12 @@ type Anchor =
 
 Reading an element of an array (`xs[i]`) gives `T` in every mode, although
 reading past the end gives `nil` at run time (decision T95). Reads through a
-map or an indexer give `V?`.
+map or an indexer give `V?`. In strict mode an array has no named fields but
+`n` (`xs.label` is E2003: a list with named fields is written
+`{ [number]: string, label?: string }`), and a record with fields read with a
+number literal it doesn't have (`art[1]` of `{ atlas: string }`) is E2003;
+another key on a table without an indexer reads `any`, which W2063 reports
+(decision L49).
 
 Records are **structural**: any table with at least the required fields of
 compatible types is assignable. Extra fields are allowed, except that an
