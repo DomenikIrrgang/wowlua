@@ -1752,3 +1752,32 @@ return tostring(tag ~= nil), select('#', BNGetInfo('player'))",
     );
     assert_eq!(r, ["true", "0"]);
 }
+
+/// A texture shows one image: `SetColorTexture` replaces its file, and
+/// `SetTexture` its plain color.
+#[test]
+fn a_color_texture_replaces_the_file() {
+    use wowlua_engine::scene::{Image, Item};
+    let mut vm = vm();
+    run(
+        &mut vm,
+        "local t = UIParent:CreateTexture()
+t:SetSize(10, 10)
+t:SetPoint('CENTER')
+t:SetTexture('Interface\\\\Buttons\\\\WHITE8X8')
+t:SetColorTexture(1, 1, 1, 0.04)",
+    );
+    let scene = wowlua_engine::scene::build(&mut vm);
+    let q = scene
+        .items
+        .iter()
+        .find_map(|i| match i {
+            Item::Quad(q) => Some(q.clone()),
+            _ => None,
+        })
+        .expect("the texture");
+    assert!(
+        matches!(q.image, Image::Color) && (q.color[3] - 0.04).abs() < 0.01,
+        "{q:?}"
+    );
+}

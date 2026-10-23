@@ -4338,6 +4338,18 @@ pub(crate) fn store(vm: &mut Vm, id: WidgetId, stem: &str, args: &[Value]) {
     if stem == "KeyboardEnabled" {
         insert_sorted(&mut engine_mut(vm).world.keyboard, id.0);
     }
+    // A texture shows one image: a plain color replaces its file or atlas,
+    // and a file or atlas its plain color, as in the client (an addon's
+    // `SetTexture(WHITE8X8)` then `SetColorTexture(1, 1, 1, 0.04)` is a
+    // faint line, not the white file).
+    match stem {
+        "ColorTexture" => {
+            unstore(vm, id, "Texture");
+            unstore(vm, id, "Atlas");
+        }
+        "Texture" | "Atlas" => unstore(vm, id, "ColorTexture"),
+        _ => {}
+    }
     let props = engine(vm).world.widgets[id.0].props;
     let list = vm.new_table();
     // A fixed-height font keeps its height as set.
