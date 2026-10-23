@@ -184,13 +184,17 @@ pub fn visible(text: &str) -> String {
                 }
             }
             Some('T') | Some('A') => {
-                // A texture or an atlas, to its `|t` / `|a`.
+                // A texture or an atlas, to its `|t` / `|a`: one character
+                // standing for it, its size in it ([`inline_char`]).
+                let mut spec = String::new();
                 while let Some(x) = chars.next() {
                     if x == '|' && matches!(chars.peek(), Some('t') | Some('a')) {
                         chars.next();
                         break;
                     }
+                    spec.push(x);
                 }
+                out.push(inline_char(inline_spec(&spec).1));
             }
             Some(other) => {
                 out.push('|');
@@ -200,6 +204,50 @@ pub fn visible(text: &str) -> String {
         }
     }
     out
+}
+
+/// The first character standing for an inline texture or atlas in laid-out
+/// text (a private use plane's); the texture's height in UI units is the
+/// character's offset from it, 0 for the text's own height.
+const INLINE_BASE: u32 = 0xF0000;
+
+/// The character standing for an inline texture `height` UI units high (0:
+/// the text's height).
+pub fn inline_char(height: u32) -> char {
+    char::from_u32(INLINE_BASE + height.min(1023)).unwrap_or('\u{F0000}')
+}
+
+/// The height an inline texture's character stands for, if it is one.
+pub fn inline_height(c: char) -> Option<u32> {
+    let n = c as u32;
+    (INLINE_BASE..INLINE_BASE + 1024)
+        .contains(&n)
+        .then(|| n - INLINE_BASE)
+}
+
+/// An inline texture's or atlas's escape body (`Interface\Icons\X:16:16`,
+/// `atlas:0:0`): its file or atlas and its height in UI units (0: the
+/// text's), its width the height unless given.
+pub fn inline_spec(spec: &str) -> (String, u32, u32) {
+    let mut parts = spec.split(':');
+    let file = parts.next().unwrap_or("").to_string();
+    let num = |p: Option<&str>| {
+        p.and_then(|v| v.trim().parse::<f64>().ok())
+            .map(|v| v.max(0.0) as u32)
+    };
+    let height = num(parts.next()).unwrap_or(0);
+    let width = num(parts.next()).filter(|w| *w > 0).unwrap_or(height);
+    (file, height, width)
+}
+
+/// An inline texture's advance in a font's pixels: its height's (the font's
+/// height for 0).
+fn inline_advance(font: &Font, px: i64, height: u32) -> f64 {
+    if height == 0 || font.size <= 0.0 {
+        px as f64
+    } else {
+        f64::from(height) * px as f64 / font.size
+    }
 }
 
 /// One line's width in pixels at the font's pixel size.
@@ -218,10 +266,17 @@ fn line_px(font: &Font, px: i64, line: &str) -> f64 {
         }
     };
     let mut total = 0.0;
+    let advance = |c: char| match inline_height(c) {
+        Some(h) => inline_advance(font, px, h),
+        None => row.advances[index(c)] * scale,
+    };
     for &c in &chars[..chars.len() - 1] {
-        total += row.advances[index(c)] * scale;
+        total += advance(c);
     }
-    total += row.widths[index(last)] * scale;
+    total += match inline_height(last) {
+        Some(h) => inline_advance(font, px, h),
+        None => row.widths[index(last)] * scale,
+    };
     let g = glyphs();
     for pair in chars.windows(2) {
         if let Some(d) = g.kern.get(&(font.file.clone(), px, pair[0], pair[1])) {
@@ -365,7 +420,10 @@ pub fn glyph_line(vm: &Vm, id: WidgetId, line: &str) -> GlyphLine {
     let mut x = 0.0;
     for (i, &c) in chars.iter().enumerate() {
         xs.push(x);
-        x += row.advances[index(c)] * scale;
+        x += match inline_height(c) {
+            Some(h) => inline_advance(&font, px, h),
+            None => row.advances[index(c)] * scale,
+        };
         if let Some(&next) = chars.get(i + 1)
             && let Some(d) = g.kern.get(&(font.file.clone(), px, c, next))
         {

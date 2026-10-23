@@ -122,6 +122,9 @@ pub struct TextLine {
 #[derive(Clone, Debug)]
 pub struct Text {
     pub widget: usize,
+    /// The textures and atlases inline in it (`|T…|t`, `|A…|a`), drawn
+    /// over it where they stand.
+    pub images: Vec<Quad>,
     pub rect: Rect,
     /// The font file as set (`Fonts\FRIZQT__.TTF`).
     pub font: String,
@@ -662,6 +665,61 @@ fn named_color(vm: &Vm, name: &str) -> Option<[f32; 4]> {
     ])
 }
 
+/// A text's inline textures and atlases, in order: the file or atlas,
+/// whether an atlas, the width in UI units (0: its height).
+fn inline_images(raw: &str) -> Vec<(String, bool, u32)> {
+    let mut out = Vec::new();
+    let mut rest = raw;
+    while let Some(i) = rest.find('|') {
+        let after = &rest[i + 1..];
+        let kind = after.chars().next();
+        match kind {
+            Some('|') => rest = &after[1..],
+            Some(k @ ('T' | 'A')) => {
+                let body = &after[1..];
+                let end = body.find(['|']).unwrap_or(body.len());
+                let (file, _, w) = crate::text::inline_spec(&body[..end]);
+                out.push((file, k == 'A', w));
+                rest = body.get(end + 2..).unwrap_or("");
+            }
+            _ => rest = after,
+        }
+    }
+    out
+}
+
+/// An inline texture's or atlas's picture at a place.
+fn inline_quad(vm: &Vm, id: WidgetId, file: &str, atlas: bool, place: Rect) -> Option<Quad> {
+    let full = [0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0];
+    let (image, texcoord) = if atlas {
+        let info = crate::measures::atlas(file)?.info.as_ref()?;
+        let c = info.coords;
+        let (l, r, t, b) = (c[0] as f32, c[1] as f32, c[2] as f32, c[3] as f32);
+        (Image::FileId(info.file as u32), [l, t, l, b, r, t, r, b])
+    } else if let Ok(n) = file.trim().parse::<u32>() {
+        (Image::FileId(n), full)
+    } else {
+        (Image::File(file.to_string()), full)
+    };
+    Some(Quad {
+        widget: id.0,
+        rect: place,
+        image,
+        texcoord,
+        atlas: None,
+        atlas_texcoord: texcoord,
+        color: [1.0, 1.0, 1.0, effective_alpha(vm, id)],
+        blend: Blend::Blend,
+        desaturated: false,
+        rotation: 0.0,
+        tile: (false, false),
+        clip: clip_of(vm, id),
+        masks: Vec::new(),
+        unit: unit_of(vm, id),
+        snap: true,
+    })
+}
+
 /// A text's characters with their colors (`|cAARRGGBB … |r`, `|cnNAME:`),
 /// the escapes taken out as [`crate::text::visible`] takes them.
 fn colored_chars(vm: &Vm, raw: &str, base: [f32; 4]) -> Vec<(char, [f32; 4])> {
@@ -711,12 +769,16 @@ fn colored_chars(vm: &Vm, raw: &str, base: [f32; 4]) -> Vec<(char, [f32; 4])> {
                 }
             }
             Some('T') | Some('A') => {
+                let mut spec = String::new();
                 while let Some(x) = chars.next() {
                     if x == '|' && matches!(chars.peek(), Some('t') | Some('a')) {
                         chars.next();
                         break;
                     }
+                    spec.push(x);
                 }
+                let h = crate::text::inline_spec(&spec).1;
+                out.push((crate::text::inline_char(h), cur(&stack)));
             }
             Some(other) => {
                 out.push(('|', cur(&stack)));
@@ -850,6 +912,11 @@ fn text_item_in(vm: &Vm, id: WidgetId, edit_box: bool, place: Option<Rect>) -> O
         _ => rect.y + (rect.h - total_h) / 2.0,
     };
     let colored = colored_chars(vm, &raw, base);
+    let inline = inline_images(&raw);
+    let mut images = Vec::new();
+    let font_size = crate::text::font_of(vm, id).size.max(1.0) as f32;
+    let text_px = g_px(&first_line) * ratio;
+    let mut seen_inline = 0usize;
     let mut cursor = 0usize;
     let mut out_lines = Vec::new();
     for (i, line) in shown.iter().enumerate() {
@@ -899,6 +966,32 @@ fn text_item_in(vm: &Vm, id: WidgetId, edit_box: bool, place: Option<Rect>) -> O
         let mut runs: Vec<Run> = Vec::new();
         for (j, (ch, c)) in picked.iter().enumerate() {
             let cx = g.xs.get(j).copied().unwrap_or(0.0) as f32 * ratio;
+            // An inline texture: drawn as a picture where it stands.
+            if let Some(h) = crate::text::inline_height(*ch) {
+                if let Some((file, atlas, w_units)) = inline.get(seen_inline) {
+                    let hp = if h == 0 {
+                        text_px
+                    } else {
+                        h as f32 * text_px / font_size
+                    };
+                    let wp = if *w_units == 0 {
+                        hp
+                    } else {
+                        *w_units as f32 * text_px / font_size
+                    };
+                    let place = Rect {
+                        x: (x + cx).round(),
+                        y: (y + (line_h - hp) / 2.0).round(),
+                        w: wp,
+                        h: hp,
+                    };
+                    if let Some(q) = inline_quad(vm, id, file, *atlas, place) {
+                        images.push(q);
+                    }
+                }
+                seen_inline += 1;
+                continue;
+            }
             match runs.last_mut() {
                 Some(r) if r.color == *c => {
                     r.text.push(*ch);
@@ -920,6 +1013,7 @@ fn text_item_in(vm: &Vm, id: WidgetId, edit_box: bool, place: Option<Rect>) -> O
     }
     Some(Text {
         widget: id.0,
+        images,
         rect,
         font,
         px: g_px(&first_line) * ratio,
@@ -1890,8 +1984,10 @@ fn build_scene(vm: &mut Vm) -> Scene {
             let id = WidgetId(r);
             let class = engine(vm).world.widgets[r].class.clone();
             if widgets::is_a(engine(vm), &class, "FontString") {
-                if let Some(t) = text_item(vm, id, false) {
+                if let Some(mut t) = text_item(vm, id, false) {
+                    let images = std::mem::take(&mut t.images);
                     items.push(Item::Text(t));
+                    items.extend(images.into_iter().map(Item::Quad));
                 }
             } else if widgets::is_a(engine(vm), &class, "MaskTexture") {
                 continue;
@@ -1924,7 +2020,11 @@ fn build_scene(vm: &mut Vm) -> Scene {
                 items.push(Item::Quad(q));
             }
             if g == f && !messages.is_empty() {
-                items.extend(message_items(vm, f).into_iter().map(Item::Text));
+                for mut t in message_items(vm, f) {
+                    let images = std::mem::take(&mut t.images);
+                    items.push(Item::Text(t));
+                    items.extend(images.into_iter().map(Item::Quad));
+                }
             }
         }
     }

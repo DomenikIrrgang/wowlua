@@ -788,3 +788,24 @@ return t:GetJustifyH()",
     assert_eq!(colors.len(), 2, "{colors:?}");
     assert_eq!((colors[0][2], colors[1][0]), (1.0, 1.0), "{colors:?}");
 }
+
+/// A texture inline in text (`|Tfile:h:w|t`) takes its width in the line
+/// and is drawn where it stands.
+#[test]
+fn inline_textures_are_drawn_in_text() {
+    let mut vm = vm("camelot");
+    let r = run(
+        &mut vm,
+        "local t = UIParent:CreateFontString(nil, 'OVERLAY')
+t:SetFont('Fonts\\\\FRIZQT__.TTF', 12, '')
+t:SetPoint('CENTER')
+t:SetText('a b')
+local plain = t:GetStringWidth()
+t:SetText('a |TInterface\\\\GossipFrame\\\\AvailableQuestIcon:16:16|t b')
+return tostring(t:GetStringWidth() > plain + 10)",
+    );
+    assert_eq!(r, ["true"]);
+    let scene = wowlua_engine::scene::build(&mut vm);
+    assert!(scene.items.iter().any(|i| matches!(i,
+        wowlua_engine::scene::Item::Quad(q) if q.image == wowlua_engine::scene::Image::File("Interface\\GossipFrame\\AvailableQuestIcon".into()))));
+}
