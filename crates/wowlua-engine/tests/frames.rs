@@ -1607,3 +1607,21 @@ return tostring(t:GetWidth() > l1:GetStringWidth()), string.format('%g', t:GetLe
     );
     assert_eq!(r, ["true", "0", "0", "true", "0"]);
 }
+
+/// `SetFrameLevel` moves the frame's descendants that have a level of
+/// their own by as much (Blizzard's menus: entries 20 over the menu, then
+/// the menu raised).
+#[test]
+fn frame_levels_move_with_their_parent() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local menu = CreateFrame('Frame', nil, UIParent)
+local entry = CreateFrame('Button', nil, menu)
+entry:SetFrameLevel(menu:GetFrameLevel() + 20)
+local plain = CreateFrame('Frame', nil, menu)
+menu:SetFrameLevel(502)
+return entry:GetFrameLevel(), plain:GetFrameLevel()",
+    );
+    assert_eq!(r, ["522", "503"]);
+}

@@ -3553,6 +3553,33 @@ fn get_frame_level(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(frame_level(vm, id))])
 }
 
+/// `SetFrameLevel(level)`: the frame's level; its descendants that have a
+/// level of their own move with it, by as much, keeping their place above
+/// it (the others follow, a level over their parent). Blizzard's menus set
+/// their entries 20 over the menu, then raise the menu to 502: the
+/// entries stayed at 20, under its background, drawn faint.
+fn set_frame_level(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let Value::Num(level) = c.arg(2) else {
+        return Err(vm.api_arg_error(2, "Usage: self:SetFrameLevel(frameLevel)"));
+    };
+    let old = frame_level(vm, id);
+    store(vm, id, "FrameLevel", &[Value::Num(level)]);
+    let delta = level - old;
+    if delta != 0.0 {
+        let mut stack = engine(vm).world.widgets[id.0].children.clone();
+        while let Some(child) = stack.pop() {
+            let props = engine(vm).world.widgets[child.0].props;
+            if let Some(Value::Num(n)) =
+                stored_args(vm, props, "FrameLevel").and_then(|v| v.first().copied())
+            {
+                store(vm, child, "FrameLevel", &[Value::Num((n + delta).max(0.0))]);
+            }
+            stack.extend(engine(vm).world.widgets[child.0].children.iter().copied());
+        }
+    }
+    Ok(vec![])
+}
+
 /// `SetUsingParentLevel(using)`: kept; using its parent's, a frame drops
 /// the level set before (SuuUI probe trees: `InsetFrameTemplate`'s
 /// `NineSlice`, `useParentLevel` over `NineSlicePanelTemplate`'s
@@ -4533,6 +4560,7 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("SetFontObject", set_font_object),
         ("CopyFontObject", copy_font_object),
         ("GetFrameLevel", get_frame_level),
+        ("SetFrameLevel", set_frame_level),
         ("SetUsingParentLevel", set_using_parent_level),
         ("SetToDefaults", set_to_defaults),
         ("GetID", get_id),
