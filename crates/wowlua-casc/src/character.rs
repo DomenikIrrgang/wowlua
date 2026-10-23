@@ -786,6 +786,45 @@ impl Library {
             .is_some_and(|r| r.int("InventoryType") == 14)
     }
 
+    /// An item's own models (`SetItem`, `SetItemAppearance`): each model
+    /// of its display with its texture, side by side as worn (a weapon's
+    /// one, a shoulder pair's two), for no race in particular.
+    pub fn item_model(&mut self, casc: &Casc, worn: Worn) -> Option<Display> {
+        let d = self.item_display(casc, worn)?;
+        let (models, materials) = {
+            let r = self.table(casc, "ItemDisplayInfo")?.row(d)?;
+            (
+                r.ints("ModelResourcesID"),
+                r.ints("ModelMaterialResourcesID"),
+            )
+        };
+        let look = Look::default();
+        let mut parts = Vec::new();
+        for (i, &resource) in models.iter().enumerate() {
+            let Some(f) = self.model_file(casc, resource, &look, None) else {
+                continue;
+            };
+            let mut p = Part::with_file(f);
+            if let Some(t) = materials
+                .get(i)
+                .copied()
+                .and_then(|m| self.material_file(casc, m, &look))
+            {
+                p.textures.insert(2, Texture::File(t));
+            }
+            parts.push(p);
+            // A shoulder pair's models are the same resource: one shows.
+            if models.get(1) == Some(&resource) {
+                break;
+            }
+        }
+        (!parts.is_empty()).then_some(Display {
+            parts,
+            scale: 1.0,
+            alpha: 1.0,
+        })
+    }
+
     /// A customization geoset's submesh ID.
     fn geoset(&mut self, casc: &Casc, id: u32) -> Option<u16> {
         let r = self.table(casc, "ChrCustomizationGeoset")?.row(id)?;

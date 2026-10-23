@@ -16,6 +16,8 @@ fn main() {
     // display ID.
     let source = if let Some(f) = a[2].strip_prefix("file:") {
         ModelSource::File(f.parse().unwrap())
+    } else if let Some(c) = a[2].strip_prefix("item:") {
+        ModelSource::Item(c.parse().unwrap())
     } else if let Some(c) = a[2].strip_prefix("creature:") {
         ModelSource::Creature(c.parse().unwrap())
     } else if let Some(c) = a[2].strip_prefix("char:") {

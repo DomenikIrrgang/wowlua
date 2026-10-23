@@ -229,7 +229,15 @@ impl Assets for ClientAssets {
                     },
                 )
             }
-            ModelSource::Item(_) | ModelSource::Appearance(_) => None,
+            ModelSource::Item(i) => lib.item_model(casc, wowlua_casc::character::Worn::Item(*i)),
+            ModelSource::Appearance(a) => {
+                // An item appearance (`ItemAppearance`): its display.
+                let d = lib
+                    .table(casc, "ItemAppearance")?
+                    .row(*a)?
+                    .int("ItemDisplayInfoID");
+                lib.item_model(casc, wowlua_casc::character::Worn::Display(d))
+            }
         }
     }
 
