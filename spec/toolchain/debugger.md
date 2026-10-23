@@ -244,8 +244,10 @@ T310).
   a file it does not have, a stand-in is drawn (below).
 - **Reading it**: the local CASC storage (`Data/`): the build config, the
   encoding table and the root, then each file by its path's name hash or
-  file ID, from the archives' index. Files are decoded once per session and
-  kept in memory.
+  file ID, from the archives' index: each of a key's entries in turn (an
+  updated client lists a file twice, one entry pointing past the block's
+  30-byte header), the block's BLTE data after that header or at once.
+  Files are decoded once per session and kept in memory.
 - **Textures**: BLP (palettized, DXT1/3/5 and uncompressed, with mipmaps)
   and TGA, from the installation or from the addon's own folder (an
   `Interface/AddOns/<Name>/…` path).
@@ -389,7 +391,9 @@ or Vulkan natively, WebGPU or WebGL 2 in the browser.
   its width at zooms 0 to 5), north up, each cut to the frame and masked by
   `SetMaskTexture`'s atlas or file; with `rotateMinimap` set, turned
   clockwise by the player's facing (`mock.moveTo`'s `facing`) about its
-  center, whole tiles cut by the frame's rectangle and the mask; the
+  center, whole tiles cut by the frame's rectangle and the mask, and the
+  texture named `MinimapCompassTexture` turned with it, its north toward
+  north (as the client turns it; no Lua does; probed); the
   player's arrow (`Interface\Minimap\MinimapArrow`, 32 by 32 UI units)
   at its center, over its regions, turned by the facing, or up when the
   minimap turns. The tiles come from the

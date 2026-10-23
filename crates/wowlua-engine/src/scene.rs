@@ -593,7 +593,7 @@ fn quad_of(vm: &Vm, id: WidgetId) -> Option<Quad> {
         ],
         blend: blend_of(vm, id),
         desaturated: first(vm, id, "Desaturated").is_some_and(|v| v.truthy()),
-        rotation: num(vm, first(vm, id, "Rotation").as_ref(), 0.0) as f32,
+        rotation: num(vm, first(vm, id, "Rotation").as_ref(), 0.0) as f32 + compass_turn(vm, id),
         tile: (
             tile.0 || first(vm, id, "HorizTile").is_some_and(|v| v.truthy()),
             tile.1 || first(vm, id, "VertTile").is_some_and(|v| v.truthy()),
@@ -603,6 +603,28 @@ fn quad_of(vm: &Vm, id: WidgetId) -> Option<Quad> {
         unit: unit_of(vm, id),
         snap: crate::measures::snaps_to_pixel_grid(vm, id),
     })
+}
+
+/// The minimap's compass (the texture named `MinimapCompassTexture`) as
+/// the client turns it with `rotateMinimap`: its north toward north, by
+/// the player's facing (probed 2026-10-23: facing east, the pointer at its
+/// left; no Lua turns it). Not otherwise, nor for another texture.
+fn compass_turn(vm: &Vm, id: WidgetId) -> f32 {
+    let named = engine(vm).world.widgets[id.0].name.as_deref() == Some("MinimapCompassTexture");
+    if !named {
+        return 0.0;
+    }
+    let rotates = engine(vm)
+        .world
+        .cvars
+        .iter()
+        .find(|(k, _)| k.eq_ignore_ascii_case("rotateMinimap"))
+        .is_some_and(|(_, v)| v.trim() == "1");
+    if rotates {
+        -crate::unitinfo::player_facing(vm) as f32
+    } else {
+        0.0
+    }
 }
 
 /// Screen pixels per UI unit of a region.

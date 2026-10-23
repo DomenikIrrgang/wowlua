@@ -68,37 +68,49 @@ impl Index {
         &self.entries[i * ENTRY..i * ENTRY + 9]
     }
 
-    /// Where an encoded key is: archive, offset, size.
-    fn find(&self, ekey: &[u8]) -> Option<(u32, u64, u32)> {
+    /// Every place an encoded key is (the entries of a key lie together,
+    /// the index being sorted): archive, offset, size.
+    fn find_all(&self, ekey: &[u8]) -> Vec<(u32, u64, u32)> {
         let n = self.entries.len() / ENTRY;
         let probe = &ekey[..9];
-        let found = {
-            // Sorted by key: a binary search; a linear one if not.
-            let (mut lo, mut hi) = (0usize, n);
-            let mut hit = None;
-            while lo < hi {
-                let mid = (lo + hi) / 2;
-                match self.key(mid).cmp(probe) {
-                    std::cmp::Ordering::Less => lo = mid + 1,
-                    std::cmp::Ordering::Greater => hi = mid,
-                    std::cmp::Ordering::Equal => {
-                        hit = Some(mid);
-                        break;
-                    }
-                }
+        let Some(hit) = self.position(probe) else {
+            return Vec::new();
+        };
+        let mut first = hit;
+        while first > 0 && self.key(first - 1) == probe {
+            first -= 1;
+        }
+        (first..n)
+            .take_while(|&i| self.key(i) == probe)
+            .map(|i| self.place(i))
+            .collect()
+    }
+
+    /// An entry of a key: a binary search; a linear one if not sorted.
+    fn position(&self, probe: &[u8]) -> Option<usize> {
+        let n = self.entries.len() / ENTRY;
+        let (mut lo, mut hi) = (0usize, n);
+        while lo < hi {
+            let mid = (lo + hi) / 2;
+            match self.key(mid).cmp(probe) {
+                std::cmp::Ordering::Less => lo = mid + 1,
+                std::cmp::Ordering::Greater => hi = mid,
+                std::cmp::Ordering::Equal => return Some(mid),
             }
-            hit.or_else(|| (0..n).find(|&i| self.key(i) == probe))
-        }?;
-        let e = &self.entries[found * ENTRY..found * ENTRY + ENTRY];
+        }
+        (0..n).find(|&i| self.key(i) == probe)
+    }
+
+    /// Entry `i`'s place: archive, offset, size.
+    fn place(&self, i: usize) -> (u32, u64, u32) {
+        let e = &self.entries[i * ENTRY..i * ENTRY + ENTRY];
         let packed = u64::from(e[9]) << 32
             | u64::from(e[10]) << 24
             | u64::from(e[11]) << 16
             | u64::from(e[12]) << 8
             | u64::from(e[13]);
-        let archive = (packed >> 30) as u32;
-        let offset = packed & 0x3fff_ffff;
         let size = u32::from_le_bytes([e[14], e[15], e[16], e[17]]);
-        Some((archive, offset, size))
+        ((packed >> 30) as u32, packed & 0x3fff_ffff, size)
     }
 }
 
@@ -518,14 +530,31 @@ impl Casc {
     /// A file by its encoded key, decoded.
     pub fn read_ekey(&self, ekey: &[u8; 16]) -> Option<Vec<u8>> {
         let index = self.indexes.get(bucket(ekey))?.as_ref()?;
-        let (archive, offset, size) = index.find(ekey)?;
-        let raw = self.storage.read_at(
-            &format!("Data/data/data.{archive:03}"),
-            offset,
-            size as usize,
-        )?;
-        // A 30-byte header before the BLTE data.
-        blte::decode(raw.get(30..)?, &self.keys).ok()
+        // Every entry of the key, as the index may hold more than one (a
+        // newer client writes a second pointing past the block's header).
+        index
+            .find_all(ekey)
+            .into_iter()
+            .find_map(|place| self.decode_at(place).ok())
+    }
+
+    /// The file at a place of the data archives, decoded: its BLTE data
+    /// after a 30-byte header, or at once.
+    fn decode_at(&self, (archive, offset, size): (u32, u64, u32)) -> Result<Vec<u8>, String> {
+        let raw = self
+            .storage
+            .read_at(
+                &format!("Data/data/data.{archive:03}"),
+                offset,
+                size as usize,
+            )
+            .ok_or("unreadable")?;
+        let blte = if raw.starts_with(b"BLTE") {
+            &raw[..]
+        } else {
+            raw.get(30..).ok_or("short")?
+        };
+        blte::decode(blte, &self.keys).map_err(|e| e.to_string())
     }
 
     pub fn read_ckey(&self, ckey: &[u8; 16]) -> Option<Vec<u8>> {
@@ -593,22 +622,17 @@ impl Casc {
                     out.push_str(": no index for its bucket");
                     continue;
                 };
-                let Some((archive, offset, size)) = index.find(&e) else {
+                let places = index.find_all(&e);
+                if places.is_empty() {
                     out.push_str(": not in the local storage");
                     continue;
-                };
-                out.push_str(&format!(": data.{archive:03} at {offset}, {size} bytes"));
-                match self.storage.read_at(
-                    &format!("Data/data/data.{archive:03}"),
-                    offset,
-                    size as usize,
-                ) {
-                    None => out.push_str(", unreadable"),
-                    Some(raw) => match raw.get(30..).map(|d| blte::decode(d, &self.keys)) {
-                        Some(Ok(d)) => out.push_str(&format!(", {} bytes decoded", d.len())),
-                        Some(Err(e)) => out.push_str(&format!(", {e}")),
-                        None => out.push_str(", short"),
-                    },
+                }
+                for place @ (archive, offset, size) in places {
+                    out.push_str(&format!(": data.{archive:03} at {offset}, {size} bytes"));
+                    match self.decode_at(place) {
+                        Ok(d) => out.push_str(&format!(", {} bytes decoded", d.len())),
+                        Err(e) => out.push_str(&format!(", {e}")),
+                    }
                 }
             }
             out.push('\n');
@@ -688,4 +712,63 @@ fn build_rows(storage: &dyn Storage) -> Vec<BuildRow> {
             }
         })
         .collect()
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// An index file (version 7, 9-byte keys) of entries: key, archive,
+    /// offset, size.
+    fn index(entries: &[([u8; 9], u32, u64, u32)]) -> Vec<u8> {
+        let mut d = vec![0u8; 0x28];
+        d[0] = 16;
+        d[8..10].copy_from_slice(&7u16.to_le_bytes());
+        d[12] = 4;
+        d[13] = 5;
+        d[14] = 9;
+        let body: Vec<u8> = entries
+            .iter()
+            .flat_map(|(k, a, o, s)| {
+                let packed = (u64::from(*a) << 30) | o;
+                let mut e = k.to_vec();
+                e.extend(&packed.to_be_bytes()[3..]);
+                e.extend(s.to_le_bytes());
+                e
+            })
+            .collect();
+        d[0x20..0x24].copy_from_slice(&(body.len() as u32).to_le_bytes());
+        d.extend(body);
+        d
+    }
+
+    /// A key's every entry, in order (a newer client writes a second, past
+    /// the block's header); none for a key not there.
+    #[test]
+    fn an_index_gives_every_entry_of_a_key() {
+        let a = [1u8; 9];
+        let b = [2u8; 9];
+        let c = [3u8; 9];
+        let idx = Index::parse(&index(&[
+            (a, 1, 10, 100),
+            (b, 75, 825_339_748, 141_273_066),
+            (b, 75, 825_339_778, 141_273_036),
+            (c, 2, 0, 5),
+        ]))
+        .expect("parses");
+        let key = |k: [u8; 9]| {
+            let mut e = [0u8; 16];
+            e[..9].copy_from_slice(&k);
+            e
+        };
+        assert_eq!(
+            idx.find_all(&key(b)),
+            [
+                (75, 825_339_748, 141_273_066),
+                (75, 825_339_778, 141_273_036)
+            ]
+        );
+        assert_eq!(idx.find_all(&key(a)), [(1, 10, 100)]);
+        assert!(idx.find_all(&key([9u8; 9])).is_empty());
+    }
 }
