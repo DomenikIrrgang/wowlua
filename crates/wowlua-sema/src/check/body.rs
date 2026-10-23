@@ -964,6 +964,7 @@ impl<'e, 'p> Checker<'e, 'p> {
                         ret: Pack::any(),
                         predicate: None,
                         unannotated: false,
+                        outer: Vec::new(),
                     };
                     return Some((f, format!("`{}`", names.join("`, `"))));
                 }
@@ -1979,6 +1980,25 @@ impl<'e, 'p> Checker<'e, 'p> {
             self.scope.params.push((name, p));
         }
         self.scope.self_ty = Some(instance);
+        // A base whose type arguments use `typeof` (directly or through a
+        // `typeof` alias) is known only where the file reaches the class
+        // (`extends Module<typeof(DEFAULTS)>`, decision L45).
+        if let Some(e) = c.extends() {
+            let mut exprs: Vec<Expr<'_>> = Vec::new();
+            typeof_exprs(e, &mut exprs);
+            for x in exprs {
+                let ty = self.infer(x);
+                let ty = self.env.types.widen(ty);
+                self.env
+                    .typeof_types
+                    .insert((x.span().start, x.span().end), ty);
+            }
+            let scope = self.scope.clone();
+            let t = self.env.resolve(e, &scope);
+            if let Some(b) = self.env.def_mut(def).bases.first_mut() {
+                *b = t;
+            }
+        }
         if self.mode == Mode::Strict {
             self.definite_assignment(c, def);
         }

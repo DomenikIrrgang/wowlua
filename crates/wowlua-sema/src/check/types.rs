@@ -266,6 +266,10 @@ pub struct Func {
     pub predicate: Option<(usize, TypeId)>,
     /// Declared without annotations (W2055 instead of E2006).
     pub unannotated: bool,
+    /// What enclosing type parameters stand for (a generic class's, for its
+    /// generic method): the method's type parameters' constraints are read
+    /// with them (`K extends keyof D` of `Module<D>`, decision L45).
+    pub outer: Vec<(ParamId, TypeId)>,
 }
 
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
@@ -356,6 +360,7 @@ impl Ty {
                     ret,
                     predicate,
                     unannotated: _,
+                    outer,
                 } = f.as_ref();
                 let rest_ty = |r: &Option<Rest>| match r {
                     Some(Rest::Variadic(t)) => Some(*t),
@@ -368,6 +373,7 @@ impl Ty {
                     .chain(ret.types.iter().copied())
                     .chain(rest_ty(&ret.rest))
                     .chain(predicate.map(|(_, t)| t))
+                    .chain(outer.iter().map(|&(_, t)| t))
                     .collect()
             }
         }
@@ -610,6 +616,7 @@ impl Types {
                     ret,
                     predicate,
                     unannotated,
+                    outer: _,
                 } = f.as_ref();
                 if !type_params.is_empty() {
                     return None;
@@ -693,6 +700,7 @@ impl Types {
                         None => None,
                     },
                     unannotated: *unannotated,
+                    outer: Vec::new(),
                 }))
             }
             // Members are in the order of their ids.

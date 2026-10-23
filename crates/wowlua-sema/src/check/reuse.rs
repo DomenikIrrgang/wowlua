@@ -245,6 +245,7 @@ impl Walk<'_> {
             ret,
             predicate,
             unannotated,
+            outer,
         } = f;
         self.num(type_params.len() as u64);
         for &p in type_params {
@@ -255,6 +256,11 @@ impl Walk<'_> {
             self.bytes(name.as_deref().unwrap_or("\0").as_bytes());
             self.ty(*ty);
             self.tag(u8::from(*optional));
+        }
+        self.num(outer.len() as u64);
+        for &(p, t) in outer {
+            self.label(Node::Param(p));
+            self.ty(t);
         }
         self.rest(rest);
         self.pack(ret);

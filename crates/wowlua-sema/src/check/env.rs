@@ -1287,6 +1287,7 @@ impl<'p> Env<'p> {
             ret,
             predicate,
             unannotated: (unannotated || bare) && !declared,
+            outer: Vec::new(),
         }
     }
 
@@ -1443,6 +1444,7 @@ impl<'p> Env<'p> {
                     ret,
                     predicate,
                     unannotated: false,
+                    outer: Vec::new(),
                 })
             }
             // Resolved by the checker (needs expression types).
