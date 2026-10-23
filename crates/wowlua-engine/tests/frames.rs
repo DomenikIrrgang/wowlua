@@ -1176,6 +1176,9 @@ impl wowlua_engine::clientdata::ClientData for Items {
             item_level: 1,
             required_level: 0,
             expansion: 0,
+            stack: 1,
+            sell_price: 250,
+            bind: 1,
         })
     }
 }
@@ -1194,6 +1197,8 @@ fn unknown_items_come_from_the_clients_tables() {
     let r = run(
         &mut vm,
         "local name, link, quality, _, _, kind, _, _, loc, icon, _, class, sub = C_Item.GetItemInfo(277714)
+local stack, price, bind = select(8, C_Item.GetItemInfo(277714)), select(11, C_Item.GetItemInfo(277714)), select(14, C_Item.GetItemInfo(277714))
+assert(stack == 1 and price == 250 and bind == 1, tostring(stack) .. ' ' .. tostring(price) .. ' ' .. tostring(bind))
 return name, quality, icon, class, sub, loc, tostring(link:find('item:277714', 1, true) ~= nil),
     tostring(C_Item.DoesItemExistByID(277714)), tostring(C_Item.IsItemDataCachedByID(277714)),
     (C_Item.GetItemInfo(19019)), tostring(C_Item.DoesItemExistByID(1234567))",

@@ -402,6 +402,11 @@ impl wowlua_engine::clientdata::ClientData for CascClientData {
                     item.item_level = r.int("ItemLevel");
                     item.required_level = r.int("RequiredLevel");
                     item.expansion = r.int("ExpansionID");
+                    if table == "ItemSparse" {
+                        item.stack = r.int("Stackable");
+                        item.sell_price = r.int("SellPrice");
+                        item.bind = r.int("Bonding");
+                    }
                     if !item.name.is_empty() {
                         break;
                     }

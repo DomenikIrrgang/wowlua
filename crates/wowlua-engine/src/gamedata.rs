@@ -200,8 +200,9 @@ pub fn item_data(vm: &mut Vm, id: i64) -> Option<TableRef> {
 /// An item the tests have no data for, from the installation's tables
 /// (decision T327): its name, quality, levels, icon, class and slot, cached
 /// as the client keeps the items it has; its class names as the client
-/// answers `C_Item.GetItemClassInfo` and `GetItemSubClassInfo`. Unverified
-/// fields: one to a stack, no sell price, no bind type.
+/// answers `C_Item.GetItemClassInfo` and `GetItemSubClassInfo`; its stack
+/// size, sell price and bind type from `ItemSparse` (one to a stack where
+/// only the search table has it).
 fn client_item(vm: &mut Vm, id: i64) -> Option<TableRef> {
     let item = crate::clientdata::item(vm, id)?;
     if item.name.is_empty() {
@@ -237,13 +238,13 @@ fn client_item(vm: &mut Vm, id: i64) -> Option<TableRef> {
         ("minLevel", Value::Num(item.required_level.into())),
         ("type", kind),
         ("subType", sub_kind),
-        ("stackCount", Value::Num(1.0)),
+        ("stackCount", Value::Num(item.stack.max(1).into())),
         ("equipLoc", equip),
         ("icon", Value::Num(item.icon.into())),
-        ("sellPrice", Value::Num(0.0)),
+        ("sellPrice", Value::Num(item.sell_price.into())),
         ("classID", class),
         ("subclassID", sub),
-        ("bindType", Value::Num(0.0)),
+        ("bindType", Value::Num(item.bind.into())),
         ("expansionID", Value::Num(item.expansion.into())),
         ("cached", Value::Bool(true)),
     ] {

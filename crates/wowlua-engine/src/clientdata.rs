@@ -104,9 +104,10 @@ pub trait ClientData: Send + Sync {
     }
 }
 
-/// An item of the client's tables: its name and quality
-/// (`ItemSearchName`), icon, class, subclass and inventory type (`Item`),
-/// levels and expansion.
+/// An item of the client's tables: its name, quality, levels, expansion,
+/// stack size, sell price and bind type (`ItemSparse`, else the name,
+/// quality and levels from `ItemSearchName`), icon, class, subclass and
+/// inventory type (`Item`).
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct ClientItem {
     pub name: String,
@@ -118,6 +119,11 @@ pub struct ClientItem {
     pub item_level: u32,
     pub required_level: u32,
     pub expansion: u32,
+    /// How many to a stack, 0 when the client's table does not say.
+    pub stack: u32,
+    pub sell_price: u32,
+    /// `Enum.ItemBind`.
+    pub bind: u32,
 }
 
 /// An item as the client's tables have it.
