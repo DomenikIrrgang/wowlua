@@ -1739,3 +1739,16 @@ return list[4].appearanceID, table.concat(Told, ' '), C_TransmogCollection.GetSo
     );
     assert_eq!(r, ["156906", "156906@4+", "2575"]);
 }
+
+/// `BNGetInfo()` answers the account; given an argument, nothing (both
+/// recorded).
+#[test]
+fn bn_get_info_answers_without_an_argument() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local _, tag = BNGetInfo()
+return tostring(tag ~= nil), select('#', BNGetInfo('player'))",
+    );
+    assert_eq!(r, ["true", "0"]);
+}

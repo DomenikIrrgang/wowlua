@@ -229,6 +229,8 @@ pub fn inline_height(c: char) -> Option<u32> {
 /// `atlas:0:0`): its file or atlas and its height in UI units (0: the
 /// text's), its width the height unless given.
 pub fn inline_spec(spec: &str) -> (String, u32, u32) {
+    // An atlas's escape has a colon before its name (`|A:name:h:w|a`).
+    let spec = spec.strip_prefix(':').unwrap_or(spec);
     let mut parts = spec.split(':');
     let file = parts.next().unwrap_or("").to_string();
     let num = |p: Option<&str>| {

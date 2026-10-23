@@ -45,6 +45,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- The friends window shows your BattleTag and your online status icon: `BNGetInfo()` answers the account, inline atlases (`|A:name:…|a`) are read right, and a texture named `.tga` that the game stores as `.blp` is found.
 - Texture gradients (`texture:SetGradient` and XML `<Gradient>`) are kept and drawn in screenshots: Blizzard's help tips are dark gold boxes again instead of white ones.
 - The dressing room lists the outfit beside the model (each slot's item with its icon), as in game: an actor's `GetItemTransmogInfoList()` holds what it wears and tried on, and its model scene gets `OnDressModel` as it dresses. The panel was empty.
 - Textures and atlases inline in text (`|T…|t`, `|A…|a`) are drawn in screenshots and take their width in the line, as in game: the quest log's "characters with a ! above their head" shows its icon.

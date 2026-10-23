@@ -197,7 +197,12 @@ fn get_guild_charter_cost(_vm: &mut Vm, _c: NativeCall) -> Ret {
 /// away, busy, Real ID enabled, and an eighth false (recorded, the strings
 /// scrubbed: the BattleTag here the player's name and #0000, the
 /// broadcast empty; unverified).
-fn bn_get_info(vm: &mut Vm, _c: NativeCall) -> Ret {
+fn bn_get_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    // Given an argument it answers nothing (the full probe:
+    // `BNGetInfo("player")`, `BNGetInfo("x")`).
+    if !c.arg(1).is_nil() {
+        return Ok(vec![]);
+    }
     let tag = format!("{}#0000", engine(vm).units.list[units::PLAYER.0].name);
     Ok(vec![
         Value::Nil,

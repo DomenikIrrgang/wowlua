@@ -578,17 +578,21 @@ impl Casc {
     }
 
     /// A file by its path; a texture path without an extension finds its
-    /// `.blp`.
+    /// `.blp`, and so does one named `.tga` or `.png` the storage lacks (the
+    /// client takes `Interface\\FriendsFrame\\StatusIcon-Online.tga` from
+    /// its `.blp`: Blizzard's friends status icons).
     pub fn file_by_path(&self, path: &str) -> Option<Vec<u8>> {
         let id = self.id_of(path).or_else(|| {
-            let has_ext = path
-                .rsplit(['\\', '/'])
-                .next()
-                .is_some_and(|n| n.contains('.'));
-            if has_ext {
-                None
-            } else {
-                self.id_of(&format!("{path}.blp"))
+            let name = path.rsplit(['\\', '/']).next().unwrap_or(path);
+            match name.rsplit_once('.') {
+                None => self.id_of(&format!("{path}.blp")),
+                Some((_, ext))
+                    if ext.eq_ignore_ascii_case("tga") || ext.eq_ignore_ascii_case("png") =>
+                {
+                    let stem = &path[..path.len() - ext.len() - 1];
+                    self.id_of(&format!("{stem}.blp"))
+                }
+                Some(_) => None,
             }
         })?;
         self.file_by_id(id)

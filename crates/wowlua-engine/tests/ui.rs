@@ -851,3 +851,24 @@ fn texture_gradients() {
         "{g:?}"
     );
 }
+
+/// An atlas inline in text (`|A:name:h:w|a`) is drawn where it stands.
+#[test]
+fn inline_atlases_are_drawn_in_text() {
+    let mut vm = vm("camelot");
+    run(
+        &mut vm,
+        "local t = UIParent:CreateFontString(nil, 'OVERLAY')
+t:SetFont('Fonts\\\\FRIZQT__.TTF', 12, '')
+t:SetPoint('CENTER')
+t:SetSize(60, 10)
+t:SetText('|A:friends-status-online:19:19:0:0|a')",
+    );
+    let scene = wowlua_engine::scene::build(&mut vm);
+    let quad = scene.items.iter().find_map(|i| match i {
+        wowlua_engine::scene::Item::Quad(q) => Some(q.rect),
+        _ => None,
+    });
+    let q = quad.expect("the atlas drawn");
+    assert!(q.w > 10.0 && q.h > 10.0, "{q:?}");
+}

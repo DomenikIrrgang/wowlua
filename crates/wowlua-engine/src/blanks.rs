@@ -210,9 +210,10 @@ const BLANKS: &[(&str, &str)] = &[
         "5: nil nil, number 0.0039215688593686, number 0.0039215688593686, number 0.0039215688593686, number 0.0039215688593686",
     ),
     ("GetMerchantItemCostItem", "2: nil nil, number 0"),
-    // Battle.net: none of it answers (the full probe: no account info, no
-    // friend, nothing selected).
-    ("BNGetInfo", "0: "),
+    // Battle.net: none of it answers (the full probe: no friend, nothing
+    // selected). `BNGetInfo` is `social`'s: the probe's nothing was its
+    // answer to `BNGetInfo("player")`; without an argument the client
+    // answers the account (recorded).
     ("BNGetFriendIndex", "0: "),
     ("BNGetNumFOF", "0: "),
     ("BNGetSelectedFriend", "0: "),
