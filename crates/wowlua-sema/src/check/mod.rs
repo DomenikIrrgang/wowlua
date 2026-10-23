@@ -727,6 +727,10 @@ fn check_file_in(
     let import_caps = import_caps(ctx, i);
     let info = FileInfo {
         intrinsics: crate::stdlib::Intrinsics::of(ctx.analysis, i, parse),
+        static_branches: ctx.analysis.modules[i]
+            .as_ref()
+            .map(|m| m.static_branches.clone())
+            .unwrap_or_default(),
         index: i,
         mode: settings.mode,
         pure_lua: settings.pure_lua,

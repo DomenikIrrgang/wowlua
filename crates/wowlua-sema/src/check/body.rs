@@ -72,6 +72,9 @@ pub struct FileInfo<'a> {
     pub meta_flavor: FxHashSet<String>,
     /// Imports bound to the standard library's `@intrinsic` ids.
     pub intrinsics: crate::stdlib::Intrinsics,
+    /// `if` blocks static conditions decide (spec §6.4.2): `false`
+    /// removed, `true` always runs.
+    pub static_branches: std::collections::HashMap<(u32, u32), bool>,
 }
 
 /// The locals in scope: every name's variables, innermost last, and the
@@ -168,6 +171,8 @@ pub struct Checker<'e, 'p> {
     pub(crate) shared: Option<super::flavors::SharedFlavors>,
     pub(crate) guard: super::flavors::Guard,
     pub(crate) meta_flavor: FxHashSet<String>,
+    /// `if` blocks static conditions decide (FileInfo's).
+    static_branches: std::collections::HashMap<(u32, u32), bool>,
     /// Expressions that are existence tests (`if C_X then`): no E2030.
     pub(crate) probes: FxHashSet<wowlua_span::Span>,
     /// Inside code already reported as unreachable (W1005).
@@ -333,6 +338,7 @@ impl<'e, 'p> Checker<'e, 'p> {
             shared: info.shared.cloned(),
             guard: super::flavors::Guard::default(),
             meta_flavor: info.meta_flavor.clone(),
+            static_branches: info.static_branches.clone(),
             probes: FxHashSet::default(),
             in_dead: false,
             is_module: info.is_module,
@@ -1177,7 +1183,21 @@ impl<'e, 'p> Checker<'e, 'p> {
                 // branch unreachable (spec §2.2.8): from then on, every
                 // later clause and the `else` too.
                 let mut rest_unreachable = false;
+                // A static condition (spec §6.4.2): a removed branch is
+                // neither checked nor a path; a branch that always runs is
+                // the only path from here (the rest is removed).
+                let mut always = false;
                 for (c, b) in clauses {
+                    match self.static_branches.get(&(b.span().start, b.span().end)) {
+                        Some(false) => continue,
+                        Some(true) => {
+                            self.block(b);
+                            ends.push((self.flow.clone(), self.live, self.guard.clone()));
+                            always = true;
+                            break;
+                        }
+                        None => {}
+                    }
                     self.mark_probes(c);
                     self.infer(c);
                     let (t_flow, f_flow) = self.narrow(c, &self.flow.clone());
@@ -1198,6 +1218,7 @@ impl<'e, 'p> Checker<'e, 'p> {
                     self.live = entry_live;
                 }
                 match else_block {
+                    _ if always => {}
                     Some(b) if rest_unreachable => {
                         self.unreachable_block(b);
                         ends.push((self.flow.clone(), self.live, self.guard.clone()));

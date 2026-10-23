@@ -151,6 +151,10 @@ pub struct ModuleInfo {
     /// Tooling §16.1.3.1): the module registers them as module
     /// `<id>#internal`.
     pub exposed: std::collections::BTreeSet<String>,
+    /// Blocks of `if` chains with static conditions (spec §6.4.2), by span:
+    /// `false` a removed branch (not checked), `true` the one that always
+    /// runs (a statically true condition: what follows it is removed).
+    pub static_branches: HashMap<(u32, u32), bool>,
 }
 
 #[derive(Debug, Default)]
@@ -433,9 +437,88 @@ pub fn analyze(files: &[FileInput], meta: Option<&Meta>) -> Analysis {
             break;
         }
     }
+    // The branches static conditions remove or keep alone.
+    for (i, file) in files.iter().enumerate() {
+        let (Some(parse), Some(meta)) = (file.parse, file.meta.or(meta)) else {
+            continue;
+        };
+        let Some(info) = &analysis.modules[i] else {
+            continue;
+        };
+        let branches = static_branches(info, &analysis.modules, parse, meta);
+        if let Some(info) = analysis.modules[i].as_mut() {
+            info.static_branches = branches;
+        }
+    }
     classes_and_enums(files, &mut analysis);
     intrinsics(files, &mut analysis);
     analysis
+}
+
+/// Every `if` chain of the file with static conditions (spec §6.4.2), as
+/// the compiler folds it: a clause whose condition is statically false is
+/// removed; the first statically true one always runs and every clause
+/// after it, the `else` included, is removed.
+fn static_branches(
+    info: &ModuleInfo,
+    modules: &[Option<ModuleInfo>],
+    parse: &Parse,
+    meta: &Meta,
+) -> HashMap<(u32, u32), bool> {
+    let kind_of = |n: &str| info.meta_bindings.get(n).copied();
+    // the file's own top-level constants and the ones it imports
+    let mut consts: HashMap<String, Const> = imported_consts(info, modules, parse);
+    for s in parse.view().block().stmts() {
+        let inner = match s.kind() {
+            StmtKind::Export(inner) => inner,
+            _ => s,
+        };
+        if let StmtKind::Const {
+            name,
+            value: Some(value),
+            ..
+        } = inner.kind()
+            && let Some(c) = meta::static_value(value, meta, &kind_of, &|n| consts.get(n).cloned())
+        {
+            consts.insert(name.text().to_string(), c);
+        }
+    }
+    let mut out = HashMap::new();
+    let key = |b: Block<'_>| (b.span().start, b.span().end);
+    wowlua_syntax::visit::walk_stmts(parse.view().block(), &mut |s| {
+        let StmtKind::If {
+            cond,
+            then_block,
+            elseifs,
+            else_block,
+        } = s.kind()
+        else {
+            return;
+        };
+        let mut clauses = vec![(cond, then_block)];
+        clauses.extend(elseifs.iter());
+        let mut decided = false;
+        for (c, b) in clauses {
+            if decided {
+                out.insert(key(b), false);
+                continue;
+            }
+            match meta::static_value(c, meta, &kind_of, &|n| consts.get(n).cloned()) {
+                Some(v) if v.truthy() => {
+                    out.insert(key(b), true);
+                    decided = true;
+                }
+                Some(_) => {
+                    out.insert(key(b), false);
+                }
+                None => {}
+            }
+        }
+        if decided && let Some(b) = else_block {
+            out.insert(key(b), false);
+        }
+    });
+    out
 }
 
 /// `@intrinsic("id")` declarations: in a standard-library module's

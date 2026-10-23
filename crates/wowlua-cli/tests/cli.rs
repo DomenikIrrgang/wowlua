@@ -5039,10 +5039,20 @@ fn profile_exclude() {
             (
                 "wowlua.json",
                 r#"{ "package": { "name": "demo", "version": "1.0.0" }, "addon": { "title": "Demo" },
+  "check": { "mode": "strict" },
   "profiles": { "release": { "exclude": ["src/Tools/**"] } } }"#,
             ),
-            ("src/main.wowlua", "print(\"main file\")\n"),
-            ("src/Tools/probe.wowlua", "print(\"probe tool\")\n"),
+            // kept code reaches the tool only where the build has it: the
+            // import under `@if`, its use in a branch the release removes
+            // (not checked there, spec §6.4.2)
+            (
+                "src/main.wowlua",
+                "import build from \"wowlua:meta\"\n@if(build.debug)\nimport * as probe from \"./Tools/probe\"\n\nif build.debug then\n    probe.run()\nend\nprint(\"main file\")\n",
+            ),
+            (
+                "src/Tools/probe.wowlua",
+                "export function run() print(\"probe tool\") end\n",
+            ),
         ],
     );
     wowlua(dir.path()).arg("build").assert().success();
@@ -5083,4 +5093,42 @@ fn walkdir(dir: &Path) -> Vec<std::path::PathBuf> {
         }
     }
     out
+}
+
+/// Branches a static condition removes are not checked (spec §6.4.2), as
+/// the build decides them: `build.debug` and the flavor, per profile.
+#[test]
+fn removed_branches_are_not_checked() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "demo", "version": "1.0.0" }, "addon": { "title": "Demo" } }"#,
+            ),
+            (
+                "src/main.wowlua",
+                "import flavor, build from \"wowlua:meta\"\nif flavor == \"vanilla\" then\n    print(onlyInVanilla())\nelseif build.debug then\n    print(debugOnly())\nelse\n    print(releaseOnly())\nend\n",
+            ),
+        ],
+    );
+    let messages = |args: &[&str]| -> String {
+        let out = wowlua(dir.path()).args(args).output().unwrap();
+        String::from_utf8_lossy(&out.stderr).into_owned()
+    };
+    // dev: the debug branch runs (checked); vanilla's and the else are removed
+    let dev = messages(&["check", "--message-format", "short"]);
+    assert!(
+        dev.contains("debugOnly") && !dev.contains("releaseOnly") && !dev.contains("onlyInVanilla"),
+        "{dev}"
+    );
+    // release: the else runs instead
+    let release = messages(&["build", "--release", "--message-format", "short"]);
+    assert!(
+        release.contains("releaseOnly")
+            && !release.contains("debugOnly")
+            && !release.contains("onlyInVanilla"),
+        "{release}"
+    );
 }
