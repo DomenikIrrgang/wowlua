@@ -269,8 +269,8 @@ T310).
   decision T322), a file by ID. Geosets not named show by the
   model's defaults (the body, each group's first variant). An item
   (`SetItem`, `SetItemAppearance`) is its display's models with their
-  textures (no race's in particular; one of a shoulder pair). Not yet:
-  particles and ribbons.
+  textures (no race's in particular; one of a shoulder pair); its
+  particle emitters too.
 - **Characters** (decision T320): a unit (`SetUnit`, `SetModelByUnit`) is
   its race and sex's model (`ChrRaceXChrModel`, `ChrModel`) with a choice
   of each customization option (the first the class may have: the
@@ -338,9 +338,15 @@ or Vulkan natively, WebGPU or WebGL 2 in the browser.
   unlit; up to three textures a batch, combined by the client's shaders
   (its shader ID: the vertex shader, which coordinates each texture takes,
   the second set, an environment map, an edge fade; the pixel shader,
-  how they combine: modulated, doubled, added, by alpha, glows). Model
-  files are read once; a frame's model textures are reused from frame to
-  frame. Not yet: billboards, particles, ribbons.
+  how they combine: modulated, doubled, added, by alpha, glows); particles
+  as their emitters' steady state at the moment (each particle's start,
+  direction, speed and life from a seed of its own, so a frame is the
+  same each time and the next follows on; its color, alpha and size over
+  its life; facing the camera, with the emitter's blend mode). Model files
+  are read once; a frame's model textures are reused from frame to frame.
+  Unverified: the particles' compressed gravity, tails and texture cells
+  over life (each particle draws its first cell). Not drawn: ribbons
+  (trails behind moving parts, as in motion), billboarded bones.
 - **Speed**: textures and glyphs are uploaded once and kept on the GPU;
   quads go in one vertex buffer per frame, drawn in as few calls as texture
   changes allow; nothing is drawn when the scene did not change.

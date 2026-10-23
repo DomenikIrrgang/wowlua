@@ -125,6 +125,63 @@ pub struct Attachment {
     pub position: Vec3,
 }
 
+/// A particle emitter (its values at the model's first frame: emitters
+/// are drawn as their steady state).
+#[derive(Clone, Debug, Default)]
+pub struct Particle {
+    pub flags: u32,
+    pub position: Vec3,
+    pub bone: u16,
+    /// The model's texture (index).
+    pub texture: u16,
+    /// As a material's blend mode.
+    pub blend: u8,
+    /// 1 a plane, 2 a sphere, 3 a spline.
+    pub kind: u8,
+    pub rows: u16,
+    pub columns: u16,
+    pub speed: f32,
+    pub speed_variation: f32,
+    pub vertical_range: f32,
+    pub horizontal_range: f32,
+    /// Down along z, per second squared.
+    pub gravity: f32,
+    pub lifespan: f32,
+    pub lifespan_variation: f32,
+    pub rate: f32,
+    pub rate_variation: f32,
+    pub length: f32,
+    pub width: f32,
+    pub z_source: f32,
+    /// Over a particle's life (0 to 1): colors (0 to 255), alphas, sizes.
+    pub colors: Vec<(f32, Vec3)>,
+    pub alphas: Vec<(f32, f32)>,
+    pub sizes: Vec<(f32, [f32; 2])>,
+    pub size_variation: f32,
+    pub drag: f32,
+    pub spin: f32,
+}
+
+impl Particle {
+    /// A value along a particle's life from its keys.
+    pub fn at<T: Blend>(keys: &[(f32, T)], t: f32, default: T) -> T {
+        let Some(first) = keys.first() else {
+            return default;
+        };
+        if t <= first.0 {
+            return first.1;
+        }
+        for w in keys.windows(2) {
+            let ((t0, a), (t1, b)) = (w[0], w[1]);
+            if t <= t1 {
+                let f = if t1 > t0 { (t - t0) / (t1 - t0) } else { 0.0 };
+                return T::blend(a, b, f);
+            }
+        }
+        keys[keys.len() - 1].1
+    }
+}
+
 /// A color's animated values.
 #[derive(Clone, Debug, Default)]
 pub struct Color {
@@ -179,6 +236,7 @@ pub struct Model {
     /// Attachment IDs to their index.
     pub attachment_of: Vec<i16>,
     pub cameras: Vec<Camera>,
+    pub particles: Vec<Particle>,
     pub skin_files: Vec<u32>,
     pub anim_files: Vec<AnimFile>,
     pub bone_files: Vec<u32>,
@@ -385,6 +443,83 @@ fn first_spline<T>(
     read(r, offset)
 }
 
+/// A track of plain floats: its first key's value in the first sequence.
+fn first_float(r: &R, at: usize) -> f32 {
+    let (vn, vo) = r.array(at + 12);
+    if vn == 0 {
+        return 0.0;
+    }
+    match (r.u32(vo), r.u32(vo + 4)) {
+        (Some(n), Some(o)) if n > 0 => r.f32(o as usize).unwrap_or(0.0),
+        _ => 0.0,
+    }
+}
+
+/// A fake block (`M2FBlock`): times (fractions of a life, fixed point) and
+/// values.
+fn fblock<T>(
+    r: &R,
+    at: usize,
+    size: usize,
+    read: impl Fn(&R, usize) -> Option<T>,
+) -> Vec<(f32, T)> {
+    let (tn, to) = r.array(at);
+    let (vn, vo) = r.array(at + 8);
+    (0..tn.min(vn))
+        .filter_map(|k| {
+            let t = f32::from(r.u16(to + k * 2)?) / 32767.0;
+            Some((t, read(r, vo + k * size)?))
+        })
+        .collect()
+}
+
+fn particle(r: &R, o: usize) -> Particle {
+    let flags = r.u32(o + 4).unwrap_or(0);
+    // Newer emitters keep gravity as a compressed vector: its z (scaled)
+    // read as the pull down (unverified: its x and y).
+    let gravity = if flags & 0x0080_0000 != 0 {
+        let (vn, vo) = r.array(o + 0x84 + 12);
+        let raw = if vn > 0 {
+            r.u32(vo + 4).and_then(|v| r.u32(v as usize)).unwrap_or(0)
+        } else {
+            0
+        };
+        -f32::from((raw >> 16) as u16 as i16) * 0.042_386_48
+    } else {
+        first_float(r, o + 0x84)
+    };
+    Particle {
+        flags,
+        position: r.vec3(o + 8).unwrap_or_default(),
+        bone: r.u16(o + 20).unwrap_or(0),
+        texture: r.u16(o + 22).unwrap_or(0),
+        blend: r.u8(o + 40).unwrap_or(0),
+        kind: r.u8(o + 41).unwrap_or(1),
+        rows: r.u16(o + 48).unwrap_or(1).max(1),
+        columns: r.u16(o + 50).unwrap_or(1).max(1),
+        speed: first_float(r, o + 0x34),
+        speed_variation: first_float(r, o + 0x48),
+        vertical_range: first_float(r, o + 0x5c),
+        horizontal_range: first_float(r, o + 0x70),
+        gravity,
+        lifespan: first_float(r, o + 0x98),
+        lifespan_variation: r.f32(o + 0xac).unwrap_or(0.0),
+        rate: first_float(r, o + 0xb0),
+        rate_variation: r.f32(o + 0xc4).unwrap_or(0.0),
+        length: first_float(r, o + 0xc8),
+        width: first_float(r, o + 0xdc),
+        z_source: first_float(r, o + 0xf0),
+        colors: fblock(r, o + 0x104, 12, |r, at| r.vec3(at)),
+        alphas: fblock(r, o + 0x114, 2, |r, at| {
+            Some(f32::from(r.i16(at)?) / 32767.0)
+        }),
+        sizes: fblock(r, o + 0x124, 8, |r, at| Some([r.f32(at)?, r.f32(at + 4)?])),
+        size_variation: r.f32(o + 0x134).unwrap_or(0.0),
+        drag: r.f32(o + 0x174).unwrap_or(0.0),
+        spin: r.f32(o + 0x180).unwrap_or(0.0),
+    }
+}
+
 fn sequence(r: &R, o: usize) -> Option<Sequence> {
     let flags = r.u32(o + 12)?;
     let alias_next = r.u16(o + 62)?;
@@ -559,6 +694,7 @@ impl Model {
             })
         });
         m.attachment_of = r.i16s(248);
+        m.particles = r.list(296, 492, |r, o| Some(particle(r, o)));
         m.cameras = r.list(272, 116, |r, o| {
             let pos = first_spline(r, o + 12, 12, |r, at| r.vec3(at)).unwrap_or_default();
             let base = r.vec3(o + 32)?;
@@ -845,6 +981,12 @@ impl Blend for Vec3 {
             a[1] + (b[1] - a[1]) * t,
             a[2] + (b[2] - a[2]) * t,
         ]
+    }
+}
+
+impl Blend for [f32; 2] {
+    fn blend(a: Self, b: Self, t: f32) -> Self {
+        [a[0] + (b[0] - a[0]) * t, a[1] + (b[1] - a[1]) * t]
     }
 }
 

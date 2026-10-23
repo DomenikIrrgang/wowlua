@@ -38,6 +38,41 @@ pub(crate) struct Loaded {
     skin: Skin,
 }
 
+/// A particle to draw, facing the camera.
+#[derive(Clone, Copy)]
+pub(crate) struct Sprite {
+    pos: Vec3,
+    size: f32,
+    spin: f32,
+    color: [f32; 4],
+    tex: usize,
+    blend: u16,
+    /// Its cell of the texture: left, top, right, bottom.
+    cell: [f32; 4],
+}
+
+/// A random stream (xorshift), the same for the same seed.
+struct Rng(u64);
+
+impl Rng {
+    fn new(seed: u64) -> Rng {
+        Rng(seed.wrapping_mul(0x9E37_79B9_7F4A_7C15) ^ 0xD1B5_4A32_D192_ED03)
+    }
+    /// A number in 0 to 1.
+    fn unit(&mut self) -> f32 {
+        let mut x = self.0;
+        x ^= x << 13;
+        x ^= x >> 7;
+        x ^= x << 17;
+        self.0 = x;
+        (x >> 40) as f32 / (1u64 << 24) as f32
+    }
+    /// A number in -1 to 1.
+    fn signed(&mut self) -> f32 {
+        self.unit() * 2.0 - 1.0
+    }
+}
+
 /// The body's pose and attachment points, for the parts on it.
 pub(crate) struct Body {
     points: HashMap<u32, Mat4>,
@@ -66,6 +101,8 @@ pub(crate) struct Models {
     portraits: HashMap<String, Option<usize>>,
     /// Drawing a portrait: on black, kept.
     portrait: bool,
+    /// The particles of the model item being drawn.
+    sprites: Vec<Sprite>,
 }
 
 /// A batch to draw: its vertices' range and how.
@@ -462,6 +499,7 @@ impl Renderer {
         let height = ((item.rect.h * scale).round() as u32).clamp(1, max);
         let aspect = width as f32 / height as f32;
         self.model_layouts();
+        self.models.sprites.clear();
         let mut verts: Vec<MVertex> = Vec::new();
         let mut draws: Vec<Draw> = Vec::new();
         // The posed points of every actor, for a frame's camera.
@@ -702,6 +740,85 @@ impl Renderer {
                 });
             }
         }
+        // Its particles: the emitters' steady state at the moment.
+        for (k, e) in m.particles.iter().enumerate() {
+            let life = e.lifespan * (1.0 + e.lifespan_variation.abs());
+            let rate = e.rate * (1.0 + e.rate_variation.abs() * 0.5);
+            if life <= 0.0 || rate <= 0.0 || e.alphas.iter().all(|(_, a)| *a <= 0.0) {
+                continue;
+            }
+            let bone = pose.get(e.bone as usize).copied().unwrap_or(m2::IDENTITY);
+            let emitter = m2::mul(&m2::mul(&part_world, &bone), &m2::translation(e.position));
+            let index = if e.flags & 0x1000_0000 != 0 {
+                e.texture & 0x1f
+            } else {
+                e.texture
+            } as usize;
+            let tex = match m.textures.get(index) {
+                Some(t) if t.kind == 0 => self.texture(&Image::FileId(t.file), assets),
+                Some(t) => match part.textures.get(&t.kind) {
+                    Some(Texture::File(f)) => self.texture(&Image::FileId(*f), assets),
+                    _ => self.white,
+                },
+                None => self.white,
+            };
+            self.model_group([tex, self.white, self.white]);
+            let now = ms as f64 / 1000.0;
+            let spawned = (now * f64::from(rate)).floor();
+            let frac = (now * f64::from(rate) - spawned) as f32;
+            let count = ((life * rate).ceil() as u32).min(400);
+            for n in 0..count {
+                let age = (n as f32 + frac) / rate;
+                let seed = (u64::from(part.file) << 20)
+                    ^ ((k as u64) << 52)
+                    ^ (spawned as u64).wrapping_sub(u64::from(n));
+                let mut rng = Rng::new(seed);
+                let span = e.lifespan * (1.0 + e.lifespan_variation * rng.signed());
+                if span <= 0.0 || age > span {
+                    continue;
+                }
+                let start = match e.kind {
+                    1 => [
+                        rng.signed() * e.length * 0.5,
+                        rng.signed() * e.width * 0.5,
+                        0.0,
+                    ],
+                    2 => {
+                        let (a, b) = (rng.unit() * std::f32::consts::TAU, rng.signed().acos());
+                        let r = e.length * rng.unit();
+                        [r * b.sin() * a.cos(), r * b.sin() * a.sin(), r * b.cos()]
+                    }
+                    _ => [0.0; 3],
+                };
+                let v = rng.signed() * e.vertical_range;
+                let h = rng.unit() * e.horizontal_range;
+                let dir = [v.sin() * h.cos(), v.sin() * h.sin(), v.cos()];
+                let speed = e.speed * (1.0 + e.speed_variation * rng.signed());
+                let p = [
+                    start[0] + dir[0] * speed * age,
+                    start[1] + dir[1] * speed * age,
+                    start[2] + dir[2] * speed * age - 0.5 * e.gravity * age * age,
+                ];
+                let t = age / span;
+                let c = m2::Particle::at(&e.colors, t, [255.0; 3]);
+                let a = m2::Particle::at(&e.alphas, t, 1.0) * actor.alpha * display.alpha;
+                let size = m2::Particle::at(&e.sizes, t, [1.0, 1.0])[0]
+                    * (1.0 + e.size_variation * rng.signed());
+                if a <= 0.002 || size <= 0.0 {
+                    continue;
+                }
+                let (cu, cv) = (1.0 / f32::from(e.columns), 1.0 / f32::from(e.rows));
+                self.models.sprites.push(Sprite {
+                    pos: m2::transform(&emitter, p),
+                    size,
+                    spin: e.spin * age,
+                    color: [c[0] / 255.0, c[1] / 255.0, c[2] / 255.0, a],
+                    tex: [tex, self.white, self.white][0],
+                    blend: u16::from(e.blend),
+                    cell: [0.0, 0.0, cu, cv],
+                });
+            }
+        }
     }
 
     /// The camera, and the vertices drawn into the model's texture.
@@ -712,14 +829,14 @@ impl Renderer {
         width: u32,
         height: u32,
         aspect: f32,
-        verts: Vec<MVertex>,
-        draws: Vec<Draw>,
+        mut verts: Vec<MVertex>,
+        mut draws: Vec<Draw>,
         lo: [f32; 3],
         hi: [f32; 3],
         portrait: Option<(Vec3, Vec3, f32)>,
         own_camera: Option<(Vec3, Vec3, f32)>,
     ) -> Option<usize> {
-        if verts.is_empty() {
+        if verts.is_empty() && self.models.sprites.is_empty() {
             return None;
         }
         // The camera.
@@ -785,6 +902,62 @@ impl Renderer {
             }
         };
         let view_proj = m2::mul(&proj, &view);
+        // The particles, facing the camera, over the meshes.
+        let right = [view[0], view[4], view[8]];
+        let up = [view[1], view[5], view[9]];
+        for sp in std::mem::take(&mut self.models.sprites) {
+            let (sn, cs) = sp.spin.sin_cos();
+            let h = sp.size / 2.0;
+            let corner = |x: f32, y: f32| {
+                let (rx, ry) = (x * cs - y * sn, x * sn + y * cs);
+                [
+                    sp.pos[0] + (right[0] * rx + up[0] * ry) * h,
+                    sp.pos[1] + (right[1] * rx + up[1] * ry) * h,
+                    sp.pos[2] + (right[2] * rx + up[2] * ry) * h,
+                ]
+            };
+            let [u0, v0, u1, v1] = sp.cell;
+            let start = verts.len() as u32;
+            let flags = UNLIT | (u32::from(sp.blend.min(7)) << 8);
+            let mk = |p: Vec3, uv: [f32; 2]| MVertex {
+                pos: p,
+                normal: [0.0, 0.0, 1.0],
+                t1: uv,
+                t2: uv,
+                raw2: uv,
+                color: sp.color,
+                flags,
+                shaders: crate::combiners::ps::MOD,
+            };
+            let (a, b, c, d) = (
+                mk(corner(-1.0, 1.0), [u0, v0]),
+                mk(corner(-1.0, -1.0), [u0, v1]),
+                mk(corner(1.0, 1.0), [u1, v0]),
+                mk(corner(1.0, -1.0), [u1, v1]),
+            );
+            verts.extend_from_slice(&[a, b, c, c, b, d]);
+            let tex = [sp.tex, self.white, self.white];
+            match draws.last_mut() {
+                Some(last)
+                    if last.tex == tex
+                        && last.blend == sp.blend
+                        && !last.depth_write
+                        && last.end == start =>
+                {
+                    last.end = verts.len() as u32
+                }
+                _ => draws.push(Draw {
+                    blend: sp.blend,
+                    depth_write: false,
+                    tex,
+                    start,
+                    end: verts.len() as u32,
+                }),
+            }
+        }
+        if verts.is_empty() {
+            return None;
+        }
         let l = &item.light;
         let (ambient, diffuse) = if l.enabled {
             (l.ambient, l.diffuse)
