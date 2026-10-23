@@ -2477,6 +2477,10 @@ print(a, b, c, d, e, name, realm, more)
             "local g\nlocal function f(): number return g() end\ng = function(): string return \"a\" end\nprint(f)\n",
             "E2001",
         );
+        // A call where it is declared may have set it: still no `nil`.
+        strict_ok(
+            "type Layer = { n: number }\nlocal layer = nil\nlocal function build() layer = { n = 1 } :: Layer end\nbuild()\nlocal function show(): number\n if not layer then build() end\n return layer.n\nend\nprint(show)\n",
+        );
         // What the closure itself assigned holds there.
         strict_ok(
             "local n = 0\nlocal function f(): string\n n = \"a\"\n return n\nend\nprint(f)\n",
