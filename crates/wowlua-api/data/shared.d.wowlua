@@ -784,10 +784,12 @@ end
 declare class Button extends Frame
     function GetScript(scriptType: ScriptButton, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptButton): boolean
+    function HookScript(scriptType: "OnLoad", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnUpdate", handler: ((self: Self, elapsed: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnClick", handler: ((self: Self, button: string, down: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "PreClick", handler: ((self: Self, button: string, down: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
@@ -810,10 +812,12 @@ declare class Button extends Frame
     function HookScript(scriptType: "OnHyperlinkEnter", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptButton, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnLoad", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnUpdate", handler: (((self: Self, elapsed: number) -> ()))?)
     function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
     function SetScript(scriptType: "OnClick", handler: (((self: Self, button: string, down: boolean) -> ()))?)
     function SetScript(scriptType: "PreClick", handler: (((self: Self, button: string, down: boolean) -> ()))?)
@@ -906,10 +910,12 @@ end
 declare class ColorSelect extends Frame
     function GetScript(scriptType: ScriptColorSelect, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptColorSelect): boolean
+    function HookScript(scriptType: "OnLoad", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnUpdate", handler: ((self: Self, elapsed: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
@@ -929,10 +935,12 @@ declare class ColorSelect extends Frame
     function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnColorSelect", handler: ((self: Self, r: number, g: number, b: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptColorSelect, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnLoad", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnUpdate", handler: (((self: Self, elapsed: number) -> ()))?)
     function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
     function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
     function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
@@ -983,10 +991,12 @@ end
 declare class Cooldown extends Frame
     function GetScript(scriptType: ScriptCooldown, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptCooldown): boolean
+    function HookScript(scriptType: "OnLoad", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnUpdate", handler: ((self: Self, elapsed: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
@@ -1006,10 +1016,12 @@ declare class Cooldown extends Frame
     function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnCooldownDone", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptCooldown, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnLoad", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnUpdate", handler: (((self: Self, elapsed: number) -> ()))?)
     function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
     function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
     function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
@@ -1082,10 +1094,12 @@ end
 declare class EditBox extends Frame
     function GetScript(scriptType: ScriptEditBox, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptEditBox): boolean
+    function HookScript(scriptType: "OnLoad", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnUpdate", handler: ((self: Self, elapsed: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
@@ -1114,10 +1128,12 @@ declare class EditBox extends Frame
     function HookScript(scriptType: "OnArrowPressed", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnCursorChanged", handler: ((self: Self, x: number, y: number, width: number, height: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptEditBox, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnLoad", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnUpdate", handler: (((self: Self, elapsed: number) -> ()))?)
     function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
     function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
     function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
@@ -1237,10 +1253,12 @@ end
 declare class FogOfWarFrame extends Frame
     function GetScript(scriptType: ScriptFogOfWarFrame, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptFogOfWarFrame): boolean
+    function HookScript(scriptType: "OnLoad", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnUpdate", handler: ((self: Self, elapsed: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
@@ -1259,10 +1277,12 @@ declare class FogOfWarFrame extends Frame
     function HookScript(scriptType: "OnHyperlinkEnter", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptFogOfWarFrame, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnLoad", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnUpdate", handler: (((self: Self, elapsed: number) -> ()))?)
     function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
     function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
     function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
@@ -1305,10 +1325,12 @@ end
 declare class Frame extends Region
     function GetScript(scriptType: ScriptFrame, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptFrame): boolean
+    function HookScript(scriptType: "OnLoad", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnUpdate", handler: ((self: Self, elapsed: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
@@ -1327,10 +1349,12 @@ declare class Frame extends Region
     function HookScript(scriptType: "OnHyperlinkEnter", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptFrame, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnLoad", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnUpdate", handler: (((self: Self, elapsed: number) -> ()))?)
     function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
     function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
     function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
@@ -1479,10 +1503,12 @@ end
 declare class GameTooltip extends Frame
     function GetScript(scriptType: ScriptGameTooltip, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptGameTooltip): boolean
+    function HookScript(scriptType: "OnLoad", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnUpdate", handler: ((self: Self, elapsed: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
@@ -1503,10 +1529,12 @@ declare class GameTooltip extends Frame
     function HookScript(scriptType: "OnTooltipCleared", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnTooltipSetDefaultAnchor", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptGameTooltip, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnLoad", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnUpdate", handler: (((self: Self, elapsed: number) -> ()))?)
     function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
     function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
     function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
@@ -1749,10 +1777,12 @@ end
 declare class CinematicModel extends PlayerModel
     function GetScript(scriptType: ScriptCinematicModel, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptCinematicModel): boolean
+    function HookScript(scriptType: "OnLoad", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnUpdate", handler: ((self: Self, elapsed: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
@@ -1771,10 +1801,12 @@ declare class CinematicModel extends PlayerModel
     function HookScript(scriptType: "OnHyperlinkEnter", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptCinematicModel, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnLoad", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnUpdate", handler: (((self: Self, elapsed: number) -> ()))?)
     function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
     function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
     function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
@@ -1823,10 +1855,12 @@ end
 declare class DressUpModel extends PlayerModel
     function GetScript(scriptType: ScriptDressUpModel, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptDressUpModel): boolean
+    function HookScript(scriptType: "OnLoad", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnUpdate", handler: ((self: Self, elapsed: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
@@ -1845,10 +1879,12 @@ declare class DressUpModel extends PlayerModel
     function HookScript(scriptType: "OnHyperlinkEnter", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptDressUpModel, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnLoad", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnUpdate", handler: (((self: Self, elapsed: number) -> ()))?)
     function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
     function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
     function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
@@ -1899,10 +1935,12 @@ end
 declare class Model extends Frame
     function GetScript(scriptType: ScriptModel, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptModel): boolean
+    function HookScript(scriptType: "OnLoad", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnUpdate", handler: ((self: Self, elapsed: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
@@ -1921,10 +1959,12 @@ declare class Model extends Frame
     function HookScript(scriptType: "OnHyperlinkEnter", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptModel, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnLoad", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnUpdate", handler: (((self: Self, elapsed: number) -> ()))?)
     function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
     function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
     function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
@@ -2137,10 +2177,12 @@ end
 declare class MovieFrame extends Frame
     function GetScript(scriptType: ScriptMovieFrame, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptMovieFrame): boolean
+    function HookScript(scriptType: "OnLoad", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnUpdate", handler: ((self: Self, elapsed: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
@@ -2159,10 +2201,12 @@ declare class MovieFrame extends Frame
     function HookScript(scriptType: "OnHyperlinkEnter", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptMovieFrame, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnLoad", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnUpdate", handler: (((self: Self, elapsed: number) -> ()))?)
     function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
     function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
     function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
@@ -2232,10 +2276,12 @@ end
 declare class ScrollFrame extends Frame
     function GetScript(scriptType: ScriptScrollFrame, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptScrollFrame): boolean
+    function HookScript(scriptType: "OnLoad", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnUpdate", handler: ((self: Self, elapsed: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
@@ -2257,10 +2303,12 @@ declare class ScrollFrame extends Frame
     function HookScript(scriptType: "OnHorizontalScroll", handler: ((self: Self, offset: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnScrollRangeChanged", handler: ((self: Self, xrange: number, yrange: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptScrollFrame, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnLoad", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnUpdate", handler: (((self: Self, elapsed: number) -> ()))?)
     function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
     function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
     function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
@@ -2336,10 +2384,12 @@ end
 declare class Slider extends Frame
     function GetScript(scriptType: ScriptSlider, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptSlider): boolean
+    function HookScript(scriptType: "OnLoad", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnUpdate", handler: ((self: Self, elapsed: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
@@ -2360,10 +2410,12 @@ declare class Slider extends Frame
     function HookScript(scriptType: "OnValueChanged", handler: ((self: Self, value: number, userInput: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnMinMaxChanged", handler: ((self: Self, min: number, max: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptSlider, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnLoad", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnUpdate", handler: (((self: Self, elapsed: number) -> ()))?)
     function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
     function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
     function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
@@ -2415,10 +2467,12 @@ end
 declare class StatusBar extends Frame
     function GetScript(scriptType: ScriptStatusBar, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptStatusBar): boolean
+    function HookScript(scriptType: "OnLoad", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnUpdate", handler: ((self: Self, elapsed: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
@@ -2439,10 +2493,12 @@ declare class StatusBar extends Frame
     function HookScript(scriptType: "OnValueChanged", handler: ((self: Self, value: number, userInput: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnMinMaxChanged", handler: ((self: Self, min: number, max: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptStatusBar, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnLoad", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnUpdate", handler: (((self: Self, elapsed: number) -> ()))?)
     function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
     function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
     function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
@@ -2528,10 +2584,12 @@ end
 declare class DropdownButton extends DropdownButtonMixin
     function GetScript(scriptType: ScriptButton, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptButton): boolean
+    function HookScript(scriptType: "OnLoad", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnUpdate", handler: ((self: Self, elapsed: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnClick", handler: ((self: Self, button: string, down: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "PreClick", handler: ((self: Self, button: string, down: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
@@ -2554,10 +2612,12 @@ declare class DropdownButton extends DropdownButtonMixin
     function HookScript(scriptType: "OnHyperlinkEnter", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptButton, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnLoad", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnUpdate", handler: (((self: Self, elapsed: number) -> ()))?)
     function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
     function SetScript(scriptType: "OnClick", handler: (((self: Self, button: string, down: boolean) -> ()))?)
     function SetScript(scriptType: "PreClick", handler: (((self: Self, button: string, down: boolean) -> ()))?)
@@ -2634,10 +2694,12 @@ end
 declare class EventFrame extends EventFrameMixin
     function GetScript(scriptType: ScriptFrame, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptFrame): boolean
+    function HookScript(scriptType: "OnLoad", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnUpdate", handler: ((self: Self, elapsed: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
@@ -2656,10 +2718,12 @@ declare class EventFrame extends EventFrameMixin
     function HookScript(scriptType: "OnHyperlinkEnter", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptFrame, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnLoad", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnUpdate", handler: (((self: Self, elapsed: number) -> ()))?)
     function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
     function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
     function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)

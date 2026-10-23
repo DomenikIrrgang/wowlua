@@ -374,6 +374,15 @@ impl Walk<'_> {
                 self.tag(28);
                 self.ty(*t);
             }
+            Ty::KeyOf(t) => {
+                self.tag(29);
+                self.ty(*t);
+            }
+            Ty::IndexOf(o, k) => {
+                self.tag(30);
+                self.ty(*o);
+                self.ty(*k);
+            }
             Ty::Secret(t) => {
                 self.tag(25);
                 self.ty(*t);

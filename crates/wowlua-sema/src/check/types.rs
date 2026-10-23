@@ -60,6 +60,11 @@ pub enum Ty {
     /// `EventArgs<E>` as a rest (`...EventArgs<E>`): the payload of event or
     /// message `E`, any values until a call knows `E` (decision L44).
     EventArgs(TypeId),
+    /// `keyof T` of a type not known yet (a type parameter): reduced when
+    /// it is substituted (decision L45).
+    KeyOf(TypeId),
+    /// `T[K]` of types not known yet (decision L45).
+    IndexOf(TypeId, TypeId),
     EnumMember(DefId, u32),
     Param(ParamId),
     Secret(TypeId),
@@ -329,7 +334,8 @@ impl Ty {
             | Ty::ClassOfParam(_)
             | Ty::Module(_) => Vec::new(),
             Ty::Union(m) | Ty::Intersection(m) => m.clone(),
-            Ty::Array(t) | Ty::Secret(t) | Ty::EventArgs(t) => vec![*t],
+            Ty::Array(t) | Ty::Secret(t) | Ty::EventArgs(t) | Ty::KeyOf(t) => vec![*t],
+            Ty::IndexOf(a, b) => vec![*a, *b],
             Ty::Map(k, v) => vec![*k, *v],
             Ty::Named(_, args) => args.clone(),
             Ty::Record(Record {
@@ -902,6 +908,60 @@ impl Types {
         match self.get(t) {
             Ty::Union(m) => m.clone(),
             _ => vec![t],
+        }
+    }
+
+    /// `keyof t` (decision L45): the names of a table type's fields, and
+    /// its indexer's key type; kept as `keyof t` while `t` is not known (a
+    /// type parameter).
+    pub fn key_of(&mut self, t: TypeId) -> TypeId {
+        match self.get(t).clone() {
+            Ty::Record(r) => {
+                let names: Vec<String> = r.fields.keys().map(|n| n.to_string()).collect();
+                let mut keys: Vec<TypeId> = names.iter().map(|n| self.str(n)).collect();
+                if let Some((k, _)) = r.indexer {
+                    keys.push(k);
+                }
+                if keys.is_empty() {
+                    Types::NEVER
+                } else {
+                    self.union(&keys)
+                }
+            }
+            Ty::Map(k, _) => k,
+            Ty::Array(_) => Types::NUMBER,
+            Ty::Any | Ty::Error => Types::ANY,
+            _ => self.intern(Ty::KeyOf(t)),
+        }
+    }
+
+    /// `o[k]` (decision L45): the type of field `k` of a table type (a
+    /// union of names: the union of their types; `string`: every field's
+    /// and the indexer's); kept as `o[k]` while either is not known.
+    pub fn index_of(&mut self, o: TypeId, k: TypeId) -> TypeId {
+        match (self.get(o).clone(), self.get(k).clone()) {
+            (Ty::Any | Ty::Error, _) => Types::ANY,
+            (Ty::Record(r), Ty::Str(name)) => match r.fields.get(&name) {
+                Some(f) => f.ty,
+                None => match r.indexer {
+                    Some((_, v)) => self.optional(v),
+                    None => Types::NIL,
+                },
+            },
+            (Ty::Record(_), Ty::Union(ms)) => {
+                let tys: Vec<TypeId> = ms.iter().map(|&m| self.index_of(o, m)).collect();
+                self.union(&tys)
+            }
+            (Ty::Record(r), Ty::String) => {
+                let mut tys: Vec<TypeId> = r.fields.values().map(|f| f.ty).collect();
+                if let Some((_, v)) = r.indexer {
+                    tys.push(v);
+                }
+                tys.push(Types::NIL);
+                self.union(&tys)
+            }
+            (Ty::Map(_, v), _) | (Ty::Array(v), _) => self.optional(v),
+            _ => self.intern(Ty::IndexOf(o, k)),
         }
     }
 

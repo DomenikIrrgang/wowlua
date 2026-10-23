@@ -2329,7 +2329,13 @@ fn calls_setfenv(b: Block<'_>) -> bool {
 pub(crate) fn typeof_exprs<'t>(t: Type<'t>, out: &mut Vec<Expr<'t>>) {
     match t.kind() {
         TypeKind::Typeof(e) => out.push(e),
-        TypeKind::Paren(i) | TypeKind::Optional(i) | TypeKind::Array(i) => typeof_exprs(i, out),
+        TypeKind::Paren(i) | TypeKind::Optional(i) | TypeKind::Array(i) | TypeKind::KeyOf(i) => {
+            typeof_exprs(i, out)
+        }
+        TypeKind::Index { object, key } => {
+            typeof_exprs(object, out);
+            typeof_exprs(key, out);
+        }
         TypeKind::Union(ms) | TypeKind::Intersection(ms) => {
             ms.iter().for_each(|m| typeof_exprs(m, out))
         }

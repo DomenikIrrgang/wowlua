@@ -2614,6 +2614,120 @@ f({ module = "a" })
     assert!(out.status.success(), "{stderr}");
 }
 
+/// `keyof T` and `T[K]` (decision L45): a field-name union and a field's
+/// type, worked out when a generic call binds them.
+#[test]
+fn keyof_and_indexed_access() {
+    let dir = tempfile::tempdir().unwrap();
+    let main = r#"type Defaults = { line: number, figure: boolean, note?: string }
+local k: keyof Defaults = "figure"
+local n: Defaults["line"] = 3
+local o: Defaults["note"] = nil
+local u: Defaults["line" | "figure"] = true
+print(k, n, o, u)
+
+local function get<D extends { [string]: unknown }, K extends keyof D>(values: D, key: K): D[K]
+    return values[key] :: D[K]
+end
+local line = get({ line = 20, figure = true }, "line")
+local s: string = line
+local f: string = get({ line = 20, figure = true }, "figure")
+get({ line = 20 }, "lnie")
+local bad: keyof Defaults = "nope"
+print(s, f, bad)
+"#;
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"keyofs\", \"version\": \"1.0.0\" } }\n",
+            ),
+            ("src/main.wowlua", main),
+        ],
+    );
+    let out = wowlua(dir.path())
+        .args(["check", "--message-format", "short"])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let errors: Vec<&str> = stderr.lines().filter(|l| l.contains("error[")).collect();
+    assert_eq!(errors.len(), 4, "{stderr}");
+    assert!(
+        errors[0].starts_with(
+            "src/main.wowlua:12:7: error[E2001]: `number` is not assignable to `string`"
+        ),
+        "{stderr}"
+    );
+    assert!(
+        errors[1].starts_with(
+            "src/main.wowlua:13:7: error[E2001]: `boolean` is not assignable to `string`"
+        ),
+        "{stderr}"
+    );
+    assert!(
+        errors[2].starts_with("src/main.wowlua:14:1: error[E2014]: `\"lnie\"`"),
+        "{stderr}"
+    );
+    assert!(errors[3].starts_with("src/main.wowlua:15:7: error[E2001]: `\"nope\"` is not assignable to `\"line\" | \"figure\" | \"note\"`"), "{stderr}");
+}
+
+/// `W2063` (decision T274): off unless `check.lints` turns it on; then an
+/// unannotated parameter nothing types, and a local whose value is `any`.
+#[test]
+fn implicit_any_lint() {
+    let dir = tempfile::tempdir().unwrap();
+    let main = r#"local function takes(fn: (x: number) -> ()) fn(1) end
+local function loose(fn: (...any) -> ()) fn(1) end
+takes(function(x) print(x) end)
+loose(function(y) print(y) end)
+local t: any = {}
+local a = t.field
+local _b = t.other
+local frame = CreateFrame("Frame")
+frame:SetScript("OnUpdate", function(self, elapsed) print(self, elapsed) end)
+print(a)
+"#;
+    let manifest = |lints: &str| {
+        format!(
+            "{{ \"package\": {{ \"name\": \"implicitany\", \"version\": \"1.0.0\" }}, \"check\": {{ \"mode\": \"strict\"{lints} }} }}\n"
+        )
+    };
+    write(
+        dir.path(),
+        &[
+            ("wowlua.json", manifest("").as_str()),
+            ("src/main.wowlua", main),
+        ],
+    );
+    let run = |dir: &std::path::Path| {
+        let out = wowlua(dir)
+            .args(["check", "--message-format", "short"])
+            .output()
+            .unwrap();
+        String::from_utf8_lossy(&out.stderr).into_owned()
+    };
+    let off = run(dir.path());
+    assert!(!off.contains("W2063"), "{off}");
+    write(
+        dir.path(),
+        &[(
+            "wowlua.json",
+            manifest(", \"lints\": { \"W2063\": \"warn\" }").as_str(),
+        )],
+    );
+    let on = run(dir.path());
+    let warnings: Vec<&str> = on.lines().filter(|l| l.contains("W2063")).collect();
+    assert_eq!(
+        warnings,
+        [
+            "src/main.wowlua:4:16: warning[W2063]: parameter `y` is `any`: nothing gives it a type (annotate it)",
+            "src/main.wowlua:6:7: warning[W2063]: `a` is `any`: its value has no type (annotate it, or type where it comes from)",
+        ],
+        "{on}"
+    );
+}
+
 /// `wowlua:reflect`'s results are typed (decision L36): `isInstance(v, Dog)`
 /// narrows `v` to `Dog`, `classOf` gives `ClassOf<Dog>?`, and `enumFrom`
 /// and `enumEntries` give the enum.

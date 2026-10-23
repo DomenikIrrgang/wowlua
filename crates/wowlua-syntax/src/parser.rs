@@ -2100,6 +2100,17 @@ impl<'a> Parser<'a> {
                     self.bump();
                     TypeData::Array(self.push_type(base))
                 }
+                // `T[K]`: an indexed access type.
+                T::LBracket => {
+                    let open = self.advance();
+                    let key = self.ty()?;
+                    self.expect_match(T::RBracket, "[", open.start)?;
+                    let object = self.push_type(base);
+                    TypeData::Index {
+                        object,
+                        key: self.push_type(key),
+                    }
+                }
                 _ => return Ok(base),
             };
             base = self.type_node(self.span_from(start), data);
@@ -2139,6 +2150,16 @@ impl<'a> Parser<'a> {
             T::Number => {
                 let t = self.advance();
                 TypeData::Number(self.make_name(&t))
+            }
+            // `keyof T` (a type named `keyof` stays one: `keyof` alone,
+            // or before `<`, `.`, `?`, `|`)
+            T::Name
+                if self.is_word("keyof")
+                    && matches!(self.kind_at(1), T::Name | T::LParen | T::LBrace) =>
+            {
+                self.bump();
+                let t = self.postfix_type()?;
+                TypeData::KeyOf(self.push_type(t))
             }
             T::Name if self.is_word("typeof") && self.kind_at(1) == T::LParen => {
                 self.bump();

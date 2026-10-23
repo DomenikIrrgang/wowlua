@@ -184,6 +184,11 @@ fn script_handlers(
             };
             let mut names = BTreeSet::new();
             script_names(&script.ty, aliases, &mut names, 0);
+            // Every frame runs `OnUpdate` and `OnLoad` (the annotations'
+            // script lists leave them out).
+            if names.contains("OnShow") {
+                names.extend(["OnUpdate", "OnLoad"].map(String::from));
+            }
             if class_name == "ScriptRegion" {
                 names.extend(
                     [
@@ -219,7 +224,7 @@ fn script_handlers(
                 typed.push(sig);
             }
             if !typed.is_empty() {
-                typed.extend(sigs.drain(..));
+                typed.append(sigs);
                 *sigs = typed;
             }
         }

@@ -75,6 +75,15 @@ pub fn apply(types: &mut Types, t: TypeId, s: &Subst) -> TypeId {
             let i = apply(types, i, s);
             types.intern(Ty::EventArgs(i))
         }
+        Ty::KeyOf(i) => {
+            let i = apply(types, i, s);
+            types.key_of(i)
+        }
+        Ty::IndexOf(o, k) => {
+            let o = apply(types, o, s);
+            let k = apply(types, k, s);
+            types.index_of(o, k)
+        }
         Ty::Named(d, args) => {
             let args: Vec<TypeId> = args.iter().map(|&x| apply(types, x, s)).collect();
             types.intern(Ty::Named(d, args))

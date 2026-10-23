@@ -488,7 +488,13 @@ fn type_refs<'a>(t: Type<'a>, out: &mut Vec<&'a str>) {
                 }
             }
         }
-        TypeKind::Paren(t) | TypeKind::Optional(t) | TypeKind::Array(t) => type_refs(t, out),
+        TypeKind::Paren(t) | TypeKind::Optional(t) | TypeKind::Array(t) | TypeKind::KeyOf(t) => {
+            type_refs(t, out)
+        }
+        TypeKind::Index { object, key } => {
+            type_refs(object, out);
+            type_refs(key, out);
+        }
         TypeKind::Union(ts) | TypeKind::Intersection(ts) => {
             ts.iter().for_each(|t| type_refs(t, out))
         }
@@ -1641,7 +1647,7 @@ mod tests {
         assert!(run("if WOW_PROJECT_ID ~= 2 then print(C_X.B()) end\n")[0].contains("`mists`"));
         // Single-flavor builds: feature detection of what the flavor lacks.
         let d = check_with(
-            "if C_X.Missing then C_X.Missing(1) end\nlocal f = C_X.Gone and C_X.Gone()\nif not OldApi then return end\nOldApi(1)\n",
+            "if C_X.Missing then C_X.Missing(1) end\nlocal _f = C_X.Gone and C_X.Gone()\nif not OldApi then return end\nOldApi(1)\n",
             Mode::Strict,
             Some(decl),
             None,
