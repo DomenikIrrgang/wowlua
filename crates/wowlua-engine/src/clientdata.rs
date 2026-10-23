@@ -111,6 +111,10 @@ pub trait ClientData: Send + Sync {
     fn appearance_source(&self, _source: u32) -> Option<(u32, u32)> {
         None
     }
+    /// A creature's (NPC ID) first display ID.
+    fn creature_display(&self, _creature: u32) -> Option<u32> {
+        None
+    }
     /// An item's own transmog source (its first modifier's) and slot.
     fn item_source(&self, _item: u32) -> Option<(u32, u32)> {
         None
@@ -186,6 +190,12 @@ pub(crate) fn item_camera(
         return Some(cam);
     }
     d.weapon_camera(it.class, it.subclass, it.inventory_type)
+}
+
+/// A creature's display ID, as the client's tables (or its creature cache)
+/// give it.
+pub(crate) fn creature_display(vm: &Vm, creature: i64) -> Option<u32> {
+    data(vm)?.creature_display(u32::try_from(creature).ok()?)
 }
 
 /// A transmog source's item and slot, as the client's tables give them.

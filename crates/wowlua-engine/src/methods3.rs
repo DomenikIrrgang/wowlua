@@ -224,6 +224,27 @@ fn empty_table(vm: &mut Vm, _id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![Value::Table(vm.new_table())])
 }
 
+/// `GetDisplayInfo()`: the display set (`SetDisplayInfo`), else a
+/// creature's (`SetCreature(npcID)`) first display from the client's
+/// tables, else 0 (the Forever Dungeon Journal finds its bosses' portraits
+/// so).
+fn get_display_info(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    if let Some(crate::models::Source::Display(d)) = crate::models::source_of(vm, id).map(|s| s.0) {
+        return Ok(vec![Value::Num(f64::from(d))]);
+    }
+    if let Some(crate::models::Source::Creature(c)) = crate::models::source_of(vm, id).map(|s| s.0)
+        && let Some(d) = crate::clientdata::creature_display(vm, i64::from(c))
+    {
+        return Ok(vec![Value::Num(f64::from(d))]);
+    }
+    let props = engine(vm).world.widgets[id.0].props;
+    let set = widgets::stored_args(vm, props, "DisplayInfo").and_then(|v| v.first().copied());
+    Ok(vec![match set {
+        Some(Value::Num(n)) => Value::Num(n),
+        _ => Value::Num(0.0),
+    }])
+}
+
 /// A model's or actor's `GetItemTransmogInfoList()`: an `ItemTransmogInfo` for
 /// every equipment slot (1 to 19), Blizzard's own objects
 /// (`ItemUtil.CreateItemTransmogInfo`) when its code is loaded. Blizzard's
@@ -944,7 +965,6 @@ getters! {
     get_model_alpha: num("ModelAlpha", 1.0);
     get_model_paused: flag("Paused", false);
     get_shadow_effect: num("ShadowEffect", 0.0);
-    get_display_info: num("DisplayInfo", 0.0);
     get_do_blend: flag("DoBlend", false);
     get_keep_model_on_hide: flag("KeepModelOnHide", false);
     get_auto_dress: flag("AutoDress", false);

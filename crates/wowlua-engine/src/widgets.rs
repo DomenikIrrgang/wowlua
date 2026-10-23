@@ -4350,6 +4350,12 @@ pub(crate) fn store(vm: &mut Vm, id: WidgetId, stem: &str, args: &[Value]) {
         "Texture" | "Atlas" => unstore(vm, id, "ColorTexture"),
         _ => {}
     }
+    // A portrait (`SetPortraitTexture…`) gives way to any image set after.
+    if matches!(stem, "ColorTexture" | "Texture" | "Atlas") {
+        for k in ["\u{0}portrait", "\u{0}portraitlook", "\u{0}portraitdisplay"] {
+            unstore(vm, id, k);
+        }
+    }
     let props = engine(vm).world.widgets[id.0].props;
     let list = vm.new_table();
     // A fixed-height font keeps its height as set.

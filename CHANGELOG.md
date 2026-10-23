@@ -6,6 +6,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### New
 
+- `SetPortraitTextureFromCreatureDisplayID` draws the creature's portrait in screenshots, and a model given `SetCreature(npcID)` reports its display through `GetDisplayInfo()` when the game's data has that creature.
 - **Debugger**: `wowlua debug` lets VS Code (or any editor that speaks the Debug Adapter Protocol) debug a test file or your addon running in the emulated client: line breakpoints with conditions, hit counts and log messages; breakpoints on functions, API calls (`C_Timer.After`), events (`event:PLAYER_LOGIN`), scripts (`script:MyFrame:OnClick`) and timers; stop on errors, on taint or on a blocked protected action. Step into event handlers, `OnUpdate` and timers, and out of one handler into the next. The call stack shows which event or script ran your code, variables show their taint and secret values what they hide, widgets their size, points and children, and watches can change locals.
 - **Screenshots**: `expect(frame).toMatchScreenshot()` (or `expect(mock.screen)`) compares what the player would see with an image stored in `__screenshots__` next to the test; a missing one is written, `wowlua test -u` updates it, and a mismatch writes the new image and a diff beside it. `mock.screenshot()` and `wowlua screenshot tests/x.test.wowlua -o x.png` write images too. Drawn with your own WoW installation's textures and fonts when there is one (for camelot, retail and every classic client), never copied anywhere.
 - **VS Code**: the wowlua extension (`editors/vscode`) adds the `wowlua` debug type, so VS Code runs `wowlua debug` for you: breakpoints in `.wowlua` and `.lua` files, and launch configurations for the addon or a test file.
@@ -45,6 +46,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- `C_Item.GetItemInfoInstant` and `C_Item.GetItemIconByID` answer for every item in the game's item table, also those whose names WoW only gets from the server, as in game: addons' loot lists show the items' icons instead of question marks.
 - `texture:SetColorTexture` replaces a file set before, and `SetTexture` a plain color, as in game: textures given a file and then a faint color were drawn as the file, solid white (the Forever Dungeon Journal's dungeon cards).
 - Text in a scaled frame (`frame:SetScale`) is drawn at that scale in screenshots: it was drawn full size and cut off (the Settings list's "NEW" badge read "N...").
 - The friends window shows your BattleTag and your online status icon: `BNGetInfo()` answers the account, inline atlases (`|A:name:…|a`) are read right, and a texture named `.tga` that the game stores as `.blp` is found.

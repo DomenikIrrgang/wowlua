@@ -408,12 +408,40 @@ fn set_portrait_texture(vm: &mut Vm, c: NativeCall) -> Ret {
         }
         _ => None,
     };
+    let key = vm.str("\u{0}portraitdisplay");
+    let _ = vm.heap.table_mut(props).set(key, Value::Nil);
     let key = vm.str("\u{0}portraitlook");
     let value = match look {
         Some(l) => vm.str(&l),
         None => Value::Nil,
     };
     let _ = vm.heap.table_mut(props).set(key, value);
+    Ok(vec![])
+}
+
+/// `SetPortraitTextureFromCreatureDisplayID(texture, displayID)`: the
+/// texture shows a portrait of that creature display, as the client draws
+/// one (screenshots: its 3D model's face; without the installation a
+/// question mark).
+pub(crate) fn set_portrait_from_display(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(texture) = crate::widgets::widget_of(vm, c.arg(1)) else {
+        return Ok(vec![]);
+    };
+    let Value::Num(display) = c.arg(2) else {
+        return Ok(vec![]);
+    };
+    let props = engine(vm).world.widgets[texture.0].props;
+    for (k, v) in [
+        (
+            "\u{0}portrait",
+            vm.str("Interface\\Icons\\INV_Misc_QuestionMark"),
+        ),
+        ("\u{0}portraitlook", Value::Nil),
+        ("\u{0}portraitdisplay", Value::Num(display)),
+    ] {
+        let key = vm.str(k);
+        let _ = vm.heap.table_mut(props).set(key, v);
+    }
     Ok(vec![])
 }
 

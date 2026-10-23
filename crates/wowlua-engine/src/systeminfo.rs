@@ -2806,7 +2806,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("Screenshot", nothing),
         // Portraits: nothing drawn.
         ("SetPortraitTexture", nothing),
-        ("SetPortraitTextureFromCreatureDisplayID", nothing),
+        (
+            "SetPortraitTextureFromCreatureDisplayID",
+            crate::facts::set_portrait_from_display,
+        ),
         // Frame rate and clocks.
         ("GetFramerate", get_framerate),
         ("GetServerTime", get_server_time),

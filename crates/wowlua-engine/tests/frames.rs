@@ -1781,3 +1781,59 @@ t:SetColorTexture(1, 1, 1, 0.04)",
         "{q:?}"
     );
 }
+
+/// The client's creatures: NPC 448 shows display 500.
+struct Creatures;
+
+impl wowlua_engine::clientdata::ClientData for Creatures {
+    fn model_scene(&self, _: u32) -> Option<wowlua_engine::clientdata::ModelScene> {
+        None
+    }
+    fn scene_camera(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneCamera> {
+        None
+    }
+    fn scene_actor(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneActor> {
+        None
+    }
+    fn actor_display(&self, _: u32) -> Option<wowlua_engine::clientdata::ActorDisplay> {
+        None
+    }
+    fn creature_display(&self, creature: u32) -> Option<u32> {
+        (creature == 448).then_some(500)
+    }
+    fn item(&self, id: u32) -> Option<wowlua_engine::clientdata::ClientItem> {
+        // An item whose name the client's tables lack (sent by the server).
+        (id == 872).then(|| wowlua_engine::clientdata::ClientItem {
+            icon: 135419,
+            class: 2,
+            subclass: 1,
+            inventory_type: 17,
+            ..Default::default()
+        })
+    }
+}
+
+/// A model given a creature reports its display; a texture given a
+/// creature display's portrait shows it; an item whose name the client
+/// lacks still has its icon at once.
+#[test]
+fn creature_displays_portraits_and_unnamed_items() {
+    use wowlua_engine::scene::{Image, Item, ModelSource};
+    let mut vm = vm();
+    wowlua_engine::clientdata::set(&mut vm, std::sync::Arc::new(Creatures));
+    let r = run(
+        &mut vm,
+        "local m = CreateFrame('PlayerModel', nil, UIParent)
+m:SetCreature(448)
+local t = UIParent:CreateTexture()
+t:SetSize(32, 32)
+t:SetPoint('CENTER')
+SetPortraitTextureFromCreatureDisplayID(t, m:GetDisplayInfo())
+local _, _, _, loc, icon = C_Item.GetItemInfoInstant(872)
+return m:GetDisplayInfo(), icon, loc, C_Item.GetItemIconByID(872)",
+    );
+    assert_eq!(r, ["500", "135419", "INVTYPE_2HWEAPON", "135419"]);
+    let scene = wowlua_engine::scene::build(&mut vm);
+    assert!(scene.items.iter().any(|i| matches!(i,
+        Item::Quad(q) if matches!(&q.image, Image::Portrait { source, .. } if **source == ModelSource::Display(500)))));
+}

@@ -416,12 +416,20 @@ fn image_of(vm: &Vm, id: WidgetId) -> Option<ImageOf> {
             .interned("\u{0}portraitlook".as_bytes())
             .and_then(|k| text_of(vm, vm.heap.table(props).get(Value::Str(k))))
             .and_then(|t| decode_look(&t));
-        let image = match look {
-            Some(look) => Image::Portrait {
+        let display = vm
+            .heap
+            .interned("\u{0}portraitdisplay".as_bytes())
+            .map(|k| vm.heap.table(props).get(Value::Str(k)));
+        let image = match (look, display) {
+            (Some(look), _) => Image::Portrait {
                 source: Box::new(ModelSource::Character(look)),
                 fallback: path,
             },
-            None => Image::File(path),
+            (None, Some(Value::Num(d))) if d > 0.0 => Image::Portrait {
+                source: Box::new(ModelSource::Display(d as u32)),
+                fallback: path,
+            },
+            _ => Image::File(path),
         };
         return Some((image, None, (false, false), None));
     }

@@ -938,11 +938,17 @@ fn get_item_info_instant(vm: &mut Vm, c: NativeCall) -> Ret {
     };
     // No item below 1: nothing (the full probe: -1, 0).
     let Some(t) = item_data(vm, id) else {
-        return Ok(if id < 1 {
-            vec![]
-        } else {
-            vec![Value::Num(id as f64)]
-        });
+        if id < 1 {
+            return Ok(vec![]);
+        }
+        // An item the client's `Item` table has, its name not shipped
+        // (`ItemSparse` lacks it: the server sends it): what that table
+        // tells, as the client answers it at once (the Forever Dungeon
+        // Journal's loot icons were question marks).
+        if let Some(item) = crate::clientdata::item(vm, id) {
+            return Ok(instant_of_client(vm, id, &item));
+        }
+        return Ok(vec![Value::Num(id as f64)]);
     };
     let mut out = vec![Value::Num(id as f64)];
     for k in [
@@ -997,10 +1003,51 @@ const QUESTION_MARK_ICON: f64 = 134400.0;
 /// AtlasLoot's price buttons ask again until they get an icon (a stack
 /// overflow on nothing). The full probe: the question mark for -1, 0 and
 /// a text naming no item too.
+/// `GetItemInfoInstant`'s answer from the client's `Item` table alone: the
+/// ID, type and subtype names, slot, icon, class and subclass.
+fn instant_of_client(vm: &mut Vm, id: i64, item: &crate::clientdata::ClientItem) -> Vec<Value> {
+    let call = |vm: &mut Vm, f: &str, args: &[Value]| -> Value {
+        let Value::Table(t) = vm.get_global("C_Item") else {
+            return Value::Nil;
+        };
+        let k = vm.str(f);
+        let func = vm.heap.table(t).get(k);
+        if func.is_nil() {
+            return Value::Nil;
+        }
+        vm.call(func, args)
+            .ok()
+            .and_then(|r| r.first().copied())
+            .unwrap_or(Value::Nil)
+    };
+    let (class, sub) = (
+        Value::Num(item.class.into()),
+        Value::Num(item.subclass.into()),
+    );
+    let kind = call(vm, "GetItemClassInfo", &[class]);
+    let sub_kind = call(vm, "GetItemSubClassInfo", &[class, sub]);
+    let equip = vm.str(crate::iteminfo::equip_loc_of(item.inventory_type));
+    vec![
+        Value::Num(id as f64),
+        kind,
+        sub_kind,
+        equip,
+        Value::Num(item.icon.into()),
+        class,
+        sub,
+    ]
+}
+
 fn get_item_icon_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
     let id = item_id(vm, c.arg(1));
     if let Some(t) = id.and_then(|id| item_data(vm, id)) {
         return Ok(vec![field(vm, t, "icon")]);
+    }
+    // The client's `Item` table's icon, its name shipped or not.
+    if let Some(item) = id.and_then(|id| crate::clientdata::item(vm, id))
+        && item.icon > 0
+    {
+        return Ok(vec![Value::Num(item.icon.into())]);
     }
     if let Some(values) = crate::recorded::lookup(vm, "C_Item.GetItemIconByID", &c) {
         return Ok(values);

@@ -375,6 +375,10 @@ impl wowlua_engine::clientdata::ClientData for CascClientData {
         })
     }
 
+    fn creature_display(&self, creature: u32) -> Option<u32> {
+        self.with(|lib, casc| lib.creature_display_id(casc, creature))
+    }
+
     fn appearance_source(&self, source: u32) -> Option<(u32, u32)> {
         self.with(|lib, casc| {
             let item = lib

@@ -212,6 +212,26 @@ impl Library {
         })
     }
 
+    /// A creature's (`Creature` ID) first display ID: the client's table's,
+    /// else its creature cache's (what the server told it).
+    pub fn creature_display_id(&mut self, casc: &Casc, id: u32) -> Option<u32> {
+        let own = self
+            .table(casc, "Creature")
+            .and_then(|t| t.row(id))
+            .and_then(|r| r.ints("DisplayID").into_iter().find(|&d| d != 0));
+        if own.is_some() {
+            return own;
+        }
+        let cache = self.creature_cache.get_or_insert_with(|| {
+            let mut all = HashMap::new();
+            for f in casc.cache_files("creaturecache.wdb") {
+                all.extend(crate::wdb::creature_displays(&f));
+            }
+            all
+        });
+        cache.get(&id)?.first().copied()
+    }
+
     /// A creature's (`Creature` ID) first display: the client's table's,
     /// else its creature cache's (what the server told it).
     pub fn creature(&mut self, casc: &Casc, id: u32) -> Option<Display> {
