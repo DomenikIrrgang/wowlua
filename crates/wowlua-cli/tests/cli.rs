@@ -5109,7 +5109,7 @@ fn removed_branches_are_not_checked() {
             ),
             (
                 "src/main.wowlua",
-                "import flavor, build from \"wowlua:meta\"\nif flavor == \"vanilla\" then\n    print(onlyInVanilla())\nelseif build.debug then\n    print(debugOnly())\nelse\n    print(releaseOnly())\nend\n",
+                "import flavor, build from \"wowlua:meta\"\nif flavor == \"vanilla\" then\n    print(onlyInVanilla())\nelseif build.debug then\n    print(debugOnly())\nelse\n    print(releaseOnly())\nend\n-- a branch that returns in one build: what follows runs in others\nlocal function answer(): boolean\n    if build.debug then return true end\n    return false\nend\nprint(answer())\n",
             ),
         ],
     );
@@ -5119,6 +5119,7 @@ fn removed_branches_are_not_checked() {
     };
     // dev: the debug branch runs (checked); vanilla's and the else are removed
     let dev = messages(&["check", "--message-format", "short"]);
+    assert!(!dev.contains("W1005"), "{dev}");
     assert!(
         dev.contains("debugOnly") && !dev.contains("releaseOnly") && !dev.contains("onlyInVanilla"),
         "{dev}"

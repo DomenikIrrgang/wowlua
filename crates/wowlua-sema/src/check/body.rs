@@ -1184,15 +1184,19 @@ impl<'e, 'p> Checker<'e, 'p> {
                 // later clause and the `else` too.
                 let mut rest_unreachable = false;
                 // A static condition (spec §6.4.2): a removed branch is
-                // neither checked nor a path; a branch that always runs is
-                // the only path from here (the rest is removed).
+                // neither checked nor a path. A branch that always runs in
+                // this build is checked without narrowing, and the rest is
+                // removed; a path still goes past it, as other builds take
+                // the other branches (what follows isn't unreachable, W1005).
                 let mut always = false;
                 for (c, b) in clauses {
                     match self.static_branches.get(&(b.span().start, b.span().end)) {
                         Some(false) => continue,
                         Some(true) => {
+                            let entry = (self.flow.clone(), self.live, self.guard.clone());
                             self.block(b);
                             ends.push((self.flow.clone(), self.live, self.guard.clone()));
+                            (self.flow, self.live, self.guard) = entry;
                             always = true;
                             break;
                         }
@@ -1218,7 +1222,7 @@ impl<'e, 'p> Checker<'e, 'p> {
                     self.live = entry_live;
                 }
                 match else_block {
-                    _ if always => {}
+                    _ if always => ends.push((self.flow.clone(), self.live, self.guard.clone())),
                     Some(b) if rest_unreachable => {
                         self.unreachable_block(b);
                         ends.push((self.flow.clone(), self.live, self.guard.clone()));
