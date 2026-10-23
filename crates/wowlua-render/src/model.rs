@@ -49,6 +49,8 @@ pub(crate) struct Sprite {
     blend: u16,
     /// Its cell of the texture: left, top, right, bottom.
     cell: [f32; 4],
+    /// A tail's: where it reaches back to (from `pos`), drawn across.
+    tail: Option<Vec3>,
 }
 
 /// A random stream (xorshift), the same for the same seed.
@@ -852,12 +854,38 @@ impl Renderer {
                 let h = rng.unit() * e.horizontal_range;
                 let dir = [v.sin() * h.cos(), v.sin() * h.sin(), v.cos()];
                 let speed = e.speed * (1.0 + e.speed_variation * rng.signed());
+                let g = e.gravity;
                 let p = [
-                    start[0] + dir[0] * speed * age,
-                    start[1] + dir[1] * speed * age,
-                    start[2] + dir[2] * speed * age - 0.5 * e.gravity * age * age,
+                    start[0] + dir[0] * speed * age + 0.5 * g[0] * age * age,
+                    start[1] + dir[1] * speed * age + 0.5 * g[1] * age * age,
+                    start[2] + dir[2] * speed * age + 0.5 * g[2] * age * age,
+                ];
+                let velocity = [
+                    dir[0] * speed + g[0] * age,
+                    dir[1] * speed + g[1] * age,
+                    dir[2] * speed + g[2] * age,
                 ];
                 let t = age / span;
+                // Its texture cell: a random one (flag 0x10000), else its
+                // track's at its age, else the first.
+                let cells = u32::from(e.columns) * u32::from(e.rows);
+                let random = (rng.unit() * cells as f32) as u32;
+                let cell_at = |track: &[(f32, f32)]| -> u32 {
+                    let n = if e.flags & 0x10000 != 0 {
+                        random
+                    } else {
+                        m2::Particle::at(track, t, 0.0).max(0.0) as u32
+                    };
+                    n.min(cells.saturating_sub(1))
+                };
+                let (cu, cv) = (1.0 / f32::from(e.columns), 1.0 / f32::from(e.rows));
+                let cell = |n: u32| {
+                    let (c, r) = (
+                        (n % u32::from(e.columns)) as f32,
+                        (n / u32::from(e.columns)) as f32,
+                    );
+                    [c * cu, r * cv, (c + 1.0) * cu, (r + 1.0) * cv]
+                };
                 let c = m2::Particle::at(&e.colors, t, [255.0; 3]);
                 let a = m2::Particle::at(&e.alphas, t, 1.0) * actor.alpha * display.alpha;
                 let size = m2::Particle::at(&e.sizes, t, [1.0, 1.0])[0]
@@ -865,16 +893,43 @@ impl Renderer {
                 if a <= 0.002 || size <= 0.0 {
                     continue;
                 }
-                let (cu, cv) = (1.0 / f32::from(e.columns), 1.0 / f32::from(e.rows));
-                self.models.sprites.push(Sprite {
-                    pos: m2::transform(&emitter, p),
-                    size,
-                    spin: e.spin * age,
-                    color: [c[0] / 255.0, c[1] / 255.0, c[2] / 255.0, a],
-                    tex: [tex, self.white, self.white][0],
-                    blend: u16::from(e.blend),
-                    cell: [0.0, 0.0, cu, cv],
-                });
+                let pos = m2::transform(&emitter, p);
+                let color = [c[0] / 255.0, c[1] / 255.0, c[2] / 255.0, a];
+                // Its head, and its tail back along its velocity.
+                if e.head_or_tail != 1 {
+                    self.models.sprites.push(Sprite {
+                        pos,
+                        size,
+                        spin: e.spin * age,
+                        color,
+                        tex,
+                        blend: u16::from(e.blend),
+                        cell: cell(cell_at(&e.head_cells)),
+                        tail: None,
+                    });
+                }
+                if e.head_or_tail >= 1 && e.tail_length > 0.0 {
+                    let back = [
+                        p[0] - velocity[0] * e.tail_length,
+                        p[1] - velocity[1] * e.tail_length,
+                        p[2] - velocity[2] * e.tail_length,
+                    ];
+                    let track = if e.tail_cells.is_empty() {
+                        &e.head_cells
+                    } else {
+                        &e.tail_cells
+                    };
+                    self.models.sprites.push(Sprite {
+                        pos,
+                        size,
+                        spin: 0.0,
+                        color,
+                        tex,
+                        blend: u16::from(e.blend),
+                        cell: cell(cell_at(track)),
+                        tail: Some(m2::transform(&emitter, back)),
+                    });
+                }
             }
         }
     }
@@ -963,10 +1018,33 @@ impl Renderer {
         // The particles, facing the camera, over the meshes.
         let right = [view[0], view[4], view[8]];
         let up = [view[1], view[5], view[9]];
+        let back = [view[2], view[6], view[10]];
         for sp in std::mem::take(&mut self.models.sprites) {
             let (sn, cs) = sp.spin.sin_cos();
             let h = sp.size / 2.0;
+            // A tail: from its head back to its end, its width across the
+            // view; a head: square to the view, spun.
+            let tail = sp.tail.map(|end| {
+                let along = sub(end, sp.pos);
+                let side = cross(along, back);
+                let l = dot(side, side).sqrt();
+                let side = if l > 1e-6 {
+                    [side[0] / l * h, side[1] / l * h, side[2] / l * h]
+                } else {
+                    [right[0] * h, right[1] * h, right[2] * h]
+                };
+                (end, side)
+            });
             let corner = |x: f32, y: f32| {
+                if let Some((end, side)) = tail {
+                    // x: -1 the head, 1 the tail's end; y across.
+                    let at = if x < 0.0 { sp.pos } else { end };
+                    return [
+                        at[0] + side[0] * y,
+                        at[1] + side[1] * y,
+                        at[2] + side[2] * y,
+                    ];
+                }
                 let (rx, ry) = (x * cs - y * sn, x * sn + y * cs);
                 [
                     sp.pos[0] + (right[0] * rx + up[0] * ry) * h,

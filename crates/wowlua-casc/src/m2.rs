@@ -144,8 +144,16 @@ pub struct Particle {
     pub speed_variation: f32,
     pub vertical_range: f32,
     pub horizontal_range: f32,
-    /// Down along z, per second squared.
-    pub gravity: f32,
+    /// Its acceleration (yards per second squared): down along z by the
+    /// emitter's gravity, or a compressed gravity's own direction.
+    pub gravity: Vec3,
+    /// 0 its head drawn, 1 its tail, 2 both.
+    pub head_or_tail: u8,
+    /// How far back its tail reaches: its velocity times this (seconds).
+    pub tail_length: f32,
+    /// Its texture cell over its life (0 to 1), its head's and its tail's.
+    pub head_cells: Vec<(f32, f32)>,
+    pub tail_cells: Vec<(f32, f32)>,
     pub lifespan: f32,
     pub lifespan_variation: f32,
     pub rate: f32,
@@ -473,10 +481,26 @@ fn fblock<T>(
         .collect()
 }
 
+/// A compressed gravity (an emitter's flag 0x800000): x and y signed bytes
+/// of 128, z the rest of a unit vector, scaled by a signed short (a
+/// negative one turning z over).
+fn compressed_gravity(raw: u32) -> Vec3 {
+    let x = f32::from(raw as u8 as i8) / 128.0;
+    let y = f32::from((raw >> 8) as u8 as i8) / 128.0;
+    let mut z = (1.0 - (x * x + y * y).min(1.0)).sqrt();
+    let mut length = f32::from((raw >> 16) as u16 as i16) * 0.042_386_48;
+    if length < 0.0 {
+        z = -z;
+        length = -length;
+    }
+    [x * length, y * length, z * length]
+}
+
 fn particle(r: &R, o: usize) -> Particle {
     let flags = r.u32(o + 4).unwrap_or(0);
-    // Newer emitters keep gravity as a compressed vector: its z (scaled)
-    // read as the pull down (unverified: its x and y).
+    // Newer emitters keep gravity as a compressed vector: x and y as
+    // signed bytes (of 128), z the rest of a unit vector, its length a
+    // signed short scaled (a negative one turning z over).
     let gravity = if flags & 0x0080_0000 != 0 {
         let (vn, vo) = r.array(o + 0x84 + 12);
         let raw = if vn > 0 {
@@ -484,10 +508,11 @@ fn particle(r: &R, o: usize) -> Particle {
         } else {
             0
         };
-        -f32::from((raw >> 16) as u16 as i16) * 0.042_386_48
+        compressed_gravity(raw)
     } else {
-        first_float(r, o + 0x84)
+        [0.0, 0.0, -first_float(r, o + 0x84)]
     };
+    let cells = |at: usize| fblock(r, at, 2, |r, a| Some(f32::from(r.u16(a)?)));
     Particle {
         flags,
         position: r.vec3(o + 8).unwrap_or_default(),
@@ -502,6 +527,10 @@ fn particle(r: &R, o: usize) -> Particle {
         vertical_range: first_float(r, o + 0x5c),
         horizontal_range: first_float(r, o + 0x70),
         gravity,
+        head_or_tail: r.u8(o + 45).unwrap_or(0),
+        tail_length: r.f32(o + 0x15c).unwrap_or(0.0),
+        head_cells: cells(o + 0x13c),
+        tail_cells: cells(o + 0x14c),
         lifespan: first_float(r, o + 0x98),
         lifespan_variation: r.f32(o + 0xac).unwrap_or(0.0),
         rate: first_float(r, o + 0xb0),
@@ -1360,5 +1389,16 @@ mod tests {
         ));
         assert_eq!(posed[2], IDENTITY);
         assert_eq!(m.pose(None, 0)[0], IDENTITY);
+    }
+
+    /// A compressed gravity's direction and pull: straight down by a
+    /// negative length, sideways by its bytes.
+    #[test]
+    fn compressed_gravity_points_where_it_pulls() {
+        let down = compressed_gravity(((-100i16) as u16 as u32) << 16);
+        assert!(close(down, [0.0, 0.0, -100.0 * 0.042_386_48]));
+        let side = compressed_gravity((100u32 << 16) | 64);
+        let l = 100.0 * 0.042_386_48;
+        assert!(close(side, [0.5 * l, 0.0, 0.75f32.sqrt() * l]));
     }
 }

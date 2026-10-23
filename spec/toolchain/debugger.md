@@ -363,10 +363,14 @@ or Vulkan natively, WebGPU or WebGL 2 in the browser.
   as their emitters' steady state at the moment (each particle's start,
   direction, speed and life from a seed of its own, so a frame is the
   same each time and the next follows on; its color, alpha and size over
-  its life; facing the camera, with the emitter's blend mode). Model files
-  are read once; a frame's model textures are reused from frame to frame.
-  Unverified: the particles' compressed gravity, tails and texture cells
-  over life (each particle draws its first cell). Billboarded bones (a
+  its life; facing the camera, with the emitter's blend mode; pulled by its
+  gravity, a compressed one's direction too; its texture cell from its
+  head's (or tail's) cell track over its life, or a random one where the
+  emitter says so; a tail where the emitter has one, from the particle
+  back along its velocity times the tail length, across the view). Model
+  files are read once; a frame's model textures are reused from frame to
+  frame. Unverified: drag, the cell tracks' reading (interpolated, then
+  whole), the tails' width. Billboarded bones (a
   spherical one, or one locked to its Z axis) face the camera as it will
   be placed: the scene's, the model's own, or the frame's from in front
   turned toward the portrait camera by the zoom; their children follow
