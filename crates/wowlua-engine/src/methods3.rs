@@ -1369,7 +1369,8 @@ fn get_ping_position(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 /// from the minimap's center, as Blizzard's minimap click gives them):
 /// kept with the time for the minimap to draw (`scene::minimap_ping`), and
 /// `MINIMAP_PING("player", x, y)` (the documentation names the payload y,
-/// x; the order unverified).
+/// x; the order unverified), a callback event on camelot: `RegisterEvent`
+/// refuses it (probed 2026-10-23), `RegisterEventCallback` gets it.
 fn ping_location(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let (Value::Num(x), Value::Num(y)) = (vm.hidden(c.arg(2)), vm.hidden(c.arg(3))) else {
         return Ok(vec![]);
@@ -1383,6 +1384,9 @@ fn ping_location(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
             .set(Value::Num(i as f64 + 1.0), Value::Num(v));
     }
     crate::widgets::store(vm, id, "MinimapPing", &[Value::Table(t)]);
+    // Told to frames that could register it and to event callbacks
+    // (`RegisterEventCallback`: on camelot it is a callback event alone,
+    // `RegisterEvent` refusing it).
     let player = vm.str("player");
     crate::widgets::fire_event(vm, "MINIMAP_PING", &[player, Value::Num(x), Value::Num(y)]);
     Ok(vec![])

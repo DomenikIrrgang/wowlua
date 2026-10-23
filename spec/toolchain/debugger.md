@@ -401,7 +401,9 @@ or Vulkan natively, WebGPU or WebGL 2 in the browser.
   with a place in the world (a unit's `world`) are their class's blips
   (`Interface\Minimap\PartyRaidBlips`, its 8 by 4 grid in class ID order,
   16 UI units) within its circle; a ping (`PingLocation`, kept for
-  `GetPingPosition`, `MINIMAP_PING("player", x, y)`) shows for 5 seconds
+  `GetPingPosition`, `MINIMAP_PING("player", x, y)` to event callbacks:
+  on camelot a callback event alone, `RegisterEvent` refusing it) shows
+  for 5 seconds
   as the client's center, growing ring and turning marks (decision T329).
   Indoors nothing (the building's own map, not read), no quest areas or
   tracked objects. Unverified: the zoom sizes, the arrow's and blips'

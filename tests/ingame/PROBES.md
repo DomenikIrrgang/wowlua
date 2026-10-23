@@ -334,10 +334,17 @@ player's arrow 32 by 32 UI units; neither is recorded on camelot.
 2. The same spot with `/console rotateMinimap 1`, facing east: the terrain
    turned and the arrow up.
 3. In a party, a screenshot of the minimap with a member in sight, and
-   one of a ping (click the minimap) at 0.5 s, 2 s and 4 s, with
-   `/run local f=CreateFrame("Frame") f:RegisterEvent("MINIMAP_PING") f:SetScript("OnEvent", function(_, e, ...) print(e, ...) end)`
-   first: the blip's size, the ping's look and time, and the event's
-   argument order (wowlua: unit, x, y).
+   one of a ping (click the minimap) at once, with
+   `/run C_Timer.NewTicker(0.5,function() print("ping",GetTime(),Minimap:GetPingPosition()) end,16)`
+   first: the blip's size, the ping's look and how long it keeps its
+   place (`RegisterEvent("MINIMAP_PING")` is refused as unknown,
+   2026-10-23: a callback event alone).
+4. Which callback events `RegisterEvent` refuses, and whether an addon's
+   callback hears one:
+   `/run P=function(e) local f=CreateFrame("Frame") print(e,(pcall(f.RegisterEvent,f,e)),C_EventUtils.IsEventValid(e)) end`
+   then `P` for each of the documentation's twelve `CallbackEvent`s, and
+   `/run CreateFrame("Frame"):RegisterEventCallback("MINIMAP_PING",function(_,...) print("cb",...) end)`
+   before a ping (the payload's order).
 
 ## Unanchored textures and slider thumbs
 

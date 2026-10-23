@@ -144,6 +144,11 @@ pub fn api(flavor: &str) -> Option<&'static Api> {
     // register it).
     if flavor == "camelot" {
         parsed.events.insert("UPDATE_EXPANSION_LEVEL".to_string());
+        // A callback event alone (the documentation's `CallbackEvent`):
+        // `RegisterEvent("MINIMAP_PING")` is refused as an unknown event
+        // (probed in WoW Forever, 2026-10-23); `RegisterEventCallback`, as
+        // Blizzard's minimap uses it, takes it.
+        parsed.events.remove("MINIMAP_PING");
     }
     // Frame types the client has that the documentation lacks or gives no
     // base (`/stdtest engine`: each a Frame by IsObjectType).

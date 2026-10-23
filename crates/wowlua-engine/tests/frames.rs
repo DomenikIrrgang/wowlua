@@ -1279,9 +1279,9 @@ M:SetPoint('TOPLEFT', 0, 0)",
 }
 
 /// Group members with a place in the world are their class's blips on the
-/// minimap, where they are; a ping (`PingLocation`) is told
-/// (`MINIMAP_PING`), answered (`GetPingPosition`) and drawn for its first
-/// seconds.
+/// minimap, where they are; a ping (`PingLocation`) is answered
+/// (`GetPingPosition`), drawn for its first seconds, and told to event
+/// callbacks (`MINIMAP_PING` is one alone on camelot).
 #[test]
 fn minimaps_show_the_group_and_pings() {
     let mut vm = vm();
@@ -1295,16 +1295,19 @@ M:SetSize(200, 200)
 M:SetPoint('TOPLEFT', 0, 0)
 local y, x = UnitPosition('player')
 mock.spawnUnit({ name = 'Anna', class = 'PRIEST', classID = 5, reaction = 'friendly', player = true, world = { y = y + 60, x = x } }):joinGroup()
-Pinged = {}
-local f = CreateFrame('Frame')
-f:RegisterEvent('MINIMAP_PING')
-f:SetScript('OnEvent', function(_, _, unit, a, b) Pinged = { unit, a, b } end)
+local refused = tostring((pcall(CreateFrame('Frame').RegisterEvent, CreateFrame('Frame'), 'MINIMAP_PING')))
+Pinged = { refused }
+CreateFrame('Frame'):RegisterEventCallback('MINIMAP_PING', function(_, unit, a, b)
+    Pinged = { refused, unit, a, b }
+end)
 M:PingLocation(-30, 20)
 local py = UnitPosition('party1')
 local gx, gy = M:GetPingPosition()
 return py - y, gx, gy, table.concat(Pinged, ' ')",
     );
-    assert_eq!(r, ["60", "-30", "20", "player -30 20"]);
+    // A callback event on camelot: `RegisterEvent` refuses it, a callback
+    // gets it.
+    assert_eq!(r, ["60", "-30", "20", "false player -30 20"]);
     let marks = |vm: &mut Vm| -> Vec<(String, [f32; 4], [f32; 2])> {
         let scene = wowlua_engine::scene::build(vm);
         scene
