@@ -210,7 +210,7 @@ impl Checker<'_, '_> {
             return None;
         };
         let index = lit.value()?;
-        (index.fract() == 0.0 && index >= 1.0 && index < 256.0).then_some(index as usize)
+        (index.fract() == 0.0 && (1.0..256.0).contains(&index)).then_some(index as usize)
     }
 
     /// `select(n, ..., f(...))` with a literal `n` past what the values
