@@ -151,6 +151,42 @@ export function on(event: string, handler: (...any) -> (), owner: any?): Subscri
     return subscribe(event, handler, owner)
 end
 
+--- Calls `handler` with each of Blizzard's EventRegistry callbacks `name`
+--- (`"MapCanvas.MapSet"`, `"ChatFrame.OnEditBoxFocusGained"`) from now on,
+--- with the callback's values (not the owner the registry passes first),
+--- isolated as every handler here; nothing on a client without
+--- EventRegistry. Cancelling the subscription unregisters it.
+export function onRegistry(name: string, handler: (...any) -> (), owner: any?): Subscription
+    const key = {}
+    const context = { component = "events: " .. name .. " callback" }
+    const registry = _G.EventRegistry :: unknown
+    local function call(method: string, ...: unknown)
+        if type(registry) ~= "table" or not secret.readable(registry) then
+            return
+        end
+        const fn = (registry :: { [string]: unknown })[method]
+        if type(fn) == "function" then
+            pcall(fn :: (...unknown) -> (), registry, ...)
+        end
+    end
+    local sub: Subscription
+    sub = {
+        active = true,
+        cancel = function(self: Subscription)
+            if self.active then
+                self.active = false
+                call("UnregisterCallback", name, key)
+            end
+        end,
+    }
+    call("RegisterCallback", name, function(_: unknown, ...: any)
+        if sub.active then
+            callOwned(context, owner, handler, ...)
+        end
+    end, key)
+    return sub
+end
+
 --- Calls `handler` with the next `event` only.
 export function once(event: string, handler: (...any) -> (), owner: any?): Subscription
     local sub: Subscription

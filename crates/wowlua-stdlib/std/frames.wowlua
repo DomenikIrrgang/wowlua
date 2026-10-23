@@ -665,6 +665,115 @@ export type AwayHandle = {
     release: () -> (),
 }
 
+-- A frame's own regions or children, protected (none for a forbidden one).
+local function own(frame: Frame, get: string): unknown[]
+    if not secret.readable(frame) or frame:IsForbidden() then
+        return {}
+    end
+    const fn = (frame :: { [string]: unknown })[get]
+    if type(fn) ~= "function" then
+        return {}
+    end
+    const all = { pcall(fn :: (unknown) -> ...unknown, frame) }
+    if all[1] ~= true then
+        return {}
+    end
+    table.remove(all, 1)
+    return all
+end
+
+--- The textures among a frame's own regions (its art): for restyling the
+--- game's frames (`for _, t in ipairs(frames.textures(f)) do t:SetAlpha(0) end`).
+export function textures(frame: Frame): Texture[]
+    const out: Texture[] = {}
+    for _, r in ipairs(own(frame, "GetRegions")) do
+        const t = asTexture(r)
+        if t then
+            out[#out + 1] = t
+        end
+    end
+    return out
+end
+
+--- The font strings among a frame's own regions.
+export function fontStrings(frame: Frame): FontString[]
+    const out: FontString[] = {}
+    for _, r in ipairs(own(frame, "GetRegions")) do
+        const fs = asFontString(r)
+        if fs then
+            out[#out + 1] = fs
+        end
+    end
+    return out
+end
+
+--- A frame's children (frames the addon may read).
+export function children(frame: Frame): Frame[]
+    const out: Frame[] = {}
+    for _, c in ipairs(own(frame, "GetChildren")) do
+        const f = asFrame(c)
+        if f then
+            out[#out + 1] = f
+        end
+    end
+    return out
+end
+
+--- A button's state textures it has: normal, pushed, highlight, disabled,
+--- and a check button's checked and disabled-checked ones.
+export function stateTextures(button: Button): Texture[]
+    const out: Texture[] = {}
+    for _, get in ipairs({ "GetNormalTexture", "GetPushedTexture", "GetHighlightTexture", "GetDisabledTexture",
+                           "GetCheckedTexture", "GetDisabledCheckedTexture" }) do
+        for _, t in ipairs(own(button, get)) do
+            const tex = asTexture(t)
+            if tex then
+                out[#out + 1] = tex
+            end
+        end
+    end
+    return out
+end
+
+--- The frames one of the game's lists shows: an object pool's active ones
+--- (`EnumerateActive`), or a scroll box's (`ForEachFrame`); none for
+--- anything else. In the list's own order.
+export function rows(list: unknown): Frame[]
+    const out: Frame[] = {}
+    if type(list) ~= "table" or not secret.readable(list) then
+        return out
+    end
+    const methods = list :: { [string]: unknown }
+    const enumerate = methods.EnumerateActive
+    if type(enumerate) == "function" then
+        local ok, iter, state, key = pcall(enumerate :: (unknown) -> (unknown, unknown, unknown), list)
+        if ok and type(iter) == "function" then
+            const step = iter :: (unknown, unknown) -> unknown
+            while true do
+                key = step(state, key)
+                if key == nil then
+                    break
+                end
+                const f = asFrame(key)
+                if f then
+                    out[#out + 1] = f
+                end
+            end
+        end
+        return out
+    end
+    const each = methods.ForEachFrame
+    if type(each) == "function" then
+        pcall(each :: (unknown, (unknown) -> ()) -> (), list, function(row: unknown)
+            const f = asFrame(row)
+            if f then
+                out[#out + 1] = f
+            end
+        end)
+    end
+    return out
+end
+
 --- Keeps one of the game's frames out of sight while it stays shown, so its
 --- scripts and children keep working (a list the addon draws its own of, a
 --- part the game must see shown): moved off screen and, with `fade`,

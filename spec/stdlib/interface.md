@@ -81,6 +81,10 @@ if list then frames.keepAway(list, { fade = true }) end     -- out of sight, sti
 | API | Signature | Notes |
 |-----|-----------|-------|
 | `find` | `(name: string) -> Frame?` | The global frame of that name, nil when there is none |
+| `textures`, `fontStrings` | `(frame: Frame) -> Texture[]`, `-> FontString[]` | The textures (its art) or font strings among the frame's own regions; none for a frame that is forbidden (decision S45) |
+| `children` | `(frame: Frame) -> Frame[]` | The frame's children the addon may read |
+| `stateTextures` | `(button: Button) -> Texture[]` | The button's state textures it has: normal, pushed, highlight, disabled, and a check button's checked ones |
+| `rows` | `(list: unknown) -> Frame[]` | The frames one of the game's lists shows: an object pool's active ones (`EnumerateActive`) or a scroll box's (`ForEachFrame`), in its order; none for anything else |
 | `asRegion`, `asFrame`, `asButton`, `asCheckButton`, `asEditBox`, `asScrollFrame`, `asSlider`, `asStatusBar`, `asCooldown`, `asFontString`, `asTexture` | `(v: unknown) -> Region?`, … | `v` when its `IsObjectType` says it is one (called protected; a table the addon may not read is none), else nil |
 | `keepAway` | `(frame: Frame, opts?: { fade?: boolean, when?: () -> boolean }) -> AwayHandle` | Keeps the frame out of sight while it stays shown (its scripts and children keep working): moved off screen, and with `fade` see-through; again a frame after the game places it (with `fade`, also after it sets its alpha) and when it shows. Only while `when` returns true (default: always). A protected frame moves only out of combat (`wowlua:combat`'s `defer`). The handle's `apply()` puts it away now, `release()` stops (hooks can't be removed: they then do nothing). |
 

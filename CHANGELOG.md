@@ -21,6 +21,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `table.list(v)` walks a list the game gives as `unknown` without a cast (`for _, x in ipairs(table.list(v))`), and `format.ago(seconds)` says how long ago: "5 min ago", or with `{ long = true }` "3 days ago".
 - `wowlua:chat` opens the player's chat line: `chat.whisper(name)`, `chat.insertLink(link)` (as a shift-click; a new line when none is open) and `chat.open(text)`, through the game's own chat code on every client. `unit.invite(name)` invites a player to your group.
 - `secure.overlay(button)` puts a secure action button over one of your own buttons, for what only a secure click may do (a slash command, a click on one of the game's protected buttons): `overlay.set("type1", "macro")`, `overlay.show()` (or `overlay.show(row)` over another frame, such as the row under the mouse), `overlay.hide()`. It is anchored only while shown, so your window never turns protected and still opens in combat.
+- Restyling the game's frames: `frames.textures(f)`, `frames.fontStrings(f)` and `frames.children(f)` give typed lists, `frames.stateTextures(button)` a button's state art, and `frames.rows(list)` the rows one of the game's lists shows (an object pool or a scroll box). `events.onRegistry(name, fn)` listens to Blizzard's `EventRegistry` callbacks, with error isolation and a subscription to cancel.
 
 ### Changed
 

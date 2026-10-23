@@ -6559,6 +6559,47 @@ print(o.hide(), o.button:IsShown(), o.button:GetNumPoints())
     );
 }
 
+/// Walking the game's frames (`frames.textures`, `fontStrings`, `children`,
+/// `stateTextures`, `rows`) and `events.onRegistry` (decision S45).
+#[test]
+fn walking_the_games_frames() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as frames from \"wowlua:frames\"\nimport * as events from \"wowlua:events\"\n_G.StdWalk = { frames = frames, events = events }\n",
+        )],
+        "",
+        r##"Mock.loadAddon("Std")
+local F, E = StdWalk.frames, StdWalk.events
+local f = CreateFrame("Frame", nil, UIParent)
+f:CreateTexture()
+f:CreateTexture()
+f:CreateFontString()
+CreateFrame("Frame", nil, f)
+CreateFrame("Button", nil, f)
+print(#F.textures(f), #F.fontStrings(f), #F.children(f))
+local b = CreateFrame("Button", nil, UIParent)
+print(#F.stateTextures(b))
+b:SetNormalTexture("Interface\Buttons\WHITE8X8")
+b:SetHighlightTexture("Interface\Buttons\WHITE8X8")
+print(#F.stateTextures(b))
+-- an object pool's active frames, a scroll box's, anything else
+local active = { [CreateFrame("Frame")] = true, [CreateFrame("Frame")] = true }
+local pool = { EnumerateActive = function(self) return pairs(active) end }
+local box = { ForEachFrame = function(self, fn) fn(f); fn(b); fn(42) end }
+print(#F.rows(pool), #F.rows(box), #F.rows(nil), #F.rows({}))
+-- EventRegistry callbacks: the values, not the owner; cancelled: none
+local seen = {}
+local sub = E.onRegistry("StdTest.Ping", function(...) seen[#seen + 1] = table.concat({ ... }, ",") end)
+EventRegistry:TriggerEvent("StdTest.Ping", "a", "b")
+sub:cancel()
+EventRegistry:TriggerEvent("StdTest.Ping", "c")
+print(table.concat(seen, " "), sub.active)
+"##,
+    );
+    assert_eq!(plain(&out), ["2 1 2", "0", "2", "2 2 0 0", "a,b false"]);
+}
+
 /// `wowlua:links`: addon links in chat, clicks reach this addon only.
 #[test]
 fn links_in_chat() {
