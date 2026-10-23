@@ -1318,12 +1318,21 @@ M:SetPoint('TOPLEFT', 0, 0)",
 /// Group members with a place in the world are their class's blips on the
 /// minimap, where they are; a ping (`PingLocation`) is answered
 /// (`GetPingPosition`), drawn for its first seconds, and told to event
-/// callbacks (`MINIMAP_PING` is one alone on camelot).
+/// callbacks (`MINIMAP_PING` is one alone on camelot); Blizzard's alone:
+/// an addon's callback for it is forbidden (`ADDON_ACTION_FORBIDDEN`,
+/// false, never called).
 #[test]
 fn minimaps_show_the_group_and_pings() {
     let mut vm = vm();
     wowlua_engine::controls::install(&mut vm, "mock");
     wowlua_engine::clientdata::set(&mut vm, std::sync::Arc::new(Tiles));
+    let secure = vm
+        .load(
+            b"CreateFrame('Frame'):RegisterEventCallback('MINIMAP_PING', function(_, unit, a, b) Heard = { unit, a, b } end)",
+            "=secure",
+        )
+        .expect("compiles");
+    vm.call(secure, &[]).expect("registers");
     let r = run(
         &mut vm,
         "mock.moveTo({ mapID = 1429, zone = 'Elwynn Forest', x = 0.4805, y = 0.4365 })
@@ -1333,19 +1342,32 @@ M:SetPoint('TOPLEFT', 0, 0)
 local y, x = UnitPosition('player')
 mock.spawnUnit({ name = 'Anna', class = 'PRIEST', classID = 5, reaction = 'friendly', player = true, world = { y = y + 60, x = x } }):joinGroup()
 local refused = tostring((pcall(CreateFrame('Frame').RegisterEvent, CreateFrame('Frame'), 'MINIMAP_PING')))
-Pinged = { refused }
-CreateFrame('Frame'):RegisterEventCallback('MINIMAP_PING', function(_, unit, a, b)
-    Pinged = { refused, unit, a, b }
-end)
+local watch = CreateFrame('Frame')
+watch:RegisterEvent('ADDON_ACTION_FORBIDDEN')
+watch:SetScript('OnEvent', function(_, _, addon, action) Forbidden = addon .. ' ' .. action end)
+Mine = 'not called'
+local registered = CreateFrame('Frame'):RegisterEventCallback('MINIMAP_PING', function() Mine = 'called' end)
 M:PingLocation(-30, 20)
 local py = UnitPosition('party1')
 local gx, gy = M:GetPingPosition()
-return py - y, string.format('%.4f', gx), string.format('%.4f', gy), table.concat(Pinged, ' ')",
+return py - y, string.format('%.4f', gx), string.format('%.4f', gy), refused .. ' ' .. table.concat(Heard, ' '),
+    tostring(registered), Mine, Forbidden",
     );
-    // A callback event on camelot: `RegisterEvent` refuses it, a callback
-    // gets it.
+    // A callback event on camelot: `RegisterEvent` refuses it, Blizzard's
+    // callback gets it, an addon's is forbidden.
     // In widths of the view (the minimap's 200 UI units across).
-    assert_eq!(r, ["60", "-0.1500", "0.1000", "false player -30 20"]);
+    assert_eq!(
+        r,
+        [
+            "60",
+            "-0.1500",
+            "0.1000",
+            "false player -30 20",
+            "false",
+            "not called",
+            "MyAddon Frame:RegisterEventCallback()"
+        ]
+    );
     let marks = |vm: &mut Vm| -> Vec<(String, [f32; 4], [f32; 2])> {
         let scene = wowlua_engine::scene::build(vm);
         scene

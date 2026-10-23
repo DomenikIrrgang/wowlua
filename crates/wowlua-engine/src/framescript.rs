@@ -123,16 +123,45 @@ fn unregister(vm: &mut Vm, event: &str, owner: Option<WidgetId>, f: Option<Value
     });
 }
 
+/// The callback events the documentation marks `HasRestrictions`: only
+/// Blizzard's untainted code may register a callback for them.
+const RESTRICTED_CALLBACK_EVENTS: &[&str] = &[
+    "MINIMAP_PING",
+    "COMBAT_LOG_ENTRIES_CLEARED",
+    "COMBAT_LOG_APPLY_FILTER_SETTINGS",
+    "COMBAT_LOG_REFILTER_ENTRIES",
+];
+
+/// Whether tainted code's callback for `event` is forbidden: then
+/// `ADDON_ACTION_FORBIDDEN(addon, action)` and nothing registers (probed
+/// in WoW Forever, 2026-10-23: `Frame:RegisterEventCallback()` for
+/// `MINIMAP_PING` and `COMBAT_LOG_REFILTER_ENTRIES` from `/run`, and the
+/// global for `MINIMAP_PING`; `TOOLTIP_SHOW_ITEM_COMPARISON` registers).
+fn forbidden_callback(vm: &mut Vm, event: &str, action: String) -> bool {
+    if !RESTRICTED_CALLBACK_EVENTS.contains(&event) || !crate::protection::tainted(vm) {
+        return false;
+    }
+    crate::protection::refuse(vm, "ADDON_ACTION_FORBIDDEN", action);
+    true
+}
+
 fn register_event_callback(vm: &mut Vm, c: NativeCall) -> Ret {
     let event = string_arg(vm, &c, 1)?;
-    register(vm, event, None, None, c.arg(2));
+    // The global's action name is unverified.
+    let action = crate::protection::action_name(vm);
+    if !forbidden_callback(vm, &event, action) {
+        register(vm, event, None, None, c.arg(2));
+    }
     Ok(vec![])
 }
 
 fn register_unit_event_callback(vm: &mut Vm, c: NativeCall) -> Ret {
     let event = string_arg(vm, &c, 1)?;
     let unit = string_arg(vm, &c, 3)?;
-    register(vm, event, Some(unit), None, c.arg(2));
+    let action = crate::protection::action_name(vm);
+    if !forbidden_callback(vm, &event, action) {
+        register(vm, event, Some(unit), None, c.arg(2));
+    }
     Ok(vec![])
 }
 
@@ -142,8 +171,13 @@ fn unregister_event_callback(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `frame:RegisterEventCallback(event, fn)`: true once registered; false
+/// for a restricted event from tainted code (probed).
 fn frame_register_event_callback(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let event = string_arg(vm, &c, 2)?;
+    if forbidden_callback(vm, &event, "Frame:RegisterEventCallback()".into()) {
+        return Ok(vec![Value::Bool(false)]);
+    }
     register(vm, event, None, Some(id), c.arg(3));
     Ok(vec![Value::Bool(true)])
 }

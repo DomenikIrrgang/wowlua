@@ -419,7 +419,8 @@ or Vulkan natively, WebGPU or WebGL 2 in the browser.
   16 UI units) within its circle; a ping (`PingLocation`: kept where it
   was in the world, `GetPingPosition` its place from the player in widths
   of the view; `MINIMAP_PING("player", x, y)` to event callbacks: on
-  camelot a callback event alone, `RegisterEvent` refusing it) shows for
+  camelot a callback event alone, `RegisterEvent` refusing it, and a
+  restricted one, Blizzard's callbacks alone, decision T336) shows for
   5 seconds
   as the client's center, growing ring and turning marks (decision T329).
   Indoors nothing (the building's own map, not read), no quest areas or
