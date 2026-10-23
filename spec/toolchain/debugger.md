@@ -264,7 +264,9 @@ T310).
   sequences shown; a creature display through `CreatureDisplayInfo` and
   `CreatureModelData` (its skins as texture kinds 11 to 13, its scale and
   alpha, the geosets `CreatureDisplayInfoGeosetData` names), a creature
-  through its first display, a file by ID. Geosets not named show by the
+  through its first display (the client's `Creature` table's, else what
+  the server told the client, its `Cache/WDB/<locale>/creaturecache.wdb`:
+  decision T322), a file by ID. Geosets not named show by the
   model's defaults (the body, each group's first variant). Not yet: items'
   own models (`SetItem`), particles and ribbons.
 - **Characters** (decision T320): a unit (`SetUnit`, `SetModelByUnit`) is

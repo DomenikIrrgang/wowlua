@@ -495,6 +495,21 @@ impl Casc {
             .collect()
     }
 
+    /// A cache file of the product's client (`Cache/WDB/<locale>/<name>`),
+    /// each locale's.
+    pub fn cache_files(&self, name: &str) -> Vec<Vec<u8>> {
+        let mut out = Vec::new();
+        for folder in self.folders() {
+            let wdb = format!("{folder}/Cache/WDB");
+            for locale in self.storage.list(&wdb) {
+                if let Some(b) = self.storage.read(&format!("{wdb}/{locale}/{name}")) {
+                    out.push(b);
+                }
+            }
+        }
+        out
+    }
+
     /// The number of encryption keys known.
     pub fn key_count(&self) -> usize {
         self.keys.len()

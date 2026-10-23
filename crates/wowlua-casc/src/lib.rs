@@ -20,6 +20,7 @@ mod salsa20;
 mod schema;
 pub mod tables;
 pub mod tga;
+pub mod wdb;
 
 pub use casc::{Casc, CascError};
 

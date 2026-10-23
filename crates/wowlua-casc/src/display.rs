@@ -110,6 +110,8 @@ pub struct Display {
 #[derive(Default)]
 pub struct Library {
     pub(crate) tables: HashMap<&'static str, Option<Table>>,
+    /// The client's creature cache: creatures' displays.
+    creature_cache: Option<HashMap<u32, Vec<u32>>>,
 }
 
 impl Library {
@@ -180,12 +182,25 @@ impl Library {
         })
     }
 
-    /// A creature's (`Creature` ID) first display.
+    /// A creature's (`Creature` ID) first display: the client's table's,
+    /// else its creature cache's (what the server told it).
     pub fn creature(&mut self, casc: &Casc, id: u32) -> Option<Display> {
-        let display = {
-            let t = self.table(casc, "Creature")?;
-            let r = t.row(id)?;
-            r.ints("DisplayID").into_iter().find(|&d| d != 0)?
+        let own = self
+            .table(casc, "Creature")
+            .and_then(|t| t.row(id))
+            .and_then(|r| r.ints("DisplayID").into_iter().find(|&d| d != 0));
+        let display = match own {
+            Some(d) => d,
+            None => {
+                let cache = self.creature_cache.get_or_insert_with(|| {
+                    let mut all = HashMap::new();
+                    for f in casc.cache_files("creaturecache.wdb") {
+                        all.extend(crate::wdb::creature_displays(&f));
+                    }
+                    all
+                });
+                *cache.get(&id)?.first()?
+            }
         };
         self.creature_display(casc, display)
     }
