@@ -2324,7 +2324,12 @@ impl<'a> Parser<'a> {
             return Ok(VarargTypeData::Pack(name));
         }
         let t = self.ty()?;
-        Ok(VarargTypeData::Type(self.push_type(t)))
+        let t = self.push_type(t);
+        // `...: EventArgs<E>...`: a pack expansion.
+        if self.eat(T::Ellipsis) {
+            return Ok(VarargTypeData::Expand(t));
+        }
+        Ok(VarargTypeData::Type(t))
     }
 
     /// A result type: its index.

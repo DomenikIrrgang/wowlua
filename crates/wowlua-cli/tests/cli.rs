@@ -2516,6 +2516,70 @@ show(pcall(pair :: any, 1, 2))
     );
 }
 
+/// `EventArgs<E>` is the payload of the event or message a call names
+/// (decision L44): a handler's arguments and a sender's values are checked,
+/// a constrained type parameter keeps the literal (`E` is "UNIT_HEALTH",
+/// not `string`), and a long union shows its first members.
+#[test]
+fn event_args_types() {
+    let dir = tempfile::tempdir().unwrap();
+    let main = r#"declare message PROBE_CHANGED(key: string, value: number)
+
+local function onGame<E extends EventName>(event: E, fn: (name: E, EventArgs<E>...) -> ())
+    print(event, fn)
+end
+local function send<M extends MessageName>(name: M, ...: EventArgs<M>...)
+    print(name, ...)
+end
+local function relay<M extends MessageName>(name: M, ...: EventArgs<M>...)
+    send(name, ...)
+end
+local function id<S extends string>(s: S): S
+    return s
+end
+onGame("UNIT_HEALTH", function(name, unit)
+    local n: number = unit
+    local e: "UNIT_HEALTH" = name
+    print(e, n)
+end)
+send("PROBE_CHANGED", "x", 1)
+send("PROBE_CHANGED", 1, "x")
+relay("PROBE_CHANGED", "a", 2)
+local k: "a" = id("a")
+print(k)
+onGame("NOT_AN_EVENT", function() end)
+"#;
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"eventargs\", \"version\": \"1.0.0\" } }\n",
+            ),
+            ("src/main.wowlua", main),
+        ],
+    );
+    let out = wowlua(dir.path())
+        .args(["check", "--message-format", "short"])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let errors: Vec<&str> = stderr.lines().filter(|l| l.contains("error[")).collect();
+    assert_eq!(errors.len(), 4, "{stderr}");
+    assert_eq!(
+        errors[..3],
+        [
+            "src/main.wowlua:16:11: error[E2001]: `string` is not assignable to `number`",
+            "src/main.wowlua:21:23: error[E2001]: `1` is not assignable to `string`",
+            "src/main.wowlua:21:26: error[E2001]: `\"x\"` is not assignable to `number`",
+        ],
+        "{stderr}"
+    );
+    assert!(errors[3].starts_with("src/main.wowlua:25:1: error[E2014]: `\"NOT_AN_EVENT\"`"));
+    assert!(errors[3].contains(" more)` of `E`"), "{stderr}");
+    assert!(errors[3].len() < 1000, "{stderr}");
+}
+
 /// `wowlua:reflect`'s results are typed (decision L36): `isInstance(v, Dog)`
 /// narrows `v` to `Dog`, `classOf` gives `ClassOf<Dog>?`, and `enumFrom`
 /// and `enumEntries` give the enum.
