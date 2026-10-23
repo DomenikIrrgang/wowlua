@@ -22,6 +22,7 @@
 
 use std::collections::HashMap;
 
+use wowlua_vm::debug::DispatchKind;
 use wowlua_vm::heap::Userdata;
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{LuaError, NativeCall, TableRef, Value, Vm};
@@ -1256,6 +1257,37 @@ pub fn run_script(vm: &mut Vm, id: WidgetId, script: &str, args: &[Value]) {
 /// [`run_script`], with `trusted_only` only the secure handlers and hooks
 /// (an object's forbidden untrusted layout scripts).
 fn run_script_of(vm: &mut Vm, id: WidgetId, script: &str, args: &[Value], trusted_only: bool) {
+    let d = if vm.dispatch_wanted() {
+        let name = script_label(engine(vm), id, script);
+        let kind = if script == "OnUpdate" {
+            DispatchKind::Update
+        } else {
+            DispatchKind::Script
+        };
+        vm.dispatch_enter(kind, || name)
+    } else {
+        None
+    };
+    run_script_body(vm, id, script, args, trusted_only);
+    vm.dispatch_exit(d);
+}
+
+/// How the debugger and profiler name a widget's script:
+/// `MyFrame:OnClick`, `Button#12:OnClick` for one without a name.
+pub fn script_label(e: &Engine, id: WidgetId, script: &str) -> String {
+    format!("{}:{script}", widget_label(e, id))
+}
+
+/// A widget's name, or its type and number.
+pub fn widget_label(e: &Engine, id: WidgetId) -> String {
+    let w = &e.world.widgets[id.0];
+    match &w.name {
+        Some(n) => n.clone(),
+        None => format!("{}#{}", w.class, id.0),
+    }
+}
+
+fn run_script_body(vm: &mut Vm, id: WidgetId, script: &str, args: &[Value], trusted_only: bool) {
     let untrusted = |vm: &Vm, f: Value| {
         trusted_only && matches!(f, Value::Func(r) if !vm.heap.func(r).taint().is_secure())
     };
@@ -1609,6 +1641,7 @@ pub fn fire_now(vm: &mut Vm, event: &str, args: &[Value]) {
     let name = vm.str(event);
     let mut call = vec![name];
     call.extend_from_slice(args);
+    let d = vm.dispatch_enter(DispatchKind::Event, || event.to_string());
     for id in targets {
         // A handler may unregister others meanwhile.
         let w = &engine(vm).world.widgets[id.0];
@@ -1617,6 +1650,7 @@ pub fn fire_now(vm: &mut Vm, event: &str, args: &[Value]) {
         }
     }
     crate::framescript::run_callbacks(vm, event, args);
+    vm.dispatch_exit(d);
 }
 
 // --------------------------------------------------------- visibility

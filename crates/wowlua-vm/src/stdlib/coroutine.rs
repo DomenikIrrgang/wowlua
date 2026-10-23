@@ -161,11 +161,19 @@ impl Vm {
                 self.heap.thread_mut(co).status = Status::Suspended;
                 Ok(std::mem::take(&mut self.yield_values))
             }
-            Err(e) => {
+            Err(mut e) => {
+                if self.debugger.is_some() {
+                    self.error_hook(&mut e);
+                }
                 self.heap.thread_mut(co).status = Status::Dead;
                 Err(self.cur.taint.fresh(e.value))
             }
         };
+        if let Some(p) = self.profiler.as_mut()
+            && self.heap.thread(co).status == Status::Dead
+        {
+            p.drop_thread(co);
+        }
         // Back to the caller, with the coroutine's taint.
         let taint = self.cur.taint.saved();
         self.cstack = saved_cstack;
@@ -186,7 +194,10 @@ impl Vm {
 
 fn resume(vm: &mut Vm, c: NativeCall) -> Ret {
     let co = check_thread(vm, &c)?;
-    let r = match vm.resume_slots(co, c.slots(2)) {
+    vm.protected += 1;
+    let r = vm.resume_slots(co, c.slots(2));
+    vm.protected -= 1;
+    let r = match r {
         Ok(mut values) => {
             values.insert(0, vm.cur.taint.fresh(Value::Bool(true)));
             values

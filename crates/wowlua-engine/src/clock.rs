@@ -6,6 +6,7 @@
 //! table with `Cancel`, `IsCancelled` and `Invoke`; within a frame, due
 //! timers run before the `OnUpdate` scripts.
 
+use wowlua_vm::debug::DispatchKind;
 use wowlua_vm::heap::Userdata;
 use wowlua_vm::stdlib::Ret;
 use wowlua_vm::{NativeCall, TableRef, Value, Vm};
@@ -42,6 +43,8 @@ pub struct Timers {
     advancing: Option<f64>,
     /// The last frame's seconds (`GetTickTime`), none before the first.
     pub tick_time: f64,
+    /// Game frames run so far (the debugger's and profiler's frame names).
+    pub frames_run: u64,
 }
 
 /// The server's round trip: a request's answer comes this much later (the
@@ -258,7 +261,9 @@ fn fire(vm: &mut Vm, id: TimerId) {
     } else {
         vec![handle]
     };
+    let d = vm.dispatch_enter(DispatchKind::Timer, || "timer".to_string());
     vm.call_from_engine(callback, &args);
+    vm.dispatch_exit(d);
 }
 
 /// Moves the clock by `ms` milliseconds (and the wall clock with it).
@@ -373,6 +378,9 @@ pub fn advance_frames(vm: &mut Vm, n: usize, ms: f64) {
             continue;
         }
         let end_ms = vm.clock.elapsed_ms + ms;
+        engine_mut(vm).timers.frames_run += 1;
+        let number = engine(vm).timers.frames_run;
+        let d = vm.dispatch_enter(DispatchKind::Frame, || format!("frame {number}"));
         engine_answers(vm, end_ms);
         tick(vm, end_ms - vm.clock.elapsed_ms);
         engine_mut(vm).timers.tick_time = ms / 1000.0;
@@ -414,6 +422,7 @@ pub fn advance_frames(vm: &mut Vm, n: usize, ms: f64) {
         crate::animations::tick(vm, ms / 1000.0);
         crate::curves::update_text_bindings(vm);
         advance(vm, 0.0);
+        vm.dispatch_exit(d);
     }
 }
 

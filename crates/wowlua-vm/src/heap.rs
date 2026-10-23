@@ -239,11 +239,24 @@ pub struct Heap {
     pub(crate) secrets: Arena<Value>,
     /// Approximate bytes allocated since the last collection.
     pub(crate) debt: usize,
+    /// Bytes allocated before the last collection, ever.
+    allocated_before: u64,
     /// The last userdata's creation serial.
     ud_serial: u64,
 }
 
 impl Heap {
+    /// Approximate bytes allocated, ever (the profiler's garbage).
+    pub fn allocated(&self) -> u64 {
+        self.allocated_before + self.debt as u64
+    }
+
+    /// A collection ran: the debt starts again.
+    pub(crate) fn clear_debt(&mut self) {
+        self.allocated_before += self.debt as u64;
+        self.debt = 0;
+    }
+
     /// The interned string for `bytes`.
     pub fn intern(&mut self, bytes: &[u8]) -> StrRef {
         if let Some(&s) = self.intern.get(bytes) {

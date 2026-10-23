@@ -219,7 +219,25 @@ pub struct Vm {
     /// Coverage counts, when on ([`Vm::enable_coverage`]).
     pub coverage: Option<crate::coverage::Coverage>,
     /// The counts' index of the running frame's function.
-    cov_frame: Option<usize>,
+    pub(crate) cov_frame: Option<usize>,
+    /// Which hooks the running frame's instructions take (`crate::debug`):
+    /// 0 unless something listens.
+    pub(crate) hook_mask: u8,
+    /// The hook bits every frame takes (profiling, a debugger attached).
+    pub(crate) hook_base: u8,
+    /// Anything listens: frames work their hook bits out.
+    pub(crate) hooks_on: bool,
+    /// Calls and returns are reported (profiling, function breakpoints).
+    pub(crate) call_hooks: bool,
+    /// Instructions run while hooks were on.
+    pub(crate) instructions: u64,
+    /// `pcall`s, `xpcall`s and `coroutine.resume`s running: an error
+    /// raised now is caught.
+    pub(crate) protected: u32,
+    pub(crate) aborted: bool,
+    pub(crate) debugger: Option<Box<dyn crate::debug::Debugger>>,
+    pub(crate) dbg: Option<Box<crate::debug::DebugState>>,
+    pub(crate) profiler: Option<Box<crate::profile::Profiler>>,
     /// Values kept alive outside the heap (host references).
     pub(crate) pinned: Vec<Value>,
     pub(crate) gc_threshold: usize,
@@ -328,6 +346,16 @@ impl Vm {
             on_dropped_error: None,
             coverage: None,
             cov_frame: None,
+            hook_mask: 0,
+            hook_base: 0,
+            hooks_on: false,
+            call_hooks: false,
+            instructions: 0,
+            protected: 0,
+            aborted: false,
+            debugger: None,
+            dbg: None,
+            profiler: None,
             output: Box::new(|bytes| {
                 use std::io::Write;
                 let _ = std::io::stdout().write_all(bytes);
@@ -519,6 +547,9 @@ impl Vm {
         if let Some(c) = self.coverage.as_mut() {
             c.register(&proto);
         }
+        if self.debugger.is_some() {
+            self.load_hook(&proto);
+        }
         let env = self.globals;
         let taint = self.cur.taint.alloc(true);
         Ok(Value::Func(self.heap.alloc_func(Function::Lua(
@@ -657,8 +688,14 @@ impl Vm {
                 self.cur.top = saved_top;
                 Ok(results)
             }
-            Err(e) => {
+            Err(mut e) => {
+                if self.debugger.is_some() {
+                    self.error_hook(&mut e);
+                }
                 self.unwind(saved_frames, saved_c, func);
+                if self.call_hooks {
+                    self.return_hook(saved_frames + saved_c);
+                }
                 self.c_depth = saved_depth;
                 self.cur.top = saved_top;
                 Err(e)
@@ -843,7 +880,11 @@ impl Vm {
                     tail: false,
                     entry: false,
                     secrets_dropped: false,
+                    hook_pc: usize::MAX,
                 });
+                if self.call_hooks {
+                    self.call_hook(f, false);
+                }
                 Ok(true)
             }
             Function::Native(nf) => {
@@ -859,6 +900,9 @@ impl Vm {
                     func: f,
                     from_lua,
                 });
+                if self.call_hooks {
+                    self.call_hook(f, true);
+                }
                 self.result_taints.clear();
                 self.cur.natives += 1;
                 let outer_used = std::mem::replace(&mut self.secret_used, false);
@@ -875,6 +919,9 @@ impl Vm {
                 );
                 self.cur.natives -= 1;
                 self.cstack.pop();
+                if self.call_hooks {
+                    self.return_hook(self.cur.frames.len() + self.cstack.len());
+                }
                 if self.cur.taint.tainted_by.is_some() {
                     self.settle_origin();
                 }
@@ -968,6 +1015,9 @@ impl Vm {
     /// Returns from the top frame with the `n` values at `from`; true if it
     /// was the entry frame of the current `execute`.
     fn poscall(&mut self, from: usize, n: usize) -> bool {
+        if self.call_hooks {
+            self.return_hook(self.cur.frames.len() + self.cstack.len() - 1);
+        }
         let frame = self.cur.frames.pop().expect("frame");
         let dest = frame.func;
         let wanted = frame.nresults;
@@ -1033,7 +1083,7 @@ impl Vm {
     }
 
     /// Stores into an upvalue, taint and all (`setobj2uv`).
-    fn upval_set(&mut self, u: UpvalRef, v: Slot) {
+    pub(crate) fn upval_set(&mut self, u: UpvalRef, v: Slot) {
         match *self.heap.upval(u) {
             Upval::Closed(_) => *self.heap.upval_mut(u) = Upval::Closed(v),
             Upval::Open { thread, idx } => {
@@ -1073,6 +1123,10 @@ impl Vm {
         let cov = self.cov_frame;
         let r = self.run();
         self.cov_frame = cov;
+        // The caller's frame works its hook bits out again.
+        if self.hooks_on {
+            self.hook_mask |= crate::debug::HOOK_RECALC;
+        }
         self.run_depth -= 1;
         r
     }
@@ -1081,6 +1135,7 @@ impl Vm {
     /// now on ([`crate::coverage`]).
     pub fn enable_coverage(&mut self, filter: crate::coverage::ChunkFilter) {
         self.coverage = Some(crate::coverage::Coverage::new(filter));
+        self.hooks_changed();
     }
 
     fn run(&mut self) -> Result<(), LuaError> {
@@ -1103,20 +1158,18 @@ impl Vm {
             self.cur.taint.read(closure_taint);
             self.settle_origin();
             self.cur.taint.fixed = closure_taint;
-            self.cov_frame = match &self.coverage {
-                Some(c) => c.index_of(&proto),
-                None => None,
-            };
+            self.frame_hooks(&proto);
             let k = &proto.constants[..];
             let code = &proto.code[..];
             loop {
                 let pc = self.cur.frames[fi].pc;
                 let op = code[pc];
                 self.cur.frames[fi].pc = pc + 1;
-                if let Some(ci) = self.cov_frame
-                    && let Some(c) = self.coverage.as_mut()
-                {
-                    c.hit(ci, pc);
+                if self.hook_mask != 0 {
+                    self.instructions += 1;
+                    if self.hook_mask & !crate::debug::HOOK_COUNT != 0 {
+                        self.instr_hook(fi, pc, &proto)?;
+                    }
                 }
                 match op {
                     Op::Move { a, b } => {
@@ -1326,6 +1379,9 @@ impl Vm {
                             // Lua takes the callee's slot before it drops
                             // the caller's.
                             self.enter_ci()?;
+                            if self.call_hooks {
+                                self.return_hook(self.cur.frames.len() + self.cstack.len() - 1);
+                            }
                             self.cur.frames.pop();
                             self.precall(cur_func, nargs, nresults, true)?;
                             let f = self.cur.frames.last_mut().expect("frame");

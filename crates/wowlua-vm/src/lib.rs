@@ -5,6 +5,7 @@
 
 pub mod compiler;
 pub mod coverage;
+pub mod debug;
 pub mod error;
 pub mod function;
 pub mod gc;
@@ -12,6 +13,7 @@ pub mod heap;
 pub mod luac;
 pub mod number;
 pub mod origin;
+pub mod profile;
 pub mod proto;
 pub mod secret;
 pub mod stdlib;

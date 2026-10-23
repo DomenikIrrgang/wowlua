@@ -10,6 +10,8 @@ pub struct LuaError {
     /// Not an error: `coroutine.yield` unwinding to its `resume` (the
     /// values wait in the VM).
     pub yielded: bool,
+    /// The debugger saw it raised (`Vm::error_hook`).
+    pub seen: bool,
 }
 
 impl LuaError {
@@ -18,6 +20,7 @@ impl LuaError {
             value,
             traceback: String::new(),
             yielded: false,
+            seen: false,
         }
     }
 
@@ -26,6 +29,7 @@ impl LuaError {
             value: Value::Nil,
             traceback: String::new(),
             yielded: true,
+            seen: false,
         }
     }
 }

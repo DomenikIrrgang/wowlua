@@ -64,6 +64,12 @@ impl Vm {
     pub(crate) fn settle_origin(&mut self) {
         if let Some(value) = self.cur.taint.tainted_by.take() {
             self.cur.taint.origin = self.record(false, value, Taint::SECURE);
+            if self.taint_watched() {
+                let by = self
+                    .taint_name(self.cur.taint.stack)
+                    .unwrap_or_else(|| "?".to_string());
+                self.taint_hook(&by);
+            }
         }
     }
 

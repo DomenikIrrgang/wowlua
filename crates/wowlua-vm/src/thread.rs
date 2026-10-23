@@ -35,6 +35,8 @@ pub struct Frame {
     pub entry: bool,
     /// The function gave up its access to secrets (`dropsecretaccess`).
     pub secrets_dropped: bool,
+    /// The last instruction a line hook saw run here (`usize::MAX`: none).
+    pub hook_pc: usize,
 }
 
 #[derive(Default)]

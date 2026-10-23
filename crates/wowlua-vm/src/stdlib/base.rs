@@ -316,7 +316,9 @@ fn pcall(vm: &mut Vm, c: NativeCall) -> Ret {
     vm.check_any(&c, 1)?;
     // Without an enclosing handler (`lua_pcall` with none).
     let saved = vm.errfunc.take();
+    vm.protected += 1;
     let r = vm.call_slots(c.slot(1), &c.slots(2));
+    vm.protected -= 1;
     vm.errfunc = saved;
     // The client's pcall pushes its status after the results without
     // room for it: once they fill its frame, its assertion fails.
@@ -338,7 +340,9 @@ fn xpcall(vm: &mut Vm, c: NativeCall) -> Ret {
     } else {
         Vec::new()
     };
+    vm.protected += 1;
     let r = vm.call_slots(c.slot(1), &args);
+    vm.protected -= 1;
     vm.errfunc = saved;
     // As pcall's, with the handler below the results in its frame.
     if vm.rules.assertions
