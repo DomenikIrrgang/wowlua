@@ -29,6 +29,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- `for k, v in pairs(t)` over a record type with an `unknown` indexer (`{ name?: string, [string]: unknown }`) is no longer refused (E2001).
 - Strict mode: a field your constructor sets in every branch of an `if … else … end` counts as set (E2052 said it wasn't), as does one set in a `do` block.
 - Strict mode: after `self.icon = parent:CreateTexture()`, calling a method on the field (`self.icon:SetTexture(…)`) no longer makes the next line's `self.icon` "may be nil" again. A call that gets a field's table can't replace the field; only calls that get the table holding it forget what you set.
 - A WoW function with several forms (`SetTexCoord`) accepts a last argument that gives several values, as Lua passes them: `tex:SetTexCoord(unpack(coords))` was refused (E2012).
