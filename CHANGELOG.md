@@ -29,6 +29,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - A generic function keeps the type of a value you pass it when that value already has one: `assert(tokens[k])` with `tokens: { [string]: Token }` is a `Token`, not a `string`. A literal written as the argument still widens (`id("x")` is a `string`).
 - A value typed as two shapes at once, such as `number[] & { hex: string }`, reads `c.hex` as a `string` and `c[1]` as a `number`, where both were `any`.
 - `local p = cache[key]; if not p then p = { seen = {} } end` gives `p.seen` the type of the cache's `seen` field, where the empty table made it `any`.
+- `local p = x :: FramePoint` keeps `FramePoint` (and `local v = t?.field` the field's type), where the local widened it to `string`.
 - A value typed `unknown` is `false` or `nil` where it is falsy: `x and true or false` is a `boolean`, and `if not x then` knows `x` is `false` or `nil`.
 - The game's transmog info (`ItemTransmogInfo`, as `C_TransmogCollection.GetCustomSetItemTransmogInfoList` gives it) has its `appearanceID`, `secondaryAppearanceID` and `illusionID`.
 - `typeof(x)` in a function's parameters and results has `x`'s type: `local function hex(k: keyof typeof(colors))` takes only the colours' names and `colors[k]` is typed, where both were `any`.

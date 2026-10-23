@@ -390,6 +390,7 @@ Inference is local and bidirectional. There is no whole-program inference.
 | Construct | Inferred type |
 |-----------|---------------|
 | `local x = 5` | declared type `number` (literal widened) |
+| `local p = s :: Point`, `local k = opts.kind` | `Point`, the field's type: a value typed elsewhere (a name, a field or index read, a call's result, a `::` assertion) keeps its type, unions of literals included (decision L64) |
 | `local y = ok and t` (`ok: boolean`, `t: T`) | `false \| T` (`false` and `true` beside types other than `nil` and booleans are not widened) |
 | `const X = 5` | `5` (literal kept) |
 | `local t = { a = 1, b = "x" }` | `{ a: number, b: string }` |

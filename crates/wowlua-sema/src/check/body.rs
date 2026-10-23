@@ -1239,22 +1239,9 @@ impl<'e, 'p> Checker<'e, 'p> {
                     .collect();
                 // Fresh literals widen (`local s = "a"` is a string); values
                 // typed elsewhere (a call's declared result, a variable,
-                // a field) keep their type, unions of literals included.
-                let keep: Vec<bool> = values
-                    .iter()
-                    .map(|v| {
-                        matches!(
-                            v.kind(),
-                            ExprKind::Call { .. }
-                                | ExprKind::OptCall { .. }
-                                | ExprKind::Method { .. }
-                                | ExprKind::OptMethod { .. }
-                                | ExprKind::Name(_)
-                                | ExprKind::Field { .. }
-                                | ExprKind::Index { .. }
-                        )
-                    })
-                    .collect();
+                // a field, a `::` assertion) keep their type, unions of
+                // literals included (decision L64).
+                let keep: Vec<bool> = values.iter().map(typed_elsewhere).collect();
                 let spread: Vec<(Span, String)> = names
                     .iter()
                     .map(|n| (n.name.span(), n.name.text().to_string()))
@@ -2647,6 +2634,25 @@ fn calls_setfenv(b: Block<'_>) -> bool {
 }
 
 /// The `typeof(expr)` parts of a type.
+/// A value whose type comes from somewhere other than a literal written
+/// here: a local keeps it unwidened (spec §2.4, decision L64).
+fn typed_elsewhere(e: Expr<'_>) -> bool {
+    match e.kind() {
+        ExprKind::Paren(inner) => typed_elsewhere(inner),
+        ExprKind::Call { .. }
+        | ExprKind::OptCall { .. }
+        | ExprKind::Method { .. }
+        | ExprKind::OptMethod { .. }
+        | ExprKind::Name(_)
+        | ExprKind::Field { .. }
+        | ExprKind::OptField { .. }
+        | ExprKind::Index { .. }
+        | ExprKind::OptIndex { .. }
+        | ExprKind::Cast { .. } => true,
+        _ => false,
+    }
+}
+
 pub(crate) fn typeof_exprs<'t>(t: Type<'t>, out: &mut Vec<Expr<'t>>) {
     match t.kind() {
         TypeKind::Typeof(e) => out.push(e),

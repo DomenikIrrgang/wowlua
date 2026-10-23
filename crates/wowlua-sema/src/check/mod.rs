@@ -2710,6 +2710,22 @@ print(a, b, c, d, e, name, realm, more)
         strict_ok("local t = { a = 1 }\nt = { b = {} }\nprint(t.b)\n");
     }
 
+    /// A local keeps the type of a value written with `::` (decision L64).
+    #[test]
+    fn local_keeps_assertion() {
+        strict_ok(
+            "type P = \"TOP\" | \"BOTTOM\"\nlocal function f(s: string): P\n local p = (s ~= \"\" and s or \"TOP\") :: P\n return p\nend\nprint(f)\n",
+        );
+        strict_ok(
+            "type P = \"TOP\" | \"BOTTOM\"\nlocal function f(s: string): P\n local p = (s :: P)\n return p\nend\nprint(f)\n",
+        );
+        // a literal still widens
+        strict_err(
+            "type P = \"TOP\" | \"BOTTOM\"\nlocal function f(): P\n local p = \"TOP\"\n p = \"x\" .. p\n return p\nend\nprint(f)\n",
+            "E2001",
+        );
+    }
+
     /// `unknown` where it is falsy is `false | nil` (decision L63).
     #[test]
     fn unknown_falsy() {
