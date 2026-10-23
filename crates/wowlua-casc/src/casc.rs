@@ -147,11 +147,12 @@ impl Encoding {
         })
     }
 
-    /// The first encoded key of a content key.
-    fn ekey(&self, ckey: &[u8; 16]) -> Option<[u8; 16]> {
+    /// The encoded keys of a content key (most have one; some have several,
+    /// and the local storage may hold any of them).
+    fn ekeys(&self, ckey: &[u8; 16]) -> Vec<[u8; 16]> {
         let i = match self.pages.binary_search_by(|(first, _)| first.cmp(ckey)) {
             Ok(i) => i,
-            Err(0) => return None,
+            Err(0) => return Vec::new(),
             Err(i) => i - 1,
         };
         let start = self.pages[i].1;
@@ -164,15 +165,23 @@ impl Encoding {
             }
             let ck = &self.data[pos + 6..pos + 6 + self.ckey_size];
             if ck == ckey {
-                let e = pos + 6 + self.ckey_size;
-                let mut out = [0u8; 16];
-                out[..self.ekey_size.min(16)]
-                    .copy_from_slice(&self.data[e..e + self.ekey_size.min(16)]);
-                return Some(out);
+                let n = self.ekey_size.min(16);
+                return (0..count)
+                    .filter_map(|k| {
+                        let e = pos + 6 + self.ckey_size + k * self.ekey_size;
+                        let mut out = [0u8; 16];
+                        out[..n].copy_from_slice(self.data.get(e..e + n)?);
+                        Some(out)
+                    })
+                    .collect();
             }
             pos += 6 + self.ckey_size + count * self.ekey_size;
         }
-        None
+        Vec::new()
+    }
+
+    fn ekey(&self, ckey: &[u8; 16]) -> Option<[u8; 16]> {
+        self.ekeys(ckey).into_iter().next()
     }
 }
 
@@ -236,9 +245,17 @@ impl Root {
             if end > d.len() {
                 return err("a short root");
             }
-            let wanted =
-                (locale & ENUS != 0 || locale == 0xffff_ffff) && content & LOW_VIOLENCE == 0;
-            if wanted {
+            // enUS (or every locale) first, then other locales, the
+            // low-violence files last: a file only listed for another
+            // locale is still found (classic's tables).
+            let rank: u8 = if content & LOW_VIOLENCE != 0 {
+                2
+            } else if locale & ENUS != 0 || locale == 0xffff_ffff {
+                0
+            } else {
+                1
+            };
+            {
                 let mut id: i64 = -1;
                 for i in 0..count {
                     let delta = i32::from_le_bytes(
@@ -249,24 +266,27 @@ impl Root {
                     id += 1 + i64::from(delta);
                     let mut ck = [0u8; 16];
                     ck.copy_from_slice(&d[keys_at + i * 16..keys_at + i * 16 + 16]);
-                    by_id.push((id as u32, ck));
+                    by_id.push((id as u32, rank, ck));
                     if named {
                         let h = u64::from_le_bytes(
                             d[names_at + i * 8..names_at + i * 8 + 8]
                                 .try_into()
                                 .unwrap_or([0; 8]),
                         );
-                        by_name.push((h, id as u32));
+                        by_name.push((h, rank, id as u32));
                     }
                 }
             }
             pos = end;
         }
-        by_id.sort_by_key(|e| e.0);
+        by_id.sort_by_key(|e| (e.0, e.1));
         by_id.dedup_by_key(|e| e.0);
-        by_name.sort_by_key(|e| e.0);
+        by_name.sort_by_key(|e| (e.0, e.1));
         by_name.dedup_by_key(|e| e.0);
-        Ok(Root { by_id, by_name })
+        Ok(Root {
+            by_id: by_id.into_iter().map(|(id, _, ck)| (id, ck)).collect(),
+            by_name: by_name.into_iter().map(|(h, _, id)| (h, id)).collect(),
+        })
     }
 
     fn ckey(&self, id: u32) -> Option<[u8; 16]> {
@@ -418,7 +438,10 @@ impl Casc {
     }
 
     pub fn read_ckey(&self, ckey: &[u8; 16]) -> Option<Vec<u8>> {
-        self.read_ekey(&self.encoding.ekey(ckey)?)
+        self.encoding
+            .ekeys(ckey)
+            .iter()
+            .find_map(|e| self.read_ekey(e))
     }
 
     /// A file by its ID.
@@ -446,6 +469,53 @@ impl Casc {
             }
         })?;
         self.file_by_id(id)
+    }
+
+    /// Whether the root lists a file ID (its data may still be missing
+    /// from the local storage).
+    pub fn has_id(&self, id: u32) -> bool {
+        self.root.ckey(id).is_some()
+    }
+
+    /// Whether the encoding table knows a file's content key.
+    pub fn has_encoding(&self, id: u32) -> bool {
+        self.root
+            .ckey(id)
+            .and_then(|c| self.encoding.ekey(&c))
+            .is_some()
+    }
+
+    /// What happens reading a file ID, step by step (for reports).
+    pub fn explain(&self, id: u32) -> String {
+        let Some(ck) = self.root.ckey(id) else {
+            return "not in the root".into();
+        };
+        let mut out = format!("content key {}", to_hex(&ck));
+        for e in self.encoding.ekeys(&ck) {
+            out.push_str(&format!("\n  encoded key {}", to_hex(&e)));
+            let Some(index) = self.indexes.get(bucket(&e)).and_then(Option::as_ref) else {
+                out.push_str(": no index for its bucket");
+                continue;
+            };
+            let Some((archive, offset, size)) = index.find(&e) else {
+                out.push_str(": not in the local storage");
+                continue;
+            };
+            out.push_str(&format!(": data.{archive:03} at {offset}, {size} bytes"));
+            match self.storage.read_at(
+                &format!("Data/data/data.{archive:03}"),
+                offset,
+                size as usize,
+            ) {
+                None => out.push_str(", unreadable"),
+                Some(raw) => match raw.get(30..).map(blte::decode) {
+                    Some(Ok(d)) => out.push_str(&format!(", {} bytes decoded", d.len())),
+                    Some(Err(e)) => out.push_str(&format!(", {e}")),
+                    None => out.push_str(", short"),
+                },
+            }
+        }
+        out
     }
 
     /// Files the root knows.

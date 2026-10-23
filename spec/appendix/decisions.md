@@ -354,6 +354,7 @@ open for review.
 | T313 | `wowlua debug` serves DAP on stdio or a TCP port, with custom requests for screenshots, the frame tree, input, time and profiles **(user, M12)** | Editors (VS Code among them) speak DAP; the custom requests give a DAP client the UI too. |
 | T314 | `wowlua mcp` is an MCP server for AI agents: sessions, screenshots as images, the frame tree, input, time, evaluation, breakpoints, stepping and profiles **(user, M12)** | Agents can then see and drive an addon's UI and debug it as a person would. |
 | T315 | `expect(frame).toMatchScreenshot(name?)` compares with `__screenshots__/<test file>/<test>-<name>.png`, written when missing and rewritten by `-u`, as snapshots; `mock.screenshot` and `wowlua screenshot` write images **(user, M12)** | UI tests compare what the player sees, reviewed as images in version control. |
+| T316 | The renderer draws atlases from the build's own tables (element, member, atlas: the flavor's set over the default, 1x), the engine's recorded atlases only where those cannot be read **(proposal, M12)** | The recorded table came from an earlier build, whose files were laid out differently (camelot's player frame drew the wrong part of its file); the build's tables always match its files. |
 
 ## Standard library
 

@@ -1146,6 +1146,16 @@ fn global_text(vm: &mut Vm, name: &str) -> Option<String> {
 /// (recorded too, decision T236) META as written and `KEY_<key>`, else
 /// itself ("Delete", "Insert", "Print Screen"). Unverified: `abbreviate`.
 pub fn binding_text(vm: &mut Vm, key: &str) -> String {
+    binding_text_of(vm, key, false)
+}
+
+/// [`binding_text`], with the modifiers shortened when `abbreviate`
+/// (`GetBindingText(key, 1)`, the action bars' hotkeys): each its
+/// `<MODIFIER>_KEY_TEXT_ABBR` (`s`, `c`, `a`, the Mac's Command `m`), so
+/// `SHIFT-1` is `s-1`. Unverified in game: the strings are the client's,
+/// their joining (`s-1`) and the key's own name kept whole are not
+/// recorded (`tests/ingame/PROBES.md`).
+pub fn binding_text_of(vm: &mut Vm, key: &str, abbreviate: bool) -> String {
     let mac = crate::engine(vm).platform == crate::Platform::Mac;
     // The modifiers, then the key (which may be "-" itself: "CTRL--").
     let mut rest = key;
@@ -1158,10 +1168,16 @@ pub fn binding_text(vm: &mut Vm, key: &str) -> String {
         let name = &m[..m.len() - 1];
         // On a Mac the Command key's name, on Windows "META" as it is
         // (recorded on both, decision T236).
-        parts.push(if name == "META" && mac {
-            global_text(vm, "CMD_KEY_TEXT").unwrap_or_else(|| "CMD".to_string())
-        } else {
-            name.to_string()
+        let global = if name == "META" && mac { "CMD" } else { name };
+        let abbr = abbreviate
+            .then(|| global_text(vm, &format!("{global}_KEY_TEXT_ABBR")))
+            .flatten();
+        parts.push(match abbr {
+            Some(a) => a,
+            None if name == "META" && mac => {
+                global_text(vm, "CMD_KEY_TEXT").unwrap_or_else(|| "CMD".to_string())
+            }
+            None => name.to_string(),
         });
         rest = &rest[m.len()..];
     }
@@ -1185,7 +1201,13 @@ fn get_binding_text(vm: &mut Vm, c: NativeCall) -> Ret {
         Value::Num(n) => wowlua_vm::number::fmt_num(n),
         _ => return Ok(vec![vm.str("")]),
     };
-    let text = binding_text(vm, &key);
+    // `(key, abbreviate)` as the action bars call it, or the older
+    // `(key, prefix, abbreviate)`.
+    let abbreviate = match c.arg(2) {
+        Value::Str(_) => c.arg(3).truthy(),
+        other => other.truthy(),
+    };
+    let text = binding_text_of(vm, &key, abbreviate);
     Ok(vec![vm.str(&text)])
 }
 

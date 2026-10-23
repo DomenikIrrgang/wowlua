@@ -158,3 +158,24 @@ fn the_platform_decides_the_machines_answers() {
     wowlua_engine::set_platform(&mut vm, wowlua_engine::Platform::Windows);
     assert_eq!(run(&mut vm, ask), ["false", "true", "Delete", "META-Enter"]);
 }
+
+/// The action bars' hotkeys: `GetBindingText(key, 1)` shortens the
+/// modifiers with Blizzard's `<MODIFIER>_KEY_TEXT_ABBR` strings (`s-1`),
+/// the older `(key, prefix, abbreviate)` too; without the strings, or
+/// without `abbreviate`, they stay whole.
+#[test]
+fn abbreviated_binding_text_shortens_the_modifiers() {
+    let mut vm = vm();
+    let whole = run(&mut vm, "return GetBindingText('SHIFT-1', 1)");
+    assert_eq!(whole, ["SHIFT-1"]);
+    run(
+        &mut vm,
+        "SHIFT_KEY_TEXT_ABBR, CTRL_KEY_TEXT_ABBR, ALT_KEY_TEXT_ABBR, CMD_KEY_TEXT_ABBR = 's', 'c', 'a', 'm'
+KEY_MOUSEWHEELUP = 'Mouse Wheel Up'",
+    );
+    let r = run(
+        &mut vm,
+        "return GetBindingText('SHIFT-1', 1), GetBindingText('CTRL-ALT-2', true), GetBindingText('META-E', 'KEY_', 1), GetBindingText('SHIFT-MOUSEWHEELUP', 1), GetBindingText('SHIFT-1')",
+    );
+    assert_eq!(r, ["s-1", "c-a-2", "m-E", "s-Mouse Wheel Up", "SHIFT-1"]);
+}

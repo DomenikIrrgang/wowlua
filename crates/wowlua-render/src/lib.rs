@@ -24,6 +24,11 @@ pub trait Assets {
     fn image(&mut self, image: &Image) -> Option<Rgba>;
     /// A font file's bytes (`Fonts\FRIZQT__.TTF`).
     fn font(&mut self, path: &str) -> Option<Vec<u8>>;
+    /// An atlas as the build's own tables give it: its file and region
+    /// (left, right, top, bottom); none to use the engine's.
+    fn atlas(&mut self, _name: &str) -> Option<(Image, [f32; 4])> {
+        None
+    }
 }
 
 /// No assets: every image a placeholder, every font a stand-in.
@@ -488,7 +493,21 @@ impl Renderer {
         for item in &scene.items {
             match item {
                 Item::Quad(q) => {
-                    let tex = self.texture(&q.image, assets);
+                    // The build's atlas, where the assets know it.
+                    let own = q.atlas.as_deref().and_then(|n| assets.atlas(n));
+                    let (image, tc) = match &own {
+                        Some((image, [l, r, t, b])) => {
+                            let a = q.atlas_texcoord;
+                            let mut tc = [0.0f32; 8];
+                            for k in 0..4 {
+                                tc[k * 2] = l + a[k * 2] * (r - l);
+                                tc[k * 2 + 1] = t + a[k * 2 + 1] * (b - t);
+                            }
+                            (image, tc)
+                        }
+                        None => (&q.image, q.texcoord),
+                    };
+                    let tex = self.texture(image, assets);
                     let (mask, mask_rect) = match q.masks.first() {
                         Some(m) => (self.texture(&m.image, assets), Some(s(m.rect))),
                         None => (self.white, None),
@@ -506,7 +525,6 @@ impl Renderer {
                         } else {
                             0
                         });
-                    let tc = q.texcoord;
                     let mk = |pos: [f32; 2], uv: [f32; 2]| Vertex {
                         pos,
                         uv,

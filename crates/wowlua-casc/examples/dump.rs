@@ -8,8 +8,16 @@ fn main() {
         .unwrap_or_else(|| "/Applications/World of Warcraft".into());
     let casc = wowlua_casc::Casc::open(Box::new(wowlua_casc::FsStorage { root }), &args[1])
         .expect("the product");
-    let b = casc.file_by_path(&args[2]).expect("the file");
+    let b = match args[2].parse::<u32>() {
+        Ok(id) => casc.file_by_id(id),
+        Err(_) => casc.file_by_path(&args[2]),
+    }
+    .expect("the file");
     println!("{} bytes, header {:?}", b.len(), &b[..b.len().min(24)]);
+    // A third argument: where to write the file.
+    if let Some(out) = args.get(3) {
+        std::fs::write(out, &b).expect("written");
+    }
     if let Some(img) = wowlua_casc::decode_image(&b) {
         println!(
             "{}x{} first {:?}",

@@ -57,11 +57,11 @@ pub(crate) fn error_text(vm: &mut Vm, v: Value) -> String {
     }
 }
 
-/// A Lua string literal of `s`, cut after 200 characters.
+/// A Lua string literal of `s`, cut after 4000 characters.
 fn quoted(s: &str) -> String {
     let mut out = String::from("\"");
     for (i, c) in s.chars().enumerate() {
-        if i >= 200 {
+        if i >= 4000 {
             out.push('…');
             break;
         }

@@ -70,6 +70,10 @@ pub struct Quad {
     /// Texture coordinates of the corners: top left, bottom left, top
     /// right, bottom right (x, y each), as `SetTexCoord`'s eight values.
     pub texcoord: [f32; 8],
+    /// The atlas set (`SetAtlas`), and the corners' coordinates within
+    /// its region: a renderer with the build's own atlases places them.
+    pub atlas: Option<String>,
+    pub atlas_texcoord: [f32; 8],
     /// Vertex color times the effective alpha (and a color texture's
     /// color).
     pub color: [f32; 4],
@@ -414,6 +418,10 @@ fn quad_of(vm: &Vm, id: WidgetId) -> Option<Quad> {
         return None;
     }
     let mut texcoord = texcoord_of(vm, id, base);
+    let atlas = first(vm, id, "Atlas").and_then(|v| text_of(vm, v));
+    let mut atlas_texcoord = texcoord_of(vm, id, None);
+    let mut fill_rect = rect;
+    bar_fill(vm, id, &mut fill_rect, &mut atlas_texcoord);
     bar_fill(vm, id, &mut rect, &mut texcoord);
     let vc = color(vm, args(vm, id, "VertexColor"), [1.0; 4]);
     let pc = plain.unwrap_or([1.0; 4]);
@@ -423,6 +431,8 @@ fn quad_of(vm: &Vm, id: WidgetId) -> Option<Quad> {
         rect,
         image,
         texcoord,
+        atlas,
+        atlas_texcoord,
         color: [
             vc[0] * pc[0],
             vc[1] * pc[1],

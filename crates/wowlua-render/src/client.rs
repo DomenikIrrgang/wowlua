@@ -46,10 +46,31 @@ pub fn open_client(install: &Path, folders: &[String]) -> Result<Arc<Casc>, Stri
     Ok(casc)
 }
 
+/// The build's atlases, by lower-case name.
+pub type Atlases = HashMap<String, wowlua_casc::atlas::Atlas>;
+
+/// The atlases of a storage, read once per storage.
+fn atlases_of(casc: &Arc<Casc>) -> Arc<Atlases> {
+    type Read = Mutex<HashMap<usize, Arc<Atlases>>>;
+    static READ: OnceLock<Read> = OnceLock::new();
+    let key = Arc::as_ptr(casc) as usize;
+    let map = READ.get_or_init(Default::default);
+    if let Some(a) = map.lock().ok().and_then(|m| m.get(&key).cloned()) {
+        return a;
+    }
+    let a = Arc::new(wowlua_casc::atlas::read(casc));
+    if let Ok(mut m) = map.lock() {
+        m.insert(key, a.clone());
+    }
+    a
+}
+
 /// The addons' folders and the client's storage.
 #[derive(Clone, Default)]
 pub struct ClientAssets {
     pub casc: Option<Arc<Casc>>,
+    /// The build's atlases (none when its tables are encrypted).
+    pub atlases: Option<Arc<Atlases>>,
     /// `interface\addons\<name>\` (lower case) → the addon's folder.
     pub addons: Vec<(String, PathBuf)>,
 }
@@ -60,8 +81,10 @@ fn norm(path: &str) -> String {
 
 impl ClientAssets {
     pub fn new(casc: Option<Arc<Casc>>, addons: &[(String, PathBuf)]) -> ClientAssets {
+        let atlases = casc.as_ref().map(atlases_of).filter(|a| !a.is_empty());
         ClientAssets {
             casc,
+            atlases,
             addons: addons
                 .iter()
                 .map(|(name, dir)| {
@@ -121,6 +144,11 @@ impl Assets for ClientAssets {
             return crate::decode_png(&bytes).ok();
         }
         wowlua_casc::decode_image(&bytes)
+    }
+
+    fn atlas(&mut self, name: &str) -> Option<(Image, [f32; 4])> {
+        let a = self.atlases.as_ref()?.get(&name.to_ascii_lowercase())?;
+        Some((Image::FileId(a.file), a.coords))
     }
 
     fn font(&mut self, path: &str) -> Option<Vec<u8>> {

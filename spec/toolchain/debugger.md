@@ -216,6 +216,13 @@ T310).
 - **Textures**: BLP (palettized, DXT1/3/5 and uncompressed, with mipmaps)
   and TGA, from the installation or from the addon's own folder (an
   `Interface/AddOns/<Name>/…` path).
+- **Atlases**: from the build's own tables (`UiTextureAtlas`,
+  `UiTextureAtlasMember`, `UiTextureAtlasElement`), so they match its
+  files (decision T316): a name is an element, drawn with its variant of
+  the flavor's atlas set (camelot's `-c60`) over the default set's, at 1x;
+  a variant's own name is drawn as itself. Where the tables cannot be read
+  (encrypted in some builds, the keys not ours), the engine's recorded
+  atlases are drawn.
 - **Fonts**: the client's TrueType fonts from the installation; without
   them, the bundled stand-in fonts (open licenses), at the same pixel
   heights. Glyph positions follow the engine's measured widths (§17.6), so

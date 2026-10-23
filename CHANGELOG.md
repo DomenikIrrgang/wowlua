@@ -41,6 +41,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- `GetBindingText(key, 1)` shortens the modifiers as the action bars show them (`s-1`, `c-2`), so Blizzard's hotkey labels in tests and screenshots read as in game.
 - Textures from XML templates (`UIPanelButtonTemplate`'s and others') now get their `<TexCoords>` and `alphaMode`, as in game: `GetTexCoord` and `GetBlendMode` give what the template sets.
 - The HTML coverage report of a workspace showed no source and took the name of the last addon in it: it now shows each file's source and the root package's name.
 - Code in a branch your build removes (`if build.debug then … end` in a release, `if flavor == "vanilla" then … end` in another flavor) is no longer checked, as documented: it may use what that build doesn't have, such as an import under `@if(build.debug)`.

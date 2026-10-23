@@ -82,6 +82,13 @@ engine cannot get otherwise.
    `GetTime()` at each). Why: SuuUI's probe saw the update 0.4-0.7 s
    later; the engine moves them and fires it at once.
 
+- **`GetBindingText(key, 1)` with modifiers** (the action bars' hotkeys):
+  `SHIFT-1`, `CTRL-ALT-2`, `META-E`, `SHIFT-MOUSEWHEELUP`, `SHIFT-NUMPAD1`.
+  Why: the engine shortens the modifiers with the client's
+  `*_KEY_TEXT_ABBR` strings and joins them with `-` (`s-1`), and keeps the
+  key's own name whole; neither the joining nor the key names are
+  recorded (M12's default-UI screenshot showed the hotkeys cut to `SHI…`).
+
 ## The answers battery's new calls
 
 About a minute, standing anywhere, out of a group and out of combat.

@@ -50,3 +50,36 @@ fn reads_every_products_textures_and_fonts() {
     }
     let _ = storage.list("Data");
 }
+
+#[test]
+fn reads_the_builds_own_atlases() {
+    let Some(root) = install() else {
+        eprintln!("no WoW installation: skipped");
+        return;
+    };
+    let storage = FsStorage { root: root.clone() };
+    for (product, version) in Casc::products(&storage) {
+        let casc = Casc::open(Box::new(FsStorage { root: root.clone() }), &product).expect("opens");
+        let started = std::time::Instant::now();
+        let atlases = wowlua_casc::atlas::read(&casc);
+        eprintln!(
+            "{product} {version}: {} atlases in {:?}",
+            atlases.len(),
+            started.elapsed()
+        );
+        // Some builds encrypt the tables (classic's): none then.
+        if product == "wow_classic_beta" {
+            assert!(atlases.len() > 1000, "{product}: {}", atlases.len());
+            // An element's camelot variant at 1x: the level circle.
+            let c = atlases["ui-hud-unitframe-smallcircle"];
+            assert_eq!(c.file, 8036204, "{c:?}");
+            assert_eq!((c.width, c.height), (39, 39));
+            assert_eq!(
+                c.coords,
+                [979.0 / 1024.0, 1018.0 / 1024.0, 87.0 / 512.0, 126.0 / 512.0]
+            );
+            // A member's own name.
+            assert_eq!(atlases["ui-hud-unitframe-smallcircle-c60-2x"].file, 8036209);
+        }
+    }
+}
