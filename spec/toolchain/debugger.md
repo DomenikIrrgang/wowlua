@@ -1,0 +1,301 @@
+# 18. Debugger, Profiler and UI Rendering
+
+**Status: planned (M12).** The debugger attaches to the emulated client
+([WoW client emulation](emulator.md)): the VM pauses and steps where the real
+client cannot be observed, the profiler counts what every function, event and
+script costs, and the engine's UI is drawn as an image of the state it holds
+(decisions T209, T300 to T315).
+
+## 18.1 Layers
+
+Everything is a library first; the command-line front-ends and wowlua Studio
+(the planned native IDE) use the same pieces.
+
+| Layer | Crate | Role |
+|-------|-------|------|
+| Debug hooks | `wowlua-vm` | Line, call, return, error and load events, the profiler's counters (§18.2) |
+| Debug core | `wowlua-debug` | Sessions, breakpoints, stepping, stacks, variables, evaluation, profiles (§18.3 to §18.8) |
+| Scene | `wowlua-engine` | The UI as a draw list: what is visible, where, in which order (§18.9) |
+| Assets | `wowlua-casc` | Textures, atlases and fonts from the user's own WoW installation (§18.10) |
+| Renderer | `wowlua-render` | Draws a scene with `wgpu`: to a window, or off-screen to a PNG (§18.11) |
+| Front-ends | `wowlua-cli` | `wowlua debug` (DAP), `wowlua mcp` (MCP), `wowlua screenshot`, the test API (§18.12) |
+
+**Native and the browser** (decisions T212, T301). Every layer but the
+front-ends builds for `wasm32-unknown-unknown`: no file system, threads,
+processes or clocks of their own. Files come through the engine's file access
+interface; time through a clock the host gives (`std::time::Instant`
+natively, `performance.now()` in the browser). A pause never blocks the
+thread that renders: the paused VM runs a command loop (§18.3), and the host
+decides where it waits (a thread natively, a Web Worker in the browser).
+Studio links the debug core directly, in its own process; DAP and MCP are
+for other programs.
+
+## 18.2 Debug hooks
+
+The VM reports what it runs to a hook the host installs (decision T302):
+
+- **Line**: before an instruction that starts a new line, as Lua 5.1's line
+  hook (a function's first instruction, a backward jump, a different line).
+- **Call** and **return**: every Lua and native function, tail calls
+  included; an error unwinding a frame reports its return too.
+- **Error**: an error raised, before it unwinds, with whether a `pcall` or
+  `xpcall` up the stack catches it.
+- **Load**: a chunk compiled, with every function in it.
+- **Dispatch**: the engine tells the hook when it starts and ends running
+  an event's handlers, a widget's script, a frame's `OnUpdate`, a timer and
+  a game frame, with their names; stacks and profiles show them as frames of
+  their own.
+
+**Cost.** One byte in the VM says which hooks are on; with none, an
+instruction costs one test of that byte, and a call or return one more
+(decision T303). Line events come only from functions that have a
+breakpoint, or while stepping: breakpoints mark the functions they are in,
+so code without one runs at full speed under the debugger. A running session
+can be interrupted from another thread or the browser's event loop: the
+interrupt is an atomic flag the VM looks at every 1024 instructions while a
+debugger is attached, and never otherwise.
+
+## 18.3 Sessions
+
+A session is one emulated client under the debugger, started from:
+
+- **A test file** (`test`): the file runs as `wowlua test` runs it
+  ([Tooling §16.1.2](tooling.md#1612-what-a-test-run-loads)), its tests
+  filtered by name (`filter`); the session ends with the file.
+- **The addon** (`addon`): the package's test build loads as the client
+  loads it, with the manifest's world profile, Blizzard's UI when
+  `test.blizzard-ui` is set, and its other addons; the player logs in and
+  the game's frames run until the session is stopped.
+
+**Clock** (decision T304). A session's time is the engine's virtual clock.
+In `realtime` mode (the default of DAP sessions) a frame runs every 1/60 s of
+wall time, so `OnUpdate` and timers advance as in game; in `manual` mode
+(the default of MCP sessions) time moves only when asked
+(`advance(seconds | frames)`), so what an agent sees repeats exactly. Time
+stops while paused.
+
+**Paused** (decision T305). At a breakpoint, a step's end, an exception or a
+pause request, the VM stops inside the hook and serves commands until told
+to go on: stack, variables, evaluation, breakpoints, the scene, screenshots,
+the profile. Input sent while paused waits and reaches the UI, in order,
+when the game's next frame runs; the scene and screenshots show the state at
+the pause, layout included.
+
+## 18.4 Breakpoints
+
+| Kind | Written as | Stops |
+|------|-----------|-------|
+| Line | a source line, with an optional condition, hit count and log message | before the line runs |
+| Function | `Name`, `Table.name`, `Table:method` | when that Lua function is entered |
+| API call | `C_Timer.After`, `CreateFrame` | when Lua calls that native function |
+| Event | `event:PLAYER_LOGIN`, `event:*` | before the event's first handler runs |
+| Script | `script:OnClick`, `script:MyFrame:OnUpdate` | before a widget's script runs (of any widget, or the named one) |
+| Timer | `timer` | before a timer's callback runs |
+| Exception | `uncaught`, `all` | when an error reaches the error handler, or any error |
+| Taint | `taint`, `blocked` | where execution becomes tainted, or a protected action is blocked |
+
+Line breakpoints are set in `.wowlua` and `.lua` sources: test and dev
+builds keep every statement on its source line
+([Code generation §14.4](codegen.md)), so a source line is the chunk's line.
+A line with no code moves to the next one that has some, as editors expect;
+the breakpoint answers with the line it took. Conditions and log messages
+are Lua expressions evaluated in the stopped frame (§18.7); a log message's
+`{expr}` parts are evaluated and printed to the console without stopping.
+
+## 18.5 Stepping
+
+Step into, over and out, by source line, in the running coroutine:
+
+- **Into** stops at the next line run anywhere: in a function the line
+  calls, or in a handler the engine runs because of it (`frame:Show()`
+  runs `OnShow`, `C_Timer.After(0, f)` does not run `f` yet).
+- **Over** stops at the next line of the same function or its callers.
+- **Out** stops at the next line of the caller; out of a handler, at the
+  next handler of the same dispatch (the next frame's `OnEvent` for the same
+  event), else where the engine resumes Lua next.
+
+Steps go into Blizzard's UI code only when the session loads it with
+`debug-blizzard-ui: true`; otherwise its functions are stepped over and its
+frames are marked in stacks.
+
+## 18.6 Stack frames
+
+A stack lists, innermost first: Lua functions with their source location
+(path relative to the package, line), native functions as `[C] name`, and
+the engine's dispatches as frames of their own (`event PLAYER_LOGIN`,
+`MyFrame:OnEvent`, `OnUpdate`, `timer`, `frame 1234`), so a handler shows
+why it runs. In a coroutine the stack continues with the code that resumed
+it. Each frame carries the taint of its function (the addon whose code it
+is, or secure).
+
+## 18.7 Variables and evaluation
+
+Scopes per frame: **Locals** (parameters first), **Varargs**, **Upvalues**,
+and **Globals** (the function's environment). Tables expand lazily, sorted
+as `toMatchSnapshot` sorts keys, with their metatable as a last entry;
+widgets show their type, name, shown state, size, points, parent and
+children before their fields. Every value shows its taint (decision T306):
+`secure`, or the addon that wrote it; a secret value shows its hidden value
+marked as secret, which no addon code can read.
+
+**Evaluation** (watches, the console, conditions, log messages): a Lua
+expression or statement list, compiled as a chunk whose environment reads
+the frame's locals and upvalues first, then its environment; it runs with
+the frame's execution taint (so it cannot make insecure code secure), with
+breakpoints off, and its errors are its result. Assignments to locals and
+upvalues write the frame's. What the session prints goes to the console.
+
+## 18.8 Profiler
+
+The VM counts, per function and per dispatch (decision T307):
+
+- calls;
+- instructions run, self and total (the default measure: the same on every
+  machine and every run, so CI compares them);
+- bytes allocated, self and total (the garbage a function makes);
+- host time, self and total, in nanoseconds (the emulator's speed, not the
+  client's; shown as a second measure).
+
+Functions are keyed by their definition (source, line defined; natives by
+name), dispatches by kind and name (`event PLAYER_LOGIN`, `MyFrame:OnEvent`,
+`OnUpdate MyFrame`, `timer`), and game frames by number. The call tree keeps
+every path (callers and callees) up to depth 256. A profile is started and
+stopped in a session (or covers a whole test file with
+`wowlua test --profile`), and is given as a table (functions sorted by a
+measure), a call tree, a per-frame timeline, or a file:
+[speedscope](https://www.speedscope.app) JSON with one profile per measure,
+which Studio and speedscope open (decision T308).
+
+## 18.9 Scene
+
+The scene is what the screen shows, as data (decision T309): every visible
+region in draw order, in screen pixels (top-left origin, UIParent's scale
+applied), each with the widget it belongs to. It is built from the engine's
+state on request (a screenshot, a viewer's frame) and costs time in
+proportion to the visible regions.
+
+- **Order**: frame strata (`BACKGROUND` to `TOOLTIP`), frame level, then a
+  frame's regions by draw layer (`BACKGROUND`, `BORDER`, `ARTWORK`,
+  `OVERLAY`, `HIGHLIGHT` while the mouse is over its button) and sublevel
+  (-8 to 7), then creation order; a frame draws before its regions'
+  children frames of the same level.
+- **Textures**: the rectangle, the image (a file path or file ID, an atlas
+  as the client's tables give it, or a color), texture coordinates (four
+  corners), vertex color, effective alpha, blend mode (`BLEND`, `ADD`,
+  `MOD`, `ALPHAKEY`, `DISABLE`), desaturation, rotation, tiling, and mask
+  textures.
+- **Text**: the rectangle, the laid-out lines (wrapped and truncated as the
+  engine measures them, §17.6), font file, height and flags (`OUTLINE`,
+  `THICKOUTLINE`, `MONOCHROME`), color, shadow, justification and spacing.
+- **Lines** (`Line` regions), status bars' and sliders' textures at their
+  value, cooldowns' swipes, and a frame's backdrop (from its template's
+  mixin, as any texture) are textures too.
+- **Clipping**: frames that clip their children (`SetClipsChildren`,
+  scroll frames) give their rectangle to everything below them.
+- **Hit testing**: the topmost mouse-enabled frame at a point, as the
+  engine's input finds it, so a viewer's click is the engine's click.
+
+The scene also comes as the frame tree (names, types, shown and visible
+state, rectangles, text, strata, levels) for agents and inspectors.
+
+## 18.10 Assets
+
+Blizzard's textures, atlases and fonts are read only from the user's own
+installation and never distributed or cached outside it (decisions T210,
+T310).
+
+- **Finding it**: `--wow`, `WOWLUA_WOW_PATH`, the global config, then the
+  default locations, as `wowlua dev` finds it
+  ([CLI §12.5](cli.md#125-wow-installation-integration)); the flavor's client
+  folder picks the product (`.build.info`). Without an installation, or for
+  a file it does not have, a stand-in is drawn (below).
+- **Reading it**: the local CASC storage (`Data/`): the build config, the
+  encoding table and the root, then each file by its path's name hash or
+  file ID, from the archives' index. Files are decoded once per session and
+  kept in memory.
+- **Textures**: BLP (palettized, DXT1/3/5 and uncompressed, with mipmaps)
+  and TGA, from the installation or from the addon's own folder (an
+  `Interface/AddOns/<Name>/…` path).
+- **Fonts**: the client's TrueType fonts from the installation; without
+  them, the bundled stand-in fonts (open licenses), at the same pixel
+  heights. Glyph positions follow the engine's measured widths (§17.6), so
+  layout does not depend on which font draws.
+- **Stand-ins**: a texture that cannot be read is drawn as a checkered
+  magenta rectangle with its vertex color, so a missing image is visible;
+  `--strict-assets` makes a missing file an error.
+
+## 18.11 Renderer
+
+`wowlua-render` draws a scene with `wgpu` (decision T311): Metal, DirectX 12
+or Vulkan natively, WebGPU or WebGL 2 in the browser.
+
+- **Targets**: a window's surface (Studio), or an off-screen texture read
+  back as RGBA and written as PNG. Reading back is asynchronous, as the
+  browser requires; native callers block on it.
+- **Drawing**: one batched pass of textured quads in scene order, with the
+  client's blend modes, premultiplied alpha, linear filtering and texture
+  coordinates; masks as a second texture; text from a glyph atlas
+  rasterized from the font at the scene's pixel height, with outlines and
+  shadows.
+- **Speed**: textures and glyphs are uploaded once and kept on the GPU;
+  quads go in one vertex buffer per frame, drawn in as few calls as texture
+  changes allow; nothing is drawn when the scene did not change.
+- **Adapter**: any GPU, or a software adapter (WARP on Windows, lavapipe on
+  Linux); without one, rendering fails with an error that says so.
+
+**Screenshots** are the whole screen or one frame's rectangle (its
+descendants included), at the screen's size (`test.screen`) or a given
+scale.
+
+**Comparison** (decision T312). A screenshot matches a stored one when at
+most `maxDiffRatio` of its pixels (default 0.001) differ by more than
+`threshold` (default 0.1, in YIQ color distance as pixelmatch measures it),
+so GPUs that round differently still match. A mismatch writes the actual
+image and a diff image next to the stored one.
+
+## 18.12 Front-ends
+
+### 18.12.1 `wowlua debug`: Debug Adapter Protocol
+
+`wowlua debug` speaks the [Debug Adapter Protocol](https://microsoft.github.io/debug-adapter-protocol/)
+on stdio, or on a TCP port with `--port <n>` (decision T313). `launch`
+takes `test` (a test file) and `filter`, or `addon: true`; and `flavor`,
+`profile`, `stopOnEntry`, `clock` (`realtime` | `manual`) and
+`debugBlizzardUI`. It supports breakpoints of every kind of §18.4 (line
+breakpoints with conditions, hit counts and log points; function
+breakpoints for functions, API calls, events, scripts and timers;
+exception breakpoints for `uncaught`, `all`, `taint` and `blocked`),
+stepping, threads (one per coroutine), stack traces, scopes, variables,
+`setVariable`, `evaluate` (watch, hover, repl), `pause` and `terminate`.
+Custom requests: `wowlua/screenshot` (PNG as base64), `wowlua/frameTree`,
+`wowlua/input` (click, hover, drag, type, key), `wowlua/advance`,
+`wowlua/profile` (start, stop, report).
+
+### 18.12.2 `wowlua mcp`: Model Context Protocol
+
+`wowlua mcp` is an MCP server on stdio for AI agents (decision T314). Its
+tools: `start_session` (a test file or the addon, flavor, profile, screen),
+`stop_session`, `screenshot` (the screen or a frame, returned as an image),
+`frame_tree` (optionally under a frame, with hidden frames or not),
+`find_frames` (by name, type or text), `click`, `hover`, `drag`, `type_text`,
+`press_key`, `advance`, `fire_event`, `eval`, `set_breakpoints`, `continue`,
+`step`, `stack`, `variables`, `profile_start`, `profile_stop`, `output`
+(what the session printed and the errors it raised). Sessions are `manual`
+clocked unless asked otherwise.
+
+### 18.12.3 `wowlua screenshot`
+
+`wowlua screenshot <test file> [--test <name>] [--frame <name>] [--flavor <f>]
+[--scale <s>] -o <file.png>` runs the test file (or one test of it) and writes
+a screenshot when it ends; `mock.screenshot(name)` calls inside it write
+`<file>-<name>.png` too.
+
+### 18.12.4 In tests
+
+`mock.screenshot(name?, frame?)` renders now and returns the image's path;
+`expect(frame).toMatchScreenshot(name?, { threshold?, maxDiffRatio? })` (or
+`expect(mock.screen)` for the whole screen) compares with
+`__screenshots__/<test file>/<test>-<name>.png` next to the test (decision
+T315): a missing image is written, a different one fails the test with its
+diff ratio and the paths of the actual and diff images, and
+`wowlua test -u` rewrites it, as snapshots.

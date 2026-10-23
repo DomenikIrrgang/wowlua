@@ -540,23 +540,32 @@ a boss pull, taken in game with the dev window, is exported and opened with
 ## M12: Debugger
 
 A debugger attaches to the emulated client (decision T209): the VM pauses and
-steps where the real client cannot be observed.
+steps where the real client cannot be observed
+([Debugger](toolchain/debugger.md), decisions T300 to T315). Built as
+libraries for wowlua Studio, natively and in the browser (T300, T301).
 
-- `wowlua debug` serves the Debug Adapter Protocol: breakpoints (also on
-  events, scripts and API calls), stepping through Lua and into event
-  dispatch, `OnUpdate` and timers, call stacks with the source-mapped wowlua
-  code, watches and a console, the taint and secrecy of every value.
-- Profiling from the VM's hooks: time and calls per function, event, frame
-  and `OnUpdate`, garbage per function (the views of M11's in-game tools,
-  T174).
-- A live UI channel (WebSocket): the frame tree, layout, draw layers, text and
-  textures of the current frame stream to a viewer, which sends mouse and
-  keyboard input back; the UI stays usable while paused or stepping.
-- The VS Code extension (M9 S8) attaches to it.
+- The VM's debug hooks: line, call, return, error, load and the engine's
+  dispatches, at no cost when off (T302, T303).
+- `wowlua-debug`: sessions of a test file or the addon, breakpoints (lines,
+  functions, API calls, events, scripts, timers, exceptions, taint),
+  stepping through Lua and into event dispatch, `OnUpdate` and timers,
+  stacks with dispatch frames, variables with taint and secrets, evaluation
+  and a console (T304 to T306).
+- Profiling from the VM's hooks: calls, instructions, garbage and host time
+  per function, event, script, `OnUpdate` and game frame; call trees and
+  speedscope files; `wowlua test --profile` (T307, T308).
+- The scene: the engine's UI as a draw list and a frame tree (T309).
+- From M13: the CASC reader for the user's textures (BLP), atlases and
+  fonts, and the `wgpu` renderer, to windows and off-screen PNGs (T310,
+  T311).
+- Front-ends: `wowlua debug` (DAP), `wowlua mcp` (MCP for AI agents),
+  `wowlua screenshot`, `mock.screenshot` and `toMatchScreenshot` (T312 to
+  T315).
 
 **Exit:** a test or an addon session is stopped at a breakpoint inside an
-event handler, stepped through, inspected with watches, and clicked through
-in the viewer.
+event handler, stepped through and inspected with watches over DAP; an agent
+clicks through the addon's UI over MCP and sees it in screenshots drawn with
+the client's textures and fonts; a UI test compares a screenshot.
 
 ## M13: Game data and rendering
 
@@ -566,12 +575,10 @@ Real game data and assets from the user's own client, never distributed
 - A CASC reader for the local installation: the DB2 tables (spells, talents,
   items, currencies, maps, …) behind the engine's game-data interface, next
   to the tests' data and the world profiles' (T203, T213).
-- UI assets: BLP textures, texture atlases, fonts; text measured with the
-  client's fonts, so `GetStringWidth`, wrapping and truncation match the
-  client in tests too (T211).
-- A renderer on `wgpu` drawing the UI as the client does: strata, levels,
-  layers, blend modes, masks, texture coordinates, text (T211); 3D models
-  (`ModelScene`, M2 files) last.
+- UI assets and the `wgpu` renderer moved to M12 (T310); left here: text
+  measured with the client's fonts, so `GetStringWidth`, wrapping and
+  truncation match the client in tests too (T211); 3D models (`ModelScene`,
+  M2 files) last.
 
 **Exit:** the debugger's viewer shows the default UI and an addon's frames
 from a world profile as the client draws them, with the client's spell and

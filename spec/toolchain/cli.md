@@ -33,8 +33,11 @@ wowlua <command> [options]
 | `wowlua dev [--flavor <f>…] [--client <folder>…] [--link] [--wow <install>] [--force]` | Watch, build with the `dev` profile, and sync the AddOn into WoW (§12.5) |
 | `wowlua install [--profile <p> \| --release] [--flavor <f>…] [--client <folder>…] [--wow <install>] [--force]` | Build once (default profile `dev`, decision T45) and install into WoW (§12.5) |
 | `wowlua uninstall [--client <folder>…] [--wow <install>]` | Remove installed builds of this addon (§12.5) |
-| `wowlua test [filter…] [--flavor <f>] [--watch] [--coverage] [--reporter <r>] [--game-data]` | Run tests ([Tooling §16.1](tooling.md#161-test-runner-wowlua-test)); `--game-data` with the data `wowlua data pull` read |
+| `wowlua test [filter…] [--flavor <f>] [--watch] [--coverage] [--reporter <r>] [--game-data] [--profile <dir>]` | Run tests ([Tooling §16.1](tooling.md#161-test-runner-wowlua-test)); `--game-data` with the data `wowlua data pull` read; `--profile` writes each test file's profile as speedscope JSON ([Debugger §18.8](debugger.md#188-profiler)) |
 | `wowlua data pull --wow <path> [--flavor <f>]` | Read the flavor's game data from a local WoW installation into wowlua's local cache, for `wowlua test --game-data` (decision T203) |
+| `wowlua debug [--port <n>]` | Serve the Debug Adapter Protocol on stdio or a TCP port: debug a test file or the addon in the emulated client ([Debugger §18.12.1](debugger.md#18121-wowlua-debug-debug-adapter-protocol)) |
+| `wowlua mcp` | Serve the Model Context Protocol on stdio, for AI agents: sessions, screenshots, the frame tree, input, debugging, profiles ([Debugger §18.12.2](debugger.md#18122-wowlua-mcp-model-context-protocol)) |
+| `wowlua screenshot <test file> [--test <name>] [--frame <name>] [--flavor <f>] [--scale <s>] -o <file.png>` | Run a test file and write a screenshot of the UI when it ends ([Debugger §18.12.3](debugger.md#18123-wowlua-screenshot)) |
 | `wowlua fmt [--check] [paths…]` | Format sources |
 | `wowlua lint [--fix]` | Run lints only. `--fix` applies machine-applicable fixes. |
 | `wowlua fix [--manifest]` | Apply all machine-applicable fixes from diagnostics. `--manifest` migrates `wowlua.json` to the current schema ([Manifest §9.16](manifest.md#916-schema-versions-and-migration)). |
