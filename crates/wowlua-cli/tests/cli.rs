@@ -1434,7 +1434,9 @@ local fadeTo: string = fade:GetToAlpha()
 local outfit = C_TransmogCollection.GetCustomSetItemTransmogInfoList(1)
 local firstPiece = outfit and outfit[1]
 local appearance: string = firstPiece and firstPiece.appearanceID or ""
-print(cancel, zoom, maxZoom, secretTable, completion, known, tabCost, conditionText, active, started, party, location, itemStarted, unitRealm, named, held, heldID, counts, enabled, fadeTo, appearance)
+local bagItem = ItemLocation:CreateFromBagAndSlot(0, 1)
+local sellable: boolean = C_AuctionHouse.IsSellItemValid(bagItem, false) and bagItem.bagID == 0
+print(cancel, zoom, maxZoom, secretTable, completion, known, tabCost, conditionText, active, started, party, location, itemStarted, unitRealm, named, held, heldID, counts, enabled, fadeTo, appearance, sellable)
 "#,
             ),
         ],

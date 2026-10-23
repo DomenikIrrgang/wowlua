@@ -202,12 +202,22 @@ impl Converter {
     fn declare_class(
         &mut self,
         name: &str,
-        parents: Vec<String>,
+        mut parents: Vec<String>,
         fields: Vec<(String, String, bool)>,
     ) {
         // Dotted names (`TextureInfoTable.margin`) are referred to as `any`.
         if name.is_empty() || !crate::model::is_ident(name) {
             return;
+        }
+        // `ItemLocation : ItemLocationData, ItemLocationMixin`: the mixin is
+        // the base (what the API's functions take), the data's fields are
+        // copied in (decision T284).
+        if parents.len() > 1
+            && parents[0].ends_with("Data")
+            && let Some(i) = parents.iter().position(|p| p.ends_with("Mixin"))
+        {
+            let mixin = parents.remove(i);
+            parents.insert(0, mixin);
         }
         let entry = self.out.classes.entry(name.to_string()).or_default();
         if entry.bases.is_empty() {
@@ -1020,6 +1030,17 @@ function C_Thing.Do(...) end
             d.namespaces["C_Thing"].functions["Do"][0].vararg.as_deref(),
             Some("any")
         );
+    }
+
+    /// A class of a data class and a mixin extends the mixin and gets the
+    /// data's fields (decision T284).
+    #[test]
+    fn data_and_mixin_parents() {
+        let src = "---@class ItemLocationData\n---@field bagID? number\nlocal D = {}\n\n---@class ItemLocationMixin\nlocal M = {}\n\n---@return boolean\nfunction M:IsValid() end\n\n---@class ItemLocation : ItemLocationData, ItemLocationMixin\nItemLocation = {}\n";
+        let d = convert(&[("x.lua".into(), src.into())]);
+        let loc = &d.classes["ItemLocation"];
+        assert_eq!(loc.bases, ["ItemLocationMixin"]);
+        assert_eq!(loc.fields["bagID"], ("number".into(), true));
     }
 
     /// A function the wiki has no page for (`---#nopage`) and nothing

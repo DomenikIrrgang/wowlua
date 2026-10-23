@@ -777,7 +777,10 @@ The global environment (`_G`) is modelled as a set of **declared globals**:
   embedded in the compiler until the package manager provides them as types
   packages; see [Package manager](../toolchain/package-manager.md#109-types-packages)
   and decision T83). A function is declared for a flavor only when that
-  flavor's client has it (decision T85),
+  flavor's client has it (decision T85). A class the annotations give a data
+  class and a mixin as parents (`ItemLocation : ItemLocationData,
+  ItemLocationMixin`) extends the mixin, what the API's functions take, and
+  has the data's fields (decision T284),
 - the globals of Blizzard's UI code (FrameXML functions, tables, mixins and
   named frames) and its global strings (decision T84). A named frame of the
   XML is typed by its mixins and its widget type, the most specific first
@@ -792,7 +795,9 @@ The global environment (`_G`) is modelled as a set of **declared globals**:
   `CreateFromMixins(A, B)` extends `A` and has `B`'s functions,
 - the Lua 5.1 standard library as available in WoW, and `LibStub`
   (decision T86). WoW has no `os`, `io`, `debug` or `package` library; it
-  keeps `date`, `time` and `difftime` as globals. Its additions to `string`
+  keeps `date`, `time` and `difftime` as globals (`date("*t")` and
+  `date("!*t")` give a `DateTable` of the time's parts, any other format a
+  `string`, decision L72). Its additions to `string`
   (`startswith`, `endswith`, `contains`, `ltrim`, `rtrim`, `concat`, …),
   `table` (`contains`, `indexof`, `keys`, `values`, `count`, `isempty`,
   `removevalue`, `freeze`, …) and `math` (`clamp`, `lerp`, `round`, `wrap`,

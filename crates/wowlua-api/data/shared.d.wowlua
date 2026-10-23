@@ -3410,7 +3410,10 @@ declare class Item
     function CreateFromItemID(itemID: number): ItemMixin
 end
 
-declare class ItemLocation extends ItemLocationData
+declare class ItemLocation extends ItemLocationMixin
+    equipmentSlotIndex?: number
+    bagID?: number
+    slotIndex?: number
     function CreateEmpty(): ItemLocation
     function CreateFromBagAndSlot(bagID: number, slotIndex: number): ItemLocation
     function CreateFromEquipmentSlot(equipmentSlotIndex: number): ItemLocation
@@ -3598,7 +3601,11 @@ declare class ColorRGBAData extends ColorRGBData
     a: number
 end
 
-declare class colorRGB extends ColorRGBData
+declare class colorRGB extends ColorMixin
+    r: number
+    g: number
+    b: number
+    colorStr?: string
     function IsEqualTo(otherColor: colorRGBA): boolean
     function GetRGB(): (number, number, number)
     function GetRGBAsBytes(): (number, number, number)

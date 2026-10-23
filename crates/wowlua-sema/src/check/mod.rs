@@ -2601,6 +2601,17 @@ print(a, b, c, d, e, name, realm, more)
         assert!(!d.iter().any(|x| x.code == Some("E2003")), "{d:#?}");
     }
 
+    /// `date("*t")` gives the time's parts, any other format a string
+    /// (decision L72).
+    #[test]
+    fn date_is_typed() {
+        strict_ok(
+            "local t = date(\"*t\", 0)\nlocal y: number = t.year + t.yday\nlocal s: string = date(\"%H:%M\")\nprint(y, s, date(\"!*t\").hour)\n",
+        );
+        strict_err("local n: number = date(\"%H\")\nprint(n)\n", "E2001");
+        strict_err("print(date(\"*t\").nope)\n", "E2003");
+    }
+
     /// `x or {}` without an expected type takes `x`'s type where `{}` fits it
     /// (decision L52).
     #[test]
