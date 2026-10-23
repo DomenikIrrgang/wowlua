@@ -454,9 +454,17 @@ exclude code, and `test.coverage.exclude` excludes files.
 Reports, any combination: a terminal summary (always, with each file's lines
 that never ran), `lcov` (`lcov.info`, with branch and function data),
 `cobertura` (`cobertura.xml`), `coverage-json` (`coverage.json`), and `html`
-(`coverage.html`): a self-contained report in the wowlua design system (its
-fonts and tokens, dark and light), with every file's source, hit counts,
-branch markers and totals per file and folder.
+(`coverage.html`): a self-contained page under wowlua's mark, in its colours
+(dark and light), drawn by its script from the counts and sources it embeds.
+The index has the totals, the files to test next (the most lines not run,
+the functions never called) and every file with its four percentages and
+lines not run, by folder, sortable by any column, filterable by name and to
+the files not fully covered. A file (`#/src/a.wowlua`, a line
+`#/src/a.wowlua:L12`) has its totals, the lines that never ran as links with
+next and previous ones (`j`, `k`), its functions with their calls (the ones
+never called first), and its source with each line's hits and each branch's
+counts ("both ways", "one way only"). In a workspace its title is the root
+package's, and each file's source is read from the addon that has it.
 
 Thresholds in `test.coverage` ([Manifest §9.18](manifest.md#918-test)) set
 minimum percentages per kind; a run of the whole suite below one fails. A

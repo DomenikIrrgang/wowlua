@@ -14,6 +14,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Changed
 
+- The HTML coverage report (`wowlua test --coverage --reporter html`) is a page to work from: the files to test next, a file table you can sort and filter, and one file at a time with the lines that never ran (jump between them with `j` and `k`), its functions and how often each was called, and its source with each branch's counts in words. It carries wowlua's mark and colours, and is less than half the size it was.
 - In a class's method or constructor, a function whose parameter is named `self` (`frame:SetScript("OnEnter", function(self) … end)`) now warns (W1004): inside it, `self` is the frame, not your instance, and `self.field` reads the wrong table. Name the parameter differently. Plain `function M:m()` code is unchanged.
 - `assert` returns every argument it was given, as Lua's does, so `return assert(x, "message")` in a function that returns one value is now reported (too many values returned): it also handed the message to the caller, as a second value. Write `return (assert(x, "message"))`.
 - A parameter's default can't read that parameter or a later one: in the Lua it compiles to, every parameter is in scope there and not set yet, so `function f(conf: Conf = conf)` or `constructor(private settings: Store = settings.store)` read `nil`, not the outer value wowlua checked them against. That is now an error (E1004); give the parameter another name. A function in a default may still use any parameter.
@@ -25,6 +26,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- The HTML coverage report of a workspace showed no source and took the name of the last addon in it: it now shows each file's source and the root package's name.
 - Strict mode: a field your constructor sets in every branch of an `if … else … end` counts as set (E2052 said it wasn't), as does one set in a `do` block.
 - Strict mode: after `self.icon = parent:CreateTexture()`, calling a method on the field (`self.icon:SetTexture(…)`) no longer makes the next line's `self.icon` "may be nil" again. A call that gets a field's table can't replace the field; only calls that get the table holding it forget what you set.
 - A WoW function with several forms (`SetTexCoord`) accepts a last argument that gives several values, as Lua passes them: `tex:SetTexCoord(unpack(coords))` was refused (E2012).

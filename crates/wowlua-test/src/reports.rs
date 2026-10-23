@@ -3,7 +3,7 @@
 //! XML, JSON or a self-contained HTML page in the wowlua design system.
 
 use std::fmt::Write;
-use std::path::Path;
+use std::path::PathBuf;
 
 use crate::coverage::{FileCoverage, Report, Totals, percent};
 use crate::{FileResult, Outcome};
@@ -376,163 +376,76 @@ pub fn coverage_json(report: &Report) -> String {
         + "\n"
 }
 
-const HTML_STYLE: &str = r#"
-:root { --bg: #0d0f12; --panel: #15181d; --line: #262b33; --text: #d8dde4; --muted: #8a93a0;
-  --accent: #e0b04a; --hit: rgba(70, 180, 110, 0.16); --miss: rgba(220, 80, 80, 0.20);
-  --part: rgba(224, 176, 74, 0.18); --good: #5fc98a; --mid: #e0b04a; --bad: #e06464; }
-@media (prefers-color-scheme: light) {
-  :root { --bg: #f6f6f3; --panel: #ffffff; --line: #d9dbe0; --text: #1b1e23; --muted: #626b77;
-    --accent: #a5761a; --hit: rgba(40, 150, 80, 0.13); --miss: rgba(200, 50, 50, 0.13);
-    --part: rgba(190, 140, 30, 0.16); --good: #23864a; --mid: #a5761a; --bad: #b73a3a; }
-}
-* { box-sizing: border-box; }
-body { margin: 0; background: var(--bg); color: var(--text);
-  font: 13px/1.5 "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
-h1, h2 { font-family: "Martian Mono", "IBM Plex Mono", ui-monospace, monospace; font-weight: 600;
-  letter-spacing: 0.02em; margin: 0; }
-h1 { font-size: 18px; } h2 { font-size: 14px; }
-header { padding: 20px 24px; border-bottom: 1px solid var(--line); background: var(--panel); }
-header p { color: var(--muted); margin: 4px 0 0; }
-main { padding: 16px 24px 48px; max-width: 1200px; }
-table { border-collapse: collapse; width: 100%; background: var(--panel); border: 1px solid var(--line); }
-th, td { padding: 6px 10px; border-bottom: 1px solid var(--line); text-align: right; white-space: nowrap; }
-th:first-child, td:first-child { text-align: left; }
-th { color: var(--muted); font-weight: 500; }
-a { color: var(--accent); text-decoration: none; } a:hover { text-decoration: underline; }
-.good { color: var(--good); } .mid { color: var(--mid); } .bad { color: var(--bad); }
-section { margin-top: 28px; }
-section h2 { margin-bottom: 8px; }
-.src { border: 1px solid var(--line); background: var(--panel); overflow-x: auto; }
-.src div { display: flex; white-space: pre; }
-.src span { display: inline-block; }
-.n { width: 56px; text-align: right; padding-right: 10px; color: var(--muted); border-right: 1px solid var(--line); user-select: none; }
-.h { width: 64px; text-align: right; padding-right: 10px; color: var(--muted); border-right: 1px solid var(--line); }
-.c { padding-left: 10px; flex: 1; }
-.hit { background: var(--hit); } .miss { background: var(--miss); } .part { background: var(--part); }
-.b { color: var(--mid); padding-left: 8px; }
-"#;
+const HTML_STYLE: &str = include_str!("coverage_html/style.css");
+const HTML_APP: &str = include_str!("coverage_html/app.js");
+/// wowlua's mark as the tab's icon, in the dark or light colours.
+const HTML_ICON: &str = "data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 48 48'%3E%3Cstyle%3Epath%7Bstroke:%23ece6d6%7Dg%7Bfill:%23ffb547%7D@media (prefers-color-scheme:light)%7Bpath%7Bstroke:%231a1813%7Dg%7Bfill:%23975200%7D%7D%3C/style%3E%3Cpath d='M9.5 5H4V43H9.5M38.5 5H44V43H38.5' fill='none' stroke-width='3.5' stroke-linecap='square'/%3E%3Cg%3E%3Cpath style='stroke:none' transform='translate(12.14 31.63)' d='M0.36 -11.16H3.33L3.73 -6.48L3.87 -2.72H4.23L4.9 -11.16H8.08L8.69 -2.72H9.05L9.18 -6.48L9.56 -11.16H12.24L11 0.0H7.11L6.52 -8.41H6.16L5.51 0.0H1.6ZM20.12 -15.26V-2.84H23.36V0.0H13.64V-2.84H16.88V-12.42H13.64V-15.26Z'/%3E%3C/g%3E%3C/svg%3E";
 
-fn class_of(p: f64) -> &'static str {
-    if p >= 90.0 {
-        "good"
-    } else if p >= 60.0 {
-        "mid"
-    } else {
-        "bad"
-    }
-}
-
-fn pct_cell((c, n): (u64, u64)) -> String {
-    let p = percent((c, n));
-    format!(
-        "<td class=\"{}\">{p:.1}% <span style=\"color:var(--muted)\">{c}/{n}</span></td>",
-        class_of(p)
-    )
-}
-
-/// A self-contained HTML page: totals per file and folder, then every
-/// file's source with hit counts and branch markers.
-pub fn html(report: &Report, root: &Path, title: &str) -> String {
-    let t = report.totals();
-    let mut out = format!(
-        "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>{} coverage</title><style>{HTML_STYLE}</style></head><body>\n<header><h1>{} coverage</h1><p>lines {:.1}% · branches {:.1}% · functions {:.1}% · conditions {:.1}%</p></header>\n<main>\n<table><tr><th>File</th><th>Lines</th><th>Branches</th><th>Functions</th><th>Conditions</th></tr>\n",
-        xml(title),
-        xml(title),
-        percent(t.lines),
-        percent(t.branches),
-        percent(t.functions),
-        percent(t.conditions)
-    );
-    let mut folders: std::collections::BTreeMap<String, Totals> = std::collections::BTreeMap::new();
-    for (path, f) in &report.files {
-        let folder = path.rsplit_once('/').map_or(".", |(d, _)| d).to_string();
-        let ft = Report::file_totals(f);
-        let e = folders.entry(folder).or_default();
-        for (a, b) in [
-            (&mut e.lines, ft.lines),
-            (&mut e.branches, ft.branches),
-            (&mut e.functions, ft.functions),
-            (&mut e.conditions, ft.conditions),
-        ] {
-            a.0 += b.0;
-            a.1 += b.1;
-        }
-    }
-    let mut current_folder = String::new();
-    for (i, (path, f)) in report.files.iter().enumerate() {
-        let folder = path.rsplit_once('/').map_or(".", |(d, _)| d).to_string();
-        if folder != current_folder {
-            let ft = folders[&folder];
-            let _ = writeln!(
-                out,
-                "<tr><td><strong>{}/</strong></td>{}{}{}{}</tr>",
-                xml(&folder),
-                pct_cell(ft.lines),
-                pct_cell(ft.branches),
-                pct_cell(ft.functions),
-                pct_cell(ft.conditions)
-            );
-            current_folder = folder;
-        }
-        let ft = Report::file_totals(f);
-        let _ = writeln!(
-            out,
-            "<tr><td>&nbsp;&nbsp;<a href=\"#f{i}\">{}</a></td>{}{}{}{}</tr>",
-            xml(path),
-            pct_cell(ft.lines),
-            pct_cell(ft.branches),
-            pct_cell(ft.functions),
-            pct_cell(ft.conditions)
-        );
-    }
-    out.push_str("</table>\n");
-    for (i, (path, f)) in report.files.iter().enumerate() {
-        let text = std::fs::read_to_string(root.join(path)).unwrap_or_default();
-        let _ = writeln!(
-            out,
-            "<section id=\"f{i}\"><h2>{}</h2><div class=\"src\">",
-            xml(path)
-        );
-        for (n, line) in text.lines().enumerate() {
-            let ln = n as u32 + 1;
-            let branches: Vec<&[u64; 2]> = f
+/// A self-contained HTML page (spec Tooling §16.1.6): the index (totals,
+/// where to test next, every file, sortable and filterable) and each file
+/// (its totals, the lines that never ran, its functions, its source with
+/// hits and branches), drawn by the page's script from the counts and
+/// sources embedded as JSON. A file's source is read from the first of
+/// `roots` (the workspace's addons) that has it.
+pub fn html(report: &Report, roots: &[PathBuf], title: &str) -> String {
+    let flat = |t: &Totals| {
+        [t.lines, t.branches, t.functions, t.conditions]
+            .iter()
+            .flat_map(|(c, n)| [*c, *n])
+            .collect::<Vec<u64>>()
+    };
+    let files: Vec<serde_json::Value> = report
+        .files
+        .iter()
+        .map(|(path, f)| {
+            let source = roots
+                .iter()
+                .find_map(|r| std::fs::read_to_string(r.join(path)).ok())
+                .unwrap_or_default();
+            let lines: Vec<u64> = f
+                .lines
+                .iter()
+                .flat_map(|(l, h)| [u64::from(*l), *h])
+                .collect();
+            let branches: Vec<u64> = f
                 .branches
                 .iter()
-                .filter(|((l, _), _)| *l == ln)
-                .map(|(_, b)| b)
+                .flat_map(|((l, _), b)| [u64::from(*l), b[0], b[1]])
                 .collect();
-            let missed = branches
+            let functions: Vec<serde_json::Value> = f
+                .functions
                 .iter()
-                .map(|b| b.iter().filter(|x| **x == 0).count())
-                .sum::<usize>();
-            let (cls, hits) = match f.lines.get(&ln) {
-                Some(0) => ("miss", "0".to_string()),
-                Some(h) if missed > 0 => ("part", h.to_string()),
-                Some(h) => ("hit", h.to_string()),
-                None => ("", String::new()),
-            };
-            let marker = if branches.is_empty() {
-                String::new()
-            } else {
-                format!(
-                    "<span class=\"b\" title=\"branches taken / not taken\">{}</span>",
-                    branches
-                        .iter()
-                        .map(|b| format!("[{}|{}]", b[0], b[1]))
-                        .collect::<Vec<_>>()
-                        .join(" ")
-                )
-            };
-            let _ = writeln!(
-                out,
-                "<div class=\"{cls}\"><span class=\"n\">{ln}</span><span class=\"h\">{hits}</span><span class=\"c\">{}{marker}</span></div>",
-                xml(line)
-            );
-        }
-        out.push_str("</div></section>\n");
-    }
-    out.push_str("</main></body></html>\n");
-    out
+                .flat_map(|((l, _), (name, h))| {
+                    [
+                        serde_json::json!(l),
+                        serde_json::json!(name),
+                        serde_json::json!(h),
+                    ]
+                })
+                .collect();
+            serde_json::json!({
+                "p": path,
+                "t": flat(&Report::file_totals(f)),
+                "s": source,
+                "l": lines,
+                "b": branches,
+                "f": functions,
+            })
+        })
+        .collect();
+    let data = serde_json::json!({
+        "title": title,
+        "totals": flat(&report.totals()),
+        "files": files,
+    });
+    // inside <script>: no `</script>` (nor `<!--`) can end it early
+    let data = serde_json::to_string(&data)
+        .unwrap_or_default()
+        .replace('<', "\\u003c");
+    format!(
+        "<!doctype html>\n<html lang=\"en\"><head><meta charset=\"utf-8\"><meta name=\"viewport\" content=\"width=device-width, initial-scale=1\"><title>{t} coverage</title><link rel=\"icon\" href=\"{HTML_ICON}\"><style>{HTML_STYLE}</style></head><body>\n<div id=\"app\"><header><h1>{t} coverage</h1></header><main><p>The report needs JavaScript.</p></main></div>\n<script type=\"application/json\" id=\"data\">{data}</script>\n<script>{HTML_APP}</script>\n</body></html>\n",
+        t = xml(title),
+    )
 }
 
 /// The terminal summary: totals, and the files not fully covered with
