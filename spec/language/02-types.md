@@ -158,7 +158,8 @@ comparison expression. Expected types also drive inference:
 parameter the arguments left open, or replaces an argument's binding that it
 fits (`local xs: (number | string)[] = list(1)` binds `T` to
 `number | string`); a binding that does not fit stays, so `local b: boolean =
-id(5)` reports `number?`, not a union with `boolean` (decision L36). A
+id(5)` reports `number?`, not a union with `boolean` (decision L36). An
+expected `any` or `unknown` (`print(id(5))`) binds nothing (decision L48). A
 parameter `ClassOf<T>` binds `T` to the class whose table is passed (any type
 arguments of a generic class `any`), or to the enum whose table is passed:
 `enumFrom<E>(e: ClassOf<E>, raw: any): E?` called with `Direction` gives
@@ -329,7 +330,12 @@ checked against the constraints, so its
 strings stay literals: `watchAll<K extends keyof D>(keys: K[], …)` called
 with `{ "line", "figure" }` binds `K` to those keys, and a name that is not
 one is E2014. (Only a list of the parameter itself, `K[]`: a table literal
-for `D[K]` takes its type from the bound `K` as usual.)
+for `D[K]` takes its type from the bound `K` as usual.) A table literal
+argument holding a function with an unannotated parameter
+(`segmented({ options = { … }, onChange = function(v) … end })`) binds the
+type parameters from its other fields first, on trial, and is then checked
+against its parameter with them bound, so `v` gets the option values' type
+(decision L48).
 
 ## 2.3 Type aliases and recursive types
 

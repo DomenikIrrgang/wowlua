@@ -2503,6 +2503,33 @@ print(a, b, c, d, e, name, realm, more)
         );
     }
 
+    /// A callback in a table literal argument takes the type parameters
+    /// the table's other fields bind; an expected `any` or `unknown` binds
+    /// nothing (decision L48).
+    #[test]
+    fn generic_table_callbacks() {
+        let seg = "type Opts<V> = { options: V[], onChange?: (v: V) -> () }\nlocal function seg<V extends string | number>(opts: Opts<V>): V? return opts.options[1] end\n";
+        strict_ok(&format!(
+            "{seg}local r = seg({{ options = {{ 1, 2 }}, onChange = function(v) print(v + 1) end }})\nprint(r)\n"
+        ));
+        strict_err(
+            &format!(
+                "{seg}local r = seg({{ options = {{ \"a\" }}, onChange = function(v) local n: number = v; print(n) end }})\nprint(r)\n"
+            ),
+            "E2001",
+        );
+        // In `print(…)` (`any`) and for an `unknown` parameter too.
+        strict_err(
+            &format!(
+                "{seg}print(seg({{ options = {{ 1 }}, onChange = function(v) local s: string = v; print(s) end }}))\n"
+            ),
+            "E2001",
+        );
+        strict_ok(&format!(
+            "{seg}local function take(x: unknown) print(x) end\ntake(seg({{ options = {{ 1 }} }}))\n"
+        ));
+    }
+
     /// E2015 on a possibly secret value points to the secret predicates.
     #[test]
     fn cast_help() {

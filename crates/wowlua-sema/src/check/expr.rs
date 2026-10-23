@@ -3343,6 +3343,10 @@ impl Checker<'_, '_> {
         // function passed with them (`pcall(f, a, b)`).
         let mut passed_from: Option<usize> = None;
         let mut arg_types: Vec<Option<TypeId>> = vec![None; exprs.len()];
+        // Table literals holding a function with an unannotated parameter:
+        // inferred on trial (their callbacks have no types yet), checked
+        // again once the type arguments are bound (L45).
+        let mut trial_tables: Vec<bool> = vec![false; exprs.len()];
         if generic {
             // Parameters that do not mention the type parameters type their
             // arguments contextually (literals keep their literal types).
@@ -3384,12 +3388,28 @@ impl Checker<'_, '_> {
                         // parameters are constrained is checked against
                         // the constraints, so its literals stay
                         // (`keys: K[]` with `K extends keyof D`, L45).
-                        (Some(p), ExprKind::Table(_)) => {
+                        (Some(p), ExprKind::Table(fields)) => {
+                            let trial = fields.iter().any(|field| {
+                                let value = match field {
+                                    TableField::Named { value, .. }
+                                    | TableField::Keyed { value, .. } => value,
+                                    TableField::Positional(value) => value,
+                                };
+                                matches!(value.kind(), ExprKind::Function(lit)
+                                    if lit.params().iter().any(|q| q.ty().is_none()))
+                            });
+                            let marks = (self.diagnostics.len(), self.env.diagnostics.len());
                             let c = self.constraint_context(f, p);
-                            match c {
+                            let t = match c {
                                 Some(c) => self.check(e, Some(c)),
                                 None => self.infer(e),
+                            };
+                            if trial {
+                                self.diagnostics.truncate(marks.0);
+                                self.env.diagnostics.truncate(marks.1);
+                                trial_tables[i] = true;
                             }
+                            t
                         }
                         _ => self.infer(e),
                     },
@@ -3423,6 +3443,10 @@ impl Checker<'_, '_> {
                 let mut from_exp = Subst::default();
                 self.unify(r, exp, &mut from_exp);
                 for (p, t) in from_exp.types {
+                    // `any` and `unknown` (`print(f(x))`) say nothing.
+                    if t == Types::ANY || t == Types::UNKNOWN {
+                        continue;
+                    }
                     match s.types.get(&p).copied() {
                         Some(bound)
                             if !s.weak.contains(&p)
@@ -3532,10 +3556,11 @@ impl Checker<'_, '_> {
             // { point = "TOP" })` for `D[K]`, L45).
             let recheck = generic
                 && matches!(e.kind(), ExprKind::Table(_))
-                && match (arg_types[i], p) {
-                    (Some(t), Some(p)) => !self.env.assignable(t, p, self.mode),
-                    _ => false,
-                };
+                && (trial_tables[i]
+                    || match (arg_types[i], p) {
+                        (Some(t), Some(p)) => !self.env.assignable(t, p, self.mode),
+                        _ => false,
+                    });
             let t = match arg_types[i] {
                 Some(t) if !matches!(e.kind(), ExprKind::Function(_)) && !recheck => t,
                 _ => {
