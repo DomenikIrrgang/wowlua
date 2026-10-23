@@ -565,7 +565,11 @@ libraries for wowlua Studio, natively and in the browser (T300, T301).
   installation (encrypted tables read with the client's own keys): creature
   displays, creatures and files; characters with their customizations
   and worn items; Blizzard's model scenes from the client's tables (T317
-  to T321).
+  to T321); particles, ribbons and billboarded bones.
+- The minimap's terrain from the client's map tiles, at its zoom, turning
+  with the player, with group members' blips and pings (T324, T329).
+- With an installation at hand, items the tests do not define are the
+  client's (`Item`, `ItemSparse`, T327).
 
 **Exit:** a test or an addon session is stopped at a breakpoint inside an
 event handler, stepped through and inspected with watches over DAP; an agent
@@ -579,9 +583,13 @@ breakpoint, screenshot tests written, compared and updated, the renderer's
 pixels, the CASC reader on all five products of this machine's
 installation). Checked by hand on the widget demo with camelot's Blizzard
 UI: its window drawn with the client's textures and Friz Quadrata, clicked
-and stepped through over MCP. Not yet: a VS Code extension (M9 S8) to
-register the `wowlua` debug type; tiling atlases are stretched, not tiled;
-the hook's cost when off is not measured on a release build yet.
+and stepped through over MCP; every window and tab of camelot's default UI
+and SuuUI screenshotted. The hooks' cost when off, measured on a release
+build (a mixed Lua workload, best of seven runs): about 1 to 2 percent
+over the VM before them (37.0 ms to 37.4–38.3 ms). Version 0.10.0, not
+released yet. Not yet: a VS Code extension (M9 S8) to register the
+`wowlua` debug type; the indoor minimap; a model material's blend 7 over a
+texture without alpha (drawn opaque).
 
 ## M13: Game data and rendering
 
