@@ -55,11 +55,15 @@ pub enum Blend {
     Disable,
 }
 
-/// A mask on a texture: its image and rectangle.
+/// A mask on a texture: its image, rectangle, and its part of the image
+/// (left, right, top, bottom; an atlas's region), with the atlas's name
+/// for a renderer with the build's own atlases.
 #[derive(Clone, Debug)]
 pub struct Mask {
     pub image: Image,
     pub rect: Rect,
+    pub region: [f32; 4],
+    pub atlas: Option<String>,
 }
 
 #[derive(Clone, Debug)]
@@ -271,6 +275,13 @@ type ImageOf = (Image, Option<[f32; 4]>, (bool, bool), Option<[f32; 4]>);
 /// A texture's image and its texture coordinates as the atlas or the
 /// file gives them.
 fn image_of(vm: &Vm, id: WidgetId) -> Option<ImageOf> {
+    // A portrait the client draws: its flat stand-in (`facts.rs`).
+    let props = engine(vm).world.widgets[id.0].props;
+    if let Some(k) = vm.heap.interned("\u{0}portrait".as_bytes())
+        && let Some(path) = text_of(vm, vm.heap.table(props).get(Value::Str(k)))
+    {
+        return Some((Image::File(path), None, (false, false), None));
+    }
     if let Some(name) = first(vm, id, "Atlas").and_then(|v| text_of(vm, v))
         && let Some(a) = crate::measures::atlas(&name)
         && let Some(info) = &a.info
@@ -350,10 +361,15 @@ fn masks_of(vm: &Vm, id: WidgetId) -> Vec<Mask> {
         let Some(m) = widgets::widget_of(vm, v) else {
             continue;
         };
-        let (Some((image, _, _, _)), Some(rect)) = (image_of(vm, m), rect_of(vm, m)) else {
+        let (Some((image, base, _, _)), Some(rect)) = (image_of(vm, m), rect_of(vm, m)) else {
             continue;
         };
-        out.push(Mask { image, rect });
+        out.push(Mask {
+            image,
+            rect,
+            region: base.unwrap_or([0.0, 1.0, 0.0, 1.0]),
+            atlas: first(vm, m, "Atlas").and_then(|v| text_of(vm, v)),
+        });
     }
     out
 }
@@ -556,6 +572,12 @@ fn colored_chars(vm: &Vm, raw: &str, base: [f32; 4]) -> Vec<(char, [f32; 4])> {
 /// A font string's (or an edit box's) text, laid out as the engine
 /// measures it.
 fn text_item(vm: &Vm, id: WidgetId, edit_box: bool) -> Option<Text> {
+    text_item_in(vm, id, edit_box, None)
+}
+
+/// [`text_item`] in a given rectangle (a message frame's line), from its
+/// top, left aligned.
+fn text_item_in(vm: &Vm, id: WidgetId, edit_box: bool, place: Option<Rect>) -> Option<Text> {
     let w = &engine(vm).world.widgets[id.0];
     let raw = w.text.and_then(|v| text_of(vm, v))?;
     if raw.is_empty() {
@@ -563,7 +585,7 @@ fn text_item(vm: &Vm, id: WidgetId, edit_box: bool) -> Option<Text> {
     }
     // A button's text without points of its own sits in the button's
     // middle, as the client places it.
-    let mut rect = rect_of(vm, id).or_else(|| {
+    let mut rect = place.or_else(|| rect_of(vm, id)).or_else(|| {
         let parent = w.parent?;
         let class = &engine(vm).world.widgets[parent.0].class;
         if !w.points.is_empty() || !widgets::is_a(engine(vm), class, "Button") {
@@ -647,10 +669,14 @@ fn text_item(vm: &Vm, id: WidgetId, edit_box: bool) -> Option<Text> {
                 "CENTER".into()
             }
         });
-    let justify_v = widgets::font_chain_ref(vm, id, "JustifyV")
-        .and_then(|v| v.first().copied())
-        .and_then(|v| text_of(vm, v))
-        .unwrap_or_else(|| "MIDDLE".into());
+    let justify_v = if place.is_some() {
+        "TOP".to_string()
+    } else {
+        widgets::font_chain_ref(vm, id, "JustifyV")
+            .and_then(|v| v.first().copied())
+            .and_then(|v| text_of(vm, v))
+            .unwrap_or_else(|| "MIDDLE".into())
+    };
     // Lines that fit (at least one).
     let fit = if rect.h > 0.0 {
         ((rect.h + spacing) / (line_h + spacing)).floor().max(1.0) as usize
@@ -753,6 +779,62 @@ fn text_item(vm: &Vm, id: WidgetId, edit_box: bool) -> Option<Text> {
     })
 }
 
+/// A message frame's messages, as the client shows them: newest at the
+/// bottom of the frame, each wrapped to its width, older ones above while
+/// they fit. Unverified: fading (`SetTimeVisible`), the insertion mode
+/// (`SetInsertMode`), the frame's scroll.
+fn message_items(vm: &Vm, frame: WidgetId) -> Vec<Text> {
+    let Some(list) = engine(vm).world.messages.get(&frame.0) else {
+        return Vec::new();
+    };
+    let Some(r) = rect_of(vm, frame) else {
+        return Vec::new();
+    };
+    let mut out = Vec::new();
+    let mut bottom = r.y + r.h;
+    for (_, v) in list.iter().rev() {
+        let Some(fs) = widgets::widget_of(vm, *v) else {
+            continue;
+        };
+        if !engine(vm).world.widgets[fs.0].shown {
+            continue;
+        }
+        let tall = Rect {
+            x: r.x,
+            y: r.y,
+            w: r.w,
+            h: f32::MAX / 4.0,
+        };
+        let Some(mut t) = text_item_in(vm, fs, false, Some(tall)) else {
+            continue;
+        };
+        let h = t.lines.len() as f32 * t.line_height;
+        let top = bottom - h;
+        if top < r.y - 0.5 {
+            break;
+        }
+        let dy = top - r.y;
+        for line in &mut t.lines {
+            line.y += dy;
+            line.x = r.x;
+        }
+        t.rect = Rect {
+            x: r.x,
+            y: top,
+            w: r.w,
+            h,
+        };
+        t.clip = Some(match t.clip {
+            Some(c) => c.intersect(r),
+            None => r,
+        });
+        out.push(t);
+        bottom = top;
+    }
+    out.reverse();
+    out
+}
+
 fn g_px(g: &crate::text::GlyphLine) -> f32 {
     g.px as f32
 }
@@ -853,10 +935,22 @@ fn build_scene(vm: &mut Vm) -> Scene {
             let w = &engine(vm).world.widgets[f.0];
             (w.children.clone(), w.class.clone())
         };
+        // A message frame's messages are laid out as its lines.
+        let messages: Vec<usize> = engine(vm)
+            .world
+            .messages
+            .get(&f.0)
+            .map(|l| {
+                l.iter()
+                    .filter_map(|(_, v)| widgets::widget_of(vm, *v))
+                    .map(|w| w.0)
+                    .collect()
+            })
+            .unwrap_or_default();
         let mut regions: Vec<(usize, i32, usize)> = Vec::new();
         for c in children {
             let w = &engine(vm).world.widgets[c.0];
-            if !w.shown || !is_region(vm, c) {
+            if !w.shown || !is_region(vm, c) || messages.contains(&c.0) {
                 continue;
             }
             let (layer, sub) = layer_of(vm, c);
@@ -884,6 +978,9 @@ fn build_scene(vm: &mut Vm) -> Scene {
             && let Some(t) = text_item(vm, f, true)
         {
             items.push(Item::Text(t));
+        }
+        if !messages.is_empty() {
+            items.extend(message_items(vm, f).into_iter().map(Item::Text));
         }
     }
     Scene {

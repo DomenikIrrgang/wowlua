@@ -714,3 +714,45 @@ return file, size, r == dr and g == dg and 'same color' or 'differs', file2, siz
     assert!(r[1].starts_with("13.99"), "{r:?}");
     assert_eq!(&r[2..4], ["same color", "Fonts\\ARIALN.TTF"]);
 }
+
+/// A message frame's messages are drawn inside it, newest at the bottom
+/// (spec debugger §18.9); a portrait the client would render is drawn as
+/// the unit's race portrait.
+#[test]
+fn message_frames_and_portraits_in_the_scene() {
+    let mut vm = vm();
+    run(
+        &mut vm,
+        "local m = CreateFrame('MessageFrame', nil, UIParent)
+m:SetSize(300, 60)
+m:SetPoint('CENTER')
+m:SetFont('Fonts\\\\ARIALN.TTF', 14, '')
+m:AddMessage('first', 1, 1, 1)
+m:AddMessage('second', 1, 1, 1)
+local p = UIParent:CreateTexture(nil, 'ARTWORK')
+p:SetSize(64, 64)
+p:SetPoint('TOPLEFT')
+SetPortraitTexture(p, 'player')",
+    );
+    let scene = wowlua_engine::scene::build(&mut vm);
+    let texts: Vec<(String, f32)> = scene
+        .items
+        .iter()
+        .filter_map(|i| match i {
+            wowlua_engine::scene::Item::Text(t) => Some((
+                t.lines[0].runs.iter().map(|r| r.text.clone()).collect(),
+                t.rect.y,
+            )),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(texts.len(), 2, "{texts:?}");
+    assert_eq!(texts[0].0, "first");
+    assert_eq!(texts[1].0, "second");
+    assert!(texts[0].1 < texts[1].1, "newest lowest: {texts:?}");
+    let portrait = scene.items.iter().any(|i| {
+        matches!(i, wowlua_engine::scene::Item::Quad(q)
+            if q.image == wowlua_engine::scene::Image::File("Interface\\CharacterFrame\\TemporaryPortrait-Male-Human".into()))
+    });
+    assert!(portrait, "the race portrait");
+}

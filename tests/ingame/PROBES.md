@@ -82,6 +82,12 @@ engine cannot get otherwise.
    `GetTime()` at each). Why: SuuUI's probe saw the update 0.4-0.7 s
    later; the engine moves them and fires it at once.
 
+- **The default UI's layout on a fresh character** (camelot, 1920x1080,
+  default Edit Mode layout): the rectangles (`GetRect`) of `ChatFrame1`,
+  `MainActionBar`, `MultiBarBottomLeft`, `StanceBar` and `MicroMenuContainer`,
+  and a screenshot. Why: in the engine the stance bar lands over the chat
+  frame (Edit Mode's code puts it above the bottom-left bar, at the left
+  edge); the client's placement decides whether that is right.
 - **`GetBindingText(key, 1)` with modifiers** (the action bars' hotkeys):
   `SHIFT-1`, `CTRL-ALT-2`, `META-E`, `SHIFT-MOUSEWHEELUP`, `SHIFT-NUMPAD1`.
   Why: the engine shortens the modifiers with the client's

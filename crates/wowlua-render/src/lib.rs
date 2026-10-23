@@ -508,9 +508,18 @@ impl Renderer {
                         None => (&q.image, q.texcoord),
                     };
                     let tex = self.texture(image, assets);
-                    let (mask, mask_rect) = match q.masks.first() {
-                        Some(m) => (self.texture(&m.image, assets), Some(s(m.rect))),
-                        None => (self.white, None),
+                    // The mask's image and its region (the build's atlas's
+                    // where the assets know it).
+                    let (mask, mask_rect, region) = match q.masks.first() {
+                        Some(m) => {
+                            let own = m.atlas.as_deref().and_then(|n| assets.atlas(n));
+                            let (image, region) = match &own {
+                                Some((image, region)) => (image, *region),
+                                None => (&m.image, m.region),
+                            };
+                            (self.texture(image, assets), Some(s(m.rect)), region)
+                        }
+                        None => (self.white, None, [0.0, 1.0, 0.0, 1.0]),
                     };
                     let r = s(q.rect);
                     let (cx, cy) = (r.x + r.w / 2.0, r.y + r.h / 2.0);
@@ -531,7 +540,11 @@ impl Renderer {
                         color: q.color,
                         mask_uv: match mask_rect {
                             Some(m) if m.w > 0.0 && m.h > 0.0 => {
-                                [(pos[0] - m.x) / m.w, (pos[1] - m.y) / m.h]
+                                let (u, v) = ((pos[0] - m.x) / m.w, (pos[1] - m.y) / m.h);
+                                [
+                                    region[0] + u * (region[1] - region[0]),
+                                    region[2] + v * (region[3] - region[2]),
+                                ]
                             }
                             _ => [0.5, 0.5],
                         },

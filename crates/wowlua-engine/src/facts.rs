@@ -360,6 +360,48 @@ fn not_drawn(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// `SetPortraitTexture(texture, unit [, disableMasking])`: the client
+/// draws the unit's head into the texture (a 3D render, not the
+/// engine's). Screenshots draw the client's flat portrait of the unit's
+/// race and sex (`Interface\CharacterFrame\TemporaryPortrait-<Sex>-<Race>`,
+/// the client's own stand-in) in its place; what code reads of the
+/// texture is unchanged (unverified in the client).
+fn set_portrait_texture(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(texture) = crate::widgets::widget_of(vm, c.arg(1)) else {
+        return Ok(vec![]);
+    };
+    let unit = c.arg(2);
+    let race = vm.get_global("UnitRace");
+    let sex = vm.get_global("UnitSex");
+    let race_file = vm
+        .pcall(race, &[unit])
+        .ok()
+        .and_then(|r| r.get(1).copied())
+        .and_then(|v| match v {
+            Value::Str(s) => Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
+            _ => None,
+        });
+    let female = vm
+        .pcall(sex, &[unit])
+        .ok()
+        .and_then(|r| r.first().copied())
+        .is_some_and(|v| matches!(v, Value::Num(n) if n == 3.0));
+    let props = engine(vm).world.widgets[texture.0].props;
+    let key = vm.str("\u{0}portrait");
+    let value = match race_file {
+        Some(race) => {
+            let path = format!(
+                "Interface\\CharacterFrame\\TemporaryPortrait-{}-{race}",
+                if female { "Female" } else { "Male" }
+            );
+            vm.str(&path)
+        }
+        None => Value::Nil,
+    };
+    let _ = vm.heap.table_mut(props).set(key, value);
+    Ok(vec![])
+}
+
 /// `C_PlayerInteractionManager.IsInteractingWithNpcOfType(type)`: that
 /// interaction is open (its `PLAYER_INTERACTION_MANAGER_FRAME_SHOW` told,
 /// its hide not yet).
@@ -769,7 +811,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetNormalizedRealmName", realm_name),
         ("GetScreenHeight", screen_height),
         ("GetScreenWidth", screen_width),
-        ("SetPortraitTexture", not_drawn),
+        ("SetPortraitTexture", set_portrait_texture),
         ("C_NamePlate.SetNamePlateSize", not_drawn),
         ("GetSpecializationRole", specialization_role),
         ("GetSpecializationRoleEnum", specialization_role_enum),

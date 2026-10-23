@@ -195,6 +195,13 @@ proportion to the visible regions.
   alpha, a flip book's frame (its rows, columns and frame count). A group
   set to its final alpha keeps its alpha animations' end values when it
   finishes, as `GetAlpha` reads them.
+- **Message frames**: a `MessageFrame`'s messages inside it, newest at
+  the bottom, each wrapped to its width, older ones above while they fit
+  (unverified: fading, the insertion mode).
+- **Portraits**: a texture given `SetPortraitTexture` (the client renders
+  the unit's head in 3D) is drawn as the client's flat portrait of the
+  unit's race and sex (`TemporaryPortrait-<Sex>-<Race>`), until 3D models
+  are drawn (M13).
 - **Clipping**: frames that clip their children (`SetClipsChildren`,
   scroll frames) give their rectangle to everything below them.
 - **Hit testing**: the topmost mouse-enabled frame at a point, as the
