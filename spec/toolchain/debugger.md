@@ -187,8 +187,9 @@ proportion to the visible regions.
   `MOD`, `ALPHAKEY`, `DISABLE`), desaturation, rotation, tiling, mask
   textures, and whether it snaps to the pixel grid (on unless
   `SetSnapToPixelGrid(false)` or `snapToPixelGrid="false"`: Blizzard's
-  code only turns it off; unverified in the client): a snapping texture
-  is drawn with its edges on whole pixels.
+  code only turns it off; probed in WoW Forever, as is a texel snapping
+  bias of 0.3 at first): a snapping texture is drawn with its edges on
+  whole pixels.
 - **Text**: the rectangle, the laid-out lines (wrapped and truncated as the
   engine measures them, §17.6), font file, height and flags (`OUTLINE`,
   `THICKOUTLINE`, `MONOCHROME`), color, shadow, justification and spacing.

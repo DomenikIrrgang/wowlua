@@ -1403,3 +1403,16 @@ return table.concat(out, ' ')",
         ]
     );
 }
+
+/// A fresh texture snaps to the pixel grid with a texel snapping bias of
+/// 0.3, the client's float (probed in WoW Forever).
+#[test]
+fn a_fresh_texture_snaps_with_a_bias_of_three_tenths() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local t = UIParent:CreateTexture()
+return tostring(t:IsSnappingToPixelGrid()), string.format('%.14f', t:GetTexelSnappingBias())",
+    );
+    assert_eq!(r, ["true", "0.30000001192093"]);
+}

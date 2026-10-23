@@ -420,7 +420,8 @@ getters! {
     get_radial_percent: num("RadialProgressBarPercent", 0.0);
     get_radial_reverse: flag("RadialProgressBarReverse", false);
     get_radial_start_offset: num("RadialProgressBarStartOffset", 0.0);
-    get_texel_snapping_bias: num("TexelSnappingBias", 0.0);
+    // 0.3 as the client's float (probed in WoW Forever, 2026-10-23).
+    get_texel_snapping_bias: num("TexelSnappingBias", 0.3_f32 as f64);
     // `Enum.UITextureSliceMode.Stretched`.
     get_texture_slice_mode: num("TextureSliceMode", 0.0);
     // `Line:SetThickness`; 4 (UI.xsd `thickness`).

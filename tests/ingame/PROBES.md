@@ -319,7 +319,8 @@ not known yet.
    and a screenshot of it hovered: wowlua draws a masked texture over the
    unmasked ones of its layer and sublevel (the icon over the slot art).
 3. `/run local t=UIParent:CreateTexture() print(t:IsSnappingToPixelGrid(), t:GetTexelSnappingBias())`:
-   a fresh texture's pixel snapping (wowlua: true, 0).
+   a fresh texture's pixel snapping (wowlua: true, 0). Answered
+   (2026-10-23): true, 0.30000001192093; wowlua now gives the same.
 
 ## Minimap
 
