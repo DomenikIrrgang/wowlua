@@ -111,3 +111,22 @@ return tostring(C_SpecializationInfo.HasPlayerEarnedATalentPoint())"
     assert_eq!(at(&mut vm, 5), ["true"]);
     assert_eq!(at(&mut vm, 60), ["true"]);
 }
+
+/// The default character's talent configs name the tree the talent model
+/// answers for: its active and combat configs (16273023, as the default
+/// character's recording has them) are one, and the model has it (its
+/// recorded warrior's tree under another number).
+#[test]
+fn the_players_configs_are_the_talent_models() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "mock.player:setStats({ combatConfig = { [1] = 16273023 }, activeSpecGroup = 1 })
+local active = C_ClassTalents.GetActiveConfigID()
+local combat = C_SpecializationInfo.GetCombatConfigIDForSpecGroup(1)
+local info = C_Traits.GetConfigInfo(combat)
+return tostring(active == combat), tostring(info ~= nil), tostring(info and #info.treeIDs > 0),
+    tostring(C_SpecializationInfo.GetCombatConfigIDForSpecGroup(2))",
+    );
+    assert_eq!(r, ["true", "true", "true", "nil"]);
+}

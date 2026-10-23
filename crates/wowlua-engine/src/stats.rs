@@ -1023,11 +1023,22 @@ pub fn active_combat_config(vm: &Vm) -> Option<f64> {
     };
     match stats.get("combatConfig") {
         Some(Entry::ByIndex(by)) => match by.get(&group).and_then(|v| v.first()) {
-            Some(Answer::Num(n)) => Some(*n),
+            Some(Answer::Num(n)) => Some(crate::traits::player_config(vm, *n)),
             _ => None,
         },
         _ => None,
     }
+}
+
+/// `C_SpecializationInfo.GetCombatConfigIDForSpecGroup(group)`: the
+/// stats' config of the spec group, as the talent model has it
+/// (`traits::player_config`); none for a group without one.
+fn combat_config(vm: &mut Vm, c: NativeCall) -> Ret {
+    let mut values = answer(vm, c)?;
+    if let Some(Value::Num(n)) = values.first().copied() {
+        values[0] = Value::Num(crate::traits::player_config(vm, n));
+    }
+    Ok(values)
 }
 
 pub fn skill_rank(vm: &Vm, skill: i64) -> Option<f64> {
@@ -1714,6 +1725,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             (
                 "C_SpecializationInfo.HasPlayerEarnedATalentPoint",
                 earned_talent_point,
+            ),
+            (
+                "C_SpecializationInfo.GetCombatConfigIDForSpecGroup",
+                combat_config,
             ),
         ])
         .collect()

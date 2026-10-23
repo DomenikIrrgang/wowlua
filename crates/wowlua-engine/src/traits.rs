@@ -812,6 +812,26 @@ fn resolve(vm: &mut Vm, config: i64) -> (String, i64, bool) {
 /// The inspected config's ID.
 const INSPECT: i64 = -1;
 
+/// The player's talent config as the model has it (decision T328): a
+/// config the class's recorded character's configs do not hold (the default
+/// character's own, from another recording) is the recorded character's
+/// active one, so the player's active and combat configs name the tree the
+/// model answers for; a config the model holds, or a class never recorded,
+/// as it is.
+pub(crate) fn player_config(vm: &Vm, config: f64) -> f64 {
+    let m = model(vm);
+    if !m.known()
+        || m.recorded(&format!("C_Traits.GetConfigInfo({})", config as i64))
+            .is_some()
+    {
+        return config;
+    }
+    match m.first("C_ClassTalents.GetActiveConfigID()") {
+        Some(Rv::Num(own)) => own,
+        _ => config,
+    }
+}
+
 fn traits_mut(vm: &mut Vm) -> &mut Traits {
     &mut engine_mut(vm).world.traits
 }
