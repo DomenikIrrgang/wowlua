@@ -1263,7 +1263,9 @@ impl Checker<'_, '_> {
                                 _ => None,
                             });
                     // Strict mode: a literal's unknown field for a record
-                    // type is a typo (spec §2.2.4, E2003).
+                    // type is a typo (spec §2.2.4, E2003); so is a named
+                    // entry other than `n` where an array is expected (an
+                    // array has numbered values only, decisions L49, L71).
                     if self.mode == super::query::Mode::Strict
                         && let Some(Ty::Record(r)) = &exp_ty
                         && r.indexer.is_none()
@@ -1271,6 +1273,17 @@ impl Checker<'_, '_> {
                     {
                         let msg = format!(
                             "`{}` is not a field of `{}`",
+                            name.text(),
+                            self.env.display(exp.expect("expected"))
+                        );
+                        self.report("E2003", name.span(), msg);
+                    }
+                    if self.mode == super::query::Mode::Strict
+                        && let Some(Ty::Array(_)) = &exp_ty
+                        && name.text() != "n"
+                    {
+                        let msg = format!(
+                            "`{}` is not a field of `{}`: an array has numbered values only",
                             name.text(),
                             self.env.display(exp.expect("expected"))
                         );
@@ -1424,7 +1437,7 @@ impl Checker<'_, '_> {
                     }
                     continue;
                 }
-                Ty::String | Ty::Str(_) => self.string_member(name),
+                Ty::String | Ty::Str(_) => Some(self.string_member(name, span, quiet)),
                 Ty::Record(r) => match r.fields.get(name) {
                     Some(f) => Some(f.ty),
                     None => match r.indexer {
@@ -1646,10 +1659,14 @@ impl Checker<'_, '_> {
                     }
                     continue;
                 }
-                Ty::String | Ty::Str(_) => self
-                    .string_member(name)
-                    .map(|f| self.drop_first(f))
-                    .unwrap_or(Types::ANY),
+                Ty::String | Ty::Str(_) => {
+                    let f = self.string_member(name, span, false);
+                    if f == Types::ERROR || f == Types::ANY {
+                        f
+                    } else {
+                        self.drop_first(f)
+                    }
+                }
                 Ty::Named(d, args) if self.env.view(d).kind() != DefKind::Enum => {
                     match self.env.instance_member(d, &args, name) {
                         Some((mem, owner)) => {
@@ -1723,19 +1740,25 @@ impl Checker<'_, '_> {
         }
     }
 
-    /// `s:upper()` is `string.upper(s)` (spec §2.4.5).
-    fn string_member(&mut self, name: &str) -> Option<TypeId> {
-        let string_ns = self.env.declared.global("string")?;
-        match self.env.types.get(string_ns).clone() {
-            Ty::ClassOf(d) => self
-                .env
-                .def(d)
-                .members
-                .get(name)
-                .map(|m| m.ty)
-                .or(Some(Types::ANY)),
-            Ty::Record(r) => r.fields.get(name).map(|f| f.ty).or(Some(Types::ANY)),
-            _ => Some(Types::ANY),
+    /// `s:upper()` is `string.upper(s)` (spec §2.4.5). A name the `string`
+    /// library doesn't have: E2003 in strict mode, else `any` (decision L71).
+    fn string_member(&mut self, name: &str, span: Span, quiet: bool) -> TypeId {
+        let Some(string_ns) = self.env.declared.global("string") else {
+            return Types::ANY;
+        };
+        let found = match self.env.types.get(string_ns).clone() {
+            Ty::ClassOf(d) => self.env.def(d).members.get(name).map(|m| m.ty),
+            Ty::Record(r) => r.fields.get(name).map(|f| f.ty),
+            _ => return Types::ANY,
+        };
+        match found {
+            Some(t) => t,
+            None if self.mode == super::query::Mode::Strict && !quiet => {
+                let msg = format!("`string` has no field or method `{name}`");
+                self.report("E2003", span, msg);
+                Types::ERROR
+            }
+            None => Types::ANY,
         }
     }
 

@@ -24,6 +24,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - Restyling the game's frames: `frames.textures(f)`, `frames.fontStrings(f)` and `frames.children(f)` give typed lists, `frames.stateTextures(button)` a button's state art, and `frames.rows(list)` the rows one of the game's lists shows (an object pool or a scroll box). `events.onRegistry(name, fn)` listens to Blizzard's `EventRegistry` callbacks, with error isolation and a subscription to cancel.
 - `chat.whisperBnet(accountName)` and `unit.inviteBnet(gameAccountID)` whisper and invite Battle.net friends, and `chat.filter("CHAT_MSG_SYSTEM", fn)` hides the chat lines `fn` returns true for, through the game's own filters (an error in `fn` is reported and the line shows; cancel the subscription to remove it).
 - `frames.mapPins(WorldMapFrame, "QuestPinTemplate")` lists the pins one of the game's maps shows of a template, as frames.
+- `mock.tooltipLines(tip?, right?)` gives the lines a tooltip shows in a test (its left texts, or the right ones), and `mock.sentAddonMessages()` is typed: each message's `prefix`, `message`, `chatType` and `target`.
 
 ### Changed
 
@@ -65,6 +66,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- In strict mode, a name the `string` library doesn't have (`s.message`, `s:nope()`) is an error (E2003); it read as `any`. So is a named entry in a table literal where a list is expected (`{ class = "X", "Y" }` for a `string[]`), which was dropped without a word.
 - A class field typed with `typeof(…)` (`map: typeof(WorldMapFrame)? = nil`) has that type; it read as `any`.
 - In tests, `GetItemInfo` gives an item defined with `mock.defineItem` its link (it gave none, so `item.get` found nothing for it).
 - `wowlua fix` crashed before doing anything. It works again; migrating `wowlua.json` to the current schema is now `wowlua fix --migrate`, since `--manifest <path>` names the manifest for every command.

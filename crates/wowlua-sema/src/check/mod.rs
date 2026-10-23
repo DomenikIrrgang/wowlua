@@ -2571,6 +2571,36 @@ print(a, b, c, d, e, name, realm, more)
         assert!(!d.iter().any(|x| x.code == Some("E2003")), "{d:#?}");
     }
 
+    /// Strict mode: a string's member the `string` library doesn't have, and
+    /// a literal's named entry (not `n`) where an array is expected, are
+    /// E2003. Decision L71.
+    #[test]
+    fn strings_and_array_literals() {
+        strict_err("local s: string = \"x\"\nprint(s.message)\n", "E2003");
+        strict_err("local s: string = \"x\"\nprint(s:nope())\n", "E2003");
+        strict_ok(
+            "local s: string = \"x\"\nprint(s:upper(), s.len, (\"%d\"):format(1), s:trim())\n",
+        );
+        strict_err(
+            "local roles: string[] = { class = \"DAMAGER\", \"TANK\" }\nprint(roles)\n",
+            "E2003",
+        );
+        strict_err(
+            "type R = { short: string[] }\nlocal r: R = { short = { class = \"BM\", \"MM\" } }\nprint(r)\n",
+            "E2003",
+        );
+        strict_ok("local xs: number[] = { 1, 2, n = 2 }\nprint(xs)\n");
+        strict_ok(
+            "type L = { [number]: string, label?: string }\nlocal l: L = { \"a\", label = \"b\" }\nprint(l)\n",
+        );
+        // basic mode: as before
+        let d = check_source(
+            "local s: string = \"x\"\nprint(s.message)\nlocal xs: string[] = { a = \"b\" }\nprint(xs)\n",
+            Mode::Basic,
+        );
+        assert!(!d.iter().any(|x| x.code == Some("E2003")), "{d:#?}");
+    }
+
     /// `x or {}` without an expected type takes `x`'s type where `{}` fits it
     /// (decision L52).
     #[test]

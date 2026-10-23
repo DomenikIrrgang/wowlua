@@ -1181,8 +1181,12 @@ export function receiveAddonMessage(prefix: string, message: string, chatType: s
     engine().receiveAddonMessage(prefix, message, chatType, sender)
 end
 
+--- An addon message the addon sent: its prefix, text, chat type and
+--- target (a whisper's).
+export type SentAddonMessage = { prefix: string, message: string, chatType: string, target?: string }
+
 --- The addon messages sent so far.
-export function sentAddonMessages(): table[]
+export function sentAddonMessages(): SentAddonMessage[]
     return engine().sentAddonMessages()
 end
 
@@ -1558,6 +1562,20 @@ export function showTooltip(kind: "item" | "spell" | "unit", data: { id?: number
     local name = t:GetName()
     for i = 1, t:NumLines() do
         local fs = _G[`{name}TextLeft{i}`]
+        lines[i] = fs and fs:GetText() or ""
+    end
+    return lines
+end
+
+--- A tooltip's lines as it shows them now (`GameTooltip`'s, or `tip`'s):
+--- the left texts, or with `right` the right ones; "" for an empty side.
+export function tooltipLines(tip: GameTooltip?, right: boolean?): string[]
+    local t: any = tip ?? _G.GameTooltip
+    local side = right and "Right" or "Left"
+    local lines: string[] = {}
+    local name = t:GetName()
+    for i = 1, t:NumLines() do
+        local fs = _G[`{name}Text{side}{i}`]
         lines[i] = fs and fs:GetText() or ""
     end
     return lines

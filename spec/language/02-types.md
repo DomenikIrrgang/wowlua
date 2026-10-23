@@ -121,7 +121,10 @@ Colors`, `"a" | "b"`) reads those fields, as `T[K]` does (decision L53).
 Records are **structural**: any table with at least the required fields of
 compatible types is assignable. Extra fields are allowed, except that an
 object literal assigned directly to a record type with an unknown field is
-an error in strict mode (E2003), to catch typos.
+an error in strict mode (E2003), to catch typos. So is a literal's named
+entry other than `n` where an array is expected (`{ class = "X", "Y" }` for
+a `string[]`): an array has numbered values only, and the entry would be
+dropped (decision L71).
 
 ### 2.2.5 Function types
 
@@ -530,7 +533,9 @@ Values of type `string`, including string literals in parentheses, index the
 `string` library: `s:upper()` is typed as `string.upper(s)`, and
 `("%d"):format(n)` as `string.format("%d", n)`. WoW's additional string
 functions (`strsplit`, `strtrim`, …) are available as methods where WoW adds them
-to the `string` table.
+to the `string` table. In strict mode a name the `string` library doesn't
+have (`s.message`, `s:nope()`) is E2003: Lua reads it as `nil` (decision
+L71).
 
 ### 2.4.6 `setmetatable`
 

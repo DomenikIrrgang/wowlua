@@ -4092,6 +4092,45 @@ end
 
 /// Tooltips with Blizzard's UI: the engine's tooltip data from the tests'
 /// game data, Blizzard's tooltip code, and an addon's post-call.
+/// `mock.tooltipLines` reads what a tooltip shows (left or right texts);
+/// `mock.sentAddonMessages` gives typed messages (decision S47).
+#[test]
+fn tooltip_lines_and_sent_messages() {
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            ("src/main.wowlua", "print(\"demo\")\n"),
+            (
+                "tests/tip.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+@test("the lines a tooltip shows; the messages sent")
+local function lines()
+    local tip = CreateFrame("GameTooltip", "DemoTip", UIParent)
+    tip:SetOwner(UIParent, "ANCHOR_NONE")
+    tip:AddLine("Title")
+    tip:AddDoubleLine("Left", "Right")
+    expect(mock.tooltipLines(tip)).toEqual({ "Title", "Left" })
+    expect(mock.tooltipLines(tip, true)).toEqual({ "", "Right" })
+    tip:Hide()
+    C_ChatInfo.RegisterAddonMessagePrefix("Demo")
+    C_ChatInfo.SendAddonMessage("Demo", "hello", "WHISPER", "Ann")
+    local sent = mock.sentAddonMessages()
+    local last = sent[#sent]
+    expect(last.prefix).toBe("Demo")
+    expect(last.message).toBe("hello")
+    expect(last.chatType).toBe("WHISPER")
+    expect(last.target).toBe("Ann")
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+}
+
 #[test]
 fn tooltips_with_blizzard_ui() {
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");
