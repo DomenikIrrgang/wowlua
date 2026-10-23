@@ -73,6 +73,9 @@ pub struct Project {
     pub bundled: bool,
 }
 
+/// Warnings a project turns on in `check.lints` (W2063, implicit `any`).
+pub const OFF_BY_DEFAULT: &[&str] = &["W2063"];
+
 impl Project {
     /// Applies the manifest's `check.lints` severities to the session's
     /// diagnostics.
@@ -81,11 +84,14 @@ impl Project {
         use wowlua_manifest::model::LintSetting;
         let lints = &self.manifest.manifest.check.lints;
         session.diagnostics.apply_lint_levels(|code| {
-            lints.get(code).map(|level| match level {
-                LintSetting::Allow => LintLevel::Allow,
-                LintSetting::Warn => LintLevel::Warn,
-                LintSetting::Deny => LintLevel::Deny,
-            })
+            match lints.get(code) {
+                Some(LintSetting::Allow) => Some(LintLevel::Allow),
+                Some(LintSetting::Warn) => Some(LintLevel::Warn),
+                Some(LintSetting::Deny) => Some(LintLevel::Deny),
+                // Off unless the manifest turns it on (decision T274).
+                None if OFF_BY_DEFAULT.contains(&code) => Some(LintLevel::Allow),
+                None => None,
+            }
         });
     }
 }

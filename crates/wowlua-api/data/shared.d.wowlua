@@ -188,6 +188,10 @@ declare class Animation extends Object
     function GetStartDelay(): number
     function GetTarget(): CScriptObject
     function HasScript(scriptName: string): boolean
+    function HookScript(scriptTypeName: "OnFinished", script: ((self: Self, requested: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptTypeName: "OnPlay", script: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptTypeName: "OnPause", script: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptTypeName: "OnStop", script: ((self: Self, requested: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptTypeName: ScriptAnimation, script: luaFunction, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function IsDelaying(): boolean
     function IsDone(): boolean
@@ -233,6 +237,11 @@ declare class AnimationGroup extends Object
     function GetProgress(): number
     function GetScript(scriptTypeName: ScriptAnimationGroup, bindingType: LE_SCRIPT_BINDING_TYPE?): luaFunction
     function HasScript(scriptName: ScriptAnimationGroup): boolean
+    function HookScript(scriptTypeName: "OnFinished", script: ((self: Self, requested: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptTypeName: "OnPlay", script: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptTypeName: "OnPause", script: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptTypeName: "OnStop", script: ((self: Self, requested: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptTypeName: "OnLoop", script: ((self: Self, loopState: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptTypeName: ScriptAnimationGroup, script: luaFunction, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function IsDone(): boolean
     function IsPaused(): boolean
@@ -247,6 +256,11 @@ declare class AnimationGroup extends Object
     function SetAnimationSpeedMultiplier(animationSpeedMultiplier: number)
     function SetLooping(loopType: LoopType)
     function SetPlaying(play: boolean)
+    function SetScript(scriptTypeName: "OnFinished", script: (((self: Self, requested: boolean) -> ()))?)
+    function SetScript(scriptTypeName: "OnPlay", script: (((self: Self) -> ()))?)
+    function SetScript(scriptTypeName: "OnPause", script: (((self: Self) -> ()))?)
+    function SetScript(scriptTypeName: "OnStop", script: (((self: Self, requested: boolean) -> ()))?)
+    function SetScript(scriptTypeName: "OnLoop", script: (((self: Self, loopState: string) -> ()))?)
     function SetScript(scriptTypeName: ScriptAnimationGroup, script: luaFunction?)
     function SetToFinalAlpha(setToFinalAlpha: boolean)
     function Stop()
@@ -562,6 +576,13 @@ declare class ScriptRegion extends Object
     function GetWidth(ignoreRect: boolean?): uiUnit
     function HasScript(scriptName: ScriptType): boolean
     function Hide()
+    function HookScript(scriptTypeName: "OnShow", script: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptTypeName: "OnHide", script: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptTypeName: "OnEnter", script: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptTypeName: "OnLeave", script: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptTypeName: "OnMouseDown", script: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptTypeName: "OnMouseUp", script: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptTypeName: "OnSizeChanged", script: ((self: Self, width: number, height: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptTypeName: ScriptType, script: luaFunction, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function Intersects(region: ScriptRegion): boolean
     function IsAnchoringRestricted(): boolean
@@ -585,6 +606,13 @@ declare class ScriptRegion extends Object
     function SetPassThroughButtons(...: MouseButton)
     function SetPropagateMouseClicks(propagate: boolean)
     function SetPropagateMouseMotion(propagate: boolean)
+    function SetScript(scriptTypeName: "OnShow", script: (((self: Self) -> ()))?)
+    function SetScript(scriptTypeName: "OnHide", script: (((self: Self) -> ()))?)
+    function SetScript(scriptTypeName: "OnEnter", script: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptTypeName: "OnLeave", script: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptTypeName: "OnMouseDown", script: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptTypeName: "OnMouseUp", script: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptTypeName: "OnSizeChanged", script: (((self: Self, width: number, height: number) -> ()))?)
     function SetScript(scriptTypeName: ScriptType, script: luaFunction?)
     function SetShown(show: boolean?)
     function ShouldButtonPassThrough(button: MouseButton): boolean
@@ -756,7 +784,57 @@ end
 declare class Button extends Frame
     function GetScript(scriptType: ScriptButton, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptButton): boolean
+    function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnClick", handler: ((self: Self, button: string, down: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "PreClick", handler: ((self: Self, button: string, down: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "PostClick", handler: ((self: Self, button: string, down: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDoubleClick", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseDown", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseUp", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseWheel", handler: ((self: Self, delta: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStart", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStop", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnReceiveDrag", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnSizeChanged", handler: ((self: Self, width: number, height: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnAttributeChanged", handler: ((self: Self, name: string, value: any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyDown", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyUp", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnChar", handler: ((self: Self, text: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkClick", handler: ((self: Self, link: string, text: string, button: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkEnter", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptButton, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnClick", handler: (((self: Self, button: string, down: boolean) -> ()))?)
+    function SetScript(scriptType: "PreClick", handler: (((self: Self, button: string, down: boolean) -> ()))?)
+    function SetScript(scriptType: "PostClick", handler: (((self: Self, button: string, down: boolean) -> ()))?)
+    function SetScript(scriptType: "OnDoubleClick", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnMouseDown", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseUp", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseWheel", handler: (((self: Self, delta: number) -> ()))?)
+    function SetScript(scriptType: "OnDragStart", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnDragStop", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnReceiveDrag", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnSizeChanged", handler: (((self: Self, width: number, height: number) -> ()))?)
+    function SetScript(scriptType: "OnAttributeChanged", handler: (((self: Self, name: string, value: any) -> ()))?)
+    function SetScript(scriptType: "OnKeyDown", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnKeyUp", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnChar", handler: (((self: Self, text: string) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkClick", handler: (((self: Self, link: string, text: string, button: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkEnter", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkLeave", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
     function SetScript(scriptType: ScriptButton, handler: function | nil)
     function ClearDisabledTexture()
     function ClearHighlightTexture()
@@ -828,7 +906,51 @@ end
 declare class ColorSelect extends Frame
     function GetScript(scriptType: ScriptColorSelect, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptColorSelect): boolean
+    function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseDown", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseUp", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseWheel", handler: ((self: Self, delta: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStart", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStop", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnReceiveDrag", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnSizeChanged", handler: ((self: Self, width: number, height: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnAttributeChanged", handler: ((self: Self, name: string, value: any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyDown", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyUp", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnChar", handler: ((self: Self, text: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkClick", handler: ((self: Self, link: string, text: string, button: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkEnter", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnColorSelect", handler: ((self: Self, r: number, g: number, b: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptColorSelect, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnMouseDown", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseUp", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseWheel", handler: (((self: Self, delta: number) -> ()))?)
+    function SetScript(scriptType: "OnDragStart", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnDragStop", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnReceiveDrag", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnSizeChanged", handler: (((self: Self, width: number, height: number) -> ()))?)
+    function SetScript(scriptType: "OnAttributeChanged", handler: (((self: Self, name: string, value: any) -> ()))?)
+    function SetScript(scriptType: "OnKeyDown", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnKeyUp", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnChar", handler: (((self: Self, text: string) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkClick", handler: (((self: Self, link: string, text: string, button: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkEnter", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkLeave", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnColorSelect", handler: (((self: Self, r: number, g: number, b: number) -> ()))?)
     function SetScript(scriptType: ScriptColorSelect, handler: function | nil)
     function ClearColorWheelTexture()
     function GetColorAlpha(): number
@@ -861,7 +983,51 @@ end
 declare class Cooldown extends Frame
     function GetScript(scriptType: ScriptCooldown, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptCooldown): boolean
+    function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseDown", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseUp", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseWheel", handler: ((self: Self, delta: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStart", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStop", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnReceiveDrag", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnSizeChanged", handler: ((self: Self, width: number, height: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnAttributeChanged", handler: ((self: Self, name: string, value: any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyDown", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyUp", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnChar", handler: ((self: Self, text: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkClick", handler: ((self: Self, link: string, text: string, button: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkEnter", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnCooldownDone", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptCooldown, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnMouseDown", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseUp", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseWheel", handler: (((self: Self, delta: number) -> ()))?)
+    function SetScript(scriptType: "OnDragStart", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnDragStop", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnReceiveDrag", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnSizeChanged", handler: (((self: Self, width: number, height: number) -> ()))?)
+    function SetScript(scriptType: "OnAttributeChanged", handler: (((self: Self, name: string, value: any) -> ()))?)
+    function SetScript(scriptType: "OnKeyDown", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnKeyUp", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnChar", handler: (((self: Self, text: string) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkClick", handler: (((self: Self, link: string, text: string, button: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkEnter", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkLeave", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnCooldownDone", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: ScriptCooldown, handler: function | nil)
     function Clear()
     function GetCooldownDisplayDuration(): number
@@ -916,7 +1082,69 @@ end
 declare class EditBox extends Frame
     function GetScript(scriptType: ScriptEditBox, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptEditBox): boolean
+    function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseDown", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseUp", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseWheel", handler: ((self: Self, delta: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStart", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStop", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnReceiveDrag", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnSizeChanged", handler: ((self: Self, width: number, height: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnAttributeChanged", handler: ((self: Self, name: string, value: any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyDown", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyUp", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnChar", handler: ((self: Self, text: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkClick", handler: ((self: Self, link: string, text: string, button: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkEnter", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnTextChanged", handler: ((self: Self, userInput: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnTextSet", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnterPressed", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEscapePressed", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnTabPressed", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnSpacePressed", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEditFocusGained", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEditFocusLost", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnArrowPressed", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnCursorChanged", handler: ((self: Self, x: number, y: number, width: number, height: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptEditBox, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnMouseDown", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseUp", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseWheel", handler: (((self: Self, delta: number) -> ()))?)
+    function SetScript(scriptType: "OnDragStart", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnDragStop", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnReceiveDrag", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnSizeChanged", handler: (((self: Self, width: number, height: number) -> ()))?)
+    function SetScript(scriptType: "OnAttributeChanged", handler: (((self: Self, name: string, value: any) -> ()))?)
+    function SetScript(scriptType: "OnKeyDown", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnKeyUp", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnChar", handler: (((self: Self, text: string) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkClick", handler: (((self: Self, link: string, text: string, button: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkEnter", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkLeave", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnTextChanged", handler: (((self: Self, userInput: boolean) -> ()))?)
+    function SetScript(scriptType: "OnTextSet", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEnterPressed", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEscapePressed", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnTabPressed", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnSpacePressed", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEditFocusGained", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEditFocusLost", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnArrowPressed", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnCursorChanged", handler: (((self: Self, x: number, y: number, width: number, height: number) -> ()))?)
     function SetScript(scriptType: ScriptEditBox, handler: function | nil)
     function AddHistoryLine(text: string)
     function ClearFocus()
@@ -1009,7 +1237,49 @@ end
 declare class FogOfWarFrame extends Frame
     function GetScript(scriptType: ScriptFogOfWarFrame, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptFogOfWarFrame): boolean
+    function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseDown", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseUp", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseWheel", handler: ((self: Self, delta: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStart", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStop", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnReceiveDrag", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnSizeChanged", handler: ((self: Self, width: number, height: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnAttributeChanged", handler: ((self: Self, name: string, value: any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyDown", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyUp", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnChar", handler: ((self: Self, text: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkClick", handler: ((self: Self, link: string, text: string, button: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkEnter", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptFogOfWarFrame, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnMouseDown", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseUp", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseWheel", handler: (((self: Self, delta: number) -> ()))?)
+    function SetScript(scriptType: "OnDragStart", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnDragStop", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnReceiveDrag", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnSizeChanged", handler: (((self: Self, width: number, height: number) -> ()))?)
+    function SetScript(scriptType: "OnAttributeChanged", handler: (((self: Self, name: string, value: any) -> ()))?)
+    function SetScript(scriptType: "OnKeyDown", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnKeyUp", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnChar", handler: (((self: Self, text: string) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkClick", handler: (((self: Self, link: string, text: string, button: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkEnter", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkLeave", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
     function SetScript(scriptType: ScriptFogOfWarFrame, handler: function | nil)
     function GetFogOfWarBackgroundAtlas(): textureAtlas
     function GetFogOfWarBackgroundTexture(): FileAsset?
@@ -1035,7 +1305,49 @@ end
 declare class Frame extends Region
     function GetScript(scriptType: ScriptFrame, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptFrame): boolean
+    function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseDown", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseUp", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseWheel", handler: ((self: Self, delta: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStart", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStop", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnReceiveDrag", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnSizeChanged", handler: ((self: Self, width: number, height: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnAttributeChanged", handler: ((self: Self, name: string, value: any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyDown", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyUp", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnChar", handler: ((self: Self, text: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkClick", handler: ((self: Self, link: string, text: string, button: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkEnter", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptFrame, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnMouseDown", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseUp", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseWheel", handler: (((self: Self, delta: number) -> ()))?)
+    function SetScript(scriptType: "OnDragStart", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnDragStop", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnReceiveDrag", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnSizeChanged", handler: (((self: Self, width: number, height: number) -> ()))?)
+    function SetScript(scriptType: "OnAttributeChanged", handler: (((self: Self, name: string, value: any) -> ()))?)
+    function SetScript(scriptType: "OnKeyDown", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnKeyUp", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnChar", handler: (((self: Self, text: string) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkClick", handler: (((self: Self, link: string, text: string, button: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkEnter", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkLeave", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
     function SetScript(scriptType: ScriptFrame, handler: function | nil)
     function GetParent(): Frame?
     function AbortDrag()
@@ -1167,7 +1479,53 @@ end
 declare class GameTooltip extends Frame
     function GetScript(scriptType: ScriptGameTooltip, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptGameTooltip): boolean
+    function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseDown", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseUp", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseWheel", handler: ((self: Self, delta: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStart", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStop", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnReceiveDrag", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnSizeChanged", handler: ((self: Self, width: number, height: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnAttributeChanged", handler: ((self: Self, name: string, value: any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyDown", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyUp", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnChar", handler: ((self: Self, text: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkClick", handler: ((self: Self, link: string, text: string, button: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkEnter", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnTooltipCleared", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnTooltipSetDefaultAnchor", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptGameTooltip, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnMouseDown", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseUp", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseWheel", handler: (((self: Self, delta: number) -> ()))?)
+    function SetScript(scriptType: "OnDragStart", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnDragStop", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnReceiveDrag", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnSizeChanged", handler: (((self: Self, width: number, height: number) -> ()))?)
+    function SetScript(scriptType: "OnAttributeChanged", handler: (((self: Self, name: string, value: any) -> ()))?)
+    function SetScript(scriptType: "OnKeyDown", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnKeyUp", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnChar", handler: (((self: Self, text: string) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkClick", handler: (((self: Self, link: string, text: string, button: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkEnter", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkLeave", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnTooltipCleared", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnTooltipSetDefaultAnchor", handler: (((self: Self) -> ()))?)
     function SetScript(scriptType: ScriptGameTooltip, handler: function | nil)
     function AddAtlas(atlas: string, textureInfoTable: TextureInfoTable)
     function AddAtlas(atlas: string, minx: number, maxx: number, miny: number, maxy: number)
@@ -1391,7 +1749,49 @@ end
 declare class CinematicModel extends PlayerModel
     function GetScript(scriptType: ScriptCinematicModel, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptCinematicModel): boolean
+    function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseDown", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseUp", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseWheel", handler: ((self: Self, delta: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStart", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStop", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnReceiveDrag", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnSizeChanged", handler: ((self: Self, width: number, height: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnAttributeChanged", handler: ((self: Self, name: string, value: any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyDown", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyUp", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnChar", handler: ((self: Self, text: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkClick", handler: ((self: Self, link: string, text: string, button: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkEnter", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptCinematicModel, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnMouseDown", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseUp", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseWheel", handler: (((self: Self, delta: number) -> ()))?)
+    function SetScript(scriptType: "OnDragStart", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnDragStop", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnReceiveDrag", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnSizeChanged", handler: (((self: Self, width: number, height: number) -> ()))?)
+    function SetScript(scriptType: "OnAttributeChanged", handler: (((self: Self, name: string, value: any) -> ()))?)
+    function SetScript(scriptType: "OnKeyDown", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnKeyUp", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnChar", handler: (((self: Self, text: string) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkClick", handler: (((self: Self, link: string, text: string, button: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkEnter", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkLeave", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
     function SetScript(scriptType: ScriptCinematicModel, handler: function | nil)
     function EquipItem(itemID: number)
     function InitializeCamera(scaleFactor: number?)
@@ -1423,7 +1823,49 @@ end
 declare class DressUpModel extends PlayerModel
     function GetScript(scriptType: ScriptDressUpModel, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptDressUpModel): boolean
+    function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseDown", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseUp", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseWheel", handler: ((self: Self, delta: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStart", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStop", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnReceiveDrag", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnSizeChanged", handler: ((self: Self, width: number, height: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnAttributeChanged", handler: ((self: Self, name: string, value: any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyDown", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyUp", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnChar", handler: ((self: Self, text: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkClick", handler: ((self: Self, link: string, text: string, button: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkEnter", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptDressUpModel, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnMouseDown", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseUp", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseWheel", handler: (((self: Self, delta: number) -> ()))?)
+    function SetScript(scriptType: "OnDragStart", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnDragStop", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnReceiveDrag", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnSizeChanged", handler: (((self: Self, width: number, height: number) -> ()))?)
+    function SetScript(scriptType: "OnAttributeChanged", handler: (((self: Self, name: string, value: any) -> ()))?)
+    function SetScript(scriptType: "OnKeyDown", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnKeyUp", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnChar", handler: (((self: Self, text: string) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkClick", handler: (((self: Self, link: string, text: string, button: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkEnter", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkLeave", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
     function SetScript(scriptType: ScriptDressUpModel, handler: function | nil)
     function Dress()
     function GetAutoDress(): boolean
@@ -1457,7 +1899,49 @@ end
 declare class Model extends Frame
     function GetScript(scriptType: ScriptModel, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptModel): boolean
+    function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseDown", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseUp", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseWheel", handler: ((self: Self, delta: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStart", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStop", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnReceiveDrag", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnSizeChanged", handler: ((self: Self, width: number, height: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnAttributeChanged", handler: ((self: Self, name: string, value: any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyDown", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyUp", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnChar", handler: ((self: Self, text: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkClick", handler: ((self: Self, link: string, text: string, button: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkEnter", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptModel, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnMouseDown", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseUp", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseWheel", handler: (((self: Self, delta: number) -> ()))?)
+    function SetScript(scriptType: "OnDragStart", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnDragStop", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnReceiveDrag", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnSizeChanged", handler: (((self: Self, width: number, height: number) -> ()))?)
+    function SetScript(scriptType: "OnAttributeChanged", handler: (((self: Self, name: string, value: any) -> ()))?)
+    function SetScript(scriptType: "OnKeyDown", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnKeyUp", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnChar", handler: (((self: Self, text: string) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkClick", handler: (((self: Self, link: string, text: string, button: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkEnter", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkLeave", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
     function SetScript(scriptType: ScriptModel, handler: function | nil)
     function AdvanceTime()
     function ClearFog()
@@ -1653,7 +2137,49 @@ end
 declare class MovieFrame extends Frame
     function GetScript(scriptType: ScriptMovieFrame, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptMovieFrame): boolean
+    function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseDown", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseUp", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseWheel", handler: ((self: Self, delta: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStart", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStop", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnReceiveDrag", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnSizeChanged", handler: ((self: Self, width: number, height: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnAttributeChanged", handler: ((self: Self, name: string, value: any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyDown", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyUp", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnChar", handler: ((self: Self, text: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkClick", handler: ((self: Self, link: string, text: string, button: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkEnter", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptMovieFrame, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnMouseDown", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseUp", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseWheel", handler: (((self: Self, delta: number) -> ()))?)
+    function SetScript(scriptType: "OnDragStart", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnDragStop", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnReceiveDrag", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnSizeChanged", handler: (((self: Self, width: number, height: number) -> ()))?)
+    function SetScript(scriptType: "OnAttributeChanged", handler: (((self: Self, name: string, value: any) -> ()))?)
+    function SetScript(scriptType: "OnKeyDown", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnKeyUp", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnChar", handler: (((self: Self, text: string) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkClick", handler: (((self: Self, link: string, text: string, button: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkEnter", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkLeave", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
     function SetScript(scriptType: ScriptMovieFrame, handler: function | nil)
     function EnableSubtitles(enable: boolean)
     function StartMovie(movieID: number, looping: boolean?): (boolean, number)
@@ -1706,7 +2232,55 @@ end
 declare class ScrollFrame extends Frame
     function GetScript(scriptType: ScriptScrollFrame, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptScrollFrame): boolean
+    function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseDown", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseUp", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseWheel", handler: ((self: Self, delta: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStart", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStop", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnReceiveDrag", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnSizeChanged", handler: ((self: Self, width: number, height: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnAttributeChanged", handler: ((self: Self, name: string, value: any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyDown", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyUp", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnChar", handler: ((self: Self, text: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkClick", handler: ((self: Self, link: string, text: string, button: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkEnter", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnVerticalScroll", handler: ((self: Self, offset: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHorizontalScroll", handler: ((self: Self, offset: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnScrollRangeChanged", handler: ((self: Self, xrange: number, yrange: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptScrollFrame, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnMouseDown", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseUp", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseWheel", handler: (((self: Self, delta: number) -> ()))?)
+    function SetScript(scriptType: "OnDragStart", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnDragStop", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnReceiveDrag", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnSizeChanged", handler: (((self: Self, width: number, height: number) -> ()))?)
+    function SetScript(scriptType: "OnAttributeChanged", handler: (((self: Self, name: string, value: any) -> ()))?)
+    function SetScript(scriptType: "OnKeyDown", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnKeyUp", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnChar", handler: (((self: Self, text: string) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkClick", handler: (((self: Self, link: string, text: string, button: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkEnter", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkLeave", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnVerticalScroll", handler: (((self: Self, offset: number) -> ()))?)
+    function SetScript(scriptType: "OnHorizontalScroll", handler: (((self: Self, offset: number) -> ()))?)
+    function SetScript(scriptType: "OnScrollRangeChanged", handler: (((self: Self, xrange: number, yrange: number) -> ()))?)
     function SetScript(scriptType: ScriptScrollFrame, handler: function | nil)
     function GetHorizontalScroll(): uiUnit
     function GetHorizontalScrollRange(): uiUnit
@@ -1762,7 +2336,53 @@ end
 declare class Slider extends Frame
     function GetScript(scriptType: ScriptSlider, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptSlider): boolean
+    function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseDown", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseUp", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseWheel", handler: ((self: Self, delta: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStart", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStop", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnReceiveDrag", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnSizeChanged", handler: ((self: Self, width: number, height: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnAttributeChanged", handler: ((self: Self, name: string, value: any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyDown", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyUp", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnChar", handler: ((self: Self, text: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkClick", handler: ((self: Self, link: string, text: string, button: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkEnter", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnValueChanged", handler: ((self: Self, value: number, userInput: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMinMaxChanged", handler: ((self: Self, min: number, max: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptSlider, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnMouseDown", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseUp", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseWheel", handler: (((self: Self, delta: number) -> ()))?)
+    function SetScript(scriptType: "OnDragStart", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnDragStop", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnReceiveDrag", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnSizeChanged", handler: (((self: Self, width: number, height: number) -> ()))?)
+    function SetScript(scriptType: "OnAttributeChanged", handler: (((self: Self, name: string, value: any) -> ()))?)
+    function SetScript(scriptType: "OnKeyDown", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnKeyUp", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnChar", handler: (((self: Self, text: string) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkClick", handler: (((self: Self, link: string, text: string, button: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkEnter", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkLeave", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnValueChanged", handler: (((self: Self, value: number, userInput: boolean) -> ()))?)
+    function SetScript(scriptType: "OnMinMaxChanged", handler: (((self: Self, min: number, max: number) -> ()))?)
     function SetScript(scriptType: ScriptSlider, handler: function | nil)
     function Disable()
     function Enable()
@@ -1795,7 +2415,53 @@ end
 declare class StatusBar extends Frame
     function GetScript(scriptType: ScriptStatusBar, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptStatusBar): boolean
+    function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseDown", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseUp", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseWheel", handler: ((self: Self, delta: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStart", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStop", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnReceiveDrag", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnSizeChanged", handler: ((self: Self, width: number, height: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnAttributeChanged", handler: ((self: Self, name: string, value: any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyDown", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyUp", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnChar", handler: ((self: Self, text: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkClick", handler: ((self: Self, link: string, text: string, button: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkEnter", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnValueChanged", handler: ((self: Self, value: number, userInput: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMinMaxChanged", handler: ((self: Self, min: number, max: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptStatusBar, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnMouseDown", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseUp", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseWheel", handler: (((self: Self, delta: number) -> ()))?)
+    function SetScript(scriptType: "OnDragStart", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnDragStop", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnReceiveDrag", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnSizeChanged", handler: (((self: Self, width: number, height: number) -> ()))?)
+    function SetScript(scriptType: "OnAttributeChanged", handler: (((self: Self, name: string, value: any) -> ()))?)
+    function SetScript(scriptType: "OnKeyDown", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnKeyUp", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnChar", handler: (((self: Self, text: string) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkClick", handler: (((self: Self, link: string, text: string, button: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkEnter", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkLeave", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnValueChanged", handler: (((self: Self, value: number, userInput: boolean) -> ()))?)
+    function SetScript(scriptType: "OnMinMaxChanged", handler: (((self: Self, min: number, max: number) -> ()))?)
     function SetScript(scriptType: ScriptStatusBar, handler: function | nil)
     function GetFillStyle(): StatusBarFillStyle
     function GetInterpolatedValue(): number
@@ -1862,7 +2528,57 @@ end
 declare class DropdownButton extends DropdownButtonMixin
     function GetScript(scriptType: ScriptButton, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptButton): boolean
+    function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnClick", handler: ((self: Self, button: string, down: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "PreClick", handler: ((self: Self, button: string, down: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "PostClick", handler: ((self: Self, button: string, down: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDoubleClick", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseDown", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseUp", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseWheel", handler: ((self: Self, delta: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStart", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStop", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnReceiveDrag", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnSizeChanged", handler: ((self: Self, width: number, height: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnAttributeChanged", handler: ((self: Self, name: string, value: any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyDown", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyUp", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnChar", handler: ((self: Self, text: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkClick", handler: ((self: Self, link: string, text: string, button: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkEnter", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptButton, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnClick", handler: (((self: Self, button: string, down: boolean) -> ()))?)
+    function SetScript(scriptType: "PreClick", handler: (((self: Self, button: string, down: boolean) -> ()))?)
+    function SetScript(scriptType: "PostClick", handler: (((self: Self, button: string, down: boolean) -> ()))?)
+    function SetScript(scriptType: "OnDoubleClick", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnMouseDown", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseUp", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseWheel", handler: (((self: Self, delta: number) -> ()))?)
+    function SetScript(scriptType: "OnDragStart", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnDragStop", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnReceiveDrag", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnSizeChanged", handler: (((self: Self, width: number, height: number) -> ()))?)
+    function SetScript(scriptType: "OnAttributeChanged", handler: (((self: Self, name: string, value: any) -> ()))?)
+    function SetScript(scriptType: "OnKeyDown", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnKeyUp", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnChar", handler: (((self: Self, text: string) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkClick", handler: (((self: Self, link: string, text: string, button: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkEnter", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkLeave", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
     function SetScript(scriptType: ScriptButton, handler: function | nil)
     function ClearDisabledTexture()
     function ClearHighlightTexture()
@@ -1918,7 +2634,49 @@ end
 declare class EventFrame extends EventFrameMixin
     function GetScript(scriptType: ScriptFrame, bindingType: LE_SCRIPT_BINDING_TYPE?): function
     function HasScript(scriptType: ScriptFrame): boolean
+    function HookScript(scriptType: "OnShow", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHide", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDisable", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEvent", handler: ((self: Self, event: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnEnter", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnLeave", handler: ((self: Self, motion: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseDown", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseUp", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMouseWheel", handler: ((self: Self, delta: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStart", handler: ((self: Self, button: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnDragStop", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnReceiveDrag", handler: ((self: Self) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnSizeChanged", handler: ((self: Self, width: number, height: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnAttributeChanged", handler: ((self: Self, name: string, value: any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyDown", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnKeyUp", handler: ((self: Self, key: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnChar", handler: ((self: Self, text: string) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkClick", handler: ((self: Self, link: string, text: string, button: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkEnter", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...any) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptFrame, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function SetScript(scriptType: "OnShow", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnHide", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEnable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnDisable", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnEvent", handler: (((self: Self, event: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnEnter", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnLeave", handler: (((self: Self, motion: boolean) -> ()))?)
+    function SetScript(scriptType: "OnMouseDown", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseUp", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnMouseWheel", handler: (((self: Self, delta: number) -> ()))?)
+    function SetScript(scriptType: "OnDragStart", handler: (((self: Self, button: string) -> ()))?)
+    function SetScript(scriptType: "OnDragStop", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnReceiveDrag", handler: (((self: Self) -> ()))?)
+    function SetScript(scriptType: "OnSizeChanged", handler: (((self: Self, width: number, height: number) -> ()))?)
+    function SetScript(scriptType: "OnAttributeChanged", handler: (((self: Self, name: string, value: any) -> ()))?)
+    function SetScript(scriptType: "OnKeyDown", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnKeyUp", handler: (((self: Self, key: string) -> ()))?)
+    function SetScript(scriptType: "OnChar", handler: (((self: Self, text: string) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkClick", handler: (((self: Self, link: string, text: string, button: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkEnter", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
+    function SetScript(scriptType: "OnHyperlinkLeave", handler: (((self: Self, link: string, text: string, ...any) -> ()))?)
     function SetScript(scriptType: ScriptFrame, handler: function | nil)
     function GetParent(): Frame?
     function AbortDrag()

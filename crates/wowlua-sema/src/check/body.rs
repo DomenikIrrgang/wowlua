@@ -1054,6 +1054,19 @@ impl<'e, 'p> Checker<'e, 'p> {
                         let span = n.name.span();
                         self.check_assignable(span, value, d);
                     }
+                    // W2063 (off unless `check.lints` turns it on): a local
+                    // whose value is `any`.
+                    if declared.is_none()
+                        && !no_values
+                        && value == Types::ANY
+                        && !n.name.text().starts_with('_')
+                    {
+                        let msg = format!(
+                            "`{}` is `any`: its value has no type (annotate it, or type where it comes from)",
+                            n.name.text()
+                        );
+                        self.report("W2063", n.name.span(), msg);
+                    }
                     let id =
                         self.declare(n.name.text(), declared, value, false, Some(n.name.span()));
                     // The names past the last value take that call's other
@@ -1827,6 +1840,15 @@ impl<'e, 'p> Checker<'e, 'p> {
                 }
                 None => sp.ty,
             };
+            // W2063 (off unless `check.lints` turns it on): an unannotated
+            // parameter that nothing gives a type.
+            if p.ty.is_none() && t == Types::ANY && !p.name.text().starts_with('_') {
+                let msg = format!(
+                    "parameter `{}` is `any`: nothing gives it a type (annotate it)",
+                    p.name.text()
+                );
+                self.report("W2063", p.name.span(), msg);
+            }
             // Runtime checks of annotated parameters (spec §7.5), after
             // defaults: a parameter with a default is checked against `T`.
             if p.ty.is_some()

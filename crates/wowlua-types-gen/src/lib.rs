@@ -78,6 +78,154 @@ fn widget_corrections(classes: &mut indexmap::IndexMap<String, model::Class>) {
     }
 }
 
+/// What the client passes each script handler after `self` (as the
+/// emulator does, wowlua-engine's `script_params`, and the client's
+/// documentation of each script).
+const SCRIPT_HANDLERS: &[(&str, &str)] = &[
+    ("OnLoad", ""),
+    ("OnShow", ""),
+    ("OnHide", ""),
+    ("OnEnable", ""),
+    ("OnDisable", ""),
+    ("OnUpdate", "elapsed: number"),
+    ("OnEvent", "event: string, ...any"),
+    ("OnClick", "button: string, down: boolean"),
+    ("PreClick", "button: string, down: boolean"),
+    ("PostClick", "button: string, down: boolean"),
+    ("OnDoubleClick", "button: string"),
+    ("OnEnter", "motion: boolean"),
+    ("OnLeave", "motion: boolean"),
+    ("OnMouseDown", "button: string"),
+    ("OnMouseUp", "button: string"),
+    ("OnMouseWheel", "delta: number"),
+    ("OnDragStart", "button: string"),
+    ("OnDragStop", ""),
+    ("OnReceiveDrag", ""),
+    ("OnSizeChanged", "width: number, height: number"),
+    ("OnAttributeChanged", "name: string, value: any"),
+    ("OnKeyDown", "key: string"),
+    ("OnKeyUp", "key: string"),
+    ("OnChar", "text: string"),
+    (
+        "OnHyperlinkClick",
+        "link: string, text: string, button: string, ...any",
+    ),
+    ("OnHyperlinkEnter", "link: string, text: string, ...any"),
+    ("OnHyperlinkLeave", "link: string, text: string, ...any"),
+    ("OnValueChanged", "value: number, userInput: boolean"),
+    ("OnMinMaxChanged", "min: number, max: number"),
+    ("OnTextChanged", "userInput: boolean"),
+    ("OnTextSet", ""),
+    ("OnEnterPressed", ""),
+    ("OnEscapePressed", ""),
+    ("OnTabPressed", ""),
+    ("OnSpacePressed", ""),
+    ("OnEditFocusGained", ""),
+    ("OnEditFocusLost", ""),
+    ("OnArrowPressed", "key: string"),
+    (
+        "OnCursorChanged",
+        "x: number, y: number, width: number, height: number",
+    ),
+    ("OnVerticalScroll", "offset: number"),
+    ("OnHorizontalScroll", "offset: number"),
+    ("OnScrollRangeChanged", "xrange: number, yrange: number"),
+    ("OnCooldownDone", ""),
+    ("OnColorSelect", "r: number, g: number, b: number"),
+    ("OnTooltipCleared", ""),
+    ("OnTooltipSetDefaultAnchor", ""),
+    ("OnFinished", "requested: boolean"),
+    ("OnPlay", ""),
+    ("OnPause", ""),
+    ("OnStop", "requested: boolean"),
+    ("OnLoop", "loopState: string"),
+];
+
+/// The script names a script type alias (`ScriptButton`) takes, through
+/// the aliases it extends.
+fn script_names(
+    ty: &str,
+    aliases: &indexmap::IndexMap<String, String>,
+    out: &mut BTreeSet<String>,
+    depth: u32,
+) {
+    if depth > 8 {
+        return;
+    }
+    for part in ty.split('|').map(str::trim) {
+        if let Some(name) = part.strip_prefix('"').and_then(|p| p.strip_suffix('"')) {
+            out.insert(name.to_string());
+        } else if let Some(t) = aliases.get(part) {
+            script_names(t, aliases, out, depth + 1);
+        }
+    }
+}
+
+/// `SetScript` and `HookScript` with a script the client calls with known
+/// arguments: an overload typing the handler `(self: Self, …) -> ()`, so a
+/// function written there gets its parameters' types (spec §2.4.3). The
+/// documented form stays last, for any other script name or handler.
+/// `ScriptRegion` (`ScriptType`, any name) gets `OnShow` and the scripts
+/// every region has.
+fn script_handlers(
+    classes: &mut indexmap::IndexMap<String, model::Class>,
+    aliases: &indexmap::IndexMap<String, String>,
+) {
+    for (class_name, class) in classes.iter_mut() {
+        for method in ["SetScript", "HookScript"] {
+            let Some(sigs) = class.methods.get_mut(method) else {
+                continue;
+            };
+            let Some(first) = sigs.first().cloned() else {
+                continue;
+            };
+            let Some(script) = first.params.first() else {
+                continue;
+            };
+            let mut names = BTreeSet::new();
+            script_names(&script.ty, aliases, &mut names, 0);
+            if class_name == "ScriptRegion" {
+                names.extend(
+                    [
+                        "OnShow",
+                        "OnHide",
+                        "OnEnter",
+                        "OnLeave",
+                        "OnMouseDown",
+                        "OnMouseUp",
+                        "OnSizeChanged",
+                    ]
+                    .map(String::from),
+                );
+            }
+            let mut typed = Vec::new();
+            for (name, args) in SCRIPT_HANDLERS {
+                if !names.contains(*name) {
+                    continue;
+                }
+                let params = if args.is_empty() {
+                    "self: Self".to_string()
+                } else {
+                    format!("self: Self, {args}")
+                };
+                let handler = format!("(({params}) -> ())");
+                let mut sig = first.clone();
+                sig.params[0].ty = format!("\"{name}\"");
+                if let Some(h) = sig.params.get_mut(1) {
+                    h.ty = handler;
+                    // SetScript takes nil (no handler); HookScript a function.
+                    h.optional = method == "SetScript";
+                }
+                typed.push(sig);
+            }
+            if !typed.is_empty() {
+                typed.extend(sigs.drain(..));
+                *sigs = typed;
+            }
+        }
+    }
+}
+
 /// Where Blizzard's documentation is wrong: `C_Timer.NewTimer` and
 /// `NewTicker` return a handle with `Cancel()` and `IsCancelled()` (the
 /// documentation says the callback), and their callbacks receive it.
@@ -317,6 +465,7 @@ pub fn generate(
     shared.constants.clear();
     blizzard::mark_widgets(&mut shared.classes);
     widget_corrections(&mut shared.classes);
+    script_handlers(&mut shared.classes, &shared.aliases);
     // `CreateFrame("Button", …)` returns a `Button`.
     let mut create = Vec::new();
     for t in blizzard::FRAME_TYPES {
