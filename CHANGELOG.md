@@ -33,6 +33,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- `fontString:SetFormattedText(format, ...)` accepts secret values among its arguments, as the game does (a target's name in a dungeon).
 - A field added to a table inside another (`API.UI.Button = button` after `API.UI = { … }`) is now part of the table other files import: they read it typed, where they got `any`, and a misspelled field there is an error.
 - `for k, v in pairs(t)` over a record type with an `unknown` indexer (`{ name?: string, [string]: unknown }`) is no longer refused (E2001).
 - Strict mode: a field your constructor sets in every branch of an `if … else … end` counts as set (E2052 said it wasn't), as does one set in a `do` block.
