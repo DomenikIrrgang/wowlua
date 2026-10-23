@@ -2825,6 +2825,44 @@ f:SetScript("OnShow", function(self) local n: number = self print(n) end)
     );
 }
 
+/// A field added to a table held in a field of an open table is part of the
+/// type the file exports, and the nested table is sealed with it (T275).
+#[test]
+fn nested_fields_are_exported() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"nested\", \"version\": \"1.0.0\" }, \"check\": { \"mode\": \"strict\" } }\n",
+            ),
+            (
+                "src/api.wowlua",
+                "local API = {}\nAPI.UI = { A = 1 }\nAPI.UI.B = \"x\"\nexport const Proto = API\n",
+            ),
+            (
+                "src/main.wowlua",
+                "import Proto from \"./api\"\nlocal n: number = Proto.UI.B\nprint(n, Proto.UI.Z)\n",
+            ),
+        ],
+    );
+    let out = wowlua(dir.path())
+        .args(["check", "--message-format", "short"])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let errors: Vec<&str> = stderr.lines().filter(|l| l.contains("error[")).collect();
+    assert_eq!(
+        errors,
+        [
+            "src/main.wowlua:2:7: error[E2001]: `string` is not assignable to `number`",
+            "src/main.wowlua:3:19: error[E2003]: `{ A: number, B: string }` has no field `Z`",
+        ],
+        "{stderr}"
+    );
+}
+
 /// `W2063` (decision T274): off unless `check.lints` turns it on; then an
 /// unannotated parameter nothing types, and a local whose value is `any`.
 #[test]
