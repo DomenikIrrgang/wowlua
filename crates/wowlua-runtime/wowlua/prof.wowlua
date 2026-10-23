@@ -69,10 +69,12 @@ function prof.wrap(fn: any, name: string, location: string, opts: { errors: bool
 			local before = memoryKiB()
 			local depth = #child + 1
 			child[depth] = 0
-			local s = prof.stats[name]
 			local function done(...: any): ...any
-				s = prof.stats[name]
-				s.memory = (s.memory ?? 0) + math.max(memoryKiB() - before, 0)
+				-- (finish made the entry)
+				local s = prof.stats[name]
+				if s then
+					s.memory = (s.memory ?? 0) + math.max(memoryKiB() - before, 0)
+				end
 				return ...
 			end
 			return done(finish(name, location, clock(), depth, fn(...)))

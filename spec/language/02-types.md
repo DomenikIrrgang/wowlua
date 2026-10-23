@@ -374,9 +374,16 @@ valid Lua patterns valid, and a local may hold different types over time,
 while still catching misuse such as calling `:upper()` on a value that is a
 number at that point.
 
-A local declared without a value and assigned later (a forward declaration,
-`local f` … `f = function() … end`) reads as `any` inside closures, which may
-run after any of its assignments.
+Inside a closure, an unannotated local that a closure assigns, or that is
+captured and assigned later, may hold any value it is given before the closure
+runs: it reads as the union of its narrowed types where functions are made in
+its scope and the values assigned to it after one is made or from inside a
+function (decision L47). A local declared without a value or with `nil` adds no
+`nil` for a function made before it is first assigned, so a forward declaration
+(`local f` … `f = function() … end`) reads as the function. The union depends
+on what is read in closures, so a file with such reads is checked again with
+the unions the pass before found until they hold (at most four passes; a local
+whose union still changes reads as `any`).
 
 An annotated local without a value (`local x: T`) is `nil` until assigned:
 its narrowed type follows the assignments, so where some path did not assign
@@ -596,7 +603,8 @@ fits (a literal stays a literal where the declared type is a literal union; a
 record or interface stays as declared), except a declared `any`. A closure sees
 the narrowing of the locals that are never assigned after their declaration (it
 cannot change), except open tables, which are sealed for closures (§2.4.2);
-other locals are their declared type inside closures. A local
+other locals are their declared type inside closures (an unannotated one, the
+union of §2.4.1). A local
 narrowed to `nil` that a closure assigns is its declared type again after any
 call, which may run that closure.
 

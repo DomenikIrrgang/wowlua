@@ -69,10 +69,12 @@ function prof.wrap(fn, name, location, opts)
 			local before = memoryKiB()
 			local depth = #child + 1
 			child[depth] = 0
-			local s = prof.stats[name]
 			local function done(...)
-				s = prof.stats[name]
-				do local __wl_t6 = s.memory if __wl_t6 == nil then __wl_t6 = 0 end s.memory = (__wl_t6) + math.max(memoryKiB() - before, 0) end
+				-- (finish made the entry)
+				local s = prof.stats[name]
+				if s then
+					do local __wl_t6 = s.memory if __wl_t6 == nil then __wl_t6 = 0 end s.memory = (__wl_t6) + math.max(memoryKiB() - before, 0) end
+				end
 				return...
 			end
 			return done(finish(name, location, clock(), depth, fn(...)))

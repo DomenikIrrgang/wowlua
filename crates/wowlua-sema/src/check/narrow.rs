@@ -137,6 +137,10 @@ impl Checker<'_, '_> {
             reassigned_in_closure: false,
             assigned_in_closure: false,
             never_reassigned: false,
+            decl: None,
+            assigned: base,
+            captured: false,
+            nil_init: false,
         });
         self.field_vars
             .entry(root)
