@@ -426,6 +426,17 @@ export function field(t: unknown, ...: string): unknown
     return v
 end
 
+--- `v` as a list when it is a table the addon may read, else an empty one:
+--- for walking a list the game gives as `unknown` (`for _, x in
+--- ipairs(table.list(v))`), its elements read with `secret.asString` and
+--- the like.
+export function list(v: unknown): unknown[]
+    if walkable(v) then
+        return v :: unknown[]
+    end
+    return {}
+end
+
 --- A table whose keys don't keep their values (`__mode = "k"`): for what
 --- you note about objects you don't own, such as the game's frames, without
 --- writing fields onto them. Typed by where it goes:

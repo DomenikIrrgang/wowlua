@@ -74,6 +74,7 @@ libraries such as Ace3, LibDBIcon or LibSerialize.
 | `wowlua:media` | SharedMedia interop for fonts, textures and sounds | [Interface](interface.md#media) |
 | `wowlua:alert` | Sounds, raid warnings, taskbar flash | [Interface](interface.md#alert) |
 | `wowlua:links` | Clickable links in the player's chat | [Interface](interface.md#links) |
+| `wowlua:chat` | The chat line: whispering, putting a link in, opening it with text | [Interface](interface.md#chat) |
 | `wowlua:errors` | Error-handling policy and reporting | [Infrastructure](infrastructure.md#errors) |
 | `wowlua:callbacks` | Callback registries and public APIs for other addons | [Infrastructure](infrastructure.md#callbacks) |
 | `wowlua:jobs` | Background jobs spread across frames | [Infrastructure](infrastructure.md#jobs) |

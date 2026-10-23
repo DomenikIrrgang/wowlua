@@ -1,0 +1,31 @@
+-- wowlua:chat (spec stdlib "chat"): the chat line the player types in,
+-- through the game's own chat code (`ChatFrameUtil`, or the older
+-- `ChatFrame_…`/`ChatEdit_…` globals on clients that have those). Nothing
+-- happens where a client has neither.
+import * as tbl from "wowlua:table"
+import * as secret from "wowlua:secret"
+import try from "wowlua:errors"
+
+local function game(name: string, old: string): unknown
+    return tbl.field(_G, "ChatFrameUtil", name) or tbl.field(_G, old)
+end
+
+--- Opens the chat line to whisper `name` (in `frame`, default the one the
+--- game picks), as the game's own "Whisper" in a menu does.
+export function whisper(name: string, frame: Frame?)
+    try(game("SendTell", "ChatFrame_SendTell"), name, frame)
+end
+
+--- Opens the chat line with `text` written in it (in `frame`, default the
+--- one the game picks).
+export function open(text: string, frame: Frame?)
+    try(game("OpenChat", "ChatFrame_OpenChat"), text, frame)
+end
+
+--- Puts `link` into the chat line being typed, as a shift-click does; with
+--- none open, opens one with it.
+export function insertLink(link: string)
+    if not secret.flag(try(game("InsertLink", "ChatEdit_InsertLink"), link)) then
+        open(link)
+    end
+end

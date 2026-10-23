@@ -67,3 +67,79 @@ export function evaluate(conditional: string): string?
     const value = SecureCmdOptionParse(conditional)
     return value
 end
+
+export type OverlayOptions = {
+    --- The layer it sits in (default "DIALOG": above a window that comes to
+    --- the front when clicked).
+    strata?: FrameStrata,
+}
+
+--- A secure button over one of the addon's own (see `overlay`).
+export type Overlay = {
+    --- The secure button: hook its `PreClick`/`PostClick` for what happens
+    --- around the action.
+    button: Button,
+    --- Sets an attribute (`type1`, `macrotext1`, `clickbutton1`, …); false
+    --- in combat, where it can't.
+    set: (name: string, value: string | Frame | nil) -> boolean,
+    --- Anchors it over the target and shows it; false in combat.
+    show: () -> boolean,
+    --- Hides it and lets go of the target; false in combat.
+    hide: () -> boolean,
+}
+
+--- A secure action button over `target`, a button of the addon's own that
+--- looks the part, for what only a click on a secure button may do (a
+--- slash command through `macro`, a click on one of the game's protected
+--- buttons through `click`). It hangs off `UIParent` and is anchored to the
+--- target only while shown, so the target's window never turns protected
+--- (it would no longer open or close in combat). A press and a release both
+--- reach it (`LeftButtonDown`, `LeftButtonUp`: the action runs on the one
+--- the client's ActionButtonUseKeyDown picks); hovering it is hovering the
+--- target. Made out of combat.
+export function overlay(target: Frame, opts: OverlayOptions?): Overlay
+    const button = CreateFrame("Button", nil, UIParent, "SecureActionButtonTemplate")
+    button:RegisterForClicks("LeftButtonDown", "LeftButtonUp")
+    button:SetScript("OnEnter", function()
+        const fn = target:GetScript("OnEnter")
+        if fn then
+            fn(target, true)
+        end
+    end)
+    button:SetScript("OnLeave", function()
+        const fn = target:GetScript("OnLeave")
+        if fn then
+            fn(target, true)
+        end
+    end)
+    button:Hide()
+    const strata: FrameStrata = opts?.strata ?? "DIALOG"
+    return {
+        button = button,
+        set = function(name: string, value: string | Frame | nil): boolean
+            if InCombatLockdown() then
+                return false
+            end
+            button:SetAttribute(name, value)
+            return true
+        end,
+        show = function(): boolean
+            if InCombatLockdown() then
+                return false
+            end
+            button:SetFrameStrata(strata)
+            button:ClearAllPoints()
+            button:SetAllPoints(target)
+            button:Show()
+            return true
+        end,
+        hide = function(): boolean
+            if InCombatLockdown() then
+                return false
+            end
+            button:Hide()
+            button:ClearAllPoints()
+            return true
+        end,
+    }
+end

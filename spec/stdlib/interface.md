@@ -474,6 +474,26 @@ which every supported client fires for `addon` links. The client does not
 send addon links to other players, so they are for the player's own chat
 frames only.
 
+## chat
+
+`wowlua:chat` opens the chat line the player types in, through the game's own
+chat code: `ChatFrameUtil`, or the older `ChatFrame_…` and `ChatEdit_…`
+globals on clients that have those. Where a client has neither, nothing
+happens (decision S44).
+
+```wowlua
+import * as chat from "wowlua:chat"
+
+menu:CreateButton("Whisper", function() chat.whisper(member.name) end)
+linkButton:SetScript("OnClick", function() chat.insertLink(recipeLink) end)
+```
+
+| API | Signature | Notes |
+|-----|-----------|-------|
+| `whisper` | `(name: string, frame?: Frame)` | Opens the chat line to whisper `name`, as the game's own "Whisper" does (`SendTell`) |
+| `open` | `(text: string, frame?: Frame)` | Opens the chat line with `text` in it (`OpenChat`) |
+| `insertLink` | `(link: string)` | Puts `link` into the line being typed, as a shift-click does (`InsertLink`); with none open, opens one with it |
+
 ## Testing
 
 `wowlua:mock` support used by this chapter: `mock.drag(frame, dx, dy)`,

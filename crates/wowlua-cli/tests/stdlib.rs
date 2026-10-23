@@ -6244,7 +6244,8 @@ print(type(format.date()))
 /// and friends, `errors.try`/`tryMethod` (silent), `table.field` and the
 /// weak tables, `frames.find`/`as…` and `frames.keepAway`, the short money
 /// form (decision S42); `errors.tryValue` keeps the function's result type,
-/// `secret.isNumber`/`isString` narrow (decision S43).
+/// `secret.isNumber`/`isString` narrow (decision S43); `format.ago`,
+/// `table.list` (decision S44).
 #[test]
 fn readers_for_the_games_values() {
     let typed = "import * as errors from \"wowlua:errors\"\nimport * as secret from \"wowlua:secret\"\nlocal function lookup(id: number): { name: string }?\n    if id == 1 then return { name = \"one\" } end\n    error(\"no \" .. id)\nend\nlocal function first(): string?\n    local info = errors.tryValue(lookup, 1)\n    return info and info.name\nend\nlocal function failed(): string?\n    local info = errors.tryValue(lookup, 2)\n    return info and info.name\nend\nlocal missing: ((n: number) -> number)? = nil\nlocal function none(): number? return errors.tryValue(missing, 2) end\nlocal function num(v: unknown): number? if secret.isNumber(v) then return v + 1 end return nil end\nlocal function str(v: unknown): string? if secret.isString(v) then return v:upper() end return nil end\n_G.StdTyped = { first = first, failed = failed, none = none, num = num, str = str }\n";
@@ -6298,6 +6299,10 @@ local _, _, _, x4 = away:GetPoint(1)
 print(x3, x4)
 local T = StdTyped
 print(T.first(), T.failed(), T.none(), T.num(1), T.num("1"), T.num(Mock.secret()), T.str("a"), T.str(1))
+local ago = R.format.ago
+print(ago(30), ago(300), ago(7200), ago(45 * 86400), ago(-5))
+print(ago(90061, { long = true }), ago(3600, { long = true }), ago(60 * 86400, { long = true }), ago(400 * 86400, { long = true }), ago(600, { long = true, from = "hour" }), ago(600, { from = "hour" }))
+print(#t.list({ 1, 2, 3 }), #t.list(5), #t.list(nil), #t.list(Mock.secret()))
 "##,
     );
     assert_eq!(
@@ -6314,6 +6319,9 @@ print(T.first(), T.failed(), T.none(), T.num(1), T.num("1"), T.num(Mock.secret()
             "5000 0",
             "0 0",
             "one nil nil 2 nil nil A nil",
+            "just now 5 min ago 2 h ago 45 d ago just now",
+            "1 day ago 1 hour ago 2 months ago 1 year ago less than an hour ago < 1 h ago",
+            "3 0 0 0",
         ]
     );
 }
@@ -6447,6 +6455,97 @@ print("flashes", Mock.flashes)
             "kit 8959 Master | file Interface\\AddOns\\Std\\ping.ogg SFX | file 567890123 Master | kit 8959 Master",
             "Pull in 5 (1.00 0.28 0.00) | Boss! (0.00 1.00 0.00) | Boss! (1.00 0.28 0.00)",
             "flashes 1",
+        ]
+    );
+}
+
+/// `wowlua:chat` and `unit.invite` call the game's chat code and group
+/// invite, the older globals where a client has those, nothing where it
+/// has neither (decision S44).
+#[test]
+fn chat_line_and_invites() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as chat from \"wowlua:chat\"\nimport * as unit from \"wowlua:unit\"\n_G.StdChat = { chat = chat, unit = unit }\n",
+        )],
+        "",
+        r#"Mock.loadAddon("Std")
+local C, U = StdChat.chat, StdChat.unit
+local seen = {}
+local function note(what) return function(...) seen[#seen + 1] = what .. ":" .. table.concat({ ... }, ",") end end
+ChatFrameUtil, ChatFrame_SendTell, ChatFrame_OpenChat, ChatEdit_InsertLink = nil, nil, nil, nil
+C.whisper("Ann")
+C.open("hi")
+C.insertLink("[x]")
+print(#seen)
+ChatFrame_SendTell, ChatFrame_OpenChat = note("oldTell"), note("oldOpen")
+ChatEdit_InsertLink = function(link) seen[#seen + 1] = "oldInsert:" .. link return false end
+C.whisper("Ann")
+C.insertLink("[x]")
+ChatFrameUtil = { SendTell = note("tell"), OpenChat = note("open"), InsertLink = function(link) seen[#seen + 1] = "insert:" .. link return true end }
+C.whisper("Bob")
+C.open("hi")
+C.insertLink("[y]")
+local real = C_PartyInfo.InviteUnit
+C_PartyInfo.InviteUnit = note("invite")
+U.invite("Cara")
+C_PartyInfo.InviteUnit = nil
+InviteUnit = note("oldInvite")
+U.invite("Dan")
+C_PartyInfo.InviteUnit = real
+print(table.concat(seen, " "))
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "0",
+            "oldTell:Ann oldInsert:[x] oldOpen:[x] tell:Bob open:hi insert:[y] invite:Cara oldInvite:Dan",
+        ]
+    );
+}
+
+/// `secure.overlay`: a secure button over the addon's own, on UIParent,
+/// anchored only while shown, hover passed on, nothing in combat (decision
+/// S44).
+#[test]
+fn secure_overlays() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as secure from \"wowlua:secure\"\n_G.StdSecure = secure\n",
+        )],
+        "",
+        r#"Mock.loadAddon("Std")
+local target = CreateFrame("Button", nil, UIParent)
+target:SetSize(60, 20)
+target:SetPoint("CENTER")
+local hovered = 0
+target:SetScript("OnEnter", function() hovered = hovered + 1 end)
+local other = CreateFrame("Button", nil, UIParent)
+local o = StdSecure.overlay(target)
+print(o.button:GetParent() == UIParent, o.button:IsShown(), o.button:GetNumPoints())
+print(o.set("type1", "click"), o.set("clickbutton1", other), o.show())
+local _, rel = o.button:GetPoint(1)
+print(o.button:IsShown(), rel == target, o.button:GetFrameStrata())
+o.button:GetScript("OnEnter")(o.button, true)
+print(hovered, o.button:GetAttribute("type1"), o.button:GetAttribute("clickbutton1") == other)
+Mock.combat = true
+print(o.set("type1", "macro"), o.hide(), o.button:IsShown())
+Mock.combat = false
+print(o.hide(), o.button:IsShown(), o.button:GetNumPoints())
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "true false 0",
+            "true true true",
+            "true true DIALOG",
+            "1 click true",
+            "false false true",
+            "true false 0",
         ]
     );
 }
