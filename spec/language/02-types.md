@@ -669,9 +669,15 @@ call, which may run that closure.
 loop starts again. A declared local keeps its narrowing at the loop start
 (as the members of its declared type it fits: `0` in a `number?` is `number`)
 when every path back to the start, the end of the body and `continue`, leaves
-it within that narrowing; its `break` paths then join the flow after the loop.
-Otherwise, and for unannotated locals, the loop body sees the declared type
-(`any` for an unannotated local).
+it within that narrowing. An unannotated local is its type before the loop
+at the loop start when the paths back bring it no other type; when they do,
+the loop is checked again with the union of that type and theirs, which then
+holds when the paths back bring nothing more. The `break` paths of the locals
+kept so join the flow after the loop: `local found = nil` that a search loop
+sets to an index is a `number?` after it. Otherwise (a declared local that
+leaves its narrowing, an unannotated one whose union still grows, or one a
+closure assigns) the loop body sees the declared type (`any` for an
+unannotated local), decision L65.
 
 **Fields through a narrowed local.** Assigning a field of an annotated local
 (`item.x = 1`) checks against the members of its declared type that its

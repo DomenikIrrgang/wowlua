@@ -1662,14 +1662,23 @@ impl<'e, 'p> Checker<'e, 'p> {
     /// first tried with that narrowing kept: the trial holds when every
     /// path back to the loop start (the body's end, `continue`) leaves them
     /// within it, and their `break` paths then join the flow after the
-    /// loop. Otherwise the loop is checked again with them forgotten.
+    /// loop. Unannotated locals are tried with their type before the loop:
+    /// the trial holds when the paths back bring no new type, and is tried
+    /// once more with the types they brought (decision L65). Otherwise the
+    /// loop is checked again with them forgotten.
     fn check_loop(
         &mut self,
         body: Block<'_>,
         mut run: impl FnMut(&mut Self, &[VarId]) -> Option<Flow>,
     ) {
-        let keep = self.loop_kept(body);
-        if !keep.is_empty() {
+        let mut keep = self.loop_kept(body);
+        // The unannotated locals' types at the loop start, once a trial
+        // found the paths back bringing more.
+        let mut grown: FxHashMap<VarId, TypeId> = FxHashMap::default();
+        for _round in 0..2 {
+            if keep.is_empty() {
+                break;
+            }
             let trial = LoopTrial {
                 flow: self.flow.clone(),
                 field_vars: self.field_vars.clone(),
@@ -1687,22 +1696,40 @@ impl<'e, 'p> Checker<'e, 'p> {
             let mut entry = Vec::new();
             for &v in &keep {
                 let now = self.var_type(v);
-                let declared = self.vars[v.0 as usize].declared.unwrap_or(now);
-                let t = self.loosen(now, declared);
+                let t = match self.vars[v.0 as usize].declared {
+                    Some(declared) => self.loosen(now, declared),
+                    None => grown.get(&v).copied().unwrap_or(now),
+                };
                 self.flow.insert(v, t);
                 entry.push((v, t));
             }
             self.loops.push(LoopFlows::default());
             let back = run(self, &keep);
             let exits = self.loops.pop().unwrap_or_default();
-            let holds = back.iter().chain(&exits.continues).all(|f| {
-                entry.iter().all(|&(v, t)| {
+            // The declared locals that left their narrowing, and the
+            // unannotated ones the paths back brought new types to.
+            let mut failed: Vec<VarId> = Vec::new();
+            let mut more: Vec<(VarId, TypeId)> = Vec::new();
+            for &(v, t) in &entry {
+                let declared = self.vars[v.0 as usize].declared.is_some();
+                let mut u = t;
+                for f in back.iter().chain(&exits.continues) {
                     let now = self.var_type_in(v, f);
-                    self.env.assignable(now, t, Mode::Strict)
-                })
-            });
+                    if declared {
+                        if !self.env.assignable(now, t, Mode::Strict) {
+                            failed.push(v);
+                            break;
+                        }
+                    } else {
+                        u = self.env.types.union(&[u, now]);
+                    }
+                }
+                if u != t {
+                    more.push((v, u));
+                }
+            }
             let log = std::mem::replace(&mut self.base_log, trial.base_log);
-            if holds {
+            if failed.is_empty() && more.is_empty() {
                 if let (Some(outer), Some(log)) = (&mut self.base_log, log) {
                     outer.extend(log);
                 }
@@ -1735,6 +1762,14 @@ impl<'e, 'p> Checker<'e, 'p> {
             if let Some(f) = self.fns.last_mut() {
                 f.returns.truncate(trial.returns);
             }
+            // A second round: without the declared locals that left their
+            // narrowing, the unannotated ones with what the paths back
+            // brought. A second round that still finds more gives up.
+            if !grown.is_empty() {
+                break;
+            }
+            keep.retain(|v| !failed.contains(v));
+            grown.extend(more);
         }
         self.loops.push(LoopFlows::default());
         run(self, &[]);
@@ -1775,7 +1810,8 @@ impl<'e, 'p> Checker<'e, 'p> {
         var.assigned = assigned;
     }
 
-    /// The declared locals a loop body assigns that the loop entry narrows
+    /// The locals a loop body assigns that keep a type at the loop start:
+    /// the declared ones the loop entry narrows, and the unannotated ones
     /// (a closure assigning one may run at any time: those are left out).
     fn loop_kept(&self, body: Block<'_>) -> Vec<VarId> {
         let mut out: Vec<VarId> = Self::assigned_names(body)
@@ -1783,12 +1819,13 @@ impl<'e, 'p> Checker<'e, 'p> {
             .filter_map(|name| self.lookup_var(name))
             .filter(|&v| {
                 let var = &self.vars[v.0 as usize];
-                var.declared.is_some_and(|d| {
-                    d != Types::ANY
-                        && !var.assigned_in_closure
-                        && var.depth == self.depth
-                        && self.flow.get(&v).is_some_and(|&t| t != d)
-                })
+                if var.assigned_in_closure || var.depth != self.depth {
+                    return false;
+                }
+                match var.declared {
+                    Some(d) => d != Types::ANY && self.flow.get(&v).is_some_and(|&t| t != d),
+                    None => self.var_type(v) != Types::ANY,
+                }
             })
             .collect();
         out.sort();

@@ -2726,6 +2726,42 @@ print(a, b, c, d, e, name, realm, more)
         );
     }
 
+    /// A local without an annotation that a loop assigns keeps its types
+    /// through the loop: its type before it and the ones the body gives
+    /// (decision L65).
+    #[test]
+    fn loop_assigned_unannotated() {
+        // after the loop: the type before it or the body's
+        strict_err(
+            "local function f(q: number): number\n local h = q > 1 and q or nil\n for i = 1, 3 do h = i end\n return h\nend\nprint(f)\n",
+            "E2001",
+        );
+        strict_ok(
+            "local function f(q: number): number?\n local h = q > 1 and q or nil\n for i = 1, 3 do h = i end\n local n: number? = h\n return n\nend\nprint(f)\n",
+        );
+        strict_err(
+            "local function f(t: string[]): string\n local h = 0\n for _, s in ipairs(t) do h = s end\n return h\nend\nprint(f)\n",
+            "E2001",
+        );
+        // in the body: what the paths back bring too
+        strict_err(
+            "local function f()\n local last = nil\n for _, v in ipairs({ 1, 2 }) do\n  local n: number = last\n  last = v\n  print(n)\n end\nend\nprint(f)\n",
+            "E2001",
+        );
+        strict_ok(
+            "local function f()\n local last = nil\n for _, v in ipairs({ 1, 2 }) do\n  local n: number? = last\n  last = v\n  print(n)\n end\nend\nprint(f)\n",
+        );
+        // a `break` path joins the flow after the loop
+        strict_err(
+            "local function f(t: string[]): number\n local found = nil\n for i, s in ipairs(t) do\n  if s == \"x\" then found = i break end\n end\n return found\nend\nprint(f)\n",
+            "E2001",
+        );
+        // a counter stays a number
+        strict_ok(
+            "local function f(): number\n local n = 0\n while n < 10 do n = n + 1 end\n repeat n = n - 1 until n < 5\n return n\nend\nprint(f)\n",
+        );
+    }
+
     /// `unknown` where it is falsy is `false | nil` (decision L63).
     #[test]
     fn unknown_falsy() {
