@@ -344,7 +344,9 @@ or Vulkan natively, WebGPU or WebGL 2 in the browser.
   place (premultiplied alpha): the actors posed on the CPU at the
   animation's time (bones, then skinning), each visible batch with its
   material's blend mode (opaque, alpha key, alpha, add, mod, mod 2x),
-  texture (the model's own, or the display's by kind), color and
+  texture (the model's own, or the display's by kind; mipmapped, each
+  level the average of the one above, so a small portrait averages its
+  texels as the client's does), color and
   transparency tracks, texture transform, lit by the frame's light unless
   unlit; up to three textures a batch, combined by the client's shaders
   (its shader ID: the vertex shader, which coordinates each texture takes,

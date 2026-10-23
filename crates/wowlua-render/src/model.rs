@@ -267,6 +267,7 @@ impl Renderer {
             address_mode_v: wgpu::AddressMode::Repeat,
             mag_filter: wgpu::FilterMode::Linear,
             min_filter: wgpu::FilterMode::Linear,
+            mipmap_filter: wgpu::MipmapFilterMode::Linear,
             ..Default::default()
         }));
         self.models.layout = Some((globals, tex, layout));
@@ -429,7 +430,7 @@ impl Renderer {
             return t;
         }
         let img = crate::composite::composite(c, &mut |f| assets.image(&Image::FileId(f)));
-        let t = self.upload(&img);
+        let t = self.upload_mipmapped(&img);
         self.models.composites.insert(key, t);
         t
     }
@@ -673,9 +674,9 @@ impl Renderer {
                     .copied()
                     .unwrap_or(0) as usize;
                 *slot = match m.textures.get(index) {
-                    Some(t) if t.kind == 0 => self.texture(&Image::FileId(t.file), assets),
+                    Some(t) if t.kind == 0 => self.model_texture(t.file, assets),
                     Some(t) => match part.textures.get(&t.kind) {
-                        Some(Texture::File(f)) => self.texture(&Image::FileId(*f), assets),
+                        Some(Texture::File(f)) => self.model_texture(*f, assets),
                         Some(Texture::Composite(c)) => self.composite(c, assets),
                         None => self.white,
                     },
@@ -755,9 +756,9 @@ impl Renderer {
                 e.texture
             } as usize;
             let tex = match m.textures.get(index) {
-                Some(t) if t.kind == 0 => self.texture(&Image::FileId(t.file), assets),
+                Some(t) if t.kind == 0 => self.model_texture(t.file, assets),
                 Some(t) => match part.textures.get(&t.kind) {
-                    Some(Texture::File(f)) => self.texture(&Image::FileId(*f), assets),
+                    Some(Texture::File(f)) => self.model_texture(*f, assets),
                     _ => self.white,
                 },
                 None => self.white,

@@ -110,6 +110,38 @@ fn axis_pieces(
 
 /// A quad's rectangle on whole pixels, as the client draws textures that
 /// snap to the pixel grid (not turned ones).
+/// An image and its mipmaps down to 1x1, each level the average of the
+/// one above's 2x2 texels.
+fn mipmaps(img: &Rgba) -> Vec<Rgba> {
+    let mut levels = vec![img.clone()];
+    loop {
+        let l = levels.last().unwrap();
+        if l.width <= 1 && l.height <= 1 {
+            break;
+        }
+        let (w, h) = ((l.width / 2).max(1), (l.height / 2).max(1));
+        let mut pixels = Vec::with_capacity((w * h * 4) as usize);
+        for y in 0..h {
+            let (y0, y1) = ((y * 2).min(l.height - 1), (y * 2 + 1).min(l.height - 1));
+            for x in 0..w {
+                let (x0, x1) = ((x * 2).min(l.width - 1), (x * 2 + 1).min(l.width - 1));
+                for k in 0..4 {
+                    let at =
+                        |x: u32, y: u32| u32::from(l.pixels[((y * l.width + x) * 4) as usize + k]);
+                    let sum = at(x0, y0) + at(x1, y0) + at(x0, y1) + at(x1, y1);
+                    pixels.push(((sum + 2) / 4) as u8);
+                }
+            }
+        }
+        levels.push(Rgba {
+            width: w,
+            height: h,
+            pixels,
+        });
+    }
+    levels
+}
+
 fn snapped(q: &wowlua_engine::scene::Quad, r: Rect) -> Rect {
     if !q.snap || q.rotation != 0.0 {
         return r;
@@ -157,6 +189,8 @@ const ALPHA_KEY: u32 = 2;
 enum TexKey {
     Path(String),
     Id(u32),
+    /// A model's texture, with its mipmaps.
+    Model(u32),
 }
 
 pub(crate) struct Tex {
@@ -447,6 +481,19 @@ impl Renderer {
     }
 
     fn upload(&mut self, img: &Rgba) -> usize {
+        self.upload_levels(&[img])
+    }
+
+    /// Uploads an image with its mipmaps, as the client draws models'
+    /// textures (seen small, they average their texels).
+    fn upload_mipmapped(&mut self, img: &Rgba) -> usize {
+        let levels = mipmaps(img);
+        self.upload_levels(&levels.iter().collect::<Vec<_>>())
+    }
+
+    /// Uploads an image's levels (the first the image).
+    fn upload_levels(&mut self, levels: &[&Rgba]) -> usize {
+        let img = levels[0];
         let size = wgpu::Extent3d {
             width: img.width.max(1),
             height: img.height.max(1),
@@ -455,28 +502,35 @@ impl Renderer {
         let texture = self.device.create_texture(&wgpu::TextureDescriptor {
             label: None,
             size,
-            mip_level_count: 1,
+            mip_level_count: levels.len() as u32,
             sample_count: 1,
             dimension: wgpu::TextureDimension::D2,
             format: FORMAT,
             usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
             view_formats: &[],
         });
-        self.queue.write_texture(
-            wgpu::TexelCopyTextureInfo {
-                texture: &texture,
-                mip_level: 0,
-                origin: wgpu::Origin3d::ZERO,
-                aspect: wgpu::TextureAspect::All,
-            },
-            &img.pixels,
-            wgpu::TexelCopyBufferLayout {
-                offset: 0,
-                bytes_per_row: Some(4 * size.width),
-                rows_per_image: Some(size.height),
-            },
-            size,
-        );
+        for (level, l) in levels.iter().enumerate() {
+            let (w, h) = (l.width.max(1), l.height.max(1));
+            self.queue.write_texture(
+                wgpu::TexelCopyTextureInfo {
+                    texture: &texture,
+                    mip_level: level as u32,
+                    origin: wgpu::Origin3d::ZERO,
+                    aspect: wgpu::TextureAspect::All,
+                },
+                &l.pixels,
+                wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(4 * w),
+                    rows_per_image: Some(h),
+                },
+                wgpu::Extent3d {
+                    width: w,
+                    height: h,
+                    depth_or_array_layers: 1,
+                },
+            );
+        }
         let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
         self.textures.push(Tex {
             texture,
@@ -508,6 +562,21 @@ impl Renderer {
         let max = self.device.limits().max_texture_dimension_2d;
         let t = match assets.image(image) {
             Some(img) if img.width <= max && img.height <= max => self.upload(&img),
+            _ => self.missing,
+        };
+        self.by_key.insert(key, t);
+        t
+    }
+
+    /// A model's texture (a file ID), with its mipmaps; uploaded once.
+    fn model_texture(&mut self, file: u32, assets: &mut dyn Assets) -> usize {
+        let key = TexKey::Model(file);
+        if let Some(&t) = self.by_key.get(&key) {
+            return t;
+        }
+        let max = self.device.limits().max_texture_dimension_2d;
+        let t = match assets.image(&Image::FileId(file)) {
+            Some(img) if img.width <= max && img.height <= max => self.upload_mipmapped(&img),
             _ => self.missing,
         };
         self.by_key.insert(key, t);
@@ -1204,4 +1273,35 @@ pub fn decode_png(bytes: &[u8]) -> Result<Rgba, String> {
         height: info.height,
         pixels,
     })
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    /// Each level halves the one above (odd sizes round down, never below
+    /// one) and averages its 2x2 texels.
+    #[test]
+    fn mipmaps_average_down_to_one_texel() {
+        let img = Rgba {
+            width: 4,
+            height: 2,
+            pixels: [
+                [0, 0, 0, 255],
+                [255, 255, 255, 255],
+                [0, 0, 0, 0],
+                [0, 0, 0, 0],
+                [0, 0, 0, 255],
+                [255, 255, 255, 255],
+                [0, 0, 0, 0],
+                [0, 0, 0, 0],
+            ]
+            .concat(),
+        };
+        let levels = mipmaps(&img);
+        let sizes: Vec<(u32, u32)> = levels.iter().map(|l| (l.width, l.height)).collect();
+        assert_eq!(sizes, [(4, 2), (2, 1), (1, 1)]);
+        assert_eq!(levels[1].pixels, [128, 128, 128, 255, 0, 0, 0, 0]);
+        assert_eq!(levels[2].pixels, [64, 64, 64, 128]);
+    }
 }
