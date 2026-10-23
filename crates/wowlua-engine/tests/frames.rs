@@ -1453,3 +1453,61 @@ return tostring(t:IsSnappingToPixelGrid()), string.format('%.14f', t:GetTexelSna
     );
     assert_eq!(r, ["true", "0.30000001192093"]);
 }
+
+/// The client's wardrobe cameras: an armor slot's by race and gender.
+struct WardrobeCameras;
+
+impl wowlua_engine::clientdata::ClientData for WardrobeCameras {
+    fn model_scene(&self, _: u32) -> Option<wowlua_engine::clientdata::ModelScene> {
+        None
+    }
+    fn scene_camera(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneCamera> {
+        None
+    }
+    fn scene_actor(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneActor> {
+        None
+    }
+    fn actor_display(&self, _: u32) -> Option<wowlua_engine::clientdata::ActorDisplay> {
+        None
+    }
+    fn item(&self, id: u32) -> Option<wowlua_engine::clientdata::ClientItem> {
+        (id == 44803).then(|| wowlua_engine::clientdata::ClientItem {
+            name: "A helm".into(),
+            class: 4,
+            inventory_type: 1,
+            ..Default::default()
+        })
+    }
+    fn transmog_camera(&self, race: u32, gender: u32, slot: u32, variation: u32) -> Option<u32> {
+        match (race, gender, slot, variation) {
+            (5, 0, 1, 0) => Some(542),
+            (96, 1, 1, 0) => Some(1957),
+            _ => None,
+        }
+    }
+}
+
+/// An appearance's wardrobe camera is the client's for its item's slot on
+/// the player's race and gender, over the recorded one (the recording's
+/// Undead male's); without the tables, the recorded one.
+#[test]
+fn wardrobe_cameras_follow_the_players_race_and_gender() {
+    let mut vm = vm();
+    let recorded = run(
+        &mut vm,
+        "return C_TransmogCollection.GetAppearanceCameraID(11257)",
+    );
+    assert_eq!(recorded, ["542"]);
+    wowlua_engine::controls::install(&mut vm, "mock");
+    wowlua_engine::clientdata::set(&mut vm, std::sync::Arc::new(WardrobeCameras));
+    run(
+        &mut vm,
+        "mock.setPlayer({ name = 'P', realm = 'R', class = 'SHAMAN', race = 'Skyborne', sex = 3, level = 21 })",
+    );
+    let r = run(
+        &mut vm,
+        "local s = C_TransmogCollection.GetAppearanceSources(11257, 1)[1]
+return C_TransmogCollection.GetAppearanceCameraID(11257), C_TransmogCollection.GetAppearanceCameraIDBySource(s.sourceID)",
+    );
+    assert_eq!(r, ["1957", "1957"]);
+}

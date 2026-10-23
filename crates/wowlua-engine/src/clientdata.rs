@@ -93,6 +93,24 @@ pub trait ClientData: Send + Sync {
     fn ui_camera(&self, _id: u32) -> Option<UiCamera> {
         None
     }
+    /// The UI camera the wardrobe shows an armor slot with
+    /// (`UiCamFbackTransmogChrRace`): by race (`ChrRaces` ID), gender (0
+    /// male, 1 female), inventory type and variation.
+    fn transmog_camera(
+        &self,
+        _race: u32,
+        _gender: u32,
+        _slot: u32,
+        _variation: u32,
+    ) -> Option<u32> {
+        None
+    }
+    /// The UI camera the wardrobe shows a weapon with
+    /// (`UiCamFbackTransmogWeapon`): by item class, subclass and inventory
+    /// type.
+    fn weapon_camera(&self, _class: u32, _subclass: u32, _slot: u32) -> Option<u32> {
+        None
+    }
     /// An item as the client's tables have it (`Item`, `ItemSearchName`).
     fn item(&self, _id: u32) -> Option<ClientItem> {
         None
@@ -138,6 +156,26 @@ pub(crate) fn item(vm: &Vm, id: i64) -> Option<ClientItem> {
 /// it.
 pub(crate) fn minimap_tile(vm: &Vm, map: u32, x: u32, y: u32) -> Option<u32> {
     data(vm)?.minimap_tile(map, x, y)
+}
+
+/// The UI camera the client's tables give an item on a character of a
+/// race (`ChrRaces` ID) and gender (0 male, 1 female): its slot's for the
+/// race (armor), else its kind's (weapons, shields).
+pub(crate) fn item_camera(
+    vm: &Vm,
+    item: i64,
+    race: u32,
+    gender: u32,
+    variation: u32,
+) -> Option<u32> {
+    let d = data(vm)?;
+    let it = d.item(u32::try_from(item).ok()?)?;
+    if it.class != 2
+        && let Some(cam) = d.transmog_camera(race, gender, it.inventory_type, variation)
+    {
+        return Some(cam);
+    }
+    d.weapon_camera(it.class, it.subclass, it.inventory_type)
 }
 
 /// An item's inventory type as the client's tables give it.
@@ -343,6 +381,10 @@ fn ui_camera_info(vm: &mut Vm, c: NativeCall) -> Ret {
 pub(crate) fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
     vec![
         ("GetUICameraInfo", ui_camera_info as wowlua_vm::NativeFn),
+        (
+            "C_TransmogCollection.GetAppearanceCameraID",
+            crate::collections::get_appearance_camera,
+        ),
         (
             "C_ModelInfo.GetModelSceneInfoByID",
             model_scene_info as wowlua_vm::NativeFn,

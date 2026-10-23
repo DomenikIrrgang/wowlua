@@ -50,6 +50,8 @@ const FILES: &[(&str, u32)] = &[
     ("UiModelSceneActorDisplay", 1548216),
     ("UiModelSceneCamera", 1548213),
     ("UiCamera", 1120287),
+    ("UiCamFbackTransmogChrRace", 1261406),
+    ("UiCamFbackTransmogWeapon", 1261407),
 ];
 
 /// A column: a field of the records, their ID, or the parent ID of the

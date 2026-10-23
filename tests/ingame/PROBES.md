@@ -303,8 +303,10 @@ The wardrobe's head shots (`Model_ApplyUICamera`) sit off center in
 wowlua's screenshots: how the client's model frame camera sees a model is
 not known yet. Answered (2026-10-23, decision T334) with a DressUpModel of
 the player under UIParent and UI camera 542 at 200 by 250 and 400 by 250,
-with and without `SetPosition(0, 0, 0)`; still open: the wardrobe's own
-cells next to a screenshot of them.
+with and without `SetPosition(0, 0, 0)`; the wardrobe's head cells match
+a Skyborne female's screenshot once the camera follows the race (T335).
+Still open: the body's transmog skin (`useTransmogSkin`, drawn dark in
+game, the character's clothes in wowlua).
 
 1. Open the appearances collection on the head slot and take a screenshot of
    the first page (the cells' framing to compare with).

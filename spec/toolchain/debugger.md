@@ -322,7 +322,13 @@ T310).
   nothing, as before. `GetUICameraInfo(id)` answers the client's
   `UiCamera` row as it is (the model's position, its yaw, pitch and roll,
   the animation, whether it is centered), as the recordings show; without
-  the tables, the recordings. A model frame given a camera
+  the tables, the recordings. `C_TransmogCollection.GetAppearanceCameraID`
+  and `GetAppearanceCameraIDBySource` answer the client's camera for the
+  appearance's item on the player (decision T335): an armor slot's by the
+  player's race and gender (`UiCamFbackTransmogChrRace`, its variation's,
+  else the slot's first), a weapon's by its class and subclass
+  (`UiCamFbackTransmogWeapon`); without the tables, the recorded cameras
+  (the recording's character's). A model frame given a camera
   (`SetCameraPosition` and `SetCameraTarget`, as `Model_ApplyUICamera`
   does) is seen from it, in camera space (decision T334): model space is
   camera space times 0.8171 times the frame's effective scale

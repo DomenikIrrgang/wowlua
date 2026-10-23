@@ -284,3 +284,39 @@ fn reads_ribbon_emitters() {
     let blend = r.materials.first().map(|i| m.materials[*i as usize].blend);
     assert_eq!(blend, Some(4));
 }
+
+/// WoW Forever's wardrobe cameras: an Undead male's head is UI camera 542
+/// (as the client answered `GetAppearanceCameraID` for him), a Skyborne
+/// female's 1957; its weapons' table reads.
+#[test]
+fn reads_the_wardrobe_camera_tables() {
+    let Some(root) = install() else {
+        eprintln!("no WoW installation: skipped");
+        return;
+    };
+    let storage = FsStorage { root: root.clone() };
+    if !Casc::products(&storage)
+        .iter()
+        .any(|(p, _)| p == "wow_classic_beta")
+    {
+        return;
+    }
+    let casc = Casc::open(Box::new(FsStorage { root }), "wow_classic_beta").expect("opens");
+    let t = wowlua_casc::tables::Table::open(&casc, "UiCamFbackTransmogChrRace").expect("races");
+    let cam = |race: u32, gender: u32| {
+        t.rows()
+            .find(|r| {
+                r.int("ChrRaceID") == race
+                    && r.int("Gender") == gender
+                    && r.int("InventoryType") == 1
+                    && r.int("Variation") == 0
+            })
+            .map(|r| r.int("UiCameraID"))
+    };
+    assert_eq!((cam(5, 0), cam(96, 1)), (Some(542), Some(1957)));
+    let w = wowlua_casc::tables::Table::open(&casc, "UiCamFbackTransmogWeapon").expect("weapons");
+    assert!(
+        w.rows()
+            .any(|r| r.int("ItemClass") == 2 && r.int("UiCameraID") > 0)
+    );
+}

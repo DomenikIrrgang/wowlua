@@ -1281,10 +1281,43 @@ fn get_appearance_info_by_source(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Table(t)])
 }
 
+/// The UI camera the client's tables give an appearance on the player:
+/// its first source's item's, by the player's race and sex (probed in WoW
+/// Forever, 2026-10-23: an Undead male's head is camera 542, as the
+/// table's row and the recordings have it).
+fn client_camera(vm: &Vm, visual: i64, variation: u32) -> Option<u32> {
+    let item = appearance_sources()
+        .get(&visual)?
+        .iter()
+        .filter_map(|id| sources().get(id))
+        .find_map(|e| field_num(e, "itemID"))?;
+    let player = &engine(vm).units.list[units::PLAYER.0];
+    let race = units::race_file_and_id(&player.race).1? as u32;
+    // `UnitSex`: 2 male, 3 female.
+    let gender = u32::from(player.sex >= 3.0);
+    crate::clientdata::item_camera(vm, item as i64, race, gender, variation)
+}
+
+/// `C_TransmogCollection.GetAppearanceCameraID(appearanceID, variation)`:
+/// the camera the client's tables give it on the player, else as recorded
+/// (`clientdata`'s behaviours install it, over the recordings).
+pub(crate) fn get_appearance_camera(vm: &mut Vm, c: NativeCall) -> Ret {
+    let visual = num(vm, &c, 1).unwrap_or(0.0) as i64;
+    let variation = num(vm, &c, 2).unwrap_or(0.0).max(0.0) as u32;
+    match client_camera(vm, visual, variation) {
+        Some(cam) => Ok(vec![Value::Num(cam.into())]),
+        None => crate::facts::recorded_call(vm, c),
+    }
+}
+
 /// `C_TransmogCollection.GetAppearanceCameraIDBySource(source)`: its
-/// appearance's recorded camera, else 0 (unverified).
+/// appearance's camera on the player from the client's tables, else its
+/// recorded camera, else 0 (unverified).
 fn get_camera_by_source(vm: &mut Vm, c: NativeCall) -> Ret {
     let visual = source(vm, &c, 1).and_then(|e| field_num(e, "visualID"));
+    if let Some(cam) = visual.and_then(|v| client_camera(vm, v as i64, 0)) {
+        return Ok(vec![Value::Num(cam.into())]);
+    }
     let camera = visual.and_then(|v| {
         num_of(first(crate::recorded::lookup_text(
             vm,

@@ -375,6 +375,37 @@ impl wowlua_engine::clientdata::ClientData for CascClientData {
         })
     }
 
+    fn transmog_camera(&self, race: u32, gender: u32, slot: u32, variation: u32) -> Option<u32> {
+        self.with(|lib, casc| {
+            let t = lib.table(casc, "UiCamFbackTransmogChrRace")?;
+            let find = |variation: u32| {
+                t.rows()
+                    .find(|r| {
+                        r.int("ChrRaceID") == race
+                            && r.int("Gender") == gender
+                            && r.int("InventoryType") == slot
+                            && r.int("Variation") == variation
+                    })
+                    .map(|r| r.int("UiCameraID"))
+            };
+            // A variation the slot lacks: its first.
+            find(variation).or_else(|| find(0))
+        })
+    }
+
+    fn weapon_camera(&self, class: u32, subclass: u32, slot: u32) -> Option<u32> {
+        self.with(|lib, casc| {
+            let t = lib.table(casc, "UiCamFbackTransmogWeapon")?;
+            let kind = |r: &wowlua_casc::tables::Row<'_>| {
+                r.int("ItemClass") == class && r.int("ItemSubclass") == subclass
+            };
+            t.rows()
+                .find(|r| kind(r) && r.int("InventoryType") == slot)
+                .or_else(|| t.rows().find(|r| kind(r)))
+                .map(|r| r.int("UiCameraID"))
+        })
+    }
+
     fn item(&self, id: u32) -> Option<wowlua_engine::clientdata::ClientItem> {
         self.with(|lib, casc| {
             let (icon, class, subclass, inventory_type) = {

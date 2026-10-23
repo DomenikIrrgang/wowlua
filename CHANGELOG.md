@@ -45,6 +45,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- The wardrobe shows each appearance from the camera WoW uses for your character's race and sex (`C_TransmogCollection.GetAppearanceCameraID`), read from your WoW installation; it used one Undead male's for everyone.
 - Model frames framed with `Model_ApplyUICamera` (the wardrobe, the dressing room's slots) show the model as in game: `TransformCameraSpaceToModelSpace` scales by the frame's effective scale, as the client's does, and screenshots draw the shot at the client's field of view, with the model's pitch and roll turned as the client turns them.
 - Models drawn with material blend 7 add their light, as in game (a totem's rune showed on a black square), and particles of the newer emitters draw no stray tails (a fire elemental showed long streaks).
 - `Minimap:GetPingPosition()` gives the ping's place from the player in widths of the minimap's view, the ping staying where it was in the world, and `C_Minimap.GetViewRadius()` follows the zoom, as in game.

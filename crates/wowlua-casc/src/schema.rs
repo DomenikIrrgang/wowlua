@@ -998,6 +998,26 @@ pub(crate) static LAYOUTS: &[(&str, Layouts)] = &[
         )],
     ),
     (
+        "UiCamFbackTransmogChrRace",
+        &[(
+            0xE3278667,
+            &[
+                "ChrRaceID",
+                "Gender",
+                "InventoryType",
+                "Variation",
+                "UiCameraID",
+            ],
+        )],
+    ),
+    (
+        "UiCamFbackTransmogWeapon",
+        &[(
+            0x8A8745C9,
+            &["ItemClass", "ItemSubclass", "InventoryType", "UiCameraID"],
+        )],
+    ),
+    (
         "UiCamera",
         &[(
             0x9D5604E1,
