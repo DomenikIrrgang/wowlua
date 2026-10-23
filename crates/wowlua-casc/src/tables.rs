@@ -39,6 +39,7 @@ const FILES: &[(&str, u32)] = &[
     ("ItemDisplayInfoMaterialRes", 1280614),
     ("ItemDisplayInfoModelMatRes", 4050937),
     ("ItemModifiedAppearance", 982457),
+    ("Map", 1349477),
     ("ModelFileData", 1337833),
     ("NPCModelItemSlotDisplayInfo", 1340661),
     ("TextureFileData", 982459),

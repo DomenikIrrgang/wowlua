@@ -193,3 +193,30 @@ fn resolves_every_products_characters() {
         );
     }
 }
+
+/// Every product's maps have WDTs (by file ID or path), which list each
+/// terrain tile's minimap texture: Eastern Kingdoms has Northshire's
+/// (column 32, row 48), and the texture reads.
+#[test]
+fn reads_the_minimap_tiles() {
+    let Some(root) = install() else {
+        eprintln!("no WoW installation: skipped");
+        return;
+    };
+    let storage = FsStorage { root: root.clone() };
+    for (product, version) in Casc::products(&storage) {
+        let casc = Casc::open(Box::new(FsStorage { root: root.clone() }), &product).expect("opens");
+        let mut lib = wowlua_casc::display::Library::default();
+        let tile = lib.minimap_tile(&casc, 0, 32, 48);
+        eprintln!("{product} {version}: Northshire's minimap tile {tile:?}");
+        {
+            let f = tile.expect("the tile");
+            let img = wowlua_casc::decode_image(&casc.file_by_id(f).expect("the file"))
+                .expect("an image");
+            // 512 pixels on camelot, 256 on the older builds.
+            assert!(img.width == img.height && img.width >= 256, "{product}");
+            assert_eq!(lib.minimap_tile(&casc, 0, 0, 0), None);
+            assert_eq!(lib.minimap_tile(&casc, 0, 64, 48), None);
+        }
+    }
+}

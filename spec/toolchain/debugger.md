@@ -360,6 +360,21 @@ or Vulkan natively, WebGPU or WebGL 2 in the browser.
   Unverified: the particles' compressed gravity, tails and texture cells
   over life (each particle draws its first cell). Not drawn: ribbons
   (trails behind moving parts, as in motion), billboarded bones.
+- **Minimap** (decision T324): a `Minimap` frame shows the terrain about the
+  player, under its regions: the minimap textures of the 533⅓-yard terrain
+  tiles its zoom covers (466⅔, 400, 333⅓, 266⅔, 200 or 133⅓ yards across
+  its width at zooms 0 to 5), north up, each cut to the frame and masked by
+  `SetMaskTexture`'s atlas or file; the player's arrow
+  (`Interface\Minimap\MinimapArrow`, 32 by 32 UI units) at its center,
+  over its regions, turned by the player's facing. The tiles come from the
+  map's WDT (`Map`'s `WdtFileDataID`, else `world/maps/<dir>/<dir>.wdt`):
+  the last of each tile's eight file IDs in its `MAID` chunk, row by row
+  from the north-west; the player's tile is column `32 - y / 533⅓`, row
+  `32 - x / 533⅓` of `UnitPosition`'s north `y` and west `x`. The minimap
+  follows `mock.moveTo` and `SetZoom` at the next frame. Indoors nothing
+  (the building's own map, not read), and no blips, pings or quest areas.
+  Unverified: the zoom sizes, the arrow's size and the order of the
+  terrain and the frame's regions on this client.
 - **Speed**: textures and glyphs are uploaded once and kept on the GPU;
   quads go in one vertex buffer per frame, drawn in as few calls as texture
   changes allow; nothing is drawn when the scene did not change.

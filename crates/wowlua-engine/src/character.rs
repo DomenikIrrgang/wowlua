@@ -1309,6 +1309,21 @@ fn vector_xy(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![x, y])
 }
 
+/// The player's place in the world as `UnitPosition` gives it: the
+/// north (`y`) and west (`x`) coordinates, the height and the instance.
+/// Not given: the map position's place on its map's world rectangle
+/// (`maps::world_rect`), the documentation's returns not nilable.
+/// Unverified: never recorded; the height (z) unknown, 0.
+pub(crate) fn player_world(vm: &mut Vm) -> Option<(f64, f64, f64, f64)> {
+    let p = engine(vm).world.character.position.clone();
+    if p.world.is_some() {
+        return p.world;
+    }
+    let (map, u, v) = (p.map_id?, p.x?, p.y?);
+    let (instance, left, top, width, height) = crate::maps::world_rect(vm, map as i64)?;
+    Some((top - v * height, left - u * width, 0.0, instance))
+}
+
 fn unit_position(vm: &mut Vm, c: NativeCall) -> Ret {
     // A unit that does not exist (or a GUID): three nils and instance 0
     // (the full probe); another unit's nothing (unverified).
@@ -1317,16 +1332,7 @@ fn unit_position(vm: &mut Vm, c: NativeCall) -> Ret {
         Some(id) if id != units::PLAYER => return Ok(vec![]),
         _ => {}
     }
-    let p = engine(vm).world.character.position.clone();
-    // Not given: the map position's place on its map's world rectangle
-    // (`maps::world_rect`), the documentation's returns not nilable.
-    // Unverified: never recorded; the height (z) unknown, 0.
-    let derived = || -> Option<(f64, f64, f64, f64)> {
-        let (map, u, v) = (p.map_id?, p.x?, p.y?);
-        let (instance, left, top, width, height) = crate::maps::world_rect(vm, map as i64)?;
-        Some((top - v * height, left - u * width, 0.0, instance))
-    };
-    Ok(match p.world.or_else(derived) {
+    Ok(match player_world(vm) {
         Some((y, x, z, instance)) => vec![
             Value::Num(y),
             Value::Num(x),

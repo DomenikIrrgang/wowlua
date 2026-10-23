@@ -1044,3 +1044,107 @@ fn ui_cameras_are_the_clients_rows() {
         ]
     );
 }
+
+/// Every terrain tile's minimap texture is `100000 + row * 64 + column`.
+struct Tiles;
+
+impl wowlua_engine::clientdata::ClientData for Tiles {
+    fn model_scene(&self, _: u32) -> Option<wowlua_engine::clientdata::ModelScene> {
+        None
+    }
+    fn scene_camera(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneCamera> {
+        None
+    }
+    fn scene_actor(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneActor> {
+        None
+    }
+    fn actor_display(&self, _: u32) -> Option<wowlua_engine::clientdata::ActorDisplay> {
+        None
+    }
+    fn minimap_tile(&self, map: u32, x: u32, y: u32) -> Option<u32> {
+        (map == 0).then_some(100000 + y * 64 + x)
+    }
+}
+
+/// A minimap's terrain tiles, each cut to the minimap: (tile, rectangle,
+/// texture coordinates' left, right, top, bottom).
+fn minimap_tiles(vm: &mut Vm) -> Vec<(u32, [f32; 4], [f32; 4])> {
+    let scene = wowlua_engine::scene::build(vm);
+    scene
+        .items
+        .iter()
+        .filter_map(|i| match i {
+            wowlua_engine::scene::Item::Quad(q) => match q.image {
+                wowlua_engine::scene::Image::FileId(f) if f >= 100000 => Some((
+                    f - 100000,
+                    [q.rect.x, q.rect.y, q.rect.w, q.rect.h],
+                    [q.texcoord[0], q.texcoord[4], q.texcoord[1], q.texcoord[3]],
+                )),
+                _ => None,
+            },
+            _ => None,
+        })
+        .collect()
+}
+
+/// A minimap shows the terrain tiles about the player at its zoom, north
+/// up, cut to it and masked; it follows the player, and shows none
+/// indoors.
+#[test]
+fn minimaps_show_the_terrain_about_the_player() {
+    let mut vm = vm();
+    wowlua_engine::controls::install(&mut vm, "mock");
+    wowlua_engine::clientdata::set(&mut vm, std::sync::Arc::new(Tiles));
+    run(
+        &mut vm,
+        "mock.moveTo({ mapID = 1429, zone = 'Elwynn Forest', x = 0.4805, y = 0.4365 })
+M = CreateFrame('Minimap', nil, UIParent)
+M:SetSize(200, 200)
+M:SetPoint('TOPLEFT', 0, 0)
+M:SetMaskTexture('Interface\\\\Masks\\\\Round')",
+    );
+    let (north, west) = {
+        let r = run(&mut vm, "local y, x = UnitPosition('player') return y, x");
+        (r[0].parse::<f64>().unwrap(), r[1].parse::<f64>().unwrap())
+    };
+    let tile = 1600.0 / 3.0;
+    let (col, row) = (32.0 - west / tile, 32.0 - north / tile);
+    // Zoomed in fully (133 yards across), one tile, about the player.
+    run(&mut vm, "M:SetZoom(5)");
+    let tiles = minimap_tiles(&mut vm);
+    assert_eq!(tiles.len(), 1, "{tiles:?}");
+    let (t, rect, tc) = tiles[0];
+    assert_eq!(t, row.floor() as u32 * 64 + col.floor() as u32);
+    assert_eq!(rect, [0.0, 0.0, 200.0, 200.0]);
+    let half = (133.0 + 1.0 / 3.0) / 2.0 / tile;
+    let (u, v) = (col.fract(), row.fract());
+    for (got, want) in tc.iter().zip([u - half, u + half, v - half, v + half]) {
+        assert!((*got as f64 - want).abs() < 1e-4, "{tc:?}");
+    }
+    let scene = wowlua_engine::scene::build(&mut vm);
+    let masked = scene.items.iter().any(|i| {
+        matches!(i, wowlua_engine::scene::Item::Quad(q)
+            if matches!(q.image, wowlua_engine::scene::Image::FileId(f) if f >= 100000)
+                && q.masks.len() == 1
+                && q.masks[0].rect.w == 200.0)
+    });
+    assert!(masked, "the tiles take the minimap's mask");
+    // Zoomed out, the tiles cover the minimap without overlapping.
+    run(&mut vm, "M:SetZoom(0)");
+    let tiles = minimap_tiles(&mut vm);
+    assert!(tiles.len() > 1);
+    let area: f32 = tiles.iter().map(|(_, r, _)| r[2] * r[3]).sum();
+    assert!((area - 40000.0).abs() < 1.0, "{area}");
+    // Moved a tile east: the next column.
+    let east = west - tile;
+    run(
+        &mut vm,
+        &format!(
+            "mock.moveTo({{ world = {{ y = {north}, x = {east}, instanceID = 0 }} }}) M:SetZoom(5)"
+        ),
+    );
+    let tiles = minimap_tiles(&mut vm);
+    assert_eq!(tiles[0].0, row.floor() as u32 * 64 + col.floor() as u32 + 1);
+    run(&mut vm, "mock.moveTo({ indoors = true })");
+    assert!(minimap_tiles(&mut vm).is_empty());
+}

@@ -93,6 +93,17 @@ pub trait ClientData: Send + Sync {
     fn ui_camera(&self, _id: u32) -> Option<UiCamera> {
         None
     }
+    /// The minimap texture (a file ID) of a map's terrain tile, column
+    /// `x` and row `y` from the north-west (0 to 63).
+    fn minimap_tile(&self, _map: u32, _x: u32, _y: u32) -> Option<u32> {
+        None
+    }
+}
+
+/// A map's minimap texture at a terrain tile, as the client's files give
+/// it.
+pub(crate) fn minimap_tile(vm: &Vm, map: u32, x: u32, y: u32) -> Option<u32> {
+    data(vm)?.minimap_tile(map, x, y)
 }
 
 /// An item's inventory type as the client's tables give it.

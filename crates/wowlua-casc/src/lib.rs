@@ -21,6 +21,7 @@ mod schema;
 pub mod tables;
 pub mod tga;
 pub mod wdb;
+pub mod wdt;
 
 pub use casc::{Casc, CascError};
 

@@ -112,6 +112,8 @@ pub struct Library {
     pub(crate) tables: HashMap<&'static str, Option<Table>>,
     /// The client's creature cache: creatures' displays.
     creature_cache: Option<HashMap<u32, Vec<u32>>>,
+    /// Each map's minimap tiles, read from its WDT on first use.
+    minimap: HashMap<u32, Option<Vec<u32>>>,
 }
 
 impl Library {
@@ -120,6 +122,34 @@ impl Library {
             .entry(name)
             .or_insert_with(|| Table::open(casc, name))
             .as_ref()
+    }
+
+    /// A map's (`Map` ID, the instance) minimap texture of the terrain
+    /// tile at column `x` and row `y` (0 to 63, from the north-west): its
+    /// WDT's, the file the map names (`WdtFileDataID`), else the one at
+    /// its directory's path (`world/maps/<dir>/<dir>.wdt`, the classic
+    /// builds' tables naming none).
+    pub fn minimap_tile(&mut self, casc: &Casc, map: u32, x: u32, y: u32) -> Option<u32> {
+        if x >= 64 || y >= 64 {
+            return None;
+        }
+        if !self.minimap.contains_key(&map) {
+            let wdt = self.table(casc, "Map").and_then(|t| {
+                let r = t.row(map)?;
+                let named = t.has("WdtFileDataID").then(|| r.int("WdtFileDataID"));
+                match named.filter(|f| *f != 0) {
+                    Some(f) => casc.file_by_id(f),
+                    None => {
+                        let dir = r.string("Directory")?;
+                        casc.file_by_path(&format!("world/maps/{dir}/{dir}.wdt"))
+                    }
+                }
+            });
+            let tiles = wdt.and_then(|b| crate::wdt::minimap_tiles(&b));
+            self.minimap.insert(map, tiles);
+        }
+        let t = self.minimap.get(&map)?.as_ref()?[(y * 64 + x) as usize];
+        (t != 0).then_some(t)
     }
 
     /// A creature display (`CreatureDisplayInfo` ID).

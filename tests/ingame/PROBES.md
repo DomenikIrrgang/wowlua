@@ -320,3 +320,17 @@ not known yet.
    unmasked ones of its layer and sublevel (the icon over the slot art).
 3. `/run local t=UIParent:CreateTexture() print(t:IsSnappingToPixelGrid(), t:GetTexelSnappingBias())`:
    a fresh texture's pixel snapping (wowlua: true, 0).
+
+## Minimap
+
+wowlua draws the minimap's terrain at the long-known zoom spans and the
+player's arrow 32 by 32 UI units; neither is recorded on camelot.
+
+1. Outdoors in Northshire (or any place with a landmark near), take a
+   screenshot of the minimap at each zoom: `/run Minimap:SetZoom(0)` to
+   `/run Minimap:SetZoom(5)`, with `/run print(UnitPosition("player"))`
+   and `/run print(C_Map.GetPlayerMapPosition(C_Map.GetBestMapForUnit("player"), "player"):GetXY())`
+   for each. The landmark's distance in the shots gives each zoom's span.
+2. The same spot with `/console rotateMinimap 1`, facing east: the terrain
+   turned and the arrow up.
+

@@ -1286,6 +1286,165 @@ fn model_item(vm: &mut Vm, f: WidgetId, class: &str) -> Option<Model> {
 }
 
 /// The scene: every visible region, back to front.
+/// The yards a minimap spans outdoors at each zoom (0 to 5), as the
+/// client draws it (the long-known sizes; unverified on this client).
+const MINIMAP_YARDS: [f64; 6] = [
+    466.0 + 2.0 / 3.0,
+    400.0,
+    333.0 + 1.0 / 3.0,
+    266.0 + 2.0 / 3.0,
+    200.0,
+    133.0 + 1.0 / 3.0,
+];
+
+/// The yards a terrain tile spans.
+const TILE_YARDS: f64 = 1600.0 / 3.0;
+
+/// A minimap's mask: the one `SetMaskTexture` set (an atlas or a file),
+/// stretched over the minimap; none set, none (unverified: the client's
+/// own default, `Textures\\MinimapMask` on old clients, is not in
+/// camelot's files).
+fn minimap_mask(vm: &Vm, f: WidgetId, rect: Rect) -> Option<Mask> {
+    let set = first(vm, f, "MaskTexture").and_then(|v| match vm.hidden(v) {
+        Value::Num(n) => Some(Err(n as u32)),
+        v => text_of(vm, v).filter(|t| !t.is_empty()).map(Ok),
+    });
+    let atlas = |name: &str| {
+        let info = crate::measures::atlas(name)?.info.as_ref()?;
+        let c = info.coords;
+        Some(Mask {
+            image: Image::FileId(info.file as u32),
+            rect,
+            region: [c[0] as f32, c[1] as f32, c[2] as f32, c[3] as f32],
+            atlas: Some(name.to_string()),
+        })
+    };
+    let file = |image: Image| Mask {
+        image,
+        rect,
+        region: [0.0, 1.0, 0.0, 1.0],
+        atlas: None,
+    };
+    Some(match set? {
+        Ok(name) => atlas(&name).unwrap_or_else(|| file(Image::File(name))),
+        Err(id) => file(Image::FileId(id)),
+    })
+}
+
+/// A minimap's terrain about the player (spec debugger §18.11): the
+/// client's minimap textures of the terrain tiles it covers at its zoom,
+/// each cut to the minimap, north up, through its mask. Indoors nothing
+/// (the client draws the building's own map there, not read).
+fn minimap_tiles(vm: &mut Vm, f: WidgetId) -> Vec<Quad> {
+    let Some(rect) = rect_of(vm, f) else {
+        return Vec::new();
+    };
+    if rect.w <= 0.0 || rect.h <= 0.0 || engine(vm).world.character.position.indoors {
+        return Vec::new();
+    }
+    let Some((north, west, _, instance)) = crate::character::player_world(vm) else {
+        return Vec::new();
+    };
+    let zoom = num(vm, first(vm, f, "Zoom").as_ref(), 0.0).clamp(0.0, 5.0) as usize;
+    // Yards per pixel: the minimap's width spans the zoom's yards.
+    let ypp = MINIMAP_YARDS[zoom] / rect.w as f64;
+    let (cx, cy) = (
+        rect.x as f64 + rect.w as f64 / 2.0,
+        rect.y as f64 + rect.h as f64 / 2.0,
+    );
+    let (half_w, half_h) = (rect.w as f64 / 2.0 * ypp, rect.h as f64 / 2.0 * ypp);
+    // Tile columns run east from the west edge (`32 - y / tile`), rows
+    // south from the north edge (`32 - x / tile`).
+    let col = |w: f64| (32.0 - w / TILE_YARDS).floor() as i64;
+    let row = |n: f64| (32.0 - n / TILE_YARDS).floor() as i64;
+    let (c0, c1) = (col(west + half_w), col(west - half_w));
+    let (r0, r1) = (row(north + half_h), row(north - half_h));
+    let size = TILE_YARDS / ypp;
+    let alpha = effective_alpha(vm, f);
+    let clip = clip_of(vm, f);
+    let unit = unit_of(vm, f);
+    let mask = minimap_mask(vm, f, rect);
+    let mut out = Vec::new();
+    for ty in r0.max(0)..=r1.min(63) {
+        for tx in c0.max(0)..=c1.min(63) {
+            let Some(file) =
+                crate::clientdata::minimap_tile(vm, instance as u32, tx as u32, ty as u32)
+            else {
+                continue;
+            };
+            // The tile's place on screen, cut to the minimap.
+            let left = cx + (west - (32.0 - tx as f64) * TILE_YARDS) / ypp;
+            let top = cy + (north - (32.0 - ty as f64) * TILE_YARDS) / ypp;
+            let x0 = left.max(rect.x as f64);
+            let x1 = (left + size).min((rect.x + rect.w) as f64);
+            let y0 = top.max(rect.y as f64);
+            let y1 = (top + size).min((rect.y + rect.h) as f64);
+            if x1 <= x0 || y1 <= y0 {
+                continue;
+            }
+            let (u0, u1) = (((x0 - left) / size) as f32, ((x1 - left) / size) as f32);
+            let (v0, v1) = (((y0 - top) / size) as f32, ((y1 - top) / size) as f32);
+            let texcoord = [u0, v0, u0, v1, u1, v0, u1, v1];
+            out.push(Quad {
+                widget: f.0,
+                rect: Rect {
+                    x: x0 as f32,
+                    y: y0 as f32,
+                    w: (x1 - x0) as f32,
+                    h: (y1 - y0) as f32,
+                },
+                image: Image::FileId(file),
+                texcoord,
+                atlas: None,
+                atlas_texcoord: texcoord,
+                color: [1.0, 1.0, 1.0, alpha],
+                blend: Blend::Blend,
+                desaturated: false,
+                rotation: 0.0,
+                tile: (false, false),
+                clip,
+                masks: mask.iter().cloned().collect(),
+                unit,
+                // Whole tiles meet without gaps.
+                snap: false,
+            });
+        }
+    }
+    out
+}
+
+/// The player's arrow at a minimap's center, turned to the player's
+/// facing (the client's own texture, 32 by 32 UI units; unverified).
+fn minimap_arrow(vm: &mut Vm, f: WidgetId) -> Option<Quad> {
+    let rect = rect_of(vm, f)?;
+    crate::character::player_world(vm)?;
+    let unit = unit_of(vm, f);
+    let size = 32.0 * unit;
+    let texcoord = [0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0];
+    Some(Quad {
+        widget: f.0,
+        rect: Rect {
+            x: rect.x + (rect.w - size) / 2.0,
+            y: rect.y + (rect.h - size) / 2.0,
+            w: size,
+            h: size,
+        },
+        image: Image::File("Interface\\Minimap\\MinimapArrow".into()),
+        texcoord,
+        atlas: None,
+        atlas_texcoord: texcoord,
+        color: [1.0, 1.0, 1.0, effective_alpha(vm, f)],
+        blend: Blend::Blend,
+        desaturated: false,
+        rotation: crate::unitinfo::player_facing(vm) as f32,
+        tile: (false, false),
+        clip: clip_of(vm, f),
+        masks: Vec::new(),
+        unit,
+        snap: true,
+    })
+}
+
 pub fn build(vm: &mut Vm) -> Scene {
     let effects = crate::animations::effects(vm);
     EFFECTS.with(|e| *e.borrow_mut() = effects);
@@ -1337,6 +1496,11 @@ fn build_scene(vm: &mut Vm) -> Scene {
             regions.push((layer, sub, masked, c.0));
         }
         regions.sort();
+        // A minimap's terrain under its regions, its player arrow over them.
+        let minimap = widgets::is_a(engine(vm), &class, "Minimap");
+        if minimap {
+            items.extend(minimap_tiles(vm, f).into_iter().map(Item::Quad));
+        }
         for (_, _, _, r) in regions {
             let id = WidgetId(r);
             let class = engine(vm).world.widgets[r].class.clone();
@@ -1349,6 +1513,9 @@ fn build_scene(vm: &mut Vm) -> Scene {
             } else if let Some(q) = quad_of(vm, id) {
                 items.push(Item::Quad(q));
             }
+        }
+        if minimap && let Some(q) = minimap_arrow(vm, f) {
+            items.push(Item::Quad(q));
         }
         // A model frame's model over its regions (unverified: the
         // client's order of a model and its frame's own regions).

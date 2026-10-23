@@ -543,7 +543,13 @@ fn get_player_facing(vm: &mut Vm, _c: NativeCall) -> Ret {
     if engine(vm).world.encounters.instance.is_some() {
         return Ok(vec![Value::Nil]);
     }
-    Ok(vec![Value::Num(0.0)])
+    Ok(vec![Value::Num(player_facing(vm))])
+}
+
+/// The player's facing, radians counter-clockwise from north: north (the
+/// engine's player does not turn).
+pub(crate) fn player_facing(_vm: &Vm) -> f64 {
+    0.0
 }
 
 /// `GetRaidDifficultyID()`: the one `SetRaidDifficultyID` chose

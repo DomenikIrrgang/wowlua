@@ -287,6 +287,10 @@ fn vec3(v: Vec<f32>) -> [f32; 3] {
 }
 
 impl wowlua_engine::clientdata::ClientData for CascClientData {
+    fn minimap_tile(&self, map: u32, x: u32, y: u32) -> Option<u32> {
+        self.with(|lib, casc| lib.minimap_tile(casc, map, x, y))
+    }
+
     fn model_scene(&self, id: u32) -> Option<wowlua_engine::clientdata::ModelScene> {
         self.with(|lib, casc| {
             let (kind, flags) = {
