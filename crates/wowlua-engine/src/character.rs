@@ -69,6 +69,9 @@ pub struct Position {
     pub pvp: Option<(String, bool, String)>,
     /// Under a roof (`IsIndoors`).
     pub indoors: bool,
+    /// Where the player faces: radians counter-clockwise from north
+    /// (`GetPlayerFacing`).
+    pub facing: f64,
 }
 
 pub struct Character {
@@ -1344,7 +1347,7 @@ fn unit_position(vm: &mut Vm, c: NativeCall) -> Ret {
 }
 
 /// `mock.moveTo({ mapID, zone, subZone, x, y, world = { y, x, z,
-/// instanceID } })`: `ZONE_CHANGED_NEW_AREA` when the zone changes,
+/// instanceID }, facing })`: `ZONE_CHANGED_NEW_AREA` when the zone changes,
 /// `ZONE_CHANGED` when only the subzone does.
 pub fn control_move_to(vm: &mut Vm, c: NativeCall) -> Ret {
     let Value::Table(t) = c.arg(1) else {
@@ -1420,6 +1423,10 @@ pub fn move_to(vm: &mut Vm, t: TableRef, told: bool) {
     // (inside a world map object, a city's: indoors), recorded.
     if let Value::Bool(b) = field(vm, t, "indoors") {
         p.indoors = b;
+    }
+    // Turned to `facing` (no event: the client tells no turn).
+    if let Some(f) = num(field(vm, t, "facing")) {
+        p.facing = f.rem_euclid(std::f64::consts::TAU);
     }
     let new_area = p.zone != old.zone;
     let new_map = p.map_id != old.map_id;

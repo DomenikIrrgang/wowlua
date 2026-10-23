@@ -727,6 +727,9 @@ export function moveTo(place: {
     pvp?: any[],
     wmo?: boolean,
     indoors?: boolean,
+    --- Where the player faces: radians counter-clockwise from north
+    --- (`GetPlayerFacing`; no event).
+    facing?: number,
 })
     engine().moveTo(place)
 end

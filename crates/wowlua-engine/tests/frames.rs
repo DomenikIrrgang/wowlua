@@ -1220,3 +1220,60 @@ return name, quality, icon, class, sub, loc, tostring(link:find('item:277714', 1
         ]
     );
 }
+
+/// The player faces where `moveTo` turns them (`GetPlayerFacing`); with
+/// `rotateMinimap` the minimap's tiles turn clockwise by it, whole, cut by
+/// the minimap's rectangle, and the arrow points up; without it the tiles
+/// stay north up and the arrow turns.
+#[test]
+fn the_minimap_turns_with_the_player() {
+    let mut vm = vm();
+    wowlua_engine::controls::install(&mut vm, "mock");
+    wowlua_engine::clientdata::set(&mut vm, std::sync::Arc::new(Tiles));
+    run(
+        &mut vm,
+        "mock.moveTo({ mapID = 1429, zone = 'Elwynn Forest', x = 0.4805, y = 0.4365, facing = math.pi / 2 })
+M = CreateFrame('Minimap', nil, UIParent)
+M:SetSize(200, 200)
+M:SetPoint('TOPLEFT', 0, 0)",
+    );
+    assert_eq!(
+        run(&mut vm, "return string.format('%.4f', GetPlayerFacing())"),
+        ["1.5708"]
+    );
+    let quads = |vm: &mut Vm| -> Vec<(bool, f32, f32, Option<f32>)> {
+        let scene = wowlua_engine::scene::build(vm);
+        scene
+            .items
+            .iter()
+            .filter_map(|i| match i {
+                wowlua_engine::scene::Item::Quad(q) => match &q.image {
+                    wowlua_engine::scene::Image::FileId(f) if *f >= 100000 => {
+                        Some((true, q.rotation, q.rect.w, q.clip.map(|c| c.w)))
+                    }
+                    wowlua_engine::scene::Image::File(p) if p.contains("MinimapArrow") => {
+                        Some((false, q.rotation, q.rect.w, None))
+                    }
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect()
+    };
+    let fixed = quads(&mut vm);
+    assert!(fixed.iter().filter(|q| q.0).all(|q| q.1 == 0.0));
+    let arrow = fixed.iter().find(|q| !q.0).expect("the arrow");
+    assert!((arrow.1 - std::f32::consts::FRAC_PI_2).abs() < 1e-5);
+    run(&mut vm, "C_CVar.SetCVar('rotateMinimap', '1')");
+    let turned = quads(&mut vm);
+    let tiles: Vec<_> = turned.iter().filter(|q| q.0).collect();
+    assert!(!tiles.is_empty());
+    // A whole tile (533 yards at 466 across 200 pixels), turned, cut to
+    // the minimap.
+    for t in &tiles {
+        assert!((t.1 + std::f32::consts::FRAC_PI_2).abs() < 1e-5, "{t:?}");
+        assert!((t.2 - 228.57).abs() < 0.1, "{t:?}");
+        assert_eq!(t.3, Some(200.0));
+    }
+    assert_eq!(turned.iter().find(|q| !q.0).expect("the arrow").1, 0.0);
+}

@@ -546,10 +546,10 @@ fn get_player_facing(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(player_facing(vm))])
 }
 
-/// The player's facing, radians counter-clockwise from north: north (the
-/// engine's player does not turn).
-pub(crate) fn player_facing(_vm: &Vm) -> f64 {
-    0.0
+/// The player's facing, radians counter-clockwise from north, 0 to 2π:
+/// `mock.moveTo`'s `facing`, north at first.
+pub(crate) fn player_facing(vm: &Vm) -> f64 {
+    engine(vm).world.character.position.facing
 }
 
 /// `GetRaidDifficultyID()`: the one `SetRaidDifficultyID` chose

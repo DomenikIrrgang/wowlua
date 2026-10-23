@@ -1331,10 +1331,18 @@ fn minimap_mask(vm: &Vm, f: WidgetId, rect: Rect) -> Option<Mask> {
     })
 }
 
+/// Whether the minimap turns with the player (`rotateMinimap`).
+fn minimap_rotates(vm: &mut Vm) -> bool {
+    crate::framescript::cvar_get(vm, "rotateMinimap").is_some_and(|v| v.trim() == "1")
+}
+
 /// A minimap's terrain about the player (spec debugger §18.11): the
 /// client's minimap textures of the terrain tiles it covers at its zoom,
-/// each cut to the minimap, north up, through its mask. Indoors nothing
-/// (the client draws the building's own map there, not read).
+/// through its mask; north up, each cut to the minimap, or with
+/// `rotateMinimap` turned so the player's facing is up, the whole tiles
+/// turned about the minimap's center (the mask and the minimap's
+/// rectangle cut them). Indoors nothing (the client draws the building's
+/// own map there, not read).
 fn minimap_tiles(vm: &mut Vm, f: WidgetId) -> Vec<Quad> {
     let Some(rect) = rect_of(vm, f) else {
         return Vec::new();
@@ -1352,7 +1360,18 @@ fn minimap_tiles(vm: &mut Vm, f: WidgetId) -> Vec<Quad> {
         rect.x as f64 + rect.w as f64 / 2.0,
         rect.y as f64 + rect.h as f64 / 2.0,
     );
-    let (half_w, half_h) = (rect.w as f64 / 2.0 * ypp, rect.h as f64 / 2.0 * ypp);
+    // Turned, the player's facing up: the map turns clockwise by it.
+    let turn = if minimap_rotates(vm) {
+        crate::unitinfo::player_facing(vm)
+    } else {
+        0.0
+    };
+    let (mut half_w, mut half_h) = (rect.w as f64 / 2.0 * ypp, rect.h as f64 / 2.0 * ypp);
+    if turn != 0.0 {
+        // The tiles under any corner of the turned square.
+        let r = half_w.hypot(half_h);
+        (half_w, half_h) = (r, r);
+    }
     // Tile columns run east from the west edge (`32 - y / tile`), rows
     // south from the north edge (`32 - x / tile`).
     let col = |w: f64| (32.0 - w / TILE_YARDS).floor() as i64;
@@ -1361,9 +1380,18 @@ fn minimap_tiles(vm: &mut Vm, f: WidgetId) -> Vec<Quad> {
     let (r0, r1) = (row(north + half_h), row(north - half_h));
     let size = TILE_YARDS / ypp;
     let alpha = effective_alpha(vm, f);
-    let clip = clip_of(vm, f);
+    // Turned tiles reach past the minimap: cut to it.
+    let clip = if turn != 0.0 {
+        Some(match clip_of(vm, f) {
+            Some(c) => c.intersect(rect),
+            None => rect,
+        })
+    } else {
+        clip_of(vm, f)
+    };
     let unit = unit_of(vm, f);
     let mask = minimap_mask(vm, f, rect);
+    let (sin, cos) = turn.sin_cos();
     let mut out = Vec::new();
     for ty in r0.max(0)..=r1.min(63) {
         for tx in c0.max(0)..=c1.min(63) {
@@ -1372,27 +1400,47 @@ fn minimap_tiles(vm: &mut Vm, f: WidgetId) -> Vec<Quad> {
             else {
                 continue;
             };
-            // The tile's place on screen, cut to the minimap.
+            // The tile's place on screen, north up.
             let left = cx + (west - (32.0 - tx as f64) * TILE_YARDS) / ypp;
             let top = cy + (north - (32.0 - ty as f64) * TILE_YARDS) / ypp;
-            let x0 = left.max(rect.x as f64);
-            let x1 = (left + size).min((rect.x + rect.w) as f64);
-            let y0 = top.max(rect.y as f64);
-            let y1 = (top + size).min((rect.y + rect.h) as f64);
-            if x1 <= x0 || y1 <= y0 {
-                continue;
-            }
-            let (u0, u1) = (((x0 - left) / size) as f32, ((x1 - left) / size) as f32);
-            let (v0, v1) = (((y0 - top) / size) as f32, ((y1 - top) / size) as f32);
-            let texcoord = [u0, v0, u0, v1, u1, v0, u1, v1];
-            out.push(Quad {
-                widget: f.0,
-                rect: Rect {
+            let (place, texcoord, rotation) = if turn != 0.0 {
+                // Its center turned clockwise about the minimap's (screen
+                // y down), the tile with it.
+                let (dx, dy) = (left + size / 2.0 - cx, top + size / 2.0 - cy);
+                let (tcx, tcy) = (cx + dx * cos - dy * sin, cy + dx * sin + dy * cos);
+                let place = Rect {
+                    x: (tcx - size / 2.0) as f32,
+                    y: (tcy - size / 2.0) as f32,
+                    w: size as f32,
+                    h: size as f32,
+                };
+                (
+                    place,
+                    [0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0],
+                    -turn as f32,
+                )
+            } else {
+                // Cut to the minimap.
+                let x0 = left.max(rect.x as f64);
+                let x1 = (left + size).min((rect.x + rect.w) as f64);
+                let y0 = top.max(rect.y as f64);
+                let y1 = (top + size).min((rect.y + rect.h) as f64);
+                if x1 <= x0 || y1 <= y0 {
+                    continue;
+                }
+                let (u0, u1) = (((x0 - left) / size) as f32, ((x1 - left) / size) as f32);
+                let (v0, v1) = (((y0 - top) / size) as f32, ((y1 - top) / size) as f32);
+                let place = Rect {
                     x: x0 as f32,
                     y: y0 as f32,
                     w: (x1 - x0) as f32,
                     h: (y1 - y0) as f32,
-                },
+                };
+                (place, [u0, v0, u0, v1, u1, v0, u1, v1], 0.0)
+            };
+            out.push(Quad {
+                widget: f.0,
+                rect: place,
                 image: Image::FileId(file),
                 texcoord,
                 atlas: None,
@@ -1400,7 +1448,7 @@ fn minimap_tiles(vm: &mut Vm, f: WidgetId) -> Vec<Quad> {
                 color: [1.0, 1.0, 1.0, alpha],
                 blend: Blend::Blend,
                 desaturated: false,
-                rotation: 0.0,
+                rotation,
                 tile: (false, false),
                 clip,
                 masks: mask.iter().cloned().collect(),
@@ -1414,10 +1462,16 @@ fn minimap_tiles(vm: &mut Vm, f: WidgetId) -> Vec<Quad> {
 }
 
 /// The player's arrow at a minimap's center, turned to the player's
-/// facing (the client's own texture, 32 by 32 UI units; unverified).
+/// facing, or up when the minimap turns instead (the client's own texture,
+/// 32 by 32 UI units; unverified).
 fn minimap_arrow(vm: &mut Vm, f: WidgetId) -> Option<Quad> {
     let rect = rect_of(vm, f)?;
     crate::character::player_world(vm)?;
+    let rotation = if minimap_rotates(vm) {
+        0.0
+    } else {
+        crate::unitinfo::player_facing(vm) as f32
+    };
     let unit = unit_of(vm, f);
     let size = 32.0 * unit;
     let texcoord = [0.0, 0.0, 0.0, 1.0, 1.0, 0.0, 1.0, 1.0];
@@ -1436,7 +1490,7 @@ fn minimap_arrow(vm: &mut Vm, f: WidgetId) -> Option<Quad> {
         color: [1.0, 1.0, 1.0, effective_alpha(vm, f)],
         blend: Blend::Blend,
         desaturated: false,
-        rotation: crate::unitinfo::player_facing(vm) as f32,
+        rotation,
         tile: (false, false),
         clip: clip_of(vm, f),
         masks: Vec::new(),

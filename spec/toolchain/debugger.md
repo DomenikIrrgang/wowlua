@@ -372,9 +372,12 @@ or Vulkan natively, WebGPU or WebGL 2 in the browser.
   player, under its regions: the minimap textures of the 533⅓-yard terrain
   tiles its zoom covers (466⅔, 400, 333⅓, 266⅔, 200 or 133⅓ yards across
   its width at zooms 0 to 5), north up, each cut to the frame and masked by
-  `SetMaskTexture`'s atlas or file; the player's arrow
-  (`Interface\Minimap\MinimapArrow`, 32 by 32 UI units) at its center,
-  over its regions, turned by the player's facing. The tiles come from the
+  `SetMaskTexture`'s atlas or file; with `rotateMinimap` set, turned
+  clockwise by the player's facing (`mock.moveTo`'s `facing`) about its
+  center, whole tiles cut by the frame's rectangle and the mask; the
+  player's arrow (`Interface\Minimap\MinimapArrow`, 32 by 32 UI units)
+  at its center, over its regions, turned by the facing, or up when the
+  minimap turns. The tiles come from the
   map's WDT (`Map`'s `WdtFileDataID`, else `world/maps/<dir>/<dir>.wdt`):
   the last of each tile's eight file IDs in its `MAID` chunk, row by row
   from the north-west; the player's tile is column `32 - y / 533⅓`, row
