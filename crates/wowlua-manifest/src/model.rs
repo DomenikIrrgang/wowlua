@@ -722,6 +722,10 @@ pub struct ProfileSettings {
     pub optimize: Option<OptimizeSettings>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub line_mode: Option<LineMode>,
+    /// Files left out of this profile's builds, as globs, besides
+    /// `build.exclude` (developer tools out of `release`).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub exclude: Option<Vec<String>>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub config: Option<JsonObject>,
 }

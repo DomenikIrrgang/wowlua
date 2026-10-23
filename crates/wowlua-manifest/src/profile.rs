@@ -99,6 +99,9 @@ pub struct Profile {
     /// `None` means "derived from `bundle`" (§14.5).
     #[serde(default)]
     pub line_mode: Option<LineMode>,
+    /// Globs left out of the build besides `build.exclude` (§9.9).
+    #[serde(default)]
+    pub exclude: Vec<String>,
     #[serde(default)]
     pub config: JsonObject,
 }

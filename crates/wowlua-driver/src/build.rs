@@ -339,7 +339,15 @@ fn build_inner(
 
     // Sources and assets.
     let build_cfg = &manifest.manifest.build;
-    let exclude = sources::glob_set(&build_cfg.exclude);
+    // `build.exclude` and the profile's own (`profiles.release.exclude`)
+    let exclude = sources::glob_set(
+        &build_cfg
+            .exclude
+            .iter()
+            .chain(&profile.exclude)
+            .cloned()
+            .collect::<Vec<_>>(),
+    );
     let (sources, given_declarations) = match &request.only {
         Some(only) => {
             let (sources, declarations) =

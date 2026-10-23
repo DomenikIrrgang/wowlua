@@ -5027,3 +5027,60 @@ fn runs_end_with_a_summary_of_their_diagnostics() {
         "{text}"
     );
 }
+
+/// A profile's `exclude` (§9.9) leaves files out of that profile's builds
+/// only: the developer tools are in `dev`, not in `release`.
+#[test]
+fn profile_exclude() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "demo", "version": "1.0.0" }, "addon": { "title": "Demo" },
+  "profiles": { "release": { "exclude": ["src/Tools/**"] } } }"#,
+            ),
+            ("src/main.wowlua", "print(\"main file\")\n"),
+            ("src/Tools/probe.wowlua", "print(\"probe tool\")\n"),
+        ],
+    );
+    wowlua(dir.path()).arg("build").assert().success();
+    wowlua(dir.path())
+        .args(["build", "--release"])
+        .assert()
+        .success();
+    let read_all = |folder: &Path| -> String {
+        let mut text = String::new();
+        for entry in walkdir(folder) {
+            text.push_str(&fs::read_to_string(entry).unwrap_or_default());
+        }
+        text
+    };
+    let dev = read_all(&dir.path().join("dist/dev/Demo"));
+    let release = read_all(&dir.path().join("dist/release/Demo"));
+    assert!(
+        dev.contains("probe tool") && dev.contains("main file"),
+        "{dev}"
+    );
+    assert!(release.contains("main file"), "{release}");
+    assert!(!release.contains("probe tool"), "{release}");
+    assert!(
+        !release.contains("Tools"),
+        "the TOC still names the left-out file:\n{release}"
+    );
+}
+
+/// Every file under `dir`.
+fn walkdir(dir: &Path) -> Vec<std::path::PathBuf> {
+    let mut out = Vec::new();
+    for entry in fs::read_dir(dir).unwrap().flatten() {
+        let path = entry.path();
+        if path.is_dir() {
+            out.extend(walkdir(&path));
+        } else {
+            out.push(path);
+        }
+    }
+    out
+}

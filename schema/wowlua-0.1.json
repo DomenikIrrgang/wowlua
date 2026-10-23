@@ -1195,6 +1195,16 @@
             }
           ]
         },
+        "exclude": {
+          "description": "Files left out of this profile's builds, as globs, besides\n`build.exclude` (developer tools out of `release`).",
+          "type": [
+            "array",
+            "null"
+          ],
+          "items": {
+            "type": "string"
+          }
+        },
         "config": {
           "type": [
             "object",

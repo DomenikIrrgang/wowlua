@@ -457,6 +457,7 @@ on with `inherits` (E4315 if missing).
 | `minify-libraries` | bool | `false`. Apply the minification level to lua-library dependencies too. |
 | `optimize` | object | `{ "inline": bool, "cache-globals": "off"\|"safe", "dead-code": bool }`, defaults in [Optimization §15.2](optimization.md#152-profile-controlled-optimizations) |
 | `line-mode` | `"preserve"` `"statement"` `"pretty"` | `"preserve"` for unbundled, `"statement"` for bundled output ([Code generation §14.5](codegen.md#145-line-preservation)) |
+| `exclude` | glob[] | Files left out of this profile's builds, besides `build.exclude` (developer tools out of `release`: `"profiles": { "release": { "exclude": ["src/Diagnostics/**"] } }`). Code that is kept and imports one guards the import with `@if(build.debug)` or a `wowlua:meta` condition ([Meta §6.4.3](../language/06-meta.md#643-conditional-declarations)). Arrays replace, as in every profile merge (decision T273) |
 | `config` | object | Overrides of the top-level `config` (§9.9.1) |
 
 **Merging.** The effective profile is built from the built-in defaults, then
