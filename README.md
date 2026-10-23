@@ -167,6 +167,7 @@ The specification lives in [`spec/`](spec/README.md); implementation follows the
 | M9 | Test runner, language server, formatter | in progress (test runner and emulated client in 0.9.7) |
 | M10 | Registry | planned |
 | M11 | Performance optimization | planned |
+| M12 | Debugger, profiler, screenshots, 3D models, MCP for AI agents | built, waiting for review (0.10.0, not released yet) |
 
 What works today:
 

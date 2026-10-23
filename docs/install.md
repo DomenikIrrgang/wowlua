@@ -85,7 +85,7 @@ $env:WOWLUA_VERSION = "v0.9.7"; irm https://github.com/DomenikIrrgang/wowlua/rel
 ```
 
 A project names the compiler versions it works with in `package.wowlua` of its
-`wowlua.json` (`wowlua new` writes `"^0.9"`). An older compiler stops with
+`wowlua.json` (`wowlua new` writes `"^0.10"`). An older compiler stops with
 E4300 and names both versions
 ([Manifest §9.16](../spec/toolchain/manifest.md#916-schema-versions-and-migration)).
 
