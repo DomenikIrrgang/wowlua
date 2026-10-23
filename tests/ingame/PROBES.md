@@ -318,6 +318,8 @@ not known yet.
 2. An action button with a spell: `/run local b=ActionButton1 print(b.icon:GetDrawLayer()) print(b.SlotArt:GetDrawLayer()) print(b.icon:GetNumMaskTextures())`
    and a screenshot of it hovered: wowlua draws a masked texture over the
    unmasked ones of its layer and sublevel (the icon over the slot art).
+   Answered (2026-10-23): both `BACKGROUND` 0, one mask, as in wowlua;
+   still open: the hovered screenshot (which of the two is drawn on top).
 3. `/run local t=UIParent:CreateTexture() print(t:IsSnappingToPixelGrid(), t:GetTexelSnappingBias())`:
    a fresh texture's pixel snapping (wowlua: true, 0). Answered
    (2026-10-23): true, 0.30000001192093; wowlua now gives the same.
