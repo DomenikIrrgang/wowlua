@@ -84,6 +84,7 @@ pub(crate) static CODES: &[CodeInfo] = &[
     CodeInfo { code: "W2060", summary: "Division or modulo by a literal zero: WoW raises \"Division by zero\" (any mode)" },
     CodeInfo { code: "W2061", summary: "`a and nil or b` (or `false` in the middle) is always `b`: the falsy middle value makes the `or` take over (any mode)" },
     CodeInfo { code: "W2062", summary: "A value read past what a function of the package can give (a `local function`, a module's or an imported function, a file-level table's method; (each of its `return`s a fixed number of values) is always `nil`: a name past them in a `local` or an assignment, or `select(n, …)` with a literal `n` past them (any mode)" },
+    CodeInfo { code: "W2063", summary: "A parameter without an annotation that nothing gives a type (no expected function type, or one that says `any`), or a `local` without an annotation whose value is `any`: it is `any` without saying so. Off unless `check.lints` sets it (`\"W2063\": \"warn\"`); names starting with `_` are exempt (decision T274)" },
     CodeInfo { code: "E3001", summary: "`super(...)` missing, repeated, or after use of `self`" },
     CodeInfo { code: "E3002", summary: "Cannot instantiate an abstract class" },
     CodeInfo { code: "E3003", summary: "Abstract method not implemented" },

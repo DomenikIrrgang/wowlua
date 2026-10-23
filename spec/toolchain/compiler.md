@@ -308,6 +308,11 @@ only lints, and errors that stop the analysis) on `.wowlua` files, and on
   `continue`, or a call whose type returns `never` (`error`), or after an `if`
   whose branches all end that way; once per region. Reported by the type
   checker, so not in `--!nocheck` files.
+- **W2063, implicit `any`.** Off unless `check.lints` turns it on: a
+  parameter without an annotation that nothing gives a type, or a `local`
+  without one whose value is `any`. A project that keeps `any` to the places
+  that need it turns it on, and writes `any` where it means it (decision
+  T274).
 
 **Fixes** (`wowlua fix`, `wowlua lint --fix`, the LSP). A statement whose
 names are all unused is removed when its values have no side effects

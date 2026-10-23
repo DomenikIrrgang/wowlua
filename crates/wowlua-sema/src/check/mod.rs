@@ -761,6 +761,11 @@ fn check_file_in(
     env.typeof_namespace_refs.clear();
     let mut checker = Checker::new(env, &info, prepared);
     checker.check_file(parse);
+    // W2063 is the project's own: not of wowlua's library or a dependency.
+    let rel = &ctx.files[i].src_rel;
+    if crate::is_compiler_known(rel) || crate::package_of(rel).is_some() {
+        checker.diagnostics.retain(|d| d.code != Some("W2063"));
+    }
     // `M.T` through a namespace import, of a `typeof` alias not reached
     // yet: W1036 at the first use of each.
     let mut seen: FxHashSet<(usize, Box<str>)> = FxHashSet::default();
