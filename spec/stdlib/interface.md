@@ -490,7 +490,7 @@ linkButton:SetScript("OnClick", function() chat.insertLink(recipeLink) end)
 
 | API | Signature | Notes |
 |-----|-----------|-------|
-| `whisper` | `(name: string, frame?: Frame)` | Opens the chat line to whisper `name`, as the game's own "Whisper" does (`SendTell`) |
+| `whisper` | `(name: string, frame?: Frame)` | Opens the chat line to whisper `name`, as the game's own "Whisper" does (`SendTell`); the frame goes to the game only when given |
 | `open` | `(text: string, frame?: Frame)` | Opens the chat line with `text` in it (`OpenChat`) |
 | `insertLink` | `(link: string)` | Puts `link` into the line being typed, as a shift-click does (`InsertLink`); with none open, opens one with it |
 

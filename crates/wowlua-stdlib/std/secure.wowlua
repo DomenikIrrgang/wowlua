@@ -82,8 +82,9 @@ export type Overlay = {
     --- Sets an attribute (`type1`, `macrotext1`, `clickbutton1`, …); false
     --- in combat, where it can't.
     set: (name: string, value: string | Frame | nil) -> boolean,
-    --- Anchors it over the target and shows it; false in combat.
-    show: () -> boolean,
+    --- Anchors it over the target, or over `other` (a row it moves between),
+    --- and shows it; false in combat. Hovering it is hovering what it is over.
+    show: (other: Frame?) -> boolean,
     --- Hides it and lets go of the target; false in combat.
     hide: () -> boolean,
 }
@@ -99,17 +100,18 @@ export type Overlay = {
 --- target. Made out of combat.
 export function overlay(target: Frame, opts: OverlayOptions?): Overlay
     const button = CreateFrame("Button", nil, UIParent, "SecureActionButtonTemplate")
+    local over = target
     button:RegisterForClicks("LeftButtonDown", "LeftButtonUp")
     button:SetScript("OnEnter", function()
-        const fn = target:GetScript("OnEnter")
+        const fn = over:GetScript("OnEnter")
         if fn then
-            fn(target, true)
+            fn(over, true)
         end
     end)
     button:SetScript("OnLeave", function()
-        const fn = target:GetScript("OnLeave")
+        const fn = over:GetScript("OnLeave")
         if fn then
-            fn(target, true)
+            fn(over, true)
         end
     end)
     button:Hide()
@@ -123,13 +125,14 @@ export function overlay(target: Frame, opts: OverlayOptions?): Overlay
             button:SetAttribute(name, value)
             return true
         end,
-        show = function(): boolean
+        show = function(other: Frame?): boolean
             if InCombatLockdown() then
                 return false
             end
+            over = other ?? target
             button:SetFrameStrata(strata)
             button:ClearAllPoints()
-            button:SetAllPoints(target)
+            button:SetAllPoints(over)
             button:Show()
             return true
         end,

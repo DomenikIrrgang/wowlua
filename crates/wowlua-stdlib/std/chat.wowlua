@@ -10,16 +10,25 @@ local function game(name: string, old: string): unknown
     return tbl.field(_G, "ChatFrameUtil", name) or tbl.field(_G, old)
 end
 
+-- The game's function with the text, and the frame only when one is given
+-- (an explicit nil would be an argument it sees).
+local function call(fn: unknown, text: string, frame: Frame?): unknown
+    if frame then
+        return try(fn, text, frame)
+    end
+    return try(fn, text)
+end
+
 --- Opens the chat line to whisper `name` (in `frame`, default the one the
 --- game picks), as the game's own "Whisper" in a menu does.
 export function whisper(name: string, frame: Frame?)
-    try(game("SendTell", "ChatFrame_SendTell"), name, frame)
+    call(game("SendTell", "ChatFrame_SendTell"), name, frame)
 end
 
 --- Opens the chat line with `text` written in it (in `frame`, default the
 --- one the game picks).
 export function open(text: string, frame: Frame?)
-    try(game("OpenChat", "ChatFrame_OpenChat"), text, frame)
+    call(game("OpenChat", "ChatFrame_OpenChat"), text, frame)
 end
 
 --- Puts `link` into the chat line being typed, as a shift-click does; with

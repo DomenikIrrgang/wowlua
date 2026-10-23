@@ -459,9 +459,10 @@ t:SetPoint('LEFT', fs, 'RIGHT')
 fs:SetPoint('LEFT', UIParent, 'LEFT', 10, 0)
 return ('%d %d %d %d %d %d %d %d'):format(w0, h0, w1, h1, w2, h2, h3, t:GetLeft())",
     );
-    // A word wider than the string keeps one line (truncated) unless it
-    // may break between its characters (`SetNonSpaceWrap`).
-    assert_eq!(r, "1 1 42 12 18 12 36 28");
+    // A word wider than the string is cut between its characters, its
+    // height every line, with or without `SetNonSpaceWrap` (without, it is
+    // truncated: the wrap probe, decision T282).
+    assert_eq!(r, "1 1 42 12 18 36 36 28");
 }
 
 #[test]

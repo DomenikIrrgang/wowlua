@@ -904,7 +904,7 @@ fn html_get_content_height(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let max = (width > 0.0).then_some(width);
     let n: usize = lines
         .iter()
-        .map(|l| crate::text::wrapped_lines(vm, id, l, max).len())
+        .map(|l| crate::text::layout(vm, id, l, max, true, 0).shown)
         .sum();
     let call = call_of(vm, id, &[]);
     let size = widgets::get_font(vm, id, call)

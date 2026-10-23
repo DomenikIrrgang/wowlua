@@ -2705,17 +2705,13 @@ fn text_extent(vm: &Vm, id: WidgetId, width: Option<f64>) -> (f64, f64) {
     if text.is_empty() {
         return (1.0, 1.0);
     }
-    let wraps = stored_ref(vm, w.props, "WordWrap")
-        .and_then(|v| v.first().copied())
-        .is_none_or(|v| v.truthy());
     let spacing = match stored_ref(vm, w.props, "Spacing").and_then(|v| v.first().copied()) {
         Some(Value::Num(s)) => s,
         _ => 0.0,
     };
-    // As the client lays text out (`text.rs`, decision T237).
+    // As the client lays text out (`text.rs`, decisions T237, T282).
     let widest = crate::text::width(vm, id, &text);
-    let max = width.filter(|w| wraps && *w > 0.0);
-    let lines = crate::text::wrapped_lines(vm, id, &text, max).len() as f64;
+    let lines = crate::text::layout_in(vm, id, &text, width.filter(|w| *w > 0.0)).shown as f64;
     let h = lines * crate::text::line_height(vm, id) + (lines - 1.0) * spacing;
     (widest, h)
 }
@@ -3480,16 +3476,36 @@ fn get_id(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![v])
 }
 
-/// `GetStringWidth()`, `GetUnboundedStringWidth()`: its widest line as the
-/// client lays text out (`text.rs`, decision T237); a secret text's width
-/// is secret too, as in the client (SuuUI's tests).
-fn get_string_width(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+/// A font string's text as shown (a secret's own text), and whether secret.
+fn shown_text(vm: &Vm, id: WidgetId) -> (String, bool) {
     let text = engine(vm).world.widgets[id.0].text;
     let secret = matches!(text, Some(Value::Secret(_)));
     let shown = match text.map(|t| vm.hidden(t)) {
-        Some(Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        Some(Value::Str(s)) => String::from_utf8_lossy(vm.heap.str_bytes(s)).into_owned(),
         _ => String::new(),
     };
+    (shown, secret)
+}
+
+/// `GetStringWidth()`: its widest line as the client lays text out
+/// (`text.rs`, decision T237), or, held to fewer lines than it has, the
+/// text it shows with the ellipsis (decision T282); a secret text's width
+/// is secret too, as in the client (SuuUI's tests).
+fn get_string_width(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let (shown, secret) = shown_text(vm, id);
+    let w = if shown.is_empty() {
+        0.0
+    } else {
+        let max = laid_out_size(vm, id).0;
+        crate::text::layout_in(vm, id, &shown, (max > 0.0).then_some(max)).width
+    };
+    let width = Value::Num(w);
+    Ok(vec![if secret { vm.secret_wrap(width) } else { width }])
+}
+
+/// `GetUnboundedStringWidth()`: its widest line, whatever its size.
+fn get_unbounded_string_width(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let (shown, secret) = shown_text(vm, id);
     let width = Value::Num(crate::text::width(vm, id, &shown));
     Ok(vec![if secret { vm.secret_wrap(width) } else { width }])
 }
@@ -4301,7 +4317,7 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("GetID", get_id),
         ("GetStringWidth", get_string_width),
         ("GetTextWidth", get_string_width),
-        ("GetUnboundedStringWidth", get_string_width),
+        ("GetUnboundedStringWidth", get_unbounded_string_width),
         ("GetFont", get_font),
         ("StartMoving", start_moving),
         ("StartSizing", start_sizing),

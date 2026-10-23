@@ -5,7 +5,9 @@
 # line per font file, flags (- for none) and pixel size: the string height,
 # then for the printable characters 32 to 126 each one's width alone and its
 # advance (twice in a row less once), in pixels. A string is its advances but
-# the last's width, plus kerning: a "kern" line's pair at that pixel size.
+# the last's width, plus kerning: a "kern" line's pair at that pixel size
+# (FRIZQT 17 and ARIALN 20 from the glyphs probe; FRIZQT 10, 14, 20 and
+# ARIALN 10, 12, 16 from the wrap probe, tests/client/forever-camelot-wrap.lua).
 ARIALN.TTF	-	8	8	2,3,4,5,5,7,6,2,3,3,4,5,3,3,3,2,5,4,5,5,5,5,5,5,5,5,3,3,5,5,5,5,8,6,6,6,6,6,5,6,6,3,4,6,5,6,6,6,6,6,6,6,5,6,6,8,6,6,5,3,2,3,4,5,3,5,5,5,5,5,4,5,5,2,2,5,2,7,5,5,5,5,4,5,3,5,5,6,5,5,5,4,3,3,5	2,2,3,4,4,6,5,2,3,3,3,4,2,3,2,2,4,4,4,4,4,4,4,4,4,4,2,2,4,4,4,4,7,5,5,5,5,5,5,6,5,2,4,5,4,6,5,6,5,6,5,5,5,5,5,7,5,5,5,2,2,2,4,4,3,4,4,4,4,4,2,4,4,2,2,4,2,6,4,4,4,4,3,4,2,4,4,5,4,4,4,3,2,3,4
 ARIALN.TTF	-	9	9	3,3,4,5,5,8,6,3,4,4,4,5,3,4,3,3,5,4,5,5,5,5,5,5,5,5,3,3,5,5,5,5,9,6,6,7,6,6,6,7,6,3,5,6,5,7,6,7,6,7,7,6,6,6,6,8,6,6,6,3,3,3,5,6,3,5,5,5,5,5,4,5,5,3,3,5,3,7,5,5,5,5,4,5,4,5,5,7,5,5,5,4,3,4,5	3,3,3,5,5,7,5,2,3,3,3,5,3,3,3,3,5,5,5,5,5,5,5,5,5,5,3,3,5,5,5,5,8,5,5,6,6,5,5,6,6,3,4,5,5,7,6,6,5,6,6,5,5,6,5,7,5,5,5,3,3,3,4,5,3,5,5,4,5,5,3,5,5,2,2,4,2,7,5,5,5,5,3,4,3,5,4,6,4,4,4,3,2,3,5
 ARIALN.TTF	-	10	10	3,3,4,6,6,8,7,3,4,4,4,6,3,4,3,3,6,5,6,6,6,6,6,6,6,6,3,3,6,6,6,6,10,7,7,7,7,7,6,7,7,3,5,7,6,8,7,8,7,8,7,7,6,7,7,9,7,7,6,4,3,3,5,6,3,6,6,6,5,6,4,5,5,3,3,6,3,8,5,6,6,5,4,5,4,5,5,7,6,6,5,4,3,4,6	3,3,3,5,5,8,6,2,3,3,4,5,3,3,3,3,5,5,5,5,5,5,5,5,5,5,3,3,5,5,5,5,9,6,6,6,6,6,6,7,6,3,5,6,5,7,6,7,6,7,6,6,6,6,6,8,6,6,6,3,3,3,4,5,3,5,5,5,5,5,3,5,5,2,2,5,2,7,5,5,5,5,3,5,3,5,5,6,5,5,5,3,3,3,5
@@ -254,3 +256,34 @@ kern	FRIZQT__.TTF	17	Yo	-1
 kern	FRIZQT__.TTF	17	LT	-1
 kern	FRIZQT__.TTF	17	LV	-1
 kern	FRIZQT__.TTF	17	P.	-1
+kern	ARIALN.TTF	10	P.	-1
+kern	ARIALN.TTF	12	To	-1
+kern	ARIALN.TTF	12	Ta	-1
+kern	ARIALN.TTF	12	Te	-1
+kern	ARIALN.TTF	12	P.	-1
+kern	ARIALN.TTF	16	To	-1
+kern	ARIALN.TTF	16	Ta	-1
+kern	ARIALN.TTF	16	Te	-1
+kern	ARIALN.TTF	16	Yo	-1
+kern	ARIALN.TTF	16	P.	-1
+kern	FRIZQT__.TTF	10	P.	-1
+kern	FRIZQT__.TTF	14	AV	-1
+kern	FRIZQT__.TTF	14	VA	-1
+kern	FRIZQT__.TTF	14	AW	-1
+kern	FRIZQT__.TTF	14	Ta	-1
+kern	FRIZQT__.TTF	14	Yo	-1
+kern	FRIZQT__.TTF	14	LT	-1
+kern	FRIZQT__.TTF	14	LV	-1
+kern	FRIZQT__.TTF	14	P.	-1
+kern	FRIZQT__.TTF	20	AV	-1
+kern	FRIZQT__.TTF	20	VA	-1
+kern	FRIZQT__.TTF	20	AW	-1
+kern	FRIZQT__.TTF	20	To	-1
+kern	FRIZQT__.TTF	20	Ta	-1
+kern	FRIZQT__.TTF	20	Te	-1
+kern	FRIZQT__.TTF	20	Yo	-1
+kern	FRIZQT__.TTF	20	LT	-1
+kern	FRIZQT__.TTF	20	LV	-1
+kern	FRIZQT__.TTF	20	Fa	-1
+kern	FRIZQT__.TTF	20	P.	-2
+kern	FRIZQT__.TTF	20	Av	-1

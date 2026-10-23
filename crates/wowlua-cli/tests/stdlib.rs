@@ -6470,10 +6470,10 @@ fn chat_line_and_invites() {
             "import * as chat from \"wowlua:chat\"\nimport * as unit from \"wowlua:unit\"\n_G.StdChat = { chat = chat, unit = unit }\n",
         )],
         "",
-        r#"Mock.loadAddon("Std")
+        r##"Mock.loadAddon("Std")
 local C, U = StdChat.chat, StdChat.unit
 local seen = {}
-local function note(what) return function(...) seen[#seen + 1] = what .. ":" .. table.concat({ ... }, ",") end end
+local function note(what) return function(...) seen[#seen + 1] = what .. select("#", ...) .. ":" .. tostring((...)) end end
 ChatFrameUtil, ChatFrame_SendTell, ChatFrame_OpenChat, ChatEdit_InsertLink = nil, nil, nil, nil
 C.whisper("Ann")
 C.open("hi")
@@ -6485,6 +6485,7 @@ C.whisper("Ann")
 C.insertLink("[x]")
 ChatFrameUtil = { SendTell = note("tell"), OpenChat = note("open"), InsertLink = function(link) seen[#seen + 1] = "insert:" .. link return true end }
 C.whisper("Bob")
+C.whisper("Bob", CreateFrame("Frame"))
 C.open("hi")
 C.insertLink("[y]")
 local real = C_PartyInfo.InviteUnit
@@ -6495,13 +6496,13 @@ InviteUnit = note("oldInvite")
 U.invite("Dan")
 C_PartyInfo.InviteUnit = real
 print(table.concat(seen, " "))
-"#,
+"##,
     );
     assert_eq!(
         plain(&out),
         [
             "0",
-            "oldTell:Ann oldInsert:[x] oldOpen:[x] tell:Bob open:hi insert:[y] invite:Cara oldInvite:Dan",
+            "oldTell1:Ann oldInsert:[x] oldOpen1:[x] tell1:Bob tell2:Bob open1:hi insert:[y] invite1:Cara oldInvite1:Dan",
         ]
     );
 }
@@ -6531,6 +6532,13 @@ local _, rel = o.button:GetPoint(1)
 print(o.button:IsShown(), rel == target, o.button:GetFrameStrata())
 o.button:GetScript("OnEnter")(o.button, true)
 print(hovered, o.button:GetAttribute("type1"), o.button:GetAttribute("clickbutton1") == other)
+local row = CreateFrame("Button", nil, UIParent)
+local rowHovered = 0
+row:SetScript("OnEnter", function() rowHovered = rowHovered + 1 end)
+o.show(row)
+local _, rel2 = o.button:GetPoint(1)
+o.button:GetScript("OnEnter")(o.button, true)
+print(rel2 == row, o.button:GetNumPoints(), hovered, rowHovered)
 Mock.combat = true
 print(o.set("type1", "macro"), o.hide(), o.button:IsShown())
 Mock.combat = false
@@ -6544,6 +6552,7 @@ print(o.hide(), o.button:IsShown(), o.button:GetNumPoints())
             "true true true",
             "true true DIALOG",
             "1 click true",
+            "true 2 1 1",
             "false false true",
             "true false 0",
         ]

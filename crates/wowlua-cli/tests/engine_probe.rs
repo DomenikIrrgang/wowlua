@@ -2727,6 +2727,163 @@ fn string_table(vm: &Vm, t: Value) -> BTreeMap<String, String> {
         .collect()
 }
 
+/// The wrap probe's run (`/stdtest engine wrap`, decision T237), played in
+/// the engine on its screen: how a font string breaks text into lines
+/// (`GetNumLines`, `GetStringHeight`, `GetStringWidth`, `IsTruncated`) for
+/// eight texts at four widths in two fonts, with and without
+/// `SetNonSpaceWrap`, free and held to two lines, and without word wrap;
+/// kerning pairs and the outlined digits, within a pixel.
+#[test]
+fn the_engine_wraps_text_as_the_client_did() {
+    let Some(ui) = wowlua_test::ui_source_in(&repo().join("target/types-src"), "camelot") else {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    };
+    let dir = build();
+    let out = dir.path().join("dist/dev/StdTest");
+    let mut vm = Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("installs");
+    wowlua_engine::set_platform(&mut vm, wowlua_engine::Platform::Windows);
+    let report = wowlua_engine::ui::load(&mut vm, &ui.interface, ui.strings.as_deref());
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let mut vm = client_in(vm, &out);
+    let name = vm.str("StdTest");
+    wowlua_engine::widgets::fire_event(&mut vm, "ADDON_LOADED", &[name, Value::Bool(false)]);
+    wowlua_engine::widgets::fire_event(&mut vm, "PLAYER_LOGIN", &[]);
+    wowlua_engine::clock::advance_frames(&mut vm, 2, 1000.0 / 60.0);
+    wowlua_engine::set_screen(
+        &mut vm,
+        wowlua_engine::Screen {
+            width: 1920.0,
+            height: 1080.0,
+            dpi_scale: 1.0,
+            ui_scale: Some(768.0 / 1080.0),
+        },
+    );
+    addon(&mut vm, "StdTestEngineProbe('wrap')");
+    let f = vm
+        .load(b"return StdTestState.engineWrap", "=wrap")
+        .expect("compiles");
+    let r = vm.call(f, &[]).expect("runs");
+    let ours = string_table(&vm, r[0]);
+    let mut fixture_vm = Vm::wow();
+    let src = fs::read(repo().join("crates/wowlua-engine/tests/client/forever-camelot-wrap.lua"))
+        .expect("the wrap record");
+    let f = fixture_vm.load(&src, "=wrap").expect("compiles");
+    let r = fixture_vm.call(f, &[]).expect("runs");
+    let theirs = string_table(&fixture_vm, r[0]);
+    let number = regex::Regex::new(r"-?\d+(\.\d+)?(e-?\d+)?").unwrap();
+    // The same words, the numbers within `tolerance` (the client's floats
+    // carry a last digit the engine's need not).
+    let close = |a: &str, b: &str, tolerance: f64| {
+        let (na, nb): (Vec<&str>, Vec<&str>) = (
+            number.find_iter(a).map(|m| m.as_str()).collect(),
+            number.find_iter(b).map(|m| m.as_str()).collect(),
+        );
+        number.replace_all(a, "N") == number.replace_all(b, "N")
+            && na.iter().zip(&nb).all(|(x, y)| {
+                let (x, y): (f64, f64) = (x.parse().unwrap_or(0.0), y.parse().unwrap_or(0.0));
+                (x - y).abs() <= tolerance.max(1e-5 * x.abs().max(y.abs()))
+            })
+    };
+    let mut differ = Vec::new();
+    for (k, v) in &theirs {
+        let mine = ours.get(k).map_or("<missing>", String::as_str);
+        // kerning and outlines within a pixel (decision T237: kerning is
+        // recorded at one size)
+        let tolerance = if k.starts_with("outline ") { 1.01 } else { 0.0 };
+        if !close(mine, v, tolerance) {
+            differ.push(format!("{k}: client {v:?}, ours {mine:?}"));
+        }
+    }
+    // The line counts across widths (a /run on the same screen): from 16
+    // units on, where a line holds two glyphs or more (narrower, the client
+    // keeps some texts on one line, unrecorded why).
+    let f = fixture_vm.load(&src, "=wrap").expect("compiles");
+    let r = fixture_vm.call(f, &[]).expect("runs");
+    let Value::Table(t) = r[0] else {
+        panic!("a table")
+    };
+    let key = fixture_vm.str("dense");
+    let dense = fixture_vm.heap.table(t).get(key);
+    let Value::Table(dense) = dense else {
+        panic!("the dense counts")
+    };
+    let n = fixture_vm.heap.table(dense).border();
+    let mut counted = 0;
+    for i in 1..=n {
+        let Value::Str(line) = fixture_vm.heap.table(dense).get(Value::Num(i as f64)) else {
+            continue;
+        };
+        let line = String::from_utf8_lossy(fixture_vm.str_bytes(line)).into_owned();
+        let (head, counts) = line.split_once(':').expect("size text nonspace:counts");
+        let (size, rest) = head.split_once(' ').expect("a size");
+        let (text, non_space) = rest.rsplit_once(' ').expect("nonspace");
+        let font = if size == "14" {
+            "Fonts\\\\ARIALN.TTF"
+        } else {
+            "Fonts\\\\FRIZQT__.TTF"
+        };
+        let code = format!(
+            "local f = UIParent:CreateFontString(nil, 'OVERLAY') f:SetPoint('TOPLEFT') f:SetFont('{font}', {size}, '') f:SetNonSpaceWrap({non_space}) local out = {{}} for w = 6, 70, 2 do f:SetWidth(w) f:SetText({text:?}) out[#out + 1] = f:GetNumLines() end StdTestDense = table.concat(out, ',')"
+        );
+        addon(&mut vm, &code);
+        let f = vm.load(b"return StdTestDense", "=dense").expect("compiles");
+        let r = vm.call(f, &[]).expect("runs");
+        let Value::Str(ours) = r[0] else {
+            panic!("counts")
+        };
+        let ours = String::from_utf8_lossy(vm.str_bytes(ours)).into_owned();
+        for (j, (theirs, mine)) in counts.split(',').zip(ours.split(',')).enumerate() {
+            let w = 6 + 2 * j;
+            if w < 16 {
+                continue;
+            }
+            counted += 1;
+            if theirs != mine {
+                differ.push(format!("dense {size} {text:?} nonspace {non_space} width {w}: client {theirs}, ours {mine}"));
+            }
+        }
+    }
+    assert!(counted > 0, "no dense counts compared");
+    // Kerning pairs exact (recorded at these sizes); the outlined digits
+    // within a pixel. The client's advances are finer than whole pixels: at a narrow
+    // Arial Narrow line it fits a glyph more now and then (a line fewer, a
+    // glyph more before the ellipsis). Listed, so a change shows.
+    let known = [
+        "Fonts\\ARIALN.TTF 14 width 20 nonspace false \"|cffff0000red|r words and plain words that run on\"",
+        "Fonts\\ARIALN.TTF 14 width 20 nonspace true \"|cffff0000red|r words and plain words that run on\"",
+        "Fonts\\ARIALN.TTF 14 width 20 nonspace false \"a long-hyphenated-word in a line\"",
+        "Fonts\\ARIALN.TTF 14 width 20 nonspace true \"a long-hyphenated-word in a line\"",
+        "Fonts\\ARIALN.TTF 14 width 45 nonspace false \"a long-hyphenated-word in a line\"",
+        "Fonts\\ARIALN.TTF 14 width 45 nonspace true \"a long-hyphenated-word in a line\"",
+        "Fonts\\FRIZQT__.TTF 12 width 20 nonspace false \"|cffff0000red|r words and plain words that run on\"",
+        "dense 14 \"a bcdefghijklmnop q\" nonspace false width 16",
+        // without word wrap, a line fewer than with it (unexplained)
+        "nowrap FRIZQT 12 width 45 \"|cffff0000red|r words and plain words that run on\"",
+        "dense 14 \"a bcdefghijklmnop q\" nonspace true width 16",
+    ];
+    let unexpected: Vec<&String> = differ
+        .iter()
+        .filter(|d| !known.iter().any(|k| d.starts_with(&format!("{k}:"))))
+        .collect();
+    let fixed: Vec<&&str> = known
+        .iter()
+        .filter(|k| !differ.iter().any(|d| d.starts_with(&format!("{k}:"))))
+        .collect();
+    assert!(
+        unexpected.is_empty() && fixed.is_empty(),
+        "{} of {} differ:\n{}\nknown, now matching: {fixed:?}",
+        unexpected.len(),
+        theirs.len() + counted,
+        unexpected
+            .iter()
+            .map(|s| s.as_str())
+            .collect::<Vec<_>>()
+            .join("\n")
+    );
+}
+
 /// The screen probe's runs on Windows (`/stdtest engine screen`, five
 /// screens, decision T237), each played in the engine on that screen:
 /// UIParent's size and scale, the DPI scale, the fonts' sizes and every

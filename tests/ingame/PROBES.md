@@ -37,16 +37,11 @@ engine cannot get otherwise.
 5. **`/stdtest engine journals`** on a character with a mount or a toy.
    Why: the events after a collected mount's or toy's favourite changes are
    unrecorded (the recording character had none; decision T235).
-6. **How the client breaks lines**: `/stdtest engine wrap` (a few
-   seconds, read-only), then `/reload`. Why: text is measured with the
-   client's glyphs (decision T237), but how it wraps is the engine's guess:
-   by words at spaces, a word wider than the string on a line of its own
-   unless `SetNonSpaceWrap(true)` breaks it between characters. It records
-   `GetNumLines`, `GetStringHeight`, `GetStringWidth` and `IsTruncated`
-   for long words, hyphens, several spaces, colour codes and sentences at
-   four widths, with and without `SetNonSpaceWrap`, free and held to two
-   lines; kerning pairs at FRIZQT 10/14/20 and ARIALN 10/12/16; the
-   outlined digits (StdTestState.engineWrap; read by hand, no ingest yet).
+6. **How the client breaks lines**: done 2026-10-24 (the beta's last
+   night): `tests/client/forever-camelot-wrap.lua` in wowlua-engine, with a
+   `/run` of line counts at widths 6 to 70; the engine follows it (decision
+   T282). Left open: why the client keeps some texts on one line below two
+   glyphs' width, and one line count without word wrap.
 7. **An early landing** (the scenario recorder as for the taxi): at a
    flight master, pick a route with a stop on the way; type
    `/stdtest engine scenario earlylanding`, take the flight, and before the
@@ -58,18 +53,12 @@ engine cannot get otherwise.
    were on high-DPI screens and gave the 2x textures' files and
    coordinates (decision T238); a 1x screen may take the 1x textures (the
    sizes are the same either way).
-9. **Talents the engine doesn't know yet**: out of combat, with an unspent
-   talent point if you have one, `/stdtest engine talents2` (two seconds),
-   then `/reload`. It records both spec groups' configs
-   (`GetCombatConfigIDForSpecGroup`), a rank planned and taken back
-   (`C_Traits.PurchaseRank`, `RefundRank`, then `RollbackConfig`: nothing
-   is applied), another class's talents in the view config
-   (`InitializeViewLoadout`, `ViewLoadout`), and the events between
-   (StdTestState.engineTalents2). On a character about to reach level 5:
-   `/stdtest engine talentwatch` first, level up, then `/reload`: every
-   `PLAYER_TALENT_UPDATE` and `PLAYER_LEVEL_UP` with the time and level
-   (StdTestState.engineTalentWatch). Why: SuuUI's Talents tests use a
-   stand-in for these.
+9. **Talents the engine doesn't know yet**: partly done 2026-10-24
+   (`tests/client/forever-camelot-talents2.lua` in wowlua-engine: the spec
+   groups' configs, the active config, another class's view loadout). Left
+   open: a rank planned and taken back (`PurchaseRank` refused, the
+   character had no unspent point) and `/stdtest engine talentwatch` (a
+   level-up to 5).
 10. **Addon messages restricted?** In a raid out of an instance and out of
    combat: `/dump C_ChatInfo.AreOutgoingAddonChatMessagesRestricted(),
    C_ChatInfo.InChatMessagingLockdown()`, then

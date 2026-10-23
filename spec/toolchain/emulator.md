@@ -332,7 +332,19 @@ The WoW API the VM's code calls, per flavor.
   it, every region's effective scale includes UIParent's (unless it ignores
   its parents' scale), and text is measured from the client's recorded
   glyphs at the pixel size the client renders at that scale, so string
-  widths, wrapping and truncation are the client's.
+  widths, wrapping and truncation are the client's. Lines break as the
+  client breaks them (decision T282, recorded by the wrap probe): at the
+  end of a space run or after a hyphen, a line as long as its advances fit
+  the width; a word wider than the line is cut between characters (at
+  least one a line), and without `SetNonSpaceWrap(true)` the rest of the
+  text then fills the lines character by character and the string is
+  truncated. `GetNumLines` counts every line the text breaks into, also
+  with word wrap off or beyond `SetMaxLines`; the height is the lines
+  shown; held to fewer lines, the last shown line ends in an ellipsis (one
+  glyph three periods wide) and `GetStringWidth` is the shown text's;
+  `IsTruncated` says whether lines are left out or a word was cut. The
+  client's advances are finer than the recorded whole pixels, so a narrow
+  line now and then holds a glyph fewer than in the client.
 - **Atlases.** Every atlas of the client, from its own tables (decision
   T238): sizes, files, texture coordinates and tiling as the client gives
   them; an atlas it lacks is none.
