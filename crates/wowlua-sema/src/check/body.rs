@@ -35,6 +35,17 @@ pub struct Var {
     pub assigned_in_closure: bool,
     /// Never assigned after its declaration: closures see its narrowing.
     pub never_reassigned: bool,
+    /// Where it is declared (the name's start), if in the source.
+    pub decl: Option<u32>,
+    /// What closures see of an unannotated local (spec §2.4.1): its
+    /// narrowed types where functions were made, and the values assigned
+    /// to it after that; `never` before.
+    pub assigned: TypeId,
+    /// A function was made where it is in scope.
+    pub captured: bool,
+    /// Declared with `nil` (or no value): that `nil` is not counted for a
+    /// function made before a value is assigned (a forward declaration).
+    pub nil_init: bool,
 }
 
 /// The function being checked.
@@ -207,9 +218,15 @@ pub struct Checker<'e, 'p> {
     /// The loops being checked, innermost last: the flows of their
     /// `break`s and `continue`s.
     loops: Vec<LoopFlows>,
-    /// While a loop is checked on trial: the base types its assignments
-    /// replaced, to restore if the trial fails.
-    base_log: Option<Vec<(VarId, TypeId)>>,
+    /// While a loop is checked on trial: the base and assigned types its
+    /// assignments replaced, to restore if the trial fails.
+    base_log: Option<Vec<(VarId, TypeId, TypeId)>>,
+    /// The types closures see of the unannotated locals a closure
+    /// assigns (or captured and assigned later), by declaration: the
+    /// previous pass's unions of their assigned values (spec §2.4.1).
+    pub(crate) closure_seeds: FxHashMap<u32, TypeId>,
+    /// A closure read such a local in this pass.
+    pub(crate) closure_hit: std::cell::Cell<bool>,
 }
 
 /// The flows that leave a loop body early.
@@ -230,7 +247,7 @@ struct LoopTrial {
     diagnostics: usize,
     env_diagnostics: usize,
     returns: usize,
-    base_log: Option<Vec<(VarId, TypeId)>>,
+    base_log: Option<Vec<(VarId, TypeId, TypeId)>>,
 }
 
 /// What checking a file reads of its syntax before and after walking it:
@@ -351,6 +368,8 @@ impl<'e, 'p> Checker<'e, 'p> {
             last_result_cap: None,
             loops: Vec::new(),
             base_log: None,
+            closure_seeds: FxHashMap::default(),
+            closure_hit: std::cell::Cell::new(false),
         };
         for (name, &t) in &info.imports {
             let id = c.declare(name, Some(t), t, true, None);
@@ -497,6 +516,10 @@ impl<'e, 'p> Checker<'e, 'p> {
             reassigned_in_closure: span.is_some_and(|s| self.reassigned.contains(&s.start)),
             assigned_in_closure: span.is_some_and(|s| self.assigned_in_closures.contains(&s.start)),
             never_reassigned: span.is_some_and(|s| !self.assigned_later.contains(&s.start)),
+            decl: span.map(|s| s.start),
+            assigned: Types::NEVER,
+            captured: false,
+            nil_init: declared.is_none() && base == Types::NIL,
         });
         self.scopes.declare(name, id);
         if declared.is_none() {
@@ -575,13 +598,80 @@ impl<'e, 'p> Checker<'e, 'p> {
         self.vars[v.0 as usize].base
     }
 
-    /// The type of a local in a flow.
+    /// The type of a local in a flow. An unannotated local a closure
+    /// assigns (or captured and assigned later) is, inside closures, the
+    /// union of the values assigned to it: the previous pass's, or in the
+    /// first pass what was assigned so far (spec §2.4.1).
     pub fn var_type_in(&self, v: VarId, flow: &Flow) -> TypeId {
         let var = &self.vars[v.0 as usize];
         if var.depth < self.depth && var.declared.is_none() && var.reassigned_in_closure {
-            return Types::ANY;
+            // What this function assigned or narrowed it to (a function
+            // starts without the outer narrowing of these).
+            if let Some(&t) = flow.get(&v) {
+                return t;
+            }
+            self.closure_hit.set(true);
+            return var
+                .decl
+                .and_then(|d| self.closure_seeds.get(&d).copied())
+                .unwrap_or(var.assigned);
         }
         flow.get(&v).copied().unwrap_or(var.base)
+    }
+
+    /// A function is made here: the unannotated locals in scope that
+    /// closures see as assigned (see [`Self::var_type_in`]) take their
+    /// narrowed types now, and count what is assigned to them from here.
+    fn note_captures(&mut self) {
+        let visible: Vec<VarId> = self
+            .scopes
+            .stacks
+            .iter()
+            .filter_map(|s| s.last().copied())
+            .filter(|v| {
+                let var = &self.vars[v.0 as usize];
+                var.declared.is_none() && var.reassigned_in_closure
+            })
+            .collect();
+        for v in visible {
+            let now = self.var_type(v);
+            let var = &self.vars[v.0 as usize];
+            // a forward declaration before its value: no `nil` of its own
+            let add = !(var.nil_init && now == Types::NIL);
+            let assigned = if add {
+                self.env.types.union(&[var.assigned, now])
+            } else {
+                var.assigned
+            };
+            let base = var.base;
+            if assigned != self.vars[v.0 as usize].assigned {
+                self.set_base(v, base, assigned);
+            }
+            self.vars[v.0 as usize].captured = true;
+        }
+    }
+
+    /// The unions of the values assigned to the locals closures read as
+    /// such (see [`Self::var_type_in`]), by declaration; `any` for one
+    /// never assigned a value.
+    pub(crate) fn closure_finals(&mut self) -> FxHashMap<u32, TypeId> {
+        let mut out: FxHashMap<u32, TypeId> = FxHashMap::default();
+        for var in &self.vars {
+            let (Some(d), None, true) = (var.decl, var.declared, var.reassigned_in_closure) else {
+                continue;
+            };
+            let t = match out.get(&d) {
+                Some(&prev) => self.env.types.union(&[prev, var.assigned]),
+                None => var.assigned,
+            };
+            out.insert(d, t);
+        }
+        for t in out.values_mut() {
+            if *t == Types::NEVER {
+                *t = Types::ANY;
+            }
+        }
+        out
     }
 
     pub fn var_type(&self, v: VarId) -> TypeId {
@@ -612,7 +702,12 @@ impl<'e, 'p> Checker<'e, 'p> {
                 self.flow.insert(v, widened);
                 // The base widens to cover every assigned value.
                 let base = self.env.types.union(&[var.base, widened]);
-                self.set_base(v, base);
+                let assigned = if var.captured {
+                    self.env.types.union(&[var.assigned, widened])
+                } else {
+                    var.assigned
+                };
+                self.set_base(v, base, assigned);
             }
         }
     }
@@ -1510,9 +1605,10 @@ impl<'e, 'p> Checker<'e, 'p> {
                 }
                 return;
             }
-            for (v, base) in log.unwrap_or_default().into_iter().rev() {
+            for (v, base, assigned) in log.unwrap_or_default().into_iter().rev() {
                 if let Some(var) = self.vars.get_mut(v.0 as usize) {
                     var.base = base;
+                    var.assigned = assigned;
                 }
             }
             self.flow = trial.flow;
@@ -1557,11 +1653,13 @@ impl<'e, 'p> Checker<'e, 'p> {
     }
 
     /// Replaces a local's base type (logged while a loop is on trial).
-    fn set_base(&mut self, v: VarId, t: TypeId) {
+    fn set_base(&mut self, v: VarId, t: TypeId, assigned: TypeId) {
+        let var = &mut self.vars[v.0 as usize];
         if let Some(log) = &mut self.base_log {
-            log.push((v, self.vars[v.0 as usize].base));
+            log.push((v, var.base, var.assigned));
         }
-        self.vars[v.0 as usize].base = t;
+        var.base = t;
+        var.assigned = assigned;
     }
 
     /// The declared locals a loop body assigns that the loop entry narrows
@@ -1757,6 +1855,7 @@ impl<'e, 'p> Checker<'e, 'p> {
             || expected
                 .as_ref()
                 .is_some_and(|e| !(e.ret.types.is_empty() && e.ret.rest.is_some()));
+        self.note_captures();
         let saved_flow = std::mem::take(&mut self.flow);
         // Locals never assigned after their declaration keep their
         // narrowing inside the closure (it cannot change); open tables are
@@ -2300,9 +2399,17 @@ impl<'e, 'p> Checker<'e, 'p> {
             };
             let Some(n) = replaced else { continue };
             self.flow.insert(v, n);
-            let base = self.vars[v.0 as usize].base;
+            let (base, assigned) = {
+                let var = &self.vars[v.0 as usize];
+                (var.base, var.assigned)
+            };
             if base == owner || base == t {
-                self.set_base(v, n);
+                let assigned = if assigned == owner || assigned == t {
+                    n
+                } else {
+                    assigned
+                };
+                self.set_base(v, n, assigned);
             }
         }
     }
