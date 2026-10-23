@@ -115,6 +115,28 @@ pub fn apply(types: &mut Types, t: TypeId, s: &Subst) -> TypeId {
     }
 }
 
+/// The enclosing parameters' bindings of a generic function `f` after `s`:
+/// its own, applied, and those `s` binds that are not `f`'s.
+fn outer_of(types: &mut Types, f: &Func, s: &Subst) -> Vec<(ParamId, TypeId)> {
+    if f.type_params.is_empty() {
+        return Vec::new();
+    }
+    let mut out: Vec<(ParamId, TypeId)> = f
+        .outer
+        .iter()
+        .map(|&(p, t)| (p, apply(types, t, s)))
+        .collect();
+    let mut added: Vec<(ParamId, TypeId)> = s
+        .types
+        .iter()
+        .filter(|(p, _)| !f.type_params.contains(p) && !out.iter().any(|(q, _)| q == *p))
+        .map(|(&p, &t)| (p, t))
+        .collect();
+    added.sort_by_key(|(p, _)| p.0);
+    out.extend(added);
+    out
+}
+
 pub fn apply_func(types: &mut Types, f: &Func, s: &Subst) -> Func {
     let params = f
         .params
@@ -132,6 +154,7 @@ pub fn apply_func(types: &mut Types, f: &Func, s: &Subst) -> Func {
         ret: apply_pack(types, &f.ret, s),
         predicate: f.predicate.map(|(i, t)| (i, apply(types, t, s))),
         unannotated: f.unannotated,
+        outer: outer_of(types, f, s),
     };
     // A pack parameter as the rest expands into parameters.
     match &f.rest {

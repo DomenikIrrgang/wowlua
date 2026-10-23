@@ -2672,6 +2672,69 @@ print(s, f, bad)
     assert!(errors[3].starts_with("src/main.wowlua:15:7: error[E2001]: `\"nope\"` is not assignable to `\"line\" | \"figure\" | \"note\"`"), "{stderr}");
 }
 
+/// A generic class's generic method reads the class's arguments in its
+/// constraints (`K extends keyof D` of `Module<D>`), and a base written
+/// with `typeof` (directly or through an alias) is worked out where the
+/// file reaches the class (decision L45).
+#[test]
+fn keyof_in_generic_class_methods() {
+    let dir = tempfile::tempdir().unwrap();
+    let main = r#"class Module<D extends { [string]: unknown }>
+    protected readonly defaults: D
+    constructor(defaults: D)
+        self.defaults = defaults
+    end
+    function Get<K extends keyof D>(key: K): D[K]
+        return self.defaults[key] :: D[K]
+    end
+end
+const DEFAULTS = { line = 20, figure = true, position = { x = 1, y = 2 } }
+type Defs = typeof(DEFAULTS)
+local probe: Defs = DEFAULTS
+local k: keyof Defs = "nope"
+class Sub extends Module<Defs>
+    constructor() super(DEFAULTS) end
+    function T()
+        local c: string = self:Get("line")
+        print(c)
+    end
+end
+class Sub2 extends Module<typeof(DEFAULTS)>
+    constructor() super(DEFAULTS) end
+    function T()
+        local c: string = self:Get("line")
+        print(c)
+    end
+end
+print(probe, k)
+"#;
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"classkeyof\", \"version\": \"1.0.0\" } }\n",
+            ),
+            ("src/main.wowlua", main),
+        ],
+    );
+    let out = wowlua(dir.path())
+        .args(["check", "--message-format", "short"])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let errors: Vec<&str> = stderr.lines().filter(|l| l.contains("error[")).collect();
+    assert_eq!(
+        errors,
+        [
+            "src/main.wowlua:13:7: error[E2001]: `\"nope\"` is not assignable to `\"line\" | \"figure\" | \"position\"`",
+            "src/main.wowlua:17:15: error[E2001]: `number` is not assignable to `string`",
+            "src/main.wowlua:24:15: error[E2001]: `number` is not assignable to `string`",
+        ],
+        "{stderr}"
+    );
+}
+
 /// `W2063` (decision T274): off unless `check.lints` turns it on; then an
 /// unannotated parameter nothing types, and a local whose value is `any`.
 #[test]

@@ -2352,6 +2352,7 @@ impl Checker<'_, '_> {
             ret: Pack::empty(),
             predicate: None,
             unannotated: false,
+            outer: Vec::new(),
         };
         Some(self.env.types.func(call))
     }
@@ -2459,6 +2460,7 @@ impl Checker<'_, '_> {
                 ret: Pack::empty(),
                 predicate: None,
                 unannotated: false,
+                outer: Vec::new(),
             };
             return Some(self.env.types.func(f));
         }
@@ -3200,6 +3202,7 @@ impl Checker<'_, '_> {
             ret: Pack::any(),
             predicate: None,
             unannotated: false,
+            outer: Vec::new(),
         });
         f.params.get_mut(1)?.ty = handler;
         Some(self.env.types.func(f))
@@ -3420,7 +3423,12 @@ impl Checker<'_, '_> {
                     continue;
                 };
                 let name = info.name.clone();
-                let c = subst::apply(&mut self.env.types, c, &s);
+                // read with the enclosing class's arguments too
+                let mut cs = s.clone();
+                for &(q, b) in &f.outer {
+                    cs.types.entry(q).or_insert(b);
+                }
+                let c = subst::apply(&mut self.env.types, c, &cs);
                 if report && !self.env.assignable(t, c, self.mode) {
                     let msg = format!(
                         "`{}` does not satisfy the constraint `{}` of `{name}`",

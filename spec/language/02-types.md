@@ -314,7 +314,12 @@ and are worked out where the parameter is bound. Inside the generic body, a
 `keyof T` value is a `string`, and a `T[K]` value is not checked (as `any`):
 it is checked where the call binds `T` and `K`. With `K extends keyof T`, the
 literal argument binds `K` (decision L44), so the result is that field's
-type.
+type. A generic method of a generic class reads the class's type arguments
+in its own constraints, so `Get<K extends keyof D>(key: K): D[K]` of
+`Module<D>` takes the keys of the `D` an instance or a subclass gives
+(`class Durability extends Module<typeof(DEFAULTS)>`); a base written with
+`typeof`, directly or through a `typeof` alias, is worked out where the
+file reaches the class.
 
 ## 2.3 Type aliases and recursive types
 
