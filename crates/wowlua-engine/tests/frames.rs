@@ -1555,3 +1555,17 @@ return f:GetTop() - text:GetTop(), text:GetLeft() - f:GetLeft(), text:GetRight()
     );
     assert_eq!(r, ["8", "8", "100"]);
 }
+
+/// `SetFormattedText` on a button gives its font string the text, as
+/// `SetText` does (the macro window's second tab).
+#[test]
+fn a_buttons_formatted_text_reaches_its_font_string() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local b = CreateFrame('Button', nil, UIParent)
+b:SetFormattedText('%s Specific Macros', 'Anna')
+return b:GetText(), b:GetFontString():GetText()",
+    );
+    assert_eq!(r, ["Anna Specific Macros", "Anna Specific Macros"]);
+}

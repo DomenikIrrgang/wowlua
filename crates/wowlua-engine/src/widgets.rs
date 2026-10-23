@@ -3259,6 +3259,11 @@ fn set_status_bar_texture(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 }
 
 fn set_text(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    set_text_value(vm, id, c.arg(2))
+}
+
+/// `SetText(text)`'s work, `SetFormattedText`'s too.
+fn set_text_value(vm: &mut Vm, id: WidgetId, text: Value) -> Ret {
     // A font string needs a font first (`/stdtest engine`).
     if engine(vm).world.widgets[id.0].class == "FontString" && !has_font(vm, id) {
         return Err(c_error(vm, "FontString:SetText(): Font not set", true));
@@ -3278,11 +3283,11 @@ fn set_text(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
             }
         };
         if let Some(fid) = widget_of(vm, fs) {
-            let t = kept_text(vm, c.arg(2));
+            let t = kept_text(vm, text);
             store_text(vm, fid, t);
         }
     }
-    let t = kept_text(vm, c.arg(2));
+    let t = kept_text(vm, text);
     store_text(vm, id, t);
     if is_a(engine(vm), &class, "EditBox") && !engine(vm).world.text_set.contains(&id) {
         engine_mut(vm).world.text_set.push(id);
@@ -3410,8 +3415,10 @@ fn set_formatted_text(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let f = vm.heap.table(string).get(key);
     let args: Vec<Value> = c.args.iter().skip(1).copied().collect();
     let r = vm.call(f, &args)?;
-    store_text(vm, id, r.first().copied());
-    Ok(vec![])
+    // As `SetText`: a button's goes to its font string (the macro window's
+    // second tab, `SetFormattedText(CHARACTER_SPECIFIC_MACROS, name)`,
+    // showed no text).
+    set_text_value(vm, id, r.first().copied().unwrap_or(Value::Nil))
 }
 
 // --------------------------------------------------------- attributes
