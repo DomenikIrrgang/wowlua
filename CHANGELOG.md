@@ -45,7 +45,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
-- When two anchors set the same edge of a frame, the one WoW gives priority to wins (`TOPLEFT` before `TOPRIGHT` and so on), as in game: the default UI's dropdowns show their text inside the box instead of over its bottom edge.
+- When two anchors set the same edge of a frame, the one WoW gives priority to wins (`TOPLEFT` before `TOPRIGHT` and so on), as in game: the default UI's dropdowns show their text inside the box instead of over its bottom edge, and window tabs sit side by side instead of overlapping ("Merchant" was cut off).
 - The wardrobe shows each appearance from the camera WoW uses for your character's race and sex (`C_TransmogCollection.GetAppearanceCameraID`), read from your WoW installation; it used one Undead male's for everyone.
 - Model frames framed with `Model_ApplyUICamera` (the wardrobe, the dressing room's slots) show the model as in game: `TransformCameraSpaceToModelSpace` scales by the frame's effective scale, as the client's does, and screenshots draw the shot at the client's field of view, with the model's pitch and roll turned as the client turns them.
 - Models drawn with material blend 7 add their light, as in game (a totem's rune showed on a black square), and particles of the newer emitters draw no stray tails (a fire elemental showed long streaks).
