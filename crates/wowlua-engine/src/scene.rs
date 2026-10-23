@@ -229,10 +229,18 @@ fn clip_of(vm: &Vm, id: WidgetId) -> Option<Rect> {
 }
 
 fn blend_of(vm: &Vm, id: WidgetId) -> Blend {
-    match first(vm, id, "BlendMode")
-        .and_then(|v| text_of(vm, v))
-        .as_deref()
-    {
+    let set = first(vm, id, "BlendMode").and_then(|v| text_of(vm, v));
+    // A button's highlight adds, unless set otherwise.
+    let highlight = set.is_none()
+        && engine(vm).world.widgets[id.0].parent.is_some_and(|p| {
+            first(vm, p, "HighlightTexture")
+                .and_then(|v| widgets::widget_of(vm, v))
+                .is_some_and(|h| h == id)
+        });
+    if highlight {
+        return Blend::Add;
+    }
+    match set.as_deref() {
         Some("ADD") => Blend::Add,
         Some("MOD") => Blend::Mod,
         Some("ALPHAKEY") => Blend::AlphaKey,
@@ -335,14 +343,19 @@ fn masks_of(vm: &Vm, id: WidgetId) -> Vec<Mask> {
     out
 }
 
+/// A status bar's texture (a file's or an atlas's made for it, or one set).
+fn bar_texture(vm: &Vm, bar: WidgetId) -> Option<WidgetId> {
+    ["StatusBarTexture", "StatusBarTextureObject"]
+        .iter()
+        .find_map(|k| first(vm, bar, k).and_then(|v| widgets::widget_of(vm, v)))
+}
+
 /// A status bar's texture: the part its value fills.
 fn bar_fill(vm: &Vm, id: WidgetId, rect: &mut Rect, tc: &mut [f32; 8]) {
     let Some(parent) = engine(vm).world.widgets[id.0].parent else {
         return;
     };
-    let is_fill = first(vm, parent, "StatusBarTextureObject")
-        .and_then(|v| widgets::widget_of(vm, v))
-        .is_some_and(|t| t == id);
+    let is_fill = bar_texture(vm, parent).is_some_and(|t| t == id);
     if !is_fill {
         return;
     }
@@ -390,7 +403,13 @@ fn bar_fill(vm: &Vm, id: WidgetId, rect: &mut Rect, tc: &mut [f32; 8]) {
 
 fn quad_of(vm: &Vm, id: WidgetId) -> Option<Quad> {
     let (image, base, tile, plain) = image_of(vm, id)?;
-    let mut rect = rect_of(vm, id)?;
+    // A status bar's texture without points fills the bar.
+    let mut rect = rect_of(vm, id).or_else(|| {
+        let w = &engine(vm).world.widgets[id.0];
+        let parent = w.parent?;
+        let fills = w.points.is_empty() && bar_texture(vm, parent).is_some_and(|t| t == id);
+        if fills { rect_of(vm, parent) } else { None }
+    })?;
     if rect.w <= 0.0 || rect.h <= 0.0 {
         return None;
     }
@@ -484,7 +503,16 @@ fn text_item(vm: &Vm, id: WidgetId, edit_box: bool) -> Option<Text> {
     if raw.is_empty() {
         return None;
     }
-    let mut rect = rect_of(vm, id)?;
+    // A button's text without points of its own sits in the button's
+    // middle, as the client places it.
+    let mut rect = rect_of(vm, id).or_else(|| {
+        let parent = w.parent?;
+        let class = &engine(vm).world.widgets[parent.0].class;
+        if !w.points.is_empty() || !widgets::is_a(engine(vm), class, "Button") {
+            return None;
+        }
+        rect_of(vm, parent)
+    })?;
     if edit_box && let Some(ins) = args(vm, id, "TextInsets") {
         let (k, _) = pixel_scale(vm);
         let k = k as f32;
@@ -686,6 +714,23 @@ fn layer_of(vm: &Vm, id: WidgetId) -> (usize, i32) {
     )
 }
 
+/// Whether a widget is a region (drawn by its frame), by its type: XML
+/// builds regions as it builds frames.
+fn is_region(vm: &Vm, id: WidgetId) -> bool {
+    let e = engine(vm);
+    let class = &e.world.widgets[id.0].class;
+    ["Texture", "FontString", "Line", "MaskTexture"]
+        .iter()
+        .any(|k| widgets::is_a(e, class, k))
+}
+
+/// Whether a widget is a frame (drawn in the strata's order).
+fn is_frame(vm: &Vm, id: WidgetId) -> bool {
+    let e = engine(vm);
+    let w = &e.world.widgets[id.0];
+    !is_region(vm, id) && (w.frame || widgets::is_a(e, &w.class, "Frame"))
+}
+
 /// The visible frames, in draw order (back to front).
 fn frames_in_order(vm: &mut Vm) -> Vec<WidgetId> {
     let count = engine(vm).world.widgets.len();
@@ -693,7 +738,7 @@ fn frames_in_order(vm: &mut Vm) -> Vec<WidgetId> {
     for i in 0..count {
         let id = WidgetId(i);
         let w = &engine(vm).world.widgets[i];
-        if !w.frame || w.forbidden || !widgets::visible(engine(vm), id) {
+        if w.forbidden || !is_frame(vm, id) || !widgets::visible(engine(vm), id) {
             continue;
         }
         let strata = widgets::strata_rank(vm, id);
@@ -731,7 +776,7 @@ pub fn build(vm: &mut Vm) -> Scene {
         let mut regions: Vec<(usize, i32, usize)> = Vec::new();
         for c in children {
             let w = &engine(vm).world.widgets[c.0];
-            if w.frame || !w.shown {
+            if !w.shown || !is_region(vm, c) {
                 continue;
             }
             let (layer, sub) = layer_of(vm, c);

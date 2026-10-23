@@ -1,0 +1,25 @@
+[package]
+name = "wowlua-render"
+description = "Draws the emulated client's UI with wgpu: to a window, or off-screen to PNG screenshots"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+bytemuck = { version = "1.25.2", features = ["derive"] }
+fontdue = "0.9.5"
+png = "0.18.1"
+pollster = "1.0.1"
+wgpu = "30.0.1"
+wowlua-casc.workspace = true
+wowlua-engine.workspace = true
+
+[dev-dependencies]
+wowlua-casc.workspace = true
+wowlua-vm.workspace = true
+
+[lints]
+workspace = true

@@ -94,6 +94,26 @@ pub struct TestArgs {
 }
 
 #[derive(Args, Debug, Clone)]
+pub struct ScreenshotArgs {
+    /// The test file to run
+    pub file: PathBuf,
+    /// Only the tests whose name contains this
+    #[arg(long)]
+    pub test: Option<String>,
+    /// One frame (by its global name) instead of the screen
+    #[arg(long)]
+    pub frame: Option<String>,
+    #[arg(long)]
+    pub flavor: Option<String>,
+    /// Times the screen's size
+    #[arg(long)]
+    pub scale: Option<f64>,
+    /// The PNG to write
+    #[arg(short = 'o', long = "output")]
+    pub output: PathBuf,
+}
+
+#[derive(Args, Debug, Clone)]
 pub struct PublishArgs {
     /// Only these publish targets
     #[arg(long = "target", value_name = "NAME")]
@@ -253,6 +273,8 @@ enum Command {
     },
     /// Run the tests in the emulated client
     Test(TestArgs),
+    /// Run a test file and write a screenshot of the UI as it ends
+    Screenshot(ScreenshotArgs),
     /// Serve the Debug Adapter Protocol: debug a test file or the addon
     Debug {
         /// Listen on this TCP port (default: stdio)
@@ -596,6 +618,7 @@ fn run() -> ExitCode {
         }
         Command::Test(args) => commands::test(&out, &cli.global, &args),
         Command::Debug { port } => debug::debug(&out, &cli.global, port),
+        Command::Screenshot(args) => screenshot::command(&out, &cli.global, &args),
         Command::Compile(args) => commands::compile(&out, &cli.global, &args),
         Command::Fmt { check, paths } => commands::fmt(&out, &cli.global, check, paths),
         Command::Dev {

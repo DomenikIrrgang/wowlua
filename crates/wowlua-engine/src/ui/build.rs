@@ -84,6 +84,7 @@ const VALUE_ATTRS: &[(&str, &str)] = &[
     ("justifyV", "SetJustifyV"),
     ("file", "SetTexture"),
     ("atlas", "SetAtlas"),
+    ("alphaMode", "SetBlendMode"),
     ("letters", "SetMaxLetters"),
     // SuuUI probe chat: ChatFrame1EditBox kept 32 (its template's).
     ("historyLines", "SetHistoryLines"),
@@ -859,6 +860,21 @@ fn apply_child(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, child: &Rc
             for g in &child.children {
                 build(vm, cx, g, Some(id));
             }
+        }
+        // A texture's coordinates: its edges, or its corners
+        // (`<Rect ULx=… LRy=…/>`).
+        "texcoords" => {
+            let args: Vec<Value> = match child.child("Rect") {
+                Some(r) => ["ULx", "ULy", "LLx", "LLy", "URx", "URy", "LRx", "LRy"]
+                    .iter()
+                    .map(|k| Value::Num(r.number(k).unwrap_or(0.0)))
+                    .collect(),
+                None => [("left", 0.0), ("right", 1.0), ("top", 0.0), ("bottom", 1.0)]
+                    .iter()
+                    .map(|(k, d)| Value::Num(child.number(k).unwrap_or(*d)))
+                    .collect(),
+            };
+            call_method(vm, cx, child.line, frame, "SetTexCoord", &args);
         }
         // A font's or font string's text color and shadow.
         "color" if is_text(vm, id) => {

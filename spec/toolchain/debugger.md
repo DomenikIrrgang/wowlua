@@ -289,16 +289,23 @@ clocked unless asked otherwise.
 ### 18.12.3 `wowlua screenshot`
 
 `wowlua screenshot <test file> [--test <name>] [--frame <name>] [--flavor <f>]
-[--scale <s>] -o <file.png>` runs the test file (or one test of it) and writes
-a screenshot when it ends; `mock.screenshot(name)` calls inside it write
-`<file>-<name>.png` too.
+[--scale <s>] -o <file.png>` runs the test file (its tests whose names contain
+`--test`) and draws the screen, or the named frame and what it holds, as each
+test leaves it: the first test's image at `-o`, the others' beside it
+(`<file>-<test>.png`).
 
 ### 18.12.4 In tests
 
-`mock.screenshot(name?, frame?)` renders now and returns the image's path;
 `expect(frame).toMatchScreenshot(name?, { threshold?, maxDiffRatio? })` (or
-`expect(mock.screen)` for the whole screen) compares with
-`__screenshots__/<test file>/<test>-<name>.png` next to the test (decision
-T315): a missing image is written, a different one fails the test with its
-diff ratio and the paths of the actual and diff images, and
-`wowlua test -u` rewrites it, as snapshots.
+`expect(mock.screen)` for the whole screen) compares the image with
+`__screenshots__/<test file>/<test>-<name>.png` next to the test file (its
+key, the test's name and `name`, as a file name: spaces as dashes; decision
+T315): a missing image is written, a different one fails the test with the
+share of pixels that differ and writes `<key>.actual.png` and
+`<key>.diff.png` beside it, and `wowlua test -u` rewrites it, as snapshots
+(the summary counts them with the snapshots). `mock.screenshot(name?,
+frame?)` draws now, writes `<build.out>/screenshots/<test file>/<name>.png`
+and returns its path. The images are drawn at the screen's size
+(`test.screen`), with the installation's textures and fonts when there is
+one, else the stand-ins: a project's stored images are made on machines
+that agree on that.

@@ -32,7 +32,7 @@ impl wowlua_debug::dap::Launcher for CliLauncher {
             &self.global,
             opts.flavor.as_deref(),
             Some(instrument),
-            &mut |suite| session(suite, crate::screenshot::screenshotter()),
+            &mut |suite| session(suite, crate::screenshot::screenshotter(suite)),
         )
     }
 }

@@ -1,0 +1,913 @@
+//! The renderer (spec debugger §18.11, decision T311): draws a scene of the
+//! engine (`wowlua_engine::scene`) with `wgpu`, off-screen into an image or
+//! into a texture view the host presents (Studio's window).
+//!
+//! Fast by keeping work: images and glyphs are uploaded once and kept on
+//! the GPU; a frame is one vertex buffer and a draw call per run of quads
+//! sharing a texture, mask, blend mode and clip rectangle.
+
+#[cfg(not(target_arch = "wasm32"))]
+pub mod client;
+pub mod compare;
+mod glyphs;
+
+use std::collections::HashMap;
+
+use wgpu::util::DeviceExt;
+pub use wowlua_casc::Rgba;
+use wowlua_engine::scene::{Blend, Image, Item, Rect, Scene};
+
+/// Where images and fonts come from: the addon's folder, the user's
+/// installation.
+pub trait Assets {
+    /// An image, decoded.
+    fn image(&mut self, image: &Image) -> Option<Rgba>;
+    /// A font file's bytes (`Fonts\FRIZQT__.TTF`).
+    fn font(&mut self, path: &str) -> Option<Vec<u8>>;
+}
+
+/// No assets: every image a placeholder, every font a stand-in.
+pub struct NoAssets;
+
+impl Assets for NoAssets {
+    fn image(&mut self, _: &Image) -> Option<Rgba> {
+        None
+    }
+    fn font(&mut self, _: &str) -> Option<Vec<u8>> {
+        None
+    }
+}
+
+/// The stand-in fonts (open licenses), for fonts not at hand.
+const SANS: &[u8] = include_bytes!("../../wowlua-runtime/fonts/Figtree-Regular.ttf");
+const SERIF: &[u8] = include_bytes!("../../wowlua-runtime/fonts/MarcellusSC-Regular.ttf");
+
+#[repr(C)]
+#[derive(Clone, Copy, bytemuck::Pod, bytemuck::Zeroable)]
+struct Vertex {
+    pos: [f32; 2],
+    uv: [f32; 2],
+    color: [f32; 4],
+    mask_uv: [f32; 2],
+    flags: u32,
+}
+
+const DESATURATE: u32 = 1;
+const ALPHA_KEY: u32 = 2;
+
+#[derive(Clone, PartialEq, Eq, Hash)]
+enum TexKey {
+    Path(String),
+    Id(u32),
+}
+
+struct Tex {
+    texture: wgpu::Texture,
+    view: wgpu::TextureView,
+    width: u32,
+    height: u32,
+}
+
+/// A run of vertices drawn together.
+struct Batch {
+    pipeline: usize,
+    tex: usize,
+    mask: usize,
+    clip: Option<Rect>,
+    start: u32,
+    end: u32,
+}
+
+pub struct Renderer {
+    device: wgpu::Device,
+    queue: wgpu::Queue,
+    pipelines: Vec<wgpu::RenderPipeline>,
+    screen_layout: wgpu::BindGroupLayout,
+    tex_layout: wgpu::BindGroupLayout,
+    sampler: wgpu::Sampler,
+    textures: Vec<Tex>,
+    by_key: HashMap<TexKey, usize>,
+    bind_groups: HashMap<(usize, usize), wgpu::BindGroup>,
+    fonts: Vec<fontdue::Font>,
+    font_ids: HashMap<String, usize>,
+    atlas: glyphs::Atlas,
+    /// Indexes into `textures`.
+    white: usize,
+    missing: usize,
+    atlas_tex: usize,
+    /// The adapter's name, for reports.
+    pub adapter: String,
+}
+
+/// The color format the renderer draws in.
+pub const FORMAT: wgpu::TextureFormat = wgpu::TextureFormat::Rgba8Unorm;
+
+const PIPELINE_BLEND: usize = 0;
+const PIPELINE_ADD: usize = 1;
+const PIPELINE_MOD: usize = 2;
+const PIPELINE_OPAQUE: usize = 3;
+
+impl Renderer {
+    /// A renderer on the first adapter there is (a software one when there
+    /// is no GPU).
+    pub async fn new() -> Result<Renderer, String> {
+        let instance =
+            wgpu::Instance::new(wgpu::InstanceDescriptor::new_without_display_handle_from_env());
+        let mut adapter = instance
+            .request_adapter(&wgpu::RequestAdapterOptions {
+                power_preference: wgpu::PowerPreference::default(),
+                force_fallback_adapter: false,
+                compatible_surface: None,
+                ..Default::default()
+            })
+            .await;
+        if adapter.is_err() {
+            adapter = instance
+                .request_adapter(&wgpu::RequestAdapterOptions {
+                    power_preference: wgpu::PowerPreference::default(),
+                    force_fallback_adapter: true,
+                    compatible_surface: None,
+                    ..Default::default()
+                })
+                .await;
+        }
+        let adapter = adapter.map_err(|e| {
+            format!("no GPU adapter to draw with ({e}); a software one (WARP, lavapipe) works too")
+        })?;
+        let name = adapter.get_info().name;
+        let (device, queue) = adapter
+            .request_device(&wgpu::DeviceDescriptor {
+                label: Some("wowlua"),
+                required_limits: wgpu::Limits::downlevel_webgl2_defaults()
+                    .using_resolution(adapter.limits()),
+                ..Default::default()
+            })
+            .await
+            .map_err(|e| format!("the GPU device: {e}"))?;
+        Ok(Renderer::with_device(device, queue, name))
+    }
+
+    /// [`new`](Self::new), blocking (native).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn new_blocking() -> Result<Renderer, String> {
+        pollster::block_on(Renderer::new())
+    }
+
+    /// A renderer on the host's device (Studio's).
+    pub fn with_device(device: wgpu::Device, queue: wgpu::Queue, adapter: String) -> Renderer {
+        let shader = device.create_shader_module(wgpu::ShaderModuleDescriptor {
+            label: Some("ui"),
+            source: wgpu::ShaderSource::Wgsl(include_str!("shader.wgsl").into()),
+        });
+        let screen_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("screen"),
+            entries: &[wgpu::BindGroupLayoutEntry {
+                binding: 0,
+                visibility: wgpu::ShaderStages::VERTEX,
+                ty: wgpu::BindingType::Buffer {
+                    ty: wgpu::BufferBindingType::Uniform,
+                    has_dynamic_offset: false,
+                    min_binding_size: None,
+                },
+                count: None,
+            }],
+        });
+        let tex_entry = |binding: u32| wgpu::BindGroupLayoutEntry {
+            binding,
+            visibility: wgpu::ShaderStages::FRAGMENT,
+            ty: wgpu::BindingType::Texture {
+                sample_type: wgpu::TextureSampleType::Float { filterable: true },
+                view_dimension: wgpu::TextureViewDimension::D2,
+                multisampled: false,
+            },
+            count: None,
+        };
+        let tex_layout = device.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
+            label: Some("textures"),
+            entries: &[
+                tex_entry(0),
+                tex_entry(1),
+                wgpu::BindGroupLayoutEntry {
+                    binding: 2,
+                    visibility: wgpu::ShaderStages::FRAGMENT,
+                    ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
+                    count: None,
+                },
+            ],
+        });
+        let layout = device.create_pipeline_layout(&wgpu::PipelineLayoutDescriptor {
+            label: Some("ui"),
+            bind_group_layouts: &[Some(&screen_layout), Some(&tex_layout)],
+            immediate_size: 0,
+        });
+        let blend = |b: Option<wgpu::BlendState>| {
+            device.create_render_pipeline(&wgpu::RenderPipelineDescriptor {
+                label: Some("ui"),
+                layout: Some(&layout),
+                vertex: wgpu::VertexState {
+                    module: &shader,
+                    entry_point: Some("vs"),
+                    compilation_options: Default::default(),
+                    buffers: &[Some(wgpu::VertexBufferLayout {
+                        array_stride: std::mem::size_of::<Vertex>() as u64,
+                        step_mode: wgpu::VertexStepMode::Vertex,
+                        attributes: &wgpu::vertex_attr_array![0 => Float32x2, 1 => Float32x2, 2 => Float32x4, 3 => Float32x2, 4 => Uint32],
+                    })],
+                },
+                primitive: wgpu::PrimitiveState::default(),
+                depth_stencil: None,
+                multisample: wgpu::MultisampleState::default(),
+                fragment: Some(wgpu::FragmentState {
+                    module: &shader,
+                    entry_point: Some("fs"),
+                    compilation_options: Default::default(),
+                    targets: &[Some(wgpu::ColorTargetState {
+                        format: FORMAT,
+                        blend: b,
+                        write_mask: wgpu::ColorWrites::ALL,
+                    })],
+                }),
+                multiview_mask: None,
+                cache: None,
+            })
+        };
+        use wgpu::{BlendComponent as C, BlendFactor as F, BlendOperation as O};
+        let keep_alpha = C {
+            src_factor: F::Zero,
+            dst_factor: F::One,
+            operation: O::Add,
+        };
+        let pipelines = vec![
+            blend(Some(wgpu::BlendState {
+                color: C {
+                    src_factor: F::SrcAlpha,
+                    dst_factor: F::OneMinusSrcAlpha,
+                    operation: O::Add,
+                },
+                alpha: C {
+                    src_factor: F::One,
+                    dst_factor: F::OneMinusSrcAlpha,
+                    operation: O::Add,
+                },
+            })),
+            blend(Some(wgpu::BlendState {
+                color: C {
+                    src_factor: F::SrcAlpha,
+                    dst_factor: F::One,
+                    operation: O::Add,
+                },
+                alpha: keep_alpha,
+            })),
+            blend(Some(wgpu::BlendState {
+                color: C {
+                    src_factor: F::Dst,
+                    dst_factor: F::Zero,
+                    operation: O::Add,
+                },
+                alpha: keep_alpha,
+            })),
+            blend(None),
+        ];
+        let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
+            label: Some("ui"),
+            address_mode_u: wgpu::AddressMode::ClampToEdge,
+            address_mode_v: wgpu::AddressMode::ClampToEdge,
+            mag_filter: wgpu::FilterMode::Linear,
+            min_filter: wgpu::FilterMode::Linear,
+            ..Default::default()
+        });
+        let mut r = Renderer {
+            device,
+            queue,
+            pipelines,
+            screen_layout,
+            tex_layout,
+            sampler,
+            textures: Vec::new(),
+            by_key: HashMap::new(),
+            bind_groups: HashMap::new(),
+            fonts: Vec::new(),
+            font_ids: HashMap::new(),
+            atlas: glyphs::Atlas::default(),
+            white: 0,
+            missing: 0,
+            atlas_tex: 0,
+            adapter,
+        };
+        r.white = r.upload(&Rgba {
+            width: 1,
+            height: 1,
+            pixels: vec![255; 4],
+        });
+        let mut checker = Vec::new();
+        for y in 0..8 {
+            for x in 0..8 {
+                checker.extend_from_slice(if (x / 2 + y / 2) % 2 == 0 {
+                    &[255, 0, 255, 255]
+                } else {
+                    &[40, 0, 40, 255]
+                });
+            }
+        }
+        r.missing = r.upload(&Rgba {
+            width: 8,
+            height: 8,
+            pixels: checker,
+        });
+        r.atlas_tex = r.upload(&Rgba {
+            width: glyphs::ATLAS,
+            height: glyphs::ATLAS,
+            pixels: vec![0; (glyphs::ATLAS * glyphs::ATLAS * 4) as usize],
+        });
+        for f in [SANS, SERIF] {
+            if let Ok(font) = fontdue::Font::from_bytes(f, fontdue::FontSettings::default()) {
+                r.fonts.push(font);
+            }
+        }
+        r
+    }
+
+    fn upload(&mut self, img: &Rgba) -> usize {
+        let size = wgpu::Extent3d {
+            width: img.width.max(1),
+            height: img.height.max(1),
+            depth_or_array_layers: 1,
+        };
+        let texture = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: None,
+            size,
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: FORMAT,
+            usage: wgpu::TextureUsages::TEXTURE_BINDING | wgpu::TextureUsages::COPY_DST,
+            view_formats: &[],
+        });
+        self.queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            &img.pixels,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * size.width),
+                rows_per_image: Some(size.height),
+            },
+            size,
+        );
+        let view = texture.create_view(&wgpu::TextureViewDescriptor::default());
+        self.textures.push(Tex {
+            texture,
+            view,
+            width: size.width,
+            height: size.height,
+        });
+        self.textures.len() - 1
+    }
+
+    /// The texture of an image: uploaded once (the placeholder when it
+    /// cannot be read).
+    fn texture(&mut self, image: &Image, assets: &mut dyn Assets) -> usize {
+        let key = match image {
+            Image::Color => return self.white,
+            Image::File(p) => TexKey::Path(p.replace('/', "\\").to_ascii_lowercase()),
+            Image::FileId(id) => TexKey::Id(*id),
+        };
+        if let Some(&t) = self.by_key.get(&key) {
+            return t;
+        }
+        let max = self.device.limits().max_texture_dimension_2d;
+        let t = match assets.image(image) {
+            Some(img) if img.width <= max && img.height <= max => self.upload(&img),
+            _ => self.missing,
+        };
+        self.by_key.insert(key, t);
+        t
+    }
+
+    /// The font of a path: the file's, else a stand-in.
+    fn font(&mut self, path: &str, assets: &mut dyn Assets) -> usize {
+        let key = path.replace('/', "\\").to_ascii_lowercase();
+        if let Some(&f) = self.font_ids.get(&key) {
+            return f;
+        }
+        let loaded = assets
+            .font(path)
+            .and_then(|b| fontdue::Font::from_bytes(b, fontdue::FontSettings::default()).ok());
+        let id = match loaded {
+            Some(f) => {
+                self.fonts.push(f);
+                self.fonts.len() - 1
+            }
+            None => {
+                let serif = key.contains("morpheus") || key.contains("skurri");
+                usize::from(serif && self.fonts.len() > 1)
+            }
+        };
+        self.font_ids.insert(key, id);
+        id
+    }
+
+    fn bind_group(&mut self, tex: usize, mask: usize) -> &wgpu::BindGroup {
+        let (device, layout, sampler, textures) = (
+            &self.device,
+            &self.tex_layout,
+            &self.sampler,
+            &self.textures,
+        );
+        self.bind_groups.entry((tex, mask)).or_insert_with(|| {
+            device.create_bind_group(&wgpu::BindGroupDescriptor {
+                label: None,
+                layout,
+                entries: &[
+                    wgpu::BindGroupEntry {
+                        binding: 0,
+                        resource: wgpu::BindingResource::TextureView(&textures[tex].view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 1,
+                        resource: wgpu::BindingResource::TextureView(&textures[mask].view),
+                    },
+                    wgpu::BindGroupEntry {
+                        binding: 2,
+                        resource: wgpu::BindingResource::Sampler(sampler),
+                    },
+                ],
+            })
+        })
+    }
+
+    /// The scene's vertices and batches, at `scale`.
+    fn build(
+        &mut self,
+        scene: &Scene,
+        scale: f32,
+        assets: &mut dyn Assets,
+    ) -> (Vec<Vertex>, Vec<Batch>) {
+        let mut verts: Vec<Vertex> = Vec::new();
+        let mut batches: Vec<Batch> = Vec::new();
+        let push = |verts: &mut Vec<Vertex>,
+                    batches: &mut Vec<Batch>,
+                    pipeline: usize,
+                    tex: usize,
+                    mask: usize,
+                    clip: Option<Rect>,
+                    quad: [Vertex; 4]| {
+            let start = verts.len() as u32;
+            verts.extend_from_slice(&[quad[0], quad[1], quad[2], quad[2], quad[1], quad[3]]);
+            let end = verts.len() as u32;
+            match batches.last_mut() {
+                Some(b)
+                    if b.pipeline == pipeline
+                        && b.tex == tex
+                        && b.mask == mask
+                        && b.clip == clip
+                        && b.end == start =>
+                {
+                    b.end = end
+                }
+                _ => batches.push(Batch {
+                    pipeline,
+                    tex,
+                    mask,
+                    clip,
+                    start,
+                    end,
+                }),
+            }
+        };
+        let s = |r: Rect| Rect {
+            x: r.x * scale,
+            y: r.y * scale,
+            w: r.w * scale,
+            h: r.h * scale,
+        };
+        for item in &scene.items {
+            match item {
+                Item::Quad(q) => {
+                    let tex = self.texture(&q.image, assets);
+                    let (mask, mask_rect) = match q.masks.first() {
+                        Some(m) => (self.texture(&m.image, assets), Some(s(m.rect))),
+                        None => (self.white, None),
+                    };
+                    let r = s(q.rect);
+                    let (cx, cy) = (r.x + r.w / 2.0, r.y + r.h / 2.0);
+                    let (sin, cos) = (-q.rotation).sin_cos();
+                    let corner = |x: f32, y: f32| -> [f32; 2] {
+                        let (dx, dy) = (x - cx, y - cy);
+                        [cx + dx * cos - dy * sin, cy + dx * sin + dy * cos]
+                    };
+                    let flags = (if q.desaturated { DESATURATE } else { 0 })
+                        | (if q.blend == Blend::AlphaKey {
+                            ALPHA_KEY
+                        } else {
+                            0
+                        });
+                    let tc = q.texcoord;
+                    let mk = |pos: [f32; 2], uv: [f32; 2]| Vertex {
+                        pos,
+                        uv,
+                        color: q.color,
+                        mask_uv: match mask_rect {
+                            Some(m) if m.w > 0.0 && m.h > 0.0 => {
+                                [(pos[0] - m.x) / m.w, (pos[1] - m.y) / m.h]
+                            }
+                            _ => [0.5, 0.5],
+                        },
+                        flags,
+                    };
+                    let quad = [
+                        mk(corner(r.x, r.y), [tc[0], tc[1]]),
+                        mk(corner(r.x, r.y + r.h), [tc[2], tc[3]]),
+                        mk(corner(r.x + r.w, r.y), [tc[4], tc[5]]),
+                        mk(corner(r.x + r.w, r.y + r.h), [tc[6], tc[7]]),
+                    ];
+                    let pipeline = match q.blend {
+                        Blend::Blend => PIPELINE_BLEND,
+                        Blend::Add => PIPELINE_ADD,
+                        Blend::Mod => PIPELINE_MOD,
+                        Blend::Disable | Blend::AlphaKey => PIPELINE_OPAQUE,
+                    };
+                    push(
+                        &mut verts,
+                        &mut batches,
+                        pipeline,
+                        tex,
+                        mask,
+                        q.clip.map(s),
+                        quad,
+                    );
+                }
+                Item::Text(t) => {
+                    let font = self.font(&t.font, assets);
+                    let px = (t.px * scale).max(1.0);
+                    let ascent = self.fonts[font]
+                        .horizontal_line_metrics(px)
+                        .map_or(px * 0.8, |m| m.ascent);
+                    let line_h = t.line_height * scale;
+                    // Shadow, outline, then the text.
+                    let mut passes: Vec<([f32; 4], f32, f32, bool)> = Vec::new();
+                    if let Some((c, dx, dy)) = t.shadow {
+                        passes.push((c, dx * scale, dy * scale, true));
+                    }
+                    if t.outline > 0 {
+                        let o = f32::from(t.outline) * scale.max(1.0);
+                        for (dx, dy) in [
+                            (-o, 0.0),
+                            (o, 0.0),
+                            (0.0, -o),
+                            (0.0, o),
+                            (-o, -o),
+                            (o, -o),
+                            (-o, o),
+                            (o, o),
+                        ] {
+                            passes.push(([0.0, 0.0, 0.0, 1.0], dx, dy, true));
+                        }
+                    }
+                    passes.push(([1.0; 4], 0.0, 0.0, false));
+                    for (pc, dx, dy, fixed) in passes {
+                        for line in &t.lines {
+                            let baseline = line.y * scale + (line_h - px) / 2.0 + ascent;
+                            for run in &line.runs {
+                                let color = if fixed {
+                                    [pc[0], pc[1], pc[2], pc[3] * run.color[3]]
+                                } else {
+                                    run.color
+                                };
+                                for (i, ch) in run.text.chars().enumerate() {
+                                    let Some(g) = self.atlas.glyph(&self.fonts, font, px, ch)
+                                    else {
+                                        continue;
+                                    };
+                                    let x = (line.x * scale
+                                        + run.xs.get(i).copied().unwrap_or(0.0) * scale
+                                        + g.left
+                                        + dx)
+                                        .round();
+                                    let y = (baseline - g.top + dy).round();
+                                    let a = glyphs::ATLAS as f32;
+                                    let (u0, v0, u1, v1) = (
+                                        g.x as f32 / a,
+                                        g.y as f32 / a,
+                                        (g.x + g.w) as f32 / a,
+                                        (g.y + g.h) as f32 / a,
+                                    );
+                                    let (w, h) = (g.w as f32, g.h as f32);
+                                    let mk = |pos: [f32; 2], uv: [f32; 2]| Vertex {
+                                        pos,
+                                        uv,
+                                        color,
+                                        mask_uv: [0.5, 0.5],
+                                        flags: 0,
+                                    };
+                                    let quad = [
+                                        mk([x, y], [u0, v0]),
+                                        mk([x, y + h], [u0, v1]),
+                                        mk([x + w, y], [u1, v0]),
+                                        mk([x + w, y + h], [u1, v1]),
+                                    ];
+                                    push(
+                                        &mut verts,
+                                        &mut batches,
+                                        PIPELINE_BLEND,
+                                        self.atlas_tex,
+                                        self.white,
+                                        t.clip.map(s),
+                                        quad,
+                                    );
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+        (verts, batches)
+    }
+
+    fn upload_atlas(&mut self) {
+        let Some((y0, y1)) = self.atlas.dirty.take() else {
+            return;
+        };
+        let a = glyphs::ATLAS;
+        let rows = &self.atlas.pixels[(y0 * a * 4) as usize..(y1 * a * 4) as usize];
+        self.queue.write_texture(
+            wgpu::TexelCopyTextureInfo {
+                texture: &self.textures[self.atlas_tex].texture,
+                mip_level: 0,
+                origin: wgpu::Origin3d { x: 0, y: y0, z: 0 },
+                aspect: wgpu::TextureAspect::All,
+            },
+            rows,
+            wgpu::TexelCopyBufferLayout {
+                offset: 0,
+                bytes_per_row: Some(4 * a),
+                rows_per_image: Some(y1 - y0),
+            },
+            wgpu::Extent3d {
+                width: a,
+                height: y1 - y0,
+                depth_or_array_layers: 1,
+            },
+        );
+    }
+
+    /// Draws the scene into `view` (`width` × `height` pixels, the
+    /// renderer's [`FORMAT`]) at `scale`, cleared to `clear` first.
+    pub fn draw(
+        &mut self,
+        scene: &Scene,
+        view: &wgpu::TextureView,
+        width: u32,
+        height: u32,
+        scale: f32,
+        assets: &mut dyn Assets,
+    ) -> wgpu::CommandEncoder {
+        let (verts, batches) = self.build(scene, scale, assets);
+        self.upload_atlas();
+        for b in &batches {
+            self.bind_group(b.tex, b.mask);
+        }
+        let screen = self
+            .device
+            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                label: Some("screen"),
+                contents: bytemuck::cast_slice(&[width as f32, height as f32, 0.0, 0.0]),
+                usage: wgpu::BufferUsages::UNIFORM,
+            });
+        let screen_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
+            label: None,
+            layout: &self.screen_layout,
+            entries: &[wgpu::BindGroupEntry {
+                binding: 0,
+                resource: screen.as_entire_binding(),
+            }],
+        });
+        let vbuf = (!verts.is_empty()).then(|| {
+            self.device
+                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
+                    label: Some("quads"),
+                    contents: bytemuck::cast_slice(&verts),
+                    usage: wgpu::BufferUsages::VERTEX,
+                })
+        });
+        let mut encoder = self
+            .device
+            .create_command_encoder(&wgpu::CommandEncoderDescriptor { label: Some("ui") });
+        {
+            let mut pass = encoder.begin_render_pass(&wgpu::RenderPassDescriptor {
+                label: Some("ui"),
+                color_attachments: &[Some(wgpu::RenderPassColorAttachment {
+                    view,
+                    depth_slice: None,
+                    resolve_target: None,
+                    ops: wgpu::Operations {
+                        load: wgpu::LoadOp::Clear(wgpu::Color::BLACK),
+                        store: wgpu::StoreOp::Store,
+                    },
+                })],
+                depth_stencil_attachment: None,
+                timestamp_writes: None,
+                occlusion_query_set: None,
+                multiview_mask: None,
+            });
+            if let Some(vbuf) = &vbuf {
+                pass.set_vertex_buffer(0, vbuf.slice(..));
+                pass.set_bind_group(0, &screen_group, &[]);
+                for b in &batches {
+                    let (x, y, w, h) = match b.clip {
+                        Some(c) => {
+                            let x0 = c.x.max(0.0).min(width as f32);
+                            let y0 = c.y.max(0.0).min(height as f32);
+                            let x1 = (c.x + c.w).max(0.0).min(width as f32);
+                            let y1 = (c.y + c.h).max(0.0).min(height as f32);
+                            (x0 as u32, y0 as u32, (x1 - x0) as u32, (y1 - y0) as u32)
+                        }
+                        None => (0, 0, width, height),
+                    };
+                    if w == 0 || h == 0 {
+                        continue;
+                    }
+                    pass.set_scissor_rect(x, y, w, h);
+                    pass.set_pipeline(&self.pipelines[b.pipeline]);
+                    pass.set_bind_group(1, &self.bind_groups[&(b.tex, b.mask)], &[]);
+                    pass.draw(b.start..b.end, 0..1);
+                }
+            }
+        }
+        encoder
+    }
+
+    /// The scene as an image (`scale` times the screen's size), the part
+    /// `crop` (screen pixels) gives, or all of it.
+    pub async fn render(
+        &mut self,
+        scene: &Scene,
+        scale: f32,
+        crop: Option<Rect>,
+        assets: &mut dyn Assets,
+    ) -> Result<Rgba, String> {
+        let width = ((scene.width as f32 * scale).round() as u32).max(1);
+        let height = ((scene.height as f32 * scale).round() as u32).max(1);
+        let max = self.device.limits().max_texture_dimension_2d;
+        if width > max || height > max {
+            return Err(format!(
+                "{width}x{height} is larger than the GPU draws ({max})"
+            ));
+        }
+        let target = self.device.create_texture(&wgpu::TextureDescriptor {
+            label: Some("screenshot"),
+            size: wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+            mip_level_count: 1,
+            sample_count: 1,
+            dimension: wgpu::TextureDimension::D2,
+            format: FORMAT,
+            usage: wgpu::TextureUsages::RENDER_ATTACHMENT | wgpu::TextureUsages::COPY_SRC,
+            view_formats: &[],
+        });
+        let view = target.create_view(&wgpu::TextureViewDescriptor::default());
+        let mut encoder = self.draw(scene, &view, width, height, scale, assets);
+        let row = (4 * width).div_ceil(wgpu::COPY_BYTES_PER_ROW_ALIGNMENT)
+            * wgpu::COPY_BYTES_PER_ROW_ALIGNMENT;
+        let buffer = self.device.create_buffer(&wgpu::BufferDescriptor {
+            label: Some("readback"),
+            size: u64::from(row * height),
+            usage: wgpu::BufferUsages::COPY_DST | wgpu::BufferUsages::MAP_READ,
+            mapped_at_creation: false,
+        });
+        encoder.copy_texture_to_buffer(
+            wgpu::TexelCopyTextureInfo {
+                texture: &target,
+                mip_level: 0,
+                origin: wgpu::Origin3d::ZERO,
+                aspect: wgpu::TextureAspect::All,
+            },
+            wgpu::TexelCopyBufferInfo {
+                buffer: &buffer,
+                layout: wgpu::TexelCopyBufferLayout {
+                    offset: 0,
+                    bytes_per_row: Some(row),
+                    rows_per_image: Some(height),
+                },
+            },
+            wgpu::Extent3d {
+                width,
+                height,
+                depth_or_array_layers: 1,
+            },
+        );
+        self.queue.submit([encoder.finish()]);
+        let slice = buffer.slice(..);
+        let (tx, rx) = std::sync::mpsc::channel();
+        slice.map_async(wgpu::MapMode::Read, move |r| {
+            let _ = tx.send(r);
+        });
+        let _ = self.device.poll(wgpu::PollType::wait_indefinitely());
+        rx.recv()
+            .map_err(|_| "the GPU did not answer".to_string())?
+            .map_err(|e| format!("reading the screenshot back: {e}"))?;
+        let data = slice
+            .get_mapped_range()
+            .map_err(|e| format!("reading the screenshot back: {e}"))?;
+        // The part asked for, opaque (the world behind the UI is black).
+        let (cx, cy, cw, ch) = match crop {
+            Some(c) => {
+                let x0 = ((c.x * scale).floor().max(0.0) as u32).min(width);
+                let y0 = ((c.y * scale).floor().max(0.0) as u32).min(height);
+                let x1 = (((c.x + c.w) * scale).ceil().max(0.0) as u32).min(width);
+                let y1 = (((c.y + c.h) * scale).ceil().max(0.0) as u32).min(height);
+                (x0, y0, (x1 - x0).max(1), (y1 - y0).max(1))
+            }
+            None => (0, 0, width, height),
+        };
+        let mut pixels = Vec::with_capacity((cw * ch * 4) as usize);
+        for y in cy..(cy + ch).min(height) {
+            let start = (y * row + cx * 4) as usize;
+            let end = start + ((cw.min(width - cx)) * 4) as usize;
+            pixels.extend_from_slice(&data[start..end]);
+        }
+        drop(data);
+        buffer.unmap();
+        for p in pixels.chunks_mut(4) {
+            p[3] = 255;
+        }
+        Ok(Rgba {
+            width: cw,
+            height: ch,
+            pixels,
+        })
+    }
+
+    /// [`render`](Self::render), blocking (native).
+    #[cfg(not(target_arch = "wasm32"))]
+    pub fn render_blocking(
+        &mut self,
+        scene: &Scene,
+        scale: f32,
+        crop: Option<Rect>,
+        assets: &mut dyn Assets,
+    ) -> Result<Rgba, String> {
+        pollster::block_on(self.render(scene, scale, crop, assets))
+    }
+
+    /// Textures uploaded so far (placeholders included).
+    pub fn texture_count(&self) -> usize {
+        self.textures.len()
+    }
+
+    /// The size of a texture uploaded for an image, if it was.
+    pub fn texture_size(&self, image: &Image) -> Option<(u32, u32)> {
+        let key = match image {
+            Image::Color => return Some((1, 1)),
+            Image::File(p) => TexKey::Path(p.replace('/', "\\").to_ascii_lowercase()),
+            Image::FileId(id) => TexKey::Id(*id),
+        };
+        self.by_key
+            .get(&key)
+            .map(|&t| (self.textures[t].width, self.textures[t].height))
+    }
+}
+
+/// An image as PNG.
+pub fn encode_png(img: &Rgba) -> Result<Vec<u8>, String> {
+    let mut out = Vec::new();
+    {
+        let mut enc = png::Encoder::new(&mut out, img.width, img.height);
+        enc.set_color(png::ColorType::Rgba);
+        enc.set_depth(png::BitDepth::Eight);
+        let mut w = enc.write_header().map_err(|e| e.to_string())?;
+        w.write_image_data(&img.pixels).map_err(|e| e.to_string())?;
+    }
+    Ok(out)
+}
+
+/// A PNG's pixels, as RGBA.
+pub fn decode_png(bytes: &[u8]) -> Result<Rgba, String> {
+    let mut dec = png::Decoder::new(std::io::Cursor::new(bytes));
+    dec.set_transformations(png::Transformations::EXPAND | png::Transformations::ALPHA);
+    let mut reader = dec.read_info().map_err(|e| e.to_string())?;
+    let mut buf = vec![0; reader.output_buffer_size().unwrap_or(0)];
+    let info = reader.next_frame(&mut buf).map_err(|e| e.to_string())?;
+    buf.truncate(info.buffer_size());
+    let pixels = match info.color_type {
+        png::ColorType::Rgba => buf,
+        png::ColorType::GrayscaleAlpha => buf
+            .chunks(2)
+            .flat_map(|p| [p[0], p[0], p[0], p[1]])
+            .collect(),
+        _ => return Err("an RGBA or gray PNG".into()),
+    };
+    Ok(Rgba {
+        width: info.width,
+        height: info.height,
+        pixels,
+    })
+}

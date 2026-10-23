@@ -1072,6 +1072,16 @@ export function script(frame: any, name: string, ...: any)
     engine().script(frame, name, ...)
 end
 
+--- The whole screen, for `expect(mock.screen).toMatchScreenshot()`.
+export const screen: any = { __wowluaScreen = true }
+
+--- Draws the screen (or `frame` and what it holds) as the client would
+--- and writes it as a PNG under the build's `screenshots` folder; its
+--- path (spec debugger §18.12.4).
+export function screenshot(name: string?, frame: any?): string
+    return engine().screenshot(name ?? "screenshot", frame)
+end
+
 --- The user's click on a visible frame (`"LeftButton"` by default):
 --- `OnMouseDown`, `OnMouseUp`, then an enabled button's `PreClick`,
 --- `OnClick` and `PostClick`.

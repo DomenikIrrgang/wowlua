@@ -936,6 +936,8 @@ fn make_suite<'a>(
         update_snapshots,
         coverage,
         instrument,
+        camera: crate::screenshot::camera(project, build, flavor),
+        after_test: None,
     }
 }
 
@@ -947,7 +949,7 @@ pub fn with_suite(
     global: &GlobalArgs,
     flavor: Option<&str>,
     instrument: Option<&(dyn Fn(&mut wowlua_vm::Vm) + Sync)>,
-    f: &mut dyn FnMut(&wowlua_test::Suite),
+    f: &mut dyn FnMut(&mut wowlua_test::Suite),
 ) -> Result<(), String> {
     let mut session = Session::new();
     let Some(projects) = wowlua_driver::load_projects(&mut session, &load_options(out, global))
@@ -990,7 +992,7 @@ pub fn with_suite(
     } else {
         None
     };
-    let suite = make_suite(
+    let mut suite = make_suite(
         &project,
         &build,
         &flavor,
@@ -999,7 +1001,7 @@ pub fn with_suite(
         false,
         instrument,
     );
-    f(&suite);
+    f(&mut suite);
     Ok(())
 }
 

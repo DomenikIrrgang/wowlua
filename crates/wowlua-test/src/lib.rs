@@ -12,6 +12,7 @@ pub mod profile;
 pub mod reports;
 mod saved;
 pub mod scenario;
+pub mod screenshots;
 mod snapshots;
 
 pub use snapshots::Summary as SnapshotSummary;
@@ -29,6 +30,9 @@ pub use wowlua_engine::Platform;
 
 /// The screen the emulated client draws on (decision T237).
 pub use wowlua_engine::Screen;
+
+/// What runs after each test (`Suite::after_test`).
+pub type AfterTest = dyn Fn(&mut Vm, &str) + Send + Sync;
 
 /// What a test run needs of a test build.
 pub struct Suite<'a> {
@@ -56,6 +60,11 @@ pub struct Suite<'a> {
     /// and before anything loads: a debugger or the profiler attaches here
     /// (spec debugger §18.3).
     pub instrument: Option<&'a (dyn Fn(&mut Vm) + Sync)>,
+    /// What draws screenshots (`toMatchScreenshot`, `mock.screenshot`).
+    pub camera: Option<std::sync::Arc<dyn screenshots::Camera>>,
+    /// Called after each test with its VM and name, before the next
+    /// (`wowlua screenshot`).
+    pub after_test: Option<std::sync::Arc<AfterTest>>,
 }
 
 fn widgets_keep(vm: &mut Vm, v: Value) {
@@ -342,6 +351,11 @@ pub fn run_file(suite: &Suite, file: &TestFile, filters: &[String]) -> FileResul
         coverage: None,
     };
     snapshots::begin(&suite.root.join(&file.rel), suite.update_snapshots);
+    screenshots::begin(
+        &suite.root.join(&file.rel),
+        suite.update_snapshots,
+        suite.camera.clone(),
+    );
     natives::reset();
     match load(suite, file, None) {
         Ok(mut state) => {
@@ -354,7 +368,13 @@ pub fn run_file(suite: &Suite, file: &TestFile, filters: &[String]) -> FileResul
             }
             let all_ran = filters.is_empty() && result.error.is_none();
             match snapshots::finish(all_ran) {
-                Ok(s) => result.snapshots = s,
+                Ok(mut s) => {
+                    // Screenshots count with the snapshots.
+                    let (written, updated) = screenshots::finish();
+                    s.written += written;
+                    s.updated += updated;
+                    result.snapshots = s
+                }
                 Err(e) => result.error = Some(format!("writing the snapshots: {e}")),
             }
         }
@@ -1079,6 +1099,9 @@ fn run_tests(
         let started = Instant::now();
         let mut outcome = run_one(suite, file, state, p);
         let vm = &mut state.vm;
+        if let Some(f) = &suite.after_test {
+            f(vm, &p.name);
+        }
         // An error no test read (`mock.errors()`) fails the test, and so
         // does a protected action refused because of taint (with its taint
         // chain) that no test expected (`toBeBlocked`, `mock.refusals()`).

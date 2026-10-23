@@ -457,6 +457,12 @@ export type Expect<T> = {
     toMatchSnapshot: (name: string?) -> (),
     --- A secret value (`issecretvalue`).
     toBeSecret: () -> (),
+    --- The frame's image (`mock.screen`: the whole screen's) matches the
+    --- stored `__screenshots__/<test file>/<test>-<name>.png`: at most
+    --- `maxDiffRatio` (0.001) of its pixels differ by more than
+    --- `threshold` (0.1); a missing one is written, `wowlua test -u`
+    --- updates it (decision T315).
+    toMatchScreenshot: (name: string?, options: { threshold: number?, maxDiffRatio: number? }?) -> (),
     --- The negated matchers: `expect(x).never.toBe(y)`.
     never: Expect<T>,
 }
@@ -835,6 +841,26 @@ local function matchers(value: any, negated: boolean): any
         end
         local what = key == nil and show(value) or `the field {show(key)}`
         check(secure, `expected {what} to be secure; {taint ?? "an addon"} tainted it`, `expected {what} to be tainted`)
+    end
+    function m.toMatchScreenshot(name: string?, options: { threshold: number?, maxDiffRatio: number? }?)
+        if negated then
+            fail("toMatchScreenshot cannot be negated", 2)
+        end
+        local engine = wl.mockEngine
+        if engine == nil then
+            fail("screenshots need `wowlua test`", 2)
+        end
+        snapshotCount = snapshotCount + 1
+        local pass = (wl.reloads ?? 0) > 0 and ` (after reload {wl.reloads})` or ""
+        local key = currentName .. pass .. " " .. (name ?? tostring(snapshotCount))
+        local frame: any = value
+        if type(value) == "table" and (value :: any).__wowluaScreen == true then
+            frame = nil
+        end
+        local same, why = engine.screenshotMatch(key, frame, options and options.threshold, options and options.maxDiffRatio)
+        if not same then
+            fail(why, 2)
+        end
     end
     function m.toMatchSnapshot(name: string?)
         if negated then

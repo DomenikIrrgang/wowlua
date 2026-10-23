@@ -285,6 +285,8 @@ pub fn extend(vm: &mut Vm, controls: TableRef, addon: &str) {
         ("login", login_control),
         ("snapshot", crate::snapshots::snapshot_native),
         ("refusals", refusals),
+        ("screenshotMatch", crate::screenshots::screenshot_match),
+        ("screenshot", crate::screenshots::screenshot),
     ] {
         let native = vm.native(key, f);
         let k = vm.heap.intern(key.as_bytes());
