@@ -108,6 +108,22 @@ fn axis_pieces(
     out
 }
 
+/// A quad's rectangle on whole pixels, as the client draws textures that
+/// snap to the pixel grid (not turned ones).
+fn snapped(q: &wowlua_engine::scene::Quad, r: Rect) -> Rect {
+    if !q.snap || q.rotation != 0.0 {
+        return r;
+    }
+    let (x0, y0) = (r.x.round(), r.y.round());
+    let (x1, y1) = ((r.x + r.w).round(), (r.y + r.h).round());
+    Rect {
+        x: x0,
+        y: y0,
+        w: x1 - x0,
+        h: y1 - y0,
+    }
+}
+
 /// No assets: every image a placeholder, every font a stand-in.
 pub struct NoAssets;
 
@@ -651,7 +667,7 @@ impl Renderer {
                         if !plain || (a_.slice.is_none() && !a_.tiles.0 && !a_.tiles.1) {
                             return None;
                         }
-                        let r = s(q.rect);
+                        let r = snapped(q, s(q.rect));
                         let unit = q.unit * scale;
                         let [l, rr, t, b] = a_.coords;
                         let (pw, ph) = (a_.size.0.max(1) as f32, a_.size.1.max(1) as f32);
@@ -699,7 +715,7 @@ impl Renderer {
                         }
                         None => (self.white, None, [0.0, 1.0, 0.0, 1.0]),
                     };
-                    let r = s(q.rect);
+                    let r = snapped(q, s(q.rect));
                     let (cx, cy) = (r.x + r.w / 2.0, r.y + r.h / 2.0);
                     let (sin, cos) = (-q.rotation).sin_cos();
                     let corner = |x: f32, y: f32| -> [f32; 2] {
@@ -768,9 +784,20 @@ impl Renderer {
                 Item::Text(t) => {
                     let font = self.font(&t.font, assets);
                     let px = (t.px * scale).max(1.0);
-                    let ascent = self.fonts[font]
-                        .horizontal_line_metrics(px)
-                        .map_or(px * 0.8, |m| m.ascent);
+                    // The baseline: the font's height shared between its
+                    // ascent and descent (the default UI's page number sits
+                    // between its arrows so, as in game).
+                    let ascent =
+                        self.fonts[font]
+                            .horizontal_line_metrics(px)
+                            .map_or(px * 0.8, |m| {
+                                let span = m.ascent - m.descent;
+                                if span > 0.0 {
+                                    px * m.ascent / span
+                                } else {
+                                    m.ascent
+                                }
+                            });
                     let line_h = t.line_height * scale;
                     // Shadow, outline, then the text.
                     let mut passes: Vec<([f32; 4], f32, f32, bool)> = Vec::new();

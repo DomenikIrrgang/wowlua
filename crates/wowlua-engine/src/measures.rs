@@ -324,6 +324,21 @@ fn get_vert_tile(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     get_tile(vm, id, "VertTile")
 }
 
+/// Whether a texture snaps to the pixel grid: what `SetSnapToPixelGrid`
+/// set, else on (Blizzard's code only ever turns it off:
+/// `snapToPixelGrid="false"`, `SetSnapToPixelGrid(false)`; unverified in
+/// the client).
+pub fn snaps_to_pixel_grid(vm: &Vm, id: WidgetId) -> bool {
+    let props = engine(vm).world.widgets[id.0].props;
+    widgets::stored_ref(vm, props, "SnapToPixelGrid")
+        .and_then(|v| v.first().copied())
+        .is_none_or(|v| v.truthy())
+}
+
+fn is_snapping_to_pixel_grid(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Bool(snaps_to_pixel_grid(vm, id))])
+}
+
 /// `Minimap:GetZoom()`: the zoom set, 0 at first.
 fn get_zoom(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let props = engine(vm).world.widgets[id.0].props;
@@ -441,6 +456,7 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
         ("RemoveMaskTexture", remove_mask_texture),
         ("GetNumMaskTextures", get_num_mask_textures),
         ("GetMaskTexture", get_mask_texture),
+        ("IsSnappingToPixelGrid", is_snapping_to_pixel_grid),
         ("GetHorizTile", get_horiz_tile),
         ("GetVertTile", get_vert_tile),
         ("GetVerticalScroll", get_vertical_scroll),

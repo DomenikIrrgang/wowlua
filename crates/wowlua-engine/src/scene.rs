@@ -97,6 +97,8 @@ pub struct Quad {
     /// Screen pixels per UI unit of the region (its effective scale): a
     /// sliced or tiled atlas's pixels are drawn this size.
     pub unit: f32,
+    /// Its edges on whole pixels (`SetSnapToPixelGrid`, on by default).
+    pub snap: bool,
 }
 
 /// A run of characters of one color.
@@ -599,6 +601,7 @@ fn quad_of(vm: &Vm, id: WidgetId) -> Option<Quad> {
         clip: clip_of(vm, id),
         masks: masks_of(vm, id),
         unit: unit_of(vm, id),
+        snap: crate::measures::snaps_to_pixel_grid(vm, id),
     })
 }
 

@@ -85,6 +85,7 @@ const VALUE_ATTRS: &[(&str, &str)] = &[
     ("file", "SetTexture"),
     ("atlas", "SetAtlas"),
     ("alphaMode", "SetBlendMode"),
+    ("texelSnappingBias", "SetTexelSnappingBias"),
     ("letters", "SetMaxLetters"),
     // SuuUI probe chat: ChatFrame1EditBox kept 32 (its template's).
     ("historyLines", "SetHistoryLines"),
@@ -622,6 +623,17 @@ fn apply_in(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Eleme
     for (attr, method) in FLAG_ATTRS {
         if el.flag(attr) {
             call_method(vm, cx, el.line, frame, method, &[Value::Bool(true)]);
+        }
+    }
+    // Switches given either way (`snapToPixelGrid="false"`).
+    for (attr, method) in [
+        ("snapToPixelGrid", "SetSnapToPixelGrid"),
+        ("horizTile", "SetHorizTile"),
+        ("vertTile", "SetVertTile"),
+    ] {
+        if let Some(v) = el.attr(attr) {
+            let on = v.trim().eq_ignore_ascii_case("true");
+            call_method(vm, cx, el.line, frame, method, &[Value::Bool(on)]);
         }
     }
     for (attr, method) in VALUE_ATTRS {

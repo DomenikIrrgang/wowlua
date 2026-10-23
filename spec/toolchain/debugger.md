@@ -184,8 +184,11 @@ proportion to the visible regions.
 - **Textures**: the rectangle, the image (a file path or file ID, an atlas
   as the client's tables give it, or a color), texture coordinates (four
   corners), vertex color, effective alpha, blend mode (`BLEND`, `ADD`,
-  `MOD`, `ALPHAKEY`, `DISABLE`), desaturation, rotation, tiling, and mask
-  textures.
+  `MOD`, `ALPHAKEY`, `DISABLE`), desaturation, rotation, tiling, mask
+  textures, and whether it snaps to the pixel grid (on unless
+  `SetSnapToPixelGrid(false)` or `snapToPixelGrid="false"`: Blizzard's
+  code only turns it off; unverified in the client): a snapping texture
+  is drawn with its edges on whole pixels.
 - **Text**: the rectangle, the laid-out lines (wrapped and truncated as the
   engine measures them, §17.6), font file, height and flags (`OUTLINE`,
   `THICKOUTLINE`, `MONOCHROME`), color, shadow, justification and spacing.
@@ -333,7 +336,9 @@ or Vulkan natively, WebGPU or WebGL 2 in the browser.
   client's blend modes, premultiplied alpha, linear filtering and texture
   coordinates; masks as a second texture; text from a glyph atlas
   rasterized from the font at the scene's pixel height, with outlines and
-  shadows.
+  shadows, each line's baseline its height times the font's ascent over
+  its ascent and descent (as the client's page number sits between the
+  action bar's arrows).
 - **Models** (decision T318): each model item is drawn into a texture of
   its rectangle's size with a depth buffer, then into the UI pass in its
   place (premultiplied alpha): the actors posed on the CPU at the
