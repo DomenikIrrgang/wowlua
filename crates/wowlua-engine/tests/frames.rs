@@ -1179,12 +1179,13 @@ impl wowlua_engine::clientdata::ClientData for Items {
             stack: 1,
             sell_price: 250,
             bind: 1,
+            description: "Teaches you how to summon this companion.".into(),
         })
     }
 }
 
 /// An item the test has no data for is the client's (name, quality,
-/// icon, class, a link), cached; one the test defines stays the test's.
+/// icon, class, a link, description), cached; one the test defines stays the test's.
 #[test]
 fn unknown_items_come_from_the_clients_tables() {
     let mut vm = vm();
@@ -1199,6 +1200,7 @@ fn unknown_items_come_from_the_clients_tables() {
         "local name, link, quality, _, _, kind, _, _, loc, icon, _, class, sub = C_Item.GetItemInfo(277714)
 local stack, price, bind = select(8, C_Item.GetItemInfo(277714)), select(11, C_Item.GetItemInfo(277714)), select(14, C_Item.GetItemInfo(277714))
 assert(stack == 1 and price == 250 and bind == 1, tostring(stack) .. ' ' .. tostring(price) .. ' ' .. tostring(bind))
+assert(select(18, C_Item.GetItemInfo(277714)) == 'Teaches you how to summon this companion.')
 return name, quality, icon, class, sub, loc, tostring(link:find('item:277714', 1, true) ~= nil),
     tostring(C_Item.DoesItemExistByID(277714)), tostring(C_Item.IsItemDataCachedByID(277714)),
     (C_Item.GetItemInfo(19019)), tostring(C_Item.DoesItemExistByID(1234567))",

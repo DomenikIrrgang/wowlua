@@ -230,6 +230,7 @@ fn client_item(vm: &mut Vm, id: i64) -> Option<TableRef> {
     let sub_kind = first(vm, "C_Item", "GetItemSubClassInfo", &[class, sub]);
     let t = vm.new_table();
     let name = vm.str(&item.name);
+    let description = vm.str(&item.description);
     let equip = vm.str(crate::iteminfo::equip_loc_of(item.inventory_type));
     for (k, v) in [
         ("name", name),
@@ -246,6 +247,7 @@ fn client_item(vm: &mut Vm, id: i64) -> Option<TableRef> {
         ("subclassID", sub),
         ("bindType", Value::Num(item.bind.into())),
         ("expansionID", Value::Num(item.expansion.into())),
+        ("description", description),
         ("cached", Value::Bool(true)),
     ] {
         set(vm, t, k, v);

@@ -406,6 +406,7 @@ impl wowlua_engine::clientdata::ClientData for CascClientData {
                         item.stack = r.int("Stackable");
                         item.sell_price = r.int("SellPrice");
                         item.bind = r.int("Bonding");
+                        item.description = r.string("Description_lang").unwrap_or_default();
                     }
                     if !item.name.is_empty() {
                         break;

@@ -311,8 +311,8 @@ T310).
   and cameras; and an item the test has no data for has the inventory
   type the client's `Item` table gives it (`C_Item.IsDressableItemByID`,
   so `DressUpItemLink` opens the dressing room), and is the client's item
-  (decision T327): its name, quality, levels, stack size, sell price and
-  bind type from `ItemSparse` (a sparse table, its strings inline; else
+  (decision T327): its name, quality, levels, stack size, sell price,
+  bind type and description from `ItemSparse` (a sparse table, its strings inline; else
   the name, quality and levels from `ItemSearchName`, one to a stack), its
   icon, class, subclass and slot from `Item`, its class names as
   `C_Item.GetItemClassInfo` answers, a link made as the engine makes them,

@@ -105,7 +105,7 @@ pub trait ClientData: Send + Sync {
 }
 
 /// An item of the client's tables: its name, quality, levels, expansion,
-/// stack size, sell price and bind type (`ItemSparse`, else the name,
+/// stack size, sell price, bind type and description (`ItemSparse`, else the name,
 /// quality and levels from `ItemSearchName`), icon, class, subclass and
 /// inventory type (`Item`).
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -124,6 +124,9 @@ pub struct ClientItem {
     pub sell_price: u32,
     /// `Enum.ItemBind`.
     pub bind: u32,
+    /// The text under its name ("Teaches you how to summon this
+    /// companion."), empty for most items.
+    pub description: String,
 }
 
 /// An item as the client's tables have it.
