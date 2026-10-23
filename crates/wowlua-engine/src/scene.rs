@@ -1489,6 +1489,14 @@ fn minimap_point(
     ))
 }
 
+/// How a minimap draws its marks: its alpha, pixels per UI unit, clip.
+#[derive(Clone, Copy)]
+struct MarkLook {
+    alpha: f32,
+    unit: f32,
+    clip: Option<Rect>,
+}
+
 /// A square quad of a whole texture (or its part) centered at a point.
 fn minimap_icon(
     f: WidgetId,
@@ -1497,9 +1505,7 @@ fn minimap_icon(
     image: Image,
     tc: [f32; 4],
     rotation: f32,
-    alpha: f32,
-    unit: f32,
-    clip: Option<Rect>,
+    look: MarkLook,
 ) -> Quad {
     let [u0, u1, v0, v1] = tc;
     let texcoord = [u0, v0, u0, v1, u1, v0, u1, v1];
@@ -1515,14 +1521,14 @@ fn minimap_icon(
         texcoord,
         atlas: None,
         atlas_texcoord: texcoord,
-        color: [1.0, 1.0, 1.0, alpha],
+        color: [1.0, 1.0, 1.0, look.alpha],
         blend: Blend::Blend,
         desaturated: false,
         rotation,
         tile: (false, false),
-        clip,
+        clip: look.clip,
         masks: Vec::new(),
-        unit,
+        unit: look.unit,
         snap: false,
     }
 }
@@ -1546,7 +1552,12 @@ fn minimap_blips(vm: &mut Vm, f: WidgetId) -> Vec<Quad> {
             })
             .collect()
     };
-    let (alpha, unit, clip) = (effective_alpha(vm, f), unit_of(vm, f), clip_of(vm, f));
+    let unit = unit_of(vm, f);
+    let look = MarkLook {
+        alpha: effective_alpha(vm, f),
+        unit,
+        clip: clip_of(vm, f),
+    };
     let mut out = Vec::new();
     for (class, (north, west)) in members {
         let Some(at) = minimap_point(vm, f, rect, north, west) else {
@@ -1561,17 +1572,7 @@ fn minimap_blips(vm: &mut Vm, f: WidgetId) -> Vec<Quad> {
             (cy + 1) as f32 / 4.0,
         ];
         let image = Image::File("Interface\\Minimap\\PartyRaidBlips".into());
-        out.push(minimap_icon(
-            f,
-            at,
-            16.0 * unit,
-            image,
-            tc,
-            0.0,
-            alpha,
-            unit,
-            clip,
-        ));
+        out.push(minimap_icon(f, at, 16.0 * unit, image, tc, 0.0, look));
     }
     out
 }
@@ -1604,46 +1605,20 @@ fn minimap_ping(vm: &mut Vm, f: WidgetId) -> Vec<Quad> {
         rect.x + rect.w / 2.0 + x as f32 * unit,
         rect.y + rect.h / 2.0 - y as f32 * unit,
     );
-    let (alpha, clip) = (effective_alpha(vm, f), clip_of(vm, f));
+    let look = MarkLook {
+        alpha: effective_alpha(vm, f),
+        unit,
+        clip: clip_of(vm, f),
+    };
     let whole = [0.0, 1.0, 0.0, 1.0];
     let tex = |n: &str| Image::File(format!("Interface\\Minimap\\UI-Minimap-Ping-{n}"));
     // The ring grows each second; the marks turn once a second.
     let grow = (age.fract() as f32) * 0.5 + 0.5;
     let turn = (age.fract() * std::f64::consts::TAU) as f32;
     vec![
-        minimap_icon(
-            f,
-            p,
-            32.0 * unit * grow,
-            tex("Expand"),
-            whole,
-            0.0,
-            alpha,
-            unit,
-            clip,
-        ),
-        minimap_icon(
-            f,
-            p,
-            32.0 * unit,
-            tex("Rotate"),
-            whole,
-            turn,
-            alpha,
-            unit,
-            clip,
-        ),
-        minimap_icon(
-            f,
-            p,
-            16.0 * unit,
-            tex("Center"),
-            whole,
-            0.0,
-            alpha,
-            unit,
-            clip,
-        ),
+        minimap_icon(f, p, 32.0 * unit * grow, tex("Expand"), whole, 0.0, look),
+        minimap_icon(f, p, 32.0 * unit, tex("Rotate"), whole, turn, look),
+        minimap_icon(f, p, 16.0 * unit, tex("Center"), whole, 0.0, look),
     ]
 }
 
