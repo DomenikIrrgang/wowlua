@@ -1956,6 +1956,28 @@ mod tests {
         }
     }
 
+    /// A value of several types at once fits a type of some of them: `A & B
+    /// & C` is an `A & B` (and a `C & B`), not only an `A` (decision L74).
+    #[test]
+    fn intersections_fit_fewer_parts() {
+        let classes = "class A\n    function a() end\nend\nclass B\n    function b() end\nend\nclass C\n    function c() end\nend\nlocal abc: A & B & C = A.new() :: unknown :: A & B & C\n";
+        for (line, fits) in [
+            ("local x: A & B = abc", true),
+            ("local x: C & B = abc", true),
+            ("local x: B = abc", true),
+            ("local x: A & B & C = abc", true),
+            ("local x: A & { n: number } = abc", false),
+            ("local ab: A & B = abc\nlocal x: A & B & C = ab", false),
+        ] {
+            let src = format!("{classes}{line}\nprint(x)\n");
+            for mode in [Mode::Strict, Mode::Basic] {
+                let d = check_source(&src, mode);
+                let errors: Vec<_> = d.iter().filter(|x| x.code == Some("E2001")).collect();
+                assert_eq!(errors.is_empty(), fits, "{src}\n{:#?}", codes(&d));
+            }
+        }
+    }
+
     /// A value read past what a `local function` can give (each `return` a
     /// fixed number of values) is W2062 in every mode: a name in a
     /// `local` or an assignment, or `select(n, …)` (decision S40).

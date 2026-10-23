@@ -411,7 +411,9 @@ impl Env<'_> {
                     _ => false,
                 };
             }
-            (Ty::Intersection(members), _) => {
+            // (to an intersection: each of its parts, below, so `A & B & C`
+            // fits `A & B`, L74)
+            (Ty::Intersection(members), _) if !matches!(tt, Ty::Intersection(_)) => {
                 return members
                     .clone()
                     .iter()

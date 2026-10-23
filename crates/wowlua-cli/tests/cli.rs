@@ -1436,7 +1436,12 @@ local firstPiece = outfit and outfit[1]
 local appearance: string = firstPiece and firstPiece.appearanceID or ""
 local bagItem = ItemLocation:CreateFromBagAndSlot(0, 1)
 local sellable: boolean = C_AuctionHouse.IsSellItemValid(bagItem, false) and bagItem.bagID == 0
-print(cancel, zoom, maxZoom, secretTable, completion, known, tabCost, conditionText, active, started, party, location, itemStarted, unitRealm, named, held, heldID, counts, enabled, fadeTo, appearance, sellable)
+local log = CreateFrame("ScrollingMessageFrame")
+log:SetFading(false)
+log:AddMessage("hi", 1, 1, 1)
+local offset: string = log:GetScrollOffset()
+local stored: string = ChatFrame1:GetNumMessages()
+print(cancel, zoom, maxZoom, secretTable, completion, known, tabCost, conditionText, active, started, party, location, itemStarted, unitRealm, named, held, heldID, counts, enabled, fadeTo, appearance, sellable, offset, stored)
 "#,
             ),
         ],
@@ -1458,6 +1463,8 @@ print(cancel, zoom, maxZoom, secretTable, completion, known, tabCost, conditionT
             "src/main.wowlua:39:7: error[E2001]: `boolean` is not assignable to `string`",
             "src/main.wowlua:42:7: error[E2001]: `number` is not assignable to `string`",
             "src/main.wowlua:45:7: error[E2001]: `number | \"\"` is not assignable to `string`",
+            "src/main.wowlua:51:7: error[E2001]: `number` is not assignable to `string`",
+            "src/main.wowlua:52:7: error[E2001]: `number` is not assignable to `string`",
         ],
         "{stderr}"
     );
@@ -2488,6 +2495,10 @@ export function takeDuration(_d: DurationObject) end
 local proxy: any = (_G :: any).newproxy
 show(pcall(takeDuration, proxy(false)))
 show(pcall(takeDuration :: any, 5))
+-- A union of many literals (every event's name): checked against a set.
+export function onEvent(event: EventName) end
+show(pcall(onEvent, "PLAYER_LOGIN"))
+show(pcall(onEvent :: any, "NOT_AN_EVENT"))
 "#;
     write(
         dir.path(),
@@ -2517,6 +2528,8 @@ show(pcall(takeDuration :: any, 5))
             "false Chk: src/main.wowlua:45: bad argument #2 '_' to 'pair' (string expected, got number)",
             "true nil",
             "false Chk: src/main.wowlua:49: bad argument #1 '_d' to 'takeDuration' (DurationObject expected, got number)",
+            "true nil",
+            "false Chk: src/main.wowlua:54: bad argument #1 'event' to 'onEvent' (\"ACCOUNT_STORE_CURRENCY_AVAILABLE_UPDATED\" | \"ACCOUNT_STORE_FRONT_UPDATED\" | \"ACCOUNT_STORE_ITEM_INFO_UPDATED\" | \"ACCOUNT_STORE_TRANSACTION_ERROR\" | \"STORE_FRONT_STATE_UPDATED\" | \"ACHIEVEMENT_EARNED\" | \"ACHIEVEMENT_PLAYER_NAME\" | \"ACHIEVEMENT_SEARCH_UPDATED\" | … (1774 more) expected, got string)",
         ]
         .join("\n")
     );

@@ -501,6 +501,20 @@ linkButton:SetScript("OnClick", function() chat.insertLink(recipeLink) end)
 | `insertLink` | `(link: string)` | Puts `link` into the line being typed, as a shift-click does (`InsertLink`); with none open, opens one with it |
 | `filter` | `(event: string, fn: (text: unknown, ...unknown) -> boolean?) -> Subscription` | Hides the chat lines of `event` for which `fn` returns true, through the game's message filters (`AddMessageEventFilter`); `fn` gets the line's values, its text first. Isolated: an error is reported and the line shows. Cancelling removes the filter (`RemoveMessageEventFilter`) (decision S46) |
 
+It also finds the game's chat windows, typed as `chat.Window`
+(`ScrollingMessageFrameMixin & Frame`: a message frame, its window ID
+`GetID()`), for a chat addon that restyles or mirrors them (decision S48):
+
+| API | Signature | Notes |
+|-----|-----------|-------|
+| `windows` | `() -> Window[]` | The windows that exist: the numbered ones (`ChatFrame1` up to `NUM_CHAT_WINDOWS`, 10 where the client doesn't say), then the temporary ones of `CHAT_FRAMES`, in the game's order |
+| `docked` | `() -> Window[]` | The windows docked with General, in the dock's order (`GENERAL_CHAT_DOCK`); `ChatFrame1` alone where there is no dock |
+| `window` | `(name: string) -> Window?` | The chat window of a global name (`"ChatFrame3"`) |
+| `asWindow` | `(v: unknown) -> Window?` | `v` when it is a frame with a message frame's `AddMessage` and `GetMessageInfo` |
+| `editBox` | `(w: Window) -> EditBox?` | The window's edit box (`ChatFrame1EditBox`) |
+| `isTemporary` | `(w: Window) -> boolean` | Whether it is a temporary window (a whisper window, which closes) |
+| `conversation` | `(w: Window) -> (string?, string?)` | What a temporary window is for: its chat type (`"WHISPER"`, …) and target (the player); nils for any other window and for values that aren't readable |
+
 ## Testing
 
 `wowlua:mock` support used by this chapter: `mock.drag(frame, dx, dy)`,

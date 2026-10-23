@@ -78,6 +78,204 @@ fn widget_corrections(classes: &mut indexmap::IndexMap<String, model::Class>) {
     }
 }
 
+/// Frame types the client makes from Blizzard's Lua, not as widgets of
+/// their own (`<ScrollingMessageFrame intrinsic="true"
+/// mixin="ScrollingMessageFrameMixin">`): what `CreateFrame` gives for
+/// them.
+const INTRINSIC_FRAMES: &[(&str, &str)] = &[(
+    "ScrollingMessageFrame",
+    "ScrollingMessageFrameMixin & Frame",
+)];
+
+/// A parameter of a hand-typed method: name, type, optional.
+type Param = (&'static str, &'static str, bool);
+/// A hand-typed method: name, parameters, `...: T`, results.
+type Method = (
+    &'static str,
+    &'static [Param],
+    Option<&'static str>,
+    &'static [&'static str],
+);
+
+const SECRET_TEXT: &str = "string | Secret<string>";
+const SECRET_COLOR: &str = "number | Secret<number>";
+const MESSAGE: &[Param] = &[
+    ("message", SECRET_TEXT, false),
+    ("r", SECRET_COLOR, true),
+    ("g", SECRET_COLOR, true),
+    ("b", SECRET_COLOR, true),
+];
+const RGBA: &[Param] = &[
+    ("r", "number", false),
+    ("g", "number", false),
+    ("b", "number", false),
+    ("a", "number", true),
+];
+const FOUR_NUMBERS: &[&str] = &["number", "number", "number", "number"];
+
+/// The font methods of a message frame's mixin, typed as the client's
+/// `MessageFrame` widget has them (decision T285).
+const FONTABLE_METHODS: &[Method] = &[
+    (
+        "SetFontObject",
+        &[("fontObject", "FontObject | nil", false)],
+        None,
+        &[],
+    ),
+    ("GetFontObject", &[], None, &["SimpleFont?"]),
+    ("HasFontObject", &[], None, &["boolean"]),
+    (
+        "SetFont",
+        &[
+            ("font", "FontFile", false),
+            ("fontHeight", "uiFontHeight", false),
+            ("fontFlags", "TBFFlags", true),
+        ],
+        None,
+        &[],
+    ),
+    (
+        "GetFont",
+        &[],
+        None,
+        &["string", "uiFontHeight", "TBFFlags"],
+    ),
+    ("SetTextColor", RGBA, None, &[]),
+    ("GetTextColor", &[], None, FOUR_NUMBERS),
+    ("SetShadowColor", RGBA, None, &[]),
+    ("GetShadowColor", &[], None, FOUR_NUMBERS),
+    (
+        "SetShadowOffset",
+        &[("offsetX", "number", false), ("offsetY", "number", false)],
+        None,
+        &[],
+    ),
+    ("GetShadowOffset", &[], None, &["number", "number"]),
+    ("SetSpacing", &[("spacing", "number", false)], None, &[]),
+    ("GetSpacing", &[], None, &["number"]),
+    (
+        "SetJustifyH",
+        &[("justifyH", "JustifyHorizontal", false)],
+        None,
+        &[],
+    ),
+    ("GetJustifyH", &[], None, &["JustifyHorizontal"]),
+    (
+        "SetJustifyV",
+        &[("justifyV", "JustifyVertical", false)],
+        None,
+        &[],
+    ),
+    ("GetJustifyV", &[], None, &["JustifyVertical"]),
+    (
+        "SetIndentedWordWrap",
+        &[("indentWordWrap", "boolean", false)],
+        None,
+        &[],
+    ),
+    ("GetIndentedWordWrap", &[], None, &["boolean"]),
+];
+
+/// The message methods of `ScrollingMessageFrameMixin` (and of its secure
+/// part): a line and its colour may be secret (decision T285).
+const MESSAGE_METHODS: &[Method] = &[
+    ("AddMessage", MESSAGE, Some("unknown"), &[]),
+    ("BackFillMessage", MESSAGE, Some("unknown"), &[]),
+    ("GetNumMessages", &[], None, &["number"]),
+    (
+        "GetMessageInfo",
+        &[("messageIndex", "number", false)],
+        None,
+        &[
+            "(string | Secret<string>)?",
+            "(number | Secret<number>)?",
+            "(number | Secret<number>)?",
+            "(number | Secret<number>)?",
+        ],
+    ),
+    (
+        "SetScrollAllowed",
+        &[("allowed", "boolean", false)],
+        None,
+        &[],
+    ),
+    ("IsScrollAllowed", &[], None, &["boolean"]),
+    ("ScrollByAmount", &[("amount", "number", false)], None, &[]),
+    ("ScrollUp", &[], None, &[]),
+    ("ScrollDown", &[], None, &[]),
+    ("PageUp", &[], None, &[]),
+    ("PageDown", &[], None, &[]),
+    ("ScrollToTop", &[], None, &[]),
+    ("ScrollToBottom", &[], None, &[]),
+    ("SetScrollOffset", &[("offset", "number", false)], None, &[]),
+    ("GetScrollOffset", &[], None, &["number"]),
+    ("GetMaxScrollRange", &[], None, &["number"]),
+    ("GetNumVisibleLines", &[], None, &["number"]),
+    ("AtTop", &[], None, &["boolean"]),
+    ("AtBottom", &[], None, &["boolean"]),
+    ("SetMaxLines", &[("maxLines", "number", false)], None, &[]),
+    ("GetMaxLines", &[], None, &["number"]),
+    (
+        "SetFading",
+        &[("shouldFadeAfterInactivity", "boolean", false)],
+        None,
+        &[],
+    ),
+    ("GetFading", &[], None, &["boolean"]),
+    (
+        "SetTimeVisible",
+        &[("timeVisibleSecs", "number", false)],
+        None,
+        &[],
+    ),
+    ("GetTimeVisible", &[], None, &["number"]),
+    (
+        "SetFadeDuration",
+        &[("fadeDurationSecs", "number", false)],
+        None,
+        &[],
+    ),
+    ("GetFadeDuration", &[], None, &["number"]),
+    ("Clear", &[], None, &[]),
+    (
+        "SetTextCopyable",
+        &[("textIsCopyable", "boolean", false)],
+        None,
+        &[],
+    ),
+    ("IsTextCopyable", &[], None, &["boolean"]),
+    ("ResetAllFadeTimes", &[], None, &[]),
+];
+
+/// The UI code's mixins are untyped; a message frame's font and message
+/// methods get the types the client gives them, where the mixin defines
+/// them (decision T285).
+fn mixin_corrections(name: &str, class: &mut model::Class) {
+    let methods: &[Method] = match name {
+        "FontableFrameMixin" => FONTABLE_METHODS,
+        "ScrollingMessageFrameMixin" | "ScrollingMessageFrameSecureMixin" => MESSAGE_METHODS,
+        _ => return,
+    };
+    for (method, params, vararg, returns) in methods {
+        let Some(sigs) = class.methods.get_mut(*method) else {
+            continue;
+        };
+        *sigs = vec![model::Sig {
+            params: params
+                .iter()
+                .map(|(n, ty, optional)| model::ParamDecl {
+                    name: (*n).into(),
+                    ty: (*ty).into(),
+                    optional: *optional,
+                })
+                .collect(),
+            vararg: vararg.map(Into::into),
+            returns: returns.iter().map(|r| (*r).into()).collect(),
+            ..model::Sig::default()
+        }];
+    }
+}
+
 /// What the client passes each script handler after `self` (as the
 /// emulator does, wowlua-engine's `script_params`, and the client's
 /// documentation of each script).
@@ -476,6 +674,8 @@ pub fn generate(
     for t in blizzard::FRAME_TYPES {
         if shared.classes.contains_key(*t) {
             create.push(create_frame_sig(&format!("{t:?}"), t));
+        } else if let Some((_, ty)) = INTRINSIC_FRAMES.iter().find(|(n, _)| n == t) {
+            create.push(create_frame_sig(&format!("{t:?}"), ty));
         }
     }
     create.push(create_frame_sig("string", "Frame"));
@@ -768,7 +968,8 @@ pub fn generate(
         // The mixin classes of the UI code's named frames, where nothing
         // else declares the name (not the engine's: they are no widgets).
         let mut mixin_names: HashSet<String> = HashSet::new();
-        for (name, class) in mixins {
+        for (name, mut class) in mixins {
+            mixin_corrections(&name, &mut class);
             if !shared_defs.contains(&name)
                 && !d.classes.contains_key(&name)
                 && !d.interfaces.contains_key(&name)
@@ -868,5 +1069,63 @@ fn create_frame_sig(frame_type: &str, result: &str) -> model::Sig {
         ],
         returns: vec![result.into()],
         ..model::Sig::default()
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn untyped(params: &[&str]) -> Vec<model::Sig> {
+        vec![model::Sig {
+            params: params
+                .iter()
+                .map(|n| model::ParamDecl {
+                    name: (*n).into(),
+                    ty: "any".into(),
+                    optional: false,
+                })
+                .collect(),
+            ret_vararg: Some("any".into()),
+            ..model::Sig::default()
+        }]
+    }
+
+    #[test]
+    fn message_frame_mixins_are_typed() {
+        let mut class = model::Class::default();
+        class
+            .methods
+            .insert("AddMessage".into(), untyped(&["message", "r", "g", "b"]));
+        class.methods.insert("GetScrollOffset".into(), untyped(&[]));
+        class.methods.insert("RefreshLayout".into(), untyped(&[]));
+        mixin_corrections("ScrollingMessageFrameMixin", &mut class);
+        let text = |m: &str| model::sig_text(&class.methods[m][0]);
+        assert_eq!(
+            text("AddMessage"),
+            "(message: string | Secret<string>, r: (number | Secret<number>)?, g: (number | Secret<number>)?, b: (number | Secret<number>)?, ...: unknown)"
+        );
+        assert_eq!(text("GetScrollOffset"), "(): number");
+        // its other functions stay as the Lua defines them, and none is added
+        assert_eq!(text("RefreshLayout"), "(): (...any)");
+        assert!(!class.methods.contains_key("ScrollUp"));
+        // the font methods on the font mixin; another mixin is left alone
+        let mut fontable = model::Class::default();
+        fontable.methods.insert(
+            "SetFont".into(),
+            untyped(&["font", "fontHeight", "fontFlags"]),
+        );
+        mixin_corrections("FontableFrameMixin", &mut fontable);
+        assert_eq!(
+            model::sig_text(&fontable.methods["SetFont"][0]),
+            "(font: FontFile, fontHeight: uiFontHeight, fontFlags: TBFFlags?)"
+        );
+        let mut other = model::Class::default();
+        other.methods.insert("GetFont".into(), untyped(&[]));
+        mixin_corrections("ChatFrameMixin", &mut other);
+        assert_eq!(
+            model::sig_text(&other.methods["GetFont"][0]),
+            "(): (...any)"
+        );
     }
 }

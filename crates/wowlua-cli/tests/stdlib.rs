@@ -6530,6 +6530,60 @@ print(filters.CHAT_MSG_SYSTEM == nil, f(nil, "CHAT_MSG_SYSTEM", "hide", 1))
     );
 }
 
+/// `wowlua:chat`'s windows: the numbered ones, then the temporary ones;
+/// those docked with General in the dock's order; a window's edit box;
+/// what a temporary window is for (decision S48).
+#[test]
+fn chat_windows() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as chat from \"wowlua:chat\"\n_G.StdChat = chat\n",
+        )],
+        "",
+        r##"Mock.loadAddon("Std")
+local C = StdChat
+local function names(list) local out = {} for _, w in ipairs(list) do out[#out + 1] = w:GetName() end return table.concat(out, " ") end
+-- the game's windows, as its chat code makes them (a message frame's lines)
+local function window(name)
+    local w = CreateFrame("Frame", name)
+    function w:AddMessage() end
+    function w:GetMessageInfo() end
+    return w
+end
+local general, log, third = window("ChatFrame1"), window("ChatFrame2"), window("ChatFrame3")
+CreateFrame("EditBox", "ChatFrame1EditBox")
+print(names(C.windows()))
+print(names(C.docked()))
+print(C.window("ChatFrame1") == general, C.window("UIParent"), C.window("NoSuchFrame"), C.asWindow(42))
+print(C.editBox(general) == ChatFrame1EditBox, C.editBox(log), C.editBox(CreateFrame("Frame")))
+print(C.isTemporary(general), C.conversation(general))
+local temp = window("ChatFrame21")
+temp.isTemporary, temp.chatType, temp.chatTarget = true, "WHISPER", "Ann"
+window("ChatFrame22")
+CHAT_FRAMES = { "ChatFrame1", "ChatFrame21", "ChatFrame22", "NoSuchFrame", 5 }
+GENERAL_CHAT_DOCK = { DOCKED_CHAT_FRAMES = { log, general, UIParent } }
+NUM_CHAT_WINDOWS = 2
+print(names(C.windows()))
+print(names(C.docked()))
+print(C.isTemporary(temp), C.conversation(temp))
+"##,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "ChatFrame1 ChatFrame2 ChatFrame3",
+            "ChatFrame1",
+            "true nil nil nil",
+            "true nil nil",
+            "false nil nil",
+            "ChatFrame1 ChatFrame2 ChatFrame21",
+            "ChatFrame2 ChatFrame1",
+            "true WHISPER Ann",
+        ]
+    );
+}
+
 /// `secure.overlay`: a secure button over the addon's own, on UIParent,
 /// anchored only while shown, hover passed on, nothing in combat (decision
 /// S44).

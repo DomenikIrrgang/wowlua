@@ -6,6 +6,7 @@ import * as tbl from "wowlua:table"
 import * as secret from "wowlua:secret"
 import try, callOwned from "wowlua:errors"
 import type Subscription from "wowlua:events"
+import asFrame, asEditBox from "wowlua:frames"
 
 local function game(name: string, old: string): unknown
     return tbl.field(_G, "ChatFrameUtil", name) or tbl.field(_G, old)
@@ -73,4 +74,80 @@ export function filter(event: string, fn: (text: unknown, ...: unknown) -> boole
     }
     try(game("AddMessageEventFilter", "ChatFrame_AddMessageEventFilter"), event, hide)
     return sub
+end
+
+--- One of the game's chat windows (`ChatFrame1`, a whisper window): a
+--- message frame (its lines, scrolling, font), its window ID `GetID()`.
+export type Window = ScrollingMessageFrameMixin & Frame
+
+--- `v` as a chat window: a frame with a message frame's lines; nil for
+--- anything else.
+export function asWindow(v: unknown): Window?
+    const f = asFrame(v)
+    if f and type(tbl.field(f, "AddMessage")) == "function" and type(tbl.field(f, "GetMessageInfo")) == "function" then
+        return f :: unknown :: Window
+    end
+    return nil
+end
+
+--- The chat window of a global name (`"ChatFrame3"`), or nil.
+export function window(name: string): Window?
+    return asWindow(_G[name])
+end
+
+--- Whether a window is a temporary one (a whisper window, which closes).
+export function isTemporary(w: Window): boolean
+    return tbl.field(w, "isTemporary") == true
+end
+
+--- What a temporary window is for: its chat type (`"WHISPER"`,
+--- `"BN_WHISPER"`, …) and its target (the player); nil for other windows
+--- and for what can't be read.
+export function conversation(w: Window): (string?, string?)
+    if not isTemporary(w) then
+        return nil, nil
+    end
+    return secret.asString(tbl.field(w, "chatType")), secret.asString(tbl.field(w, "chatTarget"))
+end
+
+--- The game's chat windows that exist: the numbered ones (`ChatFrame1` up
+--- to `NUM_CHAT_WINDOWS`), then the temporary ones, as the game made them.
+export function windows(): Window[]
+    const out: Window[] = {}
+    for i = 1, secret.asNumber(tbl.field(_G, "NUM_CHAT_WINDOWS")) or 10 do
+        const w = window("ChatFrame" .. i)
+        if w then
+            out[#out + 1] = w
+        end
+    end
+    for _, name in ipairs(tbl.list(tbl.field(_G, "CHAT_FRAMES"))) do
+        const w = asWindow(tbl.field(_G, secret.asString(name) or ""))
+        if w and isTemporary(w) then
+            out[#out + 1] = w
+        end
+    end
+    return out
+end
+
+--- The windows docked with General, in the dock's order (General first);
+--- `ChatFrame1` alone on a client without the dock.
+export function docked(): Window[]
+    const out: Window[] = {}
+    for _, f in ipairs(tbl.list(tbl.field(_G, "GENERAL_CHAT_DOCK", "DOCKED_CHAT_FRAMES"))) do
+        const w = asWindow(f)
+        if w then
+            out[#out + 1] = w
+        end
+    end
+    const general = window("ChatFrame1")
+    if #out == 0 and general then
+        out[1] = general
+    end
+    return out
+end
+
+--- A window's edit box (`ChatFrame1EditBox`), or nil.
+export function editBox(w: Window): EditBox?
+    const name = w:GetName()
+    return name and asEditBox(_G[name .. "EditBox"]) or nil
 end

@@ -9545,48 +9545,48 @@ declare class PropertyButtonMixin
 end
 
 declare class ScrollingMessageFrameMixin extends FontableFrameMixin
-    function AddMessage(message: any, r: any, g: any, b: any, ...: any): (...any)
-    function BackFillMessage(message: any, r: any, g: any, b: any, ...: any): (...any)
-    function GetNumMessages(): (...any)
-    function GetMessageInfo(messageIndex: any): (...any)
+    function AddMessage(message: string | Secret<string>, r: (number | Secret<number>)?, g: (number | Secret<number>)?, b: (number | Secret<number>)?, ...: unknown)
+    function BackFillMessage(message: string | Secret<string>, r: (number | Secret<number>)?, g: (number | Secret<number>)?, b: (number | Secret<number>)?, ...: unknown)
+    function GetNumMessages(): number
+    function GetMessageInfo(messageIndex: number): ((string | Secret<string>)?, (number | Secret<number>)?, (number | Secret<number>)?, (number | Secret<number>)?)
     function RemoveMessagesByPredicate(predicate: any): (...any)
     function AdjustMessageColors(transformFunction: any): (...any)
     function TransformMessages(predicate: any, transformFunction: any): (...any)
-    function SetScrollAllowed(allowed: any): (...any)
-    function IsScrollAllowed(): (...any)
-    function ScrollByAmount(amount: any): (...any)
-    function ScrollUp(): (...any)
-    function ScrollDown(): (...any)
-    function PageUp(): (...any)
-    function PageDown(): (...any)
-    function ScrollToTop(): (...any)
-    function ScrollToBottom(): (...any)
+    function SetScrollAllowed(allowed: boolean)
+    function IsScrollAllowed(): boolean
+    function ScrollByAmount(amount: number)
+    function ScrollUp()
+    function ScrollDown()
+    function PageUp()
+    function PageDown()
+    function ScrollToTop()
+    function ScrollToBottom()
     function AddOnDisplayRefreshedCallback(callback: any): (...any)
     function CallOnDisplayRefreshed(): (...any)
     function SetOnScrollChangedCallback(onScrollChangedCallback: any): (...any)
     function GetOnScrollChangedCallback(): (...any)
     function SetOnTextCopiedCallback(onTextCopiedCallback: any): (...any)
     function GetOnTextCopiedCallback(): (...any)
-    function SetScrollOffset(offset: any): (...any)
-    function GetScrollOffset(): (...any)
-    function GetMaxScrollRange(): (...any)
-    function GetNumVisibleLines(): (...any)
-    function AtTop(): (...any)
-    function AtBottom(): (...any)
-    function SetMaxLines(maxLines: any): (...any)
-    function GetMaxLines(): (...any)
+    function SetScrollOffset(offset: number)
+    function GetScrollOffset(): number
+    function GetMaxScrollRange(): number
+    function GetNumVisibleLines(): number
+    function AtTop(): boolean
+    function AtBottom(): boolean
+    function SetMaxLines(maxLines: number)
+    function GetMaxLines(): number
     function GetPagingScrollAmount(): (...any)
-    function SetFading(shouldFadeAfterInactivity: any): (...any)
-    function GetFading(): (...any)
-    function SetTimeVisible(timeVisibleSecs: any): (...any)
-    function GetTimeVisible(): (...any)
-    function SetFadeDuration(fadeDurationSecs: any): (...any)
-    function GetFadeDuration(): (...any)
-    function Clear(): (...any)
+    function SetFading(shouldFadeAfterInactivity: boolean)
+    function GetFading(): boolean
+    function SetTimeVisible(timeVisibleSecs: number)
+    function GetTimeVisible(): number
+    function SetFadeDuration(fadeDurationSecs: number)
+    function GetFadeDuration(): number
+    function Clear()
     function SetInsertMode(insertMode: any): (...any)
     function GetInsertMode(): (...any)
-    function SetTextCopyable(textIsCopyable: any): (...any)
-    function IsTextCopyable(): (...any)
+    function SetTextCopyable(textIsCopyable: boolean)
+    function IsTextCopyable(): boolean
     function IsSelectingText(): (...any)
     function OnPreLoad(): (...any)
     function OnPostShow(): (...any)
@@ -9608,7 +9608,7 @@ declare class ScrollingMessageFrameMixin extends FontableFrameMixin
     function CalculateNumVisibleLines(): (...any)
     function MarkLayoutDirty(): (...any)
     function MarkDisplayDirty(): (...any)
-    function ResetAllFadeTimes(): (...any)
+    function ResetAllFadeTimes()
     function AcquireFontString(): (...any)
     function AcquireHighlightTexture(): (...any)
     function CalculateLineSpacing(): (...any)
@@ -9620,25 +9620,25 @@ declare class ScrollingMessageFrameMixin extends FontableFrameMixin
 end
 
 declare class FontableFrameMixin
-    function SetFontObject(fontObject: any): (...any)
-    function GetFontObject(): (...any)
-    function HasFontObject(): (...any)
-    function SetFont(font: any, fontHeight: any, fontFlags: any): (...any)
-    function GetFont(): (...any)
-    function SetTextColor(r: any, g: any, b: any, a: any): (...any)
-    function GetTextColor(): (...any)
-    function SetShadowColor(r: any, g: any, b: any, a: any): (...any)
-    function GetShadowColor(): (...any)
-    function SetShadowOffset(offsetX: any, offsetY: any): (...any)
-    function GetShadowOffset(): (...any)
-    function SetSpacing(spacing: any): (...any)
-    function GetSpacing(): (...any)
-    function SetJustifyH(justifyH: any): (...any)
-    function GetJustifyH(): (...any)
-    function SetJustifyV(justifyV: any): (...any)
-    function GetJustifyV(): (...any)
-    function SetIndentedWordWrap(indentWordWrap: any): (...any)
-    function GetIndentedWordWrap(): (...any)
+    function SetFontObject(fontObject: FontObject | nil)
+    function GetFontObject(): SimpleFont?
+    function HasFontObject(): boolean
+    function SetFont(font: FontFile, fontHeight: uiFontHeight, fontFlags: TBFFlags?)
+    function GetFont(): (string, uiFontHeight, TBFFlags)
+    function SetTextColor(r: number, g: number, b: number, a: number?)
+    function GetTextColor(): (number, number, number, number)
+    function SetShadowColor(r: number, g: number, b: number, a: number?)
+    function GetShadowColor(): (number, number, number, number)
+    function SetShadowOffset(offsetX: number, offsetY: number)
+    function GetShadowOffset(): (number, number)
+    function SetSpacing(spacing: number)
+    function GetSpacing(): number
+    function SetJustifyH(justifyH: JustifyHorizontal)
+    function GetJustifyH(): JustifyHorizontal
+    function SetJustifyV(justifyV: JustifyVertical)
+    function GetJustifyV(): JustifyVertical
+    function SetIndentedWordWrap(indentWordWrap: boolean)
+    function GetIndentedWordWrap(): boolean
     function InitializeFontableFrame(name: any): (...any)
     function OnFontObjectUpdated(): (...any)
     function MakeFontObjectCustom(): (...any)

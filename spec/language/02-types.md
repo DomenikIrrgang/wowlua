@@ -702,6 +702,9 @@ narrowed value fits: inside `if item then`, an `Item | false` local is an
 - `S` is `nil` and the mode is `basic` (nil is assignable to everything in basic mode);
 - `T` is a union containing a member `S` is assignable to, or `S` is a union whose
   members are all assignable to `T`;
+- `T` is an intersection and `S` is assignable to each of its parts, or `S` is
+  an intersection one of whose parts is assignable to `T` (not an
+  intersection): `A & B & C` fits `A & B`, `C & B` and `B` (decision L74);
 - both are records and `S` has every required field of `T` with an assignable
   type (fields are compared covariantly; readonly-ness is ignored);
 - both are arrays or maps with assignable element types (variance as in §2.2.6);
@@ -791,7 +794,13 @@ The global environment (`_G`) is modelled as a set of **declared globals**:
   a mixin's method comes before the widget's, as in the client. These mixins
   are declared as classes with the functions their Lua defines (`function
   M:F(a, b)` a method, `function M.F(a)` a function field); the parameters
-  are untyped (`any`) and the results any values. A mixin made with
+  are untyped (`any`) and the results any values, except a message frame's
+  font and message methods (`FontableFrameMixin`, `ScrollingMessageFrameMixin`
+  and its secure part: `SetFont`, `AddMessage`, `GetScrollOffset`, …), typed
+  as the client's `MessageFrame` has them, a line and its colour possibly
+  secret. A frame type the client makes from Blizzard's Lua, not as a widget of
+  its own, is its intrinsic's mixin on a frame: `CreateFrame("ScrollingMessageFrame")`
+  gives a `ScrollingMessageFrameMixin & Frame` (decision T285). A mixin made with
   `CreateFromMixins(A, B)` extends `A` and has `B`'s functions,
 - the Lua 5.1 standard library as available in WoW, and `LibStub`
   (decision T86). WoW has no `os`, `io`, `debug` or `package` library; it

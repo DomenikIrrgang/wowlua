@@ -24,6 +24,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - Restyling the game's frames: `frames.textures(f)`, `frames.fontStrings(f)` and `frames.children(f)` give typed lists, `frames.stateTextures(button)` a button's state art, and `frames.rows(list)` the rows one of the game's lists shows (an object pool or a scroll box). `events.onRegistry(name, fn)` listens to Blizzard's `EventRegistry` callbacks, with error isolation and a subscription to cancel.
 - `chat.whisperBnet(accountName)` and `unit.inviteBnet(gameAccountID)` whisper and invite Battle.net friends, and `chat.filter("CHAT_MSG_SYSTEM", fn)` hides the chat lines `fn` returns true for, through the game's own filters (an error in `fn` is reported and the line shows; cancel the subscription to remove it).
 - `frames.mapPins(WorldMapFrame, "QuestPinTemplate")` lists the pins one of the game's maps shows of a template, as frames.
+- `wowlua:chat` finds the game's chat windows, typed: `chat.windows()` (the numbered ones, then the whisper windows), `chat.docked()` (in the dock's order), `chat.window("ChatFrame3")`, `chat.editBox(w)`, `chat.isTemporary(w)` and `chat.conversation(w)` (a whisper window's chat type and player).
 - `mock.tooltipLines(tip?, right?)` gives the lines a tooltip shows in a test (its left texts, or the right ones), and `mock.sentAddonMessages()` is typed: each message's `prefix`, `message`, `chatType` and `target`.
 
 ### Changed
@@ -66,6 +67,9 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- A function taking an `EventName` (or another type of many names) no longer stops the development build from loading ("chunk has too many syntax levels"): its argument check is now a single lookup.
+- A value of several types at once fits a type of some of them: `A & B & C` is an `A & B`, where only a single `A` was accepted. The game's chat windows (`ChatFrame1`) now fit `ScrollingMessageFrameMixin & Frame`.
+- `CreateFrame("ScrollingMessageFrame")` gives a message frame: `AddMessage`, `SetFading`, `ScrollToBottom`, `GetScrollOffset` and the rest are typed, and so are the same methods of the game's chat windows (`ChatFrame1:GetNumMessages()` is a `number`). It was a plain `Frame` without them, and the chat windows' methods took and gave `any`.
 - `ItemLocation:CreateFromBagAndSlot(bag, slot)` gives an item location the game's functions take (`C_AuctionHouse.IsSellItemValid`, `C_Item.GetItemName`, …); it was a type of its own that none of them took.
 - `date("*t")` gives the time's parts (`year`, `month`, `day`, `hour`, `min`, `sec`, `wday`, `yday`, `isdst`) and `date("%H:%M")` a string; both were `any`.
 - W2062 warns about `local x, y = pos and pos:GetXY()`: an `and` or `or` keeps only one of the call's values, so `y` is always `nil`.

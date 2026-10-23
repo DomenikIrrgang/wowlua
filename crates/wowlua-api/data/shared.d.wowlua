@@ -4157,6 +4157,7 @@ declare function CreateFrame(frameType: "PlayerModel", name: string?, parent: an
 declare function CreateFrame(frameType: "QuestPOIFrame", name: string?, parent: any?, template: string?, id: number?): QuestPOIFrame
 declare function CreateFrame(frameType: "ScenarioPOIFrame", name: string?, parent: any?, template: string?, id: number?): ScenarioPOIFrame
 declare function CreateFrame(frameType: "ScrollFrame", name: string?, parent: any?, template: string?, id: number?): ScrollFrame
+declare function CreateFrame(frameType: "ScrollingMessageFrame", name: string?, parent: any?, template: string?, id: number?): ScrollingMessageFrameMixin & Frame
 declare function CreateFrame(frameType: "SimpleHTML", name: string?, parent: any?, template: string?, id: number?): SimpleHTML
 declare function CreateFrame(frameType: "Slider", name: string?, parent: any?, template: string?, id: number?): Slider
 declare function CreateFrame(frameType: "StatusBar", name: string?, parent: any?, template: string?, id: number?): StatusBar
