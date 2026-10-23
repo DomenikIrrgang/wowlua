@@ -2468,6 +2468,11 @@ show(pcall(function() return (_G.missing :: number) end))
 export function pair(_: number, _: string) end
 show(pcall(pair, 1, "a"))
 show(pcall(pair :: any, 1, 2))
+-- The game's objects: a table or a userdata (T277).
+export function takeDuration(_d: DurationObject) end
+local proxy: any = (_G :: any).newproxy
+show(pcall(takeDuration, proxy(false)))
+show(pcall(takeDuration :: any, 5))
 "#;
     write(
         dir.path(),
@@ -2495,6 +2500,8 @@ show(pcall(pair :: any, 1, 2))
             "true nil",
             "true nil",
             "false Chk: src/main.wowlua:45: bad argument #2 '_' to 'pair' (string expected, got number)",
+            "true nil",
+            "false Chk: src/main.wowlua:49: bad argument #1 '_d' to 'takeDuration' (DurationObject expected, got number)",
         ]
         .join("\n")
     );

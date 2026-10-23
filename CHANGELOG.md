@@ -37,6 +37,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- The development build's argument check of a game object type (`DurationObject`, a colour) now takes the engine's objects: they are userdata, which it refused ("DurationObject? expected, got userdata").
 - Using `self` in the arguments of `super(…)`, also inside a function written there, is now reported (E3001): such a function may run before `self` is your new instance (a widget class's frame doesn't exist yet), so it read the wrong table.
 - `fontString:SetFormattedText(format, ...)` accepts secret values among its arguments, as the game does (a target's name in a dungeon).
 - A field added to a table inside another (`API.UI.Button = button` after `API.UI = { … }`) is now part of the table other files import: they read it typed, where they got `any`, and a misspelled field there is an error.

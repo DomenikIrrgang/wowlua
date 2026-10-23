@@ -236,6 +236,7 @@ inserts checks at function entry for **checkable** parameter types:
 | `T?` | `v == nil or check(T)` |
 | Literal unions (`"LEFT" \| "RIGHT"`, enums) | Set membership |
 | Class instance types | `reflect.isInstance(v, C)` |
+| The game's object types (frames, `DurationObject`, `ColorMixin`) | `type(v)` is `"table"` or `"userdata"` (the engine's objects can be either, decision T277) |
 | Arrays `T[]` | `type(v) == "table"` (elements are not checked, to keep cost bounded) |
 | Records, interfaces | `type(v) == "table"` plus presence and primitive type of each required field (one level) |
 | `any`, `unknown`, generics, function signatures | Not checked |
