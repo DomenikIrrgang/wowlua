@@ -6,6 +6,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### New
 
+- `EventArgs<E>` works in your own functions, not only in `wowlua:events`: `function on<E extends EventName>(event: E, fn: (name: E, EventArgs<E>...) -> ())` gives `on("UNIT_HEALTH", function(name, unit) … end)` the event's argument types, and `function send<M extends MessageName>(name: M, ...: EventArgs<M>...)` checks the values sent against `declare message`. Before, it was `any`.
 - A widget class can extend `FontString`, `Texture`, `Line` or `MaskTexture`: build it on the region its frame makes with `MyLabel.adopt(frame:CreateFontString(), …)`.
 - `MyButton.adopt(frame, …)` builds a widget class on a frame that already exists, such as the buttons a secure group header makes, instead of creating a new one: your constructor runs on that frame and your `@script` handlers are set.
 - `@deferred` on an interface method's callback parameter (`function on(name: string, @deferred fn: Handler)`) tells the load-order check that every implementation calls it later, so a callback registered through that interface at load time no longer makes files depend on each other.
@@ -13,6 +14,9 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - **Parameter properties**: a constructor's parameter can declare a field, as in TypeScript: `constructor(private sink: Sink = printer, public readonly name: string)` makes `self.sink` and `self.name` and sets them from the arguments. A field declared twice is now an error (E3046).
 
 ### Changed
+
+- A type parameter with a constraint keeps a literal argument: `function f<K extends "a" | "b">(k: K): K` gives `"a"` for `f("a")`, where it gave `string` and reported that `string` doesn't satisfy the constraint.
+- An error naming a very long union (such as `EventName`) shows its first members and how many more there are, instead of all of them.
 
 - In a class's method or constructor, a function whose parameter is named `self` (`frame:SetScript("OnEnter", function(self) … end)`) now warns (W1004): inside it, `self` is the frame, not your instance, and `self.field` reads the wrong table. Name the parameter differently. Plain `function M:m()` code is unchanged.
 - `assert` returns every argument it was given, as Lua's does, so `return assert(x, "message")` in a function that returns one value is now reported (too many values returned): it also handed the message to the caller, as a second value. Write `return (assert(x, "message"))`.

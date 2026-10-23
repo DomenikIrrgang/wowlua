@@ -1269,19 +1269,7 @@ impl<'p> Env<'p> {
             .collect();
         let rest = f.vararg.map(|v| match v.ty {
             None => Rest::Variadic(Types::ANY),
-            Some(VarargType::Type(t)) => Rest::Variadic(self.resolve(t, &scope)),
-            Some(VarargType::Pack(n)) => {
-                match scope
-                    .params
-                    .iter()
-                    .rev()
-                    .find(|(name, _)| **name == *n.text())
-                {
-                    Some((_, id)) => Rest::Pack(*id),
-                    None => Rest::Variadic(Types::ANY),
-                }
-            }
-            Some(VarargType::Expand(_)) => Rest::Variadic(Types::ANY),
+            Some(v) => self.vararg(v, &scope),
         });
         let (ret, predicate) = match f.ret {
             None if declared => (Pack::empty(), None),
@@ -1366,6 +1354,12 @@ impl<'p> Env<'p> {
                         Some((_, id)) if self.params[id.0 as usize].pack => Rest::Pack(*id),
                         _ => Rest::Variadic(Types::ANY),
                     }
+                }
+                // `EventArgs<E>...`: the payload of `E` (decision L44).
+                TypeKind::Ref { path, .. }
+                    if path.len() == 1 && path.at(0).text() == "EventArgs" =>
+                {
+                    Rest::Variadic(self.resolve(t, scope))
                 }
                 _ => Rest::Variadic(Types::ANY),
             },
@@ -1596,7 +1590,12 @@ impl<'p> Env<'p> {
                     };
                 }
                 "Thread" => return Types::THREAD,
-                "EventArgs" => return Types::ANY,
+                "EventArgs" => {
+                    return match arg_types.first() {
+                        Some(&e) => self.types.intern(Ty::EventArgs(e)),
+                        None => Types::ANY,
+                    };
+                }
                 _ => {}
             }
         }

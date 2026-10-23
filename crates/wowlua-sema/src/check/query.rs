@@ -50,6 +50,13 @@ impl Env<'_> {
                         format!("{inner}?")
                     };
                 }
+                // A long union (`EventName`) shows its first members.
+                const SHOWN: usize = 8;
+                if m.len() > SHOWN + 4 {
+                    let mut parts: Vec<String> = m.iter().take(SHOWN).map(|&x| d(x)).collect();
+                    parts.push(format!("… ({} more)", m.len() - SHOWN));
+                    return parts.join(" | ");
+                }
                 m.iter().map(|&x| d(x)).collect::<Vec<_>>().join(" | ")
             }
             Ty::Intersection(m) => m.iter().map(|&x| d(x)).collect::<Vec<_>>().join(" & "),
@@ -119,6 +126,7 @@ impl Env<'_> {
             }
             Ty::Param(p) => self.params[p.0 as usize].name.to_string(),
             Ty::ClassOfParam(p) => format!("ClassOf<{}>", self.params[p.0 as usize].name),
+            Ty::EventArgs(e) => format!("EventArgs<{}>", d(*e)),
             Ty::Secret(i) => format!("Secret<{}>", d(*i)),
             Ty::Module(_) => "module".into(),
         }
@@ -315,7 +323,8 @@ impl Env<'_> {
         let st = self.types.get(s).clone();
         let tt = self.types.get(t).clone();
         match (&st, &tt) {
-            (_, Ty::Any | Ty::Error | Ty::Unknown) | (Ty::Any | Ty::Error | Ty::Never, _) => {
+            (_, Ty::Any | Ty::Error | Ty::Unknown | Ty::EventArgs(_))
+            | (Ty::Any | Ty::Error | Ty::Never | Ty::EventArgs(_), _) => {
                 return true;
             }
             (Ty::Unknown, _) => return false,

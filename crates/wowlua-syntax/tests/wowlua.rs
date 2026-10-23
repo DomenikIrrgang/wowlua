@@ -84,6 +84,7 @@ fn declarations() {
     ok("declare function pcall<A..., R...>(f: (A...) -> R..., ...: A...): (boolean, R...)");
     ok("type W = (A...) -> ...any");
     ok("type H = (EventArgs<E>...) -> ()");
+    ok("local function send<M extends MessageName>(name: M, ...: EventArgs<M>...) end");
     ok("type C = Thread<A..., (...any), R...>");
     ok("type O = typeof(defaults) & { extra: boolean? }");
     ok(

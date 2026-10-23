@@ -165,7 +165,10 @@ arguments of a generic class `any`), or to the enum whose table is passed:
 `Direction?`. Inside the generic body a `ClassOf<T>` value is a table, and
 where nothing binds `T` it is `any`. A parameter `T | Secret<T>` (or
 `T | Secret<T> | nil`) binds `T` from both parts of an argument: passing
-`string | Secret<string>` binds `T` to `string`.
+`string | Secret<string>` binds `T` to `string`. A literal argument binds a
+constrained type parameter to the literal (`E extends EventName` called with
+`"UNIT_HEALTH"` binds `"UNIT_HEALTH"`) and an unconstrained one to its
+widened type (`T` binds `string`); decision L44.
 
 **Variance** (decision L34). For generic classes, interfaces and aliases:
 
@@ -239,7 +242,7 @@ print(v:upper())                              -- v: string (Secret excluded)
 | `ClassOf<T>` | The class value (constructor table) of instance type `T`, or the table of enum `T`. Calling `new` through `ClassOf<T>` is an error if `T` is abstract (E3002). For a type parameter `T` it binds `T` from the table passed (§2.2.6). |
 | `EventName` | Union of all **WoW event** names (`declare event`). |
 | `MessageName` | Union of all **addon message** names (`declare message`). |
-| `EventArgs<E>` | Type pack of the payload of event or message `E`. Used by `wowlua:events`. |
+| `EventArgs<E>` | Type pack of the payload of event or message `E`. Used by `wowlua:events`, and usable in any function: in a call where `E` is a declared name, `(name: E, EventArgs<E>...) -> ()` takes the payload's parameters and `...: EventArgs<E>...` its values; elsewhere (`E` still a parameter, or a union of names) it is any values (decision L44). |
 | `Thread<A..., Y..., R...>` | A typed coroutine: started with arguments `A`, yields `Y`, returns `R` (§2.4.8). |
 | `Secret<T>` | A Midnight-era *secret value* of underlying type `T` (§2.11). |
 | `AddonNamespace` | The type of the addon table received through `...` (§2.4.7). |

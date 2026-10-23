@@ -57,6 +57,9 @@ pub enum Ty {
     /// `ClassOf<T>` for a type parameter `T`: binds `T` to the class (or
     /// enum) of the table passed, and becomes that `ClassOf` once bound.
     ClassOfParam(ParamId),
+    /// `EventArgs<E>` as a rest (`...EventArgs<E>`): the payload of event or
+    /// message `E`, any values until a call knows `E` (decision L44).
+    EventArgs(TypeId),
     EnumMember(DefId, u32),
     Param(ParamId),
     Secret(TypeId),
@@ -326,7 +329,7 @@ impl Ty {
             | Ty::ClassOfParam(_)
             | Ty::Module(_) => Vec::new(),
             Ty::Union(m) | Ty::Intersection(m) => m.clone(),
-            Ty::Array(t) | Ty::Secret(t) => vec![*t],
+            Ty::Array(t) | Ty::Secret(t) | Ty::EventArgs(t) => vec![*t],
             Ty::Map(k, v) => vec![*k, *v],
             Ty::Named(_, args) => args.clone(),
             Ty::Record(Record {

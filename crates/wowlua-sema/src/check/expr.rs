@@ -1440,7 +1440,9 @@ impl Checker<'_, '_> {
                 Ty::ClassOf(d) => self.static_type(d, name, span, quiet),
                 Ty::EnumMember(..) => Some(Types::ANY),
                 Ty::Module(_) => Some(Types::ANY),
-                Ty::Never | Ty::Param(_) | Ty::ClassOfParam(_) => Some(Types::ANY),
+                Ty::Never | Ty::Param(_) | Ty::ClassOfParam(_) | Ty::EventArgs(_) => {
+                    Some(Types::ANY)
+                }
                 // A callable table (`LibStub`): the first part with the member.
                 Ty::Intersection(parts) => {
                     let found = parts.iter().find_map(|&p| match self.env.types.get(p) {
@@ -2074,7 +2076,8 @@ impl Checker<'_, '_> {
             | Ty::Record(_)
             | Ty::Never
             | Ty::Param(_)
-            | Ty::ClassOfParam(_) => {
+            | Ty::ClassOfParam(_)
+            | Ty::EventArgs(_) => {
                 self.args_types(args, &[]);
                 Pack::any()
             }
@@ -2219,6 +2222,68 @@ impl Checker<'_, '_> {
     }
 
     /// `f` with its type parameters as `any`.
+    /// `...EventArgs<"NAME">` with a declared event or message `NAME`:
+    /// its payload's parameters (decision L44), here and in the parameters
+    /// that are functions (a handler's arguments).
+    fn expand_event_args(&mut self, mut f: Func, depth: u32) -> Func {
+        if depth > 4 {
+            return f;
+        }
+        if let Some(Rest::Variadic(r)) = f.rest
+            && let Ty::EventArgs(e) = self.env.types.get(r)
+            && let Ty::Str(name) = self.env.types.get(*e)
+            && let Some(h) = self.env.declared.handler(name).cloned()
+        {
+            f.params.extend(h.params);
+            f.rest = h.rest;
+        }
+        for i in 0..f.params.len() {
+            let t = f.params[i].ty;
+            if let Some(n) = self.expand_event_args_in(t, depth) {
+                f.params[i].ty = n;
+            }
+        }
+        f
+    }
+
+    /// `t` with `expand_event_args` applied to its functions, if it has any
+    /// to expand.
+    fn expand_event_args_in(&mut self, t: TypeId, depth: u32) -> Option<TypeId> {
+        match self.env.types.get(t).clone() {
+            Ty::Func(g) if Self::mentions_event_args(&self.env.types, &g) => {
+                let g = self.expand_event_args(std::sync::Arc::unwrap_or_clone(g), depth + 1);
+                Some(self.env.types.func(g))
+            }
+            Ty::Union(m) => {
+                let mut changed = false;
+                let members: Vec<TypeId> = m
+                    .iter()
+                    .map(|&x| match self.expand_event_args_in(x, depth) {
+                        Some(n) => {
+                            changed = true;
+                            n
+                        }
+                        None => x,
+                    })
+                    .collect();
+                changed.then(|| self.env.types.union(&members))
+            }
+            _ => None,
+        }
+    }
+
+    fn mentions_event_args(types: &Types, f: &Func) -> bool {
+        let is = |t: TypeId| match types.get(t) {
+            Ty::EventArgs(_) => true,
+            Ty::Func(g) => Self::mentions_event_args(types, g),
+            Ty::Union(m) => m.iter().any(
+                |&x| matches!(types.get(x), Ty::Func(g) if Self::mentions_event_args(types, g)),
+            ),
+            _ => false,
+        };
+        matches!(f.rest, Some(Rest::Variadic(r)) if is(r)) || f.params.iter().any(|p| is(p.ty))
+    }
+
     fn instantiate_any(&mut self, f: &Func) -> Func {
         if f.type_params.is_empty() {
             return f.clone();
@@ -3371,6 +3436,7 @@ impl Checker<'_, '_> {
         } else {
             f.clone()
         };
+        let f = self.expand_event_args(f, 0);
         // Second pass: check every argument against its parameter.
         let n_args = exprs.len();
         for (i, e) in exprs.iter().enumerate() {
@@ -3549,7 +3615,10 @@ impl Checker<'_, '_> {
             self.env.types.get(actual).clone(),
         ) {
             (Ty::Param(p), _) => {
-                let widened = if widen {
+                // A constrained parameter keeps a literal (`E extends
+                // EventName` binds "UNIT_HEALTH", not `string`, decision L44).
+                let constrained = self.env.params[p.0 as usize].constraint.is_some();
+                let widened = if widen && !constrained {
                     self.env.types.widen(actual)
                 } else {
                     actual
