@@ -872,3 +872,36 @@ t:SetText('|A:friends-status-online:19:19:0:0|a')",
     let q = quad.expect("the atlas drawn");
     assert!(q.w > 10.0 && q.h > 10.0, "{q:?}");
 }
+
+/// Text in a scaled frame is drawn at the frame's scale: fitted text fits
+/// (the Settings list's "NEW" badges, `scale=".8"`).
+#[test]
+fn text_in_scaled_frames_fits() {
+    let mut vm = vm("camelot");
+    run(
+        &mut vm,
+        "local f = CreateFrame('Frame', nil, UIParent)
+f:SetScale(0.8)
+f:SetSize(1, 1)
+f:SetPoint('CENTER')
+local t = f:CreateFontString(nil, 'OVERLAY')
+t:SetFont('Fonts\\\\FRIZQT__.TTF', 12, '')
+t:SetPoint('CENTER')
+t:SetTextToFit('NEW')",
+    );
+    let scene = wowlua_engine::scene::build(&mut vm);
+    let lines: Vec<String> = scene
+        .items
+        .iter()
+        .filter_map(|i| match i {
+            wowlua_engine::scene::Item::Text(t) => Some(
+                t.lines
+                    .iter()
+                    .flat_map(|l| l.runs.iter().map(|r| r.text.clone()))
+                    .collect(),
+            ),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(lines, ["NEW"]);
+}
