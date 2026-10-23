@@ -5060,3 +5060,33 @@ end
     assert!(ok, "{out}");
     assert!(out.contains("2 passed, 0 failed"), "{out}");
 }
+
+/// A collection while a test waits (a timer's, between its steps) keeps
+/// the running test: only the runner held it, and the next step read a
+/// freed table ("stale handle").
+#[test]
+fn a_collection_while_a_test_waits_keeps_it() {
+    let dir = project(
+        r#""camelot": {}"#,
+        &[(
+            "tests/gc.test.wowlua",
+            r#"
+import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+@test("waits through collections")
+local function waits()
+    local seen: number[] = {}
+    for i = 1, 5 do
+        C_Timer.After(0.1, function() collectgarbage("collect") end)
+        mock.waitSeconds(0.2)
+        seen[#seen + 1] = i
+    end
+    expect(#seen).toBe(5)
+end
+"#,
+        )],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+}

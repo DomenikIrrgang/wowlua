@@ -768,6 +768,11 @@ fn drive(vm: &mut Vm, tests: TableRef, job: Value) -> Outcome {
 /// Steps a job until it finishes (`None`: at `mock.reloadUI`; resumed,
 /// the job ends the pass and runs its teardown).
 fn drive_inner(vm: &mut Vm, tests: TableRef, job: Value) -> Option<Outcome> {
+    // Only this function holds the job (a Lua table): kept where the
+    // collector sees it, or a collection in a timer between steps frees it
+    // ("stale handle" when the next step reads it; the default UI's every
+    // window, run in one test).
+    wowlua_engine::widgets::keep_as(vm, "wowlua.test.job", job);
     let step = get(vm, tests, "step");
     loop {
         let r = match vm.call(step, &[job]) {

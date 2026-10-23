@@ -167,8 +167,9 @@ fn layout(vm: &mut Vm, id: WidgetId) -> Result<(), wowlua_vm::LuaError> {
             } else {
                 -PADDING
             };
-            let (p, rp) = (vm.str(point), vm.str(point));
             call(vm, fs, "ClearAllPoints", &[])?;
+            // Made after that call: a collection in it would free them.
+            let (p, rp) = (vm.str(point), vm.str(point));
             call(
                 vm,
                 fs,
