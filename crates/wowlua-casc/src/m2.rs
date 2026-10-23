@@ -213,6 +213,54 @@ pub struct AnimFile {
     pub file: u32,
 }
 
+/// A float read as it is (a track's `float` values, not a fraction).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct Real(pub f32);
+
+impl Value for Real {
+    const SIZE: usize = 4;
+    fn read(r: &R, at: usize) -> Option<Self> {
+        r.f32(at).map(Real)
+    }
+}
+
+impl Blend for Real {
+    fn blend(a: Self, b: Self, t: f32) -> Self {
+        Real(a.0 + (b.0 - a.0) * t)
+    }
+}
+
+/// A ribbon emitter (`M2Ribbon`): a strip left behind its bone's point,
+/// `above` and `below` it, its edges laid down `edges_per_second` and kept
+/// `edge_lifetime` seconds.
+#[derive(Clone, Debug)]
+pub struct Ribbon {
+    pub bone: u16,
+    pub position: Vec3,
+    /// Into the model's textures and materials.
+    pub textures: Vec<u16>,
+    pub materials: Vec<u16>,
+    pub color: Track<Vec3>,
+    pub alpha: Track<f32>,
+    pub above: Track<Real>,
+    pub below: Track<Real>,
+    pub edges_per_second: f32,
+    pub edge_lifetime: f32,
+    pub gravity: f32,
+    pub rows: u16,
+    pub columns: u16,
+}
+
+/// A ribbon's look at a moment: color (0 to 1), alpha, height above and
+/// below its point.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct RibbonLook {
+    pub color: Vec3,
+    pub alpha: f32,
+    pub above: f32,
+    pub below: f32,
+}
+
 /// A model.
 #[derive(Clone, Debug, Default)]
 pub struct Model {
@@ -245,6 +293,8 @@ pub struct Model {
     pub attachment_of: Vec<i16>,
     pub cameras: Vec<Camera>,
     pub particles: Vec<Particle>,
+    /// Ribbon emitters: trails left behind a bone as it moves.
+    pub ribbons: Vec<Ribbon>,
     pub skin_files: Vec<u32>,
     pub anim_files: Vec<AnimFile>,
     pub bone_files: Vec<u32>,
@@ -724,6 +774,27 @@ impl Model {
         });
         m.attachment_of = r.i16s(248);
         m.particles = r.list(296, 492, |r, o| Some(particle(r, o)));
+        m.ribbons = r.list(288, 176, |r, o| {
+            let u16s = |at: usize| {
+                let (n, off) = r.array(at);
+                (0..n.min(16)).filter_map(|k| r.u16(off + k * 2)).collect()
+            };
+            Some(Ribbon {
+                bone: r.u32(o + 4)? as u16,
+                position: r.vec3(o + 8)?,
+                textures: u16s(o + 0x14),
+                materials: u16s(o + 0x1c),
+                color: track(r, o + 0x24, &seqs),
+                alpha: track(r, o + 0x38, &seqs),
+                above: track(r, o + 0x4c, &seqs),
+                below: track(r, o + 0x60, &seqs),
+                edges_per_second: r.f32(o + 0x74)?,
+                edge_lifetime: r.f32(o + 0x78)?,
+                gravity: r.f32(o + 0x7c).unwrap_or(0.0),
+                rows: r.u16(o + 0x80).unwrap_or(1).max(1),
+                columns: r.u16(o + 0x82).unwrap_or(1).max(1),
+            })
+        });
         m.cameras = r.list(272, 116, |r, o| {
             let pos = first_spline(r, o + 12, 12, |r, at| r.vec3(at)).unwrap_or_default();
             let base = r.vec3(o + 32)?;
@@ -1146,6 +1217,20 @@ impl Model {
             }
         }
         Some(s)
+    }
+
+    /// Ribbon `i`'s look at `time` of `sequence` (white, opaque, no height
+    /// where its tracks have no keys).
+    pub fn ribbon_look(&self, i: usize, sequence: Option<usize>, time: u32) -> Option<RibbonLook> {
+        let r = self.ribbons.get(i)?;
+        let s = sequence?;
+        let loops = &self.global_loops;
+        Some(RibbonLook {
+            color: r.color.sample(s, time, loops).unwrap_or([1.0; 3]),
+            alpha: r.alpha.sample(s, time, loops).unwrap_or(1.0),
+            above: r.above.sample(s, time, loops).unwrap_or_default().0,
+            below: r.below.sample(s, time, loops).unwrap_or_default().0,
+        })
     }
 
     /// Each bone's matrix at `time` of `sequence` (none: the bind pose).

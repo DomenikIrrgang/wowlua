@@ -374,8 +374,15 @@ or Vulkan natively, WebGPU or WebGL 2 in the browser.
   spherical one, or one locked to its Z axis) face the camera as it will
   be placed: the scene's, the model's own, or the frame's from in front
   turned toward the portrait camera by the zoom; their children follow
-  (bones locked to X or Y as posed, unverified). Not drawn: ribbons
-  (trails behind moving parts, as in motion).
+  (bones locked to X or Y as posed, unverified). Ribbons trail behind
+  their bones: the bone's point where the model was posed over the edges'
+  lifetime (an edge each 1 / edges a second), each edge its height above
+  and below along the bone's Z axis, the older ones pulled down by its
+  gravity, with the ribbon's first texture and material, its color and
+  alpha at the moment (unverified: the strip's fade along its length, its
+  texture's rows and columns). Known wrong: a batch of material blend 7
+  (BlendAdd) with a texture without alpha covers what is behind it (a
+  totem's rune drawn on black).
 - **Minimap** (decision T324): a `Minimap` frame shows the terrain about the
   player, under its regions: the minimap textures of the 533⅓-yard terrain
   tiles its zoom covers (466⅔, 400, 333⅓, 266⅔, 200 or 133⅓ yards across

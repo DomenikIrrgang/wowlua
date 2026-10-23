@@ -257,3 +257,30 @@ fn reads_the_sparse_item_table() {
         }
     }
 }
+
+/// Ribbon emitters read: camelot's fire totem (display 4589) has three,
+/// laying edges down 23 times a second for 0.53 seconds, each 0.22 yards
+/// above and below its bone's point, additive.
+#[test]
+fn reads_ribbon_emitters() {
+    let Some(root) = install() else {
+        eprintln!("no WoW installation: skipped");
+        return;
+    };
+    let Ok(casc) = Casc::open(Box::new(FsStorage { root }), "wow_classic_beta") else {
+        eprintln!("no camelot client: skipped");
+        return;
+    };
+    let mut lib = wowlua_casc::display::Library::default();
+    let d = lib.creature_display(&casc, 4589).expect("the totem");
+    let m = wowlua_casc::m2::Model::parse(&casc.file_by_id(d.parts[0].file).expect("its file"))
+        .expect("its model");
+    assert_eq!(m.ribbons.len(), 3);
+    let r = &m.ribbons[0];
+    assert_eq!((r.edges_per_second, r.bone), (23.0, 27));
+    assert!((r.edge_lifetime - 0.53).abs() < 1e-4);
+    let look = m.ribbon_look(0, Some(0), 0).expect("its look");
+    assert!((look.above - 0.2222).abs() < 1e-3 && (look.below - 0.2222).abs() < 1e-3);
+    let blend = r.materials.first().map(|i| m.materials[*i as usize].blend);
+    assert_eq!(blend, Some(4));
+}

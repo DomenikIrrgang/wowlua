@@ -51,7 +51,13 @@ pub(crate) struct Sprite {
     cell: [f32; 4],
     /// A tail's: where it reaches back to (from `pos`), drawn across.
     tail: Option<Vec3>,
+    /// A ribbon's piece: its four corners as they are (head top, head
+    /// bottom, tail top, tail bottom).
+    corners: Option<[Vec3; 4]>,
 }
+
+/// The most edges a ribbon keeps.
+const RIBBON_EDGES: usize = 64;
 
 /// A random stream (xorshift), the same for the same seed.
 struct Rng(u64);
@@ -800,6 +806,88 @@ impl Renderer {
                 });
             }
         }
+        // Its ribbons: where their bones' points were over their edges'
+        // lifetimes (the model posed at those moments), each edge its
+        // height above and below the point along the bone's Z axis, the
+        // older ones pulled down by its gravity.
+        for (k, rb) in m.ribbons.iter().enumerate() {
+            let Some(look) = m.ribbon_look(k, seq, time) else {
+                continue;
+            };
+            let a = look.alpha * actor.alpha * display.alpha;
+            if rb.edges_per_second <= 0.0 || rb.edge_lifetime <= 0.0 || a <= 0.002 {
+                continue;
+            }
+            let edges =
+                ((rb.edge_lifetime * rb.edges_per_second).ceil() as usize).clamp(1, RIBBON_EDGES);
+            let step = 1000.0 / rb.edges_per_second;
+            let duration = seq.map_or(0, |s| m.sequences[s].duration);
+            let points: Vec<(Vec3, Vec3)> = (0..=edges)
+                .map(|i| {
+                    let back = (i as f32 * step) as i64;
+                    let t = if duration > 0 {
+                        (i64::from(ms) - back).rem_euclid(i64::from(duration)) as u32
+                    } else {
+                        0
+                    };
+                    let posed = m.pose_facing(seq, t, Some(toward));
+                    let bone = posed.get(rb.bone as usize).copied().unwrap_or(m2::IDENTITY);
+                    let at = m2::mul(&part_world, &bone);
+                    let mut p = m2::transform(&at, rb.position);
+                    let age = i as f32 / rb.edges_per_second;
+                    p[2] -= 0.5 * rb.gravity * age * age;
+                    let up = m2::transform_dir(&at, [0.0, 0.0, 1.0]);
+                    let l = dot(up, up).sqrt().max(1e-6);
+                    (p, [up[0] / l, up[1] / l, up[2] / l])
+                })
+                .collect();
+            let index = rb.textures.first().copied().unwrap_or(0) as usize;
+            let tex = match m.textures.get(index) {
+                Some(t) if t.kind == 0 => self.model_texture(t.file, assets),
+                Some(t) => match part.textures.get(&t.kind) {
+                    Some(Texture::File(f)) => self.model_texture(*f, assets),
+                    _ => self.white,
+                },
+                None => self.white,
+            };
+            self.model_group([tex, self.white, self.white]);
+            let blend = rb
+                .materials
+                .first()
+                .and_then(|i| m.materials.get(*i as usize))
+                .map_or(2, |mt| mt.blend);
+            let color = [look.color[0], look.color[1], look.color[2], a];
+            let edge = |(p, up): (Vec3, Vec3)| -> (Vec3, Vec3) {
+                (
+                    [
+                        p[0] + up[0] * look.above,
+                        p[1] + up[1] * look.above,
+                        p[2] + up[2] * look.above,
+                    ],
+                    [
+                        p[0] - up[0] * look.below,
+                        p[1] - up[1] * look.below,
+                        p[2] - up[2] * look.below,
+                    ],
+                )
+            };
+            for (i, pair) in points.windows(2).enumerate() {
+                let (head_top, head_bottom) = edge(pair[0]);
+                let (tail_top, tail_bottom) = edge(pair[1]);
+                let (u0, u1) = (i as f32 / edges as f32, (i + 1) as f32 / edges as f32);
+                self.models.sprites.push(Sprite {
+                    pos: pair[0].0,
+                    size: 0.0,
+                    spin: 0.0,
+                    color,
+                    tex,
+                    blend,
+                    cell: [u0, 0.0, u1, 1.0],
+                    tail: None,
+                    corners: Some([head_top, head_bottom, tail_top, tail_bottom]),
+                });
+            }
+        }
         // Its particles: the emitters' steady state at the moment.
         for (k, e) in m.particles.iter().enumerate() {
             let life = e.lifespan * (1.0 + e.lifespan_variation.abs());
@@ -906,6 +994,7 @@ impl Renderer {
                         blend: u16::from(e.blend),
                         cell: cell(cell_at(&e.head_cells)),
                         tail: None,
+                        corners: None,
                     });
                 }
                 if e.head_or_tail >= 1 && e.tail_length > 0.0 {
@@ -928,6 +1017,7 @@ impl Renderer {
                         blend: u16::from(e.blend),
                         cell: cell(cell_at(track)),
                         tail: Some(m2::transform(&emitter, back)),
+                        corners: None,
                     });
                 }
             }
@@ -1036,6 +1126,15 @@ impl Renderer {
                 (end, side)
             });
             let corner = |x: f32, y: f32| {
+                // A ribbon's piece: x -1 the head, 1 the tail; y 1 the top.
+                if let Some(c) = sp.corners {
+                    return match (x < 0.0, y > 0.0) {
+                        (true, true) => c[0],
+                        (true, false) => c[1],
+                        (false, true) => c[2],
+                        (false, false) => c[3],
+                    };
+                }
                 if let Some((end, side)) = tail {
                     // x: -1 the head, 1 the tail's end; y across.
                     let at = if x < 0.0 { sp.pos } else { end };
