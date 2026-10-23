@@ -278,6 +278,9 @@ pub struct Model<'a> {
     state: &'a Traits,
     /// Every rank 0 (a node asked through a config without it).
     bare: bool,
+    /// The class talent points the player has earned, for the player's own
+    /// configs (`stats::talent_points`), in place of the recorded ones.
+    points: Option<i64>,
 }
 
 impl<'a> Model<'a> {
@@ -286,7 +289,14 @@ impl<'a> Model<'a> {
             class: class.to_uppercase(),
             state,
             bare: false,
+            points: None,
         }
+    }
+
+    /// The model with the player's earned class talent points.
+    fn with_points(mut self, points: i64) -> Model<'a> {
+        self.points = Some(points);
+        self
     }
 
     /// Whether the class's configs were recorded.
@@ -490,10 +500,18 @@ impl<'a> Model<'a> {
                 let mut c = c.clone();
                 if let Some(currency) = c.num("traitCurrencyID") {
                     let currency = currency as i64;
-                    let max = c.num("maxQuantity").unwrap_or(0.0) as i64;
+                    // The class talents' points: the player's earned
+                    // ones where given, else the recording's.
+                    let mut max = c.num("maxQuantity").unwrap_or(0.0) as i64;
+                    if currency == CLASS_CURRENCY
+                        && let Some(points) = self.points
+                    {
+                        max = points;
+                        c.set("maxQuantity", Rv::Num(points as f64));
+                    }
                     let spent = self.spent(config, currency, None, !exclude_staged, false);
                     let in_tree = self.spent(config, currency, Some(tree), !exclude_staged, false);
-                    c.set("quantity", Rv::Num((max - spent) as f64));
+                    c.set("quantity", Rv::Num((max - spent).max(0) as f64));
                     c.set("spent", Rv::Num(spent as f64));
                     c.set("spentInTree", Rv::Num(in_tree as f64));
                 }
@@ -629,6 +647,7 @@ impl<'a> Model<'a> {
                 class,
                 state: self.state,
                 bare: true,
+                points: None,
             };
             let mut info = bare.node(host, node)?;
             info.set("canPurchaseRank", Rv::Bool(false));
@@ -973,8 +992,14 @@ fn get_tree_currency_info(vm: &mut Vm, c: NativeCall) -> Ret {
             };
             return Ok(answer(vm, Some(rv)));
         }
-        let (key, config, _) = resolve(vm, config);
-        let rv = Model::new(&key, &engine(vm).world.traits).tree_currency(config, tree, exclude);
+        let (key, config, viewed) = resolve(vm, config);
+        // The player's own talents: the points their level earned.
+        let points = (!viewed).then(|| crate::stats::talent_points(vm) as i64);
+        let mut m = Model::new(&key, &engine(vm).world.traits);
+        if let Some(p) = points {
+            m = m.with_points(p);
+        }
+        let rv = m.tree_currency(config, tree, exclude);
         // A tree the client lacks: no currencies (the full probe, 1.60.1).
         if rv.is_none() {
             return Ok(vec![Value::Table(vm.new_table())]);
@@ -1012,6 +1037,7 @@ fn bare_tree_currency(vm: &Vm, tree: i64, exclude: bool) -> Option<Rv> {
         class: class.to_string(),
         state: &engine(vm).world.traits,
         bare: true,
+        points: None,
     };
     bare.tree_currency(config, tree, exclude)
 }

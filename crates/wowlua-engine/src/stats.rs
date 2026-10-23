@@ -1656,7 +1656,7 @@ fn global_path(vm: &mut Vm, path: &[&str]) -> Value {
 /// (Blizzard's camelot micro menu reckons it so; the ranks' descriptions,
 /// recorded: "You gain talent points every level starting at level 9
 /// instead of starting at level 10", down to 5).
-fn talent_unlock_level(vm: &mut Vm) -> f64 {
+pub(crate) fn talent_unlock_level(vm: &mut Vm) -> f64 {
     let num = |v: Value, d: f64| match v {
         Value::Num(n) => n,
         _ => d,
@@ -1696,6 +1696,18 @@ fn talent_unlock_level(vm: &mut Vm) -> f64 {
     })()
     .unwrap_or(0.0);
     (first - rank).max(1.0)
+}
+
+/// The most talent points a character earns (the ranks' descriptions,
+/// recorded: "you still may not have more than 51 total talent points").
+const MAX_TALENT_POINTS: f64 = 51.0;
+
+/// The talent points the player has earned: one a level from the unlock
+/// level, at most 51 (decision T330).
+pub(crate) fn talent_points(vm: &mut Vm) -> f64 {
+    let level = engine(vm).units.list[crate::units::PLAYER.0].level;
+    let unlock = talent_unlock_level(vm);
+    (level - unlock + 1.0).clamp(0.0, MAX_TALENT_POINTS)
 }
 
 /// `C_SpecializationInfo.HasPlayerEarnedATalentPoint()`: whether the

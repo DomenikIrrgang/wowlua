@@ -130,3 +130,27 @@ return tostring(active == combat), tostring(info ~= nil), tostring(info and #inf
     );
     assert_eq!(r, ["true", "true", "true", "nil"]);
 }
+
+/// The class talents' points follow the level: one a level from the unlock
+/// level (5 with the default character's legacy ranks), at most 51; the
+/// recorded ranks stay spent.
+#[test]
+fn talent_points_follow_the_level() {
+    let mut vm = vm();
+    let at = |vm: &mut Vm, level: u32| {
+        run(
+            vm,
+            &format!(
+                "mock.setPlayer({{ name = 'Player', class = 'WARRIOR', race = 'Human', level = {level} }})
+mock.player:setStats({{ combatConfig = {{ [1] = 16273023 }}, activeSpecGroup = 1 }})
+local config = C_ClassTalents.GetActiveConfigID()
+local tree = C_Traits.GetConfigInfo(config).treeIDs[1]
+local c = C_Traits.GetTreeCurrencyInfo(config, tree, false)[1]
+return c.maxQuantity, c.quantity, c.spent"
+            ),
+        )
+    };
+    assert_eq!(at(&mut vm, 1), ["0", "0", "7"]);
+    assert_eq!(at(&mut vm, 12), ["8", "1", "7"]);
+    assert_eq!(at(&mut vm, 60), ["51", "44", "7"]);
+}

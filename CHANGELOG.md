@@ -44,6 +44,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- Talent points follow the character's level: one a level from level 10 (earlier with Legacy's "Talented" ranks), at most 51, so the talent window and `C_Traits.GetTreeCurrencyInfo` show what a character of that level has.
 - The default world's talent tree shows its talents: the player's talent config is the one the emulated client holds talents for (it named another, so Blizzard's talents tab drew only its backgrounds).
 - With your WoW installation at hand, an item your test doesn't define is the game's own: `C_Item.GetItemInfo`, `DoesItemExistByID` and Blizzard's item loading answer with its name, quality, icon and class from the client's tables, so Blizzard's Legacy rewards panel no longer raises "invalid itemID". Items you define stay yours.
 - Textures in XML without anchors fill their frame even when they have a size, sliders place their thumb by their value, and a texture's `rotation` attribute turns it: Blizzard's group finder, Settings' sliders and the group finder's divider look as in game.
