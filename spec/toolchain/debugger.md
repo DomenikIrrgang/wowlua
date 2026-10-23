@@ -382,10 +382,16 @@ or Vulkan natively, WebGPU or WebGL 2 in the browser.
   the last of each tile's eight file IDs in its `MAID` chunk, row by row
   from the north-west; the player's tile is column `32 - y / 533⅓`, row
   `32 - x / 533⅓` of `UnitPosition`'s north `y` and west `x`. The minimap
-  follows `mock.moveTo` and `SetZoom` at the next frame. Indoors nothing
-  (the building's own map, not read), and no blips, pings or quest areas.
-  Unverified: the zoom sizes, the arrow's size and the order of the
-  terrain and the frame's regions on this client.
+  follows `mock.moveTo` and `SetZoom` at the next frame. Group members
+  with a place in the world (a unit's `world`) are their class's blips
+  (`Interface\Minimap\PartyRaidBlips`, its 8 by 4 grid in class ID order,
+  16 UI units) within its circle; a ping (`PingLocation`, kept for
+  `GetPingPosition`, `MINIMAP_PING("player", x, y)`) shows for 5 seconds
+  as the client's center, growing ring and turning marks (decision T329).
+  Indoors nothing (the building's own map, not read), no quest areas or
+  tracked objects. Unverified: the zoom sizes, the arrow's and blips'
+  sizes, the ping's look and time, and the order of the terrain and the
+  frame's regions on this client.
 - **Speed**: textures and glyphs are uploaded once and kept on the GPU;
   quads go in one vertex buffer per frame, drawn in as few calls as texture
   changes allow; nothing is drawn when the scene did not change.

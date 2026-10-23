@@ -333,6 +333,11 @@ player's arrow 32 by 32 UI units; neither is recorded on camelot.
    for each. The landmark's distance in the shots gives each zoom's span.
 2. The same spot with `/console rotateMinimap 1`, facing east: the terrain
    turned and the arrow up.
+3. In a party, a screenshot of the minimap with a member in sight, and
+   one of a ping (click the minimap) at 0.5 s, 2 s and 4 s, with
+   `/run local f=CreateFrame("Frame") f:RegisterEvent("MINIMAP_PING") f:SetScript("OnEvent", function(_, e, ...) print(e, ...) end)`
+   first: the blip's size, the ping's look and time, and the event's
+   argument order (wowlua: unit, x, y).
 
 ## Unanchored textures and slider thumbs
 

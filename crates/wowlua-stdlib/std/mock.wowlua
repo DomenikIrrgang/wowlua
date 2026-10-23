@@ -385,6 +385,9 @@ export type UnitData = {
     --- Where it is when not where the player is (a group member's roster
     --- zone; out of sight: `UnitIsVisible` false).
     zone?: string,
+    --- Where it is in the world: `UnitPosition`'s north `y` and west `x`
+    --- (a group member's blip on the minimap).
+    world?: { y: number, x: number },
     --- false: an offline player character (`UnitIsConnected` false; the
     --- roster's level 0, zone "Offline").
     online?: boolean,

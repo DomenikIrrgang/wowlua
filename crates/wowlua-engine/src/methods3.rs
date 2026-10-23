@@ -1350,9 +1350,42 @@ fn get_max_control_point_order(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret
 
 // ------------------------------------------------------- the tail: frames
 
-/// `Minimap:GetPingPosition()`: no ping (0, 0; unverified).
-fn get_ping_position(_vm: &mut Vm, _id: WidgetId, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(0.0), Value::Num(0.0)])
+/// `Minimap:GetPingPosition()`: the last ping's place, UI units from the
+/// minimap's center (`PingLocation`'s), else none (0, 0; unverified).
+fn get_ping_position(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let ping = first(vm, id, "MinimapPing");
+    let at = match ping {
+        Some(Value::Table(t)) => {
+            let x = vm.heap.table(t).get(Value::Num(1.0));
+            let y = vm.heap.table(t).get(Value::Num(2.0));
+            (x, y)
+        }
+        _ => (Value::Num(0.0), Value::Num(0.0)),
+    };
+    Ok(vec![at.0, at.1])
+}
+
+/// `Minimap:PingLocation(x, y)`: the player pings that place (UI units
+/// from the minimap's center, as Blizzard's minimap click gives them):
+/// kept with the time for the minimap to draw (`scene::minimap_ping`), and
+/// `MINIMAP_PING("player", x, y)` (the documentation names the payload y,
+/// x; the order unverified).
+fn ping_location(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let (Value::Num(x), Value::Num(y)) = (vm.hidden(c.arg(2)), vm.hidden(c.arg(3))) else {
+        return Ok(vec![]);
+    };
+    let t = vm.new_table();
+    let now = crate::clock::now(vm);
+    for (i, v) in [x, y, now].into_iter().enumerate() {
+        let _ = vm
+            .heap
+            .table_mut(t)
+            .set(Value::Num(i as f64 + 1.0), Value::Num(v));
+    }
+    crate::widgets::store(vm, id, "MinimapPing", &[Value::Table(t)]);
+    let player = vm.str("player");
+    crate::widgets::fire_event(vm, "MINIMAP_PING", &[player, Value::Num(x), Value::Num(y)]);
+    Ok(vec![])
 }
 
 /// `NamePlate:GetHitTestPoints()`: what `SetHitTestPoints` set, else none.
@@ -1751,6 +1784,7 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
         ("VertexColor:GetEndColor", get_end_color),
         // The tail.
         ("Minimap:GetPingPosition", get_ping_position),
+        ("Minimap:PingLocation", ping_location),
         // Unverified: whether the client lets addons change them (the
         // documented empty false).
         ("NamePlate:CanChangeHitTestPoints", no),

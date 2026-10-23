@@ -1277,3 +1277,80 @@ M:SetPoint('TOPLEFT', 0, 0)",
     }
     assert_eq!(turned.iter().find(|q| !q.0).expect("the arrow").1, 0.0);
 }
+
+/// Group members with a place in the world are their class's blips on the
+/// minimap, where they are; a ping (`PingLocation`) is told
+/// (`MINIMAP_PING`), answered (`GetPingPosition`) and drawn for its first
+/// seconds.
+#[test]
+fn minimaps_show_the_group_and_pings() {
+    let mut vm = vm();
+    wowlua_engine::controls::install(&mut vm, "mock");
+    wowlua_engine::clientdata::set(&mut vm, std::sync::Arc::new(Tiles));
+    let r = run(
+        &mut vm,
+        "mock.moveTo({ mapID = 1429, zone = 'Elwynn Forest', x = 0.4805, y = 0.4365 })
+M = CreateFrame('Minimap', nil, UIParent)
+M:SetSize(200, 200)
+M:SetPoint('TOPLEFT', 0, 0)
+local y, x = UnitPosition('player')
+mock.spawnUnit({ name = 'Anna', class = 'PRIEST', classID = 5, reaction = 'friendly', player = true, world = { y = y + 60, x = x } }):joinGroup()
+Pinged = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('MINIMAP_PING')
+f:SetScript('OnEvent', function(_, _, unit, a, b) Pinged = { unit, a, b } end)
+M:PingLocation(-30, 20)
+local py = UnitPosition('party1')
+local gx, gy = M:GetPingPosition()
+return py - y, gx, gy, table.concat(Pinged, ' ')",
+    );
+    assert_eq!(r, ["60", "-30", "20", "player -30 20"]);
+    let marks = |vm: &mut Vm| -> Vec<(String, [f32; 4], [f32; 2])> {
+        let scene = wowlua_engine::scene::build(vm);
+        scene
+            .items
+            .iter()
+            .filter_map(|i| match i {
+                wowlua_engine::scene::Item::Quad(q) => match &q.image {
+                    wowlua_engine::scene::Image::File(p)
+                        if p.contains("PartyRaidBlips") || p.contains("Ping") =>
+                    {
+                        Some((
+                            p.rsplit('\\').next().unwrap().to_string(),
+                            [q.rect.x, q.rect.y, q.rect.w, q.rect.h],
+                            [q.texcoord[0], q.texcoord[1]],
+                        ))
+                    }
+                    _ => None,
+                },
+                _ => None,
+            })
+            .collect()
+    };
+    let now = marks(&mut vm);
+    // The priest 60 yards north: 60 / (466.67 / 200) pixels above the
+    // center (100, 100), the priest's cell (the fifth) of the sheet.
+    let blip = now
+        .iter()
+        .find(|m| m.0 == "PartyRaidBlips")
+        .expect("the blip");
+    assert!(
+        (blip.1[0] + blip.1[2] / 2.0 - 100.0).abs() < 0.01,
+        "{blip:?}"
+    );
+    assert!((blip.1[1] + blip.1[3] / 2.0 - (100.0 - 60.0 * 200.0 / 466.6667)).abs() < 0.01);
+    assert_eq!(blip.2, [0.5, 0.0]);
+    let center = now
+        .iter()
+        .find(|m| m.0 == "UI-Minimap-Ping-Center")
+        .expect("the ping");
+    assert_eq!(
+        (
+            center.1[0] + center.1[2] / 2.0,
+            center.1[1] + center.1[3] / 2.0
+        ),
+        (70.0, 80.0)
+    );
+    run(&mut vm, "mock.advanceTime(6)");
+    assert!(marks(&mut vm).iter().all(|m| !m.0.contains("Ping")));
+}

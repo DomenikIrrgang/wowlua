@@ -1461,6 +1461,192 @@ fn minimap_tiles(vm: &mut Vm, f: WidgetId) -> Vec<Quad> {
     out
 }
 
+/// A world place (north, west) on a minimap: its screen point, when within
+/// the minimap's circle, as the minimap draws its terrain (its zoom, the
+/// player at its center, turned with `rotateMinimap`).
+fn minimap_point(
+    vm: &mut Vm,
+    f: WidgetId,
+    rect: Rect,
+    north: f64,
+    west: f64,
+) -> Option<(f32, f32)> {
+    let (pn, pw, _, _) = crate::character::player_world(vm)?;
+    let zoom = num(vm, first(vm, f, "Zoom").as_ref(), 0.0).clamp(0.0, 5.0) as usize;
+    let ypp = MINIMAP_YARDS[zoom] / rect.w as f64;
+    // East and south of the player, in pixels.
+    let (mut dx, mut dy) = ((pw - west) / ypp, (pn - north) / ypp);
+    if minimap_rotates(vm) {
+        let (sin, cos) = crate::unitinfo::player_facing(vm).sin_cos();
+        (dx, dy) = (dx * cos - dy * sin, dx * sin + dy * cos);
+    }
+    if dx.hypot(dy) > rect.w as f64 / 2.0 {
+        return None;
+    }
+    Some((
+        rect.x + rect.w / 2.0 + dx as f32,
+        rect.y + rect.h / 2.0 + dy as f32,
+    ))
+}
+
+/// A square quad of a whole texture (or its part) centered at a point.
+fn minimap_icon(
+    f: WidgetId,
+    at: (f32, f32),
+    size: f32,
+    image: Image,
+    tc: [f32; 4],
+    rotation: f32,
+    alpha: f32,
+    unit: f32,
+    clip: Option<Rect>,
+) -> Quad {
+    let [u0, u1, v0, v1] = tc;
+    let texcoord = [u0, v0, u0, v1, u1, v0, u1, v1];
+    Quad {
+        widget: f.0,
+        rect: Rect {
+            x: at.0 - size / 2.0,
+            y: at.1 - size / 2.0,
+            w: size,
+            h: size,
+        },
+        image,
+        texcoord,
+        atlas: None,
+        atlas_texcoord: texcoord,
+        color: [1.0, 1.0, 1.0, alpha],
+        blend: Blend::Blend,
+        desaturated: false,
+        rotation,
+        tile: (false, false),
+        clip,
+        masks: Vec::new(),
+        unit,
+        snap: false,
+    }
+}
+
+/// A minimap's group members (party or raid, with a place in the world)
+/// as their class's blips (`Interface\Minimap\PartyRaidBlips`: an 8 by 4
+/// grid, the classes in ID order, the solid dots first; 16 UI units,
+/// unverified), within its circle.
+fn minimap_blips(vm: &mut Vm, f: WidgetId) -> Vec<Quad> {
+    let Some(rect) = rect_of(vm, f) else {
+        return Vec::new();
+    };
+    let members: Vec<(f64, (f64, f64))> = {
+        let u = &engine(vm).units;
+        u.group
+            .iter()
+            .filter(|g| **g != crate::units::PLAYER)
+            .filter_map(|g| {
+                let m = &u.list[g.0];
+                m.world.map(|w| (m.class_id, w))
+            })
+            .collect()
+    };
+    let (alpha, unit, clip) = (effective_alpha(vm, f), unit_of(vm, f), clip_of(vm, f));
+    let mut out = Vec::new();
+    for (class, (north, west)) in members {
+        let Some(at) = minimap_point(vm, f, rect, north, west) else {
+            continue;
+        };
+        let cell = (class.max(1.0) as u32 - 1) % 16;
+        let (cx, cy) = (cell % 8, cell / 8);
+        let tc = [
+            cx as f32 / 8.0,
+            (cx + 1) as f32 / 8.0,
+            cy as f32 / 4.0,
+            (cy + 1) as f32 / 4.0,
+        ];
+        let image = Image::File("Interface\\Minimap\\PartyRaidBlips".into());
+        out.push(minimap_icon(
+            f,
+            at,
+            16.0 * unit,
+            image,
+            tc,
+            0.0,
+            alpha,
+            unit,
+            clip,
+        ));
+    }
+    out
+}
+
+/// How long a ping shows (unverified).
+const PING_SECONDS: f64 = 5.0;
+
+/// A minimap's last ping (`PingLocation`), for its first seconds: its
+/// center, a ring and the turning marks (`UI-Minimap-Ping-Center`,
+/// `-Expand`, `-Rotate`; their sizes and motion unverified).
+fn minimap_ping(vm: &mut Vm, f: WidgetId) -> Vec<Quad> {
+    let Some(rect) = rect_of(vm, f) else {
+        return Vec::new();
+    };
+    let Some(Value::Table(t)) = first(vm, f, "MinimapPing") else {
+        return Vec::new();
+    };
+    let get = |i: f64| match vm.heap.table(t).get(Value::Num(i)) {
+        Value::Num(n) => n,
+        _ => 0.0,
+    };
+    let (x, y, at) = (get(1.0), get(2.0), get(3.0));
+    let age = crate::clock::now(vm) - at;
+    if !(0.0..PING_SECONDS).contains(&age) {
+        return Vec::new();
+    }
+    let unit = unit_of(vm, f);
+    // UI units from the center, y up.
+    let p = (
+        rect.x + rect.w / 2.0 + x as f32 * unit,
+        rect.y + rect.h / 2.0 - y as f32 * unit,
+    );
+    let (alpha, clip) = (effective_alpha(vm, f), clip_of(vm, f));
+    let whole = [0.0, 1.0, 0.0, 1.0];
+    let tex = |n: &str| Image::File(format!("Interface\\Minimap\\UI-Minimap-Ping-{n}"));
+    // The ring grows each second; the marks turn once a second.
+    let grow = (age.fract() as f32) * 0.5 + 0.5;
+    let turn = (age.fract() * std::f64::consts::TAU) as f32;
+    vec![
+        minimap_icon(
+            f,
+            p,
+            32.0 * unit * grow,
+            tex("Expand"),
+            whole,
+            0.0,
+            alpha,
+            unit,
+            clip,
+        ),
+        minimap_icon(
+            f,
+            p,
+            32.0 * unit,
+            tex("Rotate"),
+            whole,
+            turn,
+            alpha,
+            unit,
+            clip,
+        ),
+        minimap_icon(
+            f,
+            p,
+            16.0 * unit,
+            tex("Center"),
+            whole,
+            0.0,
+            alpha,
+            unit,
+            clip,
+        ),
+    ]
+}
+
 /// The player's arrow at a minimap's center, turned to the player's
 /// facing, or up when the minimap turns instead (the client's own texture,
 /// 32 by 32 UI units; unverified).
@@ -1568,8 +1754,12 @@ fn build_scene(vm: &mut Vm) -> Scene {
                 items.push(Item::Quad(q));
             }
         }
-        if minimap && let Some(q) = minimap_arrow(vm, f) {
-            items.push(Item::Quad(q));
+        if minimap {
+            let marks = minimap_blips(vm, f).into_iter().chain(minimap_ping(vm, f));
+            items.extend(marks.map(Item::Quad));
+            if let Some(q) = minimap_arrow(vm, f) {
+                items.push(Item::Quad(q));
+            }
         }
         // A model frame's model over its regions (unverified: the
         // client's order of a model and its frame's own regions).

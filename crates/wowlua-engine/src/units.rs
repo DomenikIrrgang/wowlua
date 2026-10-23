@@ -95,6 +95,9 @@ pub struct Unit {
     /// Where a group member is when not where the player is (the roster's
     /// zone; out of sight).
     pub zone: Option<String>,
+    /// Where it is in the world (`world = { y, x }`: the north and west
+    /// coordinates, `UnitPosition`'s), when given.
+    pub world: Option<(f64, f64)>,
     /// A raid member's subgroup when not the one its place gives.
     pub subgroup: Option<f64>,
     /// A player character logged in (an offline group member not).
@@ -300,6 +303,7 @@ pub fn install(vm: &mut Vm) {
         creature_family: None,
         role: None,
         zone: None,
+        world: None,
         subgroup: None,
         online: true,
     };
@@ -1880,6 +1884,19 @@ fn unit_from(vm: &mut Vm, data: Option<TableRef>, player_guid: Option<String>) -
         },
         zone: match get(vm, "zone") {
             Value::Str(s) => Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
+            _ => None,
+        },
+        world: match get(vm, "world") {
+            Value::Table(w) => {
+                let k = |vm: &mut Vm, k: &str| {
+                    let key = vm.str(k);
+                    match vm.heap.table(w).get(key) {
+                        Value::Num(n) => Some(n),
+                        _ => None,
+                    }
+                };
+                k(vm, "y").zip(k(vm, "x"))
+            }
             _ => None,
         },
         subgroup: None,

@@ -1332,7 +1332,20 @@ fn unit_position(vm: &mut Vm, c: NativeCall) -> Ret {
     // (the full probe); another unit's nothing (unverified).
     match units::unit_arg(vm, &c, 1) {
         None => return Ok(vec![Value::Nil, Value::Nil, Value::Nil, Value::Num(0.0)]),
-        Some(id) if id != units::PLAYER => return Ok(vec![]),
+        // Another unit: where the test put it (`world`), in the player's
+        // instance; else nothing (unverified).
+        Some(id) if id != units::PLAYER => {
+            let Some((y, x)) = engine(vm).units.list[id.0].world else {
+                return Ok(vec![]);
+            };
+            let instance = player_world(vm).map_or(0.0, |w| w.3);
+            return Ok(vec![
+                Value::Num(y),
+                Value::Num(x),
+                Value::Num(0.0),
+                Value::Num(instance),
+            ]);
+        }
         _ => {}
     }
     Ok(match player_world(vm) {
