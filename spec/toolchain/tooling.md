@@ -360,7 +360,8 @@ T239).
 (decision T203): `mock.defineSpell(id, data)` (`name`, `iconID`,
 `description`, `known`, `petKnown`, `cooldown`, `charges`, ranges, `cached`),
 `mock.defineItem(id, data, { cached?, delay?, missing? })` (`GetItemInfo`'s
-fields by name, `itemLevel` 1 unless given; cached unless `cached` is
+fields by name, `itemLevel` 1 unless given, a `link` made as the client
+makes one unless given, decision T283; cached unless `cached` is
 `false` or a `delay` or `missing` is given, and then `RequestLoadItemDataByID` fires `ITEM_DATA_LOAD_RESULT`
 after `delay`, 0.2 s by default, decision T228), in the test or in `tests/mocks/`. The data
 stays the test's table, so its values may be secrets. An ID the test did not define behaves as data

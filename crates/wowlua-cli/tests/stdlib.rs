@@ -6483,11 +6483,16 @@ ChatFrame_SendTell, ChatFrame_OpenChat = note("oldTell"), note("oldOpen")
 ChatEdit_InsertLink = function(link) seen[#seen + 1] = "oldInsert:" .. link return false end
 C.whisper("Ann")
 C.insertLink("[x]")
-ChatFrameUtil = { SendTell = note("tell"), OpenChat = note("open"), InsertLink = function(link) seen[#seen + 1] = "insert:" .. link return true end }
+local filters = {}
+ChatFrameUtil = { SendTell = note("tell"), OpenChat = note("open"), InsertLink = function(link) seen[#seen + 1] = "insert:" .. link return true end,
+    SendBNetTell = note("bntell"),
+    AddMessageEventFilter = function(event, f) filters[event] = f end,
+    RemoveMessageEventFilter = function(event, f) if filters[event] == f then filters[event] = nil end end }
 C.whisper("Bob")
 C.whisper("Bob", CreateFrame("Frame"))
 C.open("hi")
 C.insertLink("[y]")
+C.whisperBnet("K1")
 local real = C_PartyInfo.InviteUnit
 C_PartyInfo.InviteUnit = note("invite")
 U.invite("Cara")
@@ -6495,14 +6500,32 @@ C_PartyInfo.InviteUnit = nil
 InviteUnit = note("oldInvite")
 U.invite("Dan")
 C_PartyInfo.InviteUnit = real
+local realBn = C_BattleNet
+C_BattleNet = { InviteFriend = note("bninvite") }
+U.inviteBnet(77)
+C_BattleNet = nil
+BNInviteFriend = note("oldBn")
+U.inviteBnet(78)
+C_BattleNet = realBn
 print(table.concat(seen, " "))
+local sub = C.filter("CHAT_MSG_SYSTEM", function(text, n) return text == "hide" and n == 1 end)
+local f = filters.CHAT_MSG_SYSTEM
+print(f(nil, "CHAT_MSG_SYSTEM", "hide", 1), f(nil, "CHAT_MSG_SYSTEM", "show", 1))
+C.filter("CHAT_MSG_SAY", function() error("boom") end)
+print(filters.CHAT_MSG_SAY(nil, "CHAT_MSG_SAY", "x"))
+sub:cancel()
+sub:cancel()
+print(filters.CHAT_MSG_SYSTEM == nil, f(nil, "CHAT_MSG_SYSTEM", "hide", 1))
 "##,
     );
     assert_eq!(
         plain(&out),
         [
             "0",
-            "oldTell1:Ann oldInsert:[x] oldOpen1:[x] tell1:Bob tell2:Bob open1:hi insert:[y] invite1:Cara oldInvite1:Dan",
+            "oldTell1:Ann oldInsert:[x] oldOpen1:[x] tell1:Bob tell2:Bob open1:hi insert:[y] bntell1:K1 invite1:Cara oldInvite1:Dan bninvite1:77 oldBn1:78",
+            "true false",
+            "false",
+            "true false",
         ]
     );
 }
@@ -6588,6 +6611,9 @@ local active = { [CreateFrame("Frame")] = true, [CreateFrame("Frame")] = true }
 local pool = { EnumerateActive = function(self) return pairs(active) end }
 local box = { ForEachFrame = function(self, fn) fn(f); fn(b); fn(42) end }
 print(#F.rows(pool), #F.rows(box), #F.rows(nil), #F.rows({}))
+-- a map canvas's pins of a template
+local map = { EnumeratePinsByTemplate = function(self, t) if t == "Q" then return pairs(active) end return function() end end }
+print(#F.mapPins(map, "Q"), #F.mapPins(map, "R"), #F.mapPins(nil, "Q"), #F.mapPins({}, "Q"))
 -- EventRegistry callbacks: the values, not the owner; cancelled: none
 local seen = {}
 local sub = E.onRegistry("StdTest.Ping", function(...) seen[#seen + 1] = table.concat({ ... }, ",") end)
@@ -6597,7 +6623,10 @@ EventRegistry:TriggerEvent("StdTest.Ping", "c")
 print(table.concat(seen, " "), sub.active)
 "##,
     );
-    assert_eq!(plain(&out), ["2 1 2", "0", "2", "2 2 0 0", "a,b false"]);
+    assert_eq!(
+        plain(&out),
+        ["2 1 2", "0", "2", "2 2 0 0", "2 0 0 0", "a,b false"]
+    );
 }
 
 /// `wowlua:links`: addon links in chat, clicks reach this addon only.

@@ -22,6 +22,8 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `wowlua:chat` opens the player's chat line: `chat.whisper(name)`, `chat.insertLink(link)` (as a shift-click; a new line when none is open) and `chat.open(text)`, through the game's own chat code on every client. `unit.invite(name)` invites a player to your group.
 - `secure.overlay(button)` puts a secure action button over one of your own buttons, for what only a secure click may do (a slash command, a click on one of the game's protected buttons): `overlay.set("type1", "macro")`, `overlay.show()` (or `overlay.show(row)` over another frame, such as the row under the mouse), `overlay.hide()`. It is anchored only while shown, so your window never turns protected and still opens in combat.
 - Restyling the game's frames: `frames.textures(f)`, `frames.fontStrings(f)` and `frames.children(f)` give typed lists, `frames.stateTextures(button)` a button's state art, and `frames.rows(list)` the rows one of the game's lists shows (an object pool or a scroll box). `events.onRegistry(name, fn)` listens to Blizzard's `EventRegistry` callbacks, with error isolation and a subscription to cancel.
+- `chat.whisperBnet(accountName)` and `unit.inviteBnet(gameAccountID)` whisper and invite Battle.net friends, and `chat.filter("CHAT_MSG_SYSTEM", fn)` hides the chat lines `fn` returns true for, through the game's own filters (an error in `fn` is reported and the line shows; cancel the subscription to remove it).
+- `frames.mapPins(WorldMapFrame, "QuestPinTemplate")` lists the pins one of the game's maps shows of a template, as frames.
 
 ### Changed
 
@@ -63,6 +65,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- In tests, `GetItemInfo` gives an item defined with `mock.defineItem` its link (it gave none, so `item.get` found nothing for it).
 - `wowlua fix` crashed before doing anything. It works again; migrating `wowlua.json` to the current schema is now `wowlua fix --migrate`, since `--manifest <path>` names the manifest for every command.
 - A class extending a class you imported with `import type` (`class Slot extends ItemSlot`) is now an error (E3008): it checked clean and failed when the addon loaded. Import the class itself (`import ItemSlot from …`).
 - `C_DurationUtil.CreateDurationTextBinding()` gives a typed binding (`DurationTextBindingObject`: `SetDuration`, `SetEnabled`, `SetFormatter`, …), where it was `any`, and the rule and abbreviated number formatters (`C_StringUtil.CreateNumericRuleFormatter()`, `CreateAbbreviatedNumberFormatter()`) are `NumericFormatter`s, so they can be passed as an aura button's text formatter or a binding's.

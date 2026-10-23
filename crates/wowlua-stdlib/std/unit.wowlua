@@ -192,7 +192,6 @@ export function group(opts: GroupOptions?): () -> UnitToken?
     end
 end
 
---- The group's size: 1 when solo.
 --- Invites `name` (a player's name, with the realm for another realm's) to
 --- your group: `C_PartyInfo.InviteUnit`, or the older `InviteUnit`; the
 --- game says in chat how it went.
@@ -200,6 +199,15 @@ export function invite(name: string)
     try(tbl.field(_G, "C_PartyInfo", "InviteUnit") or tbl.field(_G, "InviteUnit"), name)
 end
 
+--- Invites a Battle.net friend to your group by the game account they
+--- play on (`gameAccountID` of their game account info), as the game's
+--- friends list does: `C_BattleNet.InviteFriend`, or the older
+--- `BNInviteFriend`.
+export function inviteBnet(gameAccountID: number)
+    try(tbl.field(_G, "C_BattleNet", "InviteFriend") or tbl.field(_G, "BNInviteFriend"), gameAccountID)
+end
+
+--- The group's size: 1 when solo.
 export function groupSize(): number
     return math.max(1, GetNumGroupMembers())
 end

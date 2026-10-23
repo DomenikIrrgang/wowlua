@@ -735,33 +735,43 @@ export function stateTextures(button: Button): Texture[]
     return out
 end
 
+-- The frames an enumerator of the game's gives (`pairs`-like: each frame
+-- the first value), started by calling `enumerate(...)`, protected.
+local function enumerated(enumerate: unknown, ...: unknown): Frame[]
+    const out: Frame[] = {}
+    if type(enumerate) ~= "function" then
+        return out
+    end
+    local ok, iter, state, key = pcall(enumerate :: (...unknown) -> (unknown, unknown, unknown), ...)
+    if ok and type(iter) == "function" then
+        const step = iter :: (unknown, unknown) -> unknown
+        while true do
+            key = step(state, key)
+            if key == nil then
+                break
+            end
+            const f = asFrame(key)
+            if f then
+                out[#out + 1] = f
+            end
+        end
+    end
+    return out
+end
+
 --- The frames one of the game's lists shows: an object pool's active ones
 --- (`EnumerateActive`), or a scroll box's (`ForEachFrame`); none for
 --- anything else. In the list's own order.
 export function rows(list: unknown): Frame[]
-    const out: Frame[] = {}
     if type(list) ~= "table" or not secret.readable(list) then
-        return out
+        return {}
     end
     const methods = list :: { [string]: unknown }
     const enumerate = methods.EnumerateActive
     if type(enumerate) == "function" then
-        local ok, iter, state, key = pcall(enumerate :: (unknown) -> (unknown, unknown, unknown), list)
-        if ok and type(iter) == "function" then
-            const step = iter :: (unknown, unknown) -> unknown
-            while true do
-                key = step(state, key)
-                if key == nil then
-                    break
-                end
-                const f = asFrame(key)
-                if f then
-                    out[#out + 1] = f
-                end
-            end
-        end
-        return out
+        return enumerated(enumerate, list)
     end
+    const out: Frame[] = {}
     const each = methods.ForEachFrame
     if type(each) == "function" then
         pcall(each :: (unknown, (unknown) -> ()) -> (), list, function(row: unknown)
@@ -772,6 +782,16 @@ export function rows(list: unknown): Frame[]
         end)
     end
     return out
+end
+
+--- The pins a map of the game's (the world map, the flight map: Blizzard's
+--- map canvas) shows of one pin template (`"QuestPinTemplate"`), through
+--- its `EnumeratePinsByTemplate`; none for anything else.
+export function mapPins(map: unknown, template: string): Frame[]
+    if type(map) ~= "table" or not secret.readable(map) then
+        return {}
+    end
+    return enumerated((map :: { [string]: unknown }).EnumeratePinsByTemplate, map, template)
 end
 
 --- Keeps one of the game's frames out of sight while it stays shown, so its

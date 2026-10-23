@@ -85,6 +85,7 @@ if list then frames.keepAway(list, { fade = true }) end     -- out of sight, sti
 | `children` | `(frame: Frame) -> Frame[]` | The frame's children the addon may read |
 | `stateTextures` | `(button: Button) -> Texture[]` | The button's state textures it has: normal, pushed, highlight, disabled, and a check button's checked ones |
 | `rows` | `(list: unknown) -> Frame[]` | The frames one of the game's lists shows: an object pool's active ones (`EnumerateActive`) or a scroll box's (`ForEachFrame`), in its order; none for anything else |
+| `mapPins` | `(map: unknown, template: string) -> Frame[]` | The pins one of the game's maps (Blizzard's map canvas: the world map, the flight map) shows of a pin template, through `EnumeratePinsByTemplate`; none for anything else (decision S46) |
 | `asRegion`, `asFrame`, `asButton`, `asCheckButton`, `asEditBox`, `asScrollFrame`, `asSlider`, `asStatusBar`, `asCooldown`, `asFontString`, `asTexture` | `(v: unknown) -> Region?`, … | `v` when its `IsObjectType` says it is one (called protected; a table the addon may not read is none), else nil |
 | `keepAway` | `(frame: Frame, opts?: { fade?: boolean, when?: () -> boolean }) -> AwayHandle` | Keeps the frame out of sight while it stays shown (its scripts and children keep working): moved off screen, and with `fade` see-through; again a frame after the game places it (with `fade`, also after it sets its alpha) and when it shows. Only while `when` returns true (default: always). A protected frame moves only out of combat (`wowlua:combat`'s `defer`). The handle's `apply()` puts it away now, `release()` stops (hooks can't be removed: they then do nothing). |
 
@@ -495,8 +496,10 @@ linkButton:SetScript("OnClick", function() chat.insertLink(recipeLink) end)
 | API | Signature | Notes |
 |-----|-----------|-------|
 | `whisper` | `(name: string, frame?: Frame)` | Opens the chat line to whisper `name`, as the game's own "Whisper" does (`SendTell`); the frame goes to the game only when given |
+| `whisperBnet` | `(accountName: string, frame?: Frame)` | Opens the chat line to whisper a Battle.net friend by their account name as the game gives it (protected text only the game draws), as the friends list does (`SendBNetTell`) (decision S46) |
 | `open` | `(text: string, frame?: Frame)` | Opens the chat line with `text` in it (`OpenChat`) |
 | `insertLink` | `(link: string)` | Puts `link` into the line being typed, as a shift-click does (`InsertLink`); with none open, opens one with it |
+| `filter` | `(event: string, fn: (text: unknown, ...unknown) -> boolean?) -> Subscription` | Hides the chat lines of `event` for which `fn` returns true, through the game's message filters (`AddMessageEventFilter`); `fn` gets the line's values, its text first. Isolated: an error is reported and the line shows. Cancelling removes the filter (`RemoveMessageEventFilter`) (decision S46) |
 
 ## Testing
 

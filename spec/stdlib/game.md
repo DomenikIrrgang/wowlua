@@ -82,6 +82,7 @@ end
 | `classColor` | `(unit: UnitToken) -> ColorMixin?` | From `wowlua:color` (honors `CUSTOM_CLASS_COLORS`); `nil` when the class is secret |
 | `group` | `(opts?: { includePlayer: boolean?, includePets: boolean? }) -> (() -> UnitToken?)` | Iterates `raid1..raidN` in a raid (the player's own raid token only with `includePlayer`), `party1..party4` (plus `player` when requested) in a party, and only `player` when solo. Pets follow their owner with `includePets`. A secret answer to "in a raid/group" or "is it me" counts as no, as do secret options. |
 | `invite` | `(name: string)` | Invites a player to your group by name (`C_PartyInfo.InviteUnit`, or the older `InviteUnit`); the game reports in chat how it went (decision S44) |
+| `inviteBnet` | `(gameAccountID: number)` | Invites a Battle.net friend to your group by the game account they play on, as the game's friends list does (`C_BattleNet.InviteFriend`, or the older `BNInviteFriend`) (decision S46) |
 | `groupSize` | `() -> number` | `GetNumGroupMembers()`, with 1 when solo |
 
 The client's newer APIs (`UnitHealthPercent`, `GetUnitName`) are detected at

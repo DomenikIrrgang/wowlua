@@ -4,7 +4,8 @@
 -- happens where a client has neither.
 import * as tbl from "wowlua:table"
 import * as secret from "wowlua:secret"
-import try from "wowlua:errors"
+import try, callOwned from "wowlua:errors"
+import type Subscription from "wowlua:events"
 
 local function game(name: string, old: string): unknown
     return tbl.field(_G, "ChatFrameUtil", name) or tbl.field(_G, old)
@@ -25,6 +26,13 @@ export function whisper(name: string, frame: Frame?)
     call(game("SendTell", "ChatFrame_SendTell"), name, frame)
 end
 
+--- Opens the chat line to whisper a Battle.net friend by their account
+--- name as the game gives it (protected text only the game can draw), as
+--- the friends list's "Whisper" does (`SendBNetTell`).
+export function whisperBnet(accountName: string, frame: Frame?)
+    call(game("SendBNetTell", "ChatFrame_SendBNetTell"), accountName, frame)
+end
+
 --- Opens the chat line with `text` written in it (in `frame`, default the
 --- one the game picks).
 export function open(text: string, frame: Frame?)
@@ -37,4 +45,32 @@ export function insertLink(link: string)
     if not secret.flag(try(game("InsertLink", "ChatEdit_InsertLink"), link)) then
         open(link)
     end
+end
+
+--- Hides the chat lines of `event` (`"CHAT_MSG_SYSTEM"`, …) for which `fn`
+--- returns true, through the game's own message filters
+--- (`AddMessageEventFilter`). `fn` gets the line's values as the game
+--- gives them, its text first. Isolated: an error is reported and the line
+--- shows. Cancelling the subscription removes the filter.
+export function filter(event: string, fn: (text: unknown, ...: unknown) -> boolean?): Subscription
+    const context = { component = "chat: " .. event .. " filter" }
+    local sub: Subscription
+    local function hide(_: unknown, _: unknown, ...: unknown): boolean
+        if not sub.active then
+            return false
+        end
+        local ok, hidden = callOwned(context, nil, fn, ...)
+        return ok and hidden == true
+    end
+    sub = {
+        active = true,
+        cancel = function(self: Subscription)
+            if self.active then
+                self.active = false
+                try(game("RemoveMessageEventFilter", "ChatFrame_RemoveMessageEventFilter"), event, hide)
+            end
+        end,
+    }
+    try(game("AddMessageEventFilter", "ChatFrame_AddMessageEventFilter"), event, hide)
+    return sub
 end
