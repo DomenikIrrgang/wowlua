@@ -172,7 +172,9 @@ end
   values).
 - In a derived class's constructor, `super(args)` calls the superclass
   constructor. It must be called exactly once, as a top-level statement of the
-  constructor body, before any access to `self` (E3001). The derived class's
+  constructor body, before any access to `self` (E3001), its own arguments
+  included: a function passed to it may run in the superclass's constructor,
+  before `self` is the new instance (decision L50). The derived class's
   field initializers run immediately after it.
 - `super:method(args)` / `super.method(self, args)` calls the superclass
   implementation. Lowered to a direct call on the superclass table:

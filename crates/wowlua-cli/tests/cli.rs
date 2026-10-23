@@ -4114,6 +4114,11 @@ fn class_enum_and_decorator_errors() {
             "",
             "E3001",
         ),
+        (
+            "class A\n constructor(f: () -> ())\n  f()\n end\nend\nclass B extends A\n n: number = 1\n constructor()\n  super(function() print(self.n) end)\n end\nend\n",
+            "",
+            "E3001",
+        ),
         ("class A\n x: number = ...\nend\n", "", "E3041"),
         ("class A\n x: number\n function x() end\nend\n", "", "E3042"),
         (

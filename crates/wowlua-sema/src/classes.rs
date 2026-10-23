@@ -559,6 +559,12 @@ fn check_bodies(c: ClassDecl<'_>, info: &ClassInfo, out: &mut Vec<Diagnostic>) {
                 let mut self_before: Option<Span> = None;
                 for (i, s) in func.body().stmts().iter().enumerate() {
                     if is_super_call(s) {
+                        // its own arguments run before it too, a function
+                        // written there included (it may be called by the
+                        // superclass's constructor)
+                        if supers.is_empty() && self_before.is_none() {
+                            self_before = self_use(s);
+                        }
                         supers.push((i, s.span()));
                     } else if supers.is_empty() && self_before.is_none() {
                         self_before = self_use(s);
