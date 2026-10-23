@@ -978,7 +978,7 @@ type CachedRewardType = any
 type ClubMemberOpaqueId = any
 type ConnectionProtocol = any
 type DurationSecondsDouble = any
-type DurationTextBinding = any
+type DurationTextBinding = DurationTextBindingObject
 type GameMode = any
 type GameRule = any
 type HouseSettingFlags = any
@@ -8793,7 +8793,7 @@ declare interface TextureWithStateVisualizationInfo
     widgetTag: string
 end
 
-declare class AbbreviatedNumberFormatter
+declare class AbbreviatedNumberFormatter extends NumericFormatter
     function AddBreakpoint(breakpoint: NumberAbbreviationBreakpoint)
     function ClearBreakpoints()
     function Copy(): AbbreviatedNumberFormatter
@@ -9016,7 +9016,7 @@ declare class NumericFormatter
     function FormatNumber(number: number): string
 end
 
-declare class NumericRuleFormatter
+declare class NumericRuleFormatter extends NumericFormatter
     function AddBreakpoint(breakpoint: NumericRuleFormatBreakpoint)
     function ClearBreakpoints()
     function Copy(): NumericRuleFormatter

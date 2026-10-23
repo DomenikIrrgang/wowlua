@@ -37,6 +37,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- `C_DurationUtil.CreateDurationTextBinding()` gives a typed binding (`DurationTextBindingObject`: `SetDuration`, `SetEnabled`, `SetFormatter`, …), where it was `any`, and the rule and abbreviated number formatters (`C_StringUtil.CreateNumericRuleFormatter()`, `CreateAbbreviatedNumberFormatter()`) are `NumericFormatter`s, so they can be passed as an aura button's text formatter or a binding's.
 - The development build's argument check of a game object type (`DurationObject`, a colour) now takes the engine's objects: they are userdata, which it refused ("DurationObject? expected, got userdata").
 - Using `self` in the arguments of `super(…)`, also inside a function written there, is now reported (E3001): such a function may run before `self` is your new instance (a widget class's frame doesn't exist yet), so it read the wrong table.
 - `fontString:SetFormattedText(format, ...)` accepts secret values among its arguments, as the game does (a target's name in a dungeon).

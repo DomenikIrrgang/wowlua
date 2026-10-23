@@ -1424,7 +1424,11 @@ local named: string = unitName
 local cursorKind, cursorID = GetCursorInfo()
 local held: string? = cursorKind
 local heldID: number = cursorID
-print(cancel, zoom, maxZoom, secretTable, completion, known, tabCost, conditionText, active, started, party, location, itemStarted, unitRealm, named, held, heldID)
+local binding = C_DurationUtil.CreateDurationTextBinding()
+binding:SetFormatter(C_StringUtil.CreateNumericRuleFormatter())
+local counts: CustomAuraButtonApplicationCountOptions = { formatter = C_StringUtil.CreateAbbreviatedNumberFormatter() }
+local enabled: string = binding:IsEnabled()
+print(cancel, zoom, maxZoom, secretTable, completion, known, tabCost, conditionText, active, started, party, location, itemStarted, unitRealm, named, held, heldID, counts, enabled)
 "#,
             ),
         ],
@@ -1443,6 +1447,7 @@ print(cancel, zoom, maxZoom, secretTable, completion, known, tabCost, conditionT
             "src/main.wowlua:22:30: error[E2040]: `number | Secret<number>` may be a secret value; narrow it with `canaccessvalue` or `issecretvalue` first",
             "src/main.wowlua:22:30: error[E2001]: cannot compare `number | Secret<number>` with `0`",
             "src/main.wowlua:32:7: error[E2001]: `nil | string | Secret<string>` is not assignable to `string`",
+            "src/main.wowlua:39:7: error[E2001]: `boolean` is not assignable to `string`",
         ],
         "{stderr}"
     );
