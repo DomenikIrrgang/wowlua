@@ -2658,6 +2658,35 @@ print(a, b, c, d, e, name, realm, more)
         );
     }
 
+    /// A table assigned to an unannotated local: its empty `{}` fields take
+    /// the local's field types where it fits them (decision L59).
+    #[test]
+    fn assigned_empty_fields() {
+        let pre = "type B = { seen: { [number]: boolean }, ids: number[] }\nlocal by: { [string]: B } = {}\n";
+        let d = check_source(
+            &format!(
+                "{pre}local function f(key: string)\n local p = by[key]\n if not p then\n  p = {{ seen = {{}}, ids = {{}}, extra = 1 }}\n  by[key] = p\n end\n local x: boolean? = p.seen[1]\n print(x, p.ids[1])\nend\nprint(f)\n"
+            ),
+            Mode::Strict,
+        );
+        assert!(
+            d.iter().all(|x| !x.is_error() && x.code != Some("W2063")),
+            "{d:#?}"
+        );
+        strict_err(
+            &format!(
+                "{pre}local function f(key: string)\n local p = by[key]\n if not p then p = {{ seen = {{}}, ids = {{}} }} end\n local x: string = p.seen[1]\n print(x)\nend\nprint(f)\n"
+            ),
+            "E2001",
+        );
+        // the value's own fields stay
+        strict_ok(&format!(
+            "{pre}local p = by.a\np = {{ seen = {{}}, ids = {{}}, extra = 1 }}\nlocal n: number = p.extra\nprint(n)\n"
+        ));
+        // a value that doesn't fit is taken as it is
+        strict_ok("local t = { a = 1 }\nt = { b = {} }\nprint(t.b)\n");
+    }
+
     /// `select(n, …)` with a literal `n` gives the values from the n-th on
     /// (decision L54).
     #[test]

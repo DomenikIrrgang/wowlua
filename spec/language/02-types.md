@@ -396,6 +396,14 @@ valid Lua patterns valid, and a local may hold different types over time,
 while still catching misuse such as calling `:upper()` on a value that is a
 number at that point.
 
+A table assigned to such a local after its declaration fills in what an empty
+table leaves out: where the value fits the local's type so far, each field
+holding `{}` (with no fields and no indexer) takes that type's field type. In
+`local p = byKey[key]; if not p then p = { seen = {} } end` with
+`byKey: { [string]: { seen: { [number]: boolean } } }`, `p.seen` is the map,
+not an empty table read as `any`. The value's other fields stay as they are
+(decision L59).
+
 Inside a closure, an unannotated local that a closure assigns, or that is
 captured and assigned later, may hold any value it is given before the closure
 runs: it reads as the union of its narrowed types where functions are made in

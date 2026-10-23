@@ -709,6 +709,7 @@ impl<'e, 'p> Checker<'e, 'p> {
                 self.flow.insert(v, narrowed);
             }
             None => {
+                let value = self.fill_empty_fields(value, var.base);
                 let widened = self.env.types.widen_value(value);
                 self.flow.insert(v, widened);
                 // The base widens to cover every assigned value.
@@ -721,6 +722,61 @@ impl<'e, 'p> Checker<'e, 'p> {
                 self.set_base(v, base, assigned);
             }
         }
+    }
+
+    /// A table assigned to a local without an annotation: where it fits the
+    /// local's type so far, its empty `{}` fields take that type's field
+    /// types (`p = { seen = {} }` for a `{ seen: { [number]: boolean } }`),
+    /// decision L59. Its other fields stay as they are.
+    fn fill_empty_fields(&mut self, value: TypeId, base: TypeId) -> TypeId {
+        if !matches!(self.env.types.get(value), Ty::Record(_)) {
+            return value;
+        }
+        let target = self.env.types.non_nil(base);
+        if target == Types::ANY
+            || target == Types::NEVER
+            || !self.env.assignable(value, target, self.mode)
+        {
+            return value;
+        }
+        self.fill_fields(value, target, 0)
+    }
+
+    fn fill_fields(&mut self, value: TypeId, target: TypeId, depth: u32) -> TypeId {
+        let Ty::Record(r) = self.env.types.get(value).clone() else {
+            return value;
+        };
+        let mut fields = r.fields.clone();
+        let mut changed = false;
+        for (name, f) in r.fields.iter() {
+            let Some((ft, _)) = self.env.field_of(target, name) else {
+                continue;
+            };
+            let ft = self.env.types.non_nil(ft);
+            let filled = match self.env.types.get(f.ty) {
+                Ty::Record(inner) if inner.fields.is_empty() && inner.indexer.is_none() => {
+                    (ft != Types::ANY && self.env.assignable(f.ty, ft, self.mode)).then_some(ft)
+                }
+                Ty::Record(_) if depth < 8 => {
+                    let t = self.fill_fields(f.ty, ft, depth + 1);
+                    (t != f.ty).then_some(t)
+                }
+                _ => None,
+            };
+            if let Some(ty) = filled {
+                fields.insert(name.into(), Field { ty, ..*f });
+                changed = true;
+            }
+        }
+        if !changed {
+            return value;
+        }
+        self.env.types.record(Record {
+            fields,
+            indexer: r.indexer,
+            open: r.open,
+            id: 0,
+        })
     }
 
     /// The declared type `d` after assigning `value`: the members of `d`
