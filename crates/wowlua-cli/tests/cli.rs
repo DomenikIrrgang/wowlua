@@ -1431,7 +1431,10 @@ local enabled: string = binding:IsEnabled()
 local fade = Minimap:CreateAnimationGroup():CreateAnimation("Alpha")
 fade:SetFromAlpha(1)
 local fadeTo: string = fade:GetToAlpha()
-print(cancel, zoom, maxZoom, secretTable, completion, known, tabCost, conditionText, active, started, party, location, itemStarted, unitRealm, named, held, heldID, counts, enabled, fadeTo)
+local outfit = C_TransmogCollection.GetCustomSetItemTransmogInfoList(1)
+local firstPiece = outfit and outfit[1]
+local appearance: string = firstPiece and firstPiece.appearanceID or ""
+print(cancel, zoom, maxZoom, secretTable, completion, known, tabCost, conditionText, active, started, party, location, itemStarted, unitRealm, named, held, heldID, counts, enabled, fadeTo, appearance)
 "#,
             ),
         ],
@@ -1452,6 +1455,7 @@ print(cancel, zoom, maxZoom, secretTable, completion, known, tabCost, conditionT
             "src/main.wowlua:32:7: error[E2001]: `nil | string | Secret<string>` is not assignable to `string`",
             "src/main.wowlua:39:7: error[E2001]: `boolean` is not assignable to `string`",
             "src/main.wowlua:42:7: error[E2001]: `number` is not assignable to `string`",
+            "src/main.wowlua:45:7: error[E2001]: `number | \"\"` is not assignable to `string`",
         ],
         "{stderr}"
     );

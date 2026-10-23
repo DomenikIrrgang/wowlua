@@ -3164,6 +3164,9 @@ declare class TooltipDataLine
 end
 
 declare class ItemTransmogInfoMixin
+    appearanceID: number
+    secondaryAppearanceID: number
+    illusionID: number
     function Init(appearanceID: number, secondaryAppearanceID: number?, illusionID: number?)
     function IsEqual(itemTransmogInfo: table): boolean
     function Clear()
