@@ -2710,6 +2710,22 @@ print(a, b, c, d, e, name, realm, more)
         strict_ok("local t = { a = 1 }\nt = { b = {} }\nprint(t.b)\n");
     }
 
+    /// A literal assigned to an unannotated local whose type so far has it
+    /// stays that literal (decision L61).
+    #[test]
+    fn assigned_known_literals() {
+        // the lazily filled cache: `false` marks "none"
+        strict_ok(
+            "type W = { a: number }\nlocal cache: { [string]: W | false } = {}\nlocal function get(k: string): W?\n local w = cache[k]\n if w == nil then\n  w = false\n  cache[k] = w\n end\n return w or nil\nend\nprint(get)\n",
+        );
+        // a literal the local doesn't have still widens
+        strict_err(
+            "type W = { a: number }\nlocal cache: { [string]: W | false } = {}\nlocal function put(k: string)\n local w = cache[k]\n w = true\n cache[k] = w\nend\nprint(put)\n",
+            "E2001",
+        );
+        strict_ok("local n = 1\nn = 2\nlocal s = \"x\"\ns = \"y\"\nprint(n + 1, s:upper())\n");
+    }
+
     /// `select(n, …)` with a literal `n` gives the values from the n-th on
     /// (decision L54).
     #[test]

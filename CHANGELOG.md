@@ -29,6 +29,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - A generic function keeps the type of a value you pass it when that value already has one: `assert(tokens[k])` with `tokens: { [string]: Token }` is a `Token`, not a `string`. A literal written as the argument still widens (`id("x")` is a `string`).
 - A value typed as two shapes at once, such as `number[] & { hex: string }`, reads `c.hex` as a `string` and `c[1]` as a `number`, where both were `any`.
 - `local p = cache[key]; if not p then p = { seen = {} } end` gives `p.seen` the type of the cache's `seen` field, where the empty table made it `any`.
+- `local w = cache[key]; if w == nil then w = false end` keeps `w` as the cache's `T | false`, where `false` became `boolean` and `cache[key] = w` was an error.
 - A record type that refers to itself (`type Entry = { name: string, members: Entry[] }`) types what it holds: `entry.members[1].name` is a `string`, where it was `any`.
 - A type parameter with a constraint keeps a literal argument: `function f<K extends "a" | "b">(k: K): K` gives `"a"` for `f("a")`, where it gave `string` and reported that `string` doesn't satisfy the constraint.
 - An error naming a very long union (such as `EventName`) shows its first members and how many more there are, instead of all of them.

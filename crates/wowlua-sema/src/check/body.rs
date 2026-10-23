@@ -710,7 +710,7 @@ impl<'e, 'p> Checker<'e, 'p> {
             }
             None => {
                 let value = self.fill_empty_fields(value, var.base);
-                let widened = self.env.types.widen_value(value);
+                let widened = self.widen_assigned(value, var.base);
                 self.flow.insert(v, widened);
                 // The base widens to cover every assigned value.
                 let base = self.env.types.union(&[var.base, widened]);
@@ -722,6 +722,30 @@ impl<'e, 'p> Checker<'e, 'p> {
                 self.set_base(v, base, assigned);
             }
         }
+    }
+
+    /// The type a value assigned to an unannotated local takes: widened as
+    /// in `local`, except for a literal the local's type so far already has
+    /// (`w = false` for a `T | false` local stays `false`), decision L61.
+    fn widen_assigned(&mut self, value: TypeId, base: TypeId) -> TypeId {
+        let have = self.env.types.members(base);
+        let (kept, rest): (Vec<TypeId>, Vec<TypeId>) =
+            self.env.types.members(value).into_iter().partition(|m| {
+                have.contains(m)
+                    && matches!(
+                        self.env.types.get(*m),
+                        Ty::Bool(_) | Ty::Num(_) | Ty::Str(_)
+                    )
+            });
+        if kept.is_empty() {
+            return self.env.types.widen_value(value);
+        }
+        let mut out = kept;
+        if !rest.is_empty() {
+            let rest = self.env.types.union(&rest);
+            out.push(self.env.types.widen_value(rest));
+        }
+        self.env.types.union(&out)
     }
 
     /// A table assigned to a local without an annotation: where it fits the

@@ -409,6 +409,12 @@ holding `{}` (with no fields and no indexer) takes that type's field type. In
 not an empty table read as `any`. The value's other fields stay as they are
 (decision L59).
 
+A literal assigned to such a local keeps its literal type where the local's
+type so far has that literal: `local w = cache[k]; if w == nil then w = false
+end` with `cache: { [string]: T | false }` leaves `w` a `T | false`, so
+`cache[k] = w` fits. Other assigned literals widen as in a `local` (`w = true`
+there gives `boolean`), decision L61.
+
 Inside a closure, an unannotated local that a closure assigns, or that is
 captured and assigned later, may hold any value it is given before the closure
 runs: it reads as the union of its narrowed types where functions are made in
