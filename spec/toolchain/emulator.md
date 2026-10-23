@@ -392,7 +392,9 @@ takes the flavor's `Interface` folder and its global strings:
   `GetNumPoints` gives 1 and `GetPoint` that anchor, decision T326; a
   texture's `rotation` is in degrees, turning it about its center), layers,
   child frames and scripts (`function`, `method` or a body;
-  `inherit="prepend"` / `"append"`);
+  `inherit="prepend"` / `"append"`; a texture's `<Color>` is its plain
+  color without a file and its tint with one, `clipChildren` clips,
+  decision T339);
   `OnLoad` runs once the widget and its children are built. Fonts and font
   families become font objects.
 - **Secure APIs for addons** (Blizzard_AuraContainer's custom containers):

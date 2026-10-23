@@ -45,6 +45,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- XML textures take their `<Color>` (a plain color without a file, a tint with one) and frames their `clipChildren`, as in game: the Settings panel has its background again (no more white corners or the world showing through), and its scrolling lists stop at their edges.
 - A font string without a draw layer is drawn on `OVERLAY`, as in game, so a button's text shows over its background (the Legacy challenges' categories were empty rows), and `button:SetNormalFontObject("GameFontNormal")` and its highlight and disabled versions take a font's name, as `SetFontObject` does (the text was drawn a pixel high).
 - `button:SetFormattedText(...)` shows the text on the button, as `SetText` does; it was kept but not drawn (the macro window's "Specific Macros" tab was blank).
 - When two anchors set the same edge of a frame, the one WoW gives priority to wins (`TOPLEFT` before `TOPRIGHT` and so on), as in game: the default UI's dropdowns show their text inside the box instead of over its bottom edge, and window tabs sit side by side instead of overlapping ("Merchant" was cut off).

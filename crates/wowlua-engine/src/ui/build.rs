@@ -74,6 +74,10 @@ const FLAG_ATTRS: &[(&str, &str)] = &[
     ("reverseFill", "SetReverseFill"),
     ("rotatesTexture", "SetRotatesTexture"),
     ("useParentLevel", "SetUsingParentLevel"),
+    // Blizzard's scroll boxes (`ScrollBoxBaseTemplate`) clip what scrolls
+    // in them: the Settings panel's graphics quality controls ran past the
+    // panel without it.
+    ("clipChildren", "SetClipsChildren"),
 ];
 
 /// String and number attributes passed to a setter.
@@ -763,6 +767,12 @@ fn apply_in(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Eleme
 
 /// A `<Size>`'s or `<Offset>`'s dimensions: `x`/`y` or an `<AbsDimension>`.
 /// Whether a widget shows text (a font object, a font string).
+fn is_texture(vm: &Vm, id: WidgetId) -> bool {
+    let e = engine(vm);
+    let class = &e.world.widgets[id.0].class;
+    widgets::is_a(e, class, "Texture") || widgets::is_a(e, class, "Line")
+}
+
 fn is_text(vm: &Vm, id: WidgetId) -> bool {
     let class = &engine(vm).world.widgets[id.0].class;
     class == "Font" || class == "FontString"
@@ -926,6 +936,25 @@ fn apply_child(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, child: &Rc
                     .collect(),
             };
             call_method(vm, cx, child.line, frame, "SetTexCoord", &args);
+        }
+        // A texture's color: its tint when it shows a file or an atlas,
+        // else its plain color (`SetColorTexture`). Blizzard's flat panel
+        // backgrounds (`FlatPanelBackgroundTemplate`, the Settings panel's)
+        // tint corner atlases and fill their edges by
+        // `<Color color="PANEL_BACKGROUND_COLOR"/>`: without it the panel
+        // had no background, what lay behind it showing through.
+        "color" if is_texture(vm, id) => {
+            let rgba = super::xml_color(vm, child);
+            let props = engine(vm).world.widgets[id.0].props;
+            let shows_file = ["Texture", "Atlas"]
+                .iter()
+                .any(|k| widgets::stored_args(vm, props, k).is_some_and(|v| !v.is_empty()));
+            let method = if shows_file {
+                "SetVertexColor"
+            } else {
+                "SetColorTexture"
+            };
+            call_method(vm, cx, child.line, frame, method, &rgba);
         }
         // A font's or font string's text color and shadow.
         "color" if is_text(vm, id) => {

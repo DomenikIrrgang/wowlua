@@ -640,3 +640,57 @@ return tostring(c:GetNormalFontObject() == FamFont), tostring(c:GetHighlightFont
     assert!(order.contains(&"quad"), "{order:?}");
     assert_eq!(order.last(), Some(&"text"), "{order:?}");
 }
+
+/// A texture's `<Color>` is its plain color without a file and its tint
+/// with one (Blizzard's flat panel backgrounds); `clipChildren` clips.
+#[test]
+fn xml_texture_colors_and_clipping() {
+    let interface = tree(
+        "texture-color",
+        &[
+            ("AddOns/Blizzard_Box/Blizzard_Box.toc", "Box.xml\n"),
+            (
+                "AddOns/Blizzard_Box/Box.xml",
+                r#"<Ui>
+  <Frame name="ColorBox" parent="UIParent" clipChildren="true">
+    <Size x="100" y="100"/>
+    <Anchors><Anchor point="CENTER"/></Anchors>
+    <Layers><Layer level="BACKGROUND">
+      <Texture parentKey="Plain" setAllPoints="true"><Color r="0.5" g="0.25" b="0" a="0.8"/></Texture>
+      <Texture parentKey="Tinted" file="Interface\Buttons\WHITE8X8" setAllPoints="true"><Color r="0" g="1" b="0"/></Texture>
+    </Layer></Layers>
+  </Frame>
+</Ui>"#,
+            ),
+        ],
+    );
+    let mut vm = vm("camelot");
+    let report = wowlua_engine::ui::load(&mut vm, &interface, None);
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let r = run(
+        &mut vm,
+        "local p = ColorBox.Plain
+local r, g, b = ColorBox.Tinted:GetVertexColor()
+return tostring(ColorBox:DoesClipChildren()), tostring(p:GetTexture() ~= nil or p:GetTextureFileID() ~= nil or true), string.format('%.2f %.2f %.2f', r, g, b)",
+    );
+    assert_eq!(r[0], "true");
+    assert_eq!(r[2], "0.00 1.00 0.00");
+    let scene = wowlua_engine::scene::build(&mut vm);
+    let colors: Vec<[f32; 4]> = scene
+        .items
+        .iter()
+        .filter_map(|i| match i {
+            wowlua_engine::scene::Item::Quad(q)
+                if matches!(q.image, wowlua_engine::scene::Image::Color) =>
+            {
+                Some(q.color)
+            }
+            _ => None,
+        })
+        .collect();
+    assert_eq!(colors.len(), 1, "{colors:?}");
+    assert!(
+        (colors[0][0] - 0.5).abs() < 0.01 && (colors[0][3] - 0.8).abs() < 0.01,
+        "{colors:?}"
+    );
+}
