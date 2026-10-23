@@ -553,7 +553,7 @@ libraries for wowlua Studio, natively and in the browser (T300, T301).
   and a console (T304 to T306).
 - Profiling from the VM's hooks: calls, instructions, garbage and host time
   per function, event, script, `OnUpdate` and game frame; call trees and
-  speedscope files; `wowlua test --profile` (T307, T308).
+  speedscope files; `wowlua test --profile-out <dir>` (T307, T308).
 - The scene: the engine's UI as a draw list and a frame tree (T309).
 - From M13: the CASC reader for the user's textures (BLP), atlases and
   fonts, and the `wgpu` renderer, to windows and off-screen PNGs (T310,

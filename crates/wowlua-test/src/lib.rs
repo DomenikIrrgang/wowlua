@@ -65,6 +65,8 @@ pub struct Suite<'a> {
     /// Called after each test with its VM and name, before the next
     /// (`wowlua screenshot`).
     pub after_test: Option<std::sync::Arc<AfterTest>>,
+    /// Called when a test file's tests ran, with its VM and path.
+    pub after_file: Option<std::sync::Arc<AfterTest>>,
 }
 
 fn widgets_keep(vm: &mut Vm, v: Value) {
@@ -360,6 +362,9 @@ pub fn run_file(suite: &Suite, file: &TestFile, filters: &[String]) -> FileResul
     match load(suite, file, None) {
         Ok(mut state) => {
             run_tests(suite, file, &mut state, filters, &mut result);
+            if let Some(f) = &suite.after_file {
+                f(&mut state.vm, &file.rel);
+            }
             if let Some(mut report) = coverage_of(suite, &state.vm) {
                 for extra in &state.reloaded_coverage {
                     report.merge(extra);
@@ -450,7 +455,7 @@ pub fn source_of_chunk(suite: &Suite, chunk: &str) -> Option<String> {
 }
 
 /// Chunk name → source path.
-pub type ChunkMapper = Box<dyn Fn(&str) -> Option<String>>;
+pub type ChunkMapper = Box<dyn Fn(&str) -> Option<String> + Send + Sync>;
 
 /// [`source_of_chunk`] as a function that owns what it needs (a debug
 /// session's map from chunk names to sources).

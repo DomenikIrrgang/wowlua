@@ -91,6 +91,9 @@ pub struct TestArgs {
     /// Run again whenever a file of the package changes
     #[arg(long)]
     pub watch: bool,
+    /// Profile each test file and write its profile here (speedscope JSON)
+    #[arg(long, value_name = "DIR")]
+    pub profile_out: Option<PathBuf>,
 }
 
 #[derive(Args, Debug, Clone)]

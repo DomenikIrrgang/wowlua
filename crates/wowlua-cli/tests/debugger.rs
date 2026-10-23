@@ -260,3 +260,25 @@ fn stops_in_a_script_handler_inspects_and_steps() {
     assert_eq!(exited["exitCode"], 0);
     c.event("terminated");
 }
+
+#[test]
+fn test_profile_out_writes_a_speedscope_file_per_test_file() {
+    let dir = project();
+    let out = Command::new(assert_cmd::cargo::cargo_bin("wowlua"))
+        .args(["test", "--profile-out", "prof"])
+        .current_dir(dir.path())
+        .env("NO_COLOR", "1")
+        .env("WOWLUA_HOME", dir.path().join(".wowlua-home"))
+        .output()
+        .unwrap();
+    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
+    let file = dir.path().join("prof/tests_counter.test.wowlua.standard.speedscope.json");
+    let json: Value = serde_json::from_slice(&fs::read(&file).unwrap()).unwrap();
+    assert_eq!(json["exporter"], "wowlua");
+    let frames = json["shared"]["frames"].as_array().unwrap();
+    assert!(
+        frames.iter().any(|f| f["name"] == "script DemoButton:OnClick"),
+        "{frames:?}"
+    );
+    assert!(frames.iter().any(|f| f["file"] == "src/counter.lua"), "{frames:?}");
+}

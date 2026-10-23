@@ -161,7 +161,7 @@ name), dispatches by kind and name (`event PLAYER_LOGIN`, `MyFrame:OnEvent`,
 `OnUpdate MyFrame`, `timer`), and game frames by number. The call tree keeps
 every path (callers and callees) up to depth 256. A profile is started and
 stopped in a session (or covers a whole test file with
-`wowlua test --profile`), and is given as a table (functions sorted by a
+`wowlua test --profile-out <dir>`), and is given as a table (functions sorted by a
 measure), a call tree, a per-frame timeline, or a file:
 [speedscope](https://www.speedscope.app) JSON with one profile per measure,
 which Studio and speedscope open (decision T308).
