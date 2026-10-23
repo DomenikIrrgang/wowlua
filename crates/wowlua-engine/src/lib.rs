@@ -1063,7 +1063,6 @@ pub(crate) fn fill_ins() -> Vec<Behaviours<NativeFn>> {
         Behaviours::new("extras", extras::behaviours()),
         Behaviours::new("globalsinfo", globalsinfo::behaviours()),
         Behaviours::new("systeminfo", systeminfo::behaviours()),
-        Behaviours::new("clientdata", clientdata::behaviours()),
         Behaviours::new("actions2", actions2::behaviours()),
         Behaviours::new("leftovers2", leftovers2::behaviours()),
         // Last: what the client answers with nothing there (the full
@@ -1106,6 +1105,8 @@ pub(crate) fn own_behaviours(flavor: &str) -> Vec<Behaviours<NativeFn>> {
     vec![
         Behaviours::recorded("recorded", recorded::behaviours(flavor)),
         Behaviours::recorded("traits", traits::recorded_behaviours(flavor)),
+        // The client's tables over the recordings, where the host has them.
+        Behaviours::new("clientdata", clientdata::behaviours()),
         Behaviours::new("clock", clock::behaviours()),
         Behaviours::new("units", units::behaviours()),
         Behaviours::new("units", units::more_behaviours()),

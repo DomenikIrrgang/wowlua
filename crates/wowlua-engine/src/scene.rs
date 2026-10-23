@@ -1192,10 +1192,26 @@ fn model_item(vm: &mut Vm, f: WidgetId, class: &str) -> Option<Model> {
     }
     let (actors, camera) = if is_model {
         let actor = actor_of(vm, f, true)?;
-        let camera = ModelCamera::Frame {
-            portrait_zoom: num(vm, first(vm, f, "PortraitZoom").as_ref(), 0.0) as f32,
-            distance_scale: num(vm, first(vm, f, "CamDistanceScale").as_ref(), 1.0) as f32,
-            camera: first(vm, f, "Camera").map(|v| num(vm, Some(&v), 0.0) as i32),
+        // A camera the code placed (`SetCameraPosition`,
+        // `SetCameraTarget`: `Model_ApplyUICamera`'s), else the frame's.
+        let placed = nums(vm, f, "CameraPosition", 3).zip(nums(vm, f, "CameraTarget", 3));
+        let camera = if let Some((p, t)) = placed {
+            let forward = [t[0] - p[0], t[1] - p[1], t[2] - p[2]];
+            ModelCamera::Scene {
+                position: [p[0], p[1], p[2]],
+                forward,
+                right: [forward[1], -forward[0], 0.0],
+                up: [0.0, 0.0, 1.0],
+                fov: 0.6,
+                near: 0.1,
+                far: 100.0,
+            }
+        } else {
+            ModelCamera::Frame {
+                portrait_zoom: num(vm, first(vm, f, "PortraitZoom").as_ref(), 0.0) as f32,
+                distance_scale: num(vm, first(vm, f, "CamDistanceScale").as_ref(), 1.0) as f32,
+                camera: first(vm, f, "Camera").map(|v| num(vm, Some(&v), 0.0) as i32),
+            }
         };
         (vec![actor], camera)
     } else {

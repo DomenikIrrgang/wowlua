@@ -11,11 +11,12 @@ fn main() {
     let id: u32 = a[2].parse().unwrap();
     let mut m = wowlua_casc::m2::Model::parse(&casc.file_by_id(id).unwrap()).unwrap();
     println!(
-        "{} bones {} sequences, skeleton {:?}, {} anim files",
+        "{} bones {} sequences, skeleton {:?}, {} anim files, bounds {:?}",
         m.bones.len(),
         m.sequences.len(),
         m.skeleton_file,
-        m.anim_files.len()
+        m.anim_files.len(),
+        m.bounds
     );
     if let Some(s) = m.skeleton_file {
         let b = casc.file_by_id(s).unwrap();

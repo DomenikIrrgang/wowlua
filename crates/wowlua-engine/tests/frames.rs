@@ -989,3 +989,58 @@ d:UndressSlot(4)",
     );
     assert!(look.items.iter().any(|(s, _)| *s == 4), "{look:?}");
 }
+
+struct Cameras;
+
+impl wowlua_engine::clientdata::ClientData for Cameras {
+    fn model_scene(&self, _: u32) -> Option<wowlua_engine::clientdata::ModelScene> {
+        None
+    }
+    fn scene_camera(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneCamera> {
+        None
+    }
+    fn scene_actor(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneActor> {
+        None
+    }
+    fn actor_display(&self, _: u32) -> Option<wowlua_engine::clientdata::ActorDisplay> {
+        None
+    }
+    fn ui_camera(&self, id: u32) -> Option<wowlua_engine::clientdata::UiCamera> {
+        (id == 238).then(|| wowlua_engine::clientdata::UiCamera {
+            position: [0.0, -0.5, -0.25],
+            angles: [1.5, -1.0, 0.0],
+            animation: 0,
+            frame: -1,
+            variation: -1,
+            flags: 1,
+        })
+    }
+}
+
+/// `GetUICameraInfo` answers the client's row as it is: the model's
+/// position and angles, its animation and whether it is centered; without
+/// the tables, the recordings.
+#[test]
+fn ui_cameras_are_the_clients_rows() {
+    let mut vm = wowlua_vm::Vm::wow();
+    wowlua_engine::install(&mut vm, "camelot").expect("the engine");
+    let recorded = run(&mut vm, "return GetUICameraInfo(249)");
+    assert_eq!(recorded[0], "0.75");
+    wowlua_engine::clientdata::set(&mut vm, std::sync::Arc::new(Cameras));
+    let r = run(&mut vm, "return GetUICameraInfo(238)");
+    assert_eq!(
+        r,
+        [
+            "0",
+            "-0.5",
+            "-0.25",
+            "1.5",
+            "-1",
+            "0",
+            "0",
+            "-1",
+            "-1",
+            "Bool(true)"
+        ]
+    );
+}

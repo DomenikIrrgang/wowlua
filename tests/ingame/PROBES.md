@@ -302,3 +302,16 @@ screenshot).
    function inventory probe as on camelot, so the engine knows which of the
    old global names (`GetItemCount`, `InviteUnit`, `UseContainerItem`, ...)
    that client really defines.
+
+## Model frames' cameras
+
+The wardrobe's head shots (`Model_ApplyUICamera`) sit off center in
+wowlua's screenshots: how the client's model frame camera sees a model is
+not known yet.
+
+1. Open the appearances collection on the head slot and take a screenshot of
+   the first page (the cells' framing to compare with).
+2. With the collections open:
+   `/run local m=WardrobeCollectionFrame.ItemsCollectionFrame.Models[1] print(m:GetCameraPosition()) print(m:GetCameraTarget()) print(m:GetPosition()) print(m:GetFacing(), m:GetPitch(), m:GetRoll()) print(m:IsUsingModelCenterToTransform()) local v=m:TransformCameraSpaceToModelSpace(CreateVector3D(4,0,0)) print(v:GetXYZ())`
+3. `/run local m=CreateFrame("PlayerModel") m:SetSize(100,100) m:SetUnit("player") print(m:GetCameraDistance(), m:GetCameraPosition()) print(m:GetCameraTarget())`
+   Answers the model frame's own camera and field of view.

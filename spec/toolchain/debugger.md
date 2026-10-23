@@ -295,9 +295,14 @@ T310).
   and cameras; and an item the test has no data for has the inventory
   type the client's `Item` table gives it (`C_Item.IsDressableItemByID`,
   so `DressUpItemLink` opens the dressing room). Without it, they answer
-  nothing, as before. Not yet: a model frame's custom camera
-  (`SetCameraPosition`, `SetCameraTarget`, `Model_ApplyUICamera`'s), the
-  client's creature cache (creatures beyond the client's own table).
+  nothing, as before. `GetUICameraInfo(id)` answers the client's
+  `UiCamera` row as it is (the model's position, its yaw, pitch and roll,
+  the animation, whether it is centered), as the recordings show; without
+  the tables, the recordings. A model frame given a camera
+  (`SetCameraPosition` and `SetCameraTarget`, as `Model_ApplyUICamera`
+  does) is seen from it (unverified: the field of view, and
+  `TransformCameraSpaceToModelSpace`, which keeps the point as it is;
+  the wardrobe's head shots sit off center: in-game probe owed).
 - **Fonts**: the client's TrueType fonts from the installation; without
   them, the bundled stand-in fonts (open licenses), at the same pixel
   heights. Glyph positions follow the engine's measured widths (§17.6), so

@@ -343,6 +343,20 @@ impl wowlua_engine::clientdata::ClientData for CascClientData {
         })
     }
 
+    fn ui_camera(&self, id: u32) -> Option<wowlua_engine::clientdata::UiCamera> {
+        self.with(|lib, casc| {
+            let r = lib.table(casc, "UiCamera")?.row(id)?;
+            Some(wowlua_engine::clientdata::UiCamera {
+                position: vec3(r.floats("Pos")),
+                angles: vec3(r.floats("LookAt")),
+                animation: r.signed("AnimID"),
+                frame: r.signed("AnimFrame"),
+                variation: r.signed("AnimVariation"),
+                flags: r.int("Flags"),
+            })
+        })
+    }
+
     fn item_inventory_type(&self, id: u32) -> Option<u32> {
         self.with(|lib, casc| Some(lib.table(casc, "Item")?.row(id)?.int("InventoryType")))
     }

@@ -65,6 +65,19 @@ pub struct ActorDisplay {
     pub anim_speed: f32,
 }
 
+/// A UI camera (`UiCamera`): where the model goes before the model
+/// frame's camera, its yaw, pitch and roll (the table's `LookAt`); the
+/// animation frame it shows.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct UiCamera {
+    pub position: [f32; 3],
+    pub angles: [f32; 3],
+    pub animation: i32,
+    pub frame: i32,
+    pub variation: i32,
+    pub flags: u32,
+}
+
 /// The client's tables, as the host reads them.
 pub trait ClientData: Send + Sync {
     fn model_scene(&self, id: u32) -> Option<ModelScene>;
@@ -74,6 +87,10 @@ pub trait ClientData: Send + Sync {
     /// An item's inventory type (`Enum.InventoryType`), from the client's
     /// `Item` table.
     fn item_inventory_type(&self, _id: u32) -> Option<u32> {
+        None
+    }
+    /// A UI camera (`UiCamera`).
+    fn ui_camera(&self, _id: u32) -> Option<UiCamera> {
         None
     }
 }
@@ -251,8 +268,36 @@ fn actor_display_info(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![Value::Table(t)])
 }
 
+/// `GetUICameraInfo(id)`: the model's position, yaw, pitch and roll
+/// before the model frame's camera (the row's `Pos` and its angles), its
+/// animation, variation and frame, and whether its center is the origin;
+/// as the client answers (its recordings, rows 238 and 249). Without the
+/// tables, the recorded answers.
+fn ui_camera_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Some(cam) = data(vm).and_then(|d| d.ui_camera(id_arg(&c)?)) else {
+        // The client's answers as recorded.
+        return crate::facts::recorded_call(vm, c);
+    };
+    let n = |v: f32| Value::Num(f64::from(v));
+    Ok(vec![
+        n(cam.position[0]),
+        n(cam.position[1]),
+        n(cam.position[2]),
+        n(cam.angles[0]),
+        n(cam.angles[1]),
+        n(cam.angles[2]),
+        Value::Num(f64::from(cam.animation)),
+        Value::Num(f64::from(cam.variation)),
+        Value::Num(f64::from(cam.frame)),
+        // Flag 1: the model's center is its origin (the recordings: flag 1
+        // answers true).
+        Value::Bool(cam.flags & 1 != 0),
+    ])
+}
+
 pub(crate) fn behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
     vec![
+        ("GetUICameraInfo", ui_camera_info as wowlua_vm::NativeFn),
         (
             "C_ModelInfo.GetModelSceneInfoByID",
             model_scene_info as wowlua_vm::NativeFn,
