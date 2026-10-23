@@ -380,8 +380,10 @@ takes the flavor's `Interface` folder and its global strings:
 - **XML** builds widgets as the client does: virtual elements are templates
   (for `inherits` and `CreateFrame`), intrinsic ones frame types; an
   element's templates apply first, then its attributes, mixins, `parentKey`
-  and `parentArray`, key values, sizes, anchors, layers, child frames and
-  scripts (`function`, `method` or a body; `inherit="prepend"` / `"append"`);
+  and `parentArray`, key values, sizes, anchors (an element's own
+  `<Anchors>` take the place of its `setAllPoints`, decision T323), layers,
+  child frames and scripts (`function`, `method` or a body;
+  `inherit="prepend"` / `"append"`);
   `OnLoad` runs once the widget and its children are built. Fonts and font
   families become font objects.
 - **Secure APIs for addons** (Blizzard_AuraContainer's custom containers):

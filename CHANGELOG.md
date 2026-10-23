@@ -46,6 +46,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - A button's normal, pushed, disabled and highlight textures that `SetNormalAtlas` or `SetNormalTexture` makes fill the button, as in game; they had no size (the default UI's micro menu buttons showed no icons).
 - `<MaskedTextures>` in XML masks the textures it names (`<MaskedTexture childKey="icon"/>`): action buttons' icons are masked and drawn over their slot art.
 - `bar:SetStatusBarTexture("atlas-name")` takes an atlas by its name, as Blizzard's bars use it (the experience bar).
+- A frame in XML with both `setAllPoints="true"` and its own `<Anchors>` is placed by its anchors and size, as in game: the player frame's resting "Z" sits at the portrait's top right instead of over the health bar.
 - Textures snap to the pixel grid unless `SetSnapToPixelGrid(false)` or `snapToPixelGrid="false"` says otherwise, as in game: `IsSnappingToPixelGrid()` answers true at first, and screenshots draw their edges on whole pixels. XML's `horizTile`, `vertTile` and `texelSnappingBias` attributes are read too.
 
 - Text with a named colour (`|cnNAME:text|r`, as chat links write it) shows and measures only its text; it showed part of the colour's name.

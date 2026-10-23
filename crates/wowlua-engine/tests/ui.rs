@@ -225,6 +225,50 @@ return tostring(Box.loadSecure), tostring(plain.loadSecure), set, value, after,
     assert_eq!(run(&mut vm, "return tostring(Box.updateSecure)"), ["true"]);
 }
 
+/// `setAllPoints` with the element's own `<Anchors>`: the anchors and size
+/// place it (Blizzard's player frame rest icon); without anchors it fills
+/// its parent.
+#[test]
+fn own_anchors_take_the_place_of_set_all_points() {
+    let interface = tree(
+        "allpoints",
+        &[
+            ("AddOns/Blizzard_Rest/Blizzard_Rest.toc", "Rest.xml\n"),
+            (
+                "AddOns/Blizzard_Rest/Rest.xml",
+                r#"<Ui>
+  <Frame name="RestHolder" parent="UIParent">
+    <Size x="200" y="100"/>
+    <Anchors><Anchor point="TOPLEFT" x="10" y="-10"/></Anchors>
+    <Frames>
+      <Frame parentKey="Loop" setAllPoints="true">
+        <Size x="20" y="20"/>
+        <Anchors><Anchor point="TOPLEFT" x="64" y="-6"/></Anchors>
+      </Frame>
+      <Frame parentKey="Fill" setAllPoints="true"/>
+    </Frames>
+  </Frame>
+</Ui>"#,
+            ),
+        ],
+    );
+    let mut vm = vm("camelot");
+    let report = wowlua_engine::ui::load(&mut vm, &interface, None);
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let r = run(
+        &mut vm,
+        "local l, f = RestHolder.Loop, RestHolder.Fill
+local p, _, rp, x, y = l:GetPoint(1)
+return l:GetNumPoints(), p, rp, x, y, l:GetWidth(), l:GetHeight(), f:GetNumPoints(), f:GetWidth()",
+    );
+    assert_eq!(
+        r,
+        [
+            "1", "TOPLEFT", "TOPLEFT", "64", "-6", "20", "20", "2", "200"
+        ]
+    );
+}
+
 /// An intrinsic type declared with `allowUntaintedCreation` (Blizzard's
 /// `AuraContainer`), made by an addon while the addon loads: its `method`
 /// scripts are Blizzard's, not the loading addon's code, so its `OnLoad`

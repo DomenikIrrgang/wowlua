@@ -617,7 +617,10 @@ fn apply_in(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, el: &Rc<Eleme
     if let Some(n) = el.number("id") {
         call_method(vm, cx, el.line, frame, "SetID", &[Value::Num(n)]);
     }
-    if el.flag("setAllPoints") {
+    // An element's own `<Anchors>` take the place of its `setAllPoints`, as
+    // in game (the player frame's rest icon, 20x20 at its anchor).
+    let anchored = el.child("Anchors").is_some_and(|a| !a.children.is_empty());
+    if el.flag("setAllPoints") && !anchored {
         call_method(vm, cx, el.line, frame, "SetAllPoints", &[]);
     }
     for (attr, method) in FLAG_ATTRS {
