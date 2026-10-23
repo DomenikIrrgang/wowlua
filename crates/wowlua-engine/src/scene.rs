@@ -99,6 +99,10 @@ pub struct Quad {
     pub unit: f32,
     /// Its edges on whole pixels (`SetSnapToPixelGrid`, on by default).
     pub snap: bool,
+    /// Its color's gradient (`SetGradient`): horizontal (else vertical),
+    /// the minimum's color (left, bottom) and the maximum's (right, top),
+    /// times `color`.
+    pub gradient: Option<(bool, [f32; 4], [f32; 4])>,
 }
 
 /// A run of characters of one color.
@@ -359,6 +363,21 @@ fn clip_of(vm: &Vm, id: WidgetId) -> Option<Rect> {
     clip
 }
 
+/// A texture's gradient (`SetGradient(orientation, min, max)`).
+fn gradient_of(vm: &Vm, id: WidgetId) -> Option<(bool, [f32; 4], [f32; 4])> {
+    let a = args(vm, id, "Gradient")?;
+    let horizontal = a
+        .first()
+        .and_then(|v| text_of(vm, *v))
+        .is_some_and(|o| o.eq_ignore_ascii_case("HORIZONTAL"));
+    let n = |i: usize| num(vm, a.get(i), 1.0) as f32;
+    Some((
+        horizontal,
+        [n(1), n(2), n(3), n(4)],
+        [n(5), n(6), n(7), n(8)],
+    ))
+}
+
 fn blend_of(vm: &Vm, id: WidgetId) -> Blend {
     let set = first(vm, id, "BlendMode").and_then(|v| text_of(vm, v));
     // A button's highlight adds, unless set otherwise.
@@ -609,6 +628,7 @@ fn quad_of(vm: &Vm, id: WidgetId) -> Option<Quad> {
         masks: masks_of(vm, id),
         unit: unit_of(vm, id),
         snap: crate::measures::snaps_to_pixel_grid(vm, id),
+        gradient: gradient_of(vm, id),
     })
 }
 
@@ -717,6 +737,7 @@ fn inline_quad(vm: &Vm, id: WidgetId, file: &str, atlas: bool, place: Rect) -> O
         masks: Vec::new(),
         unit: unit_of(vm, id),
         snap: true,
+        gradient: None,
     })
 }
 
@@ -1633,6 +1654,7 @@ fn minimap_tiles(vm: &mut Vm, f: WidgetId) -> Vec<Quad> {
                 unit,
                 // Whole tiles meet without gaps.
                 snap: false,
+                gradient: None,
             });
         }
     }
@@ -1708,6 +1730,7 @@ fn minimap_icon(
         masks: Vec::new(),
         unit: look.unit,
         snap: false,
+        gradient: None,
     }
 }
 
@@ -1834,6 +1857,7 @@ fn minimap_arrow(vm: &mut Vm, f: WidgetId) -> Option<Quad> {
         masks: Vec::new(),
         unit,
         snap: true,
+        gradient: None,
     })
 }
 
@@ -1887,6 +1911,7 @@ fn unit_position_player(vm: &mut Vm, f: WidgetId) -> Option<Quad> {
         masks: Vec::new(),
         unit,
         snap: true,
+        gradient: None,
     })
 }
 

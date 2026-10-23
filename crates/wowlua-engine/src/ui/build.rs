@@ -956,6 +956,20 @@ fn apply_child(vm: &mut Vm, cx: &Context, frame: Value, id: WidgetId, child: &Rc
             };
             call_method(vm, cx, child.line, frame, method, &rgba);
         }
+        // A texture's gradient (`<Gradient orientation><MinColor/>
+        // <MaxColor/></Gradient>`): Blizzard's help tips' dark gold boxes
+        // (a white texture shaded so) were white without it.
+        "gradient" if is_texture(vm, id) => {
+            let orientation = vm.str(child.attr("orientation").unwrap_or("HORIZONTAL"));
+            let mut args = vec![orientation];
+            for tag in ["MinColor", "MaxColor"] {
+                match child.child(tag) {
+                    Some(c) => args.extend(super::xml_color(vm, c)),
+                    None => args.extend([Value::Num(1.0); 4]),
+                }
+            }
+            widgets::store(vm, id, "Gradient", &args);
+        }
         // A font's or font string's text color and shadow.
         "color" if is_text(vm, id) => {
             let rgba = super::xml_color(vm, child);

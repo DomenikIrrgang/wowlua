@@ -809,3 +809,45 @@ return tostring(t:GetStringWidth() > plain + 10)",
     assert!(scene.items.iter().any(|i| matches!(i,
         wowlua_engine::scene::Item::Quad(q) if q.image == wowlua_engine::scene::Image::File("Interface\\GossipFrame\\AvailableQuestIcon".into()))));
 }
+
+/// A texture's XML `<Gradient>` and `SetGradient` shade its color.
+#[test]
+fn texture_gradients() {
+    let interface = tree(
+        "gradient",
+        &[
+            ("AddOns/Blizzard_Box/Blizzard_Box.toc", "Box.xml\n"),
+            (
+                "AddOns/Blizzard_Box/Box.xml",
+                r#"<Ui>
+  <Frame name="GradBox" parent="UIParent">
+    <Size x="100" y="100"/>
+    <Anchors><Anchor point="CENTER"/></Anchors>
+    <Layers><Layer level="BACKGROUND">
+      <Texture parentKey="BG" setAllPoints="true">
+        <Color r="1" g="1" b="1"/>
+        <Gradient orientation="VERTICAL"><MinColor r="0.25" g="0.5" b="0"/><MaxColor r="0" g="0" b="0"/></Gradient>
+      </Texture>
+    </Layer></Layers>
+  </Frame>
+</Ui>"#,
+            ),
+        ],
+    );
+    let mut vm = vm("camelot");
+    let report = wowlua_engine::ui::load(&mut vm, &interface, None);
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let scene = wowlua_engine::scene::build(&mut vm);
+    let g = scene
+        .items
+        .iter()
+        .find_map(|i| match i {
+            wowlua_engine::scene::Item::Quad(q) => q.gradient,
+            _ => None,
+        })
+        .expect("a gradient");
+    assert!(
+        !g.0 && (g.1[0] - 0.25).abs() < 0.01 && g.2[0] == 0.0,
+        "{g:?}"
+    );
+}

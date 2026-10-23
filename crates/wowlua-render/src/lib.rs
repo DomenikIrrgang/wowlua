@@ -797,10 +797,33 @@ impl Renderer {
                         } else {
                             0
                         });
+                    // A gradient: each vertex's color by its place across
+                    // the rectangle (the minimum's at left or bottom).
+                    let shade = |pos: [f32; 2]| -> [f32; 4] {
+                        let Some((horizontal, min, max)) = q.gradient else {
+                            return q.color;
+                        };
+                        let t = if horizontal {
+                            if r.w > 0.0 {
+                                ((pos[0] - r.x) / r.w).clamp(0.0, 1.0)
+                            } else {
+                                0.0
+                            }
+                        } else if r.h > 0.0 {
+                            ((r.y + r.h - pos[1]) / r.h).clamp(0.0, 1.0)
+                        } else {
+                            0.0
+                        };
+                        let mut c = q.color;
+                        for k in 0..4 {
+                            c[k] *= min[k] + (max[k] - min[k]) * t;
+                        }
+                        c
+                    };
                     let mk = |pos: [f32; 2], uv: [f32; 2]| Vertex {
                         pos,
                         uv,
-                        color: q.color,
+                        color: shade(pos),
                         mask_uv: match mask_rect {
                             Some(m) if m.w > 0.0 && m.h > 0.0 => {
                                 let (u, v) = ((pos[0] - m.x) / m.w, (pos[1] - m.y) / m.h);

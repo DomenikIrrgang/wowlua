@@ -3559,6 +3559,31 @@ fn is_protected(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 
 /// `GetFrameLevel()`: what `SetFrameLevel` set, else one above the parent
 /// (unverified).
+/// `SetGradient(orientation, minColor, maxColor)`: the texture's color
+/// shaded from the minimum's (left, bottom) to the maximum's (right, top);
+/// the colors are color objects (`CreateColor`) or tables of `r`, `g`, `b`,
+/// `a`.
+fn set_gradient(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let mut args = vec![c.arg(2)];
+    for v in [c.arg(3), c.arg(4)] {
+        for k in ["r", "g", "b", "a"] {
+            let n = match v {
+                Value::Table(t) => {
+                    let key = vm.str(k);
+                    match vm.heap.table(t).get(key) {
+                        Value::Num(n) => n,
+                        _ => 1.0,
+                    }
+                }
+                _ => 1.0,
+            };
+            args.push(Value::Num(n));
+        }
+    }
+    store(vm, id, "Gradient", &args);
+    Ok(vec![])
+}
+
 fn get_frame_level(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(frame_level(vm, id))])
 }
@@ -4571,6 +4596,7 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("CopyFontObject", copy_font_object),
         ("GetFrameLevel", get_frame_level),
         ("SetFrameLevel", set_frame_level),
+        ("SetGradient", set_gradient),
         ("SetUsingParentLevel", set_using_parent_level),
         ("SetToDefaults", set_to_defaults),
         ("GetID", get_id),

@@ -45,6 +45,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- Texture gradients (`texture:SetGradient` and XML `<Gradient>`) are kept and drawn in screenshots: Blizzard's help tips are dark gold boxes again instead of white ones.
 - The dressing room lists the outfit beside the model (each slot's item with its icon), as in game: an actor's `GetItemTransmogInfoList()` holds what it wears and tried on, and its model scene gets `OnDressModel` as it dresses. The panel was empty.
 - Textures and atlases inline in text (`|T…|t`, `|A…|a`) are drawn in screenshots and take their width in the line, as in game: the quest log's "characters with a ! above their head" shows its icon.
 - The character window's PvP tab shows your rank, rank points, the next rank's rewards and the season's cap, as in game (WoW Forever's PvP ranks, major faction 2800), with its rank ring: `texture:SetAtlas` with an atlas the game lacks leaves the texture as it was, as in game. Side panes show their descriptions (an XML font string without anchors fills its frame), and the atlas table follows the updated client (1.60.1.70532).
