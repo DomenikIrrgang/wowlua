@@ -65,6 +65,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- A class field typed with `typeof(…)` (`map: typeof(WorldMapFrame)? = nil`) has that type; it read as `any`.
 - In tests, `GetItemInfo` gives an item defined with `mock.defineItem` its link (it gave none, so `item.get` found nothing for it).
 - `wowlua fix` crashed before doing anything. It works again; migrating `wowlua.json` to the current schema is now `wowlua fix --migrate`, since `--manifest <path>` names the manifest for every command.
 - A class extending a class you imported with `import type` (`class Slot extends ItemSlot`) is now an error (E3008): it checked clean and failed when the addon loaded. Import the class itself (`import ItemSlot from …`).

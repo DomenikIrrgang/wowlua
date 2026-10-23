@@ -2607,6 +2607,25 @@ print(a, b, c, d, e, name, realm, more)
         );
     }
 
+    /// A field annotated with `typeof(expr)` of its own has the
+    /// expression's type where the file reaches the class, not `any`
+    /// (decision L70).
+    #[test]
+    fn typeof_in_class_fields() {
+        strict_err(
+            "local defaults = { scale = 1 }\nclass Box\n s: typeof(defaults)? = nil\n function Scale(): string local s = self.s return s and s.scale or \"\" end\nend\nprint(Box)\n",
+            "E2001",
+        );
+        let d = check_source(
+            "local defaults = { scale = 1 }\nclass Box\n s: typeof(defaults)? = nil\n function Scale(): number local s = self.s return s and s.scale or 0 end\nend\nlocal b = Box.new()\nlocal kept = b.s\nprint(kept)\n",
+            Mode::Strict,
+        );
+        assert!(
+            d.iter().all(|x| !x.is_error() && x.code != Some("W2063")),
+            "{d:#?}"
+        );
+    }
+
     /// Reads on an intersection: a field from the first part that has it,
     /// a key from the first part with numbered values (decision L60).
     #[test]

@@ -217,6 +217,10 @@ again where the file reaches the class, so they read the alias's type
 (decision L57). Other uses before that point, such as a hoisted function's
 signature or another alias that refers to it, read it as `any`.
 
+Written in a class field's own annotation (`map: typeof(WorldMapFrame)? =
+nil`), `typeof(expr)` is typed where the file reaches the class, and the
+field reads that type in the class's methods and outside (decision L70).
+
 Written in a function's own annotations (a `local function`, a module's
 function, a function value), `typeof(expr)` is typed where the function
 stands, as in a `local`'s annotation: `local function hex(k: keyof

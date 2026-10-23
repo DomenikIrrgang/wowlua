@@ -2245,10 +2245,29 @@ impl<'e, 'p> Checker<'e, 'p> {
             self.scope.params.push((name, p));
         }
         self.scope.self_ty = Some(instance);
+        // A field's own `typeof(expr)` is typed where the file reaches the
+        // class, as a `local`'s annotation (decision L70).
+        let mut own: Vec<Expr<'_>> = Vec::new();
+        for m in c.members() {
+            if let ClassMemberKind::Field { ty, .. } = m.kind() {
+                typeof_exprs(ty, &mut own);
+            }
+        }
+        let has_own = !own.is_empty();
+        for x in own {
+            let ty = self.infer(x);
+            let ty = self.env.types.widen(ty);
+            self.env
+                .typeof_types
+                .insert((x.span().start, x.span().end), ty);
+        }
         // Member annotations may use a `typeof` alias the file resolved
         // above (decision L57).
-        if let Some(module) = self.scope.module
-            && self.env.typeof_resolved.contains(&module)
+        if has_own
+            || self
+                .scope
+                .module
+                .is_some_and(|module| self.env.typeof_resolved.contains(&module))
         {
             let scope = self.scope.clone();
             self.env.refresh_member_types(def, c, &scope);
