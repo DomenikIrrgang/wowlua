@@ -116,6 +116,15 @@ const INVENTORY_TYPES: &[(&str, f64)] = &[
     ("INVTYPE_RELIC", 28.0),
 ];
 
+/// The equip location (`INVTYPE_HEAD`) of an `Enum.InventoryType`; an item
+/// not worn's for 0 and the unknown.
+pub(crate) fn equip_loc_of(kind: u32) -> &'static str {
+    INVENTORY_TYPES
+        .iter()
+        .find(|(_, t)| *t == f64::from(kind))
+        .map_or("INVTYPE_NON_EQUIP_IGNORE", |(n, _)| n)
+}
+
 /// An item's `Enum.InventoryType`: 0 for one not worn, none for an item
 /// without data.
 fn inventory_type(vm: &mut Vm, id: i64) -> Option<f64> {

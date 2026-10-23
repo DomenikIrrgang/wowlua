@@ -375,6 +375,42 @@ impl wowlua_engine::clientdata::ClientData for CascClientData {
         })
     }
 
+    fn item(&self, id: u32) -> Option<wowlua_engine::clientdata::ClientItem> {
+        self.with(|lib, casc| {
+            let (icon, class, subclass, inventory_type) = {
+                let r = lib.table(casc, "Item")?.row(id)?;
+                (
+                    r.int("IconFileDataID"),
+                    r.int("ClassID"),
+                    r.int("SubclassID"),
+                    r.int("InventoryType"),
+                )
+            };
+            let mut item = wowlua_engine::clientdata::ClientItem {
+                icon,
+                class,
+                subclass,
+                inventory_type,
+                ..Default::default()
+            };
+            // Its name, quality and levels: `ItemSparse`'s, else the search
+            // table's (a part of the items).
+            for table in ["ItemSparse", "ItemSearchName"] {
+                if let Some(r) = lib.table(casc, table).and_then(|t| t.row(id)) {
+                    item.name = r.string("Display_lang").unwrap_or_default();
+                    item.quality = r.int("OverallQualityID");
+                    item.item_level = r.int("ItemLevel");
+                    item.required_level = r.int("RequiredLevel");
+                    item.expansion = r.int("ExpansionID");
+                    if !item.name.is_empty() {
+                        break;
+                    }
+                }
+            }
+            Some(item)
+        })
+    }
+
     fn item_inventory_type(&self, id: u32) -> Option<u32> {
         self.with(|lib, casc| Some(lib.table(casc, "Item")?.row(id)?.int("InventoryType")))
     }

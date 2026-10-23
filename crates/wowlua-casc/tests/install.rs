@@ -220,3 +220,40 @@ fn reads_the_minimap_tiles() {
         }
     }
 }
+
+/// Every product's `ItemSparse` (a sparse table: records of their own
+/// sizes, strings inline) reads: the Hearthstone's name and quality, and
+/// the `Item` table's class for it.
+#[test]
+fn reads_the_sparse_item_table() {
+    let Some(root) = install() else {
+        eprintln!("no WoW installation: skipped");
+        return;
+    };
+    let storage = FsStorage { root: root.clone() };
+    for (product, version) in Casc::products(&storage) {
+        let casc = Casc::open(Box::new(FsStorage { root: root.clone() }), &product).expect("opens");
+        let sparse = wowlua_casc::tables::Table::open(&casc, "ItemSparse").expect("ItemSparse");
+        let r = sparse.row(6948).expect("the Hearthstone");
+        eprintln!("{product} {version}: {} items", sparse.len());
+        assert_eq!(
+            r.string("Display_lang").as_deref(),
+            Some("Hearthstone"),
+            "{product}"
+        );
+        assert_eq!(r.int("OverallQualityID"), 1, "{product}");
+        let item = wowlua_casc::tables::Table::open(&casc, "Item").expect("Item");
+        assert_eq!(
+            item.row(6948).expect("its row").int("ClassID"),
+            15,
+            "{product}"
+        );
+        if product == "wow_classic_beta" {
+            let cub = sparse.row(277714).expect("the cub");
+            assert_eq!(
+                cub.string("Display_lang").as_deref(),
+                Some("Spectral Bear Cub")
+            );
+        }
+    }
+}

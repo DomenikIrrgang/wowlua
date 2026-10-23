@@ -1,7 +1,10 @@
 //! The client's tables (DB2, the WDC4 and WDC5 formats): records of
 //! fields, each stored inline, bit-packed, in a palette or as a default
 //! with exceptions. Read by field index; strings by their offsets into the
-//! sections' string tables.
+//! sections' string tables. Sparse tables (an offset map: `ItemSparse`)
+//! have records of their own sizes, their fields one after another and
+//! their strings inline, so which fields are strings must be told
+//! ([`Db2::set_string_fields`]).
 
 /// How a field is stored.
 #[derive(Clone, Copy, Debug)]
@@ -30,6 +33,8 @@ struct Record {
     /// The parent record's ID a relationship map gives (a field not in
     /// the record), else 0.
     relation: u32,
+    /// A sparse record's size.
+    size: usize,
 }
 
 pub struct Db2 {
@@ -44,6 +49,10 @@ pub struct Db2 {
     records_bytes: usize,
     pub layout_hash: u32,
     by_id: std::sync::OnceLock<std::collections::HashMap<u32, usize>>,
+    /// Records of their own sizes (an offset map).
+    sparse: bool,
+    /// A sparse table's string fields, by index.
+    string_fields: Vec<bool>,
 }
 
 fn u16_at(b: &[u8], at: usize) -> Option<u16> {
@@ -74,10 +83,7 @@ impl Db2 {
         let pallet_size = u32_at(&data, h + 60)? as usize;
         let section_count = u32_at(&data, h + 64)? as usize;
         let _ = (record_count, field_count);
-        if flags & 1 != 0 {
-            // Variable-size records (an offset map): not read here.
-            return None;
-        }
+        let sparse = flags & 1 != 0;
         let sections_at = h + 68;
         let structs_at = sections_at + section_count * 40;
         let fsi_at = structs_at + total_fields * 4;
@@ -135,8 +141,47 @@ impl Db2 {
             let string_size = u32_at(&data, sh + 16)? as usize;
             let id_list_size = u32_at(&data, sh + 24)? as usize;
             let relation_size = u32_at(&data, sh + 28)? as usize;
+            let records_end = u32_at(&data, sh + 20)? as usize;
             let offset_map_count = u32_at(&data, sh + 32)? as usize;
             let copy_count = u32_at(&data, sh + 36)? as usize;
+            if sparse {
+                // The sparse data, then the IDs, copies, offset map,
+                // relationship map and the offset map's IDs.
+                let ids_at = records_end;
+                let copy_at = ids_at + id_list_size;
+                let map_at = copy_at + copy_count * 8;
+                let ids_of_map = map_at + offset_map_count * 6 + relation_size;
+                for r in 0..offset_map_count {
+                    let at = u32_at(&data, map_at + r * 6)? as usize;
+                    let size = usize::from(u16_at(&data, map_at + r * 6 + 4)?);
+                    if size == 0 {
+                        continue;
+                    }
+                    let rec = data.get(at..at + size)?;
+                    if tact_key != 0 && rec.iter().all(|&b| b == 0) {
+                        continue;
+                    }
+                    let id = if id_list_size > 0 {
+                        u32_at(&data, ids_at + r * 4)?
+                    } else {
+                        u32_at(&data, ids_of_map + r * 4)?
+                    };
+                    records.push(Record {
+                        at,
+                        virtual_at: 0,
+                        id,
+                        relation: 0,
+                        size,
+                    });
+                }
+                for c in 0..copy_count {
+                    copies.push((
+                        u32_at(&data, copy_at + c * 8)?,
+                        u32_at(&data, copy_at + c * 8 + 4)?,
+                    ));
+                }
+                continue;
+            }
             let mut section_records: Vec<Option<usize>> = Vec::with_capacity(count);
             let strings_at = file_offset + count * record_size;
             strings.push((strings_at, string_size));
@@ -163,6 +208,7 @@ impl Db2 {
                     virtual_at,
                     id,
                     relation: 0,
+                    size: record_size,
                 });
                 virtual_at += record_size;
             }
@@ -198,6 +244,8 @@ impl Db2 {
             records_bytes: virtual_at,
             layout_hash,
             by_id: std::sync::OnceLock::new(),
+            sparse,
+            string_fields: Vec::new(),
         };
         for i in id_from_field {
             db.records[i].id = db.int(i, id_index).unwrap_or(0);
@@ -213,6 +261,34 @@ impl Db2 {
             }
         }
         Some(db)
+    }
+
+    /// Which fields of a sparse table are strings (they are stored inline
+    /// there, so the fields after them move with them).
+    pub fn set_string_fields(&mut self, strings: Vec<bool>) {
+        self.string_fields = strings;
+    }
+
+    pub fn is_sparse(&self) -> bool {
+        self.sparse
+    }
+
+    /// A sparse record's field `f`: where it starts in the file.
+    fn sparse_at(&self, r: &Record, f: usize) -> Option<usize> {
+        let mut at = r.at;
+        let end = r.at + r.size;
+        for j in 0..f {
+            if self.string_fields.get(j).copied().unwrap_or(false) {
+                let s = self.data.get(at..end)?;
+                at += s.iter().position(|&b| b == 0)? + 1;
+            } else {
+                let field = self.fields.get(j)?;
+                let size = field.byte_size.clamp(1, 4);
+                let count = (field.size_bits as usize / (size * 8)).max(1);
+                at += size * count;
+            }
+        }
+        (at <= end).then_some(at)
     }
 
     pub fn len(&self) -> usize {
@@ -243,6 +319,13 @@ impl Db2 {
 
     fn field_in(&self, data: &[u8], r: &Record, f: usize) -> Option<u32> {
         let field = self.fields.get(f)?;
+        if self.sparse {
+            let at = self.sparse_at(r, f)?;
+            let mut buf = [0u8; 4];
+            let n = field.byte_size.clamp(1, 4);
+            buf[..n].copy_from_slice(data.get(at..at + n)?);
+            return Some(u32::from_le_bytes(buf));
+        }
         let bits = |off: u32, size: u32| -> Option<u32> {
             if size == 0 {
                 return Some(0);
@@ -295,6 +378,21 @@ impl Db2 {
         };
         let r = &self.records[i];
         let data = &self.data;
+        if self.sparse {
+            let size = field.byte_size.clamp(1, 4);
+            let count = (field.size_bits as usize / (size * 8)).max(1);
+            let Some(start) = self.sparse_at(r, f) else {
+                return Vec::new();
+            };
+            return (0..count)
+                .filter_map(|k| {
+                    let at = start + k * size;
+                    let mut buf = [0u8; 4];
+                    buf[..size].copy_from_slice(data.get(at..at + size)?);
+                    Some(u32::from_le_bytes(buf))
+                })
+                .collect();
+        }
         match field.storage {
             0 => {
                 let size = field.byte_size.clamp(1, 4);
@@ -374,6 +472,12 @@ impl Db2 {
     /// Record `i`'s string field `f`.
     pub fn string(&self, i: usize, f: usize) -> Option<String> {
         let r = &self.records[i];
+        if self.sparse {
+            let at = self.sparse_at(r, f)?;
+            let s = self.data.get(at..r.at + r.size)?;
+            let end = s.iter().position(|&b| b == 0).unwrap_or(s.len());
+            return Some(String::from_utf8_lossy(&s[..end]).into_owned());
+        }
         let field = self.fields.get(f)?;
         let off = self.int(i, f)? as usize;
         let virtual_pos = r.virtual_at + field.byte_offset + off;

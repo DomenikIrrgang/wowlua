@@ -193,8 +193,69 @@ pub fn item_data(vm: &mut Vm, id: i64) -> Option<TableRef> {
             completed_item(vm, id, t);
             Some(t)
         }
-        None => probed_item(vm, id),
+        None => probed_item(vm, id).or_else(|| client_item(vm, id)),
     }
+}
+
+/// An item the tests have no data for, from the installation's tables
+/// (decision T327): its name, quality, levels, icon, class and slot, cached
+/// as the client keeps the items it has; its class names as the client
+/// answers `C_Item.GetItemClassInfo` and `GetItemSubClassInfo`. Unverified
+/// fields: one to a stack, no sell price, no bind type.
+fn client_item(vm: &mut Vm, id: i64) -> Option<TableRef> {
+    let item = crate::clientdata::item(vm, id)?;
+    if item.name.is_empty() {
+        return None;
+    }
+    let first = |vm: &mut Vm, table: &str, f: &str, args: &[Value]| -> Value {
+        let Value::Table(t) = vm.get_global(table) else {
+            return Value::Nil;
+        };
+        let k = vm.str(f);
+        let func = vm.heap.table(t).get(k);
+        if func.is_nil() {
+            return Value::Nil;
+        }
+        vm.call(func, args)
+            .ok()
+            .and_then(|r| r.first().copied())
+            .unwrap_or(Value::Nil)
+    };
+    let (class, sub) = (
+        Value::Num(item.class.into()),
+        Value::Num(item.subclass.into()),
+    );
+    let kind = first(vm, "C_Item", "GetItemClassInfo", &[class]);
+    let sub_kind = first(vm, "C_Item", "GetItemSubClassInfo", &[class, sub]);
+    let t = vm.new_table();
+    let name = vm.str(&item.name);
+    let equip = vm.str(crate::iteminfo::equip_loc_of(item.inventory_type));
+    for (k, v) in [
+        ("name", name),
+        ("quality", Value::Num(item.quality.into())),
+        ("itemLevel", Value::Num(item.item_level.max(1).into())),
+        ("minLevel", Value::Num(item.required_level.into())),
+        ("type", kind),
+        ("subType", sub_kind),
+        ("stackCount", Value::Num(1.0)),
+        ("equipLoc", equip),
+        ("icon", Value::Num(item.icon.into())),
+        ("sellPrice", Value::Num(0.0)),
+        ("classID", class),
+        ("subclassID", sub),
+        ("bindType", Value::Num(0.0)),
+        ("expansionID", Value::Num(item.expansion.into())),
+        ("cached", Value::Bool(true)),
+    ] {
+        set(vm, t, k, v);
+    }
+    widgets::keep(vm, Value::Table(t));
+    engine_mut(vm).world.data.items.insert(id, t);
+    // Its link as the client makes one (`character::link_of_id`).
+    if let Some(link) = crate::character::link_of_id(vm, id) {
+        set(vm, t, "link", link);
+    }
+    Some(t)
 }
 
 /// A defined item without its bind type (a snapshot's, which lacks it)

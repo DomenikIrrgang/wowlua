@@ -1148,3 +1148,70 @@ M:SetMaskTexture('Interface\\\\Masks\\\\Round')",
     run(&mut vm, "mock.moveTo({ indoors = true })");
     assert!(minimap_tiles(&mut vm).is_empty());
 }
+
+/// One item of the client's tables.
+struct Items;
+
+impl wowlua_engine::clientdata::ClientData for Items {
+    fn model_scene(&self, _: u32) -> Option<wowlua_engine::clientdata::ModelScene> {
+        None
+    }
+    fn scene_camera(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneCamera> {
+        None
+    }
+    fn scene_actor(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneActor> {
+        None
+    }
+    fn actor_display(&self, _: u32) -> Option<wowlua_engine::clientdata::ActorDisplay> {
+        None
+    }
+    fn item(&self, id: u32) -> Option<wowlua_engine::clientdata::ClientItem> {
+        (id == 277714 || id == 19019).then(|| wowlua_engine::clientdata::ClientItem {
+            name: "Spectral Bear Cub".into(),
+            quality: 3,
+            icon: 294471,
+            class: 15,
+            subclass: 2,
+            inventory_type: 0,
+            item_level: 1,
+            required_level: 0,
+            expansion: 0,
+        })
+    }
+}
+
+/// An item the test has no data for is the client's (name, quality,
+/// icon, class, a link), cached; one the test defines stays the test's.
+#[test]
+fn unknown_items_come_from_the_clients_tables() {
+    let mut vm = vm();
+    wowlua_engine::controls::install(&mut vm, "mock");
+    run(
+        &mut vm,
+        "mock.defineItem(19019, { name = 'Mine', quality = 5 })",
+    );
+    wowlua_engine::clientdata::set(&mut vm, std::sync::Arc::new(Items));
+    let r = run(
+        &mut vm,
+        "local name, link, quality, _, _, kind, _, _, loc, icon, _, class, sub = C_Item.GetItemInfo(277714)
+return name, quality, icon, class, sub, loc, tostring(link:find('item:277714', 1, true) ~= nil),
+    tostring(C_Item.DoesItemExistByID(277714)), tostring(C_Item.IsItemDataCachedByID(277714)),
+    (C_Item.GetItemInfo(19019)), tostring(C_Item.DoesItemExistByID(1234567))",
+    );
+    assert_eq!(
+        r,
+        [
+            "Spectral Bear Cub",
+            "3",
+            "294471",
+            "15",
+            "2",
+            "INVTYPE_NON_EQUIP_IGNORE",
+            "true",
+            "true",
+            "true",
+            "Mine",
+            "false"
+        ]
+    );
+}

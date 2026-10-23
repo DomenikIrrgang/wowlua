@@ -307,7 +307,14 @@ T310).
   character sheet, the dressing room, the collections) place their actors
   and cameras; and an item the test has no data for has the inventory
   type the client's `Item` table gives it (`C_Item.IsDressableItemByID`,
-  so `DressUpItemLink` opens the dressing room). Without it, they answer
+  so `DressUpItemLink` opens the dressing room), and is the client's item
+  (decision T327): its name, quality and levels from `ItemSparse` (a
+  sparse table, its strings inline; else `ItemSearchName`), its icon,
+  class, subclass and slot from `Item`, its class names as
+  `C_Item.GetItemClassInfo` answers, a link made as the engine makes them,
+  cached (one to a stack, no sell price or bind type, unverified), so
+  `GetItemInfo`, `DoesItemExistByID` and Blizzard's item loading answer for
+  it; an item the test defines stays the test's. Without it, they answer
   nothing, as before. `GetUICameraInfo(id)` answers the client's
   `UiCamera` row as it is (the model's position, its yaw, pitch and roll,
   the animation, whether it is centered), as the recordings show; without

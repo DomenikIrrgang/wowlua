@@ -93,11 +93,36 @@ pub trait ClientData: Send + Sync {
     fn ui_camera(&self, _id: u32) -> Option<UiCamera> {
         None
     }
+    /// An item as the client's tables have it (`Item`, `ItemSearchName`).
+    fn item(&self, _id: u32) -> Option<ClientItem> {
+        None
+    }
     /// The minimap texture (a file ID) of a map's terrain tile, column
     /// `x` and row `y` from the north-west (0 to 63).
     fn minimap_tile(&self, _map: u32, _x: u32, _y: u32) -> Option<u32> {
         None
     }
+}
+
+/// An item of the client's tables: its name and quality
+/// (`ItemSearchName`), icon, class, subclass and inventory type (`Item`),
+/// levels and expansion.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ClientItem {
+    pub name: String,
+    pub quality: u32,
+    pub icon: u32,
+    pub class: u32,
+    pub subclass: u32,
+    pub inventory_type: u32,
+    pub item_level: u32,
+    pub required_level: u32,
+    pub expansion: u32,
+}
+
+/// An item as the client's tables have it.
+pub(crate) fn item(vm: &Vm, id: i64) -> Option<ClientItem> {
+    data(vm)?.item(u32::try_from(id).ok()?)
 }
 
 /// A map's minimap texture at a terrain tile, as the client's files give

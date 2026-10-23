@@ -39,6 +39,8 @@ const FILES: &[(&str, u32)] = &[
     ("ItemDisplayInfoMaterialRes", 1280614),
     ("ItemDisplayInfoModelMatRes", 4050937),
     ("ItemModifiedAppearance", 982457),
+    ("ItemSearchName", 1273408),
+    ("ItemSparse", 1572924),
     ("Map", 1349477),
     ("ModelFileData", 1337833),
     ("NPCModelItemSlotDisplayInfo", 1340661),
@@ -82,7 +84,7 @@ impl Table {
     /// known.
     pub fn open(casc: &Casc, name: &str) -> Option<Table> {
         let file = FILES.iter().find(|(n, _)| *n == name)?.1;
-        let db = Db2::parse(casc.file_by_id(file)?)?;
+        let mut db = Db2::parse(casc.file_by_id(file)?)?;
         let layouts = crate::schema::LAYOUTS.iter().find(|(n, _)| *n == name)?.1;
         let fields = |names: &[&str]| names.iter().filter(|n| !n.starts_with('@')).count();
         let names = layouts
@@ -90,6 +92,15 @@ impl Table {
             .find(|(h, _)| *h == db.layout_hash)
             .or_else(|| layouts.iter().find(|(_, n)| fields(n) == db.field_count()))?
             .1;
+        // A sparse table's strings are inline: which fields are (`$`).
+        if db.is_sparse() {
+            let strings = names
+                .iter()
+                .filter(|n| !n.starts_with('@'))
+                .map(|n| n.starts_with('$'))
+                .collect();
+            db.set_string_fields(strings);
+        }
         Some(Table {
             db,
             names,
@@ -106,7 +117,7 @@ impl Table {
                 }
                 continue;
             }
-            if *n == name {
+            if n.strip_prefix('$').unwrap_or(n) == name {
                 return Some(Col::Field(i));
             }
             i += 1;
