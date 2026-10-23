@@ -2519,7 +2519,8 @@ show(pcall(pair :: any, 1, 2))
 /// `EventArgs<E>` is the payload of the event or message a call names
 /// (decision L44): a handler's arguments and a sender's values are checked,
 /// a constrained type parameter keeps the literal (`E` is "UNIT_HEALTH",
-/// not `string`), and a long union shows its first members.
+/// not `string`) and satisfies its constraint where it is passed on, and a
+/// long union shows its first members.
 #[test]
 fn event_args_types() {
     let dir = tempfile::tempdir().unwrap();
@@ -2548,6 +2549,10 @@ relay("PROBE_CHANGED", "a", 2)
 local k: "a" = id("a")
 print(k)
 onGame("NOT_AN_EVENT", function() end)
+local function wrap<E extends EventName>(event: E, fn: (name: E, EventArgs<E>...) -> ())
+    onGame(event, fn)
+end
+wrap("UNIT_HEALTH", function(_, unit) print(unit) end)
 "#;
     write(
         dir.path(),
