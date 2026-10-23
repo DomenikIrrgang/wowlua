@@ -901,7 +901,10 @@ impl Mapped {
 impl std::future::Future for Mapped {
     type Output = Result<(), wgpu::BufferAsyncError>;
 
-    fn poll(self: std::pin::Pin<&mut Self>, cx: &mut std::task::Context<'_>) -> std::task::Poll<Self::Output> {
+    fn poll(
+        self: std::pin::Pin<&mut Self>,
+        cx: &mut std::task::Context<'_>,
+    ) -> std::task::Poll<Self::Output> {
         let Ok(mut s) = self.0.lock() else {
             return std::task::Poll::Ready(Err(wgpu::BufferAsyncError));
         };

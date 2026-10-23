@@ -271,14 +271,25 @@ fn test_profile_out_writes_a_speedscope_file_per_test_file() {
         .env("WOWLUA_HOME", dir.path().join(".wowlua-home"))
         .output()
         .unwrap();
-    assert!(out.status.success(), "{}", String::from_utf8_lossy(&out.stderr));
-    let file = dir.path().join("prof/tests_counter.test.wowlua.standard.speedscope.json");
+    assert!(
+        out.status.success(),
+        "{}",
+        String::from_utf8_lossy(&out.stderr)
+    );
+    let file = dir
+        .path()
+        .join("prof/tests_counter.test.wowlua.standard.speedscope.json");
     let json: Value = serde_json::from_slice(&fs::read(&file).unwrap()).unwrap();
     assert_eq!(json["exporter"], "wowlua");
     let frames = json["shared"]["frames"].as_array().unwrap();
     assert!(
-        frames.iter().any(|f| f["name"] == "script DemoButton:OnClick"),
+        frames
+            .iter()
+            .any(|f| f["name"] == "script DemoButton:OnClick"),
         "{frames:?}"
     );
-    assert!(frames.iter().any(|f| f["file"] == "src/counter.lua"), "{frames:?}");
+    assert!(
+        frames.iter().any(|f| f["file"] == "src/counter.lua"),
+        "{frames:?}"
+    );
 }

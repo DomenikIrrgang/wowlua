@@ -567,6 +567,17 @@ event handler, stepped through and inspected with watches over DAP; an agent
 clicks through the addon's UI over MCP and sees it in screenshots drawn with
 the client's textures and fonts; a UI test compares a screenshot.
 
+Built 2026-10-23, waiting for review: every part above, with tests (the VM's
+hooks and profiler, the controller on the engine, a DAP client stopping a
+test in an `OnClick` handler, an MCP agent clicking an addon by pixel into a
+breakpoint, screenshot tests written, compared and updated, the renderer's
+pixels, the CASC reader on all five products of this machine's
+installation). Checked by hand on the widget demo with camelot's Blizzard
+UI: its window drawn with the client's textures and Friz Quadrata, clicked
+and stepped through over MCP. Not yet: a VS Code extension (M9 S8) to
+register the `wowlua` debug type; tiling atlases are stretched, not tiled;
+the hook's cost when off is not measured on a release build yet.
+
 ## M13: Game data and rendering
 
 Real game data and assets from the user's own client, never distributed

@@ -727,14 +727,24 @@ fn test_once(
                 let dir = cwd().join(dir);
                 let mapper = wowlua_test::chunk_mapper(&suite);
                 let flavor = flavor.clone();
-                suite.after_file = Some(std::sync::Arc::new(move |vm: &mut wowlua_vm::Vm, rel: &str| {
-                    let Some(p) = vm.stop_profiling() else { return };
-                    let map = |chunk: &[u8]| mapper(&String::from_utf8_lossy(chunk));
-                    let json = wowlua_debug::profile::speedscope(&p, &map, &format!("{rel} ({flavor})"));
-                    let name = format!("{}.{flavor}.speedscope.json", rel.replace(['/', '\\'], "_"));
-                    let _ = std::fs::create_dir_all(&dir);
-                    let _ = std::fs::write(dir.join(name), serde_json::to_vec(&json).unwrap_or_default());
-                }));
+                suite.after_file = Some(std::sync::Arc::new(
+                    move |vm: &mut wowlua_vm::Vm, rel: &str| {
+                        let Some(p) = vm.stop_profiling() else { return };
+                        let map = |chunk: &[u8]| mapper(&String::from_utf8_lossy(chunk));
+                        let json = wowlua_debug::profile::speedscope(
+                            &p,
+                            &map,
+                            &format!("{rel} ({flavor})"),
+                        );
+                        let name =
+                            format!("{}.{flavor}.speedscope.json", rel.replace(['/', '\\'], "_"));
+                        let _ = std::fs::create_dir_all(&dir);
+                        let _ = std::fs::write(
+                            dir.join(name),
+                            serde_json::to_vec(&json).unwrap_or_default(),
+                        );
+                    },
+                ));
             }
             let mut results = wowlua_test::run(&suite, filters, threads);
             results.extend(not_compiling(out, left_out, filters, &flavor));
