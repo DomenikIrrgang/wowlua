@@ -376,7 +376,7 @@ Inference is local and bidirectional. There is no whole-program inference.
 | `local t = { a = 1, b = "x" }` | `{ a: number, b: string }` |
 | `local t = { 1, 2, 3 }` | `number[]` |
 | `local t = {}` | open table, see below |
-| function without return annotation | union of all returned types (`()` if none) |
+| function without return annotation | union of all returned types (`()` if none); a class's method without one returns `any` (its type is known before its body is checked: annotate its results), decision L56 |
 | unannotated parameter | `any` (basic/strict), or the contextual type if available |
 
 ### 2.4.1 Unannotated locals
@@ -481,7 +481,10 @@ values, as in Lua. The loop variables take the iterator's result types, with
 
 `pairs`, `ipairs`, `next`, `select`, `unpack`, `pcall`, `xpcall`,
 `securecallfunction` and `coroutine.*` are declared in the Lua standard library
-declarations with type packs (§2.2.10). They are not special-cased.
+declarations with type packs (§2.2.10). One is special-cased: `select(n, …)`
+with a whole number literal `n` gives the types of the values from the n-th
+on (`select(2, f())` with `f(): (number, string)` is a `string`), where the
+declaration says `...any` (decision L54).
 
 ### 2.4.5 String methods
 
@@ -699,6 +702,13 @@ are resolved in two passes:
    expression matches any function type with compatible arity.
 2. The function expressions are contextually typed against the first remaining
    overload and checked.
+
+A type parameter that only a function expression's results can bind (`R` in
+`call<R>(f: () -> R): R`, `R...` in `pcall`) is bound from what the
+expression returns when it has no return annotation:
+`pcall(function() return "x" end)` gives `(boolean, string)` (decision L55).
+`pcall` and `xpcall` give `any` after the boolean where the function never
+returns or returns nothing, since then the values are only what it raised.
 
 A last argument that gives several values (a call such as `unpack(t)`, or
 `...`) gives its values to the parameters from its position on, as in Lua:

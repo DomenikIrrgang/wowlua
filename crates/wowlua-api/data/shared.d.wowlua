@@ -226,7 +226,17 @@ end
 
 declare class AnimationGroup extends Object
     function GetParent(): Frame
-    function CreateAnimation<T>(animationType: (T | AnimationType)?, name: string?, templateName: string?): table | T
+    function CreateAnimation(animationType: "Alpha", name: string?, templateName: string?): Alpha
+    function CreateAnimation(animationType: "Animation", name: string?, templateName: string?): Animation
+    function CreateAnimation(animationType: "FlipBook", name: string?, templateName: string?): FlipBook
+    function CreateAnimation(animationType: "LineScale", name: string?, templateName: string?): LineScale
+    function CreateAnimation(animationType: "LineTranslation", name: string?, templateName: string?): LineTranslation
+    function CreateAnimation(animationType: "Path", name: string?, templateName: string?): Path
+    function CreateAnimation(animationType: "Rotation", name: string?, templateName: string?): Rotation
+    function CreateAnimation(animationType: "Scale", name: string?, templateName: string?): Scale
+    function CreateAnimation(animationType: "Translation", name: string?, templateName: string?): Translation
+    function CreateAnimation(animationType: "VertexColor", name: string?, templateName: string?): VertexColor
+    function CreateAnimation(animationType: string?, name: string?, templateName: string?): Animation
     function Finish()
     function GetAnimationSpeedMultiplier(): number
     function GetAnimations(): Animation

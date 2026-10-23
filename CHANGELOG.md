@@ -20,6 +20,9 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 ### Changed
 
 - `local o = opts or {}` keeps the type of `opts` (an `Options?` gives an `Options`), as do `list or {}` and `x ?? {}`: the empty table no longer turns its fields into `any`.
+- `select(n, …)` with a number written as the index gives the types of the values from that one on: `select(2, f())` is `f`'s second result, where it was `any`.
+- A generic function's result type comes from a function you pass it when nothing else gives it: `local ok, name = pcall(function() return unit.name end)` types `name`, where it was `any`.
+- `group:CreateAnimation("Alpha")` gives an `Alpha` (and each other animation type its own), so its methods are checked; it was untyped.
 - Reading a record with a key typed `keyof` it (`colors[k]` with `k: keyof Colors`) gives that field's type, where it was `any`.
 - In a generic function or class, a value whose type is a type parameter with a constraint has the constraint's fields and methods: with `B extends Frame`, `b:GetWidth()` is a `number`, where it was `any`.
 - A generic function keeps the type of a value you pass it when that value already has one: `assert(tokens[k])` with `tokens: { [string]: Token }` is a `Token`, not a `string`. A literal written as the argument still widens (`id("x")` is a `string`).

@@ -2594,6 +2594,45 @@ print(a, b, c, d, e, name, realm, more)
         );
     }
 
+    /// `select(n, …)` with a literal `n` gives the values from the n-th on
+    /// (decision L54).
+    #[test]
+    fn literal_select() {
+        strict_err(
+            "local function three(): (number, string, boolean) return 1, \"a\", true end\nlocal s = select(2, three())\nlocal n: number = s\nprint(n)\n",
+            "E2001",
+        );
+        strict_ok(
+            "local function three(): (number, string, boolean) return 1, \"a\", true end\nlocal b: boolean = select(3, three())\nlocal c = select(\"#\", three())\nprint(b, c)\n",
+        );
+    }
+
+    /// A callback's returns bind a type parameter nothing else binds
+    /// (decision L55).
+    #[test]
+    fn callback_result_binding() {
+        strict_err(
+            "local function call<R>(f: () -> R): R return f() end\nlocal x = call(function() return \"x\" end)\nlocal n: number = x\nprint(n)\n",
+            "E2001",
+        );
+        strict_err(
+            "local ok, h = pcall(function() return \"x\" end)\nlocal e: number = h\nprint(ok, e)\n",
+            "E2001",
+        );
+        strict_err(
+            "local ok, v = pcall(function(a: number) return a * 2 end, 3)\nlocal e: string = v\nprint(ok, e)\n",
+            "E2001",
+        );
+        strict_ok(
+            "local ok, h = pcall(function(): string return \"x\" end)\nlocal e: string = h\nprint(ok, e)\n",
+        );
+        // a function that only raises: what it raised, `any`
+        strict_ok("local ok, m = pcall(error, \"x\")\nlocal s: number = m\nprint(ok, s)\n");
+        strict_ok(
+            "local ok, m = pcall(function() error(\"x\") end)\nlocal s: number = m\nprint(ok, s)\n",
+        );
+    }
+
     /// A record read with a key of its field names gives those fields'
     /// types (decision L53).
     #[test]

@@ -196,6 +196,23 @@ impl Checker<'_, '_> {
         out
     }
 
+    /// `select(n, …)` of the global `select` with a whole number literal
+    /// `n` of at least 1: `n`.
+    fn literal_select(&self, callee: Expr<'_>, args: Args<'_>) -> Option<usize> {
+        let ExprKind::Name(name) = callee.kind() else {
+            return None;
+        };
+        if name.text() != "select" || self.lookup_var("select").is_some() {
+            return None;
+        }
+        let first = args.exprs().iter().next()?;
+        let ExprKind::Number(lit) = first.kind() else {
+            return None;
+        };
+        let index = lit.value()?;
+        (index.fract() == 0.0 && index >= 1.0 && index < 256.0).then_some(index as usize)
+    }
+
     /// `select(n, ..., f(...))` with a literal `n` past what the values
     /// can be, `f` a `local function` of known count: always `nil` (W2062).
     fn select_past_results(&mut self, callee: Expr<'_>, args: Args<'_>) {
@@ -512,6 +529,20 @@ impl Checker<'_, '_> {
             ExprKind::Call { callee, args } | ExprKind::OptCall { callee, args } => {
                 self.mark_callbacks(args);
                 self.select_past_results(callee, args);
+                // `select(n, …)` with a literal `n`: the values from the n-th
+                // on, typed (decision L54)
+                if let Some(n) = self.literal_select(callee, args)
+                    && let ArgsKind::Parens { args: es, .. } = args.kind()
+                {
+                    let all = self.expr_pack(es, &[]);
+                    let mut types = all.types;
+                    let dropped = n.min(types.len());
+                    types.drain(..dropped);
+                    return Values::Many(Pack {
+                        types,
+                        rest: all.rest,
+                    });
+                }
                 if let ExprKind::Name(n) = callee.kind()
                     && n.text() == "super"
                     && !self.classes.is_empty()
@@ -539,6 +570,24 @@ impl Checker<'_, '_> {
                 let mut results = self.call(c, None, args, e.span(), expected);
                 self.forget_passed(None, args);
                 self.stdlib_after_call(callee, args);
+                // `pcall(f)`/`xpcall(f, h)`: after the boolean, `f`'s results,
+                // or what it raised; a function that never returns or
+                // returns nothing gives only the latter: `any` (L55).
+                if let ExprKind::Name(n) = callee.kind()
+                    && matches!(n.text(), "pcall" | "xpcall")
+                    && self.lookup_var(n.text()).is_none()
+                    && !results.types.is_empty()
+                {
+                    let raises_only = results.types.len() == 1 && results.rest.is_none();
+                    if raises_only {
+                        results.rest = Some(Rest::Variadic(Types::ANY));
+                    }
+                    for t in results.types.iter_mut().skip(1) {
+                        if *t == Types::NEVER {
+                            *t = Types::ANY;
+                        }
+                    }
+                }
                 // `assert(v)` returns `v` only where it is truthy.
                 if let ExprKind::Name(n) = callee.kind()
                     && n.text() == "assert"
@@ -3436,6 +3485,8 @@ impl Checker<'_, '_> {
         // inferred on trial (their callbacks have no types yet), checked
         // again once the type arguments are bound (L45).
         let mut trial_tables: Vec<bool> = vec![false; exprs.len()];
+        let mut unbound: Vec<ParamId> = Vec::new();
+        let orig = f;
         if generic {
             // Parameters that do not mention the type parameters type their
             // arguments contextually (literals keep their literal types).
@@ -3597,6 +3648,20 @@ impl Checker<'_, '_> {
                     s.packs.insert(*p, pack);
                 }
             }
+            // Still unbound: a function literal's returns may bind them in
+            // the second pass (L55); `any` until then.
+            unbound = f
+                .type_params
+                .iter()
+                .filter(|p| {
+                    if self.env.params[p.0 as usize].pack {
+                        !s.packs.contains_key(p)
+                    } else {
+                        !s.types.contains_key(p)
+                    }
+                })
+                .copied()
+                .collect();
             // Unbound parameters are `any`.
             for p in &f.type_params {
                 if self.env.params[p.0 as usize].pack {
@@ -3633,11 +3698,43 @@ impl Checker<'_, '_> {
         } else {
             f.clone()
         };
-        let f = self.expand_event_args(f, 0);
+        let mut f = self.expand_event_args(f, 0);
+        let mut rebound = false;
         // Second pass: check every argument against its parameter.
         let n_args = exprs.len();
         for (i, e) in exprs.iter().enumerate() {
             let p = self.param_at(&f, i);
+            // A function literal for a callback whose results name a type
+            // parameter nothing bound (`pcall(function() return x end)`):
+            // its own returns bind it (decision L55).
+            if !unbound.is_empty()
+                && matches!(e.kind(), ExprKind::Function(_))
+                && let Some(op) = self.param_at(orig, i)
+                && self.returns_unbound(op, &unbound)
+                && let Some(pt) = p
+                && let Ty::Func(pf) = self.env.types.get(pt).clone()
+            {
+                let mut open = Func::clone(&pf);
+                open.ret = Pack::any();
+                let open = self.env.types.func(open);
+                let t = self.check(e, Some(open));
+                let mut found = Subst::default();
+                self.unify(op, t, &mut found);
+                for q in &unbound {
+                    if let Some(&b) = found.types.get(q) {
+                        s.types.insert(*q, b);
+                        rebound = true;
+                    }
+                    if let Some(b) = found.packs.get(q) {
+                        s.packs.insert(*q, b.clone());
+                        rebound = true;
+                    }
+                }
+                if report {
+                    self.check_assignable(e.span(), t, pt);
+                }
+                continue;
+            }
             let multi = i + 1 == n_args && is_multi(e);
             // A table literal inferred before the call's type arguments
             // were known (its literals widened) is checked again against
@@ -3724,7 +3821,24 @@ impl Checker<'_, '_> {
                 }
             }
         }
+        if rebound {
+            let g = subst::apply_func(&mut self.env.types, orig, &s);
+            f = self.expand_event_args(g, 0);
+        }
         Some(f.ret)
+    }
+
+    /// Whether the results of the function type `t` name one of `unbound`
+    /// (`() -> R`, `() -> R...`).
+    fn returns_unbound(&self, t: TypeId, unbound: &[ParamId]) -> bool {
+        let Ty::Func(pf) = self.env.types.get(t) else {
+            return false;
+        };
+        pf.ret
+            .types
+            .iter()
+            .any(|&r| matches!(self.env.types.get(r), Ty::Param(q) if unbound.contains(q)))
+            || matches!(&pf.ret.rest, Some(Rest::Pack(q)) if unbound.contains(q))
     }
 
     /// The function argument whose parameters bind the pack `p` (the `f` of
@@ -3970,7 +4084,12 @@ impl Checker<'_, '_> {
                 for (pr, ar) in pf.ret.types.iter().zip(&af.ret.types) {
                     self.unify_at(*pr, *ar, s, true, contra);
                 }
-                if let Some(Rest::Pack(p)) = &pf.ret.rest {
+                // (results not known yet, `...any`, say nothing)
+                let unknown = af.ret.types.is_empty()
+                    && matches!(af.ret.rest, Some(Rest::Variadic(t)) if t == Types::ANY);
+                if let Some(Rest::Pack(p)) = &pf.ret.rest
+                    && !unknown
+                {
                     s.packs.insert(*p, af.ret.clone());
                 }
             }
