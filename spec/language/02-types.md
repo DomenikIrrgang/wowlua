@@ -217,6 +217,12 @@ again where the file reaches the class, so they read the alias's type
 (decision L57). Other uses before that point, such as a hoisted function's
 signature or another alias that refers to it, read it as `any`.
 
+Written in a function's own annotations (a `local function`, a module's
+function, a function value), `typeof(expr)` is typed where the function
+stands, as in a `local`'s annotation: `local function hex(k: keyof
+typeof(colors)): string return colors[k].hex end` takes the colours' field
+names and reads their type (decision L62).
+
 ### 2.2.8 Type predicates
 
 A function whose return type is `param is T` narrows its argument in the

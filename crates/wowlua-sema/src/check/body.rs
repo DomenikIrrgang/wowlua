@@ -554,6 +554,47 @@ impl<'e, 'p> Checker<'e, 'p> {
         self.env.resolve(t, &scope)
     }
 
+    /// A function's signature where its body is checked: the `typeof(expr)`
+    /// parts of its annotations are inferred first, as in [`Self::annotation`]
+    /// (decision L62).
+    pub fn func_sig<'t>(&mut self, f: &FnSig<'t>) -> Func {
+        fn vararg_type(v: VarargType<'_>) -> Option<Type<'_>> {
+            match v {
+                VarargType::Type(t) | VarargType::Expand(t) => Some(t),
+                VarargType::Pack(_) => None,
+            }
+        }
+        let mut types: Vec<Type<'t>> = f.params.iter().filter_map(|p| p.ty).collect();
+        if let Some(t) = f.vararg.and_then(|v| v.ty).and_then(vararg_type) {
+            types.push(t);
+        }
+        match f.ret {
+            Some(RetType::Single(t)) | Some(RetType::Predicate { ty: t, .. }) => types.push(t),
+            Some(RetType::List {
+                types: list,
+                vararg,
+                ..
+            }) => {
+                types.extend(list.iter());
+                types.extend(vararg.and_then(vararg_type));
+            }
+            Some(RetType::Pack(_)) | None => {}
+        }
+        let mut exprs: Vec<Expr<'t>> = Vec::new();
+        for t in types {
+            typeof_exprs(t, &mut exprs);
+        }
+        for e in exprs {
+            let ty = self.infer(e);
+            let ty = self.env.types.widen(ty);
+            self.env
+                .typeof_types
+                .insert((e.span().start, e.span().end), ty);
+        }
+        let scope = self.scope.clone();
+        self.env.func_sig(f, &scope, false)
+    }
+
     /// A top-level alias using `typeof(expr)` gets its body where the file
     /// reaches it, with the expressions' types there (spec §2.2.7): later
     /// annotations, and the modules checked after this one, see it.
@@ -914,9 +955,7 @@ impl<'e, 'p> Checker<'e, 'p> {
                 StmtKind::Function { name, func }
                     if self.is_module && name.path().len() == 1 && name.method().is_none() =>
                 {
-                    let sig = self
-                        .env
-                        .func_sig(&FnSig::of(func), &self.scope.clone(), false);
+                    let sig = self.func_sig(&FnSig::of(func));
                     let t = self.env.types.func(sig);
                     self.declare(name.path().at(0).text(), Some(t), t, false, None);
                 }
@@ -1020,9 +1059,7 @@ impl<'e, 'p> Checker<'e, 'p> {
         else {
             return;
         };
-        let sig = self
-            .env
-            .func_sig(&FnSig::of(func), &self.scope.clone(), false);
+        let sig = self.func_sig(&FnSig::of(func));
         for (n, entry) in entries.iter().enumerate() {
             let TableField::Positional(case) = entry else {
                 continue;
@@ -1487,9 +1524,7 @@ impl<'e, 'p> Checker<'e, 'p> {
             }
             StmtKind::Function { name, func } => self.function_stmt(name, func),
             StmtKind::LocalFunction { name, func } => {
-                let sig = self
-                    .env
-                    .func_sig(&FnSig::of(func), &self.scope.clone(), false);
+                let sig = self.func_sig(&FnSig::of(func));
                 let t = self.env.types.func(sig);
                 let id = self.declare(name.text(), None, t, false, Some(name.span()));
                 let handler = self.next_handler.take();
@@ -1913,7 +1948,7 @@ impl<'e, 'p> Checker<'e, 'p> {
         expected: Option<Func>,
         self_ty: Option<TypeId>,
     ) -> TypeId {
-        let mut sig = self.env.func_sig(f, &self.scope.clone(), false);
+        let mut sig = self.func_sig(f);
         // Strict mode: parameters of non-callback functions need
         // annotations (E2050).
         let callback = std::mem::take(&mut self.callback_next);

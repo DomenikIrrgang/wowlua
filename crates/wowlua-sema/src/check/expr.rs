@@ -3527,9 +3527,7 @@ impl Checker<'_, '_> {
                         && lit.params().iter().all(|p| p.ty().is_some())
                         && lit.vararg().is_none_or(|v| v.ty.is_some());
                     if annotated && let Some(p) = self.param_at(f, i) {
-                        let mut sig =
-                            self.env
-                                .func_sig(&FnSig::of(lit), &self.scope.clone(), false);
+                        let mut sig = self.func_sig(&FnSig::of(lit));
                         if lit.ret().is_none() {
                             sig.ret = Pack::any();
                         }

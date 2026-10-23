@@ -2710,6 +2710,49 @@ print(a, b, c, d, e, name, realm, more)
         strict_ok("local t = { a = 1 }\nt = { b = {} }\nprint(t.b)\n");
     }
 
+    /// `typeof(expr)` in a function's parameter and result annotations
+    /// reads the expression's type (decision L62).
+    #[test]
+    fn typeof_in_signatures() {
+        let pre = "local C = { a = { hex = \"x\" }, b = { hex = \"y\" } }\n";
+        strict_err(
+            &format!(
+                "{pre}local function f(t: typeof(C))\n local n: number = t\n print(n)\nend\nprint(f)\n"
+            ),
+            "E2001",
+        );
+        strict_err(
+            &format!(
+                "{pre}local function f(): typeof(C) return C end\nlocal n: number = f()\nprint(n)\n"
+            ),
+            "E2001",
+        );
+        // a key of its field names reads those fields
+        let d = check_source(
+            &format!(
+                "{pre}local function hex(k: keyof typeof(C)): string return C[k].hex end\nprint(hex(\"a\"))\n"
+            ),
+            Mode::Strict,
+        );
+        assert!(
+            d.iter().all(|x| !x.is_error() && x.code != Some("W2063")),
+            "{d:#?}"
+        );
+        strict_err(
+            &format!(
+                "{pre}local function hex(k: keyof typeof(C)): string return C[k].hex end\nprint(hex(\"c\"))\n"
+            ),
+            "E2001",
+        );
+        // a function literal's
+        strict_err(
+            &format!(
+                "{pre}local f = function(t: typeof(C)) local n: number = t print(n) end\nprint(f)\n"
+            ),
+            "E2001",
+        );
+    }
+
     /// A literal assigned to an unannotated local whose type so far has it
     /// stays that literal (decision L61).
     #[test]
