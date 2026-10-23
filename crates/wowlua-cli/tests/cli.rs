@@ -2863,6 +2863,43 @@ fn nested_fields_are_exported() {
     );
 }
 
+/// A value typed elsewhere keeps its declared type when it binds a type
+/// parameter, a union of literals included; a literal written there widens
+/// (decision L44).
+#[test]
+fn typed_values_keep_literal_unions() {
+    let dir = tempfile::tempdir().unwrap();
+    let main = r#"type Token = "a" | "b"
+local tokens: { [string]: Token } = { x = "a" }
+local t: Token = assert(tokens.x)
+local function id<T>(v: T): T return v end
+local s = id("lit")
+local u: "lit" = s
+print(t, u)
+"#;
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"literals\", \"version\": \"1.0.0\" }, \"check\": { \"mode\": \"strict\" } }\n",
+            ),
+            ("src/main.wowlua", main),
+        ],
+    );
+    let out = wowlua(dir.path())
+        .args(["check", "--message-format", "short"])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let errors: Vec<&str> = stderr.lines().filter(|l| l.contains("error[")).collect();
+    assert_eq!(
+        errors,
+        ["src/main.wowlua:6:7: error[E2001]: `string` is not assignable to `\"lit\"`"],
+        "{stderr}"
+    );
+}
+
 /// `W2063` (decision T274): off unless `check.lints` turns it on; then an
 /// unannotated parameter nothing types, and a local whose value is `any`.
 #[test]

@@ -168,7 +168,10 @@ where nothing binds `T` it is `any`. A parameter `T | Secret<T>` (or
 `string | Secret<string>` binds `T` to `string`. A literal argument binds a
 constrained type parameter to the literal (`E extends EventName` called with
 `"UNIT_HEALTH"` binds `"UNIT_HEALTH"`) and an unconstrained one to its
-widened type (`T` binds `string`); decision L44. Inside the body, a value of a
+widened type (`T` binds `string`); a value typed elsewhere (a name, a field,
+a call's result) binds as its type, a union of literals included, as a
+`local` keeps it (`assert(tokens[k])` with `tokens: { [string]: Token }` is
+a `Token`); decision L44. Inside the body, a value of a
 constrained type parameter fits wherever its constraint does (an `E extends
 EventName` is passed on as an `EventName`).
 
