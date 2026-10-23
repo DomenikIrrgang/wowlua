@@ -79,6 +79,8 @@ end)
 | `ErrorInfo` | `{ component: string?, owner: any?, stack: string? }` | What a listener learns besides the message (policy 8) |
 | `configure` | `(opts: { rateLimit: number? })` | |
 | `count` | `() -> number` | Errors reported by this addon since load |
+| `try` | `(fn: unknown, ...: unknown) -> ...unknown` | Calls `fn` when it is a function, protected and **silent**: its results, or nothing when `fn` is missing or raises; nothing is reported. For the game's functions a client may lack or that raise on input they don't expect (decision S42); `call` is for your own code. Read the results with `secret.asString` and the like. |
+| `tryMethod` | `(obj: unknown, name: string, ...: unknown) -> ...unknown` | `obj:name(...)` as `try` calls a function: nothing when `obj` is not a table the addon may read or lacks the method |
 
 ## callbacks
 
@@ -239,6 +241,8 @@ local at = tbl.insertSorted(queue, entry, tbl.by(function(e: Entry) return e.at 
 | `equal` | `(a: any, b: any) -> boolean` | Deep; secrets never equal |
 | `keys`, `values` | `<K, V>(t: { [K]: V }, less?: (a: K, b: K) -> boolean) -> K[]`, `<K, V>(t: { [K]: V }) -> V[]` | `keys` is sorted by `less` when given, else when the keys are all numbers or all strings |
 | `count`, `isEmpty` | `(t: table) -> number`, `-> boolean` | All entries, not just the array part |
+| `field` | `(t: unknown, ...: string) -> unknown` | `t[k1][k2]…` through values that may not be tables: nil at the first that is not one the addon may read (`field(frame, "ScrollBox", "ScrollTarget")`, a part some clients lack) (decision S42) |
+| `weakKeys`, `weakValues` | `<K, V>() -> { [K]: V }` | A table with `__mode = "k"` (keys don't keep their values: what you note about the game's frames without writing fields onto them) or `"v"`; typed by where it goes: `local seen: { [Frame]: boolean } = tbl.weakKeys()` |
 | `filter`, `map`, `find`, `contains` | list helpers | `find` returns the element and its index; `contains` never finds a secret |
 | `sort` | `<T>(list: T[], less?: Less<T>) -> T[]` | In place, returns `list`. **Stable** (merge sort; insertion sort up to 12 elements, without garbage). An inconsistent `less` gives some order, never "invalid order function for sorting". Secret elements never reach `less`; they go last, in their order. Default: numbers and strings ascending, values of different types by type name. |
 | `by` | `<T>(key: (v: T) -> unknown, descending?: boolean) -> Less<T>` | An order by a key: numbers and strings, ascending unless `descending`; elements whose key is nil or secret go last, in their order |
@@ -322,7 +326,7 @@ supported client has.
 | `short` | `(seconds: number) -> string` | The largest unit, like aura and cooldown times |
 | `clock` | `(seconds: number, hours?: boolean) -> string` | "3:07", "1:03:07" |
 | `date` | `(at?: number) -> string` | The locale's short date (default today) |
-| `money` | `(copper: number, opts?: { text?, separate? }) -> string` | Coin icons, or with `text` the client's words. Secret options count as unset. |
+| `money` | `(copper: number, opts?: { text?, separate?, short? }) -> string` | Coin icons, with `text` the client's words, or with `short` letters (`"12g 5s 3c"`, decision S42); units at zero are left out, copper stays when all are. Secret options count as unset. |
 | `number` | `(n: number \| Secret<number>) -> string \| Secret<string>` | Thousands separators |
 | `abbreviate` | `(n: number \| Secret<number>) -> string \| Secret<string>` | "8.5K"; a secret gives a secret string |
 | `percent` | `(fraction: number, decimals?: number) -> string` | "46%" |

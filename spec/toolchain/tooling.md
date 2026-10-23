@@ -385,7 +385,10 @@ Mocking (decision T187):
   (`expect(name).toBeSecure()`), so Blizzard's code reading it later does
   not run tainted. `mock.setField(t, key, value)` sets any field (a frame or a
   game API taken away with `nil`) the same way until the test ends
-  (decision T230).
+  (decision T230). `mock.partial(fields)` is a fake of a record the game
+  gives, with only the fields a test needs, typed by where it goes
+  (`local info: BNetAccountInfo = mock.partial({ bnetAccountID = 1 })`), so
+  a stub can return it; the fields are not checked (decision S42).
 - **Scenario controls** set the game's state: combat, units, group, auras,
   spells, items, time, screen, locale, CVars, other addons and libraries.
 - **Taint in tests.** A protected action refused because of taint fails the

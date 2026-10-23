@@ -1060,6 +1060,35 @@ end
     );
 }
 
+/// `mock.partial` gives a fake record typed by where it goes, so a stub
+/// can return it (decision S42).
+#[test]
+fn mock_partial_record() {
+    let dir = project(
+        r#""standard": {}"#,
+        &[
+            ("src/main.wowlua", "print(1)\n"),
+            (
+                "tests/partial.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+@test
+local function partial()
+    local info: BNetAccountInfo = mock.partial({ bnetAccountID = 7, accountName = "|Kq1|k" })
+    expect(info.bnetAccountID).toBe(7)
+    local n: number = info.bnetAccountID
+    expect(n).toBe(7)
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    assert!(out.contains("1 passed, 0 failed"), "{out}");
+}
+
 /// `import internal` (decision T223): a module's file-level locals and
 /// types in test files only (E8119 elsewhere); the addon build is
 /// unchanged.

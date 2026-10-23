@@ -13,6 +13,7 @@ import defer from "wowlua:combat"
 import handle from "wowlua:saved"
 import type SavedHandle from "wowlua:saved"
 import * as secret from "wowlua:secret"
+import after from "wowlua:timer"
 
 local _, ns = ...
 local wl = ns.__wowlua
@@ -617,4 +618,93 @@ export function button(parent: Frame, label: string, theme: WidgetTheme?): Butto
     b:SetFontString(text)
     b:SetText(label)
     return b
+end
+
+-- ------------------------------------------------- the game's frames --
+
+-- Whether `v` is a widget of this kind (by its IsObjectType, protected:
+-- a table that is no widget, or one the addon may not read, is not one).
+local function isA(v: unknown, kind: string): boolean
+    if type(v) ~= "table" or not secret.readable(v) then
+        return false
+    end
+    const is = (v :: { [string]: unknown }).IsObjectType
+    if type(is) ~= "function" then
+        return false
+    end
+    local ok, yes = pcall(is :: (unknown, string) -> unknown, v, kind)
+    return ok and yes == true
+end
+
+--- `v` as a widget of that kind, else nil: for the game's frames read by a
+--- name or a key (`asButton(frame.CloseButton)`), whose types the
+--- declarations may not know.
+export function asRegion(v: unknown): Region? if isA(v, "Region") then return v :: Region end return nil end
+export function asFrame(v: unknown): Frame? if isA(v, "Frame") then return v :: Frame end return nil end
+export function asButton(v: unknown): Button? if isA(v, "Button") then return v :: Button end return nil end
+export function asCheckButton(v: unknown): CheckButton? if isA(v, "CheckButton") then return v :: CheckButton end return nil end
+export function asEditBox(v: unknown): EditBox? if isA(v, "EditBox") then return v :: EditBox end return nil end
+export function asScrollFrame(v: unknown): ScrollFrame? if isA(v, "ScrollFrame") then return v :: ScrollFrame end return nil end
+export function asSlider(v: unknown): Slider? if isA(v, "Slider") then return v :: Slider end return nil end
+export function asStatusBar(v: unknown): StatusBar? if isA(v, "StatusBar") then return v :: StatusBar end return nil end
+export function asCooldown(v: unknown): Cooldown? if isA(v, "Cooldown") then return v :: Cooldown end return nil end
+export function asFontString(v: unknown): FontString? if isA(v, "FontString") then return v :: FontString end return nil end
+export function asTexture(v: unknown): Texture? if isA(v, "Texture") then return v :: Texture end return nil end
+
+--- A global frame by its name (`"CharacterFrame"`), nil when there is
+--- none: a load-on-demand window before its addon loads, a client without it.
+export function find(name: string): Frame?
+    return asFrame(_G[name])
+end
+
+--- What `keepAway` gives back.
+export type AwayHandle = {
+    --- Puts the frame away now (when `when` allows).
+    apply: () -> (),
+    --- Stops keeping it away (where the game puts it next, it stays).
+    release: () -> (),
+}
+
+--- Keeps one of the game's frames out of sight while it stays shown, so its
+--- scripts and children keep working (a list the addon draws its own of, a
+--- part the game must see shown): moved off screen and, with `fade`,
+--- see-through; again a frame after the game places it (or with `fade` sets
+--- its alpha) and when it shows. Only while `when` says so (default:
+--- always). A protected frame moves only out of combat: in combat it waits
+--- for the end (wowlua:combat).
+export function keepAway(frame: Frame, opts: { fade?: boolean, when?: () -> boolean }?): AwayHandle
+    const fade = secret.flag(opts?.fade)
+    const when = opts?.when
+    local active, placing = true, false
+    local function away()
+        if not active or (when and not when()) then
+            return
+        end
+        if InCombatLockdown() and frame:IsProtected() then
+            defer(away, frame)
+            return
+        end
+        placing = true
+        if fade then
+            frame:SetAlpha(0)
+        end
+        frame:ClearAllPoints()
+        frame:SetPoint("TOPLEFT", UIParent, "TOPRIGHT", 5000, 0)
+        placing = false
+    end
+    local function later()
+        if not placing and active then
+            after(0, away)
+        end
+    end
+    hooksecurefunc(frame, "SetPoint", later)
+    if fade then
+        hooksecurefunc(frame, "SetAlpha", later)
+    end
+    frame:HookScript("OnShow", function() away() end)
+    away()
+    return {
+        apply = away,
+        release = function() active = false end,
+    }
 end

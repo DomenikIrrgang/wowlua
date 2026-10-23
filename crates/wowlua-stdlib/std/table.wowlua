@@ -411,3 +411,34 @@ export function searchSorted<T>(list: T[], value: T, less: Less<T>?): number?
     end
     return nil
 end
+
+--- `t[k1][k2]…` through values that may not be tables: nil at the first
+--- one that is not a table the addon may read (`field(frame, "ScrollBox",
+--- "ScrollTarget")` for parts of the game's frames that some clients lack).
+export function field(t: unknown, ...: string): unknown
+    local v = t
+    for i = 1, select("#", ...) do
+        if not walkable(v) then
+            return nil
+        end
+        v = (v :: { [string]: unknown })[(select(i, ...))]
+    end
+    return v
+end
+
+--- A table whose keys don't keep their values (`__mode = "k"`): for what
+--- you note about objects you don't own, such as the game's frames, without
+--- writing fields onto them. Typed by where it goes:
+--- `local seen: { [Frame]: boolean } = tbl.weakKeys()`.
+export function weakKeys<K, V>(): { [K]: V }
+    const t: { [K]: V } = {}
+    setmetatable(t, { __mode = "k" })
+    return t
+end
+
+--- A table whose values may go when nothing else holds them (`__mode = "v"`).
+export function weakValues<K, V>(): { [K]: V }
+    const t: { [K]: V } = {}
+    setmetatable(t, { __mode = "v" })
+    return t
+end

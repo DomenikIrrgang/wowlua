@@ -6240,6 +6240,76 @@ print(type(format.date()))
     );
 }
 
+/// Reading what the game gives without trusting its type: `secret.asString`
+/// and friends, `errors.try`/`tryMethod` (silent), `table.field` and the
+/// weak tables, `frames.find`/`as…` and `frames.keepAway`, the short money
+/// form (decision S42).
+#[test]
+fn readers_for_the_games_values() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as frames from \"wowlua:frames\"\nimport * as secret from \"wowlua:secret\"\nimport * as errors from \"wowlua:errors\"\nimport * as tbl from \"wowlua:table\"\nimport * as format from \"wowlua:format\"\n_G.StdR = { frames = frames, secret = secret, errors = errors, tbl = tbl, format = format }\n",
+        )],
+        "",
+        r##"Mock.loadAddon("Std")
+local R = StdR
+local s, e, t, f = R.secret, R.errors, R.tbl, R.frames
+print(s.asString("a"), s.asString(1), s.asString(Mock.secret()), s.asNumber(2), s.asNumber("2"), s.asBoolean(false), s.asBoolean(1))
+print(e.try(nil), e.try(function(a, b) return a + b, "x" end, 1, 2), e.try(function() error("boom") end), select("#", e.try(error)))
+local obj = { n = 4, Get = function(self, k) return self.n + k end }
+print(e.tryMethod(obj, "Get", 1), e.tryMethod(obj, "Missing"), e.tryMethod(5, "Get"))
+print(t.field({ a = { b = 7 } }, "a", "b"), t.field({ a = 3 }, "a", "b"), t.field(nil, "a"), t.field({}, "x"))
+local weak = t.weakKeys()
+print(getmetatable(weak).__mode, getmetatable(t.weakValues()).__mode)
+local btn = CreateFrame("Button", "StdReaderButton", UIParent)
+print(f.find("StdReaderButton") == btn, f.find("NoSuchFrameAnywhere"), f.asButton(btn) == btn, f.asTexture(btn), f.asFrame({}), f.asRegion(42))
+print(R.format.money(123456, { short = true }), R.format.money(10000, { short = true }), R.format.money(0, { short = true }))
+-- kept away: off screen, faded; again after the game moves it or sets its alpha
+local away = CreateFrame("Frame", nil, UIParent)
+away:SetPoint("CENTER")
+local on = true
+local h = f.keepAway(away, { fade = true, when = function() return on end })
+local _, _, _, x = away:GetPoint(1)
+print(x, away:GetAlpha())
+away:ClearAllPoints()
+away:SetPoint("CENTER")
+away:SetAlpha(1)
+Mock.advanceFrames(2)
+local _, _, _, x2 = away:GetPoint(1)
+print(x2, away:GetAlpha())
+-- not while `when` says no; released: left where it is
+on = false
+away:ClearAllPoints()
+away:SetPoint("CENTER")
+Mock.advanceFrames(2)
+local _, _, _, x3 = away:GetPoint(1)
+on = true
+h.release()
+away:ClearAllPoints()
+away:SetPoint("CENTER")
+Mock.advanceFrames(2)
+local _, _, _, x4 = away:GetPoint(1)
+print(x3, x4)
+"##,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "a nil nil 2 nil false nil",
+            "nil 3 nil 1",
+            "5 nil nil",
+            "7 nil nil nil",
+            "k v",
+            "true nil true nil nil nil",
+            "12g 34s 56c 1g 0c",
+            "5000 0",
+            "5000 0",
+            "0 0",
+        ]
+    );
+}
+
 /// `wowlua:format` with secrets: secret options count as unset, secret
 /// numbers give secret strings.
 #[test]

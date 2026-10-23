@@ -38,10 +38,27 @@ export function date(at: number?): string
     return FormatShortDate(t.day, t.month, t.year)
 end
 
---- Money from copper: with coin icons ("12[g] 5[s] 3[c]"), or with `text`
---- the client's words ("12 Gold 5 Silver 3 Copper"); secret options count
---- as unset.
-export function money(copper: number, opts: { text?: boolean, separate?: boolean }?): string
+--- Money from copper: with coin icons ("12[g] 5[s] 3[c]"), with `text` the
+--- client's words ("12 Gold 5 Silver 3 Copper"), or with `short` letters
+--- ("12g 5s 3c"); units at zero are left out (copper stays when all are);
+--- secret options count as unset.
+export function money(copper: number, opts: { text?: boolean, separate?: boolean, short?: boolean }?): string
+    if secret.flag(opts?.short) then
+        const gold = math.floor(copper / (COPPER_PER_SILVER * SILVER_PER_GOLD))
+        const silver = math.floor(copper / COPPER_PER_SILVER) % SILVER_PER_GOLD
+        const rest = copper % COPPER_PER_SILVER
+        const parts: string[] = {}
+        if gold > 0 then
+            parts[#parts + 1] = gold .. "g"
+        end
+        if silver > 0 then
+            parts[#parts + 1] = silver .. "s"
+        end
+        if rest > 0 or #parts == 0 then
+            parts[#parts + 1] = rest .. "c"
+        end
+        return table.concat(parts, " ")
+    end
     if not secret.flag(opts?.text) then
         return GetMoneyString(copper, secret.flag(opts?.separate))
     end

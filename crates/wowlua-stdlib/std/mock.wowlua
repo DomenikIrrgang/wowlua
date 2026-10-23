@@ -1694,6 +1694,14 @@ export function module<M>(target: M, replacement: table)
     end
 end
 
+--- A fake of a record the game gives, with only the fields a test needs,
+--- typed as where it goes (`local info: BNetAccountInfo = mock.partial({
+--- bnetAccountID = 1 })`), so a stub can return it. The fields are not
+--- checked against the type.
+export function partial<T>(fields: { [string]: unknown }): T
+    return fields :: unknown :: T
+end
+
 --- Replaces an engine function (`"UnitName"`, `"C_Spell.GetSpellInfo"`)
 --- with `impl` until the test ends; returns its spy.
 export function fake(name: string, impl: Fn): Fn

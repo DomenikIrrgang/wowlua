@@ -65,6 +65,25 @@ Semantics:
   A stored position that cannot be read (secret, or with secret fields) is
   not applied. `lock` ignores a secret.
 
+### The game's frames
+
+The game's frames are read by name or by key, often parts the declarations
+do not know or some clients lack; these read them without trusting a type
+(decision S42):
+
+```wowlua
+local cf = frames.find("CharacterFrame")                   -- Frame?: nil before its addon loads
+local close = frames.asButton(tbl.field(cf, "CloseButton")) -- Button?
+local list = frames.asFrame(tbl.field(cf, "PaneHost", "List"))
+if list then frames.keepAway(list, { fade = true }) end     -- out of sight, still shown
+```
+
+| API | Signature | Notes |
+|-----|-----------|-------|
+| `find` | `(name: string) -> Frame?` | The global frame of that name, nil when there is none |
+| `asRegion`, `asFrame`, `asButton`, `asCheckButton`, `asEditBox`, `asScrollFrame`, `asSlider`, `asStatusBar`, `asCooldown`, `asFontString`, `asTexture` | `(v: unknown) -> Region?`, … | `v` when its `IsObjectType` says it is one (called protected; a table the addon may not read is none), else nil |
+| `keepAway` | `(frame: Frame, opts?: { fade?: boolean, when?: () -> boolean }) -> AwayHandle` | Keeps the frame out of sight while it stays shown (its scripts and children keep working): moved off screen, and with `fade` see-through; again a frame after the game places it (with `fade`, also after it sets its alpha) and when it shows. Only while `when` returns true (default: always). A protected frame moves only out of combat (`wowlua:combat`'s `defer`). The handle's `apply()` puts it away now, `release()` stops (hooks can't be removed: they then do nothing). |
+
 ### Edit Mode
 
 With `editMode = { label = … }` the frame joins the client's Edit Mode, which
