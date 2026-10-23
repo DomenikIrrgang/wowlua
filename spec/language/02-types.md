@@ -240,7 +240,7 @@ print(v:upper())                              -- v: string (Secret excluded)
 
 | Type | Meaning |
 |------|---------|
-| `Self` | Inside class and interface bodies: the type of the receiver. Used for fluent APIs and in declarations (`function SetScript(...): Self`). |
+| `Self` | Inside class and interface bodies: the type of the receiver. Used for fluent APIs and in declarations (`function SetScript(...): Self`). In a declared class (`declare class`), `Self` is bound where a member is read, to the receiver's type: `toggle:SetScript("OnClick", function(self) … end)` on an instance of `class Toggle extends Button` gives `self: Toggle` (decision L46). |
 | `ClassOf<T>` | The class value (constructor table) of instance type `T`, or the table of enum `T`. Calling `new` through `ClassOf<T>` is an error if `T` is abstract (E3002). For a type parameter `T` it binds `T` from the table passed (§2.2.6). |
 | `EventName` | Union of all **WoW event** names (`declare event`). |
 | `MessageName` | Union of all **addon message** names (`declare message`). |
@@ -308,6 +308,7 @@ get({ line = 20 }, "lnie")         -- E2014: not a key of the table
 | `T["a" \| "b"]` | the union of both fields' types |
 | `T[string]` | every field's type, the indexer's, and `nil` |
 | `T[K]` of a map or an array | the element type or `nil` |
+| `keyof (A & B)` / `(A & B)["name"]` | the names of both / the field of the part that has it |
 
 While `T` or `K` is a type parameter, `keyof T` and `T[K]` stay as they are
 and are worked out where the parameter is bound. Inside the generic body, a

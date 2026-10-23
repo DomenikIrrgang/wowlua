@@ -939,6 +939,15 @@ impl Types {
             Ty::Map(k, _) => k,
             Ty::Array(_) => Types::NUMBER,
             Ty::Any | Ty::Error => Types::ANY,
+            // `A & B`: the names of both.
+            Ty::Intersection(ms) => {
+                let keys: Vec<TypeId> = ms.iter().map(|&m| self.key_of(m)).collect();
+                if keys.iter().any(|&k| matches!(self.get(k), Ty::KeyOf(_))) {
+                    self.intern(Ty::KeyOf(t))
+                } else {
+                    self.union(&keys)
+                }
+            }
             _ => self.intern(Ty::KeyOf(t)),
         }
     }
@@ -969,6 +978,21 @@ impl Types {
                 self.union(&tys)
             }
             (Ty::Map(_, v), _) | (Ty::Array(v), _) => self.optional(v),
+            // `(A & B)[K]`: the field of whichever part has it.
+            (Ty::Intersection(ms), Ty::Str(name)) => {
+                for &m in &ms {
+                    if let Ty::Record(r) = self.get(m).clone()
+                        && let Some(f) = r.fields.get(&name)
+                    {
+                        return f.ty;
+                    }
+                }
+                self.intern(Ty::IndexOf(o, k))
+            }
+            (Ty::Intersection(_), Ty::Union(ks)) => {
+                let tys: Vec<TypeId> = ks.iter().map(|&m| self.index_of(o, m)).collect();
+                self.union(&tys)
+            }
             _ => self.intern(Ty::IndexOf(o, k)),
         }
     }
@@ -1283,6 +1307,7 @@ mod tests {
             },
             predicate: None,
             unannotated: false,
+            outer: Vec::new(),
         });
         types.union(&[r, f]);
         let unborn = types.births().expect("the function has a shape");
@@ -1333,6 +1358,7 @@ mod tests {
             ret: Pack::single(s),
             predicate: None,
             unannotated: false,
+            outer: Vec::new(),
         });
         let g = types.func(Func {
             type_params: Vec::new(),
@@ -1341,6 +1367,7 @@ mod tests {
             ret: Pack::single(bad),
             predicate: None,
             unannotated: false,
+            outer: Vec::new(),
         });
         let u = types.union(&[s, arr, Types::NIL]);
         for t in [Types::ANY, s, arr, named, bad, f, g, u] {
