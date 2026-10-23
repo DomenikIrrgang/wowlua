@@ -1656,14 +1656,71 @@ pub fn set_player(vm: &mut Vm, c: NativeCall) -> Ret {
     let Value::Table(t) = c.arg(1) else {
         return Err(vm.error("mock.setPlayer: a table of the player's data expected"));
     };
+    let events = match c.arg(2) {
+        Value::Table(o) => {
+            let k = vm.str("events");
+            vm.heap.table(o).get(k).truthy()
+        }
+        _ => false,
+    };
     let player = std::mem::take(&mut engine_mut(vm).units.list[PLAYER.0].guid);
     let mut unit = unit_from(vm, Some(t), Some(player));
     let old = &engine(vm).units.list[PLAYER.0];
+    let before = (
+        old.name.clone(),
+        old.level,
+        old.health,
+        old.health_max,
+        old.power,
+        old.power_max,
+    );
     unit.target = old.target;
     unit.in_combat = old.in_combat;
     unit.distance = Some(0.0);
     engine_mut(vm).units.list[PLAYER.0] = unit;
+    if events {
+        tell_player_changes(vm, before);
+    }
     Ok(vec![])
+}
+
+/// `setPlayer(data, { events = true })`: what changed, told as the client
+/// tells it. The level as its server packet does (`PLAYER_LEVEL_CHANGED(old,
+/// new, true)`, `UNIT_LEVEL`; `levels.rs`), the name (`UNIT_NAME_UPDATE`),
+/// the health and power and their maximums (`UNIT_MAXHEALTH`,
+/// `UNIT_HEALTH`, `UNIT_MAXPOWER`, `UNIT_POWER_UPDATE` with the power's
+/// token). Unverified: these together, the order.
+fn tell_player_changes(vm: &mut Vm, before: (String, f64, f64, f64, f64, f64)) {
+    let (name, level, health, health_max, power, power_max) = before;
+    let now = &engine(vm).units.list[PLAYER.0];
+    let (new_name, new_level) = (now.name.clone(), now.level);
+    let (new_health, new_health_max) = (now.health, now.health_max);
+    let (new_power, new_power_max, kind) = (now.power, now.power_max, now.power_type);
+    if new_level != level {
+        fire(
+            vm,
+            "PLAYER_LEVEL_CHANGED",
+            &[Value::Num(level), Value::Num(new_level), Value::Bool(true)],
+        );
+        fire_unit(vm, "UNIT_LEVEL", PLAYER, &[]);
+    }
+    if new_name != name {
+        fire_unit(vm, "UNIT_NAME_UPDATE", PLAYER, &[]);
+    }
+    if new_health_max != health_max {
+        fire_unit(vm, "UNIT_MAXHEALTH", PLAYER, &[]);
+    }
+    if new_health != health {
+        fire_unit(vm, "UNIT_HEALTH", PLAYER, &[]);
+    }
+    let token = vm.str(power_token(kind).unwrap_or("MANA"));
+    if new_power_max != power_max {
+        fire_unit(vm, "UNIT_MAXPOWER", PLAYER, &[token]);
+    }
+    if new_power != power {
+        fire_unit(vm, "UNIT_POWER_UPDATE", PLAYER, &[token]);
+        crate::actions::update_usability(vm);
+    }
 }
 
 /// A unit from a test's data; `player_guid`: the player's (it keeps its

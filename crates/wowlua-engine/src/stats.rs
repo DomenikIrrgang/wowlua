@@ -1626,6 +1626,76 @@ fn talent_ui(vm: &mut Vm, _c: NativeCall) -> Ret {
     })
 }
 
+/// A global table's field (`Constants.LevelConstsExposed`, say).
+fn global_path(vm: &mut Vm, path: &[&str]) -> Value {
+    let mut v = vm.get_global(path[0]);
+    for k in &path[1..] {
+        let Value::Table(t) = v else {
+            return Value::Nil;
+        };
+        let key = vm.str(k);
+        v = vm.heap.table(t).get(key);
+    }
+    v
+}
+
+/// The level the player earns talent points from: the client's first
+/// talent level (`Constants.LevelConstsExposed.MIN_TALENT_LEVEL`, 10),
+/// lowered by the legacy adventure tree's "Talented" ranks, at least 1
+/// (Blizzard's camelot micro menu reckons it so; the ranks' descriptions,
+/// recorded: "You gain talent points every level starting at level 9
+/// instead of starting at level 10", down to 5).
+fn talent_unlock_level(vm: &mut Vm) -> f64 {
+    let num = |v: Value, d: f64| match v {
+        Value::Num(n) => n,
+        _ => d,
+    };
+    let first = global_path(vm, &["Constants", "LevelConstsExposed", "MIN_TALENT_LEVEL"]);
+    let first = num(first, 10.0);
+    let tree = global_path(
+        vm,
+        &["Constants", "LegacyConsts", "LEGACY_TREE_ADVENTURE_ID"],
+    );
+    let node = global_path(
+        vm,
+        &[
+            "Constants",
+            "LegacyConsts",
+            "LEGACY_TREE_ADVENTURE_TALENTED_NODE_ID",
+        ],
+    );
+    let config_of = global_path(vm, &["C_Traits", "GetConfigIDByTreeID"]);
+    let node_info = global_path(vm, &["C_Traits", "GetNodeInfo"]);
+    let rank = (|| {
+        if tree.is_nil() || node.is_nil() || config_of.is_nil() || node_info.is_nil() {
+            return None;
+        }
+        let config = *vm.call(config_of, &[tree]).ok()?.first()?;
+        if config.is_nil() {
+            return None;
+        }
+        let Value::Table(info) = *vm.call(node_info, &[config, node]).ok()?.first()? else {
+            return None;
+        };
+        let key = vm.str("activeRank");
+        match vm.heap.table(info).get(key) {
+            Value::Num(n) => Some(n),
+            _ => None,
+        }
+    })()
+    .unwrap_or(0.0);
+    (first - rank).max(1.0)
+}
+
+/// `C_SpecializationInfo.HasPlayerEarnedATalentPoint()`: whether the
+/// player's level has reached the talent unlock level (the recorded
+/// answer is the level it was recorded at).
+fn earned_talent_point(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let level = engine(vm).units.list[crate::units::PLAYER.0].level;
+    let unlock = talent_unlock_level(vm);
+    Ok(vec![Value::Bool(level >= unlock)])
+}
+
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     STATS
         .iter()
@@ -1641,6 +1711,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             ("GetQuestLogLeaderBoard", quest_log_leader_board),
             ("C_SpecializationInfo.CanPlayerUseTalentUI", talent_ui),
             ("C_SpecializationInfo.CanPlayerUseTalentSpecUI", talent_ui),
+            (
+                "C_SpecializationInfo.HasPlayerEarnedATalentPoint",
+                earned_talent_point,
+            ),
         ])
         .collect()
 }

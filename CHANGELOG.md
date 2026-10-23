@@ -23,6 +23,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `@deferred` on an interface method's callback parameter (`function on(name: string, @deferred fn: Handler)`) tells the load-order check that every implementation calls it later, so a callback registered through that interface at load time no longer makes files depend on each other.
 - `wowlua:reflect` is typed as documented: `reflect.isInstance(v, Dog)` narrows `v` to `Dog`, `reflect.classOf(dog)` gives `ClassOf<Dog>?`, and `reflect.enumFrom(Direction, raw)` gives `Direction?` (`reflect.enumEntries` gives the members as `Direction`). Before, they were `any` and `boolean`. Your own generic functions can do the same: a parameter `ClassOf<T>` now takes `T` from the class or enum passed.
 - **Parameter properties**: a constructor's parameter can declare a field, as in TypeScript: `constructor(private sink: Sink = printer, public readonly name: string)` makes `self.sink` and `self.name` and sets them from the arguments. A field declared twice is now an error (E3046).
+- `mock.setPlayer(data, { events = true })` and `mock.setRenown(faction, level, { events = true })` fire the events a real change would (`PLAYER_LEVEL_CHANGED`, `UNIT_LEVEL`, `UNIT_HEALTH`, `MAJOR_FACTION_RENOWN_LEVEL_CHANGED`, …), so Blizzard's UI and your addon see the new level or renown. Without the option they stay quiet, as before.
 
 ### Changed
 
@@ -43,6 +44,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- `C_SpecializationInfo.HasPlayerEarnedATalentPoint()` follows the player's level (from level 10, earlier with Legacy's "Talented" ranks), as in game: the talents button turns on once the character reaches it.
 - `frame:GetScaledRect()` gives the rectangle times the frame's effective scale, as in game. Layouts built on it (Blizzard's action bars, `ResizeLayoutFrame`) came out too large by one over UIParent's scale, so the default UI's bars sat apart.
 - A button's normal, pushed, disabled and highlight textures that `SetNormalAtlas` or `SetNormalTexture` makes fill the button, as in game; they had no size (the default UI's micro menu buttons showed no icons).
 - `<MaskedTextures>` in XML masks the textures it names (`<MaskedTexture childKey="icon"/>`): action buttons' icons are masked and drawn over their slot art.

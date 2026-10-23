@@ -1316,12 +1316,32 @@ pub fn control_set_trait_character(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// `e.setRenown(faction, level)`: a major faction's renown.
+/// `e.setRenown(faction, level, { events? })`: a major faction's renown;
+/// with `events`, a change told as the client tells it:
+/// `MAJOR_FACTION_RENOWN_LEVEL_CHANGED(faction, new, old)` (the
+/// documentation's arguments; unverified in the client).
 pub fn control_set_renown(vm: &mut Vm, c: NativeCall) -> Ret {
     let (Value::Num(faction), Value::Num(level)) = (c.arg(1), c.arg(2)) else {
         return Err(vm.error("setRenown: a faction ID and a level expected"));
     };
-    traits_mut(vm).renown.insert(faction as i64, level);
+    let events = match c.arg(3) {
+        Value::Table(o) => {
+            let k = vm.str("events");
+            vm.heap.table(o).get(k).truthy()
+        }
+        _ => false,
+    };
+    let old = traits_mut(vm)
+        .renown
+        .insert(faction as i64, level)
+        .unwrap_or(0.0);
+    if events && old != level {
+        crate::widgets::fire_event(
+            vm,
+            "MAJOR_FACTION_RENOWN_LEVEL_CHANGED",
+            &[Value::Num(faction), Value::Num(level), Value::Num(old)],
+        );
+    }
     Ok(vec![])
 }
 

@@ -447,9 +447,13 @@ export function unitOf(token: string): MockUnit?
     return engine().unitOf(token)
 end
 
---- The player's data (a world profile's character), firing no events.
-export function setPlayer(data: UnitData)
-    engine().setPlayer(data)
+--- The player's data (a world profile's character). No events, unless
+--- `{ events = true }`: then what changed is told as the client tells it
+--- (the level: `PLAYER_LEVEL_CHANGED(old, new, true)` and `UNIT_LEVEL`; the
+--- name: `UNIT_NAME_UPDATE`; health and power: `UNIT_MAXHEALTH`,
+--- `UNIT_HEALTH`, `UNIT_MAXPOWER`, `UNIT_POWER_UPDATE`).
+export function setPlayer(data: UnitData, options: { events?: boolean }?)
+    engine().setPlayer(data, options)
 end
 
 --- An item's cooldown: `duration` seconds, `remaining` of them to run
@@ -775,9 +779,11 @@ export function setTraitCharacter(configID: number)
 end
 
 --- A major faction's renown (`C_MajorFactions.GetCurrentRenownLevel`: the
---- legacy system opens at 1 or more).
-export function setRenown(factionID: number, level: number)
-    engine().setRenown(factionID, level)
+--- legacy system opens at 1 or more). No events, unless `{ events = true }`:
+--- then a change fires `MAJOR_FACTION_RENOWN_LEVEL_CHANGED(factionID, level,
+--- oldLevel)`.
+export function setRenown(factionID: number, level: number, options: { events?: boolean }?)
+    engine().setRenown(factionID, level, options)
 end
 
 --- The player's group: `mock.group:add(unit, raid?)` (`partyN`; with
