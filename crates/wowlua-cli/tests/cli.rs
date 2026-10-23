@@ -2645,6 +2645,9 @@ each({ "line", "nope" })
 type Loose = { [string]: unknown } & { enabled: boolean }
 local z: string = (5 :: unknown) :: Loose["x"]
 print(z)
+local function set<K extends keyof Defaults>(key: K, value: Defaults[K]) print(key, value) end
+set("note", "x")
+set("line", "x")
 "#;
     write(
         dir.path(),
@@ -2662,7 +2665,13 @@ print(z)
         .unwrap();
     let stderr = String::from_utf8_lossy(&out.stderr);
     let errors: Vec<&str> = stderr.lines().filter(|l| l.contains("error[")).collect();
-    assert_eq!(errors.len(), 7, "{stderr}");
+    assert_eq!(errors.len(), 8, "{stderr}");
+    assert!(
+        errors[7].starts_with(
+            "src/main.wowlua:29:13: error[E2001]: `\"x\"` is not assignable to `number`"
+        ),
+        "{stderr}"
+    );
     assert!(
         errors[6].starts_with(
             "src/main.wowlua:25:7: error[E2001]: `unknown?` is not assignable to `string`"
