@@ -44,6 +44,12 @@ pub enum Image {
     FileId(u32),
     /// A plain color (`SetColorTexture`): the item's color is it.
     Color,
+    /// A unit's portrait (`SetPortraitTexture`): its model through its
+    /// portrait camera, else the flat stand-in file.
+    Portrait {
+        source: Box<ModelSource>,
+        fallback: String,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -374,7 +380,19 @@ fn image_of(vm: &Vm, id: WidgetId) -> Option<ImageOf> {
     if let Some(k) = vm.heap.interned("\u{0}portrait".as_bytes())
         && let Some(path) = text_of(vm, vm.heap.table(props).get(Value::Str(k)))
     {
-        return Some((Image::File(path), None, (false, false), None));
+        let look = vm
+            .heap
+            .interned("\u{0}portraitlook".as_bytes())
+            .and_then(|k| text_of(vm, vm.heap.table(props).get(Value::Str(k))))
+            .and_then(|t| decode_look(&t));
+        let image = match look {
+            Some(look) => Image::Portrait {
+                source: Box::new(ModelSource::Character(look)),
+                fallback: path,
+            },
+            None => Image::File(path),
+        };
+        return Some((image, None, (false, false), None));
     }
     if let Some(name) = first(vm, id, "Atlas").and_then(|v| text_of(vm, v))
         && let Some(a) = crate::measures::atlas(&name)
@@ -1014,7 +1032,7 @@ fn nums(vm: &Vm, id: WidgetId, stem: &str, n: usize) -> Option<Vec<f32>> {
 
 /// A unit's look: its race, sex, class and what it wears, as the API
 /// answers them.
-fn look_of(vm: &mut Vm, unit: &str) -> Look {
+pub(crate) fn look_of(vm: &mut Vm, unit: &str) -> Look {
     let u = vm.str(unit);
     let call = |vm: &mut Vm, name: &str, extra: Option<Value>| -> Vec<Value> {
         let f = vm.get_global(name);
@@ -1053,6 +1071,36 @@ fn look_of(vm: &mut Vm, unit: &str) -> Look {
     }
 }
 
+/// A look as text (`race:sex:class:slot=item,…`), for a portrait kept
+/// as the unit looked when it was set.
+pub(crate) fn encode_look(l: &Look) -> String {
+    let items: Vec<String> = l.items.iter().map(|(s, i)| format!("{s}={i}")).collect();
+    format!("{}:{}:{}:{}", l.race, l.sex, l.class, items.join(","))
+}
+
+fn decode_look(t: &str) -> Option<Look> {
+    let mut p = t.split(':');
+    let race = p.next()?.parse().ok()?;
+    let sex = p.next()?.parse().ok()?;
+    let class = p.next()?.parse().ok()?;
+    let items = p
+        .next()
+        .unwrap_or("")
+        .split(',')
+        .filter_map(|e| {
+            let (s, i) = e.split_once('=')?;
+            Some((s.parse().ok()?, i.parse().ok()?))
+        })
+        .collect();
+    (race > 0).then_some(Look {
+        race,
+        sex,
+        class,
+        items,
+        tried: Vec::new(),
+    })
+}
+
 /// An actor of a model frame or a scene's actor widget.
 fn actor_of(vm: &mut Vm, id: WidgetId, frame: bool) -> Option<Actor> {
     let (source, tried, undressed) = crate::models::source_of(vm, id)?;
@@ -1068,6 +1116,8 @@ fn actor_of(vm: &mut Vm, id: WidgetId, frame: bool) -> Option<Actor> {
             if undressed {
                 look.items.clear();
             }
+            let emptied = crate::models::undressed_slots(vm, id);
+            look.items.retain(|(s, _)| !emptied.contains(s));
             look.tried = tried;
             ModelSource::Character(look)
         }

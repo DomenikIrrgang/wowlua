@@ -59,6 +59,10 @@ pub(crate) struct Models {
     groups: HashMap<usize, wgpu::BindGroup>,
     /// Composited textures by their layers.
     composites: HashMap<String, usize>,
+    /// Portraits drawn, by their source.
+    portraits: HashMap<String, Option<usize>>,
+    /// Drawing a portrait: on black, kept.
+    portrait: bool,
 }
 
 /// A batch to draw: its vertices' range and how.
@@ -378,6 +382,58 @@ impl Renderer {
         let img = crate::composite::composite(c, &mut |f| assets.image(&Image::FileId(f)));
         let t = self.upload(&img);
         self.models.composites.insert(key, t);
+        t
+    }
+
+    /// A unit's portrait (`SetPortraitTexture`): its model through its
+    /// portrait camera, on black, drawn once.
+    pub(crate) fn portrait(
+        &mut self,
+        source: &scene::ModelSource,
+        assets: &mut dyn Assets,
+    ) -> Option<usize> {
+        let key = format!("{source:?}");
+        if let Some(t) = self.models.portraits.get(&key) {
+            return *t;
+        }
+        let item = scene::Model {
+            widget: 0,
+            rect: scene::Rect {
+                x: 0.0,
+                y: 0.0,
+                w: 128.0,
+                h: 128.0,
+            },
+            clip: None,
+            alpha: 1.0,
+            actors: vec![scene::Actor {
+                source: source.clone(),
+                position: [0.0; 3],
+                yaw: 0.0,
+                pitch: 0.0,
+                roll: 0.0,
+                scale: 1.0,
+                alpha: 1.0,
+                animation: 0,
+                variation: 0,
+            }],
+            camera: ModelCamera::Frame {
+                portrait_zoom: 1.0,
+                distance_scale: 1.0,
+                camera: None,
+            },
+            light: scene::Light {
+                enabled: true,
+                direction: [-1.0, 0.3, -0.6],
+                ambient: [0.55; 3],
+                diffuse: [0.75; 3],
+            },
+            time: 0.0,
+        };
+        self.models.portrait = true;
+        let t = self.draw_model(&item, 1.0, assets);
+        self.models.portrait = false;
+        self.models.portraits.insert(key, t);
         t
     }
 
@@ -782,7 +838,11 @@ impl Renderer {
                     depth_slice: None,
                     resolve_target: None,
                     ops: wgpu::Operations {
-                        load: wgpu::LoadOp::Clear(wgpu::Color::TRANSPARENT),
+                        load: wgpu::LoadOp::Clear(if self.models.portrait {
+                            wgpu::Color::BLACK
+                        } else {
+                            wgpu::Color::TRANSPARENT
+                        }),
                         store: wgpu::StoreOp::Store,
                     },
                 })],
@@ -807,13 +867,18 @@ impl Renderer {
             }
         }
         self.queue.submit([encoder.finish()]);
-        // The frame's model textures take the same slots each frame.
+        // The frame's model textures take the same slots each frame; a
+        // portrait is kept.
         let tex = crate::Tex {
             texture: color,
             view: color_view,
             width,
             height,
         };
+        if self.models.portrait {
+            self.textures.push(tex);
+            return Some(self.textures.len() - 1);
+        }
         let slot = match self.model_slots.get(self.model_slot_next).copied() {
             Some(s) => {
                 self.textures[s] = tex;

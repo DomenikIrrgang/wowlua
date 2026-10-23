@@ -199,16 +199,18 @@ proportion to the visible regions.
   the bottom, each wrapped to its width, older ones above while they fit
   (unverified: fading, the insertion mode).
 - **Portraits**: a texture given `SetPortraitTexture` (the client renders
-  the unit's head in 3D) is drawn as the client's flat portrait of the
-  unit's race and sex (`TemporaryPortrait-<Sex>-<Race>`), until portraits
-  are rendered from the unit's model.
+  the unit's head in 3D) is the unit's model as it looked then (race, sex,
+  class, what it wore) through its portrait camera, on black; where no
+  model can be drawn, the client's flat portrait of the unit's race and
+  sex (`TemporaryPortrait-<Sex>-<Race>`).
 - **Models** (decision T318): a model frame (`Model`, `PlayerModel`,
   `DressUpModel`, …) with a model set, or a `ModelScene` with shown actors,
   is a model item over the frame's own regions: each actor's source (the
   last of `SetModel`, `SetDisplayInfo`, `SetCreature`, `SetUnit`,
   `SetItem`, `SetModelByFileID`, `SetModelByCreatureDisplayID`,
   `SetModelByUnit`, …; a unit as its race, sex, class and worn items, with
-  items tried on), position, yaw (a frame's facing), pitch, roll, scale,
+  items tried on; less what `Undress`, `UndressSlot` or `SetAutoDress(false)`
+  took off), position, yaw (a frame's facing), pitch, roll, scale,
   alpha and animation; the camera (a frame's: the whole model in view from
   in front, toward its portrait camera by `SetPortraitZoom`, farther by
   `SetCamDistanceScale`, or a camera of the model's own by `SetCamera`; a
@@ -289,7 +291,12 @@ T310).
   `GetModelSceneActorInfoByID` and `GetModelSceneActorDisplayInfoByID`
   from `UiModelScene` and its tables, so Blizzard's model scenes (the
   character sheet, the dressing room, the collections) place their actors
-  and cameras; without it, they answer nothing.
+  and cameras; and an item the test has no data for has the inventory
+  type the client's `Item` table gives it (`C_Item.IsDressableItemByID`,
+  so `DressUpItemLink` opens the dressing room). Without it, they answer
+  nothing, as before. Not yet: a model frame's custom camera
+  (`SetCameraPosition`, `SetCameraTarget`, `Model_ApplyUICamera`'s), the
+  client's creature cache (creatures beyond the client's own table).
 - **Fonts**: the client's TrueType fonts from the installation; without
   them, the bundled stand-in fonts (open licenses), at the same pixel
   heights. Glyph positions follow the engine's measured widths (§17.6), so

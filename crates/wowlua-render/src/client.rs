@@ -157,7 +157,7 @@ impl ClientAssets {
 impl Assets for ClientAssets {
     fn image(&mut self, image: &Image) -> Option<Rgba> {
         let bytes = match image {
-            Image::Color => return None,
+            Image::Color | Image::Portrait { .. } => return None,
             Image::File(path) => self
                 .addon_file(path, &[".blp", ".tga", ".png"])
                 .or_else(|| self.casc.as_ref()?.file_by_path(path)),
@@ -341,6 +341,10 @@ impl wowlua_engine::clientdata::ClientData for CascClientData {
                 display: r.int("UiModelSceneActorDisplayID"),
             })
         })
+    }
+
+    fn item_inventory_type(&self, id: u32) -> Option<u32> {
+        self.with(|lib, casc| Some(lib.table(casc, "Item")?.row(id)?.int("InventoryType")))
     }
 
     fn actor_display(&self, id: u32) -> Option<wowlua_engine::clientdata::ActorDisplay> {

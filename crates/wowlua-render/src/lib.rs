@@ -412,6 +412,13 @@ impl Renderer {
             Image::Color => return self.white,
             Image::File(p) => TexKey::Path(p.replace('/', "\\").to_ascii_lowercase()),
             Image::FileId(id) => TexKey::Id(*id),
+            // The unit's model, else the flat stand-in.
+            Image::Portrait { source, fallback } => {
+                return match self.portrait(source, assets) {
+                    Some(t) => t,
+                    None => self.texture(&Image::File(fallback.clone()), assets),
+                };
+            }
         };
         if let Some(&t) = self.by_key.get(&key) {
             return t;
@@ -963,6 +970,7 @@ impl Renderer {
             Image::Color => return Some((1, 1)),
             Image::File(p) => TexKey::Path(p.replace('/', "\\").to_ascii_lowercase()),
             Image::FileId(id) => TexKey::Id(*id),
+            Image::Portrait { .. } => return Some((128, 128)),
         };
         self.by_key
             .get(&key)

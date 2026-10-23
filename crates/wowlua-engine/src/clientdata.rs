@@ -71,6 +71,16 @@ pub trait ClientData: Send + Sync {
     fn scene_camera(&self, id: u32) -> Option<SceneCamera>;
     fn scene_actor(&self, id: u32) -> Option<SceneActor>;
     fn actor_display(&self, id: u32) -> Option<ActorDisplay>;
+    /// An item's inventory type (`Enum.InventoryType`), from the client's
+    /// `Item` table.
+    fn item_inventory_type(&self, _id: u32) -> Option<u32> {
+        None
+    }
+}
+
+/// An item's inventory type as the client's tables give it.
+pub(crate) fn item_inventory_type(vm: &Vm, id: i64) -> Option<u32> {
+    data(vm)?.item_inventory_type(u32::try_from(id).ok()?)
 }
 
 /// Gives the engine the client's tables.

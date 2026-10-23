@@ -119,7 +119,10 @@ const INVENTORY_TYPES: &[(&str, f64)] = &[
 /// An item's `Enum.InventoryType`: 0 for one not worn, none for an item
 /// without data.
 fn inventory_type(vm: &mut Vm, id: i64) -> Option<f64> {
-    crate::gamedata::item_data(vm, id)?;
+    if crate::gamedata::item_data(vm, id).is_none() {
+        // An item the test has no data for: the client's table's.
+        return crate::clientdata::item_inventory_type(vm, id).map(f64::from);
+    }
     let loc = equip_loc(vm, id).unwrap_or_default();
     Some(
         INVENTORY_TYPES

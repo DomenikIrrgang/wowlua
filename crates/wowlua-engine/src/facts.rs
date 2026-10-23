@@ -399,6 +399,21 @@ fn set_portrait_texture(vm: &mut Vm, c: NativeCall) -> Ret {
         None => Value::Nil,
     };
     let _ = vm.heap.table_mut(props).set(key, value);
+    // The unit's look now, for the renderer's 3D portrait.
+    let look = match unit {
+        Value::Str(s) => {
+            let unit = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
+            let l = crate::scene::look_of(vm, &unit);
+            (l.race > 0).then(|| crate::scene::encode_look(&l))
+        }
+        _ => None,
+    };
+    let key = vm.str("\u{0}portraitlook");
+    let value = match look {
+        Some(l) => vm.str(&l),
+        None => Value::Nil,
+    };
+    let _ = vm.heap.table_mut(props).set(key, value);
     Ok(vec![])
 }
 

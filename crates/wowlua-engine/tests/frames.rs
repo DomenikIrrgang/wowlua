@@ -752,7 +752,8 @@ SetPortraitTexture(p, 'player')",
     assert!(texts[0].1 < texts[1].1, "newest lowest: {texts:?}");
     let portrait = scene.items.iter().any(|i| {
         matches!(i, wowlua_engine::scene::Item::Quad(q)
-            if q.image == wowlua_engine::scene::Image::File("Interface\\CharacterFrame\\TemporaryPortrait-Male-Human".into()))
+            if matches!(&q.image, wowlua_engine::scene::Image::Portrait { fallback, .. }
+                if fallback == "Interface\\CharacterFrame\\TemporaryPortrait-Male-Human"))
     });
     assert!(portrait, "the race portrait");
 }
@@ -874,6 +875,9 @@ impl wowlua_engine::clientdata::ClientData for Scenes {
             ..Default::default()
         })
     }
+    fn item_inventory_type(&self, id: u32) -> Option<u32> {
+        (id == 16923).then_some(20)
+    }
     fn actor_display(&self, id: u32) -> Option<wowlua_engine::clientdata::ActorDisplay> {
         (id == 3).then(|| wowlua_engine::clientdata::ActorDisplay {
             animation: 4,
@@ -917,4 +921,71 @@ return kind, #actors, camera.cameraType, camera.zoomDistance, camera.target.z, a
             "Bool(true)"
         ]
     );
+    // An item the test has no data for: its inventory type the client's.
+    let r = run(
+        &mut vm,
+        "return C_Item.IsDressableItemByID(16923), C_Item.IsDressableItemByID(16924)",
+    );
+    assert_eq!(r, ["Bool(true)", "Bool(false)"]);
+}
+
+/// A portrait is the unit's model as it looked when set; a model without
+/// auto dress, or with a slot undressed, wears less.
+#[test]
+fn portraits_and_undressed_models() {
+    use wowlua_engine::scene::{Image, Item, ModelSource};
+    let mut vm = vm();
+    run(
+        &mut vm,
+        "-- A shirt and a chest piece worn.
+GetInventoryItemID = function(unit, slot)
+    return ({ [4] = 38, [5] = 39 })[slot]
+end
+local f = CreateFrame('Frame', nil, UIParent)
+f:SetSize(64, 64)
+f:SetPoint('CENTER')
+local t = f:CreateTexture()
+t:SetAllPoints()
+SetPortraitTexture(t, 'player')
+local m = CreateFrame('DressUpModel', 'Naked', UIParent)
+m:SetSize(100, 100)
+m:SetPoint('TOPLEFT')
+m:SetAutoDress(false)
+m:SetUnit('player')
+local d = CreateFrame('DressUpModel', 'Dressed', UIParent)
+d:SetSize(100, 100)
+d:SetPoint('TOPRIGHT')
+d:SetUnit('player')
+d:UndressSlot(4)",
+    );
+    let scene = wowlua_engine::scene::build(&mut vm);
+    let portrait = scene
+        .items
+        .iter()
+        .find_map(|i| match i {
+            Item::Quad(q) => match &q.image {
+                Image::Portrait { source, fallback } => Some((source.clone(), fallback.clone())),
+                _ => None,
+            },
+            _ => None,
+        })
+        .expect("the portrait");
+    let ModelSource::Character(look) = *portrait.0 else {
+        panic!("{:?}", portrait.0);
+    };
+    assert!(look.race > 0 && !look.items.is_empty(), "{look:?}");
+    assert!(portrait.1.contains("TemporaryPortrait"));
+    let looks: Vec<Vec<(u32, u32)>> = models(&mut vm)
+        .iter()
+        .map(|m| match &m.actors[0].source {
+            ModelSource::Character(l) => l.items.clone(),
+            s => panic!("{s:?}"),
+        })
+        .collect();
+    assert!(looks[0].is_empty(), "{looks:?}");
+    assert!(
+        !looks[1].is_empty() && !looks[1].iter().any(|(s, _)| *s == 4),
+        "{looks:?}"
+    );
+    assert!(look.items.iter().any(|(s, _)| *s == 4), "{look:?}");
 }

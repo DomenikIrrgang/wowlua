@@ -17,6 +17,7 @@ const KIND: &str = "\u{0}model";
 const VALUE: &str = "\u{0}modelvalue";
 const TRIED: &str = "\u{0}tryon";
 const UNDRESSED: &str = "\u{0}undressed";
+const UNDRESSED_SLOTS: &str = "\u{0}undressedslots";
 
 fn set_prop(vm: &mut Vm, id: WidgetId, key: &str, v: Value) {
     let props = engine(vm).world.widgets[id.0].props;
@@ -41,6 +42,7 @@ fn set_source(vm: &mut Vm, id: WidgetId, c: &NativeCall, stem: &str, kind: &str,
     set_prop(vm, id, VALUE, value);
     set_prop(vm, id, TRIED, Value::Nil);
     set_prop(vm, id, UNDRESSED, Value::Nil);
+    set_prop(vm, id, UNDRESSED_SLOTS, Value::Nil);
 }
 
 /// A file asset: an ID, or a path (a number in a string is an ID).
@@ -109,6 +111,10 @@ fn set_creature(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 /// `SetUnit(unit)`: the unit as it looks now; true.
 fn set_unit(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     set_source(vm, id, &c, "Unit", "unit", c.arg(2));
+    // Not dressed when the model's auto dress is off.
+    if auto_dress_off(vm, id) {
+        set_prop(vm, id, UNDRESSED, Value::Bool(true));
+    }
     Ok(vec![Value::Bool(true)])
 }
 
@@ -151,11 +157,19 @@ fn by_display(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 /// An actor's `SetModelByUnit(unit, sheatheWeapons, autoDress, …)`: true.
 fn by_unit(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     set_source(vm, id, &c, "ModelByUnit", "unit", c.arg(2));
-    // Not dressed when `autoDress` is false.
-    if matches!(c.arg(4), Value::Bool(false)) {
+    // Not dressed when `autoDress` is false, or the actor's auto dress
+    // is off.
+    if matches!(c.arg(4), Value::Bool(false)) || auto_dress_off(vm, id) {
         set_prop(vm, id, UNDRESSED, Value::Bool(true));
     }
     Ok(vec![Value::Bool(true)])
+}
+
+/// Whether `SetAutoDress(false)` was the last word.
+fn auto_dress_off(vm: &mut Vm, id: WidgetId) -> bool {
+    let props = engine(vm).world.widgets[id.0].props;
+    crate::widgets::stored_args(vm, props, "AutoDress")
+        .is_some_and(|a| a.first().is_some_and(|v| !v.truthy()))
 }
 
 /// `TryOn(itemLinkOrItemModifiedAppearanceID)`: worn over what the model
@@ -185,6 +199,7 @@ fn try_on(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
 fn undress(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     set_prop(vm, id, TRIED, Value::Nil);
     set_prop(vm, id, UNDRESSED, Value::Bool(true));
+    set_prop(vm, id, UNDRESSED_SLOTS, Value::Nil);
     Ok(vec![])
 }
 
@@ -192,7 +207,38 @@ fn undress(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 fn dress(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     set_prop(vm, id, TRIED, Value::Nil);
     set_prop(vm, id, UNDRESSED, Value::Nil);
+    set_prop(vm, id, UNDRESSED_SLOTS, Value::Nil);
     Ok(vec![])
+}
+
+/// `UndressSlot(slot)`: that slot shows nothing worn.
+fn undress_slot(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let Value::Num(slot) = c.arg(2) else {
+        return Ok(vec![]);
+    };
+    let list = match prop(vm, id, UNDRESSED_SLOTS) {
+        Value::Table(t) => t,
+        _ => {
+            let t = vm.new_table();
+            set_prop(vm, id, UNDRESSED_SLOTS, Value::Table(t));
+            t
+        }
+    };
+    let _ = vm
+        .heap
+        .table_mut(list)
+        .set(Value::Num(slot), Value::Bool(true));
+    Ok(vec![])
+}
+
+/// The slots `UndressSlot` emptied.
+pub fn undressed_slots(vm: &Vm, id: WidgetId) -> Vec<u32> {
+    let Value::Table(t) = prop(vm, id, UNDRESSED_SLOTS) else {
+        return Vec::new();
+    };
+    (1..=19u32)
+        .filter(|s| vm.heap.table(t).get(Value::Num(f64::from(*s))).truthy())
+        .collect()
 }
 
 /// What a model shows.
@@ -272,5 +318,7 @@ pub(crate) fn methods() -> Vec<(&'static str, MethodFn)> {
         ("DressUpModel:TryOn", try_on),
         ("DressUpModel:Dress", dress),
         ("DressUpModel:Undress", undress),
+        ("DressUpModel:UndressSlot", undress_slot),
+        ("ModelSceneFrameActor:UndressSlot", undress_slot),
     ]
 }
