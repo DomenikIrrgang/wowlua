@@ -109,6 +109,9 @@ pub struct Shared {
     pub(crate) stepping: Option<Stepping>,
     /// Requests a running session serves between frames (its UI's).
     pub deferred: Vec<(u64, Request)>,
+    /// Requests that run the addon's code (input, events), for the driver
+    /// to run with the debugger attached: their handlers' breakpoints stop.
+    pub run_queue: Vec<(u64, Request)>,
     /// An `Advance` the driver runs: its request, seconds, frames.
     pub advance: Option<(u64, Option<f64>, Option<u32>)>,
     /// What was printed and raised, for `Output` requests (MCP).
@@ -141,6 +144,7 @@ impl Shared {
             next_id: 1,
             stepping: None,
             deferred: Vec::new(),
+            run_queue: Vec::new(),
             advance: None,
             output: Vec::new(),
             debug_blizzard_ui: false,
@@ -471,15 +475,25 @@ impl Controller {
     /// Serves the requests waiting, without stopping (a running session:
     /// the VM polled the interrupt flag, or the driver is between frames).
     pub fn serve_waiting(&mut self, vm: &mut Vm, between_frames: bool) {
+        let runs_code =
+            |r: &Request| matches!(r, Request::Input { .. } | Request::FireEvent { .. });
         if between_frames {
             let deferred = std::mem::take(&mut self.shared().deferred);
             for (id, req) in deferred {
+                if runs_code(&req) && self.shared.borrow().drives_time {
+                    self.shared().run_queue.push((id, req));
+                    continue;
+                }
                 let _ = self.handle(vm, id, req, None);
             }
         }
         loop {
             let next = self.shared().link.recv(Some(0));
             let Some((id, req)) = next else { break };
+            if between_frames && runs_code(&req) && self.shared.borrow().drives_time {
+                self.shared().run_queue.push((id, req));
+                continue;
+            }
             match req {
                 Request::Pause => {
                     self.shared().link.respond(id, Ok(Response::Ok));

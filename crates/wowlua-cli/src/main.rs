@@ -273,6 +273,8 @@ enum Command {
     },
     /// Run the tests in the emulated client
     Test(TestArgs),
+    /// Serve the Model Context Protocol for AI agents: drive and debug the addon
+    Mcp,
     /// Run a test file and write a screenshot of the UI as it ends
     Screenshot(ScreenshotArgs),
     /// Serve the Debug Adapter Protocol: debug a test file or the addon
@@ -619,6 +621,7 @@ fn run() -> ExitCode {
         Command::Test(args) => commands::test(&out, &cli.global, &args),
         Command::Debug { port } => debug::debug(&out, &cli.global, port),
         Command::Screenshot(args) => screenshot::command(&out, &cli.global, &args),
+        Command::Mcp => debug::mcp(&out, &cli.global),
         Command::Compile(args) => commands::compile(&out, &cli.global, &args),
         Command::Fmt { check, paths } => commands::fmt(&out, &cli.global, check, paths),
         Command::Dev {

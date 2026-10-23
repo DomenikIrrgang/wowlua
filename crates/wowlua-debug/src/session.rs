@@ -332,7 +332,23 @@ fn run_addon(suite: &Suite, opts: &Options, shared: &SharedRef) -> (Option<Strin
         if shared.borrow().terminate || vm.aborted() {
             break;
         }
-        if let Some((id, seconds, frames)) = shared.borrow_mut().advance.take() {
+        // Input and events run here, the debugger attached.
+        let queued = std::mem::take(&mut shared.borrow_mut().run_queue);
+        for (id, req) in queued {
+            let r = match &req {
+                Request::Input { input } => crate::ui::input(&mut vm, input).map(|()| Response::Ok),
+                Request::FireEvent { event, args } => {
+                    crate::ui::fire_event(&mut vm, event, args).map(|()| Response::Ok)
+                }
+                _ => Err("not a request that runs code".into()),
+            };
+            shared.borrow_mut().link.respond(id, r);
+        }
+        if shared.borrow().terminate || vm.aborted() {
+            break;
+        }
+        let advance = shared.borrow_mut().advance.take();
+        if let Some((id, seconds, frames)) = advance {
             let n = match (frames, seconds) {
                 (Some(f), _) => f as usize,
                 (None, Some(s)) => (s * 1000.0 / FRAME_MS).ceil() as usize,

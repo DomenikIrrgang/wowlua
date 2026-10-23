@@ -106,6 +106,7 @@ pub struct Profiler {
     last_thread: Option<ThreadRef>,
     clock: Box<dyn Fn() -> u64>,
     pub frames: Vec<FrameSample>,
+    frame_count: u64,
 }
 
 impl Profiler {
@@ -126,6 +127,7 @@ impl Profiler {
             last_thread: None,
             clock,
             frames: Vec::new(),
+            frame_count: 0,
         }
     }
 
@@ -255,6 +257,12 @@ impl Profiler {
     ) {
         let now = self.now(instructions, bytes);
         self.charge(now, thread);
+        // Game frames are one node (each frame's own cost goes to `frames`).
+        let name: Rc<str> = if kind == DispatchKind::Frame {
+            "game frame".into()
+        } else {
+            name
+        };
         let k = self.key(KeyId::Dispatch(kind, name.clone()), || {
             Key::Dispatch(kind, name)
         });
@@ -297,14 +305,15 @@ impl Profiler {
             }
             s.pop();
             if e.dispatch && e.depth == depth {
-                if let Key::Dispatch(DispatchKind::Frame, name) =
+                if let Key::Dispatch(DispatchKind::Frame, _) =
                     &self.keys[self.nodes[e.node as usize].key as usize]
                 {
                     if self.frames.len() >= MAX_FRAMES {
                         self.frames.remove(0);
                     }
+                    self.frame_count += 1;
                     self.frames.push(FrameSample {
-                        name: name.clone(),
+                        name: format!("frame {}", self.frame_count).into(),
                         cost: now - e.start,
                     });
                 }

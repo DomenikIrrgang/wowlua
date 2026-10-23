@@ -280,11 +280,16 @@ MyAddon`), a secret's value after `secret`.
 tools: `start_session` (a test file or the addon, flavor, profile, screen),
 `stop_session`, `screenshot` (the screen or a frame, returned as an image),
 `frame_tree` (optionally under a frame, with hidden frames or not),
-`find_frames` (by name, type or text), `click`, `hover`, `drag`, `type_text`,
-`press_key`, `advance`, `fire_event`, `eval`, `set_breakpoints`, `continue`,
+`find_frames` (by name, type or text), `click` (a frame, or a point in the
+screenshot's pixels), `hover`, `drag`, `type_text`, `press_key`, `slash` (a
+slash command), `advance`, `fire_event`, `eval`, `set_breakpoints`, `continue`,
 `step`, `stack`, `variables`, `profile_start`, `profile_stop`, `output`
 (what the session printed and the errors it raised). Sessions are `manual`
-clocked unless asked otherwise.
+clocked unless asked otherwise. A tool that runs code (`continue`, `step`,
+`click`, `advance`, …) answers once the session stops or settles, with its
+state (where it stopped) and what it printed meanwhile. Profiles count game
+frames as one node (`game frame`), each frame's cost in the report's
+timeline.
 
 ### 18.12.3 `wowlua screenshot`
 

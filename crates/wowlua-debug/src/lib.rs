@@ -16,6 +16,8 @@ mod values;
 #[cfg(feature = "native")]
 pub mod dap;
 #[cfg(feature = "native")]
+pub mod mcp;
+#[cfg(feature = "native")]
 pub mod session;
 
 pub use controller::{Clock, Controller, Link, Shared, SharedRef};

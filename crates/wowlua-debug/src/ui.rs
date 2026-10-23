@@ -179,6 +179,10 @@ pub fn input(vm: &mut Vm, input: &Input) -> Result<(), String> {
             inp::as_user(vm, |vm| inp::press_key(vm, key));
             Ok(())
         }
+        Input::Slash { text } => {
+            let t = vm.str(text);
+            call_control(vm, "slash", wowlua_engine::chat::slash_control, &[t])
+        }
     }
 }
 

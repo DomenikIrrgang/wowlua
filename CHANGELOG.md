@@ -6,6 +6,10 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### New
 
+- **Debugger**: `wowlua debug` lets VS Code (or any editor that speaks the Debug Adapter Protocol) debug a test file or your addon running in the emulated client: line breakpoints with conditions, hit counts and log messages; breakpoints on functions, API calls (`C_Timer.After`), events (`event:PLAYER_LOGIN`), scripts (`script:MyFrame:OnClick`) and timers; stop on errors, on taint or on a blocked protected action. Step into event handlers, `OnUpdate` and timers, and out of one handler into the next. The call stack shows which event or script ran your code, variables show their taint and secret values what they hide, widgets their size, points and children, and watches can change locals.
+- **Screenshots**: `expect(frame).toMatchScreenshot()` (or `expect(mock.screen)`) compares what the player would see with an image stored in `__screenshots__` next to the test; a missing one is written, `wowlua test -u` updates it, and a mismatch writes the new image and a diff beside it. `mock.screenshot()` and `wowlua screenshot tests/x.test.wowlua -o x.png` write images too. Drawn with your own WoW installation's textures and fonts when there is one (for camelot, retail and every classic client), never copied anywhere.
+- **For AI agents**: `wowlua mcp` is an MCP server: an agent can start your addon in the emulated client, look at it in screenshots, find frames, click, type, run slash commands, move time on, set breakpoints, step, read variables and profile it.
+- **Profiler**: `wowlua debug` and `wowlua mcp` profile calls, instructions run, memory allocated and time per function, event, script, `OnUpdate` and game frame, and write speedscope files (speedscope.app opens them).
 - A profile can leave files out of its builds: `"profiles": { "release": { "exclude": ["src/Diagnostics/**"] } }` keeps developer tools in your dev builds and tests and out of the release players get. Guard an import of such a file in code you keep with `@if(build.debug)`.
 - A script handler set on an instance of your widget class gets that class: in `toggle:SetScript("OnClick", function(self) … end)` with `class Toggle extends Button`, `self` is a `Toggle`, so its fields are typed (it was a `Button`). The same goes for every method of the game's classes that takes or gives `Self`.
 - `keyof T` and `T[K]` types, as in TypeScript: `function get<K extends keyof Defaults>(key: K): Defaults[K]` gives each setting its own type, and a key that isn't a field of `Defaults` is an error (E2014).
@@ -34,6 +38,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- Textures from XML templates (`UIPanelButtonTemplate`'s and others') now get their `<TexCoords>` and `alphaMode`, as in game: `GetTexCoord` and `GetBlendMode` give what the template sets.
 - The HTML coverage report of a workspace showed no source and took the name of the last addon in it: it now shows each file's source and the root package's name.
 - Code in a branch your build removes (`if build.debug then … end` in a release, `if flavor == "vanilla" then … end` in another flavor) is no longer checked, as documented: it may use what that build doesn't have, such as an import under `@if(build.debug)`.
 - `for k, v in pairs(t)` over a record type with an `unknown` indexer (`{ name?: string, [string]: unknown }`) is no longer refused (E2001).

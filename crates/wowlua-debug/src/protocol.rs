@@ -129,6 +129,10 @@ pub enum Input {
     Key {
         key: String,
     },
+    /// A chat line as the user types it: a slash command (`/wdemo`).
+    Slash {
+        text: String,
+    },
 }
 
 fn left_button() -> String {
