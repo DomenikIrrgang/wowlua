@@ -467,9 +467,32 @@ fn quad_of(vm: &Vm, id: WidgetId) -> Option<Quad> {
     })
 }
 
-/// A text's characters with their colors (`|cAARRGGBB … |r`), the
-/// escapes taken out as [`crate::text::visible`] takes them.
-fn colored_chars(raw: &str, base: [f32; 4]) -> Vec<(char, [f32; 4])> {
+/// A named colour (`|cnNAME:`): the global colour object of that name
+/// (`VISITABLE_URL_DEFAULT_CHAT_LINK_COLOR`, made from the client's
+/// colours), its `r`, `g`, `b`, `a`.
+fn named_color(vm: &Vm, name: &str) -> Option<[f32; 4]> {
+    let k = vm.heap.interned(name.as_bytes())?;
+    let Value::Table(t) = vm.heap.table(vm.globals).get(Value::Str(k)) else {
+        return None;
+    };
+    let field = |f: &str| -> Option<f32> {
+        let k = vm.heap.interned(f.as_bytes())?;
+        match vm.heap.table(t).get(Value::Str(k)) {
+            Value::Num(n) => Some(n as f32),
+            _ => None,
+        }
+    };
+    Some([
+        field("r")?,
+        field("g")?,
+        field("b")?,
+        field("a").unwrap_or(1.0),
+    ])
+}
+
+/// A text's characters with their colors (`|cAARRGGBB … |r`, `|cnNAME:`),
+/// the escapes taken out as [`crate::text::visible`] takes them.
+fn colored_chars(vm: &Vm, raw: &str, base: [f32; 4]) -> Vec<(char, [f32; 4])> {
     let mut out = Vec::new();
     let mut stack: Vec<[f32; 4]> = Vec::new();
     let mut chars = raw.chars().peekable();
@@ -481,6 +504,12 @@ fn colored_chars(raw: &str, base: [f32; 4]) -> Vec<(char, [f32; 4])> {
         }
         match chars.next() {
             Some('|') => out.push(('|', cur(&stack))),
+            Some('c') if chars.peek() == Some(&'n') => {
+                chars.next();
+                let name: String = chars.by_ref().take_while(|&x| x != ':').collect();
+                let c = named_color(vm, &name).unwrap_or(cur(&stack));
+                stack.push([c[0], c[1], c[2], base[3] * c[3]]);
+            }
             Some('c') => {
                 let hex: String = (0..8).filter_map(|_| chars.next()).collect();
                 let byte = |i: usize| {
@@ -635,7 +664,7 @@ fn text_item(vm: &Vm, id: WidgetId, edit_box: bool) -> Option<Text> {
         "BOTTOM" => rect.y + rect.h - total_h,
         _ => rect.y + (rect.h - total_h) / 2.0,
     };
-    let colored = colored_chars(&raw, base);
+    let colored = colored_chars(vm, &raw, base);
     let mut cursor = 0usize;
     let mut out_lines = Vec::new();
     for (i, line) in shown.iter().enumerate() {

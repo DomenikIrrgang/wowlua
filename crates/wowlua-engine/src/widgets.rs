@@ -3532,6 +3532,54 @@ fn get_string_width(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 
 /// `SetFontObject(font)`: a font object or its name; the widget's font is
 /// then the object's until `SetFont` sets its own.
+/// `CopyFontObject(font)`: the font's attributes (file, height, flags,
+/// colours, shadow, spacing, justification), its inherited ones too,
+/// become this one's own; its font object stays. Blizzard's
+/// `FontableFrameMixin` copies a frame's font so (the chat frames'), then
+/// sets its height with `SetFont(GetFont())`. Unverified: what is copied
+/// beyond those.
+fn copy_font_object(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let source = match c.arg(2) {
+        Value::Str(s) => {
+            let name = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
+            vm.get_global(&name)
+        }
+        v => v,
+    };
+    let Some(mut cur) = widget_of(vm, source) else {
+        return Err(vm.api_arg_error(2, "Usage: self:CopyFontObject(font)"));
+    };
+    let target = engine(vm).world.widgets[id.0].props;
+    let skip = vm.str("FontObject");
+    // The nearest level's value of each attribute.
+    let mut copied: Vec<Value> = Vec::new();
+    for _ in 0..32 {
+        let props = engine(vm).world.widgets[cur.0].props;
+        let mut key = Value::Nil;
+        let mut entries = Vec::new();
+        while let Ok(Some((k, v))) = vm.heap.table(props).next(key) {
+            entries.push((k, v));
+            key = k;
+        }
+        for (k, v) in entries {
+            let internal = matches!(k, Value::Str(s) if vm.str_bytes(s).first() == Some(&0));
+            if internal || k.raw_eq(skip) || copied.iter().any(|c| c.raw_eq(k)) {
+                continue;
+            }
+            copied.push(k);
+            let _ = vm.heap.table_mut(target).set(k, v);
+        }
+        match stored_args(vm, props, "FontObject")
+            .and_then(|v| v.first().copied())
+            .and_then(|f| widget_of(vm, f))
+        {
+            Some(n) if n != cur => cur = n,
+            _ => break,
+        }
+    }
+    Ok(vec![])
+}
+
 fn set_font_object(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let class = engine(vm).world.widgets[id.0].class.clone();
     let props = engine(vm).world.widgets[id.0].props;
@@ -4329,6 +4377,7 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("RegisterForClicks", register_for_clicks),
         ("IsForbidden", is_forbidden),
         ("SetFontObject", set_font_object),
+        ("CopyFontObject", copy_font_object),
         ("GetFrameLevel", get_frame_level),
         ("SetUsingParentLevel", set_using_parent_level),
         ("SetToDefaults", set_to_defaults),

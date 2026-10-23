@@ -641,3 +641,76 @@ g:Play()",
     );
     assert_eq!(r, ["false", "0"]);
 }
+
+/// A named colour (`|cnNAME:text|r`, the chat's links): the text alone is
+/// shown and measured, in the global colour object's colour.
+#[test]
+fn named_colors_color_their_text() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "LINK_BLUE = { r = 0, g = 0.5, b = 1 }
+local f = CreateFrame('Frame', nil, UIParent)
+f:SetSize(300, 40)
+f:SetPoint('CENTER')
+local t = f:CreateFontString(nil, 'OVERLAY')
+t:SetFont('Fonts\\\\FRIZQT__.TTF', 12)
+t:SetAllPoints()
+t:SetText('see |cnLINK_BLUE:here|r now')
+local plain = f:CreateFontString(nil, 'OVERLAY')
+plain:SetFont('Fonts\\\\FRIZQT__.TTF', 12)
+plain:SetText('see here now')
+return t:GetStringWidth() == plain:GetStringWidth() and 'same' or (t:GetStringWidth() .. ' ' .. plain:GetStringWidth())",
+    );
+    assert_eq!(r, ["same"]);
+    let scene = wowlua_engine::scene::build(&mut vm);
+    let text = scene
+        .items
+        .iter()
+        .find_map(|i| match i {
+            wowlua_engine::scene::Item::Text(t) => Some(t.clone()),
+            _ => None,
+        })
+        .expect("the text");
+    let runs: Vec<(String, [f32; 4])> = text.lines[0]
+        .runs
+        .iter()
+        .map(|r| (r.text.clone(), r.color))
+        .collect();
+    assert_eq!(
+        runs[1],
+        ("here".to_string(), [0.0, 0.5, 1.0, 1.0]),
+        "{runs:?}"
+    );
+    assert_eq!(
+        runs.iter().map(|r| r.0.as_str()).collect::<String>(),
+        "see here now"
+    );
+}
+
+/// `CopyFontObject` copies a font's attributes, inherited ones too, as
+/// Blizzard's `FontableFrameMixin` uses it (the chat frames' font).
+#[test]
+fn copy_font_object_copies_inherited_attributes() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local base = CreateFont('BaseFont')
+base:SetFont('Fonts\\\\ARIALN.TTF', 14, '')
+base:SetTextColor(1, 0.5, 0)
+local derived = CreateFont('DerivedFont')
+derived:SetFontObject(base)
+local copy = CreateFont('CopyFont')
+copy:CopyFontObject(derived)
+local file, size = copy:GetFont()
+local r, g = copy:GetTextColor()
+local dr, dg = derived:GetTextColor()
+copy:SetFont(file, 18, '')
+local file2, size2 = copy:GetFont()
+return file, size, r == dr and g == dg and 'same color' or 'differs', file2, size2",
+    );
+    // Heights as the client gives them (single floats).
+    assert_eq!(r[0], "Fonts\\ARIALN.TTF");
+    assert!(r[1].starts_with("13.99"), "{r:?}");
+    assert_eq!(&r[2..4], ["same color", "Fonts\\ARIALN.TTF"]);
+}

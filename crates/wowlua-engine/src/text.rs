@@ -146,8 +146,8 @@ fn row(font: &Font, px: i64) -> (&'static Row, f64) {
     (row, px as f64 / near as f64)
 }
 
-/// The text a region shows: its escape sequences taken out (`|cAARRGGBB`
-/// and `|r` colours, `|H…|h` links' codes, `|T…|t` textures, `|n` a new
+/// The text a region shows: its escape sequences taken out (`|cAARRGGBB`,
+/// `|cnNAME:` (a named colour) and `|r` colours, `|H…|h` links' codes, `|T…|t` textures, `|n` a new
 /// line, `||` a bar).
 pub fn visible(text: &str) -> String {
     let mut out = String::new();
@@ -159,6 +159,14 @@ pub fn visible(text: &str) -> String {
         }
         match chars.next() {
             Some('|') => out.push('|'),
+            // A named colour (`|cnNAME:`), to its colon.
+            Some('c') if chars.peek() == Some(&'n') => {
+                for x in chars.by_ref() {
+                    if x == ':' {
+                        break;
+                    }
+                }
+            }
             Some('c') => {
                 for _ in 0..8 {
                     chars.next();
