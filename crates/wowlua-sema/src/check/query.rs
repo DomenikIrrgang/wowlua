@@ -336,10 +336,21 @@ impl Env<'_> {
                     .all(|&m| self.assignable_in(m, t, mode, assuming));
             }
             (_, Ty::Union(members)) => {
-                return members
+                if members
                     .clone()
                     .iter()
-                    .any(|&m| self.assignable_in(s, m, mode, assuming));
+                    .any(|&m| self.assignable_in(s, m, mode, assuming))
+                {
+                    return true;
+                }
+                // `E extends EventName` where `EventName` (a union) is
+                // expected: its constraint fits as a whole.
+                return match st {
+                    Ty::Param(p) => self.params[p.0 as usize]
+                        .constraint
+                        .is_some_and(|c| self.assignable_in(c, t, mode, assuming)),
+                    _ => false,
+                };
             }
             (Ty::Intersection(members), _) => {
                 return members
