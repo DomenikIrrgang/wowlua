@@ -2571,6 +2571,60 @@ print(a, b, c, d, e, name, realm, more)
         assert!(!d.iter().any(|x| x.code == Some("E2003")), "{d:#?}");
     }
 
+    /// `x or {}` without an expected type takes `x`'s type where `{}` fits it
+    /// (decision L52).
+    #[test]
+    fn empty_table_defaults() {
+        strict_err(
+            "type O = { n?: number }\nlocal function f(o: O?)\n local d = o or {}\n local s: string = d.n\n print(s)\nend\nprint(f)\n",
+            "E2001",
+        );
+        strict_err(
+            "local function g(l: number[]?)\n local x = l or {}\n local s: string = x[1]\n print(s)\nend\nprint(g)\n",
+            "E2001",
+        );
+        strict_err(
+            "type O = { n?: number }\nlocal function f(o: O?)\n local d = o ?? {}\n local s: string = d.n\n print(s)\nend\nprint(f)\n",
+            "E2001",
+        );
+        // `{}` doesn't fit: the union, as before
+        strict_ok("local function h(s: string?)\n local v = s or {}\n print(v)\nend\nprint(h)\n");
+        strict_ok(
+            "type R = { n: number }\nlocal function k(r: R?)\n local v = r or {}\n print(v)\nend\nprint(k)\n",
+        );
+    }
+
+    /// A record read with a key of its field names gives those fields'
+    /// types (decision L53).
+    #[test]
+    fn literal_key_reads() {
+        strict_err(
+            "type C = { a: number, b: number }\nlocal c: C = { a = 1, b = 2 }\nlocal function f(k: keyof C): string return c[k] end\nprint(f)\n",
+            "E2001",
+        );
+        strict_ok(
+            "type C = { a: number, b: number }\nlocal c: C = { a = 1, b = 2 }\nlocal function f(k: \"a\" | \"b\"): number return c[k] end\nprint(f)\n",
+        );
+    }
+
+    /// A constrained type parameter's members are its constraint's (decision
+    /// T279); an unconstrained one's are `any`.
+    #[test]
+    fn type_parameter_members() {
+        strict_err(
+            "class Shape\n function Area(): number return 1 end\nend\nlocal function f<S extends Shape>(s: S): string\n return s:Area()\nend\nprint(f)\n",
+            "E2001",
+        );
+        strict_ok(
+            "class Shape\n function Area(): number return 1 end\nend\nlocal function f<S extends Shape>(s: S): number\n return s:Area()\nend\nprint(f)\n",
+        );
+        strict_err(
+            "class Shape\n size: number = 1\nend\nclass Box<S extends Shape>\n items: S[] = {}\n function First(): string return self.items[1].size end\nend\nprint(Box)\n",
+            "E2001",
+        );
+        strict_ok("local function g<T>(t: T): number\n return t.n\nend\nprint(g)\n");
+    }
+
     /// E2015 on a possibly secret value points to the secret predicates.
     #[test]
     fn cast_help() {

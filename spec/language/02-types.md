@@ -110,7 +110,8 @@ map or an indexer give `V?`. In strict mode an array has no named fields but
 `{ [number]: string, label?: string }`), and a record with fields read with a
 number literal it doesn't have (`art[1]` of `{ atlas: string }`) is E2003;
 another key on a table without an indexer reads `any`, which W2063 reports
-(decision L49).
+(decision L49). A key whose type is one or more string literals (`k: keyof
+Colors`, `"a" | "b"`) reads those fields, as `T[K]` does (decision L53).
 
 Records are **structural**: any table with at least the required fields of
 compatible types is assignable. Extra fields are allowed, except that an
@@ -179,7 +180,9 @@ a call's result) binds as its type, a union of literals included, as a
 `local` keeps it (`assert(tokens[k])` with `tokens: { [string]: Token }` is
 a `Token`); decision L44. Inside the body, a value of a
 constrained type parameter fits wherever its constraint does (an `E extends
-EventName` is passed on as an `EventName`).
+EventName` is passed on as an `EventName`), and its fields and methods are
+the constraint's (`b:GetWidth()` with `b: B` and `B extends Frame`; decision
+T279). An unconstrained type parameter's members are `any`.
 
 **Variance** (decision L34). For generic classes, interfaces and aliases:
 
@@ -443,7 +446,11 @@ expression:
   member it fits, so literal fields can discriminate
   (`local c: Earned | Spent = { kind = "spent", amount = 1 }`); for a union
   with one table member (`string | string[]`), against that member,
-- empty table literals take the expected type (`local xs: string[] = {}`),
+- empty table literals take the expected type (`local xs: string[] = {}`);
+  without one, an empty table after `or` or `??` stands in for the value
+  before it and takes its type when it fits (a record whose fields are all
+  optional, a list, a map): `local o = opts or {}` with `opts: Options?` is an
+  `Options`, `list or {}` with `list: number[]?` a `number[]` (decision L52),
 - generic calls use the expected return type to infer type arguments, and
   arguments for parameters that do not mention a type parameter are typed by
   those parameters.

@@ -1452,9 +1452,13 @@ impl Checker<'_, '_> {
                 Ty::ClassOf(d) => self.static_type(d, name, span, quiet),
                 Ty::EnumMember(..) => Some(Types::ANY),
                 Ty::Module(_) => Some(Types::ANY),
-                Ty::Never | Ty::Param(_) | Ty::ClassOfParam(_) | Ty::EventArgs(_) => {
-                    Some(Types::ANY)
-                }
+                // A type parameter's members are its constraint's (`B extends
+                // Frame`: `b:GetWidth()`), decision T279.
+                Ty::Param(p) => match self.env.params[p.0 as usize].constraint {
+                    Some(c) => self.member_type(c, name, span, quiet),
+                    None => Some(Types::ANY),
+                },
+                Ty::Never | Ty::ClassOfParam(_) | Ty::EventArgs(_) => Some(Types::ANY),
                 // A callable table (`LibStub`): the first part with the member.
                 Ty::Intersection(parts) => {
                     let found = parts.iter().find_map(|&p| match self.env.types.get(p) {
@@ -1734,6 +1738,9 @@ impl Checker<'_, '_> {
                 Ty::Map(_, v) => self.env.types.optional(v),
                 Ty::Record(r) => match r.indexer {
                     Some((_, v)) => self.env.types.optional(v),
+                    // a key of its field names (`k: keyof Colors`): those
+                    // fields' types (decision L53)
+                    None if self.field_names(k) => self.env.types.index_of(m, k),
                     None => self.unindexed(m, key, span),
                 },
                 Ty::Nil => {
@@ -1804,6 +1811,9 @@ impl Checker<'_, '_> {
                 self.flow = saved;
                 self.guard = saved_guard;
                 let lt = self.truthy(l);
+                if self.empty_default(rhs, r, lt, expected) {
+                    return lt;
+                }
                 self.env.types.union(&[lt, r])
             }
             BinOp::Coalesce => {
@@ -1812,6 +1822,9 @@ impl Checker<'_, '_> {
                 let l = self.check(lhs, expected);
                 let r = self.check(rhs, expected);
                 let non_nil = self.env.types.non_nil(l);
+                if self.empty_default(rhs, r, non_nil, expected) {
+                    return non_nil;
+                }
                 self.env.types.union(&[non_nil, r])
             }
             BinOp::Eq | BinOp::Ne => {
@@ -1941,6 +1954,33 @@ impl Checker<'_, '_> {
                     | Ty::ClassOfParam(_)
             )
         })
+    }
+
+    /// The key is one or more string literals (a `keyof` of a record), so
+    /// reading a record with it reads those fields.
+    fn field_names(&self, k: TypeId) -> bool {
+        let members = self.env.types.members(k);
+        !members.is_empty()
+            && members
+                .iter()
+                .all(|&m| matches!(self.env.types.get(m), Ty::Str(_)))
+    }
+
+    /// `x or {}` (or `x ?? {}`) without an expected type: the empty table
+    /// stands in for `x`, so the result is `x`'s type when `{}` fits it (a
+    /// record whose fields are all optional, a list, a map), decision L52.
+    fn empty_default(
+        &mut self,
+        rhs: Expr<'_>,
+        r: TypeId,
+        lt: TypeId,
+        expected: Option<TypeId>,
+    ) -> bool {
+        expected.is_none()
+            && matches!(rhs.kind(), ExprKind::Table(fields) if fields.iter().next().is_none())
+            && lt != Types::ANY
+            && lt != Types::NEVER
+            && self.env.assignable(r, lt, self.mode)
     }
 
     /// Arithmetic needs numbers (strings coerce in Lua).
