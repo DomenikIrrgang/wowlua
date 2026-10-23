@@ -574,3 +574,69 @@ fn the_flavor_ui_code_loads() {
     }
     assert!(!report.addons.is_empty());
 }
+
+/// A button's font object given by its name is that font: its text is
+/// drawn at the font's size (it was a pixel high, without a font).
+#[test]
+fn a_buttons_font_object_by_name_draws_its_text() {
+    let interface = tree(
+        "button-font-name",
+        &[
+            ("AddOns/Blizzard_Box/Blizzard_Box.toc", "Box.xml\n"),
+            (
+                "AddOns/Blizzard_Box/Box.xml",
+                r#"<Ui>
+  <FontFamily name="FamFont" virtual="true">
+    <Member alphabet="roman"><Font font="Fonts\FRIZQT__.ttf" height="15"/></Member>
+  </FontFamily>
+  <Button name="RowTemplate" virtual="true">
+    <ButtonText parentKey="ButtonText" nonspacewrap="true" justifyH="LEFT"><Anchors><Anchor point="LEFT" x="8"/><Anchor point="RIGHT" x="-30"/></Anchors></ButtonText>
+    <NormalTexture file="Interface\Buttons\WHITE8X8"/>
+    <NormalFont style="FamFont"/>
+  </Button>
+</Ui>"#,
+            ),
+        ],
+    );
+    let mut vm = vm("camelot");
+    let report = wowlua_engine::ui::load(&mut vm, &interface, None);
+    assert!(report.errors.is_empty(), "{:?}", report.errors);
+    let r = run(
+        &mut vm,
+        "local c = CreateFrame('Button', 'Plain', UIParent)
+c:SetSize(260, 25)
+c:SetPoint('CENTER')
+c:SetNormalFontObject('FamFont')
+c:SetHighlightFontObject('FamFont')
+c:SetText('Plain Button')
+local row = CreateFrame('Button', nil, UIParent, 'RowTemplate')
+row:SetSize(200, 25)
+row:SetPoint('TOP', c, 'BOTTOM')
+row.ButtonText:SetText('Row')
+return tostring(c:GetNormalFontObject() == FamFont), tostring(c:GetHighlightFontObject() == FamFont)",
+    );
+    assert_eq!(r, ["true", "true"]);
+    let scene = wowlua_engine::scene::build(&mut vm);
+    let px: Vec<f32> = scene
+        .items
+        .iter()
+        .filter_map(|i| match i {
+            wowlua_engine::scene::Item::Text(t) => Some(t.px),
+            _ => None,
+        })
+        .collect();
+    assert_eq!(px, [15.0, 15.0]);
+    // The template's `ButtonText`, in no `<Layer>`, is drawn on `OVERLAY`:
+    // over the button's normal texture (ARTWORK).
+    let order: Vec<&str> = scene
+        .items
+        .iter()
+        .filter_map(|i| match i {
+            wowlua_engine::scene::Item::Text(_) => Some("text"),
+            wowlua_engine::scene::Item::Quad(_) => Some("quad"),
+            _ => None,
+        })
+        .collect();
+    assert!(order.contains(&"quad"), "{order:?}");
+    assert_eq!(order.last(), Some(&"text"), "{order:?}");
+}

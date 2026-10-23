@@ -3184,10 +3184,45 @@ fn set_parent_key(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+/// A font object given by its name (`"GameFontNormal"`) is the global of
+/// that name, as `SetFontObject` takes it; an object as it is.
+fn font_object_value(vm: &mut Vm, v: Value) -> Value {
+    if let Value::Str(s) = v {
+        let name = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
+        let g = vm.get_global(&name);
+        if widget_of(vm, g).is_some() {
+            return g;
+        }
+    }
+    v
+}
+
+/// A button's `SetNormalFontObject`, `SetHighlightFontObject` or
+/// `SetDisabledFontObject`: the font object, by name or itself (a name
+/// was kept as the string, so the button's text had no font and was drawn
+/// a pixel high: the Legacy challenges' categories, a button given
+/// `"Game15Font_Shadow"`).
+fn set_state_font_object(vm: &mut Vm, id: WidgetId, c: &NativeCall, stem: &str) {
+    let mut args: Vec<Value> = c.args.iter().skip(1).copied().collect();
+    if let Some(first) = args.first_mut() {
+        *first = font_object_value(vm, *first);
+    }
+    store(vm, id, stem, &args);
+}
+
 fn set_normal_font_object(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
-    let args: Vec<Value> = c.args.iter().skip(1).copied().collect();
-    store(vm, id, "NormalFontObject", &args);
+    set_state_font_object(vm, id, &c, "NormalFontObject");
     button_font_to_text(vm, id);
+    Ok(vec![])
+}
+
+fn set_highlight_font_object(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    set_state_font_object(vm, id, &c, "HighlightFontObject");
+    Ok(vec![])
+}
+
+fn set_disabled_font_object(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    set_state_font_object(vm, id, &c, "DisabledFontObject");
     Ok(vec![])
 }
 
@@ -4457,6 +4492,8 @@ pub fn behaviours() -> Vec<(&'static str, MethodFn)> {
         ("SetTextToFit", set_text_to_fit),
         ("SetDrawLayer", set_draw_layer),
         ("SetNormalFontObject", set_normal_font_object),
+        ("SetHighlightFontObject", set_highlight_font_object),
+        ("SetDisabledFontObject", set_disabled_font_object),
         ("SetParentKey", set_parent_key),
         ("GetTextScale", get_text_scale),
         ("GetLineHeight", get_line_height),

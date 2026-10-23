@@ -998,11 +998,24 @@ fn g_px(g: &crate::text::GlyphLine) -> f32 {
 /// A region's draw layer rank and sublevel.
 fn layer_of(vm: &Vm, id: WidgetId) -> (usize, i32) {
     let a = args(vm, id, "DrawLayer");
+    // A region no layer was given: a font string on `OVERLAY`, the others
+    // on `ARTWORK`, as a fresh one's `GetDrawLayer` answers in the client
+    // (recorded; a button's `ButtonText`, outside any `<Layer>`, was drawn
+    // under its normal texture: the Legacy challenges' categories).
+    let fallback = if widgets::is_a(
+        engine(vm),
+        &engine(vm).world.widgets[id.0].class,
+        "FontString",
+    ) {
+        "OVERLAY"
+    } else {
+        "ARTWORK"
+    };
     let layer = a
         .as_ref()
         .and_then(|a| a.first().copied())
         .and_then(|v| text_of(vm, v))
-        .unwrap_or_else(|| "ARTWORK".into());
+        .unwrap_or_else(|| fallback.into());
     let sub = a.as_ref().map_or(0.0, |a| num(vm, a.get(1), 0.0));
     (
         LAYERS.iter().position(|l| *l == layer).unwrap_or(2),
