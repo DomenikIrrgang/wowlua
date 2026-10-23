@@ -640,14 +640,24 @@ impl<'e, 'p> Checker<'e, 'p> {
             })
             .collect();
         for v in visible {
-            let now = self.var_type(v);
+            // Where it is declared, a call may have dropped its narrowing to
+            // `nil` (a callback may have set it): not known to be assigned.
+            let here = self.vars[v.0 as usize].depth == self.depth;
+            let now = if here {
+                self.flow.get(&v).copied()
+            } else {
+                Some(self.var_type(v))
+            };
             let var = &self.vars[v.0 as usize];
             // a forward declaration before its value: no `nil` of its own
-            let add = !(var.nil_init && now == Types::NIL);
-            let assigned = if add {
-                self.env.types.union(&[var.assigned, now])
-            } else {
-                var.assigned
+            let now = match now {
+                Some(t) if !(var.nil_init && t == Types::NIL) => Some(t),
+                None if !var.nil_init => Some(var.base),
+                _ => None,
+            };
+            let assigned = match now {
+                Some(t) => self.env.types.union(&[var.assigned, t]),
+                None => var.assigned,
             };
             let base = var.base;
             if assigned != self.vars[v.0 as usize].assigned {
