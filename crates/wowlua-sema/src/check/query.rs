@@ -127,6 +127,8 @@ impl Env<'_> {
             Ty::Param(p) => self.params[p.0 as usize].name.to_string(),
             Ty::ClassOfParam(p) => format!("ClassOf<{}>", self.params[p.0 as usize].name),
             Ty::EventArgs(e) => format!("EventArgs<{}>", d(*e)),
+            Ty::KeyOf(t) => format!("keyof {}", d(*t)),
+            Ty::IndexOf(o, k) => format!("{}[{}]", d(*o), d(*k)),
             Ty::Secret(i) => format!("Secret<{}>", d(*i)),
             Ty::Module(_) => "module".into(),
         }
@@ -323,12 +325,14 @@ impl Env<'_> {
         let st = self.types.get(s).clone();
         let tt = self.types.get(t).clone();
         match (&st, &tt) {
-            (_, Ty::Any | Ty::Error | Ty::Unknown | Ty::EventArgs(_))
-            | (Ty::Any | Ty::Error | Ty::Never | Ty::EventArgs(_), _) => {
+            (_, Ty::Any | Ty::Error | Ty::Unknown | Ty::EventArgs(_) | Ty::IndexOf(..))
+            | (Ty::Any | Ty::Error | Ty::Never | Ty::EventArgs(_) | Ty::IndexOf(..), _) => {
                 return true;
             }
             // `unknown` fits only a union that takes anything (`pairs` over
             // a record with an `unknown` indexer builds one).
+            // `keyof T` of a type parameter: field names, so strings.
+            (Ty::KeyOf(_), _) => return self.assignable_in(Types::STRING, t, mode, assuming),
             (Ty::Unknown, Ty::Union(members)) => {
                 return members
                     .iter()

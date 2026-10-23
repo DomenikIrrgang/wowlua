@@ -1188,6 +1188,11 @@ impl<'t> Type<'t> {
             K::Paren(i) => TypeKind::Paren(ty(i)),
             K::Optional(i) => TypeKind::Optional(ty(i)),
             K::Array(i) => TypeKind::Array(ty(i)),
+            K::KeyOf(i) => TypeKind::KeyOf(ty(i)),
+            K::Index { object, key } => TypeKind::Index {
+                object: ty(object),
+                key: ty(key),
+            },
             K::Union(ts) => TypeKind::Union(List::new(t, ts, Type::new)),
             K::Intersection(ts) => TypeKind::Intersection(List::new(t, ts, Type::new)),
             K::Error => TypeKind::Error,
@@ -1215,6 +1220,13 @@ pub enum TypeKind<'t> {
     Paren(Type<'t>),
     Optional(Type<'t>),
     Array(Type<'t>),
+    /// `keyof T`: the names of `T`'s fields (decision L45).
+    KeyOf(Type<'t>),
+    /// `T[K]`: the type of `T`'s field `K` (decision L45).
+    Index {
+        object: Type<'t>,
+        key: Type<'t>,
+    },
     Union(Types<'t>),
     Intersection(Types<'t>),
     Error,

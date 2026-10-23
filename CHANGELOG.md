@@ -7,6 +7,9 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 ### New
 
 - A profile can leave files out of its builds: `"profiles": { "release": { "exclude": ["src/Diagnostics/**"] } }` keeps developer tools in your dev builds and tests and out of the release players get. Guard an import of such a file in code you keep with `@if(build.debug)`.
+- `keyof T` and `T[K]` types, as in TypeScript: `function get<K extends keyof Defaults>(key: K): Defaults[K]` gives each setting its own type, and a key that isn't a field of `Defaults` is an error (E2014).
+- `SetScript` and `HookScript` know what the game passes each script: in `frame:SetScript("OnUpdate", function(self, elapsed) … end)`, `self` is the frame and `elapsed` a number, for every script with known arguments (`OnClick`, `OnEnter`, `OnValueChanged`, `OnKeyDown`, …).
+- W2063 reports values that are `any` without anyone writing it: a parameter nothing gives a type, or a local whose value is `any`. It is off unless you turn it on (`"check": { "lints": { "W2063": "warn" } }`), for projects that want `any` only where it is written.
 - `EventArgs<E>` works in your own functions, not only in `wowlua:events`: `function on<E extends EventName>(event: E, fn: (name: E, EventArgs<E>...) -> ())` gives `on("UNIT_HEALTH", function(name, unit) … end)` the event's argument types, and `function send<M extends MessageName>(name: M, ...: EventArgs<M>...)` checks the values sent against `declare message`. Before, it was `any`.
 - A widget class can extend `FontString`, `Texture`, `Line` or `MaskTexture`: build it on the region its frame makes with `MyLabel.adopt(frame:CreateFontString(), …)`.
 - `MyButton.adopt(frame, …)` builds a widget class on a frame that already exists, such as the buttons a secure group header makes, instead of creating a new one: your constructor runs on that frame and your `@script` handlers are set.

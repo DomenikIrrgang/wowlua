@@ -341,6 +341,13 @@ pub(crate) enum TypeData {
     Paren(u32),
     Optional(u32),
     Array(u32),
+    /// `keyof T`
+    KeyOf(u32),
+    /// `T[K]`
+    Index {
+        object: u32,
+        key: u32,
+    },
     Union(Range),
     Intersection(Range),
     // The views show `Error` nodes; the parser builds none today.

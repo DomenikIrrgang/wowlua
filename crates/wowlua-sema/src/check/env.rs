@@ -1401,6 +1401,15 @@ impl<'p> Env<'p> {
                 let i = self.resolve(inner, scope);
                 self.types.array(i)
             }
+            TypeKind::KeyOf(inner) => {
+                let i = self.resolve(inner, scope);
+                self.types.key_of(i)
+            }
+            TypeKind::Index { object, key } => {
+                let o = self.resolve(object, scope);
+                let k = self.resolve(key, scope);
+                self.types.index_of(o, k)
+            }
             TypeKind::Union(ms) => {
                 let ms: Vec<TypeId> = ms.iter().map(|m| self.resolve(m, scope)).collect();
                 self.types.union(&ms)

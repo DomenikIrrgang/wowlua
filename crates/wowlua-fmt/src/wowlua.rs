@@ -94,6 +94,10 @@ impl Formatter<'_> {
             }
             TypeKind::Optional(inner) => Doc::concat(vec![self.ty(inner), txt("?")]),
             TypeKind::Array(inner) => Doc::concat(vec![self.ty(inner), txt("[]")]),
+            TypeKind::KeyOf(inner) => Doc::concat(vec![txt("keyof "), self.ty(inner)]),
+            TypeKind::Index { object, key } => {
+                Doc::concat(vec![self.ty(object), txt("["), self.ty(key), txt("]")])
+            }
             TypeKind::Union(members) | TypeKind::Intersection(members) => {
                 let sep = if matches!(t.kind(), TypeKind::Union(_)) {
                     "|"

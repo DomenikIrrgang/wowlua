@@ -283,6 +283,39 @@ Packs are inferred from arguments like other type parameters. A pack can only
 appear in parameter-list and result positions, as a type argument for a pack
 parameter, or as the expansion `...: T...` (E2056 otherwise).
 
+### 2.2.11 `keyof` and indexed access
+
+`keyof T` is the union of the names of a table type's fields (and its
+indexer's key type); `T[K]` is the type of `T`'s field `K` (decision L45):
+
+```wowlua
+type Defaults = { line: number, figure: boolean }
+type Key = keyof Defaults          -- "line" | "figure"
+type Line = Defaults["line"]       -- number
+
+function get<D extends { [string]: unknown }, K extends keyof D>(values: D, key: K): D[K]
+    return values[key] :: D[K]
+end
+local n = get({ line = 20, figure = true }, "line")   -- number
+get({ line = 20 }, "lnie")         -- E2014: not a key of the table
+```
+
+| Form | Gives |
+|------|-------|
+| `keyof` a record | its field names as string literals, and its indexer's key type |
+| `keyof` a map `{ [K]: V }` / an array | `K` / `number` |
+| `T["name"]` | the field's type (with `nil` for an optional field); a missing field: `nil`, or the indexer's value or `nil` |
+| `T["a" \| "b"]` | the union of both fields' types |
+| `T[string]` | every field's type, the indexer's, and `nil` |
+| `T[K]` of a map or an array | the element type or `nil` |
+
+While `T` or `K` is a type parameter, `keyof T` and `T[K]` stay as they are
+and are worked out where the parameter is bound. Inside the generic body, a
+`keyof T` value is a `string`, and a `T[K]` value is not checked (as `any`):
+it is checked where the call binds `T` and `K`. With `K extends keyof T`, the
+literal argument binds `K` (decision L44), so the result is that field's
+type.
+
 ## 2.3 Type aliases and recursive types
 
 ```wowlua

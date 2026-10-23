@@ -878,7 +878,14 @@ impl Linter<'_> {
                 }
                 self.ret(f.ret());
             }
-            TypeKind::Paren(t) | TypeKind::Optional(t) | TypeKind::Array(t) => self.ty(t),
+            TypeKind::Paren(t)
+            | TypeKind::Optional(t)
+            | TypeKind::Array(t)
+            | TypeKind::KeyOf(t) => self.ty(t),
+            TypeKind::Index { object, key } => {
+                self.ty(object);
+                self.ty(key);
+            }
             TypeKind::Union(ts) | TypeKind::Intersection(ts) => {
                 for t in ts {
                     self.ty(t);
