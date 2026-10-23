@@ -965,4 +965,34 @@ pub(crate) static LAYOUTS: &[(&str, Layouts)] = &[
             ],
         )],
     ),
+    (
+        "HelmetGeosetData",
+        &[(
+            0x103B3B37,
+            &[
+                "RaceID",
+                "HideGeosetGroup",
+                "RaceBitSelection",
+                "Field_10_0_0_46047_003",
+                "@HelmetGeosetVisDataID",
+            ],
+        )],
+    ),
+    (
+        "UiCamera",
+        &[(
+            0x9D5604E1,
+            &[
+                "Name",
+                "Pos",
+                "LookAt",
+                "Up",
+                "UiCameraTypeID",
+                "AnimID",
+                "AnimFrame",
+                "AnimVariation",
+                "Flags",
+            ],
+        )],
+    ),
 ];

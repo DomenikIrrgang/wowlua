@@ -266,7 +266,7 @@ T310).
   alpha, the geosets `CreatureDisplayInfoGeosetData` names), a creature
   through its first display, a file by ID. Geosets not named show by the
   model's defaults (the body, each group's first variant). Not yet: items'
-  own models (`SetItem`), particles and ribbons, helmets hiding hair.
+  own models (`SetItem`), particles and ribbons.
 - **Characters** (decision T320): a unit (`SetUnit`, `SetModelByUnit`) is
   its race and sex's model (`ChrRaceXChrModel`, `ChrModel`) with a choice
   of each customization option (the first the class may have: the
@@ -281,7 +281,8 @@ T310).
   in the skin's sections (`ItemDisplayInfoMaterialRes`, the file for the
   race, sex and class), a cape's texture, and models (for the race and
   sex; left and right shoulders) at attachment points (helm, shoulders,
-  hands, a shield's) or skinned to the body. A humanoid creature
+  hands, a shield's) or skinned to the body; a helm hides the geoset
+  groups `HelmetGeosetData` names for the race (hair, ears). A humanoid creature
   (`CreatureDisplayInfoExtra`) is its race and sex with its options
   (`CreatureDisplayInfoOption`), its baked skin and the item displays it
   wears.

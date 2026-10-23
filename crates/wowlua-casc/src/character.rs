@@ -607,6 +607,24 @@ impl Library {
                 continue;
             };
             let (models, model_materials, geoset_groups, attachment_groups) = info;
+            // A helm hides what it covers for the race (hair, ears, …).
+            if *slot == 1 {
+                let vis = self
+                    .table(casc, "ItemDisplayInfo")
+                    .and_then(|t| t.row(d))
+                    .and_then(|r| r.ints("HelmetGeosetVis").get(look.sex as usize).copied())
+                    .unwrap_or(0);
+                if vis != 0
+                    && let Some(t) = self.table(casc, "HelmetGeosetData")
+                {
+                    let bit = 1u32.checked_shl(look.race.saturating_sub(1)).unwrap_or(0);
+                    for r in t.rows_where("HelmetGeosetVisDataID", vis) {
+                        if r.int("RaceID") == look.race || r.int("RaceBitSelection") & bit != 0 {
+                            body.hidden_groups.push(r.int("HideGeosetGroup") as u16);
+                        }
+                    }
+                }
+            }
             for (i, &group) in slot_groups(*slot).iter().enumerate() {
                 let g = geoset_groups.get(i).copied().unwrap_or(0) as u16;
                 let value = if group == FEET {

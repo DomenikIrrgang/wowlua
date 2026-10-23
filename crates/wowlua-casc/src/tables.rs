@@ -32,6 +32,7 @@ const FILES: &[(&str, u32)] = &[
     ("CreatureDisplayInfoGeosetData", 1720141),
     ("CreatureDisplayInfoOption", 3692043),
     ("CreatureModelData", 1365368),
+    ("HelmetGeosetData", 2821752),
     ("Item", 841626),
     ("ItemAppearance", 982462),
     ("ItemDisplayInfo", 1266429),
@@ -45,6 +46,7 @@ const FILES: &[(&str, u32)] = &[
     ("UiModelSceneActor", 1548214),
     ("UiModelSceneActorDisplay", 1548216),
     ("UiModelSceneCamera", 1548213),
+    ("UiCamera", 1120287),
 ];
 
 /// A column: a field of the records, their ID, or the parent ID of the

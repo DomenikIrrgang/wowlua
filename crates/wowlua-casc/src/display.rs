@@ -51,6 +51,8 @@ pub struct Part {
     /// Submeshes shown or hidden over the defaults (customizations).
     pub shown: Vec<u16>,
     pub hidden: Vec<u16>,
+    /// Groups hidden whole (hair under a helm).
+    pub hidden_groups: Vec<u16>,
     /// The attachment point of the first part this one sits at (an
     /// item's), else none.
     pub attachment: Option<u32>,
@@ -72,6 +74,9 @@ impl Part {
         // The body always shows.
         if id == 0 {
             return true;
+        }
+        if self.hidden_groups.contains(&(id / 100)) {
+            return false;
         }
         if let Some(ids) = self.groups.get(&(id / 100))
             && id >= 100

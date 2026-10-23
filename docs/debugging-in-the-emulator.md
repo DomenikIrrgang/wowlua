@@ -33,6 +33,14 @@ Nothing of it is copied anywhere. Without an installation, Blizzard's
 textures are drawn as magenta checkers and text in a stand-in font, so the
 images of a project should be made on machines that agree on that.
 
+Model frames and model scenes show their 3D models from your installation
+too: creatures (`SetDisplayInfo`, `SetModelByCreatureDisplayID`), model
+files, and characters (`SetUnit`, `SetModelByUnit`) with their race, skin,
+hair and what they wear, posed in their animation. With Blizzard's UI
+loaded, the character sheet, the dressing room and the wardrobe show your
+character, and unit frames' portraits are drawn in 3D. Without an
+installation, a model frame shows nothing.
+
 `mock.screenshot("name")` writes an image of the screen (or of a frame:
 `mock.screenshot("name", frame)`) to `dist/screenshots/` and returns its
 path, and `wowlua screenshot` draws what a test file leaves on screen:
