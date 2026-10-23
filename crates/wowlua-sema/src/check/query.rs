@@ -192,7 +192,19 @@ impl Env<'_> {
         name: &str,
     ) -> Option<(Member, DefId)> {
         let mut seen = FxHashSet::default();
-        self.instance_member_inner(def, args, name, &mut seen)
+        let found = self.instance_member_inner(def, args, name, &mut seen);
+        // A declared class's `Self` is the receiver (decision L46).
+        match found {
+            Some((m, at)) => match self.view(at).self_param() {
+                Some(sp) => {
+                    let receiver = self.types.intern(Ty::Named(def, args.to_vec()));
+                    let ty = subst::substitute(&mut self.types, m.ty, &[sp], &[receiver]);
+                    Some((Member { ty, ..m }, at))
+                }
+                None => Some((m, at)),
+            },
+            None => None,
+        }
     }
 
     fn instance_member_inner(

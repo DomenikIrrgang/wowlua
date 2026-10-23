@@ -2635,6 +2635,10 @@ local f: string = get({ line = 20, figure = true }, "figure")
 get({ line = 20 }, "lnie")
 local bad: keyof Defaults = "nope"
 print(s, f, bad)
+type Both = Defaults & { enabled: boolean }
+local e: Both["enabled"] = 1
+local kk: keyof Both = "enabled"
+print(e, kk)
 "#;
     write(
         dir.path(),
@@ -2652,7 +2656,12 @@ print(s, f, bad)
         .unwrap();
     let stderr = String::from_utf8_lossy(&out.stderr);
     let errors: Vec<&str> = stderr.lines().filter(|l| l.contains("error[")).collect();
-    assert_eq!(errors.len(), 4, "{stderr}");
+    assert_eq!(errors.len(), 5, "{stderr}");
+    assert!(
+        errors[4]
+            .starts_with("src/main.wowlua:18:7: error[E2001]: `1` is not assignable to `boolean`"),
+        "{stderr}"
+    );
     assert!(
         errors[0].starts_with(
             "src/main.wowlua:12:7: error[E2001]: `number` is not assignable to `string`"
@@ -2730,6 +2739,54 @@ print(probe, k)
             "src/main.wowlua:13:7: error[E2001]: `\"nope\"` is not assignable to `\"line\" | \"figure\" | \"position\"`",
             "src/main.wowlua:17:15: error[E2001]: `number` is not assignable to `string`",
             "src/main.wowlua:24:15: error[E2001]: `number` is not assignable to `string`",
+        ],
+        "{stderr}"
+    );
+}
+
+/// A declared class's `Self` is the receiver (decision L46): a script
+/// handler set on a widget class's instance gets that class, so its fields
+/// are typed.
+#[test]
+fn declared_self_is_the_receiver() {
+    let dir = tempfile::tempdir().unwrap();
+    let main = r#"class Toggle extends Button
+    knob: number = 1
+    constructor() super(nil, UIParent) end
+    function Go()
+        self:SetScript("OnUpdate", function(b, elapsed)
+            local k: string = b.knob
+            print(k, elapsed)
+        end)
+    end
+end
+local t = Toggle.new()
+t:SetScript("OnUpdate", function(b) local k: string = b print(k) end)
+local f = CreateFrame("Frame")
+f:SetScript("OnShow", function(self) local n: number = self print(n) end)
+"#;
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"selfrecv\", \"version\": \"1.0.0\" } }\n",
+            ),
+            ("src/main.wowlua", main),
+        ],
+    );
+    let out = wowlua(dir.path())
+        .args(["check", "--message-format", "short"])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    let errors: Vec<&str> = stderr.lines().filter(|l| l.contains("error[")).collect();
+    assert_eq!(
+        errors,
+        [
+            "src/main.wowlua:6:19: error[E2001]: `number` is not assignable to `string`",
+            "src/main.wowlua:12:43: error[E2001]: `Toggle` is not assignable to `string`",
+            "src/main.wowlua:14:44: error[E2001]: `Frame` is not assignable to `number`",
         ],
         "{stderr}"
     );

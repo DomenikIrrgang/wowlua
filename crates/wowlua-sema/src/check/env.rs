@@ -84,6 +84,10 @@ pub struct Def {
     pub native: bool,
     pub indexer: Option<(TypeId, TypeId)>,
     pub span: Option<Span>,
+    /// A declared class's `Self`: a type parameter bound to the receiver
+    /// where a member is read (`button:SetScript(…)` on a subclass gives
+    /// the subclass, decision L46).
+    pub self_param: Option<ParamId>,
 }
 
 impl Def {
@@ -102,6 +106,7 @@ impl Def {
             native: false,
             indexer: None,
             span: None,
+            self_param: None,
         }
     }
 }
@@ -232,6 +237,10 @@ impl<'a> DefView<'a> {
 
     pub fn indexer(&self) -> Option<(TypeId, TypeId)> {
         self.header().indexer
+    }
+
+    pub fn self_param(&self) -> Option<ParamId> {
+        self.header().self_param
     }
 
     pub fn member(&self, name: &str) -> Option<&'a Member> {
@@ -660,7 +669,12 @@ impl<'p> Env<'p> {
             Pending::DeclClass(type_params, extends, members, m) => {
                 let mut scope = self.scope_of(*m, sources);
                 self.def_type_params(def, *type_params, &mut scope);
-                scope.self_ty = Some(self.instance(def));
+                // `Self`: the receiver where a member is read (L46).
+                let instance = self.instance(def);
+                let sp = self.new_param("Self", false);
+                self.params[sp.0 as usize].constraint = Some(instance);
+                self.def_mut(def).self_param = Some(sp);
+                scope.self_ty = Some(self.types.intern(Ty::Param(sp)));
                 if let Some(e) = extends {
                     let t = self.resolve(*e, &scope);
                     self.def_mut(def).bases.push(t);

@@ -432,6 +432,7 @@ impl Walk<'_> {
             native,
             indexer,
             span,
+            self_param: _,
         } = self.env.def_unrecorded(d);
         self.tag(b'D');
         self.bytes(name.as_bytes());
@@ -540,8 +541,13 @@ impl Walk<'_> {
             native,
             indexer,
             span,
+            self_param,
         } = self.env.def_unrecorded(d);
         self.num(params.len() as u64);
+        match self_param {
+            Some(p) => self.label(Node::Param(*p)),
+            None => self.tag(0),
+        }
         for &p in params {
             self.label(Node::Param(p));
         }
