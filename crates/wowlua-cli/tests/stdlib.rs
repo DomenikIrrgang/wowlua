@@ -6243,14 +6243,19 @@ print(type(format.date()))
 /// Reading what the game gives without trusting its type: `secret.asString`
 /// and friends, `errors.try`/`tryMethod` (silent), `table.field` and the
 /// weak tables, `frames.find`/`as…` and `frames.keepAway`, the short money
-/// form (decision S42).
+/// form (decision S42); `errors.tryValue` keeps the function's result type,
+/// `secret.isNumber`/`isString` narrow (decision S43).
 #[test]
 fn readers_for_the_games_values() {
+    let typed = "import * as errors from \"wowlua:errors\"\nimport * as secret from \"wowlua:secret\"\nlocal function lookup(id: number): { name: string }?\n    if id == 1 then return { name = \"one\" } end\n    error(\"no \" .. id)\nend\nlocal function first(): string?\n    local info = errors.tryValue(lookup, 1)\n    return info and info.name\nend\nlocal function failed(): string?\n    local info = errors.tryValue(lookup, 2)\n    return info and info.name\nend\nlocal missing: ((n: number) -> number)? = nil\nlocal function none(): number? return errors.tryValue(missing, 2) end\nlocal function num(v: unknown): number? if secret.isNumber(v) then return v + 1 end return nil end\nlocal function str(v: unknown): string? if secret.isString(v) then return v:upper() end return nil end\n_G.StdTyped = { first = first, failed = failed, none = none, num = num, str = str }\n";
     let out = modes(
-        &[(
-            "src/main.wowlua",
-            "import * as frames from \"wowlua:frames\"\nimport * as secret from \"wowlua:secret\"\nimport * as errors from \"wowlua:errors\"\nimport * as tbl from \"wowlua:table\"\nimport * as format from \"wowlua:format\"\n_G.StdR = { frames = frames, secret = secret, errors = errors, tbl = tbl, format = format }\n",
-        )],
+        &[
+            (
+                "src/main.wowlua",
+                "import * as frames from \"wowlua:frames\"\nimport * as secret from \"wowlua:secret\"\nimport * as errors from \"wowlua:errors\"\nimport * as tbl from \"wowlua:table\"\nimport * as format from \"wowlua:format\"\n_G.StdR = { frames = frames, secret = secret, errors = errors, tbl = tbl, format = format }\n",
+            ),
+            ("src/typed.wowlua", typed),
+        ],
         "",
         r##"Mock.loadAddon("Std")
 local R = StdR
@@ -6291,6 +6296,8 @@ away:SetPoint("CENTER")
 Mock.advanceFrames(2)
 local _, _, _, x4 = away:GetPoint(1)
 print(x3, x4)
+local T = StdTyped
+print(T.first(), T.failed(), T.none(), T.num(1), T.num("1"), T.num(Mock.secret()), T.str("a"), T.str(1))
 "##,
     );
     assert_eq!(
@@ -6306,6 +6313,7 @@ print(x3, x4)
             "5000 0",
             "5000 0",
             "0 0",
+            "one nil nil 2 nil nil A nil",
         ]
     );
 }

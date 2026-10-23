@@ -92,7 +92,7 @@ pub(crate) static CODES: &[CodeInfo] = &[
     CodeInfo { code: "E3005", summary: "`override` problem: missing `override`, or nothing to override" },
     CodeInfo { code: "E3006", summary: "Class does not satisfy an implemented interface" },
     CodeInfo { code: "E3007", summary: "Metamethod on a widget class" },
-    CodeInfo { code: "E3008", summary: "Class extends a non-class value" },
+    CodeInfo { code: "E3008", summary: "Class extends a non-class value, or a class only `import type` brings" },
     CodeInfo { code: "E3010", summary: "Enum mixes numeric and string values" },
     CodeInfo { code: "E3011", summary: "Duplicate enum value" },
     CodeInfo { code: "E3020", summary: "Unknown decorator" },

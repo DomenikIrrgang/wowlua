@@ -257,6 +257,21 @@ export function try(fn: unknown, ...: unknown): ...unknown
     return results(pcall(fn :: (...unknown) -> ...unknown, ...))
 end
 
+--- `try` for a function whose type is known: its first result, typed (the
+--- function's own result type, or nil when `fn` is missing or raises).
+--- `local info = errors.tryValue(C_TradeSkillUI.GetRecipeInfo, id)` is a
+--- `TradeSkillRecipeInfo?`.
+export function tryValue<A..., R>(fn: ((A...) -> R)?, ...: A...): R?
+    if type(fn) ~= "function" then
+        return nil
+    end
+    local ok, value = pcall(fn, ...)
+    if ok then
+        return value
+    end
+    return nil
+end
+
 --- `obj:name(...)` the way `try` calls a function: nothing when `obj` is
 --- not a table the addon may read or has no such method.
 export function tryMethod(obj: unknown, name: string, ...: unknown): ...unknown

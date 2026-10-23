@@ -37,7 +37,7 @@ wowlua <command> [options]
 | `wowlua data pull --wow <path> [--flavor <f>]` | Read the flavor's game data from a local WoW installation into wowlua's local cache, for `wowlua test --game-data` (decision T203) |
 | `wowlua fmt [--check] [paths…]` | Format sources |
 | `wowlua lint [--fix]` | Run lints only. `--fix` applies machine-applicable fixes. |
-| `wowlua fix [--manifest]` | Apply all machine-applicable fixes from diagnostics. `--manifest` migrates `wowlua.json` to the current schema ([Manifest §9.16](manifest.md#916-schema-versions-and-migration)). |
+| `wowlua fix [--migrate]` | Apply all machine-applicable fixes from diagnostics. `--migrate` migrates `wowlua.json` to the current schema (decision T281; the global `--manifest <PATH>` names which one) ([Manifest §9.16](manifest.md#916-schema-versions-and-migration)). |
 | `wowlua trace [file] [--clipboard] [--build <id>]` | Decode error stacks ([Tooling §16.4](tooling.md#164-trace-decoder-wowlua-trace)) |
 | `wowlua prof report [--account <name>] [--client <folder>] [--wow <install>] [--recording <name>…] [--out <file>] [--no-open]` | Write an HTML report of the recordings exported from the dev window ([Tooling §16.5](tooling.md#165-profiling-reports-wowlua-prof-report)) |
 | `wowlua clean` | Remove `dist/` (archived source maps in `$WOWLUA_HOME/maps/` are kept) |

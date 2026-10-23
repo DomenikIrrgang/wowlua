@@ -542,8 +542,29 @@ fn classes_and_enums(files: &[FileInput], analysis: &mut Analysis) {
         let local_classes: HashSet<String> =
             decls.iter().map(|c| c.name().text().to_string()).collect();
         let locals = top_level_locals(parse);
-        let (named, namespaces) = import_bindings(info, parse);
+        let (named, namespaces, type_only) = import_bindings(info, parse);
         for c in decls {
+            // A class extends a value: a name only `import type` brings has
+            // none at run time (E3008).
+            if let Some(e) = c.extends()
+                && let Some(path) = classes::type_path(e)
+                && let Some(first) = path.first()
+                && type_only.contains(first)
+                && !local_classes.contains(first)
+                && !locals.contains(first)
+            {
+                analysis.diagnostics.push(
+                    Diagnostic::error(
+                        "E3008",
+                        format!(
+                            "class `{}` extends `{first}`, which `import type` imports: a type only, with no class at run time",
+                            c.name().text()
+                        ),
+                    )
+                    .with_label(e.span(), "imported with `import type`")
+                    .with_help(format!("import it as a value: `import {first} from …`")),
+                );
+            }
             let base = match c.extends().map(classes::type_path) {
                 None => classes::Base::None,
                 Some(None) => classes::Base::Unknown,
@@ -670,16 +691,36 @@ fn top_level_locals(parse: &Parse) -> HashSet<String> {
 /// Imported bindings of a module: named (local → (module, export)) and
 /// namespaces (local → module).
 #[allow(clippy::type_complexity)]
+/// A module's imports: named (local name to module and export), namespaces,
+/// and the local names of type-only imports (also in `named`: their types
+/// are classes too).
 fn import_bindings(
     info: &ModuleInfo,
     parse: &Parse,
-) -> (HashMap<String, (usize, String)>, HashMap<String, usize>) {
+) -> (
+    HashMap<String, (usize, String)>,
+    HashMap<String, usize>,
+    HashSet<String>,
+) {
     let mut named = HashMap::new();
     let mut namespaces = HashMap::new();
+    let mut type_only = HashSet::new();
+    let mut values = HashSet::new();
     for s in parse.view().block().stmts() {
         let StmtKind::Import(import) = s.kind() else {
             continue;
         };
+        if let ImportClause::Names(specs) = &import.clause() {
+            let into = if import.type_only() {
+                &mut type_only
+            } else {
+                &mut values
+            };
+            for spec in specs {
+                let local = spec.alias.as_ref().unwrap_or(&spec.name);
+                into.insert(local.text().to_string());
+            }
+        }
         let Some(resolved) = info.imports.iter().find(|i| i.start == s.span().start) else {
             continue;
         };
@@ -699,7 +740,9 @@ fn import_bindings(
             ImportClause::SideEffect => {}
         }
     }
-    (named, namespaces)
+    // A name imported both ways is a value.
+    type_only.retain(|n| !values.contains(n));
+    (named, namespaces, type_only)
 }
 
 /// The folded constants a module imports, by local name.

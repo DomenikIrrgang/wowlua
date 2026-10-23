@@ -1840,8 +1840,8 @@ pub fn lint(out: &Output, global: &GlobalArgs, fix: bool) -> bool {
 }
 
 /// `wowlua fix [--manifest]`.
-pub fn fix(out: &Output, global: &GlobalArgs, manifest: bool) -> bool {
-    if manifest {
+pub fn fix(out: &Output, global: &GlobalArgs, migrate: bool) -> bool {
+    if migrate {
         let mut session = Session::new();
         let Some(project) = wowlua_driver::load_project(
             &mut session,

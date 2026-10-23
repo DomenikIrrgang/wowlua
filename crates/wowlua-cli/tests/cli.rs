@@ -3461,6 +3461,27 @@ fn lint_and_fix() {
         fs::read_to_string(dir.path().join("src/quiet.wowlua")).unwrap(),
         quiet
     );
+    // `wowlua fix` applies every fix; `--migrate` brings the manifest to the
+    // current schema (the global `--manifest` names the file, as for every
+    // command).
+    fs::write(dir.path().join("src/quiet.wowlua"), "local unused = 1\n").unwrap();
+    // (the type error is left: it has no fix, and fails the command)
+    wowlua(dir.path())
+        .args(["fix"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("Fixed 1 problem in 1 file"));
+    assert_eq!(
+        fs::read_to_string(dir.path().join("src/quiet.wowlua")).unwrap(),
+        ""
+    );
+    wowlua(dir.path())
+        .args(["fix", "--migrate", "--manifest", "wowlua.json"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "wowlua.json uses the current schema",
+        ));
     // `check.lints` severities.
     fs::write(
         dir.path().join("src/main.wowlua"),

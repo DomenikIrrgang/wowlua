@@ -83,7 +83,7 @@ import _ from "./frames.xml"                -- load-order only (no bindings)
 |------|---------|
 | `import a, b as c from "spec"` | Binds exported `a` and `b` (as `c`) as immutable locals. |
 | `import * as M from "spec"` | Binds the whole module's export table. Exported types are reachable as `M.TypeName` in type positions. |
-| `import type T, U from "spec"` | Imports types only, with no runtime effect. Never creates a load-order dependency. |
+| `import type T, U from "spec"` | Imports types only, with no runtime effect. Never creates a load-order dependency. A class it brings cannot be extended (E3008): extending needs the class itself, `import T from "spec"`. |
 | `import _ from "spec"` | Ensures `spec` loads before this file. Used for XML, plain Lua files and side-effect modules. `_` must be the only name in the statement (E0117). |
 
 **`import type` disambiguation.** `import type` followed by a name other than

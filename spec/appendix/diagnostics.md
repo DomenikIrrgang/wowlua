@@ -96,7 +96,7 @@ warning forms of §B.2's pure Lua files (`W2001`). `wowlua explain
 | E3005 | `override` problem: missing `override`, or nothing to override |
 | E3006 | Class does not satisfy an implemented interface |
 | E3007 | Metamethod on a widget class |
-| E3008 | Class extends a non-class value |
+| E3008 | Class extends a non-class value, or a class only `import type` brings |
 | E3010 | Enum mixes numeric and string values |
 | E3011 | Duplicate enum value |
 | E3020 | Unknown decorator |

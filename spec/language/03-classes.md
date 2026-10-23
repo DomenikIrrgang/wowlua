@@ -169,7 +169,8 @@ end
 ```
 
 - Single inheritance. A class extends at most one class (E3008 for non-class
-  values).
+  values, and for a class only `import type` brings: a type, with nothing to
+  extend at run time, decision L69).
 - In a derived class's constructor, `super(args)` calls the superclass
   constructor. It must be called exactly once, as a top-level statement of the
   constructor body, before any access to `self` (E3001), its own arguments

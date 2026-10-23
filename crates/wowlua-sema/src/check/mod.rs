@@ -3188,6 +3188,60 @@ print(a, b, c, d, e, name, realm, more)
         );
     }
 
+    /// `errors.tryValue`'s signature: the result is the function's own first
+    /// result, optional; the arguments are checked against its parameters
+    /// (decision S43).
+    #[test]
+    fn try_value_keeps_the_result_type() {
+        let pre = "local function tryValue<A..., R>(fn: ((A...) -> R)?, ...: A...): R?\n    if type(fn) ~= \"function\" then return nil end\n    local ok, value = pcall(fn, ...)\n    if ok then return value end\n    return nil\nend\nlocal function lookup(id: number): { name: string }? return id == 1 and { name = \"x\" } or nil end\nlocal function two(): (number, string) return 1, \"x\" end\n";
+        strict_ok(&format!(
+            "{pre}local info = tryValue(lookup, 1)\nlocal n: string? = info and info.name\nlocal m: number? = tryValue(two)\nprint(n, m)\n"
+        ));
+        strict_err(
+            &format!("{pre}local bad: number? = tryValue(lookup, 1)\nprint(bad)\n"),
+            "E2001",
+        );
+        strict_err(
+            &format!("{pre}local info = tryValue(lookup, \"1\")\nprint(info)\n"),
+            "E2001",
+        );
+    }
+
+    /// A class extends a value: a class `import type` brings is a type only,
+    /// with nothing to extend at run time (E3008); imported as a value too,
+    /// it is fine.
+    #[test]
+    fn class_extends_a_type_only_import() {
+        let base = "export class Slot\n    size: number = 1\nend\n";
+        let errs = check_modules(
+            &[
+                ("slot.wowlua", base),
+                (
+                    "main.wowlua",
+                    "import type Slot from \"./slot\"\nclass Wide extends Slot\nend\nprint(Wide)\n",
+                ),
+            ],
+            Mode::Strict,
+        );
+        assert!(
+            errs.len() == 1
+                && errs[0].starts_with("E3008")
+                && errs[0].contains("`Wide` extends `Slot`"),
+            "{errs:#?}"
+        );
+        let errs = check_modules(
+            &[
+                ("slot.wowlua", base),
+                (
+                    "main.wowlua",
+                    "import Slot from \"./slot\"\nimport type Slot as S from \"./slot\"\nclass Wide extends Slot\nend\nlocal w: S = Wide.new()\nprint(w)\n",
+                ),
+            ],
+            Mode::Strict,
+        );
+        assert!(errs.is_empty(), "{errs:#?}");
+    }
+
     /// An export's type is the annotation of an annotated `const`, and a
     /// table has the fields assigned to it after its declaration, sealed
     /// (spec §2.4.2, §5.5).

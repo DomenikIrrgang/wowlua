@@ -40,6 +40,7 @@ if secret.readable(hp) and hp > 0 then … end          -- present and not secre
 | `flag` | `(v: unknown) -> boolean` | For conditions, by truthiness (so legacy `1`/`nil` answers work): a secret reads as `false` |
 | `readable` | `(v: unknown) -> v is Plain` | Whether `v` is present and may be looked into: not nil, not a secret, and a table only when addons may index it (`canaccesstable` where the client has it), so code that walks tables it is handed checks it first. Narrows to `Plain` (`string \| number \| boolean \| table \| function`), so `number \| Secret<number> \| nil` becomes `number`. Not generic yet: generic predicates do not infer their type parameter. |
 | `amount` | `(v: number \| Secret<number> \| nil) -> number \| Secret<number>` | For widgets that take secrets: nil becomes 0 |
+| `isNumber`, `isString` | `(v: unknown) -> v is number`, `-> v is string` | Whether `v` has that type and is not secret (decision S43) |
 | `asString`, `asNumber`, `asBoolean` | `(v: unknown) -> string?`, `-> number?`, `-> boolean?` | `v` when it has that type and is not secret, else nil: for values typed `unknown` (what `errors.try` gives, a loosely declared API's result, a callback's argument), where `known` needs the type already. Legacy `1`/`nil` answers are no booleans: read them with `flag` (decision S42). |
 
 The generated `wow-api` declarations type the arguments Blizzard documents

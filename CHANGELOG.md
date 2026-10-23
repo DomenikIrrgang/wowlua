@@ -17,6 +17,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `wowlua:reflect` is typed as documented: `reflect.isInstance(v, Dog)` narrows `v` to `Dog`, `reflect.classOf(dog)` gives `ClassOf<Dog>?`, and `reflect.enumFrom(Direction, raw)` gives `Direction?` (`reflect.enumEntries` gives the members as `Direction`). Before, they were `any` and `boolean`. Your own generic functions can do the same: a parameter `ClassOf<T>` now takes `T` from the class or enum passed.
 - **Parameter properties**: a constructor's parameter can declare a field, as in TypeScript: `constructor(private sink: Sink = printer, public readonly name: string)` makes `self.sink` and `self.name` and sets them from the arguments. A field declared twice is now an error (E3046).
 - The standard library reads what the game gives without trusting its type: `secret.asString`, `asNumber` and `asBoolean` read a value typed `unknown`; `errors.try(fn, ...)` and `errors.tryMethod(obj, name, ...)` call a game function a client may lack, quietly; `table.field(t, "a", "b")` reads through values that may not be tables; `table.weakKeys()` and `weakValues()` make typed weak tables; `frames.find(name)` and `frames.asButton(v)` (and the other widget kinds) find the game's frames; `frames.keepAway(frame)` keeps one out of sight while it stays shown. `format.money(c, { short = true })` gives "12g 5s 3c", and `mock.partial({ … })` makes a typed fake record for a stub.
+- `errors.tryValue(fn, ...)` calls a game function a client may lack, quietly, as `errors.try` does, and keeps its result type: `errors.tryValue(C_TradeSkillUI.GetRecipeInfo, id)` is a `TradeSkillRecipeInfo?`, and its arguments are checked. `secret.isNumber(v)` and `secret.isString(v)` narrow a value to a number or string that isn't secret.
 
 ### Changed
 
@@ -57,6 +58,8 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- `wowlua fix` crashed before doing anything. It works again; migrating `wowlua.json` to the current schema is now `wowlua fix --migrate`, since `--manifest <path>` names the manifest for every command.
+- A class extending a class you imported with `import type` (`class Slot extends ItemSlot`) is now an error (E3008): it checked clean and failed when the addon loaded. Import the class itself (`import ItemSlot from …`).
 - `C_DurationUtil.CreateDurationTextBinding()` gives a typed binding (`DurationTextBindingObject`: `SetDuration`, `SetEnabled`, `SetFormatter`, …), where it was `any`, and the rule and abbreviated number formatters (`C_StringUtil.CreateNumericRuleFormatter()`, `CreateAbbreviatedNumberFormatter()`) are `NumericFormatter`s, so they can be passed as an aura button's text formatter or a binding's.
 - The development build's argument check of a game object type (`DurationObject`, a colour) now takes the engine's objects: they are userdata, which it refused ("DurationObject? expected, got userdata").
 - Using `self` in the arguments of `super(…)`, also inside a function written there, is now reported (E3001): such a function may run before `self` is your new instance (a widget class's frame doesn't exist yet), so it read the wrong table.

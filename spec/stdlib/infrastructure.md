@@ -80,6 +80,7 @@ end)
 | `configure` | `(opts: { rateLimit: number? })` | |
 | `count` | `() -> number` | Errors reported by this addon since load |
 | `try` | `(fn: unknown, ...: unknown) -> ...unknown` | Calls `fn` when it is a function, protected and **silent**: its results, or nothing when `fn` is missing or raises; nothing is reported. For the game's functions a client may lack or that raise on input they don't expect (decision S42); `call` is for your own code. Read the results with `secret.asString` and the like. |
+| `tryValue` | `<A..., R>(fn: ((A...) -> R)?, ...: A...) -> R?` | `try` for a function whose type is known: its first result, with the function's own type (`errors.tryValue(C_TradeSkillUI.GetRecipeInfo, id)` is a `TradeSkillRecipeInfo?`), or nil when `fn` is missing or raises; the arguments are checked against `fn`'s parameters. One result: for several, `try` (decision S43). |
 | `tryMethod` | `(obj: unknown, name: string, ...: unknown) -> ...unknown` | `obj:name(...)` as `try` calls a function: nothing when `obj` is not a table the addon may read or lacks the method |
 
 ## callbacks
