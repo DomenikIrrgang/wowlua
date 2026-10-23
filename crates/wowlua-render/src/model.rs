@@ -20,9 +20,12 @@ use crate::{Assets, Renderer};
 pub(crate) struct MVertex {
     pos: [f32; 3],
     normal: [f32; 3],
-    uv: [f32; 2],
+    t1: [f32; 2],
+    t2: [f32; 2],
+    raw2: [f32; 2],
     color: [f32; 4],
     flags: u32,
+    shaders: u32,
 }
 
 const UNLIT: u32 = 1;
@@ -56,7 +59,7 @@ pub(crate) struct Models {
     )>,
     shader: Option<wgpu::ShaderModule>,
     sampler: Option<wgpu::Sampler>,
-    groups: HashMap<usize, wgpu::BindGroup>,
+    groups: HashMap<[usize; 3], wgpu::BindGroup>,
     /// Composited textures by their layers.
     composites: HashMap<String, usize>,
     /// Portraits drawn, by their source.
@@ -69,7 +72,7 @@ pub(crate) struct Models {
 struct Draw {
     blend: u16,
     depth_write: bool,
-    tex: usize,
+    tex: [usize; 3],
     start: u32,
     end: u32,
 }
@@ -166,6 +169,19 @@ fn source_key(s: &scene::ModelSource) -> String {
     format!("{s:?}")
 }
 
+fn texture_entry(binding: u32) -> wgpu::BindGroupLayoutEntry {
+    wgpu::BindGroupLayoutEntry {
+        binding,
+        visibility: wgpu::ShaderStages::FRAGMENT,
+        ty: wgpu::BindingType::Texture {
+            sample_type: wgpu::TextureSampleType::Float { filterable: true },
+            view_dimension: wgpu::TextureViewDimension::D2,
+            multisampled: false,
+        },
+        count: None,
+    }
+}
+
 impl Renderer {
     fn model_layouts(&mut self) {
         if self.models.layout.is_some() {
@@ -188,18 +204,11 @@ impl Renderer {
         let tex = d.create_bind_group_layout(&wgpu::BindGroupLayoutDescriptor {
             label: Some("model texture"),
             entries: &[
+                texture_entry(0),
+                texture_entry(1),
+                texture_entry(2),
                 wgpu::BindGroupLayoutEntry {
-                    binding: 0,
-                    visibility: wgpu::ShaderStages::FRAGMENT,
-                    ty: wgpu::BindingType::Texture {
-                        sample_type: wgpu::TextureSampleType::Float { filterable: true },
-                        view_dimension: wgpu::TextureViewDimension::D2,
-                        multisampled: false,
-                    },
-                    count: None,
-                },
-                wgpu::BindGroupLayoutEntry {
-                    binding: 1,
+                    binding: 3,
                     visibility: wgpu::ShaderStages::FRAGMENT,
                     ty: wgpu::BindingType::Sampler(wgpu::SamplerBindingType::Filtering),
                     count: None,
@@ -281,7 +290,7 @@ impl Renderer {
                         buffers: &[Some(wgpu::VertexBufferLayout {
                             array_stride: std::mem::size_of::<MVertex>() as u64,
                             step_mode: wgpu::VertexStepMode::Vertex,
-                            attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x2, 3 => Float32x4, 4 => Uint32],
+                            attributes: &wgpu::vertex_attr_array![0 => Float32x3, 1 => Float32x3, 2 => Float32x2, 3 => Float32x2, 4 => Float32x2, 5 => Float32x4, 6 => Uint32, 7 => Uint32],
                         })],
                     },
                     primitive: wgpu::PrimitiveState::default(),
@@ -309,20 +318,23 @@ impl Renderer {
             })
     }
 
-    fn model_group(&mut self, tex: usize) {
+    fn model_group(&mut self, tex: [usize; 3]) {
         if self.models.groups.contains_key(&tex) {
             return;
         }
+        let view = |i: usize| wgpu::BindGroupEntry {
+            binding: i as u32,
+            resource: wgpu::BindingResource::TextureView(&self.textures[tex[i]].view),
+        };
         let g = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &self.models.layout.as_ref().unwrap().1,
             entries: &[
+                view(0),
+                view(1),
+                view(2),
                 wgpu::BindGroupEntry {
-                    binding: 0,
-                    resource: wgpu::BindingResource::TextureView(&self.textures[tex].view),
-                },
-                wgpu::BindGroupEntry {
-                    binding: 1,
+                    binding: 3,
                     resource: wgpu::BindingResource::Sampler(self.models.sampler.as_ref().unwrap()),
                 },
             ],
@@ -613,23 +625,30 @@ impl Renderer {
             if alpha <= 0.002 {
                 continue;
             }
-            let tex_index = m
-                .texture_combos
-                .get(batch.texture_combo as usize)
-                .copied()
-                .unwrap_or(0) as usize;
-            let tex = match m.textures.get(tex_index) {
-                Some(t) if t.kind == 0 => self.texture(&Image::FileId(t.file), assets),
-                Some(t) => match part.textures.get(&t.kind) {
-                    Some(Texture::File(f)) => self.texture(&Image::FileId(*f), assets),
-                    Some(Texture::Composite(c)) => self.composite(c, assets),
+            // The batch's textures (up to three) and their shaders.
+            let count = (batch.texture_count as usize).clamp(1, 3);
+            let mut tex = [self.white; 3];
+            for (k, slot) in tex.iter_mut().enumerate().take(count) {
+                let index = m
+                    .texture_combos
+                    .get(batch.texture_combo as usize + k)
+                    .copied()
+                    .unwrap_or(0) as usize;
+                *slot = match m.textures.get(index) {
+                    Some(t) if t.kind == 0 => self.texture(&Image::FileId(t.file), assets),
+                    Some(t) => match part.textures.get(&t.kind) {
+                        Some(Texture::File(f)) => self.texture(&Image::FileId(*f), assets),
+                        Some(Texture::Composite(c)) => self.composite(c, assets),
+                        None => self.white,
+                    },
                     None => self.white,
-                },
-                None => self.white,
-            };
+                };
+            }
             self.model_group(tex);
+            let (pixel, vertex) = crate::combiners::shaders(batch.shader, batch.texture_count);
             let uv_m = m.uv_transform(&batch, seq, time);
-            let mut flags = 0;
+            let uv2_m = m.uv_transform_of(&batch, 1, seq, time);
+            let mut flags = u32::from(mat.blend.min(255)) << 8;
             if mat.flags & 1 != 0 {
                 flags |= UNLIT;
             }
@@ -638,6 +657,7 @@ impl Renderer {
                 1 => flags |= ALPHA_KEY,
                 _ => {}
             }
+            let shaders = pixel | (vertex << 8);
             let color = [tint.color[0], tint.color[1], tint.color[2], alpha];
             let start = verts.len() as u32;
             let first = sub.index_start as usize;
@@ -653,19 +673,22 @@ impl Renderer {
                     lo[k] = lo[k].min(wp[k]);
                     hi[k] = hi[k].max(wp[k]);
                 }
-                let uv = match &uv_m {
+                let through = |m: &Option<Mat4>, uv: [f32; 2]| match m {
                     Some(t) => {
-                        let q = m2::transform(t, [v.uv[0], v.uv[1], 0.0]);
+                        let q = m2::transform(t, [uv[0], uv[1], 0.0]);
                         [q[0], q[1]]
                     }
-                    None => v.uv,
+                    None => uv,
                 };
                 verts.push(MVertex {
                     pos: wp,
                     normal: wn,
-                    uv,
+                    t1: through(&uv_m, v.uv),
+                    t2: through(&uv2_m, v.uv2),
+                    raw2: v.uv2,
                     color,
                     flags,
+                    shaders,
                 });
             }
             let end = verts.len() as u32;
@@ -768,8 +791,9 @@ impl Renderer {
         } else {
             ([1.0; 3], [0.0; 3])
         };
-        let mut globals = Vec::with_capacity(28);
+        let mut globals = Vec::with_capacity(44);
         globals.extend_from_slice(&view_proj);
+        globals.extend_from_slice(&view);
         globals.extend_from_slice(&[l.direction[0], l.direction[1], l.direction[2], 0.0]);
         globals.extend_from_slice(&[ambient[0], ambient[1], ambient[2], 1.0]);
         globals.extend_from_slice(&[diffuse[0], diffuse[1], diffuse[2], 1.0]);

@@ -1036,9 +1036,20 @@ impl Model {
     /// A batch's texture coordinate transform at `time` (a matrix for
     /// (u, v, 0)), if it has one.
     pub fn uv_transform(&self, batch: &Batch, sequence: Option<usize>, time: u32) -> Option<Mat4> {
+        self.uv_transform_of(batch, 0, sequence, time)
+    }
+
+    /// The transform of a batch's `k`th texture.
+    pub fn uv_transform_of(
+        &self,
+        batch: &Batch,
+        k: usize,
+        sequence: Option<usize>,
+        time: u32,
+    ) -> Option<Mat4> {
         let i = *self
             .texture_transform_combos
-            .get(batch.texture_transform_combo as usize)?;
+            .get(batch.texture_transform_combo as usize + k)?;
         let t = self.texture_transforms.get(i as usize)?;
         let s = sequence.unwrap_or(0);
         let tr = t

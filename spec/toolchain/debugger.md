@@ -335,9 +335,12 @@ or Vulkan natively, WebGPU or WebGL 2 in the browser.
   material's blend mode (opaque, alpha key, alpha, add, mod, mod 2x),
   texture (the model's own, or the display's by kind), color and
   transparency tracks, texture transform, lit by the frame's light unless
-  unlit. Model files are read once; a frame's model textures are reused
-  from frame to frame. Not yet: second textures and the client's shader
-  combiners, billboards, particles, ribbons.
+  unlit; up to three textures a batch, combined by the client's shaders
+  (its shader ID: the vertex shader, which coordinates each texture takes,
+  the second set, an environment map, an edge fade; the pixel shader,
+  how they combine: modulated, doubled, added, by alpha, glows). Model
+  files are read once; a frame's model textures are reused from frame to
+  frame. Not yet: billboards, particles, ribbons.
 - **Speed**: textures and glyphs are uploaded once and kept on the GPU;
   quads go in one vertex buffer per frame, drawn in as few calls as texture
   changes allow; nothing is drawn when the scene did not change.
