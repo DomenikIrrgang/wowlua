@@ -2642,6 +2642,9 @@ print(e, kk)
 local function each<K extends keyof Defaults>(keys: K[]) print(keys) end
 each({ "line", "figure" })
 each({ "line", "nope" })
+type Loose = { [string]: unknown } & { enabled: boolean }
+local z: string = (5 :: unknown) :: Loose["x"]
+print(z)
 "#;
     write(
         dir.path(),
@@ -2659,7 +2662,13 @@ each({ "line", "nope" })
         .unwrap();
     let stderr = String::from_utf8_lossy(&out.stderr);
     let errors: Vec<&str> = stderr.lines().filter(|l| l.contains("error[")).collect();
-    assert_eq!(errors.len(), 6, "{stderr}");
+    assert_eq!(errors.len(), 7, "{stderr}");
+    assert!(
+        errors[6].starts_with(
+            "src/main.wowlua:25:7: error[E2001]: `unknown?` is not assignable to `string`"
+        ),
+        "{stderr}"
+    );
     assert!(
         errors[5].starts_with("src/main.wowlua:23:1: error[E2014]: `\"line\" | \"nope\"`"),
         "{stderr}"
