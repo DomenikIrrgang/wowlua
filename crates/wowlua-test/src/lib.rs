@@ -489,6 +489,9 @@ fn load_vm(
     let name = build.addon_name.clone();
     let mut vm = Vm::wow();
     wowlua_engine::install(&mut vm, &suite.flavor)?;
+    if let Some(data) = suite.camera.as_ref().and_then(|c| c.client_data()) {
+        wowlua_engine::clientdata::set(&mut vm, data);
+    }
     // The machine the client runs on (decision T236): the file's
     // `config({ platform = … })`, else the manifest's `test.platform`.
     let source = file

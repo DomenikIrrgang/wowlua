@@ -134,3 +134,62 @@ fn reads_every_products_creature_models() {
         assert_eq!(read, 20, "{product}");
     }
 }
+
+/// Every product's characters resolve: a body with its customizations'
+/// skin composited and textures, what it wears as parts; and a humanoid
+/// creature with its baked skin.
+#[test]
+fn resolves_every_products_characters() {
+    use wowlua_casc::character::{Look, Worn};
+    use wowlua_casc::display::Texture;
+    let Some(root) = install() else {
+        eprintln!("no WoW installation: skipped");
+        return;
+    };
+    let storage = FsStorage { root: root.clone() };
+    for (product, _) in Casc::products(&storage) {
+        let Ok(casc) = Casc::open(Box::new(FsStorage { root: root.clone() }), &product) else {
+            continue;
+        };
+        let mut lib = wowlua_casc::display::Library::default();
+        // A human warrior in a recruit's shirt with a sword (the starting
+        // items of every classic client).
+        let look = Look {
+            race: 1,
+            sex: 0,
+            class: 1,
+            choices: Vec::new(),
+            worn: vec![(4, Worn::Item(38)), (16, Worn::Item(25))],
+            bake: None,
+        };
+        let d = lib
+            .character(&casc, &look)
+            .unwrap_or_else(|| panic!("{product}: the human"));
+        let body = &d.parts[0];
+        let Some(Texture::Composite(skin)) = body.textures.get(&1) else {
+            panic!("{product}: no composited skin: {:?}", body.textures.keys());
+        };
+        assert!(skin.layers.len() > 2, "{product}: {skin:?}");
+        assert!(
+            d.parts.iter().any(|p| p.attachment == Some(1)),
+            "{product}: the sword"
+        );
+        assert!(casc.file_by_id(body.file).is_some());
+        // A humanoid creature: its baked skin.
+        let humanoid = lib
+            .table(&casc, "CreatureDisplayInfo")
+            .and_then(|t| {
+                t.rows()
+                    .find(|r| r.int("ExtendedDisplayInfoID") != 0)
+                    .map(|r| r.id())
+            })
+            .expect("a humanoid");
+        let d = lib
+            .creature_display(&casc, humanoid)
+            .unwrap_or_else(|| panic!("{product}: display {humanoid}"));
+        assert!(
+            matches!(d.parts[0].textures.get(&1), Some(Texture::File(_))),
+            "{product}: display {humanoid}'s bake"
+        );
+    }
+}

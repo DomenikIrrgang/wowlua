@@ -29,6 +29,11 @@ pub trait Camera: Send + Sync {
     ) -> Result<(f64, Vec<u8>), String>;
     /// Where `mock.screenshot` writes.
     fn out_dir(&self) -> PathBuf;
+    /// The client's own tables, where the installation is at hand
+    /// (decision T321).
+    fn client_data(&self) -> Option<Arc<dyn wowlua_engine::clientdata::ClientData>> {
+        None
+    }
 }
 
 #[derive(Default)]

@@ -1168,10 +1168,15 @@ fn model_item(vm: &mut Vm, f: WidgetId, class: &str) -> Option<Model> {
             return None;
         }
         let position = nums(vm, f, "CameraPosition", 3).unwrap_or(vec![5.0, 0.0, 1.0]);
-        let axes = nums(vm, f, "CameraOrientationByAxisVectors", 9);
-        let (forward, right, up) = match axes {
-            Some(a) => ([a[0], a[1], a[2]], [a[3], a[4], a[5]], [a[6], a[7], a[8]]),
-            None => ([-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]),
+        // The axes set, or those of the yaw, pitch and roll set.
+        let set = args(vm, f, "CameraOrientationByAxisVectors").is_some()
+            || args(vm, f, "CameraOrientationByYawPitchRoll").is_some();
+        let (forward, right, up) = if set {
+            let a = crate::methods3::scene_axes(vm, f);
+            let v = |i: usize| [a[i][0] as f32, a[i][1] as f32, a[i][2] as f32];
+            (v(0), v(1), v(2))
+        } else {
+            ([-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0])
         };
         let camera = ModelCamera::Scene {
             position: [position[0], position[1], position[2]],

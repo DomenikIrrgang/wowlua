@@ -9,6 +9,7 @@
 #[cfg(not(target_arch = "wasm32"))]
 pub mod client;
 pub mod compare;
+mod composite;
 mod glyphs;
 mod model;
 

@@ -3133,12 +3133,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
             "C_Minimap.SetIgnoreRotateMinimap",
             set_ignore_rotate_minimap,
         ),
-        // Model scenes: no model data (documented: the active scene calls
-        // do nothing in public clients).
-        ("C_ModelInfo.GetModelSceneInfoByID", nothing),
-        ("C_ModelInfo.GetModelSceneActorInfoByID", nothing),
-        ("C_ModelInfo.GetModelSceneCameraInfoByID", nothing),
-        ("C_ModelInfo.GetModelSceneActorDisplayInfoByID", nothing),
+        // Model scenes: the scenes' data is `clientdata`'s (documented: the
+        // active scene calls do nothing in public clients).
         ("C_ModelInfo.AddActiveModelScene", nothing),
         ("C_ModelInfo.AddActiveModelSceneActor", nothing),
         ("C_ModelInfo.ClearActiveModelScene", nothing),

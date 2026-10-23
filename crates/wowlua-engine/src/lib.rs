@@ -23,6 +23,7 @@ pub mod channels;
 pub mod character;
 pub mod chat;
 pub mod chatwindows;
+pub mod clientdata;
 pub mod clock;
 pub mod collected;
 pub mod collections;
@@ -152,6 +153,8 @@ pub struct Engine {
     /// The behaviours of undocumented functions that check their arguments
     /// first (`args::install_usages`), by name.
     pub(crate) usage_checked: HashMap<&'static str, NativeFn>,
+    /// The client's own tables, where the host has the installation.
+    pub client_data: Option<std::sync::Arc<dyn clientdata::ClientData>>,
 }
 
 impl Engine {
@@ -426,6 +429,7 @@ pub fn install(vm: &mut Vm, flavor: &str) -> Result<(), String> {
         main_globals: vm.globals,
         secure_namespaces: Vec::new(),
         usage_checked: HashMap::new(),
+        client_data: None,
     }));
     vm.untrusted_layout_forbidden = Some(protection::untrusted_layout_forbidden);
     // Protected functions the documentation lacks.
@@ -1059,6 +1063,7 @@ pub(crate) fn fill_ins() -> Vec<Behaviours<NativeFn>> {
         Behaviours::new("extras", extras::behaviours()),
         Behaviours::new("globalsinfo", globalsinfo::behaviours()),
         Behaviours::new("systeminfo", systeminfo::behaviours()),
+        Behaviours::new("clientdata", clientdata::behaviours()),
         Behaviours::new("actions2", actions2::behaviours()),
         Behaviours::new("leftovers2", leftovers2::behaviours()),
         // Last: what the client answers with nothing there (the full

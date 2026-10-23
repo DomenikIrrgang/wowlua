@@ -78,6 +78,16 @@ fn library_of(casc: &Arc<Casc>) -> Arc<Mutex<Library>> {
     m.entry(key).or_default().clone()
 }
 
+/// The item of an item link (`|Hitem:6125:…|h`, `item:6125`).
+fn item_of_link(link: &str) -> Option<u32> {
+    let at = link.find("item:")?;
+    let rest = &link[at + 5..];
+    let end = rest
+        .find(|c: char| !c.is_ascii_digit())
+        .unwrap_or(rest.len());
+    rest[..end].parse().ok()
+}
+
 /// The addons' folders and the client's storage.
 #[derive(Clone, Default)]
 pub struct ClientAssets {
@@ -185,12 +195,166 @@ impl Assets for ClientAssets {
             }
             ModelSource::Display(d) => lib.creature_display(casc, *d),
             ModelSource::Creature(c) => lib.creature(casc, *c),
-            ModelSource::Character(_) | ModelSource::Item(_) | ModelSource::Appearance(_) => None,
+            ModelSource::Character(look) => {
+                use wowlua_casc::character::{Look, Worn};
+                let mut worn: Vec<(u32, Worn)> = look
+                    .items
+                    .iter()
+                    .map(|&(slot, item)| (slot, Worn::Item(item)))
+                    .collect();
+                // Items tried on: a link's item, or an item appearance ID,
+                // over what is worn in their slot.
+                for t in &look.tried {
+                    let w = match item_of_link(t) {
+                        Some(i) => Worn::Item(i),
+                        None => match t.trim().parse::<f64>() {
+                            Ok(n) if n > 0.0 => Worn::Appearance(n as u32),
+                            _ => continue,
+                        },
+                    };
+                    if let Some(slot) = lib.item_slot(casc, w) {
+                        worn.retain(|(s, _)| *s != slot);
+                        worn.push((slot, w));
+                    }
+                }
+                lib.character(
+                    casc,
+                    &Look {
+                        race: look.race,
+                        sex: look.sex,
+                        class: look.class,
+                        choices: Vec::new(),
+                        worn,
+                        bake: None,
+                    },
+                )
+            }
+            ModelSource::Item(_) | ModelSource::Appearance(_) => None,
         }
     }
 
     fn font(&mut self, path: &str) -> Option<Vec<u8>> {
         self.addon_file(path, &[])
             .or_else(|| self.casc.as_ref()?.file_by_path(path))
+    }
+}
+
+/// The client's tables for the engine (decision T321): model scenes,
+/// their cameras, actors and actors' displays.
+/// The storage is opened at the first question, so sessions that ask
+/// none do not open it.
+pub struct CascClientData {
+    open: Box<dyn Fn() -> Option<Arc<Casc>> + Send + Sync>,
+    casc: OnceLock<Option<Arc<Casc>>>,
+}
+
+impl CascClientData {
+    pub fn new(open: Box<dyn Fn() -> Option<Arc<Casc>> + Send + Sync>) -> CascClientData {
+        CascClientData {
+            open,
+            casc: OnceLock::new(),
+        }
+    }
+
+    fn with<T>(&self, f: impl FnOnce(&mut Library, &Casc) -> Option<T>) -> Option<T> {
+        let casc = self.casc.get_or_init(|| (self.open)()).as_ref()?;
+        let lib = library_of(casc);
+        let mut lib = lib.lock().ok()?;
+        f(&mut lib, casc)
+    }
+}
+
+fn vec3(v: Vec<f32>) -> [f32; 3] {
+    [
+        v.first().copied().unwrap_or(0.0),
+        v.get(1).copied().unwrap_or(0.0),
+        v.get(2).copied().unwrap_or(0.0),
+    ]
+}
+
+impl wowlua_engine::clientdata::ClientData for CascClientData {
+    fn model_scene(&self, id: u32) -> Option<wowlua_engine::clientdata::ModelScene> {
+        self.with(|lib, casc| {
+            let (kind, flags) = {
+                let r = lib.table(casc, "UiModelScene")?.row(id)?;
+                (r.int("UiSystemType"), r.int("Flags"))
+            };
+            let ids = |lib: &mut Library, t: &'static str| -> Vec<u32> {
+                let mut v: Vec<u32> = lib
+                    .table(casc, t)
+                    .map(|t| {
+                        t.rows_where("UiModelSceneID", id)
+                            .iter()
+                            .map(|r| r.id())
+                            .collect()
+                    })
+                    .unwrap_or_default();
+                v.sort_unstable();
+                v
+            };
+            let cameras = ids(lib, "UiModelSceneCamera");
+            let actors = ids(lib, "UiModelSceneActor");
+            Some(wowlua_engine::clientdata::ModelScene {
+                kind,
+                cameras,
+                actors,
+                flags,
+            })
+        })
+    }
+
+    fn scene_camera(&self, id: u32) -> Option<wowlua_engine::clientdata::SceneCamera> {
+        self.with(|lib, casc| {
+            let r = lib.table(casc, "UiModelSceneCamera")?.row(id)?;
+            Some(wowlua_engine::clientdata::SceneCamera {
+                id,
+                tag: r.string("ScriptTag").unwrap_or_default(),
+                kind: r.int("CameraType"),
+                target: vec3(r.floats("Target")),
+                zoomed_target_offset: vec3(r.floats("ZoomedTargetOffset")),
+                yaw: r.float("Yaw"),
+                pitch: r.float("Pitch"),
+                roll: r.float("Roll"),
+                zoomed_yaw_offset: r.float("ZoomedYawOffset"),
+                zoomed_pitch_offset: r.float("ZoomedPitchOffset"),
+                zoomed_roll_offset: r.float("ZoomedRollOffset"),
+                zoom_distance: r.float("ZoomDistance"),
+                min_zoom_distance: r.float("MinZoomDistance"),
+                max_zoom_distance: r.float("MaxZoomDistance"),
+                flags: r.int("Flags"),
+            })
+        })
+    }
+
+    fn scene_actor(&self, id: u32) -> Option<wowlua_engine::clientdata::SceneActor> {
+        self.with(|lib, casc| {
+            let r = lib.table(casc, "UiModelSceneActor")?.row(id)?;
+            Some(wowlua_engine::clientdata::SceneActor {
+                id,
+                tag: r.string("ScriptTag").unwrap_or_default(),
+                position: vec3(r.floats("Position")),
+                yaw: r.float("OrientationYaw"),
+                pitch: r.float("OrientationPitch"),
+                roll: r.float("OrientationRoll"),
+                normalized_scale: r.float("NormalizedScale"),
+                flags: r.int("Flags"),
+                display: r.int("UiModelSceneActorDisplayID"),
+            })
+        })
+    }
+
+    fn actor_display(&self, id: u32) -> Option<wowlua_engine::clientdata::ActorDisplay> {
+        self.with(|lib, casc| {
+            let r = lib.table(casc, "UiModelSceneActorDisplay")?.row(id)?;
+            Some(wowlua_engine::clientdata::ActorDisplay {
+                animation: r.int("AnimationID"),
+                variation: r.int("SequenceVariation"),
+                anim_kit: r.int("AnimKitID"),
+                spell_visual_kit: r.int("SpellVisualKitID"),
+                alpha: r.float("Alpha"),
+                scale: r.float("Scale"),
+                anim_speed: r.float("AnimSpeed"),
+            })
+        })
     }
 }

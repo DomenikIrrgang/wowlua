@@ -263,9 +263,33 @@ T310).
   `CreatureModelData` (its skins as texture kinds 11 to 13, its scale and
   alpha, the geosets `CreatureDisplayInfoGeosetData` names), a creature
   through its first display, a file by ID. Geosets not named show by the
-  model's defaults (the body, each group's first variant). Not yet:
-  characters (customizations, composited skins, worn items), items'
-  models, particles and ribbons.
+  model's defaults (the body, each group's first variant). Not yet: items'
+  own models (`SetItem`), particles and ribbons, helmets hiding hair.
+- **Characters** (decision T320): a unit (`SetUnit`, `SetModelByUnit`) is
+  its race and sex's model (`ChrRaceXChrModel`, `ChrModel`) with a choice
+  of each customization option (the first the class may have: the
+  engine's characters have no customizations of their own), its geosets
+  (the option's other choices' hidden), its skin composited from the
+  choices' textures into their sections (`ChrModelTextureLayer`,
+  `CharComponentTextureSections`, by blend mode), other textures (hair) by
+  kind, and models skinned to it; and what it wears (`GetInventoryItemID`,
+  items tried on over their slot): each item's display
+  (`ItemModifiedAppearance`, `ItemAppearance`, `ItemDisplayInfo`) gives
+  geosets by slot (gloves over chest over shirt for sleeves, …), textures
+  in the skin's sections (`ItemDisplayInfoMaterialRes`, the file for the
+  race, sex and class), a cape's texture, and models (for the race and
+  sex; left and right shoulders) at attachment points (helm, shoulders,
+  hands, a shield's) or skinned to the body. A humanoid creature
+  (`CreatureDisplayInfoExtra`) is its race and sex with its options
+  (`CreatureDisplayInfoOption`), its baked skin and the item displays it
+  wears.
+- **Client tables** (decision T321): where the installation is at hand
+  (tests and sessions with a screenshot host), the engine answers
+  `C_ModelInfo.GetModelSceneInfoByID`, `GetModelSceneCameraInfoByID`,
+  `GetModelSceneActorInfoByID` and `GetModelSceneActorDisplayInfoByID`
+  from `UiModelScene` and its tables, so Blizzard's model scenes (the
+  character sheet, the dressing room, the collections) place their actors
+  and cameras; without it, they answer nothing.
 - **Fonts**: the client's TrueType fonts from the installation; without
   them, the bundled stand-in fonts (open licenses), at the same pixel
   heights. Glyph positions follow the engine's measured widths (§17.6), so

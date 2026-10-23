@@ -563,8 +563,9 @@ libraries for wowlua Studio, natively and in the browser (T300, T301).
   T315).
 - From M13: 3D models in model frames and model scenes, from the user's
   installation (encrypted tables read with the client's own keys): creature
-  displays, creatures and files; then characters with their customizations
-  and worn items (T317 to T319).
+  displays, creatures and files; characters with their customizations
+  and worn items; Blizzard's model scenes from the client's tables (T317
+  to T321).
 
 **Exit:** a test or an addon session is stopped at a breakpoint inside an
 event handler, stepped through and inspected with watches over DAP; an agent

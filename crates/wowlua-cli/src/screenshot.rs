@@ -95,7 +95,7 @@ pub fn shoot(
 }
 
 struct CliCamera {
-    sources: Sources,
+    sources: Arc<Sources>,
 }
 
 impl wowlua_test::screenshots::Camera for CliCamera {
@@ -118,6 +118,13 @@ impl wowlua_test::screenshots::Camera for CliCamera {
     fn out_dir(&self) -> PathBuf {
         self.sources.out.clone()
     }
+
+    fn client_data(&self) -> Option<Arc<dyn wowlua_engine::clientdata::ClientData>> {
+        let sources = self.sources.clone();
+        Some(Arc::new(wowlua_render::client::CascClientData::new(
+            Box::new(move || sources.assets().casc),
+        )))
+    }
 }
 
 /// The test runner's camera for a package's test build.
@@ -127,7 +134,7 @@ pub fn camera(
     flavor: &str,
 ) -> Option<Arc<dyn wowlua_test::screenshots::Camera>> {
     Some(Arc::new(CliCamera {
-        sources: Sources::new(project, build, flavor),
+        sources: Arc::new(Sources::new(project, build, flavor)),
     }))
 }
 

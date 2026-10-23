@@ -1046,7 +1046,7 @@ fn transform_camera_to_model(vm: &mut Vm, _id: WidgetId, c: NativeCall) -> Ret {
 }
 
 /// A model scene's camera axes: forward, right, up.
-fn scene_axes(vm: &mut Vm, id: WidgetId) -> [[f64; 3]; 3] {
+pub(crate) fn scene_axes(vm: &mut Vm, id: WidgetId) -> [[f64; 3]; 3] {
     let axes = stored(vm, id, "CameraOrientationByAxisVectors").unwrap_or_default();
     let ypr = stored(vm, id, "CameraOrientationByYawPitchRoll").unwrap_or_default();
     let vm: &Vm = vm;

@@ -9,7 +9,7 @@
 use std::collections::HashMap;
 
 use wgpu::util::DeviceExt;
-use wowlua_casc::display::{Display, default_geoset};
+use wowlua_casc::display::{Composite, Display, Texture};
 use wowlua_casc::m2::{self, Mat4, Model, Skin, Vec3};
 use wowlua_engine::scene::{self, Image, ModelCamera};
 
@@ -35,6 +35,12 @@ pub(crate) struct Loaded {
     skin: Skin,
 }
 
+/// The body's pose and attachment points, for the parts on it.
+pub(crate) struct Body {
+    points: HashMap<u32, Mat4>,
+    pose: Vec<Mat4>,
+}
+
 /// What the model pass keeps between frames.
 #[derive(Default)]
 pub(crate) struct Models {
@@ -51,6 +57,8 @@ pub(crate) struct Models {
     shader: Option<wgpu::ShaderModule>,
     sampler: Option<wgpu::Sampler>,
     groups: HashMap<usize, wgpu::BindGroup>,
+    /// Composited textures by their layers.
+    composites: HashMap<String, usize>,
 }
 
 /// A batch to draw: its vertices' range and how.
@@ -361,6 +369,18 @@ impl Renderer {
         }
     }
 
+    /// A composited texture (a character's skin), made once.
+    fn composite(&mut self, c: &Composite, assets: &mut dyn Assets) -> usize {
+        let key = format!("{c:?}");
+        if let Some(&t) = self.models.composites.get(&key) {
+            return t;
+        }
+        let img = crate::composite::composite(c, &mut |f| assets.image(&Image::FileId(f)));
+        let t = self.upload(&img);
+        self.models.composites.insert(key, t);
+        t
+    }
+
     /// Draws a model item into a texture of its size at `scale`: the
     /// texture's index, or none when nothing could be drawn.
     pub(crate) fn draw_model(
@@ -396,7 +416,7 @@ impl Renderer {
             world = m2::mul(&world, &orientation(actor.yaw, actor.pitch, actor.roll));
             world = m2::mul(&world, &m2::scaling([scale; 3]));
             // The body's attachment points, for parts there.
-            let mut body_points: Option<HashMap<u32, Mat4>> = None;
+            let mut body_points: Option<Body> = None;
             for part in &display.parts {
                 if !self.loaded(part.file, assets) {
                     continue;
@@ -454,7 +474,7 @@ impl Renderer {
         world: Mat4,
         seq: Option<usize>,
         ms: u32,
-        body_points: &mut Option<HashMap<u32, Mat4>>,
+        body_points: &mut Option<Body>,
         portrait: &mut Option<(Vec3, Vec3, f32)>,
         own_camera: &mut Option<(Vec3, Vec3, f32)>,
         verts: &mut Vec<MVertex>,
@@ -468,22 +488,28 @@ impl Renderer {
             let d = m.sequences[s].duration;
             if d > 0 { ms % d } else { 0 }
         });
-        let pose = m.pose(seq, time);
+        // A part made for the body's skeleton takes its pose.
+        let pose = match body_points.as_ref() {
+            Some(b) if part.skinned && b.pose.len() >= m.bones.len() => b.pose.clone(),
+            _ => m.pose(seq, time),
+        };
         let mut part_world = world;
         if let Some(att) = part.attachment {
-            let Some(a) = body_points.as_ref().and_then(|p| p.get(&att)) else {
+            let Some(a) = body_points.as_ref().and_then(|p| p.points.get(&att)) else {
                 return;
             };
             part_world = m2::mul(&world, a);
         }
         let skinned = m.skinned(&pose);
         if part.attachment.is_none() && body_points.is_none() {
-            *body_points = Some(
-                m.attachments
+            *body_points = Some(Body {
+                points: m
+                    .attachments
                     .iter()
                     .filter_map(|a| Some((a.id, m.attachment(a.id, &pose)?)))
                     .collect(),
-            );
+                pose: pose.clone(),
+            });
             if let Some(c) = m.camera(0) {
                 *portrait = Some((
                     m2::transform(&world, c.position),
@@ -503,10 +529,6 @@ impl Renderer {
                 ));
             }
         }
-        let shown = |id: u16| match &part.geosets {
-            Some(g) => g.contains(&id) || id == 0,
-            None => default_geoset(id) || part.extra_geosets.contains(&id),
-        };
         // Opaque batches first, then the rest by priority.
         let mut order: Vec<usize> = (0..skin.batches.len()).collect();
         order.sort_by_key(|&b| {
@@ -517,20 +539,12 @@ impl Renderer {
                 .map_or(0, |x| x.blend);
             (blend > 1, batch.priority, b)
         });
-        // A group with geosets named by the display shows only
-        // those of it.
-        let named_groups: Vec<u16> = part.extra_geosets.iter().map(|g| g / 100).collect();
         for b in order {
             let batch = skin.batches[b];
             let Some(sub) = skin.submeshes.get(batch.submesh as usize) else {
                 continue;
             };
-            let visible = if part.geosets.is_none() && named_groups.contains(&(sub.id / 100)) {
-                part.extra_geosets.contains(&sub.id)
-            } else {
-                shown(sub.id)
-            };
-            if !visible {
+            if !part.shows(sub.id) {
                 continue;
             }
             let mat = m
@@ -548,13 +562,13 @@ impl Renderer {
                 .get(batch.texture_combo as usize)
                 .copied()
                 .unwrap_or(0) as usize;
-            let image = match m.textures.get(tex_index) {
-                Some(t) if t.kind == 0 => Some(Image::FileId(t.file)),
-                Some(t) => part.textures.get(&t.kind).map(|f| Image::FileId(*f)),
-                None => None,
-            };
-            let tex = match image {
-                Some(i) => self.texture(&i, assets),
+            let tex = match m.textures.get(tex_index) {
+                Some(t) if t.kind == 0 => self.texture(&Image::FileId(t.file), assets),
+                Some(t) => match part.textures.get(&t.kind) {
+                    Some(Texture::File(f)) => self.texture(&Image::FileId(*f), assets),
+                    Some(Texture::Composite(c)) => self.composite(c, assets),
+                    None => self.white,
+                },
                 None => self.white,
             };
             self.model_group(tex);

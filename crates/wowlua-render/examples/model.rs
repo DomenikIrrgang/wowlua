@@ -1,5 +1,6 @@
 //! `cargo run -p wowlua-render --example model -- <client folder> <display ID> <out.png> [portrait zoom] [facing] [animation]`:
-//! a creature display drawn as a model frame shows it.
+//! a creature display (or `file:<id>`, `char:<race>:<sex>:<class>[:<items>]`)
+//! drawn as a model frame shows it.
 
 use wowlua_engine::scene::{Actor, Item, Light, Model, ModelCamera, ModelSource, Rect, Scene};
 
@@ -11,9 +12,26 @@ fn main() {
     let casc = wowlua_render::client::open_client(&install, &[a[1].clone()]).expect("the client");
     let mut assets = wowlua_render::client::ClientAssets::new(Some(casc), &[]);
     let arg = |i: usize, d: f32| a.get(i).and_then(|v| v.parse().ok()).unwrap_or(d);
-    let source = match a[2].strip_prefix("file:") {
-        Some(f) => ModelSource::File(f.parse().unwrap()),
-        None => ModelSource::Display(a[2].parse().unwrap()),
+    // `file:<id>`, `char:<race>:<sex>:<class>[:<item>,<item>…]`, or a
+    // display ID.
+    let source = if let Some(f) = a[2].strip_prefix("file:") {
+        ModelSource::File(f.parse().unwrap())
+    } else if let Some(c) = a[2].strip_prefix("creature:") {
+        ModelSource::Creature(c.parse().unwrap())
+    } else if let Some(c) = a[2].strip_prefix("char:") {
+        let p: Vec<&str> = c.split(':').collect();
+        ModelSource::Character(wowlua_engine::scene::Look {
+            race: p[0].parse().unwrap(),
+            sex: p[1].parse().unwrap(),
+            class: p[2].parse().unwrap(),
+            items: Vec::new(),
+            tried: p
+                .get(3)
+                .map(|i| i.split(',').map(|i| format!("item:{i}")).collect())
+                .unwrap_or_default(),
+        })
+    } else {
+        ModelSource::Display(a[2].parse().unwrap())
     };
     let scene = Scene {
         width: 400,

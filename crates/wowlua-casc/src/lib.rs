@@ -11,6 +11,7 @@ pub mod atlas;
 pub mod blp;
 mod blte;
 mod casc;
+pub mod character;
 pub mod db2;
 pub mod display;
 pub mod jenkins;

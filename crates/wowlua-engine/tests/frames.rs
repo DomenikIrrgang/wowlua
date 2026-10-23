@@ -844,3 +844,77 @@ hidden:Hide()",
     };
     assert_eq!((position, fov), ([4.0, 0.0, 1.0], 0.8));
 }
+
+struct Scenes;
+
+impl wowlua_engine::clientdata::ClientData for Scenes {
+    fn model_scene(&self, id: u32) -> Option<wowlua_engine::clientdata::ModelScene> {
+        (id == 290).then(|| wowlua_engine::clientdata::ModelScene {
+            kind: 1,
+            cameras: vec![7],
+            actors: vec![8, 9],
+            flags: 0,
+        })
+    }
+    fn scene_camera(&self, id: u32) -> Option<wowlua_engine::clientdata::SceneCamera> {
+        (id == 7).then(|| wowlua_engine::clientdata::SceneCamera {
+            id,
+            tag: "primary".into(),
+            target: [0.0, 0.0, 1.0],
+            zoom_distance: 5.0,
+            ..Default::default()
+        })
+    }
+    fn scene_actor(&self, id: u32) -> Option<wowlua_engine::clientdata::SceneActor> {
+        (id == 8).then(|| wowlua_engine::clientdata::SceneActor {
+            id,
+            tag: "player".into(),
+            position: [0.0, 0.5, 0.0],
+            display: 3,
+            ..Default::default()
+        })
+    }
+    fn actor_display(&self, id: u32) -> Option<wowlua_engine::clientdata::ActorDisplay> {
+        (id == 3).then(|| wowlua_engine::clientdata::ActorDisplay {
+            animation: 4,
+            alpha: 1.0,
+            scale: 1.0,
+            anim_speed: 1.0,
+            ..Default::default()
+        })
+    }
+}
+
+/// With the client's tables at hand, `C_ModelInfo` answers from them;
+/// without, nothing.
+#[test]
+fn model_scene_data_comes_from_the_clients_tables() {
+    let mut vm = vm();
+    assert_eq!(
+        run(&mut vm, "return C_ModelInfo.GetModelSceneInfoByID(290)"),
+        Vec::<String>::new()
+    );
+    wowlua_engine::clientdata::set(&mut vm, std::sync::Arc::new(Scenes));
+    let r = run(
+        &mut vm,
+        "local kind, cameras, actors = C_ModelInfo.GetModelSceneInfoByID(290)
+local camera = C_ModelInfo.GetModelSceneCameraInfoByID(cameras[1])
+local actor = C_ModelInfo.GetModelSceneActorInfoByID(actors[1])
+local display = C_ModelInfo.GetModelSceneActorDisplayInfoByID(actor.modelActorDisplayID)
+return kind, #actors, camera.cameraType, camera.zoomDistance, camera.target.z, actor.scriptTag, actor.position.y, display.animation, C_ModelInfo.GetModelSceneActorInfoByID(9) == nil",
+    );
+    assert_eq!(
+        r,
+        [
+            "1",
+            "2",
+            "OrbitCamera",
+            "5",
+            "1",
+            "player",
+            "0.5",
+            "4",
+            "Bool(true)"
+        ]
+    );
+}
