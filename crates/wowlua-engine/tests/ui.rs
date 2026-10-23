@@ -694,3 +694,36 @@ return tostring(ColorBox:DoesClipChildren()), tostring(p:GetTexture() ~= nil or 
         "{colors:?}"
     );
 }
+
+/// Within a layer and sublevel a frame's font strings are drawn after its
+/// textures, whatever order they were made in (the Settings title over
+/// its border's top edge).
+#[test]
+fn text_draws_over_textures_of_its_layer() {
+    let mut vm = vm("camelot");
+    run(
+        &mut vm,
+        "local f = CreateFrame('Frame', nil, UIParent)
+f:SetSize(100, 20)
+f:SetPoint('CENTER')
+local t = f:CreateFontString(nil, 'OVERLAY')
+t:SetFont('Fonts\\\\FRIZQT__.TTF', 12, '')
+t:SetText('Title')
+t:SetPoint('CENTER')
+local edge = f:CreateTexture(nil, 'OVERLAY')
+edge:SetAllPoints()
+edge:SetColorTexture(1, 1, 1)",
+    );
+    let scene = wowlua_engine::scene::build(&mut vm);
+    let order: Vec<&str> = scene
+        .items
+        .iter()
+        .filter_map(|i| match i {
+            wowlua_engine::scene::Item::Text(_) => Some("text"),
+            wowlua_engine::scene::Item::Quad(_) => Some("quad"),
+            _ => None,
+        })
+        .collect();
+    let text = order.iter().position(|k| *k == "text").expect("the text");
+    assert!(order[..text].contains(&"quad"), "{order:?}");
+}

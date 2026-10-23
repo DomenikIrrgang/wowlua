@@ -179,7 +179,7 @@ proportion to the visible regions.
   `OVERLAY`, `HIGHLIGHT` while the mouse is over its button; a region given
   none, a font string on `OVERLAY` and the others on `ARTWORK`, as the
   client's fresh regions answer, decision T338) and sublevel
-  (-8 to 7), then masked textures after unmasked ones (the action
+  (-8 to 7), font strings after textures (decision T340), then masked textures after unmasked ones (the action
   buttons' masked icons over their slot art), then creation order; a
   frame draws before its regions'
   children frames of the same level.

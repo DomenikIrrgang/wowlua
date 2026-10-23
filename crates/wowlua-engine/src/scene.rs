@@ -1758,7 +1758,7 @@ fn build_scene(vm: &mut Vm) -> Scene {
                     .collect()
             })
             .unwrap_or_default();
-        let mut regions: Vec<(usize, i32, bool, usize)> = Vec::new();
+        let mut regions: Vec<(usize, i32, bool, bool, usize)> = Vec::new();
         for c in children {
             let w = &engine(vm).world.widgets[c.0];
             if !w.shown || !is_region(vm, c) || messages.contains(&c.0) {
@@ -1773,7 +1773,12 @@ fn build_scene(vm: &mut Vm) -> Scene {
             // (the action buttons' masked icons show over their slot art,
             // created after them; unverified beyond that).
             let masked = !masks_of(vm, c).is_empty();
-            regions.push((layer, sub, masked, c.0));
+            // Font strings after the textures of their layer and sublevel
+            // (the Settings panel's title, a font string on its border
+            // frame's `OVERLAY`, shows over the border's top edge, made
+            // later on the same layer; a screenshot, 2026-10-23).
+            let text = widgets::is_a(engine(vm), &w.class, "FontString");
+            regions.push((layer, sub, text, masked, c.0));
         }
         regions.sort();
         // A minimap's terrain under its regions, its player arrow over them.
@@ -1781,7 +1786,7 @@ fn build_scene(vm: &mut Vm) -> Scene {
         if minimap {
             items.extend(minimap_tiles(vm, f).into_iter().map(Item::Quad));
         }
-        for (_, _, _, r) in regions {
+        for (_, _, _, _, r) in regions {
             let id = WidgetId(r);
             let class = engine(vm).world.widgets[r].class.clone();
             if widgets::is_a(engine(vm), &class, "FontString") {
