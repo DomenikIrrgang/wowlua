@@ -2639,6 +2639,9 @@ type Both = Defaults & { enabled: boolean }
 local e: Both["enabled"] = 1
 local kk: keyof Both = "enabled"
 print(e, kk)
+local function each<K extends keyof Defaults>(keys: K[]) print(keys) end
+each({ "line", "figure" })
+each({ "line", "nope" })
 "#;
     write(
         dir.path(),
@@ -2656,7 +2659,11 @@ print(e, kk)
         .unwrap();
     let stderr = String::from_utf8_lossy(&out.stderr);
     let errors: Vec<&str> = stderr.lines().filter(|l| l.contains("error[")).collect();
-    assert_eq!(errors.len(), 5, "{stderr}");
+    assert_eq!(errors.len(), 6, "{stderr}");
+    assert!(
+        errors[5].starts_with("src/main.wowlua:23:1: error[E2014]: `\"line\" | \"nope\"`"),
+        "{stderr}"
+    );
     assert!(
         errors[4]
             .starts_with("src/main.wowlua:18:7: error[E2001]: `1` is not assignable to `boolean`"),

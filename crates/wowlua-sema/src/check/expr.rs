@@ -2284,6 +2284,49 @@ impl Checker<'_, '_> {
         matches!(f.rest, Some(Rest::Variadic(r)) if is(r)) || f.params.iter().any(|p| is(p.ty))
     }
 
+    /// `p` with `f`'s type parameters replaced by their constraints (read
+    /// with the enclosing class's arguments), when every one it mentions
+    /// has one that mentions none: the context a table literal argument is
+    /// checked in.
+    fn constraint_context(&mut self, f: &Func, p: TypeId) -> Option<TypeId> {
+        let mut outer = Subst::default();
+        for &(q, b) in &f.outer {
+            outer.types.insert(q, b);
+        }
+        let mut bounds = Subst::default();
+        for tp in &f.type_params {
+            let info = &self.env.params[tp.0 as usize];
+            if info.pack {
+                continue;
+            }
+            if let Some(c) = info.constraint {
+                let c = subst::apply(&mut self.env.types, c, &outer);
+                // only literal unions (keys, names): a table type's own
+                // literals widen as usual
+                let literal = self.env.types.members(c).iter().all(|&m| {
+                    matches!(self.env.types.get(m), Ty::Str(_) | Ty::Num(_) | Ty::Bool(_))
+                });
+                if literal {
+                    bounds.types.insert(*tp, c);
+                }
+            }
+        }
+        if bounds.types.is_empty() {
+            return None;
+        }
+        let c = subst::apply(&mut self.env.types, p, &bounds);
+        // nothing of `f`'s left in it
+        let mut probe = Subst::default();
+        for tp in &f.type_params {
+            if self.env.params[tp.0 as usize].pack {
+                probe.packs.insert(*tp, Pack::single(Types::UNKNOWN));
+            } else {
+                probe.types.insert(*tp, Types::UNKNOWN);
+            }
+        }
+        (subst::apply(&mut self.env.types, c, &probe) == c && c != p).then_some(c)
+    }
+
     fn instantiate_any(&mut self, f: &Func) -> Func {
         if f.type_params.is_empty() {
             return f.clone();
@@ -3330,7 +3373,20 @@ impl Checker<'_, '_> {
                     .filter(|&p| subst::apply(&mut self.env.types, p, &probe) == p);
                 let t = match fixed {
                     Some(p) if !is_multi(e) => self.check(e, Some(p)),
-                    _ => self.infer(e),
+                    _ => match (self.param_at(f, i), e.kind()) {
+                        // A table literal for a parameter whose type
+                        // parameters are constrained is checked against
+                        // the constraints, so its literals stay
+                        // (`keys: K[]` with `K extends keyof D`, L45).
+                        (Some(p), ExprKind::Table(_)) => {
+                            let c = self.constraint_context(f, p);
+                            match c {
+                                Some(c) => self.check(e, Some(c)),
+                                None => self.infer(e),
+                            }
+                        }
+                        _ => self.infer(e),
+                    },
                 };
                 arg_types[i] = Some(t);
                 if let Some(p) = self.param_at(f, i) {
