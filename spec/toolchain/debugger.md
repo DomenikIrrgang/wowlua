@@ -18,7 +18,7 @@ Everything is a library first; the command-line front-ends and wowlua Studio
 | Scene | `wowlua-engine` | The UI as a draw list: what is visible, where, in which order (§18.9) |
 | Assets | `wowlua-casc` | Textures, atlases and fonts from the user's own WoW installation (§18.10) |
 | Renderer | `wowlua-render` | Draws a scene with `wgpu`: to a window, or off-screen to a PNG (§18.11) |
-| Front-ends | `wowlua-cli` | `wowlua debug` (DAP), `wowlua mcp` (MCP), `wowlua screenshot`, the test API (§18.12) |
+| Front-ends | `wowlua-cli` | `wowlua debug` (DAP), `wowlua mcp` (MCP), `wowlua screenshot`, the test API (§18.12); the VS Code extension (`editors/vscode`) registers the `wowlua` debug type and runs `wowlua debug` over stdio (decision T331) |
 
 **Native and the browser** (decisions T212, T301). Every layer but the
 front-ends builds for `wasm32-unknown-unknown`: no file system, threads,

@@ -1,0 +1,141 @@
+{
+  "name": "wowlua",
+  "displayName": "wowlua",
+  "description": "Debug wowlua addons and their tests in wowlua's emulated World of Warcraft client.",
+  "version": "0.10.0",
+  "publisher": "wowlua",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DomenikIrrgang/wowlua"
+  },
+  "engines": {
+    "vscode": "^1.85.0"
+  },
+  "categories": [
+    "Debuggers"
+  ],
+  "main": "./extension.js",
+  "activationEvents": [
+    "onDebugResolve:wowlua",
+    "onDebugInitialConfigurations"
+  ],
+  "contributes": {
+    "languages": [
+      {
+        "id": "wowlua",
+        "aliases": [
+          "wowlua"
+        ],
+        "extensions": [
+          ".wowlua"
+        ]
+      }
+    ],
+    "breakpoints": [
+      {
+        "language": "wowlua"
+      },
+      {
+        "language": "lua"
+      }
+    ],
+    "configuration": {
+      "title": "wowlua",
+      "properties": {
+        "wowlua.path": {
+          "type": "string",
+          "default": "wowlua",
+          "description": "The wowlua command the debugger runs (`wowlua debug`)."
+        }
+      }
+    },
+    "debuggers": [
+      {
+        "type": "wowlua",
+        "label": "wowlua: the emulated client",
+        "languages": [
+          "wowlua",
+          "lua"
+        ],
+        "configurationAttributes": {
+          "launch": {
+            "properties": {
+              "test": {
+                "type": "string",
+                "description": "A test file to run, relative to the package (tests/options.test.wowlua)."
+              },
+              "filter": {
+                "type": "string",
+                "description": "Only the tests whose names contain this."
+              },
+              "addon": {
+                "type": "boolean",
+                "description": "Run the addon itself, logged in, instead of a test file.",
+                "default": false
+              },
+              "flavor": {
+                "type": "string",
+                "description": "The flavor to run (camelot, standard, vanilla, …); the package's first by default."
+              },
+              "clock": {
+                "type": "string",
+                "enum": [
+                  "realtime",
+                  "manual"
+                ],
+                "description": "realtime: a game frame every 1/60 s; manual: time stands still until asked.",
+                "default": "realtime"
+              },
+              "stopOnEntry": {
+                "type": "boolean",
+                "description": "Stop before the first line runs.",
+                "default": false
+              },
+              "debugBlizzardUI": {
+                "type": "boolean",
+                "description": "Step into Blizzard's UI code too.",
+                "default": false
+              },
+              "wowluaPath": {
+                "type": "string",
+                "description": "The wowlua command for this configuration (else the `wowlua.path` setting)."
+              }
+            }
+          }
+        },
+        "initialConfigurations": [
+          {
+            "type": "wowlua",
+            "request": "launch",
+            "name": "wowlua: run the addon",
+            "addon": true
+          }
+        ],
+        "configurationSnippets": [
+          {
+            "label": "wowlua: run the addon",
+            "description": "The addon in the emulated client, logged in.",
+            "body": {
+              "type": "wowlua",
+              "request": "launch",
+              "name": "wowlua: run the addon",
+              "addon": true
+            }
+          },
+          {
+            "label": "wowlua: debug a test file",
+            "description": "One test file, optionally some of its tests.",
+            "body": {
+              "type": "wowlua",
+              "request": "launch",
+              "name": "wowlua: debug a test",
+              "test": "^\"tests/${1:file}.test.wowlua\"",
+              "filter": "^\"${2}\""
+            }
+          }
+        ]
+      }
+    ]
+  }
+}

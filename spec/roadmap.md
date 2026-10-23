@@ -587,9 +587,10 @@ and stepped through over MCP; every window and tab of camelot's default UI
 and SuuUI screenshotted. The hooks' cost when off, measured on a release
 build (a mixed Lua workload, best of seven runs): about 1 to 2 percent
 over the VM before them (37.0 ms to 37.4–38.3 ms). Version 0.10.0, not
-released yet. Not yet: a VS Code extension (M9 S8) to register the
-`wowlua` debug type; the indoor minimap; a model material's blend 7 over a
-texture without alpha (drawn opaque).
+released yet. The VS Code extension's debugger part (`editors/vscode`,
+T331), its grammar and language server to come in M9 S8. Not yet: the
+indoor minimap; a model material's blend 7 over a texture without alpha
+(drawn opaque).
 
 ## M13: Game data and rendering
 

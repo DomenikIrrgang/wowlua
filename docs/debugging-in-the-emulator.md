@@ -54,8 +54,10 @@ Drawing needs a GPU, or a software one (WARP on Windows, lavapipe on Linux).
 ## The debugger
 
 `wowlua debug` speaks the Debug Adapter Protocol on stdio (`--port 4711` for
-TCP). Editors with a DAP client (Neovim's nvim-dap, Zed, Emacs' dap-mode)
-can use it now; the wowlua VS Code extension will. A launch configuration:
+TCP). The wowlua VS Code extension ([editors/vscode](../editors/vscode/README.md))
+registers the `wowlua` debug type and starts it for you; editors with a
+DAP client (Neovim's nvim-dap, Zed, Emacs' dap-mode) use it directly. A
+launch configuration:
 
 ```json
 { "type": "wowlua", "request": "launch", "test": "tests/options.test.wowlua", "filter": "options window" }
