@@ -2585,6 +2585,35 @@ wrap("UNIT_HEALTH", function(_, unit) print(unit) end)
     assert!(errors[3].len() < 1000, "{stderr}");
 }
 
+/// `pairs` over a record with named fields and an `unknown` indexer: its
+/// values are `unknown`, which fits the union of the values (spec §2.6).
+#[test]
+fn pairs_over_record_with_unknown_indexer() {
+    let dir = tempfile::tempdir().unwrap();
+    let main = r#"type Tags = { module?: string, skinned?: Frame, [string]: unknown }
+local function f(t: Tags)
+    for k, v in pairs(t) do print(k, v) end
+end
+f({ module = "a" })
+"#;
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"pairsrec\", \"version\": \"1.0.0\" } }\n",
+            ),
+            ("src/main.wowlua", main),
+        ],
+    );
+    let out = wowlua(dir.path())
+        .args(["check", "--message-format", "short"])
+        .output()
+        .unwrap();
+    let stderr = String::from_utf8_lossy(&out.stderr);
+    assert!(out.status.success(), "{stderr}");
+}
+
 /// `wowlua:reflect`'s results are typed (decision L36): `isInstance(v, Dog)`
 /// narrows `v` to `Dog`, `classOf` gives `ClassOf<Dog>?`, and `enumFrom`
 /// and `enumEntries` give the enum.

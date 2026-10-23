@@ -327,6 +327,13 @@ impl Env<'_> {
             | (Ty::Any | Ty::Error | Ty::Never | Ty::EventArgs(_), _) => {
                 return true;
             }
+            // `unknown` fits only a union that takes anything (`pairs` over
+            // a record with an `unknown` indexer builds one).
+            (Ty::Unknown, Ty::Union(members)) => {
+                return members
+                    .iter()
+                    .any(|&m| matches!(self.types.get(m), Ty::Any | Ty::Unknown | Ty::Error));
+            }
             (Ty::Unknown, _) => return false,
             (Ty::Nil, _) if mode == Mode::Basic => return true,
             (Ty::Union(members), _) => {
