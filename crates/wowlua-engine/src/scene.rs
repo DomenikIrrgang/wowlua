@@ -247,10 +247,7 @@ type ImageOf = (Image, Option<[f32; 4]>, (bool, bool), Option<[f32; 4]>);
 
 /// A texture's image and its texture coordinates as the atlas or the
 /// file gives them.
-fn image_of(
-    vm: &Vm,
-    id: WidgetId,
-) -> Option<ImageOf> {
+fn image_of(vm: &Vm, id: WidgetId) -> Option<ImageOf> {
     if let Some(name) = first(vm, id, "Atlas").and_then(|v| text_of(vm, v))
         && let Some(a) = crate::measures::atlas(&name)
         && let Some(info) = &a.info

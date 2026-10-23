@@ -1,0 +1,15 @@
+[package]
+name = "wowlua-casc"
+description = "Reads textures, atlases and fonts from the user's own WoW installation (CASC), and decodes BLP and TGA images"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+flate2.workspace = true
+
+[lints]
+workspace = true

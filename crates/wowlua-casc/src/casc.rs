@@ -1,0 +1,496 @@
+//! The local CASC storage: `.build.info` names each product's build; its
+//! build config the encoding table and the root; the local indexes
+//! (`Data/data/*.idx`) where each encoded file is in the data archives.
+//! One installation holds every product (retail, classic, the betas and
+//! PTRs) in one store; a [`Casc`] reads one product's build of it.
+
+use crate::{Storage, blte, jenkins};
+
+#[derive(Debug)]
+pub struct CascError(pub String);
+
+impl std::fmt::Display for CascError {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        f.write_str(&self.0)
+    }
+}
+
+fn err<T>(s: impl Into<String>) -> Result<T, CascError> {
+    Err(CascError(s.into()))
+}
+
+fn hex(s: &str) -> Option<[u8; 16]> {
+    if s.len() != 32 {
+        return None;
+    }
+    let mut out = [0u8; 16];
+    for (i, o) in out.iter_mut().enumerate() {
+        *o = u8::from_str_radix(&s[i * 2..i * 2 + 2], 16).ok()?;
+    }
+    Some(out)
+}
+
+fn to_hex(k: &[u8]) -> String {
+    k.iter().map(|b| format!("{b:02x}")).collect()
+}
+
+/// One local index: its sorted entries (9-byte keys, archive, offset,
+/// size), 18 bytes each.
+struct Index {
+    entries: Vec<u8>,
+}
+
+const ENTRY: usize = 18;
+
+impl Index {
+    fn parse(data: &[u8]) -> Option<Index> {
+        if data.len() < 0x28 {
+            return None;
+        }
+        let version = u16::from_le_bytes([data[8], data[9]]);
+        let (size_len, offset_len, key_len) = (data[12], data[13], data[14]);
+        if version != 7 || size_len != 4 || offset_len != 5 || key_len != 9 {
+            return None;
+        }
+        let size = u32::from_le_bytes([data[0x20], data[0x21], data[0x22], data[0x23]]) as usize;
+        let start = 0x28;
+        let end = (start + size).min(data.len());
+        let n = (end - start) / ENTRY;
+        Some(Index {
+            entries: data[start..start + n * ENTRY].to_vec(),
+        })
+    }
+
+    fn key(&self, i: usize) -> &[u8] {
+        &self.entries[i * ENTRY..i * ENTRY + 9]
+    }
+
+    /// Where an encoded key is: archive, offset, size.
+    fn find(&self, ekey: &[u8]) -> Option<(u32, u64, u32)> {
+        let n = self.entries.len() / ENTRY;
+        let probe = &ekey[..9];
+        let found = {
+            // Sorted by key: a binary search; a linear one if not.
+            let (mut lo, mut hi) = (0usize, n);
+            let mut hit = None;
+            while lo < hi {
+                let mid = (lo + hi) / 2;
+                match self.key(mid).cmp(probe) {
+                    std::cmp::Ordering::Less => lo = mid + 1,
+                    std::cmp::Ordering::Greater => hi = mid,
+                    std::cmp::Ordering::Equal => {
+                        hit = Some(mid);
+                        break;
+                    }
+                }
+            }
+            hit.or_else(|| (0..n).find(|&i| self.key(i) == probe))
+        }?;
+        let e = &self.entries[found * ENTRY..found * ENTRY + ENTRY];
+        let packed = u64::from(e[9]) << 32
+            | u64::from(e[10]) << 24
+            | u64::from(e[11]) << 16
+            | u64::from(e[12]) << 8
+            | u64::from(e[13]);
+        let archive = (packed >> 30) as u32;
+        let offset = packed & 0x3fff_ffff;
+        let size = u32::from_le_bytes([e[14], e[15], e[16], e[17]]);
+        Some((archive, offset, size))
+    }
+}
+
+/// The bucket a key's index is in.
+fn bucket(ekey: &[u8]) -> usize {
+    let x = ekey[..9].iter().fold(0u8, |a, b| a ^ b);
+    ((x & 0xf) ^ (x >> 4)) as usize
+}
+
+/// The encoding table: content keys to encoded keys.
+struct Encoding {
+    data: Vec<u8>,
+    ckey_size: usize,
+    ekey_size: usize,
+    page_size: usize,
+    /// Each page's first content key and where it starts.
+    pages: Vec<([u8; 16], usize)>,
+}
+
+impl Encoding {
+    fn parse(data: Vec<u8>) -> Result<Encoding, CascError> {
+        if data.len() < 22 || &data[..2] != b"EN" {
+            return err("the encoding table is not one");
+        }
+        let ckey_size = data[3] as usize;
+        let ekey_size = data[4] as usize;
+        let page_kb = u16::from_be_bytes([data[5], data[6]]) as usize;
+        let page_count = u32::from_be_bytes([data[9], data[10], data[11], data[12]]) as usize;
+        let espec_size = u32::from_be_bytes([data[18], data[19], data[20], data[21]]) as usize;
+        let index_start = 22 + espec_size;
+        let pages_start = index_start + page_count * (ckey_size + 16);
+        let page_size = page_kb * 1024;
+        let mut pages = Vec::with_capacity(page_count);
+        for i in 0..page_count {
+            let at = index_start + i * (ckey_size + 16);
+            if at + 16 > data.len() {
+                return err("a short encoding table");
+            }
+            let mut first = [0u8; 16];
+            first.copy_from_slice(&data[at..at + 16]);
+            pages.push((first, pages_start + i * page_size));
+        }
+        Ok(Encoding {
+            data,
+            ckey_size,
+            ekey_size,
+            page_size,
+            pages,
+        })
+    }
+
+    /// The first encoded key of a content key.
+    fn ekey(&self, ckey: &[u8; 16]) -> Option<[u8; 16]> {
+        let i = match self.pages.binary_search_by(|(first, _)| first.cmp(ckey)) {
+            Ok(i) => i,
+            Err(0) => return None,
+            Err(i) => i - 1,
+        };
+        let start = self.pages[i].1;
+        let end = (start + self.page_size).min(self.data.len());
+        let mut pos = start;
+        while pos + 6 + self.ckey_size <= end {
+            let count = self.data[pos] as usize;
+            if count == 0 {
+                break;
+            }
+            let ck = &self.data[pos + 6..pos + 6 + self.ckey_size];
+            if ck == ckey {
+                let e = pos + 6 + self.ckey_size;
+                let mut out = [0u8; 16];
+                out[..self.ekey_size.min(16)]
+                    .copy_from_slice(&self.data[e..e + self.ekey_size.min(16)]);
+                return Some(out);
+            }
+            pos += 6 + self.ckey_size + count * self.ekey_size;
+        }
+        None
+    }
+}
+
+/// The root: file IDs to content keys, name hashes to file IDs.
+struct Root {
+    by_id: Vec<(u32, [u8; 16])>,
+    by_name: Vec<(u64, u32)>,
+}
+
+/// Locales a file may be for: enUS (2) or all.
+const ENUS: u32 = 0x2;
+/// Content flags of files the client does not use here.
+const LOW_VIOLENCE: u32 = 0x80;
+const NO_NAME_HASH: u32 = 0x1000_0000;
+
+impl Root {
+    fn parse(d: &[u8]) -> Result<Root, CascError> {
+        let le = |at: usize| -> Option<u32> {
+            d.get(at..at + 4)
+                .map(|b| u32::from_le_bytes([b[0], b[1], b[2], b[3]]))
+        };
+        let mut pos = 0;
+        let mut version = 0;
+        if d.starts_with(b"TSFM") {
+            // 8.2 on: a header; 10.1.7 on, its size and a version.
+            let second = le(4).unwrap_or(0);
+            if second == 0x18 {
+                version = le(8).unwrap_or(0);
+                pos = 0x18;
+            } else {
+                pos = 12;
+            }
+        }
+        let mut by_id = Vec::new();
+        let mut by_name = Vec::new();
+        while pos + 12 <= d.len() {
+            let count = le(pos).ok_or(CascError("root".into()))? as usize;
+            let (content, locale);
+            if version >= 2 {
+                locale = le(pos + 4).unwrap_or(0);
+                let f1 = le(pos + 8).unwrap_or(0);
+                let f2 = le(pos + 12).unwrap_or(0);
+                let f3 = u32::from(*d.get(pos + 16).unwrap_or(&0));
+                content = f1 | f2 | (f3 << 17);
+                pos += 17;
+            } else {
+                content = le(pos + 4).unwrap_or(0);
+                locale = le(pos + 8).unwrap_or(0);
+                pos += 12;
+            }
+            let named = !(content & NO_NAME_HASH != 0
+                || (d.starts_with(b"TSFM") && version == 0 && content & NO_NAME_HASH != 0));
+            let ids_at = pos;
+            let keys_at = ids_at + count * 4;
+            let names_at = keys_at + count * 16;
+            let end = if named {
+                names_at + count * 8
+            } else {
+                names_at
+            };
+            if end > d.len() {
+                return err("a short root");
+            }
+            let wanted =
+                (locale & ENUS != 0 || locale == 0xffff_ffff) && content & LOW_VIOLENCE == 0;
+            if wanted {
+                let mut id: i64 = -1;
+                for i in 0..count {
+                    let delta = i32::from_le_bytes(
+                        d[ids_at + i * 4..ids_at + i * 4 + 4]
+                            .try_into()
+                            .unwrap_or([0; 4]),
+                    );
+                    id += 1 + i64::from(delta);
+                    let mut ck = [0u8; 16];
+                    ck.copy_from_slice(&d[keys_at + i * 16..keys_at + i * 16 + 16]);
+                    by_id.push((id as u32, ck));
+                    if named {
+                        let h = u64::from_le_bytes(
+                            d[names_at + i * 8..names_at + i * 8 + 8]
+                                .try_into()
+                                .unwrap_or([0; 8]),
+                        );
+                        by_name.push((h, id as u32));
+                    }
+                }
+            }
+            pos = end;
+        }
+        by_id.sort_by_key(|e| e.0);
+        by_id.dedup_by_key(|e| e.0);
+        by_name.sort_by_key(|e| e.0);
+        by_name.dedup_by_key(|e| e.0);
+        Ok(Root { by_id, by_name })
+    }
+
+    fn ckey(&self, id: u32) -> Option<[u8; 16]> {
+        self.by_id
+            .binary_search_by_key(&id, |e| e.0)
+            .ok()
+            .map(|i| self.by_id[i].1)
+    }
+
+    fn id_of(&self, hash: u64) -> Option<u32> {
+        self.by_name
+            .binary_search_by_key(&hash, |e| e.0)
+            .ok()
+            .map(|i| self.by_name[i].1)
+    }
+}
+
+/// One product's build of the storage.
+pub struct Casc {
+    storage: Box<dyn Storage + Send + Sync>,
+    indexes: Vec<Option<Index>>,
+    encoding: Encoding,
+    root: Root,
+    pub product: String,
+    pub version: String,
+}
+
+impl Casc {
+    /// The products `.build.info` lists: (product, version).
+    pub fn products(storage: &dyn Storage) -> Vec<(String, String)> {
+        build_rows(storage)
+            .into_iter()
+            .map(|r| (r.product, r.version))
+            .collect()
+    }
+
+    /// The product of a client folder (`_classic_beta_` →
+    /// `wow_classic_beta`), from its `.flavor.info`.
+    pub fn product_of_folder(storage: &dyn Storage, folder: &str) -> Option<String> {
+        let text = storage.read(&format!("{folder}/.flavor.info"))?;
+        let text = String::from_utf8_lossy(&text).into_owned();
+        text.lines()
+            .skip(1)
+            .map(str::trim)
+            .find(|l| !l.is_empty() && !l.starts_with('#'))
+            .map(str::to_string)
+    }
+
+    /// Opens `product`'s build (`wow`, `wow_classic_beta`, …).
+    pub fn open(storage: Box<dyn Storage + Send + Sync>, product: &str) -> Result<Casc, CascError> {
+        let rows = build_rows(&*storage);
+        let Some(row) = rows.iter().find(|r| r.product == product && r.active) else {
+            return err(format!("the installation has no build of {product}"));
+        };
+        let k = &row.build_key;
+        let config = storage
+            .read(&format!("Data/config/{}/{}/{k}", &k[0..2], &k[2..4]))
+            .ok_or_else(|| CascError(format!("no build config {k}")))?;
+        let config = String::from_utf8_lossy(&config).into_owned();
+        let field = |name: &str| -> Vec<String> {
+            config
+                .lines()
+                .find_map(|l| {
+                    let (key, v) = l.split_once('=')?;
+                    (key.trim() == name).then(|| v.split_whitespace().map(str::to_string).collect())
+                })
+                .unwrap_or_default()
+        };
+        let root_ckey = field("root")
+            .first()
+            .and_then(|h| hex(h))
+            .ok_or(CascError("no root".into()))?;
+        let encoding_ekey = field("encoding")
+            .get(1)
+            .and_then(|h| hex(h))
+            .ok_or(CascError("no encoding".into()))?;
+        // The newest index of each bucket.
+        let mut newest: Vec<Option<(u32, String)>> = vec![None; 16];
+        for name in storage.list("Data/data") {
+            let Some(stem) = name.strip_suffix(".idx") else {
+                continue;
+            };
+            if stem.len() != 10 {
+                continue;
+            }
+            let (Ok(b), Ok(v)) = (
+                u8::from_str_radix(&stem[..2], 16),
+                u32::from_str_radix(&stem[2..], 16),
+            ) else {
+                continue;
+            };
+            let slot = &mut newest[(b & 0xf) as usize];
+            if slot.as_ref().is_none_or(|(old, _)| v > *old) {
+                *slot = Some((v, name));
+            }
+        }
+        let indexes = newest
+            .into_iter()
+            .map(|n| {
+                n.and_then(|(_, name)| {
+                    storage
+                        .read(&format!("Data/data/{name}"))
+                        .and_then(|d| Index::parse(&d))
+                })
+            })
+            .collect();
+        let mut casc = Casc {
+            storage,
+            indexes,
+            encoding: Encoding {
+                data: Vec::new(),
+                ckey_size: 16,
+                ekey_size: 16,
+                page_size: 0,
+                pages: Vec::new(),
+            },
+            root: Root {
+                by_id: Vec::new(),
+                by_name: Vec::new(),
+            },
+            product: product.to_string(),
+            version: row.version.clone(),
+        };
+        let enc = casc.read_ekey(&encoding_ekey).ok_or_else(|| {
+            CascError(format!(
+                "the encoding table {} is not in the local storage",
+                to_hex(&encoding_ekey)
+            ))
+        })?;
+        casc.encoding = Encoding::parse(enc)?;
+        let root = casc
+            .read_ckey(&root_ckey)
+            .ok_or_else(|| CascError("the root file is not in the local storage".into()))?;
+        casc.root = Root::parse(&root)?;
+        Ok(casc)
+    }
+
+    /// A file by its encoded key, decoded.
+    pub fn read_ekey(&self, ekey: &[u8; 16]) -> Option<Vec<u8>> {
+        let index = self.indexes.get(bucket(ekey))?.as_ref()?;
+        let (archive, offset, size) = index.find(ekey)?;
+        let raw = self.storage.read_at(
+            &format!("Data/data/data.{archive:03}"),
+            offset,
+            size as usize,
+        )?;
+        // A 30-byte header before the BLTE data.
+        blte::decode(raw.get(30..)?).ok()
+    }
+
+    pub fn read_ckey(&self, ckey: &[u8; 16]) -> Option<Vec<u8>> {
+        self.read_ekey(&self.encoding.ekey(ckey)?)
+    }
+
+    /// A file by its ID.
+    pub fn file_by_id(&self, id: u32) -> Option<Vec<u8>> {
+        self.read_ckey(&self.root.ckey(id)?)
+    }
+
+    /// A file's ID by its path (`Interface\Buttons\WHITE8X8.blp`).
+    pub fn id_of(&self, path: &str) -> Option<u32> {
+        self.root.id_of(jenkins::name_hash(path))
+    }
+
+    /// A file by its path; a texture path without an extension finds its
+    /// `.blp`.
+    pub fn file_by_path(&self, path: &str) -> Option<Vec<u8>> {
+        let id = self.id_of(path).or_else(|| {
+            let has_ext = path
+                .rsplit(['\\', '/'])
+                .next()
+                .is_some_and(|n| n.contains('.'));
+            if has_ext {
+                None
+            } else {
+                self.id_of(&format!("{path}.blp"))
+            }
+        })?;
+        self.file_by_id(id)
+    }
+
+    /// Files the root knows.
+    pub fn file_count(&self) -> usize {
+        self.root.by_id.len()
+    }
+}
+
+struct BuildRow {
+    product: String,
+    version: String,
+    build_key: String,
+    active: bool,
+}
+
+fn build_rows(storage: &dyn Storage) -> Vec<BuildRow> {
+    let Some(text) = storage.read(".build.info") else {
+        return Vec::new();
+    };
+    let text = String::from_utf8_lossy(&text).into_owned();
+    let mut lines = text.lines();
+    let Some(header) = lines.next() else {
+        return Vec::new();
+    };
+    let cols: Vec<String> = header
+        .split('|')
+        .map(|c| c.split('!').next().unwrap_or("").to_string())
+        .collect();
+    let at = |name: &str| cols.iter().position(|c| c == name);
+    let (Some(p), Some(v), Some(k), a) =
+        (at("Product"), at("Version"), at("Build Key"), at("Active"))
+    else {
+        return Vec::new();
+    };
+    lines
+        .filter(|l| !l.trim().is_empty())
+        .map(|l| {
+            let f: Vec<&str> = l.split('|').collect();
+            let get = |i: usize| f.get(i).copied().unwrap_or("").to_string();
+            BuildRow {
+                product: get(p),
+                version: get(v),
+                build_key: get(k),
+                active: a.is_none_or(|a| get(a) == "1"),
+            }
+        })
+        .collect()
+}

@@ -128,11 +128,7 @@ pub struct Shared {
 pub type SharedRef = Rc<RefCell<Shared>>;
 
 impl Shared {
-    pub fn new(
-        link: Box<dyn Link>,
-        mapper: Mapper,
-        clock: Clock,
-    ) -> SharedRef {
+    pub fn new(link: Box<dyn Link>, mapper: Mapper, clock: Clock) -> SharedRef {
         Rc::new(RefCell::new(Shared {
             link,
             mapper,
@@ -618,9 +614,7 @@ impl Controller {
             Request::FindFrames { query } => Ok(Response::Data {
                 data: crate::ui::find_frames(vm, &query),
             }),
-            Request::Input { input } => {
-                crate::ui::input(vm, &input).map(|()| Response::Ok)
-            }
+            Request::Input { input } => crate::ui::input(vm, &input).map(|()| Response::Ok),
             Request::FireEvent { event, args } => {
                 crate::ui::fire_event(vm, &event, &args).map(|()| Response::Ok)
             }
