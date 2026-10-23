@@ -176,6 +176,9 @@ pub struct Env<'p> {
     /// Aliases whose bodies are not resolved yet (while building), with the
     /// module of their scope.
     lazy_aliases: FxHashMap<DefId, (TypeAlias<'p>, Option<usize>)>,
+    /// Aliases whose body is a table type, while that body is resolved: one
+    /// that meets itself there becomes a named structural type (L58).
+    record_aliases: rustc_hash::FxHashSet<DefId>,
     /// Types of `typeof(expr)` expressions, by span (set by the checker).
     pub typeof_types: FxHashMap<(u32, u32), TypeId>,
     /// Top-level aliases whose bodies use `typeof(expr)`, with their file,
@@ -588,8 +591,49 @@ impl<'p> Env<'p> {
             ..Scope::default()
         };
         self.def_type_params(def, a.type_params(), &mut scope);
-        let body = self.resolve(a.ty(), &scope);
+        self.set_alias_body(def, a, &scope);
+    }
+
+    /// Resolves an alias's body in `scope` and keeps it. A table type that
+    /// refers to itself (`type Tree = { kids: Tree[] }`) makes the alias a
+    /// named structural type, like an interface, with the table's fields as
+    /// its members (decision L58).
+    fn set_alias_body(&mut self, def: DefId, a: TypeAlias<'_>, scope: &Scope) {
+        let table = matches!(a.ty().kind(), TypeKind::Table(_));
+        if table {
+            self.record_aliases.insert(def);
+        }
+        let body = self.resolve(a.ty(), scope);
+        self.record_aliases.remove(&def);
         self.def_mut(def).alias = Some(body);
+        if self.def(def).kind == DefKind::Interface {
+            self.alias_members(def, body);
+        }
+    }
+
+    /// A recursive record alias's members and indexer: its body's.
+    fn alias_members(&mut self, def: DefId, body: TypeId) {
+        let (fields, indexer) = match self.types.get(body).clone() {
+            Ty::Record(r) => (r.fields.clone(), r.indexer),
+            Ty::Array(e) => (Default::default(), Some((Types::NUMBER, e))),
+            _ => (Default::default(), None),
+        };
+        let d = self.def_mut(def);
+        d.members.clear();
+        for (name, f) in fields.iter() {
+            d.members.insert(
+                name.into(),
+                Member {
+                    ty: f.ty,
+                    kind: MemberKind::Field,
+                    optional: f.optional,
+                    readonly: f.readonly,
+                    visibility: Visibility::Public,
+                    renamable: false,
+                },
+            );
+        }
+        d.indexer = indexer;
     }
 
     /// Resolves an alias's body again in `scope`, once its `typeof(expr)`
@@ -597,8 +641,7 @@ impl<'p> Env<'p> {
     pub fn resolve_alias_again(&mut self, def: DefId, a: TypeAlias<'_>, scope: &Scope) {
         let mut scope = scope.clone();
         self.def_type_params(def, a.type_params(), &mut scope);
-        let body = self.resolve(a.ty(), &scope);
-        self.def_mut(def).alias = Some(body);
+        self.set_alias_body(def, a, &scope);
     }
 
     /// A class's field and method types resolved again in `scope` (the
@@ -651,8 +694,7 @@ impl<'p> Env<'p> {
             Pending::Alias(a, m) => {
                 let mut scope = self.scope_of(*m, sources);
                 self.def_type_params(def, a.type_params(), &mut scope);
-                let body = self.resolve(a.ty(), &scope);
-                self.def_mut(def).alias = Some(body);
+                self.set_alias_body(def, *a, &scope);
             }
             Pending::Interface(i, m) => {
                 let mut scope = self.scope_of(*m, sources);
@@ -1746,6 +1788,14 @@ impl<'p> Env<'p> {
             DefKind::Alias => {
                 if self.def(def).alias.is_none() {
                     self.force_alias(def);
+                }
+                // Met inside its own table body: a named structural type
+                // from here on (L58).
+                if self.def(def).alias.is_none() && self.record_aliases.contains(&def) {
+                    self.def_mut(def).kind = DefKind::Interface;
+                }
+                if self.def(def).kind == DefKind::Interface {
+                    return self.types.intern(Ty::Named(def, full_args));
                 }
                 let body = self.def(def).alias.unwrap_or(Types::ANY);
                 if expected == 0 {

@@ -2607,6 +2607,53 @@ print(a, b, c, d, e, name, realm, more)
         );
     }
 
+    /// A record alias that refers to itself is a named structural type: its
+    /// references have its fields, not `any` (decision L58).
+    #[test]
+    fn recursive_record_aliases() {
+        let node = "type Node = { name?: string, kids?: Node[] }\n";
+        strict_err(
+            &format!(
+                "{node}local function f(n: Node) for _, c in ipairs(n.kids or {{}}) do local x: number = c.name end end\nprint(f)\n"
+            ),
+            "E2001",
+        );
+        let d = check_source(
+            &format!(
+                "{node}local function f(n: Node) for _, c in ipairs(n.kids or {{}}) do local x: string? = c.name; print(x) end end\nprint(f)\n"
+            ),
+            Mode::Strict,
+        );
+        assert!(
+            d.iter().all(|x| !x.is_error() && x.code != Some("W2063")),
+            "{d:#?}"
+        );
+        // table literals at any depth
+        strict_ok(&format!(
+            "{node}local t: Node = {{ name = \"a\", kids = {{ {{ name = \"b\", kids = {{}} }} }} }}\nprint(t)\n"
+        ));
+        strict_err(
+            &format!("{node}local t: Node = {{ kids = {{ {{ name = 5 }} }} }}\nprint(t)\n"),
+            "E2001",
+        );
+        // with type parameters
+        let tree = "type Tree<T> = { value: T, kids: Tree<T>[] }\n";
+        strict_ok(&format!(
+            "{tree}local t: Tree<number> = {{ value = 1, kids = {{ {{ value = 2, kids = {{}} }} }} }}\nfor _, k in ipairs(t.kids) do local v: number = k.value; print(v) end\n"
+        ));
+        strict_err(
+            &format!(
+                "{tree}local t: Tree<number> = {{ value = 1, kids = {{}} }}\nfor _, k in ipairs(t.kids) do local v: string = k.value; print(v) end\n"
+            ),
+            "E2001",
+        );
+        // aliases that refer to each other
+        strict_err(
+            "type A = { b?: B, n: number }\ntype B = { a?: A }\nlocal x: A = { n = 1 }\nlocal s: string = x.b and x.b.a and x.b.a.n or \"\"\nprint(s)\n",
+            "E2001",
+        );
+    }
+
     /// `select(n, …)` with a literal `n` gives the values from the n-th on
     /// (decision L54).
     #[test]

@@ -362,6 +362,12 @@ Aliases are transparent. `ItemId` and `number` are interchangeable.
 - An alias may refer to itself only inside a table type or function type
   (`type Tree = { value: number, children: Tree[] }`). An unguarded recursive
   alias (`type A = A | nil`, `type B = C; type C = B`) is error E2053.
+- An alias whose body is a table type and that refers to itself, directly
+  or through other aliases, is a named structural type: its references have
+  its fields (as an interface's members, with the alias's type arguments),
+  error messages name it, and table values satisfy it by their fields as
+  they satisfy an interface (decision L58). In a body that is not a table
+  type, a reference to the alias itself reads as `any`.
 - Interfaces and classes are named types and may refer to themselves and to each
   other freely, including across modules through `import type`, which never
   creates a load-order dependency.

@@ -27,6 +27,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - Reading a record with a key typed `keyof` it (`colors[k]` with `k: keyof Colors`) gives that field's type, where it was `any`.
 - In a generic function or class, a value whose type is a type parameter with a constraint has the constraint's fields and methods: with `B extends Frame`, `b:GetWidth()` is a `number`, where it was `any`.
 - A generic function keeps the type of a value you pass it when that value already has one: `assert(tokens[k])` with `tokens: { [string]: Token }` is a `Token`, not a `string`. A literal written as the argument still widens (`id("x")` is a `string`).
+- A record type that refers to itself (`type Entry = { name: string, members: Entry[] }`) types what it holds: `entry.members[1].name` is a `string`, where it was `any`.
 - A type parameter with a constraint keeps a literal argument: `function f<K extends "a" | "b">(k: K): K` gives `"a"` for `f("a")`, where it gave `string` and reported that `string` doesn't satisfy the constraint.
 - An error naming a very long union (such as `EventName`) shows its first members and how many more there are, instead of all of them.
 - A function in a table you pass to a generic function gets its parameter types from the rest of the table: in `segmented({ options = { { value = 5, label = "5" } }, onChange = function(v) … end })`, `v` is the options' value type. Before, `v` needed an annotation (E2050). And `print(f(x))` no longer turns the result of a generic `f` into `any`.
