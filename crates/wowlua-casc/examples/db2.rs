@@ -26,9 +26,26 @@ fn main() {
         db.field_count(),
         db.layout_hash
     );
-    for i in 0..db.len().min(3) {
+    // Further arguments: the IDs of records to show.
+    let wanted: Vec<usize> = a[3..]
+        .iter()
+        .filter_map(|id| db.find(id.parse().ok()?))
+        .collect();
+    let shown: Vec<usize> = if a.len() > 3 {
+        wanted
+    } else {
+        (0..db.len().min(3)).collect()
+    };
+    for i in shown {
         let ints: Vec<String> = (0..db.field_count())
-            .map(|f| format!("{:?}", db.int(i, f)))
+            .map(|f| {
+                let v = db.ints(i, f);
+                if v.len() == 1 {
+                    format!("{}={}", f, v[0])
+                } else {
+                    format!("{f}={v:?}")
+                }
+            })
             .collect();
         println!(
             "#{} id {}: {} | {:?}",

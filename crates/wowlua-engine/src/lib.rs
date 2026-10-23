@@ -64,6 +64,7 @@ pub mod merchant;
 pub mod methods2;
 pub mod methods3;
 pub mod misc;
+pub mod models;
 pub mod objects2;
 pub mod party;
 pub mod pets;
@@ -1186,6 +1187,7 @@ pub(crate) fn method_behaviours() -> Vec<Behaviours<widgets::MethodFn>> {
         Behaviours::new("bars", bars::methods()),
         Behaviours::new("buttons", buttons::methods()),
         Behaviours::new("measures", measures::methods()),
+        Behaviours::new("models", models::methods()),
     ]
 }
 

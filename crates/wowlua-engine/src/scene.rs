@@ -124,10 +124,104 @@ pub struct Text {
     pub clip: Option<Rect>,
 }
 
+/// What a model shows (spec debugger §18.9.7).
+#[derive(Clone, Debug, PartialEq)]
+pub enum ModelSource {
+    File(u32),
+    Path(String),
+    /// A creature display (`CreatureDisplayInfo`).
+    Display(u32),
+    /// A creature (`Creature`): its first display.
+    Creature(u32),
+    /// A character as a unit looks.
+    Character(Look),
+    /// An item's own model (`SetItem`).
+    Item(u32),
+    /// An item appearance's model (`SetItemAppearance`).
+    Appearance(u32),
+}
+
+/// How a character looks: race, sex (0 male, 1 female), class, and what it
+/// wears (inventory slot, item ID); items tried on (links or appearance
+/// IDs) over that.
+#[derive(Clone, Debug, PartialEq, Default)]
+pub struct Look {
+    pub race: u32,
+    pub sex: u32,
+    pub class: u32,
+    pub items: Vec<(u32, u32)>,
+    pub tried: Vec<String>,
+}
+
+/// A model placed in its frame or scene.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Actor {
+    pub source: ModelSource,
+    pub position: [f32; 3],
+    /// Radians: about the up axis (a frame's facing), then pitch, roll.
+    pub yaw: f32,
+    pub pitch: f32,
+    pub roll: f32,
+    pub scale: f32,
+    pub alpha: f32,
+    /// The animation (`AnimationData` ID, 0 standing) and its variation.
+    pub animation: u32,
+    pub variation: u32,
+}
+
+/// How a model is looked at.
+#[derive(Clone, Debug, PartialEq)]
+pub enum ModelCamera {
+    /// A model frame's: the whole model in view, toward its portrait
+    /// camera by `portrait_zoom` (0 to 1), farther by `distance_scale`; a
+    /// camera of the model's own when `SetCamera` chose one.
+    Frame {
+        portrait_zoom: f32,
+        distance_scale: f32,
+        camera: Option<i32>,
+    },
+    /// A model scene's: where it is, its axes, field of view (radians,
+    /// vertical) and clip planes.
+    Scene {
+        position: [f32; 3],
+        forward: [f32; 3],
+        right: [f32; 3],
+        up: [f32; 3],
+        fov: f32,
+        near: f32,
+        far: f32,
+    },
+}
+
+/// A model frame or scene's light.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Light {
+    pub enabled: bool,
+    /// The direction the light shines in, in the model's space.
+    pub direction: [f32; 3],
+    pub ambient: [f32; 3],
+    pub diffuse: [f32; 3],
+}
+
+/// A model frame or scene: what it draws into its rectangle.
+#[derive(Clone, Debug)]
+pub struct Model {
+    pub widget: usize,
+    pub rect: Rect,
+    pub clip: Option<Rect>,
+    pub alpha: f32,
+    pub actors: Vec<Actor>,
+    pub camera: ModelCamera,
+    pub light: Light,
+    /// Seconds since the session began (the animations' clock).
+    pub time: f64,
+}
+
 #[derive(Clone, Debug)]
 pub enum Item {
     Quad(Quad),
     Text(Text),
+    Model(Model),
 }
 
 #[derive(Clone, Debug)]
@@ -913,6 +1007,195 @@ fn sub_rect(tc: [f32; 8], u0: f32, u1: f32, v0: f32, v1: f32) -> [f32; 8] {
     [a[0], a[1], b[0], b[1], c[0], c[1], d[0], d[1]]
 }
 
+fn nums(vm: &Vm, id: WidgetId, stem: &str, n: usize) -> Option<Vec<f32>> {
+    let a = args(vm, id, stem)?;
+    Some((0..n).map(|i| num(vm, a.get(i), 0.0) as f32).collect())
+}
+
+/// A unit's look: its race, sex, class and what it wears, as the API
+/// answers them.
+fn look_of(vm: &mut Vm, unit: &str) -> Look {
+    let u = vm.str(unit);
+    let call = |vm: &mut Vm, name: &str, extra: Option<Value>| -> Vec<Value> {
+        let f = vm.get_global(name);
+        if !matches!(f, Value::Func(_)) {
+            return Vec::new();
+        }
+        let mut a = vec![u];
+        a.extend(extra);
+        vm.pcall(f, &a).unwrap_or_default()
+    };
+    let id_at = |v: &[Value], i: usize| match v.get(i) {
+        Some(Value::Num(n)) => *n as u32,
+        _ => 0,
+    };
+    let race = id_at(&call(vm, "UnitRace", None), 2);
+    let sex = match call(vm, "UnitSex", None).first() {
+        Some(Value::Num(n)) if *n == 3.0 => 1,
+        _ => 0,
+    };
+    let class = id_at(&call(vm, "UnitClass", None), 2);
+    let mut items = Vec::new();
+    for slot in 1..=19u32 {
+        let r = call(vm, "GetInventoryItemID", Some(Value::Num(f64::from(slot))));
+        if let Some(Value::Num(n)) = r.first()
+            && *n > 0.0
+        {
+            items.push((slot, *n as u32));
+        }
+    }
+    Look {
+        race,
+        sex,
+        class,
+        items,
+        tried: Vec::new(),
+    }
+}
+
+/// An actor of a model frame or a scene's actor widget.
+fn actor_of(vm: &mut Vm, id: WidgetId, frame: bool) -> Option<Actor> {
+    let (source, tried, undressed) = crate::models::source_of(vm, id)?;
+    let source = match source {
+        crate::models::Source::File(f) => ModelSource::File(f),
+        crate::models::Source::Path(p) => ModelSource::Path(p),
+        crate::models::Source::Display(d) => ModelSource::Display(d),
+        crate::models::Source::Creature(c) => ModelSource::Creature(c),
+        crate::models::Source::Item(i) => ModelSource::Item(i),
+        crate::models::Source::Appearance(a) => ModelSource::Appearance(a),
+        crate::models::Source::Unit(u) => {
+            let mut look = look_of(vm, &u);
+            if undressed {
+                look.items.clear();
+            }
+            look.tried = tried;
+            ModelSource::Character(look)
+        }
+    };
+    let position = nums(vm, id, "Position", 3).unwrap_or(vec![0.0; 3]);
+    let (yaw, scale, alpha) = if frame {
+        let facing = first(vm, id, "Facing")
+            .or_else(|| first(vm, id, "Rotation"))
+            .map_or(0.0, |v| num(vm, Some(&v), 0.0));
+        (
+            facing as f32,
+            num(vm, first(vm, id, "ModelScale").as_ref(), 1.0) as f32,
+            num(vm, first(vm, id, "ModelAlpha").as_ref(), 1.0) as f32,
+        )
+    } else {
+        (
+            num(vm, first(vm, id, "Yaw").as_ref(), 0.0) as f32,
+            num(vm, first(vm, id, "Scale").as_ref(), 1.0) as f32,
+            num(vm, first(vm, id, "Alpha").as_ref(), 1.0) as f32,
+        )
+    };
+    let anim = args(vm, id, "Animation").unwrap_or_default();
+    Some(Actor {
+        source,
+        position: [position[0], position[1], position[2]],
+        yaw,
+        pitch: num(vm, first(vm, id, "Pitch").as_ref(), 0.0) as f32,
+        roll: num(vm, first(vm, id, "Roll").as_ref(), 0.0) as f32,
+        scale,
+        alpha,
+        animation: num(vm, anim.first(), 0.0).max(0.0) as u32,
+        variation: num(vm, anim.get(1), 0.0).max(0.0) as u32,
+    })
+}
+
+/// The light of a model frame (`SetLight`) or scene (`SetLightDirection`,
+/// …); else a light from the front above (unverified: the client's
+/// default light).
+fn light_of(vm: &Vm, id: WidgetId) -> Light {
+    let mut light = Light {
+        enabled: true,
+        direction: [-1.0, 0.3, -0.6],
+        ambient: [0.55, 0.55, 0.55],
+        diffuse: [0.75, 0.75, 0.75],
+    };
+    if let Some(d) = nums(vm, id, "LightDirection", 3) {
+        light.direction = [d[0], d[1], d[2]];
+    }
+    if let Some(c) = nums(vm, id, "LightAmbientColor", 3) {
+        light.ambient = [c[0], c[1], c[2]];
+    }
+    if let Some(c) = nums(vm, id, "LightDiffuseColor", 3) {
+        light.diffuse = [c[0], c[1], c[2]];
+    }
+    if let Some(v) = first(vm, id, "LightVisible") {
+        light.enabled = v.truthy();
+    }
+    light
+}
+
+/// A model frame's or model scene's model item, if it shows a model.
+fn model_item(vm: &mut Vm, f: WidgetId, class: &str) -> Option<Model> {
+    let e = engine(vm);
+    let is_model = widgets::is_a(e, class, "Model");
+    let is_scene = widgets::is_a(e, class, "ModelScene");
+    if !is_model && !is_scene {
+        return None;
+    }
+    let rect = rect_of(vm, f)?;
+    if rect.w <= 0.0 || rect.h <= 0.0 {
+        return None;
+    }
+    let (actors, camera) = if is_model {
+        let actor = actor_of(vm, f, true)?;
+        let camera = ModelCamera::Frame {
+            portrait_zoom: num(vm, first(vm, f, "PortraitZoom").as_ref(), 0.0) as f32,
+            distance_scale: num(vm, first(vm, f, "CamDistanceScale").as_ref(), 1.0) as f32,
+            camera: first(vm, f, "Camera").map(|v| num(vm, Some(&v), 0.0) as i32),
+        };
+        (vec![actor], camera)
+    } else {
+        let list = widgets::actors(vm, f);
+        let n = vm.heap.table(list).border();
+        let mut actors = Vec::new();
+        for k in 1..=n {
+            let v = vm.heap.table(list).get(Value::Num(k as f64));
+            let Some(a) = widgets::widget_of(vm, v) else {
+                continue;
+            };
+            if !engine(vm).world.widgets[a.0].shown {
+                continue;
+            }
+            if let Some(actor) = actor_of(vm, a, false) {
+                actors.push(actor);
+            }
+        }
+        if actors.is_empty() {
+            return None;
+        }
+        let position = nums(vm, f, "CameraPosition", 3).unwrap_or(vec![5.0, 0.0, 1.0]);
+        let axes = nums(vm, f, "CameraOrientationByAxisVectors", 9);
+        let (forward, right, up) = match axes {
+            Some(a) => ([a[0], a[1], a[2]], [a[3], a[4], a[5]], [a[6], a[7], a[8]]),
+            None => ([-1.0, 0.0, 0.0], [0.0, 1.0, 0.0], [0.0, 0.0, 1.0]),
+        };
+        let camera = ModelCamera::Scene {
+            position: [position[0], position[1], position[2]],
+            forward,
+            right,
+            up,
+            fov: num(vm, first(vm, f, "CameraFieldOfView").as_ref(), 0.7) as f32,
+            near: num(vm, first(vm, f, "CameraNearClip").as_ref(), 0.2) as f32,
+            far: num(vm, first(vm, f, "CameraFarClip").as_ref(), 100.0) as f32,
+        };
+        (actors, camera)
+    };
+    Some(Model {
+        widget: f.0,
+        rect,
+        clip: clip_of(vm, f),
+        alpha: effective_alpha(vm, f),
+        actors,
+        camera,
+        light: light_of(vm, f),
+        time: crate::clock::now(vm),
+    })
+}
+
 /// The scene: every visible region, back to front.
 pub fn build(vm: &mut Vm) -> Scene {
     let effects = crate::animations::effects(vm);
@@ -973,6 +1256,11 @@ fn build_scene(vm: &mut Vm) -> Scene {
             } else if let Some(q) = quad_of(vm, id) {
                 items.push(Item::Quad(q));
             }
+        }
+        // A model frame's model over its regions (unverified: the
+        // client's order of a model and its frame's own regions).
+        if let Some(m) = model_item(vm, f, &class) {
+            items.push(Item::Model(m));
         }
         if widgets::is_a(engine(vm), &class, "EditBox")
             && let Some(t) = text_item(vm, f, true)

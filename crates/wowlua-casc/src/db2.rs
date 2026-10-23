@@ -27,6 +27,9 @@ struct Record {
     at: usize,
     virtual_at: usize,
     id: u32,
+    /// The parent record's ID a relationship map gives (a field not in
+    /// the record), else 0.
+    relation: u32,
 }
 
 pub struct Db2 {
@@ -40,6 +43,7 @@ pub struct Db2 {
     /// All sections' records' bytes (strings' virtual offsets start there).
     records_bytes: usize,
     pub layout_hash: u32,
+    by_id: std::sync::OnceLock<std::collections::HashMap<u32, usize>>,
 }
 
 fn u16_at(b: &[u8], at: usize) -> Option<u16> {
@@ -130,7 +134,10 @@ impl Db2 {
             let count = u32_at(&data, sh + 12)? as usize;
             let string_size = u32_at(&data, sh + 16)? as usize;
             let id_list_size = u32_at(&data, sh + 24)? as usize;
+            let relation_size = u32_at(&data, sh + 28)? as usize;
+            let offset_map_count = u32_at(&data, sh + 32)? as usize;
             let copy_count = u32_at(&data, sh + 36)? as usize;
+            let mut section_records: Vec<Option<usize>> = Vec::with_capacity(count);
             let strings_at = file_offset + count * record_size;
             strings.push((strings_at, string_size));
             let ids_at = strings_at + string_size;
@@ -141,15 +148,22 @@ impl Db2 {
                 // An encrypted section the client has no key for: zeros.
                 if tact_key != 0 && rec.iter().all(|&b| b == 0) {
                     virtual_at += record_size;
+                    section_records.push(None);
                     continue;
                 }
+                section_records.push(Some(records.len()));
                 let id = if id_list_size > 0 {
                     u32_at(&data, ids_at + r * 4)?
                 } else {
                     id_from_field.push(records.len());
                     0
                 };
-                records.push(Record { at, virtual_at, id });
+                records.push(Record {
+                    at,
+                    virtual_at,
+                    id,
+                    relation: 0,
+                });
                 virtual_at += record_size;
             }
             for c in 0..copy_count {
@@ -157,6 +171,21 @@ impl Db2 {
                     u32_at(&data, copy_at + c * 8)?,
                     u32_at(&data, copy_at + c * 8 + 4)?,
                 ));
+            }
+            // The relationship map: (parent ID, record index) pairs.
+            let rel_at = copy_at + copy_count * 8 + offset_map_count * 6;
+            if relation_size >= 12 {
+                let n = u32_at(&data, rel_at)? as usize;
+                for k in 0..n {
+                    let e = rel_at + 12 + k * 8;
+                    let (Some(parent), Some(index)) = (u32_at(&data, e), u32_at(&data, e + 4))
+                    else {
+                        break;
+                    };
+                    if let Some(Some(r)) = section_records.get(index as usize) {
+                        records[*r].relation = parent;
+                    }
+                }
             }
         }
         let mut db = Db2 {
@@ -168,6 +197,7 @@ impl Db2 {
             strings,
             records_bytes: virtual_at,
             layout_hash,
+            by_id: std::sync::OnceLock::new(),
         };
         for i in id_from_field {
             db.records[i].id = db.int(i, id_index).unwrap_or(0);
@@ -199,6 +229,11 @@ impl Db2 {
 
     pub fn id(&self, i: usize) -> u32 {
         self.records[i].id
+    }
+
+    /// Record `i`'s parent ID from the relationship map (0: none).
+    pub fn relation(&self, i: usize) -> u32 {
+        self.records[i].relation
     }
 
     /// Record `i`'s field `f` as an integer.
@@ -250,6 +285,90 @@ impl Db2 {
             }
             _ => None,
         }
+    }
+
+    /// Record `i`'s array field `f`: all its elements (one for a field
+    /// that is not an array).
+    pub fn ints(&self, i: usize, f: usize) -> Vec<u32> {
+        let Some(field) = self.fields.get(f) else {
+            return Vec::new();
+        };
+        let r = &self.records[i];
+        let data = &self.data;
+        match field.storage {
+            0 => {
+                let size = field.byte_size.clamp(1, 4);
+                let count = (field.size_bits as usize / (size * 8)).max(1);
+                (0..count)
+                    .filter_map(|k| {
+                        let at = r.at + field.byte_offset + k * size;
+                        let mut buf = [0u8; 4];
+                        buf[..size].copy_from_slice(data.get(at..at + size)?);
+                        Some(u32::from_le_bytes(buf))
+                    })
+                    .collect()
+            }
+            4 => {
+                let len = field.val3.max(1) as usize;
+                let Some(index) = self.bits_of(r, field) else {
+                    return Vec::new();
+                };
+                let (at, _) = self.pallet;
+                (0..len)
+                    .filter_map(|k| u32_at(data, at + field.extra + (index as usize * len + k) * 4))
+                    .collect()
+            }
+            _ => self.int(i, f).into_iter().collect(),
+        }
+    }
+
+    /// A bit-packed field's raw value.
+    fn bits_of(&self, r: &Record, field: &Field) -> Option<u32> {
+        if field.size_bits == 0 {
+            return Some(0);
+        }
+        let off = field.offset_bits;
+        let start = r.at + (off / 8) as usize;
+        let mut buf = [0u8; 8];
+        let n = (((off % 8) + field.size_bits).div_ceil(8)) as usize;
+        buf[..n].copy_from_slice(self.data.get(start..start + n)?);
+        let v = u64::from_le_bytes(buf) >> (off % 8);
+        Some((v & ((1u64 << field.size_bits) - 1)) as u32)
+    }
+
+    /// Record `i`'s field `f` as a float.
+    pub fn float(&self, i: usize, f: usize) -> Option<f32> {
+        self.int(i, f).map(f32::from_bits)
+    }
+
+    /// Record `i`'s field `f` as a signed integer (a bit-packed signed
+    /// field's sign extended).
+    pub fn signed(&self, i: usize, f: usize) -> Option<i32> {
+        let field = self.fields.get(f)?;
+        let v = self.int(i, f)?;
+        if field.storage == 5 && field.size_bits > 0 && field.size_bits < 32 {
+            let shift = 32 - field.size_bits;
+            return Some(((v << shift) as i32) >> shift);
+        }
+        Some(match field.byte_size {
+            1 if field.storage == 0 => v as u8 as i8 as i32,
+            2 if field.storage == 0 => v as u16 as i16 as i32,
+            _ => v as i32,
+        })
+    }
+
+    /// The index of the record with ID `id`.
+    pub fn find(&self, id: u32) -> Option<usize> {
+        self.by_id
+            .get_or_init(|| {
+                let mut m = std::collections::HashMap::with_capacity(self.records.len());
+                for (i, r) in self.records.iter().enumerate() {
+                    m.entry(r.id).or_insert(i);
+                }
+                m
+            })
+            .get(&id)
+            .copied()
     }
 
     /// Record `i`'s string field `f`.

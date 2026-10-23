@@ -5,8 +5,9 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex, OnceLock};
 
+use wowlua_casc::display::{Display, Library};
 use wowlua_casc::{Casc, FsStorage, Rgba};
-use wowlua_engine::scene::Image;
+use wowlua_engine::scene::{Image, ModelSource};
 
 use crate::Assets;
 
@@ -63,6 +64,18 @@ fn atlases_of(casc: &Arc<Casc>) -> Arc<Atlases> {
         m.insert(key, a.clone());
     }
     a
+}
+
+/// The tables of a storage, opened once per storage.
+fn library_of(casc: &Arc<Casc>) -> Arc<Mutex<Library>> {
+    type Libraries = Mutex<HashMap<usize, Arc<Mutex<Library>>>>;
+    static LIBS: OnceLock<Libraries> = OnceLock::new();
+    let key = Arc::as_ptr(casc) as usize;
+    let map = LIBS.get_or_init(Default::default);
+    let Ok(mut m) = map.lock() else {
+        return Arc::new(Mutex::new(Library::default()));
+    };
+    m.entry(key).or_default().clone()
 }
 
 /// The addons' folders and the client's storage.
@@ -149,6 +162,31 @@ impl Assets for ClientAssets {
     fn atlas(&mut self, name: &str) -> Option<(Image, [f32; 4])> {
         let a = self.atlases.as_ref()?.get(&name.to_ascii_lowercase())?;
         Some((Image::FileId(a.file), a.coords))
+    }
+
+    fn file(&mut self, id: u32) -> Option<Vec<u8>> {
+        self.casc.as_ref()?.file_by_id(id)
+    }
+
+    fn model(&mut self, source: &ModelSource) -> Option<Display> {
+        let casc = self.casc.as_ref()?;
+        let lib = library_of(casc);
+        let mut lib = lib.lock().ok()?;
+        match source {
+            ModelSource::File(f) => Some(Library::file(*f)),
+            ModelSource::Path(p) => {
+                // The old `.mdx` and `.mdl` names are the `.m2` files.
+                let lower = p.to_ascii_lowercase();
+                let path = match lower.rsplit_once('.') {
+                    Some((stem, "mdx" | "mdl")) => format!("{stem}.m2"),
+                    _ => lower,
+                };
+                Some(Library::file(casc.id_of(&path)?))
+            }
+            ModelSource::Display(d) => lib.creature_display(casc, *d),
+            ModelSource::Creature(c) => lib.creature(casc, *c),
+            ModelSource::Character(_) | ModelSource::Item(_) | ModelSource::Appearance(_) => None,
+        }
     }
 
     fn font(&mut self, path: &str) -> Option<Vec<u8>> {

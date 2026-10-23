@@ -561,6 +561,10 @@ libraries for wowlua Studio, natively and in the browser (T300, T301).
 - Front-ends: `wowlua debug` (DAP), `wowlua mcp` (MCP for AI agents),
   `wowlua screenshot`, `mock.screenshot` and `toMatchScreenshot` (T312 to
   T315).
+- From M13: 3D models in model frames and model scenes, from the user's
+  installation (encrypted tables read with the client's own keys): creature
+  displays, creatures and files; then characters with their customizations
+  and worn items (T317 to T319).
 
 **Exit:** a test or an addon session is stopped at a breakpoint inside an
 event handler, stepped through and inspected with watches over DAP; an agent
@@ -588,8 +592,8 @@ Real game data and assets from the user's own client, never distributed
   to the tests' data and the world profiles' (T203, T213).
 - UI assets and the `wgpu` renderer moved to M12 (T310); left here: text
   measured with the client's fonts, so `GetStringWidth`, wrapping and
-  truncation match the client in tests too (T211); 3D models (`ModelScene`,
-  M2 files) last.
+  truncation match the client in tests too (T211). 3D models moved to M12
+  (T318).
 
 **Exit:** the debugger's viewer shows the default UI and an addon's frames
 from a world profile as the client draws them, with the client's spell and

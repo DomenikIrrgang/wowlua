@@ -756,3 +756,91 @@ SetPortraitTexture(p, 'player')",
     });
     assert!(portrait, "the race portrait");
 }
+
+fn models(vm: &mut Vm) -> Vec<wowlua_engine::scene::Model> {
+    wowlua_engine::scene::build(vm)
+        .items
+        .into_iter()
+        .filter_map(|i| match i {
+            wowlua_engine::scene::Item::Model(m) => Some(m),
+            _ => None,
+        })
+        .collect()
+}
+
+/// A model frame shows the last model set, as placed and turned; the
+/// setters read back as set; a cleared model shows nothing.
+#[test]
+fn model_frames_show_their_models() {
+    use wowlua_engine::scene::{ModelCamera, ModelSource};
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local m = CreateFrame('PlayerModel', 'TestModel', UIParent)
+m:SetSize(200, 300)
+m:SetPoint('CENTER')
+m:SetModel(123)
+m:SetDisplayInfo(15)
+m:SetFacing(0.5)
+m:SetPortraitZoom(1)
+m:SetAnimation(4)
+return m:GetDisplayInfo()",
+    );
+    assert_eq!(r, ["15"]);
+    let m = models(&mut vm);
+    assert_eq!(m.len(), 1);
+    let a = &m[0].actors[0];
+    assert_eq!(a.source, ModelSource::Display(15));
+    assert_eq!(a.yaw, 0.5);
+    assert_eq!(a.animation, 4);
+    assert!(matches!(
+        m[0].camera,
+        ModelCamera::Frame { portrait_zoom, .. } if portrait_zoom == 1.0
+    ));
+    assert_eq!((m[0].rect.w, m[0].rect.h), (200.0, 300.0));
+    // A unit: how it looks.
+    run(&mut vm, "TestModel:SetUnit('player')");
+    let m = models(&mut vm);
+    let ModelSource::Character(look) = &m[0].actors[0].source else {
+        panic!("{:?}", m[0].actors[0].source);
+    };
+    assert!(look.race > 0, "{look:?}");
+    // A file ID given as a string is the file.
+    run(&mut vm, "TestModel:SetModel('124442')");
+    let m = models(&mut vm);
+    assert_eq!(m[0].actors[0].source, ModelSource::File(124442));
+    run(&mut vm, "TestModel:ClearModel()");
+    assert!(models(&mut vm).is_empty());
+}
+
+/// A model scene draws its shown actors from its camera.
+#[test]
+fn model_scenes_show_their_actors() {
+    use wowlua_engine::scene::{ModelCamera, ModelSource};
+    let mut vm = vm();
+    run(
+        &mut vm,
+        "local s = CreateFrame('ModelScene', nil, UIParent)
+s:SetSize(300, 300)
+s:SetPoint('CENTER')
+s:SetCameraPosition(4, 0, 1)
+s:SetCameraOrientationByAxisVectors(-1, 0, 0, 0, 1, 0, 0, 0, 1)
+s:SetCameraFieldOfView(0.8)
+local a = s:CreateActor()
+a:SetModelByCreatureDisplayID(1693)
+a:SetYaw(3.14)
+a:SetPosition(0, 0, 0.5)
+local hidden = s:CreateActor()
+hidden:SetModelByFileID(5)
+hidden:Hide()",
+    );
+    let m = models(&mut vm);
+    assert_eq!(m.len(), 1);
+    assert_eq!(m[0].actors.len(), 1);
+    assert_eq!(m[0].actors[0].source, ModelSource::Display(1693));
+    assert_eq!(m[0].actors[0].position, [0.0, 0.0, 0.5]);
+    let ModelCamera::Scene { position, fov, .. } = m[0].camera else {
+        panic!("{:?}", m[0].camera);
+    };
+    assert_eq!((position, fov), ([4.0, 0.0, 1.0], 0.8));
+}

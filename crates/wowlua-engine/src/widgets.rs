@@ -1993,7 +1993,7 @@ pub fn answer_copy(vm: &mut Vm, v: Value) -> Value {
 }
 
 /// A model scene's actors, in the order made.
-fn actors(vm: &mut Vm, id: WidgetId) -> TableRef {
+pub(crate) fn actors(vm: &mut Vm, id: WidgetId) -> TableRef {
     let props = engine(vm).world.widgets[id.0].props;
     let key = vm.str("actors");
     if let Value::Table(t) = vm.heap.table(props).get(key) {

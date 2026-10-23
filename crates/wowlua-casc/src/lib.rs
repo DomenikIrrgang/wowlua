@@ -12,7 +12,12 @@ pub mod blp;
 mod blte;
 mod casc;
 pub mod db2;
+pub mod display;
 pub mod jenkins;
+pub mod m2;
+mod salsa20;
+mod schema;
+pub mod tables;
 pub mod tga;
 
 pub use casc::{Casc, CascError};

@@ -83,3 +83,54 @@ fn reads_the_builds_own_atlases() {
         }
     }
 }
+
+/// Every product's creature displays resolve to models that read: the
+/// tables (encrypted ones with the client's keys), the model and its
+/// skin, posed in its first sequence.
+#[test]
+fn reads_every_products_creature_models() {
+    let Some(root) = install() else {
+        eprintln!("no WoW installation: skipped");
+        return;
+    };
+    let storage = FsStorage { root: root.clone() };
+    for (product, version) in Casc::products(&storage) {
+        let Ok(casc) = Casc::open(Box::new(FsStorage { root: root.clone() }), &product) else {
+            continue;
+        };
+        let mut lib = wowlua_casc::display::Library::default();
+        let rows = lib
+            .table(&casc, "CreatureDisplayInfo")
+            .map_or(0, wowlua_casc::tables::Table::len);
+        assert!(rows > 1000, "{product}: {rows} displays");
+        // The first displays that name a model file.
+        let mut read = 0;
+        for id in 1..3000 {
+            let Some(d) = lib.creature_display(&casc, id) else {
+                continue;
+            };
+            let part = &d.parts[0];
+            let Some(bytes) = casc.file_by_id(part.file) else {
+                continue;
+            };
+            let m = wowlua_casc::m2::Model::parse(&bytes)
+                .unwrap_or_else(|| panic!("{product}: display {id}'s model {}", part.file));
+            let skin = casc
+                .file_by_id(m.skin_files[0])
+                .and_then(|b| wowlua_casc::m2::Skin::parse(&b))
+                .unwrap_or_else(|| panic!("{product}: model {}'s skin", part.file));
+            assert!(!skin.batches.is_empty() && !m.vertices.is_empty());
+            let pose = m.pose(m.sequence(0), 0);
+            assert_eq!(pose.len(), m.bones.len());
+            read += 1;
+            if read == 20 {
+                break;
+            }
+        }
+        eprintln!(
+            "{product} {version}: {rows} displays, {} keys, {read} models read",
+            casc.key_count()
+        );
+        assert_eq!(read, 20, "{product}");
+    }
+}

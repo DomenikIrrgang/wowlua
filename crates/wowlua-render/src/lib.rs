@@ -10,12 +10,14 @@
 pub mod client;
 pub mod compare;
 mod glyphs;
+mod model;
 
 use std::collections::HashMap;
 
 use wgpu::util::DeviceExt;
 pub use wowlua_casc::Rgba;
-use wowlua_engine::scene::{Blend, Image, Item, Rect, Scene};
+pub use wowlua_casc::display::Display;
+use wowlua_engine::scene::{Blend, Image, Item, ModelSource, Rect, Scene};
 
 /// Where images and fonts come from: the addon's folder, the user's
 /// installation.
@@ -27,6 +29,14 @@ pub trait Assets {
     /// An atlas as the build's own tables give it: its file and region
     /// (left, right, top, bottom); none to use the engine's.
     fn atlas(&mut self, _name: &str) -> Option<(Image, [f32; 4])> {
+        None
+    }
+    /// A file of the client's storage by ID (models, skins, animations).
+    fn file(&mut self, _id: u32) -> Option<Vec<u8>> {
+        None
+    }
+    /// What a model shows, as the build's tables give it.
+    fn model(&mut self, _source: &ModelSource) -> Option<Display> {
         None
     }
 }
@@ -66,7 +76,7 @@ enum TexKey {
     Id(u32),
 }
 
-struct Tex {
+pub(crate) struct Tex {
     texture: wgpu::Texture,
     view: wgpu::TextureView,
     width: u32,
@@ -100,6 +110,10 @@ pub struct Renderer {
     white: usize,
     missing: usize,
     atlas_tex: usize,
+    models: model::Models,
+    /// The textures the frame's models are drawn into, reused each frame.
+    model_slots: Vec<usize>,
+    model_slot_next: usize,
     /// The adapter's name, for reports.
     pub adapter: String,
 }
@@ -111,6 +125,8 @@ const PIPELINE_BLEND: usize = 0;
 const PIPELINE_ADD: usize = 1;
 const PIPELINE_MOD: usize = 2;
 const PIPELINE_OPAQUE: usize = 3;
+/// Colors premultiplied by alpha (a model's texture).
+const PIPELINE_PREMUL: usize = 4;
 
 impl Renderer {
     /// A renderer on the first adapter there is (a software one when there
@@ -272,6 +288,18 @@ impl Renderer {
                 alpha: keep_alpha,
             })),
             blend(None),
+            blend(Some(wgpu::BlendState {
+                color: C {
+                    src_factor: F::One,
+                    dst_factor: F::OneMinusSrcAlpha,
+                    operation: O::Add,
+                },
+                alpha: C {
+                    src_factor: F::One,
+                    dst_factor: F::OneMinusSrcAlpha,
+                    operation: O::Add,
+                },
+            })),
         ];
         let sampler = device.create_sampler(&wgpu::SamplerDescriptor {
             label: Some("ui"),
@@ -297,6 +325,9 @@ impl Renderer {
             white: 0,
             missing: 0,
             atlas_tex: 0,
+            models: model::Models::default(),
+            model_slots: Vec::new(),
+            model_slot_next: 0,
             adapter,
         };
         r.white = r.upload(&Rgba {
@@ -490,8 +521,38 @@ impl Renderer {
             w: r.w * scale,
             h: r.h * scale,
         };
+        self.model_slot_next = 0;
         for item in &scene.items {
             match item {
+                Item::Model(m) => {
+                    let Some(tex) = self.draw_model(m, scale, assets) else {
+                        continue;
+                    };
+                    let r = s(m.rect);
+                    let c = [m.alpha; 4];
+                    let mk = |pos: [f32; 2], uv: [f32; 2]| Vertex {
+                        pos,
+                        uv,
+                        color: c,
+                        mask_uv: [0.5, 0.5],
+                        flags: 0,
+                    };
+                    let quad = [
+                        mk([r.x, r.y], [0.0, 0.0]),
+                        mk([r.x, r.y + r.h], [0.0, 1.0]),
+                        mk([r.x + r.w, r.y], [1.0, 0.0]),
+                        mk([r.x + r.w, r.y + r.h], [1.0, 1.0]),
+                    ];
+                    push(
+                        &mut verts,
+                        &mut batches,
+                        PIPELINE_PREMUL,
+                        tex,
+                        self.white,
+                        m.clip.map(s),
+                        quad,
+                    );
+                }
                 Item::Quad(q) => {
                     // The build's atlas, where the assets know it.
                     let own = q.atlas.as_deref().and_then(|n| assets.atlas(n));

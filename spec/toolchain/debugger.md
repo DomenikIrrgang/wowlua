@@ -200,8 +200,22 @@ proportion to the visible regions.
   (unverified: fading, the insertion mode).
 - **Portraits**: a texture given `SetPortraitTexture` (the client renders
   the unit's head in 3D) is drawn as the client's flat portrait of the
-  unit's race and sex (`TemporaryPortrait-<Sex>-<Race>`), until 3D models
-  are drawn (M13).
+  unit's race and sex (`TemporaryPortrait-<Sex>-<Race>`), until portraits
+  are rendered from the unit's model.
+- **Models** (decision T318): a model frame (`Model`, `PlayerModel`,
+  `DressUpModel`, …) with a model set, or a `ModelScene` with shown actors,
+  is a model item over the frame's own regions: each actor's source (the
+  last of `SetModel`, `SetDisplayInfo`, `SetCreature`, `SetUnit`,
+  `SetItem`, `SetModelByFileID`, `SetModelByCreatureDisplayID`,
+  `SetModelByUnit`, …; a unit as its race, sex, class and worn items, with
+  items tried on), position, yaw (a frame's facing), pitch, roll, scale,
+  alpha and animation; the camera (a frame's: the whole model in view from
+  in front, toward its portrait camera by `SetPortraitZoom`, farther by
+  `SetCamDistanceScale`, or a camera of the model's own by `SetCamera`; a
+  scene's: `SetCameraPosition`, its axes, field of view and clip planes);
+  the light; the session's time for animations. `ClearModel` shows nothing.
+  Unverified: the client's framing, field of view and default light, and
+  whether a frame's model draws over all its regions.
 - **Clipping**: frames that clip their children (`SetClipsChildren`,
   scroll frames) give their rectangle to everything below them.
 - **Hit testing**: the topmost mouse-enabled frame at a point, as the
@@ -232,9 +246,26 @@ T310).
   `UiTextureAtlasMember`, `UiTextureAtlasElement`), so they match its
   files (decision T316): a name is an element, drawn with its variant of
   the flavor's atlas set (camelot's `-c60`) over the default set's, at 1x;
-  a variant's own name is drawn as itself. Where the tables cannot be read
-  (encrypted in some builds, the keys not ours), the engine's recorded
-  atlases are drawn.
+  a variant's own name is drawn as itself. Where the tables cannot be read,
+  the engine's recorded atlases are drawn.
+- **Encrypted files** (decision T317): chunks encrypted with a key the
+  client has (its `TactKeyLookup` and `TactKey` tables, and the keys its
+  hotfix cache holds, `Cache/ADB/<locale>/DBCache.bin`) are decrypted in
+  memory (Salsa20); a chunk whose key the client lacks reads as zeros, as
+  in the client, so a table's records of unreleased content are left out.
+- **Tables** (decision T319): DB2 tables (WDC3 to WDC5: inline, bit-packed,
+  palette and common fields, arrays, copies, relationship maps), their
+  fields named by the build's layout hash (as WoWDBDefs documents each
+  layout), else by a known layout of the same field count.
+- **Models** (decision T318): M2 models (the chunked `MD21` form) with
+  their skin profile, skeleton (`.skel`) and the `.anim` files of the
+  sequences shown; a creature display through `CreatureDisplayInfo` and
+  `CreatureModelData` (its skins as texture kinds 11 to 13, its scale and
+  alpha, the geosets `CreatureDisplayInfoGeosetData` names), a creature
+  through its first display, a file by ID. Geosets not named show by the
+  model's defaults (the body, each group's first variant). Not yet:
+  characters (customizations, composited skins, worn items), items'
+  models, particles and ribbons.
 - **Fonts**: the client's TrueType fonts from the installation; without
   them, the bundled stand-in fonts (open licenses), at the same pixel
   heights. Glyph positions follow the engine's measured widths (§17.6), so
@@ -256,6 +287,16 @@ or Vulkan natively, WebGPU or WebGL 2 in the browser.
   coordinates; masks as a second texture; text from a glyph atlas
   rasterized from the font at the scene's pixel height, with outlines and
   shadows.
+- **Models** (decision T318): each model item is drawn into a texture of
+  its rectangle's size with a depth buffer, then into the UI pass in its
+  place (premultiplied alpha): the actors posed on the CPU at the
+  animation's time (bones, then skinning), each visible batch with its
+  material's blend mode (opaque, alpha key, alpha, add, mod, mod 2x),
+  texture (the model's own, or the display's by kind), color and
+  transparency tracks, texture transform, lit by the frame's light unless
+  unlit. Model files are read once; a frame's model textures are reused
+  from frame to frame. Not yet: second textures and the client's shader
+  combiners, billboards, particles, ribbons.
 - **Speed**: textures and glyphs are uploaded once and kept on the GPU;
   quads go in one vertex buffer per frame, drawn in as few calls as texture
   changes allow; nothing is drawn when the scene did not change.
