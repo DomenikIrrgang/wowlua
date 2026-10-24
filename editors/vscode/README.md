@@ -26,6 +26,18 @@ Also `"addon": true` to run the addon itself,
 `"clock": "manual"`, `"stopOnEntry": true`, `"debugBlizzardUI": true`.
 See [Debugging in the emulator](../../docs/debugging-in-the-emulator.md).
 
+## Debugging the addon itself
+
+`"addon": true` runs the addon in the emulated client, logged in, without a
+test: set breakpoints, then use it. In the Debug Console a line starting
+with `/` is a slash command, as typed in chat (`/wdemo`); any other line is
+Lua, run in the game (or in the stopped frame while paused). Clicks in the
+UI panel (below) click in the game.
+
+```json
+{ "type": "wowlua", "request": "launch", "name": "wowlua: run the addon", "addon": true, "flavor": "camelot" }
+```
+
 ## The game's screen
 
 While a session runs, the **wowlua: UI** panel beside the editor shows the

@@ -151,6 +151,8 @@ fn response_body(w: &Writer, command: &str, r: Response, source: Option<&str>) -
     match r {
         Response::Ok => match command {
             "continue" => json!({ "allThreadsContinued": true }),
+            // A slash command typed in the console: it ran.
+            "evaluate" => json!({ "result": "", "variablesReference": 0 }),
             _ => json!({}),
         },
         Response::Breakpoints { breakpoints } => json!({
@@ -347,6 +349,22 @@ fn to_request(
             },
             None,
         ),
+        // A console line starting with `/` is a slash command, as typed in
+        // the chat box (`/wdemo`); anything else is Lua.
+        "evaluate"
+            if s("context").as_deref() != Some("watch")
+                && s("context").as_deref() != Some("hover")
+                && s("expression").is_some_and(|e| e.trim_start().starts_with('/')) =>
+        {
+            (
+                Request::Input {
+                    input: Input::Slash {
+                        text: s("expression").unwrap_or_default().trim().to_string(),
+                    },
+                },
+                None,
+            )
+        }
         "evaluate" => (
             Request::Evaluate {
                 expression: s("expression").unwrap_or_default(),

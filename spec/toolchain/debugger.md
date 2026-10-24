@@ -468,7 +468,8 @@ breakpoints for functions, API calls, events, scripts and timers;
 exception breakpoints for `uncaught`, `all`, `taint` and `blocked`),
 stepping, one thread (the client runs one; a coroutine's stack goes on
 with the code that resumed it), stack traces, scopes, variables,
-`setVariable`, `evaluate` (watch, hover, repl), `pause` and `terminate`
+`setVariable`, `evaluate` (watch, hover, repl: a line starting with `/` is
+a slash command, as typed in chat, `/wdemo`), `pause` and `terminate`
 (during a stop it ends the session at once). A session runs one flavor,
 the package's first unless `flavor` names one; the console names it as the
 session starts, and the VS Code extension asks which of the package's

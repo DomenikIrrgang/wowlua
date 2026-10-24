@@ -375,6 +375,37 @@ fn names_its_flavor_opens_other_addons_files_and_ends_at_a_disconnect() {
     );
 }
 
+/// Debugging the addon itself (`addon: true`, no test): a console line
+/// starting with `/` is a slash command, as typed in chat; other lines are
+/// Lua, which sees what the command did.
+#[test]
+fn the_addons_session_takes_slash_commands_in_the_console() {
+    let dir = project();
+    let root = dir.path().canonicalize().unwrap();
+    fs::write(
+        root.join("src/counter.lua"),
+        "SLASH_DEMOCMD1 = \"/demo\"\nSlashCmdList.DEMOCMD = function(msg) DemoSlash = msg end\n",
+    )
+    .unwrap();
+    let mut c = Client::start(&root);
+    c.request("initialize", json!({ "adapterID": "wowlua" }));
+    c.request("launch", json!({ "addon": true, "flavor": "standard" }));
+    c.event("initialized");
+    c.request("setExceptionBreakpoints", json!({ "filters": [] }));
+    c.request("configurationDone", json!({}));
+    let ran = c.request(
+        "evaluate",
+        json!({ "expression": "/demo hello there", "context": "repl" }),
+    );
+    assert_eq!(ran["result"], "", "{ran:#}");
+    let value = c.request(
+        "evaluate",
+        json!({ "expression": "DemoSlash", "context": "repl" }),
+    );
+    assert_eq!(value["result"], "\"hello there\"", "{value:#}");
+    c.request("disconnect", json!({ "terminateDebuggee": true }));
+}
+
 #[test]
 fn test_profile_out_writes_a_speedscope_file_per_test_file() {
     let dir = project();
