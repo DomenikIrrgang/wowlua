@@ -261,3 +261,26 @@ return grounded, tostring(flying), tostring(landed), landings",
     );
     assert_eq!(r, ["0", "true", "false", "1"]);
 }
+
+#[test]
+fn clears_of_attributes_scripts_and_animations() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local f = CreateFrame('Frame', nil, UIParent)
+f:SetAttribute('unit', 'player')
+f:ClearAttributes()
+f:SetScript('OnShow', function() end)
+f:ClearScripts()
+local g = f:CreateAnimationGroup()
+g:CreateAnimation('Alpha'):SetDuration(2)
+g:RemoveAnimations()
+local b = CreateFrame('Button', nil, UIParent)
+b:LockHighlight()
+local locked = b:IsHighlightLocked()
+local m = CreateFrame('ModelScene', nil, UIParent)
+return tostring(f:GetAttribute('unit')), tostring(f:GetScript('OnShow')), select('#', g:GetAnimations()),
+    g:GetDuration(), tostring(locked), m:GetDrawLayer()",
+    );
+    assert_eq!(r, ["nil", "nil", "0", "0", "true", "ARTWORK", "0"]);
+}

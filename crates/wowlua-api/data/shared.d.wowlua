@@ -4076,19 +4076,19 @@ declare function CanEditGuildTabInfo(tab: unknown?, ...: unknown): (...unknown)
 declare function CanEditMOTD(): boolean
 declare function CanEditPublicNote(): (...unknown)
 declare function CanExitVehicle(): (...unknown)
-declare function CanGamePadControlCursor(...: unknown): (...unknown)
+declare function CanGamePadControlCursor(...: unknown): boolean
 declare function CanGuildBankRepair(): (...unknown)
 declare function CanGuildDemote(): boolean
 declare function CanGuildInvite(): boolean
 declare function CanGuildPromote(): boolean?
 declare function CanGuildRemove(): (...unknown)
 declare function CanHearthAndResurrectFromArea(): (...unknown)
-declare function CanInitiateWarGame(...: unknown): (...unknown)
+declare function CanInitiateWarGame(...: unknown): boolean
 declare function CanJoinBattlefieldAsGroup(): boolean
 declare function CanMerchantRepair(): boolean
 declare function CanPartyLFGBackfill(): (...unknown)
 declare function CanReplaceGuildMaster(): boolean
-declare function CanResetTutorials(...: unknown): (...unknown)
+declare function CanResetTutorials(...: unknown): boolean
 declare function CanShowAchievementUI(): boolean
 declare function CanSignPetition(): (...unknown)
 declare function CanSurrenderArena(): (...unknown)
@@ -4220,12 +4220,12 @@ declare function FlagTutorial(arg1: unknown): (...unknown)
 declare function FlipCameraYaw(angle: number)
 declare function FlyoutHasSpell(flyoutID: number, spellID: number): boolean
 declare function ForfeitDuel(): (...unknown)
-declare function GMEuropaBugsEnabled(...: unknown): (...unknown)
-declare function GMEuropaComplaintsEnabled(...: unknown): (...unknown)
-declare function GMEuropaSuggestionsEnabled(...: unknown): (...unknown)
+declare function GMEuropaBugsEnabled(...: unknown): boolean
+declare function GMEuropaComplaintsEnabled(...: unknown): boolean
+declare function GMEuropaSuggestionsEnabled(...: unknown): boolean
 declare function GMEuropaTicketsEnabled(...: unknown): (...unknown)
 declare function GMItemRestorationButtonEnabled(...: unknown): (...unknown)
-declare function GMQuickTicketSystemEnabled(...: unknown): (...unknown)
+declare function GMQuickTicketSystemEnabled(...: unknown): boolean
 declare function GMQuickTicketSystemThrottled(...: unknown): (...unknown)
 declare function GMReportLag(...: unknown): (...unknown)
 declare function GMRequestPlayerInfo()
@@ -4353,7 +4353,7 @@ declare function GetGuildLogoInfo(): (...unknown)
 declare function GetGuildMemberRecipes(name: unknown?, skillLineID: unknown?, ...: unknown): (...unknown)
 declare function GetGuildNewsFilters(): (...unknown)
 declare function GetGuildNewsMemberName(index: unknown?, nameIndex: unknown?, ...: unknown): (...unknown)
-declare function GetGuildNewsSort(...: unknown): (...unknown)
+declare function GetGuildNewsSort(...: unknown): boolean
 declare function GetGuildPerkInfo(arg1: unknown): (...unknown)
 declare function GetGuildRecipeInfoPostQuery(): (number, number, number)
 declare function GetGuildRecipeMember(index: number): (string, boolean)
@@ -4486,7 +4486,7 @@ declare function GetNumBattlefieldFlagPositions(): (number, ...unknown)
 declare function GetNumBattlefieldScores(): number
 declare function GetNumBindings(): number
 declare function GetNumBuybackItems(): number
-declare function GetNumChannelMembers(...: unknown): (...unknown)
+declare function GetNumChannelMembers(...: unknown): number
 declare function GetNumClasses(): number
 declare function GetNumCompanions(type: string): number
 declare function GetNumComparisonCompletedAchievements(achievementID: number): (number, number)
@@ -4495,7 +4495,7 @@ declare function GetNumDisplayChannels(): number
 declare function GetNumDungeonForRandomSlot(arg1: unknown): (number, ...unknown)
 declare function GetNumFilteredAchievements(): number
 declare function GetNumFlexRaidDungeons(): number
-declare function GetNumFlyouts(...: unknown): (...unknown)
+declare function GetNumFlyouts(...: unknown): number
 declare function GetNumGroupChannels(): (number, ...unknown)
 declare function GetNumGroupMembers(groupType: number?): number
 declare function GetNumGuildBankMoneyTransactions(): (number, ...unknown)
@@ -4507,12 +4507,12 @@ declare function GetNumGuildMembers(): (number, number)
 declare function GetNumGuildNews(): (number, ...unknown)
 declare function GetNumGuildPerks(): (number, ...unknown)
 declare function GetNumGuildRewards(): (number, ...unknown)
-declare function GetNumGuildTradeSkill(...: unknown): (...unknown)
+declare function GetNumGuildTradeSkill(...: unknown): number
 declare function GetNumLanguages(): number
 declare function GetNumLootItems(): number
 declare function GetNumMacros(): (number, number)
 declare function GetNumMembersInRank(arg1: unknown): (number, ...unknown)
-declare function GetNumModifiedClickActions(...: unknown): (...unknown)
+declare function GetNumModifiedClickActions(...: unknown): number
 declare function GetNumPetitionNames(): number
 declare function GetNumQuestChoices(): number
 declare function GetNumQuestCurrencies(): (number, ...unknown)
@@ -4529,7 +4529,7 @@ declare function GetNumRandomScenarios(): (number, ...unknown)
 declare function GetNumRoutes(arg1: unknown): (number, ...unknown)
 declare function GetNumSavedInstances(): number
 declare function GetNumSavedWorldBosses(): number
-declare function GetNumScenarios(...: unknown): (...unknown)
+declare function GetNumScenarios(...: unknown): number
 declare function GetNumShapeshiftForms(): number
 declare function GetNumSpecGroups(b: boolean): number
 declare function GetNumSpecializations(isInspect: boolean?, isPet: boolean?): number
@@ -4675,7 +4675,7 @@ declare function GetTrainerServiceStepIndex(): (...unknown)
 declare function GetTrainerServiceTypeFilter(type: string): boolean
 declare function GetTrainerTradeskillRankValues(): (number?, unknown, number, ...unknown)
 declare function GetTutorialsEnabled(): (...unknown)
-declare function GetVideoCaps(...: unknown): (...unknown)
+declare function GetVideoCaps(...: unknown): (boolean, boolean, boolean, boolean, boolean, number, boolean)
 declare function GetWarGameQueueStatus(...: unknown): (...unknown)
 declare function GetWarGameTypeInfo(index: unknown?, ...: unknown): (...unknown)
 declare function GetWebTicket()
@@ -4700,7 +4700,7 @@ declare function GuildNewsSetSticky(arg1: unknown, arg2: number): (...unknown)
 declare function GuildNewsSort(arg1: number): (...unknown)
 declare function HandleAtlasMemberCommand(arg1: unknown): (...unknown)
 declare function HasCompletedAnyAchievement(): (...unknown)
-declare function HasInboxItem(...: unknown): (...unknown)
+declare function HasInboxItem(messageIndex: unknown, attachIndex: unknown): boolean
 declare function HasLFGRestrictions(): boolean?
 declare function HasLoadedCUFProfiles(): (...unknown)
 declare function HasNewMail(): (...unknown)
@@ -4720,11 +4720,11 @@ declare function IsActiveQuestTrivial(arg1: unknown): (...unknown)
 declare function IsAllowedToUserTeleport(): boolean
 declare function IsArenaSkirmish(): (...unknown)
 declare function IsAvailableQuestTrivial(index: unknown?, ...: unknown): (...unknown)
-declare function IsBNLogin(...: unknown): (...unknown)
+declare function IsBNLogin(...: unknown): boolean
 declare function IsBindingForGamePad(arg1: string): (...unknown)
-declare function IsChatAFK(...: unknown): (...unknown)
+declare function IsChatAFK(...: unknown): boolean
 declare function IsChatChannelRaid(arg1: unknown): (...unknown)
-declare function IsChatDND(...: unknown): (...unknown)
+declare function IsChatDND(...: unknown): boolean
 declare function IsCurrentQuestFailed(): (...unknown)
 declare function IsDisplayChannelModerator(): (...unknown)
 declare function IsDisplayChannelOwner(): (...unknown)
@@ -4732,21 +4732,21 @@ declare function IsEveryoneAssistant(): (...unknown)
 declare function IsFishingLoot(): boolean
 declare function IsGMClient(): boolean
 declare function IsGUIDInGroup(guid: WOWGUID, groupType: number?): boolean
-declare function IsGamePadCursorControlEnabled(...: unknown): (...unknown)
-declare function IsGamePadFreelookEnabled(...: unknown): (...unknown)
+declare function IsGamePadCursorControlEnabled(...: unknown): boolean
+declare function IsGamePadFreelookEnabled(...: unknown): boolean
 declare function IsGraphicsCVarValueSupported(arg1: unknown, arg2: unknown): (...unknown)
 declare function IsGraphicsSettingValueSupported(arg1: unknown, arg2: unknown, arg3: unknown): (...unknown)
 declare function IsGuildMember(player: string): boolean
 declare function IsGuildRankAssignmentAllowed(playerIndex: unknown?, rankIndex: unknown?, ...: unknown): (...unknown)
 declare function IsInActiveWorldPVP(arg1: unknown?): (...unknown)
-declare function IsInAuthenticatedRank(...: unknown): (...unknown)
+declare function IsInAuthenticatedRank(...: unknown): boolean
 declare function IsInCinematicScene(): boolean
 declare function IsInGlobalEnvironment(): (...unknown)
 declare function IsInGroup(groupType: number?): boolean
 declare function IsInGuildGroup(): boolean
 declare function IsInLFGDungeon(): boolean
 declare function IsInRaid(groupType: number?): boolean
-declare function IsInScenarioGroup(...: unknown): (...unknown)
+declare function IsInScenarioGroup(...: unknown): boolean
 declare function IsInventoryItemLocked(slotId: number): boolean
 declare function IsInventoryItemProfessionBag(unit: unknown?, slot: unknown?, ...: unknown): (...unknown)
 declare function IsLFGComplete(): boolean
@@ -4754,7 +4754,7 @@ declare function IsLFGDungeonJoinable(dungeonID: number): (boolean, boolean, boo
 declare function IsMasterLooter(): (...unknown)
 declare function IsModifiedClick(action: string?): boolean
 declare function IsMouselooking(): boolean
-declare function IsOutlineModeSupported(...: unknown): (...unknown)
+declare function IsOutlineModeSupported(...: unknown): boolean
 declare function IsPartyLFG(): (...unknown)
 declare function IsPartyWorldPVP(): (...unknown)
 declare function IsPetActive(): (...unknown)
@@ -4770,7 +4770,7 @@ declare function IsSpellClassOrSpec(spellName: string): (string?, string?)
 declare function IsSpellClassOrSpec(spellIndex: number, bookType: string): (string?, string?)
 declare function IsTradeskillTrainer(): boolean
 declare function IsTutorialFlagged(arg1: unknown): (...unknown)
-declare function IsUsingVehicleControls(...: unknown): (...unknown)
+declare function IsUsingVehicleControls(...: unknown): boolean
 declare function IsWargame(): boolean
 declare function ItemTextGetCreator(): string?
 declare function ItemTextGetItem(): string
@@ -4906,7 +4906,7 @@ declare function RequestBattlegroundInstanceInfo(index: number)
 declare function RequestGuildChallengeInfo(): (...unknown)
 declare function RequestGuildPartyState(): (...unknown)
 declare function RequestGuildRewards(): (...unknown)
-declare function RequestLFDPartyLockInfo(...: unknown): (...unknown)
+declare function RequestLFDPartyLockInfo(...: unknown): boolean
 declare function RequestLFDPlayerLockInfo(): (...unknown)
 declare function RequestPVPOptionsEnabled(): (...unknown)
 declare function RequestPVPRewards(): (...unknown)
@@ -31380,8 +31380,8 @@ declare namespace C_Heirloom
     function GetHeirloomMaxUpgradeLevel(arg1: unknown): (...unknown)
     function GetHeirloomSourceFilter(arg1: unknown): (...unknown)
     function GetNumDisplayedHeirlooms(): (number, ...unknown)
-    function GetNumHeirlooms(...: unknown): (...unknown)
-    function GetNumKnownHeirlooms(...: unknown): (...unknown)
+    function GetNumHeirlooms(...: unknown): number
+    function GetNumKnownHeirlooms(...: unknown): number
     function GetUncollectedHeirloomFilter(): (...unknown)
     function IsItemHeirloom(arg1: number): (...unknown)
     function IsPendingHeirloomUpgrade(): (...unknown)
@@ -31391,7 +31391,7 @@ declare namespace C_Heirloom
     function SetHeirloomSourceFilter(arg1: unknown, arg2: unknown): (...unknown)
     function SetSearch(searchValue: unknown?, ...: unknown): (...unknown)
     function SetUncollectedHeirloomFilter(arg1: unknown): (...unknown)
-    function ShouldShowHeirloomHelp(...: unknown): (...unknown)
+    function ShouldShowHeirloomHelp(...: unknown): boolean
     function UpgradeHeirloom(arg1: unknown): (...unknown)
 end
 
@@ -31426,7 +31426,7 @@ declare namespace C_SharedCharacterServices
     function GetUpgradeDistributions(): (...unknown)
     function HasFreePromotionalUpgrade(): (...unknown)
     function HasSeenFreePromotionalUpgradePopup(): (...unknown)
-    function IsPurchaseIDPendingUpgrade(...: unknown): (...unknown)
+    function IsPurchaseIDPendingUpgrade(...: unknown): boolean
     function QueryClassTrialBoostResult(...: unknown): (...unknown)
     function SetCharacterUpgradePopupSeen(arg1: unknown): (...unknown)
     function SetExpansionTrialPopupSeen(arg1: unknown): (...unknown)
@@ -31447,7 +31447,7 @@ declare namespace C_TalkingHead
     function GetCurrentLineAnimationInfo(): (number?, number, unknown, number?, ...unknown)
     function GetCurrentLineInfo(): (number?, unknown, number, unknown, unknown, unknown, unknown, unknown, unknown, (string | table)?, ...unknown)
     function IgnoreCurrentTalkingHead(): (...unknown)
-    function IsCurrentTalkingHeadIgnored(...: unknown): (...unknown)
+    function IsCurrentTalkingHeadIgnored(...: unknown): boolean
     function SetConversationsDeferred(arg1: boolean): (...unknown)
 end
 
@@ -31525,9 +31525,9 @@ declare namespace C_WoWLabsMatchmaking
     function IsFindingMatch(): (...unknown)
     function IsPartyFull(): (...unknown)
     function IsPartyLeader(): (...unknown)
-    function IsPlayer(...: unknown): (...unknown)
+    function IsPlayer(...: unknown): boolean
     function IsPlayerReady(): (...unknown)
-    function IsWowLabsMatchmakingMember(...: unknown): (...unknown)
+    function IsWowLabsMatchmakingMember(...: unknown): boolean
     function LeaveParty(): (...unknown)
     function RemovePlayerFromParty(...: unknown): (...unknown)
     function SendPartyInvite(arg1: unknown): (...unknown)
@@ -31544,7 +31544,7 @@ declare namespace C_WowTokenPublic
     function GetListedAuctionableTokenInfo(arg1: unknown): (ItemInfo, ...unknown)
     function GetNumListedAuctionableTokens(): (number, ...unknown)
     function IsAuctionableWowToken(itemID: unknown?, ...: unknown): (...unknown)
-    function IsConsumableWowToken(...: unknown): (...unknown)
+    function IsConsumableWowToken(...: unknown): boolean
     function UpdateListedAuctionableTokens(): (...unknown)
     function UpdateMarketPrice(): (...unknown)
     function UpdateTokenCount(): (...unknown)

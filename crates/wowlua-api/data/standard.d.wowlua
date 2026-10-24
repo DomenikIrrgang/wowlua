@@ -43508,7 +43508,7 @@ declare function AcknowledgeAutoAcceptQuest()
 declare function ArchaeologyGetIconInfo(index: number)
 declare function ArchaeologyMapUpdateAll(uiMapID: number): number
 declare function ArcheologyGetVisibleBlobID(index: number): number
-declare function AreTalentsLocked(...: unknown): (...unknown)
+declare function AreTalentsLocked(...: unknown): boolean
 declare function AttachGlyphToSpell(spellID: unknown?, ...: unknown): (...unknown)
 declare function BNSetBlocked(ID: unknown?, bool: unknown?, ...: unknown): (...unknown)
 declare function BattlefieldMgrEntryInviteResponse(queueId: unknown?, accept: unknown?, ...: unknown): (...unknown)
@@ -43546,15 +43546,15 @@ declare function GetGuildAchievementNumMembers(achievementID: number): number
 declare function GetItemLevelColor(): (number, number, number)
 declare function GetJournalInfoForSpellConfirmation(spellID: unknown?, ...: unknown): (...unknown)
 declare function GetMaxTalentTier(): number
-declare function GetMerchantFilter(...: unknown): (...unknown)
+declare function GetMerchantFilter(): number
 declare function GetNumArchaeologyRaces(): number
 declare function GetNumArtifactsByRace(raceIndex: number): number
 declare function GetNumBattlefieldVehicles(index: unknown?, ...: unknown): (...unknown)
 declare function GetNumBattlegroundTypes(): number
-declare function GetNumQuestLogRewardFactions(...: unknown): (...unknown)
-declare function GetNumQuestLogTasks(...: unknown): (...unknown)
-declare function GetNumTreasurePickerItems(...: unknown): (...unknown)
-declare function GetNumUnspentPvpTalents(...: unknown): (...unknown)
+declare function GetNumQuestLogRewardFactions(...: unknown): number
+declare function GetNumQuestLogTasks(...: unknown): number
+declare function GetNumTreasurePickerItems(...: unknown): number
+declare function GetNumUnspentPvpTalents(...: unknown): number
 declare function GetPendingGlyphName(...: unknown): (...unknown)
 declare function GetPetFoodTypes(): string
 declare function GetPlayerTradeCurrency(...: unknown): (...unknown)
@@ -43592,16 +43592,16 @@ declare function GetTasksTable(...: unknown): (...unknown)
 declare function GetTreasurePickerItemInfo(index: unknown?, questID: unknown?, ...: unknown): (...unknown)
 declare function GetWorldMapActionButtonSpellInfo(...: unknown): (...unknown)
 declare function GetWorldPVPQueueStatus(index: number): (string, string?, number, number, number, number, boolean)
-declare function HasArtifactEquipped(...: unknown): (...unknown)
+declare function HasArtifactEquipped(...: unknown): boolean
 declare function HasAttachedGlyph(spellID: unknown?, ...: unknown): (...unknown)
-declare function HasPendingGlyphCast(...: unknown): (...unknown)
+declare function HasPendingGlyphCast(...: unknown): boolean
 declare function IsArtifactCompletionHistoryAvailable(): boolean
 declare function IsBreadcrumbQuest(questID: unknown?, ...: unknown): (...unknown)
-declare function IsCastingGlyph(...: unknown): (...unknown)
-declare function IsPendingGlyphRemoval(...: unknown): (...unknown)
+declare function IsCastingGlyph(...: unknown): boolean
+declare function IsPendingGlyphRemoval(...: unknown): boolean
 declare function IsQuestIDValidSpellTarget(questID: unknown?, ...: unknown): (...unknown)
 declare function IsQuestSequenced(questID: unknown?, ...: unknown): (...unknown)
-declare function IsSpecializationActivateSpell(...: unknown): (...unknown)
+declare function IsSpecializationActivateSpell(...: unknown): boolean
 declare function IsSpellValidForPendingGlyph(spellID: unknown?, ...: unknown): (...unknown)
 declare function IsStoryQuest(questID: unknown?, ...: unknown): (...unknown)
 declare function IsVehicleAimAngleAdjustable(): boolean
@@ -43626,10 +43626,10 @@ declare function ReleaseAction(...: unknown): (...unknown)
 declare function RemoveItemFromArtifact(): boolean
 declare function RemovePvpTalent(...: unknown): (...unknown)
 declare function RequestBottomLeftActionBar(...: unknown): (...unknown)
-declare function ResetSetMerchantFilter(...: unknown): (...unknown)
+declare function ResetSetMerchantFilter()
 declare function SetBarSlotFromIntro(slot: unknown?, ...: unknown): (...unknown)
 declare function SetFocusedAchievement(id: number?)
-declare function SetMerchantFilter(...: unknown): (...unknown)
+declare function SetMerchantFilter(filter: number)
 declare function SetSelectedArtifact(raceIndex: number, index: number?)
 declare function SetTradeCurrency(type: unknown?, amount: unknown?, ...: unknown): (...unknown)
 declare function SocketItemToArtifact(): boolean
@@ -45319,7 +45319,7 @@ declare global CombatLog_Object_IsA: (mask: CombatLogObject, flags: CombatLogObj
 declare global CombatLogAddFilter: (...unknown) -> ...unknown
 declare global CombatLogClearEntries: () -> ()
 declare global CombatLogGetCurrentEntry: (...unknown) -> ...unknown
-declare global CombatLogGetCurrentEventInfo: (...unknown) -> ...unknown
+declare global CombatLogGetCurrentEventInfo: () -> (number, string, boolean, string, string, number, number, string, string, number, number, ...unknown)
 declare global CombatLogGetNumEntries: (...unknown) -> ...unknown
 declare global CombatLogGetRetentionTime: () -> number
 declare global CombatLogResetFilter: (...unknown) -> ...unknown
@@ -62147,7 +62147,7 @@ declare namespace C_CombatLog
 end
 
 declare namespace C_CombatLogInternal
-    function GetCurrentEventInfo()
+    function GetCurrentEventInfo(): (number, string, boolean, string, string, number, number, string, string, number, number, ...unknown)
 end
 
 declare namespace C_CombatLogSecure
@@ -62155,7 +62155,7 @@ declare namespace C_CombatLogSecure
     function ClearEventFilters()
     function CreateCombatLogMessage(message: string, colorR: number, colorG: number, colorB: number, order: CombatLogMessageOrder)
     function GetCurrentEntryInfo()
-    function GetCurrentEventInfo()
+    function GetCurrentEventInfo(): (number, string, boolean, string, string, number, number, string, string, number, number, ...unknown)
     function GetEntryCount(ignoreFilter: boolean?): number
     function SeekToNewestEntry(ignoreFilter: boolean?): boolean
     function SeekToPreviousEntry(ignoreFilter: boolean?): boolean
@@ -64581,7 +64581,7 @@ declare namespace C_PetJournal
     function GetSummonedPetGUID(): string?
     function IsFilterChecked(filter: number): boolean
     function IsFindBattleEnabled(): boolean
-    function IsJournalReadOnly(...: unknown): (...unknown)
+    function IsJournalReadOnly(...: unknown): boolean
     function IsJournalUnlocked(): (...unknown)
     function IsPetSourceChecked(index: number): boolean
     function IsPetTypeChecked(index: number): boolean
@@ -65852,7 +65852,7 @@ declare namespace C_TradeSkillUI
     function GetTradeSkillTexture(tradeSkillID: number): number?
     function AnyRecipeCategoriesFiltered(): (...unknown)
     function AreAnyInventorySlotsFiltered(): (...unknown)
-    function CanObliterateCursorItem(...: unknown): (...unknown)
+    function CanObliterateCursorItem(...: unknown): boolean
     function CanTradeSkillListLink(): (...unknown)
     function ClearInventorySlotFilter(): (...unknown)
     function ClearPendingObliterateItem(): (...unknown)
@@ -65886,10 +65886,10 @@ declare namespace C_TradeSkillUI
     function IsAnyRecipeFromSource(arg1: unknown): (...unknown)
     function IsDataSourceChanging(): (...unknown)
     function IsInventorySlotFiltered(arg1: unknown): (...unknown)
-    function IsRecipeCategoryFiltered(...: unknown): (...unknown)
+    function IsRecipeCategoryFiltered(...: unknown): boolean
     function IsRecipeFavorite(arg1: unknown): (...unknown)
-    function IsRecipeRepeating(...: unknown): (...unknown)
-    function IsRecipeSearchInProgress(...: unknown): (...unknown)
+    function IsRecipeRepeating(...: unknown): boolean
+    function IsRecipeSearchInProgress(...: unknown): boolean
     function IsRecipeSourceTypeFiltered(arg1: unknown): (...unknown)
     function IsTradeSkillGuild(): boolean
     function IsTradeSkillGuildMember(): (...unknown)

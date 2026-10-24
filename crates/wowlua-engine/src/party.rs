@@ -559,8 +559,20 @@ fn is_party_full(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(!u.raid && u.group.len() >= 4)])
 }
 
-/// `GetPartyAssignment(assignment, unit [, exactMatch])`: no one is the
-/// main tank or assist (unverified: assigning); any other assignment the
+/// An assignment's name upper-cased, if it is one (`MAINTANK`,
+/// `MAINASSIST`).
+pub(crate) fn assignment(vm: &Vm, v: Value) -> Option<String> {
+    match vm.hidden(v) {
+        Value::Str(s) => {
+            let a = String::from_utf8_lossy(vm.str_bytes(s)).to_ascii_uppercase();
+            (a == "MAINTANK" || a == "MAINASSIST").then_some(a)
+        }
+        _ => None,
+    }
+}
+
+/// `GetPartyAssignment(assignment, unit [, exactMatch])`: whether the unit
+/// has the assignment (`SetPartyAssignment`); any other assignment the
 /// recorded error.
 fn get_party_assignment(vm: &mut Vm, c: NativeCall) -> Ret {
     // Asked with nothing, its usage (the full probe: the text up to its
@@ -568,17 +580,18 @@ fn get_party_assignment(vm: &mut Vm, c: NativeCall) -> Ret {
     if c.arg(1).is_nil() {
         return Err(vm.error("Usage: GetPartyAssignment(...,\"raidmember\"] [,exactMatch])"));
     }
-    let valid = match c.arg(1) {
-        Value::Str(s) => {
-            let a = String::from_utf8_lossy(vm.str_bytes(s)).to_ascii_uppercase();
-            a == "MAINTANK" || a == "MAINASSIST"
-        }
-        _ => false,
-    };
-    if !valid {
+    let Some(a) = assignment(vm, c.arg(1)) else {
         return Err(vm.error("GetPartyAssignment(): Invalid party assignment"));
-    }
-    Ok(vec![Value::Bool(false)])
+    };
+    let unit = crate::units::unit_arg(vm, &c, 2);
+    let has = unit.is_some_and(|u| {
+        engine(vm)
+            .units
+            .assignments
+            .iter()
+            .any(|(x, w)| *x == a && *w == u)
+    });
+    Ok(vec![Value::Bool(has)])
 }
 
 /// `C_PartyInfo.ConvertToRaid()`: the leader's party a raid

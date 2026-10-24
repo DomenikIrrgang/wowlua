@@ -360,8 +360,13 @@ The WoW API the VM's code calls, per flavor.
   `AdjustPointsOffset(x, y)` moves every anchor, `ClearPointsOffset()`
   zeroes them; the clears (`ClearModel`, a button's `ClearNormalTexture`
   and the other states', `FontString:ClearText`, `ClearParentKey`,
-  `ResetTexCoord`, `StopAnimating`) undo their setters. A method only a
-  renderer would show (`LockHighlight`) is kept for it. An edit box keeps
+  `ResetTexCoord`, `StopAnimating`, `ClearAttributes`, `ClearScripts`,
+  `RemoveAnimations`) undo their setters; `LockHighlight` is
+  `SetHighlightLocked(true)`. The methods of what the engine draws or keeps
+  nothing of (model cameras and dressing, the browser, the shop's checkout,
+  housing's pins, the minimap's blips, movies, vector graphics) change
+  nothing, and their getters answer the documented empty values instead of
+  "not mocked" (decision T295). An edit box keeps
   the lines `AddHistoryLine` adds (as many as `SetHistoryLines` allows,
   `ClearHistory` forgets them); the arrow keys run `OnArrowPressed`, left
   and right move the cursor, up and down step through the history (with
@@ -372,6 +377,16 @@ The WoW API the VM's code calls, per flavor.
   targets; `CancelUnitBuff` and `CancelSpellByName` remove the player's
   own buff (decision T291). They are protected: an addon's call is
   refused first.
+- **Leftovers.** `StartAttack` and `AttackTarget` turn auto attack on
+  against a target that can be attacked, `StopAttack` off;
+  `SetPartyAssignment` and `ClearPartyAssignment` keep the raid's main
+  tanks and assists for `GetPartyAssignment`; `SendSystemMessage` prints a
+  system line; `PickupPlayerMoney`, `DropCursorMoney` and `GetCursorMoney`
+  hold money on the cursor (`ClearCursor` lets it go); `TargetLastEnemy`
+  and `TargetLastFriend` retarget; `Sign` and `secretunwrap` answer as the
+  client's. The client's debug switches and the systems the engine does not
+  model answer their documented empty values (decision T295). Every
+  function the camelot client has now has behaviour.
 - **Not mocked.** A generated function without behaviour raises
   "`<name>` is not mocked" when called, unless the project provides a mock
   (Tooling §16.1.4), so gaps are visible instead of silently returning nil.

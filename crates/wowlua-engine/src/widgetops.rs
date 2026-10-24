@@ -490,6 +490,206 @@ fn stop_animating(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+// ------------------------------------------------- nothing kept or drawn
+
+/// Methods of what the engine draws or keeps nothing of: model cameras,
+/// lights, dressing and animation kits, the browser and the shop's
+/// checkout, housing's pins, the minimap's blips and pings, movies, unit
+/// position frames, vector graphics and blobs, the input language, focus
+/// and mouse simulation, roles and access restrictions, and a single
+/// animation played on its own (unverified: whether its group plays).
+/// They change nothing a getter reads; a getter among them answers its
+/// documented empty values (`widgets::stored`).
+pub const EMPTY_METHODS: &[&str] = &[
+    "Animation:Pause",
+    "Animation:Play",
+    "Animation:Restart",
+    "Animation:Stop",
+    "Blob:DrawAll",
+    "Blob:DrawBlob",
+    "Blob:DrawNone",
+    "Browser:ClearFocus",
+    "Browser:CopyExternalLink",
+    "Browser:DeleteCookies",
+    "Browser:NavigateBack",
+    "Browser:NavigateForward",
+    "Browser:NavigateHome",
+    "Browser:NavigateReload",
+    "Browser:NavigateStop",
+    "Browser:OpenExternalLink",
+    "Browser:OpenTicket",
+    "Button:RegisterForMouse",
+    "CharacterModelBase:ApplySpellVisualKit",
+    "CharacterModelBase:CanSetUnit",
+    "CharacterModelBase:FreezeAnimation",
+    "CharacterModelBase:PlayAnimKit",
+    "CharacterModelBase:RefreshCamera",
+    "CharacterModelBase:RefreshUnit",
+    "CharacterModelBase:StopAnimKit",
+    "CharacterModelBase:ZeroCachedCenterXY",
+    "CinematicModel:EquipItem",
+    "CinematicModel:InitializeCamera",
+    "CinematicModel:InitializePanCamera",
+    "CinematicModel:RefreshCamera",
+    "CinematicModel:StartPan",
+    "CinematicModel:StopPan",
+    "CinematicModel:UnequipItems",
+    "ColorSelect:ClearColorWheelTexture",
+    "Cooldown:Pause",
+    "Cooldown:Resume",
+    "DressUpModel:Dress",
+    "DressUpModel:Undress",
+    "DressUpModel:UndressSlot",
+    "EditBox:ResetInputMode",
+    "EditBox:ToggleInputLanguage",
+    "FontString:OnColorsUpdated",
+    "Frame:AbortDrag",
+    "Frame:AddRoleset",
+    "Frame:CreateVectorGraphics",
+    "Frame:DesaturateHierarchy",
+    "Frame:DisableDrawLayer",
+    "Frame:RegisterUnitEventCallback",
+    "Frame:RemoveRoleset",
+    "Frame:ResizeToBoundsRect",
+    "Frame:RotateTextures",
+    "FrameScriptObject:AddAccessRestrictions",
+    "FrameScriptObject:AddSecretAspect",
+    "FrameScriptObject:HasSecretValues",
+    "HousingFixturePointFrame:HasAttachedFixture",
+    "HousingFixturePointFrame:Select",
+    "HousingLayoutPinFrame:CanMove",
+    "HousingLayoutPinFrame:CanRemove",
+    "HousingLayoutPinFrame:CanRotate",
+    "HousingLayoutPinFrame:Drag",
+    "HousingLayoutPinFrame:GetDoorConnectionInfo",
+    "HousingLayoutPinFrame:GetPinType",
+    "HousingLayoutPinFrame:GetRoomGUID",
+    "HousingLayoutPinFrame:GetRoomName",
+    "HousingLayoutPinFrame:Select",
+    "Minimap:PingLocation",
+    "Minimap:UpdateBlips",
+    "Minimap:UpdateMouseoverAtPoint",
+    "Model:AdvanceTime",
+    "Model:ClearTransform",
+    "Model:ReplaceIconTexture",
+    "Model:UseModelCenterToTransform",
+    "ModelFFX:AddCharacterLight",
+    "ModelFFX:AddLight",
+    "ModelFFX:AddPetLight",
+    "ModelFFX:ResetLights",
+    "ModelSceneFrame:TakeActor",
+    "ModelSceneFrameActor:Dress",
+    "ModelSceneFrameActor:DressPlayerSlot",
+    "ModelSceneFrameActor:ResetNextHandSlot",
+    "ModelSceneFrameActor:Undress",
+    "ModelSceneFrameActor:UndressSlot",
+    "ModelSceneFrameActor:UseUnitSheatheCategory",
+    "ModelSceneFrameActorBase:PlayAnimationKit",
+    "ModelSceneFrameActorBase:StopAnimationKit",
+    "Movie:StartMovie",
+    "Movie:StartMovieByName",
+    "Movie:StopMovie",
+    "NamePlate:ClearAllHitTestPoints",
+    "OffScreenFrame:Flush",
+    "QuestPOI:GetNumTooltips",
+    "QuestPOI:GetTooltipIndex",
+    "QuestPOI:UpdateMouseOverTooltip",
+    "ScenarioPOI:GetScenarioTooltipText",
+    "ScenarioPOI:UpdateMouseOverTooltip",
+    "ScriptRegion:FocusEnter",
+    "ScriptRegion:FocusExit",
+    "ScriptRegion:MouseDown",
+    "ScriptRegion:MouseUp",
+    "ScrollFrame:UpdateScrollChildRect",
+    "SimpleCheckout:CancelOpenCheckout",
+    "SimpleCheckout:ClearFocus",
+    "SimpleCheckout:CloseCheckout",
+    "SimpleCheckout:CopyExternalLink",
+    "SimpleCheckout:OpenCheckout",
+    "SimpleCheckout:OpenExternalLink",
+    "TabardModelBase:CycleVariation",
+    "TabardModelBase:GetLowerEmblemTexture",
+    "TabardModelBase:GetUpperEmblemTexture",
+    "TabardModelBase:InitializeTabardColors",
+    "TabardModelBase:Save",
+    "TextureBase:ClearSVG",
+    "Tooltip:AddFontStrings",
+    "UnitPositionFrame:AddUnit",
+    "UnitPositionFrame:ClearUnits",
+    "UnitPositionFrame:FinalizeUnits",
+    "UnitPositionFrame:StartPlayerPing",
+    "UnitPositionFrame:StopPlayerPing",
+    "VectorGraphics:ClearSVG",
+    "VectorGraphics:GetSVGFileID",
+    "VectorGraphics:HasSVG",
+];
+
+/// `ClearAttributes()`: every attribute gone.
+fn clear_attributes(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let fresh = vm.new_table();
+    engine_mut(vm).world.widgets[id.0].attributes = fresh;
+    Ok(vec![])
+}
+
+/// `ClearScripts()`: every script handler gone (the hooks too).
+fn clear_scripts(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let (scripts, hooks) = (vm.new_table(), vm.new_table());
+    let w = &mut engine_mut(vm).world.widgets[id.0];
+    w.scripts = scripts;
+    w.hooks = hooks;
+    Ok(vec![])
+}
+
+/// `LockHighlight()` / `UnlockHighlight()`: as `SetHighlightLocked`
+/// (`IsHighlightLocked` reads it; the engine draws nothing yet).
+fn lock_highlight(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    widgets::store(vm, id, "HighlightLocked", &[Value::Bool(true)]);
+    Ok(vec![])
+}
+
+fn unlock_highlight(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    widgets::store(vm, id, "HighlightLocked", &[Value::Bool(false)]);
+    Ok(vec![])
+}
+
+/// `RegisterForDrag(...)`: the buttons kept.
+fn register_for_drag(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let args: Vec<Value> = c.args.iter().skip(1).copied().collect();
+    widgets::store(vm, id, "RegisterForDrag", &args);
+    Ok(vec![])
+}
+
+/// `AnimationGroup:RemoveAnimations()`: its animations gone (`GetAnimations`
+/// none, its duration 0).
+fn remove_animations(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let gone: Vec<WidgetId> = {
+        let e = engine(vm);
+        e.world.widgets[id.0]
+            .children
+            .iter()
+            .copied()
+            .filter(|c| widgets::is_a(e, &e.world.widgets[c.0].class, "Animation"))
+            .collect()
+    };
+    let e = engine_mut(vm);
+    e.world.widgets[id.0].children.retain(|c| !gone.contains(c));
+    for a in gone {
+        e.world.widgets[a.0].parent = None;
+    }
+    Ok(vec![])
+}
+
+/// `ModelSceneFrame:GetDrawLayer()`: as set, else a fresh model scene's
+/// recorded `ARTWORK`, 0.
+fn model_scene_draw_layer(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let props = engine(vm).world.widgets[id.0].props;
+    if let Some(v) = widgets::stored_args(vm, props, "DrawLayer") {
+        return Ok(v);
+    }
+    let layer = vm.str("ARTWORK");
+    Ok(vec![layer, Value::Num(0.0)])
+}
+
 pub fn methods() -> Vec<(&'static str, MethodFn)> {
     vec![
         ("Frame:Raise", raise),
@@ -511,5 +711,12 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
         ("ClearParentKey", clear_parent_key),
         ("ResetTexCoord", reset_tex_coord),
         ("StopAnimating", stop_animating),
+        ("Frame:ClearAttributes", clear_attributes),
+        ("ScriptRegion:ClearScripts", clear_scripts),
+        ("Frame:LockHighlight", lock_highlight),
+        ("Frame:UnlockHighlight", unlock_highlight),
+        ("Frame:RegisterForDrag", register_for_drag),
+        ("AnimationGroup:RemoveAnimations", remove_animations),
+        ("ModelSceneFrame:GetDrawLayer", model_scene_draw_layer),
     ]
 }

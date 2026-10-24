@@ -117,3 +117,58 @@ return table.concat(seen, ' ')",
     // Two lines kept (the oldest gone); past the newest, an empty text.
     assert_eq!(r, ["[three] [two] [two] [three] [] a-bc a-bc"]);
 }
+
+#[test]
+fn auto_attack_assignments_and_the_last_enemy() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local mob = mock.spawnUnit({ name = 'Mob', reaction = 'hostile' })
+local pal = mock.spawnUnit({ name = 'Pal', reaction = 'friendly' })
+local seen = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('PLAYER_ENTER_COMBAT')
+f:RegisterEvent('PLAYER_LEAVE_COMBAT')
+f:SetScript('OnEvent', function(_, e) seen[#seen + 1] = e end)
+mock.player:target(pal)
+StartAttack()
+mock.player:target(mob)
+StartAttack()
+StopAttack()
+mock.player:target(pal)
+TargetLastEnemy()
+seen[#seen + 1] = UnitName('target')
+TargetLastFriend()
+seen[#seen + 1] = UnitName('target')
+SetPartyAssignment('MAINTANK', 'target')
+seen[#seen + 1] = tostring(GetPartyAssignment('MAINTANK', 'target'))
+ClearPartyAssignment('MAINTANK', 'target')
+seen[#seen + 1] = tostring(GetPartyAssignment('MAINTANK', 'target'))
+seen[#seen + 1] = Sign(-3) .. Sign(0) .. Sign(2)
+return table.concat(seen, ' ')",
+    );
+    assert_eq!(
+        r,
+        ["PLAYER_ENTER_COMBAT PLAYER_LEAVE_COMBAT Mob Pal true false -101"]
+    );
+}
+
+#[test]
+fn money_on_the_cursor() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "mock.player:setMoney(500)
+local changes = 0
+local f = CreateFrame('Frame')
+f:RegisterEvent('CURSOR_CHANGED')
+f:SetScript('OnEvent', function() changes = changes + 1 end)
+PickupPlayerMoney(900)
+local tooMuch = GetCursorMoney()
+PickupPlayerMoney(200)
+local held = GetCursorMoney()
+ClearCursor()
+return tooMuch, held, GetCursorMoney(), changes",
+    );
+    assert_eq!(r, ["0", "200", "0", "2"]);
+}

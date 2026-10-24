@@ -556,6 +556,69 @@ fn compiler_type_names(root: &Path) -> Result<HashSet<String>> {
     Ok(out)
 }
 
+/// What the camelot client told of its undocumented C functions, as the
+/// engine recorded it (decision T294): its own argument checks
+/// (`camelot-usages.txt`, the first line of each function: the usage's
+/// argument names, `[x]` or a `?` check optional) and its answers to calls
+/// without arguments (`blanks.rs`).
+fn client_facts(root: &Path) -> Result<wowlua_types_gen::ClientFacts> {
+    let path = root.join("crates/wowlua-engine/data/camelot-usages.txt");
+    let text = fs::read_to_string(&path).with_context(|| path.display().to_string())?;
+    let mut usages: Vec<(String, Vec<(String, String, bool)>)> = Vec::new();
+    for line in text.lines().filter(|l| !l.starts_with('#')) {
+        let mut cols = line.split('\t');
+        let (Some(name), Some(checks), Some(message)) = (cols.next(), cols.next(), cols.next())
+        else {
+            continue;
+        };
+        if usages.iter().any(|(n, _)| n == name) {
+            continue;
+        }
+        // `Usage: Name(a, [b])`: the names, bracketed ones optional
+        let inner = message
+            .split_once('(')
+            .and_then(|(_, r)| r.rsplit_once(')'))
+            .map_or("", |(a, _)| a);
+        let names: Vec<(String, bool)> = inner
+            .split(',')
+            .map(|a| {
+                let bracketed = a.contains('[');
+                let n = a.trim().trim_matches(|c| c == '[' || c == ']').trim();
+                (n.to_string(), bracketed)
+            })
+            .filter(|(n, _)| !n.is_empty())
+            .collect();
+        let checks: Vec<&str> = checks.split(',').filter(|c| !c.is_empty()).collect();
+        let args = checks
+            .iter()
+            .enumerate()
+            .map(|(i, check)| {
+                let optional = check.ends_with('?') || *check == "optnumber";
+                let (name, bracketed) = names
+                    .get(i)
+                    .cloned()
+                    .filter(|(n, _)| n.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'))
+                    .unwrap_or_else(|| (format!("arg{}", i + 1), false));
+                (
+                    name,
+                    check.trim_end_matches('?').to_string(),
+                    optional || bracketed,
+                )
+            })
+            .collect();
+        usages.push((name.to_string(), args));
+    }
+    let answers = wowlua_engine::blanks::all()
+        .iter()
+        .map(|(n, a)| (n.to_string(), a.to_string()))
+        .collect();
+    Ok(wowlua_types_gen::ClientFacts {
+        flavor: "camelot".into(),
+        usages,
+        answers,
+    })
+}
+
 pub fn generate(root: &Path, dir: &Path) -> Result<()> {
     let mut flavors = Vec::new();
     for (flavor, _, _) in flavor_tags()? {
@@ -646,6 +709,7 @@ pub fn generate(root: &Path, dir: &Path) -> Result<()> {
         wiki_path.to_string_lossy().into_owned(),
         fs::read_to_string(&wiki_path).unwrap_or_default(),
     )];
+    let client = client_facts(root)?;
     let output = wowlua_types_gen::generate(
         &flavors,
         &annotations,
@@ -653,6 +717,7 @@ pub fn generate(root: &Path, dir: &Path) -> Result<()> {
         &skip,
         &compiler_types,
         &wiki,
+        &client,
     )
     .map_err(anyhow::Error::msg)?;
     let data = root.join("crates/wowlua-api/data");

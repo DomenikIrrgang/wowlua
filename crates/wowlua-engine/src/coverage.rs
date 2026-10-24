@@ -220,6 +220,9 @@ pub fn methods(flavor: &str) -> Result<Vec<Entry>, String> {
         let (source, module) = match modules.get(f.name).or_else(|| modules.get(f.short)) {
             Some(&(module, true)) => (Source::FillIn, module),
             Some(&(module, false)) => (Source::Model, module),
+            None if crate::widgetops::EMPTY_METHODS.contains(&f.name) => {
+                (Source::FillIn, "widgetops")
+            }
             None if f.short.starts_with("Set") || f.short.starts_with("Enable") => {
                 (Source::Model, "widgets")
             }

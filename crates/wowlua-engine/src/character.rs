@@ -93,6 +93,8 @@ pub struct Character {
     pub macros: crate::macros::Macros,
     /// What the cursor holds (`cursor.rs`).
     pub cursor: crate::cursor::Cursor,
+    /// The money on the cursor (`PickupPlayerMoney`), in copper.
+    pub cursor_money: f64,
     /// The saved equipment sets (`equipsets.rs`).
     pub equipment_sets: Vec<crate::equipsets::EquipmentSet>,
 }
@@ -119,6 +121,7 @@ impl Default for Character {
             channels: Default::default(),
             macros: Default::default(),
             cursor: Default::default(),
+            cursor_money: 0.0,
             equipment_sets: Vec::new(),
         }
     }

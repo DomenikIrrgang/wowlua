@@ -22,6 +22,20 @@ pub struct Output {
     pub api: Vec<(String, serde_json::Value)>,
 }
 
+/// What the client itself told of its undocumented C functions (the
+/// engine's recordings of one flavor, decision T294).
+#[derive(Default)]
+pub struct ClientFacts {
+    /// The flavor recorded (`camelot`).
+    pub flavor: String,
+    /// The client's own argument checks (`camelot-usages.txt`): the
+    /// function, then each argument's name, check and whether it may be nil.
+    pub usages: Vec<(String, Vec<(String, String, bool)>)>,
+    /// The client's answers to a call without arguments (`blanks.rs`):
+    /// the function and its answer (`"2: number 0, number 0"`).
+    pub answers: Vec<(String, String)>,
+}
+
 /// One flavor's input: its ID, a description of the sources (for the
 /// header), the documentation files, Blizzard's UI code (Lua and XML) and
 /// the names of its global strings.
@@ -615,6 +629,62 @@ fn recorded_corrections(d: &mut Decls) {
             sig.ret_vararg = Some(rest.into());
         }
     }
+    // The combat log's payload: its 11 base values, then the subevent's
+    // own (warcraft.wiki.gg's COMBAT_LOG_EVENT page; Blizzard's
+    // documentation gives no results).
+    let cleu = || model::Sig {
+        returns: [
+            "number", "string", "boolean", "string", "string", "number", "number", "string",
+            "string", "number", "number",
+        ]
+        .iter()
+        .map(|t| t.to_string())
+        .collect(),
+        ret_vararg: Some("unknown".into()),
+        ..model::Sig::default()
+    };
+    if let Some(sigs) = d.functions.get_mut("CombatLogGetCurrentEventInfo") {
+        *sigs = vec![cleu()];
+    }
+    if d.globals.contains_key("CombatLogGetCurrentEventInfo") {
+        d.globals.insert(
+            "CombatLogGetCurrentEventInfo".into(),
+            model::fn_type(&cleu()),
+        );
+    }
+    for ns in ["C_CombatLog", "C_CombatLogInternal", "C_CombatLogSecure"] {
+        if let Some(sigs) = d
+            .namespaces
+            .get_mut(ns)
+            .and_then(|n| n.functions.get_mut("GetCurrentEventInfo"))
+        {
+            *sigs = vec![cleu()];
+        }
+    }
+    // The merchant's goods filter (the engine's model, decision T289).
+    let filter = |params: &[(&str, &str)], returns: &[&str]| model::Sig {
+        params: params
+            .iter()
+            .map(|(n, t)| model::ParamDecl {
+                name: (*n).into(),
+                ty: (*t).into(),
+                optional: false,
+            })
+            .collect(),
+        returns: returns.iter().map(|t| t.to_string()).collect(),
+        ..model::Sig::default()
+    };
+    for (name, sig) in [
+        ("GetMerchantFilter", filter(&[], &["number"])),
+        ("SetMerchantFilter", filter(&[("filter", "number")], &[])),
+        ("ResetSetMerchantFilter", filter(&[], &[])),
+    ] {
+        if let Some(sigs) = d.functions.get_mut(name)
+            && untyped_sig(sigs)
+        {
+            *sigs = vec![sig];
+        }
+    }
     // `GetAchievementInfo`'s `icon` and `earnedBy`: nil for some
     // achievements (recorded: Archmage Arugal kills has no icon, Number of
     // hugs no one who earned it).
@@ -630,6 +700,152 @@ fn recorded_corrections(d: &mut Decls) {
                     sig.returns[i] = model::optional(&sig.returns[i]);
                 }
             }
+        }
+    }
+}
+
+/// A function no source typed: nothing known of its parameters or results.
+fn untyped_sig(sigs: &[model::Sig]) -> bool {
+    sigs.iter().all(|s| {
+        s.params.is_empty() && s.returns.is_empty() && s.ret_vararg.as_deref() == Some("any")
+    })
+}
+
+/// A usage check's type (`camelot-usages.txt`'s words).
+fn usage_type(check: &str) -> Option<&'static str> {
+    Some(match check {
+        "number" | "index" | "nonneg" | "nonzero" | "optnumber" => "number",
+        "string" | "strictstr" | "guid" => "string",
+        "table" => "table",
+        "boolean" => "boolean",
+        "companion" => "\"CRITTER\" | \"MOUNT\"",
+        "questitem" => "\"required\" | \"choice\" | \"reward\"",
+        "required" | "any" | "taxislot" => "unknown",
+        _ => return None,
+    })
+}
+
+/// An answer's values' types (`"2: number 0, {…}"`): nil is `unknown`.
+fn answer_types(answer: &str) -> Option<Vec<String>> {
+    const WORDS: [&str; 7] = [
+        "number", "string", "boolean", "nil", "{", "userdata", "function",
+    ];
+    let (count, rest) = answer.split_once(':')?;
+    let count: usize = count.trim().parse().ok()?;
+    let rest = rest.trim();
+    // the values: split at a top-level comma a type word follows (a
+    // string's own commas are not)
+    let mut parts = Vec::new();
+    let (mut depth, mut from) = (0usize, 0usize);
+    for (i, c) in rest.char_indices() {
+        match c {
+            '{' => depth += 1,
+            '}' => depth = depth.saturating_sub(1),
+            ',' if depth == 0 => {
+                let next = rest[i + 1..].trim_start();
+                if WORDS.iter().any(|w| next.starts_with(w)) {
+                    parts.push(rest[from..i].trim());
+                    from = i + 1;
+                }
+            }
+            _ => {}
+        }
+    }
+    if !rest.is_empty() {
+        parts.push(rest[from..].trim());
+    }
+    let types: Vec<String> = parts
+        .iter()
+        .map(|p| {
+            let ty = if p.starts_with('{') {
+                "table"
+            } else {
+                match p.split(' ').next().unwrap_or("") {
+                    "number" => "number",
+                    "string" => "string",
+                    "boolean" => "boolean",
+                    _ => "unknown",
+                }
+            };
+            ty.to_string()
+        })
+        .collect();
+    (types.len() == count).then_some(types)
+}
+
+/// The undocumented C functions nothing else typed, from what the client
+/// told (its usage checks and its answers without arguments, on its own
+/// flavor's declarations and the shared ones), else by their names:
+/// `Is…`, `Has…`, `Can…`, `Are…`, `Should…`, `Does…` give a boolean,
+/// `GetNum…` a number (unverified; decision T294).
+fn client_types(d: &mut Decls, client: &ClientFacts, recorded_here: bool) {
+    let usages: HashMap<&str, &Vec<(String, String, bool)>> =
+        client.usages.iter().map(|(n, a)| (n.as_str(), a)).collect();
+    let answers: HashMap<&str, &str> = client
+        .answers
+        .iter()
+        .map(|(n, a)| (n.as_str(), a.as_str()))
+        .collect();
+    let fill = |name: &str, sigs: &mut Vec<model::Sig>| {
+        if !untyped_sig(sigs) {
+            return;
+        }
+        let mut sig = model::Sig {
+            vararg: Some("unknown".into()),
+            ret_vararg: Some("unknown".into()),
+            ..model::Sig::default()
+        };
+        if recorded_here && let Some(args) = usages.get(name) {
+            let typed: Option<Vec<model::ParamDecl>> = args
+                .iter()
+                .map(|(arg, check, optional)| {
+                    Some(model::ParamDecl {
+                        name: arg.clone(),
+                        ty: usage_type(check)?.to_string(),
+                        optional: *optional,
+                    })
+                })
+                .collect();
+            if let Some(params) = typed {
+                sig.params = params;
+                sig.vararg = None;
+            }
+        }
+        if recorded_here
+            && let Some(types) = answers.get(name).and_then(|a| answer_types(a))
+            && types.iter().any(|t| t != "unknown")
+        {
+            sig.returns = types;
+            sig.ret_vararg = None;
+        } else {
+            let short = name.rsplit('.').next().unwrap_or(name);
+            let upper_after = |prefix: &str| {
+                short
+                    .strip_prefix(prefix)
+                    .is_some_and(|r| r.starts_with(|c: char| c.is_ascii_uppercase()))
+            };
+            if ["Is", "Has", "Can", "Are", "Should", "Does"]
+                .iter()
+                .any(|p| upper_after(p))
+            {
+                sig.returns = vec!["boolean".into()];
+                sig.ret_vararg = None;
+            } else if upper_after("GetNum") {
+                sig.returns = vec!["number".into()];
+                sig.ret_vararg = None;
+            }
+        }
+        let typed = !sig.params.is_empty() || !sig.returns.is_empty();
+        if typed {
+            *sigs = vec![sig];
+        }
+    };
+    for (name, sigs) in d.functions.iter_mut() {
+        fill(name, sigs);
+    }
+    for (ns, space) in d.namespaces.iter_mut() {
+        for (member, sigs) in space.functions.iter_mut() {
+            fill(&format!("{ns}.{member}"), sigs);
         }
     }
 }
@@ -937,6 +1153,7 @@ pub fn generate(
     skip: &HashSet<String>,
     compiler_types: &HashSet<String>,
     wiki: &[(String, String)],
+    client: &ClientFacts,
 ) -> Result<Output, String> {
     let mut per_flavor: Vec<(String, String, Decls)> = Vec::new();
     let mut api = Vec::new();
@@ -1986,6 +2203,7 @@ pub fn generate(
             });
         }
         recorded_corrections(&mut d);
+        client_types(&mut d, client, id == client.flavor);
         d.without_any();
         out_flavors.push((id, d.emit(&header)));
     }
@@ -1993,6 +2211,7 @@ pub fn generate(
         "wow-api declarations shared by every flavor, generated by wowlua-types-gen from\n{annotation_source}. Do not edit."
     );
     recorded_corrections(&mut shared);
+    client_types(&mut shared, client, true);
     shared.without_any();
     Ok(Output {
         shared: shared.emit(&header),
@@ -2074,6 +2293,55 @@ mod tests {
         assert_eq!(
             model::sig_text(&other.methods["GetFont"][0]),
             "(): (...any)"
+        );
+    }
+
+    #[test]
+    fn the_clients_answers_type_undocumented_functions() {
+        assert_eq!(
+            answer_types("2: number 0, string a, b").unwrap(),
+            ["number", "string"]
+        );
+        assert_eq!(
+            answer_types("3: {1=number 1,2=string x}, nil nil, boolean true").unwrap(),
+            ["table", "unknown", "boolean"]
+        );
+        assert_eq!(answer_types("0: ").unwrap(), Vec::<String>::new());
+        let untyped = || model::Sig {
+            vararg: Some("any".into()),
+            ret_vararg: Some("any".into()),
+            ..model::Sig::default()
+        };
+        let mut d = Decls::default();
+        for name in [
+            "GetTradeThing",
+            "IsChatAFK",
+            "GetNumFlyouts",
+            "StartAutoRun",
+            "HasInboxItem",
+        ] {
+            d.functions.insert(name.into(), vec![untyped()]);
+        }
+        let client = ClientFacts {
+            flavor: "camelot".into(),
+            usages: vec![(
+                "HasInboxItem".into(),
+                vec![
+                    ("messageIndex".into(), "required".into(), false),
+                    ("attachIndex".into(), "number".into(), true),
+                ],
+            )],
+            answers: vec![("GetTradeThing".into(), "2: number 0, nil nil".into())],
+        };
+        client_types(&mut d, &client, true);
+        let text = |n: &str| model::sig_text(&d.functions[n][0]);
+        assert_eq!(text("GetTradeThing"), "(...: unknown): (number, unknown)");
+        assert_eq!(text("IsChatAFK"), "(...: unknown): boolean");
+        assert_eq!(text("GetNumFlyouts"), "(...: unknown): number");
+        assert_eq!(text("StartAutoRun"), "(...: any): (...any)");
+        assert_eq!(
+            text("HasInboxItem"),
+            "(messageIndex: unknown, attachIndex: number?): boolean"
         );
     }
 }

@@ -389,7 +389,13 @@ The WoW API is typed by **pre-generated `types` packages**, one per flavor:
    (`GetChatWindowMessages(index)` is `...string`), and getters a fresh
    widget answers nil (`FontString:GetText()` is `string?`). A function
    that gives nothing for an ID that names nothing keeps its documented
-   results.
+   results. The client's own C functions no source documents take what the
+   client itself told (decision T294): the argument checks it was probed
+   for (`camelot-usages.txt`: names and kinds), its answers to a call
+   without arguments (the engine's `blanks.rs`), and else their names
+   (`Is…`, `Has…`, `Can…` a boolean, `GetNum…` a number; unverified). The
+   combat log's payload is typed as the wiki's `COMBAT_LOG_EVENT` page
+   gives its eleven base values.
 
 Package versions follow the game version: `wow-api-standard@12.1.0` for build
 12.1.0, and pre-releases for test clients (`12.1.5-ptr.70077`). Generator fixes

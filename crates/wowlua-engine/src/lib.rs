@@ -52,6 +52,7 @@ pub mod inventory;
 pub mod iteminfo;
 pub mod itemlocation;
 pub mod leftovers2;
+pub mod leftovers3;
 pub mod levels;
 pub mod lfg;
 pub mod login;
@@ -1105,6 +1106,7 @@ pub(crate) fn own_behaviours(flavor: &str) -> Vec<Behaviours<NativeFn>> {
         Behaviours::new("units", units::behaviours()),
         Behaviours::new("units", units::more_behaviours()),
         Behaviours::new("targeting", targeting::behaviours()),
+        Behaviours::new("leftovers3", leftovers3::behaviours()),
         Behaviours::new("curves", curves::behaviours()),
         Behaviours::new("healcalc", healcalc::behaviours()),
         Behaviours::new("damagemeter", damagemeter::behaviours()),

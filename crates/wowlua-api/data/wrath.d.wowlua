@@ -27546,7 +27546,7 @@ declare function GetSelectedArtifactInfo(): (string, string, number, number, str
 declare function GetWeaponEnchantInfo(): (boolean, number, number, number, boolean, number, number, number, boolean, number, number, number)
 declare function GetWorldPVPQueueStatus(index: number): (string, string?, number, number, number, number, boolean)
 declare function HasAttachedGlyph(spellID: unknown?, ...: unknown): (...unknown)
-declare function HasPendingGlyphCast(...: unknown): (...unknown)
+declare function HasPendingGlyphCast(...: unknown): boolean
 declare function IsArtifactCompletionHistoryAvailable(): boolean
 declare function IsSpellValidForPendingGlyph(spellID: unknown?, ...: unknown): (...unknown)
 declare function IsVehicleAimAngleAdjustable(): boolean
@@ -29661,7 +29661,7 @@ declare global CombatLog_Object_IsA: (mask: CombatLogObject, flags: CombatLogObj
 declare global CombatLogAddFilter: () -> ()
 declare global CombatLogClearEntries: () -> ()
 declare global CombatLogGetCurrentEntry: () -> ()
-declare global CombatLogGetCurrentEventInfo: () -> ()
+declare global CombatLogGetCurrentEventInfo: () -> (number, string, boolean, string, string, number, number, string, string, number, number, ...unknown)
 declare global CombatLogGetNumEntries: (ignoreFilter: boolean?) -> number
 declare global CombatLogGetRetentionTime: () -> number
 declare global CombatLogResetFilter: () -> ()
@@ -39817,7 +39817,7 @@ declare namespace C_CombatLog
     function ClearEventFilters()
     function DoesObjectMatchFilter(mask: CombatLogObject, flags: CombatLogObject): boolean
     function GetCurrentEntryInfo()
-    function GetCurrentEventInfo()
+    function GetCurrentEventInfo(): (number, string, boolean, string, string, number, number, string, string, number, number, ...unknown)
     function GetEntryCount(ignoreFilter: boolean?): number
     function GetEntryRetentionTime(): number
     function GetMessageLimit(): number
@@ -39831,7 +39831,7 @@ declare namespace C_CombatLog
 end
 
 declare namespace C_CombatLogInternal
-    function GetCurrentEventInfo()
+    function GetCurrentEventInfo(): (number, string, boolean, string, string, number, number, string, string, number, number, ...unknown)
 end
 
 declare namespace C_CombatLogSecure
@@ -39839,7 +39839,7 @@ declare namespace C_CombatLogSecure
     function ClearEventFilters()
     function CreateCombatLogMessage(message: string, colorR: number, colorG: number, colorB: number, order: CombatLogMessageOrder)
     function GetCurrentEntryInfo()
-    function GetCurrentEventInfo()
+    function GetCurrentEventInfo(): (number, string, boolean, string, string, number, number, string, string, number, number, ...unknown)
     function GetEntryCount(ignoreFilter: boolean?): number
     function SeekToNewestEntry(ignoreFilter: boolean?): boolean
     function SeekToPreviousEntry(ignoreFilter: boolean?): boolean
@@ -41420,7 +41420,7 @@ declare namespace C_PetJournal
     function GetSummonedPetGUID(): string?
     function IsFilterChecked(filter: number): boolean
     function IsFindBattleEnabled(): boolean
-    function IsJournalReadOnly(...: unknown): (...unknown)
+    function IsJournalReadOnly(...: unknown): boolean
     function IsJournalUnlocked(): (...unknown)
     function IsPetSourceChecked(index: number): boolean
     function IsPetTypeChecked(index: number): boolean
@@ -42484,7 +42484,7 @@ declare namespace C_CharacterServices
 end
 
 declare namespace C_Heirloom
-    function IsHeirloomSourceValid(...: unknown): (...unknown)
+    function IsHeirloomSourceValid(...: unknown): boolean
 end
 
 declare namespace C_LootHistory
@@ -42499,7 +42499,7 @@ end
 
 declare namespace C_ProductChoice
     function GetChoices(): (...unknown)
-    function GetNumSuppressed(...: unknown): (...unknown)
+    function GetNumSuppressed(...: unknown): number
     function GetProducts(arg1: unknown): (...unknown)
     function MakeSelection(arg1: unknown, arg2: unknown): (...unknown)
 end

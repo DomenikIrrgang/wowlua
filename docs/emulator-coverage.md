@@ -18,27 +18,27 @@ that client answered. The other flavors have their API documentation, the same
 engine modules and the generated stand-ins, but no recording of their own: what
 their clients answer differently is unverified.
 
-- **API functions:** 5,048 of the 5,111 documented camelot functions have
-  behaviour (98.8%): 1,018 modelled, 359 answered from recordings, 3,671 by a
+- **API functions:** 5,111 of the 5,111 documented camelot functions have
+  behaviour (100.0%): 1,025 modelled, 359 answered from recordings, 3,727 by a
   documentation-based fill-in. Of all 7,175 C functions the client has,
-  documented or not, 7,087 have behaviour.
-- **Widget methods:** 1,349 of the 1,477 documented methods have behaviour
-  (91.3%).
+  documented or not, 7,175 have behaviour.
+- **Widget methods:** 1,477 of the 1,477 documented methods have behaviour
+  (100.0%).
 - **Full probe:** 33,082 of the client's 33,727 answers given as the client gave
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,103 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,104 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
-| standard | 4,871 | 4,445 (91.3%) | 0 | 1,438 | 1,306 (90.8%) | none |
-| camelot | 5,111 | 5,048 (98.8%) | 359 | 1,477 | 1,349 (91.3%) | all |
-| mists | 3,221 | 2,836 (88.0%) | 0 | 1,360 | 1,235 (90.8%) | none |
-| cata | 1,927 | 1,640 (85.1%) | 0 | 1,008 | 907 (90.0%) | none |
-| wrath | 3,227 | 2,843 (88.1%) | 0 | 1,360 | 1,235 (90.8%) | none |
-| tbc | 3,220 | 2,839 (88.2%) | 0 | 1,360 | 1,235 (90.8%) | none |
-| vanilla | 3,220 | 2,839 (88.2%) | 0 | 1,360 | 1,235 (90.8%) | none |
+| standard | 4,871 | 4,503 (92.4%) | 0 | 1,438 | 1,429 (99.4%) | none |
+| camelot | 5,111 | 5,111 (100.0%) | 359 | 1,477 | 1,477 (100.0%) | all |
+| mists | 3,221 | 2,885 (89.6%) | 0 | 1,360 | 1,347 (99.0%) | none |
+| cata | 1,927 | 1,666 (86.5%) | 0 | 1,008 | 994 (98.6%) | none |
+| wrath | 3,227 | 2,892 (89.6%) | 0 | 1,360 | 1,347 (99.0%) | none |
+| tbc | 3,220 | 2,888 (89.7%) | 0 | 1,360 | 1,347 (99.0%) | none |
+| vanilla | 3,220 | 2,888 (89.7%) | 0 | 1,360 | 1,347 (99.0%) | none |
 
 ## API behaviour
 
@@ -62,7 +62,7 @@ ones together):
 
 | Namespace | Functions | Model | Recorded | Fill-in | Generated |
 |-----------|----------:|------:|---------:|--------:|----------:|
-| `(globals)` | 2,102 | 731 | 102 | 1,220 | 49 |
+| `(globals)` | 2,102 | 742 | 102 | 1,258 | 0 |
 | `C_AccountInfo` | 3 | 0 | 0 | 3 | 0 |
 | `C_AccountServices` | 10 | 0 | 4 | 6 | 0 |
 | `C_AccountStore` | 11 | 0 | 0 | 11 | 0 |
@@ -89,7 +89,7 @@ ones together):
 | `C_AzeriteItem` | 10 | 0 | 2 | 8 | 0 |
 | `C_Bank` | 26 | 15 | 2 | 9 | 0 |
 | `C_BarberShop` | 29 | 0 | 0 | 29 | 0 |
-| `C_BarberShopInternal` | 1 | 0 | 0 | 0 | 1 |
+| `C_BarberShopInternal` | 1 | 0 | 0 | 1 | 0 |
 | `C_BattleNet` | 35 | 0 | 2 | 33 | 0 |
 | `C_BehavioralMessaging` | 1 | 0 | 0 | 1 | 0 |
 | `C_BlackMarket` | 8 | 0 | 0 | 8 | 0 |
@@ -105,7 +105,7 @@ ones together):
 | `C_ChatBubbles` | 1 | 0 | 0 | 1 | 0 |
 | `C_ChatInfo` | 45 | 11 | 2 | 32 | 0 |
 | `C_ChromieTime` | 4 | 0 | 0 | 4 | 0 |
-| `C_CinematicList` | 1 | 0 | 0 | 0 | 1 |
+| `C_CinematicList` | 1 | 0 | 0 | 1 | 0 |
 | `C_ClassColor` | 1 | 0 | 1 | 0 | 0 |
 | `C_ClassTalents` | 31 | 1 | 15 | 15 | 0 |
 | `C_ClassTrial` | 2 | 0 | 0 | 2 | 0 |
@@ -117,10 +117,10 @@ ones together):
 | `C_ColorUtil` | 7 | 2 | 0 | 5 | 0 |
 | `C_CombatAudioAlert` | 16 | 0 | 6 | 10 | 0 |
 | `C_CombatLog` | 11 | 1 | 0 | 10 | 0 |
-| `C_CombatLogInternal` | 1 | 0 | 0 | 0 | 1 |
+| `C_CombatLogInternal` | 1 | 0 | 0 | 1 | 0 |
 | `C_CombatText` | 3 | 0 | 0 | 3 | 0 |
 | `C_Commentator` | 144 | 63 | 1 | 80 | 0 |
-| `C_ConfigurationWarnings` | 4 | 0 | 0 | 0 | 4 |
+| `C_ConfigurationWarnings` | 4 | 0 | 0 | 4 | 0 |
 | `C_ConsoleScriptCollection` | 4 | 0 | 0 | 4 | 0 |
 | `C_Container` | 47 | 17 | 3 | 27 | 0 |
 | `C_ContentTracking` | 18 | 2 | 3 | 13 | 0 |
@@ -176,16 +176,16 @@ ones together):
 | `C_HeirloomInfo` | 8 | 0 | 2 | 6 | 0 |
 | `C_HouseEditor` | 10 | 1 | 0 | 9 | 0 |
 | `C_HouseExterior` | 23 | 0 | 0 | 23 | 0 |
-| `C_Housing` | 63 | 1 | 4 | 57 | 1 |
-| `C_HousingBasicMode` | 22 | 0 | 0 | 21 | 1 |
+| `C_Housing` | 63 | 1 | 4 | 58 | 0 |
+| `C_HousingBasicMode` | 22 | 0 | 0 | 22 | 0 |
 | `C_HousingBlueprint` | 19 | 0 | 0 | 19 | 0 |
-| `C_HousingCatalog` | 35 | 1 | 0 | 26 | 8 |
+| `C_HousingCatalog` | 35 | 1 | 0 | 34 | 0 |
 | `C_HousingCleanupMode` | 3 | 0 | 0 | 3 | 0 |
 | `C_HousingCustomizeMode` | 32 | 0 | 0 | 32 | 0 |
-| `C_HousingDecor` | 38 | 0 | 0 | 36 | 2 |
+| `C_HousingDecor` | 38 | 0 | 0 | 38 | 0 |
 | `C_HousingExpertMode` | 18 | 0 | 0 | 18 | 0 |
 | `C_HousingInspectMode` | 5 | 0 | 0 | 5 | 0 |
-| `C_HousingLayout` | 41 | 0 | 0 | 39 | 2 |
+| `C_HousingLayout` | 41 | 0 | 0 | 41 | 0 |
 | `C_HousingNeighborhood` | 30 | 0 | 0 | 30 | 0 |
 | `C_ImmersiveInteraction` | 1 | 0 | 0 | 1 | 0 |
 | `C_IncomingSummon` | 2 | 1 | 0 | 1 | 0 |
@@ -208,7 +208,7 @@ ones together):
 | `C_LevelLink` | 2 | 1 | 1 | 0 | 0 |
 | `C_LevelSquish` | 2 | 0 | 0 | 2 | 0 |
 | `C_LimitedInput` | 1 | 0 | 0 | 1 | 0 |
-| `C_LiveEvent` | 2 | 0 | 0 | 0 | 2 |
+| `C_LiveEvent` | 2 | 0 | 0 | 2 | 0 |
 | `C_LobbyMatchmakerInfo` | 8 | 0 | 1 | 7 | 0 |
 | `C_Log` | 4 | 1 | 0 | 3 | 0 |
 | `C_Loot` | 2 | 0 | 0 | 2 | 0 |
@@ -275,7 +275,7 @@ ones together):
 | `C_ScriptedAnimations` | 1 | 0 | 1 | 0 | 0 |
 | `C_SeasonInfo` | 3 | 0 | 0 | 3 | 0 |
 | `C_Secrets` | 27 | 15 | 0 | 12 | 0 |
-| `C_SecureTransfer` | 14 | 0 | 0 | 0 | 14 |
+| `C_SecureTransfer` | 14 | 0 | 0 | 14 | 0 |
 | `C_SettingsUtil` | 2 | 1 | 0 | 1 | 0 |
 | `C_SharedCharacterServices` | 10 | 0 | 0 | 10 | 0 |
 | `C_SkillInfo` | 8 | 3 | 0 | 5 | 0 |
@@ -288,7 +288,7 @@ ones together):
 | `C_SpectatingUI` | 6 | 0 | 1 | 5 | 0 |
 | `C_Spell` | 71 | 22 | 7 | 42 | 0 |
 | `C_SpellActivationOverlay` | 1 | 1 | 0 | 0 | 0 |
-| `C_SpellBook` | 51 | 22 | 0 | 28 | 1 |
+| `C_SpellBook` | 51 | 22 | 0 | 29 | 0 |
 | `C_SpellDiminish` | 4 | 3 | 0 | 1 | 0 |
 | `C_SplashScreen` | 5 | 0 | 1 | 4 | 0 |
 | `C_StableInfo` | 17 | 0 | 3 | 14 | 0 |
@@ -335,7 +335,7 @@ ones together):
 | `C_Widget` | 3 | 3 | 0 | 0 | 0 |
 | `C_WoWLabsMatchmaking` | 25 | 0 | 0 | 25 | 0 |
 | `C_WorldLootObject` | 8 | 0 | 0 | 8 | 0 |
-| `C_WorldSafeLocsUIInternal` | 1 | 0 | 0 | 0 | 1 |
+| `C_WorldSafeLocsUIInternal` | 1 | 0 | 0 | 1 | 0 |
 | `C_WowLabsDataManager` | 7 | 0 | 0 | 7 | 0 |
 | `C_WowSurvey` | 2 | 0 | 0 | 2 | 0 |
 | `C_WowTokenPublic` | 11 | 1 | 2 | 8 | 0 |
@@ -348,14 +348,14 @@ ones together):
 | `math` | 38 | 38 | 0 | 0 | 0 |
 | `string` | 23 | 23 | 0 | 0 | 0 |
 | `table` | 23 | 23 | 0 | 0 | 0 |
-| **All** | 7,175 | 1,604 | 442 | 5,041 | 88 |
+| **All** | 7,175 | 1,615 | 442 | 5,118 | 0 |
 
 By where the function is listed:
 
 | List | Functions | Model | Recorded | Fill-in | Generated |
 |------|----------:|------:|---------:|--------:|----------:|
-| Blizzard's API documentation | 5,111 | 1,018 | 359 | 3,671 | 63 |
-| the client's other C functions (`/stdtest inventory`) | 2,064 | 586 | 83 | 1,370 | 25 |
+| Blizzard's API documentation | 5,111 | 1,025 | 359 | 3,727 | 0 |
+| the client's other C functions (`/stdtest inventory`) | 2,064 | 590 | 83 | 1,391 | 0 |
 | the engine's own, in neither list | 6 | 5 | 0 | 1 | 0 |
 
 Of the engine's own, Blizzard's UI code defines these in the client (Lua
@@ -372,12 +372,12 @@ The modules that answer, by how many functions and methods:
 | `widgets` | model | 646 |
 | `globalsinfo` | fill-in | 545 |
 | `content` | fill-in | 522 |
+| `leftovers2` | fill-in | 390 |
 | `social` | fill-in | 387 |
 | `collections` | fill-in | 377 |
 | `recorded` | recorded | 325 |
 | `questinfo` | fill-in | 316 |
 | `systeminfo` | fill-in | 315 |
-| `leftovers2` | fill-in | 312 |
 | `iteminfo` | fill-in | 228 |
 | `methods3` | fill-in | 212 |
 | `vm` | model | 198 |
@@ -386,6 +386,7 @@ The modules that answer, by how many functions and methods:
 | `blanks` | fill-in | 154 |
 | `stats` | model | 135 |
 | `methods2` | fill-in | 133 |
+| `widgetops` | fill-in | 121 |
 | `objects2` | model | 111 |
 | `units` | model | 94 |
 | `guild` | model | 80 |
@@ -395,7 +396,7 @@ The modules that answer, by how many functions and methods:
 | `facts` | recorded | 70 |
 | `formatters` | model | 62 |
 | `queries` | model | 62 |
-| `facts` | model | 57 |
+| `facts` | model | 56 |
 | `auction` | model | 52 |
 | `protection` | model | 51 |
 | `traits` | recorded | 47 |
@@ -410,15 +411,15 @@ The modules that answer, by how many functions and methods:
 | `mail` | model | 30 |
 | `maps` | model | 28 |
 | `actions` | model | 27 |
+| `widgetops` | model | 27 |
 | `healcalc` | model | 26 |
 | `measures` | model | 26 |
 | `merchant` | model | 26 |
-| `actions2` | fill-in | 25 |
 | `bars` | model | 25 |
+| `actions2` | fill-in | 24 |
 | `trainer` | model | 22 |
 | `widgetdata` | recorded | 21 |
 | `taxi` | model | 20 |
-| `widgetops` | model | 20 |
 | `input` | model | 18 |
 | `pets` | model | 18 |
 | `party` | model | 17 |
@@ -428,6 +429,7 @@ The modules that answer, by how many functions and methods:
 | `bank` | model | 14 |
 | `chatwindows` | model | 13 |
 | `traits` | model | 13 |
+| `leftovers3` | model | 12 |
 | `targeting` | model | 12 |
 | `tooltip` | model | 12 |
 | `death` | model | 11 |
@@ -462,78 +464,78 @@ widget's recorded value where `/stdtest engine` recorded one):
 | `Alpha` | 4 | 2 | 0 | 2 | 0 |
 | `AnimRadialProgress` | 4 | 2 | 0 | 2 | 0 |
 | `AnimatableObject` | 3 | 3 | 0 | 0 | 0 |
-| `Animation` | 36 | 23 | 0 | 9 | 4 |
-| `AnimationGroup` | 28 | 22 | 0 | 5 | 1 |
-| `Blob` | 14 | 10 | 0 | 1 | 3 |
-| `Browser` | 12 | 2 | 0 | 0 | 10 |
-| `Button` | 42 | 35 | 0 | 6 | 1 |
-| `CharacterModelBase` | 24 | 12 | 0 | 4 | 8 |
+| `Animation` | 36 | 23 | 0 | 13 | 0 |
+| `AnimationGroup` | 28 | 23 | 0 | 5 | 0 |
+| `Blob` | 14 | 10 | 0 | 4 | 0 |
+| `Browser` | 12 | 2 | 0 | 10 | 0 |
+| `Button` | 42 | 35 | 0 | 7 | 0 |
+| `CharacterModelBase` | 24 | 12 | 0 | 12 | 0 |
 | `Checkbox` | 6 | 5 | 0 | 1 | 0 |
-| `CinematicModel` | 18 | 11 | 0 | 0 | 7 |
+| `CinematicModel` | 18 | 11 | 0 | 7 | 0 |
 | `ColorCurveObject` | 11 | 11 | 0 | 0 | 0 |
-| `ColorSelect` | 19 | 12 | 0 | 6 | 1 |
+| `ColorSelect` | 19 | 12 | 0 | 7 | 0 |
 | `ControlPoint` | 5 | 3 | 0 | 2 | 0 |
-| `Cooldown` | 46 | 26 | 0 | 18 | 2 |
+| `Cooldown` | 46 | 26 | 0 | 20 | 0 |
 | `CurveObject` | 10 | 10 | 0 | 0 | 0 |
 | `CurveObjectBase` | 3 | 3 | 0 | 0 | 0 |
-| `DressUpModel` | 20 | 9 | 0 | 8 | 3 |
+| `DressUpModel` | 20 | 9 | 0 | 11 | 0 |
 | `DurationClockObject` | 1 | 1 | 0 | 0 | 0 |
 | `DurationManualClock` | 4 | 4 | 0 | 0 | 0 |
 | `DurationObject` | 31 | 31 | 0 | 0 | 0 |
 | `DurationTextBindingObject` | 30 | 30 | 0 | 0 | 0 |
-| `EditBox` | 79 | 56 | 0 | 21 | 2 |
+| `EditBox` | 79 | 56 | 0 | 23 | 0 |
 | `FlipBook` | 10 | 5 | 0 | 5 | 0 |
 | `FogOfWarFrame` | 12 | 6 | 0 | 6 | 0 |
 | `Font` | 24 | 14 | 0 | 10 | 0 |
-| `FontString` | 57 | 33 | 0 | 23 | 1 |
-| `Frame` | 126 | 81 | 13 | 19 | 13 |
-| `FrameScriptObject` | 21 | 8 | 0 | 10 | 3 |
+| `FontString` | 57 | 33 | 0 | 24 | 0 |
+| `Frame` | 126 | 85 | 13 | 28 | 0 |
+| `FrameScriptObject` | 21 | 8 | 0 | 13 | 0 |
 | `HousingCatalogSearcher` | 46 | 46 | 0 | 0 | 0 |
-| `HousingFixturePointFrame` | 5 | 3 | 0 | 0 | 2 |
-| `HousingLayoutPinFrame` | 17 | 8 | 0 | 0 | 9 |
+| `HousingFixturePointFrame` | 5 | 3 | 0 | 2 | 0 |
+| `HousingLayoutPinFrame` | 17 | 8 | 0 | 9 | 0 |
 | `Line` | 9 | 5 | 0 | 4 | 0 |
 | `LocaleContext` | 22 | 22 | 0 | 0 | 0 |
 | `MapScene` | 5 | 2 | 0 | 3 | 0 |
 | `MessageFrame` | 33 | 19 | 0 | 14 | 0 |
-| `Minimap` | 31 | 27 | 0 | 1 | 3 |
-| `Model` | 65 | 33 | 0 | 28 | 4 |
-| `ModelFFX` | 4 | 0 | 0 | 0 | 4 |
-| `ModelSceneFrame` | 47 | 24 | 0 | 21 | 2 |
-| `ModelSceneFrameActor` | 31 | 13 | 0 | 12 | 6 |
-| `ModelSceneFrameActorBase` | 50 | 31 | 0 | 17 | 2 |
-| `Movie` | 4 | 1 | 0 | 0 | 3 |
-| `NamePlate` | 6 | 3 | 0 | 2 | 1 |
+| `Minimap` | 31 | 27 | 0 | 4 | 0 |
+| `Model` | 65 | 33 | 0 | 32 | 0 |
+| `ModelFFX` | 4 | 0 | 0 | 4 | 0 |
+| `ModelSceneFrame` | 47 | 25 | 0 | 22 | 0 |
+| `ModelSceneFrameActor` | 31 | 13 | 0 | 18 | 0 |
+| `ModelSceneFrameActorBase` | 50 | 31 | 0 | 19 | 0 |
+| `Movie` | 4 | 1 | 0 | 3 | 0 |
+| `NamePlate` | 6 | 3 | 0 | 3 | 0 |
 | `NumericFormatter` | 1 | 1 | 0 | 0 | 0 |
 | `NumericRuleFormatter` | 5 | 5 | 0 | 0 | 0 |
 | `Object` | 5 | 4 | 0 | 1 | 0 |
-| `OffScreenFrame` | 8 | 2 | 0 | 5 | 1 |
+| `OffScreenFrame` | 8 | 2 | 0 | 6 | 0 |
 | `Path` | 5 | 1 | 0 | 4 | 0 |
-| `QuestPOI` | 3 | 0 | 0 | 0 | 3 |
+| `QuestPOI` | 3 | 0 | 0 | 3 | 0 |
 | `Region` | 16 | 14 | 2 | 0 | 0 |
 | `Rotation` | 6 | 1 | 0 | 5 | 0 |
 | `Scale` | 8 | 5 | 0 | 3 | 0 |
-| `ScenarioPOI` | 2 | 0 | 0 | 0 | 2 |
-| `ScriptRegion` | 55 | 37 | 5 | 8 | 5 |
+| `ScenarioPOI` | 2 | 0 | 0 | 2 | 0 |
+| `ScriptRegion` | 55 | 38 | 5 | 12 | 0 |
 | `ScriptRegionResizing` | 13 | 13 | 0 | 0 | 0 |
-| `ScrollFrame` | 9 | 7 | 0 | 1 | 1 |
+| `ScrollFrame` | 9 | 7 | 0 | 2 | 0 |
 | `SecondsFormatter` | 35 | 35 | 0 | 0 | 0 |
-| `SimpleCheckout` | 8 | 2 | 0 | 0 | 6 |
+| `SimpleCheckout` | 8 | 2 | 0 | 6 | 0 |
 | `SimpleHTML` | 23 | 5 | 0 | 18 | 0 |
 | `Slider` | 19 | 19 | 0 | 0 | 0 |
 | `StatusBar` | 28 | 25 | 0 | 3 | 0 |
 | `TabardModel` | 6 | 0 | 0 | 6 | 0 |
-| `TabardModelBase` | 7 | 1 | 0 | 1 | 5 |
+| `TabardModelBase` | 7 | 1 | 0 | 6 | 0 |
 | `Texture` | 4 | 4 | 0 | 0 | 0 |
-| `TextureBase` | 52 | 32 | 1 | 18 | 1 |
+| `TextureBase` | 52 | 32 | 1 | 19 | 0 |
 | `TextureCoordTranslation` | 2 | 1 | 0 | 1 | 0 |
 | `TimedSignalMap` | 8 | 8 | 0 | 0 | 0 |
-| `Tooltip` | 9 | 3 | 0 | 5 | 1 |
+| `Tooltip` | 9 | 3 | 0 | 6 | 0 |
 | `Translation` | 2 | 1 | 0 | 1 | 0 |
 | `UnitHealPredictionCalculator` | 35 | 35 | 0 | 0 | 0 |
-| `UnitPositionFrame` | 12 | 4 | 0 | 3 | 5 |
-| `VectorGraphics` | 4 | 1 | 0 | 0 | 3 |
+| `UnitPositionFrame` | 12 | 4 | 0 | 8 | 0 |
+| `VectorGraphics` | 4 | 1 | 0 | 3 | 0 |
 | `VertexColor` | 4 | 2 | 0 | 2 | 0 |
-| **All** | 1,477 | 983 | 21 | 345 | 128 |
+| **All** | 1,477 | 990 | 21 | 466 | 0 |
 
 ## Verification against the client
 
@@ -836,7 +838,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,103 rules unverified: each rests on Blizzard's
+The engine's code marks 1,104 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1581,6 +1583,10 @@ page changes only when a rule is added, removed or reworded.
 - [leftovers2.rs](../crates/wowlua-engine/src/leftovers2.rs): `C_Intl.FindStringMatches(text, pattern, strength)`: the 1-based byte offsets where the pattern starts; nothing for a...
 - [leftovers2.rs](../crates/wowlua-engine/src/leftovers2.rs): `C_Intl.GetCharacterProperties(text)`: the first character's Unicode properties (the full probe, 1.60.1: "H" Lu, "x"...
 
+### leftovers3 (1)
+
+- [leftovers3.rs](../crates/wowlua-engine/src/leftovers3.rs): Unverified, none recorded: the events of an assignment, of money on the cursor and of a system line sent from Lua; wh...
+
 ### levels (2)
 
 - [levels.rs](../crates/wowlua-engine/src/levels.rs): Unverified: more than one level at once, a level with talents or spells to learn, a pet's; the skill lines' changes'...
@@ -1783,7 +1789,7 @@ page changes only when a rule is added, removed or reworded.
 - [objects2.rs](../crates/wowlua-engine/src/objects2.rs): `RunSearch()`: nothing to find; the results callback is not called (unverified: the client might report an empty resu...
 - [objects2.rs](../crates/wowlua-engine/src/objects2.rs): A setting's getter: what was set; before that nil, the sort type `Enum.HousingCatalogSortType.DateAdded` (0, unverifi...
 
-### party (10)
+### party (9)
 
 - [party.rs](../crates/wowlua-engine/src/party.rs): Unverified: a party of more than two, leaving, a raid, roles, the loot method's choice (group loot, uncommon: recorde...
 - [party.rs](../crates/wowlua-engine/src/party.rs): Its faction by its group token alone (recorded: party1's, not the soft friend's it also was; unverified: other tokens).
@@ -1793,7 +1799,6 @@ page changes only when a rule is added, removed or reworded.
 - [party.rs](../crates/wowlua-engine/src/party.rs): `C_PartyInfo.ConvertToParty()`: the leader's raid of five or fewer a party again (`GROUP_ROSTER_UPDATE`; unverified:...
 - [party.rs](../crates/wowlua-engine/src/party.rs): `C_PartyInfo.GetLootMethod()`: group loot (recorded in a party and a raid, as the party was formed with; unverified:...
 - [party.rs](../crates/wowlua-engine/src/party.rs): `C_PartyInfo.IsPartyFull()`: a party of five (recorded: not with two; unverified: full, a raid).
-- [party.rs](../crates/wowlua-engine/src/party.rs): `GetPartyAssignment(assignment, unit [, exactMatch])`: no one is the main tank or assist (unverified: assigning); any...
 - [party.rs](../crates/wowlua-engine/src/party.rs): `C_PartyInfo.ConvertToRaid()`: the leader's party a raid (`GROUP_ROSTER_UPDATE`; unverified: its other events and mes...
 
 ### pets (6)
@@ -2155,9 +2160,10 @@ page changes only when a rule is added, removed or reworded.
 - [units.rs](../crates/wowlua-engine/src/units.rs): `UnitIsHumanPlayer(unit)`: a player's character (unverified: as `UnitIsPlayer`).
 - [units.rs](../crates/wowlua-engine/src/units.rs): Not casting or channeling: no values.
 
-### widgetops (1)
+### widgetops (2)
 
 - [widgetops.rs](../crates/wowlua-engine/src/widgetops.rs): Unverified, none recorded: which frames `Raise` counts (the shown ones of the strata here) and the level cap (10000),...
+- [widgetops.rs](../crates/wowlua-engine/src/widgetops.rs): Methods of what the engine draws or keeps nothing of: model cameras, lights, dressing and animation kits, the browser...
 
 ### widgets (45)
 
@@ -2331,6 +2337,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - The guild
 - Widget state (decision T289)
 - Targeting and history (decision T291)
+- Leftovers (decision T295)
 - Regressions and other flavors
 
 ## In-game regressions

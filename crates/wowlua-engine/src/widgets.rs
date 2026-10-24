@@ -1198,6 +1198,12 @@ fn stored(vm: &mut Vm, id: WidgetId, f: &crate::api::Function, c: &NativeCall) -
     if returns.is_empty() {
         return Ok(vec![]);
     }
+    // What the engine draws or keeps nothing of: the documented empty
+    // values for everyone (`widgetops::EMPTY_METHODS`).
+    if crate::widgetops::EMPTY_METHODS.contains(&name) {
+        let api = engine(vm).api;
+        return Ok(crate::defaults(vm, api, &f.doc));
+    }
     // Blizzard's code gets empty values; the addon's code an error.
     if crate::protection::blizzard_caller(vm) {
         engine_mut(vm).defaulted.insert(name);

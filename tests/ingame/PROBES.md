@@ -365,6 +365,29 @@ Screenshot after step 7. The engine keeps no line without
 `SetHistoryLines` (step 5 changes nothing), runs `OnArrowPressed` before
 the text changes, and step 7 brings back "three".
 
+## Leftovers (decision T295)
+
+**Money on the cursor** (bags open, some money):
+
+1. `/run local f=CreateFrame("Frame") f:RegisterEvent("CURSOR_CHANGED") f:SetScript("OnEvent",function(_,e,...) print(e,...) end) PickupPlayerMoney(1) print(GetCursorMoney(),GetCursorInfo())`
+2. `/run ClearCursor() print(GetCursorMoney())`
+
+Screenshot after step 2. The engine says `CURSOR_CHANGED false 2 0 0`,
+then 1 (and no cursor info), then `CURSOR_CHANGED true 0 2 0` and 0.
+
+**Assignments** (as a raid leader, a member targeted):
+
+3. `/run local f=CreateFrame("Frame") f:RegisterEvent("GROUP_ROSTER_UPDATE") f:SetScript("OnEvent",function(_,e) print(e) end) SetPartyAssignment("MAINTANK","target") C_Timer.After(1,function() print(GetPartyAssignment("MAINTANK","target")) end)`
+
+Screenshot. The engine tells `GROUP_ROSTER_UPDATE` at once and true.
+
+**A system line and Sign**:
+
+4. `/run SendSystemMessage("probe line") print(Sign(-3),Sign(0),Sign(2))`
+
+Screenshot. The engine shows "probe line" as a system message, then
+-1 0 1.
+
 ## Regressions and other flavors
 
 1. With SuuUI's current bags, open the spellbook, enter combat (a training

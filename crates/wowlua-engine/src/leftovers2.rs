@@ -199,6 +199,36 @@ const UNDOCUMENTED: &[(&str, &str)] = &[
     ("GetMaxTalentTier", "0"),
     // Code runs in the global environment.
     ("IsInGlobalEnvironment", "t"),
+    // Raid profiles (none: `GetNumRaidProfiles` 0), no death recap, no
+    // housing of one's own, the old talent and pet spell buttons, the taxi
+    // map's texture, the trainer and guild roster windows' requests, a
+    // critter summoned (no companions), UIParent placed by the client.
+    ("CreateNewRaidProfile", ""),
+    ("DeleteRaidProfile", ""),
+    ("RestoreRaidProfileFromCopy", ""),
+    ("SaveRaidProfileCopy", ""),
+    ("SetRaidProfileOption", ""),
+    ("SetRaidProfileSavedPosition", ""),
+    ("DeathRecap_GetEvents", "n"),
+    ("DeathRecap_HasEvents", "f"),
+    ("GetDeathRecapLink", "n"),
+    ("C_Housing.IsInsideOwnHouse", "f"),
+    ("PickupTalent", ""),
+    ("RemoveTalent", ""),
+    ("PickupPetAction", ""),
+    ("PickupPetSpell", ""),
+    ("SetSpellbookPetAction", ""),
+    ("SetTaxiMap", ""),
+    ("OpenTrainer", ""),
+    ("SortGuildRoster", ""),
+    ("SummonRandomCritter", ""),
+    ("UpdateUIParentPosition", ""),
+    // The spell queue window's offset: none.
+    ("GetMaxSpellStartRecoveryOffset", "0"),
+    // A chat link clicked: Blizzard's ItemRef.lua defines it when its UI
+    // code is loaded (addon links then reach `EventRegistry`'s
+    // `SetItemRef`); without that code nothing happens.
+    ("SetItemRef", ""),
 ];
 
 /// A system the engine does not model: its documented empty values, or an
@@ -237,6 +267,65 @@ fn nothing(vm: &mut Vm, c: NativeCall) -> Ret {
 /// Documented functions of systems Forever lacks or the engine does not
 /// model, answering their documentation's empty values (unverified).
 const DOCUMENTED_EMPTY: &[&str] = &[
+    // The client's debug switches and internal systems: nothing drawn,
+    // nothing moved, nothing to buy, trade or mail securely here; the
+    // direction and totem targeting the engine's world has no place for.
+    "C_BarberShopInternal.SetQAMode",
+    "C_CinematicList.GetUICinematicList",
+    "C_CombatLogInternal.GetCurrentEventInfo",
+    "C_ConfigurationWarnings.GetConfigurationWarningSeen",
+    "C_ConfigurationWarnings.GetConfigurationWarningString",
+    "C_ConfigurationWarnings.GetConfigurationWarnings",
+    "C_ConfigurationWarnings.SetConfigurationWarningSeen",
+    "C_HousingBasicMode.StartPlacingNewDecor",
+    "C_HousingCatalog.DestroyEntry",
+    "C_HousingCatalog.GetCatalogCategoryInfo",
+    "C_HousingCatalog.GetCatalogEntryInfo",
+    "C_HousingCatalog.GetCatalogEntryInfoByItem",
+    "C_HousingCatalog.GetCatalogEntryInfoByRecordID",
+    "C_HousingCatalog.GetCatalogSubcategoryInfo",
+    "C_HousingCatalog.SearchCatalogCategories",
+    "C_HousingCatalog.SearchCatalogSubcategories",
+    "C_HousingDecor.GetMaxPlacementBudget",
+    "C_HousingDecor.GetSpentPlacementBudget",
+    "C_HousingLayout.GetRoomPlacementBudget",
+    "C_HousingLayout.GetSpentPlacementBudget",
+    "C_LiveEvent.OnLiveEventBannerClicked",
+    "C_LiveEvent.OnLiveEventPopupClicked",
+    "C_SecureTransfer.AcceptTrade",
+    "C_SecureTransfer.Cancel",
+    "C_SecureTransfer.CompleteHousingPurchase",
+    "C_SecureTransfer.CompleteHousingVCPurchase",
+    "C_SecureTransfer.GetHousingPurchaseCost",
+    "C_SecureTransfer.GetHousingPurchaseQuantity",
+    "C_SecureTransfer.GetHousingVCPurchaseProductID",
+    "C_SecureTransfer.GetMailReceiveInfo",
+    "C_SecureTransfer.GetMailSendInfo",
+    "C_SecureTransfer.GetTradePartner",
+    "C_SecureTransfer.SendMail",
+    "C_SecureTransfer.ShouldShowTradeOfferWarning",
+    "C_SecureTransfer.ShouldShowTradeRMTWarning",
+    "C_SecureTransfer.TakeMailMoney",
+    "C_SpellBook.CastSpellBookItem",
+    "C_WorldSafeLocsUIInternal.GetWorldSafeLocs",
+    "CreateSecureDelegate",
+    "IsCollisionEnabled",
+    "NotWhileDeadError",
+    "SitStandOrDescendStart",
+    "TargetDirectionEnemy",
+    "TargetDirectionFinished",
+    "TargetDirectionFriend",
+    "TargetToggle",
+    "TargetTotem",
+    "ToggleAnimKitDisplay",
+    "ToggleCollision",
+    "ToggleCollisionDisplay",
+    "ToggleDebugAIDisplay",
+    "ToggleGravity",
+    "TogglePlayerBounds",
+    "TogglePortals",
+    "ToggleSit",
+    "ToggleTris",
     // Battle.net's optional features: off; no game data sent.
     "C_BattleNet.AreHighResTexturesInstalled",
     "C_BattleNet.GetFriendLevelFromInviteText",
