@@ -345,7 +345,34 @@ The WoW API is typed by **pre-generated `types` packages**, one per flavor:
    Blizzard's UI code adds its globals: the named frames of its XML, typed by
    their mixins, and those mixins as classes with the functions their Lua
    defines ([Types §2.8](../language/02-types.md#28-globals)).
-3. **Flavor availability** from per-flavor global name dumps, used to verify
+3. **warcraft.wiki.gg's API pages** (CC BY-SA 4.0) for the functions
+   Blizzard's documentation and the annotations leave untyped (decision
+   T288): `cargo xtask types wiki` reads the pages through the wiki's API,
+   once, and writes their signatures and the records they name as reviewed
+   LuaLS annotations to `xtask/data/warcraft-wiki-api.lua`, which the
+   generator reads (builds never reach the wiki). The declarations made
+   from them carry the wiki's attribution and license
+   (`LICENSE-warcraft-wiki.txt`).
+4. **Blizzard's UI code** types the functions it defines and the ones it
+   calls (decision T288): each global function and mixin function of its
+   Lua gets the parameters its definition names, typed by what the body
+   does with them (passed to a typed API function, arithmetic, compared
+   with a literal, called) and by the literals Blizzard's calls pass;
+   optional where the body tests it for `nil` or a call leaves it out; its
+   results from its `return`s (literals, operators, typed calls, string
+   methods, mixins it makes, its locals). A C function nothing documents
+   takes as many parameters as Blizzard's calls pass, typed where they
+   agree. A global value is typed by what it is made from (a mixin table
+   is its mixin class, `EnumUtil.MakeEnum` a `{ [string]: number }`, a
+   call its declared result, an alias what it names). The mixins the
+   declarations refer to are classes.
+5. **Typed throughout.** The generated declarations themselves write no
+   `any`: what no source tells is `unknown` (a function nothing types is
+   `(...unknown) -> ...unknown`, a parameter `unknown` takes any argument, a
+   result `unknown` is checked before use; decision T288). This is about
+   the declarations wowlua ships, not the language: `any` stays a type
+   authors may write ([Types §2.2](../language/02-types.md)).
+6. **Flavor availability** from per-flavor global name dumps, used to verify
    that every declared global exists in that flavor.
 
 Package versions follow the game version: `wow-api-standard@12.1.0` for build

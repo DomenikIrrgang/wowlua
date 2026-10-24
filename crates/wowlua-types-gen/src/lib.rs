@@ -4,11 +4,13 @@
 
 pub mod blizzard;
 pub mod framexml;
+pub mod infer;
 pub mod luals;
 pub mod model;
+pub mod wiki;
 
 use model::Decls;
-use std::collections::{BTreeSet, HashSet};
+use std::collections::{BTreeSet, HashMap, HashSet};
 
 /// The generated declarations: one file shared by every flavor (from the
 /// annotations) and one per flavor (from Blizzard's documentation).
@@ -434,6 +436,22 @@ fn script_handlers(
 /// documentation says the callback), and their callbacks receive it.
 /// `TimerHandle` and `TickerHandle` are declared by the compiler.
 fn corrections(d: &mut Decls) {
+    // A rule formatter is a numeric formatter: Blizzard's documentation,
+    // which has no inheritance, takes a `NumericFormatter` where its code
+    // passes `C_StringUtil.CreateNumericRuleFormatter()`'s
+    // (`AuraContainerUtilDocumentation`'s `textFormatter`,
+    // `DurationTextBindingSharedDocumentation`'s `formatter`).
+    // (and the abbreviating one: `CustomAuraButtonApplicationCountOptions`'s
+    // `formatter` takes `C_StringUtil.CreateAbbreviatedNumberFormatter()`'s)
+    if d.classes.contains_key("NumericFormatter") {
+        for name in ["NumericRuleFormatter", "AbbreviatedNumberFormatter"] {
+            if let Some(c) = d.classes.get_mut(name)
+                && c.bases.is_empty()
+            {
+                c.bases.push("NumericFormatter".into());
+            }
+        }
+    }
     if let Some(timer) = d.namespaces.get_mut("C_Timer") {
         for (name, handle) in [("NewTimer", "TimerHandle"), ("NewTicker", "TickerHandle")] {
             for sig in timer.functions.get_mut(name).into_iter().flatten() {
@@ -542,6 +560,52 @@ fn param(name: &str, ty: &str, optional: bool) -> model::ParamDecl {
 /// Where the annotations are wrong about functions Blizzard does not
 /// document: parameters the client and Blizzard's code leave out.
 fn annotation_corrections(d: &mut Decls) {
+    // `CreateAnimation(type)` gives that animation's class (T280; the method
+    // probe records each: `CreateAnimation("Alpha")` is an Alpha), the
+    // annotations' generic `table | T` none.
+    if let Some(group) = d.classes.get_mut("AnimationGroup") {
+        let p = |name: &str, ty: &str, optional: bool| model::ParamDecl {
+            name: name.into(),
+            ty: ty.into(),
+            optional,
+        };
+        let one = |kind: &str, result: &str| model::Sig {
+            params: vec![
+                p("animationType", kind, kind == "string"),
+                p("name", "string", true),
+                p("templateName", "string", true),
+            ],
+            returns: vec![result.into()],
+            ..model::Sig::default()
+        };
+        let mut sigs: Vec<model::Sig> = [
+            "Alpha",
+            "Animation",
+            "FlipBook",
+            "LineScale",
+            "LineTranslation",
+            "Path",
+            "Rotation",
+            "Scale",
+            "Translation",
+            "VertexColor",
+        ]
+        .iter()
+        .map(|k| one(&format!("{k:?}"), k))
+        .collect();
+        sigs.push(one("string", "Animation"));
+        group.methods.insert("CreateAnimation".into(), sigs);
+    }
+    // ItemTransmogInfoMixin:Init sets them (Blizzard_FrameXMLUtil ItemUtil.lua:
+    // `self.appearanceID = appearanceID`, the others `or
+    // Constants.Transmog.NoTransmogID`, a number).
+    if let Some(info) = d.classes.get_mut("ItemTransmogInfoMixin") {
+        for f in ["appearanceID", "secondaryAppearanceID", "illusionID"] {
+            info.fields
+                .entry(f.into())
+                .or_insert(("number".into(), false));
+        }
+    }
     // (function, parameter), each with its evidence.
     let optional: &[(&str, &str)] = &[
         // Blizzard_TrainerUI calls `SetTrainerServiceTypeFilter(filter,
@@ -572,12 +636,177 @@ fn annotation_corrections(d: &mut Decls) {
 /// Generates the declarations. `skip`: global names the compiler declares
 /// itself (Lua 5.1 and WoW's Lua environment). `annotation_source` goes
 /// into the shared file's header.
+/// The classes a flavor declares (its mixins, the shared classes, its own).
+fn mixins_of_flavor<'a>(
+    mixins: &'a indexmap::IndexMap<String, model::Class>,
+    shared: &'a Decls,
+    d: &'a Decls,
+) -> HashSet<&'a String> {
+    mixins
+        .keys()
+        .chain(shared.classes.keys())
+        .chain(d.classes.keys())
+        .collect()
+}
+
+/// A global's type from what its value comes from (decision T288): a mixin
+/// table is its mixin class (`table` without one), a call gives what the
+/// API says it returns, another global's value its type.
+fn global_value_type(
+    name: &str,
+    hint: &str,
+    globals: &indexmap::IndexMap<String, (String, Option<String>)>,
+    api: &HashMap<String, model::Sig>,
+    classes: &HashSet<&String>,
+    dotted: &HashMap<String, String>,
+    depth: u32,
+) -> String {
+    let class_of = |n: &str| classes.iter().any(|c| c.as_str() == n);
+    if let Some(callee) = hint.strip_prefix("call:") {
+        return match callee {
+            "CreateFromMixins" | "Mixin" | "CreateAndInitFromMixin" | "CreateFromMixinsAndInit" => {
+                if class_of(name) {
+                    name.to_string()
+                } else {
+                    "table".into()
+                }
+            }
+            "EnumUtil.MakeEnum" => "{ [string]: number }".into(),
+            "class" => "table".into(),
+            _ => match api.get(callee).and_then(|s| s.returns.first()) {
+                Some(r) if !matches!(r.as_str(), "any" | "unknown" | "nil") => r.clone(),
+                _ => "unknown".into(),
+            },
+        };
+    }
+    if let Some(other) = hint.strip_prefix("alias:") {
+        if class_of(name) {
+            return name.to_string();
+        }
+        if class_of(other) {
+            return other.to_string();
+        }
+        if let Some(sig) = api.get(other) {
+            return model::fn_type(sig);
+        }
+        if let Some(ty) = dotted.get(other) {
+            return ty.clone();
+        }
+        if depth < 4
+            && let Some((ty, _)) = globals.get(other)
+        {
+            return if ty.starts_with("call:") || ty.starts_with("alias:") {
+                global_value_type(other, ty, globals, api, classes, dotted, depth + 1)
+            } else {
+                ty.clone()
+            };
+        }
+        return "unknown".into();
+    }
+    hint.to_string()
+}
+
+/// The signature Blizzard's Lua gives a class's function: the class's own,
+/// else the nearest base's (through the bases and the parents copied in).
+fn defined_in_lua(
+    inferred: &HashMap<infer::Owner, model::Sig>,
+    parents: &HashMap<String, Vec<String>>,
+    class: &str,
+    member: &str,
+    method: bool,
+) -> Option<model::Sig> {
+    let mut queue = std::collections::VecDeque::from([class.to_string()]);
+    let mut seen = HashSet::new();
+    while let Some(c) = queue.pop_front() {
+        if !seen.insert(c.clone()) {
+            continue;
+        }
+        let owner = infer::Owner::Table {
+            table: c.clone(),
+            member: member.to_string(),
+            method,
+        };
+        if let Some(sig) = inferred.get(&owner) {
+            return Some(sig.clone());
+        }
+        // the last mixin's functions win (`CreateFromMixins(A, B)` copies
+        // B's over A's): the later parents first
+        queue.extend(parents.get(&c).into_iter().flatten().rev().cloned());
+    }
+    // A function copied in from a parent the classes don't name: the one
+    // definition of that name, when there is one.
+    let mut found: Option<&model::Sig> = None;
+    for (owner, sig) in inferred {
+        if let infer::Owner::Table {
+            member: m,
+            method: k,
+            ..
+        } = owner
+            && m == member
+            && *k == method
+        {
+            if found.is_some_and(|f| f != sig) {
+                return None;
+            }
+            found = Some(sig);
+        }
+    }
+    found.cloned()
+}
+
+/// A type the wiki names, as the declarations have it: a name nothing
+/// declares is `unknown`; the wiki's own index and string names are
+/// `number` and `string`.
+fn wiki_type(ty: &str, known: &HashSet<String>) -> String {
+    const BUILTIN: &[&str] = &[
+        "nil", "number", "string", "boolean", "table", "any", "unknown", "function", "true",
+        "false", "thread", "userdata", "never",
+    ];
+    let mut out = String::new();
+    let mut word = String::new();
+    let flush = |word: &mut String, out: &mut String| {
+        if word.is_empty() {
+            return;
+        }
+        let w = word.as_str();
+        let mapped = if BUILTIN.contains(&w)
+            || w.chars().all(|c| c.is_ascii_digit() || c == '.')
+            || known.contains(w)
+        {
+            w
+        } else {
+            match w {
+                "luaIndex" | "integer" => "number",
+                "cstring" => "string",
+                _ => "unknown",
+            }
+        };
+        out.push_str(mapped);
+        word.clear();
+    };
+    let mut quoted = false;
+    for c in ty.chars() {
+        if c == '"' {
+            quoted = !quoted;
+        }
+        if !quoted && (c.is_ascii_alphanumeric() || c == '_' || c == '.') {
+            word.push(c);
+        } else {
+            flush(&mut word, &mut out);
+            out.push(c);
+        }
+    }
+    flush(&mut word, &mut out);
+    out
+}
+
 pub fn generate(
     flavors: &[FlavorDocs],
     annotations: &[(String, String)],
     annotation_source: &str,
     skip: &HashSet<String>,
     compiler_types: &HashSet<String>,
+    wiki: &[(String, String)],
 ) -> Result<Output, String> {
     let mut per_flavor: Vec<(String, String, Decls)> = Vec::new();
     let mut api = Vec::new();
@@ -640,6 +869,43 @@ pub fn generate(
         }
     }
     let mut shared = luals::convert(annotations);
+    // `colorRGB` and `colorRGBA` are ColorMixin objects: Blizzard's
+    // `CreateColor` returns `CreateFromMixins(ColorMixin)` (Blizzard_SharedXMLBase
+    // Color.lua), which the annotations call `colorRGBA`; one name for one
+    // object, so a ColorMixin from anywhere is a colour (decision T288).
+    if shared.classes.contains_key("ColorMixin") {
+        for name in ["colorRGB", "colorRGBA"] {
+            if let Some(c) = shared.classes.shift_remove(name) {
+                let mixin = shared.classes.get_mut("ColorMixin").expect("present");
+                for (f, (ty, optional)) in c.fields {
+                    let optional = optional || !matches!(f.as_str(), "r" | "g" | "b");
+                    mixin.fields.entry(f).or_insert((ty, optional));
+                }
+                shared.aliases.insert(name.into(), "ColorMixin".into());
+            }
+        }
+    }
+    // A LuaLS `@class` that is only data (fields, no functions, no parent:
+    // `backdropInfo`) is a record, as LuaLS reads it: structural, so a table
+    // of those fields is one (decision T288).
+    let records: Vec<String> = shared
+        .classes
+        .iter()
+        .filter(|(_, c)| {
+            c.methods.is_empty()
+                && c.statics.is_empty()
+                && c.bases.is_empty()
+                && c.also.is_empty()
+                && c.widget.is_none()
+                && !c.fields.is_empty()
+        })
+        .map(|(n, _)| n.clone())
+        .collect();
+    for name in records {
+        let c = shared.classes.shift_remove(&name).expect("present");
+        let fields = c.fields.into_iter().map(|(f, (t, o))| (f, t, o)).collect();
+        shared.interfaces.insert(name, fields);
+    }
     annotation_corrections(&mut shared);
     // Blizzard's data wins: drop what any flavor's documentation defines,
     // and what the compiler declares itself.
@@ -817,8 +1083,282 @@ pub fn generate(
             }
         }
     }
-    // API functions no source documents: untyped.
-    for ((_, _, d), f) in per_flavor.iter_mut().zip(flavors) {
+    // warcraft.wiki.gg's signatures (decision T288), for the functions
+    // nothing above types; its records, where nothing declares them.
+    let wiki = luals::convert(wiki);
+    let mut known: HashSet<String> = shared
+        .aliases
+        .keys()
+        .chain(shared.interfaces.keys())
+        .chain(shared.classes.keys())
+        .cloned()
+        .collect();
+    for (_, _, d) in &per_flavor {
+        known.extend(d.aliases.keys().cloned());
+        known.extend(d.interfaces.keys().cloned());
+        known.extend(d.classes.keys().cloned());
+        known.extend(d.enums.keys().map(|e| format!("Enum.{e}")));
+    }
+    known.extend(compiler_types.iter().cloned());
+    type Record = (String, Vec<(String, String, bool)>);
+    let records: Vec<Record> = wiki
+        .classes
+        .iter()
+        .filter(|(n, c)| !known.contains(*n) && !c.fields.is_empty())
+        .map(|(n, c)| {
+            let fields = c
+                .fields
+                .iter()
+                .map(|(f, (t, o))| (f.clone(), t.clone(), *o))
+                .collect();
+            (n.clone(), fields)
+        })
+        .collect();
+    known.extend(records.iter().map(|(n, _)| n.clone()));
+    for (name, fields) in records {
+        let fields = fields
+            .into_iter()
+            .map(|(f, t, o)| (f, wiki_type(&t, &known), o))
+            .collect();
+        shared.interfaces.insert(name, fields);
+    }
+    let wiki_sigs = |sigs: &[model::Sig]| -> Vec<model::Sig> {
+        sigs.iter()
+            .map(|s| {
+                let mut s = s.clone();
+                for p in &mut s.params {
+                    p.ty = wiki_type(&p.ty, &known);
+                }
+                s.vararg = s.vararg.map(|t| wiki_type(&t, &known));
+                s.returns = s.returns.iter().map(|t| wiki_type(t, &known)).collect();
+                s.ret_vararg = s.ret_vararg.map(|t| wiki_type(&t, &known));
+                s
+            })
+            .collect()
+    };
+    let wiki_function = |name: &str| -> Option<Vec<model::Sig>> {
+        let sigs = match name.split_once('.') {
+            Some((ns, member)) => wiki.namespaces.get(ns)?.functions.get(member)?,
+            None => wiki.functions.get(name)?,
+        };
+        Some(wiki_sigs(sigs))
+    };
+    // Ketho's untyped functions (a page without annotations) the wiki types.
+    let untyped = |sigs: &[model::Sig]| sigs.iter().all(|s| s.ret_vararg.as_deref() == Some("any"));
+    let names: Vec<String> = shared.functions.keys().cloned().collect();
+    for name in names {
+        if untyped(&shared.functions[&name])
+            && let Some(sigs) = wiki_function(&name)
+        {
+            shared.functions.insert(name, sigs);
+        }
+    }
+    let spaces: Vec<String> = shared.namespaces.keys().cloned().collect();
+    for ns in spaces {
+        let members: Vec<String> = shared.namespaces[&ns].functions.keys().cloned().collect();
+        for member in members {
+            if untyped(&shared.namespaces[&ns].functions[&member])
+                && let Some(sigs) = wiki_function(&format!("{ns}.{member}"))
+            {
+                shared.namespaces[&ns].functions.insert(member, sigs);
+            }
+        }
+    }
+    // Blizzard's UI functions, typed from their Lua (decision T288).
+    let mut inferred: Vec<HashMap<infer::Owner, model::Sig>> = Vec::new();
+    let mut called: Vec<infer::Inferred> = Vec::new();
+    // the mixins' fields as their Lua sets them, per flavor
+    let mut lua_fields: Vec<HashMap<(String, String), String>> = Vec::new();
+    let mut apis: Vec<HashMap<String, model::Sig>> = Vec::new();
+    for ((_, _, d), f) in per_flavor.iter().zip(flavors) {
+        let mut api: HashMap<String, model::Sig> = HashMap::new();
+        for (n, sigs) in shared.functions.iter().chain(d.functions.iter()) {
+            if let Some(s) = sigs.first() {
+                api.entry(n.clone()).or_insert_with(|| s.clone());
+            }
+        }
+        for (ns, space) in shared.namespaces.iter().chain(d.namespaces.iter()) {
+            for (m, sigs) in &space.functions {
+                if let Some(s) = sigs.first() {
+                    api.entry(format!("{ns}.{m}")).or_insert_with(|| s.clone());
+                }
+            }
+        }
+        // constants and enum values (`=Constants.X.Y`, `=Enum.X.Y`)
+        for decls in [&shared, d] {
+            for (group, values) in &decls.constants {
+                for (name, ty) in values {
+                    api.insert(
+                        format!("=Constants.{group}.{name}"),
+                        model::Sig {
+                            returns: vec![ty.clone()],
+                            ..model::Sig::default()
+                        },
+                    );
+                }
+            }
+            for (e, members) in &decls.enums {
+                for (m, _) in members {
+                    api.insert(
+                        format!("=Enum.{e}.{m}"),
+                        model::Sig {
+                            returns: vec!["number".into()],
+                            ..model::Sig::default()
+                        },
+                    );
+                }
+            }
+        }
+        // the classes' own functions (`T:M`, `T.F`), for their Lua's evidence
+        for (cname, c) in shared.classes.iter().chain(d.classes.iter()) {
+            for (m, sigs) in &c.methods {
+                if let Some(s) = sigs.first() {
+                    api.entry(format!("{cname}:{m}"))
+                        .or_insert_with(|| s.clone());
+                }
+            }
+            for (m, sigs) in &c.statics {
+                if let Some(s) = sigs.first() {
+                    api.entry(format!("{cname}.{m}"))
+                        .or_insert_with(|| s.clone());
+                }
+            }
+        }
+        // passes until nothing changes (at most five): each reads the one
+        // before's functions and the mixins' fields as typed API, so
+        // wrappers of wrappers get their types (`Settings.X` returns
+        // `SettingsInbound.X(…)`)
+        let declared: HashSet<String> = api.keys().cloned().collect();
+        let mut analysis = infer::analyze(&f.ui_lua, &api);
+        for _ in 0..4 {
+            let mut changed = false;
+            let mut learn =
+                |key: String, sig: model::Sig, api: &mut HashMap<String, model::Sig>| {
+                    if !declared.contains(&key) && api.get(&key) != Some(&sig) {
+                        api.insert(key, sig);
+                        changed = true;
+                    }
+                };
+            for (owner, sig) in &analysis.defined {
+                match owner {
+                    infer::Owner::Global(n) => learn(n.clone(), sig.clone(), &mut api),
+                    infer::Owner::Table {
+                        table,
+                        member,
+                        method: false,
+                    } => learn(format!("{table}.{member}"), sig.clone(), &mut api),
+                    _ => {}
+                }
+            }
+            // the mixins' fields, as `T#field`, for `self.x`
+            for ((table, field), ty) in analysis.fields() {
+                let sig = model::Sig {
+                    returns: vec![ty.clone()],
+                    ..model::Sig::default()
+                };
+                learn(format!("{table}#{field}"), sig, &mut api);
+            }
+            if !changed {
+                break;
+            }
+            analysis = infer::analyze(&f.ui_lua, &api);
+        }
+        lua_fields.push(
+            analysis
+                .fields()
+                .map(|(k, t)| (k.clone(), t.clone()))
+                .collect(),
+        );
+        inferred.push(analysis.defined.clone());
+        called.push(analysis);
+        apis.push(api);
+    }
+    // Classes whose functions the annotations leave untyped (Ketho's
+    // FrameXML mixins): as Blizzard's Lua shows them; a shared class from
+    // the first flavor whose Lua defines the function.
+    let parents: HashMap<String, Vec<String>> = shared
+        .classes
+        .iter()
+        .chain(per_flavor.iter().flat_map(|(_, _, d)| d.classes.iter()))
+        .map(|(n, c)| (n.clone(), c.bases.iter().chain(&c.also).cloned().collect()))
+        .collect();
+    let typed_from_lua = |class: &str, member: &str, method: bool, flavors: &[usize]| {
+        flavors
+            .iter()
+            .find_map(|&i| defined_in_lua(&inferred[i], &parents, class, member, method))
+    };
+    let all: Vec<usize> = (0..inferred.len()).collect();
+    let untyped_sigs =
+        |sigs: &[model::Sig]| sigs.iter().all(|s| s.ret_vararg.as_deref() == Some("any"));
+    for (class, c) in shared.classes.iter_mut() {
+        for (statics, members) in [(false, &mut c.methods), (true, &mut c.statics)] {
+            for (member, sigs) in members.iter_mut() {
+                if untyped_sigs(sigs)
+                    && let Some(sig) = typed_from_lua(class, member, !statics, &all)
+                {
+                    *sigs = vec![sig];
+                }
+            }
+        }
+    }
+    for (class, c) in shared.classes.iter_mut() {
+        if c.widget.is_some() {
+            continue;
+        }
+        for fields in &lua_fields {
+            for ((table, field), ty) in fields {
+                if table == class && !c.fields.contains_key(field) && model::is_ident(field) {
+                    c.fields.insert(field.clone(), (ty.clone(), false));
+                }
+            }
+        }
+    }
+    for (fi, (_, _, d)) in per_flavor.iter_mut().enumerate() {
+        for (class, c) in d.classes.iter_mut() {
+            for (statics, members) in [(false, &mut c.methods), (true, &mut c.statics)] {
+                for (member, sigs) in members.iter_mut() {
+                    if untyped_sigs(sigs)
+                        && let Some(sig) = typed_from_lua(class, member, !statics, &[fi])
+                    {
+                        *sigs = vec![sig];
+                    }
+                }
+            }
+        }
+    }
+    // The annotations' functions still untyped (no page, no annotation):
+    // as Blizzard's calls show them, in the first flavor that calls them.
+    let from_calls = |name: &str| called.iter().find_map(|c| c.called(name));
+    let names: Vec<String> = shared.functions.keys().cloned().collect();
+    for name in names {
+        if untyped(&shared.functions[&name])
+            && let Some(sig) = from_calls(&name)
+        {
+            shared.functions.insert(name, vec![sig]);
+        }
+    }
+    let spaces: Vec<String> = shared.namespaces.keys().cloned().collect();
+    for ns in spaces {
+        let members: Vec<String> = shared.namespaces[&ns].functions.keys().cloned().collect();
+        for member in members {
+            if untyped(&shared.namespaces[&ns].functions[&member])
+                && let Some(sig) = from_calls(&format!("{ns}.{member}"))
+            {
+                shared.namespaces[&ns].functions.insert(member, vec![sig]);
+            }
+        }
+    }
+    // API functions no source documents: the wiki's, Blizzard's Lua's, else
+    // untyped.
+    for (fi, ((_, _, d), f)) in per_flavor.iter_mut().zip(flavors).enumerate() {
+        // defined in Blizzard's Lua, else as its calls there show it
+        let from_lua = |name: &str| {
+            inferred[fi]
+                .get(&infer::Owner::Global(name.to_string()))
+                .cloned()
+                .or_else(|| called[fi].called(name))
+                .map(|s| vec![s])
+        };
         let Some(api) = &f.api_names else { continue };
         let mut names: Vec<&String> = api.iter().collect();
         names.sort();
@@ -833,9 +1373,16 @@ pub fn generate(
                         && !shared.namespaces.contains_key(name)
                         && !shared.classes.contains_key(name)
                     {
-                        d.globals
-                            .entry(name.clone())
-                            .or_insert_with(|| "(...any) -> ...any".into());
+                        match wiki_function(name).or_else(|| from_lua(name)) {
+                            Some(sigs) => {
+                                d.functions.insert(name.clone(), sigs);
+                            }
+                            None => {
+                                d.globals
+                                    .entry(name.clone())
+                                    .or_insert_with(|| "(...any) -> ...any".into());
+                            }
+                        }
                     }
                 }
                 Some((ns, member))
@@ -847,15 +1394,18 @@ pub fn generate(
                         .is_some_and(|n| n.functions.contains_key(member));
                     if !in_shared && !shared.classes.contains_key(ns) {
                         let target = d.namespaces.entry(ns.to_string()).or_default();
+                        let typed = wiki_function(name).or_else(|| from_lua(name));
                         target
                             .functions
                             .entry(member.to_string())
                             .or_insert_with(|| {
-                                vec![model::Sig {
-                                    vararg: Some("any".into()),
-                                    ret_vararg: Some("any".into()),
-                                    ..model::Sig::default()
-                                }]
+                                typed.unwrap_or_else(|| {
+                                    vec![model::Sig {
+                                        vararg: Some("any".into()),
+                                        ret_vararg: Some("any".into()),
+                                        ..model::Sig::default()
+                                    }]
+                                })
                             });
                     }
                 }
@@ -867,21 +1417,160 @@ pub fn generate(
     // declares them; those of every flavor go into the shared file.
     let widget_classes: HashSet<String> = shared.classes.keys().cloned().collect();
     // Each with the load-on-demand addon that alone defines it, if any.
+    let mut ui_overrides: Vec<Vec<(String, String)>> = Vec::new();
     let mut ui_globals: Vec<indexmap::IndexMap<String, (String, Option<String>)>> = Vec::new();
     // Each flavor's mixin classes its named frames are typed with.
     let mut ui_mixins: Vec<indexmap::IndexMap<String, model::Class>> = Vec::new();
     for (f, (_, _, d)) in flavors.iter().zip(&per_flavor) {
         let lod = framexml::lod_origins(&f.ui_lua, &f.ui_xml, &f.lod_files);
         let ui = framexml::ui_globals(&f.ui_lua, &f.ui_xml, &widget_classes);
-        ui_mixins.push(ui.mixins);
+        let fi = ui_mixins.len();
+        // the mixins' functions as their Lua shows them (a function a base
+        // defines, copied in, as the base's Lua shows it)
+        let mut mixins = ui.mixins;
+        let parents: HashMap<String, Vec<String>> = mixins
+            .iter()
+            .map(|(n, c)| (n.clone(), c.bases.iter().chain(&c.also).cloned().collect()))
+            .chain(
+                shared
+                    .classes
+                    .iter()
+                    .map(|(n, c)| (n.clone(), c.bases.iter().chain(&c.also).cloned().collect())),
+            )
+            .collect();
+        for (class, c) in mixins.iter_mut() {
+            // functions kept in its fields (`Settings.CreateElementInitializer`)
+            for (field, (ty, _)) in c.fields.iter_mut() {
+                if ty.contains("->")
+                    && let Some(sig) = inferred[fi].get(&infer::Owner::Table {
+                        table: class.clone(),
+                        member: field.clone(),
+                        method: false,
+                    })
+                {
+                    *ty = model::fn_type(sig);
+                }
+            }
+            for (statics, members) in [(false, &mut c.methods), (true, &mut c.statics)] {
+                for (member, sigs) in members.iter_mut() {
+                    // where the reader found it (a mixin copied in), else
+                    // through the bases
+                    let origin = ui
+                        .origins
+                        .get(&(class.clone(), member.clone()))
+                        .filter(|_| !statics)
+                        .and_then(|o| {
+                            inferred[fi].get(&infer::Owner::Table {
+                                table: o.clone(),
+                                member: member.clone(),
+                                method: true,
+                            })
+                        })
+                        .cloned();
+                    if let Some(sig) = origin.or_else(|| {
+                        defined_in_lua(&inferred[fi], &parents, class, member, !statics)
+                    }) {
+                        *sigs = vec![sig];
+                    }
+                }
+            }
+        }
+        // and the fields their Lua sets (`self.r = r`), where not declared
+        for (class, c) in mixins.iter_mut() {
+            for ((table, field), ty) in &lua_fields[fi] {
+                if table == class && !c.fields.contains_key(field) && model::is_ident(field) {
+                    c.fields.insert(field.clone(), (ty.clone(), false));
+                }
+            }
+        }
+        ui_mixins.push(mixins);
         let mut g: indexmap::IndexMap<String, (String, Option<String>)> = ui
             .globals
             .into_iter()
             .map(|(n, ty)| {
                 let addon = lod.get(&n).cloned();
+                // a function its Lua defines, typed from it
+                let ty = match inferred[fi].get(&infer::Owner::Global(n.clone())) {
+                    Some(sig) if ty == "(...any) -> ...any" => model::fn_type(sig),
+                    _ => ty,
+                };
                 (n, (ty, addon))
             })
             .collect();
+        // what a value comes from (`call:F`, `alias:X`): typed
+        let classes: HashSet<&String> = mixins_of_flavor(&ui_mixins[fi], &shared, d);
+        // the types of dotted values: constants, enum members, namespace values
+        let mut dotted: HashMap<String, String> = HashMap::new();
+        for decls in [&shared, d] {
+            for (group, values) in &decls.constants {
+                // (their values are their types: `number`, a literal)
+                for (name, ty) in values {
+                    dotted.insert(format!("Constants.{group}.{name}"), ty.clone());
+                }
+            }
+            for (e, members) in &decls.enums {
+                for (m, _) in members {
+                    dotted.insert(format!("Enum.{e}.{m}"), "number".into());
+                }
+            }
+            for (ns, space) in &decls.namespaces {
+                for (v, ty) in &space.values {
+                    dotted.insert(format!("{ns}.{v}"), ty.clone());
+                }
+            }
+        }
+        let resolved: Vec<(String, String)> = g
+            .iter()
+            .filter(|(_, (ty, _))| ty.starts_with("call:") || ty.starts_with("alias:"))
+            .map(|(n, (ty, _))| {
+                let ty = global_value_type(n, ty, &g, &apis[fi], &classes, &dotted, 0);
+                // an alias of a table's function its Lua defines
+                let ty = match ty.as_str() {
+                    "unknown" => g[n]
+                        .0
+                        .strip_prefix("alias:")
+                        .and_then(|a| a.rsplit_once('.'))
+                        .and_then(|(t, m)| {
+                            inferred[fi].get(&infer::Owner::Table {
+                                table: t.to_string(),
+                                member: m.to_string(),
+                                method: false,
+                            })
+                        })
+                        .map(model::fn_type)
+                        // else as Blizzard's calls of it show it; an alias of
+                        // a `C_` namespace's member is a function still
+                        .or_else(|| called[fi].called(n).map(|s| model::fn_type(&s)))
+                        .or_else(|| {
+                            g[n].0
+                                .strip_prefix("alias:C_")
+                                .filter(|a| a.contains('.'))
+                                .map(|_| "(...unknown) -> ...unknown".to_string())
+                        })
+                        .unwrap_or(ty),
+                    _ => ty,
+                };
+                (n.clone(), ty)
+            })
+            .collect();
+        for (n, ty) in resolved {
+            if let Some(slot) = g.get_mut(&n) {
+                slot.0 = ty;
+            }
+        }
+        // a table the code puts functions in (`ScrollUtil`): its class,
+        // unless the name is another type (`UiMapPoint`, a record too)
+        let other_type = |n: &str| {
+            shared.interfaces.contains_key(n)
+                || shared.aliases.contains_key(n)
+                || d.interfaces.contains_key(n)
+                || d.aliases.contains_key(n)
+        };
+        for (n, (ty, _)) in g.iter_mut() {
+            if ty == "table" && ui_mixins[fi].contains_key(n) && !other_type(n) {
+                *ty = n.clone();
+            }
+        }
         for s in &f.strings {
             g.entry(s.clone())
                 .or_insert_with(|| ("string".into(), None));
@@ -890,6 +1579,21 @@ pub fn generate(
         for n in &f.number_globals {
             g.entry(n.clone())
                 .or_insert_with(|| ("number".into(), None));
+        }
+        // what Blizzard's Lua makes a global, over another source's untyped
+        // declaration of it (`CombatLogGetCurrentEventInfo =
+        // C_CombatLog.GetCurrentEventInfo`, an `any` elsewhere)
+        let untyped = |t: &str| matches!(t, "any" | "unknown" | "(...any) -> ...any");
+        let mut overrides: Vec<(String, String)> = Vec::new();
+        for (n, (ty, _)) in g.iter() {
+            if untyped(ty) || ty == "table" || ty.starts_with("call:") || ty.starts_with("alias:") {
+                continue;
+            }
+            if d.globals.get(n).is_some_and(|t| untyped(t)) {
+                overrides.push((n.clone(), ty.clone()));
+            } else if shared.globals.get(n).is_some_and(|t| untyped(t)) {
+                shared.globals.insert(n.clone(), ty.clone());
+            }
         }
         g.retain(|n, _| {
             !skip.contains(n)
@@ -909,6 +1613,7 @@ pub fn generate(
             }
         }
         ui_globals.push(g);
+        ui_overrides.push(overrides);
     }
     if let Some(first) = ui_globals.first().cloned() {
         for (name, (ty, addon)) in first {
@@ -926,7 +1631,10 @@ pub fn generate(
             }
         }
     }
-    for ((_, _, d), g) in per_flavor.iter_mut().zip(ui_globals) {
+    for (((_, _, d), g), over) in per_flavor.iter_mut().zip(ui_globals).zip(ui_overrides) {
+        for (n, ty) in over {
+            d.globals.insert(n, ty);
+        }
         for (name, (ty, addon)) in g {
             if !d.globals.contains_key(&name)
                 && let Some(a) = addon
@@ -968,7 +1676,33 @@ pub fn generate(
         // The mixin classes of the UI code's named frames, where nothing
         // else declares the name (not the engine's: they are no widgets).
         let mut mixin_names: HashSet<String> = HashSet::new();
+        // Only the mixins something refers to (a type in the declarations,
+        // a base or a member type of a mixin kept), not every table with
+        // functions: they cost every check its parse.
+        let mut wanted: BTreeSet<String> = shared_refs.clone();
+        wanted.extend(d.referenced_types());
+        let mut kept: HashSet<String> = HashSet::new();
+        loop {
+            let mut grew = false;
+            for (name, class) in &mixins {
+                if kept.contains(name) || !wanted.contains(name) {
+                    continue;
+                }
+                kept.insert(name.clone());
+                grew = true;
+                let mut one = Decls::default();
+                one.classes.insert(name.clone(), class.clone());
+                wanted.extend(one.referenced_types());
+                wanted.extend(class.bases.iter().chain(&class.also).cloned());
+            }
+            if !grew {
+                break;
+            }
+        }
         for (name, mut class) in mixins {
+            if !kept.contains(&name) {
+                continue;
+            }
             mixin_corrections(&name, &mut class);
             if !shared_defs.contains(&name)
                 && !d.classes.contains_key(&name)
@@ -988,9 +1722,15 @@ pub fn generate(
         refs.extend(d.referenced_types());
         for name in refs.difference(&defined) {
             if model::is_ident(name) {
-                d.aliases
-                    .entry(name.clone())
-                    .or_insert_with(|| "any".into());
+                // Blizzard's documentation names an object's type without
+                // `Object` where it returns one (`DurationTextBinding`)
+                let object = format!("{name}Object");
+                let ty = if defined.contains(&object) {
+                    object
+                } else {
+                    "any".into()
+                };
+                d.aliases.entry(name.clone()).or_insert(ty);
             }
         }
         let header = format!(
@@ -1041,11 +1781,13 @@ pub fn generate(
                 "templates": templates,
             });
         }
+        d.without_any();
         out_flavors.push((id, d.emit(&header)));
     }
     let header = format!(
         "wow-api declarations shared by every flavor, generated by wowlua-types-gen from\n{annotation_source}. Do not edit."
     );
+    shared.without_any();
     Ok(Output {
         shared: shared.emit(&header),
         flavors: out_flavors,

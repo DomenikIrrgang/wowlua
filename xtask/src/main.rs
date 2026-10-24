@@ -7,7 +7,7 @@
 //!   Lua the compiler embeds (`crates/wowlua-runtime/lua`).
 //! - `cargo xtask check`: fail if generated files are out of date (used in CI).
 //! - `cargo xtask corpus fetch|run [dir]`: the conformance corpus.
-//! - `cargo xtask types fetch|gen [dir]`: the embedded wow-api declarations.
+//! - `cargo xtask types fetch|gen|wiki [dir]`: the embedded wow-api declarations.
 //! - `cargo xtask packager-diff <release dir> <wowlua project>`: the M6
 //!   exit check against the BigWigs packager (every AddOn folder).
 //! - `cargo xtask parse-stats <dir>`: what the syntax trees of every Lua
@@ -178,7 +178,8 @@ fn main() -> Result<()> {
             match std::env::args().nth(2).as_deref() {
                 Some("fetch") => types::fetch(&dir),
                 Some("gen") => types::generate(&root, &dir),
-                _ => bail!("usage: cargo xtask types <fetch|gen> [dir]"),
+                Some("wiki") => types::wiki(&root, &dir),
+                _ => bail!("usage: cargo xtask types <fetch|gen|wiki> [dir]"),
             }
         }
         "packager-runs" => {

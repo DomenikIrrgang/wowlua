@@ -3692,6 +3692,27 @@ impl Checker<'_, '_> {
             Ty::Func(g) if g.type_params.is_empty() => {
                 let mut g = std::sync::Arc::unwrap_or_clone(g);
                 g.ret = Pack::any();
+                // What the declarations can't tell (`unknown`) the handler's
+                // own annotation says (decision T288): the game passes it.
+                // (`table` says as little of what the game passes)
+                let unknown = |types: &super::types::Types, t: TypeId| {
+                    t == Types::UNKNOWN
+                        || t == Types::TABLE
+                        || types
+                            .members(t)
+                            .iter()
+                            .any(|&m| m == Types::UNKNOWN || m == Types::TABLE)
+                };
+                for p in &mut g.params {
+                    if unknown(&self.env.types, p.ty) {
+                        p.ty = Types::ANY;
+                    }
+                }
+                if let Some(Rest::Variadic(t)) = &mut g.rest
+                    && unknown(&self.env.types, *t)
+                {
+                    *t = Types::ANY;
+                }
                 self.env.types.func(g)
             }
             _ => return None,

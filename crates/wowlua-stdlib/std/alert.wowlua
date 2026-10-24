@@ -57,7 +57,10 @@ export function raidWarning(text: string | Secret<string>, color: Color?)
     if color then
         r, g, b = color:GetRGB()
     end
-    RaidNotice_AddMessage(RaidWarningFrame, text, { r = r, g = g, b = b })
+    -- (the annotations type the text `string`, knowing nothing of secrets:
+    -- the raid warning frame shows a secret text as it is, as wowlua:alert
+    -- takes one and its tests show)
+    RaidNotice_AddMessage(RaidWarningFrame, text :: string, { r = r, g = g, b = b })
 end
 
 --- Raid-warning text with an optional sound and flash, once per

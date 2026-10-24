@@ -99,6 +99,13 @@ local proxies: SettingMixin[] = {}
 -- have several controls (on a page and its subcategory).
 local variables: { [string]: boolean } = {}
 
+-- What Blizzard's initializer creators give: their results come back
+-- through the settings' secure attribute delegate, which no declaration
+-- types; Blizzard's own code adds them to a layout as these.
+local function initializer(made: unknown): SettingsListElementInitializer
+    return made :: SettingsListElementInitializer
+end
+
 local function variableFor(key: string): string
     local name = prefix .. key
     local n = 1
@@ -202,7 +209,7 @@ local function addControls(def: PageDef, store: table, category: SettingsCategor
     end
     for _, c in ipairs(controls) do
         if c.kind == "header" then
-            layout:AddInitializer(CreateSettingsListSectionHeaderInitializer(c.text))
+            layout:AddInitializer(initializer(CreateSettingsListSectionHeaderInitializer(c.text)))
         elseif c.kind == "text" then
             local content = c.text
             element(layout, 20, function(holder: Frame)
@@ -265,15 +272,15 @@ local function addControls(def: PageDef, store: table, category: SettingsCategor
                 end
             end
             if index then
-                layout:AddInitializer(CreateKeybindingEntryInitializer(index, true))
+                layout:AddInitializer(initializer(CreateKeybindingEntryInitializer(index, true)))
             else
                 error("settings.keybinding: no binding `" .. binding .. "`", 0)
             end
         elseif c.kind == "button" then
             local onClick = c.fn
-            layout:AddInitializer(CreateSettingsButtonInitializer("", c.text, function()
+            layout:AddInitializer(initializer(CreateSettingsButtonInitializer("", c.text, function()
                 callIn({ component = "settings: button" }, onClick)
-            end, nil, true))
+            end, nil, true)))
         elseif c.kind == "custom" then
             local factory = c.fn
             element(layout, c.opts.height or 100, function(holder: Frame)
@@ -334,7 +341,12 @@ export function register(def: PageDef): SettingsCategory
             addControls(def, def.store, subcategory, subLayout, sub.controls)
         end
         Settings.RegisterAddOnCategory(category)
-        categoryId = category:GetID()
+        -- (the category comes back through the secure delegate: its id is
+        -- read as what the settings take, a number or a string)
+        local id = category:GetID()
+        if type(id) == "number" or type(id) == "string" then
+            categoryId = id
+        end
         page.id = categoryId
         -- Profile switches re-read every control.
         local profiles = handle(def.store).profiles

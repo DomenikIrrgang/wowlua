@@ -376,9 +376,12 @@ impl Converter {
             {
                 self.out.namespaces.entry(lhs.to_string()).or_default();
             } else if !line.starts_with("local ") && is_global_name(lhs) && !lhs.contains('.') {
-                // Unannotated globals (`GlobalColors`): colors, else `any`.
+                // Unannotated globals (`GlobalColors`): colors, font objects
+                // (`GameFontNormal = CreateFont(…)`), else `any`.
                 let ty = if rhs.starts_with("CreateColor(") {
                     "ColorMixin"
+                } else if rhs.starts_with("CreateFont(") {
+                    "Font"
                 } else {
                     "any"
                 };

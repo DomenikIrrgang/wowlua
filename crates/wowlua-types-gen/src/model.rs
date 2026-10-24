@@ -385,6 +385,131 @@ pub fn sig_text(sig: &Sig) -> String {
     out
 }
 
+/// `any` in a written type as `unknown` (quoted literals kept).
+pub fn unknown_for_any(ty: &str) -> String {
+    let mut out = String::with_capacity(ty.len());
+    let mut word = String::new();
+    let mut quoted = false;
+    let flush = |word: &mut String, out: &mut String| {
+        out.push_str(if word == "any" { "unknown" } else { word });
+        word.clear();
+    };
+    for c in ty.chars() {
+        if c == '"' {
+            quoted = !quoted;
+        }
+        if !quoted && (c.is_ascii_alphanumeric() || c == '_') {
+            word.push(c);
+        } else {
+            flush(&mut word, &mut out);
+            out.push(c);
+        }
+    }
+    flush(&mut word, &mut out);
+    out
+}
+
+impl Sig {
+    fn without_any(&mut self) {
+        for p in &mut self.params {
+            p.ty = unknown_for_any(&p.ty);
+        }
+        self.vararg = self.vararg.as_deref().map(unknown_for_any);
+        self.returns = self.returns.iter().map(|r| unknown_for_any(r)).collect();
+        self.ret_vararg = self.ret_vararg.as_deref().map(unknown_for_any);
+    }
+}
+
+impl Decls {
+    /// Every `any` the declarations write as `unknown` (decision T288):
+    /// values nothing types say so, and a caller checks them before use.
+    pub fn without_any(&mut self) {
+        let sigs = |m: &mut IndexMap<String, Vec<Sig>>| {
+            m.values_mut().flatten().for_each(Sig::without_any);
+        };
+        sigs(&mut self.functions);
+        for ns in self.namespaces.values_mut() {
+            sigs(&mut ns.functions);
+            for v in ns.values.values_mut() {
+                *v = unknown_for_any(v);
+            }
+        }
+        for c in self.classes.values_mut() {
+            sigs(&mut c.methods);
+            sigs(&mut c.statics);
+            for (t, _) in c.fields.values_mut() {
+                *t = unknown_for_any(t);
+            }
+        }
+        for t in self.aliases.values_mut() {
+            // names or any other string (`FrameType = "Frame" | … | any`)
+            *t = if t.contains('"') && t.split('|').any(|m| m.trim() == "any") {
+                t.split('|')
+                    .map(|m| if m.trim() == "any" { " string" } else { m })
+                    .collect::<Vec<_>>()
+                    .join("|")
+            } else {
+                unknown_for_any(t)
+            };
+        }
+        for fields in self.interfaces.values_mut() {
+            for (_, t, _) in fields.iter_mut() {
+                *t = unknown_for_any(t);
+            }
+        }
+        for params in self.events.values_mut() {
+            for p in params.iter_mut() {
+                p.ty = unknown_for_any(&p.ty);
+            }
+        }
+        for t in self.globals.values_mut() {
+            *t = unknown_for_any(t);
+        }
+    }
+}
+
+/// A signature as a function type: `(a: T, b: U?) -> R`.
+///
+/// ```
+/// use wowlua_types_gen::model::{fn_type, ParamDecl, Sig};
+/// let sig = Sig {
+///     params: vec![ParamDecl { name: "f".into(), ty: "(t: T) -> ()".into(), optional: true }],
+///     ..Sig::default()
+/// };
+/// assert_eq!(fn_type(&sig), "(f: ((t: T) -> ())?) -> ()");
+/// ```
+pub fn fn_type(sig: &Sig) -> String {
+    let text = sig_text(sig);
+    // `(params): results` → `(params) -> results`
+    let close = {
+        let mut depth = 0i32;
+        let mut at = text.len();
+        let mut prev = ' ';
+        for (i, c) in text.char_indices() {
+            match c {
+                '(' | '<' | '{' => depth += 1,
+                // (the `>` of `->` closes nothing)
+                '>' if prev == '-' => {}
+                ')' | '>' | '}' => {
+                    depth -= 1;
+                    if depth == 0 && c == ')' {
+                        at = i;
+                        break;
+                    }
+                }
+                _ => {}
+            }
+            prev = c;
+        }
+        at
+    };
+    let (params, rest) = text.split_at((close + 1).min(text.len()));
+    match rest.strip_prefix(": ") {
+        Some(results) => format!("{params} -> {results}"),
+        None => format!("{params} -> ()"),
+    }
+}
+
 /// `T?`, parenthesized where needed.
 pub fn optional(ty: &str) -> String {
     if ty.contains('|') || ty.contains("->") || ty.contains('&') {
