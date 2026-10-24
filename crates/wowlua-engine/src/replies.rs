@@ -478,11 +478,12 @@ fn get_num_who_results(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 /// `C_FriendList.GetWhoInfo(index)`: a result's `WhoInfo`.
 fn get_who_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    // No such row: nothing (the full probe: `GetWhoInfo(0)`, `(1)`, `(1.5)`).
     let Value::Num(n) = vm.hidden(c.arg(1)) else {
-        return Ok(vec![Value::Nil]);
+        return Ok(vec![]);
     };
     let Some(&i) = engine(vm).world.chat.who.get((n as usize).wrapping_sub(1)) else {
-        return Ok(vec![Value::Nil]);
+        return Ok(vec![]);
     };
     let (name, level, race, class, zone) = who_fields(vm, i);
     let guild = if i == units::PLAYER.0 {

@@ -49,6 +49,16 @@ pub struct Options {
     pub profile: Option<String>,
 }
 
+/// A path without Windows' verbatim prefix (`\\?\C:\x` is `C:\x`), so
+/// a canonical path and a plain one compare.
+fn verbatim_free(p: &std::path::Path) -> std::path::PathBuf {
+    let text = p.to_string_lossy();
+    match text.strip_prefix(r"\\?\") {
+        Some(rest) if !rest.starts_with("UNC\\") => std::path::PathBuf::from(rest),
+        _ => p.to_path_buf(),
+    }
+}
+
 impl Options {
     /// From DAP's `launch` arguments: `test` (a path) and `filter`, or
     /// `addon: true`; `clock`, `stopOnEntry`, `debugBlizzardUI`, `flavor`,
@@ -60,8 +70,10 @@ impl Options {
     ) -> Result<Options, String> {
         let target = match args.get("test").and_then(Json::as_str) {
             Some(test) => {
-                let path = std::path::Path::new(test);
-                let rel = path.strip_prefix(root).unwrap_or(path);
+                // (Windows' `\\?\C:\…` paths and plain ones alike)
+                let path = verbatim_free(std::path::Path::new(test));
+                let root = verbatim_free(root);
+                let rel = path.strip_prefix(&root).unwrap_or(&path);
                 Target::Test {
                     file: rel.to_string_lossy().replace('\\', "/"),
                     filters: match args.get("filter") {
@@ -431,4 +443,25 @@ fn run_addon(suite: &Suite, opts: &Options, shared: &SharedRef) -> (Option<Strin
         }
     }
     (Some("the session ended".into()), false)
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_verbatim_test_path_is_the_package_s() {
+        let root = std::path::Path::new(r"C:\pkg");
+        let args = serde_json::json!({ "test": r"\\?\C:\pkg\tests\a.test.wowlua" });
+        let opts = Options::from_launch(&args, root, ClockMode::Manual).expect("options");
+        match opts.target {
+            Target::Test { file, .. } if cfg!(windows) => assert_eq!(file, "tests/a.test.wowlua"),
+            Target::Test { .. } => {}
+            Target::Addon => panic!("a test"),
+        }
+        assert_eq!(
+            verbatim_free(std::path::Path::new(r"\\?\C:\x")),
+            std::path::PathBuf::from(r"C:\x")
+        );
+    }
 }

@@ -1,8 +1,9 @@
 # The full probe's answers the engine does not give as the client did, by
 # function: written by its test with WOWLUA_COVERAGE_WRITE=1, read by
 # `cargo xtask coverage-report`.
-matched	33082
+matched	33081
 total	33727
+BNGetInfo	1
 C_ActionBar.IsActionInRange	2
 C_ActionBar.IsHarmfulAction	4
 C_AddOnProfiler.GetAddOnMetric	10

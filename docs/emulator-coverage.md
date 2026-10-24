@@ -24,7 +24,7 @@ their clients answer differently is unverified.
   documented or not, 7,175 have behaviour.
 - **Widget methods:** 1,477 of the 1,477 documented methods have behaviour
   (100.0%).
-- **Full probe:** 33,082 of the client's 33,727 answers given as the client gave
+- **Full probe:** 33,081 of the client's 33,727 answers given as the client gave
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
@@ -551,7 +551,7 @@ locally and CI skips them.
 
 | Comparison | Matched | Of | Ratio |
 |------------|--------:|---:|------:|
-| Full probe (`/stdtest engine fullprobe`: every C function with many arguments) | 33,082 | 33,727 | 98.1% |
+| Full probe (`/stdtest engine fullprobe`: every C function with many arguments) | 33,081 | 33,727 | 98.1% |
 | Answers battery (`/stdtest engine answers`: the calls Blizzard's UI makes) | 6,129 | 6,229 | 98.4% |
 | Method probe (`/stdtest engine methodprobe`: every widget method) | 8,399 | 13,049 | 64.4% |
 | Maps (`/stdtest engine maps`: each map's data) | 3,028 | 3,028 | 100.0% |
@@ -611,7 +611,7 @@ read-back counts for its setter), from the test's misses
 
 | Namespace | Answers | Matched | Ratio |
 |-----------|--------:|--------:|------:|
-| `(globals)` | 9,705 | 9,591 | 98.8% |
+| `(globals)` | 9,705 | 9,590 | 98.8% |
 | `C_AccountInfo` | 18 | 18 | 100.0% |
 | `C_AccountServices` | 57 | 57 | 100.0% |
 | `C_AccountStore` | 61 | 61 | 100.0% |

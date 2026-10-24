@@ -1933,7 +1933,10 @@ fn the_engine_answers_blizzards_calls_as_the_client_did() {
 /// `C_QuestLog.GetQuestsOnMap` lists the log's quests only (6 calls: the
 /// probing character's log, which the default world lacks; the client's
 /// atlas tables gained 5, decision T238).
-const FULLPROBE_MATCHED: usize = 33082;
+// (33,082 until `BNGetInfo()` followed the later recording, decision
+// T350: the full probe's run got nothing, the answers battery's a day
+// later the account; Battle.net's state, the engine answers the account)
+const FULLPROBE_MATCHED: usize = 33081;
 
 #[test]
 fn the_engine_answers_the_full_probe_as_the_client_did() {

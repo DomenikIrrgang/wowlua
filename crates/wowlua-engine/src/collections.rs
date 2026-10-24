@@ -1338,7 +1338,15 @@ pub(crate) fn get_appearance_camera(vm: &mut Vm, c: NativeCall) -> Ret {
     let variation = num(vm, &c, 2).unwrap_or(0.0).max(0.0) as u32;
     match client_camera(vm, visual, variation) {
         Some(cam) => Ok(vec![Value::Num(cam.into())]),
-        None => crate::facts::recorded_call(vm, c),
+        // its recorded answer, else none: 0 (the full probe: `(-1, 0)`)
+        None => {
+            let recorded = crate::facts::recorded_call(vm, c)?;
+            Ok(if recorded.is_empty() {
+                vec![Value::Num(0.0)]
+            } else {
+                recorded
+            })
+        }
     }
 }
 

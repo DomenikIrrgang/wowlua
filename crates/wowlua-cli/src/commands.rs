@@ -719,10 +719,12 @@ fn test_once(
                 build,
                 &flavor,
                 blizzard_ui,
-                args.update_snapshots,
-                args.coverage,
+                SuiteSwitches {
+                    update_snapshots: args.update_snapshots,
+                    coverage: args.coverage,
+                    game_data: args.game_data,
+                },
                 args.profile_out.as_ref().map(|_| start_profile),
-                args.game_data,
             );
             if let Some(dir) = &args.profile_out {
                 let dir = cwd().join(dir);
@@ -924,17 +926,28 @@ fn test_once(
     (ok, watched)
 }
 
+/// How a suite runs: `-u`, `--coverage`, `--game-data`.
+#[derive(Clone, Copy, Default)]
+struct SuiteSwitches {
+    update_snapshots: bool,
+    coverage: bool,
+    game_data: bool,
+}
+
 /// The test runner's suite for a test build of `project`.
 fn make_suite<'a>(
     project: &Project,
     build: &'a BuildOutput,
     flavor: &str,
     blizzard_ui: Option<wowlua_test::UiSource>,
-    update_snapshots: bool,
-    coverage: bool,
+    switches: SuiteSwitches,
     instrument: Option<&'a (dyn Fn(&mut wowlua_vm::Vm) + Sync)>,
-    game_data: bool,
 ) -> wowlua_test::Suite<'a> {
+    let SuiteSwitches {
+        update_snapshots,
+        coverage,
+        game_data,
+    } = switches;
     let test_settings = &project.manifest.manifest.test;
     wowlua_test::Suite {
         build,
@@ -1028,12 +1041,13 @@ pub fn with_suite(
         &build,
         &flavor,
         blizzard_ui,
-        false,
-        false,
-        instrument,
         // a debug session and `wowlua screenshot` show the game as the
         // installation has it
-        true,
+        SuiteSwitches {
+            game_data: true,
+            ..SuiteSwitches::default()
+        },
+        instrument,
     );
     f(&mut suite);
     Ok(())

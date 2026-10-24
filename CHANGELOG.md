@@ -27,6 +27,8 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- Debugging a test file on Windows works: the file was reported as "not a test file of the package" when its path came with Windows' `\\?\` prefix.
+- In tests, `C_FriendList.GetWhoInfo(i)` for a row that isn't there answers nothing, `GetUICameraInfo` of an unknown camera nine zeros and `false`, and `C_TransmogCollection.GetAppearanceCameraID` of an unknown appearance `0`, as the game does. A character loaded from a snapshot keeps its own talent config.
 - A frame with an `OnEnter`, `OnLeave`, `OnMouseDown` or `OnMouseUp` script takes the mouse, as in game, even without `EnableMouse(true)`: clicks reach it and `IsMouseEnabled()` is true (`OnMouseWheel` turns on the wheel). The side tabs of the character frame and the group finder can be clicked now.
 - More of what you type gets the server's answer, as in game: `/roll` ("Player rolls 42 (1-100)"), `/played`, `/afk` and `/dnd` (with `UnitIsAFK` and `UnitIsDND`), `/ignore` and `/unignore` (a real ignore list), `/who`, and the game's errors for `/invite`, `/ginvite`, `/gpromote`, `/gremove` and `/gquit` when the name doesn't exist or the guild master would leave. Emotes (`/dance`, `/wave`) no longer print "Type '/help' for a listing of a few commands.", and plural words in game text ("1 day", "2 days") show as the game shows them.
 - Chat you send gets the server's answer, as in game: what you say, yell and emote shows in chat, party, raid and guild chat shows when you are in one (else the game's error, "You aren't in a party."), and a whisper shows as sent, or "No player named '…' is currently playing." for a name nobody has. Before, `SendChatMessage` did nothing.

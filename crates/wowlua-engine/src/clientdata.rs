@@ -412,8 +412,15 @@ fn actor_display_info(vm: &mut Vm, c: NativeCall) -> Ret {
 /// tables, the recorded answers.
 fn ui_camera_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(cam) = data(vm).and_then(|d| d.ui_camera(id_arg(&c)?)) else {
-        // The client's answers as recorded.
-        return crate::facts::recorded_call(vm, c);
+        // The client's answers as recorded, else none: nine zeros and
+        // false (the full probe: `GetUICameraInfo(0)`, `(1)`).
+        let recorded = crate::facts::recorded_call(vm, c)?;
+        if !recorded.is_empty() {
+            return Ok(recorded);
+        }
+        let mut none = vec![Value::Num(0.0); 9];
+        none.push(Value::Bool(false));
+        return Ok(none);
     };
     let n = |v: f32| Value::Num(f64::from(v));
     Ok(vec![

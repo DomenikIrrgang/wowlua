@@ -831,6 +831,11 @@ fn resolve(vm: &mut Vm, config: i64) -> (String, i64, bool) {
 /// The inspected config's ID.
 const INSPECT: i64 = -1;
 
+/// The default character's own combat config (`stats.combatConfig` of
+/// `data/camelot-default-character.json`, from another recording than the
+/// talent model's).
+const DEFAULT_CHARACTER_CONFIG: f64 = 16273023.0;
+
 /// The player's talent config as the model has it (decision T328): a
 /// config the class's recorded character's configs do not hold (the default
 /// character's own, from another recording) is the recorded character's
@@ -838,6 +843,11 @@ const INSPECT: i64 = -1;
 /// model answers for; a config the model holds, or a class never recorded,
 /// as it is.
 pub(crate) fn player_config(vm: &Vm, config: f64) -> f64 {
+    // Only the default character's own config: a character given with its
+    // own snapshot (a scenario's paladin's 73810) keeps the config it has.
+    if config != DEFAULT_CHARACTER_CONFIG {
+        return config;
+    }
     let m = model(vm);
     if !m.known()
         || m.recorded(&format!("C_Traits.GetConfigInfo({})", config as i64))
