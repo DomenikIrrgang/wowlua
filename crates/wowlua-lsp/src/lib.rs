@@ -967,11 +967,21 @@ fn hover(server: &Server, uri: &str, position: &Json) -> Json {
         return Json::Null;
     };
     let (start, end) = (found.start as usize, found.end as usize);
-    let name = doc.text.get(start..end).filter(|s| {
-        !s.is_empty()
-            && s.len() <= 80
-            && !s.starts_with(|c: char| c.is_ascii_digit())
-            && s.chars().all(|c| c.is_alphanumeric() || c == '_')
+    // a name, or the field or method at the end of an expression
+    // (`self.count`) when the pointer is on it
+    let name = doc.text.get(start..end).and_then(|s| {
+        let tail = s.len()
+            - s.chars()
+                .rev()
+                .take_while(|c| c.is_alphanumeric() || *c == '_')
+                .map(char::len_utf8)
+                .sum::<usize>();
+        let n = &s[tail..];
+        let named = !n.is_empty()
+            && n.len() <= 80
+            && !n.starts_with(|c: char| c.is_ascii_digit())
+            && (tail == 0 || offset >= start + tail);
+        named.then_some(n)
     });
     let mut value = match name {
         Some(n) => format!("```wowlua\n{n}: {}\n```", found.ty),

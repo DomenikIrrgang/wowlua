@@ -1071,6 +1071,10 @@ impl Checker<'_, '_> {
         if let ExprKind::Name(n) = t.kind() {
             let var = self.lookup_var(n.text());
             self.note_name(n, var);
+            // (hover: the value it gets)
+            if let Some(h) = self.hovers.as_mut() {
+                h.push((n.span(), value));
+            }
         }
         match t.kind() {
             ExprKind::Name(n) => match self.lookup_var(n.text()) {

@@ -178,6 +178,9 @@ fn names_show_their_types_and_doc_comments() {
     // a method called
     let h = hover(&uri, MAIN, "bump", 0);
     assert!(h.contains("bump: () -> "), "{h}");
+    // a field, by its name
+    let h = hover(&util_uri, &util_text, "count += 1", 0);
+    assert!(h.contains("count: number"), "{h}");
     // a parameter, where it is declared
     let h = hover(&util_uri, &util_text, "name: string", 0);
     assert!(h.contains("name: string"), "{h}");
