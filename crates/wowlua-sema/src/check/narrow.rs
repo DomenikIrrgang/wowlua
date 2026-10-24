@@ -623,7 +623,16 @@ impl Checker<'_, '_> {
                     yes.push(narrowed);
                     no.push(m);
                 }
-                None if self.env.assignable(m, target, super::query::Mode::Strict) => yes.push(m),
+                None if self.env.assignable(m, target, super::query::Mode::Strict) => {
+                    // An open type (a game frame takes any field) passes for
+                    // the predicate's type; that one, which declares more,
+                    // when it is also one of it (decision L79).
+                    if m != target && self.env.assignable(target, m, super::query::Mode::Strict) {
+                        yes.push(target);
+                    } else {
+                        yes.push(m);
+                    }
+                }
                 None if self.env.assignable(target, m, super::query::Mode::Strict) => {
                     yes.push(target);
                     no.push(m);

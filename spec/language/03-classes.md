@@ -360,7 +360,8 @@ WoW widgets are created by `CreateFrame` and already have a metatable, so
 widget classes are lowered as **mixins**, following Blizzard's own
 `Mixin` pattern. The game's frames take any field (`[string]: any`), and
 so does a widget class's instance; a member the class doesn't declare is
-then `any`, which W2063 reports (decision L51).
+then `any`, which W2063 reports (decision L51), as it reports a field a
+plain game frame doesn't declare when it is read or called (decision L79).
 
 ```wowlua
 export class CounterButton extends Button

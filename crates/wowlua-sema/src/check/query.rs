@@ -312,6 +312,14 @@ impl Env<'_> {
         false
     }
 
+    /// One of the game's widget types (`Button`, `Texture`): it takes any
+    /// field, so one it doesn't declare reads as `any` nobody wrote (W2063,
+    /// decision L79).
+    pub fn native_widget(&self, def: DefId) -> bool {
+        let v = self.view(def);
+        v.native() && v.widget().is_some()
+    }
+
     /// `sub` is `sup` or one of its subclasses / sub-interfaces.
     pub fn derives(&self, sub: DefId, sup: DefId) -> bool {
         let mut stack = vec![sub];

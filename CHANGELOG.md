@@ -44,6 +44,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `local p = cache[key]; if not p then p = { seen = {} } end` gives `p.seen` the type of the cache's `seen` field, where the empty table made it `any`.
 - Calling a method a record type doesn't declare, on a record with an indexer (`m:Setting("x")` with `{ Get: …, [string]: unknown }`), calls the indexer's value: an `unknown` there is an error until it is narrowed (E2004), where the call was `any`.
 - A function passed where a function with `...` parameters is expected types its parameters from them: in `text:gsub("(%w+)=(%w+)", function(key, value) … end)`, `key` and `value` are strings, where they were `any`.
+- W2063 (when turned on) also reports a field one of the game's frames doesn't declare, read or called (`button.owner`, `tooltip:AppendInfo()`): it is `any`. Give the value a type that has it (`Button & { owner: Frame? }`), or read it with `frames.keyed` or `table.field`.
 - `local p = x :: FramePoint` keeps `FramePoint` (and `local v = t?.field` the field's type), where the local widened it to `string`.
 - A value typed `unknown` is `false` or `nil` where it is falsy: `x and true or false` is a `boolean`, and `if not x then` knows `x` is `false` or `nil`.
 - The game's transmog info (`ItemTransmogInfo`, as `C_TransmogCollection.GetCustomSetItemTransmogInfoList` gives it) has its `appearanceID`, `secondaryAppearanceID` and `illusionID`.
@@ -71,6 +72,8 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- A type predicate narrows one of the game's frames to its type: after `if canDisable(f) then` with `canDisable(f: Frame): f is Frame & Disableable`, `f:SetDisabled(true)` is checked; it was `any`.
+- `Browser` and `OffScreenFrame` frames have a frame's methods (`SetPoint`, `SetScript`, …); they had only their own.
 - A class field typed by another file's alias that uses `typeof` (`api: UnitApi`, with `UnitApi = { UnitHealth: typeof(UnitHealth), … }` in another file) is typed in the class's methods; it was `any` there.
 - A function taking an `EventName` (or another type of many names) no longer stops the development build from loading ("chunk has too many syntax levels"): its argument check is now a single lookup.
 - A value of several types at once fits a type of some of them: `A & B & C` is an `A & B`, where only a single `A` was accepted. The game's chat windows (`ChatFrame1`) now fit `ScrollingMessageFrameMixin & Frame`.

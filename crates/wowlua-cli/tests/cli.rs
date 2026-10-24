@@ -2936,8 +2936,9 @@ print(t, u)
 }
 
 /// `W2063` (decision T274): off unless `check.lints` turns it on; then an
-/// unannotated parameter nothing types, a local whose value is `any`, and
-/// a generic type written without its type arguments (T276).
+/// unannotated parameter nothing types, a local whose value is `any`, a
+/// generic type written without its type arguments (T276), and a field a
+/// widget class or a game frame doesn't declare (L51, L79).
 #[test]
 fn implicit_any_lint() {
     let dir = tempfile::tempdir().unwrap();
@@ -2961,6 +2962,9 @@ end
 local sw = Switch.new(nil, UIParent)
 sw.extra = 1
 print(sw.on, sw.other, frame.anything)
+frame:Paint()
+local function paintable(f: Frame): f is Frame & { Paint: (self: Frame) -> () } return f ~= nil end
+if paintable(frame) then frame:Paint() end
 "#;
     let manifest = |lints: &str| {
         format!(
@@ -2999,6 +3003,8 @@ print(sw.on, sw.other, frame.anything)
             "src/main.wowlua:6:7: warning[W2063]: `a` is `any`: its value has no type (annotate it, or type where it comes from)",
             "src/main.wowlua:19:4: warning[W2063]: `Switch` doesn't declare `extra`, so it is `any` (declare it in the class)",
             "src/main.wowlua:20:17: warning[W2063]: `Switch` doesn't declare `other`, so it is `any` (declare it in the class)",
+            "src/main.wowlua:20:30: warning[W2063]: `Frame` doesn't declare `anything`, so it is `any` (give the value a type that has it: `Frame & { anything: … }`)",
+            "src/main.wowlua:21:7: warning[W2063]: `Frame` doesn't declare `Paint`, so it is `any` (give the value a type that has it: `Frame & { Paint: … }`)",
             "src/main.wowlua:12:14: warning[W2063]: `Box` is written without its type arguments, so they are `any` (write `Box<T>`)",
         ],
         "{on}"

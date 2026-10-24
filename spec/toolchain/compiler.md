@@ -316,7 +316,10 @@ only lints, and errors that stop the analysis) on `.wowlua` files, and on
   type arguments (`Box` for `Box<T>`, whose arguments are then `any`;
   decision T276), or a member a widget class (`class Toggle extends
   Button`) doesn't declare, read or set: the game's frames are open, so it
-  passes as `any` (decision L51). Only the project's files: not wowlua's
+  passes as `any` (decision L51); and a field one of the game's frame types
+  doesn't declare, read or called (`button.owner`: give the value a type
+  that has it, `Button & { owner: Frame? }`, or read it with
+  `frames.keyed` or `table.field`; decision L79). Only the project's files: not wowlua's
   library or a dependency's. A project that keeps `any` to the places
   that need it turns it on, and writes `any` where it means it (decision
   T274).

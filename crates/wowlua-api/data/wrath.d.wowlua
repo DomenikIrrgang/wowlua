@@ -9064,7 +9064,7 @@ declare class SecondsFormatter
 end
 
 @widget("Browser")
-declare class Browser
+declare class Browser extends Frame
     function ClearFocus()
     function CopyExternalLink()
     function DeleteCookies()
@@ -9103,7 +9103,7 @@ declare class Movie
 end
 
 @widget("OffScreenFrame")
-declare class OffScreenFrame
+declare class OffScreenFrame extends Frame
     function ApplySnapshot(texture: Texture, snapshotID: number): boolean
     function Flush()
     function GetMaxSnapshots(): number

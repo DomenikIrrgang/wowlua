@@ -1521,6 +1521,8 @@ impl Checker<'_, '_> {
                                 Some((_, v)) => {
                                     if !quiet && self.env.open_through_native(d) {
                                         self.undeclared_member(m, name, span);
+                                    } else if !quiet && self.env.native_widget(d) {
+                                        self.undeclared_frame_member(m, name, span);
                                     }
                                     Some(v)
                                 }
@@ -1715,6 +1717,8 @@ impl Checker<'_, '_> {
                             Some((_, v)) => {
                                 if self.env.open_through_native(d) {
                                     self.undeclared_member(m, name, span);
+                                } else if self.env.native_widget(d) {
+                                    self.undeclared_frame_member(m, name, span);
                                 }
                                 self.drop_first(v)
                             }
@@ -1798,6 +1802,16 @@ impl Checker<'_, '_> {
         let msg = format!(
             "`{}` doesn't declare `{name}`, so it is `any` (declare it in the class)",
             self.env.display(t)
+        );
+        self.report("W2063", span, msg);
+    }
+
+    /// A field one of the game's widget types doesn't declare (decision
+    /// L79): the game's frames take any field, so it reads as `any`.
+    fn undeclared_frame_member(&mut self, t: TypeId, name: &str, span: Span) {
+        let shown = self.env.display(t);
+        let msg = format!(
+            "`{shown}` doesn't declare `{name}`, so it is `any` (give the value a type that has it: `{shown} & {{ {name}: … }}`)"
         );
         self.report("W2063", span, msg);
     }

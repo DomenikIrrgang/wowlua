@@ -243,7 +243,10 @@ A function whose return type is `param is T` narrows its argument in the
 caller:
 
 - where the call is **truthy**, the argument is narrowed to `T` (intersected
-  with its current type);
+  with its current type); a member that passes for `T` only because it is
+  open (a game frame takes any field, so `Frame` passes for `Frame &
+  Disableable`) is narrowed to `T` too, whose members are declared (decision
+  L79);
 - where the call is **falsy** (`else` branch, `if not p(x)`, after
   `if p(x) then return end`), the argument is narrowed by **excluding** the
   members of its union type that are assignable to `T`. A member that is a
