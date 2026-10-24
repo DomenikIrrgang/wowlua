@@ -57,12 +57,15 @@ struct Server {
     jobs: mpsc::Sender<Job>,
     /// Go to definition requests waiting for their package's check: the
     /// package, the request's id, the document and the position.
-    waiting: Vec<(PathBuf, Json, String, Json)>,
+    waiting: Vec<(PathBuf, Json, String, Json, Ask)>,
     /// The files each package's last check reported (by the package's
     /// manifest), to clear them.
     published: HashMap<PathBuf, BTreeSet<PathBuf>>,
     /// What each file's names refer to, from its package's last check.
     definitions: HashMap<PathBuf, Vec<check::Definition>>,
+    /// What each open file's names and expressions are, from its
+    /// package's last check.
+    hovers: HashMap<PathBuf, Vec<check::Hover>>,
     /// The files each package's last check gave definitions for.
     defined: HashMap<PathBuf, Vec<PathBuf>>,
     shutdown: bool,
@@ -254,6 +257,7 @@ pub fn serve_with(
         waiting: Vec::new(),
         published: HashMap::new(),
         definitions: HashMap::new(),
+        hovers: HashMap::new(),
         defined: HashMap::new(),
         shutdown: false,
         in_process,
@@ -668,6 +672,7 @@ fn initialized(out: &mut impl std::io::Write, id: &Json) -> std::io::Result<()> 
                 "documentFormattingProvider": true,
                 "documentSymbolProvider": true,
                 "definitionProvider": true,
+                "hoverProvider": true,
             },
             "serverInfo": { "name": "wowlua", "version": env!("CARGO_PKG_VERSION") },
         }),
@@ -797,7 +802,12 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
             let edits = server.docs.get(&uri).and_then(format).unwrap_or_default();
             reply(out, id, Json::Array(edits))?;
         }
-        "textDocument/definition" => {
+        "textDocument/definition" | "textDocument/hover" => {
+            let ask = if method == "textDocument/hover" {
+                Ask::Hover
+            } else {
+                Ask::Definition
+            };
             let manifest = server.docs.get(&uri).and_then(|d| d.manifest.clone());
             match manifest {
                 // edits not checked yet: the answer waits for the check,
@@ -808,9 +818,9 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
                     }
                     server
                         .waiting
-                        .push((m, id.clone(), uri, params["position"].clone()));
+                        .push((m, id.clone(), uri, params["position"].clone(), ask));
                 }
-                _ => reply(out, id, definition(server, &uri, &params["position"]))?,
+                _ => reply(out, id, ask.answer(server, &uri, &params["position"]))?,
             }
         }
         "textDocument/documentSymbol" => {
@@ -891,12 +901,17 @@ fn publish(
         let replaced = covers(f);
         if replaced {
             server.definitions.remove(f);
+            server.hovers.remove(f);
         }
         !replaced
     });
     files.extend(checked.definitions.keys().cloned());
+    files.extend(checked.hovers.keys().cloned());
+    files.sort();
+    files.dedup();
     server.defined.insert(manifest.to_path_buf(), files);
     server.definitions.extend(checked.definitions);
+    server.hovers.extend(checked.hovers);
     Ok(())
 }
 
@@ -910,11 +925,110 @@ fn answer_waiting(
         .into_iter()
         .partition(|(m, ..)| m == manifest);
     server.waiting = rest;
-    for (_, id, uri, position) in ready {
-        let found = definition(server, &uri, &position);
+    for (_, id, uri, position, ask) in ready {
+        let found = ask.answer(server, &uri, &position);
         reply(out, &id, found)?;
     }
     Ok(())
+}
+
+/// A request answered from a package's last check.
+#[derive(Clone, Copy, Debug)]
+enum Ask {
+    Definition,
+    Hover,
+}
+
+impl Ask {
+    fn answer(self, server: &Server, uri: &str, position: &Json) -> Json {
+        match self {
+            Ask::Definition => definition(server, uri, position),
+            Ask::Hover => hover(server, uri, position),
+        }
+    }
+}
+
+/// What the name or expression at `position` is (the innermost one there):
+/// its type, as `name: type` for a name, and the doc comment of what it
+/// refers to (or declares); `null` where the last check knows none.
+fn hover(server: &Server, uri: &str, position: &Json) -> Json {
+    let Some(doc) = server.docs.get(uri) else {
+        return Json::Null;
+    };
+    let offset = text::offset(&doc.text, position);
+    let Some(found) = server
+        .hovers
+        .get(&doc.canonical)
+        .into_iter()
+        .flatten()
+        .filter(|h| h.start as usize <= offset && offset <= h.end as usize)
+        .min_by_key(|h| h.end - h.start)
+    else {
+        return Json::Null;
+    };
+    let (start, end) = (found.start as usize, found.end as usize);
+    let name = doc.text.get(start..end).filter(|s| {
+        !s.is_empty()
+            && s.len() <= 80
+            && !s.starts_with(|c: char| c.is_ascii_digit())
+            && s.chars().all(|c| c.is_alphanumeric() || c == '_')
+    });
+    let mut value = match name {
+        Some(n) => format!("```wowlua\n{n}: {}\n```", found.ty),
+        None => format!("```wowlua\n{}\n```", found.ty),
+    };
+    // the doc comment of what it refers to, else of what it declares here
+    let target = server
+        .definitions
+        .get(&doc.canonical)
+        .into_iter()
+        .flatten()
+        .find(|d| d.start as usize <= offset && offset <= d.end as usize)
+        .map(|d| (d.target.uri.to_string(), d.target.range[0] as usize));
+    let (target_uri, line) = target.unwrap_or_else(|| {
+        let line = doc.text[..start.min(doc.text.len())].matches('\n').count();
+        (uri.to_string(), line)
+    });
+    if let Some(comment) = doc_comment(server, &target_uri, line) {
+        value.push_str("\n\n");
+        value.push_str(&comment);
+    }
+    json!({
+        "contents": { "kind": "markdown", "value": value },
+        "range": text::range(&doc.text, start, end),
+    })
+}
+
+/// The `---` comment lines right above line `line` of the file at `uri`
+/// (decorators between them and it skipped), without their dashes.
+fn doc_comment(server: &Server, uri: &str, line: usize) -> Option<String> {
+    let owned;
+    let text = match server.docs.get(uri) {
+        Some(d) => d.text.as_str(),
+        None => {
+            owned = std::fs::read_to_string(text::path_of(uri)?).ok()?;
+            owned.as_str()
+        }
+    };
+    let lines: Vec<&str> = text.lines().take(line).collect();
+    let mut comment: Vec<&str> = Vec::new();
+    for l in lines.iter().rev() {
+        let t = l.trim_start();
+        if t.starts_with('@') && comment.is_empty() {
+            continue;
+        }
+        match t.strip_prefix("---") {
+            Some(rest) if !rest.starts_with('-') => {
+                comment.push(rest.strip_prefix(' ').unwrap_or(rest));
+            }
+            _ => break,
+        }
+    }
+    if comment.is_empty() {
+        return None;
+    }
+    comment.reverse();
+    Some(comment.join("\n"))
 }
 
 /// Where the name at `position` of the document is defined, from its

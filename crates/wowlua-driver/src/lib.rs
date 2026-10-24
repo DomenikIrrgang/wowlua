@@ -77,6 +77,12 @@ pub struct Session {
     /// modules they import, and stop after the type check, building
     /// nothing: their diagnostics in a fraction of the time.
     pub focus: Option<std::collections::HashSet<std::path::PathBuf>>,
+    /// `Some`: builds record the types of these files' names and
+    /// expressions (the language server's hover, its open files) in
+    /// `hovers`.
+    pub hover: Option<std::collections::HashSet<std::path::PathBuf>>,
+    /// With `hover`: (span, type as messages show it).
+    pub hovers: Vec<(wowlua_span::Span, String)>,
 }
 
 impl Session {

@@ -11,7 +11,8 @@ too; *Format Document* formats as `wowlua fmt` does with your package's
 `fmt` settings; the outline and breadcrumbs list a file's functions, classes
 with their methods, locals, enums and types; *Go to Definition* (F12, or
 Ctrl or Cmd + click) leads from a name to where it is defined, in your
-files or in the game's API. `wowlua.languageServer` turns
+files or in the game's API; hovering a name shows its type and doc
+comment. `wowlua.languageServer` turns
 it off; *wowlua: Restart Language Server* restarts it (its log is in the
 **wowlua Language Server** output).
 

@@ -92,6 +92,9 @@ pub struct FileInfo<'a> {
     /// `if` blocks static conditions decide (spec §6.4.2): `false`
     /// removed, `true` always runs.
     pub static_branches: std::collections::HashMap<(u32, u32), bool>,
+    /// Record what the names and expressions are, for the language
+    /// server's hover (the file is open in the editor).
+    pub hover: bool,
 }
 
 /// The locals in scope: every name's variables, innermost last, and the
@@ -207,6 +210,9 @@ pub struct Checker<'e, 'p> {
     /// variables of those imports (a shadowing local is not the import).
     intrinsics: crate::stdlib::Intrinsics,
     pub(crate) import_vars: FxHashMap<Box<str>, VarId>,
+    /// With `FileInfo::hover`: declared names (locals, parameters,
+    /// functions, methods) and methods called, with their types.
+    pub(crate) hovers: Option<Vec<(Span, TypeId)>>,
     /// `FileInfo::import_targets`.
     pub(crate) import_targets: FxHashMap<Box<str>, super::env::DefTarget>,
     /// The handler type the decorators of the statement being checked give
@@ -378,6 +384,7 @@ impl<'e, 'p> Checker<'e, 'p> {
             value_checks: FxHashMap::default(),
             intrinsics: info.intrinsics.clone(),
             import_vars: FxHashMap::default(),
+            hovers: info.hover.then(Vec::new),
             import_targets: info.import_targets.clone(),
             next_handler: None,
             result_caps: FxHashMap::default(),
@@ -529,6 +536,9 @@ impl<'e, 'p> Checker<'e, 'p> {
             None if widen => self.env.types.widen_value(ty),
             None => ty,
         };
+        if let (Some(h), Some(s)) = (self.hovers.as_mut(), span) {
+            h.push((s, base));
+        }
         self.vars.push(Var {
             name: name.into(),
             declared,
@@ -2093,6 +2103,12 @@ impl<'e, 'p> Checker<'e, 'p> {
             })
             .flatten();
         let t = self.function_body(&FnSig::of(func), expected, self_ty);
+        if let Some(h) = self.hovers.as_mut() {
+            let at = name
+                .method()
+                .unwrap_or_else(|| name.path().at(name.path().len() - 1));
+            h.push((at.span(), t));
+        }
         let cap = self.last_result_cap.take();
         if let (Some(v), Some(m)) = (table, method_name) {
             match cap {
@@ -2531,7 +2547,11 @@ impl<'e, 'p> Checker<'e, 'p> {
                         self.env.def(def).members.get(name.text()).map(|m| m.ty)
                     };
                     let exp = expected.and_then(|e| self.as_func(e));
-                    self.function_body(&FnSig::of(func), exp, (!is_static).then_some(instance));
+                    let t =
+                        self.function_body(&FnSig::of(func), exp, (!is_static).then_some(instance));
+                    if let Some(h) = self.hovers.as_mut() {
+                        h.push((name.span(), expected.unwrap_or(t)));
+                    }
                 }
                 ClassMemberKind::Constructor {
                     func,

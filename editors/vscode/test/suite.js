@@ -236,6 +236,11 @@ async function lspScenario(widgets) {
         const line = doc.lineAt(range.start.line).text;
         log("definition:", uri.fsPath === widgets.fsPath ? "same file" : uri.fsPath, "line", range.start.line + 1, line.trim());
         assert(uri.fsPath === widgets.fsPath && line.includes("function refresh"), "definition at " + line);
+        // hovering `refresh` shows its type
+        const hovers = await vscode.commands.executeCommand("vscode.executeHoverProvider", widgets, call);
+        const shown = (hovers || []).flatMap((h) => h.contents.map((c) => c.value || String(c))).join("\n");
+        log("hover:", shown.replace(/\n/g, " "));
+        assert(shown.includes("refresh: "), "hover shows " + shown);
         const edits = await vscode.commands.executeCommand("vscode.executeFormatDocumentProvider", widgets, { tabSize: 4, insertSpaces: false });
         assert(Array.isArray(edits), "formatting gave " + edits);
         log("PASS", name);

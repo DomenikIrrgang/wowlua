@@ -1,5 +1,6 @@
 //! Go to definition (decision T369): locals, imports, class members, types,
-//! globals and the game's API, from what the check found.
+//! globals and the game's API, from what the check found; and hover
+//! (decision T376): what a name is, with its doc comment.
 
 use serde_json::{Value as Json, json};
 use std::path::{Path, PathBuf};
@@ -8,6 +9,7 @@ mod common;
 use common::Client;
 
 const UTIL: &str = "\
+--- Says hello to `name`.
 export function greet(name: string): string
 \treturn `hi {name}`
 end
@@ -139,4 +141,45 @@ fn names_lead_to_their_definitions() {
     assert!(same(&p, &util) && t == "bump", "{p:?} {t}");
     let (p, t) = answer(11);
     assert!(p.ends_with("src/hello.wowlua") && t == "SayHi", "{p:?} {t}");
+}
+
+#[test]
+fn names_show_their_types_and_doc_comments() {
+    let (_dir, main, util) = project();
+    let uri = wowlua_lsp::text::uri_of(&main);
+    let mut c = Client::start();
+    c.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": uri, "languageId": "wowlua", "version": 1, "text": MAIN } }),
+    );
+    let util_uri = wowlua_lsp::text::uri_of(&util);
+    let util_text = std::fs::read_to_string(&util).unwrap();
+    c.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": util_uri, "languageId": "wowlua", "version": 1, "text": util_text } }),
+    );
+    let mut hover = |uri: &str, text: &str, needle: &str, nth: usize| -> String {
+        let r = c.request(
+            "textDocument/hover",
+            json!({ "textDocument": { "uri": uri }, "position": at(text, needle, nth) }),
+        );
+        r["result"]["contents"]["value"]
+            .as_str()
+            .unwrap_or_else(|| panic!("no hover for {needle}: {r}"))
+            .to_string()
+    };
+    // a local's inferred type
+    let h = hover(&uri, MAIN, "message", 0);
+    assert!(h.contains("message: string"), "{h}");
+    // an imported function: its signature and doc comment
+    let h = hover(&uri, MAIN, "greet", 1);
+    assert!(h.contains("greet: (name: string) -> string"), "{h}");
+    assert!(h.contains("Says hello to `name`."), "{h}");
+    // a method called
+    let h = hover(&uri, MAIN, "bump", 0);
+    assert!(h.contains("bump: () -> "), "{h}");
+    // a parameter, where it is declared
+    let h = hover(&util_uri, &util_text, "name: string", 0);
+    assert!(h.contains("name: string"), "{h}");
+    assert!(c.finish());
 }

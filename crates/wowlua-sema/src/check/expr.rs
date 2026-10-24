@@ -720,6 +720,9 @@ impl Checker<'_, '_> {
                     Some(t) => self.drop_first(t),
                     None => self.method_type(o, name.text(), name.span()),
                 };
+                if let Some(h) = self.hovers.as_mut() {
+                    h.push((name.span(), m));
+                }
                 let m = self.registry_method_type(o, name.text(), args, m);
                 self.check_router_add(o, name.text(), args);
                 let results = self.call(m, Some(o), args, e.span(), expected);

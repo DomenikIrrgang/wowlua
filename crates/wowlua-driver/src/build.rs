@@ -719,6 +719,7 @@ fn build_inner(
         lua: manifest.manifest.check.lua,
         index: session.definitions.is_some(),
         focus: session.focus.clone(),
+        hover: session.hover.clone(),
         globals: manifest
             .manifest
             .check
@@ -1143,6 +1144,7 @@ fn build_inner(
                         stdlib: wowlua_sema::stdlib::StdlibConfig::default(),
                         index: false,
                         focus: None,
+                        hover: None,
                     },
                     main: l.main.as_ref().map(|r| l.src_rel(r)),
                     meta: std::sync::Arc::new(crate::meta::library_meta(&meta, m, &l.entry)),
@@ -1193,6 +1195,7 @@ fn build_inner(
         if let Some(found) = session.definitions.as_mut() {
             found.append(&mut output.definitions);
         }
+        session.hovers.append(&mut output.hovers);
         builds.push(FlavorBuild {
             flavor: flavor.clone(),
             meta,

@@ -52,8 +52,7 @@ pub fn check_package(
         shared,
         None,
         &[],
-        false,
-        None,
+        &Extras::default(),
     )
     .diagnostics
 }
@@ -75,6 +74,22 @@ pub struct CheckOutput {
     /// what it refers to, for the language server's go to definition
     /// (spec §16.2).
     pub definitions: Vec<(wowlua_span::Span, wowlua_span::Span)>,
+    /// With `Extras::hover`: the names and expressions of those files, and
+    /// their types as messages show them (the language server's hover).
+    pub hovers: Vec<(wowlua_span::Span, String)>,
+}
+
+/// What a check does besides checking (the language server's).
+#[derive(Default)]
+pub struct Extras<'a> {
+    /// Find what each name refers to (`CheckOutput::definitions`).
+    pub definitions: bool,
+    /// Check only these inputs: the others count for the globals, as in a
+    /// full check, but are not checked (a first pass).
+    pub only: Option<&'a std::collections::HashSet<usize>>,
+    /// Record the types of these inputs' names and expressions
+    /// (`CheckOutput::hovers`).
+    pub hover: Option<&'a std::collections::HashSet<usize>>,
 }
 
 /// Like [`check_package`], with the type information lowering uses. With
@@ -90,11 +105,12 @@ pub fn check_package_full(
     shared: Option<&flavors::SharedFlavors>,
     mut reuse: Option<reuse::Reuse<'_>>,
     global_defs: &[Option<Vec<String>>],
-    indexed: bool,
-    only: Option<&std::collections::HashSet<usize>>,
+    extras: &Extras,
 ) -> CheckOutput {
+    let (indexed, only) = (extras.definitions, extras.only);
     let mut type_names = HashMap::new();
     let mut value_checks = HashMap::new();
+    let mut hovers: Vec<(wowlua_span::Span, String)> = Vec::new();
     use types::DefId;
     let mut private_methods: HashMap<wowlua_span::Span, DefId> = HashMap::new();
     let mut global_classes: HashSet<DefId> = HashSet::new();
@@ -397,6 +413,7 @@ pub fn check_package_full(
             export_caps: &export_caps,
             early: &early,
             global_exports: &global_exports,
+            hover: extras.hover,
         };
         // A plain Lua file reads nothing of other files but the
         // declarations: a later flavor whose declarations give the same
@@ -504,6 +521,7 @@ pub fn check_package_full(
             m.cache
                 .keep(&env, facts, keys, i, &out.exports, &out.export_caps);
         }
+        hovers.extend(out.hovers);
         type_names.extend(out.type_names);
         value_checks.extend(out.value_checks);
         private_methods.extend(out.private_methods);
@@ -584,6 +602,7 @@ pub fn check_package_full(
         value_checks,
         private_methods,
         definitions,
+        hovers,
     }
 }
 
@@ -768,10 +787,14 @@ struct FileCtx<'a> {
     export_caps: &'a FxHashMap<usize, FxHashMap<Box<str>, usize>>,
     early: &'a FxHashSet<usize>,
     global_exports: &'a FxHashMap<String, (usize, String)>,
+    /// The inputs whose names and expressions are recorded for hover.
+    hover: Option<&'a std::collections::HashSet<usize>>,
 }
 
 /// What checking one file gives.
 struct FileOutcome {
+    /// The file's names and expressions with their types (`Extras::hover`).
+    hovers: Vec<(wowlua_span::Span, String)>,
     diagnostics: Vec<Diagnostic>,
     type_names: Vec<(wowlua_span::Span, String)>,
     value_checks: Vec<(wowlua_span::Span, runtime::ValueCheck)>,
@@ -908,7 +931,9 @@ fn check_file_in(
     settings: FileSettings,
     parse: &wowlua_syntax::Parse,
 ) -> FileOutcome {
+    let hover = ctx.hover.is_some_and(|h| h.contains(&i));
     let mut out = FileOutcome {
+        hovers: Vec::new(),
         diagnostics: Vec::new(),
         type_names: Vec::new(),
         value_checks: Vec::new(),
@@ -947,6 +972,7 @@ fn check_file_in(
         imports,
         import_targets,
         import_caps,
+        hover,
         is_module: ctx.analysis.modules[i]
             .as_ref()
             .is_some_and(|m| m.is_module),
@@ -1028,6 +1054,22 @@ fn check_file_in(
     }
     out.value_checks
         .extend(std::mem::take(&mut checker.value_checks));
+    if hover {
+        // Every expression's type (not long ones: a table literal's record
+        // reads worse than its fields'), and the declared names.
+        let file = parse.view().span().file;
+        let mut found: Vec<(wowlua_span::Span, TypeId)> = checker
+            .expr_types
+            .iter()
+            .filter(|((s, e), _)| e - s <= 120)
+            .map(|(&(start, end), &t)| (wowlua_span::Span { file, start, end }, t))
+            .collect();
+        found.extend(checker.hovers.take().unwrap_or_default());
+        for (span, t) in found {
+            let shown = checker.env.display(t);
+            out.hovers.push((span, shown));
+        }
+    }
     out.private_methods
         .extend(std::mem::take(&mut checker.private_methods));
     // `@global` declarations hand their classes to other addons: the
@@ -1743,8 +1785,7 @@ mod tests {
                     modules: None,
                 }),
                 &[],
-                false,
-                None,
+                &Extras::default(),
             );
             if k == 0 {
                 stored = cache.stored() == 1;

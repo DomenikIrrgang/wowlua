@@ -77,6 +77,9 @@ pub struct CompileOutput {
     /// With `CheckConfig::index`: each name the check met and the span of
     /// what it refers to.
     pub definitions: Vec<(wowlua_span::Span, wowlua_span::Span)>,
+    /// With `CheckConfig::hover`: those files' names and expressions, with
+    /// their types.
+    pub hovers: Vec<(wowlua_span::Span, String)>,
 }
 
 /// A declaration file with its contents.
@@ -101,6 +104,8 @@ pub struct CheckConfig {
     pub index: bool,
     /// `Session::focus`: type-check only these files and their imports.
     pub focus: Option<std::collections::HashSet<std::path::PathBuf>>,
+    /// `Session::hover`: record these files' types for hover.
+    pub hover: Option<std::collections::HashSet<std::path::PathBuf>>,
 }
 
 /// A declaration file of one flavor (the wow-api types), parsed.
@@ -1361,6 +1366,19 @@ pub fn compile_flavor(
     };
     // A focused check: the focused files and the modules they import,
     // directly or not.
+    // The files the editor has open: their names and expressions' types
+    // are recorded (hover).
+    let hovered: Option<std::collections::HashSet<usize>> = check.hover.as_ref().map(|open| {
+        files
+            .iter()
+            .enumerate()
+            .filter(|(_, (s, _))| {
+                open.contains(&s.abs)
+                    || std::fs::canonicalize(&s.abs).is_ok_and(|p| open.contains(&p))
+            })
+            .map(|(i, _)| i)
+            .collect()
+    });
     let mut focus_files: std::collections::HashSet<usize> = Default::default();
     let focused: Option<std::collections::HashSet<usize>> = check.focus.as_ref().map(|focus| {
         let mut keep = std::collections::HashSet::new();
@@ -1493,12 +1511,17 @@ pub fn compile_flavor(
                     }),
                 }),
             &order.global_defs,
-            check.index,
-            // (a focused check checks these; the rest count for the globals)
-            focused.as_ref(),
+            &wowlua_sema::check::Extras {
+                definitions: check.index,
+                // (a focused check checks these; the rest count for the
+                // globals)
+                only: focused.as_ref(),
+                hover: hovered.as_ref(),
+            },
         );
         diagnostics.extend(checked.diagnostics);
         out.definitions = checked.definitions;
+        out.hovers = checked.hovers;
         out.type_names = checked.type_names;
         out.value_checks = checked.value_checks;
         private_methods = checked.private_methods;

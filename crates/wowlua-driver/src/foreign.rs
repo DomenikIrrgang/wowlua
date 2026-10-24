@@ -76,6 +76,7 @@ impl Foreign {
                         stdlib: wowlua_sema::stdlib::StdlibConfig::default(),
                         index: false,
                         focus: None,
+                        hover: None,
                     },
                     main: p.main.as_ref().map(|r| p.src_rel(r)),
                     meta: Arc::new(crate::meta::library_meta(

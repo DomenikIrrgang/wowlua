@@ -1,7 +1,7 @@
 // The language client: starts `wowlua lsp` and keeps it in step with the
 // open `.wowlua` and `.lua` files (whole texts, unsaved edits included). Its
-// diagnostics go to the Problems view; it formats documents, outlines them
-// and finds where their names are defined. Hand-written on `connection.js`, so the extension has no build
+// diagnostics go to the Problems view; it formats documents, outlines them,
+// finds where their names are defined and shows their types on hover. Hand-written on `connection.js`, so the extension has no build
 // step (decision T331).
 const vscode = require("vscode");
 const { Connection } = require("./connection");
@@ -60,6 +60,9 @@ class LanguageClient {
             }),
             vscode.languages.registerDefinitionProvider(SYNCED, {
                 provideDefinition: (doc, position) => this.definition(doc, position),
+            }),
+            vscode.languages.registerHoverProvider(SYNCED, {
+                provideHover: (doc, position) => this.hover(doc, position),
             }),
             // files changed on disk (a branch checked out, a formatter
             // run): the server checks their packages again
@@ -230,6 +233,18 @@ class LanguageClient {
             position: { line: position.line, character: position.character },
         });
         return (found || []).map((l) => new vscode.Location(vscode.Uri.parse(l.uri), lspRange(l.range)));
+    }
+
+    // The type of the name under the pointer, and its doc comment.
+    async hover(doc, position) {
+        const found = await this.request("textDocument/hover", {
+            textDocument: { uri: doc.uri.toString() },
+            position: { line: position.line, character: position.character },
+        });
+        if (!found || !found.contents) {
+            return undefined;
+        }
+        return new vscode.Hover(new vscode.MarkdownString(found.contents.value), found.range ? lspRange(found.range) : undefined);
     }
 
     async symbols(doc) {

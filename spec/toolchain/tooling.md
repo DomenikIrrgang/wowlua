@@ -598,14 +598,24 @@ global to the first script that defines it (`function Name()`,
 is checked before the answer. Declarations built into wowlua (the game's
 API, Lua's and the standard library's) open from a copy the server writes
 to the system's temporary directory, one folder per wowlua version. Names
-in plain Lua files are found where those files are type-checked. Hover,
-completion, find references and the rest of the table follow.
+in plain Lua files are found where those files are type-checked.
+
+Hover (decision T376) answers from the last check too: for the files open
+in the editor, the checker records the type of every expression (up to
+120 bytes long: a table literal's fields show, not its record) and of every
+name it declares (locals, parameters, functions, methods) or calls as a
+method, as messages show types. The innermost one under the pointer is
+shown, a name as `name: type` (a variable's type where it is read, as
+narrowed there), with the `---` doc comment above what it refers to (or,
+where it is declared, above the declaration; decorators between are
+skipped). Completion, find references and the rest of the table follow.
 
 The VS Code extension starts `wowlua lsp` (the `wowlua.path` command) when a
 `.wowlua` file opens or the workspace has a `wowlua.json`, and sends it the
 open `.wowlua` and `.lua` files, each edit as the range it changed, and the
 `.wowlua`, `.lua`, `.xml`, `.toc`, `wowlua.json` and `wowlua.lock` files
-changed on disk; *Go to Definition* (F12) and Ctrl or Cmd + click use it.
+changed on disk; *Go to Definition* (F12) and Ctrl or Cmd + click use it,
+and hovering a name shows its type.
 A server that stops by itself is started again at once, up to three times
 in three minutes, then the extension asks. The extension colors `.wowlua`
 and `.d.wowlua` files with a TextMate grammar of its own (decision T371):

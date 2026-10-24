@@ -20,6 +20,15 @@ pub struct Definition {
     pub target: Target,
 }
 
+/// A name or expression of a file, by its bytes, and its type as messages
+/// show it.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Hover {
+    pub start: u32,
+    pub end: u32,
+    pub ty: String,
+}
+
 /// A place in a file: its URI (shared by every name that leads there) and
 /// the lines and UTF-16 columns of its start and end. Kept this small, as a
 /// large package has a definition for hundreds of thousands of names.
@@ -55,6 +64,8 @@ pub struct Checked {
     pub diagnostics: BTreeMap<PathBuf, Vec<Json>>,
     /// Each file's names that refer to something, by start.
     pub definitions: HashMap<PathBuf, Vec<Definition>>,
+    /// Each open file's names and expressions with their types, by start.
+    pub hovers: HashMap<PathBuf, Vec<Hover>>,
 }
 
 /// Checks the package whose manifest is `manifest`; with `whole`, every
@@ -99,6 +110,8 @@ fn check_and(
     let mut session = Session::new();
     session.definitions = Some(Vec::new());
     session.focus = focus.cloned();
+    // (the open files' types, for hover)
+    session.hover = Some(open.clone());
     let whole = whole && focus.is_none();
     let options = LoadOptions {
         manifest: Some(manifest.to_path_buf()),
@@ -117,11 +130,12 @@ fn check_and(
     };
     let mut roots = vec![dir.clone()];
     // (diagnostics and definitions by package, as each build makes them)
-    let mut parts: Vec<(PathBuf, Vec<wowlua_diagnostics::Diagnostic>, Vec<Spans>)> = Vec::new();
+    let mut parts: Vec<Part> = Vec::new();
     let loaded = wowlua_driver::load_projects(&mut session, &options);
     parts.push((
         manifest.to_path_buf(),
         session.take_diagnostics().into_iter().collect(),
+        Vec::new(),
         Vec::new(),
     ));
     if let Some(projects) = loaded {
@@ -160,18 +174,21 @@ fn check_and(
             project.apply_lints(&mut session);
             roots.push(project.root().to_path_buf());
             let defs = session.definitions.replace(Vec::new()).unwrap_or_default();
+            let hovers = std::mem::take(&mut session.hovers);
             parts.push((
                 project.manifest.path.clone(),
                 session.take_diagnostics().into_iter().collect(),
                 defs,
+                hovers,
             ));
         }
     }
     let mut out: Vec<Checked> = Vec::new();
-    for (package, diagnostics, defs) in parts {
+    for (package, diagnostics, defs, hovers) in parts {
         let package = text::canonical(&package);
         let mut checked = Checked {
             definitions: definitions(&session, &roots, &defs, open),
+            hovers: hovers_of(&session, &roots, &hovers, open),
             scope: focus.map(|f| f.iter().cloned().collect()),
             ..Checked::default()
         };
@@ -186,6 +203,7 @@ fn check_and(
         }
         if let Some(f) = focus {
             checked.definitions.retain(|path, _| f.contains(path));
+            checked.hovers.retain(|path, _| f.contains(path));
         }
         // (a package loaded and built: one part)
         match out.iter_mut().find(|c| c.manifest == package) {
@@ -194,6 +212,7 @@ fn check_and(
                     c.diagnostics.entry(path).or_default().extend(items);
                 }
                 c.definitions.extend(checked.definitions);
+                c.hovers.extend(checked.hovers);
             }
             None => {
                 checked.manifest = package;
@@ -207,6 +226,47 @@ fn check_and(
 
 /// A name's span and its definition's.
 type Spans = (wowlua_span::Span, wowlua_span::Span);
+
+/// What one package's build gave: its manifest, diagnostics, definitions
+/// and hovers.
+type Part = (
+    PathBuf,
+    Vec<wowlua_diagnostics::Diagnostic>,
+    Vec<Spans>,
+    Vec<(wowlua_span::Span, String)>,
+);
+
+/// The hovers of the open files, by file.
+fn hovers_of(
+    session: &Session,
+    roots: &[PathBuf],
+    found: &[(wowlua_span::Span, String)],
+    open: &HashSet<PathBuf>,
+) -> HashMap<PathBuf, Vec<Hover>> {
+    let mut out: HashMap<PathBuf, Vec<Hover>> = HashMap::new();
+    let mut paths: HashMap<wowlua_span::FileId, Option<PathBuf>> = HashMap::new();
+    for (span, ty) in found {
+        let Some(path) = paths
+            .entry(span.file)
+            .or_insert_with(|| {
+                absolute(roots, session.db.get(span.file).path()).filter(|p| open.contains(p))
+            })
+            .clone()
+        else {
+            continue;
+        };
+        out.entry(path).or_default().push(Hover {
+            start: span.start,
+            end: span.end,
+            ty: ty.clone(),
+        });
+    }
+    for list in out.values_mut() {
+        list.sort_by_key(|h| (h.start, h.end));
+        list.dedup_by(|a, b| a.start == b.start && a.end == b.end);
+    }
+    out
+}
 
 /// (name, definition) spans as each file's [`Definition`]s.
 fn definitions(
@@ -437,6 +497,14 @@ impl Checked {
             "diagnostics": self.diagnostics,
             "uris": uris.iter().map(|u| &**u).collect::<Vec<_>>(),
             "definitions": files,
+            "hovers": self
+                .hovers
+                .iter()
+                .map(|(path, list)| {
+                    let rows: Vec<Json> = list.iter().map(|h| json!([h.start, h.end, h.ty])).collect();
+                    (path.to_string_lossy().into_owned(), Json::Array(rows))
+                })
+                .collect::<serde_json::Map<_, _>>(),
         })
     }
 
@@ -462,6 +530,18 @@ impl Checked {
             }
             definitions.insert(PathBuf::from(path), list);
         }
+        let mut hovers = HashMap::new();
+        for (path, rows) in json["hovers"].as_object().into_iter().flatten() {
+            let mut list = Vec::new();
+            for row in rows.as_array()? {
+                list.push(Hover {
+                    start: row.get(0)?.as_u64()? as u32,
+                    end: row.get(1)?.as_u64()? as u32,
+                    ty: row.get(2)?.as_str()?.to_string(),
+                });
+            }
+            hovers.insert(PathBuf::from(path), list);
+        }
         let diagnostics = json["diagnostics"]
             .as_object()?
             .iter()
@@ -477,6 +557,7 @@ impl Checked {
             }),
             diagnostics,
             definitions,
+            hovers,
         })
     }
 }
