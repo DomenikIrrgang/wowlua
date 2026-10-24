@@ -39,6 +39,11 @@ impl Parse {
         self.diagnostics.iter().any(Diagnostic::is_error)
     }
 
+    /// The bytes the tree was parsed from.
+    pub fn source(&self) -> &[u8] {
+        self.tree.src.bytes()
+    }
+
     /// The heap the tree holds, by array: name, bytes, items (for `cargo
     /// xtask parse-stats`).
     pub fn tree_heap(&self) -> Vec<(&'static str, usize, usize)> {

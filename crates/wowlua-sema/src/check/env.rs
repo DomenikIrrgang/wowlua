@@ -14,7 +14,7 @@ use wowlua_span::Span;
 use wowlua_syntax::view::Func as FuncNode;
 use wowlua_syntax::view::*;
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum DefKind {
     Class,
     Interface,
@@ -23,7 +23,7 @@ pub enum DefKind {
     Namespace,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum MemberKind {
     Field,
     Method,
@@ -31,7 +31,7 @@ pub enum MemberKind {
     Setter,
 }
 
-#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
 pub enum Visibility {
     Public,
     Protected,

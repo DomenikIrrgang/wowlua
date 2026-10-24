@@ -132,6 +132,11 @@ impl Declared {
         self.global(name).is_some()
     }
 
+    /// Every globally named type, without noting a read.
+    pub fn global_type_entries(&self) -> impl Iterator<Item = (&str, DefId)> {
+        self.global_types.iter().map(|(n, &d)| (&**n, d))
+    }
+
     pub fn global_type(&self, name: &str) -> Option<DefId> {
         let found = self.global_types.get(name).copied();
         self.note(|| Root::Type(name.into()), found.is_some());

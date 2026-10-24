@@ -31,6 +31,8 @@ pub struct BuildCache {
     pub(crate) vcs: Option<Option<crate::vcs::VcsInfo>>,
     /// Each source's load-order usage, by `Source::rel`.
     usages: HashMap<String, crate::compile::UsageEntry>,
+    /// Modules' exports (decision T375).
+    modules: wowlua_sema::check::portable::ModuleCache,
     /// Plain Lua files a rebuild does not parse again, by `Source::rel`.
     fronts: HashMap<String, FrontEntry>,
     /// What the last build wrote (stage 4).
@@ -76,6 +78,9 @@ pub struct CacheStats {
     pub summarized: usize,
     /// The build-wide inputs changed, so the cache was emptied.
     pub cleared: bool,
+    /// Modules whose exports a focused check took instead of checking them
+    /// (decision T375).
+    pub modules: usize,
 }
 
 impl BuildCache {
@@ -86,6 +91,7 @@ impl BuildCache {
             self.stats.cleared = self.config.is_some();
             self.files.clear();
             self.usages.clear();
+            self.modules = Default::default();
             self.lua_checks.clear();
             self.fronts.clear();
             self.written = None;
@@ -215,6 +221,12 @@ impl BuildCache {
             std::mem::take(&mut self.files),
             std::mem::take(&mut self.hashes),
             std::mem::take(&mut self.usages),
+            {
+                let mut modules = std::mem::take(&mut self.modules);
+                modules.hits = 0;
+                modules.misses = 0;
+                modules
+            },
             self.generation,
         )
     }
@@ -227,6 +239,8 @@ impl BuildCache {
         self.stats.misses += cache.misses;
         self.files = cache.entries;
         self.usages = cache.usages;
+        self.stats.modules += cache.modules.hits;
+        self.modules = cache.modules;
     }
 
     /// Takes the entries back after compiling, without those this build
@@ -245,6 +259,8 @@ impl BuildCache {
         let mut usages = cache.usages;
         usages.retain(|_, u| u.generation == generation);
         self.usages = usages;
+        self.stats.modules += cache.modules.hits;
+        self.modules = cache.modules;
         self.lua_checks.retain(|_, c| c.generation == generation);
         self.fronts.retain(|_, f| f.generation == generation);
     }

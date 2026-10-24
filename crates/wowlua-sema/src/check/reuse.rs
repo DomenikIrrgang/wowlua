@@ -50,6 +50,9 @@ struct CheckEntry {
 pub struct Reuse<'a> {
     pub cache: &'a mut CheckCache,
     pub store: bool,
+    /// Modules' exports kept from earlier checks (the language server's
+    /// checker, decision T375).
+    pub modules: Option<super::portable::ModuleReuse<'a>>,
 }
 
 /// What a reused file gives.

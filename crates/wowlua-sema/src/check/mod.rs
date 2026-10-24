@@ -9,6 +9,7 @@ pub mod env;
 pub mod expr;
 pub mod flavors;
 pub mod narrow;
+pub mod portable;
 pub mod query;
 pub mod reuse;
 pub mod runtime;
@@ -52,6 +53,7 @@ pub fn check_package(
         None,
         &[],
         false,
+        None,
     )
     .diagnostics
 }
@@ -89,6 +91,7 @@ pub fn check_package_full(
     mut reuse: Option<reuse::Reuse<'_>>,
     global_defs: &[Option<Vec<String>>],
     indexed: bool,
+    only: Option<&std::collections::HashSet<usize>>,
 ) -> CheckOutput {
     let mut type_names = HashMap::new();
     let mut value_checks = HashMap::new();
@@ -233,7 +236,18 @@ pub fn check_package_full(
     let markers = crate::usage::Markers::default();
     // They depend on nothing but the file's parse: later flavors of the
     // build take them from the first (#6).
-    let mut cached = reuse.as_mut().map(|r| &mut r.cache.globals);
+    // (kept across checks by the language server's checker: by path and
+    // bytes)
+    let file_hashes = reuse
+        .as_ref()
+        .is_some_and(|r| r.modules.is_some())
+        .then(|| portable::hashes(files));
+    let mut cached = reuse.as_mut().map(|r| {
+        (
+            &mut r.cache.globals,
+            r.modules.as_mut().map(|m| &mut m.cache.globals),
+        )
+    });
     for (i, f) in files.iter().enumerate() {
         let Some(parse) = f.parse else { continue };
         let wowlua = f.kind == FileKind::Wowlua;
@@ -242,11 +256,21 @@ pub fn check_package_full(
             continue;
         }
         let mut fresh = FileGlobals::default();
-        let globals = match cached.as_mut() {
-            Some(c) => c
+        let globals = match (cached.as_mut(), &file_hashes) {
+            (Some((_, Some(kept))), Some(hashes)) => {
+                let hash = hashes[i];
+                let entry = kept
+                    .entry(f.src_rel.as_str().into())
+                    .or_insert_with(|| (hash, FileGlobals::default()));
+                if entry.0 != hash {
+                    *entry = (hash, FileGlobals::default());
+                }
+                &mut entry.1
+            }
+            (Some((c, _)), _) => c
                 .entry((f.src_rel.as_str().into(), parse.view().span().file))
                 .or_default(),
-            None => &mut fresh,
+            (None, _) => &mut fresh,
         };
         globals.fill(
             parse,
@@ -319,11 +343,47 @@ pub fn check_package_full(
         }
         order.extend(component);
     }
+    // Modules' exports kept from earlier checks: what an unchanged module
+    // and its unchanged imports were checked from (decision T375).
+    let mut module_facts = reuse
+        .as_ref()
+        .is_some_and(|r| r.modules.is_some())
+        .then(|| {
+            portable::Facts::new(
+                &env,
+                files,
+                analysis,
+                file_hashes.clone().unwrap_or_default(),
+                module_context(files, extra_globals, assigned_globals, &global_exports),
+            )
+        });
+    let module_keys = module_facts
+        .as_ref()
+        .map(|f| portable::def_keys(&env, &f.paths));
     for i in order {
         let (Some(settings), Some(parse)) = (settings.get(i).copied().flatten(), files[i].parse)
         else {
             continue;
         };
+        // (a focused check: the other files count for the globals, as in a
+        // full check, but are not checked)
+        if only.is_some_and(|only| !only.contains(&i)) {
+            continue;
+        }
+        if files[i].kind == FileKind::Wowlua
+            && let Some(facts) = module_facts.as_mut()
+            && let Some(m) = reuse.as_mut().and_then(|r| r.modules.as_mut())
+            && m.take_except
+                .as_ref()
+                .is_some_and(|except| !except.contains(&i))
+            && let Some(keys) = module_keys.as_ref()
+            && let Some((taken, caps)) = m.cache.take(&mut env, facts, keys, i)
+        {
+            exports.insert(i, taken);
+            export_caps.insert(i, caps);
+            early.remove(&i);
+            continue;
+        }
         if !checked(i) {
             continue;
         }
@@ -436,6 +496,13 @@ pub fn check_package_full(
                     (extra_globals, assigned_globals),
                 );
             }
+        }
+        if files[i].kind == FileKind::Wowlua
+            && let (Some(facts), Some(keys)) = (module_facts.as_mut(), module_keys.as_ref())
+            && let Some(m) = reuse.as_mut().and_then(|r| r.modules.as_mut())
+        {
+            m.cache
+                .keep(&env, facts, keys, i, &out.exports, &out.export_caps);
         }
         type_names.extend(out.type_names);
         value_checks.extend(out.value_checks);
@@ -712,6 +779,36 @@ struct FileOutcome {
     global_classes: Vec<types::DefId>,
     exports: FxHashMap<Box<str>, TypeId>,
     export_caps: FxHashMap<Box<str>, usize>,
+}
+
+/// What every module's check reads of the package besides the modules it
+/// imports: the globals it may read, the `@global` exports, and the
+/// declaration files.
+fn module_context(
+    files: &[FileInput],
+    extra_globals: &FxHashSet<String>,
+    assigned_globals: &FxHashSet<String>,
+    global_exports: &FxHashMap<String, (usize, String)>,
+) -> u64 {
+    use std::hash::{BuildHasher, Hash, Hasher};
+    let mut h = rustc_hash::FxBuildHasher.build_hasher();
+    fn sorted(set: &FxHashSet<String>) -> Vec<&String> {
+        let mut v: Vec<&String> = set.iter().collect();
+        v.sort();
+        v
+    }
+    sorted(extra_globals).hash(&mut h);
+    sorted(assigned_globals).hash(&mut h);
+    let mut globals: Vec<(&String, &(usize, String))> = global_exports.iter().collect();
+    globals.sort();
+    for (name, (_, export)) in globals {
+        (name, export).hash(&mut h);
+    }
+    for f in files.iter().filter(|f| f.kind == FileKind::Declaration) {
+        f.src_rel.hash(&mut h);
+        f.parse.map(|p| p.source()).hash(&mut h);
+    }
+    h.finish()
 }
 
 /// Compile-time tests of `wowlua:test` (decision T219): a function with
@@ -1643,9 +1740,11 @@ mod tests {
                 Some(reuse::Reuse {
                     cache: &mut cache,
                     store: k == 0,
+                    modules: None,
                 }),
                 &[],
                 false,
+                None,
             );
             if k == 0 {
                 stored = cache.stored() == 1;

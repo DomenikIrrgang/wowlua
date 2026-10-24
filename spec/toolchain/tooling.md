@@ -560,7 +560,21 @@ file gives between checks: the folders' walks (as long as no folder, ignore
 file or git index they read changed, and until the editor reports files
 created or deleted), each file's load-order usage, `import internal`
 reads and the game's parsed API (by path, `FileId` and bytes), the
-repository's state, and the compiled files of full checks. A check that
+repository's state, and the compiled files of full checks. It also keeps
+each module's exports from the last check that checked it (decision T375),
+written without that check's ids (named types by name, type parameters by
+place), with what they were checked from: the module's bytes, the
+package's context (declaration files, the globals files assign and
+`@global` declares), and each module it imports, directly or not, by a
+fingerprint of its interface (its exports, and the types it declares
+without positions) where the import was checked first, else by the types
+it declares, else by its bytes. A first pass takes an imported module's
+exports instead of checking it while all of these are as they were, so an
+edit that leaves a module's interface as it was (a function's body) checks
+that module alone; modules that make `typeof` aliases are always checked.
+A first pass counts every file for the globals the package assigns, as a
+full check does, and checks only its files and their imports. Full checks
+take nothing from it: they keep it current and stay exact. A check that
 crashes, fails or runs longer than two minutes ends the checker (it is
 started again for the next check) and is logged to the editor; the server
 goes on with the last results. After 300 checks the checker is replaced

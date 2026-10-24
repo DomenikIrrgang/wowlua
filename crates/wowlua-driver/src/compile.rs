@@ -971,6 +971,8 @@ pub(crate) struct FlavorCache {
     /// language server's checker): the same `FileId`, bytes and game API
     /// give the same usage.
     pub(crate) usages: HashMap<String, UsageEntry>,
+    /// Modules' exports, kept across builds (decision T375).
+    pub(crate) modules: wowlua_sema::check::portable::ModuleCache,
 }
 
 /// A source's load-order usage and what it was computed from.
@@ -1014,12 +1016,14 @@ impl FlavorCache {
         entries: HashMap<String, Vec<CacheEntry>>,
         hashes: HashMap<String, blake3::Hash>,
         usages: HashMap<String, UsageEntry>,
+        modules: wowlua_sema::check::portable::ModuleCache,
         generation: u64,
     ) -> Self {
         FlavorCache {
             entries,
             hashes,
             usages,
+            modules,
             generation: Some(generation),
             ..FlavorCache::default()
         }
@@ -1357,6 +1361,7 @@ pub fn compile_flavor(
     };
     // A focused check: the focused files and the modules they import,
     // directly or not.
+    let mut focus_files: std::collections::HashSet<usize> = Default::default();
     let focused: Option<std::collections::HashSet<usize>> = check.focus.as_ref().map(|focus| {
         let mut keep = std::collections::HashSet::new();
         let mut todo: Vec<usize> = files
@@ -1368,6 +1373,7 @@ pub fn compile_flavor(
             })
             .map(|(i, _)| i)
             .collect();
+        focus_files.extend(todo.iter().copied());
         while let Some(i) = todo.pop() {
             if !keep.insert(i) {
                 continue;
@@ -1388,9 +1394,6 @@ pub fn compile_flavor(
     });
     let settings: Vec<Option<wowlua_sema::check::FileSettings>> = (0..inputs.len())
         .map(|i| {
-            if focused.as_ref().is_some_and(|keep| !keep.contains(&i)) {
-                return None;
-            }
             let foreign_file = foreign_files(i);
             let (file, parse, ok) = match &foreign_file {
                 Some((file, parse)) => (Some(file), Some(*parse), true),
@@ -1434,6 +1437,8 @@ pub fn compile_flavor(
     // build, on worker threads (#8).
     let unprepared: Vec<usize> = (0..files.len())
         .filter(|&i| settings.get(i).copied().flatten().is_some() && inputs[i].parse.is_some())
+        // (a focused check prepares the files it checks)
+        .filter(|&i| focused.as_ref().is_none_or(|keep| keep.contains(&i)))
         .filter(|&i| {
             !cache
                 .prepared
@@ -1477,9 +1482,20 @@ pub fn compile_flavor(
                 .then_some(wowlua_sema::check::reuse::Reuse {
                     cache: &mut cache.checks,
                     store,
+                    // kept across builds (the language server's checker): a
+                    // first pass takes unchanged modules' exports, a full
+                    // check only keeps them (decision T375)
+                    modules: cache.generation.is_some().then(|| {
+                        wowlua_sema::check::portable::ModuleReuse {
+                            cache: &mut cache.modules,
+                            take_except: focused.is_some().then(|| focus_files.clone()),
+                        }
+                    }),
                 }),
             &order.global_defs,
             check.index,
+            // (a focused check checks these; the rest count for the globals)
+            focused.as_ref(),
         );
         diagnostics.extend(checked.diagnostics);
         out.definitions = checked.definitions;
