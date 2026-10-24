@@ -44,11 +44,15 @@ pub struct Options {
     pub stop_on_entry: bool,
     pub debug_blizzard_ui: bool,
     pub flavor: Option<String>,
+    /// The world profile (`tests/profiles/<name>.json`) the session starts
+    /// in, in place of the manifest's `test.profile`.
+    pub profile: Option<String>,
 }
 
 impl Options {
     /// From DAP's `launch` arguments: `test` (a path) and `filter`, or
-    /// `addon: true`; `clock`, `stopOnEntry`, `debugBlizzardUI`, `flavor`.
+    /// `addon: true`; `clock`, `stopOnEntry`, `debugBlizzardUI`, `flavor`,
+    /// `profile`.
     pub fn from_launch(
         args: &Json,
         root: &std::path::Path,
@@ -97,6 +101,11 @@ impl Options {
             flavor: args
                 .get("flavor")
                 .and_then(Json::as_str)
+                .map(str::to_string),
+            profile: args
+                .get("profile")
+                .and_then(Json::as_str)
+                .filter(|p| !p.is_empty())
                 .map(str::to_string),
         })
     }

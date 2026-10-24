@@ -35,8 +35,13 @@ Lua, run in the game (or in the stopped frame while paused). Clicks in the
 UI panel (below) click in the game.
 
 ```json
-{ "type": "wowlua", "request": "launch", "name": "wowlua: run the addon", "addon": true, "flavor": "camelot" }
+{ "type": "wowlua", "request": "launch", "name": "wowlua: run the addon", "addon": true, "flavor": "camelot", "profile": "camelot" }
 ```
+
+`"profile"` starts the session in a world profile (`tests/profiles/<name>.json`:
+the character with its name, gear and bags, the world around it) instead of
+the default character; the widget demo has `camelot`, a recorded WoW Forever
+character, "Player Lastname".
 
 ## The game's screen
 

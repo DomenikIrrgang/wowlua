@@ -113,6 +113,10 @@
               "wowluaPath": {
                 "type": "string",
                 "description": "The wowlua command for this configuration (else the `wowlua.path` setting)."
+              },
+              "profile": {
+                "type": "string",
+                "description": "A world profile to start in (tests/profiles/<name>.json: the character, its gear, bags, world), over the manifest's test.profile."
               }
             }
           }

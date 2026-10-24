@@ -32,7 +32,13 @@ impl wowlua_debug::dap::Launcher for CliLauncher {
             &self.global,
             opts.flavor.as_deref(),
             Some(instrument),
-            &mut |suite| session(suite, crate::screenshot::screenshotter(suite)),
+            &mut |suite| {
+                // The launch's world profile over the manifest's.
+                if let Some(p) = &opts.profile {
+                    suite.profile = Some(p.clone());
+                }
+                session(suite, crate::screenshot::screenshotter(suite))
+            },
         )
     }
 }

@@ -183,6 +183,7 @@ fn tools() -> Json {
                 "filter": { "type": "string", "description": "Only the tests whose names contain this" },
                 "addon": { "type": "boolean", "description": "The addon itself instead of a test file" },
                 "flavor": { "type": "string", "description": "The flavor (standard, camelot, vanilla, …); the package's first by default" },
+                "profile": { "type": "string", "description": "A world profile (tests/profiles/<name>.json) to start in, over the manifest's test.profile" },
                 "clock": { "type": "string", "enum": ["manual", "realtime"] },
                 "stopOnEntry": { "type": "boolean" },
                 "breakpoints": { "type": "array", "items": { "type": "object", "properties": { "source": { "type": "string" }, "line": { "type": "integer" }, "condition": { "type": "string" } }, "required": ["source", "line"] } },

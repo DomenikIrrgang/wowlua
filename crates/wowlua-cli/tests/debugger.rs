@@ -469,6 +469,35 @@ fn the_addons_session_reloads_with_its_saved_variables() {
     c.request("disconnect", json!({ "terminateDebuggee": true }));
 }
 
+/// A launch's `profile` starts the session in that world profile
+/// (`tests/profiles/<name>.json`): its character, named as it says.
+#[test]
+fn a_launch_starts_in_its_world_profile() {
+    let dir = project();
+    let root = dir.path().canonicalize().unwrap();
+    fs::create_dir_all(root.join("tests/profiles")).unwrap();
+    fs::write(
+        root.join("tests/profiles/ann.json"),
+        r#"{ "character": { "name": "Ann", "lastName": "Smith", "realm": "Realm", "level": 42 } }"#,
+    )
+    .unwrap();
+    let mut c = Client::start(&root);
+    c.request("initialize", json!({ "adapterID": "wowlua" }));
+    c.request(
+        "launch",
+        json!({ "addon": true, "flavor": "standard", "profile": "ann" }),
+    );
+    c.event("initialized");
+    c.request("setExceptionBreakpoints", json!({ "filters": [] }));
+    c.request("configurationDone", json!({}));
+    let name = c.request(
+        "evaluate",
+        json!({ "expression": "strjoin(' ', UnitName('player')) .. ' ' .. UnitLevel('player')", "context": "repl" }),
+    );
+    assert_eq!(name["result"], "\"Ann Smith 42\"", "{name:#}");
+    c.request("disconnect", json!({ "terminateDebuggee": true }));
+}
+
 #[test]
 fn test_profile_out_writes_a_speedscope_file_per_test_file() {
     let dir = project();
