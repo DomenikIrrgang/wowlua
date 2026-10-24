@@ -2,7 +2,7 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
-## Unreleased
+## 0.9.8 (2026-10-24)
 
 ### New
 
@@ -78,7 +78,6 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - W1004 also warns about a `local function` with the name of another local in the same block: calls meant for the first one reach the second, also from inside it.
 - Strict mode: reading a named field of a list (`list.label`) or a number key a record doesn't have (`art[1]` of `{ atlas: string }`) is an error (E2003); both read as `any` before. A list with named entries needs its type written: `{ [number]: string, label?: string }`. Reading a table that has no indexer with a key (`t[k]`) is still `any`, and W2063 now reports it.
 - A local without a type annotation that a function changes keeps a type inside functions: `local count = 0` read in a callback that does `count = count + 1` is a `number`, a forward-declared `local update` is the function assigned to it later, and a flag saved and restored is a `boolean`. Before, they were `any` there, so mistakes with them went unreported; now they are checked, and W2063 no longer reports them.
-
 - In a class's method or constructor, a function whose parameter is named `self` (`frame:SetScript("OnEnter", function(self) … end)`) now warns (W1004): inside it, `self` is the frame, not your instance, and `self.field` reads the wrong table. Name the parameter differently. Plain `function M:m()` code is unchanged.
 - `assert` returns every argument it was given, as Lua's does, so `return assert(x, "message")` in a function that returns one value is now reported (too many values returned): it also handed the message to the caller, as a second value. Write `return (assert(x, "message"))`.
 - A parameter's default can't read that parameter or a later one: in the Lua it compiles to, every parameter is in scope there and not set yet, so `function f(conf: Conf = conf)` or `constructor(private settings: Store = settings.store)` read `nil`, not the outer value wowlua checked them against. That is now an error (E1004); give the parameter another name. A function in a default may still use any parameter.
