@@ -62,6 +62,10 @@ pub struct Suite<'a> {
     pub instrument: Option<&'a (dyn Fn(&mut Vm) + Sync)>,
     /// What draws screenshots (`toMatchScreenshot`, `mock.screenshot`).
     pub camera: Option<std::sync::Arc<dyn screenshots::Camera>>,
+    /// Answer from the installation's own data where a test defines
+    /// nothing (`wowlua test --game-data`, decision T366); off, a test
+    /// gives the same result on every machine.
+    pub game_data: bool,
     /// Called after each test with its VM and name, before the next
     /// (`wowlua screenshot`).
     pub after_test: Option<std::sync::Arc<AfterTest>>,
@@ -561,7 +565,12 @@ fn load_vm(
     let name = build.addon_name.clone();
     let mut vm = Vm::wow();
     wowlua_engine::install(&mut vm, &suite.flavor)?;
-    if let Some(data) = suite.camera.as_ref().and_then(|c| c.client_data()) {
+    if let Some(data) = suite
+        .camera
+        .as_ref()
+        .filter(|_| suite.game_data)
+        .and_then(|c| c.client_data())
+    {
         wowlua_engine::clientdata::set(&mut vm, data);
     }
     // The machine the client runs on (decision T236): the file's

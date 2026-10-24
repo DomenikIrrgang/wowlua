@@ -94,6 +94,11 @@ pub struct TestArgs {
     /// Profile each test file and write its profile here (speedscope JSON)
     #[arg(long, value_name = "DIR")]
     pub profile_out: Option<PathBuf>,
+    /// Answer from your WoW installation's own data (items, creatures,
+    /// appearances, models) where a test defines nothing; off by default,
+    /// so a test gives the same result on every machine
+    #[arg(long)]
+    pub game_data: bool,
 }
 
 #[derive(Args, Debug, Clone)]

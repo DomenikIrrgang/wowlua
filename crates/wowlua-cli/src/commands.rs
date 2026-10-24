@@ -722,6 +722,7 @@ fn test_once(
                 args.update_snapshots,
                 args.coverage,
                 args.profile_out.as_ref().map(|_| start_profile),
+                args.game_data,
             );
             if let Some(dir) = &args.profile_out {
                 let dir = cwd().join(dir);
@@ -932,6 +933,7 @@ fn make_suite<'a>(
     update_snapshots: bool,
     coverage: bool,
     instrument: Option<&'a (dyn Fn(&mut wowlua_vm::Vm) + Sync)>,
+    game_data: bool,
 ) -> wowlua_test::Suite<'a> {
     let test_settings = &project.manifest.manifest.test;
     wowlua_test::Suite {
@@ -964,6 +966,7 @@ fn make_suite<'a>(
         coverage,
         instrument,
         camera: crate::screenshot::camera(project, build, flavor),
+        game_data,
         after_test: None,
         after_file: None,
     }
@@ -1028,6 +1031,9 @@ pub fn with_suite(
         false,
         false,
         instrument,
+        // a debug session and `wowlua screenshot` show the game as the
+        // installation has it
+        true,
     );
     f(&mut suite);
     Ok(())

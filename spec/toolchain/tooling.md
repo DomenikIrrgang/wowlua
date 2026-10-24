@@ -382,10 +382,14 @@ makes one unless given, decision T283; cached unless `cached` is
 after `delay`, 0.2 s by default, decision T228), in the test or in `tests/mocks/`. The data
 stays the test's table, so its values may be secrets. An ID the test did not define behaves as data
 the client does not have. Optionally, tests can run with the real client's
-data: `wowlua data pull --wow <path to the WoW installation>` reads the
-flavor's game data from the user's own client into a local cache (nothing is
-distributed with wowlua), and `wowlua test --game-data` loads it. Off by
-default, so tests in CI run with test data only.
+data: `wowlua test --game-data` answers from the WoW installation's own
+tables where a test defines nothing (items, creatures, appearances, models:
+decisions T321, T327; T366), and `wowlua data pull --wow <path to the WoW
+installation>` will read the flavor's game data into a local cache (nothing
+is distributed with wowlua, M13). Off by default, so a test gives the same
+result on every machine and in CI; a debug session and `wowlua screenshot`
+show the game as the installation has it. Screenshots draw the
+installation's textures either way.
 
 **Secret values.** `mock.secret(v)` makes a secret; the restrictions above
 make the API return secrets where the client does. Spies record secret
