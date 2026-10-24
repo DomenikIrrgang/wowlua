@@ -669,7 +669,8 @@ return one reports (E2001, too many values); write `return (assert(x, "msg"))`
 (decision L38).
 
 **Fields.** A field path of a local or of a declared global (`a.b`, `a.b.c`,
-`G.x`) is narrowed like a local, and assigning it narrows it by the value's
+`G.x`) is narrowed like a local (a field of an intersection's part too:
+`b.owner` of a `Button & { owner: Frame? }`, decision L81), and assigning it narrows it by the value's
 `nil`-ness (to the declared type without `nil`, or to `nil`). Its narrowing
 is invalidated by an assignment to the root, to the path or to a path above
 it, and by a call that may modify the table holding it: one that receives the

@@ -3322,6 +3322,19 @@ print(a, b, c, d, e, name, realm, more)
         assert!(errs.is_empty(), "{errs:#?}");
     }
 
+    /// A condition narrows a field of an intersection's part, as of a
+    /// record. Decision L81.
+    #[test]
+    fn intersection_fields_narrow() {
+        strict_ok(
+            "type A = { a: number }\ntype B = { b: string? }\nlocal function f(x: A & B) if x.b then local s: string = x.b; print(s, x.a) end end\nprint(f)\n",
+        );
+        strict_err(
+            "type A = { a: number }\ntype B = { b: string? }\nlocal function f(x: A & B) local s: string = x.b; print(s) end\nprint(f)\n",
+            "E2001",
+        );
+    }
+
     #[test]
     fn callback_parameters_take_the_rest_type() {
         strict_err(

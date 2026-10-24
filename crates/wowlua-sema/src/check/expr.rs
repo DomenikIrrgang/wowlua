@@ -961,6 +961,12 @@ impl Checker<'_, '_> {
                 Some(self.env.types.union(&out))
             }
             Ty::Record(r) => r.fields.get(name).map(|f| f.ty),
+            // The first part that declares it (`Button & { owner: Frame? }`,
+            // decision L81).
+            Ty::Intersection(parts) => parts.iter().find_map(|&p| {
+                self.field_type_quiet(p, name)
+                    .filter(|&t| t != Types::ANY && t != Types::ERROR)
+            }),
             // A method's stored value takes `self` first.
             Ty::Named(d, args) => self.env.instance_member(d, &args, name).map(|(m, _)| {
                 if m.kind == MemberKind::Method {
