@@ -59,7 +59,7 @@ local function super(cls: any): any
 end
 
 -- `value is T`: true narrows `value` to the class.
-export function isInstance<T>(value: any, cls: ClassOf<T>): value is T
+export function isInstance<T>(value: unknown, cls: ClassOf<T>): value is T
     local check = wl.isInstance
     return check ~= nil and secret.readable(value) and secret.readable(cls) and check(value, cls)
 end
@@ -70,7 +70,7 @@ export function classOf<T>(value: T): ClassOf<T>?
 end
 
 -- The class name of an instance or a class.
-export function className(value: any): string?
+export function className(value: unknown): string?
     local cls = classOf(value)
     if cls == nil and type(value) == "table" and secret.readable(value) and rawget(value, "__name") then
         cls = value
@@ -78,11 +78,11 @@ export function className(value: any): string?
     return cls and rawget(cls, "__name") or nil
 end
 
-export function superclass(cls: any): any
+export function superclass(cls: unknown): unknown
     return super(cls)
 end
 
-export function isSubclass(cls: any, base: any): boolean
+export function isSubclass(cls: unknown, base: unknown): boolean
     if not (secret.readable(cls) and secret.readable(base)) then
         return false
     end
@@ -117,8 +117,8 @@ local function order(e: any): string[]
     return names
 end
 
-export function enumName(e: any, value: any): string?
-    if not (secret.readable(e) and secret.readable(value)) then
+export function enumName(e: unknown, value: unknown): string?
+    if type(e) ~= "table" or not (secret.readable(e) and secret.readable(value)) then
         return nil
     end
     for _, name in ipairs(order(e)) do
@@ -141,8 +141,11 @@ export function enumEntries<E>(e: ClassOf<E>): { name: string, value: E }[]
 end
 
 -- `raw` as a member of `e`, or nil.
-export function enumFrom<E>(e: ClassOf<E>, raw: any): E?
-    return enumName(e, raw) and raw or nil
+export function enumFrom<E>(e: ClassOf<E>, raw: unknown): E?
+    if enumName(e, raw) then
+        return raw :: E
+    end
+    return nil
 end
 
 local function meta(cls: any): ClassMeta?
@@ -155,28 +158,28 @@ local function meta(cls: any): ClassMeta?
     return m and m :: ClassMeta or nil
 end
 
-export function fields(cls: any): FieldInfo[]?
+export function fields(cls: unknown): FieldInfo[]?
     local m = meta(cls)
     return m?.fields
 end
 
-export function methods(cls: any): MethodInfo[]?
+export function methods(cls: unknown): MethodInfo[]?
     local m = meta(cls)
     return m?.methods
 end
 
-export function properties(cls: any): PropertyInfo[]?
+export function properties(cls: unknown): PropertyInfo[]?
     local m = meta(cls)
     return m?.properties
 end
 
-export function interfaces(cls: any): string[]?
+export function interfaces(cls: unknown): string[]?
     local m = meta(cls)
     return m?.interfaces
 end
 
 -- The class's decorators, or a member's.
-export function decorators(cls: any, member: string?): DecoratorInfo[]?
+export function decorators(cls: unknown, member: string?): DecoratorInfo[]?
     local m = meta(cls)
     if not m then
         return nil
@@ -202,7 +205,7 @@ export function decorators(cls: any, member: string?): DecoratorInfo[]?
     return nil
 end
 
-export function functionInfo(fn: any): FunctionInfo?
+export function functionInfo(fn: unknown): FunctionInfo?
     if secret.isSecret(fn) then
         return nil
     end
@@ -211,12 +214,12 @@ export function functionInfo(fn: any): FunctionInfo?
     return info and info :: FunctionInfo or nil
 end
 
-export function getClass(name: string): any
+export function getClass(name: string): unknown
     local reg = registry()
     return reg?.byName[name]
 end
 
-export function classes(): any[]
+export function classes(): unknown[]
     local out: any[] = {}
     local reg = registry()
     if reg then

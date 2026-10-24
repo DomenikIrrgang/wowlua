@@ -13,6 +13,7 @@ pub mod deps;
 mod embed;
 pub mod external;
 pub mod fix;
+mod foreign;
 pub mod format;
 mod fsutil;
 pub mod incremental;

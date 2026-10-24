@@ -62,7 +62,7 @@ local function chatSink(level: string, message: string, location: string?)
 end
 
 -- (Compiled `log` calls and tracing come here with the level's string.)
-export function emitAt(level: string, location: string?, ...: any)
+export function emitAt(level: string, location: string?, ...: unknown)
     local rank = RANKS[level] ?? 0
     if rank < current then
         return
@@ -84,11 +84,11 @@ end
 -- Tracing wrappers (`@trace`) log through here when this module is loaded.
 wl.logEmit = emitAt
 
-export function trace(...: any) emitAt("trace", nil, ...) end
-export function debug(...: any) emitAt("debug", nil, ...) end
-export function info(...: any) emitAt("info", nil, ...) end
-export function warn(...: any) emitAt("warn", nil, ...) end
-export function error(...: any) emitAt("error", nil, ...) end
+export function trace(...: unknown) emitAt("trace", nil, ...) end
+export function debug(...: unknown) emitAt("debug", nil, ...) end
+export function info(...: unknown) emitAt("info", nil, ...) end
+export function warn(...: unknown) emitAt("warn", nil, ...) end
+export function error(...: unknown) emitAt("error", nil, ...) end
 
 -- Sets the runtime level from a level's string (the dev console passes
 -- what the player typed; unknown names are ignored).

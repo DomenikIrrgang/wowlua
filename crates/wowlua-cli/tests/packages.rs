@@ -1212,6 +1212,120 @@ fn workspace(root: &Path) {
     );
 }
 
+/// An addon that lists a workspace addon in `addon-dependencies` is checked
+/// with its sources, types only (decisions T287, L83).
+#[test]
+fn addon_dependencies_typed() {
+    let e = env();
+    let root = &e.project;
+    workspace(root);
+    write(
+        root,
+        &[
+            (
+                "addons/core/src/api.wowlua",
+                "@global(\"SuiteApi\")\nexport const api = { version = \"1.0\", count = function(): number return 1 end }\nexport type Entry = { name: string }\n",
+            ),
+            (
+                "addons/core/src/use.wowlua",
+                "local n: number = SuiteApi.count()\nprint(n)\n",
+            ),
+            (
+                "addons/options/src/main.wowlua",
+                "import type Entry from \"suite-core/api\"\nlocal v: string = SuiteApi.version\nlocal e: Entry = { name = v }\nprint(e.name, SuiteCore_Score(\"player\") + SuiteApi.count())\n",
+            ),
+        ],
+    );
+    // Inferred types reach the other addon and the addon's own files.
+    wowlua(root, &e.home)
+        .args(["check", "-p", "suite-options"])
+        .assert()
+        .success();
+    wowlua(root, &e.home)
+        .args(["check", "-p", "suite-core"])
+        .assert()
+        .success();
+    write(
+        root,
+        &[
+            (
+                "addons/core/src/use.wowlua",
+                "local n: string = SuiteApi.count()\nprint(n)\n",
+            ),
+            (
+                "addons/options/src/main.wowlua",
+                "import type Entry from \"suite-core/api\"\nlocal v: number = SuiteApi.version\nlocal e: Entry = { name = 1 }\nprint(v, e)\n",
+            ),
+        ],
+    );
+    wowlua(root, &e.home)
+        .args(["check", "-p", "suite-core"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("use.wowlua:1:"))
+        .stderr(predicate::str::contains("error[E2001]"));
+    // The other addon's problems are its own: not reported here.
+    wowlua(root, &e.home)
+        .args(["check", "-p", "suite-options", "--message-format", "short"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("main.wowlua:2:"))
+        .stderr(predicate::str::contains("main.wowlua:3:"))
+        .stderr(predicate::str::contains("use.wowlua").not());
+    // A value import of its module: E1041.
+    write(
+        root,
+        &[(
+            "addons/options/src/main.wowlua",
+            "import api from \"suite-core/api\"\nprint(api.version)\n",
+        )],
+    );
+    wowlua(root, &e.home)
+        .args(["check", "-p", "suite-options"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("error[E1041]"));
+    // None of it is built into the addon.
+    write(
+        root,
+        &[(
+            "addons/options/src/main.wowlua",
+            "print(SuiteApi.version)\n",
+        )],
+    );
+    wowlua(root, &e.home)
+        .args(["-p", "suite-options", "build"])
+        .assert()
+        .success();
+    let out = root.join("dist/dev/SuiteOptions");
+    fn walk(dir: &Path, base: &Path, out: &mut Vec<String>) {
+        for entry in std::fs::read_dir(dir).unwrap().flatten() {
+            let path = entry.path();
+            if path.is_dir() {
+                walk(&path, base, out);
+            } else {
+                out.push(
+                    path.strip_prefix(base)
+                        .unwrap()
+                        .to_string_lossy()
+                        .into_owned(),
+                );
+            }
+        }
+    }
+    let mut built = Vec::new();
+    walk(&out, &out, &mut built);
+    assert!(built.iter().any(|f| f.ends_with("main.lua")), "{built:?}");
+    assert!(
+        !built
+            .iter()
+            .any(|f| f.contains("api") || f.contains("shared") || f.contains("use")),
+        "{built:?}"
+    );
+    let toc = std::fs::read_to_string(out.join("SuiteOptions.toc")).unwrap();
+    assert!(!toc.contains("api") && !toc.contains("shared"), "{toc}");
+}
+
 #[test]
 fn workspaces() {
     let e = env();

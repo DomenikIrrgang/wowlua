@@ -906,7 +906,7 @@ pub fn add_libraries(
 }
 
 /// `.` and `..` resolved; `None` if the path leaves the root.
-fn normalize_rel(path: &str) -> Option<String> {
+pub(crate) fn normalize_rel(path: &str) -> Option<String> {
     let mut parts: Vec<&str> = Vec::new();
     for part in path.split('/') {
         match part {
@@ -1064,6 +1064,8 @@ pub fn compile_flavor(
     shared: Option<&wowlua_sema::check::flavors::SharedFlavors>,
     lower_lua: &std::collections::HashSet<String>,
     libraries: &HashMap<String, LibraryUnit>,
+    // The sources of the addons it depends on, checked with it, types only.
+    foreign: &crate::foreign::Foreign,
     minify: &Minify,
     cache: &mut FlavorCache,
     store: bool,
@@ -1135,8 +1137,75 @@ pub fn compile_flavor(
             prepared: None,
         });
     }
+    // The types-only sources: their declarations, then their files, last.
+    let foreign_from = inputs.len();
+    for (d, parse) in &foreign.declarations {
+        inputs.push(FileInput {
+            src_rel: d.source.src_rel.clone(),
+            kind: FileKind::Declaration,
+            parse: Some(parse),
+            xml: None,
+            meta: None,
+            main_of: None,
+            globals: Default::default(),
+            usage: None,
+            prepared: None,
+        });
+    }
+    let foreign_start = inputs.len();
+    for ((source, _), parse) in foreign.files.iter().zip(&foreign.parses) {
+        inputs.push(FileInput {
+            src_rel: source.src_rel.clone(),
+            kind: FileKind::Wowlua,
+            parse: Some(parse),
+            xml: None,
+            meta: unit_of(&source.src_rel).map(|u| u.meta.as_ref()),
+            main_of: unit_of(&source.src_rel)
+                .filter(|u| u.main.as_deref() == Some(source.src_rel.as_str()))
+                .and(wowlua_sema::package_of(&source.src_rel).map(str::to_string)),
+            globals: Default::default(),
+            usage: None,
+            prepared: None,
+        });
+    }
+    let foreign_ids = foreign.file_ids();
     let analysis = wowlua_sema::analyze(&inputs, Some(&meta));
     diagnostics.extend(analysis.diagnostics.iter().cloned());
+    // Only types cross to another addon: its modules are not in this
+    // one's build (E1041).
+    if !foreign.is_empty() {
+        for (i, parse) in parsed.parses.iter().enumerate().take(files.len()) {
+            let (Some(info), Some(parse)) = (analysis.modules[i].as_ref(), parse) else {
+                continue;
+            };
+            for import in &info.imports {
+                let foreign_module = matches!(import.target,
+                    Target::Module(m) | Target::Lua { file: m, .. } if m >= foreign_from);
+                if import.type_only || !foreign_module {
+                    continue;
+                }
+                let Some(s) = parse
+                    .view()
+                    .block()
+                    .stmts()
+                    .into_iter()
+                    .find(|s| s.span().start == import.start)
+                else {
+                    continue;
+                };
+                diagnostics.push(
+                    Diagnostic::error(
+                        "E1041",
+                        "imports a module of another addon, which is not part of this one",
+                    )
+                    .with_label(s.span(), "another addon's module")
+                    .with_help(
+                        "use `import type` for its types, and its `@global` API for its values",
+                    ),
+                );
+            }
+        }
+    }
     // The standard library's compile-time checks (spec stdlib, "core").
     let stdlib = wowlua_sema::stdlib::check(&inputs, &analysis, &check.stdlib, Some(&meta));
     diagnostics.extend(stdlib.diagnostics);
@@ -1184,6 +1253,16 @@ pub fn compile_flavor(
     for (i, usage) in &usages {
         inputs[*i].usage = Some(usage.clone());
     }
+    // The types-only sources load with another addon, not this one.
+    let mut active = layout.active.to_vec();
+    if !foreign.is_empty() {
+        active.resize(foreign_start, true);
+        active.resize(inputs.len(), false);
+    }
+    let layout = wowlua_sema::loadorder::Layout {
+        active: &active,
+        ..layout
+    };
     let order = wowlua_sema::loadorder::analyze_with(&inputs, &analysis, layout, &markers, jobs);
     for (i, _) in usages {
         inputs[i].usage = None;
@@ -1199,15 +1278,28 @@ pub fn compile_flavor(
         }
     }
     // Type checking (spec chapter 2).
+    let foreign_files = |i: usize| {
+        i.checked_sub(foreign_start)
+            .and_then(|k| Some((foreign.files.get(k)?, foreign.parses.get(k)?)))
+            .map(|((source, file), parse)| ((source.clone(), *file), parse))
+    };
     let settings: Vec<Option<wowlua_sema::check::FileSettings>> = (0..inputs.len())
-        .map(
-            |i| match (files.get(i), parsed.parses.get(i).and_then(Option::as_ref)) {
+        .map(|i| {
+            let foreign_file = foreign_files(i);
+            let (file, parse, ok) = match &foreign_file {
+                Some((file, parse)) => (Some(file), Some(*parse), true),
+                None => (
+                    files.get(i),
+                    parsed.parses.get(i).and_then(Option::as_ref),
+                    parsed.ok.get(i).copied().unwrap_or(false),
+                ),
+            };
+            match (file, parse) {
                 // The standard library's modules are checked in strict mode
                 // whatever the project's settings, so their exports are typed
                 // for the code that imports them.
                 (Some((source, _)), Some(_))
-                    if parsed.ok[i]
-                        && wowlua_sema::module_id(&source.src_rel).starts_with("wowlua:") =>
+                    if ok && wowlua_sema::module_id(&source.src_rel).starts_with("wowlua:") =>
                 {
                     Some(wowlua_sema::check::FileSettings {
                         mode: wowlua_sema::check::query::Mode::Strict,
@@ -1215,19 +1307,20 @@ pub fn compile_flavor(
                     })
                 }
                 (Some((source, _)), Some(parse))
-                    if parsed.ok[i] && !wowlua_sema::is_compiler_known(&source.src_rel) =>
+                    if ok && !wowlua_sema::is_compiler_known(&source.src_rel) =>
                 {
                     // A library is checked with its own settings.
                     let cfg = unit_of(&source.src_rel).map_or(check, |u| &u.check);
                     check_settings(source, parse, cfg)
                 }
                 _ => None,
-            },
-        )
+            }
+        })
         .collect();
     out.checked = settings
         .iter()
         .enumerate()
+        .take(files.len())
         .filter(|(_, s)| s.is_some())
         .map(|(i, _)| i)
         .collect();
@@ -1286,7 +1379,18 @@ pub fn compile_flavor(
         out.value_checks = checked.value_checks;
         private_methods = checked.private_methods;
     }
-    for info in analysis.modules.iter().flatten() {
+    // What the types-only sources report is their addon's.
+    if !foreign_ids.is_empty() {
+        diagnostics.retain(|d| {
+            !d.labels
+                .first()
+                .is_some_and(|l| foreign_ids.contains(&l.span.file))
+        });
+    }
+    for info in analysis.modules[..foreign_from.min(analysis.modules.len())]
+        .iter()
+        .flatten()
+    {
         if info.is_module {
             out.needs_runtime = true;
             out.modules.push(info.id.clone());
@@ -1306,7 +1410,7 @@ pub fn compile_flavor(
     out.modules.dedup();
 
     // Enums register their order when the package uses `wowlua:reflect`.
-    let reflect_used = analysis.modules.iter().flatten().any(|m| {
+    let reflect_used = analysis.modules[..files.len()].iter().flatten().any(|m| {
         m.imports.iter().any(|imp| {
             matches!(imp.target, Target::Module(t)
                 if analysis.modules[t].as_ref().is_some_and(|x| x.id == "wowlua:reflect"))

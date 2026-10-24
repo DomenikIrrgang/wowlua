@@ -70,6 +70,9 @@ pub struct FileInfo<'a> {
     /// Globals the package assigns: reading them is fine (the assignments
     /// themselves are W1002).
     pub assigned_globals: &'a FxHashSet<String>,
+    /// Globals other modules' `@global` exports create, with the exports'
+    /// types.
+    pub global_types: FxHashMap<Box<str>, TypeId>,
     /// Imported bindings: local name → type.
     pub imports: FxHashMap<Box<str>, TypeId>,
     /// The counts of imported functions (W2062), by local name.
@@ -142,6 +145,8 @@ pub struct Checker<'e, 'p> {
     pub diagnostics: Vec<Diagnostic>,
     pub extra_globals: &'e FxHashSet<String>,
     pub assigned_globals: &'e FxHashSet<String>,
+    /// See [`FileInfo::global_types`].
+    pub global_types: FxHashMap<Box<str>, TypeId>,
     /// Types of expressions already checked, by span.
     pub(crate) expr_types: FxHashMap<(u32, u32), TypeId>,
     /// Links of optional chains: their type before the short-circuit's
@@ -332,6 +337,7 @@ impl<'e, 'p> Checker<'e, 'p> {
             diagnostics: Vec::new(),
             extra_globals: info.extra_globals,
             assigned_globals: info.assigned_globals,
+            global_types: info.global_types.clone(),
             expr_types: FxHashMap::default(),
             chain_inner: FxHashMap::default(),
             classes: Vec::new(),

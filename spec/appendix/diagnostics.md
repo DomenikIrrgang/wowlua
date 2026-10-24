@@ -63,6 +63,7 @@ warning forms of §B.2's pure Lua files (`W2001`). `wowlua explain
 | E1038 | `asset()` path is not a package asset (or case mismatch) |
 | E1039 | `@if(flavor …)` in a `.wowlua` file in shared flavor mode |
 | E1040 | `@if` condition is not a static condition |
+| E1041 | Value import of another addon's module (an `addon-dependencies` addon): only `import type` crosses addons |
 | E2001 | Type mismatch: `S` is not assignable to `T` |
 | E2002 | Unknown type name |
 | E2003 | Unknown field or method (also: method defined outside its class body, assignment to the reserved `__wowlua` key) |

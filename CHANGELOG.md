@@ -30,6 +30,9 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Changed
 
+- The standard library takes and gives `any` in fewer places: `mock.click`, `script`, `hover`, `typeText`, `drag`, `slide`, `dragTo`, `sizeBy`, `wheel` and `protect` take frames (a `nil` frame fails the test with "mock.click: no frame"), `mock.frames()` gives `ScriptRegion[]` and `mock.defineTemplate`'s function gets a `Frame`; `serialize.decode` and `importString`, `reflect.getClass`, `superclass` and `classes` give `unknown` (check it before you use it); `debug.measure`, `errors.callIn` and `errors.callOwned` keep the function's argument and result types, and `debug.stats()` its entries' fields; values only passed on (`log.info(...)`, `events.send`, `errors.report`, `table.equal`, `mock.fireEvent`, an owner, …) are `unknown`.
+- An addon that lists another addon of its workspace in `addon-dependencies` sees that addon's `@global` API with all its types, as that addon has them (a value without an annotation, a class or an enum was `any`): `wowlua check` reads the other addon's sources with yours, without building them into yours or reporting their problems. You can import its types (`import type UnitFrame from "suuui/UI/UnitFrame"`); importing a value from it is E1041, as its modules aren't part of your addon.
+- A global made with `@global` has its value's type where your other files read it (it was `any`).
 - A value typed `unknown` stays `unknown` inside once you check its kind: after `type(v) == "table"`, `v.name` is `unknown` (read it with `secret.asString` or check its type), and after `type(f) == "function"`, `f(...)` gives `unknown`. Before, both gave `any`, so a mistake there went unnoticed. `local ok, err = pcall(f)` with an `f` that returns nothing gives `err` as `unknown` too.
 - Font strings in tests break text into lines as the game does (measured in the game): also after a hyphen, a word too wide for the line cut between characters, `GetNumLines()` counting every line (also with word wrap off or beyond `SetMaxLines`), and text held to fewer lines ending in an ellipsis, with `GetStringWidth()` the width of what shows. `IsTruncated()` answers. Kerning is known at more sizes.
 - `local o = opts or {}` keeps the type of `opts` (an `Options?` gives an `Options`), as do `list or {}` and `x ?? {}`: the empty table no longer turns its fields into `any`.
@@ -74,6 +77,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- A value written with `::` keeps its type in a table: `{ corner = "TOPLEFT" :: FramePoint }` has a `FramePoint` field, where it was a `string`.
 - `frames.children`, `frames.textures` and `frames.fontStrings` work on a frame with many children or regions, such as `UIParent`; they crashed the game there.
 - `if b.owner then b.owner:Hide() end` narrows `b.owner` when `b` is typed as two parts (`Button & { owner: Frame? }`), as it does for a record; it stayed `Frame?`.
 - A type predicate narrows one of the game's frames to its type: after `if canDisable(f) then` with `canDisable(f: Frame): f is Frame & Disableable`, `f:SetDisabled(true)` is checked; it was `any`.

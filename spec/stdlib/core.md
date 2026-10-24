@@ -67,13 +67,13 @@ declare module "wowlua:events"
         function cancel()
     end
 
-    function on<E extends EventName | MessageName>(event: E, handler: (EventArgs<E>...) -> (), owner: any?): Subscription
-    function once<E extends EventName | MessageName>(event: E, handler: (EventArgs<E>...) -> (), owner: any?): Subscription
-    function onUnit<E extends EventName>(event: E, units: UnitToken[], handler: (EventArgs<E>...) -> (), owner: any?): Subscription
-    function watchUnit<E extends EventName>(events: E[], handler: (event: E, ...any) -> (), owner: any?): UnitWatch
-    function onBucket(events: (EventName | MessageName) | (EventName | MessageName)[], interval: number, handler: (counts: BucketCounts) -> (), owner: any?): Subscription
+    function on<E extends EventName | MessageName>(event: E, handler: (EventArgs<E>...) -> (), owner: unknown?): Subscription
+    function once<E extends EventName | MessageName>(event: E, handler: (EventArgs<E>...) -> (), owner: unknown?): Subscription
+    function onUnit<E extends EventName>(event: E, units: UnitToken[], handler: (EventArgs<E>...) -> (), owner: unknown?): Subscription
+    function watchUnit<E extends EventName>(events: E[], handler: (event: E, ...any) -> (), owner: unknown?): UnitWatch
+    function onBucket(events: (EventName | MessageName) | (EventName | MessageName)[], interval: number, handler: (counts: BucketCounts) -> (), owner: unknown?): Subscription
     function off(sub: Subscription)
-    function offAll(owner: any, name: (EventName | MessageName)?)
+    function offAll(owner: unknown, name: (EventName | MessageName)?)
     function send<M extends MessageName>(name: M, ...: EventArgs<M>...)   -- EventArgs<M> is a type pack
 end
 ```

@@ -25,7 +25,7 @@ local function deep(v: any, seen: { [table]: table }): any
 end
 
 -- A table the addon may walk.
-local function walkable(v: unknown): boolean
+local function walkable(v: unknown): v is table
     return type(v) == "table" and secret.readable(v)
 end
 
@@ -121,7 +121,7 @@ export function defaults<T extends table>(target: T, from: table): T
 end
 
 --- Deep equality: the same keys with equal values (secrets never equal).
-export function equal(a: any, b: any): boolean
+export function equal(a: unknown, b: unknown): boolean
     if secret.isSecret(a) or secret.isSecret(b) then
         return false
     end

@@ -664,7 +664,9 @@ fn load_workspace(
         .filter(|m| m.package().is_some_and(|p| p.kind == PackageKind::Addon))
         .map(|m| WorkspaceAddon {
             name: m.addon_name(),
+            package: m.package().map(|p| p.name.clone()).unwrap_or_default(),
             src: m.root.join(&m.manifest.build.src),
+            manifest: m.manifest.clone(),
         })
         .collect();
 

@@ -280,7 +280,11 @@ pub fn check_package_full(
             && matches!(files[i].kind, FileKind::Wowlua | FileKind::Lua)
     };
     let mut order = Vec::with_capacity(files.len());
-    let edges = check_edges(&env, analysis);
+    // Globals exported `@global` declarations create: their readers get
+    // the export's type (spec §4.3), so the module that makes one is
+    // checked before them.
+    let global_exports = global_exports(files);
+    let edges = check_edges(&env, analysis, files, &global_exports);
     for component in crate::order::components_in_order(files.len(), &edges) {
         if component.len() > 1 {
             for &m in component
@@ -313,6 +317,7 @@ pub fn check_package_full(
             exports: &exports,
             export_caps: &export_caps,
             early: &early,
+            global_exports: &global_exports,
         };
         // A plain Lua file reads nothing of other files but the
         // declarations: a later flavor whose declarations give the same
@@ -567,52 +572,96 @@ impl FileGlobals {
     }
 }
 
+/// The globals `@global` declarations of modules create, by name: the
+/// module and the declaration's file-level name, under which the module's
+/// exports hold its type (`body::INTERNAL` + name).
+fn global_exports(files: &[FileInput]) -> FxHashMap<String, (usize, String)> {
+    let mut out = FxHashMap::default();
+    for (m, f) in files.iter().enumerate() {
+        if f.kind != FileKind::Wowlua {
+            continue;
+        }
+        let Some(parse) = f.parse else { continue };
+        for s in parse.view().block().stmts() {
+            let mut globals = Vec::new();
+            global_names(s, &mut globals);
+            if globals.is_empty() {
+                continue;
+            }
+            let inner = match s.kind() {
+                StmtKind::Export(i) => i,
+                _ => s,
+            };
+            let declared: Vec<String> = match inner.kind() {
+                StmtKind::LocalFunction { name, .. } => vec![name.text().to_string()],
+                StmtKind::Function { name, .. }
+                    if name.path().len() == 1 && name.method().is_none() =>
+                {
+                    vec![name.path().at(0).text().to_string()]
+                }
+                _ => crate::exported_names_of(inner),
+            };
+            // An explicit name stands for the one declaration; otherwise
+            // each declared name is its own global.
+            for (k, g) in globals.into_iter().enumerate() {
+                if let Some(name) = declared.get(k).or(declared.first()) {
+                    out.entry(g)
+                        .or_insert((m, format!("{}{name}", body::INTERNAL)));
+                }
+            }
+        }
+    }
+    out
+}
+
 /// Names of declarations decorated with `@global`.
 fn global_decorated(block: Block<'_>, out: &mut Vec<String>) {
-    use wowlua_syntax::view::ExprKind;
     for s in block.stmts() {
-        let Some(d) = s.decorators().iter().find(|d| d.is_named("global")) else {
-            continue;
-        };
-        let explicit = d
-            .args()
-            .and_then(|a| match a.exprs().first().map(|e| e.kind()) {
-                Some(ExprKind::String(lit)) => {
-                    Some(String::from_utf8_lossy(&lit.value()).into_owned())
-                }
-                _ => None,
-            });
-        if let Some(name) = explicit {
-            out.push(name);
-            continue;
+        global_names(s, out);
+    }
+}
+
+/// The globals one statement's `@global` creates.
+fn global_names(s: wowlua_syntax::view::Stmt<'_>, out: &mut Vec<String>) {
+    let Some(d) = s.decorators().iter().find(|d| d.is_named("global")) else {
+        return;
+    };
+    let explicit = d
+        .args()
+        .and_then(|a| match a.exprs().first().map(|e| e.kind()) {
+            Some(ExprKind::String(lit)) => Some(String::from_utf8_lossy(&lit.value()).into_owned()),
+            _ => None,
+        });
+    if let Some(name) = explicit {
+        out.push(name);
+        return;
+    }
+    let inner = match s.kind() {
+        StmtKind::Export(i) => i.kind(),
+        k => k,
+    };
+    match inner {
+        StmtKind::Local { names, .. } => {
+            out.extend(names.iter().map(|n| n.name.text().to_string()))
         }
-        let inner = match s.kind() {
-            StmtKind::Export(i) => i.kind(),
-            k => k,
-        };
-        match inner {
-            StmtKind::Local { names, .. } => {
-                out.extend(names.iter().map(|n| n.name.text().to_string()))
-            }
-            StmtKind::LocalFunction { name, .. } | StmtKind::Const { name, .. } => {
-                out.push(name.text().to_string());
-            }
-            StmtKind::Function { name, .. } => {
-                out.push(
-                    name.method()
-                        .unwrap_or_else(|| name.path().last().expect("a name"))
-                        .text()
-                        .to_string(),
-                );
-            }
-            StmtKind::Class(c) => {
-                out.push(c.name().text().to_string());
-            }
-            StmtKind::Enum(e) => {
-                out.push(e.name().text().to_string());
-            }
-            _ => {}
+        StmtKind::LocalFunction { name, .. } | StmtKind::Const { name, .. } => {
+            out.push(name.text().to_string());
         }
+        StmtKind::Function { name, .. } => {
+            out.push(
+                name.method()
+                    .unwrap_or_else(|| name.path().last().expect("a name"))
+                    .text()
+                    .to_string(),
+            );
+        }
+        StmtKind::Class(c) => {
+            out.push(c.name().text().to_string());
+        }
+        StmtKind::Enum(e) => {
+            out.push(e.name().text().to_string());
+        }
+        _ => {}
     }
 }
 
@@ -626,6 +675,7 @@ struct FileCtx<'a> {
     exports: &'a FxHashMap<usize, FxHashMap<Box<str>, TypeId>>,
     export_caps: &'a FxHashMap<usize, FxHashMap<Box<str>, usize>>,
     early: &'a FxHashSet<usize>,
+    global_exports: &'a FxHashMap<String, (usize, String)>,
 }
 
 /// What checking one file gives.
@@ -754,6 +804,11 @@ fn check_file_in(
         pure_lua: settings.pure_lua,
         extra_globals: ctx.extra_globals,
         assigned_globals: ctx.assigned_globals,
+        global_types: if ctx.files[i].kind == FileKind::Wowlua {
+            global_types(ctx, i)
+        } else {
+            FxHashMap::default()
+        },
         imports,
         import_caps,
         is_module: ctx.analysis.modules[i]
@@ -921,8 +976,35 @@ fn check_file_in(
 /// ones, and a type-only import of a module with a `typeof` alias, which
 /// has its type once that module is checked (spec §2.2.7), where it adds
 /// no cycle.
-fn check_edges(env: &env::Env, analysis: &Analysis) -> Vec<(usize, usize)> {
+fn check_edges(
+    env: &env::Env,
+    analysis: &Analysis,
+    files: &[FileInput],
+    global_exports: &FxHashMap<String, (usize, String)>,
+) -> Vec<(usize, usize)> {
     let mut edges = analysis.edges.clone();
+    if !global_exports.is_empty() {
+        for (i, f) in files.iter().enumerate() {
+            if f.kind != FileKind::Wowlua {
+                continue;
+            }
+            let Some(parse) = f.parse else { continue };
+            let mut read: FxHashSet<&str> = FxHashSet::default();
+            wowlua_syntax::visit::walk_block(parse.view().block(), &mut |e| {
+                if let ExprKind::Name(n) = e.kind()
+                    && let Some((name, _)) = global_exports.get_key_value(n.text())
+                {
+                    read.insert(name.as_str());
+                }
+            });
+            for name in read {
+                let m = global_exports[name].0;
+                if m != i && !reaches(&edges, i, m) {
+                    edges.push((m, i));
+                }
+            }
+        }
+    }
     let typeof_modules: FxHashSet<usize> = env.typeof_aliases.values().copied().collect();
     if typeof_modules.is_empty() {
         return edges;
@@ -1304,6 +1386,19 @@ fn untyped_internal_warning(
     .with_help(format!(
         "annotate it where `{module}` declares it (`local {name}: T = …`)"
     ))
+}
+
+/// The types of the `@global` exports other modules make, for file `i`:
+/// those checked before it (the rest read as `any`).
+fn global_types(ctx: &FileCtx, i: usize) -> FxHashMap<Box<str>, TypeId> {
+    ctx.global_exports
+        .iter()
+        .filter(|(_, (m, _))| *m != i)
+        .filter_map(|(g, (m, export))| {
+            let t = ctx.exports.get(m)?.get(export.as_str())?;
+            Some((g.as_str().into(), *t))
+        })
+        .collect()
 }
 
 /// Is the export `name` of module `m` decorated?
@@ -3362,6 +3457,56 @@ print(a, b, c, d, e, name, realm, more)
             "type A = { a: number }\ntype B = { b: string? }\nlocal function f(x: A & B) local s: string = x.b; print(s) end\nprint(f)\n",
             "E2001",
         );
+    }
+
+    #[test]
+    fn a_cast_in_a_table_keeps_its_type() {
+        let p = "type P = \"A\" | \"B\"\n";
+        strict_ok(&format!(
+            "{p}local e = {{ corner = \"A\" :: P }}\nlocal x: P = e.corner\nlocal l = {{ (\"B\" :: P) }}\nlocal y: P = l[1]\nlocal k = {{ [\"c\"] = \"A\" :: P }}\nlocal z: P = k.c\nprint(x, y, z)\n"
+        ));
+        // a literal still widens
+        strict_err(
+            &format!("{p}local e = {{ corner = \"A\" }}\nlocal x: P = e.corner\nprint(x)\n"),
+            "E2001",
+        );
+    }
+
+    #[test]
+    fn global_exports_are_typed() {
+        // a `@global` export read in another module: checked after it,
+        // whatever the order of the files
+        for files in [
+            [
+                (
+                    "api.wowlua",
+                    "@global(\"Api\")\nexport const api = { n = 1 }\n",
+                ),
+                ("use.wowlua", "local s: string = Api.n\nprint(s)\n"),
+            ],
+            [
+                ("use.wowlua", "local s: string = Api.n\nprint(s)\n"),
+                (
+                    "api.wowlua",
+                    "@global(\"Api\")\nexport const api = { n = 1 }\n",
+                ),
+            ],
+        ] {
+            let e = check_modules(&files, Mode::Strict);
+            assert!(e.iter().any(|e| e.starts_with("E2001")), "{e:?}");
+        }
+        // a `@global` local function of a module, by its signature
+        let e = check_modules(
+            &[
+                (
+                    "api.wowlua",
+                    "export const x = 1\n@global\nlocal function Score(u: string): number return #u end\n",
+                ),
+                ("use.wowlua", "local n: number = Score(\"a\")\nprint(n)\n"),
+            ],
+            Mode::Strict,
+        );
+        assert!(e.is_empty(), "{e:?}");
     }
 
     #[test]

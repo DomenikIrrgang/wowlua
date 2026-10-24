@@ -293,13 +293,19 @@ addon plus load-on-demand modules, together with shared libraries.
   `remove`, `toc`, `lint`, `fix`, `dev`, `trace`) need exactly one selected
   member.
 - An addon may list another workspace addon in `addon-dependencies`. The
-  compiler then type-checks against that addon's **generated declaration file**,
-  which describes its `@global` API: `@global` functions with their
-  signatures, values with their annotated or literal type, and classes and
-  enums as `any` (decision T114). The file is generated from the other
-  addon's collected declarations, not from a full build
-  ([Compiler §13.3.1](compiler.md#1331-stages), stage 12), so two addons that
-  list each other as optional dependencies still build.
+  compiler then checks it together with that addon's sources, **types only**
+  (decision T287): the files that make `@global` declarations and what they
+  import (its modules, its wowlua libraries, the standard-library modules)
+  are analyzed and type-checked with the addon's own, so its `@global` API
+  has the types the checker infers for it, as inside that addon
+  ([Language §4.3](../language/04-decorators.md), decision L83). They are
+  never compiled into the addon, loaded with it or reported: the other addon
+  reports its own problems. Only its top level is read, not its own addon
+  dependencies, so two addons that list each other still build
+  ([Compiler §13.3.1](compiler.md#1331-stages), stage 12).
+- Its modules' **types** can be imported (`import type UnitFrame from
+  "suuui/UI/UnitFrame"`, by its package name); a value import of one is error
+  E1041, as the module is not part of the addon.
 - A cycle of `required` addon dependencies within the workspace is error E4324.
   Two members with the same `addon.name` are error E4325.
 - SavedVariables names must be unique across the workspace (E4120).

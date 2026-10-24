@@ -442,6 +442,7 @@ described in [Types §2.4.7](02-types.md#247-the-addon-namespace). The key
 
 Modules are private to the AddOn they are compiled into. Two AddOns never share
 module instances, even in the same workspace. Addons communicate through
-`@global` APIs, which another addon in the same workspace can type-check against
-via the generated declaration file (see
+`@global` APIs. Another addon in the same workspace that lists the addon in
+`addon-dependencies` is checked with its sources, types only, so the API has
+its inferred types there, and may `import type` from its modules (see
 [Package manager](../toolchain/package-manager.md#108-workspaces)).

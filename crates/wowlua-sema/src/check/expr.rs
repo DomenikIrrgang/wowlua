@@ -887,7 +887,12 @@ impl Checker<'_, '_> {
                 || self.extra_globals.contains(n.text())
                 || self.assigned_globals.contains(n.text()) =>
             {
-                Types::ANY
+                // A global another module's `@global` export makes has
+                // the export's type.
+                self.global_types
+                    .get(n.text())
+                    .copied()
+                    .unwrap_or(Types::ANY)
             }
             None => {
                 let mut msg = format!("`{}` is not a declared global", n.text());
@@ -1324,6 +1329,8 @@ impl Checker<'_, '_> {
             ..Record::default()
         };
         let mut array: Vec<TypeId> = Vec::new();
+        // Elements whose type a cast gives: kept, not widened.
+        let mut kept: FxHashSet<usize> = FxHashSet::default();
         let mut keys: Vec<TypeId> = Vec::new();
         let mut values: Vec<TypeId> = Vec::new();
         for (i, f) in fields.iter().enumerate() {
@@ -1370,8 +1377,8 @@ impl Checker<'_, '_> {
                         name.text().into(),
                         Field {
                             // Literals stay only where the expected type
-                            // gives the field a type.
-                            ty: if want.is_some() {
+                            // gives the field a type, or a cast does.
+                            ty: if want.is_some() || written(value) {
                                 t
                             } else {
                                 self.env.types.widen(t)
@@ -1393,7 +1400,11 @@ impl Checker<'_, '_> {
                         record.fields.insert(
                             String::from_utf8_lossy(&s.value()).into(),
                             Field {
-                                ty: self.env.types.widen(v),
+                                ty: if written(value) {
+                                    v
+                                } else {
+                                    self.env.types.widen(v)
+                                },
                                 optional: false,
                                 readonly: false,
                             },
@@ -1423,6 +1434,9 @@ impl Checker<'_, '_> {
                         // element is checked, as a named field is.
                         if let Some(w) = list_of_record {
                             self.check_assignable(value.span(), t, w);
+                        }
+                        if written(value) {
+                            kept.insert(array.len());
                         }
                         array.push(t);
                     }
@@ -1458,8 +1472,9 @@ impl Checker<'_, '_> {
         } else {
             let widened: Vec<TypeId> = array
                 .iter()
-                .map(|&t| {
-                    if exp.is_some() {
+                .enumerate()
+                .map(|(i, &t)| {
+                    if exp.is_some() || kept.contains(&i) {
                         t
                     } else {
                         self.env.types.widen(t)
@@ -4520,5 +4535,15 @@ fn obj_text(obj: Expr<'_>) -> String {
     match obj.kind() {
         ExprKind::Name(n) => n.text().to_string(),
         _ => "?".to_string(),
+    }
+}
+
+/// A value whose type is written (`x :: T`, in parentheses or not): a
+/// table keeps that type for it where it widens a literal (decision L84).
+fn written(e: Expr<'_>) -> bool {
+    match e.kind() {
+        ExprKind::Cast { .. } => true,
+        ExprKind::Paren(inner) => written(inner),
+        _ => false,
     }
 }

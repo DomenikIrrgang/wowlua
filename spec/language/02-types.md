@@ -412,7 +412,7 @@ Inference is local and bidirectional. There is no whole-program inference.
 | `local p = s :: Point`, `local k = opts.kind` | `Point`, the field's type: a value typed elsewhere (a name, a field or index read, a call's result, a `::` assertion) keeps its type, unions of literals included (decision L64) |
 | `local y = ok and t` (`ok: boolean`, `t: T`) | `false \| T` (`false` and `true` beside types other than `nil` and booleans are not widened) |
 | `const X = 5` | `5` (literal kept) |
-| `local t = { a = 1, b = "x" }` | `{ a: number, b: string }` |
+| `local t = { a = 1, b = "x" }` | `{ a: number, b: string }`; a field or element written `v :: T` keeps `T` (`{ corner = "TOP" :: FramePoint }` is `{ corner: FramePoint }`, decision L84) |
 | `local t = { 1, 2, 3 }` | `number[]` |
 | `local t = {}` | open table, see below |
 | function without return annotation | union of all returned types (`()` if none); a class's method without one returns `any` (its type is known before its body is checked: annotate its results), decision L56 |

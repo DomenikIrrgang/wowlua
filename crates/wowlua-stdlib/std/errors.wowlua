@@ -141,7 +141,7 @@ end
 
 --- Reports an error through the policy; `context.component` and
 --- `context.module` name where it came from, `context.owner` whose it is.
-export function report(err: any, context: { [string]: any }?)
+export function report(err: unknown, context: { [string]: unknown }?)
     reportWith(err, context, nil)
 end
 
@@ -192,12 +192,12 @@ export function call<A..., R...>(fn: (A...) -> R..., ...: A...): (boolean, R...)
 end
 
 --- Calls `fn` isolated, reporting with `context` (the stdlib's handlers).
-export function callIn(context: { [string]: any }, fn: (...any) -> ...any, ...: any): (boolean, ...any)
+export function callIn<A..., R...>(context: { [string]: unknown }, fn: (A...) -> R..., ...: A...): (boolean, R...)
     return isolate(context, nil, fn, ...)
 end
 
 --- `callIn` for a handler registered with `owner`, which listeners get.
-export function callOwned(context: { [string]: any }, owner: any, fn: (...any) -> ...any, ...: any): (boolean, ...any)
+export function callOwned<A..., R...>(context: { [string]: unknown }, owner: unknown, fn: (A...) -> R..., ...: A...): (boolean, R...)
     return isolate(context, owner, fn, ...)
 end
 

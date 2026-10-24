@@ -299,16 +299,16 @@ end
 
 ```wowlua
 declare module "wowlua:serialize"
-    function encode(value: any): string
-    function decode(s: string): (boolean, any)
+    function encode(value: unknown): string
+    function decode(s: string): (boolean, unknown)
     function compress(s: string, level: number?): string
     function decompress(s: string): string?
     function toPrintable(s: string): string
     function fromPrintable(s: string): string?
     function toAddonChannel(s: string): string
     function fromAddonChannel(s: string): string
-    function exportString(value: any, opts: { version: number, prefix?: string }): string
-    function importString(s: string): (boolean, any)
+    function exportString(value: unknown, opts: { version: number, prefix?: string }): string
+    function importString(s: string): (boolean, unknown)
 end
 ```
 
@@ -386,11 +386,11 @@ declare module "wowlua:log"
         to: (frame: ScrollingMessageFrame, ...any) -> (),
     }
 
-    function trace(...: any)
-    function debug(...: any)
-    function info(...: any)
-    function warn(...: any)
-    function error(...: any)
+    function trace(...: unknown)
+    function debug(...: unknown)
+    function info(...: unknown)
+    function warn(...: unknown)
+    function error(...: unknown)
     function setLevel(level: LevelValue)
     function sink(fn: (level: string, message: string) -> ())
     type LogOptions = { prefix?: string, chatLevel?: LevelValue }

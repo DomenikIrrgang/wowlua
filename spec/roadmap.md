@@ -566,6 +566,11 @@ Real game data and assets from the user's own client, never distributed
 - A CASC reader for the local installation: the DB2 tables (spells, talents,
   items, currencies, maps, …) behind the engine's game-data interface, next
   to the tests' data and the world profiles' (T203, T213).
+- Full API types: the type generator types every function, event payload
+  and table the game API has. About 3,700 functions (2026-10-24) are still
+  declared `(...any) -> ...any` because Blizzard's documentation leaves them
+  out; their types come from the client's own code (FrameXML calls, the
+  annotations) and from recordings, so an addon's API calls carry no `any`.
 - UI assets: BLP textures, texture atlases, fonts; text measured with the
   client's fonts, so `GetStringWidth`, wrapping and truncation match the
   client in tests too (T211).

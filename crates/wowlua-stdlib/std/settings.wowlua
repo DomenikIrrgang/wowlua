@@ -69,7 +69,7 @@ export function slider(
 end
 
 --- A dropdown; its options are shown in their order.
-export function dropdown(key: string, opts: { label: string, tooltip?: string, options: { value: any, label: string }[] }): Control
+export function dropdown(key: string, opts: { label: string, tooltip?: string, options: { value: unknown, label: string }[] }): Control
     return { kind = "dropdown", key = key, opts = opts }
 end
 
