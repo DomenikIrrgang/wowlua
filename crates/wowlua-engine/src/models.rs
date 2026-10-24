@@ -88,6 +88,20 @@ fn clear_model(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     for key in [KIND, VALUE, TRIED, UNDRESSED] {
         set_prop(vm, id, key, Value::Nil);
     }
+    // and what its setters kept for the getters (`GetModelFileID` 0)
+    for stem in [
+        "Model",
+        "ModelByFileID",
+        "ModelByPath",
+        "ModelByCreatureDisplayID",
+        "DisplayInfo",
+        "Creature",
+        "Unit",
+        "Item",
+        "ItemAppearance",
+    ] {
+        set_prop(vm, id, stem, Value::Nil);
+    }
     Ok(vec![])
 }
 

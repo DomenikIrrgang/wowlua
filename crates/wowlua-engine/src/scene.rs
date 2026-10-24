@@ -923,12 +923,6 @@ fn text_item_in(vm: &Vm, id: WidgetId, edit_box: bool, place: Option<Rect>) -> O
         && widgets::font_chain_ref(vm, id, "WordWrap")
             .and_then(|v| v.first().copied())
             .is_none_or(|v| v.truthy());
-    let (k, _) = pixel_scale(vm);
-    let units_w = f64::from(rect.w) / k;
-    let lines = crate::text::wrapped_lines(vm, id, &raw, wraps.then_some(units_w));
-    let first_line = crate::text::glyph_line(vm, id, "");
-    // Pixel sizes in the region's own pixels; the screen's are these
-    // times the pixel ratio.
     // The region's scale over UIParent's too: a font string in a frame
     // scaled 0.8 is drawn 0.8 the size, as its rectangle is (the Settings
     // list's "NEW" badges, `scale=".8"`, were drawn full size and cut to
@@ -937,6 +931,13 @@ fn text_item_in(vm: &Vm, id: WidgetId, edit_box: bool, place: Option<Rect>) -> O
         let e = engine(vm);
         widgets::effective_scale(e, id) / e.screen.ui_parent_scale().max(1e-6)
     };
+    let (k, _) = pixel_scale(vm);
+    // its width in its own units, as the text is laid out in them
+    let units_w = f64::from(rect.w) / k / relative.max(1e-6);
+    let lines = crate::text::wrapped_lines(vm, id, &raw, wraps.then_some(units_w));
+    let first_line = crate::text::glyph_line(vm, id, "");
+    // Pixel sizes in the region's own pixels; the screen's are these
+    // times the pixel ratio.
     let ratio = (f64::from(crate::text::pixel(vm, id)) * k * relative) as f32;
     let line_h = first_line.line_height_px as f32 * ratio;
     let spacing = num(vm, first(vm, id, "Spacing").as_ref(), 0.0) as f32 * k as f32;
