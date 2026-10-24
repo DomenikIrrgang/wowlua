@@ -46,8 +46,10 @@ engine cannot get otherwise.
    flight master, pick a route with a stop on the way; type
    `/stdtest engine scenario earlylanding`, take the flight, and before the
    first stop `/run TaxiRequestEarlyLanding()`; once landed,
-   `/stdtest engine scenario stop` and `/reload`. Why: the engine has no
-   early landing; SuuUI's Land at is tested with it stubbed.
+   `/stdtest engine scenario stop` and `/reload`. Why: the engine lands the
+   flight a server round trip after the request (decision T289, a guess:
+   it keeps no stops on the way); the recording gives when it lands and
+   which events come.
 8. **Atlases on a 1x screen**: the answers battery's atlas checks at a
    1920x1080 screen with Windows' DPI scale at 100%. Why: both recordings
    were on high-DPI screens and gave the 2x textures' files and
@@ -267,6 +269,78 @@ screenshot).
 4. `/run for i=3,10 do print(GetGuildTradeSkillInfo(i)) end`
 5. `/dump C_Club.GetClubInfo(C_Club.GetGuildClubId())` and
    `/dump C_Club.GetClubPrivileges(C_Club.GetGuildClubId())`.
+
+## Widget state (decision T289)
+
+The engine's guesses for methods that had no behaviour. Anywhere, out of
+combat; each step is one line to paste, then a screenshot of the chat.
+
+**Frame levels** (`Raise`, `Lower`):
+
+1. `/run A=CreateFrame("Frame",nil,UIParent) B=CreateFrame("Frame",nil,UIParent) A:SetFrameStrata("FULLSCREEN_DIALOG") B:SetFrameStrata("FULLSCREEN_DIALOG") B:SetFrameLevel(7) A:Raise() print(A:GetFrameLevel(),B:GetFrameLevel())`
+2. `/run C=CreateFrame("Frame",nil,UIParent) C:SetFrameStrata("FULLSCREEN_DIALOG") C:SetFrameLevel(20) C:Hide() A:Raise() print(A:GetFrameLevel())`
+3. `/run A:Lower() print(A:GetFrameLevel(),B:GetFrameLevel())`
+
+Screenshot after step 3. The engine says 8 7, then 8 (a hidden frame
+doesn't count), then 0 7.
+
+**An edit box's selection** (`HighlightText`, `Insert`):
+
+4. `/run E=CreateFrame("EditBox",nil,UIParent) E:SetSize(200,20) E:SetPoint("CENTER") E:SetFontObject(ChatFontNormal) E:SetAutoFocus(false) E:SetText("hello world") E:HighlightText(0,5) E:Insert("HELLO") print(E:GetText(),E:GetCursorPosition())`
+5. `/run E:SetScript("OnTextChanged",function(s,u) print("changed",u) end) E:Insert("!") print("after Insert")`
+6. `/run E:SetCursorPosition(1) E:SetText("abc") print(E:GetCursorPosition())`
+7. `/run E:SetText("abcdef") E:HighlightText(4,1) E:Insert("Z") print(E:GetText())`
+
+Screenshot after step 7. The engine says `HELLO world 5`; then "after
+Insert" before "changed false" (Insert's `OnTextChanged` comes in the next
+frame, as SetText's); then 3; then `aZef` (a selection given backwards is
+the same one).
+
+8. `/run E:SetScript("OnEditFocusGained",function(s) s:HighlightText() end) E:SetText("Sheep")`
+9. By hand: click into the box (in the middle of the screen), type `x`.
+10. `/run print(E:GetText()) E:ClearFocus() E:Hide()`
+
+Screenshot after step 10. The engine says `x`: the text selected on focus
+stays selected after the click, and typing replaces it. If the click put
+the cursor somewhere instead, it says where the text went.
+
+**A font copied** (`CopyFontObject`):
+
+11. `/run F1=CreateFont("ProbeF1") F1:SetFont("Fonts\\FRIZQT__.TTF",14,"OUTLINE") F1:SetTextColor(1,0,0) F2=CreateFont("ProbeF2") F2:CopyFontObject(F1) F1:SetTextColor(0,1,0) print(F2:GetFont()) print(F2:GetTextColor())`
+
+Screenshot. The engine says the file, 14 and OUTLINE, then 1 0 0 1: a
+copy, not a link to the other font.
+
+**Anchors moved** (`AdjustPointsOffset`, `ClearPointsOffset`):
+
+12. `/run P=CreateFrame("Frame",nil,UIParent) P:SetPoint("TOPLEFT",10,20) P:AdjustPointsOffset(5,-5) print(select(4,P:GetPoint(1))) P:ClearPointsOffset() print(select(4,P:GetPoint(1)))`
+
+Screenshot. The engine says 15 15, then 0 0. If the client keeps the
+adjustment apart from the point, `GetPoint` may say 10 20 both times.
+
+**The clears**:
+
+13. `/run Q=CreateFrame("Button",nil,UIParent) Q:SetNormalTexture("Interface\\Buttons\\WHITE8X8") T=Q:GetNormalTexture() Q:ClearNormalTexture() print(Q:GetNormalTexture(),T:IsShown(),T:GetParent()==Q)`
+14. `/run M=CreateFrame("PlayerModel",nil,UIParent) M:SetModel(130737) M:ClearModel() print(M:GetModelFileID())`
+
+Screenshot after step 14. The engine says nil false true, then 0.
+
+**At a vendor** (the merchant's window open):
+
+15. `/run local f=CreateFrame("Frame") f:RegisterEvent("MERCHANT_UPDATE") f:SetScript("OnEvent",function(_,e) print(e,GetMerchantFilter(),GetMerchantNumItems()) end) print(LE_LOOT_FILTER_ALL,LE_LOOT_FILTER_CLASS,GetMerchantFilter(),GetMerchantNumItems())`
+16. `/run SetMerchantFilter(LE_LOOT_FILTER_ALL)`
+17. `/run ResetSetMerchantFilter()`
+
+Screenshot after step 17. The engine keeps the filter and tells
+`MERCHANT_UPDATE` once per change, every item still listed; the client may
+list fewer items with the class filter.
+
+**In a guild**:
+
+18. `/run print(GetGuildRosterSelection()) SetGuildRosterSelection(2) print(GetGuildRosterSelection()) SetGuildRosterSelection(999) print(GetGuildRosterSelection())`
+
+Screenshot. The engine says 0, 2, 0 (a row past the roster selects
+none).
 
 ## Regressions and other flavors
 
