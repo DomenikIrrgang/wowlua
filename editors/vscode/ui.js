@@ -20,6 +20,7 @@ class UiPanel {
         this.shots = 0;
         this.scale = 1; // the drawing's scale, as the panel's zoom asks
         this.frames = []; // the frames the picker offers: { label, rect }
+        this.metrics = undefined; // the picture as displayed: { width, height, zoom }
     }
 
     /// A wowlua session started: the panel follows it.
@@ -185,6 +186,9 @@ class UiPanel {
                 }
                 return;
             }
+            case "metrics":
+                this.metrics = { width: m.width, height: m.height, zoom: m.zoom };
+                return;
             case "pick": {
                 const f = this.frames.find((x) => x.label === m.label);
                 if (f) {
@@ -227,6 +231,7 @@ class UiPanel {
             ended: this.ended,
             scale: this.scale,
             frames: this.frames.length,
+            metrics: this.metrics,
         };
     }
 }
@@ -263,7 +268,9 @@ function html() {
   #stage { flex: 1; overflow: auto; position: relative; }
   #stage.panning, #stage.panning img { cursor: grabbing; }
   .wrap { position: relative; line-height: 0; margin: 8px; display: inline-block; }
-  img { display: block; cursor: crosshair; }
+  /* VS Code's webview styles cap images at the container (max-width:
+     100%): zoomed in, that squeezed the screen sideways. */
+  img { display: block; cursor: crosshair; max-width: none; max-height: none; }
   #outline { position: absolute; border: 2px solid var(--vscode-focusBorder); pointer-events: none; display: none; box-sizing: border-box; }
   #empty { padding: 24px; opacity: 0.7; line-height: 1.5; }
 </style>
@@ -316,9 +323,16 @@ function html() {
     img.style.height = screen.height * z + "px";
     zoomText.textContent = zoom === null ? "Fit" : Math.round(z * 100) + "%";
     placeOutline();
+    // (A timer: animation frames wait while the panel is hidden.)
+    setTimeout(report, 0);
     // A sharper drawing once the screen shows larger than its pixels.
     const want = z * (window.devicePixelRatio || 1) > 2.5 ? 3 : z * (window.devicePixelRatio || 1) > 1.25 ? 2 : 1;
     if (want !== sentScale) { sentScale = want; vscode.postMessage({ type: "scale", scale: want }); }
+  }
+  // The displayed size, for the extension (its tests check the shape).
+  function report() {
+    const r = img.getBoundingClientRect();
+    vscode.postMessage({ type: "metrics", width: r.width, height: r.height, zoom: current() });
   }
   function placeOutline() {
     if (!rect || !screen.width) { outline.style.display = "none"; return; }

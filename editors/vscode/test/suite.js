@@ -125,13 +125,22 @@ async function uiScenario(widgets) {
         assert(api.ui.highlight === win.rect, "picking did not outline the window");
         await vscode.commands.executeCommand("wowlua.zoomToFrame", node);
         assert(api.ui.highlight === node.rect, "the view's zoom did not outline the button");
-        // Zoomed in, the drawing is sharper: twice the pixels, the screen's
-        // size the same.
-        const before2 = api.ui.state().shots;
-        await api.ui.handleMessage({ type: "scale", scale: 2 });
-        await waitFor(() => api.ui.state().shots > before2, 20000, "a 2x drawing");
-        const last = api.ui.state().last;
-        assert(last.scale === 2 && last.width === 3840 && last.height === 2160, "2x drawing " + JSON.stringify(last));
+        // Zoomed in on the button, the picture keeps the screen's shape
+        // (VS Code's webview styles capped its width: it was squeezed).
+        const m = await waitFor(() => {
+            const x = api.ui.state().metrics;
+            return x && x.zoom > 1.2 ? x : undefined;
+        }, 20000, "the zoomed picture's size");
+        const shape = (m.width / m.height) / (1920 / 1080);
+        log("zoomed:", JSON.stringify(m), "shape", shape.toFixed(3));
+        assert(Math.abs(shape - 1) < 0.01, "the zoomed picture is stretched: " + JSON.stringify(m));
+        // Zoomed in, the panel asks for a sharper drawing itself: two or
+        // three times the pixels, the screen's size the same.
+        const sharp = await waitFor(() => {
+            const l = api.ui.state().last;
+            return l && l.scale >= 2 ? l : undefined;
+        }, 20000, "a sharper drawing");
+        assert(sharp.width === 1920 * sharp.scale && sharp.height === 1080 * sharp.scale, "drawing " + JSON.stringify(sharp));
         log("zoom:", JSON.stringify(api.ui.state()));
         await vscode.commands.executeCommand("workbench.action.debug.continue");
         await clicked;
