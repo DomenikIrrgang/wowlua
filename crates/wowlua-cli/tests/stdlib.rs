@@ -6280,7 +6280,7 @@ print(t.field({ a = { b = 7 } }, "a", "b"), t.field({ a = 3 }, "a", "b"), t.fiel
 local weak = t.weakKeys()
 print(getmetatable(weak).__mode, getmetatable(t.weakValues()).__mode)
 local btn = CreateFrame("Button", "StdReaderButton", UIParent)
-print(f.find("StdReaderButton") == btn, f.find("NoSuchFrameAnywhere"), f.asButton(btn) == btn, f.asTexture(btn), f.asFrame({}), f.asRegion(42))
+print(f.find("StdReaderButton") == btn, f.find("NoSuchFrameAnywhere"), f.asButton(btn) == btn, f.asTexture(btn), f.asFrame({}), f.asRegion(42), f.asBrowser(btn))
 print(R.format.money(123456, { short = true }), R.format.money(10000, { short = true }), R.format.money(0, { short = true }))
 -- kept away: off screen, faded; again after the game moves it or sets its alpha
 local away = CreateFrame("Frame", nil, UIParent)
@@ -6324,7 +6324,7 @@ print(#t.list({ 1, 2, 3 }), #t.list(5), #t.list(nil), #t.list(Mock.secret()))
             "5 nil nil",
             "7 nil nil nil",
             "k v",
-            "true nil true nil nil nil",
+            "true nil true nil nil nil nil",
             "12g 34s 56c 1g 0c",
             "5000 0",
             "5000 0",

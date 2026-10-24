@@ -4155,33 +4155,6 @@ declare function ConfirmLootRoll(rollID: number, roll: number)
 declare function ConfirmLootSlot(slot: number)
 declare function ConfirmReadyCheck(isReady: number?)
 declare function CreateFont(name: string): Font
-declare function CreateFrame(frameType: "Frame", name: string?, parent: unknown?, template: string?, id: number?): Frame
-declare function CreateFrame(frameType: "ArchaeologyDigSiteFrame", name: string?, parent: unknown?, template: string?, id: number?): ArchaeologyDigSiteFrame
-declare function CreateFrame(frameType: "Button", name: string?, parent: unknown?, template: string?, id: number?): Button
-declare function CreateFrame(frameType: "CheckButton", name: string?, parent: unknown?, template: string?, id: number?): CheckButton
-declare function CreateFrame(frameType: "CinematicModel", name: string?, parent: unknown?, template: string?, id: number?): CinematicModel
-declare function CreateFrame(frameType: "ColorSelect", name: string?, parent: unknown?, template: string?, id: number?): ColorSelect
-declare function CreateFrame(frameType: "Cooldown", name: string?, parent: unknown?, template: string?, id: number?): Cooldown
-declare function CreateFrame(frameType: "DressUpModel", name: string?, parent: unknown?, template: string?, id: number?): DressUpModel
-declare function CreateFrame(frameType: "EditBox", name: string?, parent: unknown?, template: string?, id: number?): EditBox
-declare function CreateFrame(frameType: "FogOfWarFrame", name: string?, parent: unknown?, template: string?, id: number?): FogOfWarFrame
-declare function CreateFrame(frameType: "GameTooltip", name: string?, parent: unknown?, template: string?, id: number?): GameTooltip
-declare function CreateFrame(frameType: "MessageFrame", name: string?, parent: unknown?, template: string?, id: number?): MessageFrame
-declare function CreateFrame(frameType: "Minimap", name: string?, parent: unknown?, template: string?, id: number?): Minimap
-declare function CreateFrame(frameType: "Model", name: string?, parent: unknown?, template: string?, id: number?): Model
-declare function CreateFrame(frameType: "ModelScene", name: string?, parent: unknown?, template: string?, id: number?): ModelScene
-declare function CreateFrame(frameType: "MovieFrame", name: string?, parent: unknown?, template: string?, id: number?): MovieFrame
-declare function CreateFrame(frameType: "PlayerModel", name: string?, parent: unknown?, template: string?, id: number?): PlayerModel
-declare function CreateFrame(frameType: "QuestPOIFrame", name: string?, parent: unknown?, template: string?, id: number?): QuestPOIFrame
-declare function CreateFrame(frameType: "ScenarioPOIFrame", name: string?, parent: unknown?, template: string?, id: number?): ScenarioPOIFrame
-declare function CreateFrame(frameType: "ScrollFrame", name: string?, parent: unknown?, template: string?, id: number?): ScrollFrame
-declare function CreateFrame(frameType: "ScrollingMessageFrame", name: string?, parent: unknown?, template: string?, id: number?): ScrollingMessageFrameMixin & Frame
-declare function CreateFrame(frameType: "SimpleHTML", name: string?, parent: unknown?, template: string?, id: number?): SimpleHTML
-declare function CreateFrame(frameType: "Slider", name: string?, parent: unknown?, template: string?, id: number?): Slider
-declare function CreateFrame(frameType: "StatusBar", name: string?, parent: unknown?, template: string?, id: number?): StatusBar
-declare function CreateFrame(frameType: "TabardModel", name: string?, parent: unknown?, template: string?, id: number?): TabardModel
-declare function CreateFrame(frameType: "UnitPositionFrame", name: string?, parent: unknown?, template: string?, id: number?): UnitPositionFrame
-declare function CreateFrame(frameType: string, name: string?, parent: unknown?, template: string?, id: number?): Frame
 declare function CreateMacro(name: string, iconFileID: number | string, body: string?, perCharacter: boolean?): number
 declare function CreateNewRaidProfile(arg1: unknown, arg2: unknown?): (...unknown)
 declare function DeclineChannelInvite(channel: string)

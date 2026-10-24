@@ -650,6 +650,7 @@ export function asStatusBar(v: unknown): StatusBar? if isA(v, "StatusBar") then 
 export function asCooldown(v: unknown): Cooldown? if isA(v, "Cooldown") then return v :: Cooldown end return nil end
 export function asFontString(v: unknown): FontString? if isA(v, "FontString") then return v :: FontString end return nil end
 export function asTexture(v: unknown): Texture? if isA(v, "Texture") then return v :: Texture end return nil end
+export function asBrowser(v: unknown): Browser? if isA(v, "Browser") then return v :: Browser end return nil end
 
 --- A global frame by its name (`"CharacterFrame"`), nil when there is
 --- none: a load-on-demand window before its addon loads, a client without it.

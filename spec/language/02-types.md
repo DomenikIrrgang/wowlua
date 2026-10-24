@@ -824,7 +824,10 @@ The global environment (`_G`) is modelled as a set of **declared globals**:
   as the client's `MessageFrame` has them, a line and its colour possibly
   secret. A frame type the client makes from Blizzard's Lua, not as a widget of
   its own, is its intrinsic's mixin on a frame: `CreateFrame("ScrollingMessageFrame")`
-  gives a `ScrollingMessageFrameMixin & Frame` (decision T285). A mixin made with
+  gives a `ScrollingMessageFrameMixin & Frame` (decision T285).
+  `CreateFrame(frameType, …)` gives the class of each frame type the flavor
+  has, also those only some flavors document (`CreateFrame("Browser")` is a
+  `Browser`; decision T292). A mixin made with
   `CreateFromMixins(A, B)` extends `A` and has `B`'s functions,
 - the Lua 5.1 standard library as available in WoW, and `LibStub`
   (decision T86). WoW has no `os`, `io`, `debug` or `package` library; it

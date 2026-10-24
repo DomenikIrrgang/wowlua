@@ -1065,17 +1065,22 @@ pub fn generate(
     blizzard::mark_widgets(&mut shared.classes);
     widget_corrections(&mut shared.classes);
     script_handlers(&mut shared.classes, &shared.aliases);
-    // `CreateFrame("Button", …)` returns a `Button`.
-    let mut create = Vec::new();
-    for t in blizzard::FRAME_TYPES {
-        if shared.classes.contains_key(*t) {
-            create.push(create_frame_sig(&format!("{t:?}"), t));
-        } else if let Some((_, ty)) = INTRINSIC_FRAMES.iter().find(|(n, _)| n == t) {
-            create.push(create_frame_sig(&format!("{t:?}"), ty));
+    // `CreateFrame("Button", …)` returns a `Button`: per flavor, with the
+    // frame types only some have (`Browser`, `Checkout`); the annotations'
+    // generic one goes.
+    shared.functions.shift_remove("CreateFrame");
+    for (_, _, d) in per_flavor.iter_mut() {
+        let mut create = Vec::new();
+        for t in blizzard::FRAME_TYPES {
+            if shared.classes.contains_key(*t) || d.classes.contains_key(*t) {
+                create.push(create_frame_sig(&format!("{t:?}"), t));
+            } else if let Some((_, ty)) = INTRINSIC_FRAMES.iter().find(|(n, _)| n == t) {
+                create.push(create_frame_sig(&format!("{t:?}"), ty));
+            }
         }
+        create.push(create_frame_sig("string", "Frame"));
+        d.functions.insert("CreateFrame".into(), create);
     }
-    create.push(create_frame_sig("string", "Frame"));
-    shared.functions.insert("CreateFrame".into(), create);
     // Arguments Blizzard documents as accepting secrets
     // (`SecretArguments`) accept them in the annotated methods too.
     for (_, _, d) in &per_flavor {
