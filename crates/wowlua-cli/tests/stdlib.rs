@@ -6696,6 +6696,10 @@ local keys = {}
 for k in pairs(keyed) do keys[#keys + 1] = k end
 table.sort(keys)
 print(table.concat(keys, ","), keyed.Close == b, next(F.keyed(nil)), next(F.keyed(5)))
+-- a frame with more children than pcall may hand back (UIParent's)
+local busy = CreateFrame("Frame", nil, UIParent)
+for _ = 1, 300 do CreateFrame("Frame", nil, busy); busy:CreateTexture() end
+print(#F.children(busy), #F.textures(busy))
 "##,
     );
     assert_eq!(
@@ -6707,7 +6711,8 @@ print(table.concat(keys, ","), keyed.Close == b, next(F.keyed(nil)), next(F.keye
             "2 2 0 0",
             "2 0 0 0",
             "a,b false",
-            "Art,Close true nil nil"
+            "Art,Close true nil nil",
+            "300 300"
         ]
     );
 }

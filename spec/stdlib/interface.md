@@ -81,7 +81,7 @@ if list then frames.keepAway(list, { fade = true }) end     -- out of sight, sti
 | API | Signature | Notes |
 |-----|-----------|-------|
 | `find` | `(name: string) -> Frame?` | The global frame of that name, nil when there is none |
-| `textures`, `fontStrings` | `(frame: Frame) -> Texture[]`, `-> FontString[]` | The textures (its art) or font strings among the frame's own regions; none for a frame that is forbidden (decision S45) |
+| `textures`, `fontStrings` | `(frame: Frame) -> Texture[]`, `-> FontString[]` | The textures (its art) or font strings among the frame's own regions; none for a frame that is forbidden (decision S45); any number of them (gathered inside the protected call: `pcall` handing back a hundred values or more crashes the game, decision S50) |
 | `children` | `(frame: Frame) -> Frame[]` | The frame's children the addon may read |
 | `keyed` | `(frame: unknown) -> { [string]: Region }` | The widgets the frame holds in its own fields, by key (`frame.ScrollBox`): what its template or code gave it, named or not; forbidden ones left out, none for a value that is no table the addon may read (decision S49) |
 | `stateTextures` | `(button: Button) -> Texture[]` | The button's state textures it has: normal, pushed, highlight, disabled, and a check button's checked ones |

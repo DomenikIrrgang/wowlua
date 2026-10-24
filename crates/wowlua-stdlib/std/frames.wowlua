@@ -674,11 +674,14 @@ local function own(frame: Frame, get: string): unknown[]
     if type(fn) ~= "function" then
         return {}
     end
-    const all = { pcall(fn :: (unknown) -> ...unknown, frame) }
-    if all[1] ~= true then
+    -- (gathered inside the protected call: pcall handing back a hundred or
+    -- more values crashes the game, as UIParent's children would)
+    local ok, all = pcall(function(): unknown[]
+        return { (fn :: (unknown) -> ...unknown)(frame) }
+    end)
+    if not ok then
         return {}
     end
-    table.remove(all, 1)
     return all
 end
 

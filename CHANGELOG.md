@@ -73,6 +73,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- `frames.children`, `frames.textures` and `frames.fontStrings` work on a frame with many children or regions, such as `UIParent`; they crashed the game there.
 - `if b.owner then b.owner:Hide() end` narrows `b.owner` when `b` is typed as two parts (`Button & { owner: Frame? }`), as it does for a record; it stayed `Frame?`.
 - A type predicate narrows one of the game's frames to its type: after `if canDisable(f) then` with `canDisable(f: Frame): f is Frame & Disableable`, `f:SetDisabled(true)` is checked; it was `any`.
 - `Browser` and `OffScreenFrame` frames have a frame's methods (`SetPoint`, `SetScript`, …); they had only their own.
