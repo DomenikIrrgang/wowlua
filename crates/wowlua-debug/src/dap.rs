@@ -501,6 +501,8 @@ pub fn serve(
     // Sources of setBreakpoints requests waiting, for their answers' paths.
     let sources: Arc<Mutex<HashMap<u64, String>>> = Arc::new(Mutex::new(HashMap::new()));
     let mut session_thread: Option<std::thread::JoinHandle<()>> = None;
+    // Closed when the thread that writes the session's events is done.
+    let mut forwarded: Option<std::sync::mpsc::Receiver<()>> = None;
     while let Some(msg) = read_message(&mut reader) {
         if msg.get("type").and_then(Json::as_str) != Some("request") {
             continue;
@@ -544,7 +546,10 @@ pub fn serve(
                 let w = writer.clone();
                 let srcs = sources.clone();
                 let launch_seq = seq;
+                let (done, forwarding) = channel::<()>();
+                forwarded = Some(forwarding);
                 std::thread::spawn(move || {
+                    let _done = done;
                     let mut launched = false;
                     for o in orx {
                         match o {
@@ -636,6 +641,11 @@ pub fn serve(
     interrupt.store(true, Ordering::Relaxed);
     if let Some(t) = session_thread {
         let _ = t.join();
+    }
+    // The session's last events (`terminated`) written before the process
+    // ends; not for long, should something still hold a sender.
+    if let Some(f) = forwarded {
+        let _ = f.recv_timeout(std::time::Duration::from_secs(5));
     }
 }
 
