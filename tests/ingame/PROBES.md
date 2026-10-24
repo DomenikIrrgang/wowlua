@@ -631,6 +631,12 @@ alone unless an item names an addon.
     1. `/run local f=CreateFrame("Frame") local a=f:IsMouseEnabled() f:SetScript("OnMouseUp",function() end) local b=f:IsMouseEnabled() f:SetScript("OnMouseUp",nil) print(a,b,f:IsMouseEnabled())`
     2. `/run local g=CreateFrame("Frame") g:SetScript("OnEnter",function() end) local h=CreateFrame("Frame") h:SetScript("OnMouseWheel",function() end) print(g:IsMouseEnabled(),h:IsMouseEnabled(),h:IsMouseWheelEnabled())`
     3. Open the character frame (C) and type `/run local t=CharacterFrameModeTab2 print(t:IsMouseEnabled(),t:IsMouseClickEnabled(),t:IsMouseMotionEnabled())`
+20e. **`BNGetInfo()`** (two recordings disagree: the full probe of
+    2026-10-20 has nothing, the answers of 2026-10-21 eight values; wowlua
+    answers the eight):
+    1. Right after logging in (before opening anything): `/run print(select("#",BNGetInfo()),BNGetInfo())`
+    2. `/reload`, then the same line again.
+    3. `/run print(select("#",BNGetInfo("player")),BNConnected())`
 20. **Screenshots to compare with wowlua's** (in `~/Desktop/wowlua-*`):
     1. Settings, Accessibility: the "Colors" category and the "Use UI
        Scale" check box (Graphics).
