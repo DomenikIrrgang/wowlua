@@ -17,7 +17,7 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 /// How long after the last edit a package is checked again.
-const SETTLE: Duration = Duration::from_millis(200);
+const SETTLE: Duration = Duration::from_millis(100);
 
 /// How long without edits before a save's packages that depend on the
 /// saved one are checked.

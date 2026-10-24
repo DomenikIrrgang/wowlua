@@ -528,7 +528,7 @@ Other editors use the LSP directly.
 
 **Built so far (M9 S8, decisions T368, T370, T372).** `wowlua lsp` checks
 a package as `wowlua check` does with its tests, the editor's unsaved texts
-read over the files on disk, in two passes. 200 ms after the last edit, the
+read over the files on disk, in two passes. 100 ms after the last edit, the
 first pass type-checks the package's open files and the modules they
 import (directly or not), builds nothing, skips the load order (its
 diagnostics come with the second pass), and reports those files only.
