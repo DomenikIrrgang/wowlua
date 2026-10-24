@@ -578,7 +578,14 @@ open `.wowlua` and `.lua` files, each edit as the range it changed, and the
 `.wowlua`, `.lua`, `.xml`, `.toc`, `wowlua.json` and `wowlua.lock` files
 changed on disk; *Go to Definition* (F12) and Ctrl or Cmd + click use it.
 A server that stops by itself is started again at once, up to three times
-in three minutes, then the extension asks. `wowlua.languageServer` (on by
+in three minutes, then the extension asks. The extension colors `.wowlua`
+and `.d.wowlua` files with a TextMate grammar of its own (decision T371):
+Lua's syntax, interpolated strings with their expressions, decorators,
+wowlua's contextual keywords where they are keywords (§1.2.5), declared
+names, and type annotations (`name: T`, `name?: T`, `): T`, `:: T`, type
+parameters) as types; its language configuration toggles `--` comments,
+matches and closes brackets and quotes, and indents blocks. It makes
+itself the formatter of `.wowlua` files. `wowlua.languageServer` (on by
 default) turns it off; *wowlua: Restart Language Server* restarts it; the
 **wowlua Language Server** output shows what it logs. Its client is
 hand-written, as the rest of the extension, so it needs no build step.

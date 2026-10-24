@@ -36,9 +36,22 @@
         ],
         "extensions": [
           ".wowlua"
-        ]
+        ],
+        "configuration": "./language-configuration.json"
       }
     ],
+    "grammars": [
+      {
+        "language": "wowlua",
+        "scopeName": "source.wowlua",
+        "path": "./syntaxes/wowlua.tmLanguage.json"
+      }
+    ],
+    "configurationDefaults": {
+      "[wowlua]": {
+        "editor.defaultFormatter": "wowlua.wowlua"
+      }
+    },
     "breakpoints": [
       {
         "language": "wowlua"

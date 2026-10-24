@@ -1,5 +1,9 @@
 # wowlua for VS Code
 
+Colors `.wowlua` files (keywords, strings and their `{…}` expressions,
+decorators, declared names, type annotations as types), toggles `--`
+comments with `Cmd+/`, closes brackets and indents blocks.
+
 Check, format and outline wowlua addons as you type. The extension starts
 `wowlua lsp`: errors and warnings show in the Problems view a moment after
 you stop typing (and at once when you save), for the edits you haven't saved
@@ -87,4 +91,6 @@ Its tests drive a VS Code of their own on `examples/widget-demo` (they
 need a WoW installation and `cargo build --release -p wowlua-cli`):
 `editors/vscode/test/run.sh` (`WOWLUA_SCENARIO=lsp` for the language
 client alone). `node --test editors/vscode/test/connection.test.js` checks
-the client's connection to `wowlua lsp` without VS Code.
+the client's connection to `wowlua lsp` without VS Code, and
+`node --test editors/vscode/test/grammar.test.js` the grammar with VS Code's
+own tokenizer.
