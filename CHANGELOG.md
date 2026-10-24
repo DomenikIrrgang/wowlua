@@ -47,6 +47,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- `C_SkillInfo.SetSelectedSkill` selects the skill line, so the character window's skills tab shows the first skill's details when it opens, as in game.
 - Addons that load their own modules on demand through `GetAddOnInfo`'s reason (AtlasLoot) load them: it is `"DEMAND_LOADED"` for a load-on-demand addon that isn't loaded yet.
 - `GetFileIDFromPath` answers nil for a file that doesn't exist, such as one of an addon you haven't installed, so AtlasLoot no longer draws the Atlas addon's maps without it. With your WoW installation, a game file answers its own ID.
 - With your WoW installation, `C_Map.GetAreaInfo` names every area (AtlasLoot's instance names), and `C_Item.DoesItemExistByID` is true for items the game ships without a name.

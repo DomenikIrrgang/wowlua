@@ -1719,6 +1719,22 @@ fn earned_talent_point(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(level >= unlock)])
 }
 
+/// `C_SkillInfo.SetSelectedSkill(index)`: the skill line `GetSelectedSkill`
+/// answers from then (Blizzard's skills window selects its first skill so,
+/// and shows its details; unverified: an index naming no line, and whether
+/// a change is told).
+fn set_selected_skill(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Num(n) = vm.hidden(c.arg(1)) else {
+        return Ok(vec![]);
+    };
+    engine_mut(vm)
+        .world
+        .character
+        .stats
+        .insert("selectedSkill", Entry::One(vec![Answer::Num(n.trunc())]));
+    Ok(vec![])
+}
+
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     STATS
         .iter()
@@ -1729,6 +1745,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
                 find_spellbook_slot as NativeFn,
             ),
             ("C_SpellBook.IsSpellInSpellBook", is_spell_in_spellbook),
+            ("C_SkillInfo.SetSelectedSkill", set_selected_skill),
             ("GetNumQuestLeaderBoards", num_quest_leader_boards),
             ("C_QuestLog.GetQuestIDForLogIndex", quest_id_for_log_index),
             ("GetQuestLogLeaderBoard", quest_log_leader_board),

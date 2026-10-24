@@ -314,7 +314,8 @@ The WoW API the VM's code calls, per flavor.
   and unit events, points and sizes, show and hide, parenting, templates,
   mixins, protected frames), the event loop and `OnUpdate` frames, timers on a
   virtual clock, combat lockdown, units, auras, spells and items (from test
-  data), saved variables across reloads, slash commands, keybindings, addon
+  data), skill lines (the one selected is the one `SetSelectedSkill`
+  chose, decision T357), saved variables across reloads, slash commands, keybindings, addon
   messages, settings, tooltips, menus and dialogs. The M8 test mock is the
   starting point.
 - **Layout.** A region's rectangle comes from its points as the client

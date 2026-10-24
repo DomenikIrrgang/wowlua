@@ -190,3 +190,17 @@ return tostring(a:GetTexture() < 0), tostring(b:GetTexture() == a:GetTexture())"
     assert!(scene.items.iter().any(|i| matches!(i,
         Item::Quad(q) if matches!(&q.image, Image::File(p) if p == "interface\\addons\\mine\\logo"))));
 }
+
+/// The skill line selected is the one `SetSelectedSkill` chose (the skills
+/// window selects its first skill so and shows its details).
+#[test]
+fn the_selected_skill_is_kept() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local before = C_SkillInfo.GetSelectedSkill()
+C_SkillInfo.SetSelectedSkill(3)
+return before, C_SkillInfo.GetSelectedSkill()",
+    );
+    assert_eq!(r, ["0", "3"]);
+}

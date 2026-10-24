@@ -469,10 +469,23 @@ alone unless an item names an addon.
 18. **The calendar's holidays** (open: wowlua shows no holiday events):
     1. Open the calendar on this month and take a screenshot.
     2. `/run local m=C_Calendar.GetMonthInfo(0) for d=1,m.numDays do for j=1,C_Calendar.GetNumDayEvents(0,d) do local e=C_Calendar.GetDayEvent(0,d,j) print(d,e.title,e.calendarType,e.sequenceType,e.eventID) end end`
-19. **The skill bars' fill** (open: Blizzard's `ColoredProgressBar` sets
-    its fill by `FillArea:GetWidth()`; in game a 49/105 bar looks full):
-    1. Open the character window's skills and take a screenshot.
-    2. `/run local b=SkillFrame and SkillFrame.ScrollBox and SkillFrame.ScrollBox:GetFrames()[2] print(b and b:GetDebugName())` (to find the bar for the next step).
+19. **The skill bars' fill.** In game (screenshot of 2026-10-23) the
+    skills list's bars fill the whole track at any value, the left
+    `p` of the atlas stretched over it (`SetTexCoord(0, p, 1, 0)`), while
+    the detail pane's bar fills by value (87/150 to 57%). wowlua fills the
+    list's by value too. Blizzard's `SetFillPercent` sets the fill to
+    `p * FillArea:GetWidth()`: so in game `FillArea` reads 0 in the rows'
+    `Initialize` (why is open: the rows are anchored then, decision T346's
+    `child 0 200` is the nearest rule), and a 0-wide fill with one point
+    is drawn at its atlas size (240, clipped by the bar's mask). Steps:
+    1. `/reload`, and do not open the character window before step 3.
+    2. `/run hooksecurefunc(SkillsBarMixin,"SetFillPercent",function(b,p) local r=b:GetParent():GetParent() print(format("%.2f",p),b.FillArea:GetWidth(),b.Fill:GetWidth(),r:GetWidth(),r:GetNumPoints()) end)`
+    3. Open the character window's Skills tab; note the lines printed.
+    4. `/run for _,f in ipairs(SkillsFrame.ScrollBox:GetFrames()) do local s=f.Content and f.Content.SkillsBar if s then print(s.FillArea:GetWidth(),s.Fill:GetWidth(),s.Fill:GetTexCoord()) end end`
+    5. `/run local b=SkillsFrame.SkillDetailFrame.RankBar print(b.FillArea:GetWidth(),b.Fill:GetWidth())`
+    6. `/run T=UIParent:CreateTexture(nil,"OVERLAY") T:SetAtlas("common-stat-bar-blue",true) T:SetPoint("LEFT",UIParent,"CENTER",-100,0) T:SetWidth(0) print(T:GetSize())`
+    7. A screenshot: is a 240-wide blue bar drawn in the middle (wowlua:
+       nothing)?
 20. **Screenshots to compare with wowlua's** (in `~/Desktop/wowlua-*`):
     1. Settings, Accessibility: the "Colors" category and the "Use UI
        Scale" check box (Graphics).

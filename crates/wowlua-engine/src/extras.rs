@@ -2985,7 +2985,6 @@ const NOTHING: &[&str] = &[
     "C_SkillInfo.CollapseSkillHeader",
     "C_SkillInfo.ExpandSkillHeader",
     "C_SkillInfo.GetSkillLineInfoByID",
-    "C_SkillInfo.SetSelectedSkill",
     "C_Soulbinds.ActivateSoulbind",
     "C_Soulbinds.CanActivateSoulbind",
     "C_Soulbinds.CanModifySoulbind",
