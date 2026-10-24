@@ -259,8 +259,9 @@ A screenshot of the output or the values typed back is enough.
 
 ## Replay leftovers
 
-- Before turning in a quest with an item reward:
-  `/run local f=CreateFrame("Frame") f:RegisterEvent("QUEST_TURNED_IN") f:SetScript("OnEvent",function() print(GetTime(), C_Container.GetContainerNumFreeSlots(0)) C_Timer.After(0.2,function() print(GetTime(), C_Container.GetContainerNumFreeSlots(0)) end) end)`:
+- Before turning in a quest with an item reward, two lines:
+  `/run Q=function() print(GetTime(), C_Container.GetContainerNumFreeSlots(0)) end`
+  then `/run local f=CreateFrame("Frame") f:RegisterEvent("QUEST_TURNED_IN") f:SetScript("OnEvent",function() Q() C_Timer.After(0.2,Q) end)`:
   when the reward takes its bag slot.
 - Around a second level-up: `/stdtest engine scenario`, to confirm the
   specialization event is batched.
@@ -310,8 +311,9 @@ game, the character's clothes in wowlua).
 
 1. Open the appearances collection on the head slot and take a screenshot of
    the first page (the cells' framing to compare with).
-2. With the collections open:
-   `/run local m=WardrobeCollectionFrame.ItemsCollectionFrame.Models[1] print(m:GetCameraPosition()) print(m:GetCameraTarget()) print(m:GetPosition()) print(m:GetFacing(), m:GetPitch(), m:GetRoll()) print(m:IsUsingModelCenterToTransform()) local v=m:TransformCameraSpaceToModelSpace(CreateVector3D(4,0,0)) print(v:GetXYZ())`
+2. With the collections open, two lines:
+   `/run M=WardrobeCollectionFrame.ItemsCollectionFrame.Models[1] print(M:GetCameraPosition()) print(M:GetCameraTarget()) print(M:GetPosition())`
+   then `/run print(M:GetFacing(), M:GetPitch(), M:GetRoll()) print(M:IsUsingModelCenterToTransform()) print(M:TransformCameraSpaceToModelSpace(CreateVector3D(4,0,0)):GetXYZ())`
 3. `/run local m=CreateFrame("PlayerModel") m:SetSize(100,100) m:SetUnit("player") print(m:GetCameraDistance(), m:GetCameraPosition()) print(m:GetCameraTarget())`
    Answers the model frame's own camera and field of view.
 
@@ -380,6 +382,106 @@ player's arrow 32 by 32 UI units; neither is recorded on camelot.
    `LEFT` to the slider's `LEFT`; still open: a vertical slider's point.
 
 
+## Owed from the M12 screenshots (next beta, about 2026-11-07)
+
+The camelot beta closed on 2026-10-24; these close what the screenshot work
+left as proposals. Each item stands alone: after a `/reload` (or an error)
+start the item again from its first step. In the chat box `|` is escaped,
+so the lines write it as `\124`. Take the screenshots with the default UI
+alone unless an item names an addon.
+
+1. **Load-on-demand addons' reason** (decision T354; wowlua:
+   `DEMAND_LOADED` before loading, empty after). With AtlasLoot installed:
+   1. `/run for i=1,C_AddOns.GetNumAddOns() do local n,_,_,l,r=C_AddOns.GetAddOnInfo(i) if C_AddOns.IsAddOnLoadOnDemand(i) then print(n,tostring(l),"["..tostring(r).."]",C_AddOns.IsAddOnLoaded(i)) end end`
+   2. `/run print(C_AddOns.LoadAddOn("AtlasLootClassic_Crafting"), "["..tostring(select(5,C_AddOns.GetAddOnInfo("AtlasLootClassic_Crafting"))).."]")`
+2. **AceGUI's `SetDesaturation`** (AtlasLoot's options window: wowlua has
+   no such global, so AceGUI's checkbox errors):
+   1. `/run print(SetDesaturation, LibStub and LibStub("AceGUI-3.0",true) and select(2,LibStub("AceGUI-3.0")))`
+3. **Which point sets an edge** (decision T337; wowlua: `TOPLEFT` places
+   the left edge over `LEFT`, whatever order they were set in, so `50 50`;
+   `GetPoint(1)` stays the first set, `RIGHT`):
+   1. `/run F=CreateFrame("Frame",nil,UIParent) F:SetHeight(10) F:SetPoint("RIGHT",UIParent,"CENTER") F:SetPoint("LEFT",UIParent,"CENTER",-100,0) F:SetPoint("TOPLEFT",UIParent,"CENTER",-50,0)`
+   2. `/run print(UIParent:GetWidth()/2-F:GetLeft(), F:GetWidth(), (F:GetPoint(1)))`
+4. **A button's font objects by name** (decision T338; wowlua: a name
+   works, an unknown name unverified):
+   1. `/run local b=CreateFrame("Button",nil,UIParent) b:SetNormalFontObject("GameFontRed") print(b:GetNormalFontObject():GetName()) print(pcall(b.SetHighlightFontObject,b,"NoSuchFont"))`
+5. **Font strings over textures in one layer** (decision T340; wowlua: the
+   text is drawn over the red, though made first):
+   1. `/run F=CreateFrame("Frame",nil,UIParent) F:SetSize(240,60) F:SetPoint("CENTER") local s=F:CreateFontString(nil,"ARTWORK","GameFontNormalHuge") s:SetPoint("CENTER") s:SetText("TEXT ON TOP?")`
+   2. `/run local t=F:CreateTexture(nil,"ARTWORK") t:SetAllPoints() t:SetColorTexture(1,0,0)`
+   3. A screenshot.
+6. **A frame on its parent's level** (decision T341; wowlua: the child's
+   green `BACKGROUND` is drawn under the parent's blue `ARTWORK`, the two
+   sorted together by layer):
+   1. `/run local p=CreateFrame("Frame",nil,UIParent) p:SetSize(200,100) p:SetPoint("CENTER") local a=p:CreateTexture(nil,"ARTWORK") a:SetPoint("LEFT") a:SetSize(120,100) a:SetColorTexture(0,0,1) P=p`
+   2. `/run local c=CreateFrame("Frame",nil,P) c:SetUsingParentLevel(true) c:SetAllPoints() local g=c:CreateTexture(nil,"BACKGROUND") g:SetPoint("RIGHT") g:SetSize(120,100) g:SetColorTexture(0,1,0)`
+   3. A screenshot: is the middle strip blue (wowlua) or green?
+7. **`SetFrameLevel` and descendants** (decision T343; wowlua: the
+   child raised by 5 moves with the parent, the grandchild stays one over
+   its parent):
+   1. `/run P=CreateFrame("Frame",nil,UIParent) C=CreateFrame("Frame",nil,P) C:SetFrameLevel(P:GetFrameLevel()+5) G=CreateFrame("Frame",nil,C) print(P:GetFrameLevel(),C:GetFrameLevel(),G:GetFrameLevel())`
+   2. `/run P:SetFrameLevel(P:GetFrameLevel()+10) print(P:GetFrameLevel(),C:GetFrameLevel(),G:GetFrameLevel())`
+8. **Inline textures in text** (decision T347; wowlua: the icon is as tall
+   as the text for height 0, the atlas 20 by 20, each its width in the
+   line):
+   1. `/run S=UIParent:CreateFontString(nil,"OVERLAY","GameFontNormal") S:SetPoint("CENTER") S:SetText("ab") print(S:GetStringWidth(),S:GetStringHeight())`
+   2. `/run S:SetText("a\124TInterface\\Icons\\INV_Misc_QuestionMark:0\124tb\124A:128-RedButton-Exit:20:20\124ac") print(S:GetStringWidth(),S:GetStringHeight())`
+   3. A screenshot of the text in the middle of the screen.
+9. **The dressing room** (decision T348; wowlua: `OnDressModel` once per
+   changed slot, at once; the outfit list shows an item it does not know
+   as not collectable, red):
+   1. `/run DressUpItemLink("item:2575") DressUpFrame.ModelScene:HookScript("OnDressModel",function(_,...) print("dress",GetTime(),...) end)`
+   2. `/run DressUpItemLink("item:6125")`
+   3. A screenshot of the dressing room with the outfit list open.
+10. **Gradients** (decision T349; wowlua: red at the left to blue at the
+    right, and turned with the texture):
+    1. `/run local t=UIParent:CreateTexture() t:SetSize(200,50) t:SetPoint("CENTER") t:SetColorTexture(1,1,1) t:SetGradient("HORIZONTAL",CreateColor(1,0,0,1),CreateColor(0,0,1,1)) T=t`
+    2. A screenshot.
+    3. `/run T:SetRotation(math.pi/4)` and a screenshot.
+11. **`.png` and `.jpg` paths of `.blp` files** (decision T350; wowlua: a
+    `.tga` or `.png` the storage lacks is its `.blp`, a `.jpg` unverified):
+    1. `/run local t=UIParent:CreateTexture() for _,x in ipairs({".blp",".tga",".png",".jpg",""}) do print(x,t:SetTexture("Interface\\FriendsFrame\\StatusIcon-Online"..x),t:GetTexture()) end`
+12. **Text in a scaled frame** (decision T351; wowlua: 0.8 the size, the
+    width the same in the frame's units):
+    1. `/run F=CreateFrame("Frame",nil,UIParent) F:SetScale(0.8) F:SetSize(200,40) F:SetPoint("CENTER") S=F:CreateFontString(nil,"OVERLAY","GameFontNormal") S:SetPoint("CENTER") S:SetText("Scaled 0.8 text")`
+    2. `/run print(S:GetStringWidth(),S:GetEffectiveScale())`
+    3. A screenshot.
+13. **A creature display's portrait** (decision T353; wowlua: the face,
+    framed as a unit's portrait):
+    1. `/run local t=UIParent:CreateTexture() t:SetSize(128,128) t:SetPoint("CENTER") SetPortraitTextureFromCreatureDisplayID(t,7970)`
+    2. A screenshot (7970 is Taragaman the Hungerer, AtlasLoot's).
+14. **An unknown atlas** (decision T346; wowlua: `SetAtlas` leaves the
+    texture as it was; its answer unknown):
+    1. `/run local t=UIParent:CreateTexture() t:SetColorTexture(1,0,0) print(t:SetAtlas("NoSuchAtlas"), t:GetAtlas(), t:GetTexture())`
+15. **Restricted callback events** (decision T336; wowlua: refused from
+    addon code, `ADDON_ACTION_FORBIDDEN` with `Frame:RegisterEventCallback()`).
+    It shows a blocked-action message: `/reload` after it.
+    1. `/run local f=CreateFrame("Frame") print(f:RegisterEventCallback("COMBAT_LOG_ENTRIES_CLEARED",print))`
+16. **Tooltip spacing** (decision T342; wowlua: 10 padding, 2 between
+    lines, 40 between a double line's sides):
+    1. `/run GameTooltip:SetOwner(UIParent,"ANCHOR_NONE") GameTooltip:SetPoint("CENTER") GameTooltip:AddLine("Title") GameTooltip:AddDoubleLine("Left","Right")`
+    2. `/run GameTooltip:AddLine("A long line to see where and how a tooltip wraps its text",1,1,1,true) GameTooltip:Show() print(GameTooltip:GetSize())`
+    3. A screenshot of the tooltip.
+17. **PvP ranks 5 to 14** (decision T345; wowlua's formula gives 24150 for
+    14, the table 24750):
+    1. `/run for n=5,14 do print(n,C_MajorFactions.GetTotalReputationForRenownLevel(2800,n)) end`
+    2. `/run for n=2,6 do local r=C_MajorFactions.GetRenownRewardsForLevel(2800,n) print(n,#r,r[1] and (r[1].name or r[1].itemID)) end`
+18. **The calendar's holidays** (open: wowlua shows no holiday events):
+    1. Open the calendar on this month and take a screenshot.
+    2. `/run local m=C_Calendar.GetMonthInfo(0) for d=1,m.numDays do for j=1,C_Calendar.GetNumDayEvents(0,d) do local e=C_Calendar.GetDayEvent(0,d,j) print(d,e.title,e.calendarType,e.sequenceType,e.eventID) end end`
+19. **The skill bars' fill** (open: Blizzard's `ColoredProgressBar` sets
+    its fill by `FillArea:GetWidth()`; in game a 49/105 bar looks full):
+    1. Open the character window's skills and take a screenshot.
+    2. `/run local b=SkillFrame and SkillFrame.ScrollBox and SkillFrame.ScrollBox:GetFrames()[2] print(b and b:GetDebugName())` (to find the bar for the next step).
+20. **Screenshots to compare with wowlua's** (in `~/Desktop/wowlua-*`):
+    1. Settings, Accessibility: the "Colors" category and the "Use UI
+       Scale" check box (Graphics).
+    2. The Forever Dungeon Journal: a boss with its portrait (the ring under
+       it).
+    3. EllesmereUI: the action bars' key labels and the chat window's text.
+    4. AtlasLoot: Ragefire Chasm, Taragaman, its loot list.
+
+
 ## Answered on the beta's last day (2026-10-24)
 
 - PvP ranks (major faction 2800): `GetMajorFactionProgressionInfo` gives
@@ -395,5 +497,5 @@ player's arrow 32 by 32 UI units; neither is recorded on camelot.
 - The macro window shows no "Create Macros" title in game either.
 - `|cAARRGGBB`'s alpha could not be checked from the chat box (it escapes
   `|`); decision T342 stays a proposal.
-- Still owed: the skill bars' fill (Blizzard's `ColoredProgressBar` sets
-  its fill by `FillArea:GetWidth()`; in game a 49/105 bar looks full).
+- Still owed: the skill bars' fill (item 19 of "Owed from the M12
+  screenshots").
