@@ -4092,7 +4092,8 @@ end
 
 /// Tooltips with Blizzard's UI: the engine's tooltip data from the tests'
 /// game data, Blizzard's tooltip code, and an addon's post-call.
-/// `mock.tooltipLines` reads what a tooltip shows (left or right texts);
+/// `mock.tooltipLines` reads what a tooltip shows (left or right texts),
+/// `mock.textOf` what a font string shows (decision S52);
 /// `mock.sentAddonMessages` gives typed messages (decision S47).
 #[test]
 fn tooltip_lines_and_sent_messages() {
@@ -4113,6 +4114,10 @@ local function lines()
     tip:AddDoubleLine("Left", "Right")
     expect(mock.tooltipLines(tip)).toEqual({ "Title", "Left" })
     expect(mock.tooltipLines(tip, true)).toEqual({ "", "Right" })
+    local label = UIParent:CreateFontString(nil, "OVERLAY", "GameFontNormal")
+    expect(mock.textOf(label)).toBe("")
+    label:SetText("Shown")
+    expect(mock.textOf(label)).toBe("Shown")
     tip:Hide()
     C_ChatInfo.RegisterAddonMessagePrefix("Demo")
     C_ChatInfo.SendAddonMessage("Demo", "hello", "WHISPER", "Ann")
