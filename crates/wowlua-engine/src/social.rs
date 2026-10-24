@@ -192,7 +192,8 @@ fn get_guild_charter_cost(_vm: &mut Vm, _c: NativeCall) -> Ret {
 /// `BNGetInfo()`: presence ID (nil), BattleTag, toon ID 1, broadcast,
 /// away, busy, Real ID enabled, and an eighth false (recorded, the strings
 /// scrubbed: the BattleTag here the player's name and #0000, the
-/// broadcast empty; unverified).
+/// broadcast empty; unverified: the full probe of 2026-10-20 recorded
+/// nothing, perhaps before Battle.net had answered; probe 20e).
 fn bn_get_info(vm: &mut Vm, c: NativeCall) -> Ret {
     // Given an argument it answers nothing (the full probe:
     // `BNGetInfo("player")`, `BNGetInfo("x")`).
