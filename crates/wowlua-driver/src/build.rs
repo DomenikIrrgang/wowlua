@@ -713,6 +713,7 @@ fn build_inner(
         strict: sources::glob_set(&manifest.manifest.check.strict),
         lua: manifest.manifest.check.lua,
         index: session.definitions.is_some(),
+        focus: session.focus.clone(),
         globals: manifest
             .manifest
             .check
@@ -947,7 +948,12 @@ fn build_inner(
             SourceKind::Lua => check_cfg.lua,
             _ => false,
         };
-        if lintable {
+        // (a focused check reports its files only)
+        let focused = session.focus.as_ref().is_none_or(|focus| {
+            focus.contains(&source.abs)
+                || std::fs::canonicalize(&source.abs).is_ok_and(|p| focus.contains(&p))
+        });
+        if lintable && focused {
             lint_files.push(i);
         }
     }
@@ -1130,6 +1136,7 @@ fn build_inner(
                         globals: m.check.globals.iter().cloned().collect(),
                         stdlib: wowlua_sema::stdlib::StdlibConfig::default(),
                         index: false,
+                        focus: None,
                     },
                     main: l.main.as_ref().map(|r| l.src_rel(r)),
                     meta: std::sync::Arc::new(crate::meta::library_meta(&meta, m, &l.entry)),
@@ -1185,6 +1192,23 @@ fn build_inner(
             meta,
             output,
         });
+    }
+    // A focused check (the language server's first pass) builds nothing:
+    // its diagnostics, one per problem, and no output.
+    if session.focus.is_some() {
+        let mut seen = BTreeSet::new();
+        for d in diagnostics {
+            let key = format!(
+                "{:?}|{}|{:?}",
+                d.code,
+                d.message,
+                d.labels.first().map(|l| (l.span.start, l.span.end))
+            );
+            if seen.insert(key) {
+                session.push(d);
+            }
+        }
+        return None;
     }
     // The parses and the flavor cache are not read after compiling; freeing
     // them here keeps them out of the memory that assembly and bundling add

@@ -526,12 +526,16 @@ produce a diagnostic suggesting `wowlua fetch`.
 A VS Code extension (TextMate grammar plus LSP client) is part of the project.
 Other editors use the LSP directly.
 
-**Built so far (M9 S8, decisions T368, T370).** `wowlua lsp` checks a
-package as `wowlua check` does with its tests, the editor's unsaved texts
-read over the files on disk: 350 ms after the last edit, the package the
-edited file belongs to; at once when a file of it (its `wowlua.json` too) is
-saved, or when the editor reports files changed on disk (not in the
-package's `dist/` or hidden folders), with every package of its workspace,
+**Built so far (M9 S8, decisions T368, T370, T372).** `wowlua lsp` checks
+a package as `wowlua check` does with its tests, the editor's unsaved texts
+read over the files on disk, in two passes. 200 ms after the last edit, the
+first pass type-checks the package's open files and the modules they
+import (directly or not), builds nothing, and reports those files only; a
+check of the same package still running then is stopped, its text being
+old. Once no package was edited for 2 s, the second pass checks the whole
+package as `wowlua check` does, reporting every file; after a save (its
+`wowlua.json` too) or files changed on disk (not in the package's `dist/`
+or hidden folders) the second pass covers every package of its workspace,
 so those that depend on it are checked too. It checks every flavor the
 package names with the `dev` profile and applies `check.lints`. It writes no files: no
 build output, and dependencies resolve as the lockfile would change while
@@ -555,7 +559,8 @@ fails or runs longer than two minutes (it is stopped) is logged to the
 editor, and the server goes on with the last results; its memory goes back
 to the system when it ends, so the server itself stays small. A message
 that is no JSON is skipped; a request whose handler fails gets an error
-reply. Edits arriving while a package is checked are checked next, once.
+reply. A first pass's diagnostics replace those of its files only; the
+other files keep what the last full check found.
 
 Go to definition (decision T369) answers from the last check: the checker
 records, for each name it resolves, what it refers to. A local leads to its

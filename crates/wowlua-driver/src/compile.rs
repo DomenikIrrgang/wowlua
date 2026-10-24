@@ -99,6 +99,8 @@ pub struct CheckConfig {
     /// Find what each name refers to (the language server's go to
     /// definition): `CompileOutput::definitions`.
     pub index: bool,
+    /// `Session::focus`: type-check only these files and their imports.
+    pub focus: Option<std::collections::HashSet<std::path::PathBuf>>,
 }
 
 /// A declaration file of one flavor (the wow-api types), parsed.
@@ -1289,8 +1291,42 @@ pub fn compile_flavor(
             .and_then(|k| Some((foreign.files.get(k)?, foreign.parses.get(k)?)))
             .map(|((source, file), parse)| ((source.clone(), *file), parse))
     };
+    // A focused check: the focused files and the modules they import,
+    // directly or not.
+    let focused: Option<std::collections::HashSet<usize>> = check.focus.as_ref().map(|focus| {
+        let mut keep = std::collections::HashSet::new();
+        let mut todo: Vec<usize> = files
+            .iter()
+            .enumerate()
+            .filter(|(_, (s, _))| {
+                focus.contains(&s.abs)
+                    || std::fs::canonicalize(&s.abs).is_ok_and(|p| focus.contains(&p))
+            })
+            .map(|(i, _)| i)
+            .collect();
+        while let Some(i) = todo.pop() {
+            if !keep.insert(i) {
+                continue;
+            }
+            for import in analysis
+                .modules
+                .get(i)
+                .into_iter()
+                .flatten()
+                .flat_map(|m| &m.imports)
+            {
+                if let Target::Module(m) = import.target {
+                    todo.push(m);
+                }
+            }
+        }
+        keep
+    });
     let settings: Vec<Option<wowlua_sema::check::FileSettings>> = (0..inputs.len())
         .map(|i| {
+            if focused.as_ref().is_some_and(|keep| !keep.contains(&i)) {
+                return None;
+            }
             let foreign_file = foreign_files(i);
             let (file, parse, ok) = match &foreign_file {
                 Some((file, parse)) => (Some(file), Some(*parse), true),
@@ -1394,6 +1430,10 @@ pub fn compile_flavor(
                 .first()
                 .is_some_and(|l| foreign_ids.contains(&l.span.file))
         });
+    }
+    // A focused check ends with the type check: nothing is lowered.
+    if focused.is_some() {
+        return out;
     }
     for info in analysis.modules[..foreign_from.min(analysis.modules.len())]
         .iter()

@@ -17,7 +17,11 @@ use std::sync::mpsc;
 use std::time::{Duration, Instant};
 
 /// How long after the last edit a package is checked again.
-const SETTLE: Duration = Duration::from_millis(350);
+const SETTLE: Duration = Duration::from_millis(200);
+
+/// How long without edits before a save's packages that depend on the
+/// saved one are checked.
+const QUIET: Duration = Duration::from_secs(2);
 
 /// An open document.
 struct Doc {
@@ -33,18 +37,22 @@ struct Doc {
 /// checks the worker finished.
 enum Event {
     Message(Json),
-    Checked(PathBuf, Result<Vec<check::Checked>, String>),
+    Checked(PathBuf, Result<Vec<check::Checked>, Failure>),
     /// The editor's side closed.
     Closed,
 }
 
 struct Server {
     docs: HashMap<String, Doc>,
-    /// Packages (by manifest) to check again: since when, and whether with
-    /// the rest of their workspace (after a save).
-    dirty: BTreeMap<PathBuf, (Instant, bool)>,
-    /// The package the worker checks now.
-    running: Option<PathBuf>,
+    /// Packages (by manifest) edited since their last check, and since
+    /// when.
+    dirty: BTreeMap<PathBuf, Instant>,
+    /// Packages whose full check waits until no package was edited for
+    /// `QUIET`: since when, and whether with their whole workspace (after a
+    /// save or a change on disk).
+    later: BTreeMap<PathBuf, (Instant, bool)>,
+    /// The check the worker runs now.
+    running: Option<Running>,
     /// Checks for the worker.
     jobs: mpsc::Sender<Job>,
     /// Go to definition requests waiting for their package's check: the
@@ -74,22 +82,50 @@ impl Server {
     }
 
     /// Marks a package edited: its check is due `SETTLE - early` from now
-    /// (`early` = `SETTLE`: at once); `whole`: with its whole workspace.
-    fn touch(&mut self, manifest: &Path, early: Duration, whole: bool) {
+    /// (`early` = `SETTLE`: at once). A check of it running now is of an
+    /// older text: it is stopped.
+    fn touch(&mut self, manifest: &Path, early: Duration) {
         let at = Instant::now()
             .checked_sub(early)
             .unwrap_or_else(Instant::now);
+        self.dirty.insert(manifest.to_path_buf(), at);
+        if let Some(r) = &self.running
+            && r.manifest == manifest
+        {
+            r.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
+        }
+        // (its full check waits for quiet again)
         let entry = self
-            .dirty
+            .later
             .entry(manifest.to_path_buf())
-            .or_insert((at, whole));
-        entry.0 = at;
-        entry.1 |= whole;
+            .or_insert((Instant::now(), false));
+        entry.0 = Instant::now();
     }
 
-    /// Whether a package's check is due or running.
+    /// Marks a package saved: checked at once, its workspace once quiet.
+    fn saved(&mut self, manifest: &Path) {
+        self.touch(manifest, SETTLE);
+        if let Some(entry) = self.later.get_mut(manifest) {
+            entry.1 = true;
+        }
+    }
+
+    /// Whether a package has edits its last check did not see.
     fn pending(&self, manifest: &Path) -> bool {
-        self.dirty.contains_key(manifest) || self.running.as_deref() == Some(manifest)
+        self.dirty.contains_key(manifest)
+            || self
+                .running
+                .as_ref()
+                .is_some_and(|r| r.manifest == manifest && r.focused)
+    }
+
+    /// The open documents of a package (canonical paths).
+    fn open_in(&self, manifest: &Path) -> std::collections::HashSet<PathBuf> {
+        self.docs
+            .values()
+            .filter(|d| d.manifest.as_deref() == Some(manifest))
+            .map(|d| d.canonical.clone())
+            .collect()
     }
 }
 
@@ -196,6 +232,7 @@ pub fn serve_with(
     let mut server = Server {
         docs: HashMap::new(),
         dirty: BTreeMap::new(),
+        later: BTreeMap::new(),
         running: None,
         jobs,
         waiting: Vec::new(),
@@ -206,10 +243,20 @@ pub fn serve_with(
         in_process,
     };
     loop {
-        // the next check to start, when its edits have settled
-        let wait = match (&server.running, server.dirty.values().map(|d| d.0).min()) {
-            (None, Some(at)) => (at + SETTLE).saturating_duration_since(Instant::now()),
-            _ => Duration::from_secs(3600),
+        // the next check to start: when its edits have settled, or a saved
+        // workspace's once nothing was edited for a while
+        let now = Instant::now();
+        let wait = match (&server.running, server.dirty.values().min()) {
+            (Some(_), _) => Duration::from_secs(3600),
+            (None, Some(at)) => (*at + SETTLE).saturating_duration_since(now),
+            (None, None) => server
+                .later
+                .values()
+                .map(|l| l.0)
+                .min()
+                .map_or(Duration::from_secs(3600), |at| {
+                    (at + QUIET).saturating_duration_since(now)
+                }),
         };
         match inbox.recv_timeout(wait) {
             Ok(Event::Message(message)) => {
@@ -240,14 +287,28 @@ pub fn serve_with(
                 }
             }
             Ok(Event::Checked(manifest, result)) => {
-                server.running = None;
+                let ran = server.running.take();
                 match result {
                     Ok(packages) => {
                         for checked in packages {
                             publish(&mut server, checked, out)?;
                         }
                     }
-                    Err(why) => {
+                    // stopped for a newer text: that one is checked next (a
+                    // workspace's check waits for quiet again)
+                    Err(Failure::Cancelled) => {
+                        if let Some(r) = ran.filter(|r| !r.focused) {
+                            let entry = server
+                                .later
+                                .entry(manifest.clone())
+                                .or_insert((Instant::now(), false));
+                            entry.0 = Instant::now();
+                            entry.1 |= r.whole;
+                        }
+                        start_due(&mut server);
+                        continue;
+                    }
+                    Err(Failure::Failed(why)) => {
                         eprintln!("wowlua lsp: checking {} failed: {why}", manifest.display());
                         notify(
                             out,
@@ -267,39 +328,90 @@ pub fn serve_with(
     }
 }
 
-/// Starts the check of the package whose edits settled first, unless one
-/// runs.
+/// Starts the check of the package whose edits settled first, else, when
+/// nothing was edited for `QUIET`, a saved package's workspace; unless a
+/// check runs.
 fn start_due(server: &mut Server) {
     if server.running.is_some() {
         return;
     }
     let now = Instant::now();
-    let due = server
+    let edited = server
         .dirty
         .iter()
-        .filter(|(_, (at, _))| now.duration_since(*at) >= SETTLE)
-        .min_by_key(|(_, (at, _))| *at)
+        .filter(|(_, at)| now.duration_since(**at) >= SETTLE)
+        .min_by_key(|(_, at)| **at)
         .map(|(m, _)| m.clone());
-    if let Some(manifest) = due {
-        let (_, whole) = server
-            .dirty
-            .remove(&manifest)
-            .unwrap_or((Instant::now(), false));
+    // an edit: its open files (and what they import) first; quiet: the
+    // full package, after a save its whole workspace
+    let (manifest, whole, focus) = match edited {
+        Some(m) => {
+            server.dirty.remove(&m);
+            let open = server.open_in(&m);
+            let focus = (!open.is_empty()).then_some(open);
+            (m, false, focus)
+        }
+        None if server.dirty.is_empty() => {
+            let quiet = server
+                .later
+                .iter()
+                .filter(|(_, (at, _))| now.duration_since(*at) >= QUIET)
+                .min_by_key(|(_, (at, _))| *at)
+                .map(|(m, _)| m.clone());
+            match quiet {
+                Some(m) => {
+                    let (_, whole) = server.later.remove(&m).unwrap_or((now, false));
+                    (m, whole, None)
+                }
+                None => return,
+            }
+        }
+        None => return,
+    };
+    let focused = focus.is_some();
+    {
         // (the open documents as they are now: what this check sees)
         let docs: Vec<(PathBuf, String)> = server
             .docs
             .values()
             .map(|d| (d.path.clone(), d.text.clone()))
             .collect();
+        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let job = Job {
             manifest: manifest.clone(),
             whole,
+            focus,
             docs,
+            cancel: cancel.clone(),
         };
         if server.jobs.send(job).is_ok() {
-            server.running = Some(manifest);
+            server.running = Some(Running {
+                manifest,
+                whole,
+                focused,
+                cancel,
+            });
         }
     }
+}
+
+/// The check the worker runs.
+struct Running {
+    manifest: PathBuf,
+    whole: bool,
+    /// The first pass of an edit (its open files only).
+    focused: bool,
+    /// Set when an edit made its text old: the worker stops it.
+    cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+}
+
+/// Why a check gave no answer.
+#[derive(Debug)]
+enum Failure {
+    /// Stopped: its text was old.
+    Cancelled,
+    /// It crashed, failed or took too long.
+    Failed(String),
 }
 
 /// Whether a file of the package whose manifest is `manifest` is one no
@@ -317,25 +429,29 @@ fn generated(manifest: &Path, path: &Path) -> bool {
     })
 }
 
-/// A check for the worker: the package, whether its whole workspace, and
-/// the open documents.
+/// A check for the worker: the package, whether its whole workspace, the
+/// open documents, and whether it is to stop.
 struct Job {
     manifest: PathBuf,
     whole: bool,
+    /// The files a first pass checks (and what they import).
+    focus: Option<std::collections::HashSet<PathBuf>>,
     docs: Vec<(PathBuf, String)>,
+    cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 /// Runs a check where `checker` says. A check that panics, crashes or
 /// takes too long is an error the server reports, and goes on.
-fn run_check(checker: &Checker, job: &Job) -> Result<Vec<check::Checked>, String> {
+fn run_check(checker: &Checker, job: &Job) -> Result<Vec<check::Checked>, Failure> {
     match checker {
         Checker::InProcess => {
-            // (the overlay has the open documents already)
+            // (the overlay has the open documents already; a check here
+            // runs to its end)
             let open = job.docs.iter().map(|(p, _)| canonical(p)).collect();
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                check::check(&job.manifest, job.whole, &open)
+                check::check(&job.manifest, job.whole, &open, job.focus.as_ref())
             }))
-            .map_err(|e| panic_message(&*e))
+            .map_err(|e| Failure::Failed(panic_message(&*e)))
         }
         Checker::Child(program) => check_in_child(program, job),
     }
@@ -343,7 +459,7 @@ fn run_check(checker: &Checker, job: &Job) -> Result<Vec<check::Checked>, String
 
 /// Runs a check in a child process: the request on its input, the answer
 /// on its output.
-fn check_in_child(program: &Path, job: &Job) -> Result<Vec<check::Checked>, String> {
+fn check_in_child(program: &Path, job: &Job) -> Result<Vec<check::Checked>, Failure> {
     use std::io::{Read, Write};
     use std::process::{Command, Stdio};
     let mut child = Command::new(program)
@@ -352,8 +468,8 @@ fn check_in_child(program: &Path, job: &Job) -> Result<Vec<check::Checked>, Stri
         .stdout(Stdio::piped())
         .stderr(Stdio::piped())
         .spawn()
-        .map_err(|e| format!("cannot start {}: {e}", program.display()))?;
-    let request = check::request(&job.manifest, job.whole, &job.docs);
+        .map_err(|e| Failure::Failed(format!("cannot start {}: {e}", program.display())))?;
+    let request = check::request(&job.manifest, job.whole, &job.docs, job.focus.as_ref());
     let mut input = child.stdin.take().expect("piped");
     // (written and read on threads of their own: a full pipe blocks)
     let writer = std::thread::spawn(move || {
@@ -375,16 +491,25 @@ fn check_in_child(program: &Path, job: &Job) -> Result<Vec<check::Checked>, Stri
     let status = loop {
         match child.try_wait() {
             Ok(Some(status)) => break status,
+            Ok(None) if job.cancel.load(std::sync::atomic::Ordering::Relaxed) => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(Failure::Cancelled);
+            }
             Ok(None) if started.elapsed() > CHECK_LIMIT => {
                 let _ = child.kill();
                 let _ = child.wait();
-                return Err(format!(
+                return Err(Failure::Failed(format!(
                     "the check took longer than {} s and was stopped",
                     CHECK_LIMIT.as_secs()
-                ));
+                )));
             }
             Ok(None) => std::thread::sleep(Duration::from_millis(5)),
-            Err(e) => return Err(format!("the check could not be waited for: {e}")),
+            Err(e) => {
+                return Err(Failure::Failed(format!(
+                    "the check could not be waited for: {e}"
+                )));
+            }
         }
     };
     let _ = writer.join();
@@ -400,14 +525,16 @@ fn check_in_child(program: &Path, job: &Job) -> Result<Vec<check::Checked>, Stri
             .rev()
             .collect::<Vec<_>>()
             .join("\n");
-        return Err(format!("the check failed ({status}): {tail}"));
+        return Err(Failure::Failed(format!(
+            "the check failed ({status}): {tail}"
+        )));
     }
     let _ = std::io::stderr().write_all(errors.as_bytes());
     serde_json::from_slice::<Json>(&bytes)
         .ok()
         .as_ref()
         .and_then(check::answer)
-        .ok_or_else(|| "the check's answer could not be read".to_string())
+        .ok_or_else(|| Failure::Failed("the check's answer could not be read".into()))
 }
 
 /// The `--check` side: reads a request on stdin, writes the answer to
@@ -513,7 +640,7 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
                     None => manifest_of(&path),
                 };
                 if let Some(m) = &manifest {
-                    server.touch(m, Duration::ZERO, false);
+                    server.touch(m, Duration::ZERO);
                 }
                 server.docs.insert(
                     uri,
@@ -532,16 +659,16 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
                 None => text::path_of(&uri).and_then(|p| manifest_of(&p)),
             };
             if let Some(m) = manifest {
-                // a save is checked at once, with the packages that depend
-                // on it
-                server.touch(&m, SETTLE, true);
+                // a save is checked at once, the packages that depend on it
+                // once edits pause
+                server.saved(&m);
             }
         }
         "textDocument/didClose" => {
             if let Some(doc) = server.docs.remove(&uri) {
                 wowlua_driver::overlay::remove(&doc.path);
                 if let Some(m) = &doc.manifest {
-                    server.touch(m, Duration::ZERO, false);
+                    server.touch(m, Duration::ZERO);
                 }
             }
         }
@@ -556,7 +683,7 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
                     .filter(|(m, p)| !generated(m, p))
                     .map(|(m, _)| m);
                 if let Some(m) = manifest {
-                    server.touch(&m, Duration::ZERO, true);
+                    server.saved(&m);
                 }
             }
         }
@@ -571,7 +698,7 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
                 // which starts now
                 Some(m) if server.pending(&m) => {
                     if server.dirty.contains_key(&m) {
-                        server.touch(&m, SETTLE, false);
+                        server.touch(&m, SETTLE);
                     }
                     server
                         .waiting
@@ -614,6 +741,8 @@ fn publish(
 ) -> std::io::Result<()> {
     let manifest = checked.manifest.clone();
     let manifest = manifest.as_path();
+    // (a focused check speaks for its files; a full one for the package)
+    let covers = |path: &Path| checked.scope.as_ref().is_none_or(|s| s.contains(path));
     let now: BTreeSet<PathBuf> = checked.diagnostics.keys().cloned().collect();
     for (path, items) in &checked.diagnostics {
         notify(
@@ -622,11 +751,10 @@ fn publish(
             json!({ "uri": server.uri_for(path), "diagnostics": items }),
         )?;
     }
-    let mut clean: BTreeSet<PathBuf> = server
-        .published
-        .remove(manifest)
-        .unwrap_or_default()
-        .difference(&now)
+    let before = server.published.remove(manifest).unwrap_or_default();
+    let mut clean: BTreeSet<PathBuf> = before
+        .iter()
+        .filter(|p| covers(p) && !now.contains(*p))
         .cloned()
         .collect();
     // the open documents the check found nothing in: they are checked
@@ -634,24 +762,34 @@ fn publish(
         server
             .docs
             .values()
-            .filter(|d| d.manifest.as_deref() == Some(manifest) && !now.contains(&d.canonical))
+            .filter(|d| {
+                d.manifest.as_deref() == Some(manifest)
+                    && covers(&d.canonical)
+                    && !now.contains(&d.canonical)
+            })
             .map(|d| d.canonical.clone()),
     );
-    for path in clean {
+    for path in &clean {
         notify(
             out,
             "textDocument/publishDiagnostics",
-            json!({ "uri": server.uri_for(&path), "diagnostics": [] }),
+            json!({ "uri": server.uri_for(path), "diagnostics": [] }),
         )?;
     }
-    server.published.insert(manifest.to_path_buf(), now);
-    for file in server.defined.remove(manifest).unwrap_or_default() {
-        server.definitions.remove(&file);
-    }
-    server.defined.insert(
-        manifest.to_path_buf(),
-        checked.definitions.keys().cloned().collect(),
-    );
+    // what it did not cover stays as the last check found it
+    let mut kept: BTreeSet<PathBuf> = before.into_iter().filter(|p| !covers(p)).collect();
+    kept.extend(now);
+    server.published.insert(manifest.to_path_buf(), kept);
+    let mut files: Vec<PathBuf> = server.defined.remove(manifest).unwrap_or_default();
+    files.retain(|f| {
+        let replaced = covers(f);
+        if replaced {
+            server.definitions.remove(f);
+        }
+        !replaced
+    });
+    files.extend(checked.definitions.keys().cloned());
+    server.defined.insert(manifest.to_path_buf(), files);
     server.definitions.extend(checked.definitions);
     Ok(())
 }

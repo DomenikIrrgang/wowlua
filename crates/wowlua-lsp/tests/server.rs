@@ -134,3 +134,41 @@ fn ranged_edits_and_files_changed_on_disk_are_checked() {
     assert!(items.iter().any(|d| d["code"] == "E2001"), "{items:#?}");
     assert!(c.finish());
 }
+
+#[test]
+fn an_edit_checks_its_file_first_and_the_package_once_quiet() {
+    let dir = project();
+    let src = wowlua_lsp::text::canonical(&dir.path().join("src"));
+    // another file of the package, with an error, never opened
+    let other = src.join("other.wowlua");
+    std::fs::write(&other, "local b: string = 2\nprint(b)\n").unwrap();
+    let other_uri = wowlua_lsp::text::uri_of(&other);
+    let path = src.join("main.wowlua");
+    let uri = wowlua_lsp::text::uri_of(&path);
+    let mut c = Client::start();
+    c.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": uri, "languageId": "wowlua", "version": 1, "text": ON_DISK } }),
+    );
+    // first the open file alone, then (no edits for a while) the package
+    c.diagnostics(&uri, |d| d.is_empty());
+    let items = c.diagnostics(&other_uri, |d| !d.is_empty());
+    assert!(items.iter().any(|d| d["code"] == "E2001"), "{items:#?}");
+    // an edit's first pass speaks for the edited file only: the other
+    // file's error stays
+    c.notify(
+        "textDocument/didChange",
+        json!({ "textDocument": { "uri": uri, "version": 2 }, "contentChanges": [{ "text": "local a: number = \"x\"\nprint(a)\n" }] }),
+    );
+    c.diagnostics(&uri, |d| d.iter().any(|x| x["code"] == "E2001"));
+    assert!(
+        !c.seen
+            .iter()
+            .any(|m| m["method"] == "textDocument/publishDiagnostics"
+                && m["params"]["uri"] == other_uri.as_str()
+                && m["params"]["diagnostics"] == json!([])),
+        "the other file's diagnostics were cleared: {:#?}",
+        c.seen
+    );
+    assert!(c.finish());
+}

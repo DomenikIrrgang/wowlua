@@ -71,6 +71,11 @@ pub struct Session {
     /// server's go to definition, spec §16.2) and add (name, definition)
     /// spans here, for every flavor.
     pub definitions: Option<Vec<(wowlua_span::Span, wowlua_span::Span)>>,
+    /// `Some`: the language server's first pass after an edit. Builds
+    /// type-check only these files (canonical absolute paths) and the
+    /// modules they import, and stop after the type check, building
+    /// nothing: their diagnostics in a fraction of the time.
+    pub focus: Option<std::collections::HashSet<std::path::PathBuf>>,
 }
 
 impl Session {

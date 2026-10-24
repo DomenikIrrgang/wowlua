@@ -5,7 +5,7 @@
 
 use crate::text;
 use serde_json::{Value as Json, json};
-use std::collections::{BTreeMap, HashMap, HashSet};
+use std::collections::{BTreeMap, BTreeSet, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use wowlua_diagnostics::{Diagnostic, Severity};
 use wowlua_driver::Session;
@@ -48,6 +48,9 @@ impl Target {
 #[derive(Default)]
 pub struct Checked {
     pub manifest: PathBuf,
+    /// A focused check's files: what it says about them replaces what was
+    /// known (`None`: the whole package).
+    pub scope: Option<BTreeSet<PathBuf>>,
     /// Diagnostics; one about the package as a whole goes to its manifest.
     pub diagnostics: BTreeMap<PathBuf, Vec<Json>>,
     /// Each file's names that refer to something, by start.
@@ -59,10 +62,33 @@ pub struct Checked {
 /// the workspace reported goes with `manifest`'s package. Definitions are
 /// kept for the `open` files (canonical paths) only: an editor asks for
 /// those, and a large package has hundreds of thousands.
-pub fn check(manifest: &Path, whole: bool, open: &HashSet<PathBuf>) -> Vec<Checked> {
+///
+/// With `focus` (canonical paths), only those files and the modules they
+/// import are type-checked, and nothing is built: the language server's
+/// first pass after an edit, its diagnostics for those files alone.
+pub fn check(
+    manifest: &Path,
+    whole: bool,
+    open: &HashSet<PathBuf>,
+    focus: Option<&HashSet<PathBuf>>,
+) -> Vec<Checked> {
+    check_and(manifest, whole, open, focus, drop)
+}
+
+/// [`check`], handing the session to `done` (a process about to end
+/// leaves it unfreed: a large package's take tens of milliseconds).
+fn check_and(
+    manifest: &Path,
+    whole: bool,
+    open: &HashSet<PathBuf>,
+    focus: Option<&HashSet<PathBuf>>,
+    done: fn(Session),
+) -> Vec<Checked> {
     let dir = manifest.parent().unwrap_or(Path::new(".")).to_path_buf();
     let mut session = Session::new();
     session.definitions = Some(Vec::new());
+    session.focus = focus.cloned();
+    let whole = whole && focus.is_none();
     let options = LoadOptions {
         manifest: Some(manifest.to_path_buf()),
         cwd: dir.clone(),
@@ -129,12 +155,20 @@ pub fn check(manifest: &Path, whole: bool, open: &HashSet<PathBuf>) -> Vec<Check
         let package = text::canonical(&package);
         let mut checked = Checked {
             definitions: definitions(&session, &roots, &defs, open),
+            scope: focus.map(|f| f.iter().cloned().collect()),
             ..Checked::default()
         };
         for d in &diagnostics {
             if let Some((path, item)) = convert(&session, &roots, &package, d) {
+                // (a focused check speaks for its files only)
+                if focus.is_some_and(|f| !f.contains(&path)) {
+                    continue;
+                }
                 checked.diagnostics.entry(path).or_default().push(item);
             }
+        }
+        if let Some(f) = focus {
+            checked.definitions.retain(|path, _| f.contains(path));
         }
         // (a package loaded and built: one part)
         match out.iter_mut().find(|c| c.manifest == package) {
@@ -150,6 +184,7 @@ pub fn check(manifest: &Path, whole: bool, open: &HashSet<PathBuf>) -> Vec<Check
             }
         }
     }
+    done(session);
     out
 }
 
@@ -303,10 +338,16 @@ fn convert(
 /// A check as one process asks another for it (`wowlua lsp --check`): the
 /// package, whether its whole workspace, and the editor's open documents
 /// (their unsaved texts are what is checked).
-pub fn request(manifest: &Path, whole: bool, docs: &[(PathBuf, String)]) -> Json {
+pub fn request(
+    manifest: &Path,
+    whole: bool,
+    docs: &[(PathBuf, String)],
+    focus: Option<&HashSet<PathBuf>>,
+) -> Json {
     json!({
         "manifest": manifest,
         "whole": whole,
+        "focus": focus,
         "docs": docs.iter().map(|(p, t)| json!({ "path": p, "text": t })).collect::<Vec<_>>(),
     })
 }
@@ -324,7 +365,14 @@ pub fn child(request: &Json) -> Json {
         wowlua_driver::overlay::set(&path, text.as_bytes().to_vec());
         open.insert(text::canonical(&path));
     }
-    let packages = check(&manifest, whole, &open);
+    let focus: Option<HashSet<PathBuf>> = request["focus"].as_array().map(|f| {
+        f.iter()
+            .filter_map(Json::as_str)
+            .map(PathBuf::from)
+            .collect()
+    });
+    // (this process ends after answering: its memory is not freed first)
+    let packages = check_and(&manifest, whole, &open, focus.as_ref(), std::mem::forget);
     Json::Array(packages.iter().map(Checked::to_json).collect())
 }
 
@@ -355,6 +403,7 @@ impl Checked {
         }
         json!({
             "manifest": self.manifest,
+            "scope": self.scope,
             "diagnostics": self.diagnostics,
             "uris": uris.iter().map(|u| &**u).collect::<Vec<_>>(),
             "definitions": files,
@@ -390,6 +439,12 @@ impl Checked {
             .collect::<Option<_>>()?;
         Some(Checked {
             manifest: PathBuf::from(json["manifest"].as_str()?),
+            scope: json["scope"].as_array().map(|s| {
+                s.iter()
+                    .filter_map(Json::as_str)
+                    .map(PathBuf::from)
+                    .collect()
+            }),
             diagnostics,
             definitions,
         })
