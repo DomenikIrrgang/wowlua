@@ -282,7 +282,7 @@ print(v:upper())                              -- v: string (Secret excluded)
 
 | Type | Meaning |
 |------|---------|
-| `Self` | Inside class and interface bodies: the type of the receiver. Used for fluent APIs and in declarations (`function SetScript(...): Self`). In a declared class (`declare class`), `Self` is bound where a member is read, to the receiver's type: `toggle:SetScript("OnClick", function(self) … end)` on an instance of `class Toggle extends Button` gives `self: Toggle` (decision L46). |
+| `Self` | Inside class and interface bodies: the type of the receiver. Used for fluent APIs and in declarations (`function SetScript(...): Self`). In a declared class (`declare class`), `Self` is bound where a member is read, to the receiver's type: `toggle:SetScript("OnClick", function(self) … end)` on an instance of `class Toggle extends Button` gives `self: Toggle` (decision L46); on a value typed as a game type with more (`Button & { owner: Frame? }`), the whole value: `self.owner` is typed (decision L80). |
 | `ClassOf<T>` | The class value (constructor table) of instance type `T`, or the table of enum `T`. Calling `new` through `ClassOf<T>` is an error if `T` is abstract (E3002). For a type parameter `T` it binds `T` from the table passed (§2.2.6). |
 | `EventName` | Union of all **WoW event** names (`declare event`). |
 | `MessageName` | Union of all **addon message** names (`declare message`). |

@@ -191,13 +191,27 @@ impl Env<'_> {
         args: &[TypeId],
         name: &str,
     ) -> Option<(Member, DefId)> {
+        self.instance_member_as(def, args, name, None)
+    }
+
+    /// `instance_member` with `Self` as `receiver` when given: a method
+    /// reached through an intersection (`Button & { owner: Frame? }`) takes
+    /// the whole value (decision L80).
+    pub fn instance_member_as(
+        &mut self,
+        def: DefId,
+        args: &[TypeId],
+        name: &str,
+        receiver: Option<TypeId>,
+    ) -> Option<(Member, DefId)> {
         let mut seen = FxHashSet::default();
         let found = self.instance_member_inner(def, args, name, &mut seen);
         // A declared class's `Self` is the receiver (decision L46).
         match found {
             Some((m, at)) => match self.view(at).self_param() {
                 Some(sp) => {
-                    let receiver = self.types.intern(Ty::Named(def, args.to_vec()));
+                    let receiver = receiver
+                        .unwrap_or_else(|| self.types.intern(Ty::Named(def, args.to_vec())));
                     let ty = subst::substitute(&mut self.types, m.ty, &[sp], &[receiver]);
                     Some((Member { ty, ..m }, at))
                 }

@@ -1555,12 +1555,29 @@ impl Checker<'_, '_> {
                 // part that only reads it as `any` (an array's named field)
                 // doesn't count (decision L60).
                 Ty::Intersection(parts) => {
-                    let found = parts.iter().find_map(|&p| match self.env.types.get(p) {
-                        Ty::Func(_) => None,
-                        _ => self
-                            .member_type(p, name, span, true)
-                            .filter(|&t| t != Types::ERROR && t != Types::ANY),
-                    });
+                    let found = parts
+                        .iter()
+                        .find_map(|&p| match self.env.types.get(p).clone() {
+                            Ty::Func(_) => None,
+                            // A game type's method: its `Self` and `self` are
+                            // the whole value (`Button & { owner: Frame? }`,
+                            // decision L80).
+                            Ty::Named(d, args)
+                                if self.env.view(d).native()
+                                    && self.env.view(d).kind() != DefKind::Enum
+                                    && self
+                                        .env
+                                        .instance_member(d, &args, name)
+                                        .is_some_and(|(mem, _)| mem.kind == MemberKind::Method) =>
+                            {
+                                let (mem, _) =
+                                    self.env.instance_member_as(d, &args, name, Some(m))?;
+                                Some(self.env.with_self(mem.ty, m))
+                            }
+                            _ => self
+                                .member_type(p, name, span, true)
+                                .filter(|&t| t != Types::ERROR && t != Types::ANY),
+                        });
                     Some(found.unwrap_or(Types::ANY))
                 }
                 Ty::Secret(_) => {
