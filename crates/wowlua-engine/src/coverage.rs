@@ -184,6 +184,17 @@ pub fn functions(flavor: &str) -> Result<Vec<Entry>, String> {
 }
 
 /// Every documented widget method of a flavor (`Frame:Show`), by class.
+/// Whether a fresh widget of a class deriving from `class` (the
+/// documentation's `Region`, `TextureBase`) has `getter` recorded: the
+/// widgets made answer it so.
+fn recorded_below(e: &crate::Engine, class: &str, getter: &str) -> bool {
+    crate::widgetdata::data(&e.flavor).is_some_and(|data| {
+        data.defaults
+            .keys()
+            .any(|(c, g)| g == getter && widgets::is_a(e, c, class))
+    })
+}
+
 pub fn methods(flavor: &str) -> Result<Vec<Entry>, String> {
     let mut vm = Vm::wow();
     crate::install(&mut vm, flavor)?;
@@ -212,7 +223,9 @@ pub fn methods(flavor: &str) -> Result<Vec<Entry>, String> {
             None if f.short.starts_with("Set") || f.short.starts_with("Enable") => {
                 (Source::Model, "widgets")
             }
-            None if widgets::recorded_default(e, class, f.short).is_some() => {
+            None if widgets::recorded_default(e, class, f.short).is_some()
+                || recorded_below(e, class, f.short) =>
+            {
                 (Source::Recorded, "widgetdata")
             }
             None if f.short.starts_with("Is") && returns == 1 => (Source::Model, "widgets"),

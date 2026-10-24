@@ -3166,8 +3166,11 @@ fn set_text(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     }
     let t = kept_text(vm, c.arg(2));
     store_text(vm, id, t);
-    if is_a(engine(vm), &class, "EditBox") && !engine(vm).world.text_set.contains(&id) {
-        engine_mut(vm).world.text_set.push(id);
+    if is_a(engine(vm), &class, "EditBox") {
+        crate::widgetops::text_set(vm, id);
+        if !engine(vm).world.text_set.contains(&id) {
+            engine_mut(vm).world.text_set.push(id);
+        }
     }
     Ok(vec![])
 }

@@ -128,6 +128,8 @@ pub struct Guild {
     pub club_id: f64,
     pub join_time: f64,
     pub trade_skills: Vec<TradeSkill>,
+    /// The roster's selected row (`SetGuildRosterSelection`), 0 none.
+    pub selection: usize,
     next_handle: u32,
 }
 
@@ -159,6 +161,7 @@ impl Guild {
             club_id: CLUB_ID,
             join_time: JOIN_TIME,
             trade_skills: Vec::new(),
+            selection: 0,
             next_handle: 1,
         }
     }
@@ -522,6 +525,29 @@ fn get_num_guild_members(vm: &mut Vm, _c: NativeCall) -> Ret {
         )
     });
     Ok(vec![Value::Num(total as f64), Value::Num(online as f64)])
+}
+
+/// `SetGuildRosterSelection(index)`: the roster's row selected, 0 (or
+/// one past the roster) none (unverified: no event).
+fn set_guild_roster_selection(vm: &mut Vm, c: NativeCall) -> Ret {
+    let index = match vm.hidden(c.arg(1)) {
+        Value::Num(n) if n >= 1.0 => n as usize,
+        _ => 0,
+    };
+    if let Some(g) = guild_mut(vm) {
+        g.selection = if index <= g.members.len() + 1 {
+            index
+        } else {
+            0
+        };
+    }
+    Ok(vec![])
+}
+
+/// `GetGuildRosterSelection()`: the row selected, 0 none.
+fn get_guild_roster_selection(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let n = guild(vm).map_or(0, |g| g.selection);
+    Ok(vec![Value::Num(n as f64)])
 }
 
 /// `GetGuildRosterInfo(index)`: the member's name, rank name and index,
@@ -1748,6 +1774,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("IsInGuild", is_in_guild),
         ("GetGuildInfo", get_guild_info),
         ("GetNumGuildMembers", get_num_guild_members),
+        ("SetGuildRosterSelection", set_guild_roster_selection),
+        ("GetGuildRosterSelection", get_guild_roster_selection),
         ("GetGuildRosterInfo", get_guild_roster_info),
         ("GetGuildRosterLastOnline", get_guild_roster_last_online),
         ("IsGuildLeader", is_guild_leader),

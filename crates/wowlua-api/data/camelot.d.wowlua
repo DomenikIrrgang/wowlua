@@ -9411,8 +9411,8 @@ declare class WowStyle1FilterDropdownMixin extends ButtonStateBehaviorMixin
 end
 
 declare class ButtonStateBehaviorMixin
-    displacedRegions: table
     desaturateIfDisabled: boolean
+    displacedRegions: table
     function OnLoad()
     function OnShow()
     function SetDisplacedRegions(x: unknown, y: unknown, ...: unknown)
@@ -9461,11 +9461,11 @@ declare class EditModeActionBarMixin
 end
 
 declare class ActionBarMixin
-    shownButtonContainers: table
-    oldGridSettings: table
-    minButtonPadding: number
-    buttonPadding: number
     actionButtons: table
+    buttonPadding: number
+    minButtonPadding: number
+    oldGridSettings: table
+    shownButtonContainers: table
     function ActionBar_OnLoad()
     function ActionBar_OnEvent(event: unknown, ...: unknown)
     function CacheGridSettings()
@@ -9522,12 +9522,12 @@ declare class BaseLayoutMixin
 end
 
 declare class EditModeActionBarSystemMixin
-    addButtonsToTop: boolean
     addButtonsToRight: boolean
-    visibility: string
+    addButtonsToTop: boolean
+    barArtDirty: boolean
     dividersDirty: boolean
     gridLayoutDirty: boolean
-    barArtDirty: boolean
+    visibility: string
     function UpdateSystem(systemInfo: unknown)
     function OnEditModeEnter()
     function OnEditModeExit()
@@ -9556,14 +9556,14 @@ declare class EditModeActionBarSystemMixin
 end
 
 declare class EditModeSystemMixin
-    systemInfo: table
+    dirtySettings: table
+    downKeys: table
     isDragging: boolean
-    savedSystemInfo: table
-    snappedFrames: table
     isHighlighted: boolean
     isSelected: boolean
-    downKeys: table
-    dirtySettings: table
+    savedSystemInfo: table
+    snappedFrames: table
+    systemInfo: table
     function OnSystemLoad()
     function SetupVisibilityFunctionOverrides()
     function OnSystemHide()
@@ -9756,9 +9756,9 @@ declare class ExtraActionButtonMixin
 end
 
 declare class ActionBarActionButtonDerivedMixin extends BaseActionButtonInfoMixin
-    pressAndHoldAction: boolean
-    initialFlyout: boolean
     RarityPipContainer: Frame
+    initialFlyout: boolean
+    pressAndHoldAction: boolean
     function ActionBarActionButtonDerivedMixin_OnLoad()
     function ActionBarActionButtonDerivedMixin_OnAttributeChanged()
     function ActionBarActionButtonDerivedMixin_OnEvent(event: unknown, ...: unknown)
@@ -9889,8 +9889,8 @@ declare class EditModeTotemActionBarSystemMixin
 end
 
 declare class ActionBarActionButtonMixin
-    flashing: number
     bindingAction: string
+    flashing: number
     hideCooldownFrame: boolean
     function OnLoad()
     function UpdateHotkeys(actionButtonType: string?)
@@ -10000,10 +10000,10 @@ declare class ActionBarButtonMixin
 end
 
 declare class SpellFlyoutMixin
-    frameFooter: PromptedBindingFooterMixin
     buttons: table
-    glyphActivating: boolean
     eventsRegistered: boolean
+    frameFooter: PromptedBindingFooterMixin
+    glyphActivating: boolean
     numSlots: number
     function IsButtonContextValid(): boolean
     function SetUpGamepad()
@@ -10077,8 +10077,8 @@ declare class HorizontalLayoutMixin
 end
 
 declare class BattleNetInviteFrameMixin
-    hideOnEscape: boolean
     exclusive: boolean
+    hideOnEscape: boolean
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function OnHide()
@@ -10103,8 +10103,8 @@ declare class UserScaledElementMixin
 end
 
 declare class AddFriendFrameMixin
-    hideOnEscape: boolean
     exclusive: boolean
+    hideOnEscape: boolean
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -10151,12 +10151,12 @@ declare class UIButtonFitToTextBehaviorMixin
 end
 
 declare class AddonListMixin
+    lastMemoryUpdate: number
+    offset: number
     outOfDateIndexes: table
+    save: boolean
     shouldReload: boolean
     startStatus: table
-    offset: number
-    lastMemoryUpdate: number
-    save: boolean
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -10169,8 +10169,8 @@ declare class AddonListMixin
 end
 
 declare class AdventureMapQuestChoiceDialogMixin
-    widgetContainer: Frame
     rewardsHeight: number
+    widgetContainer: Frame
     function OnLoad()
     function OnParentHide(parent: unknown)
     function ShowWithQuest(parent: unknown, anchorRegion: unknown, questID: unknown, onClosedCallback: unknown, animDelay: unknown?)
@@ -10204,9 +10204,9 @@ declare class AlliedRacesFrameMixin
 end
 
 declare class AnimaDiversionFrameMixin
+    bolsterProgress: number
     covenantData: CovenantData?
     disallowSelection: boolean
-    bolsterProgress: number
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -10227,29 +10227,29 @@ declare class AnimaDiversionFrameMixin
 end
 
 declare class MapCanvasMixin extends CallbackRegistryMixin
-    debugAreaTriggerColors: table
-    mouseClickHandlers: table
-    areDetailLayersDirty: boolean
-    pinNudgingDirty: boolean
-    pinsToNudge: table
-    lockReasons: table
-    mapInsetsByIndex: table
-    cursorHandlers: table
-    pinSuppressors: table
-    mapID: number
-    pinSuppressionDirty: boolean
-    expandedMapInsetsByMapID: table
-    onUpdateDataProvidersDirty: boolean
-    mapArtID: number?
-    maskableTextures: table
-    pinTemplateTypes: table
-    dataProviders: table
-    currentPoIPins: table
-    pinPools: table
     activeAreaTriggers: table
-    globalPinMouseActionHandlers: table
+    areDetailLayersDirty: boolean
+    currentPoIPins: table
+    cursorHandlers: table
     dataProviderEventsCount: table
+    dataProviders: table
+    debugAreaTriggerColors: table
+    expandedMapInsetsByMapID: table
+    globalPinMouseActionHandlers: table
+    lockReasons: table
+    mapArtID: number?
+    mapID: number
+    mapInsetsByIndex: table
+    maskableTextures: table
+    mouseClickHandlers: table
+    onUpdateDataProvidersDirty: boolean
     pinFrameLevelsManager: MapCanvasPinFrameLevelsManagerMixin
+    pinNudgingDirty: boolean
+    pinPools: table
+    pinSuppressionDirty: boolean
+    pinSuppressors: table
+    pinTemplateTypes: table
+    pinsToNudge: table
     function OnLoad()
     function OnUpdate()
     function SetMapID(mapID: number)
@@ -10414,8 +10414,8 @@ declare class ArtifactFrameUnderlayMixin
 end
 
 declare class ArtifactUIMixin
-    wasViewedArtifactEquipped: boolean
     wasAtForge: boolean
+    wasViewedArtifactEquipped: boolean
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -10443,12 +10443,12 @@ declare class ManagedFrameMixin
 end
 
 declare class AuctionHouseFrameMixin extends CallbackRegistryMixin
-    isDisplayingFavorites: boolean
-    tabsForDisplayMode: table
-    maxUnitPriceWidth: table
-    maxBuyoutPriceWidth: table
-    maxBidPriceWidth: table
     activeSearches: table
+    isDisplayingFavorites: boolean
+    maxBidPriceWidth: table
+    maxBuyoutPriceWidth: table
+    maxUnitPriceWidth: table
+    tabsForDisplayMode: table
     function OnLoad()
     function OnShow()
     function OnEvent(event: string, ...: unknown)
@@ -10500,9 +10500,9 @@ declare class PrivateAurasTooltipMixin
 end
 
 declare class GameTooltipDataMixin extends TooltipDataHandlerMixin
+    shoppingTooltips: table
     shouldRefreshData: boolean
     updateTooltipTimer: number
-    shoppingTooltips: table
     function OnLoad()
     function RefreshData()
     function RefreshDataNextUpdate()
@@ -10542,10 +10542,10 @@ declare class TooltipBackdropTemplateMixin
 end
 
 declare class AzeriteEssenceUIMixin extends CallbackRegistryMixin
-    Milestones: table
-    powerLevel: number
-    Slots: table
     Lines: table
+    Milestones: table
+    Slots: table
+    powerLevel: number
     revealInProgress: boolean
     function OnLoad()
     function SetupMilestones()
@@ -10603,9 +10603,9 @@ declare class AzeriteRespecMixin
 end
 
 declare class AzeriteEmpoweredItemUIMixin extends CallbackRegistryMixin
-    transformTree: TransformTreeMixin
-    tiersByIndex: table
     loopingSoundEmitter: LoopingSoundEffectMixin
+    tiersByIndex: table
+    transformTree: TransformTreeMixin
     function OnLoad()
     function OnUpdate(elapsed: unknown)
     function OnShow()
@@ -10635,8 +10635,8 @@ declare class AzeriteEmpoweredItemUIMixin extends CallbackRegistryMixin
 end
 
 declare class BNToastMixin
-    BNToasts: table
     BNToastEvents: table
+    BNToasts: table
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function OnHide()
@@ -10756,10 +10756,10 @@ declare class BattlefieldMapTabMixin
 end
 
 declare class BattlefieldMapMixin
-    oldX: number
-    hoverTime: number
-    spectatorDataProvider: SpectatorDataProviderMixin
     groupMembersDataProvider: GroupMembersDataProviderMixin
+    hoverTime: number
+    oldX: number
+    spectatorDataProvider: SpectatorDataProviderMixin
     function Toggle()
     function OnLoad()
     function OnShow()
@@ -10788,8 +10788,8 @@ declare class BehavioralMessagingDetailsMixin
 end
 
 declare class SmallMoneyFrameMixin
-    isUserScaled: boolean
     OnTextScaleUpdated: function
+    isUserScaled: boolean
     function SetIsUserScaled()
 end
 
@@ -10799,10 +10799,10 @@ declare class MoneyInputFrameMixin
 end
 
 declare class BuffFrameMixin extends BaseAuraFrameMixin
+    auraTooltipQueue: table
     footer: PromptedBindingFooterMixin
     hiddenBuffUpdatePeriod: number
     hiddenBuffUpdateTimer: number
-    auraTooltipQueue: table
     numHideableBuffs: number
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
@@ -10940,13 +10940,13 @@ end
 declare class CatalogShopMixin
     GetBaseProductInfo: (productID: unknown) -> (...unknown)
     GetBundleProductInfo: (productID: unknown) -> (...unknown)
-    failedLoad: boolean
-    JustOrderedBoost: boolean
-    categoryIDs: number[]
     JustFinishedOrdering: boolean
-    showDetails: boolean
+    JustOrderedBoost: boolean
     ModelSceneData: table
+    categoryIDs: number[]
+    failedLoad: boolean
     onCloseCallback: function
+    showDetails: boolean
     function OnLoad_CatalogShop()
     function InitVariables()
     function SetCurrentActor(actor: unknown)
@@ -11034,10 +11034,10 @@ declare class CarouselControlMixin
 end
 
 declare class CatalogShopRefundFrameMixin
+    currentInterval: number
+    isProcessingRefund: boolean
     onCloseCallback: function
     refundableDecors: table
-    isProcessingRefund: boolean
-    currentInterval: number
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function OnUpdate(deltaTime: number)
@@ -11068,9 +11068,9 @@ declare class DefaultPanelMixin extends TitledPanelMixin
 end
 
 declare class CatalogShopTopUpFrameMixin
+    currentBalance: number?
     desiredQuantity: number?
     onCloseCallback: function
-    currentBalance: number?
     function OnLoad()
     function OnEvent(event: unknown, ...: unknown)
     function OnShow()
@@ -11115,8 +11115,8 @@ declare class ChallengeModeCompleteBannerMixin
 end
 
 declare class ChallengesFrameMixin
-    maps: number[]
     leadersAvailable: boolean
+    maps: number[]
     function OnLoad()
     function OnEvent(event: string)
     function OnShow()
@@ -11126,8 +11126,8 @@ declare class ChallengesFrameMixin
 end
 
 declare class ChannelFrameMixin
-    focusedClubId: ClubId
     channelStates: table
+    focusedClubId: ClubId
     function OnLoad(): (...unknown)
     function OnShow()
     function OnHide(): (...unknown)
@@ -11241,15 +11241,15 @@ declare class CreateChannelPopupMixin
 end
 
 declare class VoiceActivityManagerMixin
-    notificationFrameToParentFrame: table
+    alertNotificationList: DoublyLinkedListMixin
+    externalNotificationOwnerToGuid: table
+    externalNotificationTemplates: table
     guidToExternalNotificationInfo: table
+    notificationFrameToParentFrame: table
+    notificationMembers: table
     notificationTemplates: table
     parentFrameNotificationFrames: table
-    externalNotificationTemplates: table
-    alertNotificationList: DoublyLinkedListMixin
     releaseTimers: table
-    notificationMembers: table
-    externalNotificationOwnerToGuid: table
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function OnVoiceChannelMemberSpeakingStateChanged(memberID: VoiceChatID, channelID: VoiceChatID, isSpeaking: unknown?)
@@ -11309,17 +11309,17 @@ declare class NarratableTooltipMixin
 end
 
 declare class CharacterCreateMixin extends CharCustomizeParentFrameBaseMixin
-    perSecondRotation: number
-    navBlockers: table
-    lastCursorPosX: number
-    targetAlpha: number
     RotationConstant: number
-    isRotationNegative: boolean
     activeUpdates: table
-    targetRotation: number
     creatingCharacter: boolean
-    perSecondAlpha: number
+    isRotationNegative: boolean
+    lastCursorPosX: number
     mouseRotating: boolean
+    navBlockers: table
+    perSecondAlpha: number
+    perSecondRotation: number
+    targetAlpha: number
+    targetRotation: number
     function OnLoad()
     function OnDisplaySizeChanged()
     function OnEvent(event: string, ...: unknown)
@@ -11414,8 +11414,8 @@ end
 
 declare class CharCustomizeMixin extends CustomizationFrameBaseMixin
     bindings: BindingGroupMixin
-    hasChrModels: boolean
     footer: PromptedBindingFooterMixin
+    hasChrModels: boolean
     hasShapeshiftForms: boolean
     needsNativeFormCategory: boolean
     function OnLoad()
@@ -11464,8 +11464,8 @@ declare class CharCustomizeMixin extends CustomizationFrameBaseMixin
 end
 
 declare class CustomizationFrameBaseMixin
-    previewIsDirty: boolean
     numSubcategories: number
+    previewIsDirty: boolean
     tooltipsExpanded: boolean
     function CustomizationFrameBase_OnLoad()
     function OnEvent(event: string, ...: unknown)
@@ -11560,10 +11560,10 @@ declare class ChatAlertFrameMixin
 end
 
 declare class AlertContainerMixin
+    alertFrameSubSystems: table
     anchorPrioritiesDirty: boolean
     reasonsToBlockLeftClickingAlerts: table
     shouldQueueAlertsFlags: table
-    alertFrameSubSystems: table
     function OnLoad()
     function SetEnabledFlag(flagName: unknown, enabled: unknown)
     function SetAlertsEnabled(enabled: unknown, reason: unknown)
@@ -11701,10 +11701,10 @@ declare class PrimaryChatFrameMixin extends FloatingChatFrameMixin
 end
 
 declare class FloatingChatFrameMixin extends ChatFrameMixin
-    restoreGamepadFocusOnMenuClose: boolean
     footer: PromptedBindingFooterMixin
     isGamepadMenuOpen: boolean
     isInitialized: number
+    restoreGamepadFocusOnMenuClose: boolean
     function OnLoad()
     function OnHide()
     function IsGamepadMenuOpen(): unknown
@@ -11726,12 +11726,12 @@ declare class FloatingChatFrameMixin extends ChatFrameMixin
 end
 
 declare class ChatFrameMixin
-    messageTypeList: table
     channelList: table
-    zoneChannelList: table
-    tellTimer: number
-    defaultLanguage: string
     checkedGMOTD: boolean
+    defaultLanguage: string
+    messageTypeList: table
+    tellTimer: number
+    zoneChannelList: table
     function PlayerLevelChanged(...: unknown)
     function PlayerLevelUp(...: unknown)
     function OnLoad()
@@ -11781,10 +11781,10 @@ declare class EditModeChatFrameSystemMixin
 end
 
 declare class ScrollingMessageFrameMixin extends FontableFrameMixin
+    historyBuffer: CircularBufferMixin
     isDisplayDirty: boolean
     isLayoutDirty: boolean
     onDisplayRefreshedCallbacks: table
-    historyBuffer: CircularBufferMixin
     overrideFadeTimestamp: number
     visibleLines: table
     function AddMessage(message: string | Secret<string>, r: (number | Secret<number>)?, g: (number | Secret<number>)?, b: (number | Secret<number>)?, ...: unknown)
@@ -12013,9 +12013,9 @@ declare class ClassTrialSecureFrameMixin
 end
 
 declare class ClickBindingFrameMixin
+    currentSpec: number
     isApplyingEnabledMouseOverCastFrameSizeOffset: boolean
     pendingChanges: boolean
-    currentSpec: number
     function InitializeButtons()
     function InitializeScrollBox()
     function CleanDataProvider()
@@ -12047,16 +12047,16 @@ declare class ClientSceneVisManagerMixin
 end
 
 declare class HeirloomsMixin
-    heirloomEntryFrames: table
-    numKnownHeirlooms: number
-    upgradedHeirlooms: table
-    itemIDsInCurrentLayout: table
-    needsRefresh: boolean
-    heirloomLayoutData: table
     filtersSet: boolean
+    heirloomEntryFrames: table
     heirloomHeaderFrames: table
+    heirloomLayoutData: table
+    itemIDsInCurrentLayout: table
     needsDataRebuilt: boolean
+    needsRefresh: boolean
+    numKnownHeirlooms: number
     numPossibleHeirlooms: number
+    upgradedHeirlooms: table
     function OnLoad()
     function InitFilterDropdown()
     function InitClassDropdown()
@@ -12156,17 +12156,17 @@ declare class SoftCursorMixin
 end
 
 declare class CombatAudioAlertManagerMixin
-    lastPlayerPowerPercent: table
-    partyHealthInfo: table
     initDone: boolean
+    lastPlayerPowerAnnouncePercent: table
+    lastPlayerPowerPercent: table
+    lastUnitHealthAnnouncePercent: table
+    lastUnitHealthPercent: table
+    partyHealthInfo: table
+    queuedSounds: table
+    unitCastEndUnitsLookup: table
     unitCastStartUnitsLookup: table
     unitHealthUnitsLookup: table
-    lastUnitHealthAnnouncePercent: table
-    unitCastEndUnitsLookup: table
-    lastPlayerPowerAnnouncePercent: table
     watchedPowerTokens: table
-    queuedSounds: table
-    lastUnitHealthPercent: table
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function Init(force: unknown?)
@@ -12255,15 +12255,15 @@ declare class CombatAudioAlertManagerMixin
 end
 
 declare class CombatTextMixin
-    xDir: number
-    textOffsetAdjustment: number
     activeFontStrings: table
-    textScaleY: number
-    textScaleX: number
     textLocations: table
-    unit: string
+    textOffsetAdjustment: number
     textOffsetMax: number
+    textScaleX: number
+    textScaleY: number
     textSpacing: number
+    unit: string
+    xDir: number
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function OnUpdate(elapsed: number)
@@ -12277,8 +12277,8 @@ declare class CombatTextMixin
 end
 
 declare class CommentatorMixin
-    unitFrames: table
     sortedPlayerIndices: table
+    unitFrames: table
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function OnUpdate(elapsed: number)
@@ -12376,16 +12376,16 @@ declare class GamepadBaseDialogMixin
 end
 
 declare class CommunitiesFrameMixin extends CallbackRegistryMixin
-    accountMuted: boolean
-    privilegesForClub: table
-    selectedStreamForClub: table
-    selectedClubId: ClubId
-    newClubIds: table
-    focusedClubId: ClubId
     ReportFrames: table
-    focusedStreamId: ClubStreamId
     accountChatDisabled: boolean
+    accountMuted: boolean
+    focusedClubId: ClubId
+    focusedStreamId: ClubStreamId
     footer: PromptedBindingFooterMixin
+    newClubIds: table
+    privilegesForClub: table
+    selectedClubId: ClubId
+    selectedStreamForClub: table
     function RequestSubscribedClubFinderPostingInfo()
     function OnLoad()
     function RegisterForTransitions()
@@ -12477,10 +12477,10 @@ declare class ClubFinderGuildAndCommunityMixin
 end
 
 declare class CommunitiesSettingsDialogMixin
-    waitingForResponseToShow: boolean
-    clubPostingInfo: RecruitingClubInfo?
     avatarId: number
     clubId: ClubId
+    clubPostingInfo: RecruitingClubInfo?
+    waitingForResponseToShow: boolean
     function SmartNavigationCloseHandler(): boolean
     function UpdatedPostingInformationInit()
     function OnUpdatedPostingInformationRecieved()
@@ -12509,8 +12509,8 @@ end
 
 declare class CommunitiesTicketManagerDialogMixin
     refreshTicker: TickerHandle
-    shouldGenerateDefaultLink: boolean
     revokedTickets: table
+    shouldGenerateDefaultLink: boolean
     function OnLoad()
     function CreateGamepadFooter(): PromptedBindingFooterMixin
     function SetupUsesDropdown()
@@ -12559,8 +12559,8 @@ declare class GamepadSecureBaseDialogMixin
 end
 
 declare class CommunitiesCreateDialogMixin
-    clubType: ClubType
     avatarId: number
+    clubType: ClubType
     function ClearText()
     function OnShow()
     function SetClubType(clubType: ClubType)
@@ -12575,10 +12575,10 @@ declare class CommunitiesCreateDialogMixin
 end
 
 declare class CompactRaidFrameContainerMixin
-    units: table
-    unitFrameUnusedFunc: function
-    frameUpdateList: table
     frameReservations: table
+    frameUpdateList: table
+    unitFrameUnusedFunc: function
+    units: table
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function OnSizeChanged()
@@ -12834,15 +12834,15 @@ declare class CooldownViewerCooldownMixin extends CooldownViewerMixin
 end
 
 declare class CooldownViewerMixin
-    iconLimit: number
     currentTarget: (string | Secret<string>)?
+    hasDoneInitialTargetUpdate: boolean
     iconDirection: number
-    itemFramesNeedingOnUpdateMap: table
+    iconLimit: number
+    iconPadding: number
     iconScale: number
     isHorizontal: boolean
-    iconPadding: number
+    itemFramesNeedingOnUpdateMap: table
     itemFramesNeedingTargetUpdateMap: table
-    hasDoneInitialTargetUpdate: boolean
     function GetItemContainerFrame(): unknown
     function GetItemFrames(): (...unknown)
     function OnLoad()
@@ -13167,8 +13167,8 @@ declare class CooldownViewerBuffMixin extends CooldownViewerMixin
 end
 
 declare class BuffBarCooldownViewerMixin extends CooldownViewerBuffMixin
-    baseBarWidth: number
     barWidthScale: number
+    baseBarWidth: number
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -13296,10 +13296,10 @@ end
 
 declare class CooldownViewerSettingsMixin
     categoryObjects: table
-    scrollFramePadding: Frame
+    currentCategories: table
     displayMode: string
     reorderOffset: number
-    currentCategories: table
+    scrollFramePadding: Frame
     function GetExtraPanelWidth(): number
     function OnLoad()
     function GetDataProvider(): unknown
@@ -13536,8 +13536,8 @@ declare class CovenantRenownMixin
 end
 
 declare class CovenantSanctumMixin
-    covenantID: number
     covenantData: CovenantData?
+    covenantID: number
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -13585,12 +13585,12 @@ declare class CustomizationNoHeaderTooltipMixin
 end
 
 declare class DamageMeterMixin
-    sessionType: number
-    barHeight: number
-    windowDataList: table
     backgroundAlpha: number
+    barHeight: number
+    sessionType: number
     textScale: number
     windowAlpha: number
+    windowDataList: table
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function GetDefaultWindowData(): table
@@ -13709,10 +13709,10 @@ declare class AnchorHighlightMixin
 end
 
 declare class TableInspectorMixin extends ToolWindowOwnerMixin
-    tableNavigationIndex: number
+    dataProviders: table
     lines: table
     tableNavigation: table
-    dataProviders: table
+    tableNavigationIndex: number
     function OnLoad()
     function SetTableFocusedCallback(tableFocusedCallback: unknown)
     function Reset()
@@ -13764,24 +13764,24 @@ declare class DelvesCompanionAbilityListFrameMixin
 end
 
 declare class TalentFrameBaseMixin extends CallbackRegistryMixin
-    subTreeInfoCache: table
+    buttonsWithDirtyEdges: table
+    condInfoCache: table
+    definitionInfoCache: table
+    dirtyCondIDSet: table
+    dirtyDefinitionIDSet: table
+    dirtyEntryIDSet: table
     dirtyNodeIDSet: table
     dirtySubTreeIDSet: table
-    dirtyEntryIDSet: table
-    eventRegisteredNodes: table
-    treeInfoDirty: boolean
-    dirtyCondIDSet: table
-    spinnerTimer: TimerHandle
-    nodeInfoCache: table
-    dirtyDefinitionIDSet: table
-    talentTreeInfo: TraitTreeInfo?
     entryInfoCache: table
-    definitionInfoCache: table
-    treeCurrencyInfoMap: table
-    condInfoCache: table
-    treeCurrencyInfo: TreeCurrencyInfo[]
+    eventRegisteredNodes: table
     nodeIDToButton: table
-    buttonsWithDirtyEdges: table
+    nodeInfoCache: table
+    spinnerTimer: TimerHandle
+    subTreeInfoCache: table
+    talentTreeInfo: TraitTreeInfo?
+    treeCurrencyInfo: TreeCurrencyInfo[]
+    treeCurrencyInfoMap: table
+    treeInfoDirty: boolean
     function OnLoad()
     function RegisterOnUpdate()
     function OnUpdate()
@@ -13977,10 +13977,10 @@ end
 
 declare class DelvesDifficultyPickerFrameMixin
     entranceType: TieredEntranceType
-    tieredEntranceStaticData: table
-    partyTierEligibility: table
-    newTiers: table
     longestDropdownString: number
+    newTiers: table
+    partyTierEligibility: table
+    tieredEntranceStaticData: table
     function SetStartingPage()
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
@@ -14071,10 +14071,10 @@ declare class ArenaEnemyMatchFramesContainerMixin
 end
 
 declare class ArenaEnemyMatchFrameMixin
+    debuffCountdown: number
+    numDebuffs: number
     statusCounter: number
     statusSign: number
-    numDebuffs: number
-    debuffCountdown: number
     unitHPPercent: number
     function OnLoad()
     function UpdatePlayer()
@@ -14148,14 +14148,14 @@ declare class EditModeSystemSettingsDialogMixin
 end
 
 declare class EditModeManagerFrameMixin
-    registeredSystemFrames: table
+    FramesBlockingEditMode: table
     accountSettings: EditModeSettingInfo[]
     editModeActive: boolean
-    highestLayoutIndexByType: table
     hasActiveChanges: boolean
-    FramesBlockingEditMode: table
+    highestLayoutIndexByType: table
     layoutApplyInProgress: boolean
     numLayouts: table
+    registeredSystemFrames: table
     function GetRightActionBars(): table
     function GetRightActionBarTopLimit(): unknown
     function GetRightActionBarBottomLimit(): number
@@ -14420,12 +14420,12 @@ declare class EndOfMatchFrameMixin
 end
 
 declare class EventTracePanelMixin extends ToolWindowOwnerMixin
-    searchDataProvider: DataProviderMixin
-    frameCounter: number
-    logDataProvider: DataProviderMixin
-    loadTime: number
     filterDataProvider: DataProviderMixin
+    frameCounter: number
     idCounter: function
+    loadTime: number
+    logDataProvider: DataProviderMixin
+    searchDataProvider: DataProviderMixin
     function OnSetDebugToolVisible(addonName: string, showTool: unknown)
     function OnLoad()
     function OnShow()
@@ -14583,9 +14583,9 @@ declare class EquipmentFlyoutMixin
 end
 
 declare class StackSplitMixin
-    splitBindings: BindingGroupMixin
     footer: PromptedBindingFooterMixin
     isMultiStack: boolean
+    splitBindings: BindingGroupMixin
     function OpenStackSplitFrame(maxStack: number?, parent: unknown, anchor: unknown, anchorTo: unknown, stackCount: unknown?)
     function OnLoad()
     function RegisterForTransitions()
@@ -14655,8 +14655,8 @@ declare class EventToastManagerMixin
 end
 
 declare class EventToastManagerSideDisplayMixin extends EventToastManagerMixin
-    toasts: EventToastInfo[]?
     currentlyDisplayingToastIndex: number
+    toasts: EventToastInfo[]?
     function OnLoad()
     function GetToastFrame(toastTable: unknown, isFirstToast: unknown?): unknown
     function DisplayToastAtIndex(index: number)
@@ -14781,8 +14781,8 @@ end
 
 declare class LootHistoryFrameMixin
     lootHistoryFooter: PromptedBindingFooterMixin
-    skipGamepadAutoFocus: boolean
     perfectRollItemQueue: table
+    skipGamepadAutoFocus: boolean
     function ShouldAutoOpen(): boolean
     function OnLoad()
     function OnShow()
@@ -14813,17 +14813,17 @@ declare class LootHistoryFrameMixin
 end
 
 declare class LowHealthFrameMixin
-    fullscreenMaxAlpha: number
-    lowHealthMinAlpha: number
-    lowHealthReducedMaxAlpha: number
-    fullscreenMinAlpha: number
-    playerEntered: boolean
     fadeEnd: number
-    lowHealthReducedMinAlpha: number
     fadeStart: number
+    fullscreenMaxAlpha: number
+    fullscreenMinAlpha: number
     lowHealthMaxAlpha: number
-    varsLoaded: boolean
+    lowHealthMinAlpha: number
     lowHealthPercentStart: number
+    lowHealthReducedMaxAlpha: number
+    lowHealthReducedMinAlpha: number
+    playerEntered: boolean
+    varsLoaded: boolean
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function ListenForHealthEvents()
@@ -14836,9 +14836,9 @@ declare class LowHealthFrameMixin
 end
 
 declare class ReadyCheckListenerFrameMixin
+    binding: BindingGroupMixin
     noIcon: Frame
     skipGamepadAutoFocus: boolean
-    binding: BindingGroupMixin
     useCustomNavigation: boolean
     yesIcon: Frame
     function OnLoad()
@@ -14921,10 +14921,10 @@ declare class SpellActivationOverlayMixin
 end
 
 declare class TalkingHeadFrameMixin
-    isManagedFrame: boolean
-    isClosing: boolean
-    isPlaying: boolean
     isBottomManagedFrame: boolean
+    isClosing: boolean
+    isManagedFrame: boolean
+    isPlaying: boolean
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function CloseImmediately()
@@ -15051,9 +15051,9 @@ declare class WhoFrameColumnHeaderMixin
 end
 
 declare class FriendsFriendsFrameMixin extends SocialUIScrollableElementExtentPreviewerMixin
+    exclusive: boolean
     hideOnEscape: boolean
     requested: table
-    exclusive: boolean
     function OnLoad()
     function InitializeDropdown()
     function RefreshVisualsForFontSize()
@@ -15106,9 +15106,9 @@ end
 
 declare class GamepadHudModeMixin extends CallbackRegistryMixin
     hudInfoList: table
+    hudModeActiveFrameBindings: BindingGroupMixin
     hudModeGeneralBindings: BindingGroupMixin
     isFrameActive: boolean
-    hudModeActiveFrameBindings: BindingGroupMixin
     nextFrameRegistrationID: number
     function OnLoad()
     function OnShow()
@@ -15140,13 +15140,13 @@ declare class GamepadHudModeMixin extends CallbackRegistryMixin
 end
 
 declare class GamepadPersistentInputLegendMixin
-    headers: table
-    friendlyFaceEntries: table
-    friendlyDpadEntries: table
-    hostileFaceEntries: table
-    hostileDpadEntries: table
-    groups: table
     columns: table
+    friendlyDpadEntries: table
+    friendlyFaceEntries: table
+    groups: table
+    headers: table
+    hostileDpadEntries: table
+    hostileFaceEntries: table
     function SetGroupColumns(groupName: unknown, countAndWidth: unknown)
     function SetGroupUsesHeader(GroupName: unknown)
     function DoesGroupUseHeader(GroupName: unknown): unknown
@@ -15168,13 +15168,13 @@ declare class GamepadPersistentInputLegendMixin
 end
 
 declare class GamepadRadialMixin
-    isCancelled: boolean
-    segmentOptions: table
-    pageIndicators: table
-    inputBindings: BindingGroupMixin
-    lastDistanceSq: number
     currentPage: number
+    inputBindings: BindingGroupMixin
+    isCancelled: boolean
+    lastDistanceSq: number
     mainMenuPages: table
+    pageIndicators: table
+    segmentOptions: table
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -15207,18 +15207,18 @@ declare class GamepadReticleMixin
 end
 
 declare class GamepadActionBarEditFrameMixin
-    editModeFooter: PromptedBindingFooterMixin
     bindingModeFooter: PromptedBindingFooterMixin
-    inputBindingGroups: table
-    showButtonIcons: boolean
-    useCompactLayout: boolean
     buttonBindingInfos: table
-    shouldExpand: boolean
-    showHighlight: boolean
-    showEmptyBars: boolean
     clickHandlers: table
+    editModeFooter: PromptedBindingFooterMixin
+    inputBindingGroups: table
     pickupParams: table
     pickupSlot: number
+    shouldExpand: boolean
+    showButtonIcons: boolean
+    showEmptyBars: boolean
+    showHighlight: boolean
+    useCompactLayout: boolean
     function GetTooltip(): unknown
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
@@ -15291,8 +15291,8 @@ declare class GamepadIconIntroTrackerMixin
 end
 
 declare class GamepadMainActionBarFrameMixin
-    isMeleeAttacking: boolean
     buttonOwners: table
+    isMeleeAttacking: boolean
     function GetActionBars(): unknown
     function AssignActionBarUsableConditionalFunc()
     function RefreshSecondaryActionbarVisibility()
@@ -15344,25 +15344,25 @@ declare class GamepadScrollBarHintMixin
 end
 
 declare class SmartNavigationMixin extends CallbackRegistryMixin
-    navigatingTime: number
-    xRes: number
-    repeatStart: number
-    repeatDelay: number
-    isCursorSuspended: boolean
+    accumulatedRightStickScrollOffset: number
+    activePanels: table
+    bindingActive: boolean
     currentDirections: table
     enabled: boolean
-    selectButtonSequence: number
-    bindingActive: boolean
-    rightStickScrollBindings: BindingGroupMixin
-    maxScrollSpeed: number?
-    navigationBindings: BindingGroupMixin
-    scrollSpeed: number
-    isRepeating: boolean
-    shouldPropagate: boolean
-    activePanels: table
-    accumulatedRightStickScrollOffset: number
     hookedFrames: table
+    isCursorSuspended: boolean
+    isRepeating: boolean
+    maxScrollSpeed: number?
+    navigatingTime: number
+    navigationBindings: BindingGroupMixin
+    repeatDelay: number
+    repeatStart: number
+    rightStickScrollBindings: BindingGroupMixin
+    scrollSpeed: number
+    selectButtonSequence: number
+    shouldPropagate: boolean
     startedNavigating: boolean
+    xRes: number
     function ResetVars()
     function OnLoad(): boolean
     function RegisterForTransitions()
@@ -15522,9 +15522,9 @@ declare class AdventuresPuckMixin
 end
 
 declare class GarrisonMission
-    selectedTab: number
-    followerMaxQuality: number
     followerMaxLevel: number
+    followerMaxQuality: number
+    selectedTab: number
     spilloverBuffs: table
     function OnLoadMainFrame()
     function OnShowMainFrame()
@@ -15668,11 +15668,11 @@ declare class BFAMission
 end
 
 declare class CovenantMission extends CallbackRegistryMixin
-    enemyPowerLevel: number
-    tutorialIndex: number
     enemyHealthLevel: number
+    enemyPowerLevel: number
     lastShowMissionsAndFollowersTabs: boolean
     queuedTutorials: table
+    tutorialIndex: number
     function OnLoadMainFrame()
     function OnEventMainFrame(event: string, ...: unknown)
     function OnShowMainFrame()
@@ -15725,11 +15725,11 @@ declare class CovenantMission extends CallbackRegistryMixin
 end
 
 declare class GarrisonLandingPageMixin
-    selectedTab: number
-    sectionsLayoutIndex: number
-    SoulbindPanel: Frame
-    CovenantCallings: Frame
     ArdenwealdGardeningPanel: Frame
+    CovenantCallings: Frame
+    SoulbindPanel: Frame
+    sectionsLayoutIndex: number
+    selectedTab: number
     function OnLoad()
     function UpdateTabs()
     function UpdateUIToGarrisonType()
@@ -15870,9 +15870,9 @@ declare class AutoCommitTraitFrameMixin
 end
 
 declare class ScriptAnimatedModelSceneMixin
+    centerY: number
     effectControllers: table
     modelSceneSet: boolean
-    centerY: number
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -15898,12 +15898,12 @@ declare class ScriptAnimatedModelSceneMixin
 end
 
 declare class ModelSceneMixin
-    tagToActor: table
-    isLeftButtonDown: boolean
     actorTemplate: string
-    tagToCamera: table
-    isRightButtonDown: boolean
     cameras: table
+    isLeftButtonDown: boolean
+    isRightButtonDown: boolean
+    tagToActor: table
+    tagToCamera: table
     function OnLoad()
     function ClearScene()
     function GetModelSceneID(): unknown
@@ -15949,8 +15949,8 @@ declare class ModelSceneMixin
 end
 
 declare class GlueMenuFrameMixin
-    gamepadFooter: PromptedBindingFooterMixin
     buttons: table
+    gamepadFooter: PromptedBindingFooterMixin
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -15971,8 +15971,8 @@ declare class GlueMenuFrameMixin
 end
 
 declare class MainMenuFrameMixin
-    nextLayoutIndex: number
     buttonCount: number
+    nextLayoutIndex: number
     function OnLoad()
     function Reset()
     function AddButton(text: unknown, callback: unknown, isDisabled: unknown?, disabledText: string?): unknown
@@ -16050,19 +16050,19 @@ declare class CharacterListEditGroupFrameMixin
 end
 
 declare class CharacterSelectFrameMixin
-    selectLast: boolean
-    waitingforCharacterList: boolean
-    createIndex: number
-    isMovingCharacter: boolean
-    characterMoveBindings: BindingGroupMixin
-    undeletePendingRename: boolean
-    characterSelectBindings: BindingGroupMixin
     backFromCharCreate: boolean
-    undeleteSucceeded: boolean
-    frameFooter: PromptedBindingFooterMixin
-    undeleteNoCharacters: boolean
-    characterToggleUIBindings: BindingGroupMixin
+    characterMoveBindings: BindingGroupMixin
     characterRestoreBindings: BindingGroupMixin
+    characterSelectBindings: BindingGroupMixin
+    characterToggleUIBindings: BindingGroupMixin
+    createIndex: number
+    frameFooter: PromptedBindingFooterMixin
+    isMovingCharacter: boolean
+    selectLast: boolean
+    undeleteNoCharacters: boolean
+    undeletePendingRename: boolean
+    undeleteSucceeded: boolean
+    waitingforCharacterList: boolean
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -16105,17 +16105,17 @@ declare class CharacterSelectFrameMixin
 end
 
 declare class CharacterSelectUIMixin extends CallbackRegistryMixin
-    LoadedOverlayFrameCharacterIDs: table
+    ClampedHeightBottomPercent: number
     ClampedHeightTopPercent: number
+    DoubleClickThreshold: number
+    LoadedOverlayFrameCharacterIDs: table
+    RotationConstant: number
+    TooltipTimerDuration: number
+    config: table
     footerFrames: table
     headerFrames: table
-    config: table
     inVisibilityDoubleClickThreshold: boolean
-    TooltipTimerDuration: number
-    RotationConstant: number
-    DoubleClickThreshold: number
     mapSceneLoading: boolean
-    ClampedHeightBottomPercent: number
     visibilityState: boolean
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
@@ -16172,8 +16172,8 @@ declare class CharSelectEnterWorldButtonMixin
 end
 
 declare class ThreeSliceButtonMixin extends UIButtonMixin
-    rightAtlasInfo: AtlasInfo?
     leftAtlasInfo: AtlasInfo?
+    rightAtlasInfo: AtlasInfo?
     function GetLeftAtlasName(): string
     function GetRightAtlasName(): string
     function GetCenterAtlasName(): string
@@ -16296,9 +16296,9 @@ end
 
 declare class CharacterDeletionDialogMixin
     cancelIcon: Frame
-    useCustomNavigation: boolean
-    deleteDialogBindings: BindingGroupMixin
     confirmIcon: Frame
+    deleteDialogBindings: BindingGroupMixin
+    useCustomNavigation: boolean
     function OnLoad()
     function OnShow()
     function NarrationShouldIgnoreFocus(): boolean
@@ -16338,10 +16338,10 @@ declare class CinematicsMenuMixin
 end
 
 declare class CreditsFrameMixin
-    pixelAlignedRemainder: number
-    strings: table
-    startPos: number
     creditsInfos: CreditsDisplayInfo[]
+    pixelAlignedRemainder: number
+    startPos: number
+    strings: table
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -16409,8 +16409,8 @@ end
 
 declare class GamepadTabIndicatorsMixin
     bindings: BindingGroupMixin
-    visibleTabs: table
     tabs: table
+    visibleTabs: table
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -16576,11 +16576,11 @@ declare class LFGReadyCheckPopupMixin
 end
 
 declare class LFGBrowseMixin
-    selectionBehavior: SelectionBehaviorMixin
-    searching: boolean
-    searchFailed: boolean
-    totalResults: number
     results: table
+    searchFailed: boolean
+    searching: boolean
+    selectionBehavior: SelectionBehaviorMixin
+    totalResults: number
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function OnShow()
@@ -16598,9 +16598,9 @@ declare class LFGBrowseMixin
 end
 
 declare class LFGListingMixin
-    selectedActivities: number
     activities: table
     savedInstances: table
+    selectedActivities: number
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function OnShow()
@@ -16766,9 +16766,9 @@ declare class GuildRenameFrameMixin
 end
 
 declare class UIThemeContainerMixin
+    cvar: string
     fontStrings: table
     frames: table
-    cvar: string
     function UIThemeContainerFrame_OnPreLoad()
     function UIThemeContainerFrame_OnPreShow()
     function UIThemeContainerFrame_OnPostHide()
@@ -16934,8 +16934,8 @@ declare class HousingBlueprintRenameFrameMixin
 end
 
 declare class HousingInviteResidentFrameMixin
-    pendingInvite: boolean
     numPendingInvites: number
+    pendingInvite: boolean
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -17010,10 +17010,10 @@ declare class HousingCornerstoneFrameMixin
 end
 
 declare class HousingCornerstonePurchaseFrameMixin
-    houseInfo: HouseInfo
     boughtHouse: boolean
-    purchaseMode: CornerstonePurchaseMode
+    houseInfo: HouseInfo
     neighborhoodInfo: NeighborhoodInfo
+    purchaseMode: CornerstonePurchaseMode
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function OnCinematicStopped()
@@ -17106,9 +17106,9 @@ declare class HousingCreateNeighborhoodCharterMixin
 end
 
 declare class HousingDashboardFrameMixin
-    houseInfoTab: table
     catalogTab: table
     collectionTab: table
+    houseInfoTab: table
     tabs: table
     function OnLoad()
     function OnShow()
@@ -17123,9 +17123,9 @@ end
 
 declare class HouseFinderFrameMixin
     guildSubdivisions: table
-    pendingFriendSearch: boolean
     mapDataProvider: HouseFinderMapDataProviderMixin
     mapID: number?
+    pendingFriendSearch: boolean
     function OnLoad()
     function OnRefreshClicked()
     function PopulateNeighborhoodList(neighborhoodInfoVector: unknown)
@@ -17252,10 +17252,10 @@ declare class SidePanelTabButtonMixin
 end
 
 declare class ModelFrameMixin
-    mouseDown: boolean
-    rotationCursorStart: number
-    panning: boolean
     cursorX: number
+    mouseDown: boolean
+    panning: boolean
+    rotationCursorStart: number
     function OnLoad(maxZoom: unknown?, minZoom: unknown?, defaultRotation: unknown?)
     function Init()
     function OnEvent(event: unknown, ...: unknown)
@@ -17276,8 +17276,8 @@ declare class ModelFrameMixin
 end
 
 declare class ItemButtonMixin
-    isProfessionItem: boolean
     isCraftedItem: boolean
+    isProfessionItem: boolean
     noProfessionQualityOverlay: boolean
     pendingInfo: table
     function SetItemButtonTexture(texture: unknown)
@@ -17393,10 +17393,10 @@ declare class HUDInventoryMixin
 end
 
 declare class ItemInteractionMixin
-    conversionMode: boolean
     clickShowsFlyout: boolean
-    usesCharges: boolean
+    conversionMode: boolean
     itemLocation: ItemLocationMixin
+    usesCharges: boolean
     function GetItemLocation(): ItemLocationMixin
     function GetInteractionType(): unknown
     function GetCost(): unknown
@@ -17446,13 +17446,13 @@ end
 
 declare class ItemUpgradeMixin
     numUpgradeLevels: number
-    upgradeCurrencyCosts: table
-    tooltipReappearTimerInProgress: boolean
     pendingButtonEnable: boolean
-    upgradeMoneyCosts: table
+    tooltipReappearTimerInProgress: boolean
     upgradeAnimationsInProgress: boolean
+    upgradeCurrencyCosts: table
     upgradeInfo: ItemUpgradeItemInfo?
     upgradeItemCosts: table
+    upgradeMoneyCosts: table
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -17650,9 +17650,9 @@ declare class PanelTopTabButtonMixin
 end
 
 declare class MailMixin
-    refreshQueued: boolean
     inboxBeingChecked: boolean
     maxTabWidth: number
+    refreshQueued: boolean
     function OnLoad()
     function OnHide()
     function RegisterForTransitions()
@@ -17668,9 +17668,9 @@ declare class MailMixin
 end
 
 declare class InboxMixin
-    shownMails: number
-    maxShownMails: number
     gamepadFooter: PromptedBindingFooterMixin
+    maxShownMails: number
+    shownMails: number
     function OnLoad()
     function RegisterForTransitions()
     function SetupGamepad()
@@ -17803,8 +17803,8 @@ declare class MainMenuBarBackpackMixin extends BaseBagSlotButtonMixin
 end
 
 declare class BaseBagSlotButtonMixin
-    maxDisplayCount: number
     isBag: number
+    maxDisplayCount: number
     function GetSlotAtlases(): (string, string, string)
     function UpdateTextures()
     function BagSlotOnLoad()
@@ -17915,10 +17915,10 @@ declare class MatchCelebrationPartyPoseMixin extends PartyPoseMixin
 end
 
 declare class MicroMenuMixin
-    numButtons: number
+    isHorizontal: boolean
     layoutFramesGoingRight: boolean
     layoutFramesGoingUp: boolean
-    isHorizontal: boolean
+    numButtons: number
     function GenerateButtonInfos(): table
     function OnLoad()
     function ApplyMicroMenuOverrides()
@@ -18079,12 +18079,12 @@ declare class CollectionMicroButtonMixin
 end
 
 declare class EJMicroButtonMixin
-    lastEvaluatedLevel: number
-    varsLoaded: boolean
-    playerEntered: boolean
     lastEvaluatedIlvl: number
-    zoneEntered: boolean
+    lastEvaluatedLevel: number
     lastEvaluatedSpec: number
+    playerEntered: boolean
+    varsLoaded: boolean
+    zoneEntered: boolean
     function OnLoad()
     function EvaluateAlertVisibility(): boolean
     function UpdateLastEvaluations()
@@ -18158,11 +18158,11 @@ declare class AddonCompartmentMixin extends ButtonStateBehaviorMixin
 end
 
 declare class GameTimeFrameMixin extends ButtonStateBehaviorMixin
-    timeOfDay: number
-    pendingCalendarInvites: number
-    hour: number
     atlasFormat: string
     flashTimer: number
+    hour: number
+    pendingCalendarInvites: number
+    timeOfDay: number
     function OnLoad()
     function OnButtonStateChanged()
     function OnShow()
@@ -18211,8 +18211,8 @@ declare class MinimapMixin
 end
 
 declare class ExpansionLandingPageMinimapButtonMixin
-    pulseLocks: table
     faction: string
+    pulseLocks: table
     function OnLoad()
     function IsInGarrisonMode(): boolean
     function IsExpansionOverlayMode(): boolean
@@ -18310,8 +18310,8 @@ declare class MovePadStrafeRightMixin
 end
 
 declare class NamePlateDriverMixin
-    scriptNamePlates: table
     optionCVars: table
+    scriptNamePlates: table
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function OnDebuffPaddingCVarChanged()
@@ -18393,8 +18393,8 @@ declare class ClassNameplateBarDeathKnight extends RuneFrameMixin
 end
 
 declare class RuneFrameMixin
-    spentAnimsActive: number
     runeIndices: table
+    spentAnimsActive: number
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function UpdateRunes(isSpecChange: unknown?)
@@ -18479,11 +18479,11 @@ declare class AlternatePowerBarBaseMixin
 end
 
 declare class EvokerEbonMightBarMixin
-    requiredClass: string
+    disablePercentages: boolean
     frequentUpdates: boolean
     numericDisplayTransformFunc: function
+    requiredClass: string
     unit: string
-    disablePercentages: boolean
     function Initialize()
     function OnEvent(event: string, ...: unknown)
     function OnUnitAuraUpdate(unitToken: unknown, unitAuraUpdateInfo: unknown?)
@@ -18636,8 +18636,8 @@ declare class TutorialWalkMixin extends TutorialMainFrameMixin
 end
 
 declare class TutorialMainFrameMixin
-    wasShown: boolean
     NextID: number
+    wasShown: boolean
     function OnLoad()
     function CINEMATIC_START()
     function CINEMATIC_STOP()
@@ -18677,19 +18677,19 @@ declare class AchievementObjectiveTrackerMixin extends ObjectiveTrackerModuleMix
 end
 
 declare class ObjectiveTrackerModuleMixin extends ObjectiveTrackerSlidingMixin
-    usedTimerBars: table
-    cacheIndex: number
-    usedProgressBars: table
-    hasContents: boolean
-    numCachedBlocks: number
-    heightModifiers: table
     availableHeight: number
-    usedRightEdgeFrames: table
+    cacheIndex: number
+    hasContents: boolean
     hasSkippedBlocks: boolean
-    usedBlocks: table
+    hasTriedBlocks: boolean
+    heightModifiers: table
     init: boolean
     isDirty: boolean
-    hasTriedBlocks: boolean
+    numCachedBlocks: number
+    usedBlocks: table
+    usedProgressBars: table
+    usedRightEdgeFrames: table
+    usedTimerBars: table
     function OnLoad()
     function OnEvent(event: unknown, ...: unknown)
     function OnHide()
@@ -18889,8 +18889,8 @@ declare class MonthlyActivitiesObjectiveTrackerMixin extends ObjectiveTrackerMod
 end
 
 declare class ObjectiveTrackerFrameMixin
-    lastSortMapID: number?
     gamepadFooter: PromptedBindingFooterMixin
+    lastSortMapID: number?
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function ShouldShowHeader(): boolean
@@ -18932,9 +18932,9 @@ end
 
 declare class ObjectiveTrackerContainerMixin extends DirtiableMixin
     init: boolean
+    modules: table
     needsSorting: boolean
     topPaddingProviders: table
-    modules: table
     function OnLoad()
     function AddTopPaddingProvider(topPaddingProvider: unknown)
     function OnSizeChanged()
@@ -18987,9 +18987,9 @@ declare class OverrideLayoutFrameOnUpdateMixin
 end
 
 declare class UIWidgetContainerMixin
+    numTimers: number
     numWidgetsShowing: number
     timerWidgets: table
-    numTimers: number
     widgetFrames: table
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
@@ -19065,9 +19065,9 @@ end
 
 declare class WorldQuestObjectiveTrackerMixin extends BonusObjectiveTrackerMixin
     currentContentList: table
+    entryCount: number
     oldContentList: table
     tickerSeconds: number
-    entryCount: number
     function InitModule()
     function OnEvent(event: string, ...: unknown)
     function TryAddingExpirationWarningLine(block: unknown, questID: number)
@@ -19133,12 +19133,12 @@ end
 declare class PVPMatchResultsMixin
     Tabs: table
     UpdateLeaveButton: function
-    tableBuilder: TableBuilderMixin
-    hasRewardTimerElapsed: boolean
-    progressFrames: table
-    tintFrames: table
-    isInitialized: boolean
     hasDisplayedRewards: boolean
+    hasRewardTimerElapsed: boolean
+    isInitialized: boolean
+    progressFrames: table
+    tableBuilder: TableBuilderMixin
+    tintFrames: table
     function OnLoad()
     function Init()
     function Shutdown()
@@ -19160,9 +19160,9 @@ declare class PVPMatchResultsMixin
 end
 
 declare class PVPMatchScoreboardMixin
+    Tabs: table
     isInitialized: boolean
     tableBuilder: TableBuilderMixin
-    Tabs: table
     tintFrames: table
     function OnLoad()
     function Init()
@@ -19207,13 +19207,13 @@ declare class PlunderstormQueueFrameMixin
 end
 
 declare class PerksProgramMixin
+    activeFilters: table
+    categories: table
     categoryIDs: number[]
-    purchaseStateTimer: TimerHandle
     currencyIconMarkup: string
+    purchaseStateTimer: TimerHandle
     refundStateTimer: TimerHandle
     vendorItemIDs: number[]
-    categories: table
-    activeFilters: table
     function OnLoad()
     function SetDefaultSort()
     function GetLabelFont(): unknown
@@ -19277,8 +19277,8 @@ end
 
 declare class PersonalResourceDisplayMixin
     classFrame: Frame
-    hasBeenSetup: boolean
     currPowerValue: number
+    hasBeenSetup: boolean
     lastKnownSpec: number
     powerType: PowerType?
     function GetClassFrameInfo(): unknown
@@ -19384,13 +19384,13 @@ declare class PingFrameMixin
 end
 
 declare class RadialWheelFrameMixin
-    numWedges: number
-    wedgeAngleIntervalRadians: number
-    processStickInputStarted: boolean
-    wedgeAngleIntervalRadiansHalf: number
-    radialWheelWedgeButtons: table
-    wedgeAngleOffsetInitial: number
     isWheelClosing: boolean
+    numWedges: number
+    processStickInputStarted: boolean
+    radialWheelWedgeButtons: table
+    wedgeAngleIntervalRadians: number
+    wedgeAngleIntervalRadiansHalf: number
+    wedgeAngleOffsetInitial: number
     function OnLoad()
     function OnUpdate()
     function UpdateSelection(forceUpdate: unknown?)
@@ -19429,10 +19429,10 @@ declare class PingListenerFrameMixin
 end
 
 declare class PlayerChoiceFrameMixin
-    optionFrames: table
-    choiceInfo: PlayerChoiceInfo?
     alignedSectionMaxHeights: table
+    choiceInfo: PlayerChoiceInfo?
     isLegacy: boolean
+    optionFrames: table
     optionsAligned: boolean
     function OnLoad()
     function SetupGridFrames()
@@ -19483,27 +19483,27 @@ declare class PlayerChoiceToggleButtonMixin
 end
 
 declare class CypherPlayerChoiceToggleButtonMixin
-    shownModeButtonInfo: table
     hiddenModeButtonInfo: table
+    shownModeButtonInfo: table
     function OnLoad()
     function UpdateButtonState()
 end
 
 declare class GenericPlayerChoiceToggleButtonMixin extends PlayerChoiceToggleButtonMixin
-    shownModeButtonInfo: table
     hiddenModeButtonInfo: table
+    shownModeButtonInfo: table
     function OnLoad()
     function OnEnter()
 end
 
 declare class PlayerSpellsFrameMixin
-    navigateSpellBookSection: BindingGroupMixin
+    classTalentsFrameFooter: PromptedBindingFooterMixin
     frameTabsToTabID: table
+    isMinimized: boolean
+    lockInspect: boolean
+    navigateSpellBookSection: BindingGroupMixin
     navigateTalentSection: BindingGroupMixin
     spellsFrameFooter: PromptedBindingFooterMixin
-    lockInspect: boolean
-    classTalentsFrameFooter: PromptedBindingFooterMixin
-    isMinimized: boolean
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -19596,8 +19596,8 @@ declare class ClassTalentLoadoutDialogMixin
 end
 
 declare class ClassTalentLoadoutEditDialogMixin
-    exclusive: boolean
     configID: number
+    exclusive: boolean
     function OnLoad()
     function OnCancel()
     function OnAccept()
@@ -19683,8 +19683,8 @@ declare class VisualAlertsManagerMixin
 end
 
 declare class GroupBuffMixin
-    hiddenGroupBuffSpellIDs: table
     groupBuffVisualAlerts: table
+    hiddenGroupBuffSpellIDs: table
     function OnLoad()
     function RefreshHiddenGroupBuffs(spellIDs: unknown?)
     function IsGroupBuffHidden(spellID: unknown?): boolean
@@ -19707,19 +19707,19 @@ declare class InspectRecipeMixin
 end
 
 declare class ProfessionsMixin
+    adjustAmount: BindingGroupMixin
     bookPageFooter: PromptedBindingFooterMixin
     changingTabs: boolean
-    gamepadCreateAllIcon: Frame
     craftingOrdersFilters: table
-    recipesFilters: table
-    gamepadCreateIcon: Frame
-    pendingPointsHelptipAcknowledged: boolean
     craftingPageFooter: PromptedBindingFooterMixin
+    gamepadCreateAllIcon: Frame
+    gamepadCreateIcon: Frame
     isCraftingOrdersTabEnabled: boolean
-    unspentPointsHelpTipInfo: boolean
-    unlockSpecHelptipAcknowledged: boolean
+    pendingPointsHelptipAcknowledged: boolean
     professionInfo: ProfessionInfo
-    adjustAmount: BindingGroupMixin
+    recipesFilters: table
+    unlockSpecHelptipAcknowledged: boolean
+    unspentPointsHelpTipInfo: boolean
     function OnLoad()
     function OnSkillAbandoned(_skillLine: unknown)
     function OnTradeSkillClosed()
@@ -19794,17 +19794,17 @@ declare class ProfessionsCustomerOrdersMixin
 end
 
 declare class SuperTrackedFrameMixin
+    axesMultiplied: number
+    circularVec: Vector2DMixin
+    clampedChanged: boolean
+    indicatorVec: Vector2DMixin
+    isClamped: boolean
+    majorAxisSquared: number
+    minorAxisSquared: number
+    mouseToNavVec: Vector2DMixin
+    navFrameRadius: number
     navFrameRadiusSq: number
     timeSinceLastPartyMemberUpdate: number
-    majorAxisSquared: number
-    circularVec: Vector2DMixin
-    indicatorVec: Vector2DMixin
-    clampedChanged: boolean
-    isClamped: boolean
-    axesMultiplied: number
-    mouseToNavVec: Vector2DMixin
-    minorAxisSquared: number
-    navFrameRadius: number
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function OnUpdate(dt: number)
@@ -19831,8 +19831,8 @@ end
 
 declare class QuestTimerMixin
     activeElements: table
-    templateName: string
     numTimers: number
+    templateName: string
     function OnLoad()
     function OnHide()
     function OnEvent(event: string, ...: unknown)
@@ -19845,8 +19845,8 @@ declare class QuestTimerMixin
 end
 
 declare class QueueStatusButtonMixin
-    glowLocks: table
     cursorOnButton: boolean
+    glowLocks: table
     function ShowLFGFrame(toggle: unknown?)
     function UpdateDefaultAnchor()
     function OnLoad()
@@ -19916,11 +19916,11 @@ declare class RoleSelectionMixin
 end
 
 declare class QuickJoinToastMixin
+    displayedTime: number
     groups: table
-    throttle: QuickJoinToastThrottleMixin
     groupsAwaitingDisplay: table
     queuedUpdates: table
-    displayedTime: number
+    throttle: QuickJoinToastThrottleMixin
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -20115,8 +20115,8 @@ declare class ReportFrameMixin extends SharedReportFrameMixin
 end
 
 declare class SharedReportFrameMixin
-    minorCategoryFlags: FlagsMixin
     enteringScreenshotMode: boolean
+    minorCategoryFlags: FlagsMixin
     requiresScreenshot: boolean
     function OnLoad()
     function OnHide()
@@ -20243,13 +20243,13 @@ declare class ScrappingMachineMixin
 end
 
 declare class ScriptErrorsFrameMixin
-    inputLegend: PromptedBindingFooterMixin
-    UnfocusGamepad: function
     OnSmartNavFocus: function
-    seen: table
-    messageLimit: number
+    UnfocusGamepad: function
     errorData: table
+    inputLegend: PromptedBindingFooterMixin
     messageCounter: function
+    messageLimit: number
+    seen: table
     function OnLoad()
     function OnShow()
     function Warn(warningMessage: unknown)
@@ -20293,9 +20293,9 @@ end
 
 declare class SettingsPanelMixin
     categoryLayouts: table
-    tabsGroup: RadioButtonGroupMixin
     modified: table
     settings: table
+    tabsGroup: RadioButtonGroupMixin
     function OnLoad()
     function OnTabSelected(tab: unknown, tabIndex: unknown)
     function OnCVarChanged(cvar: unknown, cvarValue: unknown)
@@ -20407,8 +20407,8 @@ declare class SimpleCheckoutMixin
 end
 
 declare class ShardTransferImminentMixin
-    timer: number
     startingTimer: number
+    timer: number
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function Start(time: unknown)
@@ -20426,10 +20426,10 @@ declare class ShardTransferImminentMinimizeMixin
 end
 
 declare class SocialUIFrameMixin extends CallbackRegistryMixin
-    tabDefinitions: table
     glowingTabTypes: table
-    sideWindowToLinkedTabType: table
     sideWindowFrames: table
+    sideWindowToLinkedTabType: table
+    tabDefinitions: table
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -20615,11 +20615,11 @@ declare class PetStableSlotMixin
 end
 
 declare class StableFrameMixin
-    selectedPetNewSlot: number
-    zoomSpeed: number
-    rotationSpeed: number
     bindings: BindingGroupMixin
     footer: PromptedBindingFooterMixin
+    rotationSpeed: number
+    selectedPetNewSlot: number
+    zoomSpeed: number
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function OnShow()
@@ -20731,8 +20731,8 @@ declare class EditModeStatusTrackingBarContainerMixin
 end
 
 declare class StatusTrackingBarContainerMixin
-    bars: table
     animationFinishedCallbacks: table
+    bars: table
     function InitializeBars()
     function GetExpectedWidth(): unknown
     function GetExpectedSegments(): unknown
@@ -21017,10 +21017,10 @@ declare class TorghastLevelPickerFrameMixin
 end
 
 declare class CustomGossipFrameBaseGridMixin
-    totalNumGossipOptions: number
-    maxOptionsPerPage: number
     gossipOptionsByIndex: table
+    maxOptionsPerPage: number
     numPages: number
+    totalNumGossipOptions: number
     function LayoutGridInit(anchor: AnchorMixin, overridePaddingX: unknown?, overridePaddingY: unknown?, overrideDirection: unknown?)
     function SetupOptionsByStartingIndex(index: number)
     function NextGridPage()
@@ -21107,8 +21107,8 @@ declare class UIErrorsMixin
 end
 
 declare class UIFrameManagerMixin
-    registeredFrames: table
     registeredFrameTypeToFrames: table
+    registeredFrames: table
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function RegisterFrameForFrameType(frame: unknown, frameType: UIFrameType)
@@ -21165,9 +21165,9 @@ declare class BankPanelMixin extends CallbackRegistryMixin
 end
 
 declare class CharacterFrameMixin
+    Expanded: boolean
     leftFooter: PromptedBindingFooterMixin
     rightFooter: PromptedBindingFooterMixin
-    Expanded: boolean
     function GetTab(tabID: unknown): unknown
     function GetJumpHintLabel(): unknown
     function ToggleTokenFrame()
@@ -21254,9 +21254,9 @@ declare class PaperDollFrameMixin
     CharacterViewerFooter: PromptedBindingFooterMixin
     characterViewerBindings: BindingGroupMixin
     panVector: Vector2DMixin
-    zoomSpeed: number
     rotationSpeed: number
     stickUpdateFrame: Frame
+    zoomSpeed: number
     function RepairSingleItemContextAction()
     function IsRepairSingleItemButtonContextActionValid(): unknown
     function OpenEquipmentFlyoutForFocusedButton()
@@ -21354,8 +21354,8 @@ end
 
 declare class SpellBookFrameMixin extends SpellBookFrameTutorialsMixin
     categoryMixins: table
-    isUpdatingAllSpellData: boolean
     isMinimized: boolean
+    isUpdatingAllSpellData: boolean
     spellDataDirty: boolean
     function OnShow()
     function SetupSettingsDropdown()
@@ -21474,15 +21474,15 @@ declare class PlayerCastingBarMixin
 end
 
 declare class CastingBarMixin
-    additionalFadeWidgets: table
+    ChargeTierPool: table
     NumStages: number
-    look: string
+    StagePipPool: table
     StagePips: table
     StagePoints: table
-    ChargeTierPool: table
     StageTiers: table
+    additionalFadeWidgets: table
+    look: string
     value: number
-    StagePipPool: table
     function OnLoad(unit: unknown, showTradeSkills: unknown, showShield: unknown)
     function OnEvent(event: string, ...: unknown)
     function OnUpdate(elapsed: number)
@@ -21692,10 +21692,10 @@ declare class PortraitFrameFlatBaseMixin
 end
 
 declare class ContainerFrameCombinedBagsMixin extends ContainerFrameTokenWatcherMixin
-    shownSlots: number
     gamepadFooter: PromptedBindingFooterMixin
-    size: number
     navigateCombinedBagsFrame: BindingGroupMixin
+    shownSlots: number
+    size: number
     function GetJumpHintLabel(): unknown
     function OnLoad()
     function OnShow()
@@ -21830,8 +21830,8 @@ declare class DressUpModelFrameResetButtonMixin
 end
 
 declare class GossipFrameMixin extends GossipFrameSharedMixin
-    tutorialButtons: table
     gamepadFooter: PromptedBindingFooterMixin
+    tutorialButtons: table
     function OnLoad()
     function HandleShow(textureKit: unknown)
     function OnEvent(event: string, ...: unknown)
@@ -21846,8 +21846,8 @@ declare class GossipFrameMixin extends GossipFrameSharedMixin
 end
 
 declare class GossipFrameSharedMixin
-    hasActiveQuests: boolean
     buttons: table
+    hasActiveQuests: boolean
     tutorialButtons: table
     function AvailableQuestButtonInit(button: unknown, elementData: unknown)
     function UpdateScrollBox()
@@ -21926,7 +21926,7 @@ end
 
 declare class LootFrameMixin
     gamepadFooter: PromptedBindingFooterMixin
-    selectedItemLink: string
+    selectedItemLink: string?
     function OnLoad()
     function OnHideAnimFinished()
     function CalculateElementsHeight(): number
@@ -21948,8 +21948,8 @@ declare class LootFrameMixin
 end
 
 declare class ScrollingFlatPanelMixin
-    onCloseCallback: function
     isOpen: boolean
+    onCloseCallback: function
     function OnLoad()
     function OnCloseCallback()
     function Open(skipShow: unknown?)
@@ -21965,8 +21965,8 @@ declare class ScrollingFlatPanelMixin
 end
 
 declare class EditModeLootFrameSystemMixin
-    isInEditMode: boolean
     editModeManuallyShown: boolean
+    isInEditMode: boolean
     function OnEditModeExit()
     function OnDragStart()
     function ApplySystemAnchor()
@@ -22019,8 +22019,8 @@ declare class QuestLogMixin
 end
 
 declare class QuestLogScrollFrameMixin
-    StoryTooltip: Frame
     CampaignTooltip: Frame
+    StoryTooltip: Frame
     function OnLoad()
     function OnSizeChanged()
     function OnMapCanvasPinEnter(unused_pin: unknown, questID: unknown)
@@ -22116,9 +22116,9 @@ declare class UIWidgetCenterScreenContainerMixin
 end
 
 declare class UIWidgetManagerMixin
+    processingUnit: string
     registeredWidgetContainers: table
     widgetVisTypeInfo: table
-    processingUnit: string
     function OnLoad()
     function OnWidgetContainerRegistered(widgetContainer: unknown)
     function OnWidgetContainerUnregistered(widgetContainer: unknown)
@@ -22142,8 +22142,8 @@ end
 
 declare class ComboFrameMixin
     ComboPoints: table
-    maxComboPoints: number
     layout: table
+    maxComboPoints: number
     function OnLoad()
     function InitializeComboPointPool()
     function OnEvent(event: string, ...: unknown)
@@ -22154,11 +22154,11 @@ declare class ComboFrameMixin
 end
 
 declare class PlayerFrameAlternatePowerBarBaseMixin extends AlternatePowerBarBaseMixin
-    cvar: string
     capNumericDisplay: boolean
+    cvar: string
+    cvarLabel: string
     pauseUpdates: boolean
     textLockable: number
-    cvarLabel: string
     function Initialize()
     function OnShow()
     function OnHide()
@@ -22190,9 +22190,9 @@ declare class TextStatusBarMixin
 end
 
 declare class DemonHunterSoulFragmentsBarMixin
+    disablePercentages: boolean
     frequentUpdates: boolean
     inVoidMetamorphosis: boolean
-    disablePercentages: boolean
     requiredClass: string
     function Initialize()
     function OnEvent(event: string, ...: unknown)
@@ -22254,8 +22254,8 @@ declare class PetFrameMixin extends PartyMemberAuraMixin
 end
 
 declare class PartyMemberAuraMixin
-    debuffs: table
     buffs: table
+    debuffs: table
     function UpdateMemberAuras(unitAuraUpdateInfo: unknown)
     function UpdateAurasInternal(unitAuraUpdateInfo: unknown?)
     function ParseAllAuras(displayOnlyDispellableDebuffs: unknown?, ignoreBuffs: boolean?, ignoreDebuffs: boolean?, ignoreDispelDebuffs: boolean?)
@@ -22268,10 +22268,10 @@ declare class EditModePetFrameSystemMixin
 end
 
 declare class PetHealthBarMixin
+    cvar: string
+    cvarLabel: string
     lockColor: boolean
     textLockable: number
-    cvarLabel: string
-    cvar: string
     function OnLoad()
     function OnSizeChanged()
 end
@@ -22286,10 +22286,10 @@ declare class StatusBarOverlaySegmentMixin
 end
 
 declare class PetManaBarMixin
-    textLockable: number
     cvar: string
-    lockColor: boolean
     cvarLabel: string
+    lockColor: boolean
+    textLockable: number
     function OnLoad()
 end
 
@@ -22318,20 +22318,20 @@ declare class PlayerBottomManagedFrameContainerMixin
 end
 
 declare class TargetFrameInstanceMixin
-    showLevel: boolean
-    showPortrait: boolean
-    showClassification: boolean
-    showPVP: boolean
-    showThreat: boolean
     showAuraCount: boolean
+    showClassification: boolean
     showLeader: boolean
+    showLevel: boolean
+    showPVP: boolean
+    showPortrait: boolean
+    showThreat: boolean
     function OnLoad_TargetFrameInstance()
 end
 
 declare class TargetFrameMixin
+    auraRows: number
     elapsed: number
     statusCounter: number
-    auraRows: number
     totFrame: Frame
     unitHPPercent: number
     function OnLoad(unit: unknown, menuFunc: unknown)
@@ -22390,12 +22390,12 @@ declare class EditModeBossUnitFrameSystemMixin
 end
 
 declare class BossTargetFrameMixin
-    maxDebuffs: number
-    showThreat: boolean
     isBossFrame: boolean
-    showPortrait: boolean
     maxBuffs: number
+    maxDebuffs: number
     showLevel: boolean
+    showPortrait: boolean
+    showThreat: boolean
     function OnLoad()
     function OnShow()
     function BossTarget_OnHide()
@@ -22454,8 +22454,8 @@ declare class PartyMemberBuffTooltipMixin
 end
 
 declare class WarfrontsPartyPoseMixin extends PartyPoseMixin
-    pendingRewardData: table
     isPlayingRewards: boolean
+    pendingRewardData: table
     function PlayRewardsAnimations()
     function SetLeaveButtonText()
     function GetPartyPoseData(mapID: number, winner: unknown): table
@@ -22466,13 +22466,13 @@ declare class WarfrontsPartyPoseMixin extends PartyPoseMixin
 end
 
 declare class WeeklyRewardsMixin
-    hasAvailableRewards: boolean
-    showWorldRow: boolean
     Activities: table
     Overlay: Frame
+    confirmSelectionFrame: Frame
+    hasAvailableRewards: boolean
     isReadOnly: boolean
     showPVPRow: boolean
-    confirmSelectionFrame: Frame
+    showWorldRow: boolean
     function SetUpConditionalActivities()
     function OnLoad()
     function OnShow()
@@ -22504,10 +22504,10 @@ declare class GreatVaultRetirementWarningFrameMixin
 end
 
 declare class WorldLootObjectListMixin
-    widgetObjectSet: table
-    shownObjectSet: table
     dataProvider: DataProviderMixin
+    shownObjectSet: table
     widgetDistanceCache: table
+    widgetObjectSet: table
     function OnLoad()
     function OnUpdate(dt: number)
     function OnObjectShown(unitToken: unknown, widget: unknown)
@@ -22548,19 +22548,19 @@ declare class QuestLogOwnerMixin
 end
 
 declare class WorldMapMixin
-    worldMapCursorBindings: BindingGroupMixin
-    worldMapFooter: PromptedBindingFooterMixin
+    isMaximized: boolean
+    minimizedHeight: number
     minimizedWidth: number
-    rewardCursorActive: boolean
     navBarBindings: BindingGroupMixin
     overlayFrames: table
+    questDetailCursorBindings: BindingGroupMixin
+    questDetailsFooter: PromptedBindingFooterMixin
     questLogFooter: PromptedBindingFooterMixin
     questLogTooltipBindings: BindingGroupMixin
-    isMaximized: boolean
-    questDetailsFooter: PromptedBindingFooterMixin
-    questDetailCursorBindings: BindingGroupMixin
-    minimizedHeight: number
     questLogWidth: number
+    rewardCursorActive: boolean
+    worldMapCursorBindings: BindingGroupMixin
+    worldMapFooter: PromptedBindingFooterMixin
     function GetJumpHintLabel(): unknown
     function SetupTitle()
     function SynchronizeDisplayState()
@@ -22659,8 +22659,8 @@ declare class WowSurveyStatusMixin
 end
 
 declare class ZoneAbilityFrameMixin
-    variablesLoaded: boolean
     previousZoneAbilities: table
+    variablesLoaded: boolean
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function SetVariablesLoaded()
@@ -22681,11 +22681,11 @@ declare class QuestTextContrast
 end
 
 declare class TextSizeManagerBase
-    registeredObjects: table
-    fonts: table
-    defaultScaleWeight: number
     cvarNames: table
+    defaultScaleWeight: number
+    fonts: table
     minScale: number
+    registeredObjects: table
     function Init()
     function BuildFonts()
     function GetFonts(): table
@@ -22723,10 +22723,10 @@ declare class FullscreenLeaveAccountStoreButtonMixin
 end
 
 declare class AccountStoreBaseCardMixin
-    itemInfo: AccountStoreItemInfo?
-    itemID: number
-    timeSinceUpdate: number
     hoverSoundPlayed: boolean
+    itemID: number
+    itemInfo: AccountStoreItemInfo?
+    timeSinceUpdate: number
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -22771,13 +22771,13 @@ declare class AccountStoreCategoryListMixin
 end
 
 declare class AccountStoreItemDisplayMixin
-    categoryID: number
-    categoryTypeToItemRack: table
     areItemsAvailable: boolean
+    categoryID: number
     categoryItems: number[]
-    currentPage: number
     categoryLastPage: table
+    categoryTypeToItemRack: table
     currencyID: number?
+    currentPage: number
     function InitializeStore(storeFrontID: unknown)
     function OnLoad()
     function OnShow()
@@ -22811,10 +22811,10 @@ declare class AccountStoreUtil
 end
 
 declare class AchievementsObjectivesMixin
-    metas: table
-    progressBars: table
-    miniAchivements: table
     criterias: table
+    metas: table
+    miniAchivements: table
+    progressBars: table
     function OnLoad()
     function OnHide()
     function Clear()
@@ -22950,11 +22950,11 @@ declare class MainMenuBarEndCapMixin
 end
 
 declare class AssistedCombatManager
-    init: boolean
     affectingCombat: boolean
-    useAssistedHighlight: boolean?
-    updateFrame: Frame
     hasShapeshiftForms: boolean
+    init: boolean
+    updateFrame: Frame
+    useAssistedHighlight: boolean?
     function Init()
     function OnSpellsChanged()
     function SetActionSpell(actionSpellID: unknown?)
@@ -23115,7 +23115,7 @@ declare class StanceButtonMixin
     function StanceButtonMixin_OnClick(button: unknown, down: unknown)
     function StanceButtonMixin_OnEnter()
     function StanceButtonMixin_OnLeave()
-    function HasAction(): (string, boolean, boolean, number)
+    function HasAction(): (string, boolean?, boolean?, number)
     function GetActionButtonInfo(): table
 end
 
@@ -23330,21 +23330,21 @@ declare class ArtifactAppearanceSlotMixin
 end
 
 declare class ArtifactPerksMixin
+    areAllGoldMedalsPurchasedByTier: table
     areAllPowersPurchasedByTier: table
     callbackTimers: table
-    tierGlowSeen: number?
+    finalPowerButtonsByTier: table
+    hasBoughtAnyPowers: boolean
+    modelTransformElapsed: number
+    numUsedCurvedLines: number
+    numUsedLines: number
     perksDirty: boolean
     powerIDToPowerButton: table
     queuePlayingReveal: boolean
-    traitRefundSoundEmitter: LoopingSoundEffectMixin
-    modelTransformElapsed: number
-    numUsedCurvedLines: number
-    finalPowerButtonsByTier: table
-    wasFinalPowerButtonUnlockedByTier: table
-    areAllGoldMedalsPurchasedByTier: table
     startingPowerButtonsByTier: table
-    numUsedLines: number
-    hasBoughtAnyPowers: boolean
+    tierGlowSeen: number?
+    traitRefundSoundEmitter: LoopingSoundEffectMixin
+    wasFinalPowerButtonUnlockedByTier: table
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -23659,11 +23659,11 @@ declare class AuctionHouseCommoditiesBuyDisplayMixin
 end
 
 declare class AuctionHouseItemListMixin
-    scrollFrameDirty: boolean
-    tableBuilderLayoutDirty: boolean
-    tableBuilder: TableBuilderMixin
-    isInitialized: boolean
     initArgs: table
+    isInitialized: boolean
+    scrollFrameDirty: boolean
+    tableBuilder: TableBuilderMixin
+    tableBuilderLayoutDirty: boolean
     function OnLoad()
     function SetDataProvider(searchStartedFunc: unknown, getEntry: unknown, getNumEntries: unknown, hasFullResultsFunc: unknown)
     function SetRefreshFrameFunctions(totalQuantityFunc: unknown, refreshResultsFunc: unknown)
@@ -24042,10 +24042,10 @@ declare class AuraContainerFramePoolProviderMixin
 end
 
 declare class AuraContainerCustomFrameProviderMixin
-    ownedFrames: table
     activeFrames: table
-    templateString: string
     availableFrames: table
+    ownedFrames: table
+    templateString: string
     function Init(parent: unknown?, description: unknown)
     function GetParent(): unknown
     function GetTemplateString(): string
@@ -24069,8 +24069,8 @@ declare class AuraContainerSingleFrameProviderMixin
 end
 
 declare class AuraContainerAuraGroupManagerMixin
-    auraGroupsByKey: table
     auraGroups: table
+    auraGroupsByKey: table
     function Init(owner: unknown)
     function RegisterAuraGroup(groupKey: string, description: unknown): AuraContainerAuraGroupMixin
     function UnregisterAuraGroup(groupKey: unknown)
@@ -24101,9 +24101,9 @@ declare class AuraContainerAuraGroupManagerMixin
 end
 
 declare class AuraContainerAuraGroupMixin
+    dirtyAuraInstanceIDs: table
     enabled: boolean
     frameAssignmentsDirty: boolean
-    dirtyAuraInstanceIDs: table
     function Init(description: unknown)
     function IsEnabled(): boolean
     function SetEnabled(enabled: boolean)
@@ -24176,10 +24176,10 @@ declare class AuraContainerAuraSlotManagerMixin
 end
 
 declare class AuraContainerAuraSlotMixin
-    enabled: boolean
     dirty: boolean
-    forceReassignPreferredAura: boolean
     dirtyAuraInstanceIDs: table
+    enabled: boolean
+    forceReassignPreferredAura: boolean
     function Init(slotKey: unknown, description: unknown)
     function IsEnabled(): boolean
     function SetEnabled(enabled: boolean)
@@ -24228,13 +24228,13 @@ declare class AuraContainerAuraSourceMixin
 end
 
 declare class CustomAuraButtonSharedMixin
-    pandemicEnterAnimations: table
-    auraShownAnimations: table
-    pandemicLeaveAnimations: table
-    dispelTypeTextures: table
-    pandemicRegions: table
     auraAssignedAnimations: table
+    auraShownAnimations: table
+    dispelTypeTextures: table
     pandemicActiveAnimations: table
+    pandemicEnterAnimations: table
+    pandemicLeaveAnimations: table
+    pandemicRegions: table
     function GetApplicationBar(): (...unknown)
     function SetApplicationBar(statusBar: FrameScriptObject, options: unknown?)
     function ClearApplicationBar()
@@ -24387,10 +24387,10 @@ declare class AzeriteRespecButtonMixin
 end
 
 declare class AzeriteEmpoweredItemChannelMixin
-    sparklesOffsetY: number
     goldOffsetY: number
-    sparklesOffsetX: number
     snapValue: boolean
+    sparklesOffsetX: number
+    sparklesOffsetY: number
     wispyOffsetY: number
     function Reset()
     function AdjustSizeForTiers(numTiers: unknown)
@@ -24403,11 +24403,11 @@ end
 
 declare class AzeriteEmpoweredItemPowerMixin
     goldOffsetX: number
-    sparklesOffsetY: number
-    sparklesOffsetX: number
-    wispyOffsetX: number
     goldOffsetY: number
+    sparklesOffsetX: number
+    sparklesOffsetY: number
     transitionStateInitialized: boolean
+    wispyOffsetX: number
     wispyOffsetY: number
     function Setup(owningTierFrame: unknown, azeriteItemDataSource: unknown, azeritePowerID: unknown, baseAngle: unknown)
     function Reset()
@@ -24474,11 +24474,11 @@ declare class AzeriteEmpoweredItemSlotMixin
 end
 
 declare class AzeriteEmpoweredItemTierMixin
-    tierOffset: number
+    azeriteItemPowerLevel: number
     azeritePowerButtons: table
     isFinalTier: boolean
     meetsPowerLevelRequirement: boolean
-    azeriteItemPowerLevel: number
+    tierOffset: number
     function Reset()
     function SetOwner(owningFrame: unknown, azeriteItemDataSource: unknown)
     function GetOwner(): unknown
@@ -24602,8 +24602,8 @@ declare class NewPlayerExperience
 end
 
 declare class NPE_TutorialCallout
-    InUseFrames: table
     FramePool: table
+    InUseFrames: table
     function Initialize()
     function Show(): unknown
     function Hide(frame: unknown?)
@@ -24659,10 +24659,10 @@ declare class NPE_TutorialMainFrame
 end
 
 declare class NPE_TutorialPointerFrame
-    InUseFrames: table
     FrameCount: number
-    NextID: number
     FramePool: table
+    InUseFrames: table
+    NextID: number
     function Initialize()
     function Show(content: unknown, direction: unknown, anchorFrame: unknown?, ofsX: number?, ofsY: number?, relativePoint: unknown?, backupDirection: unknown?, _overrideWidth: unknown): number
     function Hide(id: unknown)
@@ -24674,8 +24674,8 @@ declare class NPE_TutorialPointerFrame
 end
 
 declare class NPE_QuestManager
-    Data: table
     Callbacks: table
+    Data: table
     IsReinitializing: boolean
     function Initialize()
     function Shutdown()
@@ -24805,9 +24805,9 @@ declare class CatalogShopProductDetailsContainerFrameMixin
 end
 
 declare class CatalogShopProductContainerFrameMixin
-    silenceSelectionSounds: boolean
     ignoreNextSelectionForTelemetry: boolean
     selectionWasAutomatic: boolean
+    silenceSelectionSounds: boolean
     usesScrollBox: boolean
     function OnLoad()
     function Init()
@@ -25378,10 +25378,10 @@ declare class WeeklyRewardMixin
 end
 
 declare class ChallengeModeLegacyWeeklyChestMixin
-    ownedKeystoneLevel: number?
     level: number
-    rewardLevel: number?
     name: string?
+    ownedKeystoneLevel: number?
+    rewardLevel: number?
     function Update(bestMapID: number): unknown
     function SetupChest(chestFrame: unknown)
     function OnEnter()
@@ -25471,9 +25471,9 @@ declare class ChannelButtonBaseMixin
 end
 
 declare class ChannelListMixin
+    buttons: table
     collapsedStates: table
     scrolling: boolean
-    buttons: table
     function OnLoad()
     function SetCollapsed(category: unknown, collapsed: unknown)
     function IsCollapsed(category: unknown): unknown
@@ -25646,16 +25646,16 @@ declare class RingedFrameWithTooltipMixin
 end
 
 declare class CharacterCreateRaceAndClassMixin
-    rightStickMaxScrollSpeed: number?
     Timer: TimerHandle
-    rightStickScrollSpeed: number
-    classButtons: table?
-    footer: PromptedBindingFooterMixin
-    spellVisualKitStartAction: table
     bindings: BindingGroupMixin
     blockedRaces: table
-    spellVisualKitCompletionAction: table
+    classButtons: table?
     createdModelIndices: table
+    footer: PromptedBindingFooterMixin
+    rightStickMaxScrollSpeed: number?
+    rightStickScrollSpeed: number
+    spellVisualKitCompletionAction: table
+    spellVisualKitStartAction: table
     function OnLoad()
     function GetCreateCharacterFaction(): unknown
     function GetBoostCharacterFactionID(): unknown
@@ -25881,8 +25881,8 @@ declare class ChatConfigWideCheckboxMixin
 end
 
 declare class VoiceChatHeadsetButtonMixin
-    clubId: ClubId
     channelType: ChatChannelType
+    clubId: ClubId
     function OnLoad()
     function OnVoiceChannelRequestCompleted()
     function OnEvent(event: string, ...: unknown)
@@ -26197,14 +26197,14 @@ declare class ClickableBindingsEnableMouseoverCastCheckboxMixin
 end
 
 declare class WardrobeItemsCollectionMixin
-    defaultSectionSpacing: number
-    slots: table
     NUM_COLS: number
-    chosenVisualSources: table
     NUM_ROWS: number
-    latestAppearanceID: number?
     PAGE_SIZE: number
+    chosenVisualSources: table
+    defaultSectionSpacing: number
     lastWeaponCategory: TransmogCollectionType
+    latestAppearanceID: number?
+    slots: table
     function SetProgressBarVisibility(category: unknown)
     function OverrideDefaults()
     function CreateSlotButtons()
@@ -26255,9 +26255,9 @@ declare class WardrobeItemsCollectionMixin
 end
 
 declare class WardrobeSetsCollectionMixin
-    selectedVariantSets: table
-    selectedSetID: number
     init: boolean
+    selectedSetID: number
+    selectedVariantSets: table
     function SetProgressBarVisibility(show: unknown)
     function OnLoad()
     function OnShow()
@@ -26480,10 +26480,10 @@ end
 
 declare class WardrobeSetsDetailsModelMixin
     panAndZoomModelType: string
-    rotateStartCursorX: number
-    panning: boolean
-    rotating: boolean
     panStartCursorX: number
+    panning: boolean
+    rotateStartCursorX: number
+    rotating: boolean
     yaw: number
     function OnLoad()
     function OnShow()
@@ -26509,8 +26509,8 @@ end
 
 declare class ColorPickerFrameMixin
     brightnessBinding: BindingGroupMixin
-    previousValues: table
     colorPickerDetailsFooter: PromptedBindingFooterMixin
+    previousValues: table
     function GetColorAlpha(): (...unknown)
     function SetupColorPickerAndShow(info: unknown)
     function GetExtraInfo(): unknown
@@ -26674,8 +26674,8 @@ declare class CommentatorSpellCache
 end
 
 declare class CommentatorSpellTrayMixin
-    unitToken: string
     spellCaches: table
+    unitToken: string
     function OnLoad()
     function Reset()
     function OnUpdate(elapsed: unknown)
@@ -26728,8 +26728,8 @@ declare class CooldownCircleTrackerMixin
 end
 
 declare class CommentatorUnitFrameMixin
-    isInitializing: boolean
     ccSpellID: number?
+    isInitializing: boolean
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -26876,10 +26876,10 @@ declare class ClubFinderCardMixin
 end
 
 declare class ClubFinderCommunitiesCardsBaseMixin
-    totalListSize: number
-    showingCards: boolean
     CardList: table
     requestedNextPage: boolean
+    showingCards: boolean
+    totalListSize: number
     function ClearCardList()
     function OnLoad()
     function FindAndSetReportedCard(clubFinderGUID: unknown)
@@ -26890,11 +26890,11 @@ declare class ClubFinderCommunitiesCardsBaseMixin
 end
 
 declare class ClubFinderGuildCardsBaseMixin
-    pageNumber: number
-    showingCards: boolean
-    numPages: number
     CardList: table
+    numPages: number
+    pageNumber: number
     requestedPage: boolean
+    showingCards: boolean
     function ClearCardList()
     function OnLoad()
     function OnShow()
@@ -26965,8 +26965,8 @@ end
 
 declare class ClubFinderApplicantListMixin
     ApplicantInfoList: ClubFinderApplicantInfo[]
-    newApplicantListRequest: TickerHandle
     clubSizeMaxHit: boolean
+    newApplicantListRequest: TickerHandle
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -27008,10 +27008,10 @@ declare class CommunitiesCalendarButtonMixin
 end
 
 declare class CommunitiesChatMixin
-    requestedMoreHistory: boolean
-    eventsSent: table
     broadcastSent: table
+    eventsSent: table
     pendingMemberInfo: table
+    requestedMoreHistory: boolean
     function OnLoad()
     function OnShow()
     function OnEvent(event: string, ...: unknown)
@@ -27079,13 +27079,13 @@ declare class CommunitiesLanguageDropdownMixin
 end
 
 declare class CommunitiesListMixin
-    pendingFavorites: table
-    tickets: table
+    communitiesList: ClubInfo[]
     declinedInvitationIds: table
+    finderInvitations: RecruitingClubInfo[]?
     invitations: ClubSelfInvitationInfo[]
     newCommunityFlashTime: number
-    finderInvitations: RecruitingClubInfo[]?
-    communitiesList: ClubInfo[]
+    pendingFavorites: table
+    tickets: table
     function GetCommunitiesFrame(): (...unknown)
     function OnEvent(event: string, ...: unknown)
     function UpdateInvitations()
@@ -27153,12 +27153,12 @@ declare class CommunitiesListDropdownMixin
 end
 
 declare class CommunitiesMemberListMixin
-    professionDisplay: table
-    sortedProfessionList: table
-    sortedMemberList: table
-    allMemberList: table
-    sortedMemberLookup: table
     allMemberInfoLookup: table
+    allMemberList: table
+    professionDisplay: table
+    sortedMemberList: table
+    sortedMemberLookup: table
+    sortedProfessionList: table
     function ResetColumnSort()
     function SetVoiceChannel(voiceChannel: unknown)
     function GetVoiceChannel(voiceChannel: unknown): unknown
@@ -27475,10 +27475,10 @@ end
 
 declare class DeveloperConsoleAutoCompleteMixin
     bestResults: table
+    dirty: boolean
     entryByIndex: table
     heightDirty: boolean
     maxResults: number
-    dirty: boolean
     function OnLoad()
     function OnAvailableHeightChanged()
     function SetText(text: unknown, cursorPosition: unknown)
@@ -27550,9 +27550,9 @@ declare class ContributionRewardMouseOverMixin
 end
 
 declare class ContributionStatusMixin
-    onlyShowTextOnMouseEnter: boolean
-    nextUpdate: number
     isMouseOver: boolean
+    nextUpdate: number
+    onlyShowTextOnMouseEnter: boolean
     function OnLoad()
     function SetContributionID(contributionID: unknown)
     function Update()
@@ -27725,9 +27725,9 @@ declare class CooldownViewerSettingsTabMixin
 end
 
 declare class CooldownViewerSettingsDataProviderMixin
-    displayDataDirty: boolean
-    displayData: table
     IsLayoutUpdateQueued: function
+    displayData: table
+    displayDataDirty: boolean
     function Init(layoutManager: unknown?)
     function SetLayoutManager(layoutManager: unknown)
     function GetLayoutManager(): unknown
@@ -27772,12 +27772,12 @@ declare class CooldownViewerDataStoreSerializationMixin
 end
 
 declare class CooldownViewerLayoutManagerMixin
-    notificationLockCount: number
+    lastActiveLayoutIDsPerSpec: table
     layouts: table
     needsNotificationAfterUnlock: boolean
+    notificationLockCount: number
     notificationsCompletelyDisabled: boolean
     notifying: boolean
-    lastActiveLayoutIDsPerSpec: table
     function Init(dataProvider: unknown, serializer: unknown)
     function InitMemberVariables()
     function IsLoaded(): unknown
@@ -28067,9 +28067,9 @@ declare class CovenantChoiceToasts
 end
 
 declare class CustomizationAudioInterfaceMixin
+    isPlaying: boolean
     previousAllSoundSetting: string?
     previousSFXSetting: string?
-    isPlaying: boolean
     function OnEvent(event: string, ...: unknown)
     function SetupAudio(soundKit: unknown?)
     function IsPlaying(): boolean
@@ -28239,12 +28239,12 @@ declare class DamageMeterSpellEntryMixin
 end
 
 declare class DamageMeterSessionWindowMixin
-    needsSourceWindowRefresh: boolean
     backgroundAlpha: number
     barHeight: number
+    isResizing: boolean
+    needsSourceWindowRefresh: boolean
     playedMouseOverAnims: boolean
     textScale: number
-    isResizing: boolean
     function GetDamageMeterTypeDropdown(): unknown
     function GetDamageMeterTypeName(): unknown
     function GetSessionDropdown(): unknown
@@ -28355,13 +28355,13 @@ declare class DamageMeterSessionWindowMixin
 end
 
 declare class DamageMeterSourceWindowMixin
+    backgroundAlpha: number
+    barHeight: number
+    isResizing: boolean
     isRightSide: boolean
     showBarIcons: boolean
     textScale: number
-    backgroundAlpha: number
     useClassColor: boolean
-    barHeight: number
-    isResizing: boolean
     function GetScrollBox(): unknown
     function GetScrollBar(): unknown
     function GetResizeButton(): unknown
@@ -28528,10 +28528,10 @@ declare class CompanionInfoFrameMixin
 end
 
 declare class CompanionConfigSlotTemplateMixin
-    toggleNotAllowed: boolean
     configID: number?
-    selectionNodeOptions: table
     selectionNodeInfo: TraitNodeInfo?
+    selectionNodeOptions: table
+    toggleNotAllowed: boolean
     unseenCurios: number[]
     function OnEvent(event: string)
     function OnLoad()
@@ -28806,8 +28806,8 @@ declare class EditModeGridMixin
 end
 
 declare class EditModeGridSpacingSliderMixin
-    formatters: table
     cbrHandles: CallbackHandleContainerMixin
+    formatters: table
     function OnLoad()
     function SetupSlider(gridSpacing: unknown)
     function SetEnabled(enabled: unknown)
@@ -28862,8 +28862,8 @@ declare class EditModeChatFrameResizeButtonMixin
 end
 
 declare class EditModeSystemSelectionBaseMixin
-    textureShown: string
     isSelected: boolean
+    textureShown: string
     function OnLoad()
     function SetSystem(system: unknown)
     function ShowHighlighted()
@@ -28934,11 +28934,11 @@ declare class EditModeManagerSettingCheckButtonMixin
 end
 
 declare class EditModeMagnetismManager
-    topLevelParentTop: number
+    magnetismRange: number
     sqrCornerMagnetismRange: number
     sqrMagnetismRange: number
-    magnetismRange: number
     topLevelParentRight: number
+    topLevelParentTop: number
     function UpdateTopLevelParentPoints()
     function SetMagnetismRange(magnetismRange: number)
     function RegisterFrame(frame: unknown)
@@ -29000,8 +29000,8 @@ end
 
 declare class JourneysFrameMixin
     dataProvider: DataProviderMixin
-    renownJourneyData: table
     encountersJourneyData: table
+    renownJourneyData: table
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -29019,10 +29019,10 @@ declare class RenownCardButtonMixin
 end
 
 declare class JourneyProgressFrameMixin
-    renownLevelsInfo: MajorFactionRenownLevelInfo[]
     actualLevel: number
-    isLocked: boolean
     displayLevel: number
+    isLocked: boolean
+    renownLevelsInfo: MajorFactionRenownLevelInfo[]
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -29210,14 +29210,14 @@ declare class MonthlyActivitiesFilterListMixin
 end
 
 declare class MonthlyActivitiesFrameMixin
-    pendingCompleteFinishedAnimWindows: table
-    thresholdFrames: table
-    previousEarnedContribution: number
-    restricted: boolean
-    pendingCompleteActivities: table
-    progressionSFXQueued: boolean
-    thresholdMax: number
     InBonusMode: boolean
+    pendingCompleteActivities: table
+    pendingCompleteFinishedAnimWindows: table
+    previousEarnedContribution: number
+    progressionSFXQueued: boolean
+    restricted: boolean
+    thresholdFrames: table
+    thresholdMax: number
     function OnLoad()
     function CollapseAllMonthlyActivities()
     function OnShow()
@@ -29399,8 +29399,8 @@ declare class EncounterTimelineTimerViewTrackDividerMixin
 end
 
 declare class EncounterTimelineTrackLayoutMixin
-    tracksByID: table
     layoutDirty: boolean
+    tracksByID: table
     tracksByIndex: table
     function OnLoad()
     function OnUpdate(_elapsedTime: unknown)
@@ -29830,8 +29830,8 @@ end
 
 declare class CustomBindingManager
     handlers: table
-    systems: table
     pendingBinds: table
+    systems: table
     function RegisterHandlerAndCreateButton(handler: unknown, template: string?, parent: unknown?): Frame
     function SetHandlerRegistered(button: unknown, registered: unknown?)
     function RegisterHandler(customBindingType: unknown, handler: unknown, button: unknown)
@@ -29911,13 +29911,13 @@ declare class EventToastManagerNormalMixin
 end
 
 declare class EventToastAnimationsMixin
+    PlayBanner: function
+    ResumeBanner: function
+    StopBanner: function
     animInEndDelay: number
     animInStartDelay: number
-    isSideDisplayToast: boolean
-    ResumeBanner: function
-    PlayBanner: function
     fixedWidth: number
-    StopBanner: function
+    isSideDisplayToast: boolean
     function SetupSideDisplayToast(isFirstToast: unknown)
     function OnAnimFinished()
     function OnLoad()
@@ -30036,8 +30036,8 @@ declare class NavButtonMixin
 end
 
 declare class PvpTalentSlotMixin
-    slotIndex: number
     predictedSetting: PredictedSettingMixin
+    slotIndex: number
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -30243,14 +30243,14 @@ declare class ConfirmInviteTravelPassConfirmationDialogMixin
 end
 
 declare class RewardTrackFrameMixin
+    Elements: table
+    calculationWidth: number
     disableCentering: boolean
     moving: boolean
-    stopRequested: boolean
-    calculationWidth: number
-    visibleRadius: number
-    Elements: table
     numElements: number
     numElementsPerHalf: number
+    stopRequested: boolean
+    visibleRadius: number
     function OnLoad()
     function OnHide()
     function Init(elementList: unknown, paragonInfo: unknown?, progressBar: unknown?)
@@ -30378,11 +30378,11 @@ declare class WardrobeCustomSetManager
 end
 
 declare class AnimatedStatusBarMixin
-    pendingReset: boolean
-    numUsedTileTemplates: number
+    OnFinishedCallback: function
     OnSetStatusBarAnimUpdateCallback: function
     animatedTextureColors: table
-    OnFinishedCallback: function
+    numUsedTileTemplates: number
+    pendingReset: boolean
     tileTemplates: table
     function OnLoad()
     function Reset()
@@ -30414,10 +30414,10 @@ declare class AnimatedStatusBarMixin
 end
 
 declare class GradualAnimatedStatusBarMixin
-    pendingReset: boolean
     animationFinishedCallbacks: table
-    onCleanCallbacks: table
     isDirty: boolean
+    onCleanCallbacks: table
+    pendingReset: boolean
     function OnLoad()
     function Reset()
     function SetDeferAnimationCallback(deferAnimationCallback: unknown)
@@ -31341,8 +31341,8 @@ declare class GameEvent
 end
 
 declare class GameMenuFrameMixin
-    gamepadFooter: PromptedBindingFooterMixin
     buttons: table
+    gamepadFooter: PromptedBindingFooterMixin
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -31383,9 +31383,9 @@ declare class GameModeButtonMixin
 end
 
 declare class GameModeFrameMixin
-    shouldShowButtons: boolean
     buttonGroup: RadioButtonGroupMixin
     gameModeButtonTemplates: table
+    shouldShowButtons: boolean
     function SetDisabledForMode(gameModeRecordID: unknown, disabled: unknown)
     function OnLoad()
     function OnShow()
@@ -31472,17 +31472,17 @@ declare class GamepadRadialSegmentMixin
 end
 
 declare class GamepadRadialContextMenuMixin
-    isDown: table
-    indicators: table
     defaultOptions: table
+    indicators: table
+    isDown: table
     function Init(radial: unknown)
     function SetMenuOptions(options: unknown?)
     function OnButton(button: unknown, isDown: unknown?)
 end
 
 declare class GamepadReticleSwingTimerMixin
-    enabledCursorVis: boolean
     enabled: boolean
+    enabledCursorVis: boolean
     initialized: boolean
     function OnLoad()
     function OnEnableCVarChanged(newValue: string)
@@ -31547,8 +31547,8 @@ end
 
 declare class GamepadActionBarMixin
     actionBarScaledUp: boolean
-    supportsActionButtonPaging: boolean
     actionButtons: table
+    supportsActionButtonPaging: boolean
     function InitActionButtons()
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
@@ -31697,8 +31697,8 @@ declare class GamepadPetSpellFlyoutMixin
 end
 
 declare class GamepadClassActionButtonMixin
-    anchorInfo: table
     action: number
+    anchorInfo: table
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -31709,8 +31709,8 @@ declare class GamepadClassActionButtonMixin
 end
 
 declare class GamepadFlyoutPopupButtonMixin
-    isMouseOver: boolean
     isMouseDown: boolean
+    isMouseOver: boolean
     function UpdateButtonArt()
     function OnEnter()
     function OnLeave()
@@ -31730,10 +31730,10 @@ declare class GamepadActionBarPageTrackerSlotMixin
 end
 
 declare class GamepadFrameControlsManagerMixin
-    shownFrames: table
-    isPopupFrame: table
     gamepadBindings: BindingGroupMixin
     gamepadFallthroughCatcherBindings: BindingGroupMixin
+    isPopupFrame: table
+    shownFrames: table
     function ResetVars()
     function ToggleTooltips()
     function Init(): unknown
@@ -31837,8 +31837,8 @@ end
 
 declare class GamepadInputSequenceMixin
     currentSequenceIndex: number
-    sequenceButtons: table
     inputSequenceBindings: BindingGroupMixin
+    sequenceButtons: table
     function OnLoad()
     function OnShow()
     function SetupGamepad()
@@ -31896,13 +31896,13 @@ declare class PromptedBindingMixin
 end
 
 declare class PromptedBindingFooterMixin
+    bindings: BindingGroupMixin
     disallowButtonContexts: boolean
-    promptedBindings: table
     isShown: boolean
+    promptedBindings: table
+    promptedBindingsActive: table
     promptedBindingsByKey: table
     useWideBackground: boolean
-    promptedBindingsActive: table
-    bindings: BindingGroupMixin
     function Init(parentFrame: unknown, debugName: unknown?)
     function AddPromptedBinding(promptedBinding: unknown)
     function AddPromptedBindings(promptedBindings: unknown)
@@ -31948,12 +31948,12 @@ declare class SoftCursorCircleBoundsMixin extends SoftCursorBoundsMixin
 end
 
 declare class SoftCursorRectBoundsMixin extends SoftCursorBoundsMixin
-    right: number
     bottom: number
-    top: number
     left: number
-    pointY: number
     pointX: number
+    pointY: number
+    right: number
+    top: number
     function Init(inX: number, inY: number, inWidth: number, inHeight: number)
     function ClampPointInBounds(inX: unknown, inY: unknown): (unknown, unknown)
 end
@@ -31977,8 +31977,8 @@ declare class CovenantMissionPageEnemyMixin
 end
 
 declare class CovenantFollowerTabMixin
-    lastUpdate: number
     followerID: GarrisonFollower
+    lastUpdate: number
     function OnHide()
     function OnUpdate()
     function UpdateValidSpellHighlightOnAbilityFrame()
@@ -32109,9 +32109,9 @@ declare class GarrisonMissionPageCostWithTooltipMixin
 end
 
 declare class GarrisonMissionFollowerDurabilityMixin
-    maxDurabilityVal: number
-    durabilityVal: number
     durabilityLossVal: number
+    durabilityVal: number
+    maxDurabilityVal: number
     function SetDurability(durability: number, maxDurability: number, durabilityLoss: number?)
     function GetDurability(): (number, number, number)
 end
@@ -32166,11 +32166,11 @@ declare class GarrisonFollowerEquipmentMixin
 end
 
 declare class AdventuresBoardMixin
+    containerLayoutUpdated: boolean
+    enemyFramesCreated: boolean
     followerFramesCreated: boolean
     framesByBoardIndex: table
-    enemyFramesCreated: boolean
     socketsByBoardIndex: table
-    containerLayoutUpdated: boolean
     function OnLoad()
     function OnShow()
     function GetMainFrame(): (...unknown)
@@ -32201,9 +32201,9 @@ declare class AdventuresBoardMixin
 end
 
 declare class AdventuresSocketMixin
-    activeHealing: table
     activeBuffs: table
     activeDebuffs: table
+    activeHealing: table
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -32262,10 +32262,10 @@ end
 
 declare class AdventuresCompleteScreenMixin
     eventIndexToCooldownUpdates: table
-    replayFinished: boolean
-    missionEncounters: GarrisonEnemyEncounterInfo[]
-    replayTimeElapsed: number
     followerGUIDToInfo: table
+    missionEncounters: GarrisonEnemyEncounterInfo[]
+    replayFinished: boolean
+    replayTimeElapsed: number
     function OnShow()
     function OnHide()
     function OnLoad()
@@ -32402,8 +32402,8 @@ end
 
 declare class GarrisonMissionListMixin
     availableMissions: table
-    newMissionIDs: table
     inProgressMissions: table
+    newMissionIDs: table
     function OnLoad()
     function GetMissionFrame(): (...unknown)
     function OnShow()
@@ -32591,8 +32591,8 @@ declare class WarbandSceneEntryMixin
 end
 
 declare class GlueWarbandSceneJounalMixin
-    activeSearchParams: table
     GroupInfo: table
+    activeSearchParams: table
     function OnLoad()
     function OnShow()
     function OnEvent(event: string, ...: unknown)
@@ -32672,9 +32672,9 @@ declare class HCTEndStep
 end
 
 declare class CharacterServicesFlowMixin
-    step: number
-    rewindRequested: boolean
     results: table
+    rewindRequested: boolean
+    step: number
     function Initialize(controller: unknown)
     function BuildResults(steps: number): table
     function Advance(controller: unknown)
@@ -32779,8 +32779,8 @@ declare class CharacterSelectListGroupPulseAnimMixin
 end
 
 declare class CharacterSelectListCharacterMixin
-    isVeteranLocked: boolean
     EarlyTimerunningConversionButton: Frame
+    isVeteranLocked: boolean
     function OnLoad()
     function OnEnter()
     function OnLeave()
@@ -32933,8 +32933,8 @@ declare class CharacterSelectListUtil
 end
 
 declare class CharacterSelectToolTrayMixin
-    toolFrames: table
     nextLayoutIndex: number
+    toolFrames: table
     function OnLoad()
     function RegisterToolFrame(toolFrame: unknown, insertAtTop: unknown?)
     function SetToolFrameShown(toolFrame: unknown, isEnabled: unknown)
@@ -32984,9 +32984,9 @@ end
 
 declare class CharacterSelectBlockBase
     OPTION_INDEX_CREATE_NEW_CHARACTER: number
+    OPTION_INDEX_CREATE_TRIAL_CHARACTER: number
     OPTION_INDEX_CREATE_TRIAL_CHARACTER_HINT: number
     OPTION_INDEX_STEP_LABEL: number
-    OPTION_INDEX_CREATE_TRIAL_CHARACTER: number
     seenPopup: boolean
     function SetCharacterSelectErrorFrameShown(showError: unknown?)
     function GetStepOptionFrames(): (unknown, unknown)
@@ -33169,8 +33169,8 @@ declare class CharacterServicesTemplatesUtil
 end
 
 declare class CinematicsMenuButtonMixin
-    mouseIsOverMe: boolean
     isLocal: boolean
+    mouseIsOverMe: boolean
     function OnEnter()
     function OnLeave()
     function OnMouseDown()
@@ -33731,8 +33731,8 @@ declare class CustomizeDecorPetFrameMixin
 end
 
 declare class DecorPetCustomizationMixin
-    petID: string
     originalSelectedPet: string?
+    petID: string
     function SetPetID(petID: string?)
     function OnApply()
     function SetCustomizePane(customizePane: unknown)
@@ -34003,11 +34003,11 @@ end
 
 declare class HouseEditorStorageFrameMixin
     catalogSearcher: HousingCatalogSearcher
-    hasMarketData: boolean
-    hasUnseenDecor: boolean
-    collapsed: boolean | string | number
     catalogShopInteractionStarted: boolean
+    collapsed: boolean | string | number
+    hasMarketData: boolean
     hasRequestedRefundInfo: boolean
+    hasUnseenDecor: boolean
     tabsByEnum: table
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
@@ -34109,9 +34109,9 @@ declare class HouseEditorRoomCountMixin
 end
 
 declare class HouseEntryTemplateMixin
-    selected: boolean
-    expandedDetails: table
     collapsed: boolean
+    expandedDetails: table
+    selected: boolean
     function Init(elementData: unknown?)
     function OnVisitHouseClicked()
     function SetSelected(selected: unknown?)
@@ -34408,8 +34408,8 @@ declare class HousingCreateGuildNeighborhoodConfirmationMixin
 end
 
 declare class HousingCatalogFrameMixin
-    didOneTimeInitialize: boolean
     catalogSearcher: HousingCatalogSearcher
+    didOneTimeInitialize: boolean
     function OnLoad()
     function OneTimeInit()
     function OnEvent(event: string, ...: unknown)
@@ -34480,10 +34480,10 @@ declare class HouseFinderButtonMixin
 end
 
 declare class HousingUpgradeFrameMixin
-    houseLevelRewardInfos: table
-    maxLevel: number
     hasSelectedLevel: boolean
     houseFavorNeeded: number
+    houseLevelRewardInfos: table
+    maxLevel: number
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function AllRewardsLoaded(): boolean
@@ -34557,10 +34557,10 @@ declare class HouseXPCapIconMixin
 end
 
 declare class InitiativesTabMixin
-    initiativeActivityLog: InitiativeActivityLogInfo?
-    thresholdFrames: table
-    isViewingActiveNeighborhood: boolean
     currentInitiative: NeighborhoodInitiativeInfo?
+    initiativeActivityLog: InitiativeActivityLogInfo?
+    isViewingActiveNeighborhood: boolean
+    thresholdFrames: table
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function OnShow()
@@ -34751,8 +34751,8 @@ end
 
 declare class HousingMarketCartItemMixin
     enabled: boolean
-    selected: boolean
     mouseHovered: boolean
+    selected: boolean
     function OnLoad()
     function GetPlaceInWorldData(): table
     function InitItem(elementData: unknown)
@@ -34833,12 +34833,12 @@ declare class BaseHousingModeButtonMixin
 end
 
 declare class HousingCatalogCategoriesMixin
-    subcategoryFramesByID: table
-    filteredCategories: table
-    savedFocusStates: table
-    filteredSubcategories: table
     categories: table
     categoryFramesByID: table
+    filteredCategories: table
+    filteredSubcategories: table
+    savedFocusStates: table
+    subcategoryFramesByID: table
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function OnShow()
@@ -35222,10 +35222,10 @@ end
 
 declare class InspectPaperDollFrameMixin
     frameFooter: PromptedBindingFooterMixin
-    stickUpdateFrame: Frame
-    zoomSpeed: number
     paperDollBindings: BindingGroupMixin
     rotationSpeed: number
+    stickUpdateFrame: Frame
+    zoomSpeed: number
     function OnLoad()
     function OnEvent(event: string, unit: unknown?)
     function SetLevel()
@@ -35595,9 +35595,9 @@ end
 declare class LegacyRewardTrackPageMixin
     actualLevel: number
     displayLevel: number
+    majorFactionData: MajorFactionData?
     progressBarMaskTextures: table
     renownLevelsInfo: MajorFactionRenownLevelInfo[]
-    majorFactionData: MajorFactionData?
     function OnLoad()
     function OnShow()
     function RefreshPoints(currencyInfo: unknown)
@@ -35770,9 +35770,9 @@ declare class MajorFactionWatchFactionButtonMixin
 end
 
 declare class MapCanvasDetailLayerMixin
+    mapArtID: number?
     mapID: number
     textureLoadGroup: TextureLoadingGroupMixin
-    mapArtID: number?
     function OnLoad()
     function SetMapAndLayer(mapID: number, layerIndex: unknown, mapCanvas: unknown)
     function GetLayerIndex(): unknown
@@ -35802,26 +35802,26 @@ declare class MapCanvasPinFrameLevelsManagerMixin
 end
 
 declare class MapCanvasScrollControllerMixin
-    areaTriggersDirty: boolean
-    gamepadZoom: number
-    gamepadScrollSpeed: table
-    baseScale: number
-    normalizedZoomLerpAmount: number
-    hasInitializedGamepadCursor: boolean
-    maxGamepadScrollSpeedFullScreen: number?
     accumulatedMouseDeltaX: number
-    gamepadCursorLines: table
-    gamepadOverlayFrame: Frame
-    maxGamepadScrollSpeed: number?
-    edgePanDistance: number?
-    normalizedPanXLerpAmount: number
     accumulatedMouseDeltaY: number
+    areaTriggersDirty: boolean
+    baseScale: number
+    edgePanDistance: number?
+    gamepadCursorLines: table
+    gamepadCursorLinesActive: boolean
+    gamepadOverlayFrame: Frame
+    gamepadScrollSpeed: table
+    gamepadZoom: number
+    gamepadZoomSpeed: number?
+    hasInitializedGamepadCursor: boolean
+    maxGamepadScrollSpeed: number?
+    maxGamepadScrollSpeedFullScreen: number?
+    mouseButtonInfo: table
+    normalizedPanXLerpAmount: number
     normalizedPanYLerpAmount: number
+    normalizedZoomLerpAmount: number
     zoomAmountPerMouseWheelDelta: number
     zoomLevels: table
-    gamepadZoomSpeed: number?
-    gamepadCursorLinesActive: boolean
-    mouseButtonInfo: table
     function OnLoad()
     function OnMouseDown(button: string)
     function WouldCursorPositionBeClick(button: unknown, cursorX: number, cursorY: number): boolean
@@ -35962,8 +35962,8 @@ end
 
 declare class MatchmakingQueueFrameMixin
     clientStartTime: number
-    timer: TimerHandle
     currentTimeInQueue: number
+    timer: TimerHandle
     function OnLoad()
     function ResetTimer()
     function OnTick()
@@ -36032,8 +36032,8 @@ declare class MenuStyleMixin
 end
 
 declare class CompositorMixin
-    replacedMetatables: table
     attachments: table
+    replacedMetatables: table
     function Init(target: unknown): (...unknown)
     function GetBase(): unknown
     function ClearTicker()
@@ -36151,8 +36151,8 @@ end
 
 declare class MinimapPlayerCoordsMixin
     coordsByTenths: boolean?
-    updateThrottle: number
     showPlayerCoords: boolean?
+    updateThrottle: number
     function OnLoad()
     function CVarsUpdated()
     function OnUpdate(elapsed: number)
@@ -36206,8 +36206,8 @@ declare class MoneyDenominationDisplayMixin
 end
 
 declare class MoneyDisplayFrameMixin
-    rawCopper: number
     hideCopper: boolean
+    rawCopper: number
     function OnLoad()
     function SetFontAndIconDisabled(disabled: unknown)
     function SetFontObject(fontObject: unknown)
@@ -36327,8 +36327,8 @@ declare class NarrationHTMLMixin
 end
 
 declare class NarrationManagerMixin
-    eventsRegistered: boolean
     controlKeyDown: boolean
+    eventsRegistered: boolean
     function Init()
     function RegisterEvents()
     function UnregisterEvents()
@@ -36347,9 +36347,9 @@ declare class NarrationSliderMixin
 end
 
 declare class NarrationSourceMouseMixin
-    dwellTimer: number
-    callbacksRegistered: boolean
     activeTooltips: table
+    callbacksRegistered: boolean
+    dwellTimer: number
     function Init()
     function OnSystemStatus(isEnabled: unknown?)
     function UpdateEventRegistration(shouldBeRegistered: unknown?)
@@ -36421,8 +36421,8 @@ declare class CriterionMixin
 end
 
 declare class CriteriaDisplayMixin
-    criteria: table
     contentHeight: number
+    criteria: table
     function OnLoad()
     function SetTitle(title: unknown)
     function AddCriterion(text: unknown, isComplete: unknown)
@@ -36454,8 +36454,8 @@ declare class AsyncCallbackSystemMixin
 end
 
 declare class CovenantCallingMixin
-    isOnQuest: boolean
     isLockedToday: boolean
+    isOnQuest: boolean
     function Init(bounty: unknown?)
     function SetIndex(index: unknown)
     function GetIndex(): unknown
@@ -36824,9 +36824,9 @@ declare class PVPMatchResultsCurrencyRewardMixin
 end
 
 declare class PVPMatchResultsRatingMixin
+    rating: number
     ratingChange: number
     ratingNew: number
-    rating: number
     function Init(rating: number, ratingChange: number)
     function OnEnter()
     function OnLeave()
@@ -36939,9 +36939,9 @@ declare class PlunderstormPanelMixin
 end
 
 declare class PVPQuestRewardMixin
-    shouldShowObjectivesAsStatusBar: boolean
-    questInCache: boolean
     questID: number
+    questInCache: boolean
+    shouldShowObjectivesAsStatusBar: boolean
     function OnShow()
     function OnHide()
     function OnEvent(event: string, ...: unknown)
@@ -37009,8 +37009,8 @@ declare class PagingControlsMixin
 end
 
 declare class PartyPoseRewardsMixin
-    loopingSoundEmitter: LoopingSoundEffectMixin
     isPlayingRewards: boolean
+    loopingSoundEmitter: LoopingSoundEffectMixin
     function OnLoad()
     function OnEnter()
     function OnLeave()
@@ -37142,8 +37142,8 @@ end
 
 declare class PerksProgramItemDetailsListMixin
     allItemsSelectionTypeOther: boolean
-    selectedItems: table
     itemList: table
+    selectedItems: table
     function OnLoad()
     function PopulateItemList()
     function ClearData()
@@ -37259,10 +37259,10 @@ declare class PerksProgramPurchaseCartButtonMixin
 end
 
 declare class PerksProgramShoppingCartMixin
-    totalCartPrice: number
+    cartItems: table
     defaultTransmogDisplayData: table
     originalTotalCartPrice: number
-    cartItems: table
+    totalCartPrice: number
     function OnLoad()
     function InitCart()
     function UpdateShown(showCart: unknown?)
@@ -37299,8 +37299,8 @@ end
 
 declare class PerksProgramModelSceneContainerFrameMixin
     buttonGroup: RadioButtonGroupMixin
-    hasAlternateForm: boolean
     firstDress: boolean
+    hasAlternateForm: boolean
     function OnLoad()
     function OnFormSelected(button: unknown, buttonIndex: unknown)
     function Init()
@@ -37351,8 +37351,8 @@ declare class PerksProgramProductsFrameMixin
 end
 
 declare class PerksProgramCurrencyFrameMixin
-    pendingChestRewards: PerksProgramPendingChestRewards[]
     currencyAmount: number
+    pendingChestRewards: PerksProgramPendingChestRewards[]
     function OnLoad()
     function UpdateCurrencyAmount()
     function OnEvent(event: string, ...: unknown)
@@ -37376,9 +37376,9 @@ declare class FrozenProductContainerMixin
 end
 
 declare class DemonHunterAlternatePowerBarMixin
+    alternatePowerRequirementsMet: boolean
     powerName: string
     requiredClass: string
-    alternatePowerRequirementsMet: boolean
     function Initialize()
     function EvaluateUnit()
     function UpdatePower()
@@ -37390,9 +37390,9 @@ declare class DemonHunterAlternatePowerBarMixin
 end
 
 declare class EvokerAlternatePowerBarMixin
-    requiredClass: string
-    powerName: string
     alternatePowerRequirementsMet: boolean
+    powerName: string
+    requiredClass: string
     function Initialize()
     function EvaluateUnit()
     function UpdatePower()
@@ -37416,9 +37416,9 @@ declare class ManaAlternatePowerMixin
 end
 
 declare class MonkAlternatePowerBarMixin
-    requiredClass: string
     alternatePowerRequirementsMet: boolean
     powerName: string
+    requiredClass: string
     function Initialize()
     function EvaluateUnit()
     function UpdatePower()
@@ -37450,8 +37450,8 @@ declare class PhotoSharingBrowserPopupMixin
 end
 
 declare class PingManager
-    defaultWedgeInfo: table
     activePinFrames: table
+    defaultWedgeInfo: table
     function Initialize()
     function SetupDefaultPingOptions()
     function OnPingPinFrameAdded(frame: unknown, uiTextureKit: unknown, isWorldPoint: unknown, actionInfo: unknown)
@@ -37873,10 +37873,10 @@ declare class ClassTalentUtil
 end
 
 declare class HeroTalentsContainerMixin
-    playedUnlockedAnim: boolean
     anyActiveSubTreeMatches: boolean
     availableHeroSpecSubTreeIDs: number[]?
     heroTalentUIDirty: boolean
+    playedUnlockedAnim: boolean
     function OnLoad()
     function Init(talentFrame: unknown, specSelectionDialog: unknown)
     function OnHide()
@@ -37944,10 +37944,10 @@ end
 
 declare class HeroTalentSpecContentMixin
     Reset: (framePool: unknown, self: unknown) -> ()
+    isLeftMostSpec: boolean
+    isRightMostSpec: boolean
     layoutIndex: number
     playingActivationFlash: boolean
-    isRightMostSpec: boolean
-    isLeftMostSpec: boolean
     function OnLoad()
     function Setup(subTreeID: unknown, index: number, numSpecs: unknown, specContentWidth: unknown)
     function UpdateCurrency()
@@ -38000,11 +38000,11 @@ declare class ClassSpecFrameMixin
 end
 
 declare class ClassSpecContentFrameMixin
-    specIndex: number
     isLeftMostSpec: boolean
-    layoutIndex: number
     isRightMostSpec: boolean
+    layoutIndex: number
     playingActivationFlash: boolean
+    specIndex: number
     function OnLoad()
     function Setup(index: number, sex: number?, frameWidth: unknown, numSpecs: unknown)
     function UpdateActiveGlow(isInGlowState: unknown?)
@@ -38203,8 +38203,8 @@ declare class SpellBookItemButtonMixin
 end
 
 declare class SpellBookSearchMixin
-    searchController: SpellSearchControllerMixin
     isInSearchResultsMode: boolean
+    searchController: SpellSearchControllerMixin
     function InitializeSearch()
     function IsSearchInitialized(): unknown
     function IsInSearchResultsMode(): unknown
@@ -38291,17 +38291,17 @@ declare class CompactDispelDebuffMixin
 end
 
 declare class PrivateAuraAnchorContainerMixin
-    blockedAuras: table
-    container: InboundContainerFrameMixin
-    dispelOverlayAuraOffset: number
-    debuffs: table
-    buffs: table
-    dispels: table
-    containerSettings: table
-    dispelsChanged: boolean
-    buffsChanged: boolean
     bigDefensives: table
+    blockedAuras: table
+    buffs: table
+    buffsChanged: boolean
+    container: InboundContainerFrameMixin
+    containerSettings: table
+    debuffs: table
     debuffsChanged: boolean
+    dispelOverlayAuraOffset: number
+    dispels: table
+    dispelsChanged: boolean
     function ReadContainerSettings()
     function OnAnchorAdded(watcher: unknown)
     function OnAnchorRemoved()
@@ -38380,9 +38380,9 @@ declare class ProfessionsCrafterOrderRewardTooltipMixin
 end
 
 declare class ProfessionsCrafterOrderViewMixin
+    asyncContainers: table
     hasOptionalReagentSlots: boolean
     isOverrideCastBarActive: boolean
-    asyncContainers: table
     reagentSlotProvidedByCustomer: table
     function InitButtons()
     function InitRegions()
@@ -38453,8 +38453,8 @@ declare class ProfessionsSpecFrameMixin
     getTemplateType: (nodeInfo: unknown, talentType: unknown) -> string
     getSpecializedMixin: (nodeInfo: unknown, talentType: unknown) -> unknown
     getEdgeTemplateType: () -> string
-    tabSpendCurrency: number?
     tabInfo: ProfTabInfo?
+    tabSpendCurrency: number?
     function GetDesiredPageWidth(): number
     function ConfigureButtons()
     function ConfigureRegions()
@@ -38512,9 +38512,9 @@ declare class ProfessionsSpecFrameMixin
 end
 
 declare class ProfessionSpecTabMixin
-    traitTreeID: number
     isSelected: boolean
     tabInfo: ProfTabInfo?
+    traitTreeID: number
     function OnShow()
     function OnHide()
     function OnEvent(event: string, ...: unknown)
@@ -38536,8 +38536,8 @@ declare class ProfessionSpecEdgeArrowMixin
 end
 
 declare class ProfessionSpellButtonMixin
-    spellGrabbed: boolean
     dragStopped: boolean
+    spellGrabbed: boolean
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function OnShow()
@@ -38562,8 +38562,8 @@ declare class ProfessionsCustomerOrdersFrameTabMixin
 end
 
 declare class ProfessionsCustomerOrdersBrowsePageMixin
-    tableBuilder: TableBuilderMixin
     sortManager: SortManagerMixin
+    tableBuilder: TableBuilderMixin
     function SetDefaultFilters()
     function UpdateFavoritesButton()
     function OnLoad()
@@ -38580,9 +38580,9 @@ declare class ProfessionsCustomerOrdersBrowsePageMixin
 end
 
 declare class ProfessionsCustomerOrderFormMixin
-    pendingOrderPlacement: boolean
-    lastRequest: CraftingOrderRequestInfo
     committed: boolean
+    lastRequest: CraftingOrderRequestInfo
+    pendingOrderPlacement: boolean
     function InitPaymentContainer()
     function SetRecraftItemGUID(itemGUID: string)
     function InitButtons()
@@ -38624,10 +38624,10 @@ declare class ProfessionsCustomerOrderFormMixin
 end
 
 declare class ProfessionsCustomerOrdersMyOrdersMixin
+    numOrders: number
+    primarySort: table
     secondarySort: table
     tableBuilder: TableBuilderMixin
-    primarySort: table
-    numOrders: number
     function InitButtons()
     function InitOrderList()
     function ResetSortOrder()
@@ -38821,14 +38821,14 @@ declare class ProfessionsRecipeCrafterDetailsMixin
 end
 
 declare class ProfessionsQualityMeterMixin
-    anims: table
-    pendingMaxQualityInfo: CraftingQualityInfo?
     animating: boolean
-    sequencer: SequencerMixin
-    craftingQualityInfo: CraftingQualityInfo?
-    pendingQualityInfo: CraftingQualityInfo?
+    anims: table
     atMaxTier: boolean
+    craftingQualityInfo: CraftingQualityInfo?
     interpolator: InterpolatorMixin
+    pendingMaxQualityInfo: CraftingQualityInfo?
+    pendingQualityInfo: CraftingQualityInfo?
+    sequencer: SequencerMixin
     function OnLoad()
     function CancelAllAnims(operationInfo: unknown?)
     function SetOnAnimationsFinished(func: unknown)
@@ -38919,10 +38919,10 @@ declare class ProfessionsCurrencyMixin
 end
 
 declare class ProfessionsRecipeTransactionMixin
-    exemptedReagents: table
-    reagentTbls: table
     allocationTbls: table
+    exemptedReagents: table
     reagentSlotSchematicTbls: table
+    reagentTbls: table
     function Init(recipeSchematic: unknown)
     function HasReagentSlots(): boolean
     function SetAllocationsChangedHandler(onChangedFunc: unknown)
@@ -39050,8 +39050,8 @@ declare class QuickJoinEntriesMixin
 end
 
 declare class QuickJoinEntryMixin
-    displayedQueues: table
     displayedMembers: table
+    displayedQueues: table
     hasRelationshipWithLeader: boolean
     function Init(partyGUID: unknown)
     function GetGUID(): unknown
@@ -39089,8 +39089,8 @@ end
 
 declare class QuickJoinToastGroupMixin
     displayedQueues: table
-    suppressToast: boolean
     priority: number
+    suppressToast: boolean
     function Init(guid: unknown)
     function DelayUntil(delayUntil: unknown)
     function GetDelayUntil(): unknown
@@ -39311,8 +39311,8 @@ declare class RecentAlliesUtil
 end
 
 declare class RecruitActivityButtonMixin
-    lastCanClaim: boolean
     isTrialAccount: boolean
+    lastCanClaim: boolean
     questName: string?
     function OnLoad()
     function OnHide()
@@ -39518,8 +39518,8 @@ declare class ScrappingMachineItemSlotMixin
 end
 
 declare class ScriptErrorsMixin
-    unhandledErrors: table
     isErrorHandlingDeferred: boolean
+    unhandledErrors: table
     function Init()
     function AddUnhandledError(errorMessage: unknown, stack: unknown, locals: unknown)
 end
@@ -39732,8 +39732,8 @@ declare class SubtitlesPreviewMixin
 end
 
 declare class SettingsCategoryMixin
-    tutorial: table
     subcategories: table
+    tutorial: table
     function Init(name: unknown)
     function GetID(): unknown
     function GetName(): unknown
@@ -39813,11 +39813,11 @@ declare class SettingMixin
 end
 
 declare class CVarSettingMixin extends SettingMixin
-    GetNameDerived: function
     ConvertValueInternal: function
     GetDefaultValueDerived: function
-    SetValueDerived: function
+    GetNameDerived: function
     GetValueDerived: function
+    SetValueDerived: function
     function Init(name: unknown, cvar: string, variableType: string)
     function TransformValue(value: unknown): (unknown, ...unknown)
     function NegateBoolean(): (...unknown)
@@ -39830,8 +39830,8 @@ end
 
 declare class SettingsElementHierarchyMixin
     evaluateStateCVars: table
-    modifyPredicates: table
     evaluateStateFrameEvents: table
+    modifyPredicates: table
     function SetParentInitializer(parentInitializer: unknown, modifyPredicate: unknown?)
     function GetParentInitializer(): unknown
     function AddModifyPredicate(func: unknown)
@@ -39882,9 +39882,9 @@ declare class SettingsExpandableSectionInitializer extends ScrollBoxFactoryIniti
 end
 
 declare class SettingsSearchableElementMixin
-    shownPredicates: table
-    searchTags: table
     searchIgnoredLayouts: table
+    searchTags: table
+    shownPredicates: table
     function AddSearchTags(...: unknown)
     function MatchesSearchTags(words: unknown): number?
     function SetSearchIgnoredInLayout(layout: unknown)
@@ -39948,8 +39948,8 @@ declare class SettingsListSearchCategoryMixin
 end
 
 declare class SettingsRegistrar
-    registrants: table
     allowCallRegistrants: boolean
+    registrants: table
     function OnLoad()
     function AddRegistrant(registrant: unknown)
 end
@@ -40027,9 +40027,9 @@ declare class IconWithHeightIndicatorMapPinMixin
 end
 
 declare class QuestHubPinMixin
-    suppressedPinTooltipContainers: table
     linkedAreaPOIPins: table
     relatedQuests: table
+    suppressedPinTooltipContainers: table
     function OnAcquired(poiInfo: unknown)
     function BuildRelatedQuests()
     function GetRelatedQuests(): table
@@ -40205,8 +40205,8 @@ declare class TalentTreeSelectableButtonMixin
 end
 
 declare class TalentFrameTreeSelectorMixin
-    treeButtons: table
     buttonGroup: RadioButtonGroupMixin
+    treeButtons: table
     function OnLoad()
     function OnButtonSelected(button: unknown, _buttonIndex: unknown)
     function SetTreeSelectedCallback(callback: unknown)
@@ -40223,8 +40223,8 @@ declare class TalentFrameStarGridMixin
 end
 
 declare class TalentSelectionChoiceFrameMixin
-    selectionFrameArray: table
     selectionCount: number
+    selectionFrameArray: table
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -40429,11 +40429,11 @@ end
 
 declare class RadialWheelButtonMixin
     animEndTime: number
-    animStartY: number
+    animEndX: number
+    animEndY: number
     animStartTime: number
     animStartX: number
-    animEndY: number
-    animEndX: number
+    animStartY: number
     function OnHide()
     function OnUpdate()
     function CacheAnimatingFrameInfo(frame: unknown)
@@ -40479,8 +40479,8 @@ declare class ContentFrameMixin
 end
 
 declare class ButtonGroupBaseMixin extends CallbackRegistryMixin
-    callbacks: table
     buttons: table
+    callbacks: table
     function Init()
     function SetShown(shown: unknown)
     function AddButton(button: unknown)
@@ -40562,8 +40562,8 @@ declare class CircularBufferMixin
 end
 
 declare class CustomBindingButtonMixin
-    keys: table
     isBindingModeActive: boolean
+    keys: table
     receivedNonMetaKeyInput: boolean
     function OnLoad()
     function OnClick(button: unknown, isDown: unknown?)
@@ -40828,8 +40828,8 @@ declare class HelpTip
 end
 
 declare class HelpTipTemplateMixin
-    ignoreInLayout: boolean
     acknowledged: boolean
+    ignoreInLayout: boolean
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -41141,11 +41141,11 @@ declare class SearchBoxListElementMixin
 end
 
 declare class SearchBoxListMixin
-    allResultsIndex: number
-    showAllResults: Frame
-    selectedIndex: number
     HasStickyFocus: function
+    allResultsIndex: number
     searchButtons: table
+    selectedIndex: number
+    showAllResults: Frame
     function OnLoad()
     function HideSearchPreview()
     function HideSearchProgress()
@@ -41479,8 +41479,8 @@ declare class RegionUtil
 end
 
 declare class ScaleToFitFrameMixin
-    maxWidth: number
     maxHeight: number
+    maxWidth: number
     function OnScaleToFitFrameLoad()
     function OnScaleToFitFrameEvent(event: string, ...: unknown)
     function SetRefreshCallback(callback: unknown)
@@ -41559,9 +41559,9 @@ declare class ScriptedAnimationEffectsDebug
 end
 
 declare class ScrollableTabsContainerMixin
+    canScrollRight: boolean
     controlWidthRight: number
     tabs: table
-    canScrollRight: boolean
     function OnSizeChanged()
     function Init(template: string, initializer: unknown, controlsUpdateFunc: unknown)
     function AddTab(tabInfo: unknown)
@@ -41604,9 +41604,9 @@ declare class AutoScalingFontStringMixin
 end
 
 declare class SequencerMixin
-    sequences: table
-    original: table
     interpolator: InterpolatorMixin
+    original: table
+    sequences: table
     function Init()
     function AddInterpolated(v1: unknown, v2: unknown, time: unknown, interpType: unknown, func: unknown)
     function Add(func: unknown)
@@ -41715,8 +41715,8 @@ declare class InputIconTextureSetUtility
 end
 
 declare class InputIconTextureMixin
-    useDropShadow: boolean
     textureStateTextures: table
+    useDropShadow: boolean
     function RefreshIconTextures()
     function ApplyTextureLayout(texture: unknown, atlasKey: unknown)
     function ShouldUseAdjustedTextureBounds(iconAtlasKey: string?): unknown
@@ -41825,11 +41825,11 @@ end
 
 declare class ScrollBoxListViewMixin extends ScrollBoxViewMixin
     DoesFrameHaveEvent: (frame: unknown, event: unknown) -> ...unknown
-    factory: function
-    initializers: table
     canSignalWithoutInitializer: boolean
+    factory: function
     frameFactory: FrameFactoryMixin
     frames: table
+    initializers: table
     function Init()
     function GetExtentFromInfo(info: unknown): unknown
     function GetTemplateInfo(frameTemplate: unknown): (...unknown)
@@ -42204,12 +42204,12 @@ declare class SelectionBehaviorMixin extends CallbackRegistryMixin
 end
 
 declare class ScrollBoxDragBehavior
-    sourceData: table
-    cursorHitInsets: table
-    lastCandidate: table
-    dropPreviewFactory: function
     candidate: table
     childToParent: table
+    cursorHitInsets: table
+    dropPreviewFactory: function
+    lastCandidate: table
+    sourceData: table
     function Init(scrollBox: unknown)
     function RebuildOnDrop(): unknown
     function ClearCandidate()
@@ -42323,10 +42323,10 @@ declare class MinimalSliderMixin
 end
 
 declare class TabSystemTrackerMixin
-    tabIDToTabCallback: table
-    tabbedElements: table
-    tabIDToTabDeselectCallback: table
     tabIDToElementSet: table
+    tabIDToTabCallback: table
+    tabIDToTabDeselectCallback: table
+    tabbedElements: table
     function OnLoad()
     function Init()
     function AddTab(tabID: unknown, ...: unknown)
@@ -42388,8 +42388,8 @@ end
 
 declare class BaseTextTimerMixin
     currentTime: number
-    remainingTime: number
     endTime: number
+    remainingTime: number
     function StartTimer(timeInSeconds: number, updateFrequency: unknown, hideOnFinish: unknown, notAbbreviated: unknown, formatString: unknown)
     function StopTimer()
     function UpdateTimerText()
@@ -42436,8 +42436,8 @@ end
 
 declare class CatmullRomSplineMixin
     numDimensions: number
-    pointData: table
     numPoints: number
+    pointData: table
     function OnLoad(numDimensions: number)
     function GetNumDimensions(): number
     function AddPoint(...: unknown)
@@ -42697,9 +42697,9 @@ declare class ColorSwatchMixin
 end
 
 declare class CVarAccessorMixin
+    ConvertValue: function
     GetDefaultValue: function
     GetValue: function
-    ConvertValue: function
     SetValue: function
     function Init(cvar: CVar, variableType: string)
 end
@@ -43288,8 +43288,8 @@ declare class SpellDiminishStatusTrayItemMixin
 end
 
 declare class SpellDiminishStatusTrayMixin
-    trayItemOrder: table
     activeItemForCategory: table
+    trayItemOrder: table
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -43328,10 +43328,10 @@ declare class SpellPickupIndicatorMixin
 end
 
 declare class BaseSpellSearchFilterMixin
-    resultsBySourceType: table
-    reverseDefaultMatchTypeSort: boolean
     isActive: boolean
     matchesBySourceType: table
+    resultsBySourceType: table
+    reverseDefaultMatchTypeSort: boolean
     function Init(searchController: unknown, enabled: unknown)
     function SetEnabled(enabled: unknown)
     function GetIsEnabled(): unknown
@@ -43398,8 +43398,8 @@ declare class SpellSearchPreviewResultMixin
 end
 
 declare class SpellSearchPreviewContainerMixin
-    suggestedResultInfos: table
     highlightedIndex: number
+    suggestedResultInfos: table
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -43568,8 +43568,8 @@ declare class StabledPetListCategoryMixin
 end
 
 declare class StableStabledPetListMixin
-    pets: PetInfo[]
     collapsedCategories: table
+    pets: PetInfo[]
     function OnLoad()
     function OnShow()
     function SetSortMode(sortMode: (boolean | string | number)?)
@@ -43888,8 +43888,8 @@ declare class DefaultStoreCardMagnifierMixin
 end
 
 declare class StoreLayoutGridMixin
-    grid: table
     currentCol: number
+    grid: table
     function Init(numRows: unknown, numCols: unknown)
     function Reset()
     function IsGridFull(): boolean
@@ -43949,8 +43949,8 @@ declare class TextStatusBarSparkMixin
 end
 
 declare class TieredEntranceTraitsContainerMixin
-    numTraits: number
     isOnLeftSide: boolean
+    numTraits: number
     function OnHide()
     function OnClick()
     function SetTraitTree(traitTreeID: number)
@@ -44122,8 +44122,8 @@ declare class TorghastPagingContainerMixin
 end
 
 declare class TorghastLevelPickerRewardCircleMixin
-    itemRewards: table
     currencyRewards: table
+    itemRewards: table
     function SetSortedRewards()
     function AddCurrencyToTooltip(currency: unknown, tooltip: unknown?)
     function SetRewardIcon()
@@ -44175,8 +44175,8 @@ declare class ScaleControlFrameMixin
 end
 
 declare class TransformTreeBaseNodeMixin
-    dirty: boolean
     children: table
+    dirty: boolean
     isResolving: boolean
     function OnLoad(parentTransform: unknown, localPosition: unknown?, localRotationRadians: unknown?, localScale: unknown?)
     function SetParentTransform(parentTransform: unknown?)
@@ -44206,8 +44206,8 @@ declare class TransformTreeBaseNodeMixin
 end
 
 declare class TransformTreeMixin
-    root: nodeMixin
     dirtyPushTransformNodes: table
+    root: nodeMixin
     function OnLoad()
     function GetRoot(): nodeMixin
     function ResolveTransforms()
@@ -44433,8 +44433,8 @@ declare class TransmogWardrobeCollectionTabMixin
 end
 
 declare class TransmogSearchBoxMixin
-    updateDelay: number
     checkProgress: boolean
+    updateDelay: number
     function OnHide()
     function OnUpdate(elapsed: number)
     function OnTextChanged()
@@ -44557,8 +44557,8 @@ declare class TutorialQuestBangGlow
 end
 
 declare class TutorialDragButton
-    tx: number
     ox: number
+    tx: number
     function Show(originButton: unknown, destButton: unknown)
     function Animate()
     function OnUpdate()
@@ -44594,8 +44594,8 @@ declare class TutorialHelper
 end
 
 declare class TutorialManager
-    Watchers: table
     Tutorials: table
+    Watchers: table
     function Initialize()
     function Begin()
     function Shutdown()
@@ -44625,10 +44625,10 @@ declare class TutorialManager
 end
 
 declare class TutorialPointerFrame
-    InUseFrames: table
-    NextID: number
     FrameCount: number
     FramePool: table
+    InUseFrames: table
+    NextID: number
     function Initialize()
     function Show(content: unknown, direction: unknown, anchorFrame: unknown?, ofsX: number?, ofsY: number?, relativePoint: unknown?, backupDirection: unknown?, overrideWidth: unknown?): number
     function Hide(id: unknown)
@@ -44727,9 +44727,9 @@ declare class TalentRankDisplayMixin
 end
 
 declare class CurrencyTemplateMixin
-    currencyID: number
     amount: number
     colorCode: string
+    currencyID: number
     function SetCurrencyFromID(currencyID: number, amount: number?, formatString: unknown?, colorCode: string?)
     function SetTooltipAnchor(tooltipAnchor: unknown)
     function SetAbbreviate(abbreviate: unknown)
@@ -44992,9 +44992,9 @@ declare class SkillsSubHeaderToggleCollapseButtonMixin
 end
 
 declare class BankPanelItemButtonMixin
-    questItemInfo: ItemQuestInfo
-    itemInfo: ContainerItemInfo?
     isInitialized: boolean
+    itemInfo: ContainerItemInfo?
+    questItemInfo: ItemQuestInfo
     function OnLoad()
     function OnEnter()
     function OnLeave()
@@ -45110,9 +45110,9 @@ declare class ContainerFramePortraitButtonMixin
 end
 
 declare class ContainerFrameSettingsManager
-    filterFlags: table
-    bagSetupDirty: boolean
     TokenTracker: Frame
+    bagSetupDirty: boolean
+    filterFlags: table
     function Init()
     function OnAddonLoaded(addonName: string)
     function IsUsingCombinedBags(optionalID: unknown?): unknown
@@ -45159,8 +45159,8 @@ declare class DressUpCustomSetMixin
 end
 
 declare class DressUpCustomSetDetailsPanelMixin
-    waitingOnItemData: boolean
     validMainHand: boolean
+    waitingOnItemData: boolean
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -45420,9 +45420,9 @@ end
 
 declare class UnitPositionFrameMixin
     currentMouseOverUnitCount: number
-    needsFullUpdate: boolean
-    excludedMouseOverUnits: table
     currentMouseOverUnits: table
+    excludedMouseOverUnits: table
+    needsFullUpdate: boolean
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -45584,8 +45584,8 @@ declare class UIWidgetHorizontalWidgetContainerMixin
 end
 
 declare class UIWidgetTemplateTooltipFrameMixin
-    tooltipContainsHyperLink: boolean
     mouseOver: boolean
+    tooltipContainsHyperLink: boolean
     function SetMouse(disableMouse: unknown?)
     function OnLoad()
     function UpdateMouseEnabled()
@@ -45618,9 +45618,9 @@ declare class UIWidgetBaseScenarioHeaderTemplateMixin
 end
 
 declare class UIWidgetBaseButtonTemplateMixin
+    disableOnCooldown: boolean
     registered: boolean
     showCooldown: boolean
-    disableOnCooldown: boolean
     function OnShow()
     function OnHide()
     function OnEvent(event: string, ...: unknown)
@@ -45686,15 +45686,15 @@ declare class TargetOfTargetMixin
 end
 
 declare class BuilderSpender
-    unit: string
-    oldValue: number
-    initialized: boolean
-    updatingLoss: boolean
-    animLossStartTime: number
-    updatingGain: boolean
     animGainStartTime: number
-    powerType: PowerType
+    animLossStartTime: number
+    initialized: boolean
     newValue: number
+    oldValue: number
+    powerType: PowerType
+    unit: string
+    updatingGain: boolean
+    updatingLoss: boolean
     function OnLoad()
     function Initialize(textureInfo: unknown, unit: string, powerType: PowerType?)
     function AddMaskTexture(mask: unknown)
@@ -45852,11 +45852,11 @@ declare class WarlockShardMixin
 end
 
 declare class TargetFrameStatusBarMixin
-    zeroText: string
-    textLockable: number
-    lockColor: boolean
     cvar: string
     cvarLabel: string
+    lockColor: boolean
+    textLockable: number
+    zeroText: string
     function OnLoad()
 end
 
@@ -46031,7 +46031,7 @@ declare class UnitPopupSharedUtil
     CanAddBNetFriend: (contextData: unknown, isLocalPlayer: boolean?, haveBattleTag: boolean?, isPlayer: unknown?, requestedFriendLevel: number?) -> boolean
     TryInvite: (contextData: table, inviteType: string, fullName: string) -> ()
     GetFullPlayerName: (contextData: unknown?) -> unknown
-    HasLFGRestrictions: () -> boolean
+    HasLFGRestrictions: () -> boolean?
     IsInWarModeState: () -> boolean
     GetGUID: (contextData: unknown) -> unknown
     GetIsMobile: (contextData: unknown) -> unknown
@@ -46150,8 +46150,8 @@ declare class WeeklyRewardOverlayMixin
 end
 
 declare class WeeklyRewardsActivityMixin
-    unlocked: boolean
     hasRewards: boolean
+    unlocked: boolean
     function SetSelectionState(state: unknown)
     function MarkForPendingSheenAnim()
     function Refresh(activityInfo: unknown)
@@ -46189,8 +46189,8 @@ declare class WeeklyRewardActivityItemMixin
 end
 
 declare class WeeklyRewardsConcessionMixin
-    unlocked: boolean
     hasRewards: boolean
+    unlocked: boolean
     function SetWeeklyRewardsFrame(weeklyRewardsFrame: unknown)
     function SetSelectionState(state: unknown)
     function MarkForPendingSheenAnim()
@@ -46280,9 +46280,9 @@ declare class WorldMapNavBarButtonMixin
 end
 
 declare class WorldMapCoordsPanelMixin
+    coordsByTenths: boolean?
     showCursorCoords: boolean?
     showPlayerCoords: boolean?
-    coordsByTenths: boolean?
     function OnLoad()
     function OnUpdate(elapsed: unknown)
     function AttachToNeighbor(frame: unknown, x: unknown, y: unknown, requireBottomLeft: unknown)
@@ -46302,10 +46302,10 @@ declare class WorldMapZoneTimerMixin
 end
 
 declare class WorldMapThreatFrameMixin
-    modelSceneInfoTop: table
-    threatQuests: number[]
     dirtyModels: boolean
     modelSceneInfoBottom: table
+    modelSceneInfoTop: table
+    threatQuests: number[]
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -47088,8 +47088,8 @@ declare function GetAchievementGuildRep(id: number): (boolean, boolean, number)
 declare function GetActiveArtifactByRace(branchIndex: number, artifactIndex: number): (string, string, string, string, string, number, string)
 declare function GetActiveQuestID(index: unknown?, ...: unknown): (...unknown)
 declare function GetArchaeologyInfo(): string
-declare function GetArchaeologyRaceInfo(raceIndex: number): (string, number, number, number, number, number)
-declare function GetArchaeologyRaceInfoByID(branchID: number): (string, number, number, number, number, number)
+declare function GetArchaeologyRaceInfo(raceIndex: number): (string, number, number?, number, number, number)
+declare function GetArchaeologyRaceInfoByID(branchID: number): (string, number, number?, number, number, number)
 declare function GetArtifactInfoByRace(raceIndex: number, artifactIndex: number): (string, string, number, string, string, number, string, number, number)
 declare function GetArtifactProgress(): (number, number, number)
 declare function GetCurrentGlyphNameForSpell(spellID: unknown?, ...: unknown): (...unknown)
@@ -47208,7 +47208,7 @@ declare function asin(x: number): (...unknown)
 declare function atan(x: unknown): (...unknown)
 declare function atan2(x: number, y: number): (...unknown)
 declare function cos(x: number): (...unknown)
-declare function import(moduleName: string): unknown
+declare function import(moduleName: string): unknown?
 declare function sin(x: number): (...unknown)
 declare function tan(x: unknown): (...unknown)
 
@@ -71726,7 +71726,7 @@ declare namespace C_PetBattles
     function GetMaxHealth(petOwner: number, petIndex: number): number
     function GetNumAuras(petOwner: number, petIndex: number): number
     function GetNumPets(petOwner: number): number
-    function GetPVPMatchmakingInfo(): (string, number, number)
+    function GetPVPMatchmakingInfo(): (string?, number, number)
     function GetPetSpeciesID(petOwner: number, petIndex: number): number
     function GetPetType(petOwner: number, petIndex: number): number
     function GetPlayerTrapAbility(): number
@@ -71738,7 +71738,7 @@ declare namespace C_PetBattles
     function GetXP(petOwner: number, petIndex: number): (number, number)
     function IsInBattle(): boolean
     function IsSkipAvailable(): boolean
-    function IsTrapAvailable(): boolean
+    function IsTrapAvailable(): (boolean, number)
     function IsWaitingOnOpponent(): boolean
     function SetPendingReportBattlePetTarget(petIndex: number)
     function SetPendingReportTargetFromUnit(unit: UnitToken)
@@ -71796,19 +71796,19 @@ declare namespace C_PetJournal
     function CagePetByID(petID: string)
     function ClearFanfare(arg1: unknown): (...unknown)
     function ClearRecentFanfares(): (...unknown)
-    function FindPetIDByName(petName: string): (number, string)
-    function GetBattlePetLink(petID: string): string
+    function FindPetIDByName(petName: string): (number?, string?)
+    function GetBattlePetLink(petID: string): string?
     function GetNumCollectedInfo(speciesId: number): (number, number)
     function GetNumPetSources(): number
     function GetNumPetTypes(): number
     function GetNumPets(): (number, number)
     function GetNumPetsNeedingFanfare(): (number, ...unknown)
-    function GetOwnedBattlePetString(speciesId: number): string
+    function GetOwnedBattlePetString(speciesId: number): string?
     function GetPetAbilityList(speciesID: number, idTable: table?, levelTable: table?): (number[], number[])
     function GetPetCooldownByGUID(GUID: string): (number, number, number)
-    function GetPetInfoByIndex(index: number): (string, number, boolean, string, number, boolean, boolean, string, fileID, number, number, string, string, boolean, boolean, boolean, boolean, boolean)
+    function GetPetInfoByIndex(index: number): (string, number, boolean, string?, number, boolean, boolean, string, fileID, number, number, string, string, boolean, boolean, boolean, boolean, boolean)
     function GetPetInfoByItemID(itemID: number): (string, fileID, number, number, string, string, boolean, boolean, boolean, boolean, boolean, number, number)
-    function GetPetInfoByPetID(petID: string): (number, string, number, number, number, number, boolean, string, fileID, number, number, string, string, boolean, boolean, boolean, boolean, boolean)
+    function GetPetInfoByPetID(petID: string): (number, string?, number, number, number, number, boolean, string, fileID, number, number, string, string, boolean, boolean, boolean, boolean, boolean)
     function GetPetInfoBySpeciesID(speciesID: number): (string, fileID, number, number, string, string, boolean, boolean, boolean, boolean, boolean, number)
     function GetPetModelSceneInfoBySpeciesID(arg1: unknown): (...unknown)
     function GetPetSortParameter(): number
@@ -71816,7 +71816,7 @@ declare namespace C_PetJournal
     function GetPetTeamAverageLevel(): number
     function GetSummonBattlePetCooldown(): (number, number, ...unknown)
     function GetSummonRandomFavoritePetGUID(...: unknown): (...unknown)
-    function GetSummonedPetGUID(): string
+    function GetSummonedPetGUID(): string?
     function IsFilterChecked(filter: number): boolean
     function IsFindBattleEnabled(): boolean
     function IsJournalReadOnly(...: unknown): (...unknown)
@@ -73190,7 +73190,7 @@ declare namespace C_TradeSkillUI
     function IsRecipeSourceTypeFiltered(arg1: unknown): (...unknown)
     function IsTradeSkillGuild(): boolean
     function IsTradeSkillGuildMember(): (...unknown)
-    function IsTradeSkillLinked(): boolean
+    function IsTradeSkillLinked(): (boolean, string?)
     function IsTradeSkillReady(): boolean
     function ObliterateItem(): (...unknown)
     function SetInventorySlotFilter(arg1: unknown, arg2: unknown, arg3: boolean?): (...unknown)

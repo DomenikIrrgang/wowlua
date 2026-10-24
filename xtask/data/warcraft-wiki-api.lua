@@ -431,9 +431,9 @@ function BNConnected() end
 ---@return boolean isMutual
 function BNGetFOFInfo(mutual, nonMutual, index) end
 
----@param friendIndex)
- {{=}} BNGetGameAccountInfo(bnetIDGameAccount)
- {{=}} BNGetGameAccountInfoByGUID(guid number
+---@overload fun(bnetIDGameAccount: number): boolean, string, string, string, number, string, string, string, string, string, string, string, string, number, boolean, number, number, boolean, boolean
+---@overload fun(guid: string): boolean, string, string, string, number, string, string, string, string, string, string, string, string, number, boolean, number, number, boolean, boolean
+---@param friendIndex number
 ---@return boolean hasFocus
 ---@return string characterName
 ---@return string client
@@ -453,16 +453,14 @@ function BNGetFOFInfo(mutual, nonMutual, index) end
 ---@return number bnetIDAccount
 ---@return boolean isGameAFK
 ---@return boolean isGameBusy
-function BNGetFriendGameAccountInfo(friendIndex)
- {{=}} BNGetGameAccountInfo(bnetIDGameAccount)
- {{=}} BNGetGameAccountInfoByGUID(guid) end
+function BNGetFriendGameAccountInfo(friendIndex) end
 
 ---@param presenceID number
 ---@return number index
 function BNGetFriendIndex(presenceID) end
 
----@param friendIndex)
-  {{=}} BNGetFriendInfoByID(bnetAccountID number
+---@overload fun(bnetAccountID: number): number, string, string, boolean, string, number, string, boolean, number?, boolean, boolean, string, string, boolean, number, boolean, boolean, boolean
+---@param friendIndex number
 ---@return number bnetAccountID
 ---@return string accountName
 ---@return string battleTag
@@ -471,7 +469,7 @@ function BNGetFriendIndex(presenceID) end
 ---@return number bnetIDGameAccount
 ---@return string client
 ---@return boolean isOnline
----@return number lastOnline
+---@return number? lastOnline
 ---@return boolean isAFK
 ---@return boolean isDND
 ---@return string messageText
@@ -481,8 +479,7 @@ function BNGetFriendIndex(presenceID) end
 ---@return boolean canSoR
 ---@return boolean isReferAFriend
 ---@return boolean canSummonFriend
-function BNGetFriendInfo(friendIndex)
-  {{=}} BNGetFriendInfoByID(bnetAccountID) end
+function BNGetFriendInfo(friendIndex) end
 
 ---@deprecated
 ---@param inviteIndex number
@@ -630,10 +627,10 @@ function C_BehavioralMessaging.TestNotification(notificationType) end
 
 function C_BlackMarket.Close() end
 
----@param marketID)
- {{=}} C_BlackMarket.GetItemInfoByIndex(index)
- {{=}} C_BlackMarket.GetHotItem( number
----@return string name
+---@overload fun(index: number): string?, string, number, string, boolean, number, string, string, number, number, number, boolean, number, number, string, number, number
+---@overload fun(): string?, string, number, string, boolean, number, string, string, number, number, number, boolean, number, number, string, number, number
+---@param marketID number
+---@return string? name
 ---@return string texture
 ---@return number quantity
 ---@return string itemType
@@ -650,9 +647,7 @@ function C_BlackMarket.Close() end
 ---@return string link
 ---@return number marketID
 ---@return number quality
-function C_BlackMarket.GetItemInfoByID(marketID)
- {{=}} C_BlackMarket.GetItemInfoByIndex(index)
- {{=}} C_BlackMarket.GetHotItem() end
+function C_BlackMarket.GetItemInfoByID(marketID) end
 
 ---@return number numItems
 function C_BlackMarket.GetNumItems() end
@@ -1565,7 +1560,7 @@ function C_PetBattles.GetNumAuras(petOwner, petIndex) end
 ---@return number numPets
 function C_PetBattles.GetNumPets(petOwner) end
 
----@return string queueState
+---@return string? queueState
 ---@return number estimatedTime
 ---@return number queuedTime
 function C_PetBattles.GetPVPMatchmakingInfo() end
@@ -1651,12 +1646,12 @@ function C_PetBattles.UseTrap() end
 function C_PetJournal.CagePetByID(petID) end
 
 ---@param petName string
----@return number speciesId
----@return string petGUID
+---@return number? speciesId
+---@return string? petGUID
 function C_PetJournal.FindPetIDByName(petName) end
 
 ---@param petID string
----@return string link
+---@return string? link
 function C_PetJournal.GetBattlePetLink(petID) end
 
 ---@param speciesId number
@@ -1675,7 +1670,7 @@ function C_PetJournal.GetNumPetTypes() end
 function C_PetJournal.GetNumPets() end
 
 ---@param speciesId number
----@return string ownedString
+---@return string? ownedString
 function C_PetJournal.GetOwnedBattlePetString(speciesId) end
 
 ---@param speciesID number
@@ -1695,7 +1690,7 @@ function C_PetJournal.GetPetCooldownByGUID(GUID) end
 ---@return string petID
 ---@return number speciesID
 ---@return boolean owned
----@return string customName
+---@return string? customName
 ---@return number level
 ---@return boolean favorite
 ---@return boolean isRevoked
@@ -1730,7 +1725,7 @@ function C_PetJournal.GetPetInfoByItemID(itemID) end
 
 ---@param petID string
 ---@return number speciesID
----@return string customName
+---@return string? customName
 ---@return number level
 ---@return number xp
 ---@return number maxXp
@@ -1778,7 +1773,7 @@ function C_PetJournal.GetPetStats(petID) end
 ---@return number avgLevel
 function C_PetJournal.GetPetTeamAverageLevel() end
 
----@return string summonedPetGUID
+---@return string? summonedPetGUID
 function C_PetJournal.GetSummonedPetGUID() end
 
 ---@param filter number
@@ -1993,13 +1988,10 @@ function C_ReportSystem.SendReportPlayer(token, comment) end
 ---@return boolean set
 function C_ReportSystem.SetPendingReportPetTarget(target) end
 
+---@overload fun(guid?: string): boolean
 ---@param target? string
----@param )
-    {{=}} C_ReportSystem.SetPendingReportTargetByGuid(? string
----@param guid? string
 ---@return boolean set
-function C_ReportSystem.SetPendingReportTarget(target, )
-    {{=}} C_ReportSystem.SetPendingReportTargetByGuid(, guid) end
+function C_ReportSystem.SetPendingReportTarget(target) end
 
 ---@param factionID number
 function C_Reputation.SetWatchedFaction(factionID) end
@@ -2008,14 +2000,13 @@ function C_ReturningPlayerUI.AcceptPrompt() end
 
 function C_ReturningPlayerUI.DeclinePrompt() end
 
----@return string name
----@return string description
+---@return string? name
+---@return string? description
 ---@return number numCriteria
 ---@return boolean failed
 function C_Scenario.GetBonusStepInfo() end
 
----@param criteriaIndex)
-  {{=}} C_Scenario.GetCriteriaInfoByStep(stepID number
+---@overload fun(stepID: number, criteriaIndex: number): string, number, boolean, number, number, number, number, string, number, number, number, boolean, boolean
 ---@param criteriaIndex number
 ---@return string criteriaString
 ---@return number criteriaType
@@ -2030,8 +2021,7 @@ function C_Scenario.GetBonusStepInfo() end
 ---@return number elapsed
 ---@return boolean criteriaFailed
 ---@return boolean isWeightedProgress
-function C_Scenario.GetCriteriaInfo(criteriaIndex)
-  {{=}} C_Scenario.GetCriteriaInfoByStep(stepID, criteriaIndex) end
+function C_Scenario.GetCriteriaInfo(criteriaIndex) end
 
 ---@return number difficulty
 ---@return number curWave
@@ -2473,7 +2463,7 @@ function CameraZoomIn(increment) end
 function CameraZoomOut(increment) end
 
 ---@param questID number
----@return boolean canAbandon
+---@return boolean? canAbandon
 function CanAbandonQuest(questID) end
 
 ---@return boolean cancel
@@ -2487,7 +2477,7 @@ function CanComplainInboxItem(mailID) end
 function CanEditMOTD() end
 
 ---@param unit string
----@return boolean status
+---@return boolean? status
 function CanGrantLevel(unit) end
 
 ---@return boolean canDemote
@@ -2496,7 +2486,7 @@ function CanGuildDemote() end
 ---@return boolean canInvite
 function CanGuildInvite() end
 
----@return boolean canPromote
+---@return boolean? canPromote
 function CanGuildPromote() end
 
 ---@param itemID number
@@ -2526,7 +2516,7 @@ function CanShowAchievementUI() end
 function CanSolveArtifact() end
 
 ---@param unit string
----@return boolean summonable
+---@return boolean? summonable
 function CanSummonFriend(unit) end
 
 ---@return boolean canSwitchSeats
@@ -2538,11 +2528,11 @@ function CanTrackBattlePets() end
 ---@return boolean transform
 function CanTransform() end
 
----@return number canUse
+---@return number? canUse
 function CanUseVoidStorage() end
 
 ---@param skillID number
----@return boolean canView
+---@return boolean? canView
 function CanViewGuildRecipes(skillID) end
 
 function CancelDuel() end
@@ -2604,7 +2594,7 @@ function CastSpellByName(name, target) end
 ---@return number endTime
 ---@return boolean isTradeSkill
 ---@return string castID
----@return boolean notInterruptible
+---@return boolean? notInterruptible
 ---@return number spellID
 function CastingInfo() end
 
@@ -2622,13 +2612,13 @@ function ChangeChatColor(channelName, red, green, blue) end
 ---@param playerName string
 function ChannelBan(channelName, playerName) end
 
----@return string name
+---@return string? name
 ---@return string text
 ---@return number texture
 ---@return number startTime
 ---@return number endTime
 ---@return boolean isTradeSkill
----@return boolean notInterruptible
+---@return boolean? notInterruptible
 ---@return number spellID
 function ChannelInfo() end
 
@@ -2871,7 +2861,7 @@ function CreateMacro(name, iconFileID, body, perCharacter) end
 
 ---@deprecated
 ---@param invSlot number
----@return boolean fitsInSlot
+---@return boolean? fitsInSlot
 function CursorCanGoInSlot(invSlot) end
 
 ---@param channel string
@@ -3046,7 +3036,7 @@ function FloorToNearestString(number) end
 ---@return boolean hasSpell
 function FlyoutHasSpell(flyoutID, spellID) end
 
----@return boolean forced
+---@return boolean? forced
 function ForceGossip() end
 
 function GMRequestPlayerInfo() end
@@ -3066,17 +3056,15 @@ function GetAchievementCategory(achievementID) end
 
 ---@param achievementID number
 ---@return boolean completed
----@return number month
----@return number day
----@return number year
+---@return number? month
+---@return number? day
+---@return number? year
 function GetAchievementComparisonInfo(achievementID) end
 
+---@overload fun(achievementID: number, criteriaID: number): string, number, boolean, number, number, string, number, number, string, number, boolean, number, number
 ---@param achievementID number
 ---@param criteriaIndex number
 ---@param countHidden? boolean
----@param )
-  {{=}} GetAchievementCriteriaInfoByID(achievementID number
----@param criteriaID number
 ---@return string criteriaString
 ---@return number criteriaType
 ---@return boolean completed
@@ -3090,8 +3078,7 @@ function GetAchievementComparisonInfo(achievementID) end
 ---@return boolean eligible
 ---@return number duration
 ---@return number elapsed
-function GetAchievementCriteriaInfo(achievementID, criteriaIndex, countHidden, )
-  {{=}} GetAchievementCriteriaInfoByID(achievementID, criteriaID) end
+function GetAchievementCriteriaInfo(achievementID, criteriaIndex, countHidden) end
 
 ---@param id number
 ---@return boolean requiresRep
@@ -3099,16 +3086,15 @@ function GetAchievementCriteriaInfo(achievementID, criteriaIndex, countHidden, )
 ---@return number repLevel
 function GetAchievementGuildRep(id) end
 
----@param achievementID)
-  {{=}} GetAchievementInfo(categoryID number
----@param index number
+---@overload fun(categoryID: number, index: number): number, string, number, boolean, number?, number?, number?, string, number, number, string, boolean, boolean, string, bool
+---@param achievementID number
 ---@return number id
 ---@return string name
 ---@return number points
 ---@return boolean completed
----@return number month
----@return number day
----@return number year
+---@return number? month
+---@return number? day
+---@return number? year
 ---@return string description
 ---@return number flags
 ---@return number icon
@@ -3117,8 +3103,7 @@ function GetAchievementGuildRep(id) end
 ---@return boolean wasEarnedByMe
 ---@return string earnedBy
 ---@return bool isStatistic
-function GetAchievementInfo(achievementID)
-  {{=}} GetAchievementInfo(categoryID, index) end
+function GetAchievementInfo(achievementID) end
 
 ---@return number id
 ---@return string name
@@ -3247,7 +3232,7 @@ function GetAddOnEnableState(character, name) end
 ---@return string title
 ---@return string notes
 ---@return boolean loadable
----@return string reason
+---@return string? reason
 ---@return string security
 ---@return boolean newVersion
 function GetAddOnInfo(name) end
@@ -3272,7 +3257,7 @@ function GetArchaeologyInfo() end
 ---@param raceIndex number
 ---@return string raceName
 ---@return number raceTexture
----@return number raceItemID
+---@return number? raceItemID
 ---@return number numFragmentsCollected
 ---@return number numFragmentsRequired
 ---@return number maxFragments
@@ -3281,7 +3266,7 @@ function GetArchaeologyRaceInfo(raceIndex) end
 ---@param branchID number
 ---@return string raceName
 ---@return number raceTextureID
----@return number raceItemID
+---@return number? raceItemID
 ---@return number numFragmentsCollected
 ---@return number numFragmentsRequired
 ---@return number maxFragments
@@ -3293,7 +3278,7 @@ function GetArchaeologyRaceInfoByID(branchID) end
 function GetArenaOpponentSpec(id) end
 
 ---@param id unknown
----@return string teamName
+---@return string? teamName
 ---@return number teamSize
 ---@return number teamRating
 ---@return number weekPlayed
@@ -3307,7 +3292,7 @@ function GetArenaOpponentSpec(id) end
 function GetArenaTeam(id) end
 
 ---@param size number
----@return number index
+---@return number? index
 function GetArenaTeamIndexBySize(size) end
 
 ---@param teamindex number
@@ -3316,7 +3301,7 @@ function GetArenaTeamIndexBySize(size) end
 ---@return number rank
 ---@return number level
 ---@return string class
----@return number online
+---@return number? online
 ---@return number played
 ---@return number win
 ---@return number seasonPlayed
@@ -3536,7 +3521,7 @@ function GetBattlefieldStatInfo(index) end
 ---@return string? mapName
 ---@return number teamSize
 ---@return boolean registeredMatch
----@return boolean suspendedQueue
+---@return boolean? suspendedQueue
 ---@return string? queueType
 ---@return string? gameType
 ---@return string? role
@@ -3581,7 +3566,7 @@ function GetBattlegroundInfo(index) end
 ---@return number maxPoints
 function GetBattlegroundPoints(team) end
 
----@return number flexDungeonID
+---@return number? flexDungeonID
 function GetBestFlexRaidChoice() end
 
 ---@return number dungeonId
@@ -3600,7 +3585,7 @@ function GetBinding(index, alwaysIncludeGamepad) end
 function GetBindingAction(binding, checkOverride) end
 
 ---@param key string
----@return string bindingAction
+---@return string? bindingAction
 function GetBindingByKey(key) end
 
 ---@param command string
@@ -3618,7 +3603,7 @@ function GetBindingText(key, prefix, abbreviate) end
 function GetBlacklistMap(index) end
 
 ---@param index number
----@return string mapName
+---@return string? mapName
 function GetBlacklistMapName(index) end
 
 ---@deprecated
@@ -3691,7 +3676,7 @@ function GetChannelList() end
 
 ---@param name string|number
 ---@return number id
----@return string name
+---@return string? name
 ---@return number instanceID
 ---@return boolean isCommunitiesChannel
 function GetChannelName(name) end
@@ -3715,7 +3700,7 @@ function GetChatWindowChannels(frameId) end
 ---@return number alpha
 ---@return boolean shown
 ---@return boolean locked
----@return number docked
+---@return number? docked
 ---@return boolean uninteractable
 function GetChatWindowInfo(frameIndex) end
 
@@ -3768,7 +3753,7 @@ function GetCompanionCooldown(type, id) end
 ---@return string creatureName
 ---@return number creatureSpellID
 ---@return string icon
----@return boolean issummoned
+---@return boolean? issummoned
 ---@return number mountType
 function GetCompanionInfo(type, id) end
 
@@ -3803,7 +3788,7 @@ function GetContainerItemGems(bag, slot) end
 
 ---@param bag number
 ---@param slot number
----@return number itemId
+---@return number? itemId
 function GetContainerItemID(bag, slot) end
 
 ---@param bagID number
@@ -3823,14 +3808,14 @@ function GetContainerItemInfo(bagID, slot) end
 
 ---@param bagID number
 ---@param slotIndex number
----@return string itemLink
+---@return string? itemLink
 function GetContainerItemLink(bagID, slotIndex) end
 
 ---@param bag number
 ---@param slot number
----@return boolean isQuestItem
+---@return boolean? isQuestItem
 ---@return number questId
----@return boolean isActive
+---@return boolean? isActive
 function GetContainerItemQuestInfo(bag, slot) end
 
 ---@param bagID? number
@@ -3893,8 +3878,8 @@ function GetCraftReagentItemLink(index, n) end
 ---@return string link
 function GetCraftRecipeLink(index) end
 
----@param n number
----@return string currentCraftingWindow
+---@param n? number
+---@return string? currentCraftingWindow
 function GetCraftSkillLine(n) end
 
 ---@param index number
@@ -3947,8 +3932,8 @@ function GetCurrentArenaSeason() end
 function GetCurrentBindingSet() end
 
 ---@deprecated
----@return string|number? desc1
----@return string|number? desc2
+---@return (string|number)? desc1
+---@return (string|number)? desc2
 function GetCurrentCombatTextEventInfo() end
 
 ---@return string gxAPI
@@ -4028,8 +4013,8 @@ function GetExistingSocketLink(index) end
 ---@return number extraPage
 function GetExtraBarIndex() end
 
----@param factionIndex)
-  {{=}} GetFactionInfoByID(factionID number
+---@overload fun(factionID: number): string, string, number, number, number, number, boolean, boolean, boolean, boolean, boolean, boolean, boolean, number, boolean, boolean
+---@param factionIndex number
 ---@return string name
 ---@return string description
 ---@return number standingID
@@ -4046,8 +4031,7 @@ function GetExtraBarIndex() end
 ---@return number factionID
 ---@return boolean hasBonusRepGain
 ---@return boolean canSetInactive
-function GetFactionInfo(factionIndex)
-  {{=}} GetFactionInfoByID(factionID) end
+function GetFactionInfo(factionIndex) end
 
 ---@param index number
 ---@return number achievementID
@@ -4106,7 +4090,7 @@ function GetFriendInfo(friendIndex) end
 ---@return number friendTexture
 ---@return string friendTextLevel
 ---@return number friendThreshold
----@return number nextFriendThreshold
+---@return number? nextFriendThreshold
 function GetFriendshipReputation(factionID) end
 
 ---@param factionID? number
@@ -4125,9 +4109,9 @@ function GetGlyphClearInfo() end
 ---@return string name
 ---@return number glyphType
 ---@return boolean isKnown
----@return fileID icon
----@return number glyphID
----@return string glyphLink
+---@return fileID? icon
+---@return number? glyphID
+---@return string? glyphLink
 function GetGlyphInfo(index) end
 
 ---@param index number
@@ -4192,16 +4176,16 @@ function GetGuildAchievementNumMembers(achievementID) end
 
 ---@param tab number
 ---@param slot number
----@return number texture
+---@return number? texture
 ---@return number itemCount
----@return boolean locked
+---@return boolean? locked
 ---@return boolean isFiltered
----@return number quality
+---@return number? quality
 function GetGuildBankItemInfo(tab, slot) end
 
 ---@param tab number
 ---@param slot number
----@return string itemLink
+---@return string? itemLink
 function GetGuildBankItemLink(tab, slot) end
 
 ---@return number retVal1
@@ -4209,7 +4193,7 @@ function GetGuildBankMoney() end
 
 ---@param index number
 ---@return string transactionType
----@return string name
+---@return string? name
 ---@return number amount
 ---@return number years
 ---@return number months
@@ -4228,9 +4212,9 @@ function GetGuildBankMoneyTransaction(index) end
 function GetGuildBankTabInfo(tab) end
 
 ---@param tab number
----@return boolean canView
----@return boolean canDeposit
----@return boolean canEdit
+---@return boolean? canView
+---@return boolean? canDeposit
+---@return boolean? canEdit
 ---@return number stacksPerDay
 function GetGuildBankTabPermissions(tab) end
 
@@ -4263,7 +4247,7 @@ function GetGuildBankWithdrawMoney() end
 function GetGuildFactionInfo() end
 
 ---@param unit string
----@return string guildName
+---@return string? guildName
 ---@return string guildRankName
 ---@return number guildRankIndex
 ---@return string? realm
@@ -4308,10 +4292,10 @@ function GetGuildRecipeMember(index) end
 function GetGuildRosterInfo(index) end
 
 ---@param index number
----@return number yearsOffline
----@return number monthsOffline
----@return number daysOffline
----@return number hoursOffline
+---@return number? yearsOffline
+---@return number? monthsOffline
+---@return number? daysOffline
+---@return number? hoursOffline
 function GetGuildRosterLastOnline(index) end
 
 ---@deprecated
@@ -4365,22 +4349,22 @@ function GetGuildTradeSkillInfo(index) end
 function GetHolidayBGInfo() end
 
 ---@param homePlayers? table
----@return table homePlayers
+---@return table? homePlayers
 function GetHomePartyInfo(homePlayers) end
 
 ---@param index number
----@return string packageIcon
+---@return string? packageIcon
 ---@return string stationeryIcon
 ---@return string sender
 ---@return string subject
 ---@return number money
 ---@return number CODAmount
 ---@return number daysLeft
----@return number hasItem
----@return boolean wasRead
----@return boolean wasReturned
----@return boolean textCreated
----@return boolean canReply
+---@return number? hasItem
+---@return boolean? wasRead
+---@return boolean? wasReturned
+---@return boolean? textCreated
+---@return boolean? canReply
 ---@return boolean isGM
 function GetInboxHeaderInfo(index) end
 
@@ -4406,7 +4390,7 @@ function GetInboxInvoiceInfo(index) end
 ---@return string texture
 ---@return number count
 ---@return number quality
----@return boolean canUse
+---@return boolean? canUse
 function GetInboxItem(index, itemIndex) end
 
 ---@param message number
@@ -4423,7 +4407,7 @@ function GetInboxNumItems() end
 ---@return string stationaryMiddle
 ---@return string stationaryEdge
 ---@return boolean isTakeable
----@return boolean isInvoice
+---@return boolean? isInvoice
 ---@return boolean isConsortium
 function GetInboxText(index) end
 
@@ -4488,7 +4472,7 @@ function GetInventoryItemGems(invSlot) end
 
 ---@param unit string
 ---@param invSlotId number
----@return number itemId
+---@return number? itemId
 ---@return number unknown
 function GetInventoryItemID(unit, invSlotId) end
 
@@ -4564,7 +4548,7 @@ function GetItemCreationContext(itemInfo) end
 
 ---@deprecated
 ---@param item number|string
----@return number bagType
+---@return number? bagType
 function GetItemFamily(item) end
 
 ---@deprecated
@@ -4637,7 +4621,7 @@ function GetItemSetInfo(setID) end
 ---@deprecated
 ---@param itemLink or itemID or itemName table
 ---@param specTable? table
----@return table specTable
+---@return table? specTable
 function GetItemSpecInfo(itemLink or itemID or itemName, specTable) end
 
 ---@deprecated
@@ -4692,7 +4676,7 @@ function GetLFGDeserterExpiration() end
 ---@param dungeonID number
 ---@param encounterIndex number
 ---@return string bossName
----@return string texture
+---@return string? texture
 ---@return boolean isKilled
 ---@return boolean unknown4
 function GetLFGDungeonEncounterInfo(dungeonID, encounterIndex) end
@@ -4714,7 +4698,7 @@ function GetLFGDungeonEncounterInfo(dungeonID, encounterIndex) end
 ---@return string description
 ---@return boolean isHoliday
 ---@return number bonusRepAmount
----@return number minPlayers
+---@return number? minPlayers
 ---@return boolean isTimeWalker
 ---@return string name2
 ---@return number minGearLevel
@@ -4740,7 +4724,7 @@ function GetLFGDungeonNumEncounters(dungeonID) end
 ---@return number purseLimit
 function GetLFGDungeonRewardCapBarInfo(dungeonID) end
 
----@return boolean proposalExists
+---@return boolean? proposalExists
 ---@return number id
 ---@return number typeID
 ---@return number subtypeID
@@ -4799,7 +4783,7 @@ function GetLFGRandomCooldownExpiration() end
 ---@return string description
 ---@return boolean isHoliday
 ---@return number bonusRepAmount
----@return number minPlayers
+---@return number? minPlayers
 ---@return boolean isTimeWalker
 ---@return string name2
 ---@return number minGearLevel
@@ -4857,8 +4841,8 @@ function GetLevelUpInstances(level, isRaid) end
 function GetLootInfo() end
 
 ---@return string lootmethod
----@return number masterlooterPartyID
----@return number masterlooterRaidID
+---@return number? masterlooterPartyID
+---@return number? masterlooterRaidID
 function GetLootMethod() end
 
 ---@param rollID number
@@ -4866,15 +4850,15 @@ function GetLootMethod() end
 ---@return string name
 ---@return number count
 ---@return number quality
----@return boolean bindOnPickUp
----@return boolean canNeed
----@return boolean canGreed
----@return boolean canDisenchant
+---@return boolean? bindOnPickUp
+---@return boolean? canNeed
+---@return boolean? canGreed
+---@return boolean? canDisenchant
 ---@return number reasonNeed
 ---@return number reasonGreed
 ---@return number reasonDisenchant
 ---@return number deSkillRequired
----@return boolean canTransmog
+---@return boolean? canTransmog
 function GetLootRollItemInfo(rollID) end
 
 ---@param id number
@@ -4889,7 +4873,7 @@ function GetLootRollTimeLeft(rollID) end
 ---@return string lootIcon
 ---@return string lootName
 ---@return number lootQuantity
----@return number currencyID
+---@return number? currencyID
 ---@return number lootQuality
 ---@return boolean locked
 ---@return boolean isQuestItem
@@ -4899,7 +4883,7 @@ function GetLootRollTimeLeft(rollID) end
 function GetLootSlotInfo(slot) end
 
 ---@param index number
----@return string itemLink
+---@return string? itemLink
 function GetLootSlotLink(index) end
 
 ---@param slotIndex number
@@ -4981,8 +4965,8 @@ function GetMerchantItemCostInfo(index) end
 ---@param itemIndex number
 ---@return string itemTexture
 ---@return number itemValue
----@return string itemLink
----@return string currencyName
+---@return string? itemLink
+---@return string? currencyName
 function GetMerchantItemCostItem(index, itemIndex) end
 
 ---@param index number
@@ -5315,7 +5299,7 @@ function GetNumVoidTransferWithdrawal() end
 ---@return number bottom
 function GetObjectIconTextureCoords(objectIcon) end
 
----@return boolean optedOut
+---@return boolean? optedOut
 function GetOptOutOfLoot() end
 
 ---@deprecated
@@ -5466,13 +5450,13 @@ function GetPlayerBuffName(id, name, rank) end
 function GetPlayerTradeMoney() end
 
 ---@param index number
----@return string texture
----@return number spellID
----@return boolean enabled
+---@return string? texture
+---@return number? spellID
+---@return boolean? enabled
 function GetPossessInfo(index) end
 
 ---@param achievementID number
----@return number previousAchievementID
+---@return number? previousAchievementID
 function GetPreviousAchievement(achievementID) end
 
 ---@param isInspect? boolean
@@ -5495,11 +5479,11 @@ function GetPrimaryTalentTree(isInspect, isPet, talentGroup) end
 ---@return string skillLineName
 function GetProfessionInfo(index) end
 
----@return number prof1
----@return number prof2
----@return number archaeology
----@return number fishing
----@return number cooking
+---@return number? prof1
+---@return number? prof2
+---@return number? archaeology
+---@return number? fishing
+---@return number? cooking
 function GetProfessions() end
 
 ---@return string progress
@@ -5567,7 +5551,7 @@ function GetQuestItemInfo(type, index) end
 function GetQuestItemLink(type, index) end
 
 ---@param questID number
----@return string questLink
+---@return string? questLink
 function GetQuestLink(questID) end
 
 ---@param index number
@@ -5601,7 +5585,7 @@ function GetQuestLogItemLink(type, index, questID) end
 ---@return boolean isCompleted
 function GetQuestLogLeaderBoard(objIndex, questIndex) end
 
----@return boolean isPushable
+---@return boolean? isPushable
 function GetQuestLogPushable() end
 
 ---@param questLogIndex? number
@@ -5671,12 +5655,12 @@ function GetQuestLogSpecialItemInfo(questLogIndex) end
 function GetQuestLogTimeLeft() end
 
 ---@param questLogIndex number
----@return string title
+---@return string? title
 ---@return number level
 ---@return number suggestedGroup
 ---@return boolean isHeader
 ---@return boolean isCollapsed
----@return number isComplete
+---@return number? isComplete
 ---@return number frequency
 ---@return number questID
 ---@return boolean startEvent
@@ -5715,9 +5699,9 @@ function GetQuestReward(itemChoice) end
 function GetQuestSortIndex(questLogIndex) end
 
 ---@param questID number
----@return number tagID
----@return string tagName
----@return number worldQuestType
+---@return number? tagID
+---@return string? tagName
+---@return number? worldQuestType
 ---@return number rarity
 ---@return boolean isElite
 ---@return unknown tradeskillLineIndex
@@ -5749,7 +5733,7 @@ function GetQuestsCompleted(table) end
 ---@return string description
 ---@return boolean isHoliday
 ---@return number bonusRepAmount
----@return number minPlayers
+---@return number? minPlayers
 ---@return boolean isTimeWalking
 ---@return string name2
 ---@return number minGearLevel
@@ -5765,14 +5749,14 @@ function GetRaidBuffInfo() end
 ---@return string name
 ---@return number rank
 ---@return number subgroup
----@return number level
+---@return number? level
 ---@return string class
 ---@return string fileName
 ---@return string? zone
----@return boolean online
----@return boolean isDead
+---@return boolean? online
+---@return boolean? isDead
 ---@return string role
----@return boolean isML
+---@return boolean? isML
 ---@return string combatRole
 function GetRaidRosterInfo(raidIndex) end
 
@@ -5827,13 +5811,13 @@ function GetRewardXP() end
 function GetRuneType(id) end
 
 ---@param index number
----@return string instanceChatLink
+---@return string? instanceChatLink
 function GetSavedInstanceChatLink(index) end
 
 ---@param instanceIndex number
 ---@param encounterIndex number
 ---@return string bossName
----@return number fileDataID
+---@return number? fileDataID
 ---@return boolean isKilled
 ---@return boolean unknown4
 function GetSavedInstanceEncounterInfo(instanceIndex, encounterIndex) end
@@ -5929,7 +5913,7 @@ function GetShapeshiftForm(flag) end
 ---@param index number
 ---@return number startTime
 ---@return number duration
----@return number isActive
+---@return number? isActive
 function GetShapeshiftFormCooldown(index) end
 
 ---@return number index
@@ -5937,33 +5921,33 @@ function GetShapeshiftFormID() end
 
 ---@param index number
 ---@return string icon
----@return boolean active
----@return boolean castable
+---@return boolean? active
+---@return boolean? castable
 ---@return number spellID
 function GetShapeshiftFormInfo(index) end
 
 ---@param index number
 ---@return string skillName
----@return number header
----@return number isExpanded
+---@return number? header
+---@return number? isExpanded
 ---@return number skillRank
 ---@return number numTempPoints
 ---@return number skillModifier
 ---@return number skillMaxRank
----@return number isAbandonable
----@return number stepCost
----@return number rankCost
+---@return number? isAbandonable
+---@return number? stepCost
+---@return number? rankCost
 ---@return number minLevel
 ---@return number skillCostType
 ---@return string skillDescription
 function GetSkillLineInfo(index) end
 
 ---@deprecated
----@return boolean isBoundTradeable
+---@return boolean? isBoundTradeable
 function GetSocketItemBoundTradeable() end
 
 ---@deprecated
----@return string name
+---@return string? name
 ---@return fileID icon
 ---@return Enum.ItemQuality quality
 function GetSocketItemInfo() end
@@ -5991,7 +5975,7 @@ function GetSourceReforgeStats() end
 ---@param isInspect? boolean
 ---@param isPet? boolean
 ---@param specGroup? number
----@return number currentSpec
+---@return number? currentSpec
 function GetSpecialization(isInspect, isPet, specGroup) end
 
 ---@deprecated
@@ -6039,7 +6023,7 @@ function GetSpecializationNameForClassID(classId, specIndex) end
 function GetSpecializationRole(specIndex, isInspect, isPet) end
 
 ---@param specID number
----@return string roleToken
+---@return string? roleToken
 function GetSpecializationRoleByID(specID) end
 
 ---@param specIndex number
@@ -6063,61 +6047,49 @@ function GetSpellAutocast(spellName" or spellId, bookType) end
 ---@return number gcdMS
 function GetSpellBaseCooldown(spellid) end
 
----@param spellName)
-              {{=}} GetSpellBookItemInfo(index unknown
----@param bookType unknown
+---@overload fun(index: unknown, bookType: unknown): string, number
+---@param spellName unknown
 ---@return string spellType
 ---@return number id
-function GetSpellBookItemInfo(spellName)
-              {{=}} GetSpellBookItemInfo(index, bookType) end
+function GetSpellBookItemInfo(spellName) end
 
 ---@deprecated
----@param spellName)
-                                 {{=}} GetSpellBookItemName(index unknown
----@param bookType unknown
+---@overload fun(index: unknown, bookType: unknown): string, string, number
+---@param spellName unknown
 ---@return string spellName
 ---@return string spellSubName
 ---@return number spellID
-function GetSpellBookItemName(spellName)
-                                 {{=}} GetSpellBookItemName(index, bookType) end
+function GetSpellBookItemName(spellName) end
 
----@param spell)
-     {{=}} GetSpellBookItemTexture(index unknown
----@param bookType unknown
----@return number icon
-function GetSpellBookItemTexture(spell)
-     {{=}} GetSpellBookItemTexture(index, bookType) end
+---@overload fun(index: unknown, bookType: unknown): number?
+---@param spell unknown
+---@return number? icon
+function GetSpellBookItemTexture(spell) end
 
 ---@deprecated
----@param spell)
-  {{=}} GetSpellCharges(index unknown
----@param bookType unknown
+---@overload fun(index: unknown, bookType: unknown): number, number, number, number, number
+---@param spell unknown
 ---@return number currentCharges
 ---@return number maxCharges
 ---@return number cooldownStart
 ---@return number cooldownDuration
 ---@return number chargeModRate
-function GetSpellCharges(spell)
-  {{=}} GetSpellCharges(index, bookType) end
+function GetSpellCharges(spell) end
 
 ---@deprecated
----@param spell)
-                                  {{=}} GetSpellCooldown(index unknown
----@param bookType unknown
+---@overload fun(index: unknown, bookType: unknown): number, number, number, number
+---@param spell unknown
 ---@return number startTime
 ---@return number duration
 ---@return number enabled
 ---@return number modRate
-function GetSpellCooldown(spell)
-                                  {{=}} GetSpellCooldown(index, bookType) end
+function GetSpellCooldown(spell) end
 
 ---@deprecated
----@param spell)
-         {{=}} GetSpellCount(index unknown
----@param bookType unknown
+---@overload fun(index: unknown, bookType: unknown): number
+---@param spell unknown
 ---@return number numCasts
-function GetSpellCount(spell)
-         {{=}} GetSpellCount(index, bookType) end
+function GetSpellCount(spell) end
 
 ---@deprecated
 ---@param spellID number
@@ -6125,33 +6097,28 @@ function GetSpellCount(spell)
 function GetSpellDescription(spellID) end
 
 ---@deprecated
----@param spell)
-  {{=}} GetSpellInfo(index unknown
----@param bookType unknown
+---@overload fun(index: unknown, bookType: unknown): string, string?, number, number, number, number, number, number
+---@param spell unknown
 ---@return string name
----@return string subtext
+---@return string? subtext
 ---@return number icon
 ---@return number castTime
 ---@return number minRange
 ---@return number maxRange
 ---@return number spellID
 ---@return number originalIcon
-function GetSpellInfo(spell)
-  {{=}} GetSpellInfo(index, bookType) end
+function GetSpellInfo(spell) end
 
----@param spell)
-      {{=}} GetSpellLevelLearned(index unknown
----@param bookType unknown
----@return number level
-function GetSpellLevelLearned(spell)
-      {{=}} GetSpellLevelLearned(index, bookType) end
-
+---@overload fun(index: unknown, bookType: unknown): number
 ---@param spell unknown
----@param {{=}} GetSpellLink(index unknown
+---@return number level
+function GetSpellLevelLearned(spell) end
+
+---@param index unknown
 ---@param bookType unknown
 ---@return string link
 ---@return number spellID
-function GetSpellLink(spell, {{=}} GetSpellLink(index, bookType) end
+function GetSpellLink(index, bookType) end
 
 ---@param spellSlot number
 ---@param bookType? string
@@ -6165,12 +6132,10 @@ function GetSpellLossOfControlCooldown(spellSlot, bookType, or spellName or spel
 ---@return string spellRank
 function GetSpellName(bookType) end
 
----@param spell)
-      {{=}} GetSpellPowerCost(index unknown
----@param bookType unknown
+---@overload fun(index: unknown, bookType: unknown): table[]
+---@param spell unknown
 ---@return table[] costs
-function GetSpellPowerCost(spell)
-      {{=}} GetSpellPowerCost(index, bookType) end
+function GetSpellPowerCost(spell) end
 
 ---@deprecated
 ---@return number result
@@ -6187,12 +6152,10 @@ function GetSpellQueueWindow() end
 function GetSpellTabInfo(tabIndex) end
 
 ---@deprecated
----@param spell)
-     {{=}} GetSpellTexture(index unknown
----@param bookType unknown
+---@overload fun(index: unknown, bookType: unknown): number
+---@param spell unknown
 ---@return number icon
-function GetSpellTexture(spell)
-     {{=}} GetSpellTexture(index, bookType) end
+function GetSpellTexture(spell) end
 
 ---@param spellId number
 ---@param spellName string
@@ -6239,20 +6202,13 @@ function GetTalentClearInfo() end
 function GetTalentGroupRole(groupIndex) end
 
 ---@deprecated
+---@overload fun(talentID: number, specGroupIndex: number, isInspect?: boolean, inspectUnit?: string): number, string, number, boolean, boolean, number, boolean, number, number, boolean, boolean
+---@overload fun(specIndex: number, tier: number, column: number): number, string, number, boolean, boolean, number, boolean, number, number, boolean, boolean
 ---@param tier number
 ---@param column number
 ---@param specGroupIndex number
 ---@param isInspect? boolean
 ---@param inspectUnit? string
----@param )
-  {{=}} GetTalentInfoByID(talentID number
----@param specGroupIndex number
----@param isInspect? boolean
----@param inspectUnit? string
----@param )
-  {{=}} GetTalentInfoBySpecialization(specIndex number
----@param tier number
----@param column number
 ---@return number talentID
 ---@return string name
 ---@return number texture
@@ -6264,9 +6220,7 @@ function GetTalentGroupRole(groupIndex) end
 ---@return number column
 ---@return boolean known
 ---@return boolean grantedByAura
-function GetTalentInfo(tier, column, specGroupIndex, isInspect, inspectUnit, )
-  {{=}} GetTalentInfoByID(talentID, specGroupIndex, isInspect, inspectUnit, )
-  {{=}} GetTalentInfoBySpecialization(specIndex, tier, column) end
+function GetTalentInfo(tier, column, specGroupIndex, isInspect, inspectUnit) end
 
 ---@param tabIndex number
 ---@param talentIndex number
@@ -6275,7 +6229,7 @@ function GetTalentInfo(tier, column, specGroupIndex, isInspect, inspectUnit, )
 ---@param talentGroup? number
 ---@return number tier
 ---@return number column
----@return number isLearnable
+---@return number? isLearnable
 function GetTalentPrereqs(tabIndex, talentIndex, isInspect, isPet, talentGroup) end
 
 ---@param tier number
@@ -6349,12 +6303,12 @@ function GetTrackedAchievements() end
 ---@param id number
 ---@return string name
 ---@return number texture
----@return boolean active
+---@return boolean? active
 ---@return string category
 ---@return number nested
 function GetTrackingInfo(id) end
 
----@return number icon
+---@return number? icon
 function GetTrackingTexture() end
 
 ---@param id number
@@ -6379,7 +6333,7 @@ function GetTradeSkillDescription(index) end
 ---@return string skillType
 ---@return number numAvailable
 ---@return boolean isExpanded
----@return string altVerb
+---@return string? altVerb
 ---@return number numSkillUps
 ---@return number indentLevel
 ---@return boolean showProgressBar
@@ -6389,7 +6343,7 @@ function GetTradeSkillDescription(index) end
 function GetTradeSkillInfo(skillIndex) end
 
 ---@param slotIndex number
----@return number isVisible
+---@return number? isVisible
 function GetTradeSkillInvSlotFilter(slotIndex) end
 
 ---@return unknown invSlots
@@ -6442,7 +6396,7 @@ function GetTradeSkillRecipeLink(index) end
 function GetTradeSkillSelectionIndex() end
 
 ---@param filterIndex number
----@return number isVisible
+---@return number? isVisible
 function GetTradeSkillSubClassFilter(filterIndex) end
 
 ---@return unknown subClasses
@@ -6490,14 +6444,14 @@ function GetTrainerServiceCost(index) end
 function GetTrainerServiceDescription(index) end
 
 ---@param index number
----@return fileID icon
+---@return fileID? icon
 function GetTrainerServiceIcon(index) end
 
 ---@param index number
 ---@return string name
 ---@return string rank
 ---@return string category
----@return number expanded
+---@return number? expanded
 function GetTrainerServiceInfo(index) end
 
 ---@param index number
@@ -6515,7 +6469,7 @@ function GetTrainerServiceSkillLine(index) end
 ---@param index number
 ---@return string? skillName
 ---@return number skillLevel
----@return boolean hasReq
+---@return boolean? hasReq
 function GetTrainerServiceSkillReq(index) end
 
 ---@param type string
@@ -6542,7 +6496,7 @@ function GetVehicleBarIndex() end
 function GetVoiceSessionInfo(id) end
 
 ---@param voidSlot number
----@return string itemLink
+---@return string? itemLink
 function GetVoidItemHyperlinkString(voidSlot) end
 
 ---@param tabIndex number
@@ -6568,7 +6522,7 @@ function GetVoidTransferDepositInfo(slotIndex) end
 ---@return string textureName
 function GetVoidTransferWithdrawalInfo(slotIndex) end
 
----@return string name
+---@return string? name
 ---@return number standing
 ---@return number min
 ---@return number max
@@ -6744,20 +6698,20 @@ function HasBonusActionBar() end
 function HasBoundGemProposed() end
 
 ---@deprecated
----@return boolean hasBar
+---@return boolean? hasBar
 function HasExtraActionBar() end
 
 ---@return boolean hasData
 function HasInspectHonorData() end
 
----@return boolean isRestricted
+---@return boolean? isRestricted
 function HasLFGRestrictions() end
 
 ---@deprecated
 ---@return boolean hasOverrideActionBar
 function HasOverrideActionBar() end
 
----@return number numSpells
+---@return number? numSpells
 ---@return string petToken
 function HasPetSpells() end
 
@@ -6807,7 +6761,7 @@ function IsAchievementEligible(achievementID) end
 ---@deprecated
 ---@param actionSlot number
 ---@param unit? string
----@return boolean inRange
+---@return boolean? inRange
 function IsActionInRange(actionSlot, unit) end
 
 ---@return boolean isArena
@@ -6885,7 +6839,7 @@ function IsConsumableAction(slotID) end
 
 ---@deprecated
 ---@param itemID or itemLink or itemName unknown
----@return boolean isConsumable
+---@return boolean? isConsumable
 function IsConsumableItem(itemID or itemLink or itemName) end
 
 ---@deprecated
@@ -6900,7 +6854,7 @@ function IsCosmeticItem(itemInfo) end
 
 ---@deprecated
 ---@param actionSlot number
----@return boolean isCurrent
+---@return boolean? isCurrent
 function IsCurrentAction(actionSlot) end
 
 ---@deprecated
@@ -6950,7 +6904,7 @@ function IsEquippedItem(itemID or itemName) end
 function IsEquippedItemType(type) end
 
 ---@param index number
----@return boolean inactive
+---@return boolean? inactive
 function IsFactionInactive(index) end
 
 ---@return boolean isFishingLoot
@@ -7012,7 +6966,7 @@ function IsItemAction(actionID) end
 ---@deprecated
 ---@param item number|string
 ---@param unit? string
----@return boolean inRange
+---@return boolean? inRange
 function IsItemInRange(item, unit) end
 
 ---@return boolean isComplete
@@ -7102,18 +7056,15 @@ function IsReferAFriendLinked(unit) end
               IsSpellClassOrSpec(spellIndex string
 ---@param bookType string
 ---@return string? spec
----@return string class
+---@return string? class
 function IsSpellClassOrSpec(spellName)
               IsSpellClassOrSpec(spellIndex, bookType) end
 
+---@overload fun(index: number, bookType: string, unit: string): number?
 ---@param spellName string
----@param unit)
-        {{=}} IsSpellInRange(index string
----@param bookType string
 ---@param unit string
 ---@return number? inRange
-function IsSpellInRange(spellName, unit)
-        {{=}} IsSpellInRange(index, bookType, unit) end
+function IsSpellInRange(spellName, unit) end
 
 ---@deprecated
 ---@param spellID number
@@ -7167,8 +7118,8 @@ function IsTradeSkillRepeating() end
 function IsTradeskillTrainer() end
 
 ---@param index number
----@return number isLearnSpell
----@return number isPetLearnSpell
+---@return number? isLearnSpell
+---@return number? isPetLearnSpell
 function IsTrainerServiceLearnSpell(index) end
 
 ---@param questIndex unknown
@@ -7188,13 +7139,11 @@ function IsUsableAction(slot) end
 function IsUsableItem(itemInfo) end
 
 ---@deprecated
----@param spell)
-               {{=}} IsUsableSpell(index unknown
----@param bookType unknown
+---@overload fun(index: unknown, bookType: unknown): boolean, boolean
+---@param spell unknown
 ---@return boolean usable
 ---@return boolean noMana
-function IsUsableSpell(spell)
-               {{=}} IsUsableSpell(index, bookType) end
+function IsUsableSpell(spell) end
 
 ---@return boolean adjustable
 function IsVehicleAimAngleAdjustable() end
@@ -7220,7 +7169,7 @@ function ItemTextGetCreator() end
 ---@return string textName
 function ItemTextGetItem() end
 
----@return string materialName
+---@return string? materialName
 function ItemTextGetMaterial() end
 
 ---@return number pageNum
@@ -7254,7 +7203,7 @@ function JoinChannelByName(channelName, password, frameID, hasVoice) end
 ---@param frameID? number
 ---@param hasVoice? boolean
 ---@return number type
----@return string name
+---@return string? name
 function JoinPermanentChannel(channelName, password, frameID, hasVoice) end
 
 ---@param arenaID number
@@ -7266,7 +7215,7 @@ function JoinSkirmish(arenaID, joinAsGroup) end
 ---@param frameID? number
 ---@param hasVoice? boolean
 ---@return number type
----@return string name
+---@return string? name
 function JoinTemporaryChannel(channelName, password, frameID, hasVoice) end
 
 function JumpOrAscendStart() end
@@ -7491,13 +7440,13 @@ function PlayMusic(sound) end
 ---@param channel? string
 ---@param forceNoDuplicates? boolean
 ---@param runFinishCallback? boolean
----@return boolean willPlay
+---@return boolean? willPlay
 ---@return number soundHandle
 function PlaySound(soundKitID, channel, forceNoDuplicates, runFinishCallback) end
 
 ---@param sound number|string
 ---@param channel? string
----@return boolean willPlay
+---@return boolean? willPlay
 ---@return number soundHandle
 function PlaySoundFile(sound, channel) end
 
@@ -7559,7 +7508,7 @@ function QuestChooseRewardError() end
 ---@return boolean isAutoAccepted
 function QuestGetAutoAccept() end
 
----@return boolean isDaily
+---@return boolean? isDaily
 function QuestIsDaily() end
 
 ---@return boolean isFromArea
@@ -7777,8 +7726,8 @@ function SearchLFGJoin(typeID, lfgID) end
 function Secretunwrap(values) end
 
 ---@param options string
----@return string result
----@return string target
+---@return string? result
+---@return string? target
 function SecureCmdOptionParse(options) end
 
 ---@param index number
@@ -7810,7 +7759,7 @@ function SendAddonMessage(prefix, message, chatType, target) end
 function SendChatMessage(msg, chatType, languageID, target) end
 
 ---@param recipient string
----@param subject string
+---@param subject? string
 ---@param body? string
 function SendMail(recipient, subject, body) end
 
@@ -7863,18 +7812,18 @@ function SetBattlefieldScoreFaction(faction) end
 ---@param key string
 ---@param command? string
 ---@param mode? number
----@return boolean ok
+---@return boolean? ok
 function SetBinding(key, command, mode) end
 
 ---@param key string
 ---@param buttonName string
 ---@param button? string
----@return boolean ok
+---@return boolean? ok
 function SetBindingClick(key, buttonName, button) end
 
 ---@param key string
 ---@param item string
----@return boolean ok
+---@return boolean? ok
 function SetBindingItem(key, item) end
 
 ---@param key string
@@ -7884,7 +7833,7 @@ function SetBindingMacro(key, name) end
 
 ---@param key string
 ---@param spell string
----@return boolean ok
+---@return boolean? ok
 function SetBindingSpell(key, spell) end
 
 ---@param channel string
@@ -7989,13 +7938,13 @@ function SetMoveEnabled() end
 ---@param spellID number
 function SetMultiCastSpell(actionID, spellID) end
 
----@param optOut boolean
+---@param optOut? boolean
 function SetOptOutOfLoot(optOut) end
 
 ---@param owner Frame
 ---@param isPriority boolean
 ---@param key string
----@param command string
+---@param command? string
 function SetOverrideBinding(owner, isPriority, key, command) end
 
 ---@param owner Frame
@@ -8195,10 +8144,10 @@ function SpellIsPriorityAura(spellID) end
 ---@return boolean hasSelfEffectsOnly
 function SpellIsSelfBuff(spellID) end
 
----@return boolean isTargeting
+---@return boolean? isTargeting
 function SpellIsTargeting() end
 
----@return boolean stopped
+---@return boolean? stopped
 function SpellStopCasting() end
 
 function SpellStopTargeting() end
@@ -8444,7 +8393,7 @@ function UnitDebuff(unit, index, filter) end
 function UnitGetGuildXP() end
 
 ---@param unit UnitToken
----@return boolean isBeingResurrected
+---@return boolean? isBeingResurrected
 function UnitHasIncomingResurrection(unit) end
 
 ---@param unit string
@@ -8540,7 +8489,7 @@ function VehicleCameraZoomIn(increment) end
 ---@param increment? number
 function VehicleCameraZoomOut(increment) end
 
----@return boolean disabled
+---@return boolean? disabled
 function VoiceIsDisabledByClient() end
 
 ---@param text string
@@ -8601,7 +8550,7 @@ function getfenv(f) end
 function hooksecurefunc(tbl, functionName, hookfunc) end
 
 ---@param moduleName string
----@return any module
+---@return any? module
 function import(moduleName) end
 
 ---@return boolean secure
@@ -8655,11 +8604,10 @@ function math.random(<nowiki>, </nowiki>low, high) end
 ---@param text string
 function message(text) end
 
----@param withmetatable)
-      {{=}} newproxy(otherproxy boolean
+---@overload fun(otherproxy: userdata): userdata
+---@param withmetatable boolean
 ---@return userdata proxy
-function newproxy(withmetatable)
-      {{=}} newproxy(otherproxy) end
+function newproxy(withmetatable) end
 
 ---@return boolean retOK
 ---@return string ret1
@@ -8703,7 +8651,7 @@ function setmetatable(table, metatable) end
 ---@param s string
 ---@param index number
 ---@param endIndex number
----@return number indexByte
+---@return number? indexByte
 function string.byte(s, index, endIndex) end
 
 ---@param ... unknown
@@ -8803,7 +8751,7 @@ function tonumber(radix) end
 ---@return string s
 function tostring() end
 
----@return string t
+---@return string? t
 function type() end
 
 ---@param t table

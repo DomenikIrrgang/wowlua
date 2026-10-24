@@ -48,6 +48,8 @@ pub struct Taxis {
     /// The flight masters' maps: unit → the test's table.
     pub defined: std::collections::BTreeMap<usize, TableRef>,
     pub open: Option<UnitId>,
+    /// The flights taken: a landing of an earlier one is stale.
+    pub flights: u32,
 }
 
 fn fire(vm: &mut Vm, e: &str, args: &[Value]) {
@@ -393,6 +395,11 @@ fn take_taxi_node(vm: &mut Vm, c: NativeCall) -> Ret {
 fn departed(vm: &mut Vm, c: NativeCall) -> Ret {
     close(vm);
     engine_mut(vm).world.taxi_stage = 1;
+    let flight = {
+        let taxis = &mut engine_mut(vm).world.taxis;
+        taxis.flights += 1;
+        taxis.flights
+    };
     fire(vm, "PLAYER_CONTROL_LOST", &[]);
     fire(vm, "VEHICLE_ANGLE_SHOW", &[Value::Nil]);
     fire(vm, "VEHICLE_POWER_SHOW", &[Value::Nil]);
@@ -406,7 +413,7 @@ fn departed(vm: &mut Vm, c: NativeCall) -> Ret {
         BOARDED_AFTER,
         "taxiBoarded",
         boarded,
-        vec![c.upvals[0], c.upvals[1]],
+        vec![c.upvals[0], c.upvals[1], Value::Num(f64::from(flight))],
     );
     Ok(vec![])
 }
@@ -441,7 +448,7 @@ fn boarded(vm: &mut Vm, c: NativeCall) -> Ret {
             (time - BOARDED_AFTER).max(0.0),
             "taxiLanded",
             landed,
-            vec![],
+            vec![c.upvals[2]],
         );
     }
     Ok(vec![])
@@ -452,8 +459,15 @@ fn shapeshift_usable(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// Landed: the control back, off the taxi and the mount, the spells usable.
-fn landed(vm: &mut Vm, _c: NativeCall) -> Ret {
+/// Landed: the control back, off the taxi and the mount, the spells usable
+/// (once: an early landing's, then not the flight's own).
+fn landed(vm: &mut Vm, c: NativeCall) -> Ret {
+    let flight = f64::from(engine(vm).world.taxis.flights);
+    if engine(vm).world.taxi_stage != 2
+        || !matches!(c.upvals.first(), Some(Value::Num(n)) if *n == flight)
+    {
+        return Ok(vec![]);
+    }
     engine_mut(vm).world.taxi_stage = 0;
     fire(vm, "PLAYER_CONTROL_GAINED", &[]);
     fire(vm, "VEHICLE_UPDATE", &[]);
@@ -467,6 +481,20 @@ fn landed(vm: &mut Vm, _c: NativeCall) -> Ret {
     fire(vm, "PLAYER_MOUNT_DISPLAY_CHANGED", &[]);
     fire(vm, "ACTIONBAR_UPDATE_USABLE", &[]);
     fire(vm, "SPELL_UPDATE_USABLE", &[]);
+    Ok(vec![])
+}
+
+/// `TaxiRequestEarlyLanding()`: on a flight, it lands at the next stop.
+/// Unverified (the client's undocumented function, not probed): the
+/// engine keeps no stops on the way, so the landing comes the server's
+/// round trip later; off a flight nothing.
+fn request_early_landing(vm: &mut Vm, _c: NativeCall) -> Ret {
+    if engine(vm).world.taxi_stage != 2 {
+        return Ok(vec![]);
+    }
+    let flight = Value::Num(f64::from(engine(vm).world.taxis.flights));
+    let after = crate::clock::server_delay(vm);
+    later(vm, after, "taxiLanded", landed, vec![flight]);
     Ok(vec![])
 }
 
@@ -492,6 +520,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_TaxiMap.GetTaxiNodesForMap", get_taxi_nodes_for_map),
         ("CloseTaxiMap", close_taxi_map),
         ("TakeTaxiNode", take_taxi_node),
+        ("TaxiRequestEarlyLanding", request_early_landing),
         ("TaxiGetNodeSlot", taxi_get_node_slot),
         ("TaxiIsDirectFlight", taxi_is_direct_flight),
         ("TaxiGetSrcX", taxi_get_src_x),

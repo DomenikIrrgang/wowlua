@@ -348,6 +348,19 @@ The WoW API the VM's code calls, per flavor.
 - **Atlases.** Every atlas of the client, from its own tables (decision
   T238): sizes, files, texture coordinates and tiling as the client gives
   them; an atlas it lacks is none.
+- **Widget state.** A method with no result changes what the widget's
+  getters answer as the client's does (decision T289): `Raise()` and
+  `Lower()` put a frame above or below every other shown frame of its
+  strata (`GetFrameLevel`); an edit box keeps a selection
+  (`HighlightText`, `ClearHighlightText`) that `Insert(text)` and the
+  user's typing (`mock.type`) replace, else they go in at the cursor, and
+  `SetText` puts the cursor at the end; `Font:CopyFontObject` copies the
+  font, colors, shadow, spacing and justification;
+  `AdjustPointsOffset(x, y)` moves every anchor, `ClearPointsOffset()`
+  zeroes them; the clears (`ClearModel`, a button's `ClearNormalTexture`
+  and the other states', `FontString:ClearText`, `ClearParentKey`,
+  `ResetTexCoord`, `StopAnimating`) undo their setters. A method only a
+  renderer would show (`LockHighlight`) is kept for it.
 - **Not mocked.** A generated function without behaviour raises
   "`<name>` is not mocked" when called, unless the project provides a mock
   (Tooling §16.1.4), so gaps are visible instead of silently returning nil.

@@ -50,6 +50,30 @@ pub struct FlavorDocs {
 /// `SecureTemplates.lua` uses; `Texture:GetTexture` gives the file ID (a
 /// number) of a texture set by one, as the client does, not only a path.
 fn widget_corrections(classes: &mut indexmap::IndexMap<String, model::Class>) {
+    // What a fresh widget answers (`/stdtest engine`, the engine's
+    // `camelot-widget-defaults.txt`): a font string's and a button's
+    // `GetText()` nothing, an edit box's and a message frame's `GetFont()`
+    // no file (a font object's alike), where the documentation has a
+    // string.
+    let nilable_first =
+        |classes: &mut indexmap::IndexMap<String, model::Class>, class: &str, method: &str| {
+            for sig in classes
+                .get_mut(class)
+                .and_then(|c| c.methods.get_mut(method))
+                .into_iter()
+                .flatten()
+            {
+                if sig.returns.first().map(String::as_str) == Some("string") {
+                    sig.returns[0] = "string?".into();
+                }
+            }
+        };
+    for class in ["FontString", "Button", "DropdownButton"] {
+        nilable_first(classes, class, "GetText");
+    }
+    for class in ["Font", "EditBox", "MessageFrame"] {
+        nilable_first(classes, class, "GetFont");
+    }
     if let Some(texture) = classes.get_mut("TextureBase")
         && let Some(sigs) = texture.methods.get_mut("GetTexture")
     {
@@ -436,13 +460,6 @@ fn script_handlers(
 /// documentation says the callback), and their callbacks receive it.
 /// `TimerHandle` and `TickerHandle` are declared by the compiler.
 fn corrections(d: &mut Decls) {
-    // A rule formatter is a numeric formatter: Blizzard's documentation,
-    // which has no inheritance, takes a `NumericFormatter` where its code
-    // passes `C_StringUtil.CreateNumericRuleFormatter()`'s
-    // (`AuraContainerUtilDocumentation`'s `textFormatter`,
-    // `DurationTextBindingSharedDocumentation`'s `formatter`).
-    // (and the abbreviating one: `CustomAuraButtonApplicationCountOptions`'s
-    // `formatter` takes `C_StringUtil.CreateAbbreviatedNumberFormatter()`'s)
     if d.classes.contains_key("NumericFormatter") {
         for name in ["NumericRuleFormatter", "AbbreviatedNumberFormatter"] {
             if let Some(c) = d.classes.get_mut(name)
@@ -559,6 +576,118 @@ fn param(name: &str, ty: &str, optional: bool) -> model::ParamDecl {
 
 /// Where the annotations are wrong about functions Blizzard does not
 /// document: parameters the client and Blizzard's code leave out.
+/// Results the client's recorded answers show and the sources lack (the
+/// engine's `camelot-answers.txt`, decision T290), on the final
+/// declarations.
+fn recorded_corrections(d: &mut Decls) {
+    // Results the documentation lacks: `C_PetBattles.IsTrapAvailable()`
+    // answers `false, 0` (the reason it is not),
+    // `C_TradeSkillUI.IsTradeSkillLinked()` `false, nil` (the linked
+    // player's name).
+    for (ns, name, extra) in [
+        ("C_PetBattles", "IsTrapAvailable", "number"),
+        ("C_TradeSkillUI", "IsTradeSkillLinked", "string?"),
+    ] {
+        for sig in d
+            .namespaces
+            .get_mut(ns)
+            .and_then(|n| n.functions.get_mut(name))
+            .into_iter()
+            .flatten()
+        {
+            if sig.returns.len() == 1 && sig.ret_vararg.is_none() {
+                sig.returns.push(extra.into());
+            }
+        }
+    }
+    // Lists the sources give as their first values: a chat window's
+    // channels (name and ID after name and ID) and its message groups.
+    for (name, first, rest) in [
+        (
+            "GetChatWindowChannels",
+            &["string", "number"][..],
+            "string | number",
+        ),
+        ("GetChatWindowMessages", &[][..], "string"),
+    ] {
+        for sig in d.functions.get_mut(name).into_iter().flatten() {
+            sig.returns = first.iter().map(|t| t.to_string()).collect();
+            sig.ret_vararg = Some(rest.into());
+        }
+    }
+    // `GetAchievementInfo`'s `icon` and `earnedBy`: nil for some
+    // achievements (recorded: Archmage Arugal kills has no icon, Number of
+    // hugs no one who earned it).
+    for sig in d
+        .functions
+        .get_mut("GetAchievementInfo")
+        .into_iter()
+        .flatten()
+    {
+        if sig.returns.len() == 15 {
+            for i in [9, 13] {
+                if !sig.returns[i].ends_with('?') {
+                    sig.returns[i] = model::optional(&sig.returns[i]);
+                }
+            }
+        }
+    }
+}
+
+/// The forms and nil results of a function as the wiki tells them, over
+/// the annotations' (decision T290).
+fn answer_corrections(d: &mut Decls, wiki: &Decls) {
+    let mut all: Vec<(String, &mut Vec<model::Sig>)> = d
+        .functions
+        .iter_mut()
+        .map(|(n, s)| (n.clone(), s))
+        .collect();
+    for (ns, space) in d.namespaces.iter_mut() {
+        for (n, s) in space.functions.iter_mut() {
+            all.push((format!("{ns}.{n}"), s));
+        }
+    }
+    for (name, sigs) in all {
+        // An overload the annotations give no results (`---@overload
+        // fun(categoryID: number, index: number)` of `GetAchievementInfo`)
+        // gives the function's: the forms of one function answer alike.
+        if let Some(typed) = sigs
+            .iter()
+            .find(|s| !s.returns.is_empty() || s.ret_vararg.is_some())
+            .cloned()
+        {
+            for sig in sigs.iter_mut() {
+                if sig.returns.is_empty() && sig.ret_vararg.is_none() {
+                    sig.returns = typed.returns.clone();
+                    sig.ret_vararg = typed.ret_vararg.clone();
+                }
+            }
+        }
+        // A result the wiki says can be nil (`month`: "Returns nil if
+        // Completed is false") is optional where the results line up.
+        let wiki_sigs = match name.split_once('.') {
+            Some((ns, member)) => wiki
+                .namespaces
+                .get(ns)
+                .and_then(|n| n.functions.get(member)),
+            None => wiki.functions.get(&name),
+        };
+        let Some(w) = wiki_sigs.and_then(|w| w.first()) else {
+            continue;
+        };
+        for sig in sigs.iter_mut() {
+            if sig.returns.len() != w.returns.len() {
+                continue;
+            }
+            for (r, wr) in sig.returns.iter_mut().zip(&w.returns) {
+                if wr.ends_with('?') && !r.ends_with('?') && r != "unknown" {
+                    *r = model::optional(r);
+                }
+            }
+        }
+    }
+}
+
 fn annotation_corrections(d: &mut Decls) {
     // `CreateAnimation(type)` gives that animation's class (T280; the method
     // probe records each: `CreateAnimation("Alpha")` is an Alpha), the
@@ -776,8 +905,9 @@ fn wiki_type(ty: &str, known: &HashSet<String>) -> String {
             w
         } else {
             match w {
-                "luaIndex" | "integer" => "number",
+                "luaIndex" | "integer" | "float" | "double" => "number",
                 "cstring" => "string",
+                "bool" => "boolean",
                 _ => "unknown",
             }
         };
@@ -1164,6 +1294,10 @@ pub fn generate(
             }
         }
     }
+    answer_corrections(&mut shared, &wiki);
+    for (_, _, d) in per_flavor.iter_mut() {
+        answer_corrections(d, &wiki);
+    }
     // Blizzard's UI functions, typed from their Lua (decision T288).
     let mut inferred: Vec<HashMap<infer::Owner, model::Sig>> = Vec::new();
     let mut called: Vec<infer::Inferred> = Vec::new();
@@ -1306,6 +1440,8 @@ pub fn generate(
             continue;
         }
         for fields in &lua_fields {
+            let mut fields: Vec<(&(String, String), &String)> = fields.iter().collect();
+            fields.sort();
             for ((table, field), ty) in fields {
                 if table == class && !c.fields.contains_key(field) && model::is_ident(field) {
                     c.fields.insert(field.clone(), (ty.clone(), false));
@@ -1476,8 +1612,11 @@ pub fn generate(
             }
         }
         // and the fields their Lua sets (`self.r = r`), where not declared
+        // (in name order: the map's own order changes from run to run)
+        let mut set: Vec<(&(String, String), &String)> = lua_fields[fi].iter().collect();
+        set.sort();
         for (class, c) in mixins.iter_mut() {
-            for ((table, field), ty) in &lua_fields[fi] {
+            for &((table, field), ty) in &set {
                 if table == class && !c.fields.contains_key(field) && model::is_ident(field) {
                     c.fields.insert(field.clone(), (ty.clone(), false));
                 }
@@ -1781,12 +1920,14 @@ pub fn generate(
                 "templates": templates,
             });
         }
+        recorded_corrections(&mut d);
         d.without_any();
         out_flavors.push((id, d.emit(&header)));
     }
     let header = format!(
         "wow-api declarations shared by every flavor, generated by wowlua-types-gen from\n{annotation_source}. Do not edit."
     );
+    recorded_corrections(&mut shared);
     shared.without_any();
     Ok(Output {
         shared: shared.emit(&header),

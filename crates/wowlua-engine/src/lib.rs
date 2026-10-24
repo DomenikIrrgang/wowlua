@@ -87,6 +87,7 @@ pub mod ui;
 pub mod unitinfo;
 pub mod units;
 pub mod widgetdata;
+pub mod widgetops;
 pub mod widgets;
 
 use std::collections::HashMap;
@@ -1185,6 +1186,7 @@ pub(crate) fn method_behaviours() -> Vec<Behaviours<widgets::MethodFn>> {
         Behaviours::new("bars", bars::methods()),
         Behaviours::new("buttons", buttons::methods()),
         Behaviours::new("measures", measures::methods()),
+        Behaviours::new("widgetops", widgetops::methods()),
     ]
 }
 

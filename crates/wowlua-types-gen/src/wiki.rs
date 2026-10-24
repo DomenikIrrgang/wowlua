@@ -32,6 +32,9 @@ pub struct Function {
     /// `...` among the results.
     pub ret_vararg: bool,
     pub deprecated: bool,
+    /// The other calls the page shows (`{{=}} GetAchievementInfo(categoryID,
+    /// index)`): their parameters and `...`, the results the same.
+    pub overloads: Vec<(Vec<Value>, bool)>,
 }
 
 /// The function a page title names: `API:C Garrison.GetFollowers` →
@@ -96,6 +99,21 @@ fn old_type(word: &str) -> Option<&'static str> {
     })
 }
 
+/// Whether a value's description says it can be nil (`Returns nil if
+/// Completed is false`).
+fn says_nil(description: &str) -> bool {
+    description
+        .split(|c: char| !c.is_ascii_alphanumeric())
+        .any(|w| w.eq_ignore_ascii_case("nil"))
+}
+
+/// The text after a cell's `{{apitype|…}}`.
+fn after_apitype(s: &str) -> &str {
+    s.find("{{apitype|")
+        .and_then(|i| s[i..].find("}}").map(|j| &s[i + j + 2..]))
+        .unwrap_or("")
+}
+
 /// The values a section lists, in order.
 fn values(section: &str) -> Vec<Value> {
     let mut out = Vec::new();
@@ -116,7 +134,7 @@ fn values(section: &str) -> Vec<Value> {
                 out.push(Value {
                     name: name.to_string(),
                     ty,
-                    optional: default,
+                    optional: default || says_nil(after_apitype(tail)),
                 });
             }
             continue;
@@ -128,10 +146,11 @@ fn values(section: &str) -> Vec<Value> {
                 && cells[0].chars().all(|c| c.is_ascii_digit())
                 && let Some((ty, default)) = apitype(cells[2])
             {
+                let description = cells[3..].join(" ");
                 out.push(Value {
                     name: cells[1].to_string(),
                     ty,
-                    optional: default,
+                    optional: default || says_nil(&description),
                 });
             }
             continue;
@@ -157,9 +176,12 @@ fn values(section: &str) -> Vec<Value> {
     out
 }
 
-/// A call as `{{apisig|…}}` writes it: the results' names, and the
-/// arguments' names, each with whether brackets make it optional.
-type Call = (Vec<String>, Vec<(String, bool)>);
+/// A call's arguments' names, each with whether brackets make it optional.
+type Args = Vec<(String, bool)>;
+
+/// A call as `{{apisig|…}}` writes it: the results' names, and each form's
+/// arguments (`r {{=}} F(a) {{=}} F(b, c)`: two).
+type Call = (Vec<String>, Vec<Args>);
 
 /// The `{{apisig|…}}` call.
 fn apisig(text: &str) -> Option<Call> {
@@ -185,21 +207,35 @@ fn apisig(text: &str) -> Option<Call> {
         }
     };
     let sig = &text[start..end];
-    let (lhs, call) = match sig.split_once("{{=}}") {
-        Some((l, c)) => (l.trim(), c.trim()),
-        None => ("", sig.trim()),
+    let parts: Vec<&str> = sig.split("{{=}}").map(str::trim).collect();
+    let (lhs, calls) = match parts.as_slice() {
+        [call] => ("", vec![*call]),
+        [lhs, calls @ ..] => (*lhs, calls.to_vec()),
+        [] => return None,
     };
     let results: Vec<String> = lhs
         .split(',')
         .map(|r| r.trim().to_string())
         .filter(|r| !r.is_empty())
         .collect();
+    let forms: Vec<Args> = calls.iter().filter_map(|c| call_args(c)).collect();
+    if forms.is_empty() {
+        return None;
+    }
+    Some((results, forms))
+}
+
+/// The arguments of one call `F(a, [b])`.
+fn call_args(call: &str) -> Option<Args> {
     let open = call.find('(')?;
     let close = call.rfind(')')?;
+    if close < open {
+        return None;
+    }
     let mut args = Vec::new();
     let mut depth = 0i32;
     let mut word = String::new();
-    let flush = |word: &mut String, optional: bool, args: &mut Vec<(String, bool)>| {
+    let flush = |word: &mut String, optional: bool, args: &mut Args| {
         let w = word
             .trim()
             .trim_matches(|c| c == '"' || c == '\'')
@@ -224,7 +260,7 @@ fn apisig(text: &str) -> Option<Call> {
         }
     }
     flush(&mut word, depth > 0, &mut args);
-    Some((results, args))
+    Some(args)
 }
 
 /// Reads one page; `None` when it has no call to read.
@@ -240,26 +276,36 @@ pub fn function(title: &str, text: &str) -> Option<Function> {
         return None;
     }
     let find = |list: &[Value], name: &str| list.iter().find(|v| v.name == name).cloned();
+    // A form's parameters: each listed by name, else (the first form's) by
+    // position.
+    let form = |args: &Args, by_position: bool| -> (Vec<Value>, bool) {
+        let mut params = Vec::new();
+        let mut vararg = false;
+        for (i, (arg, bracketed)) in args.iter().enumerate() {
+            if arg == "..." {
+                vararg = true;
+                continue;
+            }
+            let listed = find(&listed_args, arg)
+                .or_else(|| by_position.then(|| listed_args.get(i).cloned()).flatten());
+            let mut v = listed.unwrap_or(Value {
+                name: arg.clone(),
+                ty: "unknown".into(),
+                optional: false,
+            });
+            v.name = arg.clone();
+            v.optional |= *bracketed || v.ty.ends_with('?');
+            params.push(v);
+        }
+        (params, vararg)
+    };
     let mut params = Vec::new();
     let mut vararg = false;
+    let mut overloads = Vec::new();
     match &sig {
-        Some((_, args)) => {
-            for (i, (arg, bracketed)) in args.iter().enumerate() {
-                if arg == "..." {
-                    vararg = true;
-                    continue;
-                }
-                // by name, else by position
-                let listed = find(&listed_args, arg).or_else(|| listed_args.get(i).cloned());
-                let mut v = listed.unwrap_or(Value {
-                    name: arg.clone(),
-                    ty: "unknown".into(),
-                    optional: false,
-                });
-                v.name = arg.clone();
-                v.optional |= *bracketed || v.ty.ends_with('?');
-                params.push(v);
-            }
+        Some((_, forms)) => {
+            (params, vararg) = form(&forms[0], true);
+            overloads = forms[1..].iter().map(|f| form(f, false)).collect();
         }
         None => {
             for v in &listed_args {
@@ -289,7 +335,10 @@ pub fn function(title: &str, text: &str) -> Option<Function> {
         _ => returns = listed_rets,
     }
     // A parameter's type keeps no `?`: optionality is the parameter's.
-    for p in &mut params {
+    for p in params
+        .iter_mut()
+        .chain(overloads.iter_mut().flat_map(|(o, _)| o.iter_mut()))
+    {
         if let Some(t) = p.ty.strip_suffix('?') {
             p.ty = t.to_string();
         }
@@ -301,6 +350,7 @@ pub fn function(title: &str, text: &str) -> Option<Function> {
         returns,
         ret_vararg,
         deprecated: text.contains("{{deprecatedapi"),
+        overloads,
     })
 }
 
@@ -371,6 +421,17 @@ fn luals_type(ty: &str) -> String {
         .join("|")
 }
 
+/// A result's type as LuaLS writes it, `?` when it can be nil.
+fn result_type(r: &Value) -> String {
+    let ty = luals_type(r.ty.trim_end_matches('?'));
+    let optional = r.optional || r.ty.ends_with('?');
+    match (optional, ty.contains('|')) {
+        (true, true) => format!("({ty})?"),
+        (true, false) => format!("{ty}?"),
+        (false, _) => ty,
+    }
+}
+
 /// The functions and records as one LuaLS file.
 pub fn to_luals(functions: &[Function], structs: &[(String, Vec<Value>)]) -> String {
     let mut out = String::new();
@@ -400,6 +461,29 @@ pub fn to_luals(functions: &[Function], structs: &[(String, Vec<Value>)]) -> Str
         if f.deprecated {
             out.push_str("---@deprecated\n");
         }
+        // The other forms, with the same results.
+        let results: Vec<String> = f
+            .returns
+            .iter()
+            .map(result_type)
+            .chain(f.ret_vararg.then(|| "...".to_string()))
+            .collect();
+        for (params, vararg) in &f.overloads {
+            let list: Vec<String> = params
+                .iter()
+                .map(|p| {
+                    let opt = if p.optional { "?" } else { "" };
+                    format!("{}{opt}: {}", p.name, luals_type(&p.ty))
+                })
+                .chain(vararg.then(|| "...: unknown".to_string()))
+                .collect();
+            let ret = if results.is_empty() {
+                String::new()
+            } else {
+                format!(": {}", results.join(", "))
+            };
+            let _ = writeln!(out, "---@overload fun({}){ret}", list.join(", "));
+        }
         for p in &f.params {
             let opt = if p.optional { "?" } else { "" };
             let _ = writeln!(out, "---@param {}{opt} {}", p.name, luals_type(&p.ty));
@@ -408,7 +492,7 @@ pub fn to_luals(functions: &[Function], structs: &[(String, Vec<Value>)]) -> Str
             out.push_str("---@param ... unknown\n");
         }
         for r in &f.returns {
-            let _ = writeln!(out, "---@return {} {}", luals_type(&r.ty), r.name);
+            let _ = writeln!(out, "---@return {} {}", result_type(r), r.name);
         }
         if f.ret_vararg {
             out.push_str("---@return unknown ...\n");
@@ -501,5 +585,24 @@ mod tests {
         assert_eq!(f.params[0].ty, "unknown");
         assert_eq!(f.returns[0].ty, "unknown");
         assert_eq!(function("API:Foo", "#REDIRECT [[API:Bar]]"), None);
+    }
+
+    #[test]
+    fn a_page_of_two_forms() {
+        let text = "{{wowapi}}\n{{apisig|id, month\n  {{=}} GetAchievementInfo(achievementID)\n  {{=}} GetAchievementInfo(categoryID, index)}}\n\n==Arguments==\n:;achievementID:{{apitype|number}} : The achievement.\n----\n:;categoryID:{{apitype|number}} - A category.\n:;index:{{apitype|number}} - An offset.\n\n==Returns==\n{| class=\"darktable\"\n! Index !! Param !! Type !! Description\n|-\n|1 || id || {{apitype|number}} || Achievement ID.\n|-\n|2 || month || {{apitype|number}} || Returns nil if Completed is false.\n|}\n";
+        let f = function("API:GetAchievementInfo", text).expect("a function");
+        let names = |ps: &[Value]| ps.iter().map(|p| p.name.clone()).collect::<Vec<_>>();
+        assert_eq!(names(&f.params), ["achievementID"]);
+        assert_eq!(f.overloads.len(), 1);
+        assert_eq!(names(&f.overloads[0].0), ["categoryID", "index"]);
+        assert_eq!(f.overloads[0].0[1].ty, "number");
+        assert!(!f.returns[0].optional);
+        assert!(f.returns[1].optional);
+        let lua = to_luals(&[f], &[]);
+        assert!(
+            lua.contains("---@overload fun(categoryID: number, index: number): number, number?\n"),
+            "{lua}"
+        );
+        assert!(lua.contains("---@return number? month\n"), "{lua}");
     }
 }

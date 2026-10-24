@@ -352,7 +352,10 @@ The WoW API is typed by **pre-generated `types` packages**, one per flavor:
    LuaLS annotations to `xtask/data/warcraft-wiki-api.lua`, which the
    generator reads (builds never reach the wiki). The declarations made
    from them carry the wiki's attribution and license
-   (`LICENSE-warcraft-wiki.txt`).
+   (`LICENSE-warcraft-wiki.txt`). A page that shows several calls
+   (`GetAchievementInfo(achievementID)` and `GetAchievementInfo(categoryID,
+   index)`) gives an overload per call, with the same results; a value whose
+   description says it can be `nil` is optional (decision T290).
 4. **Blizzard's UI code** types the functions it defines and the ones it
    calls (decision T288): each global function and mixin function of its
    Lua gets the parameters its definition names, typed by what the body
@@ -374,6 +377,15 @@ The WoW API is typed by **pre-generated `types` packages**, one per flavor:
    authors may write ([Types §2.2](../language/02-types.md)).
 6. **Flavor availability** from per-flavor global name dumps, used to verify
    that every declared global exists in that flavor.
+7. **The client's answers.** Where the client's recorded answers (the
+   engine's recordings, Emulation §17.8) contradict the sources, the
+   generator corrects the declaration (decision T290): results the client
+   gives that the documentation lacks (`C_PetBattles.IsTrapAvailable()`'s
+   reason), lists the wiki gives as their first values
+   (`GetChatWindowMessages(index)` is `...string`), and getters a fresh
+   widget answers nil (`FontString:GetText()` is `string?`). A function
+   that gives nothing for an ID that names nothing keeps its documented
+   results.
 
 Package versions follow the game version: `wow-api-standard@12.1.0` for build
 12.1.0, and pre-releases for test clients (`12.1.5-ptr.70077`). Generator fixes

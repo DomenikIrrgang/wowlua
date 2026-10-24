@@ -989,7 +989,7 @@ end
 declare class Font extends FrameScriptObject
     function CopyFontObject(sourceFont: SimpleFont | FontObject)
     function GetAlpha(): SingleColorValue
-    function GetFont(): (string, uiFontHeight, TBFFlags)
+    function GetFont(): (string?, uiFontHeight, TBFFlags)
     function GetFontHeight(): number
     function GetFontObject(): SimpleFont
     function GetFontObjectForAlphabet(alphabet: FontAlphabet): SimpleFont
@@ -1039,7 +1039,7 @@ declare class FontString extends Region
     function GetSpacing(): uiUnit
     function GetStringHeight(): uiUnit
     function GetStringWidth(): uiUnit
-    function GetText(): string
+    function GetText(): string?
     function GetTextColor(): (number, number, number, number)
     function GetTextScale(): number
     function GetUnboundedStringWidth(): uiUnit
@@ -1154,7 +1154,7 @@ declare class Button extends Frame
     function GetNormalTexture(): SimpleTexture
     function GetPushedTextOffset(): (uiUnit, uiUnit)
     function GetPushedTexture(): SimpleTexture
-    function GetText(): string
+    function GetText(): string?
     function GetTextHeight(): uiUnit
     function GetTextWidth(): uiUnit
     function IsEnabled(): boolean
@@ -1468,7 +1468,7 @@ declare class EditBox extends Frame
     function GetBlinkSpeed(): number
     function GetCursorPosition(): number
     function GetDisplayText(): string
-    function GetFont(): (string, uiUnit, TBFFlags)
+    function GetFont(): (string?, uiUnit, TBFFlags)
     function GetFontObject(): SimpleFont
     function GetHighlightColor(): (number, number, number, number)
     function GetHistoryLines(): number
@@ -1986,7 +1986,7 @@ declare class MessageFrame extends Frame
     function GetFadeDuration(): number
     function GetFadePower(): number
     function GetFading(): boolean
-    function GetFont(): (string, uiFontHeight, TBFFlags)
+    function GetFont(): (string?, uiFontHeight, TBFFlags)
     function GetFontObject(): SimpleFont
     function GetFontStringByID(messageID: number): SimpleFontString
     function GetIndentedWordWrap(): boolean
@@ -2866,8 +2866,8 @@ end
 
 declare class DropdownButtonMixin extends CallbackRegistryMixin
     mouseWheelDisabledThisFrame: boolean
-    shouldRegenerateOnResponse: boolean
     onMenuClosedCallback: function
+    shouldRegenerateOnResponse: boolean
     function OnLoad_Intrinsic()
     function OnHide_Intrinsic()
     function OnShow_Intrinsic()
@@ -2950,7 +2950,7 @@ declare class DropdownButton extends DropdownButtonMixin
     function GetNormalTexture(): SimpleTexture
     function GetPushedTextOffset(): (uiUnit, uiUnit)
     function GetPushedTexture(): SimpleTexture
-    function GetText(): string
+    function GetText(): string?
     function GetTextHeight(): uiUnit
     function GetTextWidth(): uiUnit
     function IsEnabled(): boolean
@@ -3408,14 +3408,14 @@ end
 
 declare class TransmogPendingInfoMixin
     category: number
-    type: number
     transmogID: number
+    type: number
     function Init(pendingType: number, transmogID: number, category: number)
 end
 
 declare class TransmogLocationMixin extends TransmogLocationType
-    slotID: number
     modification: number
+    slotID: number
     type: number
     function Set(slotID: number, transmogType: number, modification: number)
     function IsAppearance(): boolean
@@ -3752,9 +3752,9 @@ declare class BackdropTemplate
 end
 
 declare class CallbackRegistryMixin
-    deferredCallbacks: table
     Event: table
     callbackTables: table
+    deferredCallbacks: table
     executingEvents: table
     function SetUndefinedEventsAllowed(allowed: unknown?)
     function GetCallbackTables(): table
@@ -3795,8 +3795,8 @@ declare class ColorMixin
 end
 
 declare class EventRegistry
-    onUpdateCallbacksByOwner: table
     frameEventFrame: Frame
+    onUpdateCallbacksByOwner: table
     function OnAttributeChanged(frameEvent: FrameEvent, value: number)
     function RegisterFrameEvent(frameEvent: FrameEvent)
     function UnregisterFrameEvent(frameEvent: FrameEvent)
@@ -3827,9 +3827,9 @@ declare class Vector2DMixin extends Vector2DType
 end
 
 declare class Vector3DMixin extends Vector3DType
+    x: number
     y: number
     z: number
-    x: number
     function IsEqualTo(otherVector: Vector3DMixin): boolean
     function GetXYZ(): (number, number, number)
     function SetXYZ(x: number, y: number, z: number)
@@ -3878,7 +3878,7 @@ end
 @deprecated declare function IsUsableItem(itemInfo: ItemInfo): (boolean, boolean)
 @deprecated declare function IsHelpfulItem(itemInfo: ItemInfo): boolean
 @deprecated declare function IsHarmfulItem(itemInfo: ItemInfo): boolean
-@deprecated declare function IsConsumableItem(itemInfo: ItemInfo): boolean
+@deprecated declare function IsConsumableItem(itemInfo: ItemInfo): boolean?
 @deprecated declare function IsEquippableItem(itemInfo: ItemInfo): boolean
 @deprecated declare function IsEquippedItem(itemInfo: ItemInfo): boolean
 @deprecated declare function IsEquippedItemType(type: string): boolean
@@ -3898,7 +3898,7 @@ end
 @deprecated declare function EndRefund(type: number)
 @deprecated declare function GetItemInfo(itemInfo: ItemInfo): (string, string, number, number, number, string, string, number, string, fileID, number, number, number, number, number, number?, boolean)
 @deprecated declare function GetDetailedItemLevelInfo(itemInfo: ItemInfo): (number, boolean, number)
-@deprecated declare function GetItemSpecInfo(itemInfo: ItemInfo): number[]
+@deprecated declare function GetItemSpecInfo(itemInfo: ItemInfo): number[]?
 @deprecated declare function GetItemUniqueness(itemInfo: ItemInfo): (number, number)
 @deprecated declare function GetItemCount(itemInfo: ItemInfo, includeBank: boolean?, includeUses: boolean?, includeReagentBank: boolean?): number
 @deprecated declare function PickupItem(itemInfo: ItemInfo)
@@ -3917,7 +3917,7 @@ end
 @deprecated declare function PlayVocalErrorSoundID(vocalErrorSoundID: number)
 @deprecated declare function GetNumSpecializationsForClassID(classID: number): number
 declare function GetSpecializationInfo(specializationIndex: number, isInspect: boolean?, isPet: boolean?, inspectTarget: string?, sex: number?, groupIndex: number?): (number?, string?, string?, fileID?, string?, number?, number?, string?, number?, boolean?)
-declare function GetSpecialization(isInspect: boolean?, isPet: boolean?, specGroupIndex: number?): number
+declare function GetSpecialization(isInspect: boolean?, isPet: boolean?, specGroupIndex: number?): number?
 declare function GetActiveSpecGroup(isInspect: boolean?, isPet: boolean?): number
 declare function GetSpecializationMasterySpells(specializationIndex: number, isInspect: boolean?, isPet: boolean?): (number, number)
 declare function GetTalentInfo(talentTier: number, talentColumn: number, specGroupIndex: number, isInspect: boolean?, target: string?): (number, string, number, boolean, boolean, number, boolean, number, number, boolean, boolean)
@@ -4080,7 +4080,7 @@ declare function CanGamePadControlCursor(...: unknown): (...unknown)
 declare function CanGuildBankRepair(): (...unknown)
 declare function CanGuildDemote(): boolean
 declare function CanGuildInvite(): boolean
-declare function CanGuildPromote(): boolean
+declare function CanGuildPromote(): boolean?
 declare function CanGuildRemove(): (...unknown)
 declare function CanHearthAndResurrectFromArea(): (...unknown)
 declare function CanInitiateWarGame(...: unknown): (...unknown)
@@ -4092,7 +4092,7 @@ declare function CanResetTutorials(...: unknown): (...unknown)
 declare function CanShowAchievementUI(): boolean
 declare function CanSignPetition(): (...unknown)
 declare function CanSurrenderArena(): (...unknown)
-declare function CanViewGuildRecipes(skillID: number): boolean
+declare function CanViewGuildRecipes(skillID: number): boolean?
 declare function CanWithdrawGuildBankMoney(): (...unknown)
 declare function CancelDuel()
 declare function CancelPetPossess(): (...unknown)
@@ -4264,11 +4264,11 @@ declare function GMSurveyNumAnswers(...: unknown): (...unknown)
 declare function GMSurveyQuestion(index: number)
 declare function GMSurveySubmit(...: unknown): (...unknown)
 declare function GetAchievementCategory(achievementID: number): number
-declare function GetAchievementComparisonInfo(achievementID: number): (boolean, number, number, number)
+declare function GetAchievementComparisonInfo(achievementID: number): (boolean, number?, number?, number?)
 declare function GetAchievementCriteriaInfo(achievementID: number, criteriaIndex: number, countHidden: boolean?): (string, number, boolean, number, number, string, number, number, string, number, boolean, number, number)
 declare function GetAchievementCriteriaInfoByID(achievementID: number, criteriaID: number): (string, number, boolean, number, number, string, number, number, string, number, boolean, number, number)
-declare function GetAchievementInfo(achievementID: number): (number, string, number, boolean, number, number, number, string, number, number, string, boolean, boolean, string, boolean)
-declare function GetAchievementInfo(categoryID: number, index: number)
+declare function GetAchievementInfo(achievementID: number): (number, string, number, boolean, number?, number?, number?, string, number, number?, string, boolean, boolean, string?, boolean)
+declare function GetAchievementInfo(categoryID: number, index: number): (number, string, number, boolean, number?, number?, number?, string, number, number?, string, boolean, boolean, string?, boolean)
 declare function GetAchievementLink(id: number): string
 declare function GetAchievementNumCriteria(achievementID: number): number
 declare function GetAchievementNumRewards(achievementID: unknown?, ...: unknown): (...unknown)
@@ -4293,12 +4293,12 @@ declare function GetBattlefieldInstanceExpiration(): number
 declare function GetBattlefieldInstanceRunTime(): number
 declare function GetBattlefieldMapIconScale(...: unknown): (...unknown)
 declare function GetBattlefieldPortExpiration(index: number): number
-declare function GetBattlefieldStatus(index: number): (string, string?, number, boolean, boolean, string?, string?, string?, boolean?, string?, string?, boolean)
+declare function GetBattlefieldStatus(index: number): (string, string?, number, boolean, boolean?, string?, string?, string?, boolean?, string?, string?, boolean)
 declare function GetBattlefieldTeamInfo(index: number): (string, number, number, number)
 declare function GetBattlefieldTimeWaited(battlegroundQueuePosition: number): number
 declare function GetBattlefieldWinner(): number?
 declare function GetBattlegroundPoints(team: number): (number, number)
-declare function GetBestFlexRaidChoice(): number
+declare function GetBestFlexRaidChoice(): number?
 declare function GetBestRFChoice(): number
 declare function GetBinding(index: number, alwaysIncludeGamepad: boolean?): (string, string, string?, string?, string?)
 declare function GetBindingAction(binding: string, checkOverride: boolean?): string
@@ -4315,16 +4315,16 @@ declare function GetCategoryList(): number[]
 declare function GetCategoryNumAchievements(categoryId: number, includeAll: boolean?): (number, number, number)
 declare function GetChannelDisplayInfo(index: number): (string, boolean, boolean?, number?, number?, boolean?, string, number)
 declare function GetChannelList(): (number, string, boolean, unknown)
-declare function GetChannelName(name: string | number): (number, string, number, boolean)
+declare function GetChannelName(name: string | number): (number, string?, number, boolean)
 declare function GetChatTypeIndex(messageGroup: string): number
-declare function GetChatWindowChannels(frameId: number): (string, number, unknown)
-declare function GetChatWindowInfo(frameIndex: number): (string, number, number, number, number, number, boolean, boolean, number, boolean)
-declare function GetChatWindowMessages(index: number): string
+declare function GetChatWindowChannels(frameId: number): (string, number, ...string | number)
+declare function GetChatWindowInfo(frameIndex: number): (string, number, number, number, number, number, boolean, boolean, number?, boolean)
+declare function GetChatWindowMessages(index: number): (...string)
 declare function GetChatWindowSavedDimensions(index: unknown?, ...: unknown): (...unknown)
 declare function GetChatWindowSavedPosition(index: unknown?, ...: unknown): (...unknown)
 declare function GetClassInfo(classID: number): (string, string, number)
 declare function GetClickFrame(name: string): table?
-declare function GetCompanionInfo(type: string, id: number): (number, string, number, string, boolean, number)
+declare function GetCompanionInfo(type: string, id: number): (number, string, number, string, boolean?, number)
 declare function GetComparisonAchievementPoints(): (...unknown)
 declare function GetComparisonCategoryNumAchievements(arg1: number): (...unknown)
 declare function GetComparisonStatistic(achievementID: number): string
@@ -4359,13 +4359,13 @@ declare function GetGraphicsCVarValueForQualityLevel(arg1: string, arg2: unknown
 declare function GetGreetingText(): (...unknown)
 declare function GetGroupMemberCounts(): (...unknown)
 declare function GetGuildBankBonusDepositMoney(...: unknown): (...unknown)
-declare function GetGuildBankItemInfo(tab: number, slot: number): (number, number, boolean, boolean, number)
-declare function GetGuildBankItemLink(tab: number, slot: number): string
+declare function GetGuildBankItemInfo(tab: number, slot: number): (number?, number, boolean?, boolean, number?)
+declare function GetGuildBankItemLink(tab: number, slot: number): string?
 declare function GetGuildBankMoney(): number
-declare function GetGuildBankMoneyTransaction(index: number): (string, string, number, number, number, number, number)
+declare function GetGuildBankMoneyTransaction(index: number): (string, string?, number, number, number, number, number)
 declare function GetGuildBankTabCost(): (number?, ...unknown)
 declare function GetGuildBankTabInfo(tab: number): (string, string, boolean, boolean, number, number, boolean)
-declare function GetGuildBankTabPermissions(tab: number): (boolean, boolean, boolean, number)
+declare function GetGuildBankTabPermissions(tab: number): (boolean?, boolean?, boolean?, number)
 declare function GetGuildBankText(arg1: unknown): (...unknown)
 declare function GetGuildBankTransaction(tab: number, index: number): (string, string, string, number, number, number, number, number, number, number)
 declare function GetGuildBankWithdrawGoldLimit(): number
@@ -4375,7 +4375,7 @@ declare function GetGuildChallengeInfo(arg1: unknown): (...unknown)
 declare function GetGuildCharterCost(): (number?, ...unknown)
 declare function GetGuildEventInfo(arg1: unknown): (string, unknown, unknown, unknown, number?, number?, number?, number?, ...unknown)
 declare function GetGuildFactionGroup(): (number, ...unknown)
-declare function GetGuildInfo(unit: UnitToken): (string, string, number, string?)
+declare function GetGuildInfo(unit: UnitToken): (string?, string, number, string?)
 declare function GetGuildLogoInfo(): (...unknown)
 declare function GetGuildMemberRecipes(name: unknown?, skillLineID: unknown?, ...: unknown): (...unknown)
 declare function GetGuildNewsFilters(): (...unknown)
@@ -4388,18 +4388,18 @@ declare function GetGuildRenameRequired(): (...unknown)
 declare function GetGuildRewardInfo(arg1: unknown): (number?, ItemInfo?, unknown, unknown, number, number?, ...unknown)
 declare function GetGuildRosterInfo(index: number): (string, string, number, number, string, string, string, string, boolean, number, string, number, number, boolean, boolean, number, string)
 declare function GetGuildRosterLargestAchievementPoints(...: unknown): (...unknown)
-declare function GetGuildRosterLastOnline(index: number): (number, number, number, number)
+declare function GetGuildRosterLastOnline(index: number): (number?, number?, number?, number?)
 declare function GetGuildRosterSelection(): number
 declare function GetGuildRosterShowOffline(): boolean
 declare function GetGuildTabardFiles(): (number, number, number, number, number, number)
 declare function GetGuildTradeSkillInfo(index: number): (number, boolean, string, string, number, number, number, string, string, string, boolean, string, number, string, boolean, number)
-declare function GetHomePartyInfo(homePlayers: table): table
-declare function GetInboxHeaderInfo(index: number): (string, string, string, string, number, number, number, number, boolean, boolean, boolean, boolean, boolean)
+declare function GetHomePartyInfo(homePlayers: table): table?
+declare function GetInboxHeaderInfo(index: number): (string?, string, string, string, number, number, number, number?, boolean?, boolean?, boolean?, boolean?, boolean)
 declare function GetInboxInvoiceInfo(index: number): (string?, string?, string?, number, number, number, number, number, number, number, number, boolean)
-declare function GetInboxItem(index: number, itemIndex: number): (string, number, string, number, number, boolean)
+declare function GetInboxItem(index: number, itemIndex: number): (string, number, string, number, number, boolean?)
 declare function GetInboxItemLink(message: number, attachment: number): string
 declare function GetInboxNumItems(): (number, number)
-declare function GetInboxText(index: number): (string, string, string, boolean, boolean, boolean)
+declare function GetInboxText(index: number): (string, string, string, boolean, boolean?, boolean)
 declare function GetInspectArenaData(bracketId: number): (number, number, number, number, number)
 declare function GetInspectHonorData(): (number, number, number, number, number, number)
 declare function GetInspectTalent(...: unknown): (...unknown)
@@ -4409,7 +4409,7 @@ declare function GetInventoryItemCooldown(unit: UnitToken, invSlotId: number): (
 declare function GetInventoryItemCount(unit: UnitToken, invSlotId: number): number
 declare function GetInventoryItemDurability(invSlotId: number): (number, number)
 declare function GetInventoryItemEquippedUnusable(unit: unknown?, slot: unknown?, ...: unknown): (...unknown)
-declare function GetInventoryItemID(unit: UnitToken, invSlotId: number): (number, number)
+declare function GetInventoryItemID(unit: UnitToken, invSlotId: number): (number?, number)
 declare function GetInventoryItemLink(unit: UnitToken, invSlotId: number): string?
 declare function GetInventoryItemQuality(unit: UnitToken, invSlotId: number): number
 declare function GetInventoryItemTexture(unit: UnitToken, invSlotId: number): fileID
@@ -4428,8 +4428,8 @@ declare function GetLFGCompletionReward(): (unknown, unknown, unknown, unknown, 
 declare function GetLFGCompletionRewardItem(arg1: unknown): (string?, number, unknown, unknown, unknown, unknown, number, string, ...unknown)
 declare function GetLFGCompletionRewardItemLink(arg1: unknown): (...unknown)
 declare function GetLFGDeserterExpiration(): number?
-declare function GetLFGDungeonEncounterInfo(dungeonID: number, encounterIndex: number): (string, string, boolean, boolean)
-declare function GetLFGDungeonInfo(dungeonID: number): (string, number, number, number, number, number, number, number, number, number, string, number, number, string, boolean, number, number, boolean, string, number, boolean, number)
+declare function GetLFGDungeonEncounterInfo(dungeonID: number, encounterIndex: number): (string, string?, boolean, boolean)
+declare function GetLFGDungeonInfo(dungeonID: number): (string, number, number, number, number, number, number, number, number, number, string, number, number, string, boolean, number, number?, boolean, string, number, boolean, number)
 declare function GetLFGDungeonNumEncounters(dungeonID: number): (number, number)
 declare function GetLFGDungeonRewardCapBarInfo(dungeonID: number): (number, number, number, number, number, number, number, number, number, number)
 declare function GetLFGDungeonRewardCapInfo(arg1: number): (unknown, number, number, number, number, number, number, number, ...unknown)
@@ -4441,13 +4441,13 @@ declare function GetLFGDungeonShortageRewardLink(dungeonID: unknown?, shortageIn
 declare function GetLFGInfoServer(arg1: number, arg2: unknown): (...unknown)
 declare function GetLFGInviteRoleAvailability(roleID: unknown?, ...: unknown): (...unknown)
 declare function GetLFGInviteRoleRestrictions(arg1: unknown): (...unknown)
-declare function GetLFGProposal(): (boolean, number, number, number, string, string, string, boolean, number, number, number, boolean, boolean, number)
+declare function GetLFGProposal(): (boolean?, number, number, number, string, string, string, boolean, number, number, number, boolean, boolean, number)
 declare function GetLFGProposalEncounter(arg1: unknown): (...unknown)
 declare function GetLFGProposalMember(memberIndex: unknown?, ...: unknown): (...unknown)
 declare function GetLFGQueueStats(category: number, activeID: number?): (boolean, boolean, boolean, boolean, boolean, number, number, number, number, number, string, number, number, number, number, number, number, number)
 declare function GetLFGQueuedList(arg1: unknown, arg2: unknown): (...unknown)
 declare function GetLFGRandomCooldownExpiration(): number?
-declare function GetLFGRandomDungeonInfo(index: number): (number, string, number, number, number, number, number, number, number, number, number, string, number, number, string, boolean, number, number, boolean, string, number, boolean)
+declare function GetLFGRandomDungeonInfo(index: number): (number, string, number, number, number, number, number, number, number, number, number, string, number, number, string, boolean, number, number?, boolean, string, number, boolean)
 declare function GetLFGReadyCheckUpdate(): (...unknown)
 declare function GetLFGReadyCheckUpdateBattlegroundInfo(): (string, ...unknown)
 declare function GetLFGRoleShortageRewards(dungeonID: number, shortageSeverity: number): (boolean, boolean, boolean, boolean, number, number, number)
@@ -4467,11 +4467,11 @@ declare function GetLatestUpdatedStats(...: unknown): (...unknown)
 declare function GetLooseMacroIcons(arg1: unknown): (...unknown)
 declare function GetLooseMacroItemIcons(arg1: unknown): (...unknown)
 declare function GetLootInfo(): table[]
-declare function GetLootRollItemInfo(rollID: number): (string, string, number, number, boolean, boolean, boolean, boolean, number, number, number, number, boolean)
+declare function GetLootRollItemInfo(rollID: number): (string, string, number, number, boolean?, boolean?, boolean?, boolean?, number, number, number, number, boolean?)
 declare function GetLootRollItemLink(id: number): string
 declare function GetLootRollTimeLeft(rollID: number): number?
-declare function GetLootSlotInfo(slot: number): (string, string, number, number, number, boolean, boolean, number, boolean, boolean)
-declare function GetLootSlotLink(index: number): string
+declare function GetLootSlotInfo(slot: number): (string, string, number, number?, number, boolean, boolean, number, boolean, boolean)
+declare function GetLootSlotLink(index: number): string?
 declare function GetLootSlotType(slotIndex: number): number
 declare function GetLootSourceInfo(lootSlot: number): (string, number)
 declare function GetLootThreshold(): number
@@ -4489,7 +4489,7 @@ declare function GetMaxRenderScale(): (...unknown)
 declare function GetMaxRewardCurrencies(): (number, ...unknown)
 @deprecated declare function GetMerchantCurrencies(): (number, unknown)
 declare function GetMerchantItemCostInfo(index: number): number
-declare function GetMerchantItemCostItem(index: number, itemIndex: number): (string, number, string, string)
+declare function GetMerchantItemCostItem(index: number, itemIndex: number): (string, number, string?, string?)
 declare function GetMerchantItemID(index: number): number
 declare function GetMerchantItemLink(index: number): string?
 declare function GetMerchantItemMaxStack(index: number): number
@@ -4565,7 +4565,7 @@ declare function GetNumTrainerServices(): number
 declare function GetNumUnspentTalents(): number
 declare function GetNumWarGameTypes(): (number, ...unknown)
 declare function GetObjectiveText(): (...unknown)
-declare function GetOptOutOfLoot(): boolean
+declare function GetOptOutOfLoot(): boolean?
 declare function GetPVPRoles(): (boolean, boolean, boolean)
 declare function GetPartyAssignment(assignment: string, raidmember: UnitToken?, exactMatch: boolean?): boolean
 declare function GetPartyLFGBackfillInfo(): (...unknown)
@@ -4582,13 +4582,13 @@ declare function GetPetTimeRemaining(...: unknown): (...unknown)
 declare function GetPetitionInfo(): (string, string, string, number, string, boolean, number)
 declare function GetPetitionNameInfo(arg1: unknown): (...unknown)
 declare function GetPlayerTradeMoney(): number
-declare function GetPossessInfo(index: number): (string, number, boolean)
+declare function GetPossessInfo(index: number): (string?, number?, boolean?)
 declare function GetPrevCompleatedTutorial(arg1: unknown): (...unknown)
-declare function GetPreviousAchievement(achievementID: number): number
+declare function GetPreviousAchievement(achievementID: number): number?
 declare function GetPreviousArenaSeason(...: unknown): (...unknown)
 declare function GetPrimarySpecialization(...: unknown): (...unknown)
 declare function GetProfessionInfo(index: number): (string, fileID, number, number, number, number, number, number, number, number, string)
-declare function GetProfessions(): (number, number, number, number, number)
+declare function GetProfessions(): (number?, number?, number?, number?, number?)
 declare function GetProgressText(): string
 declare function GetPromotionRank(index: unknown?, ...: unknown): (...unknown)
 declare function GetQuestBackgroundMaterial(): string?
@@ -4597,7 +4597,7 @@ declare function GetQuestFactionGroup(questID: number): number
 declare function GetQuestID(): number
 declare function GetQuestItemInfo(type: string, index: number): (string, number, number, number, boolean, number)
 declare function GetQuestItemLink(type: string, index: number): string
-declare function GetQuestLink(questID: number): string
+declare function GetQuestLink(questID: number): string?
 declare function GetQuestLogChoiceInfo(index: number, questID: number?): (string, fileID, number, number, boolean, number)
 declare function GetQuestLogCompletionText(arg1: unknown): (string?, ...unknown)
 declare function GetQuestLogItemDrop(arg1: unknown, arg2: number): (...unknown)
@@ -4624,12 +4624,12 @@ declare function GetQuestReward(itemChoice: number)
 declare function GetQuestSortIndex(questLogIndex: number): number
 declare function GetQuestText(): (...unknown)
 declare function GetQuestUiMapID(arg1: unknown, arg2: unknown?): (number?, ...unknown)
-declare function GetRFDungeonInfo(index: number): (number, string, number, number, number, number, number, number, number, number, number, string, number, number, string, boolean, number, number, boolean, string, number, boolean, number)
+declare function GetRFDungeonInfo(index: number): (number, string, number, number, number, number, number, number, number, number, number, string, number, number, string, boolean, number, number?, boolean, string, number, boolean, number)
 declare function GetRaidProfileFlattenedOptions(arg1: unknown): (...unknown)
 declare function GetRaidProfileName(arg1: number): (...unknown)
 declare function GetRaidProfileOption(arg1: unknown, arg2: unknown): (...unknown)
 declare function GetRaidProfileSavedPosition(profile: unknown?, ...: unknown): (...unknown)
-declare function GetRaidRosterInfo(raidIndex: number): (string, number, number, number, string, string, string?, boolean, boolean, string, boolean, string)
+declare function GetRaidRosterInfo(raidIndex: number): (string, number, number, number?, string, string, string?, boolean?, boolean?, string, boolean?, string)
 declare function GetRandomDungeonBestChoice(): (string?, ...unknown)
 declare function GetRandomScenarioBestChoice(): (string?, ...unknown)
 declare function GetRandomScenarioInfo(arg1: unknown): (number?, unknown, unknown, unknown, number, number, ...unknown)
@@ -4644,8 +4644,8 @@ declare function GetRewardTitle(): (...unknown)
 declare function GetRewardXP(): number
 declare function GetRunningMacro(...: unknown): (...unknown)
 declare function GetRunningMacroButton(...: unknown): (...unknown)
-declare function GetSavedInstanceChatLink(index: number): string
-declare function GetSavedInstanceEncounterInfo(instanceIndex: number, encounterIndex: number): (string, number, boolean, boolean)
+declare function GetSavedInstanceChatLink(index: number): string?
+declare function GetSavedInstanceEncounterInfo(instanceIndex: number, encounterIndex: number): (string, number?, boolean, boolean)
 declare function GetSavedInstanceInfo(index: number): (string, number, number, number, boolean, boolean, number, boolean, number, string, number, number, boolean, number)
 declare function GetSavedWorldBossInfo(index: number): (string, number, number)
 declare function GetScenariosChoiceOrder(allScenarios: table?): table
@@ -4657,13 +4657,13 @@ declare function GetSendMailItemLink(attachment: number): string
 declare function GetSendMailMoney(): (...unknown)
 declare function GetSendMailPrice(): number
 declare function GetShapeshiftForm(flag: boolean?): number
-declare function GetShapeshiftFormCooldown(index: number): (number, number, number)
+declare function GetShapeshiftFormCooldown(index: number): (number, number, number?)
 declare function GetShapeshiftFormID(): number
-declare function GetShapeshiftFormInfo(index: number): (string, boolean, boolean, number)
+declare function GetShapeshiftFormInfo(index: number): (string, boolean?, boolean?, number)
 declare function GetSoundEntryCount(soundKit: number): number?
 declare function GetSpecializationInfoByID(specID: number, gender: number?): (number, string, string, number, string, string, string)
 declare function GetSpecializationRole(specIndex: number, isInspect: boolean?, isPet: boolean?): string
-declare function GetSpecializationRoleByID(specID: number): string
+declare function GetSpecializationRoleByID(specID: number): string?
 declare function GetSpecializationRoleEnum(arg1: unknown): (...unknown)
 declare function GetSpecializationRoleEnumByID(arg1: unknown): (...unknown)
 declare function GetSpecializationSpells(specIndex: number, isInspect: boolean?, isPet: boolean?): (number, number, number)
@@ -4691,13 +4691,13 @@ declare function GetTrainerSelectionIndex(): number
 declare function GetTrainerServiceAbilityReq(trainerIndex: number, reqIndex: number): (string, boolean)
 declare function GetTrainerServiceCost(index: number): (number, number, number)
 declare function GetTrainerServiceDescription(index: number): string
-declare function GetTrainerServiceIcon(index: number): fileID
-declare function GetTrainerServiceInfo(index: number): (string, string, string, number)
+declare function GetTrainerServiceIcon(index: number): fileID?
+declare function GetTrainerServiceInfo(index: number): (string, string, string, number?)
 declare function GetTrainerServiceItemLink(index: number): string
 declare function GetTrainerServiceLevelReq(id: number): number
 declare function GetTrainerServiceNumAbilityReq(arg1: unknown): (number, ...unknown)
 declare function GetTrainerServiceSkillLine(index: number): string
-declare function GetTrainerServiceSkillReq(index: number): (string?, number, boolean)
+declare function GetTrainerServiceSkillReq(index: number): (string?, number, boolean?)
 declare function GetTrainerServiceStepIndex(): (...unknown)
 declare function GetTrainerServiceTypeFilter(type: string): boolean
 declare function GetTrainerTradeskillRankValues(): (number?, unknown, number, ...unknown)
@@ -4728,7 +4728,7 @@ declare function GuildNewsSort(arg1: number): (...unknown)
 declare function HandleAtlasMemberCommand(arg1: unknown): (...unknown)
 declare function HasCompletedAnyAchievement(): (...unknown)
 declare function HasInboxItem(...: unknown): (...unknown)
-declare function HasLFGRestrictions(): boolean
+declare function HasLFGRestrictions(): boolean?
 declare function HasLoadedCUFProfiles(): (...unknown)
 declare function HasNewMail(): (...unknown)
 declare function HasPetUI(): (boolean, boolean)
@@ -4793,15 +4793,15 @@ declare function IsQuestItemHidden(arg1: unknown): (number, ...unknown)
 declare function IsQuestLogSpecialItemInRange(arg1: unknown): (number, ...unknown)
 declare function IsSelectedSpellBookItem(arg1: unknown, arg2: string): (...unknown)
 declare function IsServerControlledBackfill(): (...unknown)
-declare function IsSpellClassOrSpec(spellName: string): (string?, string)
-declare function IsSpellClassOrSpec(spellIndex: number, bookType: string)
+declare function IsSpellClassOrSpec(spellName: string): (string?, string?)
+declare function IsSpellClassOrSpec(spellIndex: number, bookType: string): (string?, string?)
 declare function IsTradeskillTrainer(): boolean
 declare function IsTutorialFlagged(arg1: unknown): (...unknown)
 declare function IsUsingVehicleControls(...: unknown): (...unknown)
 declare function IsWargame(): boolean
 declare function ItemTextGetCreator(): string?
 declare function ItemTextGetItem(): string
-declare function ItemTextGetMaterial(): string
+declare function ItemTextGetMaterial(): string?
 declare function ItemTextGetPage(): number
 declare function ItemTextGetText(): string
 declare function ItemTextHasNextPage(): boolean
@@ -4811,11 +4811,11 @@ declare function ItemTextPrevPage()
 declare function JoinArena(): (...unknown)
 declare function JoinChannelByName(channelName: string, password: string?, frameID: number?, hasVoice: boolean?): (number, string?)
 declare function JoinLFG(arg1: unknown): (...unknown)
-declare function JoinPermanentChannel(channelName: string, password: string?, frameID: number?, hasVoice: boolean?): (number, string)
+declare function JoinPermanentChannel(channelName: string, password: string?, frameID: number?, hasVoice: boolean?): (number, string?)
 declare function JoinRatedBattlefield(): (...unknown)
 declare function JoinSingleLFG(arg1: unknown, arg2: unknown): (...unknown)
 declare function JoinSkirmish(arenaID: number, joinAsGroup: boolean?)
-declare function JoinTemporaryChannel(channelName: string, password: string?, frameID: number?, hasVoice: boolean?): (number, string)
+declare function JoinTemporaryChannel(channelName: string, password: string?, frameID: number?, hasVoice: boolean?): (number, string?)
 declare function JumpOrAscendStart()
 declare function LFGTeleport(toSafety: boolean)
 declare function LearnTalent(talentID: number): boolean
@@ -4892,8 +4892,8 @@ declare function PitchUpStart(...: unknown): (...unknown)
 declare function PitchUpStop(...: unknown): (...unknown)
 declare function PlaceAction(slot: number)
 declare function PlayMusic(sound: number | string): boolean
-declare function PlaySound(soundKitID: number, channel: string?, forceNoDuplicates: boolean?, runFinishCallback: boolean?): (boolean, number)
-declare function PlaySoundFile(sound: number | string, channel: string?): (boolean, number)
+declare function PlaySound(soundKitID: number, channel: string?, forceNoDuplicates: boolean?, runFinishCallback: boolean?): (boolean?, number)
+declare function PlaySoundFile(sound: number | string, channel: string?): (boolean?, number)
 declare function PlayerHasToy(itemId: number): boolean
 declare function PrevView(...: unknown): (...unknown)
 declare function ProcessExceptionClient(description: string)
@@ -4910,7 +4910,7 @@ declare function QueryGuildNews(): (...unknown)
 declare function QueryGuildRecipes(): (...unknown)
 declare function QuestChooseRewardError()
 declare function QuestFlagsPVP(): (...unknown)
-declare function QuestIsDaily(): boolean
+declare function QuestIsDaily(): boolean?
 declare function QuestLogPushQuest()
 declare function QuestLogShouldShowPortrait(): (...unknown)
 declare function QuestMapUpdateAllQuests(): (...unknown)
@@ -4963,7 +4963,7 @@ declare function SearchLFGGetResults(index: number): unknown
 declare function SearchLFGJoin(typeID: number, lfgID: number)
 declare function SearchLFGLeave(...: unknown): (...unknown)
 declare function SearchLFGSort(type: unknown?, ...: unknown): (...unknown)
-declare function SecureCmdOptionParse(options: string): (string, string)
+declare function SecureCmdOptionParse(options: string): (string?, string?)
 declare function SelectActiveQuest(...: unknown): (...unknown)
 declare function SelectAvailableQuest(...: unknown): (...unknown)
 declare function SelectTrainerService(index: number)
@@ -4973,11 +4973,11 @@ declare function SetAchievementComparisonUnit(unit: UnitToken): boolean
 declare function SetAchievementSearchString(searchText: string): boolean
 declare function SetActionBarToggles(bar1: boolean, bar2: boolean, bar3: boolean, bar4: boolean, bar5: boolean, bar6: boolean, bar7: boolean, alwaysShow: string)
 declare function SetBattlefieldScoreFaction(faction: number)
-declare function SetBinding(key: string, command: string?, mode: number?): boolean
-declare function SetBindingClick(key: string, buttonName: string, button: string): boolean
-declare function SetBindingItem(key: string, item: string): boolean
+declare function SetBinding(key: string, command: string?, mode: number?): boolean?
+declare function SetBindingClick(key: string, buttonName: string, button: string): boolean?
+declare function SetBindingItem(key: string, item: string): boolean?
 declare function SetBindingMacro(key: string, name: unknown): boolean
-declare function SetBindingSpell(key: string, spell: string): boolean
+declare function SetBindingSpell(key: string, spell: string): boolean?
 declare function SetChannelOwner(channel: string, newowner: string)
 declare function SetChannelPassword(channelName: string, password: string)
 declare function SetChatColorNameByClass(arg1: unknown, arg2: unknown): (...unknown)
@@ -5071,8 +5071,8 @@ declare function SpellCanTargetItem(): (...unknown)
 declare function SpellCanTargetItemID(): (...unknown)
 declare function SpellCanTargetUnit(unit: UnitToken): boolean
 declare function SpellCancelQueuedSpell(): (...unknown)
-declare function SpellIsTargeting(): boolean
-declare function SpellStopCasting(): boolean
+declare function SpellIsTargeting(): boolean?
+declare function SpellStopCasting(): boolean?
 declare function SpellStopTargeting()
 declare function SpellTargetItem(arg1: unknown): (...unknown)
 declare function SpellTargetUnit(unit: UnitToken)
@@ -5124,7 +5124,7 @@ declare function TurnOrActionStop()
 declare function TurnRightStart(startTime: number)
 declare function TurnRightStop()
 declare function UninviteUnit(name: string, reason: string?)
-declare function UnitHasIncomingResurrection(unit: UnitToken): boolean
+declare function UnitHasIncomingResurrection(unit: UnitToken): boolean?
 declare function UnitHasLFGDeserter(unit: UnitToken): boolean
 declare function UnitHasLFGRandomCooldown(unit: UnitToken): boolean
 declare function UnlearnSpecialization(arg1: unknown): (...unknown)
@@ -31340,7 +31340,7 @@ end
 
 declare namespace C_BlackMarket
     function Close()
-    function GetItemInfoByID(marketID: number): (string, string, number, string, boolean, number, string, string, number, number, number, boolean, number, number, string, number, number)
+    function GetItemInfoByID(marketID: number): (string?, string, number, string, boolean, number, string, string, number, number, number, boolean, number, number, string, number, number)
     function GetItemInfoByIndex(index: number): (string, string, number, string, boolean, number, string, string, number, number, number, boolean, number, number, string, number, number)
     function GetHotItem(): (string, string, number, string, boolean, number, string, string, number, number, number, boolean, number, number, string, number, number)
     function GetNumItems(): number

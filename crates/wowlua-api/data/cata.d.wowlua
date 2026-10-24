@@ -8881,12 +8881,12 @@ declare class CollectionMicroButtonMixin
 end
 
 declare class EJMicroButtonMixin
-    zoneEntered: boolean
-    playerEntered: boolean
-    lastEvaluatedLevel: number
-    lastEvaluatedSpec: number
     lastEvaluatedIlvl: number
+    lastEvaluatedLevel: number
+    lastEvaluatedSpec: number?
+    playerEntered: boolean
     varsLoaded: boolean
+    zoneEntered: boolean
     function OnLoad()
     function UpdateLastEvaluations()
     function OnShow()
@@ -8958,12 +8958,12 @@ declare class UIParentManagedFrameMixin
 end
 
 declare class AuctionHouseFrameMixin extends CallbackRegistryMixin
-    maxBidPriceWidth: table
-    maxUnitPriceWidth: table
     activeSearches: table
-    maxBuyoutPriceWidth: table
-    tabsForDisplayMode: table
     isDisplayingFavorites: boolean
+    maxBidPriceWidth: table
+    maxBuyoutPriceWidth: table
+    maxUnitPriceWidth: table
+    tabsForDisplayMode: table
     function OnLoad()
     function OnShow()
     function OnEvent(event: string, ...: unknown)
@@ -9050,8 +9050,8 @@ declare class TooltipBackdropTemplateMixin
 end
 
 declare class BNToastMixin
-    BNToasts: table
     BNToastEvents: table
+    BNToasts: table
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function OnHide()
@@ -9146,10 +9146,10 @@ declare class BattlefieldMapTabMixin
 end
 
 declare class BattlefieldMapMixin
-    spectatorDataProvider: SpectatorDataProviderMixin
     groupMembersDataProvider: GroupMembersDataProviderMixin
-    oldX: number
     hoverTime: number
+    oldX: number
+    spectatorDataProvider: SpectatorDataProviderMixin
     function Toggle()
     function OnLoad()
     function OnShow()
@@ -9163,21 +9163,21 @@ declare class BattlefieldMapMixin
 end
 
 declare class MapCanvasMixin extends CallbackRegistryMixin
+    activeAreaTriggers: table
+    areDetailLayersDirty: boolean
+    dataProviderEventsCount: table
+    dataProviders: table
+    debugAreaTriggerColors: table
     expandedMapInsetsByMapID: table
-    pinPools: table
+    lockReasons: table
+    mapArtID: number
+    mapID: number
     mapInsetsByIndex: table
     mouseClickHandlers: table
     pinFrameLevelsManager: MapCanvasPinFrameLevelsManagerMixin
-    dataProviders: table
-    mapID: number
-    dataProviderEventsCount: table
-    areDetailLayersDirty: boolean
+    pinPools: table
     pinTemplateTypes: table
-    lockReasons: table
-    debugAreaTriggerColors: table
-    mapArtID: number
     pinsToNudge: table
-    activeAreaTriggers: table
     function OnLoad()
     function OnUpdate()
     function SetMapID(mapID: number)
@@ -9377,15 +9377,15 @@ declare class CreateChannelPopupMixin
 end
 
 declare class VoiceActivityManagerMixin
-    notificationMembers: table
-    externalNotificationOwnerToGuid: table
-    parentFrameNotificationFrames: table
-    releaseTimers: table
     alertNotificationList: DoublyLinkedListMixin
+    externalNotificationOwnerToGuid: table
     externalNotificationTemplates: table
     guidToExternalNotificationInfo: table
     notificationFrameToParentFrame: table
+    notificationMembers: table
     notificationTemplates: table
+    parentFrameNotificationFrames: table
+    releaseTimers: table
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function OnVoiceChannelMemberSpeakingStateChanged(memberID: number, channelID: number, isSpeaking: unknown?)
@@ -9447,12 +9447,12 @@ declare class PanningModelSceneMixin extends ModelSceneMixin
 end
 
 declare class ModelSceneMixin
+    actorTemplate: string
     cameras: table
     isLeftButtonDown: boolean
-    actorTemplate: string
     isRightButtonDown: boolean
-    tagToCamera: table
     tagToActor: table
+    tagToCamera: table
     function OnLoad()
     function ClearScene()
     function GetModelSceneID(): unknown
@@ -9563,8 +9563,8 @@ declare class VoiceToggleButtonMixin
 end
 
 declare class PropertyBindingMixin
-    shouldPassSelfToMutator: boolean
     shouldPassSelfToAccessor: boolean
+    shouldPassSelfToMutator: boolean
     function RegisterStateUpdateEvent(event: unknown, optionalCallback: unknown?)
     function UnregisterStateUpdateEvent(event: unknown)
     function RegisterPropertyChangeHandler(event: unknown, optionalCallback: unknown?)
@@ -9610,13 +9610,13 @@ declare class PropertyButtonMixin
 end
 
 declare class ScrollingMessageFrameMixin extends FontableFrameMixin
-    onDisplayRefreshedCallbacks: table
-    isDisplayDirty: boolean
-    visibleLines: table
-    isLayoutDirty: boolean
-    scrollOffset: number
     historyBuffer: CircularBufferMixin
+    isDisplayDirty: boolean
+    isLayoutDirty: boolean
+    onDisplayRefreshedCallbacks: table
     overrideFadeTimestamp: number
+    scrollOffset: number
+    visibleLines: table
     function AddMessage(message: string | Secret<string>, r: (number | Secret<number>)?, g: (number | Secret<number>)?, b: (number | Secret<number>)?, ...: unknown)
     function BackFillMessage(message: string | Secret<string>, r: (number | Secret<number>)?, g: (number | Secret<number>)?, b: (number | Secret<number>)?, ...: unknown)
     function GetNumMessages(): number
@@ -9745,9 +9745,9 @@ declare class ChatAlertFrameMixin
 end
 
 declare class AlertContainerMixin
-    shouldQueueAlertsFlags: table
     alertFrameSubSystems: table
     anchorPrioritiesDirty: boolean
+    shouldQueueAlertsFlags: table
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function SetEnabledFlag(flagName: unknown, enabled: unknown)
@@ -9772,16 +9772,16 @@ declare class AlertContainerMixin
 end
 
 declare class HeirloomsMixin
-    heirloomHeaderFrames: table
-    itemIDsInCurrentLayout: table
-    numKnownHeirlooms: number
-    needsRefresh: boolean
-    upgradedHeirlooms: table
-    heirloomEntryFrames: table
     filtersSet: boolean
+    heirloomEntryFrames: table
+    heirloomHeaderFrames: table
     heirloomLayoutData: table
+    itemIDsInCurrentLayout: table
     needsDataRebuilt: boolean
+    needsRefresh: boolean
+    numKnownHeirlooms: number
     numPossibleHeirlooms: number
+    upgradedHeirlooms: table
     function OnLoad()
     function InitFilterDropdown()
     function InitClassDropdown()
@@ -9873,8 +9873,8 @@ end
 
 declare class CommentatorMixin
     cameraMoveSpeed: number
-    unitFrames: table
     sortedPlayerIndices: table
+    unitFrames: table
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function OnUpdate(elapsed: number)
@@ -9939,15 +9939,15 @@ declare class CommunitiesAvatarPickerDialogMixin
 end
 
 declare class CommunitiesFrameMixin extends CallbackRegistryMixin
+    ReportFrames: table
+    accountChatDisabled: boolean
+    accountMuted: boolean
     focusedClubId: ClubId
+    focusedStreamId: ClubStreamId
+    newClubIds: table
     privilegesForClub: table
     selectedClubId: ClubId
     selectedStreamForClub: table
-    focusedStreamId: ClubStreamId
-    newClubIds: table
-    accountChatDisabled: boolean
-    ReportFrames: table
-    accountMuted: boolean
     function RequestSubscribedClubFinderPostingInfo()
     function OnLoad()
     function OnShow()
@@ -10035,10 +10035,10 @@ declare class ClubFinderGuildAndCommunityMixin
 end
 
 declare class CommunitiesSettingsDialogMixin
-    waitingForResponseToShow: boolean
+    avatarId: number
     clubId: ClubId
     clubPostingInfo: RecruitingClubInfo?
-    avatarId: number
+    waitingForResponseToShow: boolean
     function UpdatedPostingInformationInit()
     function OnUpdatedPostingInformationRecieved()
     function InitDropdowns()
@@ -10065,8 +10065,8 @@ declare class CommunitiesSettingsDialogMixin
 end
 
 declare class CommunitiesTicketManagerDialogMixin
-    revokedTickets: table
     refreshTicker: TickerHandle
+    revokedTickets: table
     shouldGenerateDefaultLink: boolean
     function OnLoad()
     function SetupUsesDropdown()
@@ -10106,8 +10106,8 @@ declare class CommunitiesAddDialogMixin
 end
 
 declare class CommunitiesCreateDialogMixin
-    clubType: ClubType
     avatarId: number
+    clubType: ClubType
     function ClearText()
     function OnShow()
     function SetClubType(clubType: ClubType)
@@ -10121,9 +10121,9 @@ declare class CommunitiesCreateDialogMixin
 end
 
 declare class DeveloperConsoleMixin
-    filteringCoroutineEndTime: number
     commandCircularBuffer: CircularBufferMixin
     filterText: string
+    filteringCoroutineEndTime: number
     function OnLoad()
     function RestoreMessageHistory()
     function RestoreCommandHistory()
@@ -10174,8 +10174,8 @@ end
 
 declare class TableInspectorMixin extends ToolWindowOwnerMixin
     dataProviders: table
-    tableNavigation: table
     lines: table
+    tableNavigation: table
     tableNavigationIndex: number
     function OnLoad()
     function SetTableFocusedCallback(tableFocusedCallback: unknown)
@@ -10206,11 +10206,11 @@ declare class ToolWindowOwnerMixin
 end
 
 declare class EventTracePanelMixin extends ToolWindowOwnerMixin
-    frameCounter: number
-    logDataProvider: DataProviderMixin
-    idCounter: function
     filterDataProvider: DataProviderMixin
+    frameCounter: number
+    idCounter: function
     loadTime: number
+    logDataProvider: DataProviderMixin
     searchDataProvider: DataProviderMixin
     function OnSetDebugToolVisible(addonName: string, showTool: unknown)
     function OnLoad()
@@ -10287,17 +10287,17 @@ declare class ColorPickerFrameMixin
 end
 
 declare class LowHealthFrameMixin
+    fadeEnd: number
     fadeStart: number
+    fullscreenMaxAlpha: number
+    fullscreenMinAlpha: number
+    lowHealthMaxAlpha: number
+    lowHealthMinAlpha: number
+    lowHealthPercentStart: number
+    lowHealthReducedMaxAlpha: number
     lowHealthReducedMinAlpha: number
     playerEntered: boolean
-    fullscreenMaxAlpha: number
     varsLoaded: boolean
-    lowHealthReducedMaxAlpha: number
-    lowHealthPercentStart: number
-    fullscreenMinAlpha: number
-    lowHealthMinAlpha: number
-    fadeEnd: number
-    lowHealthMaxAlpha: number
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function ListenForHealthEvents()
@@ -10530,11 +10530,11 @@ declare class LFGAuthenticatorMessagingMixin
 end
 
 declare class LFGBrowseMixin
-    searching: boolean
-    searchFailed: boolean
-    totalResults: number
     results: table
+    searchFailed: boolean
+    searching: boolean
     selectionBehavior: SelectionBehaviorMixin
+    totalResults: number
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function OnShow()
@@ -10551,8 +10551,8 @@ end
 
 declare class LFGListingMixin
     activities: table
-    selectedActivities: number
     savedInstances: table
+    selectedActivities: number
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function OnShow()
@@ -10700,8 +10700,8 @@ declare class KoreanRatingsMixin extends LoginWarningDialogBaseMixin
 end
 
 declare class TaiwanFraudWarningMixin extends LoginWarningDialogBaseMixin
-    wasAccepted: boolean
     disableHideOnEscape: boolean
+    wasAccepted: boolean
     function OnLoad()
     function ShouldShow(): unknown
     function OnShow()
@@ -10765,9 +10765,9 @@ declare class MovePadMixin
 end
 
 declare class NamePlateDriverMixin
-    preferredInsets: table
-    namePlateSetupFunctions: table
     namePlateSetInsetFunctions: table
+    namePlateSetupFunctions: table
+    preferredInsets: table
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function OnNamePlateCreated(namePlateFrameBase: unknown)
@@ -10864,10 +10864,10 @@ declare class ResizeLayoutMixin extends BaseLayoutMixin
 end
 
 declare class SettingsPanelMixin
-    tabsGroup: RadioButtonGroupMixin
     categoryLayouts: table
-    settings: table
     modified: table
+    settings: table
+    tabsGroup: RadioButtonGroupMixin
     function OnLoad()
     function OnTabSelected(tab: unknown, tabIndex: unknown)
     function OnCVarChanged(cvar: unknown, cvarValue: unknown)
@@ -10947,15 +10947,15 @@ declare class WidgetCenterDisplayFrameMixin
 end
 
 declare class ScriptErrorsFrameMixin
-    warnType: table
-    messages: table
-    seen: table
-    locals: table
-    times: table
-    messageLimit: number
-    messageCount: number
     count: table
+    locals: table
+    messageCount: number
+    messageLimit: number
+    messages: table
     order: table
+    seen: table
+    times: table
+    warnType: table
     function OnLoad()
     function OnShow()
     function DisplayMessageInternal(msg: unknown, warnType: unknown?, keepHidden: unknown?, locals: unknown, msgKey: unknown)
@@ -11076,9 +11076,9 @@ declare class GossipFrameMixin extends GossipFrameSharedMixin
 end
 
 declare class GossipFrameSharedMixin
-    tutorialButtons: table
     buttons: table
     hasActiveQuests: boolean
+    tutorialButtons: table
     function SetGossipTitle(title: unknown)
     function AvailableQuestButtonInit(button: unknown, elementData: unknown)
     function UpdateScrollBox()
@@ -11092,8 +11092,8 @@ declare class GossipFrameSharedMixin
 end
 
 declare class OpenAllMailMixin
-    numToOpen: number
     mailIndex: number
+    numToOpen: number
     function Reset()
     function StartOpening()
     function StopOpening()
@@ -11147,8 +11147,8 @@ declare class ScrollBarMixin extends CallbackRegistryMixin
     DoesFrameHaveEvent: (frame: unknown, event: unknown) -> ...unknown
     internalPriority: boolean
     internalScope: boolean
-    visibleExtentPercentage: number
     onButtonMouseUp: function
+    visibleExtentPercentage: number
     function OnLoad()
     function Init(visibleExtentPercentage: unknown, panExtentPercentage: unknown)
     function GetBackStepper(): unknown
@@ -11293,15 +11293,15 @@ declare class UIWidgetBelowMinimapContainerMixin
 end
 
 declare class UIWidgetManagerMixin
-    widgetSetFrames: table
-    registeredWidgetSetContainers: table
     layoutUpdateSetsPending: table
-    widgetIdToFrame: table
-    widgetVisTypeInfo: table
     numTimers: number
+    registeredWidgetSetContainers: table
     timerWidgets: table
+    widgetIdToFrame: table
+    widgetSetFrames: table
     widgetTagToFrames: table
     widgetTagToNumFrames: table
+    widgetVisTypeInfo: table
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
     function OnUpdate(elapsed: unknown)
@@ -11351,10 +11351,10 @@ declare class TotemFrameMixin
 end
 
 declare class WorldLootObjectListMixin
-    shownObjectSet: table
     dataProvider: DataProviderMixin
-    widgetObjectSet: table
+    shownObjectSet: table
     widgetDistanceCache: table
+    widgetObjectSet: table
     function OnLoad()
     function OnUpdate(dt: number)
     function OnObjectShown(unitToken: unknown, widget: unknown)
@@ -11366,12 +11366,12 @@ declare class WorldLootObjectListMixin
 end
 
 declare class WorldMapMixin
+    isMaximized: boolean
+    maximizedHeight: number
+    maximizedWidth: number
     minimizedHeight: number
     minimizedWidth: number
     overlayFrames: table
-    isMaximized: boolean
-    maximizedWidth: number
-    maximizedHeight: number
     function SynchronizeDisplayState()
     function Minimize()
     function Maximize()
@@ -11400,9 +11400,9 @@ end
 
 declare class AchievementsObjectivesMixin
     criterias: table
-    progressBars: table
-    miniAchivements: table
     metas: table
+    miniAchivements: table
+    progressBars: table
     function OnLoad()
     function OnHide()
     function Clear()
@@ -11612,11 +11612,11 @@ declare class AuctionHouseCommoditiesBuyDisplayMixin
 end
 
 declare class AuctionHouseItemListMixin
+    initArgs: table
     isInitialized: boolean
     scrollFrameDirty: boolean
-    initArgs: table
-    tableBuilderLayoutDirty: boolean
     tableBuilder: TableBuilderMixin
+    tableBuilderLayoutDirty: boolean
     function OnLoad()
     function SetDataProvider(searchStartedFunc: unknown, getEntry: unknown, getNumEntries: unknown, hasFullResultsFunc: unknown)
     function SetRefreshFrameFunctions(totalQuantityFunc: unknown, refreshResultsFunc: unknown)
@@ -12241,8 +12241,8 @@ end
 
 declare class TransmogSlotButtonMixin
     invalidWeapon: boolean
-    slotID: number
     justRemoved: number
+    slotID: number
     function OnLoad()
     function OnClick(mouseButton: string)
     function OnUserSelect()
@@ -12271,12 +12271,12 @@ declare class WardrobeItemsCollectionSlotButtonMixin
 end
 
 declare class WardrobeItemsCollectionMixin
-    chosenVisualSources: table
-    latestAppearanceID: number
-    lastWeaponCategory: TransmogCollectionType
-    PAGE_SIZE: number
-    NUM_ROWS: number
     NUM_COLS: number
+    NUM_ROWS: number
+    PAGE_SIZE: number
+    chosenVisualSources: table
+    lastWeaponCategory: TransmogCollectionType
+    latestAppearanceID: number
     function CreateSlotButtons()
     function OnEvent(event: string, ...: unknown)
     function CheckLatestAppearance(changeTab: unknown?)
@@ -12468,8 +12468,8 @@ declare class CooldownCircleTrackerMixin
 end
 
 declare class CommentatorUnitFrameMixin
-    isInitializing: boolean
     ccSpellID: number
+    isInitializing: boolean
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -12585,8 +12585,8 @@ declare class ClubFocusDropdownMixin
 end
 
 declare class ClubLookingForDropdownMixin
-    checkedList: table
     checkedCount: number
+    checkedList: table
     function SetupMenu(checkedList: unknown?)
     function GetSpecsList(): table
     function IsSpecInList(specID: unknown): unknown
@@ -12650,10 +12650,10 @@ declare class ClubFinderCardMixin
 end
 
 declare class ClubFinderCommunitiesCardsBaseMixin
-    totalListSize: number
     CardList: table
     requestedNextPage: boolean
     showingCards: boolean
+    totalListSize: number
     function ClearCardList()
     function OnLoad()
     function FindAndSetReportedCard(clubFinderGUID: unknown)
@@ -12666,8 +12666,8 @@ end
 declare class ClubFinderGuildCardsBaseMixin
     CardList: table
     numPages: number
-    requestedPage: boolean
     pageNumber: number
+    requestedPage: boolean
     showingCards: boolean
     function ClearCardList()
     function OnLoad()
@@ -12725,8 +12725,8 @@ declare class ClubFinderRoleMixin
 end
 
 declare class ClubFinderApplicantEntryMixin
-    ClassName: string
     ClassColor: colorRGBA
+    ClassName: string
     function GetApplicantName(): unknown
     function GetApplicantStatus(): unknown
     function GetPlayerGUID(): unknown
@@ -12738,9 +12738,9 @@ declare class ClubFinderApplicantEntryMixin
 end
 
 declare class ClubFinderApplicantListMixin
+    ApplicantInfoList: ClubFinderApplicantInfo[]
     clubSizeMaxHit: boolean
     newApplicantListRequest: TickerHandle
-    ApplicantInfoList: ClubFinderApplicantInfo[]
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -12780,10 +12780,10 @@ declare class CommunitiesCalendarButtonMixin
 end
 
 declare class CommunitiesChatMixin
-    eventsSent: table
     broadcastSent: table
-    requestedMoreHistory: boolean
+    eventsSent: table
     pendingMemberInfo: table
+    requestedMoreHistory: boolean
     function OnLoad()
     function OnShow()
     function OnEvent(event: string, ...: unknown)
@@ -12851,13 +12851,13 @@ declare class CommunitiesLanguageDropdownMixin
 end
 
 declare class CommunitiesListMixin
-    pendingFavorites: table
-    newCommunityFlashTime: number
-    declinedInvitationIds: table
-    tickets: table
-    invitations: ClubSelfInvitationInfo[]
     communitiesList: ClubInfo[]
+    declinedInvitationIds: table
     finderInvitations: RecruitingClubInfo[]
+    invitations: ClubSelfInvitationInfo[]
+    newCommunityFlashTime: number
+    pendingFavorites: table
+    tickets: table
     function GetCommunitiesFrame(): (...unknown)
     function OnEvent(event: string, ...: unknown)
     function UpdateInvitations()
@@ -12925,10 +12925,10 @@ declare class CommunitiesListDropdownMixin
 end
 
 declare class CommunitiesMemberListMixin
-    professionDisplay: table
-    sortedMemberList: table
     allMemberInfoLookup: table
     allMemberList: table
+    professionDisplay: table
+    sortedMemberList: table
     sortedMemberLookup: table
     sortedProfessionList: table
     function ResetColumnSort()
@@ -13131,11 +13131,11 @@ declare class CommunitiesGuildMemberDetailMixin
 end
 
 declare class DeveloperConsoleAutoCompleteMixin
-    maxResults: number
-    entryByIndex: table
     bestResults: table
     dirty: boolean
+    entryByIndex: table
     heightDirty: boolean
+    maxResults: number
     function OnLoad()
     function OnAvailableHeightChanged()
     function SetText(text: unknown, cursorPosition: unknown)
@@ -13344,9 +13344,9 @@ declare class CustomBindingHandlerMixin
 end
 
 declare class CustomBindingManager
+    handlers: table
     pendingBinds: table
     systems: table
-    handlers: table
     function RegisterHandlerAndCreateButton(handler: unknown, template: string?, parent: unknown?): Frame
     function SetHandlerRegistered(button: unknown, registered: unknown?)
     function RegisterHandler(customBindingType: unknown, handler: unknown, button: unknown)
@@ -13410,11 +13410,11 @@ declare class WardrobeOutfitManager
 end
 
 declare class AnimatedStatusBarMixin
+    OnFinishedCallback: function
+    OnSetStatusBarAnimUpdateCallback: function
     animatedTextureColors: table
     numUsedTileTemplates: number
     pendingReset: boolean
-    OnSetStatusBarAnimUpdateCallback: function
-    OnFinishedCallback: function
     tileTemplates: table
     function OnLoad()
     function Reset()
@@ -13721,9 +13721,9 @@ declare class CharacterServicesFlowPrototype
 end
 
 declare class CharacterServicesFlowMixin
+    results: table
     rewindRequested: boolean
     step: number
-    results: table
     function Initialize(controller: unknown)
     function BuildResults(steps: number): table
     function Advance(controller: unknown)
@@ -13912,14 +13912,14 @@ declare class SocialContractDeclineButtonMixin
 end
 
 declare class CreditsFrameMixin
-    startPos: number
-    artCount: number
-    startIdx: number
-    cacheIndex: number
     alphaIn: number
+    artCount: number
     cacheElapsed: number
+    cacheIndex: number
     currentArt: number
     pixelAlignedRemainder: number
+    startIdx: number
+    startPos: number
     strings: table
     function OnShow()
     function OnHide()
@@ -14060,10 +14060,10 @@ declare class GuildBankPopupOkayButtonMixin
 end
 
 declare class ItemButtonMixin
-    pendingInfo: table
-    isProfessionItem: boolean
     isCraftedItem: boolean
+    isProfessionItem: boolean
     noProfessionQualityOverlay: boolean
+    pendingInfo: table
     function OnItemContextChanged()
     function PostOnShow()
     function PostOnHide()
@@ -14103,9 +14103,9 @@ declare class KioskSessionStartedDialogButtonMixin
 end
 
 declare class MapCanvasDetailLayerMixin
-    textureLoadGroup: TextureLoadingGroupMixin
-    mapID: number
     mapArtID: number
+    mapID: number
+    textureLoadGroup: TextureLoadingGroupMixin
     function OnLoad()
     function SetMapAndLayer(mapID: number, layerIndex: unknown)
     function GetLayerIndex(): unknown
@@ -14212,17 +14212,17 @@ declare class MapCanvasPinFrameLevelsManagerMixin
 end
 
 declare class MapCanvasScrollControllerMixin
-    normalizedZoomLerpAmount: number
     accumulatedMouseDeltaX: number
-    zoomTarget: number
-    normalizedPanYLerpAmount: number
-    zoomAmountPerMouseWheelDelta: number
-    zoomLevels: table
-    normalizedPanXLerpAmount: number
+    accumulatedMouseDeltaY: number
+    areaTriggersDirty: boolean
     baseScale: number
     mouseButtonInfo: table
-    areaTriggersDirty: boolean
-    accumulatedMouseDeltaY: number
+    normalizedPanXLerpAmount: number
+    normalizedPanYLerpAmount: number
+    normalizedZoomLerpAmount: number
+    zoomAmountPerMouseWheelDelta: number
+    zoomLevels: table
+    zoomTarget: number
     function OnLoad()
     function OnMouseDown(button: string)
     function WouldCursorPositionBeClick(button: unknown, cursorX: number, cursorY: number): boolean
@@ -14455,8 +14455,8 @@ declare class MoneyDenominationDisplayMixin
 end
 
 declare class MoneyDisplayFrameMixin
-    rawCopper: number
     hideCopper: boolean
+    rawCopper: number
     function OnLoad()
     function SetFontAndIconDisabled(disabled: unknown)
     function SetFontObject(fontObject: unknown)
@@ -14771,8 +14771,8 @@ declare class SettingMixin
 end
 
 declare class CVarSettingMixin extends SettingMixin
-    GetDefaultValueDerived: function
     ConvertValueInternal: function
+    GetDefaultValueDerived: function
     GetValueDerived: function
     SetValueDerived: function
     function Init(name: unknown, cvar: string, variableType: string)
@@ -14813,8 +14813,8 @@ declare class SettingsExpandableSectionInitializer extends ScrollBoxFactoryIniti
 end
 
 declare class SettingsSearchableElementMixin
-    searchTags: table
     searchIgnoredLayouts: table
+    searchTags: table
     shownPredicates: table
     function AddSearchTags(...: unknown)
     function MatchesSearchTags(words: unknown): number?
@@ -14909,8 +14909,8 @@ declare class GraphicsOverrides
 end
 
 declare class AreaLabelFrameMixin
-    labelInfoByType: table
     dirty: boolean
+    labelInfoByType: table
     function OnLoad()
     function OnUpdate()
     function SetLabel(areaLabelType: unknown, name: unknown, description: unknown, nameColor: colorRGBA, descriptionColor: colorRGBA, textureInfo: unknown)
@@ -15294,10 +15294,10 @@ declare class BindingUtil
 end
 
 declare class RadialWheelFrameMixin
-    wedgeAngleIntervalRadians: number
-    radialWheelWedgeButtons: table
     isWheelClosing: boolean
     numWedges: number
+    radialWheelWedgeButtons: table
+    wedgeAngleIntervalRadians: number
     wedgeAngleIntervalRadiansHalf: number
     wedgeAngleOffsetInitial: number
     function OnLoad()
@@ -15314,11 +15314,11 @@ declare class RadialWheelFrameMixin
 end
 
 declare class RadialWheelButtonMixin
+    animEndTime: number
+    animEndX: number
+    animEndY: number
     animStartTime: number
     animStartX: number
-    animEndTime: number
-    animEndY: number
-    animEndX: number
     animStartY: number
     function OnHide()
     function OnUpdate()
@@ -15365,8 +15365,8 @@ declare class ContentFrameMixin
 end
 
 declare class ButtonGroupBaseMixin extends CallbackRegistryMixin
-    callbacks: table
     buttons: table
+    callbacks: table
     function Init()
     function SetShown(shown: unknown)
     function AddButton(button: unknown)
@@ -15447,9 +15447,9 @@ declare class PanelTopTabButtonMixin
 end
 
 declare class NumericInputSpinnerMixin
-    startTime: number
     currentValue: number
     incrementing: boolean
+    startTime: number
     function SetValue(value: number)
     function SetMinMaxValues(min: unknown, max: unknown)
     function GetValue(): unknown
@@ -15568,11 +15568,11 @@ declare class SearchBoxListElementMixin
 end
 
 declare class SearchBoxListMixin
-    showAllResults: Frame
-    selectedIndex: number
-    allResultsIndex: number
     HasStickyFocus: function
+    allResultsIndex: number
     searchButtons: table
+    selectedIndex: number
+    showAllResults: Frame
     function OnLoad()
     function HideSearchPreview()
     function HideSearchProgress()
@@ -15686,8 +15686,8 @@ end
 
 declare class CustomBindingButtonMixin
     isBindingModeActive: boolean
-    receivedNonMetaKeyInput: boolean
     keys: table
+    receivedNonMetaKeyInput: boolean
     function OnLoad()
     function OnClick(button: unknown, isDown: unknown?)
     function OnMouseWheel(delta: unknown)
@@ -15919,8 +15919,8 @@ declare class InterpolatorMixin
 end
 
 declare class KeyCommand
-    runOnUp: boolean
     isDown: boolean
+    runOnUp: boolean
     function OnLoad(command: unknown, runOnUp: unknown, key: unknown)
     function Update()
     function MarkCommandFired()
@@ -16334,12 +16334,12 @@ end
 
 declare class ScrollBoxListViewMixin extends ScrollBoxViewMixin
     DoesFrameHaveEvent: (frame: unknown, event: unknown) -> ...unknown
-    factory: function
-    initializers: table
-    templateInfoDirty: boolean
     canSignalWithoutInitializer: boolean
+    factory: function
     frameFactory: FrameFactoryMixin
     frames: table
+    initializers: table
+    templateInfoDirty: boolean
     function Init()
     function GetExtentFromInfo(info: unknown): unknown
     function GetTemplateInfo(frameTemplate: unknown): (...unknown)
@@ -16438,8 +16438,8 @@ declare class ScrollBoxListViewMixin extends ScrollBoxViewMixin
 end
 
 declare class ScrollBoxViewMixin extends ScrollDirectionMixin
-    initialized: boolean
     frames: table
+    initialized: boolean
     function GetFrameLevelPolicy(): unknown
     function SetFrameLevelPolicy(frameLevelPolicy: unknown)
     function IsElementStretchDisabled(): unknown
@@ -16653,11 +16653,11 @@ declare class SelectionBehaviorMixin extends CallbackRegistryMixin
 end
 
 declare class ScrollBoxDragBehavior
-    childToParent: table
     candidate: table
+    childToParent: table
+    cursorHitInsets: table
     dropPreviewFactory: function
     lastCandidate: table
-    cursorHitInsets: table
     sourceData: table
     function Init(scrollBox: unknown)
     function RebuildOnDrop(): unknown
@@ -16832,9 +16832,9 @@ declare class SpinnerWithShadowMixin
 end
 
 declare class CatmullRomSplineMixin
+    numDimensions: number
     numPoints: number
     pointData: table
-    numDimensions: number
     function OnLoad(numDimensions: number)
     function GetNumDimensions(): number
     function AddPoint(...: unknown)
@@ -16861,8 +16861,8 @@ declare class TabGroupMixin
 end
 
 declare class TableBuilderColumnMixin
-    cells: table
     args: table
+    cells: table
     function Init(table: unknown)
     function ConstructHeader(templateType: unknown, template: unknown, ...: unknown)
     function Reset()
@@ -16891,8 +16891,8 @@ declare class TableBuilderColumnMixin
 end
 
 declare class TableBuilderMixin
-    rows: table
     columns: table
+    rows: table
     function Init()
     function GetDataProvider(): unknown
     function SetDataProvider(dataProvider: unknown)
@@ -16934,8 +16934,8 @@ declare class TemplatedListElementMixin
 end
 
 declare class TemplatedListMixin
-    isInitialized: boolean
     elementTemplateInitArgs: table
+    isInitialized: boolean
     function SetElementTemplate(elementTemplate: unknown, ...: unknown)
     function SetGetNumResultsFunction(getNumResultsFunction: unknown)
     function SetSelectionCallback(selectionCallback: unknown)
@@ -17099,9 +17099,9 @@ declare class ExportDataStreamMixin
 end
 
 declare class ImportDataStreamMixin
-    dataValues: table
-    currentIndex: number
     currentExtractedBits: number
+    currentIndex: number
+    dataValues: table
     function Init(exportString: unknown)
     function ExtractValue(bitWidth: unknown): number?
     function GetNumberOfBits(): number
@@ -17242,9 +17242,9 @@ declare class LoopingSoundEffectMixin
 end
 
 declare class ScriptAnimatedEffectControllerMixin
+    activeBehaviors: table
     effectCount: number
     effectStarted: boolean
-    activeBehaviors: table
     function Init(modelScene: unknown, effectID: unknown, source: unknown, target: unknown, onEffectFinish: unknown, onEffectResolution: unknown, scaleMultiplier: unknown)
     function GetEffect(): unknown
     function GetCurrentEffectID(): unknown
@@ -17268,9 +17268,9 @@ declare class ScriptAnimatedEffectControllerMixin
 end
 
 declare class ScriptAnimatedModelSceneMixin
-    modelSceneSet: boolean
     centerY: number
     effectControllers: table
+    modelSceneSet: boolean
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -17412,10 +17412,10 @@ declare class SpellPickupIndicatorMixin
 end
 
 declare class BaseSpellSearchFilterMixin
+    isActive: boolean
     matchesBySourceType: table
     resultsBySourceType: table
     reverseDefaultMatchTypeSort: boolean
-    isActive: boolean
     function Init(searchController: unknown, enabled: unknown)
     function SetEnabled(enabled: unknown)
     function GetIsEnabled(): unknown
@@ -17442,9 +17442,9 @@ declare class BaseSpellSearchFilterMixin
 end
 
 declare class SpellSearchControllerMixin
-    searchFilters: table
     disabledFilters: table
     isInitialized: boolean
+    searchFilters: table
     function Init(searchSourceInstances: unknown)
     function IsInitialized(): boolean
     function IsFilterEnabled(filterType: unknown): unknown
@@ -17587,10 +17587,10 @@ declare class RaidInstanceFrameMixin
 end
 
 declare class UnitPositionFrameMixin
-    needsFullUpdate: boolean
-    currentMouseOverUnits: table
     currentMouseOverUnitCount: number
+    currentMouseOverUnits: table
     excludedMouseOverUnits: table
+    needsFullUpdate: boolean
     function OnLoad()
     function OnShow()
     function OnHide()
@@ -17748,8 +17748,8 @@ declare class TotemButtonMixin
 end
 
 declare class TempMaxHealthLossMixin
-    initialized: boolean
     ShouldAdjustHealthBarAnchor: boolean
+    initialized: boolean
     function InitalizeMaxHealthLossBar(healthBarsContainer: unknown, healthBar: unknown, optionalTempMaxHealthLossDivider: unknown?)
     function SetShouldAdjustHealthBarAnchor(xOffset: unknown, yOffset: unknown)
     function OnMaxHealthModifiersChanged(value: number)
@@ -17792,7 +17792,7 @@ declare class UnitPopupSharedUtil
     IsBNetFriend: (contextData: unknown) -> unknown
     CanAddBNetFriend: (contextData: unknown, isLocalPlayer: boolean?, haveBattleTag: boolean?, isPlayer: unknown?) -> boolean
     GetFullPlayerName: (contextData: unknown) -> unknown
-    HasLFGRestrictions: () -> boolean
+    HasLFGRestrictions: () -> boolean?
     TryInvite: (contextData: unknown, inviteType: string, fullName: string) -> ()
     GetGUID: (contextData: unknown) -> unknown
     GetIsMobile: (contextData: unknown) -> unknown
@@ -18597,7 +18597,7 @@ declare function WorldLootObjectExists(unit: string?): boolean
 declare function GetArmorPenetration(): number | Secret<number>
 declare function UnitResistance(unit: string, damageClass: Damageclass): (number | Secret<number>, number | Secret<number>, number | Secret<number>, number | Secret<number>)
 declare function SetTableSecurityOption(table: LuaValueVariant, option: TableSecurityOption)
-@deprecated declare function GetMerchantItemInfo(index: number): (string, number, number, number, number, boolean, boolean, boolean, number, number)
+@deprecated declare function GetMerchantItemInfo(index: number): (string, number, number, number, number, boolean, boolean, boolean, number?, number?)
 @deprecated declare function IsActiveQuestLegendary(questIndex: number): boolean
 declare function AbandonSkill(skillLineID: number)
 declare function ArchaeologyGetIconInfo(index: number)
@@ -18615,8 +18615,8 @@ declare function CloseResearch()
 declare function GetAchievementGuildRep(id: number): (boolean, boolean, number)
 declare function GetActiveArtifactByRace(branchIndex: number, artifactIndex: number): (string, string, string, string, string, number, string)
 declare function GetArchaeologyInfo(): string
-declare function GetArchaeologyRaceInfo(raceIndex: number): (string, number, number, number, number, number)
-declare function GetArchaeologyRaceInfoByID(branchID: number): (string, number, number, number, number, number)
+declare function GetArchaeologyRaceInfo(raceIndex: number): (string, number, number?, number, number, number)
+declare function GetArchaeologyRaceInfoByID(branchID: number): (string, number, number?, number, number, number)
 declare function GetArtifactInfoByRace(raceIndex: number, artifactIndex: number): (string, string, number, string, string, number, string, number, number)
 declare function GetArtifactProgress(): (number, number, number)
 declare function GetGuildAchievementMemberInfo(achievementID: number, index: number): string?
@@ -18646,22 +18646,25 @@ declare function SocketItemToArtifact(): boolean
 declare function SolveArtifact()
 declare function SortBGList(): boolean
 declare function GetSpellCooldown(spell: number | string): (number, number, number, number)
-declare function GetSpellCooldown(index: number, bookType: string)
+declare function GetSpellCooldown(index: number, bookType: string): (number, number, number, number)
 declare function AbandonQuest()
 declare function AddPreviewTalentPoints(arg1: unknown, arg2: unknown, arg3: number, arg4: unknown, arg5: unknown): (...unknown)
 declare function AddQuestWatch(questIndex: number, watchTime: number?)
 declare function AddTrackedAchievement(achievementID: number)
 declare function AreHighResTexturesAvailable(): (...unknown)
 declare function ArenaTeamRoster(index: unknown)
-declare function BNGetFriendGameAccountInfo(friendIndex: unknown?): (boolean, string, string, string, number, string, string, string, string, string, string, string, string, number, boolean, number, number, boolean, boolean)
-declare function BNGetFriendInfo(friendIndex: unknown?): (number, string, string, boolean, string, number, string, boolean, number, boolean, boolean, string, string, boolean, number, boolean, boolean, boolean)
+declare function BNGetFriendGameAccountInfo(friendIndex: number): (boolean, string, string, string, number, string, string, string, string, string, string, string, string, number, boolean, number, number, boolean, boolean)
+declare function BNGetFriendGameAccountInfo(bnetIDGameAccount: number): (boolean, string, string, string, number, string, string, string, string, string, string, string, string, number, boolean, number, number, boolean, boolean)
+declare function BNGetFriendGameAccountInfo(guid: string): (boolean, string, string, string, number, string, string, string, string, string, string, string, string, number, boolean, number, number, boolean, boolean)
+declare function BNGetFriendInfo(friendIndex: number): (number, string, string, boolean, string, number, string, boolean, number?, boolean, boolean, string, string, boolean, number, boolean, boolean, boolean)
+declare function BNGetFriendInfo(bnetAccountID: number): (number, string, string, boolean, string, number, string, boolean, number?, boolean, boolean, string, string, boolean, number, boolean, boolean, boolean)
 declare function BNGetFriendInfoByID(arg1: unknown): (unknown, string?, string?, unknown, string?, unknown, string?, unknown, unknown, unknown, unknown, string?, ...unknown)
 declare function BNGetGameAccountInfo(arg1: unknown): (unknown, string?, unknown, unknown, number?, unknown, unknown, unknown, unknown, unknown, unknown, string?, ...unknown)
 declare function BNGetGameAccountInfoByGUID(arg1: unknown): (...unknown)
 declare function BNGetNumFriendGameAccounts(friendIndex: number): number
 declare function BankButtonIDToInvSlotID(buttonID: number, isBag: number?): number
 declare function BuyStableSlot()
-declare function CanAbandonQuest(questID: number): boolean
+declare function CanAbandonQuest(questID: number): boolean?
 declare function CanSendAuctionQuery(): (boolean, boolean)
 declare function CancelSell()
 declare function CancelTrackingBuff()
@@ -18685,7 +18688,7 @@ declare function CollapseTrainerSkillLine(index: number)
 declare function ConvertToParty()
 declare function ConvertToRaid(): (...unknown)
 declare function CraftIsEnchanting(): (...unknown)
-@deprecated declare function CursorCanGoInSlot(invSlot: number): boolean
+@deprecated declare function CursorCanGoInSlot(invSlot: number): boolean?
 declare function DisableSpellAutocast(arg1: string): (...unknown)
 declare function DoTradeSkill(index: number, repeat_: number)
 declare function DoesSpellExist(spellName: string): boolean
@@ -18701,9 +18704,9 @@ declare function FactionToggleAtWar(rowIndex: number)
 declare function GMSubmitBug(arg1: string): (...unknown)
 declare function GetAbandonQuestItems(): (string?, ...unknown)
 declare function GetAbandonQuestName(): string
-declare function GetArenaTeam(id: unknown): (string, number, number, number, number, number, number, number, number, number, number)
-declare function GetArenaTeamIndexBySize(size: number): number
-declare function GetArenaTeamRosterInfo(teamindex: number, playerid: number): (string, number, number, string, number, number, number, number, number, number)
+declare function GetArenaTeam(id: unknown): (string?, number, number, number, number, number, number, number, number, number, number)
+declare function GetArenaTeamIndexBySize(size: number): number?
+declare function GetArenaTeamRosterInfo(teamindex: number, playerid: number): (string, number, number, string, number?, number, number, number, number, number)
 declare function GetArenaTeamRosterSelection(arg1: unknown): (...unknown)
 declare function GetAuctionItemBattlePetInfo(type: string, index: number): (number, number)
 declare function GetAuctionItemInfo(type: string, index: number): (string, number, number, number, boolean, number, string, number, number, number, number, string?, string?, string, string?, number, number, boolean)
@@ -18737,7 +18740,7 @@ declare function GetCraftReagentInfo(index: unknown, n: unknown): (unknown, unkn
 declare function GetCraftReagentItemLink(index: number, n: number): string
 declare function GetCraftRecipeLink(index: number): string
 declare function GetCraftSelectionIndex(): (number?, ...unknown)
-declare function GetCraftSkillLine(n: number): string
+declare function GetCraftSkillLine(n: number?): string?
 declare function GetCraftSlots(): (...unknown)
 declare function GetCraftSpellFocus(index: number): (unknown, unknown)
 declare function GetCritChanceFromAgility(arg1: string): (...unknown)
@@ -18748,11 +18751,12 @@ declare function GetCurrentArenaSeasonUsesTeams(): (...unknown)
 declare function GetCurrentLevelSpells(level: unknown): unknown
 declare function GetDuelerInfo(): (string | Secret<string>, number, ...unknown)
 declare function GetEclipseDirection(): unknown
-declare function GetFactionInfo(factionIndex: unknown?): (string, string, number, number, number, number, boolean, boolean, boolean, boolean, boolean, boolean, boolean, number, boolean, boolean)
+declare function GetFactionInfo(factionIndex: number): (string, string, number, number, number, number, boolean, boolean, boolean, boolean, boolean, boolean, boolean, number, boolean, boolean)
+declare function GetFactionInfo(factionID: number): (string, string, number, number, number, number, boolean, boolean, boolean, boolean, boolean, boolean, boolean, number, boolean, boolean)
 declare function GetFirstBagBankSlotIndex(): number
 declare function GetFirstTradeSkill(): number
 declare function GetGlyphClearInfo(): (string, number, fileID, number, number)
-declare function GetGlyphInfo(index: number): (string, number, boolean, fileID, number, string)
+declare function GetGlyphInfo(index: number): (string, number, boolean, fileID?, number?, string?)
 declare function GetGlyphSocketInfo(socketID: number, talentGroup: number?): (boolean, number, number, number?, fileID?, number)
 declare function GetGroupPreviewTalentPointsSpent(arg1: unknown, arg2: unknown): (number, ...unknown)
 declare function GetGuildFactionInfo(): (unknown, unknown, unknown, unknown, unknown, unknown)
@@ -18811,15 +18815,15 @@ declare function GetQuestLogGroupNum(questID: unknown): number
 declare function GetQuestLogIndexByID(questID: number): number
 declare function GetQuestLogIsAutoComplete(arg1: unknown): (...unknown)
 declare function GetQuestLogPortraitGiver(): (number?, string?, unknown, number, ...unknown)
-declare function GetQuestLogPushable(): boolean
+declare function GetQuestLogPushable(): boolean?
 declare function GetQuestLogRequiredMoney(arg1: unknown?): (number, ...unknown)
 declare function GetQuestLogRewardArenaPoints(): (...unknown)
 declare function GetQuestLogRewardCurrencyInfo(index: number, questId: number?): (string, string, number, number, number)
 declare function GetQuestLogRewardTalents(): (...unknown)
 declare function GetQuestLogSelectedID(): (...unknown)
 declare function GetQuestLogSelection(): unknown
-declare function GetQuestLogTitle(questLogIndex: number): (string, number, number, boolean, boolean, number, number, number, boolean, boolean, boolean, boolean, boolean, boolean, boolean, boolean, boolean)
-declare function GetQuestTagInfo(questID: number): (number, string, number, number, boolean, unknown, unknown)
+declare function GetQuestLogTitle(questLogIndex: number): (string?, number, number, boolean, boolean, number?, number, number, boolean, boolean, boolean, boolean, boolean, boolean, boolean, boolean, boolean)
+declare function GetQuestTagInfo(questID: number): (number?, string?, number?, number, boolean, unknown, unknown)
 declare function GetQuestTimers(): unknown
 declare function GetQuestWatchIndex(arg1: unknown): (...unknown)
 declare function GetQuestsCompleted(table: table?): table
@@ -18831,23 +18835,32 @@ declare function GetSelectedFaction(): (number, ...unknown)
 declare function GetSelectedGlyphSpellIndex(): number?
 declare function GetSelectedSkill(): number
 declare function GetSelectedStablePet(): number
-declare function GetSkillLineInfo(index: number): (string, number, number, number, number, number, number, number, number, number, number, number, string)
+declare function GetSkillLineInfo(index: number): (string, number?, number?, number, number, number, number, number?, number?, number?, number, number, string)
 declare function GetSpellAutocast(spellName__or_spellId: unknown?, bookType: string): (number, number)
 declare function GetSpellAvailableLevel(arg1: number, arg2: unknown): (number?, ...unknown)
-declare function GetSpellBookItemInfo(spellName: unknown?): (string, number)
-declare function GetSpellBookItemName(spellName: unknown?): (string, string, number)
-declare function GetSpellBookItemTexture(spell: unknown?): number
-declare function GetSpellCharges(spell: unknown?): (number, number, number, number, number)
-declare function GetSpellCount(spell: unknown?): number
+declare function GetSpellBookItemInfo(spellName: unknown): (string, number)
+declare function GetSpellBookItemInfo(index: unknown, bookType: unknown): (string, number)
+@deprecated declare function GetSpellBookItemName(spellName: unknown): (string, string, number)
+@deprecated declare function GetSpellBookItemName(index: unknown, bookType: unknown): (string, string, number)
+declare function GetSpellBookItemTexture(spell: unknown): number?
+declare function GetSpellBookItemTexture(index: unknown, bookType: unknown): number?
+@deprecated declare function GetSpellCharges(spell: unknown): (number, number, number, number, number)
+@deprecated declare function GetSpellCharges(index: unknown, bookType: unknown): (number, number, number, number, number)
+@deprecated declare function GetSpellCount(spell: unknown): number
+@deprecated declare function GetSpellCount(index: unknown, bookType: unknown): number
 declare function GetSpellCritChanceFromIntellect(arg1: string): (...unknown)
 @deprecated declare function GetSpellDescription(spellID: number): string
-declare function GetSpellInfo(spell: unknown?): (string, string, number, number, number, number, number, number)
-declare function GetSpellLevelLearned(spell: unknown?): number
-declare function GetSpellLink(spell: unknown, ______GetSpellLink_index: unknown?, bookType: unknown): (string, number)
+@deprecated declare function GetSpellInfo(spell: unknown): (string, string?, number, number, number, number, number, number)
+@deprecated declare function GetSpellInfo(index: unknown, bookType: unknown): (string, string?, number, number, number, number, number, number)
+declare function GetSpellLevelLearned(spell: unknown): number
+declare function GetSpellLevelLearned(index: unknown, bookType: unknown): number
+declare function GetSpellLink(index: unknown, bookType: unknown): (string, number)
 declare function GetSpellLossOfControlCooldown(spellSlot: number, bookType: string?, or_spellName_or_spellID: unknown?): (number, number)
-declare function GetSpellPowerCost(spell: unknown?): table[]
+declare function GetSpellPowerCost(spell: unknown): table[]
+declare function GetSpellPowerCost(index: unknown, bookType: unknown): table[]
 @deprecated declare function GetSpellTabInfo(tabIndex: number): (string, string, number, number, boolean, number)
-declare function GetSpellTexture(spell: unknown?): number
+@deprecated declare function GetSpellTexture(spell: unknown): number
+@deprecated declare function GetSpellTexture(index: unknown, bookType: unknown): number
 declare function GetSpellTradeSkillLink(arg1: number, arg2: unknown): (...unknown)
 @deprecated declare function GetStablePetFoodTypes(index: number): string
 @deprecated declare function GetStablePetInfo(index: number): (string, string, number, string, string)
@@ -18855,16 +18868,16 @@ declare function GetSuggestedGroupNum(): (number, ...unknown)
 declare function GetSuperTrackedQuestID(): (...unknown)
 declare function GetTalentClearInfo(): (string, number, string, number, number)
 declare function GetTalentGroupRole(groupIndex: number): string
-declare function GetTalentPrereqs(tabIndex: number, talentIndex: number, isInspect: boolean?, isPet: boolean?, talentGroup: number?): (number, number, number)
+declare function GetTalentPrereqs(tabIndex: number, talentIndex: number, isInspect: boolean?, isPet: boolean?, talentGroup: number?): (number, number, number?)
 declare function GetTalentTreeEarlySpells(arg1: unknown, arg2: unknown, arg3: unknown): (...unknown)
 declare function GetTalentTreeRoles(talentTreeId: number, isInspect: boolean, isPet: boolean): string
 declare function GetTrackedAchievements(): (number, unknown, unknown, unknown)
-declare function GetTrackingTexture(): number
+declare function GetTrackingTexture(): number?
 declare function GetTradeSkillCooldown(arg1: unknown): (number?, ...unknown)
 declare function GetTradeSkillDescription(index: number): string
 declare function GetTradeSkillIcon(arg1: unknown): (...unknown)
-declare function GetTradeSkillInfo(skillIndex: number): (string, string, number, boolean, string, number, number, boolean, number, number, number)
-declare function GetTradeSkillInvSlotFilter(slotIndex: number): number
+declare function GetTradeSkillInfo(skillIndex: number): (string, string, number, boolean, string?, number, number, boolean, number, number, number)
+declare function GetTradeSkillInvSlotFilter(slotIndex: number): number?
 declare function GetTradeSkillInvSlots(): unknown
 declare function GetTradeSkillItemLink(skillId: number): string
 declare function GetTradeSkillItemStats(skillId: unknown): unknown
@@ -18876,7 +18889,7 @@ declare function GetTradeSkillReagentInfo(tradeSkillRecipeId: unknown, reagentId
 declare function GetTradeSkillReagentItemLink(skillId: number, reagentId: number): string
 declare function GetTradeSkillRecipeLink(index: number): string
 declare function GetTradeSkillSelectionIndex(): number
-declare function GetTradeSkillSubClassFilter(filterIndex: number): number
+declare function GetTradeSkillSubClassFilter(filterIndex: number): number?
 declare function GetTradeSkillSubClasses(): unknown
 declare function GetTradeSkillTools(skillIndex: unknown)
 declare function GetTradeskillRepeatCount(): number
@@ -18888,7 +18901,7 @@ declare function GetWorldPVPQueueMapName(arg1: boolean): (...unknown)
 declare function GlyphMatchesSocket(socketIndex: number): number?
 declare function HasFilledPetition(): (...unknown)
 declare function HasInspectHonorData(): boolean
-declare function HasPetSpells(): (number, string)
+declare function HasPetSpells(): (number?, string)
 declare function HonorSystemEnabled(): (...unknown)
 declare function InActiveBattlefield(): boolean
 declare function IsArenaSeasonActive(): (...unknown)
@@ -18901,7 +18914,7 @@ declare function IsChannelModerator(arg1: unknown): (...unknown)
 declare function IsChannelOwner(arg1: unknown): (...unknown)
 declare function IsConsumableSpell(arg1: unknown): (...unknown)
 declare function IsCurrentSpell(spellID: number): boolean
-declare function IsFactionInactive(index: number): boolean
+declare function IsFactionInactive(index: number): boolean?
 declare function IsGlyphFlagSet(filter: unknown): number
 declare function IsKeyRingEnabled(): (...unknown)
 declare function IsPassiveSpell(spellId_or_index: unknown?, bookType: string): unknown
@@ -18909,13 +18922,15 @@ declare function IsPlayerAttacking(unit: string): boolean
 declare function IsQuestComplete(questID: number): boolean
 declare function IsQuestWatched(arg1: unknown): (...unknown)
 declare function IsSpellHidden(arg1: number, arg2: unknown): (...unknown)
-declare function IsSpellInRange(spellName: unknown?, unit: string): number?
+declare function IsSpellInRange(spellName: string, unit: string): number?
+declare function IsSpellInRange(index: number, bookType: string, unit: string): number?
 declare function IsTalentSpell(spellName_or_slotIndex: unknown?, bookType: string): boolean
 declare function IsTrackedAchievement(achievementID: unknown): boolean
 declare function IsTradeSkillLinked(): (unknown, unknown)
-declare function IsTrainerServiceLearnSpell(index: number): (number, number)
+declare function IsTrainerServiceLearnSpell(index: number): (number?, number?)
 declare function IsUnitOnQuest(questIndex: unknown, unit: unknown)
-declare function IsUsableSpell(spell: unknown?): (boolean, boolean)
+@deprecated declare function IsUsableSpell(spell: unknown): (boolean, boolean)
+@deprecated declare function IsUsableSpell(index: unknown, bookType: unknown): (boolean, boolean)
 declare function IsUsingLegacyAuctionClient(): (...unknown)
 declare function JoinWorldPVPQueue(arg1: boolean, arg2: unknown, arg3: unknown?): (...unknown)
 declare function KeyRingButtonIDToInvSlotID(buttonID: number): number
@@ -30143,19 +30158,19 @@ declare namespace C_PetJournal
     function CagePetByID(petID: string)
     function ClearFanfare(arg1: unknown): (...unknown)
     function ClearRecentFanfares(): (...unknown)
-    function FindPetIDByName(petName: string): (number, string)
-    function GetBattlePetLink(petID: string): string
+    function FindPetIDByName(petName: string): (number?, string?)
+    function GetBattlePetLink(petID: string): string?
     function GetNumCollectedInfo(speciesId: number): (number, number)
     function GetNumPetSources(): number
     function GetNumPetTypes(): number
     function GetNumPets(): (number, number)
     function GetNumPetsNeedingFanfare(): (number, ...unknown)
-    function GetOwnedBattlePetString(speciesId: number): string
+    function GetOwnedBattlePetString(speciesId: number): string?
     function GetPetAbilityList(speciesID: number, idTable: table?, levelTable: table?): (number[], number[])
     function GetPetCooldownByGUID(GUID: string): (number, number, number)
-    function GetPetInfoByIndex(index: number): (string, number, boolean, string, number, boolean, boolean, string, fileID, number, number, string, string, boolean, boolean, boolean, boolean, boolean)
+    function GetPetInfoByIndex(index: number): (string, number, boolean, string?, number, boolean, boolean, string, fileID, number, number, string, string, boolean, boolean, boolean, boolean, boolean)
     function GetPetInfoByItemID(itemID: number): (string, fileID, number, number, string, string, boolean, boolean, boolean, boolean, boolean, number, number)
-    function GetPetInfoByPetID(petID: string): (number, string, number, number, number, number, boolean, string, fileID, number, number, string, string, boolean, boolean, boolean, boolean, boolean)
+    function GetPetInfoByPetID(petID: string): (number, string?, number, number, number, number, boolean, string, fileID, number, number, string, string, boolean, boolean, boolean, boolean, boolean)
     function GetPetInfoBySpeciesID(speciesID: number): (string, fileID, number, number, string, string, boolean, boolean, boolean, boolean, boolean, number)
     function GetPetModelSceneInfoBySpeciesID(arg1: unknown): (...unknown)
     function GetPetSortParameter(): number
@@ -30163,7 +30178,7 @@ declare namespace C_PetJournal
     function GetPetTeamAverageLevel(): number
     function GetSummonBattlePetCooldown(...: unknown): (...unknown)
     function GetSummonRandomFavoritePetGUID(...: unknown): (...unknown)
-    function GetSummonedPetGUID(): string
+    function GetSummonedPetGUID(): string?
     function IsFilterChecked(filter: number): boolean
     function IsFindBattleEnabled(): boolean
     function IsJournalReadOnly(...: unknown): (...unknown)
@@ -31736,7 +31751,7 @@ declare namespace C_PetBattles
     function GetMaxHealth(petOwner: number, petIndex: number): number
     function GetNumAuras(petOwner: number, petIndex: number): number
     function GetNumPets(petOwner: number): number
-    function GetPVPMatchmakingInfo(): (string, number, number)
+    function GetPVPMatchmakingInfo(): (string?, number, number)
     function GetPetSpeciesID(petOwner: number, petIndex: number): number
     function GetPetType(petOwner: number, petIndex: number): number
     function GetPlayerTrapAbility(): number
@@ -31748,7 +31763,7 @@ declare namespace C_PetBattles
     function GetXP(petOwner: number, petIndex: number): (number, number)
     function IsInBattle(): boolean
     function IsSkipAvailable(): boolean
-    function IsTrapAvailable(): boolean
+    function IsTrapAvailable(): (boolean, number)
     function IsWaitingOnOpponent(): boolean
     function SetPendingReportBattlePetTarget(petIndex: number)
     function SetPendingReportTargetFromUnit(unit: UnitToken)

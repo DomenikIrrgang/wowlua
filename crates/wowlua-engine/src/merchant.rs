@@ -82,6 +82,9 @@ pub struct Merchant {
     pub repair_costs: std::collections::BTreeMap<i64, f64>,
     /// The chat's line IDs (`CHAT_MSG_LOOT`).
     pub line: f64,
+    /// The goods' filter `SetMerchantFilter` chose (none: the recorded
+    /// default).
+    pub filter: Option<f64>,
 }
 
 fn field(vm: &mut Vm, t: TableRef, key: &str) -> Value {
@@ -343,9 +346,40 @@ fn nothing(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// `GetMerchantFilter()`: 2 (recorded open and closed).
-fn filter(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(2.0)])
+/// The filter a merchant's goods start with (recorded open and closed).
+const DEFAULT_FILTER: f64 = 2.0;
+
+/// `GetMerchantFilter()`: the filter chosen, else the default.
+fn filter(vm: &mut Vm, _c: NativeCall) -> Ret {
+    Ok(vec![Value::Num(
+        merchant(vm).filter.unwrap_or(DEFAULT_FILTER),
+    )])
+}
+
+/// `SetMerchantFilter(filter)`: the filter chosen; an open merchant's
+/// goods told again (`MERCHANT_UPDATE`). Unverified: the goods the filter
+/// hides (all of them listed here) and the event.
+fn set_filter(vm: &mut Vm, c: NativeCall) -> Ret {
+    let chosen = match vm.hidden(c.arg(1)) {
+        Value::Num(n) => Some(n),
+        _ => None,
+    };
+    filter_chosen(vm, chosen);
+    Ok(vec![])
+}
+
+/// `ResetSetMerchantFilter()`: the default filter again, as
+/// `SetMerchantFilter` sets one.
+fn reset_filter(vm: &mut Vm, _c: NativeCall) -> Ret {
+    filter_chosen(vm, None);
+    Ok(vec![])
+}
+
+fn filter_chosen(vm: &mut Vm, chosen: Option<f64>) {
+    merchant_mut(vm).filter = chosen;
+    if merchant(vm).open {
+        fire(vm, "MERCHANT_UPDATE", &[]);
+    }
 }
 
 fn can_repair(vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -1001,6 +1035,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("CanAffordMerchantItem", nothing),
         ("C_MerchantFrame.IsMerchantItemRefundable", refundable),
         ("GetMerchantFilter", filter),
+        ("SetMerchantFilter", set_filter),
+        ("ResetSetMerchantFilter", reset_filter),
         ("CanMerchantRepair", can_repair),
         ("GetRepairAllCost", repair_all_cost),
         ("RepairAllItems", repair_all),

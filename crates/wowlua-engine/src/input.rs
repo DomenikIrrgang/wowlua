@@ -360,15 +360,9 @@ fn set_keyboard_focus(vm: &mut Vm, new: Option<WidgetId>) {
     }
 }
 
-fn text_of(vm: &mut Vm, id: WidgetId) -> String {
-    match engine(vm).world.widgets[id.0].text {
-        Some(Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
-        _ => String::new(),
-    }
-}
-
 /// `type(editBox, text)`: focuses the edit box, then types each character:
-/// the text grows, `OnChar(char)`, `OnTextChanged(true)`.
+/// in place of the selection, else at the cursor (`widgetops::insert`),
+/// `OnChar(char)`, `OnTextChanged(true)`.
 pub fn control_type(vm: &mut Vm, c: NativeCall) -> Ret {
     let id = widget_arg(vm, &c, 1, "mock.type")?;
     let typed = vm.check_str(&c, 2)?;
@@ -380,10 +374,7 @@ pub fn control_type(vm: &mut Vm, c: NativeCall) -> Ret {
     as_user(vm, |vm| {
         set_keyboard_focus(vm, Some(id));
         for ch in typed.chars() {
-            let mut text = text_of(vm, id);
-            text.push(ch);
-            let v = vm.str(&text);
-            widgets::store_text(vm, id, Some(v));
+            crate::widgetops::insert(vm, id, &ch.to_string());
             let ch = vm.str(&ch.to_string());
             widgets::run_script(vm, id, "OnChar", &[ch]);
             widgets::run_script(vm, id, "OnTextChanged", &[Value::Bool(true)]);

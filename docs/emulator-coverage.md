@@ -18,27 +18,27 @@ that client answered. The other flavors have their API documentation, the same
 engine modules and the generated stand-ins, but no recording of their own: what
 their clients answer differently is unverified.
 
-- **API functions:** 5,037 of the 5,111 documented camelot functions have
-  behaviour (98.6%): 1,009 modelled, 359 answered from recordings, 3,669 by a
+- **API functions:** 5,039 of the 5,111 documented camelot functions have
+  behaviour (98.6%): 1,009 modelled, 359 answered from recordings, 3,671 by a
   documentation-based fill-in. Of all 7,175 C functions the client has,
-  documented or not, 7,070 have behaviour.
-- **Widget methods:** 1,326 of the 1,477 documented methods have behaviour
-  (89.8%).
+  documented or not, 7,076 have behaviour.
+- **Widget methods:** 1,347 of the 1,477 documented methods have behaviour
+  (91.2%).
 - **Full probe:** 33,082 of the client's 33,727 answers given as the client gave
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,098 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,101 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
-| standard | 4,871 | 4,434 (91.0%) | 0 | 1,438 | 1,286 (89.4%) | none |
-| camelot | 5,111 | 5,037 (98.6%) | 359 | 1,477 | 1,326 (89.8%) | all |
-| mists | 3,221 | 2,825 (87.7%) | 0 | 1,360 | 1,215 (89.3%) | none |
-| cata | 1,927 | 1,629 (84.5%) | 0 | 1,008 | 889 (88.2%) | none |
-| wrath | 3,227 | 2,832 (87.8%) | 0 | 1,360 | 1,215 (89.3%) | none |
-| tbc | 3,220 | 2,828 (87.8%) | 0 | 1,360 | 1,215 (89.3%) | none |
-| vanilla | 3,220 | 2,828 (87.8%) | 0 | 1,360 | 1,215 (89.3%) | none |
+| standard | 4,871 | 4,436 (91.1%) | 0 | 1,438 | 1,304 (90.7%) | none |
+| camelot | 5,111 | 5,039 (98.6%) | 359 | 1,477 | 1,347 (91.2%) | all |
+| mists | 3,221 | 2,827 (87.8%) | 0 | 1,360 | 1,233 (90.7%) | none |
+| cata | 1,927 | 1,631 (84.6%) | 0 | 1,008 | 905 (89.8%) | none |
+| wrath | 3,227 | 2,834 (87.8%) | 0 | 1,360 | 1,233 (90.7%) | none |
+| tbc | 3,220 | 2,830 (87.9%) | 0 | 1,360 | 1,233 (90.7%) | none |
+| vanilla | 3,220 | 2,830 (87.9%) | 0 | 1,360 | 1,233 (90.7%) | none |
 
 ## API behaviour
 
@@ -62,7 +62,7 @@ ones together):
 
 | Namespace | Functions | Model | Recorded | Fill-in | Generated |
 |-----------|----------:|------:|---------:|--------:|----------:|
-| `(globals)` | 2,102 | 715 | 102 | 1,220 | 65 |
+| `(globals)` | 2,102 | 720 | 102 | 1,220 | 60 |
 | `C_AccountInfo` | 3 | 0 | 0 | 3 | 0 |
 | `C_AccountServices` | 10 | 0 | 4 | 6 | 0 |
 | `C_AccountStore` | 11 | 0 | 0 | 11 | 0 |
@@ -218,7 +218,7 @@ ones together):
 | `C_LoreText` | 1 | 0 | 0 | 1 | 0 |
 | `C_LossOfControl` | 5 | 0 | 1 | 4 | 0 |
 | `C_MacOptions` | 10 | 0 | 0 | 10 | 0 |
-| `C_Macro` | 4 | 0 | 0 | 3 | 1 |
+| `C_Macro` | 4 | 0 | 0 | 4 | 0 |
 | `C_Mail` | 5 | 4 | 0 | 1 | 0 |
 | `C_MajorFactions` | 14 | 1 | 4 | 9 | 0 |
 | `C_Map` | 40 | 8 | 18 | 14 | 0 |
@@ -348,14 +348,14 @@ ones together):
 | `math` | 38 | 38 | 0 | 0 | 0 |
 | `string` | 23 | 23 | 0 | 0 | 0 |
 | `table` | 23 | 23 | 0 | 0 | 0 |
-| **All** | 7,175 | 1,588 | 442 | 5,040 | 105 |
+| **All** | 7,175 | 1,593 | 442 | 5,041 | 99 |
 
 By where the function is listed:
 
 | List | Functions | Model | Recorded | Fill-in | Generated |
 |------|----------:|------:|---------:|--------:|----------:|
-| Blizzard's API documentation | 5,111 | 1,009 | 359 | 3,669 | 74 |
-| the client's other C functions (`/stdtest inventory`) | 2,064 | 579 | 83 | 1,371 | 31 |
+| Blizzard's API documentation | 5,111 | 1,009 | 359 | 3,671 | 72 |
+| the client's other C functions (`/stdtest inventory`) | 2,064 | 584 | 83 | 1,370 | 27 |
 | the engine's own, in neither list | 6 | 5 | 0 | 1 | 0 |
 
 Of the engine's own, Blizzard's UI code defines these in the client (Lua
@@ -368,11 +368,11 @@ The modules that answer, by how many functions and methods:
 
 | Module | Kind | Functions and methods |
 |--------|------|----------------------:|
-| `extras` | fill-in | 1,488 |
-| `widgets` | model | 652 |
+| `extras` | fill-in | 1,490 |
+| `widgets` | model | 646 |
 | `globalsinfo` | fill-in | 545 |
 | `content` | fill-in | 522 |
-| `social` | fill-in | 388 |
+| `social` | fill-in | 387 |
 | `collections` | fill-in | 377 |
 | `recorded` | recorded | 325 |
 | `questinfo` | fill-in | 316 |
@@ -388,8 +388,8 @@ The modules that answer, by how many functions and methods:
 | `methods2` | fill-in | 133 |
 | `objects2` | model | 111 |
 | `units` | model | 95 |
+| `guild` | model | 80 |
 | `extras` | model | 78 |
-| `guild` | model | 78 |
 | `tradeskill` | model | 71 |
 | `curves` | model | 70 |
 | `facts` | recorded | 70 |
@@ -411,14 +411,16 @@ The modules that answer, by how many functions and methods:
 | `maps` | model | 28 |
 | `actions` | model | 27 |
 | `healcalc` | model | 26 |
+| `measures` | model | 26 |
+| `merchant` | model | 26 |
 | `actions2` | fill-in | 25 |
 | `bars` | model | 25 |
-| `measures` | model | 25 |
-| `merchant` | model | 24 |
 | `trainer` | model | 22 |
-| `taxi` | model | 19 |
+| `widgetdata` | recorded | 21 |
+| `taxi` | model | 20 |
 | `input` | model | 18 |
 | `pets` | model | 18 |
+| `widgetops` | model | 18 |
 | `party` | model | 17 |
 | `clock` | model | 16 |
 | `cursor` | model | 15 |
@@ -426,7 +428,6 @@ The modules that answer, by how many functions and methods:
 | `bank` | model | 14 |
 | `chatwindows` | model | 13 |
 | `traits` | model | 13 |
-| `widgetdata` | recorded | 13 |
 | `tooltip` | model | 12 |
 | `death` | model | 11 |
 | `channels` | model | 10 |
@@ -459,12 +460,12 @@ widget's recorded value where `/stdtest engine` recorded one):
 | `AbbreviatedNumberFormatter` | 6 | 6 | 0 | 0 | 0 |
 | `Alpha` | 4 | 2 | 0 | 2 | 0 |
 | `AnimRadialProgress` | 4 | 2 | 0 | 2 | 0 |
-| `AnimatableObject` | 3 | 2 | 0 | 0 | 1 |
+| `AnimatableObject` | 3 | 3 | 0 | 0 | 0 |
 | `Animation` | 36 | 23 | 0 | 9 | 4 |
 | `AnimationGroup` | 28 | 22 | 0 | 5 | 1 |
 | `Blob` | 14 | 10 | 0 | 1 | 3 |
 | `Browser` | 12 | 2 | 0 | 0 | 10 |
-| `Button` | 42 | 31 | 0 | 6 | 5 |
+| `Button` | 42 | 35 | 0 | 6 | 1 |
 | `CharacterModelBase` | 24 | 12 | 0 | 4 | 8 |
 | `Checkbox` | 6 | 5 | 0 | 1 | 0 |
 | `CinematicModel` | 18 | 11 | 0 | 0 | 7 |
@@ -479,12 +480,12 @@ widget's recorded value where `/stdtest engine` recorded one):
 | `DurationManualClock` | 4 | 4 | 0 | 0 | 0 |
 | `DurationObject` | 31 | 31 | 0 | 0 | 0 |
 | `DurationTextBindingObject` | 30 | 30 | 0 | 0 | 0 |
-| `EditBox` | 79 | 51 | 0 | 21 | 7 |
+| `EditBox` | 79 | 54 | 0 | 21 | 4 |
 | `FlipBook` | 10 | 5 | 0 | 5 | 0 |
 | `FogOfWarFrame` | 12 | 6 | 0 | 6 | 0 |
-| `Font` | 24 | 13 | 0 | 10 | 1 |
-| `FontString` | 57 | 32 | 0 | 23 | 2 |
-| `Frame` | 126 | 79 | 13 | 19 | 15 |
+| `Font` | 24 | 14 | 0 | 10 | 0 |
+| `FontString` | 57 | 33 | 0 | 23 | 1 |
+| `Frame` | 126 | 81 | 13 | 19 | 13 |
 | `FrameScriptObject` | 21 | 8 | 0 | 10 | 3 |
 | `HousingCatalogSearcher` | 46 | 46 | 0 | 0 | 0 |
 | `HousingFixturePointFrame` | 5 | 3 | 0 | 0 | 2 |
@@ -494,25 +495,25 @@ widget's recorded value where `/stdtest engine` recorded one):
 | `MapScene` | 5 | 2 | 0 | 3 | 0 |
 | `MessageFrame` | 33 | 19 | 0 | 14 | 0 |
 | `Minimap` | 31 | 27 | 0 | 1 | 3 |
-| `Model` | 65 | 32 | 0 | 28 | 5 |
+| `Model` | 65 | 33 | 0 | 28 | 4 |
 | `ModelFFX` | 4 | 0 | 0 | 0 | 4 |
 | `ModelSceneFrame` | 47 | 24 | 0 | 21 | 2 |
 | `ModelSceneFrameActor` | 31 | 13 | 0 | 12 | 6 |
-| `ModelSceneFrameActorBase` | 50 | 30 | 0 | 17 | 3 |
+| `ModelSceneFrameActorBase` | 50 | 31 | 0 | 17 | 2 |
 | `Movie` | 4 | 1 | 0 | 0 | 3 |
 | `NamePlate` | 6 | 3 | 0 | 2 | 1 |
 | `NumericFormatter` | 1 | 1 | 0 | 0 | 0 |
 | `NumericRuleFormatter` | 5 | 5 | 0 | 0 | 0 |
-| `Object` | 5 | 3 | 0 | 1 | 1 |
+| `Object` | 5 | 4 | 0 | 1 | 0 |
 | `OffScreenFrame` | 8 | 2 | 0 | 5 | 1 |
 | `Path` | 5 | 1 | 0 | 4 | 0 |
 | `QuestPOI` | 3 | 0 | 0 | 0 | 3 |
-| `Region` | 16 | 15 | 0 | 0 | 1 |
+| `Region` | 16 | 14 | 2 | 0 | 0 |
 | `Rotation` | 6 | 1 | 0 | 5 | 0 |
 | `Scale` | 8 | 5 | 0 | 3 | 0 |
 | `ScenarioPOI` | 2 | 0 | 0 | 0 | 2 |
-| `ScriptRegion` | 55 | 41 | 0 | 8 | 6 |
-| `ScriptRegionResizing` | 13 | 11 | 0 | 0 | 2 |
+| `ScriptRegion` | 55 | 37 | 5 | 8 | 5 |
+| `ScriptRegionResizing` | 13 | 13 | 0 | 0 | 0 |
 | `ScrollFrame` | 9 | 7 | 0 | 1 | 1 |
 | `SecondsFormatter` | 35 | 35 | 0 | 0 | 0 |
 | `SimpleCheckout` | 8 | 2 | 0 | 0 | 6 |
@@ -522,7 +523,7 @@ widget's recorded value where `/stdtest engine` recorded one):
 | `TabardModel` | 6 | 0 | 0 | 6 | 0 |
 | `TabardModelBase` | 7 | 1 | 0 | 1 | 5 |
 | `Texture` | 4 | 4 | 0 | 0 | 0 |
-| `TextureBase` | 52 | 31 | 0 | 18 | 3 |
+| `TextureBase` | 52 | 32 | 1 | 18 | 1 |
 | `TextureCoordTranslation` | 2 | 1 | 0 | 1 | 0 |
 | `TimedSignalMap` | 8 | 8 | 0 | 0 | 0 |
 | `Tooltip` | 9 | 3 | 0 | 5 | 1 |
@@ -531,7 +532,7 @@ widget's recorded value where `/stdtest engine` recorded one):
 | `UnitPositionFrame` | 12 | 4 | 0 | 3 | 5 |
 | `VectorGraphics` | 4 | 1 | 0 | 0 | 3 |
 | `VertexColor` | 4 | 2 | 0 | 2 | 0 |
-| **All** | 1,477 | 968 | 13 | 345 | 151 |
+| **All** | 1,477 | 981 | 21 | 345 | 130 |
 
 ## Verification against the client
 
@@ -834,7 +835,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,098 rules unverified: each rests on Blizzard's
+The engine's code marks 1,101 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1381,7 +1382,7 @@ page changes only when a rule is added, removed or reworded.
 - [gossip.rs](../crates/wowlua-engine/src/gossip.rs): Unverified: an option that opens nothing, active quests in a gossip, why the trainer's text came later, why a walk aw...
 - [gossip.rs](../crates/wowlua-engine/src/gossip.rs): The NPC now `distance` away: beyond reach, its open gossip closes (recorded, walking away from a trainer: `GOSSIP_CLO...
 
-### guild (43)
+### guild (44)
 
 - [guild.rs](../crates/wowlua-engine/src/guild.rs): The engine's camelot character is in a guild as the recorded one is (the full probe, WoW Forever 1.60.1): its leader...
 - [guild.rs](../crates/wowlua-engine/src/guild.rs): The second row recorded: level 3, 24 days and an hour away, 25th by achievements.
@@ -1390,6 +1391,7 @@ page changes only when a rule is added, removed or reworded.
 - [guild.rs](../crates/wowlua-engine/src/guild.rs): The roster in its order: the player first, the other members online, then those offline, each in the order they joine...
 - [guild.rs](../crates/wowlua-engine/src/guild.rs): The roster changed: `GUILD_ROSTER_UPDATE(false)` a round trip later (unverified: the client's argument, whether it ma...
 - [guild.rs](../crates/wowlua-engine/src/guild.rs): `GetGuildInfo(unit)`: the guild's name, the unit's rank's name and index, and the realm (nil for the player's own); f...
+- [guild.rs](../crates/wowlua-engine/src/guild.rs): `SetGuildRosterSelection(index)`: the roster's row selected, 0 (or one past the roster) none (unverified: no event).
 - [guild.rs](../crates/wowlua-engine/src/guild.rs): `GetGuildRosterInfo(index)`: the member's name, rank name and index, level, class name, zone, public and officer note...
 - [guild.rs](../crates/wowlua-engine/src/guild.rs): `IsGuildMember(unit)`: the unit a member (the full probe: "player" true; "x" and numbers false; another member's unit...
 - [guild.rs](../crates/wowlua-engine/src/guild.rs): `UnitIsInMyGuild(unit)`: the unit a member of the player's guild (the full probe: "player" true, others and a GUID fa...
@@ -1655,10 +1657,9 @@ page changes only when a rule is added, removed or reworded.
 - [maps.rs](../crates/wowlua-engine/src/maps.rs): `C_Map.GetWorldPosFromMapPos(uiMapID, mapPosition)`: the instance and the world position (a vector, `x` the world's X...
 - [maps.rs](../crates/wowlua-engine/src/maps.rs): Azeroth: Kalimdor on its left half, the Eastern Kingdoms on its right (recorded: (0, 0) Kalimdor's, (1, 1) the Easter...
 
-### measures (9)
+### measures (8)
 
 - [measures.rs](../crates/wowlua-engine/src/measures.rs): What regions measure and hold beyond their setters: a font string's lines and height (on the engine's text model: 6 u...
-- [measures.rs](../crates/wowlua-engine/src/measures.rs): The string's lines: its own, each wrapped by words at the laid out width when it has one and wraps (`SetWordWrap(fals...
 - [measures.rs](../crates/wowlua-engine/src/measures.rs): A texture's atlas set (`SetAtlas(atlas, useAtlasSize)`, a button's `SetXAtlas`): with `useAtlasSize`, the texture tak...
 - [measures.rs](../crates/wowlua-engine/src/measures.rs): `GetTextureFileID()`: the file ID `SetTexture` was given; a path's ID is not known to the engine (nil, unverified).
 - [measures.rs](../crates/wowlua-engine/src/measures.rs): `EditBox:GetTextInsets()`: what `SetTextInsets` set, else none (unverified: a fresh edit box's, not recorded).
@@ -1667,11 +1668,12 @@ page changes only when a rule is added, removed or reworded.
 - [measures.rs](../crates/wowlua-engine/src/measures.rs): `GetHorizTile()`, `GetVertTile()`: what `SetHorizTile`/`SetVertTile` set, off at first (unverified: a fresh texture's...
 - [measures.rs](../crates/wowlua-engine/src/measures.rs): `SetVerticalScroll(offset)` / `SetHorizontalScroll(offset)`: the offset kept; a change runs `OnVerticalScroll(offset)...
 
-### merchant (6)
+### merchant (7)
 
 - [merchant.rs](../crates/wowlua-engine/src/merchant.rs): Unverified: the server's delay (0.4 s, as its other answers), a purchase's price for stacks (the price per `stackCoun...
 - [merchant.rs](../crates/wowlua-engine/src/merchant.rs): A frame after opening: the filter updates of the goods whose data was not loaded, with `MERCHANT_UPDATE` before the l...
 - [merchant.rs](../crates/wowlua-engine/src/merchant.rs): The repair cursor gone with the window (the next visit's opens out of repair mode: `repair`, unverified beyond its sa...
+- [merchant.rs](../crates/wowlua-engine/src/merchant.rs): `SetMerchantFilter(filter)`: the filter chosen; an open merchant's goods told again (`MERCHANT_UPDATE`).
 - [merchant.rs](../crates/wowlua-engine/src/merchant.rs): An item mended with the repair cursor (`PickupInventoryItem(slot)` in repair mode): a round trip later its durability...
 - [merchant.rs](../crates/wowlua-engine/src/merchant.rs): `CHAT_MSG_LOOT("You receive item: <link>", …)` for the player, with the payload the client gave it (`/stdtest engine...
 - [merchant.rs](../crates/wowlua-engine/src/merchant.rs): `C_Container.UseContainerItem(bag, slot)` at a vendor (Blizzard's bag buttons): the sale; elsewhere nothing (unverifi...
@@ -1983,18 +1985,19 @@ page changes only when a rule is added, removed or reworded.
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): Raid marks (unverified: no mark kept).
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): Headers: the engine's list is the recorded one, flat (unverified: collapsing hides the children).
 
-### taxi (4)
+### taxi (5)
 
 - [taxi.rs](../crates/wowlua-engine/src/taxi.rs): Unverified: the routes' hops, a node's state other than current, reachable and unreachable; the item and durability u...
 - [taxi.rs](../crates/wowlua-engine/src/taxi.rs): `defineTaxi(npc, { mapID, nodes = { { name, nodeID, x, y, state, cost, routes, hops, flightTime } }, mapNodes = { { n...
 - [taxi.rs](../crates/wowlua-engine/src/taxi.rs): `TaxiIsDirectFlight(slot)`: a node one hop away (its path from the current node two slots long: `GetNumRoutes` 1).
 - [taxi.rs](../crates/wowlua-engine/src/taxi.rs): `C_TaxiMap.GetTaxiNodesForMap(mapID)`: every node the map shows.
+- [taxi.rs](../crates/wowlua-engine/src/taxi.rs): `TaxiRequestEarlyLanding()`: on a flight, it lands at the next stop.
 
 ### text (3)
 
 - [text.rs](../crates/wowlua-engine/src/text.rs): Recorded: FRIZQT, ARIALN (both plain and outlined), skurri and MORPHEUS at 8 to 45 pixels, every printable ASCII char...
 - [text.rs](../crates/wowlua-engine/src/text.rs): In single floats (the recorded widths' last digit varies by a float step from this, the pixels exact: unverified how...
-- [text.rs](../crates/wowlua-engine/src/text.rs): The visible text's lines, each wrapped by words at `max` units when it is wider (none: unwrapped).
+- [text.rs](../crates/wowlua-engine/src/text.rs): The text laid out in the region at `max` units (none: unbounded) as the client does it (decision T282): `wraps` its w...
 
 ### timeline (2)
 
@@ -2145,6 +2148,10 @@ page changes only when a rule is added, removed or reworded.
 - [units.rs](../crates/wowlua-engine/src/units.rs): `UnitCanCooperate(a, b)`: two players of one faction (unverified: not recorded; Blizzard's unit menu shows Trade and...
 - [units.rs](../crates/wowlua-engine/src/units.rs): `UnitIsHumanPlayer(unit)`: a player's character (unverified: as `UnitIsPlayer`).
 - [units.rs](../crates/wowlua-engine/src/units.rs): Not casting or channeling: no values.
+
+### widgetops (1)
+
+- [widgetops.rs](../crates/wowlua-engine/src/widgetops.rs): Unverified, none recorded: which frames `Raise` counts (the shown ones of the strata here) and the level cap (10000),...
 
 ### widgets (45)
 
