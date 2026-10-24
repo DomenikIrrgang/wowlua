@@ -3292,6 +3292,62 @@ print(a, b, c, d, e, name, realm, more)
     /// `type X = typeof(v)` is the type of `v` where the alias stands, in
     /// later annotations of its file and for importers, by name or through
     /// a type-only import (spec §2.2.7).
+    /// A class field typed by another module's `typeof` alias (a record of
+    /// `typeof(UnitHealth)` and the like) reads the alias's type in the
+    /// class's methods, not `any` (decision L76).
+    #[test]
+    fn typeof_alias_of_another_module_in_classes() {
+        let api = "local function health(u: string): number return #u end\nexport type Api = { health: typeof(health) }\n";
+        let errs = check_modules(
+            &[
+                ("api.wowlua", api),
+                (
+                    "main.wowlua",
+                    "import type Api from \"./api\"\nclass Plate\n api: Api\n constructor(api: Api) self.api = api end\n function Read(): string return self.api.health(\"player\") end\nend\nprint(Plate)\n",
+                ),
+            ],
+            Mode::Strict,
+        );
+        assert!(errs.len() == 1 && errs[0].starts_with("E2001"), "{errs:#?}");
+        let errs = check_modules(
+            &[
+                ("api.wowlua", api),
+                (
+                    "main.wowlua",
+                    "import type Api from \"./api\"\nclass Plate\n api: Api\n constructor(api: Api) self.api = api end\n function Read(): number return self.api.health(\"player\") end\nend\nprint(Plate)\n",
+                ),
+            ],
+            Mode::Strict,
+        );
+        assert!(errs.is_empty(), "{errs:#?}");
+    }
+
+    #[test]
+    fn callback_parameters_take_the_rest_type() {
+        strict_err(
+            "local t = \"a=b\"\nlocal s = t:gsub(\"(%w)=(%w)\", function(k, v) local n: number = v; return k .. n end)\nprint(s)\n",
+            "E2001",
+        );
+        strict_ok(
+            "local t = \"a=b\"\nlocal s = t:gsub(\"(%w)=(%w)\", function(k, v) return k:upper() .. v end)\nprint(s)\n",
+        );
+    }
+
+    #[test]
+    fn method_through_an_indexer_is_its_value() {
+        let t = "type R = { Get: (self: R) -> number, [string]: unknown }\n";
+        strict_err(
+            &format!("{t}local function f(r: R) r:Setting(\"x\") end\nprint(f)\n"),
+            "E2004",
+        );
+        strict_ok(&format!(
+            "{t}local function f(r: R): number return r:Get() end\nprint(f)\n"
+        ));
+        strict_ok(
+            "type H = (self: S, n: number) -> number\ntype S = { [string]: H }\nlocal function f(s: S): number return s:Any(1) end\nprint(f)\n",
+        );
+    }
+
     #[test]
     fn typeof_aliases() {
         strict_err(

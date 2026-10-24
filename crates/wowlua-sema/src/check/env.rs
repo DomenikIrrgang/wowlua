@@ -191,6 +191,10 @@ pub struct Env<'p> {
     /// The modules a `typeof` alias of has been resolved in, by the checker:
     /// their classes' member types are resolved again where reached (L57).
     pub typeof_resolved: rustc_hash::FxHashSet<usize>,
+    /// The names of the `typeof` aliases resolved so far, in any module: a
+    /// class whose member annotations name one has its member types
+    /// resolved again where reached, wherever the alias lives (L76).
+    pub typeof_alias_names: rustc_hash::FxHashSet<Box<str>>,
     /// `M.T` type references through a namespace import to such an alias
     /// of another module, read as `any`: the module, the name and where
     /// (W1036, spec §5.4.4).

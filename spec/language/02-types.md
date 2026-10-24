@@ -117,6 +117,10 @@ number literal it doesn't have (`art[1]` of `{ atlas: string }`) is E2003;
 another key on a table without an indexer reads `any`, which W2063 reports
 (decision L49). A key whose type is one or more string literals (`k: keyof
 Colors`, `"a" | "b"`) reads those fields, as `T[K]` does (decision L53).
+A method call `r:Name(...)` with a name the record doesn't declare calls the
+indexer's value, as `r.Name` reads it: with `[string]: unknown` it is E2004
+(an `unknown` must be narrowed before it is called), with `[string]: F` it
+checks against `F` (decision L77).
 
 Records are **structural**: any table with at least the required fields of
 compatible types is assignable. Extra fields are allowed, except that an
@@ -217,8 +221,11 @@ checked up to it: in the file's later annotations and in the modules checked
 after it (importers, and a library's consumers, spec §5.4.4). A class
 declared after it in the file has its field and method types worked out
 again where the file reaches the class, so they read the alias's type
-(decision L57). Other uses before that point, such as a hoisted function's
-signature or another alias that refers to it, read it as `any`.
+(decision L57); so does a class in another module whose field or method
+annotations name an alias of an imported module (`api: UnitApi`, a record of
+`typeof(UnitHealth)` and the like, checked after that module), decision L76.
+Other uses before that point, such as a hoisted function's signature or
+another alias that refers to it, read it as `any`.
 
 Written in a class field's own annotation (`map: typeof(WorldMapFrame)? =
 nil`), `typeof(expr)` is typed where the file reaches the class, and the
@@ -477,7 +484,9 @@ When an expression appears where a type is expected, that type flows into the
 expression:
 
 - function expressions get parameter and return types from the expected
-  function type,
+  function type; parameters past the expected ones take its rest's type, so
+  each capture of `s:gsub("(%w+)=(%w+)", function(k, v) … end)` is a
+  `string` (`(...string) -> any`, decision L78),
 - table literals are checked against the expected record or array type, and
   nested literals get their field types; a literal whose elements all have
   the expected element type gets that type (`local xs: string[] = { "a" }` is a

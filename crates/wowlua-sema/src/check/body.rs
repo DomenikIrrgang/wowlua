@@ -628,6 +628,7 @@ impl<'e, 'p> Checker<'e, 'p> {
         let scope = self.scope.clone();
         self.env.resolve_alias_again(def, a, &scope);
         self.env.typeof_resolved.insert(module);
+        self.env.typeof_alias_names.insert(a.name().text().into());
     }
 
     /// The type of `...` in the current function.
@@ -2005,10 +2006,14 @@ impl<'e, 'p> Checker<'e, 'p> {
         // Contextual parameter types for unannotated parameters.
         if let Some(exp) = &expected {
             for (i, p) in sig.params.iter_mut().enumerate() {
-                if f.params[i].ty.is_none()
-                    && let Some(ep) = exp.params.get(i)
-                {
-                    p.ty = ep.ty;
+                if f.params[i].ty.is_none() {
+                    // Past the expected parameters, its rest's type:
+                    // `(...string) -> ()` types each (decision L78).
+                    if let Some(ep) = exp.params.get(i) {
+                        p.ty = ep.ty;
+                    } else if let Some(Rest::Variadic(t)) = exp.rest {
+                        p.ty = t;
+                    }
                 }
             }
             if f.ret.is_none()
@@ -2232,6 +2237,39 @@ impl<'e, 'p> Checker<'e, 'p> {
         }
     }
 
+    /// Whether a member annotation of `c` names a `typeof` alias resolved
+    /// so far (by its name: another of that name only costs a refresh).
+    fn names_typeof_alias(&self, c: ClassDecl<'_>) -> bool {
+        if self.env.typeof_alias_names.is_empty() {
+            return false;
+        }
+        let mut names: Vec<String> = Vec::new();
+        for m in c.members() {
+            match m.kind() {
+                ClassMemberKind::Field { ty, .. } => type_ref_names(ty, &mut names),
+                ClassMemberKind::Method { func, .. } => {
+                    let sig = FnSig::of(func);
+                    for p in &sig.params {
+                        if let Some(t) = p.ty {
+                            type_ref_names(t, &mut names);
+                        }
+                    }
+                    match sig.ret {
+                        Some(RetType::Single(t)) => type_ref_names(t, &mut names),
+                        Some(RetType::List { types, .. }) => {
+                            types.iter().for_each(|t| type_ref_names(t, &mut names))
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+        names
+            .iter()
+            .any(|n| self.env.typeof_alias_names.contains(n.as_str()))
+    }
+
     /// The bodies of a class's methods (spec chapter 3).
     fn class_body(&mut self, c: ClassDecl<'_>) {
         let Some(def) = self.env.lookup_type(c.name().text(), &self.scope) else {
@@ -2262,12 +2300,14 @@ impl<'e, 'p> Checker<'e, 'p> {
                 .insert((x.span().start, x.span().end), ty);
         }
         // Member annotations may use a `typeof` alias the file resolved
-        // above (decision L57).
+        // above (decision L57), or one of another module, resolved when that
+        // module was checked (decision L76).
         if has_own
             || self
                 .scope
                 .module
                 .is_some_and(|module| self.env.typeof_resolved.contains(&module))
+            || self.names_typeof_alias(c)
         {
             let scope = self.scope.clone();
             self.env.refresh_member_types(def, c, &scope);
@@ -2722,6 +2762,47 @@ fn typed_elsewhere(e: Expr<'_>) -> bool {
         | ExprKind::OptIndex { .. }
         | ExprKind::Cast { .. } => true,
         _ => false,
+    }
+}
+
+/// The last name of every type a type annotation refers to (`a.b.C<T>`
+/// gives `C` and `T`'s).
+pub(crate) fn type_ref_names(t: Type<'_>, out: &mut Vec<String>) {
+    match t.kind() {
+        TypeKind::Ref { path, args } => {
+            if let Some(last) = path.iter().next_back() {
+                out.push(last.text().to_string());
+            }
+            for a in args {
+                if let TypeArg::Type(t) = a {
+                    type_ref_names(t, out);
+                }
+            }
+        }
+        TypeKind::Paren(i) | TypeKind::Optional(i) | TypeKind::Array(i) | TypeKind::KeyOf(i) => {
+            type_ref_names(i, out)
+        }
+        TypeKind::Index { object, key } => {
+            type_ref_names(object, out);
+            type_ref_names(key, out);
+        }
+        TypeKind::Union(ms) | TypeKind::Intersection(ms) => {
+            ms.iter().for_each(|m| type_ref_names(m, out))
+        }
+        TypeKind::Table(fields) => {
+            for f in fields {
+                match f {
+                    TableTypeField::Named { ty, .. }
+                    | TableTypeField::NamedString { ty, .. }
+                    | TableTypeField::Array(ty) => type_ref_names(ty, out),
+                    TableTypeField::Indexer { key, value } => {
+                        type_ref_names(key, out);
+                        type_ref_names(value, out);
+                    }
+                }
+            }
+        }
+        _ => {}
     }
 }
 

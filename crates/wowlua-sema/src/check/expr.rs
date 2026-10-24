@@ -1708,12 +1708,15 @@ impl Checker<'_, '_> {
                                 _ => self.drop_first(mem.ty),
                             }
                         }
+                        // A name the indexer covers: its value, as a field
+                        // read gives it (`unknown` must be narrowed before
+                        // it is called, decision L77).
                         None => match self.env.indexer_of(d) {
-                            Some(_) => {
+                            Some((_, v)) => {
                                 if self.env.open_through_native(d) {
                                     self.undeclared_member(m, name, span);
                                 }
-                                Types::ANY
+                                self.drop_first(v)
                             }
                             None => {
                                 let msg =
