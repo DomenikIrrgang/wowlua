@@ -561,18 +561,6 @@ fn get_num_expansions(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(1.0)])
 }
 
-/// `RequestTimePlayed()`: the server's answer (`TIME_PLAYED_MSG`) was
-/// never recorded, so nothing is told (unverified).
-fn request_time_played(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![])
-}
-
-/// `RandomRoll(min, max)`: the server's roll message was never recorded,
-/// so nothing is told (unverified).
-fn random_roll(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![])
-}
-
 /// `ConsoleExec(command, addToHistory)`: the engine has no console; the
 /// command not run (false; unverified).
 fn console_exec(_vm: &mut Vm, _c: NativeCall) -> Ret {
@@ -2537,8 +2525,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetNetIpTypes", get_net_ip_types),
         ("GetProtocolTypes", get_protocol_types),
         ("GetNumExpansions", get_num_expansions),
-        ("RequestTimePlayed", request_time_played),
-        ("RandomRoll", random_roll),
         ("ConsoleExec", console_exec),
         ("ConsoleEcho", console_echo),
         ("ConsoleGetColorFromType", console_get_color_from_type),

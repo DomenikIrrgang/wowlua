@@ -38,6 +38,13 @@ pub struct Chat {
     pub sent: Vec<Sent>,
     /// The player's guild, if any (`guild.rs`).
     pub guild: Option<crate::guild::Guild>,
+    /// Away (`/afk`) and busy (`/dnd`): their messages (`replies.rs`).
+    pub afk: Option<String>,
+    pub dnd: Option<String>,
+    /// The ignore list's names, in order added.
+    pub ignores: Vec<String>,
+    /// The server's dice (`/roll`): its own generator's state.
+    pub rolls: u32,
 }
 
 const MAX_PREFIX: usize = 16;
@@ -319,12 +326,12 @@ fn send_chat(vm: &mut Vm, c: NativeCall) -> Ret {
         Value::Num(n) => n.to_string(),
         _ => String::new(),
     };
-    if message.is_empty() {
-        return Ok(vec![]);
-    }
     let chat_type = text(vm, c.arg(2))
         .unwrap_or_else(|| "SAY".into())
         .to_uppercase();
+    if message.is_empty() && chat_type != "AFK" && chat_type != "DND" {
+        return Ok(vec![]);
+    }
     let target = text(vm, c.arg(4)).filter(|t| !t.is_empty());
     let me = player_full_name(vm);
     let my_guid = engine(vm).units.list[units::PLAYER.0].guid.clone();
@@ -348,6 +355,11 @@ fn send_chat(vm: &mut Vm, c: NativeCall) -> Ret {
         )
     };
     match chat_type.as_str() {
+        // Away and busy: the message is their text (decision T362).
+        "AFK" | "DND" => {
+            crate::replies::toggle_status(vm, &chat_type, &message);
+            return Ok(vec![]);
+        }
         "SAY" | "YELL" | "EMOTE" => lines.push(mine(&format!("CHAT_MSG_{chat_type}"))),
         "PARTY" | "INSTANCE_CHAT" if in_group => lines.push(mine(&format!("CHAT_MSG_{chat_type}"))),
         "PARTY" | "INSTANCE_CHAT" => {

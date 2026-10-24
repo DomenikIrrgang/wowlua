@@ -805,6 +805,13 @@ fn colored_chars(vm: &Vm, raw: &str, base: [f32; 4]) -> Vec<(char, [f32; 4])> {
             }
             Some('h') => {}
             Some('n') => out.push(('\n', cur(&stack))),
+            Some('4') => {
+                let spec: String = chars.by_ref().take_while(|&x| x != ';').collect();
+                let before: String = out.iter().map(|(ch, _)| *ch).collect();
+                for ch in crate::text::plural(&before, &spec).chars() {
+                    out.push((ch, cur(&stack)));
+                }
+            }
             Some('H') => {
                 while let Some(x) = chars.next() {
                     if x == '|' && chars.peek() == Some(&'h') {

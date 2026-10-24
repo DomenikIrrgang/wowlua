@@ -503,6 +503,14 @@ alone unless an item names an addon.
     2. `/s probe one`, then `/p probe two` (not in a group).
     3. `/w <your first and last name> probe three`, then `/w Nobody Anyone probe four`.
     4. A screenshot of the chat with the printed lines.
+20b. **Typed commands' answers** (decision T362; wowlua's lines in the
+    decision). With the frame of 20a also registering `CHAT_MSG_TEXT_EMOTE`,
+    `TIME_PLAYED_MSG`, `WHO_LIST_UPDATE`, `PLAYER_FLAGS_CHANGED`, and
+    `IGNORELIST_UPDATE`, type each and note what prints:
+    1. `/roll`, `/roll 1 6`, `/played`, `/afk`, `/afk`, `/dnd`, `/dnd busy`
+    2. `/ignore Nobody Anyone`, `/invite Nobody Anyone`, `/ginvite Nobody Anyone`,
+       `/gpromote Nobody Anyone`, `/gquit` (as guild master), `/who Nobody`
+    3. `/dance`, `/friend Nobody Anyone`, `/1 hello`, `/join Trade`
 20. **Screenshots to compare with wowlua's** (in `~/Desktop/wowlua-*`):
     1. Settings, Accessibility: the "Colors" category and the "Use UI
        Scale" check box (Graphics).

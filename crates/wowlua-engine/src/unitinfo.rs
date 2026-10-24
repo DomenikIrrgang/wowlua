@@ -1309,8 +1309,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetShapeshiftFormCooldown", get_shapeshift_form_cooldown),
         ("UnitVehicleSkin", unit_vehicle_skin),
         // States the engine does not model: none of them.
-        ("UnitIsAFK", no),
-        ("UnitIsDND", no),
         ("UnitIsFeignDeath", no),
         ("UnitIsCharmed", no),
         ("UnitIsMercenary", no),

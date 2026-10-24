@@ -1002,6 +1002,9 @@ fn assign(vm: &mut Vm, row: Option<Row>, to: impl Fn(usize) -> Option<usize>) {
 fn promote(vm: &mut Vm, c: NativeCall) -> Ret {
     let name = text(vm, c.arg(1)).unwrap_or_default();
     let row = row_by_name(vm, &name);
+    if row.is_none() && !name.is_empty() {
+        not_found(vm, &name);
+    }
     assign(vm, row, |r| r.checked_sub(1));
     Ok(vec![])
 }
@@ -1010,6 +1013,9 @@ fn promote(vm: &mut Vm, c: NativeCall) -> Ret {
 fn demote(vm: &mut Vm, c: NativeCall) -> Ret {
     let name = text(vm, c.arg(1)).unwrap_or_default();
     let row = row_by_name(vm, &name);
+    if row.is_none() && !name.is_empty() {
+        not_found(vm, &name);
+    }
     assign(vm, row, |r| Some(r + 1));
     Ok(vec![])
 }
@@ -1041,6 +1047,9 @@ fn remove_row(vm: &mut Vm, row: Option<Row>) {
 fn uninvite(vm: &mut Vm, c: NativeCall) -> Ret {
     let name = text(vm, c.arg(1)).unwrap_or_default();
     let row = row_by_name(vm, &name);
+    if row.is_none() && !name.is_empty() {
+        not_found(vm, &name);
+    }
     remove_row(vm, row);
     Ok(vec![])
 }
@@ -1079,8 +1088,23 @@ fn leave(vm: &mut Vm, _c: NativeCall) -> Ret {
     if guild(vm).is_some_and(|g| g.rank != 0 || g.members.is_empty()) {
         engine_mut(vm).world.chat.guild = None;
         player_guild_changed(vm);
+    } else if guild(vm).is_some() {
+        // The leader with members: the server's refusal (decision T362).
+        let t = crate::replies::global(
+            vm,
+            "ERR_GUILD_LEADER_LEAVE",
+            "You must promote a new Guild Master using /gleader before leaving the guild.",
+        );
+        crate::replies::system_later(vm, t);
     }
     Ok(vec![])
+}
+
+/// A roster command's name the guild does not have: the server's answer
+/// (decision T362; unverified on WoW Forever).
+fn not_found(vm: &mut Vm, name: &str) {
+    let f = crate::replies::global(vm, "ERR_GUILD_PLAYER_NOT_FOUND_S", "\"%s\" not found.");
+    crate::replies::system_later(vm, f.replacen("%s", name, 1));
 }
 
 /// `GuildDisband()`, `C_GuildInfo.Disband()`: the leader's guild gone

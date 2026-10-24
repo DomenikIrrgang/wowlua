@@ -1080,7 +1080,6 @@ const NOTHING_HERE: &[(&str, NativeFn)] = &[
     // here (a protected one's protection is the protection layer's).
     ("C_ChallengeMode.GetMapUIInfo", nothing),
     ("C_ChallengeMode.GetAffixInfo", nothing),
-    ("C_PartyInfo.UninviteUnit", nothing),
     ("C_EncounterJournal.GetSectionInfo", nothing),
     ("C_MythicPlus.GetOwnedKeystoneLevel", nothing),
     ("C_ScenarioInfo.GetCriteriaInfo", nothing),
@@ -1098,7 +1097,6 @@ const NOTHING_HERE: &[(&str, NativeFn)] = &[
     ("C_Calendar.GetEventIndex", nothing),
     ("C_EncounterJournal.GetLootInfoByIndex", nothing),
     ("C_PartyInfo.GetInviteReferralInfo", nothing),
-    ("C_PartyInfo.PromoteToLeader", nothing),
     ("C_PvP.JoinBattlefield", nothing),
     ("C_ScenarioInfo.GetDisplayInfo", nothing),
     ("C_ScenarioInfo.GetUnitCriteriaProgressValues", nothing),

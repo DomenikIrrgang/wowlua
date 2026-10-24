@@ -119,6 +119,15 @@ fn party_guid(vm: &mut Vm) -> Value {
 /// later, the party formed after.
 fn invite_unit(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(id) = unit_named(vm, c.arg(1)) else {
+        // A name the world does not have: the server's answer (decision
+        // T362; unverified on WoW Forever).
+        if let Value::Str(s) = vm.hidden(c.arg(1)) {
+            let name = String::from_utf8_lossy(vm.str_bytes(s)).trim().to_string();
+            if !name.is_empty() {
+                let f = crate::replies::global(vm, "ERR_BAD_PLAYER_NAME_S", "Cannot find '%s'.");
+                crate::replies::system_later(vm, f.replacen("%s", &name, 1));
+            }
+        }
         return Ok(vec![]);
     };
     let delay = crate::clock::server_delay(vm);

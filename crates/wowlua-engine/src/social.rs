@@ -518,12 +518,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         // Unverified: nothing keeps the player from chat.
         "C_SocialRestrictions.CanSendChat",
         // Unverified: an emote is performed.
-        "C_ChatInfo.PerformEmote",
         // Unverified: a custom message is set.
         "C_BattleNet.SetCustomMessage",
         // Unverified: an ignore is accepted (the server's list answers
         // later; the engine keeps none).
-        "C_FriendList.AddIgnore",
     ];
     // Lists with nothing in them: no friends, ignores, Battle.net
     // friends, clubs, members, messages, tickets, applicants, allies,
@@ -559,7 +557,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     let zeros: &[&str] = &[
         "C_FriendList.GetNumFriends",
         "C_FriendList.GetNumOnlineFriends",
-        "C_FriendList.GetNumIgnores",
         "C_BattleNet.GetFriendNumGameAccounts",
         "BNGetNumBlocked",
         "BNGetNumFOF",
@@ -608,7 +605,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         "C_ClubFinder.GetPostingIDFromClubFinderGUID",
         "C_FriendList.GetSelectedIgnore",
         "C_FriendList.GetSelectedFriend",
-        "C_FriendList.GetIgnoreName",
         "C_RecentAllies.GetRecentAllyByFullName",
         "C_RecentAllies.GetRecentAllyByGUID",
         "C_VoiceChat.GetLocalPlayerMemberID",
@@ -630,11 +626,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     // Not so (unverified unless said).
     let falses: &[&str] = &[
         "C_FriendList.IsFriend",
-        "C_FriendList.IsIgnored",
         "C_FriendList.IsIgnoredByGuid",
-        "C_FriendList.IsOnIgnoredList",
         // Not on the list: nothing removed, no notes set.
-        "C_FriendList.DelIgnore",
         "C_FriendList.RemoveFriend",
         "C_FriendList.SetFriendNotes",
         "BNIsFriend",
@@ -752,7 +745,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         "BNGetBlockedInfo",
         "BNGetFOFInfo",
         // Guild actions.
-        "C_GuildInfo.Invite",
         "C_GuildInfo.RequestGuildRename",
         "C_GuildInfo.RequestGuildRenameRefund",
         "C_GuildInfo.RequestRenameNameCheck",
@@ -767,19 +759,15 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         "GuildControlShiftRankUp",
         "GuildNewsSetSticky",
         "GuildNewsSort",
-        "GuildInvite",
         "GuildMasterAbsent",
         // Friends, ignores, who.
         "C_FriendList.AddFriend",
         "C_FriendList.AddOrRemoveFriend",
-        "C_FriendList.AddOrDelIgnore",
-        "C_FriendList.DelIgnoreByIndex",
         "C_FriendList.SetSelectedIgnore",
         "C_FriendList.RemoveFriendByIndex",
         "C_FriendList.SetSelectedFriend",
         "C_FriendList.SetFriendNotesByIndex",
         "C_FriendList.ShowFriends",
-        "C_FriendList.SendWho",
         "C_FriendList.SortWho",
         "C_FriendList.SetWhoToUi",
         // Battle.net.

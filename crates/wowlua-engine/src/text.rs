@@ -148,7 +148,7 @@ fn row(font: &Font, px: i64) -> (&'static Row, f64) {
 
 /// The text a region shows: its escape sequences taken out (`|cAARRGGBB`,
 /// `|cnNAME:` (a named colour) and `|r` colours, `|H…|h` links' codes, `|T…|t` textures, `|n` a new
-/// line, `||` a bar).
+/// line, `||` a bar, `|4one:many;` the word for the number before it).
 pub fn visible(text: &str) -> String {
     let mut out = String::new();
     let mut chars = text.chars().peekable();
@@ -174,6 +174,10 @@ pub fn visible(text: &str) -> String {
             }
             Some('r') | Some('h') => {}
             Some('n') => out.push('\n'),
+            Some('4') => {
+                let spec: String = chars.by_ref().take_while(|&x| x != ';').collect();
+                out.push_str(plural(&out, &spec));
+            }
             Some('H') => {
                 // The link's code, to its `|h`.
                 while let Some(x) = chars.next() {
@@ -204,6 +208,23 @@ pub fn visible(text: &str) -> String {
         }
     }
     out
+}
+
+/// The form `|4one:many;` takes after `before`: the first for the number 1
+/// written last (spaces between), else the second, as the client's chat
+/// writes "1 day", "2 days" (`TIME_PLAYED_TOTAL`, `WHO_NUM_RESULTS`).
+pub(crate) fn plural<'a>(before: &str, spec: &'a str) -> &'a str {
+    let (one, many) = spec.split_once(':').unwrap_or((spec, spec));
+    let digits: String = before
+        .trim_end()
+        .chars()
+        .rev()
+        .take_while(|c| c.is_ascii_digit() || *c == '.')
+        .collect::<Vec<_>>()
+        .into_iter()
+        .rev()
+        .collect();
+    if digits == "1" { one } else { many }
 }
 
 /// The first character standing for an inline texture or atlas in laid-out

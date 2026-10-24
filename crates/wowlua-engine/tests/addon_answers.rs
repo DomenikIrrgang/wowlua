@@ -251,3 +251,70 @@ C_ChatInfo.SendChatMessage('team', 'PARTY')",
     );
     assert_eq!(lines[4], "CHAT_MSG_SYSTEM|You aren't in a party.|");
 }
+
+/// What the player types gets the server's answer a round trip later, in
+/// Blizzard's words (decision T362): a roll in its range, away and back,
+/// names the world does not have, the guild master's leave refused, a
+/// who's count; an emote is not restricted.
+#[test]
+fn commands_get_the_servers_answers() {
+    let mut vm = vm();
+    run(
+        &mut vm,
+        "Lines = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('CHAT_MSG_SYSTEM')
+f:SetScript('OnEvent', function(_, _, text) Lines[#Lines + 1] = text end)
+RandomRoll(1, 6)
+C_ChatInfo.SendChatMessage('', 'AFK')
+C_FriendList.AddOrDelIgnore('Some Body')
+C_PartyInfo.InviteUnit('Some Body')
+C_PartyInfo.UninviteUnit('Some Body')
+C_GuildInfo.Invite('Some Body')
+C_GuildInfo.Promote('Some Body')
+C_GuildInfo.Leave()
+C_FriendList.SendWho('Some')
+Emote = C_ChatInfo.PerformEmote('DANCE')",
+    );
+    wowlua_engine::clock::advance_frames(&mut vm, 30, 1000.0 / 60.0);
+    let r = run(
+        &mut vm,
+        "return table.concat(Lines, '\\n'), tostring(UnitIsAFK('player')), tostring(Emote), UnitName('player')",
+    );
+    let lines: Vec<&str> = r[0].lines().collect();
+    let me = &r[3];
+    assert!(
+        lines.iter().any(|l| {
+            l.strip_prefix(&format!("{me} rolls "))
+                .and_then(|rest| rest.strip_suffix(" (1-6)"))
+                .and_then(|n| n.parse::<u32>().ok())
+                .is_some_and(|n| (1..=6).contains(&n))
+        }),
+        "{lines:?}"
+    );
+    assert!(
+        lines.contains(&"You are now AFK: Away from Keyboard"),
+        "{lines:?}"
+    );
+    assert!(lines.contains(&"Player not found."), "{lines:?}");
+    assert!(lines.contains(&"Cannot find 'Some Body'."), "{lines:?}");
+    assert!(lines.contains(&"You aren't in a party."), "{lines:?}");
+    assert!(lines.contains(&"\"Some Body\" not found."), "{lines:?}");
+    assert!(lines.contains(&"0 |4player:players; total"), "{lines:?}");
+    assert_eq!(r[1], "true", "away");
+    assert_eq!(r[2], "false", "the emote is not restricted");
+}
+
+/// `|4one:many;` reads the number before it, as the client writes "1 day"
+/// and "2 days".
+#[test]
+fn plural_escapes_follow_the_number_before() {
+    assert_eq!(
+        wowlua_engine::text::visible("1 |4day:days;, 2 |4hour:hours;"),
+        "1 day, 2 hours"
+    );
+    assert_eq!(
+        wowlua_engine::text::visible("0 |4player:players; total"),
+        "0 players total"
+    );
+}

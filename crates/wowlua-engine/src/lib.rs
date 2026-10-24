@@ -74,6 +74,7 @@ pub mod queries;
 pub mod questinfo;
 pub mod quests;
 pub mod recorded;
+pub mod replies;
 pub mod scene;
 pub mod social;
 pub mod spellinfo;
@@ -1149,6 +1150,7 @@ pub(crate) fn own_behaviours(flavor: &str) -> Vec<Behaviours<NativeFn>> {
         Behaviours::new("tradeskill", tradeskill::behaviours(flavor)),
         Behaviours::new("tooltip", tooltip::behaviours()),
         Behaviours::new("chat", chat::behaviours()),
+        Behaviours::new("replies", replies::behaviours()),
         Behaviours::new("bindings", bindings::behaviours()),
         Behaviours::new("facts", facts::behaviours()),
         Behaviours::new("equipsets", equipsets::behaviours()),
