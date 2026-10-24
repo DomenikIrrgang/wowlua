@@ -1,8 +1,9 @@
 //! `wowlua lsp`: the language server (spec §16.2) over stdio. It shares the
 //! compiler: a package is checked as `wowlua check` checks it, with the
 //! editor's unsaved texts over the disk's, a moment after the last edit
-//! and on every save; documents are formatted as `wowlua fmt` formats them,
-//! and outlined from their syntax.
+//! and on every save, on a thread of its own; documents are formatted as
+//! `wowlua fmt` formats them, outlined from their syntax, and their names
+//! lead to their definitions from the last check.
 
 pub mod check;
 pub mod symbols;
@@ -23,21 +24,42 @@ struct Doc {
     path: PathBuf,
     /// `path` canonical, as checks name files.
     canonical: PathBuf,
+    /// The package's manifest, if the file is in one.
+    manifest: Option<PathBuf>,
     text: String,
 }
 
-#[derive(Default)]
+/// What the server's loop takes in turn: the editor's messages and the
+/// checks the worker finished.
+enum Event {
+    Message(Json),
+    Checked(PathBuf, Result<Vec<check::Checked>, String>),
+    /// The editor's side closed.
+    Closed,
+}
+
 struct Server {
     docs: HashMap<String, Doc>,
-    /// Packages (by manifest) to check again, and since when.
-    dirty: BTreeMap<PathBuf, Instant>,
-    /// The files each package's last check reported, to clear them.
+    /// Packages (by manifest) to check again: since when, and whether with
+    /// the rest of their workspace (after a save).
+    dirty: BTreeMap<PathBuf, (Instant, bool)>,
+    /// The package the worker checks now.
+    running: Option<PathBuf>,
+    /// Checks for the worker.
+    jobs: mpsc::Sender<Job>,
+    /// Go to definition requests waiting for their package's check: the
+    /// package, the request's id, the document and the position.
+    waiting: Vec<(PathBuf, Json, String, Json)>,
+    /// The files each package's last check reported (by the package's
+    /// manifest), to clear them.
     published: HashMap<PathBuf, BTreeSet<PathBuf>>,
     /// What each file's names refer to, from its package's last check.
     definitions: HashMap<PathBuf, Vec<check::Definition>>,
     /// The files each package's last check gave definitions for.
     defined: HashMap<PathBuf, Vec<PathBuf>>,
     shutdown: bool,
+    /// Checks run in this process (they read the overlay).
+    in_process: bool,
 }
 
 impl Server {
@@ -50,65 +72,361 @@ impl Server {
             .map(|(uri, _)| uri.clone())
             .unwrap_or_else(|| text::uri_of(path))
     }
+
+    /// Marks a package edited: its check is due `SETTLE - early` from now
+    /// (`early` = `SETTLE`: at once); `whole`: with its whole workspace.
+    fn touch(&mut self, manifest: &Path, early: Duration, whole: bool) {
+        let at = Instant::now()
+            .checked_sub(early)
+            .unwrap_or_else(Instant::now);
+        let entry = self
+            .dirty
+            .entry(manifest.to_path_buf())
+            .or_insert((at, whole));
+        entry.0 = at;
+        entry.1 |= whole;
+    }
+
+    /// Whether a package's check is due or running.
+    fn pending(&self, manifest: &Path) -> bool {
+        self.dirty.contains_key(manifest) || self.running.as_deref() == Some(manifest)
+    }
 }
 
 fn canonical(path: &Path) -> PathBuf {
-    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+    text::canonical(path)
 }
 
 /// Runs the server on stdin and stdout until the client says `exit`; true
 /// when it said `shutdown` before (the protocol's exit code 0).
 pub fn run() -> std::io::Result<bool> {
+    // A panic (a compiler bug) is logged and caught where the server checks
+    // or answers, never the end of the process as on the command line; a
+    // parallel job's is recorded, as the driver expects.
+    std::panic::set_hook(Box::new(|info| {
+        if wowlua_driver::parallel::in_job() {
+            wowlua_driver::parallel::record_panic(info.to_string());
+            return;
+        }
+        eprintln!("wowlua lsp: internal compiler error: {info}");
+    }));
     let (tx, rx) = mpsc::channel::<Json>();
     std::thread::spawn(move || {
         let stdin = std::io::stdin();
         let mut input = stdin.lock();
-        while let Ok(Some(message)) = transport::read(&mut input) {
-            if tx.send(message).is_err() {
-                break;
+        loop {
+            match transport::read(&mut input) {
+                Ok(Some(message)) => {
+                    if tx.send(message).is_err() {
+                        break;
+                    }
+                }
+                // a message that is no JSON: skipped, the next one read
+                Err(e) if e.kind() == std::io::ErrorKind::InvalidData => {
+                    eprintln!("wowlua lsp: skipped a message: {e}");
+                }
+                Ok(None) | Err(_) => break,
             }
         }
     });
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
-    serve(&rx, &mut out)
+    let checker = match std::env::current_exe() {
+        Ok(program) => Checker::Child(program),
+        Err(_) => Checker::InProcess,
+    };
+    serve_with(rx, &mut out, checker)
+}
+
+/// Where packages are checked.
+#[derive(Clone, Debug)]
+pub enum Checker {
+    /// In this process (the crate's tests).
+    InProcess,
+    /// In a child process of this program (`wowlua lsp --check`), one per
+    /// check: its memory goes back to the system when it ends, and a check
+    /// that crashes, overflows its stack or hangs ends only itself.
+    Child(PathBuf),
+}
+
+/// How long a check may run before it is stopped.
+const CHECK_LIMIT: Duration = Duration::from_secs(120);
+
+/// [`serve_with`] checking in this process.
+pub fn serve(
+    messages: mpsc::Receiver<Json>,
+    out: &mut impl std::io::Write,
+) -> std::io::Result<bool> {
+    serve_with(messages, out, Checker::InProcess)
 }
 
 /// The server's loop over `messages`, writing to `out`; true when the client
-/// said `shutdown` before `exit`.
-pub fn serve(
-    messages: &mpsc::Receiver<Json>,
+/// said `shutdown` before `exit`. Packages are checked on a thread of their
+/// own, so requests are answered while one is checked.
+pub fn serve_with(
+    messages: mpsc::Receiver<Json>,
     out: &mut impl std::io::Write,
+    checker: Checker,
 ) -> std::io::Result<bool> {
-    let mut server = Server::default();
+    let (events, inbox) = mpsc::channel::<Event>();
+    let forward = events.clone();
+    std::thread::spawn(move || {
+        for m in messages {
+            if forward.send(Event::Message(m)).is_err() {
+                return;
+            }
+        }
+        let _ = forward.send(Event::Closed);
+    });
+    let in_process = matches!(checker, Checker::InProcess);
+    let (jobs, work) = mpsc::channel::<Job>();
+    // (the stack the command line checks on: deep code overflows a smaller
+    // one, which ends the process where no panic is caught)
+    let worker = std::thread::Builder::new()
+        .name("wowlua-lsp-check".into())
+        .stack_size(wowlua_driver::parallel::STACK);
+    worker.spawn(move || {
+        for job in work {
+            let result = run_check(&checker, &job);
+            if events.send(Event::Checked(job.manifest, result)).is_err() {
+                return;
+            }
+        }
+    })?;
+    let mut server = Server {
+        docs: HashMap::new(),
+        dirty: BTreeMap::new(),
+        running: None,
+        jobs,
+        waiting: Vec::new(),
+        published: HashMap::new(),
+        definitions: HashMap::new(),
+        defined: HashMap::new(),
+        shutdown: false,
+        in_process,
+    };
     loop {
-        let wait = if server.dirty.is_empty() {
-            Duration::from_secs(3600)
-        } else {
-            SETTLE
+        // the next check to start, when its edits have settled
+        let wait = match (&server.running, server.dirty.values().map(|d| d.0).min()) {
+            (None, Some(at)) => (at + SETTLE).saturating_duration_since(Instant::now()),
+            _ => Duration::from_secs(3600),
         };
-        match messages.recv_timeout(wait) {
-            Ok(message) => {
-                if handle(&mut server, &message, out)? {
-                    return Ok(server.shutdown);
+        match inbox.recv_timeout(wait) {
+            Ok(Event::Message(message)) => {
+                let handled = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                    handle(&mut server, &message, out)
+                }));
+                match handled {
+                    Ok(stop) => {
+                        if stop? {
+                            return Ok(server.shutdown);
+                        }
+                    }
+                    Err(e) => {
+                        // a request whose handler panicked still gets an answer
+                        let why = panic_message(&*e);
+                        eprintln!("wowlua lsp: {} failed: {why}", message["method"]);
+                        if !message["id"].is_null() {
+                            transport::write(
+                                out,
+                                &json!({
+                                    "jsonrpc": "2.0",
+                                    "id": message["id"],
+                                    "error": { "code": -32603, "message": why },
+                                }),
+                            )?;
+                        }
+                    }
                 }
             }
+            Ok(Event::Checked(manifest, result)) => {
+                server.running = None;
+                match result {
+                    Ok(packages) => {
+                        for checked in packages {
+                            publish(&mut server, checked, out)?;
+                        }
+                    }
+                    Err(why) => {
+                        eprintln!("wowlua lsp: checking {} failed: {why}", manifest.display());
+                        notify(
+                            out,
+                            "window/logMessage",
+                            json!({ "type": 1, "message": format!("wowlua: checking {} failed: {why}", manifest.display()) }),
+                        )?;
+                    }
+                }
+                answer_waiting(&mut server, &manifest, out)?;
+            }
+            Ok(Event::Closed) | Err(mpsc::RecvTimeoutError::Disconnected) => {
+                return Ok(server.shutdown);
+            }
             Err(mpsc::RecvTimeoutError::Timeout) => {}
-            Err(mpsc::RecvTimeoutError::Disconnected) => return Ok(server.shutdown),
         }
-        // the packages edits settled in
-        let now = Instant::now();
-        let due: Vec<PathBuf> = server
+        start_due(&mut server);
+    }
+}
+
+/// Starts the check of the package whose edits settled first, unless one
+/// runs.
+fn start_due(server: &mut Server) {
+    if server.running.is_some() {
+        return;
+    }
+    let now = Instant::now();
+    let due = server
+        .dirty
+        .iter()
+        .filter(|(_, (at, _))| now.duration_since(*at) >= SETTLE)
+        .min_by_key(|(_, (at, _))| *at)
+        .map(|(m, _)| m.clone());
+    if let Some(manifest) = due {
+        let (_, whole) = server
             .dirty
-            .iter()
-            .filter(|(_, at)| now.duration_since(**at) >= SETTLE)
-            .map(|(m, _)| m.clone())
+            .remove(&manifest)
+            .unwrap_or((Instant::now(), false));
+        // (the open documents as they are now: what this check sees)
+        let docs: Vec<(PathBuf, String)> = server
+            .docs
+            .values()
+            .map(|d| (d.path.clone(), d.text.clone()))
             .collect();
-        for manifest in due {
-            server.dirty.remove(&manifest);
-            publish(&mut server, &manifest, out)?;
+        let job = Job {
+            manifest: manifest.clone(),
+            whole,
+            docs,
+        };
+        if server.jobs.send(job).is_ok() {
+            server.running = Some(manifest);
         }
     }
+}
+
+/// Whether a file of the package whose manifest is `manifest` is one no
+/// check reads: what builds write (`dist/`) or in a hidden folder of the
+/// package (`.git/`).
+fn generated(manifest: &Path, path: &Path) -> bool {
+    let root = manifest.parent().unwrap_or(Path::new(""));
+    let inside = canonical(path);
+    let Ok(rel) = inside.strip_prefix(root) else {
+        return false;
+    };
+    rel.components().any(|c| {
+        let c = c.as_os_str().to_string_lossy();
+        c == "dist" || c.starts_with('.')
+    })
+}
+
+/// A check for the worker: the package, whether its whole workspace, and
+/// the open documents.
+struct Job {
+    manifest: PathBuf,
+    whole: bool,
+    docs: Vec<(PathBuf, String)>,
+}
+
+/// Runs a check where `checker` says. A check that panics, crashes or
+/// takes too long is an error the server reports, and goes on.
+fn run_check(checker: &Checker, job: &Job) -> Result<Vec<check::Checked>, String> {
+    match checker {
+        Checker::InProcess => {
+            // (the overlay has the open documents already)
+            let open = job.docs.iter().map(|(p, _)| canonical(p)).collect();
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                check::check(&job.manifest, job.whole, &open)
+            }))
+            .map_err(|e| panic_message(&*e))
+        }
+        Checker::Child(program) => check_in_child(program, job),
+    }
+}
+
+/// Runs a check in a child process: the request on its input, the answer
+/// on its output.
+fn check_in_child(program: &Path, job: &Job) -> Result<Vec<check::Checked>, String> {
+    use std::io::{Read, Write};
+    use std::process::{Command, Stdio};
+    let mut child = Command::new(program)
+        .args(["lsp", "--check"])
+        .stdin(Stdio::piped())
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        .map_err(|e| format!("cannot start {}: {e}", program.display()))?;
+    let request = check::request(&job.manifest, job.whole, &job.docs);
+    let mut input = child.stdin.take().expect("piped");
+    // (written and read on threads of their own: a full pipe blocks)
+    let writer = std::thread::spawn(move || {
+        let _ = serde_json::to_writer(&mut input, &request);
+    });
+    let mut stdout = child.stdout.take().expect("piped");
+    let reader = std::thread::spawn(move || {
+        let mut bytes = Vec::new();
+        let _ = stdout.read_to_end(&mut bytes);
+        bytes
+    });
+    let mut stderr = child.stderr.take().expect("piped");
+    let errors = std::thread::spawn(move || {
+        let mut text = String::new();
+        let _ = stderr.read_to_string(&mut text);
+        text
+    });
+    let started = Instant::now();
+    let status = loop {
+        match child.try_wait() {
+            Ok(Some(status)) => break status,
+            Ok(None) if started.elapsed() > CHECK_LIMIT => {
+                let _ = child.kill();
+                let _ = child.wait();
+                return Err(format!(
+                    "the check took longer than {} s and was stopped",
+                    CHECK_LIMIT.as_secs()
+                ));
+            }
+            Ok(None) => std::thread::sleep(Duration::from_millis(5)),
+            Err(e) => return Err(format!("the check could not be waited for: {e}")),
+        }
+    };
+    let _ = writer.join();
+    let bytes = reader.join().unwrap_or_default();
+    let errors = errors.join().unwrap_or_default();
+    if !status.success() {
+        let tail: String = errors
+            .lines()
+            .rev()
+            .take(20)
+            .collect::<Vec<_>>()
+            .into_iter()
+            .rev()
+            .collect::<Vec<_>>()
+            .join("\n");
+        return Err(format!("the check failed ({status}): {tail}"));
+    }
+    let _ = std::io::stderr().write_all(errors.as_bytes());
+    serde_json::from_slice::<Json>(&bytes)
+        .ok()
+        .as_ref()
+        .and_then(check::answer)
+        .ok_or_else(|| "the check's answer could not be read".to_string())
+}
+
+/// The `--check` side: reads a request on stdin, writes the answer to
+/// stdout.
+pub fn run_child() -> std::io::Result<()> {
+    let request: Json = serde_json::from_reader(std::io::stdin().lock())?;
+    let answer = check::child(&request);
+    let stdout = std::io::stdout();
+    let mut out = stdout.lock();
+    serde_json::to_writer(&mut out, &answer)?;
+    std::io::Write::flush(&mut out)
+}
+
+/// What a panic said.
+fn panic_message(e: &(dyn std::any::Any + Send)) -> String {
+    e.downcast_ref::<&str>()
+        .map(|s| s.to_string())
+        .or_else(|| e.downcast_ref::<String>().cloned())
+        .unwrap_or_else(|| "a panic".into())
 }
 
 fn reply(out: &mut impl std::io::Write, id: &Json, result: Json) -> std::io::Result<()> {
@@ -125,9 +443,10 @@ fn notify(out: &mut impl std::io::Write, method: &str, params: Json) -> std::io:
     )
 }
 
-/// The manifest of the package a file belongs to.
+/// The manifest of the package a file belongs to (canonical, as checks
+/// name packages).
 fn manifest_of(path: &Path) -> Option<PathBuf> {
-    wowlua_manifest::find_manifest(path.parent()?, None)
+    wowlua_manifest::find_manifest(path.parent()?, None).map(|m| canonical(&m))
 }
 
 /// Handles one message; true when the server should stop.
@@ -145,7 +464,7 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
             id,
             json!({
                 "capabilities": {
-                    "textDocumentSync": { "openClose": true, "change": 1, "save": { "includeText": false } },
+                    "textDocumentSync": { "openClose": true, "change": 2, "save": { "includeText": false } },
                     "documentFormattingProvider": true,
                     "documentSymbolProvider": true,
                     "definitionProvider": true,
@@ -160,45 +479,84 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
         "exit" => return Ok(true),
         "textDocument/didOpen" | "textDocument/didChange" => {
             let text = if method == "textDocument/didOpen" {
-                params["textDocument"]["text"].as_str()
+                params["textDocument"]["text"].as_str().map(str::to_string)
             } else {
-                // full sync: the last change is the whole text
-                params["contentChanges"]
-                    .as_array()
-                    .and_then(|c| c.last())
-                    .and_then(|c| c["text"].as_str())
+                // incremental sync: each change replaces its range of the
+                // text before it (without a range, the whole text)
+                let mut text = server
+                    .docs
+                    .get_mut(&uri)
+                    .map(|d| std::mem::take(&mut d.text))
+                    .unwrap_or_default();
+                for change in params["contentChanges"].as_array().into_iter().flatten() {
+                    let new = change["text"].as_str().unwrap_or_default();
+                    match change.get("range").filter(|r| r.is_object()) {
+                        Some(range) => {
+                            let start = text::offset(&text, &range["start"]);
+                            let end = text::offset(&text, &range["end"]).max(start);
+                            text.replace_range(start..end, new);
+                        }
+                        None => text = new.to_string(),
+                    }
+                }
+                Some(text)
             };
             if let (Some(text), Some(path)) = (text, text::path_of(&uri)) {
-                wowlua_driver::overlay::set(&path, text.as_bytes().to_vec());
-                if let Some(manifest) = manifest_of(&path) {
-                    server.dirty.insert(manifest, Instant::now());
+                // (a check in this process reads the overlay; a child gets
+                // the open documents with its request)
+                if server.in_process {
+                    wowlua_driver::overlay::set(&path, text.as_bytes().to_vec());
+                }
+                // (an open document keeps the package it was opened in)
+                let manifest = match server.docs.get(&uri) {
+                    Some(d) => d.manifest.clone(),
+                    None => manifest_of(&path),
+                };
+                if let Some(m) = &manifest {
+                    server.touch(m, Duration::ZERO, false);
                 }
                 server.docs.insert(
                     uri,
                     Doc {
                         canonical: canonical(&path),
                         path,
-                        text: text.to_string(),
+                        manifest,
+                        text,
                     },
                 );
             }
         }
         "textDocument/didSave" => {
-            if let Some(manifest) = text::path_of(&uri).and_then(|p| manifest_of(&p)) {
-                // now: a save is checked at once
-                server.dirty.insert(
-                    manifest,
-                    Instant::now()
-                        .checked_sub(SETTLE)
-                        .unwrap_or_else(Instant::now),
-                );
+            let manifest = match server.docs.get(&uri) {
+                Some(d) => d.manifest.clone(),
+                None => text::path_of(&uri).and_then(|p| manifest_of(&p)),
+            };
+            if let Some(m) = manifest {
+                // a save is checked at once, with the packages that depend
+                // on it
+                server.touch(&m, SETTLE, true);
             }
         }
         "textDocument/didClose" => {
             if let Some(doc) = server.docs.remove(&uri) {
                 wowlua_driver::overlay::remove(&doc.path);
-                if let Some(manifest) = manifest_of(&doc.path) {
-                    server.dirty.insert(manifest, Instant::now());
+                if let Some(m) = &doc.manifest {
+                    server.touch(m, Duration::ZERO, false);
+                }
+            }
+        }
+        // files changed on disk (a branch checked out, a formatter run):
+        // their packages, with those that depend on them, again
+        "workspace/didChangeWatchedFiles" => {
+            for change in params["changes"].as_array().into_iter().flatten() {
+                let manifest = change["uri"]
+                    .as_str()
+                    .and_then(text::path_of)
+                    .and_then(|p| Some((manifest_of(&p)?, p)))
+                    .filter(|(m, p)| !generated(m, p))
+                    .map(|(m, _)| m);
+                if let Some(m) = manifest {
+                    server.touch(&m, Duration::ZERO, true);
                 }
             }
         }
@@ -207,8 +565,20 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
             reply(out, id, Json::Array(edits))?;
         }
         "textDocument/definition" => {
-            let found = definition(server, &uri, &params["position"], out)?;
-            reply(out, id, found)?;
+            let manifest = server.docs.get(&uri).and_then(|d| d.manifest.clone());
+            match manifest {
+                // edits not checked yet: the answer waits for the check,
+                // which starts now
+                Some(m) if server.pending(&m) => {
+                    if server.dirty.contains_key(&m) {
+                        server.touch(&m, SETTLE, false);
+                    }
+                    server
+                        .waiting
+                        .push((m, id.clone(), uri, params["position"].clone()));
+                }
+                _ => reply(out, id, definition(server, &uri, &params["position"]))?,
+            }
         }
         "textDocument/documentSymbol" => {
             let symbols = server
@@ -235,14 +605,15 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
     Ok(false)
 }
 
-/// Checks the package: its diagnostics to the client (its files without
-/// any cleared), its definitions kept.
+/// A package's check to the client: its diagnostics (its files without any
+/// and its open documents without any cleared), its definitions kept.
 fn publish(
     server: &mut Server,
-    manifest: &Path,
+    checked: check::Checked,
     out: &mut impl std::io::Write,
 ) -> std::io::Result<()> {
-    let checked = check::check(manifest);
+    let manifest = checked.manifest.clone();
+    let manifest = manifest.as_path();
     let now: BTreeSet<PathBuf> = checked.diagnostics.keys().cloned().collect();
     for (path, items) in &checked.diagnostics {
         notify(
@@ -251,14 +622,27 @@ fn publish(
             json!({ "uri": server.uri_for(path), "diagnostics": items }),
         )?;
     }
-    if let Some(before) = server.published.get(manifest) {
-        for gone in before.difference(&now) {
-            notify(
-                out,
-                "textDocument/publishDiagnostics",
-                json!({ "uri": server.uri_for(gone), "diagnostics": [] }),
-            )?;
-        }
+    let mut clean: BTreeSet<PathBuf> = server
+        .published
+        .remove(manifest)
+        .unwrap_or_default()
+        .difference(&now)
+        .cloned()
+        .collect();
+    // the open documents the check found nothing in: they are checked
+    clean.extend(
+        server
+            .docs
+            .values()
+            .filter(|d| d.manifest.as_deref() == Some(manifest) && !now.contains(&d.canonical))
+            .map(|d| d.canonical.clone()),
+    );
+    for path in clean {
+        notify(
+            out,
+            "textDocument/publishDiagnostics",
+            json!({ "uri": server.uri_for(&path), "diagnostics": [] }),
+        )?;
     }
     server.published.insert(manifest.to_path_buf(), now);
     for file in server.defined.remove(manifest).unwrap_or_default() {
@@ -272,38 +656,44 @@ fn publish(
     Ok(())
 }
 
-/// Where the name at `position` of the document is defined: the
-/// protocol's locations, or `null`. A package with edits not checked yet is
-/// checked first, so the names are those of the text the editor shows.
-fn definition(
+/// Answers the go to definition requests that waited for a package's check.
+fn answer_waiting(
     server: &mut Server,
-    uri: &str,
-    position: &Json,
+    manifest: &Path,
     out: &mut impl std::io::Write,
-) -> std::io::Result<Json> {
-    let Some(doc) = server.docs.get(uri) else {
-        return Ok(Json::Null);
-    };
-    let (key, offset) = (doc.canonical.clone(), text::offset(&doc.text, position));
-    if let Some(manifest) = manifest_of(&doc.path)
-        && server.dirty.remove(&manifest).is_some()
-    {
-        publish(server, &manifest, out)?;
+) -> std::io::Result<()> {
+    let (ready, rest): (Vec<_>, Vec<_>) = std::mem::take(&mut server.waiting)
+        .into_iter()
+        .partition(|(m, ..)| m == manifest);
+    server.waiting = rest;
+    for (_, id, uri, position) in ready {
+        let found = definition(server, &uri, &position);
+        reply(out, &id, found)?;
     }
+    Ok(())
+}
+
+/// Where the name at `position` of the document is defined, from its
+/// package's last check: the protocol's locations, or `null`.
+fn definition(server: &Server, uri: &str, position: &Json) -> Json {
+    let Some(doc) = server.docs.get(uri) else {
+        return Json::Null;
+    };
+    let offset = text::offset(&doc.text, position);
     let found: Vec<Json> = server
         .definitions
-        .get(&key)
+        .get(&doc.canonical)
         .into_iter()
         .flatten()
         // (the cursor just after a name is on it too)
         .filter(|d| d.start as usize <= offset && offset <= d.end as usize)
-        .map(|d| d.target.clone())
+        .map(|d| d.target.location())
         .collect();
-    Ok(if found.is_empty() {
+    if found.is_empty() {
         Json::Null
     } else {
         Json::Array(found)
-    })
+    }
 }
 
 /// The document formatted as its package's `fmt` settings say: one edit
@@ -331,4 +721,28 @@ fn format(doc: &Doc) -> Option<Vec<Json>> {
         "range": text::range(&doc.text, 0, doc.text.len()),
         "newText": formatted,
     })])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::generated;
+    use std::path::Path;
+
+    #[test]
+    fn build_output_and_hidden_folders_of_a_package_are_generated() {
+        let m = Path::new("/home/u/.projects/addon/wowlua.json");
+        assert!(!generated(
+            m,
+            Path::new("/home/u/.projects/addon/src/a.wowlua")
+        ));
+        assert!(generated(
+            m,
+            Path::new("/home/u/.projects/addon/dist/camelot/a.lua")
+        ));
+        assert!(generated(
+            m,
+            Path::new("/home/u/.projects/addon/.git/index")
+        ));
+        assert!(!generated(m, Path::new("/elsewhere/dist/a.lua")));
+    }
 }

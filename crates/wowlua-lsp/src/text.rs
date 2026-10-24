@@ -33,12 +33,18 @@ impl<'a> Lines<'a> {
         Lines { text, starts }
     }
 
-    /// [`position`] of byte `offset`.
-    pub fn position(&self, offset: usize) -> Json {
+    /// The line and UTF-16 column of byte `offset`.
+    pub fn line_column(&self, offset: usize) -> (u32, u32) {
         let offset = floor_char(self.text, offset.min(self.text.len()));
         let line = self.starts.partition_point(|&s| s <= offset) - 1;
         let start = self.starts[line];
-        let character: usize = self.text[start..offset].chars().map(char::len_utf16).sum();
+        let column: usize = self.text[start..offset].chars().map(char::len_utf16).sum();
+        (line as u32, column as u32)
+    }
+
+    /// [`position`] of byte `offset`.
+    pub fn position(&self, offset: usize) -> Json {
+        let (line, character) = self.line_column(offset);
         json!({ "line": line, "character": character })
     }
 
@@ -74,6 +80,18 @@ fn floor_char(text: &str, mut i: usize) -> usize {
         i -= 1;
     }
     i
+}
+
+/// `path` canonical (symbolic links resolved), without Windows' verbatim
+/// prefix (`\\?\C:\x` is `C:\x`), which editors' URIs never have; `path`
+/// as it is when it does not exist.
+pub fn canonical(path: &Path) -> PathBuf {
+    let found = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let text = found.to_string_lossy();
+    match text.strip_prefix(r"\\?\") {
+        Some(rest) if !rest.starts_with("UNC\\") => PathBuf::from(rest),
+        _ => found,
+    }
 }
 
 /// A `file:` URI's path.

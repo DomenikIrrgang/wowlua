@@ -4,7 +4,12 @@
 use serde_json::Value as Json;
 use std::io::{BufRead, Write};
 
-/// The next message, or `None` at the end of the input.
+/// The largest message read: more is a broken stream, not a document.
+const MAX: usize = 1 << 30;
+
+/// The next message, or `None` at the end of the input. A body that is no
+/// JSON is an `InvalidData` error after which the next message can be
+/// read; any other error ends the stream.
 pub fn read(input: &mut impl BufRead) -> std::io::Result<Option<Json>> {
     let mut length: Option<usize> = None;
     loop {
@@ -27,7 +32,13 @@ pub fn read(input: &mut impl BufRead) -> std::io::Result<Option<Json>> {
             length = Some(n);
         }
     }
-    let mut body = vec![0; length.unwrap_or(0)];
+    let length = length.unwrap_or(0);
+    if length > MAX {
+        return Err(std::io::Error::other(format!(
+            "a message of {length} bytes"
+        )));
+    }
+    let mut body = vec![0; length];
     input.read_exact(&mut body)?;
     serde_json::from_slice(&body)
         .map(Some)
@@ -54,5 +65,20 @@ mod tests {
         let got = read(&mut input).unwrap().unwrap();
         assert_eq!(got["method"], "x");
         assert!(read(&mut input).unwrap().is_none());
+    }
+
+    #[test]
+    fn a_broken_message_is_skipped_a_broken_stream_ends() {
+        let mut out = b"Content-Length: 5\r\n\r\n{nope".to_vec();
+        write(&mut out, &serde_json::json!({ "id": 2 })).unwrap();
+        let mut input = std::io::Cursor::new(out);
+        let e = read(&mut input).unwrap_err();
+        assert_eq!(e.kind(), std::io::ErrorKind::InvalidData);
+        assert_eq!(read(&mut input).unwrap().unwrap()["id"], 2);
+        let mut huge = std::io::Cursor::new(b"Content-Length: 99999999999\r\n\r\n".to_vec());
+        assert_ne!(
+            read(&mut huge).unwrap_err().kind(),
+            std::io::ErrorKind::InvalidData
+        );
     }
 }

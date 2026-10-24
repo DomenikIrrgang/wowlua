@@ -425,6 +425,19 @@ impl Env<'_> {
         if let Some(t2) = self.unfold_alias(t) {
             return self.assignable_in(s, t2, mode, assuming);
         }
+        // A member of a union fits it, and so does a union of its members:
+        // found without copying them (members are sorted), as a union of
+        // every event name has thousands.
+        if let Ty::Union(tm) = self.types.get(t) {
+            if tm.binary_search(&s).is_ok() {
+                return true;
+            }
+            if let Ty::Union(sm) = self.types.get(s)
+                && sorted_subset(sm, tm)
+            {
+                return true;
+            }
+        }
         let st = self.types.get(s).clone();
         let tt = self.types.get(t).clone();
         match (&st, &tt) {
@@ -639,10 +652,12 @@ impl Env<'_> {
 
     /// A recursive record alias's body with its type arguments (L58).
     pub fn unfold_alias(&mut self, t: TypeId) -> Option<TypeId> {
-        let Ty::Named(d, args) = self.types.get(t).clone() else {
+        // (looked at before anything is copied: this runs at every step of
+        // `assignable`, also on unions of thousands of members)
+        let Ty::Named(d, args) = self.types.get(t) else {
             return None;
         };
-        let def = self.def(d);
+        let def = self.def(*d);
         if !def.recursive_alias {
             return None;
         }
@@ -650,6 +665,7 @@ impl Env<'_> {
         if args.is_empty() {
             return Some(body);
         }
+        let args = args.clone();
         let params = def.params.clone();
         Some(super::subst::substitute(
             &mut self.types,
@@ -879,4 +895,19 @@ impl Env<'_> {
         }
         true
     }
+}
+
+/// Whether every member of `a` is one of `b` (both sorted).
+fn sorted_subset(a: &[TypeId], b: &[TypeId]) -> bool {
+    let mut j = 0;
+    for x in a {
+        while j < b.len() && b[j] < *x {
+            j += 1;
+        }
+        if j == b.len() || b[j] != *x {
+            return false;
+        }
+        j += 1;
+    }
+    true
 }

@@ -5,33 +5,61 @@
 
 use crate::text;
 use serde_json::{Value as Json, json};
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
 use std::path::{Path, PathBuf};
 use wowlua_diagnostics::{Diagnostic, Severity};
 use wowlua_driver::Session;
 use wowlua_driver::build::BuildRequest;
 use wowlua_driver::project::LoadOptions;
 
-/// A name of a file, by its bytes, and where what it refers to is (the
-/// protocol's `Location`).
+/// A name of a file, by its bytes, and where what it refers to is.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Definition {
     pub start: u32,
     pub end: u32,
-    pub target: Json,
+    pub target: Target,
 }
 
-/// What a check found, by file (canonical absolute paths).
+/// A place in a file: its URI (shared by every name that leads there) and
+/// the lines and UTF-16 columns of its start and end. Kept this small, as a
+/// large package has a definition for hundreds of thousands of names.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Target {
+    pub uri: std::sync::Arc<str>,
+    pub range: [u32; 4],
+}
+
+impl Target {
+    /// The protocol's `Location`.
+    pub fn location(&self) -> Json {
+        let [l0, c0, l1, c1] = self.range;
+        json!({
+            "uri": &*self.uri,
+            "range": {
+                "start": { "line": l0, "character": c0 },
+                "end": { "line": l1, "character": c1 },
+            },
+        })
+    }
+}
+
+/// What a check found in one package (its manifest), by file (canonical
+/// absolute paths).
 #[derive(Default)]
 pub struct Checked {
+    pub manifest: PathBuf,
     /// Diagnostics; one about the package as a whole goes to its manifest.
     pub diagnostics: BTreeMap<PathBuf, Vec<Json>>,
     /// Each file's names that refer to something, by start.
     pub definitions: HashMap<PathBuf, Vec<Definition>>,
 }
 
-/// Checks the package whose manifest is `manifest`.
-pub fn check(manifest: &Path) -> Checked {
+/// Checks the package whose manifest is `manifest`; with `whole`, every
+/// package of its workspace (those that depend on it too). What loading
+/// the workspace reported goes with `manifest`'s package. Definitions are
+/// kept for the `open` files (canonical paths) only: an editor asks for
+/// those, and a large package has hundreds of thousands.
+pub fn check(manifest: &Path, whole: bool, open: &HashSet<PathBuf>) -> Vec<Checked> {
     let dir = manifest.parent().unwrap_or(Path::new(".")).to_path_buf();
     let mut session = Session::new();
     session.definitions = Some(Vec::new());
@@ -51,8 +79,26 @@ pub fn check(manifest: &Path) -> Checked {
         bundled: false,
     };
     let mut roots = vec![dir.clone()];
-    if let Some(projects) = wowlua_driver::load_projects(&mut session, &options) {
+    // (diagnostics and definitions by package, as each build makes them)
+    let mut parts: Vec<(PathBuf, Vec<wowlua_diagnostics::Diagnostic>, Vec<Spans>)> = Vec::new();
+    let loaded = wowlua_driver::load_projects(&mut session, &options);
+    parts.push((
+        manifest.to_path_buf(),
+        session.take_diagnostics().into_iter().collect(),
+        Vec::new(),
+    ));
+    if let Some(projects) = loaded {
+        let own = text::canonical(manifest);
+        // an edit checks its own package (a workspace root that is no
+        // package: every member)
+        let only_own = !whole
+            && projects
+                .iter()
+                .any(|p| text::canonical(&p.manifest.path) == own);
         for project in projects {
+            if only_own && text::canonical(&project.manifest.path) != own {
+                continue;
+            }
             let request = BuildRequest {
                 profile: "dev".into(),
                 flavors: None,
@@ -70,55 +116,93 @@ pub fn check(manifest: &Path) -> Checked {
             let _ = wowlua_driver::build(&mut session, &project, &request);
             project.apply_lints(&mut session);
             roots.push(project.root().to_path_buf());
+            let defs = session.definitions.replace(Vec::new()).unwrap_or_default();
+            parts.push((
+                project.manifest.path.clone(),
+                session.take_diagnostics().into_iter().collect(),
+                defs,
+            ));
         }
     }
-    let mut out = Checked::default();
-    for d in session.diagnostics.iter() {
-        if let Some((path, item)) = convert(&session, &roots, manifest, d) {
-            out.diagnostics.entry(path).or_default().push(item);
+    let mut out: Vec<Checked> = Vec::new();
+    for (package, diagnostics, defs) in parts {
+        let package = text::canonical(&package);
+        let mut checked = Checked {
+            definitions: definitions(&session, &roots, &defs, open),
+            ..Checked::default()
+        };
+        for d in &diagnostics {
+            if let Some((path, item)) = convert(&session, &roots, &package, d) {
+                checked.diagnostics.entry(path).or_default().push(item);
+            }
+        }
+        // (a package loaded and built: one part)
+        match out.iter_mut().find(|c| c.manifest == package) {
+            Some(c) => {
+                for (path, items) in checked.diagnostics {
+                    c.diagnostics.entry(path).or_default().extend(items);
+                }
+                c.definitions.extend(checked.definitions);
+            }
+            None => {
+                checked.manifest = package;
+                out.push(checked);
+            }
         }
     }
-    out.definitions = definitions(&session, &roots);
     out
 }
 
-/// The session's (name, definition) spans as each file's [`Definition`]s.
-fn definitions(session: &Session, roots: &[PathBuf]) -> HashMap<PathBuf, Vec<Definition>> {
+/// A name's span and its definition's.
+type Spans = (wowlua_span::Span, wowlua_span::Span);
+
+/// (name, definition) spans as each file's [`Definition`]s.
+fn definitions(
+    session: &Session,
+    roots: &[PathBuf],
+    found: &[Spans],
+    open: &HashSet<PathBuf>,
+) -> HashMap<PathBuf, Vec<Definition>> {
     let mut out: HashMap<PathBuf, Vec<Definition>> = HashMap::new();
-    let Some(found) = session.definitions.as_ref() else {
-        return out;
-    };
     // Each file's path (or none) and line index, once: a file on disk for
     // names, also one written for the compiler's own as a target.
     let mut paths: HashMap<wowlua_span::FileId, Option<PathBuf>> = HashMap::new();
-    let mut targets: HashMap<wowlua_span::FileId, Option<PathBuf>> = HashMap::new();
+    let mut targets: HashMap<wowlua_span::FileId, Option<std::sync::Arc<str>>> = HashMap::new();
     let mut lines: HashMap<wowlua_span::FileId, text::Lines<'_>> = HashMap::new();
     for (at, to) in found {
         let Some(path) = paths
             .entry(at.file)
-            .or_insert_with(|| absolute(roots, session.db.get(at.file).path()))
+            .or_insert_with(|| {
+                absolute(roots, session.db.get(at.file).path()).filter(|p| open.contains(p))
+            })
             .clone()
         else {
             continue;
         };
-        let target_path = targets
+        let uri = targets
             .entry(to.file)
             .or_insert_with(|| {
                 let file = session.db.get(to.file);
-                absolute(roots, file.path()).or_else(|| materialize(file.path(), file.text()))
+                absolute(roots, file.path())
+                    .or_else(|| materialize(file.path(), file.text()))
+                    .map(|p| text::uri_of(&p).into())
             })
             .clone();
-        let Some(target_path) = target_path else {
+        let Some(uri) = uri else {
             continue;
         };
-        let range = lines
+        let lines = lines
             .entry(to.file)
-            .or_insert_with(|| text::Lines::new(session.db.get(to.file).text()))
-            .range(to.start as usize, to.end as usize);
+            .or_insert_with(|| text::Lines::new(session.db.get(to.file).text()));
+        let (l0, c0) = lines.line_column(to.start as usize);
+        let (l1, c1) = lines.line_column(to.end as usize);
         out.entry(path).or_default().push(Definition {
             start: at.start,
             end: at.end,
-            target: json!({ "uri": text::uri_of(&target_path), "range": range }),
+            target: Target {
+                uri,
+                range: [l0, c0, l1, c1],
+            },
         });
     }
     for list in out.values_mut() {
@@ -162,7 +246,7 @@ fn absolute(roots: &[PathBuf], rel: &Path) -> Option<PathBuf> {
     } else {
         roots.iter().map(|r| r.join(rel)).find(|p| p.exists())
     }?;
-    Some(std::fs::canonicalize(&found).unwrap_or(found))
+    Some(text::canonical(&found))
 }
 
 fn convert(
@@ -212,4 +296,102 @@ fn convert(
         item["code"] = json!(code);
     }
     Some((path, item))
+}
+
+// ------------------------------------------------------------ the child --
+
+/// A check as one process asks another for it (`wowlua lsp --check`): the
+/// package, whether its whole workspace, and the editor's open documents
+/// (their unsaved texts are what is checked).
+pub fn request(manifest: &Path, whole: bool, docs: &[(PathBuf, String)]) -> Json {
+    json!({
+        "manifest": manifest,
+        "whole": whole,
+        "docs": docs.iter().map(|(p, t)| json!({ "path": p, "text": t })).collect::<Vec<_>>(),
+    })
+}
+
+/// Runs a [`request`] in this process: the answer [`answer`] reads.
+pub fn child(request: &Json) -> Json {
+    let manifest = PathBuf::from(request["manifest"].as_str().unwrap_or_default());
+    let whole = request["whole"].as_bool().unwrap_or(false);
+    let mut open = HashSet::new();
+    for doc in request["docs"].as_array().into_iter().flatten() {
+        let (Some(path), Some(text)) = (doc["path"].as_str(), doc["text"].as_str()) else {
+            continue;
+        };
+        let path = PathBuf::from(path);
+        wowlua_driver::overlay::set(&path, text.as_bytes().to_vec());
+        open.insert(text::canonical(&path));
+    }
+    let packages = check(&manifest, whole, &open);
+    Json::Array(packages.iter().map(Checked::to_json).collect())
+}
+
+/// What a child's [`child`] wrote, read back.
+pub fn answer(json: &Json) -> Option<Vec<Checked>> {
+    json.as_array()?.iter().map(Checked::from_json).collect()
+}
+
+impl Checked {
+    /// The definitions as rows of numbers, their URIs listed once.
+    fn to_json(&self) -> Json {
+        let mut uris: Vec<std::sync::Arc<str>> = Vec::new();
+        let mut index: HashMap<std::sync::Arc<str>, usize> = HashMap::new();
+        let mut files = serde_json::Map::new();
+        for (path, list) in &self.definitions {
+            let rows: Vec<Json> = list
+                .iter()
+                .map(|d| {
+                    let u = *index.entry(d.target.uri.clone()).or_insert_with(|| {
+                        uris.push(d.target.uri.clone());
+                        uris.len() - 1
+                    });
+                    let [l0, c0, l1, c1] = d.target.range;
+                    json!([d.start, d.end, u, l0, c0, l1, c1])
+                })
+                .collect();
+            files.insert(path.to_string_lossy().into_owned(), Json::Array(rows));
+        }
+        json!({
+            "manifest": self.manifest,
+            "diagnostics": self.diagnostics,
+            "uris": uris.iter().map(|u| &**u).collect::<Vec<_>>(),
+            "definitions": files,
+        })
+    }
+
+    fn from_json(json: &Json) -> Option<Checked> {
+        let uris: Vec<std::sync::Arc<str>> = json["uris"]
+            .as_array()?
+            .iter()
+            .map(|u| u.as_str().map(Into::into))
+            .collect::<Option<_>>()?;
+        let mut definitions = HashMap::new();
+        for (path, rows) in json["definitions"].as_object()? {
+            let mut list = Vec::new();
+            for row in rows.as_array()? {
+                let n = |i: usize| row.get(i).and_then(Json::as_u64).map(|v| v as u32);
+                list.push(Definition {
+                    start: n(0)?,
+                    end: n(1)?,
+                    target: Target {
+                        uri: uris.get(n(2)? as usize)?.clone(),
+                        range: [n(3)?, n(4)?, n(5)?, n(6)?],
+                    },
+                });
+            }
+            definitions.insert(PathBuf::from(path), list);
+        }
+        let diagnostics = json["diagnostics"]
+            .as_object()?
+            .iter()
+            .map(|(p, items)| Some((PathBuf::from(p), items.as_array()?.clone())))
+            .collect::<Option<_>>()?;
+        Some(Checked {
+            manifest: PathBuf::from(json["manifest"].as_str()?),
+            diagnostics,
+            definitions,
+        })
+    }
 }

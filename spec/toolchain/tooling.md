@@ -526,11 +526,14 @@ produce a diagnostic suggesting `wowlua fetch`.
 A VS Code extension (TextMate grammar plus LSP client) is part of the project.
 Other editors use the LSP directly.
 
-**Built so far (M9 S8, decision T368).** `wowlua lsp` checks a package as
-`wowlua check` does with its tests, the editor's unsaved texts read over the
-files on disk: 350 ms after the last edit, and at once when a file of it
-(its `wowlua.json` too) is saved. It checks every flavor the package names
-with the `dev` profile and applies `check.lints`. It writes no files: no
+**Built so far (M9 S8, decisions T368, T370).** `wowlua lsp` checks a
+package as `wowlua check` does with its tests, the editor's unsaved texts
+read over the files on disk: 350 ms after the last edit, the package the
+edited file belongs to; at once when a file of it (its `wowlua.json` too) is
+saved, or when the editor reports files changed on disk (not in the
+package's `dist/` or hidden folders), with every package of its workspace,
+so those that depend on it are checked too. It checks every flavor the
+package names with the `dev` profile and applies `check.lints`. It writes no files: no
 build output, and dependencies resolve as the lockfile would change while
 `wowlua.lock` stays as it is; they come from the cache only. A diagnostic
 carries its code, the first label's message, its notes and its help; one
@@ -540,7 +543,19 @@ diagnostics are gone is cleared. Formatting replaces the document with
 does not parse). The outline lists a file's top-level functions (`A.b`,
 `A:c`), local functions, locals, constants, classes with their methods and
 fields, interfaces, enums and type aliases, exported or not. The server
-speaks LSP 3.17 with full document sync.
+speaks LSP 3.17 with incremental document sync.
+
+The server stays responsive and survives what goes wrong (decision T370).
+Each check runs in a child process of the server (`wowlua lsp --check`,
+the open documents with its request, its diagnostics and the open files'
+definitions as its answer), one at a time, while the server answers
+formatting, outline and definition requests; only go to definition in a
+package with unchecked edits waits for its check. A check that crashes,
+fails or runs longer than two minutes (it is stopped) is logged to the
+editor, and the server goes on with the last results; its memory goes back
+to the system when it ends, so the server itself stays small. A message
+that is no JSON is skipped; a request whose handler fails gets an error
+reply. Edits arriving while a package is checked are checked next, once.
 
 Go to definition (decision T369) answers from the last check: the checker
 records, for each name it resolves, what it refers to. A local leads to its
@@ -559,9 +574,13 @@ completion, find references and the rest of the table follow.
 
 The VS Code extension starts `wowlua lsp` (the `wowlua.path` command) when a
 `.wowlua` file opens or the workspace has a `wowlua.json`, and sends it the
-open `.wowlua` and `.lua` files; *Go to Definition* (F12) and Ctrl or Cmd +
-click use it. `wowlua.languageServer` (on by default)
-turns it off; *wowlua: Restart Language Server* restarts it. Its client is
+open `.wowlua` and `.lua` files, each edit as the range it changed, and the
+`.wowlua`, `.lua`, `.xml`, `.toc`, `wowlua.json` and `wowlua.lock` files
+changed on disk; *Go to Definition* (F12) and Ctrl or Cmd + click use it.
+A server that stops by itself is started again at once, up to three times
+in three minutes, then the extension asks. `wowlua.languageServer` (on by
+default) turns it off; *wowlua: Restart Language Server* restarts it; the
+**wowlua Language Server** output shows what it logs. Its client is
 hand-written, as the rest of the extension, so it needs no build step.
 
 ## 16.3 Formatter (`wowlua fmt`)

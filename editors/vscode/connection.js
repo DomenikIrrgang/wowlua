@@ -27,8 +27,9 @@ class Connection {
             this.pending.clear();
         });
         this.child.stdout.on("data", (chunk) => this.receive(chunk));
+        // (the last of what it wrote, for an error message)
         this.child.stderr.on("data", (chunk) => {
-            this.stderr += chunk.toString();
+            this.stderr = (this.stderr + chunk.toString()).slice(-65536);
         });
     }
 

@@ -42,6 +42,9 @@ class LanguageClient {
         this.diagnostics = vscode.languages.createDiagnosticCollection("wowlua");
         this.connection = undefined;
         this.ready = undefined;
+        // when the server stopped by itself lately (restarted at once up to
+        // three times in three minutes)
+        this.crashes = [];
         context.subscriptions.push(
             this.output,
             this.diagnostics,
@@ -58,6 +61,10 @@ class LanguageClient {
             vscode.languages.registerDefinitionProvider(SYNCED, {
                 provideDefinition: (doc, position) => this.definition(doc, position),
             }),
+            // files changed on disk (a branch checked out, a formatter
+            // run): the server checks their packages again
+            ...this.watch("**/*.{wowlua,lua,xml,toc}"),
+            ...this.watch("**/wowlua.{json,lock}"),
             vscode.workspace.onDidChangeConfiguration((e) => {
                 if (e.affectsConfiguration("wowlua.path") || e.affectsConfiguration("wowlua.languageServer")) {
                     this.restart();
@@ -65,6 +72,17 @@ class LanguageClient {
             }),
             { dispose: () => this.stop() },
         );
+    }
+
+    // A file system watcher whose changes go to the server.
+    watch(pattern) {
+        const watcher = vscode.workspace.createFileSystemWatcher(pattern);
+        const report = (type) => (uri) => {
+            if (uri.scheme === "file") {
+                this.send("workspace/didChangeWatchedFiles", { changes: [{ uri: uri.toString(), type }] });
+            }
+        };
+        return [watcher, watcher.onDidCreate(report(1)), watcher.onDidChange(report(2)), watcher.onDidDelete(report(3))];
     }
 
     enabled() {
@@ -86,18 +104,31 @@ class LanguageClient {
         connection.child.on("error", (e) => {
             this.output.appendLine(`cannot start ${command} lsp: ${e.message}`);
         });
+        connection.child.stderr.on("data", (chunk) => this.output.append(chunk.toString()));
+        connection.onNotification("window/logMessage", (p) => this.output.appendLine(p.message));
         connection.exited.then((code) => {
-            if (connection.stderr) {
-                this.output.appendLine(connection.stderr);
-            }
             if (this.connection !== connection) {
                 return;
             }
             this.connection = undefined;
             this.diagnostics.clear();
+            // stopped by itself: started again at once, unless it keeps
+            // stopping
+            const now = Date.now();
+            this.crashes = this.crashes.filter((t) => now - t < 180000).concat(now);
+            if (this.crashes.length <= 3) {
+                this.output.appendLine(`the server stopped (${code}); starting it again`);
+                setTimeout(() => this.start(), 1000);
+                return;
+            }
             vscode.window
-                .showWarningMessage(`The wowlua language server stopped (${code}). Is wowlua 0.10 or newer installed?`, "Restart")
-                .then((pick) => pick && this.restart());
+                .showWarningMessage(`The wowlua language server keeps stopping (${code}). Is wowlua 0.10 or newer installed?`, "Restart")
+                .then((pick) => {
+                    if (pick) {
+                        this.crashes = [];
+                        this.restart();
+                    }
+                });
         });
         this.ready = connection
             .request("initialize", {
@@ -145,11 +176,18 @@ class LanguageClient {
         }
     }
 
+    // Only what changed: a keystroke in a large file sends a character.
     changed(e) {
         if (synced(e.document) && e.contentChanges.length > 0) {
             this.send("textDocument/didChange", {
                 textDocument: { uri: e.document.uri.toString(), version: e.document.version },
-                contentChanges: [{ text: e.document.getText() }],
+                contentChanges: e.contentChanges.map((c) => ({
+                    range: {
+                        start: { line: c.range.start.line, character: c.range.start.character },
+                        end: { line: c.range.end.line, character: c.range.end.character },
+                    },
+                    text: c.text,
+                })),
             });
         }
     }

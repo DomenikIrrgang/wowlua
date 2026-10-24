@@ -3,7 +3,9 @@
 
 use serde_json::{Value as Json, json};
 use std::path::{Path, PathBuf};
-use std::sync::mpsc;
+
+mod common;
+use common::Client;
 
 const UTIL: &str = "\
 export function greet(name: string): string
@@ -52,8 +54,8 @@ fn project() -> (tempfile::TempDir, PathBuf, PathBuf) {
     std::fs::write(dir.path().join("src/util.wowlua"), UTIL).unwrap();
     std::fs::write(dir.path().join("src/main.wowlua"), MAIN).unwrap();
     std::fs::write(dir.path().join("src/hello.wowlua"), SCRIPT).unwrap();
-    let main = std::fs::canonicalize(dir.path().join("src/main.wowlua")).unwrap();
-    let util = std::fs::canonicalize(dir.path().join("src/util.wowlua")).unwrap();
+    let main = wowlua_lsp::text::canonical(&dir.path().join("src/main.wowlua"));
+    let util = wowlua_lsp::text::canonical(&dir.path().join("src/util.wowlua"));
     (dir, main, util)
 }
 
@@ -76,15 +78,6 @@ fn covered(location: &Json) -> (PathBuf, String) {
     (path, text[start..end].to_string())
 }
 
-fn written(out: &[u8]) -> Vec<Json> {
-    let mut input = std::io::Cursor::new(out.to_vec());
-    let mut all = Vec::new();
-    while let Ok(Some(m)) = wowlua_lsp::transport::read(&mut input) {
-        all.push(m);
-    }
-    all
-}
-
 #[test]
 fn names_lead_to_their_definitions() {
     let (_dir, main, util) = project();
@@ -101,27 +94,23 @@ fn names_lead_to_their_definitions() {
         ("bump", 1),    // 10: an inherited method
         ("SayHi", 0),   // 11: a global another script defines
     ];
-    let mut messages = vec![
-        json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": { "capabilities": {} } }),
-        json!({ "jsonrpc": "2.0", "method": "textDocument/didOpen", "params": {
-            "textDocument": { "uri": uri, "languageId": "wowlua", "version": 1, "text": MAIN } } }),
-    ];
-    for (i, (needle, nth)) in asks.iter().enumerate() {
-        messages.push(
-            json!({ "jsonrpc": "2.0", "id": i + 2, "method": "textDocument/definition", "params": {
-            "textDocument": { "uri": uri }, "position": at(MAIN, needle, *nth) } }),
+    let mut c = Client::start();
+    c.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": uri, "languageId": "wowlua", "version": 1, "text": MAIN } }),
+    );
+    // asked at once: each waits for the check
+    let mut answers = Vec::new();
+    for (needle, nth) in &asks {
+        let r = c.request(
+            "textDocument/definition",
+            json!({ "textDocument": { "uri": uri }, "position": at(MAIN, needle, *nth) }),
         );
+        answers.push(r);
     }
-    messages.push(json!({ "jsonrpc": "2.0", "method": "exit" }));
-    let (tx, rx) = mpsc::channel();
-    for m in messages {
-        tx.send(m).unwrap();
-    }
-    let mut out = Vec::new();
-    wowlua_lsp::serve(&rx, &mut out).unwrap();
-    let replies = written(&out);
+    assert!(c.finish());
     let answer = |id: usize| -> (PathBuf, String) {
-        let r = replies.iter().find(|m| m["id"] == id).expect("answered");
+        let r = &answers[id - 2];
         let first = &r["result"][0];
         assert!(first.is_object(), "no definition for request {id}: {r}");
         covered(first)
