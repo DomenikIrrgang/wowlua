@@ -102,6 +102,13 @@ async function uiScenario(widgets) {
         // the frames shown now, the demo's window among them.
         await api.ui.handleMessage({ type: "framesWanted" });
         assert(api.ui.frames.some((f) => f.label === "WidgetDemoWindow"), "the picker has no WidgetDemoWindow before a stop");
+        // Opened, the picker stays open as the frames come, listing them
+        // (a datalist closed when its options were renewed).
+        api.ui.picker = undefined;
+        api.ui.post({ type: "openPicker" });
+        const picker = await waitFor(() => api.ui.state().picker, 20000, "the picker's state");
+        log("picker:", JSON.stringify(picker));
+        assert(picker.open && picker.items > 0, "the picker closed or is empty: " + JSON.stringify(picker));
         const before = stops.length;
         // The click answers once the breakpoint it hits is continued.
         const clicked = api.ui.handleMessage({ type: "click", x: button.rect.x + button.rect.width / 2, y: button.rect.y + button.rect.height / 2, button: "LeftButton" });
@@ -134,7 +141,7 @@ async function uiScenario(widgets) {
         const m = await waitFor(() => {
             const x = api.ui.state().metrics;
             return x && x.zoom > 1.2 ? x : undefined;
-        }, 20000, "the zoomed picture's size");
+        }, 20000, "the zoomed picture's size").catch((e) => { throw new Error(e.message + ": " + JSON.stringify(api.ui.state())); });
         const shape = (m.width / m.height) / (1920 / 1080);
         log("zoomed:", JSON.stringify(m), "shape", shape.toFixed(3));
         assert(Math.abs(shape - 1) < 0.01, "the zoomed picture is stretched: " + JSON.stringify(m));
@@ -165,6 +172,39 @@ async function uiScenario(widgets) {
     }
 }
 
+// The addon's session as a user runs it: the world profile's game, a
+// system command typed in the Debug Console, its answer in the chat frame
+// the panel draws, the panel drawing on while the game runs.
+async function chatScenario() {
+    const name = "addon: a command's answer shows in the panel's chat";
+    log(`== ${name}`);
+    const api = await vscode.extensions.getExtension("wowlua.wowlua").activate();
+    const folder = vscode.workspace.workspaceFolders[0];
+    try {
+        await vscode.debug.startDebugging(folder, { type: "wowlua", request: "launch", name: "run the addon", addon: true, flavor: "camelot", profile: "camelot" });
+        const session = await waitFor(() => vscode.debug.activeDebugSession, 30000, "the session");
+        await waitFor(() => api.ui.state().open && api.ui.state().shots >= 2, 60000, "the panel drawing twice");
+        await new Promise(r => setTimeout(r, 3000));
+        await session.customRequest("evaluate", { expression: "/played", context: "repl" });
+        const at = api.ui.state().shots;
+        await waitFor(() => api.ui.state().shots >= at + 4, 20000, "the panel drawing on");
+        log("panel:", JSON.stringify(api.ui.state()));
+        // Closed and opened again, the panel draws on while the game runs.
+        api.ui.panel.dispose();
+        await vscode.commands.executeCommand("wowlua.showUI");
+        const reopened = api.ui.state().shots;
+        await waitFor(() => api.ui.state().shots >= reopened + 3, 20000, "the reopened panel drawing on");
+        if (process.env.WOWLUA_CHAT_SHOT) {
+            fs.writeFileSync(process.env.WOWLUA_CHAT_SHOT, Buffer.from(api.ui.lastPng, "base64"));
+            log("captured", process.env.WOWLUA_CHAT_SHOT);
+        }
+        log("PASS", name);
+    } finally {
+        if (vscode.debug.activeDebugSession) await vscode.debug.stopDebugging();
+        await new Promise(r => setTimeout(r, 2000));
+    }
+}
+
 exports.run = async function () {
     const folder = vscode.workspace.workspaceFolders[0].uri.fsPath;
     await vscode.workspace.getConfiguration("wowlua").update("path", process.env.WOWLUA_BIN, vscode.ConfigurationTarget.Global);
@@ -172,6 +212,12 @@ exports.run = async function () {
     vscode.debug.addBreakpoints([new vscode.SourceBreakpoint(new vscode.Location(widgets, new vscode.Position(20, 0)))]);
     const base = { type: "wowlua", request: "launch", name: "wowlua: debug the counter test", test: "tests/window.test.wowlua", filter: "clicking the counter" };
     let failed = 0;
+    if (process.env.WOWLUA_SCENARIO === "chat") {
+        try { await chatScenario(); } catch (e) { failed++; log(String(e)); }
+        log(failed ? `${failed} FAILED` : "ALL PASSED");
+        if (failed) throw new Error(`${failed} scenarios failed`);
+        return;
+    }
     try {
         await scenario("camelot: the breakpoint in OnClick", { ...base, flavor: "camelot" }, (stop, ed, frames) => {
             assert(stop.reason === "breakpoint", "stopped for " + stop.reason);
@@ -189,6 +235,9 @@ exports.run = async function () {
     } catch (e) { failed++; log(String(e)); }
     try {
         await uiScenario(widgets);
+    } catch (e) { failed++; log(String(e)); }
+    try {
+        await chatScenario();
     } catch (e) { failed++; log(String(e)); }
     log(failed ? `${failed} FAILED` : "ALL PASSED");
     if (failed) throw new Error(`${failed} scenarios failed`);

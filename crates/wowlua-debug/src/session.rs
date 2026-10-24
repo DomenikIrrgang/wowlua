@@ -294,7 +294,9 @@ pub fn run(
     SESSION.with(|s| *s.borrow_mut() = Some(shared.clone()));
     let tee = shared.clone();
     wowlua_test::set_tee(Some(Box::new(move |o: Output| match o {
-        Output::Printed(text) => send_output(&tee, "stdout", text),
+        // A chat line as the chat frame shows it: no colour codes, links'
+        // codes or textures, `|4day:days;` its word.
+        Output::Printed(text) => send_output(&tee, "stdout", wowlua_engine::text::plain(&text)),
         Output::Error { message, stack } => {
             send_output(&tee, "stderr", format!("{message}\n{stack}\n"))
         }

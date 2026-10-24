@@ -148,7 +148,10 @@ expression or statement list, compiled as a chunk whose environment reads
 the frame's locals and upvalues first, then its environment; it runs with
 the frame's execution taint (so it cannot make insecure code secure), with
 breakpoints off, and its errors are its result. Assignments to locals and
-upvalues write the frame's. What the session prints goes to the console.
+upvalues write the frame's. What the session prints goes to the console,
+as the chat frame shows it: colour codes, links' codes and inline
+textures left out, `|4one:many;` its word for the number (a chat line's
+text, `ChatFrame1:AddMessage`'s, is otherwise the game's own).
 
 ## 18.8 Profiler
 
@@ -499,7 +502,10 @@ trackpad's pinch) at the pointer, its buttons, *Fit* and *1:1* (the
 screen's own pixels), panned with the scrollbars, the wheel, or a drag
 with the middle button or Space held; *Zoom to frame…* picks a visible
 named frame and zooms so it fills the panel, outlined (the Frames view's
-zoom button too). Shown larger than its pixels, the screen is drawn at 2
+zoom button too): opened, it lists the frames shown, renewed as they
+come without closing, filtered as their names are typed (arrows and
+Enter pick). Closed and opened again during a session, the panel draws on
+as before. Shown larger than its pixels, the screen is drawn at 2
 (above 1.25 device pixels per screen pixel) or 3 times (above 2.5)
 `wowlua/screenshot`'s scale, so it stays sharp. A click in it is `wowlua/input`'s click at that pixel (the
 right button for a right-click), so the frame under it gets the click and

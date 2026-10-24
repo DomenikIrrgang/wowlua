@@ -398,6 +398,14 @@ fn the_addons_session_takes_slash_commands_in_the_console() {
         json!({ "expression": "/demo hello there", "context": "repl" }),
     );
     assert_eq!(ran["result"], "", "{ran:#}");
+    // What it prints shows as the chat frame shows it.
+    c.request(
+        "evaluate",
+        json!({ "expression": "print('|cff33ff99Demo|r: 2 |4day:days;')", "context": "repl" }),
+    );
+    c.wait("the printed line, plain", |m| {
+        m["event"] == "output" && m["body"]["output"] == "Demo: 2 days\n"
+    });
     let value = c.request(
         "evaluate",
         json!({ "expression": "DemoSlash", "context": "repl" }),

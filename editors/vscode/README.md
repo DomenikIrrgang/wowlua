@@ -55,7 +55,8 @@ click in the game (right-click for the right button): the frame under the
 pointer gets the click, so its breakpoints stop. Zoom with Ctrl or Cmd and
 the wheel (or a pinch), or the buttons; pan with the scrollbars, the wheel,
 or by dragging with the middle button or Space held. *Zoom to frame…*
-zooms to a frame by its name; zoomed in, the screen is drawn sharper. *wowlua: Show UI* opens it;
+lists the frames on screen (type to filter, arrows and Enter to pick) and
+zooms to the one you pick; zoomed in, the screen is drawn sharper. *wowlua: Show UI* opens it;
 `wowlua.ui.autoOpen` opens it as a session starts.
 
 The **wowlua Frames** view in the debug sidebar lists the frames on

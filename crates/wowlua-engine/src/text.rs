@@ -210,6 +210,15 @@ pub fn visible(text: &str) -> String {
     out
 }
 
+/// The text as a log shows it (the debugger's console): what [`visible`]
+/// shows, its inline textures left out.
+pub fn plain(text: &str) -> String {
+    visible(text)
+        .chars()
+        .filter(|&c| inline_height(c).is_none())
+        .collect()
+}
+
 /// The form `|4one:many;` takes after `before`: the first for the number 1
 /// written last (spaces between), else the second, as the client's chat
 /// writes "1 day", "2 days" (`TIME_PLAYED_TOTAL`, `WHO_NUM_RESULTS`).

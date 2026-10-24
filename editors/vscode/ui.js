@@ -79,7 +79,13 @@ class UiPanel {
             this.stopTimer();
         });
         this.post({ type: "frames", frames: this.frames });
+        if (this.session && !this.ended) {
+            this.post({ type: "status", text: this.paused ? "Paused (continue to click in the game)" : "Running" });
+        }
         this.refresh();
+        // Opened again during a session: drawing on as the game runs (its
+        // timer stopped with the panel closed).
+        this.schedule();
     }
 
     post(message) {
@@ -118,6 +124,7 @@ class UiPanel {
             const scale = this.scale;
             const shot = await this.session.customRequest("wowlua/screenshot", scale === 1 ? {} : { scale });
             this.shots += 1;
+            this.lastPng = shot.png;
             this.last = { width: shot.width, height: shot.height, scale, at: Date.now() };
             // The screen's size in its pixels, whatever the drawing's scale.
             this.post({
@@ -191,6 +198,9 @@ class UiPanel {
                     await this.requestFrames();
                 }
                 return;
+            case "picker":
+                this.picker = { open: m.open, items: m.items };
+                return;
             case "metrics":
                 this.metrics = { width: m.width, height: m.height, zoom: m.zoom };
                 return;
@@ -237,6 +247,7 @@ class UiPanel {
             scale: this.scale,
             frames: this.frames.length,
             metrics: this.metrics,
+            picker: this.picker,
         };
     }
 }
@@ -278,6 +289,15 @@ function html() {
   img { display: block; cursor: crosshair; max-width: none; max-height: none; }
   #outline { position: absolute; border: 2px solid var(--vscode-focusBorder); pointer-events: none; display: none; box-sizing: border-box; }
   #empty { padding: 24px; opacity: 0.7; line-height: 1.5; }
+  .picker { position: relative; }
+  /* The picker's list: the panel's own (a datalist closed whenever its
+     options were renewed, as they are while it opens). */
+  #pickList { position: absolute; z-index: 10; left: 0; top: 100%; min-width: 100%; max-height: 50vh; overflow-y: auto; margin: 2px 0 0; padding: 2px 0; list-style: none; background: var(--vscode-dropdown-background, var(--vscode-input-background)); color: var(--vscode-dropdown-foreground, var(--vscode-foreground)); border: 1px solid var(--vscode-dropdown-border, var(--vscode-panel-border)); box-shadow: 0 2px 8px var(--vscode-widget-shadow, rgba(0,0,0,0.4)); }
+  #pickList[hidden] { display: none; }
+  #pickList li { padding: 2px 8px; white-space: nowrap; cursor: pointer; display: flex; gap: 12px; justify-content: space-between; }
+  #pickList li .kind { opacity: 0.6; }
+  #pickList li.active { background: var(--vscode-list-activeSelectionBackground); color: var(--vscode-list-activeSelectionForeground); }
+  #pickList li.none { opacity: 0.6; cursor: default; }
 </style>
 </head>
 <body>
@@ -291,8 +311,7 @@ function html() {
   <button id="fit" title="Fit the whole screen in the panel">Fit</button>
   <button id="one" title="The screen's own pixels">1:1</button>
   <span class="sep"></span>
-  <input type="text" id="pick" list="frameList" placeholder="Zoom to frame…" title="Type a frame's name, then Enter">
-  <datalist id="frameList"></datalist>
+  <span class="picker"><input type="text" id="pick" placeholder="Zoom to frame…" title="Pick a frame, or type part of its name" autocomplete="off" spellcheck="false"><ul id="pickList" hidden></ul></span>
   <span id="status">Waiting for the session</span>
 </div>
 <div id="stage">
@@ -308,7 +327,10 @@ function html() {
   const outline = document.getElementById("outline");
   const zoomText = document.getElementById("zoomText");
   const pick = document.getElementById("pick");
-  const list = document.getElementById("frameList");
+  const list = document.getElementById("pickList");
+  let frames = []; // the picker's frames: { label, type, rect }
+  let matches = [];
+  let active = -1;
   const MARGIN = 16;
   let screen = { width: 0, height: 0 }; // the game's screen, its pixels
   let zoom = null; // displayed pixels per screen pixel; null: fit
@@ -375,12 +397,64 @@ function html() {
   document.getElementById("out").onclick = () => zoomBy(0.8);
   document.getElementById("fit").onclick = () => { zoom = null; layout(); stage.scrollLeft = 0; stage.scrollTop = 0; };
   document.getElementById("one").onclick = () => zoomAt(1, stage.clientWidth / 2, stage.clientHeight / 2);
-  pick.addEventListener("change", () => { if (pick.value) vscode.postMessage({ type: "pick", label: pick.value }); });
+  // The picker: the frames whose names have what is typed, the list
+  // drawn again (open) as the frames come.
+  function renderList() {
+    const q = pick.value.trim().toLowerCase();
+    matches = frames.filter((f) => !q || f.label.toLowerCase().includes(q));
+    if (active >= matches.length) active = matches.length - 1;
+    list.textContent = "";
+    if (!matches.length) {
+      const li = document.createElement("li");
+      li.className = "none";
+      li.textContent = frames.length ? "No frame has that name" : "Loading the frames…";
+      list.appendChild(li);
+    }
+    matches.slice(0, 300).forEach((f, i) => {
+      const li = document.createElement("li");
+      if (i === active) li.className = "active";
+      const n = document.createElement("span");
+      n.textContent = f.label;
+      const k = document.createElement("span");
+      k.className = "kind";
+      k.textContent = f.type + " " + Math.round(f.rect.width) + "×" + Math.round(f.rect.height);
+      li.append(n, k);
+      // (mousedown: before the input's blur closes the list)
+      li.addEventListener("mousedown", (e) => { e.preventDefault(); choose(f); });
+      list.appendChild(li);
+    });
+  }
+  function openList() { list.hidden = false; renderList(); }
+  function closeList() { list.hidden = true; active = -1; }
+  function choose(f) {
+    pick.value = f.label;
+    closeList();
+    vscode.postMessage({ type: "pick", label: f.label });
+  }
   // Opening the picker asks for the frames shown now (windows open and
   // close while the game runs).
-  pick.addEventListener("focus", () => vscode.postMessage({ type: "framesWanted" }));
-  pick.addEventListener("mousedown", () => vscode.postMessage({ type: "framesWanted" }));
-  pick.addEventListener("keydown", (e) => { if (e.key === "Enter" && pick.value) vscode.postMessage({ type: "pick", label: pick.value }); });
+  pick.addEventListener("focus", () => { openList(); vscode.postMessage({ type: "framesWanted" }); });
+  pick.addEventListener("click", () => { if (list.hidden) openList(); });
+  pick.addEventListener("input", () => { active = -1; openList(); });
+  pick.addEventListener("blur", () => closeList());
+  pick.addEventListener("keydown", (e) => {
+    if (e.key === "ArrowDown" || e.key === "ArrowUp") {
+      e.preventDefault();
+      if (list.hidden) openList();
+      const n = Math.min(matches.length, 300);
+      if (!n) return;
+      active = e.key === "ArrowDown" ? (active + 1) % n : (active <= 0 ? n - 1 : active - 1);
+      renderList();
+      const el = list.children[active];
+      if (el) el.scrollIntoView({ block: "nearest" });
+    } else if (e.key === "Enter") {
+      const exact = frames.find((f) => f.label === pick.value);
+      const f = active >= 0 ? matches[active] : exact || matches[0];
+      if (f) choose(f);
+    } else if (e.key === "Escape") {
+      closeList();
+    }
+  });
 
   // Ctrl or Cmd with the wheel, and a trackpad pinch (its wheel events
   // carry ctrlKey), zoom at the pointer; the wheel alone scrolls.
@@ -440,13 +514,14 @@ function html() {
       rect = m.rect;
       if (screen.width) zoomToRect(m.rect); else pendingZoom = m.rect;
     } else if (m.type === "frames") {
-      list.innerHTML = "";
-      for (const f of m.frames) {
-        const o = document.createElement("option");
-        o.value = f.label;
-        o.label = f.type + " " + f.rect.width + "×" + f.rect.height;
-        list.appendChild(o);
-      }
+      frames = m.frames;
+      if (!list.hidden) renderList();
+    } else if (m.type === "openPicker") {
+      // For the extension's tests: the picker opened as a click opens it,
+      // what it shows reported once the frames came.
+      openList();
+      vscode.postMessage({ type: "framesWanted" });
+      setTimeout(() => vscode.postMessage({ type: "picker", open: !list.hidden, items: list.querySelectorAll("li:not(.none)").length }), 1500);
     }
   });
 </script>

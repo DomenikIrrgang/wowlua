@@ -319,6 +319,17 @@ fn plural_escapes_follow_the_number_before() {
     );
 }
 
+/// The debugger's console shows a chat line as the chat frame does.
+#[test]
+fn plain_text_leaves_out_colours_links_and_textures() {
+    assert_eq!(
+        wowlua_engine::text::plain(
+            "|cff33ff99Demo|r: |HurlIndex:64|h|cnVISITABLE_URL_DEFAULT_CHAT_LINK_COLOR:a link|r|h |TInterface\\Icons\\Spell_Nature_Rejuvenation:0|t, 2 |4day:days;"
+        ),
+        "Demo: a link , 2 days"
+    );
+}
+
 /// Other players of the world who accept invitations join a moment after
 /// the player's `/invite` (decision T363): a party of five, then full; a
 /// raid after converting, its second group filling; the leader removes and
