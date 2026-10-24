@@ -30,6 +30,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `mock.tooltipLines(tip?, right?)` gives the lines a tooltip shows in a test (its left texts, or the right ones), and `mock.sentAddonMessages()` is typed: each message's `prefix`, `message`, `chatType` and `target`.
 - `mock.textOf(label)` gives the text a font string, button or edit box shows in a test, `""` when it has none.
 - In tests, more of the game's widget methods do what they do in the game: `frame:Raise()` and `frame:Lower()` change the frame level, `editBox:HighlightText()` selects text that `editBox:Insert(text)` and `mock.type` then replace (typing used to append), `font:CopyFontObject(other)` copies the font, `AdjustPointsOffset` moves the anchors, and `ClearModel`, `ClearNormalTexture`, `ClearText`, `ClearParentKey`, `ResetTexCoord` and `StopAnimating` undo what was set. `SetMerchantFilter`, `SetGuildRosterSelection` and `TaxiRequestEarlyLanding` work too instead of failing as not mocked.
+- Tests can target as the player does: a keybinding or secure button calling `TargetNearestEnemy`, `TargetNearestFriend` and the other tab-targeting functions cycles the units in range, nearest first; `TargetLastTarget`, `AssistUnit`, `FocusUnit`, `CancelUnitBuff` and `CancelSpellByName` work too. An edit box keeps the lines `AddHistoryLine` adds, and `mock.pressKey("UP")` brings them back; the arrow keys run `OnArrowPressed` and move the cursor.
 
 ### Changed
 

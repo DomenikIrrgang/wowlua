@@ -18,27 +18,27 @@ that client answered. The other flavors have their API documentation, the same
 engine modules and the generated stand-ins, but no recording of their own: what
 their clients answer differently is unverified.
 
-- **API functions:** 5,039 of the 5,111 documented camelot functions have
-  behaviour (98.6%): 1,009 modelled, 359 answered from recordings, 3,671 by a
+- **API functions:** 5,048 of the 5,111 documented camelot functions have
+  behaviour (98.8%): 1,018 modelled, 359 answered from recordings, 3,671 by a
   documentation-based fill-in. Of all 7,175 C functions the client has,
-  documented or not, 7,076 have behaviour.
-- **Widget methods:** 1,347 of the 1,477 documented methods have behaviour
-  (91.2%).
+  documented or not, 7,087 have behaviour.
+- **Widget methods:** 1,349 of the 1,477 documented methods have behaviour
+  (91.3%).
 - **Full probe:** 33,082 of the client's 33,727 answers given as the client gave
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,101 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,103 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
-| standard | 4,871 | 4,436 (91.1%) | 0 | 1,438 | 1,304 (90.7%) | none |
-| camelot | 5,111 | 5,039 (98.6%) | 359 | 1,477 | 1,347 (91.2%) | all |
-| mists | 3,221 | 2,827 (87.8%) | 0 | 1,360 | 1,233 (90.7%) | none |
-| cata | 1,927 | 1,631 (84.6%) | 0 | 1,008 | 905 (89.8%) | none |
-| wrath | 3,227 | 2,834 (87.8%) | 0 | 1,360 | 1,233 (90.7%) | none |
-| tbc | 3,220 | 2,830 (87.9%) | 0 | 1,360 | 1,233 (90.7%) | none |
-| vanilla | 3,220 | 2,830 (87.9%) | 0 | 1,360 | 1,233 (90.7%) | none |
+| standard | 4,871 | 4,445 (91.3%) | 0 | 1,438 | 1,306 (90.8%) | none |
+| camelot | 5,111 | 5,048 (98.8%) | 359 | 1,477 | 1,349 (91.3%) | all |
+| mists | 3,221 | 2,836 (88.0%) | 0 | 1,360 | 1,235 (90.8%) | none |
+| cata | 1,927 | 1,640 (85.1%) | 0 | 1,008 | 907 (90.0%) | none |
+| wrath | 3,227 | 2,843 (88.1%) | 0 | 1,360 | 1,235 (90.8%) | none |
+| tbc | 3,220 | 2,839 (88.2%) | 0 | 1,360 | 1,235 (90.8%) | none |
+| vanilla | 3,220 | 2,839 (88.2%) | 0 | 1,360 | 1,235 (90.8%) | none |
 
 ## API behaviour
 
@@ -62,7 +62,7 @@ ones together):
 
 | Namespace | Functions | Model | Recorded | Fill-in | Generated |
 |-----------|----------:|------:|---------:|--------:|----------:|
-| `(globals)` | 2,102 | 720 | 102 | 1,220 | 60 |
+| `(globals)` | 2,102 | 731 | 102 | 1,220 | 49 |
 | `C_AccountInfo` | 3 | 0 | 0 | 3 | 0 |
 | `C_AccountServices` | 10 | 0 | 4 | 6 | 0 |
 | `C_AccountStore` | 11 | 0 | 0 | 11 | 0 |
@@ -348,14 +348,14 @@ ones together):
 | `math` | 38 | 38 | 0 | 0 | 0 |
 | `string` | 23 | 23 | 0 | 0 | 0 |
 | `table` | 23 | 23 | 0 | 0 | 0 |
-| **All** | 7,175 | 1,593 | 442 | 5,041 | 99 |
+| **All** | 7,175 | 1,604 | 442 | 5,041 | 88 |
 
 By where the function is listed:
 
 | List | Functions | Model | Recorded | Fill-in | Generated |
 |------|----------:|------:|---------:|--------:|----------:|
-| Blizzard's API documentation | 5,111 | 1,009 | 359 | 3,671 | 72 |
-| the client's other C functions (`/stdtest inventory`) | 2,064 | 584 | 83 | 1,370 | 27 |
+| Blizzard's API documentation | 5,111 | 1,018 | 359 | 3,671 | 63 |
+| the client's other C functions (`/stdtest inventory`) | 2,064 | 586 | 83 | 1,370 | 25 |
 | the engine's own, in neither list | 6 | 5 | 0 | 1 | 0 |
 
 Of the engine's own, Blizzard's UI code defines these in the client (Lua
@@ -387,7 +387,7 @@ The modules that answer, by how many functions and methods:
 | `stats` | model | 135 |
 | `methods2` | fill-in | 133 |
 | `objects2` | model | 111 |
-| `units` | model | 95 |
+| `units` | model | 94 |
 | `guild` | model | 80 |
 | `extras` | model | 78 |
 | `tradeskill` | model | 71 |
@@ -418,9 +418,9 @@ The modules that answer, by how many functions and methods:
 | `trainer` | model | 22 |
 | `widgetdata` | recorded | 21 |
 | `taxi` | model | 20 |
+| `widgetops` | model | 20 |
 | `input` | model | 18 |
 | `pets` | model | 18 |
-| `widgetops` | model | 18 |
 | `party` | model | 17 |
 | `clock` | model | 16 |
 | `cursor` | model | 15 |
@@ -428,6 +428,7 @@ The modules that answer, by how many functions and methods:
 | `bank` | model | 14 |
 | `chatwindows` | model | 13 |
 | `traits` | model | 13 |
+| `targeting` | model | 12 |
 | `tooltip` | model | 12 |
 | `death` | model | 11 |
 | `channels` | model | 10 |
@@ -480,7 +481,7 @@ widget's recorded value where `/stdtest engine` recorded one):
 | `DurationManualClock` | 4 | 4 | 0 | 0 | 0 |
 | `DurationObject` | 31 | 31 | 0 | 0 | 0 |
 | `DurationTextBindingObject` | 30 | 30 | 0 | 0 | 0 |
-| `EditBox` | 79 | 54 | 0 | 21 | 4 |
+| `EditBox` | 79 | 56 | 0 | 21 | 2 |
 | `FlipBook` | 10 | 5 | 0 | 5 | 0 |
 | `FogOfWarFrame` | 12 | 6 | 0 | 6 | 0 |
 | `Font` | 24 | 14 | 0 | 10 | 0 |
@@ -532,7 +533,7 @@ widget's recorded value where `/stdtest engine` recorded one):
 | `UnitPositionFrame` | 12 | 4 | 0 | 3 | 5 |
 | `VectorGraphics` | 4 | 1 | 0 | 0 | 3 |
 | `VertexColor` | 4 | 2 | 0 | 2 | 0 |
-| **All** | 1,477 | 981 | 21 | 345 | 130 |
+| **All** | 1,477 | 983 | 21 | 345 | 128 |
 
 ## Verification against the client
 
@@ -835,7 +836,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,101 rules unverified: each rests on Blizzard's
+The engine's code marks 1,103 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -1434,12 +1435,13 @@ page changes only when a rule is added, removed or reworded.
 - [healcalc.rs](../crates/wowlua-engine/src/healcalc.rs): The engine's units have no absorbs and no incoming heals (`UnitGetIncomingHeals`, `UnitGetTotalAbsorbs`: none), so th...
 - [healcalc.rs](../crates/wowlua-engine/src/healcalc.rs): `UnitGetDetailedHealPrediction(unit, healer, calculator)`: the unit's health and maximum kept in the calculator (noth...
 
-### input (5)
+### input (6)
 
 - [input.rs](../crates/wowlua-engine/src/input.rs): The key itself, pressed: to the keyboard frames as any key (`/stdtest engine keys`: `OnKeyDown("LSHIFT")`; unverified...
 - [input.rs](../crates/wowlua-engine/src/input.rs): An enabled button's click, down or up as it registered for clicks (`RegisterForClicks`: by default the left button's...
 - [input.rs](../crates/wowlua-engine/src/input.rs): The keyboard focus let go once its edit box is out of sight (hidden, or a parent hidden or changed): keys reach the g...
 - [input.rs](../crates/wowlua-engine/src/input.rs): A key the focused edit box takes, whether it took it: every key while it has the focus (unverified: typing into chat...
+- [input.rs](../crates/wowlua-engine/src/input.rs): The user clicks into an edit box: after its text (the engine's click is at the box's middle; unverified where the cli...
 - [input.rs](../crates/wowlua-engine/src/input.rs): `IsMouseOver(top, bottom, left, right)`: the mouse over the region's rectangle grown by the offsets (`mouse_inside`),...
 
 ### inspect (1)
@@ -1985,6 +1987,10 @@ page changes only when a rule is added, removed or reworded.
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): Raid marks (unverified: no mark kept).
 - [systeminfo.rs](../crates/wowlua-engine/src/systeminfo.rs): Headers: the engine's list is the recorded one, flat (unverified: collapsing hides the children).
 
+### targeting (1)
+
+- [targeting.rs](../crates/wowlua-engine/src/targeting.rs): Unverified, none recorded: the range (40 yards here), whether a neutral creature counts as an enemy (it does here: it...
+
 ### taxi (5)
 
 - [taxi.rs](../crates/wowlua-engine/src/taxi.rs): Unverified: the routes' hops, a node's state other than current, reachable and unreachable; the item and durability u...
@@ -2323,6 +2329,8 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Situations (one /dump each, whenever it happens)
 - Replay leftovers
 - The guild
+- Widget state (decision T289)
+- Targeting and history (decision T291)
 - Regressions and other flavors
 
 ## In-game regressions

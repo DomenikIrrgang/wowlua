@@ -76,6 +76,7 @@ pub mod social;
 pub mod spellinfo;
 pub mod stats;
 pub mod systeminfo;
+pub mod targeting;
 pub mod taxi;
 pub mod text;
 pub mod timeline;
@@ -1103,6 +1104,7 @@ pub(crate) fn own_behaviours(flavor: &str) -> Vec<Behaviours<NativeFn>> {
         Behaviours::new("clock", clock::behaviours()),
         Behaviours::new("units", units::behaviours()),
         Behaviours::new("units", units::more_behaviours()),
+        Behaviours::new("targeting", targeting::behaviours()),
         Behaviours::new("curves", curves::behaviours()),
         Behaviours::new("healcalc", healcalc::behaviours()),
         Behaviours::new("damagemeter", damagemeter::behaviours()),

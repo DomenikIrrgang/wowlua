@@ -11,6 +11,9 @@
 //!   user types (`mock.type`) goes there too; `SetText` puts the cursor at
 //!   the end and drops the selection, as the user's click or typing into a
 //!   box without the focus does before its `OnEditFocusGained`.
+//! - An edit box's history: `AddHistoryLine(text)` keeps the line (as many
+//!   as `SetHistoryLines` allows), `ClearHistory()` forgets them, and the
+//!   up and down arrows step through them (`arrow`).
 //! - `Font:CopyFontObject(font)`: the other font's font, colors, shadow,
 //!   spacing and justification copied, as its getters answer them.
 //! - `AdjustPointsOffset(x, y)`: every anchor moved by (x, y);
@@ -24,7 +27,8 @@
 //! Unverified, none recorded: which frames `Raise` counts (the shown ones
 //! of the strata here) and the level cap (10000), `Insert`'s
 //! `OnTextChanged` (`false`, the frame's update after, as `SetText`'s),
-//! a selection given backwards, `ClearPointsOffset` zeroing the offsets
+//! a selection given backwards, a box without `SetHistoryLines` keeping
+//! no line, the arrows' order (`OnArrowPressed` first), `ClearPointsOffset` zeroing the offsets
 //! `SetPoint` gave, and the stems `ClearModel` drops.
 
 use wowlua_vm::stdlib::Ret;
@@ -224,6 +228,95 @@ fn insert_text(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
+// --------------------------------------------------------------- history
+
+/// The lines `AddHistoryLine` kept, oldest first, and where the arrow keys
+/// are in them (the engine's own stems).
+const HISTORY: &str = "\u{0}History";
+const HISTORY_AT: &str = "\u{0}HistoryAt";
+
+fn history(vm: &mut Vm, id: WidgetId) -> Vec<Value> {
+    let props = engine(vm).world.widgets[id.0].props;
+    widgets::stored_args(vm, props, HISTORY).unwrap_or_default()
+}
+
+/// `AddHistoryLine(text)`: kept, as many lines as `SetHistoryLines` allows
+/// (the oldest go first; none without it).
+fn add_history_line(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let max = first_number(vm, id, "HistoryLines").unwrap_or(0.0).max(0.0) as usize;
+    let line = match vm.hidden(c.arg(2)) {
+        v @ Value::Str(_) => v,
+        _ => return Ok(vec![]),
+    };
+    let mut lines = history(vm, id);
+    lines.push(line);
+    let extra = lines.len().saturating_sub(max);
+    lines.drain(..extra);
+    widgets::store(vm, id, HISTORY, &lines);
+    unset(vm, id, HISTORY_AT);
+    Ok(vec![])
+}
+
+/// `ClearHistory()`: no lines kept.
+fn clear_history(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    unset(vm, id, HISTORY);
+    unset(vm, id, HISTORY_AT);
+    Ok(vec![])
+}
+
+/// An arrow key (`UP`, `DOWN`, `LEFT`, `RIGHT`) the focused edit box takes,
+/// whether it took it: with `SetAltArrowKeyMode(true)` only with Alt held.
+/// It runs `OnArrowPressed(key)`; left and right move the cursor a
+/// character (the selection gone), up and down step through the history
+/// lines, the newest first, down past the newest an empty text
+/// (`OnTextChanged(true)`).
+pub fn arrow(vm: &mut Vm, id: WidgetId, key: &str) -> bool {
+    let props = engine(vm).world.widgets[id.0].props;
+    let alt_mode = widgets::stored_args(vm, props, "AltArrowKeyMode")
+        .and_then(|v| v.first().copied())
+        .is_some_and(|v| v.truthy());
+    if alt_mode && !engine(vm).world.input.modifiers[2] {
+        return false;
+    }
+    let k = vm.str(key);
+    widgets::run_script(vm, id, "OnArrowPressed", &[k]);
+    let text = text_of(vm, id);
+    match key {
+        "LEFT" | "RIGHT" => {
+            let at = cursor(vm, id, &text);
+            let moved = if key == "LEFT" {
+                text[..at]
+                    .chars()
+                    .next_back()
+                    .map_or(at, |c| at - c.len_utf8())
+            } else {
+                text[at..].chars().next().map_or(at, |c| at + c.len_utf8())
+            };
+            unset(vm, id, HIGHLIGHT);
+            widgets::store(vm, id, "CursorPosition", &[Value::Num(moved as f64)]);
+        }
+        _ => {
+            let lines = history(vm, id);
+            if lines.is_empty() {
+                return true;
+            }
+            let n = lines.len();
+            let at = first_number(vm, id, HISTORY_AT).map_or(n, |a| a as usize);
+            let next = match key {
+                "UP" if at > 0 => at - 1,
+                "DOWN" if at < n => at + 1,
+                _ => return true,
+            };
+            widgets::store(vm, id, HISTORY_AT, &[Value::Num(next as f64)]);
+            let line = lines.get(next).copied().unwrap_or_else(|| vm.str(""));
+            widgets::store_text(vm, id, Some(line));
+            text_set(vm, id);
+            widgets::run_script(vm, id, "OnTextChanged", &[Value::Bool(true)]);
+        }
+    }
+    true
+}
+
 // --------------------------------------------------------------- fonts
 
 /// What a font's getters read, by setter stem.
@@ -404,6 +497,8 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
         ("EditBox:HighlightText", highlight_text),
         ("EditBox:ClearHighlightText", clear_highlight_text),
         ("EditBox:Insert", insert_text),
+        ("EditBox:AddHistoryLine", add_history_line),
+        ("EditBox:ClearHistory", clear_history),
         ("Font:CopyFontObject", copy_font_object),
         ("AdjustPointsOffset", adjust_points_offset),
         ("ClearPointsOffset", clear_points_offset),

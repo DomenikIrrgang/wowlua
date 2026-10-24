@@ -361,7 +361,17 @@ The WoW API the VM's code calls, per flavor.
   zeroes them; the clears (`ClearModel`, a button's `ClearNormalTexture`
   and the other states', `FontString:ClearText`, `ClearParentKey`,
   `ResetTexCoord`, `StopAnimating`) undo their setters. A method only a
-  renderer would show (`LockHighlight`) is kept for it.
+  renderer would show (`LockHighlight`) is kept for it. An edit box keeps
+  the lines `AddHistoryLine` adds (as many as `SetHistoryLines` allows,
+  `ClearHistory` forgets them); the arrow keys run `OnArrowPressed`, left
+  and right move the cursor, up and down step through the history (with
+  `SetAltArrowKeyMode(true)` only while Alt is held; decision T291).
+- **Targeting.** Tab-targeting cycles the units of its kind within 40
+  yards, nearest first (`TargetNearestEnemy([reverse])` and its kin);
+  `TargetLastTarget`, `AssistUnit` and `FocusUnit` follow the units'
+  targets; `CancelUnitBuff` and `CancelSpellByName` remove the player's
+  own buff (decision T291). They are protected: an addon's call is
+  refused first.
 - **Not mocked.** A generated function without behaviour raises
   "`<name>` is not mocked" when called, unless the project provides a mock
   (Tooling §16.1.4), so gaps are visible instead of silently returning nil.

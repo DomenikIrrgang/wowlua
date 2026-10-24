@@ -385,11 +385,16 @@ pub fn control_type(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// A key the focused edit box takes, whether it took it: every key while
 /// it has the focus (unverified: typing into chat runs no binding),
-/// `ENTER`, `ESCAPE`, `TAB` and `SPACE` running its scripts.
+/// `ENTER`, `ESCAPE`, `TAB` and `SPACE` running its scripts, the arrows
+/// as `widgetops::arrow` has them (with the Alt arrow mode, only with Alt
+/// held).
 pub fn edit_box_key(vm: &mut Vm, key: &str) -> bool {
     let Some(id) = engine(vm).world.input.keyboard_focus else {
         return false;
     };
+    if matches!(key, "UP" | "DOWN" | "LEFT" | "RIGHT") {
+        return as_user(vm, |vm| crate::widgetops::arrow(vm, id, key));
+    }
     let script = match key {
         "ENTER" => "OnEnterPressed",
         "ESCAPE" => "OnEscapePressed",

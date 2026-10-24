@@ -125,6 +125,8 @@ pub struct Units {
     pub echoing: Option<Option<UnitId>>,
     pub list: Vec<Unit>,
     pub target: Option<UnitId>,
+    /// The target before the last change (`TargetLastTarget`).
+    pub last_target: Option<UnitId>,
     pub focus: Option<UnitId>,
     pub mouseover: Option<UnitId>,
     /// The soft targets: the enemy, the friend, the interact unit.
@@ -2203,10 +2205,14 @@ fn soft_friend_usable(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 /// The player's target now `new`: `PLAYER_TARGET_CHANGED`, the server's
 /// echo (`UNIT_TARGET("player")`) a round trip later.
-fn set_player_target(vm: &mut Vm, new: Option<UnitId>) {
+pub(crate) fn set_player_target(vm: &mut Vm, new: Option<UnitId>) {
     // The same target again: told to the UI, not to the server (no flags,
     // no echo: recorded, `auradeath` 10.030, the cat targeted again).
     let same = new.is_some() && engine(vm).units.target == new;
+    let old = engine(vm).units.target;
+    if old.is_some() && old != new {
+        engine_mut(vm).units.last_target = old;
+    }
     engine_mut(vm).units.target = new;
     engine_mut(vm).units.list[PLAYER.0].target = new;
     fire(vm, "PLAYER_TARGET_CHANGED", &[]);
@@ -3978,7 +3984,6 @@ pub fn more_behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
         ("C_SpecializationInfo.GetAllClassIDs", all_class_ids),
         ("UnitFullName", unit_full_name),
         ("ClearFocus", clear_focus),
-        ("TargetLastTarget", nothing),
         ("StopAttack", nothing),
         ("UnitFactionGroup", unit_faction_group),
         ("UnitPVPName", unit_pvp_name),

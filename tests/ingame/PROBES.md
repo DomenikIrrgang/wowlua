@@ -342,6 +342,29 @@ list fewer items with the class filter.
 Screenshot. The engine says 0, 2, 0 (a row past the roster selects
 none).
 
+## Targeting and history (decision T291)
+
+**Tab-targeting**, near a few creatures (out of combat):
+
+1. `/run local f=CreateFrame("Frame") f:RegisterEvent("PLAYER_TARGET_CHANGED") f:SetScript("OnEvent",function() print(UnitName("target"),UnitReaction("target","player")) end)`
+2. Press Tab five times, then Shift-Tab twice.
+
+Screenshot. The engine cycles the hostile and neutral creatures within
+40 yards nearest first, Shift-Tab back; the names and reactions show
+whether neutral ones count and how far it looks.
+
+**An edit box's history and arrows**:
+
+3. `/run H=CreateFrame("EditBox",nil,UIParent) H:SetSize(200,20) H:SetPoint("CENTER") H:SetFontObject(ChatFontNormal) H:SetAutoFocus(false) H:AddHistoryLine("one") H:AddHistoryLine("two") print(H:GetHistoryLines())`
+4. `/run H:SetScript("OnArrowPressed",function(s,k) print("arrow",k,s:GetText()) end) H:SetScript("OnTextChanged",function(s,u) print("changed",u,s:GetText()) end) H:SetFocus()`
+5. By hand: press Up twice, then Down twice.
+6. `/run H:SetHistoryLines(5) H:AddHistoryLine("three") H:SetFocus()`
+7. By hand: press Up, then Escape.
+
+Screenshot after step 7. The engine keeps no line without
+`SetHistoryLines` (step 5 changes nothing), runs `OnArrowPressed` before
+the text changes, and step 7 brings back "three".
+
 ## Regressions and other flavors
 
 1. With SuuUI's current bags, open the spellbook, enter combat (a training
