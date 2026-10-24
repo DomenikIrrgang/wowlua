@@ -613,10 +613,17 @@ impl Checker<'_, '_> {
                 {
                     let skip = if n.text() == "xpcall" { 2 } else { 1 };
                     let exprs = Self::arg_exprs(args);
+                    // (a string written there as its literal: `"ModelScene"`
+                    // picks its overload, as in a direct call)
                     let rest: Vec<TypeId> = exprs
                         .iter()
                         .skip(skip)
-                        .map(|e| self.peek_or_check(e))
+                        .map(|e| match e.kind() {
+                            ExprKind::String(lit) => {
+                                self.env.types.str(&String::from_utf8_lossy(&lit.value()))
+                            }
+                            _ => self.peek_or_check(e),
+                        })
                         .collect();
                     for o in overloads {
                         if let Ty::Func(f) = self.env.types.get(o).clone()
@@ -3721,6 +3728,28 @@ impl Checker<'_, '_> {
                         let t = self.env.types.func(sig);
                         self.unify(p, t, &mut s);
                     }
+                    continue;
+                }
+                // A last argument that gives several values (`...`, a call)
+                // at a generic `...: T`: `T` from every value it gives, not
+                // the first one alone (`select(i, ...)`, decision L82).
+                if i + 1 == exprs.len()
+                    && i >= f.params.len()
+                    && is_multi(e)
+                    && let Some(Rest::Variadic(rt)) = f.rest
+                    && subst::apply(&mut self.env.types, rt, &probe) != rt
+                {
+                    let saved = self.flow.clone();
+                    let pack = self.infer_multi(e);
+                    self.flow = saved;
+                    let mut values: Vec<TypeId> = pack.types.clone();
+                    if let Some(Rest::Variadic(t)) = pack.rest {
+                        values.push(t);
+                    }
+                    for &t in &values {
+                        self.unify_at(rt, t, &mut s, false, false);
+                    }
+                    arg_types[i] = Some(values.first().copied().unwrap_or(Types::NIL));
                     continue;
                 }
                 let fixed = self

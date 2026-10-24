@@ -2965,6 +2965,8 @@ print(sw.on, sw.other, frame.anything)
 frame:Paint()
 local function paintable(f: Frame): f is Frame & { Paint: (self: Frame) -> () } return f ~= nil end
 if paintable(frame) then frame:Paint() end
+local made, slider = pcall(CreateFrame, "Slider", nil, UIParent)
+if made and slider then slider:SetMinMaxValues(0, 1) end
 local owned = CreateFrame("Button") :: Button & { owner: Frame? }
 owned:SetScript("OnClick", function(self) if self.owner then self.owner:Hide() end end)
 "#;

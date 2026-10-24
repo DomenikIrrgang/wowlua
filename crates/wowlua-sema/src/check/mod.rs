@@ -3347,6 +3347,10 @@ print(a, b, c, d, e, name, realm, more)
             "local function f(i: number, ...: string) local n: number = select(i, ...); print(n) end\nprint(f)\n",
             "E2001",
         );
+        // the loop over `...`: each value as its type
+        strict_ok(
+            "local function f(...: string) for i = 1, select(\"#\", ...) do local s: string = (select(i, ...)); print(s) end end\nprint(f)\n",
+        );
     }
 
     #[test]

@@ -540,7 +540,7 @@ declarations with type packs (§2.2.10). One is special-cased: `select(n, …)`
 with a whole number literal `n` gives the types of the values from the n-th
 on (`select(2, f())` with `f(): (number, string)` is a `string`, decision
 L54); with another `n`, the values' type (`select(i, ...)` with `...: string`
-gives `...string`, decision L82).
+gives `(string, ...string)`: the loop `for i = 1, select("#", ...)` reads each value as its type, decision L82).
 
 ### 2.4.5 String methods
 
