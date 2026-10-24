@@ -368,7 +368,13 @@ The WoW API is typed by **pre-generated `types` packages**, one per flavor:
    agree. A global value is typed by what it is made from (a mixin table
    is its mixin class, `EnumUtil.MakeEnum` a `{ [string]: number }`, a
    call its declared result, an alias what it names). The mixins the
-   declarations refer to are classes. A global or function no source of
+   declarations refer to are classes. A field read of a value of a
+   declared type is that type's field (`auraData.name` of an `AuraData`,
+   through `?` and `Secret<…>`); a definition in a top-level `do … end`
+   block counts as one at the top level; a returned call ending in `...`
+   gives its typed values, then the rest open. A table the annotations
+   declare as a namespace (`AuraUtil`) also has the functions its Lua
+   defines that they lack (decision T296). A global or function no source of
    its flavor types takes the wiki's signature, else the type another
    flavor gives it when every type it names exists in this one (camelot's
    own `Clamp` is typed as retail's MathUtil.lua defines it; decision

@@ -1583,6 +1583,38 @@ pub fn generate(
                 }
             }
         }
+        // the records' and classes' declared fields (`T#x`), for a field
+        // read of a typed value (`auraData.name`)
+        for decls in [&shared, d] {
+            for (iname, fields) in &decls.interfaces {
+                for (field, ty, optional) in fields {
+                    let ty = if *optional {
+                        model::optional(ty)
+                    } else {
+                        ty.clone()
+                    };
+                    api.entry(format!("{iname}#{field}"))
+                        .or_insert_with(|| model::Sig {
+                            returns: vec![ty],
+                            ..model::Sig::default()
+                        });
+                }
+            }
+            for (cname, c) in &decls.classes {
+                for (field, (ty, optional)) in &c.fields {
+                    let ty = if *optional {
+                        model::optional(ty)
+                    } else {
+                        ty.clone()
+                    };
+                    api.entry(format!("{cname}#{field}"))
+                        .or_insert_with(|| model::Sig {
+                            returns: vec![ty],
+                            ..model::Sig::default()
+                        });
+                }
+            }
+        }
         // passes until nothing changes (at most five): each reads the one
         // before's functions and the mixins' fields as typed API, so
         // wrappers of wrappers get their types (`Settings.X` returns
@@ -1782,6 +1814,9 @@ pub fn generate(
     let mut ui_globals: Vec<indexmap::IndexMap<String, (String, Option<String>)>> = Vec::new();
     // Each flavor's mixin classes its named frames are typed with.
     let mut ui_mixins: Vec<indexmap::IndexMap<String, model::Class>> = Vec::new();
+    // Each flavor's functions of a Lua table the annotations declare as a
+    // namespace but without them (`AuraUtil.UnpackAuraData`).
+    let mut ns_extras: Vec<Vec<(String, String, Vec<model::Sig>)>> = Vec::new();
     for (f, (_, _, d)) in flavors.iter().zip(&per_flavor) {
         let lod = framexml::lod_origins(&f.ui_lua, &f.ui_xml, &f.lod_files);
         let ui = framexml::ui_globals(&f.ui_lua, &f.ui_xml, &widget_classes);
@@ -1847,6 +1882,29 @@ pub fn generate(
                 }
             }
         }
+        // a table the annotations declare as a namespace (`AuraUtil`): the
+        // functions its Lua defines that they lack (decision T296)
+        let mut extras: Vec<(String, String, Vec<model::Sig>)> = Vec::new();
+        for (owner, sig) in &inferred[fi] {
+            let infer::Owner::Table {
+                table,
+                member,
+                method: false,
+            } = owner
+            else {
+                continue;
+            };
+            if let Some(ns) = shared.namespaces.get(table)
+                && !ns.functions.contains_key(member)
+                && !ns.values.contains_key(member)
+                && model::is_ident(member)
+            {
+                extras.push((table.clone(), member.clone(), vec![sig.clone()]));
+            }
+        }
+        // (in name order: the map's own order changes from run to run)
+        extras.sort_by(|a, b| (&a.0, &a.1).cmp(&(&b.0, &b.1)));
+        ns_extras.push(extras);
         ui_mixins.push(mixins);
         let mut g: indexmap::IndexMap<String, (String, Option<String>)> = ui
             .globals
@@ -1995,7 +2053,20 @@ pub fn generate(
             }
         }
     }
-    for (((_, _, d), g), over) in per_flavor.iter_mut().zip(ui_globals).zip(ui_overrides) {
+    for ((((_, _, d), g), over), extras) in per_flavor
+        .iter_mut()
+        .zip(ui_globals)
+        .zip(ui_overrides)
+        .zip(ns_extras)
+    {
+        for (ns, member, sigs) in extras {
+            d.namespaces
+                .entry(ns)
+                .or_default()
+                .functions
+                .entry(member)
+                .or_insert(sigs);
+        }
         for (n, ty) in over {
             d.globals.insert(n, ty);
         }

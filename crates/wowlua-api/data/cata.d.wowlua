@@ -8935,7 +8935,7 @@ declare class PortraitFrameMixin extends TitledPanelMixin
     function SetPortraitTexCoord(...: unknown)
     function SetPortraitShown(shown: unknown)
     function SetPortraitTextureSizeAndOffset(size: unknown, offsetX: unknown, offsetY: unknown)
-    function SetFrameLevelsFromBaseLevel(baseLevel: unknown): (...unknown)
+    function SetFrameLevelsFromBaseLevel(baseLevel: number)
 end
 
 declare class TitledPanelMixin
@@ -9193,7 +9193,7 @@ declare class MapCanvasMixin extends CallbackRegistryMixin
     function AddDataProviderEvent(event: unknown)
     function RemoveDataProviderEvent(event: unknown)
     function SetPinNudgingDirty(dirty: unknown)
-    function AcquirePin(pinTemplate: unknown, ...: unknown): (...unknown)
+    function AcquirePin(pinTemplate: unknown, ...: unknown): unknown
     function SetPinTemplateType(pinTemplate: unknown, pinTemplateType: unknown)
     function GetPinTemplateType(pinTemplate: string): unknown
     function RemoveAllPinsByTemplate(pinTemplate: unknown)
@@ -9273,7 +9273,7 @@ declare class MapCanvasMixin extends CallbackRegistryMixin
     function ReapplyPinFrameLevels(pinFrameLevelType: unknown)
     function NavigateToParentMap()
     function NavigateToCursor()
-    function AddCanvasClickHandler(handler: unknown, priority: unknown): (...unknown)
+    function AddCanvasClickHandler(handler: unknown, priority: unknown?)
     function RemoveCanvasClickHandler(handler: unknown, priority: unknown?)
     function ProcessCanvasClickHandlers(button: unknown, cursorX: unknown, cursorY: unknown): boolean
     function GetGlobalPinScale(): unknown
@@ -9302,10 +9302,11 @@ declare class BehavioralMessagingDetailsMixin
 end
 
 declare class ChannelFrameMixin
+    DirtyFlags: DirtyFlagsMixin
     channelStates: table
-    function OnLoad(): (...unknown)
+    function OnLoad()
     function OnShow()
-    function OnHide(): (...unknown)
+    function OnHide()
     function OnEvent(event: string, ...: unknown)
     function OnUpdate()
     function GetList(): unknown
@@ -9569,8 +9570,8 @@ declare class PropertyBindingMixin
     function UnregisterStateUpdateEvent(event: unknown)
     function RegisterPropertyChangeHandler(event: unknown, optionalCallback: unknown?)
     function UnregisterPropertyChangeHandler(event: unknown)
-    function OnEvent(event: unknown, ...: unknown): (...unknown)
-    function OnPropertyChanged(event: unknown, ...: unknown): (...unknown)
+    function OnEvent(event: unknown, ...: unknown)
+    function OnPropertyChanged(event: unknown, ...: unknown)
     function AddStateTooltipString(stateValue: unknown, tooltipString: unknown)
     function GetStateTooltipString(stateValue: unknown): unknown
     function SetTooltipFunction(tooltipFunction: unknown)
@@ -9746,7 +9747,6 @@ end
 
 declare class AlertContainerMixin
     alertFrameSubSystems: table
-    anchorPrioritiesDirty: boolean
     shouldQueueAlertsFlags: table
     function OnLoad()
     function OnEvent(event: string, ...: unknown)
@@ -9763,7 +9763,7 @@ declare class AlertContainerMixin
     function AddQueuedAlertFrameSubSystem(alertFrameTemplate: unknown, setUpFunction: unknown, maxAlerts: unknown, maxQueue: unknown, coalesceFunction: unknown): (...unknown)
     function AddAlertFrameSubSystem(alertFrameSubSystem: unknown): unknown
     function SetSubSystemAnchorPriority(alertFrameSubSystem: unknown, priority: unknown)
-    function CleanAnchorPriorities(): (...unknown)
+    function CleanAnchorPriorities()
     function UpdateAnchors()
     function SetJustification(justification: unknown)
     function GetJustification(): unknown
@@ -10038,6 +10038,7 @@ declare class CommunitiesSettingsDialogMixin
     avatarId: number
     clubId: ClubId
     clubPostingInfo: RecruitingClubInfo?
+    clubType: ClubType
     waitingForResponseToShow: boolean
     function UpdatedPostingInformationInit()
     function OnUpdatedPostingInformationRecieved()
@@ -10048,7 +10049,7 @@ declare class CommunitiesSettingsDialogMixin
     function OnEvent(event: string, ...: unknown)
     function SetClubId(clubId: ClubId)
     function GetClubId(): ClubId
-    function GetClubType(): unknown
+    function GetClubType(): ClubType
     function SetAvatarId(avatarId: number)
     function GetAvatarId(): number
     function GetName(): (...unknown)
@@ -10122,7 +10123,6 @@ end
 
 declare class DeveloperConsoleMixin
     commandCircularBuffer: CircularBufferMixin
-    filterText: string
     filteringCoroutineEndTime: number
     function OnLoad()
     function RestoreMessageHistory()
@@ -10154,7 +10154,7 @@ declare class DeveloperConsoleMixin
     function OnEditBoxPageUpPressed()
     function OnEditBoxPageDownPressed()
     function OnEditBoxTabPressed()
-    function OnFilterEditBoxTextChanged(text: unknown): (...unknown)
+    function OnFilterEditBoxTextChanged(text: unknown)
     function OnUpdate()
     function StepFilteringCoroutine(extendedTime: unknown?)
     function CheckFilterCoroutineYield(): (...unknown)
@@ -10378,7 +10378,7 @@ declare class GlueGameLogoMixin
     function SetGameMode(gameModeRecordID: unknown)
     function SetGameLogoDefaultHeight(gameLogoDefaultHeight: unknown)
     function UpdateLogoTexture()
-    function GetDisplayedExpansionLogo(expansionLevel: number, desiredReleaseType: number): unknown
+    function GetDisplayedExpansionLogo(expansionLevel: number, desiredReleaseType: number): number?
 end
 
 declare class UIButtonMixin
@@ -10851,7 +10851,7 @@ declare class SharedReportFrameMixin
     function AnchorMinorCategory(index: unknown, minorCategory: unknown): unknown
     function SendReport()
     function SetMinorCategoryFlag(flag: unknown, flagValue: unknown)
-    function OnAttributeChanged(attribute: unknown, data: unknown): (...unknown)
+    function OnAttributeChanged(attribute: string, data: unknown)
 end
 
 declare class ResizeLayoutMixin extends BaseLayoutMixin
@@ -11016,7 +11016,7 @@ declare class SimpleCheckoutMixin
     function OnHide()
     function OnRequestNewSize(newWidth: unknown, newHeight: unknown)
     function OnExternalLink()
-    function CalculateDesiredSize(): (...unknown)
+    function CalculateDesiredSize()
     function RecalculateSize()
 end
 
@@ -11210,7 +11210,7 @@ declare class ScrollBarMixin extends CallbackRegistryMixin
     function GetCallbacksByEvent(callbackType: unknown, event: unknown): unknown
     function HasRegistrantsForEvent(event: unknown): boolean
     function SecureInsertEvent(event: unknown)
-    function RegisterCallback(event: unknown, func: unknown, owner: unknown?, ...: unknown): unknown
+    function RegisterCallback(event: unknown, func: function, owner: unknown?, ...: unknown): unknown
     function RegisterCallbackWithHandle(event: unknown, func: unknown, owner: unknown, ...: unknown): (...unknown)
     function TriggerEvent(event: unknown, ...: unknown)
     function UnregisterCallback(event: unknown, owner: unknown?)
@@ -11455,7 +11455,7 @@ declare class AuctionCategoryMixin
     function CreateSubCategoryAndFilter(classID: unknown, subClassID: unknown, inventoryType: unknown, implicitFilter: unknown, useParentFilters: unknown?): unknown
     function AddFilter(classID: unknown?, subClassID: unknown?, inventoryType: unknown?, implicitFilter: unknown?)
     function SetFilters(filters: unknown)
-    function GenerateSubCategoriesAndFiltersFromSubClass(classID: unknown): (...unknown)
+    function GenerateSubCategoriesAndFiltersFromSubClass(classID: number)
     function FindSubCategoryByName(name: unknown): unknown
     function SortSubCategories()
     function SetSortIndex(sortIndex: unknown)
@@ -11488,7 +11488,7 @@ declare class AuctionHouseItemDisplayMixin
     function SetItem(item: unknown): (...unknown)
     function SetItemInternal(item: unknown?): boolean
     function IsPet(): unknown
-    function GetItemDisplayText(itemName: unknown, itemLevel: unknown, isPet: unknown?): (unknown, ...unknown)
+    function GetItemDisplayText(itemName: string, itemLevel: unknown, isPet: unknown?): (unknown, ...unknown)
     function GetItemInfo(): (unknown, unknown, unknown, unknown, unknown)
     function GetItemID(): number?
     function GetItem(): unknown
@@ -11512,7 +11512,7 @@ declare class AuctionHouseUtil
     GetTooltipTimeLeftBandText: (rowData: unknown) -> (string?, ...unknown)
     AddSellersToTooltip: (tooltip: unknown, sellers: unknown, totalNumberOfSellers: number) -> ()
     AddAuctionHouseTooltipInfo: (tooltip: unknown, rowData: unknown, bidStatus: unknown?) -> ()
-    GetItemDisplayText: (itemName: unknown, itemLevel: unknown?) -> (unknown, ...unknown)
+    GetItemDisplayText: (itemName: string, itemLevel: unknown?) -> (string?, ...unknown)
     GetItemDisplayTextFromItemKey: (itemKey: ItemKey, itemKeyInfo: ItemKeyInfo, hideItemLevel: unknown?) -> (...unknown)
     GetItemQualityColorFromOwnedAuctionData: (ownedAuctionData: unknown, itemKeyInfo: unknown) -> unknown
     GetQuantityDisplayTextFromOwnedAuctionData: (ownedAuctionData: unknown) -> unknown
@@ -11952,10 +11952,10 @@ declare class ChannelListMixin
     function SetSelectedChannel(channelButton: unknown?)
     function GetSelectedChannelButton(): unknown
     function GetSelectedChannelIDAndSupportsText(): (unknown, unknown)
-    function GetClosestNeighboringChannelButton(channelButton: unknown): (...unknown)
+    function GetClosestNeighboringChannelButton(channelButton: unknown): unknown
     function GetFirstAvailableChannelButton(optionalChannelToExclude: unknown): (...unknown)
-    function SelectChannelByID(channelID: unknown): (...unknown)
-    function SelectChannelByName(channelName: unknown): (...unknown)
+    function SelectChannelByID(channelID: unknown)
+    function SelectChannelByName(channelName: unknown)
     function OnChannelLeft(channelID: unknown, channelName: unknown)
     function ShowDropdown(channel: unknown?)
 end
@@ -11975,11 +11975,11 @@ declare class ChannelRosterMixin
     function GetChannelCountText(count: number, category: unknown): string
     function GetChannelNameText(count: number, channel: unknown): unknown
     function UpdateFromOpaqueChannel(opaqueChannel: unknown, getChannelInfoFn: function, updateChannelRosterEntryFn: unknown)
-    function UpdateRosterList(): (...unknown)
+    function UpdateRosterList()
     function UpdateRosterWidth()
     function InitializeScrollFrame()
-    function UpdateFromTextChannelID(channelID: unknown): (...unknown)
-    function UpdateFromVoiceChannelID(channelID: unknown): (...unknown)
+    function UpdateFromTextChannelID(channelID: number): (...unknown)
+    function UpdateFromVoiceChannelID(channelID: number): (...unknown)
     function UpdateFromCommunityStream(channelButton: unknown): (...unknown)
 end
 
@@ -12017,7 +12017,7 @@ declare class ChannelRosterButtonMixin
     function OnEnter()
     function OnLeave()
     function Update()
-    function UpdateVoiceActivityNotification(): (...unknown)
+    function UpdateVoiceActivityNotification()
     function UpdateName()
     function UpdateNameSize()
     function UpdateRankVisibleState()
@@ -12516,7 +12516,7 @@ end
 
 declare class FunctionThrottleMixin
     elapsed: number
-    function Init(threshold: unknown, func: unknown, owner: unknown)
+    function Init(threshold: unknown, func: function, owner: unknown)
     function Update(dt: number, ...: unknown): boolean
 end
 
@@ -12797,7 +12797,7 @@ declare class CommunitiesChatMixin
     function BackfillMessages(maxCount: number)
     function DisplayChat()
     function UpdateChatColor()
-    function GetChatColor(): (nil, ...unknown)
+    function GetChatColor(): (unknown?, unknown?, unknown?, ...unknown)
     function FormatMessage(clubId: unknown, streamId: unknown, message: unknown): (string?, ...unknown)
     function AddDateNotification(calendarTime: unknown, backfill: unknown)
     function AddUnreadNotification(backfill: unknown)
@@ -13017,7 +13017,7 @@ declare class CommunitiesMemberListEntryMixin
     function IsChannelPublic(): boolean
     function IsVoiceActive(): unknown
     function SetVoiceActive(voiceActive: unknown)
-    function UpdateVoiceActivityNotification(): (...unknown)
+    function UpdateVoiceActivityNotification()
 end
 
 declare class CommunitiesFrameMemberListDropdownMixin
@@ -13472,7 +13472,7 @@ declare class AdventureGuideUtil
 end
 
 declare class CalendarUtil
-    GetCalendarInviteStatusInfo: (inviteStatus: unknown) -> unknown
+    GetCalendarInviteStatusInfo: (inviteStatus: CalendarStatus) -> unknown
     GetEventBroadcastText: (event: unknown) -> (...unknown)
     GetOngoingEventBroadcastText: (event: unknown) -> (...unknown)
     FormatCalendarTimeWeekday: (messageDate: unknown) -> (...unknown)
@@ -13486,7 +13486,7 @@ end
 declare class MapUtil
     IsMapTypeZone: (mapID: number) -> unknown
     GetMapParentInfo: (mapID: number, mapType: number, topMost: boolean?) -> unknown
-    ShouldMapTypeShowQuests: (mapType: unknown) -> unknown
+    ShouldMapTypeShowQuests: (mapType: UIMapType) -> unknown
     ShouldShowTask: (mapID: unknown, info: unknown) -> unknown
     MapHasUnlockedBounties: (mapID: unknown) -> ()
     MapHasEmissaries: (mapID: unknown) -> ()
@@ -13506,7 +13506,7 @@ declare class TransmogUtil
     GetBestWeaponInfoForIllusionDressup: () -> (unknown, unknown)
     GetSlotID: (slotName: unknown) -> number
     GetSlotName: (slotID: number) -> unknown
-    CreateTransmogLocation: (slotDescriptor: unknown, transmogType: number, modification: number) -> TransmogLocationMixin
+    CreateTransmogLocation: (slotDescriptor: string, transmogType: number, modification: number) -> TransmogLocationMixin
     GetTransmogLocation: (slotDescriptor: unknown, transmogType: number, modification: number) -> unknown
     GetCorrespondingHandTransmogLocation: (transmogLocation: unknown) -> unknown
     GetTransmogLocationLookupKey: (slotID: number, transmogType: number, modification: number) -> number
@@ -13576,8 +13576,8 @@ declare class CommunitiesUtil
 end
 
 declare class CurrencyContainerUtil
-    GetCurrencyContainerInfo: (currencyID: number, numItems: number, name: unknown?, texture: unknown?, quality: unknown?) -> (unknown, unknown, unknown, unknown)
-    GetCurrencyContainerInfoForAlert: (currencyID: number, quantity: number, name: unknown?, texture: unknown?, quality: unknown?) -> (unknown, unknown, unknown, unknown)
+    GetCurrencyContainerInfo: (currencyID: number, numItems: number, name: string?, texture: number?, quality: ItemQuality?) -> (string, number, number, unknown)
+    GetCurrencyContainerInfoForAlert: (currencyID: number, quantity: number, name: string?, texture: number?, quality: ItemQuality?) -> (string, number, number, unknown)
 end
 
 declare class DifficultyUtil
@@ -14237,7 +14237,7 @@ declare class MapCanvasScrollControllerMixin
     function CalculateScaleExtents()
     function CalculateScrollExtents()
     function CalculateScrollExtentsAtScale(scale: number): (number, number, number, number)
-    function AccumulateMouseDeltas(elapsed: unknown, deltaX: unknown, deltaY: unknown): (...unknown)
+    function AccumulateMouseDeltas(elapsed: number, deltaX: number, deltaY: number)
     function CalculateLerpScaling(): (number, number, number)
     function SetScalingMode(mode: unknown)
     function ScalingMode(): unknown
@@ -14366,14 +14366,14 @@ end
 
 declare class MenuStyleMixin
     function Generate()
-    function GetInset(): (...unknown)
-    function GetChildExtentPadding(): (...unknown)
+    function GetInset(): unknown
+    function GetChildExtentPadding(): unknown
 end
 
 declare class CompositorMixin
     attachments: table
     replacedMetatables: table
-    function Init(target: unknown): (...unknown)
+    function Init(target: unknown)
     function GetBase(): unknown
     function ClearTicker()
     function NewTicker(parent: unknown, timeSeconds: number, callback: (handle: TickerHandle) -> ())
@@ -14408,7 +14408,7 @@ declare class MenuTemplates
     CreateSpacer: (extent: unknown?) -> (...unknown)
     CreateDivider: () -> (...unknown)
     CreateColorSwatch: (text: string, callback: MenuResponder, colorInfo: colorRGBA) -> unknown
-    AttachAutoHideButton: (parent: unknown, textureName: unknown) -> ...unknown
+    AttachAutoHideButton: (parent: unknown, textureName: unknown) -> unknown
     AttachAutoHideGearButton: (parent: unknown) -> unknown
     AttachAutoHideCancelButton: (parent: unknown) -> unknown
     AttachNewFeatureFrame: (parent: unknown) -> unknown
@@ -14777,7 +14777,7 @@ declare class CVarSettingMixin extends SettingMixin
     SetValueDerived: function
     function Init(name: unknown, cvar: string, variableType: string)
     function TransformValue(value: unknown): (unknown, ...unknown)
-    function NegateBoolean(): (...unknown)
+    function NegateBoolean()
 end
 
 declare class SettingsElementHierarchyMixin
@@ -15420,8 +15420,8 @@ declare class CircularBufferMixin
     function GetNumElements(): number
     function IsFull(): boolean
     function IsEmpty(): boolean
-    function EnumerateIndexedEntries(): (...unknown)
-    function ReverseEnumerateIndexedEntries(): (...unknown)
+    function EnumerateIndexedEntries(): (unknown, unknown, number)
+    function ReverseEnumerateIndexedEntries(): (unknown, unknown, number)
     function OnLoad(maxElements: unknown)
     function CalculateElementIndex(index: number): (...unknown)
     function CalculateElementIndexFromGlobalIndex(globalIndex: number): (number?, ...unknown)
@@ -15784,8 +15784,8 @@ declare class EventUtil
 end
 
 declare class FormattingUtil
-    GetCostString: (icon: unknown, quantity: number | Secret<number>, colorCode: string?, abbreviate: boolean?) -> string
-    GetItemCostString: (itemID: ItemInfo, quantity: number | Secret<number>, colorCode: string?, abbreviate: boolean?) -> string
+    GetCostString: (icon: unknown, quantity: unknown, colorCode: string?, abbreviate: boolean?) -> string
+    GetItemCostString: (itemID: ItemInfo, quantity: unknown, colorCode: string?, abbreviate: boolean?) -> string
 end
 
 declare class GridLayoutUtil
@@ -16083,7 +16083,7 @@ declare class NineSliceUtil
     ApplyUniqueCornersLayout: (self: unknown, textureKit: string?) -> ()
     ApplyIdenticalCornersLayout: (self: unknown, textureKit: string?) -> ()
     ApplyLayout: (container: unknown, userLayout: table, textureKit: string?) -> ()
-    SetLayoutShown: (container: unknown, show: unknown) -> ...unknown
+    SetLayoutShown: (container: unknown, show: unknown?) -> ()
     DisableSharpening: (container: unknown) -> ()
     ApplyLayoutByName: (container: unknown, userLayoutName: string, textureKit: string?) -> ()
     GetLayout: (layoutName: string) -> unknown
@@ -16339,7 +16339,6 @@ declare class ScrollBoxListViewMixin extends ScrollBoxViewMixin
     frameFactory: FrameFactoryMixin
     frames: table
     initializers: table
-    templateInfoDirty: boolean
     function Init()
     function GetExtentFromInfo(info: unknown): unknown
     function GetTemplateInfo(frameTemplate: unknown): (...unknown)
@@ -16385,7 +16384,7 @@ declare class ScrollBoxListViewMixin extends ScrollBoxViewMixin
     function AcquireInternal(dataIndex: unknown, elementData: unknown)
     function InvokeInitializer(frame: unknown, initializer: function?)
     function InvokeInitializers()
-    function AcquireRange(dataIndices: table)
+    function AcquireRange(dataIndices: unknown)
     function ReinitializeFrames()
     function Release(frame: string)
     function GetFrameCount(): number
@@ -16395,7 +16394,7 @@ declare class ScrollBoxListViewMixin extends ScrollBoxViewMixin
     function SetElementResetter(resetter: unknown)
     function SetVirtualized(virtualized: unknown)
     function CalculateFrameExtent(dataIndex: unknown, elementData: unknown): (unknown, ...unknown)
-    function GetFactoryDataFromElementData(elementData: unknown): (...unknown)
+    function GetFactoryDataFromElementData(elementData: unknown): (unknown, unknown)
     function GetTemplateExtentFromElementData(elementData: unknown): (...unknown)
     function GetTemplateExtent(frameTemplate: unknown): (...unknown)
     function GetPanExtent(spacing: number): number
@@ -16403,7 +16402,7 @@ declare class ScrollBoxListViewMixin extends ScrollBoxViewMixin
     function CalculateDataIndices(scrollBox: unknown, stride: number, spacing: number): (number?, number?, ...unknown)
     function RecalculateExtent(scrollBox: unknown, stride: number, spacing: number)
     function GetExtent(scrollBox: unknown, stride: unknown, spacing: unknown): unknown
-    function HasIdenticalElementExtents(): (...unknown)
+    function HasIdenticalElementExtents(): unknown
     function GetIdenticalElementExtents(): (unknown, ...unknown)
     function GetElementExtent(dataIndex: unknown): (unknown, ...unknown)
     function SetElementExtent(extent: unknown)
@@ -16429,7 +16428,7 @@ declare class ScrollBoxListViewMixin extends ScrollBoxViewMixin
     function GetCallbacksByEvent(callbackType: unknown, event: unknown): unknown
     function HasRegistrantsForEvent(event: unknown): boolean
     function SecureInsertEvent(event: unknown)
-    function RegisterCallback(event: unknown, func: unknown, owner: unknown?, ...: unknown): unknown
+    function RegisterCallback(event: unknown, func: function, owner: unknown?, ...: unknown): unknown
     function RegisterCallbackWithHandle(event: unknown, func: unknown, owner: unknown, ...: unknown): (...unknown)
     function TriggerEvent(event: unknown, ...: unknown)
     function UnregisterCallback(event: unknown, owner: unknown?)
@@ -16492,7 +16491,7 @@ end
 declare class ScrollBoxListLinearViewMixin extends ScrollBoxListViewMixin
     function Init(top: unknown, bottom: unknown, left: unknown, right: unknown, spacing: unknown)
     function SetScrollBox(scrollBox: unknown)
-    function InitDefaultDrag(scrollBox: unknown): (...unknown)
+    function InitDefaultDrag(scrollBox: unknown): ScrollBoxDragBehavior
     function CalculateDataIndices(scrollBox: unknown): (...unknown)
     function GetExtent(scrollBox: unknown): (...unknown)
     function RecalculateExtent(scrollBox: unknown): (...unknown)
@@ -16544,7 +16543,7 @@ end
 
 declare class ScrollBoxListTreeListViewMixin extends ScrollBoxListLinearViewMixin
     function Init(indent: unknown, top: unknown, bottom: unknown, left: unknown, right: unknown, spacing: unknown)
-    function InitDefaultDrag(scrollBox: unknown): (...unknown)
+    function InitDefaultDrag(scrollBox: unknown): ScrollBoxDragBehavior
     function ForEachElementData(func: unknown)
     function ReverseForEachElementData(func: unknown)
     function Find(index: unknown): (...unknown)
@@ -16607,8 +16606,8 @@ declare class ScrollUtil
     AddTreeDragBehavior: (scrollBox: unknown) -> ScrollBoxDragBehavior
     GenerateCursorFactory: (scrollBox: unknown) -> unknown
     AddLinearDragBehavior: (scrollBox: unknown) -> ScrollBoxDragBehavior
-    InitDefaultLinearDragBehavior: (scrollBox: unknown) -> ...unknown
-    InitDefaultTreeDragBehavior: (scrollBox: unknown) -> ...unknown
+    InitDefaultLinearDragBehavior: (scrollBox: unknown) -> ScrollBoxDragBehavior
+    InitDefaultTreeDragBehavior: (scrollBox: unknown) -> ScrollBoxDragBehavior
     AddResizableChildrenBehavior: (scrollBox: unknown) -> ()
     RegisterAlternateRowBehavior: (scrollBox: unknown, callback: function) -> ()
     AlternateDataValue: (dataProvider: unknown, predicate: function?, field: unknown?, initValue: unknown?) -> ()
@@ -17036,7 +17035,7 @@ declare class PlayerUtil
     GetClassID: () -> unknown
     GetClassName: () -> string
     GetClassInfo: () -> ClassInfo?
-    GetClassFile: () -> unknown
+    GetClassFile: () -> string
     GetClassColor: () -> ColorMixin?
     CanUseClassTalents: () -> unknown
     HasFriendlyReaction: (unit: string) -> boolean
@@ -17080,7 +17079,7 @@ end
 
 declare class EnumUtil
     MakeEnum: (...: unknown) -> table
-    IsValid: (enumClass: table, enumValue: unknown) -> boolean
+    IsValid: (enumClass: unknown, enumValue: unknown) -> boolean
     GenerateNameTranslation: (enum: unknown) -> function
 end
 
@@ -17129,6 +17128,14 @@ declare class FlagsMixin
     function GetFlags(): unknown
 end
 
+declare class DirtyFlagsMixin extends FlagsMixin
+    isDirty: boolean
+    function OnLoad()
+    function MarkDirty(flag: unknown?)
+    function MarkClean()
+    function IsDirty(flag: unknown?): (boolean?, ...unknown)
+end
+
 declare class FrameUtil
     RegisterUpdateFunction: (frame: unknown, frequencySeconds: unknown, func: function) -> ()
     UnregisterUpdateFunction: (frame: unknown) -> ()
@@ -17163,7 +17170,7 @@ declare class ProxyUtil
     ReleasePrivateReference: (proxy: unknown) -> ()
     CreateProxy: (obj: unknown, mixin: unknown) -> table
     CreateProxyDirectory: (name: unknown, enableReporting: unknown?) -> table
-    CreateProxyMixin: (proxyCollection: unknown, privateMixin: unknown, funcs: unknown) -> ...unknown
+    CreateProxyMixin: (proxyCollection: unknown, privateMixin: unknown, funcs: unknown) -> table
 end
 
 declare class ProxyConvertableMixin
@@ -17201,13 +17208,13 @@ declare class RectangleMixin
 end
 
 declare class SecureTypes
-    CreateSecureMap: (mixin: unknown) -> ...unknown
-    CreateSecureArray: () -> ...unknown
+    CreateSecureMap: (mixin: unknown?) -> table
+    CreateSecureArray: () -> table
     CreateSecureStack: () -> table
-    CreateSecureValue: (value: unknown) -> ...unknown
-    CreateSecureNumber: (value: unknown) -> ...unknown
-    CreateSecureBoolean: (v: unknown) -> ...unknown
-    CreateSecureFunction: () -> ...unknown
+    CreateSecureValue: (value: unknown) -> table
+    CreateSecureNumber: (value: unknown?) -> table
+    CreateSecureBoolean: (v: boolean) -> table
+    CreateSecureFunction: () -> table
 end
 
 declare class TableUtil
@@ -17348,7 +17355,7 @@ declare class TooltipDataHandlerMixin
     function ProcessInfo(info: unknown): (...unknown)
     function InternalProcessInfo(info: unknown?): boolean
     function ProcessLines()
-    function ProcessLineData(lineData: unknown, excludeLines: table?, linePreCall: function?, linePostCall: function?)
+    function ProcessLineData(lineData: unknown, excludeLines: unknown?, linePreCall: function?, linePostCall: function?)
     function AddLineDataText(lineData: unknown)
     function ClearHandlerInfo()
     function RebuildFromTooltipInfo()
@@ -17608,7 +17615,7 @@ declare class UnitPositionFrameMixin
     function SetMouseOverUnitExcluded(unit: unknown, excluded: unknown?)
     function UpdateUnitTooltips(tooltipFrame: unknown)
     function UpdateTooltips(tooltipFrame: unknown)
-    function GetUnitColor(timeNow: number, unit: string?, appearanceData: unknown): (boolean, unknown?, unknown?, unknown?)
+    function GetUnitColor(timeNow: number, unit: string?, appearanceData: unknown): (boolean, number?, number?, number?)
     function AddUnitInternal(timeNow: unknown, unit: unknown, appearanceData: unknown)
     function SetUnitAppearanceInternal(timeNow: unknown, unit: unknown, appearanceData: unknown)
     function GetMemberCountAndUnitTokenPrefix(): (unknown, unknown)
@@ -17691,8 +17698,9 @@ declare class QuestPOIDisplayLayerMixin
 end
 
 declare class UIWidgetTemplateTooltipFrameMixin
+    tooltip: string
     tooltipContainsHyperLink: boolean
-    function SetTooltip(tooltip: unknown?)
+    function SetTooltip(tooltip: string?)
     function SetTooltipOwner()
     function OnEnter()
     function OnLeave()
@@ -18687,7 +18695,7 @@ declare function BNGetFriendGameAccountInfo(bnetIDGameAccount: number): (boolean
 declare function BNGetFriendGameAccountInfo(guid: string): (boolean, string, string, string, number, string, string, string, string, string, string, string, string, number, boolean, number, number, boolean, boolean)
 declare function BNGetFriendInfo(friendIndex: number): (number, string, string, boolean, string, number, string, boolean, number?, boolean, boolean, string, string, boolean, number, boolean, boolean, boolean)
 declare function BNGetFriendInfo(bnetAccountID: number): (number, string, string, boolean, string, number, string, boolean, number?, boolean, boolean, string, string, boolean, number, boolean, boolean, boolean)
-declare function BNGetFriendInfoByID(arg1: unknown): (unknown, string?, string?, unknown, string?, unknown, string?, unknown, unknown, unknown, unknown, string?, ...unknown)
+declare function BNGetFriendInfoByID(arg1: unknown): (number?, string?, string?, unknown, string?, unknown, string?, unknown, unknown, unknown, unknown, string?, ...unknown)
 declare function BNGetGameAccountInfo(arg1: unknown): (unknown, string?, unknown, unknown, number?, unknown, unknown, unknown, unknown, unknown, unknown, string?, ...unknown)
 declare function BNGetGameAccountInfoByGUID(arg1: unknown): (...unknown)
 declare function BNGetNumFriendGameAccounts(friendIndex: number): number
@@ -19279,7 +19287,11 @@ declare global MultiActionBar_ShowAllGrids: () -> ()
 declare global MultiActionBar_HideAllGrids: () -> ()
 declare global MultiActionBar_UpdateGrid: (barName: string, show: boolean?) -> ()
 declare global MultiActionBar_UpdateGridVisibility: () -> ()
-declare global MultibarGrid_IsVisible: () -> (...unknown)
+declare global MultibarGrid_IsVisible: () -> (nil, ...unknown)
+declare global MultiBar1_IsVisible: () -> (nil, ...unknown)
+declare global MultiBar2_IsVisible: () -> (nil, ...unknown)
+declare global MultiBar3_IsVisible: () -> (nil, ...unknown)
+declare global MultiBar4_IsVisible: () -> (nil, ...unknown)
 declare global MULTICASTACTIONBAR_SLIDETIME: number
 declare global MULTICASTACTIONBAR_YPOS: number
 declare global MULTICASTACTIONBAR_XPOS: number
@@ -19605,11 +19617,11 @@ declare global AuctionFrameAuctions_OnShow: () -> ()
 @onDemand("Blizzard_AuctionUI")
 declare global AuctionFrameAuctions_OnUpdate: (self: unknown, elapsed: number) -> ()
 @onDemand("Blizzard_AuctionUI")
-declare global GetEffectiveSelectedOwnerAuctionItemIndex: (...unknown) -> ...unknown
+declare global GetEffectiveSelectedOwnerAuctionItemIndex: () -> number
 @onDemand("Blizzard_AuctionUI")
-declare global SetEffectiveSelectedOwnerAuctionItemIndex: (...unknown) -> ...unknown
+declare global SetEffectiveSelectedOwnerAuctionItemIndex: (index: number) -> ()
 @onDemand("Blizzard_AuctionUI")
-declare global IsSelectedOwnerAuctionItemIndexAToken: (...unknown) -> ...unknown
+declare global IsSelectedOwnerAuctionItemIndexAToken: () -> boolean
 @onDemand("Blizzard_AuctionUI")
 declare global AuctionFrameAuctions_Update: () -> ()
 @onDemand("Blizzard_AuctionUI")
@@ -19669,6 +19681,9 @@ declare global AUTOCOMPLETE_FLAG_ONLINE: number
 declare global AUTO_COMPLETE_IN_AOI: number
 declare global AUTO_COMPLETE_ACCOUNT_CHARACTER: number
 declare global AUTO_COMPLETE_NON_LOCAL_REALM: number
+declare global BNet_GetClientAtlas: (atlasPrefix: string, clientName: unknown?) -> string
+declare global BNet_GetClientEmbeddedAtlas: (client: unknown?, width: number?, height: number?, xOffset: number?, yOffset: number?) -> string
+declare global BNet_GetBattlenetClientAtlas: (client: unknown?) -> string
 declare global BNet_GetBNetIDAccount: (name: unknown) -> (...unknown)
 declare global BNet_GetBNetIDAccountFromCharacterName: (name: unknown) -> unknown
 declare global BNet_GetValidatedCharacterName: (characterName: string?, battleTag: string?, client: unknown) -> string?
@@ -20006,12 +20021,12 @@ declare global PetPaperDollFrame_OnHide: () -> ()
 declare global PetPaperDollFrame_Update: () -> ()
 declare global PetExpBar_Update: () -> ()
 declare global JumpToCollectionsTab: (tabIndex: number?) -> ()
-declare global DressUpLink: (link: ItemInfo?, forcedFrame: unknown?) -> unknown
+declare global DressUpLink: (link: unknown?, forcedFrame: unknown?) -> unknown
 declare global DressUpItemLink: (link: ItemInfo?) -> boolean
 declare global DressUpVisual: (...: unknown) -> boolean
-declare global DressUpBattlePetLink: (link: ItemInfo?) -> boolean
+declare global DressUpBattlePetLink: (link: string?) -> boolean
 declare global DressUpBattlePet: (speciesID: number?) -> boolean
-declare global DressUpMountLink: (link: ItemInfo?, forcedFrame: unknown?) -> boolean
+declare global DressUpMountLink: (link: unknown?, forcedFrame: unknown?) -> boolean
 declare global DressUpMount: (mountID: number?) -> boolean
 declare global DressUpTexturePath: (raceFileName: string?) -> string
 declare global SetDressUpBackground: (frame: unknown, fileName: string?, atlasPostfix: unknown?) -> ()
@@ -20226,7 +20241,7 @@ declare global ChatFrame_ConfigEventHandler: (self: Region, event: string, ...: 
 declare global ChatFrame_SystemEventHandler: (self: Region, event: string, ...: unknown) -> boolean
 declare global GetColoredName: (event: string, arg1: unknown, arg2: string, arg3: unknown, arg4: unknown, arg5: unknown, arg6: unknown, arg7: unknown, arg8: unknown, arg9: unknown, arg10: unknown, arg11: unknown, arg12: unknown) -> string
 declare global ChatFrame_DisplayGMOTD: (frame: unknown, gmotd: string?) -> ()
-declare global ChatFrame_ReplaceIconAndGroupExpressions: (...unknown) -> ...unknown
+declare global ChatFrame_ReplaceIconAndGroupExpressions: (message: string, noIconReplacement: unknown?, noGroupReplacement: boolean?) -> string
 declare global ChatFrame_MessageEventHandler: (self: Region, event: string, ...: unknown) -> boolean?
 declare global ChatFrame_AddMessageEventFilter: (event: string?, filter: unknown) -> ()
 declare global ChatFrame_RemoveMessageEventFilter: (event: string?, filter: unknown) -> ()
@@ -20237,7 +20252,7 @@ declare global ChatFrame_OnMouseWheel: (value: number) -> ()
 declare global ChatFrame_OpenChat: (text: string?, chatFrame: Region?, desiredCursorPosition: unknown?) -> unknown
 declare global MessageFrameScrollButton_OnLoad: (self: unknown) -> ()
 declare global MessageFrameScrollButton_OnUpdate: (self: unknown, elapsed: number) -> ()
-declare global ChatFrame_SendTell: (name: unknown, chatFrame: Region?) -> ()
+declare global ChatFrame_SendTell: (name: string, chatFrame: Region?) -> ()
 declare global ChatFrame_SendBNetTell: (tokenizedName: unknown) -> ()
 declare global ChatFrame_ReplyTell: (chatFrame: Region?) -> ()
 declare global ChatFrame_ReplyTell2: (chatFrame: Region?) -> ()
@@ -20521,7 +20536,7 @@ declare global CompactRaidFrameContainer_ReadyToUpdate: (self: unknown) -> boole
 declare global CompactRaidFrameContainer_UpdateDisplayedUnits: (self: unknown) -> ()
 declare global CompactRaidFrameContainer_LayoutFrames: (self: unknown?) -> ()
 declare global CompactRaidFrameContainer_UpdateBorder: (self: unknown) -> ()
-declare global CompactRaidFrameContainer_AddGroups: (...unknown) -> ...unknown
+declare global CompactRaidFrameContainer_AddGroups: (self: unknown) -> ()
 declare global CompactRaidFrameContainer_AddGroup: (self: unknown, id: string) -> ()
 declare global CompactRaidFrameContainer_AddPlayers: (self: unknown?) -> ()
 declare global CompactRaidFrameContainer_AddPets: (self: unknown?) -> ()
@@ -20529,7 +20544,6 @@ declare global CompactRaidFrameContainer_AddFlaggedUnits: (self: unknown?) -> ()
 declare global CompactRaidFrameContainer_AddUnitFrame: (self: unknown?, unit: string?, frameType: string) -> unknown
 declare global CompactRaidFrameContainer_GetUnitFrame: (self: unknown?, unit: string, frameType: string) -> unknown
 declare global CompactRaidFrameContainer_ReleaseAllReservedFrames: (self: unknown) -> ()
-declare global RaidUtil_GetUsedGroups: (tab: table) -> table
 declare global CompactRaidFrameManager_OnLoad: (self: unknown) -> ()
 declare global CompactRaidFrameManager_OnEvent: (self: unknown, event: string, ...: unknown) -> ()
 declare global CompactRaidFrameManagerDisplayFrameProfileSelector_OnLoad: (self: unknown) -> ()
@@ -20543,6 +20557,7 @@ declare global CompactRaidFrameManager_UpdateOptionsFlowContainer: (self: unknow
 declare global CompactRaidFrameManager_UpdateDisplayCounts: (self: unknown) -> ()
 declare global CompactRaidFrameManager_UpdateHeaderInfo: (self: unknown) -> ()
 declare global CompactRaidFrameManager_GetSettingBeforeLoad: (settingName: string) -> unknown
+declare global CompactRaidFrameManager_SetSetting: (settingName: string, value: string) -> ()
 declare global CompactRaidFrameManager_AttachPartyFrames: (manager: unknown) -> ()
 declare global CompactRaidFrameManager_ResetContainerPosition: () -> ()
 declare global CompactRaidFrameManager_UpdateContainerLockVisibility: (self: unknown) -> ()
@@ -20610,7 +20625,7 @@ declare global CraftIcon_OnUpdate: (self: unknown) -> ()
 declare global CanAccessObject: (obj: unknown) -> unknown
 declare global EnableAddOn: (name: uiAddon, character: string?) -> ()
 declare global DisableAddOn: (name: uiAddon, character: string?) -> ()
-declare global GetAddOnEnableState: (character: string?, name: uiAddon) -> number
+declare global GetAddOnEnableState: (character: string?, name: uiAddon) -> AddOnEnableState
 declare global LoadAddOn: (name: uiAddon) -> (boolean?, string?)
 declare global IsAddOnLoaded: (name: uiAddon) -> (boolean, boolean)
 declare global EnableAllAddOns: (character: string?) -> ()
@@ -20630,7 +20645,7 @@ declare global CanEditOfficerNote: () -> boolean
 declare global CanViewOfficerNote: () -> boolean
 declare global GuildRoster: () -> ()
 declare global GetNumStablePets: () -> number
-declare global CreatePoolCollection: (...unknown) -> ...unknown
+declare global CreatePoolCollection: () -> (...unknown)
 declare global LE_ITEM_CLASS_CONSUMABLE: number
 declare global LE_ITEM_CLASS_CONTAINER: number
 declare global LE_ITEM_CLASS_WEAPON: number
@@ -20739,7 +20754,7 @@ declare global EQUIPPED_RUNES_CATEGORY: unknown
 @onDemand("Blizzard_EngravingUI")
 declare global EngravingFrame_OnLoad: (self: unknown) -> ()
 @onDemand("Blizzard_EngravingUI")
-declare global EngravingFrame_SetupFilterDropdown: (...unknown) -> ...unknown
+declare global EngravingFrame_SetupFilterDropdown: (self: unknown) -> ()
 @onDemand("Blizzard_EngravingUI")
 declare global EngravingFrame_OnShow: (self: unknown) -> ()
 @onDemand("Blizzard_EngravingUI")
@@ -20793,7 +20808,6 @@ declare global C_UnitAurasPrivate: unknown
 declare global C_PingSecure: unknown
 declare global DEFAULT_TALENT_SPEC: string
 declare global TalentFrame_SetBranchTexture: (tier: unknown, column: number, texCoords: unknown, xOffset: number, yOffset: number, TalentFrame: unknown, xSize: number?, ySize: number?) -> ()
-declare global TalentFrame_SetPrereqs: (TalentFrame: unknown, buttonTier: number, buttonColumn: number, forceDesaturated: unknown?, tierUnlocked: unknown?, preview: boolean?, ...: unknown) -> unknown
 declare global SetTalentButtonLocation: (button: unknown, tier: number, column: number, talentButtonSize: unknown?, initialOffsetX: number?, initialOffsetY: number?, buttonSpacingX: number?, buttonSpacingY: number?) -> ()
 declare global GuildChallengeAlertFrame_OnClick: (self: unknown, button: string, down: unknown) -> ()
 declare global LootWonAlertFrame_SetUp: (self: unknown, itemLink: ItemInfo, quantity: number, rollType: unknown, roll: unknown, specID: number?, isCurrency: unknown?, showFactionBG: unknown?, lootSource: unknown, lessAwesome: unknown?, isUpgraded: unknown?, wonRoll: unknown?, showRatedBG: unknown?) -> ()
@@ -20842,6 +20856,7 @@ declare global MovieFrame_OnCinematicStopped: () -> ()
 declare global MovieFrame_OnMovieFinished: (self: unknown, userCanceled: boolean?) -> ()
 declare global MovieFrame_OnMovieShowSubtitle: (self: unknown, text: unknown) -> ()
 declare global MovieFrame_OnMovieHideSubtitle: (self: unknown) -> ()
+declare global RolePollPopup_OnLoad: (self: unknown) -> ()
 declare global RolePollPopupRoleButton_SetRecommended: (button: unknown) -> ()
 declare global RolePollPopupRoleButton_SetNotRecommended: (button: unknown) -> ()
 declare global SecureButton_GetModifierPrefix: (frame: table?) -> string
@@ -21119,7 +21134,7 @@ declare global RaidBossEmoteFrame_OnEvent: (self: unknown, event: string, ...: u
 declare global TransmogSlotOrder: table
 declare global TransmogUtil: TransmogUtil
 declare global TRANSMOG_SLOTS: table
-declare global Add: (...unknown) -> ...unknown
+declare global Add: (slotName: string, transmogType: number, modification: number, armorCategoryID: number?) -> ()
 declare global CollectionsUtil: CollectionsUtil
 declare global CooldownFrame_Set: (self: unknown, start: number, duration: number, enable: unknown?, forceShowDrawEdge: boolean?, modRate: number?) -> ()
 declare global CooldownFrame_SetDisplayAsPercentage: (self: unknown, percentage: number) -> ()
@@ -21211,6 +21226,11 @@ declare global CharacterCreate_UpdateFacialHairCustomization: () -> ()
 declare global SetViewingAlteredForm: () -> ()
 declare global CheckSelfFoundButton: () -> ()
 declare global CharacterCreate_CancelReincarnation: () -> ()
+declare global AccountLogin_OnLoad: (self: unknown) -> ()
+declare global AccountLogin_OnEvent: (self: unknown, event: string, ...: unknown) -> ()
+declare global AccountLogin_CheckLoginState: (self: unknown) -> ()
+declare global AccountLogin_OnShow: (self: unknown) -> ()
+declare global AccountLogin_UpdateSavedData: (self: unknown) -> ()
 declare global AccountLogin_OnKeyDown: (self: unknown, key: string) -> ()
 declare global CachedLoginFrameContainer_Update: (self: unknown?) -> ()
 declare global CachedLoginButton_OnClick: (self: unknown) -> ()
@@ -21331,8 +21351,6 @@ declare global DisplayBattlepayTokens: (upgradeInfo: unknown?, boostType: unknow
 declare global DisplayBattlepayTokenType: (charUpgradeDisplayData: unknown, upgradeInfo: unknown) -> ()
 declare global CharacterServicesTokenBoost_OnClick: (self: unknown) -> ()
 declare global GameLogoDarkBackdropMixin: GameLogoDarkBackdropMixin
-declare global CharacterServicesMaster_SetBlockActiveState: (block: unknown) -> ()
-declare global CharacterServicesMaster_SetBlockFinishedState: (block: unknown) -> ()
 declare global CharacterServicesProcessingIcon_OnEnter: (self: unknown) -> ()
 declare global CharacterServicesMasterFinishButton_OnClick: (self: unknown) -> ()
 declare global CharacterUpgradeSecondChanceWarningFrameConfirmButton_OnShow: (self: unknown) -> ()
@@ -21573,7 +21591,7 @@ declare global GLYPH_MAJOR: table
 declare global GLYPH_SLOTS: table
 declare global LFDQueueFrameSpecificList_Update: () -> ()
 declare global LFDQueueFrameRandomCooldownFrame_OnEvent: (self: unknown, event: string, ...: unknown) -> ()
-declare global LFGRewardsFrame_SetItemButton: (parentFrame: unknown, dungeonID: number, index: number, id: unknown, name: unknown, texture: unknown?, numItems: number?, rewardType: string, rewardID: number?, quality: unknown?, shortageIndex: unknown?, showTankIcon: unknown?, showHealerIcon: unknown?, showDamageIcon: unknown?) -> unknown
+declare global LFGRewardsFrame_SetItemButton: (parentFrame: unknown, dungeonID: number, index: number, id: unknown, name: unknown, texture: unknown?, numItems: number?, rewardType: string, rewardID: number?, quality: ItemQuality?, shortageIndex: unknown?, showTankIcon: unknown?, showHealerIcon: unknown?, showDamageIcon: unknown?) -> unknown
 declare global LFGCooldownCover_OnEvent: (self: unknown, event: string, ...: unknown) -> ()
 declare global MAX_LFG_LIST_ACTIVITY_DROPDOWN_ENTRIES: number
 declare global LFGListFrame_BeginFindQuestGroup: (self: unknown, questID: number?, shouldShowCreateGroupButton: unknown?) -> ()
@@ -21594,19 +21612,17 @@ declare global LFGListInviteDialog_UpdateOfflineNotice: (self: unknown) -> ()
 declare global LFGListInviteDialog_Accept: (self: unknown) -> ()
 declare global LFGListInviteDialog_Decline: (self: unknown) -> ()
 declare global LFGListInviteDialog_Acknowledge: (self: unknown) -> ()
-declare global LFGListGroupDataDisplay_Update: (self: unknown, activityID: number, displayData: unknown, disabled: unknown?) -> ()
-declare global LFGListGroupDataDisplayRoleCount_Update: (self: unknown, displayData: unknown, disabled: unknown?) -> ()
-declare global LFGListGroupDataDisplayEnumerate_Update: (self: unknown, numPlayers: number, displayData: unknown, disabled: unknown?, iconOrder: unknown) -> ()
-declare global LFGListGroupDataDisplayPlayerCount_Update: (self: unknown, displayData: unknown, disabled: unknown?) -> ()
+declare global LFGListGroupDataDisplay_Update: (self: unknown, activityID: number, displayData: unknown, disabled: boolean?) -> ()
+declare global LFGListGroupDataDisplayEnumerate_Update: (self: unknown, numPlayers: number, displayData: unknown, disabled: boolean?, iconOrder: unknown) -> ()
 declare global LFGListUtil_ValidateLevelReq: (self: unknown, text: string) -> string
 declare global LFGListUtil_SortSearchResults: (results: unknown) -> ()
 declare global LFGListUtil_IsAppEmpowered: () -> unknown
 declare global LFGListUtil_IsEntryEmpowered: () -> boolean | Secret<boolean>
 declare global LFGListUtil_CanSearchForGroup: () -> unknown
 declare global LFGListUtil_CanListGroup: () -> unknown
-declare global LFGList_ReportAdvertisement: (searchResultID: unknown, leaderName: unknown) -> ()
+declare global LFGList_ReportAdvertisement: (searchResultID: unknown, leaderName: string) -> ()
 declare global LFGListUtil_SortActivitiesByRelevancyCB: (activityID1: number, activityID2: number) -> boolean
-declare global LFGListUtil_GetQuestCategoryData: (questID: number) -> (unknown, unknown, unknown, unknown)
+declare global LFGListUtil_GetQuestCategoryData: (questID: number) -> (unknown, number?, number?, unknown)
 declare global LFGListUtil_FindQuestGroup: (questID: number?, isFromGreenEyeButton: unknown?) -> ()
 declare global PVEFrame_OnLoad: (self: unknown) -> ()
 declare global PVEFrame_OnShow: (self: unknown) -> ()
@@ -21643,17 +21659,17 @@ declare global LFGBrowseSearchEntryTooltip_Load: (self: unknown) -> ()
 @onDemand("Blizzard_GroupFinder_VanillaStyle")
 declare global LFGBrowseSearchEntryTooltip_UpdateAndShow: (self: unknown, resultID: number) -> ()
 @onDemand("Blizzard_GroupFinder_VanillaStyle")
-declare global LFGBrowseGroupDataDisplay_Update: (self: unknown, displayType: unknown?, maxNumPlayers: number, displayData: unknown?, disabled: unknown?, isSolo: boolean?, soloRoles: unknown?, comment: unknown) -> ()
+declare global LFGBrowseGroupDataDisplay_Update: (self: unknown, displayType: unknown?, maxNumPlayers: number, displayData: unknown?, disabled: boolean?, isSolo: boolean?, soloRoles: unknown?, comment: string) -> ()
 @onDemand("Blizzard_GroupFinder_VanillaStyle")
-declare global LFGBrowseGroupDataDisplayComment_Update: (self: unknown, text: unknown, disabled: unknown?) -> ()
+declare global LFGBrowseGroupDataDisplayComment_Update: (self: unknown, text: string, disabled: boolean?) -> ()
 @onDemand("Blizzard_GroupFinder_VanillaStyle")
-declare global LFGBrowseGroupDataDisplaySolo_Update: (self: unknown, soloRoles: unknown?, disabled: unknown?) -> ()
+declare global LFGBrowseGroupDataDisplaySolo_Update: (self: unknown, soloRoles: unknown?, disabled: boolean?) -> ()
 @onDemand("Blizzard_GroupFinder_VanillaStyle")
-declare global LFGBrowseGroupDataDisplayRoleCount_Update: (self: unknown, displayData: unknown, disabled: unknown?) -> ()
+declare global LFGBrowseGroupDataDisplayRoleCount_Update: (self: unknown, displayData: unknown, disabled: boolean?) -> ()
 @onDemand("Blizzard_GroupFinder_VanillaStyle")
-declare global LFGBrowseGroupDataDisplayEnumerate_Update: (self: unknown, numPlayers: number, displayData: unknown, disabled: unknown?, iconOrder: unknown) -> ()
+declare global LFGBrowseGroupDataDisplayEnumerate_Update: (self: unknown, numPlayers: number, displayData: unknown, disabled: boolean?, iconOrder: unknown) -> ()
 @onDemand("Blizzard_GroupFinder_VanillaStyle")
-declare global LFGBrowseGroupDataDisplayPlayerCount_Update: (self: unknown, displayData: unknown, disabled: unknown?) -> ()
+declare global LFGBrowseGroupDataDisplayPlayerCount_Update: (self: unknown, displayData: unknown, disabled: boolean?) -> ()
 @onDemand("Blizzard_GroupFinder_VanillaStyle")
 declare global LFGBrowseCategoryDropDown_Initialize: (self: unknown) -> ()
 @onDemand("Blizzard_GroupFinder_VanillaStyle")
@@ -21695,13 +21711,13 @@ declare global LFGBrowseUtil_SortSearchResults: (results: table) -> ()
 @onDemand("Blizzard_GroupFinder_VanillaStyle")
 declare global LFGBrowseUtil_GetInviteActionForResult: (resultID: number?) -> (unknown, unknown)
 @onDemand("Blizzard_GroupFinder_VanillaStyle")
-declare global LFGBrowseUtil_MapRoleStatesToRoleIcons: (iconArray: unknown, isTank: boolean, isHealer: boolean, isDPS: boolean, useSimple: boolean?, useDisabled: unknown?) -> ()
+declare global LFGBrowseUtil_MapRoleStatesToRoleIcons: (iconArray: unknown, isTank: boolean, isHealer: boolean, isDPS: boolean, useSimple: boolean?, useDisabled: boolean?) -> ()
 @onDemand("Blizzard_GroupFinder_VanillaStyle")
-declare global LFGBrowseUtil_ReportListing: (searchResultID: unknown, leaderName: unknown) -> ()
+declare global LFGBrowseUtil_ReportListing: (searchResultID: unknown, leaderName: string) -> ()
 @onDemand("Blizzard_GroupFinder_VanillaStyle")
-declare global LFGBrowseUtil_ReportAdvertisement: (searchResultID: unknown, leaderName: unknown) -> ()
+declare global LFGBrowseUtil_ReportAdvertisement: (searchResultID: unknown, leaderName: string) -> ()
 @onDemand("Blizzard_GroupFinder_VanillaStyle")
-declare global LFGBrowseUtil_GetBestDisplayTypeForActivityIDs: (activityIDs: unknown) -> (unknown, unknown)
+declare global LFGBrowseUtil_GetBestDisplayTypeForActivityIDs: (activityIDs: number[]) -> (unknown, number)
 @onDemand("Blizzard_GroupFinder_VanillaStyle")
 declare global LFGListingMixin: LFGListingMixin
 @onDemand("Blizzard_GroupFinder_VanillaStyle")
@@ -21805,7 +21821,7 @@ declare global LFGUtil_SortActivityGroupIDs: (activityGroupIDList: table) -> ()
 @onDemand("Blizzard_GroupFinder_VanillaStyle")
 declare global LFGUtil_GetActivityGroupForActivity: (activityID: number) -> unknown
 @onDemand("Blizzard_GroupFinder_VanillaStyle")
-declare global LFGUtil_OrganizeActivitiesByActivityGroup: (activities: unknown) -> table
+declare global LFGUtil_OrganizeActivitiesByActivityGroup: (activities: number[]) -> table
 @onDemand("Blizzard_GroupFinder_VanillaStyle")
 declare global LFGUtil_GetFilteredActivities: (categoryID: number, activityGroupID: number?) -> unknown
 @onDemand("Blizzard_GroupFinder_VanillaStyle")
@@ -21912,7 +21928,7 @@ declare global InspectHonorFrame_OnEvent: (self: unknown, event: string, ...: un
 declare global InspectHonorFrame_Update: () -> ()
 declare global SetItemButtonCount: (button: unknown?, count: unknown?, abbreviate: boolean?) -> ()
 declare global SetItemButtonSubTexture: (button: unknown?, texture: unknown?) -> ()
-declare global SetItemButtonQuality: (button: unknown, quality: unknown?, itemIDOrLink: unknown?, suppressOverlays: boolean?) -> ()
+declare global SetItemButtonQuality: (button: unknown, quality: ItemQuality?, itemIDOrLink: unknown?, suppressOverlays: boolean?) -> ()
 declare global HandleModifiedItemClick: (link: unknown?) -> boolean
 @onDemand("Blizzard_ItemSocketingUI")
 declare global GEM_TYPE_INFO: table
@@ -22118,7 +22134,6 @@ declare global WorldQuestPinPingDriverAnimationMixin: WorldQuestPinPingDriverAni
 declare global TalentDisplayMixin: TalentDisplayMixin
 declare global TalentButtonBasicArtMixin: TalentButtonBasicArtMixin
 declare global BNet_GetBNetAccountName: (accountInfo: unknown?) -> unknown
-declare global BNet_GetTruncatedBattleTag: (battleTag: string?) -> string
 declare global BNet_GetValidatedCharacterNameWithClientEmbeddedAtlas: (characterName: string?, battleTag: string?, client: unknown?, texWidth: number?, texHeight: number?, texXOffset: number?, texYOffset: number?) -> string
 declare global CreateAnchor: (point: string, relativeTo: number, relativePoint: unknown?, x: number?, y: number?) -> AnchorMixin
 declare global IsMouseButton: (button: unknown) -> boolean
@@ -22135,8 +22150,10 @@ declare global ModelControlButton_OnMouseDown: (self: unknown) -> ()
 declare global ModelControlButton_OnMouseUp: (self: unknown) -> ()
 declare global SCROLL_FRAME_SCROLL_BAR_OFFSET_LEFT: unknown
 declare global SecureCurrencyUtil: SecureCurrencyUtil
+declare global PanelTemplates_Tab_OnClick: (self: unknown, frame: unknown) -> ()
 declare global PanelTemplates_SetTab: (frame: unknown, id: number) -> ()
 declare global PanelTemplates_SetTabEnabled: (frame: unknown, index: number, enabled: boolean?) -> ()
+declare global PanelTemplates_UpdateTabs: (frame: unknown) -> ()
 declare global PanelTemplates_SetNumTabs: (frame: unknown, numTabs: number) -> ()
 declare global PanelTemplates_DisableTab: (frame: unknown, index: number) -> ()
 declare global PanelTemplates_EnableTab: (frame: unknown, index: number) -> ()
@@ -22161,7 +22178,7 @@ declare global UIDropDownMenuButton_OnLeave: (self: unknown) -> ()
 declare global UIDropDownMenu_Refresh: (frame: unknown, useValue: boolean?, dropdownLevel: number?) -> ()
 declare global UIDropDownMenu_RefreshAll: (frame: unknown, useValue: boolean?) -> ()
 declare global UIDropDownMenu_SetSelectedName: (frame: unknown, name: unknown, useValue: boolean?) -> ()
-declare global UIDropDownMenu_SetSelectedValue: (frame: unknown, value: unknown, useValue: boolean?) -> ()
+declare global UIDropDownMenu_SetSelectedValue: (frame: unknown, value: number, useValue: boolean?) -> ()
 declare global UIDropDownMenu_SetSelectedID: (frame: unknown, id: unknown, useValue: boolean?) -> ()
 declare global UIDropDownMenuButton_OnClick: (self: unknown) -> ()
 declare global ToggleDropDownMenu: (level: number?, value: unknown?, dropDownFrame: unknown?, anchorName: string?, xOffset: number?, yOffset: number?, menuList: unknown?, button: unknown?, autoHideDelay: unknown?) -> boolean
@@ -22212,6 +22229,7 @@ declare global UserEditBoxNonEmpty: (editBox: unknown) -> boolean
 declare global StringSplitIntoTable: (sep: unknown, string: unknown) -> table
 declare global SOUNDKIT_ALLOW_DUPLICATES: boolean
 declare global GetPlayerGuid: () -> (string | Secret<string>)?
+declare global IsPlayerGuid: (guid: unknown) -> boolean
 declare global GetNameAndServerNameFromGUID: (unitGUID: string | Secret<string>) -> (unknown, unknown)
 declare global ConcatinateServerNameToPlayerName: (unitGUID: string | Secret<string>) -> string
 declare global Vector3D_CalculateNormalFromYawPitch: (yaw: unknown, pitch: number) -> (number, number, ...unknown)
@@ -22241,8 +22259,8 @@ declare global CreateUnsecuredFramePool: (frameType: "Frame", parent: unknown?, 
 declare global CreateFramePool: (frameType: unknown, parent: unknown, template: unknown, resetFunc: unknown, forbidden: unknown, frameInitializer: unknown, capacity: unknown) -> (...unknown)
 declare global tDeleteItem: (tbl: table, item: string) -> number
 declare global tIndexOf: (tbl: table, item: string) -> unknown
-declare global tContains: (tbl: table, item: unknown) -> boolean
-declare global tInsertUnique: (tbl: table, item: unknown) -> number?
+declare global tContains: (tbl: unknown, item: unknown) -> boolean
+declare global tInsertUnique: (tbl: unknown, item: unknown) -> number?
 declare global tUnorderedRemove: (tbl: table, index: number) -> ()
 declare global MergeTable: (destination: table, source: unknown) -> ()
 declare global SetTablePairsToTable: (destination: table, source: unknown) -> ()
@@ -22253,6 +22271,7 @@ declare global TableHasAnyEntries: (tbl: unknown) -> boolean
 declare global CopyValuesAsKeys: (tbl: unknown) -> table
 declare global CopyTransformedValuesAsKeys: (tbl: unknown, transformOp: function) -> table
 declare global GetOrCreateTableEntry: (table: unknown, key: unknown, defaultValue: unknown?) -> (unknown, boolean)
+declare global GetOrCreateTableEntryByCallback: (table: table, key: number, callback: function) -> (unknown, boolean)
 declare global GetKeysArray: (tbl: table) -> table
 declare global GetValuesArray: (tbl: unknown) -> table
 declare global GetKeysArraySortedByValue: (tbl: table) -> table
@@ -22910,7 +22929,7 @@ declare global FRIEND_HEADER_TAB_FRIENDS: number
 declare global FRIEND_HEADER_TAB_IGNORE: number
 declare global PENDING_GUILDBANK_PERMISSIONS: table
 declare global FriendsFrame_ShouldShowSummonButton: (self: unknown) -> (boolean, unknown)
-declare global FriendsFrame_ShowDropdown: (name: string, connected: number?, lineID: unknown?, chatType: unknown?, chatFrame: Region?, friendsList: number?, isMobile: unknown?, communityClubID: unknown?, communityStreamID: unknown?, communityEpoch: unknown?, communityPosition: unknown?, guid: unknown?, whoIndex: unknown?) -> ()
+declare global FriendsFrame_ShowDropdown: (name: string, connected: unknown?, lineID: unknown?, chatType: unknown?, chatFrame: Region?, friendsList: number?, isMobile: unknown?, communityClubID: unknown?, communityStreamID: unknown?, communityEpoch: unknown?, communityPosition: unknown?, guid: string?, whoIndex: unknown?) -> ()
 declare global FriendsFrame_ShowBNDropdown: (name: unknown, connected: number?, lineID: unknown?, chatType: unknown?, chatFrame: Region?, friendsList: number?, bnetIDAccount: unknown, communityClubID: unknown?, communityStreamID: unknown?, communityEpoch: unknown?, communityPosition: unknown?) -> ()
 declare global FriendsFrame_CheckDethroneStatus: () -> ()
 declare global FriendsFrame_OnLoad: (self: unknown) -> ()
@@ -23034,7 +23053,12 @@ declare global LootFrame_OnShow: (self: unknown) -> ()
 declare global LootFrame_OnHide: (self: unknown) -> ()
 declare global LootButton_OnClick: (self: unknown, button: unknown) -> ()
 declare global LootItem_OnEnter: (self: unknown) -> ()
+declare global GroupLootContainer_OnLoad: (self: unknown) -> ()
+declare global GroupLootContainer_CalcMaxIndex: (self: unknown) -> ()
+declare global GroupLootContainer_AddFrame: (self: unknown, frame: unknown) -> ()
 declare global GroupLootContainer_RemoveFrame: (self: unknown, frame: unknown) -> ()
+declare global GroupLootContainer_ReplaceFrame: (self: unknown, oldFrame: unknown, newFrame: unknown) -> boolean
+declare global GroupLootContainer_Update: (self: unknown) -> ()
 declare global GroupLootFrame_OpenNewFrame: (id: unknown, rollTime: unknown) -> ()
 declare global MasterLooterFrame_Show: (selectedLootButton: unknown) -> ()
 declare global MasterLooterPlayerFrame_OnClick: (self: unknown) -> ()
@@ -23145,7 +23169,6 @@ declare global TabardCharacterModelRotateLeftButton_OnClick: (self: unknown) -> 
 declare global TabardCharacterModelRotateRightButton_OnClick: (self: unknown) -> ()
 declare global TabardCharacterModelFrame_OnUpdate: (self: unknown, elapsedTime: number) -> ()
 declare global TradeFrame_Update: () -> ()
-declare global CheckColorOverrideForPVPInactive: (unit: string?, timeNow: number, r: unknown, g: unknown, b: unknown) -> (unknown, unknown, unknown)
 declare global SocialQueueUtil_GetHeaderName: (groupGUID: unknown) -> unknown
 declare global SocialQueueUtil_SetTooltip: (tooltip: unknown, playerDisplayName: unknown, queues: unknown, canJoin: unknown?, hasRelationshipWithLeader: unknown) -> ()
 declare global SocialQueueUtil_GetRelationshipInfo: (guid: unknown, missingNameFallback: unknown?, clubId: ClubId?) -> (unknown, unknown, string?, unknown)
@@ -23181,6 +23204,7 @@ declare global MerchantFrame_GetProductInfo: (itemButton: unknown) -> (table, ta
 declare global MAX_NUM_QUESTS: number
 declare global QUEST_FRAME_AUTO_ACCEPT_QUEST_ID: number
 declare global QUEST_FRAME_AUTO_ACCEPT_QUEST_START_ITEM_ID: number
+declare global QuestFrame_OnLoad: (self: unknown) -> ()
 declare global QuestFrameProgressPanel_OnShow: () -> ()
 declare global QuestMoneyFrame_OnLoad: (self: unknown) -> ()
 declare global QuestFrameItems_Update: (questState: string) -> ()
@@ -23467,7 +23491,7 @@ declare global RefreshBuffs: (frame: Frame, unit: string, numBuffs: number?, suf
 declare global RefreshDebuffs: (frame: Frame, unit: string, numDebuffs: number?, suffix: string?, checkCVar: boolean?) -> ()
 declare global GetQuestDifficultyColor: (level: number, isScaling: unknown?) -> (unknown, unknown)
 declare global ConvertRGBtoColorString: (color: unknown) -> string
-declare global GetDungeonNameWithDifficulty: (name: unknown?, difficultyName: string) -> unknown
+declare global GetDungeonNameWithDifficulty: (name: string?, difficultyName: string) -> string
 declare global AnimatedShine_Start: (shine: unknown, r: unknown?, g: unknown, b: unknown) -> ()
 declare global AnimatedShine_Stop: (shine: string) -> ()
 declare global AnimatedShine_OnUpdate: (elapsed: number) -> ()
@@ -23593,72 +23617,43 @@ declare global BOSS_DEBUFF_SIZE_INCREASE: number
 declare global CUF_AURA_BOTTOM_OFFSET: number
 declare global HEALTH_BAR_HIDE_REASON_SETUP: number
 declare global HEALTH_BAR_HIDE_REASON_UNIT_DEAD: number
-declare global CompactUnitFrame_OnLoad: (self: unknown) -> ()
-declare global CompactUnitFrame_OnEvent: (self: unknown, event: string, ...: unknown) -> ()
-declare global CompactUnitFrame_OnUpdate: (self: unknown, elapsed: number) -> ()
-declare global CompactUnitFrame_SetUnit: (frame: unknown, unit: unknown?) -> ()
-declare global CompactUnitFrame_SetUpdateAllOnUpdate: (self: unknown, doUpdate: boolean?) -> ()
-declare global CompactUnitFrame_SetUpFrame: (frame: unknown, func: function) -> ()
-declare global CompactUnitFrame_SetOptionTable: (frame: unknown, optionTable: unknown) -> ()
-declare global CompactUnitFrame_RegisterEvents: (frame: unknown) -> ()
-declare global CompactUnitFrame_UpdateUnitEvents: (frame: unknown) -> ()
-declare global CompactUnitFrame_UnregisterEvents: (frame: unknown) -> ()
-declare global CompactUnitFrame_SetUpClicks: (frame: unknown) -> ()
-declare global CompactUnitFrame_SetMaxBuffs: (frame: unknown, numBuffs: number) -> ()
-declare global CompactUnitFrame_SetMaxDebuffs: (frame: unknown, numDebuffs: number) -> ()
-declare global CompactUnitFrame_SetMaxDispelDebuffs: (frame: unknown, numDispelDebuffs: number) -> ()
-declare global CompactUnitFrame_UpdateAll: (frame: unknown) -> ()
-declare global CompactUnitFrame_UpdateInVehicle: (frame: unknown) -> ()
-declare global CompactUnitFrame_UpdateVisible: (frame: unknown) -> ()
-declare global CompactUnitFrame_IsTapDenied: (frame: unknown) -> unknown
-declare global CompactUnitFrame_UpdateHealthColor: (frame: unknown) -> ()
-declare global CompactUnitFrame_SetHideHealth: (frame: unknown, hideHealth: boolean?, reason: unknown) -> ()
-declare global CompactUnitFrame_GetHideHealth: (frame: unknown) -> unknown
-declare global CompactUnitFrame_UpdateMaxHealth: (frame: unknown) -> ()
-declare global CompactUnitFrame_UpdateHealth: (frame: unknown) -> ()
-declare global CompactUnitFrame_UpdateMaxPower: (frame: unknown) -> ()
-declare global CompactUnitFrame_UpdatePower: (frame: unknown) -> ()
-declare global CompactUnitFrame_UpdatePowerColor: (frame: unknown) -> ()
-declare global ShouldShowName: (frame: unknown) -> boolean
-declare global CompactUnitFrame_UpdateName: (frame: unknown) -> ()
-declare global CompactUnitFrame_UpdateAuras: (frame: unknown) -> ()
-declare global CompactUnitFrame_UpdateSelectionHighlight: (frame: unknown) -> ()
-declare global CompactUnitFrame_UpdateHealthBorder: (frame: unknown) -> ()
-declare global CompactUnitFrame_UpdateInRange: (frame: unknown) -> ()
-declare global CompactUnitFrame_UpdateDistance: (frame: unknown) -> ()
-declare global CompactUnitFrame_UpdateStatusText: (frame: unknown) -> ()
-declare global CompactUnitFrameUtil_UpdateFillBar: (frame: unknown, previousTexture: unknown, bar: unknown, amount: number, barOffsetXPercent: number?) -> unknown
-declare global CompactUnitFrame_UpdateRoleIcon: (frame: unknown) -> ()
-declare global CompactUnitFrame_UpdateReadyCheck: (frame: unknown) -> ()
-declare global CompactUnitFrame_FinishReadyCheck: (frame: unknown) -> ()
-declare global CompactUnitFrame_CheckReadyCheckDecay: (frame: unknown, elapsed: number) -> ()
-declare global CompactUnitFrame_UpdateCenterStatusIcon: (frame: unknown) -> ()
-declare global CompactUnitFrame_UpdateClassificationIndicator: (frame: unknown) -> ()
-declare global CompactUnitFrame_UpdateBuffs: (frame: unknown) -> ()
-declare global CompactUnitFrame_UpdateDebuffs: (frame: unknown) -> ()
-declare global CompactUnitFrame_UpdateDispellableDebuffs: (frame: unknown) -> ()
+declare global CompactUnitFrame_OnLoad: (self: Button) -> ()
+declare global CompactUnitFrame_SetUnit: (frame: Button, unit: unknown?) -> ()
+declare global CompactUnitFrame_SetUpFrame: (frame: Button, func: function) -> ()
+declare global CompactUnitFrame_SetUpClicks: (frame: Button) -> ()
+declare global CompactUnitFrame_SetMaxBuffs: (frame: Button, numBuffs: number) -> ()
+declare global CompactUnitFrame_SetMaxDispelDebuffs: (frame: Button, numDispelDebuffs: number) -> ()
+declare global CompactUnitFrame_UpdateAll: (frame: Button) -> ()
+declare global CompactUnitFrame_SetHideHealth: (frame: Button, hideHealth: boolean?, reason: unknown) -> ()
+declare global CompactUnitFrame_GetHideHealth: (frame: Button) -> unknown
+declare global CompactUnitFrame_UpdateAuras: (frame: Button) -> ()
+declare global CompactUnitFrameUtil_UpdateFillBar: (frame: Button, previousTexture: unknown, bar: unknown, amount: number, barOffsetXPercent: number?) -> unknown
+declare global CompactUnitFrame_UpdateClassificationIndicator: (frame: Button) -> ()
+declare global CompactUnitFrame_UpdateBuffs: (frame: Button) -> ()
+declare global CompactUnitFrame_UpdateDebuffs: (frame: Button) -> ()
+declare global CompactUnitFrame_UpdateDispellableDebuffs: (frame: Button) -> ()
 declare global CompactUnitFrame_UtilShouldDisplayBuff: (unit: unknown, index: number, filter: unknown) -> unknown
-declare global CompactUnitFrame_HideAllBuffs: (frame: unknown) -> ()
+declare global CompactUnitFrame_HideAllBuffs: (frame: Button) -> ()
 declare global CompactUnitFrame_UpdateCooldownFrame: (frame: unknown, expirationTime: number?, duration: number, buff: boolean?) -> ()
 declare global CompactUnitFrame_UtilSetBuff: (buffFrame: unknown, unit: unknown, index: number, filter: unknown) -> ()
 declare global CompactUnitFrame_UtilShouldDisplayDebuff: (unit: unknown, index: number, filter: unknown) -> unknown
 declare global CompactUnitFrame_UtilIsBossAura: (unit: unknown, index: number, filter: unknown, checkAsBuff: boolean?) -> unknown
 declare global CompactUnitFrame_UtilIsPriorityDebuff: (unit: unknown, index: number, filter: unknown) -> boolean
-declare global CompactUnitFrame_HideAllDebuffs: (frame: unknown) -> ()
+declare global CompactUnitFrame_HideAllDebuffs: (frame: Button) -> ()
 declare global CompactUnitFrame_UtilSetDebuff: (debuffFrame: unknown, unit: unknown, index: number, filter: unknown, isBossAura: boolean?, isBossBuff: boolean?) -> ()
 declare global CompactUnitFrame_UtilSetDispelDebuff: (dispellDebuffFrame: unknown, debuffType: unknown, index: number) -> ()
-declare global CompactUnitFrame_HideAllDispelDebuffs: (frame: unknown) -> ()
-declare global CompactUnitFrame_UpdateLevel: (frame: unknown) -> ()
+declare global CompactUnitFrame_HideAllDispelDebuffs: (frame: Button) -> ()
+declare global CompactUnitFrame_UpdateLevel: (frame: Button) -> ()
 declare global CompactUnitFrame_OpenMenu: (self: unknown) -> ()
-declare global DefaultCompactUnitFrameSetup: (frame: unknown) -> ()
-declare global DefaultCompactMiniFrameSetup: (frame: unknown) -> ()
+declare global DefaultCompactUnitFrameSetup: (frame: Button) -> ()
+declare global DefaultCompactMiniFrameSetup: (frame: Button) -> ()
 declare global DefaultCompactNamePlateFriendlyFrameOptions: table
 declare global DefaultCompactNamePlateEnemyFrameOptions: table
 declare global DefaultCompactNamePlateFrameSetUpOptions: table
-declare global DefaultCompactNamePlateFrameSetup: (frame: unknown, options: unknown?) -> ()
-declare global DefaultCompactNamePlateFriendlyFrameSetup: (frame: unknown) -> ()
-declare global DefaultCompactNamePlateEnemyFrameSetup: (frame: unknown) -> ()
-declare global DefaultCompactNamePlateFrameSetupInternal: (frame: unknown, setupOptions: unknown, frameOptions: unknown) -> ()
+declare global DefaultCompactNamePlateFrameSetup: (frame: Button, options: unknown?) -> ()
+declare global DefaultCompactNamePlateFriendlyFrameSetup: (frame: Button) -> ()
+declare global DefaultCompactNamePlateEnemyFrameSetup: (frame: Button) -> ()
+declare global DefaultCompactNamePlateFrameSetupInternal: (frame: Button, setupOptions: unknown, frameOptions: unknown) -> ()
 declare global PetFrame_OnLoad: (self: Frame) -> ()
 declare global PetFrame_Update: (self: Frame, override: unknown?) -> ()
 declare global PetFrame_OnEvent: (self: Frame, event: string, ...: unknown) -> ()
@@ -23739,9 +23734,6 @@ declare global AlternatePowerBar_UpdateValue: (self: unknown) -> ()
 declare global AlternatePowerBar_UpdateMaxValues: (self: unknown) -> ()
 declare global AlternatePowerBar_UpdatePowerType: (self: unknown) -> ()
 declare global CompactUnitFrame_IsPlayerAttacking: (unit: unknown) -> (...unknown)
-declare global CompactUnitFrame_UpdateAggroHighlight: (frame: unknown) -> ()
-declare global CompactUnitFrame_UpdateAggroFlash: (frame: unknown) -> ()
-declare global CompactUnitFrame_UpdateHealPrediction: (frame: unknown) -> ()
 declare global RuneButton_OnUpdate: (self: unknown, elapsed: unknown, ...: unknown) -> ()
 declare global RuneFrame_AddRune: (runeFrame: unknown, rune: unknown) -> ()
 declare global RuneFrame_FixRunes: (runeFrame: unknown) -> ()
@@ -23801,9 +23793,9 @@ declare global UnitPopupResetTargetFrameButtonMixin: unknown
 declare global WorldMapTrackingOptionsButtonMixin: WorldMapTrackingOptionsButtonMixin
 declare global OpenWorldMap: (mapID: unknown?) -> ()
 declare global WorldMapContinentDropdown_OnLoad: (self: unknown) -> ()
-declare global WorldMapContinentDropdown_OnShow: (...unknown) -> ...unknown
+declare global WorldMapContinentDropdown_OnShow: (self: unknown) -> ()
 declare global WorldMapZoneDropdown_OnLoad: (self: unknown) -> ()
-declare global WorldMapZoneDropdown_OnShow: (...unknown) -> ...unknown
+declare global WorldMapZoneDropdown_OnShow: (self: unknown) -> ()
 declare global WorldMapZoneMinimapDropdown_OnLoad: (self: unknown) -> ()
 declare global WorldMapZoneMinimapDropdown_OnShow: (self: unknown) -> ()
 declare global WorldMapZoneMinimapDropdown_OnEnter: (self: unknown) -> ()
@@ -32076,6 +32068,11 @@ declare namespace C_ProductChoice
     function GetNumSuppressed(...: unknown): number
     function GetProducts(arg1: unknown): (...unknown)
     function MakeSelection(arg1: unknown, arg2: unknown): (...unknown)
+end
+
+declare namespace AuraUtil
+    function FindAura(predicate: unknown, unit: string, filter: string, predicateArg1: string, predicateArg2: unknown?, predicateArg3: unknown?): (...unknown)
+    function UnpackAuraData(auraData: unknown?): (unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, ...unknown)
 end
 
 declare namespace Enum

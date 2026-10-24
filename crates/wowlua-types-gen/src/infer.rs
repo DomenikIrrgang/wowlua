@@ -121,6 +121,54 @@ fn base(ty: &str) -> String {
     ty.trim().trim_end_matches('?').trim().to_string()
 }
 
+/// A block's statements, those of its `do … end` blocks in their place.
+fn flatten<'a>(b: Block<'a>, out: &mut Vec<Stmt<'a>>) {
+    for s in b.stmts() {
+        match s.kind() {
+            StmtKind::Do(inner) => flatten(inner, out),
+            _ => out.push(s),
+        }
+    }
+}
+
+/// The one named type a value's type allows, seen through `?`,
+/// parentheses, `nil` and `Secret<…>` (`(AuraData | Secret<AuraData>)?`
+/// is an `AuraData`).
+fn record_name(ty: &str) -> Option<String> {
+    fn strip(t: &str) -> &str {
+        let mut t = t.trim();
+        loop {
+            let before = t;
+            t = t.trim_end_matches('?').trim();
+            if t.starts_with('(') && t.ends_with(')') {
+                t = t[1..t.len() - 1].trim();
+            }
+            if let Some(inner) = t.strip_prefix("Secret<").and_then(|r| r.strip_suffix('>')) {
+                t = inner.trim();
+            }
+            if t == before {
+                return t;
+            }
+        }
+    }
+    let whole = strip(ty);
+    let mut name: Option<&str> = None;
+    for part in whole.split('|') {
+        let p = strip(part);
+        if p == "nil" {
+            continue;
+        }
+        if !p.chars().all(|c| c.is_ascii_alphanumeric() || c == '_') {
+            return None;
+        }
+        match name {
+            Some(n) if n != p => return None,
+            _ => name = Some(p),
+        }
+    }
+    name.map(str::to_string)
+}
+
 /// Types that say nothing.
 fn says_nothing(ty: &str) -> bool {
     matches!(base(ty).as_str(), "any" | "unknown" | "" | "nil")
@@ -274,13 +322,12 @@ impl<'a, A: Api> Walker<'a, A> {
                 {
                     return sig.returns.first().cloned();
                 }
-                let ExprKind::Name(o) = obj.kind() else {
-                    return None;
+                // a field of a value of a declared type (`auraData.name`,
+                // `auraData` an `AuraData`): the type's field
+                let owner = match obj.kind() {
+                    ExprKind::Name(o) if o.text() == "self" => self.owner.clone()?,
+                    _ => record_name(&self.type_of(obj)?)?,
                 };
-                if o.text() != "self" {
-                    return None;
-                }
-                let owner = self.owner.as_ref()?;
                 let sig = self.api.signature(&format!("{owner}#{}", name.text()))?;
                 sig.returns.first().cloned()
             }
@@ -656,11 +703,12 @@ impl<'a, A: Api> Walker<'a, A> {
                     let last = i + 1 == values.len();
                     if last && is_multi(*v) {
                         // a call's results: a known API call's, else open
+                        // (its typed values, then open where it ends in `...`)
                         let known = match v.kind() {
                             ExprKind::Call { callee, .. } => callee_name(callee)
                                 .and_then(|n| self.api.signature(&n))
-                                .filter(|s| s.ret_vararg.is_none())
-                                .map(|s| s.returns.clone()),
+                                .filter(|s| !s.returns.is_empty() || s.ret_vararg.is_none())
+                                .map(|s| (s.returns.clone(), s.ret_vararg.is_some())),
                             _ => None,
                         };
                         // a mixin made, a builtin's value: over a declared result
@@ -673,7 +721,12 @@ impl<'a, A: Api> Walker<'a, A> {
                         };
                         let known = if special.is_some() { None } else { known };
                         match (known, special.or_else(|| self.type_of(*v))) {
-                            (Some(rs), _) => list.extend(rs.into_iter().map(Some)),
+                            (Some((rs, open)), _) => {
+                                list.extend(rs.into_iter().map(Some));
+                                if open {
+                                    self.ev.open_results = true;
+                                }
+                            }
                             // a builtin's or a string method's one value
                             (None, Some(t)) => list.push(Some(t)),
                             (None, None) => self.ev.open_results = true,
@@ -845,7 +898,11 @@ pub fn analyze(files: &[(String, String)], api: &impl Api) -> Inferred {
         let mut locals: std::collections::HashSet<String> = std::collections::HashSet::new();
         let mut top_locals: HashMap<String, Option<String>> = HashMap::new();
         let mut top_results: HashMap<String, (String, usize)> = HashMap::new();
-        for s in parse.view().block().stmts() {
+        // the top level's statements, a `do … end` block's as its own
+        // (Blizzard's deprecation files define their functions in one)
+        let mut stmts = Vec::new();
+        flatten(parse.view().block(), &mut stmts);
+        for s in stmts {
             match s.kind() {
                 StmtKind::Local { names, .. } => {
                     for n in names {
@@ -1036,7 +1093,37 @@ mod tests {
                 ..Sig::default()
             },
         );
+        m.insert(
+            "C_Rec.Get".to_string(),
+            Sig {
+                returns: vec!["Rec?".into()],
+                ..Sig::default()
+            },
+        );
+        m.insert(
+            "Rec#name".to_string(),
+            Sig {
+                returns: vec!["string".into()],
+                ..Sig::default()
+            },
+        );
         m
+    }
+
+    #[test]
+    fn a_field_of_a_typed_value() {
+        assert_eq!(
+            one(
+                "function F()\n  local r = C_Rec.Get()\n  return r.name\nend\n",
+                "F"
+            ),
+            "(): string"
+        );
+        assert_eq!(
+            record_name("((AuraData | Secret<AuraData>))?").as_deref(),
+            Some("AuraData")
+        );
+        assert_eq!(record_name("A | B"), None);
     }
 
     fn one(src: &str, name: &str) -> String {
