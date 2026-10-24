@@ -238,7 +238,12 @@ proportion to the visible regions.
 - **Clipping**: frames that clip their children (`SetClipsChildren`,
   scroll frames) give their rectangle to everything below them.
 - **Hit testing**: the topmost mouse-enabled frame at a point, as the
-  engine's input finds it, so a viewer's click is the engine's click.
+  engine's input finds it, so a viewer's click is the engine's click. A
+  button takes the mouse from the start; any frame once given (set,
+  hooked or from XML) an `OnEnter`, `OnLeave`, `OnMouseDown` or
+  `OnMouseUp` script, as the client turns the mouse on for it
+  (`OnMouseWheel` the wheel, a key script the keyboard), until
+  `EnableMouse(false)`.
 
 The scene also comes as the frame tree (names, types, shown and visible
 state, rectangles, text, strata, levels) for agents and inspectors.

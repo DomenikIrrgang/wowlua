@@ -393,6 +393,38 @@ fn the_ui_answers_with_frames_and_clicks_at_a_point() {
     assert!(text.lines[0].x > 0.0, "centered: {:?}", text.lines[0]);
 }
 
+/// A frame its mouse scripts alone make clickable, as the side tabs of the
+/// character frame and the group finder (decision T365): `OnMouseUp`
+/// turned the mouse on, the click reaches it; a frame without such a
+/// script lets the click through.
+#[test]
+fn a_frame_with_mouse_scripts_takes_clicks_at_a_point() {
+    let mut s = session();
+    s.run(
+        "tab.lua",
+        "local tab = CreateFrame('Frame', 'SideTab', UIParent)\ntab:SetSize(50, 50)\ntab:SetPoint('TOPLEFT', 0, 0)\n\
+         tab:SetScript('OnMouseUp', function(_, button, inside) upped = button end)\n\
+         local plain = CreateFrame('Frame', 'PlainFrame', UIParent)\nplain:SetSize(50, 50)\nplain:SetPoint('TOPLEFT', 100, 0)\n\
+         mouse = { tab:IsMouseEnabled(), plain:IsMouseEnabled() }\n",
+    );
+    let click = |x: f64| Input::Click {
+        frame: None,
+        x: Some(x),
+        y: Some(25.0),
+        button: "LeftButton".into(),
+    };
+    wowlua_debug::ui::input(&mut s.vm, &click(25.0)).expect("clicked the tab");
+    match s.vm.get_global("upped") {
+        Value::Str(b) => assert_eq!(s.vm.str_bytes(b), b"LeftButton"),
+        other => panic!("OnMouseUp did not run: {other:?}"),
+    }
+    assert_eq!(
+        wowlua_engine::scene::hit_test(&mut s.vm, 125.0, 25.0),
+        wowlua_engine::scene::hit_test(&mut s.vm, 500.0, 500.0),
+        "the plain frame took the mouse"
+    );
+}
+
 #[test]
 fn a_profile_report_has_functions_and_a_speedscope_file() {
     let mut s = session();

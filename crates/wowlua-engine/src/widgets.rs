@@ -1394,7 +1394,7 @@ fn set_script(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     vm.heap.table_mut(hooks).set_str(key, Value::Nil);
     script_stored(vm, id, &s);
     if !f.is_nil() {
-        key_script_set(vm, id, &s);
+        input_script_set(vm, id, &s);
     }
     Ok(vec![])
 }
@@ -1407,12 +1407,22 @@ pub fn script_stored(vm: &mut Vm, id: WidgetId, script: &str) {
     }
 }
 
-/// A key script given (set or hooked) turns the keyboard on; taking it
-/// away does not turn it off (`/stdtest engine answers` "Keyboard script
-/// enables": `KeybindListener` listens by its scripts alone).
-pub fn key_script_set(vm: &mut Vm, id: WidgetId, script: &str) {
-    if script == "OnKeyDown" || script == "OnKeyUp" {
-        store(vm, id, "KeyboardEnabled", &[Value::Bool(true)]);
+/// A script that takes input, given (set, hooked or from XML), turns that
+/// input on; taking it away does not turn it off. A key script the
+/// keyboard (`/stdtest engine answers` "Keyboard script enables":
+/// `KeybindListener` listens by its scripts alone); `OnEnter`, `OnLeave`,
+/// `OnMouseDown` and `OnMouseUp` the mouse, `OnMouseWheel` the wheel
+/// (decision T365; unverified on WoW Forever: the side tabs of the
+/// character frame and the group finder are frames clicked by their
+/// `OnMouseUp` alone).
+pub fn input_script_set(vm: &mut Vm, id: WidgetId, script: &str) {
+    match script {
+        "OnKeyDown" | "OnKeyUp" => store(vm, id, "KeyboardEnabled", &[Value::Bool(true)]),
+        "OnEnter" | "OnLeave" | "OnMouseDown" | "OnMouseUp" => {
+            store(vm, id, "MouseEnabled", &[Value::Bool(true)])
+        }
+        "OnMouseWheel" => store(vm, id, "MouseWheelEnabled", &[Value::Bool(true)]),
+        _ => {}
     }
 }
 
@@ -1447,7 +1457,7 @@ fn hook_script(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let n = vm.heap.table(list).border() as f64 + 1.0;
     let _ = vm.heap.table_mut(list).set(Value::Num(n), c.arg(3));
     script_stored(vm, id, &s);
-    key_script_set(vm, id, &s);
+    input_script_set(vm, id, &s);
     Ok(vec![])
 }
 

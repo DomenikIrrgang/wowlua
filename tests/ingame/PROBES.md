@@ -516,6 +516,12 @@ alone unless an item names an addon.
     the party after accepting; `/promote` and `/kick` it; `/who` with three
     or fewer results and with more (the chat lines); `/ginvite` (the lines
     after it accepts).
+20d. **Mouse scripts turn the mouse on** (decision T365; wowlua: `false
+    true true true true true`; the in-game suite's "Mouse script enables"
+    asks the same):
+    1. `/run local f=CreateFrame("Frame") local a=f:IsMouseEnabled() f:SetScript("OnMouseUp",function() end) local b=f:IsMouseEnabled() f:SetScript("OnMouseUp",nil) print(a,b,f:IsMouseEnabled())`
+    2. `/run local g=CreateFrame("Frame") g:SetScript("OnEnter",function() end) local h=CreateFrame("Frame") h:SetScript("OnMouseWheel",function() end) print(g:IsMouseEnabled(),h:IsMouseEnabled(),h:IsMouseWheelEnabled())`
+    3. Open the character frame (C) and type `/run local t=CharacterFrameModeTab2 print(t:IsMouseEnabled(),t:IsMouseClickEnabled(),t:IsMouseMotionEnabled())`
 20. **Screenshots to compare with wowlua's** (in `~/Desktop/wowlua-*`):
     1. Settings, Accessibility: the "Colors" category and the "Use UI
        Scale" check box (Graphics).

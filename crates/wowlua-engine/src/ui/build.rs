@@ -1314,7 +1314,7 @@ fn set_script(vm: &mut Vm, cx: &Context, id: WidgetId, s: &Element) {
     };
     vm.heap.table_mut(scripts).set_str(key, f);
     crate::widgets::script_stored(vm, id, name);
-    crate::widgets::key_script_set(vm, id, name);
+    crate::widgets::input_script_set(vm, id, name);
 }
 
 /// A handler running `a`, then `b`.
