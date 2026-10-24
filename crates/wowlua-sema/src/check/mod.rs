@@ -2968,6 +2968,33 @@ print(a, b, c, d, e, name, realm, more)
         );
     }
 
+    /// An `unknown` narrowed to a function or a table stays `unknown`
+    /// inside; an `any` keeps the plain `function` and `table` (decision L75).
+    #[test]
+    fn narrowed_unknown_stays_unknown_inside() {
+        strict_err(
+            "local function f(v: unknown) if type(v) == \"table\" then local s: string = v.name print(s) end end\nf(1)\n",
+            "E2001",
+        );
+        strict_err(
+            "local function f(v: unknown) if type(v) == \"function\" then local s: string = v() print(s) end end\nf(1)\n",
+            "E2001",
+        );
+        strict_ok(
+            "local function f(v: unknown) if type(v) == \"table\" then for k, x in pairs(v) do print(tostring(k), tostring(x)) end end end\nf(1)\n",
+        );
+        strict_ok(
+            "local function f(v: unknown) if type(v) == \"function\" then local ok, r = pcall(v, 1, \"a\") print(ok, tostring(r)) end end\nf(1)\n",
+        );
+        strict_ok(
+            "local function f(v: unknown) if type(v) == \"table\" then local n = v.n if type(n) == \"number\" then print(n + 1) end end end\nf(1)\n",
+        );
+        // an `any` keeps the plain types
+        strict_ok(
+            "local function f(v: any) if type(v) == \"table\" then local s: string = v.name print(s) end end\nf(1)\n",
+        );
+    }
+
     /// A callback's returns bind a type parameter nothing else binds
     /// (decision L55).
     #[test]
@@ -2987,11 +3014,16 @@ print(a, b, c, d, e, name, realm, more)
         strict_ok(
             "local ok, h = pcall(function(): string return \"x\" end)\nlocal e: string = h\nprint(ok, e)\n",
         );
-        // a function that only raises: what it raised, `any`
-        strict_ok("local ok, m = pcall(error, \"x\")\nlocal s: number = m\nprint(ok, s)\n");
-        strict_ok(
-            "local ok, m = pcall(function() error(\"x\") end)\nlocal s: number = m\nprint(ok, s)\n",
+        // a function that only raises: what it raised, `unknown` (L75)
+        strict_err(
+            "local ok, m = pcall(error, \"x\")\nlocal s: number = m\nprint(ok, s)\n",
+            "E2001",
         );
+        strict_err(
+            "local ok, m = pcall(function() error(\"x\") end)\nlocal s: number = m\nprint(ok, s)\n",
+            "E2001",
+        );
+        strict_ok("local ok, m = pcall(error, \"x\")\nprint(ok, tostring(m))\n");
     }
 
     /// A record read with a key of its field names gives those fields'

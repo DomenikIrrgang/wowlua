@@ -598,7 +598,8 @@ impl Checker<'_, '_> {
                 self.stdlib_after_call(callee, args);
                 // `pcall(f)`/`xpcall(f, h)`: after the boolean, `f`'s results,
                 // or what it raised; a function that never returns or
-                // returns nothing gives only the latter: `any` (L55).
+                // returns nothing gives only the latter, which may be
+                // anything: `unknown` (L55, L75).
                 if let ExprKind::Name(n) = callee.kind()
                     && matches!(n.text(), "pcall" | "xpcall")
                     && self.lookup_var(n.text()).is_none()
@@ -606,11 +607,11 @@ impl Checker<'_, '_> {
                 {
                     let raises_only = results.types.len() == 1 && results.rest.is_none();
                     if raises_only {
-                        results.rest = Some(Rest::Variadic(Types::ANY));
+                        results.rest = Some(Rest::Variadic(Types::UNKNOWN));
                     }
                     for t in results.types.iter_mut().skip(1) {
                         if *t == Types::NEVER {
-                            *t = Types::ANY;
+                            *t = Types::UNKNOWN;
                         }
                     }
                 }

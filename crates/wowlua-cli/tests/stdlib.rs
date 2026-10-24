@@ -5909,6 +5909,15 @@ local kept, apart = tbl.copy(both), tbl.copy(both, { shared = false })
 print(kept.a == kept.b, apart.a == apart.b, apart.a[1], apart.a ~= shared)
 print(pcall(tbl.copy, t, { shared = false }))
 print(table.concat(tbl.keys({ [2] = 1, b = 2, [1] = 3 }, function(x, y) return tostring(x) < tostring(y) end), ","))
+-- listAt and recordAt: the table there, or a new one stored there.
+local saved = { errors = { "old" }, bad = 5 }
+table.insert(tbl.listAt(saved, "errors"), "new")
+table.insert(tbl.listAt(saved, "fresh"), "one")
+tbl.recordAt(saved, "probe").at = "now"
+tbl.recordAt(saved, "probe").n = 2
+local made = tbl.listAt(saved, "bad")
+print(#saved.errors, saved.fresh[1], saved.probe.at, saved.probe.n, made == saved.bad, #made)
+print(tbl.listAt({ s = Mock.secret() }, "s") ~= nil)
 "#,
     );
     assert_eq!(
@@ -5924,6 +5933,8 @@ print(table.concat(tbl.keys({ [2] = 1, b = 2, [1] = 3 }, function(x, y) return t
             "true false 1 true",
             "false copy: the table contains itself, which `shared = false` cannot copy",
             "1,2,b",
+            "2 one now 2 true 0",
+            "true",
         ]
     );
 }
@@ -6637,7 +6648,8 @@ print(o.hide(), o.button:IsShown(), o.button:GetNumPoints())
 }
 
 /// Walking the game's frames (`frames.textures`, `fontStrings`, `children`,
-/// `stateTextures`, `rows`) and `events.onRegistry` (decision S45).
+/// `stateTextures`, `rows`, `keyed`) and `events.onRegistry` (decisions
+/// S45, S49).
 #[test]
 fn walking_the_games_frames() {
     let out = modes(
@@ -6675,11 +6687,28 @@ EventRegistry:TriggerEvent("StdTest.Ping", "a", "b")
 sub:cancel()
 EventRegistry:TriggerEvent("StdTest.Ping", "c")
 print(table.concat(seen, " "), sub.active)
+-- the widgets a frame holds by key: set from Lua too; not other values
+f.Close = b
+f.Art = f:CreateTexture()
+f.count, f.data = 3, {}
+local keyed = F.keyed(f)
+local keys = {}
+for k in pairs(keyed) do keys[#keys + 1] = k end
+table.sort(keys)
+print(table.concat(keys, ","), keyed.Close == b, next(F.keyed(nil)), next(F.keyed(5)))
 "##,
     );
     assert_eq!(
         plain(&out),
-        ["2 1 2", "0", "2", "2 2 0 0", "2 0 0 0", "a,b false"]
+        [
+            "2 1 2",
+            "0",
+            "2",
+            "2 2 0 0",
+            "2 0 0 0",
+            "a,b false",
+            "Art,Close true nil nil"
+        ]
     );
 }
 

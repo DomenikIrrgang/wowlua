@@ -437,6 +437,33 @@ export function list(v: unknown): unknown[]
     return {}
 end
 
+--- The list at `t[key]`, made and stored there when `t[key]` is not a
+--- table the addon may read: for adding to a list kept in a record read
+--- as `unknown`, such as saved variables
+--- (`table.insert(tbl.listAt(saved, "errors"), text)`).
+export function listAt<K>(t: { [K]: unknown }, key: K): unknown[]
+    const v = t[key]
+    if walkable(v) then
+        return v :: unknown[]
+    end
+    const made: unknown[] = {}
+    t[key] = made
+    return made
+end
+
+--- The record at `t[key]` (its fields `unknown`), made and stored there
+--- when `t[key]` is not a table the addon may read: for filling in a
+--- record kept in another (`tbl.recordAt(saved, "probe").at = date()`).
+export function recordAt<K>(t: { [K]: unknown }, key: K): { [string]: unknown }
+    const v = t[key]
+    if walkable(v) then
+        return v :: { [string]: unknown }
+    end
+    const made: { [string]: unknown } = {}
+    t[key] = made
+    return made
+end
+
 --- A table whose keys don't keep their values (`__mode = "k"`): for what
 --- you note about objects you don't own, such as the game's frames, without
 --- writing fields onto them. Typed by where it goes:

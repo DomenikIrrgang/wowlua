@@ -629,7 +629,12 @@ The checker narrows union types along control flow using:
   an `unknown` is falsy it is `false | nil`, so `x and true or false` is a
   `boolean` (decision L63)
 - nil comparison: `x ~= nil`, `x == nil`
-- `type(x) == "string"` (and the other Lua type names)
+- `type(x) == "string"` (and the other Lua type names); an `unknown` (or a
+  member that is) narrowed to `"function"` is a function that takes and gives
+  `unknown` (`(...unknown) -> ...unknown`), and to `"table"` a table of
+  `unknown` keys and values (`{ [unknown]: unknown }`): what is inside stays
+  `unknown` until it too is narrowed (decision L75). `any` narrows to the
+  plain `function` and `table` types
 - literal equality: `if kind == "spell" then` on discriminated unions; a
   comparison of a field, `if x.kind == "spell" then`, narrows `x` to the
   members whose `kind` can be that literal (and the false branch drops the
@@ -761,8 +766,9 @@ A type parameter that only a function expression's results can bind (`R` in
 `call<R>(f: () -> R): R`, `R...` in `pcall`) is bound from what the
 expression returns when it has no return annotation:
 `pcall(function() return "x" end)` gives `(boolean, string)` (decision L55).
-`pcall` and `xpcall` give `any` after the boolean where the function never
-returns or returns nothing, since then the values are only what it raised.
+`pcall` and `xpcall` give `unknown` after the boolean where the function never
+returns or returns nothing, since then the values are only what it raised,
+which may be anything (decision L75).
 
 A last argument that gives several values (a call such as `unpack(t)`, or
 `...`) gives its values to the parameters from its position on, as in Lua:

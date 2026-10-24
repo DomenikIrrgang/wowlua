@@ -481,13 +481,46 @@ impl Checker<'_, '_> {
                 Some(n) if n == name => yes.push(m),
                 Some(_) => no.push(m),
                 None => {
-                    // `any`, `unknown`: narrowed to the named type.
-                    yes.push(target);
+                    // `any`, `unknown`: narrowed to the named type; an
+                    // `unknown` function or table stays `unknown` inside
+                    // (what it takes and gives, its keys and values: L75).
+                    let narrowed = if m == Types::UNKNOWN {
+                        self.unknown_inside(name).unwrap_or(target)
+                    } else {
+                        target
+                    };
+                    yes.push(narrowed);
                     no.push(m);
                 }
             }
         }
         (self.env.types.union(&yes), self.env.types.union(&no))
+    }
+
+    /// What `type(v) == name` makes of an `unknown` `v` where its insides
+    /// matter: a function that takes and gives `unknown`, a table of
+    /// `unknown` keys and values.
+    fn unknown_inside(&mut self, name: &str) -> Option<TypeId> {
+        match name {
+            "function" => Some(self.env.types.func(super::types::Func {
+                type_params: Vec::new(),
+                params: Vec::new(),
+                rest: Some(Rest::Variadic(Types::UNKNOWN)),
+                ret: Pack {
+                    types: Vec::new(),
+                    rest: Some(Rest::Variadic(Types::UNKNOWN)),
+                },
+                predicate: None,
+                unannotated: false,
+                outer: Vec::new(),
+            })),
+            "table" => Some(
+                self.env
+                    .types
+                    .intern(Ty::Map(Types::UNKNOWN, Types::UNKNOWN)),
+            ),
+            _ => None,
+        }
     }
 
     /// The `type()` name of values of `t`, if fixed.

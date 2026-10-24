@@ -707,6 +707,29 @@ export function fontStrings(frame: Frame): FontString[]
     return out
 end
 
+--- The widgets a frame holds in its own fields, by key
+--- (`frame.ScrollBox`, `frame.CloseButton`): the parts the game's templates
+--- and code give it, named or not, for restyling or reading them. None for
+--- a value that is no table the addon may read; forbidden widgets are left
+--- out.
+export function keyed(frame: unknown): { [string]: Region }
+    const out: { [string]: Region } = {}
+    if type(frame) ~= "table" or not secret.readable(frame) then
+        return out
+    end
+    pcall(function()
+        for k, v in pairs(frame) do
+            if type(k) == "string" then
+                const r = asRegion(v)
+                if r and not r:IsForbidden() then
+                    out[k] = r
+                end
+            end
+        end
+    end)
+    return out
+end
+
 --- A frame's children (frames the addon may read).
 export function children(frame: Frame): Frame[]
     const out: Frame[] = {}

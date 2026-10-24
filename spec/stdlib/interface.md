@@ -83,6 +83,7 @@ if list then frames.keepAway(list, { fade = true }) end     -- out of sight, sti
 | `find` | `(name: string) -> Frame?` | The global frame of that name, nil when there is none |
 | `textures`, `fontStrings` | `(frame: Frame) -> Texture[]`, `-> FontString[]` | The textures (its art) or font strings among the frame's own regions; none for a frame that is forbidden (decision S45) |
 | `children` | `(frame: Frame) -> Frame[]` | The frame's children the addon may read |
+| `keyed` | `(frame: unknown) -> { [string]: Region }` | The widgets the frame holds in its own fields, by key (`frame.ScrollBox`): what its template or code gave it, named or not; forbidden ones left out, none for a value that is no table the addon may read (decision S49) |
 | `stateTextures` | `(button: Button) -> Texture[]` | The button's state textures it has: normal, pushed, highlight, disabled, and a check button's checked ones |
 | `rows` | `(list: unknown) -> Frame[]` | The frames one of the game's lists shows: an object pool's active ones (`EnumerateActive`) or a scroll box's (`ForEachFrame`), in its order; none for anything else |
 | `mapPins` | `(map: unknown, template: string) -> Frame[]` | The pins one of the game's maps (Blizzard's map canvas: the world map, the flight map) shows of a pin template, through `EnumeratePinsByTemplate`; none for anything else (decision S46) |
