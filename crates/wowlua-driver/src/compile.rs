@@ -80,6 +80,8 @@ pub struct CompileOutput {
     /// With `CheckConfig::hover`: those files' names and expressions, with
     /// their types.
     pub hovers: Vec<(wowlua_span::Span, String)>,
+    /// With `CheckConfig::complete`: what could stand at the cursor.
+    pub completions: Option<wowlua_sema::check::complete::Completions>,
 }
 
 /// A declaration file with its contents.
@@ -106,6 +108,8 @@ pub struct CheckConfig {
     pub focus: Option<std::collections::HashSet<std::path::PathBuf>>,
     /// `Session::hover`: record these files' types for hover.
     pub hover: Option<std::collections::HashSet<std::path::PathBuf>>,
+    /// `Session::complete`: a completion check, of the word typed.
+    pub complete: Option<String>,
 }
 
 /// A declaration file of one flavor (the wow-api types), parsed.
@@ -1517,11 +1521,13 @@ pub fn compile_flavor(
                 // globals)
                 only: focused.as_ref(),
                 hover: hovered.as_ref(),
+                complete: check.complete.as_deref(),
             },
         );
         diagnostics.extend(checked.diagnostics);
         out.definitions = checked.definitions;
         out.hovers = checked.hovers;
+        out.completions = checked.completions;
         out.type_names = checked.type_names;
         out.value_checks = checked.value_checks;
         private_methods = checked.private_methods;

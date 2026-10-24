@@ -77,6 +77,7 @@ impl Foreign {
                         index: false,
                         focus: None,
                         hover: None,
+                        complete: None,
                     },
                     main: p.main.as_ref().map(|r| p.src_rel(r)),
                     meta: Arc::new(crate::meta::library_meta(

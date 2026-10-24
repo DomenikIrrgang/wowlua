@@ -3,6 +3,7 @@
 //! bodies with flow-sensitive narrowing.
 
 pub mod body;
+pub mod complete;
 pub mod declared;
 mod definition;
 pub mod env;
@@ -77,6 +78,9 @@ pub struct CheckOutput {
     /// With `Extras::hover`: the names and expressions of those files, and
     /// their types as messages show them (the language server's hover).
     pub hovers: Vec<(wowlua_span::Span, String)>,
+    /// With `Extras::complete`: what could stand at the placeholder (the
+    /// language server's completion), if the check met it.
+    pub completions: Option<complete::Completions>,
 }
 
 /// What a check does besides checking (the language server's).
@@ -90,6 +94,9 @@ pub struct Extras<'a> {
     /// Record the types of these inputs' names and expressions
     /// (`CheckOutput::hovers`).
     pub hover: Option<&'a std::collections::HashSet<usize>>,
+    /// A completion check: the word typed at the cursor, where a source
+    /// has `complete::PLACEHOLDER` (`CheckOutput::completions`).
+    pub complete: Option<&'a str>,
 }
 
 /// Like [`check_package`], with the type information lowering uses. With
@@ -196,7 +203,7 @@ pub fn check_package_full(
             globals: Default::default(),
         });
     }
-    let mut env = env::Env::build_indexed(&sources, indexed);
+    let mut env = env::Env::build_for(&sources, indexed, extras.complete);
     let mut diagnostics = std::mem::take(&mut env.diagnostics);
     let registry = files
         .iter()
@@ -596,6 +603,28 @@ pub fn check_package_full(
         .take()
         .map(|found| definition::resolve(files, analysis, found))
         .unwrap_or_default();
+    let completions = env.completing.take().and_then(|c| c.found).map(|mut c| {
+        // where each is declared: item `i` asks as the span `i..i`
+        let asked: Vec<(wowlua_span::Span, env::DefTarget)> = c
+            .items
+            .iter()
+            .enumerate()
+            .filter_map(|(i, item)| {
+                let at = wowlua_span::Span {
+                    file: c.file,
+                    start: i as u32,
+                    end: i as u32,
+                };
+                Some((at, item.target.clone()?))
+            })
+            .collect();
+        for (at, to) in definition::resolve(files, analysis, asked) {
+            if let Some(item) = c.items.get_mut(at.start as usize) {
+                item.at = Some(to);
+            }
+        }
+        c
+    });
     CheckOutput {
         diagnostics,
         type_names,
@@ -603,6 +632,7 @@ pub fn check_package_full(
         private_methods,
         definitions,
         hovers,
+        completions,
     }
 }
 
@@ -943,7 +973,8 @@ fn check_file_in(
         export_caps: FxHashMap::default(),
     };
     let imports = import_types(env, ctx, i, &mut out.diagnostics);
-    let import_targets = if env.definitions.is_some() {
+    // (completion: an import's doc comment is its export's)
+    let import_targets = if env.definitions.is_some() || env.completing.is_some() {
         let (bindings, written) = definition::import_targets(ctx.files, ctx.analysis, i);
         for (at, target) in written {
             env.note_definition(at, target);

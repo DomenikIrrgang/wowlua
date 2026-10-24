@@ -14,6 +14,7 @@ wowlua-diagnostics.workspace = true
 wowlua-driver.workspace = true
 wowlua-fmt.workspace = true
 wowlua-manifest.workspace = true
+wowlua-sema.workspace = true
 wowlua-span.workspace = true
 wowlua-syntax.workspace = true
 

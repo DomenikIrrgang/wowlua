@@ -720,6 +720,7 @@ fn build_inner(
         index: session.definitions.is_some(),
         focus: session.focus.clone(),
         hover: session.hover.clone(),
+        complete: session.complete.clone(),
         globals: manifest
             .manifest
             .check
@@ -1145,6 +1146,7 @@ fn build_inner(
                         index: false,
                         focus: None,
                         hover: None,
+                        complete: None,
                     },
                     main: l.main.as_ref().map(|r| l.src_rel(r)),
                     meta: std::sync::Arc::new(crate::meta::library_meta(&meta, m, &l.entry)),
@@ -1196,6 +1198,9 @@ fn build_inner(
             found.append(&mut output.definitions);
         }
         session.hovers.append(&mut output.hovers);
+        if session.completions.is_none() {
+            session.completions = output.completions.take();
+        }
         builds.push(FlavorBuild {
             flavor: flavor.clone(),
             meta,

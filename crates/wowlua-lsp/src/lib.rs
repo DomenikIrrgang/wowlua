@@ -3,9 +3,11 @@
 //! editor's unsaved texts over the disk's, a moment after the last edit
 //! and on every save, on a thread of its own; documents are formatted as
 //! `wowlua fmt` formats them, outlined from their syntax, and their names
-//! lead to their definitions from the last check.
+//! lead to their definitions from the last check. Completion checks the
+//! text with a placeholder at the cursor (`complete`).
 
 pub mod check;
+pub mod complete;
 pub mod symbols;
 pub mod text;
 pub mod transport;
@@ -76,6 +78,19 @@ struct Server {
     /// The editor's workspace folders: canonical, and as the editor spells
     /// them (through a symbolic link, say).
     roots: Vec<(PathBuf, PathBuf)>,
+    /// The completion request to check next (only the latest: the editor
+    /// asks again as the word grows).
+    completing: Option<Completing>,
+    /// The last completion's items, for `completionItem/resolve`.
+    completed: Vec<check::Completion>,
+}
+
+/// A completion request: its id, document and package, and what to check.
+struct Completing {
+    id: Json,
+    uri: String,
+    manifest: PathBuf,
+    asked: complete::Asked,
 }
 
 impl Server {
@@ -263,6 +278,8 @@ pub fn serve_with(
         in_process,
         rescan: false,
         roots: Vec::new(),
+        completing: None,
+        completed: Vec::new(),
     };
     loop {
         // the next check to start: when its edits have settled, or a saved
@@ -309,7 +326,21 @@ pub fn serve_with(
                 }
             }
             Ok(Event::Checked(manifest, result)) => {
-                server.running = None;
+                let ran = server.running.take();
+                // a completion check: its answer, nothing published
+                if let Some(Running {
+                    completion: Some((id, prefix)),
+                    ..
+                }) = ran
+                {
+                    let found = result
+                        .ok()
+                        .and_then(|packages| packages.into_iter().find_map(|c| c.completions));
+                    let list = completion_list(&mut server, found, &prefix);
+                    reply(out, &id, list)?;
+                    start_due(&mut server);
+                    continue;
+                }
                 match result {
                     Ok(packages) => {
                         for checked in packages {
@@ -342,6 +373,40 @@ pub fn serve_with(
 fn start_due(server: &mut Server) {
     if server.running.is_some() {
         return;
+    }
+    // a completion first: someone waits for it
+    if let Some(c) = server.completing.take() {
+        let canonical = server.docs.get(&c.uri).map(|d| d.canonical.clone());
+        if let Some(canonical) = canonical {
+            let docs: Vec<(PathBuf, String)> = server
+                .docs
+                .iter()
+                .map(|(uri, d)| {
+                    let text = if *uri == c.uri {
+                        c.asked.text.clone()
+                    } else {
+                        d.text.clone()
+                    };
+                    (d.path.clone(), text)
+                })
+                .collect();
+            let job = Job {
+                manifest: c.manifest.clone(),
+                whole: false,
+                focus: Some(std::iter::once(canonical).collect()),
+                docs,
+                rescan: false,
+                complete: Some(c.asked.prefix.clone()),
+            };
+            if server.jobs.send(job).is_ok() {
+                server.running = Some(Running {
+                    manifest: c.manifest,
+                    focused: false,
+                    completion: Some((c.id, c.asked.prefix)),
+                });
+            }
+            return;
+        }
     }
     let now = Instant::now();
     let edited = server
@@ -390,9 +455,14 @@ fn start_due(server: &mut Server) {
             focus,
             docs,
             rescan: std::mem::take(&mut server.rescan),
+            complete: None,
         };
         if server.jobs.send(job).is_ok() {
-            server.running = Some(Running { manifest, focused });
+            server.running = Some(Running {
+                manifest,
+                focused,
+                completion: None,
+            });
         }
     }
 }
@@ -402,6 +472,8 @@ struct Running {
     manifest: PathBuf,
     /// The first pass of an edit (its open files only).
     focused: bool,
+    /// A completion check: the request's id and the word typed.
+    completion: Option<(Json, String)>,
 }
 
 /// Why a check gave no answer.
@@ -436,6 +508,8 @@ struct Job {
     docs: Vec<(PathBuf, String)>,
     /// Files were created or deleted since the last check.
     rescan: bool,
+    /// A completion check (`check::check`): the word typed.
+    complete: Option<String>,
 }
 
 /// Runs a check where `checker` says. A check that panics, crashes or
@@ -447,11 +521,23 @@ fn run_check(
 ) -> Result<Vec<check::Checked>, Failure> {
     match checker {
         Checker::InProcess => {
-            // (the overlay has the open documents already; a check here
-            // runs to its end)
+            // (the open documents as the job has them; a check here runs to
+            // its end)
+            wowlua_driver::overlay::replace_all(
+                job.docs
+                    .iter()
+                    .map(|(p, t)| (p.clone(), std::sync::Arc::from(t.as_bytes())))
+                    .collect::<Vec<(PathBuf, std::sync::Arc<[u8]>)>>(),
+            );
             let open = job.docs.iter().map(|(p, _)| canonical(p)).collect();
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                check::check(&job.manifest, job.whole, &open, job.focus.as_ref())
+                check::check(
+                    &job.manifest,
+                    job.whole,
+                    &open,
+                    job.focus.as_ref(),
+                    job.complete.as_deref(),
+                )
             }))
             .map_err(|e| Failure::Failed(panic_message(&*e)))
         }
@@ -561,6 +647,7 @@ fn check_in_worker(
         &job.docs,
         job.focus.as_ref(),
         job.rescan,
+        job.complete.as_deref(),
     );
     let mut line = serde_json::to_vec(&request).unwrap_or_default();
     line.push(b'\n');
@@ -673,6 +760,7 @@ fn initialized(out: &mut impl std::io::Write, id: &Json) -> std::io::Result<()> 
                 "documentSymbolProvider": true,
                 "definitionProvider": true,
                 "hoverProvider": true,
+                "completionProvider": { "triggerCharacters": [".", ":"], "resolveProvider": true },
             },
             "serverInfo": { "name": "wowlua", "version": env!("CARGO_PKG_VERSION") },
         }),
@@ -822,6 +910,47 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
                 }
                 _ => reply(out, id, ask.answer(server, &uri, &params["position"]))?,
             }
+        }
+        "textDocument/completion" => {
+            let asked = server.docs.get(&uri).and_then(|d| {
+                let offset = text::offset(&d.text, &params["position"]);
+                Some((d.manifest.clone()?, complete::prepare(&d.text, offset)?))
+            });
+            match asked {
+                None => reply(out, id, completion_list(server, None, ""))?,
+                Some((manifest, asked)) => {
+                    // (an older request still waiting is answered empty)
+                    let next = Completing {
+                        id: id.clone(),
+                        uri,
+                        manifest,
+                        asked,
+                    };
+                    if let Some(old) = server.completing.replace(next) {
+                        reply(out, &old.id, json!({ "isIncomplete": true, "items": [] }))?;
+                    }
+                }
+            }
+        }
+        // a completion's type and doc comment, once the editor shows it
+        "completionItem/resolve" => {
+            let mut item = params.clone();
+            let found = params["data"]
+                .as_u64()
+                .and_then(|i| server.completed.get(i as usize))
+                .filter(|c| params["label"] == c.label.as_str())
+                .cloned();
+            if let Some(c) = found {
+                if !c.detail.is_empty() {
+                    item["detail"] = json!(c.detail);
+                }
+                if let Some((uri, line)) = &c.declared
+                    && let Some(comment) = doc_comment(server, uri, *line as usize)
+                {
+                    item["documentation"] = json!({ "kind": "markdown", "value": comment });
+                }
+            }
+            reply(out, id, item)?;
         }
         "textDocument/documentSymbol" => {
             let symbols = server
@@ -1007,6 +1136,75 @@ fn hover(server: &Server, uri: &str, position: &Json) -> Json {
         "contents": { "kind": "markdown", "value": value },
         "range": text::range(&doc.text, start, end),
     })
+}
+
+/// The keywords a statement or an expression may start with, completed
+/// where a name is.
+const KEYWORDS: &[&str] = &[
+    "and",
+    "break",
+    "class",
+    "const",
+    "continue",
+    "do",
+    "else",
+    "elseif",
+    "end",
+    "enum",
+    "export",
+    "false",
+    "for",
+    "function",
+    "if",
+    "import",
+    "in",
+    "interface",
+    "local",
+    "nil",
+    "not",
+    "or",
+    "repeat",
+    "return",
+    "then",
+    "true",
+    "type",
+    "until",
+    "while",
+];
+
+/// A completion check's answer as the protocol's `CompletionList` (an
+/// empty one without), keywords added where a name is. The items are kept
+/// for `completionItem/resolve`: the game's (thousands, for a short
+/// prefix) get their type there, every item its doc comment.
+fn completion_list(server: &mut Server, found: Option<check::Completions>, prefix: &str) -> Json {
+    let Some(found) = found else {
+        return json!({ "isIncomplete": false, "items": [] });
+    };
+    let mut items: Vec<Json> = found
+        .items
+        .iter()
+        .enumerate()
+        .map(|(i, c)| {
+            let mut item = json!({ "label": c.label, "kind": c.kind, "data": i });
+            if c.rank < 2 {
+                item["sortText"] = json!(format!("{}{}", c.rank, c.label));
+                if !c.detail.is_empty() {
+                    item["detail"] = json!(c.detail);
+                }
+            }
+            item
+        })
+        .collect();
+    server.completed = found.items;
+    if found.context == "names" {
+        items.extend(
+            KEYWORDS
+                .iter()
+                .filter(|k| k.starts_with(prefix) || prefix.is_empty())
+                .map(|k| json!({ "label": k, "kind": 14, "sortText": format!("3{k}") })),
+        );
+    }
+    json!({ "isIncomplete": found.incomplete, "items": items })
 }
 
 /// The `---` comment lines right above line `line` of the file at `uri`

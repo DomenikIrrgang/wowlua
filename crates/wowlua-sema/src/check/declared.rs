@@ -132,6 +132,11 @@ impl Declared {
         self.global(name).is_some()
     }
 
+    /// Every global value, without noting a read (completion).
+    pub fn global_entries(&self) -> impl Iterator<Item = (&str, TypeId)> {
+        self.globals.iter().map(|(n, &t)| (&**n, t))
+    }
+
     /// Every globally named type, without noting a read.
     pub fn global_type_entries(&self) -> impl Iterator<Item = (&str, DefId)> {
         self.global_types.iter().map(|(n, &d)| (&**n, d))

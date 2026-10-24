@@ -218,6 +218,9 @@ pub struct Env<'p> {
     /// Go to definition (spec §16.2): what the names the check meets refer
     /// to, by the name's span. `None` unless the language server asks.
     pub definitions: Option<Vec<(Span, DefTarget)>>,
+    /// A completion check (spec §16.2): what was typed, and what the check
+    /// found at the placeholder.
+    pub completing: Option<super::complete::Completing>,
 }
 
 /// What a name refers to, for go to definition; the last three are
@@ -386,8 +389,18 @@ impl<'p> Env<'p> {
     /// [`Env::build`]; with `index`, it records what names refer to
     /// (`definitions`), from the declarations on.
     pub fn build_indexed(sources: &[Source<'p>], index: bool) -> Env<'p> {
+        Env::build_for(sources, index, None)
+    }
+
+    /// [`Env::build_indexed`]; with `complete`, a completion check of what
+    /// was typed (`Env::completing`).
+    pub fn build_for(sources: &[Source<'p>], index: bool, complete: Option<&str>) -> Env<'p> {
         let mut env = Env {
             definitions: index.then(Vec::new),
+            completing: complete.map(|prefix| super::complete::Completing {
+                prefix: prefix.into(),
+                found: None,
+            }),
             ..Env::default()
         };
         // The ambient addon namespace: undeclared fields stay `any`.
@@ -1795,6 +1808,14 @@ impl<'p> Env<'p> {
                 TypeArg::Pack(_) => Types::ANY,
             })
             .collect();
+        if self.completing.is_some()
+            && path
+                .last()
+                .is_some_and(|n| n.text() == super::complete::PLACEHOLDER)
+        {
+            self.complete_types(path, scope, span.file);
+            return Types::ANY;
+        }
         if path.len() == 1 {
             let name = path.at(0).text();
             if let Some((_, id)) = scope.params.iter().rev().find(|(n, _)| n.as_ref() == name) {

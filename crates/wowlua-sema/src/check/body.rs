@@ -570,6 +570,15 @@ impl<'e, 'p> Checker<'e, 'p> {
         self.scopes.lookup(name)
     }
 
+    /// The locals in scope (completion), by name.
+    pub(crate) fn visible_locals(&self) -> Vec<(Box<str>, VarId)> {
+        self.scopes
+            .ids
+            .iter()
+            .filter_map(|(n, &sym)| Some((n.clone(), *self.scopes.stacks[sym as usize].last()?)))
+            .collect()
+    }
+
     /// An annotation's type; `typeof(expr)` parts are inferred first
     /// (spec §2.2.7).
     pub fn annotation(&mut self, t: Type<'_>) -> TypeId {

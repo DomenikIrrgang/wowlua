@@ -477,7 +477,8 @@ The test framework runs on wowlua's own emulation of the WoW client
 - S8 `wowlua lsp` and the VS Code extension, with a test explorer, coverage in
   the editor and "run test" code lenses; code examples in doc comments run as
   tests (T222). Started 2026-10-24 (T368, T369): diagnostics as you type,
-  formatting, the outline and go to definition, in the extension too.
+  formatting, the outline and go to definition, in the extension too; hover
+  (T376) and completion (T377) on 2026-10-25.
 
 **Exit:** the full edit, test, debug loop works without leaving the editor, and
 the in-game bugs found so far fail as tests the same way they failed in game

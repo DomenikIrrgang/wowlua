@@ -1,8 +1,9 @@
 // The language client: starts `wowlua lsp` and keeps it in step with the
 // open `.wowlua` and `.lua` files (whole texts, unsaved edits included). Its
 // diagnostics go to the Problems view; it formats documents, outlines them,
-// finds where their names are defined and shows their types on hover. Hand-written on `connection.js`, so the extension has no build
-// step (decision T331).
+// finds where their names are defined, shows their types on hover and
+// completes names and members. Hand-written on `connection.js`, so the
+// extension has no build step (decision T331).
 const vscode = require("vscode");
 const { Connection } = require("./connection");
 
@@ -64,6 +65,15 @@ class LanguageClient {
             vscode.languages.registerHoverProvider(SYNCED, {
                 provideHover: (doc, position) => this.hover(doc, position),
             }),
+            vscode.languages.registerCompletionItemProvider(
+                SYNCED,
+                {
+                    provideCompletionItems: (doc, position) => this.complete(doc, position),
+                    resolveCompletionItem: (item) => this.resolveCompletion(item),
+                },
+                ".",
+                ":",
+            ),
             // files changed on disk (a branch checked out, a formatter
             // run): the server checks their packages again
             ...this.watch("**/*.{wowlua,lua,xml,toc}"),
@@ -245,6 +255,42 @@ class LanguageClient {
             return undefined;
         }
         return new vscode.Hover(new vscode.MarkdownString(found.contents.value), found.range ? lspRange(found.range) : undefined);
+    }
+
+    // What can stand at the cursor: names in scope, a value's members after
+    // `.` and `:`, type names in annotations.
+    async complete(doc, position) {
+        const found = await this.request("textDocument/completion", {
+            textDocument: { uri: doc.uri.toString() },
+            position: { line: position.line, character: position.character },
+        });
+        if (!found) {
+            return undefined;
+        }
+        const items = (found.items || []).map((i) => {
+            // (the protocol's kinds count from 1, VS Code's from 0)
+            const item = new vscode.CompletionItem(i.label, (i.kind || 1) - 1);
+            item.detail = i.detail;
+            item.sortText = i.sortText;
+            item.lsp = i;
+            return item;
+        });
+        return new vscode.CompletionList(items, !!found.isIncomplete);
+    }
+
+    // A completion's type (the game's names) and doc comment, read once it
+    // is shown.
+    async resolveCompletion(item) {
+        if (item.lsp && item.lsp.data !== undefined) {
+            const found = await this.request("completionItem/resolve", item.lsp);
+            if (found && found.detail) {
+                item.detail = found.detail;
+            }
+            if (found && found.documentation) {
+                item.documentation = new vscode.MarkdownString(found.documentation.value);
+            }
+        }
+        return item;
     }
 
     async symbols(doc) {

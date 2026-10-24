@@ -207,7 +207,8 @@ async function chatScenario() {
 
 // The language client (decision T368): an unsaved edit's type error shows
 // in the Problems view and goes again when undone; the outline lists the
-// file's functions; Format Document formats it.
+// file's functions; go to definition, hover and completion find the
+// method; Format Document formats it.
 async function lspScenario(widgets) {
     const name = "the language server checks an unsaved edit";
     log(`== ${name}`);
@@ -241,6 +242,12 @@ async function lspScenario(widgets) {
         const shown = (hovers || []).flatMap((h) => h.contents.map((c) => c.value || String(c))).join("\n");
         log("hover:", shown.replace(/\n/g, " "));
         assert(shown.includes("refresh: "), "hover shows " + shown);
+        // completing after `self:` lists the class's methods, `refresh` too
+        const colon = doc.positionAt(text.indexOf("self:refresh()") + "self:".length);
+        const completions = await vscode.commands.executeCommand("vscode.executeCompletionItemProvider", widgets, colon, ":");
+        const offered = ((completions && completions.items) || []).map((i) => (typeof i.label === "string" ? i.label : i.label.label));
+        log("completion:", offered.slice(0, 12).join(", "));
+        assert(offered.includes("refresh"), "completion offers " + offered.join(", "));
         const edits = await vscode.commands.executeCommand("vscode.executeFormatDocumentProvider", widgets, { tabSize: 4, insertSpaces: false });
         assert(Array.isArray(edits), "formatting gave " + edits);
         log("PASS", name);

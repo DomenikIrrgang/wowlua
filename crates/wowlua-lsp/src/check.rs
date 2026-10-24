@@ -29,6 +29,29 @@ pub struct Hover {
     pub ty: String,
 }
 
+/// What could stand at the cursor (a completion check's).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Completions {
+    /// Where the cursor is: `names`, `members`, `methods`, `types`, or
+    /// `none` (where the check found nothing to complete).
+    pub context: &'static str,
+    /// Names were left out for the prefix: a longer one gives others.
+    pub incomplete: bool,
+    pub items: Vec<Completion>,
+}
+
+/// One completion: its name, kind (the protocol's number), type, rank
+/// (lower first) and where it is declared (a URI and line, for its doc
+/// comment).
+#[derive(Clone, Debug, PartialEq)]
+pub struct Completion {
+    pub label: String,
+    pub kind: u8,
+    pub detail: String,
+    pub rank: u8,
+    pub declared: Option<(String, u32)>,
+}
+
 /// A place in a file: its URI (shared by every name that leads there) and
 /// the lines and UTF-16 columns of its start and end. Kept this small, as a
 /// large package has a definition for hundreds of thousands of names.
@@ -66,6 +89,8 @@ pub struct Checked {
     pub definitions: HashMap<PathBuf, Vec<Definition>>,
     /// Each open file's names and expressions with their types, by start.
     pub hovers: HashMap<PathBuf, Vec<Hover>>,
+    /// A completion check's: what could stand at the cursor.
+    pub completions: Option<Completions>,
 }
 
 /// Checks the package whose manifest is `manifest`; with `whole`, every
@@ -77,13 +102,18 @@ pub struct Checked {
 /// With `focus` (canonical paths), only those files and the modules they
 /// import are type-checked, and nothing is built: the language server's
 /// first pass after an edit, its diagnostics for those files alone.
+///
+/// With `complete` (the word typed), a completion check: a focused file
+/// has the placeholder where the cursor is, and what could stand there is
+/// the answer (its diagnostics and the rest are of no use).
 pub fn check(
     manifest: &Path,
     whole: bool,
     open: &HashSet<PathBuf>,
     focus: Option<&HashSet<PathBuf>>,
+    complete: Option<&str>,
 ) -> Vec<Checked> {
-    check_and(manifest, whole, open, focus, None, drop)
+    check_and(manifest, whole, open, focus, complete, None, drop)
 }
 
 /// What a long-lived checker keeps between checks: each package's build
@@ -103,15 +133,19 @@ fn check_and(
     whole: bool,
     open: &HashSet<PathBuf>,
     focus: Option<&HashSet<PathBuf>>,
+    complete: Option<&str>,
     mut warm: Option<&mut Warm>,
     done: fn(Session),
 ) -> Vec<Checked> {
     let dir = manifest.parent().unwrap_or(Path::new(".")).to_path_buf();
     let mut session = Session::new();
-    session.definitions = Some(Vec::new());
     session.focus = focus.cloned();
-    // (the open files' types, for hover)
-    session.hover = Some(open.clone());
+    session.complete = complete.map(str::to_string);
+    if complete.is_none() {
+        session.definitions = Some(Vec::new());
+        // (the open files' types, for hover)
+        session.hover = Some(open.clone());
+    }
     let whole = whole && focus.is_none();
     let options = LoadOptions {
         manifest: Some(manifest.to_path_buf()),
@@ -184,6 +218,23 @@ fn check_and(
         }
     }
     let mut out: Vec<Checked> = Vec::new();
+    if complete.is_some() {
+        // (none when the check never met the placeholder)
+        let completions = match session.completions.take() {
+            Some(found) => completions_of(&session, &roots, found),
+            None => Completions {
+                context: "none",
+                incomplete: false,
+                items: Vec::new(),
+            },
+        };
+        done(session);
+        return vec![Checked {
+            manifest: text::canonical(manifest),
+            completions: Some(completions),
+            ..Checked::default()
+        }];
+    }
     for (package, diagnostics, defs, hovers) in parts {
         let package = text::canonical(&package);
         let mut checked = Checked {
@@ -222,6 +273,70 @@ fn check_and(
     }
     done(session);
     out
+}
+
+/// What a completion check found, for the protocol.
+fn completions_of(
+    session: &Session,
+    roots: &[PathBuf],
+    found: wowlua_sema::check::complete::Completions,
+) -> Completions {
+    use wowlua_sema::check::complete::{Context, Kind};
+    let context = match found.context {
+        Context::Names => "names",
+        Context::Members { method: false } => "members",
+        Context::Members { method: true } => "methods",
+        Context::Types => "types",
+    };
+    // (each file's URI and lines once)
+    let mut files: HashMap<wowlua_span::FileId, Option<(String, text::Lines<'_>)>> = HashMap::new();
+    let items = found
+        .items
+        .into_iter()
+        .map(|item| {
+            let declared = item.at.and_then(|at| {
+                let (uri, lines) = files
+                    .entry(at.file)
+                    .or_insert_with(|| {
+                        let file = session.db.get(at.file);
+                        let path = absolute(roots, file.path())
+                            .or_else(|| materialize(file.path(), file.text()))?;
+                        Some((text::uri_of(&path), text::Lines::new(file.text())))
+                    })
+                    .as_ref()?;
+                Some((uri.clone(), lines.line_column(at.start as usize).0))
+            });
+            // the protocol's `CompletionItemKind`
+            let kind = match item.kind {
+                Kind::Variable => 6,
+                Kind::Constant => 21,
+                Kind::Function => 3,
+                Kind::Method => 2,
+                Kind::Field => 5,
+                Kind::Property => 10,
+                Kind::Class => 7,
+                Kind::Interface => 8,
+                Kind::Alias => 22,
+                Kind::Enum => 13,
+                Kind::EnumMember => 20,
+                Kind::Module => 9,
+                Kind::TypeParameter => 25,
+                Kind::Builtin => 14,
+            };
+            Completion {
+                label: item.label,
+                kind,
+                detail: item.detail,
+                rank: item.rank,
+                declared,
+            }
+        })
+        .collect();
+    Completions {
+        context,
+        incomplete: found.incomplete,
+        items,
+    }
 }
 
 /// A name's span and its definition's.
@@ -342,10 +457,21 @@ fn materialize(rel: &Path, contents: &str) -> Option<PathBuf> {
     let fresh = std::fs::metadata(&path).is_ok_and(|m| m.len() == contents.len() as u64);
     if !fresh {
         std::fs::create_dir_all(path.parent()?).ok()?;
-        // written whole, then renamed: a reader never sees half a file
-        let partial = path.with_extension("partial");
-        std::fs::write(&partial, contents).ok()?;
-        std::fs::rename(&partial, &path).ok()?;
+        // written whole, then renamed: a reader never sees half a file;
+        // each writer has its own partial file, so two checks writing the
+        // same declaration at once don't take each other's
+        static WRITES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
+        let n = WRITES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
+        let partial = path.with_extension(format!("{}-{n}.partial", std::process::id()));
+        let written =
+            std::fs::write(&partial, contents).and_then(|()| std::fs::rename(&partial, &path));
+        if written.is_err() {
+            let _ = std::fs::remove_file(&partial);
+            let done = std::fs::metadata(&path).is_ok_and(|m| m.len() == contents.len() as u64);
+            if !done {
+                return None;
+            }
+        }
     }
     Some(path)
 }
@@ -421,12 +547,14 @@ pub fn request(
     docs: &[(PathBuf, String)],
     focus: Option<&HashSet<PathBuf>>,
     rescan: bool,
+    complete: Option<&str>,
 ) -> Json {
     json!({
         "manifest": manifest,
         "whole": whole,
         "focus": focus,
         "rescan": rescan,
+        "complete": complete,
         "docs": docs.iter().map(|(p, t)| json!({ "path": p, "text": t })).collect::<Vec<_>>(),
     })
 }
@@ -460,9 +588,18 @@ pub fn worker(warm: &mut Warm, request: &Json) -> Json {
     });
     warm.checks += 1;
     // (the session is freed on another thread: the answer goes out first)
-    let packages = check_and(&manifest, whole, &open, focus.as_ref(), Some(warm), |s| {
-        std::thread::spawn(move || drop(s));
-    });
+    let complete = request["complete"].as_str();
+    let packages = check_and(
+        &manifest,
+        whole,
+        &open,
+        focus.as_ref(),
+        complete,
+        Some(warm),
+        |s| {
+            std::thread::spawn(move || drop(s));
+        },
+    );
     Json::Array(packages.iter().map(Checked::to_json).collect())
 }
 
@@ -505,6 +642,11 @@ impl Checked {
                     (path.to_string_lossy().into_owned(), Json::Array(rows))
                 })
                 .collect::<serde_json::Map<_, _>>(),
+            "completions": self.completions.as_ref().map(|c| json!({
+                "context": c.context,
+                "incomplete": c.incomplete,
+                "items": c.items.iter().map(|i| json!([i.label, i.kind, i.detail, i.rank, i.declared])).collect::<Vec<_>>(),
+            })),
         })
     }
 
@@ -558,6 +700,38 @@ impl Checked {
             diagnostics,
             definitions,
             hovers,
+            completions: completions_from(&json["completions"]),
         })
     }
+}
+
+/// [`Completions`] as `Checked::to_json` writes them.
+fn completions_from(json: &Json) -> Option<Completions> {
+    let context = match json["context"].as_str()? {
+        "names" => "names",
+        "members" => "members",
+        "methods" => "methods",
+        "types" => "types",
+        _ => "none",
+    };
+    let items = json["items"]
+        .as_array()?
+        .iter()
+        .map(|row| {
+            Some(Completion {
+                label: row.get(0)?.as_str()?.to_string(),
+                kind: row.get(1)?.as_u64()? as u8,
+                detail: row.get(2)?.as_str()?.to_string(),
+                rank: row.get(3)?.as_u64()? as u8,
+                declared: row.get(4).and_then(|d| {
+                    Some((d.get(0)?.as_str()?.to_string(), d.get(1)?.as_u64()? as u32))
+                }),
+            })
+        })
+        .collect::<Option<Vec<_>>>()?;
+    Some(Completions {
+        context,
+        incomplete: json["incomplete"].as_bool().unwrap_or(false),
+        items,
+    })
 }

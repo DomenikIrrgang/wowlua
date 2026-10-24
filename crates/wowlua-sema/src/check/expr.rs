@@ -421,6 +421,11 @@ impl Checker<'_, '_> {
                 single(self.function_body(&FnSig::of(f), exp, None))
             }
             ExprKind::Table(fields) => single(self.table(fields, expected)),
+            // the cursor of a completion check
+            ExprKind::Name(n) if self.completes(n.text()) => {
+                self.complete_names(n.span());
+                single(Types::ANY)
+            }
             // An existence test of an undeclared global: `nil`; inside the
             // region the test guards: `any`.
             ExprKind::Name(n)
@@ -495,6 +500,11 @@ impl Checker<'_, '_> {
             }
             ExprKind::Field { obj, name } | ExprKind::OptField { obj, name } => {
                 if self.is_super(obj) {
+                    if self.completes(name.text()) {
+                        let base = self.super_member("", name.span());
+                        self.complete_members(base, false, name.span());
+                        return single(Types::ANY);
+                    }
                     return single(self.super_member(name.text(), name.span()));
                 }
                 let probed = self.probes.contains(&e.span());
@@ -514,6 +524,10 @@ impl Checker<'_, '_> {
                 let (o, chained) = self.chain_obj(obj);
                 let opt = matches!(e.kind(), ExprKind::OptField { .. });
                 let o = if opt { self.env.types.non_nil(o) } else { o };
+                if self.completes(name.text()) {
+                    self.complete_members(o, false, name.span());
+                    return single(Types::ANY);
+                }
                 if let Some(t) = self.custom_matcher(obj, o, name) {
                     return single(t);
                 }
@@ -688,6 +702,11 @@ impl Checker<'_, '_> {
             }
             ExprKind::Method { obj, name, args } | ExprKind::OptMethod { obj, name, args } => {
                 self.mark_callbacks(args);
+                if self.is_super(obj) && self.completes(name.text()) {
+                    let base = self.super_member("", name.span());
+                    self.complete_members(base, true, name.span());
+                    return single(Types::ANY);
+                }
                 if self.is_super(obj) {
                     let m = self.super_member(name.text(), name.span());
                     let instance = self.scope.self_ty.unwrap_or(Types::ANY);
@@ -698,6 +717,10 @@ impl Checker<'_, '_> {
                 let (o, chained) = self.chain_obj(obj);
                 let opt = matches!(e.kind(), ExprKind::OptMethod { .. });
                 let o = if opt { self.env.types.non_nil(o) } else { o };
+                if self.completes(name.text()) {
+                    self.complete_members(o, true, name.span());
+                    return single(Types::ANY);
+                }
                 // A function field a condition narrowed (`if t.f then t:f() end`).
                 let narrowed = self
                     .field_path(obj)
@@ -1880,7 +1903,7 @@ impl Checker<'_, '_> {
     }
 
     /// A function type without its first parameter (`self`).
-    fn drop_first(&mut self, t: TypeId) -> TypeId {
+    pub(crate) fn drop_first(&mut self, t: TypeId) -> TypeId {
         match self.env.types.get(t).clone() {
             // `F?`: each function member (`nil` stays, reported by the call).
             Ty::Union(members) => {

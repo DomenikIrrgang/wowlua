@@ -83,6 +83,13 @@ pub struct Session {
     pub hover: Option<std::collections::HashSet<std::path::PathBuf>>,
     /// With `hover`: (span, type as messages show it).
     pub hovers: Vec<(wowlua_span::Span, String)>,
+    /// `Some`: a completion check (the language server's). A source has
+    /// `wowlua_sema::check::complete::PLACEHOLDER` where the cursor is,
+    /// and this is the word typed there; what could stand there goes to
+    /// `completions`.
+    pub complete: Option<String>,
+    /// With `complete`: what the first flavor's check found.
+    pub completions: Option<wowlua_sema::check::complete::Completions>,
 }
 
 impl Session {

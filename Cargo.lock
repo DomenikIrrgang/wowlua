@@ -3523,6 +3523,7 @@ dependencies = [
  "wowlua-driver",
  "wowlua-fmt",
  "wowlua-manifest",
+ "wowlua-sema",
  "wowlua-span",
  "wowlua-syntax",
 ]

@@ -608,14 +608,45 @@ method, as messages show types. The innermost one under the pointer is
 shown, a name as `name: type` (a variable's type where it is read, as
 narrowed there), with the `---` doc comment above what it refers to (or,
 where it is declared, above the declaration; decorators between are
-skipped). Completion, find references and the rest of the table follow.
+skipped).
+
+Completion (decision T377) checks the text as it is at the request. The
+word at the cursor (letters, digits and `_` on both sides) becomes a
+placeholder name; unfinished code around it is repaired until the file
+parses, trying in turn: the placeholder alone, as a call (`self.P()`), the
+rest of the line left out with its open brackets closed, an `if`, `elseif`,
+`while` or `for` header finished (`then end`, `do end`), and the line
+replaced by `local _ = <receiver>.P` (opening a `do` where the line opened
+a block). Nothing is completed in a comment, a quoted string or a number,
+nor where no repair parses. The file is checked as a first pass checks it
+(its imports taken from earlier checks), and where the checker meets the
+placeholder it lists what could stand there: where a name is read, the
+locals in scope with their types (as narrowed there), the package's
+globals, the game's globals that match the word typed, and the keywords;
+after `.`, the members of the value's type (a class's own, inherited and
+the game's, a record's fields, a module's exports, a namespace's or an
+enum's members, a class value's statics and methods; of a union, the
+members every part has; private and protected ones only where they can be
+read), after `:` its methods without `self` (a string's: the `string`
+library); where a type is written, the type parameters, `Self`, the
+built-in types, the module's and its imports' types, its namespaces, and
+the game's types that match. The game's names match when the letters typed
+appear in order with the first at the start of the name or of a word in it
+(`spell` matches `GetSpellInfo`), a single letter only at the start; the
+list is then incomplete, so the editor asks again as the word grows. Each
+item has its kind, and its type (the game's: on `completionItem/resolve`,
+with the `---` doc comment above its declaration for every item). The
+completion check's diagnostics are not published; only the latest request
+waits for a check (an older one is answered empty), and it runs before the
+checks edits wait for. Find references and the rest of the table follow.
 
 The VS Code extension starts `wowlua lsp` (the `wowlua.path` command) when a
 `.wowlua` file opens or the workspace has a `wowlua.json`, and sends it the
 open `.wowlua` and `.lua` files, each edit as the range it changed, and the
 `.wowlua`, `.lua`, `.xml`, `.toc`, `wowlua.json` and `wowlua.lock` files
 changed on disk; *Go to Definition* (F12) and Ctrl or Cmd + click use it,
-and hovering a name shows its type.
+hovering a name shows its type, and its completions list as you type (and
+after `.` and `:`).
 A server that stops by itself is started again at once, up to three times
 in three minutes, then the extension asks. The extension colors `.wowlua`
 and `.d.wowlua` files with a TextMate grammar of its own (decision T371):
