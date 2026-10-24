@@ -582,7 +582,12 @@ impl Casc {
     /// client takes `Interface\\FriendsFrame\\StatusIcon-Online.tga` from
     /// its `.blp`: Blizzard's friends status icons).
     pub fn file_by_path(&self, path: &str) -> Option<Vec<u8>> {
-        let id = self.id_of(path).or_else(|| {
+        self.file_by_id(self.id_of_texture(path)?)
+    }
+
+    /// The ID of a file by its path, as [`Casc::file_by_path`] finds it.
+    pub fn id_of_texture(&self, path: &str) -> Option<u32> {
+        self.id_of(path).or_else(|| {
             let name = path.rsplit(['\\', '/']).next().unwrap_or(path);
             match name.rsplit_once('.') {
                 None => self.id_of(&format!("{path}.blp")),
@@ -594,8 +599,7 @@ impl Casc {
                 }
                 Some(_) => None,
             }
-        })?;
-        self.file_by_id(id)
+        })
     }
 
     /// Whether the root lists a file ID (its data may still be missing

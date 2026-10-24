@@ -383,8 +383,10 @@ fn get_text(vm: &mut Vm, c: NativeCall) -> Ret {
 /// own numbering of loose files is not reproduced; a game file's real ID is
 /// not known here).
 ///
-/// A path to no file answers nil (the full probe: `""` and `"x"`; taken
-/// here as a path without a folder, unverified for others).
+/// A path to no file answers nil (the full probe: `""` and `"x"`): a path
+/// without a folder; one into an addon folder that is not there, or to a
+/// file its folder lacks; a game file the client's storage lacks, where it
+/// is at hand (a game file there answers its own ID).
 fn get_file_id_from_path(vm: &mut Vm, c: NativeCall) -> Ret {
     let Value::Str(s) = c.arg(1) else {
         return Ok(vec![Value::Num(0.0)]);
@@ -397,12 +399,49 @@ fn get_file_id_from_path(vm: &mut Vm, c: NativeCall) -> Ret {
     }
     let key = match path.rsplit_once('.') {
         Some((stem, ext)) if !ext.contains('\\') => stem.to_string(),
-        _ => path,
+        _ => path.clone(),
     };
+    match loose_file(vm, &key) {
+        Some(true) => {}
+        Some(false) => return Ok(vec![Value::Nil]),
+        None => {
+            if let Some(found) = crate::clientdata::game_file_id(vm, &path) {
+                return Ok(vec![
+                    found.map_or(Value::Nil, |id| Value::Num(f64::from(id))),
+                ]);
+            }
+        }
+    }
     let ids = &mut crate::engine_mut(vm).world.file_ids;
     let next = -(ids.len() as f64) - 1.0;
     let id = *ids.entry(key).or_insert(next);
     Ok(vec![Value::Num(id)])
+}
+
+/// Whether a path (lower case, back slashes, without its extension) is a
+/// file of an addon's folder: `None` for a game file (a Blizzard addon's
+/// included, or one not under `Interface\AddOns`), true for the addon
+/// under test's (its files are not looked at).
+fn loose_file(vm: &Vm, key: &str) -> Option<bool> {
+    let rest = key.strip_prefix("interface\\addons\\")?;
+    let (name, rel) = rest.split_once('\\').unwrap_or((rest, ""));
+    let addons = &crate::engine(vm).world.bindings.addons;
+    match addons.iter().find(|a| a.name.eq_ignore_ascii_case(name)) {
+        Some(a) => Some(
+            a.own
+                || a.files.as_ref().is_none_or(|f| {
+                    const EXTS: &[&str] = &[
+                        ".blp", ".tga", ".png", ".jpg", ".ogg", ".mp3", ".wav", ".ttf", ".m2",
+                        ".lua", ".xml", ".toc",
+                    ];
+                    crate::bindings::find_addon_file(&f.dir, rel, EXTS).is_some()
+                }),
+        ),
+        None if crate::ui::blizzard_addon(vm, name).is_some() || name.starts_with("blizzard_") => {
+            None
+        }
+        None => Some(false),
+    }
 }
 
 /// `GetCurrentRegion()`: WoW Forever's region, 110 (probed; its name
@@ -449,9 +488,10 @@ fn get_coin_texture_string(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// `C_Map.GetAreaInfo(areaID)`: the area's name as the client answered
 /// (`data/camelot-answers.txt`: the zones and capitals probed, 1637
-/// "Orgrimmar"); an ID naming no area nil (the full probe: -1, 0,
-/// 2147483647; unverified: where the areas' IDs end, here a million);
-/// else none, noted as unanswered.
+/// "Orgrimmar"), else as the client's `AreaTable` names it (2437 "Ragefire
+/// Chasm"); an ID naming no area nil (the full probe: -1, 0, 2147483647;
+/// unverified: where the areas' IDs end, here a million); else none, noted
+/// as unanswered.
 fn get_area_info(vm: &mut Vm, c: NativeCall) -> Ret {
     if let Some(v) = crate::recorded::lookup(vm, "C_Map.GetAreaInfo", &c) {
         return Ok(v);
@@ -460,6 +500,11 @@ fn get_area_info(vm: &mut Vm, c: NativeCall) -> Ret {
         && !(1.0..1_000_000.0).contains(&n)
     {
         return Ok(vec![Value::Nil]);
+    }
+    if let Value::Num(n) = vm.hidden(c.arg(1))
+        && let Some(name) = crate::clientdata::area_name(vm, n)
+    {
+        return Ok(vec![vm.str(&name)]);
     }
     crate::note_default(vm, "C_Map.GetAreaInfo", &c, 1);
     Ok(vec![vm.str("")])

@@ -115,7 +115,13 @@ then its `ADDON_LOADED`; its files' errors reach the error handler).
 `C_AddOns.GetNumAddOns`, `GetAddOnInfo`, `GetAddOnMetadata`,
 `IsAddOnLoaded` and `IsAddOnLoadOnDemand` see each of them, in load order,
 and the addon itself last, as its generated TOC describes it (its `Title`,
-`Version`, `Notes`, `X-…` fields), with or without `test.addons`.
+`Version`, `Notes`, `X-…` fields), with or without `test.addons`;
+`GetAddOnInfo`'s reason is `"DEMAND_LOADED"` for a load-on-demand addon
+not loaded yet (decision T354). `GetFileIDFromPath` answers nil for a path
+into an addon folder that is not there, or to a file its folder lacks
+(any case, with or without its extension; the addon's own files are not
+looked at), and with the installation at hand for a game file the
+client's storage lacks; a game file there answers its ID (decision T355).
 Their SavedVariables (`## SavedVariables`, `## SavedVariablesPerCharacter`)
 survive `mock.reloadUI()` as the addon's do. An error while one loads fails
 the file, naming the addon. Coverage counts only the addon's own files.

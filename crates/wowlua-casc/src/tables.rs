@@ -10,6 +10,7 @@ use crate::db2::Db2;
 
 /// The tables' file IDs (the same in every build).
 const FILES: &[(&str, u32)] = &[
+    ("AreaTable", 1353545),
     ("CharComponentTextureLayouts", 1360262),
     ("CharComponentTextureSections", 1360263),
     ("ChrCustomizationChoice", 3450554),

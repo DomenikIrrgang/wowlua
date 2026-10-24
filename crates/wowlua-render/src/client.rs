@@ -127,30 +127,8 @@ impl ClientAssets {
             .addons
             .iter()
             .find(|(p, _)| n.starts_with(p.as_str()))?;
-        let rel = &path[prefix.len()..];
-        let mut cur = dir.clone();
-        let parts: Vec<&str> = rel.split(['\\', '/']).filter(|p| !p.is_empty()).collect();
-        for (i, part) in parts.iter().enumerate() {
-            let last = i + 1 == parts.len();
-            let entries = std::fs::read_dir(&cur).ok()?;
-            let mut found = None;
-            for e in entries.flatten() {
-                let name = e.file_name().to_string_lossy().into_owned();
-                let lower = name.to_ascii_lowercase();
-                let want = part.to_ascii_lowercase();
-                let hit = if last {
-                    lower == want || exts.iter().any(|x| lower == format!("{want}{x}"))
-                } else {
-                    lower == want
-                };
-                if hit {
-                    found = Some(cur.join(name));
-                    break;
-                }
-            }
-            cur = found?;
-        }
-        std::fs::read(cur).ok()
+        let file = wowlua_engine::bindings::find_addon_file(dir, &path[prefix.len()..], exts)?;
+        std::fs::read(file).ok()
     }
 }
 
@@ -377,6 +355,19 @@ impl wowlua_engine::clientdata::ClientData for CascClientData {
 
     fn creature_display(&self, creature: u32) -> Option<u32> {
         self.with(|lib, casc| lib.creature_display_id(casc, creature))
+    }
+
+    fn game_file_id(&self, path: &str) -> Option<Option<u32>> {
+        let casc = self.casc.get_or_init(|| (self.open)()).as_ref()?;
+        Some(casc.id_of_texture(path))
+    }
+
+    fn area_name(&self, area: u32) -> Option<String> {
+        self.with(|lib, casc| {
+            lib.table(casc, "AreaTable")?
+                .row(area)?
+                .string("AreaName_lang")
+        })
     }
 
     fn appearance_source(&self, source: u32) -> Option<(u32, u32)> {

@@ -320,3 +320,26 @@ fn reads_the_wardrobe_camera_tables() {
             .any(|r| r.int("ItemClass") == 2 && r.int("UiCameraID") > 0)
     );
 }
+
+/// WoW Forever's areas: 2437 is Ragefire Chasm (AtlasLoot names its
+/// dungeons by `C_Map.GetAreaInfo`), 1637 Orgrimmar (as the client
+/// answered).
+#[test]
+fn reads_the_area_table() {
+    let Some(root) = install() else {
+        eprintln!("no WoW installation: skipped");
+        return;
+    };
+    let storage = FsStorage { root: root.clone() };
+    if !Casc::products(&storage)
+        .iter()
+        .any(|(p, _)| p == "wow_classic_beta")
+    {
+        return;
+    }
+    let casc = Casc::open(Box::new(FsStorage { root }), "wow_classic_beta").expect("opens");
+    let t = wowlua_casc::tables::Table::open(&casc, "AreaTable").expect("areas");
+    let name = |id: u32| t.row(id).and_then(|r| r.string("AreaName_lang"));
+    assert_eq!(name(2437).as_deref(), Some("Ragefire Chasm"));
+    assert_eq!(name(1637).as_deref(), Some("Orgrimmar"));
+}

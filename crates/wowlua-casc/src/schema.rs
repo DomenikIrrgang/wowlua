@@ -6,6 +6,38 @@ pub(crate) type Layouts = &'static [(u32, &'static [&'static str])];
 
 pub(crate) static LAYOUTS: &[(&str, Layouts)] = &[
     (
+        "AreaTable",
+        &[(
+            0x9995B797,
+            &[
+                "ZoneName",
+                "AreaName_lang",
+                "ContinentID",
+                "ParentAreaID",
+                "AreaBit",
+                "SoundProviderPref",
+                "SoundProviderPrefUnderwater",
+                "AmbienceID",
+                "UwAmbience",
+                "ZoneMusic",
+                "UwZoneMusic",
+                "ExplorationLevel",
+                "IntroSound",
+                "UwIntroSound",
+                "FactionGroupMask",
+                "Ambient_multiplier",
+                "MountFlags",
+                "PvpCombatWorldStateID",
+                "WildBattlePetLevelMin",
+                "WildBattlePetLevelMax",
+                "WindSettingsID",
+                "ContentTuningID",
+                "Flags",
+                "LiquidTypeID",
+            ],
+        )],
+    ),
+    (
         "CreatureDisplayInfo",
         &[
             (

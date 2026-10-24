@@ -63,6 +63,30 @@ pub struct AddonFiles {
     pub bindings: bool,
 }
 
+/// A file of an addon's folder, `rel` its path there (either slash, any
+/// case; its last part may leave out one of `exts`): the file as named on
+/// disk.
+pub fn find_addon_file(
+    dir: &std::path::Path,
+    rel: &str,
+    exts: &[&str],
+) -> Option<std::path::PathBuf> {
+    let parts: Vec<&str> = rel.split(['\\', '/']).filter(|p| !p.is_empty()).collect();
+    let mut cur = dir.to_path_buf();
+    for (i, part) in parts.iter().enumerate() {
+        let last = i + 1 == parts.len();
+        let want = part.to_ascii_lowercase();
+        let found = std::fs::read_dir(&cur).ok()?.flatten().find_map(|e| {
+            let name = e.file_name().to_string_lossy().into_owned();
+            let lower = name.to_ascii_lowercase();
+            let hit = lower == want || (last && exts.iter().any(|x| lower == format!("{want}{x}")));
+            hit.then(|| cur.join(name))
+        })?;
+        cur = found;
+    }
+    (!parts.is_empty() && cur.is_file()).then_some(cur)
+}
+
 #[derive(Default)]
 pub struct Bindings {
     pub bindings: Vec<Binding>,
@@ -816,13 +840,26 @@ fn get_addon_info(vm: &mut Vm, c: NativeCall) -> Ret {
             .map(|(_, v)| v.clone())
     };
     let (name, title, notes) = (a.name.clone(), meta("Title"), meta("Notes"));
+    let on_demand = a.on_demand;
     let title = vm.str(&title.unwrap_or_else(|| name.clone()));
+    // A load-on-demand addon not loaded yet: "DEMAND_LOADED", the reason
+    // addons check before `LoadAddOn` (AtlasLoot's loader takes any other
+    // as the module being broken, and loaded none of its modules).
+    let loaded = engine(vm)
+        .world
+        .loaded_addons
+        .contains(&name.to_lowercase());
+    let reason = if on_demand && !loaded {
+        "DEMAND_LOADED"
+    } else {
+        ""
+    };
     Ok(vec![
         vm.str(&name),
         title,
         notes.map_or(Value::Nil, |n| vm.str(&n)),
         Value::Bool(true),
-        vm.str(""),
+        vm.str(reason),
         vm.str("INSECURE"),
     ])
 }

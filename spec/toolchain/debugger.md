@@ -321,7 +321,10 @@ T310).
   `C_Item.GetItemClassInfo` answers, a link made as the engine makes them,
   cached, so
   `GetItemInfo`, `DoesItemExistByID` and Blizzard's item loading answer for
-  it; an item the test defines stays the test's. Without it, they answer
+  it (`DoesItemExistByID` also for an item whose name `ItemSparse` lacks,
+  decision T355); an item the test defines stays the test's.
+  `C_Map.GetAreaInfo(id)` names an area the recordings lack as
+  `AreaTable` does (T355). Without it, they answer
   nothing, as before. `GetUICameraInfo(id)` answers the client's
   `UiCamera` row as it is (the model's position, its yaw, pitch and roll,
   the animation, whether it is centered), as the recordings show; without

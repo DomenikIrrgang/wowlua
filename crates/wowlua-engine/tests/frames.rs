@@ -1801,6 +1801,9 @@ impl wowlua_engine::clientdata::ClientData for Creatures {
     fn creature_display(&self, creature: u32) -> Option<u32> {
         (creature == 448).then_some(500)
     }
+    fn area_name(&self, area: u32) -> Option<String> {
+        (area == 2437).then(|| "Ragefire Chasm".into())
+    }
     fn item(&self, id: u32) -> Option<wowlua_engine::clientdata::ClientItem> {
         // An item whose name the client's tables lack (sent by the server).
         (id == 872).then(|| wowlua_engine::clientdata::ClientItem {
@@ -1811,6 +1814,19 @@ impl wowlua_engine::clientdata::ClientData for Creatures {
             ..Default::default()
         })
     }
+}
+
+/// An area the recordings lack is named by the client's tables; an ID
+/// naming no area stays nil.
+#[test]
+fn areas_are_named_by_the_clients_tables() {
+    let mut vm = vm();
+    wowlua_engine::clientdata::set(&mut vm, std::sync::Arc::new(Creatures));
+    let r = run(
+        &mut vm,
+        "return C_Map.GetAreaInfo(2437), tostring(C_Map.GetAreaInfo(0))",
+    );
+    assert_eq!(r, ["Ragefire Chasm", "nil"]);
 }
 
 /// A model given a creature reports its display; a texture given a
@@ -1830,9 +1846,9 @@ t:SetSize(32, 32)
 t:SetPoint('CENTER')
 SetPortraitTextureFromCreatureDisplayID(t, m:GetDisplayInfo())
 local _, _, _, loc, icon = C_Item.GetItemInfoInstant(872)
-return m:GetDisplayInfo(), icon, loc, C_Item.GetItemIconByID(872)",
+return m:GetDisplayInfo(), icon, loc, C_Item.GetItemIconByID(872), tostring(C_Item.DoesItemExistByID(872))",
     );
-    assert_eq!(r, ["500", "135419", "INVTYPE_2HWEAPON", "135419"]);
+    assert_eq!(r, ["500", "135419", "INVTYPE_2HWEAPON", "135419", "true"]);
     let scene = wowlua_engine::scene::build(&mut vm);
     assert!(scene.items.iter().any(|i| matches!(i,
         Item::Quad(q) if matches!(&q.image, Image::Portrait { source, .. } if **source == ModelSource::Display(500)))));

@@ -46,6 +46,9 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- Addons that load their own modules on demand through `GetAddOnInfo`'s reason (AtlasLoot) load them: it is `"DEMAND_LOADED"` for a load-on-demand addon that isn't loaded yet.
+- `GetFileIDFromPath` answers nil for a file that doesn't exist, such as one of an addon you haven't installed, so AtlasLoot no longer draws the Atlas addon's maps without it. With your WoW installation, a game file answers its own ID.
+- With your WoW installation, `C_Map.GetAreaInfo` names every area (AtlasLoot's instance names), and `C_Item.DoesItemExistByID` is true for items the game ships without a name.
 - `C_Item.GetItemInfoInstant` and `C_Item.GetItemIconByID` answer for every item in the game's item table, also those whose names WoW only gets from the server, as in game: addons' loot lists show the items' icons instead of question marks.
 - `texture:SetColorTexture` replaces a file set before, and `SetTexture` a plain color, as in game: textures given a file and then a faint color were drawn as the file, solid white (the Forever Dungeon Journal's dungeon cards).
 - Text in a scaled frame (`frame:SetScale`) is drawn at that scale in screenshots: it was drawn full size and cut off (the Settings list's "NEW" badge read "N...").

@@ -115,6 +115,16 @@ pub trait ClientData: Send + Sync {
     fn creature_display(&self, _creature: u32) -> Option<u32> {
         None
     }
+    /// An area's name (`AreaTable`).
+    fn area_name(&self, _area: u32) -> Option<String> {
+        None
+    }
+    /// A game file's ID by its path (a texture's without its extension):
+    /// `Some(None)` where the storage has no such file, `None` without
+    /// one.
+    fn game_file_id(&self, _path: &str) -> Option<Option<u32>> {
+        None
+    }
     /// An item's own transmog source (its first modifier's) and slot.
     fn item_source(&self, _item: u32) -> Option<(u32, u32)> {
         None
@@ -196,6 +206,20 @@ pub(crate) fn item_camera(
 /// give it.
 pub(crate) fn creature_display(vm: &Vm, creature: i64) -> Option<u32> {
     data(vm)?.creature_display(u32::try_from(creature).ok()?)
+}
+
+/// An area's name, as the client's tables give it.
+pub(crate) fn area_name(vm: &Vm, area: f64) -> Option<String> {
+    if area.fract() != 0.0 || !(1.0..=f64::from(u32::MAX)).contains(&area) {
+        return None;
+    }
+    data(vm)?.area_name(area as u32)
+}
+
+/// A game file's ID by its path: `Some(None)` where the client's storage
+/// lacks it, `None` without the storage.
+pub(crate) fn game_file_id(vm: &Vm, path: &str) -> Option<Option<u32>> {
+    data(vm)?.game_file_id(path)
 }
 
 /// A transmog source's item and slot, as the client's tables give them.

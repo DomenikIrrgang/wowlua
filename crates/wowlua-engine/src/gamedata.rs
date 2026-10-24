@@ -1063,11 +1063,18 @@ fn get_item_icon_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
 /// mixin's `ContinueWithCancelOnItemLoad` failed inside
 /// `secureexecuterange`). Unverified for names (as `item_id` reads one: a
 /// cached item's).
+///
+/// An item of the client's `Item` table whose name it does not ship (the
+/// server sends it) exists too, as its icon and slot do (T355).
 fn does_item_exist_by_id(vm: &mut Vm, c: NativeCall) -> Ret {
-    let defined = match item_id(vm, c.arg(1)) {
+    let id = item_id(vm, c.arg(1));
+    let defined = match id {
         Some(id) => item_data(vm, id),
         None => None,
     };
+    if defined.is_none() && id.and_then(|id| crate::clientdata::item(vm, id)).is_some() {
+        return Ok(vec![Value::Bool(true)]);
+    }
     match defined {
         Some(t) => Ok(vec![Value::Bool(!field(vm, t, "missing").truthy())]),
         // Else as the client answered, else no (the full probe: "x", -1,
