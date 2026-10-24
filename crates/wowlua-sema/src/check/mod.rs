@@ -3324,6 +3324,31 @@ print(a, b, c, d, e, name, realm, more)
 
     /// A condition narrows a field of an intersection's part, as of a
     /// record. Decision L81.
+    /// `pcall` of an overloaded function takes the overload its arguments
+    /// match; a predicate of a class narrows an unrelated record to the
+    /// class; `select(i, ...)` keeps the values' type. Decision L82.
+    #[test]
+    fn pcall_overloads_predicates_and_select() {
+        let over = "type Over = ((k: \"a\") -> number) & ((k: \"b\") -> string)\n";
+        strict_ok(&format!(
+            "{over}local function f(o: Over) local ok, v = pcall(o, \"b\"); if ok then local s: string = v; print(s) end end\nprint(f)\n"
+        ));
+        strict_err(
+            &format!(
+                "{over}local function f(o: Over) local ok, v = pcall(o, \"b\"); if ok then local n: number = v; print(n) end end\nprint(f)\n"
+            ),
+            "E2001",
+        );
+        strict_err(
+            "class Dog\n bark: string = \"woof\"\nend\ntype Rec = { name: string }\nlocal function isDog(v: unknown): v is Dog return v ~= nil end\nlocal function f(r: Rec) if isDog(r) then local n: number = r.bark; print(n) end end\nprint(f, Dog)\n",
+            "E2001",
+        );
+        strict_err(
+            "local function f(i: number, ...: string) local n: number = select(i, ...); print(n) end\nprint(f)\n",
+            "E2001",
+        );
+    }
+
     #[test]
     fn intersection_fields_narrow() {
         strict_ok(

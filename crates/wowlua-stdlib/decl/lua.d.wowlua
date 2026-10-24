@@ -21,7 +21,7 @@ declare function rawequal(a: any, b: any): boolean
 declare function rawget(t: table, key: any): any
 declare function rawset<T>(t: T, key: any, value: any): T
 declare function select(index: "#", ...: any): number
-declare function select(index: number, ...: any): ...any
+declare function select<T>(index: number, ...: T): ...T
 declare function setfenv<F>(f: F, env: table): F
 declare function setmetatable<T>(t: T, metatable: table?): T
 declare function tonumber(value: any, base: number?): number?

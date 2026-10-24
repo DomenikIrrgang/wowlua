@@ -600,6 +600,39 @@ impl Checker<'_, '_> {
                 // or what it raised; a function that never returns or
                 // returns nothing gives only the latter, which may be
                 // anything: `unknown` (L55, L75).
+                // `pcall(f, ...)` of an overloaded `f` (`CreateFrame`): the
+                // overload the arguments match gives the results (L82).
+                if let ExprKind::Name(n) = callee.kind()
+                    && matches!(n.text(), "pcall" | "xpcall")
+                    && self.lookup_var(n.text()).is_none()
+                    && let Some(first) = args.exprs().first()
+                    && let Ty::Intersection(overloads) = {
+                        let ft = self.peek_or_check(first);
+                        self.env.types.get(ft).clone()
+                    }
+                {
+                    let skip = if n.text() == "xpcall" { 2 } else { 1 };
+                    let exprs = Self::arg_exprs(args);
+                    let rest: Vec<TypeId> = exprs
+                        .iter()
+                        .skip(skip)
+                        .map(|e| self.peek_or_check(e))
+                        .collect();
+                    for o in overloads {
+                        if let Ty::Func(f) = self.env.types.get(o).clone()
+                            && f.type_params.is_empty()
+                            && self.accepts(&f, &rest, None)
+                        {
+                            let mut types = vec![Types::BOOLEAN];
+                            types.extend(f.ret.types.iter().copied());
+                            results = Pack {
+                                types,
+                                rest: f.ret.rest.clone(),
+                            };
+                            break;
+                        }
+                    }
+                }
                 if let ExprKind::Name(n) = callee.kind()
                     && matches!(n.text(), "pcall" | "xpcall")
                     && self.lookup_var(n.text()).is_none()

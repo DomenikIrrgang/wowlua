@@ -246,7 +246,9 @@ caller:
   with its current type); a member that passes for `T` only because it is
   open (a game frame takes any field, so `Frame` passes for `Frame &
   Disableable`) is narrowed to `T` too, whose members are declared (decision
-  L79);
+  L79); so is an object of an unrelated type when `T` is a class: it may still
+  be one (`reflect.isInstance(module, WorldMapModule)` on a module's record
+  type, decision L82);
 - where the call is **falsy** (`else` branch, `if not p(x)`, after
   `if p(x) then return end`), the argument is narrowed by **excluding** the
   members of its union type that are assignable to `T`. A member that is a
@@ -536,8 +538,9 @@ values, as in Lua. The loop variables take the iterator's result types, with
 `securecallfunction` and `coroutine.*` are declared in the Lua standard library
 declarations with type packs (§2.2.10). One is special-cased: `select(n, …)`
 with a whole number literal `n` gives the types of the values from the n-th
-on (`select(2, f())` with `f(): (number, string)` is a `string`), where the
-declaration says `...any` (decision L54).
+on (`select(2, f())` with `f(): (number, string)` is a `string`, decision
+L54); with another `n`, the values' type (`select(i, ...)` with `...: string`
+gives `...string`, decision L82).
 
 ### 2.4.5 String methods
 
@@ -781,7 +784,9 @@ expression returns when it has no return annotation:
 `pcall(function() return "x" end)` gives `(boolean, string)` (decision L55).
 `pcall` and `xpcall` give `unknown` after the boolean where the function never
 returns or returns nothing, since then the values are only what it raised,
-which may be anything (decision L75).
+which may be anything (decision L75). `pcall(f, ...)` of an overloaded `f`
+(`CreateFrame`) gives the results of the overload the arguments match:
+`pcall(CreateFrame, "ModelScene")` gives `(boolean, ModelScene)` (decision L82).
 
 A last argument that gives several values (a call such as `unpack(t)`, or
 `...`) gives its values to the parameters from its position on, as in Lua:

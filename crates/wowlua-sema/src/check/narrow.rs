@@ -637,6 +637,15 @@ impl Checker<'_, '_> {
                     yes.push(target);
                     no.push(m);
                 }
+                // An object of an unrelated type may still be one of the
+                // predicate's class (`isInstance(module, WorldMapModule)`
+                // on a module's record type): narrowed to it (decision L82).
+                None if matches!(self.env.types.get(m), Ty::Named(..) | Ty::Record(_))
+                    && matches!(self.env.types.get(target), Ty::Named(..)) =>
+                {
+                    yes.push(target);
+                    no.push(m);
+                }
                 None => no.push(m),
             }
         }
