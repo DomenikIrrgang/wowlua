@@ -18,15 +18,26 @@ fn run(vm: &mut Vm, src: &str) -> Vec<String> {
 
 #[test]
 fn documented_functions_exist_and_are_not_mocked() {
+    // Every camelot function has behaviour (decision T295); a flavor with
+    // gaps shows the stand-in: a function without behaviour fails for
+    // addon code, and gives its documented empty values to Blizzard's.
+    let gap = wowlua_engine::coverage::functions("mists")
+        .expect("mists")
+        .into_iter()
+        .find(|e| {
+            e.source == wowlua_engine::coverage::Source::Generated
+                && e.group == wowlua_engine::coverage::Group::Documented
+                && !e.name.contains('.')
+                && !wowlua_engine::protection::is_protected(&e.name, None)
+        })
+        .expect("a function without behaviour on mists")
+        .name;
     let mut vm = Vm::wow();
-    wowlua_engine::install(&mut vm, "camelot").expect("installs");
-    // Addon code: a function without behaviour fails.
+    wowlua_engine::install(&mut vm, "mists").expect("installs");
+    let src =
+        format!("return type({gap}), select(2, pcall({gap})), type(GetTime), type(secretwrap)");
     let f = vm
-        .load_as(
-            b"return type(IsCollisionEnabled), select(2, pcall(IsCollisionEnabled)), type(GetTime), type(secretwrap)",
-            "@MyAddon/main.lua",
-            "MyAddon",
-        )
+        .load_as(src.as_bytes(), "@MyAddon/main.lua", "MyAddon")
         .expect("compiles");
     let r: Vec<String> = vm
         .call(f, &[])
@@ -40,13 +51,13 @@ fn documented_functions_exist_and_are_not_mocked() {
     assert_eq!(
         r,
         [
-            "function",
-            "IsCollisionEnabled is not mocked",
-            "function",
-            "function"
+            "function".to_string(),
+            format!("{gap} is not mocked"),
+            "function".to_string(),
+            "function".to_string()
         ]
     );
-    // Secure code (a fresh execution): its documented results' empty values.
+    // On camelot it has an answer: its documented empty values.
     let mut vm = Vm::wow();
     wowlua_engine::install(&mut vm, "camelot").expect("installs");
     let r = run(&mut vm, "return IsCollisionEnabled()");

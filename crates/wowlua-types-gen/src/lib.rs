@@ -22,6 +22,9 @@ pub struct Output {
     pub api: Vec<(String, serde_json::Value)>,
 }
 
+/// An argument the client's usage check names: name, check, may be nil.
+pub type UsageArg = (String, String, bool);
+
 /// What the client itself told of its undocumented C functions (the
 /// engine's recordings of one flavor, decision T294).
 #[derive(Default)]
@@ -30,7 +33,7 @@ pub struct ClientFacts {
     pub flavor: String,
     /// The client's own argument checks (`camelot-usages.txt`): the
     /// function, then each argument's name, check and whether it may be nil.
-    pub usages: Vec<(String, Vec<(String, String, bool)>)>,
+    pub usages: Vec<(String, Vec<UsageArg>)>,
     /// The client's answers to a call without arguments (`blanks.rs`):
     /// the function and its answer (`"2: number 0, number 0"`).
     pub answers: Vec<(String, String)>,

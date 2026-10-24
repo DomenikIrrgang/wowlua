@@ -564,7 +564,7 @@ fn compiler_type_names(root: &Path) -> Result<HashSet<String>> {
 fn client_facts(root: &Path) -> Result<wowlua_types_gen::ClientFacts> {
     let path = root.join("crates/wowlua-engine/data/camelot-usages.txt");
     let text = fs::read_to_string(&path).with_context(|| path.display().to_string())?;
-    let mut usages: Vec<(String, Vec<(String, String, bool)>)> = Vec::new();
+    let mut usages: Vec<(String, Vec<wowlua_types_gen::UsageArg>)> = Vec::new();
     for line in text.lines().filter(|l| !l.starts_with('#')) {
         let mut cols = line.split('\t');
         let (Some(name), Some(checks), Some(message)) = (cols.next(), cols.next(), cols.next())
