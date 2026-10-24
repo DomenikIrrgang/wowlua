@@ -87,10 +87,15 @@ fn play(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 }
 
 fn stop(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    stop_group(vm, id);
+    Ok(vec![])
+}
+
+/// A group stopped: `OnStop(false)` if it was playing.
+pub fn stop_group(vm: &mut Vm, id: WidgetId) {
     if engine_mut(vm).animations.playing.remove(&id.0).is_some() {
         widgets::run_script(vm, id, "OnStop", &[Value::Bool(false)]);
     }
-    Ok(vec![])
 }
 
 fn pause(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {

@@ -597,7 +597,7 @@ to that member automatically, without a `path` entry.
   stops with E4300, which names both versions, instead of reporting unknown keys
   of a newer schema as E4002.
 - When the schema changes incompatibly, the compiler accepts the previous major
-  schema with warnings for one release cycle, and `wowlua fix --manifest`
+  schema with warnings for one release cycle, and `wowlua fix --migrate`
   rewrites the manifest in place (keeping formatting) to the current schema.
 - `wowlua.lock` has its own `version` field. The compiler reads lockfiles of
   older versions and rewrites them in the current format on the next resolve.

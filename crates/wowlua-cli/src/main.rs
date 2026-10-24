@@ -343,7 +343,7 @@ enum Command {
     Fix {
         /// Migrate wowlua.json to the current schema
         #[arg(long)]
-        manifest: bool,
+        migrate: bool,
     },
     /// Map error messages and stacks from the game back to source locations
     Trace {
@@ -652,7 +652,7 @@ fn run() -> ExitCode {
             clipboard,
             build.as_deref(),
         ),
-        Command::Fix { manifest } => commands::fix(&out, &cli.global, manifest),
+        Command::Fix { migrate } => commands::fix(&out, &cli.global, migrate),
         Command::Add(args) => commands::add(&out, &cli.global, &args),
         Command::Remove { name, dev } => commands::remove(&out, &cli.global, &name, dev),
         Command::Update { names, precise } => commands::update(&out, &cli.global, names, precise),

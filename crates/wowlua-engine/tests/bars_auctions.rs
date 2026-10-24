@@ -467,3 +467,21 @@ return name, level, current, tostring(before), loaded, (C_Item.GetItemInfo(99000
         ["Plain Thing", "1", "1", "nil", "990002 true", "Later Thing"]
     );
 }
+
+/// `GetItemInfo` gives a defined item without a link the one the client
+/// makes, the same as in the bags; a given link stays (decision T283).
+#[test]
+fn a_defined_item_has_a_link() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "mock.defineItem(990003, { name = 'Linked Thing', quality = 2 })
+mock.defineItem(990004, { name = 'Own Link', link = 'my link' })
+mock.setBag(0, { slots = 16, items = { [1] = { id = 990003 } } })
+local _, link = C_Item.GetItemInfo(990003)
+local _, byLink = C_Item.GetItemInfo(link)
+local _, own = C_Item.GetItemInfo(990004)
+return tostring(link == C_Container.GetContainerItemLink(0, 1)), tostring(byLink == link), link:match('%[(.-)%]'), own",
+    );
+    assert_eq!(r, ["true", "true", "Linked Thing", "my link"]);
+}

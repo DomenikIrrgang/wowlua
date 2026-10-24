@@ -1,14 +1,14 @@
 -- Compiler behavior of `wowlua:log` (spec stdlib "log"): level calls below
 -- the profile's log level are removed with their arguments.
 @intrinsic("log.trace")
-declare function trace(...: any)
+declare function trace(...: unknown)
 @intrinsic("log.debug")
-declare function debug(...: any)
+declare function debug(...: unknown)
 @intrinsic("log.info")
-declare function info(...: any)
+declare function info(...: unknown)
 @intrinsic("log.warn")
-declare function warn(...: any)
+declare function warn(...: unknown)
 @intrinsic("log.error")
-declare function error(...: any)
+declare function error(...: unknown)
 @intrinsic("log.object")
-declare global log: { trace: (...any) -> (), debug: (...any) -> (), info: (...any) -> (), warn: (...any) -> (), error: (...any) -> () }
+declare global log: { trace: (...unknown) -> (), debug: (...unknown) -> (), info: (...unknown) -> (), warn: (...unknown) -> (), error: (...unknown) -> () }

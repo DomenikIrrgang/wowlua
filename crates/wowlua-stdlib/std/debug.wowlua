@@ -34,14 +34,14 @@ local function fail(message: string)
 end
 
 -- (A secret condition cannot be tested: it passes.)
-export function assert(condition: any, message: string?, location: string?)
+export function assert(condition: unknown, message: string?, location: string?)
     if not secret.isSecret(condition) and not condition then
         fail((location ?? "?") .. ": assertion failed" .. (message and (": " .. message) or ""))
     end
 end
 
 -- `dump(location, text1, value1, text2, value2, …)`.
-export function dump(location: string, ...: any)
+export function dump(location: string, ...: unknown)
     local n = select("#", ...)
     for i = 1, n, 2 do
         local text, value = select(i, ...)
@@ -64,15 +64,15 @@ export function location(): string
     return "?"
 end
 
-export function nameof(value: any): string
+export function nameof(value: unknown): string
     return "?"
 end
 
-export function typeName(value: any): string
+export function typeName(value: unknown): string
     return type(value)
 end
 
-export function measure(label: string, fn: (...any) -> ...any, ...: any): ...any
+export function measure<A..., R...>(label: string, fn: (A...) -> R..., ...: A...): R...
     local prof = wl.prof
     if prof then
         return prof.measure(label, fn, ...)
@@ -92,7 +92,7 @@ export function timeEnd(label: string)
     end
 end
 
-export function stats(): { [string]: any }
+export function stats(): { [string]: WowluaProfStat }
     return wl.prof?.stats ?? {}
 end
 
@@ -102,7 +102,7 @@ export function resetStats()
     end
 end
 
-export function watch(label: string, fn: () -> any)
+export function watch(label: string, fn: () -> unknown)
     if wl.dev then
         wl.dev.watch(label, fn)
     end

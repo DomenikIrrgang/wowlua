@@ -556,6 +556,69 @@ fn compiler_type_names(root: &Path) -> Result<HashSet<String>> {
     Ok(out)
 }
 
+/// What the camelot client told of its undocumented C functions, as the
+/// engine recorded it (decision T294): its own argument checks
+/// (`camelot-usages.txt`, the first line of each function: the usage's
+/// argument names, `[x]` or a `?` check optional) and its answers to calls
+/// without arguments (`blanks.rs`).
+fn client_facts(root: &Path) -> Result<wowlua_types_gen::ClientFacts> {
+    let path = root.join("crates/wowlua-engine/data/camelot-usages.txt");
+    let text = fs::read_to_string(&path).with_context(|| path.display().to_string())?;
+    let mut usages: Vec<(String, Vec<wowlua_types_gen::UsageArg>)> = Vec::new();
+    for line in text.lines().filter(|l| !l.starts_with('#')) {
+        let mut cols = line.split('\t');
+        let (Some(name), Some(checks), Some(message)) = (cols.next(), cols.next(), cols.next())
+        else {
+            continue;
+        };
+        if usages.iter().any(|(n, _)| n == name) {
+            continue;
+        }
+        // `Usage: Name(a, [b])`: the names, bracketed ones optional
+        let inner = message
+            .split_once('(')
+            .and_then(|(_, r)| r.rsplit_once(')'))
+            .map_or("", |(a, _)| a);
+        let names: Vec<(String, bool)> = inner
+            .split(',')
+            .map(|a| {
+                let bracketed = a.contains('[');
+                let n = a.trim().trim_matches(|c| c == '[' || c == ']').trim();
+                (n.to_string(), bracketed)
+            })
+            .filter(|(n, _)| !n.is_empty())
+            .collect();
+        let checks: Vec<&str> = checks.split(',').filter(|c| !c.is_empty()).collect();
+        let args = checks
+            .iter()
+            .enumerate()
+            .map(|(i, check)| {
+                let optional = check.ends_with('?') || *check == "optnumber";
+                let (name, bracketed) = names
+                    .get(i)
+                    .cloned()
+                    .filter(|(n, _)| n.chars().all(|c| c.is_ascii_alphanumeric() || c == '_'))
+                    .unwrap_or_else(|| (format!("arg{}", i + 1), false));
+                (
+                    name,
+                    check.trim_end_matches('?').to_string(),
+                    optional || bracketed,
+                )
+            })
+            .collect();
+        usages.push((name.to_string(), args));
+    }
+    let answers = wowlua_engine::blanks::all()
+        .iter()
+        .map(|(n, a)| (n.to_string(), a.to_string()))
+        .collect();
+    Ok(wowlua_types_gen::ClientFacts {
+        flavor: "camelot".into(),
+        usages,
+        answers,
+    })
+}
+
 pub fn generate(root: &Path, dir: &Path) -> Result<()> {
     let mut flavors = Vec::new();
     for (flavor, _, _) in flavor_tags()? {
@@ -639,10 +702,29 @@ pub fn generate(root: &Path, dir: &Path) -> Result<()> {
     let skip = compiler_globals(root)?;
     let compiler_types = compiler_type_names(root)?;
     let source = format!("Ketho's vscode-wow-api annotations (MIT License, commit {KETHO_COMMIT})");
-    let output =
-        wowlua_types_gen::generate(&flavors, &annotations, &source, &skip, &compiler_types)
-            .map_err(anyhow::Error::msg)?;
+    // warcraft.wiki.gg's signatures, as `cargo xtask types wiki` reviewed
+    // them (decision T288).
+    let wiki_path = root.join(WIKI_DATA);
+    let wiki = vec![(
+        wiki_path.to_string_lossy().into_owned(),
+        fs::read_to_string(&wiki_path).unwrap_or_default(),
+    )];
+    let client = client_facts(root)?;
+    let output = wowlua_types_gen::generate(
+        &flavors,
+        &annotations,
+        &source,
+        &skip,
+        &compiler_types,
+        &wiki,
+        &client,
+    )
+    .map_err(anyhow::Error::msg)?;
     let data = root.join("crates/wowlua-api/data");
+    crate::write_if_changed(
+        &data.join("LICENSE-warcraft-wiki.txt"),
+        "The declarations in this directory include function signatures and records\nadapted from warcraft.wiki.gg's API pages (https://warcraft.wiki.gg), by its\ncontributors, as `xtask/data/warcraft-wiki-api.lua` holds them. That content is\nlicensed under the Creative Commons Attribution-ShareAlike 4.0 International\nLicense (https://creativecommons.org/licenses/by-sa/4.0/); the adapted\ndeclarations are shared under the same license.\n",
+    )?;
     fs::create_dir_all(&data)?;
     // The MIT notice of the annotations goes with the generated files.
     let license = git(
@@ -764,4 +846,251 @@ fn validate(files: &[(&str, &String)]) -> Vec<String> {
             format!("{}{}", at.unwrap_or_default(), d.message)
         })
         .collect()
+}
+
+const WIKI_API: &str = "https://warcraft.wiki.gg/api.php";
+const WIKI_AGENT: &str =
+    "wowlua-types-gen (https://github.com/DomenikIrrgang/wowlua; API types for addon authors)";
+/// The wiki's API namespace.
+const WIKI_API_NAMESPACE: &str = "3000";
+/// The reviewed wiki data the generator reads (decision T288).
+pub const WIKI_DATA: &str = "xtask/data/warcraft-wiki-api.lua";
+
+/// One request to the wiki's API (form-encoded), paced: a second apart.
+fn wiki_query(params: &[(&str, &str)]) -> Result<serde_json::Value> {
+    let mut cmd = Command::new("curl");
+    cmd.args(["-fsS", "--retry", "3", "-A", WIKI_AGENT]);
+    for (k, v) in params {
+        cmd.arg("--data-urlencode").arg(format!("{k}={v}"));
+    }
+    cmd.arg(WIKI_API);
+    let out = cmd.output().context("running curl")?;
+    std::thread::sleep(std::time::Duration::from_secs(1));
+    if !out.status.success() {
+        bail!(
+            "the wiki's API failed: {}",
+            String::from_utf8_lossy(&out.stderr)
+        );
+    }
+    Ok(serde_json::from_slice(&out.stdout)?)
+}
+
+/// The pages' texts by title (and the newest revision among them), from
+/// `cache` or the wiki, 50 a request.
+fn wiki_pages(cache: &Path, titles: &[String]) -> Result<(HashMap<String, String>, u64)> {
+    let mut known: serde_json::Map<String, serde_json::Value> = fs::read(cache)
+        .ok()
+        .and_then(|b| serde_json::from_slice(&b).ok())
+        .unwrap_or_default();
+    let missing: Vec<&String> = titles.iter().filter(|t| !known.contains_key(*t)).collect();
+    for (i, batch) in missing.chunks(50).enumerate() {
+        println!(
+            "wiki: pages {}-{} of {}",
+            i * 50 + 1,
+            i * 50 + batch.len(),
+            missing.len()
+        );
+        let joined = batch
+            .iter()
+            .map(|t| t.as_str())
+            .collect::<Vec<_>>()
+            .join("|");
+        let d = wiki_query(&[
+            ("action", "query"),
+            ("prop", "revisions"),
+            ("rvprop", "content|ids"),
+            ("rvslots", "main"),
+            ("format", "json"),
+            ("formatversion", "2"),
+            ("redirects", "1"),
+            ("titles", &joined),
+        ])?;
+        // The titles asked for, by the page that answers them (through
+        // normalization and redirects).
+        let mut asked: HashMap<String, Vec<String>> = HashMap::new();
+        for kind in ["normalized", "redirects"] {
+            for r in d["query"][kind].as_array().into_iter().flatten() {
+                let (Some(from), Some(to)) = (r["from"].as_str(), r["to"].as_str()) else {
+                    continue;
+                };
+                let mut froms = asked.remove(from).unwrap_or_default();
+                froms.push(from.to_string());
+                asked.entry(to.to_string()).or_default().extend(froms);
+            }
+        }
+        for p in d["query"]["pages"].as_array().into_iter().flatten() {
+            let title = p["title"].as_str().unwrap_or_default().to_string();
+            for from in asked.get(&title).into_iter().flatten() {
+                if let Some(r) = p["revisions"].get(0) {
+                    known.insert(
+                        from.clone(),
+                        serde_json::json!({
+                            "rev": r["revid"],
+                            "text": r["slots"]["main"]["content"],
+                        }),
+                    );
+                }
+            }
+            let entry = match p["revisions"].get(0) {
+                Some(r) => serde_json::json!({
+                    "rev": r["revid"],
+                    "text": r["slots"]["main"]["content"],
+                }),
+                // no such page: remembered, not asked again
+                None => serde_json::json!({ "rev": 0, "text": "" }),
+            };
+            known.insert(title, entry);
+        }
+        // asked for but not answered (normalized titles): none
+        for t in batch {
+            known
+                .entry(t.to_string())
+                .or_insert_with(|| serde_json::json!({ "rev": 0, "text": "" }));
+        }
+        fs::write(cache, serde_json::to_vec(&known)?)?;
+    }
+    let mut rev = 0;
+    let texts = titles
+        .iter()
+        .filter_map(|t| {
+            let e = known.get(t)?;
+            rev = rev.max(e["rev"].as_u64().unwrap_or(0));
+            Some((t.clone(), e["text"].as_str()?.to_string()))
+        })
+        .filter(|(_, text)| !text.is_empty())
+        .collect();
+    Ok((texts, rev))
+}
+
+/// The titles of the wiki's API pages (redirects left out).
+fn wiki_api_titles(cache: &Path) -> Result<Vec<String>> {
+    if let Some(t) = fs::read(cache)
+        .ok()
+        .and_then(|b| serde_json::from_slice::<Vec<String>>(&b).ok())
+    {
+        return Ok(t);
+    }
+    let mut titles = Vec::new();
+    let mut from = String::new();
+    loop {
+        let mut q = vec![
+            ("action", "query"),
+            ("list", "allpages"),
+            ("apnamespace", WIKI_API_NAMESPACE),
+            ("aplimit", "max"),
+            ("apfilterredir", "nonredirects"),
+            ("format", "json"),
+            ("formatversion", "2"),
+        ];
+        if !from.is_empty() {
+            q.push(("apcontinue", &from));
+        }
+        let d = wiki_query(&q)?;
+        for p in d["query"]["allpages"].as_array().into_iter().flatten() {
+            if let Some(t) = p["title"].as_str() {
+                titles.push(t.to_string());
+            }
+        }
+        match d["continue"]["apcontinue"].as_str() {
+            Some(c) => from = c.to_string(),
+            None => break,
+        }
+    }
+    fs::write(cache, serde_json::to_vec(&titles)?)?;
+    Ok(titles)
+}
+
+/// The functions Blizzard's documentation of any flavor types: the wiki
+/// does not stand in for them.
+fn documented(dir: &Path) -> Result<HashSet<String>> {
+    let ns = regex::Regex::new(r#"Namespace\s*=\s*"(\w+)""#)?;
+    let func = regex::Regex::new(r#"Name\s*=\s*"(\w+)",\s*\n\s*Type\s*=\s*"Function""#)?;
+    let mut out = HashSet::new();
+    for (flavor, _, _) in flavor_tags()? {
+        let mut files = Vec::new();
+        lua_files(&dir.join(&flavor).join(DOCS_DIR), &mut files)?;
+        for (_, text) in files {
+            let prefix = ns
+                .captures(&text)
+                .map(|c| format!("{}.", &c[1]))
+                .unwrap_or_default();
+            for c in func.captures_iter(&text) {
+                out.insert(format!("{prefix}{}", &c[1]));
+            }
+        }
+    }
+    Ok(out)
+}
+
+/// `cargo xtask types wiki [dir]`: the signatures of warcraft.wiki.gg's API
+/// pages (CC BY-SA 4.0) for the functions Blizzard's documentation leaves
+/// out, with the records they name, as LuaLS annotations in [`WIKI_DATA`]
+/// (decision T288). The pages are cached under `dir/wiki`; delete it to
+/// read the wiki again.
+pub fn wiki(root: &Path, dir: &Path) -> Result<()> {
+    let cache = dir.join("wiki");
+    fs::create_dir_all(&cache)?;
+    let titles = wiki_api_titles(&cache.join("api_titles.json"))?;
+    let (pages, mut rev) = wiki_pages(&cache.join("api_pages.json"), &titles)?;
+    let documented = documented(dir)?;
+    let mut functions = Vec::new();
+    let mut refs = std::collections::BTreeSet::new();
+    let mut ordered: Vec<(&String, &String)> = pages.iter().collect();
+    ordered.sort();
+    for (title, text) in ordered {
+        let Some(f) = wowlua_types_gen::wiki::function(title, text) else {
+            continue;
+        };
+        if documented.contains(&f.name) {
+            continue;
+        }
+        refs.extend(wowlua_types_gen::wiki::struct_refs(text));
+        functions.push(f);
+    }
+    // The records, and the records they show in turn.
+    let mut struct_pages: HashMap<String, String> = HashMap::new();
+    let mut wanted: Vec<String> = refs.into_iter().collect();
+    while !wanted.is_empty() {
+        let (got, struct_rev) = wiki_pages(&cache.join("struct_pages.json"), &wanted)?;
+        rev = rev.max(struct_rev);
+        let mut next = std::collections::BTreeSet::new();
+        for (title, text) in got {
+            for r in wowlua_types_gen::wiki::struct_refs(&text) {
+                if !struct_pages.contains_key(&r) && r != title {
+                    next.insert(r);
+                }
+            }
+            struct_pages.insert(title, text);
+        }
+        wanted = next
+            .into_iter()
+            .filter(|r| !struct_pages.contains_key(r))
+            .collect();
+    }
+    let mut structs: Vec<(String, Vec<wowlua_types_gen::wiki::Value>)> = Vec::new();
+    let mut ordered: Vec<(&String, &String)> = struct_pages.iter().collect();
+    ordered.sort();
+    for (title, text) in ordered {
+        let Some(name) = wowlua_types_gen::wiki::struct_name(title) else {
+            continue;
+        };
+        let fields = wowlua_types_gen::wiki::struct_fields(text);
+        if !fields.is_empty() && !structs.iter().any(|(n, _)| *n == name) {
+            structs.push((name, fields));
+        }
+    }
+    let body = wowlua_types_gen::wiki::to_luals(&functions, &structs);
+    let text = format!(
+        "---@meta\n-- Generated by `cargo xtask types wiki` from warcraft.wiki.gg's API pages\n-- (newest revision {rev}): the functions Blizzard's documentation leaves\n-- out, and the records they name. The wiki's content is licensed under the\n-- Creative Commons Attribution-ShareAlike 4.0 License\n-- (https://creativecommons.org/licenses/by-sa/4.0/); so is this file, an\n-- adaptation of it. Authors: the contributors of https://warcraft.wiki.gg.\n\n{body}"
+    );
+    let path = root.join(WIKI_DATA);
+    fs::create_dir_all(path.parent().expect("a directory"))?;
+    crate::write_if_changed(&path, &text)?;
+    println!(
+        "wiki: {} functions, {} records -> {}",
+        functions.len(),
+        structs.len(),
+        path.display()
+    );
+    Ok(())
 }

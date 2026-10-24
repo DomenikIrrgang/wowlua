@@ -915,6 +915,13 @@ fn get_item_info(vm: &mut Vm, c: NativeCall) -> Ret {
         return Ok(vec![]);
     };
     let mut out: Vec<Value> = ITEM_INFO_FIELDS.iter().map(|k| field(vm, t, k)).collect();
+    // The link, made as the client makes one, where the data has none (a
+    // test's `mock.defineItem`): the client always gives one.
+    if out[1].is_nil()
+        && let Some(id) = item_id(vm, c.arg(1))
+    {
+        out[1] = crate::character::link_of_id(vm, id).unwrap_or(Value::Nil);
+    }
     // The expansion 0 where the data has none (recorded: all 609 of the
     // client's GetItemInfo answers in the probes, Forever's items), and
     // eighteen values: no set, not a crafting reagent, no description where

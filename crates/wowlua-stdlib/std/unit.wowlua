@@ -3,12 +3,13 @@
 -- answers in combat) are typed `T | Secret<T>` and passed through: nothing
 -- here compares or tests them (decision S26).
 import * as secret from "wowlua:secret"
+import * as tbl from "wowlua:table"
 import * as color from "wowlua:color"
 import type Color from "wowlua:color"
 import on from "wowlua:events"
 import type Subscription from "wowlua:events"
 import after from "wowlua:timer"
-import callIn from "wowlua:errors"
+import callIn, try from "wowlua:errors"
 
 export type UnitInfo = {
     --- Without the realm (WoW: Forever's names include the surname).
@@ -189,6 +190,21 @@ export function group(opts: GroupOptions?): () -> UnitToken?
         i += 1
         return tokens[i]
     end
+end
+
+--- Invites `name` (a player's name, with the realm for another realm's) to
+--- your group: `C_PartyInfo.InviteUnit`, or the older `InviteUnit`; the
+--- game says in chat how it went.
+export function invite(name: string)
+    try(tbl.field(_G, "C_PartyInfo", "InviteUnit") or tbl.field(_G, "InviteUnit"), name)
+end
+
+--- Invites a Battle.net friend to your group by the game account they
+--- play on (`gameAccountID` of their game account info), as the game's
+--- friends list does: `C_BattleNet.InviteFriend`, or the older
+--- `BNInviteFriend`.
+export function inviteBnet(gameAccountID: number)
+    try(tbl.field(_G, "C_BattleNet", "InviteFriend") or tbl.field(_G, "BNInviteFriend"), gameAccountID)
 end
 
 --- The group's size: 1 when solo.

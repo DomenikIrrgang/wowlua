@@ -191,13 +191,27 @@ impl Env<'_> {
         args: &[TypeId],
         name: &str,
     ) -> Option<(Member, DefId)> {
+        self.instance_member_as(def, args, name, None)
+    }
+
+    /// `instance_member` with `Self` as `receiver` when given: a method
+    /// reached through an intersection (`Button & { owner: Frame? }`) takes
+    /// the whole value (decision L80).
+    pub fn instance_member_as(
+        &mut self,
+        def: DefId,
+        args: &[TypeId],
+        name: &str,
+        receiver: Option<TypeId>,
+    ) -> Option<(Member, DefId)> {
         let mut seen = FxHashSet::default();
         let found = self.instance_member_inner(def, args, name, &mut seen);
         // A declared class's `Self` is the receiver (decision L46).
         match found {
             Some((m, at)) => match self.view(at).self_param() {
                 Some(sp) => {
-                    let receiver = self.types.intern(Ty::Named(def, args.to_vec()));
+                    let receiver = receiver
+                        .unwrap_or_else(|| self.types.intern(Ty::Named(def, args.to_vec())));
                     let ty = subst::substitute(&mut self.types, m.ty, &[sp], &[receiver]);
                     Some((Member { ty, ..m }, at))
                 }
@@ -283,6 +297,43 @@ impl Env<'_> {
         None
     }
 
+    /// A class of the project's (a widget class) open only through the game's
+    /// frames it is built on: its own fields are declared, so an unknown one
+    /// is `any` nobody wrote (W2063, L51).
+    pub fn open_through_native(&self, def: DefId) -> bool {
+        if self.view(def).native() {
+            return false;
+        }
+        let mut current = Some(def);
+        let mut guard = 0;
+        while let Some(d) = current {
+            let v = self.view(d);
+            if v.indexer().is_some() {
+                return false;
+            }
+            if v.native() && (v.widget().is_some() || v.kind() == DefKind::Class) {
+                return true;
+            }
+            guard += 1;
+            if guard > 64 {
+                return false;
+            }
+            current = v.bases().first().and_then(|&b| match self.types.get(b) {
+                Ty::Named(bd, _) => Some(*bd),
+                _ => None,
+            });
+        }
+        false
+    }
+
+    /// One of the game's widget types (`Button`, `Texture`): it takes any
+    /// field, so one it doesn't declare reads as `any` nobody wrote (W2063,
+    /// decision L79).
+    pub fn native_widget(&self, def: DefId) -> bool {
+        let v = self.view(def);
+        v.native() && v.widget().is_some()
+    }
+
     /// `sub` is `sup` or one of its subclasses / sub-interfaces.
     pub fn derives(&self, sub: DefId, sup: DefId) -> bool {
         let mut stack = vec![sub];
@@ -301,6 +352,39 @@ impl Env<'_> {
             }
         }
         false
+    }
+
+    /// Does the implementation `implementation` of an overloaded function
+    /// accept the overload `sig` (E3044, spec §3.1.11)? Every argument the
+    /// overload takes fits the implementation's parameters, and the results
+    /// fit one way or the other (an implementation's wider results stand
+    /// behind narrower overloads), as TypeScript has it.
+    pub fn overload_accepted(&mut self, implementation: TypeId, sig: TypeId) -> bool {
+        let (Ty::Func(imp), Ty::Func(o)) = (
+            self.types.get(implementation).clone(),
+            self.types.get(sig).clone(),
+        ) else {
+            return self.assignable(implementation, sig, Mode::Strict);
+        };
+        // the parameters, with the overload's results
+        let mut with_results = Func::clone(&imp);
+        with_results.ret = o.ret.clone();
+        let params = self.types.func(with_results);
+        if !self.assignable(params, sig, Mode::Strict) {
+            return false;
+        }
+        let results = |f: &Func| Func {
+            type_params: f.type_params.clone(),
+            params: Vec::new(),
+            rest: None,
+            ret: f.ret.clone(),
+            predicate: None,
+            unannotated: false,
+            outer: f.outer.clone(),
+        };
+        let a = self.types.func(results(&imp));
+        let b = self.types.func(results(&o));
+        self.assignable(a, b, Mode::Strict) || self.assignable(b, a, Mode::Strict)
     }
 
     /// Is `s` assignable to `t`?
@@ -334,6 +418,13 @@ impl Env<'_> {
         mode: Mode,
         assuming: &mut FxHashSet<(TypeId, TypeId)>,
     ) -> bool {
+        // A recursive record alias matches as its record does (L58).
+        if let Some(s2) = self.unfold_alias(s) {
+            return self.assignable_in(s2, t, mode, assuming);
+        }
+        if let Some(t2) = self.unfold_alias(t) {
+            return self.assignable_in(s, t2, mode, assuming);
+        }
         let st = self.types.get(s).clone();
         let tt = self.types.get(t).clone();
         match (&st, &tt) {
@@ -375,7 +466,9 @@ impl Env<'_> {
                     _ => false,
                 };
             }
-            (Ty::Intersection(members), _) => {
+            // (to an intersection: each of its parts, below, so `A & B & C`
+            // fits `A & B`, L74)
+            (Ty::Intersection(members), _) if !matches!(tt, Ty::Intersection(_)) => {
                 return members
                     .clone()
                     .iter()
@@ -542,6 +635,28 @@ impl Env<'_> {
             },
             _ => false,
         }
+    }
+
+    /// A recursive record alias's body with its type arguments (L58).
+    pub fn unfold_alias(&mut self, t: TypeId) -> Option<TypeId> {
+        let Ty::Named(d, args) = self.types.get(t).clone() else {
+            return None;
+        };
+        let def = self.def(d);
+        if !def.recursive_alias {
+            return None;
+        }
+        let body = def.alias?;
+        if args.is_empty() {
+            return Some(body);
+        }
+        let params = def.params.clone();
+        Some(super::subst::substitute(
+            &mut self.types,
+            body,
+            &params,
+            &args,
+        ))
     }
 
     /// Element types of arrays, maps and type arguments: covariant in basic

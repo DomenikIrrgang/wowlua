@@ -38,7 +38,7 @@ warning forms of §B.2's pure Lua files (`W2001`). `wowlua explain
 | E0112 | `const` without an initializer, or declaring several names |
 | E0113 | Optional chain used as an assignment or compound-assignment target |
 | E0114 | `continue` is not the last statement of its block |
-| E0115 | `class`, `enum` or `declare` not at the top level of a file |
+| E0115 | `class`, `enum`, `declare` or `overload function` not at the top level of a file |
 | E0116 | Unbalanced `}` in an interpolated string |
 | E0117 | `import _` combined with other names |
 | E0118 | `export function` with a dotted or method name |
@@ -63,6 +63,7 @@ warning forms of §B.2's pure Lua files (`W2001`). `wowlua explain
 | E1038 | `asset()` path is not a package asset (or case mismatch) |
 | E1039 | `@if(flavor …)` in a `.wowlua` file in shared flavor mode |
 | E1040 | `@if` condition is not a static condition |
+| E1041 | Value import of another addon's module (an `addon-dependencies` addon): only `import type` crosses addons |
 | E2001 | Type mismatch: `S` is not assignable to `T` |
 | E2002 | Unknown type name |
 | E2003 | Unknown field or method (also: method defined outside its class body, assignment to the reserved `__wowlua` key) |
@@ -96,7 +97,7 @@ warning forms of §B.2's pure Lua files (`W2001`). `wowlua explain
 | E3005 | `override` problem: missing `override`, or nothing to override |
 | E3006 | Class does not satisfy an implemented interface |
 | E3007 | Metamethod on a widget class |
-| E3008 | Class extends a non-class value |
+| E3008 | Class extends a non-class value, or a class only `import type` brings |
 | E3010 | Enum mixes numeric and string values |
 | E3011 | Duplicate enum value |
 | E3020 | Unknown decorator |
@@ -111,6 +112,7 @@ warning forms of §B.2's pure Lua files (`W2001`). `wowlua explain
 | E3044 | Overload implementation does not accept every overload signature |
 | E3045 | Statement-only `wowlua:debug` helper used as a value |
 | E3046 | A field declared twice in one class (a constructor's parameter property included) |
+| E3047 | `overload function` signature not followed by its implementation |
 | E4001 | Manifest is not valid JSON |
 | E4002 | Manifest does not match the schema (unknown key, wrong type) |
 | E4003 | Invalid package name or version |
@@ -171,7 +173,7 @@ is reported as the warning with the same number (`E2001` → `W2001`, `E2030` �
 | W1001 | Undefined global read (basic mode) |
 | W1002 | Implicit global assignment (basic mode) |
 | W1003 | Unused local, parameter or import |
-| W1004 | Local shadows another local; also a parameter named `self` inside a class's method or constructor, which hides the instance (a plain `function M:m()`'s `self` may be shadowed, as frame handlers do) |
+| W1004 | Local shadows another local, or a `local function` is named like a local of the same block; also a parameter named `self` inside a class's method or constructor, which hides the instance (a plain `function M:m()`'s `self` may be shadowed, as frame handlers do) |
 | W1005 | Unreachable code |
 | W1033 | Load order cannot be determined (dynamic names, several writers, external names); files keep their source order |
 | W1034 | Name read at load time but only defined at run time |
@@ -181,8 +183,8 @@ is reported as the warning with the same number (`E2001` → `W2001`, `E2030` �
 | W2055 | Too many arguments to an unannotated function (basic mode). Replaces the second meaning of W2006. |
 | W2060 | Division or modulo by a literal zero: WoW raises "Division by zero" (any mode) |
 | W2061 | `a and nil or b` (or `false` in the middle) is always `b`: the falsy middle value makes the `or` take over (any mode) |
-| W2062 | A value read past what a function of the package can give (a `local function`, a module's or an imported function, a file-level table's method; (each of its `return`s a fixed number of values) is always `nil`: a name past them in a `local` or an assignment, or `select(n, …)` with a literal `n` past them (any mode) |
-| W2063 | A parameter without an annotation that nothing gives a type (no expected function type, or one that says `any`), or a `local` without an annotation whose value is `any`: it is `any` without saying so. Off unless `check.lints` sets it (`"W2063": "warn"`); names starting with `_` are exempt (decision T274) |
+| W2062 | A value read past what a function of the package can give (a `local function`, a module's or an imported function, a file-level table's method; (each of its `return`s a fixed number of values) is always `nil`: a name past them in a `local` or an assignment, or `select(n, …)` with a literal `n` past them; and a name past an `and` or `or` of a call ending a `local` or an assignment (`local x, y = pos and pos:GetXY()`: the operator keeps one value, decision L73) (any mode) |
+| W2063 | A parameter without an annotation that nothing gives a type (no expected function type, or one that says `any`), or a `local` without an annotation whose value is `any`, or a generic type written without its type arguments (`Box` for `Box<T>`: they are `any`; decision T276), or a member a widget class doesn't declare, read or set through the openness of the game's frames (decision L51): it is `any` without saying so. Off unless `check.lints` sets it (`"W2063": "warn"`); names starting with `_` are exempt (decision T274) |
 | W2057 | `coroutine.yield` inside a function passed to `pcall`/`xpcall`/a C callback (cannot yield across that boundary in Lua 5.1) |
 | W3021 | Lexical binding named like a core decorator is not a re-export of it (ignored in decorator position) |
 | W3030 | Use of a `@deprecated` declaration |

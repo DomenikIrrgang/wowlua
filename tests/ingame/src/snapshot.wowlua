@@ -593,8 +593,8 @@ local function openToyBox(): () -> ()
     C_ToyBox.SetUnusableShown(true)
     C_ToyBox.SetFilterString("")
     return function()
-        C_ToyBox.SetCollectedShown(collected)
-        C_ToyBox.SetUnusableShown(unusable)
+        C_ToyBox.SetCollectedShown(collected == true)
+        C_ToyBox.SetUnusableShown(unusable == true)
     end
 end
 

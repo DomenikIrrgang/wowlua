@@ -11,36 +11,44 @@ use wowlua_vm::{NativeCall, Value, Vm};
 use crate::engine;
 use crate::widgets::{self, MethodFn, WidgetId};
 
-/// The string's lines: its own, each wrapped by words at the laid out
-/// width when it has one and wraps (`SetWordWrap(false)` keeps one each),
-/// as the client measures text (`text.rs`, decision T237; unverified: the
-/// client's breaking rules).
-fn lines(vm: &mut Vm, id: WidgetId) -> usize {
+/// The string laid out at its laid out width, with its word wrap and its
+/// maximum lines, as the client does it (`text.rs`, decisions T237, T282);
+/// none without text.
+fn laid_out(vm: &mut Vm, id: WidgetId) -> Option<crate::text::Layout> {
     let text = match engine(vm).world.widgets[id.0].text {
         Some(Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
-        _ => return 0,
+        _ => return None,
     };
     if text.is_empty() {
-        return 0;
+        return None;
     }
-    let props = engine(vm).world.widgets[id.0].props;
-    let wraps = widgets::stored_args(vm, props, "WordWrap")
-        .and_then(|v| v.first().copied())
-        .is_none_or(|v| v.truthy());
     let width = widgets::laid_out_size(vm, id).0;
-    let max = (wraps && width > 0.0).then_some(width);
-    crate::text::wrapped_lines(vm, id, &text, max).len()
+    Some(crate::text::layout_in(
+        vm,
+        id,
+        &text,
+        (width > 0.0).then_some(width),
+    ))
 }
 
-/// `GetNumLines()`.
+/// `GetNumLines()`: every line the text breaks into at its width, also
+/// those it doesn't show (decision T282).
 fn get_num_lines(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(lines(vm, id) as f64)])
+    let n = laid_out(vm, id).map_or(0, |l| l.lines);
+    Ok(vec![Value::Num(n as f64)])
 }
 
-/// `GetStringHeight()`: its lines at the font's line height on the screen
-/// (`text.rs`, decision T237), the spacing between them.
+/// `IsTruncated()`: lines it doesn't show, or a word cut without non-space
+/// wrap (decision T282).
+fn is_truncated(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    let t = laid_out(vm, id).is_some_and(|l| l.truncated);
+    Ok(vec![Value::Bool(t)])
+}
+
+/// `GetStringHeight()`: the lines it shows at the font's line height on the
+/// screen (`text.rs`, decisions T237, T282), the spacing between them.
 fn get_string_height(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
-    let n = lines(vm, id) as f64;
+    let n = laid_out(vm, id).map_or(0, |l| l.shown) as f64;
     let size = crate::text::line_height(vm, id);
     let props = engine(vm).world.widgets[id.0].props;
     let spacing = match widgets::stored_args(vm, props, "Spacing").and_then(|v| v.first().copied())
@@ -491,6 +499,7 @@ fn get_font_string(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 pub fn methods() -> Vec<(&'static str, MethodFn)> {
     vec![
         ("GetNumLines", get_num_lines),
+        ("IsTruncated", is_truncated),
         ("GetStringHeight", get_string_height),
         ("GetVerticalScrollRange", get_vertical_scroll_range),
         ("GetHorizontalScrollRange", get_horizontal_scroll_range),

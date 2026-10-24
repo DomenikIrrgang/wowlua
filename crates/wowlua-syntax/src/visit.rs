@@ -240,6 +240,7 @@ pub fn walk_stmt<'t>(stmt: Stmt<'t>, f: &mut impl FnMut(Expr<'t>)) {
         | StmtKind::Enum(_)
         | StmtKind::TypeAlias(_)
         | StmtKind::Declare(_)
+        | StmtKind::Overload { .. }
         | StmtKind::Import(_)
         | StmtKind::Error => {}
     }

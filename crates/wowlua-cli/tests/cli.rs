@@ -1424,7 +1424,24 @@ local named: string = unitName
 local cursorKind, cursorID = GetCursorInfo()
 local held: string? = cursorKind
 local heldID: number = cursorID
-print(cancel, zoom, maxZoom, secretTable, completion, known, tabCost, conditionText, active, started, party, location, itemStarted, unitRealm, named, held, heldID)
+local binding = C_DurationUtil.CreateDurationTextBinding()
+binding:SetFormatter(C_StringUtil.CreateNumericRuleFormatter())
+local counts: CustomAuraButtonApplicationCountOptions = { formatter = C_StringUtil.CreateAbbreviatedNumberFormatter() }
+local enabled: string = binding:IsEnabled()
+local fade = Minimap:CreateAnimationGroup():CreateAnimation("Alpha")
+fade:SetFromAlpha(1)
+local fadeTo: string = fade:GetToAlpha()
+local outfit = C_TransmogCollection.GetCustomSetItemTransmogInfoList(1)
+local firstPiece = outfit and outfit[1]
+local appearance: string = firstPiece and firstPiece.appearanceID or ""
+local bagItem = ItemLocation:CreateFromBagAndSlot(0, 1)
+local sellable: boolean = C_AuctionHouse.IsSellItemValid(bagItem, false) and bagItem.bagID == 0
+local log = CreateFrame("ScrollingMessageFrame")
+log:SetFading(false)
+log:AddMessage("hi", 1, 1, 1)
+local offset: string = log:GetScrollOffset()
+local stored: string = ChatFrame1:GetNumMessages()
+print(cancel, zoom, maxZoom, secretTable, completion, known, tabCost, conditionText, active, started, party, location, itemStarted, unitRealm, named, held, heldID, counts, enabled, fadeTo, appearance, sellable, offset, stored)
 "#,
             ),
         ],
@@ -1443,6 +1460,13 @@ print(cancel, zoom, maxZoom, secretTable, completion, known, tabCost, conditionT
             "src/main.wowlua:22:30: error[E2040]: `number | Secret<number>` may be a secret value; narrow it with `canaccessvalue` or `issecretvalue` first",
             "src/main.wowlua:22:30: error[E2001]: cannot compare `number | Secret<number>` with `0`",
             "src/main.wowlua:32:7: error[E2001]: `nil | string | Secret<string>` is not assignable to `string`",
+            // (the cursor's id depends on what it holds: unknown, T288)
+            "src/main.wowlua:35:7: error[E2001]: `unknown?` is not assignable to `number`",
+            "src/main.wowlua:39:7: error[E2001]: `boolean` is not assignable to `string`",
+            "src/main.wowlua:42:7: error[E2001]: `number` is not assignable to `string`",
+            "src/main.wowlua:45:7: error[E2001]: `number | \"\"` is not assignable to `string`",
+            "src/main.wowlua:51:7: error[E2001]: `number` is not assignable to `string`",
+            "src/main.wowlua:52:7: error[E2001]: `number` is not assignable to `string`",
         ],
         "{stderr}"
     );
@@ -2468,6 +2492,15 @@ show(pcall(function() return (_G.missing :: number) end))
 export function pair(_: number, _: string) end
 show(pcall(pair, 1, "a"))
 show(pcall(pair :: any, 1, 2))
+-- The game's objects: a table or a userdata (T277).
+export function takeDuration(_d: DurationObject) end
+local proxy: any = (_G :: any).newproxy
+show(pcall(takeDuration, proxy(false)))
+show(pcall(takeDuration :: any, 5))
+-- A union of many literals (every event's name): checked against a set.
+export function onEvent(event: EventName) end
+show(pcall(onEvent, "PLAYER_LOGIN"))
+show(pcall(onEvent :: any, "NOT_AN_EVENT"))
 "#;
     write(
         dir.path(),
@@ -2495,6 +2528,10 @@ show(pcall(pair :: any, 1, 2))
             "true nil",
             "true nil",
             "false Chk: src/main.wowlua:45: bad argument #2 '_' to 'pair' (string expected, got number)",
+            "true nil",
+            "false Chk: src/main.wowlua:49: bad argument #1 '_d' to 'takeDuration' (DurationObject expected, got number)",
+            "true nil",
+            "false Chk: src/main.wowlua:54: bad argument #1 'event' to 'onEvent' (\"ACCOUNT_STORE_CURRENCY_AVAILABLE_UPDATED\" | \"ACCOUNT_STORE_FRONT_UPDATED\" | \"ACCOUNT_STORE_ITEM_INFO_UPDATED\" | \"ACCOUNT_STORE_TRANSACTION_ERROR\" | \"STORE_FRONT_STATE_UPDATED\" | \"ACHIEVEMENT_EARNED\" | \"ACHIEVEMENT_PLAYER_NAME\" | \"ACHIEVEMENT_SEARCH_UPDATED\" | … (1774 more) expected, got string)",
         ]
         .join("\n")
     );
@@ -2901,7 +2938,9 @@ print(t, u)
 }
 
 /// `W2063` (decision T274): off unless `check.lints` turns it on; then an
-/// unannotated parameter nothing types, and a local whose value is `any`.
+/// unannotated parameter nothing types, a local whose value is `any`, a
+/// generic type written without its type arguments (T276), and a field a
+/// widget class or a game frame doesn't declare (L51, L79).
 #[test]
 fn implicit_any_lint() {
     let dir = tempfile::tempdir().unwrap();
@@ -2915,6 +2954,23 @@ local _b = t.other
 local frame = CreateFrame("Frame")
 frame:SetScript("OnUpdate", function(self, elapsed) print(self, elapsed) end)
 print(a)
+type Box<T> = { item: T }
+local boxed: Box = { item = 1 }
+local typed: Box<number> = { item = 1 }
+print(boxed, typed)
+class Switch extends Button
+    on: boolean = false
+end
+local sw = Switch.new(nil, UIParent)
+sw.extra = 1
+print(sw.on, sw.other, frame.anything)
+frame:Paint()
+local function paintable(f: Frame): f is Frame & { Paint: (self: Frame) -> () } return f ~= nil end
+if paintable(frame) then frame:Paint() end
+local made, slider = pcall(CreateFrame, "Slider", nil, UIParent)
+if made and slider then slider:SetMinMaxValues(0, 1) end
+local owned = CreateFrame("Button") :: Button & { owner: Frame? }
+owned:SetScript("OnClick", function(self) if self.owner then self.owner:Hide() end end)
 "#;
     let manifest = |lints: &str| {
         format!(
@@ -2951,6 +3007,11 @@ print(a)
         [
             "src/main.wowlua:4:16: warning[W2063]: parameter `y` is `any`: nothing gives it a type (annotate it)",
             "src/main.wowlua:6:7: warning[W2063]: `a` is `any`: its value has no type (annotate it, or type where it comes from)",
+            "src/main.wowlua:19:4: warning[W2063]: `Switch` doesn't declare `extra`, so it is `any` (declare it in the class)",
+            "src/main.wowlua:20:17: warning[W2063]: `Switch` doesn't declare `other`, so it is `any` (declare it in the class)",
+            "src/main.wowlua:20:30: warning[W2063]: `Frame` doesn't declare `anything`, so it is `any` (give the value a type that has it: `Frame & { anything: … }`)",
+            "src/main.wowlua:21:7: warning[W2063]: `Frame` doesn't declare `Paint`, so it is `any` (give the value a type that has it: `Frame & { Paint: … }`)",
+            "src/main.wowlua:12:14: warning[W2063]: `Box` is written without its type arguments, so they are `any` (write `Box<T>`)",
         ],
         "{on}"
     );
@@ -3427,6 +3488,27 @@ fn lint_and_fix() {
         fs::read_to_string(dir.path().join("src/quiet.wowlua")).unwrap(),
         quiet
     );
+    // `wowlua fix` applies every fix; `--migrate` brings the manifest to the
+    // current schema (the global `--manifest` names the file, as for every
+    // command).
+    fs::write(dir.path().join("src/quiet.wowlua"), "local unused = 1\n").unwrap();
+    // (the type error is left: it has no fix, and fails the command)
+    wowlua(dir.path())
+        .args(["fix"])
+        .assert()
+        .code(1)
+        .stderr(predicate::str::contains("Fixed 1 problem in 1 file"));
+    assert_eq!(
+        fs::read_to_string(dir.path().join("src/quiet.wowlua")).unwrap(),
+        ""
+    );
+    wowlua(dir.path())
+        .args(["fix", "--migrate", "--manifest", "wowlua.json"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "wowlua.json uses the current schema",
+        ));
     // `check.lints` severities.
     fs::write(
         dir.path().join("src/main.wowlua"),
@@ -4105,6 +4187,11 @@ fn class_enum_and_decorator_errors() {
         ),
         (
             "class A\n constructor()\n  super()\n end\nend\n",
+            "",
+            "E3001",
+        ),
+        (
+            "class A\n constructor(f: () -> ())\n  f()\n end\nend\nclass B extends A\n n: number = 1\n constructor()\n  super(function() print(self.n) end)\n end\nend\n",
             "",
             "E3001",
         ),

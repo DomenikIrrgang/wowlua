@@ -37,39 +37,30 @@ engine cannot get otherwise.
 5. **`/stdtest engine journals`** on a character with a mount or a toy.
    Why: the events after a collected mount's or toy's favourite changes are
    unrecorded (the recording character had none; decision T235).
-6. **How the client breaks lines**: `/stdtest engine wrap` (a few
-   seconds, read-only), then `/reload`. Why: text is measured with the
-   client's glyphs (decision T237), but how it wraps is the engine's guess:
-   by words at spaces, a word wider than the string on a line of its own
-   unless `SetNonSpaceWrap(true)` breaks it between characters. It records
-   `GetNumLines`, `GetStringHeight`, `GetStringWidth` and `IsTruncated`
-   for long words, hyphens, several spaces, colour codes and sentences at
-   four widths, with and without `SetNonSpaceWrap`, free and held to two
-   lines; kerning pairs at FRIZQT 10/14/20 and ARIALN 10/12/16; the
-   outlined digits (StdTestState.engineWrap; read by hand, no ingest yet).
+6. **How the client breaks lines**: done 2026-10-24 (the beta's last
+   night): `tests/client/forever-camelot-wrap.lua` in wowlua-engine, with a
+   `/run` of line counts at widths 6 to 70; the engine follows it (decision
+   T282). Left open: why the client keeps some texts on one line below two
+   glyphs' width, and one line count without word wrap.
 7. **An early landing** (the scenario recorder as for the taxi): at a
    flight master, pick a route with a stop on the way; type
    `/stdtest engine scenario earlylanding`, take the flight, and before the
    first stop `/run TaxiRequestEarlyLanding()`; once landed,
-   `/stdtest engine scenario stop` and `/reload`. Why: the engine has no
-   early landing; SuuUI's Land at is tested with it stubbed.
+   `/stdtest engine scenario stop` and `/reload`. Why: the engine lands the
+   flight a server round trip after the request (decision T289, a guess:
+   it keeps no stops on the way); the recording gives when it lands and
+   which events come.
 8. **Atlases on a 1x screen**: the answers battery's atlas checks at a
    1920x1080 screen with Windows' DPI scale at 100%. Why: both recordings
    were on high-DPI screens and gave the 2x textures' files and
    coordinates (decision T238); a 1x screen may take the 1x textures (the
    sizes are the same either way).
-9. **Talents the engine doesn't know yet**: out of combat, with an unspent
-   talent point if you have one, `/stdtest engine talents2` (two seconds),
-   then `/reload`. It records both spec groups' configs
-   (`GetCombatConfigIDForSpecGroup`), a rank planned and taken back
-   (`C_Traits.PurchaseRank`, `RefundRank`, then `RollbackConfig`: nothing
-   is applied), another class's talents in the view config
-   (`InitializeViewLoadout`, `ViewLoadout`), and the events between
-   (StdTestState.engineTalents2). On a character about to reach level 5:
-   `/stdtest engine talentwatch` first, level up, then `/reload`: every
-   `PLAYER_TALENT_UPDATE` and `PLAYER_LEVEL_UP` with the time and level
-   (StdTestState.engineTalentWatch). Why: SuuUI's Talents tests use a
-   stand-in for these.
+9. **Talents the engine doesn't know yet**: partly done 2026-10-24
+   (`tests/client/forever-camelot-talents2.lua` in wowlua-engine: the spec
+   groups' configs, the active config, another class's view loadout). Left
+   open: a rank planned and taken back (`PurchaseRank` refused, the
+   character had no unspent point) and `/stdtest engine talentwatch` (a
+   level-up to 5).
 10. **Addon messages restricted?** In a raid out of an instance and out of
    combat: `/dump C_ChatInfo.AreOutgoingAddonChatMessagesRestricted(),
    C_ChatInfo.InChatMessagingLockdown()`, then
@@ -286,6 +277,124 @@ screenshot).
 4. `/run for i=3,10 do print(GetGuildTradeSkillInfo(i)) end`
 5. `/dump C_Club.GetClubInfo(C_Club.GetGuildClubId())` and
    `/dump C_Club.GetClubPrivileges(C_Club.GetGuildClubId())`.
+
+## Widget state (decision T289)
+
+The engine's guesses for methods that had no behaviour. Anywhere, out of
+combat; each step is one line to paste, then a screenshot of the chat.
+
+**Frame levels** (`Raise`, `Lower`):
+
+1. `/run A=CreateFrame("Frame",nil,UIParent) B=CreateFrame("Frame",nil,UIParent) A:SetFrameStrata("FULLSCREEN_DIALOG") B:SetFrameStrata("FULLSCREEN_DIALOG") B:SetFrameLevel(7) A:Raise() print(A:GetFrameLevel(),B:GetFrameLevel())`
+2. `/run C=CreateFrame("Frame",nil,UIParent) C:SetFrameStrata("FULLSCREEN_DIALOG") C:SetFrameLevel(20) C:Hide() A:Raise() print(A:GetFrameLevel())`
+3. `/run A:Lower() print(A:GetFrameLevel(),B:GetFrameLevel())`
+
+Screenshot after step 3. The engine says 8 7, then 8 (a hidden frame
+doesn't count), then 0 7.
+
+**An edit box's selection** (`HighlightText`, `Insert`):
+
+4. `/run E=CreateFrame("EditBox",nil,UIParent) E:SetSize(200,20) E:SetPoint("CENTER") E:SetFontObject(ChatFontNormal) E:SetAutoFocus(false) E:SetText("hello world") E:HighlightText(0,5) E:Insert("HELLO") print(E:GetText(),E:GetCursorPosition())`
+5. `/run E:SetScript("OnTextChanged",function(s,u) print("changed",u) end) E:Insert("!") print("after Insert")`
+6. `/run E:SetCursorPosition(1) E:SetText("abc") print(E:GetCursorPosition())`
+7. `/run E:SetText("abcdef") E:HighlightText(4,1) E:Insert("Z") print(E:GetText())`
+
+Screenshot after step 7. The engine says `HELLO world 5`; then "after
+Insert" before "changed false" (Insert's `OnTextChanged` comes in the next
+frame, as SetText's); then 3; then `aZef` (a selection given backwards is
+the same one).
+
+8. `/run E:SetScript("OnEditFocusGained",function(s) s:HighlightText() end) E:SetText("Sheep")`
+9. By hand: click into the box (in the middle of the screen), type `x`.
+10. `/run print(E:GetText()) E:ClearFocus() E:Hide()`
+
+Screenshot after step 10. The engine says `x`: the text selected on focus
+stays selected after the click, and typing replaces it. If the click put
+the cursor somewhere instead, it says where the text went.
+
+**A font copied** (`CopyFontObject`):
+
+11. `/run F1=CreateFont("ProbeF1") F1:SetFont("Fonts\\FRIZQT__.TTF",14,"OUTLINE") F1:SetTextColor(1,0,0) F2=CreateFont("ProbeF2") F2:CopyFontObject(F1) F1:SetTextColor(0,1,0) print(F2:GetFont()) print(F2:GetTextColor())`
+
+Screenshot. The engine says the file, 14 and OUTLINE, then 1 0 0 1: a
+copy, not a link to the other font.
+
+**Anchors moved** (`AdjustPointsOffset`, `ClearPointsOffset`):
+
+12. `/run P=CreateFrame("Frame",nil,UIParent) P:SetPoint("TOPLEFT",10,20) P:AdjustPointsOffset(5,-5) print(select(4,P:GetPoint(1))) P:ClearPointsOffset() print(select(4,P:GetPoint(1)))`
+
+Screenshot. The engine says 15 15, then 0 0. If the client keeps the
+adjustment apart from the point, `GetPoint` may say 10 20 both times.
+
+**The clears**:
+
+13. `/run Q=CreateFrame("Button",nil,UIParent) Q:SetNormalTexture("Interface\\Buttons\\WHITE8X8") T=Q:GetNormalTexture() Q:ClearNormalTexture() print(Q:GetNormalTexture(),T:IsShown(),T:GetParent()==Q)`
+14. `/run M=CreateFrame("PlayerModel",nil,UIParent) M:SetModel(130737) M:ClearModel() print(M:GetModelFileID())`
+
+Screenshot after step 14. The engine says nil false true, then 0.
+
+**At a vendor** (the merchant's window open):
+
+15. `/run local f=CreateFrame("Frame") f:RegisterEvent("MERCHANT_UPDATE") f:SetScript("OnEvent",function(_,e) print(e,GetMerchantFilter(),GetMerchantNumItems()) end) print(LE_LOOT_FILTER_ALL,LE_LOOT_FILTER_CLASS,GetMerchantFilter(),GetMerchantNumItems())`
+16. `/run SetMerchantFilter(LE_LOOT_FILTER_ALL)`
+17. `/run ResetSetMerchantFilter()`
+
+Screenshot after step 17. The engine keeps the filter and tells
+`MERCHANT_UPDATE` once per change, every item still listed; the client may
+list fewer items with the class filter.
+
+**In a guild**:
+
+18. `/run print(GetGuildRosterSelection()) SetGuildRosterSelection(2) print(GetGuildRosterSelection()) SetGuildRosterSelection(999) print(GetGuildRosterSelection())`
+
+Screenshot. The engine says 0, 2, 0 (a row past the roster selects
+none).
+
+## Targeting and history (decision T291)
+
+**Tab-targeting**, near a few creatures (out of combat):
+
+1. `/run local f=CreateFrame("Frame") f:RegisterEvent("PLAYER_TARGET_CHANGED") f:SetScript("OnEvent",function() print(UnitName("target"),UnitReaction("target","player")) end)`
+2. Press Tab five times, then Shift-Tab twice.
+
+Screenshot. The engine cycles the hostile and neutral creatures within
+40 yards nearest first, Shift-Tab back; the names and reactions show
+whether neutral ones count and how far it looks.
+
+**An edit box's history and arrows**:
+
+3. `/run H=CreateFrame("EditBox",nil,UIParent) H:SetSize(200,20) H:SetPoint("CENTER") H:SetFontObject(ChatFontNormal) H:SetAutoFocus(false) H:AddHistoryLine("one") H:AddHistoryLine("two") print(H:GetHistoryLines())`
+4. `/run H:SetScript("OnArrowPressed",function(s,k) print("arrow",k,s:GetText()) end) H:SetScript("OnTextChanged",function(s,u) print("changed",u,s:GetText()) end) H:SetFocus()`
+5. By hand: press Up twice, then Down twice.
+6. `/run H:SetHistoryLines(5) H:AddHistoryLine("three") H:SetFocus()`
+7. By hand: press Up, then Escape.
+
+Screenshot after step 7. The engine keeps no line without
+`SetHistoryLines` (step 5 changes nothing), runs `OnArrowPressed` before
+the text changes, and step 7 brings back "three".
+
+## Leftovers (decision T295)
+
+**Money on the cursor** (bags open, some money):
+
+1. `/run local f=CreateFrame("Frame") f:RegisterEvent("CURSOR_CHANGED") f:SetScript("OnEvent",function(_,e,...) print(e,...) end) PickupPlayerMoney(1) print(GetCursorMoney(),GetCursorInfo())`
+2. `/run ClearCursor() print(GetCursorMoney())`
+
+Screenshot after step 2. The engine says `CURSOR_CHANGED false 2 0 0`,
+then 1 (and no cursor info), then `CURSOR_CHANGED true 0 2 0` and 0.
+
+**Assignments** (as a raid leader, a member targeted):
+
+3. `/run local f=CreateFrame("Frame") f:RegisterEvent("GROUP_ROSTER_UPDATE") f:SetScript("OnEvent",function(_,e) print(e) end) SetPartyAssignment("MAINTANK","target") C_Timer.After(1,function() print(GetPartyAssignment("MAINTANK","target")) end)`
+
+Screenshot. The engine tells `GROUP_ROSTER_UPDATE` at once and true.
+
+**A system line and Sign**:
+
+4. `/run SendSystemMessage("probe line") print(Sign(-3),Sign(0),Sign(2))`
+
+Screenshot. The engine shows "probe line" as a system message, then
+-1 0 1.
 
 ## Regressions and other flavors
 

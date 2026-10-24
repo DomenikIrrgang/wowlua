@@ -1161,6 +1161,7 @@ impl<'a> Walker<'a> {
             | StmtKind::Enum(_)
             | StmtKind::TypeAlias(_)
             | StmtKind::Declare(_)
+            | StmtKind::Overload { .. }
             | StmtKind::Error => {}
         }
     }

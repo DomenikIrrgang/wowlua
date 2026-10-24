@@ -84,6 +84,9 @@ pub struct UiGlobals {
     /// The mixin classes the named frames' types name (and their bases),
     /// those the annotations declare left out.
     pub mixins: IndexMap<String, Class>,
+    /// Where each class's method comes from: (class, method) → the mixin
+    /// whose Lua defines it (its own, or one copied in).
+    pub origins: std::collections::HashMap<(String, String), String>,
 }
 
 /// A mixin table of the UI code (`FooMixin = {}`, `FooMixin =
@@ -168,14 +171,25 @@ pub fn ui_globals(
                 used.extend(mixins);
                 parts.join(" & ")
             }
-            // Different widget types in different files.
-            None => "any".into(),
+            // Different widget types in different files: a region of the
+            // screen still.
+            None => "Region".into(),
         };
         add(&mut out, &name, &ty);
     }
+    // Every mixin the code defines functions on is a class (decision T288),
+    // not only those the named frames use.
+    for (name, def) in &defs {
+        if !def.methods.is_empty() || !def.functions.is_empty() {
+            used.push(name.clone());
+        }
+    }
+    let mut origins = std::collections::HashMap::new();
+    let mixins = mixin_classes(&defs, used, widget_classes, &mut origins);
     UiGlobals {
         globals: out,
-        mixins: mixin_classes(&defs, used, widget_classes),
+        mixins,
+        origins,
     }
 }
 
@@ -239,6 +253,7 @@ fn mixin_classes(
     defs: &IndexMap<String, MixinDef>,
     used: Vec<String>,
     widget_classes: &HashSet<String>,
+    origins: &mut std::collections::HashMap<(String, String), String>,
 ) -> IndexMap<String, Class> {
     let sig = |(params, vararg): &(Vec<String>, bool)| Sig {
         params: params
@@ -308,6 +323,7 @@ fn mixin_classes(
             for (m, f) in &d.methods {
                 if !class.methods.contains_key(m) && !class.fields.contains_key(m) {
                     class.methods.insert(m.clone(), vec![sig(f)]);
+                    origins.insert((name.clone(), m.clone()), current.clone());
                 }
             }
             for (m, f) in &d.functions {
@@ -315,7 +331,9 @@ fn mixin_classes(
                     class.fields.insert(m.clone(), (function_type(f), false));
                 }
             }
-            for b in &d.bases {
+            // (the last mixin's functions win, as `CreateFromMixins(A, B)`
+            // copies B's over A's: the later bases are read first)
+            for b in d.bases.iter().rev() {
                 if Some(b) != base.as_ref() || current != name {
                     sources.push(b.clone());
                 }
@@ -380,9 +398,9 @@ fn add(out: &mut IndexMap<String, String>, name: &str, ty: &str) {
         return;
     }
     match out.get(name) {
-        // Different kinds in different files: `any`.
+        // Different kinds in different files: `unknown`.
         Some(existing) if existing != ty => {
-            out.insert(name.to_string(), "any".into());
+            out.insert(name.to_string(), "unknown".into());
         }
         Some(_) => {}
         None => {
@@ -391,14 +409,47 @@ fn add(out: &mut IndexMap<String, String>, name: &str, ty: &str) {
     }
 }
 
-fn value_type(e: Expr<'_>) -> &'static str {
+/// `a.b.c` as text.
+fn dotted(e: Expr<'_>) -> Option<String> {
     match e.kind() {
-        ExprKind::Function(_) => "(...any) -> ...any",
-        ExprKind::Table(_) => "table",
-        ExprKind::String(_) | ExprKind::Interp(_) => "string",
-        ExprKind::Number(_) => "number",
-        ExprKind::True | ExprKind::False => "boolean",
-        _ => "any",
+        ExprKind::Name(n) => Some(n.text().to_string()),
+        ExprKind::Field { obj, name } => Some(format!("{}.{}", dotted(obj)?, name.text())),
+        _ => None,
+    }
+}
+
+/// What a global's value is: a literal's type, or what the generator
+/// resolves later (decision T288): `call:F` (the result of `F(…)`),
+/// `alias:X` (another global's value), `unknown`.
+fn value_type(e: Expr<'_>) -> String {
+    match e.kind() {
+        ExprKind::Function(_) => "(...any) -> ...any".into(),
+        ExprKind::Table(_) => "table".into(),
+        ExprKind::String(_) | ExprKind::Interp(_) => "string".into(),
+        ExprKind::Number(_) => "number".into(),
+        ExprKind::True | ExprKind::False => "boolean".into(),
+        ExprKind::Paren(inner) => value_type(inner),
+        ExprKind::Name(n) => format!("alias:{}", n.text()),
+        // `Constants.InventoryConstants.NumBagSlots`, `Enum.X.Y`
+        ExprKind::Field { .. } => {
+            dotted(e).map_or_else(|| "unknown".into(), |d| format!("alias:{d}"))
+        }
+        ExprKind::Call { callee, .. } => match callee.kind() {
+            ExprKind::Name(n) => format!("call:{}", n.text()),
+            ExprKind::Field { obj, name } => match obj.kind() {
+                ExprKind::Name(o) => format!("call:{}.{}", o.text(), name.text()),
+                _ => "unknown".into(),
+            },
+            _ => "unknown".into(),
+        },
+        ExprKind::Binary { op, .. } => match op {
+            BinOp::Concat => "string".into(),
+            BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod | BinOp::Pow => {
+                "number".into()
+            }
+            _ => "unknown".into(),
+        },
+        _ => "unknown".into(),
     }
 }
 
@@ -501,7 +552,11 @@ fn block(
             }
             StmtKind::Assign { targets, values } => {
                 for (i, t) in targets.iter().enumerate() {
-                    let ty = values.get(i).map(value_type).unwrap_or("any");
+                    let ty = values
+                        .get(i)
+                        .map(value_type)
+                        .unwrap_or_else(|| "unknown".into());
+                    let ty = ty.as_str();
                     match t.kind() {
                         ExprKind::Name(n) if !locals.contains(n.text()) => {
                             add(out, n.text(), ty);
@@ -783,7 +838,8 @@ mod tests {
         assert_eq!(g["Twice"], "Frame");
         assert_eq!(g["FooMixin"], "table");
         let names: Vec<&String> = ui.mixins.keys().collect();
-        assert_eq!(names, ["BazMixin", "FooMixin", "IntrMixin"]);
+        // every mixin with functions (the generator keeps those referred to)
+        assert_eq!(names, ["BazMixin", "FooMixin", "IntrMixin", "OtherMixin"]);
         let baz = &ui.mixins["BazMixin"];
         assert_eq!(baz.bases, ["FooMixin"]);
         let methods: Vec<String> = baz

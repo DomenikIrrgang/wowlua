@@ -337,7 +337,19 @@ The WoW API the VM's code calls, per flavor.
   it, every region's effective scale includes UIParent's (unless it ignores
   its parents' scale), and text is measured from the client's recorded
   glyphs at the pixel size the client renders at that scale, so string
-  widths, wrapping and truncation are the client's.
+  widths, wrapping and truncation are the client's. Lines break as the
+  client breaks them (decision T282, recorded by the wrap probe): at the
+  end of a space run or after a hyphen, a line as long as its advances fit
+  the width; a word wider than the line is cut between characters (at
+  least one a line), and without `SetNonSpaceWrap(true)` the rest of the
+  text then fills the lines character by character and the string is
+  truncated. `GetNumLines` counts every line the text breaks into, also
+  with word wrap off or beyond `SetMaxLines`; the height is the lines
+  shown; held to fewer lines, the last shown line ends in an ellipsis (one
+  glyph three periods wide) and `GetStringWidth` is the shown text's;
+  `IsTruncated` says whether lines are left out or a word was cut. The
+  client's advances are finer than the recorded whole pixels, so a narrow
+  line now and then holds a glyph fewer than in the client.
 - **Atlases.** Every atlas of the client, from its own tables (decision
   T238): sizes, files, texture coordinates and tiling as the client gives
   them; an atlas it lacks is none.
@@ -352,6 +364,44 @@ The WoW API the VM's code calls, per flavor.
   (false) for `""` and file ID 0. Without the installation a game file's ID is not known, and
   a path to one answers a stand-in: a negative number, the same for the
   same path.
+- **Widget state.** A method with no result changes what the widget's
+  getters answer as the client's does (decision T289): `Raise()` and
+  `Lower()` put a frame above or below every other shown frame of its
+  strata (`GetFrameLevel`); an edit box keeps a selection
+  (`HighlightText`, `ClearHighlightText`) that `Insert(text)` and the
+  user's typing (`mock.type`) replace, else they go in at the cursor, and
+  `SetText` puts the cursor at the end, as does the user's click or typing
+  into a box without the focus (before its `OnEditFocusGained`);
+  `AdjustPointsOffset(x, y)` moves every anchor, `ClearPointsOffset()`
+  zeroes them; the clears (a button's `ClearNormalTexture`
+  and the other states', `FontString:ClearText`, `ClearParentKey`,
+  `ResetTexCoord`, `StopAnimating`, `ClearAttributes`, `ClearScripts`,
+  `RemoveAnimations`) undo their setters; `LockHighlight` is
+  `SetHighlightLocked(true)`. The methods of what the engine draws or keeps
+  nothing of (model cameras and lights, the browser, the shop's checkout,
+  housing's pins, the minimap's blips, movies, vector graphics) change
+  nothing, and their getters answer the documented empty values instead of
+  "not mocked" (decision T295). An edit box keeps
+  the lines `AddHistoryLine` adds (as many as `SetHistoryLines` allows,
+  `ClearHistory` forgets them); the arrow keys run `OnArrowPressed`, left
+  and right move the cursor, up and down step through the history (with
+  `SetAltArrowKeyMode(true)` only while Alt is held; decision T291).
+- **Targeting.** Tab-targeting cycles the units of its kind within 40
+  yards, nearest first (`TargetNearestEnemy([reverse])` and its kin);
+  `TargetLastTarget`, `AssistUnit` and `FocusUnit` follow the units'
+  targets; `CancelUnitBuff` and `CancelSpellByName` remove the player's
+  own buff (decision T291). They are protected: an addon's call is
+  refused first.
+- **Leftovers.** `StartAttack` and `AttackTarget` turn auto attack on
+  against a target that can be attacked, `StopAttack` off;
+  `SetPartyAssignment` and `ClearPartyAssignment` keep the raid's main
+  tanks and assists for `GetPartyAssignment`; `SendSystemMessage` prints a
+  system line; `PickupPlayerMoney`, `DropCursorMoney` and `GetCursorMoney`
+  hold money on the cursor (`ClearCursor` lets it go); `TargetLastEnemy`
+  and `TargetLastFriend` retarget; `Sign` and `secretunwrap` answer as the
+  client's. The client's debug switches and the systems the engine does not
+  model answer their documented empty values (decision T295). Every
+  function the camelot client has now has behaviour.
 - **Not mocked.** A generated function without behaviour raises
   "`<name>` is not mocked" when called, unless the project provides a mock
   (Tooling §16.1.4), so gaps are visible instead of silently returning nil.

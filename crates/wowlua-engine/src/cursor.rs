@@ -137,6 +137,9 @@ fn pick_up(vm: &mut Vm, new: Cursor) {
 /// Holds nothing: a held item unlocked (`ITEM_LOCK_CHANGED`), the grid
 /// hides, the cursor changes.
 fn put_down(vm: &mut Vm) {
+    if crate::leftovers3::drop_money(vm) {
+        return;
+    }
     let old = std::mem::take(&mut engine_mut(vm).world.character.cursor);
     if matches!(old, Cursor::Empty) {
         return;

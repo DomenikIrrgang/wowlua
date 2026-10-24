@@ -294,6 +294,12 @@ const BLANKS: &[(&str, &str)] = &[
     ("C_DeathRecap.GetRecapEvents", "0: "),
 ];
 
+/// Every recorded answer: the function and its answer (the type
+/// generator's evidence of undocumented functions, decision T294).
+pub fn all() -> &'static [(&'static str, &'static str)] {
+    BLANKS
+}
+
 /// The client's answer to a call of `name` when there is nothing to tell,
 /// if the probe settled it.
 pub fn answer(name: &str) -> Option<&'static str> {

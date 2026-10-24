@@ -67,13 +67,13 @@ declare module "wowlua:events"
         function cancel()
     end
 
-    function on<E extends EventName | MessageName>(event: E, handler: (EventArgs<E>...) -> (), owner: any?): Subscription
-    function once<E extends EventName | MessageName>(event: E, handler: (EventArgs<E>...) -> (), owner: any?): Subscription
-    function onUnit<E extends EventName>(event: E, units: UnitToken[], handler: (EventArgs<E>...) -> (), owner: any?): Subscription
-    function watchUnit<E extends EventName>(events: E[], handler: (event: E, ...any) -> (), owner: any?): UnitWatch
-    function onBucket(events: (EventName | MessageName) | (EventName | MessageName)[], interval: number, handler: (counts: BucketCounts) -> (), owner: any?): Subscription
+    function on<E extends EventName | MessageName>(event: E, handler: (EventArgs<E>...) -> (), owner: unknown?): Subscription
+    function once<E extends EventName | MessageName>(event: E, handler: (EventArgs<E>...) -> (), owner: unknown?): Subscription
+    function onUnit<E extends EventName>(event: E, units: UnitToken[], handler: (EventArgs<E>...) -> (), owner: unknown?): Subscription
+    function watchUnit<E extends EventName>(events: E[], handler: (event: E, ...any) -> (), owner: unknown?): UnitWatch
+    function onBucket(events: (EventName | MessageName) | (EventName | MessageName)[], interval: number, handler: (counts: BucketCounts) -> (), owner: unknown?): Subscription
     function off(sub: Subscription)
-    function offAll(owner: any, name: (EventName | MessageName)?)
+    function offAll(owner: unknown, name: (EventName | MessageName)?)
     function send<M extends MessageName>(name: M, ...: EventArgs<M>...)   -- EventArgs<M> is a type pack
 end
 ```
@@ -83,6 +83,7 @@ end
 | `@event(...names)` | One name: the handler receives `EventArgs<E>`. Several names: the handler receives the name first (typed as the union of the names), then `...any`. Names may mix WoW events and messages. |
 | `@unitEvent(name, ...units)` | WoW events only. Uses `RegisterUnitEvent`, which filters by at most two units, so any number of units is registered in pairs (see *Unit events*). A unit listed twice counts once. |
 | `on`, `once` | Dynamic registration. `owner` allows `offAll(owner)`, and error listeners get it ([`wowlua:errors`](infrastructure.md#errors)). |
+| `onRegistry(name, handler, owner?)` | Blizzard's `EventRegistry` callbacks (`"MapCanvas.MapSet"`, `"ChatFrame.OnEditBoxFocusGained"`): the handler gets the callback's values, not the owner the registry passes first, isolated as other handlers; nothing on a client without `EventRegistry`. Cancelling the subscription unregisters it (decision S45). |
 | `onUnit` | Dynamic version of `@unitEvent`: one subscription for all its units. No units is a runtime error. A secret unit cannot be a key nor registered by addon code (`RegisterUnitEvent` refuses secrets from tainted code): it is skipped. |
 | `watchUnit(events, handler, owner?)` | Unit events on one frame of the watch's own, for objects that show one unit at a time and change it (unit frames, nameplates). `setUnit(unit?, unit2?)` registers every event for that unit (or two) with `RegisterUnitEvent`, replacing the previous units without subscribing again; `setUnit(nil)` unregisters them, and so does a secret unit, which cannot be compared or registered (a secret `unit2` reads as none). The handler gets the event name first (typed as the union of the literal names), then the payload. Names are checked as for `onUnit` (E8003). |
 | `@bucket(interval, ...names)`, `onBucket` | Coalesces bursts (like AceBucket): the first of the events starts an `interval`-second wait, and the handler then gets one `BucketCounts`: `args` counts by first argument (the units of unit events, the bags of `BAG_UPDATE`), `events` by event. |

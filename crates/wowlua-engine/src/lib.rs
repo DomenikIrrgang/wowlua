@@ -53,6 +53,7 @@ pub mod inventory;
 pub mod iteminfo;
 pub mod itemlocation;
 pub mod leftovers2;
+pub mod leftovers3;
 pub mod levels;
 pub mod lfg;
 pub mod login;
@@ -80,6 +81,7 @@ pub mod social;
 pub mod spellinfo;
 pub mod stats;
 pub mod systeminfo;
+pub mod targeting;
 pub mod taxi;
 pub mod text;
 pub mod timeline;
@@ -91,6 +93,7 @@ pub mod ui;
 pub mod unitinfo;
 pub mod units;
 pub mod widgetdata;
+pub mod widgetops;
 pub mod widgets;
 
 use std::collections::HashMap;
@@ -1111,6 +1114,8 @@ pub(crate) fn own_behaviours(flavor: &str) -> Vec<Behaviours<NativeFn>> {
         Behaviours::new("clock", clock::behaviours()),
         Behaviours::new("units", units::behaviours()),
         Behaviours::new("units", units::more_behaviours()),
+        Behaviours::new("targeting", targeting::behaviours()),
+        Behaviours::new("leftovers3", leftovers3::behaviours()),
         Behaviours::new("curves", curves::behaviours()),
         Behaviours::new("healcalc", healcalc::behaviours()),
         Behaviours::new("damagemeter", damagemeter::behaviours()),
@@ -1196,6 +1201,7 @@ pub(crate) fn method_behaviours() -> Vec<Behaviours<widgets::MethodFn>> {
         Behaviours::new("buttons", buttons::methods()),
         Behaviours::new("measures", measures::methods()),
         Behaviours::new("models", models::methods()),
+        Behaviours::new("widgetops", widgetops::methods()),
     ]
 }
 

@@ -217,6 +217,27 @@ impl<'a> Lowerer<'a> {
                     .collect();
                 any(parts, pos)
             }
+            // A large union (`EventName`): one lookup in a set made once,
+            // not a comparison per member (Lua refuses an expression that
+            // deep).
+            RuntimeCheck::Literals(literals) if literals.len() > SET_MIN => {
+                let name = match self.literal_sets.iter().find(|(_, l)| l == literals) {
+                    Some((name, _)) => name.clone(),
+                    None => {
+                        let name = format!("__wl_set{}", self.literal_sets.len() + 1);
+                        self.literal_sets.push((name.clone(), literals.clone()));
+                        name
+                    }
+                };
+                let member = ir::Expr::new(
+                    ir::ExprKind::Index {
+                        obj: Box::new(name_expr(generated(&name, pos))),
+                        key: Box::new(value),
+                    },
+                    pos,
+                );
+                binary(ir::BinOp::Eq, member, lit(ir::ExprKind::True, pos), pos)
+            }
             RuntimeCheck::Literals(literals) => {
                 let parts: Vec<ir::Expr> = literals
                     .iter()
@@ -302,6 +323,22 @@ fn any(parts: Vec<ir::Expr>, pos: Pos) -> ir::Expr {
 }
 
 /// A Lua literal from its source text (`"LEFT"`, `2`, `true`).
+/// Unions of more literals than this are checked against a set.
+const SET_MIN: usize = 8;
+
+/// `{ [lit] = true, … }`: the set of a large union's literals.
+pub(crate) fn literal_set(literals: &[String], pos: Pos) -> ir::Expr {
+    let fields = literals
+        .iter()
+        .map(|l| ir::Field::Keyed {
+            open: pos,
+            key: Box::new(literal(l, pos)),
+            value: lit(ir::ExprKind::True, pos),
+        })
+        .collect();
+    ir::Expr::new(ir::ExprKind::Table { fields, close: pos }, pos)
+}
+
 fn literal(text: &str, pos: Pos) -> ir::Expr {
     match text {
         "true" => lit(ir::ExprKind::True, pos),

@@ -76,7 +76,7 @@ end
 --- same `key` while in combat keep the first one's place in the queue, and
 --- only the latest function runs. A secret key cannot be a table key: the
 --- call is queued on its own.
-export function defer(fn: () -> (), key: any?)
+export function defer(fn: () -> (), key: unknown?)
     if not InCombatLockdown() then
         fn()
         return
@@ -88,11 +88,12 @@ export function defer(fn: () -> (), key: any?)
 end
 
 --- `@outOfCombat`: the call runs now out of combat, else queued (coalesced).
-export function outOfCombat(fn: (...any) -> ...any, ctx: DecoratorContext?): (...any) -> ...any
+export function outOfCombat<A...>(fn: (A...) -> ...unknown, ctx: DecoratorContext?): (A...) -> ()
     local method = ctx and ctx.kind == "method" and not ctx.static
-    return function(...: any): ...any
+    return function(...: A...)
         if not InCombatLockdown() then
-            return fn(...)
+            fn(...)
+            return
         end
         enqueue(fn, pack(...), method and (...) or fn, pendingOf(fn))
     end

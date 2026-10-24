@@ -248,6 +248,7 @@ pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered,
         prelude: Vec::new(),
         temps: 0,
         aliases: BTreeMap::new(),
+        literal_sets: Vec::new(),
         errors: Vec::new(),
         loops: Vec::new(),
         func_depth: 0,
@@ -341,6 +342,13 @@ pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered,
         })
         .collect();
     prologue.extend(aliases);
+    for (name, literals) in &lowerer.literal_sets {
+        prologue.push(local(
+            generated(name, line1),
+            checks::literal_set(literals, line1),
+            line1,
+        ));
+    }
     stmts.splice(0..0, prologue);
     let mut chunk = ir::Chunk {
         block: ir::Block {
@@ -658,6 +666,9 @@ struct Lowerer<'a> {
     temps: u32,
     /// Hygienic aliases of shadowed globals: alias → (global, member).
     aliases: BTreeMap<String, (String, Option<String>)>,
+    /// The sets of literals large unions are checked against at run time
+    /// (spec §7.5), made once in the prologue: name, Lua literals.
+    literal_sets: Vec<(String, Vec<String>)>,
     errors: Vec<Diagnostic>,
     loops: Vec<LoopInfo>,
     /// Names of the functions being lowered (innermost last; `None` for
@@ -1261,7 +1272,10 @@ impl<'a> Lowerer<'a> {
                 out
             }
             // Type-only declarations are erased.
-            StmtKind::TypeAlias(_) | StmtKind::Interface(_) | StmtKind::Declare(_) => Vec::new(),
+            StmtKind::TypeAlias(_)
+            | StmtKind::Interface(_)
+            | StmtKind::Declare(_)
+            | StmtKind::Overload { .. } => Vec::new(),
             StmtKind::Import(import) => self.import(import, s.span(), pos),
             StmtKind::Export(inner) => self.export(inner, pos),
             StmtKind::Class(c) => self.class_decl(c, &decorate::Decorations::default(), false),

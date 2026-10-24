@@ -1060,6 +1060,35 @@ end
     );
 }
 
+/// `mock.partial` gives a fake record typed by where it goes, so a stub
+/// can return it (decision S42).
+#[test]
+fn mock_partial_record() {
+    let dir = project(
+        r#""standard": {}"#,
+        &[
+            ("src/main.wowlua", "print(1)\n"),
+            (
+                "tests/partial.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+@test
+local function partial()
+    local info: BNetAccountInfo = mock.partial({ bnetAccountID = 7, accountName = "|Kq1|k" })
+    expect(info.bnetAccountID).toBe(7)
+    local n: number = info.bnetAccountID
+    expect(n).toBe(7)
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+    assert!(out.contains("1 passed, 0 failed"), "{out}");
+}
+
 /// `import internal` (decision T223): a module's file-level locals and
 /// types in test files only (E8119 elsewhere); the addon build is
 /// unchanged.
@@ -1079,6 +1108,8 @@ local cache: { [string]: Entry } = {}
 export function record(name: string, text: string)
     cache[name] = { kills = math.min(parse(text), LIMIT) }
 end
+
+export function limit(): number return LIMIT end
 "#;
     let dir = project(
         r#""standard": {}"#,
@@ -1109,6 +1140,18 @@ end
     fs::write(
         dir.path().join("tests/tracker.test.wowlua"),
         "import internal parse from \"/tracker\"\nlocal s: string = parse(\"1\")\nprint(s)\n",
+    )
+    .unwrap();
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(!ok, "{out}");
+    assert!(
+        out.contains("`number` is not assignable to `string`"),
+        "{out}"
+    );
+    // An export read through it keeps its type (decision L66).
+    fs::write(
+        dir.path().join("tests/tracker.test.wowlua"),
+        "import internal limit from \"/tracker\"\nlocal s: string = limit()\nprint(s)\n",
     )
     .unwrap();
     let (ok, out) = test(dir.path(), &[]);
@@ -4112,6 +4155,51 @@ end
 
 /// Tooltips with Blizzard's UI: the engine's tooltip data from the tests'
 /// game data, Blizzard's tooltip code, and an addon's post-call.
+/// `mock.tooltipLines` reads what a tooltip shows (left or right texts),
+/// `mock.textOf` what a font string shows (decision S52);
+/// `mock.sentAddonMessages` gives typed messages (decision S47).
+#[test]
+fn tooltip_lines_and_sent_messages() {
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            ("src/main.wowlua", "print(\"demo\")\n"),
+            (
+                "tests/tip.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+import * as mock from "wowlua:mock"
+
+@test("the lines a tooltip shows; the messages sent")
+local function lines()
+    local tip = CreateFrame("GameTooltip", "DemoTip", UIParent)
+    tip:SetOwner(UIParent, "ANCHOR_NONE")
+    tip:AddLine("Title")
+    tip:AddDoubleLine("Left", "Right")
+    expect(mock.tooltipLines(tip)).toEqual({ "Title", "Left" })
+    expect(mock.tooltipLines(tip, true)).toEqual({ "", "Right" })
+    local label = UIParent:CreateFontString(nil, "OVERLAY")
+    label:SetFont("Fonts\\FRIZQT__.TTF", 12, "")
+    expect(mock.textOf(label)).toBe("")
+    label:SetText("Shown")
+    expect(mock.textOf(label)).toBe("Shown")
+    tip:Hide()
+    C_ChatInfo.RegisterAddonMessagePrefix("Demo")
+    C_ChatInfo.SendAddonMessage("Demo", "hello", "WHISPER", "Ann")
+    local sent = mock.sentAddonMessages()
+    local last = sent[#sent]
+    expect(last.prefix).toBe("Demo")
+    expect(last.message).toBe("hello")
+    expect(last.chatType).toBe("WHISPER")
+    expect(last.target).toBe("Ann")
+end
+"#,
+            ),
+        ],
+    );
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(ok, "{out}");
+}
+
 #[test]
 fn tooltips_with_blizzard_ui() {
     let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");

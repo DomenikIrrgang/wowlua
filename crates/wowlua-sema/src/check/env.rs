@@ -88,6 +88,9 @@ pub struct Def {
     /// where a member is read (`button:SetScript(…)` on a subclass gives
     /// the subclass, decision L46).
     pub self_param: Option<ParamId>,
+    /// A record alias that refers to itself (decision L58): a named type
+    /// whose values match as its body (`alias`) does.
+    pub recursive_alias: bool,
 }
 
 impl Def {
@@ -107,6 +110,7 @@ impl Def {
             indexer: None,
             span: None,
             self_param: None,
+            recursive_alias: false,
         }
     }
 }
@@ -176,11 +180,21 @@ pub struct Env<'p> {
     /// Aliases whose bodies are not resolved yet (while building), with the
     /// module of their scope.
     lazy_aliases: FxHashMap<DefId, (TypeAlias<'p>, Option<usize>)>,
+    /// Aliases whose body is a table type, while that body is resolved: one
+    /// that meets itself there becomes a named structural type (L58).
+    record_aliases: rustc_hash::FxHashSet<DefId>,
     /// Types of `typeof(expr)` expressions, by span (set by the checker).
     pub typeof_types: FxHashMap<(u32, u32), TypeId>,
     /// Top-level aliases whose bodies use `typeof(expr)`, with their file,
     /// until the file's check reaches them (spec §2.2.7): `any` until then.
     pub typeof_aliases: FxHashMap<DefId, usize>,
+    /// The modules a `typeof` alias of has been resolved in, by the checker:
+    /// their classes' member types are resolved again where reached (L57).
+    pub typeof_resolved: rustc_hash::FxHashSet<usize>,
+    /// The names of the `typeof` aliases resolved so far, in any module: a
+    /// class whose member annotations name one has its member types
+    /// resolved again where reached, wherever the alias lives (L76).
+    pub typeof_alias_names: rustc_hash::FxHashSet<Box<str>>,
     /// `M.T` type references through a namespace import to such an alias
     /// of another module, read as `any`: the module, the name and where
     /// (W1036, spec §5.4.4).
@@ -585,8 +599,49 @@ impl<'p> Env<'p> {
             ..Scope::default()
         };
         self.def_type_params(def, a.type_params(), &mut scope);
-        let body = self.resolve(a.ty(), &scope);
+        self.set_alias_body(def, a, &scope);
+    }
+
+    /// Resolves an alias's body in `scope` and keeps it. A table type that
+    /// refers to itself (`type Tree = { kids: Tree[] }`) makes the alias a
+    /// named structural type, like an interface, with the table's fields as
+    /// its members (decision L58).
+    fn set_alias_body(&mut self, def: DefId, a: TypeAlias<'_>, scope: &Scope) {
+        let table = matches!(a.ty().kind(), TypeKind::Table(_));
+        if table {
+            self.record_aliases.insert(def);
+        }
+        let body = self.resolve(a.ty(), scope);
+        self.record_aliases.remove(&def);
         self.def_mut(def).alias = Some(body);
+        if self.def(def).kind == DefKind::Interface {
+            self.alias_members(def, body);
+        }
+    }
+
+    /// A recursive record alias's members and indexer: its body's.
+    fn alias_members(&mut self, def: DefId, body: TypeId) {
+        let (fields, indexer) = match self.types.get(body).clone() {
+            Ty::Record(r) => (r.fields.clone(), r.indexer),
+            Ty::Array(e) => (Default::default(), Some((Types::NUMBER, e))),
+            _ => (Default::default(), None),
+        };
+        let d = self.def_mut(def);
+        d.members.clear();
+        for (name, f) in fields.iter() {
+            d.members.insert(
+                name.into(),
+                Member {
+                    ty: f.ty,
+                    kind: MemberKind::Field,
+                    optional: f.optional,
+                    readonly: f.readonly,
+                    visibility: Visibility::Public,
+                    renamable: false,
+                },
+            );
+        }
+        d.indexer = indexer;
     }
 
     /// Resolves an alias's body again in `scope`, once its `typeof(expr)`
@@ -594,8 +649,114 @@ impl<'p> Env<'p> {
     pub fn resolve_alias_again(&mut self, def: DefId, a: TypeAlias<'_>, scope: &Scope) {
         let mut scope = scope.clone();
         self.def_type_params(def, a.type_params(), &mut scope);
-        let body = self.resolve(a.ty(), &scope);
-        self.def_mut(def).alias = Some(body);
+        self.set_alias_body(def, a, &scope);
+    }
+
+    /// A class's field and method types resolved again in `scope` (the
+    /// class's own, as the checker has it where its file reaches the
+    /// class): its annotations may use `typeof` aliases that have their
+    /// types only now (decision L57). Members keep everything but the type.
+    pub fn refresh_member_types(&mut self, def: DefId, c: ClassDecl<'_>, scope: &Scope) {
+        for m in c.members() {
+            if m.modifiers().contains(&Modifier::Overload) {
+                continue;
+            }
+            let is_static = m.modifiers().contains(&Modifier::Static);
+            let (name, t) = match m.kind() {
+                ClassMemberKind::Field {
+                    name, optional, ty, ..
+                } => {
+                    let mut t = self.resolve(ty, scope);
+                    if optional {
+                        t = self.types.optional(t);
+                    }
+                    (name, t)
+                }
+                ClassMemberKind::Method { name, func, .. } => {
+                    let f = self.func_sig(&FnSig::of(func), scope, false);
+                    (name, self.types.func(f))
+                }
+                _ => continue,
+            };
+            let target = if is_static {
+                &mut self.def_mut(def).statics
+            } else {
+                &mut self.def_mut(def).members
+            };
+            if let Some(member) = target.get_mut(name.text()) {
+                member.ty = t;
+            }
+        }
+        self.class_overloads(def, c, scope, false);
+    }
+
+    /// A class's `overload function` signatures: callers of the method see
+    /// them, not its implementation (spec §3.1.11). With `report`, E3044
+    /// where the implementation does not accept one.
+    fn class_overloads(&mut self, def: DefId, c: ClassDecl<'_>, scope: &Scope, report: bool) {
+        type Set = (Box<str>, bool, Vec<(TypeId, Span)>);
+        let mut sets: Vec<Set> = Vec::new();
+        for m in c.members() {
+            if !m.modifiers().contains(&Modifier::Overload) {
+                continue;
+            }
+            let ClassMemberKind::Method { name, func, .. } = m.kind() else {
+                continue;
+            };
+            let is_static = m.modifiers().contains(&Modifier::Static);
+            let mut f = self.func_sig(&FnSig::of(func), scope, false);
+            // (without a body: no results unless it names them)
+            if func.ret().is_none() {
+                f.ret = Pack::empty();
+            }
+            let t = self.types.func(f);
+            match sets
+                .iter_mut()
+                .find(|(n, s, _)| n.as_ref() == name.text() && *s == is_static)
+            {
+                Some(set) => set.2.push((t, name.span())),
+                None => sets.push((name.text().into(), is_static, vec![(t, name.span())])),
+            }
+        }
+        for (name, is_static, sigs) in sets {
+            let target = if is_static {
+                &self.def(def).statics
+            } else {
+                &self.def(def).members
+            };
+            let Some(implementation) = target.get(name.as_ref()).map(|m| m.ty) else {
+                continue;
+            };
+            if report {
+                for &(sig, span) in &sigs {
+                    if !self.overload_accepted(implementation, sig) {
+                        let msg = format!(
+                            "the implementation of `{name}` (`{}`) does not accept this overload (`{}`)",
+                            self.display(implementation),
+                            self.display(sig)
+                        );
+                        self.diagnostics.push(
+                            Diagnostic::error("E3044", msg)
+                                .with_label(span, "not accepted by the implementation"),
+                        );
+                    }
+                }
+            }
+            let set = match sigs.as_slice() {
+                [(one, _)] => *one,
+                _ => self
+                    .types
+                    .intern(Ty::Intersection(sigs.iter().map(|s| s.0).collect())),
+            };
+            let target = if is_static {
+                &mut self.def_mut(def).statics
+            } else {
+                &mut self.def_mut(def).members
+            };
+            if let Some(member) = target.get_mut(name.as_ref()) {
+                member.ty = set;
+            }
+        }
     }
 
     fn scope_of(&self, module: usize, sources: &[Source]) -> Scope {
@@ -611,8 +772,7 @@ impl<'p> Env<'p> {
             Pending::Alias(a, m) => {
                 let mut scope = self.scope_of(*m, sources);
                 self.def_type_params(def, a.type_params(), &mut scope);
-                let body = self.resolve(a.ty(), &scope);
-                self.def_mut(def).alias = Some(body);
+                self.set_alias_body(def, *a, &scope);
             }
             Pending::Interface(i, m) => {
                 let mut scope = self.scope_of(*m, sources);
@@ -1009,6 +1169,7 @@ impl<'p> Env<'p> {
                 }
             }
         }
+        self.class_overloads(def, c, &scope, true);
         // `new`: the constructor, or the superclass's with this class's
         // instance type (spec §3.1.2).
         let own_ctor = ctor.is_some();
@@ -1678,13 +1839,44 @@ impl<'p> Env<'p> {
                 .with_label(span, "here"),
             );
         }
-        // Missing type arguments are `any`.
+        // Missing type arguments are `any` (W2063 in a module's own types:
+        // the declarations' are not the project's).
+        if args.is_empty() && expected > 0 && scope.module.is_some() {
+            let d = self.def(def);
+            let params: Vec<String> = d
+                .params
+                .iter()
+                .map(|p| self.params[p.0 as usize].name.to_string())
+                .collect();
+            self.diagnostics.push(
+                Diagnostic::warning(
+                    "W2063",
+                    format!(
+                        "`{}` is written without its type arguments, so they are `any` (write `{}<{}>`)",
+                        d.name,
+                        d.name,
+                        params.join(", ")
+                    ),
+                )
+                .with_label(span, "here"),
+            );
+        }
         let mut full_args = arg_types;
         full_args.resize(expected, Types::ANY);
         match self.def(def).kind {
             DefKind::Alias => {
                 if self.def(def).alias.is_none() {
                     self.force_alias(def);
+                }
+                // Met inside its own table body: a named structural type
+                // from here on (L58).
+                if self.def(def).alias.is_none() && self.record_aliases.contains(&def) {
+                    let d = self.def_mut(def);
+                    d.kind = DefKind::Interface;
+                    d.recursive_alias = true;
+                }
+                if self.def(def).kind == DefKind::Interface {
+                    return self.types.intern(Ty::Named(def, full_args));
                 }
                 let body = self.def(def).alias.unwrap_or(Types::ANY);
                 if expected == 0 {

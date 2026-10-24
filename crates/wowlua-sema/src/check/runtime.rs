@@ -107,7 +107,13 @@ impl Checker<'_, '_> {
                                 .collect();
                             others.push(RuntimeCheck::Table(fields));
                         }
-                        // Native classes (frames) and aliases: a table.
+                        // Native classes: a table (frames) or a userdata
+                        // (the engine's objects: durations, colours).
+                        DefKind::Class => {
+                            types.push("table");
+                            types.push("userdata");
+                        }
+                        // aliases: a table
                         _ => types.push("table"),
                     }
                 }

@@ -290,7 +290,7 @@ pub fn control_click(vm: &mut Vm, c: NativeCall) -> Ret {
         widgets::fire_event(vm, "GLOBAL_MOUSE_DOWN", &[button]);
         widgets::run_script(vm, id, "OnMouseDown", &[button]);
         if edit_box {
-            set_keyboard_focus(vm, Some(id));
+            user_focus(vm, id);
         }
         clicked(vm, true);
         widgets::run_script(vm, id, "OnMouseUp", &[button, Value::Bool(true)]);
@@ -360,15 +360,9 @@ fn set_keyboard_focus(vm: &mut Vm, new: Option<WidgetId>) {
     }
 }
 
-fn text_of(vm: &mut Vm, id: WidgetId) -> String {
-    match engine(vm).world.widgets[id.0].text {
-        Some(Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
-        _ => String::new(),
-    }
-}
-
 /// `type(editBox, text)`: focuses the edit box, then types each character:
-/// the text grows, `OnChar(char)`, `OnTextChanged(true)`.
+/// in place of the selection, else at the cursor (`widgetops::insert`),
+/// `OnChar(char)`, `OnTextChanged(true)`.
 pub fn control_type(vm: &mut Vm, c: NativeCall) -> Ret {
     let id = widget_arg(vm, &c, 1, "mock.type")?;
     let typed = vm.check_str(&c, 2)?;
@@ -378,12 +372,9 @@ pub fn control_type(vm: &mut Vm, c: NativeCall) -> Ret {
         return Err(vm.error(&format!("mock.type: {name} is not visible")));
     }
     as_user(vm, |vm| {
-        set_keyboard_focus(vm, Some(id));
+        user_focus(vm, id);
         for ch in typed.chars() {
-            let mut text = text_of(vm, id);
-            text.push(ch);
-            let v = vm.str(&text);
-            widgets::store_text(vm, id, Some(v));
+            crate::widgetops::insert(vm, id, &ch.to_string());
             let ch = vm.str(&ch.to_string());
             widgets::run_script(vm, id, "OnChar", &[ch]);
             widgets::run_script(vm, id, "OnTextChanged", &[Value::Bool(true)]);
@@ -394,11 +385,16 @@ pub fn control_type(vm: &mut Vm, c: NativeCall) -> Ret {
 
 /// A key the focused edit box takes, whether it took it: every key while
 /// it has the focus (unverified: typing into chat runs no binding),
-/// `ENTER`, `ESCAPE`, `TAB` and `SPACE` running its scripts.
+/// `ENTER`, `ESCAPE`, `TAB` and `SPACE` running its scripts, the arrows
+/// as `widgetops::arrow` has them (with the Alt arrow mode, only with Alt
+/// held).
 pub fn edit_box_key(vm: &mut Vm, key: &str) -> bool {
     let Some(id) = engine(vm).world.input.keyboard_focus else {
         return false;
     };
+    if matches!(key, "UP" | "DOWN" | "LEFT" | "RIGHT") {
+        return as_user(vm, |vm| crate::widgetops::arrow(vm, id, key));
+    }
     let script = match key {
         "ENTER" => "OnEnterPressed",
         "ESCAPE" => "OnEscapePressed",
@@ -535,6 +531,17 @@ pub fn press_key(vm: &mut Vm, key: &str) {
         crate::bindings::run_command(vm, command, "down");
         crate::bindings::run_command(vm, command, "up");
     }
+}
+
+/// The user clicks into an edit box: after its text (the engine's click
+/// is at the box's middle; unverified where the client puts the cursor),
+/// so the cursor goes to the end, nothing selected, before
+/// `OnEditFocusGained` (which may select). One with the focus keeps both.
+fn user_focus(vm: &mut Vm, id: WidgetId) {
+    if engine(vm).world.input.keyboard_focus != Some(id) {
+        crate::widgetops::text_set(vm, id);
+    }
+    set_keyboard_focus(vm, Some(id));
 }
 
 fn set_focus(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {

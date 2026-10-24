@@ -76,7 +76,7 @@ end
 --- Encodes nil, booleans, numbers, strings and tables of them. A secret,
 --- or a table addons may not index, cannot be read: it encodes as nil (a
 --- table leaves its key out).
-export function encode(value: any): string
+export function encode(value: unknown): string
     local out: string[] = { char(FORMAT) }
     local strings: { [string]: number } = {}
     local stringCount = 0
@@ -161,7 +161,7 @@ export function encode(value: any): string
 end
 
 --- Decodes `encode`'s output: true and the value, or false and why.
-export function decode(s: string): (boolean, any)
+export function decode(s: string): (boolean, unknown)
     if type(s) ~= "string" then
         return false, "not a string"
     elseif secret.isSecret(s) then
@@ -993,14 +993,14 @@ end
 
 --- `!PREFIX:version!` and the value encoded, compressed and printable,
 --- with a checksum.
-export function exportString(value: any, opts: { version: number, prefix?: string }): string
+export function exportString(value: unknown, opts: { version: number, prefix?: string }): string
     local data = encode(value)
     local body = toPrintable(compress(checksumBytes(adler32(data)) .. data))
     return "!" .. (opts.prefix ?? "WL") .. ":" .. tostring(opts.version) .. "!" .. body
 end
 
 --- Reads an `exportString`: true and the value, or false and why.
-export function importString(s: string): (boolean, any)
+export function importString(s: string): (boolean, unknown)
     if type(s) ~= "string" then
         return false, "not a string"
     elseif secret.isSecret(s) then

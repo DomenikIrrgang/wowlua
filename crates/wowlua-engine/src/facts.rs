@@ -906,9 +906,8 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("GetSpellConfirmationPromptsInfo", empty_list),
         // Not a convention kiosk.
         ("Kiosk.IsEnabled", no),
-        // No money on the cursor, no trade: Blizzard's money frames
-        // subtract them from GetMoney() (without an error in the client).
-        ("GetCursorMoney", zero),
+        // No trade: Blizzard's money frames subtract it from GetMoney()
+        // (without an error in the client).
         ("GetPlayerTradeMoney", zero),
         ("GetTargetTradeMoney", zero),
     ]

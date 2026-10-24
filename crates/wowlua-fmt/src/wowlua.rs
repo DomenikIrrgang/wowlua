@@ -519,6 +519,12 @@ impl Formatter<'_> {
                 };
                 self.declare(d, from, s.span().end)
             }
+            StmtKind::Overload { name, func } => {
+                let k = self.tok("overload", start);
+                let f = self.tok("function", self.next_token(start + 1));
+                let n = self.name(name);
+                Doc::concat(vec![k, txt(" "), f, txt(" "), n, self.signature(func)])
+            }
             _ => txt(""),
         }
     }

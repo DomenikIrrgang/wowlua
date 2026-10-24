@@ -144,14 +144,23 @@ local function entry(fn: Fn, ctx: DecoratorContext?): Entry
     return e
 end
 
+--- What a test decorator called with its arguments gives (`@test("…")`,
+--- `@flavors(…)`, …): the decorator, which marks the function it decorates.
+export type TestDecorator = (fn: function, ctx: DecoratorContext?) -> ()
+
+--- `@test`'s options.
+export type TestOptions = { timeout?: number }
+
 -- A decorator that is used bare (`@skip`) or called (`@skip("why")`).
-local function decorator(apply: (e: Entry, arg: any) -> ()): any
-    return function(a: any, ctx: any): any
+local function decorator(
+    apply: (e: Entry, arg: string?) -> ()
+): (a: string | function | nil, ctx: DecoratorContext?) -> TestDecorator?
+    return function(a: string | function | nil, ctx: DecoratorContext?): TestDecorator?
         if type(a) == "function" then
             apply(entry(a, ctx), nil)
             return nil
         end
-        return function(fn: Fn, c: DecoratorContext?)
+        return function(fn: function, c: DecoratorContext?)
             apply(entry(fn, c), a)
         end
     end
@@ -160,7 +169,9 @@ end
 --- `@test(name?, opts?)`: marks a test function; the name defaults to the
 --- function's. `opts.timeout`: how long its waits may take (virtual
 --- seconds).
-export function test(name: any?, opts: any?): any
+export overload function test(fn: function, ctx: DecoratorContext?)
+export overload function test(name: string?, opts: TestOptions?): TestDecorator
+export function test(name: string | function | nil, opts: TestOptions | DecoratorContext | nil): TestDecorator?
     local function mark(fn: Fn, ctx: DecoratorContext?)
         local e = entry(fn, ctx)
         e.test = true
@@ -168,29 +179,38 @@ export function test(name: any?, opts: any?): any
             local prefix = #groups > 0 and table.concat(groups, " › ") .. " › " or ""
             e.name = prefix .. label(name)
         end
-        if type(opts) == "table" and type(opts.timeout) == "number" then
-            e.timeout = opts.timeout
+        local o = opts :: TestOptions?
+        if type(o) == "table" and type(o.timeout) == "number" then
+            e.timeout = o.timeout
         end
     end
     if type(name) == "function" then
-        mark(name, opts)
+        mark(name, opts :: DecoratorContext?)
         return nil
     end
     return mark
 end
 
 --- `@skip(reason?)`: the test is reported as skipped.
-export const skip: any = decorator(function(e: Entry, reason: any)
+local skipped = decorator(function(e: Entry, reason: string?)
     e.skip = type(reason) == "string" and label(reason) or ""
 end)
+export overload function skip(fn: function, ctx: DecoratorContext?)
+export overload function skip(reason: string?): TestDecorator
+export function skip(a: string | function | nil, ctx: DecoratorContext?): TestDecorator?
+    return skipped(a, ctx)
+end
 
 --- `@only`: in a file with `@only` tests, only they run.
-export const only: any = decorator(function(e: Entry, _: any)
+local onlyThese = decorator(function(e: Entry, _: string?)
     e.only = true
 end)
+export function only(fn: function, ctx: DecoratorContext?)
+    onlyThese(fn, ctx)
+end
 
 --- `@flavors("standard", …)`: the test runs only for these flavors.
-export function flavors(...: string): any
+export function flavors(...: string): TestDecorator
     local list = { ... }
     return function(fn: Fn, ctx: DecoratorContext?)
         entry(fn, ctx).flavors = list
@@ -200,7 +220,7 @@ end
 --- `@cases(list)`: the test runs once per case, the case's values as its
 --- arguments (decision T215). A case may be or hold secrets (passed on as
 --- they are); the list itself may not.
-export function cases(list: any[]): any
+export function cases<T>(list: T[]): TestDecorator
     if not secret.readable(list) then
         error("@cases: the list of cases is a secret value", 2)
     end
@@ -212,7 +232,7 @@ end
 --- `@expectError("E2001", …)`: a compile-time test (decision T219). The
 --- function must not compile, with exactly these diagnostics; the compiler
 --- checks it (E8122 otherwise), and it is never run.
-export function expectError(...: string): any
+export function expectError(...: string): TestDecorator
     return function(fn: Fn, ctx: DecoratorContext?)
         local e = entry(fn, ctx)
         e.test = true
@@ -220,7 +240,7 @@ export function expectError(...: string): any
     end
 end
 
-local function hook(kind: string): any
+local function hook(kind: string): TestDecorator
     return function(fn: Fn, _: DecoratorContext?)
         local list = (hooks :: any)[kind] :: Fn[]
         list[#list + 1] = fn
@@ -228,12 +248,12 @@ local function hook(kind: string): any
 end
 
 --- `@beforeEach`, `@afterEach`: run around every test of the file.
-export const beforeEach: any = hook("beforeEach")
-export const afterEach: any = hook("afterEach")
+export const beforeEach: TestDecorator = hook("beforeEach")
+export const afterEach: TestDecorator = hook("afterEach")
 --- `@beforeAll`, `@afterAll`: run once, before the first and after the
 --- last test of the file.
-export const beforeAll: any = hook("beforeAll")
-export const afterAll: any = hook("afterAll")
+export const beforeAll: TestDecorator = hook("beforeAll")
+export const afterAll: TestDecorator = hook("afterAll")
 
 --- Per-file runner settings: `lifecycle = "manual"` leaves logging in to
 --- the file (`mock.login()`); `timeout`: how long waits may take (virtual

@@ -54,17 +54,19 @@ impl Checker<'_, '_> {
     }
 
     /// `t` where it is falsy: `nil` or `false` (other members cannot be).
+    /// `unknown` there is `false | nil` (decision L63); `any` stays `any`.
     pub fn falsy(&mut self, t: TypeId) -> TypeId {
         let members: Vec<TypeId> = self
             .env
             .types
             .members(t)
             .into_iter()
-            .filter_map(|m| match self.env.types.get(m) {
-                Ty::Nil | Ty::Bool(false) => Some(m),
-                Ty::Boolean => Some(Types::FALSE),
-                Ty::Any | Ty::Unknown | Ty::Error => Some(m),
-                _ => None,
+            .flat_map(|m| match self.env.types.get(m) {
+                Ty::Nil | Ty::Bool(false) => vec![m],
+                Ty::Boolean => vec![Types::FALSE],
+                Ty::Unknown => vec![Types::FALSE, Types::NIL],
+                Ty::Any | Ty::Error => vec![m],
+                _ => Vec::new(),
             })
             .collect();
         self.env.types.union(&members)
@@ -479,13 +481,46 @@ impl Checker<'_, '_> {
                 Some(n) if n == name => yes.push(m),
                 Some(_) => no.push(m),
                 None => {
-                    // `any`, `unknown`: narrowed to the named type.
-                    yes.push(target);
+                    // `any`, `unknown`: narrowed to the named type; an
+                    // `unknown` function or table stays `unknown` inside
+                    // (what it takes and gives, its keys and values: L75).
+                    let narrowed = if m == Types::UNKNOWN {
+                        self.unknown_inside(name).unwrap_or(target)
+                    } else {
+                        target
+                    };
+                    yes.push(narrowed);
                     no.push(m);
                 }
             }
         }
         (self.env.types.union(&yes), self.env.types.union(&no))
+    }
+
+    /// What `type(v) == name` makes of an `unknown` `v` where its insides
+    /// matter: a function that takes and gives `unknown`, a table of
+    /// `unknown` keys and values.
+    fn unknown_inside(&mut self, name: &str) -> Option<TypeId> {
+        match name {
+            "function" => Some(self.env.types.func(super::types::Func {
+                type_params: Vec::new(),
+                params: Vec::new(),
+                rest: Some(Rest::Variadic(Types::UNKNOWN)),
+                ret: Pack {
+                    types: Vec::new(),
+                    rest: Some(Rest::Variadic(Types::UNKNOWN)),
+                },
+                predicate: None,
+                unannotated: false,
+                outer: Vec::new(),
+            })),
+            "table" => Some(
+                self.env
+                    .types
+                    .intern(Ty::Map(Types::UNKNOWN, Types::UNKNOWN)),
+            ),
+            _ => None,
+        }
     }
 
     /// The `type()` name of values of `t`, if fixed.
@@ -588,8 +623,26 @@ impl Checker<'_, '_> {
                     yes.push(narrowed);
                     no.push(m);
                 }
-                None if self.env.assignable(m, target, super::query::Mode::Strict) => yes.push(m),
+                None if self.env.assignable(m, target, super::query::Mode::Strict) => {
+                    // An open type (a game frame takes any field) passes for
+                    // the predicate's type; that one, which declares more,
+                    // when it is also one of it (decision L79).
+                    if m != target && self.env.assignable(target, m, super::query::Mode::Strict) {
+                        yes.push(target);
+                    } else {
+                        yes.push(m);
+                    }
+                }
                 None if self.env.assignable(target, m, super::query::Mode::Strict) => {
+                    yes.push(target);
+                    no.push(m);
+                }
+                // An object of an unrelated type may still be one of the
+                // predicate's class (`isInstance(module, WorldMapModule)`
+                // on a module's record type): narrowed to it (decision L82).
+                None if matches!(self.env.types.get(m), Ty::Named(..) | Ty::Record(_))
+                    && matches!(self.env.types.get(target), Ty::Named(..)) =>
+                {
                     yes.push(target);
                     no.push(m);
                 }

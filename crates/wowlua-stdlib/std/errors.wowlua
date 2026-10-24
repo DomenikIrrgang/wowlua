@@ -3,6 +3,8 @@
 -- error goes to `geterrorhandler()` (so BugSack and the error frame see it,
 -- with the stack of the error), prefixed with the addon's name, at most once
 -- per `rateLimit` seconds per message, and the caller carries on.
+import * as secret from "wowlua:secret"
+
 local addonName, ns = ...
 local wl = ns.__wowlua
 
@@ -139,7 +141,7 @@ end
 
 --- Reports an error through the policy; `context.component` and
 --- `context.module` name where it came from, `context.owner` whose it is.
-export function report(err: any, context: { [string]: any }?)
+export function report(err: unknown, context: { [string]: unknown }?)
     reportWith(err, context, nil)
 end
 
@@ -190,12 +192,12 @@ export function call<A..., R...>(fn: (A...) -> R..., ...: A...): (boolean, R...)
 end
 
 --- Calls `fn` isolated, reporting with `context` (the stdlib's handlers).
-export function callIn(context: { [string]: any }, fn: (...any) -> ...any, ...: any): (boolean, ...any)
+export function callIn<A..., R...>(context: { [string]: unknown }, fn: (A...) -> R..., ...: A...): (boolean, R...)
     return isolate(context, nil, fn, ...)
 end
 
 --- `callIn` for a handler registered with `owner`, which listeners get.
-export function callOwned(context: { [string]: any }, owner: any, fn: (...any) -> ...any, ...: any): (boolean, ...any)
+export function callOwned<A..., R...>(context: { [string]: unknown }, owner: unknown, fn: (A...) -> R..., ...: A...): (boolean, R...)
     return isolate(context, owner, fn, ...)
 end
 
@@ -235,4 +237,50 @@ end
 --- Errors reported by this addon since it loaded.
 export function count(): number
     return reported
+end
+
+local function results(ok: boolean, ...: unknown): ...unknown
+    if ok then
+        return ...
+    end
+    return nil
+end
+
+--- Calls `fn` when it is a function, protected and silent: its results, or
+--- nothing when `fn` is missing or raises (nothing is reported). For the
+--- game's functions a client may lack or that raise on input they don't
+--- expect; `call` is for your own code, whose errors you want to hear of.
+export function try(fn: unknown, ...: unknown): ...unknown
+    if type(fn) ~= "function" then
+        return nil
+    end
+    return results(pcall(fn :: (...unknown) -> ...unknown, ...))
+end
+
+--- `try` for a function whose type is known: its first result, typed (the
+--- function's own result type, or nil when `fn` is missing or raises).
+--- `local info = errors.tryValue(C_TradeSkillUI.GetRecipeInfo, id)` is a
+--- `TradeSkillRecipeInfo?`.
+export function tryValue<A..., R>(fn: ((A...) -> R)?, ...: A...): R?
+    if type(fn) ~= "function" then
+        return nil
+    end
+    local ok, value = pcall(fn, ...)
+    if ok then
+        return value
+    end
+    return nil
+end
+
+--- `obj:name(...)` the way `try` calls a function: nothing when `obj` is
+--- not a table the addon may read or has no such method.
+export function tryMethod(obj: unknown, name: string, ...: unknown): ...unknown
+    if type(obj) ~= "table" or not secret.readable(obj) then
+        return nil
+    end
+    const fn = (obj :: { [string]: unknown })[name]
+    if type(fn) ~= "function" then
+        return nil
+    end
+    return results(pcall(fn :: (...unknown) -> ...unknown, obj, ...))
 end

@@ -79,6 +79,9 @@ end)
 | `ErrorInfo` | `{ component: string?, owner: any?, stack: string? }` | What a listener learns besides the message (policy 8) |
 | `configure` | `(opts: { rateLimit: number? })` | |
 | `count` | `() -> number` | Errors reported by this addon since load |
+| `try` | `(fn: unknown, ...: unknown) -> ...unknown` | Calls `fn` when it is a function, protected and **silent**: its results, or nothing when `fn` is missing or raises; nothing is reported. For the game's functions a client may lack or that raise on input they don't expect (decision S42); `call` is for your own code. Read the results with `secret.asString` and the like. |
+| `tryValue` | `<A..., R>(fn: ((A...) -> R)?, ...: A...) -> R?` | `try` for a function whose type is known: its first result, with the function's own type (`errors.tryValue(C_TradeSkillUI.GetRecipeInfo, id)` is a `TradeSkillRecipeInfo?`), or nil when `fn` is missing or raises; the arguments are checked against `fn`'s parameters. One result: for several, `try` (decision S43). |
+| `tryMethod` | `(obj: unknown, name: string, ...: unknown) -> ...unknown` | `obj:name(...)` as `try` calls a function: nothing when `obj` is not a table the addon may read or lacks the method |
 
 ## callbacks
 
@@ -239,6 +242,10 @@ local at = tbl.insertSorted(queue, entry, tbl.by(function(e: Entry) return e.at 
 | `equal` | `(a: any, b: any) -> boolean` | Deep; secrets never equal |
 | `keys`, `values` | `<K, V>(t: { [K]: V }, less?: (a: K, b: K) -> boolean) -> K[]`, `<K, V>(t: { [K]: V }) -> V[]` | `keys` is sorted by `less` when given, else when the keys are all numbers or all strings |
 | `count`, `isEmpty` | `(t: table) -> number`, `-> boolean` | All entries, not just the array part |
+| `field` | `(t: unknown, ...: string) -> unknown` | `t[k1][k2]…` through values that may not be tables: nil at the first that is not one the addon may read (`field(frame, "ScrollBox", "ScrollTarget")`, a part some clients lack) (decision S42) |
+| `list` | `(v: unknown) -> unknown[]` | `v` when it is a table the addon may read, else an empty list: for walking a list the game gives as `unknown` without a cast (decision S44) |
+| `listAt`, `recordAt` | `<K>(t: { [K]: unknown }, key: K) -> unknown[]`, `-> { [string]: unknown }` | `t[key]` when it is a table the addon may read, else a new empty one stored there: for adding to a list or record kept in a table read as `unknown`, such as saved variables (`table.insert(tbl.listAt(saved, "errors"), text)`) (decision S49) |
+| `weakKeys`, `weakValues` | `<K, V>() -> { [K]: V }` | A table with `__mode = "k"` (keys don't keep their values: what you note about the game's frames without writing fields onto them) or `"v"`; typed by where it goes: `local seen: { [Frame]: boolean } = tbl.weakKeys()` |
 | `filter`, `map`, `find`, `contains` | list helpers | `find` returns the element and its index; `contains` never finds a secret |
 | `sort` | `<T>(list: T[], less?: Less<T>) -> T[]` | In place, returns `list`. **Stable** (merge sort; insertion sort up to 12 elements, without garbage). An inconsistent `less` gives some order, never "invalid order function for sorting". Secret elements never reach `less`; they go last, in their order. Default: numbers and strings ascending, values of different types by type name. |
 | `by` | `<T>(key: (v: T) -> unknown, descending?: boolean) -> Less<T>` | An order by a key: numbers and strings, ascending unless `descending`; elements whose key is nil or secret go last, in their order |
@@ -321,8 +328,9 @@ supported client has.
 | `duration` | `(seconds: number, opts?: { noSeconds?, long?, units? }) -> string` | "1 Hr 5 Min" (`long`: unit words; `units` at most, default 2). Secret options count as unset. |
 | `short` | `(seconds: number) -> string` | The largest unit, like aura and cooldown times |
 | `clock` | `(seconds: number, hours?: boolean) -> string` | "3:07", "1:03:07" |
+| `ago` | `(seconds: number, opts?: { long?, from? }) -> string` | How long ago, from the seconds since, in the largest unit rounded down: "5 min ago", "2 h ago", "45 d ago"; `long` words it ("1 hour ago", "3 days ago") and goes on to months (30 days) and years (365 days); under the smallest unit "just now", or with `from = "hour"` "less than an hour ago" ("< 1 h ago"). English, like the other `format` texts that are not the client's own (decision S44). |
 | `date` | `(at?: number) -> string` | The locale's short date (default today) |
-| `money` | `(copper: number, opts?: { text?, separate? }) -> string` | Coin icons, or with `text` the client's words. Secret options count as unset. |
+| `money` | `(copper: number, opts?: { text?, separate?, short? }) -> string` | Coin icons, with `text` the client's words, or with `short` letters (`"12g 5s 3c"`, decision S42); units at zero are left out, copper stays when all are. Secret options count as unset. |
 | `number` | `(n: number \| Secret<number>) -> string \| Secret<string>` | Thousands separators |
 | `abbreviate` | `(n: number \| Secret<number>) -> string \| Secret<string>` | "8.5K"; a secret gives a secret string |
 | `percent` | `(fraction: number, decimals?: number) -> string` | "46%" |

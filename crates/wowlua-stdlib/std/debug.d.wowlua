@@ -1,8 +1,8 @@
 -- Compiler behavior of `wowlua:debug` (spec §7.1).
 @intrinsic("debug.assert")
-declare function assert(condition: any, message: string?)
+declare function assert(condition: unknown, message: string?)
 @intrinsic("debug.dump")
-declare function dump(...: any)
+declare function dump(...: unknown)
 @intrinsic("debug.todo")
 declare function todo(message: string?): never
 @intrinsic("debug.unreachable")
@@ -10,18 +10,18 @@ declare function unreachable(message: string?): never
 @intrinsic("debug.location")
 declare function location(): string
 @intrinsic("debug.nameof")
-declare function nameof(value: any): string
+declare function nameof(value: unknown): string
 @intrinsic("debug.typeName")
-declare function typeName(value: any): string
+declare function typeName(value: unknown): string
 @intrinsic("debug.measure")
-declare function measure(label: string, fn: (...any) -> ...any, ...: any): ...any
+declare function measure<A..., R...>(label: string, fn: (A...) -> R..., ...: A...): R...
 @intrinsic("debug.time")
 declare function time(label: string)
 @intrinsic("debug.timeEnd")
 declare function timeEnd(label: string)
 @intrinsic("debug.stats")
-declare function stats(): { [string]: any }
+declare function stats(): { [string]: WowluaProfStat }
 @intrinsic("debug.resetStats")
 declare function resetStats()
 @intrinsic("debug.watch")
-declare function watch(label: string, fn: () -> any)
+declare function watch(label: string, fn: () -> unknown)

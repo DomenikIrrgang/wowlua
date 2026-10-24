@@ -3130,6 +3130,40 @@ defer(function() header:Show() end, "header")
     );
 }
 
+/// A function written in `hook(…)` or `hookScript(…)` gets the hooked
+/// function's parameter types: the receiver first for a method, the
+/// script's handler for `hookScript` (decision L67).
+#[test]
+fn hooks_type_their_callbacks() {
+    let stderr = check(
+        r#"import hook, hookScript from "wowlua:hooks"
+local f = CreateFrame("Frame")
+hookScript(f, "OnSizeChanged", function(frame, w, h)
+    local s: string = w
+    print(frame, s, h)
+end)
+hook(GameTooltip, "SetUnit", function(tip, unit)
+    local n: number = unit
+    print(tip, n)
+end)
+-- (the receiver is the frame; the alpha may be secret)
+hook(f, "SetAlpha", function(frame, alpha)
+    frame:SetAlpha(alpha)
+end)
+"#,
+    );
+    let found: Vec<String> = stderr
+        .lines()
+        .filter(|l| l.starts_with("src/main.wowlua"))
+        .filter_map(|l| {
+            let line = l.split(':').nth(1)?;
+            let code = l.split('[').nth(1)?.split(']').next()?;
+            Some(format!("{line} {code}"))
+        })
+        .collect();
+    assert_eq!(found, ["4 E2001", "8 E2001"], "{stderr}");
+}
+
 /// An enclosing existence test of the hooked member stands for its
 /// declaration (no W8040), but a target of a load-on-demand addon still
 /// needs `opts.addon` (W8102): before the addon loads, the test fails and
@@ -5875,6 +5909,15 @@ local kept, apart = tbl.copy(both), tbl.copy(both, { shared = false })
 print(kept.a == kept.b, apart.a == apart.b, apart.a[1], apart.a ~= shared)
 print(pcall(tbl.copy, t, { shared = false }))
 print(table.concat(tbl.keys({ [2] = 1, b = 2, [1] = 3 }, function(x, y) return tostring(x) < tostring(y) end), ","))
+-- listAt and recordAt: the table there, or a new one stored there.
+local saved = { errors = { "old" }, bad = 5 }
+table.insert(tbl.listAt(saved, "errors"), "new")
+table.insert(tbl.listAt(saved, "fresh"), "one")
+tbl.recordAt(saved, "probe").at = "now"
+tbl.recordAt(saved, "probe").n = 2
+local made = tbl.listAt(saved, "bad")
+print(#saved.errors, saved.fresh[1], saved.probe.at, saved.probe.n, made == saved.bad, #made)
+print(tbl.listAt({ s = Mock.secret() }, "s") ~= nil)
 "#,
     );
     assert_eq!(
@@ -5890,6 +5933,8 @@ print(table.concat(tbl.keys({ [2] = 1, b = 2, [1] = 3 }, function(x, y) return t
             "true false 1 true",
             "false copy: the table contains itself, which `shared = false` cannot copy",
             "1,2,b",
+            "2 one now 2 true 0",
+            "true",
         ]
     );
 }
@@ -6206,6 +6251,92 @@ print(type(format.date()))
     );
 }
 
+/// Reading what the game gives without trusting its type: `secret.asString`
+/// and friends, `errors.try`/`tryMethod` (silent), `table.field` and the
+/// weak tables, `frames.find`/`as…` and `frames.keepAway`, the short money
+/// form (decision S42); `errors.tryValue` keeps the function's result type,
+/// `secret.isNumber`/`isString` narrow (decision S43); `format.ago`,
+/// `table.list` (decision S44).
+#[test]
+fn readers_for_the_games_values() {
+    let typed = "import * as errors from \"wowlua:errors\"\nimport * as secret from \"wowlua:secret\"\nlocal function lookup(id: number): { name: string }?\n    if id == 1 then return { name = \"one\" } end\n    error(\"no \" .. id)\nend\nlocal function first(): string?\n    local info = errors.tryValue(lookup, 1)\n    return info and info.name\nend\nlocal function failed(): string?\n    local info = errors.tryValue(lookup, 2)\n    return info and info.name\nend\nlocal missing: ((n: number) -> number)? = nil\nlocal function none(): number? return errors.tryValue(missing, 2) end\nlocal function num(v: unknown): number? if secret.isNumber(v) then return v + 1 end return nil end\nlocal function str(v: unknown): string? if secret.isString(v) then return v:upper() end return nil end\n_G.StdTyped = { first = first, failed = failed, none = none, num = num, str = str }\n";
+    let out = modes(
+        &[
+            (
+                "src/main.wowlua",
+                "import * as frames from \"wowlua:frames\"\nimport * as secret from \"wowlua:secret\"\nimport * as errors from \"wowlua:errors\"\nimport * as tbl from \"wowlua:table\"\nimport * as format from \"wowlua:format\"\n_G.StdR = { frames = frames, secret = secret, errors = errors, tbl = tbl, format = format }\n",
+            ),
+            ("src/typed.wowlua", typed),
+        ],
+        "",
+        r##"Mock.loadAddon("Std")
+local R = StdR
+local s, e, t, f = R.secret, R.errors, R.tbl, R.frames
+print(s.asString("a"), s.asString(1), s.asString(Mock.secret()), s.asNumber(2), s.asNumber("2"), s.asBoolean(false), s.asBoolean(1))
+print(e.try(nil), e.try(function(a, b) return a + b, "x" end, 1, 2), e.try(function() error("boom") end), select("#", e.try(error)))
+local obj = { n = 4, Get = function(self, k) return self.n + k end }
+print(e.tryMethod(obj, "Get", 1), e.tryMethod(obj, "Missing"), e.tryMethod(5, "Get"))
+print(t.field({ a = { b = 7 } }, "a", "b"), t.field({ a = 3 }, "a", "b"), t.field(nil, "a"), t.field({}, "x"))
+local weak = t.weakKeys()
+print(getmetatable(weak).__mode, getmetatable(t.weakValues()).__mode)
+local btn = CreateFrame("Button", "StdReaderButton", UIParent)
+print(f.find("StdReaderButton") == btn, f.find("NoSuchFrameAnywhere"), f.asButton(btn) == btn, f.asTexture(btn), f.asFrame({}), f.asRegion(42), f.asBrowser(btn))
+print(R.format.money(123456, { short = true }), R.format.money(10000, { short = true }), R.format.money(0, { short = true }))
+-- kept away: off screen, faded; again after the game moves it or sets its alpha
+local away = CreateFrame("Frame", nil, UIParent)
+away:SetPoint("CENTER")
+local on = true
+local h = f.keepAway(away, { fade = true, when = function() return on end })
+local _, _, _, x = away:GetPoint(1)
+print(x, away:GetAlpha())
+away:ClearAllPoints()
+away:SetPoint("CENTER")
+away:SetAlpha(1)
+Mock.advanceFrames(2)
+local _, _, _, x2 = away:GetPoint(1)
+print(x2, away:GetAlpha())
+-- not while `when` says no; released: left where it is
+on = false
+away:ClearAllPoints()
+away:SetPoint("CENTER")
+Mock.advanceFrames(2)
+local _, _, _, x3 = away:GetPoint(1)
+on = true
+h.release()
+away:ClearAllPoints()
+away:SetPoint("CENTER")
+Mock.advanceFrames(2)
+local _, _, _, x4 = away:GetPoint(1)
+print(x3, x4)
+local T = StdTyped
+print(T.first(), T.failed(), T.none(), T.num(1), T.num("1"), T.num(Mock.secret()), T.str("a"), T.str(1))
+local ago = R.format.ago
+print(ago(30), ago(300), ago(7200), ago(45 * 86400), ago(-5))
+print(ago(90061, { long = true }), ago(3600, { long = true }), ago(60 * 86400, { long = true }), ago(400 * 86400, { long = true }), ago(600, { long = true, from = "hour" }), ago(600, { from = "hour" }))
+print(#t.list({ 1, 2, 3 }), #t.list(5), #t.list(nil), #t.list(Mock.secret()))
+"##,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "a nil nil 2 nil false nil",
+            "nil 3 nil 1",
+            "5 nil nil",
+            "7 nil nil nil",
+            "k v",
+            "true nil true nil nil nil nil",
+            "12g 34s 56c 1g 0c",
+            "5000 0",
+            "5000 0",
+            "0 0",
+            "one nil nil 2 nil nil A nil",
+            "just now 5 min ago 2 h ago 45 d ago just now",
+            "1 day ago 1 hour ago 2 months ago 1 year ago less than an hour ago < 1 h ago",
+            "3 0 0 0",
+        ]
+    );
+}
+
 /// `wowlua:format` with secrets: secret options count as unset, secret
 /// numbers give secret strings.
 #[test]
@@ -6335,6 +6466,253 @@ print("flashes", Mock.flashes)
             "kit 8959 Master | file Interface\\AddOns\\Std\\ping.ogg SFX | file 567890123 Master | kit 8959 Master",
             "Pull in 5 (1.00 0.28 0.00) | Boss! (0.00 1.00 0.00) | Boss! (1.00 0.28 0.00)",
             "flashes 1",
+        ]
+    );
+}
+
+/// `wowlua:chat` and `unit.invite` call the game's chat code and group
+/// invite, the older globals where a client has those, nothing where it
+/// has neither (decision S44).
+#[test]
+fn chat_line_and_invites() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as chat from \"wowlua:chat\"\nimport * as unit from \"wowlua:unit\"\n_G.StdChat = { chat = chat, unit = unit }\n",
+        )],
+        "",
+        r##"Mock.loadAddon("Std")
+local C, U = StdChat.chat, StdChat.unit
+local seen = {}
+local function note(what) return function(...) seen[#seen + 1] = what .. select("#", ...) .. ":" .. tostring((...)) end end
+ChatFrameUtil, ChatFrame_SendTell, ChatFrame_OpenChat, ChatEdit_InsertLink = nil, nil, nil, nil
+C.whisper("Ann")
+C.open("hi")
+C.insertLink("[x]")
+print(#seen)
+ChatFrame_SendTell, ChatFrame_OpenChat = note("oldTell"), note("oldOpen")
+ChatEdit_InsertLink = function(link) seen[#seen + 1] = "oldInsert:" .. link return false end
+C.whisper("Ann")
+C.insertLink("[x]")
+local filters = {}
+ChatFrameUtil = { SendTell = note("tell"), OpenChat = note("open"), InsertLink = function(link) seen[#seen + 1] = "insert:" .. link return true end,
+    SendBNetTell = note("bntell"),
+    AddMessageEventFilter = function(event, f) filters[event] = f end,
+    RemoveMessageEventFilter = function(event, f) if filters[event] == f then filters[event] = nil end end }
+C.whisper("Bob")
+C.whisper("Bob", CreateFrame("Frame"))
+C.open("hi")
+C.insertLink("[y]")
+C.whisperBnet("K1")
+local real = C_PartyInfo.InviteUnit
+C_PartyInfo.InviteUnit = note("invite")
+U.invite("Cara")
+C_PartyInfo.InviteUnit = nil
+InviteUnit = note("oldInvite")
+U.invite("Dan")
+C_PartyInfo.InviteUnit = real
+local realBn = C_BattleNet
+C_BattleNet = { InviteFriend = note("bninvite") }
+U.inviteBnet(77)
+C_BattleNet = nil
+BNInviteFriend = note("oldBn")
+U.inviteBnet(78)
+C_BattleNet = realBn
+print(table.concat(seen, " "))
+local sub = C.filter("CHAT_MSG_SYSTEM", function(text, n) return text == "hide" and n == 1 end)
+local f = filters.CHAT_MSG_SYSTEM
+print(f(nil, "CHAT_MSG_SYSTEM", "hide", 1), f(nil, "CHAT_MSG_SYSTEM", "show", 1))
+C.filter("CHAT_MSG_SAY", function() error("boom") end)
+print(filters.CHAT_MSG_SAY(nil, "CHAT_MSG_SAY", "x"))
+sub:cancel()
+sub:cancel()
+print(filters.CHAT_MSG_SYSTEM == nil, f(nil, "CHAT_MSG_SYSTEM", "hide", 1))
+"##,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "0",
+            "oldTell1:Ann oldInsert:[x] oldOpen1:[x] tell1:Bob tell2:Bob open1:hi insert:[y] bntell1:K1 invite1:Cara oldInvite1:Dan bninvite1:77 oldBn1:78",
+            "true false",
+            "false",
+            "true false",
+        ]
+    );
+}
+
+/// `wowlua:chat`'s windows: the numbered ones, then the temporary ones;
+/// those docked with General in the dock's order; a window's edit box;
+/// what a temporary window is for (decision S48).
+#[test]
+fn chat_windows() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as chat from \"wowlua:chat\"\n_G.StdChat = chat\n",
+        )],
+        "",
+        r##"Mock.loadAddon("Std")
+local C = StdChat
+local function names(list) local out = {} for _, w in ipairs(list) do out[#out + 1] = w:GetName() end return table.concat(out, " ") end
+-- the game's windows, as its chat code makes them (a message frame's lines)
+local function window(name)
+    local w = CreateFrame("Frame", name)
+    function w:AddMessage() end
+    function w:GetMessageInfo() end
+    return w
+end
+local general, log, third = window("ChatFrame1"), window("ChatFrame2"), window("ChatFrame3")
+CreateFrame("EditBox", "ChatFrame1EditBox")
+print(names(C.windows()))
+print(names(C.docked()))
+print(C.window("ChatFrame1") == general, C.window("UIParent"), C.window("NoSuchFrame"), C.asWindow(42))
+print(C.editBox(general) == ChatFrame1EditBox, C.editBox(log), C.editBox(CreateFrame("Frame")))
+print(C.isTemporary(general), C.conversation(general))
+local temp = window("ChatFrame21")
+temp.isTemporary, temp.chatType, temp.chatTarget = true, "WHISPER", "Ann"
+window("ChatFrame22")
+CHAT_FRAMES = { "ChatFrame1", "ChatFrame21", "ChatFrame22", "NoSuchFrame", 5 }
+GENERAL_CHAT_DOCK = { DOCKED_CHAT_FRAMES = { log, general, UIParent } }
+NUM_CHAT_WINDOWS = 2
+print(names(C.windows()))
+print(names(C.docked()))
+print(C.isTemporary(temp), C.conversation(temp))
+"##,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "ChatFrame1 ChatFrame2 ChatFrame3",
+            "ChatFrame1",
+            "true nil nil nil",
+            "true nil nil",
+            "false nil nil",
+            "ChatFrame1 ChatFrame2 ChatFrame21",
+            "ChatFrame2 ChatFrame1",
+            "true WHISPER Ann",
+        ]
+    );
+}
+
+/// `secure.overlay`: a secure button over the addon's own, on UIParent,
+/// anchored only while shown, hover passed on, nothing in combat (decision
+/// S44).
+#[test]
+fn secure_overlays() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as secure from \"wowlua:secure\"\n_G.StdSecure = secure\n",
+        )],
+        "",
+        r#"Mock.loadAddon("Std")
+local target = CreateFrame("Button", nil, UIParent)
+target:SetSize(60, 20)
+target:SetPoint("CENTER")
+local hovered = 0
+target:SetScript("OnEnter", function() hovered = hovered + 1 end)
+local other = CreateFrame("Button", nil, UIParent)
+local o = StdSecure.overlay(target)
+print(o.button:GetParent() == UIParent, o.button:IsShown(), o.button:GetNumPoints())
+print(o.set("type1", "click"), o.set("clickbutton1", other), o.show())
+local _, rel = o.button:GetPoint(1)
+print(o.button:IsShown(), rel == target, o.button:GetFrameStrata())
+o.button:GetScript("OnEnter")(o.button, true)
+print(hovered, o.button:GetAttribute("type1"), o.button:GetAttribute("clickbutton1") == other)
+local row = CreateFrame("Button", nil, UIParent)
+local rowHovered = 0
+row:SetScript("OnEnter", function() rowHovered = rowHovered + 1 end)
+o.show(row)
+local _, rel2 = o.button:GetPoint(1)
+o.button:GetScript("OnEnter")(o.button, true)
+print(rel2 == row, o.button:GetNumPoints(), hovered, rowHovered)
+Mock.combat = true
+print(o.set("type1", "macro"), o.hide(), o.button:IsShown())
+Mock.combat = false
+print(o.hide(), o.button:IsShown(), o.button:GetNumPoints())
+"#,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "true false 0",
+            "true true true",
+            "true true DIALOG",
+            "1 click true",
+            "true 2 1 1",
+            "false false true",
+            "true false 0",
+        ]
+    );
+}
+
+/// Walking the game's frames (`frames.textures`, `fontStrings`, `children`,
+/// `stateTextures`, `rows`, `keyed`) and `events.onRegistry` (decisions
+/// S45, S49).
+#[test]
+fn walking_the_games_frames() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            "import * as frames from \"wowlua:frames\"\nimport * as events from \"wowlua:events\"\n_G.StdWalk = { frames = frames, events = events }\n",
+        )],
+        "",
+        r##"Mock.loadAddon("Std")
+local F, E = StdWalk.frames, StdWalk.events
+local f = CreateFrame("Frame", nil, UIParent)
+f:CreateTexture()
+f:CreateTexture()
+f:CreateFontString()
+CreateFrame("Frame", nil, f)
+CreateFrame("Button", nil, f)
+print(#F.textures(f), #F.fontStrings(f), #F.children(f))
+local b = CreateFrame("Button", nil, UIParent)
+print(#F.stateTextures(b))
+b:SetNormalTexture("Interface\Buttons\WHITE8X8")
+b:SetHighlightTexture("Interface\Buttons\WHITE8X8")
+print(#F.stateTextures(b))
+-- an object pool's active frames, a scroll box's, anything else
+local active = { [CreateFrame("Frame")] = true, [CreateFrame("Frame")] = true }
+local pool = { EnumerateActive = function(self) return pairs(active) end }
+local box = { ForEachFrame = function(self, fn) fn(f); fn(b); fn(42) end }
+print(#F.rows(pool), #F.rows(box), #F.rows(nil), #F.rows({}))
+-- a map canvas's pins of a template
+local map = { EnumeratePinsByTemplate = function(self, t) if t == "Q" then return pairs(active) end return function() end end }
+print(#F.mapPins(map, "Q"), #F.mapPins(map, "R"), #F.mapPins(nil, "Q"), #F.mapPins({}, "Q"))
+-- EventRegistry callbacks: the values, not the owner; cancelled: none
+local seen = {}
+local sub = E.onRegistry("StdTest.Ping", function(...) seen[#seen + 1] = table.concat({ ... }, ",") end)
+EventRegistry:TriggerEvent("StdTest.Ping", "a", "b")
+sub:cancel()
+EventRegistry:TriggerEvent("StdTest.Ping", "c")
+print(table.concat(seen, " "), sub.active)
+-- the widgets a frame holds by key: set from Lua too; not other values
+f.Close = b
+f.Art = f:CreateTexture()
+f.count, f.data = 3, {}
+local keyed = F.keyed(f)
+local keys = {}
+for k in pairs(keyed) do keys[#keys + 1] = k end
+table.sort(keys)
+print(table.concat(keys, ","), keyed.Close == b, next(F.keyed(nil)), next(F.keyed(5)))
+-- a frame with more children than pcall may hand back (UIParent's)
+local busy = CreateFrame("Frame", nil, UIParent)
+for _ = 1, 300 do CreateFrame("Frame", nil, busy); busy:CreateTexture() end
+print(#F.children(busy), #F.textures(busy))
+"##,
+    );
+    assert_eq!(
+        plain(&out),
+        [
+            "2 1 2",
+            "0",
+            "2",
+            "2 2 0 0",
+            "2 0 0 0",
+            "a,b false",
+            "Art,Close true nil nil",
+            "300 300"
         ]
     );
 }

@@ -70,6 +70,9 @@ pub struct FileInfo<'a> {
     /// Globals the package assigns: reading them is fine (the assignments
     /// themselves are W1002).
     pub assigned_globals: &'a FxHashSet<String>,
+    /// Globals other modules' `@global` exports create, with the exports'
+    /// types.
+    pub global_types: FxHashMap<Box<str>, TypeId>,
     /// Imported bindings: local name → type.
     pub imports: FxHashMap<Box<str>, TypeId>,
     /// The counts of imported functions (W2062), by local name.
@@ -145,6 +148,8 @@ pub struct Checker<'e, 'p> {
     pub diagnostics: Vec<Diagnostic>,
     pub extra_globals: &'e FxHashSet<String>,
     pub assigned_globals: &'e FxHashSet<String>,
+    /// See [`FileInfo::global_types`].
+    pub global_types: FxHashMap<Box<str>, TypeId>,
     /// Types of expressions already checked, by span.
     pub(crate) expr_types: FxHashMap<(u32, u32), TypeId>,
     /// Links of optional chains: their type before the short-circuit's
@@ -212,6 +217,9 @@ pub struct Checker<'e, 'p> {
     pub(crate) self_owners: FxHashMap<VarId, VarId>,
     /// The table of the method whose body is checked next.
     pending_self_owner: Option<VarId>,
+    /// `overload function` signatures waiting for their implementation:
+    /// (name, signature, where).
+    pending_overloads: Vec<(Box<str>, TypeId, Span)>,
     /// Uses of a call whose count wasn't known yet (a method defined
     /// further down): judged at the file's end.
     pub(crate) pending_caps: Vec<(super::expr::CapKey, String, super::expr::CapUse)>,
@@ -337,6 +345,7 @@ impl<'e, 'p> Checker<'e, 'p> {
             diagnostics: Vec::new(),
             extra_globals: info.extra_globals,
             assigned_globals: info.assigned_globals,
+            global_types: info.global_types.clone(),
             expr_types: FxHashMap::default(),
             chain_inner: FxHashMap::default(),
             classes: Vec::new(),
@@ -369,6 +378,7 @@ impl<'e, 'p> Checker<'e, 'p> {
             method_caps: FxHashMap::default(),
             self_owners: FxHashMap::default(),
             pending_self_owner: None,
+            pending_overloads: Vec::new(),
             pending_caps: Vec::new(),
             export_caps: FxHashMap::default(),
             last_result_cap: None,
@@ -560,6 +570,47 @@ impl<'e, 'p> Checker<'e, 'p> {
         self.env.resolve(t, &scope)
     }
 
+    /// A function's signature where its body is checked: the `typeof(expr)`
+    /// parts of its annotations are inferred first, as in [`Self::annotation`]
+    /// (decision L62).
+    pub fn func_sig<'t>(&mut self, f: &FnSig<'t>) -> Func {
+        fn vararg_type(v: VarargType<'_>) -> Option<Type<'_>> {
+            match v {
+                VarargType::Type(t) | VarargType::Expand(t) => Some(t),
+                VarargType::Pack(_) => None,
+            }
+        }
+        let mut types: Vec<Type<'t>> = f.params.iter().filter_map(|p| p.ty).collect();
+        if let Some(t) = f.vararg.and_then(|v| v.ty).and_then(vararg_type) {
+            types.push(t);
+        }
+        match f.ret {
+            Some(RetType::Single(t)) | Some(RetType::Predicate { ty: t, .. }) => types.push(t),
+            Some(RetType::List {
+                types: list,
+                vararg,
+                ..
+            }) => {
+                types.extend(list.iter());
+                types.extend(vararg.and_then(vararg_type));
+            }
+            Some(RetType::Pack(_)) | None => {}
+        }
+        let mut exprs: Vec<Expr<'t>> = Vec::new();
+        for t in types {
+            typeof_exprs(t, &mut exprs);
+        }
+        for e in exprs {
+            let ty = self.infer(e);
+            let ty = self.env.types.widen(ty);
+            self.env
+                .typeof_types
+                .insert((e.span().start, e.span().end), ty);
+        }
+        let scope = self.scope.clone();
+        self.env.func_sig(f, &scope, false)
+    }
+
     /// A top-level alias using `typeof(expr)` gets its body where the file
     /// reaches it, with the expressions' types there (spec §2.2.7): later
     /// annotations, and the modules checked after this one, see it.
@@ -592,6 +643,8 @@ impl<'e, 'p> Checker<'e, 'p> {
         }
         let scope = self.scope.clone();
         self.env.resolve_alias_again(def, a, &scope);
+        self.env.typeof_resolved.insert(module);
+        self.env.typeof_alias_names.insert(a.name().text().into());
     }
 
     /// The type of `...` in the current function.
@@ -714,7 +767,8 @@ impl<'e, 'p> Checker<'e, 'p> {
                 self.flow.insert(v, narrowed);
             }
             None => {
-                let widened = self.env.types.widen_value(value);
+                let value = self.fill_empty_fields(value, var.base);
+                let widened = self.widen_assigned(value, var.base);
                 self.flow.insert(v, widened);
                 // The base widens to cover every assigned value.
                 let base = self.env.types.union(&[var.base, widened]);
@@ -726,6 +780,85 @@ impl<'e, 'p> Checker<'e, 'p> {
                 self.set_base(v, base, assigned);
             }
         }
+    }
+
+    /// The type a value assigned to an unannotated local takes: widened as
+    /// in `local`, except for a literal the local's type so far already has
+    /// (`w = false` for a `T | false` local stays `false`), decision L61.
+    fn widen_assigned(&mut self, value: TypeId, base: TypeId) -> TypeId {
+        let have = self.env.types.members(base);
+        let (kept, rest): (Vec<TypeId>, Vec<TypeId>) =
+            self.env.types.members(value).into_iter().partition(|m| {
+                have.contains(m)
+                    && matches!(
+                        self.env.types.get(*m),
+                        Ty::Bool(_) | Ty::Num(_) | Ty::Str(_)
+                    )
+            });
+        if kept.is_empty() {
+            return self.env.types.widen_value(value);
+        }
+        let mut out = kept;
+        if !rest.is_empty() {
+            let rest = self.env.types.union(&rest);
+            out.push(self.env.types.widen_value(rest));
+        }
+        self.env.types.union(&out)
+    }
+
+    /// A table assigned to a local without an annotation: where it fits the
+    /// local's type so far, its empty `{}` fields take that type's field
+    /// types (`p = { seen = {} }` for a `{ seen: { [number]: boolean } }`),
+    /// decision L59. Its other fields stay as they are.
+    fn fill_empty_fields(&mut self, value: TypeId, base: TypeId) -> TypeId {
+        if !matches!(self.env.types.get(value), Ty::Record(_)) {
+            return value;
+        }
+        let target = self.env.types.non_nil(base);
+        if target == Types::ANY
+            || target == Types::NEVER
+            || !self.env.assignable(value, target, self.mode)
+        {
+            return value;
+        }
+        self.fill_fields(value, target, 0)
+    }
+
+    fn fill_fields(&mut self, value: TypeId, target: TypeId, depth: u32) -> TypeId {
+        let Ty::Record(r) = self.env.types.get(value).clone() else {
+            return value;
+        };
+        let mut fields = r.fields.clone();
+        let mut changed = false;
+        for (name, f) in r.fields.iter() {
+            let Some((ft, _)) = self.env.field_of(target, name) else {
+                continue;
+            };
+            let ft = self.env.types.non_nil(ft);
+            let filled = match self.env.types.get(f.ty) {
+                Ty::Record(inner) if inner.fields.is_empty() && inner.indexer.is_none() => {
+                    (ft != Types::ANY && self.env.assignable(f.ty, ft, self.mode)).then_some(ft)
+                }
+                Ty::Record(_) if depth < 8 => {
+                    let t = self.fill_fields(f.ty, ft, depth + 1);
+                    (t != f.ty).then_some(t)
+                }
+                _ => None,
+            };
+            if let Some(ty) = filled {
+                fields.insert(name.into(), Field { ty, ..*f });
+                changed = true;
+            }
+        }
+        if !changed {
+            return value;
+        }
+        self.env.types.record(Record {
+            fields,
+            indexer: r.indexer,
+            open: r.open,
+            id: 0,
+        })
     }
 
     /// The declared type `d` after assigning `value`: the members of `d`
@@ -823,6 +956,22 @@ impl<'e, 'p> Checker<'e, 'p> {
                     }
                 }
             }
+            // The exports are file-level names too: `import internal`
+            // reads them with their types (an `export function` was
+            // missing there and read as `any`, decision L66).
+            let exported: Vec<(Box<str>, TypeId)> = self
+                .exports
+                .iter()
+                .filter(|(k, _)| !k.starts_with(INTERNAL))
+                .map(|(k, &t)| (k.clone(), t))
+                .collect();
+            for (name, t) in exported {
+                let key: Box<str> = format!("{INTERNAL}{name}").into();
+                if let Some(&cap) = self.export_caps.get(&name) {
+                    self.export_caps.entry(key.clone()).or_insert(cap);
+                }
+                self.exports.entry(key).or_insert(t);
+            }
         }
         self.fns.pop();
     }
@@ -830,20 +979,31 @@ impl<'e, 'p> Checker<'e, 'p> {
     /// Top-level classes and enums are hoisted (decision T76), and so are
     /// the top-level functions of a module (spec §5.1).
     fn hoist(&mut self, b: Block<'_>) {
+        // The overload signatures before a function: callers see them.
+        let mut overloads: Vec<(Box<str>, TypeId)> = Vec::new();
         for s in b.stmts() {
             let kind = match s.kind() {
                 StmtKind::Export(inner) => inner.kind(),
                 k => k,
             };
             match kind {
+                StmtKind::Overload { name, func } => {
+                    let t = self.overload_signature(func);
+                    overloads.push((name.text().into(), t));
+                    continue;
+                }
                 StmtKind::Function { name, func }
                     if self.is_module && name.path().len() == 1 && name.method().is_none() =>
                 {
-                    let sig = self
-                        .env
-                        .func_sig(&FnSig::of(func), &self.scope.clone(), false);
-                    let t = self.env.types.func(sig);
-                    self.declare(name.path().at(0).text(), Some(t), t, false, None);
+                    let n = name.path().at(0).text();
+                    let t = match overload_set_of(&mut self.env.types, &overloads, n) {
+                        Some(set) => set,
+                        None => {
+                            let sig = self.func_sig(&FnSig::of(func));
+                            self.env.types.func(sig)
+                        }
+                    };
+                    self.declare(n, Some(t), t, false, None);
                 }
                 StmtKind::Class(c) => {
                     if let Some(def) = self.env.lookup_type(c.name().text(), &self.scope) {
@@ -859,6 +1019,68 @@ impl<'e, 'p> Checker<'e, 'p> {
                 }
                 _ => {}
             }
+            overloads.clear();
+        }
+    }
+
+    /// The overload set the pending `overload function` signatures of
+    /// `name` make, now that its implementation (`actual`) is here: each
+    /// one the implementation must accept (E3044).
+    fn take_overloads(&mut self, name: &str, actual: TypeId) -> Option<TypeId> {
+        if !self
+            .pending_overloads
+            .iter()
+            .any(|(n, _, _)| n.as_ref() == name)
+        {
+            return None;
+        }
+        let pending = std::mem::take(&mut self.pending_overloads);
+        let mut set: Option<TypeId> = None;
+        for (n, sig, span) in pending {
+            if n.as_ref() != name {
+                self.report(
+                    "E3047",
+                    span,
+                    format!(
+                        "the overload signature of `{n}` is not followed by its implementation"
+                    ),
+                );
+                continue;
+            }
+            if !self.env.overload_accepted(actual, sig) {
+                let msg = format!(
+                    "the implementation of `{name}` (`{}`) does not accept this overload (`{}`)",
+                    self.env.display(actual),
+                    self.env.display(sig)
+                );
+                self.report("E3044", span, msg);
+            }
+            set = Some(match set {
+                Some(s) => super::env::overload_set(&mut self.env.types, s, sig),
+                None => sig,
+            });
+        }
+        set
+    }
+
+    /// An `overload function` signature's type: without a body, no
+    /// results unless it names them.
+    fn overload_signature(&mut self, func: FuncNode<'_>) -> TypeId {
+        let mut sig = self.func_sig(&FnSig::of(func));
+        if func.ret().is_none() {
+            sig.ret = Pack::empty();
+        }
+        self.env.types.func(sig)
+    }
+
+    /// Overload signatures left without their implementation (E3047).
+    fn unimplemented_overloads(&mut self) {
+        for (n, _, span) in std::mem::take(&mut self.pending_overloads) {
+            self.report(
+                "E3047",
+                span,
+                format!("the overload signature of `{n}` is not followed by its implementation"),
+            );
         }
     }
 
@@ -887,8 +1109,33 @@ impl<'e, 'p> Checker<'e, 'p> {
                 self.report("W1005", s.span(), "unreachable code");
                 self.in_dead = true;
             }
+            // Overload signatures belong to the function right after them.
+            let implements = match s.kind() {
+                StmtKind::Export(inner) => inner,
+                _ => s,
+            };
+            let continues = match implements.kind() {
+                StmtKind::Overload { .. } => true,
+                StmtKind::LocalFunction { name, .. } => self
+                    .pending_overloads
+                    .iter()
+                    .all(|(n, _, _)| n.as_ref() == name.text()),
+                StmtKind::Function { name, .. } => {
+                    name.path().len() == 1
+                        && name.method().is_none()
+                        && self
+                            .pending_overloads
+                            .iter()
+                            .all(|(n, _, _)| n.as_ref() == name.path().at(0).text())
+                }
+                _ => false,
+            };
+            if !continues {
+                self.unimplemented_overloads();
+            }
             self.stmt(s);
         }
+        self.unimplemented_overloads();
         self.in_dead = outer;
     }
 
@@ -945,9 +1192,7 @@ impl<'e, 'p> Checker<'e, 'p> {
         else {
             return;
         };
-        let sig = self
-            .env
-            .func_sig(&FnSig::of(func), &self.scope.clone(), false);
+        let sig = self.func_sig(&FnSig::of(func));
         for (n, entry) in entries.iter().enumerate() {
             let TableField::Positional(case) = entry else {
                 continue;
@@ -1127,22 +1372,9 @@ impl<'e, 'p> Checker<'e, 'p> {
                     .collect();
                 // Fresh literals widen (`local s = "a"` is a string); values
                 // typed elsewhere (a call's declared result, a variable,
-                // a field) keep their type, unions of literals included.
-                let keep: Vec<bool> = values
-                    .iter()
-                    .map(|v| {
-                        matches!(
-                            v.kind(),
-                            ExprKind::Call { .. }
-                                | ExprKind::OptCall { .. }
-                                | ExprKind::Method { .. }
-                                | ExprKind::OptMethod { .. }
-                                | ExprKind::Name(_)
-                                | ExprKind::Field { .. }
-                                | ExprKind::Index { .. }
-                        )
-                    })
-                    .collect();
+                // a field, a `::` assertion) keep their type, unions of
+                // literals included (decision L64).
+                let keep: Vec<bool> = values.iter().map(typed_elsewhere).collect();
                 let spread: Vec<(Span, String)> = names
                     .iter()
                     .map(|n| (n.name.span(), n.name.text().to_string()))
@@ -1430,11 +1662,17 @@ impl<'e, 'p> Checker<'e, 'p> {
                 });
             }
             StmtKind::Function { name, func } => self.function_stmt(name, func),
+            StmtKind::Overload { name, func } => {
+                let t = self.overload_signature(func);
+                self.pending_overloads
+                    .push((name.text().into(), t, name.span()));
+            }
             StmtKind::LocalFunction { name, func } => {
-                let sig = self
-                    .env
-                    .func_sig(&FnSig::of(func), &self.scope.clone(), false);
-                let t = self.env.types.func(sig);
+                let sig = self.func_sig(&FnSig::of(func));
+                let impl_t = self.env.types.func(sig);
+                // Callers (and the body, recursing) see the overloads.
+                let set = self.take_overloads(name.text(), impl_t);
+                let t = set.unwrap_or(impl_t);
                 let id = self.declare(name.text(), None, t, false, Some(name.span()));
                 let handler = self.next_handler.take();
                 let actual = self.function_body(
@@ -1448,6 +1686,7 @@ impl<'e, 'p> Checker<'e, 'p> {
                 if let Some(cap) = self.last_result_cap.take() {
                     self.result_caps.insert(id, cap);
                 }
+                let actual = set.unwrap_or(actual);
                 self.flow.insert(id, actual);
                 self.vars[id.0 as usize].base = actual;
             }
@@ -1584,14 +1823,23 @@ impl<'e, 'p> Checker<'e, 'p> {
     /// first tried with that narrowing kept: the trial holds when every
     /// path back to the loop start (the body's end, `continue`) leaves them
     /// within it, and their `break` paths then join the flow after the
-    /// loop. Otherwise the loop is checked again with them forgotten.
+    /// loop. Unannotated locals are tried with their type before the loop:
+    /// the trial holds when the paths back bring no new type, and is tried
+    /// once more with the types they brought (decision L65). Otherwise the
+    /// loop is checked again with them forgotten.
     fn check_loop(
         &mut self,
         body: Block<'_>,
         mut run: impl FnMut(&mut Self, &[VarId]) -> Option<Flow>,
     ) {
-        let keep = self.loop_kept(body);
-        if !keep.is_empty() {
+        let mut keep = self.loop_kept(body);
+        // The unannotated locals' types at the loop start, once a trial
+        // found the paths back bringing more.
+        let mut grown: FxHashMap<VarId, TypeId> = FxHashMap::default();
+        for _round in 0..2 {
+            if keep.is_empty() {
+                break;
+            }
             let trial = LoopTrial {
                 flow: self.flow.clone(),
                 field_vars: self.field_vars.clone(),
@@ -1609,22 +1857,40 @@ impl<'e, 'p> Checker<'e, 'p> {
             let mut entry = Vec::new();
             for &v in &keep {
                 let now = self.var_type(v);
-                let declared = self.vars[v.0 as usize].declared.unwrap_or(now);
-                let t = self.loosen(now, declared);
+                let t = match self.vars[v.0 as usize].declared {
+                    Some(declared) => self.loosen(now, declared),
+                    None => grown.get(&v).copied().unwrap_or(now),
+                };
                 self.flow.insert(v, t);
                 entry.push((v, t));
             }
             self.loops.push(LoopFlows::default());
             let back = run(self, &keep);
             let exits = self.loops.pop().unwrap_or_default();
-            let holds = back.iter().chain(&exits.continues).all(|f| {
-                entry.iter().all(|&(v, t)| {
+            // The declared locals that left their narrowing, and the
+            // unannotated ones the paths back brought new types to.
+            let mut failed: Vec<VarId> = Vec::new();
+            let mut more: Vec<(VarId, TypeId)> = Vec::new();
+            for &(v, t) in &entry {
+                let declared = self.vars[v.0 as usize].declared.is_some();
+                let mut u = t;
+                for f in back.iter().chain(&exits.continues) {
                     let now = self.var_type_in(v, f);
-                    self.env.assignable(now, t, Mode::Strict)
-                })
-            });
+                    if declared {
+                        if !self.env.assignable(now, t, Mode::Strict) {
+                            failed.push(v);
+                            break;
+                        }
+                    } else {
+                        u = self.env.types.union(&[u, now]);
+                    }
+                }
+                if u != t {
+                    more.push((v, u));
+                }
+            }
             let log = std::mem::replace(&mut self.base_log, trial.base_log);
-            if holds {
+            if failed.is_empty() && more.is_empty() {
                 if let (Some(outer), Some(log)) = (&mut self.base_log, log) {
                     outer.extend(log);
                 }
@@ -1657,6 +1923,14 @@ impl<'e, 'p> Checker<'e, 'p> {
             if let Some(f) = self.fns.last_mut() {
                 f.returns.truncate(trial.returns);
             }
+            // A second round: without the declared locals that left their
+            // narrowing, the unannotated ones with what the paths back
+            // brought. A second round that still finds more gives up.
+            if !grown.is_empty() {
+                break;
+            }
+            keep.retain(|v| !failed.contains(v));
+            grown.extend(more);
         }
         self.loops.push(LoopFlows::default());
         run(self, &[]);
@@ -1697,7 +1971,8 @@ impl<'e, 'p> Checker<'e, 'p> {
         var.assigned = assigned;
     }
 
-    /// The declared locals a loop body assigns that the loop entry narrows
+    /// The locals a loop body assigns that keep a type at the loop start:
+    /// the declared ones the loop entry narrows, and the unannotated ones
     /// (a closure assigning one may run at any time: those are left out).
     fn loop_kept(&self, body: Block<'_>) -> Vec<VarId> {
         let mut out: Vec<VarId> = Self::assigned_names(body)
@@ -1705,12 +1980,13 @@ impl<'e, 'p> Checker<'e, 'p> {
             .filter_map(|name| self.lookup_var(name))
             .filter(|&v| {
                 let var = &self.vars[v.0 as usize];
-                var.declared.is_some_and(|d| {
-                    d != Types::ANY
-                        && !var.assigned_in_closure
-                        && var.depth == self.depth
-                        && self.flow.get(&v).is_some_and(|&t| t != d)
-                })
+                if var.assigned_in_closure || var.depth != self.depth {
+                    return false;
+                }
+                match var.declared {
+                    Some(d) => d != Types::ANY && self.flow.get(&v).is_some_and(|&t| t != d),
+                    None => self.var_type(v) != Types::ANY,
+                }
             })
             .collect();
         out.sort();
@@ -1801,6 +2077,15 @@ impl<'e, 'p> Checker<'e, 'p> {
         let expected = expected
             .and_then(|e| self.as_func(e))
             .or_else(|| handler.as_ref().map(|h| h.0.clone()));
+        // Its overload signatures, taken before the body is checked (a
+        // block reports those left pending at its end).
+        let overloads = (name.path().len() == 1 && !method)
+            .then(|| {
+                let sig = self.func_sig(&FnSig::of(func));
+                let declared = self.env.types.func(sig);
+                self.take_overloads(name.path().at(0).text(), declared)
+            })
+            .flatten();
         let t = self.function_body(&FnSig::of(func), expected, self_ty);
         let cap = self.last_result_cap.take();
         if let (Some(v), Some(m)) = (table, method_name) {
@@ -1828,6 +2113,8 @@ impl<'e, 'p> Checker<'e, 'p> {
         }
         if name.path().len() == 1 && !method {
             let n = &name.path().at(0);
+            // Callers see the overloads.
+            let t = overloads.unwrap_or(t);
             match self.lookup_var(n.text()) {
                 Some(v) => self.assign_var(v, t, n.span()),
                 None => self.assign_global(*n, t),
@@ -1857,7 +2144,7 @@ impl<'e, 'p> Checker<'e, 'p> {
         expected: Option<Func>,
         self_ty: Option<TypeId>,
     ) -> TypeId {
-        let mut sig = self.env.func_sig(f, &self.scope.clone(), false);
+        let mut sig = self.func_sig(f);
         // Strict mode: parameters of non-callback functions need
         // annotations (E2050).
         let callback = std::mem::take(&mut self.callback_next);
@@ -1874,10 +2161,14 @@ impl<'e, 'p> Checker<'e, 'p> {
         // Contextual parameter types for unannotated parameters.
         if let Some(exp) = &expected {
             for (i, p) in sig.params.iter_mut().enumerate() {
-                if f.params[i].ty.is_none()
-                    && let Some(ep) = exp.params.get(i)
-                {
-                    p.ty = ep.ty;
+                if f.params[i].ty.is_none() {
+                    // Past the expected parameters, its rest's type:
+                    // `(...string) -> ()` types each (decision L78).
+                    if let Some(ep) = exp.params.get(i) {
+                        p.ty = ep.ty;
+                    } else if let Some(Rest::Variadic(t)) = exp.rest {
+                        p.ty = t;
+                    }
                 }
             }
             if f.ret.is_none()
@@ -2101,6 +2392,39 @@ impl<'e, 'p> Checker<'e, 'p> {
         }
     }
 
+    /// Whether a member annotation of `c` names a `typeof` alias resolved
+    /// so far (by its name: another of that name only costs a refresh).
+    fn names_typeof_alias(&self, c: ClassDecl<'_>) -> bool {
+        if self.env.typeof_alias_names.is_empty() {
+            return false;
+        }
+        let mut names: Vec<String> = Vec::new();
+        for m in c.members() {
+            match m.kind() {
+                ClassMemberKind::Field { ty, .. } => type_ref_names(ty, &mut names),
+                ClassMemberKind::Method { func, .. } => {
+                    let sig = FnSig::of(func);
+                    for p in &sig.params {
+                        if let Some(t) = p.ty {
+                            type_ref_names(t, &mut names);
+                        }
+                    }
+                    match sig.ret {
+                        Some(RetType::Single(t)) => type_ref_names(t, &mut names),
+                        Some(RetType::List { types, .. }) => {
+                            types.iter().for_each(|t| type_ref_names(t, &mut names))
+                        }
+                        _ => {}
+                    }
+                }
+                _ => {}
+            }
+        }
+        names
+            .iter()
+            .any(|n| self.env.typeof_alias_names.contains(n.as_str()))
+    }
+
     /// The bodies of a class's methods (spec chapter 3).
     fn class_body(&mut self, c: ClassDecl<'_>) {
         let Some(def) = self.env.lookup_type(c.name().text(), &self.scope) else {
@@ -2114,6 +2438,35 @@ impl<'e, 'p> Checker<'e, 'p> {
             self.scope.params.push((name, p));
         }
         self.scope.self_ty = Some(instance);
+        // A field's own `typeof(expr)` is typed where the file reaches the
+        // class, as a `local`'s annotation (decision L70).
+        let mut own: Vec<Expr<'_>> = Vec::new();
+        for m in c.members() {
+            if let ClassMemberKind::Field { ty, .. } = m.kind() {
+                typeof_exprs(ty, &mut own);
+            }
+        }
+        let has_own = !own.is_empty();
+        for x in own {
+            let ty = self.infer(x);
+            let ty = self.env.types.widen(ty);
+            self.env
+                .typeof_types
+                .insert((x.span().start, x.span().end), ty);
+        }
+        // Member annotations may use a `typeof` alias the file resolved
+        // above (decision L57), or one of another module, resolved when that
+        // module was checked (decision L76).
+        if has_own
+            || self
+                .scope
+                .module
+                .is_some_and(|module| self.env.typeof_resolved.contains(&module))
+            || self.names_typeof_alias(c)
+        {
+            let scope = self.scope.clone();
+            self.env.refresh_member_types(def, c, &scope);
+        }
         // A base whose type arguments use `typeof` (directly or through a
         // `typeof` alias) is known only where the file reaches the class
         // (`extends Module<typeof(DEFAULTS)>`, decision L45).
@@ -2548,6 +2901,66 @@ fn calls_setfenv(b: Block<'_>) -> bool {
 }
 
 /// The `typeof(expr)` parts of a type.
+/// A value whose type comes from somewhere other than a literal written
+/// here: a local keeps it unwidened (spec §2.4, decision L64).
+fn typed_elsewhere(e: Expr<'_>) -> bool {
+    match e.kind() {
+        ExprKind::Paren(inner) => typed_elsewhere(inner),
+        ExprKind::Call { .. }
+        | ExprKind::OptCall { .. }
+        | ExprKind::Method { .. }
+        | ExprKind::OptMethod { .. }
+        | ExprKind::Name(_)
+        | ExprKind::Field { .. }
+        | ExprKind::OptField { .. }
+        | ExprKind::Index { .. }
+        | ExprKind::OptIndex { .. }
+        | ExprKind::Cast { .. } => true,
+        _ => false,
+    }
+}
+
+/// The last name of every type a type annotation refers to (`a.b.C<T>`
+/// gives `C` and `T`'s).
+pub(crate) fn type_ref_names(t: Type<'_>, out: &mut Vec<String>) {
+    match t.kind() {
+        TypeKind::Ref { path, args } => {
+            if let Some(last) = path.iter().next_back() {
+                out.push(last.text().to_string());
+            }
+            for a in args {
+                if let TypeArg::Type(t) = a {
+                    type_ref_names(t, out);
+                }
+            }
+        }
+        TypeKind::Paren(i) | TypeKind::Optional(i) | TypeKind::Array(i) | TypeKind::KeyOf(i) => {
+            type_ref_names(i, out)
+        }
+        TypeKind::Index { object, key } => {
+            type_ref_names(object, out);
+            type_ref_names(key, out);
+        }
+        TypeKind::Union(ms) | TypeKind::Intersection(ms) => {
+            ms.iter().for_each(|m| type_ref_names(m, out))
+        }
+        TypeKind::Table(fields) => {
+            for f in fields {
+                match f {
+                    TableTypeField::Named { ty, .. }
+                    | TableTypeField::NamedString { ty, .. }
+                    | TableTypeField::Array(ty) => type_ref_names(ty, out),
+                    TableTypeField::Indexer { key, value } => {
+                        type_ref_names(key, out);
+                        type_ref_names(value, out);
+                    }
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
 pub(crate) fn typeof_exprs<'t>(t: Type<'t>, out: &mut Vec<Expr<'t>>) {
     match t.kind() {
         TypeKind::Typeof(e) => out.push(e),
@@ -2796,5 +3209,23 @@ fn literal_string(e: Expr<'_>) -> Option<String> {
     match e.kind() {
         ExprKind::String(lit) => Some(String::from_utf8_lossy(&lit.value()).into_owned()),
         _ => None,
+    }
+}
+
+/// The overload set the signatures of `name` among `overloads` make.
+fn overload_set_of(
+    types: &mut Types,
+    overloads: &[(Box<str>, TypeId)],
+    name: &str,
+) -> Option<TypeId> {
+    let sigs: Vec<TypeId> = overloads
+        .iter()
+        .filter(|(n, _)| n.as_ref() == name)
+        .map(|(_, t)| *t)
+        .collect();
+    match sigs.len() {
+        0 => None,
+        1 => Some(sigs[0]),
+        _ => Some(types.intern(Ty::Intersection(sigs))),
     }
 }

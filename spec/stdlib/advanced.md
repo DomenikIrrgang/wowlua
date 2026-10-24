@@ -64,6 +64,7 @@ if secure.evaluate("[group:raid] yes") then … end
 | `visibility` | `(frame: Frame, conditional: string?)` | `RegisterStateDriver(frame, "visibility", …)`; the values are `show` and `hide`. nil removes the driver (`UnregisterStateDriver`); the frame stays as it is. A constant conditional (`"show"`, `"hide"`) keeps a frame always shown or hidden. |
 | `state` | `(frame: Frame, name: string, conditional: string, fn: ((value: string) -> ())?) -> Subscription` | A driver for the state `name`; `fn` gets each new value, the first right away. Without `fn` only the driver is registered and nothing is hooked, for a header whose `_onstate-<name>` snippet does the work. Cancelling removes the driver. |
 | `evaluate` | `(conditional: string) -> string?` | What the conditional gives now (`SecureCmdOptionParse`); nil when no clause matches |
+| `overlay` | `(target: Frame, opts?: { strata? }) -> Overlay` | A secure action button over a button of the addon's own, for what only a click on a secure button may do (a slash command through `macro`, a click on a protected button through `click`). Made out of combat. `Overlay`: `button` (the secure button, for `PreClick`/`PostClick` hooks), `set(name, value)` (an attribute), `show(other?)` (anchored over the target, or over `other`, such as the row of a list it moves between, in `strata`, default `"DIALOG"`; hovering it is hovering what it is over), `hide()` (hidden and let go of the target); the last three answer false in combat, where they can't. It hangs off `UIParent` and is anchored to the target only while shown, so the target's window never turns protected; a press and a release both reach it, and hovering it is hovering the target (decision S44). |
 
 Semantics (decision S35):
 
@@ -113,6 +114,24 @@ hook(GameTooltip, "SetSpellByID", function(tip: GameTooltip, id: number) … end
 | `@hookScript(frame, script, opts?)` | `frame:HookScript(script, fn)` |
 | `hook(...)`, `hookScript(...)` | The same as plain functions |
 
+Their signatures are overloads (decision S51):
+
+```wowlua
+overload function hook(name: string, fn: function)
+overload function hook(target: unknown, name: string, fn: function, opts: Options?)
+overload function hook(name: string): HookDecorator
+overload function hook(target: unknown, name: string, opts: Options?): HookDecorator
+overload function hookScript(frame: ScriptRegion | string, script: string, fn: function, opts: Options?)
+overload function hookScript(frame: ScriptRegion | string, script: string, opts: Options?): HookDecorator
+type Options = { addon?: string, owner?: unknown }
+type HookDecorator = (fn: function, ctx: DecoratorContext?) -> ()
+```
+
+`fn` takes the hooked function's parameters where the target is known
+(decision L67). A target may be any value (a game object whose method the
+declarations leave out): the hook checks it when it is installed and fails,
+naming it, when it has no such function.
+
 - **Targets.** `target` (and `frame` for `@hookScript`) is either a table or a
   **string naming a global**. A string is resolved from `_G` when the hook is
   installed.
@@ -125,6 +144,12 @@ hook(GameTooltip, "SetSpellByID", function(tip: GameTooltip, id: number) … end
   (`ErrorInfo.owner`, [`wowlua:errors`](infrastructure.md#errors)).
 - **Signatures.** The hook's parameters are checked against the hooked
   function's declared signature, with the receiver first for method hooks.
+  A function written in a `hook(…)` or `hookScript(…)` call takes its
+  parameter types from it: `hook(GameTooltip, "SetUnit", function(tip,
+  unit) … end)` gives `tip` the tooltip's type and `unit` the method's, and
+  `hookScript(frame, "OnSizeChanged", function(self, w, h) … end)` the
+  script's handler types, as `frame:HookScript` would (decision L67). Its
+  results are not read.
   Hooking a name that is not declared is warning W8040, unless an enclosing
   existence test checks the same member (`if obj.Method then` around
   `hook(obj, "Method", fn)`, `if _G.Name then` around `hook("Name", fn)`).
@@ -292,16 +317,16 @@ end
 
 ```wowlua
 declare module "wowlua:serialize"
-    function encode(value: any): string
-    function decode(s: string): (boolean, any)
+    function encode(value: unknown): string
+    function decode(s: string): (boolean, unknown)
     function compress(s: string, level: number?): string
     function decompress(s: string): string?
     function toPrintable(s: string): string
     function fromPrintable(s: string): string?
     function toAddonChannel(s: string): string
     function fromAddonChannel(s: string): string
-    function exportString(value: any, opts: { version: number, prefix?: string }): string
-    function importString(s: string): (boolean, any)
+    function exportString(value: unknown, opts: { version: number, prefix?: string }): string
+    function importString(s: string): (boolean, unknown)
 end
 ```
 
@@ -379,11 +404,11 @@ declare module "wowlua:log"
         to: (frame: ScrollingMessageFrame, ...any) -> (),
     }
 
-    function trace(...: any)
-    function debug(...: any)
-    function info(...: any)
-    function warn(...: any)
-    function error(...: any)
+    function trace(...: unknown)
+    function debug(...: unknown)
+    function info(...: unknown)
+    function warn(...: unknown)
+    function error(...: unknown)
     function setLevel(level: LevelValue)
     function sink(fn: (level: string, message: string) -> ())
     type LogOptions = { prefix?: string, chatLevel?: LevelValue }

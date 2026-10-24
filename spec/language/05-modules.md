@@ -68,6 +68,34 @@ Rules:
   after it would never be assigned. It is allowed in scripts, as in Lua (the
   value is ignored by WoW).
 
+### 5.1.1 Function overloads
+
+A top-level function may declare several **overload signatures** before its
+implementation, as a class's method does
+([Classes §3.1.11](03-classes.md#3111-overloads)); `export overload function`
+before an `export function` (decision L85):
+
+```wowlua
+export overload function hook(name: string, fn: function)
+export overload function hook(name: string): HookDecorator
+export function hook(name: string, fn: function?): HookDecorator?
+    …
+end
+```
+
+- Callers, the function's own body included, see only the overload
+  signatures, resolved as in [Types §2.7](02-types.md#27-calls-and-arity);
+  importers of an exported one see them too.
+- Each signature must be accepted by the implementation (E3044): every
+  argument it takes fits the implementation's parameters, and its results
+  and the implementation's fit one way or the other (wider results stand
+  behind narrower overloads, as in TypeScript).
+- The signatures come right before their implementation (`function f`,
+  `local function f` or `export function f`, all with the same name); a
+  signature without one right after it is E3047. Overloads are top-level
+  only (E0115).
+- They are compile-time only: no code is emitted for them.
+
 ## 5.2 Imports
 
 ```wowlua
@@ -83,7 +111,7 @@ import _ from "./frames.xml"                -- load-order only (no bindings)
 |------|---------|
 | `import a, b as c from "spec"` | Binds exported `a` and `b` (as `c`) as immutable locals. |
 | `import * as M from "spec"` | Binds the whole module's export table. Exported types are reachable as `M.TypeName` in type positions. |
-| `import type T, U from "spec"` | Imports types only, with no runtime effect. Never creates a load-order dependency. |
+| `import type T, U from "spec"` | Imports types only, with no runtime effect. Never creates a load-order dependency. A class it brings cannot be extended (E3008): extending needs the class itself, `import T from "spec"`. |
 | `import _ from "spec"` | Ensures `spec` loads before this file. Used for XML, plain Lua files and side-effect modules. `_` must be the only name in the statement (E0117). |
 
 **`import type` disambiguation.** `import type` followed by a name other than
@@ -442,6 +470,7 @@ described in [Types §2.4.7](02-types.md#247-the-addon-namespace). The key
 
 Modules are private to the AddOn they are compiled into. Two AddOns never share
 module instances, even in the same workspace. Addons communicate through
-`@global` APIs, which another addon in the same workspace can type-check against
-via the generated declaration file (see
+`@global` APIs. Another addon in the same workspace that lists the addon in
+`addon-dependencies` is checked with its sources, types only, so the API has
+its inferred types there, and may `import type` from its modules (see
 [Package manager](../toolchain/package-manager.md#108-workspaces)).

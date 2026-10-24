@@ -582,7 +582,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         "GetGuildAchievementNumMembers",
         "GetGuildNewsSort",
         "GetGuildRosterLargestAchievementPoints",
-        "GetGuildRosterSelection",
     ];
     // Unknown IDs, no one selected, nothing found: nil (unverified).
     let nils: &[&str] = &[

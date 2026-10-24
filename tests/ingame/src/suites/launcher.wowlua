@@ -34,7 +34,9 @@ s:test("a minimap button and a compartment entry", function(t)
     end
     if AddonCompartmentFrame and AddonCompartmentFrame.registeredAddons then
         local found: { text: string, func: (button: any, input: { buttonName: string }) -> () }? = nil
-        for _, entry in ipairs(AddonCompartmentFrame.registeredAddons) do
+        -- (the compartment's list, which its Lua keeps as a plain table)
+        local registered = AddonCompartmentFrame.registeredAddons :: { text: string, func: (button: any, input: { buttonName: string }) -> () }[]
+        for _, entry in ipairs(registered) do
             if entry.text == "wowlua StdTest" then found = entry end
         end
         t:ok(found ~= nil, "the compartment entry")

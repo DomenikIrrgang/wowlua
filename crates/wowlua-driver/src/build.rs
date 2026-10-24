@@ -500,33 +500,6 @@ fn build_inner(
             ))),
         }
     }
-    // Generated declaration files of the workspace addons this addon lists
-    // in `addon-dependencies` (spec §10.8).
-    if let Some(deps) = &manifest.manifest.addon_dependencies {
-        for dep in deps.required.iter().chain(&deps.optional) {
-            let Some(other) = project
-                .workspace_addons
-                .iter()
-                .find(|a| a.name.eq_ignore_ascii_case(dep.name()))
-            else {
-                continue;
-            };
-            let text = crate::workspace::global_declarations(&other.src);
-            let rel = format!("@workspace/{}.d.wowlua", other.name);
-            let file = session.db.add(&rel, text.clone());
-            declarations.push(crate::compile::Declaration {
-                source: sources::Source {
-                    rel: rel.clone(),
-                    src_rel: rel,
-                    abs: PathBuf::new(),
-                    kind: SourceKind::Wowlua,
-                    output: None,
-                },
-                file,
-                bytes: text.into_bytes().into(),
-            });
-        }
-    }
     // The compiler's implicit declarations (Lua 5.1 and WoW's Lua).
     for builtin in wowlua_stdlib::declarations() {
         let file = session.db.add_static(builtin.path, builtin.text);
@@ -904,6 +877,16 @@ fn build_inner(
         &mut parsed,
         &overrides,
     );
+    // The sources of the workspace addons it lists in `addon-dependencies`,
+    // types only (spec §10.8).
+    let types_only = {
+        let present: HashSet<String> = files
+            .iter()
+            .map(|(s, _)| s.src_rel.clone())
+            .chain(declarations.iter().map(|d| d.source.src_rel.clone()))
+            .collect();
+        crate::foreign::load(&mut session.db, project, &present)
+    };
     let uses_locale = files
         .iter()
         .any(|(s, _)| s.src_rel == format!("{}locale.wowlua", wowlua_sema::STDLIB_PREFIX));
@@ -1134,7 +1117,7 @@ fn build_inner(
             }
             None => Vec::new(),
         };
-        let units: HashMap<String, crate::compile::LibraryUnit> = wlibs
+        let mut units: HashMap<String, crate::compile::LibraryUnit> = wlibs
             .iter()
             .map(|l| {
                 let m = &l.manifest;
@@ -1152,6 +1135,7 @@ fn build_inner(
                 (l.name.clone(), unit)
             })
             .collect();
+        units.extend(types_only.units(&meta));
         let output = crate::compile::compile_flavor(
             &session.db,
             &mut diagnostics,
@@ -1183,6 +1167,7 @@ fn build_inner(
             },
             &lower_lua,
             &units,
+            &types_only,
             &minify,
             &mut flavor_cache,
             idx + 1 < compile_flavors.len(),

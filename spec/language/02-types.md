@@ -89,6 +89,11 @@ type Anchor =
 - `A | B` is a value of either type.
 - `A & B` is a value satisfying both types, used mainly for combining table
   shapes and for function overloads in declarations.
+  Reading a field of an intersection gives the type of the first part that
+  has the field; a part that only reads it as `any` (an array asked for a
+  named field) doesn't count. A key read (`c[i]`) gives the first part's
+  with numbered values or an indexer: in `number[] & { hex: string }`,
+  `c.hex` is a `string` and `c[1]` a `number` (decision L60).
 
 ### 2.2.4 Table types
 
@@ -105,12 +110,25 @@ type Anchor =
 
 Reading an element of an array (`xs[i]`) gives `T` in every mode, although
 reading past the end gives `nil` at run time (decision T95). Reads through a
-map or an indexer give `V?`.
+map or an indexer give `V?`. In strict mode an array has no named fields but
+`n` (`xs.label` is E2003: a list with named fields is written
+`{ [number]: string, label?: string }`), and a record with fields read with a
+number literal it doesn't have (`art[1]` of `{ atlas: string }`) is E2003;
+another key on a table without an indexer reads `any`, which W2063 reports
+(decision L49). A key whose type is one or more string literals (`k: keyof
+Colors`, `"a" | "b"`) reads those fields, as `T[K]` does (decision L53).
+A method call `r:Name(...)` with a name the record doesn't declare calls the
+indexer's value, as `r.Name` reads it: with `[string]: unknown` it is E2004
+(an `unknown` must be narrowed before it is called), with `[string]: F` it
+checks against `F` (decision L77).
 
 Records are **structural**: any table with at least the required fields of
 compatible types is assignable. Extra fields are allowed, except that an
 object literal assigned directly to a record type with an unknown field is
-an error in strict mode (E2003), to catch typos.
+an error in strict mode (E2003), to catch typos. So is a literal's named
+entry other than `n` where an array is expected (`{ class = "X", "Y" }` for
+a `string[]`): an array has numbered values only, and the entry would be
+dropped (decision L71).
 
 ### 2.2.5 Function types
 
@@ -158,7 +176,8 @@ comparison expression. Expected types also drive inference:
 parameter the arguments left open, or replaces an argument's binding that it
 fits (`local xs: (number | string)[] = list(1)` binds `T` to
 `number | string`); a binding that does not fit stays, so `local b: boolean =
-id(5)` reports `number?`, not a union with `boolean` (decision L36). A
+id(5)` reports `number?`, not a union with `boolean` (decision L36). An
+expected `any` or `unknown` (`print(id(5))`) binds nothing (decision L48). A
 parameter `ClassOf<T>` binds `T` to the class whose table is passed (any type
 arguments of a generic class `any`), or to the enum whose table is passed:
 `enumFrom<E>(e: ClassOf<E>, raw: any): E?` called with `Direction` gives
@@ -173,7 +192,9 @@ a call's result) binds as its type, a union of literals included, as a
 `local` keeps it (`assert(tokens[k])` with `tokens: { [string]: Token }` is
 a `Token`); decision L44. Inside the body, a value of a
 constrained type parameter fits wherever its constraint does (an `E extends
-EventName` is passed on as an `EventName`).
+EventName` is passed on as an `EventName`), and its fields and methods are
+the constraint's (`b:GetWidth()` with `b: B` and `B extends Frame`; decision
+T279). An unconstrained type parameter's members are `any`.
 
 **Variance** (decision L34). For generic classes, interfaces and aliases:
 
@@ -197,9 +218,24 @@ type Settings = typeof(defaults)    -- { scale: number, locked: boolean }
 The expression is typed where the alias stands, so it may only refer to
 names declared before it. A `typeof` alias has its type once its file has been
 checked up to it: in the file's later annotations and in the modules checked
-after it (importers, and a library's consumers, spec §5.4.4). Uses before
-that point, such as a hoisted function's signature or another alias that
-refers to it, read it as `any`.
+after it (importers, and a library's consumers, spec §5.4.4). A class
+declared after it in the file has its field and method types worked out
+again where the file reaches the class, so they read the alias's type
+(decision L57); so does a class in another module whose field or method
+annotations name an alias of an imported module (`api: UnitApi`, a record of
+`typeof(UnitHealth)` and the like, checked after that module), decision L76.
+Other uses before that point, such as a hoisted function's signature or
+another alias that refers to it, read it as `any`.
+
+Written in a class field's own annotation (`map: typeof(WorldMapFrame)? =
+nil`), `typeof(expr)` is typed where the file reaches the class, and the
+field reads that type in the class's methods and outside (decision L70).
+
+Written in a function's own annotations (a `local function`, a module's
+function, a function value), `typeof(expr)` is typed where the function
+stands, as in a `local`'s annotation: `local function hex(k: keyof
+typeof(colors)): string return colors[k].hex end` takes the colours' field
+names and reads their type (decision L62).
 
 ### 2.2.8 Type predicates
 
@@ -207,7 +243,12 @@ A function whose return type is `param is T` narrows its argument in the
 caller:
 
 - where the call is **truthy**, the argument is narrowed to `T` (intersected
-  with its current type);
+  with its current type); a member that passes for `T` only because it is
+  open (a game frame takes any field, so `Frame` passes for `Frame &
+  Disableable`) is narrowed to `T` too, whose members are declared (decision
+  L79); so is an object of an unrelated type when `T` is a class: it may still
+  be one (`reflect.isInstance(module, WorldMapModule)` on a module's record
+  type, decision L82);
 - where the call is **falsy** (`else` branch, `if not p(x)`, after
   `if p(x) then return end`), the argument is narrowed by **excluding** the
   members of its union type that are assignable to `T`. A member that is a
@@ -243,7 +284,7 @@ print(v:upper())                              -- v: string (Secret excluded)
 
 | Type | Meaning |
 |------|---------|
-| `Self` | Inside class and interface bodies: the type of the receiver. Used for fluent APIs and in declarations (`function SetScript(...): Self`). In a declared class (`declare class`), `Self` is bound where a member is read, to the receiver's type: `toggle:SetScript("OnClick", function(self) … end)` on an instance of `class Toggle extends Button` gives `self: Toggle` (decision L46). |
+| `Self` | Inside class and interface bodies: the type of the receiver. Used for fluent APIs and in declarations (`function SetScript(...): Self`). In a declared class (`declare class`), `Self` is bound where a member is read, to the receiver's type: `toggle:SetScript("OnClick", function(self) … end)` on an instance of `class Toggle extends Button` gives `self: Toggle` (decision L46); on a value typed as a game type with more (`Button & { owner: Frame? }`), the whole value: `self.owner` is typed (decision L80). |
 | `ClassOf<T>` | The class value (constructor table) of instance type `T`, or the table of enum `T`. Calling `new` through `ClassOf<T>` is an error if `T` is abstract (E3002). For a type parameter `T` it binds `T` from the table passed (§2.2.6). |
 | `EventName` | Union of all **WoW event** names (`declare event`). |
 | `MessageName` | Union of all **addon message** names (`declare message`). |
@@ -329,7 +370,12 @@ checked against the constraints, so its
 strings stay literals: `watchAll<K extends keyof D>(keys: K[], …)` called
 with `{ "line", "figure" }` binds `K` to those keys, and a name that is not
 one is E2014. (Only a list of the parameter itself, `K[]`: a table literal
-for `D[K]` takes its type from the bound `K` as usual.)
+for `D[K]` takes its type from the bound `K` as usual.) A table literal
+argument holding a function with an unannotated parameter
+(`segmented({ options = { … }, onChange = function(v) … end })`) binds the
+type parameters from its other fields first, on trial, and is then checked
+against its parameter with them bound, so `v` gets the option values' type
+(decision L48).
 
 ## 2.3 Type aliases and recursive types
 
@@ -346,6 +392,12 @@ Aliases are transparent. `ItemId` and `number` are interchangeable.
 - An alias may refer to itself only inside a table type or function type
   (`type Tree = { value: number, children: Tree[] }`). An unguarded recursive
   alias (`type A = A | nil`, `type B = C; type C = B`) is error E2053.
+- An alias whose body is a table type and that refers to itself, directly
+  or through other aliases, is a named structural type: its references have
+  its fields (as an interface's members, with the alias's type arguments),
+  error messages name it, and values match it exactly as they match its
+  table type (decision L58). In a body that is not a table
+  type, a reference to the alias itself reads as `any`.
 - Interfaces and classes are named types and may refer to themselves and to each
   other freely, including across modules through `import type`, which never
   creates a load-order dependency.
@@ -357,12 +409,13 @@ Inference is local and bidirectional. There is no whole-program inference.
 | Construct | Inferred type |
 |-----------|---------------|
 | `local x = 5` | declared type `number` (literal widened) |
+| `local p = s :: Point`, `local k = opts.kind` | `Point`, the field's type: a value typed elsewhere (a name, a field or index read, a call's result, a `::` assertion) keeps its type, unions of literals included (decision L64) |
 | `local y = ok and t` (`ok: boolean`, `t: T`) | `false \| T` (`false` and `true` beside types other than `nil` and booleans are not widened) |
 | `const X = 5` | `5` (literal kept) |
-| `local t = { a = 1, b = "x" }` | `{ a: number, b: string }` |
+| `local t = { a = 1, b = "x" }` | `{ a: number, b: string }`; a field or element written `v :: T` keeps `T` (`{ corner = "TOP" :: FramePoint }` is `{ corner: FramePoint }`, decision L84) |
 | `local t = { 1, 2, 3 }` | `number[]` |
 | `local t = {}` | open table, see below |
-| function without return annotation | union of all returned types (`()` if none) |
+| function without return annotation | union of all returned types (`()` if none); a class's method without one returns `any` (its type is known before its body is checked: annotate its results), decision L56 |
 | unannotated parameter | `any` (basic/strict), or the contextual type if available |
 
 ### 2.4.1 Unannotated locals
@@ -373,6 +426,20 @@ the type of the most recent assignment on that control-flow path. This keeps
 valid Lua patterns valid, and a local may hold different types over time,
 while still catching misuse such as calling `:upper()` on a value that is a
 number at that point.
+
+A table assigned to such a local after its declaration fills in what an empty
+table leaves out: where the value fits the local's type so far, each field
+holding `{}` (with no fields and no indexer) takes that type's field type. In
+`local p = byKey[key]; if not p then p = { seen = {} } end` with
+`byKey: { [string]: { seen: { [number]: boolean } } }`, `p.seen` is the map,
+not an empty table read as `any`. The value's other fields stay as they are
+(decision L59).
+
+A literal assigned to such a local keeps its literal type where the local's
+type so far has that literal: `local w = cache[k]; if w == nil then w = false
+end` with `cache: { [string]: T | false }` leaves `w` a `T | false`, so
+`cache[k] = w` fits. Other assigned literals widen as in a `local` (`w = true`
+there gives `boolean`), decision L61.
 
 Inside a closure, an unannotated local that a closure assigns, or that is
 captured and assigned later, may hold any value it is given before the closure
@@ -422,7 +489,9 @@ When an expression appears where a type is expected, that type flows into the
 expression:
 
 - function expressions get parameter and return types from the expected
-  function type,
+  function type; parameters past the expected ones take its rest's type, so
+  each capture of `s:gsub("(%w+)=(%w+)", function(k, v) … end)` is a
+  `string` (`(...string) -> any`, decision L78),
 - table literals are checked against the expected record or array type, and
   nested literals get their field types; a literal whose elements all have
   the expected element type gets that type (`local xs: string[] = { "a" }` is a
@@ -432,7 +501,11 @@ expression:
   member it fits, so literal fields can discriminate
   (`local c: Earned | Spent = { kind = "spent", amount = 1 }`); for a union
   with one table member (`string | string[]`), against that member,
-- empty table literals take the expected type (`local xs: string[] = {}`),
+- empty table literals take the expected type (`local xs: string[] = {}`);
+  without one, an empty table after `or` or `??` stands in for the value
+  before it and takes its type when it fits (a record whose fields are all
+  optional, a list, a map): `local o = opts or {}` with `opts: Options?` is an
+  `Options`, `list or {}` with `list: number[]?` a `number[]` (decision L52),
 - generic calls use the expected return type to infer type arguments, and
   arguments for parameters that do not mention a type parameter are typed by
   those parameters.
@@ -463,7 +536,11 @@ values, as in Lua. The loop variables take the iterator's result types, with
 
 `pairs`, `ipairs`, `next`, `select`, `unpack`, `pcall`, `xpcall`,
 `securecallfunction` and `coroutine.*` are declared in the Lua standard library
-declarations with type packs (§2.2.10). They are not special-cased.
+declarations with type packs (§2.2.10). One is special-cased: `select(n, …)`
+with a whole number literal `n` gives the types of the values from the n-th
+on (`select(2, f())` with `f(): (number, string)` is a `string`, decision
+L54); with another `n`, the values' type (`select(i, ...)` with `...: string`
+gives `(string, ...string)`: the loop `for i = 1, select("#", ...)` reads each value as its type, decision L82).
 
 ### 2.4.5 String methods
 
@@ -471,7 +548,9 @@ Values of type `string`, including string literals in parentheses, index the
 `string` library: `s:upper()` is typed as `string.upper(s)`, and
 `("%d"):format(n)` as `string.format("%d", n)`. WoW's additional string
 functions (`strsplit`, `strtrim`, …) are available as methods where WoW adds them
-to the `string` table.
+to the `string` table. In strict mode a name the `string` library doesn't
+have (`s.message`, `s:nope()`) is E2003: Lua reads it as `nil` (decision
+L71).
 
 ### 2.4.6 `setmetatable`
 
@@ -561,9 +640,16 @@ local ok, n = coroutine.resume(co, items)
 
 The checker narrows union types along control flow using:
 
-- truthiness: `if x then`, `x and x.y`, `if not x then return end`
+- truthiness: `if x then`, `x and x.y`, `if not x then return end`; where
+  an `unknown` is falsy it is `false | nil`, so `x and true or false` is a
+  `boolean` (decision L63)
 - nil comparison: `x ~= nil`, `x == nil`
-- `type(x) == "string"` (and the other Lua type names)
+- `type(x) == "string"` (and the other Lua type names); an `unknown` (or a
+  member that is) narrowed to `"function"` is a function that takes and gives
+  `unknown` (`(...unknown) -> ...unknown`), and to `"table"` a table of
+  `unknown` keys and values (`{ [unknown]: unknown }`): what is inside stays
+  `unknown` until it too is narrowed (decision L75). `any` narrows to the
+  plain `function` and `table` types
 - literal equality: `if kind == "spell" then` on discriminated unions; a
   comparison of a field, `if x.kind == "spell" then`, narrows `x` to the
   members whose `kind` can be that literal (and the false branch drops the
@@ -586,7 +672,8 @@ return one reports (E2001, too many values); write `return (assert(x, "msg"))`
 (decision L38).
 
 **Fields.** A field path of a local or of a declared global (`a.b`, `a.b.c`,
-`G.x`) is narrowed like a local, and assigning it narrows it by the value's
+`G.x`) is narrowed like a local (a field of an intersection's part too:
+`b.owner` of a `Button & { owner: Frame? }`, decision L81), and assigning it narrows it by the value's
 `nil`-ness (to the declared type without `nil`, or to `nil`). Its narrowing
 is invalidated by an assignment to the root, to the path or to a path above
 it, and by a call that may modify the table holding it: one that receives the
@@ -612,9 +699,15 @@ call, which may run that closure.
 loop starts again. A declared local keeps its narrowing at the loop start
 (as the members of its declared type it fits: `0` in a `number?` is `number`)
 when every path back to the start, the end of the body and `continue`, leaves
-it within that narrowing; its `break` paths then join the flow after the loop.
-Otherwise, and for unannotated locals, the loop body sees the declared type
-(`any` for an unannotated local).
+it within that narrowing. An unannotated local is its type before the loop
+at the loop start when the paths back bring it no other type; when they do,
+the loop is checked again with the union of that type and theirs, which then
+holds when the paths back bring nothing more. The `break` paths of the locals
+kept so join the flow after the loop: `local found = nil` that a search loop
+sets to an index is a `number?` after it. Otherwise (a declared local that
+leaves its narrowing, an unannotated one whose union still grows, or one a
+closure assigns) the loop body sees the declared type (`any` for an
+unannotated local), decision L65.
 
 **Fields through a narrowed local.** Assigning a field of an annotated local
 (`item.x = 1`) checks against the members of its declared type that its
@@ -630,6 +723,9 @@ narrowed value fits: inside `if item then`, an `Item | false` local is an
 - `S` is `nil` and the mode is `basic` (nil is assignable to everything in basic mode);
 - `T` is a union containing a member `S` is assignable to, or `S` is a union whose
   members are all assignable to `T`;
+- `T` is an intersection and `S` is assignable to each of its parts, or `S` is
+  an intersection one of whose parts is assignable to `T` (not an
+  intersection): `A & B & C` fits `A & B`, `C & B` and `B` (decision L74);
 - both are records and `S` has every required field of `T` with an assignable
   type (fields are compared covariantly; readonly-ness is ignored);
 - both are arrays or maps with assignable element types (variance as in §2.2.6);
@@ -682,6 +778,16 @@ are resolved in two passes:
 2. The function expressions are contextually typed against the first remaining
    overload and checked.
 
+A type parameter that only a function expression's results can bind (`R` in
+`call<R>(f: () -> R): R`, `R...` in `pcall`) is bound from what the
+expression returns when it has no return annotation:
+`pcall(function() return "x" end)` gives `(boolean, string)` (decision L55).
+`pcall` and `xpcall` give `unknown` after the boolean where the function never
+returns or returns nothing, since then the values are only what it raised,
+which may be anything (decision L75). `pcall(f, ...)` of an overloaded `f`
+(`CreateFrame`) gives the results of the overload the arguments match:
+`pcall(CreateFrame, "ModelScene")` gives `(boolean, ModelScene)` (decision L82).
+
 A last argument that gives several values (a call such as `unpack(t)`, or
 `...`) gives its values to the parameters from its position on, as in Lua:
 `tex:SetTexCoord(unpack(coords))` matches the four-number overload when
@@ -698,7 +804,10 @@ The global environment (`_G`) is modelled as a set of **declared globals**:
   embedded in the compiler until the package manager provides them as types
   packages; see [Package manager](../toolchain/package-manager.md#109-types-packages)
   and decision T83). A function is declared for a flavor only when that
-  flavor's client has it (decision T85),
+  flavor's client has it (decision T85). A class the annotations give a data
+  class and a mixin as parents (`ItemLocation : ItemLocationData,
+  ItemLocationMixin`) extends the mixin, what the API's functions take, and
+  has the data's fields (decision T284),
 - the globals of Blizzard's UI code (FrameXML functions, tables, mixins and
   named frames) and its global strings (decision T84). A named frame of the
   XML is typed by its mixins and its widget type, the most specific first
@@ -709,11 +818,22 @@ The global environment (`_G`) is modelled as a set of **declared globals**:
   a mixin's method comes before the widget's, as in the client. These mixins
   are declared as classes with the functions their Lua defines (`function
   M:F(a, b)` a method, `function M.F(a)` a function field); the parameters
-  are untyped (`any`) and the results any values. A mixin made with
+  are untyped (`any`) and the results any values, except a message frame's
+  font and message methods (`FontableFrameMixin`, `ScrollingMessageFrameMixin`
+  and its secure part: `SetFont`, `AddMessage`, `GetScrollOffset`, …), typed
+  as the client's `MessageFrame` has them, a line and its colour possibly
+  secret. A frame type the client makes from Blizzard's Lua, not as a widget of
+  its own, is its intrinsic's mixin on a frame: `CreateFrame("ScrollingMessageFrame")`
+  gives a `ScrollingMessageFrameMixin & Frame` (decision T285).
+  `CreateFrame(frameType, …)` gives the class of each frame type the flavor
+  has, also those only some flavors document (`CreateFrame("Browser")` is a
+  `Browser`; decision T292). A mixin made with
   `CreateFromMixins(A, B)` extends `A` and has `B`'s functions,
 - the Lua 5.1 standard library as available in WoW, and `LibStub`
   (decision T86). WoW has no `os`, `io`, `debug` or `package` library; it
-  keeps `date`, `time` and `difftime` as globals. Its additions to `string`
+  keeps `date`, `time` and `difftime` as globals (`date("*t")` and
+  `date("!*t")` give a `DateTable` of the time's parts, any other format a
+  `string`, decision L72). Its additions to `string`
   (`startswith`, `endswith`, `contains`, `ltrim`, `rtrim`, `concat`, …),
   `table` (`contains`, `indexof`, `keys`, `values`, `count`, `isempty`,
   `removevalue`, `freeze`, …) and `math` (`clamp`, `lerp`, `round`, `wrap`,
@@ -755,6 +875,10 @@ A name starting with `_` takes no value it wants (as for W1003) and is
 skipped: the warning names the first other one.
 A helper meant to pass every value on returns them through `...`
 (`local function okThen(ok, ...) if ok then return ... end end`).
+An `and` or `or` gives one value, so a name past an `and` or `or` of a call
+that ends a `local` or an assignment (`local x, y = pos and
+pos:GetXY()`) is W2062 too, whatever the call (decision L73): write
+`if pos then x, y = pos:GetXY() end`.
 
 Reading an undeclared global is warning W1001 in basic mode and error E1001
 in strict mode. **Assigning** an undeclared global, including through

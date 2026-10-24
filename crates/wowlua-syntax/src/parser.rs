@@ -822,6 +822,10 @@ impl<'a> Parser<'a> {
         if self.is_word("interface") && next_is_name {
             return Ok(Some(StmtData::Interface(self.interface_decl()?)));
         }
+        if self.is_word("overload") && next == T::Function {
+            place(self, "E0115", "`overload function`");
+            return Ok(Some(self.overload_stat()?));
+        }
         if self.is_word("enum") && next_is_name {
             place(self, "E0115", "`enum`");
             return Ok(Some(StmtData::Enum(self.enum_decl()?)));
@@ -857,7 +861,8 @@ impl<'a> Parser<'a> {
             && (matches!(next, T::Local | T::Function)
                 || ["const", "class", "abstract", "interface", "enum", "type"]
                     .iter()
-                    .any(|w| self.is_word_at(1, w)))
+                    .any(|w| self.is_word_at(1, w))
+                || (self.is_word_at(1, "overload") && self.kind_at(2) == T::Function))
         {
             place(self, "E0108", "`export`");
             return Ok(Some(self.export(start)?));
@@ -1102,6 +1107,15 @@ impl<'a> Parser<'a> {
         let (name, _) = self.func_name()?;
         let func = self.func_body(opened)?;
         Ok(StmtData::Function { name, func })
+    }
+
+    /// `overload function name<T>(params): ret`, without a body.
+    fn overload_stat(&mut self) -> PResult<StmtData> {
+        self.bump(); // overload
+        self.bump(); // function
+        let name = self.name()?;
+        let func = self.signature(false)?;
+        Ok(StmtData::Overload { name, func })
     }
 
     fn local_stat(&mut self) -> PResult<StmtData> {
@@ -3119,6 +3133,9 @@ impl<'a> Parser<'a> {
                 StmtData::Function { name, func }
             }
             _ if self.is_word("const") => self.const_decl(inner_start)?,
+            _ if self.is_word("overload") && self.kind_at(1) == T::Function => {
+                self.overload_stat()?
+            }
             _ if self.is_word("class") || self.is_word("abstract") => {
                 StmtData::Class(self.class_decl()?)
             }

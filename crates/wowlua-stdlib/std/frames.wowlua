@@ -13,6 +13,7 @@ import defer from "wowlua:combat"
 import handle from "wowlua:saved"
 import type SavedHandle from "wowlua:saved"
 import * as secret from "wowlua:secret"
+import after from "wowlua:timer"
 
 local _, ns = ...
 local wl = ns.__wowlua
@@ -617,4 +618,249 @@ export function button(parent: Frame, label: string, theme: WidgetTheme?): Butto
     b:SetFontString(text)
     b:SetText(label)
     return b
+end
+
+-- ------------------------------------------------- the game's frames --
+
+-- Whether `v` is a widget of this kind (by its IsObjectType, protected:
+-- a table that is no widget, or one the addon may not read, is not one).
+local function isA(v: unknown, kind: string): boolean
+    if type(v) ~= "table" or not secret.readable(v) then
+        return false
+    end
+    const is = (v :: { [string]: unknown }).IsObjectType
+    if type(is) ~= "function" then
+        return false
+    end
+    local ok, yes = pcall(is :: (unknown, string) -> unknown, v, kind)
+    return ok and yes == true
+end
+
+--- `v` as a widget of that kind, else nil: for the game's frames read by a
+--- name or a key (`asButton(frame.CloseButton)`), whose types the
+--- declarations may not know.
+export function asRegion(v: unknown): Region? if isA(v, "Region") then return v :: Region end return nil end
+export function asFrame(v: unknown): Frame? if isA(v, "Frame") then return v :: Frame end return nil end
+export function asButton(v: unknown): Button? if isA(v, "Button") then return v :: Button end return nil end
+export function asCheckButton(v: unknown): CheckButton? if isA(v, "CheckButton") then return v :: CheckButton end return nil end
+export function asEditBox(v: unknown): EditBox? if isA(v, "EditBox") then return v :: EditBox end return nil end
+export function asScrollFrame(v: unknown): ScrollFrame? if isA(v, "ScrollFrame") then return v :: ScrollFrame end return nil end
+export function asSlider(v: unknown): Slider? if isA(v, "Slider") then return v :: Slider end return nil end
+export function asStatusBar(v: unknown): StatusBar? if isA(v, "StatusBar") then return v :: StatusBar end return nil end
+export function asCooldown(v: unknown): Cooldown? if isA(v, "Cooldown") then return v :: Cooldown end return nil end
+export function asFontString(v: unknown): FontString? if isA(v, "FontString") then return v :: FontString end return nil end
+export function asTexture(v: unknown): Texture? if isA(v, "Texture") then return v :: Texture end return nil end
+export function asBrowser(v: unknown): Browser? if isA(v, "Browser") then return v :: Browser end return nil end
+
+--- A global frame by its name (`"CharacterFrame"`), nil when there is
+--- none: a load-on-demand window before its addon loads, a client without it.
+export function find(name: string): Frame?
+    return asFrame(_G[name])
+end
+
+--- What `keepAway` gives back.
+export type AwayHandle = {
+    --- Puts the frame away now (when `when` allows).
+    apply: () -> (),
+    --- Stops keeping it away (where the game puts it next, it stays).
+    release: () -> (),
+}
+
+-- A frame's own regions or children, protected (none for a forbidden one).
+local function own(frame: Frame, get: string): unknown[]
+    if not secret.readable(frame) or frame:IsForbidden() then
+        return {}
+    end
+    const fn = (frame :: { [string]: unknown })[get]
+    if type(fn) ~= "function" then
+        return {}
+    end
+    -- (gathered inside the protected call: pcall handing back a hundred or
+    -- more values crashes the game, as UIParent's children would)
+    local ok, all = pcall(function(): unknown[]
+        return { (fn :: (unknown) -> ...unknown)(frame) }
+    end)
+    if not ok then
+        return {}
+    end
+    return all
+end
+
+--- The textures among a frame's own regions (its art): for restyling the
+--- game's frames (`for _, t in ipairs(frames.textures(f)) do t:SetAlpha(0) end`).
+export function textures(frame: Frame): Texture[]
+    const out: Texture[] = {}
+    for _, r in ipairs(own(frame, "GetRegions")) do
+        const t = asTexture(r)
+        if t then
+            out[#out + 1] = t
+        end
+    end
+    return out
+end
+
+--- The font strings among a frame's own regions.
+export function fontStrings(frame: Frame): FontString[]
+    const out: FontString[] = {}
+    for _, r in ipairs(own(frame, "GetRegions")) do
+        const fs = asFontString(r)
+        if fs then
+            out[#out + 1] = fs
+        end
+    end
+    return out
+end
+
+--- The widgets a frame holds in its own fields, by key
+--- (`frame.ScrollBox`, `frame.CloseButton`): the parts the game's templates
+--- and code give it, named or not, for restyling or reading them. None for
+--- a value that is no table the addon may read; forbidden widgets are left
+--- out.
+export function keyed(frame: unknown): { [string]: Region }
+    const out: { [string]: Region } = {}
+    if type(frame) ~= "table" or not secret.readable(frame) then
+        return out
+    end
+    pcall(function()
+        for k, v in pairs(frame) do
+            if type(k) == "string" then
+                const r = asRegion(v)
+                if r and not r:IsForbidden() then
+                    out[k] = r
+                end
+            end
+        end
+    end)
+    return out
+end
+
+--- A frame's children (frames the addon may read).
+export function children(frame: Frame): Frame[]
+    const out: Frame[] = {}
+    for _, c in ipairs(own(frame, "GetChildren")) do
+        const f = asFrame(c)
+        if f then
+            out[#out + 1] = f
+        end
+    end
+    return out
+end
+
+--- A button's state textures it has: normal, pushed, highlight, disabled,
+--- and a check button's checked and disabled-checked ones.
+export function stateTextures(button: Button): Texture[]
+    const out: Texture[] = {}
+    for _, get in ipairs({ "GetNormalTexture", "GetPushedTexture", "GetHighlightTexture", "GetDisabledTexture",
+                           "GetCheckedTexture", "GetDisabledCheckedTexture" }) do
+        for _, t in ipairs(own(button, get)) do
+            const tex = asTexture(t)
+            if tex then
+                out[#out + 1] = tex
+            end
+        end
+    end
+    return out
+end
+
+-- The frames an enumerator of the game's gives (`pairs`-like: each frame
+-- the first value), started by calling `enumerate(...)`, protected.
+local function enumerated(enumerate: unknown, ...: unknown): Frame[]
+    const out: Frame[] = {}
+    if type(enumerate) ~= "function" then
+        return out
+    end
+    local ok, iter, state, key = pcall(enumerate :: (...unknown) -> (unknown, unknown, unknown), ...)
+    if ok and type(iter) == "function" then
+        const step = iter :: (unknown, unknown) -> unknown
+        while true do
+            key = step(state, key)
+            if key == nil then
+                break
+            end
+            const f = asFrame(key)
+            if f then
+                out[#out + 1] = f
+            end
+        end
+    end
+    return out
+end
+
+--- The frames one of the game's lists shows: an object pool's active ones
+--- (`EnumerateActive`), or a scroll box's (`ForEachFrame`); none for
+--- anything else. In the list's own order.
+export function rows(list: unknown): Frame[]
+    if type(list) ~= "table" or not secret.readable(list) then
+        return {}
+    end
+    const methods = list :: { [string]: unknown }
+    const enumerate = methods.EnumerateActive
+    if type(enumerate) == "function" then
+        return enumerated(enumerate, list)
+    end
+    const out: Frame[] = {}
+    const each = methods.ForEachFrame
+    if type(each) == "function" then
+        pcall(each :: (unknown, (unknown) -> ()) -> (), list, function(row: unknown)
+            const f = asFrame(row)
+            if f then
+                out[#out + 1] = f
+            end
+        end)
+    end
+    return out
+end
+
+--- The pins a map of the game's (the world map, the flight map: Blizzard's
+--- map canvas) shows of one pin template (`"QuestPinTemplate"`), through
+--- its `EnumeratePinsByTemplate`; none for anything else.
+export function mapPins(map: unknown, template: string): Frame[]
+    if type(map) ~= "table" or not secret.readable(map) then
+        return {}
+    end
+    return enumerated((map :: { [string]: unknown }).EnumeratePinsByTemplate, map, template)
+end
+
+--- Keeps one of the game's frames out of sight while it stays shown, so its
+--- scripts and children keep working (a list the addon draws its own of, a
+--- part the game must see shown): moved off screen and, with `fade`,
+--- see-through; again a frame after the game places it (or with `fade` sets
+--- its alpha) and when it shows. Only while `when` says so (default:
+--- always). A protected frame moves only out of combat: in combat it waits
+--- for the end (wowlua:combat).
+export function keepAway(frame: Frame, opts: { fade?: boolean, when?: () -> boolean }?): AwayHandle
+    const fade = secret.flag(opts?.fade)
+    const when = opts?.when
+    local active, placing = true, false
+    local function away()
+        if not active or (when and not when()) then
+            return
+        end
+        if InCombatLockdown() and frame:IsProtected() then
+            defer(away, frame)
+            return
+        end
+        placing = true
+        if fade then
+            frame:SetAlpha(0)
+        end
+        frame:ClearAllPoints()
+        frame:SetPoint("TOPLEFT", UIParent, "TOPRIGHT", 5000, 0)
+        placing = false
+    end
+    local function later()
+        if not placing and active then
+            after(0, away)
+        end
+    end
+    hooksecurefunc(frame, "SetPoint", later)
+    if fade then
+        hooksecurefunc(frame, "SetAlpha", later)
+    end
+    frame:HookScript("OnShow", function() away() end)
+    away()
+    return {
+        apply = away,
+        release = function() active = false end,
+    }
 end

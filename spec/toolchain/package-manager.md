@@ -293,13 +293,19 @@ addon plus load-on-demand modules, together with shared libraries.
   `remove`, `toc`, `lint`, `fix`, `dev`, `trace`) need exactly one selected
   member.
 - An addon may list another workspace addon in `addon-dependencies`. The
-  compiler then type-checks against that addon's **generated declaration file**,
-  which describes its `@global` API: `@global` functions with their
-  signatures, values with their annotated or literal type, and classes and
-  enums as `any` (decision T114). The file is generated from the other
-  addon's collected declarations, not from a full build
-  ([Compiler §13.3.1](compiler.md#1331-stages), stage 12), so two addons that
-  list each other as optional dependencies still build.
+  compiler then checks it together with that addon's sources, **types only**
+  (decision T287): the files that make `@global` declarations and what they
+  import (its modules, its wowlua libraries, the standard-library modules)
+  are analyzed and type-checked with the addon's own, so its `@global` API
+  has the types the checker infers for it, as inside that addon
+  ([Language §4.3](../language/04-decorators.md), decision L83). They are
+  never compiled into the addon, loaded with it or reported: the other addon
+  reports its own problems. Only its top level is read, not its own addon
+  dependencies, so two addons that list each other still build
+  ([Compiler §13.3.1](compiler.md#1331-stages), stage 12).
+- Its modules' **types** can be imported (`import type UnitFrame from
+  "suuui/UI/UnitFrame"`, by its package name); a value import of one is error
+  E1041, as the module is not part of the addon.
 - A cycle of `required` addon dependencies within the workspace is error E4324.
   Two members with the same `addon.name` are error E4325.
 - SavedVariables names must be unique across the workspace (E4120).
@@ -339,8 +345,63 @@ The WoW API is typed by **pre-generated `types` packages**, one per flavor:
    Blizzard's UI code adds its globals: the named frames of its XML, typed by
    their mixins, and those mixins as classes with the functions their Lua
    defines ([Types §2.8](../language/02-types.md#28-globals)).
-3. **Flavor availability** from per-flavor global name dumps, used to verify
+3. **warcraft.wiki.gg's API pages** (CC BY-SA 4.0) for the functions
+   Blizzard's documentation and the annotations leave untyped (decision
+   T288): `cargo xtask types wiki` reads the pages through the wiki's API,
+   once, and writes their signatures and the records they name as reviewed
+   LuaLS annotations to `xtask/data/warcraft-wiki-api.lua`, which the
+   generator reads (builds never reach the wiki). The declarations made
+   from them carry the wiki's attribution and license
+   (`LICENSE-warcraft-wiki.txt`). A page that shows several calls
+   (`GetAchievementInfo(achievementID)` and `GetAchievementInfo(categoryID,
+   index)`) gives an overload per call, with the same results; a value whose
+   description says it can be `nil` is optional (decision T290).
+4. **Blizzard's UI code** types the functions it defines and the ones it
+   calls (decision T288): each global function and mixin function of its
+   Lua gets the parameters its definition names, typed by what the body
+   does with them (passed to a typed API function, arithmetic, compared
+   with a literal, called) and by the literals Blizzard's calls pass;
+   optional where the body tests it for `nil` or a call leaves it out; its
+   results from its `return`s (literals, operators, typed calls, string
+   methods, mixins it makes, its locals). A C function nothing documents
+   takes as many parameters as Blizzard's calls pass, typed where they
+   agree. A global value is typed by what it is made from (a mixin table
+   is its mixin class, `EnumUtil.MakeEnum` a `{ [string]: number }`, a
+   call its declared result, an alias what it names). The mixins the
+   declarations refer to are classes. A field read of a value of a
+   declared type is that type's field (`auraData.name` of an `AuraData`,
+   through `?` and `Secret<…>`); a definition in a top-level `do … end`
+   block counts as one at the top level; a returned call ending in `...`
+   gives its typed values, then the rest open. A table the annotations
+   declare as a namespace (`AuraUtil`) also has the functions its Lua
+   defines that they lack (decision T296). A global or function no source of
+   its flavor types takes the wiki's signature, else the type another
+   flavor gives it when every type it names exists in this one (camelot's
+   own `Clamp` is typed as retail's MathUtil.lua defines it; decision
+   T293).
+5. **Typed throughout.** The generated declarations themselves write no
+   `any`: what no source tells is `unknown` (a function nothing types is
+   `(...unknown) -> ...unknown`, a parameter `unknown` takes any argument, a
+   result `unknown` is checked before use; decision T288). This is about
+   the declarations wowlua ships, not the language: `any` stays a type
+   authors may write ([Types §2.2](../language/02-types.md)).
+6. **Flavor availability** from per-flavor global name dumps, used to verify
    that every declared global exists in that flavor.
+7. **The client's answers.** Where the client's recorded answers (the
+   engine's recordings, Emulation §17.8) contradict the sources, the
+   generator corrects the declaration (decision T290): results the client
+   gives that the documentation lacks (`C_PetBattles.IsTrapAvailable()`'s
+   reason), lists the wiki gives as their first values
+   (`GetChatWindowMessages(index)` is `...string`), and getters a fresh
+   widget answers nil (`FontString:GetText()` is `string?`). A function
+   that gives nothing for an ID that names nothing keeps its documented
+   results. The client's own C functions no source documents take what the
+   client itself told (decision T294): the argument checks it was probed
+   for (`camelot-usages.txt`: names and kinds), its answers to a call
+   without arguments (the engine's `blanks.rs`), and else their names
+   (`Is…`, `Has…`, `Can…` a boolean, `GetNum…` a number; unverified). The
+   combat log's payload is typed as the wiki's `COMBAT_LOG_EVENT` page
+   gives its eleven base values.
 
 Package versions follow the game version: `wow-api-standard@12.1.0` for build
 12.1.0, and pre-releases for test clients (`12.1.5-ptr.70077`). Generator fixes

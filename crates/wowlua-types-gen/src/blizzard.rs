@@ -526,6 +526,11 @@ pub fn mark_widgets(classes: &mut indexmap::IndexMap<String, Class>) {
     for name in FRAME_TYPES.iter().chain(REGION_TYPES) {
         if let Some(c) = classes.get_mut(*name) {
             c.widget = Some((*name).to_string());
+            // A frame type the documentation gives no parent (Browser,
+            // OffScreenFrame) is a frame all the same.
+            if *name != "Frame" && FRAME_TYPES.contains(name) && c.bases.is_empty() {
+                c.bases.push("Frame".to_string());
+            }
         }
     }
 }
@@ -618,6 +623,27 @@ APIDocumentation:AddDocumentationTable({
     /// structure. Lists of structures in a companion hold companions. Other
     /// results are wholly secret. Big integers and UI sizes are numbers, a
     /// Lua value reference any value.
+    /// Every frame type is a widget; one the documentation gives no parent
+    /// is a frame all the same (decision L79).
+    #[test]
+    fn widgets_and_parentless_frames() {
+        let mut classes = indexmap::IndexMap::new();
+        classes.insert("Browser".to_string(), Class::default());
+        let button = Class {
+            bases: vec!["Frame".to_string()],
+            ..Class::default()
+        };
+        classes.insert("Button".to_string(), button);
+        classes.insert("Frame".to_string(), Class::default());
+        classes.insert("Texture".to_string(), Class::default());
+        mark_widgets(&mut classes);
+        assert_eq!(classes["Browser"].bases, vec!["Frame".to_string()]);
+        assert_eq!(classes["Browser"].widget.as_deref(), Some("Browser"));
+        assert_eq!(classes["Button"].bases, vec!["Frame".to_string()]);
+        assert!(classes["Frame"].bases.is_empty());
+        assert!(classes["Texture"].bases.is_empty());
+    }
+
     #[test]
     fn secret_structures_and_number_types() {
         let d = read(&[("doc.lua".into(), DOC.into())]).unwrap();

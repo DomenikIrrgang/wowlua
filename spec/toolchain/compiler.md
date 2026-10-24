@@ -131,7 +131,7 @@ identical effective settings share one build.
 | 9 | Static pruning | sema | AST + constants → pruned view | Marks dead branches and removed declarations, including imports removed by `@if`. Later stages skip them. |
 | 10 | Resolve names | sema | AST → `Scopes`, `Bindings` | Per file: locals, upvalues, globals, `ns` fields, imports, decorators. Needs no other module. |
 | 11 | Module graph | sema | imports + bindings → `ModuleGraph` | Per flavor. Import edges plus usage-analysis edges for globals and addon-table fields, classified load-time / run-time (§13.6.1). Cycle check, lazy bindings, load order. |
-| 12 | Collect declarations | sema | → `TypeEnv` | Classes, interfaces, enums, aliases, `declare`s in load order, plus **implicit declarations**: `wow-api-<flavor>`, WoW's Lua environment, SavedVariables globals, `check.globals`, `AddonNamespace`, the `L` type, and the generated declaration files of workspace addons listed in `addon-dependencies`. Workspace declaration files are produced from this stage's output, so mutually dependent addons do not need each other's full build. |
+| 12 | Collect declarations | sema | → `TypeEnv` | Classes, interfaces, enums, aliases, `declare`s in load order, plus **implicit declarations**: `wow-api-<flavor>`, WoW's Lua environment, SavedVariables globals, `check.globals`, `AddonNamespace`, the `L` type, and the sources of the workspace addons listed in `addon-dependencies`, types only (checked with the package's files, never compiled into it or reported; decision T287). Only their own sources are read, not their addon dependencies, so mutually dependent addons do not need each other's build. |
 | 13 | Type check | sema | → `TypeTable` + diagnostics | Bidirectional checking per function body. Dependency and standard-library modules are checked with **their own package's** check settings. |
 | 14 | Lower | lower | AST + sema → `lua::Chunk` | Desugaring, classes, decorators, modules (copied vs lazy bindings), debug features, keybinding declarations → `Bindings.xml` model |
 | 15 | IR passes | luair | `Chunk` → `Chunk` | See [Optimization](optimization.md) |
@@ -303,14 +303,24 @@ only lints, and errors that stop the analysis) on `.wowlua` files, and on
   enclosing scope. Redeclaring a local in the same block (`local x = f(x)`)
   is not reported, nor shadowing a decorated declaration that nothing reads
   by name (a `@test` function, which its decorator runs: a local in another
-  test may take its name).
+  test may take its name). A `local function` named like a local of the
+  same block is: a call meant for the earlier one, from here on and inside
+  the new function, reaches the new one (decision L68).
 - **W1005, unreachable code.** The first statement after `return`, `break`,
   `continue`, or a call whose type returns `never` (`error`), or after an `if`
   whose branches all end that way; once per region. Reported by the type
   checker, so not in `--!nocheck` files.
 - **W2063, implicit `any`.** Off unless `check.lints` turns it on: a
-  parameter without an annotation that nothing gives a type, or a `local`
-  without one whose value is `any`. A project that keeps `any` to the places
+  parameter without an annotation that nothing gives a type, a `local`
+  without one whose value is `any`, or a generic type written without its
+  type arguments (`Box` for `Box<T>`, whose arguments are then `any`;
+  decision T276), or a member a widget class (`class Toggle extends
+  Button`) doesn't declare, read or set: the game's frames are open, so it
+  passes as `any` (decision L51); and a field one of the game's frame types
+  doesn't declare, read or called (`button.owner`: give the value a type
+  that has it, `Button & { owner: Frame? }`, or read it with
+  `frames.keyed` or `table.field`; decision L79). Only the project's files: not wowlua's
+  library or a dependency's. A project that keeps `any` to the places
   that need it turns it on, and writes `any` where it means it (decision
   T274).
 

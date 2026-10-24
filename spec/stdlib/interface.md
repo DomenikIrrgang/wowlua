@@ -65,6 +65,31 @@ Semantics:
   A stored position that cannot be read (secret, or with secret fields) is
   not applied. `lock` ignores a secret.
 
+### The game's frames
+
+The game's frames are read by name or by key, often parts the declarations
+do not know or some clients lack; these read them without trusting a type
+(decision S42):
+
+```wowlua
+local cf = frames.find("CharacterFrame")                   -- Frame?: nil before its addon loads
+local close = frames.asButton(tbl.field(cf, "CloseButton")) -- Button?
+local list = frames.asFrame(tbl.field(cf, "PaneHost", "List"))
+if list then frames.keepAway(list, { fade = true }) end     -- out of sight, still shown
+```
+
+| API | Signature | Notes |
+|-----|-----------|-------|
+| `find` | `(name: string) -> Frame?` | The global frame of that name, nil when there is none |
+| `textures`, `fontStrings` | `(frame: Frame) -> Texture[]`, `-> FontString[]` | The textures (its art) or font strings among the frame's own regions; none for a frame that is forbidden (decision S45); any number of them (gathered inside the protected call: `pcall` handing back a hundred values or more crashes the game, decision S50) |
+| `children` | `(frame: Frame) -> Frame[]` | The frame's children the addon may read |
+| `keyed` | `(frame: unknown) -> { [string]: Region }` | The widgets the frame holds in its own fields, by key (`frame.ScrollBox`): what its template or code gave it, named or not; forbidden ones left out, none for a value that is no table the addon may read (decision S49) |
+| `stateTextures` | `(button: Button) -> Texture[]` | The button's state textures it has: normal, pushed, highlight, disabled, and a check button's checked ones |
+| `rows` | `(list: unknown) -> Frame[]` | The frames one of the game's lists shows: an object pool's active ones (`EnumerateActive`) or a scroll box's (`ForEachFrame`), in its order; none for anything else |
+| `mapPins` | `(map: unknown, template: string) -> Frame[]` | The pins one of the game's maps (Blizzard's map canvas: the world map, the flight map) shows of a pin template, through `EnumeratePinsByTemplate`; none for anything else (decision S46) |
+| `asRegion`, `asFrame`, `asButton`, `asCheckButton`, `asEditBox`, `asScrollFrame`, `asSlider`, `asStatusBar`, `asCooldown`, `asFontString`, `asTexture`, `asBrowser` | `(v: unknown) -> Region?`, … | `v` when its `IsObjectType` says it is one (called protected; a table the addon may not read is none), else nil |
+| `keepAway` | `(frame: Frame, opts?: { fade?: boolean, when?: () -> boolean }) -> AwayHandle` | Keeps the frame out of sight while it stays shown (its scripts and children keep working): moved off screen, and with `fade` see-through; again a frame after the game places it (with `fade`, also after it sets its alpha) and when it shows. Only while `when` returns true (default: always). A protected frame moves only out of combat (`wowlua:combat`'s `defer`). The handle's `apply()` puts it away now, `release()` stops (hooks can't be removed: they then do nothing). |
+
 ### Edit Mode
 
 With `editMode = { label = … }` the frame joins the client's Edit Mode, which
@@ -454,6 +479,42 @@ Clicks arrive through the client's `EventRegistry` callback `SetItemRef`,
 which every supported client fires for `addon` links. The client does not
 send addon links to other players, so they are for the player's own chat
 frames only.
+
+## chat
+
+`wowlua:chat` opens the chat line the player types in, through the game's own
+chat code: `ChatFrameUtil`, or the older `ChatFrame_…` and `ChatEdit_…`
+globals on clients that have those. Where a client has neither, nothing
+happens (decision S44).
+
+```wowlua
+import * as chat from "wowlua:chat"
+
+menu:CreateButton("Whisper", function() chat.whisper(member.name) end)
+linkButton:SetScript("OnClick", function() chat.insertLink(recipeLink) end)
+```
+
+| API | Signature | Notes |
+|-----|-----------|-------|
+| `whisper` | `(name: string, frame?: Frame)` | Opens the chat line to whisper `name`, as the game's own "Whisper" does (`SendTell`); the frame goes to the game only when given |
+| `whisperBnet` | `(accountName: string, frame?: Frame)` | Opens the chat line to whisper a Battle.net friend by their account name as the game gives it (protected text only the game draws), as the friends list does (`SendBNetTell`) (decision S46) |
+| `open` | `(text: string, frame?: Frame)` | Opens the chat line with `text` in it (`OpenChat`) |
+| `insertLink` | `(link: string)` | Puts `link` into the line being typed, as a shift-click does (`InsertLink`); with none open, opens one with it |
+| `filter` | `(event: string, fn: (text: unknown, ...unknown) -> boolean?) -> Subscription` | Hides the chat lines of `event` for which `fn` returns true, through the game's message filters (`AddMessageEventFilter`); `fn` gets the line's values, its text first. Isolated: an error is reported and the line shows. Cancelling removes the filter (`RemoveMessageEventFilter`) (decision S46) |
+
+It also finds the game's chat windows, typed as `chat.Window`
+(`ScrollingMessageFrameMixin & Frame`: a message frame, its window ID
+`GetID()`), for a chat addon that restyles or mirrors them (decision S48):
+
+| API | Signature | Notes |
+|-----|-----------|-------|
+| `windows` | `() -> Window[]` | The windows that exist: the numbered ones (`ChatFrame1` up to `NUM_CHAT_WINDOWS`, 10 where the client doesn't say), then the temporary ones of `CHAT_FRAMES`, in the game's order |
+| `docked` | `() -> Window[]` | The windows docked with General, in the dock's order (`GENERAL_CHAT_DOCK`); `ChatFrame1` alone where there is no dock |
+| `window` | `(name: string) -> Window?` | The chat window of a global name (`"ChatFrame3"`) |
+| `asWindow` | `(v: unknown) -> Window?` | `v` when it is a frame with a message frame's `AddMessage` and `GetMessageInfo` |
+| `editBox` | `(w: Window) -> EditBox?` | The window's edit box (`ChatFrame1EditBox`) |
+| `isTemporary` | `(w: Window) -> boolean` | Whether it is a temporary window (a whisper window, which closes) |
+| `conversation` | `(w: Window) -> (string?, string?)` | What a temporary window is for: its chat type (`"WHISPER"`, …) and target (the player); nils for any other window and for values that aren't readable |
 
 ## Testing
 

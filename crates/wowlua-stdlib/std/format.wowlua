@@ -31,6 +31,48 @@ export function clock(seconds: number, hours: boolean?): string
     return SecondsToClock(math.max(0, seconds), hours)
 end
 
+export type AgoOptions = {
+    --- Unit words ("3 days ago") instead of letters ("3 d ago").
+    long?: boolean,
+    --- The smallest unit: under it, "just now" (`"minute"`, the default) or
+    --- "less than an hour ago" (`"hour"`).
+    from?: "minute" | "hour",
+}
+
+local AGO_UNITS: { { seconds: number, short: string, one: string, many: string } } = {
+    { seconds = 365 * 86400, short = "d", one = "year", many = "years" },
+    { seconds = 30 * 86400, short = "d", one = "month", many = "months" },
+    { seconds = 86400, short = "d", one = "day", many = "days" },
+    { seconds = 3600, short = "h", one = "hour", many = "hours" },
+    { seconds = 60, short = "min", one = "minute", many = "minutes" },
+}
+
+--- How long ago, from the seconds since: the largest unit, rounded down
+--- ("5 min ago", "2 h ago", "45 d ago"; with `long` "5 minutes ago",
+--- "1 hour ago", "3 days ago", "2 months ago", "1 year ago": months and
+--- years are 30 and 365 days, and only in the long form).
+export function ago(seconds: number, opts: AgoOptions?): string
+    const s = math.max(0, seconds)
+    const long = secret.flag(opts?.long)
+    const least = opts?.from == "hour" and 3600 or 60
+    if s < least then
+        if least == 3600 then
+            return long and "less than an hour ago" or "< 1 h ago"
+        end
+        return "just now"
+    end
+    for _, u in ipairs(AGO_UNITS) do
+        if s >= u.seconds and (long or u.seconds <= 86400) then
+            const n = math.floor(s / u.seconds)
+            if long then
+                return n .. " " .. (n == 1 and u.one or u.many) .. " ago"
+            end
+            return n .. " " .. u.short .. " ago"
+        end
+    end
+    return "just now"
+end
+
 --- A date in the locale's short form (`at`: a Unix time, default now).
 export function date(at: number?): string
     -- The client's `date` and `time` (WoW: Forever has no `os` table).
@@ -38,10 +80,27 @@ export function date(at: number?): string
     return FormatShortDate(t.day, t.month, t.year)
 end
 
---- Money from copper: with coin icons ("12[g] 5[s] 3[c]"), or with `text`
---- the client's words ("12 Gold 5 Silver 3 Copper"); secret options count
---- as unset.
-export function money(copper: number, opts: { text?: boolean, separate?: boolean }?): string
+--- Money from copper: with coin icons ("12[g] 5[s] 3[c]"), with `text` the
+--- client's words ("12 Gold 5 Silver 3 Copper"), or with `short` letters
+--- ("12g 5s 3c"); units at zero are left out (copper stays when all are);
+--- secret options count as unset.
+export function money(copper: number, opts: { text?: boolean, separate?: boolean, short?: boolean }?): string
+    if secret.flag(opts?.short) then
+        const gold = math.floor(copper / (COPPER_PER_SILVER * SILVER_PER_GOLD))
+        const silver = math.floor(copper / COPPER_PER_SILVER) % SILVER_PER_GOLD
+        const rest = copper % COPPER_PER_SILVER
+        const parts: string[] = {}
+        if gold > 0 then
+            parts[#parts + 1] = gold .. "g"
+        end
+        if silver > 0 then
+            parts[#parts + 1] = silver .. "s"
+        end
+        if rest > 0 or #parts == 0 then
+            parts[#parts + 1] = rest .. "c"
+        end
+        return table.concat(parts, " ")
+    end
     if not secret.flag(opts?.text) then
         return GetMoneyString(copper, secret.flag(opts?.separate))
     end

@@ -131,6 +131,13 @@ pub struct Units {
     pub echoing: Option<Option<UnitId>>,
     pub list: Vec<Unit>,
     pub target: Option<UnitId>,
+    /// The target before the last change (`TargetLastTarget`), and the
+    /// last hostile and friendly ones (`TargetLastEnemy`, `TargetLastFriend`).
+    pub last_target: Option<UnitId>,
+    pub last_enemy: Option<UnitId>,
+    pub last_friend: Option<UnitId>,
+    /// The raid's main tanks and assists (`SetPartyAssignment`).
+    pub assignments: Vec<(String, UnitId)>,
     pub focus: Option<UnitId>,
     pub mouseover: Option<UnitId>,
     /// The soft targets: the enemy, the friend, the interact unit.
@@ -2298,10 +2305,23 @@ fn soft_friend_usable(vm: &mut Vm, _c: NativeCall) -> Ret {
 
 /// The player's target now `new`: `PLAYER_TARGET_CHANGED`, the server's
 /// echo (`UNIT_TARGET("player")`) a round trip later.
-fn set_player_target(vm: &mut Vm, new: Option<UnitId>) {
+pub(crate) fn set_player_target(vm: &mut Vm, new: Option<UnitId>) {
     // The same target again: told to the UI, not to the server (no flags,
     // no echo: recorded, `auradeath` 10.030, the cat targeted again).
     let same = new.is_some() && engine(vm).units.target == new;
+    let old = engine(vm).units.target;
+    if let Some(o) = old
+        && old != new
+    {
+        let friendly = engine(vm).units.list[o.0].reaction == Reaction::Friendly;
+        let u = &mut engine_mut(vm).units;
+        u.last_target = old;
+        if friendly {
+            u.last_friend = old;
+        } else {
+            u.last_enemy = old;
+        }
+    }
     engine_mut(vm).units.target = new;
     engine_mut(vm).units.list[PLAYER.0].target = new;
     fire(vm, "PLAYER_TARGET_CHANGED", &[]);
@@ -2839,6 +2859,20 @@ fn control_stop_attack(vm: &mut Vm, c: NativeCall) -> Ret {
         stop_auto_attack(vm);
     }
     Ok(vec![])
+}
+
+/// `StopAttack()`: the player's auto attack off.
+fn stop_attack(vm: &mut Vm, _c: NativeCall) -> Ret {
+    stop_auto_attack(vm);
+    Ok(vec![])
+}
+
+/// The player's auto attack on (`PLAYER_ENTER_COMBAT`), if off.
+pub(crate) fn start_auto_attack(vm: &mut Vm) {
+    if !engine(vm).units.auto_attack {
+        engine_mut(vm).units.auto_attack = true;
+        fire(vm, "PLAYER_ENTER_COMBAT", &[]);
+    }
 }
 
 /// The player's auto attack off (`PLAYER_LEAVE_COMBAT`), if on.
@@ -4042,12 +4076,6 @@ fn clear_focus(vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-/// Nothing to do in the world (no auto attack, no target history; the
-/// client returned nothing for addon code).
-fn nothing(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![])
-}
-
 /// `UnitFullName(unit)`: as `UnitName` (`/stdtest engine comm`), but the player's second value is
 /// never nil: its last name on WoW Forever (recorded: `Player, Lastname`),
 /// else its realm (as the engine's chat names it, `Name-Realm`).
@@ -4073,8 +4101,7 @@ pub fn more_behaviours() -> Vec<(&'static str, wowlua_vm::NativeFn)> {
         ("C_SpecializationInfo.GetAllClassIDs", all_class_ids),
         ("UnitFullName", unit_full_name),
         ("ClearFocus", clear_focus),
-        ("TargetLastTarget", nothing),
-        ("StopAttack", nothing),
+        ("StopAttack", stop_attack),
         ("UnitFactionGroup", unit_faction_group),
         ("UnitPVPName", unit_pvp_name),
         ("UnitIsGhost", unit_is_ghost),

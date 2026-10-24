@@ -147,12 +147,48 @@ local function subscribe(name: string, fn: (...any) -> (), owner: any): Subscrip
 end
 
 --- Calls `handler` with every `event` (or message) from now on.
-export function on(event: string, handler: (...any) -> (), owner: any?): Subscription
+export function on(event: string, handler: (...any) -> (), owner: unknown?): Subscription
     return subscribe(event, handler, owner)
 end
 
+--- Calls `handler` with each of Blizzard's EventRegistry callbacks `name`
+--- (`"MapCanvas.MapSet"`, `"ChatFrame.OnEditBoxFocusGained"`) from now on,
+--- with the callback's values (not the owner the registry passes first),
+--- isolated as every handler here; nothing on a client without
+--- EventRegistry. Cancelling the subscription unregisters it.
+export function onRegistry(name: string, handler: (...any) -> (), owner: unknown?): Subscription
+    const key = {}
+    const context = { component = "events: " .. name .. " callback" }
+    const registry = _G.EventRegistry :: unknown
+    local function call(method: string, ...: unknown)
+        if type(registry) ~= "table" or not secret.readable(registry) then
+            return
+        end
+        const fn = (registry :: { [string]: unknown })[method]
+        if type(fn) == "function" then
+            pcall(fn :: (...unknown) -> (), registry, ...)
+        end
+    end
+    local sub: Subscription
+    sub = {
+        active = true,
+        cancel = function(self: Subscription)
+            if self.active then
+                self.active = false
+                call("UnregisterCallback", name, key)
+            end
+        end,
+    }
+    call("RegisterCallback", name, function(_: unknown, ...: any)
+        if sub.active then
+            callOwned(context, owner, handler, ...)
+        end
+    end, key)
+    return sub
+end
+
 --- Calls `handler` with the next `event` only.
-export function once(event: string, handler: (...any) -> (), owner: any?): Subscription
+export function once(event: string, handler: (...any) -> (), owner: unknown?): Subscription
     local sub: Subscription
     sub = subscribe(event, function(...)
         sub:cancel()
@@ -211,7 +247,7 @@ end
 
 --- `RegisterUnitEvent` for any number of units: WoW filters a frame by at
 --- most two, so each pair gets a frame of its own.
-export function onUnit(event: string, units: string[], handler: (...any) -> (), owner: any?): Subscription
+export function onUnit(event: string, units: string[], handler: (...any) -> (), owner: unknown?): Subscription
     if #units == 0 then
         error("onUnit: no units", 2)
     end
@@ -351,7 +387,7 @@ end
 
 --- Unit events on a frame of the watch's own, re-pointed with `setUnit`
 --- (unit frames, nameplates); `handler` gets the event name first.
-export function watchUnit(events: string[], handler: (...any) -> (), owner: any?): UnitWatch
+export function watchUnit(events: string[], handler: (...any) -> (), owner: unknown?): UnitWatch
     const w = Watch.new(events, handler, owner)
     watches[w] = true
     return w
@@ -363,7 +399,7 @@ end
 
 --- Cancels every subscription registered with `owner`, or only those to
 --- `name`.
-export function offAll(owner: any, name: string?)
+export function offAll(owner: unknown, name: string?)
     -- nil would match every subscription without an owner, the standard
     -- library's own among them.
     if owner == nil then
@@ -404,7 +440,7 @@ export function offAll(owner: any, name: string?)
 end
 
 --- Dispatches a message to this addon's handlers, synchronously.
-export function send(name: string, ...: any)
+export function send(name: string, ...: unknown)
     if isGameEvent(name) then
         error("send: `" .. name .. "` is a WoW event, not a message", 2)
     end
@@ -432,7 +468,7 @@ end
 --- Coalesces bursts: the first of `events` starts an `interval`-second
 --- wait, and `handler` then gets everything that arrived in it, counted
 --- by first argument and by event (like AceBucket).
-export function onBucket(events: string | string[], interval: number, handler: (counts: BucketCounts) -> (), owner: any?): Subscription
+export function onBucket(events: string | string[], interval: number, handler: (counts: BucketCounts) -> (), owner: unknown?): Subscription
     local names: string[]
     if type(events) == "string" then
         names = { events }

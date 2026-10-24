@@ -685,7 +685,7 @@ end
 --- `generalPlaystyle`, `isAutoAccept`, `questID`, …): the listing a round
 --- trip later, `LFG_LIST_ACTIVE_ENTRY_UPDATE` from the server. An addon's
 --- own `CreateListing` is blocked.
-export function postLFGListing(createData: { [string]: any })
+export function postLFGListing(createData: { [string]: unknown })
     engine().postLFGListing(createData)
 end
 
@@ -872,7 +872,7 @@ export function setPet(pet: MockUnit?, opts: { hunter?: boolean, happiness?: num
 end
 
 --- Turns one of the client's addon restrictions on or off.
-export function setRestriction(kind: any, active: boolean)
+export function setRestriction(kind: unknown, active: boolean)
     engine().setRestriction(kind, active)
 end
 
@@ -885,12 +885,12 @@ end
 
 --- Fires an event of the flavor, its payload checked against the
 --- documentation.
-export function fireEvent(name: string, ...: any)
+export function fireEvent(name: string, ...: unknown)
     engine().fireEvent(name, ...)
 end
 
 --- Fires a unit event for `unit`.
-export function fireUnitEvent(name: string, unit: string, ...: any)
+export function fireUnitEvent(name: string, unit: string, ...: unknown)
     engine().fireUnitEvent(name, unit, ...)
 end
 
@@ -1079,8 +1079,17 @@ export function slash(line: string)
     engine().slash(line)
 end
 
+-- A user action on a frame the test found: nil fails the test where it
+-- was passed, saying so.
+local function present(frame: unknown, fn: string)
+    if frame == nil then
+        error(`mock.{fn}: no frame (nil)`, 3)
+    end
+end
+
 --- Runs a frame's script handler as a user action would (`OnClick`, …).
-export function script(frame: any, name: string, ...: any)
+export function script(frame: ScriptRegion?, name: string, ...: unknown)
+    present(frame, "script")
     engine().script(frame, name, ...)
 end
 
@@ -1097,7 +1106,8 @@ end
 --- The user's click on a visible frame (`"LeftButton"` by default):
 --- `OnMouseDown`, `OnMouseUp`, then an enabled button's `PreClick`,
 --- `OnClick` and `PostClick`.
-export function click(frame: any, button: string?)
+export function click(frame: ScriptRegion?, button: string?)
+    present(frame, "click")
     engine().click(frame, button ?? "LeftButton")
 end
 
@@ -1105,14 +1115,16 @@ end
 --- middle unless it is over it already (`GetCursorPosition`), then
 --- `OnLeave` of the last one, `OnEnter` of this one; `GetMouseFoci`
 --- follows, and `IsMouseOver` measures the mouse against each frame.
-export function hover(frame: any?)
+export function hover(frame: ScriptRegion?)
     engine().hover(frame)
 end
 
 --- Types into a visible edit box: it gets the keyboard focus
---- (`OnEditFocusGained`), then each character runs `OnChar` and
---- `OnTextChanged(true)`. `mock.pressKey("ENTER")` then goes to it.
-export function typeText(editBox: any, text: string)
+--- (`OnEditFocusGained`), then each character goes in place of the
+--- selected text (`HighlightText`), else at the cursor, and runs `OnChar`
+--- and `OnTextChanged(true)`. `mock.pressKey("ENTER")` then goes to it.
+export function typeText(editBox: EditBox?, text: string)
+    present(editBox, "typeText")
     engine().type(editBox, text)
 end
 
@@ -1121,7 +1133,8 @@ end
 --- units times its `GetEffectiveScale()`). The mouse starts on the frame
 --- and moves with the drag; with `frames`, in that many steps, a frame
 --- running after each (`OnUpdate` code following the drag sees it move).
-export function drag(frame: any, dx: number, dy: number, frames: number?)
+export function drag(frame: ScriptRegion?, dx: number, dy: number, frames: number?)
+    present(frame, "drag")
     engine().drag(frame, dx, dy, frames)
 end
 
@@ -1131,21 +1144,26 @@ end
 --- Drags a slider's thumb to `value` as the user does: `OnValueChanged(
 --- value, true)` for where it is and where it goes (clamped; snapped to its
 --- step only if it obeys its step on drag), `OnMouseDown`, `OnMouseUp`.
-export function slide(slider: any, value: number)
+export function slide(slider: Slider?, value: number)
+    present(slider, "slide")
     engine().slide(slider, value)
 end
 
-export function dragTo(source: any, target: any)
+export function dragTo(source: ScriptRegion?, target: ScriptRegion?)
+    present(source, "dragTo")
+    present(target, "dragTo")
     engine().dragTo(source, target)
 end
 
 --- Drags a resize grip by `dw`, `dh` screen units (as `drag`).
-export function sizeBy(grip: any, dw: number, dh: number)
+export function sizeBy(grip: ScriptRegion?, dw: number, dh: number)
+    present(grip, "sizeBy")
     engine().sizeBy(grip, dw, dh)
 end
 
 --- Turns the mouse wheel over a frame.
-export function wheel(frame: any, delta: number)
+export function wheel(frame: ScriptRegion?, delta: number)
+    present(frame, "wheel")
     engine().wheel(frame, delta)
 end
 
@@ -1203,8 +1221,12 @@ export function receiveAddonMessage(prefix: string, message: string, chatType: s
     engine().receiveAddonMessage(prefix, message, chatType, sender)
 end
 
+--- An addon message the addon sent: its prefix, text, chat type and
+--- target (a whisper's).
+export type SentAddonMessage = { prefix: string, message: string, chatType: string, target?: string }
+
 --- The addon messages sent so far.
-export function sentAddonMessages(): table[]
+export function sentAddonMessages(): SentAddonMessage[]
     return engine().sentAddonMessages()
 end
 
@@ -1559,7 +1581,7 @@ end
 --- tooltip hooks run. It is placed where the default UI places a tooltip
 --- of something in the world (`GameTooltip_SetDefaultAnchor`), so a
 --- screenshot shows it. Returns the lines' left texts.
-export function showTooltip(kind: "item" | "spell" | "unit", data: { id?: number, link?: string, unit?: string, bag?: number, slot?: number }, tip: any?): string[]
+export function showTooltip(kind: "item" | "spell" | "unit", data: { id?: number, link?: string, unit?: string, bag?: number, slot?: number }, tip: GameTooltip?): string[]
     local t: any = tip ?? _G.GameTooltip
     if t == nil or t.SetItemByID == nil then
         error("mock.showTooltip needs Blizzard's UI code (test.blizzard-ui)", 2)
@@ -1594,23 +1616,46 @@ export function showTooltip(kind: "item" | "spell" | "unit", data: { id?: number
     return lines
 end
 
+--- A tooltip's lines as it shows them now (`GameTooltip`'s, or `tip`'s):
+--- the left texts, or with `right` the right ones; "" for an empty side.
+export function tooltipLines(tip: GameTooltip?, right: boolean?): string[]
+    local t: any = tip ?? _G.GameTooltip
+    local side = right and "Right" or "Left"
+    local lines: string[] = {}
+    local name = t:GetName()
+    for i = 1, t:NumLines() do
+        local fs = _G[`{name}Text{side}{i}`]
+        lines[i] = fs and fs:GetText() or ""
+    end
+    return lines
+end
+
+--- The text a font string, button or edit box shows: `""` when it has
+--- none (a fresh font string's `GetText()` is nil).
+export function textOf(region: FontString | Button | EditBox | nil): string
+    if region == nil then
+        error("mock.textOf: no region (nil)", 2)
+    end
+    return region:GetText() ?? ""
+end
+
 --- A stand-in for a Blizzard template: `CreateFrame` with it calls `fn`.
-export function defineTemplate(name: string, fn: (frame: any) -> ())
+export function defineTemplate(name: string, fn: (frame: Frame) -> ())
     engine().defineTemplate(name, fn)
 end
 
 --- An intrinsic frame type built on `base`.
-export function defineFrameType(name: string, base: string, fn: (frame: any) -> ())
+export function defineFrameType(name: string, base: string, fn: (frame: Frame) -> ())
     engine().defineFrameType(name, base, fn)
 end
 
 --- Makes a frame protected (or not).
-export function protect(frame: any, on: boolean?)
+export function protect(frame: ScriptRegion, on: boolean?)
     engine().protect(frame, on)
 end
 
 --- Every frame, in creation order.
-export function frames(): any[]
+export function frames(): ScriptRegion[]
     return engine().frames()
 end
 
@@ -1694,7 +1739,7 @@ end
 --- back as it was, its taint included, as `stub` does it: an assignment
 --- from the test would leave Blizzard's field tainted for the rest of the
 --- file (decision T230).
-export function setField(t: table, key: any, value: any)
+export function setField(t: table, key: unknown, value: unknown)
     local target: any = t
     if type(target) ~= "table" then
         error(`mock.setField: a table expected, got {type(target)}`, 2)
@@ -1723,6 +1768,14 @@ export function module<M>(target: M, replacement: table)
     for name, value in pairs(replacement) do
         exports[name] = value
     end
+end
+
+--- A fake of a record the game gives, with only the fields a test needs,
+--- typed as where it goes (`local info: BNetAccountInfo = mock.partial({
+--- bnetAccountID = 1 })`), so a stub can return it. The fields are not
+--- checked against the type.
+export function partial<T>(fields: { [string]: unknown }): T
+    return fields :: unknown :: T
 end
 
 --- Replaces an engine function (`"UnitName"`, `"C_Spell.GetSpellInfo"`)

@@ -737,7 +737,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("ShowQuestComplete", nothing),
         ("ShowQuestOffer", nothing),
         ("ConfirmAcceptQuest", nothing),
-        ("ClearPartyAssignment", nothing),
         ("RespondMailLockSendItem", nothing),
     ]
 }

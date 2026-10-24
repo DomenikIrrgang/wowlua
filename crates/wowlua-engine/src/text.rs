@@ -13,8 +13,8 @@
 //! - A line's height is the font's at that pixel size.
 //!
 //! Recorded: FRIZQT, ARIALN (both plain and outlined), skurri and MORPHEUS
-//! at 8 to 45 pixels, every printable ASCII character; kerning at FRIZQT 17
-//! and ARIALN 20 pixels. Unverified: other fonts (measured as FRIZQT),
+//! at 8 to 45 pixels, every printable ASCII character; kerning at FRIZQT 10, 14,
+//! 17, 20 and ARIALN 10, 12, 16, 20 pixels (16 pairs). Unverified: other fonts (measured as FRIZQT),
 //! sizes outside 8 to 45 (the nearest scaled), other characters (as `?`),
 //! kerning at other sizes (none), a texture's width in text (none).
 
@@ -354,10 +354,101 @@ pub fn line_height(vm: &Vm, id: WidgetId) -> f64 {
     f64::from((row.height * scale).round() as f32 * pixel)
 }
 
-/// The visible text's lines, each wrapped by words at `max` units when it
-/// is wider (none: unwrapped). A word wider than `max` keeps a line of its
-/// own (truncated), or with `SetNonSpaceWrap(true)` breaks between its
-/// characters (unverified in the client).
+/// A line's advance in pixels: each glyph's advance (the last one's too)
+/// and the kerning of pairs that kern. What a line must fit the width in.
+fn advance_px(font: &Font, px: i64, chars: &[char]) -> f64 {
+    let (row, scale) = row(font, px);
+    let index = |c: char| {
+        let i = c as u32;
+        if (32..=126).contains(&i) {
+            (i - 32) as usize
+        } else {
+            ('?' as u32 - 32) as usize
+        }
+    };
+    let mut total: f64 = chars.iter().map(|&c| row.advances[index(c)] * scale).sum();
+    let g = glyphs();
+    for pair in chars.windows(2) {
+        if let Some(d) = g.kern.get(&(font.file.clone(), px, pair[0], pair[1])) {
+            total += d;
+        }
+    }
+    total
+}
+
+/// How the client breaks one line of text at a width (`fits`), as
+/// recorded by the wrap probe (decision T282): at a space run's end or
+/// after a hyphen, the line as long as it fits (its trailing spaces left
+/// out); a word wider than the line is cut between characters, at least
+/// one a line. Without non-space wrap the rest of the text then fills the
+/// lines character by character, its spaces included (one at a break
+/// left out). The lines as ranges of `line`, and the first that cut a
+/// word without non-space wrap.
+fn breaks(
+    line: &[char],
+    fits: &dyn Fn(&[char]) -> bool,
+    non_space: bool,
+) -> (Vec<(usize, usize)>, Option<usize>) {
+    let n = line.len();
+    let mut out: Vec<(usize, usize)> = Vec::new();
+    let mut s = 0;
+    let mut greedy = false;
+    let mut cut = None;
+    while s < n {
+        if !out.is_empty() && !greedy {
+            while s < n && line[s] == ' ' {
+                s += 1;
+            }
+            if s >= n {
+                break;
+            }
+        }
+        let mut last_ok = None;
+        let mut i = s;
+        while i < n {
+            let j = i + 1;
+            let mut upto = &line[s..j];
+            if !greedy {
+                while let [rest @ .., ' '] = upto {
+                    upto = rest;
+                }
+            }
+            if j - 1 > s && !fits(upto) {
+                break;
+            }
+            if line[i] == '-' || (line[i] == ' ' && (j >= n || line[j] != ' ')) {
+                last_ok = Some(j);
+            }
+            i = j;
+        }
+        if i >= n {
+            out.push((s, n));
+            break;
+        }
+        if let Some(end) = last_ok.filter(|e| !greedy && *e > s) {
+            out.push((s, end));
+            s = end;
+            continue;
+        }
+        if !non_space && !greedy {
+            greedy = true;
+            cut = cut.or(Some(out.len()));
+        }
+        out.push((s, i));
+        s = i;
+        if greedy && s < n && line[s] == ' ' {
+            s += 1;
+        }
+    }
+    if out.is_empty() {
+        out.push((0, 0));
+    }
+    (out, cut)
+}
+
+/// The lines the text breaks into at `max` units (none: its own lines),
+/// as `layout` breaks them (decision T282), each without its trailing
+/// spaces: what the renderer draws.
 pub fn wrapped_lines(vm: &Vm, id: WidgetId, text: &str, max: Option<f64>) -> Vec<String> {
     let font = font_of(vm, id);
     let pixel = pixel(vm, id);
@@ -366,44 +457,157 @@ pub fn wrapped_lines(vm: &Vm, id: WidgetId, text: &str, max: Option<f64>) -> Vec
     let non_space = crate::widgets::stored_ref(vm, props, "NonSpaceWrap")
         .and_then(|v| v.first().copied())
         .is_some_and(|v| v.truthy());
-    let fits = |s: &str, max: f64| f64::from(line_px(&font, px, s) as f32 * pixel) <= max + 1e-3;
+    let max = max.filter(|m| *m > 0.0 && font.size > 0.0);
+    let units = |p: f64| f64::from(p as f32 * pixel);
     let mut out = Vec::new();
     for line in visible(text).split('\n') {
-        let Some(max) = max.filter(|m| *m > 0.0 && font.size > 0.0) else {
+        let Some(m) = max else {
             out.push(line.to_string());
             continue;
         };
-        let mut current = String::new();
-        for word in line.split(' ') {
-            let candidate = if current.is_empty() {
-                word.to_string()
-            } else {
-                format!("{current} {word}")
-            };
-            if current.is_empty() || fits(&candidate, max) {
-                current = candidate;
-            } else {
-                out.push(std::mem::take(&mut current));
-                current = word.to_string();
+        let chars: Vec<char> = line.chars().collect();
+        let fits = |s: &[char]| units(advance_px(&font, px, s)) <= m + 1e-3;
+        let (ranges, _) = breaks(&chars, &fits, non_space);
+        for (start, end) in ranges {
+            let mut t = &chars[start..end];
+            while let [rest @ .., ' '] = t {
+                t = rest;
             }
-            if non_space && !fits(&current, max) {
-                // Break the word between characters, each line at least one.
-                let mut piece = String::new();
-                for ch in current.clone().chars() {
-                    let longer = format!("{piece}{ch}");
-                    if !piece.is_empty() && !fits(&longer, max) {
-                        out.push(std::mem::take(&mut piece));
-                        piece = ch.to_string();
-                    } else {
-                        piece = longer;
-                    }
-                }
-                current = piece;
-            }
+            out.push(t.iter().collect());
         }
-        out.push(current);
     }
     out
+}
+
+/// What the client makes of a text at a width (decision T282).
+pub struct Layout {
+    /// `GetNumLines()`: every line the text breaks into at the width, also
+    /// with word wrap off or more lines than it may show.
+    pub lines: usize,
+    /// The lines it draws (its height): one per line of its own without
+    /// word wrap; at most the maximum lines; with a word cut without
+    /// non-space wrap and a maximum, to the line that cut it.
+    pub shown: usize,
+    /// `IsTruncated()`: lines it doesn't show, or a word cut without
+    /// non-space wrap.
+    pub truncated: bool,
+    /// `GetStringWidth()`: the whole text's widest line, or, cut short by
+    /// a maximum, the text it shows to the cut and an ellipsis.
+    pub width: f64,
+}
+
+/// The text laid out in the region at `max` units (none: unbounded) as
+/// the client does it (decision T282): `wraps` its word wrap, `max_lines`
+/// its maximum (0: none). The ellipsis is one glyph three periods wide
+/// that fits by a pixel less (recorded in FRIZQT 12 and ARIALN 14;
+/// unverified at other sizes). The client breaks some narrow lines a line
+/// sooner than whole-pixel advances say (its advances are finer).
+pub fn layout(
+    vm: &Vm,
+    id: WidgetId,
+    text: &str,
+    max: Option<f64>,
+    wraps: bool,
+    max_lines: usize,
+) -> Layout {
+    let font = font_of(vm, id);
+    let pixel = pixel(vm, id);
+    let px = pixel_size(&font, pixel);
+    let props = engine(vm).world.widgets[id.0].props;
+    let non_space = crate::widgets::stored_ref(vm, props, "NonSpaceWrap")
+        .and_then(|v| v.first().copied())
+        .is_some_and(|v| v.truthy());
+    let vis = visible(text);
+    let full = width(vm, id, text);
+    let hard: Vec<Vec<char>> = vis.split('\n').map(|l| l.chars().collect()).collect();
+    let max = max.filter(|m| *m > 0.0 && font.size > 0.0);
+    let units = |p: f64| f64::from(p as f32 * pixel);
+    let font_ref = &font;
+    let fits = |m: f64| move |s: &[char]| units(advance_px(font_ref, px, s)) <= m + 1e-3;
+    // every line: its own line's index, its range
+    let mut all: Vec<(usize, usize, usize)> = Vec::new();
+    let mut cut = None;
+    for (h, line) in hard.iter().enumerate() {
+        match max {
+            Some(m) => {
+                let (ranges, c) = breaks(line, &fits(m), non_space);
+                if cut.is_none() {
+                    cut = c.map(|c| all.len() + c);
+                }
+                all.extend(ranges.into_iter().map(|(s, e)| (h, s, e)));
+            }
+            None => all.push((h, 0, line.len())),
+        }
+    }
+    let lines = all.len();
+    let whole = |shown: usize, truncated: bool| Layout {
+        lines,
+        shown,
+        truncated,
+        width: full,
+    };
+    if !wraps {
+        return whole(hard.len(), lines > hard.len());
+    }
+    let shown = match (cut, max_lines) {
+        (Some(_), 0) => return whole(lines, true),
+        (Some(c), m) => (c + 1).min(m),
+        (None, m) if m > 0 && lines > m => m,
+        _ => return whole(lines, false),
+    };
+    // The shown text to the cut, and the ellipsis.
+    let (row, scale) = row(&font, px);
+    let dot = row.advances[('.' as u32 - 32) as usize] * scale;
+    let (ellipsis_fit, ellipsis_width) = (3.0 * dot - 1.0, 3.0 * dot);
+    let (h, s, e) = all[shown - 1];
+    let line = &hard[h];
+    let mut k = e;
+    let trimmed = |k: usize| {
+        let mut t = &line[s..k];
+        while let [rest @ .., ' '] = t {
+            t = rest;
+        }
+        t
+    };
+    while k > s
+        && max.is_some_and(|m| units(advance_px(&font, px, trimmed(k)) + ellipsis_fit) > m + 1e-3)
+    {
+        k -= 1;
+    }
+    let mut head = &line[..k];
+    while let [rest @ .., ' '] = head {
+        head = rest;
+    }
+    let last = if head.is_empty() {
+        units(ellipsis_width)
+    } else {
+        units(advance_px(&font, px, head) + ellipsis_width)
+    };
+    let before = hard[..h]
+        .iter()
+        .map(|l| units(line_px(&font, px, &l.iter().collect::<String>())))
+        .fold(0.0, f64::max);
+    Layout {
+        lines,
+        shown,
+        truncated: true,
+        width: before.max(last),
+    }
+}
+
+/// The text laid out in the region at `max` units with its own word wrap
+/// and maximum lines (`SetWordWrap`, `SetMaxLines`, a font object's).
+pub fn layout_in(vm: &Vm, id: WidgetId, text: &str, max: Option<f64>) -> Layout {
+    let props = engine(vm).world.widgets[id.0].props;
+    let wraps = crate::widgets::stored_ref(vm, props, "WordWrap")
+        .and_then(|v| v.first().copied())
+        .is_none_or(|v| v.truthy());
+    let max_lines =
+        match crate::widgets::stored_ref(vm, props, "MaxLines").and_then(|v| v.first().copied()) {
+            Some(Value::Num(n)) if n > 0.0 => n as usize,
+            _ => 0,
+        };
+    layout(vm, id, text, max, wraps, max_lines)
 }
 
 /// The character index (1-based) at `x` units on a one-line text, and
