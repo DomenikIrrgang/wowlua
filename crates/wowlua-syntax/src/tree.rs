@@ -93,6 +93,12 @@ pub(crate) enum StmtData {
         name: Sp,
         func: u32,
     },
+    /// `overload function name(…): …`: a signature of the function
+    /// implemented next (spec §5.1.1).
+    Overload {
+        name: Sp,
+        func: u32,
+    },
     Local {
         names: Range,
         values: Range,

@@ -202,9 +202,10 @@ fn stmt(s: Stmt<'_>, out: &mut Out) {
         StmtKind::Continue => out.push((Feature::Continue, s.span())),
         StmtKind::Class(_) => out.push((Feature::Class, s.span())),
         StmtKind::Enum(_) => out.push((Feature::Enum, s.span())),
-        StmtKind::Interface(_) | StmtKind::TypeAlias(_) | StmtKind::Declare(_) => {
-            out.push((Feature::TypeDeclaration, s.span()))
-        }
+        StmtKind::Interface(_)
+        | StmtKind::TypeAlias(_)
+        | StmtKind::Declare(_)
+        | StmtKind::Overload { .. } => out.push((Feature::TypeDeclaration, s.span())),
         StmtKind::Import(import) => {
             if import.type_only() {
                 out.push((Feature::TypeDeclaration, s.span()));
@@ -213,7 +214,7 @@ fn stmt(s: Stmt<'_>, out: &mut Out) {
             }
         }
         StmtKind::Export(inner) => match inner.kind() {
-            StmtKind::Interface(_) | StmtKind::TypeAlias(_) => {
+            StmtKind::Interface(_) | StmtKind::TypeAlias(_) | StmtKind::Overload { .. } => {
                 out.push((Feature::TypeDeclaration, s.span()))
             }
             _ => {

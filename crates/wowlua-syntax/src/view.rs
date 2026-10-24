@@ -399,6 +399,10 @@ impl<'t> Stmt<'t> {
                 name: Name::new(t, name),
                 func: Func::new(t, func),
             },
+            K::Overload { name, func } => StmtKind::Overload {
+                name: Name::new(t, name),
+                func: Func::new(t, func),
+            },
             K::Local { names, values } => StmtKind::Local {
                 names: List::new(t, names, TypedName::at),
                 values: exprs(values),
@@ -474,6 +478,12 @@ pub enum StmtKind<'t> {
         func: Func<'t>,
     },
     LocalFunction {
+        name: Name<'t>,
+        func: Func<'t>,
+    },
+    /// `overload function name(…): …`: a signature without body of the
+    /// function implemented next (spec §5.1.1).
+    Overload {
         name: Name<'t>,
         func: Func<'t>,
     },

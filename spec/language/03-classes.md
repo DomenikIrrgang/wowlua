@@ -348,8 +348,11 @@ end
 
 - Callers see only the overload signatures, which are resolved as in
   [Types §2.7](02-types.md#27-calls-and-arity).
-- The implementation signature must accept every overload (E3044) and is not
-  callable directly.
+- The implementation signature must accept every overload (E3044): each
+  overload's arguments fit its parameters, and the results fit one way or
+  the other (decision L85). It is not callable directly.
+- Top-level functions have overloads too
+  ([Modules §5.1.1](05-modules.md#511-function-overloads)).
 - Overloads are compile-time only. One function is emitted.
 
 ## 3.2 Widget classes

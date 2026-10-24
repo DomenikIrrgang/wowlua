@@ -189,6 +189,10 @@ fn stmt_inner(s: Stmt<'_>, out: &mut String) {
             let _ = write!(out, "localfn {}", name.text());
             func(f, out);
         }
+        StmtKind::Overload { name, func: f } => {
+            let _ = write!(out, "overload {}", name.text());
+            func(f, out);
+        }
         StmtKind::Local { names, values } => {
             out.push_str("local ");
             for n in names {

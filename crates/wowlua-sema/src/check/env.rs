@@ -687,6 +687,76 @@ impl<'p> Env<'p> {
                 member.ty = t;
             }
         }
+        self.class_overloads(def, c, scope, false);
+    }
+
+    /// A class's `overload function` signatures: callers of the method see
+    /// them, not its implementation (spec §3.1.11). With `report`, E3044
+    /// where the implementation does not accept one.
+    fn class_overloads(&mut self, def: DefId, c: ClassDecl<'_>, scope: &Scope, report: bool) {
+        type Set = (Box<str>, bool, Vec<(TypeId, Span)>);
+        let mut sets: Vec<Set> = Vec::new();
+        for m in c.members() {
+            if !m.modifiers().contains(&Modifier::Overload) {
+                continue;
+            }
+            let ClassMemberKind::Method { name, func, .. } = m.kind() else {
+                continue;
+            };
+            let is_static = m.modifiers().contains(&Modifier::Static);
+            let mut f = self.func_sig(&FnSig::of(func), scope, false);
+            // (without a body: no results unless it names them)
+            if func.ret().is_none() {
+                f.ret = Pack::empty();
+            }
+            let t = self.types.func(f);
+            match sets
+                .iter_mut()
+                .find(|(n, s, _)| n.as_ref() == name.text() && *s == is_static)
+            {
+                Some(set) => set.2.push((t, name.span())),
+                None => sets.push((name.text().into(), is_static, vec![(t, name.span())])),
+            }
+        }
+        for (name, is_static, sigs) in sets {
+            let target = if is_static {
+                &self.def(def).statics
+            } else {
+                &self.def(def).members
+            };
+            let Some(implementation) = target.get(name.as_ref()).map(|m| m.ty) else {
+                continue;
+            };
+            if report {
+                for &(sig, span) in &sigs {
+                    if !self.overload_accepted(implementation, sig) {
+                        let msg = format!(
+                            "the implementation of `{name}` (`{}`) does not accept this overload (`{}`)",
+                            self.display(implementation),
+                            self.display(sig)
+                        );
+                        self.diagnostics.push(
+                            Diagnostic::error("E3044", msg)
+                                .with_label(span, "not accepted by the implementation"),
+                        );
+                    }
+                }
+            }
+            let set = match sigs.as_slice() {
+                [(one, _)] => *one,
+                _ => self
+                    .types
+                    .intern(Ty::Intersection(sigs.iter().map(|s| s.0).collect())),
+            };
+            let target = if is_static {
+                &mut self.def_mut(def).statics
+            } else {
+                &mut self.def_mut(def).members
+            };
+            if let Some(member) = target.get_mut(name.as_ref()) {
+                member.ty = set;
+            }
+        }
     }
 
     fn scope_of(&self, module: usize, sources: &[Source]) -> Scope {
@@ -1099,6 +1169,7 @@ impl<'p> Env<'p> {
                 }
             }
         }
+        self.class_overloads(def, c, &scope, true);
         // `new`: the constructor, or the superclass's with this class's
         // instance type (spec §3.1.2).
         let own_ctor = ctor.is_some();

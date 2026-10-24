@@ -95,6 +95,13 @@ fn declarations() {
         "abstract class Base<T> extends Frame implements Shape, Other\n  private static count: number = 0\n  readonly name?: string\n  static: boolean\n  @trace function greet(self, who: string): string return who end\n  abstract function area(self): number\n  overload function f(self, x: number): number\n  get size(): number return 1 end\n  set size(v: number) end\n  constructor(name: string) self.name = name end\n  overload constructor(x: number)\nend",
     );
     ok("declare function GetTime(): number");
+    // function overloads (spec §5.1.1)
+    ok(
+        "overload function pick(n: number): string\noverload function pick<T>(v: T, ...: T): T\nlocal function pick(v: unknown): unknown return v end\nexport overload function wrap(): nil\nexport function wrap() end",
+    );
+    assert!(codes("function f()\n overload function g(): nil\nend").contains(&"E0115".to_string()));
+    // `overload` stays a name
+    ok("local overload = 1\noverload = overload + 1");
     ok("declare global MyAddonDB: { count: number }");
     ok(
         "declare namespace C_Timer\n function After(seconds: number, @deferred cb: () -> ()): ()\n const MAX: number\n namespace Inner\n  x: number\n end\nend",

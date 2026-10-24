@@ -1382,6 +1382,7 @@ impl Compiler<'_> {
             StmtKind::Enum(_) => self.not_lua(stmt.span(), "an enum"),
             StmtKind::TypeAlias(_) => self.not_lua(stmt.span(), "a type alias"),
             StmtKind::Declare(_) => self.not_lua(stmt.span(), "a declaration"),
+            StmtKind::Overload { .. } => self.not_lua(stmt.span(), "an overload signature"),
             StmtKind::Import(_) => self.not_lua(stmt.span(), "an import"),
             StmtKind::Export(_) => self.not_lua(stmt.span(), "an export"),
             StmtKind::Error => self.err(line, "syntax error"),

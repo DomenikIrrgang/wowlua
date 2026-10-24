@@ -13,6 +13,16 @@ fn fmt(src: &str) -> String {
 }
 
 #[test]
+fn overload_signatures() {
+    let src =
+        "overload  function pick( n:number ):string\nexport overload function wrap<T>(v:T):{v:T}\n";
+    assert_eq!(
+        fmt(src),
+        "overload function pick(n: number): string\nexport overload function wrap<T>(v: T): { v: T }\n"
+    );
+}
+
+#[test]
 fn show() {
     let src = r#"-- Header comment
 local addonName,ns=...

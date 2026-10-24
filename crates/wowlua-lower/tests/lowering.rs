@@ -133,6 +133,14 @@ fn same(wowlua: &str, reference: &str) {
 }
 
 #[test]
+fn overload_signatures_emit_nothing() {
+    let src = "overload function pick(n: number): string\noverload function pick(s: string): number\nlocal function pick(v)\n  return v\nend\nprint(pick(1))";
+    let compiled = compile(src);
+    assert!(!compiled.contains("overload"), "{compiled}");
+    same(src, "local function pick(v) return v end\nprint(pick(1))");
+}
+
+#[test]
 fn compound_assignment() {
     same(
         "local x = 1\nx += 2\nx *= 3 + 1\nx -= 1\nx /= 2\nx %= 4\nx ^= 2\nprint(x)\nlocal s = 'a'\ns ..= 1 .. 2\nprint(s)",

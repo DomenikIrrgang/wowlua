@@ -1053,27 +1053,44 @@ fn annotated_exports(
     // The module's own check reports what its annotations get wrong.
     let reported = env.diagnostics.len();
     let mut out = FxHashMap::default();
+    // A function's overload signatures: its type for callers.
+    let mut overloads: Vec<TypeId> = Vec::new();
     for s in parse.view().block().stmts() {
         // An export, or a file-level local (for `import internal`).
         let (inner, prefix) = match s.kind() {
             StmtKind::Export(inner) => (inner, ""),
             _ => (s, body::INTERNAL),
         };
+        if let StmtKind::Overload { func, .. } = inner.kind() {
+            let mut sig = env.func_sig(&env::FnSig::of(func), &scope, false);
+            if func.ret().is_none() {
+                sig.ret = types::Pack::empty();
+            }
+            overloads.push(env.types.func(sig));
+            continue;
+        }
+        let pending = std::mem::take(&mut overloads);
         if !s.decorators().is_empty() || !inner.decorators().is_empty() {
             continue;
         }
         let key = |name: &str| -> Box<str> { format!("{prefix}{name}").into() };
+        let function_type = |env: &mut env::Env, func| match pending.as_slice() {
+            [] => {
+                let sig = env.func_sig(&env::FnSig::of(func), &scope, false);
+                env.types.func(sig)
+            }
+            [one] => *one,
+            many => env.types.intern(Ty::Intersection(many.to_vec())),
+        };
         match inner.kind() {
             StmtKind::Function { name, func }
                 if name.path().len() == 1 && name.method().is_none() =>
             {
-                let sig = env.func_sig(&env::FnSig::of(func), &scope, false);
-                let t = env.types.func(sig);
+                let t = function_type(env, func);
                 out.insert(key(name.path().at(0).text()), t);
             }
             StmtKind::LocalFunction { name, func } if !prefix.is_empty() => {
-                let sig = env.func_sig(&env::FnSig::of(func), &scope, false);
-                let t = env.types.func(sig);
+                let t = function_type(env, func);
                 out.insert(key(name.text()), t);
             }
             StmtKind::Local { names, .. } => {
@@ -3507,6 +3524,85 @@ print(a, b, c, d, e, name, realm, more)
             Mode::Strict,
         );
         assert!(e.is_empty(), "{e:?}");
+    }
+
+    #[test]
+    fn function_overloads() {
+        let f = "overload function pick(n: number): string\noverload function pick(s: string): number\nlocal function pick(v: number | string): string | number\n    if type(v) == \"number\" then return tostring(v) end\n    return #v\nend\n";
+        // callers see the overloads, not the implementation
+        strict_ok(&format!(
+            "{f}local a: string = pick(1)\nlocal b: number = pick(\"x\")\nprint(a, b)\n"
+        ));
+        strict_err(
+            &format!("{f}local c: number = pick(1)\nprint(c)\n"),
+            "E2001",
+        );
+        strict_err(&format!("{f}print(pick(true))\n"), "E2012");
+        // the implementation accepts every overload
+        strict_err(
+            "overload function f(b: boolean): number\nlocal function f(v: number): number return v end\nprint(f(true))\n",
+            "E3044",
+        );
+        // without a return type, an overload returns nothing
+        let d = check_source(
+            "overload function g(n: number)\nlocal function g(n: number): number? return nil end\nprint(g(1) + 1)\n",
+            Mode::Strict,
+        );
+        assert!(d.iter().any(|x| x.is_error()), "{:#?}", codes(&d));
+        // a signature with no implementation right after it
+        strict_err(
+            "overload function f(n: number): number\nlocal x = 1\nprint(x)\n",
+            "E3047",
+        );
+        strict_err(
+            "overload function f(n: number): number\nlocal function g(n: number): number return n end\nprint(g(1))\n",
+            "E3047",
+        );
+        // generic overloads; a module's exported ones reach its importers
+        let e = check_modules(
+            &[
+                (
+                    "api.wowlua",
+                    "export overload function wrap<T>(v: T): { v: T }\nexport overload function wrap(): nil\nexport function wrap(v: unknown?): { v: unknown }?\n    if v == nil then return nil end\n    return { v = v }\nend\n",
+                ),
+                (
+                    "use.wowlua",
+                    "import wrap from \"./api\"\nlocal w = wrap(1)\nlocal n: number = w.v\nlocal s: string = wrap(\"a\").v\nprint(n, s, wrap())\n",
+                ),
+            ],
+            Mode::Strict,
+        );
+        assert!(e.is_empty(), "{e:?}");
+        let e = check_modules(
+            &[
+                (
+                    "api.wowlua",
+                    "export overload function wrap<T>(v: T): { v: T }\nexport function wrap(v: unknown): { v: unknown }\n    return { v = v }\nend\n",
+                ),
+                (
+                    "use.wowlua",
+                    "import wrap from \"./api\"\nlocal s: string = wrap(1).v\nprint(s)\n",
+                ),
+            ],
+            Mode::Strict,
+        );
+        assert!(e.iter().any(|e| e.starts_with("E2001")), "{e:?}");
+    }
+
+    #[test]
+    fn method_overloads() {
+        let c = "class Inv\n    overload function find(id: number): string?\n    overload function find(name: string): number?\n    function find(k: number | string): (string | number)?\n        return nil\n    end\nend\nlocal i = Inv.new()\n";
+        strict_ok(&format!(
+            "{c}local s: string? = i:find(1)\nlocal n: number? = i:find(\"a\")\nprint(s, n)\n"
+        ));
+        strict_err(
+            &format!("{c}local n: number? = i:find(1)\nprint(n)\n"),
+            "E2001",
+        );
+        strict_err(
+            "class Inv\n    overload function find(b: boolean): string?\n    function find(k: number): string?\n        return nil\n    end\nend\nprint(Inv)\n",
+            "E3044",
+        );
     }
 
     #[test]

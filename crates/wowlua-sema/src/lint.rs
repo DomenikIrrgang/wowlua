@@ -670,6 +670,7 @@ impl Linter<'_> {
                 self.ty(a.ty());
             }
             StmtKind::Declare(_) => {}
+            StmtKind::Overload { func, .. } => self.signature(func),
             StmtKind::Import(i) => self.import(i, s.span()),
         }
     }

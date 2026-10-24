@@ -3567,6 +3567,14 @@ impl Checker<'_, '_> {
         let Some(id) = self.intrinsic_of(callee) else {
             return c;
         };
+        // An overloaded intrinsic (`hook`): each overload, as one alone.
+        if let Ty::Intersection(overloads) = self.env.types.get(c).clone() {
+            let each: Vec<TypeId> = overloads
+                .iter()
+                .map(|&o| self.stdlib_call_type(callee, args, o))
+                .collect();
+            return self.env.types.intern(Ty::Intersection(each));
+        }
         let Ty::Func(f) = self.env.types.get(c).clone() else {
             return c;
         };

@@ -212,6 +212,9 @@ pub struct Checker<'e, 'p> {
     pub(crate) self_owners: FxHashMap<VarId, VarId>,
     /// The table of the method whose body is checked next.
     pending_self_owner: Option<VarId>,
+    /// `overload function` signatures waiting for their implementation:
+    /// (name, signature, where).
+    pending_overloads: Vec<(Box<str>, TypeId, Span)>,
     /// Uses of a call whose count wasn't known yet (a method defined
     /// further down): judged at the file's end.
     pub(crate) pending_caps: Vec<(super::expr::CapKey, String, super::expr::CapUse)>,
@@ -369,6 +372,7 @@ impl<'e, 'p> Checker<'e, 'p> {
             method_caps: FxHashMap::default(),
             self_owners: FxHashMap::default(),
             pending_self_owner: None,
+            pending_overloads: Vec::new(),
             pending_caps: Vec::new(),
             export_caps: FxHashMap::default(),
             last_result_cap: None,
@@ -969,18 +973,31 @@ impl<'e, 'p> Checker<'e, 'p> {
     /// Top-level classes and enums are hoisted (decision T76), and so are
     /// the top-level functions of a module (spec §5.1).
     fn hoist(&mut self, b: Block<'_>) {
+        // The overload signatures before a function: callers see them.
+        let mut overloads: Vec<(Box<str>, TypeId)> = Vec::new();
         for s in b.stmts() {
             let kind = match s.kind() {
                 StmtKind::Export(inner) => inner.kind(),
                 k => k,
             };
             match kind {
+                StmtKind::Overload { name, func } => {
+                    let t = self.overload_signature(func);
+                    overloads.push((name.text().into(), t));
+                    continue;
+                }
                 StmtKind::Function { name, func }
                     if self.is_module && name.path().len() == 1 && name.method().is_none() =>
                 {
-                    let sig = self.func_sig(&FnSig::of(func));
-                    let t = self.env.types.func(sig);
-                    self.declare(name.path().at(0).text(), Some(t), t, false, None);
+                    let n = name.path().at(0).text();
+                    let t = match overload_set_of(&mut self.env.types, &overloads, n) {
+                        Some(set) => set,
+                        None => {
+                            let sig = self.func_sig(&FnSig::of(func));
+                            self.env.types.func(sig)
+                        }
+                    };
+                    self.declare(n, Some(t), t, false, None);
                 }
                 StmtKind::Class(c) => {
                     if let Some(def) = self.env.lookup_type(c.name().text(), &self.scope) {
@@ -996,6 +1013,68 @@ impl<'e, 'p> Checker<'e, 'p> {
                 }
                 _ => {}
             }
+            overloads.clear();
+        }
+    }
+
+    /// The overload set the pending `overload function` signatures of
+    /// `name` make, now that its implementation (`actual`) is here: each
+    /// one the implementation must accept (E3044).
+    fn take_overloads(&mut self, name: &str, actual: TypeId) -> Option<TypeId> {
+        if !self
+            .pending_overloads
+            .iter()
+            .any(|(n, _, _)| n.as_ref() == name)
+        {
+            return None;
+        }
+        let pending = std::mem::take(&mut self.pending_overloads);
+        let mut set: Option<TypeId> = None;
+        for (n, sig, span) in pending {
+            if n.as_ref() != name {
+                self.report(
+                    "E3047",
+                    span,
+                    format!(
+                        "the overload signature of `{n}` is not followed by its implementation"
+                    ),
+                );
+                continue;
+            }
+            if !self.env.overload_accepted(actual, sig) {
+                let msg = format!(
+                    "the implementation of `{name}` (`{}`) does not accept this overload (`{}`)",
+                    self.env.display(actual),
+                    self.env.display(sig)
+                );
+                self.report("E3044", span, msg);
+            }
+            set = Some(match set {
+                Some(s) => super::env::overload_set(&mut self.env.types, s, sig),
+                None => sig,
+            });
+        }
+        set
+    }
+
+    /// An `overload function` signature's type: without a body, no
+    /// results unless it names them.
+    fn overload_signature(&mut self, func: FuncNode<'_>) -> TypeId {
+        let mut sig = self.func_sig(&FnSig::of(func));
+        if func.ret().is_none() {
+            sig.ret = Pack::empty();
+        }
+        self.env.types.func(sig)
+    }
+
+    /// Overload signatures left without their implementation (E3047).
+    fn unimplemented_overloads(&mut self) {
+        for (n, _, span) in std::mem::take(&mut self.pending_overloads) {
+            self.report(
+                "E3047",
+                span,
+                format!("the overload signature of `{n}` is not followed by its implementation"),
+            );
         }
     }
 
@@ -1024,8 +1103,33 @@ impl<'e, 'p> Checker<'e, 'p> {
                 self.report("W1005", s.span(), "unreachable code");
                 self.in_dead = true;
             }
+            // Overload signatures belong to the function right after them.
+            let implements = match s.kind() {
+                StmtKind::Export(inner) => inner,
+                _ => s,
+            };
+            let continues = match implements.kind() {
+                StmtKind::Overload { .. } => true,
+                StmtKind::LocalFunction { name, .. } => self
+                    .pending_overloads
+                    .iter()
+                    .all(|(n, _, _)| n.as_ref() == name.text()),
+                StmtKind::Function { name, .. } => {
+                    name.path().len() == 1
+                        && name.method().is_none()
+                        && self
+                            .pending_overloads
+                            .iter()
+                            .all(|(n, _, _)| n.as_ref() == name.path().at(0).text())
+                }
+                _ => false,
+            };
+            if !continues {
+                self.unimplemented_overloads();
+            }
             self.stmt(s);
         }
+        self.unimplemented_overloads();
         self.in_dead = outer;
     }
 
@@ -1533,9 +1637,17 @@ impl<'e, 'p> Checker<'e, 'p> {
                 });
             }
             StmtKind::Function { name, func } => self.function_stmt(name, func),
+            StmtKind::Overload { name, func } => {
+                let t = self.overload_signature(func);
+                self.pending_overloads
+                    .push((name.text().into(), t, name.span()));
+            }
             StmtKind::LocalFunction { name, func } => {
                 let sig = self.func_sig(&FnSig::of(func));
-                let t = self.env.types.func(sig);
+                let impl_t = self.env.types.func(sig);
+                // Callers (and the body, recursing) see the overloads.
+                let set = self.take_overloads(name.text(), impl_t);
+                let t = set.unwrap_or(impl_t);
                 let id = self.declare(name.text(), None, t, false, Some(name.span()));
                 let handler = self.next_handler.take();
                 let actual = self.function_body(
@@ -1549,6 +1661,7 @@ impl<'e, 'p> Checker<'e, 'p> {
                 if let Some(cap) = self.last_result_cap.take() {
                     self.result_caps.insert(id, cap);
                 }
+                let actual = set.unwrap_or(actual);
                 self.flow.insert(id, actual);
                 self.vars[id.0 as usize].base = actual;
             }
@@ -1939,6 +2052,15 @@ impl<'e, 'p> Checker<'e, 'p> {
         let expected = expected
             .and_then(|e| self.as_func(e))
             .or_else(|| handler.as_ref().map(|h| h.0.clone()));
+        // Its overload signatures, taken before the body is checked (a
+        // block reports those left pending at its end).
+        let overloads = (name.path().len() == 1 && !method)
+            .then(|| {
+                let sig = self.func_sig(&FnSig::of(func));
+                let declared = self.env.types.func(sig);
+                self.take_overloads(name.path().at(0).text(), declared)
+            })
+            .flatten();
         let t = self.function_body(&FnSig::of(func), expected, self_ty);
         let cap = self.last_result_cap.take();
         if let (Some(v), Some(m)) = (table, method_name) {
@@ -1966,6 +2088,8 @@ impl<'e, 'p> Checker<'e, 'p> {
         }
         if name.path().len() == 1 && !method {
             let n = &name.path().at(0);
+            // Callers see the overloads.
+            let t = overloads.unwrap_or(t);
             match self.lookup_var(n.text()) {
                 Some(v) => self.assign_var(v, t, n.span()),
                 None => self.assign_global(*n, t),
@@ -3060,5 +3184,23 @@ fn literal_string(e: Expr<'_>) -> Option<String> {
     match e.kind() {
         ExprKind::String(lit) => Some(String::from_utf8_lossy(&lit.value()).into_owned()),
         _ => None,
+    }
+}
+
+/// The overload set the signatures of `name` among `overloads` make.
+fn overload_set_of(
+    types: &mut Types,
+    overloads: &[(Box<str>, TypeId)],
+    name: &str,
+) -> Option<TypeId> {
+    let sigs: Vec<TypeId> = overloads
+        .iter()
+        .filter(|(n, _)| n.as_ref() == name)
+        .map(|(_, t)| *t)
+        .collect();
+    match sigs.len() {
+        0 => None,
+        1 => Some(sigs[0]),
+        _ => Some(types.intern(Ty::Intersection(sigs))),
     }
 }

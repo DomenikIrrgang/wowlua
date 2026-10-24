@@ -243,7 +243,7 @@ on("PLAYER_REGEN_DISABLED", function() combat(true) end)
 on("PLAYER_REGEN_ENABLED", function() combat(false) end)
 
 --- Starts `fn` as a job on the next frame.
-export function start(fn: (ctx: JobContext) -> ...any, opts: JobOptions?): Job
+export function start(fn: (ctx: JobContext) -> ...unknown, opts: JobOptions?): Job
     const t = Task.new(opts ?? {})
     t.co = coroutine.create(fn)
     t.combatPaused = (opts?.pauseInCombat == true) and InCombatLockdown()

@@ -6,7 +6,11 @@
 import onAddonLoaded from "wowlua:lifecycle"
 import callOwned from "wowlua:errors"
 
-type Options = { addon?: string, owner?: any }
+export type Options = { addon?: string, owner?: unknown }
+
+--- What `@hook(…)` and `@hookScript(…)` give: the decorator, which hooks the
+--- function it decorates.
+export type HookDecorator = (fn: function, ctx: DecoratorContext?) -> ()
 
 local function resolve(target: any): any
     if type(target) == "string" then
@@ -57,7 +61,16 @@ end
 
 --- A post-hook: `hook(name, fn)` or `hook(target, name, fn, opts?)`. As a
 --- decorator: `@hook(name)` or `@hook(target, name, opts?)`.
-export function hook(a: any, b: any?, c: any?, d: any?): any
+export overload function hook(name: string, fn: function)
+export overload function hook(target: unknown, name: string, fn: function, opts: Options?)
+export overload function hook(name: string): HookDecorator
+export overload function hook(target: unknown, name: string, opts: Options?): HookDecorator
+export function hook(
+    a: unknown,
+    b: string | function | nil,
+    c: function | Options | nil,
+    d: Options?
+): HookDecorator?
     if type(b) == "function" then
         hookNow(a, nil, b, nil)
         return nil
@@ -66,23 +79,32 @@ export function hook(a: any, b: any?, c: any?, d: any?): any
         hookNow(a, b, c, d)
         return nil
     end
-    return function(fn: any, ctx: any)
+    local opts = c :: Options?
+    return function(fn: function, _: DecoratorContext?)
         if b == nil then
             hookNow(a, nil, fn, nil)
         else
-            hookNow(a, b, fn, c)
+            hookNow(a, b, fn, opts)
         end
     end
 end
 
 --- `frame:HookScript(script, fn)`: `hookScript(frame, script, fn, opts?)`,
 --- or as a decorator `@hookScript(frame, script, opts?)`.
-export function hookScript(frame: any, script: string, c: any?, d: any?): any
+export overload function hookScript(frame: ScriptRegion | string, script: string, fn: function, opts: Options?)
+export overload function hookScript(frame: ScriptRegion | string, script: string, opts: Options?): HookDecorator
+export function hookScript(
+    frame: ScriptRegion | string,
+    script: string,
+    c: function | Options | nil,
+    d: Options?
+): HookDecorator?
     if type(c) == "function" then
         hookScriptNow(frame, script, c, d)
         return nil
     end
-    return function(fn: any, ctx: any)
-        hookScriptNow(frame, script, fn, c)
+    local opts = c :: Options?
+    return function(fn: function, _: DecoratorContext?)
+        hookScriptNow(frame, script, fn, opts)
     end
 end

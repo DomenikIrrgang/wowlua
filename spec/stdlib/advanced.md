@@ -114,6 +114,24 @@ hook(GameTooltip, "SetSpellByID", function(tip: GameTooltip, id: number) … end
 | `@hookScript(frame, script, opts?)` | `frame:HookScript(script, fn)` |
 | `hook(...)`, `hookScript(...)` | The same as plain functions |
 
+Their signatures are overloads (decision S51):
+
+```wowlua
+overload function hook(name: string, fn: function)
+overload function hook(target: unknown, name: string, fn: function, opts: Options?)
+overload function hook(name: string): HookDecorator
+overload function hook(target: unknown, name: string, opts: Options?): HookDecorator
+overload function hookScript(frame: ScriptRegion | string, script: string, fn: function, opts: Options?)
+overload function hookScript(frame: ScriptRegion | string, script: string, opts: Options?): HookDecorator
+type Options = { addon?: string, owner?: unknown }
+type HookDecorator = (fn: function, ctx: DecoratorContext?) -> ()
+```
+
+`fn` takes the hooked function's parameters where the target is known
+(decision L67). A target may be any value (a game object whose method the
+declarations leave out): the hook checks it when it is installed and fails,
+naming it, when it has no such function.
+
 - **Targets.** `target` (and `frame` for `@hookScript`) is either a table or a
   **string naming a global**. A string is resolved from `_G` when the hook is
   installed.

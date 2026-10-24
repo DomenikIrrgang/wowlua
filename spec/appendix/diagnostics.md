@@ -38,7 +38,7 @@ warning forms of §B.2's pure Lua files (`W2001`). `wowlua explain
 | E0112 | `const` without an initializer, or declaring several names |
 | E0113 | Optional chain used as an assignment or compound-assignment target |
 | E0114 | `continue` is not the last statement of its block |
-| E0115 | `class`, `enum` or `declare` not at the top level of a file |
+| E0115 | `class`, `enum`, `declare` or `overload function` not at the top level of a file |
 | E0116 | Unbalanced `}` in an interpolated string |
 | E0117 | `import _` combined with other names |
 | E0118 | `export function` with a dotted or method name |
@@ -112,6 +112,7 @@ warning forms of §B.2's pure Lua files (`W2001`). `wowlua explain
 | E3044 | Overload implementation does not accept every overload signature |
 | E3045 | Statement-only `wowlua:debug` helper used as a value |
 | E3046 | A field declared twice in one class (a constructor's parameter property included) |
+| E3047 | `overload function` signature not followed by its implementation |
 | E4001 | Manifest is not valid JSON |
 | E4002 | Manifest does not match the schema (unknown key, wrong type) |
 | E4003 | Invalid package name or version |

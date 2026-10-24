@@ -354,6 +354,39 @@ impl Env<'_> {
         false
     }
 
+    /// Does the implementation `implementation` of an overloaded function
+    /// accept the overload `sig` (E3044, spec §3.1.11)? Every argument the
+    /// overload takes fits the implementation's parameters, and the results
+    /// fit one way or the other (an implementation's wider results stand
+    /// behind narrower overloads), as TypeScript has it.
+    pub fn overload_accepted(&mut self, implementation: TypeId, sig: TypeId) -> bool {
+        let (Ty::Func(imp), Ty::Func(o)) = (
+            self.types.get(implementation).clone(),
+            self.types.get(sig).clone(),
+        ) else {
+            return self.assignable(implementation, sig, Mode::Strict);
+        };
+        // the parameters, with the overload's results
+        let mut with_results = Func::clone(&imp);
+        with_results.ret = o.ret.clone();
+        let params = self.types.func(with_results);
+        if !self.assignable(params, sig, Mode::Strict) {
+            return false;
+        }
+        let results = |f: &Func| Func {
+            type_params: f.type_params.clone(),
+            params: Vec::new(),
+            rest: None,
+            ret: f.ret.clone(),
+            predicate: None,
+            unannotated: false,
+            outer: f.outer.clone(),
+        };
+        let a = self.types.func(results(&imp));
+        let b = self.types.func(results(&o));
+        self.assignable(a, b, Mode::Strict) || self.assignable(b, a, Mode::Strict)
+    }
+
     /// Is `s` assignable to `t`?
     pub fn assignable(&mut self, s: TypeId, t: TypeId, mode: Mode) -> bool {
         let mut assuming = FxHashSet::default();

@@ -1272,7 +1272,10 @@ impl<'a> Lowerer<'a> {
                 out
             }
             // Type-only declarations are erased.
-            StmtKind::TypeAlias(_) | StmtKind::Interface(_) | StmtKind::Declare(_) => Vec::new(),
+            StmtKind::TypeAlias(_)
+            | StmtKind::Interface(_)
+            | StmtKind::Declare(_)
+            | StmtKind::Overload { .. } => Vec::new(),
             StmtKind::Import(import) => self.import(import, s.span(), pos),
             StmtKind::Export(inner) => self.export(inner, pos),
             StmtKind::Class(c) => self.class_decl(c, &decorate::Decorations::default(), false),

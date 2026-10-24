@@ -6,6 +6,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### New
 
+- **Function overloads**: a top-level function can declare several signatures before its implementation, as a class method can: `overload function find(id: number): Item?`, `overload function find(name: string): Item?`, then `function find(key: number | string): Item?`. Callers see only the overloads; `export overload function` exports them. A signature with no implementation right after it is E3047.
 - A script handler set on an instance of your widget class gets that class: in `toggle:SetScript("OnClick", function(self) … end)` with `class Toggle extends Button`, `self` is a `Toggle`, so its fields are typed (it was a `Button`). The same goes for every method of the game's classes that takes or gives `Self`.
 - `keyof T` and `T[K]` types, as in TypeScript: `function get<K extends keyof Defaults>(key: K): Defaults[K]` gives each setting its own type, and a key that isn't a field of `Defaults` is an error (E2014).
 - `SetScript` and `HookScript` know what the game passes each script: in `frame:SetScript("OnUpdate", function(self, elapsed) … end)`, `self` is the frame and `elapsed` a number, for every script with known arguments (`OnClick`, `OnEnter`, `OnValueChanged`, `OnKeyDown`, …).
@@ -30,6 +31,8 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Changed
 
+- A class's `overload function` signatures are what callers see now (they saw the implementation), and the implementation must accept each one (E3044), as documented.
+- `hook`, `hookScript` and the test decorators (`@test`, `@skip`, `@only`, `@flavors`, `@cases`, `@expectError`, `@beforeEach`, …) are typed instead of `any`: `hook(name, fn)` and `hook(target, name, fn, opts?)` take the function, `@hook(name)` gives the decorator, and a mistake in their arguments is an error. `jobs.start`'s function may return anything, and a function wrapped with `@outOfCombat` returns nothing (its call may wait for combat to end).
 - The standard library takes and gives `any` in fewer places: `mock.click`, `script`, `hover`, `typeText`, `drag`, `slide`, `dragTo`, `sizeBy`, `wheel` and `protect` take frames (a `nil` frame fails the test with "mock.click: no frame"), `mock.frames()` gives `ScriptRegion[]` and `mock.defineTemplate`'s function gets a `Frame`; `serialize.decode` and `importString`, `reflect.getClass`, `superclass` and `classes` give `unknown` (check it before you use it); `debug.measure`, `errors.callIn` and `errors.callOwned` keep the function's argument and result types, and `debug.stats()` its entries' fields; values only passed on (`log.info(...)`, `events.send`, `errors.report`, `table.equal`, `mock.fireEvent`, an owner, …) are `unknown`.
 - An addon that lists another addon of its workspace in `addon-dependencies` sees that addon's `@global` API with all its types, as that addon has them (a value without an annotation, a class or an enum was `any`): `wowlua check` reads the other addon's sources with yours, without building them into yours or reporting their problems. You can import its types (`import type UnitFrame from "suuui/UI/UnitFrame"`); importing a value from it is E1041, as its modules aren't part of your addon.
 - A global made with `@global` has its value's type where your other files read it (it was `any`).
