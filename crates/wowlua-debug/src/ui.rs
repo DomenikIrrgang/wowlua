@@ -67,8 +67,10 @@ pub fn frame_tree(vm: &mut Vm, root: Option<&str>, hidden: bool) -> Result<Json,
     let roots: Vec<WidgetId> = (0..e.world.widgets.len())
         .map(WidgetId)
         .filter(|&id| {
+            // Frames without a parent: UIParent and WorldFrame (the engine
+            // makes them, not `CreateFrame`) and those made without one.
             let w = &e.world.widgets[id.0];
-            w.parent.is_none() && w.frame
+            w.parent.is_none() && (w.frame || widgets::is_a(e, &w.class, "Frame"))
         })
         .collect();
     let list: Vec<Json> = roots

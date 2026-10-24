@@ -1,7 +1,7 @@
 {
   "name": "wowlua",
   "displayName": "wowlua",
-  "description": "Debug wowlua addons and their tests in wowlua's emulated World of Warcraft client.",
+  "description": "Debug wowlua addons and their tests in wowlua's emulated World of Warcraft client, and see their UI as the game draws it.",
   "version": "0.10.0",
   "publisher": "wowlua",
   "license": "MIT",
@@ -18,7 +18,9 @@
   "main": "./extension.js",
   "activationEvents": [
     "onDebugResolve:wowlua",
-    "onDebugInitialConfigurations"
+    "onDebugInitialConfigurations",
+    "onView:wowlua.frames",
+    "onCommand:wowlua.showUI"
   ],
   "contributes": {
     "languages": [
@@ -47,6 +49,17 @@
           "type": "string",
           "default": "wowlua",
           "description": "The wowlua command the debugger runs (`wowlua debug`)."
+        },
+        "wowlua.ui.autoOpen": {
+          "type": "boolean",
+          "default": true,
+          "description": "Open the UI panel (the game's screen) when a wowlua debug session starts."
+        },
+        "wowlua.ui.refreshInterval": {
+          "type": "number",
+          "default": 1000,
+          "minimum": 0,
+          "description": "How often the UI panel draws the screen while the game runs, in milliseconds (0: only at stops and on Refresh)."
         }
       }
     },
@@ -76,7 +89,7 @@
               },
               "flavor": {
                 "type": "string",
-                "description": "The flavor to run (camelot, standard, vanilla, …); the package's first by default."
+                "description": "The flavor to run (camelot, standard, vanilla, \u2026); the package's first by default."
               },
               "clock": {
                 "type": "string",
@@ -136,6 +149,60 @@
           }
         ]
       }
-    ]
+    ],
+    "commands": [
+      {
+        "command": "wowlua.showUI",
+        "title": "Show UI",
+        "category": "wowlua",
+        "icon": "$(device-desktop)"
+      },
+      {
+        "command": "wowlua.refreshFrames",
+        "title": "Refresh Frames",
+        "category": "wowlua",
+        "icon": "$(refresh)"
+      },
+      {
+        "command": "wowlua.outlineFrame",
+        "title": "Outline in the UI",
+        "category": "wowlua"
+      }
+    ],
+    "views": {
+      "debug": [
+        {
+          "id": "wowlua.frames",
+          "name": "wowlua Frames",
+          "when": "debugType == 'wowlua'"
+        }
+      ]
+    },
+    "menus": {
+      "view/title": [
+        {
+          "command": "wowlua.refreshFrames",
+          "when": "view == wowlua.frames",
+          "group": "navigation"
+        },
+        {
+          "command": "wowlua.showUI",
+          "when": "view == wowlua.frames",
+          "group": "navigation"
+        }
+      ],
+      "debug/toolBar": [
+        {
+          "command": "wowlua.showUI",
+          "when": "debugType == 'wowlua'"
+        }
+      ],
+      "commandPalette": [
+        {
+          "command": "wowlua.outlineFrame",
+          "when": "false"
+        }
+      ]
+    }
   }
 }

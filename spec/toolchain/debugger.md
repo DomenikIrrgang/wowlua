@@ -485,6 +485,19 @@ Custom requests: `wowlua/screenshot` (PNG as base64), `wowlua/frameTree`,
 the report). A value's taint shows in its type (`string · tainted by
 MyAddon`), a secret's value after `secret`.
 
+The VS Code extension shows the game with them (decision T359): the
+**UI panel** (beside the editor; opened as a session starts, or with
+*wowlua: Show UI*) draws `wowlua/screenshot` at every stop and step, and
+while the game runs every `wowlua.ui.refreshInterval` milliseconds (1000;
+0 only at stops and on Refresh); it fits the panel or shows the screen's
+own pixels. A click in it is `wowlua/input`'s click at that pixel (the
+right button for a right-click), so the frame under it gets the click and
+its handlers' breakpoints stop; while the session is paused, clicks wait
+for it to run. The **wowlua Frames** view in the debug sidebar is
+`wowlua/frameTree`'s shown frames, refreshed at every stop (and with its
+Refresh button); each shows its type, size and text, and selecting one
+outlines its rectangle in the panel.
+
 ### 18.12.2 `wowlua mcp`: Model Context Protocol
 
 `wowlua mcp` is an MCP server on stdio for AI agents (decision T314). Its
