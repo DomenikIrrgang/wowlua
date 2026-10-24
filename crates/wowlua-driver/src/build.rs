@@ -416,7 +416,7 @@ fn build_inner(
     let mut files: Vec<(Source, FileId)> = Vec::new();
     let mut raw: HashMap<String, Arc<[u8]>> = HashMap::new();
     for source in sources {
-        match std::fs::read(&source.abs) {
+        match crate::overlay::read(&source.abs) {
             Ok(bytes) => {
                 // Valid UTF-8 (nearly every file) is kept once, for the
                 // source database and as the bytes.
@@ -458,7 +458,7 @@ fn build_inner(
         }
     };
     for source in declaration_sources {
-        match std::fs::read(&source.abs) {
+        match crate::overlay::read(&source.abs) {
             Ok(bytes) => {
                 let file = session
                     .db

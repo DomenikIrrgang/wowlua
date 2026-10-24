@@ -1,7 +1,7 @@
 {
   "name": "wowlua",
   "displayName": "wowlua",
-  "description": "Debug wowlua addons and their tests in wowlua's emulated World of Warcraft client, and see their UI as the game draws it.",
+  "description": "Check, format and outline wowlua addons as you type; debug them and their tests in wowlua's emulated World of Warcraft client, and see their UI as the game draws it.",
   "version": "0.10.0",
   "publisher": "wowlua",
   "license": "MIT",
@@ -13,10 +13,15 @@
     "vscode": "^1.85.0"
   },
   "categories": [
+    "Programming Languages",
+    "Linters",
+    "Formatters",
     "Debuggers"
   ],
   "main": "./extension.js",
   "activationEvents": [
+    "onLanguage:wowlua",
+    "workspaceContains:**/wowlua.json",
     "onDebugResolve:wowlua",
     "onDebugInitialConfigurations",
     "onView:wowlua.frames",
@@ -48,7 +53,12 @@
         "wowlua.path": {
           "type": "string",
           "default": "wowlua",
-          "description": "The wowlua command the debugger runs (`wowlua debug`)."
+          "description": "The wowlua command the extension runs (`wowlua lsp`, `wowlua debug`)."
+        },
+        "wowlua.languageServer": {
+          "type": "boolean",
+          "default": true,
+          "description": "Check the open files' packages as you type (`wowlua lsp`): errors and warnings in the Problems view, Format Document, the outline."
         },
         "wowlua.ui.autoOpen": {
           "type": "boolean",
@@ -177,6 +187,11 @@
         "title": "Zoom to Frame in the UI",
         "category": "wowlua",
         "icon": "$(zoom-in)"
+      },
+      {
+        "command": "wowlua.restartLanguageServer",
+        "title": "Restart Language Server",
+        "category": "wowlua"
       }
     ],
     "views": {

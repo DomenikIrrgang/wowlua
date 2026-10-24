@@ -22,6 +22,7 @@ fn load_options(out: &Output, global: &GlobalArgs) -> LoadOptions {
         cwd,
         package: global.package.clone(),
         locked: global.locked || global.frozen,
+        lock_in_memory: false,
         offline: global.offline || global.frozen,
         skip_dependencies: false,
         update: None,

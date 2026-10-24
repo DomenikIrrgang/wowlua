@@ -3397,6 +3397,7 @@ dependencies = [
  "wowlua-driver",
  "wowlua-engine",
  "wowlua-flavors",
+ "wowlua-lsp",
  "wowlua-manifest",
  "wowlua-pkg",
  "wowlua-render",
@@ -3508,6 +3509,20 @@ dependencies = [
  "wowlua-luair",
  "wowlua-runtime",
  "wowlua-sema",
+ "wowlua-span",
+ "wowlua-syntax",
+]
+
+[[package]]
+name = "wowlua-lsp"
+version = "0.10.0"
+dependencies = [
+ "serde_json",
+ "tempfile",
+ "wowlua-diagnostics",
+ "wowlua-driver",
+ "wowlua-fmt",
+ "wowlua-manifest",
  "wowlua-span",
  "wowlua-syntax",
 ]

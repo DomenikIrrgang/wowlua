@@ -19,6 +19,7 @@ wowlua-flavors.workspace = true
 wowlua-pkg.workspace = true
 wowlua-manifest.workspace = true
 wowlua-test.workspace = true
+wowlua-lsp.workspace = true
 wowlua-debug = { workspace = true, features = ["native"] }
 wowlua-vm.workspace = true
 wowlua-engine.workspace = true

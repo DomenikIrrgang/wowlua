@@ -268,7 +268,7 @@ pub fn internal_reads(
     let mut reads: std::collections::HashMap<String, Vec<String>> = Default::default();
     let mut db = wowlua_span::SourceDb::new();
     for test in discover_tests(root, src, out, exclude) {
-        let Ok(bytes) = std::fs::read(&test.abs) else {
+        let Ok(bytes) = crate::overlay::read(&test.abs) else {
             continue;
         };
         if !bytes.windows(8).any(|w| w == b"internal") {

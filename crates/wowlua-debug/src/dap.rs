@@ -108,10 +108,31 @@ impl Writer {
     }
 }
 
+/// A client's path relative to the package root, as the session names
+/// sources. Windows' `\\?\` prefix and the case of its letters (VS Code
+/// sends `c:\`) do not matter there.
 fn rel(root: &Path, path: &str) -> String {
-    let p = Path::new(path);
-    let r = p.strip_prefix(root).unwrap_or(p);
-    r.to_string_lossy().replace('\\', "/")
+    let slashed = |p: &Path| {
+        crate::session::verbatim_free(p)
+            .to_string_lossy()
+            .replace('\\', "/")
+    };
+    let p = slashed(Path::new(path));
+    let r = slashed(root);
+    let r = r.trim_end_matches('/');
+    let same = |a: &str, b: &str| {
+        if cfg!(windows) {
+            a.eq_ignore_ascii_case(b)
+        } else {
+            a == b
+        }
+    };
+    match p.get(..r.len()) {
+        Some(head) if !r.is_empty() && same(head, r) && p[r.len()..].starts_with('/') => {
+            p[r.len() + 1..].to_string()
+        }
+        _ => p,
+    }
 }
 
 fn breakpoint_json(w: &Writer, b: &BreakpointState, source: Option<&str>) -> Json {
@@ -664,5 +685,32 @@ fn send_event(w: &Writer, e: Event, launched: &mut bool, launch_seq: u64) {
             w.event("exited", json!({ "exitCode": i32::from(failed) }));
             w.event("terminated", json!({}));
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::rel;
+    use std::path::Path;
+
+    #[test]
+    fn a_breakpoint_path_is_relative_to_the_root_in_either_spelling() {
+        assert_eq!(
+            rel(Path::new("/p/addon"), "/p/addon/src/x.lua"),
+            "src/x.lua"
+        );
+        assert_eq!(
+            rel(Path::new("/p/addon"), "/p/addons/x.lua"),
+            "/p/addons/x.lua"
+        );
+        // Windows' canonical paths and plain ones alike
+        assert_eq!(
+            rel(Path::new(r"C:\p\addon"), r"\\?\C:\p\addon\src\x.lua"),
+            "src/x.lua"
+        );
+        assert_eq!(
+            rel(Path::new(r"\\?\C:\p\addon"), r"C:\p\addon\src\x.lua"),
+            "src/x.lua"
+        );
     }
 }

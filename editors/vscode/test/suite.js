@@ -205,6 +205,34 @@ async function chatScenario() {
     }
 }
 
+// The language client (decision T368): an unsaved edit's type error shows
+// in the Problems view and goes again when undone; the outline lists the
+// file's functions; Format Document formats it.
+async function lspScenario(widgets) {
+    const name = "the language server checks an unsaved edit";
+    log(`== ${name}`);
+    const doc = await vscode.workspace.openTextDocument(widgets);
+    const ed = await vscode.window.showTextDocument(doc);
+    const errors = () => vscode.languages.getDiagnostics(widgets).filter(d => d.code === "E2001");
+    try {
+        await ed.edit(b => b.insert(new vscode.Position(0, 0), "local broken: number = \"one\"\n"));
+        const found = await waitFor(() => errors().length > 0 && errors(), 60000, "the edit's E2001");
+        assert(found[0].range.start.line === 0, "E2001 on line " + found[0].range.start.line);
+        log("diagnostic:", found[0].message.split("\n")[0]);
+        await ed.edit(b => b.delete(new vscode.Range(0, 0, 1, 0)));
+        await waitFor(() => errors().length === 0, 60000, "the E2001 cleared");
+        const symbols = await vscode.commands.executeCommand("vscode.executeDocumentSymbolProvider", widgets);
+        const names = (symbols || []).map(s => s.name);
+        log("outline:", names.join(", "));
+        assert(names.length > 0, "no outline");
+        const edits = await vscode.commands.executeCommand("vscode.executeFormatDocumentProvider", widgets, { tabSize: 4, insertSpaces: false });
+        assert(Array.isArray(edits), "formatting gave " + edits);
+        log("PASS", name);
+    } finally {
+        await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
+    }
+}
+
 exports.run = async function () {
     const folder = vscode.workspace.workspaceFolders[0].uri.fsPath;
     await vscode.workspace.getConfiguration("wowlua").update("path", process.env.WOWLUA_BIN, vscode.ConfigurationTarget.Global);
@@ -212,6 +240,12 @@ exports.run = async function () {
     vscode.debug.addBreakpoints([new vscode.SourceBreakpoint(new vscode.Location(widgets, new vscode.Position(20, 0)))]);
     const base = { type: "wowlua", request: "launch", name: "wowlua: debug the counter test", test: "tests/window.test.wowlua", filter: "clicking the counter" };
     let failed = 0;
+    if (process.env.WOWLUA_SCENARIO === "lsp") {
+        try { await lspScenario(widgets); } catch (e) { failed++; log(String(e)); }
+        log(failed ? `${failed} FAILED` : "ALL PASSED");
+        if (failed) throw new Error(`${failed} scenarios failed`);
+        return;
+    }
     if (process.env.WOWLUA_SCENARIO === "chat") {
         try { await chatScenario(); } catch (e) { failed++; log(String(e)); }
         log(failed ? `${failed} FAILED` : "ALL PASSED");
@@ -238,6 +272,9 @@ exports.run = async function () {
     } catch (e) { failed++; log(String(e)); }
     try {
         await chatScenario();
+    } catch (e) { failed++; log(String(e)); }
+    try {
+        await lspScenario(widgets);
     } catch (e) { failed++; log(String(e)); }
     log(failed ? `${failed} FAILED` : "ALL PASSED");
     if (failed) throw new Error(`${failed} scenarios failed`);

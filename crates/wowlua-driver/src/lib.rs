@@ -23,6 +23,7 @@ mod locale;
 pub mod lockfile;
 mod luacheck;
 mod meta;
+pub mod overlay;
 pub mod package;
 pub mod packaging;
 pub mod parallel;

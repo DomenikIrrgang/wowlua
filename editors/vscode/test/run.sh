@@ -1,7 +1,8 @@
 #!/bin/sh
 # Runs the extension's tests in a VS Code of its own (a fresh profile, no
 # other extensions) on examples/widget-demo, with target/release/wowlua.
-# Needs VS Code, a WoW installation and `cargo build --release -p wowlua-cli`.
+# Needs VS Code, a WoW installation and `cargo build --release -p wowlua-cli`
+# (or WOWLUA_BIN); WOWLUA_SCENARIO=lsp or chat runs that scenario alone.
 set -e
 here=$(cd "$(dirname "$0")" && pwd)
 repo=$(cd "$here/../../.." && pwd)
@@ -10,7 +11,7 @@ work=$(mktemp -d)
 log="$work/run.log"
 : > "$log"
 status=0
-WOWLUA_VSCODE_LOG="$log" WOWLUA_BIN="$repo/target/release/wowlua" "$code" \
+WOWLUA_VSCODE_LOG="$log" WOWLUA_BIN="${WOWLUA_BIN:-$repo/target/release/wowlua}" "$code" \
     --user-data-dir="$work/user" --extensions-dir="$work/extensions" \
     --disable-extensions --disable-workspace-trust --skip-welcome --skip-release-notes \
     --extensionDevelopmentPath="$repo/editors/vscode" \

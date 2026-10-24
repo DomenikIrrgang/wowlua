@@ -21,6 +21,9 @@ pub struct LoadOptions {
     pub package: Option<String>,
     /// `--locked` / `--frozen`: fail instead of changing `wowlua.lock`.
     pub locked: bool,
+    /// The editor (`wowlua lsp`): resolve as the lockfile would change, but
+    /// leave `wowlua.lock` as it is on disk.
+    pub lock_in_memory: bool,
     /// `--offline` / `--frozen`: only the cache, never the network.
     pub offline: bool,
     /// Commands that never look at dependencies (`fmt`, `trace`) skip
@@ -323,7 +326,7 @@ fn store_lock(
     pinned: Option<&Lockfile>,
     lock: &Lockfile,
 ) -> Option<()> {
-    if pinned == Some(lock) {
+    if pinned == Some(lock) || options.lock_in_memory {
         return Some(());
     }
     if options.locked {

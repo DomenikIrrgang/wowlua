@@ -1,7 +1,9 @@
 // The wowlua debug type: VS Code starts `wowlua debug` in the workspace
 // folder and talks the Debug Adapter Protocol with it over stdio. The UI
-// panel shows the game's screen; the Frames view its frames.
+// panel shows the game's screen; the Frames view its frames. The language
+// client starts `wowlua lsp` for diagnostics, formatting and the outline.
 const vscode = require("vscode");
+const { LanguageClient } = require("./lsp");
 const { UiPanel } = require("./ui");
 const { FramesView } = require("./frames");
 
@@ -23,6 +25,8 @@ async function packageFlavors(folder) {
 const RESUMING = new Set(["continue", "next", "stepIn", "stepOut", "stepBack", "reverseContinue"]);
 
 function activate(context) {
+    const lsp = new LanguageClient(context);
+    lsp.start();
     const ui = new UiPanel(context);
     const frames = new FramesView(ui);
     // The UI panel's frame picker asks for the frames shown now.
@@ -101,6 +105,7 @@ function activate(context) {
             frames.detach(s);
         }),
         vscode.commands.registerCommand("wowlua.showUI", () => ui.show(false)),
+        vscode.commands.registerCommand("wowlua.restartLanguageServer", () => lsp.restart()),
         vscode.commands.registerCommand("wowlua.refreshFrames", () => frames.refresh()),
         vscode.commands.registerCommand("wowlua.outlineFrame", (node) => {
             if (node && node.rect) {
@@ -114,7 +119,7 @@ function activate(context) {
         }),
     );
     // For the extension's tests.
-    return { ui, frames };
+    return { ui, frames, lsp };
 }
 
 function deactivate() {}

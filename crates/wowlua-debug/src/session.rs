@@ -51,7 +51,7 @@ pub struct Options {
 
 /// A path without Windows' verbatim prefix (`\\?\C:\x` is `C:\x`), so
 /// a canonical path and a plain one compare.
-fn verbatim_free(p: &std::path::Path) -> std::path::PathBuf {
+pub(crate) fn verbatim_free(p: &std::path::Path) -> std::path::PathBuf {
     let text = p.to_string_lossy();
     match text.strip_prefix(r"\\?\") {
         Some(rest) if !rest.starts_with("UNC\\") => std::path::PathBuf::from(rest),

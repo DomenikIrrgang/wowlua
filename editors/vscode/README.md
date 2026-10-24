@@ -1,5 +1,14 @@
 # wowlua for VS Code
 
+Check, format and outline wowlua addons as you type. The extension starts
+`wowlua lsp`: errors and warnings show in the Problems view a moment after
+you stop typing (and at once when you save), for the edits you haven't saved
+too; *Format Document* formats as `wowlua fmt` does with your package's
+`fmt` settings; the outline and breadcrumbs list a file's functions, classes
+with their methods, locals, enums and types. `wowlua.languageServer` turns
+it off; *wowlua: Restart Language Server* restarts it (its log is in the
+**wowlua Language Server** output).
+
 Debug wowlua addons and their tests in wowlua's emulated World of Warcraft
 client: breakpoints in `.wowlua` and `.lua` files, stepping, the call stack
 with the events and scripts that ran your code, variables with their taint,
@@ -74,4 +83,6 @@ folder.
 
 Its tests drive a VS Code of their own on `examples/widget-demo` (they
 need a WoW installation and `cargo build --release -p wowlua-cli`):
-`editors/vscode/test/run.sh`.
+`editors/vscode/test/run.sh` (`WOWLUA_SCENARIO=lsp` for the language
+client alone). `node --test editors/vscode/test/connection.test.js` checks
+the client's connection to `wowlua lsp` without VS Code.

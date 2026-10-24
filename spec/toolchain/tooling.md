@@ -526,6 +526,29 @@ produce a diagnostic suggesting `wowlua fetch`.
 A VS Code extension (TextMate grammar plus LSP client) is part of the project.
 Other editors use the LSP directly.
 
+**Built so far (M9 S8, decision T368).** `wowlua lsp` checks a package as
+`wowlua check` does with its tests, the editor's unsaved texts read over the
+files on disk: 350 ms after the last edit, and at once when a file of it
+(its `wowlua.json` too) is saved. It checks every flavor the package names
+with the `dev` profile and applies `check.lints`. It writes no files: no
+build output, and dependencies resolve as the lockfile would change while
+`wowlua.lock` stays as it is; they come from the cache only. A diagnostic
+carries its code, the first label's message, its notes and its help; one
+about the package as a whole goes to its manifest, and a file whose
+diagnostics are gone is cleared. Formatting replaces the document with
+`wowlua fmt`'s result under the package's `fmt` settings (nothing when it
+does not parse). The outline lists a file's top-level functions (`A.b`,
+`A:c`), local functions, locals, constants, classes with their methods and
+fields, interfaces, enums and type aliases, exported or not. The server
+speaks LSP 3.17 with full document sync. Hover, completion, navigation and
+the rest of the table follow.
+
+The VS Code extension starts `wowlua lsp` (the `wowlua.path` command) when a
+`.wowlua` file opens or the workspace has a `wowlua.json`, and sends it the
+open `.wowlua` and `.lua` files. `wowlua.languageServer` (on by default)
+turns it off; *wowlua: Restart Language Server* restarts it. Its client is
+hand-written, as the rest of the extension, so it needs no build step.
+
 ## 16.3 Formatter (`wowlua fmt`)
 
 An opinionated formatter for `.wowlua` and `.d.wowlua`. It can optionally format

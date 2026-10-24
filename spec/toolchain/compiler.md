@@ -444,7 +444,7 @@ user error otherwise:
 | File watching | `notify` |
 | Globs | `globset`, `ignore` |
 | Embedded Lua 5.1 (tests, validation) | `mlua` with features `lua51`, `vendored` |
-| LSP | `tower-lsp` (or `lsp-server`) |
+| LSP | hand-written over `serde_json`, threads and a channel (decision T368) |
 | Snapshot tests | `insta` |
 | Deep recursion | `stacker` (grows the stack per nesting level) |
 | Logging | `tracing` |
