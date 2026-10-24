@@ -290,7 +290,7 @@ pub fn control_click(vm: &mut Vm, c: NativeCall) -> Ret {
         widgets::fire_event(vm, "GLOBAL_MOUSE_DOWN", &[button]);
         widgets::run_script(vm, id, "OnMouseDown", &[button]);
         if edit_box {
-            set_keyboard_focus(vm, Some(id));
+            user_focus(vm, id);
         }
         clicked(vm, true);
         widgets::run_script(vm, id, "OnMouseUp", &[button, Value::Bool(true)]);
@@ -372,7 +372,7 @@ pub fn control_type(vm: &mut Vm, c: NativeCall) -> Ret {
         return Err(vm.error(&format!("mock.type: {name} is not visible")));
     }
     as_user(vm, |vm| {
-        set_keyboard_focus(vm, Some(id));
+        user_focus(vm, id);
         for ch in typed.chars() {
             crate::widgetops::insert(vm, id, &ch.to_string());
             let ch = vm.str(&ch.to_string());
@@ -526,6 +526,17 @@ pub fn press_key(vm: &mut Vm, key: &str) {
         crate::bindings::run_command(vm, command, "down");
         crate::bindings::run_command(vm, command, "up");
     }
+}
+
+/// The user clicks into an edit box: after its text (the engine's click
+/// is at the box's middle; unverified where the client puts the cursor),
+/// so the cursor goes to the end, nothing selected, before
+/// `OnEditFocusGained` (which may select). One with the focus keeps both.
+fn user_focus(vm: &mut Vm, id: WidgetId) {
+    if engine(vm).world.input.keyboard_focus != Some(id) {
+        crate::widgetops::text_set(vm, id);
+    }
+    set_keyboard_focus(vm, Some(id));
 }
 
 fn set_focus(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {

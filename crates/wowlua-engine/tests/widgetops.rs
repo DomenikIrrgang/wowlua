@@ -92,6 +92,25 @@ return e:GetText(), table.concat(changes, ' ')",
 }
 
 #[test]
+fn typing_into_a_box_starts_after_its_text() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local e = CreateFrame('EditBox', nil, UIParent)
+e:SetText('Sheep')
+e:SetCursorPosition(0)
+mock.type(e, '!')
+local first = e:GetText()
+e:SetCursorPosition(0)
+mock.type(e, '>')
+return first, e:GetText()",
+    );
+    // A click into the box puts the cursor after the text; with the focus
+    // kept, typing goes where the cursor was put.
+    assert_eq!(r, ["Sheep!", ">Sheep!"]);
+}
+
+#[test]
 fn copy_font_object_copies_the_font_and_its_colors() {
     let mut vm = vm();
     let r = run(

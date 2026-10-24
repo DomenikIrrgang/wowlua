@@ -9,7 +9,8 @@
 //!   `ClearHighlightText()` drops it; `Insert(text)` puts the text in place
 //!   of the selection, else at the cursor, the cursor after it. What the
 //!   user types (`mock.type`) goes there too; `SetText` puts the cursor at
-//!   the end and drops the selection.
+//!   the end and drops the selection, as the user's click or typing into a
+//!   box without the focus does before its `OnEditFocusGained`.
 //! - `Font:CopyFontObject(font)`: the other font's font, colors, shadow,
 //!   spacing and justification copied, as its getters answer them.
 //! - `AdjustPointsOffset(x, y)`: every anchor moved by (x, y);

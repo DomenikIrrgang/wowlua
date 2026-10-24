@@ -354,7 +354,8 @@ The WoW API the VM's code calls, per flavor.
   strata (`GetFrameLevel`); an edit box keeps a selection
   (`HighlightText`, `ClearHighlightText`) that `Insert(text)` and the
   user's typing (`mock.type`) replace, else they go in at the cursor, and
-  `SetText` puts the cursor at the end; `Font:CopyFontObject` copies the
+  `SetText` puts the cursor at the end, as does the user's click or typing
+  into a box without the focus (before its `OnEditFocusGained`); `Font:CopyFontObject` copies the
   font, colors, shadow, spacing and justification;
   `AdjustPointsOffset(x, y)` moves every anchor, `ClearPointsOffset()`
   zeroes them; the clears (`ClearModel`, a button's `ClearNormalTexture`
