@@ -4339,7 +4339,7 @@ pub(crate) fn store(vm: &mut Vm, id: WidgetId, stem: &str, args: &[Value]) {
         insert_sorted(&mut engine_mut(vm).world.keyboard, id.0);
     }
     // A texture shows one image: a plain color replaces its file or atlas,
-    // and a file or atlas its plain color, as in the client (an addon's
+    // a file its plain color, and an atlas its file or color, as in the client (an addon's
     // `SetTexture(WHITE8X8)` then `SetColorTexture(1, 1, 1, 0.04)` is a
     // faint line, not the white file).
     match stem {
@@ -4347,7 +4347,11 @@ pub(crate) fn store(vm: &mut Vm, id: WidgetId, stem: &str, args: &[Value]) {
             unstore(vm, id, "Texture");
             unstore(vm, id, "Atlas");
         }
-        "Texture" | "Atlas" => unstore(vm, id, "ColorTexture"),
+        "Texture" => unstore(vm, id, "ColorTexture"),
+        "Atlas" => {
+            unstore(vm, id, "ColorTexture");
+            unstore(vm, id, "Texture");
+        }
         _ => {}
     }
     // A portrait (`SetPortraitTexture…`) gives way to any image set after.
@@ -4421,11 +4425,18 @@ pub(crate) fn set_texture_file(vm: &mut Vm, id: WidgetId, args: &[Value]) {
     unstore(vm, id, "Atlas");
 }
 
-/// `Texture:SetTexture(file, …)`: [`set_texture_file`]; it worked.
+/// `Texture:SetTexture(file, …)`: [`set_texture_file`]; it worked, but for
+/// an empty path or file ID 0 (recorded: false for `""` and `0`, true for
+/// `nil`, `{}` and `"NoSuchFile"`).
 fn set_texture(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let args: Vec<Value> = c.args.iter().skip(1).copied().collect();
+    let worked = match vm.hidden(c.arg(2)) {
+        Value::Num(n) => n != 0.0,
+        Value::Str(s) => !vm.str_bytes(s).is_empty(),
+        _ => true,
+    };
     set_texture_file(vm, id, &args);
-    Ok(vec![Value::Bool(true)])
+    Ok(vec![Value::Bool(worked)])
 }
 
 /// `SetXTexture(asset)`: a texture widget becomes the button's, a file its

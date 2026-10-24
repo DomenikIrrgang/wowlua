@@ -1804,6 +1804,12 @@ impl wowlua_engine::clientdata::ClientData for Creatures {
     fn area_name(&self, area: u32) -> Option<String> {
         (area == 2437).then(|| "Ragefire Chasm".into())
     }
+    fn game_file_id(&self, path: &str) -> Option<Option<u32>> {
+        Some(
+            path.eq_ignore_ascii_case("interface\\buttons\\white8x8")
+                .then_some(130871),
+        )
+    }
     fn item(&self, id: u32) -> Option<wowlua_engine::clientdata::ClientItem> {
         // An item whose name the client's tables lack (sent by the server).
         (id == 872).then(|| wowlua_engine::clientdata::ClientItem {
@@ -1814,6 +1820,41 @@ impl wowlua_engine::clientdata::ClientData for Creatures {
             ..Default::default()
         })
     }
+}
+
+/// A texture tells its file by ID, as the client answered: a game file's
+/// own, the ID set, nil for no file; `SetTexture` fails for `""` and 0.
+#[test]
+fn textures_tell_their_files_by_id() {
+    let mut vm = vm();
+    wowlua_engine::clientdata::set(&mut vm, std::sync::Arc::new(Creatures));
+    let r = run(
+        &mut vm,
+        "local t = UIParent:CreateTexture()
+local out = { tostring(select('#', t:GetTexture())), tostring(t:GetTexture()) }
+local function try(file)
+    local ok = t:SetTexture(file)
+    out[#out + 1] = tostring(ok) .. ' ' .. tostring(t:GetTexture()) .. ' ' .. tostring(t:GetTextureFileID())
+end
+try('Interface\\\\Buttons\\\\WHITE8X8')
+try('Interface/Buttons/NoSuchFile')
+try('NoSuchFile')
+try('')
+try(0)
+try(134400)
+try(nil)
+try('Interface\\\\AddOns\\\\Absent\\\\x.tga')
+t:SetAtlas('128-RedButton-Exit')
+out[#out + 1] = tostring(t:GetTexture())
+return table.concat(out, ', ')",
+    );
+    assert_eq!(
+        r,
+        [
+            "1, nil, true 130871 130871, true nil nil, true nil nil, false nil nil, false nil nil, \
+true 134400 134400, true nil nil, true nil nil, 8063723"
+        ]
+    );
 }
 
 /// An area the recordings lack is named by the client's tables; an ID

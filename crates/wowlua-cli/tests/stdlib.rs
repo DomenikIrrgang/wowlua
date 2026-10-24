@@ -6997,7 +6997,7 @@ print("square", at())
 StdLauncher.launcher.showMinimap(false)
 C(not b:IsShown() and StdLauncher.db.minimap.hide == true, "hidden and stored")
 StdLauncher.launcher.setIcon("icon-2")
-C(b.icon:GetTexture() == "icon-2", "the button's icon")
+C(b.icon:GetTextureFilePath() == "icon-2", "the button's icon")
 -- The compartment entry.
 local entry = AddonCompartmentFrame.registeredAddons[1]
 C(entry and entry.text == "Std" and entry.icon == "icon-2", "the compartment entry")
@@ -7098,7 +7098,7 @@ local entry = AddonCompartmentFrame.registeredAddons[1]
 l.setIcon(wrap("icon-x"))
 l.setLabel(wrap("Bob"))
 l.showMinimap(wrap(false))
-print(b.icon:GetTexture(), entry.text, entry.icon, Mock.ldb.objects.Std.label, b:IsShown(), StdLauncher.db.minimap.hide)
+print(b.icon:GetTextureFilePath(), entry.text, entry.icon, Mock.ldb.objects.Std.label, b:IsShown(), StdLauncher.db.minimap.hide)
 StdLauncher.db.minimap.minimapPos = wrap(90)
 StdLauncher.db.minimap.hide = wrap(true)
 l.refresh()

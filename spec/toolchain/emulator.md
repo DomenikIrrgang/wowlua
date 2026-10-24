@@ -340,6 +340,17 @@ The WoW API the VM's code calls, per flavor.
 - **Atlases.** Every atlas of the client, from its own tables (decision
   T238): sizes, files, texture coordinates and tiling as the client gives
   them; an atlas it lacks is none.
+- **Textures' files.** A texture shows one image: a color, a file or an
+  atlas, each set replacing the others (decisions T352, T356). It tells its
+  file by ID, as the client does: `GetTexture()` and `GetTextureFileID()`
+  give a file ID set, a path's file as `GetFileIDFromPath` gives it (a game
+  file's own ID where the installation is at hand, an addon's file its
+  loose file's, nil for a file there is not), an atlas's file, else nil;
+  `GetTextureFilePath()` the path set. A loose file's ID set
+  (`b:SetTexture(a:GetTexture())`) shows that file. `SetTexture` fails
+  (false) for `""` and file ID 0. Without the installation a game file's ID is not known, and
+  a path to one answers a stand-in: a negative number, the same for the
+  same path.
 - **Not mocked.** A generated function without behaviour raises
   "`<name>` is not mocked" when called, unless the project provides a mock
   (Tooling §16.1.4), so gaps are visible instead of silently returning nil.

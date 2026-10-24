@@ -223,15 +223,51 @@ fn get_atlas(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     }])
 }
 
-/// `GetTextureFileID()`: the file ID `SetTexture` was given; a path's ID
-/// is not known to the engine (nil, unverified).
-fn get_texture_file_id(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+/// The file a texture shows, by ID, as `GetTexture()` and
+/// `GetTextureFileID()` answer: one value. A file ID set is itself (0 none,
+/// recorded); a path set is its file's ID as `GetFileIDFromPath` gives it,
+/// so a game file's own ID (recorded: `Interface\\Buttons\\WHITE8X8`
+/// 130871, `Interface\\Icons\\INV_Misc_QuestionMark` 134400), an addon's
+/// file the loose file's ID, nil for a file there is not (recorded:
+/// `"NoSuchFile"`, `""`); an atlas's, its file's (unverified); nothing set,
+/// a color, or another value nil (recorded: `nil`, `{}`).
+fn texture_file(vm: &mut Vm, id: WidgetId) -> Value {
     let props = engine(vm).world.widgets[id.0].props;
-    let file = widgets::stored_args(vm, props, "Texture").and_then(|v| v.first().copied());
-    Ok(vec![match file {
-        Some(Value::Num(n)) => Value::Num(n),
-        _ => Value::Nil,
-    }])
+    let set = widgets::stored_args(vm, props, "Texture").and_then(|v| v.first().copied());
+    let answer = match set.map(|v| vm.hidden(v)) {
+        Some(Value::Num(n)) if n != 0.0 => Value::Num(n),
+        Some(Value::Str(s)) => {
+            let path = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
+            crate::misc::file_id_of_path(vm, &path).map_or(Value::Nil, Value::Num)
+        }
+        Some(_) => Value::Nil,
+        None => {
+            let atlas_set =
+                widgets::stored_args(vm, props, "Atlas").and_then(|v| v.first().copied());
+            match atlas_set {
+                Some(Value::Str(s)) => atlas(&String::from_utf8_lossy(vm.str_bytes(s)))
+                    .and_then(|a| a.info.as_ref())
+                    .filter(|info| info.file > 0.0)
+                    .map_or(Value::Nil, |info| Value::Num(info.file)),
+                _ => Value::Nil,
+            }
+        }
+    };
+    // A secret file answers its file secretly.
+    if matches!(set, Some(Value::Secret(_))) && !answer.is_nil() {
+        return vm.secret_wrap(answer);
+    }
+    answer
+}
+
+/// `GetTexture()`: [`texture_file`].
+fn get_texture(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    Ok(vec![texture_file(vm, id)])
+}
+
+/// `GetTextureFileID()`: [`texture_file`].
+fn get_texture_file_id(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
+    Ok(vec![texture_file(vm, id)])
 }
 
 /// `EditBox:GetTextInsets()`: what `SetTextInsets` set, else none
@@ -463,6 +499,7 @@ pub fn methods() -> Vec<(&'static str, MethodFn)> {
         ("GetZoom", get_zoom),
         ("SetZoom", set_zoom),
         ("GetZoomLevels", get_zoom_levels),
+        ("GetTexture", get_texture),
         ("GetTextureFileID", get_texture_file_id),
         ("GetTextInsets", get_text_insets),
         ("AddMaskTexture", add_mask_texture),

@@ -29,6 +29,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Changed
 
+- `texture:GetTexture()` and `GetTextureFileID()` give the file's ID, as in game, instead of the path you set: `SetTexture("Interface\\Buttons\\WHITE8X8")` then `GetTexture()` is 130871 with your WoW installation, nil for a file that doesn't exist. A test that compared it with a path now compares with the ID (or reads `GetTextureFilePath()`). `SetTexture("")` and `SetTexture(0)` return false, and `SetAtlas` replaces a file set before.
 - The HTML coverage report (`wowlua test --coverage --reporter html`) is a page to work from: the files to test next, a file table you can sort and filter, and one file at a time with the lines that never ran (jump between them with `j` and `k`), its functions and how often each was called, and its source with each branch's counts in words. It carries wowlua's mark and colours, and is less than half the size it was.
 - A generic function keeps the type of a value you pass it when that value already has one: `assert(tokens[k])` with `tokens: { [string]: Token }` is a `Token`, not a `string`. A literal written as the argument still widens (`id("x")` is a `string`).
 - A type parameter with a constraint keeps a literal argument: `function f<K extends "a" | "b">(k: K): K` gives `"a"` for `f("a")`, where it gave `string` and reported that `string` doesn't satisfy the constraint.

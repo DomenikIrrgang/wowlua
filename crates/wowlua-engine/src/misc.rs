@@ -391,11 +391,17 @@ fn get_file_id_from_path(vm: &mut Vm, c: NativeCall) -> Ret {
     let Value::Str(s) = c.arg(1) else {
         return Ok(vec![Value::Num(0.0)]);
     };
-    let path = String::from_utf8_lossy(vm.str_bytes(s))
-        .to_ascii_lowercase()
-        .replace('/', "\\");
+    let path = String::from_utf8_lossy(vm.str_bytes(s)).into_owned();
+    Ok(vec![
+        file_id_of_path(vm, &path).map_or(Value::Nil, Value::Num),
+    ])
+}
+
+/// A file's ID by its path, as `GetFileIDFromPath` answers it.
+pub(crate) fn file_id_of_path(vm: &mut Vm, path: &str) -> Option<f64> {
+    let path = path.to_ascii_lowercase().replace('/', "\\");
     if !path.contains('\\') {
-        return Ok(vec![Value::Nil]);
+        return None;
     }
     let key = match path.rsplit_once('.') {
         Some((stem, ext)) if !ext.contains('\\') => stem.to_string(),
@@ -403,19 +409,16 @@ fn get_file_id_from_path(vm: &mut Vm, c: NativeCall) -> Ret {
     };
     match loose_file(vm, &key) {
         Some(true) => {}
-        Some(false) => return Ok(vec![Value::Nil]),
+        Some(false) => return None,
         None => {
             if let Some(found) = crate::clientdata::game_file_id(vm, &path) {
-                return Ok(vec![
-                    found.map_or(Value::Nil, |id| Value::Num(f64::from(id))),
-                ]);
+                return found.map(f64::from);
             }
         }
     }
     let ids = &mut crate::engine_mut(vm).world.file_ids;
     let next = -(ids.len() as f64) - 1.0;
-    let id = *ids.entry(key).or_insert(next);
-    Ok(vec![Value::Num(id)])
+    Some(*ids.entry(key).or_insert(next))
 }
 
 /// Whether a path (lower case, back slashes, without its extension) is a

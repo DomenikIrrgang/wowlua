@@ -167,3 +167,26 @@ return two, t:GetNumMaskTextures(), t:GetMaskTexture(1) == m2, tostring(tile), t
     );
     assert_eq!(r, ["2", "1", "true", "false", "true"]);
 }
+
+/// An addon's texture copied by its ID (`b:SetTexture(a:GetTexture())`)
+/// still shows the addon's file.
+#[test]
+fn a_loose_files_id_shows_its_file() {
+    use wowlua_engine::scene::{Image, Item};
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "mock.defineAddon('Mine', {})
+local a = UIParent:CreateTexture()
+a:SetTexture('Interface\\\\AddOns\\\\Mine\\\\logo.tga')
+local b = UIParent:CreateTexture()
+b:SetSize(32, 32)
+b:SetPoint('CENTER')
+b:SetTexture(a:GetTexture())
+return tostring(a:GetTexture() < 0), tostring(b:GetTexture() == a:GetTexture())",
+    );
+    assert_eq!(r, ["true", "true"]);
+    let scene = wowlua_engine::scene::build(&mut vm);
+    assert!(scene.items.iter().any(|i| matches!(i,
+        Item::Quad(q) if matches!(&q.image, Image::File(p) if p == "interface\\addons\\mine\\logo"))));
+}

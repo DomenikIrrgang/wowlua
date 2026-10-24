@@ -454,6 +454,9 @@ fn image_of(vm: &Vm, id: WidgetId) -> Option<ImageOf> {
                 }
                 return Some((Image::File(path), None, (false, false), None));
             }
+            Value::Num(n) if n < 0.0 => {
+                return Some((Image::File(loose_path(vm, n)?), None, (false, false), None));
+            }
             Value::Num(n) => return Some((Image::FileId(n as u32), None, (false, false), None)),
             _ => {}
         }
@@ -461,6 +464,17 @@ fn image_of(vm: &Vm, id: WidgetId) -> Option<ImageOf> {
     let c = args(vm, id, "ColorTexture")?;
     let rgba = color(vm, Some(c), [1.0; 4]);
     Some((Image::Color, None, (false, false), Some(rgba)))
+}
+
+/// The path of a loose file's ID (`GetFileIDFromPath`'s, `GetTexture`'s
+/// for an addon's file), without its extension.
+fn loose_path(vm: &Vm, id: f64) -> Option<String> {
+    engine(vm)
+        .world
+        .file_ids
+        .iter()
+        .find(|(_, v)| **v == id)
+        .map(|(k, _)| k.clone())
 }
 
 fn texcoord_of(vm: &Vm, id: WidgetId, base: Option<[f32; 4]>) -> [f32; 8] {
@@ -726,6 +740,8 @@ fn inline_quad(vm: &Vm, id: WidgetId, file: &str, atlas: bool, place: Rect) -> O
         (Image::FileId(info.file as u32), [l, t, l, b, r, t, r, b])
     } else if let Ok(n) = file.trim().parse::<u32>() {
         (Image::FileId(n), full)
+    } else if let Ok(n) = file.trim().parse::<i64>() {
+        (Image::File(loose_path(vm, n as f64)?), full)
     } else {
         (Image::File(file.to_string()), full)
     };
