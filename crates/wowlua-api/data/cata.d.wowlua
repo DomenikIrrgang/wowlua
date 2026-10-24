@@ -20610,7 +20610,7 @@ declare global CraftIcon_OnUpdate: (self: unknown) -> ()
 declare global CanAccessObject: (obj: unknown) -> unknown
 declare global EnableAddOn: (name: uiAddon, character: string?) -> ()
 declare global DisableAddOn: (name: uiAddon, character: string?) -> ()
-declare global GetAddOnEnableState: (...unknown) -> ...unknown
+declare global GetAddOnEnableState: (character: string?, name: uiAddon) -> number
 declare global LoadAddOn: (name: uiAddon) -> (boolean?, string?)
 declare global IsAddOnLoaded: (name: uiAddon) -> (boolean, boolean)
 declare global EnableAllAddOns: (character: string?) -> ()

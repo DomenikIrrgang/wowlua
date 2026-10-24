@@ -368,7 +368,11 @@ The WoW API is typed by **pre-generated `types` packages**, one per flavor:
    agree. A global value is typed by what it is made from (a mixin table
    is its mixin class, `EnumUtil.MakeEnum` a `{ [string]: number }`, a
    call its declared result, an alias what it names). The mixins the
-   declarations refer to are classes.
+   declarations refer to are classes. A global or function no source of
+   its flavor types takes the wiki's signature, else the type another
+   flavor gives it when every type it names exists in this one (camelot's
+   own `Clamp` is typed as retail's MathUtil.lua defines it; decision
+   T293).
 5. **Typed throughout.** The generated declarations themselves write no
    `any`: what no source tells is `unknown` (a function nothing types is
    `(...unknown) -> ...unknown`, a parameter `unknown` takes any argument, a

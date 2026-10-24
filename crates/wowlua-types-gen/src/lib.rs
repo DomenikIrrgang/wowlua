@@ -1788,6 +1788,66 @@ pub fn generate(
             d.globals.entry(name).or_insert(ty);
         }
     }
+    // A UI global or a function nothing typed (one Blizzard's Lua assigns,
+    // or the client's own, as camelot's `Clamp` is): the wiki's signature,
+    // else the type another flavor gives it, where every type it names
+    // exists here (retail's MathUtil.lua types `Clamp`; decision T293).
+    let untyped_global = |t: &str| t == "(...any) -> ...any";
+    let untyped_sigs = |sigs: &[model::Sig]| {
+        sigs.iter().all(|s| {
+            s.params.is_empty() && s.returns.is_empty() && s.ret_vararg.as_deref() == Some("any")
+        })
+    };
+    let mut typed_globals: HashMap<String, String> = HashMap::new();
+    let mut typed_functions: HashMap<String, Vec<model::Sig>> = HashMap::new();
+    for (_, _, d) in &per_flavor {
+        for (n, t) in &d.globals {
+            if !untyped_global(t) {
+                typed_globals.entry(n.clone()).or_insert_with(|| t.clone());
+            }
+        }
+        for (n, sigs) in &d.functions {
+            if !untyped_sigs(sigs) {
+                typed_functions
+                    .entry(n.clone())
+                    .or_insert_with(|| sigs.clone());
+            }
+        }
+    }
+    let common = shared.defined_types();
+    for (_, _, d) in per_flavor.iter_mut() {
+        let mut here = d.defined_types();
+        here.extend(common.iter().cloned());
+        let fits = |ty: &str| {
+            let mut names = BTreeSet::new();
+            model::collect_type_names(ty, &mut names);
+            names.iter().all(|n| here.contains(n))
+        };
+        for (n, t) in d.globals.iter_mut() {
+            if !untyped_global(t) {
+                continue;
+            }
+            if let Some(sigs) = wiki_function(n)
+                && let Some(first) = sigs.first()
+            {
+                *t = model::fn_type(first);
+            } else if let Some(other) = typed_globals.get(n)
+                && fits(other)
+            {
+                *t = other.clone();
+            }
+        }
+        for (n, sigs) in d.functions.iter_mut() {
+            if !untyped_sigs(sigs) {
+                continue;
+            }
+            if let Some(other) = typed_functions.get(n)
+                && other.iter().all(|s| fits(&model::fn_type(s)))
+            {
+                *sigs = other.clone();
+            }
+        }
+    }
     // The aura filter words each flavor's UI code accepts (wowlua:aura
     // checks literal filters against them); a flavor without the table
     // takes the words every other flavor has.

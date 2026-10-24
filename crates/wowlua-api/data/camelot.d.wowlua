@@ -47241,13 +47241,13 @@ declare function import(moduleName: string): unknown?
 declare function sin(x: number): (...unknown)
 declare function tan(x: unknown): (...unknown)
 
-declare global Clamp: (...unknown) -> ...unknown
-declare global CountTable: (...unknown) -> ...unknown
-declare global GetKeysArray: (...unknown) -> ...unknown
-declare global Lerp: (...unknown) -> ...unknown
-declare global Round: (...unknown) -> ...unknown
-declare global Saturate: (...unknown) -> ...unknown
-declare global Sign: (...unknown) -> ...unknown
+declare global Clamp: (value: number, min: number, max: number) -> number
+declare global CountTable: (tbl: table) -> number
+declare global GetKeysArray: (tbl: table) -> table
+declare global Lerp: (startValue: number, endValue: number, amount: number) -> number
+declare global Round: (value: number) -> number
+declare global Saturate: (value: number) -> number
+declare global Sign: (value: number) -> unknown
 declare global UIThemeContainerMixin: UIThemeContainerMixin
 declare global QuestTextContrast: QuestTextContrast
 declare global TextSizeManagerBase: TextSizeManagerBase
@@ -48952,9 +48952,9 @@ declare global DelvesDifficultyPickerDropdownMixin: DelvesDifficultyPickerDropdo
 @onDemand("Blizzard_DelvesDifficultyPicker")
 declare global TieredEntranceViewRewardsMixin: unknown
 declare global DelvesToastMixin: DelvesToastMixin
-declare global UnitAura: (...unknown) -> ...unknown
-declare global UnitBuff: (...unknown) -> ...unknown
-declare global UnitDebuff: (...unknown) -> ...unknown
+declare global UnitAura: (unit: UnitToken, index: number, filter: AuraFilters?) -> (unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown)
+declare global UnitBuff: (unit: UnitTokenRestrictedForAddOns, index: number, filter: AuraFilters?) -> (unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown)
+declare global UnitDebuff: (unit: UnitTokenRestrictedForAddOns, index: number, filter: AuraFilters?) -> (unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown)
 declare global GetBattlefieldScore: (playerIndex: number) -> (unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown)
 declare global GetBattlefieldStatData: (playerIndex: number, statIndex: unknown) -> unknown
 declare global UnitIsSpellTarget: (unit: string, target: string) -> unknown
@@ -49129,10 +49129,10 @@ declare global CombatLog_String_DamageResultString: unknown
 declare global CombatLog_String_GetIcon: unknown
 declare global CombatLog_String_PowerType: unknown
 declare global CombatLog_String_SchoolString: (school: (number | Secret<number>)?) -> unknown
-declare global CombatLog_Color_FloatToText: (...unknown) -> ...unknown
-declare global CombatLog_Color_ColorStringByEventType: (...unknown) -> ...unknown
-declare global CombatLog_Color_ColorStringBySchool: (...unknown) -> ...unknown
-declare global CombatLog_Color_ColorStringByUnitType: (...unknown) -> ...unknown
+declare global CombatLog_Color_FloatToText: (arg1: unknown, arg2: unknown, arg3: unknown, arg4: unknown) -> (...unknown)
+declare global CombatLog_Color_ColorStringByEventType: unknown
+declare global CombatLog_Color_ColorStringBySchool: unknown
+declare global CombatLog_Color_ColorStringByUnitType: unknown
 declare global GetGuildRosterMOTD: () -> string
 declare global GetGuildInfoText: () -> string
 declare global SetGuildInfoText: (infoText: string) -> ()
@@ -49142,18 +49142,18 @@ declare global IsEncounterLimitingResurrections: () -> boolean
 declare global RaidNotice_AddMessage: (_noticeFrame: unknown, textString: string, colorInfo: unknown, displayTime: number?) -> ()
 declare global RaidNotice_UpdateSlot: (slotFrame: unknown, timings: unknown, elapsedTime: number, hasFading: unknown?) -> ()
 declare global SetActiveTalentGroup: (groupIndex: number) -> ()
-declare global GetTalentTabInfo: (...unknown) -> ...unknown
+declare global GetTalentTabInfo: (index: number, isInspect: boolean?, isPet: boolean?, talentGroup: number?) -> (number, string, string, number, number, number, number, boolean)
 declare global GetPrimaryTalentTree: (isInspect: boolean?, isPet: boolean?, specGroupIndex: number?) -> number
 declare global GetActiveTalentGroup: (isInspect: boolean?, isPet: boolean?) -> number
 declare global GetTalentTreeMasterySpells: (...unknown) -> ...unknown
 declare global MAX_TALENT_TIERS: 7
 declare global HUNTER_DISMISS_PET: 2641
-declare global FindFlyoutSlotBySpellID: (...unknown) -> ...unknown
-declare global FindSpellOverrideByID: (...unknown) -> ...unknown
-declare global FindBaseSpellByID: (...unknown) -> ...unknown
-declare global SpellIsPriorityAura: (...unknown) -> ...unknown
-declare global SpellIsSelfBuff: (...unknown) -> ...unknown
-declare global SpellGetVisibilityInfo: (...unknown) -> ...unknown
+declare global FindFlyoutSlotBySpellID: (spellID: number) -> number
+declare global FindSpellOverrideByID: (spellID: number) -> number
+declare global FindBaseSpellByID: (spellID: number) -> number
+declare global SpellIsPriorityAura: (spellID: number) -> boolean
+declare global SpellIsSelfBuff: (spellID: number) -> boolean
+declare global SpellGetVisibilityInfo: (spellId: number, visType: string) -> (boolean, boolean, boolean)
 declare global CastingInfo: () -> (string | Secret<string>, string | Secret<string>, number | Secret<number>, number | Secret<number>, number | Secret<number>, boolean | Secret<boolean>, string | Secret<string>, (boolean | Secret<boolean>)?, number | Secret<number>, (UnitCastBarID | Secret<UnitCastBarID>)?, number | Secret<number>)
 declare global ChannelInfo: () -> (string | Secret<string>, string | Secret<string>, number | Secret<number>, number | Secret<number>, number | Secret<number>, boolean | Secret<boolean>, (boolean | Secret<boolean>)?, number | Secret<number>, boolean | Secret<boolean>, number | Secret<number>, (UnitCastBarID | Secret<UnitCastBarID>)?)
 declare global MAX_ARENA_ENEMIES: number
@@ -51383,8 +51383,8 @@ declare global BeginCharacterServicesFlow: (flow: unknown, data: unknown) -> ()
 declare global EndCharacterServicesFlow: (shouldMaximize: boolean?) -> ()
 declare global CharacterServicesMaster_ClearFlow: (self: unknown) -> ()
 declare global CharacterServicesMaster_AllowCharacterReordering: (self: unknown) -> unknown
-declare global CharacterServicesMaster_SetBlockActiveState: (...unknown) -> ...unknown
-declare global CharacterServicesMaster_SetBlockFinishedState: (...unknown) -> ...unknown
+declare global CharacterServicesMaster_SetBlockActiveState: (block: unknown) -> ()
+declare global CharacterServicesMaster_SetBlockFinishedState: (block: unknown) -> ()
 declare global CharacterServicesMasterFinishButton_OnClick: () -> ()
 declare global CharacterServicesFlow_IsShowing: () -> unknown
 declare global CollapsableUpgradeFrameMixin: CollapsableUpgradeFrameMixin

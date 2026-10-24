@@ -29471,9 +29471,9 @@ declare global DamageMeterSourceWindowMixin: DamageMeterSourceWindowMixin
 declare global TextureInfoGeneratorMixin: TextureInfoGeneratorMixin
 @onDemand("Blizzard_DebugTools")
 declare global CanAccessObject: (obj: unknown) -> unknown
-declare global UnitAura: (...unknown) -> ...unknown
-declare global UnitBuff: (...unknown) -> ...unknown
-declare global UnitDebuff: (...unknown) -> ...unknown
+declare global UnitAura: (unit: UnitToken, index: number, filter: AuraFilters?) -> (unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown)
+declare global UnitBuff: (unit: UnitTokenRestrictedForAddOns, index: number, filter: AuraFilters?) -> (unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown)
+declare global UnitDebuff: (unit: UnitTokenRestrictedForAddOns, index: number, filter: AuraFilters?) -> (unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown, unknown)
 declare global GetActionAutocast: (actionID: number) -> (boolean, boolean)
 declare global GetActionText: (actionID: number) -> string?
 declare global GetActionTexture: (actionID: number) -> number
@@ -29636,10 +29636,10 @@ declare global CombatLog_String_DamageResultString: unknown
 declare global CombatLog_String_GetIcon: unknown
 declare global CombatLog_String_PowerType: unknown
 declare global CombatLog_String_SchoolString: (school: number?) -> unknown
-declare global CombatLog_Color_FloatToText: (...unknown) -> ...unknown
-declare global CombatLog_Color_ColorStringByEventType: (...unknown) -> ...unknown
-declare global CombatLog_Color_ColorStringBySchool: (...unknown) -> ...unknown
-declare global CombatLog_Color_ColorStringByUnitType: (...unknown) -> ...unknown
+declare global CombatLog_Color_FloatToText: (arg1: unknown, arg2: unknown, arg3: unknown, arg4: unknown) -> (...unknown)
+declare global CombatLog_Color_ColorStringByEventType: unknown
+declare global CombatLog_Color_ColorStringBySchool: unknown
+declare global CombatLog_Color_ColorStringByUnitType: unknown
 declare global IsOnGlueScreen: boolean
 declare global GetGuildRosterMOTD: () -> string
 declare global GetGuildInfoText: () -> string
@@ -29663,18 +29663,18 @@ declare global HasBoundGemProposed: () -> boolean
 declare global PetAssistMode: () -> ()
 declare global GetPetTalentTree: () -> stringView?
 declare global SetActiveTalentGroup: (groupIndex: number) -> ()
-declare global GetTalentTabInfo: (...unknown) -> ...unknown
+declare global GetTalentTabInfo: (index: number, isInspect: boolean?, isPet: boolean?, talentGroup: number?) -> (number, string, string, number, number, number, number, boolean)
 declare global GetPrimaryTalentTree: (isInspect: boolean?, isPet: boolean?, specGroupIndex: number?) -> number
 declare global GetActiveTalentGroup: (isInspect: boolean?, isPet: boolean?) -> number
 declare global GetTalentTreeMasterySpells: (...unknown) -> ...unknown
 declare global MAX_TALENT_TIERS: 7
 declare global HUNTER_DISMISS_PET: 2641
-declare global FindFlyoutSlotBySpellID: (...unknown) -> ...unknown
-declare global FindSpellOverrideByID: (...unknown) -> ...unknown
-declare global FindBaseSpellByID: (...unknown) -> ...unknown
-declare global SpellIsPriorityAura: (...unknown) -> ...unknown
-declare global SpellIsSelfBuff: (...unknown) -> ...unknown
-declare global SpellGetVisibilityInfo: (...unknown) -> ...unknown
+declare global FindFlyoutSlotBySpellID: (spellID: number) -> number
+declare global FindSpellOverrideByID: (spellID: number) -> number
+declare global FindBaseSpellByID: (spellID: number) -> number
+declare global SpellIsPriorityAura: (spellID: number) -> boolean
+declare global SpellIsSelfBuff: (spellID: number) -> boolean
+declare global SpellGetVisibilityInfo: (spellId: number, visType: string) -> (boolean, boolean, boolean)
 declare global PickupTradeMoney: (amount: WOWMONEY) -> ()
 declare global CastingInfo: () -> (string, string, number, number, number, boolean, string, boolean?, number, number?, number)
 declare global ChannelInfo: () -> (string, string, number, number, number, boolean, boolean?, number, boolean, number, number?)
