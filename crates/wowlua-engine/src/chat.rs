@@ -225,6 +225,25 @@ fn send(vm: &mut Vm, c: NativeCall) -> Ret {
 /// no GUID, 0, four falses, the Discord fields; `sender` the player's full
 /// name for loot (with the player's GUID).
 pub fn game_message(vm: &mut Vm, event: &str, text: &str, sender: Option<&str>) {
+    let guid = sender.map(|_| {
+        crate::engine(vm).units.list[crate::units::PLAYER.0]
+            .guid
+            .clone()
+    });
+    chat_line(vm, event, text, sender, ("", 0.0), guid);
+}
+
+/// A chat line's event, the payload as [`game_message`]'s: the text, its
+/// author (also the fifth value), the language's name and ID, the author's
+/// GUID.
+fn chat_line(
+    vm: &mut Vm,
+    event: &str,
+    text: &str,
+    sender: Option<&str>,
+    language: (&str, f64),
+    guid: Option<String>,
+) {
     let line = {
         let e = crate::engine_mut(vm);
         e.world.next_chat_line += 1;
@@ -255,26 +274,23 @@ pub fn game_message(vm: &mut Vm, event: &str, text: &str, sender: Option<&str>) 
         let key = vm.str(k);
         let _ = vm.heap.table_mut(discord).set(key, Value::Num(0.0));
     }
+    let guid = match guid {
+        Some(g) => vm.str(&g),
+        None => Value::Nil,
+    };
     let args = vec![
         s(vm, text),
         s(vm, name),
-        s(vm, ""),
+        s(vm, language.0),
         s(vm, ""),
         s(vm, name),
         s(vm, ""),
         Value::Num(0.0),
         Value::Num(0.0),
         s(vm, ""),
-        Value::Num(0.0),
+        Value::Num(language.1),
         Value::Num(line as f64),
-        if sender.is_some() {
-            let g = crate::engine(vm).units.list[crate::units::PLAYER.0]
-                .guid
-                .clone();
-            vm.str(&g)
-        } else {
-            Value::Nil
-        },
+        guid,
         Value::Num(0.0),
         Value::Bool(false),
         Value::Bool(false),
@@ -283,6 +299,204 @@ pub fn game_message(vm: &mut Vm, event: &str, text: &str, sender: Option<&str>) 
         Value::Table(discord),
     ];
     crate::widgets::fire_event(vm, event, &args);
+}
+
+/// `C_ChatInfo.SendChatMessage(message, chatType, languageID, target)`
+/// (`SendChatMessage`): the server's answer on the next frame (decision
+/// T360; unverified on WoW Forever: the lines' order and payloads, the
+/// leader's chat types, channels). The player hears what they say, yell
+/// and emote (`CHAT_MSG_SAY`, …, in their language), and their party,
+/// raid, instance, guild and officer lines when they are in one, else the
+/// server's error (`ERR_NOT_IN_GROUP`, `ERR_NOT_IN_RAID`,
+/// `ERR_GUILD_PLAYER_NOT_IN_GUILD`). A whisper shows as sent
+/// (`CHAT_MSG_WHISPER_INFORM`) to the player or a player the world has,
+/// a whisper to the player arriving too (`CHAT_MSG_WHISPER`); to a name
+/// the world does not have, `ERR_CHAT_PLAYER_NOT_FOUND_S`. A channel's
+/// message is not answered.
+fn send_chat(vm: &mut Vm, c: NativeCall) -> Ret {
+    let message = match vm.hidden(c.arg(1)) {
+        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+        Value::Num(n) => n.to_string(),
+        _ => String::new(),
+    };
+    if message.is_empty() {
+        return Ok(vec![]);
+    }
+    let chat_type = text(vm, c.arg(2))
+        .unwrap_or_else(|| "SAY".into())
+        .to_uppercase();
+    let target = text(vm, c.arg(4)).filter(|t| !t.is_empty());
+    let me = player_full_name(vm);
+    let my_guid = engine(vm).units.list[units::PLAYER.0].guid.clone();
+    let language = default_language(vm);
+    let in_group = !engine(vm).units.group.is_empty();
+    let in_raid = in_group && engine(vm).units.raid;
+    let err = |vm: &mut Vm, key: &str, fallback: &str| -> String {
+        match vm.get_global(key) {
+            Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+            _ => fallback.to_string(),
+        }
+    };
+    // (event, text, author, author's GUID; a system line has none).
+    let mut lines: Vec<(String, String, Option<String>, Option<String>)> = Vec::new();
+    let mine = |event: &str| {
+        (
+            event.to_string(),
+            message.clone(),
+            Some(me.clone()),
+            Some(my_guid.clone()),
+        )
+    };
+    match chat_type.as_str() {
+        "SAY" | "YELL" | "EMOTE" => lines.push(mine(&format!("CHAT_MSG_{chat_type}"))),
+        "PARTY" | "INSTANCE_CHAT" if in_group => lines.push(mine(&format!("CHAT_MSG_{chat_type}"))),
+        "PARTY" | "INSTANCE_CHAT" => {
+            let t = err(vm, "ERR_NOT_IN_GROUP", "You aren't in a party.");
+            lines.push(("CHAT_MSG_SYSTEM".into(), t, None, None));
+        }
+        "RAID" if in_raid => lines.push(mine("CHAT_MSG_RAID")),
+        "RAID" => {
+            let t = err(vm, "ERR_NOT_IN_RAID", "You are not in a raid group");
+            lines.push(("CHAT_MSG_SYSTEM".into(), t, None, None));
+        }
+        "GUILD" | "OFFICER" if crate::guild::in_guild(vm) => {
+            lines.push(mine(&format!("CHAT_MSG_{chat_type}")));
+        }
+        "GUILD" | "OFFICER" => {
+            let t = err(
+                vm,
+                "ERR_GUILD_PLAYER_NOT_IN_GUILD",
+                "You are not in a guild.",
+            );
+            lines.push(("CHAT_MSG_SYSTEM".into(), t, None, None));
+        }
+        "WHISPER" => {
+            let Some(target) = target else {
+                return Ok(vec![]);
+            };
+            if whispers_self(vm, &target) {
+                lines.push((
+                    "CHAT_MSG_WHISPER_INFORM".into(),
+                    message.clone(),
+                    Some(me.clone()),
+                    Some(my_guid.clone()),
+                ));
+                lines.push(mine("CHAT_MSG_WHISPER"));
+            } else if let Some((name, guid)) = known_player(vm, &target) {
+                lines.push((
+                    "CHAT_MSG_WHISPER_INFORM".into(),
+                    message.clone(),
+                    Some(name),
+                    Some(guid),
+                ));
+            } else {
+                let f = err(
+                    vm,
+                    "ERR_CHAT_PLAYER_NOT_FOUND_S",
+                    "No player named '%s' is currently playing.",
+                );
+                lines.push((
+                    "CHAT_MSG_SYSTEM".into(),
+                    f.replacen("%s", &target, 1),
+                    None,
+                    None,
+                ));
+            }
+        }
+        _ => {}
+    }
+    if lines.is_empty() {
+        return Ok(vec![]);
+    }
+    // Answered on the next frame, as the server's addon messages are.
+    let mut upvals = vec![vm.str(&language.0), Value::Num(language.1)];
+    for (event, text, author, guid) in lines {
+        upvals.push(vm.str(&event));
+        upvals.push(vm.str(&text));
+        upvals.push(author.map_or(Value::Nil, |a| vm.str(&a)));
+        upvals.push(guid.map_or(Value::Nil, |g| vm.str(&g)));
+    }
+    let f = vm.native_with("chat answer", chat_answer, upvals);
+    crate::clock::after_engine(vm, 0.0, f);
+    Ok(vec![])
+}
+
+/// The server's answer to a chat message: its lines, in order.
+fn chat_answer(vm: &mut Vm, c: NativeCall) -> Ret {
+    let up = c.upvals.clone();
+    let s = |vm: &Vm, v: Value| match v {
+        Value::Str(s) => Some(String::from_utf8_lossy(vm.str_bytes(s)).into_owned()),
+        _ => None,
+    };
+    let language = (
+        s(vm, up[0]).unwrap_or_default(),
+        match up[1] {
+            Value::Num(n) => n,
+            _ => 0.0,
+        },
+    );
+    for chunk in up[2..].chunks(4) {
+        let event = s(vm, chunk[0]).unwrap_or_default();
+        let text = s(vm, chunk[1]).unwrap_or_default();
+        let author = s(vm, chunk[2]);
+        let guid = s(vm, chunk[3]);
+        // A system line has no language.
+        let lang = if author.is_some() {
+            (language.0.as_str(), language.1)
+        } else {
+            ("", 0.0)
+        };
+        chat_line(vm, &event, &text, author.as_deref(), lang, guid);
+    }
+    Ok(vec![])
+}
+
+/// The player's language: `GetDefaultLanguage()`'s name and ID.
+fn default_language(vm: &mut Vm) -> (String, f64) {
+    let f = vm.get_global("GetDefaultLanguage");
+    if f.is_nil() {
+        return (String::new(), 0.0);
+    }
+    let unit = vm.str("player");
+    let r = vm.call(f, &[unit]).unwrap_or_default();
+    let name = match r.first() {
+        Some(Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(*s)).into_owned(),
+        _ => String::new(),
+    };
+    let id = match r.get(1) {
+        Some(Value::Num(n)) => *n,
+        _ => 0.0,
+    };
+    (name, id)
+}
+
+/// Whether a whisper's target is the player (as addon messages reach them:
+/// the full name, or the first name without a last one).
+fn whispers_self(vm: &Vm, target: &str) -> bool {
+    let me = player_full_name(vm);
+    let player = &engine(vm).units.list[units::PLAYER.0];
+    target.eq_ignore_ascii_case(&me)
+        || (player.last_name.is_none() && target.eq_ignore_ascii_case(&player.name))
+}
+
+/// Another player the world has by that name (with or without the realm):
+/// their full name and GUID.
+fn known_player(vm: &Vm, target: &str) -> Option<(String, String)> {
+    let wanted = target.split('-').next().unwrap_or(target);
+    engine(vm)
+        .units
+        .list
+        .iter()
+        .skip(1)
+        .find(|u| u.player && u.name.eq_ignore_ascii_case(wanted))
+        .map(|u| {
+            let full = match (&u.last_name, &u.realm) {
+                (Some(last), _) => format!("{} {last}", u.name),
+                (None, Some(realm)) => format!("{}-{realm}", u.name),
+                (None, None) => u.name.clone(),
+            };
+            (full, u.guid.clone())
+        })
 }
 
 pub fn receive_control(vm: &mut Vm, c: NativeCall) -> Ret {
@@ -432,6 +646,7 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ),
         ("C_ChatInfo.InChatMessagingLockdown", messaging_lockdown),
         ("C_ChatInfo.SendAddonMessage", send),
+        ("C_ChatInfo.SendChatMessage", send_chat),
         ("C_ChatInfo.SendAddonMessageLogged", send),
     ]
 }

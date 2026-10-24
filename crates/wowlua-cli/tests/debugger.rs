@@ -406,6 +406,69 @@ fn the_addons_session_takes_slash_commands_in_the_console() {
     c.request("disconnect", json!({ "terminateDebuggee": true }));
 }
 
+/// A `/reload` in the addon's session (`C_UI.Reload()`) loads the UI again as
+/// the client does: the addon's SavedVariables kept, its breakpoints on the
+/// new load too.
+#[test]
+fn the_addons_session_reloads_with_its_saved_variables() {
+    let dir = project();
+    let root = dir.path().canonicalize().unwrap();
+    fs::write(
+        root.join("src/counter.lua"),
+        "local f = CreateFrame(\"Frame\")\nf:RegisterEvent(\"ADDON_LOADED\")\nf:SetScript(\"OnEvent\", function(_, _, name)\n    if name:lower() ~= \"demo\" then return end\n    DemoDB = DemoDB or { loads = 0 }\n    DemoDB.loads = DemoDB.loads + 1\nend)\n",
+    )
+    .unwrap();
+    let manifest = fs::read_to_string(root.join("wowlua.json")).unwrap();
+    fs::write(
+        root.join("wowlua.json"),
+        manifest.replace(
+            r#""addon": { "title": "Demo" }"#,
+            r#""addon": { "title": "Demo", "saved-variables": ["DemoDB"] }"#,
+        ),
+    )
+    .unwrap();
+    let mut c = Client::start(&root);
+    c.request("initialize", json!({ "adapterID": "wowlua" }));
+    c.request("launch", json!({ "addon": true, "flavor": "standard" }));
+    c.event("initialized");
+    let src = root.join("src/counter.lua");
+    c.request(
+        "setBreakpoints",
+        json!({ "source": { "path": src.to_string_lossy() }, "breakpoints": [{ "line": 6 }] }),
+    );
+    c.request("setExceptionBreakpoints", json!({ "filters": [] }));
+    c.request("configurationDone", json!({}));
+    // The first load stops at the breakpoint.
+    assert_eq!(c.event("stopped")["reason"], "breakpoint");
+    c.request("continue", json!({ "threadId": 1 }));
+    let first = c.request(
+        "evaluate",
+        json!({ "expression": "DemoDB.loads", "context": "repl" }),
+    );
+    assert_eq!(first["result"], "1", "{first:#}");
+    c.request(
+        "evaluate",
+        json!({ "expression": "C_UI.Reload()", "context": "repl" }),
+    );
+    // The reload's load stops there again, the saved count carried over.
+    assert_eq!(c.event("stopped")["reason"], "breakpoint");
+    c.request("continue", json!({ "threadId": 1 }));
+    let second = c.request(
+        "evaluate",
+        json!({ "expression": "DemoDB.loads", "context": "repl" }),
+    );
+    assert_eq!(second["result"], "2", "{second:#}");
+    assert!(
+        c.seen.iter().any(|m| m["event"] == "output"
+            && m["body"]["output"]
+                .as_str()
+                .is_some_and(|o| o.contains("Reloading the UI"))),
+        "{:#?}",
+        c.seen
+    );
+    c.request("disconnect", json!({ "terminateDebuggee": true }));
+}
+
 #[test]
 fn test_profile_out_writes_a_speedscope_file_per_test_file() {
     let dir = project();

@@ -812,7 +812,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         // Chat and channels (unverified: the client's chat lines, its
         // channel moderation; leaving and joining keep the engine's
         // numbering, which has no gaps, as it is).
-        "C_ChatInfo.SendChatMessage",
         "C_ChatInfo.RequestCanLocalWhisperTarget",
         "C_ChatInfo.DropCautionaryChatMessage",
         "C_ChatInfo.SendCautionaryChatMessage",

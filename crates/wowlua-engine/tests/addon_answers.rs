@@ -204,3 +204,50 @@ return before, C_SkillInfo.GetSelectedSkill()",
     );
     assert_eq!(r, ["0", "3"]);
 }
+
+/// Chat the player sends gets the server's answer on the next frame: what
+/// they say, a whisper to themselves (sent, then heard), the error for a
+/// name nobody has, and for party chat outside a party (decision T360).
+#[test]
+fn chat_messages_get_the_servers_answer() {
+    let mut vm = vm();
+    run(
+        &mut vm,
+        "Got = {}
+local f = CreateFrame('Frame')
+for _, e in ipairs({ 'CHAT_MSG_SAY', 'CHAT_MSG_WHISPER', 'CHAT_MSG_WHISPER_INFORM', 'CHAT_MSG_SYSTEM' }) do f:RegisterEvent(e) end
+f:SetScript('OnEvent', function(_, e, text, author) Got[#Got + 1] = e .. '|' .. text .. '|' .. author end)
+local me = UnitName('player')
+C_ChatInfo.SendChatMessage('hello', 'SAY')
+C_ChatInfo.SendChatMessage('psst', 'WHISPER', nil, me)
+C_ChatInfo.SendChatMessage('anyone', 'WHISPER', nil, 'Nobody')
+C_ChatInfo.SendChatMessage('team', 'PARTY')",
+    );
+    let before = run(&mut vm, "return #Got");
+    assert_eq!(before, ["0"], "answered at once, not on the next frame");
+    wowlua_engine::clock::advance_frames(&mut vm, 1, 1000.0 / 60.0);
+    let r = run(
+        &mut vm,
+        "return table.concat(Got, '\\n'), UnitName('player')",
+    );
+    let me = &r[1];
+    let lines: Vec<&str> = r[0].lines().collect();
+    assert_eq!(lines.len(), 5, "{lines:?}");
+    assert!(
+        lines[0].starts_with(&format!("CHAT_MSG_SAY|hello|{me}")),
+        "{lines:?}"
+    );
+    assert!(
+        lines[1].starts_with(&format!("CHAT_MSG_WHISPER_INFORM|psst|{me}")),
+        "{lines:?}"
+    );
+    assert!(
+        lines[2].starts_with(&format!("CHAT_MSG_WHISPER|psst|{me}")),
+        "{lines:?}"
+    );
+    assert_eq!(
+        lines[3],
+        "CHAT_MSG_SYSTEM|No player named 'Nobody' is currently playing.|"
+    );
+    assert_eq!(lines[4], "CHAT_MSG_SYSTEM|You aren't in a party.|");
+}

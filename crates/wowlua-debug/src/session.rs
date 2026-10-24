@@ -335,13 +335,22 @@ fn run_test(suite: &Suite, file: &str, filters: &[String]) -> (Option<String>, b
 const FRAME_MS: f64 = 1000.0 / 60.0;
 
 fn run_addon(suite: &Suite, opts: &Options, shared: &SharedRef) -> (Option<String>, bool) {
-    let mut vm = match wowlua_test::open_addon(suite) {
-        Ok(vm) => vm,
+    let mut session = match wowlua_test::AddonSession::open(suite) {
+        Ok(s) => s,
         Err(e) => return (Some(e), true),
     };
     let started = Instant::now();
     let mut frames_run: u64 = 0;
     loop {
+        // A `/reload` (`ReloadUI()`) ended the addon's session: the UI loads
+        // again, its SavedVariables kept, the debugger on the new one.
+        if session.wants_reload() {
+            send_output(shared, "console", "Reloading the UI\n".into());
+            if let Err(e) = session.reload(suite) {
+                return (Some(format!("reloading the UI: {e}")), true);
+            }
+        }
+        let vm = &mut session.vm;
         vm.with_debugger(|d, vm| d.idle(vm));
         if shared.borrow().terminate || vm.aborted() {
             break;
@@ -350,9 +359,9 @@ fn run_addon(suite: &Suite, opts: &Options, shared: &SharedRef) -> (Option<Strin
         let queued = std::mem::take(&mut shared.borrow_mut().run_queue);
         for (id, req) in queued {
             let r = match &req {
-                Request::Input { input } => crate::ui::input(&mut vm, input).map(|()| Response::Ok),
+                Request::Input { input } => crate::ui::input(vm, input).map(|()| Response::Ok),
                 Request::FireEvent { event, args } => {
-                    crate::ui::fire_event(&mut vm, event, args).map(|()| Response::Ok)
+                    crate::ui::fire_event(vm, event, args).map(|()| Response::Ok)
                 }
                 _ => Err("not a request that runs code".into()),
             };
@@ -368,13 +377,13 @@ fn run_addon(suite: &Suite, opts: &Options, shared: &SharedRef) -> (Option<Strin
                 (None, Some(s)) => (s * 1000.0 / FRAME_MS).ceil() as usize,
                 (None, None) => 1,
             };
-            wowlua_engine::clock::advance_frames(&mut vm, n, FRAME_MS);
+            wowlua_engine::clock::advance_frames(vm, n, FRAME_MS);
             shared.borrow_mut().link.respond(id, Ok(Response::Ok));
             continue;
         }
         match opts.clock {
             ClockMode::Realtime => {
-                wowlua_engine::clock::advance_frames(&mut vm, 1, FRAME_MS);
+                wowlua_engine::clock::advance_frames(vm, 1, FRAME_MS);
                 frames_run += 1;
                 let deadline =
                     started + Duration::from_secs_f64(frames_run as f64 * FRAME_MS / 1000.0);

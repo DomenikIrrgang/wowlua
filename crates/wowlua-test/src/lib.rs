@@ -441,6 +441,52 @@ pub fn open_addon(suite: &Suite) -> Result<Vm, String> {
         .map_err(|e| to_sources(suite, &e))
 }
 
+/// A debug session of the addon (spec debugger §18.3): its VM, and the
+/// variables its TOC saves, so a `/reload` loads it again with them.
+pub struct AddonSession {
+    pub vm: Vm,
+    saved: Vec<String>,
+    reloads: usize,
+}
+
+impl AddonSession {
+    /// The addon loaded as the client loads it, the player logged in.
+    pub fn open(suite: &Suite) -> Result<AddonSession, String> {
+        natives::reset();
+        let (vm, _, saved) = load_vm(suite, None, None).map_err(|e| to_sources(suite, &e))?;
+        Ok(AddonSession {
+            vm,
+            saved,
+            reloads: 0,
+        })
+    }
+
+    /// The addon's UI asked to reload (`ReloadUI()`, `/reload`): its
+    /// session ended (`PLAYER_LOGOUT`).
+    pub fn wants_reload(&self) -> bool {
+        wowlua_engine::engine(&self.vm).world.logged_out
+    }
+
+    /// Loads the UI again as the client does after a `/reload` (as
+    /// `mock.reloadUI` does in a test): a fresh VM, the SavedVariables
+    /// kept, the clock going on, the reload's login.
+    pub fn reload(&mut self, suite: &Suite) -> Result<(), String> {
+        let saved = saved::capture(&mut self.vm, &self.saved);
+        let reload = Reload {
+            pass: self.reloads + 1,
+            now: self.vm.clock.now,
+            elapsed_ms: self.vm.clock.elapsed_ms,
+        };
+        natives::keep_saved(saved);
+        let (vm, _, names) =
+            load_vm(suite, None, Some(&reload)).map_err(|e| to_sources(suite, &e))?;
+        self.vm = vm;
+        self.saved = names;
+        self.reloads += 1;
+        Ok(())
+    }
+}
+
 /// The source path (`src/x.wowlua`, `tests/x.test.wowlua`) of a chunk
 /// name of the package's own files; `None` for others' (Blizzard's,
 /// other addons').

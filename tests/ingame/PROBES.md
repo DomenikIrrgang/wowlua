@@ -495,6 +495,14 @@ alone unless an item names an addon.
     9. `/run local p=CreateFrame("Frame",nil,UIParent) p:SetPoint("CENTER") p:SetSize(100,50) local c=CreateFrame("Frame",nil,p) c:SetAllPoints() local g=CreateFrame("Frame",nil,c) g:SetAllPoints() print(g:GetWidth(),g:IsRectValid(),c:IsRectValid())`
        (wowlua: `100 true true`): whether a chain made in one call has its
        size at once.
+20a. **Chat the player sends** (decision T360; wowlua: `CHAT_MSG_SAY`
+    back, `CHAT_MSG_WHISPER_INFORM` then `CHAT_MSG_WHISPER` for a whisper to
+    yourself, `ERR_CHAT_PLAYER_NOT_FOUND_S` for a name nobody has, `ERR_NOT_IN_GROUP`
+    for /p alone):
+    1. `/run F=CreateFrame("Frame") for _,e in ipairs({"CHAT_MSG_SAY","CHAT_MSG_WHISPER","CHAT_MSG_WHISPER_INFORM","CHAT_MSG_SYSTEM","CHAT_MSG_PARTY"}) do F:RegisterEvent(e) end F:SetScript("OnEvent",function(_,e,...) print(e,...) end)`
+    2. `/s probe one`, then `/p probe two` (not in a group).
+    3. `/w <your first and last name> probe three`, then `/w Nobody Anyone probe four`.
+    4. A screenshot of the chat with the printed lines.
 20. **Screenshots to compare with wowlua's** (in `~/Desktop/wowlua-*`):
     1. Settings, Accessibility: the "Colors" category and the "Use UI
        Scale" check box (Graphics).
