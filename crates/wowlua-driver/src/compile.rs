@@ -74,6 +74,9 @@ pub struct CompileOutput {
     pub removed: BTreeSet<String>,
     /// `@binding` declarations, for the generated Bindings.xml.
     pub bindings: Vec<wowlua_sema::stdlib::BindingDecl>,
+    /// With `CheckConfig::index`: each name the check met and the span of
+    /// what it refers to.
+    pub definitions: Vec<(wowlua_span::Span, wowlua_span::Span)>,
 }
 
 /// A declaration file with its contents.
@@ -93,6 +96,9 @@ pub struct CheckConfig {
     pub globals: std::collections::HashSet<String>,
     /// The SavedVariables, for `wowlua:saved`'s checks.
     pub stdlib: wowlua_sema::stdlib::StdlibConfig,
+    /// Find what each name refers to (the language server's go to
+    /// definition): `CompileOutput::definitions`.
+    pub index: bool,
 }
 
 /// A declaration file of one flavor (the wow-api types), parsed.
@@ -1373,8 +1379,10 @@ pub fn compile_flavor(
                     store,
                 }),
             &order.global_defs,
+            check.index,
         );
         diagnostics.extend(checked.diagnostics);
+        out.definitions = checked.definitions;
         out.type_names = checked.type_names;
         out.value_checks = checked.value_checks;
         private_methods = checked.private_methods;

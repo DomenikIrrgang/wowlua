@@ -3,7 +3,7 @@
 //! overloads).
 
 use super::body::{Checker, VarId};
-use super::env::{DefKind, FnSig, MemberKind, Visibility};
+use super::env::{DefKind, DefTarget, FnSig, MemberKind, Visibility};
 use super::subst::{self, Subst};
 use super::types::*;
 use super::types::{Field, Func, Types};
@@ -858,9 +858,44 @@ impl Checker<'_, '_> {
         }
     }
 
+    /// Go to definition (spec §16.2): the name `n`, read or assigned, is
+    /// the local or import `var`, else a global.
+    pub(crate) fn note_name(&mut self, n: Name<'_>, var: Option<VarId>) {
+        if self.env.definitions.is_none() {
+            return;
+        }
+        let target = match var {
+            Some(v) if self.import_vars.get(n.text()) == Some(&v) => {
+                self.import_targets.get(n.text()).cloned()
+            }
+            Some(v) => self.vars[v.0 as usize].decl.map(|start| {
+                DefTarget::At(Span {
+                    file: n.span().file,
+                    start,
+                    end: start + n.text().len() as u32,
+                })
+            }),
+            None => Some(DefTarget::Global(n.text().into())),
+        };
+        if let Some(t) = target {
+            self.env.note_definition(n.span(), t);
+        }
+    }
+
+    /// Go to definition: the member name at `at` is the member declared at
+    /// `member`, else in the declaration of `owner`.
+    fn note_member(&mut self, at: Span, member: Option<Span>, owner: DefId) {
+        if self.env.definitions.is_some() {
+            let span = member.or(self.env.def(owner).span);
+            self.env.note_declared_at(at, span);
+        }
+    }
+
     /// The type of a name: a local, an import, or a global.
     pub fn name_type(&mut self, n: Name<'_>) -> TypeId {
-        if let Some(v) = self.lookup_var(n.text()) {
+        let var = self.lookup_var(n.text());
+        self.note_name(n, var);
+        if let Some(v) = var {
             // A parameter read in its own default or an earlier one's,
             // before it is set (a function literal there runs later).
             if self.unset_params.contains(&v) && self.vars[v.0 as usize].depth == self.depth {
@@ -1030,6 +1065,10 @@ impl Checker<'_, '_> {
     }
 
     pub fn assign_target(&mut self, t: Expr<'_>, value: TypeId) {
+        if let ExprKind::Name(n) = t.kind() {
+            let var = self.lookup_var(n.text());
+            self.note_name(n, var);
+        }
         match t.kind() {
             ExprKind::Name(n) => match self.lookup_var(n.text()) {
                 Some(v) => {
@@ -1182,6 +1221,7 @@ impl Checker<'_, '_> {
                 },
                 Ty::Named(d, args) => match self.env.instance_member(d, &args, name) {
                     Some((mem, owner)) => {
+                        self.note_member(span, mem.span, owner);
                         // A readonly field: only in its own class's
                         // constructor (spec §3.1.1).
                         let in_own_ctor = self.ctor_of == Some(owner);
@@ -1570,6 +1610,7 @@ impl Checker<'_, '_> {
                                 if mem.renamable {
                                     self.private_methods.insert(span, owner);
                                 }
+                                self.note_member(span, mem.span, owner);
                                 if !quiet {
                                     self.check_visibility(mem.visibility, owner, name, span);
                                 }
@@ -1691,7 +1732,10 @@ impl Checker<'_, '_> {
             DefKind::Enum => {
                 let idx = self.env.view(d).enum_position(name);
                 match idx {
-                    Some(i) => Some(self.env.types.intern(Ty::EnumMember(d, i as u32))),
+                    Some(i) => {
+                        self.note_member(span, None, d);
+                        Some(self.env.types.intern(Ty::EnumMember(d, i as u32)))
+                    }
                     None => {
                         if !quiet {
                             let msg = format!(
@@ -1704,8 +1748,11 @@ impl Checker<'_, '_> {
                     }
                 }
             }
-            DefKind::Namespace => match self.env.view(d).member(name).map(|m| m.ty) {
-                Some(t) => Some(t),
+            DefKind::Namespace => match self.env.view(d).member(name).map(|m| (m.ty, m.span)) {
+                Some((t, member)) => {
+                    self.note_member(span, member, d);
+                    Some(t)
+                }
                 None => {
                     if !quiet {
                         let msg = format!("`{}` has no member `{name}`", self.env.view(d).name());
@@ -1719,6 +1766,7 @@ impl Checker<'_, '_> {
                     if m.renamable {
                         self.private_methods.insert(span, d);
                     }
+                    self.note_member(span, m.span, d);
                     Some(m.ty)
                 }
                 None => {
@@ -1735,6 +1783,7 @@ impl Checker<'_, '_> {
                             if m.renamable {
                                 self.private_methods.insert(span, owner);
                             }
+                            self.note_member(span, m.span, owner);
                             let inst = self.env.instance(d);
                             Some(self.env.with_self(m.ty, inst))
                         }
@@ -1780,6 +1829,7 @@ impl Checker<'_, '_> {
                             if mem.renamable {
                                 self.private_methods.insert(span, owner);
                             }
+                            self.note_member(span, mem.span, owner);
                             self.check_visibility(mem.visibility, owner, name, span);
                             match mem.kind {
                                 MemberKind::Method => mem.ty,

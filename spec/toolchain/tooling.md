@@ -540,12 +540,27 @@ diagnostics are gone is cleared. Formatting replaces the document with
 does not parse). The outline lists a file's top-level functions (`A.b`,
 `A:c`), local functions, locals, constants, classes with their methods and
 fields, interfaces, enums and type aliases, exported or not. The server
-speaks LSP 3.17 with full document sync. Hover, completion, navigation and
-the rest of the table follow.
+speaks LSP 3.17 with full document sync.
+
+Go to definition (decision T369) answers from the last check: the checker
+records, for each name it resolves, what it refers to. A local leads to its
+declaration, an imported name (and the name in the `import` statement) to
+the export in its module, a namespace import to the module, a member
+(field, method, getter, setter, static, `new`, namespace member, enum
+member) to where its class, interface or namespace declares it (`new` to
+the constructor, else the class), a type name to its declaration, and a
+global to the first script that defines it (`function Name()`,
+`Name = …`) or else its declaration. A package with edits not yet checked
+is checked before the answer. Declarations built into wowlua (the game's
+API, Lua's and the standard library's) open from a copy the server writes
+to the system's temporary directory, one folder per wowlua version. Names
+in plain Lua files are found where those files are type-checked. Hover,
+completion, find references and the rest of the table follow.
 
 The VS Code extension starts `wowlua lsp` (the `wowlua.path` command) when a
 `.wowlua` file opens or the workspace has a `wowlua.json`, and sends it the
-open `.wowlua` and `.lua` files. `wowlua.languageServer` (on by default)
+open `.wowlua` and `.lua` files; *Go to Definition* (F12) and Ctrl or Cmd +
+click use it. `wowlua.languageServer` (on by default)
 turns it off; *wowlua: Restart Language Server* restarts it. Its client is
 hand-written, as the rest of the extension, so it needs no build step.
 

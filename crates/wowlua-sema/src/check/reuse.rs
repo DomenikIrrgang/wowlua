@@ -408,6 +408,8 @@ impl Walk<'_> {
             readonly,
             visibility,
             renamable,
+            // (where it is declared does not change how code checks)
+            span: _,
         } = m;
         self.bytes(name.as_bytes());
         self.ty(*ty);

@@ -225,6 +225,17 @@ async function lspScenario(widgets) {
         const names = (symbols || []).map(s => s.name);
         log("outline:", names.join(", "));
         assert(names.length > 0, "no outline");
+        // `self:refresh()` in the constructor: its method below.
+        const text = doc.getText();
+        const call = doc.positionAt(text.indexOf("self:refresh()") + "self:".length + 1);
+        const definitions = await vscode.commands.executeCommand("vscode.executeDefinitionProvider", widgets, call);
+        const target = (definitions || [])[0];
+        assert(target, "no definition of refresh");
+        const range = target.targetRange || target.range;
+        const uri = target.targetUri || target.uri;
+        const line = doc.lineAt(range.start.line).text;
+        log("definition:", uri.fsPath === widgets.fsPath ? "same file" : uri.fsPath, "line", range.start.line + 1, line.trim());
+        assert(uri.fsPath === widgets.fsPath && line.includes("function refresh"), "definition at " + line);
         const edits = await vscode.commands.executeCommand("vscode.executeFormatDocumentProvider", widgets, { tabSize: 4, insertSpaces: false });
         assert(Array.isArray(edits), "formatting gave " + edits);
         log("PASS", name);

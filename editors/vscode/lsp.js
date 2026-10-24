@@ -1,13 +1,15 @@
 // The language client: starts `wowlua lsp` and keeps it in step with the
 // open `.wowlua` and `.lua` files (whole texts, unsaved edits included). Its
-// diagnostics go to the Problems view; it formats documents and outlines
-// them. Hand-written on `connection.js`, so the extension has no build
+// diagnostics go to the Problems view; it formats documents, outlines them
+// and finds where their names are defined. Hand-written on `connection.js`, so the extension has no build
 // step (decision T331).
 const vscode = require("vscode");
 const { Connection } = require("./connection");
 
 // The documents it formats and outlines.
 const SELECTOR = [{ language: "wowlua", scheme: "file" }];
+// The documents it checks, and finds definitions in.
+const SYNCED = [...SELECTOR, { language: "lua", scheme: "file" }];
 
 // The documents the server is told about.
 function synced(doc) {
@@ -52,6 +54,9 @@ class LanguageClient {
             }),
             vscode.languages.registerDocumentSymbolProvider(SELECTOR, {
                 provideDocumentSymbols: (doc) => this.symbols(doc),
+            }),
+            vscode.languages.registerDefinitionProvider(SYNCED, {
+                provideDefinition: (doc, position) => this.definition(doc, position),
             }),
             vscode.workspace.onDidChangeConfiguration((e) => {
                 if (e.affectsConfiguration("wowlua.path") || e.affectsConfiguration("wowlua.languageServer")) {
@@ -177,6 +182,14 @@ class LanguageClient {
             options: { tabSize: options.tabSize, insertSpaces: options.insertSpaces },
         });
         return (edits || []).map((e) => vscode.TextEdit.replace(lspRange(e.range), e.newText));
+    }
+
+    async definition(doc, position) {
+        const found = await this.request("textDocument/definition", {
+            textDocument: { uri: doc.uri.toString() },
+            position: { line: position.line, character: position.character },
+        });
+        return (found || []).map((l) => new vscode.Location(vscode.Uri.parse(l.uri), lspRange(l.range)));
     }
 
     async symbols(doc) {

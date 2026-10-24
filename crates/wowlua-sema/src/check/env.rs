@@ -49,6 +49,9 @@ pub struct Member {
     /// pass may rename (spec optimization §15.4.1): not abstract, not
     /// decorated, not a metamethod, of a class that is no widget class.
     pub renamable: bool,
+    /// Where it is declared (the name), when that is in a source: what the
+    /// language server's go to definition shows (spec §16.2).
+    pub span: Option<Span>,
 }
 
 impl Member {
@@ -60,7 +63,13 @@ impl Member {
             readonly: false,
             visibility: Visibility::Public,
             renamable: false,
+            span: None,
         }
+    }
+
+    fn at(mut self, span: Span) -> Member {
+        self.span = Some(span);
+        self
     }
 }
 
@@ -112,6 +121,11 @@ impl Def {
             self_param: None,
             recursive_alias: false,
         }
+    }
+
+    fn at(mut self, span: Span) -> Def {
+        self.span = Some(span);
+        self
     }
 }
 
@@ -201,6 +215,23 @@ pub struct Env<'p> {
     pub typeof_namespace_refs: Vec<(usize, Box<str>, wowlua_span::Span)>,
     /// Name spans of the definitions of renamable methods, with their class.
     pub renamable_defs: Vec<(wowlua_span::Span, DefId)>,
+    /// Go to definition (spec §16.2): what the names the check meets refer
+    /// to, by the name's span. `None` unless the language server asks.
+    pub definitions: Option<Vec<(Span, DefTarget)>>,
+}
+
+/// What a name refers to, for go to definition; the last three are
+/// resolved to spans once the package is checked.
+#[derive(Clone, Debug, PartialEq, Eq, Hash)]
+pub enum DefTarget {
+    /// A declaration in a source: its name.
+    At(Span),
+    /// A global, by name.
+    Global(Box<str>),
+    /// Export `name` of the module that is input `usize`.
+    Export(usize, Box<str>),
+    /// The module that is input `usize`.
+    Module(usize),
 }
 
 pub const ADDON_NAMESPACE: &str = "AddonNamespace";
@@ -349,7 +380,16 @@ impl<'p> Env<'p> {
     /// Builds the environment from the declaration sources (declaration
     /// files first, then modules).
     pub fn build(sources: &[Source<'p>]) -> Env<'p> {
-        let mut env = Env::default();
+        Env::build_indexed(sources, false)
+    }
+
+    /// [`Env::build`]; with `index`, it records what names refer to
+    /// (`definitions`), from the declarations on.
+    pub fn build_indexed(sources: &[Source<'p>], index: bool) -> Env<'p> {
+        let mut env = Env {
+            definitions: index.then(Vec::new),
+            ..Env::default()
+        };
         // The ambient addon namespace: undeclared fields stay `any`.
         let mut ns = Def::new(ADDON_NAMESPACE, DefKind::Interface);
         ns.native = true;
@@ -427,6 +467,20 @@ impl<'p> Env<'p> {
         env
     }
 
+    /// Records that the name at `at` refers to `target` (when indexing).
+    pub fn note_definition(&mut self, at: Span, target: DefTarget) {
+        if let Some(d) = self.definitions.as_mut() {
+            d.push((at, target));
+        }
+    }
+
+    /// Records that the name at `at` refers to the declaration at `span`.
+    pub fn note_declared_at(&mut self, at: Span, span: Option<Span>) {
+        if let Some(span) = span {
+            self.note_definition(at, DefTarget::At(span));
+        }
+    }
+
     fn register(&mut self, src: &Source, name: &str, def: Def, global: bool) -> DefId {
         let map_global = global || src.declaration;
         // Ambient interfaces merge (spec §2.4.7).
@@ -465,7 +519,7 @@ impl<'p> Env<'p> {
                 let id = self.register(
                     src,
                     a.name().text(),
-                    Def::new(a.name().text(), DefKind::Alias),
+                    Def::new(a.name().text(), DefKind::Alias).at(a.name().span()),
                     false,
                 );
                 if !src.declaration && uses_typeof(a.ty()) {
@@ -477,7 +531,7 @@ impl<'p> Env<'p> {
                 let id = self.register(
                     src,
                     i.name().text(),
-                    Def::new(i.name().text(), DefKind::Interface),
+                    Def::new(i.name().text(), DefKind::Interface).at(i.name().span()),
                     false,
                 );
                 pending.push((id, Pending::Interface(i, src.index)));
@@ -503,7 +557,7 @@ impl<'p> Env<'p> {
                     members,
                     ..
                 } => {
-                    let mut def = Def::new(name.text(), DefKind::Class);
+                    let mut def = Def::new(name.text(), DefKind::Class).at(name.span());
                     def.native = true;
                     def.widget = widget;
                     let id = self.register(src, name.text(), def, true);
@@ -513,13 +567,13 @@ impl<'p> Env<'p> {
                     ));
                 }
                 DeclareKind::Interface(i) => {
-                    let mut def = Def::new(i.name().text(), DefKind::Interface);
+                    let mut def = Def::new(i.name().text(), DefKind::Interface).at(i.name().span());
                     def.native = true;
                     let id = self.register(src, i.name().text(), def, true);
                     pending.push((id, Pending::Interface(i, src.index)));
                 }
                 DeclareKind::Namespace { name, members } => {
-                    self.register_namespace(src, name.text(), members, pending);
+                    self.register_namespace(src, name.text(), name.span(), members, pending);
                 }
                 _ => {}
             },
@@ -532,13 +586,14 @@ impl<'p> Env<'p> {
         &mut self,
         src: &Source<'a>,
         path: &str,
+        span: Span,
         members: NsMembers<'a>,
         pending: &mut Vec<(DefId, Pending<'a>)>,
     ) -> DefId {
         let id = match self.declared.global_type(path) {
             Some(id) if self.def(id).kind == DefKind::Namespace => id,
             _ => {
-                let mut def = Def::new(path, DefKind::Namespace);
+                let mut def = Def::new(path, DefKind::Namespace).at(span);
                 def.native = true;
                 self.register(src, path, def, true)
             }
@@ -548,7 +603,7 @@ impl<'p> Env<'p> {
             match m.kind() {
                 NsMemberKind::Namespace { name, members } => {
                     let inner = format!("{path}.{}", name.text());
-                    self.register_namespace(src, &inner, members, pending);
+                    self.register_namespace(src, &inner, name.span(), members, pending);
                 }
                 NsMemberKind::Class {
                     name,
@@ -557,7 +612,7 @@ impl<'p> Env<'p> {
                     members,
                 } => {
                     let full = format!("{path}.{}", name.text());
-                    let mut def = Def::new(&full, DefKind::Class);
+                    let mut def = Def::new(&full, DefKind::Class).at(name.span());
                     def.native = true;
                     def.widget = widget;
                     let cid = self.register(src, &full, def, true);
@@ -568,17 +623,32 @@ impl<'p> Env<'p> {
                 }
                 NsMemberKind::Interface(i) => {
                     let full = format!("{path}.{}", i.name().text());
-                    let iid = self.register(src, &full, Def::new(&full, DefKind::Interface), true);
+                    let iid = self.register(
+                        src,
+                        &full,
+                        Def::new(&full, DefKind::Interface).at(i.name().span()),
+                        true,
+                    );
                     pending.push((iid, Pending::Interface(i, src.index)));
                 }
                 NsMemberKind::TypeAlias(a) => {
                     let full = format!("{path}.{}", a.name().text());
-                    let aid = self.register(src, &full, Def::new(&full, DefKind::Alias), true);
+                    let aid = self.register(
+                        src,
+                        &full,
+                        Def::new(&full, DefKind::Alias).at(a.name().span()),
+                        true,
+                    );
                     pending.push((aid, Pending::Alias(a, src.index)));
                 }
                 NsMemberKind::Enum(e) => {
                     let full = format!("{path}.{}", e.name().text());
-                    let eid = self.register(src, &full, Def::new(&full, DefKind::Enum), true);
+                    let eid = self.register(
+                        src,
+                        &full,
+                        Def::new(&full, DefKind::Enum).at(e.name().span()),
+                        true,
+                    );
                     pending.push((eid, Pending::Enum(e, src.index)));
                 }
                 _ => {}
@@ -638,6 +708,7 @@ impl<'p> Env<'p> {
                     readonly: f.readonly,
                     visibility: Visibility::Public,
                     renamable: false,
+                    span: None,
                 },
             );
         }
@@ -803,6 +874,7 @@ impl<'p> Env<'p> {
                                     readonly,
                                     visibility: Visibility::Public,
                                     renamable: false,
+                                    span: Some(name.span()),
                                 },
                             )
                         }
@@ -818,6 +890,7 @@ impl<'p> Env<'p> {
                                     readonly: true,
                                     visibility: Visibility::Public,
                                     renamable: false,
+                                    span: Some(name.span()),
                                 },
                             )
                         }
@@ -856,6 +929,7 @@ impl<'p> Env<'p> {
                                 readonly: true,
                                 visibility: Visibility::Public,
                                 renamable: false,
+                                span: Some(name.span()),
                             };
                             self.add_member(def, name.text(), m, member.is_static());
                         }
@@ -876,6 +950,7 @@ impl<'p> Env<'p> {
                                 readonly,
                                 visibility: Visibility::Public,
                                 renamable: false,
+                                span: Some(name.span()),
                             };
                             self.add_member(def, name.text(), m, member.is_static());
                         }
@@ -911,11 +986,11 @@ impl<'p> Env<'p> {
                         NsMemberKind::Function { name, sig } => {
                             let f = self.func_sig(&FnSig::of(sig), &scope, true);
                             let t = self.types.func(f);
-                            self.add_overload(def, name.text(), t);
+                            self.add_overload(def, name.text(), t, name.span());
                         }
                         NsMemberKind::Value { name, ty, is_const } => {
                             let t = self.resolve(ty, &scope);
-                            let mut mem = Member::field(t);
+                            let mut mem = Member::field(t).at(name.span());
                             mem.readonly = is_const;
                             self.def_mut(def).members.insert(name.text().into(), mem);
                         }
@@ -923,7 +998,7 @@ impl<'p> Env<'p> {
                             let full = format!("{}.{}", self.def(def).name, name.text());
                             if let Some(inner) = self.declared.global_type(full.as_str()) {
                                 let t = self.types.intern(Ty::ClassOf(inner));
-                                let mut mem = Member::field(t);
+                                let mut mem = Member::field(t).at(name.span());
                                 mem.readonly = true;
                                 self.def_mut(def).members.insert(name.text().into(), mem);
                             }
@@ -932,7 +1007,7 @@ impl<'p> Env<'p> {
                             let full = format!("{}.{}", self.def(def).name, e.name().text());
                             if let Some(inner) = self.declared.global_type(full.as_str()) {
                                 let t = self.types.intern(Ty::ClassOf(inner));
-                                let mut mem = Member::field(t);
+                                let mut mem = Member::field(t).at(e.name().span());
                                 mem.readonly = true;
                                 self.def_mut(def)
                                     .members
@@ -974,13 +1049,15 @@ impl<'p> Env<'p> {
         }
     }
 
-    fn add_overload(&mut self, def: DefId, name: &str, t: TypeId) {
-        let existing = self.def(def).members.get(name).map(|m| m.ty);
-        let ty = match existing {
-            Some(e) => overload_set(&mut self.types, e, t),
-            None => t,
+    fn add_overload(&mut self, def: DefId, name: &str, t: TypeId, span: Span) {
+        let existing = self.def(def).members.get(name).map(|m| (m.ty, m.span));
+        let (ty, span) = match existing {
+            // (the first declaration is where it is declared)
+            Some((e, first)) => (overload_set(&mut self.types, e, t), first.or(Some(span))),
+            None => (t, Some(span)),
         };
         let mut m = Member::field(ty);
+        m.span = span;
         m.kind = MemberKind::Field;
         m.readonly = true;
         self.def_mut(def).members.insert(name.into(), m);
@@ -1013,6 +1090,7 @@ impl<'p> Env<'p> {
             }
         }
         let mut ctor: Option<TypeId> = None;
+        let mut ctor_span: Option<Span> = None;
         for m in c.members() {
             if m.modifiers().contains(&Modifier::Overload) {
                 continue;
@@ -1041,6 +1119,7 @@ impl<'p> Env<'p> {
                         readonly,
                         visibility,
                         renamable: false,
+                        span: Some(name.span()),
                     };
                     self.add_member(def, name.text(), member, is_static);
                 }
@@ -1067,6 +1146,7 @@ impl<'p> Env<'p> {
                         readonly: true,
                         visibility,
                         renamable,
+                        span: Some(name.span()),
                     };
                     self.add_member(def, name.text(), member, is_static);
                 }
@@ -1082,6 +1162,7 @@ impl<'p> Env<'p> {
                         readonly: true,
                         visibility,
                         renamable: false,
+                        span: Some(name.span()),
                     };
                     let target = if is_static {
                         &mut self.def_mut(def).statics
@@ -1125,12 +1206,14 @@ impl<'p> Env<'p> {
                                     readonly: false,
                                     visibility,
                                     renamable: false,
+                                    span: Some(name.span()),
                                 },
                             );
                         }
                     }
                 }
                 ClassMemberKind::Constructor { func, .. } => {
+                    ctor_span = Some(m.span());
                     let mut f = self.func_sig(&FnSig::of(func), &scope, false);
                     // Parameter properties (`private sink: Sink`): fields of
                     // the parameter's type, set from it (decision L35).
@@ -1160,6 +1243,7 @@ impl<'p> Env<'p> {
                             readonly: mods.contains(&Modifier::Readonly),
                             visibility,
                             renamable: false,
+                            span: Some(p.name().span()),
                         };
                         self.add_member(def, p.name().text(), member, false);
                     }
@@ -1218,6 +1302,7 @@ impl<'p> Env<'p> {
         if !region {
             let mut m = Member::field(new);
             m.readonly = true;
+            m.span = ctor_span.or(self.def(def).span);
             self.def_mut(def).statics.insert("new".into(), m);
         }
         // A widget class's `adopt(frame, …)`: the class built on a frame
@@ -1816,6 +1901,10 @@ impl<'p> Env<'p> {
                 self.declared.global_type(joined.as_str())
             }
         };
+        if let (Some(d), Some(last)) = (def, path.last()) {
+            let span = self.def(d).span;
+            self.note_declared_at(last.span(), span);
+        }
         let Some(def) = def else {
             let joined: Vec<&str> = path.iter().map(|n| n.text()).collect();
             self.diagnostics.push(

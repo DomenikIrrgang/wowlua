@@ -75,6 +75,9 @@ pub struct FileInfo<'a> {
     pub global_types: FxHashMap<Box<str>, TypeId>,
     /// Imported bindings: local name → type.
     pub imports: FxHashMap<Box<str>, TypeId>,
+    /// What each imported binding refers to (go to definition; empty
+    /// unless the language server asks).
+    pub import_targets: FxHashMap<Box<str>, super::env::DefTarget>,
     /// The counts of imported functions (W2062), by local name.
     pub import_caps: FxHashMap<Box<str>, usize>,
     /// The file is a module (top-level `...` is not the addon arguments
@@ -203,7 +206,9 @@ pub struct Checker<'e, 'p> {
     /// Imports bound to the standard library's `@intrinsic` ids, and the
     /// variables of those imports (a shadowing local is not the import).
     intrinsics: crate::stdlib::Intrinsics,
-    import_vars: FxHashMap<Box<str>, VarId>,
+    pub(crate) import_vars: FxHashMap<Box<str>, VarId>,
+    /// `FileInfo::import_targets`.
+    pub(crate) import_targets: FxHashMap<Box<str>, super::env::DefTarget>,
     /// The handler type the decorators of the statement being checked give
     /// its function (`@event("X")`): (type, what it handles).
     next_handler: Option<(Func, String)>,
@@ -373,6 +378,7 @@ impl<'e, 'p> Checker<'e, 'p> {
             value_checks: FxHashMap::default(),
             intrinsics: info.intrinsics.clone(),
             import_vars: FxHashMap::default(),
+            import_targets: info.import_targets.clone(),
             next_handler: None,
             result_caps: FxHashMap::default(),
             method_caps: FxHashMap::default(),

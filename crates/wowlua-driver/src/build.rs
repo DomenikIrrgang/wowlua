@@ -712,6 +712,7 @@ fn build_inner(
         mode: manifest.manifest.check.mode,
         strict: sources::glob_set(&manifest.manifest.check.strict),
         lua: manifest.manifest.check.lua,
+        index: session.definitions.is_some(),
         globals: manifest
             .manifest
             .check
@@ -1128,6 +1129,7 @@ fn build_inner(
                         lua: m.check.lua,
                         globals: m.check.globals.iter().cloned().collect(),
                         stdlib: wowlua_sema::stdlib::StdlibConfig::default(),
+                        index: false,
                     },
                     main: l.main.as_ref().map(|r| l.src_rel(r)),
                     meta: std::sync::Arc::new(crate::meta::library_meta(&meta, m, &l.entry)),
@@ -1136,7 +1138,7 @@ fn build_inner(
             })
             .collect();
         units.extend(types_only.units(&meta));
-        let output = crate::compile::compile_flavor(
+        let mut output = crate::compile::compile_flavor(
             &session.db,
             &mut diagnostics,
             &files,
@@ -1175,6 +1177,9 @@ fn build_inner(
             (!request.keep_code && !request.write && !profile.bundle).then_some(&flavor_blocks),
             &request.jobs,
         );
+        if let Some(found) = session.definitions.as_mut() {
+            found.append(&mut output.definitions);
+        }
         builds.push(FlavorBuild {
             flavor: flavor.clone(),
             meta,

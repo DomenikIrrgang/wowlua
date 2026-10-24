@@ -67,6 +67,10 @@ pub fn compiler_version() -> semver::Version {
 pub struct Session {
     pub db: SourceDb,
     pub diagnostics: Diagnostics,
+    /// `Some`: builds also find what each name refers to (the language
+    /// server's go to definition, spec §16.2) and add (name, definition)
+    /// spans here, for every flavor.
+    pub definitions: Option<Vec<(wowlua_span::Span, wowlua_span::Span)>>,
 }
 
 impl Session {

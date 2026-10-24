@@ -21,6 +21,8 @@ const SETTLE: Duration = Duration::from_millis(350);
 /// An open document.
 struct Doc {
     path: PathBuf,
+    /// `path` canonical, as checks name files.
+    canonical: PathBuf,
     text: String,
 }
 
@@ -31,7 +33,27 @@ struct Server {
     dirty: BTreeMap<PathBuf, Instant>,
     /// The files each package's last check reported, to clear them.
     published: HashMap<PathBuf, BTreeSet<PathBuf>>,
+    /// What each file's names refer to, from its package's last check.
+    definitions: HashMap<PathBuf, Vec<check::Definition>>,
+    /// The files each package's last check gave definitions for.
+    defined: HashMap<PathBuf, Vec<PathBuf>>,
     shutdown: bool,
+}
+
+impl Server {
+    /// The URI to report `path` (canonical) under: the editor's own for a
+    /// document it has open.
+    fn uri_for(&self, path: &Path) -> String {
+        self.docs
+            .iter()
+            .find(|(_, d)| d.canonical == path)
+            .map(|(uri, _)| uri.clone())
+            .unwrap_or_else(|| text::uri_of(path))
+    }
+}
+
+fn canonical(path: &Path) -> PathBuf {
+    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 /// Runs the server on stdin and stdout until the client says `exit`; true
@@ -126,6 +148,7 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
                     "textDocumentSync": { "openClose": true, "change": 1, "save": { "includeText": false } },
                     "documentFormattingProvider": true,
                     "documentSymbolProvider": true,
+                    "definitionProvider": true,
                 },
                 "serverInfo": { "name": "wowlua", "version": env!("CARGO_PKG_VERSION") },
             }),
@@ -153,6 +176,7 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
                 server.docs.insert(
                     uri,
                     Doc {
+                        canonical: canonical(&path),
                         path,
                         text: text.to_string(),
                     },
@@ -182,6 +206,10 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
             let edits = server.docs.get(&uri).and_then(format).unwrap_or_default();
             reply(out, id, Json::Array(edits))?;
         }
+        "textDocument/definition" => {
+            let found = definition(server, &uri, &params["position"], out)?;
+            reply(out, id, found)?;
+        }
         "textDocument/documentSymbol" => {
             let symbols = server
                 .docs
@@ -207,19 +235,20 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
     Ok(false)
 }
 
-/// The package's diagnostics to the client, its files without any cleared.
+/// Checks the package: its diagnostics to the client (its files without
+/// any cleared), its definitions kept.
 fn publish(
     server: &mut Server,
     manifest: &Path,
     out: &mut impl std::io::Write,
 ) -> std::io::Result<()> {
-    let found = check::check(manifest);
-    let now: BTreeSet<PathBuf> = found.keys().cloned().collect();
-    for (path, items) in &found {
+    let checked = check::check(manifest);
+    let now: BTreeSet<PathBuf> = checked.diagnostics.keys().cloned().collect();
+    for (path, items) in &checked.diagnostics {
         notify(
             out,
             "textDocument/publishDiagnostics",
-            json!({ "uri": text::uri_of(path), "diagnostics": items }),
+            json!({ "uri": server.uri_for(path), "diagnostics": items }),
         )?;
     }
     if let Some(before) = server.published.get(manifest) {
@@ -227,12 +256,54 @@ fn publish(
             notify(
                 out,
                 "textDocument/publishDiagnostics",
-                json!({ "uri": text::uri_of(gone), "diagnostics": [] }),
+                json!({ "uri": server.uri_for(gone), "diagnostics": [] }),
             )?;
         }
     }
     server.published.insert(manifest.to_path_buf(), now);
+    for file in server.defined.remove(manifest).unwrap_or_default() {
+        server.definitions.remove(&file);
+    }
+    server.defined.insert(
+        manifest.to_path_buf(),
+        checked.definitions.keys().cloned().collect(),
+    );
+    server.definitions.extend(checked.definitions);
     Ok(())
+}
+
+/// Where the name at `position` of the document is defined: the
+/// protocol's locations, or `null`. A package with edits not checked yet is
+/// checked first, so the names are those of the text the editor shows.
+fn definition(
+    server: &mut Server,
+    uri: &str,
+    position: &Json,
+    out: &mut impl std::io::Write,
+) -> std::io::Result<Json> {
+    let Some(doc) = server.docs.get(uri) else {
+        return Ok(Json::Null);
+    };
+    let (key, offset) = (doc.canonical.clone(), text::offset(&doc.text, position));
+    if let Some(manifest) = manifest_of(&doc.path)
+        && server.dirty.remove(&manifest).is_some()
+    {
+        publish(server, &manifest, out)?;
+    }
+    let found: Vec<Json> = server
+        .definitions
+        .get(&key)
+        .into_iter()
+        .flatten()
+        // (the cursor just after a name is on it too)
+        .filter(|d| d.start as usize <= offset && offset <= d.end as usize)
+        .map(|d| d.target.clone())
+        .collect();
+    Ok(if found.is_empty() {
+        Json::Null
+    } else {
+        Json::Array(found)
+    })
 }
 
 /// The document formatted as its package's `fmt` settings say: one edit

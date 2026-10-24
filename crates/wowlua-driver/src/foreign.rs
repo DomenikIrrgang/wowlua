@@ -74,6 +74,7 @@ impl Foreign {
                         lua: m.check.lua,
                         globals,
                         stdlib: wowlua_sema::stdlib::StdlibConfig::default(),
+                        index: false,
                     },
                     main: p.main.as_ref().map(|r| p.src_rel(r)),
                     meta: Arc::new(crate::meta::library_meta(

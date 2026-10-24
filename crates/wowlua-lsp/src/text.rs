@@ -19,6 +19,35 @@ pub fn range(text: &str, start: usize, end: usize) -> Json {
     json!({ "start": position(text, start), "end": position(text, end) })
 }
 
+/// A text's line starts, for many positions in a large text: each
+/// position costs a search and its line's length, not the text's.
+pub struct Lines<'a> {
+    text: &'a str,
+    starts: Vec<usize>,
+}
+
+impl<'a> Lines<'a> {
+    pub fn new(text: &'a str) -> Lines<'a> {
+        let mut starts = vec![0];
+        starts.extend(text.match_indices('\n').map(|(i, _)| i + 1));
+        Lines { text, starts }
+    }
+
+    /// [`position`] of byte `offset`.
+    pub fn position(&self, offset: usize) -> Json {
+        let offset = floor_char(self.text, offset.min(self.text.len()));
+        let line = self.starts.partition_point(|&s| s <= offset) - 1;
+        let start = self.starts[line];
+        let character: usize = self.text[start..offset].chars().map(char::len_utf16).sum();
+        json!({ "line": line, "character": character })
+    }
+
+    /// [`range`] of bytes `start..end`.
+    pub fn range(&self, start: usize, end: usize) -> Json {
+        json!({ "start": self.position(start), "end": self.position(end) })
+    }
+}
+
 /// The byte offset of the protocol's `{ line, character }` in `text`.
 pub fn offset(text: &str, pos: &Json) -> usize {
     let line = pos["line"].as_u64().unwrap_or(0) as usize;
@@ -104,6 +133,15 @@ mod tests {
         let y = text.find('y').unwrap();
         assert_eq!(position(text, y), json!({ "line": 1, "character": 4 }));
         assert_eq!(offset(text, &json!({ "line": 1, "character": 4 })), y);
+    }
+
+    #[test]
+    fn lines_give_the_same_positions() {
+        let text = "a\nßx😀y\n\nlast";
+        let lines = Lines::new(text);
+        for i in 0..=text.len() + 2 {
+            assert_eq!(lines.position(i), position(text, i), "offset {i}");
+        }
     }
 
     #[test]

@@ -4,6 +4,7 @@
 
 pub mod body;
 pub mod declared;
+mod definition;
 pub mod env;
 pub mod expr;
 pub mod flavors;
@@ -42,7 +43,17 @@ pub fn check_package(
     extra_globals: &HashSet<String>,
     shared: Option<&flavors::SharedFlavors>,
 ) -> Vec<Diagnostic> {
-    check_package_full(files, analysis, settings, extra_globals, shared, None, &[]).diagnostics
+    check_package_full(
+        files,
+        analysis,
+        settings,
+        extra_globals,
+        shared,
+        None,
+        &[],
+        false,
+    )
+    .diagnostics
 }
 
 /// What checking a package produces.
@@ -58,11 +69,17 @@ pub struct CheckOutput {
     /// Name spans of the definitions of renamable methods (see
     /// `env::Member::renamable`) and of the accesses that resolve to them.
     pub private_methods: HashSet<wowlua_span::Span>,
+    /// With `indexed`: each name the check met (its span) and the span of
+    /// what it refers to, for the language server's go to definition
+    /// (spec §16.2).
+    pub definitions: Vec<(wowlua_span::Span, wowlua_span::Span)>,
 }
 
 /// Like [`check_package`], with the type information lowering uses. With
 /// `reuse`, plain Lua files take their checks from earlier flavors of the
 /// build where they check the same, and store theirs for later ones (#6).
+/// With `indexed`, it also finds what each name refers to (`definitions`).
+#[allow(clippy::too_many_arguments)]
 pub fn check_package_full(
     files: &[FileInput],
     analysis: &Analysis,
@@ -71,6 +88,7 @@ pub fn check_package_full(
     shared: Option<&flavors::SharedFlavors>,
     mut reuse: Option<reuse::Reuse<'_>>,
     global_defs: &[Option<Vec<String>>],
+    indexed: bool,
 ) -> CheckOutput {
     let mut type_names = HashMap::new();
     let mut value_checks = HashMap::new();
@@ -159,7 +177,7 @@ pub fn check_package_full(
             globals: Default::default(),
         });
     }
-    let mut env = env::Env::build(&sources);
+    let mut env = env::Env::build_indexed(&sources, indexed);
     let mut diagnostics = std::mem::take(&mut env.diagnostics);
     let registry = files
         .iter()
@@ -200,6 +218,7 @@ pub fn check_package_full(
                                 readonly: true,
                                 visibility: env::Visibility::Public,
                                 renamable: false,
+                                span: None,
                             },
                         );
                     }
@@ -487,11 +506,17 @@ pub fn check_package_full(
         .filter(|(_, owner)| !reachable.contains(owner))
         .map(|(span, _)| span)
         .collect();
+    let definitions = env
+        .definitions
+        .take()
+        .map(|found| definition::resolve(files, analysis, found))
+        .unwrap_or_default();
     CheckOutput {
         diagnostics,
         type_names,
         value_checks,
         private_methods,
+        definitions,
     }
 }
 
@@ -796,6 +821,15 @@ fn check_file_in(
         export_caps: FxHashMap::default(),
     };
     let imports = import_types(env, ctx, i, &mut out.diagnostics);
+    let import_targets = if env.definitions.is_some() {
+        let (bindings, written) = definition::import_targets(ctx.files, ctx.analysis, i);
+        for (at, target) in written {
+            env.note_definition(at, target);
+        }
+        bindings
+    } else {
+        FxHashMap::default()
+    };
     let import_caps = import_caps(ctx, i);
     let info = FileInfo {
         intrinsics: crate::stdlib::Intrinsics::of(ctx.analysis, i, parse),
@@ -814,6 +848,7 @@ fn check_file_in(
             FxHashMap::default()
         },
         imports,
+        import_targets,
         import_caps,
         is_module: ctx.analysis.modules[i]
             .as_ref()
@@ -1610,6 +1645,7 @@ mod tests {
                     store: k == 0,
                 }),
                 &[],
+                false,
             );
             if k == 0 {
                 stored = cache.stored() == 1;
