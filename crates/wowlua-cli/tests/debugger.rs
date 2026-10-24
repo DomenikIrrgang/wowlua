@@ -172,6 +172,7 @@ fn stops_in_a_script_handler_inspects_and_steps() {
         frames[0]["source"]["path"]
             .as_str()
             .unwrap()
+            .replace('\\', "/")
             .ends_with("src/counter.lua")
     );
     assert!(
@@ -342,8 +343,14 @@ fn names_its_flavor_opens_other_addons_files_and_ends_at_a_disconnect() {
         .as_str()
         .unwrap_or_default()
         .to_string();
-    assert!(
-        Path::new(&path) == root.join("addons/Other/other.lua"),
+    // (Windows: the root canonical, `\\?\C:\…`; the path as editors write it)
+    let plain = |p: &Path| {
+        let p = p.to_string_lossy().replace('\\', "/");
+        p.strip_prefix("//?/").map(str::to_string).unwrap_or(p)
+    };
+    assert_eq!(
+        plain(Path::new(&path)),
+        plain(&root.join("addons/Other/other.lua")),
         "{stack:#}"
     );
     // Dimmed, the package's handler below it: the editor shows that.
@@ -358,7 +365,7 @@ fn names_its_flavor_opens_other_addons_files_and_ends_at_a_disconnect() {
             .iter()
             .any(|f| f["source"]["path"]
                 .as_str()
-                .is_some_and(|p| p.ends_with("src/counter.lua"))),
+                .is_some_and(|p| p.replace('\\', "/").ends_with("src/counter.lua"))),
         "{stack:#}"
     );
     c.request("continue", json!({ "threadId": 1 }));

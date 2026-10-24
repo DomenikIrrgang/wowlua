@@ -104,7 +104,17 @@ impl Writer {
     }
 
     fn abs(&self, rel: &str) -> String {
-        self.root.join(rel).to_string_lossy().into_owned()
+        native(&self.root.join(rel).to_string_lossy())
+    }
+}
+
+/// A path with the platform's separators (`addons/Other\\x.lua` on Windows
+/// is `addons\\Other\\x.lua`), as editors compare them.
+fn native(path: &str) -> String {
+    if cfg!(windows) {
+        path.replace('/', "\\")
+    } else {
+        path.to_string()
     }
 }
 
@@ -202,7 +212,7 @@ fn response_body(w: &Writer, command: &str, r: Response, source: Option<&str>) -
                             j["source"] = match &f.file {
                                 Some(path) => json!({
                                     "name": path.rsplit(['/', '\\']).next().unwrap_or(c),
-                                    "path": path,
+                                    "path": native(path),
                                 }),
                                 None => json!({ "name": c }),
                             };
