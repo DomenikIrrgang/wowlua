@@ -25,6 +25,8 @@ const RESUMING = new Set(["continue", "next", "stepIn", "stepOut", "stepBack", "
 function activate(context) {
     const ui = new UiPanel(context);
     const frames = new FramesView(ui);
+    // The UI panel's frame picker asks for the frames shown now.
+    ui.requestFrames = () => frames.refresh();
 
     const factory = {
         createDebugAdapterDescriptor(session) {

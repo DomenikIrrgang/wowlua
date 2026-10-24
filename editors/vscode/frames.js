@@ -40,7 +40,8 @@ class FramesView {
                     const tree = await this.session.customRequest("wowlua/frameTree", { hidden: false });
                     this.roots = Array.isArray(tree) ? tree : tree ? [tree] : [];
                 } catch (e) {
-                    this.roots = [];
+                    // Not answered (the session still starting): the last
+                    // tree stays.
                 }
                 this.changed.fire();
                 this.ui.setFrames(this.roots);

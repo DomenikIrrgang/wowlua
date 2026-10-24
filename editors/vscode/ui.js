@@ -186,6 +186,11 @@ class UiPanel {
                 }
                 return;
             }
+            case "framesWanted":
+                if (this.requestFrames) {
+                    await this.requestFrames();
+                }
+                return;
             case "metrics":
                 this.metrics = { width: m.width, height: m.height, zoom: m.zoom };
                 return;
@@ -371,6 +376,10 @@ function html() {
   document.getElementById("fit").onclick = () => { zoom = null; layout(); stage.scrollLeft = 0; stage.scrollTop = 0; };
   document.getElementById("one").onclick = () => zoomAt(1, stage.clientWidth / 2, stage.clientHeight / 2);
   pick.addEventListener("change", () => { if (pick.value) vscode.postMessage({ type: "pick", label: pick.value }); });
+  // Opening the picker asks for the frames shown now (windows open and
+  // close while the game runs).
+  pick.addEventListener("focus", () => vscode.postMessage({ type: "framesWanted" }));
+  pick.addEventListener("mousedown", () => vscode.postMessage({ type: "framesWanted" }));
   pick.addEventListener("keydown", (e) => { if (e.key === "Enter" && pick.value) vscode.postMessage({ type: "pick", label: pick.value }); });
 
   // Ctrl or Cmd with the wheel, and a trackpad pinch (its wheel events

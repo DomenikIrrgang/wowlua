@@ -98,6 +98,10 @@ async function uiScenario(widgets) {
             return button;
         }, 30000, "the counter button");
         log("button:", JSON.stringify(button));
+        // Opening the frame picker while the game runs (no stop yet) loads
+        // the frames shown now, the demo's window among them.
+        await api.ui.handleMessage({ type: "framesWanted" });
+        assert(api.ui.frames.some((f) => f.label === "WidgetDemoWindow"), "the picker has no WidgetDemoWindow before a stop");
         const before = stops.length;
         // The click answers once the breakpoint it hits is continued.
         const clicked = api.ui.handleMessage({ type: "click", x: button.rect.x + button.rect.width / 2, y: button.rect.y + button.rect.height / 2, button: "LeftButton" });
