@@ -105,6 +105,11 @@ function activate(context) {
                 ui.outline(node.rect);
             }
         }),
+        vscode.commands.registerCommand("wowlua.zoomToFrame", (node) => {
+            if (node && node.rect) {
+                ui.zoomTo(node.rect);
+            }
+        }),
     );
     // For the extension's tests.
     return { ui, frames };

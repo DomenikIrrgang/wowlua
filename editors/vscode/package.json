@@ -167,6 +167,12 @@
         "command": "wowlua.outlineFrame",
         "title": "Outline in the UI",
         "category": "wowlua"
+      },
+      {
+        "command": "wowlua.zoomToFrame",
+        "title": "Zoom to Frame in the UI",
+        "category": "wowlua",
+        "icon": "$(zoom-in)"
       }
     ],
     "views": {
@@ -201,6 +207,17 @@
         {
           "command": "wowlua.outlineFrame",
           "when": "false"
+        },
+        {
+          "command": "wowlua.zoomToFrame",
+          "when": "false"
+        }
+      ],
+      "view/item/context": [
+        {
+          "command": "wowlua.zoomToFrame",
+          "when": "view == wowlua.frames && viewItem == frame",
+          "group": "inline"
         }
       ]
     }

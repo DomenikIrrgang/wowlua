@@ -43,6 +43,7 @@ class FramesView {
                     this.roots = [];
                 }
                 this.changed.fire();
+                this.ui.setFrames(this.roots);
             } while (this.again && this.session);
             this.loading = undefined;
         })();
@@ -76,6 +77,7 @@ class FramesView {
         item.iconPath = new vscode.ThemeIcon(node.visible ? "symbol-class" : "eye-closed");
         if (r) {
             item.command = { command: "wowlua.outlineFrame", title: "Outline in the UI", arguments: [node] };
+            item.contextValue = "frame";
         }
         return item;
     }

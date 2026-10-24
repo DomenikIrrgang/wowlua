@@ -489,8 +489,14 @@ The VS Code extension shows the game with them (decision T359): the
 **UI panel** (beside the editor; opened as a session starts, or with
 *wowlua: Show UI*) draws `wowlua/screenshot` at every stop and step, and
 while the game runs every `wowlua.ui.refreshInterval` milliseconds (1000;
-0 only at stops and on Refresh); it fits the panel or shows the screen's
-own pixels. A click in it is `wowlua/input`'s click at that pixel (the
+0 only at stops and on Refresh). It zooms: the wheel with Ctrl or Cmd (a
+trackpad's pinch) at the pointer, its buttons, *Fit* and *1:1* (the
+screen's own pixels), panned with the scrollbars, the wheel, or a drag
+with the middle button or Space held; *Zoom to frame…* picks a visible
+named frame and zooms so it fills the panel, outlined (the Frames view's
+zoom button too). Shown larger than its pixels, the screen is drawn at 2
+(above 1.25 device pixels per screen pixel) or 3 times (above 2.5)
+`wowlua/screenshot`'s scale, so it stays sharp. A click in it is `wowlua/input`'s click at that pixel (the
 right button for a right-click), so the frame under it gets the click and
 its handlers' breakpoints stop; while the session is paused, clicks wait
 for it to run. The **wowlua Frames** view in the debug sidebar is

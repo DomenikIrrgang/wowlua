@@ -33,12 +33,15 @@ game's screen as the client draws it (with your installation's textures
 and fonts). It redraws at every stop and step, and once a second while the
 game runs (`wowlua.ui.refreshInterval`, `0` for stops only). Click in it to
 click in the game (right-click for the right button): the frame under the
-pointer gets the click, so its breakpoints stop. *wowlua: Show UI* opens it;
+pointer gets the click, so its breakpoints stop. Zoom with Ctrl or Cmd and
+the wheel (or a pinch), or the buttons; pan with the scrollbars, the wheel,
+or by dragging with the middle button or Space held. *Zoom to frame…*
+zooms to a frame by its name; zoomed in, the screen is drawn sharper. *wowlua: Show UI* opens it;
 `wowlua.ui.autoOpen` opens it as a session starts.
 
 The **wowlua Frames** view in the debug sidebar lists the frames on
 screen with their type, size and text; select one to outline it in the
-panel.
+panel, or its zoom button to zoom to it.
 
 ## Trying it from the repository
 

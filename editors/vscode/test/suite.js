@@ -116,6 +116,23 @@ async function uiScenario(widgets) {
             fs.writeFileSync(process.env.WOWLUA_SHOT, Buffer.from(shot.png, "base64"));
             log("captured", process.env.WOWLUA_SHOT, JSON.stringify(api.ui.highlight));
         }
+        // Zoom: the picker lists the visible named frames; picking one zooms
+        // to it, outlined; the Frames view's zoom does the same.
+        assert(api.ui.state().frames > 0, "the picker has no frames");
+        const win = api.ui.frames.find((f) => f.label === "WidgetDemoWindow");
+        assert(win, "WidgetDemoWindow not in the picker");
+        await api.ui.handleMessage({ type: "pick", label: "WidgetDemoWindow" });
+        assert(api.ui.highlight === win.rect, "picking did not outline the window");
+        await vscode.commands.executeCommand("wowlua.zoomToFrame", node);
+        assert(api.ui.highlight === node.rect, "the view's zoom did not outline the button");
+        // Zoomed in, the drawing is sharper: twice the pixels, the screen's
+        // size the same.
+        const before2 = api.ui.state().shots;
+        await api.ui.handleMessage({ type: "scale", scale: 2 });
+        await waitFor(() => api.ui.state().shots > before2, 20000, "a 2x drawing");
+        const last = api.ui.state().last;
+        assert(last.scale === 2 && last.width === 3840 && last.height === 2160, "2x drawing " + JSON.stringify(last));
+        log("zoom:", JSON.stringify(api.ui.state()));
         await vscode.commands.executeCommand("workbench.action.debug.continue");
         await clicked;
         let text;
