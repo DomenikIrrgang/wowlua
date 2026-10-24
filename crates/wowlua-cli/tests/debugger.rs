@@ -346,6 +346,21 @@ fn names_its_flavor_opens_other_addons_files_and_ends_at_a_disconnect() {
         Path::new(&path) == root.join("addons/Other/other.lua"),
         "{stack:#}"
     );
+    // Dimmed, the package's handler below it: the editor shows that.
+    assert_eq!(
+        stack["stackFrames"][0]["presentationHint"], "subtle",
+        "{stack:#}"
+    );
+    assert!(
+        stack["stackFrames"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|f| f["source"]["path"]
+                .as_str()
+                .is_some_and(|p| p.ends_with("src/counter.lua"))),
+        "{stack:#}"
+    );
     c.request("continue", json!({ "threadId": 1 }));
 
     // The second click's stop, then a disconnect: no stop after it.

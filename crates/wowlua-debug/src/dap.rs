@@ -157,6 +157,10 @@ fn response_body(w: &Writer, command: &str, r: Response, source: Option<&str>) -
             "breakpoints": breakpoints.iter().map(|b| breakpoint_json(w, b, source)).collect::<Vec<_>>(),
         }),
         Response::StackTrace { frames } => {
+            // Code not the package's is shown dimmed, and the editor skips
+            // it for the package's frame below; with none below, the editor
+            // shows it (a stop in Blizzard's UI as it loads).
+            let below = frames.iter().any(|f| f.source.is_some());
             let list: Vec<Json> = frames
                 .iter()
                 .map(|f| {
@@ -176,11 +180,13 @@ fn response_body(w: &Writer, command: &str, r: Response, source: Option<&str>) -
                                 Some(path) => json!({
                                     "name": path.rsplit(['/', '\\']).next().unwrap_or(c),
                                     "path": path,
-                                    "presentationHint": "deemphasize",
                                 }),
-                                None => json!({ "name": c, "presentationHint": "deemphasize" }),
+                                None => json!({ "name": c }),
                             };
-                            j["presentationHint"] = json!("subtle");
+                            if below {
+                                j["source"]["presentationHint"] = json!("deemphasize");
+                                j["presentationHint"] = json!("subtle");
+                            }
                         }
                         (None, None) => j["presentationHint"] = json!("label"),
                     }

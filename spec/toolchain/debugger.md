@@ -475,7 +475,10 @@ session starts, and the VS Code extension asks which of the package's
 flavors to debug when the configuration names none and the package has
 several (decision T358). A frame of code that is not the package's carries
 its file when there is one on disk (Blizzard's UI in the local cache, a
-`test.addons` folder's file), so the editor opens it at the line.
+`test.addons` folder's file), so the editor opens it at the line; it is
+shown dimmed when one of the package's frames lies below it (the editor
+then shows that one), else not (a stop in Blizzard's UI as it loads shows
+there). Once a session ends, nothing more loads.
 Custom requests: `wowlua/screenshot` (PNG as base64), `wowlua/frameTree`,
 `wowlua/findFrames`, `wowlua/input` (click, hover, drag, type, key),
 `wowlua/advance`, `wowlua/fireEvent`, `wowlua/profile` (`start`, `stop`:

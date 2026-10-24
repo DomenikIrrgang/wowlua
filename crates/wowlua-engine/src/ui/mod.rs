@@ -935,6 +935,10 @@ pub fn load_user_file(vm: &mut Vm, dir: &Path, rel: &str, name: &str, table: Val
 
 /// Loads one UI file (`.lua` or `.xml`) of an addon.
 fn load_file(vm: &mut Vm, interface_root: &Path, path: &Path, addon: &str, addon_table: Value) {
+    // A session ended (a debugger's terminate): nothing more loads.
+    if vm.aborted() {
+        return;
+    }
     let shown = path
         .strip_prefix(interface_root)
         .unwrap_or(path)

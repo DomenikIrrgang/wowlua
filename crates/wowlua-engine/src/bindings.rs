@@ -147,6 +147,10 @@ pub fn load_bindings_xml(
     path: &std::path::Path,
     addon: Option<&str>,
 ) -> Result<(), String> {
+    // A session ended (a debugger's terminate): nothing more loads.
+    if vm.aborted() {
+        return Ok(());
+    }
     let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let root = crate::ui::xml::parse(&text).map_err(|e| format!("Bindings.xml: {e}"))?;
     let mut list = Vec::new();
