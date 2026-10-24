@@ -253,6 +253,7 @@ pub fn run(
     let shared = Shared::new(link, wowlua_test::chunk_mapper(suite), host_clock());
     {
         let mut s = shared.borrow_mut();
+        s.files = Some(wowlua_test::chunk_file_mapper(suite));
         s.interrupt = interrupt;
         s.screenshot = screenshot;
         s.debug_blizzard_ui = opts.debug_blizzard_ui;
@@ -268,6 +269,19 @@ pub fn run(
     if opts.stop_on_entry {
         shared.borrow_mut().stop_on_entry();
     }
+    // Which flavor runs: a package has several, the session one.
+    let what = match &opts.target {
+        Target::Test { file, .. } => file.clone(),
+        Target::Addon => "the addon".into(),
+    };
+    send_output(
+        &shared,
+        "console",
+        format!(
+            "Debugging {what} on {} (the launch configuration's \"flavor\" chooses)\n",
+            suite.flavor
+        ),
+    );
     SESSION.with(|s| *s.borrow_mut() = Some(shared.clone()));
     let tee = shared.clone();
     wowlua_test::set_tee(Some(Box::new(move |o: Output| match o {

@@ -94,6 +94,11 @@ the pause, layout included.
 | Exception | `uncaught`, `all` | when an error reaches the error handler, or any error |
 | Taint | `taint`, `blocked` | where execution becomes tainted, or a protected action is blocked |
 
+An error reaches the error handler when the nearest handler that takes it
+is the client's: an event or script handler, a timer, anything the engine
+ran, unless a `pcall` or `xpcall` inside it catches the error first; a
+test's own `xpcall` around the test does not count (decision T358).
+
 Line breakpoints are set in `.wowlua` and `.lua` sources: test and dev
 builds keep every statement on its source line
 ([Code generation §14.4](codegen.md)), so a source line is the chunk's line.
@@ -463,7 +468,14 @@ breakpoints for functions, API calls, events, scripts and timers;
 exception breakpoints for `uncaught`, `all`, `taint` and `blocked`),
 stepping, one thread (the client runs one; a coroutine's stack goes on
 with the code that resumed it), stack traces, scopes, variables,
-`setVariable`, `evaluate` (watch, hover, repl), `pause` and `terminate`.
+`setVariable`, `evaluate` (watch, hover, repl), `pause` and `terminate`
+(during a stop it ends the session at once). A session runs one flavor,
+the package's first unless `flavor` names one; the console names it as the
+session starts, and the VS Code extension asks which of the package's
+flavors to debug when the configuration names none and the package has
+several (decision T358). A frame of code that is not the package's carries
+its file when there is one on disk (Blizzard's UI in the local cache, a
+`test.addons` folder's file), so the editor opens it at the line.
 Custom requests: `wowlua/screenshot` (PNG as base64), `wowlua/frameTree`,
 `wowlua/findFrames`, `wowlua/input` (click, hover, drag, type, key),
 `wowlua/advance`, `wowlua/fireEvent`, `wowlua/profile` (`start`, `stop`:

@@ -57,6 +57,10 @@ pub struct StackFrame {
     /// The chunk name when the frame's code is not the package's.
     #[serde(skip_serializing_if = "Option::is_none")]
     pub chunk: Option<String>,
+    /// The file on disk of such code, when there is one (Blizzard's UI
+    /// in the local cache, a `test.addons` folder's), absolute.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub file: Option<String>,
     pub line: u32,
     /// The function's taint: `secure`, or the addon.
     pub taint: String,

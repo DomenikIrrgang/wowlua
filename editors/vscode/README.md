@@ -18,7 +18,11 @@ A launch configuration (`.vscode/launch.json`):
 }
 ```
 
-or `"addon": true` to run the addon itself, `"flavor": "camelot"`,
+A session runs one flavor: `"flavor": "camelot"` chooses it; without one,
+the extension takes the package's only flavor or asks which of its flavors
+to debug, and the Debug Console names the flavor that runs.
+
+Also `"addon": true` to run the addon itself,
 `"clock": "manual"`, `"stopOnEntry": true`, `"debugBlizzardUI": true`.
 See [Debugging in the emulator](../../docs/debugging-in-the-emulator.md).
 

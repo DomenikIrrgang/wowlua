@@ -473,6 +473,32 @@ pub fn chunk_mapper(suite: &Suite) -> ChunkMapper {
     })
 }
 
+/// Chunk name → the file on disk of code that is not the package's: a
+/// `test.addons` folder's (`Interface/AddOns/<Name>/…`), else Blizzard's
+/// UI in the local cache; absolute (a debugger's frames open it).
+pub fn chunk_file_mapper(suite: &Suite) -> ChunkMapper {
+    let addons = suite.addons.clone();
+    let interface = suite.blizzard_ui.as_ref().map(|u| u.interface.clone());
+    Box::new(move |chunk: &str| {
+        let chunk = chunk.strip_prefix('@').unwrap_or(chunk).replace('\\', "/");
+        let at = chunk.find("Interface/AddOns/")?;
+        let rest = &chunk[at + "Interface/AddOns/".len()..];
+        let (name, file) = rest.split_once('/')?;
+        let found = addons
+            .iter()
+            .find(|d| {
+                d.file_name()
+                    .is_some_and(|n| n.to_string_lossy().eq_ignore_ascii_case(name))
+            })
+            .and_then(|d| wowlua_engine::bindings::find_addon_file(d, file, &[]))
+            .or_else(|| {
+                let dir = interface.as_ref()?.join("AddOns").join(name);
+                wowlua_engine::bindings::find_addon_file(&dir, file, &[])
+            })?;
+        Some(found.to_string_lossy().into_owned())
+    })
+}
+
 /// What a test run sends on as it happens: printed lines and errors
 /// that reached the error handler (a debug session's console).
 pub use natives::{Output, set_tee};

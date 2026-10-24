@@ -97,6 +97,9 @@ pub struct Shared {
     /// Chunk name → source path (relative to the package root), for the
     /// package's own files.
     pub mapper: Mapper,
+    /// Chunk name → a file on disk, for code that is not the package's
+    /// (Blizzard's UI, other addons): editors open it at its frames.
+    pub files: Option<Mapper>,
     pub clock: Clock,
     pub screenshot: Option<Screenshotter>,
     /// The flag the front-end's thread sets with each request it sends,
@@ -135,6 +138,7 @@ impl Shared {
         Rc::new(RefCell::new(Shared {
             link,
             mapper,
+            files: None,
             clock,
             screenshot: None,
             interrupt: Arc::new(AtomicBool::new(false)),
@@ -444,12 +448,14 @@ impl Controller {
                 }
                 continue;
             };
-            match self.handle(vm, id, req, Some(&mut paused)) {
-                Flow::Stay => {}
-                Flow::Resume => break,
-            }
+            let flow = self.handle(vm, id, req, Some(&mut paused));
+            // A terminate resumes only to end: the VM stops at once, not
+            // at the next breakpoint.
             if self.shared.borrow().terminate {
                 vm.abort();
+                break;
+            }
+            if matches!(flow, Flow::Resume) {
                 break;
             }
         }
@@ -782,6 +788,7 @@ impl Controller {
             kind: "dispatch".into(),
             source: None,
             chunk: None,
+            file: None,
             line: 0,
             taint: "secure".into(),
         };
@@ -791,6 +798,7 @@ impl Controller {
             kind: "native".into(),
             source: None,
             chunk: None,
+            file: None,
             line: 0,
             taint: "secure".into(),
         };
@@ -807,6 +815,14 @@ impl Controller {
             let chunk = source.is_none().then(|| {
                 String::from_utf8_lossy(&wowlua_vm::vm::chunkid(&f.proto.source)).into_owned()
             });
+            let file = if source.is_none() {
+                let s = self.shared.borrow();
+                s.files
+                    .as_ref()
+                    .and_then(|m| m(&String::from_utf8_lossy(&f.proto.source)))
+            } else {
+                None
+            };
             let name = match vm.frame_name(f.index) {
                 Some((_, n)) => n,
                 None if f.proto.line_defined == 0 => "main chunk".into(),
@@ -828,6 +844,7 @@ impl Controller {
                     kind: "lua".into(),
                     source,
                     chunk,
+                    file,
                     line,
                     taint,
                 },
@@ -851,6 +868,7 @@ impl Controller {
             kind: "dispatch".into(),
             source: None,
             chunk: None,
+            file: None,
             line: 0,
             taint: "secure".into(),
         }]

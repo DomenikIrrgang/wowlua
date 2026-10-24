@@ -169,7 +169,17 @@ fn response_body(w: &Writer, command: &str, r: Response, source: Option<&str>) -
                     match (&f.source, &f.chunk) {
                         (Some(s), _) => j["source"] = json!({ "path": w.abs(s), "name": s }),
                         (None, Some(c)) => {
-                            j["source"] = json!({ "name": c, "presentationHint": "deemphasize" });
+                            // Code not the package's: its file when it has
+                            // one on disk (Blizzard's UI, other addons), so
+                            // the editor opens it at the line.
+                            j["source"] = match &f.file {
+                                Some(path) => json!({
+                                    "name": path.rsplit(['/', '\\']).next().unwrap_or(c),
+                                    "path": path,
+                                    "presentationHint": "deemphasize",
+                                }),
+                                None => json!({ "name": c, "presentationHint": "deemphasize" }),
+                            };
                             j["presentationHint"] = json!("subtle");
                         }
                         (None, None) => j["presentationHint"] = json!("label"),

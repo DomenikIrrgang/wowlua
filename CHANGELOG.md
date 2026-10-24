@@ -47,6 +47,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- **Debugger**: VS Code asks which flavor to debug when your launch configuration names none and the package has several, and the Debug Console says which flavor runs. Errors in event and script handlers stop the debugger in tests too (they reach the error handler), a stop in Blizzard's UI code or another addon's opens that file at the line, and stopping the debugger ends the session at once.
 - `C_SkillInfo.SetSelectedSkill` selects the skill line, so the character window's skills tab shows the first skill's details when it opens, as in game.
 - Addons that load their own modules on demand through `GetAddOnInfo`'s reason (AtlasLoot) load them: it is `"DEMAND_LOADED"` for a load-on-demand addon that isn't loaded yet.
 - `GetFileIDFromPath` answers nil for a file that doesn't exist, such as one of an addon you haven't installed, so AtlasLoot no longer draws the Atlas addon's maps without it. With your WoW installation, a game file answers its own ID.

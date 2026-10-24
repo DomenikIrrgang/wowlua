@@ -261,6 +261,105 @@ fn stops_in_a_script_handler_inspects_and_steps() {
     c.event("terminated");
 }
 
+/// A session names its flavor; an error in another addon's file
+/// (`test.addons`) stops where it reached the error handler, its frame
+/// carrying that file's path, so the editor opens it; a disconnect during
+/// a stop ends the session there, not at the next breakpoint (decision
+/// T358).
+#[test]
+fn names_its_flavor_opens_other_addons_files_and_ends_at_a_disconnect() {
+    let dir = project();
+    let root = dir.path().canonicalize().unwrap();
+    // The first click calls into the other addon, which fails; a second
+    // click would stop again after a disconnect that runs on.
+    let counter = COUNTER.replace(
+        "    print(\"clicked\", count)",
+        "    print(\"clicked\", count)\n    if count == 1 then OtherBreak() end",
+    );
+    fs::write(root.join("src/counter.lua"), counter).unwrap();
+    let twice = TEST.replace(
+        "mock.click(_G.DemoButton :: any)",
+        "mock.click(_G.DemoButton :: any)\n    mock.click(_G.DemoButton :: any)",
+    );
+    fs::write(
+        root.join("tests/counter.test.wowlua"),
+        twice.replace("toBe(1)", "toBe(2)"),
+    )
+    .unwrap();
+    fs::create_dir_all(root.join("addons/Other")).unwrap();
+    fs::write(
+        root.join("addons/Other/Other.toc"),
+        "## Title: Other\nother.lua\n",
+    )
+    .unwrap();
+    fs::write(
+        root.join("addons/Other/other.lua"),
+        "function OtherBreak()\n    local x = nil\n    return x.field\nend\n",
+    )
+    .unwrap();
+    let manifest = fs::read_to_string(root.join("wowlua.json")).unwrap();
+    fs::write(
+        root.join("wowlua.json"),
+        manifest.replacen("{", r#"{ "test": { "addons": ["addons/Other"] },"#, 1),
+    )
+    .unwrap();
+
+    let mut c = Client::start(&root);
+    c.request("initialize", json!({ "adapterID": "wowlua" }));
+    let test = root.join("tests/counter.test.wowlua");
+    c.request(
+        "launch",
+        json!({ "test": test.to_string_lossy(), "flavor": "standard" }),
+    );
+    c.event("initialized");
+    let src = root.join("src/counter.lua");
+    c.request(
+        "setBreakpoints",
+        json!({ "source": { "path": src.to_string_lossy() }, "breakpoints": [{ "line": 7 }] }),
+    );
+    c.request(
+        "setExceptionBreakpoints",
+        json!({ "filters": ["uncaught"] }),
+    );
+    c.request("configurationDone", json!({}));
+
+    let named = c.wait("the flavor's line", |m| {
+        m["event"] == "output"
+            && m["body"]["output"]
+                .as_str()
+                .is_some_and(|o| o.contains("on standard"))
+    });
+    assert_eq!(named["body"]["category"], "console");
+
+    // The first click: the breakpoint, then the other addon's error in the
+    // handler (it reaches the error handler: a stop), in its own file.
+    assert_eq!(c.event("stopped")["reason"], "breakpoint");
+    c.request("continue", json!({ "threadId": 1 }));
+    let stopped = c.event("stopped");
+    assert_eq!(stopped["reason"], "exception", "{stopped:#}");
+    let stack = c.request("stackTrace", json!({ "threadId": 1 }));
+    let path = stack["stackFrames"][0]["source"]["path"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
+    assert!(
+        Path::new(&path) == root.join("addons/Other/other.lua"),
+        "{stack:#}"
+    );
+    c.request("continue", json!({ "threadId": 1 }));
+
+    // The second click's stop, then a disconnect: no stop after it.
+    let stopped = c.event("stopped");
+    assert_eq!(stopped["reason"], "breakpoint", "{stopped:#}");
+    c.request("disconnect", json!({ "terminateDebuggee": true }));
+    c.event("terminated");
+    assert!(
+        !c.seen.iter().any(|m| m["event"] == "stopped"),
+        "stopped again after the disconnect: {:#?}",
+        c.seen
+    );
+}
+
 #[test]
 fn test_profile_out_writes_a_speedscope_file_per_test_file() {
     let dir = project();

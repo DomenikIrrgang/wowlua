@@ -18,6 +18,7 @@ use crate::error::LuaError;
 use crate::function::Function;
 use crate::heap::{FuncRef, ThreadRef};
 use crate::proto::Proto;
+use crate::value::Value;
 use crate::vm::Vm;
 
 /// Line events in the running frame.
@@ -493,7 +494,15 @@ impl Vm {
             return;
         }
         e.seen = true;
-        let caught = self.protected > 0;
+        // Where the error goes: the nearest handler. The client's error
+        // handler (a handler or script the engine ran: errors reach it) is
+        // not catching; an `xpcall`'s handler is; without a handler, a
+        // `pcall` running is (decision T358).
+        let caught = match (self.errfunc, self.errfunc_proxy) {
+            (Some(Value::Func(f)), Some(Value::Func(p))) if f == p => false,
+            (Some(_), _) => true,
+            (None, _) => self.protected > 0,
+        };
         let err = e.clone();
         self.with_debugger(|d, vm| d.error(vm, &err, caught));
     }
