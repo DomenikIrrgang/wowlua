@@ -62,6 +62,11 @@ each(profile.auras, function(_, aura)
     player:applyAura(aura)
 end)
 each(profile.units, function(_, data)
+    -- Another player of the world, not in the group: online, and accepting
+    -- the player's invitations, as a friend would (decision T363).
+    if data.player and not data.group and data.acceptsInvites == nil then
+        data.acceptsInvites = true
+    end
     local unit = mock.spawnUnit(data)
     if data.target then
         player:target(unit)

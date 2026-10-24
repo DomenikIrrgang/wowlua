@@ -511,6 +511,11 @@ alone unless an item names an addon.
     2. `/ignore Nobody Anyone`, `/invite Nobody Anyone`, `/ginvite Nobody Anyone`,
        `/gpromote Nobody Anyone`, `/gquit` (as guild master), `/who Nobody`
     3. `/dance`, `/friend Nobody Anyone`, `/1 hello`, `/join Trade`
+20c. **Inviting players** (decision T363), with a second character of yours
+    online: `/invite` it and note the lines and how long until it shows in
+    the party after accepting; `/promote` and `/kick` it; `/who` with three
+    or fewer results and with more (the chat lines); `/ginvite` (the lines
+    after it accepts).
 20. **Screenshots to compare with wowlua's** (in `~/Desktop/wowlua-*`):
     1. Settings, Accessibility: the "Colors" category and the "Use UI
        Scale" check box (Graphics).

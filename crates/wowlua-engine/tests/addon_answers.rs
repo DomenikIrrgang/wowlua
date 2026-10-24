@@ -318,3 +318,83 @@ fn plural_escapes_follow_the_number_before() {
         "0 players total"
     );
 }
+
+/// Other players of the world who accept invitations join a moment after
+/// the player's `/invite` (decision T363): a party of five, then full; a
+/// raid after converting, its second group filling; the leader removes and
+/// promotes; a who counts the online players; a guild invitation joins the
+/// roster. One who does not accept stays out.
+#[test]
+fn online_players_accept_invitations() {
+    let mut vm = vm();
+    let step = |vm: &mut Vm, seconds: f64| {
+        wowlua_engine::clock::advance_frames(vm, (seconds * 60.0) as usize, 1000.0 / 60.0);
+    };
+    run(
+        &mut vm,
+        "Lines = {}
+local f = CreateFrame('Frame')
+f:RegisterEvent('CHAT_MSG_SYSTEM')
+f:SetScript('OnEvent', function(_, _, text) Lines[#Lines + 1] = text end)
+for i, n in ipairs({ 'Ana', 'Bo', 'Cy', 'Di', 'Ed', 'Fay' }) do
+    mock.spawnUnit({ name = n, lastName = 'Test', player = true, class = 'MAGE', level = 60, acceptsInvites = true })
+end
+mock.spawnUnit({ name = 'Shy', lastName = 'Test', player = true, class = 'MAGE', level = 60 })
+for _, n in ipairs({ 'Ana Test', 'Bo Test', 'Cy Test', 'Di Test', 'Shy Test' }) do C_PartyInfo.InviteUnit(n) end",
+    );
+    step(&mut vm, 3.0);
+    let r = run(&mut vm, "return GetNumGroupMembers(), tostring(IsInRaid())");
+    assert_eq!(r, ["5", "false"], "four joined, the shy one not");
+    run(&mut vm, "Lines = {} C_PartyInfo.InviteUnit('Ed Test')");
+    step(&mut vm, 1.0);
+    assert_eq!(
+        run(&mut vm, "return table.concat(Lines, '|')"),
+        ["Your party is full."]
+    );
+    run(
+        &mut vm,
+        "C_PartyInfo.ConvertToRaid() C_PartyInfo.InviteUnit('Ed Test') C_PartyInfo.InviteUnit('Fay Test')",
+    );
+    step(&mut vm, 3.0);
+    let r = run(
+        &mut vm,
+        "local _, _, g = GetRaidRosterInfo(GetNumGroupMembers()) return GetNumGroupMembers(), tostring(IsInRaid()), g",
+    );
+    assert_eq!(r, ["7", "true", "2"], "the raid's second group");
+    run(
+        &mut vm,
+        "Lines = {} C_PartyInfo.UninviteUnit('Fay Test') C_PartyInfo.PromoteToLeader('Ana Test')",
+    );
+    step(&mut vm, 1.0);
+    let r = run(
+        &mut vm,
+        "local leader for i = 1, GetNumGroupMembers() do local n, rank = GetRaidRosterInfo(i) if rank == 2 then leader = n end end
+return GetNumGroupMembers(), tostring(UnitIsGroupLeader('player')), leader, table.concat(Lines, '|')",
+    );
+    assert_eq!(r[0], "6");
+    assert_eq!(r[1], "false");
+    assert_eq!(r[2], "Ana Test");
+    assert!(
+        r[3].contains("Fay Test has left the raid group"),
+        "{}",
+        r[3]
+    );
+    assert!(
+        r[3].contains("Ana Test is now the group leader."),
+        "{}",
+        r[3]
+    );
+    run(
+        &mut vm,
+        "Lines = {} Before = GetNumGuildMembers() C_FriendList.SendWho('Test') C_GuildInfo.Invite('Ed Test')",
+    );
+    step(&mut vm, 3.0);
+    let r = run(
+        &mut vm,
+        "return table.concat(Lines, '|'), GetNumGuildMembers() - Before, (C_FriendList.GetNumWhoResults())",
+    );
+    assert!(r[0].contains("7 |4player:players; total"), "{}", r[0]);
+    assert!(r[0].contains("Ed Test has joined the guild."), "{}", r[0]);
+    assert_eq!(r[1], "1", "the guild has one more member");
+    assert_eq!(r[2], "7");
+}

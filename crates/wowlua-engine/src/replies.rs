@@ -334,22 +334,186 @@ fn is_ignored(vm: &mut Vm, c: NativeCall) -> Ret {
 
 // ----------------------------------------------------------------- who
 
-/// `C_FriendList.SendWho(filter)` (`/who`): the server's list a round
-/// trip later (`WHO_LIST_UPDATE`) and its count as a system line; the
-/// world has no one else online to list (unverified: the results' shape,
-/// whether the count shows for a who from the who frame too).
-fn send_who(vm: &mut Vm, _c: NativeCall) -> Ret {
+/// A player's name as the server writes it in a who: first and last name,
+/// else the name.
+fn who_name(u: &units::Unit) -> String {
+    match &u.last_name {
+        Some(l) => format!("{} {l}", u.name),
+        None => u.name.clone(),
+    }
+}
+
+/// The online players a who's filter finds (decision T363): the player
+/// and the world's other players. Plain words match a name, zone, guild,
+/// class or race (any case, a part); `n-`, `z-`, `g-`, `c-`, `r-` one of
+/// them; `20-30` (or `60`) the levels.
+fn who_matches(vm: &mut Vm, filter: &str) -> Vec<usize> {
+    let player_zone = match vm.get_global("GetZoneText") {
+        f @ Value::Func(_) => match vm.call(f, &[]).ok().and_then(|r| r.first().copied()) {
+            Some(Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+            _ => String::new(),
+        },
+        _ => String::new(),
+    };
+    let guild = crate::guild::guild_name(vm).unwrap_or_default();
+    let e = engine(vm);
+    let mut out = Vec::new();
+    for (i, u) in e.units.list.iter().enumerate() {
+        if !(u.player || i == units::PLAYER.0) || !u.online {
+            continue;
+        }
+        let zone = if i == units::PLAYER.0 {
+            player_zone.clone()
+        } else {
+            u.zone.clone().unwrap_or_else(|| player_zone.clone())
+        };
+        let their_guild = if i == units::PLAYER.0 {
+            guild.clone()
+        } else {
+            String::new()
+        };
+        let has = |field: &str, word: &str| field.to_lowercase().contains(&word.to_lowercase());
+        let ok = filter.split_whitespace().all(|word| {
+            if let Some((a, b)) = word.split_once('-')
+                && let (Ok(lo), Ok(hi)) = (a.parse::<f64>(), b.parse::<f64>())
+            {
+                return u.level >= lo && u.level <= hi;
+            }
+            if let Ok(l) = word.parse::<f64>() {
+                return u.level == l;
+            }
+            match word.split_once('-') {
+                Some(("n", w)) => has(&who_name(u), w),
+                Some(("z", w)) => has(&zone, w),
+                Some(("g", w)) => has(&their_guild, w),
+                Some(("c", w)) => has(&u.class_name, w),
+                Some(("r", w)) => has(&u.race, w),
+                _ => {
+                    has(&who_name(u), word)
+                        || has(&zone, word)
+                        || has(&their_guild, word)
+                        || has(&u.class_name, word)
+                        || has(&u.race, word)
+                }
+            }
+        });
+        if ok {
+            out.push(i);
+        }
+    }
+    out
+}
+
+/// `C_FriendList.SendWho(filter)` (`/who`): the online players the filter
+/// finds, a round trip later (`WHO_LIST_UPDATE`); in chat their lines
+/// (`WHO_LIST_FORMAT`, three at most) and the count (`WHO_NUM_RESULTS`).
+/// Unverified: whether a who from the who frame prints too, the lines'
+/// limit, the results' order.
+fn send_who(vm: &mut Vm, c: NativeCall) -> Ret {
+    let filter = text_arg(vm, c.arg(1)).unwrap_or_default();
+    let found = who_matches(vm, &filter);
+    engine_mut(vm).world.chat.who = found;
     let f = vm.native("who list", |vm, _| {
         widgets::fire_event(vm, "WHO_LIST_UPDATE", &[]);
-        // Typed in chat, the count in chat too (`WHO_NUM_RESULTS`).
-        let total =
-            global(vm, "WHO_NUM_RESULTS", "%d |4player:players; total").replacen("%d", "0", 1);
+        let found = engine(vm).world.chat.who.clone();
+        if found.len() <= 3 {
+            let format = global(
+                vm,
+                "WHO_LIST_FORMAT",
+                "|Hplayer:%s|h[%s]|h: Level %d %s %s - %s",
+            );
+            for i in &found {
+                let info = who_fields(vm, *i);
+                let line = format
+                    .replacen("%s", &info.0, 1)
+                    .replacen("%s", &info.0, 1)
+                    .replacen("%d", &format!("{}", info.1), 1)
+                    .replacen("%s", &info.2, 1)
+                    .replacen("%s", &info.3, 1)
+                    .replacen("%s", &info.4, 1);
+                crate::chat::game_message(vm, "CHAT_MSG_SYSTEM", &line, None);
+            }
+        }
+        let total = global(vm, "WHO_NUM_RESULTS", "%d |4player:players; total").replacen(
+            "%d",
+            &found.len().to_string(),
+            1,
+        );
         crate::chat::game_message(vm, "CHAT_MSG_SYSTEM", &total, None);
         Ok(vec![])
     });
     let delay = crate::clock::server_delay(vm);
     crate::clock::after_engine(vm, delay, f);
     Ok(vec![])
+}
+
+/// A who result's name, level, race, class and zone.
+fn who_fields(vm: &mut Vm, i: usize) -> (String, f64, String, String, String) {
+    let zone = if i == units::PLAYER.0 {
+        match vm.get_global("GetZoneText") {
+            f @ Value::Func(_) => match vm.call(f, &[]).ok().and_then(|r| r.first().copied()) {
+                Some(Value::Str(s)) => String::from_utf8_lossy(vm.str_bytes(s)).into_owned(),
+                _ => String::new(),
+            },
+            _ => String::new(),
+        }
+    } else {
+        engine(vm).units.list[i].zone.clone().unwrap_or_default()
+    };
+    let u = &engine(vm).units.list[i];
+    (
+        who_name(u),
+        u.level,
+        u.race.clone(),
+        u.class_name.clone(),
+        zone,
+    )
+}
+
+/// `C_FriendList.GetNumWhoResults()`: the last who's count, twice.
+fn get_num_who_results(vm: &mut Vm, _c: NativeCall) -> Ret {
+    let n = engine(vm).world.chat.who.len() as f64;
+    Ok(vec![Value::Num(n), Value::Num(n)])
+}
+
+/// `C_FriendList.GetWhoInfo(index)`: a result's `WhoInfo`.
+fn get_who_info(vm: &mut Vm, c: NativeCall) -> Ret {
+    let Value::Num(n) = vm.hidden(c.arg(1)) else {
+        return Ok(vec![Value::Nil]);
+    };
+    let Some(&i) = engine(vm).world.chat.who.get((n as usize).wrapping_sub(1)) else {
+        return Ok(vec![Value::Nil]);
+    };
+    let (name, level, race, class, zone) = who_fields(vm, i);
+    let guild = if i == units::PLAYER.0 {
+        crate::guild::guild_name(vm).unwrap_or_default()
+    } else {
+        String::new()
+    };
+    let (file, sex) = {
+        let u = &engine(vm).units.list[i];
+        (u.class.clone(), u.sex)
+    };
+    let t = vm.new_table();
+    let set = |vm: &mut Vm, k: &str, v: Value| {
+        let key = vm.str(k);
+        let _ = vm.heap.table_mut(t).set(key, v);
+    };
+    let v = vm.str(&name);
+    set(vm, "fullName", v);
+    let v = vm.str(&guild);
+    set(vm, "fullGuildName", v);
+    set(vm, "level", Value::Num(level));
+    let v = vm.str(&race);
+    set(vm, "raceStr", v);
+    let v = vm.str(&class);
+    set(vm, "classStr", v);
+    let v = vm.str(&zone);
+    set(vm, "area", v);
+    let v = vm.str(&file);
+    set(vm, "filename", v);
+    set(vm, "gender", Value::Num(sex));
+    Ok(vec![Value::Table(t)])
 }
 
 // --------------------------------------------------------------- emotes
@@ -378,7 +542,20 @@ fn guild_invite(vm: &mut Vm, c: NativeCall) -> Ret {
             "You are not in a guild.",
         );
         system_later(vm, t);
+    } else if is_own_name(vm, &name) {
+        let t = global(
+            vm,
+            "ERR_GUILD_INVITE_SELF",
+            "You can't invite yourself to a guild.",
+        );
+        system_later(vm, t);
     } else if let Some(n) = known_player(vm, &name) {
+        if crate::guild::has_member(vm, &n) {
+            let t = global(vm, "ERR_ALREADY_IN_GUILD_S", "%s is already in a guild.")
+                .replacen("%s", &n, 1);
+            system_later(vm, t);
+            return Ok(vec![]);
+        }
         let t = global(
             vm,
             "ERR_GUILD_INVITE_S",
@@ -386,6 +563,14 @@ fn guild_invite(vm: &mut Vm, c: NativeCall) -> Ret {
         )
         .replacen("%s", &n, 1);
         system_later(vm, t);
+        // A player who accepts invitations joins a moment later.
+        if let Some(i) = unit_of_name(vm, &n)
+            && engine(vm).units.list[i].accepts_invites
+        {
+            let f = vm.native_with("guild accepted", guild_accepted, vec![Value::Num(i as f64)]);
+            let delay = crate::clock::server_delay(vm) + 1.5;
+            crate::clock::after_engine(vm, delay, f);
+        }
     } else {
         let t = global(vm, "ERR_GUILD_PLAYER_NOT_FOUND_S", "\"%s\" not found.")
             .replacen("%s", &name, 1);
@@ -394,15 +579,26 @@ fn guild_invite(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![])
 }
 
-// --------------------------------------------------------------- party
+/// The index of the world's player unit with that name (as the server
+/// writes it).
+fn unit_of_name(vm: &Vm, name: &str) -> Option<usize> {
+    engine(vm)
+        .units
+        .list
+        .iter()
+        .enumerate()
+        .skip(1)
+        .find(|(_, u)| u.player && who_name(u).eq_ignore_ascii_case(name))
+        .map(|(i, _)| i)
+}
 
-/// `C_PartyInfo.UninviteUnit(name)` (`/uninvite`, `/kick`) and
-/// `PromoteToLeader(name)` (`/promote`) outside a party: the server's
-/// `ERR_NOT_IN_GROUP` (unverified: in a party, nothing is done yet).
-fn party_command(vm: &mut Vm, _c: NativeCall) -> Ret {
-    if engine(vm).units.group.is_empty() {
-        let t = global(vm, "ERR_NOT_IN_GROUP", "You aren't in a party.");
-        system_later(vm, t);
+fn guild_accepted(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some(Value::Num(i)) = c.upvals.first().copied() {
+        let id = units::UnitId(i as usize);
+        let name = who_name(&engine(vm).units.list[id.0]);
+        if crate::guild::in_guild(vm) && !crate::guild::has_member(vm, &name) {
+            crate::guild::join_from_unit(vm, id);
+        }
     }
     Ok(vec![])
 }
@@ -422,10 +618,10 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         ("C_FriendList.IsIgnored", is_ignored),
         ("C_FriendList.IsOnIgnoredList", is_ignored),
         ("C_FriendList.SendWho", send_who),
+        ("C_FriendList.GetNumWhoResults", get_num_who_results),
+        ("C_FriendList.GetWhoInfo", get_who_info),
         ("C_ChatInfo.PerformEmote", perform_emote),
         ("C_GuildInfo.Invite", guild_invite),
         ("GuildInvite", guild_invite),
-        ("C_PartyInfo.UninviteUnit", party_command),
-        ("C_PartyInfo.PromoteToLeader", party_command),
     ]
 }

@@ -610,9 +610,10 @@ fn unit_in_subgroup(vm: &mut Vm, c: NativeCall) -> Ret {
 /// `UnitLeadsAnyGroup(unit)`: the player leading its group (the engine
 /// knows no other leader).
 fn unit_leads_any_group(vm: &mut Vm, c: NativeCall) -> Ret {
-    let me = units::unit_arg(vm, &c, 1) == Some(PLAYER);
-    let leads = me && crate::party::grouped(vm) && engine(vm).world.party.leader;
-    Ok(vec![Value::Bool(leads)])
+    let unit = units::unit_arg(vm, &c, 1);
+    Ok(vec![Value::Bool(
+        unit.is_some_and(|u| crate::party::leads(vm, u)),
+    )])
 }
 
 /// `Enum.LFGRole` of a role's name; none -1 (recorded for the player

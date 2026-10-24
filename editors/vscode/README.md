@@ -41,7 +41,9 @@ UI panel (below) click in the game.
 `"profile"` starts the session in a world profile (`tests/profiles/<name>.json`:
 the character with its name, gear and bags, the world around it) instead of
 the default character; the widget demo has `camelot`, a recorded WoW Forever
-character, "Player Lastname".
+character, "Player Lastname", with eight other players online to `/invite`
+(`/invite Gorak Stonefist`), enough for a party and, after
+`C_PartyInfo.ConvertToRaid()`, a raid.
 
 ## The game's screen
 

@@ -102,6 +102,9 @@ pub struct Unit {
     pub subgroup: Option<f64>,
     /// A player character logged in (an offline group member not).
     pub online: bool,
+    /// Another player who accepts the player's invitations (to the group,
+    /// the guild) a moment after (`acceptsInvites`; decision T363).
+    pub accepts_invites: bool,
 }
 
 /// The addon restriction types (`Enum.AddOnRestrictionType`).
@@ -306,6 +309,7 @@ pub fn install(vm: &mut Vm) {
         world: None,
         subgroup: None,
         online: true,
+        accepts_invites: false,
     };
     engine_mut(vm).units.list.push(player);
 }
@@ -622,6 +626,22 @@ fn with_unit(vm: &mut Vm, c: &NativeCall, f: impl FnOnce(&mut Vm, &Unit) -> Vec<
             Ok(f(vm, &unit))
         }
         None => Ok(vec![]),
+    }
+}
+
+impl Unit {
+    /// What a guild member takes of a player unit: name, last name, GUID,
+    /// class file, race, level, zone.
+    pub fn clone_fields(&self) -> (String, Option<String>, String, String, String, f64, String) {
+        (
+            self.name.clone(),
+            self.last_name.clone(),
+            self.guid.clone(),
+            self.class.clone(),
+            self.race.clone(),
+            self.level,
+            self.zone.clone().unwrap_or_default(),
+        )
     }
 }
 
@@ -1901,6 +1921,7 @@ fn unit_from(vm: &mut Vm, data: Option<TableRef>, player_guid: Option<String>) -
         },
         subgroup: None,
         online: !matches!(get(vm, "online"), Value::Bool(false)),
+        accepts_invites: get(vm, "acceptsInvites").truthy(),
     }
 }
 

@@ -314,6 +314,52 @@ pub fn in_guild(vm: &Vm) -> bool {
     guild(vm).is_some()
 }
 
+/// The guild's name, when the player is in one.
+pub fn guild_name(vm: &Vm) -> Option<String> {
+    guild(vm).map(|g| g.name.clone())
+}
+
+/// Whether a player of that name (first, or first and last) is in the
+/// guild.
+pub fn has_member(vm: &Vm, name: &str) -> bool {
+    guild(vm).is_some_and(|g| {
+        g.members.iter().any(|m| {
+            m.name.eq_ignore_ascii_case(name)
+                || m.last_name
+                    .as_deref()
+                    .is_some_and(|l| name.eq_ignore_ascii_case(&format!("{} {l}", m.name)))
+        })
+    })
+}
+
+/// An online player of the world joins the guild at its lowest rank (an
+/// accepted `/ginvite`; decision T363): "… has joined the guild.", the
+/// roster told.
+pub fn join_from_unit(vm: &mut Vm, id: crate::units::UnitId) {
+    let u = engine(vm).units.list[id.0].clone_fields();
+    let Some(g) = guild_mut(vm) else { return };
+    let mut m = g.member(&u.0, u.1.as_deref());
+    m.guid = u.2;
+    m.class = u.3;
+    m.race = u.4;
+    m.level = u.5;
+    m.zone = u.6;
+    m.online = true;
+    let shown = match &m.last_name {
+        Some(l) => format!("{} {l}", m.name),
+        None => m.name.clone(),
+    };
+    g.members.push(m);
+    let format = crate::replies::global(vm, "ERR_GUILD_JOIN_S", "%s has joined the guild.");
+    crate::chat::game_message(
+        vm,
+        "CHAT_MSG_SYSTEM",
+        &format.replacen("%s", &shown, 1),
+        None,
+    );
+    roster_changed(vm);
+}
+
 fn can(vm: &Vm, n: usize) -> bool {
     guild(vm).is_some_and(|g| g.can(n))
 }

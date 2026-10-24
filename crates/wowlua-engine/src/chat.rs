@@ -45,6 +45,8 @@ pub struct Chat {
     pub ignores: Vec<String>,
     /// The server's dice (`/roll`): its own generator's state.
     pub rolls: u32,
+    /// The last who's results: the units' indices (`replies.rs`).
+    pub who: Vec<usize>,
 }
 
 const MAX_PREFIX: usize = 16;

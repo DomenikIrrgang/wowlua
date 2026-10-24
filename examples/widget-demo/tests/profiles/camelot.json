@@ -827,7 +827,96 @@
     "Z": "TOGGLESHEATH",
     "`": "TOGGLEAUTORUN"
   },
-  "units": {},
+  "units": [
+    {
+      "name": "Gorak",
+      "lastName": "Stonefist",
+      "player": true,
+      "class": "WARRIOR",
+      "race": "Orc",
+      "sex": 2,
+      "level": 21,
+      "faction": "Horde",
+      "reaction": "friendly"
+    },
+    {
+      "name": "Zul'jin",
+      "lastName": "Darkspear",
+      "player": true,
+      "class": "PRIEST",
+      "race": "Troll",
+      "sex": 2,
+      "level": 21,
+      "faction": "Horde",
+      "reaction": "friendly"
+    },
+    {
+      "name": "Mara",
+      "lastName": "Ashveil",
+      "player": true,
+      "class": "MAGE",
+      "race": "Scourge",
+      "sex": 3,
+      "level": 21,
+      "faction": "Horde",
+      "reaction": "friendly"
+    },
+    {
+      "name": "Thrall",
+      "lastName": "Windcaller",
+      "player": true,
+      "class": "SHAMAN",
+      "race": "Orc",
+      "sex": 2,
+      "level": 21,
+      "faction": "Horde",
+      "reaction": "friendly"
+    },
+    {
+      "name": "Kaya",
+      "lastName": "Swiftmane",
+      "player": true,
+      "class": "DRUID",
+      "race": "Tauren",
+      "sex": 3,
+      "level": 21,
+      "faction": "Horde",
+      "reaction": "friendly"
+    },
+    {
+      "name": "Vex",
+      "lastName": "Nightblade",
+      "player": true,
+      "class": "ROGUE",
+      "race": "Scourge",
+      "sex": 2,
+      "level": 21,
+      "faction": "Horde",
+      "reaction": "friendly"
+    },
+    {
+      "name": "Lorna",
+      "lastName": "Grimtusk",
+      "player": true,
+      "class": "HUNTER",
+      "race": "Troll",
+      "sex": 3,
+      "level": 21,
+      "faction": "Horde",
+      "reaction": "friendly"
+    },
+    {
+      "name": "Sylas",
+      "lastName": "Hollowmoor",
+      "player": true,
+      "class": "WARLOCK",
+      "race": "Scourge",
+      "sex": 2,
+      "level": 21,
+      "faction": "Horde",
+      "reaction": "friendly"
+    }
+  ],
   "character": {
     "class": "PALADIN",
     "faction": "Horde",

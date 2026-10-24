@@ -43,10 +43,6 @@ fn zero(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Num(0.0)])
 }
 
-fn zeros2(_vm: &mut Vm, _c: NativeCall) -> Ret {
-    Ok(vec![Value::Num(0.0), Value::Num(0.0)])
-}
-
 fn no2(_vm: &mut Vm, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(false), Value::Bool(false)])
 }
@@ -700,7 +696,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     ];
     // Two of nothing.
     let pairs: &[(&str, NativeFn)] = &[
-        ("C_FriendList.GetNumWhoResults", zeros2),
         ("C_ChatInfo.IsLoggingCombat", no2),
         ("GuildControlGetAllowedShifts", no2),
     ];
@@ -712,7 +707,6 @@ pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
         // Found nothing.
         "C_FriendList.GetFriendInfoByIndex",
         "C_FriendList.GetFriendInfo",
-        "C_FriendList.GetWhoInfo",
         "C_VoiceChat.GetChannel",
         "C_VoiceChat.GetChannelForCommunityStream",
         "C_SocialQueue.GetGroupQueues",

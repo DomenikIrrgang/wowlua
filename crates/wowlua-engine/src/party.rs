@@ -28,6 +28,9 @@ use crate::{engine, engine_mut, widgets};
 
 /// The party formed after the invitation's message (recorded).
 const FORMED_AFTER: f64 = 0.047;
+/// An invited player who accepts does so this long after the invitation
+/// (a person clicking the popup; decision T363, unverified).
+const ACCEPTS_AFTER: f64 = 1.5;
 /// The raid targets told after the party formed (recorded).
 const TARGETS_AFTER: f64 = 0.49;
 /// A joined member's second roster, then the social queue (recorded).
@@ -45,6 +48,8 @@ pub struct Party {
     /// A party, maybe of the player alone (an invitation out).
     pub formed: bool,
     pub leader: bool,
+    /// Another member leading (the player promoted them; decision T363).
+    pub leader_unit: Option<UnitId>,
     /// Trading with a unit.
     pub trading: Option<UnitId>,
 }
@@ -130,6 +135,38 @@ fn invite_unit(vm: &mut Vm, c: NativeCall) -> Ret {
         }
         return Ok(vec![]);
     };
+    // The server's refusals (decision T363): oneself, a member already,
+    // another's party, a full party or raid.
+    let refusal = {
+        let u = &engine(vm).units;
+        let p = party(vm);
+        if id == PLAYER {
+            Some((
+                "ERR_INVITE_SELF",
+                "You can't invite yourself to a group.",
+                false,
+            ))
+        } else if u.group.contains(&id) {
+            Some(("ERR_ALREADY_IN_GROUP_S", "%s is already in a group.", true))
+        } else if grouped(vm) && !p.leader {
+            Some(("ERR_NOT_LEADER", "You are not the party leader.", false))
+        } else if !u.raid && u.group.len() >= 4 {
+            Some(("ERR_GROUP_FULL", "Your party is full.", false))
+        } else if u.raid && u.group.len() >= 39 {
+            Some(("ERR_RAID_FULL", "Your raid group is full.", false))
+        } else {
+            None
+        }
+    };
+    if let Some((key, default, named)) = refusal {
+        let mut text = global(vm, key, default);
+        if named {
+            let name = full_name(vm, id);
+            text = text.replacen("%s", &name, 1);
+        }
+        crate::replies::system_later(vm, text);
+        return Ok(vec![]);
+    }
     let delay = crate::clock::server_delay(vm);
     later(
         vm,
@@ -138,6 +175,30 @@ fn invite_unit(vm: &mut Vm, c: NativeCall) -> Ret {
         invited,
         vec![Value::Num(id.0 as f64)],
     );
+    // A player who accepts invitations joins a moment later.
+    if engine(vm).units.list[id.0].accepts_invites {
+        later(
+            vm,
+            delay + ACCEPTS_AFTER,
+            "partyAccepted",
+            accepted,
+            vec![Value::Num(id.0 as f64)],
+        );
+    }
+    Ok(vec![])
+}
+
+/// An invited player accepts: they join, unless the group filled or
+/// they joined meanwhile.
+fn accepted(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = UnitId(upval(&c));
+    let full = {
+        let u = &engine(vm).units;
+        u.group.contains(&id) || (!u.raid && u.group.len() >= 4) || u.group.len() >= 39
+    };
+    if !full {
+        join(vm, id);
+    }
     Ok(vec![])
 }
 
@@ -203,11 +264,36 @@ fn raid_targets(vm: &mut Vm, _c: NativeCall) -> Ret {
 /// `unit:joinGroup()`: the invited player joins the party.
 pub fn control_join_group(vm: &mut Vm, c: NativeCall) -> Ret {
     let me = units::this(vm, &c)?;
-    {
+    join(vm, me);
+    Ok(vec![])
+}
+
+/// A player joins the player's group (an accepted invitation): in a raid,
+/// the first subgroup with room (`ERR_RAID_MEMBER_ADDED_S`); in a party,
+/// "… joins the party.".
+pub fn join(vm: &mut Vm, me: UnitId) {
+    let raid = {
         let u = &mut engine_mut(vm).units;
         if !u.group.contains(&me) {
             u.group.push(me);
         }
+        u.raid
+    };
+    if raid {
+        let taken: Vec<f64> = {
+            let u = &engine(vm).units;
+            u.group
+                .iter()
+                .filter(|&&g| g != me)
+                .map(|&g| u.list[g.0].subgroup.unwrap_or(1.0))
+                .collect()
+        };
+        // The player is in subgroup 1.
+        let free = (1..=8)
+            .map(f64::from)
+            .find(|&s| taken.iter().filter(|&&t| t == s).count() + usize::from(s == 1.0) < 5)
+            .unwrap_or(8.0);
+        engine_mut(vm).units.list[me.0].subgroup = Some(free);
     }
     party_mut(vm).formed = true;
     // Its faction by its group token alone (recorded: party1's, not the
@@ -220,7 +306,15 @@ pub fn control_join_group(vm: &mut Vm, c: NativeCall) -> Ret {
         let t = vm.str(&t);
         fire(vm, "UNIT_FACTION", &[t]);
     }
-    let format = global(vm, "ERR_JOINED_GROUP_S", "%s joins the party.");
+    let format = if raid {
+        global(
+            vm,
+            "ERR_RAID_MEMBER_ADDED_S",
+            "%s has joined the raid group",
+        )
+    } else {
+        global(vm, "ERR_JOINED_GROUP_S", "%s joins the party.")
+    };
     let name = full_name(vm, me);
     system(vm, &format.replacen("%s", &name, 1));
     let guid = party_guid(vm);
@@ -229,7 +323,6 @@ pub fn control_join_group(vm: &mut Vm, c: NativeCall) -> Ret {
     roster(vm);
     later(vm, ROSTER_AFTER, "partyRoster", roster_again, vec![]);
     later(vm, QUEUE_AFTER, "partyQueue", social_queue, vec![]);
-    Ok(vec![])
 }
 
 fn roster(vm: &mut Vm) {
@@ -256,8 +349,135 @@ pub fn grouped(vm: &Vm) -> bool {
 }
 
 fn unit_is_group_leader(vm: &mut Vm, c: NativeCall) -> Ret {
-    let leader = units::unit_arg(vm, &c, 1) == Some(PLAYER) && party(vm).leader;
-    Ok(vec![Value::Bool(leader)])
+    let unit = units::unit_arg(vm, &c, 1);
+    Ok(vec![Value::Bool(unit.is_some_and(|u| leads(vm, u)))])
+}
+
+/// Whether a unit leads the player's group: the player, or the member the
+/// player promoted.
+pub fn leads(vm: &Vm, unit: UnitId) -> bool {
+    let p = party(vm);
+    if unit == PLAYER {
+        grouped(vm) && p.leader
+    } else {
+        p.leader_unit == Some(unit) && engine(vm).units.group.contains(&unit)
+    }
+}
+
+/// The checks of a leader's command on a member (`/uninvite`, `/kick`,
+/// `/promote`; decision T363): grouped, leading, the name a member; else
+/// the server's answer, a round trip later.
+fn member_for_leader(vm: &mut Vm, v: Value) -> Option<UnitId> {
+    let typed = match vm.hidden(v) {
+        Value::Str(s) => String::from_utf8_lossy(vm.str_bytes(s)).trim().to_string(),
+        _ => String::new(),
+    };
+    let refusal = if !grouped(vm) {
+        Some(global(vm, "ERR_NOT_IN_GROUP", "You aren't in a party."))
+    } else if !party(vm).leader {
+        Some(global(
+            vm,
+            "ERR_NOT_LEADER",
+            "You are not the party leader.",
+        ))
+    } else {
+        match unit_named(vm, v) {
+            Some(id) if id != PLAYER && engine(vm).units.group.contains(&id) => return Some(id),
+            _ => Some(
+                global(vm, "ERR_TARGET_NOT_IN_GROUP_S", "%s is not in your party.")
+                    .replacen("%s", &typed, 1),
+            ),
+        }
+    };
+    if let Some(t) = refusal {
+        crate::replies::system_later(vm, t);
+    }
+    None
+}
+
+/// `C_PartyInfo.UninviteUnit(name)` (`/uninvite`, `/kick`): the leader
+/// removes a member a round trip later; the last one gone, the group
+/// disbands (decision T363; unverified: the events' order).
+fn uninvite_unit(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some(id) = member_for_leader(vm, c.arg(1)) {
+        let delay = crate::clock::server_delay(vm);
+        later(
+            vm,
+            delay,
+            "partyRemoved",
+            removed,
+            vec![Value::Num(id.0 as f64)],
+        );
+    }
+    Ok(vec![])
+}
+
+fn removed(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = UnitId(upval(&c));
+    let (was, empty, raid) = {
+        let u = &mut engine_mut(vm).units;
+        let was = u.group.contains(&id);
+        u.group.retain(|&m| m != id);
+        u.list[id.0].subgroup = None;
+        (was, u.group.is_empty(), u.raid)
+    };
+    if !was {
+        return Ok(vec![]);
+    }
+    if party(vm).leader_unit == Some(id) {
+        party_mut(vm).leader_unit = None;
+    }
+    let format = if raid {
+        global(
+            vm,
+            "ERR_RAID_MEMBER_REMOVED_S",
+            "%s has left the raid group",
+        )
+    } else {
+        global(vm, "ERR_LEFT_GROUP_S", "%s leaves the party.")
+    };
+    let name = full_name(vm, id);
+    system(vm, &format.replacen("%s", &name, 1));
+    if empty {
+        leave(vm, "ERR_GROUP_DISBANDED", "Your group has been disbanded.");
+    } else {
+        fire(vm, "GROUP_ROSTER_UPDATE", &[]);
+    }
+    Ok(vec![])
+}
+
+/// `C_PartyInfo.PromoteToLeader(name)` (`/promote`): the member leads, a
+/// round trip later (decision T363).
+fn promote_to_leader(vm: &mut Vm, c: NativeCall) -> Ret {
+    if let Some(id) = member_for_leader(vm, c.arg(1)) {
+        let delay = crate::clock::server_delay(vm);
+        later(
+            vm,
+            delay,
+            "partyPromoted",
+            promoted,
+            vec![Value::Num(id.0 as f64)],
+        );
+    }
+    Ok(vec![])
+}
+
+fn promoted(vm: &mut Vm, c: NativeCall) -> Ret {
+    let id = UnitId(upval(&c));
+    if !engine(vm).units.group.contains(&id) {
+        return Ok(vec![]);
+    }
+    {
+        let p = party_mut(vm);
+        p.leader = false;
+        p.leader_unit = Some(id);
+    }
+    let format = global(vm, "ERR_NEW_LEADER_S", "%s is now the group leader.");
+    let name = full_name(vm, id);
+    system(vm, &format.replacen("%s", &name, 1));
+    fire(vm, "PARTY_LEADER_CHANGED", &[]);
+    fire(vm, "GROUP_ROSTER_UPDATE", &[]);
+    Ok(vec![])
 }
 
 /// `FollowUnit(unit)`: `AUTOFOLLOW_BEGIN(name)` (recorded at the click).
@@ -431,6 +651,7 @@ pub fn leave(vm: &mut Vm, message: &str, default: &str) {
         let p = party_mut(vm);
         p.formed = false;
         p.leader = false;
+        p.leader_unit = None;
     }
     let text = global(vm, message, default);
     system(vm, &text);
@@ -492,11 +713,7 @@ fn get_raid_roster_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(unit) = unit else {
         return Ok(placeholder(vm));
     };
-    let rank = if unit == PLAYER && party(vm).leader {
-        2.0
-    } else {
-        0.0
-    };
+    let rank = if leads(vm, unit) { 2.0 } else { 0.0 };
     let subgroup = {
         let u = &engine(vm).units;
         if u.raid {
@@ -596,6 +813,8 @@ fn convert_to_raid(vm: &mut Vm, _c: NativeCall) -> Ret {
     let leading = party(vm).leader && !engine(vm).units.group.is_empty();
     if leading && !engine(vm).units.raid {
         engine_mut(vm).units.raid = true;
+        let t = global(vm, "ERR_PARTY_CONVERTED_TO_RAID", "Party converted to Raid");
+        system(vm, &t);
         fire(vm, "GROUP_ROSTER_UPDATE", &[]);
     }
     Ok(vec![])
@@ -608,6 +827,8 @@ fn no(_vm: &mut Vm, _c: NativeCall) -> Ret {
 pub fn behaviours() -> Vec<(&'static str, NativeFn)> {
     vec![
         ("C_PartyInfo.InviteUnit", invite_unit),
+        ("C_PartyInfo.UninviteUnit", uninvite_unit),
+        ("C_PartyInfo.PromoteToLeader", promote_to_leader),
         ("InviteUnit", invite_unit),
         ("UnitIsGroupLeader", unit_is_group_leader),
         ("GetRaidRosterInfo", get_raid_roster_info),
