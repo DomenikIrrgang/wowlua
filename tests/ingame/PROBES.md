@@ -319,7 +319,8 @@ game, the character's clothes in wowlua).
 
 1. `/run local t=MainStatusTrackingBarContainer.bars and MainStatusTrackingBarContainer.bars[1] or nil print(t and t.StatusBar:GetStatusBarTexture():GetAtlas(), t and t.StatusBar:GetStatusBarTexture():GetTexture())`
    with the experience bar shown: whether `SetStatusBarTexture(atlasName)`
-   makes the texture's atlas (wowlua: it does; `GetTexture` answers nil).
+   makes the texture's atlas (wowlua: it does; `GetTexture` answers the
+   atlas's file ID, decision T356).
 2. An action button with a spell: `/run local b=ActionButton1 print(b.icon:GetDrawLayer()) print(b.SlotArt:GetDrawLayer()) print(b.icon:GetNumMaskTextures())`
    and a screenshot of it hovered: wowlua draws a masked texture over the
    unmasked ones of its layer and sublevel (the icon over the slot art).
@@ -328,6 +329,17 @@ game, the character's clothes in wowlua).
 3. `/run local t=UIParent:CreateTexture() print(t:IsSnappingToPixelGrid(), t:GetTexelSnappingBias())`:
    a fresh texture's pixel snapping (wowlua: true, 0). Answered
    (2026-10-23): true, 0.30000001192093; wowlua now gives the same.
+4. What `GetTexture` answers for an addon's own file, an atlas and a color
+   (decision T356; wowlua: the file's negative loose ID, the atlas's file
+   ID, nil), and what `GetTextureFilePath` answers (wowlua: the path set).
+   With an addon that ships a texture (here SuuUI's
+   `Interface\AddOns\SuuUI\media\logo`; use any file it has):
+   1. `/run T=UIParent:CreateTexture() print(T:SetTexture("Interface\\AddOns\\SuuUI\\media\\logo"), T:GetTexture(), T:GetTextureFileID(), T:GetTextureFilePath())`
+   2. `/run print(GetFileIDFromPath("Interface\\AddOns\\SuuUI\\media\\logo"))`
+   3. `/run T:SetAtlas("128-RedButton-Exit") print(T:GetTexture(), T:GetTextureFileID(), T:GetTextureFilePath())`
+   4. `/run T:SetColorTexture(1, 0, 0) print(T:GetTexture(), T:GetTextureFileID(), T:GetTextureFilePath())`
+   5. `/run print(GetFileIDFromPath("Interface\\AddOns\\NoSuchAddon\\x"), GetFileIDFromPath("Interface\\Buttons\\WHITE8X8"))`
+      (wowlua: nil, 130871; decision T355).
 
 ## Minimap
 
