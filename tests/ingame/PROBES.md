@@ -469,23 +469,32 @@ alone unless an item names an addon.
 18. **The calendar's holidays** (open: wowlua shows no holiday events):
     1. Open the calendar on this month and take a screenshot.
     2. `/run local m=C_Calendar.GetMonthInfo(0) for d=1,m.numDays do for j=1,C_Calendar.GetNumDayEvents(0,d) do local e=C_Calendar.GetDayEvent(0,d,j) print(d,e.title,e.calendarType,e.sequenceType,e.eventID) end end`
-19. **The skill bars' fill.** In game (screenshot of 2026-10-23) the
-    skills list's bars fill the whole track at any value, the left
-    `p` of the atlas stretched over it (`SetTexCoord(0, p, 1, 0)`), while
-    the detail pane's bar fills by value (87/150 to 57%). wowlua fills the
-    list's by value too. Blizzard's `SetFillPercent` sets the fill to
-    `p * FillArea:GetWidth()`: so in game `FillArea` reads 0 in the rows'
-    `Initialize` (why is open: the rows are anchored then, decision T346's
-    `child 0 200` is the nearest rule), and a 0-wide fill with one point
-    is drawn at its atlas size (240, clipped by the bar's mask). Steps:
-    1. `/reload`, and do not open the character window before step 3.
-    2. `/run hooksecurefunc(SkillsBarMixin,"SetFillPercent",function(b,p) local r=b:GetParent():GetParent() print(format("%.2f",p),b.FillArea:GetWidth(),b.Fill:GetWidth(),r:GetWidth(),r:GetNumPoints()) end)`
-    3. Open the character window's Skills tab; note the lines printed.
-    4. `/run for _,f in ipairs(SkillsFrame.ScrollBox:GetFrames()) do local s=f.Content and f.Content.SkillsBar if s then print(s.FillArea:GetWidth(),s.Fill:GetWidth(),s.Fill:GetTexCoord()) end end`
-    5. `/run local b=SkillsFrame.SkillDetailFrame.RankBar print(b.FillArea:GetWidth(),b.Fill:GetWidth())`
-    6. `/run T=UIParent:CreateTexture(nil,"OVERLAY") T:SetAtlas("common-stat-bar-blue",true) T:SetPoint("LEFT",UIParent,"CENTER",-100,0) T:SetWidth(0) print(T:GetSize())`
-    7. A screenshot: is a 240-wide blue bar drawn in the middle (wowlua:
+19. **The skill bars' fill.** In game (screenshot of 2026-10-23, build
+    70532, the same Blizzard code as wowlua's) the skills list's bars fill
+    the whole track at any value, the left `p` of the atlas stretched over
+    it (`SetTexCoord(0, p, 1, 0)`), while the detail pane's bar fills by
+    value (87/150 to 57%). wowlua fills the list's by value too. Blizzard's
+    `SetFillPercent` sets the fill to `p * FillArea:GetWidth()`, so in game
+    `FillArea` must read 0 when the rows are set, and a 0-wide fill with one
+    point is drawn at its atlas size (240, clipped by the bar's mask). Why
+    it reads 0 is open: rows made and initialized in the same frame are the
+    likely cause, but Blizzard's micro menu and text-to-speech options read
+    sizes of regions made moments before at login and need them at once
+    (unless they fail silently in game; step 1 shows it). Steps:
+    1. `/console scriptErrors 1`, then `/reload`; note any error shown at
+       login (`FrameUtil.lua:247`, `TextToSpeechFrame.lua:597`?), then
+       `/console scriptErrors 0`.
+    2. `/reload`, and do not open the character window before step 4.
+    3. `/run hooksecurefunc(SkillsBarMixin,"SetFillPercent",function(b,p) local a=b.FillArea print(format("%.2f",p),a:GetWidth(),tostring(a:IsRectValid()),b:GetWidth(),b:GetParent():GetParent():GetWidth()) end)`
+    4. Open the character window's Skills tab; note the lines printed.
+    5. `/run for _,f in ipairs(SkillsFrame.ScrollBox:GetFrames()) do local s=f.Content and f.Content.SkillsBar if s then print(s.FillArea:GetWidth(),s.Fill:GetWidth(),s.Fill:GetTexCoord()) end end`
+    6. `/run local b=SkillsFrame.SkillDetailFrame.RankBar print(b.FillArea:GetWidth(),b.Fill:GetWidth())`
+    7. `/run T=UIParent:CreateTexture(nil,"OVERLAY") T:SetAtlas("common-stat-bar-blue",true) T:SetPoint("LEFT",UIParent,"CENTER",-100,0) T:SetWidth(0) print(T:GetSize())`
+    8. A screenshot: is a 240-wide blue bar drawn in the middle (wowlua:
        nothing)?
+    9. `/run local p=CreateFrame("Frame",nil,UIParent) p:SetPoint("CENTER") p:SetSize(100,50) local c=CreateFrame("Frame",nil,p) c:SetAllPoints() local g=CreateFrame("Frame",nil,c) g:SetAllPoints() print(g:GetWidth(),g:IsRectValid(),c:IsRectValid())`
+       (wowlua: `100 true true`): whether a chain made in one call has its
+       size at once.
 20. **Screenshots to compare with wowlua's** (in `~/Desktop/wowlua-*`):
     1. Settings, Accessibility: the "Colors" category and the "Use UI
        Scale" check box (Graphics).
