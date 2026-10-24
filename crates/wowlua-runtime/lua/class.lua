@@ -73,9 +73,9 @@ function wl.finalize(cls)
 			end
 		end
 	end
-	local getters, setters = merged(cls, "__getters"), merged(cls, "__setters")
-	if getters or setters then
-		getters, setters = getters or {}, setters or {}
+	local ownGetters, ownSetters = merged(cls, "__getters"), merged(cls, "__setters")
+	if ownGetters or ownSetters then
+		local getters, setters = ownGetters or {}, ownSetters or {}
 		cls.__index = function(self, k)
 			local g = getters[k]
 			if g then
@@ -94,9 +94,9 @@ function wl.finalize(cls)
 			end
 		end
 	end
-	local sgetters, ssetters = merged(cls, "__sgetters"), merged(cls, "__ssetters")
-	if sgetters or ssetters then
-		sgetters, ssetters = sgetters or {}, ssetters or {}
+	local ownSgetters, ownSsetters = merged(cls, "__sgetters"), merged(cls, "__ssetters")
+	if ownSgetters or ownSsetters then
+		local sgetters, ssetters = ownSgetters or {}, ownSsetters or {}
 		local mt = getmetatable(cls)
 		mt.__index = function(_, k)
 			local g = sgetters[k]
