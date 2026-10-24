@@ -287,10 +287,10 @@ enum Command {
     Screenshot(ScreenshotArgs),
     /// Serve the Language Server Protocol on stdio, for editors
     Lsp {
-        /// Run one check for the server (its request on stdin, the answer
-        /// on stdout): the server runs each check in a process of its own.
+        /// Check for the server (a request per line on stdin, its answer a
+        /// line on stdout): the server checks in a process of its own.
         #[arg(long, hide = true)]
-        check: bool,
+        worker: bool,
     },
     /// Serve the Debug Adapter Protocol: debug a test file or the addon
     Debug {
@@ -636,14 +636,14 @@ fn run() -> ExitCode {
         Command::Test(args) => commands::test(&out, &cli.global, &args),
         Command::Debug { port } => debug::debug(&out, &cli.global, port),
         // exit code 1 when the client exits without `shutdown`
-        Command::Lsp { check: true } => match wowlua_lsp::run_child() {
+        Command::Lsp { worker: true } => match wowlua_lsp::run_worker() {
             Ok(()) => true,
             Err(e) => {
-                eprintln!("error: the check stopped: {e}");
+                eprintln!("error: the checker stopped: {e}");
                 false
             }
         },
-        Command::Lsp { check: false } => match wowlua_lsp::run() {
+        Command::Lsp { worker: false } => match wowlua_lsp::run() {
             Ok(clean) => clean,
             Err(e) => {
                 eprintln!("error: the language server stopped: {e}");

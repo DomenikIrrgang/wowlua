@@ -516,7 +516,12 @@ fn build_inner(
         });
     }
     // Version and build id (`wowlua:meta` needs them while compiling).
-    let vcs = vcs::info(&root);
+    // (a long-lived cache keeps the repository's state it first read: it
+    // only stamps the version, and git takes tens of milliseconds)
+    let vcs = match cache.as_deref_mut() {
+        Some(cache) => cache.vcs.get_or_insert_with(|| vcs::info(&root)).clone(),
+        None => vcs::info(&root),
+    };
     let version = build_version(session, project, &profile, vcs.as_ref())?;
     let build_id = build_id(session, project, &profile.name, &flavors, &files, &assets);
     let asset_rels: Vec<String> = assets.iter().map(|a| a.rel.clone()).collect();
@@ -1068,7 +1073,7 @@ fn build_inner(
         .as_deref_mut()
         .map(crate::BuildCache::lend)
         .unwrap_or_default();
-    let mut api_shared: Option<crate::compile::ParsedDeclaration> = None;
+    let mut api_shared: Option<Arc<crate::compile::ParsedDeclaration>> = None;
     for (idx, flavor) in compile_flavors.iter().enumerate() {
         let meta = crate::meta::build_meta(
             project,
@@ -1117,10 +1122,11 @@ fn build_inner(
                         &mut session.db,
                         wowlua_api::shared(),
                         keep_tokens,
+                        cache.as_deref_mut(),
                     ));
                 }
-                api_own = parse_api(&mut session.db, own, keep_tokens);
-                vec![api_shared.as_ref().expect("parsed above"), &api_own]
+                api_own = parse_api(&mut session.db, own, keep_tokens, cache.as_deref_mut());
+                vec![api_shared.as_deref().expect("parsed above"), &*api_own]
             }
             None => Vec::new(),
         };
@@ -1207,6 +1213,11 @@ fn build_inner(
             if seen.insert(key) {
                 session.push(d);
             }
+        }
+        // (what it used is kept; what it did not touch stays for the next
+        // full build)
+        if let Some(cache) = cache.as_deref_mut() {
+            cache.keep_partial(flavor_cache);
         }
         return None;
     }
@@ -3048,12 +3059,36 @@ fn order_by_dependencies(
 /// Adds and parses an embedded WoW API file. Without `keep_tokens` its tokens,
 /// trivia and line starts are freed at once: only rename-private
 /// (`private_names::plan`) reads them, for the API's method names.
+/// A long-lived cache keeps the parse while the file gets the same
+/// `FileId` (the files before it are as many as before).
 fn parse_api(
     db: &mut wowlua_span::SourceDb,
     f: wowlua_api::File,
     keep_tokens: bool,
-) -> crate::compile::ParsedDeclaration {
+    cache: Option<&mut crate::BuildCache>,
+) -> Arc<crate::compile::ParsedDeclaration> {
     let file = db.add_static(f.path, f.text);
+    if let Some(cache) = cache {
+        if let Some((id, keep, parsed)) = cache.api.get(f.path)
+            && *id == file
+            && *keep == keep_tokens
+        {
+            return parsed.clone();
+        }
+        let parsed = Arc::new(parse_api_file(f, file, keep_tokens));
+        cache
+            .api
+            .insert(f.path, (file, keep_tokens, parsed.clone()));
+        return parsed;
+    }
+    Arc::new(parse_api_file(f, file, keep_tokens))
+}
+
+fn parse_api_file(
+    f: wowlua_api::File,
+    file: FileId,
+    keep_tokens: bool,
+) -> crate::compile::ParsedDeclaration {
     let mut parse = wowlua_syntax::parse_static(f.text, file);
     if !keep_tokens {
         parse.lexed.tokens = Default::default();

@@ -967,6 +967,21 @@ pub(crate) struct FlavorCache {
     /// What checking each file reads of its syntax, by path and `FileId`
     /// (the same in every flavor of the build).
     prepared: HashMap<(String, FileId), Arc<wowlua_sema::check::body::Prepared>>,
+    /// Each source's load-order usage, by path, kept across builds (the
+    /// language server's checker): the same `FileId`, bytes and game API
+    /// give the same usage.
+    pub(crate) usages: HashMap<String, UsageEntry>,
+}
+
+/// A source's load-order usage and what it was computed from.
+pub(crate) struct UsageEntry {
+    file: FileId,
+    hash: blake3::Hash,
+    /// The declaration files the markers came from (the flavor's API).
+    api: blake3::Hash,
+    usage: Arc<wowlua_sema::usage::FileUsage>,
+    /// The last build that used it.
+    pub(crate) generation: u64,
 }
 
 pub(crate) struct CacheEntry {
@@ -998,11 +1013,13 @@ impl FlavorCache {
     pub(crate) fn kept(
         entries: HashMap<String, Vec<CacheEntry>>,
         hashes: HashMap<String, blake3::Hash>,
+        usages: HashMap<String, UsageEntry>,
         generation: u64,
     ) -> Self {
         FlavorCache {
             entries,
             hashes,
+            usages,
             generation: Some(generation),
             ..FlavorCache::default()
         }
@@ -1239,7 +1256,17 @@ pub fn compile_flavor(
     let markers = wowlua_sema::usage::Markers::from_table().with_api(&inputs);
     // The active sources' usages, on worker threads (#8): the load order
     // takes them from `FileInput::usage`, and they go after it.
-    let wanted: Vec<usize> = (0..files.len())
+    // (kept across builds: those of unchanged files are taken from there)
+    let api_files = {
+        let mut h = blake3::Hasher::new();
+        for input in inputs.iter().filter(|i| i.kind == FileKind::Declaration) {
+            h.update(input.src_rel.as_bytes());
+            h.update(b"\0");
+        }
+        h.finalize()
+    };
+    let mut hashes: HashMap<usize, blake3::Hash> = HashMap::new();
+    let candidates: Vec<usize> = (0..files.len())
         .filter(|&i| {
             matches!(inputs[i].kind, FileKind::Wowlua | FileKind::Lua)
                 && inputs[i].parse.is_some()
@@ -1247,6 +1274,25 @@ pub fn compile_flavor(
                 && layout.active.get(i).copied().unwrap_or(true)
         })
         .collect();
+    let mut wanted: Vec<usize> = Vec::with_capacity(candidates.len());
+    for i in candidates {
+        let (source, file) = &files[i];
+        let Some(hash) = cache.hash(source, &raw[&source.rel]) else {
+            wanted.push(i);
+            continue;
+        };
+        let generation = cache.generation.unwrap_or(0);
+        match cache.usages.get_mut(&source.rel) {
+            Some(e) if e.file == *file && e.hash == hash && e.api == api_files => {
+                e.generation = generation;
+                inputs[i].usage = Some(e.usage.clone());
+            }
+            _ => {
+                hashes.insert(i, hash);
+                wanted.push(i);
+            }
+        }
+    }
     let mut usages = Vec::with_capacity(wanted.len());
     jobs.region(
         wanted,
@@ -1260,6 +1306,18 @@ pub fn compile_flavor(
     );
     for (i, usage) in &usages {
         inputs[*i].usage = Some(usage.clone());
+        if let (Some(&hash), Some(generation)) = (hashes.get(i), cache.generation) {
+            cache.usages.insert(
+                files[*i].0.rel.clone(),
+                UsageEntry {
+                    file: files[*i].1,
+                    hash,
+                    api: api_files,
+                    usage: usage.clone(),
+                    generation,
+                },
+            );
+        }
     }
     // The types-only sources load with another addon, not this one.
     let mut active = layout.active.to_vec();
@@ -1271,7 +1329,13 @@ pub fn compile_flavor(
         active: &active,
         ..layout
     };
-    let order = wowlua_sema::loadorder::analyze_with(&inputs, &analysis, layout, &markers, jobs);
+    // (a focused check needs the globals files assign, not the order: its
+    // diagnostics wait for the full check)
+    let order = if check.focus.is_some() {
+        wowlua_sema::loadorder::global_defs_only(&inputs)
+    } else {
+        wowlua_sema::loadorder::analyze_with(&inputs, &analysis, layout, &markers, jobs)
+    };
     for (i, _) in usages {
         inputs[i].usage = None;
     }

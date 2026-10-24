@@ -530,9 +530,9 @@ Other editors use the LSP directly.
 a package as `wowlua check` does with its tests, the editor's unsaved texts
 read over the files on disk, in two passes. 200 ms after the last edit, the
 first pass type-checks the package's open files and the modules they
-import (directly or not), builds nothing, and reports those files only; a
-check of the same package still running then is stopped, its text being
-old. Once no package was edited for 2 s, the second pass checks the whole
+import (directly or not), builds nothing, skips the load order (its
+diagnostics come with the second pass), and reports those files only.
+Once no package was edited for 2 s, the second pass checks the whole
 package as `wowlua check` does, reporting every file; after a save (its
 `wowlua.json` too) or files changed on disk (not in the package's `dist/`
 or hidden folders) the second pass covers every package of its workspace,
@@ -549,18 +549,28 @@ does not parse). The outline lists a file's top-level functions (`A.b`,
 fields, interfaces, enums and type aliases, exported or not. The server
 speaks LSP 3.17 with incremental document sync.
 
-The server stays responsive and survives what goes wrong (decision T370).
-Each check runs in a child process of the server (`wowlua lsp --check`,
-the open documents with its request, its diagnostics and the open files'
-definitions as its answer), one at a time, while the server answers
-formatting, outline and definition requests; only go to definition in a
-package with unchecked edits waits for its check. A check that crashes,
-fails or runs longer than two minutes (it is stopped) is logged to the
-editor, and the server goes on with the last results; its memory goes back
-to the system when it ends, so the server itself stays small. A message
-that is no JSON is skipped; a request whose handler fails gets an error
-reply. A first pass's diagnostics replace those of its files only; the
-other files keep what the last full check found.
+The server stays responsive and survives what goes wrong (decisions T370,
+T373). Checks run in a long-lived child process of the server, the checker
+(`wowlua lsp --worker`: a request a line on its input with the open
+documents, its answer a line on its output: diagnostics and the open
+files' definitions), one at a time, while the server answers formatting,
+outline and definition requests; only go to definition in a package with
+unchecked edits waits for its check. The checker keeps what an unchanged
+file gives between checks: the folders' walks (as long as no folder, ignore
+file or git index they read changed, and until the editor reports files
+created or deleted), each file's load-order usage, `import internal`
+reads and the game's parsed API (by path, `FileId` and bytes), the
+repository's state, and the compiled files of full checks. A check that
+crashes, fails or runs longer than two minutes ends the checker (it is
+started again for the next check) and is logged to the editor; the server
+goes on with the last results. After 300 checks the checker is replaced
+by a fresh one, which gives its memory back to the system, so neither
+process grows. A message that is no JSON is skipped; a request whose
+handler fails gets an error reply. A first pass's diagnostics replace
+those of its files only; the other files keep what the last full check
+found. A file below one of the editor's workspace folders is reported in
+the editor's spelling of that folder (`initialize`'s `rootUri` and
+`workspaceFolders`), also where it is reached through a symbolic link.
 
 Go to definition (decision T369) answers from the last check: the checker
 records, for each name it resolves, what it refers to. A local leads to its

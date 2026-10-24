@@ -111,10 +111,84 @@ pub fn glob_set_ci(patterns: &[String]) -> GlobSet {
 /// Walks `dir` (respecting `.gitignore` and hidden files) and returns files as
 /// `(path relative to root, absolute path)`, skipping `skip_dirs`. Like git,
 /// `.gitignore` does not apply to files git tracks.
+/// Walks remembered by a long-lived process (`remember_walks`): by the
+/// directory, its skipped directories and its root, the files found and
+/// what shows they are still the files there.
+type Walks = std::collections::HashMap<(PathBuf, Vec<PathBuf>, PathBuf), Walked>;
+static WALKS: std::sync::Mutex<Option<Walks>> = std::sync::Mutex::new(None);
+
+/// A walk's files and the modification times that keep it valid: of every
+/// directory it went through (adding, removing or renaming an entry
+/// changes its directory's), of the ignore files it read, and of git's
+/// index (which files git tracks).
+struct Walked {
+    files: Vec<(String, PathBuf)>,
+    stamps: Stamps,
+}
+
+/// Paths and their modification times (`None`: not there).
+type Stamps = Vec<(PathBuf, Option<std::time::SystemTime>)>;
+
+/// A long-lived process (the language server's checker) remembers walks
+/// for as long as nothing they saw changed.
+pub fn remember_walks() {
+    let mut w = WALKS.lock().unwrap_or_else(|e| e.into_inner());
+    w.get_or_insert_with(Default::default);
+}
+
+/// Stops remembering walks (for tests: the switch is the process's).
+#[cfg(test)]
+fn stop_remembering_walks() {
+    *WALKS.lock().unwrap_or_else(|e| e.into_inner()) = None;
+}
+
+/// Forgets the remembered walks (files were created or deleted).
+pub fn forget_walks() {
+    let mut w = WALKS.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(w) = w.as_mut() {
+        w.clear();
+    }
+}
+
+fn modified(path: &Path) -> Option<std::time::SystemTime> {
+    std::fs::metadata(path).and_then(|m| m.modified()).ok()
+}
+
 fn walk(root: &Path, dir: &Path, skip_dirs: &[PathBuf]) -> Vec<(String, PathBuf)> {
+    let key = (dir.to_path_buf(), skip_dirs.to_vec(), root.to_path_buf());
+    {
+        let w = WALKS.lock().unwrap_or_else(|e| e.into_inner());
+        let Some(walks) = w.as_ref() else {
+            drop(w);
+            return walk_now(root, dir, skip_dirs).0;
+        };
+        if let Some(walked) = walks.get(&key)
+            && walked.stamps.iter().all(|(p, t)| modified(p) == *t)
+        {
+            return walked.files.clone();
+        }
+    }
+    let (files, stamps) = walk_now(root, dir, skip_dirs);
+    let mut w = WALKS.lock().unwrap_or_else(|e| e.into_inner());
+    if let Some(walks) = w.as_mut() {
+        walks.insert(
+            key,
+            Walked {
+                files: files.clone(),
+                stamps,
+            },
+        );
+    }
+    files
+}
+
+/// Walks `dir`: its files, and the stamps that keep the walk valid.
+fn walk_now(root: &Path, dir: &Path, skip_dirs: &[PathBuf]) -> (Vec<(String, PathBuf)>, Stamps) {
+    let stamps = std::cell::RefCell::new(Vec::new());
     let walk_with = |git_ignore: bool| -> Vec<PathBuf> {
         let skip = skip_dirs.to_vec();
-        ignore::WalkBuilder::new(dir)
+        let mut files = Vec::new();
+        for entry in ignore::WalkBuilder::new(dir)
             .hidden(true)
             .git_ignore(git_ignore)
             .git_global(false)
@@ -124,9 +198,22 @@ fn walk(root: &Path, dir: &Path, skip_dirs: &[PathBuf]) -> Vec<(String, PathBuf)
             .filter_entry(move |entry| !skip.iter().any(|s| entry.path() == s))
             .build()
             .filter_map(Result::ok)
-            .filter(|entry| entry.file_type().is_some_and(|t| t.is_file()))
-            .map(|entry| entry.into_path())
-            .collect()
+        {
+            match entry.file_type() {
+                Some(t) if t.is_dir() => {
+                    let path = entry.path();
+                    let mut st = stamps.borrow_mut();
+                    st.push((path.to_path_buf(), modified(path)));
+                    for name in [".gitignore", ".ignore"] {
+                        let f = path.join(name);
+                        st.push((f.clone(), modified(&f)));
+                    }
+                }
+                Some(t) if t.is_file() => files.push(entry.into_path()),
+                _ => {}
+            }
+        }
+        files
     };
     let mut paths = walk_with(true);
     let tracked = tracked_files(dir);
@@ -143,7 +230,34 @@ fn walk(root: &Path, dir: &Path, skip_dirs: &[PathBuf]) -> Vec<(String, PathBuf)
         .filter_map(|path| Some((crate::fsutil::relative_slash(&path, root)?, path)))
         .collect();
     files.sort_by(|a, b| a.0.cmp(&b.0));
-    files
+    let mut stamps = stamps.into_inner();
+    // (what git tracks changes with its index)
+    if let Some(git) = git_dir(dir) {
+        let index = git.join("index");
+        stamps.push((index.clone(), modified(&index)));
+    }
+    stamps.sort();
+    stamps.dedup();
+    (files, stamps)
+}
+
+/// The `.git` directory of the repository `dir` is in, if any (`.git` may
+/// be a file naming it, in a worktree).
+fn git_dir(dir: &Path) -> Option<PathBuf> {
+    let mut d = Some(dir);
+    while let Some(here) = d {
+        let dot = here.join(".git");
+        if dot.is_dir() {
+            return Some(dot);
+        }
+        if let Ok(text) = std::fs::read_to_string(&dot)
+            && let Some(rest) = text.trim().strip_prefix("gitdir:")
+        {
+            return Some(here.join(rest.trim()));
+        }
+        d = here.parent();
+    }
+    None
 }
 
 /// The files under `dir` git tracks (absolute paths); empty outside a
@@ -264,9 +378,8 @@ pub fn internal_reads(
     out: &str,
     exclude: &GlobSet,
 ) -> std::collections::HashMap<String, Vec<String>> {
-    use wowlua_syntax::view::{ImportClause, StmtKind};
     let mut reads: std::collections::HashMap<String, Vec<String>> = Default::default();
-    let mut db = wowlua_span::SourceDb::new();
+    let remember = WALKS.lock().unwrap_or_else(|e| e.into_inner()).is_some();
     for test in discover_tests(root, src, out, exclude) {
         let Ok(bytes) = crate::overlay::read(&test.abs) else {
             continue;
@@ -274,48 +387,83 @@ pub fn internal_reads(
         if !bytes.windows(8).any(|w| w == b"internal") {
             continue;
         }
-        let file = db.add(test.rel.clone(), String::new());
-        let parse = wowlua_syntax::parse(&bytes, file);
-        for s in parse.view().block().stmts() {
-            let StmtKind::Import(i) = s.kind() else {
-                continue;
-            };
-            if !i.internal() {
-                continue;
-            }
-            let ImportClause::Names(specs) = i.clause() else {
-                continue;
-            };
-            let spec = String::from_utf8_lossy(&i.from().value()).into_owned();
-            let base = if let Some(rest) = spec.strip_prefix('/') {
-                rest.to_string()
-            } else if spec.starts_with("./") || spec.starts_with("../") {
-                let dir = test.src_rel.rsplit_once('/').map_or("", |(d, _)| d);
-                format!("{dir}/{spec}")
-            } else {
-                continue;
-            };
-            let mut parts: Vec<&str> = Vec::new();
-            for part in base.split('/') {
-                match part {
-                    "" | "." => {}
-                    ".." => {
-                        parts.pop();
-                    }
-                    p => parts.push(p),
-                }
-            }
-            let path = parts.join("/");
-            let names: Vec<String> = specs.iter().map(|s| s.name.text().to_string()).collect();
-            for module in [format!("{path}.wowlua"), format!("{path}/init.wowlua")] {
-                reads
-                    .entry(module)
-                    .or_default()
-                    .extend(names.iter().cloned());
-            }
+        // (a long-lived process keeps each test file's, by its bytes)
+        let found = if remember {
+            let hash = blake3::hash(&bytes);
+            let kept = INTERNAL
+                .lock()
+                .unwrap_or_else(|e| e.into_inner())
+                .get(&test.abs)
+                .filter(|(h, _)| *h == hash)
+                .map(|(_, f)| f.clone());
+            kept.unwrap_or_else(|| {
+                let found = internal_reads_of(&test, &bytes);
+                INTERNAL
+                    .lock()
+                    .unwrap_or_else(|e| e.into_inner())
+                    .insert(test.abs.clone(), (hash, found.clone()));
+                found
+            })
+        } else {
+            internal_reads_of(&test, &bytes)
+        };
+        for (module, names) in found {
+            reads.entry(module).or_default().extend(names);
         }
     }
     reads
+}
+
+/// Each test file's `import internal` reads, by its path and bytes' hash,
+/// in a long-lived process.
+type InternalReads = std::collections::HashMap<PathBuf, (blake3::Hash, Vec<(String, Vec<String>)>)>;
+static INTERNAL: std::sync::LazyLock<std::sync::Mutex<InternalReads>> =
+    std::sync::LazyLock::new(Default::default);
+
+/// What one test file reads through `import internal`: by module path,
+/// the names.
+fn internal_reads_of(test: &Source, bytes: &[u8]) -> Vec<(String, Vec<String>)> {
+    use wowlua_syntax::view::{ImportClause, StmtKind};
+    let mut out = Vec::new();
+    let mut db = wowlua_span::SourceDb::new();
+    let file = db.add(test.rel.clone(), String::new());
+    let parse = wowlua_syntax::parse(bytes, file);
+    for s in parse.view().block().stmts() {
+        let StmtKind::Import(i) = s.kind() else {
+            continue;
+        };
+        if !i.internal() {
+            continue;
+        }
+        let ImportClause::Names(specs) = i.clause() else {
+            continue;
+        };
+        let spec = String::from_utf8_lossy(&i.from().value()).into_owned();
+        let base = if let Some(rest) = spec.strip_prefix('/') {
+            rest.to_string()
+        } else if spec.starts_with("./") || spec.starts_with("../") {
+            let dir = test.src_rel.rsplit_once('/').map_or("", |(d, _)| d);
+            format!("{dir}/{spec}")
+        } else {
+            continue;
+        };
+        let mut parts: Vec<&str> = Vec::new();
+        for part in base.split('/') {
+            match part {
+                "" | "." => {}
+                ".." => {
+                    parts.pop();
+                }
+                p => parts.push(p),
+            }
+        }
+        let path = parts.join("/");
+        let names: Vec<String> = specs.iter().map(|s| s.name.text().to_string()).collect();
+        for module in [format!("{path}.wowlua"), format!("{path}/init.wowlua")] {
+            out.push((module, names.clone()));
+        }
+    }
+    out
 }
 
 /// Source files under `src`, sorted by path.
@@ -440,6 +588,34 @@ pub fn discover_assets(root: &Path, out: &str, assets: &GlobSet, exclude: &GlobS
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn a_remembered_walk_sees_files_added_and_removed() {
+        super::remember_walks();
+        let dir = tempfile::tempdir().unwrap();
+        let src = dir.path().join("src");
+        std::fs::create_dir_all(src.join("ui")).unwrap();
+        std::fs::write(src.join("a.wowlua"), "").unwrap();
+        let walk = || {
+            super::walk(dir.path(), &src, &[])
+                .into_iter()
+                .map(|(rel, _)| rel)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(walk(), ["src/a.wowlua"]);
+        // remembered: the same again
+        assert_eq!(walk(), ["src/a.wowlua"]);
+        // a file in a subfolder, then one removed
+        std::fs::write(src.join("ui/b.wowlua"), "").unwrap();
+        assert_eq!(walk(), ["src/a.wowlua", "src/ui/b.wowlua"]);
+        std::fs::remove_file(src.join("a.wowlua")).unwrap();
+        assert_eq!(walk(), ["src/ui/b.wowlua"]);
+        // forgotten: walked anew
+        super::forget_walks();
+        assert_eq!(walk(), ["src/ui/b.wowlua"]);
+        super::stop_remembering_walks();
+    }
+
     use super::*;
     use std::fs;
 

@@ -24,6 +24,13 @@ pub struct BuildCache {
     lua_checks: HashMap<String, LuaCheck>,
     /// The hashes of the files' bytes in this build, by `Source::rel`.
     hashes: HashMap<String, blake3::Hash>,
+    /// The game's API files, parsed: by path, the `FileId` and whether
+    /// tokens were kept.
+    pub(crate) api: HashMap<&'static str, (FileId, bool, Arc<crate::compile::ParsedDeclaration>)>,
+    /// The repository's state, read by the first build.
+    pub(crate) vcs: Option<Option<crate::vcs::VcsInfo>>,
+    /// Each source's load-order usage, by `Source::rel`.
+    usages: HashMap<String, crate::compile::UsageEntry>,
     /// Plain Lua files a rebuild does not parse again, by `Source::rel`.
     fronts: HashMap<String, FrontEntry>,
     /// What the last build wrote (stage 4).
@@ -78,6 +85,7 @@ impl BuildCache {
         if self.config != Some(config) {
             self.stats.cleared = self.config.is_some();
             self.files.clear();
+            self.usages.clear();
             self.lua_checks.clear();
             self.fronts.clear();
             self.written = None;
@@ -206,8 +214,19 @@ impl BuildCache {
         FlavorCache::kept(
             std::mem::take(&mut self.files),
             std::mem::take(&mut self.hashes),
+            std::mem::take(&mut self.usages),
             self.generation,
         )
+    }
+
+    /// Takes the entries back after a build that compiled part of the
+    /// package (the language server's first pass): those it did not touch
+    /// stay, for the next full build to use or drop.
+    pub(crate) fn keep_partial(&mut self, cache: FlavorCache) {
+        self.stats.hits += cache.hits;
+        self.stats.misses += cache.misses;
+        self.files = cache.entries;
+        self.usages = cache.usages;
     }
 
     /// Takes the entries back after compiling, without those this build
@@ -223,6 +242,9 @@ impl BuildCache {
             !entries.is_empty()
         });
         self.files = files;
+        let mut usages = cache.usages;
+        usages.retain(|_, u| u.generation == generation);
+        self.usages = usages;
         self.lua_checks.retain(|_, c| c.generation == generation);
         self.fronts.retain(|_, f| f.generation == generation);
     }

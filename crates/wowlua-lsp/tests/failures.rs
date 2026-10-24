@@ -1,4 +1,4 @@
-//! A check that fails (here: a child that ends without an answer) is
+//! A check that fails (here: a worker that ends without an answer) is
 //! reported, and the server goes on answering (decision T370).
 
 mod common;
@@ -20,7 +20,7 @@ fn a_failed_check_is_reported_and_the_server_goes_on() {
     std::fs::write(&path, "local function f() end\n").unwrap();
     let uri = wowlua_lsp::text::uri_of(&path);
     // `false` ends at once, writing nothing
-    let mut c = Client::start_with(wowlua_lsp::Checker::Child("false".into()));
+    let mut c = Client::start_with(wowlua_lsp::Checker::Worker("false".into()));
     c.notify(
         "textDocument/didOpen",
         json!({ "textDocument": { "uri": uri, "languageId": "wowlua", "version": 1, "text": "local function f() end\n" } }),

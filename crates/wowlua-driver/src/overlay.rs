@@ -28,11 +28,22 @@ pub fn remove(path: &Path) {
     }
 }
 
+/// The editor's texts of exactly these files (any others read from disk
+/// again).
+pub fn replace_all(files: impl IntoIterator<Item = (PathBuf, Arc<[u8]>)>) {
+    let map: HashMap<PathBuf, Arc<[u8]>> = files.into_iter().map(|(p, b)| (key(&p), b)).collect();
+    let mut o = OVERLAY.write().unwrap_or_else(|e| e.into_inner());
+    *o = Some(map);
+}
+
 /// A source's bytes: the editor's when it has the file open, else the disk's.
 pub fn read(path: &Path) -> std::io::Result<Vec<u8>> {
     {
         let o = OVERLAY.read().unwrap_or_else(|e| e.into_inner());
+        // (only a path whose file name is an open file's is made canonical
+        // to look it up: a build reads hundreds of files)
         if let Some(map) = o.as_ref().filter(|m| !m.is_empty())
+            && map.keys().any(|k| k.file_name() == path.file_name())
             && let Some(bytes) = map.get(&key(path))
         {
             return Ok(bytes.to_vec());
@@ -55,6 +66,10 @@ mod tests {
         set(&file, b"editor".to_vec());
         assert_eq!(read(&file).unwrap(), b"editor");
         remove(&file);
+        assert_eq!(read(&file).unwrap(), b"disk");
+        replace_all([(file.clone(), Arc::from(&b"all"[..]))]);
+        assert_eq!(read(&file).unwrap(), b"all");
+        replace_all([]);
         assert_eq!(read(&file).unwrap(), b"disk");
         std::fs::remove_dir_all(&dir).ok();
     }

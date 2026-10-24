@@ -49,6 +49,7 @@ pub use project::{
     ExternalAddon, LoadOptions, Project, Status, load_project, load_projects, standalone_project,
 };
 pub use sources::{TestRole, glob_set};
+pub use sources::{forget_walks, remember_walks};
 
 /// wowlua's cache folder (`$WOWLUA_HOME/cache`).
 pub fn cache_root() -> Option<std::path::PathBuf> {

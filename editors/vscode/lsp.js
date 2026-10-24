@@ -135,6 +135,8 @@ class LanguageClient {
                 processId: process.pid,
                 clientInfo: { name: "vscode" },
                 rootUri: folder ? folder.uri.toString() : null,
+                // (the server reports files in these folders as they are spelled here)
+                workspaceFolders: (vscode.workspace.workspaceFolders || []).map((f) => ({ uri: f.uri.toString(), name: f.name })),
                 capabilities: {},
             })
             .then(() => {

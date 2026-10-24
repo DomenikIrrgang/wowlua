@@ -1,6 +1,6 @@
-//! `wowlua lsp` as an editor runs it (decision T370): each check in a
-//! process of its own, the unsaved text's error reported, a local's
-//! definition found, and a clean exit.
+//! `wowlua lsp` as an editor runs it (decisions T370, T373): checks in its
+//! long-lived worker, the unsaved text's error reported, a local's
+//! definition found, a file created on disk checked, and a clean exit.
 
 use serde_json::{Value as Json, json};
 use std::io::Write;
@@ -21,7 +21,9 @@ fn the_server_checks_in_a_child_and_answers() {
     )
     .unwrap();
     std::fs::create_dir_all(dir.path().join("src")).unwrap();
-    let path = wowlua_lsp::text::canonical(&dir.path().join("src/main.wowlua"));
+    // (as an editor spells it: a temporary folder may be reached through a
+    // symbolic link, macOS's `/var`)
+    let path = dir.path().join("src/main.wowlua");
     std::fs::write(&path, "print(1)\n").unwrap();
     let uri = wowlua_lsp::text::uri_of(&path);
     let mut server = Command::new(assert_cmd::cargo::cargo_bin("wowlua"))
@@ -54,7 +56,8 @@ fn the_server_checks_in_a_child_and_answers() {
     };
     send(
         &mut stdin,
-        &json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": { "capabilities": {} } }),
+        &json!({ "jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+            "capabilities": {}, "rootUri": wowlua_lsp::text::uri_of(dir.path()) } }),
     );
     wait("the initialize reply", &|m| m["id"] == 1);
     let text = "local count: number = \"none\"\nprint(count)\n";
@@ -77,6 +80,22 @@ fn the_server_checks_in_a_child_and_answers() {
     let def = wait("the definition", &|m| m["id"] == 2);
     assert_eq!(def["result"][0]["range"]["start"]["line"], 0, "{def}");
     assert_eq!(def["result"][0]["range"]["start"]["character"], 6, "{def}");
+    // a file created on disk: checked once the editor says so
+    let other = path.with_file_name("other.wowlua");
+    std::fs::write(&other, "local b: string = 2\nprint(b)\n").unwrap();
+    let other_uri = wowlua_lsp::text::uri_of(&other);
+    send(
+        &mut stdin,
+        &json!({ "jsonrpc": "2.0", "method": "workspace/didChangeWatchedFiles", "params": {
+            "changes": [{ "uri": other_uri, "type": 1 }] } }),
+    );
+    let published = wait("the new file's diagnostics", &|m| {
+        m["method"] == "textDocument/publishDiagnostics"
+            && m["params"]["uri"] == other_uri.as_str()
+            && !m["params"]["diagnostics"].as_array().unwrap().is_empty()
+    });
+    let items = published["params"]["diagnostics"].as_array().unwrap();
+    assert!(items.iter().any(|d| d["code"] == "E2001"), "{items:#?}");
     send(
         &mut stdin,
         &json!({ "jsonrpc": "2.0", "id": 3, "method": "shutdown" }),

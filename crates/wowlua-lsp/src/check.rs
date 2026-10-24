@@ -72,7 +72,17 @@ pub fn check(
     open: &HashSet<PathBuf>,
     focus: Option<&HashSet<PathBuf>>,
 ) -> Vec<Checked> {
-    check_and(manifest, whole, open, focus, drop)
+    check_and(manifest, whole, open, focus, None, drop)
+}
+
+/// What a long-lived checker keeps between checks: each package's build
+/// cache (by its manifest), so a check repeats only the work of what
+/// changed.
+#[derive(Default)]
+pub struct Warm {
+    caches: HashMap<PathBuf, wowlua_driver::BuildCache>,
+    /// Checks run, for the server's restarts.
+    pub checks: usize,
 }
 
 /// [`check`], handing the session to `done` (a process about to end
@@ -82,6 +92,7 @@ fn check_and(
     whole: bool,
     open: &HashSet<PathBuf>,
     focus: Option<&HashSet<PathBuf>>,
+    mut warm: Option<&mut Warm>,
     done: fn(Session),
 ) -> Vec<Checked> {
     let dir = manifest.parent().unwrap_or(Path::new(".")).to_path_buf();
@@ -139,7 +150,13 @@ fn check_and(
                 tests: true,
                 left_out: Vec::new(),
             };
-            let _ = wowlua_driver::build(&mut session, &project, &request);
+            let _ = match warm.as_deref_mut() {
+                Some(w) => {
+                    let cache = w.caches.entry(project.manifest.path.clone()).or_default();
+                    wowlua_driver::build_with_cache(&mut session, &project, &request, cache)
+                }
+                None => wowlua_driver::build(&mut session, &project, &request),
+            };
             project.apply_lints(&mut session);
             roots.push(project.root().to_path_buf());
             let defs = session.definitions.replace(Vec::new()).unwrap_or_default();
@@ -343,27 +360,37 @@ pub fn request(
     whole: bool,
     docs: &[(PathBuf, String)],
     focus: Option<&HashSet<PathBuf>>,
+    rescan: bool,
 ) -> Json {
     json!({
         "manifest": manifest,
         "whole": whole,
         "focus": focus,
+        "rescan": rescan,
         "docs": docs.iter().map(|(p, t)| json!({ "path": p, "text": t })).collect::<Vec<_>>(),
     })
 }
 
-/// Runs a [`request`] in this process: the answer [`answer`] reads.
-pub fn child(request: &Json) -> Json {
+/// A [`request`] answered by a long-lived checker (`wowlua lsp --worker`):
+/// the open documents are exactly the request's, and what `warm` kept is
+/// reused.
+pub fn worker(warm: &mut Warm, request: &Json) -> Json {
     let manifest = PathBuf::from(request["manifest"].as_str().unwrap_or_default());
     let whole = request["whole"].as_bool().unwrap_or(false);
     let mut open = HashSet::new();
+    let mut docs = Vec::new();
     for doc in request["docs"].as_array().into_iter().flatten() {
         let (Some(path), Some(text)) = (doc["path"].as_str(), doc["text"].as_str()) else {
             continue;
         };
         let path = PathBuf::from(path);
-        wowlua_driver::overlay::set(&path, text.as_bytes().to_vec());
         open.insert(text::canonical(&path));
+        docs.push((path, std::sync::Arc::from(text.as_bytes())));
+    }
+    wowlua_driver::overlay::replace_all(docs);
+    // files were created or deleted: the folders are walked again
+    if request["rescan"].as_bool() == Some(true) {
+        wowlua_driver::forget_walks();
     }
     let focus: Option<HashSet<PathBuf>> = request["focus"].as_array().map(|f| {
         f.iter()
@@ -371,12 +398,15 @@ pub fn child(request: &Json) -> Json {
             .map(PathBuf::from)
             .collect()
     });
-    // (this process ends after answering: its memory is not freed first)
-    let packages = check_and(&manifest, whole, &open, focus.as_ref(), std::mem::forget);
+    warm.checks += 1;
+    // (the session is freed on another thread: the answer goes out first)
+    let packages = check_and(&manifest, whole, &open, focus.as_ref(), Some(warm), |s| {
+        std::thread::spawn(move || drop(s));
+    });
     Json::Array(packages.iter().map(Checked::to_json).collect())
 }
 
-/// What a child's [`child`] wrote, read back.
+/// What a worker's [`worker`] wrote, read back.
 pub fn answer(json: &Json) -> Option<Vec<Checked>> {
     json.as_array()?.iter().map(Checked::from_json).collect()
 }

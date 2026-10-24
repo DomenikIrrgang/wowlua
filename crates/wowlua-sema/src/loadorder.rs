@@ -135,6 +135,32 @@ pub fn analyze(
 
 /// [`analyze`], with the per-file work spread as `spread` does it; the
 /// result is the same.
+/// The part of the load order the type check needs, without the order: the
+/// globals each source assigns, from the usages `files` carry (the
+/// language server's first pass, whose load-order diagnostics wait for the
+/// full check). A file without its usage gets `None` (the type check finds
+/// them itself).
+pub fn global_defs_only(files: &[FileInput]) -> LoadOrder {
+    LoadOrder {
+        global_defs: files
+            .iter()
+            .map(|f| match (&f.usage, f.kind) {
+                (Some(u), FileKind::Wowlua | FileKind::Lua) => Some(
+                    u.defs
+                        .iter()
+                        .filter_map(|d| match &d.key {
+                            Key::Global(name) => Some(name.clone()),
+                            _ => None,
+                        })
+                        .collect(),
+                ),
+                _ => None,
+            })
+            .collect(),
+        ..LoadOrder::default()
+    }
+}
+
 pub fn analyze_with(
     files: &[FileInput],
     analysis: &Analysis,

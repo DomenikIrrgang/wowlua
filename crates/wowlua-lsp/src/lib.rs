@@ -68,32 +68,37 @@ struct Server {
     shutdown: bool,
     /// Checks run in this process (they read the overlay).
     in_process: bool,
+    /// Files were created or deleted since the last check started.
+    rescan: bool,
+    /// The editor's workspace folders: canonical, and as the editor spells
+    /// them (through a symbolic link, say).
+    roots: Vec<(PathBuf, PathBuf)>,
 }
 
 impl Server {
     /// The URI to report `path` (canonical) under: the editor's own for a
     /// document it has open.
     fn uri_for(&self, path: &Path) -> String {
-        self.docs
-            .iter()
-            .find(|(_, d)| d.canonical == path)
-            .map(|(uri, _)| uri.clone())
-            .unwrap_or_else(|| text::uri_of(path))
+        if let Some((uri, _)) = self.docs.iter().find(|(_, d)| d.canonical == path) {
+            return uri.clone();
+        }
+        // a file below a workspace folder: in the editor's spelling
+        for (canonical, given) in &self.roots {
+            if let Ok(rest) = path.strip_prefix(canonical) {
+                return text::uri_of(&given.join(rest));
+            }
+        }
+        text::uri_of(path)
     }
 
     /// Marks a package edited: its check is due `SETTLE - early` from now
     /// (`early` = `SETTLE`: at once). A check of it running now is of an
-    /// older text: it is stopped.
+    /// older text: its results are replaced by the next one's.
     fn touch(&mut self, manifest: &Path, early: Duration) {
         let at = Instant::now()
             .checked_sub(early)
             .unwrap_or_else(Instant::now);
         self.dirty.insert(manifest.to_path_buf(), at);
-        if let Some(r) = &self.running
-            && r.manifest == manifest
-        {
-            r.cancel.store(true, std::sync::atomic::Ordering::Relaxed);
-        }
         // (its full check waits for quiet again)
         let entry = self
             .later
@@ -133,12 +138,10 @@ fn canonical(path: &Path) -> PathBuf {
     text::canonical(path)
 }
 
-/// Runs the server on stdin and stdout until the client says `exit`; true
-/// when it said `shutdown` before (the protocol's exit code 0).
-pub fn run() -> std::io::Result<bool> {
-    // A panic (a compiler bug) is logged and caught where the server checks
-    // or answers, never the end of the process as on the command line; a
-    // parallel job's is recorded, as the driver expects.
+/// A panic (a compiler bug) is logged and caught where the server checks or
+/// answers, never the end of the process as on the command line; a parallel
+/// job's is recorded, as the driver expects.
+fn catch_panics() {
     std::panic::set_hook(Box::new(|info| {
         if wowlua_driver::parallel::in_job() {
             wowlua_driver::parallel::record_panic(info.to_string());
@@ -146,6 +149,12 @@ pub fn run() -> std::io::Result<bool> {
         }
         eprintln!("wowlua lsp: internal compiler error: {info}");
     }));
+}
+
+/// Runs the server on stdin and stdout until the client says `exit`; true
+/// when it said `shutdown` before (the protocol's exit code 0).
+pub fn run() -> std::io::Result<bool> {
+    catch_panics();
     let (tx, rx) = mpsc::channel::<Json>();
     std::thread::spawn(move || {
         let stdin = std::io::stdin();
@@ -168,7 +177,7 @@ pub fn run() -> std::io::Result<bool> {
     let stdout = std::io::stdout();
     let mut out = stdout.lock();
     let checker = match std::env::current_exe() {
-        Ok(program) => Checker::Child(program),
+        Ok(program) => Checker::Worker(program),
         Err(_) => Checker::InProcess,
     };
     serve_with(rx, &mut out, checker)
@@ -179,11 +188,17 @@ pub fn run() -> std::io::Result<bool> {
 pub enum Checker {
     /// In this process (the crate's tests).
     InProcess,
-    /// In a child process of this program (`wowlua lsp --check`), one per
-    /// check: its memory goes back to the system when it ends, and a check
-    /// that crashes, overflows its stack or hangs ends only itself.
-    Child(PathBuf),
+    /// In a long-lived child process of this program (`wowlua lsp
+    /// --worker`) that keeps each package's build cache between checks, so
+    /// a check repeats only the work of what changed. A check that crashes,
+    /// overflows its stack or hangs ends only the worker, which is started
+    /// again; after `RECYCLE` checks it is started afresh, which gives its
+    /// memory back to the system.
+    Worker(PathBuf),
 }
+
+/// Checks a worker runs before it is replaced by a fresh one.
+const RECYCLE: usize = 300;
 
 /// How long a check may run before it is stopped.
 const CHECK_LIMIT: Duration = Duration::from_secs(120);
@@ -222,8 +237,9 @@ pub fn serve_with(
         .name("wowlua-lsp-check".into())
         .stack_size(wowlua_driver::parallel::STACK);
     worker.spawn(move || {
+        let mut process: Option<WorkerProcess> = None;
         for job in work {
-            let result = run_check(&checker, &job);
+            let result = run_check(&checker, &mut process, &job);
             if events.send(Event::Checked(job.manifest, result)).is_err() {
                 return;
             }
@@ -241,6 +257,8 @@ pub fn serve_with(
         defined: HashMap::new(),
         shutdown: false,
         in_process,
+        rescan: false,
+        roots: Vec::new(),
     };
     loop {
         // the next check to start: when its edits have settled, or a saved
@@ -287,26 +305,12 @@ pub fn serve_with(
                 }
             }
             Ok(Event::Checked(manifest, result)) => {
-                let ran = server.running.take();
+                server.running = None;
                 match result {
                     Ok(packages) => {
                         for checked in packages {
                             publish(&mut server, checked, out)?;
                         }
-                    }
-                    // stopped for a newer text: that one is checked next (a
-                    // workspace's check waits for quiet again)
-                    Err(Failure::Cancelled) => {
-                        if let Some(r) = ran.filter(|r| !r.focused) {
-                            let entry = server
-                                .later
-                                .entry(manifest.clone())
-                                .or_insert((Instant::now(), false));
-                            entry.0 = Instant::now();
-                            entry.1 |= r.whole;
-                        }
-                        start_due(&mut server);
-                        continue;
                     }
                     Err(Failure::Failed(why)) => {
                         eprintln!("wowlua lsp: checking {} failed: {why}", manifest.display());
@@ -376,21 +380,15 @@ fn start_due(server: &mut Server) {
             .values()
             .map(|d| (d.path.clone(), d.text.clone()))
             .collect();
-        let cancel = std::sync::Arc::new(std::sync::atomic::AtomicBool::new(false));
         let job = Job {
             manifest: manifest.clone(),
             whole,
             focus,
             docs,
-            cancel: cancel.clone(),
+            rescan: std::mem::take(&mut server.rescan),
         };
         if server.jobs.send(job).is_ok() {
-            server.running = Some(Running {
-                manifest,
-                whole,
-                focused,
-                cancel,
-            });
+            server.running = Some(Running { manifest, focused });
         }
     }
 }
@@ -398,18 +396,13 @@ fn start_due(server: &mut Server) {
 /// The check the worker runs.
 struct Running {
     manifest: PathBuf,
-    whole: bool,
     /// The first pass of an edit (its open files only).
     focused: bool,
-    /// Set when an edit made its text old: the worker stops it.
-    cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
 }
 
 /// Why a check gave no answer.
 #[derive(Debug)]
 enum Failure {
-    /// Stopped: its text was old.
-    Cancelled,
     /// It crashed, failed or took too long.
     Failed(String),
 }
@@ -430,19 +423,24 @@ fn generated(manifest: &Path, path: &Path) -> bool {
 }
 
 /// A check for the worker: the package, whether its whole workspace, the
-/// open documents, and whether it is to stop.
+/// files a first pass checks, and the open documents.
 struct Job {
     manifest: PathBuf,
     whole: bool,
     /// The files a first pass checks (and what they import).
     focus: Option<std::collections::HashSet<PathBuf>>,
     docs: Vec<(PathBuf, String)>,
-    cancel: std::sync::Arc<std::sync::atomic::AtomicBool>,
+    /// Files were created or deleted since the last check.
+    rescan: bool,
 }
 
 /// Runs a check where `checker` says. A check that panics, crashes or
 /// takes too long is an error the server reports, and goes on.
-fn run_check(checker: &Checker, job: &Job) -> Result<Vec<check::Checked>, Failure> {
+fn run_check(
+    checker: &Checker,
+    process: &mut Option<WorkerProcess>,
+    job: &Job,
+) -> Result<Vec<check::Checked>, Failure> {
     match checker {
         Checker::InProcess => {
             // (the overlay has the open documents already; a check here
@@ -453,99 +451,182 @@ fn run_check(checker: &Checker, job: &Job) -> Result<Vec<check::Checked>, Failur
             }))
             .map_err(|e| Failure::Failed(panic_message(&*e)))
         }
-        Checker::Child(program) => check_in_child(program, job),
+        Checker::Worker(program) => check_in_worker(program, process, job),
     }
 }
 
-/// Runs a check in a child process: the request on its input, the answer
-/// on its output.
-fn check_in_child(program: &Path, job: &Job) -> Result<Vec<check::Checked>, Failure> {
-    use std::io::{Read, Write};
-    use std::process::{Command, Stdio};
-    let mut child = Command::new(program)
-        .args(["lsp", "--check"])
-        .stdin(Stdio::piped())
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        .map_err(|e| Failure::Failed(format!("cannot start {}: {e}", program.display())))?;
-    let request = check::request(&job.manifest, job.whole, &job.docs, job.focus.as_ref());
-    let mut input = child.stdin.take().expect("piped");
-    // (written and read on threads of their own: a full pipe blocks)
-    let writer = std::thread::spawn(move || {
-        let _ = serde_json::to_writer(&mut input, &request);
-    });
-    let mut stdout = child.stdout.take().expect("piped");
-    let reader = std::thread::spawn(move || {
-        let mut bytes = Vec::new();
-        let _ = stdout.read_to_end(&mut bytes);
-        bytes
-    });
-    let mut stderr = child.stderr.take().expect("piped");
-    let errors = std::thread::spawn(move || {
-        let mut text = String::new();
-        let _ = stderr.read_to_string(&mut text);
-        text
-    });
-    let started = Instant::now();
-    let status = loop {
-        match child.try_wait() {
-            Ok(Some(status)) => break status,
-            Ok(None) if job.cancel.load(std::sync::atomic::Ordering::Relaxed) => {
-                let _ = child.kill();
-                let _ = child.wait();
-                return Err(Failure::Cancelled);
+/// The worker process: its input, its answers (one line each), the last
+/// of what it wrote to stderr, and the checks it ran.
+struct WorkerProcess {
+    child: std::process::Child,
+    input: std::process::ChildStdin,
+    answers: mpsc::Receiver<String>,
+    errors: std::sync::Arc<std::sync::Mutex<String>>,
+    checks: usize,
+}
+
+impl WorkerProcess {
+    fn start(program: &Path) -> Result<WorkerProcess, String> {
+        use std::io::{BufRead, Read};
+        use std::process::{Command, Stdio};
+        let mut child = Command::new(program)
+            .args(["lsp", "--worker"])
+            .stdin(Stdio::piped())
+            .stdout(Stdio::piped())
+            .stderr(Stdio::piped())
+            .spawn()
+            .map_err(|e| format!("cannot start {}: {e}", program.display()))?;
+        let input = child.stdin.take().expect("piped");
+        let stdout = child.stdout.take().expect("piped");
+        let (tx, answers) = mpsc::channel();
+        std::thread::spawn(move || {
+            for line in std::io::BufReader::new(stdout).lines() {
+                let Ok(line) = line else { return };
+                if tx.send(line).is_err() {
+                    return;
+                }
             }
-            Ok(None) if started.elapsed() > CHECK_LIMIT => {
-                let _ = child.kill();
-                let _ = child.wait();
+        });
+        let errors = std::sync::Arc::new(std::sync::Mutex::new(String::new()));
+        let tail = errors.clone();
+        let mut stderr = child.stderr.take().expect("piped");
+        std::thread::spawn(move || {
+            let mut chunk = [0u8; 4096];
+            while let Ok(n) = stderr.read(&mut chunk) {
+                if n == 0 {
+                    return;
+                }
+                let text = String::from_utf8_lossy(&chunk[..n]);
+                // (shown in the editor's log as it comes; the last kept for
+                // the reason of a crash)
+                eprint!("{text}");
+                let mut t = tail.lock().unwrap_or_else(|e| e.into_inner());
+                t.push_str(&text);
+                if t.len() > 16384 {
+                    let cut = t.len() - 16384;
+                    let cut = (cut..t.len()).find(|&i| t.is_char_boundary(i)).unwrap_or(0);
+                    t.drain(..cut);
+                }
+            }
+        });
+        Ok(WorkerProcess {
+            child,
+            input,
+            answers,
+            errors,
+            checks: 0,
+        })
+    }
+
+    /// The last lines it wrote to stderr.
+    fn last_errors(&self) -> String {
+        let t = self.errors.lock().unwrap_or_else(|e| e.into_inner());
+        let lines: Vec<&str> = t.lines().rev().take(20).collect();
+        lines.into_iter().rev().collect::<Vec<_>>().join("\n")
+    }
+}
+
+impl Drop for WorkerProcess {
+    fn drop(&mut self) {
+        let _ = self.child.kill();
+        let _ = self.child.wait();
+    }
+}
+
+/// Runs a check in the worker (started, or started again, as needed): the
+/// request one line on its input, the answer one line on its output. A
+/// check whose text an edit made old runs to its end: stopping it would
+/// stop the worker and lose what it keeps.
+fn check_in_worker(
+    program: &Path,
+    process: &mut Option<WorkerProcess>,
+    job: &Job,
+) -> Result<Vec<check::Checked>, Failure> {
+    use std::io::Write;
+    if process.as_ref().is_some_and(|p| p.checks >= RECYCLE) {
+        *process = None;
+    }
+    if process.is_none() {
+        *process = Some(WorkerProcess::start(program).map_err(Failure::Failed)?);
+    }
+    let worker = process.as_mut().expect("started");
+    worker.checks += 1;
+    let request = check::request(
+        &job.manifest,
+        job.whole,
+        &job.docs,
+        job.focus.as_ref(),
+        job.rescan,
+    );
+    let mut line = serde_json::to_vec(&request).unwrap_or_default();
+    line.push(b'\n');
+    if worker
+        .input
+        .write_all(&line)
+        .and_then(|()| worker.input.flush())
+        .is_err()
+    {
+        let why = worker.last_errors();
+        *process = None;
+        return Err(Failure::Failed(format!("the checker stopped: {why}")));
+    }
+    let started = Instant::now();
+    let answer = loop {
+        match worker.answers.recv_timeout(Duration::from_millis(20)) {
+            Ok(answer) => break answer,
+            Err(mpsc::RecvTimeoutError::Timeout) if started.elapsed() > CHECK_LIMIT => {
+                *process = None;
                 return Err(Failure::Failed(format!(
                     "the check took longer than {} s and was stopped",
                     CHECK_LIMIT.as_secs()
                 )));
             }
-            Ok(None) => std::thread::sleep(Duration::from_millis(5)),
-            Err(e) => {
-                return Err(Failure::Failed(format!(
-                    "the check could not be waited for: {e}"
-                )));
+            Err(mpsc::RecvTimeoutError::Timeout) => {}
+            Err(mpsc::RecvTimeoutError::Disconnected) => {
+                let why = worker.last_errors();
+                *process = None;
+                return Err(Failure::Failed(format!("the checker stopped: {why}")));
             }
         }
     };
-    let _ = writer.join();
-    let bytes = reader.join().unwrap_or_default();
-    let errors = errors.join().unwrap_or_default();
-    if !status.success() {
-        let tail: String = errors
-            .lines()
-            .rev()
-            .take(20)
-            .collect::<Vec<_>>()
-            .into_iter()
-            .rev()
-            .collect::<Vec<_>>()
-            .join("\n");
-        return Err(Failure::Failed(format!(
-            "the check failed ({status}): {tail}"
-        )));
+    let json: Json = serde_json::from_str(&answer)
+        .map_err(|_| Failure::Failed("the check's answer could not be read".into()))?;
+    if let Some(why) = json["error"].as_str() {
+        return Err(Failure::Failed(why.to_string()));
     }
-    let _ = std::io::stderr().write_all(errors.as_bytes());
-    serde_json::from_slice::<Json>(&bytes)
-        .ok()
-        .as_ref()
-        .and_then(check::answer)
+    check::answer(&json)
         .ok_or_else(|| Failure::Failed("the check's answer could not be read".into()))
 }
 
-/// The `--check` side: reads a request on stdin, writes the answer to
-/// stdout.
-pub fn run_child() -> std::io::Result<()> {
-    let request: Json = serde_json::from_reader(std::io::stdin().lock())?;
-    let answer = check::child(&request);
+/// The worker (`wowlua lsp --worker`): a request per line on stdin, its
+/// answer a line on stdout, keeping each package's build cache between
+/// checks. A check that panics answers with the error, and what was kept
+/// is dropped.
+pub fn run_worker() -> std::io::Result<()> {
+    use std::io::{BufRead, Write};
+    catch_panics();
+    // (folders are walked again only when what is in them changed)
+    wowlua_driver::remember_walks();
+    let mut warm = check::Warm::default();
     let stdout = std::io::stdout();
-    let mut out = stdout.lock();
-    serde_json::to_writer(&mut out, &answer)?;
-    std::io::Write::flush(&mut out)
+    for line in std::io::stdin().lock().lines() {
+        let line = line?;
+        let answer = match serde_json::from_str::<Json>(&line) {
+            Ok(request) => std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+                check::worker(&mut warm, &request)
+            }))
+            .unwrap_or_else(|e| {
+                warm = check::Warm::default();
+                json!({ "error": panic_message(&*e) })
+            }),
+            Err(e) => json!({ "error": format!("a request that is no JSON: {e}") }),
+        };
+        let mut out = stdout.lock();
+        serde_json::to_writer(&mut out, &answer)?;
+        out.write_all(b"\n")?;
+        out.flush()?;
+    }
+    Ok(())
 }
 
 /// What a panic said.
@@ -576,6 +657,23 @@ fn manifest_of(path: &Path) -> Option<PathBuf> {
     wowlua_manifest::find_manifest(path.parent()?, None).map(|m| canonical(&m))
 }
 
+/// The reply to `initialize`: what the server can do.
+fn initialized(out: &mut impl std::io::Write, id: &Json) -> std::io::Result<()> {
+    reply(
+        out,
+        id,
+        json!({
+            "capabilities": {
+                "textDocumentSync": { "openClose": true, "change": 2, "save": { "includeText": false } },
+                "documentFormattingProvider": true,
+                "documentSymbolProvider": true,
+                "definitionProvider": true,
+            },
+            "serverInfo": { "name": "wowlua", "version": env!("CARGO_PKG_VERSION") },
+        }),
+    )
+}
+
 /// Handles one message; true when the server should stop.
 fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::io::Result<bool> {
     let method = m["method"].as_str().unwrap_or("");
@@ -586,19 +684,23 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
         .unwrap_or("")
         .to_string();
     match method {
-        "initialize" => reply(
-            out,
-            id,
-            json!({
-                "capabilities": {
-                    "textDocumentSync": { "openClose": true, "change": 2, "save": { "includeText": false } },
-                    "documentFormattingProvider": true,
-                    "documentSymbolProvider": true,
-                    "definitionProvider": true,
-                },
-                "serverInfo": { "name": "wowlua", "version": env!("CARGO_PKG_VERSION") },
-            }),
-        )?,
+        "initialize" => {
+            let folders = params["workspaceFolders"]
+                .as_array()
+                .into_iter()
+                .flatten()
+                .map(|f| &f["uri"])
+                .chain(std::iter::once(&params["rootUri"]));
+            for uri in folders {
+                if let Some(given) = uri.as_str().and_then(text::path_of) {
+                    let pair = (canonical(&given), given);
+                    if !server.roots.contains(&pair) {
+                        server.roots.push(pair);
+                    }
+                }
+            }
+            initialized(out, id)?;
+        }
         "shutdown" => {
             server.shutdown = true;
             reply(out, id, Json::Null)?;
@@ -676,6 +778,10 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
         // their packages, with those that depend on them, again
         "workspace/didChangeWatchedFiles" => {
             for change in params["changes"].as_array().into_iter().flatten() {
+                // (created or deleted: the files to check are found anew)
+                if change["type"] != 2 {
+                    server.rescan = true;
+                }
                 let manifest = change["uri"]
                     .as_str()
                     .and_then(text::path_of)
