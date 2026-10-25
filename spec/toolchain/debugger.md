@@ -403,7 +403,9 @@ T310).
 - **Fonts**: the client's TrueType fonts from the installation; without
   them, the bundled stand-in fonts (open licenses), at the same pixel
   heights. Glyph positions follow the engine's measured widths (§17.6), so
-  layout does not depend on which font draws.
+  layout does not depend on which font draws; a glyph the recorded widths
+  lack is measured with the installation's font file (decision T392,
+  [Emulator §17.6](emulator.md)).
 - **Stand-ins**: a texture that cannot be read is drawn as a checkered
   magenta rectangle with its vertex color, so a missing image is visible;
   `--strict-assets` makes a missing file an error.

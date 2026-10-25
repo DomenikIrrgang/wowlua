@@ -349,7 +349,19 @@ The WoW API the VM's code calls, per flavor.
   glyph three periods wide) and `GetStringWidth` is the shown text's;
   `IsTruncated` says whether lines are left out or a word was cut. The
   client's advances are finer than the recorded whole pixels, so a narrow
-  line now and then holds a glyph fewer than in the client.
+  line now and then holds a glyph fewer than in the client. The recordings
+  cover Friz Quadrata, Arial Narrow, Skurri and Morpheus at 8 to 45 pixels,
+  printable ASCII; with the user's installation at hand (tests with
+  `--game-data`, sessions with a screenshot host), a glyph they lack (another
+  of the client's fonts, another character, another size) is measured with
+  the client's font file (decision T392): its advance rounded up, its width
+  alone (a line's last glyph) its ink's right edge rounded up and one more,
+  a space's its advance; checked against the recordings, 98.6 % of the
+  advances and 95 % of the widths are the same. Without it, such a glyph
+  is the recorded Friz Quadrata's (scaled to the size), a character outside
+  ASCII a `?`'s. Unverified: kerning beyond the recorded pairs (none), an
+  outlined font's glyphs (as the plain one's), a font of an addon's (not
+  in the installation: as without it).
 - **Atlases.** Every atlas of the client, from its own tables (decision
   T238): sizes, files, texture coordinates and tiling as the client gives
   them; an atlas it lacks is none.

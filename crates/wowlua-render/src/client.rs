@@ -240,7 +240,15 @@ pub struct CascClientData {
     casc: OnceLock<Option<Arc<Casc>>>,
     /// The spell tables, opened on first use.
     spells: OnceLock<Option<wowlua_casc::spells::SpellTables>>,
+    /// The client's fonts by their file's name (lower case), read on first
+    /// use; `None` for one the storage lacks.
+    fonts: std::sync::Mutex<std::collections::HashMap<String, Option<Arc<fontdue::Font>>>>,
+    /// Glyphs measured: (font, pixel size, character) → advance, ink.
+    glyphs: std::sync::Mutex<Measured>,
 }
+
+/// Glyphs measured, by font, pixel size and character: advance and ink.
+type Measured = std::collections::HashMap<(String, u32, char), Option<(f32, f32)>>;
 
 impl CascClientData {
     pub fn new(open: Box<dyn Fn() -> Option<Arc<Casc>> + Send + Sync>) -> CascClientData {
@@ -248,7 +256,28 @@ impl CascClientData {
             open,
             casc: OnceLock::new(),
             spells: OnceLock::new(),
+            fonts: Default::default(),
+            glyphs: Default::default(),
         }
+    }
+
+    fn font(&self, file: &str) -> Option<Arc<fontdue::Font>> {
+        let name = file.to_ascii_lowercase();
+        let mut fonts = self.fonts.lock().ok()?;
+        if let Some(f) = fonts.get(&name) {
+            return f.clone();
+        }
+        let font = self
+            .casc
+            .get_or_init(|| (self.open)())
+            .as_ref()
+            .and_then(|casc| casc.file_by_path(&format!("Fonts\\{file}")))
+            .and_then(|bytes| {
+                fontdue::Font::from_bytes(bytes, fontdue::FontSettings::default()).ok()
+            })
+            .map(Arc::new);
+        fonts.insert(name, font.clone());
+        font
     }
 
     fn spells(&self) -> Option<&wowlua_casc::spells::SpellTables> {
@@ -435,6 +464,23 @@ impl wowlua_engine::clientdata::ClientData for CascClientData {
                 .or_else(|| t.rows().find(|r| kind(r)))
                 .map(|r| r.int("UiCameraID"))
         })
+    }
+
+    fn glyph(&self, font: &str, px: u32, c: char) -> Option<(f32, f32)> {
+        let key = (font.to_ascii_lowercase(), px, c);
+        if let Some(g) = self.glyphs.lock().ok()?.get(&key) {
+            return *g;
+        }
+        let measured = self.font(font).and_then(|f| {
+            // (a character the font lacks is not measured)
+            if f.lookup_glyph_index(c) == 0 && c != ' ' {
+                return None;
+            }
+            let m = f.metrics(c, px as f32);
+            Some((m.advance_width, m.xmin as f32 + m.width as f32))
+        });
+        self.glyphs.lock().ok()?.insert(key, measured);
+        measured
     }
 
     fn spell(&self, id: u32) -> Option<wowlua_engine::clientdata::ClientSpell> {

@@ -1980,3 +1980,65 @@ return s.name, s.castTime, s.maxRange, s.iconID, C_Spell.GetSpellSubtext(9900001
         ]
     );
 }
+
+/// A font whose glyphs are 10.2 pixels apart, their ink 8.3 wide.
+struct Glyphs;
+
+impl wowlua_engine::clientdata::ClientData for Glyphs {
+    fn model_scene(&self, _: u32) -> Option<wowlua_engine::clientdata::ModelScene> {
+        None
+    }
+    fn scene_camera(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneCamera> {
+        None
+    }
+    fn scene_actor(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneActor> {
+        None
+    }
+    fn actor_display(&self, _: u32) -> Option<wowlua_engine::clientdata::ActorDisplay> {
+        None
+    }
+    fn glyph(&self, _font: &str, _px: u32, _c: char) -> Option<(f32, f32)> {
+        Some((10.2, 8.3))
+    }
+}
+
+/// With the installation (decision T392), text the recordings cannot
+/// measure is measured with the client's font files: a font they lack and
+/// characters outside printable ASCII (advances rounded up, the last
+/// glyph its ink rounded up and one more); what they have stays as
+/// recorded.
+#[test]
+fn unrecorded_glyphs_are_measured_with_the_clients_fonts() {
+    let measure = |client: bool| {
+        let mut vm = vm();
+        if client {
+            wowlua_engine::clientdata::set(&mut vm, std::sync::Arc::new(Glyphs));
+        }
+        run(
+            &mut vm,
+            "UIParent:SetScale(1)
+local function w(font, text)
+    local fs = UIParent:CreateFontString()
+    fs:SetFont(font, 12, '')
+    fs:SetShadowOffset(0, 0)
+    fs:SetText(text)
+    return fs:GetStringWidth()
+end
+local px = 768 / select(2, GetPhysicalScreenSize())
+return w('Fonts\\\\ARHei.ttf', 'ab') / px, w('Fonts\\\\FRIZQT__.TTF', 'éé') / px,
+    w('Fonts\\\\FRIZQT__.TTF', 'iiii') / px",
+        )
+        .into_iter()
+        .map(|v| v.parse::<f64>().unwrap().round())
+        .collect::<Vec<f64>>()
+    };
+    let recorded = measure(false);
+    let with_fonts = measure(true);
+    // 11 + 10: an advance rounded up, then the last glyph's ink rounded
+    // up and one
+    assert_eq!(with_fonts[0], 21.0, "{with_fonts:?}");
+    assert_eq!(with_fonts[1], 21.0, "{with_fonts:?}");
+    assert_eq!(with_fonts[2], recorded[2], "recorded glyphs stay");
+    assert!(recorded[2] < 30.0, "{recorded:?}");
+    assert_ne!(recorded[1], with_fonts[1], "{recorded:?}");
+}

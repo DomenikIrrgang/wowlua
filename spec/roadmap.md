@@ -632,7 +632,9 @@ from a world profile as the client draws them, with the client's spell and
 item data.
 
 Started 2026-10-25: the reader and items came with M12 (T310, T327); the
-spells from the client's tables and hotfix cache (T391).
+spells from the client's tables and hotfix cache (T391); text the
+recordings cannot measure is measured with the client's font files
+(T392).
 
 ## M14: Browser
 

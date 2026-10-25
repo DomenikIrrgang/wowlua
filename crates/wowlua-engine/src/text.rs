@@ -16,7 +16,9 @@
 //! at 8 to 45 pixels, every printable ASCII character; kerning at FRIZQT 10, 14,
 //! 17, 20 and ARIALN 10, 12, 16, 20 pixels (16 pairs). Unverified: other fonts (measured as FRIZQT),
 //! sizes outside 8 to 45 (the nearest scaled), other characters (as `?`),
-//! kerning at other sizes (none), a texture's width in text (none).
+//! kerning at other sizes (none), a texture's width in text (none). With
+//! the user's installation, its font files measure what the recordings
+//! lack (decision T392).
 
 use std::collections::HashMap;
 use std::sync::OnceLock;
@@ -86,6 +88,9 @@ pub struct Font {
     pub size: f64,
     pub outline: bool,
     pub shadow_x: f64,
+    /// The client's tables and files, where the installation is at hand:
+    /// its fonts measure what the recordings lack (decision T392).
+    pub client: Option<std::sync::Arc<dyn crate::clientdata::ClientData>>,
 }
 
 /// The region's font: its own or its font object's.
@@ -115,7 +120,43 @@ pub fn font_of(vm: &Vm, id: WidgetId) -> Font {
         size,
         outline: flags.to_ascii_uppercase().contains("OUTLINE"),
         shadow_x,
+        client: engine(vm).client_data.clone(),
     }
+}
+
+/// A glyph's advance and its width alone, in pixels: as recorded, where
+/// the recordings have the font at that size (8 to 45) and the character
+/// (printable ASCII); else as the client's font file gives them (decision
+/// T392: the advance rounded up, the width its ink rounded up and one
+/// more, a space's its advance; checked against the recordings: 98.6 % of
+/// the advances and 95 % of the widths the same); else the recorded
+/// row's (its font's or Friz Quadrata's, scaled to the size), a
+/// character outside it as `?`.
+fn glyph(font: &Font, px: i64, c: char) -> (f64, f64) {
+    let g = glyphs();
+    let i = c as u32;
+    let ascii = (32..=126).contains(&i);
+    let recorded = g.rows.contains_key(&(font.file.clone(), font.outline, 12));
+    if !(recorded && ascii && (8..=45).contains(&px))
+        && let Some(client) = &font.client
+        && let Ok(size) = u32::try_from(px)
+        && let Some((advance, ink)) = client.glyph(&font.file, size, c)
+    {
+        let advance = f64::from(advance).ceil();
+        let width = if c == ' ' {
+            advance
+        } else {
+            f64::from(ink).ceil() + 1.0
+        };
+        return (advance, width);
+    }
+    let (row, scale) = row(font, px);
+    let index = if ascii {
+        (i - 32) as usize
+    } else {
+        ('?' as u32 - 32) as usize
+    };
+    (row.advances[index] * scale, row.widths[index] * scale)
 }
 
 /// The screen's pixel in the region's own units: 768 over the screen's
@@ -288,26 +329,17 @@ fn line_px(font: &Font, px: i64, line: &str) -> f64 {
     let Some(&last) = chars.last() else {
         return 0.0;
     };
-    let (row, scale) = row(font, px);
-    let index = |c: char| {
-        let i = c as u32;
-        if (32..=126).contains(&i) {
-            (i - 32) as usize
-        } else {
-            ('?' as u32 - 32) as usize
-        }
-    };
     let mut total = 0.0;
     let advance = |c: char| match inline_height(c) {
         Some(h) => inline_advance(font, px, h),
-        None => row.advances[index(c)] * scale,
+        None => glyph(font, px, c).0,
     };
     for &c in &chars[..chars.len() - 1] {
         total += advance(c);
     }
     total += match inline_height(last) {
         Some(h) => inline_advance(font, px, h),
-        None => row.widths[index(last)] * scale,
+        None => glyph(font, px, last).1,
     };
     let g = glyphs();
     for pair in chars.windows(2) {
@@ -357,16 +389,7 @@ pub fn line_height(vm: &Vm, id: WidgetId) -> f64 {
 /// A line's advance in pixels: each glyph's advance (the last one's too)
 /// and the kerning of pairs that kern. What a line must fit the width in.
 fn advance_px(font: &Font, px: i64, chars: &[char]) -> f64 {
-    let (row, scale) = row(font, px);
-    let index = |c: char| {
-        let i = c as u32;
-        if (32..=126).contains(&i) {
-            (i - 32) as usize
-        } else {
-            ('?' as u32 - 32) as usize
-        }
-    };
-    let mut total: f64 = chars.iter().map(|&c| row.advances[index(c)] * scale).sum();
+    let mut total: f64 = chars.iter().map(|&c| glyph(font, px, c).0).sum();
     let g = glyphs();
     for pair in chars.windows(2) {
         if let Some(d) = g.kern.get(&(font.file.clone(), px, pair[0], pair[1])) {
@@ -556,8 +579,7 @@ pub fn layout(
         _ => return whole(lines, false),
     };
     // The shown text to the cut, and the ellipsis.
-    let (row, scale) = row(&font, px);
-    let dot = row.advances[('.' as u32 - 32) as usize] * scale;
+    let dot = glyph(&font, px, '.').0;
     let (ellipsis_fit, ellipsis_width) = (3.0 * dot - 1.0, 3.0 * dot);
     let (h, s, e) = all[shown - 1];
     let line = &hard[h];
@@ -644,21 +666,13 @@ pub fn glyph_line(vm: &Vm, id: WidgetId, line: &str) -> GlyphLine {
     let (row, scale) = row(&font, px);
     let g = glyphs();
     let chars: Vec<char> = line.chars().collect();
-    let index = |c: char| {
-        let i = c as u32;
-        if (32..=126).contains(&i) {
-            (i - 32) as usize
-        } else {
-            ('?' as u32 - 32) as usize
-        }
-    };
     let mut xs = Vec::with_capacity(chars.len());
     let mut x = 0.0;
     for (i, &c) in chars.iter().enumerate() {
         xs.push(x);
         x += match inline_height(c) {
             Some(h) => inline_advance(&font, px, h),
-            None => row.advances[index(c)] * scale,
+            None => glyph(&font, px, c).0,
         };
         if let Some(&next) = chars.get(i + 1)
             && let Some(d) = g.kern.get(&(font.file.clone(), px, c, next))

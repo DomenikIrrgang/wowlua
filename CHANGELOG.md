@@ -6,6 +6,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### New
 
+- With your WoW installation at hand, text in fonts and characters wowlua's recordings don't cover (accented letters, other alphabets, the game's other fonts) is measured with the game's own font files, so `GetStringWidth`, wrapping and truncation come close to the game's instead of treating each such character as a `?`.
 - **Spells from your WoW installation**: with your installation at hand (`wowlua test --game-data`, debug sessions, `wowlua screenshot`), a spell your test doesn't define is the game's: `C_Spell.GetSpellInfo` gives its name, rank, icon, cast time and range, `C_Spell.GetSpellPowerCost` its costs, and `C_Spell.GetSpellDescription` its text with the numbers for your test's character ("Burns the enemy for 7 to 9 Arcane damage and then an additional 12 Arcane damage over 9 sec."), in every flavor. Spells and texts the server changed are read from the game's hotfix cache, as the game shows them.
 
 ## 0.10.1 (2026-10-25)

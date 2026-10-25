@@ -154,6 +154,12 @@ pub trait ClientData: Send + Sync {
     fn spell_description(&self, _id: u32, _caster: &SpellCaster) -> Option<String> {
         None
     }
+    /// A glyph of one of the client's fonts (`Fonts\<file>`, the file's
+    /// name in any case) at a pixel size: its advance and the right edge
+    /// of its ink, in pixels (decision T392).
+    fn glyph(&self, _font: &str, _px: u32, _c: char) -> Option<(f32, f32)> {
+        None
+    }
 }
 
 /// A spell of the client's tables: its name, rank, icon, cast time,
