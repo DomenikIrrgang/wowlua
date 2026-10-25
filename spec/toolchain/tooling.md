@@ -554,8 +554,9 @@ diagnostics come with the second pass), and reports those files only.
 Once no package was edited for 2 s, the second pass checks the whole
 package as `wowlua check` does, reporting every file; after a save (its
 `wowlua.json` too) or files changed on disk (not in the package's `dist/`
-or hidden folders) the second pass covers every package of its workspace,
-so those that depend on it are checked too. It checks every flavor the
+or hidden folders) the second pass covers every package of its workspace
+(from a member's file too: every member), so those that depend on it are
+checked too. It checks every flavor the
 package names with the `dev` profile and applies `check.lints`. It writes no files: no
 build output, and dependencies resolve as the lockfile would change while
 `wowlua.lock` stays as it is; they come from the cache only. A diagnostic
@@ -728,7 +729,62 @@ test --coverage --reporter html`); in the Explorer's menu of a
 one, and the Test Coverage view's title has it too. In the tab the report
 follows the editor's light or dark theme, its links stay in the tab, and a
 line's number, or "Open in editor" on a file, opens the source at that
-line beside it. Find references and the rest of the table follow.
+line beside it. The rest of the table follows.
+
+Find references (decision T389) checks the whole workspace of the
+document's package (every member, from a member's file too, so the
+packages that depend on it are checked) when asked, with the editor's
+texts as they are, after a waiting completion and before the checks edits
+wait for; its diagnostics and definitions replace the last check's as a
+full check's do. The name at the cursor leads to what it refers to (as go
+to definition does), or where it is declared it is that declaration;
+every name the check resolved to the same declaration is a reference, in
+every file of the workspace's packages and their tests, open in the editor
+or not, with the declaration when the request asks for it. A module's
+top-level functions, classes and enums lead to their declaration from
+their uses in the module too (they are hoisted). An import's alias
+(`import a as b`, `import * as m`) is a name of its own: from it, the
+references are the names spelled as it in its file; from the export, the
+aliases and their uses are among them. A member that leads to its class
+(one declared without a place of its own) is no reference of the class. A
+dependency's file that is on disk (a workspace member, a path or cached
+dependency) is reported, and opened by go to definition, where it is, and a
+package that depends on a member reads that member's files with the
+editor's unsaved texts.
+
+Rename (decision T389, `prepareRename` and `rename`) gives every name the
+references search finds that is spelled as the name at the cursor the new
+name, as a `WorkspaceEdit` across files (the server writes none): from an
+alias, that file's names spelled as it, else the declarations and the
+names in every file, imports and `import a as b`'s `a` included. It is
+refused, with the reason and no edit, when the new name is not a name or is
+one of Lua's keywords; the name is `self`, `super` or `new`; what it refers
+to is declared by wowlua (the game's API, Lua's library, the standard
+library), is a module, or is declared in a file no check of the workspace
+reads names in (a dependency that is no member); the name stands as a
+word in a file the checker doesn't read names in (a plain Lua file that is
+not type-checked, an XML file's attribute values and text); or the
+workspace checked again with the rename made (over the editor's texts, not
+written) has more errors of a code in a file than before (an override left
+overriding nothing, E3005; a class that no longer satisfies an interface
+it is used as) or its names spelled as the new name are not exactly the
+renamed ones referring to the renamed declaration (the new name is taken
+there). What the checker does not resolve is not found and not renamed: a
+member named in a string (`self[key]`, `hooksecurefunc(t, "name")`), a
+member of a type without a declaration. `prepareRename` answers from the
+document and the last check: the name's range and text; nothing where no
+name is; an error for a keyword, `self` and `super`, and for a name the
+last check leads into wowlua's declarations.
+
+A package that can't be loaded (decision T390) is checked no further: its
+manifest, or its workspace's, does not parse, has a schema error, or names
+a `package.wowlua` this wowlua does not satisfy (E4300). Its manifest gets
+the diagnostic as before, and the server sends `window/showMessage`, an
+error naming the package (its `package.name`, else its folder), the first
+error and the manifest's file: "suuui can't be checked: this package
+requires wowlua ^0.9, but this is wowlua 0.10.0 (wowlua.json)". It is sent
+once for a package and problem: again when the problem changes, or comes
+back after a check that loaded the package.
 
 The VS Code extension starts `wowlua lsp` (the `wowlua.path` command) when a
 `.wowlua` file opens or the workspace has a `wowlua.json`, and sends it the
@@ -737,7 +793,10 @@ open `.wowlua` and `.lua` files, each edit as the range it changed, and the
 changed on disk; *Go to Definition* (F12) and Ctrl or Cmd + click use it,
 hovering a name shows its type, its completions list as you type (and
 after `.`, `:`, `@` and a quote), and in a call's parentheses its signature
-help shows the parameters.
+help shows the parameters; *Find All References* (Shift+F12) and *Rename
+Symbol* (F2, its refusals shown at the cursor) use it too, and its
+`window/showMessage` is an error, warning or information message (and a
+line of its output).
 A server that stops by itself is started again at once, up to three times
 in three minutes, then the extension asks. The extension colors `.wowlua`
 and `.d.wowlua` files with a TextMate grammar of its own (decision T371):

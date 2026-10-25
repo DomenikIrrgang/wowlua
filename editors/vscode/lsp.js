@@ -1,9 +1,11 @@
 // The language client: starts `wowlua lsp` and keeps it in step with the
 // open `.wowlua` and `.lua` files (whole texts, unsaved edits included). Its
 // diagnostics go to the Problems view; it formats documents, outlines them,
-// finds where their names are defined, shows their types on hover,
-// completes names and members, and shows a call's parameters. Hand-written on `connection.js`, so the
-// extension has no build step (decision T331).
+// finds where their names are defined and every name that refers to the
+// same, renames them, shows their types on hover, completes names and
+// members, and shows a call's parameters; a package the server can't load
+// is an error message. Hand-written on `connection.js`, so the extension
+// has no build step (decision T331).
 const vscode = require("vscode");
 const { Connection } = require("./connection");
 
@@ -61,6 +63,13 @@ class LanguageClient {
             }),
             vscode.languages.registerDefinitionProvider(SYNCED, {
                 provideDefinition: (doc, position) => this.definition(doc, position),
+            }),
+            vscode.languages.registerReferenceProvider(SYNCED, {
+                provideReferences: (doc, position, context) => this.references(doc, position, context),
+            }),
+            vscode.languages.registerRenameProvider(SYNCED, {
+                prepareRename: (doc, position) => this.prepareRename(doc, position),
+                provideRenameEdits: (doc, position, newName) => this.rename(doc, position, newName),
             }),
             vscode.languages.registerHoverProvider(SYNCED, {
                 provideHover: (doc, position) => this.hover(doc, position),
@@ -129,6 +138,12 @@ class LanguageClient {
         });
         connection.child.stderr.on("data", (chunk) => this.output.append(chunk.toString()));
         connection.onNotification("window/logMessage", (p) => this.output.appendLine(p.message));
+        // (a package that can't be checked: why, once)
+        connection.onNotification("window/showMessage", (p) => {
+            this.output.appendLine(p.message);
+            const show = { 1: "showErrorMessage", 2: "showWarningMessage" }[p.type] || "showInformationMessage";
+            vscode.window[show](p.message);
+        });
         connection.exited.then((code) => {
             if (this.connection !== connection) {
                 return;
@@ -253,6 +268,46 @@ class LanguageClient {
             position: { line: position.line, character: position.character },
         });
         return (found || []).map((l) => new vscode.Location(vscode.Uri.parse(l.uri), lspRange(l.range)));
+    }
+
+    // Every name of the workspace that refers to what the one at the cursor
+    // does (Find All References, Shift+F12).
+    async references(doc, position, context) {
+        const found = await this.request("textDocument/references", {
+            textDocument: { uri: doc.uri.toString() },
+            position: { line: position.line, character: position.character },
+            context: { includeDeclaration: !context || context.includeDeclaration !== false },
+        });
+        return (found || []).map((l) => new vscode.Location(vscode.Uri.parse(l.uri), lspRange(l.range)));
+    }
+
+    // The name a rename (F2) starts from; an error says why it can't be.
+    async prepareRename(doc, position) {
+        const found = await this.request("textDocument/prepareRename", {
+            textDocument: { uri: doc.uri.toString() },
+            position: { line: position.line, character: position.character },
+        });
+        if (!found) {
+            throw new Error("There is no name here to rename.");
+        }
+        return { range: lspRange(found.range), placeholder: found.placeholder };
+    }
+
+    // Every name a rename changes, across the workspace; an error (shown
+    // at the cursor) when it can't be done whole.
+    async rename(doc, position, newName) {
+        const found = await this.request("textDocument/rename", {
+            textDocument: { uri: doc.uri.toString() },
+            position: { line: position.line, character: position.character },
+            newName,
+        });
+        const edit = new vscode.WorkspaceEdit();
+        for (const [uri, edits] of Object.entries((found && found.changes) || {})) {
+            for (const e of edits) {
+                edit.replace(vscode.Uri.parse(uri), lspRange(e.range), e.newText);
+            }
+        }
+        return edit;
     }
 
     // The type of the name under the pointer, and its doc comment.

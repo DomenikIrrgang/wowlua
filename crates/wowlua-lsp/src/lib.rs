@@ -4,10 +4,12 @@
 //! and on every save, on a thread of its own; documents are formatted as
 //! `wowlua fmt` formats them, outlined from their syntax, and their names
 //! lead to their definitions from the last check. Completion checks the
-//! text with a placeholder at the cursor (`complete`).
+//! text with a placeholder at the cursor (`complete`); references and
+//! rename check the whole workspace (`refs`).
 
 pub mod check;
 pub mod complete;
+pub mod refs;
 pub mod symbols;
 pub mod testing;
 pub mod text;
@@ -84,6 +86,29 @@ struct Server {
     completing: Option<Completing>,
     /// The last completion's items, for `completionItem/resolve`.
     completed: Vec<check::Completion>,
+    /// References and rename requests waiting for their check, in order.
+    finds: std::collections::VecDeque<Finding>,
+    /// The load failure each package's last check told the editor of.
+    told: HashMap<PathBuf, String>,
+}
+
+/// A references or rename request: its id, what it wants, its package and
+/// what its check looks for.
+struct Finding {
+    id: Json,
+    want: Seek,
+    manifest: PathBuf,
+    find: refs::Find,
+}
+
+/// What a [`Finding`] answers.
+#[derive(Clone, Copy, Debug)]
+enum Seek {
+    /// The references, with the declarations or without.
+    References {
+        declarations: bool,
+    },
+    Rename,
 }
 
 /// A completion check to run: the requests waiting for it (a completion
@@ -337,6 +362,8 @@ pub fn serve_with(
         roots: Vec::new(),
         completing: None,
         completed: Vec::new(),
+        finds: std::collections::VecDeque::new(),
+        told: HashMap::new(),
     };
     loop {
         // the next check to start: when its edits have settled, or a saved
@@ -383,7 +410,8 @@ pub fn serve_with(
                 }
             }
             Ok(Event::Checked(manifest, result)) => {
-                let ran = server.running.take();
+                let mut ran = server.running.take();
+                let finding = ran.as_mut().and_then(|r| r.finding.take());
                 // a completion check: its answer, nothing published
                 if let Some(Running {
                     completion: Some((waiters, prefix, uri)),
@@ -407,12 +435,22 @@ pub fn serve_with(
                     continue;
                 }
                 match result {
-                    Ok(packages) => {
+                    Ok(mut packages) => {
+                        let found = packages.first_mut().and_then(|c| c.found.take());
                         for checked in packages {
                             publish(&mut server, checked, out)?;
                         }
+                        if let Some(f) = finding {
+                            let new = f.find.rename.as_deref();
+                            let answer = found_answer(&server, f.want, new, found);
+                            respond(out, &f.id, answer)?;
+                        }
                     }
                     Err(Failure::Failed(why)) => {
+                        if let Some(f) = finding {
+                            let failed = format!("wowlua could not check the workspace: {why}");
+                            respond(out, &f.id, Err(failed))?;
+                        }
                         eprintln!("wowlua lsp: checking {} failed: {why}", manifest.display());
                         notify(
                             out,
@@ -462,16 +500,44 @@ fn start_due(server: &mut Server) {
                 docs,
                 rescan: false,
                 complete: Some(c.asked.prefix.clone()),
+                find: None,
             };
             if server.jobs.send(job).is_ok() {
                 server.running = Some(Running {
                     manifest: c.manifest,
                     focused: false,
                     completion: Some((c.waiters, c.asked.prefix, c.uri)),
+                    finding: None,
                 });
             }
             return;
         }
+    }
+    // then references and renames: someone waits for them too (a whole
+    // check of the workspace, with the texts as they are now)
+    if let Some(f) = server.finds.pop_front() {
+        let job = Job {
+            manifest: f.manifest.clone(),
+            whole: true,
+            focus: None,
+            docs: server
+                .docs
+                .values()
+                .map(|d| (d.path.clone(), d.text.clone()))
+                .collect(),
+            rescan: std::mem::take(&mut server.rescan),
+            complete: None,
+            find: Some(f.find.clone()),
+        };
+        if server.jobs.send(job).is_ok() {
+            server.running = Some(Running {
+                manifest: f.manifest.clone(),
+                focused: false,
+                completion: None,
+                finding: Some(f),
+            });
+        }
+        return;
     }
     let now = Instant::now();
     let edited = server
@@ -521,12 +587,14 @@ fn start_due(server: &mut Server) {
             docs,
             rescan: std::mem::take(&mut server.rescan),
             complete: None,
+            find: None,
         };
         if server.jobs.send(job).is_ok() {
             server.running = Some(Running {
                 manifest,
                 focused,
                 completion: None,
+                finding: None,
             });
         }
     }
@@ -540,6 +608,8 @@ struct Running {
     /// A completion check: the requests waiting for it, the word typed and
     /// the document.
     completion: Option<CompletionRun>,
+    /// A references or rename check: the request it answers.
+    finding: Option<Finding>,
 }
 
 /// Why a check gave no answer.
@@ -576,6 +646,8 @@ struct Job {
     rescan: bool,
     /// A completion check (`check::check`): the word typed.
     complete: Option<String>,
+    /// A references or rename check (`check::find`).
+    find: Option<refs::Find>,
 }
 
 /// Runs a check where `checker` says. A check that panics, crashes or
@@ -595,14 +667,15 @@ fn run_check(
                 wowlua_driver::overlay::set(path, text.as_bytes().to_vec());
             }
             let open = job.docs.iter().map(|(p, _)| canonical(p)).collect();
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                check::check(
+            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match &job.find {
+                Some(f) => check::find(&job.manifest, &open, f, None, drop),
+                None => check::check(
                     &job.manifest,
                     job.whole,
                     &open,
                     job.focus.as_ref(),
                     job.complete.as_deref(),
-                )
+                ),
             }))
             .map_err(|e| Failure::Failed(panic_message(&*e)))
         }
@@ -706,7 +779,7 @@ fn check_in_worker(
     }
     let worker = process.as_mut().expect("started");
     worker.checks += 1;
-    let request = check::request(
+    let mut request = check::request(
         &job.manifest,
         job.whole,
         &job.docs,
@@ -714,6 +787,9 @@ fn check_in_worker(
         job.rescan,
         job.complete.as_deref(),
     );
+    if let Some(f) = &job.find {
+        request["find"] = f.to_json();
+    }
     let mut line = serde_json::to_vec(&request).unwrap_or_default();
     line.push(b'\n');
     if worker
@@ -827,6 +903,8 @@ fn initialized(out: &mut impl std::io::Write, id: &Json) -> std::io::Result<()> 
                 "documentFormattingProvider": true,
                 "documentSymbolProvider": true,
                 "definitionProvider": true,
+                "referencesProvider": true,
+                "renameProvider": { "prepareProvider": true },
                 "hoverProvider": true,
                 "completionProvider": { "triggerCharacters": [".", ":", "\"", "'", "@"], "resolveProvider": true },
                 "signatureHelpProvider": { "triggerCharacters": ["(", ","], "retriggerCharacters": [","] },
@@ -980,6 +1058,46 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
                 _ => reply(out, id, ask.answer(server, &uri, &params["position"]))?,
             }
         }
+        // a whole check of the workspace finds them, with the texts as they
+        // are now
+        "textDocument/references" | "textDocument/rename" => {
+            let want = if method == "textDocument/rename" {
+                Seek::Rename
+            } else {
+                Seek::References {
+                    declarations: params["context"]["includeDeclaration"] != false,
+                }
+            };
+            let new = params["newName"].as_str().map(str::to_string);
+            let refused = match (want, &new) {
+                (Seek::Rename, Some(n)) => refs::invalid_name(n),
+                (Seek::Rename, None) => Some("no new name".to_string()),
+                _ => None,
+            };
+            let doc = server.docs.get(&uri);
+            let asked = doc.and_then(|d| {
+                let offset = text::offset(&d.text, &params["position"]) as u32;
+                Some((d.manifest.clone()?, d.canonical.clone(), offset))
+            });
+            match (refused, asked) {
+                (Some(why), _) => respond(out, id, Err(why))?,
+                (None, None) => respond(out, id, found_answer(server, want, None, None))?,
+                (None, Some((manifest, path, offset))) => server.finds.push_back(Finding {
+                    id: id.clone(),
+                    want,
+                    manifest,
+                    find: refs::Find {
+                        path,
+                        offset,
+                        rename: new.filter(|_| matches!(want, Seek::Rename)),
+                    },
+                }),
+            }
+        }
+        "textDocument/prepareRename" => {
+            let answer = prepare_rename(server, &uri, &params["position"]);
+            respond(out, id, answer)?;
+        }
         "textDocument/completion" => {
             let asked = server.docs.get(&uri).and_then(|d| {
                 let offset = text::offset(&d.text, &params["position"]);
@@ -1086,6 +1204,22 @@ fn publish(
 ) -> std::io::Result<()> {
     let manifest = checked.manifest.clone();
     let manifest = manifest.as_path();
+    // a package that can't be loaded is checked no further: the editor
+    // shows why, once until it changes or is fixed
+    match &checked.unloaded {
+        Some(why) if server.told.get(manifest) != Some(why) => {
+            notify(
+                out,
+                "window/showMessage",
+                json!({ "type": 1, "message": why }),
+            )?;
+            server.told.insert(manifest.to_path_buf(), why.clone());
+        }
+        Some(_) => {}
+        None => {
+            server.told.remove(manifest);
+        }
+    }
     // (a focused check speaks for its files; a full one for the package)
     let covers = |path: &Path| checked.scope.as_ref().is_none_or(|s| s.contains(path));
     let now: BTreeSet<PathBuf> = checked.diagnostics.keys().cloned().collect();
@@ -1443,6 +1577,124 @@ fn doc_comment(server: &Server, uri: &str, line: usize) -> Option<String> {
     }
     comment.reverse();
     Some(comment.join("\n"))
+}
+
+/// A reply: its result, or an error the editor shows (the protocol's
+/// `RequestFailed`).
+fn respond(
+    out: &mut impl std::io::Write,
+    id: &Json,
+    answer: Result<Json, String>,
+) -> std::io::Result<()> {
+    match answer {
+        Ok(result) => reply(out, id, result),
+        Err(message) => transport::write(
+            out,
+            &json!({
+                "jsonrpc": "2.0",
+                "id": id,
+                "error": { "code": -32803, "message": message },
+            }),
+        ),
+    }
+}
+
+/// The answer to a references or rename request (the new name `new`) from
+/// what its check found: the declarations (when asked) and references as
+/// locations; the renamed names' edits, or why there are none.
+fn found_answer(
+    server: &Server,
+    want: Seek,
+    new: Option<&str>,
+    found: Option<refs::Found>,
+) -> Result<Json, String> {
+    let location =
+        |p: &refs::Place| json!({ "uri": server.uri_for(&p.path), "range": p.lsp_range() });
+    match want {
+        Seek::References { declarations } => {
+            let Some(f) = found else {
+                return Ok(Json::Array(Vec::new()));
+            };
+            let mut list: Vec<Json> = Vec::new();
+            if declarations {
+                list.extend(f.declarations.iter().map(location));
+            }
+            list.extend(f.references.iter().map(location));
+            Ok(Json::Array(list))
+        }
+        Seek::Rename => match found.and_then(|f| f.rename) {
+            None => Err("wowlua found nothing here to rename".into()),
+            Some(Err(why)) => Err(why),
+            Some(Ok(edits)) => {
+                let mut changes = serde_json::Map::new();
+                for e in &edits {
+                    let edit =
+                        json!({ "range": e.lsp_range(), "newText": new.unwrap_or_default() });
+                    if let Some(list) = changes
+                        .entry(server.uri_for(&e.path))
+                        .or_insert_with(|| Json::Array(Vec::new()))
+                        .as_array_mut()
+                    {
+                        list.push(edit);
+                    }
+                }
+                Ok(json!({ "changes": changes }))
+            }
+        },
+    }
+}
+
+/// Whether the name at `position` can be renamed, as far as the document
+/// and its package's last check tell: its range and text; `null` where no
+/// name is; an error for a keyword, `self`, and what wowlua declares (the
+/// rename's own check decides the rest).
+fn prepare_rename(server: &Server, uri: &str, position: &Json) -> Result<Json, String> {
+    let Some(doc) = server.docs.get(uri) else {
+        return Ok(Json::Null);
+    };
+    let offset = text::offset(&doc.text, position);
+    let is_name = |b: u8| b.is_ascii_alphanumeric() || b == b'_';
+    let bytes = doc.text.as_bytes();
+    let start = (0..offset.min(bytes.len()))
+        .rev()
+        .take_while(|&i| is_name(bytes[i]))
+        .last()
+        .unwrap_or(offset);
+    let end = (offset..bytes.len())
+        .take_while(|&i| is_name(bytes[i]))
+        .last()
+        .map_or(offset, |i| i + 1);
+    let word = &doc.text[start..end];
+    if word.is_empty() || word.starts_with(|c: char| c.is_ascii_digit()) {
+        return Ok(Json::Null);
+    }
+    if refs::RESERVED.contains(&word) {
+        return Err(format!("`{word}` is a keyword"));
+    }
+    if matches!(word, "self" | "super") {
+        return Err(format!(
+            "`{word}` is part of the language and can't be renamed"
+        ));
+    }
+    let checked = !doc.manifest.as_ref().is_some_and(|m| server.pending(m));
+    let builtin = format!(
+        "{}/",
+        text::uri_of(&check::builtin_dir()).trim_end_matches('/')
+    );
+    let declared_by_wowlua = checked
+        && server
+            .definitions
+            .get(&doc.canonical)
+            .into_iter()
+            .flatten()
+            .filter(|d| d.start as usize <= offset && offset <= d.end as usize)
+            .any(|d| d.target.uri.starts_with(&builtin));
+    if declared_by_wowlua {
+        return Err(format!(
+            "`{word}` is declared by wowlua (the game's API, Lua's library or the standard library) and can't be renamed"
+        ));
+    }
+    Ok(json!({ "range": text::range(&doc.text, start, end), "placeholder": word }))
 }
 
 /// Where the name at `position` of the document is defined, from its

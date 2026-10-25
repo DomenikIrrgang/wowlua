@@ -2,6 +2,19 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### New
+
+- **Find All References**: Shift+F12 (or *Go to References*) in VS Code lists every place in your workspace that uses a name: a local, a function, a class, a method or field (`self.count` too), a type, an import, a global; in every file, open or not, in your tests, and in the packages of your workspace that depend on it.
+- **Rename Symbol**: F2 renames a name everywhere it is used, across files and the packages of your workspace, methods called with `:` and `self.` fields included; an `import a as b` keeps its alias. When a rename can't be done safely (the game's API or Lua's functions, an override or interface that would no longer match, a name already taken, a name an XML file uses), wowlua says why and changes nothing.
+- When wowlua can't load a package (a broken `wowlua.json`, or a `"wowlua"` version this wowlua doesn't satisfy), the editor now shows an error saying so, such as "suuui can't be checked: this package requires wowlua ^0.9, but this is wowlua 0.10.1 (wowlua.json)", instead of silently checking nothing.
+
+### Fixed
+
+- *Go to Definition* on a module's own function, class or enum, used in that module, now finds it, and leads into a library of your workspace at its real file instead of a copy.
+- In the editor, a package of your workspace that uses a library or addon of the workspace now sees that library's unsaved edits, and saving a file of a workspace member checks the members that depend on it again.
+
 ## 0.10.1 (2026-10-25)
 
 ### Fixed
