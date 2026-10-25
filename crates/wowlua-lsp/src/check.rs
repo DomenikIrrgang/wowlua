@@ -94,6 +94,17 @@ pub struct Checked {
     pub hovers: HashMap<PathBuf, Vec<Hover>>,
     /// A completion check's: what could stand at the cursor.
     pub completions: Option<Completions>,
+    /// A completion check's: the forms of the call around the cursor.
+    pub signature: Option<Vec<SignatureForm>>,
+}
+
+/// One form of the function called around the cursor (signature help):
+/// its parameters as written (`name: T`), its rest, its results.
+#[derive(Clone, Debug, PartialEq)]
+pub struct SignatureForm {
+    pub params: Vec<String>,
+    pub rest: Option<String>,
+    pub results: String,
 }
 
 /// Checks the package whose manifest is `manifest`; with `whole`, every
@@ -144,8 +155,10 @@ fn check_and(
     let mut session = Session::new();
     session.focus = focus.cloned();
     session.complete = complete.map(str::to_string);
+    // (a completion check's too: signature help reads the callee's, which
+    // stands before the cursor, where its text is the document's)
+    session.definitions = Some(Vec::new());
     if complete.is_none() {
-        session.definitions = Some(Vec::new());
         // (the open files' types, for hover)
         session.hover = Some(open.clone());
     }
@@ -231,10 +244,27 @@ fn check_and(
                 items: Vec::new(),
             },
         };
+        let signature = session.signature.take().map(|forms| {
+            forms
+                .into_iter()
+                .map(|s| SignatureForm {
+                    params: s.params,
+                    rest: s.rest,
+                    results: s.results,
+                })
+                .collect()
+        });
+        let defs: Vec<Spans> = parts.iter().flat_map(|p| p.2.iter().cloned()).collect();
+        let mut definitions = definitions(&session, &roots, &defs, open);
+        if let Some(f) = focus {
+            definitions.retain(|path, _| f.contains(path));
+        }
         done(session);
         return vec![Checked {
             manifest: text::canonical(manifest),
             completions: Some(completions),
+            signature,
+            definitions,
             ..Checked::default()
         }];
     }
@@ -650,6 +680,7 @@ impl Checked {
                     (path.to_string_lossy().into_owned(), Json::Array(rows))
                 })
                 .collect::<serde_json::Map<_, _>>(),
+            "signature": self.signature.as_ref().map(|forms| forms.iter().map(|f| json!([f.params, f.rest, f.results])).collect::<Vec<_>>()),
             "completions": self.completions.as_ref().map(|c| json!({
                 "context": c.context,
                 "incomplete": c.incomplete,
@@ -709,6 +740,23 @@ impl Checked {
             definitions,
             hovers,
             completions: completions_from(&json["completions"]),
+            signature: json["signature"].as_array().map(|forms| {
+                forms
+                    .iter()
+                    .filter_map(|f| {
+                        Some(SignatureForm {
+                            params: f
+                                .get(0)?
+                                .as_array()?
+                                .iter()
+                                .filter_map(|p| p.as_str().map(str::to_string))
+                                .collect(),
+                            rest: f.get(1).and_then(Json::as_str).map(str::to_string),
+                            results: f.get(2)?.as_str()?.to_string(),
+                        })
+                    })
+                    .collect()
+            }),
         })
     }
 }

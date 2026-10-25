@@ -90,6 +90,9 @@ pub struct Session {
     pub complete: Option<String>,
     /// With `complete`: what the first flavor's check found.
     pub completions: Option<wowlua_sema::check::complete::Completions>,
+    /// With `complete`: the signatures of the call around the cursor
+    /// (signature help).
+    pub signature: Option<Vec<wowlua_sema::check::complete::Signature>>,
 }
 
 impl Session {

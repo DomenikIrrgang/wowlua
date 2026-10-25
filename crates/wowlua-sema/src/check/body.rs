@@ -160,6 +160,9 @@ pub struct Checker<'e, 'p> {
     pub(crate) expr_types: FxHashMap<(u32, u32), TypeId>,
     /// The call of the call statement being checked (its results dropped).
     pub(crate) statement_call: Option<(u32, u32)>,
+    /// The calls whose arguments are being checked, innermost last (a
+    /// completion check's signature help).
+    pub(crate) call_stack: Vec<TypeId>,
     /// Links of optional chains: their type before the short-circuit's
     /// `nil`, which the rest of the chain continues from.
     pub(crate) chain_inner: FxHashMap<(u32, u32), TypeId>,
@@ -348,6 +351,7 @@ impl<'e, 'p> Checker<'e, 'p> {
                 ..Scope::default()
             },
             vars: Vec::new(),
+            call_stack: Vec::new(),
             statement_call: None,
             scopes: Scopes::default(),
             flow: Flow::default(),

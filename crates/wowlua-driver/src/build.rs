@@ -1201,6 +1201,9 @@ fn build_inner(
         if session.completions.is_none() {
             session.completions = output.completions.take();
         }
+        if session.signature.is_none() {
+            session.signature = output.signature.take();
+        }
         builds.push(FlavorBuild {
             flavor: flavor.clone(),
             meta,

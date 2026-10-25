@@ -323,3 +323,79 @@ fn completion_after_at_lists_the_decorators_that_apply() {
     );
     assert!(c.finish());
 }
+
+#[test]
+fn signature_help_shows_the_parameters_and_the_one_at_the_cursor() {
+    let (_dir, uri) = project();
+    let mut c = Client::start();
+    c.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": uri, "languageId": "wowlua", "version": 1, "text": MAIN } }),
+    );
+    let help = |c: &mut Client, text: &str| -> Json {
+        let offset = text.rfind('|').expect("a cursor");
+        let mut t = text.to_string();
+        t.remove(offset);
+        let before = &t[..offset];
+        let line = before.matches('\n').count();
+        let character = offset - before.rfind('\n').map_or(0, |i| i + 1);
+        c.notify(
+            "textDocument/didChange",
+            json!({ "textDocument": { "uri": uri, "version": 2 }, "contentChanges": [{ "text": t }] }),
+        );
+        c.request(
+            "textDocument/signatureHelp",
+            json!({ "textDocument": { "uri": uri }, "position": { "line": line, "character": character } }),
+        )["result"]
+            .clone()
+    };
+    let head = "import greet, Counter from \"./util\"\nlocal counter: Counter = Counter.new()\n";
+    // an imported function: its parameter, its doc comment
+    let h = help(&mut c, &format!("{head}local s = greet(|)\n"));
+    let sig = &h["signatures"][0];
+    assert_eq!(sig["label"], "greet(name: string) -> string", "{h}");
+    assert_eq!(sig["parameters"][0]["label"], json!([6, 18]), "{h}");
+    assert!(
+        sig["documentation"]["value"]
+            .as_str()
+            .unwrap_or("")
+            .contains("Says hello"),
+        "{h}"
+    );
+    assert_eq!(h["activeParameter"], 0);
+    // a method, the second argument; unfinished
+    let h = help(&mut c, &format!("{head}counter:bump(1, |\n"));
+    assert!(
+        h["signatures"][0]["label"]
+            .as_str()
+            .unwrap_or("")
+            .starts_with("bump(by: number)"),
+        "{h}"
+    );
+    assert_eq!(h["activeParameter"], 1);
+    // the game's API, with its parameters' descriptions
+    let h = help(
+        &mut c,
+        &format!("{head}local hp = UnitHealth(\"player\", |)\n"),
+    );
+    let sig = &h["signatures"][0];
+    assert!(
+        sig["label"]
+            .as_str()
+            .unwrap_or("")
+            .starts_with("UnitHealth(unit: string, usePredicted: boolean?)"),
+        "{h}"
+    );
+    assert_eq!(h["activeParameter"], 1);
+    assert!(
+        sig["parameters"][1]["documentation"]["value"]
+            .as_str()
+            .unwrap_or("")
+            .contains("Predicts"),
+        "{h}"
+    );
+    // no call around the cursor
+    let h = help(&mut c, &format!("{head}local z = |\n"));
+    assert!(h.is_null(), "{h}");
+    assert!(c.finish());
+}

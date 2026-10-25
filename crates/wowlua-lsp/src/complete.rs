@@ -235,6 +235,90 @@ fn receiver(line: &str) -> &str {
     &line[i..]
 }
 
+/// The call whose argument list holds the cursor (signature help): the
+/// argument it is in (from 0), and the end of the called name (its last
+/// name: `GetSpellInfo` of `C_Spell.GetSpellInfo`) with that name.
+#[derive(Debug, PartialEq)]
+pub struct CallSite {
+    pub active: usize,
+    pub name: String,
+    pub name_end: usize,
+}
+
+/// The innermost call around byte `offset` whose `(` is open there; none
+/// in a function's body inside the arguments, a table's braces count as
+/// part of the argument they are in.
+pub fn call_at(text: &str, offset: usize) -> Option<CallSite> {
+    use TokenKind as T;
+    let mut db = SourceDb::new();
+    let file = db.add("signature", String::new());
+    let lexed = wowlua_syntax::lexer::lex(text.as_bytes(), file);
+    let tokens: Vec<_> = lexed
+        .tokens
+        .iter()
+        .filter(|t| {
+            (t.end as usize) <= offset || (t.start as usize) < offset && matches!(t.kind, T::String)
+        })
+        .collect();
+    let mut depth = 0usize;
+    let mut active = 0usize;
+    for (i, t) in tokens.iter().enumerate().rev() {
+        match t.kind {
+            T::RParen | T::RBracket | T::RBrace => depth += 1,
+            T::LBracket | T::LBrace if depth > 0 => depth -= 1,
+            // an open table or index: its commas are another list's
+            T::LBracket | T::LBrace => active = 0,
+            T::LParen if depth > 0 => depth -= 1,
+            T::LParen => {
+                let before = i.checked_sub(1).map(|j| tokens[j]);
+                match before.map(|b| b.kind) {
+                    Some(T::Name) => {
+                        let b = before.expect("a token");
+                        return Some(CallSite {
+                            active,
+                            name: text[b.start as usize..b.end as usize].to_string(),
+                            name_end: b.end as usize,
+                        });
+                    }
+                    Some(T::RParen | T::RBracket) => {
+                        return Some(CallSite {
+                            active,
+                            name: "function".into(),
+                            name_end: before.expect("a token").end as usize,
+                        });
+                    }
+                    // `function(` of a function's parameters, or a grouping
+                    // parenthesis: not a call
+                    Some(T::Function) => return None,
+                    _ => active = 0,
+                }
+            }
+            T::Comma if depth == 0 => active += 1,
+            // a statement starts here: the cursor is in no call
+            T::Function
+            | T::Do
+            | T::Then
+            | T::Else
+            | T::Elseif
+            | T::Repeat
+            | T::Until
+            | T::End
+            | T::Local
+            | T::Return
+            | T::While
+            | T::For
+            | T::If
+            | T::Semi
+                if depth == 0 =>
+            {
+                return None;
+            }
+            _ => {}
+        }
+    }
+    None
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -294,6 +378,30 @@ mod tests {
         assert!(at("local n = 1.|\n").is_none());
         // after a closed string: completion again
         assert!(at("local s = \"a\" .. |\n").is_some());
+    }
+
+    #[test]
+    fn the_call_around_the_cursor_and_its_argument() {
+        let site = |t: &str| {
+            let offset = t.find('|').expect("a cursor");
+            call_at(&t.replacen('|', "", 1), offset).map(|c| (c.name, c.active))
+        };
+        assert_eq!(
+            site("local x = C_Spell.GetSpellInfo(|)"),
+            Some(("GetSpellInfo".into(), 0))
+        );
+        assert_eq!(site("f(a, |"), Some(("f".into(), 1)));
+        assert_eq!(site("f(a, g(b, c|), d)"), Some(("g".into(), 1)));
+        assert_eq!(site("f(a, { 1, 2, | })"), Some(("f".into(), 1)));
+        assert_eq!(site("f(\"a, b\", |)"), Some(("f".into(), 1)));
+        assert_eq!(
+            site("frame:SetPoint(\"TOP\", |"),
+            Some(("SetPoint".into(), 1))
+        );
+        // in a function passed as an argument, a grouping parenthesis
+        assert_eq!(site("f(function() x = | end)"), None);
+        assert_eq!(site("local y = (a + |)"), None);
+        assert_eq!(site("local z = |"), None);
     }
 
     #[test]

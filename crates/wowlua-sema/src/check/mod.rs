@@ -81,6 +81,9 @@ pub struct CheckOutput {
     /// With `Extras::complete`: what could stand at the placeholder (the
     /// language server's completion), if the check met it.
     pub completions: Option<complete::Completions>,
+    /// With `Extras::complete`: the signatures of the innermost call whose
+    /// arguments hold the placeholder (signature help).
+    pub signature: Option<Vec<complete::Signature>>,
 }
 
 /// What a check does besides checking (the language server's).
@@ -603,7 +606,11 @@ pub fn check_package_full(
         .take()
         .map(|found| definition::resolve(files, analysis, found))
         .unwrap_or_default();
-    let completions = env.completing.take().and_then(|c| c.found).map(|mut c| {
+    let (found, signature) = match env.completing.take() {
+        Some(c) => (c.found, c.signature),
+        None => (None, None),
+    };
+    let completions = found.map(|mut c| {
         // where each is declared: item `i` asks as the span `i..i`
         let asked: Vec<(wowlua_span::Span, env::DefTarget)> = c
             .items
@@ -633,6 +640,7 @@ pub fn check_package_full(
         definitions,
         hovers,
         completions,
+        signature,
     }
 }
 

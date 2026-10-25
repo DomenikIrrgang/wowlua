@@ -413,6 +413,7 @@ impl<'p> Env<'p> {
             completing: complete.map(|prefix| super::complete::Completing {
                 prefix: prefix.into(),
                 found: None,
+                signature: None,
             }),
             ..Env::default()
         };

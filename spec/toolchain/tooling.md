@@ -655,15 +655,33 @@ item has its kind, and its type (the game's: on `completionItem/resolve`,
 with the `---` doc comment above its declaration for every item). The
 completion check's diagnostics are not published; only the latest request
 waits for a check (an older one is answered empty), and it runs before the
-checks edits wait for. Find references and the rest of the table follow.
+checks edits wait for.
+
+Signature help (decision T381) shows the parameters of the call the cursor
+is in, the one at the cursor highlighted. The innermost unclosed `(` before
+the cursor that follows a name, `)` or `]` is the call (a grouping
+parenthesis or an open table belongs to the argument around it; in a
+function body inside the arguments, or past the start of a statement, there
+is none), and the commas before the cursor at its level count the argument.
+The completion check of that text and cursor answers it: where the checker
+meets the placeholder, the innermost call whose arguments it checks gives
+its forms (an overload each: `name(a: T, b: U?, ...: V) -> R`, each
+parameter's place in that label). The doc comment of what the called name
+refers to gives each form its summary (the text before **Parameters**) and
+each parameter its line. The active form is the first with a parameter at
+the cursor's argument (or a rest), the active parameter that argument's (or
+the rest's). `(` and `,` trigger it; a completion and a signature request of
+the same text and cursor are answered by one check. Find references and the
+rest of the table follow.
 
 The VS Code extension starts `wowlua lsp` (the `wowlua.path` command) when a
 `.wowlua` file opens or the workspace has a `wowlua.json`, and sends it the
 open `.wowlua` and `.lua` files, each edit as the range it changed, and the
 `.wowlua`, `.lua`, `.xml`, `.toc`, `wowlua.json` and `wowlua.lock` files
 changed on disk; *Go to Definition* (F12) and Ctrl or Cmd + click use it,
-hovering a name shows its type, and its completions list as you type (and
-after `.`, `:`, `@` and a quote).
+hovering a name shows its type, its completions list as you type (and
+after `.`, `:`, `@` and a quote), and in a call's parentheses its signature
+help shows the parameters.
 A server that stops by itself is started again at once, up to three times
 in three minutes, then the extension asks. The extension colors `.wowlua`
 and `.d.wowlua` files with a TextMate grammar of its own (decision T371):

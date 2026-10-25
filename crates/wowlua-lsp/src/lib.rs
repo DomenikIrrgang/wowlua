@@ -85,12 +85,68 @@ struct Server {
     completed: Vec<check::Completion>,
 }
 
-/// A completion request: its id, document and package, and what to check.
+/// A completion check to run: the requests waiting for it (a completion
+/// list, signature help: one check answers those of the same text and
+/// cursor), the document and package, and what to check.
 struct Completing {
-    id: Json,
+    waiters: Vec<(Json, Want)>,
     uri: String,
     manifest: PathBuf,
     asked: complete::Asked,
+}
+
+/// A completion check running: the requests waiting for it, the word typed
+/// and the document.
+type CompletionRun = (Vec<(Json, Want)>, String, String);
+
+/// What a request wants of a completion check.
+enum Want {
+    Completion,
+    /// Signature help for the call around the cursor.
+    Signature(complete::CallSite),
+}
+
+impl Want {
+    /// The answer to a request whose check did not run (a newer one
+    /// replaced it).
+    fn nothing(&self) -> Json {
+        match self {
+            Want::Completion => json!({ "isIncomplete": true, "items": [] }),
+            Want::Signature(_) => Json::Null,
+        }
+    }
+}
+
+/// Puts a request on the completion check to run: the one waiting, when it
+/// is of the same text and cursor; else a new one (the requests of the one
+/// waiting are answered empty: the editor asked again since).
+fn wait_for_completion_check(
+    server: &mut Server,
+    out: &mut impl std::io::Write,
+    request: (Json, Want),
+    uri: String,
+    manifest: PathBuf,
+    asked: complete::Asked,
+) -> std::io::Result<()> {
+    if let Some(c) = server.completing.as_mut()
+        && c.uri == uri
+        && c.asked.text == asked.text
+    {
+        c.waiters.push(request);
+        return Ok(());
+    }
+    let next = Completing {
+        waiters: vec![request],
+        uri,
+        manifest,
+        asked,
+    };
+    if let Some(old) = server.completing.replace(next) {
+        for (id, want) in old.waiters {
+            reply(out, &id, want.nothing())?;
+        }
+    }
+    Ok(())
 }
 
 impl Server {
@@ -329,15 +385,23 @@ pub fn serve_with(
                 let ran = server.running.take();
                 // a completion check: its answer, nothing published
                 if let Some(Running {
-                    completion: Some((id, prefix)),
+                    completion: Some((waiters, prefix, uri)),
                     ..
                 }) = ran
                 {
-                    let found = result
-                        .ok()
-                        .and_then(|packages| packages.into_iter().find_map(|c| c.completions));
-                    let list = completion_list(&mut server, found, &prefix);
-                    reply(out, &id, list)?;
+                    let checked = result.ok().and_then(|packages| packages.into_iter().next());
+                    for (id, want) in waiters {
+                        let answer = match want {
+                            Want::Completion => {
+                                let found = checked.as_ref().and_then(|c| c.completions.clone());
+                                completion_list(&mut server, found, &prefix)
+                            }
+                            Want::Signature(site) => {
+                                signature_help(&server, checked.as_ref(), &site, &uri)
+                            }
+                        };
+                        reply(out, &id, answer)?;
+                    }
                     start_due(&mut server);
                     continue;
                 }
@@ -402,7 +466,7 @@ fn start_due(server: &mut Server) {
                 server.running = Some(Running {
                     manifest: c.manifest,
                     focused: false,
-                    completion: Some((c.id, c.asked.prefix)),
+                    completion: Some((c.waiters, c.asked.prefix, c.uri)),
                 });
             }
             return;
@@ -472,8 +536,9 @@ struct Running {
     manifest: PathBuf,
     /// The first pass of an edit (its open files only).
     focused: bool,
-    /// A completion check: the request's id and the word typed.
-    completion: Option<(Json, String)>,
+    /// A completion check: the requests waiting for it, the word typed and
+    /// the document.
+    completion: Option<CompletionRun>,
 }
 
 /// Why a check gave no answer.
@@ -760,6 +825,7 @@ fn initialized(out: &mut impl std::io::Write, id: &Json) -> std::io::Result<()> 
                 "definitionProvider": true,
                 "hoverProvider": true,
                 "completionProvider": { "triggerCharacters": [".", ":", "\"", "'", "@"], "resolveProvider": true },
+                "signatureHelpProvider": { "triggerCharacters": ["(", ","], "retriggerCharacters": [","] },
             },
             "serverInfo": { "name": "wowlua", "version": env!("CARGO_PKG_VERSION") },
         }),
@@ -917,18 +983,37 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
             });
             match asked {
                 None => reply(out, id, completion_list(server, None, ""))?,
-                Some((manifest, asked)) => {
-                    // (an older request still waiting is answered empty)
-                    let next = Completing {
-                        id: id.clone(),
-                        uri,
-                        manifest,
-                        asked,
-                    };
-                    if let Some(old) = server.completing.replace(next) {
-                        reply(out, &old.id, json!({ "isIncomplete": true, "items": [] }))?;
-                    }
-                }
+                Some((manifest, asked)) => wait_for_completion_check(
+                    server,
+                    out,
+                    (id.clone(), Want::Completion),
+                    uri,
+                    manifest,
+                    asked,
+                )?,
+            }
+        }
+        // the parameters of the call the cursor is in, the one it is at
+        "textDocument/signatureHelp" => {
+            let asked = server.docs.get(&uri).and_then(|d| {
+                let offset = text::offset(&d.text, &params["position"]);
+                let site = complete::call_at(&d.text, offset)?;
+                Some((
+                    d.manifest.clone()?,
+                    site,
+                    complete::prepare(&d.text, offset)?,
+                ))
+            });
+            match asked {
+                None => reply(out, id, Json::Null)?,
+                Some((manifest, site, asked)) => wait_for_completion_check(
+                    server,
+                    out,
+                    (id.clone(), Want::Signature(site)),
+                    uri,
+                    manifest,
+                    asked,
+                )?,
             }
         }
         // a completion's type and doc comment, once the editor shows it
@@ -1207,6 +1292,109 @@ fn completion_list(server: &mut Server, found: Option<check::Completions>, prefi
         );
     }
     json!({ "isIncomplete": found.incomplete, "items": items })
+}
+
+/// Signature help for the call `site` names, from a completion check: each
+/// form of the function (`name(a: T, b: U) -> R`, its parameters' places in
+/// that label), its doc comment's summary and each parameter's line of it,
+/// the form and parameter the cursor is at.
+fn signature_help(
+    server: &Server,
+    checked: Option<&check::Checked>,
+    site: &complete::CallSite,
+    uri: &str,
+) -> Json {
+    let Some(forms) = checked
+        .and_then(|c| c.signature.as_ref())
+        .filter(|f| !f.is_empty())
+    else {
+        return Json::Null;
+    };
+    // the doc comment of what the name before the `(` refers to
+    let comment = server.docs.get(uri).and_then(|doc| {
+        checked?
+            .definitions
+            .get(&doc.canonical)?
+            .iter()
+            .find(|d| d.start as usize <= site.name_end && site.name_end <= d.end as usize)
+            .and_then(|d| doc_comment(server, &d.target.uri, d.target.range[0] as usize))
+    });
+    let (summary, param_docs) = split_doc(comment.as_deref().unwrap_or(""));
+    let utf16 = |s: &str| s.encode_utf16().count();
+    let signatures: Vec<Json> = forms
+        .iter()
+        .map(|form| {
+            let mut label = format!("{}(", site.name);
+            let mut parameters = Vec::new();
+            let parts = form.params.iter().chain(form.rest.iter());
+            for (i, p) in parts.enumerate() {
+                if i > 0 {
+                    label.push_str(", ");
+                }
+                let start = utf16(&label);
+                label.push_str(p);
+                let mut param = json!({ "label": [start, utf16(&label)] });
+                let name = p.split(':').next().unwrap_or("").trim();
+                if let Some(doc) = param_docs.iter().find(|(n, _)| n == name).map(|(_, d)| d) {
+                    param["documentation"] = json!({ "kind": "markdown", "value": doc });
+                }
+                parameters.push(param);
+            }
+            label.push(')');
+            if form.results != "()" {
+                label.push_str(&format!(" -> {}", form.results));
+            }
+            let mut sig = json!({ "label": label, "parameters": parameters });
+            if !summary.is_empty() {
+                sig["documentation"] = json!({ "kind": "markdown", "value": summary });
+            }
+            sig
+        })
+        .collect();
+    // the first form with a parameter at the cursor's argument
+    let fits = |f: &check::SignatureForm| site.active < f.params.len() || f.rest.is_some();
+    let active_signature = forms.iter().position(fits).unwrap_or(0);
+    let form = &forms[active_signature];
+    // (past the parameters: the rest's, else none is highlighted)
+    let active_parameter = if site.active < form.params.len() || form.rest.is_none() {
+        site.active
+    } else {
+        form.params.len()
+    };
+    json!({
+        "signatures": signatures,
+        "activeSignature": active_signature,
+        "activeParameter": active_parameter,
+    })
+}
+
+/// A doc comment's summary (what comes before its **Parameters** or
+/// **Returns**) and its parameters' lines (`- \`name\`: text`).
+fn split_doc(comment: &str) -> (String, Vec<(String, String)>) {
+    let summary = comment
+        .split("\n\n**")
+        .next()
+        .unwrap_or("")
+        .trim()
+        .to_string();
+    let mut params = Vec::new();
+    let mut in_params = false;
+    for line in comment.lines() {
+        let t = line.trim();
+        if t.starts_with("**") {
+            in_params = t == "**Parameters**";
+            continue;
+        }
+        if !in_params {
+            continue;
+        }
+        if let Some(rest) = t.strip_prefix("- `")
+            && let Some((name, text)) = rest.split_once("`: ")
+        {
+            params.push((name.to_string(), text.to_string()));
+        }
+    }
+    (summary, params)
 }
 
 /// The `---` comment lines right above line `line` of the file at `uri`

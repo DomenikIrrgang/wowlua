@@ -1,8 +1,8 @@
 // The language client: starts `wowlua lsp` and keeps it in step with the
 // open `.wowlua` and `.lua` files (whole texts, unsaved edits included). Its
 // diagnostics go to the Problems view; it formats documents, outlines them,
-// finds where their names are defined, shows their types on hover and
-// completes names and members. Hand-written on `connection.js`, so the
+// finds where their names are defined, shows their types on hover,
+// completes names and members, and shows a call's parameters. Hand-written on `connection.js`, so the
 // extension has no build step (decision T331).
 const vscode = require("vscode");
 const { Connection } = require("./connection");
@@ -78,6 +78,11 @@ class LanguageClient {
                 "'",
                 // (the decorators that apply to what follows)
                 "@",
+            ),
+            vscode.languages.registerSignatureHelpProvider(
+                SYNCED,
+                { provideSignatureHelp: (doc, position) => this.signatureHelp(doc, position) },
+                { triggerCharacters: ["(", ","], retriggerCharacters: [","] },
             ),
             // files changed on disk (a branch checked out, a formatter
             // run): the server checks their packages again
@@ -297,6 +302,28 @@ class LanguageClient {
             }
         }
         return item;
+    }
+
+    // The parameters of the call the cursor is in, the one it is at
+    // highlighted.
+    async signatureHelp(doc, position) {
+        const found = await this.request("textDocument/signatureHelp", {
+            textDocument: { uri: doc.uri.toString() },
+            position: { line: position.line, character: position.character },
+        });
+        if (!found || !found.signatures) {
+            return undefined;
+        }
+        const markdown = (d) => (d ? new vscode.MarkdownString(d.value) : undefined);
+        const help = new vscode.SignatureHelp();
+        help.signatures = found.signatures.map((s) => {
+            const sig = new vscode.SignatureInformation(s.label, markdown(s.documentation));
+            sig.parameters = (s.parameters || []).map((p) => new vscode.ParameterInformation(p.label, markdown(p.documentation)));
+            return sig;
+        });
+        help.activeSignature = found.activeSignature || 0;
+        help.activeParameter = found.activeParameter || 0;
+        return help;
     }
 
     async symbols(doc) {

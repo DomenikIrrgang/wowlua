@@ -294,6 +294,14 @@ async function completeScenario(widgets) {
             await typed('local e = CreateFrame("Frame"):RegisterEvent("PLAYER_LOGI', 'local e = CreateFrame("Frame"):RegisterEvent("PLAYER_LOGIN")'),
         ];
         assert(results.every(Boolean), "results " + results.join(", "));
+        // inside a call's parentheses: its parameters, the one at the cursor
+        await ed.edit((b) => b.insert(new vscode.Position(line, 0), "        UnitHealth(\"player\", )\n"));
+        const inCall = new vscode.Position(line, "        UnitHealth(\"player\", ".length);
+        const help = await vscode.commands.executeCommand("vscode.executeSignatureHelpProvider", doc.uri, inCall, ",");
+        await ed.edit((b) => b.delete(new vscode.Range(line, 0, line + 1, 0)));
+        const label = help && help.signatures[help.activeSignature].label;
+        log(`signature: ${label} (parameter ${help && help.activeParameter})`);
+        assert(label && label.startsWith("UnitHealth(unit: string") && help.activeParameter === 1, "signature help " + label);
         log("PASS", name);
     } finally {
         await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");

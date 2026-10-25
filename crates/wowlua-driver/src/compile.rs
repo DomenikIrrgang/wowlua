@@ -82,6 +82,9 @@ pub struct CompileOutput {
     pub hovers: Vec<(wowlua_span::Span, String)>,
     /// With `CheckConfig::complete`: what could stand at the cursor.
     pub completions: Option<wowlua_sema::check::complete::Completions>,
+    /// With `CheckConfig::complete`: the signatures of the call around the
+    /// cursor.
+    pub signature: Option<Vec<wowlua_sema::check::complete::Signature>>,
 }
 
 /// A declaration file with its contents.
@@ -1528,6 +1531,7 @@ pub fn compile_flavor(
         out.definitions = checked.definitions;
         out.hovers = checked.hovers;
         out.completions = checked.completions;
+        out.signature = checked.signature;
         out.type_names = checked.type_names;
         out.value_checks = checked.value_checks;
         private_methods = checked.private_methods;

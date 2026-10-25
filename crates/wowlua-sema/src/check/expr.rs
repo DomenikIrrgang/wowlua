@@ -2441,6 +2441,27 @@ impl Checker<'_, '_> {
         span: Span,
         expected: Option<TypeId>,
     ) -> Pack {
+        // (a completion check's signature help: the innermost call whose
+        // arguments hold the cursor)
+        let completing = self.env.completing.is_some();
+        if completing {
+            self.call_stack.push(callee);
+        }
+        let results = self.call_inner(callee, receiver, args, span, expected);
+        if completing {
+            self.call_stack.pop();
+        }
+        results
+    }
+
+    fn call_inner(
+        &mut self,
+        callee: TypeId,
+        receiver: Option<TypeId>,
+        args: Args<'_>,
+        span: Span,
+        expected: Option<TypeId>,
+    ) -> Pack {
         let _ = receiver;
         let members = self.env.types.members(callee);
         if members.len() > 1 {

@@ -226,6 +226,18 @@ pub struct Completions {
 pub struct Completing {
     pub prefix: Box<str>,
     pub found: Option<Completions>,
+    /// The signatures of the innermost call whose arguments hold the
+    /// placeholder (signature help): one per overload.
+    pub signature: Option<Vec<Signature>>,
+}
+
+/// One form of a function, for signature help: its parameters as written
+/// (`name: T`), its rest (`...: T`), its results.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Signature {
+    pub params: Vec<String>,
+    pub rest: Option<String>,
+    pub results: String,
 }
 
 /// Whether `name` matches what was typed: its letters in order, the first
@@ -506,6 +518,57 @@ fn string_literals(env: &Env<'_>, t: TypeId, out: &mut Vec<String>, depth: u32) 
 }
 
 impl Checker<'_, '_> {
+    /// The placeholder is met: the innermost call whose arguments are being
+    /// checked gives the signature help.
+    pub(crate) fn note_signature(&mut self) {
+        let Some(&callee) = self.call_stack.last() else {
+            return;
+        };
+        let mut funcs: Vec<super::types::Func> = Vec::new();
+        for m in self.env.types.members(callee) {
+            match self.env.types.get(m).clone() {
+                Ty::Func(f) => funcs.push((*f).clone()),
+                Ty::Intersection(parts) => {
+                    for p in parts {
+                        if let Ty::Func(f) = self.env.types.get(p).clone() {
+                            funcs.push((*f).clone());
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+        let shown: Vec<Signature> = funcs
+            .iter()
+            .map(|f| Signature {
+                params: f
+                    .params
+                    .iter()
+                    .map(|p| {
+                        let ty = self.env.display(p.ty);
+                        let mark = if p.optional && !ty.ends_with('?') {
+                            "?"
+                        } else {
+                            ""
+                        };
+                        match &p.name {
+                            Some(n) => format!("{n}: {ty}{mark}"),
+                            None => format!("{ty}{mark}"),
+                        }
+                    })
+                    .collect(),
+                rest: f.rest.as_ref().map(|r| match r {
+                    super::types::Rest::Variadic(t) => format!("...: {}", self.env.display(*t)),
+                    super::types::Rest::Pack(_) => "...".to_string(),
+                }),
+                results: self.env.display_pack(&f.ret, 0),
+            })
+            .collect();
+        if let Some(c) = self.env.completing.as_mut() {
+            c.signature = (!shown.is_empty()).then_some(shown);
+        }
+    }
+
     /// Whether `e` is the placeholder string of a completion check.
     pub(crate) fn completes_string(&self, e: wowlua_syntax::view::Expr<'_>) -> bool {
         self.env.completing.is_some()
@@ -516,6 +579,7 @@ impl Checker<'_, '_> {
     /// `at` is checked against it. A call checked against several overloads
     /// meets it once for each: what each names is kept.
     pub(crate) fn complete_strings(&mut self, expected: Option<TypeId>, at: Span) {
+        self.note_signature();
         let mut names = Vec::new();
         if let Some(t) = expected {
             string_literals(self.env, t, &mut names, 0);
@@ -544,6 +608,7 @@ impl Checker<'_, '_> {
     /// The game's events, where the placeholder string `at` is an event
     /// method's argument; each with its payload.
     pub(crate) fn complete_events(&mut self, at: Span) {
+        self.note_signature();
         let events: Vec<(Box<str>, super::types::Pack)> = self
             .env
             .events
@@ -674,6 +739,7 @@ impl Checker<'_, '_> {
     /// locals in scope, the project's globals, and the game's globals the
     /// prefix matches.
     pub(crate) fn complete_names(&mut self, at: Span) {
+        self.note_signature();
         let prefix = self.env.prefix();
         let mut items = Vec::new();
         let mut seen: FxHashSet<Box<str>> = FxHashSet::default();
@@ -770,6 +836,7 @@ impl Checker<'_, '_> {
     /// The members of a value of type `o` (after `:`, the methods),
     /// where the placeholder `at` is. Of a union, those every part has.
     pub(crate) fn complete_members(&mut self, o: TypeId, method: bool, at: Span) {
+        self.note_signature();
         let mut parts: Vec<Vec<Item>> = Vec::new();
         for m in self.env.types.members(o) {
             if m == Types::NIL {
