@@ -252,7 +252,7 @@
           }
         },
         {
-          "match": "^\\s*(?:export\\s+)?(type)\\s+([A-Za-z_][A-Za-z0-9_]*)(?=\\s*(?:<|=))",
+          "match": "(?:^\\s*(?:export\\s+)?|(?<=\\bexport)\\s+)(type)\\s+([A-Za-z_][A-Za-z0-9_]*)(?=\\s*(?:<|=))",
           "captures": {
             "1": {
               "name": "storage.type.wowlua"
@@ -263,7 +263,7 @@
           }
         },
         {
-          "match": "^\\s*(?:export\\s+)?(const)\\s+([A-Za-z_][A-Za-z0-9_]*)",
+          "match": "(?:^\\s*(?:export\\s+)?|(?<=\\bexport)\\s+)(const)\\s+([A-Za-z_][A-Za-z0-9_]*)",
           "captures": {
             "1": {
               "name": "storage.modifier.wowlua"

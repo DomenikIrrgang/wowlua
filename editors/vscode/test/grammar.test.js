@@ -92,6 +92,8 @@ table.sort(list, function(a: Made, b: Made): boolean return a.seq < b.seq end)
 local after = 1
 export abstract class Bar<B extends Button> extends BarBase implements Shown, Sized
 end
+export type Summary = {
+export const MAX = 3
 `;
 
 // The scopes of the first token whose text is `text` on line `line` (0-based).
@@ -165,6 +167,12 @@ test("wowlua code is colored by what it is", { skip: !fs.existsSync(asar) && "no
     has(32, "BarBase", "entity.other.inherited-class");
     has(32, "Shown", "entity.other.inherited-class");
     has(32, "Sized", "entity.other.inherited-class");
+    // after `export` too
+    has(34, "export", "storage.modifier.export");
+    has(34, "type", "storage.type");
+    has(34, "Summary", "entity.name.type.alias");
+    has(35, "const", "storage.modifier");
+    has(35, "MAX", "variable.other.constant");
     assert.ok(scopes(tokenized, 32, "B").includes("entity.name.type"));
     assert.ok(tokenized[32].filter((t) => t.text === "extends").every((t) => t.scopes.join(" ").includes("storage.modifier")));
 });
