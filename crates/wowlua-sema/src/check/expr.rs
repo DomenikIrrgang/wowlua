@@ -753,6 +753,9 @@ impl Checker<'_, '_> {
                     })
                     .and_then(|key| self.field_vars.get(&key.0)?.get(key.1.as_str()).copied())
                     .and_then(|v| self.flow.get(&v).copied());
+                // a call statement's method: its results are dropped (L56)
+                let dropped = self.statement_call == Some((e.span().start, e.span().end));
+                let reads = dropped.then(|| self.env.pending_reads.clone());
                 let m = match narrowed {
                     Some(t) => self.drop_first(t),
                     None => self.method_type(o, name.text(), name.span()),
@@ -762,6 +765,9 @@ impl Checker<'_, '_> {
                 }
                 let m = self.registry_method_type(o, name.text(), args, m);
                 self.check_router_add(o, name.text(), args);
+                if let Some(reads) = reads {
+                    self.env.pending_reads = reads;
+                }
                 let results = self.call(m, Some(o), args, e.span(), expected);
                 self.forget_passed(Some(obj), args);
                 if opt || chained {

@@ -23,6 +23,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Changed
 
+- Class methods without a result annotation return what their body returns, as functions do: `obj:get()` is a `number` when `get` returns `self.count`, where it was `any`. Completion and hover show the results (`-> ()`, `-> number`), and code that used a method's results wrongly now gets the error. Generic methods still return `any` unless annotated.
 - `wowlua check`, `wowlua build` and `wowlua test` type-check code that passes event names (`EventName`) to generic functions much faster: SuuUI's workspace checks in two thirds of the time.
 - `wowlua test` uses your WoW installation's own data (item names, creatures, appearances) only with `--game-data`: by default a test sees only what it defines, so it gives the same result on every machine and in CI. Debug sessions and `wowlua screenshot` still show the game as your installation has it.
 - `texture:GetTexture()` and `GetTextureFileID()` give the file's ID, as in game, instead of the path you set: `SetTexture("Interface\\Buttons\\WHITE8X8")` then `GetTexture()` is 130871 with your WoW installation, nil for a file that doesn't exist. A test that compared it with a path now compares with the ID (or reads `GetTextureFilePath()`). `SetTexture("")` and `SetTexture(0)` return false, and `SetAtlas` replaces a file set before.

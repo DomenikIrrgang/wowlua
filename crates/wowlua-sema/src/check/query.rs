@@ -206,6 +206,9 @@ impl Env<'_> {
     ) -> Option<(Member, DefId)> {
         let mut seen = FxHashSet::default();
         let found = self.instance_member_inner(def, args, name, &mut seen);
+        if let Some((_, at)) = &found {
+            self.note_pending(*at, name);
+        }
         // A declared class's `Self` is the receiver (decision L46).
         match found {
             Some((m, at)) => match self.view(at).self_param() {
@@ -252,7 +255,9 @@ impl Env<'_> {
         let mut guard = 0;
         while let Some(d) = current {
             if let Some(m) = self.view(d).static_member(name) {
-                return Some(m.clone());
+                let m = m.clone();
+                self.note_pending(d, name);
+                return Some(m);
             }
             guard += 1;
             if guard > 64 {
@@ -268,6 +273,21 @@ impl Env<'_> {
                 });
         }
         None
+    }
+
+    /// A read of member `name` of `def` whose results are not inferred yet
+    /// (L56): when `def` is the file's own, the file is checked again once
+    /// they are.
+    fn note_pending(&mut self, def: DefId, name: &str) {
+        if !self.results.is_empty()
+            && self.results.get(&def).and_then(|m| m.get(name)) == Some(&false)
+            && self
+                .inferring
+                .as_ref()
+                .is_none_or(|(d, n)| (*d, &**n) != (def, name))
+        {
+            self.pending_reads.insert((def, name.into()));
+        }
     }
 
     /// The indexer of a named type (`AddonNamespace` has `[string]: any`;

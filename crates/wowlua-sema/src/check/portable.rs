@@ -81,6 +81,9 @@ pub struct Portable {
     params: Vec<ParamNode>,
     exports: Vec<(Box<str>, u32)>,
     caps: Vec<(Box<str>, usize)>,
+    /// The module's methods whose results its check inferred (L56): the
+    /// class, the method, its type.
+    results: Vec<(DefKey, Box<str>, u32)>,
 }
 
 /// How many nodes a module's exports may take before they are not kept (a
@@ -123,12 +126,18 @@ impl<'a> Writer<'a> {
         mut self,
         exports: &FxHashMap<Box<str>, TypeId>,
         caps: &FxHashMap<Box<str>, usize>,
+        results: &[(DefId, Box<str>, TypeId)],
     ) -> Option<Portable> {
         let mut names: Vec<(&Box<str>, &TypeId)> = exports.iter().collect();
         names.sort();
         for (name, &t) in names {
             let node = self.ty(t)?;
             self.out.exports.push((name.clone(), node));
+        }
+        for (d, name, t) in results {
+            let key = self.keys.get(d)?.clone();
+            let node = self.ty(*t)?;
+            self.out.results.push((key, name.clone(), node));
         }
         // every parameter is one a written function declares
         if self.declared.iter().any(|d| !d) {
@@ -289,6 +298,11 @@ impl Portable {
     ) -> Option<Exports> {
         // (looked up before anything is made: a missing one makes nothing)
         let mut defs: FxHashMap<&DefKey, DefId> = FxHashMap::default();
+        for (k, _, _) in &self.results {
+            if !defs.contains_key(k) {
+                defs.insert(k, def(env, k)?);
+            }
+        }
         for node in &self.nodes {
             if let Node::Named(k, _) | Node::ClassOf(k) | Node::EnumMember(k, _) = node
                 && !defs.contains_key(k)
@@ -393,6 +407,25 @@ impl Portable {
             .map(|(name, n)| (name.clone(), ids[*n as usize]))
             .collect();
         let caps = self.caps.iter().cloned().collect();
+        // the methods' inferred results, as the module's check left them
+        for (k, name, n) in &self.results {
+            let d = defs[k];
+            let t = ids[*n as usize];
+            let def = env.def_mut(d);
+            if let Some(m) = def
+                .members
+                .get_mut(name)
+                .or_else(|| def.statics.get_mut(name))
+            {
+                m.ty = t;
+            }
+            if let Some(done) = env.results.get_mut(&d).and_then(|m| m.get_mut(name))
+                && !*done
+            {
+                *done = true;
+                env.inferred += 1;
+            }
+        }
         Some((exports, caps))
     }
 }
@@ -727,7 +760,26 @@ impl ModuleCache {
             return;
         }
         let written = (!facts.typeof_modules.contains(&i))
-            .then(|| Writer::new(env, keys, &facts.paths).exports(exports, caps))
+            .then(|| {
+                // (the module's methods whose results its check inferred)
+                let mut results: Vec<(DefId, Box<str>, TypeId)> = Vec::new();
+                for &d in env
+                    .module_types
+                    .get(&i)
+                    .into_iter()
+                    .flat_map(|t| t.values())
+                {
+                    let def = env.def_unrecorded(d);
+                    for (name, &done) in env.results.get(&d).into_iter().flatten() {
+                        let member = def.members.get(name).or_else(|| def.statics.get(name));
+                        if let (true, Some(m)) = (done, member) {
+                            results.push((d, name.clone(), m.ty));
+                        }
+                    }
+                }
+                results.sort_by(|a, b| (a.0.0, &a.1).cmp(&(b.0.0, &b.1)));
+                Writer::new(env, keys, &facts.paths).exports(exports, caps, &results)
+            })
             .flatten();
         self.entries.insert(
             facts.paths[i].into(),

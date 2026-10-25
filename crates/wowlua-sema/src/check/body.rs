@@ -158,6 +158,8 @@ pub struct Checker<'e, 'p> {
     pub global_types: FxHashMap<Box<str>, TypeId>,
     /// Types of expressions already checked, by span.
     pub(crate) expr_types: FxHashMap<(u32, u32), TypeId>,
+    /// The call of the call statement being checked (its results dropped).
+    pub(crate) statement_call: Option<(u32, u32)>,
     /// Links of optional chains: their type before the short-circuit's
     /// `nil`, which the rest of the chain continues from.
     pub(crate) chain_inner: FxHashMap<(u32, u32), TypeId>,
@@ -346,6 +348,7 @@ impl<'e, 'p> Checker<'e, 'p> {
                 ..Scope::default()
             },
             vars: Vec::new(),
+            statement_call: None,
             scopes: Scopes::default(),
             flow: Flow::default(),
             field_vars: FxHashMap::default(),
@@ -1505,7 +1508,11 @@ impl<'e, 'p> Checker<'e, 'p> {
                 self.assign_target(target, result);
             }
             StmtKind::Call(e) => {
+                // (its results are dropped: reading a method whose results
+                // are not inferred yet is no reason to check again, L56)
+                self.statement_call = Some((e.span().start, e.span().end));
                 let results = self.infer_multi(e);
+                self.statement_call = None;
                 // `error(...)` and other functions returning `never`.
                 if results.types.first() == Some(&Types::NEVER) {
                     self.live = false;
@@ -2161,6 +2168,132 @@ impl<'e, 'p> Checker<'e, 'p> {
         }
     }
 
+    /// The order a class's members are checked in: the methods whose
+    /// results are inferred (L56) first, each after the ones it calls
+    /// (`self:m()`, `self.m`, `C.m`), so a call reads its callee's results;
+    /// then the rest in source order. (Their diagnostics are put back in the
+    /// source's order.)
+    fn member_order(
+        &self,
+        def: DefId,
+        class: &str,
+        members: &[wowlua_syntax::view::ClassMember<'_>],
+    ) -> Vec<usize> {
+        let source: Vec<usize> = (0..members.len()).collect();
+        let Some(results) = self.env.results.get(&def) else {
+            return source;
+        };
+        let methods: FxHashMap<&str, usize> = members
+            .iter()
+            .enumerate()
+            .filter_map(|(i, m)| match m.kind() {
+                ClassMemberKind::Method {
+                    name,
+                    has_body: true,
+                    ..
+                } if results.contains_key(name.text()) => Some((name.text(), i)),
+                _ => None,
+            })
+            .collect();
+        if methods.is_empty() {
+            return source;
+        }
+        let calls = |i: usize| -> Vec<usize> {
+            let mut out = Vec::new();
+            if let ClassMemberKind::Method { func, .. } = members[i].kind() {
+                wowlua_syntax::visit::walk_block(func.body(), &mut |e| {
+                    let (obj, name) = match e.kind() {
+                        ExprKind::Method { obj, name, .. }
+                        | ExprKind::OptMethod { obj, name, .. }
+                        | ExprKind::Field { obj, name }
+                        | ExprKind::OptField { obj, name } => (obj, name),
+                        _ => return,
+                    };
+                    let on_class = matches!(obj.kind(), ExprKind::Name(n) if n.text() == "self" || n.text() == class);
+                    if let (true, Some(&j)) = (on_class, methods.get(name.text()))
+                        && j != i
+                    {
+                        out.push(j);
+                    }
+                });
+            }
+            out
+        };
+        // callees first (a cycle: in source order)
+        let mut order = Vec::with_capacity(members.len());
+        let mut state = vec![0u8; members.len()];
+        let mut starts: Vec<usize> = methods.values().copied().collect();
+        starts.sort_unstable();
+        for start in starts {
+            let mut stack = vec![(start, false)];
+            while let Some((i, done)) = stack.pop() {
+                if done {
+                    state[i] = 2;
+                    order.push(i);
+                    continue;
+                }
+                if state[i] != 0 {
+                    continue;
+                }
+                state[i] = 1;
+                stack.push((i, true));
+                let mut next = calls(i);
+                next.sort_unstable();
+                next.dedup();
+                for j in next.into_iter().rev() {
+                    if state[j] == 0 {
+                        stack.push((j, false));
+                    }
+                }
+            }
+        }
+        order.extend(source.into_iter().filter(|&i| state[i] == 0));
+        order
+    }
+
+    /// A method without a result annotation, its body just checked (`t`):
+    /// its member gets the body's results (spec §2.4, decision L56). The
+    /// member's type, when it changed.
+    fn infer_results(
+        &mut self,
+        def: DefId,
+        name: &str,
+        is_static: bool,
+        t: TypeId,
+    ) -> Option<TypeId> {
+        let done = *self.env.results.get(&def)?.get(name)?;
+        let inferred = self.as_func(t)?;
+        let current = {
+            let d = self.env.def(def);
+            if is_static {
+                d.statics.get(name)
+            } else {
+                d.members.get(name)
+            }
+            .map(|m| m.ty)?
+        };
+        let Ty::Func(f) = self.env.types.get(current).clone() else {
+            return None;
+        };
+        let mut f = std::sync::Arc::unwrap_or_clone(f);
+        f.ret = inferred.ret;
+        let ty = self.env.types.func(f);
+        let d = self.env.def_mut(def);
+        let member = if is_static {
+            d.statics.get_mut(name)
+        } else {
+            d.members.get_mut(name)
+        }?;
+        member.ty = ty;
+        if !done {
+            self.env.inferred += 1;
+            if let Some(m) = self.env.results.get_mut(&def).and_then(|m| m.get_mut(name)) {
+                *m = true;
+            }
+        }
+        Some(ty)
+    }
+
     pub fn as_func(&self, t: TypeId) -> Option<Func> {
         match self.env.types.get(t) {
             Ty::Func(f) => Some(Func::clone(f)),
@@ -2532,9 +2665,19 @@ impl<'e, 'p> Checker<'e, 'p> {
             }
         }
         if self.mode == Mode::Strict {
+            // (which fields the constructor sets: no results read, L56)
+            let reads = self.env.pending_reads.clone();
             self.definite_assignment(c, def);
+            self.env.pending_reads = reads;
         }
-        for m in c.members() {
+        let members: Vec<_> = c.members().iter().collect();
+        let order = self.member_order(def, c.name().text(), &members);
+        // (what each member reports, put back in the source's order)
+        let reordered = order.iter().enumerate().any(|(k, &i)| k != i);
+        let mut reports: Vec<Vec<Diagnostic>> = vec![Vec::new(); members.len()];
+        for i in order {
+            let m = members[i];
+            let reported = self.diagnostics.len();
             let is_static = m.modifiers().contains(&Modifier::Static);
             self.classes.push((def, is_static));
             match m.kind() {
@@ -2570,10 +2713,15 @@ impl<'e, 'p> Checker<'e, 'p> {
                         self.env.def(def).members.get(name.text()).map(|m| m.ty)
                     };
                     let exp = expected.and_then(|e| self.as_func(e));
+                    let outer = self.env.inferring.replace((def, name.text().into()));
                     let t =
                         self.function_body(&FnSig::of(func), exp, (!is_static).then_some(instance));
+                    self.env.inferring = outer;
+                    let member = self
+                        .infer_results(def, name.text(), is_static, t)
+                        .or(expected);
                     if let Some(h) = self.hovers.as_mut() {
-                        h.push((name.span(), expected.unwrap_or(t)));
+                        h.push((name.span(), member.unwrap_or(t)));
                     }
                 }
                 ClassMemberKind::Constructor {
@@ -2595,6 +2743,12 @@ impl<'e, 'p> Checker<'e, 'p> {
                 _ => {}
             }
             self.classes.pop();
+            if reordered {
+                reports[i] = self.diagnostics.split_off(reported);
+            }
+        }
+        for r in reports {
+            self.diagnostics.extend(r);
         }
         self.scope = saved;
         let _ = class_obj;

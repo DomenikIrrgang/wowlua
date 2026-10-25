@@ -1040,16 +1040,31 @@ fn check_file_in(
         pass += 1;
         env.diagnostics.truncate(env_diagnostics);
         env.typeof_namespace_refs.clear();
+        // A method whose results are inferred (L56) read before its body
+        // was reached: once the body is, the file is checked again.
+        env.pending_reads.clear();
+        let inferred = env.inferred;
         let mut checker = Checker::new(env, &info, prepared);
         if let Some(s) = &seeds {
             checker.closure_seeds = s.clone();
         }
         checker.check_file(parse);
+        // (only the file's own classes: another file's are inferred where
+        // that file is checked)
+        let methods_again = checker.env.inferred > inferred
+            && pass < 4
+            && checker.env.module_types.get(&i).is_some_and(|own| {
+                own.values()
+                    .any(|d| checker.env.pending_reads.iter().any(|(r, _)| r == d))
+            });
         if forced || !checker.closure_hit.get() {
+            if methods_again {
+                continue;
+            }
             break checker;
         }
         let mut finals = checker.closure_finals();
-        if seeds.as_ref() == Some(&finals) {
+        if seeds.as_ref() == Some(&finals) && !methods_again {
             break checker;
         }
         if pass >= 4 {
@@ -1966,6 +1981,52 @@ mod tests {
             d.iter().any(|x| x.code == Some(code)),
             "expected {code}: {src}\n{:#?}",
             codes(&d)
+        );
+    }
+
+    #[test]
+    fn unannotated_methods_return_what_their_bodies_return() {
+        // a call gets the body's results (L56)
+        err(
+            "class C\n    function get()\n        return 1\n    end\nend\nlocal s: string = C.new():get()\n",
+            "E2001",
+        );
+        // a method calling one below it
+        err(
+            "class C\n    function early()\n        return self:later()\n    end\n    function later()\n        return \"x\"\n    end\nend\nlocal n: number = C.new():early()\n",
+            "E2001",
+        );
+        // a static one
+        err(
+            "class C\n    static function make()\n        return C.new()\n    end\nend\nlocal b: boolean = C.make()\n",
+            "E2001",
+        );
+        // read before the class: the file is checked again
+        err(
+            "local function f(c: C): number\n    return c:name()\nend\nclass C\n    function name()\n        return \"n\"\n    end\nend\nf(C.new())\n",
+            "E2001",
+        );
+        // no `return`: no values
+        let d = check_source(
+            "class C\n    function run()\n    end\nend\nlocal x: number = C.new().run\n",
+            Mode::Basic,
+        );
+        assert!(
+            d.iter().any(|x| x.message.contains("(self: C) -> ()")),
+            "{:#?}",
+            codes(&d)
+        );
+        ok("class C\n    function run()\n    end\nend\nC.new():run()\n");
+        // its own calls (recursion) read `...any`
+        ok(
+            "class C\n    function count(n: number)\n        if n == 0 then return 0 end\n        return self:count(n - 1) + 1\n    end\nend\nlocal k: number = C.new():count(3)\n",
+        );
+        // generic methods and annotated results stay as they are
+        ok(
+            "class C\n    function id<T>(x: T)\n        return x\n    end\nend\nlocal s: string = C.new():id(1)\n",
+        );
+        ok(
+            "class C\n    function get(): any\n        return 1\n    end\nend\nlocal s: string = C.new():get()\n",
         );
     }
 

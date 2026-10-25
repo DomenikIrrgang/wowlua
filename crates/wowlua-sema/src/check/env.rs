@@ -221,6 +221,19 @@ pub struct Env<'p> {
     /// A completion check (spec §16.2): what was typed, and what the check
     /// found at the placeholder.
     pub completing: Option<super::complete::Completing>,
+    /// Class methods without a result annotation, by class and name: their
+    /// results are inferred from their bodies (spec §2.4, decision L56):
+    /// `false` until the check reaches the body, the member's results
+    /// `...any` until then.
+    pub results: FxHashMap<DefId, FxHashMap<Box<str>, bool>>,
+    /// The classes a member of which was read before its results were
+    /// inferred (a file's own: it is checked again once they are).
+    pub pending_reads: rustc_hash::FxHashSet<(DefId, Box<str>)>,
+    /// The method whose body is checked, its results to infer: its own
+    /// calls (recursion) read `...any` and are no reason to check again.
+    pub inferring: Option<(DefId, Box<str>)>,
+    /// Members whose results were inferred so far.
+    pub inferred: usize,
 }
 
 /// What a name refers to, for go to definition; the last three are
@@ -1136,8 +1149,20 @@ impl<'p> Env<'p> {
                     };
                     self.add_member(def, name.text(), member, is_static);
                 }
-                ClassMemberKind::Method { name, func, .. } => {
-                    let f = self.func_sig(&FnSig::of(func), &scope, false);
+                ClassMemberKind::Method {
+                    name,
+                    func,
+                    has_body,
+                } => {
+                    let sig = FnSig::of(func);
+                    // results without an annotation: the body's (L56)
+                    if has_body && !declaration && sig.ret.is_none() && sig.type_params.is_empty() {
+                        self.results
+                            .entry(def)
+                            .or_default()
+                            .insert(name.text().into(), false);
+                    }
+                    let f = self.func_sig(&sig, &scope, false);
                     let t = self.types.func(f);
                     let renamable = visibility != Visibility::Public
                         && !declaration

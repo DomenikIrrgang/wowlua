@@ -100,3 +100,48 @@ fn an_import_is_taken_until_its_interface_changes() {
     let (full, _) = check(root, &mut fresh, None);
     assert!(full.contains(&"E2001".to_string()), "{full:?}");
 }
+
+/// A taken module's classes keep the results their methods' bodies gave
+/// (decision L56): its importers check as against the module checked.
+#[test]
+fn a_taken_modules_methods_keep_their_inferred_results() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    std::fs::write(
+        root.join("wowlua.json"),
+        r#"{ "package": { "name": "focus-results", "version": "0.1.0", "wowlua": "^0.10" }, "flavors": { "camelot": {} } }"#,
+    )
+    .unwrap();
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    let a = root.join("src/a.wowlua");
+    let c = root.join("src/c.wowlua");
+    std::fs::write(
+        &a,
+        "export class Counter\n    count: number = 0\n    function get()\n        return self.count\n    end\nend\n",
+    )
+    .unwrap();
+    std::fs::write(
+        &c,
+        "import Counter from \"./a\"\n\nlocal s: string = Counter.new():get()\nprint(s)\n",
+    )
+    .unwrap();
+    let mut cache = BuildCache::default();
+    let (full, _) = check(root, &mut cache, None);
+    assert!(full.contains(&"E2001".to_string()), "{full:?}");
+    // `a` taken from the cache: `get` still gives a number
+    let (codes, taken) = check(root, &mut cache, Some(&c));
+    assert_eq!(taken, 1, "a taken");
+    assert_eq!(codes, full);
+    // `get`'s body changes its results: `a`'s interface changed, `c` sees it
+    std::fs::write(
+        &a,
+        "export class Counter\n    count: number = 0\n    function get()\n        return tostring(self.count)\n    end\nend\n",
+    )
+    .unwrap();
+    let (codes, taken) = check(root, &mut cache, Some(&c));
+    assert_eq!(taken, 0, "a checked");
+    assert!(!codes.contains(&"E2001".to_string()), "{codes:?}");
+    let (codes, taken) = check(root, &mut cache, Some(&c));
+    assert_eq!(taken, 1, "a taken again");
+    assert!(!codes.contains(&"E2001".to_string()), "{codes:?}");
+}

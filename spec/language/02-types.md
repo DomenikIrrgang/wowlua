@@ -415,7 +415,7 @@ Inference is local and bidirectional. There is no whole-program inference.
 | `local t = { a = 1, b = "x" }` | `{ a: number, b: string }`; a field or element written `v :: T` keeps `T` (`{ corner = "TOP" :: FramePoint }` is `{ corner: FramePoint }`, decision L84) |
 | `local t = { 1, 2, 3 }` | `number[]` |
 | `local t = {}` | open table, see below |
-| function without return annotation | union of all returned types (`()` if none); a class's method without one returns `any` (its type is known before its body is checked: annotate its results), decision L56 |
+| function without return annotation | union of all returned types (`()` if none); a class's method without one too: its results become its body's when the check reaches it, the class's methods checked first (callees first), the file again where one was read earlier; a generic method's stay `...any`, decision L86 |
 | unannotated parameter | `any` (basic/strict), or the contextual type if available |
 
 ### 2.4.1 Unannotated locals
