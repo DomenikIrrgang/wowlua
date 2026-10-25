@@ -43,6 +43,8 @@ pub enum Kind {
     Builtin,
     /// A string the expected type names (`"UNIT_HEALTH"`).
     Literal,
+    /// A core decorator (`@script`).
+    Decorator,
 }
 
 /// Where the cursor is.
@@ -57,6 +59,135 @@ pub enum Context {
     /// In a string, where the expected type names strings (an event name,
     /// an anchor point).
     Strings,
+    /// After `@`: the decorators that apply to what follows.
+    Decorators,
+}
+
+/// What a decorator is put on (as the lowerer tells them apart).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub(crate) enum On {
+    Function,
+    Method,
+    Constructor,
+    Accessor,
+    Field,
+    Class,
+    Enum,
+    Local,
+    Import,
+    Declare,
+    Type,
+    Other,
+}
+
+/// What a statement's decorators are put on.
+pub(crate) fn on_stmt(s: wowlua_syntax::view::Stmt<'_>) -> On {
+    use wowlua_syntax::view::StmtKind as K;
+    match s.kind() {
+        K::Export(inner) => on_stmt(inner),
+        K::Function { .. } | K::LocalFunction { .. } => On::Function,
+        K::Class(_) => On::Class,
+        K::Enum(_) => On::Enum,
+        K::Local { .. } | K::Const { .. } | K::LocalDestructure { .. } => On::Local,
+        K::Import(_) => On::Import,
+        K::Declare(_) => On::Declare,
+        K::Interface(_) | K::TypeAlias(_) => On::Type,
+        _ => On::Other,
+    }
+}
+
+/// The core decorators a user writes (spec §4.3): name, how it is written,
+/// what it does. (`@intrinsic` is the compiler's own; `@deferred` is put on
+/// parameters.)
+const CORE_DECORATORS: &[(&str, &str, &str)] = &[
+    (
+        "deprecated",
+        "@deprecated(msg?)",
+        "Warning W3030 at every use; in debug builds, a warning at run time on first use.",
+    ),
+    (
+        "global",
+        "@global(name?)",
+        "Also assigns the final value to the global `name` (the declaration's name by default), for XML scripts, key bindings and other addons.",
+    ),
+    (
+        "if",
+        "@if(condition)",
+        "Conditional compilation: the declaration is left out when the build-time condition is false (`@if(build.debug)`).",
+    ),
+    (
+        "script",
+        "@script(name, opts?)",
+        "The method handles the frame script `name` (`SetScript`; `{ hook = true }`: `HookScript`) on every frame of the class.",
+    ),
+    (
+        "inline",
+        "@inline",
+        "Inlines the function at its calls in optimized builds (a body that is a single `return`).",
+    ),
+    (
+        "reflect",
+        "@reflect(opts?)",
+        "Emits full reflection metadata.",
+    ),
+    (
+        "profile",
+        "@profile(opts?)",
+        "Measures calls and time when the profile instruments the build.",
+    ),
+    (
+        "noprofile",
+        "@noprofile",
+        "Left out of `instrument = \"all\"`.",
+    ),
+    (
+        "trace",
+        "@trace(opts?)",
+        "Logs entry, arguments, results and errors at `trace` level.",
+    ),
+    (
+        "debugOnly",
+        "@debugOnly",
+        "Outside debug builds the declaration and every call statement to it are removed.",
+    ),
+    (
+        "checked",
+        "@checked",
+        "Checks the parameters' types at run time, whatever the profile.",
+    ),
+    (
+        "unchecked",
+        "@unchecked",
+        "Never checks the parameters' types at run time.",
+    ),
+    ("nocheck", "@nocheck", "Skips type checking of the body."),
+    (
+        "widget",
+        "@widget(type)",
+        "Marks a native widget type for widget classes (`declare class`).",
+    ),
+    (
+        "onDemand",
+        "@onDemand(addon)",
+        "The global exists only once Blizzard's load-on-demand addon `addon` has loaded.",
+    ),
+];
+
+/// Whether core decorator `name` applies to `on` (the lowerer's E3021).
+fn applies(name: &str, on: On) -> bool {
+    use On::*;
+    match name {
+        "if" | "deprecated" => true,
+        "global" => matches!(on, Function | Class | Local | Enum),
+        "inline" | "debugOnly" => matches!(on, Function | Method),
+        "script" => on == Method,
+        "nocheck" => matches!(on, Function | Method | Constructor | Accessor | Class),
+        "widget" | "onDemand" => on == Declare,
+        "profile" | "noprofile" => matches!(on, Function | Method | Constructor | Class),
+        "trace" | "checked" | "unchecked" => matches!(on, Function | Method | Constructor),
+        "reflect" => matches!(on, Function | Class | Enum),
+        _ => false,
+    }
 }
 
 /// One thing that could stand at the cursor.
@@ -73,6 +204,8 @@ pub struct Item {
     pub target: Option<DefTarget>,
     /// `target` resolved, once the package is checked.
     pub at: Option<Span>,
+    /// What it does, where no doc comment says (a core decorator).
+    pub doc: Option<String>,
 }
 
 /// What a completion check found.
@@ -202,6 +335,7 @@ impl Env<'_> {
             rank,
             target: self.def(d).span.map(DefTarget::At),
             at: None,
+            doc: None,
         }
     }
 
@@ -225,6 +359,7 @@ impl Env<'_> {
                     rank: 0,
                     target: None,
                     at: None,
+                    doc: None,
                 });
             }
             if scope.self_ty.is_some() {
@@ -235,6 +370,7 @@ impl Env<'_> {
                     rank: 0,
                     target: None,
                     at: None,
+                    doc: None,
                 });
             }
             for b in BUILTIN_TYPES {
@@ -245,6 +381,7 @@ impl Env<'_> {
                     rank: 1,
                     target: None,
                     at: None,
+                    doc: None,
                 });
             }
             if let Some(m) = module {
@@ -274,6 +411,7 @@ impl Env<'_> {
                         rank: 0,
                         target: None,
                         at: None,
+                        doc: None,
                     });
                 }
             }
@@ -385,6 +523,7 @@ impl Checker<'_, '_> {
                 rank: 0,
                 target: None,
                 at: None,
+                doc: None,
             });
         }
         self.env.found(Context::Strings, items, false, at.file);
@@ -408,9 +547,110 @@ impl Checker<'_, '_> {
                 rank: 0,
                 target: None,
                 at: None,
+                doc: None,
             })
             .collect();
         self.env.found(Context::Strings, items, false, at.file);
+    }
+
+    /// After `@` (decorators put on `on`): the core decorators that apply,
+    /// and where user decorators may stand the functions in scope and the
+    /// modules a dotted decorator reads (`@events.`); a dotted one's
+    /// members; in a decorator's string argument, the game's events for the
+    /// event decorators.
+    pub(crate) fn complete_decorators(
+        &mut self,
+        decorators: wowlua_syntax::view::Decorators<'_>,
+        on: On,
+    ) {
+        if self.env.completing.is_none() {
+            return;
+        }
+        for d in decorators {
+            let path = d.path();
+            if let Some(last) = path.last()
+                && last.text() == PLACEHOLDER
+            {
+                if path.len() == 1 {
+                    self.complete_decorator_names(last.span(), on);
+                } else {
+                    let head = path.at(0).text();
+                    let mut t = match self.lookup_var(head) {
+                        Some(v) => self.var_type(v),
+                        None => self.env.declared.global(head).unwrap_or(Types::ANY),
+                    };
+                    for i in 1..path.len() - 1 {
+                        t = self
+                            .field_type_quiet(t, path.at(i).text())
+                            .unwrap_or(Types::ANY);
+                    }
+                    self.complete_members(t, false, last.span());
+                }
+            }
+            let Some(args) = d.args() else { continue };
+            let id = match path.len() {
+                1 => self.intrinsic_path(path.at(0).text(), None),
+                2 => self.intrinsic_path(path.at(0).text(), Some(path.at(1).text())),
+                _ => None,
+            };
+            for e in args.exprs() {
+                if self.completes_string(e)
+                    && id.as_deref().is_some_and(|i| i.starts_with("events."))
+                {
+                    self.complete_events(e.span());
+                }
+            }
+        }
+    }
+
+    fn complete_decorator_names(&mut self, at: Span, on: On) {
+        let mut items: Vec<Item> = CORE_DECORATORS
+            .iter()
+            .filter(|(n, _, _)| applies(n, on))
+            .map(|(n, written, doc)| Item {
+                label: n.to_string(),
+                kind: Kind::Decorator,
+                detail: written.to_string(),
+                rank: 0,
+                target: None,
+                at: None,
+                doc: Some(doc.to_string()),
+            })
+            .collect();
+        // user decorators: functions, and modules for `@events.on`
+        let user = matches!(
+            on,
+            On::Function | On::Method | On::Constructor | On::Accessor | On::Field | On::Class
+        );
+        if user {
+            for (name, v) in self.visible_locals() {
+                if !is_name(&name) || items.iter().any(|i| *i.label == *name) {
+                    continue;
+                }
+                let t = self.var_type(v);
+                let kind = match self.env.value_kind(t, false) {
+                    Kind::Function => Kind::Function,
+                    _ if matches!(self.env.types.get(t), Ty::Record(_) | Ty::ClassOf(_)) => {
+                        Kind::Module
+                    }
+                    _ => continue,
+                };
+                let target = match self.import_targets.get(&name) {
+                    Some(t) if self.import_vars.get(&name) == Some(&v) => Some(t.clone()),
+                    _ => None,
+                };
+                items.push(Item {
+                    label: name.to_string(),
+                    kind,
+                    detail: self.env.display(t),
+                    rank: 1,
+                    target,
+                    at: None,
+                    doc: None,
+                });
+            }
+        }
+        self.env.found(Context::Decorators, items, false, at.file);
     }
 
     /// Whether `name` is the placeholder of a completion check.
@@ -459,6 +699,7 @@ impl Checker<'_, '_> {
                 rank: 0,
                 target,
                 at: None,
+                doc: None,
             });
         }
         // the project's globals, then the game's the prefix matches
@@ -486,6 +727,7 @@ impl Checker<'_, '_> {
                 rank: 1,
                 target: Some(DefTarget::Global(name.as_str().into())),
                 at: None,
+                doc: None,
                 label: name,
             });
         }
@@ -506,6 +748,7 @@ impl Checker<'_, '_> {
                     rank: 2,
                     target: Some(DefTarget::Global(name)),
                     at: None,
+                    doc: None,
                 });
             }
         }
@@ -555,6 +798,7 @@ impl Checker<'_, '_> {
             rank,
             target: at.map(DefTarget::At),
             at: None,
+            doc: None,
         })
     }
 
@@ -710,6 +954,7 @@ impl Checker<'_, '_> {
                         rank: 0,
                         target: None,
                         at: None,
+                        doc: None,
                     });
                 }
             }

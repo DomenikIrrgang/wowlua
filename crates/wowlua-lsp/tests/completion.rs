@@ -259,3 +259,67 @@ fn completion_in_a_string_lists_the_strings_its_type_names() {
     assert!(labels(&list).is_empty(), "{:?}", labels(&list));
     assert!(c.finish());
 }
+
+#[test]
+fn completion_after_at_lists_the_decorators_that_apply() {
+    let (_dir, uri) = project();
+    let mut c = Client::start();
+    c.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": uri, "languageId": "wowlua", "version": 1, "text": MAIN } }),
+    );
+    let head = "import * as events from \"wowlua:events\"\nlocal function memo(f: () -> ()): () -> () return f end\n";
+    // on a function: the core decorators that apply, user decorators
+    let list = complete(&mut c, &uri, &format!("{head}@|\nlocal function f() end\n"));
+    let found = labels(&list);
+    for d in ["inline", "global", "deprecated", "memo", "events"] {
+        assert!(found.contains(&d.to_string()), "no {d} in {found:?}");
+    }
+    assert!(!found.contains(&"script".into()), "{found:?}");
+    let doc = item(&list, "global")["documentation"]["value"]
+        .as_str()
+        .unwrap_or_default()
+        .to_string();
+    assert!(doc.contains("global"), "{doc}");
+    assert_eq!(item(&list, "global")["detail"], "@global(name?)");
+    // nothing after it yet
+    let list = complete(&mut c, &uri, &format!("{head}@deb|"));
+    assert!(
+        labels(&list).contains(&"debugOnly".into()),
+        "{:?}",
+        labels(&list)
+    );
+    // on a method: `@script`
+    let list = complete(
+        &mut c,
+        &uri,
+        &format!("{head}class B extends Button\n\t@sc|\n\tfunction click() end\nend\n"),
+    );
+    assert!(
+        labels(&list).contains(&"script".into()),
+        "{:?}",
+        labels(&list)
+    );
+    // a module's decorators, and an event decorator's event names
+    let list = complete(
+        &mut c,
+        &uri,
+        &format!("{head}@events.|\nlocal function g() end\n"),
+    );
+    assert!(
+        labels(&list).contains(&"event".into()),
+        "{:?}",
+        labels(&list)
+    );
+    let list = complete(
+        &mut c,
+        &uri,
+        &format!("{head}@events.event(\"PLAYER_|\")\nlocal function h() end\n"),
+    );
+    assert!(
+        labels(&list).contains(&"PLAYER_LOGIN".into()),
+        "{} items",
+        labels(&list).len()
+    );
+    assert!(c.finish());
+}

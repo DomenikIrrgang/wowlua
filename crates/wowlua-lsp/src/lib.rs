@@ -759,7 +759,7 @@ fn initialized(out: &mut impl std::io::Write, id: &Json) -> std::io::Result<()> 
                 "documentSymbolProvider": true,
                 "definitionProvider": true,
                 "hoverProvider": true,
-                "completionProvider": { "triggerCharacters": [".", ":", "\"", "'"], "resolveProvider": true },
+                "completionProvider": { "triggerCharacters": [".", ":", "\"", "'", "@"], "resolveProvider": true },
             },
             "serverInfo": { "name": "wowlua", "version": env!("CARGO_PKG_VERSION") },
         }),
@@ -1190,6 +1190,9 @@ fn completion_list(server: &mut Server, found: Option<check::Completions>, prefi
                 if !c.detail.is_empty() {
                     item["detail"] = json!(c.detail);
                 }
+            }
+            if let Some(doc) = &c.doc {
+                item["documentation"] = json!({ "kind": "markdown", "value": doc });
             }
             item
         })

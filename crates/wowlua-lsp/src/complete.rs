@@ -85,6 +85,12 @@ pub fn prepare(text: &str, offset: usize) -> Option<Asked> {
         candidates.push(format!("{before}{p}{closers}{header}{rest}"));
         candidates.push(format!("{before}{p}(){closers}{header}{rest}"));
     }
+    // a decorator with nothing after it yet: a function to put it on
+    if string.is_none() && before.ends_with('@') {
+        candidates.push(format!(
+            "{before}{p}{closers}\nlocal function _() end{rest}"
+        ));
+    }
     // the line alone, as a statement of its own: what precedes the
     // placeholder from where its expression starts
     // (the block a header opens stays open, for its `end`)
@@ -272,6 +278,12 @@ mod tests {
         );
         // a type
         assert_eq!(checked("local x: Fr|\n"), "local x: @\n");
+        // a decorator: above a function, or with nothing after it yet
+        assert_eq!(
+            checked("@gl|\nfunction f() end\n"),
+            "@@\nfunction f() end\n"
+        );
+        assert_eq!(checked("@|"), "@@\nlocal function _() end");
     }
 
     #[test]

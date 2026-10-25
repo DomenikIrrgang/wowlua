@@ -76,6 +76,8 @@ class LanguageClient {
                 // (in a string: the event names, anchor points, … its type names)
                 '"',
                 "'",
+                // (the decorators that apply to what follows)
+                "@",
             ),
             // files changed on disk (a branch checked out, a formatter
             // run): the server checks their packages again

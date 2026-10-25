@@ -638,7 +638,15 @@ each overload's parameter there for an overloaded call; with `==`, the
 other side's type), and the game's events (with their payloads) as the
 first argument of a frame's `RegisterEvent`, `RegisterUnitEvent`,
 `UnregisterEvent` and `IsEventRegistered`, which the game's API types
-`string`. The game's names match when the letters typed
+`string`. After `@` (decision T379): the core decorators that apply to the
+declaration that follows (§4.3's targets: `@script` on a method, `@global`
+on a function, a class, a local or an enum, …; not `@intrinsic`, which is
+the compiler's, nor `@deferred`, which is put on parameters), each with how
+it is written and what it does, and where user decorators may stand the
+functions and modules in scope; after `@m.`, the members of `m`; in an
+event decorator's string argument (`@events.event("…")`), the game's
+events. A decorator with nothing after it yet is completed as if a
+function followed. The game's names match when the letters typed
 appear in order with the first at the start of the name or of a word in it
 (`spell` matches `GetSpellInfo`), a single letter only at the start; the
 list is then incomplete, so the editor asks again as the word grows. Each
@@ -654,7 +662,7 @@ open `.wowlua` and `.lua` files, each edit as the range it changed, and the
 `.wowlua`, `.lua`, `.xml`, `.toc`, `wowlua.json` and `wowlua.lock` files
 changed on disk; *Go to Definition* (F12) and Ctrl or Cmd + click use it,
 hovering a name shows its type, and its completions list as you type (and
-after `.` and `:`).
+after `.`, `:`, `@` and a quote).
 A server that stops by itself is started again at once, up to three times
 in three minutes, then the extension asks. The extension colors `.wowlua`
 and `.d.wowlua` files with a TextMate grammar of its own (decision T371):

@@ -1165,6 +1165,7 @@ impl<'e, 'p> Checker<'e, 'p> {
     }
 
     fn stmt(&mut self, s: Stmt<'_>) {
+        self.complete_decorators(s.decorators(), super::complete::on_stmt(s));
         self.next_handler = self.decorated_handler(s.decorators());
         stacker::maybe_grow(64 * 1024, 1024 * 1024, || self.stmt_inner(s));
         self.next_handler = None;
@@ -1289,7 +1290,7 @@ impl<'e, 'p> Checker<'e, 'p> {
         }
     }
 
-    fn intrinsic_path(&self, local: &str, member: Option<&str>) -> Option<String> {
+    pub(crate) fn intrinsic_path(&self, local: &str, member: Option<&str>) -> Option<String> {
         let id = self.intrinsics.get(local, member)?;
         match (self.lookup_var(local), self.import_vars.get(local)) {
             (Some(v), Some(&import)) if v != import => None,
@@ -2469,6 +2470,19 @@ impl<'e, 'p> Checker<'e, 'p> {
             self.scope.params.push((name, p));
         }
         self.scope.self_ty = Some(instance);
+        // (completion after a member's `@`)
+        if self.env.completing.is_some() {
+            use super::complete::On;
+            for m in c.members() {
+                let on = match m.kind() {
+                    ClassMemberKind::Field { .. } => On::Field,
+                    ClassMemberKind::Method { .. } => On::Method,
+                    ClassMemberKind::Constructor { .. } => On::Constructor,
+                    _ => On::Accessor,
+                };
+                self.complete_decorators(m.decorators(), on);
+            }
+        }
         // A field's own `typeof(expr)` is typed where the file reaches the
         // class, as a `local`'s annotation (decision L70).
         let mut own: Vec<Expr<'_>> = Vec::new();

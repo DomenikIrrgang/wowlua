@@ -33,7 +33,8 @@ pub struct Hover {
 #[derive(Clone, Debug, PartialEq)]
 pub struct Completions {
     /// Where the cursor is: `names`, `members`, `methods`, `types`,
-    /// `strings`, or `none` (where the check found nothing to complete).
+    /// `strings`, `decorators`, or `none` (where the check found nothing to
+    /// complete).
     pub context: &'static str,
     /// Names were left out for the prefix: a longer one gives others.
     pub incomplete: bool,
@@ -50,6 +51,8 @@ pub struct Completion {
     pub detail: String,
     pub rank: u8,
     pub declared: Option<(String, u32)>,
+    /// What it does, where no doc comment says (a core decorator).
+    pub doc: Option<String>,
 }
 
 /// A place in a file: its URI (shared by every name that leads there) and
@@ -288,6 +291,7 @@ fn completions_of(
         Context::Members { method: true } => "methods",
         Context::Types => "types",
         Context::Strings => "strings",
+        Context::Decorators => "decorators",
     };
     // (each file's URI and lines once)
     let mut files: HashMap<wowlua_span::FileId, Option<(String, text::Lines<'_>)>> = HashMap::new();
@@ -324,6 +328,7 @@ fn completions_of(
                 Kind::TypeParameter => 25,
                 Kind::Builtin => 14,
                 Kind::Literal => 12,
+                Kind::Decorator => 14,
             };
             Completion {
                 label: item.label,
@@ -331,6 +336,7 @@ fn completions_of(
                 detail: item.detail,
                 rank: item.rank,
                 declared,
+                doc: item.doc,
             }
         })
         .collect();
@@ -647,7 +653,7 @@ impl Checked {
             "completions": self.completions.as_ref().map(|c| json!({
                 "context": c.context,
                 "incomplete": c.incomplete,
-                "items": c.items.iter().map(|i| json!([i.label, i.kind, i.detail, i.rank, i.declared])).collect::<Vec<_>>(),
+                "items": c.items.iter().map(|i| json!([i.label, i.kind, i.detail, i.rank, i.declared, i.doc])).collect::<Vec<_>>(),
             })),
         })
     }
@@ -715,6 +721,7 @@ fn completions_from(json: &Json) -> Option<Completions> {
         "methods" => "methods",
         "types" => "types",
         "strings" => "strings",
+        "decorators" => "decorators",
         _ => "none",
     };
     let items = json["items"]
@@ -729,6 +736,7 @@ fn completions_from(json: &Json) -> Option<Completions> {
                 declared: row.get(4).and_then(|d| {
                     Some((d.get(0)?.as_str()?.to_string(), d.get(1)?.as_u64()? as u32))
                 }),
+                doc: row.get(5).and_then(Json::as_str).map(str::to_string),
             })
         })
         .collect::<Option<Vec<_>>>()?;
