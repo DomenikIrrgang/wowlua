@@ -1,27 +1,71 @@
 -- FrameXML globals that the generated wow-api declarations do not cover.
 
+--- The slash command handlers, by key. `SlashCmdList.MYADDON = fn` together
+--- with the globals `SLASH_MYADDON1 = "/myaddon"` (and `SLASH_MYADDON2`, …)
+--- registers `/myaddon`.
+---
+--- The handler gets the text typed after the command (trimmed) and the chat
+--- edit box it was typed in.
 declare global SlashCmdList: { [string]: (msg: string, editBox: EditBox?) -> () }
+--- The slash command handlers by upper-case command text (`"/MYADDON"`). The
+--- chat edit box moves new `SlashCmdList` entries here before it runs a
+--- command; addons clear an entry here to unregister a command.
 declare global hash_SlashCmdList: { [string]: (msg: string, editBox: EditBox?) -> () }
+--- Global names of frames that Escape closes: add a frame's name and pressing
+--- Escape hides the frame while it is shown.
 declare global UISpecialFrames: string[]
+--- Popup dialog definitions by name (`text`, `button1`, `button2`,
+--- `OnAccept`, `timeout`, …). Define a dialog here, then show it with
+--- `StaticPopup_Show(name)`.
 declare global StaticPopupDialogs: { [string]: table }
+--- The level of the UIDropDownMenu list being built: 1 for the top list,
+--- 2 and up for submenus. Read it in a dropdown's initialize function.
 declare global UIDROPDOWNMENU_MENU_LEVEL: number
+--- The `value` of the UIDropDownMenu button whose submenu is being built
+--- (nil for the top list).
 declare global UIDROPDOWNMENU_MENU_VALUE: any
+--- The UIDropDownMenu dropdown whose menu is open, or nil.
 declare global UIDROPDOWNMENU_OPEN_MENU: any
+--- The game flavor the client runs; compare it with the `WOW_PROJECT_*`
+--- constants (`WOW_PROJECT_ID == WOW_PROJECT_MAINLINE` on retail).
 declare global WOW_PROJECT_ID: number
+--- `WOW_PROJECT_ID` on the retail game (1).
 declare global WOW_PROJECT_MAINLINE: number
+--- `WOW_PROJECT_ID` on Classic Era (2).
 declare global WOW_PROJECT_CLASSIC: number
+--- `WOW_PROJECT_ID` on Burning Crusade Classic (5).
 declare global WOW_PROJECT_BURNING_CRUSADE_CLASSIC: number
+--- `WOW_PROJECT_ID` on Wrath of the Lich King Classic (11).
 declare global WOW_PROJECT_WRATH_CLASSIC: number
+--- `WOW_PROJECT_ID` on Cataclysm Classic (14).
 declare global WOW_PROJECT_CATACLYSM_CLASSIC: number
+--- `WOW_PROJECT_ID` on Mists of Pandaria Classic (19).
 declare global WOW_PROJECT_MISTS_CLASSIC: number
 
 -- LibStub: embedded by nearly every addon; it registers itself through
 -- `_G[...]`, which the analysis cannot see.
+--- LibStub, the registry of embedded libraries: each library is registered
+--- under its major name, with a minor version so that the newest copy
+--- loaded wins.
 declare class LibStubLibrary
+    --- The registered libraries, by major name.
     libs: { [string]: table }
+    --- Each registered library's minor version, by major name.
     minors: { [string]: number }
+    --- Registers version `minor` of library `major` and returns its table to
+    --- fill, with the minor version registered before (nil the first time).
+    --- An upgrade returns the existing table. Returns nil when the same or a
+    --- newer version is already registered: the caller then stops loading
+    --- its copy.
+    ---
+    --- **Parameters**
+    --- - `minor`: A number, or a string whose digits give it (`"$Revision: 42 $"`).
     function NewLibrary(major: string, minor: number | string): (table?, number?)
+    --- The library registered as `major` and its minor version. Raises an
+    --- error when none is registered, unless `silent` is true (then nil).
     function GetLibrary(major: string, silent: boolean?): (table?, number?)
+    --- Iterates over the registered libraries:
+    --- `for major, lib in LibStub:IterateLibraries() do … end`.
     function IterateLibraries(): ((t: table, key: string?) -> (string?, table), table, nil)
 end
 -- The common libraries, by name: `LibStub("LibDBIcon-1.0")` is typed (a
@@ -29,57 +73,113 @@ end
 
 --- A LibDataBroker data object (any attributes; these are the common ones).
 type LibDataBrokerObject = {
+    --- The kind of object: `"launcher"` (a button that opens something) or
+    --- `"data source"` (a value to display).
     type?: string,
+    --- The text a display shows for the object.
     text?: string,
+    --- A label shown with the text, by displays that use one.
     label?: string,
+    --- The icon: a texture path or file ID.
     icon?: string | number,
+    --- The data source's value.
     value?: any,
+    --- Called when the object's display is clicked, with the display frame
+    --- and the mouse button (`"LeftButton"`, `"RightButton"`, …).
     OnClick?: (frame: Frame, button: string) -> (),
+    --- Fills the tooltip the display shows on mouseover.
     OnTooltipShow?: (tooltip: GameTooltip) -> (),
+    --- Called when the mouse enters the display frame.
     OnEnter?: (frame: Frame) -> (),
+    --- Called when the mouse leaves the display frame.
     OnLeave?: (frame: Frame) -> (),
     [string]: any,
 }
+--- LibDataBroker-1.1: data objects that display addons (minimap buttons,
+--- data bars) show.
 type LibDataBroker = {
+    --- Creates and registers a data object with the attributes of `data`;
+    --- nil when the name is already taken.
     NewDataObject: (self: LibDataBroker, name: string, data: table?) -> LibDataBrokerObject?,
+    --- The data object registered under `name`, or nil.
     GetDataObjectByName: (self: LibDataBroker, name: string) -> LibDataBrokerObject?,
+    --- The name a data object was registered under, or nil.
     GetNameByDataObject: (self: LibDataBroker, object: LibDataBrokerObject) -> string?,
+    --- Iterates over the registered data objects: `for name, object in ldb:DataObjectIterator() do … end`.
     DataObjectIterator: (self: LibDataBroker) -> ((...any) -> (string?, LibDataBrokerObject), table, nil),
     [string]: any,
 }
 --- LibDBIcon's saved position table.
 type LibDBIconPosition = { hide?: boolean, minimapPos?: number, lock?: boolean, [string]: any }
+--- LibDBIcon-1.0: minimap buttons for LibDataBroker launchers.
 type LibDBIcon = {
+    --- Creates the minimap button `name` for a data object. `db` is a saved
+    --- table where the button keeps its position and its hidden and locked
+    --- state.
+    ---
+    --- **Parameters**
+    --- - `customCompartmentIcon`: The icon of the button's AddOn compartment entry, if not the object's.
     Register: (self: LibDBIcon, name: string, object: LibDataBrokerObject, db: LibDBIconPosition?, customCompartmentIcon: (string | number)?) -> (),
+    --- Shows the minimap button `name`.
     Show: (self: LibDBIcon, name: string) -> (),
+    --- Hides the minimap button `name`.
     Hide: (self: LibDBIcon, name: string) -> (),
+    --- Locks the minimap button `name` in place: it can no longer be dragged.
     Lock: (self: LibDBIcon, name: string) -> (),
+    --- Unlocks the minimap button `name`: it can be dragged around the minimap again.
     Unlock: (self: LibDBIcon, name: string) -> (),
+    --- Whether a minimap button is registered under `name`.
     IsRegistered: (self: LibDBIcon, name: string) -> boolean,
+    --- Applies the saved position and state to the button `name` again,
+    --- from `db` if given (it then replaces the registered table).
     Refresh: (self: LibDBIcon, name: string, db: LibDBIconPosition?) -> (),
+    --- The minimap button frame registered as `name`, or nil.
     GetMinimapButton: (self: LibDBIcon, name: string) -> Button?,
+    --- The names of all registered minimap buttons.
     GetButtonList: (self: LibDBIcon) -> string[],
+    --- Whether the client has the AddOn compartment (the minimap's addon menu).
     IsButtonCompartmentAvailable: (self: LibDBIcon) -> boolean,
+    --- Whether the button `name` has an entry in the AddOn compartment.
     IsButtonInCompartment: (self: LibDBIcon, name: string) -> boolean,
+    --- Adds an entry for the button `name` to the AddOn compartment.
     AddButtonToCompartment: (self: LibDBIcon, name: string, customIcon: (string | number)?) -> (),
+    --- Removes the button `name`'s entry from the AddOn compartment.
     RemoveButtonFromCompartment: (self: LibDBIcon, name: string) -> (),
     [string]: any,
 }
 
 --- LibSharedMedia-3.0: media shared between addons, by type and name.
 type LibSharedMedia = {
+    --- Registers a media file under a name. Returns false when the name is
+    --- already registered for that type, or a font does not support the
+    --- client's locale.
+    ---
+    --- **Parameters**
+    --- - `mediatype`: `"background"`, `"border"`, `"font"`, `"statusbar"` or `"sound"`.
+    --- - `data`: The file path or file ID.
+    --- - `langmask`: For fonts: the client locales the font supports (`LSM.LOCALE_BIT_*`).
     Register: (self: LibSharedMedia, mediatype: string, key: string, data: string | number, langmask: number?) -> boolean,
+    --- The file of the media `key` of a type; the type's default when `key`
+    --- is not registered, unless `noDefault` is true (then nil).
     Fetch: (self: LibSharedMedia, mediatype: string, key: string?, noDefault: boolean?) -> (string | number)?,
+    --- The registered names of a type, sorted.
     List: (self: LibSharedMedia, mediatype: string) -> string[],
+    --- The registered media of a type: name → file.
     HashTable: (self: LibSharedMedia, mediatype: string) -> { [string]: string | number },
+    --- Whether the media type exists and, with `key`, whether that name is registered for it.
     IsValid: (self: LibSharedMedia, mediatype: string, key: string?) -> boolean,
+    --- The name of a type's default media.
     GetDefault: (self: LibSharedMedia, mediatype: string) -> string?,
     --- CallbackHandler: `LSM.RegisterCallback(owner, "LibSharedMedia_Registered", fn)`.
     RegisterCallback: (owner: any, event: string, method: any) -> (),
+    --- Removes the callback `owner` registered for `event`.
     UnregisterCallback: (owner: any, event: string) -> (),
     [string]: any,
 }
 
+--- LibStub, the library registry: `LibStub("Name")` returns the library
+--- registered under that major name and its minor version. It raises an
+--- error when none is, unless the second argument is true (then nil).
 declare global LibStub: LibStubLibrary
     & ((major: "LibDataBroker-1.1", silent: false?) -> LibDataBroker)
     & ((major: "LibDataBroker-1.1", silent: boolean?) -> LibDataBroker?)
@@ -91,137 +191,327 @@ declare global LibStub: LibStubLibrary
 
 -- The handles of `C_Timer.NewTimer` and `C_Timer.NewTicker` (Blizzard's
 -- documentation types them as the callback).
+--- The handle of a `C_Timer.NewTimer` timer. The callback receives a handle
+--- of its own that shares the timer's state, fields written to either
+--- included.
 declare class TimerHandle
+    --- Stops the timer: its callback does not run (again).
     function Cancel()
+    --- Whether the timer has been cancelled.
     function IsCancelled(): boolean
 end
+--- The handle of a `C_Timer.NewTicker` ticker: `Cancel()` stops its
+--- remaining runs.
 declare class TickerHandle extends TimerHandle
 end
 
 -- Blizzard's Settings API (Blizzard_Settings_Shared): the objects it hands
 -- to addons, and the `Settings` functions they use. Members not declared
 -- here read as `any`.
+--- The type of a setting's value, as `Settings.VarType` names it.
 type SettingsVarType = "boolean" | "string" | "number"
 
+--- A category of the Settings panel: an entry in its category list, with
+--- a page of settings or an addon's own frame.
 interface SettingsCategoryMixin
     --- A number; some addons replace it with the category's name (older
     --- clients opened categories by name).
     ID: number | string
+    --- The name shown in the category list.
     name: string
+    --- Its position among its siblings (starts as the ID: creation order).
     order: number
+    --- The category this one is a subcategory of.
     parentCategory?: SettingsCategoryMixin
+    --- Its subcategories, in creation order.
     subcategories: SettingsCategoryMixin[]
+    --- Whether its subcategories are shown in the category list.
     expanded?: boolean
+    --- The panel tab it is listed in (`Settings.CategorySet`: Game or
+    --- AddOns), set when it is registered.
     categorySet?: number
+    --- Whether its subcategories are listed alphabetically.
     shouldSortAlphabetically?: boolean
+    --- The tutorial `Settings.AssignTutorialToCategory` gave it
+    --- (`{ tooltip, callback }`).
     tutorial?: table
+    --- The category's ID, which `Settings.OpenToCategory` takes.
     function GetID(): number | string
+    --- The name shown in the category list.
     function GetName(): string
+    --- Renames the category.
     function SetName(name: string)
+    --- Its position among its siblings.
     function GetOrder(): number
+    --- Sets its position among its siblings (lower comes first).
     function SetOrder(order: number)
+    --- The name, with the parent category's name for a subcategory.
     function GetQualifiedName(): string
+    --- The category this one is a subcategory of, or nil.
     function GetParentCategory(): SettingsCategoryMixin?
+    --- Makes this category a subcategory of `category`.
     function SetParentCategory(category: SettingsCategoryMixin)
+    --- Whether it is a subcategory.
     function HasParentCategory(): boolean
+    --- Its subcategories, in creation order.
     function GetSubcategories(): SettingsCategoryMixin[]
+    --- Whether it has subcategories.
     function HasSubcategories(): boolean
+    --- Creates a subcategory of this category, without a layout (the
+    --- `Settings.Register…LayoutSubcategory` functions create one with it).
+    ---
+    --- **Parameters**
+    --- - `description`: Passed on to `Settings.CreateCategory`, which does not use it.
     function CreateSubcategory(name: string, description: string?): SettingsCategoryMixin
+    --- Shows or hides its subcategories in the category list.
     function SetExpanded(expanded: boolean)
+    --- Whether its subcategories are shown in the category list.
     function IsExpanded(): boolean
+    --- Whether its subcategories are listed alphabetically.
     function ShouldSortAlphabetically(): boolean
+    --- Lists its subcategories alphabetically (true) or by their order.
+    --- Addon categories are always sorted alphabetically; their
+    --- subcategories only with this.
     function SetShouldSortAlphabetically(should: boolean)
 end
 
+--- A setting of the Settings panel: a named value with a type and a
+--- default, which the panel's controls show and change.
 interface SettingMixin
+    --- The name its control shows.
     function GetName(): string
+    --- The variable that identifies it (`Settings.GetSetting(variable)`).
     function GetVariable(): string
+    --- The type of its value.
     function GetVariableType(): SettingsVarType
+    --- The current value, or the value waiting for the panel's Apply button.
     function GetValue(): any
+    --- Sets the value and notifies its controls and callbacks. A changed value
+    --- must have the setting's type, or it raises an error. While the setting
+    --- is locked, nothing happens.
+    ---
+    --- **Parameters**
+    --- - `immediate`: Applies the value now, also for a setting that otherwise waits for the panel's Apply button.
     function SetValue(value: any, immediate: boolean?)
+    --- The default value, which the panel's Defaults button restores.
     function GetDefaultValue(): any
+    --- Applies the default value (nothing when the setting has none).
     function SetValueToDefault()
+    --- Reads the value again and notifies the controls and callbacks; for a
+    --- value changed outside the setting.
     function NotifyUpdate()
+    --- Whether a value waiting for the panel's Apply button differs from the current one.
     function IsModified(): boolean
+    --- Locks or unlocks the setting: while locked, `SetValue` does nothing
+    --- (the setting locks itself while it writes its value).
     function SetLocked(locked: boolean)
+    --- Whether the setting is locked.
     function IsLocked(): boolean
+    --- Calls `callback(setting, value)` whenever the value changes.
     function SetValueChangedCallback(callback: (setting: SettingMixin, value: any) -> ())
 end
 
 --- An element of a vertical settings layout. Addons may replace
 --- `InitFrame`, `Resetter` and `GetExtent` to draw rows of their own.
 interface SettingsListElementInitializer
+    --- Sets up a row frame made from the element's template; the default
+    --- calls `frame:Init(initializer)`.
     InitFrame: (self: SettingsListElementInitializer, frame: Frame) -> ()
+    --- Clears a row frame when the list releases it; the default calls
+    --- `frame:Release(initializer)`.
     Resetter: (self: SettingsListElementInitializer, frame: Frame) -> ()
+    --- The row's height. Blizzard's default returns nil, which leaves the
+    --- height to the template.
     GetExtent: (self: SettingsListElementInitializer) -> number
+    --- Indents the row.
     function Indent()
+    --- The data the element was created with (for a control: `setting`,
+    --- `name`, `options`, `tooltip`).
     function GetData(): table
+    --- The setting's name, or the data's `name` for an element without a setting.
     function GetName(): string?
+    --- The setting the row controls, or nil.
     function GetSetting(): SettingMixin?
+    --- Sets the setting the row controls.
     function SetSetting(setting: SettingMixin)
+    --- Makes this row a child of `parent`: it is indented while `parent` is
+    --- in the layout. `modifyPredicate` is added as with `AddModifyPredicate`.
     function SetParentInitializer(parent: SettingsListElementInitializer, modifyPredicate: (() -> boolean)?)
+    --- The parent row's initializer, or nil.
     function GetParentInitializer(): SettingsListElementInitializer?
+    --- Adds a condition for changing the setting: while any condition
+    --- returns false, the control is disabled.
     function AddModifyPredicate(func: () -> boolean)
 end
 
+--- The layout of a vertical-list category: the rows of its page, in order.
 interface SettingsVerticalLayoutMixin
+    --- The rows' initializers, in order.
     function GetInitializers(): SettingsListElementInitializer[]
+    --- Whether the layout has no rows.
     function IsEmpty(): boolean
+    --- Appends a row.
     function AddInitializer(initializer: SettingsListElementInitializer)
+    --- Appends a row that is also shown in another category; search results
+    --- leave out this copy. Does nothing for nil.
     function AddMirroredInitializer(initializer: SettingsListElementInitializer)
 end
 
+--- The layout of a canvas category: the addon's frame, shown as the page.
 interface SettingsCanvasLayoutMixin
+    --- The addon's frame the category shows.
     function GetFrame(): Frame
+    --- Anchors the frame inside the settings panel. Without anchor points it
+    --- fills the panel (`TOPLEFT` and `BOTTOMRIGHT` at 0, 0).
     function AddAnchorPoint(point: string, x: number, y: number)
 end
 
+--- A slider's range and labels, made by `Settings.CreateSliderOptions`.
 interface SettingsSliderOptionsMixin
+    --- The lowest value.
     minValue: number
+    --- The highest value.
     maxValue: number
+    --- The number of steps from the lowest to the highest value.
     steps: number
+    --- Sets how a label of the slider shows the value.
+    ---
+    --- **Parameters**
+    --- - `labelType`: The label, a `MinimalSliderWithSteppersMixin.Label` (`Left`, `Right`, `Top`, `Min`, `Max`).
+    --- - `formatter`: A function from the value to the label's text, or a fixed text.
     function SetLabelFormatter(labelType: number, formatter: ((value: number) -> string) | string)
 end
 
+--- A dropdown's options, made by `Settings.CreateControlTextContainer`.
 interface SettingsControlTextContainerMixin
+    --- Adds an option: choosing it sets the setting to `value`. Returns the
+    --- option's data.
     function Add(value: any, label: string, tooltip: string?): table
+    --- Adds a checkbox option for a bitmask setting: `value` is the bit's
+    --- position, counting from 1. Returns the option's data.
     function AddCheckbox(value: any, label: string, tooltip: string?): table
+    --- The options added, in order: what a dropdown's options function returns.
     function GetData(): table[]
 end
 
+--- The functions and constants of Blizzard's `Settings` table.
 type SettingsAPI = {
+    --- The value types of settings: `Boolean`, `String`, `Number`.
     VarType: { Boolean: "boolean", String: "string", Number: "number" },
+    --- Named default values: `Settings.Default.True`, `Settings.Default.False`.
     Default: { True: true, False: false },
+    --- Creates a category with a new ID, without a layout and unregistered.
+    --- The `Register…LayoutCategory` functions create a category with its
+    --- layout instead.
     CreateCategory: (name: string) -> SettingsCategoryMixin,
+    --- Adds a category to the Settings panel's Game tab, under the group
+    --- `group` (default: `"AddOns"`). Addons use `RegisterAddOnCategory`.
     RegisterCategory: (category: SettingsCategoryMixin, group: any?) -> (),
+    --- Adds a top-level category to the Settings panel's AddOns tab. Call it
+    --- last, after the category's settings and controls.
+    ---
+    --- **Parameters**
+    --- - `category`: The category made by `Settings.RegisterVerticalLayoutCategory` or `Settings.RegisterCanvasLayoutCategory`.
     RegisterAddOnCategory: (category: SettingsCategoryMixin) -> (),
+    --- Opens the Settings panel to a category.
+    ---
+    --- **Parameters**
+    --- - `categoryID`: The category's `GetID()`.
+    --- - `scrollToElementName`: The name of a setting in the category to scroll to.
     OpenToCategory: (categoryID: number | string, scrollToElementName: string?) -> (),
+    --- The registered category, or subcategory, whose `GetID()` equals the
+    --- value given; nil when none does.
     GetCategory: (name: string) -> SettingsCategoryMixin?,
+    --- Creates a category whose page is a vertical list of controls, and its
+    --- layout. Register it with `Settings.RegisterAddOnCategory`.
     RegisterVerticalLayoutCategory: (name: string) -> (SettingsCategoryMixin, SettingsVerticalLayoutMixin),
+    --- Creates a subcategory of `parent` whose page is a vertical list of
+    --- controls, and its layout.
     RegisterVerticalLayoutSubcategory: (parent: SettingsCategoryMixin, name: string) -> (SettingsCategoryMixin, SettingsVerticalLayoutMixin),
+    --- Creates a category whose page shows `frame`, a panel the addon draws
+    --- itself, and its layout. The frame may define `OnCommit` (Apply),
+    --- `OnDefault` (Defaults) and `OnRefresh` (the panel is shown).
     RegisterCanvasLayoutCategory: (frame: Frame, name: string) -> (SettingsCategoryMixin, SettingsCanvasLayoutMixin),
+    --- Creates a subcategory of `parent` whose page shows `frame`, and its layout.
     RegisterCanvasLayoutSubcategory: (parent: SettingsCategoryMixin, frame: Frame, name: string) -> (SettingsCategoryMixin, SettingsCanvasLayoutMixin),
+    --- Appends a row to a vertical-list category's layout.
     RegisterInitializer: (category: SettingsCategoryMixin, initializer: SettingsListElementInitializer) -> (),
+    --- Creates and registers a setting stored in a saved-variables table: its
+    --- value is `variableTbl[variableKey]`, set to `defaultValue` when nil.
+    --- Each variable can be registered once.
+    ---
+    --- **Parameters**
+    --- - `variable`: The setting's ID, unique among all addons (prefix it with the addon's name).
+    --- - `variableKey`: The key of the value in `variableTbl`.
+    --- - `variableTbl`: The saved-variables table that stores the value.
+    --- - `name`: The name the setting's control shows.
     RegisterAddOnSetting: (category: SettingsCategoryMixin, variable: string, variableKey: string, variableTbl: table, variableType: SettingsVarType, name: string, defaultValue: any) -> SettingMixin,
+    --- Creates and registers a setting whose value is read with `getValue`
+    --- and written with `setValue`; the addon stores it and sets its initial
+    --- value. Each variable can be registered once.
+    ---
+    --- **Parameters**
+    --- - `variable`: The setting's ID, unique among all addons (prefix it with the addon's name).
+    --- - `name`: The name the setting's control shows.
     RegisterProxySetting: (category: SettingsCategoryMixin, variable: string, variableType: SettingsVarType, name: string, defaultValue: any, getValue: () -> any, setValue: (value: any) -> ()) -> SettingMixin,
+    --- Creates and registers a setting stored in the console variable
+    --- `variable`, with the CVar's default.
     RegisterCVarSetting: (category: SettingsCategoryMixin, variable: string, variableType: SettingsVarType, name: string) -> SettingMixin,
+    --- The registered setting of a variable, or nil.
     GetSetting: (variable: string) -> SettingMixin?,
+    --- The value of the registered setting of a variable, or nil when none is registered.
     GetValue: (variable: string) -> any,
+    --- Sets the value of the registered setting of a variable; raises an
+    --- error when none is registered.
+    ---
+    --- **Parameters**
+    --- - `force`: Applies the value now, also for a setting that otherwise waits for the panel's Apply button.
     SetValue: (variable: string, value: any, force: boolean?) -> (),
+    --- Makes the registered setting of a variable read its value again and
+    --- notify its controls and callbacks.
     NotifyUpdate: (variable: string) -> (),
+    --- Calls `callback(owner, setting, value)` whenever the value of the
+    --- setting of `variable` changes. Returns a handle: `handle:Unregister()`
+    --- removes the callback.
     SetOnValueChangedCallback: (variable: string, callback: (...any) -> (), owner: any?) -> any,
+    --- Creates an empty list of dropdown options: `container:Add(value,
+    --- label)` per option, and `container:GetData()` from the options function.
     CreateControlTextContainer: () -> SettingsControlTextContainerMixin,
+    --- Creates a slider's options: from `minValue` (default 0) to `maxValue`
+    --- (default 1) in steps of `rate` (default: 100 steps).
     CreateSliderOptions: (minValue: number?, maxValue: number?, rate: number?) -> SettingsSliderOptionsMixin,
+    --- Creates a row built from the XML template `frameTemplate`, with `data`
+    --- as its data (a section header: `"SettingsListSectionHeaderTemplate"`
+    --- with `{ name = … }`). Add it with `layout:AddInitializer`.
     CreateElementInitializer: (frameTemplate: string, data: table?) -> SettingsListElementInitializer,
+    --- Creates a row for a setting (`data.setting`) built from the XML
+    --- template `frameTemplate`; the setting's name becomes a search term.
     CreateSettingInitializer: (frameTemplate: string, data: table?) -> SettingsListElementInitializer,
+    --- Creates a panel row built from the XML template `frameTemplate`; the
+    --- names of the settings in `data.settings` become search terms.
     CreatePanelInitializer: (frameTemplate: string, data: table?) -> SettingsListElementInitializer,
+    --- Adds a checkbox for a boolean setting to the category's layout.
     CreateCheckbox: (category: SettingsCategoryMixin, setting: SettingMixin, tooltip: string?) -> SettingsListElementInitializer,
+    --- Adds a checkbox for a boolean setting to the category's layout, with
+    --- `options` in the row's data.
     CreateCheckboxWithOptions: (category: SettingsCategoryMixin, setting: SettingMixin, options: any, tooltip: string?) -> SettingsListElementInitializer,
+    --- Adds a slider for a number setting to the category's layout.
+    ---
+    --- **Parameters**
+    --- - `options`: The range, from `Settings.CreateSliderOptions`.
     CreateSlider: (category: SettingsCategoryMixin, setting: SettingMixin, options: SettingsSliderOptionsMixin, tooltip: string?) -> SettingsListElementInitializer,
+    --- Adds a dropdown for a setting to the category's layout.
+    ---
+    --- **Parameters**
+    --- - `options`: Returns the choices: `container:GetData()` of a `Settings.CreateControlTextContainer()`.
     CreateDropdown: (category: SettingsCategoryMixin, setting: SettingMixin, options: () -> table[], tooltip: string?) -> SettingsListElementInitializer,
+    --- Adds a color swatch for a string setting holding a hex color
+    --- (`CreateColorFromHexString` reads it) to the category's layout.
     CreateColorSwatch: (category: SettingsCategoryMixin, setting: SettingMixin, tooltip: string?, options: any?) -> SettingsListElementInitializer,
     [string]: any,
 }
+--- Blizzard's Settings API: categories of the Settings panel, the settings
+--- in them and their controls.
 declare global Settings: SettingsAPI
 
 --- The 3D world's frame, which the client creates (no FrameXML file
@@ -230,6 +520,9 @@ declare global WorldFrame: Frame
 
 -- The chat windows (ScrollingMessageFrames). Members beyond MessageFrame's
 -- read as `any`.
+--- A chat window: a message frame with the chat frame's own members.
 type ChatFrame = MessageFrame & { [string]: any }
+--- The main chat window (`ChatFrame1`), where `print` writes.
 declare global DEFAULT_CHAT_FRAME: ChatFrame
+--- The chat window whose tab is selected.
 declare global SELECTED_CHAT_FRAME: ChatFrame

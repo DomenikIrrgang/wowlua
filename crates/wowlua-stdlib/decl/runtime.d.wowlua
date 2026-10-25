@@ -4,69 +4,116 @@
 -- it. User code cannot reach it (`__wowlua` is reserved, E2003). Members of
 -- optional slices are optional.
 
+--- An entry of wowlua:log's history: the `GetTime()` it was logged at, its
+--- level, the message, and the source location in debug builds.
 type WowluaLogEntry = { time: number, level: string, message: string, location?: string }
 
+--- The profiler's statistics of one function or label (times in
+--- milliseconds).
 type WowluaProfStat = {
+    --- The number of calls.
     calls: number,
+    --- The time of all calls together.
     total: number,
+    --- The total minus the time spent in profiled callees.
     self: number,
+    --- The longest call.
     max: number,
+    --- The average call.
     avg: number,
+    --- The calls that raised an error (counted with `profile-errors`).
     errors: number,
+    --- Where the function is defined.
     location?: string,
+    --- The memory its calls allocated, in KiB (`@profile({ memory = true })`).
     memory?: number,
 }
 
 --- The profiler (slice `prof`).
 interface WowluaProfiler
+    --- The statistics, by function name or label.
     stats: { [string]: WowluaProfStat }
+    --- The start times of the running `time` labels.
     timers: { [string]: number }
     --- Count errors of every wrapped function (`profile-errors`).
     errors?: boolean
+    --- The clock in milliseconds (`debugprofilestop`).
     clock: () -> number
+    --- Adds one call to the statistics of `name`: its time and its time
+    --- without profiled callees.
     record: (name: string, location: string?, elapsed: number, own: number) -> ()
+    --- Wraps `fn` so that every call is timed under `name`; the results pass
+    --- through. Values that are not functions come back unchanged.
     wrap: (fn: any, name: string, location: string, opts: { errors?: boolean, memory?: boolean }?) -> any
+    --- Calls `fn(...)` once, timed under `label`, and returns its results.
     measure: (label: string, fn: (...any) -> ...any, ...any) -> ...any
+    --- Starts timing `label`, until `timeEnd(label)`.
     time: (label: string) -> ()
+    --- Records the time since `time(label)` under `label`.
     timeEnd: (label: string) -> ()
+    --- Clears the statistics.
     reset: () -> ()
 end
 
+--- The monitor's statistics of one event, script or timer (times in
+--- milliseconds; `detail`: where the handler was set).
 type WowluaMonitorStat = { count: number, total: number, max: number, detail: string }
 
 --- The event, script and timer monitor (slice `monitor`).
 interface WowluaMonitor
+    --- The `OnEvent` handlers' statistics, by event.
     events: { [string]: WowluaMonitorStat }
+    --- Other script handlers' statistics, by frame and script.
     scripts: { [string]: WowluaMonitorStat }
+    --- Timer callbacks' statistics, by `C_Timer` function and location.
     timers: { [string]: WowluaMonitorStat }
     --- Memory samples in KiB, the newest last.
     memory: number[]
+    --- `frame:SetScript(script, fn)` with `fn` timed (compiled code calls it).
     setScript: (frame: any, script: string, fn: any, location: string) -> any
+    --- `frame:HookScript(script, fn)` with `fn` timed (compiled code calls it).
     hookScript: (frame: any, script: string, fn: any, location: string) -> any
+    --- `C_Timer.After` with the callback timed.
     after: (seconds: number, fn: any, location: string) -> ()
+    --- `C_Timer.NewTimer` with the callback timed.
     newTimer: (seconds: number, fn: any, location: string) -> TimerHandle
+    --- `C_Timer.NewTicker` with the callback timed.
     newTicker: (seconds: number, fn: any, iterations: number?, location: string) -> TickerHandle
+    --- Clears the event, script and timer statistics.
     reset: () -> ()
 end
 
+--- A captured error: its message and stack (paths relative to the addon's
+--- folder), how often it occurred, and the time (`HH:MM:SS`) it last did.
 type WowluaErrorEntry = { message: string, stack: string, count: number, time: string }
 
 --- Captured errors (slice `errors`).
 interface WowluaErrorLog
     --- Newest first.
     list: WowluaErrorEntry[]
+    --- The captured errors, by message.
     byMessage: { [string]: WowluaErrorEntry }
+    --- Captures an error if it comes from this addon's code: counts a repeat,
+    --- or adds it and announces it in chat (the newest 50 are kept).
     record: (message: any, stack: string?) -> ()
+    --- Forgets the captured errors.
     clear: () -> ()
 end
 
 --- What the dev console knows about this addon (slice `devconsole`).
 interface WowluaDev
+    --- The addon's name.
     name: string
+    --- What the dev console shows about the build.
     info: { [string]: any }
+    --- The watched expressions: a label, the function giving the value, and
+    --- whether code (`"code"`) or the console (`"typed"`) added it.
     watches: { label: string, fn: () -> any, source: string }[]
+    --- The version of this table's layout.
     schema: number
+    --- The addon's runtime table, which the console reads.
     runtime: WowluaRuntime
+    --- Shows `fn()` live under `label` in the dev console (`debug.watch`).
     watch: (label: string, fn: () -> any) -> ()
     --- The `/wl` console, on the addon whose runtime installed it.
     console?: table
@@ -74,87 +121,147 @@ end
 
 --- The log's ring buffer (wowlua:log), for the dev console.
 interface WowluaLogs
+    --- The kept entries, by slot of the ring buffer.
     entries: { [number]: WowluaLogEntry }
+    --- The slot of the oldest entry.
     first: () -> number
+    --- The number of entries kept.
     count: () -> number
+    --- The newest `n` entries (default: all kept), oldest first.
     history: (n: number?) -> WowluaLogEntry[]
+    --- Sets the log level at run time by its name (never below the build's).
     setLevel: (level: string) -> ()
 end
 
 --- The standard library's work per lifecycle phase (wowlua:lifecycle).
 interface WowluaLifecycleTasks
+    --- Runs at `ADDON_LOADED`, before the `@onLoad` hooks.
     beforeLoad: (() -> ())[]
+    --- Runs at `ADDON_LOADED`, after the `@onLoad` hooks.
     afterLoad: (() -> ())[]
+    --- Runs at login, after the `@onLogin` hooks.
     afterLogin: (() -> ())[]
+    --- Runs at `PLAYER_LOGOUT`, after the `@onLogout` hooks.
     afterLogout: (() -> ())[]
 end
 
+--- The runtime table of an addon, `ns.__wowlua`.
 interface WowluaRuntime
     -- core
+    --- The addon table (`ns`).
     ns: table
+    --- The modules' export tables, by module ID.
     modules: { [string]: table }
     --- A debug build.
     debug: boolean
+    --- Count the errors of every profiled function (`profile-errors`).
     profErrors?: boolean
+    --- The SavedVariables exist before the addon's files run
+    --- (`addon.load-saved-variables-first`): wowlua:saved's `bind` loads at once.
     savedFirst?: boolean
     --- Dev builds: what the dev console shows about the build.
     devInfo?: { [string]: any }
+    --- The build's log level: calls below it were removed.
     logLevel?: string
+    --- How many log entries the history keeps.
     logHistory?: number
     --- Build metadata tables (wowlua:meta).
     meta?: table
+    --- Creates, or completes, the export table of module `id`.
     module: (id: string) -> table
+    --- The export table of module `id`; debug builds raise an error when the
+    --- module has not loaded, unless `lazy`.
     require: (id: string, lazy: boolean?) -> table
+    --- Registers a module from plain Lua: copies `exports` into the export
+    --- table of `id`.
     define: (id: string, exports: table) -> table
 
     -- class and widget
+    --- Creates the table of class `name`, extending `super`.
     class?: (name: string, super: any) -> any
+    --- Registers an accessor: kind is `"get"`, `"set"`, `"sget"` or `"sset"` (static).
     accessor?: (cls: any, kind: string, name: string, fn: (...any) -> ...any) -> ()
+    --- Completes a class after its members are defined.
     finalize?: (cls: any) -> any
+    --- Makes method `name` an abstract stub that raises an error when called.
     abstract?: (cls: any, name: string) -> ()
+    --- The class of a value, or nil.
     classOf?: (v: any) -> any
+    --- Whether `v` is an instance of `cls` or one of its subclasses.
     isInstance?: (v: any, cls: any) -> boolean
+    --- Creates the table of widget class `name`, extending `super`.
     widgetClass?: (name: string, super: any) -> any
+    --- Completes a widget class after its members are defined.
     finalizeWidget?: (cls: any) -> any
+    --- Applies the methods of `cls` and its superclasses to a new frame.
     mixin?: (frame: any, cls: any) -> any
+    --- The mixin exposed for XML templates (`@global` on a widget class).
     xmlMixin?: (cls: any) -> { [string]: any }
+    --- Registers an `@script` method: script name, method name, hook.
     script?: (cls: any, script: string, method: string, hook: boolean?) -> ()
 
     -- enum, decorate
+    --- Makes `t` the enum `name`; debug builds raise an error on reading an
+    --- unknown member or assigning one.
     enum?: (t: table, name: string) -> table
+    --- Applies decorators to a value, bottom to top, each with the context table.
     decorate?: (value: any, ctx: table, ...((value: any, ctx: table) -> any)) -> any
+    --- Applies field decorators: they receive no value; their results are ignored.
     decorateField?: (ctx: table, ...((value: any, ctx: table) -> any)) -> ()
+    --- Wraps a `@deprecated` function: debug builds warn on its first call.
     deprecated?: (fn: (...any) -> ...any, name: string, message: string?) -> (...any) -> ...any
+    --- Applies registering decorators to the final value, in source order.
     register?: (value: any, ctx: table, ...((value: any, ctx: table) -> any)) -> any
 
     -- runtime checks
+    --- The errors of failed runtime type checks.
     check?: {
+        --- Raises the error of a parameter that failed its check.
         fail: (index: number, name: string, fname: string, location: string, expected: string, value: any) -> (),
+        --- Raises the error of a failed `::` assertion.
         castFail: (expected: string, value: any, location: string) -> (),
     }
 
     -- reflection
+    --- The reflection metadata.
     reflect?: {
+        --- Class metadata, by class table.
         classes: { [table]: table },
+        --- Class tables, by class name.
         byName: { [string]: table },
+        --- Function metadata, by function.
         functions: { [function]: table },
+        --- Each enum's values in declaration order, by enum table.
         enums: { [table]: any[] },
     }
+    --- Records a class's metadata.
     reflectClass?: (cls: table, meta: { name: string }) -> ()
+    --- Records a function's metadata.
     reflectFn?: (fn: any, meta: table) -> ()
+    --- Records an enum's values in declaration order.
     reflectEnum?: (e: table, order: any[]) -> ()
 
     -- dev tooling
+    --- Tracing: the current call depth, and `wrap`, which makes a function
+    --- log its calls, results and errors at the `trace` level.
     trace?: { depth: number, wrap: (fn: any, name: string, location: string, opts: { args?: boolean }?) -> any }
+    --- The profiler.
     prof?: WowluaProfiler
+    --- The event, script and timer monitor.
     mon?: WowluaMonitor
+    --- The captured errors.
     errors?: WowluaErrorLog
+    --- What the dev console knows about this addon.
     dev?: WowluaDev
 
     -- the standard library's
+    --- The standard library's work per lifecycle phase.
     lifecycleTasks?: WowluaLifecycleTasks
+    --- The strings of the client's language (wowlua:locale).
     locale?: { [string]: string }
+    --- The log's ring buffer.
     logs?: WowluaLogs
+    --- Logs a message at a level with an optional source location (wowlua:log's `emitAt`).
     logEmit?: (level: string, location: string?, ...any) -> ()
 
     -- the test framework's (`wowlua test`, spec Tooling §16.1)
