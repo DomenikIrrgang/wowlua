@@ -17,6 +17,6 @@ WOWLUA_VSCODE_LOG="$log" WOWLUA_BIN="${WOWLUA_BIN:-$repo/target/release/wowlua}"
     --extensionDevelopmentPath="$repo/editors/vscode" \
     --extensionTestsPath="$here/suite.js" \
     "$repo/examples/widget-demo" > "$work/vscode.out" 2>&1 || status=$?
-grep -E "^==|PASS|FAIL|Error|ALL" "$log" || true
+grep -E "^==|PASS|FAIL|Error|ALL|typed" "$log" || true
 if [ "$status" -eq 0 ]; then rm -rf "$work"; else echo "logs: $work"; fi
 exit $status

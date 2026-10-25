@@ -256,6 +256,45 @@ async function lspScenario(widgets) {
     }
 }
 
+// Completion as a user gets it (decision T377): typing a name opens the
+// suggestions by itself, after `.` too, and accepting one inserts it.
+async function completeScenario(widgets) {
+    const name = "completion suggests as you type";
+    log(`== ${name}`);
+    const doc = await vscode.workspace.openTextDocument(widgets);
+    const ed = await vscode.window.showTextDocument(doc);
+    const line = doc.getText().split("\n").findIndex((l) => l.includes("self:refresh()"));
+    try {
+        // (the first check done)
+        await waitFor(() => vscode.languages.getDiagnostics(widgets) !== undefined, 1000, "diagnostics");
+        await new Promise((r) => setTimeout(r, 4000));
+        const typed = async (text, expect) => {
+            await ed.edit((b) => b.insert(new vscode.Position(line, 0), "        \n"));
+            ed.selection = new vscode.Selection(line, 8, line, 8);
+            for (const ch of text) {
+                await vscode.commands.executeCommand("type", { text: ch });
+                await new Promise((r) => setTimeout(r, 60));
+            }
+            await new Promise((r) => setTimeout(r, 3000));
+            await vscode.commands.executeCommand("acceptSelectedSuggestion");
+            await new Promise((r) => setTimeout(r, 300));
+            const got = doc.lineAt(line).text.trim();
+            log(`typed ${JSON.stringify(text)}: ${JSON.stringify(got)}`);
+            await ed.edit((b) => b.delete(new vscode.Range(line, 0, line + 1, 0)));
+            return got === expect;
+        };
+        const results = [
+            await typed("local test = C_Tim", "local test = C_Timer"),
+            await typed("self.cou", "self.count"),
+            await typed("local n = C_Timer.Aft", "local n = C_Timer.After"),
+        ];
+        assert(results.every(Boolean), "results " + results.join(", "));
+        log("PASS", name);
+    } finally {
+        await vscode.commands.executeCommand("workbench.action.revertAndCloseActiveEditor");
+    }
+}
+
 exports.run = async function () {
     const folder = vscode.workspace.workspaceFolders[0].uri.fsPath;
     await vscode.workspace.getConfiguration("wowlua").update("path", process.env.WOWLUA_BIN, vscode.ConfigurationTarget.Global);
@@ -265,6 +304,12 @@ exports.run = async function () {
     let failed = 0;
     if (process.env.WOWLUA_SCENARIO === "lsp") {
         try { await lspScenario(widgets); } catch (e) { failed++; log(String(e)); }
+        log(failed ? `${failed} FAILED` : "ALL PASSED");
+        if (failed) throw new Error(`${failed} scenarios failed`);
+        return;
+    }
+    if (process.env.WOWLUA_SCENARIO === "complete") {
+        try { await completeScenario(widgets); } catch (e) { failed++; log(String(e)); }
         log(failed ? `${failed} FAILED` : "ALL PASSED");
         if (failed) throw new Error(`${failed} scenarios failed`);
         return;
