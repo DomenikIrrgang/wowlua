@@ -38,6 +38,9 @@ pub struct LoadOptions {
     /// `package` / `publish` at a workspace root: also load the members the
     /// root's `publish.bundle-addons` bundles.
     pub bundled: bool,
+    /// Every member of the workspace, from a member's folder too (the
+    /// language server's checks of a whole workspace).
+    pub all_members: bool,
 }
 
 /// A progress callback: status word and message.
@@ -674,7 +677,9 @@ fn load_workspace(
         .collect();
 
     // Selection.
-    let selected: Vec<usize> = if let Some(name) = &options.package {
+    let selected: Vec<usize> = if options.all_members {
+        (0..manifests.len()).collect()
+    } else if let Some(name) = &options.package {
         match manifests
             .iter()
             .position(|m| m.package().is_some_and(|p| &p.name == name))

@@ -29,6 +29,7 @@ fn load_options(out: &Output, global: &GlobalArgs) -> LoadOptions {
         precise: None,
         status: Some(out.status_sink()),
         bundled: false,
+        all_members: false,
     }
 }
 
@@ -210,6 +211,7 @@ pub fn package(
     let mut session = Session::new();
     let options = LoadOptions {
         bundled: true,
+        all_members: false,
         ..load_options(out, global)
     };
     let Some(projects) = wowlua_driver::load_projects(&mut session, &options) else {

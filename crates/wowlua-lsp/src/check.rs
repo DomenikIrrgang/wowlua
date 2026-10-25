@@ -96,6 +96,11 @@ pub struct Checked {
     pub completions: Option<Completions>,
     /// A completion check's: the forms of the call around the cursor.
     pub signature: Option<Vec<SignatureForm>>,
+    /// Why the package could not be loaded (its manifest's first error),
+    /// when it could not: nothing of it is checked.
+    pub unloaded: Option<String>,
+    /// A references or rename check's answer.
+    pub found: Option<crate::refs::Found>,
 }
 
 /// One form of the function called around the cursor (signature help):
@@ -127,7 +132,212 @@ pub fn check(
     focus: Option<&HashSet<PathBuf>>,
     complete: Option<&str>,
 ) -> Vec<Checked> {
-    check_and(manifest, whole, open, focus, complete, None, drop)
+    check_and(manifest, whole, open, focus, complete, None, None, drop)
+}
+
+/// A references or rename check (`find`) of the whole workspace of
+/// `manifest`'s package, its results those of a full check. A rename is
+/// checked again with the new name, and refused when that check finds
+/// errors the first did not, or names that refer to it other than the
+/// renamed ones.
+pub fn find(
+    manifest: &Path,
+    open: &HashSet<PathBuf>,
+    find: &crate::refs::Find,
+    mut warm: Option<&mut Warm>,
+    done: fn(Session),
+) -> Vec<Checked> {
+    let mut out = check_and(
+        manifest,
+        true,
+        open,
+        None,
+        None,
+        Some(find),
+        warm.as_deref_mut(),
+        done,
+    );
+    let Some(new) = &find.rename else {
+        return out;
+    };
+    let edits = match out.first().and_then(|c| c.found.as_ref()) {
+        Some(crate::refs::Found {
+            rename: Some(Ok(edits)),
+            ..
+        }) => edits.clone(),
+        _ => return out,
+    };
+    let verdict = if edits.is_empty() {
+        Err("wowlua found nothing here to rename".to_string())
+    } else {
+        verify(manifest, open, &out, find, new, &edits, warm)
+    };
+    if let Err(why) = verdict
+        && let Some(found) = out.first_mut().and_then(|c| c.found.as_mut())
+    {
+        found.rename = Some(Err(why));
+    }
+    out
+}
+
+/// Checks the workspace with `edits` given the name `new` (over the texts
+/// the first check read, put back after): no new errors, and the renamed
+/// names, and no others, spelled as `new` and referring to the same.
+fn verify(
+    manifest: &Path,
+    open: &HashSet<PathBuf>,
+    before: &[Checked],
+    find: &crate::refs::Find,
+    new: &str,
+    edits: &[crate::refs::Place],
+    mut warm: Option<&mut Warm>,
+) -> Result<(), String> {
+    let mut by_file: BTreeMap<&Path, Vec<&crate::refs::Place>> = BTreeMap::new();
+    for e in edits {
+        by_file.entry(e.path.as_path()).or_default().push(e);
+    }
+    // each file renamed, and how far its bytes move: (start, end, by)
+    let mut originals = Restore {
+        files: Vec::new(),
+        open,
+    };
+    let mut moved: HashMap<PathBuf, Vec<(u32, u32, i64)>> = HashMap::new();
+    for (path, list) in &mut by_file {
+        list.sort_by_key(|e| e.start);
+        let Ok(bytes) = wowlua_driver::overlay::read(path) else {
+            return Err(format!("{} can't be read", path.display()));
+        };
+        let mut last = 0u32;
+        let mut shifts = Vec::new();
+        for e in list.iter() {
+            if e.start < last || e.end as usize > bytes.len() {
+                return Err("the names to rename overlap".into());
+            }
+            shifts.push((e.start, e.end, new.len() as i64 - (e.end - e.start) as i64));
+            last = e.end;
+        }
+        moved.insert(path.to_path_buf(), shifts);
+        originals.files.push((path.to_path_buf(), bytes));
+    }
+    for (path, bytes) in &originals.files {
+        wowlua_driver::overlay::set(path, renamed_text(bytes, &moved[path], new));
+    }
+    // where byte `at` of `path` is after the rename (a renamed name: its
+    // start)
+    let shift = |path: &Path, at: u32| -> u32 {
+        let mut delta = 0i64;
+        for &(s, e, by) in moved.get(path).into_iter().flatten() {
+            if s <= at && at < e {
+                return (s as i64 + delta) as u32;
+            }
+            if e <= at {
+                delta += by;
+            }
+        }
+        (at as i64 + delta) as u32
+    };
+    let again = crate::refs::Find {
+        path: find.path.clone(),
+        offset: shift(&text::canonical(&find.path), find.offset),
+        rename: None,
+    };
+    // (not kept on disk: the next check reads the texts as they are)
+    let store = warm.as_deref_mut().and_then(|w| w.store.take());
+    let after = check_and(
+        manifest,
+        true,
+        &HashSet::new(),
+        None,
+        None,
+        Some(&again),
+        warm.as_deref_mut(),
+        drop,
+    );
+    if let Some(w) = warm {
+        w.store = store;
+    }
+    drop(originals);
+    // errors by file and code
+    let errors = |checked: &[Checked]| -> HashMap<(PathBuf, String), Vec<Json>> {
+        let mut out: HashMap<(PathBuf, String), Vec<Json>> = HashMap::new();
+        for c in checked {
+            for (path, items) in &c.diagnostics {
+                for d in items.iter().filter(|d| d["severity"] == 1) {
+                    let code = d["code"].as_str().unwrap_or_default().to_string();
+                    out.entry((path.clone(), code)).or_default().push(d.clone());
+                }
+            }
+        }
+        out
+    };
+    let (old, now) = (errors(before), errors(&after));
+    let mut fresh: Vec<_> = now
+        .iter()
+        .filter(|(key, items)| items.len() > old.get(*key).map_or(0, Vec::len))
+        .collect();
+    fresh.sort_by(|a, b| a.0.cmp(b.0));
+    if let Some(((path, _), items)) = fresh.first() {
+        let d = &items[items.len() - 1];
+        let line = d["range"]["start"]["line"].as_u64().unwrap_or(0) + 1;
+        let message = d["message"].as_str().unwrap_or_default();
+        let message = message.lines().next().unwrap_or_default();
+        return Err(format!(
+            "renaming to `{new}` would be an error in {}:{line}: {message}",
+            path.file_name().unwrap_or_default().to_string_lossy()
+        ));
+    }
+    let expected: BTreeSet<(PathBuf, u32)> = edits
+        .iter()
+        .map(|e| (e.path.clone(), shift(&e.path, e.start)))
+        .collect();
+    let found: BTreeSet<(PathBuf, u32)> = after
+        .iter()
+        .filter_map(|c| c.found.as_ref())
+        .flat_map(|f| f.renamed.iter().map(|p| (p.path.clone(), p.start)))
+        .collect();
+    if found != expected {
+        let file = found
+            .symmetric_difference(&expected)
+            .next()
+            .map(|(path, _)| path.file_name().unwrap_or_default().to_string_lossy())
+            .unwrap_or_default();
+        return Err(format!(
+            "renaming to `{new}` would change what names refer to in {file}: is `{new}` taken there?"
+        ));
+    }
+    Ok(())
+}
+
+/// Files whose texts a rename's check replaced, put back when dropped (a
+/// panic too): an open document's text, else the disk's.
+struct Restore<'a> {
+    files: Vec<(PathBuf, Vec<u8>)>,
+    open: &'a HashSet<PathBuf>,
+}
+
+impl Drop for Restore<'_> {
+    fn drop(&mut self) {
+        for (path, bytes) in self.files.drain(..) {
+            if self.open.contains(&text::canonical(&path)) {
+                wowlua_driver::overlay::set(&path, bytes);
+            } else {
+                wowlua_driver::overlay::remove(&path);
+            }
+        }
+    }
+}
+
+/// `bytes` with the names at `moved`'s places replaced by `new`.
+fn renamed_text(bytes: &[u8], moved: &[(u32, u32, i64)], new: &str) -> Vec<u8> {
+    let mut out = Vec::with_capacity(bytes.len());
+    let mut last = 0usize;
+    for &(s, e, _) in moved {
+        out.extend_from_slice(&bytes[last..s as usize]);
+        out.extend_from_slice(new.as_bytes());
+        last = e as usize;
+    }
+    out.extend_from_slice(&bytes[last..]);
+    out
 }
 
 /// What a long-lived checker keeps between checks: each package's build
@@ -183,12 +393,14 @@ impl Warm {
 
 /// [`check`], handing the session to `done` (a process about to end
 /// leaves it unfreed: a large package's take tens of milliseconds).
+#[allow(clippy::too_many_arguments)]
 fn check_and(
     manifest: &Path,
     whole: bool,
     open: &HashSet<PathBuf>,
     focus: Option<&HashSet<PathBuf>>,
     complete: Option<&str>,
+    find: Option<&crate::refs::Find>,
     mut warm: Option<&mut Warm>,
     done: fn(Session),
 ) -> Vec<Checked> {
@@ -218,18 +430,35 @@ fn check_and(
         precise: None,
         status: None,
         bundled: false,
+        // (a member's whole check: those of its workspace that depend on it)
+        all_members: whole,
     };
-    let mut roots = vec![dir.clone()];
+    let mut roots = Roots {
+        dirs: vec![dir.clone()],
+        ..Roots::default()
+    };
     // (diagnostics and definitions by package, as each build makes them)
     let mut parts: Vec<Part> = Vec::new();
     let loaded = wowlua_driver::load_projects(&mut session, &options);
-    parts.push((
-        manifest.to_path_buf(),
-        session.take_diagnostics().into_iter().collect(),
-        Vec::new(),
-        Vec::new(),
-    ));
+    let loading: Vec<Diagnostic> = session.take_diagnostics().into_iter().collect();
+    // (nothing is checked: the editor is told why)
+    let unloaded = loaded
+        .is_none()
+        .then(|| unloaded(&session, &roots, manifest, &loading));
+    parts.push((manifest.to_path_buf(), loading, Vec::new(), Vec::new()));
     if let Some(projects) = loaded {
+        // (where a dependency's files are: the workspace's packages', and
+        // those they depend on)
+        for project in &projects {
+            if let Some(p) = project.manifest.package() {
+                let src = &project.manifest.manifest.build.src;
+                roots.package(&p.name, project.root(), src);
+            }
+            for p in &project.deps.packages {
+                let src = p.manifest.as_ref().map_or("src", |m| m.build.src.as_str());
+                roots.package(&p.name, &p.dir, src);
+            }
+        }
         let own = text::canonical(manifest);
         // an edit checks its own package (a workspace root that is no
         // package: every member)
@@ -287,7 +516,7 @@ fn check_and(
                 None => wowlua_driver::build(&mut session, &project, &request),
             };
             project.apply_lints(&mut session);
-            roots.push(project.root().to_path_buf());
+            roots.dirs.push(project.root().to_path_buf());
             let defs = session.definitions.replace(Vec::new()).unwrap_or_default();
             let hovers = std::mem::take(&mut session.hovers);
             parts.push((
@@ -333,6 +562,11 @@ fn check_and(
             ..Checked::default()
         }];
     }
+    // a references or rename check: every name the workspace's checks met
+    let found = find.map(|f| {
+        let defs: Vec<Spans> = parts.iter().flat_map(|p| p.2.iter().copied()).collect();
+        crate::refs::find(&session, &roots, &defs, f)
+    });
     for (package, diagnostics, defs, hovers) in parts {
         let package = text::canonical(&package);
         let mut checked = Checked {
@@ -369,14 +603,49 @@ fn check_and(
             }
         }
     }
+    if let Some(first) = out.first_mut() {
+        first.unloaded = unloaded;
+        first.found = found;
+    }
     done(session);
     out
+}
+
+/// Why a package could not be loaded, as the editor shows it: its name (as
+/// its manifest says, else its folder's), the first error and its file.
+fn unloaded(session: &Session, roots: &Roots, manifest: &Path, found: &[Diagnostic]) -> String {
+    let error = found.iter().find(|d| d.severity == Severity::Error);
+    let file = error
+        .and_then(|d| {
+            d.labels
+                .first()
+                .map(|l| session.db.get(l.span.file).path().to_path_buf())
+                .or_else(|| d.path.clone())
+        })
+        .unwrap_or_else(|| manifest.to_path_buf());
+    let file = absolute(roots, &file).unwrap_or(file);
+    let json = std::fs::read_to_string(&file)
+        .ok()
+        .and_then(|t| serde_json::from_str::<Json>(&t).ok());
+    let folder = file
+        .parent()
+        .and_then(Path::file_name)
+        .map(|n| n.to_string_lossy().into_owned())
+        .unwrap_or_default();
+    let name = json
+        .as_ref()
+        .and_then(|j| j["package"]["name"].as_str())
+        .map(str::to_string)
+        .unwrap_or(folder);
+    let why = error.map_or("its manifest has errors", |d| d.message.as_str());
+    let shown = file.file_name().unwrap_or_default().to_string_lossy();
+    format!("{name} can't be checked: {why} ({shown})")
 }
 
 /// What a completion check found, for the protocol.
 fn completions_of(
     session: &Session,
-    roots: &[PathBuf],
+    roots: &Roots,
     found: wowlua_sema::check::complete::Completions,
 ) -> Completions {
     use wowlua_sema::check::complete::{Context, Kind};
@@ -457,7 +726,7 @@ type Part = (
 /// The hovers of the open files, by file.
 fn hovers_of(
     session: &Session,
-    roots: &[PathBuf],
+    roots: &Roots,
     found: &[(wowlua_span::Span, String)],
     open: &HashSet<PathBuf>,
 ) -> HashMap<PathBuf, Vec<Hover>> {
@@ -489,7 +758,7 @@ fn hovers_of(
 /// (name, definition) spans as each file's [`Definition`]s.
 fn definitions(
     session: &Session,
-    roots: &[PathBuf],
+    roots: &Roots,
     found: &[Spans],
     open: &HashSet<PathBuf>,
 ) -> HashMap<PathBuf, Vec<Definition>> {
@@ -542,10 +811,15 @@ fn definitions(
     out
 }
 
+/// Where [`materialize`] writes the compiler's built-in files.
+pub fn builtin_dir() -> PathBuf {
+    std::env::temp_dir().join(format!("wowlua-{}", env!("CARGO_PKG_VERSION")))
+}
+
 /// A file the compiler has built in (the game's API, the standard
 /// library's declarations) written where the editor can open it: the
 /// system's temporary directory, one folder per wowlua version.
-fn materialize(rel: &Path, contents: &str) -> Option<PathBuf> {
+pub(crate) fn materialize(rel: &Path, contents: &str) -> Option<PathBuf> {
     let name: String = rel
         .to_string_lossy()
         .chars()
@@ -554,9 +828,7 @@ fn materialize(rel: &Path, contents: &str) -> Option<PathBuf> {
             c => c,
         })
         .collect();
-    let path = std::env::temp_dir()
-        .join(format!("wowlua-{}", env!("CARGO_PKG_VERSION")))
-        .join(name.trim_start_matches(['/', '\\']));
+    let path = builtin_dir().join(name.trim_start_matches(['/', '\\']));
     let fresh = std::fs::metadata(&path).is_ok_and(|m| m.len() == contents.len() as u64);
     if !fresh {
         std::fs::create_dir_all(path.parent()?).ok()?;
@@ -579,11 +851,46 @@ fn materialize(rel: &Path, contents: &str) -> Option<PathBuf> {
     Some(path)
 }
 
+/// Where a check's files are: the folders their paths are relative to, and
+/// each package's folder and source folder by name (a dependency's files
+/// are `@pkg/<name>/<path>`).
+#[derive(Default)]
+pub(crate) struct Roots {
+    pub dirs: Vec<PathBuf>,
+    pub packages: HashMap<String, (PathBuf, PathBuf)>,
+}
+
+impl Roots {
+    /// A package's folders, by its name.
+    fn package(&mut self, name: &str, dir: &Path, src: &str) {
+        self.packages
+            .entry(name.to_string())
+            .or_insert_with(|| (dir.join(src), dir.to_path_buf()));
+    }
+}
+
+impl std::ops::Deref for Roots {
+    type Target = [PathBuf];
+
+    fn deref(&self) -> &[PathBuf] {
+        &self.dirs
+    }
+}
+
 /// A file of the session as a canonical absolute path, if it is one on
 /// disk.
-fn absolute(roots: &[PathBuf], rel: &Path) -> Option<PathBuf> {
+pub(crate) fn absolute(roots: &Roots, rel: &Path) -> Option<PathBuf> {
     let found = if rel.is_absolute() {
         rel.exists().then(|| rel.to_path_buf())
+    } else if let Some((name, rest)) = rel
+        .to_str()
+        .and_then(|r| r.strip_prefix(wowlua_sema::PACKAGE_PREFIX))
+        .and_then(|r| r.split_once('/'))
+    {
+        let (src, dir) = roots.packages.get(name)?;
+        [src.join(rest), dir.join(rest)]
+            .into_iter()
+            .find(|p| p.exists())
     } else {
         roots.iter().map(|r| r.join(rel)).find(|p| p.exists())
     }?;
@@ -592,7 +899,7 @@ fn absolute(roots: &[PathBuf], rel: &Path) -> Option<PathBuf> {
 
 fn convert(
     session: &Session,
-    roots: &[PathBuf],
+    roots: &Roots,
     manifest: &Path,
     d: &Diagnostic,
 ) -> Option<(PathBuf, Json)> {
@@ -692,17 +999,22 @@ pub fn worker(warm: &mut Warm, request: &Json) -> Json {
     warm.checks += 1;
     // (the session is freed on another thread: the answer goes out first)
     let complete = request["complete"].as_str();
-    let packages = check_and(
-        &manifest,
-        whole,
-        &open,
-        focus.as_ref(),
-        complete,
-        Some(warm),
-        |s| {
-            std::thread::spawn(move || drop(s));
-        },
-    );
+    let free: fn(Session) = |s| {
+        std::thread::spawn(move || drop(s));
+    };
+    let packages = match crate::refs::Find::from_json(&request["find"]) {
+        Some(f) => find(&manifest, &open, &f, Some(warm), free),
+        None => check_and(
+            &manifest,
+            whole,
+            &open,
+            focus.as_ref(),
+            complete,
+            None,
+            Some(warm),
+            free,
+        ),
+    };
     Json::Array(packages.iter().map(Checked::to_json).collect())
 }
 
@@ -745,6 +1057,8 @@ impl Checked {
                     (path.to_string_lossy().into_owned(), Json::Array(rows))
                 })
                 .collect::<serde_json::Map<_, _>>(),
+            "unloaded": self.unloaded,
+            "found": self.found.as_ref().map(crate::refs::Found::to_json),
             "signature": self.signature.as_ref().map(|forms| forms.iter().map(|f| json!([f.params, f.rest, f.results])).collect::<Vec<_>>()),
             "completions": self.completions.as_ref().map(|c| json!({
                 "context": c.context,
@@ -805,6 +1119,8 @@ impl Checked {
             definitions,
             hovers,
             completions: completions_from(&json["completions"]),
+            unloaded: json["unloaded"].as_str().map(str::to_string),
+            found: crate::refs::Found::from_json(&json["found"]),
             signature: json["signature"].as_array().map(|forms| {
                 forms
                     .iter()

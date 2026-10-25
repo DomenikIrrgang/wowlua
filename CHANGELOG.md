@@ -6,8 +6,16 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### New
 
-- With your WoW installation at hand, text in fonts and characters wowlua's recordings don't cover (accented letters, other alphabets, the game's other fonts) is measured with the game's own font files, so `GetStringWidth`, wrapping and truncation come close to the game's instead of treating each such character as a `?`.
+- **Find All References**: Shift+F12 (or *Go to References*) in VS Code lists every place in your workspace that uses a name: a local, a function, a class, a method or field (`self.count` too), a type, an import, a global; in every file, open or not, in your tests, and in the packages of your workspace that depend on it.
+- **Rename Symbol**: F2 renames a name everywhere it is used, across files and the packages of your workspace, methods called with `:` and `self.` fields included; an `import a as b` keeps its alias. When a rename can't be done safely (the game's API or Lua's functions, an override or interface that would no longer match, a name already taken, a name an XML file uses), wowlua says why and changes nothing.
+- When wowlua can't load a package (a broken `wowlua.json`, or a `"wowlua"` version this wowlua doesn't satisfy), the editor now shows an error saying so, such as "suuui can't be checked: this package requires wowlua ^0.9, but this is wowlua 0.10.1 (wowlua.json)", instead of silently checking nothing.
 - **Spells from your WoW installation**: with your installation at hand (`wowlua test --game-data`, debug sessions, `wowlua screenshot`), a spell your test doesn't define is the game's: `C_Spell.GetSpellInfo` gives its name, rank, icon, cast time and range, `C_Spell.GetSpellPowerCost` its costs, and `C_Spell.GetSpellDescription` its text with the numbers for your test's character ("Burns the enemy for 7 to 9 Arcane damage and then an additional 12 Arcane damage over 9 sec."), in every flavor. Spells and texts the server changed are read from the game's hotfix cache, as the game shows them.
+- With your WoW installation at hand, text in fonts and characters wowlua's recordings don't cover (accented letters, other alphabets, the game's other fonts) is measured with the game's own font files, so `GetStringWidth`, wrapping and truncation come close to the game's instead of treating each such character as a `?`.
+
+### Fixed
+
+- *Go to Definition* on a module's own function, class or enum, used in that module, now finds it, and leads into a library of your workspace at its real file instead of a copy.
+- In the editor, a package of your workspace that uses a library or addon of the workspace now sees that library's unsaved edits, and saving a file of a workspace member checks the members that depend on it again.
 
 ## 0.10.1 (2026-10-25)
 

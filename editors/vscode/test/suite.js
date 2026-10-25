@@ -207,8 +207,8 @@ async function chatScenario() {
 
 // The language client (decision T368): an unsaved edit's type error shows
 // in the Problems view and goes again when undone; the outline lists the
-// file's functions; go to definition, hover and completion find the
-// method; Format Document formats it.
+// file's functions; go to definition, hover, completion, references and
+// rename find the method; Format Document formats it.
 async function lspScenario(widgets) {
     const name = "the language server checks an unsaved edit";
     log(`== ${name}`);
@@ -242,6 +242,23 @@ async function lspScenario(widgets) {
         const shown = (hovers || []).flatMap((h) => h.contents.map((c) => c.value || String(c))).join("\n");
         log("hover:", shown.replace(/\n/g, " "));
         assert(shown.includes("refresh: "), "hover shows " + shown);
+        // Find All References: its declaration and both calls; Rename
+        // Symbol: all three, and a refusal for the game's `SetSize`
+        const refs = await vscode.commands.executeCommand("vscode.executeReferenceProvider", widgets, call);
+        const lines = (refs || []).map((l) => l.range.start.line + 1).sort((a, b) => a - b);
+        log("references:", lines.join(", "));
+        assert(lines.length === 3 && lines.every((l) => doc.lineAt(l - 1).text.includes("refresh")), "references at " + lines);
+        const renamed = await vscode.commands.executeCommand("vscode.executeDocumentRenameProvider", widgets, call, "redraw");
+        const renames = renamed ? renamed.get(widgets) : [];
+        log("rename:", renames.length, "edits");
+        assert(renames.length === 3 && renames.every((e) => e.newText === "redraw"), "rename edits " + JSON.stringify(renames));
+        const size = doc.positionAt(text.indexOf("SetSize") + 1);
+        const refusal = await vscode.commands.executeCommand("vscode.executeDocumentRenameProvider", widgets, size, "Resize").then(
+            () => "",
+            (e) => String(e.message || e),
+        );
+        log("rename SetSize:", refusal);
+        assert(refusal.includes("declared by wowlua"), "rename SetSize: " + refusal);
         // completing after `self:` lists the class's methods, `refresh` too
         const colon = doc.positionAt(text.indexOf("self:refresh()") + "self:".length);
         const completions = await vscode.commands.executeCommand("vscode.executeCompletionItemProvider", widgets, colon, ":");
