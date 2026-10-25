@@ -4,10 +4,14 @@
 //! All functions report problems by pushing diagnostics into a [`Session`];
 //! the CLI renders them.
 
+// (tests set up their files on the disk directly)
+#![cfg_attr(test, allow(clippy::disallowed_methods))]
+
 pub mod build;
 mod bundle;
 mod compile;
 pub mod compile_cache;
+#[cfg(feature = "native")]
 pub mod credentials;
 pub mod deps;
 mod embed;
@@ -17,6 +21,7 @@ pub mod fix;
 mod foreign;
 pub mod format;
 mod fsutil;
+pub mod host;
 pub mod incremental;
 pub mod install;
 pub mod keywords;
@@ -31,10 +36,12 @@ pub mod parallel;
 pub mod pkgmeta;
 mod private_names;
 pub mod project;
+#[cfg(feature = "native")]
 pub mod publish;
 pub mod scaffold;
 mod sources;
 pub mod trace;
+#[cfg(feature = "native")]
 pub mod types;
 pub mod vcs;
 pub mod workspace;

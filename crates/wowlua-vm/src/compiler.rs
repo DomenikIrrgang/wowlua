@@ -176,6 +176,8 @@ pub fn compile_with(
         source,
         fs: Vec::new(),
         lastline: 1,
+        lookahead: 0,
+        name_next_line: 1,
         depth: options.c_depth,
         options,
     };
@@ -193,6 +195,11 @@ struct Compiler<'a> {
     source: Rc<[u8]>,
     fs: Vec<FuncState>,
     lastline: u32,
+    /// Where the token after the last one read starts (from here on): Lua's
+    /// lookahead, which a syntax error is `near`.
+    lookahead: u32,
+    /// The line of the token after the variable being resolved.
+    name_next_line: u32,
     depth: usize,
     options: Options,
 }
@@ -501,7 +508,7 @@ impl Compiler<'_> {
         let newstack = self.fs().freereg + n;
         if newstack > self.fs().proto.max_stack as usize {
             if newstack >= MAXSTACK {
-                return self.err(self.lastline, "function or expression too complex");
+                return self.syntax_error(self.lookahead, "function or expression too complex");
             }
             self.fs_mut().proto.max_stack = newstack as u8;
         }
@@ -1221,7 +1228,7 @@ impl Compiler<'_> {
             } else {
                 format!("function at line {line} has more than {MAXUPVALUES} upvalues")
             };
-            return self.err(self.lastline, message);
+            return self.err(self.name_next_line, message);
         }
         let p = &mut self.fs[level].proto;
         p.upvals.push(desc);
@@ -1250,8 +1257,12 @@ impl Compiler<'_> {
         })
     }
 
-    fn singlevar(&mut self, name: &str) -> R<Exp> {
+    /// The variable `name`, whose token ends at `end`.
+    fn singlevar(&mut self, name: &str, end: u32) -> R<Exp> {
         let level = self.fs.len() - 1;
+        // (Lua has read the token after the name when it finds an upvalue
+        // too many: its line is the error's)
+        self.name_next_line = self.line(self.next_token(end));
         Ok(Exp::new(match self.singlevaraux(level, name, true)? {
             VarKind::Local(r) => EK::Local(r),
             VarKind::Upval(u) => EK::Upval(u),
@@ -1595,7 +1606,8 @@ impl Compiler<'_> {
     }
 
     fn funcstat(&mut self, name: FuncName<'_>, func: Func<'_>, line: u32) -> R<()> {
-        let mut v = self.singlevar(name.path().at(0).text())?;
+        let first = name.path().at(0);
+        let mut v = self.singlevar(first.text(), first.span().end)?;
         for field in name.path().iter().skip(1).chain(name.method()) {
             self.exp2anyreg(&mut v)?;
             let k = self.string_k(field.text().as_bytes())?;
@@ -1615,11 +1627,13 @@ impl Compiler<'_> {
         // The names, then any `=`, are read before the values.
         let mut end = names.at(names.len() - 1).name.span().end;
         self.lastline = self.line(end - 1);
+        self.lookahead = end;
         let (nexps, mut e) = if values.is_empty() {
             (0, Exp::new(EK::Void))
         } else {
             end = self.next_token(end);
             self.lastline = self.line(end);
+            self.lookahead = end + 1;
             self.explist(values)?
         };
         self.adjust_assign(names.len(), nexps, &mut e)?;
@@ -1657,7 +1671,9 @@ impl Compiler<'_> {
         let mut v = self.expr(exprs.at(0))?;
         for (prev, e) in exprs.iter().zip(exprs.iter().skip(1)) {
             // The previous value is stored after the `,` is read.
-            self.lastline = self.line(self.next_token(prev.span().end));
+            let comma = self.next_token(prev.span().end);
+            self.lastline = self.line(comma);
+            self.lookahead = comma + 1;
             self.exp2nextreg(&mut v)?;
             v = self.expr(e)?;
         }
@@ -1696,12 +1712,17 @@ impl Compiler<'_> {
             }
             lhs.push(v);
         }
-        if lhs.len() > MAXCCALLS {
-            return Err(self.errorlimit(MAXCCALLS, "variables in assignment"));
+        // Lua checks each `,` against the C calls left: the targets before
+        // it may number at most `LUAI_MAXCCALLS - L->nCcalls`.
+        let limit = MAXCCALLS.saturating_sub(self.depth);
+        if lhs.len() - 1 > limit {
+            return Err(self.errorlimit(limit, "variables in assignment"));
         }
         let nvars = lhs.len();
         // The values follow the `=`.
-        self.lastline = self.line(self.next_token(targets.at(nvars - 1).span().end));
+        let eq = self.next_token(targets.at(nvars - 1).span().end);
+        self.lastline = self.line(eq);
+        self.lookahead = eq + 1;
         let (nexps, mut e) = self.explist(values)?;
         let mut rest = nvars;
         if nexps != nvars {
@@ -1727,7 +1748,7 @@ impl Compiler<'_> {
     /// An assignment target: a variable or an indexed expression.
     fn primary_target(&mut self, e: Expr<'_>) -> R<Exp> {
         match e.kind() {
-            ExprKind::Name(n) => self.singlevar(n.text()),
+            ExprKind::Name(n) => self.singlevar(n.text(), n.span().end),
             ExprKind::Index { obj, key } => {
                 let mut v = self.expr(obj)?;
                 self.exp2anyreg(&mut v)?;
@@ -1834,6 +1855,7 @@ impl Compiler<'_> {
                     self.setmultret(&mut e)?;
                     // The last argument is closed after the `)`.
                     self.lastline = self.line_end(span);
+                    self.lookahead = span.end;
                     e
                 }
             }
@@ -1882,7 +1904,9 @@ impl Compiler<'_> {
         for field in fields {
             // Each field starts after the separator is read.
             if let Some(end) = prev_end {
-                self.lastline = self.line(self.next_token(end));
+                let separator = self.next_token(end);
+                self.lastline = self.line(separator);
+                self.lookahead = separator + 1;
             }
             prev_end = Some(field.span().end);
             // closelistfield
@@ -1906,7 +1930,9 @@ impl Compiler<'_> {
                     let mut key = Exp::new(EK::K(k));
                     nh += 1;
                     // The key is prepared after the `=`.
-                    self.lastline = self.line(self.next_token(name.span().end));
+                    let eq = self.next_token(name.span().end);
+                    self.lastline = self.line(eq);
+                    self.lookahead = eq + 1;
                     let rkkey = self.exp2rk(&mut key)?;
                     let mut val = self.expr(value)?;
                     let rkval = self.exp2rk(&mut val)?;
@@ -1921,12 +1947,15 @@ impl Compiler<'_> {
                     let reg = self.fs().freereg;
                     // After the `[`.
                     self.lastline = self.line(span.start);
+                    self.lookahead = span.start + 1;
                     let mut k = self.expr(key)?;
                     self.exp2val(&mut k)?;
                     nh += 1;
                     // After the `]` and the `=`.
                     let close = self.next_token(key.span().end);
-                    self.lastline = self.line(self.next_token(close + 1));
+                    let eq = self.next_token(close + 1);
+                    self.lastline = self.line(eq);
+                    self.lookahead = eq + 1;
                     let rkkey = self.exp2rk(&mut k)?;
                     let mut val = self.expr(value)?;
                     let rkval = self.exp2rk(&mut val)?;
@@ -1941,6 +1970,7 @@ impl Compiler<'_> {
         }
         // lastlistfield, after the closing brace.
         self.lastline = self.line_end(span);
+        self.lookahead = span.end;
         if tostore > 0 {
             if v.has_multret() {
                 self.setmultret(&mut v)?;
@@ -1968,6 +1998,7 @@ impl Compiler<'_> {
         self.leave_level();
         let v = r?;
         self.lastline = self.line_end(e.span());
+        self.lookahead = e.span().end;
         Ok(v)
     }
 
@@ -1993,7 +2024,7 @@ impl Compiler<'_> {
             }
             ExprKind::Function(f) => self.body(f, false, self.line(e.span().start))?,
             ExprKind::Table(fields) => self.constructor(fields, e.span())?,
-            ExprKind::Name(n) => self.singlevar(n.text())?,
+            ExprKind::Name(n) => self.singlevar(n.text(), n.span().end)?,
             ExprKind::Index { obj, key } => {
                 let mut v = self.expr(obj)?;
                 self.exp2anyreg(&mut v)?;
@@ -2031,6 +2062,7 @@ impl Compiler<'_> {
                 let mut v = self.expr(inner)?;
                 // Discharged after the `)`.
                 self.lastline = self.line_end(e.span());
+                self.lookahead = e.span().end;
                 self.dischargevars(&mut v);
                 v
             }
@@ -2040,7 +2072,9 @@ impl Compiler<'_> {
                 }
                 let mut v1 = self.expr(lhs)?;
                 // `infix` runs after the operator is read.
-                self.lastline = self.line(self.next_token(lhs.span().end));
+                let at = self.next_token(lhs.span().end);
+                self.lastline = self.line(at);
+                self.lookahead = at + op.as_str().len() as u32;
                 self.infix(op, &mut v1)?;
                 let mut v2 = self.expr(rhs)?;
                 self.posfix(op, &mut v1, &mut v2)?;

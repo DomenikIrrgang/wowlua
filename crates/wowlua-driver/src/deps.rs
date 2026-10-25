@@ -100,7 +100,7 @@ fn edit_and_load(
     edit: impl FnOnce(&str) -> Result<Option<String>, Diagnostic>,
 ) -> Option<Project> {
     let path = manifest_path(session, options)?;
-    let original = match std::fs::read_to_string(&path) {
+    let original = match crate::host::read_to_string(&path) {
         Ok(t) => t,
         Err(e) => {
             session.push(
@@ -117,7 +117,7 @@ fn edit_and_load(
             return None;
         }
     };
-    if let Err(e) = std::fs::write(&path, &edited) {
+    if let Err(e) = crate::host::write(&path, &edited) {
         session.push(
             Diagnostic::plain_error(format!("cannot write the manifest: {e}")).with_path(&path),
         );
@@ -125,7 +125,7 @@ fn edit_and_load(
     }
     let project = load_project(session, options);
     if project.is_none() {
-        let _ = std::fs::write(&path, &original);
+        let _ = crate::host::write(&path, &original);
         session.push(Diagnostic::note("wowlua.json was left unchanged"));
     }
     project

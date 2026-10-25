@@ -86,7 +86,7 @@ fn floor_char(text: &str, mut i: usize) -> usize {
 /// prefix (`\\?\C:\x` is `C:\x`), which editors' URIs never have; `path`
 /// as it is when it does not exist.
 pub fn canonical(path: &Path) -> PathBuf {
-    let found = std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
+    let found = wowlua_driver::host::canonicalize(path).unwrap_or_else(|_| path.to_path_buf());
     let text = found.to_string_lossy();
     match text.strip_prefix(r"\\?\") {
         Some(rest) if !rest.starts_with("UNC\\") => PathBuf::from(rest),

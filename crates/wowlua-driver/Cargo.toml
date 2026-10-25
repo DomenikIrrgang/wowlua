@@ -21,30 +21,40 @@ wowlua-sema.workspace = true
 wowlua-runtime.workspace = true
 wowlua-stdlib.workspace = true
 wowlua-api.workspace = true
-wowlua-types-gen.workspace = true
+wowlua-types-gen = { workspace = true, optional = true }
 wowlua-luair.workspace = true
 wowlua-fmt.workspace = true
 wowlua-pkg.workspace = true
+wowlua-vm.workspace = true
 blake3.workspace = true
 dirs.workspace = true
 globset.workspace = true
 ignore.workspace = true
 indexmap.workspace = true
-keyring.workspace = true
-mlua.workspace = true
+keyring = { workspace = true, optional = true }
+mlua = { workspace = true, optional = true }
 regex.workspace = true
 semver.workspace = true
 serde.workspace = true
 serde_json.workspace = true
-ureq.workspace = true
+ureq = { workspace = true, optional = true }
 walkdir.workspace = true
 zip.workspace = true
 
 [target.'cfg(windows)'.dependencies]
 junction.workspace = true
 
+[features]
+default = ["native"]
+# What a build on a computer has and the browser's has not (spec M14 S1):
+# downloads and uploads, the OS credential store, the C Lua that checks
+# Lua's limits (the browser's uses wowlua's own VM) and `wowlua types`.
+native = ["dep:keyring", "dep:mlua", "dep:ureq", "dep:wowlua-types-gen", "wowlua-pkg/net"]
+
 [dev-dependencies]
 tempfile.workspace = true
+# (the browser's limit check is compared with the C Lua's)
+mlua.workspace = true
 
 [lints]
 workspace = true

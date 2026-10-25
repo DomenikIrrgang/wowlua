@@ -2,6 +2,8 @@
 //! build gives what a fresh build of the same tree gives (files, maps,
 //! TOCs, diagnostics in order, success), and recompiles only what changed.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 use wowlua_diagnostics::{ColorChoice, MessageFormat, Renderer};

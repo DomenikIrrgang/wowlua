@@ -1,6 +1,9 @@
 //! `wowlua new` (package templates, spec §12.9) and `wowlua init` (adopting
 //! an existing addon, spec §12.6).
 
+// Only a computer has this (spec M14, decision T394).
+#![allow(clippy::disallowed_methods)]
+
 use crate::fsutil;
 use crate::vcs;
 use indexmap::IndexMap;

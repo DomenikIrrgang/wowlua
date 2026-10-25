@@ -1,6 +1,9 @@
 //! `wowlua types convert`: LuaLS `---@` annotations → `.d.wowlua`
 //! declarations (spec package manager §10.9).
 
+// Only a computer has this (spec M14, decision T394).
+#![allow(clippy::disallowed_methods)]
+
 use std::path::{Path, PathBuf};
 
 /// Converts the annotated `.lua` file, or every `.lua` file under the

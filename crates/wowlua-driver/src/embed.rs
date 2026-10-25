@@ -62,19 +62,12 @@ fn join_libs(libs_dir: &str, install: &str) -> String {
 /// Every file of a package directory (version-control folders excluded).
 fn index(dir: &Path) -> BTreeMap<String, String> {
     let mut out = BTreeMap::new();
-    for entry in walkdir::WalkDir::new(dir)
-        .into_iter()
-        .filter_entry(|e| {
-            !(e.file_type().is_dir()
-                && wowlua_pkg::checksum::VCS_DIRS
-                    .contains(&e.file_name().to_string_lossy().as_ref()))
-        })
-        .flatten()
-    {
-        if !entry.file_type().is_file() {
-            continue;
-        }
-        let Ok(rel) = entry.path().strip_prefix(dir) else {
+    let enter = |d: &Path| {
+        !d.file_name()
+            .is_some_and(|n| wowlua_pkg::checksum::VCS_DIRS.contains(&n.to_string_lossy().as_ref()))
+    };
+    for path in crate::host::walk(dir, true, &enter) {
+        let Ok(rel) = path.strip_prefix(dir) else {
             continue;
         };
         let rel = rel.to_string_lossy().replace('\\', "/");
@@ -424,11 +417,8 @@ pub fn wowlua_libraries(
         let entry = entry_of(project, p);
         let src = p.dir.join(&manifest.build.src);
         let mut files = BTreeMap::new();
-        for entry in walkdir::WalkDir::new(&src).into_iter().flatten() {
-            if !entry.file_type().is_file() {
-                continue;
-            }
-            let Ok(rel) = entry.path().strip_prefix(&src) else {
+        for path in crate::host::walk(&src, true, &|_| true) {
+            let Ok(rel) = path.strip_prefix(&src) else {
                 continue;
             };
             let rel = rel.to_string_lossy().replace('\\', "/");
@@ -440,7 +430,7 @@ pub fn wowlua_libraries(
                 .iter()
                 .any(|e| lower.ends_with(e))
             {
-                files.insert(rel, entry.path().to_path_buf());
+                files.insert(rel, path);
             }
         }
         let main_path = manifest
@@ -495,15 +485,15 @@ pub fn type_declarations(project: &Project) -> Vec<(String, PathBuf)> {
             .filter(|d| !d.is_empty())
             .unwrap_or_else(|| vec!["**/*.d.wowlua".into()]);
         let set = crate::sources::glob_set(&globs);
-        for entry in walkdir::WalkDir::new(&p.dir).into_iter().flatten() {
-            let Ok(rel) = entry.path().strip_prefix(&p.dir) else {
+        for path in crate::host::walk(&p.dir, true, &|_| true) {
+            let Ok(rel) = path.strip_prefix(&p.dir) else {
                 continue;
             };
             let rel = rel.to_string_lossy().replace('\\', "/");
-            if entry.file_type().is_file() && rel.ends_with(".d.wowlua") && set.is_match(&rel) {
+            if rel.ends_with(".d.wowlua") && set.is_match(&rel) {
                 out.push((
                     format!("{}{}/{rel}", wowlua_sema::PACKAGE_PREFIX, p.name),
-                    entry.path().to_path_buf(),
+                    path,
                 ));
             }
         }
@@ -522,14 +512,10 @@ pub fn type_declarations(project: &Project) -> Vec<(String, PathBuf)> {
             continue;
         }
         let path = project.root().join(types);
-        let files: Vec<PathBuf> = if path.is_dir() {
-            walkdir::WalkDir::new(&path)
+        let files: Vec<PathBuf> = if crate::host::is_dir(&path) {
+            crate::host::walk(&path, true, &|_| true)
                 .into_iter()
-                .flatten()
-                .filter(|e| {
-                    e.file_type().is_file() && e.path().to_string_lossy().ends_with(".d.wowlua")
-                })
-                .map(|e| e.path().to_path_buf())
+                .filter(|p| p.to_string_lossy().ends_with(".d.wowlua"))
                 .collect()
         } else {
             vec![path.clone()]
@@ -687,7 +673,7 @@ fn toc_files(
     toc: &str,
     idx: &BTreeMap<String, String>,
 ) -> Option<Vec<String>> {
-    let text = std::fs::read(p.dir.join(toc))
+    let text = crate::host::read(p.dir.join(toc))
         .map(|b| String::from_utf8_lossy(&b).into_owned())
         .unwrap_or_default();
     let dir = toc.rsplit_once('/').map(|(d, _)| d).unwrap_or("");
@@ -727,7 +713,7 @@ pub fn reachable(session: &mut Session, lib: &LuaLib, roots: &[String]) -> BTree
         if !rel.to_ascii_lowercase().ends_with(".xml") {
             continue;
         }
-        let Ok(bytes) = std::fs::read(lib.dir.join(&rel)) else {
+        let Ok(bytes) = crate::host::read(lib.dir.join(&rel)) else {
             continue;
         };
         let text = String::from_utf8_lossy(&bytes);
@@ -786,7 +772,7 @@ pub fn wowlua_license_text(lib: &WowluaLib) -> Option<String> {
 /// package's `license`.
 pub fn workspace_license_text(root: &Path) -> Option<String> {
     license_files_text(root).or_else(|| {
-        let text = std::fs::read_to_string(root.join(wowlua_manifest::MANIFEST_FILE)).ok()?;
+        let text = crate::host::read_to_string(root.join(wowlua_manifest::MANIFEST_FILE)).ok()?;
         let manifest: serde_json::Value = serde_json::from_str(&text).ok()?;
         manifest
             .pointer("/package/license")
@@ -798,16 +784,15 @@ pub fn workspace_license_text(root: &Path) -> Option<String> {
 /// The `LICENSE*`, `LICENCE*` and `COPYING*` files of `dir`, joined in name
 /// order. `None` if there are none.
 fn license_files_text(dir: &Path) -> Option<String> {
-    let entries = std::fs::read_dir(dir).ok()?;
+    let entries = crate::host::read_dir(dir).ok()?;
     let mut names: Vec<PathBuf> = entries
-        .flatten()
-        .map(|e| e.path())
+        .into_iter()
         .filter(|p| {
             let n = p
                 .file_name()
                 .map(|n| n.to_string_lossy().to_ascii_lowercase())
                 .unwrap_or_default();
-            p.is_file()
+            crate::host::is_file(p)
                 && (n.starts_with("license")
                     || n.starts_with("licence")
                     || n.starts_with("copying"))
@@ -816,7 +801,7 @@ fn license_files_text(dir: &Path) -> Option<String> {
     names.sort();
     let parts: Vec<String> = names
         .iter()
-        .filter_map(|p| std::fs::read(p).ok())
+        .filter_map(|p| crate::host::read(p).ok())
         .map(|bytes| String::from_utf8_lossy(&bytes).trim_end().to_string())
         .collect();
     (!parts.is_empty()).then(|| parts.join("\n\n"))
@@ -827,7 +812,7 @@ fn license_files_text(dir: &Path) -> Option<String> {
 pub fn license_text(lib: &LuaLib) -> Option<String> {
     let mut parts = Vec::new();
     for file in &lib.licenses {
-        if let Ok(bytes) = std::fs::read(lib.dir.join(file)) {
+        if let Ok(bytes) = crate::host::read(lib.dir.join(file)) {
             parts.push(String::from_utf8_lossy(&bytes).trim_end().to_string());
         }
     }
@@ -839,7 +824,7 @@ pub fn license_text(lib: &LuaLib) -> Option<String> {
                 None
             };
             let Some(lua) = lua else { continue };
-            if let Ok(bytes) = std::fs::read(lib.dir.join(&lua))
+            if let Ok(bytes) = crate::host::read(lib.dir.join(&lua))
                 && let Some(header) = license_header(&String::from_utf8_lossy(&bytes))
             {
                 parts.push(header);

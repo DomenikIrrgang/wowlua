@@ -3,6 +3,9 @@
 //! exponential backoff for server errors and network failures (Publishing
 //! §11.9, step 5).
 
+// Only a computer has this (spec M14, decision T394).
+#![allow(clippy::disallowed_methods)]
+
 use std::time::Duration;
 
 /// A response: status and body text.

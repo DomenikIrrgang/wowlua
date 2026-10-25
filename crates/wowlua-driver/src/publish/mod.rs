@@ -8,6 +8,9 @@
 //! is retried and then stops the publish; targets without a token are
 //! skipped; the tokens come from the packager's variables and `.env` file.
 
+// Only a computer has this (spec M14, decision T394).
+#![allow(clippy::disallowed_methods)]
+
 pub mod changelog;
 pub mod http;
 pub mod sites;

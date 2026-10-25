@@ -1,6 +1,8 @@
 //! Completion (decision T377): the names in scope, a value's members after
 //! `.` and `:`, type names in annotations, and doc comments on request.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use serde_json::{Value as Json, json};
 
 mod common;

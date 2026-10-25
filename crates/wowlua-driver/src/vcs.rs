@@ -2,6 +2,9 @@
 //! `build.version` (spec §9.9.2). Everything is optional: without git or
 //! outside a repository the build still works.
 
+// Only a computer has this (spec M14, decision T394).
+#![allow(clippy::disallowed_methods)]
+
 use std::path::Path;
 use std::process::{Command, Stdio};
 

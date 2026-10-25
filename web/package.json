@@ -1,0 +1,39 @@
+{
+  "name": "@wowlua/web",
+  "version": "0.11.0",
+  "description": "wowlua in a web page: the compiler, checker, formatter and language server for World of Warcraft addons, as WebAssembly",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/DomenikIrrgang/wowlua",
+    "directory": "web"
+  },
+  "type": "module",
+  "main": "./index.js",
+  "types": "./index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./index.d.ts",
+      "default": "./index.js"
+    },
+    "./client": {
+      "types": "./index.d.ts",
+      "default": "./client.js"
+    },
+    "./worker": "./worker.js",
+    "./wowlua_web_bg.wasm": "./pkg/wowlua_web_bg.wasm"
+  },
+  "files": [
+    "index.js",
+    "index.d.ts",
+    "client.js",
+    "worker.js",
+    "pkg/wowlua_web.js",
+    "pkg/wowlua_web_bg.wasm"
+  ],
+  "scripts": {
+    "build": "cargo build --release --target wasm32-unknown-unknown -p wowlua-web && wasm-bindgen --target web --no-typescript --out-dir pkg ../target/wasm32-unknown-unknown/release/wowlua_web.wasm",
+    "test": "node test/smoke.mjs"
+  },
+  "sideEffects": false
+}

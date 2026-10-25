@@ -210,10 +210,7 @@ pub fn build_meta(project: &Project, input: &MetaInput) -> Meta {
         ),
     );
 
-    let now = std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .map(|d| d.as_secs() as i64)
-        .unwrap_or(0);
+    let now = crate::host::unix_now();
     let mut build: IndexMap<String, MetaValue> = IndexMap::new();
     build.insert("profile".into(), MetaValue::str(&input.profile.name));
     build.insert("debug".into(), MetaValue::Bool(input.profile.debug));

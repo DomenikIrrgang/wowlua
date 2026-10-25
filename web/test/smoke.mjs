@@ -1,0 +1,46 @@
+// The built package as a page uses it, in Node: `npm run build && npm test`.
+
+import assert from "node:assert/strict";
+import { readFile } from "node:fs/promises";
+import { load, version, Playground } from "../index.js";
+
+await load(await readFile(new URL("../pkg/wowlua_web_bg.wasm", import.meta.url)));
+const p = new Playground();
+console.log(`wowlua ${version()}`);
+
+const built = p.build();
+assert.equal(built.ok, true, JSON.stringify(built.diagnostics));
+assert.ok(built.files.some((f) => f.path === "Playground.toc"));
+
+p.writeFile("src/main.wowlua", 'local n: number = "one"\nprint(n)\n');
+const found = p.check();
+assert.equal(found[0].code, "E2001");
+assert.equal(found[0].file, "src/main.wowlua");
+
+const link = p.share();
+p.reset({ "wowlua.json": "{}" });
+assert.equal(p.openShared(link), true);
+assert.ok("src/main.wowlua" in p.files());
+
+// the language server: diagnostics of the open file, then a hover
+const got = [];
+const server = p.languageServer((m) => got.push(m));
+const uri = "file:///playground/src/main.wowlua";
+server.send({ jsonrpc: "2.0", id: 1, method: "initialize", params: { rootUri: "file:///playground", capabilities: {} } });
+server.send({ jsonrpc: "2.0", method: "initialized", params: {} });
+server.send({
+    jsonrpc: "2.0",
+    method: "textDocument/didOpen",
+    params: { textDocument: { uri, languageId: "wowlua", version: 1, text: "local count = 1\nlocal n: string = count\nprint(n)\n" } },
+});
+const until = async (test) => {
+    for (let i = 0; i < 200 && !got.some(test); i++) await new Promise((r) => setTimeout(r, 25));
+    return got.find(test);
+};
+const published = await until((m) => m.method === "textDocument/publishDiagnostics" && m.params.uri === uri);
+assert.deepEqual(published.params.diagnostics.map((d) => d.code), ["E2001"]);
+server.send({ jsonrpc: "2.0", id: 2, method: "textDocument/hover", params: { textDocument: { uri }, position: { line: 0, character: 7 } } });
+const hover = await until((m) => m.id === 2);
+assert.match(JSON.stringify(hover.result.contents), /number/);
+server.close();
+console.log("ok");

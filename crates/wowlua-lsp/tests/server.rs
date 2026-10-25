@@ -1,6 +1,8 @@
 //! The language server end to end: a package's file opened, edited without
 //! saving, formatted and outlined; its diagnostics cleared once fixed.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 mod common;
 
 use common::Client;

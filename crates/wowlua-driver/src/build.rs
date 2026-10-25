@@ -142,7 +142,7 @@ pub fn lua_outputs(build: &BuildOutput) -> Vec<(String, Vec<u8>)> {
         .map(|path| {
             let bytes = match &build.files[&path] {
                 Content::Bytes(b) => b.clone(),
-                Content::Copy(from) => std::fs::read(from).unwrap_or_default(),
+                Content::Copy(from) => crate::host::read(from).unwrap_or_default(),
             };
             (path, bytes)
         })
@@ -531,7 +531,7 @@ fn build_inner(
     }
     // Declarations of `types` packages and `types` paths.
     for (src_rel, abs) in crate::embed::type_declarations(project) {
-        match std::fs::read(&abs) {
+        match crate::host::read(&abs) {
             Ok(bytes) => {
                 let file = session
                     .db
@@ -1012,7 +1012,7 @@ fn build_inner(
         // (a focused check reports its files only)
         let focused = session.focus.as_ref().is_none_or(|focus| {
             focus.contains(&source.abs)
-                || std::fs::canonicalize(&source.abs).is_ok_and(|p| focus.contains(&p))
+                || crate::host::canonicalize(&source.abs).is_ok_and(|p| focus.contains(&p))
         });
         if lintable && focused {
             lint_files.push(i);
@@ -1078,7 +1078,7 @@ fn build_inner(
                         let lower = rel.to_ascii_lowercase();
                         lower.ends_with(".lua") || lower.ends_with(".xml")
                     })
-                    .filter_map(|rel| std::fs::read(lib.dir.join(rel)).ok())
+                    .filter_map(|rel| crate::host::read(lib.dir.join(rel)).ok())
                     .collect::<Vec<_>>()
             }))
             .collect()
@@ -1871,7 +1871,7 @@ fn build_inner(
         // dotfiles and what its `.pkgmeta` or the project ignores, like the
         // packager (decision T144); otherwise what the addon can load.
         let own = lib.project_file.as_ref().and_then(|(file, sub)| {
-            let text = std::fs::read_to_string(file).ok()?;
+            let text = crate::host::read_to_string(file).ok()?;
             Some((crate::pkgmeta::parse(&text).ok()?, sub.clone()))
         });
         let in_repo = |rel: &str| match &own {
@@ -1910,11 +1910,8 @@ fn build_inner(
                 .iter()
                 .map(|(_, r, _)| r.to_ascii_lowercase())
                 .collect();
-            for entry in walkdir::WalkDir::new(outer).into_iter().flatten() {
-                if !entry.file_type().is_file() {
-                    continue;
-                }
-                let Ok(rel) = entry.path().strip_prefix(outer) else {
+            for entry in crate::host::walk(outer, true, &|_| true) {
+                let Ok(rel) = entry.as_path().strip_prefix(outer) else {
                     continue;
                 };
                 let rel = rel.to_string_lossy().replace('\\', "/");
@@ -1930,7 +1927,7 @@ fn build_inner(
                 {
                     continue;
                 }
-                shipped.push((entry.path().to_path_buf(), rel, repo_rel));
+                shipped.push((entry.as_path().to_path_buf(), rel, repo_rel));
             }
         }
         shipped.retain(|(_, rel, _)| !exclude.is_match(lib.output(rel)));
@@ -1941,7 +1938,7 @@ fn build_inner(
             && matches!(lib.source, wowlua_pkg::Source::Svn { .. })
             && shipped.iter().any(|(abs, rel, _)| {
                 crate::keywords::processed_extension(rel)
-                    && std::fs::read_to_string(abs).is_ok_and(|t| {
+                    && crate::host::read_to_string(abs).is_ok_and(|t| {
                         crate::keywords::SVN_DETAIL_KEYWORDS
                             .iter()
                             .any(|k| t.contains(k))
@@ -1962,7 +1959,7 @@ fn build_inner(
             // Library files get the packager's processing (decisions T120,
             // T124): keywords and blocks, LF line endings.
             if keywords && !unchanged && crate::keywords::processed_extension(&rel) {
-                let bytes = std::fs::read(&abs).unwrap_or_default();
+                let bytes = crate::host::read(&abs).unwrap_or_default();
                 let normalized = crate::keywords::lf(&bytes);
                 let processed = match std::str::from_utf8(&normalized) {
                     Ok(text) if text.contains('@') => {
@@ -2012,7 +2009,7 @@ fn build_inner(
             };
             let bytes = match content {
                 Content::Bytes(b) => b.clone(),
-                Content::Copy(p) => std::fs::read(p).unwrap_or_default(),
+                Content::Copy(p) => crate::host::read(p).unwrap_or_default(),
             };
             if let Some(code) =
                 crate::compile::minify_lua(&mut session.db, path, &bytes, &minify.passes, mode)
@@ -2030,30 +2027,21 @@ fn build_inner(
         let tracked = (!profile.debug).then(|| sources::tracked_files(&root));
         for lib in &libs {
             let folder = root.join(&lib.install);
-            for entry in walkdir::WalkDir::new(&folder)
-                .into_iter()
-                .filter_entry(|e| {
-                    e.depth() == 0 || !e.file_name().to_string_lossy().starts_with('.')
-                })
-                .flatten()
-            {
-                if !entry.file_type().is_file() {
-                    continue;
-                }
-                let Ok(rel) = entry.path().strip_prefix(&root) else {
+            for entry in crate::host::walk(&folder, false, &|_| true) {
+                let Ok(rel) = entry.as_path().strip_prefix(&root) else {
                     continue;
                 };
                 let rel = rel.to_string_lossy().replace('\\', "/");
                 let untracked = tracked
                     .as_ref()
-                    .is_some_and(|t| !t.is_empty() && !t.contains(entry.path()));
+                    .is_some_and(|t| !t.is_empty() && !t.contains(entry.as_path()));
                 if out.contains_key(&rel) || exclude.is_match(&rel) || untracked {
                     continue;
                 }
                 let plain =
                     crate::keywords::plain_copy(&manifest.manifest.compat.plain_copy, &[&rel]);
                 let lower = rel.to_ascii_lowercase();
-                let content = match std::fs::read(entry.path()) {
+                let content = match crate::host::read(entry.as_path()) {
                     Ok(bytes) if !plain && crate::keywords::processed_extension(&rel) => {
                         let normalized = crate::keywords::lf(&bytes);
                         match std::str::from_utf8(&normalized) {
@@ -2073,7 +2061,7 @@ fn build_inner(
                             _ => Content::Bytes(packaged_text(&bytes, info, &rel)),
                         }
                     }
-                    _ => Content::Copy(entry.path().to_path_buf()),
+                    _ => Content::Copy(entry.clone()),
                 };
                 lib_outputs.insert(rel.clone());
                 if plain {
@@ -2087,7 +2075,7 @@ fn build_inner(
     // in its folder) without a license of its own has the workspace's. A
     // package outside a workspace counts as its own workspace.
     let workspace =
-        std::fs::canonicalize(project.workspace_root.as_deref().unwrap_or(project.root())).ok();
+        crate::host::canonicalize(project.workspace_root.as_deref().unwrap_or(project.root())).ok();
     let mut workspace_license: Option<Option<String>> = None;
     for lib in &wlibs {
         let used = files
@@ -2099,7 +2087,7 @@ fn build_inner(
         let own = crate::embed::wowlua_license_text(lib);
         let inherited = || {
             let ws = workspace.as_deref()?;
-            let dir = std::fs::canonicalize(&lib.dir).ok()?;
+            let dir = crate::host::canonicalize(&lib.dir).ok()?;
             if !dir.starts_with(ws) {
                 return None;
             }
@@ -2267,7 +2255,7 @@ fn build_inner(
         if let Some(info) = &keyword_info
             && crate::keywords::processed_extension(&asset.rel)
             && !crate::keywords::plain_copy(&manifest.manifest.compat.plain_copy, &[&asset.rel])
-            && let Ok(bytes) = std::fs::read(&asset.abs)
+            && let Ok(bytes) = crate::host::read(&asset.abs)
         {
             out.insert(
                 asset.rel.clone(),
@@ -2284,8 +2272,8 @@ fn build_inner(
     // The workspace root's license in a member that has none (`.pkgmeta`
     // `license-output`, copied into `move-folders` addons by the packager).
     if let Some(ws) = &project.workspace_root
-        && std::fs::canonicalize(ws).ok() != std::fs::canonicalize(&root).ok()
-        && let Some(license) = std::fs::read_to_string(ws.join(wowlua_manifest::MANIFEST_FILE))
+        && crate::host::canonicalize(ws).ok() != crate::host::canonicalize(&root).ok()
+        && let Some(license) = crate::host::read_to_string(ws.join(wowlua_manifest::MANIFEST_FILE))
             .ok()
             .and_then(|text| serde_json::from_str::<serde_json::Value>(&text).ok())
             .and_then(|m| {
@@ -2411,7 +2399,7 @@ fn build_inner(
             }
             let bytes = match content {
                 Content::Bytes(b) => std::mem::take(b),
-                Content::Copy(p) => std::fs::read(&*p).unwrap_or_default(),
+                Content::Copy(p) => crate::host::read(&*p).unwrap_or_default(),
             };
             *content = Content::Bytes(crate::keywords::crlf(&bytes));
         }
@@ -3522,7 +3510,7 @@ fn read_toc_data(session: &mut Session, project: &Project, flavors: &[String]) -
         let mut lines = Vec::new();
         for rel in paths {
             let path = project.root().join(rel);
-            let text = match std::fs::read_to_string(&path) {
+            let text = match crate::host::read_to_string(&path) {
                 Ok(text) => text,
                 Err(error) => {
                     session.push(
@@ -3645,7 +3633,7 @@ fn build_id(
     }
     for asset in assets {
         hasher.update(asset.rel.as_bytes());
-        if let Ok(bytes) = std::fs::read(&asset.abs) {
+        if let Ok(bytes) = crate::host::read(&asset.abs) {
             hasher.update(&bytes);
         }
     }
@@ -4043,7 +4031,7 @@ fn packaged_text(bytes: &[u8], info: &crate::keywords::KeywordInfo, rel: &str) -
 
 /// The manifest JSON of a package folder.
 fn manifest_json(dir: &Path) -> Option<serde_json::Value> {
-    let text = std::fs::read_to_string(dir.join(wowlua_manifest::MANIFEST_FILE)).ok()?;
+    let text = crate::host::read_to_string(dir.join(wowlua_manifest::MANIFEST_FILE)).ok()?;
     serde_json::from_str(&text).ok()
 }
 
@@ -4064,7 +4052,7 @@ fn curseforge_id(manifest: &serde_json::Value) -> Option<String> {
 /// `license-output` of the package in `dir`: its file, else the license of
 /// its CurseForge project, like the packager downloads it.
 fn license_bytes(dir: &Path, license: &str) -> Option<(Vec<u8>, bool)> {
-    if let Ok(bytes) = std::fs::read(dir.join(license)) {
+    if let Ok(bytes) = crate::host::read(dir.join(license)) {
         return Some((bytes, false));
     }
     let id = curseforge_id(&manifest_json(dir)?)?;
@@ -4083,7 +4071,8 @@ fn package_files(
     out: &mut BTreeMap<String, Content>,
     raw_paths: &mut BTreeSet<String>,
 ) {
-    let same = |a: &Path, b: &Path| std::fs::canonicalize(a).ok() == std::fs::canonicalize(b).ok();
+    let same =
+        |a: &Path, b: &Path| crate::host::canonicalize(a).ok() == crate::host::canonicalize(b).ok();
     let (repo, repo_manifest) = match &project.workspace_root {
         Some(ws) if !same(ws, root) => {
             let Some(m) = manifest_json(ws) else { return };
@@ -4103,11 +4092,11 @@ fn package_files(
         .pointer("/publish/changelog")
         .and_then(|v| v.as_str())
         // A manual changelog the repository lacks: the packager generates one.
-        .filter(|file| repo.join(file).is_file())
+        .filter(|file| crate::host::is_file(repo.join(file)))
     {
         Some(file) => {
             if !out.contains_key(file)
-                && let Ok(bytes) = std::fs::read(repo.join(file))
+                && let Ok(bytes) = crate::host::read(repo.join(file))
             {
                 out.insert(
                     file.to_string(),
@@ -4138,7 +4127,7 @@ fn package_files(
         .pointer("/compat/license-output")
         .and_then(|v| v.as_str())
         && !out.contains_key(license)
-        && !repo.join(license).is_file()
+        && !crate::host::is_file(repo.join(license))
         && let Some((bytes, _)) = license_bytes(&repo, license)
     {
         // Saved after the packager's processing: as downloaded.
@@ -4155,7 +4144,7 @@ fn suite_package_root(
     addon_name: &str,
 ) -> Option<(PathBuf, serde_json::Value)> {
     let ws = project.workspace_root.as_ref()?;
-    if std::fs::canonicalize(ws).ok() == std::fs::canonicalize(root).ok() {
+    if crate::host::canonicalize(ws).ok() == crate::host::canonicalize(root).ok() {
         return None;
     }
     let m = manifest_json(ws)?;
@@ -4184,21 +4173,9 @@ fn ship_project_files(
     // what is already there wins.
     let mut taken: std::collections::HashSet<String> =
         out.keys().map(|k| k.to_ascii_lowercase()).collect();
-    for entry in walkdir::WalkDir::new(dir)
-        .sort_by_file_name()
-        .into_iter()
-        .filter_entry(|e| {
-            e.depth() == 0
-                || !(e.file_name().to_string_lossy().starts_with('.')
-                    || skip.iter().any(|d| d == e.path())
-                    || members.iter().any(|m| m == e.path()))
-        })
-        .flatten()
-    {
-        if !entry.file_type().is_file() {
-            continue;
-        }
-        let Ok(rel) = entry.path().strip_prefix(dir) else {
+    let enter = |d: &Path| !(skip.iter().any(|s| s == d) || members.iter().any(|m| m == d));
+    for entry in crate::host::walk(dir, false, &enter) {
+        let Ok(rel) = entry.as_path().strip_prefix(dir) else {
             continue;
         };
         let rel = rel.to_string_lossy().replace('\\', "/");
@@ -4206,12 +4183,12 @@ fn ship_project_files(
         // wowlua's files, and the TOCs it generates in their place.
         let own = !rel.contains('/')
             && (lower == "wowlua.json" || lower == "wowlua.lock" || lower.ends_with(".toc"));
-        let untracked = tracked.is_some_and(|t| !t.is_empty() && !t.contains(entry.path()));
+        let untracked = tracked.is_some_and(|t| !t.is_empty() && !t.contains(entry.as_path()));
         if own || untracked || taken.contains(&lower) || exclude.is_match(&rel) {
             continue;
         }
         taken.insert(lower.clone());
-        let content = match std::fs::read(entry.path()) {
+        let content = match crate::host::read(entry.as_path()) {
             Ok(bytes)
                 if !crate::keywords::plain_copy(plain, &[&rel])
                     && crate::keywords::processed_extension(&rel) =>
@@ -4228,7 +4205,7 @@ fn ship_project_files(
                     _ => Content::Bytes(packaged_text(&bytes, info, &rel)),
                 }
             }
-            _ => Content::Copy(entry.path().to_path_buf()),
+            _ => Content::Copy(entry.clone()),
         };
         shipped.insert(rel.clone());
         out.insert(rel, content);
@@ -4284,15 +4261,15 @@ pub fn is_bindings_file(name: &str) -> bool {
 /// Keybinding files in the package root, passed through unchanged (they are
 /// loaded by the client, not by the TOC). Each must be well-formed XML.
 fn bindings_files(session: &mut Session, root: &Path) -> Vec<(String, Vec<u8>)> {
-    let Ok(entries) = std::fs::read_dir(root) else {
+    let Ok(entries) = crate::host::read_dir(root) else {
         return Vec::new();
     };
     let mut files: Vec<(String, Vec<u8>)> = entries
-        .filter_map(Result::ok)
-        .filter(|e| e.file_type().is_ok_and(|t| t.is_file()))
-        .filter_map(|e| {
-            let name = e.file_name().to_string_lossy().into_owned();
-            is_bindings_file(&name).then(|| std::fs::read(e.path()).ok().map(|b| (name, b)))?
+        .into_iter()
+        .filter(|p| crate::host::is_file(p))
+        .filter_map(|p| {
+            let name = p.file_name()?.to_string_lossy().into_owned();
+            is_bindings_file(&name).then(|| crate::host::read(&p).ok().map(|b| (name, b)))?
         })
         .collect();
     files.sort();
@@ -4382,15 +4359,18 @@ fn bindings_xml(
 
 /// The binding names of the hand-written keybinding files in `root`.
 fn xml_binding_names(root: &Path) -> HashSet<String> {
-    let Ok(entries) = std::fs::read_dir(root) else {
+    let Ok(entries) = crate::host::read_dir(root) else {
         return HashSet::new();
     };
     let mut names = HashSet::new();
-    for e in entries.filter_map(Result::ok) {
-        if !is_bindings_file(&e.file_name().to_string_lossy()) {
+    for path in entries {
+        if !path
+            .file_name()
+            .is_some_and(|n| is_bindings_file(&n.to_string_lossy()))
+        {
             continue;
         }
-        let Ok(text) = std::fs::read_to_string(e.path()) else {
+        let Ok(text) = crate::host::read_to_string(&path) else {
             continue;
         };
         for tag in text.split("<Binding").skip(1) {
@@ -4514,7 +4494,7 @@ fn validate_output(
         }
         let bytes = match content {
             Content::Bytes(b) => b.clone(),
-            Content::Copy(p) => std::fs::read(p).unwrap_or_default(),
+            Content::Copy(p) => crate::host::read(p).unwrap_or_default(),
         };
         let Ok(refs) = wowlua_xml::references(&String::from_utf8_lossy(&bytes)) else {
             continue;
@@ -4577,6 +4557,7 @@ pub struct Stats {
 
 /// The statistics of a build's output.
 pub fn stats(build: &BuildOutput) -> Stats {
+    #[cfg(feature = "native")]
     let lua = mlua::Lua::new();
     let mut stats = Stats::default();
     for (path, content) in &build.files {
@@ -4587,8 +4568,12 @@ pub fn stats(build: &BuildOutput) -> Stats {
             stats.lua_files += 1;
             stats.lua_bytes += bytes.len() as u64;
             let code = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(&bytes);
+            #[allow(clippy::disallowed_methods)] // (`stats` is the CLI's)
             let started = std::time::Instant::now();
+            #[cfg(feature = "native")]
             let _ = lua.load(code).into_function();
+            #[cfg(not(feature = "native"))]
+            let _ = crate::luacheck::compile_fresh(code, None);
             stats.compile += started.elapsed();
         }
     }
@@ -4611,7 +4596,7 @@ struct BundleInput<'a> {
 fn content_bytes(content: &Content) -> Vec<u8> {
     match content {
         Content::Bytes(b) => b.clone(),
-        Content::Copy(p) => std::fs::read(p).unwrap_or_default(),
+        Content::Copy(p) => crate::host::read(p).unwrap_or_default(),
     }
 }
 
@@ -4692,7 +4677,7 @@ fn bundle_output(
         }
         let inspects = lib.index.values().any(|rel| {
             rel.to_ascii_lowercase().ends_with(".lua")
-                && std::fs::read(lib.dir.join(rel)).is_ok_and(|t| inspects_own_file(&t))
+                && crate::host::read(lib.dir.join(rel)).is_ok_and(|t| inspects_own_file(&t))
         });
         if inspects {
             separate.insert(lib.name.clone());
@@ -4743,10 +4728,9 @@ fn bundle_output(
             .map(|(f, idx)| (f, idx.iter().flat_map(|&i| origin[i].clone()).collect()))
             .collect::<HashMap<_, _>>()
     });
-    let lua = mlua::Lua::new();
     let compiles = |bytes: &[u8]| {
         let bytes = bytes.strip_prefix(b"\xEF\xBB\xBF").unwrap_or(bytes);
-        crate::luacheck::no_memory_error(lua.load(bytes).into_function()).is_ok()
+        crate::luacheck::compile_fresh(bytes, None).is_ok()
     };
     let entries: Vec<(bool, Option<Vec<String>>)> = expanded
         .iter()
@@ -4846,10 +4830,9 @@ fn bundle_output(
                 // the Rust file and line of this call, so the name is pinned
                 // to the one it has always had: edits above leave the message
                 // unchanged.
-                if let Err(error) = crate::luacheck::no_memory_error(
-                    lua.load(&text[..])
-                        .set_name("@crates/wowlua-driver/src/build.rs:4316")
-                        .into_function(),
+                if let Err(error) = crate::luacheck::compile_fresh(
+                    &text[..],
+                    Some("@crates/wowlua-driver/src/build.rs:4316"),
                 ) {
                     session.push(Diagnostic::plain_error(format!(
                         "internal compiler error: the bundle `{path}` does not compile: {error}"
@@ -4956,15 +4939,15 @@ pub(crate) fn write_maps(
         return Ok(());
     };
     let root = parent.join(".maps").join(addon);
-    if root.exists() {
-        std::fs::remove_dir_all(&root)?;
+    if crate::host::exists(&root) {
+        crate::host::remove_dir_all(&root)?;
     }
     for (rel, map) in maps {
         let path = root.join(rel);
         if let Some(p) = path.parent() {
-            std::fs::create_dir_all(p)?;
+            crate::host::create_dir_all(p)?;
         }
-        std::fs::write(path, map.to_json())?;
+        crate::host::write(path, map.to_json())?;
     }
     Ok(())
 }
@@ -4977,9 +4960,9 @@ pub(crate) fn write_tree(dir: &Path, out: &BTreeMap<String, Content>) -> std::io
             Content::Bytes(bytes) => fsutil::write_file(&dest, bytes)?,
             Content::Copy(from) => {
                 if let Some(parent) = dest.parent() {
-                    std::fs::create_dir_all(parent)?;
+                    crate::host::create_dir_all(parent)?;
                 }
-                std::fs::copy(from, &dest)?;
+                crate::host::copy(from, &dest)?;
             }
         }
     }

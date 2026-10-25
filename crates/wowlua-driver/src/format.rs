@@ -66,18 +66,13 @@ fn files(project: &Project, request: &FormatRequest, lua: bool) -> Vec<PathBuf> 
     };
     let mut found = Vec::new();
     for start in starts {
-        if start.is_file() {
+        if crate::host::is_file(&start) {
             found.push(start);
             continue;
         }
-        for entry in ignore::WalkBuilder::new(&start)
-            .hidden(true)
-            .require_git(false)
-            .build()
-            .flatten()
-        {
-            let path = entry.path();
-            if path.starts_with(&out_dir) || !entry.file_type().is_some_and(|t| t.is_file()) {
+        for path in walk_files(&start) {
+            let path = path.as_path();
+            if path.starts_with(&out_dir) {
                 continue;
             }
             let rel = path
@@ -106,7 +101,7 @@ pub fn format(session: &mut Session, project: &Project, request: &FormatRequest)
             .unwrap_or(&path)
             .to_string_lossy()
             .replace('\\', "/");
-        let bytes = match std::fs::read(&path) {
+        let bytes = match crate::host::read(&path) {
             Ok(b) => b,
             Err(e) => {
                 session.push(
@@ -122,7 +117,7 @@ pub fn format(session: &mut Session, project: &Project, request: &FormatRequest)
             Ok(out) if out == bytes => report.unchanged += 1,
             Ok(out) => {
                 if !request.check
-                    && let Err(e) = std::fs::write(&path, &out)
+                    && let Err(e) = crate::host::write(&path, &out)
                 {
                     session.push(
                         Diagnostic::plain_error(format!("cannot write file: {e}")).with_path(&rel),
@@ -146,4 +141,22 @@ pub fn format(session: &mut Session, project: &Project, request: &FormatRequest)
         }
     }
     report
+}
+
+/// The files below `start` that are not hidden; on a computer also not
+/// ignored by `.gitignore` or `.ignore`.
+fn walk_files(start: &Path) -> Vec<PathBuf> {
+    if crate::host::installed().is_some() {
+        return crate::host::walk(start, false, &|_| true);
+    }
+    #[allow(clippy::disallowed_methods)] // (no host installed: the disk's)
+    let walker = ignore::WalkBuilder::new(start)
+        .hidden(true)
+        .require_git(false)
+        .build();
+    walker
+        .flatten()
+        .filter(|e| e.file_type().is_some_and(|t| t.is_file()))
+        .map(ignore::DirEntry::into_path)
+        .collect()
 }

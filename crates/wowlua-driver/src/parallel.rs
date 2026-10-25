@@ -189,7 +189,7 @@ impl Jobs {
     /// else 1 GiB. Any of them set makes it explicit.
     pub fn resolve(threads: Option<usize>) -> Jobs {
         let config: Option<serde_json::Value> = crate::install::wowlua_home()
-            .and_then(|home| std::fs::read_to_string(home.join("config.json")).ok())
+            .and_then(|home| crate::host::read_to_string(home.join("config.json")).ok())
             .and_then(|text| serde_json::from_str(&text).ok());
         let config_number = |key: &str| config.as_ref()?.pointer(key)?.as_u64();
         let env_number = |name: &str| {

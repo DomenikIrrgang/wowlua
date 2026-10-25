@@ -3,6 +3,8 @@
 //! rename of them all, refused where it can't be done whole; and the
 //! message when a package can't be loaded (decision T390).
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use serde_json::{Value as Json, json};
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};

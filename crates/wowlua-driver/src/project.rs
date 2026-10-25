@@ -173,6 +173,39 @@ pub fn load_project(session: &mut Session, options: &LoadOptions) -> Option<Proj
     None
 }
 
+/// The `wowlua.json` in `start` or the nearest folder above it.
+pub fn find_manifest(start: &Path) -> Option<PathBuf> {
+    start
+        .ancestors()
+        .map(|dir| dir.join(wowlua_manifest::MANIFEST_FILE))
+        .find(|candidate| crate::host::is_file(candidate))
+}
+
+/// Reads and validates the manifest at `path` ([`wowlua_manifest::load`]
+/// through the host).
+pub fn load_manifest(db: &mut wowlua_span::SourceDb, path: &Path) -> wowlua_manifest::LoadOutput {
+    let text = match crate::host::read_to_string(path) {
+        Ok(text) => text,
+        Err(error) => {
+            let mut diagnostics = wowlua_diagnostics::Diagnostics::new();
+            diagnostics.push(
+                Diagnostic::plain_error(format!("cannot read the manifest: {error}"))
+                    .with_path(path),
+            );
+            return wowlua_manifest::LoadOutput {
+                manifest: None,
+                diagnostics,
+            };
+        }
+    };
+    let mut output = wowlua_manifest::parse(db, path, text, &crate::compiler_version());
+    if let Some(manifest) = &mut output.manifest {
+        manifest.path = path.to_path_buf();
+        manifest.root = path.parent().map(Path::to_path_buf).unwrap_or_default();
+    }
+    output
+}
+
 fn no_manifest(options: &LoadOptions) -> Diagnostic {
     Diagnostic::plain_error(format!(
         "no {} found in `{}` or any parent directory",
@@ -185,7 +218,7 @@ fn no_manifest(options: &LoadOptions) -> Diagnostic {
 }
 
 fn read_json(path: &Path) -> Option<serde_json::Value> {
-    serde_json::from_str(&std::fs::read_to_string(path).ok()?).ok()
+    serde_json::from_str(&crate::host::read_to_string(path).ok()?).ok()
 }
 
 fn member_globs(patterns: &[String]) -> globset::GlobSet {
@@ -219,7 +252,7 @@ fn is_member(root_value: &serde_json::Value, rel: &str) -> bool {
 fn workspace_root_above(dir: &Path) -> Option<PathBuf> {
     for ancestor in dir.ancestors().skip(1) {
         let candidate = ancestor.join(wowlua_manifest::MANIFEST_FILE);
-        if !candidate.is_file() {
+        if !crate::host::is_file(&candidate) {
             continue;
         }
         let value = read_json(&candidate)?;
@@ -357,8 +390,11 @@ fn store_lock(
 /// members of a workspace (`-p`, the member around the current directory,
 /// `default-members`, or all members).
 pub fn load_projects(session: &mut Session, options: &LoadOptions) -> Option<Vec<Project>> {
-    let Some(path) = wowlua_manifest::find_manifest(&options.cwd, options.manifest.as_deref())
-    else {
+    let found = match &options.manifest {
+        Some(path) => Some(path.clone()),
+        None => find_manifest(&options.cwd),
+    };
+    let Some(path) = found else {
         session.push(no_manifest(options));
         return None;
     };
@@ -414,7 +450,7 @@ pub fn standalone_project(
 
 /// A package outside any workspace.
 fn load_single(session: &mut Session, options: &LoadOptions, path: &Path) -> Option<Project> {
-    let text = match std::fs::read_to_string(path) {
+    let text = match crate::host::read_to_string(path) {
         Ok(text) => text,
         Err(error) => {
             session.push(
@@ -473,7 +509,7 @@ fn load_workspace(
     inside: Option<&Path>,
 ) -> Option<Vec<Project>> {
     let root_path = root.join(wowlua_manifest::MANIFEST_FILE);
-    let root_text = match std::fs::read_to_string(&root_path) {
+    let root_text = match crate::host::read_to_string(&root_path) {
         Ok(t) => t,
         Err(error) => {
             session.push(
@@ -494,29 +530,20 @@ fn load_workspace(
     if root_manifest.package().is_some() {
         dirs.push(root.to_path_buf());
     }
-    for entry in walkdir::WalkDir::new(root)
-        .min_depth(1)
-        .into_iter()
-        .filter_entry(|e| {
-            let n = e.file_name().to_string_lossy();
-            e.file_type().is_dir()
-                && !n.starts_with('.')
-                && e.path() != out_root
-                && n != "node_modules"
-        })
-        .flatten()
-    {
-        if !entry.path().join(wowlua_manifest::MANIFEST_FILE).is_file() {
+    let enter = |p: &Path| p != out_root && p.file_name().is_none_or(|n| n != "node_modules");
+    for (dir, kind) in crate::host::walk_entries(root, false, &enter) {
+        if kind != crate::host::Kind::Dir
+            || !crate::host::is_file(dir.join(wowlua_manifest::MANIFEST_FILE))
+        {
             continue;
         }
-        let rel = entry
-            .path()
+        let rel = dir
             .strip_prefix(root)
-            .unwrap_or(entry.path())
+            .unwrap_or(&dir)
             .to_string_lossy()
             .replace('\\', "/");
         if is_member(&root_value, &rel) {
-            dirs.push(entry.path().to_path_buf());
+            dirs.push(dir);
         }
     }
     dirs.sort();
@@ -538,7 +565,7 @@ fn load_workspace(
             manifests.push(m);
             continue;
         }
-        let Ok(text) = std::fs::read_to_string(&path) else {
+        let Ok(text) = crate::host::read_to_string(&path) else {
             continue;
         };
         let Ok(value) = serde_json::from_str::<serde_json::Value>(&text) else {

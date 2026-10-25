@@ -7,8 +7,12 @@
 //! text with a placeholder at the cursor (`complete`); references and
 //! rename check the whole workspace (`refs`).
 
+// (tests set up their files on the disk directly)
+#![cfg_attr(test, allow(clippy::disallowed_methods))]
+
 pub mod check;
 pub mod complete;
+pub mod embedded;
 pub mod refs;
 pub mod symbols;
 pub mod testing;
@@ -20,6 +24,11 @@ use std::collections::{BTreeMap, BTreeSet, HashMap};
 use std::path::{Path, PathBuf};
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
+
+/// A moment on the server's clock: the time since it started. The clock is
+/// the system's natively; a page that embeds the server sets it
+/// ([`embedded`]), as the browser has no clock `std` can read.
+type Moment = Duration;
 
 /// How long after the last edit a package is checked again.
 const SETTLE: Duration = Duration::from_millis(100);
@@ -51,15 +60,17 @@ struct Server {
     docs: HashMap<String, Doc>,
     /// Packages (by manifest) edited since their last check, and since
     /// when.
-    dirty: BTreeMap<PathBuf, Instant>,
+    dirty: BTreeMap<PathBuf, Moment>,
     /// Packages whose full check waits until no package was edited for
     /// `QUIET`: since when, and whether with their whole workspace (after a
     /// save or a change on disk).
-    later: BTreeMap<PathBuf, (Instant, bool)>,
+    later: BTreeMap<PathBuf, (Moment, bool)>,
     /// The check the worker runs now.
     running: Option<Running>,
     /// Checks for the worker.
-    jobs: mpsc::Sender<Job>,
+    jobs: Box<dyn FnMut(Job) -> bool>,
+    /// The time now.
+    clock: Box<dyn Fn() -> Moment>,
     /// Go to definition requests waiting for their package's check: the
     /// package, the request's id, the document and the position.
     waiting: Vec<(PathBuf, Json, String, Json, Ask)>,
@@ -195,16 +206,15 @@ impl Server {
     /// (`early` = `SETTLE`: at once). A check of it running now is of an
     /// older text: its results are replaced by the next one's.
     fn touch(&mut self, manifest: &Path, early: Duration) {
-        let at = Instant::now()
-            .checked_sub(early)
-            .unwrap_or_else(Instant::now);
+        let now = (self.clock)();
+        let at = now.saturating_sub(early);
         self.dirty.insert(manifest.to_path_buf(), at);
         // (its full check waits for quiet again)
         let entry = self
             .later
             .entry(manifest.to_path_buf())
-            .or_insert((Instant::now(), false));
-        entry.0 = Instant::now();
+            .or_insert((now, false));
+        entry.0 = now;
     }
 
     /// Marks a package saved: checked at once, its workspace once quiet.
@@ -345,121 +355,22 @@ pub fn serve_with(
             }
         }
     })?;
-    let mut server = Server {
-        docs: HashMap::new(),
-        dirty: BTreeMap::new(),
-        later: BTreeMap::new(),
-        running: None,
-        jobs,
-        waiting: Vec::new(),
-        published: HashMap::new(),
-        definitions: HashMap::new(),
-        hovers: HashMap::new(),
-        defined: HashMap::new(),
-        shutdown: false,
+    #[allow(clippy::disallowed_methods)] // (the computer's loop: its clock)
+    let started = Instant::now();
+    let mut server = Server::new(
         in_process,
-        rescan: false,
-        roots: Vec::new(),
-        completing: None,
-        completed: Vec::new(),
-        finds: std::collections::VecDeque::new(),
-        told: HashMap::new(),
-    };
+        Box::new(move |job| jobs.send(job).is_ok()),
+        Box::new(move || started.elapsed()),
+    );
     loop {
-        // the next check to start: when its edits have settled, or a saved
-        // workspace's once nothing was edited for a while
-        let now = Instant::now();
-        let wait = match (&server.running, server.dirty.values().min()) {
-            (Some(_), _) => Duration::from_secs(3600),
-            (None, Some(at)) => (*at + SETTLE).saturating_duration_since(now),
-            (None, None) => server
-                .later
-                .values()
-                .map(|l| l.0)
-                .min()
-                .map_or(Duration::from_secs(3600), |at| {
-                    (at + QUIET).saturating_duration_since(now)
-                }),
-        };
-        match inbox.recv_timeout(wait) {
+        match inbox.recv_timeout(server.wait()) {
             Ok(Event::Message(message)) => {
-                let handled = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
-                    handle(&mut server, &message, out)
-                }));
-                match handled {
-                    Ok(stop) => {
-                        if stop? {
-                            return Ok(server.shutdown);
-                        }
-                    }
-                    Err(e) => {
-                        // a request whose handler panicked still gets an answer
-                        let why = panic_message(&*e);
-                        eprintln!("wowlua lsp: {} failed: {why}", message["method"]);
-                        if !message["id"].is_null() {
-                            transport::write(
-                                out,
-                                &json!({
-                                    "jsonrpc": "2.0",
-                                    "id": message["id"],
-                                    "error": { "code": -32603, "message": why },
-                                }),
-                            )?;
-                        }
-                    }
+                if on_message(&mut server, &message, out)? {
+                    return Ok(server.shutdown);
                 }
             }
             Ok(Event::Checked(manifest, result)) => {
-                let mut ran = server.running.take();
-                let finding = ran.as_mut().and_then(|r| r.finding.take());
-                // a completion check: its answer, nothing published
-                if let Some(Running {
-                    completion: Some((waiters, prefix, uri)),
-                    ..
-                }) = ran
-                {
-                    let checked = result.ok().and_then(|packages| packages.into_iter().next());
-                    for (id, want) in waiters {
-                        let answer = match want {
-                            Want::Completion => {
-                                let found = checked.as_ref().and_then(|c| c.completions.clone());
-                                completion_list(&mut server, found, &prefix)
-                            }
-                            Want::Signature(site) => {
-                                signature_help(&server, checked.as_ref(), &site, &uri)
-                            }
-                        };
-                        reply(out, &id, answer)?;
-                    }
-                    start_due(&mut server);
-                    continue;
-                }
-                match result {
-                    Ok(mut packages) => {
-                        let found = packages.first_mut().and_then(|c| c.found.take());
-                        for checked in packages {
-                            publish(&mut server, checked, out)?;
-                        }
-                        if let Some(f) = finding {
-                            let new = f.find.rename.as_deref();
-                            let answer = found_answer(&server, f.want, new, found);
-                            respond(out, &f.id, answer)?;
-                        }
-                    }
-                    Err(Failure::Failed(why)) => {
-                        if let Some(f) = finding {
-                            let failed = format!("wowlua could not check the workspace: {why}");
-                            respond(out, &f.id, Err(failed))?;
-                        }
-                        eprintln!("wowlua lsp: checking {} failed: {why}", manifest.display());
-                        notify(
-                            out,
-                            "window/logMessage",
-                            json!({ "type": 1, "message": format!("wowlua: checking {} failed: {why}", manifest.display()) }),
-                        )?;
-                    }
-                }
-                answer_waiting(&mut server, &manifest, out)?;
+                on_checked(&mut server, &manifest, result, out)?
             }
             Ok(Event::Closed) | Err(mpsc::RecvTimeoutError::Disconnected) => {
                 return Ok(server.shutdown);
@@ -468,6 +379,141 @@ pub fn serve_with(
         }
         start_due(&mut server);
     }
+}
+
+impl Server {
+    fn new(
+        in_process: bool,
+        jobs: Box<dyn FnMut(Job) -> bool>,
+        clock: Box<dyn Fn() -> Moment>,
+    ) -> Server {
+        Server {
+            docs: HashMap::new(),
+            dirty: BTreeMap::new(),
+            later: BTreeMap::new(),
+            running: None,
+            jobs,
+            clock,
+            waiting: Vec::new(),
+            published: HashMap::new(),
+            definitions: HashMap::new(),
+            hovers: HashMap::new(),
+            defined: HashMap::new(),
+            shutdown: false,
+            in_process,
+            rescan: false,
+            roots: Vec::new(),
+            completing: None,
+            completed: Vec::new(),
+            finds: std::collections::VecDeque::new(),
+            told: HashMap::new(),
+        }
+    }
+
+    /// How long until the next check is due: when its edits have settled,
+    /// or a saved workspace's once nothing was edited for a while (an hour:
+    /// none is).
+    fn wait(&self) -> Duration {
+        let now = (self.clock)();
+        let none = Duration::from_secs(3600);
+        match (&self.running, self.dirty.values().min()) {
+            (Some(_), _) => none,
+            (None, Some(at)) => (*at + SETTLE).saturating_sub(now),
+            (None, None) => self
+                .later
+                .values()
+                .map(|l| l.0)
+                .min()
+                .map_or(none, |at| (at + QUIET).saturating_sub(now)),
+        }
+    }
+}
+
+/// Handles one of the editor's messages; true at `exit`. A request whose
+/// handler panicked still gets an answer.
+fn on_message(
+    server: &mut Server,
+    message: &Json,
+    out: &mut impl std::io::Write,
+) -> std::io::Result<bool> {
+    let handled = std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
+        handle(server, message, out)
+    }));
+    match handled {
+        Ok(stop) => stop,
+        Err(e) => {
+            let why = panic_message(&*e);
+            eprintln!("wowlua lsp: {} failed: {why}", message["method"]);
+            if !message["id"].is_null() {
+                transport::write(
+                    out,
+                    &json!({
+                        "jsonrpc": "2.0",
+                        "id": message["id"],
+                        "error": { "code": -32603, "message": why },
+                    }),
+                )?;
+            }
+            Ok(false)
+        }
+    }
+}
+
+/// Takes in a finished check: answers what waited for it and publishes
+/// its diagnostics.
+fn on_checked(
+    server: &mut Server,
+    manifest: &Path,
+    result: Result<Vec<check::Checked>, Failure>,
+    out: &mut impl std::io::Write,
+) -> std::io::Result<()> {
+    let mut ran = server.running.take();
+    let finding = ran.as_mut().and_then(|r| r.finding.take());
+    // a completion check: its answer, nothing published
+    if let Some(Running {
+        completion: Some((waiters, prefix, uri)),
+        ..
+    }) = ran
+    {
+        let checked = result.ok().and_then(|packages| packages.into_iter().next());
+        for (id, want) in waiters {
+            let answer = match want {
+                Want::Completion => {
+                    let found = checked.as_ref().and_then(|c| c.completions.clone());
+                    completion_list(server, found, &prefix)
+                }
+                Want::Signature(site) => signature_help(server, checked.as_ref(), &site, &uri),
+            };
+            reply(out, &id, answer)?;
+        }
+        return Ok(());
+    }
+    match result {
+        Ok(mut packages) => {
+            let found = packages.first_mut().and_then(|c| c.found.take());
+            for checked in packages {
+                publish(server, checked, out)?;
+            }
+            if let Some(f) = finding {
+                let new = f.find.rename.as_deref();
+                let answer = found_answer(server, f.want, new, found);
+                respond(out, &f.id, answer)?;
+            }
+        }
+        Err(Failure::Failed(why)) => {
+            if let Some(f) = finding {
+                let failed = format!("wowlua could not check the workspace: {why}");
+                respond(out, &f.id, Err(failed))?;
+            }
+            eprintln!("wowlua lsp: checking {} failed: {why}", manifest.display());
+            notify(
+                out,
+                "window/logMessage",
+                json!({ "type": 1, "message": format!("wowlua: checking {} failed: {why}", manifest.display()) }),
+            )?;
+        }
+    }
+    answer_waiting(server, manifest, out)
 }
 
 /// Starts the check of the package whose edits settled first, else, when
@@ -502,7 +548,7 @@ fn start_due(server: &mut Server) {
                 complete: Some(c.asked.prefix.clone()),
                 find: None,
             };
-            if server.jobs.send(job).is_ok() {
+            if (server.jobs)(job) {
                 server.running = Some(Running {
                     manifest: c.manifest,
                     focused: false,
@@ -529,7 +575,7 @@ fn start_due(server: &mut Server) {
             complete: None,
             find: Some(f.find.clone()),
         };
-        if server.jobs.send(job).is_ok() {
+        if (server.jobs)(job) {
             server.running = Some(Running {
                 manifest: f.manifest.clone(),
                 focused: false,
@@ -539,11 +585,11 @@ fn start_due(server: &mut Server) {
         }
         return;
     }
-    let now = Instant::now();
+    let now = (server.clock)();
     let edited = server
         .dirty
         .iter()
-        .filter(|(_, at)| now.duration_since(**at) >= SETTLE)
+        .filter(|(_, at)| now.saturating_sub(**at) >= SETTLE)
         .min_by_key(|(_, at)| **at)
         .map(|(m, _)| m.clone());
     // an edit: its open files (and what they import) first; quiet: the
@@ -559,7 +605,7 @@ fn start_due(server: &mut Server) {
             let quiet = server
                 .later
                 .iter()
-                .filter(|(_, (at, _))| now.duration_since(*at) >= QUIET)
+                .filter(|(_, (at, _))| now.saturating_sub(*at) >= QUIET)
                 .min_by_key(|(_, (at, _))| *at)
                 .map(|(m, _)| m.clone());
             match quiet {
@@ -589,7 +635,7 @@ fn start_due(server: &mut Server) {
             complete: None,
             find: None,
         };
-        if server.jobs.send(job).is_ok() {
+        if (server.jobs)(job) {
             server.running = Some(Running {
                 manifest,
                 focused,
@@ -658,29 +704,35 @@ fn run_check(
     job: &Job,
 ) -> Result<Vec<check::Checked>, Failure> {
     match checker {
-        Checker::InProcess => {
-            // (the open documents as the job has them, a completion's text
-            // with its placeholder; the next job sets them again. Each set
-            // alone: the crate's tests run servers side by side. A check
-            // here runs to its end)
-            for (path, text) in &job.docs {
-                wowlua_driver::overlay::set(path, text.as_bytes().to_vec());
-            }
-            let open = job.docs.iter().map(|(p, _)| canonical(p)).collect();
-            std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match &job.find {
-                Some(f) => check::find(&job.manifest, &open, f, None, drop),
-                None => check::check(
-                    &job.manifest,
-                    job.whole,
-                    &open,
-                    job.focus.as_ref(),
-                    job.complete.as_deref(),
-                ),
-            }))
-            .map_err(|e| Failure::Failed(panic_message(&*e)))
-        }
+        Checker::InProcess => check_in_process(job, None),
         Checker::Worker(program) => check_in_worker(program, process, job),
     }
+}
+
+/// Runs a check in this process, with what `warm` kept from earlier checks.
+/// The open documents are the job's, a completion's text with its
+/// placeholder; the next job sets them again. Each is set alone: the
+/// crate's tests run servers side by side. A check here runs to its end.
+fn check_in_process(
+    job: &Job,
+    warm: Option<&mut check::Warm>,
+) -> Result<Vec<check::Checked>, Failure> {
+    for (path, text) in &job.docs {
+        wowlua_driver::overlay::set(path, text.as_bytes().to_vec());
+    }
+    let open = job.docs.iter().map(|(p, _)| canonical(p)).collect();
+    std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| match &job.find {
+        Some(f) => check::find(&job.manifest, &open, f, warm, drop),
+        None => check::check_warm(
+            &job.manifest,
+            job.whole,
+            &open,
+            job.focus.as_ref(),
+            job.complete.as_deref(),
+            warm,
+        ),
+    }))
+    .map_err(|e| Failure::Failed(panic_message(&*e)))
 }
 
 /// The worker process: its input, its answers (one line each), the last
@@ -802,6 +854,7 @@ fn check_in_worker(
         *process = None;
         return Err(Failure::Failed(format!("the checker stopped: {why}")));
     }
+    #[allow(clippy::disallowed_methods)] // (the computer's loop: its clock)
     let started = Instant::now();
     let answer = loop {
         match worker.answers.recv_timeout(Duration::from_millis(20)) {
@@ -889,7 +942,7 @@ fn notify(out: &mut impl std::io::Write, method: &str, params: Json) -> std::io:
 /// The manifest of the package a file belongs to (canonical, as checks
 /// name packages).
 fn manifest_of(path: &Path) -> Option<PathBuf> {
-    wowlua_manifest::find_manifest(path.parent()?, None).map(|m| canonical(&m))
+    wowlua_driver::project::find_manifest(path.parent()?).map(|m| canonical(&m))
 }
 
 /// The reply to `initialize`: what the server can do.
@@ -1164,7 +1217,7 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
             let found = match server.docs.get(&uri) {
                 Some(d) => testing::tests(&d.text),
                 None => text::path_of(&uri)
-                    .and_then(|p| std::fs::read_to_string(p).ok())
+                    .and_then(|p| wowlua_driver::host::read_to_string(p).ok())
                     .map(|t| testing::tests(&t))
                     .unwrap_or_default(),
             };
@@ -1554,7 +1607,7 @@ fn doc_comment(server: &Server, uri: &str, line: usize) -> Option<String> {
     let text = match server.docs.get(uri) {
         Some(d) => d.text.as_str(),
         None => {
-            owned = std::fs::read_to_string(text::path_of(uri)?).ok()?;
+            owned = wowlua_driver::host::read_to_string(text::path_of(uri)?).ok()?;
             owned.as_str()
         }
     };
@@ -1730,9 +1783,7 @@ fn format(doc: &Doc) -> Option<Vec<Json>> {
     }
     let mut db = wowlua_span::SourceDb::new();
     let config = manifest_of(&doc.path)
-        .and_then(|m| {
-            wowlua_manifest::load(&mut db, &m, &wowlua_driver::compiler_version()).manifest
-        })
+        .and_then(|m| wowlua_driver::project::load_manifest(&mut db, &m).manifest)
         .map(|m| wowlua_driver::format::config(&m.manifest.fmt))
         .unwrap_or_default();
     let file = db.add(doc.path.clone(), doc.text.clone());

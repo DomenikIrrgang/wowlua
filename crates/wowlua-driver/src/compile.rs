@@ -1381,7 +1381,7 @@ pub fn compile_flavor(
             .enumerate()
             .filter(|(_, (s, _))| {
                 open.contains(&s.abs)
-                    || std::fs::canonicalize(&s.abs).is_ok_and(|p| open.contains(&p))
+                    || crate::host::canonicalize(&s.abs).is_ok_and(|p| open.contains(&p))
             })
             .map(|(i, _)| i)
             .collect()
@@ -1394,7 +1394,7 @@ pub fn compile_flavor(
             .enumerate()
             .filter(|(_, (s, _))| {
                 focus.contains(&s.abs)
-                    || std::fs::canonicalize(&s.abs).is_ok_and(|p| focus.contains(&p))
+                    || crate::host::canonicalize(&s.abs).is_ok_and(|p| focus.contains(&p))
             })
             .map(|(i, _)| i)
             .collect();

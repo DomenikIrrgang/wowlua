@@ -391,6 +391,19 @@ impl Warm {
     }
 }
 
+/// [`check`] with what `warm` kept from earlier checks (a long-lived
+/// checker's), keeping this one's there.
+pub fn check_warm(
+    manifest: &Path,
+    whole: bool,
+    open: &HashSet<PathBuf>,
+    focus: Option<&HashSet<PathBuf>>,
+    complete: Option<&str>,
+    warm: Option<&mut Warm>,
+) -> Vec<Checked> {
+    check_and(manifest, whole, open, focus, complete, None, warm, drop)
+}
+
 /// [`check`], handing the session to `done` (a process about to end
 /// leaves it unfreed: a large package's take tens of milliseconds).
 #[allow(clippy::too_many_arguments)]
@@ -624,7 +637,7 @@ fn unloaded(session: &Session, roots: &Roots, manifest: &Path, found: &[Diagnost
         })
         .unwrap_or_else(|| manifest.to_path_buf());
     let file = absolute(roots, &file).unwrap_or(file);
-    let json = std::fs::read_to_string(&file)
+    let json = wowlua_driver::host::read_to_string(&file)
         .ok()
         .and_then(|t| serde_json::from_str::<Json>(&t).ok());
     let folder = file
@@ -813,6 +826,11 @@ fn definitions(
 
 /// Where [`materialize`] writes the compiler's built-in files.
 pub fn builtin_dir() -> PathBuf {
+    // (a host of its own, such as a page's in-memory files, keeps them in
+    // a hidden folder at its root: no temporary directory there)
+    if wowlua_driver::host::installed().is_some() {
+        return PathBuf::from(format!("/.wowlua-{}", env!("CARGO_PKG_VERSION")));
+    }
     std::env::temp_dir().join(format!("wowlua-{}", env!("CARGO_PKG_VERSION")))
 }
 
@@ -829,21 +847,21 @@ pub(crate) fn materialize(rel: &Path, contents: &str) -> Option<PathBuf> {
         })
         .collect();
     let path = builtin_dir().join(name.trim_start_matches(['/', '\\']));
-    let fresh = std::fs::metadata(&path).is_ok_and(|m| m.len() == contents.len() as u64);
-    if !fresh {
-        std::fs::create_dir_all(path.parent()?).ok()?;
+    let same =
+        |path: &Path| wowlua_driver::host::read(path).is_ok_and(|b| b.len() == contents.len());
+    if !same(&path) {
+        wowlua_driver::host::create_dir_all(path.parent()?).ok()?;
         // written whole, then renamed: a reader never sees half a file;
         // each writer has its own partial file, so two checks writing the
         // same declaration at once don't take each other's
         static WRITES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let n = WRITES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
         let partial = path.with_extension(format!("{}-{n}.partial", std::process::id()));
-        let written =
-            std::fs::write(&partial, contents).and_then(|()| std::fs::rename(&partial, &path));
+        let written = wowlua_driver::host::write(&partial, contents)
+            .and_then(|()| wowlua_driver::host::rename(&partial, &path));
         if written.is_err() {
-            let _ = std::fs::remove_file(&partial);
-            let done = std::fs::metadata(&path).is_ok_and(|m| m.len() == contents.len() as u64);
-            if !done {
+            let _ = wowlua_driver::host::remove_file(&partial);
+            if !same(&path) {
                 return None;
             }
         }
@@ -881,7 +899,7 @@ impl std::ops::Deref for Roots {
 /// disk.
 pub(crate) fn absolute(roots: &Roots, rel: &Path) -> Option<PathBuf> {
     let found = if rel.is_absolute() {
-        rel.exists().then(|| rel.to_path_buf())
+        wowlua_driver::host::exists(rel).then(|| rel.to_path_buf())
     } else if let Some((name, rest)) = rel
         .to_str()
         .and_then(|r| r.strip_prefix(wowlua_sema::PACKAGE_PREFIX))
@@ -890,9 +908,12 @@ pub(crate) fn absolute(roots: &Roots, rel: &Path) -> Option<PathBuf> {
         let (src, dir) = roots.packages.get(name)?;
         [src.join(rest), dir.join(rest)]
             .into_iter()
-            .find(|p| p.exists())
+            .find(|p| wowlua_driver::host::exists(p))
     } else {
-        roots.iter().map(|r| r.join(rel)).find(|p| p.exists())
+        roots
+            .iter()
+            .map(|r| r.join(rel))
+            .find(|p| wowlua_driver::host::exists(p))
     }?;
     Some(text::canonical(&found))
 }

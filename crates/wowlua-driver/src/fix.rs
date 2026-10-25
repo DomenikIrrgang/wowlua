@@ -28,7 +28,7 @@ pub fn apply(db: &SourceDb, diagnostics: &[&Diagnostic], root: &Path) -> std::io
     let mut out = Applied::default();
     for (file, fixes) in per_file {
         let path = root.join(db.get(file).path());
-        if !path.starts_with(root) || !path.is_file() {
+        if !path.starts_with(root) || !crate::host::is_file(&path) {
             continue;
         }
         let mut taken: Vec<&Edit> = Vec::new();
@@ -50,7 +50,7 @@ pub fn apply(db: &SourceDb, diagnostics: &[&Diagnostic], root: &Path) -> std::io
         }
         taken.sort_by_key(|e| std::cmp::Reverse(e.span.start));
         // Spans are byte offsets into the file as read.
-        let mut bytes = std::fs::read(&path)?;
+        let mut bytes = crate::host::read(&path)?;
         for e in taken {
             let range = e.span.start as usize..e.span.end as usize;
             if range.end > bytes.len() {
@@ -58,7 +58,7 @@ pub fn apply(db: &SourceDb, diagnostics: &[&Diagnostic], root: &Path) -> std::io
             }
             bytes.splice(range, e.replacement.bytes());
         }
-        std::fs::write(&path, bytes)?;
+        crate::host::write(&path, bytes)?;
         out.fixes += count;
         out.files.push(path);
     }

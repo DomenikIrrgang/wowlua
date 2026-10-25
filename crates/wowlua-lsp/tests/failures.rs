@@ -1,6 +1,8 @@
 //! A check that fails (here: a worker that ends without an answer) is
 //! reported, and the server goes on answering (decision T370).
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 mod common;
 
 use common::Client;

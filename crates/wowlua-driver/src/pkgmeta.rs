@@ -99,7 +99,7 @@ pub const FILES: &[&str] = &[".pkgmeta", "pkgmeta.yaml", "pkgmeta.yml", ".pkgmet
 pub fn read(dir: &Path) -> Result<Option<PkgMeta>, Diagnostic> {
     for name in FILES {
         let path = dir.join(name);
-        if let Ok(text) = std::fs::read_to_string(&path) {
+        if let Ok(text) = crate::host::read_to_string(&path) {
             let mut meta = parse(&text).map_err(|e| {
                 Diagnostic::plain_error(format!("cannot read `{name}`: {e}")).with_path(&path)
             })?;
@@ -123,7 +123,7 @@ pub fn read_project(dir: &Path, explicit: Option<&Path>) -> Result<Option<PkgMet
     let runs = single_game_runs(dir);
     let default = FILES
         .iter()
-        .find(|f| dir.join(f).is_file())
+        .find(|f| crate::host::is_file(dir.join(f)))
         .map(|f| (*f).to_string());
     let main = match explicit {
         Some(path) => Some(
@@ -146,7 +146,7 @@ pub fn read_project(dir: &Path, explicit: Option<&Path>) -> Result<Option<PkgMet
     };
     let load = |name: &str| -> Result<PkgMeta, Diagnostic> {
         let path = dir.join(name);
-        let text = std::fs::read_to_string(&path).map_err(|e| {
+        let text = crate::host::read_to_string(&path).map_err(|e| {
             Diagnostic::plain_error(format!("cannot read `{name}`: {e}")).with_path(&path)
         })?;
         let mut meta = parse(&text).map_err(|e| {
@@ -268,18 +268,18 @@ fn parse_run(args: &str) -> WorkflowRun {
 /// The CI workflows that run the BigWigs packager action, by file name, and
 /// whether they ask it for `pandoc`.
 pub fn packager_workflows(dir: &Path) -> Vec<(String, bool)> {
-    let mut out: Vec<(String, bool)> = std::fs::read_dir(dir.join(".github/workflows"))
+    let mut out: Vec<(String, bool)> = crate::host::read_dir(dir.join(".github/workflows"))
         .into_iter()
         .flatten()
-        .flatten()
-        .filter_map(|e| {
-            let text = std::fs::read_to_string(e.path()).ok()?;
+        .filter_map(|path| {
+            let text = crate::host::read_to_string(&path).ok()?;
+            let name = path.file_name()?.to_string_lossy().into_owned();
             text.contains("BigWigsMods/packager").then(|| {
                 let pandoc = text.lines().any(|l| {
                     let l = l.trim().replace(' ', "");
                     l == "pandoc:true" || l == "pandoc:\"true\""
                 });
-                (e.file_name().to_string_lossy().into_owned(), pandoc)
+                (name, pandoc)
             })
         })
         .collect();
@@ -290,11 +290,10 @@ pub fn packager_workflows(dir: &Path) -> Vec<(String, bool)> {
 /// The packager runs of the project's GitHub workflows: each step using
 /// the packager action (with its `args:`), and each `release.sh` command.
 pub fn workflow_runs(dir: &Path) -> Vec<WorkflowRun> {
-    let mut files: Vec<PathBuf> = std::fs::read_dir(dir.join(".github/workflows"))
+    let mut files: Vec<PathBuf> = crate::host::read_dir(dir.join(".github/workflows"))
         .map(|entries| {
             entries
-                .filter_map(Result::ok)
-                .map(|e| e.path())
+                .into_iter()
                 .filter(|p| {
                     p.extension().is_some_and(|e| {
                         e.eq_ignore_ascii_case("yml") || e.eq_ignore_ascii_case("yaml")
@@ -311,7 +310,7 @@ pub fn workflow_runs(dir: &Path) -> Vec<WorkflowRun> {
         }
     };
     for file in files {
-        let Ok(text) = std::fs::read_to_string(&file) else {
+        let Ok(text) = crate::host::read_to_string(&file) else {
             continue;
         };
         // The packager action step being read.
@@ -1047,23 +1046,23 @@ mod tests {
         );
         let dir = tempfile::tempdir().unwrap();
         let workflows = dir.path().join(".github/workflows");
-        std::fs::create_dir_all(&workflows).unwrap();
+        crate::host::create_dir_all(&workflows).unwrap();
         let step = |args: &str| {
             format!(
                 "      - name: Package\n        uses: BigWigsMods/packager@v2\n{args}      - name: Next\n        run: true\n"
             )
         };
-        std::fs::write(
+        crate::host::write(
             workflows.join("beta.yml"),
             step("        with:\n          args: -zg retail\n"),
         )
         .unwrap();
         // A release without `-g` packages every game in one run.
-        std::fs::write(workflows.join("release.yml"), step("")).unwrap();
+        crate::host::write(workflows.join("release.yml"), step("")).unwrap();
         assert_eq!(workflow_runs(dir.path()).len(), 2);
         assert!(single_game_runs(dir.path()).is_empty());
-        std::fs::remove_file(workflows.join("release.yml")).unwrap();
-        std::fs::write(
+        crate::host::remove_file(workflows.join("release.yml")).unwrap();
+        crate::host::write(
             workflows.join("classic.yml"),
             "    steps:\n      - run: curl -s https://x/release.sh | bash -s -- -g classic -m .pkgmeta-classic.yml\n",
         )

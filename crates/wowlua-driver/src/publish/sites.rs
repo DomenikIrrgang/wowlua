@@ -2,6 +2,9 @@
 //! WoWInterface and GitHub Releases. Endpoints can be redirected with the
 //! target's `api-url`.
 
+// Only a computer has this (spec M14, decision T394).
+#![allow(clippy::disallowed_methods)]
+
 use super::changelog::Changelog;
 use super::http::{Http, Multipart, Response};
 use super::versions::{self, Choice};

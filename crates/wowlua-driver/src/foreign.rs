@@ -95,17 +95,14 @@ impl Foreign {
 /// The `.wowlua` and `.d.wowlua` files below `src`, tests left out.
 fn files_below(src: &Path) -> BTreeMap<String, PathBuf> {
     let mut files = BTreeMap::new();
-    for entry in walkdir::WalkDir::new(src).into_iter().flatten() {
-        if !entry.file_type().is_file() {
-            continue;
-        }
-        let Ok(rel) = entry.path().strip_prefix(src) else {
+    for path in crate::host::walk(src, true, &|_| true) {
+        let Ok(rel) = path.strip_prefix(src) else {
             continue;
         };
         let rel = rel.to_string_lossy().replace('\\', "/");
         let lower = rel.to_ascii_lowercase();
         if lower.ends_with(".wowlua") && !lower.ends_with(".test.wowlua") {
-            files.insert(rel, entry.path().to_path_buf());
+            files.insert(rel, path);
         }
     }
     files

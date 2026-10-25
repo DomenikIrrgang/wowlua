@@ -21,9 +21,9 @@ pub fn temp_sibling(target: &Path) -> io::Result<PathBuf> {
     let tmp = sibling(target, TMP_SUFFIX);
     remove_any(&tmp)?;
     if let Some(parent) = tmp.parent() {
-        fs::create_dir_all(parent)?;
+        crate::host::create_dir_all(parent)?;
     }
-    fs::create_dir_all(&tmp)?;
+    crate::host::create_dir_all(&tmp)?;
     Ok(tmp)
 }
 
@@ -35,37 +35,57 @@ pub fn replace_dir(staged: &Path, target: &Path) -> io::Result<()> {
     if is_link(target) {
         remove_any(target)?;
     }
-    if cfg!(windows) || target.exists() {
-        if target.exists() {
-            fs::rename(target, &old)?;
+    if cfg!(windows) || crate::host::exists(target) {
+        if crate::host::exists(target) {
+            crate::host::rename(target, &old)?;
         }
-        fs::rename(staged, target)?;
+        crate::host::rename(staged, target)?;
         remove_any(&old)?;
     } else {
-        fs::rename(staged, target)?;
+        crate::host::rename(staged, target)?;
     }
     Ok(())
 }
 
 /// Removes a file, a directory tree or a link (without following it).
 pub fn remove_any(path: &Path) -> io::Result<()> {
+    if crate::host::installed().is_some() {
+        return match crate::host::kind(path) {
+            Some(crate::host::Kind::Dir) => crate::host::remove_dir_all(path),
+            Some(crate::host::Kind::File) => crate::host::remove_file(path),
+            None => Ok(()),
+        };
+    }
+    #[allow(clippy::disallowed_methods)] // (no host installed: the disk's)
     let Ok(meta) = fs::symlink_metadata(path) else {
         return Ok(());
     };
     if meta.file_type().is_symlink() || is_junction(path) {
         // Directory symlinks on Windows and junctions are removed as directories.
-        return fs::remove_file(path).or_else(|_| fs::remove_dir(path));
+        #[allow(clippy::disallowed_methods)]
+        return crate::host::remove_file(path).or_else(|_| fs::remove_dir(path));
     }
     if meta.is_dir() {
-        fs::remove_dir_all(path)
+        crate::host::remove_dir_all(path)
     } else {
-        fs::remove_file(path)
+        crate::host::remove_file(path)
     }
 }
 
 /// Copies a directory tree. Links inside it are copied as their targets.
 pub fn copy_dir(from: &Path, to: &Path) -> io::Result<()> {
-    fs::create_dir_all(to)?;
+    crate::host::create_dir_all(to)?;
+    if crate::host::installed().is_some() {
+        for (path, kind) in crate::host::walk_entries(from, true, &|_| true) {
+            let dest = to.join(path.strip_prefix(from).unwrap_or(&path));
+            match kind {
+                crate::host::Kind::Dir => crate::host::create_dir_all(&dest)?,
+                crate::host::Kind::File => drop(crate::host::copy(&path, &dest)?),
+            }
+        }
+        return Ok(());
+    }
+    #[allow(clippy::disallowed_methods)] // (no host installed: the disk's)
     for entry in walkdir::WalkDir::new(from).min_depth(1).follow_links(true) {
         let entry = entry.map_err(io::Error::other)?;
         let relative = entry
@@ -74,16 +94,21 @@ pub fn copy_dir(from: &Path, to: &Path) -> io::Result<()> {
             .expect("walkdir yields children");
         let dest = to.join(relative);
         if entry.file_type().is_dir() {
-            fs::create_dir_all(&dest)?;
+            crate::host::create_dir_all(&dest)?;
         } else {
-            fs::copy(entry.path(), &dest)?;
+            crate::host::copy(entry.path(), &dest)?;
         }
     }
     Ok(())
 }
 
 pub fn is_link(path: &Path) -> bool {
-    fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink()) || is_junction(path)
+    if crate::host::installed().is_some() {
+        return false;
+    }
+    #[allow(clippy::disallowed_methods)] // (no host installed: the disk's)
+    let link = fs::symlink_metadata(path).is_ok_and(|m| m.file_type().is_symlink());
+    link || is_junction(path)
 }
 
 #[cfg(windows)]
@@ -115,14 +140,22 @@ pub fn create_dir_link(target: &Path, link: &Path) -> io::Result<()> {
     {
         junction::create(target, link)
     }
+    #[cfg(not(any(unix, windows)))]
+    {
+        let _ = (target, link);
+        Err(io::Error::new(
+            io::ErrorKind::Unsupported,
+            "this system has no directory links",
+        ))
+    }
 }
 
 /// Writes a file, creating parent directories.
 pub fn write_file(path: &Path, contents: &[u8]) -> io::Result<()> {
     if let Some(parent) = path.parent() {
-        fs::create_dir_all(parent)?;
+        crate::host::create_dir_all(parent)?;
     }
-    fs::write(path, contents)
+    crate::host::write(path, contents)
 }
 
 /// `a/b/c` with `/` separators, relative to `base`.
@@ -145,11 +178,11 @@ mod tests {
     fn replace_dir_swaps_contents() {
         let root = tempfile::tempdir().unwrap();
         let target = root.path().join("out");
-        fs::create_dir_all(&target).unwrap();
-        fs::write(target.join("old.txt"), "old").unwrap();
+        crate::host::create_dir_all(&target).unwrap();
+        crate::host::write(target.join("old.txt"), "old").unwrap();
 
         let staged = temp_sibling(&target).unwrap();
-        fs::write(staged.join("new.txt"), "new").unwrap();
+        crate::host::write(staged.join("new.txt"), "new").unwrap();
         replace_dir(&staged, &target).unwrap();
 
         assert!(target.join("new.txt").exists());
@@ -161,8 +194,8 @@ mod tests {
     fn links_are_replaced_not_followed() {
         let root = tempfile::tempdir().unwrap();
         let real = root.path().join("real");
-        fs::create_dir_all(&real).unwrap();
-        fs::write(real.join("keep.txt"), "keep").unwrap();
+        crate::host::create_dir_all(&real).unwrap();
+        crate::host::write(real.join("keep.txt"), "keep").unwrap();
         let link = root.path().join("link");
         create_dir_link(&real, &link).unwrap();
         assert!(is_link(&link));

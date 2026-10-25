@@ -661,3 +661,37 @@ The compiler, the VM and the engine run in the browser as WebAssembly
 
 **Exit:** an addon from the corpus compiles, runs and is debugged in the
 browser against the default UI, from a link.
+
+The playground's page and editor are the website's (wowlua.dev/playground,
+with its own design); wowlua provides what the page embeds:
+
+- S1 The compiler in the browser: `wowlua-driver` (loading, checking,
+  building and formatting a package) builds for `wasm32-unknown-unknown`
+  without its `native` feature, reading and writing through a host the
+  program installs (`wowlua_driver::host`; `MemoryHost` keeps the files in
+  memory), Lua's limits checked by wowlua's own Lua 5.1 instead of the C
+  Lua; CI checks the build (T394).
+  Done 2026-10-25: a package in memory loads, checks, builds and formats
+  as on disk (`tests/memory.rs`); wowlua's Lua gives the C Lua's limit
+  errors message for message (three differences fixed in the VM).
+- S2 `@wowlua/web`: an npm package (wasm-bindgen) with a JavaScript API to
+  check, build and format a package held in memory, the editor's services
+  (diagnostics, hover, completion, go to definition, formatting) and share
+  links (the files and the world profile in a URL). No editor or page of its
+  own (T395).
+  Built 2026-10-26: `crates/wowlua-web` (the playground's API, tested
+  natively: `tests/playground.rs`), the language server embedded (the
+  editor's services are `wowlua lsp`'s, over messages), `web/` (the
+  JavaScript API, a Web Worker and its client) and `docs/embedding.md`.
+  The module builds for the browser (7.5 MB with gzip). Not yet run in
+  Node or a browser: the JavaScript bindings need `wasm-bindgen` 0.2.129;
+  share links carry the files only (world profiles come with S3).
+- S3 Run and draw: the built addon runs in the engine with a world profile
+  and camelot's Blizzard UI (fetched by the page), drawn on a canvas by the
+  renderer, with mouse and keyboard input, printed output and errors.
+- S4 The debugger over the JavaScript API: breakpoints, stepping,
+  variables, frames and events, as the M12 views have them.
+- S5 Game data and assets from the user's installation through the File
+  System Access API, read in the browser and never uploaded (T210).
+- S6 A bare test page that uses only the package, `docs/embedding.md` for
+  the website, and the package built and attached to each release.

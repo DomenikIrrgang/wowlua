@@ -13,6 +13,9 @@
 //! cache stays under its size by removing the least recently used entries
 //! (an entry's modification time is its last use), at most once a day.
 
+// Only a computer has this (spec M14, decision T394).
+#![allow(clippy::disallowed_methods)]
+
 use std::path::PathBuf;
 use std::sync::OnceLock;
 use std::time::{Duration, SystemTime};

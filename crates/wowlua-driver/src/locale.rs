@@ -117,9 +117,8 @@ pub fn load(
     diagnostics: &mut Vec<Diagnostic>,
 ) -> Option<Locales> {
     let mut files: Vec<(String, std::path::PathBuf)> = Vec::new();
-    if let Ok(entries) = std::fs::read_dir(dir) {
-        for e in entries.flatten() {
-            let path = e.path();
+    if let Ok(entries) = crate::host::read_dir(dir) {
+        for path in entries {
             if path.extension().is_some_and(|x| x == "json")
                 && let Some(stem) = path.file_stem().and_then(|s| s.to_str())
             {
@@ -147,7 +146,7 @@ pub fn load(
             ok = false;
             continue;
         }
-        let text = std::fs::read_to_string(path).unwrap_or_default();
+        let text = crate::host::read_to_string(path).unwrap_or_default();
         let value: serde_json::Value = match serde_json::from_str(&text) {
             Ok(v) => v,
             Err(e) => {

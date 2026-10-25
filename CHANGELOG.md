@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## Unreleased
+
+### Fixed
+
+- In tests, `loadstring` of code past Lua's limits gives the game's error message: "more than 199 variables in assignment" (not 200), an upvalue too many reported on the line the game reports, and "function or expression too complex near '…'" with the token it is near.
+
 ## 0.11.0 (2026-10-25)
 
 ### New

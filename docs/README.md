@@ -8,3 +8,4 @@ is the complete reference.
 - [Debugging in game](debugging-in-game.md) — the dev window, `/wl` and `wowlua trace`
 - [Adopting an addon](adopting-an-addon.md) — bring an existing addon to wowlua, including one built with the BigWigs packager
 - [Emulator coverage](emulator-coverage.md) — how much of the WoW client `wowlua test` emulates, verified against the real client (generated)
+- [Embedding wowlua in a web page](embedding.md) — `@wowlua/web`: the compiler and language server as WebAssembly, for the playground

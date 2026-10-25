@@ -3,6 +3,8 @@
 //! unchanged imports an earlier checker's full check kept, with the same
 //! errors.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use std::collections::HashSet;
 use wowlua_lsp::check::{self, Store, Warm};
 

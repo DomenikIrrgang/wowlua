@@ -4,6 +4,9 @@
 //! 0600, W4326). `WOWLUA_NO_KEYRING=1` skips the credential store, and
 //! without a terminal reading, saving and removing a token skip it too.
 
+// Only a computer has this (spec M14, decision T394).
+#![allow(clippy::disallowed_methods)]
+
 use serde_json::Value;
 use std::path::PathBuf;
 

@@ -22,9 +22,15 @@ serde_json.workspace = true
 sha1.workspace = true
 sha2.workspace = true
 tar.workspace = true
-ureq.workspace = true
+ureq = { workspace = true, optional = true }
 walkdir.workspace = true
 zip.workspace = true
+
+[features]
+default = ["net"]
+# Downloads (archives over HTTPS); without it a package is read from the
+# cache or the disk only (the browser build).
+net = ["dep:ureq"]
 
 [dev-dependencies]
 tempfile.workspace = true

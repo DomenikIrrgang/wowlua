@@ -224,20 +224,31 @@ pub fn downloaded_license(project_id: &str) -> Option<Vec<u8>> {
     let cache = wowlua_pkg::Cache::new()?;
     let entry = cache.checkout_dir(&format!("wowace-license-{project_id}"));
     let file = entry.join("LICENSE");
-    if let Ok(bytes) = std::fs::read(&file) {
+    if let Ok(bytes) = crate::host::read(&file) {
         return Some(bytes);
     }
+    let page = license_page(project_id)?;
+    let text = license_from_page(&page);
+    crate::host::create_dir_all(&entry).ok()?;
+    crate::host::write(&file, &text).ok()?;
+    Some(text.into_bytes())
+}
+
+#[cfg(feature = "native")]
+fn license_page(project_id: &str) -> Option<String> {
     let url = format!("https://www.wowace.com/project/{project_id}/license");
-    let page = ureq::get(&url)
+    ureq::get(&url)
         .call()
         .ok()?
         .into_body()
         .read_to_string()
-        .ok()?;
-    let text = license_from_page(&page);
-    std::fs::create_dir_all(&entry).ok()?;
-    std::fs::write(&file, &text).ok()?;
-    Some(text.into_bytes())
+        .ok()
+}
+
+/// The browser's build downloads nothing.
+#[cfg(not(feature = "native"))]
+fn license_page(_project_id: &str) -> Option<String> {
+    None
 }
 
 /// `echo "$(curl …)" | sed -e '1,4d' -e '5s/^\s*//' -e '$d' | sed '$d'`:

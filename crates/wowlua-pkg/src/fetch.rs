@@ -636,6 +636,21 @@ impl Fetcher {
                 "archive `{url}` must be downloaded over HTTPS"
             )));
         }
+        self.download_https(url)
+    }
+
+    /// Without downloads (the browser's build): an archive must be in the
+    /// cache or on disk.
+    #[cfg(not(feature = "net"))]
+    fn download_https(&self, url: &str) -> Result<Vec<u8>, FetchError> {
+        Err(FetchError::coded(
+            "E4102",
+            format!("cannot download `{url}`: this build of wowlua has no downloads"),
+        ))
+    }
+
+    #[cfg(feature = "net")]
+    fn download_https(&self, url: &str) -> Result<Vec<u8>, FetchError> {
         self.say("Downloading", url);
         let mut delay = std::time::Duration::from_secs(2);
         let mut attempt = 1;

@@ -6,6 +6,9 @@
 //! their source. The enclosing function is found in the source, and renamed
 //! locals get their original names.
 
+// It reads the source maps a computer's builds left (spec M14, decision T394).
+#![allow(clippy::disallowed_methods)]
+
 use crate::Project;
 use regex::Regex;
 use std::collections::HashMap;
@@ -169,7 +172,7 @@ fn map_dirs(project: &Project, build: Option<&str>) -> Vec<(PathBuf, Option<Path
             continue;
         };
         let addon_dir = parent.join(&addon);
-        let id = std::fs::read_to_string(addon_dir.join(format!("{addon}.toc")))
+        let id = crate::host::read_to_string(addon_dir.join(format!("{addon}.toc")))
             .ok()
             .and_then(|toc| {
                 toc.lines()
@@ -217,18 +220,18 @@ fn find_map(
     path: &str,
 ) -> Option<(SourceMap, Option<String>)> {
     builds.iter().find_map(|(maps, addon_dir)| {
-        let text = std::fs::read_to_string(maps.join(format!("{path}.map"))).ok()?;
+        let text = crate::host::read_to_string(maps.join(format!("{path}.map"))).ok()?;
         let map = SourceMap::parse(&text)?;
         let generated = addon_dir
             .as_ref()
-            .and_then(|d| std::fs::read_to_string(d.join(path)).ok());
+            .and_then(|d| crate::host::read_to_string(d.join(path)).ok());
         Some((map, generated))
     })
 }
 
 /// The line ranges of the named functions of a source file.
 fn function_ranges(path: &std::path::Path) -> Vec<(u32, u32, String)> {
-    let Ok(bytes) = std::fs::read(path) else {
+    let Ok(bytes) = crate::host::read(path) else {
         return Vec::new();
     };
     let mut db = wowlua_span::SourceDb::new();

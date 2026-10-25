@@ -273,6 +273,7 @@ const MODULES_MAGIC: &[u8; 8] = b"WLMODS01";
 
 /// What wrote a module cache file: this wowlua, down to its executable
 /// (a rebuilt wowlua of the same version reads none of another's).
+#[allow(clippy::disallowed_methods)] // (a computer's: the browser keeps no cache)
 fn identity() -> blake3::Hash {
     let mut h = blake3::Hasher::new();
     h.update(env!("CARGO_PKG_VERSION").as_bytes());
@@ -314,7 +315,7 @@ impl BuildCache {
         if self.config.is_some() {
             return false;
         }
-        let Ok(bytes) = std::fs::read(path) else {
+        let Ok(bytes) = crate::host::read(path) else {
             return false;
         };
         let head = MODULES_MAGIC.len() + 64;
@@ -355,13 +356,13 @@ impl BuildCache {
         bytes.extend_from_slice(config.as_bytes());
         bytes.extend_from_slice(&body);
         if let Some(dir) = path.parent() {
-            std::fs::create_dir_all(dir)?;
+            crate::host::create_dir_all(dir)?;
         }
         // (written whole, then renamed: another server reads all or none)
         let partial = path.with_extension(format!("{}.partial", std::process::id()));
-        std::fs::write(&partial, &bytes)?;
-        if let Err(e) = std::fs::rename(&partial, path) {
-            let _ = std::fs::remove_file(&partial);
+        crate::host::write(&partial, &bytes)?;
+        if let Err(e) = crate::host::rename(&partial, path) {
+            let _ = crate::host::remove_file(&partial);
             return Err(e);
         }
         self.persisted = Some(hash);
@@ -382,6 +383,7 @@ const MODULES_UNUSED: std::time::Duration = std::time::Duration::from_secs(30 * 
 
 /// Marks a module cache file as used now, at most once a day (its
 /// modification time is its last use).
+#[allow(clippy::disallowed_methods)] // (a computer's: the browser keeps no cache)
 fn touch(path: &std::path::Path) {
     let day = std::time::Duration::from_secs(24 * 60 * 60);
     let old = std::fs::metadata(path)
@@ -394,6 +396,7 @@ fn touch(path: &std::path::Path) {
 
 /// Removes the module caches of packages no server checked for 30 days
 /// (and files a server left half-written), once per process.
+#[allow(clippy::disallowed_methods)] // (a computer's: the browser keeps no cache)
 fn prune(dir: &std::path::Path) {
     static PRUNED: std::sync::Once = std::sync::Once::new();
     PRUNED.call_once(|| {
@@ -413,7 +416,7 @@ fn prune(dir: &std::path::Path) {
                 .and_then(|m| m.modified())
                 .is_ok_and(|t| t.elapsed().is_ok_and(|age| age >= limit));
             if unused {
-                let _ = std::fs::remove_file(&path);
+                let _ = crate::host::remove_file(&path);
             }
         }
     });
@@ -454,6 +457,7 @@ pub(crate) fn config_hash(
 #[derive(Clone, Copy, PartialEq, Eq)]
 struct Stamp(u64, std::time::SystemTime);
 
+#[allow(clippy::disallowed_methods)] // (`wowlua dev`, a computer's)
 fn stamp(path: &std::path::Path) -> Option<Stamp> {
     let meta = std::fs::symlink_metadata(path).ok()?;
     meta.is_file().then_some(())?;
@@ -482,6 +486,7 @@ enum Kept {
 /// written. A map that is the same (`Arc`) and on disk as left stays; the
 /// others are written, and maps of files no longer built are removed. The
 /// result is what writing everything gives.
+#[allow(clippy::disallowed_methods)] // (`wowlua dev`, a computer's)
 pub(crate) fn write_changed(
     dir: &std::path::Path,
     out: &std::collections::BTreeMap<String, crate::build::Content>,
@@ -496,7 +501,7 @@ pub(crate) fn write_changed(
     for (path, content) in out {
         let dest = staged.join(path);
         if let Some(parent) = dest.parent() {
-            std::fs::create_dir_all(parent)?;
+            crate::host::create_dir_all(parent)?;
         }
         let kept = match content {
             Content::Bytes(bytes) => Kept::Bytes(blake3::hash(bytes)),
@@ -516,7 +521,7 @@ pub(crate) fn write_changed(
             && std::fs::hard_link(&old, &dest).is_ok();
         if !linked {
             match content {
-                Content::Bytes(bytes) => std::fs::write(&dest, bytes)?,
+                Content::Bytes(bytes) => crate::host::write(&dest, bytes)?,
                 Content::Copy(from) => {
                     std::fs::copy(from, &dest)?;
                 }
@@ -570,6 +575,7 @@ pub(crate) fn write_changed(
 
 /// Removes the files below `dir` that are not in `keep` (by path relative
 /// to `root`, `/` separators), and directories left empty.
+#[allow(clippy::disallowed_methods)] // (`wowlua dev`, a computer's)
 fn remove_others(
     root: &std::path::Path,
     dir: &std::path::Path,
@@ -586,7 +592,7 @@ fn remove_others(
         } else if crate::fsutil::relative_slash(&path, root)
             .is_none_or(|rel| !keep.contains_key(&rel))
         {
-            std::fs::remove_file(&path)?;
+            crate::host::remove_file(&path)?;
         }
     }
     Ok(())

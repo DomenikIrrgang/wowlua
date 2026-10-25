@@ -1,6 +1,9 @@
 //! Installing builds into WoW (spec §12.5): locating the installation, the
 //! client folders of each flavor, safe replacement and links.
 
+// Only a computer has this (spec M14, decision T394).
+#![allow(clippy::disallowed_methods)]
+
 use crate::build::BuildOutput;
 use crate::project::Project;
 use crate::{Session, fsutil};

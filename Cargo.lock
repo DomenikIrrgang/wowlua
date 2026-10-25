@@ -3462,6 +3462,7 @@ dependencies = [
  "wowlua-syntax",
  "wowlua-toc",
  "wowlua-types-gen",
+ "wowlua-vm",
  "wowlua-xml",
  "zip",
 ]
@@ -3680,6 +3681,18 @@ dependencies = [
  "smallvec",
  "wowlua-span",
  "wowlua-syntax",
+]
+
+[[package]]
+name = "wowlua-web"
+version = "0.11.0"
+dependencies = [
+ "flate2",
+ "serde_json",
+ "wasm-bindgen",
+ "wowlua-diagnostics",
+ "wowlua-driver",
+ "wowlua-lsp",
 ]
 
 [[package]]

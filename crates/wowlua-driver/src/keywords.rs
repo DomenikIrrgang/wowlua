@@ -90,12 +90,7 @@ pub fn build_time() -> i64 {
     std::env::var("SOURCE_DATE_EPOCH")
         .ok()
         .and_then(|s| s.parse().ok())
-        .unwrap_or_else(|| {
-            std::time::SystemTime::now()
-                .duration_since(std::time::UNIX_EPOCH)
-                .map(|d| d.as_secs() as i64)
-                .unwrap_or(0)
-        })
+        .unwrap_or_else(crate::host::unix_now)
 }
 
 fn git(dir: &Path, args: &[&str]) -> Option<String> {

@@ -3,6 +3,8 @@
 //! read is unchanged, and checks them again when an import's interface
 //! changed, so its errors are the ones a full check finds.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use std::path::Path;
 use wowlua_driver::{BuildCache, BuildRequest, Session, build_with_cache};
 

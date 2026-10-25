@@ -7,6 +7,9 @@
 //! the repository (one per game for `compat.per-game` projects), named from
 //! the packager's templates, plus its nolib zip with `compat.nolib-package`.
 
+// Only a computer has this (spec M14, decision T394).
+#![allow(clippy::disallowed_methods)]
+
 use crate::build::{BuildOutput, BuildRequest};
 use crate::{Project, Session};
 use std::collections::{BTreeMap, BTreeSet};

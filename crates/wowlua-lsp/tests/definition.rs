@@ -2,6 +2,8 @@
 //! globals and the game's API, from what the check found; and hover
 //! (decision T376): what a name is, with its doc comment.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use serde_json::{Value as Json, json};
 use std::path::{Path, PathBuf};
 

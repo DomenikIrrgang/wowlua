@@ -26,15 +26,15 @@ wowlua-stdlib = { path = "crates/wowlua-stdlib" }
 wowlua-types-gen = { path = "crates/wowlua-types-gen" }
 wowlua-api = { path = "crates/wowlua-api" }
 wowlua-sema = { path = "crates/wowlua-sema" }
-wowlua-driver = { path = "crates/wowlua-driver" }
-wowlua-pkg = { path = "crates/wowlua-pkg" }
+wowlua-driver = { path = "crates/wowlua-driver", default-features = false }
+wowlua-pkg = { path = "crates/wowlua-pkg", default-features = false }
 wowlua-vm = { path = "crates/wowlua-vm" }
 wowlua-engine = { path = "crates/wowlua-engine" }
 wowlua-test = { path = "crates/wowlua-test" }
 wowlua-debug = { path = "crates/wowlua-debug", default-features = false }
 wowlua-casc = { path = "crates/wowlua-casc" }
 wowlua-render = { path = "crates/wowlua-render" }
-wowlua-lsp = { path = "crates/wowlua-lsp" }
+wowlua-lsp = { path = "crates/wowlua-lsp", default-features = false }
 
 anyhow = "1.0"
 assert_cmd = "2.2"

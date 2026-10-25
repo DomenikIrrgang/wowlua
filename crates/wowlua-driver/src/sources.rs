@@ -151,7 +151,7 @@ pub fn forget_walks() {
 }
 
 fn modified(path: &Path) -> Option<std::time::SystemTime> {
-    std::fs::metadata(path).and_then(|m| m.modified()).ok()
+    crate::host::modified(path)
 }
 
 fn walk(root: &Path, dir: &Path, skip_dirs: &[PathBuf]) -> Vec<(String, PathBuf)> {
@@ -185,9 +185,21 @@ fn walk(root: &Path, dir: &Path, skip_dirs: &[PathBuf]) -> Vec<(String, PathBuf)
 /// Walks `dir`: its files, and the stamps that keep the walk valid.
 fn walk_now(root: &Path, dir: &Path, skip_dirs: &[PathBuf]) -> (Vec<(String, PathBuf)>, Stamps) {
     let stamps = std::cell::RefCell::new(Vec::new());
+    // An installed host (the browser's) has no ignore files and no git:
+    // every file that is not hidden.
+    if crate::host::installed().is_some() {
+        let files = crate::host::walk(dir, false, &|d| !skip_dirs.iter().any(|s| d == s));
+        let mut files: Vec<(String, PathBuf)> = files
+            .into_iter()
+            .filter_map(|path| Some((crate::fsutil::relative_slash(&path, root)?, path)))
+            .collect();
+        files.sort_by(|a, b| a.0.cmp(&b.0));
+        return (files, Vec::new());
+    }
     let walk_with = |git_ignore: bool| -> Vec<PathBuf> {
         let skip = skip_dirs.to_vec();
         let mut files = Vec::new();
+        #[allow(clippy::disallowed_methods)] // (no host installed: the disk's)
         for entry in ignore::WalkBuilder::new(dir)
             .hidden(true)
             .git_ignore(git_ignore)
@@ -247,10 +259,10 @@ fn git_dir(dir: &Path) -> Option<PathBuf> {
     let mut d = Some(dir);
     while let Some(here) = d {
         let dot = here.join(".git");
-        if dot.is_dir() {
+        if crate::host::is_dir(&dot) {
             return Some(dot);
         }
-        if let Ok(text) = std::fs::read_to_string(&dot)
+        if let Ok(text) = crate::host::read_to_string(&dot)
             && let Some(rest) = text.trim().strip_prefix("gitdir:")
         {
             return Some(here.join(rest.trim()));
@@ -263,6 +275,9 @@ fn git_dir(dir: &Path) -> Option<PathBuf> {
 /// The files under `dir` git tracks (absolute paths); empty outside a
 /// repository.
 pub(crate) fn tracked_files(dir: &Path) -> HashSet<PathBuf> {
+    if crate::host::installed().is_some() {
+        return HashSet::new();
+    }
     let Ok(output) = std::process::Command::new("git")
         .arg("-C")
         .arg(dir)
@@ -342,7 +357,7 @@ pub fn discover_tests(root: &Path, src: &str, out: &str, exclude: &GlobSet) -> V
         })
         .collect();
     let tests_dir = root.join(TESTS_DIR);
-    if tests_dir.is_dir() {
+    if crate::host::is_dir(&tests_dir) {
         found.extend(
             walk(root, &tests_dir, &[root.join(out)])
                 .into_iter()
@@ -496,9 +511,9 @@ pub fn given(
     src: &str,
 ) -> (Vec<Source>, Vec<Source>) {
     // Compared canonically (the given paths are canonical).
-    let root = &root.canonicalize().unwrap_or_else(|_| root.to_path_buf());
+    let root = &crate::host::canonicalize(root).unwrap_or_else(|_| root.to_path_buf());
     let src_dir = root.join(src);
-    let src_dir = src_dir.canonicalize().unwrap_or(src_dir);
+    let src_dir = crate::host::canonicalize(&src_dir).unwrap_or(src_dir);
     let mut sources: Vec<Source> = Vec::new();
     let mut declarations = Vec::new();
     for abs in files {
@@ -594,8 +609,8 @@ mod tests {
         super::remember_walks();
         let dir = tempfile::tempdir().unwrap();
         let src = dir.path().join("src");
-        std::fs::create_dir_all(src.join("ui")).unwrap();
-        std::fs::write(src.join("a.wowlua"), "").unwrap();
+        crate::host::create_dir_all(src.join("ui")).unwrap();
+        crate::host::write(src.join("a.wowlua"), "").unwrap();
         let walk = || {
             super::walk(dir.path(), &src, &[])
                 .into_iter()
@@ -606,9 +621,9 @@ mod tests {
         // remembered: the same again
         assert_eq!(walk(), ["src/a.wowlua"]);
         // a file in a subfolder, then one removed
-        std::fs::write(src.join("ui/b.wowlua"), "").unwrap();
+        crate::host::write(src.join("ui/b.wowlua"), "").unwrap();
         assert_eq!(walk(), ["src/a.wowlua", "src/ui/b.wowlua"]);
-        std::fs::remove_file(src.join("a.wowlua")).unwrap();
+        crate::host::remove_file(src.join("a.wowlua")).unwrap();
         assert_eq!(walk(), ["src/ui/b.wowlua"]);
         // forgotten: walked anew
         super::forget_walks();

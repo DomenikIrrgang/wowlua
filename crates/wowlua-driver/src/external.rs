@@ -34,7 +34,7 @@ pub fn build_external(
         .project_file
         .as_ref()
         .and_then(|(file, sub)| {
-            let text = std::fs::read_to_string(file).ok()?;
+            let text = crate::host::read_to_string(file).ok()?;
             Some((crate::pkgmeta::parse(&text).ok()?, sub.clone()))
         })
         .unwrap_or_default();
@@ -42,15 +42,8 @@ pub fn build_external(
     let archive = matches!(package.source, wowlua_pkg::Source::Archive { .. });
     let mut files: BTreeMap<String, Content> = BTreeMap::new();
     let mut info: Option<crate::keywords::KeywordInfo> = None;
-    for entry in walkdir::WalkDir::new(dir)
-        .into_iter()
-        .filter_entry(|e| e.depth() == 0 || !e.file_name().to_string_lossy().starts_with('.'))
-        .flatten()
-    {
-        if !entry.file_type().is_file() {
-            continue;
-        }
-        let Ok(rel) = entry.path().strip_prefix(dir) else {
+    for abs in crate::host::walk(dir, false, &|_| true) {
+        let Ok(rel) = abs.strip_prefix(dir) else {
             continue;
         };
         let rel = rel.to_string_lossy().replace('\\', "/");
@@ -62,7 +55,6 @@ pub fn build_external(
         if crate::keywords::plain_copy(&own.ignore, &[&in_root]) {
             continue;
         }
-        let abs = entry.path().to_path_buf();
         let processed = ext.packager
             && !archive
             && crate::keywords::processed_extension(&rel)
@@ -71,7 +63,7 @@ pub fn build_external(
             files.insert(rel, Content::Copy(abs));
             continue;
         }
-        let bytes = std::fs::read(&abs).unwrap_or_default();
+        let bytes = crate::host::read(&abs).unwrap_or_default();
         let normalized = crate::keywords::lf(&bytes);
         let lower = rel.to_ascii_lowercase();
         let out = match std::str::from_utf8(&normalized) {
@@ -135,7 +127,7 @@ pub fn build_external(
         .map(|f| {
             let content = match &files[f] {
                 Content::Bytes(b) => String::from_utf8_lossy(b).into_owned(),
-                Content::Copy(p) => std::fs::read(p)
+                Content::Copy(p) => crate::host::read(p)
                     .map(|b| String::from_utf8_lossy(&b).into_owned())
                     .unwrap_or_default(),
             };

@@ -38,7 +38,7 @@ impl Lockfile {
     /// Reads `wowlua.lock` from the package root, if present.
     pub fn read(root: &Path) -> Result<Option<Lockfile>, LockError> {
         let path = root.join(LOCKFILE);
-        let Ok(text) = std::fs::read_to_string(&path) else {
+        let Ok(text) = crate::host::read_to_string(&path) else {
             return Ok(None);
         };
         let value: serde_json::Value =
@@ -64,7 +64,7 @@ impl Lockfile {
     }
 
     pub fn write(&self, root: &Path) -> std::io::Result<()> {
-        std::fs::write(root.join(LOCKFILE), self.to_json())
+        crate::host::write(root.join(LOCKFILE), self.to_json())
     }
 }
 
@@ -133,7 +133,7 @@ mod tests {
         lock.write(dir.path()).unwrap();
         assert_eq!(Lockfile::read(dir.path()).unwrap(), Some(lock));
 
-        std::fs::write(dir.path().join(LOCKFILE), r#"{ "version": 99 }"#).unwrap();
+        crate::host::write(dir.path().join(LOCKFILE), r#"{ "version": 99 }"#).unwrap();
         assert!(matches!(
             Lockfile::read(dir.path()),
             Err(LockError::TooNew(99))

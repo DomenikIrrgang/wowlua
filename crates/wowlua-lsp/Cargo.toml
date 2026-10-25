@@ -18,6 +18,12 @@ wowlua-sema.workspace = true
 wowlua-span.workspace = true
 wowlua-syntax.workspace = true
 
+[features]
+default = ["native"]
+# The computer's: downloads, the C Lua (spec M14, decision T394). Without it
+# the server runs embedded in a page (`embedded`).
+native = ["wowlua-driver/native"]
+
 [lints]
 workspace = true
 

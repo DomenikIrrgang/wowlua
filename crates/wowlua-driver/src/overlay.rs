@@ -10,7 +10,7 @@ use std::sync::{Arc, RwLock};
 static OVERLAY: RwLock<Option<HashMap<PathBuf, Arc<[u8]>>>> = RwLock::new(None);
 
 fn key(path: &Path) -> PathBuf {
-    std::fs::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
+    crate::host::canonicalize(path).unwrap_or_else(|_| path.to_path_buf())
 }
 
 /// The editor's text of `path`.
@@ -49,7 +49,7 @@ pub fn read(path: &Path) -> std::io::Result<Vec<u8>> {
             return Ok(bytes.to_vec());
         }
     }
-    std::fs::read(path)
+    crate::host::read(path)
 }
 
 #[cfg(test)]
@@ -59,9 +59,9 @@ mod tests {
     #[test]
     fn the_editor_s_text_over_the_disk_s() {
         let dir = std::env::temp_dir().join(format!("wowlua-overlay-{}", std::process::id()));
-        std::fs::create_dir_all(&dir).unwrap();
+        crate::host::create_dir_all(&dir).unwrap();
         let file = dir.join("a.wowlua");
-        std::fs::write(&file, b"disk").unwrap();
+        crate::host::write(&file, b"disk").unwrap();
         assert_eq!(read(&file).unwrap(), b"disk");
         set(&file, b"editor".to_vec());
         assert_eq!(read(&file).unwrap(), b"editor");
@@ -71,6 +71,6 @@ mod tests {
         assert_eq!(read(&file).unwrap(), b"all");
         replace_all([]);
         assert_eq!(read(&file).unwrap(), b"disk");
-        std::fs::remove_dir_all(&dir).ok();
+        crate::host::remove_dir_all(&dir).ok();
     }
 }

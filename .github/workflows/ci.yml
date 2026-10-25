@@ -33,8 +33,10 @@ jobs:
       - name: Generated files are up to date
         run: cargo xtask check
 
-  # The layers that are to run in the browser (decisions T212, T301): the
-  # VM, the engine, the debugger's core, the asset reader, the renderer.
+  # The layers that are to run in the browser (decisions T212, T301, T394):
+  # the VM, the engine, the debugger's core, the asset reader, the renderer,
+  # the driver that checks, builds and formats a package, the language
+  # server and the playground's module (T395).
   wasm:
     runs-on: ubuntu-latest
     steps:
@@ -45,7 +47,7 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo check --target wasm32-unknown-unknown --no-default-features -p wowlua-vm -p wowlua-engine -p wowlua-debug -p wowlua-casc -p wowlua-render
+      - run: cargo check --target wasm32-unknown-unknown --no-default-features -p wowlua-vm -p wowlua-engine -p wowlua-debug -p wowlua-casc -p wowlua-render -p wowlua-driver -p wowlua-lsp -p wowlua-web
 
   test:
     strategy:
