@@ -486,6 +486,11 @@ with an incompatible type, is error E4012.
 
 Without version control, `<short hash>` is omitted (`X.Y.Z-dev`).
 
+In a workspace the tag is the root package's: a member whose version no tag
+on the commit names is built as one not on a tag (`X.Y.Z-alpha+<short
+hash>`) instead of stopping the build with E4319, which still applies to the
+root package (decision T388).
+
 A converted packager project (`compat.packager-keywords`) is versioned by its
 tags like the BigWigs packager: on a tag, `build.version` is the tag as it is
 (the packager's `@project-version@`) and E4319 does not apply (decision T158).

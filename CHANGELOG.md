@@ -2,6 +2,12 @@
 
 All notable changes to wowlua. Each minor version closes a milestone of the [roadmap](spec/roadmap.md).
 
+## 0.10.1 (2026-10-25)
+
+### Fixed
+
+- A release build of a workspace on a tag no longer stops with E4319 for members of another version: the tag is the root package's, and the members (example plugins, libraries) are built as untagged builds (`0.1.0-alpha+<hash>`). The root package's version must still match the tag.
+
 ## 0.10.0 (2026-10-25)
 
 ### New

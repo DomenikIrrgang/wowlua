@@ -3595,6 +3595,15 @@ fn build_version(
         .tags
         .iter()
         .any(|tag| tag.strip_prefix('v').unwrap_or(tag) == version);
+    // In a workspace the tag is the root package's: a member it does not
+    // name is built as one not on a tag (decision T388).
+    let member = project
+        .workspace_root
+        .as_ref()
+        .is_some_and(|w| *w != project.manifest.root);
+    if !matching && member {
+        return Some(format!("{version}-alpha{hash}"));
+    }
     if !matching {
         session.push(
             Diagnostic::error(

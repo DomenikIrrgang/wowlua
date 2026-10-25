@@ -857,3 +857,56 @@ fn workspaces_bundle_addons_and_keep_member_targets_apart() {
         .collect();
     assert_eq!(folders.into_iter().collect::<Vec<_>>(), ["Core", "Options"]);
 }
+
+/// A release build of a tagged workspace (decision T388): the tag is the
+/// root package's, so a member of another version is built as one not on a
+/// tag instead of stopping the build with E4319; the root still must match.
+#[test]
+fn a_tagged_workspace_builds_its_members_untagged() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = plain(dir.path().canonicalize().unwrap());
+    let home = root.join(".home");
+    write(
+        &root,
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "main", "version": "1.2.0", "wowlua": "^0.10" }, "addon": { "title": "Main" }, "flavors": { "camelot": {} },
+  "workspace": { "members": ["plugins/*"] } }"#,
+            ),
+            ("src/main.wowlua", "print(\"main\")\n"),
+            (
+                "plugins/Zed/wowlua.json",
+                r#"{ "package": { "name": "zed", "version": "0.1.0", "wowlua": "^0.10" }, "addon": { "title": "Zed" }, "flavors": { "camelot": {} } }"#,
+            ),
+            ("plugins/Zed/src/zed.wowlua", "print(\"zed\")\n"),
+            (".gitignore", "dist/\n.home/\n"),
+        ],
+    );
+    git(&root, &["init", "-q"]);
+    commit_all(&root, Some("v1.2.0"));
+    wowlua(&root, &home)
+        .args(["build", "--release"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("E4319").not());
+    let toc = |path: &str| fs::read_to_string(root.join(path)).unwrap();
+    assert!(
+        toc("dist/release/Main/Main.toc").contains("## Version: 1.2.0\n"),
+        "{}",
+        toc("dist/release/Main/Main.toc")
+    );
+    assert!(
+        toc("dist/release/Zed/Zed.toc").contains("## Version: 0.1.0-alpha+"),
+        "{}",
+        toc("dist/release/Zed/Zed.toc")
+    );
+    // the root's version must still be the tag's
+    git(&root, &["tag", "-d", "v1.2.0"]);
+    git(&root, &["tag", "v2.0.0"]);
+    wowlua(&root, &home)
+        .args(["build", "--release"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("error[E4319]"));
+}
