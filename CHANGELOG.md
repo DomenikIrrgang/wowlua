@@ -27,6 +27,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Changed
 
+- The language server remembers your addon between VS Code sessions: the first check after opening VS Code reuses what the last session found out about the files you haven't changed since, so errors show sooner (SuuUI: about 0.3 s instead of 0.4 s). It is kept in `~/.wowlua/cache/check/` (`wowlua cache clean` removes what no session used for 30 days, `--all` everything); set `WOWLUA_NO_CHECK_CACHE=1` to turn it off.
 - Class methods without a result annotation return what their body returns, as functions do: `obj:get()` is a `number` when `get` returns `self.count`, where it was `any`. Completion and hover show the results (`-> ()`, `-> number`), and code that used a method's results wrongly now gets the error. Generic methods still return `any` unless annotated.
 - `wowlua check`, `wowlua build` and `wowlua test` type-check code that passes event names (`EventName`) to generic functions much faster: SuuUI's workspace checks in two thirds of the time.
 - `wowlua test` uses your WoW installation's own data (item names, creatures, appearances) only with `--game-data`: by default a test sees only what it defines, so it gives the same result on every machine and in CI. Debug sessions and `wowlua screenshot` still show the game as your installation has it.

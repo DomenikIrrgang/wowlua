@@ -793,3 +793,658 @@ impl ModuleCache {
         );
     }
 }
+
+// ------------------------------------------------------------- on disk --
+
+/// The format of [`ModuleCache::to_bytes`]; another number is not read.
+const FORMAT: u32 = 1;
+
+/// Writes the cache's parts as bytes: numbers as LEB128, strings with
+/// their length.
+#[derive(Default)]
+struct Enc(Vec<u8>);
+
+impl Enc {
+    fn u(&mut self, mut n: u64) {
+        loop {
+            let b = (n & 0x7f) as u8;
+            n >>= 7;
+            if n == 0 {
+                self.0.push(b);
+                return;
+            }
+            self.0.push(b | 0x80);
+        }
+    }
+    fn b(&mut self, b: bool) {
+        self.0.push(u8::from(b));
+    }
+    fn s(&mut self, s: &str) {
+        self.u(s.len() as u64);
+        self.0.extend_from_slice(s.as_bytes());
+    }
+    fn opt_u(&mut self, n: Option<u64>) {
+        match n {
+            Some(n) => {
+                self.0.push(1);
+                self.u(n);
+            }
+            None => self.0.push(0),
+        }
+    }
+    fn ids(&mut self, ids: &[u32]) {
+        self.u(ids.len() as u64);
+        for &i in ids {
+            self.u(u64::from(i));
+        }
+    }
+    fn key(&mut self, k: &DefKey) {
+        match k {
+            DefKey::Global(n) => {
+                self.0.push(0);
+                self.s(n);
+            }
+            DefKey::Module(p, n) => {
+                self.0.push(1);
+                self.s(p);
+                self.s(n);
+            }
+        }
+    }
+    fn rest(&mut self, r: &Option<RestNode>) {
+        match r {
+            None => self.0.push(0),
+            Some(RestNode::Variadic(t)) => {
+                self.0.push(1);
+                self.u(u64::from(*t));
+            }
+            Some(RestNode::Pack(p)) => {
+                self.0.push(2);
+                self.u(u64::from(*p));
+            }
+        }
+    }
+    fn leaf(&mut self, t: &Ty) {
+        let tag = match t {
+            Ty::Any => 0,
+            Ty::Unknown => 1,
+            Ty::Never => 2,
+            Ty::Error => 3,
+            Ty::Nil => 4,
+            Ty::Boolean => 5,
+            Ty::Number => 6,
+            Ty::String => 7,
+            Ty::Table => 8,
+            Ty::Function => 9,
+            Ty::Thread => 10,
+            Ty::Userdata => 11,
+            Ty::Bool(b) => {
+                self.0.push(12);
+                self.b(*b);
+                return;
+            }
+            Ty::Num(n) => {
+                self.0.push(13);
+                self.0.extend_from_slice(&n.to_le_bytes());
+                return;
+            }
+            Ty::Str(s) => {
+                self.0.push(14);
+                self.s(s);
+                return;
+            }
+            // (no other type is a leaf)
+            _ => 0,
+        };
+        self.0.push(tag);
+    }
+    fn node(&mut self, n: &Node) {
+        match n {
+            Node::Leaf(t) => {
+                self.0.push(0);
+                self.leaf(t);
+            }
+            Node::Union(m) => {
+                self.0.push(1);
+                self.ids(m);
+            }
+            Node::Intersection(m) => {
+                self.0.push(2);
+                self.ids(m);
+            }
+            Node::Array(e) => {
+                self.0.push(3);
+                self.u(u64::from(*e));
+            }
+            Node::Map(k, v) => {
+                self.0.push(4);
+                self.u(u64::from(*k));
+                self.u(u64::from(*v));
+            }
+            Node::Record {
+                fields,
+                indexer,
+                open,
+            } => {
+                self.0.push(5);
+                self.u(fields.len() as u64);
+                for (name, t, optional, readonly) in fields {
+                    self.s(name);
+                    self.u(u64::from(*t));
+                    self.b(*optional);
+                    self.b(*readonly);
+                }
+                match indexer {
+                    Some((k, v)) => {
+                        self.0.push(1);
+                        self.u(u64::from(*k));
+                        self.u(u64::from(*v));
+                    }
+                    None => self.0.push(0),
+                }
+                self.b(*open);
+            }
+            Node::Func(f) => {
+                self.0.push(6);
+                self.ids(&f.type_params);
+                self.u(f.params.len() as u64);
+                for (name, t, optional) in &f.params {
+                    match name {
+                        Some(n) => {
+                            self.0.push(1);
+                            self.s(n);
+                        }
+                        None => self.0.push(0),
+                    }
+                    self.u(u64::from(*t));
+                    self.b(*optional);
+                }
+                self.rest(&f.rest);
+                self.ids(&f.ret);
+                self.rest(&f.ret_rest);
+                match f.predicate {
+                    Some((i, t)) => {
+                        self.0.push(1);
+                        self.u(i as u64);
+                        self.u(u64::from(t));
+                    }
+                    None => self.0.push(0),
+                }
+                self.b(f.unannotated);
+            }
+            Node::Named(k, args) => {
+                self.0.push(7);
+                self.key(k);
+                self.ids(args);
+            }
+            Node::ClassOf(k) => {
+                self.0.push(8);
+                self.key(k);
+            }
+            Node::ClassOfParam(p) => {
+                self.0.push(9);
+                self.u(u64::from(*p));
+            }
+            Node::EventArgs(e) => {
+                self.0.push(10);
+                self.u(u64::from(*e));
+            }
+            Node::KeyOf(e) => {
+                self.0.push(11);
+                self.u(u64::from(*e));
+            }
+            Node::IndexOf(o, k) => {
+                self.0.push(12);
+                self.u(u64::from(*o));
+                self.u(u64::from(*k));
+            }
+            Node::EnumMember(k, i) => {
+                self.0.push(13);
+                self.key(k);
+                self.u(u64::from(*i));
+            }
+            Node::Param(p) => {
+                self.0.push(14);
+                self.u(u64::from(*p));
+            }
+            Node::Secret(s) => {
+                self.0.push(15);
+                self.u(u64::from(*s));
+            }
+            Node::Module(p) => {
+                self.0.push(16);
+                self.s(p);
+            }
+        }
+    }
+    fn portable(&mut self, p: &Portable) {
+        self.u(p.nodes.len() as u64);
+        for n in &p.nodes {
+            self.node(n);
+        }
+        self.u(p.params.len() as u64);
+        for q in &p.params {
+            self.s(&q.name);
+            self.b(q.pack);
+            self.opt_u(q.constraint.map(u64::from));
+        }
+        self.u(p.exports.len() as u64);
+        for (name, n) in &p.exports {
+            self.s(name);
+            self.u(u64::from(*n));
+        }
+        self.u(p.caps.len() as u64);
+        for (name, c) in &p.caps {
+            self.s(name);
+            self.u(*c as u64);
+        }
+        self.u(p.results.len() as u64);
+        for (k, name, n) in &p.results {
+            self.key(k);
+            self.s(name);
+            self.u(u64::from(*n));
+        }
+    }
+    fn names(&mut self, names: &Option<Vec<String>>) {
+        match names {
+            Some(v) => {
+                self.0.push(1);
+                self.u(v.len() as u64);
+                for n in v {
+                    self.s(n);
+                }
+            }
+            None => self.0.push(0),
+        }
+    }
+}
+
+/// Reads what [`Enc`] wrote; `None` at anything else.
+struct Dec<'a>(&'a [u8]);
+
+impl Dec<'_> {
+    fn byte(&mut self) -> Option<u8> {
+        let (&b, rest) = self.0.split_first()?;
+        self.0 = rest;
+        Some(b)
+    }
+    fn u(&mut self) -> Option<u64> {
+        let mut n = 0u64;
+        for shift in (0..64).step_by(7) {
+            let b = self.byte()?;
+            n |= u64::from(b & 0x7f) << shift;
+            if b & 0x80 == 0 {
+                return Some(n);
+            }
+        }
+        None
+    }
+    fn u32(&mut self) -> Option<u32> {
+        u32::try_from(self.u()?).ok()
+    }
+    /// A count, no more than the bytes left could hold (a damaged one
+    /// allocates nothing).
+    fn len(&mut self) -> Option<usize> {
+        let n = usize::try_from(self.u()?).ok()?;
+        (n <= self.0.len()).then_some(n)
+    }
+    fn b(&mut self) -> Option<bool> {
+        match self.byte()? {
+            0 => Some(false),
+            1 => Some(true),
+            _ => None,
+        }
+    }
+    fn s(&mut self) -> Option<Box<str>> {
+        let n = self.len()?;
+        let (s, rest) = self.0.split_at(n);
+        self.0 = rest;
+        Some(std::str::from_utf8(s).ok()?.into())
+    }
+    fn opt_u(&mut self) -> Option<Option<u64>> {
+        match self.byte()? {
+            0 => Some(None),
+            1 => Some(Some(self.u()?)),
+            _ => None,
+        }
+    }
+    fn ids(&mut self) -> Option<Vec<u32>> {
+        let n = self.len()?;
+        (0..n).map(|_| self.u32()).collect()
+    }
+    fn key(&mut self) -> Option<DefKey> {
+        match self.byte()? {
+            0 => Some(DefKey::Global(self.s()?)),
+            1 => Some(DefKey::Module(self.s()?, self.s()?)),
+            _ => None,
+        }
+    }
+    fn rest(&mut self) -> Option<Option<RestNode>> {
+        match self.byte()? {
+            0 => Some(None),
+            1 => Some(Some(RestNode::Variadic(self.u32()?))),
+            2 => Some(Some(RestNode::Pack(self.u32()?))),
+            _ => None,
+        }
+    }
+    fn leaf(&mut self) -> Option<Ty> {
+        Some(match self.byte()? {
+            0 => Ty::Any,
+            1 => Ty::Unknown,
+            2 => Ty::Never,
+            3 => Ty::Error,
+            4 => Ty::Nil,
+            5 => Ty::Boolean,
+            6 => Ty::Number,
+            7 => Ty::String,
+            8 => Ty::Table,
+            9 => Ty::Function,
+            10 => Ty::Thread,
+            11 => Ty::Userdata,
+            12 => Ty::Bool(self.b()?),
+            13 => {
+                if self.0.len() < 8 {
+                    return None;
+                }
+                let (n, rest) = self.0.split_at(8);
+                self.0 = rest;
+                Ty::Num(u64::from_le_bytes(n.try_into().ok()?))
+            }
+            14 => Ty::Str(self.s()?),
+            _ => return None,
+        })
+    }
+    fn node(&mut self) -> Option<Node> {
+        Some(match self.byte()? {
+            0 => Node::Leaf(self.leaf()?),
+            1 => Node::Union(self.ids()?),
+            2 => Node::Intersection(self.ids()?),
+            3 => Node::Array(self.u32()?),
+            4 => Node::Map(self.u32()?, self.u32()?),
+            5 => {
+                let n = self.len()?;
+                let mut fields = Vec::with_capacity(n);
+                for _ in 0..n {
+                    fields.push((self.s()?, self.u32()?, self.b()?, self.b()?));
+                }
+                let indexer = match self.byte()? {
+                    0 => None,
+                    1 => Some((self.u32()?, self.u32()?)),
+                    _ => return None,
+                };
+                Node::Record {
+                    fields,
+                    indexer,
+                    open: self.b()?,
+                }
+            }
+            6 => {
+                let type_params = self.ids()?;
+                let n = self.len()?;
+                let mut params = Vec::with_capacity(n);
+                for _ in 0..n {
+                    let name = match self.byte()? {
+                        0 => None,
+                        1 => Some(self.s()?),
+                        _ => return None,
+                    };
+                    params.push((name, self.u32()?, self.b()?));
+                }
+                let rest = self.rest()?;
+                let ret = self.ids()?;
+                let ret_rest = self.rest()?;
+                let predicate = match self.byte()? {
+                    0 => None,
+                    1 => Some((usize::try_from(self.u()?).ok()?, self.u32()?)),
+                    _ => return None,
+                };
+                Node::Func(Box::new(FuncNode {
+                    type_params,
+                    params,
+                    rest,
+                    ret,
+                    ret_rest,
+                    predicate,
+                    unannotated: self.b()?,
+                }))
+            }
+            7 => Node::Named(self.key()?, self.ids()?),
+            8 => Node::ClassOf(self.key()?),
+            9 => Node::ClassOfParam(self.u32()?),
+            10 => Node::EventArgs(self.u32()?),
+            11 => Node::KeyOf(self.u32()?),
+            12 => Node::IndexOf(self.u32()?, self.u32()?),
+            13 => Node::EnumMember(self.key()?, self.u32()?),
+            14 => Node::Param(self.u32()?),
+            15 => Node::Secret(self.u32()?),
+            16 => Node::Module(self.s()?),
+            _ => return None,
+        })
+    }
+    fn portable(&mut self) -> Option<Portable> {
+        let n = self.len()?;
+        let mut nodes = Vec::with_capacity(n);
+        for _ in 0..n {
+            nodes.push(self.node()?);
+        }
+        // (every child an earlier node, as the reader takes them)
+        let fine = |i: u32, at: usize| (i as usize) < at;
+        for (at, node) in nodes.iter().enumerate() {
+            let ok = match node {
+                Node::Union(m) | Node::Intersection(m) | Node::Named(_, m) => {
+                    m.iter().all(|&i| fine(i, at))
+                }
+                Node::Array(e) | Node::EventArgs(e) | Node::KeyOf(e) | Node::Secret(e) => {
+                    fine(*e, at)
+                }
+                Node::Map(k, v) | Node::IndexOf(k, v) => fine(*k, at) && fine(*v, at),
+                Node::Record {
+                    fields, indexer, ..
+                } => {
+                    fields.iter().all(|f| fine(f.1, at))
+                        && indexer.is_none_or(|(k, v)| fine(k, at) && fine(v, at))
+                }
+                Node::Func(f) => {
+                    let rest = |r: &Option<RestNode>| match r {
+                        Some(RestNode::Variadic(t)) => fine(*t, at),
+                        _ => true,
+                    };
+                    f.params.iter().all(|p| fine(p.1, at))
+                        && f.ret.iter().all(|&t| fine(t, at))
+                        && rest(&f.rest)
+                        && rest(&f.ret_rest)
+                        && f.predicate.is_none_or(|(_, t)| fine(t, at))
+                }
+                _ => true,
+            };
+            if !ok {
+                return None;
+            }
+        }
+        let n = self.len()?;
+        let mut params = Vec::with_capacity(n);
+        for _ in 0..n {
+            params.push(ParamNode {
+                name: self.s()?,
+                pack: self.b()?,
+                constraint: self.opt_u()?.map(u32::try_from).transpose().ok()?,
+            });
+        }
+        let count = nodes.len();
+        let p = params.len();
+        let in_nodes = |i: u32| (i as usize) < count;
+        let in_params = |i: u32| (i as usize) < p;
+        // (every parameter a node names is one written)
+        for node in &nodes {
+            let ok = match node {
+                Node::ClassOfParam(i) | Node::Param(i) => in_params(*i),
+                Node::Func(f) => {
+                    let pack = |r: &Option<RestNode>| match r {
+                        Some(RestNode::Pack(q)) => in_params(*q),
+                        _ => true,
+                    };
+                    f.type_params.iter().all(|&q| in_params(q))
+                        && pack(&f.rest)
+                        && pack(&f.ret_rest)
+                }
+                _ => true,
+            };
+            if !ok {
+                return None;
+            }
+        }
+        if params
+            .iter()
+            .any(|q| q.constraint.is_some_and(|c| !in_nodes(c)))
+        {
+            return None;
+        }
+        let n = self.len()?;
+        let mut exports = Vec::with_capacity(n);
+        for _ in 0..n {
+            let name = self.s()?;
+            let i = self.u32()?;
+            in_nodes(i).then_some(())?;
+            exports.push((name, i));
+        }
+        let n = self.len()?;
+        let mut caps = Vec::with_capacity(n);
+        for _ in 0..n {
+            caps.push((self.s()?, usize::try_from(self.u()?).ok()?));
+        }
+        let n = self.len()?;
+        let mut results = Vec::with_capacity(n);
+        for _ in 0..n {
+            let (k, name, i) = (self.key()?, self.s()?, self.u32()?);
+            in_nodes(i).then_some(())?;
+            results.push((k, name, i));
+        }
+        Some(Portable {
+            nodes,
+            params,
+            exports,
+            caps,
+            results,
+        })
+    }
+    fn names(&mut self) -> Option<Option<Vec<String>>> {
+        match self.byte()? {
+            0 => Some(None),
+            1 => {
+                let n = self.len()?;
+                (0..n)
+                    .map(|_| self.s().map(String::from))
+                    .collect::<Option<Vec<_>>>()
+                    .map(Some)
+            }
+            _ => None,
+        }
+    }
+}
+
+impl ModuleCache {
+    /// The cache as bytes, for a later process (spec compiler §13.9 Phase
+    /// 2): each module's entry and each file's globals. In path order, so
+    /// the same cache gives the same bytes.
+    pub fn to_bytes(&self) -> Vec<u8> {
+        let mut e = Enc::default();
+        e.u(u64::from(FORMAT));
+        let mut paths: Vec<&Box<str>> = self.entries.keys().collect();
+        paths.sort();
+        e.u(paths.len() as u64);
+        for path in paths {
+            let m = &self.entries[path];
+            e.s(path);
+            e.u(m.hash);
+            e.u(m.context);
+            e.opt_u(m.interface);
+            e.u(m.deps.len() as u64);
+            for d in &m.deps {
+                e.s(&d.path);
+                e.u(d.bytes);
+                e.opt_u(d.interface);
+                e.opt_u(d.types);
+            }
+            match &m.exports {
+                Some(p) => {
+                    e.0.push(1);
+                    e.portable(p);
+                }
+                None => e.0.push(0),
+            }
+        }
+        let mut files: Vec<&Box<str>> = self.globals.keys().collect();
+        files.sort();
+        e.u(files.len() as u64);
+        for file in files {
+            let (hash, g) = &self.globals[file];
+            e.s(file);
+            e.u(*hash);
+            e.names(&g.decorated);
+            e.names(&g.assigned);
+        }
+        e.0
+    }
+
+    /// A cache [`ModuleCache::to_bytes`] wrote; `None` for bytes of another
+    /// format, or cut short or damaged.
+    pub fn from_bytes(bytes: &[u8]) -> Option<ModuleCache> {
+        let mut d = Dec(bytes);
+        if d.u()? != u64::from(FORMAT) {
+            return None;
+        }
+        let mut cache = ModuleCache::default();
+        let n = d.len()?;
+        for _ in 0..n {
+            let path = d.s()?;
+            let hash = d.u()?;
+            let context = d.u()?;
+            let interface = d.opt_u()?;
+            let count = d.len()?;
+            let mut deps = Vec::with_capacity(count);
+            for _ in 0..count {
+                deps.push(Dep {
+                    path: d.s()?,
+                    bytes: d.u()?,
+                    interface: d.opt_u()?,
+                    types: d.opt_u()?,
+                });
+            }
+            let exports = match d.byte()? {
+                0 => None,
+                1 => Some(d.portable()?),
+                _ => return None,
+            };
+            cache.entries.insert(
+                path,
+                ModuleEntry {
+                    hash,
+                    deps,
+                    context,
+                    exports,
+                    interface,
+                },
+            );
+        }
+        let n = d.len()?;
+        for _ in 0..n {
+            let file = d.s()?;
+            let hash = d.u()?;
+            let globals = super::FileGlobals {
+                decorated: d.names()?,
+                assigned: d.names()?,
+            };
+            cache.globals.insert(file, (hash, globals));
+        }
+        d.0.is_empty().then_some(cache)
+    }
+
+    /// The modules kept.
+    pub fn len(&self) -> usize {
+        self.entries.len()
+    }
+
+    pub fn is_empty(&self) -> bool {
+        self.entries.is_empty()
+    }
+}

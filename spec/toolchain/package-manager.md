@@ -266,6 +266,13 @@ under three quarters of the limit. `cache clean` removes entries unused for
 §12.7](cli.md#127-configuration); decision T208). Debug builds of wowlua compile anyway and
 check that the two results agree.
 
+**Checked modules.** The language server keeps each package's checked
+modules in `…/cache/check/<hash>` (one file per package; [compiler
+§13.9](compiler.md#139-caching-and-incremental-builds), decision T386).
+A file's modification time is its last use; files unused for 30 days are
+removed by the language server and by `cache clean`, `--all` removes all
+of them. `WOWLUA_NO_CHECK_CACHE=1` turns it off.
+
 ## 10.8 Workspaces
 
 A workspace groups several packages, typically an addon suite such as a core

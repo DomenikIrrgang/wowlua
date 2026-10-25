@@ -39,6 +39,8 @@ pub struct BuildCache {
     pub(crate) written: Option<Written>,
     /// What the last build took from the cache.
     pub stats: CacheStats,
+    /// The hash of the modules' bytes as last read from or written to disk.
+    persisted: Option<blake3::Hash>,
 }
 
 /// What `luacheck::check` gave for a file: it reads only the bytes, and the
@@ -264,6 +266,157 @@ impl BuildCache {
         self.lua_checks.retain(|_, c| c.generation == generation);
         self.fronts.retain(|_, f| f.generation == generation);
     }
+}
+
+/// The start of a module cache file: what it is and its format.
+const MODULES_MAGIC: &[u8; 8] = b"WLMODS01";
+
+/// What wrote a module cache file: this wowlua, down to its executable
+/// (a rebuilt wowlua of the same version reads none of another's).
+fn identity() -> blake3::Hash {
+    let mut h = blake3::Hasher::new();
+    h.update(env!("CARGO_PKG_VERSION").as_bytes());
+    if let Ok(meta) = std::env::current_exe().and_then(std::fs::metadata) {
+        h.update(&meta.len().to_le_bytes());
+        if let Ok(t) = meta.modified()
+            && let Ok(since) = t.duration_since(std::time::UNIX_EPOCH)
+        {
+            h.update(&since.as_nanos().to_le_bytes());
+        }
+    }
+    h.finalize()
+}
+
+/// Where the language server keeps a package's module cache between runs
+/// (spec compiler §13.9 Phase 2): `$WOWLUA_HOME/cache/check/<hash of the
+/// manifest's path>`; `None` with `WOWLUA_NO_CHECK_CACHE` set (to anything
+/// but `0`) or without a wowlua home.
+pub fn module_cache_path(manifest: &std::path::Path) -> Option<std::path::PathBuf> {
+    if std::env::var_os("WOWLUA_NO_CHECK_CACHE").is_some_and(|v| !v.is_empty() && v != "0") {
+        return None;
+    }
+    let cache = wowlua_pkg::Cache::new()?;
+    Some(module_cache_in(&cache.root.join("check"), manifest))
+}
+
+/// The module cache file of `manifest` in `dir`.
+pub fn module_cache_in(dir: &std::path::Path, manifest: &std::path::Path) -> std::path::PathBuf {
+    let name = blake3::hash(manifest.to_string_lossy().as_bytes()).to_hex();
+    dir.join(&name.as_str()[..32])
+}
+
+impl BuildCache {
+    /// Reads the modules' exports a language server kept on disk for this
+    /// package (`path`), into a cache that has built nothing yet: the next
+    /// build takes them when its build-wide inputs are the ones they were
+    /// checked with, and drops them otherwise. Whether it read any.
+    pub fn load_modules(&mut self, path: &std::path::Path) -> bool {
+        if self.config.is_some() {
+            return false;
+        }
+        let Ok(bytes) = std::fs::read(path) else {
+            return false;
+        };
+        let head = MODULES_MAGIC.len() + 64;
+        if bytes.len() < head
+            || &bytes[..MODULES_MAGIC.len()] != MODULES_MAGIC
+            || bytes[MODULES_MAGIC.len()..MODULES_MAGIC.len() + 32] != *identity().as_bytes()
+        {
+            return false;
+        }
+        let mut config = [0u8; 32];
+        config.copy_from_slice(&bytes[MODULES_MAGIC.len() + 32..head]);
+        let Some(modules) = wowlua_sema::check::portable::ModuleCache::from_bytes(&bytes[head..])
+        else {
+            return false;
+        };
+        self.persisted = Some(blake3::hash(&bytes[head..]));
+        self.config = Some(blake3::Hash::from_bytes(config));
+        self.modules = modules;
+        // (used now: kept from pruning)
+        touch(path);
+        true
+    }
+
+    /// Writes the modules' exports to `path` for a later language server,
+    /// unless they are as read or last written. Whether it wrote them.
+    pub fn save_modules(&mut self, path: &std::path::Path) -> std::io::Result<bool> {
+        let Some(config) = self.config else {
+            return Ok(false);
+        };
+        let body = self.modules.to_bytes();
+        let hash = blake3::hash(&body);
+        if self.persisted == Some(hash) {
+            return Ok(false);
+        }
+        let mut bytes = Vec::with_capacity(MODULES_MAGIC.len() + 64 + body.len());
+        bytes.extend_from_slice(MODULES_MAGIC);
+        bytes.extend_from_slice(identity().as_bytes());
+        bytes.extend_from_slice(config.as_bytes());
+        bytes.extend_from_slice(&body);
+        if let Some(dir) = path.parent() {
+            std::fs::create_dir_all(dir)?;
+        }
+        // (written whole, then renamed: another server reads all or none)
+        let partial = path.with_extension(format!("{}.partial", std::process::id()));
+        std::fs::write(&partial, &bytes)?;
+        if let Err(e) = std::fs::rename(&partial, path) {
+            let _ = std::fs::remove_file(&partial);
+            return Err(e);
+        }
+        self.persisted = Some(hash);
+        if let Some(dir) = path.parent() {
+            prune(dir);
+        }
+        Ok(true)
+    }
+
+    /// The modules whose exports are kept.
+    pub fn kept_modules(&self) -> usize {
+        self.modules.len()
+    }
+}
+
+/// How long a package's module cache is kept unused.
+const MODULES_UNUSED: std::time::Duration = std::time::Duration::from_secs(30 * 24 * 60 * 60);
+
+/// Marks a module cache file as used now, at most once a day (its
+/// modification time is its last use).
+fn touch(path: &std::path::Path) {
+    let day = std::time::Duration::from_secs(24 * 60 * 60);
+    let old = std::fs::metadata(path)
+        .and_then(|m| m.modified())
+        .is_ok_and(|t| t.elapsed().is_ok_and(|age| age >= day));
+    if old && let Ok(file) = std::fs::File::options().append(true).open(path) {
+        let _ = file.set_modified(std::time::SystemTime::now());
+    }
+}
+
+/// Removes the module caches of packages no server checked for 30 days
+/// (and files a server left half-written), once per process.
+fn prune(dir: &std::path::Path) {
+    static PRUNED: std::sync::Once = std::sync::Once::new();
+    PRUNED.call_once(|| {
+        let Ok(entries) = std::fs::read_dir(dir) else {
+            return;
+        };
+        for entry in entries.flatten() {
+            let path = entry.path();
+            let partial = path.extension().is_some_and(|e| e == "partial");
+            let limit = if partial {
+                std::time::Duration::from_secs(60 * 60)
+            } else {
+                MODULES_UNUSED
+            };
+            let unused = entry
+                .metadata()
+                .and_then(|m| m.modified())
+                .is_ok_and(|t| t.elapsed().is_ok_and(|age| age >= limit));
+            if unused {
+                let _ = std::fs::remove_file(&path);
+            }
+        }
+    });
 }
 
 /// The hash of what every file of a build depends on: the request, the

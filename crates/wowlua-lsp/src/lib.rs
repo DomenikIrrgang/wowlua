@@ -763,7 +763,10 @@ pub fn run_worker() -> std::io::Result<()> {
     catch_panics();
     // (folders are walked again only when what is in them changed)
     wowlua_driver::remember_walks();
-    let mut warm = check::Warm::default();
+    // (the packages' modules kept on disk: a new server's first check
+    // takes the unchanged ones, spec compiler §13.9 Phase 2)
+    let fresh = || check::Warm::persistent(check::Store::Home);
+    let mut warm = fresh();
     let stdout = std::io::stdout();
     for line in std::io::stdin().lock().lines() {
         let line = line?;
@@ -772,7 +775,7 @@ pub fn run_worker() -> std::io::Result<()> {
                 check::worker(&mut warm, &request)
             }))
             .unwrap_or_else(|e| {
-                warm = check::Warm::default();
+                warm = fresh();
                 json!({ "error": panic_message(&*e) })
             }),
             Err(e) => json!({ "error": format!("a request that is no JSON: {e}") }),

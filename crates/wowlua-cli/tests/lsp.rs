@@ -29,6 +29,7 @@ fn the_server_checks_in_a_child_and_answers() {
     let mut server = Command::new(assert_cmd::cargo::cargo_bin("wowlua"))
         .arg("lsp")
         .current_dir(dir.path())
+        .env("WOWLUA_HOME", dir.path().join(".wowlua-home"))
         .stdin(Stdio::piped())
         .stdout(Stdio::piped())
         .stderr(Stdio::null())

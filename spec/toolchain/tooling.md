@@ -593,7 +593,13 @@ edit that leaves a module's interface as it was (a function's body) checks
 that module alone; modules that make `typeof` aliases are always checked.
 A first pass counts every file for the globals the package assigns, as a
 full check does, and checks only its files and their imports. Full checks
-take nothing from it: they keep it current and stay exact. A check that
+take nothing from it: they keep it current and stay exact. After a full
+check the checker writes these module entries, with each file's globals,
+to `$WOWLUA_HOME/cache/check/` (one file per package, by its manifest's
+path; decision T386), and a new checker reads them before its first check
+of the package, so the first pass after the editor starts or the checker
+is replaced takes the unchanged modules as a running one does (compiler
+§13.9). A check that
 crashes, fails or runs longer than two minutes ends the checker (it is
 started again for the next check) and is logged to the editor; the server
 goes on with the last results. After 300 checks the checker is replaced

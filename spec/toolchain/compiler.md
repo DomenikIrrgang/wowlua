@@ -415,14 +415,27 @@ user error otherwise:
   a whole, but links each file whose bytes are those of the last build (and
   that is on disk as that build left it) from the old folder instead of
   writing it, and rewrites only the source maps that changed.
-- **Phase 2.** Persistent per-module cache in `dist/.cache/` keyed by the
-  module's content hash, the compiler version, the effective configuration
-  hash (profile, target overrides, feature set), the flavor, the flavor-table
-  version, the locked types-package versions, the lockfile hash, and the
-  export-interface hashes of its imports. A module is re-checked only if its
-  own key changes. Dependents are re-checked only if its **export interface
-  hash** (the types of its exports) changes. A different compiler version
-  invalidates the whole cache.
+- **Phase 2: the language server's modules on disk** (decision T386). The
+  language server's checker keeps each module's exports between checks
+  (Tooling §16.2, decision T375); after a full check of a package it writes
+  them, with each file's globals, to
+  `$WOWLUA_HOME/cache/check/<hash of the manifest's path>`, and a new
+  checker reads that file before its first check of the package. The file
+  holds what wrote it (the wowlua version and its executable's size and
+  modification time: a rebuilt wowlua reads none of another's) and the
+  hash of the build-wide inputs it was checked with (the request, the
+  manifests, the lockfile, the resolved dependencies, the workspace); a
+  file of another wowlua, a damaged or cut-short one, is not read, and
+  other build-wide inputs drop what it held at the first build. Each
+  module's entry then holds or not as in memory: by its bytes, the
+  package's context and each import's interface fingerprint, so a module
+  edited while no server ran is checked again, and so are its importers
+  when its interface changed. It is written whole and renamed into place
+  (concurrent servers read all of one or none), only when it changed, and
+  touched at most once a day when read; files unused for 30 days are
+  removed. `WOWLUA_NO_CHECK_CACHE` turns it off. Batch commands (`wowlua
+  check`, `build`, `test`) check every module, as the language server's
+  full checks do.
 - **LSP.** Uses the same queries in a demand-driven database (`salsa` is the
   intended framework), sharing code with the batch compiler.
 

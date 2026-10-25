@@ -138,6 +138,47 @@ pub struct Warm {
     caches: HashMap<PathBuf, wowlua_driver::BuildCache>,
     /// Checks run, for the server's restarts.
     pub checks: usize,
+    /// Where each package's modules are kept between runs (spec compiler
+    /// §13.9 Phase 2): `None` keeps them in memory only.
+    pub store: Option<Store>,
+}
+
+/// Where a checker keeps packages' module caches on disk.
+#[derive(Clone, Debug)]
+pub enum Store {
+    /// `$WOWLUA_HOME/cache/check/` (the language server's).
+    Home,
+    /// A folder of its own (the tests').
+    Dir(PathBuf),
+}
+
+impl Store {
+    fn path(&self, manifest: &Path) -> Option<PathBuf> {
+        match self {
+            Store::Home => wowlua_driver::module_cache_path(manifest),
+            Store::Dir(dir) => Some(wowlua_driver::module_cache_in(dir, manifest)),
+        }
+    }
+}
+
+impl Warm {
+    /// A checker that keeps the packages' modules on disk too.
+    pub fn persistent(store: Store) -> Warm {
+        Warm {
+            store: Some(store),
+            ..Warm::default()
+        }
+    }
+
+    /// The modules kept for `manifest`'s package, for the tests.
+    pub fn kept_modules(&self, manifest: &Path) -> usize {
+        self.caches.get(manifest).map_or(0, |c| c.kept_modules())
+    }
+
+    /// What the last build of `manifest`'s package took from its cache.
+    pub fn stats(&self, manifest: &Path) -> Option<wowlua_driver::CacheStats> {
+        self.caches.get(manifest).map(|c| c.stats)
+    }
 }
 
 /// [`check`], handing the session to `done` (a process about to end
@@ -216,8 +257,32 @@ fn check_and(
             };
             let _ = match warm.as_deref_mut() {
                 Some(w) => {
-                    let cache = w.caches.entry(project.manifest.path.clone()).or_default();
-                    wowlua_driver::build_with_cache(&mut session, &project, &request, cache)
+                    let store = w
+                        .store
+                        .as_ref()
+                        .and_then(|s| s.path(&project.manifest.path));
+                    let cache = w
+                        .caches
+                        .entry(project.manifest.path.clone())
+                        .or_insert_with(|| {
+                            // (a fresh server: the modules an earlier one kept)
+                            let mut cache = wowlua_driver::BuildCache::default();
+                            if let Some(path) = &store {
+                                cache.load_modules(path);
+                            }
+                            cache
+                        });
+                    let built =
+                        wowlua_driver::build_with_cache(&mut session, &project, &request, cache);
+                    // a full check keeps every module: kept for the next
+                    // server too
+                    if focus.is_none()
+                        && let Some(path) = &store
+                        && let Err(e) = cache.save_modules(path)
+                    {
+                        eprintln!("cannot keep the checked modules in {}: {e}", path.display());
+                    }
+                    built
                 }
                 None => wowlua_driver::build(&mut session, &project, &request),
             };

@@ -474,6 +474,11 @@ The test framework runs on wowlua's own emulation of the WoW client
   the AST check covers types, decorators and declarations; the suite formats
   the repository's 148 `.wowlua` and `.d.wowlua` files twice.
 - S7 Persistent incremental cache (phase 2), shared with the LSP.
+  Done 2026-10-25 (T386): the language server's checker writes each
+  package's module cache to `$WOWLUA_HOME/cache/check/` after a full check
+  and a new checker reads it, so the first check after the editor starts
+  takes the unchanged modules (SuuUI: about 280 ms instead of 400 ms; 175 ms
+  warm). Batch commands keep checking every module.
 - S8 `wowlua lsp` and the VS Code extension, with a test explorer, coverage in
   the editor and "run test" code lenses; code examples in doc comments run as
   tests (T222). Started 2026-10-24 (T368, T369): diagnostics as you type,

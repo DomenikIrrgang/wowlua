@@ -145,3 +145,92 @@ fn a_taken_modules_methods_keep_their_inferred_results() {
     assert_eq!(taken, 1, "a taken again");
     assert!(!codes.contains(&"E2001".to_string()), "{codes:?}");
 }
+
+/// The modules kept on disk (spec compiler §13.9 Phase 2): a new checker
+/// that reads them takes the unchanged ones as the one that wrote them did,
+/// checks a changed one again, and reads nothing of a file that is damaged
+/// or was written for other build-wide inputs.
+#[test]
+fn a_new_checker_takes_the_modules_kept_on_disk() {
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path();
+    let manifest = |strict: bool| {
+        format!(
+            r#"{{ "package": {{ "name": "focus-disk", "version": "0.1.0", "wowlua": "^0.10" }}, "flavors": {{ "camelot": {{}} }}{} }}"#,
+            if strict {
+                r#", "check": { "mode": "strict" }"#
+            } else {
+                ""
+            }
+        )
+    };
+    std::fs::write(root.join("wowlua.json"), manifest(false)).unwrap();
+    std::fs::create_dir_all(root.join("src")).unwrap();
+    let a = root.join("src/a.wowlua");
+    let b = root.join("src/b.wowlua");
+    let c = root.join("src/c.wowlua");
+    std::fs::write(
+        &a,
+        "export class Counter\n    count: number = 0\n    function get()\n        return self.count\n    end\nend\n\nexport function make(): Counter\n    return Counter.new()\nend\n",
+    )
+    .unwrap();
+    std::fs::write(
+        &b,
+        "import make from \"./a\"\n\nexport local counter = make()\nexport local names: { [string]: number } = { one = 1 }\n",
+    )
+    .unwrap();
+    std::fs::write(
+        &c,
+        "import counter, names from \"./b\"\n\nlocal s: string = counter:get()\nlocal n: number = names.one ?? 0\nprint(s, n)\n",
+    )
+    .unwrap();
+    let store = root.join("cache/modules");
+    let mut first = BuildCache::default();
+    let (full, _) = check(root, &mut first, None);
+    assert_eq!(full, vec!["E2001".to_string()], "get gives a number");
+    assert!(first.save_modules(&store).unwrap(), "written");
+    assert!(
+        !first.save_modules(&store).unwrap(),
+        "the same: not written again"
+    );
+    // a new checker: `a` and `b` taken, the same errors
+    let mut second = BuildCache::default();
+    assert!(second.load_modules(&store));
+    assert!(!second.save_modules(&store).unwrap(), "read back the same");
+    let (codes, taken) = check(root, &mut second, Some(&c));
+    assert_eq!(taken, 2, "a and b taken");
+    assert_eq!(codes, full);
+    // `a` changed while no checker ran: checked again, as is `b`
+    std::fs::write(
+        &a,
+        "export class Counter\n    count: number = 0\n    function get()\n        return tostring(self.count)\n    end\nend\n\nexport function make(): Counter\n    return Counter.new()\nend\n",
+    )
+    .unwrap();
+    let mut third = BuildCache::default();
+    assert!(third.load_modules(&store));
+    let (codes, taken) = check(root, &mut third, Some(&c));
+    assert_eq!(taken, 0, "a and b checked");
+    assert_eq!(codes, Vec::<String>::new());
+    // other build-wide inputs (the manifest): nothing taken
+    check(root, &mut third, None);
+    third.save_modules(&store).unwrap();
+    std::fs::write(root.join("wowlua.json"), manifest(true)).unwrap();
+    let mut fourth = BuildCache::default();
+    assert!(fourth.load_modules(&store));
+    let (_, taken) = check(root, &mut fourth, Some(&c));
+    assert_eq!(taken, 0, "another manifest");
+    // a damaged file is not read
+    std::fs::write(root.join("wowlua.json"), manifest(false)).unwrap();
+    let bytes = std::fs::read(&store).unwrap();
+    for cut in [0, 7, 40, 72, bytes.len() / 2, bytes.len() - 1] {
+        std::fs::write(&store, &bytes[..cut]).unwrap();
+        assert!(!BuildCache::default().load_modules(&store), "cut at {cut}");
+    }
+    let mut flipped = bytes.clone();
+    flipped[9] ^= 1;
+    std::fs::write(&store, &flipped).unwrap();
+    assert!(
+        !BuildCache::default().load_modules(&store),
+        "another wowlua's"
+    );
+}

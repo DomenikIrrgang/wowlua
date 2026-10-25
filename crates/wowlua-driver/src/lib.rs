@@ -44,7 +44,7 @@ use wowlua_span::SourceDb;
 
 pub use build::{BuildOutput, BuildRequest, Only, TestFile, build, build_with_cache};
 pub use compile::{Optimizations, Optimized, optimize_and_emit};
-pub use incremental::{BuildCache, CacheStats};
+pub use incremental::{BuildCache, CacheStats, module_cache_in, module_cache_path};
 pub use luacheck::LuaOutOfMemory;
 pub use project::{
     ExternalAddon, LoadOptions, Project, Status, load_project, load_projects, standalone_project,

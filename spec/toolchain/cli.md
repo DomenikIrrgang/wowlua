@@ -373,7 +373,9 @@ credential store and use `config.json` only (headless machines, tests).
 
 Environment variables override config values: `WOWLUA_HOME`,
 `WOWLUA_WOW_PATH`, `WOWLUA_JOBS` and `WOWLUA_JOBS_MEMORY` (MiB),
-`WOWLUA_NO_COMPILE_CACHE` (set to anything but `0`: no compile cache), the token
+`WOWLUA_NO_COMPILE_CACHE` (set to anything but `0`: no compile cache),
+`WOWLUA_NO_CHECK_CACHE` (the same: the language server keeps no modules on
+disk), the token
 variables in [Publishing §11.1.3](publishing.md#1113-tokens), and `NO_COLOR`.
 `--jobs` overrides both.
 
