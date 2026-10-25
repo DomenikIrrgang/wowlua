@@ -14,6 +14,8 @@ export type SoundChannel = "Master" | "SFX" | "Music" | "Ambience" | "Dialog"
 --- a file path or file ID.
 export type SoundRef = number | string
 
+--- Options of `warn`: the sound to play and its channel, the text's color,
+--- whether to flash the taskbar icon, and the throttle.
 export type WarnOptions = {
     sound?: SoundRef,
     channel?: SoundChannel,

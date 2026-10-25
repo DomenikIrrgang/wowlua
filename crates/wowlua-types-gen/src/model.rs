@@ -61,6 +61,23 @@ pub struct Decls {
     pub globals: IndexMap<String, String>,
     /// Globals only a load-on-demand Blizzard addon defines: name → addon.
     pub global_addons: IndexMap<String, String>,
+    /// What the functions do, written as their doc comments
+    /// (`crate::docs`).
+    pub docs: crate::docs::Docs,
+}
+
+/// The doc comment of the function `key` names, if documented.
+fn doc_comment(out: &mut String, docs: &crate::docs::Docs, key: &str, indent: &str) {
+    let Some(doc) = docs.get(key) else {
+        return;
+    };
+    for line in crate::docs::lines(doc) {
+        if line.is_empty() {
+            let _ = writeln!(out, "{indent}---");
+        } else {
+            let _ = writeln!(out, "{indent}--- {line}");
+        }
+    }
 }
 
 const LUA_KEYWORDS: &[&str] = &[
@@ -137,6 +154,7 @@ impl Decls {
                 );
             }
             for (m, sigs) in &class.methods {
+                doc_comment(&mut out, &self.docs, &self.method_key(name, m), "    ");
                 for sig in sigs {
                     let _ = writeln!(
                         out,
@@ -148,6 +166,7 @@ impl Decls {
                 }
             }
             for (m, sigs) in &class.statics {
+                doc_comment(&mut out, &self.docs, &self.method_key(name, m), "    ");
                 for sig in sigs {
                     let _ = writeln!(
                         out,
@@ -161,6 +180,7 @@ impl Decls {
             out.push_str("end\n\n");
         }
         for (name, sigs) in &self.functions {
+            doc_comment(&mut out, &self.docs, name, "");
             for sig in sigs {
                 let _ = writeln!(
                     out,
@@ -186,6 +206,7 @@ impl Decls {
         for (name, ns) in &self.namespaces {
             let _ = writeln!(out, "declare namespace {name}");
             for (f, sigs) in &ns.functions {
+                doc_comment(&mut out, &self.docs, &format!("{name}.{f}"), "    ");
                 for sig in sigs {
                     let _ = writeln!(
                         out,
@@ -248,6 +269,35 @@ impl Decls {
             let _ = writeln!(out, "declare event {name}({})", list.join(", "));
         }
         out
+    }
+
+    /// The documentation key of method `m` of `class`: its own, else the
+    /// first parent's (bases, then the classes it copies members from)
+    /// that documents it (`Region:SetPoint` is `ScriptRegionResizing`'s).
+    fn method_key(&self, class: &str, m: &str) -> String {
+        let own = format!("{class}:{m}");
+        if self.docs.contains_key(&own) {
+            return own;
+        }
+        let mut seen = BTreeSet::new();
+        let mut todo = vec![class.to_string()];
+        while let Some(c) = todo.pop() {
+            if !seen.insert(c.clone()) {
+                continue;
+            }
+            let key = format!("{c}:{m}");
+            if self.docs.contains_key(&key) {
+                return key;
+            }
+            if let Some(def) = self.classes.get(&c) {
+                // (nearest first: the base, then the others in order)
+                for p in def.also.iter().rev().chain(def.bases.iter().rev()) {
+                    let p = p.split('<').next().unwrap_or(p).trim().to_string();
+                    todo.push(p);
+                }
+            }
+        }
+        own
     }
 
     /// Every type name the declarations refer to (first path segment).

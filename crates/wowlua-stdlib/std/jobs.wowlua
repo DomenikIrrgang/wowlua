@@ -8,9 +8,15 @@ import type Subscription from "wowlua:events"
 import report, callIn from "wowlua:errors"
 import * as secret from "wowlua:secret"
 
+--- How large a share of the frame budget a job gets: `"high"` runs four
+--- times as often as `"low"`, `"normal"` twice.
 export type Priority = "high" | "normal" | "low"
+--- Where a job is: `"paused"` while combat pauses it, `"failed"` after
+--- an error.
 export type Status = "pending" | "running" | "paused" | "done" | "failed" | "cancelled"
 
+--- Options of `start`: a name for error reports, the priority (default
+--- `"normal"`), and callbacks for the results, an error and progress.
 export type JobOptions = {
     name?: string,
     priority?: Priority,
@@ -27,6 +33,7 @@ export interface JobContext
     function check()
     --- Yields until the next frame.
     function yield()
+    --- Yields for at least `seconds` of game time.
     function sleep(seconds: number)
     --- Waits for an event or message; returns its payload.
     function waitFor(event: string): ...any
@@ -34,10 +41,17 @@ export interface JobContext
     function progress(p: number)
 end
 
+--- A started job: cancel it, or read its status, progress (0 to 1) and,
+--- once done, the values its function returned.
 export interface Job
+    --- Stops a pending or running job: it never runs again, and an event it
+    --- waits for is unregistered.
     function cancel()
+    --- Where the job is: `"paused"` while combat pauses it.
     function status(): Status
+    --- The progress its function last reported (0 to 1), 1 once done.
     function progress(): number
+    --- What its function returned, once done.
     function result(): ...any
 end
 

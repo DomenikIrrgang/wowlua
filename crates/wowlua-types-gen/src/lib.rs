@@ -3,6 +3,7 @@
 //! annotations (Ketho's vscode-wow-api), written as `.d.wowlua`.
 
 pub mod blizzard;
+pub mod docs;
 pub mod framexml;
 pub mod infer;
 pub mod luals;
@@ -1149,6 +1150,7 @@ fn wiki_type(ty: &str, known: &HashSet<String>) -> String {
     out
 }
 
+#[allow(clippy::too_many_arguments)]
 pub fn generate(
     flavors: &[FlavorDocs],
     annotations: &[(String, String)],
@@ -1157,11 +1159,20 @@ pub fn generate(
     compiler_types: &HashSet<String>,
     wiki: &[(String, String)],
     client: &ClientFacts,
+    sources: &docs::Sources,
 ) -> Result<Output, String> {
+    let (wiki_docs, written) = (&sources.wiki, &sources.written);
     let mut per_flavor: Vec<(String, String, Decls)> = Vec::new();
     let mut api = Vec::new();
+    // what the functions do: the wiki's, completed by each flavor's own
+    // documentation
+    let mut flavor_docs: HashMap<String, docs::Docs> = HashMap::new();
     for f in flavors {
-        api.push((f.id.clone(), blizzard::read_json(&f.files)?));
+        let json = blizzard::read_json(&f.files)?;
+        let mut d = docs::merge(wiki_docs, &docs::from_blizzard(&json));
+        docs::add_written(&mut d, written);
+        flavor_docs.insert(f.id.clone(), d);
+        api.push((f.id.clone(), json));
         let mut d = blizzard::read(&f.files)?;
         corrections(&mut d);
         d.functions.retain(|n, _| !skip.contains(n));
@@ -2279,6 +2290,7 @@ pub fn generate(
         recorded_corrections(&mut d);
         client_types(&mut d, client, id == client.flavor);
         d.without_any();
+        d.docs = flavor_docs.remove(&id).unwrap_or_else(|| wiki_docs.clone());
         out_flavors.push((id, d.emit(&header)));
     }
     let header = format!(
@@ -2287,6 +2299,8 @@ pub fn generate(
     recorded_corrections(&mut shared);
     client_types(&mut shared, client, true);
     shared.without_any();
+    shared.docs = wiki_docs.clone();
+    docs::add_written(&mut shared.docs, written);
     Ok(Output {
         shared: shared.emit(&header),
         flavors: out_flavors,

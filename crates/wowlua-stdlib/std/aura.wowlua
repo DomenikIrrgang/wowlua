@@ -113,22 +113,36 @@ end
 --- The setters of the engine's aura buttons (call them in `initialize`;
 --- the engine then drives what they show, secrets and combat included).
 export interface AuraButtonApi
+    --- Shows the aura's icon in `texture`.
     function SetIcon(texture: Texture)
+    --- Shows the aura's stack count in `fontString`.
     function SetApplicationCount(fontString: FontString, options: table?)
+    --- Shows the aura's time left in `fontString`.
     function SetDurationText(fontString: FontString, options: table?)
+    --- Shows the aura's time left as `statusBar`'s value.
     function SetDurationBar(statusBar: StatusBar, options: table?)
+    --- Shows the aura's duration as a cooldown swipe on `cooldown`.
     function SetDurationCooldown(cooldown: Cooldown)
+    --- Colours `texture` by the aura's dispel type (the client's debuff
+    --- border with `options.style`); returns its index.
     function AddDispelTypeTexture(texture: Texture, options: table?)
+    --- Shows the aura's spell name in `fontString`.
     function SetSpellName(fontString: FontString)
+    --- Shows the name of the aura's caster in `fontString`.
     function SetCasterName(fontString: FontString, options: table?)
+    --- The clicks that cancel the aura (`"RightButtonUp"`).
     function SetCancelAuraButtons(buttons: string?)
+    --- Whether the button's tooltip is hidden in combat.
     function SetHideTooltipInCombat(hide: boolean)
+    --- Where the button's tooltip is anchored, and its offset.
     function SetTooltipAnchorPoint(point: FramePoint, x: number?, y: number?)
 end
 
 --- An engine aura button.
 export type AuraButton = Button & AuraButtonApi
 
+--- One group of a container's buttons: the auras matching `filter`, kept
+--- apart from the other groups under `key`.
 export type AuraGroup = {
     key: string,
     filter: AuraFilter,
@@ -153,6 +167,8 @@ export type AuraGroup = {
     initialize?: (button: AuraButton) -> (),
 }
 
+--- Options of `container`: the unit whose auras show, its groups, and
+--- how the icons are sized and laid out.
 export type ContainerOptions = {
     unit: UnitToken,
     groups: AuraGroup[],
@@ -173,14 +189,24 @@ export type ContainerOptions = {
 --- A container: the engine's frame and what can change later.
 export interface AuraContainer
     readonly frame: Frame
+    --- Shows the auras of `unit` (shows a released container again).
     function setUnit(unit: UnitToken)
+    --- Rescans the unit's auras.
     function refresh()
+    --- How many buttons the group `key` shows at most; a lazy group with no
+    --- room yet goes to the engine now. A secret `max` is ignored.
     function setGroupMax(key: string, max: number)
+    --- Shows only these spell IDs in the group `key` (nil: every spell its
+    --- filter matches).
     function setGroupSpells(key: string, spells: number[]?)
+    --- The aura filter of the group `key`.
     function setGroupFilter(key: string, filter: AuraFilter)
     --- The group's icon size; its buttons are resized out of combat.
     function setGroupSize(key: string, size: number)
+    --- The corner the icons start from and the directions they grow (default
+    --- `{ "RIGHT", "DOWN" }`).
     function setFlow(anchor: FramePoint, growth: string[]?)
+    --- The width before icons wrap to the next line (nil: never).
     function setLineWidth(width: number?)
     --- Hidden, without a unit and deaf until the next `setUnit` (engine
     --- containers cannot be freed: keep released ones for reuse).

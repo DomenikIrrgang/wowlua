@@ -23,14 +23,17 @@ export function info(spell: SpellRef): SpellInfo?
     return C_Spell.GetSpellInfo(spell)
 end
 
+--- The spell's name, or nil.
 export function name(spell: SpellRef): string?
     return C_Spell.GetSpellName(spell)
 end
 
+--- The spell's icon (a file ID), or nil.
 export function icon(spell: SpellRef): number?
     return (C_Spell.GetSpellTexture(spell))
 end
 
+--- The spell's chat link, or nil.
 export function link(spell: SpellRef): string?
     return C_Spell.GetSpellLink(spell)
 end

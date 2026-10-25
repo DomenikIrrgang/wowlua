@@ -195,6 +195,8 @@ end
 local skipped = decorator(function(e: Entry, reason: string?)
     e.skip = type(reason) == "string" and label(reason) or ""
 end)
+--- `@skip` or `@skip(reason)`: the test is not run and is reported as
+--- skipped (with the reason).
 export overload function skip(fn: function, ctx: DecoratorContext?)
 export overload function skip(reason: string?): TestDecorator
 export function skip(a: string | function | nil, ctx: DecoratorContext?): TestDecorator?
@@ -205,6 +207,7 @@ end
 local onlyThese = decorator(function(e: Entry, _: string?)
     e.only = true
 end)
+--- `@only`: in a file with `@only` tests, only they run.
 export function only(fn: function, ctx: DecoratorContext?)
     onlyThese(fn, ctx)
 end
@@ -249,10 +252,12 @@ end
 
 --- `@beforeEach`, `@afterEach`: run around every test of the file.
 export const beforeEach: TestDecorator = hook("beforeEach")
+--- `@afterEach`: runs after every test of the file.
 export const afterEach: TestDecorator = hook("afterEach")
 --- `@beforeAll`, `@afterAll`: run once, before the first and after the
 --- last test of the file.
 export const beforeAll: TestDecorator = hook("beforeAll")
+--- `@afterAll`: runs once, after the last test of the file.
 export const afterAll: TestDecorator = hook("afterAll")
 
 --- Per-file runner settings: `lifecycle = "manual"` leaves logging in to

@@ -292,6 +292,18 @@ impl Env<'_> {
         }
     }
 
+    /// The completions found are module `m`'s members: each is declared as
+    /// its export.
+    pub(crate) fn export_targets(&mut self, m: usize) {
+        if let Some(found) = self.completing.as_mut().and_then(|c| c.found.as_mut()) {
+            for item in &mut found.items {
+                if item.target.is_none() {
+                    item.target = Some(DefTarget::Export(m, item.label.as_str().into()));
+                }
+            }
+        }
+    }
+
     fn prefix(&self) -> Box<str> {
         self.completing
             .as_ref()

@@ -18,6 +18,7 @@ import after from "wowlua:timer"
 local _, ns = ...
 local wl = ns.__wowlua
 
+--- A frame's anchor point (`"TOPLEFT"`, `"CENTER"`, …): the game's `FramePoint`.
 export type AnchorPoint = FramePoint
 
 --- Where a frame is: always relative to UIParent.
@@ -34,8 +35,11 @@ export type FramePosition = {
     layouts?: { [string]: FramePosition },
 }
 
+--- A modifier key.
 export type Modifier = "SHIFT" | "CTRL" | "ALT"
 
+--- Options of `movable`: where the position is saved, and how the frame
+--- is dragged, resized and scaled.
 export type MovableOptions = {
     --- A wowlua:saved store; `store[key]` is `FramePosition?` (E8340).
     store: table,
@@ -58,9 +62,12 @@ export type MovableOptions = {
     editMode?: { label: string, lock?: boolean },
 }
 
+--- What `movable` returns: locks the frame, and saves, restores or
+--- resets its position.
 export interface MovableHandle
     --- A locked frame cannot be moved, resized or scaled with the mouse.
     function lock(locked: boolean)
+    --- Whether the frame is locked (see `lock`).
     function isLocked(): boolean
     --- Back to the frame's original anchor, size and scale (forgets the
     --- saved position).
@@ -640,16 +647,27 @@ end
 --- name or a key (`asButton(frame.CloseButton)`), whose types the
 --- declarations may not know.
 export function asRegion(v: unknown): Region? if isA(v, "Region") then return v :: Region end return nil end
+--- `v` as a `Frame`, else nil.
 export function asFrame(v: unknown): Frame? if isA(v, "Frame") then return v :: Frame end return nil end
+--- `v` as a `Button`, else nil.
 export function asButton(v: unknown): Button? if isA(v, "Button") then return v :: Button end return nil end
+--- `v` as a `CheckButton`, else nil.
 export function asCheckButton(v: unknown): CheckButton? if isA(v, "CheckButton") then return v :: CheckButton end return nil end
+--- `v` as an `EditBox`, else nil.
 export function asEditBox(v: unknown): EditBox? if isA(v, "EditBox") then return v :: EditBox end return nil end
+--- `v` as a `ScrollFrame`, else nil.
 export function asScrollFrame(v: unknown): ScrollFrame? if isA(v, "ScrollFrame") then return v :: ScrollFrame end return nil end
+--- `v` as a `Slider`, else nil.
 export function asSlider(v: unknown): Slider? if isA(v, "Slider") then return v :: Slider end return nil end
+--- `v` as a `StatusBar`, else nil.
 export function asStatusBar(v: unknown): StatusBar? if isA(v, "StatusBar") then return v :: StatusBar end return nil end
+--- `v` as a `Cooldown`, else nil.
 export function asCooldown(v: unknown): Cooldown? if isA(v, "Cooldown") then return v :: Cooldown end return nil end
+--- `v` as a `FontString`, else nil.
 export function asFontString(v: unknown): FontString? if isA(v, "FontString") then return v :: FontString end return nil end
+--- `v` as a `Texture`, else nil.
 export function asTexture(v: unknown): Texture? if isA(v, "Texture") then return v :: Texture end return nil end
+--- `v` as a `Browser`, else nil.
 export function asBrowser(v: unknown): Browser? if isA(v, "Browser") then return v :: Browser end return nil end
 
 --- A global frame by its name (`"CharacterFrame"`), nil when there is

@@ -101,10 +101,14 @@ export function onAddonLoaded(name: string, fn: () -> ())
     end)
 end
 
+--- Whether this addon's `ADDON_LOADED` has fired (its SavedVariables are
+--- loaded).
 export function isLoaded(): boolean
     return loaded
 end
 
+--- Whether the player has logged in: `PLAYER_LOGIN` has fired, or the
+--- addon loaded after it.
 export function isLoggedIn(): boolean
     return loggedIn
 end

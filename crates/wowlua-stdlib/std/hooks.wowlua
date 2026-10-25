@@ -6,6 +6,9 @@
 import onAddonLoaded from "wowlua:lifecycle"
 import callOwned from "wowlua:errors"
 
+--- Options of `hook` and `hookScript`: `addon` installs the hook once that
+--- load-on-demand addon has loaded; `owner` is passed to error listeners
+--- as the hook's owner.
 export type Options = { addon?: string, owner?: unknown }
 
 --- What `@hook(…)` and `@hookScript(…)` give: the decorator, which hooks the

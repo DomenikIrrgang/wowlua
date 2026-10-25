@@ -5,8 +5,11 @@
 import callOwned from "wowlua:errors"
 import * as secret from "wowlua:secret"
 
+--- A registered handler: `active` until `cancel` unregisters it.
 export interface Subscription
     active: boolean
+    --- Unregisters the handler (the event too, when it was the last one);
+    --- `active` becomes false.
     function cancel()
 end
 
@@ -282,6 +285,8 @@ export interface UnitWatch
     --- Registers every event for `unit` (and `unit2`); nil (or a secret)
     --- unregisters them.
     function setUnit(unit: string?, unit2: string?)
+    --- Stops the watch: unregisters its events and frees its frame for the
+    --- next watch.
     function cancel()
 end
 
@@ -393,6 +398,7 @@ export function watchUnit(events: string[], handler: (...any) -> (), owner: unkn
     return w
 end
 
+--- Cancels `sub` (the same as `sub:cancel()`).
 export function off(sub: Subscription)
     sub:cancel()
 end

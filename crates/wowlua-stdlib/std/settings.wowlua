@@ -19,6 +19,7 @@ local wl = ns.__wowlua
 export interface SettingsCategory
     --- The category's id (set once the page exists).
     id: (number | string)?
+    --- Opens the options page (once combat ends, if in combat).
     function open()
     --- Re-reads every control from the store.
     function refresh()

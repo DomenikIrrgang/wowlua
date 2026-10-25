@@ -13,6 +13,8 @@ import * as secret from "wowlua:secret"
 
 local addonName = ...
 
+--- Options of `confirm`: the text, the button labels (default Accept and
+--- Cancel; a secret label shows the default), and the callbacks.
 export type ConfirmOptions = {
     text: string | Secret<string>,
     accept?: string,
@@ -21,6 +23,8 @@ export type ConfirmOptions = {
     onCancel?: () -> (),
 }
 
+--- Options of `prompt`: the text, the edit box's default, a check of the
+--- value, and the callbacks.
 export type PromptOptions = {
     text: string | Secret<string>,
     --- A secret default is left out (edit boxes refuse secrets).
@@ -34,6 +38,7 @@ export type PromptOptions = {
 --- A secret `value` shows an empty box.
 export type ExportOptions = { title: string | Secret<string>, value: string | Secret<string> }
 
+--- Options of `import`: the title, and `onImport` with the pasted text.
 export type ImportOptions = {
     title: string | Secret<string>,
     --- A returned string is shown as an error and the dialog stays open.

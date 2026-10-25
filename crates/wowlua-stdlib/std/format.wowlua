@@ -4,6 +4,7 @@
 -- strings where the client's formatter takes them.
 import * as secret from "wowlua:secret"
 
+--- Options of `duration`.
 export type DurationOptions = {
     --- Leave out the seconds (from a minute on).
     noSeconds?: boolean,
@@ -31,6 +32,7 @@ export function clock(seconds: number, hours: boolean?): string
     return SecondsToClock(math.max(0, seconds), hours)
 end
 
+--- Options of `ago`.
 export type AgoOptions = {
     --- Unit words ("3 days ago") instead of letters ("3 d ago").
     long?: boolean,

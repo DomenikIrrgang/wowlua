@@ -186,3 +186,33 @@ fn names_show_their_types_and_doc_comments() {
     assert!(h.contains("name: string"), "{h}");
     assert!(c.finish());
 }
+
+/// `M.f` of `import * as M`: the module's export, and its doc comment.
+#[test]
+fn a_module_imports_members_lead_to_its_exports() {
+    let (_dir, main, util) = project();
+    let uri = wowlua_lsp::text::uri_of(&main);
+    let text = "import * as u from \"./util\"\n\nprint(u.greet(\"you\"))\n";
+    let mut c = Client::start();
+    c.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": uri, "languageId": "wowlua", "version": 1, "text": text } }),
+    );
+    let r = c.request(
+        "textDocument/definition",
+        json!({ "textDocument": { "uri": uri }, "position": at(text, "greet", 0) }),
+    );
+    let first = &r["result"][0];
+    assert!(first.is_object(), "no definition: {r}");
+    let (p, t) = covered(first);
+    assert!(p == util && t == "greet", "{p:?} {t}");
+    let h = c.request(
+        "textDocument/hover",
+        json!({ "textDocument": { "uri": uri }, "position": at(text, "greet", 0) }),
+    );
+    let shown = h["result"]["contents"]["value"]
+        .as_str()
+        .unwrap_or_default();
+    assert!(shown.contains("Says hello to `name`."), "{h}");
+    assert!(c.finish());
+}

@@ -8,6 +8,8 @@ import type Pool from "wowlua:pool"
 import callIn from "wowlua:errors"
 import * as secret from "wowlua:secret"
 
+--- Options of `create`: the row height, the rows' class, and how a row
+--- shows an entry.
 export type ListOptions<T, R> = {
     rowHeight: number,
     --- The rows' widget class.
@@ -20,14 +22,22 @@ export type ListOptions<T, R> = {
     spacing?: number,
 }
 
+--- A list made by `create`: its data, scrolling and selection.
 export interface ListView<T>
     readonly frame: Frame
+    --- Shows `data`, one row per entry (a list the addon may not read shows
+    --- empty).
     function setData(data: T[])
     --- Shows the visible entries again (after they changed).
     function refresh()
+    --- Scrolls to the entry at `index`.
     function scrollTo(index: number)
+    --- Calls `fn` with the entry and its index when a row is left-clicked
+    --- (replaces the previous handler).
     function onSelect(fn: (entry: T, index: number) -> ())
+    --- The entry last selected, or nil.
     function selected(): T?
+    --- The list last given to `setData`.
     function data(): T[]
 end
 

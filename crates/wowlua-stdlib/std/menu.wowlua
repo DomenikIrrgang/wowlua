@@ -15,15 +15,19 @@ end
 export class MenuBuilder
     private readonly desc: SharedMenuDescriptionProxy
 
+    --- A builder adding entries to the menu description `desc` (`open` and
+    --- `submenu` make them).
     constructor(desc: SharedMenuDescriptionProxy)
         self.desc = desc
     end
 
+    --- A title entry.
     function title(text: string | Secret<string>): MenuBuilder
         self.desc:CreateTitle(label(text))
         return self
     end
 
+    --- A button entry; `onClick` runs when it is clicked.
     function button(text: string | Secret<string>, onClick: () -> ()): MenuBuilder
         self.desc:CreateButton(label(text), function()
             callIn({ component = "menu: button" }, onClick)
@@ -32,6 +36,8 @@ export class MenuBuilder
         return self
     end
 
+    --- A checkbox entry: `isChecked` says whether it is checked (a secret
+    --- answer reads as unchecked), `toggle` runs when it is clicked.
     function checkbox(text: string | Secret<string>, isChecked: () -> (boolean | Secret<boolean>), toggle: () -> ()): MenuBuilder
         self.desc:CreateCheckbox(label(text), function() return secret.flag(isChecked()) end, function()
             callIn({ component = "menu: checkbox" }, toggle)
@@ -40,6 +46,8 @@ export class MenuBuilder
         return self
     end
 
+    --- A radio entry: `isSelected` says whether it is selected (a secret
+    --- answer reads as unselected), `select` runs when it is clicked.
     function radio(text: string | Secret<string>, isSelected: () -> (boolean | Secret<boolean>), select: () -> ()): MenuBuilder
         self.desc:CreateRadio(label(text), function() return secret.flag(isSelected()) end, function()
             callIn({ component = "menu: radio" }, select)
@@ -48,11 +56,13 @@ export class MenuBuilder
         return self
     end
 
+    --- A divider line.
     function divider(): MenuBuilder
         self.desc:CreateDivider()
         return self
     end
 
+    --- Empty space between entries.
     function spacer(): MenuBuilder
         self.desc:CreateSpacer()
         return self

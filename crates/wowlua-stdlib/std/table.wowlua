@@ -52,6 +52,7 @@ local function separate(v: any, path: { [table]: boolean }): (boolean, any)
     return true, out
 end
 
+--- Options of `copy`.
 export type CopyOptions = {
     --- `false`: every occurrence of a nested table gets a table of its own
     --- (no two places of the copy share one; a cycle is an error).
@@ -171,6 +172,7 @@ export function keys<K, V>(t: { [K]: V }, less: ((a: K, b: K) -> boolean)?): K[]
     return out
 end
 
+--- The values, in no particular order (`pairs`'s).
 export function values<K, V>(t: { [K]: V }): V[]
     const out: V[] = {}
     if not secret.readable(t) then
@@ -194,10 +196,13 @@ export function count(t: table): number
     return n
 end
 
+--- Whether the table has no entries (pairs, not just the array part); a
+--- table the addon may not read counts as empty.
 export function isEmpty(t: table): boolean
     return not secret.readable(t) or next(t) == nil
 end
 
+--- A new list of the elements `keep` accepts, in their order.
 export function filter<T>(list: T[], keep: (v: T, i: number) -> boolean): T[]
     const out: T[] = {}
     if not secret.readable(list) then
@@ -211,6 +216,7 @@ export function filter<T>(list: T[], keep: (v: T, i: number) -> boolean): T[]
     return out
 end
 
+--- A new list of `fn`'s result for each element, at the same index.
 export function map<T, U>(list: T[], fn: (v: T, i: number) -> U): U[]
     const out: U[] = {}
     if not secret.readable(list) then
@@ -250,6 +256,7 @@ end
 
 -- Ordering ------------------------------------------------------------------
 
+--- An order: whether `a` comes before `b`.
 export type Less<T> = (a: T, b: T) -> boolean
 
 -- The default order: numbers and strings by `<`, values of different types

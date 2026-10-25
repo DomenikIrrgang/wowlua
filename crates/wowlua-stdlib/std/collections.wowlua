@@ -19,6 +19,8 @@ export class RingBuffer<T>
     private head: number = 1
     private n: number = 0
 
+    --- An empty buffer for `capacity` values (rounded down; less than 1 is an
+    --- error).
     constructor(capacity: number)
         if capacity < 1 then
             error("RingBuffer: the capacity must be at least 1", 3)
@@ -81,14 +83,17 @@ export class RingBuffer<T>
         return self.items[self:slot(i)]
     end
 
+    --- How many values the buffer holds.
     function size(): number
         return self.n
     end
 
+    --- Whether the buffer holds `capacity` values (the next push drops one).
     function isFull(): boolean
         return self.n == self.capacity
     end
 
+    --- Removes every value.
     function clear()
         for i = 1, self.n do
             self.items[self:slot(i)] = nil
@@ -125,6 +130,8 @@ export class Heap<T>
     private items: T[] = {}
     private readonly less: Less<T>
 
+    --- An empty heap ordered by `less` (default: numbers and strings
+    --- ascending).
     constructor(less: Less<T>?)
         self.less = order(less)
     end
@@ -161,6 +168,7 @@ export class Heap<T>
         end
     end
 
+    --- Adds `v` (nil is ignored).
     function push(v: T)
         if v == nil then
             return
@@ -213,10 +221,12 @@ export class Heap<T>
         return false
     end
 
+    --- How many values the heap holds.
     function size(): number
         return #self.items
     end
 
+    --- Removes every value.
     function clear()
         self.items = {}
     end
@@ -238,6 +248,8 @@ export class LruCache<K, V>
     private oldest?: Entry<K, V>
     private n: number = 0
 
+    --- An empty cache for `capacity` entries (rounded down; less than 1 is an
+    --- error).
     constructor(capacity: number)
         if capacity < 1 then
             error("LruCache: the capacity must be at least 1", 3)
@@ -345,10 +357,12 @@ export class LruCache<K, V>
         return true
     end
 
+    --- How many entries the cache holds.
     function size(): number
         return self.n
     end
 
+    --- Removes every entry.
     function clear()
         self.entries = {}
         self.newest = nil

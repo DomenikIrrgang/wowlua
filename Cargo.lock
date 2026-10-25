@@ -3664,6 +3664,7 @@ dependencies = [
  "indexmap",
  "mlua",
  "quick-xml",
+ "serde",
  "serde_json",
  "wowlua-span",
  "wowlua-syntax",

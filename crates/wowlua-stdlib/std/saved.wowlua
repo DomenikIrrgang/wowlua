@@ -14,11 +14,19 @@ const DEFAULT_PROFILE = "Default"
 
 --- The profiles of a binding with `profiles = true`.
 export interface Profiles
+    --- Switches to the profile `name` (made empty when new) and calls the
+    --- `onChange` handlers. An error before the data is loaded.
     function use(name: string)
+    --- The active profile's name (`"Default"` at first).
     function current(): string
+    --- The profiles' names, sorted.
     function list(): string[]
+    --- Replaces the active profile's data with a copy of the profile `from`'s;
+    --- an error when there is no such profile.
     function copy(from: string)
+    --- Deletes the profile `name`; deleting the active one is an error.
     function delete(name: string)
+    --- Calls `fn` with the new profile's name after each `use`.
     function onChange(fn: (name: string) -> ()): Subscription
 end
 
@@ -27,11 +35,16 @@ export interface SavedHandle
     profiles?: Profiles
     --- The current profile (or the whole data) back to its defaults.
     function reset()
+    --- Whether the SavedVariable is loaded (the data can be read).
     function isLoaded(): boolean
     --- For wowlua:settings: a key's default (the panel's Defaults button).
     __default?: (self: SavedHandle, key: string) -> any
 end
 
+--- Options of `bind`: the data's `version` and `defaults`; `migrate[v]`
+--- upgrades data saved at version `v - 1` to `v`; `profiles` keeps the data
+--- per profile; `stripDefaults = false` keeps values equal to their
+--- defaults at logout.
 export type BindOptions<T> = {
     version: number,
     defaults: T,

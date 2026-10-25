@@ -32,9 +32,11 @@ end
 export interface Repeating
     --- Starts ticking (the first tick one interval later); nothing if running.
     function start()
+    --- Stops ticking; nothing if stopped.
     function stop()
     --- `start()` when `running`, else `stop()` (a secret reads as false).
     function setRunning(running: boolean | Secret<boolean>)
+    --- Whether it is ticking.
     function isRunning(): boolean
 end
 

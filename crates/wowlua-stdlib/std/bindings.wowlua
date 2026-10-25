@@ -10,6 +10,10 @@ local addonName = ...
 --- The key's state: `"up"` reaches only bindings with `runOnUp`.
 export type KeyState = "down" | "up"
 
+--- Options of `@binding`: `label` is the binding's name in the Key
+--- Bindings UI, `header` the `header` id it is listed under, `runOnUp`
+--- also calls the function when the key goes up, and `default` is the
+--- key bound by default.
 export type Options = {
     label: string,
     header?: string,

@@ -589,7 +589,8 @@ the editor's spelling of that folder (`initialize`'s `rootUri` and
 Go to definition (decision T369) answers from the last check: the checker
 records, for each name it resolves, what it refers to. A local leads to its
 declaration, an imported name (and the name in the `import` statement) to
-the export in its module, a namespace import to the module, a member
+the export in its module, a namespace import to the module and its member
+(`M.f`) to that export, a member
 (field, method, getter, setter, static, `new`, namespace member, enum
 member) to where its class, interface or namespace declares it (`new` to
 the constructor, else the class), a type name to its declaration, and a

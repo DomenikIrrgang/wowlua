@@ -16,7 +16,9 @@ export interface MockUnit
     --- the player's target told back by the server (`UNIT_TARGET`) a round
     --- trip later, or `echo` seconds (`false`: not).
     function target(unit: MockUnit?, opts: { echo?: number | boolean }?)
+    --- Focuses `unit` (nil: none): `PLAYER_FOCUS_CHANGED`.
     function focus(unit: MockUnit?)
+    --- Mouses over `unit` (nil: none): `UPDATE_MOUSEOVER_UNIT`.
     function mouseover(unit: MockUnit?)
     --- The player's soft target of `kind` (by default the enemy for a
     --- hostile or neutral unit, else the friend; `nil` clears it):
@@ -27,6 +29,8 @@ export interface MockUnit
     --- Its health down or up; `statesAfter`: its aura states' change told
     --- that many seconds later (the server's next update), else at once.
     function damage(amount: number, opts: { statesAfter?: number | boolean }?)
+    --- Its health up by `amount`: `UNIT_HEALTH` (`statesAfter` as for
+    --- `damage`).
     function heal(amount: number, opts: { statesAfter?: number | boolean }?)
     --- Dies (`UNIT_DIED`); `by` the player or the group: `PARTY_KILL` and
     --- the killing blow's `UNIT_COMBAT` (`amount`, else the health left;
@@ -37,11 +41,16 @@ export interface MockUnit
     --- Its power now (`UNIT_POWER_UPDATE`); `frequent`: a regeneration
     --- tick's, `UNIT_POWER_FREQUENT` alone.
     function setPower(amount: number, opts: { frequent?: boolean }?)
+    --- Puts it in combat; the player's: `PLAYER_REGEN_DISABLED`, the combat
+    --- lockdown, `PLAYER_IN_COMBAT_CHANGED`, `UNIT_FLAGS`.
     function enterCombat()
+    --- Takes it out of combat; the player's: the lockdown ends,
+    --- `PLAYER_REGEN_ENABLED`, `UNIT_FLAGS`.
     function leaveCombat()
     --- The player's auto attack on (`PLAYER_ENTER_COMBAT`) and off
     --- (`PLAYER_LEAVE_COMBAT`).
     function startAttack()
+    --- The player's auto attack off (`PLAYER_LEAVE_COMBAT`).
     function stopAttack()
     --- A melee swing landing on `victim`: `PLAYER_SWING` for the player's,
     --- both in combat, the attacker's then the victim's power (`power`,
@@ -84,8 +93,13 @@ export interface MockUnit
     --- a round trip later: `PLAYER_ALIVE`); another unit lives at once
     --- (`UNIT_HEALTH`, `UNIT_FLAGS`).
     function resurrect(target: MockUnit, opts: { health?: number }?)
+    --- Its nameplate appears in the first free `nameplateN` slot
+    --- (`NAME_PLATE_UNIT_ADDED`); nothing if it is shown.
     function showNameplate()
+    --- Its nameplate goes (`NAME_PLATE_UNIT_REMOVED`).
     function hideNameplate()
+    --- It leaves the world: its nameplate and auras go, and it stops being
+    --- the target (`PLAYER_TARGET_CHANGED`), focus or mouseover.
     function despawn()
     --- The unit's first token (`"player"`, `"nameplate1"` before
     --- `"target"`, …), nil when none names it.
@@ -102,6 +116,7 @@ export interface MockUnit
     --- An aura on it (`UNIT_AURA`), its instance ID; `quiet = true`: there
     --- already (a snapshot's), untold.
     function applyAura(data: table): number
+    --- Removes the aura with that instance ID (`UNIT_AURA`).
     function removeAura(auraInstanceID: number)
     --- The aura changed in place (a periodic effect's tick:
     --- `updatedAuraInstanceIDs`); `cooldowns`: the spells it triggered, as
@@ -940,6 +955,8 @@ export function snapshotTaken()
     engine().snapshotTaken()
 end
 
+--- Moves the virtual clock (`GetTime`, `C_Timer`) on by `sec` seconds,
+--- running the timers that come due on the way, in order.
 export function advanceTime(sec: number)
     engine().advanceTime(sec)
 end
@@ -1138,9 +1155,6 @@ export function drag(frame: ScriptRegion?, dx: number, dy: number, frames: numbe
     engine().drag(frame, dx, dy, frames)
 end
 
---- Drags `source` onto `target` as the user would: the source's
---- `OnDragStart` (it picks something up), then its `OnDragStop` and, with
---- something on the cursor, the target's `OnReceiveDrag`.
 --- Drags a slider's thumb to `value` as the user does: `OnValueChanged(
 --- value, true)` for where it is and where it goes (clamped; snapped to its
 --- step only if it obeys its step on drag), `OnMouseDown`, `OnMouseUp`.
@@ -1149,6 +1163,9 @@ export function slide(slider: Slider?, value: number)
     engine().slide(slider, value)
 end
 
+--- Drags `source` onto `target` as the user would: the source's
+--- `OnDragStart` (it picks something up), then its `OnDragStop` and, with
+--- something on the cursor, the target's `OnReceiveDrag`.
 export function dragTo(source: ScriptRegion?, target: ScriptRegion?)
     present(source, "dragTo")
     present(target, "dragTo")
@@ -1205,6 +1222,9 @@ export function defineBinding(name: string, action: (keystate: string) -> (), op
     engine().defineBinding(name, action, opts)
 end
 
+--- Presses the key binding `name` (one from `defineBinding`): its action
+--- runs with `keystate` (default `"down"`); `"up"` only reaches a binding
+--- with `runOnUp`.
 export function pressBinding(name: string, keystate: string?)
     engine().pressBinding(name, keystate)
 end

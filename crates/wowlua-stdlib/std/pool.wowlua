@@ -12,7 +12,11 @@ local wl = ns.__wowlua
 export interface Pool<T>
     --- An object, and whether it was newly created.
     function acquire(): (T, boolean)
+    --- Gives `obj` back: reset and kept for reuse. A protected frame
+    --- released in combat is released when combat ends. One that is not
+    --- acquired from this pool, or released twice, is an error in debug builds.
     function release(obj: T)
+    --- Releases every acquired object.
     function releaseAll()
     --- An iterator over the acquired objects.
     function active(): () -> T?
@@ -169,5 +173,11 @@ local function tablePool(opts: { max?: number }?): Pool<table>
     end, wipeTable, opts?.max)
 end
 
+--- Frame pools: `FramePool.new(cls, ...)` makes instances of the widget
+--- class `cls` with `cls.new(...)`, `FramePool.fromTemplate(frameType,
+--- parent?, template?)` plain frames. A released frame is hidden, its
+--- points cleared, and its `onRelease` method called.
 export local FramePool = { new = framePool, fromTemplate = templatePool }
+--- Table pools: `TablePool.new(opts?)` hands out tables, wiped when
+--- released; `opts.max` caps how many released tables are kept.
 export local TablePool = { new = tablePool }

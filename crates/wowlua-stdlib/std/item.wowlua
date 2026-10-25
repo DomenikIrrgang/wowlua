@@ -30,15 +30,19 @@ export type ItemData = {
 --- An item ID, link or (cached) name.
 export type ItemRef = number | string
 
+--- Options of `load`, `loadMany`, `loadSpell` and `await`.
 export type LoadOptions = {
     --- Seconds before the load gives up and calls back with nothing
     --- (default 10).
     timeout?: number,
 }
 
+--- A pending load: cancel it, or ask whether it is done (called back or
+--- cancelled).
 export interface LoadHandle
     --- A cancelled load never calls back.
     function cancel()
+    --- Whether the load has called back or was cancelled.
     function isDone(): boolean
 end
 

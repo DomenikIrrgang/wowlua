@@ -62,6 +62,10 @@ local function chatSink(level: string, message: string, location: string?)
 end
 
 -- (Compiled `log` calls and tracing come here with the level's string.)
+--- Logs the values of `...` (joined with spaces, secrets as `<secret>`) at
+--- `level` with an optional source location: into the history, to chat
+--- from the chat level on, and to every sink. Below the runtime level it
+--- does nothing.
 export function emitAt(level: string, location: string?, ...: unknown)
     local rank = RANKS[level] ?? 0
     if rank < current then
@@ -84,10 +88,15 @@ end
 -- Tracing wrappers (`@trace`) log through here when this module is loaded.
 wl.logEmit = emitAt
 
+--- Logs the values at `trace` level (removed below the build's log level).
 export function trace(...: unknown) emitAt("trace", nil, ...) end
+--- Logs the values at `debug` level (removed below the build's log level).
 export function debug(...: unknown) emitAt("debug", nil, ...) end
+--- Logs the values at `info` level (removed below the build's log level).
 export function info(...: unknown) emitAt("info", nil, ...) end
+--- Logs the values at `warn` level (removed below the build's log level).
 export function warn(...: unknown) emitAt("warn", nil, ...) end
+--- Logs the values at `error` level (removed below the build's log level).
 export function error(...: unknown) emitAt("error", nil, ...) end
 
 -- Sets the runtime level from a level's string (the dev console passes
@@ -104,10 +113,13 @@ export function setLevel(level: LevelValue)
     setRank(level)
 end
 
+--- Calls `fn` with the level and message of every line logged at or above
+--- the runtime level.
 export function sink(fn: (level: string, message: string) -> ())
     sinks[#sinks + 1] = fn
 end
 
+--- Options of `configure`.
 export type LogOptions = {
     --- Starts every chat line of the default sink and of `print`, instead
     --- of the addon's coloured name (`"|cff33ff99MyAddon|r "`).
@@ -129,6 +141,7 @@ export function configure(opts: LogOptions)
 end
 
 -- The newest `n` entries (all by default), oldest first.
+--- The newest `n` log entries (default: all that are kept), oldest first.
 export function history(n: number?): { time: number, level: string, message: string, location?: string }[]
     local take = math.min(n ?? count, count)
     local out = {}
@@ -138,6 +151,7 @@ export function history(n: number?): { time: number, level: string, message: str
     return out
 end
 
+--- The log functions as one table: `log.info(…)`, `log.warn(…)`.
 export const log = { trace = trace, debug = debug, info = info, warn = warn, error = error }
 
 -- The ring buffer, shared with the dev console.
@@ -159,6 +173,9 @@ local function say(frame: MessageFrame?, message: string)
 end
 
 -- `print(...)`: chat output with the addon's coloured name.
+--- Prints the values (joined with spaces) to chat after the addon's
+--- coloured name or the configured prefix. `print.color(hex, …)` prints
+--- them in a colour, `print.to(frame, …)` to another message frame.
 export const print = setmetatable({
     color = function(hex: string, ...: any)
         say(chatFrame(), "|cff" .. hex .. text(...) .. "|r")

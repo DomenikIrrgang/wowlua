@@ -68,6 +68,7 @@ end
 
 on("PLAYER_REGEN_ENABLED", flush)
 
+--- Whether the player is in combat lockdown (`InCombatLockdown()`).
 export function inCombat(): boolean
     return InCombatLockdown() and true or false
 end

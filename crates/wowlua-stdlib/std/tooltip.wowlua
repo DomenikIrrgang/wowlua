@@ -67,23 +67,30 @@ export class TooltipHook
     private readonly fn: Handler
     private enabled: boolean = true
 
+    --- A hook of `fn` on tooltips of `kind`, enabled (`hook` makes and
+    --- registers one).
     constructor(kind: TooltipKind, fn: Handler)
         self.kind = kind
         self.fn = fn
     end
 
+    --- Calls the handler again.
     function enable()
         self.enabled = true
     end
 
+    --- Stops calling the handler (the hook itself stays).
     function disable()
         self.enabled = false
     end
 
+    --- Whether the handler is called.
     function isEnabled(): boolean
         return self.enabled
     end
 
+    --- Calls the handler with `tip` and `data` (through the error policy)
+    --- when the hook is enabled.
     function run(tip: GameTooltip, data: TooltipData)
         if self.enabled then
             callIn({ component = `tooltip: {self.kind}` }, self.fn, tip, data)

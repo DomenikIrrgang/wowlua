@@ -402,6 +402,21 @@ The WoW API is typed by **pre-generated `types` packages**, one per flavor:
    (`Is…`, `Has…`, `Can…` a boolean, `GetNum…` a number; unverified). The
    combat log's payload is typed as the wiki's `COMBAT_LOG_EVENT` page
    gives its eleven base values.
+8. **What the functions do** (decision T380). Each API function, namespace
+   function and widget method has a `---` doc comment above its
+   declaration, which the language server shows on hover and completion
+   (§16.2): the summary of its wiki page (the text before the first
+   section, templates and a call written as text left out), the
+   descriptions its `==Arguments==` and `==Returns==` give their values
+   (under **Parameters** and **Returns**, values without one left out),
+   and a link to the page, the wiki's markup turned into Markdown.
+   `cargo xtask types wiki` writes them to
+   `xtask/data/warcraft-wiki-docs.json`. Where the wiki says nothing,
+   Blizzard's documentation's `Documentation` lines of the function and its
+   values do; where neither does, a sentence wowlua wrote from the
+   function's name, signature and the emulator's behaviour
+   (`xtask/data/written-docs.json`), marked as such ("Description by
+   wowlua: the API's documentation has none.").
 
 Package versions follow the game version: `wow-api-standard@12.1.0` for build
 12.1.0, and pre-releases for test clients (`12.1.5-ptr.70077`). Generator fixes

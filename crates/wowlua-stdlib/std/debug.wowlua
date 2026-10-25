@@ -34,6 +34,9 @@ local function fail(message: string)
 end
 
 -- (A secret condition cannot be tested: it passes.)
+--- Raises an error with the source location (and `message`) when
+--- `condition` is falsy; a secret condition passes. Removed from builds
+--- without `assertions`, with its arguments.
 export function assert(condition: unknown, message: string?, location: string?)
     if not secret.isSecret(condition) and not condition then
         fail((location ?? "?") .. ": assertion failed" .. (message and (": " .. message) or ""))
@@ -41,6 +44,9 @@ export function assert(condition: unknown, message: string?, location: string?)
 end
 
 -- `dump(location, text1, value1, text2, value2, …)`.
+--- Prints each expression's source text and value (tables one level deep,
+--- secret values as `<secret>`), prefixed with the location. Removed from
+--- builds without `debug`.
 export function dump(location: string, ...: unknown)
     local n = select("#", ...)
     for i = 1, n, 2 do
@@ -49,29 +55,39 @@ export function dump(location: string, ...: unknown)
     end
 end
 
+--- Raises "not implemented" (with `message`); never returns.
 export function todo(message: string?, location: string?): never
     fail((location ?? "?") .. ": not implemented" .. (message and (": " .. message) or ""))
     error("unreachable")
 end
 
+--- Raises "unreachable code reached" (with `message`); never returns.
 export function unreachable(message: string?, location: string?): never
     fail((location ?? "?") .. ": unreachable code reached" .. (message and (": " .. message) or ""))
     error("unreachable")
 end
 
 -- Folded by the compiler; these run only when called through a value.
+--- The source location of the call, as `"src/a.wowlua:12 (fn)"`; the
+--- compiler folds it to a string (`"?"` when called through a value).
 export function location(): string
     return "?"
 end
 
+--- The last name of the expression `value` as a string
+--- (`nameof(Tracker.record)` is `"record"`); folded by the compiler.
 export function nameof(value: unknown): string
     return "?"
 end
 
+--- The static type of `value` as a string (`"Frame?"`); folded by the
+--- compiler (through a value: Lua's `type`).
 export function typeName(value: unknown): string
     return type(value)
 end
 
+--- Calls `fn(...)` and returns its results, recording its time under
+--- `label` in the profiler statistics; a plain call when the profiler is off.
 export function measure<A..., R...>(label: string, fn: (A...) -> R..., ...: A...): R...
     local prof = wl.prof
     if prof then
@@ -80,28 +96,36 @@ export function measure<A..., R...>(label: string, fn: (A...) -> R..., ...: A...
     return fn(...)
 end
 
+--- Starts a timing span `label`, ended by `timeEnd(label)`. Removed from
+--- builds without `debug`.
 export function time(label: string)
     if wl.prof then
         wl.prof.time(label)
     end
 end
 
+--- Ends the timing span `label` started by `time` and records its time.
 export function timeEnd(label: string)
     if wl.prof then
         wl.prof.timeEnd(label)
     end
 end
 
+--- The profiler statistics by function name or label (`{}` when the
+--- profiler is off).
 export function stats(): { [string]: WowluaProfStat }
     return wl.prof?.stats ?? {}
 end
 
+--- Clears the profiler statistics.
 export function resetStats()
     if wl.prof then
         wl.prof.reset()
     end
 end
 
+--- Shows `fn()` under `label` in the dev window's watch list, refreshed
+--- while the window is visible. Removed from builds without `dev-console`.
 export function watch(label: string, fn: () -> unknown)
     if wl.dev then
         wl.dev.watch(label, fn)
@@ -113,6 +137,12 @@ end
 local function decoratorValue()
     fail("core decorators cannot be used as values")
 end
+--- `@profile`: the core decorator, re-exported. Records the time of the
+--- function (or a class's methods) in the profiler statistics.
 export local profile = decoratorValue
+--- `@trace`: the core decorator, re-exported. Logs the function's calls
+--- with their arguments, results and errors at `trace` level.
 export local trace = decoratorValue
+--- `@debugOnly`: the core decorator, re-exported. Removes the function and
+--- the statements calling it from non-debug builds.
 export local debugOnly = decoratorValue

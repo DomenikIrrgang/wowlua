@@ -11,6 +11,8 @@ import type Subscription from "wowlua:events"
 import after from "wowlua:timer"
 import callIn, try from "wowlua:errors"
 
+--- What `info` knows about a unit; the fields the client may keep secret
+--- are typed so.
 export type UnitInfo = {
     --- Without the realm (WoW: Forever's names include the surname).
     name: string | Secret<string>,
@@ -29,6 +31,8 @@ export type UnitInfo = {
     role?: string | Secret<string>,
 }
 
+--- Options of `group`: also the player's own token in a group, and each
+--- member's pet after it.
 export type GroupOptions = { includePlayer?: boolean, includePets?: boolean }
 
 -- `GetUnitName(unit, true)`: the name with `-Realm` for other realms.

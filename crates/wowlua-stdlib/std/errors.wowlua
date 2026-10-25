@@ -211,6 +211,7 @@ end
 --- An `onError` listener (a wowlua:events `Subscription`).
 export interface ErrorListener
     active: boolean
+    --- Stops the listener; `active` becomes false.
     function cancel()
 end
 
@@ -228,6 +229,9 @@ export function onError(fn: (msg: string, info: ErrorInfo) -> ()): ErrorListener
     }
 end
 
+--- Sets the error policy: `rateLimit` is how many seconds the same
+--- message is reported only once (default 10); later repeats are counted
+--- and shown with the next report.
 export function configure(opts: { rateLimit?: number })
     if opts.rateLimit then
         rateLimit = opts.rateLimit

@@ -35,6 +35,7 @@ export enum Priority {
     Normal = "normal",
     Bulk = "bulk",
 }
+--- A priority: a member of the enum, or its string.
 export type PriorityValue = Priority | "alert" | "normal" | "bulk"
 
 --- The wire format: wowlua's or AceComm-3.0's.
@@ -42,8 +43,11 @@ export enum Format {
     Wowlua = "wowlua",
     AceComm = "acecomm",
 }
+--- A wire format: a member of the enum, or its string.
 export type FormatValue = Format | "wowlua" | "acecomm"
 
+--- Options of `send` and `sendObject`: the priority (default `"normal"`),
+--- a progress callback, and how to send during lockdown.
 export interface SendOptions
     priority?: PriorityValue
     --- Progress: bytes sent so far, and of the whole message.
@@ -54,12 +58,23 @@ export interface SendOptions
     dropInLockdown?: boolean
 end
 
+--- A channel opened with `open`: sends and receives the addon messages
+--- of its prefix. Long messages are split into chunks and joined again.
 export interface Channel
     prefix: string
+    --- Sends `msg` to `distribution` (`target`: the player of a whisper, the
+    --- channel of `CHANNEL`), split into chunks and throttled. Returns
+    --- whether it went at once, was queued, or was dropped (secret values,
+    --- or `GROUP` out of a group). A NUL byte in an AceComm-format message is
+    --- an error.
     function send(msg: string, distribution: DistributionValue, target: string?, opts: SendOptions?): SendStatus
+    --- Calls `fn` with each complete text message received on the prefix
+    --- (the player's own only with `receiveOwn`).
     function onMessage(fn: (msg: string, sender: string, distribution: string) -> ())
     --- Sends a value through wowlua:serialize (encoded and compressed).
     function sendObject(value: any, distribution: DistributionValue, target: string?, opts: SendOptions?): SendStatus
+    --- Calls `fn` with each value received through `sendObject` (the
+    --- player's own only with `receiveOwn`).
     function onObject(fn: (value: any, sender: string, distribution: string) -> ())
 end
 

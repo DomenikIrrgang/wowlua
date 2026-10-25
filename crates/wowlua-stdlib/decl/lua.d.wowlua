@@ -4,222 +4,605 @@
 -- WoW has no `os` (only the globals `date`, `time` and `difftime`), `io`,
 -- `debug` or `package` (probed in game, decision S37).
 
+--- Raises an error if `value` is `false` or `nil`; otherwise returns all its arguments.
+---
+--- **Parameters**
+--- - `...`: The error message (the first extra argument); `"assertion failed!"` if none is given.
 declare function assert<T, A...>(value: T, ...: A...): (T, A...)
+--- Controls the garbage collector, or queries it.
+---
+--- **Parameters**
+--- - `option`: `"collect"` (default) runs a full collection; `"count"` returns the memory in use in kilobytes; `"step"` runs a step (of size `arg`) and returns `true` if it finished a cycle; `"stop"` and `"restart"` stop and restart the collector; `"setpause"` and `"setstepmul"` set the pause and the step multiplier to `arg` and return the previous value.
 declare function collectgarbage(option: string?, arg: number?): any
+--- Raises an error with `message` as the error value; never returns.
+---
+--- **Parameters**
+--- - `level`: Where a string message gets its position from: 1 (default) the function that called `error`, 2 its caller, and so on; 0 adds no position.
 declare function error(message: any, level: number?): never
+--- Returns the memory Lua uses, in kilobytes (same as `collectgarbage("count")`).
 declare function gcinfo(): number
+--- Returns the environment (globals table) of a function.
+---
+--- **Parameters**
+--- - `f`: A function, or a stack level: 1 (default) the function calling `getfenv`, 2 its caller, and so on; 0 gives the global environment.
 declare function getfenv(f: (function | number)?): table
+--- Returns the metatable of `object`, or `nil` if it has none. If the metatable has a `__metatable` field, returns that field's value instead.
+---
+--- In WoW, `getmetatable("")` returns the `string` table.
 declare function getmetatable(object: any): table?
+--- Returns an iterator over the array part of `t`: `for i, v in ipairs(t)` visits `t[1]`, `t[2]`, … up to the first `nil` value.
 declare function ipairs<V>(t: V[]): ((t: V[], i: number) -> (number?, V), V[], number)
+--- Compiles `source` as a Lua chunk without running it.
+---
+--- **Parameters**
+--- - `chunkname`: The chunk's name in error messages and stack traces; defaults to `source`.
+---
+--- **Returns**
+--- - The compiled chunk as a function; or `nil` and the error message if `source` does not compile.
 declare function loadstring(source: string, chunkname: string?): (((...any) -> ...any)?, string?)
+--- Creates a zero-size userdata (undocumented in Lua 5.1).
+---
+--- **Parameters**
+--- - `addMetatable`: `true` gives the userdata a new, empty metatable (reachable with `getmetatable`).
 declare function newproxy(addMetatable: boolean?): userdata
+--- Returns the key after `index` in `t` and its value; with `index` omitted or `nil`, the first key. Returns `nil` after the last key.
+---
+--- The order is unspecified. Assigning to a key that is not yet in the table during a traversal is undefined behaviour; changing or clearing existing fields is allowed.
 declare function next<K, V>(t: { [K]: V }, index: K?): (K?, V)
+--- Returns `next`, `t` and `nil`, so that `for k, v in pairs(t)` visits every key and value of `t` (in no particular order).
 declare function pairs<K, V>(t: { [K]: V }): ((t: { [K]: V }, key: K?) -> (K?, V), { [K]: V }, nil)
+--- Calls `f` with the given arguments in protected mode: an error inside it is caught instead of propagated.
+---
+--- **Returns**
+--- - `true` and `f`'s results; or `false` and the error value if `f` raised an error.
 declare function pcall<A..., R...>(f: (A...) -> R..., ...: A...): (boolean, R...)
+--- Prints its arguments, each converted with `tostring`. In WoW, the line goes to the default chat frame.
 declare function print(...: any)
+--- Returns whether `a` and `b` are the same value, without calling the `__eq` metamethod.
 declare function rawequal(a: any, b: any): boolean
+--- Returns `t[key]` without calling the `__index` metamethod.
 declare function rawget(t: table, key: any): any
+--- Sets `t[key]` to `value` without calling the `__newindex` metamethod; returns `t`.
 declare function rawset<T>(t: T, key: any, value: any): T
+--- With `"#"`, returns the number of arguments after it (counting `nil`s); with a number, returns the arguments from that position on.
+---
+--- **Parameters**
+--- - `index`: `"#"`, or the position of the first argument to return; a negative position counts from the end (-1 is the last argument).
 declare function select(index: "#", ...: any): number
 declare function select<T>(index: number, ...: T): (T, ...T)
+--- Sets the environment (globals table) of a function, and returns the function.
+---
+--- **Parameters**
+--- - `f`: A function, or a stack level: 1 the function calling `setfenv`, 2 its caller, and so on; 0 changes the environment of the running thread (and returns nothing).
 declare function setfenv<F>(f: F, env: table): F
+--- Sets the metatable of `t` (`nil` removes it) and returns `t`. Raises an error if the current metatable has a `__metatable` field.
 declare function setmetatable<T>(t: T, metatable: table?): T
+--- Converts `value` to a number: a number stays as it is, a string is parsed as a numeral; returns `nil` if it cannot be converted.
+---
+--- **Parameters**
+--- - `base`: The base (2 to 36) the numeral is written in; letters stand for the digits 10 to 35. Default 10, which also accepts decimals and exponents; other bases take only unsigned integers.
 declare function tonumber(value: any, base: number?): number?
+--- Converts `value` to a string; a value whose metatable has a `__tostring` field is converted by calling it.
 declare function tostring(value: any): string
+--- Returns the name of `value`'s type.
 declare function type(value: any): "nil" | "number" | "string" | "boolean" | "table" | "function" | "thread" | "userdata"
+--- Returns the elements `t[i]` to `t[j]` as separate values.
+---
+--- **Parameters**
+--- - `i`: The first index; default 1.
+--- - `j`: The last index; default `#t`.
 declare function unpack<V>(t: V[], i: number?, j: number?): ...V
+--- Calls `f` in protected mode, as `pcall` does, with `handler` as the error handler: on an error, `handler` is called with the error value (while the failing stack is still there) and its result becomes the error value.
+---
+--- In WoW, the extra arguments are passed to `f` (Lua 5.1's `xpcall` takes none).
+---
+--- **Returns**
+--- - `true` and `f`'s results; or `false` and `handler`'s result if `f` raised an error.
 declare function xpcall<A..., R...>(f: (A...) -> R..., handler: (err: any) -> any, ...: A...): (boolean, R...)
 
 declare global _G: { [string]: any }
 declare global _VERSION: string
 
 declare namespace string
+    --- Returns the byte codes of the characters `s[i]` to `s[j]`.
+    ---
+    --- **Parameters**
+    --- - `i`: The first position; default 1. Negative positions count from the end (-1 is the last character).
+    --- - `j`: The last position; default `i`.
     function byte(s: string, i: number?, j: number?): ...number
+    --- Returns a string made of the characters with the given byte codes.
     function char(...: number): string
+    --- Finds the first match of `pattern` in `s`.
+    ---
+    --- **Parameters**
+    --- - `pattern`: A Lua pattern (`%d`, `%a`, `.-`, captures in parentheses, …); with `plain`, a literal substring.
+    --- - `init`: Where the search starts; default 1. Negative positions count from the end.
+    --- - `plain`: `true` turns off pattern matching (then `init` must be given too).
+    ---
+    --- **Returns**
+    --- - The start and end positions of the match, then the pattern's captures; `nil` if there is no match.
     function find(s: string, pattern: string, init: number?, plain: boolean?): (number?, number?, ...string)
+    --- Returns the arguments formatted as `format` describes, in the manner of C's `printf`: `%d`, `%i`, `%u`, `%c`, `%x`, `%X`, `%o`, `%e`, `%E`, `%f`, `%g`, `%G`, `%s`, `%q` (a string quoted to be read back by Lua) and `%%`.
+    ---
+    --- In WoW, `%1$s`, `%2$d`, … take the argument at that position, so translations can reorder them.
     function format(format: string, ...: any): string
+    --- Returns an iterator over the matches of `pattern` in `s`: each call returns the next match's captures (or the whole match if the pattern has none).
+    ---
+    --- **Parameters**
+    --- - `pattern`: A Lua pattern; a leading `^` does not anchor it.
     function gmatch(s: string, pattern: string): () -> ...string
+    --- Returns a copy of `s` with the matches of `pattern` replaced, and the number of matches.
+    ---
+    --- **Parameters**
+    --- - `pattern`: A Lua pattern.
+    --- - `replacement`: A string, in which `%1` to `%9` stand for the captures, `%0` for the whole match and `%%` for `%`; a table, indexed with the first capture (or the whole match); or a function, called with the captures (or the whole match). A table value or function result of `false` or `nil` keeps the original match.
+    --- - `n`: The most replacements to make; all if omitted.
     function gsub(s: string, pattern: string, replacement: string | table | ((...string) -> any), n: number?): (string, number)
+    --- Joins the arguments (strings or numbers) with `separator` between them. WoW's addition; works as `strjoin` does.
     function join(separator: string, ...: any): string
+    --- Returns the length of `s` in bytes (embedded zeros count); `#s` gives the same.
     function len(s: string): number
+    --- Returns `s` with all uppercase letters changed to lowercase. In WoW, this also covers non-ASCII letters in UTF-8.
     function lower(s: string): string
+    --- Matches `pattern` against `s` and returns its captures, or the whole match if the pattern has none; `nil` if there is no match.
+    ---
+    --- **Parameters**
+    --- - `pattern`: A Lua pattern; a leading `^` anchors it at `init`.
+    --- - `init`: Where the search starts; default 1. Negative positions count from the end.
     function match(s: string, pattern: string, init: number?): ...string
+    --- Returns `n` copies of `s` concatenated; the empty string if `n` is 0 or less.
     function rep(s: string, n: number): string
+    --- Returns `s` with its bytes in reverse order.
     function reverse(s: string): string
+    --- Splits `s` at every occurrence of any of `separator`'s characters (each character delimits on its own; not a pattern) and returns the pieces. WoW's addition; works as `strsplit` does.
+    ---
+    --- **Parameters**
+    --- - `limit`: The most pieces to return; the last one holds the rest of the string. Unlimited if omitted.
     function split(separator: string, s: string, limit: number?): ...string
+    --- Returns the substring of `s` from position `i` to position `j`, both included.
+    ---
+    --- **Parameters**
+    --- - `i`: The first position. Negative positions count from the end (-1 is the last character).
+    --- - `j`: The last position; default -1 (the end of the string).
     function sub(s: string, i: number, j: number?): string
+    --- Removes the characters in `chars` from both ends of `s`. WoW's addition; the same as `strtrim`.
+    ---
+    --- **Parameters**
+    --- - `chars`: The set of characters to remove (each on its own; not a pattern); default space, tab, carriage return and newline.
     function trim(s: string, chars: string?): string
+    --- Returns `s` with all lowercase letters changed to uppercase. In WoW, this also covers non-ASCII letters in UTF-8.
     function upper(s: string): string
     -- The client's additions.
+    --- Concatenates the arguments without a separator. WoW's addition; like `strconcat`.
     function concat(...: string | number): string
+    --- Returns whether `s` contains `substring` (literally; not a pattern). WoW's addition.
     function contains(s: string, substring: string): boolean
+    --- Returns whether `s` ends with `suffix`. WoW's addition.
     function endswith(s: string, suffix: string): boolean
+    --- Removes the characters in `chars` from the start of `s`. WoW's addition.
+    ---
+    --- **Parameters**
+    --- - `chars`: The set of characters to remove (each on its own; not a pattern); default space, tab, carriage return and newline.
     function ltrim(s: string, chars: string?): string
+    --- `string.gsub` that also accepts the restricted tables of Blizzard's secure restricted environment. WoW's addition.
     function rtgsub(s: string, pattern: string, replacement: string | table | ((...string) -> any), n: number?): (string, number)
+    --- Removes the characters in `chars` from the end of `s`. WoW's addition.
+    ---
+    --- **Parameters**
+    --- - `chars`: The set of characters to remove (each on its own; not a pattern); default space, tab, carriage return and newline.
     function rtrim(s: string, chars: string?): string
+    --- Returns whether `s` starts with `prefix`. WoW's addition.
     function startswith(s: string, prefix: string): boolean
 end
 
 declare namespace table
+    --- Returns the elements `t[i]` to `t[j]` (strings or numbers) concatenated, with `separator` between them.
+    ---
+    --- **Parameters**
+    --- - `separator`: Default the empty string.
+    --- - `i`: The first index; default 1.
+    --- - `j`: The last index; default `#t`.
     function concat<T extends string | number>(t: T[], separator: string?, i: number?, j: number?): string
+    --- Calls `f(key, value)` for every entry of `t`, in no particular order. Stops at the first call that returns a value other than `nil`, and returns that value. Deprecated in Lua 5.1 (use `pairs`).
     function foreach<K, V>(t: { [K]: V }, f: (key: K, value: V) -> any): any
+    --- Calls `f(index, value)` for the indices 1 to `#t`, in order. Stops at the first call that returns a value other than `nil`, and returns that value. Deprecated in Lua 5.1 (use `ipairs`).
     function foreachi<V>(t: V[], f: (index: number, value: V) -> any): any
+    --- Returns the length of `t`, the same as `#t`. Deprecated in Lua 5.1.
     function getn(t: any[]): number
+    --- Inserts `value` into the array `t`: at the end, or at `position`, moving the elements from there up by one.
     function insert<V>(t: V[], value: V)
     function insert<V>(t: V[], position: number, value: V)
+    --- Returns the largest positive numeric key of `t`, or 0 if it has none.
     function maxn(t: table): number
+    --- Removes the element at `position` from the array `t`, moving the elements after it down by one, and returns it.
+    ---
+    --- **Parameters**
+    --- - `position`: Default `#t` (the last element).
     function remove<V>(t: V[], position: number?): V?
+    --- Removes `count` elements from the array `t`, starting at `position`, moving the elements after them down, and returns the removed elements. WoW's addition.
+    ---
+    --- **Parameters**
+    --- - `position`: The first element to remove; default `#t` (the last element).
+    --- - `count`: How many elements to remove; default 1.
     function removemulti(t: any[], position: number, count: number?): ...any
+    --- Sorts the array `t` in place. The sort is not stable.
+    ---
+    --- **Parameters**
+    --- - `comparator`: Returns `true` when `a` must come before `b` (a strict "less than"); default the `<` operator.
     function sort<V>(t: V[], comparator: ((a: V, b: V) -> boolean)?)
+    --- Removes every entry from `t` and returns `t`. WoW's addition; the same as `wipe`.
     function wipe<T>(t: T): T
     -- The client's additions.
+    --- Returns whether any value of `t` (under any key) equals `value`. WoW's addition.
     function contains<V>(t: V[], value: V): boolean
+    --- Returns the number of entries of `t` (all keys, not only the array part). WoW's addition.
     function count(t: table): number
+    --- Returns a new, empty table with room preallocated for its entries. WoW's addition.
+    ---
+    --- **Parameters**
+    --- - `arraySizeHint`: How many array elements (keys 1, 2, …) to make room for.
+    --- - `nodeSizeHint`: How many other keys to make room for; default 0.
     function create(arraySizeHint: number, nodeSizeHint: number?): table
+    --- Marks `t` as frozen, so that its contents and its metatable can no longer be changed, and returns `t`. Insecure code can only freeze tables its own addon created. WoW's addition.
     function freeze<T extends table>(t: T): T
+    --- Returns how the entries of `t` are distributed. WoW's addition.
+    ---
+    --- **Returns**
+    --- - The number of entries, the number of positive integer keys, and the largest positive integer key (0 if there is none).
     function getcountinfo(t: table): (number, number, number)
+    --- Returns the first index (searching from 1 up to the first `nil`) whose value equals `value`, or `nil` if there is none. WoW's addition.
     function indexof<V>(t: V[], value: V): number?
+    --- Returns whether `t` has no entries. WoW's addition.
     function isempty(t: table): boolean
+    --- Returns whether `t` was frozen with `table.freeze`. WoW's addition.
     function isfrozen(t: table): boolean
+    --- Returns a new array of the keys of `t`, in no particular order. WoW's addition.
     function keys<K, V>(t: { [K]: V }): K[]
+    --- Removes the element at `index` from the array `t` by moving the last element into its place (faster than `table.remove`, but it changes the order), and returns the removed element; `nil` if `index` is outside the array. WoW's addition.
     function removeunordered<V>(t: V[], index: number): V?
+    --- Removes every element equal to `value` from the array part of `t`, keeping the others in order, and returns how many it removed. WoW's addition.
     function removevalue<V>(t: V[], value: V): number
+    --- Returns a new array of the values of `t`, in no particular order. WoW's addition.
     function values<K, V>(t: { [K]: V }): V[]
 end
 
 declare namespace math
+    --- Returns the absolute value of `x`.
     function abs(x: number): number
+    --- Returns the arc cosine of `x`, in radians. In WoW, an `x` outside [-1, 1] raises an error.
     function acos(x: number): number
+    --- Returns the arc sine of `x`, in radians. In WoW, an `x` outside [-1, 1] raises an error.
     function asin(x: number): number
+    --- Returns the arc tangent of `x`, in radians.
     function atan(x: number): number
+    --- Returns the arc tangent of `y / x`, in radians, using the signs of both to find the quadrant (and handling `x` = 0).
     function atan2(y: number, x: number): number
+    --- Returns the smallest integer greater than or equal to `x` (rounds up).
     function ceil(x: number): number
+    --- Returns the cosine of `x` (in radians).
     function cos(x: number): number
+    --- Returns the hyperbolic cosine of `x`.
     function cosh(x: number): number
+    --- Converts the angle `x` from radians to degrees.
     function deg(x: number): number
+    --- Returns *e* raised to the power `x`.
     function exp(x: number): number
+    --- Returns the largest integer less than or equal to `x` (rounds down).
     function floor(x: number): number
+    --- Returns the remainder of `x / y` with the quotient rounded towards zero; the result has the sign of `x` (unlike `x % y`, which has the sign of `y`).
     function fmod(x: number, y: number): number
+    --- Splits `x` into a mantissa and an exponent.
+    ---
+    --- **Returns**
+    --- - `m` and `e` with `x = m * 2^e`, where the absolute value of `m` is in [0.5, 1) (or `m` is 0 when `x` is 0).
     function frexp(x: number): (number, number)
     const huge: number
+    --- Returns `m * 2^e`.
     function ldexp(m: number, e: number): number
+    --- Returns the natural logarithm of `x`. In WoW, a negative `x` raises an error.
     function log(x: number): number
+    --- Returns the base-10 logarithm of `x`. In WoW, a negative `x` raises an error.
     function log10(x: number): number
+    --- Returns the largest of its arguments.
     function max(x: number, ...: number): number
+    --- Returns the smallest of its arguments.
     function min(x: number, ...: number): number
+    --- Splits `x` into its integral part and its fractional part (both with the sign of `x`).
     function modf(x: number): (number, number)
     const pi: number
+    --- Returns `x` raised to the power `y` (the same as `x ^ y`).
     function pow(x: number, y: number): number
+    --- Converts the angle `x` from degrees to radians.
     function rad(x: number): number
+    --- Returns a random number: without arguments, a number in [0, 1); with `m`, an integer from 1 to `m`; with `m` and `n`, an integer from `m` to `n` (bounds included).
+    ---
+    --- In WoW, the numbers come from a secure generator that cannot be seeded (there is no `math.randomseed`).
     function random(m: number?, n: number?): number
+    --- Returns the sine of `x` (in radians).
     function sin(x: number): number
+    --- Returns the hyperbolic sine of `x`.
     function sinh(x: number): number
+    --- Returns the square root of `x`. In WoW, a negative `x` raises an error.
     function sqrt(x: number): number
+    --- Returns the tangent of `x` (in radians).
     function tan(x: number): number
+    --- Returns the hyperbolic tangent of `x`.
     function tanh(x: number): number
     -- The client's additions.
+    --- Returns `value` limited to the range [`min`, `max`]. WoW's addition.
     function clamp(value: number, min: number, max: number): number
+    --- Returns whether `x` is neither infinite nor NaN. WoW's addition.
     function isfinite(x: number): boolean
+    --- Returns whether `x` is positive or negative infinity. WoW's addition.
     function isinf(x: number): boolean
+    --- Returns whether `x` is NaN (not a number). WoW's addition.
     function isnan(x: number): boolean
+    --- Interpolates linearly from `from` to `to`: `from + (to - from) * amount`. WoW's addition.
+    ---
+    --- **Parameters**
+    --- - `amount`: 0 gives `from`, 1 gives `to`; values outside [0, 1] extrapolate.
     function lerp(from: number, to: number, amount: number): number
+    --- Returns where `value` lies in the range: `min` maps to 0 and `max` to 1 (values outside the range give results outside [0, 1]); 0 if `min` equals `max`. WoW's addition.
     function normalize(value: number, min: number, max: number): number
+    --- Maps `value` from the range [`fromMin`, `fromMax`] to the same relative position in [`toMin`, `toMax`] (values outside extrapolate). WoW's addition.
     function remap(value: number, fromMin: number, fromMax: number, toMin: number, toMax: number): number
+    --- Rounds `value` to `decimals` decimal places, halves away from zero. WoW's addition.
+    ---
+    --- **Parameters**
+    --- - `decimals`: Default 0 (an integer); negative values round to tens, hundreds, ….
     function round(value: number, decimals: number?): number
+    --- Returns `x` limited to the range [0, 1]. WoW's addition.
     function saturate(x: number): number
+    --- Returns -1 for a negative `x`, 0 for zero and 1 for a positive `x`. WoW's addition.
     function sign(x: number): number
+    --- Wraps `value` around into the range [`min`, `max`) (`max` excluded); returns `min` if `max` is not greater than `min`. WoW's addition.
     function wrap(value: number, min: number, max: number): number
 end
 
 declare namespace coroutine
+    --- Creates a coroutine that runs `f` once resumed; returns it as a thread.
     function create(f: (...any) -> ...any): thread
+    --- Starts or continues the coroutine `co`. The first resume passes the arguments to its function; later ones make them the results of the `coroutine.yield` it is suspended in.
+    ---
+    --- **Returns**
+    --- - `true` and the values passed to `coroutine.yield` (or the function's results once it ends); or `false` and the error value if it raised an error.
     function resume(co: thread, ...: any): (boolean, ...any)
+    --- Returns the running coroutine, or `nil` when called from the main thread.
     function running(): thread?
+    --- Returns the status of `co`: `"running"` (it is the one calling `status`), `"suspended"` (yielded or not started yet), `"normal"` (it resumed another coroutine) or `"dead"` (its function ended or raised an error).
     function status(co: thread): "running" | "suspended" | "normal" | "dead"
+    --- Creates a coroutine that runs `f` and returns a function that resumes it: calling the function passes its arguments to `coroutine.resume` and returns what the coroutine yields or returns, without the leading `true`. An error inside the coroutine propagates to the caller.
     function wrap(f: (...any) -> ...any): (...any) -> ...any
+    --- Suspends the running coroutine; its arguments become the results of the `coroutine.resume` that ran it, and the arguments of the next resume become `yield`'s results.
     function yield(...: any): ...any
 end
 
 declare namespace bit
+    --- Shifts `x` right by `n` bits, copying the sign bit into the vacated bits (an arithmetic shift).
     function arshift(x: number, n: number): number
+    --- Returns the bitwise AND of its arguments, as 32-bit integers.
     function band(x: number, ...: number): number
+    --- Returns the bitwise NOT of `x`, as a 32-bit integer.
     function bnot(x: number): number
+    --- Returns the bitwise OR of its arguments, as 32-bit integers.
     function bor(x: number, ...: number): number
+    --- Returns the bitwise exclusive OR of its arguments, as 32-bit integers.
     function bxor(x: number, ...: number): number
+    --- Shifts `x` left by `n` bits, filling with zeros.
     function lshift(x: number, n: number): number
+    --- Returns the remainder of the integer division of `x` by `y`, as 32-bit signed integers.
     function mod(x: number, y: number): number
+    --- Shifts `x` right by `n` bits, filling with zeros (a logical shift).
     function rshift(x: number, n: number): number
 end
 
 -- WoW's global aliases of library functions.
+--- WoW's global alias of `string.byte`: returns the byte codes of the characters `s[i]` to `s[j]`.
+---
+--- **Parameters**
+--- - `i`: The first position; default 1. Negative positions count from the end.
+--- - `j`: The last position; default `i`.
 declare function strbyte(s: string, i: number?, j: number?): ...number
+--- WoW's global alias of `string.char`: returns a string made of the characters with the given byte codes.
 declare function strchar(...: number): string
+--- WoW's global alias of `string.find`: finds the first match of `pattern` in `s`.
+---
+--- **Parameters**
+--- - `pattern`: A Lua pattern; with `plain`, a literal substring.
+--- - `init`: Where the search starts; default 1. Negative positions count from the end.
+--- - `plain`: `true` turns off pattern matching.
+---
+--- **Returns**
+--- - The start and end positions of the match, then the pattern's captures; `nil` if there is no match.
 declare function strfind(s: string, pattern: string, init: number?, plain: boolean?): (number?, number?, ...string)
+--- WoW's global alias of `string.format`: returns the arguments formatted as `format` describes (`%d`, `%s`, `%.2f`, …; `%1$s` takes the argument at that position).
 declare function format(format: string, ...: any): string
+--- WoW's global alias of `string.gsub`: returns a copy of `s` with the matches of `pattern` replaced, and the number of matches.
+---
+--- **Parameters**
+--- - `pattern`: A Lua pattern.
+--- - `replacement`: A string (`%1` to `%9` stand for the captures, `%0` for the whole match), a table indexed with the first capture, or a function called with the captures. `false` or `nil` from a table or function keeps the original match.
+--- - `n`: The most replacements to make; all if omitted.
 declare function gsub(s: string, pattern: string, replacement: string | table | ((...string) -> any), n: number?): (string, number)
+--- WoW's global alias of `string.len`: returns the length of `s` in bytes.
 declare function strlen(s: string): number
+--- WoW's global alias of `string.lower`: returns `s` with all uppercase letters changed to lowercase.
 declare function strlower(s: string): string
+--- WoW's global alias of `string.match`: returns the captures of the first match of `pattern` in `s`, or the whole match if the pattern has none; `nil` if there is no match.
+---
+--- **Parameters**
+--- - `pattern`: A Lua pattern.
+--- - `init`: Where the search starts; default 1. Negative positions count from the end.
 declare function strmatch(s: string, pattern: string, init: number?): ...string
+--- WoW's global alias of `string.gmatch`: returns an iterator over the matches of `pattern` in `s`, each call giving the next match's captures (or the whole match).
 declare function gmatch(s: string, pattern: string): () -> ...string
+--- WoW's global alias of `string.rep`: returns `n` copies of `s` concatenated.
 declare function strrep(s: string, n: number): string
+--- WoW's global alias of `string.reverse`: returns `s` with its bytes in reverse order.
 declare function strrev(s: string): string
+--- WoW's global alias of `string.sub`: returns the substring of `s` from position `i` to position `j`, both included.
+---
+--- **Parameters**
+--- - `i`: The first position. Negative positions count from the end (-1 is the last character).
+--- - `j`: The last position; default -1 (the end of the string).
 declare function strsub(s: string, i: number, j: number?): string
+--- WoW's global alias of `string.upper`: returns `s` with all lowercase letters changed to uppercase.
 declare function strupper(s: string): string
+--- Splits `s` at every occurrence of any of `separator`'s characters (each character delimits on its own; not a pattern) and returns the pieces. `strsplit(",", "a,b,,c")` returns `"a"`, `"b"`, `""`, `"c"`.
+---
+--- **Parameters**
+--- - `separator`: The delimiter characters.
+--- - `limit`: The most pieces to return; the last one holds the rest of the string. Unlimited if omitted.
 declare function strsplit(separator: string, s: string, limit: number?): ...string
+--- Splits `s` as `strsplit` does, and returns the pieces as an array.
+---
+--- **Parameters**
+--- - `separator`: The delimiter characters (each on its own; not a pattern).
+--- - `limit`: The most pieces to make; the last one holds the rest of the string. Unlimited if omitted.
 declare function strsplittable(separator: string, s: string, limit: number?): string[]
+--- Joins the arguments (strings or numbers) with `separator` between them. `strjoin(", ", "a", "b")` is `"a, b"`.
 declare function strjoin(separator: string, ...: any): string
+--- Removes the characters in `chars` from both ends of `s`.
+---
+--- **Parameters**
+--- - `chars`: The set of characters to remove (each on its own; not a pattern); default space, tab, carriage return and newline.
 declare function strtrim(s: string, chars: string?): string
+--- Concatenates the arguments (strings or numbers) without a separator; the empty string for none.
 declare function strconcat(...: any): string
+--- Returns the number of UTF-8 characters in `s` (where `strlen` counts bytes).
 declare function strlenutf8(s: string): number
+--- Compares `a` and `b` character by character, ignoring case (UTF-8 aware).
+---
+--- **Returns**
+--- - A negative number if `a` sorts before `b`, 0 if they are equal, a positive number if `a` sorts after `b`.
 declare function strcmputf8i(a: string, b: string): number
+--- WoW's global alias of `table.insert`: inserts `value` into the array `t`, at the end or at `position` (moving the elements from there up by one).
 declare function tinsert<V>(t: V[], value: V)
 declare function tinsert<V>(t: V[], position: number, value: V)
+--- WoW's global alias of `table.remove`: removes the element at `position` from the array `t`, moving the elements after it down by one, and returns it.
+---
+--- **Parameters**
+--- - `position`: Default `#t` (the last element).
 declare function tremove<V>(t: V[], position: number?): V?
+--- WoW's global alias of `table.sort`: sorts the array `t` in place (not stable).
+---
+--- **Parameters**
+--- - `comparator`: Returns `true` when `a` must come before `b` (a strict "less than"); default the `<` operator.
 declare function sort<V>(t: V[], comparator: ((a: V, b: V) -> boolean)?)
+--- Removes every entry from `t` and returns `t`, so a table can be reused instead of replaced. WoW's global alias of `table.wipe`.
 declare function wipe<T>(t: T): T
+--- WoW's global alias of `table.foreach`: calls `f(key, value)` for every entry of `t`, stopping at the first call that returns a value other than `nil` and returning it.
 declare function foreach<K, V>(t: { [K]: V }, f: (key: K, value: V) -> any): any
+--- WoW's global alias of `table.foreachi`: calls `f(index, value)` for the indices 1 to `#t`, stopping at the first call that returns a value other than `nil` and returning it.
 declare function foreachi<V>(t: V[], f: (index: number, value: V) -> any): any
+--- WoW's global alias of `table.getn`: returns the length of `t`, the same as `#t`.
 declare function getn(t: any[]): number
+--- WoW's global alias of `math.abs`: returns the absolute value of `x`.
 declare function abs(x: number): number
+--- WoW's global alias of `math.ceil`: returns the smallest integer greater than or equal to `x`.
 declare function ceil(x: number): number
+--- WoW's global alias of `math.floor`: returns the largest integer less than or equal to `x`.
 declare function floor(x: number): number
+--- WoW's global alias of `math.max`: returns the largest of its arguments.
 declare function max(x: number, ...: number): number
+--- WoW's global alias of `math.min`: returns the smallest of its arguments.
 declare function min(x: number, ...: number): number
+--- WoW's global alias of `math.fmod`: returns the remainder of `x / y` with the quotient rounded towards zero (the result has the sign of `x`).
 declare function mod(x: number, y: number): number
+--- WoW's global alias of `math.sqrt`: returns the square root of `x`.
 declare function sqrt(x: number): number
+--- WoW's global alias of `math.exp`: returns *e* raised to the power `x`.
 declare function exp(x: number): number
+--- WoW's global alias of `math.log`: returns the natural logarithm of `x`.
 declare function log(x: number): number
+--- WoW's global alias of `math.log10`: returns the base-10 logarithm of `x`.
 declare function log10(x: number): number
+--- WoW's global alias of `math.frexp`: returns `m` and `e` with `x = m * 2^e`, where the absolute value of `m` is in [0.5, 1).
 declare function frexp(x: number): (number, number)
+--- WoW's global alias of `math.ldexp`: returns `m * 2^e`.
 declare function ldexp(m: number, e: number): number
+--- WoW's global alias of `math.deg`: converts the angle `x` from radians to degrees.
 declare function deg(x: number): number
+--- WoW's global alias of `math.rad`: converts the angle `x` from degrees to radians.
 declare function rad(x: number): number
+--- WoW's global alias of `math.random`: without arguments, a number in [0, 1); with `m`, an integer from 1 to `m`; with `m` and `n`, an integer from `m` to `n` (bounds included).
 declare function random(m: number?, n: number?): number
+--- Returns a random number, with the same arguments and ranges as `math.random`: without arguments, a number in [0, 1); with `m`, an integer from 1 to `m`; with `m` and `n`, an integer from `m` to `n`.
 declare function fastrandom(m: number?, n: number?): number
 --- `date("*t")`: the time's parts (decision L72).
 type DateTable = { year: number, month: number, day: number, hour: number, min: number, sec: number, wday: number, yday: number, isdst: boolean }
+--- Formats a time as a string, or returns its parts as a table (Lua 5.1's `os.date`; WoW has no `os`).
+---
+--- **Parameters**
+--- - `format`: A `strftime` format (`"%Y-%m-%d %H:%M"`, …); `"*t"` returns a table of the parts instead. A leading `!` uses UTC instead of local time. Default `"%c"`.
+--- - `time`: The time in seconds since the epoch, as `time()` returns it; default the current time.
 declare function date(format: "*t" | "!*t", time: number?): DateTable
 declare function date(format: string?, time: number?): string
+--- Returns the current time in seconds since the epoch, or the time a table describes (Lua 5.1's `os.time`; WoW has no `os`).
+---
+--- **Parameters**
+--- - `t`: A table with the fields `year`, `month` and `day`, and optionally `hour` (default 12), `min`, `sec` and `isdst`, read as local time.
 declare function time(t: table?): number
+--- Returns the number of seconds from time `t1` to time `t2` (`t2 - t1`). Lua 5.1's `os.difftime`; WoW has no `os`.
 declare function difftime(t2: number, t1: number): number
 
 -- WoW's helpers of its Lua environment.
+--- Returns its arguments, each converted with `tostring`.
 declare function tostringall(...: any): ...string
+--- Returns a description of the call stack as a multi-line string.
+---
+--- **Parameters**
+--- - `thread`: The coroutine whose stack to describe; default the running one. It can be left out: `debugstack(2)` starts at level 2.
+--- - `start`: The stack level to start at; default 1 (the function calling `debugstack`).
+--- - `count1`: How many functions to show at the top of the stack; default 12.
+--- - `count2`: How many functions to show at the bottom of the stack; default 10.
 declare function debugstack(thread: (thread | number)?, start: number?, count1: number?, count2: number?): string
+--- Returns a description of the local variables and upvalues at a stack level, as a multi-line string.
+---
+--- **Parameters**
+--- - `level`: The stack level; default 1 (the function calling `debuglocals`).
 declare function debuglocals(level: number?): string
+--- Starts (or restarts) the profiling timer that `debugprofilestop` reads.
 declare function debugprofilestart()
+--- Returns the time in milliseconds (with a fractional part) since `debugprofilestart` was called.
 declare function debugprofilestop(): number
+--- Returns the current error handler: the function WoW calls with the error message when an addon's code raises an uncaught error.
 declare function geterrorhandler(): (err: any, ...any) -> any
+--- Sets the error handler that WoW calls with the error message when an addon's code raises an uncaught error.
 declare function seterrorhandler(handler: (err: any, ...any) -> any)
+--- Calls `f` with the given arguments without passing its taint on to the caller, and returns its results. An error inside it goes to the error handler (`geterrorhandler()`) instead of propagating.
+---
+--- **Parameters**
+--- - `f`: The function, or the name of a global function.
 declare function securecall<A..., R...>(f: ((A...) -> R...) | string, ...: A...): R...
+--- Calls `f` with the given arguments as `securecall` does (without passing its taint on to the caller; errors go to the error handler), but takes only a function, not a name.
 declare function securecallfunction<A..., R...>(f: (A...) -> R..., ...: A...): R...
+--- Calls `f(key, value, ...)` for every entry of `t`, without passing taint on to the caller. Errors raised by `f` are discarded.
 declare function secureexecuterange(t: table, f: (key: any, value: any, ...any) -> any, ...: any)
+--- Returns whether the current execution is secure (untainted, so it may call protected functions).
 declare function issecure(): boolean
+--- Returns whether a variable is secure (not tainted).
+---
+--- **Parameters**
+--- - `t`: The table holding the variable; with a single argument, the name of a global variable.
+--- - `name`: The variable's key in `t`.
+---
+--- **Returns**
+--- - Whether the variable is secure, and, if not, the name of the addon that tainted it (an empty string for a macro).
 declare function issecurevariable(t: table | string, name: string?): (boolean, string?)
+--- Taints the current execution, as if insecure code were running.
 declare function forceinsecure()
+--- Hooks a function securely: after every call of the function, `hook` is called with the same arguments. The original's results are kept (the hook's are ignored), and the hook does not taint callers of the function.
+---
+--- **Parameters**
+--- - `t`: The table holding the function; with two arguments, the function is a global.
+--- - `name`: The function's key.
 declare function hooksecurefunc(name: string, hook: (...any) -> any)
 declare function hooksecurefunc(t: table, name: string, hook: (...any) -> any)
+--- Returns its arguments, with every value that is not a number, string or boolean replaced by `nil`.
 declare function scrub(...: any): ...any
+--- Returns whether `value` is a secret value.
 declare function issecretvalue(value: unknown): value is Secret<unknown>
 -- The checker narrows a call of the global as the complement of `issecretvalue` (spec §2.11).
+--- Returns whether the calling function may access and operate on `value`.
 declare function canaccessvalue(value: unknown): boolean

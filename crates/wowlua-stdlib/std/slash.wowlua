@@ -33,8 +33,14 @@ export type CommandInfo = {
 --- (default) or in the order they were added (the definitions first).
 export type RouterOptions = { order?: "name" | "added" }
 
+--- What `router` returns: runs the commands of a slash line, and lists
+--- them.
 export interface Router
+    --- Runs the command `msg` names with its arguments (true). An empty
+    --- `msg` or `help` prints the help (true); an unknown command prints it
+    --- too (false). A secret `msg` runs nothing (false).
     function dispatch(msg: string): boolean
+    --- Every command's usage and help text, one per line.
     function help(): string
     --- Adds a command (checked like the definitions; a name or alias that is
     --- taken is an error), owned by `owner` for `removeAll`.

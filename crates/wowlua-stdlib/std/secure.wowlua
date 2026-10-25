@@ -68,6 +68,7 @@ export function evaluate(conditional: string): string?
     return value
 end
 
+--- Options of `overlay`.
 export type OverlayOptions = {
     --- The layer it sits in (default "DIALOG": above a window that comes to
     --- the front when clicked).

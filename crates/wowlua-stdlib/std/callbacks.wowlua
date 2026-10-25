@@ -10,16 +10,24 @@
 import callOwned from "wowlua:errors"
 import Subscription from "wowlua:events"
 
+--- Options of `registry`: `compat = "CallbackHandler"` adds
+--- CallbackHandler's methods for plain Lua consumers.
 export type RegistryOptions = { compat?: "CallbackHandler" }
 
 --- A registry of the events `E` (an interface of function types).
 export interface Registry<E>
+    --- Calls `handler` with the event's arguments every time `name` fires;
+    --- `owner` is for `offAll`.
     function on(name: string, handler: (...any) -> (), owner: any?): Subscription
+    --- Like `on`, but cancelled before its first call.
     function once(name: string, handler: (...any) -> (), owner: any?): Subscription
     --- Cancels `sub`, or with a name every subscription of `handler` to it.
     function off(target: Subscription | string, handler: ((...any) -> ())?)
     --- Cancels every subscription of `owner` (to `name` only, when given).
     function offAll(owner: any, name: string?)
+    --- Calls the handlers of `name` with the arguments (each through the
+    --- error policy). Handlers added during the call wait for the next
+    --- `fire`; ones cancelled during it are skipped.
     function fire(name: string, ...: any)
     --- Whether any handler is subscribed to `name`.
     function has(name: string): boolean

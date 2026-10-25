@@ -394,6 +394,9 @@ end
 
 -- LDB data sources ------------------------------------------------------------
 
+--- Options of `dataSource`: its text, a label (default: its name), an
+--- icon, a click handler that gets the mouse button, and a tooltip
+--- builder.
 export type DataSourceOptions = {
     text: string,
     label?: string,

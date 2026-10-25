@@ -1,6 +1,8 @@
-The declarations in this directory include function signatures and records
-adapted from warcraft.wiki.gg's API pages (https://warcraft.wiki.gg), by its
-contributors, as `xtask/data/warcraft-wiki-api.lua` holds them. That content is
-licensed under the Creative Commons Attribution-ShareAlike 4.0 International
-License (https://creativecommons.org/licenses/by-sa/4.0/); the adapted
-declarations are shared under the same license.
+The declarations in this directory include function signatures, records and
+the descriptions of functions and their values (doc comments) adapted from
+warcraft.wiki.gg's API pages (https://warcraft.wiki.gg), by its contributors,
+as `xtask/data/warcraft-wiki-api.lua` and `xtask/data/warcraft-wiki-docs.json`
+hold them. That content is licensed under the Creative Commons
+Attribution-ShareAlike 4.0 International License
+(https://creativecommons.org/licenses/by-sa/4.0/); the adapted declarations are
+shared under the same license.

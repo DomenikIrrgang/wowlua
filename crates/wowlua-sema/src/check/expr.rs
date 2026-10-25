@@ -531,7 +531,21 @@ impl Checker<'_, '_> {
                 let o = if opt { self.env.types.non_nil(o) } else { o };
                 if self.completes(name.text()) {
                     self.complete_members(o, false, name.span());
+                    // a module's members: its exports (their doc comments)
+                    if let Some(m) = self.namespace_module(obj) {
+                        self.env.export_targets(m);
+                    }
                     return single(Types::ANY);
+                }
+                // `M.f` of `import * as M`: the module's export (go to
+                // definition, its doc comment on hover)
+                if self.env.definitions.is_some()
+                    && let Some(m) = self.namespace_module(obj)
+                {
+                    self.env.note_definition(
+                        name.span(),
+                        super::env::DefTarget::Export(m, name.text().into()),
+                    );
                 }
                 if let Some(t) = self.custom_matcher(obj, o, name) {
                     return single(t);
@@ -925,6 +939,22 @@ impl Checker<'_, '_> {
         };
         if let Some(t) = target {
             self.env.note_definition(n.span(), t);
+        }
+    }
+
+    /// The module `e` names, when it is the name of an `import * as M` in
+    /// scope.
+    pub(crate) fn namespace_module(&self, e: Expr<'_>) -> Option<usize> {
+        let ExprKind::Name(n) = e.kind() else {
+            return None;
+        };
+        let var = self.lookup_var(n.text())?;
+        if self.import_vars.get(n.text()) != Some(&var) {
+            return None;
+        }
+        match self.import_targets.get(n.text())? {
+            super::env::DefTarget::Module(m) => Some(*m),
+            _ => None,
         }
     }
 
