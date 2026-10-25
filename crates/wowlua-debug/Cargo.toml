@@ -12,7 +12,7 @@ authors.workspace = true
 default = ["native"]
 # Sessions of test files and the addon (through the test runner), and the
 # DAP server: not for the browser.
-native = ["dep:wowlua-test", "dep:wowlua-driver", "wowlua-driver/native"]
+native = ["dep:wowlua-test", "dep:wowlua-driver", "wowlua-driver/native", "wowlua-test/native"]
 
 [dependencies]
 rustc-hash.workspace = true

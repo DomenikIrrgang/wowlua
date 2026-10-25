@@ -1,6 +1,8 @@
 //! Widget methods `methods2.rs` answers from the engine's models and the
 //! setters' stored values.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {

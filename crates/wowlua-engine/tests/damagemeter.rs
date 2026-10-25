@@ -1,6 +1,8 @@
 //! The damage meter's sessions (`C_DamageMeter`) from the engine's fights,
 //! and the client's rules Details! and WeakAuras ran into on WoW Forever.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {

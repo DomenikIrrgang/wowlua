@@ -12,6 +12,7 @@ authors = ["Domenik Irrgang"]
 
 [workspace.dependencies]
 wowlua-span = { path = "crates/wowlua-span" }
+wowlua-host = { path = "crates/wowlua-host" }
 wowlua-diagnostics = { path = "crates/wowlua-diagnostics" }
 wowlua-flavors = { path = "crates/wowlua-flavors" }
 wowlua-manifest = { path = "crates/wowlua-manifest" }
@@ -30,7 +31,7 @@ wowlua-driver = { path = "crates/wowlua-driver", default-features = false }
 wowlua-pkg = { path = "crates/wowlua-pkg", default-features = false }
 wowlua-vm = { path = "crates/wowlua-vm" }
 wowlua-engine = { path = "crates/wowlua-engine" }
-wowlua-test = { path = "crates/wowlua-test" }
+wowlua-test = { path = "crates/wowlua-test", default-features = false }
 wowlua-debug = { path = "crates/wowlua-debug", default-features = false }
 wowlua-casc = { path = "crates/wowlua-casc" }
 wowlua-render = { path = "crates/wowlua-render" }

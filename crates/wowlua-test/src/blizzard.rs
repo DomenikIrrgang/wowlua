@@ -20,7 +20,7 @@ pub struct UiSource {
 
 /// The commits the flavor's declarations name: wow-ui-source's and the
 /// global strings dump's.
-fn commits(flavor: &str) -> Option<(String, Option<String>)> {
+pub fn commits(flavor: &str) -> Option<(String, Option<String>)> {
     let file = wowlua_api::own(flavor)?;
     let header: String = file.text.lines().take(3).collect::<Vec<_>>().join(" ");
     let ui = regex::Regex::new(r"wow-ui-source [^,]*, commit ([0-9a-f]{40})")
@@ -53,14 +53,14 @@ fn run(cmd: &mut Command, what: &str) -> Result<(), String> {
 pub fn ui_source_in(dir: &Path, flavor: &str) -> Option<UiSource> {
     let (_, strings_commit) = commits(flavor)?;
     let interface = dir.join(flavor).join("Interface");
-    if !interface.exists() {
+    if !wowlua_host::exists(&interface) {
         return None;
     }
     Some(UiSource {
         interface,
         strings: strings_commit
             .map(|c| dir.join("strings").join(format!("{c}.lua")))
-            .filter(|p| p.exists()),
+            .filter(|p| wowlua_host::exists(p)),
     })
 }
 
@@ -76,7 +76,7 @@ pub fn ui_source(flavor: &str, status: &dyn Fn(&str)) -> Result<UiSource, String
         .ok_or("cannot find the cache (set `WOWLUA_HOME`)")?
         .join("blizzard-ui");
     let dir = cache.join(format!("{flavor}-{}", &commit[..12]));
-    if !dir.join(".wowlua-complete").exists() {
+    if !wowlua_host::exists(dir.join(".wowlua-complete")) {
         status(&format!(
             "Blizzard's UI code for {flavor} (wow-ui-source {})",
             &commit[..12]
@@ -86,7 +86,7 @@ pub fn ui_source(flavor: &str, status: &dyn Fn(&str)) -> Result<UiSource, String
     let strings = match strings_commit {
         Some(c) => {
             let path = cache.join("strings").join(format!("{c}.lua"));
-            if !path.exists() {
+            if !wowlua_host::exists(&path) {
                 fetch_strings(&path, &c)?;
             }
             Some(path)
@@ -100,10 +100,10 @@ pub fn ui_source(flavor: &str, status: &dyn Fn(&str)) -> Result<UiSource, String
 }
 
 fn fetch_ui(dir: &Path, commit: &str) -> Result<(), String> {
-    if dir.exists() {
-        std::fs::remove_dir_all(dir).map_err(|e| e.to_string())?;
+    if wowlua_host::exists(dir) {
+        wowlua_host::remove_dir_all(dir).map_err(|e| e.to_string())?;
     }
-    std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+    wowlua_host::create_dir_all(dir).map_err(|e| e.to_string())?;
     let git = |args: &[&str]| -> Result<(), String> {
         run(
             Command::new("git").arg("-C").arg(dir).args(args),
@@ -124,13 +124,13 @@ fn fetch_ui(dir: &Path, commit: &str) -> Result<(), String> {
     ])?;
     git(&["checkout", "-q", "FETCH_HEAD"])?;
     // Only the files are needed.
-    let _ = std::fs::remove_dir_all(dir.join(".git"));
-    std::fs::write(dir.join(".wowlua-complete"), commit).map_err(|e| e.to_string())
+    let _ = wowlua_host::remove_dir_all(dir.join(".git"));
+    wowlua_host::write(dir.join(".wowlua-complete"), commit).map_err(|e| e.to_string())
 }
 
 fn fetch_strings(path: &Path, commit: &str) -> Result<(), String> {
     if let Some(parent) = path.parent() {
-        std::fs::create_dir_all(parent).map_err(|e| e.to_string())?;
+        wowlua_host::create_dir_all(parent).map_err(|e| e.to_string())?;
     }
     let url = format!(
         "https://raw.githubusercontent.com/Ketho/BlizzardInterfaceResources/{commit}/Resources/GlobalStrings/enUS.lua"
@@ -143,5 +143,5 @@ fn fetch_strings(path: &Path, commit: &str) -> Result<(), String> {
             .arg(&url),
         "downloading the global strings with curl",
     )?;
-    std::fs::rename(&part, path).map_err(|e| e.to_string())
+    wowlua_host::rename(&part, path).map_err(|e| e.to_string())
 }

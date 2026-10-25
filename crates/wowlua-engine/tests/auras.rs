@@ -1,5 +1,7 @@
 //! Auras on the world's units, read through C_UnitAuras.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {

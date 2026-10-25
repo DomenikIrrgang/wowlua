@@ -4,6 +4,8 @@
 //! button 1 takes to the protected `UseAction`; the click is then forbidden
 //! exactly when the client forbade it.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use std::path::{Path, PathBuf};
 
 use wowlua_vm::{Value, Vm};

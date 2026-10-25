@@ -4,8 +4,9 @@
 //! [`MemoryHost`], and every check, build and format reads and writes
 //! through it.
 //!
-//! The functions here mirror `std::fs`; the driver's build path calls them
-//! instead of `std::fs` (clippy's `disallowed-methods` keeps it that way).
+//! The functions here mirror `std::fs`; the driver's build path, the
+//! language server, the engine and the test runner call them instead of
+//! `std::fs` (clippy's `disallowed-methods` keeps it that way).
 
 #![allow(clippy::disallowed_methods)]
 
@@ -196,6 +197,41 @@ pub fn unix_now() -> i64 {
     };
     now.and_then(|t| t.duration_since(SystemTime::UNIX_EPOCH).ok())
         .map_or(0, |d| d.as_secs() as i64)
+}
+
+/// Measures how long something takes: the computer's steady clock, else
+/// the host's (a page's, which moves as the page sets it).
+pub struct Stopwatch(Start);
+
+enum Start {
+    Steady(std::time::Instant),
+    Host(Option<SystemTime>),
+}
+
+impl Stopwatch {
+    pub fn start() -> Stopwatch {
+        match installed() {
+            Some(h) => Stopwatch(Start::Host(h.now())),
+            None if cfg!(all(target_family = "wasm", target_os = "unknown")) => {
+                Stopwatch(Start::Host(None))
+            }
+            None => Stopwatch(Start::Steady(std::time::Instant::now())),
+        }
+    }
+
+    /// The time since [`start`](Self::start); zero without a clock.
+    pub fn elapsed(&self) -> std::time::Duration {
+        match &self.0 {
+            Start::Steady(at) => at.elapsed(),
+            Start::Host(at) => {
+                let now = installed().and_then(|h| h.now());
+                match (at, now) {
+                    (Some(a), Some(n)) => n.duration_since(*a).unwrap_or_default(),
+                    _ => std::time::Duration::ZERO,
+                }
+            }
+        }
+    }
 }
 
 /// The files under `dir` (itself a file: just it), sorted by path;

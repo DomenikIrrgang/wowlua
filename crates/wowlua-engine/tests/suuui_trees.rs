@@ -11,6 +11,8 @@
 //! reputations), so not every line can match; the counts below may only go
 //! up.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use std::collections::HashMap;
 use std::fmt::Write as _;
 use std::path::PathBuf;

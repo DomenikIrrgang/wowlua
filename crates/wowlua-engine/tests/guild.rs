@@ -2,6 +2,8 @@
 //! the mock's controls put it in another, at another rank, or in none, and
 //! change the roster.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {

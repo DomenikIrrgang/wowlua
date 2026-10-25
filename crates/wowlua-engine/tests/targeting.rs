@@ -1,6 +1,8 @@
 //! Targeting from the keyboard, assist and focus, and the player's buffs
 //! cancelled (decision T291); an edit box's history (decision T289).
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {

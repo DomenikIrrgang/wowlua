@@ -2,6 +2,8 @@
 //! duration objects, locale contexts, abbreviation configs, heal
 //! prediction values and housing catalog searchers.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {

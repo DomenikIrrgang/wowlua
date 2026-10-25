@@ -400,7 +400,7 @@ pub fn html(report: &Report, roots: &[PathBuf], title: &str) -> String {
         .map(|(path, f)| {
             let source = roots
                 .iter()
-                .find_map(|r| std::fs::read_to_string(r.join(path)).ok())
+                .find_map(|r| wowlua_host::read_to_string(r.join(path)).ok())
                 .unwrap_or_default();
             let lines: Vec<u64> = f
                 .lines

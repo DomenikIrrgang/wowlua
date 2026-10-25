@@ -1,6 +1,8 @@
 //! The player's data changed by a test: told by events when asked, and
 //! the answers that follow the level.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {

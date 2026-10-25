@@ -32,6 +32,46 @@ export interface Built {
 
 export type Formatted = { text: string } | { diagnostics: Diagnostic[] };
 
+/** What the running addon printed (`print`) or raised. */
+export interface Output {
+    kind: "print" | "error";
+    text: string;
+    stack?: string;
+}
+
+export interface RunOptions {
+    /** The flavor to run (default "camelot", the one the playground has Blizzard's UI for). */
+    flavor?: string;
+    /** Load Blizzard's UI first (`loadBlizzardUI` fetched it). */
+    blizzardUI?: boolean;
+    /** A world profile's JSON text (`tests/profiles/<name>.json`'s). */
+    profile?: string;
+}
+
+export interface Started {
+    ok: boolean;
+    diagnostics: Diagnostic[];
+    error?: string;
+}
+
+/** Input as the user gives it; x and y are screen pixels from the top left. */
+export type Input =
+    | { action: "click"; x?: number; y?: number; frame?: string; button?: "LeftButton" | "RightButton" | "MiddleButton" }
+    | { action: "hover"; x?: number; y?: number; frame?: string }
+    | { action: "type"; text: string }
+    | { action: "key"; key: string }
+    | { action: "slash"; text: string };
+
+/** A canvas the running addon is drawn on. */
+export interface Screen {
+    /** "BrowserWebGpu" or "Gl". */
+    readonly backend: string;
+    resize(width: number, height: number): void;
+}
+
+/** Draws on a canvas (an HTMLCanvasElement or, in a worker, an OffscreenCanvas). */
+export function createScreen(canvas: HTMLCanvasElement | OffscreenCanvas): Promise<Screen>;
+
 /** A JSON-RPC message of the Language Server Protocol. */
 export type LspMessage = Record<string, unknown>;
 
@@ -62,11 +102,35 @@ export class Playground {
     share(): string;
     openShared(link: string): boolean;
     languageServer(onMessage: (message: LspMessage) => void): LanguageServer;
+    /**
+     * Fetches a flavor's Blizzard UI code (from jsDelivr by default, or
+     * `base`): the startup files before it resolves, the rest in `later`.
+     */
+    loadBlizzardUI(options?: {
+        flavor?: string;
+        base?: string;
+        concurrency?: number;
+        onProgress?: (done: number, total: number) => void;
+        fetch?: typeof fetch;
+    }): Promise<{ flavor: string; commit: string; later: Promise<void> }>;
+    run(options?: RunOptions): Started;
+    stop(): void;
+    readonly running: boolean;
+    /** Moves the game to now; what it printed and raised. */
+    advance(): Output[];
+    input(input: Input): Output[];
+    /** The running addon's screen in pixels: [width, height]. */
+    screenSize(): [number, number];
+    /** Advances and draws each animation frame until `stop()`. */
+    play(screen: Screen, onOutput?: (output: Output) => void): { stop(): void };
 }
 
 export type PlaygroundCall =
     | "files" | "reset" | "writeFile" | "readFile" | "deleteFile"
-    | "check" | "build" | "format" | "share" | "openShared" | "version";
+    | "check" | "build" | "format" | "share" | "openShared" | "version"
+    | "loadBlizzardUI" | "run" | "stop" | "input" | "screenSize"
+    /** The game's screen as a PNG Blob (`call("snapshot", scale)`). */
+    | "snapshot";
 
 /** The page's side of worker.js (from "@wowlua/web/client"). */
 export interface Connection {
@@ -76,6 +140,17 @@ export interface Connection {
         /** Returns a function that stops listening. */
         onMessage(listen: (message: LspMessage) => void): () => void;
     };
+    /** What the running addon prints and raises. */
+    onOutput(listen: (output: Output) => void): () => void;
+    /** Progress while Blizzard's UI loads. */
+    onProgress(listen: (done: number, total: number) => void): () => void;
+    /**
+     * Draws the game on `canvas` (set its width and height first) and
+     * passes its mouse and keyboard to the game; the backend that draws.
+     */
+    attachCanvas(canvas: HTMLCanvasElement): Promise<string>;
+    /** The canvas's new drawing size. */
+    resize(width: number, height: number): void;
     terminate(): void;
 }
 

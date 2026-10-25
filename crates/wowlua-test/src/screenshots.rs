@@ -127,24 +127,24 @@ pub(crate) fn screenshot_match(vm: &mut Vm, c: NativeCall) -> Ret {
         let actual_path = dir.join(format!("{base}.actual.png"));
         let diff_path = dir.join(format!("{base}.diff.png"));
         let write = |path: &Path, bytes: &[u8]| -> Result<(), String> {
-            std::fs::create_dir_all(&dir).map_err(|e| e.to_string())?;
-            std::fs::write(path, bytes).map_err(|e| format!("writing {}: {e}", path.display()))
+            wowlua_host::create_dir_all(&dir).map_err(|e| e.to_string())?;
+            wowlua_host::write(path, bytes).map_err(|e| format!("writing {}: {e}", path.display()))
         };
-        let Ok(expected) = std::fs::read(&stored) else {
+        let Ok(expected) = wowlua_host::read(&stored) else {
             write(&stored, &actual)?;
             STATE.with(|s| s.borrow_mut().written += 1);
             return Ok(None);
         };
         let (ratio, diff) = cam.compare(&expected, &actual, threshold)?;
         if ratio <= max_ratio {
-            let _ = std::fs::remove_file(&actual_path);
-            let _ = std::fs::remove_file(&diff_path);
+            let _ = wowlua_host::remove_file(&actual_path);
+            let _ = wowlua_host::remove_file(&diff_path);
             return Ok(None);
         }
         if update {
             write(&stored, &actual)?;
-            let _ = std::fs::remove_file(&actual_path);
-            let _ = std::fs::remove_file(&diff_path);
+            let _ = wowlua_host::remove_file(&actual_path);
+            let _ = wowlua_host::remove_file(&diff_path);
             STATE.with(|s| s.borrow_mut().updated += 1);
             return Ok(None);
         }
@@ -178,8 +178,8 @@ pub(crate) fn screenshot(vm: &mut Vm, c: NativeCall) -> Ret {
     let file = STATE.with(|s| s.borrow().file_name.clone());
     let dir = cam.out_dir().join(file);
     let path = dir.join(format!("{}.png", file_key(&name)));
-    std::fs::create_dir_all(&dir)
-        .and_then(|()| std::fs::write(&path, &png))
+    wowlua_host::create_dir_all(&dir)
+        .and_then(|()| wowlua_host::write(&path, &png))
         .map_err(|e| vm.error(&format!("mock.screenshot: {e}")))?;
     Ok(vec![vm.str(&path.to_string_lossy())])
 }

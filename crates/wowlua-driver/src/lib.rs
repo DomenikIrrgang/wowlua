@@ -21,7 +21,8 @@ pub mod fix;
 mod foreign;
 pub mod format;
 mod fsutil;
-pub mod host;
+/// The files and clock a build reads through (`wowlua-host`).
+pub use wowlua_host as host;
 pub mod incremental;
 pub mod install;
 pub mod keywords;

@@ -2,6 +2,8 @@
 //! gear answers `GetInventoryItemID`, `…Texture` and `…Quality` as its
 //! link does (SuuUI's inspect window draws its slots from them).
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {

@@ -1,0 +1,15 @@
+[package]
+name = "wowlua-host"
+description = "The files and clock wowlua reads through: the computer's, or a page's in memory (spec M14, decisions T394, T396)"
+version.workspace = true
+edition.workspace = true
+rust-version.workspace = true
+license.workspace = true
+repository.workspace = true
+authors.workspace = true
+
+[dependencies]
+walkdir.workspace = true
+
+[lints]
+workspace = true

@@ -1,6 +1,8 @@
 //! The long tail of namespaces (`extras.rs`): the systems Forever lacks
 //! answer "nothing here", the small helpers answer from the world.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {

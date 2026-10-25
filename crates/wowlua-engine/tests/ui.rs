@@ -1,6 +1,8 @@
 //! Blizzard's UI code loaded as secure code: a small UI tree, and the
 //! flavor's own when it is on disk (`cargo xtask types` fetches it).
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use std::path::{Path, PathBuf};
 
 use wowlua_vm::{Value, Vm};

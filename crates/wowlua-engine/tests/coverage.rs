@@ -3,6 +3,8 @@
 //! function it says has behaviour has it, a generated one has none, and
 //! every function it lists exists in the environment.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_engine::coverage::{Group, Source};
 use wowlua_vm::{Value, Vm};
 

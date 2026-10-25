@@ -2,6 +2,8 @@
 //! `UnitPosition`) and the session's end at `ReloadUI` (`login.rs`,
 //! `clock.rs`).
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {

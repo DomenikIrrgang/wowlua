@@ -2,6 +2,8 @@
 //! containers as frames, the regions widgets are made with, curve colors,
 //! explicit protection from XML and secure addons' unforbidden frames.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use std::path::PathBuf;
 
 use wowlua_vm::{Value, Vm};

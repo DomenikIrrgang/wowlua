@@ -3,6 +3,8 @@
 //! loaded as the addon's: including those the VM alone cannot pass
 //! (`wowlua-vm`'s `tests/client.rs` lists them as pending).
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use std::collections::BTreeMap;
 use std::path::{Path, PathBuf};
 

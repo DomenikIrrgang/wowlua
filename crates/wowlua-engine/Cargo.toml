@@ -9,6 +9,7 @@ repository.workspace = true
 authors.workspace = true
 
 [dependencies]
+wowlua-host.workspace = true
 flate2.workspace = true
 quick-xml.workspace = true
 rustc-hash.workspace = true

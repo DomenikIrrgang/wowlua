@@ -1,6 +1,8 @@
 //! The client's global functions `globalsinfo.rs` answers: kept settings,
 //! the table aliases, answers from the engine's world.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {

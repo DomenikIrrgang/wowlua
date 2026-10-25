@@ -1,6 +1,8 @@
 //! Protected actions: refused for tainted code, with the client's events
 //! and a taint report.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {

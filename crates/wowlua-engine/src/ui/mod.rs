@@ -199,11 +199,10 @@ fn directive<'a>(toc: &'a wowlua_toc::ParsedToc, t: &Target, key: &str) -> Vec<&
 /// it could load (by lower-case name).
 fn startup_addons(interface: &Path, t: &Target) -> (Vec<Addon>, HashMap<String, Addon>) {
     let mut all: HashMap<String, Addon> = HashMap::new();
-    let Ok(dirs) = std::fs::read_dir(interface.join("AddOns")) else {
+    let Ok(dirs) = wowlua_host::read_dir(interface.join("AddOns")) else {
         return (Vec::new(), HashMap::new());
     };
-    for entry in dirs.flatten() {
-        let dir = entry.path();
+    for dir in dirs {
         let Some(name) = dir.file_name().and_then(|n| n.to_str()).map(str::to_string) else {
             continue;
         };
@@ -213,7 +212,7 @@ fn startup_addons(interface: &Path, t: &Target) -> (Vec<Addon>, HashMap<String, 
             .iter()
             .map(|s| format!("{name}{s}.toc"))
             .chain(std::iter::once(format!("{name}.toc")))
-            .find_map(|f| std::fs::read_to_string(dir.join(f)).ok());
+            .find_map(|f| wowlua_host::read_to_string(dir.join(f)).ok());
         let Some(text) = text else {
             continue;
         };
@@ -463,7 +462,7 @@ fn keep_for_secure_code(vm: &mut Vm, dir: &Path) {
     let mut files = Vec::new();
     lua_files_in(dir, &mut files);
     for file in files {
-        let Ok(text) = std::fs::read_to_string(&file) else {
+        let Ok(text) = wowlua_host::read_to_string(&file) else {
             continue;
         };
         for line in text.lines() {
@@ -510,12 +509,11 @@ fn keep_for_secure_code(vm: &mut Vm, dir: &Path) {
 }
 
 fn lua_files_in(dir: &Path, out: &mut Vec<PathBuf>) {
-    let Ok(entries) = std::fs::read_dir(dir) else {
+    let Ok(entries) = wowlua_host::read_dir(dir) else {
         return;
     };
-    for e in entries.flatten() {
-        let p = e.path();
-        if p.is_dir() {
+    for p in entries {
+        if wowlua_host::is_dir(&p) {
             lua_files_in(&p, out);
         } else if p.extension().is_some_and(|x| x.eq_ignore_ascii_case("lua")) {
             out.push(p);
@@ -741,7 +739,7 @@ pub fn read_user_addon(flavor: &str, dir: &Path) -> Result<UserAddon, String> {
         .map(|s| format!("{name}{s}.toc"))
         .chain(std::iter::once(format!("{name}.toc")))
         .map(|f| resolve(dir, &f))
-        .find(|p| p.is_file())
+        .find(|p| wowlua_host::is_file(p))
         .ok_or_else(|| format!("{}: no {name}.toc for {flavor}", dir.display()))?;
     read_user_toc(flavor, &name, dir, &toc)
 }
@@ -757,7 +755,7 @@ pub fn read_user_toc(
     let t = Target::new(flavor);
     let name = name.to_string();
     let toc = toc.to_path_buf();
-    let text = std::fs::read_to_string(&toc).map_err(|e| format!("{}: {e}", toc.display()))?;
+    let text = wowlua_host::read_to_string(&toc).map_err(|e| format!("{}: {e}", toc.display()))?;
     let parsed = wowlua_toc::parse(&text);
     let on = |v: &str| v.trim() == "1" || v.trim().eq_ignore_ascii_case("true");
     let list = |keys: &[&str]| -> Vec<String> {
@@ -883,7 +881,7 @@ pub fn load_user_addon(
     table: Value,
     skip: &HashSet<String>,
 ) {
-    let text = match std::fs::read_to_string(toc) {
+    let text = match wowlua_host::read_to_string(toc) {
         Ok(t) => t,
         Err(e) => {
             engine_mut(vm)
@@ -955,7 +953,7 @@ fn load_file(vm: &mut Vm, interface_root: &Path, path: &Path, addon: &str, addon
     match ext.as_deref() {
         Some("lua") => build::run_lua(vm, path, &shown, addon, addon_table),
         Some("xml") => {
-            let text = match std::fs::read_to_string(path) {
+            let text = match wowlua_host::read_to_string(path) {
                 Ok(t) => t,
                 Err(e) => {
                     engine_mut(vm).world.ui.errors.push(format!("{shown}: {e}"));
@@ -982,14 +980,14 @@ fn load_file(vm: &mut Vm, interface_root: &Path, path: &Path, addon: &str, addon
 fn resolve(dir: &Path, file: &str) -> PathBuf {
     let rel = wowlua_toc::split_conditions(file).0.replace('\\', "/");
     let direct = dir.join(&rel);
-    if direct.exists() {
+    if wowlua_host::exists(&direct) {
         return direct;
     }
     // Case-insensitive lookup, one component at a time.
     let mut cur = dir.to_path_buf();
     for part in rel.split('/') {
-        let next = std::fs::read_dir(&cur).ok().and_then(|entries| {
-            entries.flatten().map(|e| e.path()).find(|p| {
+        let next = wowlua_host::read_dir(&cur).ok().and_then(|entries| {
+            entries.into_iter().find(|p| {
                 p.file_name()
                     .and_then(|n| n.to_str())
                     .is_some_and(|n| n.eq_ignore_ascii_case(part))
@@ -1254,7 +1252,7 @@ pub(crate) fn xml_color(vm: &mut Vm, el: &Element) -> [Value; 4] {
 /// The client's global strings: the file's `NAME = "text";` lines (a line
 /// whose name is not an identifier is skipped).
 fn load_global_strings(vm: &mut Vm, path: &Path) {
-    let text = match std::fs::read_to_string(path) {
+    let text = match wowlua_host::read_to_string(path) {
         Ok(t) => t,
         Err(e) => {
             engine_mut(vm)
@@ -1414,7 +1412,7 @@ pub fn load(vm: &mut Vm, interface: &Path, global_strings: Option<&Path>) -> Rep
     let mut names: Vec<&String> = all.keys().collect();
     names.sort();
     binding_files.extend(names.into_iter().map(|n| all[n].dir.join("Bindings.xml")));
-    for path in binding_files.into_iter().filter(|p| p.exists()) {
+    for path in binding_files.into_iter().filter(|p| wowlua_host::exists(p)) {
         if let Err(e) = crate::bindings::load_bindings_xml(vm, &path, None) {
             engine_mut(vm).world.ui.errors.push(e);
         }

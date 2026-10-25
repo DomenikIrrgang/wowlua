@@ -2,6 +2,8 @@
 //! activities, who may search and list (SuuUI's `/suu probe lfg`), the
 //! searches' answers, and Blizzard's vanilla-style group finder on them.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use std::path::{Path, PathBuf};
 
 use wowlua_engine::lfg::{Member, SearchResult};

@@ -8,7 +8,6 @@
 
 use std::collections::HashMap;
 
-use wgpu::util::DeviceExt;
 use wowlua_casc::display::{Composite, Display, Texture};
 use wowlua_casc::m2::{self, Mat4, Model, Skin, Vec3};
 use wowlua_engine::scene::{self, Image, ModelCamera};
@@ -1223,13 +1222,13 @@ impl Renderer {
         globals.extend_from_slice(&[l.direction[0], l.direction[1], l.direction[2], 0.0]);
         globals.extend_from_slice(&[ambient[0], ambient[1], ambient[2], 1.0]);
         globals.extend_from_slice(&[diffuse[0], diffuse[1], diffuse[2], 1.0]);
-        let ubuf = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("model globals"),
-                contents: bytemuck::cast_slice(&globals),
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
+        let ubuf = crate::buffer_with(
+            &self.device,
+            &self.queue,
+            "model globals",
+            bytemuck::cast_slice(&globals),
+            wgpu::BufferUsages::UNIFORM,
+        );
         let ugroup = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &self.models.layout.as_ref().unwrap().0,
@@ -1238,13 +1237,13 @@ impl Renderer {
                 resource: ubuf.as_entire_binding(),
             }],
         });
-        let vbuf = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("model vertices"),
-                contents: bytemuck::cast_slice(&verts),
-                usage: wgpu::BufferUsages::VERTEX,
-            });
+        let vbuf = crate::buffer_with(
+            &self.device,
+            &self.queue,
+            "model vertices",
+            bytemuck::cast_slice(&verts),
+            wgpu::BufferUsages::VERTEX,
+        );
         let size = wgpu::Extent3d {
             width,
             height,

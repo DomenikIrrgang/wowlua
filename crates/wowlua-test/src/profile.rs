@@ -131,7 +131,7 @@ pub fn default_for(flavor: &str) -> Option<&'static str> {
 
 /// Applies the profile in `path` with the engine's `controls`.
 pub fn apply(vm: &mut Vm, controls: TableRef, path: &Path) -> Result<(), String> {
-    let text = std::fs::read_to_string(path)
+    let text = wowlua_host::read_to_string(path)
         .map_err(|e| format!("the world profile {}: {e}", path.display()))?;
     apply_text(vm, controls, &text, &path.display().to_string())
 }

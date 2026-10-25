@@ -88,7 +88,7 @@ fn render(entries: &[(String, String)]) -> String {
 /// Starts a test file's snapshots.
 pub fn begin(test_file: &Path, update: bool) {
     let path = path_for(test_file);
-    let entries = std::fs::read_to_string(&path)
+    let entries = wowlua_host::read_to_string(&path)
         .map(|t| parse(&t))
         .unwrap_or_default();
     FILE.with(|f| {
@@ -122,13 +122,13 @@ pub fn finish(complete: bool) -> Result<Summary, String> {
             return Ok(summary);
         }
         if f.entries.is_empty() {
-            let _ = std::fs::remove_file(&f.path);
+            let _ = wowlua_host::remove_file(&f.path);
             return Ok(summary);
         }
         if let Some(dir) = f.path.parent() {
-            std::fs::create_dir_all(dir).map_err(|e| e.to_string())?;
+            wowlua_host::create_dir_all(dir).map_err(|e| e.to_string())?;
         }
-        std::fs::write(&f.path, render(&f.entries)).map_err(|e| e.to_string())?;
+        wowlua_host::write(&f.path, render(&f.entries)).map_err(|e| e.to_string())?;
         Ok(summary)
     })
 }

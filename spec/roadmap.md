@@ -690,6 +690,17 @@ with its own design); wowlua provides what the page embeds:
 - S3 Run and draw: the built addon runs in the engine with a world profile
   and camelot's Blizzard UI (fetched by the page), drawn on a canvas by the
   renderer, with mouse and keyboard input, printed output and errors.
+  Built 2026-10-26 (T396): the engine and the test runner read through
+  `wowlua-host` too; the playground builds into memory and opens the
+  test runner's addon session, after Blizzard's UI when the page fetched
+  it (the files listed per flavor by `cargo xtask web-ui`, from jsDelivr);
+  frames as the page's clock moves, the debugger's input, output to the
+  page; the renderer draws into the canvas (WebGPU, else WebGL 2) and
+  snapshots the screen. Checked natively (`crates/wowlua-web/tests/run.rs`,
+  with the UI in CI's Blizzard UI job), in Node, and in Chrome on WebGPU
+  and WebGL 2: camelot's default UI and an addon's frame drawn, a click
+  on the canvas reaching the frame. Blizzard's textures and fonts wait for
+  S5 (placeholders and stand-in fonts until then).
 - S4 The debugger over the JavaScript API: breakpoints, stepping,
   variables, frames and events, as the M12 views have them.
 - S5 Game data and assets from the user's installation through the File

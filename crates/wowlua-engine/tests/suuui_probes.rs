@@ -2,6 +2,8 @@
 //! that the engine answers: function and event answers, widget methods,
 //! the XML's frames.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use std::path::PathBuf;
 
 use wowlua_vm::{Value, Vm};

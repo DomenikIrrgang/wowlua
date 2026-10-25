@@ -4,6 +4,8 @@
 //! an item's expansion; the house's searches by name, the player's
 //! auctions and their cancelling.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use std::path::PathBuf;
 
 use wowlua_vm::{Value, Vm};

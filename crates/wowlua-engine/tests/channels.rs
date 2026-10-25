@@ -1,6 +1,8 @@
 //! The chat channels as the client lists them (recorded in Thunder Bluff
 //! by `/stdtest snapshot`).
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {

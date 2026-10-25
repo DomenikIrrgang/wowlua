@@ -4,6 +4,8 @@
 //! engine's world is set up as it was (a level 14 enemy targeted, a buff
 //! on the player) and the probe's calls give what WoW Forever gave.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 

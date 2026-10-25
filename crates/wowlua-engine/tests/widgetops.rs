@@ -2,6 +2,8 @@
 //! decision T289: what the widget's getters and the world answer after
 //! them.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {

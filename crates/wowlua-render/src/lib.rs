@@ -16,7 +16,6 @@ mod model;
 
 use std::collections::HashMap;
 
-use wgpu::util::DeviceExt;
 pub use wowlua_casc::Rgba;
 pub use wowlua_casc::display::Display;
 use wowlua_engine::scene::{Blend, Image, Item, ModelSource, Rect, Scene};
@@ -154,6 +153,35 @@ fn snapped(q: &wowlua_engine::scene::Quad, r: Rect) -> Rect {
         w: x1 - x0,
         h: y1 - y0,
     }
+}
+
+/// A buffer holding `contents`, written through the queue (no buffer
+/// mapped at creation: a browser's WebGPU can refuse those).
+pub(crate) fn buffer_with(
+    device: &wgpu::Device,
+    queue: &wgpu::Queue,
+    label: &str,
+    contents: &[u8],
+    usage: wgpu::BufferUsages,
+) -> wgpu::Buffer {
+    // (writes are whole multiples of 4 bytes)
+    let size = (contents.len() as u64)
+        .next_multiple_of(wgpu::COPY_BUFFER_ALIGNMENT)
+        .max(4);
+    let buffer = device.create_buffer(&wgpu::BufferDescriptor {
+        label: Some(label),
+        size,
+        usage: usage | wgpu::BufferUsages::COPY_DST,
+        mapped_at_creation: false,
+    });
+    if contents.len() as u64 == size {
+        queue.write_buffer(&buffer, 0, contents);
+    } else {
+        let mut padded = contents.to_vec();
+        padded.resize(size as usize, 0);
+        queue.write_buffer(&buffer, 0, &padded);
+    }
+    buffer
 }
 
 /// No assets: every image a placeholder, every font a stand-in.
@@ -1015,13 +1043,13 @@ impl Renderer {
         for b in &batches {
             self.bind_group(b.tex, b.mask);
         }
-        let screen = self
-            .device
-            .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                label: Some("screen"),
-                contents: bytemuck::cast_slice(&[width as f32, height as f32, 0.0, 0.0]),
-                usage: wgpu::BufferUsages::UNIFORM,
-            });
+        let screen = buffer_with(
+            &self.device,
+            &self.queue,
+            "screen",
+            bytemuck::cast_slice(&[width as f32, height as f32, 0.0, 0.0]),
+            wgpu::BufferUsages::UNIFORM,
+        );
         let screen_group = self.device.create_bind_group(&wgpu::BindGroupDescriptor {
             label: None,
             layout: &self.screen_layout,
@@ -1031,12 +1059,13 @@ impl Renderer {
             }],
         });
         let vbuf = (!verts.is_empty()).then(|| {
-            self.device
-                .create_buffer_init(&wgpu::util::BufferInitDescriptor {
-                    label: Some("quads"),
-                    contents: bytemuck::cast_slice(&verts),
-                    usage: wgpu::BufferUsages::VERTEX,
-                })
+            buffer_with(
+                &self.device,
+                &self.queue,
+                "quads",
+                bytemuck::cast_slice(&verts),
+                wgpu::BufferUsages::VERTEX,
+            )
         });
         let mut encoder = self
             .device

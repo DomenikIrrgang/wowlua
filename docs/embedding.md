@@ -19,7 +19,8 @@ npm run build   # pkg/wowlua_web.js and pkg/wowlua_web_bg.wasm
 npm test        # the package as a page uses it, in Node
 ```
 
-The module is about 41 MB, 7.5 MB with gzip: serve it compressed, with
+The module is about 76 MB, 14 MB with gzip (the compiler, the language
+server, the emulated client and its renderer): serve it compressed, with
 `Content-Type: application/wasm`, and let the browser cache it.
 
 ## The playground
@@ -78,11 +79,50 @@ library), whose URIs are `file:///.wowlua-<version>/…`: read them with
 Any LSP client works over this transport, for example
 `@codemirror/lsp-client` or `monaco-languageclient`.
 
+## Running the addon
+
+The page can run the package in the emulated client and draw it on a
+canvas, with its mouse and keyboard. Through the worker:
+
+```js
+await wowlua.attachCanvas(canvas);   // set canvas.width and height first
+wowlua.onOutput((o) => chat.append(o.text));      // print() and errors
+wowlua.onProgress((done, total) => …);            // while the UI loads
+await wowlua.call("loadBlizzardUI", { flavor: "camelot" });
+const started = await wowlua.call("run", { blizzardUI: true });
+// started: { ok, diagnostics, error }
+await wowlua.call("stop");
+const png = await wowlua.call("snapshot", 1);     // the screen as a PNG Blob
+```
+
+- The game draws with WebGPU where the browser has a GPU adapter for it,
+  else WebGL 2; `attachCanvas` resolves to which (`BrowserWebGpu`, `Gl`).
+  It draws at the canvas's size, scaled from the client's 1920×1080
+  screen; keep the canvas 16:9.
+- Clicks, mouse moves and keys on the canvas reach the game: a click on a
+  button runs its `OnClick`, typing goes into the focused edit box.
+- Blizzard's default UI is its code from Gethe/wow-ui-source at the
+  commit wowlua's declarations name, fetched by the page from jsDelivr
+  (about 2,450 files, 18 MB, before the run; the rest of its addons' code
+  in the background). The browser caches the files: a first run takes
+  about 30 s, later ones a few seconds. Pass `base` to fetch from another
+  place with the same paths. Without it (`blizzardUI: false`) the addon
+  runs alone, at once.
+- The game's textures and fonts are the user's installation's, which a
+  page cannot read yet: images are placeholders (magenta) and text uses
+  stand-in fonts, except the addon's own images (its PNG, TGA and BLP
+  files).
+
+Without the worker, `Playground` has the same calls (`loadBlizzardUI`,
+`run`, `advance`, `input`, `stop`) and `createScreen(canvas)` with
+`playground.play(screen, onOutput)`.
+
 ## A test page
 
 `web/demo/index.html` uses only the package, through its worker: a text
 area for `src/main.wowlua`, the language server's diagnostics as you type,
-hover on click, build, format and share. Serve `web/` and open it:
+hover on click, build, format, share, and the game on a canvas (with or
+without Blizzard's UI) with its chat output. Serve `web/` and open it:
 
 ```sh
 cd web && npm run build && python3 -m http.server 8000
@@ -98,6 +138,7 @@ gone, so keep the editor's texts and write them again.
 
 ## Not yet
 
-Running the addon, drawing it and the debugger come with M14's next
-stages (`spec/roadmap.md`); so do dependencies other than the standard
-library and game data from the user's installation.
+The debugger and the user's installation (textures, fonts, game data)
+come with M14's next stages (`spec/roadmap.md`); so do dependencies other
+than the standard library, world profiles in share links and Blizzard's
+UI for flavors other than camelot.

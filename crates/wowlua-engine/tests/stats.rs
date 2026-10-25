@@ -1,6 +1,8 @@
 //! The player's stats: the recorded answers of the client functions that
 //! report them, set by a profile or `mock.player:setStats`.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {

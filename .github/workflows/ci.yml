@@ -36,7 +36,7 @@ jobs:
   # The layers that are to run in the browser (decisions T212, T301, T394):
   # the VM, the engine, the debugger's core, the asset reader, the renderer,
   # the driver that checks, builds and formats a package, the language
-  # server and the playground's module (T395).
+  # server, the test runner and the playground's module (T395, T396).
   wasm:
     runs-on: ubuntu-latest
     steps:
@@ -47,7 +47,8 @@ jobs:
       - uses: Swatinem/rust-cache@v2
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
-      - run: cargo check --target wasm32-unknown-unknown --no-default-features -p wowlua-vm -p wowlua-engine -p wowlua-debug -p wowlua-casc -p wowlua-render -p wowlua-driver -p wowlua-lsp -p wowlua-web
+      - run: cargo check --target wasm32-unknown-unknown --no-default-features -p wowlua-vm -p wowlua-engine -p wowlua-debug -p wowlua-casc -p wowlua-render -p wowlua-host -p wowlua-driver -p wowlua-lsp -p wowlua-test -p wowlua-web
+      - run: cargo clippy --target wasm32-unknown-unknown -p wowlua-web --no-deps -- -D warnings
       # The playground's package, built and used as a page uses it (T395).
       - uses: taiki-e/install-action@v2
         with:
@@ -94,6 +95,8 @@ jobs:
         env:
           WOWLUA_FETCH_ONLY: camelot
       - run: cargo test -p wowlua-cli --test test_runner --test engine_probe
+      # The playground's game after Blizzard's UI, as the page fetches it (T396).
+      - run: cargo test -p wowlua-web --test run
 
   msrv:
     runs-on: ubuntu-latest

@@ -2,6 +2,8 @@
 //! item into a bag, a letter's money taken and the letter deleted, raid
 //! members moved between subgroups.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {

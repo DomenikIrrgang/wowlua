@@ -1,6 +1,8 @@
 //! Collections: the recorded wardrobe, mounts, statistics and titles, and
 //! the journals' filters reading back what was set.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {

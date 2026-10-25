@@ -10,6 +10,7 @@ authors.workspace = true
 
 [dependencies]
 wowlua-span.workspace = true
+wowlua-host.workspace = true
 wowlua-diagnostics.workspace = true
 wowlua-flavors.workspace = true
 wowlua-manifest.workspace = true

@@ -1333,7 +1333,7 @@ fn chain(vm: &mut Vm, a: Value, b: Value) -> Value {
 /// Loads a Lua file of Blizzard's code as secure code, with the addon's
 /// name and table as its arguments.
 pub fn run_lua(vm: &mut Vm, path: &Path, chunk: &str, addon: &str, addon_table: Value) {
-    let src = match std::fs::read(path) {
+    let src = match wowlua_host::read(path) {
         Ok(s) => s,
         // A TOC's file that is not there: skipped, as the client skips it
         // (it only logs; unverified wording).

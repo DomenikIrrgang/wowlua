@@ -25,6 +25,8 @@
 //!   (`tests/ingame/src/methodprobeplan.lua`).
 //! - `cargo xtask coverage-report`: the emulator's coverage report
 //!   (`docs/emulator-coverage.md`).
+//! - `cargo xtask web-ui`: the Blizzard UI files the playground fetches
+//!   per flavor (`crates/wowlua-web/ui/`).
 
 use anyhow::{Context, Result, bail};
 use std::fs;
@@ -44,6 +46,7 @@ mod profile;
 mod runtime;
 mod trainer_levels;
 mod types;
+mod webui;
 
 // Counts live heap bytes for `parse-stats`; forwards to the system allocator.
 #[global_allocator]
@@ -105,6 +108,12 @@ fn main() -> Result<()> {
         "coverage-report" => {
             write_if_changed(&root.join(coverage::REPORT), &coverage::generate(&root)?)
         }
+        "web-ui" => {
+            for flavor in webui::FLAVORS {
+                write_if_changed(&webui::path(&root, flavor), &webui::generate(flavor)?)?;
+            }
+            Ok(())
+        }
         "runtime" => {
             let slices = runtime::generate(&root)?;
             for stale in stale_runtime_files(&root, &slices)? {
@@ -148,7 +157,7 @@ fn main() -> Result<()> {
             for (path, lua) in &slices {
                 check_current(path, lua, "runtime")?;
             }
-            Ok(())
+            webui::check(&root)
         }
         "parse-stats" => {
             let Some(dir) = std::env::args().nth(2) else {

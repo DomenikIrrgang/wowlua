@@ -1,6 +1,8 @@
 //! The quest log's rewards, super-tracking and the user's map pin
 //! (`questinfo.rs`).
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {

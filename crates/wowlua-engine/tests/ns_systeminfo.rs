@@ -1,6 +1,8 @@
 //! The client's answers about itself (`systeminfo.rs`): math helpers,
 //! encodings, keys held, CVar bitfields, add-on states.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {

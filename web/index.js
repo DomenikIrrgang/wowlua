@@ -15,7 +15,7 @@
 // (WebAssembly has no unwinding): calls then throw, and a page makes a new
 // one with `load()` again.
 
-import init, { Playground as Raw } from "./pkg/wowlua_web.js";
+import init, { Playground as Raw, createScreen as rawScreen } from "./pkg/wowlua_web.js";
 
 let loaded = null;
 
@@ -36,6 +36,27 @@ export function version() {
 }
 
 const now = () => (typeof performance !== "undefined" ? performance.now() : Date.now());
+
+/**
+ * A canvas the running addon is drawn on (an HTMLCanvasElement, or an
+ * OffscreenCanvas in a worker): WebGPU where the browser has it, else
+ * WebGL 2. `screen.backend` says which.
+ */
+export function createScreen(canvas) {
+    return rawScreen(canvas);
+}
+
+/** Fetches `urls` with at most `limit` at once; `each(url, response)`. */
+async function fetchAll(items, limit, each) {
+    let next = 0;
+    const worker = async () => {
+        while (next < items.length) {
+            const item = items[next++];
+            await each(item);
+        }
+    };
+    await Promise.all(Array.from({ length: Math.min(limit, items.length) }, worker));
+}
 
 /** A package in memory, and its language server. */
 export class Playground {
@@ -104,6 +125,102 @@ export class Playground {
     /** Opens a shared package (a link or its fragment); false if it is none. */
     openShared(link) {
         return this.raw.openShared(link);
+    }
+
+    /**
+     * Fetches a flavor's Blizzard UI code into the playground: what loading
+     * it reads first (about 2,400 files, 18 MB for camelot; the browser
+     * caches them), then, in the background, the code of the addons it
+     * loads on demand (`later`, a promise). From jsDelivr's copy of
+     * Gethe/wow-ui-source at the commit wowlua's declarations name, unless
+     * `base` names another place with the same paths.
+     */
+    async loadBlizzardUI({ flavor = "camelot", base, concurrency = 48, onProgress, fetch: get = fetch } = {}) {
+        const json = Raw.blizzardUI(flavor);
+        if (json === undefined) throw new Error(`no Blizzard UI for ${flavor} in the playground`);
+        const ui = JSON.parse(json);
+        const from = base ?? ui.base;
+        const total = ui.startup.length + ui.later.length;
+        let done = 0;
+        const one = async (path) => {
+            const at = `${ui.root}/${path}`;
+            if (!this.raw.hasHostFile(at)) {
+                const response = await get(from + path);
+                // (a file a TOC names that is not there: the game skips it too)
+                if (response.ok) this.raw.writeHostFile(at, new Uint8Array(await response.arrayBuffer()));
+            }
+            done++;
+            onProgress?.(done, total);
+        };
+        if (ui.strings && !this.raw.hasHostFile(ui.strings.path)) {
+            const response = await get(ui.strings.url);
+            if (!response.ok) throw new Error(`the global strings: ${response.status}`);
+            this.raw.writeHostFile(ui.strings.path, new Uint8Array(await response.arrayBuffer()));
+        }
+        await fetchAll(ui.startup, concurrency, one);
+        const later = fetchAll(ui.later, Math.max(1, concurrency >> 2), one);
+        return { flavor, commit: ui.commit, later };
+    }
+
+    /**
+     * Builds the package and runs it: `{ flavor = "camelot", blizzardUI =
+     * false, profile }` (a world profile's JSON text). `{ ok, diagnostics,
+     * error }`.
+     */
+    run({ flavor = "camelot", blizzardUI = false, profile } = {}) {
+        this.tick();
+        return JSON.parse(this.raw.run(JSON.stringify({ flavor, blizzardUI, profile })));
+    }
+
+    stop() {
+        this.raw.stop();
+    }
+
+    get running() {
+        return this.raw.running;
+    }
+
+    /** Moves the game to now: what it printed and raised (`{ kind, text, stack }`). */
+    advance() {
+        this.tick();
+        return JSON.parse(this.raw.advance(now()));
+    }
+
+    /**
+     * Input as the user gives it: `{ action: "click", x, y, button }`,
+     * `{ action: "hover", x, y }`, `{ action: "type", text }`,
+     * `{ action: "key", key }`, `{ action: "slash", text }`; screen pixels
+     * from the top left. What it printed and raised.
+     */
+    input(input) {
+        return JSON.parse(this.raw.input(JSON.stringify(input)));
+    }
+
+    /** The running addon's screen size in pixels: `[width, height]`. */
+    screenSize() {
+        return Array.from(this.raw.screenSize());
+    }
+
+    /**
+     * Runs the game on `screen` each animation frame until `stop()` is
+     * called on what this returns; `onOutput` gets what the addon prints
+     * and raises.
+     */
+    play(screen, onOutput = () => {}) {
+        const frame = typeof requestAnimationFrame === "function"
+            ? requestAnimationFrame
+            : (f) => setTimeout(f, 1000 / 60);
+        let on = true;
+        const step = () => {
+            if (!on) return;
+            if (this.raw.running) {
+                for (const o of this.advance()) onOutput(o);
+                screen.draw(this.raw);
+            }
+            frame(step);
+        };
+        frame(step);
+        return { stop: () => { on = false; } };
     }
 
     /**

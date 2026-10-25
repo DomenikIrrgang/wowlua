@@ -3,6 +3,9 @@
 //! with behaviour where tests need it; a function without behaviour fails
 //! with "`<name>` is not mocked", so gaps are visible.
 
+/// The files and clock the engine reads through (`wowlua-host`).
+pub use wowlua_host as host;
+
 pub mod achievements;
 pub mod actions;
 pub mod actions2;

@@ -1,6 +1,8 @@
 //! The guild's message of the day blocked for addons in combat (decision
 //! T265).
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {

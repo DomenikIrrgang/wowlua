@@ -30,6 +30,13 @@ impl Default for WebPlayground {
     }
 }
 
+impl WebPlayground {
+    #[cfg_attr(not(target_arch = "wasm32"), allow(dead_code))]
+    pub(crate) fn inner(&mut self) -> &mut Playground {
+        &mut self.0
+    }
+}
+
 #[wasm_bindgen(js_class = Playground)]
 impl WebPlayground {
     /// A playground with the template package (one per instance).
@@ -112,6 +119,77 @@ impl WebPlayground {
     #[wasm_bindgen(js_name = openShared)]
     pub fn open_shared(&self, link: &str) -> bool {
         self.0.open_shared(link)
+    }
+
+    /// Puts bytes at an absolute path (Blizzard's UI files the page fetched).
+    #[wasm_bindgen(js_name = writeHostFile)]
+    pub fn write_host_file(&self, path: &str, bytes: &[u8]) {
+        self.0.write_host_file(path, bytes);
+    }
+
+    #[wasm_bindgen(js_name = hasHostFile)]
+    pub fn has_host_file(&self, path: &str) -> bool {
+        self.0.has_host_file(path)
+    }
+
+    /// What to fetch for a flavor's Blizzard UI (JSON), or `undefined`.
+    #[wasm_bindgen(js_name = blizzardUI)]
+    pub fn blizzard_ui(flavor: &str) -> Option<String> {
+        crate::run::blizzard_ui(flavor).map(|j| j.to_string())
+    }
+
+    /// Builds and runs the package: `options` is `{ flavor, blizzardUI,
+    /// profile }`; `{ ok, diagnostics, error }`.
+    pub fn run(&mut self, options: &str) -> Result<String, JsError> {
+        let o: Json = serde_json::from_str(options)?;
+        let options = crate::run::Options {
+            flavor: o["flavor"].as_str().unwrap_or("camelot").to_string(),
+            blizzard_ui: o["blizzardUI"].as_bool().unwrap_or(false),
+            profile: o["profile"].as_str().map(str::to_string),
+        };
+        Ok(self.0.run(&options).to_string())
+    }
+
+    pub fn stop(&mut self) {
+        self.0.stop();
+    }
+
+    /// Whether an addon runs.
+    #[wasm_bindgen(getter)]
+    pub fn running(&mut self) -> bool {
+        self.0.game().is_some()
+    }
+
+    /// Moves the running addon's time to `now_ms` (`performance.now()`):
+    /// a JSON array of what it printed and raised (`{ kind, text, stack }`).
+    pub fn advance(&mut self, now_ms: f64) -> Result<String, JsError> {
+        let Some(game) = self.0.game() else {
+            return Ok("[]".into());
+        };
+        let out = game.advance(now_ms).map_err(|e| JsError::new(&e))?;
+        Ok(Json::Array(out).to_string())
+    }
+
+    /// Input as the user gives it (JSON: `{ action: "click", x, y,
+    /// button }`, `hover`, `type`, `key`, `slash`); screen pixels from the
+    /// top left.
+    pub fn input(&mut self, input: &str) -> Result<String, JsError> {
+        let input: Json = serde_json::from_str(input)?;
+        let game = self.0.game().ok_or_else(|| JsError::new("no addon runs"))?;
+        game.input(&input).map_err(|e| JsError::new(&e))?;
+        Ok(Json::Array(game.take_output()).to_string())
+    }
+
+    /// The running addon's screen size in pixels, `[width, height]`.
+    #[wasm_bindgen(js_name = screenSize)]
+    pub fn screen_size(&mut self) -> Vec<u32> {
+        match self.0.game() {
+            Some(g) => {
+                let (w, h) = g.screen();
+                vec![w, h]
+            }
+            None => Vec::new(),
+        }
     }
 
     /// One JSON-RPC message from the editor; a JSON array of the server's.

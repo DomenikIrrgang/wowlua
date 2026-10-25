@@ -9,6 +9,7 @@
   body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; background: #fff; color: #111; }
   textarea { width: 100%; height: 14em; font: 13px/1.4 ui-monospace, monospace; }
   pre { background: #f4f4f4; padding: 8px; overflow: auto; max-height: 16em; }
+  canvas { width: 100%; max-width: 960px; aspect-ratio: 16 / 9; background: #000; display: block; }
   @media (prefers-color-scheme: dark) {
     body { background: #111; color: #eee; }
     pre { background: #222; }
@@ -25,7 +26,15 @@
   <button id="build">Build</button>
   <button id="format">Format</button>
   <button id="share">Share link</button>
+  <button id="run">Run</button>
+  <label><input type="checkbox" id="ui"> with Blizzard's UI</label>
+  <button id="stop">Stop</button>
 </p>
+<h2>Game</h2>
+<p id="game">Not running.</p>
+<canvas id="screen" width="1280" height="720"></canvas>
+<h2>Chat</h2>
+<pre id="chat"></pre>
 <h2>Language server diagnostics</h2>
 <pre id="diagnostics"></pre>
 <h2>Hover at the cursor</h2>
@@ -38,6 +47,8 @@ import { connect } from "../client.js";
 const $ = (id) => document.getElementById(id);
 const URI = "file:///playground/src/main.wowlua";
 const wowlua = connect(new Worker(new URL("../worker.js", import.meta.url), { type: "module" }));
+// (to try calls from the browser's console)
+globalThis.wowlua = wowlua;
 let version = 1;
 let nextId = 1;
 const answers = new Map();
@@ -106,6 +117,33 @@ $("format").addEventListener("click", async () => {
     $("code").value = formatted.text;
     $("code").dispatchEvent(new Event("input"));
   }
+});
+let attached = null;
+let uiLoaded = false;
+wowlua.onOutput((o) => {
+  $("chat").textContent += `${o.kind === "error" ? "error: " : ""}${o.text}\n`;
+});
+wowlua.onProgress((done, total) => {
+  // (after the startup files the rest comes in the background)
+  if (!uiLoaded) $("game").textContent = `Loading Blizzard's UI: ${done} of ${total} files`;
+});
+$("run").addEventListener("click", async () => {
+  attached ??= wowlua.attachCanvas($("screen"));
+  const backend = await attached;
+  if ($("ui").checked && !uiLoaded) {
+    await wowlua.call("loadBlizzardUI", { flavor: "camelot" });
+    uiLoaded = true;
+  }
+  $("chat").textContent = "";
+  const started = await wowlua.call("run", { blizzardUI: $("ui").checked });
+  $("game").textContent = started.ok
+    ? `Running (drawn with ${backend}).`
+    : `Did not start: ${started.error ?? started.diagnostics.map((d) => d.message).join("; ")}`;
+  document.body.dataset.running = started.ok ? "yes" : "no";
+});
+$("stop").addEventListener("click", async () => {
+  await wowlua.call("stop");
+  $("game").textContent = "Stopped.";
 });
 $("share").addEventListener("click", async () => {
   location.hash = await wowlua.call("share");

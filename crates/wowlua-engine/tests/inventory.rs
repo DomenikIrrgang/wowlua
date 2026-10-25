@@ -3,6 +3,8 @@
 //! with camelot's engine and Blizzard UI code loaded, each exists, as a C
 //! function or a Lua one as in the client.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use std::path::{Path, PathBuf};
 
 use wowlua_vm::function::Function;

@@ -2,6 +2,8 @@
 //! another: what the controls do (all unverified against the client: no
 //! recording has them yet).
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {

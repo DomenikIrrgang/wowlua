@@ -237,7 +237,7 @@ pub fn collect(
             continue;
         };
         let entry = sources.entry(path.clone()).or_insert_with(|| {
-            let text = std::fs::read_to_string(root.join(&path)).unwrap_or_default();
+            let text = wowlua_host::read_to_string(root.join(&path)).unwrap_or_default();
             let lines: Vec<String> = text.lines().map(str::to_string).collect();
             let refs: Vec<&str> = lines.iter().map(String::as_str).collect();
             ignored(&refs).map(|ig| (lines, ig))

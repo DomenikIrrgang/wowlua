@@ -1,6 +1,8 @@
 //! Group content the world has little of (`content.rs`): difficulties,
 //! roles, and the "nothing here" answers addons now get.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {

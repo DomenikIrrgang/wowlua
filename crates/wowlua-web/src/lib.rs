@@ -8,6 +8,9 @@
 //! to the package's folder, [`ROOT`]; the language server's URIs are
 //! `file:///playground/…`.
 
+pub mod run;
+#[cfg(target_arch = "wasm32")]
+mod screen;
 mod share;
 pub mod web;
 
@@ -53,6 +56,7 @@ end)
 pub struct Playground {
     memory: Arc<MemoryHost>,
     server: wowlua_lsp::embedded::Embedded,
+    game: Option<run::Game>,
 }
 
 impl Default for Playground {
@@ -69,6 +73,7 @@ impl Playground {
         let playground = Playground {
             memory,
             server: wowlua_lsp::embedded::Embedded::new(),
+            game: None,
         };
         playground.reset(TEMPLATE.iter().map(|(p, t)| (p.to_string(), t.to_string())));
         playground
@@ -104,6 +109,17 @@ impl Playground {
             Playground::path(path)
         };
         host::read_to_string(path).ok()
+    }
+
+    /// Puts bytes at an absolute path of the host (Blizzard's UI files the
+    /// page fetched).
+    pub fn write_host_file(&self, path: &str, bytes: &[u8]) {
+        self.memory.insert(path, bytes.to_vec());
+    }
+
+    /// Whether the host has a file at an absolute path.
+    pub fn has_host_file(&self, path: &str) -> bool {
+        host::is_file(path)
     }
 
     /// Removes a file (or a folder and what is in it).
@@ -224,6 +240,52 @@ impl Playground {
             return json!({ "diagnostics": diagnostics(&mut session) });
         }
         json!({ "text": self.read_file(rel) })
+    }
+
+    /// Builds the package for `options.flavor` and runs it (the running one
+    /// stops): `{ ok, diagnostics, error }`.
+    pub fn run(&mut self, options: &run::Options) -> Json {
+        self.game = None;
+        let mut session = Session::new();
+        let Some(project) = self.load(&mut session) else {
+            return json!({ "ok": false, "diagnostics": diagnostics(&mut session) });
+        };
+        let request = BuildRequest {
+            profile: "dev".into(),
+            flavors: Some(vec![options.flavor.clone()]),
+            out_dir: None,
+            write: true,
+            nolib: false,
+            minify: None,
+            bundle: None,
+            only: None,
+            jobs: wowlua_driver::parallel::Jobs::one(),
+            keep_code: true,
+            tests: false,
+            left_out: Vec::new(),
+        };
+        let built = wowlua_driver::build(&mut session, &project, &request);
+        let found = diagnostics(&mut session);
+        let Some(build) = built.filter(|_| !session.has_errors()) else {
+            return json!({ "ok": false, "diagnostics": found });
+        };
+        match run::Game::start(project, build, options) {
+            Ok(game) => {
+                self.game = Some(game);
+                json!({ "ok": true, "diagnostics": found })
+            }
+            Err(error) => json!({ "ok": false, "diagnostics": found, "error": error }),
+        }
+    }
+
+    /// The running addon, if one runs.
+    pub fn game(&mut self) -> Option<&mut run::Game> {
+        self.game.as_mut()
+    }
+
+    /// Stops the running addon.
+    pub fn stop(&mut self) {
+        self.game = None;
     }
 
     /// The package's files in a link's fragment (compressed, URL-safe).

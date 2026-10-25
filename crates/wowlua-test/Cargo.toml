@@ -12,7 +12,8 @@ authors.workspace = true
 regex.workspace = true
 serde_json.workspace = true
 wowlua-api.workspace = true
-wowlua-driver = { workspace = true, features = ["native"] }
+wowlua-driver.workspace = true
+wowlua-host.workspace = true
 wowlua-engine.workspace = true
 wowlua-flavors.workspace = true
 wowlua-span.workspace = true
@@ -22,6 +23,12 @@ wowlua-vm.workspace = true
 
 [dev-dependencies]
 tempfile.workspace = true
+
+[features]
+default = ["native"]
+# The computer's: fetching Blizzard's UI with git, the C Lua (spec M14,
+# decision T396). Without it the runner runs in a page.
+native = ["wowlua-driver/native"]
 
 [lints]
 workspace = true

@@ -23,6 +23,29 @@ p.reset({ "wowlua.json": "{}" });
 assert.equal(p.openShared(link), true);
 assert.ok("src/main.wowlua" in p.files());
 
+// the addon runs: login, frames, a click (no canvas in Node: not drawn)
+p.writeFile(
+    "src/main.wowlua",
+    [
+        'print("logged in")',
+        'local b = CreateFrame("Button", nil, UIParent)',
+        "b:SetSize(100, 40)",
+        'b:SetPoint("CENTER")',
+        'b:SetScript("OnClick", function() print("clicked") end)',
+        "",
+    ].join("\n"),
+);
+const started = p.run({ flavor: "camelot" });
+assert.equal(started.ok, true, JSON.stringify(started));
+assert.ok(p.running);
+let printed = p.advance().map((o) => o.text);
+assert.ok(printed.includes("logged in"), JSON.stringify(printed));
+const [w, h] = p.screenSize();
+printed = p.input({ action: "click", x: w / 2, y: h / 2 }).map((o) => o.text);
+assert.deepEqual(printed, ["clicked"]);
+p.stop();
+assert.equal(p.running, false);
+
 // the language server: diagnostics of the open file, then a hover
 const got = [];
 const server = p.languageServer((m) => got.push(m));

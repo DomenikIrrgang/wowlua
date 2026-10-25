@@ -27,5 +27,5 @@ wowlua-sema.workspace = true
 wowlua-toc.workspace = true
 wowlua-xml.workspace = true
 wowlua-vm.workspace = true
-wowlua-test.workspace = true
+wowlua-test = { workspace = true, features = ["native"] }
 walkdir.workspace = true

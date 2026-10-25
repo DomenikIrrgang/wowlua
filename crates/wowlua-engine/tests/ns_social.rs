@@ -1,6 +1,8 @@
 //! The player's social world: no friends or clubs but the guild's unless
 //! the test says so; names without the player's realm; the voice CVars.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {

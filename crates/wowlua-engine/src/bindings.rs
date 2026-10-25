@@ -76,15 +76,19 @@ pub fn find_addon_file(
     for (i, part) in parts.iter().enumerate() {
         let last = i + 1 == parts.len();
         let want = part.to_ascii_lowercase();
-        let found = std::fs::read_dir(&cur).ok()?.flatten().find_map(|e| {
-            let name = e.file_name().to_string_lossy().into_owned();
-            let lower = name.to_ascii_lowercase();
-            let hit = lower == want || (last && exts.iter().any(|x| lower == format!("{want}{x}")));
-            hit.then(|| cur.join(name))
-        })?;
+        let found = wowlua_host::read_dir(&cur)
+            .ok()?
+            .into_iter()
+            .find_map(|p| {
+                let name = p.file_name()?.to_string_lossy().into_owned();
+                let lower = name.to_ascii_lowercase();
+                let hit =
+                    lower == want || (last && exts.iter().any(|x| lower == format!("{want}{x}")));
+                hit.then(|| cur.join(name))
+            })?;
         cur = found;
     }
-    (!parts.is_empty() && cur.is_file()).then_some(cur)
+    (!parts.is_empty() && wowlua_host::is_file(&cur)).then_some(cur)
 }
 
 #[derive(Default)]
@@ -151,7 +155,7 @@ pub fn load_bindings_xml(
     if vm.aborted() {
         return Ok(());
     }
-    let text = std::fs::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
+    let text = wowlua_host::read_to_string(path).map_err(|e| format!("{}: {e}", path.display()))?;
     let root = crate::ui::xml::parse(&text).map_err(|e| format!("Bindings.xml: {e}"))?;
     let mut list = Vec::new();
     fn collect(el: &crate::ui::xml::Element, out: &mut Vec<std::rc::Rc<crate::ui::xml::Element>>) {
@@ -1040,10 +1044,10 @@ fn loose_file(dir: &std::path::Path, rel: &str) -> bool {
     let parts: Vec<&str> = rel.split('/').filter(|p| !p.is_empty()).collect();
     for (i, part) in parts.iter().enumerate() {
         let last = i + 1 == parts.len();
-        let Ok(entries) = std::fs::read_dir(&cur) else {
+        let Ok(entries) = wowlua_host::read_dir(&cur) else {
             return false;
         };
-        let next = entries.flatten().map(|e| e.path()).find(|p| {
+        let next = entries.into_iter().find(|p| {
             p.file_name().and_then(|n| n.to_str()).is_some_and(|n| {
                 n.eq_ignore_ascii_case(part)
                     || (last
@@ -1056,7 +1060,7 @@ fn loose_file(dir: &std::path::Path, rel: &str) -> bool {
             None => return false,
         }
     }
-    cur.is_file()
+    wowlua_host::is_file(&cur)
 }
 
 /// The functions with behaviour here.

@@ -1,6 +1,8 @@
 //! Macro conditionals: `SecureCmdOptionParse` over the engine's state, and
 //! Blizzard's state driver following it.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use std::path::{Path, PathBuf};
 
 use wowlua_vm::{Value, Vm};

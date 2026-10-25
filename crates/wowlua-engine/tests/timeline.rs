@@ -1,5 +1,7 @@
 //! The encounter timeline's script events (`timeline.rs`, decision T255).
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {

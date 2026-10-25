@@ -1,6 +1,8 @@
 //! The client's argument checks (`/stdtest argcheck`, WoW Forever 1.60.1):
 //! the engine runs the same probe and must give the same results.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use std::collections::BTreeMap;
 use std::path::PathBuf;
 

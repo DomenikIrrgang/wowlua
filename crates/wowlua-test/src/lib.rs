@@ -17,11 +17,10 @@ mod snapshots;
 
 pub use snapshots::Summary as SnapshotSummary;
 
-pub use blizzard::{UiSource, ui_source, ui_source_in};
+pub use blizzard::{UiSource, commits as ui_commits, ui_source, ui_source_in};
 
 use std::collections::HashSet;
 use std::path::{Path, PathBuf};
-use std::time::Instant;
 use wowlua_driver::{BuildOutput, TestFile, TestRole};
 use wowlua_vm::{TableRef, Value, Vm};
 
@@ -178,7 +177,7 @@ fn selectable(suite: &Suite, file: &TestFile, filters: &[String]) -> bool {
     if loose.iter().any(|f| file.rel.contains(f.as_str())) {
         return true;
     }
-    match std::fs::read_to_string(suite.root.join(&file.rel)) {
+    match wowlua_host::read_to_string(suite.root.join(&file.rel)) {
         Ok(text) => loose.iter().any(|f| text.contains(f.as_str())),
         Err(_) => !loose.is_empty(),
     }
@@ -267,7 +266,7 @@ fn source_path(root: &Path, src: &str, output: &str) -> String {
     if wowlua.ends_with(wowlua_driver::examples::SUFFIX) {
         return wowlua_driver::examples::source_of(&wowlua);
     }
-    if root.join(&wowlua).exists() {
+    if wowlua_host::exists(root.join(&wowlua)) {
         wowlua
     } else {
         format!("{prefix}{rest}")
@@ -382,7 +381,7 @@ fn closure<'a>(build: &'a BuildOutput, path: &'a str, out: &mut Vec<&'a str>) {
 /// Runs one test file (its tests whose names contain any of `filters`)
 /// on this thread.
 pub fn run_file(suite: &Suite, file: &TestFile, filters: &[String]) -> FileResult {
-    let started = Instant::now();
+    let started = wowlua_host::Stopwatch::start();
     let rel = file.rel.clone();
     let mut result = FileResult {
         // (a source's examples are reported as that source's)
@@ -615,7 +614,7 @@ fn load_vm(
     // The machine the client runs on (decision T236): the file's
     // `config({ platform = … })`, else the manifest's `test.platform`.
     let source = file
-        .and_then(|f| std::fs::read(suite.root.join(&f.rel)).ok())
+        .and_then(|f| wowlua_host::read(suite.root.join(&f.rel)).ok())
         .unwrap_or_default();
     let platform = match profile::config_text(&source, "platform") {
         Some(name) => wowlua_engine::Platform::parse(&name).ok_or_else(|| {
@@ -698,12 +697,12 @@ fn load_vm(
 
     // The addon's key bindings, which the client reads at startup.
     let bindings = dir.join("Bindings.xml");
-    natives::set_has_bindings(bindings.exists());
-    if bindings.exists() {
+    natives::set_has_bindings(wowlua_host::exists(&bindings));
+    if wowlua_host::exists(&bindings) {
         wowlua_engine::bindings::load_bindings_xml(&mut vm, &bindings, Some(&name))?;
     }
     let toc = toc_path(build, &suite.flavor).ok_or("the build has no TOC file")?;
-    let toc_text = std::fs::read_to_string(dir.join(&toc)).map_err(|e| e.to_string())?;
+    let toc_text = wowlua_host::read_to_string(dir.join(&toc)).map_err(|e| e.to_string())?;
     let mut saved = saved::names(&wowlua_toc::parse(&toc_text));
     let listed: Vec<String> = wowlua_toc::parse(&toc_text)
         .files
@@ -757,7 +756,7 @@ fn load_vm(
     }
     // The addon itself, known to the addon functions as its TOC says.
     let own = wowlua_engine::ui::read_user_toc(&suite.flavor, &name, dir, &dir.join(&toc))?;
-    wowlua_engine::bindings::add_own_addon(&mut vm, &own, table, bindings.exists());
+    wowlua_engine::bindings::add_own_addon(&mut vm, &own, table, wowlua_host::exists(&bindings));
     let before = errors_before(&vm);
     named_as_client(&mut vm, build, |vm| {
         wowlua_engine::ui::load_user_addon(vm, dir, &dir.join(&toc), &name, table, &loaded)
@@ -819,10 +818,10 @@ fn other_addons(suite: &Suite) -> Result<Vec<wowlua_engine::ui::UserAddon>, Stri
 fn load_other_addon(vm: &mut Vm, addon: &wowlua_engine::ui::UserAddon) -> Result<(), String> {
     let table = Value::Table(vm.new_table());
     let bindings = addon.dir.join("Bindings.xml");
-    if bindings.exists() {
+    if wowlua_host::exists(&bindings) {
         wowlua_engine::bindings::load_bindings_xml(vm, &bindings, Some(&addon.name))?;
     }
-    wowlua_engine::bindings::add_user_addon(vm, addon, table, bindings.exists());
+    wowlua_engine::bindings::add_user_addon(vm, addon, table, wowlua_host::exists(&bindings));
     if addon.on_demand {
         return Ok(());
     }
@@ -1226,7 +1225,7 @@ fn run_tests(
             });
             continue;
         }
-        let started = Instant::now();
+        let started = wowlua_host::Stopwatch::start();
         let mut outcome = run_one(suite, file, state, p);
         let vm = &mut state.vm;
         if let Some(f) = &suite.after_test {

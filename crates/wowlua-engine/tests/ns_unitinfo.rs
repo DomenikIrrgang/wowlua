@@ -1,6 +1,8 @@
 //! The unit information `unitinfo.rs` answers from the world's units, the
 //! group and the auras.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {

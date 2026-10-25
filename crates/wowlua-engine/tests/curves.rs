@@ -1,6 +1,8 @@
 //! The client's script objects that keep secrets: curves, duration objects
 //! and numeric formatters, as Blizzard's documentation describes them.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {

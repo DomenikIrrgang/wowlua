@@ -18,7 +18,22 @@ serde_json.workspace = true
 wowlua-diagnostics.workspace = true
 wowlua-driver.workspace = true
 wowlua-lsp.workspace = true
+wowlua-host.workspace = true
+wowlua-engine.workspace = true
+wowlua-vm.workspace = true
+wowlua-test.workspace = true
+wowlua-debug.workspace = true
+wowlua-manifest.workspace = true
 wasm-bindgen = "=0.2.129"
+
+# Drawing on the page's canvas (the browser's only).
+[target.'cfg(target_arch = "wasm32")'.dependencies]
+wasm-bindgen-futures = "=0.4.79"
+js-sys = "=0.3.106"
+web-sys = { version = "=0.3.106", features = ["HtmlCanvasElement", "OffscreenCanvas"] }
+wgpu = { version = "30.0.1", features = ["webgl"] }
+wowlua-casc.workspace = true
+wowlua-render.workspace = true
 
 [lints]
 workspace = true

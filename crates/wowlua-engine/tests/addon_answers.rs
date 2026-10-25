@@ -2,6 +2,8 @@
 //! maps, heal prediction calculators, addons' enable states, CVar
 //! bitfields, masks, zero-delay timers set by timers.
 
+#![allow(clippy::disallowed_methods)] // (tests set up their files on the disk)
+
 use wowlua_vm::{Value, Vm};
 
 fn vm() -> Vm {
