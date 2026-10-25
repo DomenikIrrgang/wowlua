@@ -550,6 +550,7 @@ Target objects:
 | `line-width` | number | `100` |
 | `quote-style` | `"double"` `"single"` `"preserve"` | `"double"` |
 | `lua` | bool | `false` (also format `.lua` files) |
+| `exclude` | glob[] | `[]` (files `wowlua fmt` leaves as they are, such as generated ones; relative to the package root) |
 
 See [Tooling §16.3](tooling.md#163-formatter-wowlua-fmt).
 

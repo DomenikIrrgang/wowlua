@@ -763,18 +763,25 @@ An opinionated formatter for `.wowlua` and `.d.wowlua`. It can optionally format
 - Configuration is deliberately small, in the manifest:
   `"fmt": { "indent": "tab" | 2 | 4, "line-width": 100, "quote-style": "double" | "single" | "preserve" }`.
   Defaults: `indent` `"tab"`, `line-width` 100, `quote-style` `"double"`
-  ([Manifest §9.13](manifest.md#913-fmt)).
+  ([Manifest §9.13](manifest.md#913-fmt)). `exclude` (globs) leaves files
+  out of `wowlua fmt` of the package or a folder, such as generated ones; a
+  file named on the command line is formatted (decision T387).
 - `wowlua fmt --check` exits 1 if any file would change (for CI).
 - Style (decision T65), following StyLua: lines are reflowed at `line-width`;
   call arguments are always parenthesized (`f "x"` becomes `f("x")`); tables
   print as `{ a = 1, b = 2 }` when they fit, otherwise one field per line with
   a trailing comma; a single table or function argument, or a function as the
   last argument, hugs the parentheses; long binary expressions break after
-  the operator with a hanging indent; blocks are never kept on one line,
-  except an empty function body (`function() end`); at most one blank line is
+  the operator with a hanging indent; a function's parameters stay on its
+  line when they fit, otherwise one per line (`(` and `)` on the lines
+  around them), never broken inside a parameter's type; blocks are never
+  kept on one line, except an empty function body (`function() end`), whose
+  `end` goes on its own line when the line would be too long; at most one blank line is
   kept; `;` is written only before a statement that starts with `(`.
-  Trailing comments stay on their line, comments on their own line stay on
-  their own line. wowlua's syntax (M9 S6): decorators each on their own
+  Trailing comments stay on their line (after a table's or a table type's
+  field, with that field), comments on their own line stay on their own
+  line (one before a table stands before it and leaves the table on one
+  line when it fits). wowlua's syntax (M9 S6): decorators each on their own
   line; annotations as `name: T`, `name?: T` and `name: T = default`;
   `function f<T extends X>(a: T, ...: U): R`; function types as
   `(a: A, ...B) -> R` and a results list of one `...T` without

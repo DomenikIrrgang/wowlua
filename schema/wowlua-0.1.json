@@ -1658,6 +1658,13 @@
         "lua": {
           "type": "boolean",
           "default": false
+        },
+        "exclude": {
+          "description": "Files `wowlua fmt` leaves as they are (generated ones), globs\nrelative to the package root.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       },
       "additionalProperties": false

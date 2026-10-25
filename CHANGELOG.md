@@ -6,6 +6,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### New
 
+- `"fmt": { "exclude": ["src/Data/**"] }` leaves files out of `wowlua fmt`, such as data your tools generate. A file you name (`wowlua fmt src/Data/Quests.wowlua`) is still formatted.
 - **VS Code: the coverage report in the editor**: *wowlua: Show Coverage Report* opens the HTML coverage report in an editor tab, from your last Run with Coverage in the Testing view or the newest `coverage.html` `wowlua test --coverage --reporter html` wrote (right-click a `coverage.html` in the Explorer to open that one; the Test Coverage view has a button for it too). It follows your light or dark theme, and clicking a line's number opens that line of the source beside it.
 - **Examples that run**: a ```` ```wowlua ```` code block in a `---` doc comment is a test now. `wowlua test` (and the Testing view) runs it as `add example` with `expect` and everything the module exports at hand, reports it under its source file, and points a failure or a type error at the comment's line; the editor shows an example's type errors as you type. Mark a block `wowlua norun` to only show it.
 - **VS Code: Testing view**: the extension lists your test files and their `@test`s in VS Code's Testing view, with "Run test" and "Debug" above each test in the editor (and "Run all tests" at the top of the file; `wowlua.testCodeLens` hides them), runs a file or a single test with a click, shows each result at the test, a failure at the line it failed on (with the flavor when several run), debugs a test in `wowlua debug`, and with Run with Coverage shows which of your addon's lines, branches and functions the tests ran (VS Code 1.88 or newer). The cases of a `@cases` test appear as they run. `wowlua test "tests/x.test.wowlua::adds two numbers"` runs exactly that test.
@@ -36,6 +37,9 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Fixed
 
+- `wowlua fmt` keeps a comment after a field of a table type (`color?: string, -- a class colour`) on that field; it moved one field down on every run.
+- `wowlua fmt` breaks a function header that is too long one parameter per line, instead of in the middle of a parameter's type (`units: UnitToken` / `| UnitToken[]`), and puts the `end` of an empty function on its own line when the header and `end` together would be too long.
+- `wowlua fmt` leaves a table on one line when a comment on its own line stands before it, where it used to spread `{ "0000" }` over three lines.
 - `wowlua lsp` reports errors in files you have not opened under the folder as your editor knows it, also when your project is reached through a symbolic link: they show when you open the file.
 - Debugging on Windows works: a test file was reported as "not a test file of the package", and breakpoints never stopped, when a path came with Windows' `\\?\` prefix or a lower-case drive letter.
 - In tests, `C_FriendList.GetWhoInfo(i)` for a row that isn't there answers nothing, `GetUICameraInfo` of an unknown camera nine zeros and `false`, and `C_TransmogCollection.GetAppearanceCameraID` of an unknown appearance `0`, as the game does. A character loaded from a snapshot keeps its own talent config.

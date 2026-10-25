@@ -501,7 +501,11 @@ impl<'a> Formatter<'a> {
         let inner = self.inner_comments(f.end_span().start);
         let mut parts = vec![signature, header];
         if f.body().stmts().is_empty() && inner.is_none() {
-            parts.push(txt(" "));
+            // `… end` on one line when it fits, else `end` below
+            parts.push(Doc::Line);
+            let end = self.tok("end", f.end_span().start);
+            parts.push(end);
+            return Doc::group(Doc::concat(parts));
         } else {
             let mut indented = Vec::new();
             if !f.body().stmts().is_empty() {
@@ -702,14 +706,17 @@ impl<'a> Formatter<'a> {
     }
 
     fn table(&mut self, fields: TableFields<'_>, span: wowlua_span::Span) -> Doc {
-        let open = self.tok("{", span.start);
+        // (comments before the brace stand before the table, outside its
+        // group: one on its own line does not break the table)
+        let lead = Doc::concat(self.comments_before(span.start));
+        let open = txt("{");
         let close_offset = span.end.saturating_sub(1);
         if fields.is_empty() {
             let inner = self.inner_comments(close_offset);
             let close = self.tok("}", close_offset);
             return match inner {
-                Some(inner) => Doc::concat(vec![open, Doc::indent(inner), hard(), close]),
-                None => Doc::concat(vec![open, close]),
+                Some(inner) => Doc::concat(vec![lead, open, Doc::indent(inner), hard(), close]),
+                None => Doc::concat(vec![lead, open, close]),
             };
         }
         let head = self.trailing_before(field_start(fields.at(0)));
@@ -754,7 +761,7 @@ impl<'a> Formatter<'a> {
         }
         let inner = self.inner_comments(close_offset);
         let close = self.tok("}", close_offset);
-        Doc::group(Doc::concat(vec![
+        let table = Doc::group(Doc::concat(vec![
             open,
             head,
             Doc::indent(Doc::concat(vec![
@@ -765,7 +772,8 @@ impl<'a> Formatter<'a> {
             ])),
             Doc::Line,
             close,
-        ]))
+        ]));
+        Doc::concat(vec![lead, table])
     }
 
     /// A string literal in the configured quote style, when that needs no

@@ -848,6 +848,16 @@ fn publish(manifest: &Manifest, ctx: &mut Ctx) {
 }
 
 fn globs(manifest: &Manifest, ctx: &mut Ctx) {
+    for (i, pattern) in manifest.fmt.exclude.iter().enumerate() {
+        if let Err(error) = globset::Glob::new(pattern) {
+            ctx.error(
+                "E4002",
+                &root().key("fmt").key("exclude").index(i),
+                format!("invalid glob `{pattern}`: {error}"),
+                "invalid glob",
+            );
+        }
+    }
     let build = root().key("build");
     for (key, list) in [
         ("assets", &manifest.build.assets),

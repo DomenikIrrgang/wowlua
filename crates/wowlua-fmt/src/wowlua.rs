@@ -169,16 +169,42 @@ impl Formatter<'_> {
     }
 
     fn table_type(&mut self, fields: TableTypeFields<'_>, span: wowlua_span::Span) -> Doc {
-        let open = self.tok("{", span.start);
+        // (comments before the brace stand before the table, outside its
+        // group: one on its own line does not break the table)
+        let lead = Doc::concat(self.comments_before(span.start));
+        let open = txt("{");
         let close_offset = span.end.saturating_sub(1);
         if fields.is_empty() {
             let close = self.tok("}", close_offset);
-            return Doc::concat(vec![open, close]);
+            return Doc::concat(vec![lead, open, close]);
         }
+        // where a field starts (its `readonly` or `[`): a comment after the
+        // comma before it stays on the line it ends
+        let start = |me: &Self, f: &TableTypeField<'_>| match f {
+            TableTypeField::Named { name, readonly, .. } => {
+                if *readonly {
+                    me.prev_token(name.span().start)
+                } else {
+                    name.span().start
+                }
+            }
+            TableTypeField::NamedString { span, .. } => span.start,
+            TableTypeField::Indexer { key, .. } => me.prev_token(key.span().start),
+            TableTypeField::Array(t) => t.span().start,
+        };
+        let head = match fields.iter().next() {
+            Some(f) => {
+                let at = start(self, &f);
+                self.trailing_before(at)
+            }
+            None => txt(""),
+        };
         let mut parts = Vec::new();
         for (i, f) in fields.iter().enumerate() {
             if i > 0 {
                 parts.push(txt(","));
+                let at = start(self, &f);
+                parts.push(self.trailing_before(at));
                 parts.push(Doc::Line);
             }
             let doc = match f {
@@ -223,17 +249,21 @@ impl Formatter<'_> {
             };
             parts.push(doc);
         }
+        let inner = self.inner_comments(close_offset);
         let close = self.tok("}", close_offset);
-        Doc::group(Doc::concat(vec![
+        let table = Doc::group(Doc::concat(vec![
             open,
+            head,
             Doc::indent(Doc::concat(vec![
                 Doc::Line,
                 Doc::concat(parts),
                 Doc::if_break(txt(","), txt("")),
+                inner.unwrap_or_else(|| txt("")),
             ])),
             Doc::Line,
             close,
-        ]))
+        ]));
+        Doc::concat(vec![lead, table])
     }
 
     fn function_type(&mut self, f: FunctionType<'_>, start: u32) -> Doc {
@@ -366,53 +396,71 @@ impl Formatter<'_> {
     /// defaults and decorators), `...` and the return type.
     pub(crate) fn signature(&mut self, f: Func<'_>) -> Doc {
         let mut parts = vec![self.type_params(f.type_params())];
-        parts.push(self.tok("(", f.params_span().start));
-        for (i, p) in f.params().iter().enumerate() {
-            if i > 0 {
-                parts.push(txt(", "));
-            }
+        let open = self.tok("(", f.params_span().start);
+        // each parameter, the `...` last
+        let mut items: Vec<Doc> = Vec::new();
+        for p in f.params().iter() {
+            let mut item = Vec::new();
             for d in &p.decorators() {
-                parts.push(self.decorator(d));
-                parts.push(txt(" "));
+                item.push(self.decorator(d));
+                item.push(txt(" "));
             }
             for m in p.modifiers() {
-                parts.push(txt(modifier(m)));
-                parts.push(txt(" "));
+                item.push(txt(modifier(m)));
+                item.push(txt(" "));
             }
-            parts.push(self.name(p.name()));
+            item.push(self.name(p.name()));
             if let Some(t) = &p.ty() {
-                parts.push(txt(": "));
-                parts.push(self.ty(*t));
+                item.push(txt(": "));
+                item.push(self.ty(*t));
             }
             if let Some(d) = &p.default() {
-                parts.push(txt(" = "));
-                parts.push(self.expr(*d));
+                item.push(txt(" = "));
+                item.push(self.expr(*d));
             }
+            items.push(Doc::concat(item));
         }
         if let Some(v) = &f.vararg() {
-            if !f.params().is_empty() {
-                parts.push(txt(", "));
-            }
-            parts.push(self.tok("...", v.span.start));
+            let mut item = vec![self.tok("...", v.span.start)];
             match &v.ty {
                 Some(VarargType::Type(t)) => {
-                    parts.push(txt(": "));
-                    parts.push(self.ty(*t));
+                    item.push(txt(": "));
+                    item.push(self.ty(*t));
                 }
                 Some(VarargType::Pack(n)) => {
-                    parts.push(txt(": "));
-                    parts.push(self.name(*n));
-                    parts.push(txt("..."));
+                    item.push(txt(": "));
+                    item.push(self.name(*n));
+                    item.push(txt("..."));
                 }
                 Some(VarargType::Expand(t)) => {
-                    parts.push(txt(": "));
-                    parts.push(self.ty(*t));
-                    parts.push(txt("..."));
+                    item.push(txt(": "));
+                    item.push(self.ty(*t));
+                    item.push(txt("..."));
                 }
                 None => {}
             }
+            items.push(Doc::concat(item));
         }
-        parts.push(self.tok(")", f.params_span().end.saturating_sub(1)));
+        let close = self.tok(")", f.params_span().end.saturating_sub(1));
+        parts.push(open);
+        if items.is_empty() {
+            parts.push(close);
+        } else {
+            // on one line when they fit, else one per line
+            let mut list = vec![Doc::SoftLine];
+            for (i, item) in items.into_iter().enumerate() {
+                if i > 0 {
+                    list.push(txt(","));
+                    list.push(Doc::Line);
+                }
+                list.push(item);
+            }
+            parts.push(Doc::group(Doc::concat(vec![
+                Doc::indent(Doc::concat(list)),
+                Doc::SoftLine,
+                close,
+            ])));
+        }
         if let Some(r) = &f.ret() {
             parts.push(txt(": "));
             parts.push(self.ret_type(*r, false));

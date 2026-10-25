@@ -54,10 +54,11 @@ fn wanted(path: &Path, lua: bool) -> bool {
 
 /// The files to format: explicit files, or the matching files below the
 /// given directories (the package root by default), respecting `.gitignore`
-/// and skipping the build output.
+/// and skipping the build output and `fmt.exclude`.
 fn files(project: &Project, request: &FormatRequest, lua: bool) -> Vec<PathBuf> {
     let root = &project.manifest.root;
     let out_dir = project.manifest.out_dir();
+    let exclude = crate::sources::glob_set(&project.manifest.manifest.fmt.exclude);
     let starts: Vec<PathBuf> = if request.paths.is_empty() {
         vec![root.clone()]
     } else {
@@ -79,7 +80,12 @@ fn files(project: &Project, request: &FormatRequest, lua: bool) -> Vec<PathBuf> 
             if path.starts_with(&out_dir) || !entry.file_type().is_some_and(|t| t.is_file()) {
                 continue;
             }
-            if wanted(path, lua) {
+            let rel = path
+                .strip_prefix(root)
+                .unwrap_or(path)
+                .to_string_lossy()
+                .replace('\\', "/");
+            if wanted(path, lua) && !exclude.is_match(&rel) {
                 found.push(path.to_path_buf());
             }
         }

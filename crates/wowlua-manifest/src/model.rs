@@ -1012,6 +1012,10 @@ pub struct Fmt {
     pub quote_style: QuoteStyle,
     #[serde(default)]
     pub lua: bool,
+    /// Files `wowlua fmt` leaves as they are (generated ones), globs
+    /// relative to the package root.
+    #[serde(default, skip_serializing_if = "Vec::is_empty")]
+    pub exclude: Vec<String>,
 }
 
 impl Fmt {
@@ -1033,6 +1037,7 @@ impl Default for Fmt {
             line_width: Self::default_line_width(),
             quote_style: Self::default_quote_style(),
             lua: false,
+            exclude: Vec::new(),
         }
     }
 }

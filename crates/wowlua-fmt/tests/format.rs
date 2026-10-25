@@ -119,3 +119,68 @@ fn returned_function_body() {
     let src = "local function f()\n\treturn function()\n\t\tprint(1)\n\tend\nend\n";
     assert_eq!(fmt(src), src);
 }
+
+/// A signature too long for the line breaks between its parameters, one
+/// per line, never inside a parameter's type.
+#[test]
+fn long_signatures_break_between_parameters() {
+    let src = "export function onUnit<E extends EventName>(event: E, units: UnitToken | UnitToken[], fn: (name: E) -> (), owner: unknown): boolean\n    return true\nend\n";
+    assert_eq!(
+        fmt(src),
+        "export function onUnit<E extends EventName>(\n\tevent: E,\n\tunits: UnitToken | UnitToken[],\n\tfn: (name: E) -> (),\n\towner: unknown\n): boolean\n\treturn true\nend\n"
+    );
+    // one that fits stays on its line
+    assert_eq!(
+        fmt("local function add(a: number, b: number): number\n    return a + b\nend\n"),
+        "local function add(a: number, b: number): number\n\treturn a + b\nend\n"
+    );
+}
+
+/// An empty body's `end` follows the signature when the line fits, and goes
+/// below it otherwise (never past the line width).
+#[test]
+fn an_empty_body_ends_below_a_long_signature() {
+    assert_eq!(fmt("function f(a)\nend\n"), "function f(a) end\n");
+    let src = "class Bus\n    constructor(private dispatcher: Dispatcher = StdDispatcher.new(), private reporter: Reporter = log)\n    end\nend\n";
+    let out = fmt(src);
+    assert_eq!(
+        out,
+        "class Bus\n\tconstructor(\n\t\tprivate dispatcher: Dispatcher = StdDispatcher.new(),\n\t\tprivate reporter: Reporter = log\n\t)\n\tend\nend\n"
+    );
+    // fitting, but not with ` end` after it
+    let src = "class Bus\n    constructor(private dispatcher: Dispatcher = StdDispatcher.new(), private reporter: Repo = log)\n    end\nend\n";
+    assert_eq!(
+        fmt(src),
+        "class Bus\n\tconstructor(private dispatcher: Dispatcher = StdDispatcher.new(), private reporter: Repo = log)\n\tend\nend\n"
+    );
+    assert!(
+        out.lines().all(|l| l.replace('\t', "    ").len() <= 100),
+        "{out}"
+    );
+}
+
+/// A comment after a table type's field stays on that field's line, pass
+/// after pass.
+#[test]
+fn table_type_comments_stay_on_their_field() {
+    let src = "export type Friend = {\n    name?: string,\n    color?: string,      -- a class colour token\n    online?: boolean,\n    -- the owner's own\n    sort?: string, -- last\n}\n";
+    let once = fmt(src);
+    assert_eq!(
+        once,
+        "export type Friend = {\n\tname?: string,\n\tcolor?: string, -- a class colour token\n\tonline?: boolean,\n\t-- the owner's own\n\tsort?: string, -- last\n}\n"
+    );
+    assert_eq!(fmt(&once), once);
+}
+
+/// A comment on its own line before a table stands before it and leaves the
+/// table on one line.
+#[test]
+fn a_comment_before_a_table_does_not_break_it() {
+    let src = "f({\n    -- the first\n    { \"0000\" },  -- four\n    { \"0001\" },  -- one\n})\n";
+    let once = fmt(src);
+    assert_eq!(
+        once,
+        "f({\n\t-- the first\n\t{ \"0000\" }, -- four\n\t{ \"0001\" }, -- one\n})\n"
+    );
+    assert_eq!(fmt(&once), once);
+}
