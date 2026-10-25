@@ -238,6 +238,8 @@ impl Assets for ClientAssets {
 pub struct CascClientData {
     open: Box<dyn Fn() -> Option<Arc<Casc>> + Send + Sync>,
     casc: OnceLock<Option<Arc<Casc>>>,
+    /// The spell tables, opened on first use.
+    spells: OnceLock<Option<wowlua_casc::spells::SpellTables>>,
 }
 
 impl CascClientData {
@@ -245,7 +247,17 @@ impl CascClientData {
         CascClientData {
             open,
             casc: OnceLock::new(),
+            spells: OnceLock::new(),
         }
+    }
+
+    fn spells(&self) -> Option<&wowlua_casc::spells::SpellTables> {
+        self.spells
+            .get_or_init(|| {
+                let casc = self.casc.get_or_init(|| (self.open)()).as_ref()?;
+                wowlua_casc::spells::SpellTables::open(casc)
+            })
+            .as_ref()
     }
 
     fn with<T>(&self, f: impl FnOnce(&mut Library, &Casc) -> Option<T>) -> Option<T> {
@@ -423,6 +435,46 @@ impl wowlua_engine::clientdata::ClientData for CascClientData {
                 .or_else(|| t.rows().find(|r| kind(r)))
                 .map(|r| r.int("UiCameraID"))
         })
+    }
+
+    fn spell(&self, id: u32) -> Option<wowlua_engine::clientdata::ClientSpell> {
+        let s = self.spells()?.info(id)?;
+        Some(wowlua_engine::clientdata::ClientSpell {
+            name: s.name,
+            subtext: s.subtext,
+            icon: s.icon,
+            cast_ms: s.cast_ms,
+            min_range: s.min_range,
+            max_range: s.max_range,
+            school_mask: s.school_mask,
+            cooldown_ms: s.cooldown_ms.max(s.category_cooldown_ms),
+            gcd_ms: s.gcd_ms,
+            costs: s
+                .costs
+                .iter()
+                .map(|c| wowlua_engine::clientdata::SpellCost {
+                    power_type: c.power_type,
+                    cost: c.shown(),
+                    min_cost: c.shown_min(),
+                    percent: c.percent,
+                })
+                .collect(),
+        })
+    }
+
+    fn spell_description(
+        &self,
+        id: u32,
+        caster: &wowlua_engine::clientdata::SpellCaster,
+    ) -> Option<String> {
+        let caster = wowlua_casc::spelltext::Caster {
+            level: caster.level,
+            spell_power: caster.spell_power,
+            healing_power: caster.healing_power,
+            attack_power: caster.attack_power,
+            damage_done: 1.0,
+        };
+        self.spells()?.describe(id, &caster)
     }
 
     fn item(&self, id: u32) -> Option<wowlua_engine::clientdata::ClientItem> {

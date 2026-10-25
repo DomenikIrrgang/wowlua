@@ -35,6 +35,9 @@ struct Record {
     relation: u32,
     /// A sparse record's size.
     size: usize,
+    /// A hotfix's record: in `Db2::hot`, its fields one after another at
+    /// their full sizes, its strings inline.
+    hot: bool,
 }
 
 pub struct Db2 {
@@ -48,6 +51,16 @@ pub struct Db2 {
     /// All sections' records' bytes (strings' virtual offsets start there).
     records_bytes: usize,
     pub layout_hash: u32,
+    /// The table's hash, by which hotfixes name it.
+    pub table_hash: u32,
+    /// The hotfixes' records' bytes.
+    hot: Vec<u8>,
+    /// Each field's size in a hotfix record (bytes per element).
+    hot_sizes: Vec<usize>,
+    /// Each field's size as the layout gives it, where known: a value of
+    /// a palette or the common data is cut to it (its high bytes are not
+    /// the field's).
+    natural: Vec<Option<usize>>,
     by_id: std::sync::OnceLock<std::collections::HashMap<u32, usize>>,
     /// Records of their own sizes (an offset map).
     sparse: bool,
@@ -74,6 +87,7 @@ impl Db2 {
         let record_count = u(0)? as usize;
         let field_count = u(1)? as usize;
         let record_size = u(2)? as usize;
+        let table_hash = u(4)?;
         let layout_hash = u(5)?;
         let flags = u16_at(&data, h + 36)?;
         let id_index = u16_at(&data, h + 38)? as usize;
@@ -172,6 +186,7 @@ impl Db2 {
                         id,
                         relation: 0,
                         size,
+                        hot: false,
                     });
                 }
                 for c in 0..copy_count {
@@ -209,6 +224,7 @@ impl Db2 {
                     id,
                     relation: 0,
                     size: record_size,
+                    hot: false,
                 });
                 virtual_at += record_size;
             }
@@ -243,6 +259,10 @@ impl Db2 {
             strings,
             records_bytes: virtual_at,
             layout_hash,
+            table_hash,
+            hot: Vec::new(),
+            hot_sizes: Vec::new(),
+            natural: Vec::new(),
             by_id: std::sync::OnceLock::new(),
             sparse,
             string_fields: Vec::new(),
@@ -299,6 +319,14 @@ impl Db2 {
         self.records.is_empty()
     }
 
+    /// Each field's storage, bits, byte size and element count (for tools).
+    pub fn field_info(&self) -> Vec<(u32, u32, usize, usize)> {
+        self.fields
+            .iter()
+            .map(|f| (f.storage, f.size_bits, f.byte_size, Self::count(f)))
+            .collect()
+    }
+
     pub fn field_count(&self) -> usize {
         self.fields.len()
     }
@@ -314,7 +342,145 @@ impl Db2 {
 
     /// Record `i`'s field `f` as an integer.
     pub fn int(&self, i: usize, f: usize) -> Option<u32> {
-        self.field_in(&self.data, &self.records[i], f)
+        let r = &self.records[i];
+        if r.hot {
+            return self.hot_ints(r, f)?.first().copied();
+        }
+        self.field_in(&self.data, r, f).map(|v| self.cut(f, v))
+    }
+
+    /// The layout's field sizes (`None` where unknown), for cutting stored
+    /// values to them.
+    pub fn set_field_sizes(&mut self, sizes: Vec<Option<usize>>) {
+        self.natural = sizes;
+    }
+
+    /// `v` cut to field `f`'s size.
+    fn cut(&self, f: usize, v: u32) -> u32 {
+        match self.natural.get(f).copied().flatten() {
+            Some(1) => v & 0xFF,
+            Some(2) => v & 0xFFFF,
+            _ => v,
+        }
+    }
+
+    /// How many elements field `f` has (an array's length).
+    fn count(field: &Field) -> usize {
+        let size = field.byte_size.clamp(1, 4);
+        match field.storage {
+            0 => (field.size_bits as usize / (size * 8)).max(1),
+            4 => field.val3.max(1) as usize,
+            _ => 1,
+        }
+    }
+
+    /// A hotfix record's field `f`: where it starts in `hot`.
+    fn hot_at(&self, r: &Record, f: usize) -> Option<usize> {
+        let mut at = r.at;
+        let end = r.at + r.size;
+        for j in 0..f {
+            if self.string_fields.get(j).copied().unwrap_or(false) {
+                let s = self.hot.get(at..end)?;
+                at += s.iter().position(|&b| b == 0)? + 1;
+            } else {
+                let field = self.fields.get(j)?;
+                at += self.hot_sizes.get(j)? * Self::count(field);
+            }
+        }
+        (at <= end).then_some(at)
+    }
+
+    fn hot_ints(&self, r: &Record, f: usize) -> Option<Vec<u32>> {
+        let field = self.fields.get(f)?;
+        let size = (*self.hot_sizes.get(f)?).clamp(1, 4);
+        let start = self.hot_at(r, f)?;
+        (0..Self::count(field))
+            .map(|k| {
+                let at = start + k * size;
+                let mut buf = [0u8; 4];
+                buf[..size].copy_from_slice(self.hot.get(at..at + size)?);
+                Some(u32::from_le_bytes(buf))
+            })
+            .collect()
+    }
+
+    /// Takes the client's hotfixes of this table (`Casc::hotfixes`): a
+    /// valid record (status 1) replaces the record of its ID (keeping its
+    /// parent in a relationship map) or is added, a deleted one (2) is
+    /// removed. `sizes`: each field's size in bytes as hotfixes store it;
+    /// without one for a field that is not stored whole, the hotfixes are
+    /// not taken. Needs [`Db2::set_string_fields`] first.
+    pub fn apply_hotfixes(&mut self, rows: &[(u32, u8, Vec<u8>)], sizes: &[Option<usize>]) {
+        if rows.is_empty() {
+            return;
+        }
+        let mut hot_sizes = Vec::with_capacity(self.fields.len());
+        for (j, f) in self.fields.iter().enumerate() {
+            let string = self.string_fields.get(j).copied().unwrap_or(false);
+            match sizes.get(j).copied().flatten() {
+                Some(n) => hot_sizes.push(n),
+                None if string || (f.storage == 0 && f.byte_size > 0) => {
+                    hot_sizes.push(f.byte_size.clamp(1, 4))
+                }
+                None => return,
+            }
+        }
+        self.hot_sizes = hot_sizes;
+        let mut changed = false;
+        for (id, status, data) in rows {
+            let old = self.records.iter().position(|r| r.id == *id);
+            match status {
+                1 => {
+                    let at = self.hot.len();
+                    self.hot.extend_from_slice(data);
+                    let r = Record {
+                        at,
+                        virtual_at: 0,
+                        id: *id,
+                        relation: old.map_or(0, |i| self.records[i].relation),
+                        size: data.len(),
+                        hot: true,
+                    };
+                    // (a record that does not fit the layout is left out;
+                    // four bytes more are its parent's ID)
+                    let last = self.fields.len().saturating_sub(1);
+                    let Some(end) = self.hot_at(&r, last).and_then(|at| {
+                        if self.string_fields.get(last).copied().unwrap_or(false) {
+                            let s = self.hot.get(at..r.at + r.size)?;
+                            Some(at + s.iter().position(|&b| b == 0)? + 1)
+                        } else {
+                            Some(at + self.hot_sizes[last] * Self::count(&self.fields[last]))
+                        }
+                    }) else {
+                        continue;
+                    };
+                    let mut r = r;
+                    if end + 4 == r.at + r.size {
+                        r.relation = u32_at(&self.hot, end).unwrap_or(r.relation);
+                    } else if end != r.at + r.size {
+                        continue;
+                    }
+                    if self.fields.is_empty() {
+                        continue;
+                    }
+                    match old {
+                        Some(i) => self.records[i] = r,
+                        None => self.records.push(r),
+                    }
+                    changed = true;
+                }
+                2 => {
+                    if let Some(i) = old {
+                        self.records.remove(i);
+                        changed = true;
+                    }
+                }
+                _ => {}
+            }
+        }
+        if changed {
+            self.by_id = std::sync::OnceLock::new();
+        }
     }
 
     fn field_in(&self, data: &[u8], r: &Record, f: usize) -> Option<u32> {
@@ -377,6 +543,9 @@ impl Db2 {
             return Vec::new();
         };
         let r = &self.records[i];
+        if r.hot {
+            return self.hot_ints(r, f).unwrap_or_default();
+        }
         let data = &self.data;
         if self.sparse {
             let size = field.byte_size.clamp(1, 4);
@@ -414,6 +583,7 @@ impl Db2 {
                 let (at, _) = self.pallet;
                 (0..len)
                     .filter_map(|k| u32_at(data, at + field.extra + (index as usize * len + k) * 4))
+                    .map(|v| self.cut(f, v))
                     .collect()
             }
             _ => self.int(i, f).into_iter().collect(),
@@ -444,6 +614,11 @@ impl Db2 {
     pub fn signed(&self, i: usize, f: usize) -> Option<i32> {
         let field = self.fields.get(f)?;
         let v = self.int(i, f)?;
+        match self.natural.get(f).copied().flatten() {
+            Some(1) => return Some(v as u8 as i8 as i32),
+            Some(2) => return Some(v as u16 as i16 as i32),
+            _ => {}
+        }
         if field.storage == 5 && field.size_bits > 0 && field.size_bits < 32 {
             let shift = 32 - field.size_bits;
             return Some(((v << shift) as i32) >> shift);
@@ -472,6 +647,12 @@ impl Db2 {
     /// Record `i`'s string field `f`.
     pub fn string(&self, i: usize, f: usize) -> Option<String> {
         let r = &self.records[i];
+        if r.hot {
+            let at = self.hot_at(r, f)?;
+            let s = self.hot.get(at..r.at + r.size)?;
+            let end = s.iter().position(|&b| b == 0).unwrap_or(s.len());
+            return Some(String::from_utf8_lossy(&s[..end]).into_owned());
+        }
         if self.sparse {
             let at = self.sparse_at(r, f)?;
             let s = self.data.get(at..r.at + r.size)?;

@@ -631,6 +631,9 @@ Real game data and assets from the user's own client, never distributed
 from a world profile as the client draws them, with the client's spell and
 item data.
 
+Started 2026-10-25: the reader and items came with M12 (T310, T327); the
+spells from the client's tables and hotfix cache (T391).
+
 ## M14: Browser
 
 The compiler, the VM and the engine run in the browser as WebAssembly

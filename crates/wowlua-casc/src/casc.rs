@@ -336,7 +336,13 @@ pub struct Casc {
     /// The client's encryption keys: its own tables' and those its hotfix
     /// cache holds (decision T317).
     keys: blte::Keys,
+    /// The hotfix cache's records by table hash, read on first use.
+    hotfixes: std::sync::OnceLock<HashMap<u32, Vec<Hotfix>>>,
 }
+
+/// A hotfix of a table's record: its ID, its status (1: the record as
+/// given, 2: the record removed) and its data.
+pub type Hotfix = (u32, u8, Vec<u8>);
 
 impl Casc {
     /// The products `.build.info` lists: (product, version).
@@ -434,6 +440,7 @@ impl Casc {
             product: product.to_string(),
             version: row.version.clone(),
             keys: blte::Keys::new(),
+            hotfixes: std::sync::OnceLock::new(),
         };
         let enc = casc.read_ekey(&encoding_ekey).ok_or_else(|| {
             CascError(format!(
@@ -493,6 +500,35 @@ impl Casc {
             .into_iter()
             .filter_map(|(id, name)| Some((name, *values.get(&id)?)))
             .collect()
+    }
+
+    /// The hotfixes the server sent the client for a table (by its
+    /// `Db2::table_hash`), from its hotfix cache
+    /// (`Cache/ADB/<locale>/DBCache.bin`, enUS first), in their order: a
+    /// later one of a record wins (decision T391).
+    pub fn hotfixes(&self, table_hash: u32) -> &[Hotfix] {
+        let all = self.hotfixes.get_or_init(|| {
+            let mut by_table: HashMap<u32, Vec<Hotfix>> = HashMap::new();
+            for folder in self.folders() {
+                let adb = format!("{folder}/Cache/ADB");
+                let mut locales = self.storage.list(&adb);
+                locales.sort_by_key(|l| l != "enUS");
+                let Some(cache) = locales
+                    .iter()
+                    .find_map(|l| self.storage.read(&format!("{adb}/{l}/DBCache.bin")))
+                else {
+                    continue;
+                };
+                for (table, record, status, data) in hotfix_records(&cache) {
+                    by_table
+                        .entry(table)
+                        .or_default()
+                        .push((record, status, data.to_vec()));
+                }
+            }
+            by_table
+        });
+        all.get(&table_hash).map_or(&[], Vec::as_slice)
     }
 
     /// The installation's client folders of this product (`_classic_beta_`).
@@ -656,6 +692,15 @@ impl Casc {
 
 /// A hotfix cache's valid records: (table hash, record ID, data).
 fn hotfixes(cache: &[u8]) -> Vec<(u32, u32, &[u8])> {
+    hotfix_records(cache)
+        .into_iter()
+        .filter(|r| r.2 == 1)
+        .map(|(table, record, _, data)| (table, record, data))
+        .collect()
+}
+
+/// A hotfix cache's records: (table hash, record ID, status, data).
+fn hotfix_records(cache: &[u8]) -> Vec<(u32, u32, u8, &[u8])> {
     let u = |at: usize| -> Option<u32> {
         Some(u32::from_le_bytes(cache.get(at..at + 4)?.try_into().ok()?))
     };
@@ -673,9 +718,7 @@ fn hotfixes(cache: &[u8]) -> Vec<(u32, u32, &[u8])> {
         let Some(data) = cache.get(pos + 32..pos + 32 + size as usize) else {
             break;
         };
-        if status == 1 {
-            out.push((table, record, data));
-        }
+        out.push((table, record, status, data));
         pos += 32 + size as usize;
     }
     out

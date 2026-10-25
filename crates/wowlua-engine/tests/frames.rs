@@ -1894,3 +1894,89 @@ return m:GetDisplayInfo(), icon, loc, C_Item.GetItemIconByID(872), tostring(C_It
     assert!(scene.items.iter().any(|i| matches!(i,
         Item::Quad(q) if matches!(&q.image, Image::Portrait { source, .. } if **source == ModelSource::Display(500)))));
 }
+
+/// Two spells of the client's tables: Fireball (in camelot's scan) and
+/// one the scan lacks.
+struct Spells;
+
+impl wowlua_engine::clientdata::ClientData for Spells {
+    fn model_scene(&self, _: u32) -> Option<wowlua_engine::clientdata::ModelScene> {
+        None
+    }
+    fn scene_camera(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneCamera> {
+        None
+    }
+    fn scene_actor(&self, _: u32) -> Option<wowlua_engine::clientdata::SceneActor> {
+        None
+    }
+    fn actor_display(&self, _: u32) -> Option<wowlua_engine::clientdata::ActorDisplay> {
+        None
+    }
+    fn spell(&self, id: u32) -> Option<wowlua_engine::clientdata::ClientSpell> {
+        let (name, cast_ms) = match id {
+            133 => ("Fireball (tables)", 1500),
+            9_900_001 => ("Unscanned Bolt", 2500),
+            _ => return None,
+        };
+        Some(wowlua_engine::clientdata::ClientSpell {
+            name: name.into(),
+            subtext: "Rank 9".into(),
+            icon: Some(135812),
+            cast_ms,
+            min_range: 0.0,
+            max_range: 30.0,
+            school_mask: 4,
+            costs: vec![wowlua_engine::clientdata::SpellCost {
+                power_type: 0,
+                cost: 30,
+                min_cost: 30,
+                percent: 0.0,
+            }],
+            ..Default::default()
+        })
+    }
+    fn spell_description(
+        &self,
+        id: u32,
+        caster: &wowlua_engine::clientdata::SpellCaster,
+    ) -> Option<String> {
+        (id == 9_900_001)
+            .then(|| format!("Burns for {} at level {}.", 10 + caster.level, caster.level))
+    }
+}
+
+/// A spell no test defines comes from the client's tables (decision
+/// T391): one camelot's scan lacks whole (name, rank, icon, cast time,
+/// range, costs, its description for the player's level, 60 here); the scan's
+/// keeps its recorded name, the tables adding its cast time and range.
+#[test]
+fn unknown_spells_come_from_the_clients_tables() {
+    let mut vm = vm();
+    wowlua_engine::clientdata::set(&mut vm, std::sync::Arc::new(Spells));
+    let r = run(
+        &mut vm,
+        "local s = C_Spell.GetSpellInfo(9900001)
+local f = C_Spell.GetSpellInfo(133)
+local cost = C_Spell.GetSpellPowerCost(9900001)[1]
+return s.name, s.castTime, s.maxRange, s.iconID, C_Spell.GetSpellSubtext(9900001),
+    C_Spell.GetSpellDescription(9900001), f.name, f.castTime, f.maxRange,
+    cost.name, cost.cost, tostring(C_Spell.DoesSpellExist(9900001))",
+    );
+    assert_eq!(
+        r,
+        [
+            "Unscanned Bolt",
+            "2500",
+            "30",
+            "135812",
+            "Rank 9",
+            "Burns for 70 at level 60.",
+            "Fireball",
+            "1500",
+            "30",
+            "MANA",
+            "30",
+            "true"
+        ]
+    );
+}

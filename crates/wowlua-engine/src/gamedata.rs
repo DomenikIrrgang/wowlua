@@ -340,31 +340,91 @@ const NO_ICON: f64 = 136235.0;
 /// cast time and range (none here, as `get_spell_info` defaults them), and
 /// a spell's rank, which the scan read only where the client had it cached
 /// (Holy Light's ranks are in the trainers' recordings, not in the scan).
+///
+/// With the user's installation (decision T391), the client's tables add
+/// the cast time and range (`castTime` in milliseconds, `minRange`,
+/// `maxRange` in yards) and give the spells the scan lacks, in every
+/// flavor; the scan's name, icon and rank, recorded from the client,
+/// stay.
 pub fn scanned_spell(vm: &mut Vm, id: i64) -> Option<TableRef> {
     if let Some(t) = engine(vm).world.data.scanned.get(&id).copied() {
         return Some(t);
     }
-    if engine(vm).flavor != "camelot" {
+    let scan = (engine(vm).flavor == "camelot")
+        .then(|| spell_table().get(&id))
+        .flatten();
+    let client = crate::clientdata::spell(vm, id);
+    if scan.is_none() && client.is_none() {
         return None;
     }
-    let s = spell_table().get(&id)?;
-    // The scan's icon, else the recorded spellbook item's (the full probe,
-    // 1.60.1: Attack's 133728 and Cannibalize's 132278, which the scan
-    // lacked, are their spellbook items' icons).
-    let icon = s
-        .icon
-        .or_else(|| book_icon(vm, id as f64))
-        .unwrap_or(NO_ICON);
     let t = vm.new_table();
-    let name = vm.str(s.name);
-    set(vm, t, "name", name);
-    set(vm, t, "iconID", Value::Num(icon));
-    let subtext = vm.str(s.subtext);
-    set(vm, t, "subtext", subtext);
+    match scan {
+        Some(s) => {
+            // The scan's icon, else the recorded spellbook item's (the full
+            // probe, 1.60.1: Attack's 133728 and Cannibalize's 132278, which
+            // the scan lacked, are their spellbook items' icons), else the
+            // client's tables'.
+            let icon = s
+                .icon
+                .or_else(|| book_icon(vm, id as f64))
+                .or_else(|| client.as_ref()?.icon.map(f64::from))
+                .unwrap_or(NO_ICON);
+            let name = vm.str(s.name);
+            set(vm, t, "name", name);
+            set(vm, t, "iconID", Value::Num(icon));
+            let subtext = vm.str(s.subtext);
+            set(vm, t, "subtext", subtext);
+        }
+        None => {
+            let c = client.as_ref()?;
+            let name = vm.str(&c.name);
+            set(vm, t, "name", name);
+            let icon = c.icon.map_or(NO_ICON, f64::from);
+            set(vm, t, "iconID", Value::Num(icon));
+            let subtext = vm.str(&c.subtext);
+            set(vm, t, "subtext", subtext);
+        }
+    }
+    if let Some(c) = &client {
+        set(vm, t, "castTime", Value::Num(f64::from(c.cast_ms)));
+        set(vm, t, "minRange", Value::Num(f64::from(c.min_range)));
+        set(vm, t, "maxRange", Value::Num(f64::from(c.max_range)));
+    }
     set(vm, t, "cached", Value::Bool(true));
     widgets::keep(vm, Value::Table(t));
     engine_mut(vm).world.data.scanned.insert(id, t);
     Some(t)
+}
+
+/// A spell's description from the client's tables (decision T391), its
+/// numbers for the player as the engine has them: level, spell power of
+/// the spell's school (`GetSpellBonusDamage`), bonus healing and attack
+/// power. Unverified: talents and auras that change a spell's numbers
+/// (the client's own descriptions include them).
+fn client_description(vm: &mut Vm, id: i64) -> Option<String> {
+    let spell = crate::clientdata::spell(vm, id)?;
+    let level = engine(vm).units.list[crate::units::PLAYER.0].level.max(1.0) as u32;
+    // the school's index (1 physical … 7 arcane) by its lowest bit
+    let school = (spell.school_mask.trailing_zeros() + 1).min(7);
+    let n = |v: Vec<Value>, i: usize| -> f32 {
+        match v.get(i) {
+            Some(Value::Num(n)) => *n as f32,
+            _ => 0.0,
+        }
+    };
+    let damage =
+        crate::leftovers2::ask(vm, "GetSpellBonusDamage", &[Value::Num(f64::from(school))]);
+    let healing = crate::leftovers2::ask(vm, "GetSpellBonusHealing", &[]);
+    let player = vm.str("player");
+    let attack = crate::leftovers2::ask(vm, "UnitAttackPower", &[player]);
+    let attack_power = n(attack.clone(), 0) + n(attack.clone(), 1) + n(attack, 2);
+    let caster = crate::clientdata::SpellCaster {
+        level,
+        spell_power: n(damage, 0),
+        healing_power: n(healing, 0),
+        attack_power,
+    };
+    crate::clientdata::spell_description(vm, id, &caster)
 }
 
 /// The icon of the recorded spellbook item holding the spell.
@@ -499,11 +559,15 @@ fn spell_field_of(vm: &mut Vm, c: &NativeCall, key: &str) -> Ret {
     match spell(vm, c) {
         Some((_, s)) => Ok(vec![field(vm, s, key)]),
         None => match unrecorded(vm, c) {
-            Ok((_, s)) => Ok(match field(vm, s, key) {
-                // A spell of the client's table without a description: an
-                // empty one (the full probe, 1.60.1: Attack's ""; unverified:
-                // a spell whose text the engine lacks).
-                Value::Nil if key == "description" => vec![vm.str("")],
+            Ok((id, s)) => Ok(match field(vm, s, key) {
+                // A spell of the client's table without a description: the
+                // client's tables' (with the installation), else an empty
+                // one (the full probe, 1.60.1: Attack's ""; unverified: a
+                // spell whose text the engine lacks).
+                Value::Nil if key == "description" => {
+                    let text = client_description(vm, id).unwrap_or_default();
+                    vec![vm.str(&text)]
+                }
                 Value::Nil => vec![],
                 v => vec![v],
             }),
@@ -816,7 +880,48 @@ fn get_spell_power_cost(vm: &mut Vm, c: NativeCall) -> Ret {
     if let Some(answer) = crate::recorded::probed(&call) {
         return Ok(crate::recorded::parse_answer(vm, answer));
     }
+    // the client's tables' costs (decision T391), where each is an amount
+    // (one in percent of the base power is the character's)
+    if let Value::Num(id) = vm.hidden(c.arg(1))
+        && let Some(spell) = crate::clientdata::spell(vm, id as i64)
+        && !spell.costs.is_empty()
+        && spell.costs.iter().all(|c| c.percent == 0.0)
+    {
+        let list = vm.new_table();
+        for (i, cost) in spell.costs.iter().enumerate() {
+            let t = vm.new_table();
+            set(vm, t, "type", Value::Num(f64::from(cost.power_type)));
+            let name = vm.str(power_name(cost.power_type));
+            set(vm, t, "name", name);
+            set(vm, t, "cost", Value::Num(f64::from(cost.cost)));
+            set(vm, t, "minCost", Value::Num(f64::from(cost.min_cost)));
+            set(vm, t, "costPercent", Value::Num(0.0));
+            set(vm, t, "costPerSec", Value::Num(0.0));
+            set(vm, t, "requiredAuraID", Value::Num(0.0));
+            set(vm, t, "hasRequiredAura", Value::Bool(false));
+            let _ = vm
+                .heap
+                .table_mut(list)
+                .set(Value::Num((i + 1) as f64), Value::Table(t));
+        }
+        return Ok(vec![Value::Table(list)]);
+    }
     Ok(crate::recorded::client_answer(vm, &c))
+}
+
+/// A power type's token (`Enum.PowerType`), as `GetSpellPowerCost` names
+/// it.
+fn power_name(kind: i32) -> &'static str {
+    match kind {
+        0 => "MANA",
+        1 => "RAGE",
+        2 => "FOCUS",
+        3 => "ENERGY",
+        4 => "COMBO_POINTS",
+        5 => "RUNES",
+        6 => "RUNIC_POWER",
+        _ => "",
+    }
 }
 
 /// The engine's timers run a native after a delay: the load results.

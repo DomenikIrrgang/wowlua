@@ -1,6 +1,6 @@
 //! The client's own tables, where the host has the user's installation
 //! (spec debugger §18.10, decision T321): model scenes, their cameras and
-//! actors (`C_ModelInfo`). Without one, the engine answers as before:
+//! actors (`C_ModelInfo`), items, creatures, spells (decision T391). Without one, the engine answers as before:
 //! nothing.
 
 use std::sync::Arc;
@@ -144,6 +144,68 @@ pub trait ClientData: Send + Sync {
     fn minimap_tile(&self, _map: u32, _x: u32, _y: u32) -> Option<u32> {
         None
     }
+    /// A spell as the client's tables (and its hotfixes) have it
+    /// (decision T391).
+    fn spell(&self, _id: u32) -> Option<ClientSpell> {
+        None
+    }
+    /// A spell's description for a caster, its numbers filled in; `None`
+    /// without one or where a number cannot be given exactly.
+    fn spell_description(&self, _id: u32, _caster: &SpellCaster) -> Option<String> {
+        None
+    }
+}
+
+/// A spell of the client's tables: its name, rank, icon, cast time,
+/// range, school, cooldowns and costs.
+#[derive(Clone, Debug, Default, PartialEq)]
+pub struct ClientSpell {
+    pub name: String,
+    /// "Rank 2", empty for none.
+    pub subtext: String,
+    pub icon: Option<u32>,
+    pub cast_ms: u32,
+    pub min_range: f32,
+    pub max_range: f32,
+    /// The schools (`Enum.Damageclass` bits: 1 physical, 2 holy, …).
+    pub school_mask: u32,
+    pub cooldown_ms: u32,
+    pub gcd_ms: u32,
+    pub costs: Vec<SpellCost>,
+}
+
+/// A spell's power cost as `GetSpellPowerCost` gives it (rage and runic
+/// power in whole points).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct SpellCost {
+    /// `Enum.PowerType`.
+    pub power_type: i32,
+    /// The most it takes (a finisher's combo points).
+    pub cost: u32,
+    pub min_cost: u32,
+    /// In percent of the base power (0 for a fixed cost).
+    pub percent: f32,
+}
+
+/// What a spell description's numbers depend on in the caster.
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+pub struct SpellCaster {
+    pub level: u32,
+    /// `GetSpellBonusDamage` of the spell's school.
+    pub spell_power: f32,
+    /// `GetSpellBonusHealing`.
+    pub healing_power: f32,
+    pub attack_power: f32,
+}
+
+/// A spell as the client's tables have it.
+pub(crate) fn spell(vm: &Vm, id: i64) -> Option<ClientSpell> {
+    data(vm)?.spell(u32::try_from(id).ok()?)
+}
+
+/// A spell's description for a caster, as the client's tables give it.
+pub(crate) fn spell_description(vm: &Vm, id: i64, caster: &SpellCaster) -> Option<String> {
+    data(vm)?.spell_description(u32::try_from(id).ok()?, caster)
 }
 
 /// An item of the client's tables: its name, quality, levels, expansion,

@@ -27,7 +27,7 @@ use crate::{engine, engine_mut, widgets};
 /// What the engine answers for the client function `name` called with
 /// `args` (its behaviour; none: nothing), secret answers unwrapped (as
 /// `extras::ask`).
-fn ask(vm: &mut Vm, name: &'static str, args: &[Value]) -> Vec<Value> {
+pub(crate) fn ask(vm: &mut Vm, name: &'static str, args: &[Value]) -> Vec<Value> {
     let Some(f) = engine(vm).behaviour(name) else {
         return vec![];
     };

@@ -286,7 +286,16 @@ T310).
 - **Tables** (decision T319): DB2 tables (WDC3 to WDC5: inline, bit-packed,
   palette and common fields, arrays, copies, relationship maps), their
   fields named by the build's layout hash, else by a known layout of the
-  same field count.
+  same field count. A value from a palette or the common data is cut to
+  the field's size where the layout gives it (a one-byte field's palette
+  holds four bytes). What the server changed since the build is taken
+  from the client's hotfix cache (`Cache/ADB/<locale>/DBCache.bin`, enUS
+  first; decision T391): a record of a table (by its hash) replaces the
+  record of its ID or is added, a removed one is left out. A hotfix
+  record holds the fields one after another at the sizes the layout gives
+  (`~n` in wowlua's layouts; a table whose layout lacks them takes no
+  hotfixes), strings inline, and, four bytes more, its parent's ID in a
+  relationship map (else a replaced record keeps its parent).
 - **Models** (decision T318): M2 models (the chunked `MD21` form) with
   their skin profile, skeleton (`.skel`) and the `.anim` files of the
   sequences shown; a creature display through `CreatureDisplayInfo` and
@@ -356,6 +365,41 @@ T310).
   its `SetPosition` at its own size, pitch and roll turn it about the
   view's axes after its facing, and the field of view is 50 degrees
   across the frame's diagonal.
+
+  A spell no test defines (decision T391) is the client's: its name, rank
+  and icon from `SpellName`, `Spell` and `SpellMisc` (camelot's recorded
+  scan's name, rank and icon win where it has the spell), its cast time
+  (`SpellCastTimes`), range (`SpellRange`, the first of its pair) and
+  costs (`SpellPower`: rage and runic power in whole points, a finisher's
+  cost the most it takes, `minCost` the least), so
+  `C_Spell.GetSpellInfo`, `GetSpellSubtext`, `GetSpellTexture`,
+  `DoesSpellExist` and `GetSpellPowerCost` answer for it in every flavor;
+  a cost in percent of the base power is the character's and is not
+  given. `C_Spell.GetSpellDescription` gives the client's text with its
+  placeholders filled for the player as the engine has them (level, the
+  school's `GetSpellBonusDamage`, `GetSpellBonusHealing`, attack power):
+  `$s` an effect's points (`EffectBasePointsF`, grown by
+  `EffectRealPointsPerLevel` from `SpellLevels`' level to its maximum,
+  plus the spell power coefficient times the power; with a `Variance`, "low
+  to high", the spread halved each way, rounded; else rounded down),
+  `$m`/`$M` the low and high ends, `$o` the points times the whole ticks
+  of the duration (`EffectAuraPeriod`), `$t` the period in seconds, `$d` the
+  duration ("12 sec", "1.5 sec", "10 min", "1 |4hour:hrs;", "2
+  |4day:days;"), `$a` the radius, `$h` the proc chance, `$u` the stacks, `$n`
+  the charges, `$x` the chain targets, `$r` the range, `$12345s1` another
+  spell's, `$/1000;` and `$*2;` scaled (a range's ends each),
+  `$lpoint:points;` by the number before it, `$@spellname12345` and
+  `$@spelldesc12345`; numbers from 1,000 up with a separator. A
+  description with a placeholder it cannot fill exactly (formulas `${…}`,
+  conditions `$?`, variables `$<…>`, gender `$g`) is empty, as without
+  the tables. Checked against the client's recorded descriptions (about
+  2,000, `wowlua-casc`'s installation tests): the same, except where the
+  recorded character's gear, talents or a damage modifier count (2 % more
+  damage on a level-21 druid). Unverified: talents and auras that change a
+  spell's numbers or costs (the client's answers include them: a druid's
+  feral abilities cost 2 less, Improved Thunder Clap), spells changed by
+  the server beyond its hotfixes (Hunter's Mark shows half its table's
+  value).
 - **Fonts**: the client's TrueType fonts from the installation; without
   them, the bundled stand-in fonts (open licenses), at the same pixel
   heights. Glyph positions follow the engine's measured widths (§17.6), so

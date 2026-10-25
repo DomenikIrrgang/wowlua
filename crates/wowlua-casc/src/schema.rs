@@ -1,7 +1,8 @@
 // The field order of each table layout wowlua reads.
 
 /// A table's layouts: (layout hash, field names in order; `@` a
-/// relationship map's column, `$` a sparse table's string).
+/// relationship map's column, `$` a string, `~n` a field's size in bytes
+/// as hotfixes store it).
 pub(crate) type Layouts = &'static [(u32, &'static [&'static str])];
 
 pub(crate) static LAYOUTS: &[(&str, Layouts)] = &[
@@ -1328,5 +1329,175 @@ pub(crate) static LAYOUTS: &[(&str, Layouts)] = &[
                 ],
             ),
         ],
+    ),
+    ("SpellName", &[(0x782EE721, &["$Name_lang"])]),
+    (
+        "Spell",
+        &[(
+            0xE3D134FB,
+            &[
+                "$NameSubtext_lang",
+                "$Description_lang",
+                "$AuraDescription_lang",
+            ],
+        )],
+    ),
+    (
+        "SpellMisc",
+        &[(
+            0x434B3607,
+            &[
+                "Attributes~4",
+                "DifficultyID~2",
+                "CastingTimeIndex~2",
+                "DurationIndex~2",
+                "PvPDurationIndex~2",
+                "RangeIndex~2",
+                "SchoolMask~1",
+                "Speed~4",
+                "LaunchDelay~4",
+                "MinDuration~4",
+                "SpellIconFileDataID~4",
+                "ActiveIconFileDataID~4",
+                "ContentTuningID~4",
+                "ShowFutureSpellPlayerConditionID~4",
+                "SpellVisualScript~4",
+                "ActiveSpellVisualScript~4",
+                "@SpellID",
+            ],
+        )],
+    ),
+    ("SpellCastTimes", &[(0x75B6BD3A, &["Base~4", "Minimum~4"])]),
+    (
+        "SpellRange",
+        &[(
+            0xADA13705,
+            &[
+                "$DisplayName_lang",
+                "$DisplayNameShort_lang",
+                "Flags~4",
+                "RangeMin~4",
+                "RangeMax~4",
+            ],
+        )],
+    ),
+    (
+        "SpellCooldowns",
+        &[(
+            0xDC945B8C,
+            &[
+                "DifficultyID~2",
+                "CategoryRecoveryTime~4",
+                "RecoveryTime~4",
+                "StartRecoveryTime~4",
+                "AuraSpellID~4",
+                "@SpellID",
+            ],
+        )],
+    ),
+    (
+        "SpellEffect",
+        &[(
+            0x5362E3D4,
+            &[
+                "EffectAura~2",
+                "DifficultyID~2",
+                "EffectIndex~4",
+                "Effect~4",
+                "EffectAmplitude~4",
+                "EffectAttributes~4",
+                "EffectAuraPeriod~4",
+                "EffectBonusCoefficient~4",
+                "EffectChainAmplitude~4",
+                "EffectChainTargets~4",
+                "EffectItemType~4",
+                "EffectMechanic~4",
+                "EffectPointsPerResource~4",
+                "EffectPos_facing~4",
+                "EffectRealPointsPerLevel~4",
+                "EffectTriggerSpell~4",
+                "BonusCoefficientFromAP~4",
+                "PvpMultiplier~4",
+                "Coefficient~4",
+                "Variance~4",
+                "ResourceCoefficient~4",
+                "GroupSizeBasePointsCoefficient~4",
+                "EffectBasePointsF~4",
+                "ScalingClass~4",
+                "Node__Field_12_0_0_63534_001~4",
+                "EffectMiscValue~4",
+                "EffectRadiusIndex~4",
+                "EffectSpellClassMask~4",
+                "ImplicitTarget~2",
+                "@SpellID",
+            ],
+        )],
+    ),
+    (
+        "SpellPower",
+        &[(
+            0x61AD223F,
+            &[
+                "ID~4",
+                "OrderIndex~1",
+                "ManaCost~4",
+                "ManaCostPerLevel~4",
+                "ManaPerSecond~4",
+                "PowerDisplayID~4",
+                "AltPowerBarID~4",
+                "PowerCostPct~4",
+                "PowerCostMaxPct~4",
+                "OptionalCostPct~4",
+                "PowerPctPerSecond~4",
+                "PowerType~1",
+                "RequiredAuraSpellID~4",
+                "OptionalCost~4",
+                "@SpellID",
+            ],
+        )],
+    ),
+    (
+        "SpellDuration",
+        &[(
+            0xA931BD2B,
+            &["Duration~4", "MaxDuration~4", "DurationPerResource~4"],
+        )],
+    ),
+    (
+        "SpellRadius",
+        &[(
+            0xF9A913EE,
+            &["Radius~4", "RadiusPerLevel~4", "RadiusMin~4", "RadiusMax~4"],
+        )],
+    ),
+    (
+        "SpellLevels",
+        &[(
+            0x7EB86FDC,
+            &[
+                "DifficultyID~2",
+                "MaxLevel~2",
+                "MaxPassiveAuraLevel~1",
+                "BaseLevel~4",
+                "SpellLevel~4",
+                "@SpellID",
+            ],
+        )],
+    ),
+    (
+        "SpellAuraOptions",
+        &[(
+            0x95F4D5E1,
+            &[
+                "DifficultyID~2",
+                "CumulativeAura~2",
+                "ProcCategoryRecovery~4",
+                "ProcChance~1",
+                "ProcCharges~4",
+                "SpellProcsPerMinuteID~2",
+                "ProcTypeMask~4",
+                "@SpellID",
+            ],
+        )],
     ),
 ];

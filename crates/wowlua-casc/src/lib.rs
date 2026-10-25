@@ -18,6 +18,8 @@ pub mod jenkins;
 pub mod m2;
 mod salsa20;
 mod schema;
+pub mod spells;
+pub mod spelltext;
 pub mod tables;
 pub mod tga;
 pub mod wdb;

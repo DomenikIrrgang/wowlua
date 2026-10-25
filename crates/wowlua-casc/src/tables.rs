@@ -23,8 +23,8 @@ const FILES: &[(&str, u32)] = &[
     ("ChrModel", 3384313),
     ("ChrModelMaterial", 3566562),
     ("ChrModelTextureLayer", 3548976),
-    ("ChrRaces", 1305311),
     ("ChrRaceXChrModel", 3490304),
+    ("ChrRaces", 1305311),
     ("ComponentModelFileData", 1349053),
     ("ComponentTextureFileData", 1278239),
     ("Creature", 841631),
@@ -45,14 +45,26 @@ const FILES: &[(&str, u32)] = &[
     ("Map", 1349477),
     ("ModelFileData", 1337833),
     ("NPCModelItemSlotDisplayInfo", 1340661),
+    ("Spell", 1140089),
+    ("SpellAuraOptions", 1139952),
+    ("SpellCastTimes", 1134089),
+    ("SpellCooldowns", 1139924),
+    ("SpellDuration", 1137828),
+    ("SpellEffect", 1140088),
+    ("SpellLevels", 1140079),
+    ("SpellMisc", 1003144),
+    ("SpellName", 1990283),
+    ("SpellPower", 982806),
+    ("SpellRadius", 1134584),
+    ("SpellRange", 1146820),
     ("TextureFileData", 982459),
+    ("UiCamFbackTransmogChrRace", 1261406),
+    ("UiCamFbackTransmogWeapon", 1261407),
+    ("UiCamera", 1120287),
     ("UiModelScene", 1548215),
     ("UiModelSceneActor", 1548214),
     ("UiModelSceneActorDisplay", 1548216),
     ("UiModelSceneCamera", 1548213),
-    ("UiCamera", 1120287),
-    ("UiCamFbackTransmogChrRace", 1261406),
-    ("UiCamFbackTransmogWeapon", 1261407),
 ];
 
 /// A column: a field of the records, their ID, or the parent ID of the
@@ -95,15 +107,23 @@ impl Table {
             .find(|(h, _)| *h == db.layout_hash)
             .or_else(|| layouts.iter().find(|(_, n)| fields(n) == db.field_count()))?
             .1;
-        // A sparse table's strings are inline: which fields are (`$`).
-        if db.is_sparse() {
-            let strings = names
-                .iter()
-                .filter(|n| !n.starts_with('@'))
-                .map(|n| n.starts_with('$'))
-                .collect();
-            db.set_string_fields(strings);
-        }
+        // A sparse table's strings are inline, as are a hotfix's: which
+        // fields are (`$`).
+        let strings = names
+            .iter()
+            .filter(|n| !n.starts_with('@'))
+            .map(|n| n.starts_with('$'))
+            .collect();
+        db.set_string_fields(strings);
+        // what the server changed since the build (decision T391), where
+        // the layout gives the fields' sizes (`~bytes`)
+        let sizes: Vec<Option<usize>> = names
+            .iter()
+            .filter(|n| !n.starts_with('@'))
+            .map(|n| n.split_once('~').and_then(|(_, b)| b.parse().ok()))
+            .collect();
+        db.set_field_sizes(sizes.clone());
+        db.apply_hotfixes(casc.hotfixes(db.table_hash), &sizes);
         Some(Table {
             db,
             names,
@@ -120,6 +140,7 @@ impl Table {
                 }
                 continue;
             }
+            let n = n.split_once('~').map_or(*n, |(n, _)| n);
             if n.strip_prefix('$').unwrap_or(n) == name {
                 return Some(Col::Field(i));
             }
