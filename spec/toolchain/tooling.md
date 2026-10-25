@@ -434,7 +434,10 @@ wowlua test [filter…] [--flavor <f>] [-u] [--watch] [--coverage] [--reporter <
   several keep those that contain any of them. A file whose path and
   source contain none of them is not loaded (a test's name is written in
   its file); a filter on a name made at run time (a group's prefix, a
-  case's values) finds only the files whose source holds it.
+  case's values) finds only the files whose source holds it. A filter
+  `path::name` selects exactly the test `name` of the file `path`
+  (package-relative, or a path ending in it), every case of a `@cases` test
+  of that name, and nothing else (decision T382).
 - A test file that does not compile (its errors all in test files) is left
   out and the others run: its errors are shown and it fails the run when
   the run selects it (no filter, or one in its path); a filtered run that
@@ -671,7 +674,22 @@ refers to gives each form its summary (the text before **Parameters**) and
 each parameter its line. The active form is the first with a parameter at
 the cursor's argument (or a rest), the active parameter that argument's (or
 the rest's). `(` and `,` trigger it; a completion and a signature request of
-the same text and cursor are answered by one check. Find references and the
+the same text and cursor are answered by one check. The test explorer (decision T382): `wowlua/tests` (a request of
+wowlua's own, with a document's URI) answers a test file's tests from its
+syntax, its open text or else the file on disk: each function a
+`wowlua:test` `@test` decorates (through a named or a namespace import),
+named by `@test`'s string or else the function, with its range and whether
+`@skip` or `@cases` marks it (`@expectError` tests, never run, are left
+out). The VS Code extension lists every `*.test.wowlua` of the workspace
+in the Testing view, each with those tests, again a moment after an edit;
+it runs what is chosen with `wowlua test --reporter json` in the file's
+package (a file by its path, a test as `path::name`), and shows each
+test's result from the report: a test is failed when a flavor fails it,
+errored when its file did not load on one, its messages naming the flavor
+when several ran, a failure at the line the report names; the cases of a
+`@cases` test and the tests a `describe` makes appear with the results.
+Debugging a test starts `wowlua debug` on its file with `filter` set to
+`path::name`. Find references and the
 rest of the table follow.
 
 The VS Code extension starts `wowlua lsp` (the `wowlua.path` command) when a

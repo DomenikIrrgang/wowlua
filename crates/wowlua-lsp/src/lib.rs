@@ -9,6 +9,7 @@
 pub mod check;
 pub mod complete;
 pub mod symbols;
+pub mod testing;
 pub mod text;
 pub mod transport;
 
@@ -1035,6 +1036,18 @@ fn handle(server: &mut Server, m: &Json, out: &mut impl std::io::Write) -> std::
                 }
             }
             reply(out, id, item)?;
+        }
+        // the test explorer: a test file's tests (its text as open, else on
+        // disk)
+        "wowlua/tests" => {
+            let found = match server.docs.get(&uri) {
+                Some(d) => testing::tests(&d.text),
+                None => text::path_of(&uri)
+                    .and_then(|p| std::fs::read_to_string(p).ok())
+                    .map(|t| testing::tests(&t))
+                    .unwrap_or_default(),
+            };
+            reply(out, id, Json::Array(found))?;
         }
         "textDocument/documentSymbol" => {
             let symbols = server

@@ -67,6 +67,7 @@ impl GlobalArgs {
 #[derive(Args, Debug, Clone)]
 pub struct TestArgs {
     /// Only test files and tests whose path or name contains one of these
+    /// (`path::name`: that test exactly)
     pub filter: Vec<String>,
     /// Restrict to these flavors
     #[arg(long, value_delimiter = ',')]

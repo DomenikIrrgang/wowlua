@@ -308,6 +308,43 @@ async function completeScenario(widgets) {
     }
 }
 
+// The test explorer (decision T382), on the fixture package
+// `test/fixture-tests`: the file's tests found, a run of the file, a run of
+// one test.
+async function testsScenario() {
+    const name = "the test explorer finds and runs tests";
+    log(`== ${name}`);
+    const api = await vscode.extensions.getExtension("wowlua.wowlua").activate();
+    const folder = vscode.workspace.workspaceFolders[0].uri.fsPath;
+    const uri = vscode.Uri.file(path.join(folder, "tests/math.test.wowlua"));
+    // (the language server reads the file once it runs)
+    for (let tries = 0; ; tries++) {
+        await api.tests.discover();
+        const f = api.tests.ctrl.items.get(uri.toString());
+        if (f && f.children.size > 0) break;
+        if (tries > 60) throw new Error("timed out waiting for the file's tests");
+        await new Promise((r) => setTimeout(r, 1000));
+    }
+    const file = api.tests.ctrl.items.get(uri.toString());
+    const names = [];
+    file.children.forEach((c) => names.push(c.label));
+    log("found:", names.join(", "));
+    assert(["adds two numbers", "fails on purpose", "waits", "sums"].every((n) => names.includes(n)), "found " + names.join(", "));
+    const token = new vscode.CancellationTokenSource().token;
+    await api.tests.run(new vscode.TestRunRequest([file]), token);
+    const states = Object.fromEntries(api.tests.last.map((r) => [r.name, r.state]));
+    log("ran the file:", JSON.stringify(states));
+    assert(states["adds two numbers"] === "passed", "adds: " + states["adds two numbers"]);
+    assert(states["fails on purpose"] === "failed", "fails: " + states["fails on purpose"]);
+    assert(states["waits"] === "skipped", "waits: " + states["waits"]);
+    assert(states["sums [2, 3, 5]"] === "passed", "a case: " + states["sums [2, 3, 5]"]);
+    const one = file.children.get(`${uri.toString()}::adds two numbers`);
+    await api.tests.run(new vscode.TestRunRequest([one]), token);
+    log("ran one test:", JSON.stringify(api.tests.last));
+    assert(api.tests.last.length === 1 && api.tests.last[0].state === "passed", "one test: " + JSON.stringify(api.tests.last));
+    log("PASS", name);
+}
+
 exports.run = async function () {
     const folder = vscode.workspace.workspaceFolders[0].uri.fsPath;
     await vscode.workspace.getConfiguration("wowlua").update("path", process.env.WOWLUA_BIN, vscode.ConfigurationTarget.Global);
@@ -317,6 +354,12 @@ exports.run = async function () {
     let failed = 0;
     if (process.env.WOWLUA_SCENARIO === "lsp") {
         try { await lspScenario(widgets); } catch (e) { failed++; log(String(e)); }
+        log(failed ? `${failed} FAILED` : "ALL PASSED");
+        if (failed) throw new Error(`${failed} scenarios failed`);
+        return;
+    }
+    if (process.env.WOWLUA_SCENARIO === "tests") {
+        try { await testsScenario(); } catch (e) { failed++; log(String(e)); }
         log(failed ? `${failed} FAILED` : "ALL PASSED");
         if (failed) throw new Error(`${failed} scenarios failed`);
         return;

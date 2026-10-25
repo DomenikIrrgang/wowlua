@@ -164,12 +164,41 @@ pub fn run(suite: &Suite, filters: &[String], jobs: usize) -> Vec<FileResult> {
 /// the function's name, a group's). A file no filter can select is not
 /// loaded: each is a whole emulated client, Blizzard's UI and all.
 fn selectable(suite: &Suite, file: &TestFile, filters: &[String]) -> bool {
-    if filters.is_empty() || filters.iter().any(|f| file.rel.contains(f.as_str())) {
+    if filters.is_empty() {
+        return true;
+    }
+    // `path::name`: that file only
+    if filters.iter().any(|f| {
+        f.split_once("::")
+            .is_some_and(|(p, _)| is_path(&file.rel, p))
+    }) {
+        return true;
+    }
+    let loose: Vec<&String> = filters.iter().filter(|f| !f.contains("::")).collect();
+    if loose.iter().any(|f| file.rel.contains(f.as_str())) {
         return true;
     }
     match std::fs::read_to_string(suite.root.join(&file.rel)) {
-        Ok(text) => filters.iter().any(|f| text.contains(f.as_str())),
-        Err(_) => true,
+        Ok(text) => loose.iter().any(|f| text.contains(f.as_str())),
+        Err(_) => !loose.is_empty(),
+    }
+}
+
+/// Whether test file `rel` is the one `path` names (the same path, or `path`
+/// ends with it: an absolute one).
+fn is_path(rel: &str, path: &str) -> bool {
+    let path = path.replace('\\', "/");
+    path == rel || path.ends_with(&format!("/{rel}"))
+}
+
+/// Whether filter `f` selects the test `name` of file `file` (a case of a
+/// `@cases` test: `declared` is the test's own name): `path::name` that
+/// test exactly (every case of a test of that name), anything else when the
+/// name or path contains it.
+pub fn selects(f: &str, file: &str, name: &str, declared: &str) -> bool {
+    match f.split_once("::") {
+        Some((path, exact)) => is_path(file, path) && (name == exact || declared == exact),
+        None => name.contains(f) || file.contains(f),
     }
 }
 
@@ -977,6 +1006,7 @@ fn plan(
         if !runs || (any_only && !only) {
             continue;
         }
+        let declared = name.clone();
         let names: Vec<(Option<usize>, String)> = if cases == 0 {
             vec![(None, name)]
         } else {
@@ -993,11 +1023,7 @@ fn plan(
                 .collect()
         };
         for (case, name) in names {
-            if !filters.is_empty()
-                && !filters
-                    .iter()
-                    .any(|f| name.contains(f.as_str()) || file.contains(f.as_str()))
-            {
+            if !filters.is_empty() && !filters.iter().any(|f| selects(f, file, &name, &declared)) {
                 continue;
             }
             planned.push(Planned {
@@ -1242,4 +1268,48 @@ fn run_tests(
 /// Where test builds go: `<out>/.test/<flavor>/<Name>`.
 pub fn build_dir(out: &Path, flavor: &str, addon: &str) -> PathBuf {
     out.join(".test").join(flavor).join(addon)
+}
+
+#[cfg(test)]
+mod filter_tests {
+    use super::selects;
+
+    #[test]
+    fn a_filter_selects_by_text_or_exactly() {
+        let a = "tests/a.test.wowlua";
+        assert!(selects("count", a, "counts clicks", "counts clicks"));
+        assert!(selects("a.test", a, "anything", "anything"));
+        assert!(selects(
+            "tests/a.test.wowlua::counts",
+            a,
+            "counts",
+            "counts"
+        ));
+        assert!(!selects(
+            "tests/a.test.wowlua::counts",
+            a,
+            "counts clicks",
+            "counts clicks"
+        ));
+        assert!(!selects(
+            "tests/b.test.wowlua::counts",
+            a,
+            "counts",
+            "counts"
+        ));
+        // every case of a `@cases` test
+        assert!(selects(
+            "tests/a.test.wowlua::adds",
+            a,
+            "adds [1, 2]",
+            "adds"
+        ));
+        // an absolute path ends with the file's
+        assert!(selects(
+            "/home/u/addon/tests/a.test.wowlua::counts",
+            a,
+            "counts",
+            "counts"
+        ));
+    }
 }
