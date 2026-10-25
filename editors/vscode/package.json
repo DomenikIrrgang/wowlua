@@ -4,6 +4,11 @@
   "description": "Check, format and outline wowlua addons as you type; debug them and their tests in wowlua's emulated World of Warcraft client, and see their UI as the game draws it.",
   "version": "0.10.0",
   "publisher": "wowlua",
+  "icon": "icon.png",
+  "galleryBanner": {
+    "color": "#14120e",
+    "theme": "dark"
+  },
   "license": "MIT",
   "repository": {
     "type": "git",

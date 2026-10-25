@@ -252,9 +252,9 @@ cargo xtask types fetch && cargo xtask types gen
 
 ## Licence
 
-[MIT](LICENSE). The logo and banner in [`.github/assets`](.github/assets) are
-set in Martian Mono and IBM Plex Mono (SIL Open Font License 1.1) and
-converted to outlines.
+[MIT](LICENSE). The logo and banner in [`.github/assets`](.github/assets)
+and the VS Code extension's icon are set in Martian Mono and IBM Plex Mono
+(SIL Open Font License 1.1) and converted to outlines.
 
 <p align="center">
   <picture>
