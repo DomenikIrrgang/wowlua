@@ -263,17 +263,20 @@ async function completeScenario(widgets) {
     log(`== ${name}`);
     const doc = await vscode.workspace.openTextDocument(widgets);
     const ed = await vscode.window.showTextDocument(doc);
-    const line = doc.getText().split("\n").findIndex((l) => l.includes("self:refresh()"));
+    // (inside a method: where one sets a field)
+    const lines = doc.getText().split("\n");
+    const line = lines.findIndex((l) => /^\s+self\.\w+ = /.test(l));
+    const field = lines[line].match(/self\.(\w+)/)[1];
     try {
         // (the first check done)
         await waitFor(() => vscode.languages.getDiagnostics(widgets) !== undefined, 1000, "diagnostics");
-        await new Promise((r) => setTimeout(r, 4000));
-        const typed = async (text, expect) => {
+        await new Promise((r) => setTimeout(r, Number(process.env.WOWLUA_SETTLE || 4000)));
+        const typed = async (text, expect, pace = 60) => {
             await ed.edit((b) => b.insert(new vscode.Position(line, 0), "        \n"));
             ed.selection = new vscode.Selection(line, 8, line, 8);
             for (const ch of text) {
                 await vscode.commands.executeCommand("type", { text: ch });
-                await new Promise((r) => setTimeout(r, 60));
+                await new Promise((r) => setTimeout(r, pace));
             }
             await new Promise((r) => setTimeout(r, 3000));
             await vscode.commands.executeCommand("acceptSelectedSuggestion");
@@ -285,7 +288,7 @@ async function completeScenario(widgets) {
         };
         const results = [
             await typed("local test = C_Tim", "local test = C_Timer"),
-            await typed("self.cou", "self.count"),
+            await typed("self." + field.slice(0, 3), "self." + field),
             await typed("local n = C_Timer.Aft", "local n = C_Timer.After"),
         ];
         assert(results.every(Boolean), "results " + results.join(", "));
@@ -309,7 +312,9 @@ exports.run = async function () {
         return;
     }
     if (process.env.WOWLUA_SCENARIO === "complete") {
-        try { await completeScenario(widgets); } catch (e) { failed++; log(String(e)); }
+        // (WOWLUA_COMPLETE_FILE: another package's file, its folder open)
+        const file = process.env.WOWLUA_COMPLETE_FILE ? vscode.Uri.file(process.env.WOWLUA_COMPLETE_FILE) : widgets;
+        try { await completeScenario(file); } catch (e) { failed++; log(String(e)); }
         log(failed ? `${failed} FAILED` : "ALL PASSED");
         if (failed) throw new Error(`${failed} scenarios failed`);
         return;
