@@ -27,7 +27,16 @@ fn a_page_edits_checks_builds_shares_and_asks_the_language_server() {
         .map(|f| f["path"].as_str().unwrap())
         .collect();
     assert!(files.contains(&"Playground.toc"), "{files:?}");
-    assert!(files.contains(&"src/main.lua"), "{files:?}");
+    let main = built["files"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .find(|f| f["path"] == "src/main.lua")
+        .unwrap_or_else(|| panic!("{files:?}"));
+    assert!(
+        main["text"].as_str().unwrap().contains("PLAYER_LOGIN"),
+        "{main}"
+    );
 
     // a type error, where it is
     p.write_file("src/main.wowlua", "local n: number = \"one\"\nprint(n)\n");

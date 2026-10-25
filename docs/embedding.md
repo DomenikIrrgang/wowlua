@@ -78,10 +78,22 @@ library), whose URIs are `file:///.wowlua-<version>/…`: read them with
 Any LSP client works over this transport, for example
 `@codemirror/lsp-client` or `monaco-languageclient`.
 
+## A test page
+
+`web/demo/index.html` uses only the package, through its worker: a text
+area for `src/main.wowlua`, the language server's diagnostics as you type,
+hover on click, build, format and share. Serve `web/` and open it:
+
+```sh
+cd web && npm run build && python3 -m http.server 8000
+# http://localhost:8000/demo/
+```
+
 ## When wowlua fails
 
 A panic in wowlua ends the WebAssembly module (it has no unwinding), and
-every later call throws. Start a new worker; the files of the old one are
+every later call throws; its message is on the console ("wowlua panicked:
+…"). Start a new worker; the files of the old one are
 gone, so keep the editor's texts and write them again.
 
 ## Not yet

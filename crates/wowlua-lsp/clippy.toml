@@ -30,6 +30,8 @@ disallowed-methods = [
     { path = "ignore::WalkBuilder::new", reason = "use crate::host::walk" },
     { path = "std::time::SystemTime::now", reason = "use crate::host::unix_now: the browser has no clock std can read" },
     { path = "std::time::Instant::now", reason = "the browser has no clock std can read" },
+    { path = "std::process::id", reason = "use wowlua_driver::host::process_id: a page has no processes" },
+    { path = "std::env::temp_dir", reason = "a page has no temporary directory: check crate::host::installed first" },
     { path = "wowlua_manifest::load", reason = "use crate::project::load_manifest" },
     { path = "wowlua_manifest::find_manifest", reason = "use crate::project::find_manifest" },
 ]

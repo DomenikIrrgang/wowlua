@@ -178,6 +178,15 @@ pub fn modified(path: impl AsRef<Path>) -> Option<SystemTime> {
     }
 }
 
+/// This process's id, for names of files being written; 0 where there are
+/// no processes (a page) or a host of its own is installed.
+pub fn process_id() -> u32 {
+    if installed().is_some() || cfg!(all(target_family = "wasm", target_os = "unknown")) {
+        return 0;
+    }
+    std::process::id()
+}
+
 /// Seconds since 1970; 0 on a system without a clock.
 pub fn unix_now() -> i64 {
     let now = match installed() {

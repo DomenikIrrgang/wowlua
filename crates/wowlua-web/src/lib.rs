@@ -153,6 +153,12 @@ impl Playground {
     /// files, the AddOn folder's (`{ path, text }`, or `{ path, base64 }`
     /// for one that is no UTF-8 text, such as a font; URL-safe base64).
     pub fn build(&self, profile: &str) -> Json {
+        self.build_with(profile, true)
+    }
+
+    /// [`build`](Self::build), keeping the compiled code or not (a check
+    /// reads none of it).
+    fn build_with(&self, profile: &str, keep_code: bool) -> Json {
         let mut session = Session::new();
         let built = self.load(&mut session).and_then(|project| {
             let request = BuildRequest {
@@ -165,7 +171,7 @@ impl Playground {
                 bundle: None,
                 only: None,
                 jobs: wowlua_driver::parallel::Jobs::one(),
-                keep_code: false,
+                keep_code,
                 tests: false,
                 left_out: Vec::new(),
             };
@@ -198,7 +204,7 @@ impl Playground {
 
     /// Checks the package (`wowlua check`): its diagnostics.
     pub fn check(&self) -> Json {
-        let mut built = self.build("dev");
+        let mut built = self.build_with("dev", false);
         built["diagnostics"].take()
     }
 

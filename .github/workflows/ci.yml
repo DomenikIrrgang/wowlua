@@ -48,6 +48,15 @@ jobs:
         with:
           save-if: ${{ github.ref == 'refs/heads/main' }}
       - run: cargo check --target wasm32-unknown-unknown --no-default-features -p wowlua-vm -p wowlua-engine -p wowlua-debug -p wowlua-casc -p wowlua-render -p wowlua-driver -p wowlua-lsp -p wowlua-web
+      # The playground's package, built and used as a page uses it (T395).
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: wasm-bindgen-cli@0.2.129
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm run build && npm test
+        working-directory: web
 
   test:
     strategy:

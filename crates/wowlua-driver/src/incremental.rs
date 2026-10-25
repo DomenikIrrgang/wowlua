@@ -359,7 +359,7 @@ impl BuildCache {
             crate::host::create_dir_all(dir)?;
         }
         // (written whole, then renamed: another server reads all or none)
-        let partial = path.with_extension(format!("{}.partial", std::process::id()));
+        let partial = path.with_extension(format!("{}.partial", crate::host::process_id()));
         crate::host::write(&partial, &bytes)?;
         if let Err(e) = crate::host::rename(&partial, path) {
             let _ = crate::host::remove_file(&partial);

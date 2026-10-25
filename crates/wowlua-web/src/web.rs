@@ -6,6 +6,21 @@ use crate::Playground;
 use serde_json::Value as Json;
 use wasm_bindgen::prelude::*;
 
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console)]
+    fn error(message: &str);
+}
+
+/// A panic's message goes to the console before the module ends: the page
+/// can tell what failed.
+fn report_panics() {
+    static ONCE: std::sync::Once = std::sync::Once::new();
+    ONCE.call_once(|| {
+        std::panic::set_hook(Box::new(|info| error(&format!("wowlua panicked: {info}"))));
+    });
+}
+
 #[wasm_bindgen(js_name = Playground)]
 pub struct WebPlayground(Playground);
 
@@ -20,6 +35,7 @@ impl WebPlayground {
     /// A playground with the template package (one per instance).
     #[wasm_bindgen(constructor)]
     pub fn new() -> WebPlayground {
+        report_panics();
         WebPlayground(Playground::new())
     }
 

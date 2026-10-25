@@ -1,0 +1,116 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>wowlua web test page</title>
+<style>
+  /* A bare page: it only shows the package works. The playground's design is the website's. */
+  body { font: 14px/1.4 system-ui, sans-serif; margin: 16px; background: #fff; color: #111; }
+  textarea { width: 100%; height: 14em; font: 13px/1.4 ui-monospace, monospace; }
+  pre { background: #f4f4f4; padding: 8px; overflow: auto; max-height: 16em; }
+  @media (prefers-color-scheme: dark) {
+    body { background: #111; color: #eee; }
+    pre { background: #222; }
+    textarea { background: #1a1a1a; color: #eee; }
+  }
+</style>
+</head>
+<body>
+<h1>wowlua web test page</h1>
+<p id="status">Loading…</p>
+<label for="code">src/main.wowlua</label>
+<textarea id="code" spellcheck="false"></textarea>
+<p>
+  <button id="build">Build</button>
+  <button id="format">Format</button>
+  <button id="share">Share link</button>
+</p>
+<h2>Language server diagnostics</h2>
+<pre id="diagnostics"></pre>
+<h2>Hover at the cursor</h2>
+<pre id="hover"></pre>
+<h2>Output</h2>
+<pre id="output"></pre>
+<script type="module">
+import { connect } from "../client.js";
+
+const $ = (id) => document.getElementById(id);
+const URI = "file:///playground/src/main.wowlua";
+const wowlua = connect(new Worker(new URL("../worker.js", import.meta.url), { type: "module" }));
+let version = 1;
+let nextId = 1;
+const answers = new Map();
+
+wowlua.lsp.onMessage((m) => {
+  if (m.method === "textDocument/publishDiagnostics" && m.params.uri === URI) {
+    $("diagnostics").textContent = m.params.diagnostics
+      .map((d) => `${d.range.start.line + 1}:${d.range.start.character + 1} ${d.code ?? ""} ${d.message}`)
+      .join("\n") || "none";
+    document.body.dataset.checked = "yes";
+  }
+  if (m.id !== undefined && answers.has(m.id)) {
+    answers.get(m.id)(m.result);
+    answers.delete(m.id);
+  }
+});
+const request = (method, params) =>
+  new Promise((resolve) => {
+    const id = nextId++;
+    answers.set(id, resolve);
+    wowlua.lsp.send({ jsonrpc: "2.0", id, method, params });
+  });
+
+const shared = location.hash.length > 1 && (await wowlua.call("openShared", location.hash));
+const files = await wowlua.call("files");
+$("code").value = files["src/main.wowlua"] ?? "";
+$("status").textContent = `wowlua ${await wowlua.call("version")}${shared ? " (shared package)" : ""}`;
+
+await request("initialize", { rootUri: "file:///playground", capabilities: {} });
+wowlua.lsp.send({ jsonrpc: "2.0", method: "initialized", params: {} });
+wowlua.lsp.send({
+  jsonrpc: "2.0",
+  method: "textDocument/didOpen",
+  params: { textDocument: { uri: URI, languageId: "wowlua", version, text: $("code").value } },
+});
+
+$("code").addEventListener("input", async () => {
+  const text = $("code").value;
+  await wowlua.call("writeFile", "src/main.wowlua", text);
+  wowlua.lsp.send({
+    jsonrpc: "2.0",
+    method: "textDocument/didChange",
+    params: { textDocument: { uri: URI, version: ++version }, contentChanges: [{ text }] },
+  });
+});
+
+const position = () => {
+  const before = $("code").value.slice(0, $("code").selectionStart).split("\n");
+  return { line: before.length - 1, character: before[before.length - 1].length };
+};
+$("code").addEventListener("click", async () => {
+  const hover = await request("textDocument/hover", { textDocument: { uri: URI }, position: position() });
+  $("hover").textContent = hover ? JSON.stringify(hover.contents, null, 1) : "nothing";
+});
+
+$("build").addEventListener("click", async () => {
+  const built = await wowlua.call("build", "dev");
+  $("output").textContent = built.ok
+    ? built.files.filter((f) => f.text !== undefined && f.path.endsWith(".lua") && !f.path.startsWith("wowlua/"))
+        .map((f) => `-- ${f.path}\n${f.text}`).join("\n")
+    : built.diagnostics.map((d) => `${d.file}:${d.range.start.line + 1} ${d.code ?? ""} ${d.message}`).join("\n");
+});
+$("format").addEventListener("click", async () => {
+  const formatted = await wowlua.call("format", "src/main.wowlua");
+  if (formatted.text !== undefined) {
+    $("code").value = formatted.text;
+    $("code").dispatchEvent(new Event("input"));
+  }
+});
+$("share").addEventListener("click", async () => {
+  location.hash = await wowlua.call("share");
+  $("output").textContent = location.href;
+});
+</script>
+</body>
+</html>

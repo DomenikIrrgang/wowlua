@@ -831,7 +831,9 @@ pub fn builtin_dir() -> PathBuf {
     if wowlua_driver::host::installed().is_some() {
         return PathBuf::from(format!("/.wowlua-{}", env!("CARGO_PKG_VERSION")));
     }
-    std::env::temp_dir().join(format!("wowlua-{}", env!("CARGO_PKG_VERSION")))
+    #[allow(clippy::disallowed_methods)] // (the computer's: no host installed)
+    let temp = std::env::temp_dir();
+    temp.join(format!("wowlua-{}", env!("CARGO_PKG_VERSION")))
 }
 
 /// A file the compiler has built in (the game's API, the standard
@@ -856,7 +858,8 @@ pub(crate) fn materialize(rel: &Path, contents: &str) -> Option<PathBuf> {
         // same declaration at once don't take each other's
         static WRITES: std::sync::atomic::AtomicUsize = std::sync::atomic::AtomicUsize::new(0);
         let n = WRITES.fetch_add(1, std::sync::atomic::Ordering::Relaxed);
-        let partial = path.with_extension(format!("{}-{n}.partial", std::process::id()));
+        let partial =
+            path.with_extension(format!("{}-{n}.partial", wowlua_driver::host::process_id()));
         let written = wowlua_driver::host::write(&partial, contents)
             .and_then(|()| wowlua_driver::host::rename(&partial, &path));
         if written.is_err() {

@@ -683,9 +683,10 @@ with its own design); wowlua provides what the page embeds:
   natively: `tests/playground.rs`), the language server embedded (the
   editor's services are `wowlua lsp`'s, over messages), `web/` (the
   JavaScript API, a Web Worker and its client) and `docs/embedding.md`.
-  The module builds for the browser (7.5 MB with gzip). Not yet run in
-  Node or a browser: the JavaScript bindings need `wasm-bindgen` 0.2.129;
-  share links carry the files only (world profiles come with S3).
+  Checked in Node (`web/test/smoke.mjs`, in CI) and in Chrome through the
+  Web Worker (`web/demo/`): a check takes about 50 ms, the module 7.5 MB
+  with gzip. Share links carry the files only (world profiles come with
+  S3).
 - S3 Run and draw: the built addon runs in the engine with a world profile
   and camelot's Blizzard UI (fetched by the page), drawn on a canvas by the
   renderer, with mouse and keyboard input, printed output and errors.
@@ -695,3 +696,4 @@ with its own design); wowlua provides what the page embeds:
   System Access API, read in the browser and never uploaded (T210).
 - S6 A bare test page that uses only the package, `docs/embedding.md` for
   the website, and the package built and attached to each release.
+  The test page (`web/demo/`) and the guide came with S2.

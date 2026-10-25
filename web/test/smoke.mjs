@@ -11,6 +11,7 @@ console.log(`wowlua ${version()}`);
 const built = p.build();
 assert.equal(built.ok, true, JSON.stringify(built.diagnostics));
 assert.ok(built.files.some((f) => f.path === "Playground.toc"));
+assert.match(built.files.find((f) => f.path === "src/main.lua").text, /PLAYER_LOGIN/);
 
 p.writeFile("src/main.wowlua", 'local n: number = "one"\nprint(n)\n');
 const found = p.check();
