@@ -342,6 +342,17 @@ async function testsScenario() {
     await api.tests.run(new vscode.TestRunRequest([one]), token);
     log("ran one test:", JSON.stringify(api.tests.last));
     assert(api.tests.last.length === 1 && api.tests.last[0].state === "passed", "one test: " + JSON.stringify(api.tests.last));
+    // the code lenses: run and debug at the top and above each test; a
+    // test's runs it
+    await vscode.window.showTextDocument(await vscode.workspace.openTextDocument(uri));
+    const lenses = await vscode.commands.executeCommand("vscode.executeCodeLensProvider", uri, 10);
+    const titles = (lenses || []).map((l) => l.command && l.command.title);
+    log("lenses:", titles.length, titles.slice(0, 4).join(" | "));
+    assert(titles.filter((t) => t && t.includes("Run test")).length === 4, "lenses " + titles.join(" | "));
+    const sums = lenses.find((l) => l.command && l.command.title.includes("Run test") && String(l.command.arguments[0]).endsWith("::sums"));
+    await vscode.commands.executeCommand(sums.command.command, ...sums.command.arguments);
+    log("ran by its lens:", JSON.stringify(api.tests.last));
+    assert(api.tests.last.length === 2 && api.tests.last.every((r) => r.state === "passed"), "the sums lens ran " + JSON.stringify(api.tests.last));
     log("PASS", name);
 }
 

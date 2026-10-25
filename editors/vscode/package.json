@@ -88,6 +88,11 @@
           "default": 1000,
           "minimum": 0,
           "description": "How often the UI panel draws the screen while the game runs, in milliseconds (0: only at stops and on Refresh)."
+        },
+        "wowlua.testCodeLens": {
+          "type": "boolean",
+          "default": true,
+          "description": "Show \"Run test\" and \"Debug\" above each test and at the top of a test file."
         }
       }
     },

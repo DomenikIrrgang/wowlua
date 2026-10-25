@@ -3,7 +3,8 @@
 // reads from them (`wowlua/tests`), runs them with `wowlua test --reporter
 // json` (one test exactly as `file::name`) and shows each result at its
 // test, a failure at its line with the flavor it failed on. Debug runs
-// `wowlua debug` on the test's file, filtered to it.
+// `wowlua debug` on the test's file, filtered to it. Code lenses above each
+// test and at the top of a test file run or debug it the same way.
 const vscode = require("vscode");
 const cp = require("child_process");
 const fs = require("fs");
@@ -52,7 +53,24 @@ class TestExplorer {
         this.ctrl.createRunProfile("Run", vscode.TestRunProfileKind.Run, (req, token) => this.run(req, token), true);
         this.ctrl.createRunProfile("Debug", vscode.TestRunProfileKind.Debug, (req) => this.debug(req), true);
         const watcher = vscode.workspace.createFileSystemWatcher(GLOB);
+        // (the code lenses follow the tests as they are read)
+        this.lensesChanged = new vscode.EventEmitter();
         context.subscriptions.push(
+            this.lensesChanged,
+            vscode.languages.registerCodeLensProvider(
+                { language: "wowlua", scheme: "file", pattern: "**/*.test.wowlua" },
+                {
+                    onDidChangeCodeLenses: this.lensesChanged.event,
+                    provideCodeLenses: (doc) => this.lenses(doc),
+                },
+            ),
+            vscode.commands.registerCommand("wowlua.runTest", (id) => this.runItem(id, false)),
+            vscode.commands.registerCommand("wowlua.debugTest", (id) => this.runItem(id, true)),
+            vscode.workspace.onDidChangeConfiguration((e) => {
+                if (e.affectsConfiguration("wowlua.testCodeLens")) {
+                    this.lensesChanged.fire();
+                }
+            }),
             this.ctrl,
             watcher,
             watcher.onDidCreate((uri) => this.load(this.file(uri))),
@@ -120,6 +138,58 @@ class TestExplorer {
             return child;
         });
         item.children.replace(children);
+        this.lensesChanged.fire();
+    }
+
+    // The code lenses of a test file: run and debug at its top and above
+    // each test (`wowlua.testCodeLens` turns them off).
+    async lenses(doc) {
+        if (!vscode.workspace.getConfiguration("wowlua").get("testCodeLens", true)) {
+            return [];
+        }
+        const file = this.file(doc.uri);
+        if (file.children.size === 0) {
+            await this.load(file);
+        }
+        const at = (range, item, label) => [
+            new vscode.CodeLens(range, { title: `$(play) ${label}`, command: "wowlua.runTest", arguments: [item.id] }),
+            new vscode.CodeLens(range, { title: "$(debug-alt) Debug", command: "wowlua.debugTest", arguments: [item.id] }),
+        ];
+        const lenses = at(new vscode.Range(0, 0, 0, 0), file, "Run all tests");
+        file.children.forEach((t) => {
+            if (t.range) {
+                lenses.push(...at(new vscode.Range(t.range.start, t.range.start), t, "Run test"));
+            }
+        });
+        return lenses;
+    }
+
+    // Runs (or debugs) the test or test file `id` names, as the Testing
+    // view would: its results show there and at the test.
+    async runItem(id, debug) {
+        const item = this.find(id);
+        if (!item) {
+            return;
+        }
+        const request = new vscode.TestRunRequest([item]);
+        if (debug) {
+            await this.debug(request);
+        } else {
+            await this.run(request, new vscode.CancellationTokenSource().token);
+        }
+    }
+
+    // The item `id` names: a file's, or one of its tests (or cases).
+    find(id) {
+        let found;
+        const look = (items) =>
+            items.forEach((i) => {
+                if (found) return;
+                if (i.id === id) found = i;
+                else look(i.children);
+            });
+        look(this.ctrl.items);
+        return found;
     }
 
     // The test files and tests a request names, by package: each with the

@@ -689,7 +689,10 @@ errored when its file did not load on one, its messages naming the flavor
 when several ran, a failure at the line the report names; the cases of a
 `@cases` test and the tests a `describe` makes appear with the results.
 Debugging a test starts `wowlua debug` on its file with `filter` set to
-`path::name`. Find references and the
+`path::name`. Code lenses (decision T383) put "Run all tests" and "Debug"
+at the top of a test file and "Run test" and "Debug" above each test,
+running it as the Testing view does (its results there and at the test);
+`wowlua.testCodeLens` turns them off. Find references and the
 rest of the table follow.
 
 The VS Code extension starts `wowlua lsp` (the `wowlua.path` command) when a

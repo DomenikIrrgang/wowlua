@@ -15,7 +15,8 @@ files or in the game's API; hovering a name shows its type and doc
 comment; completion lists the names in scope, the game's API, and after
 `.` and `:` a value's fields and methods. The Testing view lists your
 tests (`*.test.wowlua`) and runs or debugs a file or a single test, each
-result shown at its test. `wowlua.languageServer` turns
+result shown at its test; "Run test" and "Debug" above each test do the
+same (`wowlua.testCodeLens` hides them). `wowlua.languageServer` turns
 it off; *wowlua: Restart Language Server* restarts it (its log is in the
 **wowlua Language Server** output).
 
