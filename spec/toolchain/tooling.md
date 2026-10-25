@@ -782,7 +782,7 @@ a `package.wowlua` this wowlua does not satisfy (E4300). Its manifest gets
 the diagnostic as before, and the server sends `window/showMessage`, an
 error naming the package (its `package.name`, else its folder), the first
 error and the manifest's file: "suuui can't be checked: this package
-requires wowlua ^0.9, but this is wowlua 0.10.0 (wowlua.json)". It is sent
+requires wowlua ^0.9, but this is wowlua 0.11.0 (wowlua.json)". It is sent
 once for a package and problem: again when the problem changes, or comes
 back after a check that loaded the package.
 

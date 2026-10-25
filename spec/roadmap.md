@@ -640,7 +640,7 @@ demo's window, the spellbook's pages (once `Raise` moved panes with their
 window, T343) and a spell's tooltip with the client's current cost, cast
 time, cooldown and description (T391, wrapped: T393).
 
-**Status: done (2026-10-25).** Follow-ups for the next beta, not blocking:
+**Status: done (2026-10-25)**, released as 0.11.0. Follow-ups for the next beta, not blocking:
 the untyped functions' probe, how the client answers for currencies,
 factions and mounts a character lacks, the tooltip's wrap width and
 descriptions with spell power (`tests/ingame/PROBES.md`).

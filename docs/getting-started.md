@@ -53,7 +53,7 @@ The manifest starts small:
     "authors": [
       "Your Name"
     ],
-    "wowlua": "^0.10"
+    "wowlua": "^0.11"
   },
   "addon": {
     "title": "MyAddon"

@@ -8,7 +8,7 @@
       "wowlua contributors"
     ],
     "license": "MIT",
-    "wowlua": "^0.10"
+    "wowlua": "^0.11"
   },
   "addon": {
     "title": "Widget Demo",

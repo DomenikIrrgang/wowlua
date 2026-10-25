@@ -56,7 +56,7 @@ fn an_import_is_taken_until_its_interface_changes() {
     let root = dir.path();
     std::fs::write(
         root.join("wowlua.json"),
-        r#"{ "package": { "name": "focus-demo", "version": "0.1.0", "wowlua": "^0.10" }, "flavors": { "camelot": {} } }"#,
+        r#"{ "package": { "name": "focus-demo", "version": "0.1.0", "wowlua": "^0.11" }, "flavors": { "camelot": {} } }"#,
     )
     .unwrap();
     std::fs::create_dir_all(root.join("src")).unwrap();
@@ -109,7 +109,7 @@ fn a_taken_modules_methods_keep_their_inferred_results() {
     let root = dir.path();
     std::fs::write(
         root.join("wowlua.json"),
-        r#"{ "package": { "name": "focus-results", "version": "0.1.0", "wowlua": "^0.10" }, "flavors": { "camelot": {} } }"#,
+        r#"{ "package": { "name": "focus-results", "version": "0.1.0", "wowlua": "^0.11" }, "flavors": { "camelot": {} } }"#,
     )
     .unwrap();
     std::fs::create_dir_all(root.join("src")).unwrap();
@@ -156,7 +156,7 @@ fn a_new_checker_takes_the_modules_kept_on_disk() {
     let root = dir.path();
     let manifest = |strict: bool| {
         format!(
-            r#"{{ "package": {{ "name": "focus-disk", "version": "0.1.0", "wowlua": "^0.10" }}, "flavors": {{ "camelot": {{}} }}{} }}"#,
+            r#"{{ "package": {{ "name": "focus-disk", "version": "0.1.0", "wowlua": "^0.11" }}, "flavors": {{ "camelot": {{}} }}{} }}"#,
             if strict {
                 r#", "check": { "mode": "strict" }"#
             } else {

@@ -12,7 +12,7 @@ fn project() -> tempfile::TempDir {
     let dir = tempfile::tempdir().expect("a temp dir");
     std::fs::write(
         dir.path().join("wowlua.json"),
-        r#"{ "package": { "name": "lsp-demo", "version": "0.1.0", "wowlua": "^0.10" }, "flavors": { "camelot": {} } }"#,
+        r#"{ "package": { "name": "lsp-demo", "version": "0.1.0", "wowlua": "^0.11" }, "flavors": { "camelot": {} } }"#,
     )
     .unwrap();
     std::fs::create_dir_all(dir.path().join("src")).unwrap();

@@ -1,5 +1,5 @@
 {
-  "package": { "name": "explorer-fixture", "version": "0.1.0", "wowlua": "^0.10" },
+  "package": { "name": "explorer-fixture", "version": "0.1.0", "wowlua": "^0.11" },
   "addon": { "title": "Explorer Fixture" },
   "flavors": { "camelot": {} }
 }

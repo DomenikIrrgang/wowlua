@@ -871,13 +871,13 @@ fn a_tagged_workspace_builds_its_members_untagged() {
         &[
             (
                 "wowlua.json",
-                r#"{ "package": { "name": "main", "version": "1.2.0", "wowlua": "^0.10" }, "addon": { "title": "Main" }, "flavors": { "camelot": {} },
+                r#"{ "package": { "name": "main", "version": "1.2.0", "wowlua": "^0.11" }, "addon": { "title": "Main" }, "flavors": { "camelot": {} },
   "workspace": { "members": ["plugins/*"] } }"#,
             ),
             ("src/main.wowlua", "print(\"main\")\n"),
             (
                 "plugins/Zed/wowlua.json",
-                r#"{ "package": { "name": "zed", "version": "0.1.0", "wowlua": "^0.10" }, "addon": { "title": "Zed" }, "flavors": { "camelot": {} } }"#,
+                r#"{ "package": { "name": "zed", "version": "0.1.0", "wowlua": "^0.11" }, "addon": { "title": "Zed" }, "flavors": { "camelot": {} } }"#,
             ),
             ("plugins/Zed/src/zed.wowlua", "print(\"zed\")\n"),
             (".gitignore", "dist/\n.home/\n"),

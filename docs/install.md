@@ -60,7 +60,7 @@ wowlua --version
 ```
 
 ```text
-wowlua 0.10.1
+wowlua 0.11.0
 ```
 
 `wowlua help` lists every command, and `wowlua help <command>` shows its
@@ -73,19 +73,19 @@ variables change what it installs and where:
 
 | Variable | Default | Effect |
 |----------|---------|--------|
-| `WOWLUA_VERSION` | `latest` | The release tag to install, for example `v0.10.1` |
+| `WOWLUA_VERSION` | `latest` | The release tag to install, for example `v0.11.0` |
 | `WOWLUA_INSTALL_DIR` | `~/.wowlua/bin` (`$HOME\.wowlua\bin` on Windows) | Where the binary goes |
 
 ```sh
-curl -fsSL https://github.com/DomenikIrrgang/wowlua/releases/latest/download/install.sh | WOWLUA_VERSION=v0.10.1 sh
+curl -fsSL https://github.com/DomenikIrrgang/wowlua/releases/latest/download/install.sh | WOWLUA_VERSION=v0.11.0 sh
 ```
 
 ```powershell
-$env:WOWLUA_VERSION = "v0.10.1"; irm https://github.com/DomenikIrrgang/wowlua/releases/latest/download/install.ps1 | iex
+$env:WOWLUA_VERSION = "v0.11.0"; irm https://github.com/DomenikIrrgang/wowlua/releases/latest/download/install.ps1 | iex
 ```
 
 A project names the compiler versions it works with in `package.wowlua` of its
-`wowlua.json` (`wowlua new` writes `"^0.10"`). An older compiler stops with
+`wowlua.json` (`wowlua new` writes `"^0.11"`). An older compiler stops with
 E4300 and names both versions
 ([Manifest §9.16](../spec/toolchain/manifest.md#916-schema-versions-and-migration)).
 

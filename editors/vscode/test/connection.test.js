@@ -28,7 +28,7 @@ test("an unsaved edit is checked, and a fix clears it", { skip: !fs.existsSync(b
     const dir = fs.realpathSync(fs.mkdtempSync(path.join(os.tmpdir(), "wowlua-lsp-")));
     fs.writeFileSync(
         path.join(dir, "wowlua.json"),
-        JSON.stringify({ package: { name: "lsp-client", version: "0.1.0", wowlua: "^0.10" }, flavors: { camelot: {} } }),
+        JSON.stringify({ package: { name: "lsp-client", version: "0.1.0", wowlua: "^0.11" }, flavors: { camelot: {} } }),
     );
     fs.mkdirSync(path.join(dir, "src"));
     const file = path.join(dir, "src", "main.wowlua");
