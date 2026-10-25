@@ -91,7 +91,11 @@ fn describe_depth(
             i += ch.len_utf8();
             continue;
         }
-        let mut p = Parser { text, at: i + 1 };
+        let mut p = Parser {
+            text,
+            at: i + 1,
+            signed: false,
+        };
         match p.placeholder(id, spells, caster, depth, last_number)? {
             Filled::Number(n) => {
                 let shown = number(n);
@@ -125,6 +129,9 @@ enum Filled {
 struct Parser<'a> {
     text: &'a str,
     at: usize,
+    /// In a formula: values keep their sign (`${$m2/-1000}` of -60000 is
+    /// 60); outside one they are shown without it.
+    signed: bool,
 }
 
 impl Parser<'_> {
@@ -165,6 +172,37 @@ impl Parser<'_> {
         last: Option<f64>,
     ) -> Option<Filled> {
         match self.peek()? {
+            // `${$m1*8}`, `${$s1/1000}.1`: arithmetic of numbers and
+            // placeholders (`+ - * /`, parentheses), shown whole, else to
+            // the decimals after it; anything else in it (a condition, a
+            // function, a variable) is not filled
+            b'{' => {
+                self.at += 1;
+                let rest = &self.text[self.at..];
+                let end = rest.find('}')?;
+                let expr = &rest[..end];
+                self.at += end + 1;
+                let v = Formula {
+                    text: expr,
+                    at: 0,
+                    id,
+                    spells,
+                    caster,
+                    depth,
+                }
+                .eval()?;
+                // `.1`: one decimal (a digit right after the brace's dot)
+                let b = self.text.as_bytes();
+                if b.get(self.at) == Some(&b'.')
+                    && b.get(self.at + 1).is_some_and(u8::is_ascii_digit)
+                    && !b.get(self.at + 2).is_some_and(u8::is_ascii_digit)
+                {
+                    let places = usize::from(b[self.at + 1] - b'0');
+                    self.at += 2;
+                    return Some(Filled::Text(format!("{v:.places$}")));
+                }
+                Some(Filled::Number(v.round()))
+            }
             // `$/1000;S1`, `$*2;s1`: a value divided or multiplied
             op @ (b'/' | b'*') => {
                 self.at += 1;
@@ -211,7 +249,113 @@ impl Parser<'_> {
                 }
                 let index = self.digits();
                 let spell = other.unwrap_or(id);
-                value(&word, index, spell, spells, caster)
+                value(&word, index, spell, spells, caster, self.signed)
+            }
+            _ => None,
+        }
+    }
+}
+
+/// A `${…}` formula: sums of products of numbers, placeholders and
+/// parenthesized formulas.
+struct Formula<'a> {
+    text: &'a str,
+    at: usize,
+    id: u32,
+    spells: &'a dyn Spells,
+    caster: &'a Caster,
+    depth: u32,
+}
+
+impl Formula<'_> {
+    fn eval(mut self) -> Option<f64> {
+        let v = self.sum()?;
+        self.skip();
+        (self.at == self.text.len()).then_some(v)
+    }
+
+    fn skip(&mut self) {
+        while self.text.as_bytes().get(self.at) == Some(&b' ') {
+            self.at += 1;
+        }
+    }
+
+    fn sum(&mut self) -> Option<f64> {
+        let mut v = self.product()?;
+        loop {
+            self.skip();
+            match self.text.as_bytes().get(self.at) {
+                Some(b'+') => {
+                    self.at += 1;
+                    v += self.product()?;
+                }
+                Some(b'-') => {
+                    self.at += 1;
+                    v -= self.product()?;
+                }
+                _ => return Some(v),
+            }
+        }
+    }
+
+    fn product(&mut self) -> Option<f64> {
+        let mut v = self.atom()?;
+        loop {
+            self.skip();
+            match self.text.as_bytes().get(self.at) {
+                Some(b'*') => {
+                    self.at += 1;
+                    v *= self.atom()?;
+                }
+                Some(b'/') => {
+                    self.at += 1;
+                    let d = self.atom()?;
+                    (d != 0.0).then_some(())?;
+                    v /= d;
+                }
+                _ => return Some(v),
+            }
+        }
+    }
+
+    fn atom(&mut self) -> Option<f64> {
+        self.skip();
+        let b = self.text.as_bytes();
+        match *b.get(self.at)? {
+            b'(' => {
+                self.at += 1;
+                let v = self.sum()?;
+                self.skip();
+                (self.text.as_bytes().get(self.at) == Some(&b')')).then_some(())?;
+                self.at += 1;
+                Some(v)
+            }
+            b'-' => {
+                self.at += 1;
+                Some(-self.atom()?)
+            }
+            b'$' => {
+                let mut p = Parser {
+                    text: self.text,
+                    at: self.at + 1,
+                    signed: true,
+                };
+                let v = match p.placeholder(self.id, self.spells, self.caster, self.depth, None)? {
+                    Filled::Number(n) => n,
+                    _ => return None,
+                };
+                self.at = p.at;
+                Some(v)
+            }
+            c if c.is_ascii_digit() || c == b'.' => {
+                let start = self.at;
+                while b
+                    .get(self.at)
+                    .is_some_and(|c| c.is_ascii_digit() || *c == b'.')
+                {
+                    self.at += 1;
+                }
+                self.text[start..self.at].parse().ok()
             }
             _ => None,
         }
@@ -225,7 +369,9 @@ fn value(
     spell: u32,
     spells: &dyn Spells,
     caster: &Caster,
+    signed: bool,
 ) -> Option<Filled> {
+    let shown = |v: f64| if signed { v } else { v.abs() };
     let data = spells.data(spell)?;
     let effect = |i: Option<u32>| {
         let i = i.unwrap_or(1).checked_sub(1)?;
@@ -236,7 +382,7 @@ fn value(
         // the effect's points; with a spread, "low to high"
         "s" | "S" => {
             let e = effect(index)?;
-            let v = points(e, &data, caster)?.abs();
+            let v = shown(points(e, &data, caster)?);
             if e.variance > 0.0 {
                 let half = f64::from(e.variance) / 2.0;
                 return Some(Filled::Range(v * (1.0 - half), v * (1.0 + half)));
@@ -245,12 +391,12 @@ fn value(
         }
         "m" => {
             let e = effect(index)?;
-            let v = points(e, &data, caster)?.abs();
+            let v = shown(points(e, &data, caster)?);
             num((v * (1.0 - f64::from(e.variance) / 2.0)).round())
         }
         "M" => {
             let e = effect(index)?;
-            let v = points(e, &data, caster)?.abs();
+            let v = shown(points(e, &data, caster)?);
             num((v * (1.0 + f64::from(e.variance) / 2.0)).round())
         }
         // over the whole duration: each tick's points times the ticks
@@ -261,7 +407,7 @@ fn value(
                 return None;
             }
             let ticks = f64::from(duration) / f64::from(e.period_ms);
-            let total = points(e, &data, caster)?.abs() * ticks.floor();
+            let total = shown(points(e, &data, caster)?) * ticks.floor();
             num(if e.damage { down(total) } else { total.round() })
         }
         // the period in seconds
@@ -427,7 +573,20 @@ mod tests {
         assert_eq!(duration(600_000).as_deref(), Some("10 min"));
         assert_eq!(duration(1500).as_deref(), Some("1.5 sec"));
         // what cannot be given exactly gives nothing
-        assert_eq!(describe("${$m1*2}", 8921, &book, &Caster::default()), None);
+        assert_eq!(
+            describe(
+                "${$m2*2} and ${($s1+1)/2}.1",
+                8921,
+                &book,
+                &Caster::default()
+            )
+            .as_deref(),
+            Some("14 and 2.5")
+        );
+        assert_eq!(
+            describe("${$cond(1,2)}", 8921, &book, &Caster::default()),
+            None
+        );
         assert_eq!(
             describe("$?s123[a][b]", 8921, &book, &Caster::default()),
             None

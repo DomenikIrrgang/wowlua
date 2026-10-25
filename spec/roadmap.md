@@ -634,7 +634,16 @@ item data.
 Started 2026-10-25: the reader and items came with M12 (T310, T327); the
 spells from the client's tables and hotfix cache (T391); text the
 recordings cannot measure is measured with the client's font files
-(T392).
+(T392). Exit checked 2026-10-25: a screenshot of the widget demo with the
+camelot world profile and the installation shows the default UI, the
+demo's window, the spellbook's pages (once `Raise` moved panes with their
+window, T343) and a spell's tooltip with the client's current cost, cast
+time, cooldown and description (T391, wrapped: T393).
+
+**Status: done (2026-10-25).** Follow-ups for the next beta, not blocking:
+the untyped functions' probe, how the client answers for currencies,
+factions and mounts a character lacks, the tooltip's wrap width and
+descriptions with spell power (`tests/ingame/PROBES.md`).
 
 ## M14: Browser
 

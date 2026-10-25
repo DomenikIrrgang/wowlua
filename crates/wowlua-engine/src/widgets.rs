@@ -3612,6 +3612,13 @@ fn set_frame_level(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let Value::Num(level) = c.arg(2) else {
         return Err(vm.api_arg_error(2, "Usage: self:SetFrameLevel(frameLevel)"));
     };
+    set_level(vm, id, level);
+    Ok(vec![])
+}
+
+/// Sets a frame's level, its descendants with a level of their own moved
+/// with it (`SetFrameLevel`, `Raise`, `Lower`).
+pub(crate) fn set_level(vm: &mut Vm, id: WidgetId, level: f64) {
     let old = frame_level(vm, id);
     store(vm, id, "FrameLevel", &[Value::Num(level)]);
     let delta = level - old;
@@ -3627,7 +3634,6 @@ fn set_frame_level(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
             stack.extend(engine(vm).world.widgets[child.0].children.iter().copied());
         }
     }
-    Ok(vec![])
 }
 
 /// `SetUsingParentLevel(using)`: kept; using its parent's, a frame drops

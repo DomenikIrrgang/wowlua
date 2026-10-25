@@ -191,7 +191,9 @@ proportion to the visible regions.
   (-8 to 7), font strings after textures (decision T340), then masked textures after unmasked ones (the action
   buttons' masked icons over their slot art), then creation order; a
   frame draws before its regions'
-  children frames of the same level.
+  children frames of the same level. `SetFrameLevel`, `Raise` and `Lower`
+  move a frame's descendants that have levels of their own with it
+  (decision T343).
 - **Textures**: the rectangle, the image (a file path or file ID, an atlas
   as the client's tables give it, or a color), texture coordinates (four
   corners), vertex color, effective alpha, blend mode (`BLEND`, `ADD`,
@@ -367,8 +369,7 @@ T310).
   across the frame's diagonal.
 
   A spell no test defines (decision T391) is the client's: its name, rank
-  and icon from `SpellName`, `Spell` and `SpellMisc` (camelot's recorded
-  scan's name, rank and icon win where it has the spell), its cast time
+  and icon from `SpellName`, `Spell` and `SpellMisc`, its cast time
   (`SpellCastTimes`), range (`SpellRange`, the first of its pair) and
   costs (`SpellPower`: rage and runic power in whole points, a finisher's
   cost the most it takes, `minCost` the least), so
@@ -389,10 +390,18 @@ T310).
   the charges, `$x` the chain targets, `$r` the range, `$12345s1` another
   spell's, `$/1000;` and `$*2;` scaled (a range's ends each),
   `$lpoint:points;` by the number before it, `$@spellname12345` and
-  `$@spelldesc12345`; numbers from 1,000 up with a separator. A
-  description with a placeholder it cannot fill exactly (formulas `${…}`,
-  conditions `$?`, variables `$<…>`, gender `$g`) is empty, as without
-  the tables. Checked against the client's recorded descriptions (about
+  `$@spelldesc12345`, formulas `${$m1*8}` (numbers and placeholders,
+  `+ - * /`, parentheses; the placeholders in them signed, the result
+  whole, `${…}.2` to two decimals); numbers from 1,000 up with a
+  separator. A description with a placeholder it cannot fill exactly
+  (conditions `$?`, variables `$<…>`, functions in formulas, gender `$g`)
+  is the recorded one, else empty. A spell's tooltip
+  (`C_TooltipInfo.GetSpellByID`, `GameTooltip:SetSpellByID`) shows its
+  cost and range ("435 Mana", "30 yd range"), its cast time and cooldown
+  ("Instant" or "10 sec cast", "8 sec cooldown") and the description, as
+  the trainers' recorded tooltips do. The installation's current data
+  wins over the recordings and camelot's scan of older builds (spells and
+  items alike); a test's own data wins over both. Checked against the client's recorded descriptions (about
   2,000, `wowlua-casc`'s installation tests): the same, except where the
   recorded character's gear, talents or a damage modifier count (2 % more
   damage on a level-21 druid). Unverified: talents and auras that change a

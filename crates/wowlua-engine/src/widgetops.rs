@@ -88,13 +88,18 @@ fn other_levels(vm: &mut Vm, id: WidgetId) -> Vec<f64> {
     out
 }
 
-/// `Frame:Raise()`: above every other shown frame of its strata.
+/// `Frame:Raise()`: above every other shown frame of its strata, its
+/// descendants with levels of their own raised with it, as
+/// `SetFrameLevel` moves them: a top-level window raised as it opens
+/// keeps its panes above its background (the spellbook's
+/// `PlayerSpellsFrame`, raised to 501, its `SpellBookFrame` at 100 was
+/// drawn under it; the recorded tree has the pane above the window).
 fn raise(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let own = widgets::frame_level(vm, id);
     let top = other_levels(vm, id).into_iter().fold(f64::MIN, f64::max);
     if top >= own {
         let level = (top + 1.0).min(MAX_LEVEL);
-        widgets::store(vm, id, "FrameLevel", &[Value::Num(level)]);
+        widgets::set_level(vm, id, level);
     }
     Ok(vec![])
 }
@@ -106,7 +111,7 @@ fn lower(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     let bottom = other_levels(vm, id).into_iter().fold(f64::MAX, f64::min);
     if bottom <= own {
         let level = (bottom - 1.0).max(0.0);
-        widgets::store(vm, id, "FrameLevel", &[Value::Num(level)]);
+        widgets::set_level(vm, id, level);
     }
     Ok(vec![])
 }

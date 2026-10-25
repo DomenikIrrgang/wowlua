@@ -84,12 +84,16 @@ fn show_line(
     fs: Value,
     text: Value,
     color: &[Value],
+    wrap: bool,
 ) -> Result<(), wowlua_vm::LuaError> {
-    if let Some(fid) = widgets::widget_of(vm, fs)
-        && !widgets::has_font(vm, fid)
-    {
-        let path = vm.str("Fonts\\FRIZQT__.TTF");
-        widgets::store(vm, fid, "Font", &[path, Value::Num(12.0)]);
+    if let Some(fid) = widgets::widget_of(vm, fs) {
+        if !widgets::has_font(vm, fid) {
+            let path = vm.str("Fonts\\FRIZQT__.TTF");
+            widgets::store(vm, fid, "Font", &[path, Value::Num(12.0)]);
+        }
+        // (a line reused: its own width again until the layout wraps it)
+        widgets::store(vm, fid, "TooltipWrap", &[Value::Bool(wrap)]);
+        call(vm, fs, "SetWidth", &[Value::Num(0.0)])?;
     }
     call(vm, fs, "SetText", &[text])?;
     let (r, g, b) = match color {
@@ -116,6 +120,9 @@ fn hide_line(vm: &mut Vm, fs: Option<Value>) -> Result<(), wowlua_vm::LuaError> 
 
 /// The space around a tooltip's lines and between them, in UI units.
 const PADDING: f64 = 10.0;
+/// The least width a tooltip wraps its wrapping lines at (unverified: see
+/// `tests/ingame/PROBES.md`).
+const WRAP_WIDTH: f64 = 300.0;
 const LINE_GAP: f64 = 2.0;
 /// The least space between a line's left and right texts.
 const COLUMN_GAP: f64 = 40.0;
@@ -134,6 +141,49 @@ fn number(v: Option<&Value>) -> f64 {
 fn layout(vm: &mut Vm, id: WidgetId) -> Result<(), wowlua_vm::LuaError> {
     let n = count(vm, id);
     let tip = Value::Table(engine(vm).world.widgets[id.0].table);
+    // A wrapping line (`AddLine`'s `wrap`) breaks at the tooltip's width:
+    // its widest other line, at least `WRAP_WIDTH` (decision T393).
+    let wraps = |vm: &mut Vm, fs: Option<Value>| -> bool {
+        let Some(fid) = fs.and_then(|fs| widgets::widget_of(vm, fs)) else {
+            return false;
+        };
+        let props = engine(vm).world.widgets[fid.0].props;
+        widgets::stored_args(vm, props, "TooltipWrap")
+            .and_then(|v| v.first().copied())
+            .is_some_and(|v| v.truthy())
+    };
+    let mut widest = 0.0_f64;
+    let mut wrapping = Vec::new();
+    for i in 1..=n {
+        let left = line(vm, id, "Left", i);
+        let right = line(vm, id, "Right", i);
+        let width = |vm: &mut Vm, fs: Option<Value>| -> Result<f64, wowlua_vm::LuaError> {
+            Ok(match fs {
+                Some(fs)
+                    if call(vm, fs, "IsShown", &[])?
+                        .first()
+                        .is_some_and(|v| v.truthy()) =>
+                {
+                    number(call(vm, fs, "GetStringWidth", &[])?.first())
+                }
+                _ => 0.0,
+            })
+        };
+        let (lw, rw) = (width(vm, left)?, width(vm, right)?);
+        if wraps(vm, left) {
+            wrapping.push((left, lw));
+        } else {
+            widest = widest.max(if rw > 0.0 { lw + COLUMN_GAP + rw } else { lw });
+        }
+    }
+    let wrap_at = widest.max(WRAP_WIDTH);
+    for (fs, natural) in wrapping {
+        if let Some(fs) = fs
+            && natural > wrap_at
+        {
+            call(vm, fs, "SetWidth", &[Value::Num(wrap_at)])?;
+        }
+    }
     let mut lines = Vec::new();
     let (mut width, mut height) = (0.0_f64, 0.0_f64);
     for i in 1..=n {
@@ -151,8 +201,12 @@ fn layout(vm: &mut Vm, id: WidgetId) -> Result<(), wowlua_vm::LuaError> {
             let h = number(call(vm, fs, "GetStringHeight", &[])?.first());
             Ok((w, h))
         };
-        let (lw, lh) = measure(vm, left)?;
+        let (mut lw, lh) = measure(vm, left)?;
         let (rw, rh) = measure(vm, right)?;
+        // (`GetStringWidth` is a wrapped line's width unwrapped)
+        if wraps(vm, left) {
+            lw = lw.min(wrap_at);
+        }
         let row = if rw > 0.0 { lw + COLUMN_GAP + rw } else { lw };
         width = width.max(row);
         let top = height;
@@ -194,11 +248,16 @@ fn layout(vm: &mut Vm, id: WidgetId) -> Result<(), wowlua_vm::LuaError> {
 
 /// `tooltip:AddLine(text [, r, g, b, wrap])`.
 fn add_line(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
+    let wrap = c.arg(6).truthy();
+    add_line_with(vm, id, c, wrap)
+}
+
+fn add_line_with(vm: &mut Vm, id: WidgetId, c: NativeCall, wrap: bool) -> Ret {
     let n = count(vm, id) + 1;
     set_count(vm, id, n);
     let color: Vec<Value> = c.args.iter().skip(2).copied().collect();
     if let Some(fs) = line(vm, id, "Left", n) {
-        show_line(vm, fs, c.arg(2), &color)?;
+        show_line(vm, fs, c.arg(2), &color, wrap)?;
     }
     let right = line(vm, id, "Right", n);
     hide_line(vm, right)?;
@@ -213,10 +272,10 @@ fn add_double_line(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let left_color: Vec<Value> = c.args.iter().skip(3).take(3).copied().collect();
     let right_color: Vec<Value> = c.args.iter().skip(6).take(3).copied().collect();
     if let Some(fs) = line(vm, id, "Left", n) {
-        show_line(vm, fs, c.arg(2), &left_color)?;
+        show_line(vm, fs, c.arg(2), &left_color, false)?;
     }
     if let Some(fs) = line(vm, id, "Right", n) {
-        show_line(vm, fs, c.arg(3), &right_color)?;
+        show_line(vm, fs, c.arg(3), &right_color, false)?;
     }
     layout(vm, id)?;
     Ok(vec![])
@@ -241,7 +300,8 @@ fn clear_lines(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
 /// `tooltip:SetText(text [, r, g, b, a, wrap])`: the only line.
 fn set_text(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     clear(vm, id)?;
-    add_line(vm, id, c)
+    let wrap = c.arg(7).truthy();
+    add_line_with(vm, id, c, wrap)
 }
 
 fn num_lines(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
@@ -767,7 +827,9 @@ fn get_toy_by_item_id(vm: &mut Vm, c: NativeCall) -> Ret {
 /// table's spell's (`gamedata::scanned_spell`): its name and rank, the
 /// cost and range line, then a defined spell's description (`SpellName`;
 /// the description's line as Devotion Aura's, gold and wrapped; recorded:
-/// Attack's two lines).
+/// Attack's two lines). With the client's tables, a spell no test defines
+/// has its cost, range, cast time, cooldown and description (decision
+/// T391).
 fn spell_tooltip(vm: &mut Vm, id: i64) -> Ret {
     let defined = engine(vm).world.data.spells.get(&id).copied();
     let Some(spell) = defined.or_else(|| crate::gamedata::scanned_spell(vm, id)) else {
@@ -780,11 +842,43 @@ fn spell_tooltip(vm: &mut Vm, id: i64) -> Ret {
     };
     let name = field(vm, "name").unwrap_or_default();
     let rank = field(vm, "subtext").unwrap_or_default();
+    // the client's tables' facts of a spell no test defines (decision
+    // T391), as its tooltips show them (recorded: the trainers')
+    let client = defined
+        .is_none()
+        .then(|| crate::clientdata::spell(vm, id))
+        .flatten();
+    let (cost, range, cast, cooldown) = match &client {
+        Some(c) => spell_lines(c),
+        None => Default::default(),
+    };
     let mut lines = vec![
         double_line(vm, LINE_SPELL_NAME, (&name, WHITE), (&rank, GRAY)),
-        double_line(vm, LINE_NONE, ("", WHITE), ("", WHITE)),
+        double_line(vm, LINE_NONE, (&cost, WHITE), (&range, WHITE)),
     ];
-    if let Some(description) = field(vm, "description").filter(|d| !d.is_empty()) {
+    if client.is_some() {
+        lines.push(double_line(
+            vm,
+            LINE_NONE,
+            (&cast, WHITE),
+            (&cooldown, WHITE),
+        ));
+    }
+    let description = field(vm, "description")
+        .filter(|d| !d.is_empty())
+        .or_else(|| {
+            client
+                .is_some()
+                .then(|| crate::gamedata::client_description(vm, id))
+                .flatten()
+        })
+        .or_else(|| {
+            client
+                .is_some()
+                .then(|| crate::gamedata::recorded_description(vm, id))
+                .flatten()
+        });
+    if let Some(description) = description.filter(|d| !d.is_empty()) {
         let wrap = [("wrapText", Value::Bool(true))];
         lines.push(data_line(vm, 34.0, &description, GOLD, &wrap));
     }
@@ -794,6 +888,56 @@ fn spell_tooltip(vm: &mut Vm, id: i64) -> Ret {
         &[("id", Value::Num(id as f64))],
         lines,
     )
+}
+
+/// A spell's cost, range, cast and cooldown lines as its tooltip shows
+/// them (recorded, the trainers' tooltips: "435 Mana" and "30 yd range",
+/// "Instant" or "10 sec cast", "8 sec cooldown"); empty where it has none.
+/// Unverified: a cost in percent (not shown), several costs (the first),
+/// a range under 6 yards (as any), a channeled spell (as a cast), a
+/// cooldown of minutes ("2 min cooldown").
+fn spell_lines(c: &crate::clientdata::ClientSpell) -> (String, String, String, String) {
+    let cost = c
+        .costs
+        .iter()
+        .find(|k| k.percent == 0.0 && k.cost > 0)
+        .and_then(|k| {
+            let power = match k.power_type {
+                0 => "Mana",
+                1 => "Rage",
+                2 => "Focus",
+                3 => "Energy",
+                4 => "Combo Points",
+                6 => "Runic Power",
+                _ => return None,
+            };
+            Some(format!("{} {power}", k.cost))
+        })
+        .unwrap_or_default();
+    let range = if c.max_range > 0.0 {
+        format!("{} yd range", c.max_range)
+    } else {
+        String::new()
+    };
+    let secs = |ms: u32| {
+        let s = f64::from(ms) / 1000.0;
+        if s.fract() == 0.0 {
+            format!("{}", s as u64)
+        } else {
+            format!("{s:.1}")
+        }
+    };
+    let cast = if c.cast_ms == 0 {
+        "Instant".to_string()
+    } else {
+        format!("{} sec cast", secs(c.cast_ms))
+    };
+    let cooldown = match c.cooldown_ms {
+        0 => String::new(),
+        ms if ms >= 60_000 && ms % 60_000 == 0 => format!("{} min cooldown", ms / 60_000),
+        ms => format!("{} sec cooldown", secs(ms)),
+    };
+    (cost, range, cast, cooldown)
 }
 
 /// `C_TooltipInfo.GetSpellByID(spellID, …)`: the spell's; a spell's name

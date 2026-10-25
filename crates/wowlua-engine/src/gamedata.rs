@@ -193,7 +193,9 @@ pub fn item_data(vm: &mut Vm, id: i64) -> Option<TableRef> {
             completed_item(vm, id, t);
             Some(t)
         }
-        None => probed_item(vm, id).or_else(|| client_item(vm, id)),
+        // the installation's current data wins over older recordings
+        // (decision T391)
+        None => client_item(vm, id).or_else(|| probed_item(vm, id)),
     }
 }
 
@@ -289,6 +291,9 @@ fn completed_item(vm: &mut Vm, id: i64, t: TableRef) {
 pub fn spell_data(vm: &mut Vm, id: i64) -> Option<TableRef> {
     match engine(vm).world.data.spells.get(&id).copied() {
         Some(t) => Some(t),
+        // the installation's current data wins over older recordings
+        // (decision T391)
+        None if crate::clientdata::spell(vm, id).is_some() => None,
         None => probed_spell(vm, id),
     }
 }
@@ -341,11 +346,11 @@ const NO_ICON: f64 = 136235.0;
 /// a spell's rank, which the scan read only where the client had it cached
 /// (Holy Light's ranks are in the trainers' recordings, not in the scan).
 ///
-/// With the user's installation (decision T391), the client's tables add
-/// the cast time and range (`castTime` in milliseconds, `minRange`,
-/// `maxRange` in yards) and give the spells the scan lacks, in every
-/// flavor; the scan's name, icon and rank, recorded from the client,
-/// stay.
+/// With the user's installation (decision T391), the client's tables
+/// give the spell: its name, rank and icon, its cast time and range
+/// (`castTime` in milliseconds, `minRange`, `maxRange` in yards), in every
+/// flavor; the installation's current data wins over the scan, recorded
+/// from an older build.
 pub fn scanned_spell(vm: &mut Vm, id: i64) -> Option<TableRef> {
     if let Some(t) = engine(vm).world.data.scanned.get(&id).copied() {
         return Some(t);
@@ -358,7 +363,7 @@ pub fn scanned_spell(vm: &mut Vm, id: i64) -> Option<TableRef> {
         return None;
     }
     let t = vm.new_table();
-    match scan {
+    match scan.filter(|_| client.is_none()) {
         Some(s) => {
             // The scan's icon, else the recorded spellbook item's (the full
             // probe, 1.60.1: Attack's 133728 and Cannibalize's 132278, which
@@ -401,7 +406,7 @@ pub fn scanned_spell(vm: &mut Vm, id: i64) -> Option<TableRef> {
 /// the spell's school (`GetSpellBonusDamage`), bonus healing and attack
 /// power. Unverified: talents and auras that change a spell's numbers
 /// (the client's own descriptions include them).
-fn client_description(vm: &mut Vm, id: i64) -> Option<String> {
+pub(crate) fn client_description(vm: &mut Vm, id: i64) -> Option<String> {
     let spell = crate::clientdata::spell(vm, id)?;
     let level = engine(vm).units.list[crate::units::PLAYER.0].level.max(1.0) as u32;
     // the school's index (1 physical … 7 arcane) by its lowest bit
@@ -508,7 +513,15 @@ fn spell(vm: &mut Vm, c: &NativeCall) -> Option<(i64, TableRef)> {
 /// The spell a call names that no test defined and no probe recorded: the
 /// client's recorded answer to the call wins (`Err`, its values), else
 /// the spell table's spell (`Ok`), else what an unanswered call gets.
+/// With the installation, its spell wins over the recordings (decision
+/// T391: they are of older builds).
 fn unrecorded(vm: &mut Vm, c: &NativeCall) -> Result<(i64, TableRef), Vec<Value>> {
+    if let Value::Num(n) = vm.hidden(c.arg(1))
+        && crate::clientdata::spell(vm, n as i64).is_some()
+        && let Some(s) = scanned_arg(vm, c)
+    {
+        return Ok(s);
+    }
     if let Some(name) = crate::recorded::called_name(vm, c)
         && let Some(values) = crate::recorded::lookup(vm, &name, c)
     {
@@ -565,7 +578,10 @@ fn spell_field_of(vm: &mut Vm, c: &NativeCall, key: &str) -> Ret {
                 // one (the full probe, 1.60.1: Attack's ""; unverified: a
                 // spell whose text the engine lacks).
                 Value::Nil if key == "description" => {
-                    let text = client_description(vm, id).unwrap_or_default();
+                    // (one it cannot fill exactly: the recorded text)
+                    let text = client_description(vm, id)
+                        .or_else(|| recorded_description(vm, id))
+                        .unwrap_or_default();
                     vec![vm.str(&text)]
                 }
                 Value::Nil => vec![],
@@ -877,11 +893,9 @@ fn get_spell_subtext(vm: &mut Vm, c: NativeCall) -> Ret {
 /// recorded answer, else nothing.
 fn get_spell_power_cost(vm: &mut Vm, c: NativeCall) -> Ret {
     let call = crate::call_text(vm, "C_Spell.GetSpellPowerCost", &c, 1);
-    if let Some(answer) = crate::recorded::probed(&call) {
-        return Ok(crate::recorded::parse_answer(vm, answer));
-    }
-    // the client's tables' costs (decision T391), where each is an amount
-    // (one in percent of the base power is the character's)
+    // the client's tables' costs (decision T391), current, before the
+    // recorded ones, where each is an amount (one in percent of the base
+    // power is the character's: then the recording's)
     if let Value::Num(id) = vm.hidden(c.arg(1))
         && let Some(spell) = crate::clientdata::spell(vm, id as i64)
         && !spell.costs.is_empty()
@@ -906,7 +920,23 @@ fn get_spell_power_cost(vm: &mut Vm, c: NativeCall) -> Ret {
         }
         return Ok(vec![Value::Table(list)]);
     }
+    if let Some(answer) = crate::recorded::probed(&call) {
+        return Ok(crate::recorded::parse_answer(vm, answer));
+    }
     Ok(crate::recorded::client_answer(vm, &c))
+}
+
+/// A spell's description as a recording has it (a trainer's, a talent's).
+pub(crate) fn recorded_description(vm: &mut Vm, id: i64) -> Option<String> {
+    let text = crate::recorded::probed(&format!("C_Spell.GetSpellDescription({id})"))?;
+    match crate::traits::Rv::answer(text)
+        .into_iter()
+        .next()?
+        .to_value(vm)
+    {
+        Value::Str(s) => Some(String::from_utf8_lossy(vm.heap.str_bytes(s)).into_owned()),
+        _ => None,
+    }
 }
 
 /// A power type's token (`Enum.PowerType`), as `GetSpellPowerCost` names

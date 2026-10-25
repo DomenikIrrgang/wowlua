@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,140 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,142 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -841,7 +841,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,140 rules unverified: each rests on Blizzard's
+The engine's code marks 1,142 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -2055,15 +2055,17 @@ page changes only when a rule is added, removed or reworded.
 - [timeline.rs](../crates/wowlua-engine/src/timeline.rs): Unverified, from the API's documentation: the IDs (here counted from after `ENCOUNTER_TIMELINE_RESERVED_EVENT_COUNT`,...
 - [timeline.rs](../crates/wowlua-engine/src/timeline.rs): `GetEventState(id)`: active or paused; an event no longer there, finished (unverified: what the client answers for an...
 
-### tooltip (11)
+### tooltip (13)
 
 - [tooltip.rs](../crates/wowlua-engine/src/tooltip.rs): Unverified: the colors of lines added without one (white here), and what `ClearLines` leaves in the font strings (no...
+- [tooltip.rs](../crates/wowlua-engine/src/tooltip.rs): The least width a tooltip wraps its wrapping lines at (unverified: see `tests/ingame/PROBES.md`).
 - [tooltip.rs](../crates/wowlua-engine/src/tooltip.rs): - Every data carries `dataInstanceID`, the session's count of tooltip data made (the probe's answers: consecutive wit...
 - [tooltip.rs](../crates/wowlua-engine/src/tooltip.rs): Unverified: the lines the client adds that the game data lacks (an item's equip slot, stats, requirements, sell price...
 - [tooltip.rs](../crates/wowlua-engine/src/tooltip.rs): An item's lines (`None` without its data); a data the client does not have yet: its retrieving line (unverified: the...
 - [tooltip.rs](../crates/wowlua-engine/src/tooltip.rs): `Enum.TooltipDataItemBinding` by the item's bind type (recorded: a quest item's "Quest Item" 0, the Hearthstone's "Bi...
 - [tooltip.rs](../crates/wowlua-engine/src/tooltip.rs): An item's tooltip data asked another way (`extras.rs`: an action's, a merchant's goods'): as by ID, without its link...
 - [tooltip.rs](../crates/wowlua-engine/src/tooltip.rs): `C_TooltipInfo.GetItemByID(itemID [, quality, itemContext, treasureContextLevel])`: the item's, its link carrying the...
+- [tooltip.rs](../crates/wowlua-engine/src/tooltip.rs): A spell's cost, range, cast and cooldown lines as its tooltip shows them (recorded, the trainers' tooltips: "435 Mana...
 - [tooltip.rs](../crates/wowlua-engine/src/tooltip.rs): `C_TooltipInfo.GetUnit(unit [, hideStatus])`: a player's name with its last name (`UnitName`, gold, with the token as...
 - [tooltip.rs](../crates/wowlua-engine/src/tooltip.rs): `C_TooltipInfo.GetInventoryItem(unit, slot [, hideUselessStats])`: the player's worn item's (unverified: its GUID, eq...
 - [tooltip.rs](../crates/wowlua-engine/src/tooltip.rs): `C_TooltipInfo.GetEquipmentSet(setID)`: the set's name with its items' count on the right ("10 |4Item:Items;", gold),...
@@ -2392,6 +2394,7 @@ in [tests/ingame/PROBES.md](../tests/ingame/PROBES.md):
 - Minimap
 - Unanchored textures and slider thumbs
 - Owed from the M12 screenshots (next beta, about 2026-11-07)
+- Owed from M13 (next beta, about 2026-11-07)
 - Answered on the beta's last day (2026-10-24)
 
 ## In-game regressions

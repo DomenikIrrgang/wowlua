@@ -1946,9 +1946,9 @@ impl wowlua_engine::clientdata::ClientData for Spells {
 }
 
 /// A spell no test defines comes from the client's tables (decision
-/// T391): one camelot's scan lacks whole (name, rank, icon, cast time,
-/// range, costs, its description for the player's level, 60 here); the scan's
-/// keeps its recorded name, the tables adding its cast time and range.
+/// T391): one camelot's scan lacks (name, rank, icon, cast time, range,
+/// costs, its description for the player's level, 60 here), and one the
+/// scan and the recordings have: the installation's current data wins.
 #[test]
 fn unknown_spells_come_from_the_clients_tables() {
     let mut vm = vm();
@@ -1971,7 +1971,7 @@ return s.name, s.castTime, s.maxRange, s.iconID, C_Spell.GetSpellSubtext(9900001
             "135812",
             "Rank 9",
             "Burns for 70 at level 60.",
-            "Fireball",
+            "Fireball (tables)",
             "1500",
             "30",
             "MANA",
@@ -2041,4 +2041,56 @@ return w('Fonts\\\\ARHei.ttf', 'ab') / px, w('Fonts\\\\FRIZQT__.TTF', 'éé') / 
     assert_eq!(with_fonts[2], recorded[2], "recorded glyphs stay");
     assert!(recorded[2] < 30.0, "{recorded:?}");
     assert_ne!(recorded[1], with_fonts[1], "{recorded:?}");
+}
+
+/// `Raise()` moves a frame's descendants that have levels of their own
+/// with it, as `SetFrameLevel` does: a window raised as it opens keeps
+/// its panes over its background (the spellbook's `PlayerSpellsFrame`
+/// drew its pages under it).
+#[test]
+fn raise_keeps_panes_above_their_window() {
+    let mut vm = vm();
+    let r = run(
+        &mut vm,
+        "local other = CreateFrame('Frame', nil, UIParent)
+other:SetFrameLevel(500)
+other:Show()
+local window = CreateFrame('Frame', nil, UIParent)
+window:SetFrameLevel(1)
+local pane = CreateFrame('Frame', nil, window)
+pane:SetFrameLevel(100)
+window:Raise()
+return window:GetFrameLevel(), pane:GetFrameLevel()",
+    );
+    let (window, pane): (f64, f64) = (r[0].parse().unwrap(), r[1].parse().unwrap());
+    assert!(window > 500.0, "{r:?}");
+    assert_eq!(pane - window, 99.0, "{r:?}");
+}
+
+/// A spell's tooltip with the client's tables (decision T391): its cost
+/// and range, its cast time and cooldown, its description; and a tooltip
+/// line that wraps (decision T393) breaks at the tooltip's width, at
+/// least 300, where `GetStringWidth` stays the text's on one line.
+#[test]
+fn spell_tooltips_show_the_clients_facts_and_wrap() {
+    let mut vm = vm();
+    wowlua_engine::clientdata::set(&mut vm, std::sync::Arc::new(Spells));
+    let r = run(
+        &mut vm,
+        "local data = C_TooltipInfo.GetSpellByID(9900001)
+local out = {}
+for _, l in ipairs(data.lines) do table.insert(out, (l.leftText or '') .. '|' .. (l.rightText or '')) end
+local t = CreateFrame('GameTooltip', 'WrapTip', UIParent)
+t:SetOwner(UIParent, 'ANCHOR_NONE')
+t:AddLine('Short')
+t:AddLine(string.rep('word ', 60), 1, 1, 1, true)
+return table.concat(out, ' ; '), t:GetWidth(), tostring(WrapTipTextLeft2:GetHeight() > 20)",
+    );
+    assert_eq!(
+        r[0],
+        "Unscanned Bolt|Rank 9 ; 30 Mana|30 yd range ; 2.5 sec cast| ; Burns for 70 at level 60.|"
+    );
+    let width: f64 = r[1].parse().unwrap();
+    assert!((width - 320.0).abs() < 1.0, "{r:?}");
+    assert_eq!(r[2], "true", "{r:?}");
 }

@@ -646,6 +646,31 @@ alone unless an item names an addon.
     4. AtlasLoot: Ragefire Chasm, Taragaman, its loot list.
 
 
+## Owed from M13 (next beta, about 2026-11-07)
+
+What the M13 work (the client's tables in tests) guessed. Each item stands
+alone: after a `/reload` (or an error) start it again from its first step.
+Take a screenshot after each step that names one.
+
+1. **A tooltip's wrap width** (decision T393; wowlua wraps at the widest
+   other line, at least 300). Take a screenshot after each of:
+   1. `/run GameTooltip:SetOwner(UIParent,"ANCHOR_CURSOR") GameTooltip:SetSpellByID(26573) GameTooltip:Show() print(GameTooltip:GetWidth())`
+   2. `/run GameTooltip:SetOwner(UIParent,"ANCHOR_CURSOR") GameTooltip:AddLine("Short") GameTooltip:AddLine(string.rep("word ",60),1,1,1,true) GameTooltip:Show() print(GameTooltip:GetWidth())`
+2. **A spell's description with spell power** (decision T391; wowlua adds
+   the coefficient times `GetSpellBonusDamage`): on a paladin with gear
+   that gives spell power:
+   1. `/run print(GetSpellBonusDamage(2), GetSpellBonusHealing())`
+   2. `/run print(C_Spell.GetSpellDescription(26573))`
+   3. `/run print(C_Spell.GetSpellDescription(635))`
+3. **Currencies, factions and mounts the character doesn't have**
+   (task #30: what the client answers for an ID it knows but the character
+   lacks):
+   1. `/dump C_CurrencyInfo.GetCurrencyInfo(1792)`
+   2. `/dump C_CurrencyInfo.GetCurrencyInfo(1901)`
+   3. `/dump C_Reputation.GetFactionDataByID(69)`
+   4. `/dump C_Reputation.GetFactionDataByID(930)`
+   5. `/dump C_MountJournal.GetMountInfoByID(6)`
+
 ## Answered on the beta's last day (2026-10-24)
 
 - PvP ranks (major faction 2800): `GetMajorFactionProgressionInfo` gives
