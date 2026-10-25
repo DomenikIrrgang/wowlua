@@ -692,7 +692,12 @@ Debugging a test starts `wowlua debug` on its file with `filter` set to
 `path::name`. Code lenses (decision T383) put "Run all tests" and "Debug"
 at the top of a test file and "Run test" and "Debug" above each test,
 running it as the Testing view does (its results there and at the test);
-`wowlua.testCodeLens` turns them off. Find references and the
+`wowlua.testCodeLens` turns them off. Run with Coverage (decision T384)
+adds `--coverage` and the `coverage-json` report: each of the addon's
+files covered gets its lines', branches' and functions' counts in the
+Testing view's coverage, and, shown in the editor, its lines with their
+hits, each branch's two sides and its functions with their calls (VS
+Code's test coverage, 1.88 or newer). Find references and the
 rest of the table follow.
 
 The VS Code extension starts `wowlua lsp` (the `wowlua.path` command) when a

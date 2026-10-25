@@ -4,7 +4,9 @@
 // json` (one test exactly as `file::name`) and shows each result at its
 // test, a failure at its line with the flavor it failed on. Debug runs
 // `wowlua debug` on the test's file, filtered to it. Code lenses above each
-// test and at the top of a test file run or debug it the same way.
+// test and at the top of a test file run or debug it the same way. Run
+// with Coverage adds `--coverage` and shows the addon's lines, branches and
+// functions as the run covered them (decision T384).
 const vscode = require("vscode");
 const cp = require("child_process");
 const fs = require("fs");
@@ -52,6 +54,15 @@ class TestExplorer {
         this.ctrl.refreshHandler = () => this.discover();
         this.ctrl.createRunProfile("Run", vscode.TestRunProfileKind.Run, (req, token) => this.run(req, token), true);
         this.ctrl.createRunProfile("Debug", vscode.TestRunProfileKind.Debug, (req) => this.debug(req), true);
+        // each file's lines, branches and functions, read when it is shown
+        this.covered = new Map();
+        const coverage = this.ctrl.createRunProfile(
+            "Run with Coverage",
+            vscode.TestRunProfileKind.Coverage,
+            (req, token) => this.run(req, token, { coverage: true }),
+            true,
+        );
+        coverage.loadDetailedCoverage = async (_run, file) => this.covered.get(file.uri.toString()) || [];
         const watcher = vscode.workspace.createFileSystemWatcher(GLOB);
         // (the code lenses follow the tests as they are read)
         this.lensesChanged = new vscode.EventEmitter();
@@ -225,7 +236,7 @@ class TestExplorer {
         return vscode.workspace.getConfiguration("wowlua").get("path") || "wowlua";
     }
 
-    async run(request, token) {
+    async run(request, token, opts = {}) {
         const run = this.ctrl.createTestRun(request);
         const packages = this.plan(request);
         // every test that runs, started
@@ -242,7 +253,18 @@ class TestExplorer {
                 break;
             }
             const out = fs.mkdtempSync(path.join(os.tmpdir(), "wowlua-tests-"));
-            const args = ["test", "--reporter", "json", "--output", out, "--color", "never", ...entries.map((e) => e.filter)];
+            const reporters = opts.coverage ? "json,coverage-json" : "json";
+            const args = [
+                "test",
+                ...(opts.coverage ? ["--coverage"] : []),
+                "--reporter",
+                reporters,
+                "--output",
+                out,
+                "--color",
+                "never",
+                ...entries.map((e) => e.filter),
+            ];
             run.appendOutput(`$ wowlua ${args.map((a) => (a.includes(" ") ? JSON.stringify(a) : a)).join(" ")}\r\n`);
             const code = await new Promise((resolve) => {
                 const child = cp.spawn(this.command(), args, { cwd: root });
@@ -257,12 +279,23 @@ class TestExplorer {
                 token.onCancellationRequested(() => child.kill());
             });
             let report;
+            let coverage;
             try {
                 report = JSON.parse(fs.readFileSync(path.join(out, "results.json"), "utf8"));
             } catch {
                 report = undefined;
             }
+            if (opts.coverage) {
+                try {
+                    coverage = JSON.parse(fs.readFileSync(path.join(out, "coverage.json"), "utf8"));
+                } catch {
+                    coverage = undefined;
+                }
+            }
             fs.rmSync(out, { recursive: true, force: true });
+            if (coverage) {
+                this.addCoverage(run, root, coverage);
+            }
             if (!report) {
                 const message = new vscode.TestMessage(
                     token.isCancellationRequested ? "cancelled" : `wowlua test gave no results (exit ${code}); see the output`,
@@ -345,6 +378,44 @@ class TestExplorer {
                 default:
                     run.skipped(o.item);
             }
+        }
+    }
+
+    // A coverage report onto the run: each file's totals now, its lines,
+    // branches and functions when the editor shows them.
+    addCoverage(run, root, coverage) {
+        const count = (k) => new vscode.TestCoverageCount(k.covered, k.total);
+        this.lastCoverage = [];
+        for (const [file, c] of Object.entries(coverage.files || {})) {
+            const uri = vscode.Uri.file(path.join(root, file));
+            const t = c.totals;
+            run.addCoverage(
+                new vscode.FileCoverage(
+                    uri,
+                    count(t.lines),
+                    t.branches.total ? count(t.branches) : undefined,
+                    t.functions.total ? count(t.functions) : undefined,
+                ),
+            );
+            // (a branch is taken or not: each side its own count)
+            const branches = new Map();
+            for (const b of c.branches || []) {
+                const list = branches.get(b.line) || [];
+                list.push(
+                    new vscode.BranchCoverage(b.taken, undefined, `branch ${b.index + 1} taken`),
+                    new vscode.BranchCoverage(b.notTaken, undefined, `branch ${b.index + 1} not taken`),
+                );
+                branches.set(b.line, list);
+            }
+            const details = Object.entries(c.lines || {}).map(([line, hits]) => {
+                const l = Number(line) - 1;
+                return new vscode.StatementCoverage(hits, new vscode.Range(l, 0, l, Number.MAX_SAFE_INTEGER), branches.get(Number(line)) || []);
+            });
+            for (const f of c.functions || []) {
+                details.push(new vscode.DeclarationCoverage(f.name, f.calls, new vscode.Position(f.line - 1, 0)));
+            }
+            this.covered.set(uri.toString(), details);
+            this.lastCoverage.push({ file, lines: t.lines.covered, of: t.lines.total });
         }
     }
 

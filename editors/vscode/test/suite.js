@@ -353,6 +353,13 @@ async function testsScenario() {
     await vscode.commands.executeCommand(sums.command.command, ...sums.command.arguments);
     log("ran by its lens:", JSON.stringify(api.tests.last));
     assert(api.tests.last.length === 2 && api.tests.last.every((r) => r.state === "passed"), "the sums lens ran " + JSON.stringify(api.tests.last));
+    // with coverage: the addon's file, its lines as the run covered them
+    await api.tests.run(new vscode.TestRunRequest([file]), token, { coverage: true });
+    log("coverage:", JSON.stringify(api.tests.lastCoverage));
+    const main = (api.tests.lastCoverage || []).find((c) => c.file === "src/main.wowlua");
+    assert(main && main.lines === 3 && main.of === 3, "coverage " + JSON.stringify(api.tests.lastCoverage));
+    const details = api.tests.covered.get(vscode.Uri.file(path.join(folder, "src/main.wowlua")).toString()) || [];
+    assert(details.some((d) => d instanceof vscode.DeclarationCoverage && d.name === "add" && d.executed === 4), "details " + details.length);
     log("PASS", name);
 }
 

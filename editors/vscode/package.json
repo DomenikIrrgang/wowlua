@@ -15,7 +15,7 @@
     "url": "https://github.com/DomenikIrrgang/wowlua"
   },
   "engines": {
-    "vscode": "^1.85.0"
+    "vscode": "^1.88.0"
   },
   "categories": [
     "Programming Languages",
