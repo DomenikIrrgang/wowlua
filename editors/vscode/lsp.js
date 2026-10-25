@@ -73,6 +73,9 @@ class LanguageClient {
                 },
                 ".",
                 ":",
+                // (in a string: the event names, anchor points, … its type names)
+                '"',
+                "'",
             ),
             // files changed on disk (a branch checked out, a formatter
             // run): the server checks their packages again
@@ -258,7 +261,8 @@ class LanguageClient {
     }
 
     // What can stand at the cursor: names in scope, a value's members after
-    // `.` and `:`, type names in annotations.
+    // `.` and `:`, type names in annotations, the strings a string's type
+    // names.
     async complete(doc, position) {
         const found = await this.request("textDocument/completion", {
             textDocument: { uri: doc.uri.toString() },

@@ -521,14 +521,13 @@ fn run_check(
 ) -> Result<Vec<check::Checked>, Failure> {
     match checker {
         Checker::InProcess => {
-            // (the open documents as the job has them; a check here runs to
-            // its end)
-            wowlua_driver::overlay::replace_all(
-                job.docs
-                    .iter()
-                    .map(|(p, t)| (p.clone(), std::sync::Arc::from(t.as_bytes())))
-                    .collect::<Vec<(PathBuf, std::sync::Arc<[u8]>)>>(),
-            );
+            // (the open documents as the job has them, a completion's text
+            // with its placeholder; the next job sets them again. Each set
+            // alone: the crate's tests run servers side by side. A check
+            // here runs to its end)
+            for (path, text) in &job.docs {
+                wowlua_driver::overlay::set(path, text.as_bytes().to_vec());
+            }
             let open = job.docs.iter().map(|(p, _)| canonical(p)).collect();
             std::panic::catch_unwind(std::panic::AssertUnwindSafe(|| {
                 check::check(
@@ -760,7 +759,7 @@ fn initialized(out: &mut impl std::io::Write, id: &Json) -> std::io::Result<()> 
                 "documentSymbolProvider": true,
                 "definitionProvider": true,
                 "hoverProvider": true,
-                "completionProvider": { "triggerCharacters": [".", ":"], "resolveProvider": true },
+                "completionProvider": { "triggerCharacters": [".", ":", "\"", "'"], "resolveProvider": true },
             },
             "serverInfo": { "name": "wowlua", "version": env!("CARGO_PKG_VERSION") },
         }),

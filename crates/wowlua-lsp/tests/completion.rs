@@ -45,10 +45,12 @@ fn project() -> (tempfile::TempDir, String) {
     (dir, wowlua_lsp::text::uri_of(&main))
 }
 
-/// The completions with the document's text `text`, at its `|`.
+/// The completions with the document's text `text`, at its last `|` (one
+/// before it is a type's).
 fn complete(c: &mut Client, uri: &str, text: &str) -> Json {
-    let offset = text.find('|').expect("a cursor");
-    let text = text.replacen('|', "", 1);
+    let offset = text.rfind('|').expect("a cursor");
+    let mut text = text.to_string();
+    text.remove(offset);
     let before = &text[..offset];
     let line = before.matches('\n').count();
     let character = offset - before.rfind('\n').map_or(0, |i| i + 1);
@@ -191,5 +193,69 @@ fn completion_lists_what_can_stand_at_the_cursor() {
         .as_str()
         .unwrap_or_default();
     assert!(doc.contains("Says hello to `name`."), "{resolved}");
+    assert!(c.finish());
+}
+
+#[test]
+fn completion_in_a_string_lists_the_strings_its_type_names() {
+    let (_dir, uri) = project();
+    let mut c = Client::start();
+    c.notify(
+        "textDocument/didOpen",
+        json!({ "textDocument": { "uri": uri, "languageId": "wowlua", "version": 1, "text": MAIN } }),
+    );
+    let head = "local frame = CreateFrame(\"Frame\")\n";
+    // an event name
+    let list = complete(
+        &mut c,
+        &uri,
+        &format!("{head}frame:RegisterEvent(\"UNIT_|\")\n"),
+    );
+    let found = labels(&list);
+    assert!(
+        found.contains(&"UNIT_HEALTH".into()),
+        "{} items",
+        found.len()
+    );
+    assert_eq!(item(&list, "UNIT_HEALTH")["kind"], 12);
+    assert!(!found.contains(&"local".into()), "no keywords in a string");
+    assert!(
+        item(&list, "UNIT_HEALTH")["detail"]
+            .as_str()
+            .unwrap_or_default()
+            .contains("string"),
+        "the event's payload"
+    );
+    // an anchor point (an overloaded method)
+    let list = complete(&mut c, &uri, &format!("{head}frame:SetPoint(\"TOP|\")\n"));
+    let found = labels(&list);
+    assert!(
+        found.contains(&"TOPLEFT".into()) && found.contains(&"CENTER".into()),
+        "{found:?}"
+    );
+    // still being typed, no closing quote yet
+    let list = complete(
+        &mut c,
+        &uri,
+        &format!("{head}frame:RegisterEvent(\"PLAYER_|\n"),
+    );
+    assert!(labels(&list).contains(&"PLAYER_LOGIN".into()));
+    // an annotated local's strings
+    let list = complete(
+        &mut c,
+        &uri,
+        &format!("{head}local mode: \"on\" | \"off\" = \"|\"\n"),
+    );
+    assert_eq!(labels(&list), vec!["on".to_string(), "off".to_string()]);
+    // compared with a value of such a type
+    let list = complete(
+        &mut c,
+        &uri,
+        &format!("{head}local function f(e: \"a\" | \"b\")\n\tif e == \"|\" then end\nend\n"),
+    );
+    assert_eq!(labels(&list), vec!["a".to_string(), "b".to_string()]);
+    // a string no type names: nothing
+    let list = complete(&mut c, &uri, &format!("{head}print(\"hel|\")\n"));
+    assert!(labels(&list).is_empty(), "{:?}", labels(&list));
     assert!(c.finish());
 }

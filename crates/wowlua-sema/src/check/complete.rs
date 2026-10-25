@@ -14,6 +14,15 @@ use wowlua_syntax::view::Names;
 /// The name the editor writes at the cursor.
 pub const PLACEHOLDER: &str = "__wowlua_complete__";
 
+/// The frame methods whose first argument is an event's name (typed
+/// `string` by the game's API): completed with the game's events.
+pub const EVENT_METHODS: &[&str] = &[
+    "RegisterEvent",
+    "RegisterUnitEvent",
+    "UnregisterEvent",
+    "IsEventRegistered",
+];
+
 /// What a completion is.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Kind {
@@ -32,6 +41,8 @@ pub enum Kind {
     TypeParameter,
     /// A built-in type (`number`).
     Builtin,
+    /// A string the expected type names (`"UNIT_HEALTH"`).
+    Literal,
 }
 
 /// Where the cursor is.
@@ -43,6 +54,9 @@ pub enum Context {
     Members { method: bool },
     /// Where a type is written.
     Types,
+    /// In a string, where the expected type names strings (an event name,
+    /// an anchor point).
+    Strings,
 }
 
 /// One thing that could stand at the cursor.
@@ -322,7 +336,83 @@ impl Env<'_> {
     }
 }
 
+/// The strings a type names: its string literals, through unions and a
+/// type parameter's constraint.
+fn string_literals(env: &Env<'_>, t: TypeId, out: &mut Vec<String>, depth: u32) {
+    if depth > 8 {
+        return;
+    }
+    for m in env.types.members(t) {
+        match env.types.get(m) {
+            Ty::Str(s) => out.push(s.to_string()),
+            Ty::Param(p) => {
+                if let Some(c) = env.params[p.0 as usize].constraint {
+                    string_literals(env, c, out, depth + 1);
+                }
+            }
+            _ => {}
+        }
+    }
+}
+
 impl Checker<'_, '_> {
+    /// Whether `e` is the placeholder string of a completion check.
+    pub(crate) fn completes_string(&self, e: wowlua_syntax::view::Expr<'_>) -> bool {
+        self.env.completing.is_some()
+            && matches!(e.kind(), wowlua_syntax::view::ExprKind::String(s) if &*s.value() == PLACEHOLDER.as_bytes())
+    }
+
+    /// The strings the expected type names, where the placeholder string
+    /// `at` is checked against it. A call checked against several overloads
+    /// meets it once for each: what each names is kept.
+    pub(crate) fn complete_strings(&mut self, expected: Option<TypeId>, at: Span) {
+        let mut names = Vec::new();
+        if let Some(t) = expected {
+            string_literals(self.env, t, &mut names, 0);
+        }
+        let mut items: Vec<Item> = match self.env.completing.as_mut().and_then(|c| c.found.take()) {
+            Some(found) if found.context == Context::Strings => found.items,
+            _ => Vec::new(),
+        };
+        for n in names {
+            if items.iter().any(|i| i.label == n) {
+                continue;
+            }
+            items.push(Item {
+                label: n,
+                kind: Kind::Literal,
+                detail: String::new(),
+                rank: 0,
+                target: None,
+                at: None,
+            });
+        }
+        self.env.found(Context::Strings, items, false, at.file);
+    }
+
+    /// The game's events, where the placeholder string `at` is an event
+    /// method's argument; each with its payload.
+    pub(crate) fn complete_events(&mut self, at: Span) {
+        let events: Vec<(Box<str>, super::types::Pack)> = self
+            .env
+            .events
+            .iter()
+            .map(|(n, p)| (n.clone(), p.clone()))
+            .collect();
+        let items = events
+            .into_iter()
+            .map(|(n, pack)| Item {
+                label: n.to_string(),
+                kind: Kind::Literal,
+                detail: self.env.display_pack(&pack, 0),
+                rank: 0,
+                target: None,
+                at: None,
+            })
+            .collect();
+        self.env.found(Context::Strings, items, false, at.file);
+    }
+
     /// Whether `name` is the placeholder of a completion check.
     pub(crate) fn completes(&self, name: &str) -> bool {
         name == PLACEHOLDER && self.env.completing.is_some()

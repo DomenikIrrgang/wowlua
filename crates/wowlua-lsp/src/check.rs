@@ -32,8 +32,8 @@ pub struct Hover {
 /// What could stand at the cursor (a completion check's).
 #[derive(Clone, Debug, PartialEq)]
 pub struct Completions {
-    /// Where the cursor is: `names`, `members`, `methods`, `types`, or
-    /// `none` (where the check found nothing to complete).
+    /// Where the cursor is: `names`, `members`, `methods`, `types`,
+    /// `strings`, or `none` (where the check found nothing to complete).
     pub context: &'static str,
     /// Names were left out for the prefix: a longer one gives others.
     pub incomplete: bool,
@@ -287,6 +287,7 @@ fn completions_of(
         Context::Members { method: false } => "members",
         Context::Members { method: true } => "methods",
         Context::Types => "types",
+        Context::Strings => "strings",
     };
     // (each file's URI and lines once)
     let mut files: HashMap<wowlua_span::FileId, Option<(String, text::Lines<'_>)>> = HashMap::new();
@@ -322,6 +323,7 @@ fn completions_of(
                 Kind::Module => 9,
                 Kind::TypeParameter => 25,
                 Kind::Builtin => 14,
+                Kind::Literal => 12,
             };
             Completion {
                 label: item.label,
@@ -712,6 +714,7 @@ fn completions_from(json: &Json) -> Option<Completions> {
         "members" => "members",
         "methods" => "methods",
         "types" => "types",
+        "strings" => "strings",
         _ => "none",
     };
     let items = json["items"]

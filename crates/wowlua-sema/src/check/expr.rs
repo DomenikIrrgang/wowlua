@@ -403,6 +403,11 @@ impl Checker<'_, '_> {
                 Some(v) => self.env.types.num(v),
                 None => Types::NUMBER,
             }),
+            // the cursor of a completion check, in a string
+            ExprKind::String(_) if self.completes_string(e) => {
+                self.complete_strings(expected, e.span());
+                single(expected.unwrap_or(Types::STRING))
+            }
             ExprKind::String(s) => single(self.env.types.str(&String::from_utf8_lossy(&s.value()))),
             ExprKind::Interp(parts) => {
                 for p in parts {
@@ -719,6 +724,15 @@ impl Checker<'_, '_> {
                 let o = if opt { self.env.types.non_nil(o) } else { o };
                 if self.completes(name.text()) {
                     self.complete_members(o, true, name.span());
+                    return single(Types::ANY);
+                }
+                // a frame's event methods take a string; completed with the
+                // game's events
+                if let Some(first) = Self::arg_exprs(args).get(0)
+                    && self.completes_string(first)
+                    && super::complete::EVENT_METHODS.contains(&name.text())
+                {
+                    self.complete_events(first.span());
                     return single(Types::ANY);
                 }
                 // A function field a condition narrowed (`if t.f then t:f() end`).
@@ -2122,8 +2136,17 @@ impl Checker<'_, '_> {
                 self.env.types.union(&[non_nil, r])
             }
             BinOp::Eq | BinOp::Ne => {
-                let l = self.infer(lhs);
-                let r = self.infer(rhs);
+                // (completing a string compared with a value: the strings
+                // the value's type names)
+                let (l, r) = if self.completes_string(rhs) {
+                    let l = self.infer(lhs);
+                    (l, self.check(rhs, Some(l)))
+                } else if self.completes_string(lhs) {
+                    let r = self.infer(rhs);
+                    (self.check(lhs, Some(r)), r)
+                } else {
+                    (self.infer(lhs), self.infer(rhs))
+                };
                 self.check_secret(l, lhs.span());
                 self.check_secret(r, rhs.span());
                 Types::BOOLEAN
@@ -2531,6 +2554,17 @@ impl Checker<'_, '_> {
             };
         }
         self.diagnostics.truncate(saved_diags);
+        // completing a string argument: what each overload's parameter there
+        // names
+        if let Some(i) = exprs.iter().position(|e| self.completes_string(e)) {
+            let at = exprs.get(i).map(|e| e.span()).unwrap_or(span);
+            for &o in overloads {
+                if let Ty::Func(f) = self.env.types.get(o).clone() {
+                    let param = self.param_at(&f, i);
+                    self.complete_strings(param, at);
+                }
+            }
+        }
         for &o in overloads {
             let Ty::Func(f) = self.env.types.get(o).clone() else {
                 continue;

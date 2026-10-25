@@ -617,8 +617,10 @@ parses, trying in turn: the placeholder alone, as a call (`self.P()`), the
 rest of the line left out with its open brackets closed, an `if`, `elseif`,
 `while` or `for` header finished (`then end`, `do end`), and the line
 replaced by `local _ = <receiver>.P` (opening a `do` where the line opened
-a block). Nothing is completed in a comment, a quoted string or a number,
-nor where no repair parses. The file is checked as a first pass checks it
+a block). In a quoted string (one line, no escapes) the string's text
+becomes the placeholder, closed if its quote is still missing (decision
+T378). Nothing is completed in a comment, a long string or a number, nor
+where no repair parses. The file is checked as a first pass checks it
 (its imports taken from earlier checks), and where the checker meets the
 placeholder it lists what could stand there: where a name is read, the
 locals in scope with their types (as narrowed there), the package's
@@ -630,7 +632,13 @@ members every part has; private and protected ones only where they can be
 read), after `:` its methods without `self` (a string's: the `string`
 library); where a type is written, the type parameters, `Self`, the
 built-in types, the module's and its imports' types, its namespaces, and
-the game's types that match. The game's names match when the letters typed
+the game's types that match; in a string, the string literals its expected
+type names (an annotated local's, a parameter's: anchor points, `EventName`;
+each overload's parameter there for an overloaded call; with `==`, the
+other side's type), and the game's events (with their payloads) as the
+first argument of a frame's `RegisterEvent`, `RegisterUnitEvent`,
+`UnregisterEvent` and `IsEventRegistered`, which the game's API types
+`string`. The game's names match when the letters typed
 appear in order with the first at the start of the name or of a word in it
 (`spell` matches `GetSpellInfo`), a single letter only at the start; the
 list is then incomplete, so the editor asks again as the word grows. Each

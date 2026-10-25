@@ -21,28 +21,42 @@ fn is_word(b: u8) -> bool {
 }
 
 /// The completion at byte `offset` of `text`, unless the cursor is in a
-/// comment, a string or a number, or no repair of the text around it
-/// parses.
+/// comment, a long string or a number, or no repair of the text around it
+/// parses. In a quoted string, its text becomes the placeholder (the
+/// strings its expected type names are completed).
 pub fn prepare(text: &str, offset: usize) -> Option<Asked> {
     let mut offset = offset.min(text.len());
     while !text.is_char_boundary(offset) {
         offset -= 1;
     }
     let bytes = text.as_bytes();
-    let mut start = offset;
-    while start > 0 && is_word(bytes[start - 1]) {
-        start -= 1;
-    }
-    let mut end = offset;
-    while end < bytes.len() && is_word(bytes[end]) {
-        end += 1;
-    }
-    if bytes.get(start).is_some_and(u8::is_ascii_digit) || quoted(text, offset) {
-        return None;
-    }
+    let string = match place(text, offset) {
+        Place::Code => None,
+        Place::String(s) => Some(s),
+        Place::None => return None,
+    };
+    let (start, end, p) = match &string {
+        // the string's text, its closing quote added if it has none yet
+        Some(s) if s.closed => (s.start + 1, s.end - 1, PLACEHOLDER.to_string()),
+        Some(s) => (s.start + 1, s.end, format!("{PLACEHOLDER}{}", s.quote)),
+        None => {
+            let mut start = offset;
+            while start > 0 && is_word(bytes[start - 1]) {
+                start -= 1;
+            }
+            let mut end = offset;
+            while end < bytes.len() && is_word(bytes[end]) {
+                end += 1;
+            }
+            if bytes.get(start).is_some_and(u8::is_ascii_digit) {
+                return None;
+            }
+            (start, end, PLACEHOLDER.to_string())
+        }
+    };
     let mut db = SourceDb::new();
     let file = db.add("complete", String::new());
-    let prefix = text[start..offset].to_string();
+    let prefix = text[start..offset.max(start)].to_string();
     let before = &text[..start];
     let after = &text[end..];
     let line_start = before.rfind('\n').map_or(0, |i| i + 1);
@@ -59,7 +73,6 @@ pub fn prepare(text: &str, offset: usize) -> Option<Asked> {
         Some("while" | "for") => " do end",
         _ => "",
     };
-    let p = PLACEHOLDER;
     let mut candidates = vec![
         format!("{before}{p}{after}"),
         // a call statement (`frame:Show()`)
@@ -75,25 +88,43 @@ pub fn prepare(text: &str, offset: usize) -> Option<Asked> {
     // the line alone, as a statement of its own: what precedes the
     // placeholder from where its expression starts
     // (the block a header opens stays open, for its `end`)
-    let receiver = receiver(&text[line_start..start]);
-    let call = if receiver.ends_with(':') { "()" } else { "" };
-    let opens = match header {
-        " then end" | " do end" => "do ",
-        " then" => "elseif _ then ",
-        _ => "",
-    };
-    candidates.push(format!(
-        "{}{indent}{opens}local _ = {receiver}{p}{call}{rest}",
-        &text[..line_start]
-    ));
+    if string.is_none() {
+        let receiver = receiver(&text[line_start..start]);
+        let call = if receiver.ends_with(':') { "()" } else { "" };
+        let opens = match header {
+            " then end" | " do end" => "do ",
+            " then" => "elseif _ then ",
+            _ => "",
+        };
+        candidates.push(format!(
+            "{}{indent}{opens}local _ = {receiver}{p}{call}{rest}",
+            &text[..line_start]
+        ));
+    }
     let text = candidates
         .into_iter()
         .find(|c| wowlua_syntax::parses(c.as_bytes(), file))?;
     Some(Asked { prefix, text })
 }
 
-/// Whether byte `offset` is inside a comment or a quoted string.
-fn quoted(text: &str, offset: usize) -> bool {
+/// Where the cursor is: in code, in a quoted string, or where nothing is
+/// completed (a comment, a long string).
+enum Place {
+    Code,
+    String(Quoted),
+    None,
+}
+
+/// A quoted string: where it starts and ends, its quote, and whether it has
+/// its closing quote (one being typed runs to the end of its line).
+struct Quoted {
+    start: usize,
+    end: usize,
+    quote: char,
+    closed: bool,
+}
+
+fn place(text: &str, offset: usize) -> Place {
     let mut db = SourceDb::new();
     let file = db.add("complete", String::new());
     let lexed = wowlua_syntax::lexer::lex_with(
@@ -107,16 +138,31 @@ fn quoted(text: &str, offset: usize) -> bool {
         TriviaKind::BlockComment => t.start < at && at < t.end,
         TriviaKind::Newline => false,
     });
-    let in_string = lexed.tokens.iter().any(|t| {
+    if in_comment {
+        return Place::None;
+    }
+    for t in lexed.tokens.iter() {
         if !matches!(t.kind, TokenKind::String | TokenKind::LongString) {
-            return false;
+            continue;
         }
         let s = &text.as_bytes()[t.start as usize..t.end as usize];
-        // (an unfinished string runs to the end of its line)
-        let closed = s.len() >= 2 && s.last() == s.first() || t.kind == TokenKind::LongString;
-        t.start < at && (at < t.end || (at == t.end && !closed))
-    });
-    in_comment || in_string
+        let long = t.kind == TokenKind::LongString;
+        let closed = long || (s.len() >= 2 && s.last() == s.first() && s[s.len() - 2] != b'\\');
+        if !(t.start < at && (at < t.end || (at == t.end && !closed))) {
+            continue;
+        }
+        // (a string with escapes or line breaks is no name)
+        if long || s.contains(&b'\\') {
+            return Place::None;
+        }
+        return Place::String(Quoted {
+            start: t.start as usize,
+            end: t.end as usize,
+            quote: s[0] as char,
+            closed,
+        });
+    }
+    Place::Code
 }
 
 /// What closes the brackets `line` opens and leaves open.
@@ -229,13 +275,29 @@ mod tests {
     }
 
     #[test]
-    fn no_completion_in_comments_strings_and_numbers() {
+    fn no_completion_in_comments_long_strings_and_numbers() {
         assert!(at("-- self.|\n").is_none());
-        assert!(at("local s = \"a.|\"\n").is_none());
-        assert!(at("local s = \"a.|\n").is_none());
         assert!(at("--[[ x.| ]]\n").is_none());
+        assert!(at("local s = [[a.|]]\n").is_none());
         assert!(at("local n = 1.|\n").is_none());
         // after a closed string: completion again
         assert!(at("local s = \"a\" .. |\n").is_some());
+    }
+
+    #[test]
+    fn a_strings_text_becomes_the_placeholder() {
+        let a = at("f:RegisterEvent(\"UNIT_|HEALTH\")\n").unwrap();
+        assert_eq!(a.prefix, "UNIT_");
+        assert_eq!(a.text.replace(PLACEHOLDER, "@"), "f:RegisterEvent(\"@\")\n");
+        // still being typed: closed
+        assert_eq!(
+            checked("f:RegisterEvent(\"UNIT_|\n"),
+            "f:RegisterEvent(\"@\")\n"
+        );
+        assert_eq!(checked("if event == '|\n"), "if event == '@' then end\n");
+        assert_eq!(
+            checked("local m: \"a\" = \"|\"\n"),
+            "local m: \"a\" = \"@\"\n"
+        );
     }
 }

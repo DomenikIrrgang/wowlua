@@ -290,6 +290,8 @@ async function completeScenario(widgets) {
             await typed("local test = C_Tim", "local test = C_Timer"),
             await typed("self." + field.slice(0, 3), "self." + field),
             await typed("local n = C_Timer.Aft", "local n = C_Timer.After"),
+            // (the quote closes itself: the name lands between the quotes)
+            await typed('local e = CreateFrame("Frame"):RegisterEvent("PLAYER_LOGI', 'local e = CreateFrame("Frame"):RegisterEvent("PLAYER_LOGIN")'),
         ];
         assert(results.every(Boolean), "results " + results.join(", "));
         log("PASS", name);
