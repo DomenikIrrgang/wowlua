@@ -193,7 +193,7 @@ pub fn load(db: &mut SourceDb, project: &Project, present: &HashSet<String>) -> 
             if rel.ends_with(".d.wowlua") {
                 continue;
             }
-            if std::fs::read(abs).is_ok_and(|b| b.windows(7).any(|w| w == b"@global")) {
+            if crate::overlay::read(abs).is_ok_and(|b| b.windows(7).any(|w| w == b"@global")) {
                 wanted.push(Wanted::File(a, rel.clone()));
             }
         }
@@ -206,7 +206,7 @@ pub fn load(db: &mut SourceDb, project: &Project, present: &HashSet<String>) -> 
                 if !seen.insert(src_rel.clone()) {
                     continue;
                 }
-                let Ok(bytes) = std::fs::read(&out.packages[p].files[&rel]) else {
+                let Ok(bytes) = crate::overlay::read(&out.packages[p].files[&rel]) else {
                     continue;
                 };
                 let text = String::from_utf8_lossy(&bytes).into_owned();

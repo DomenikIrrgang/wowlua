@@ -1008,6 +1008,12 @@ impl<'e, 'p> Checker<'e, 'p> {
         self.fns.pop();
     }
 
+    /// A hoisted declaration's name, where its uses lead (go to definition,
+    /// references); its type is declared, so nothing else reads it.
+    fn hoisted_at(&mut self, id: VarId, name: Name<'_>) {
+        self.vars[id.0 as usize].decl = Some(name.span().start);
+    }
+
     /// Top-level classes and enums are hoisted (decision T76), and so are
     /// the top-level functions of a module (spec §5.1).
     fn hoist(&mut self, b: Block<'_>) {
@@ -1035,18 +1041,21 @@ impl<'e, 'p> Checker<'e, 'p> {
                             self.env.types.func(sig)
                         }
                     };
-                    self.declare(n, Some(t), t, false, None);
+                    let id = self.declare(n, Some(t), t, false, None);
+                    self.hoisted_at(id, name.path().at(0));
                 }
                 StmtKind::Class(c) => {
                     if let Some(def) = self.env.lookup_type(c.name().text(), &self.scope) {
                         let t = self.env.types.intern(Ty::ClassOf(def));
-                        self.declare(c.name().text(), Some(t), t, true, None);
+                        let id = self.declare(c.name().text(), Some(t), t, true, None);
+                        self.hoisted_at(id, c.name());
                     }
                 }
                 StmtKind::Enum(e) => {
                     if let Some(def) = self.env.lookup_type(e.name().text(), &self.scope) {
                         let t = self.env.types.intern(Ty::ClassOf(def));
-                        self.declare(e.name().text(), Some(t), t, true, None);
+                        let id = self.declare(e.name().text(), Some(t), t, true, None);
+                        self.hoisted_at(id, e.name());
                     }
                 }
                 _ => {}

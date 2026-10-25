@@ -860,7 +860,7 @@ pub fn add_libraries(
             }
             added = true;
             let abs = l.files[&rel].clone();
-            let bytes = match std::fs::read(&abs) {
+            let bytes = match crate::overlay::read(&abs) {
                 Ok(b) => b,
                 Err(e) => {
                     diagnostics.push(Diagnostic::plain_error(format!(
