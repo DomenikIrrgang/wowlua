@@ -233,8 +233,23 @@
           }
         },
         {
-          "match": "\\b(extends|implements)\\b",
-          "name": "storage.modifier.wowlua"
+          "match": "\\b(extends|implements)\\s+([A-Za-z_][A-Za-z0-9_.]*)((?:\\s*,\\s*[A-Za-z_][A-Za-z0-9_.]*)*)",
+          "captures": {
+            "1": {
+              "name": "storage.modifier.wowlua"
+            },
+            "2": {
+              "name": "entity.other.inherited-class.wowlua"
+            },
+            "3": {
+              "patterns": [
+                {
+                  "match": "[A-Za-z_][A-Za-z0-9_.]*",
+                  "name": "entity.other.inherited-class.wowlua"
+                }
+              ]
+            }
+          }
         },
         {
           "match": "^\\s*(?:export\\s+)?(type)\\s+([A-Za-z_][A-Za-z0-9_]*)(?=\\s*(?:<|=))",
@@ -350,7 +365,11 @@
           "name": "support.type.primitive.wowlua"
         },
         {
-          "match": "\\b(?:typeof|keyof|is|extends)\\b",
+          "match": "\\bextends\\b",
+          "name": "storage.modifier.wowlua"
+        },
+        {
+          "match": "\\b(?:typeof|keyof|is)\\b",
           "name": "keyword.operator.type.wowlua"
         },
         {

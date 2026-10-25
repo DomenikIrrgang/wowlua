@@ -90,6 +90,8 @@ interface Opts
 end
 table.sort(list, function(a: Made, b: Made): boolean return a.seq < b.seq end)
 local after = 1
+export abstract class Bar<B extends Button> extends BarBase implements Shown, Sized
+end
 `;
 
 // The scopes of the first token whose text is `text` on line `line` (0-based).
@@ -158,4 +160,11 @@ test("wowlua code is colored by what it is", { skip: !fs.existsSync(asar) && "no
     has(30, "return", "keyword.control");
     has(30, "<", "keyword.operator.comparison");
     has(31, "local", "storage.modifier.local");
+    // a type parameter's constraint, the base class and interfaces
+    has(32, "extends", "storage.modifier");
+    has(32, "BarBase", "entity.other.inherited-class");
+    has(32, "Shown", "entity.other.inherited-class");
+    has(32, "Sized", "entity.other.inherited-class");
+    assert.ok(scopes(tokenized, 32, "B").includes("entity.name.type"));
+    assert.ok(tokenized[32].filter((t) => t.text === "extends").every((t) => t.scopes.join(" ").includes("storage.modifier")));
 });

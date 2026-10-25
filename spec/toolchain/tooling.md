@@ -688,7 +688,9 @@ and `.d.wowlua` files with a TextMate grammar of its own (decision T371):
 Lua's syntax, interpolated strings with their expressions, decorators,
 wowlua's contextual keywords where they are keywords (§1.2.5), declared
 names, and type annotations (`name: T`, `name?: T`, `): T`, `:: T`, type
-parameters) as types; its language configuration toggles `--` comments,
+parameters) as types, with the scopes TypeScript's grammar gives (a type
+parameter's `extends` a modifier, a base class or interface after `extends`
+and `implements` an inherited class), so themes color them alike; its language configuration toggles `--` comments,
 matches and closes brackets and quotes, and indents blocks. It makes
 itself the formatter of `.wowlua` files. `wowlua.languageServer` (on by
 default) turns it off; *wowlua: Restart Language Server* restarts it; the
