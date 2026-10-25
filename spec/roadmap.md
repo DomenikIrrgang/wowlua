@@ -494,6 +494,13 @@ the in-game bugs found so far fail as tests the same way they failed in game
 reparented status-bar containers breaking Edit Mode, taint in combat). StdTest
 stays the in-game check until then (decision T189).
 
+**Status: done (2026-10-25).** S1 to S8 as above; the four in-game bugs fail
+as tests as they failed in game (`crates/wowlua-engine/data/coverage-regressions.txt`).
+Camelot is the flavor the emulated client targets: the standard and classic
+flavors' Blizzard UI code still errors in the engine, for a later milestone.
+The in-game runs of S3 and S4 wait for the next beta (`tests/ingame/PROBES.md`).
+Released as 0.10.0, together with M12.
+
 ## M10: Registry
 
 - Registry server (separate repository), `publish --target registry`,
@@ -586,7 +593,8 @@ event handler, stepped through and inspected with watches over DAP; an agent
 clicks through the addon's UI over MCP and sees it in screenshots drawn with
 the client's textures and fonts; a UI test compares a screenshot.
 
-Built 2026-10-23, waiting for review: every part above, with tests (the VM's
+**Status: done (2026-10-25)**, released as 0.10.0 together with M9.
+Built 2026-10-23: every part above, with tests (the VM's
 hooks and profiler, the controller on the engine, a DAP client stopping a
 test in an `OnClick` handler, an MCP agent clicking an addon by pixel into a
 breakpoint, screenshot tests written, compared and updated, the renderer's
@@ -596,10 +604,9 @@ UI: its window drawn with the client's textures and Friz Quadrata, clicked
 and stepped through over MCP; every window and tab of camelot's default UI
 and SuuUI screenshotted. The hooks' cost when off, measured on a release
 build (a mixed Lua workload, best of seven runs): about 1 to 2 percent
-over the VM before them (37.0 ms to 37.4–38.3 ms). Version 0.10.0, not
-released yet. The VS Code extension's debugger part (`editors/vscode`,
-T331), its grammar and language server to come in M9 S8. Not yet: the
-indoor minimap.
+over the VM before them (37.0 ms to 37.4–38.3 ms). The VS Code
+extension's debugger part (`editors/vscode`, T331); its grammar, language
+server and test explorer came with M9 S8. Not yet: the indoor minimap.
 
 ## M13: Game data and rendering
 

@@ -60,7 +60,7 @@ wowlua --version
 ```
 
 ```text
-wowlua 0.9.8
+wowlua 0.10.0
 ```
 
 `wowlua help` lists every command, and `wowlua help <command>` shows its
@@ -73,15 +73,15 @@ variables change what it installs and where:
 
 | Variable | Default | Effect |
 |----------|---------|--------|
-| `WOWLUA_VERSION` | `latest` | The release tag to install, for example `v0.9.8` |
+| `WOWLUA_VERSION` | `latest` | The release tag to install, for example `v0.10.0` |
 | `WOWLUA_INSTALL_DIR` | `~/.wowlua/bin` (`$HOME\.wowlua\bin` on Windows) | Where the binary goes |
 
 ```sh
-curl -fsSL https://github.com/DomenikIrrgang/wowlua/releases/latest/download/install.sh | WOWLUA_VERSION=v0.9.8 sh
+curl -fsSL https://github.com/DomenikIrrgang/wowlua/releases/latest/download/install.sh | WOWLUA_VERSION=v0.10.0 sh
 ```
 
 ```powershell
-$env:WOWLUA_VERSION = "v0.9.8"; irm https://github.com/DomenikIrrgang/wowlua/releases/latest/download/install.ps1 | iex
+$env:WOWLUA_VERSION = "v0.10.0"; irm https://github.com/DomenikIrrgang/wowlua/releases/latest/download/install.ps1 | iex
 ```
 
 A project names the compiler versions it works with in `package.wowlua` of its

@@ -164,10 +164,10 @@ The specification lives in [`spec/`](spec/README.md); implementation follows the
 | M6 | Package manager | done · 2026-10-12 |
 | M7 | Optimization and publishing | done · 2026-10-13 |
 | M8 | Standard library | done · 2026-10-15 |
-| M9 | Test runner, language server, formatter | in progress (test runner and emulated client in 0.9.8) |
+| M9 | Test runner, language server, formatter | done · 2026-10-25 (0.10.0) |
 | M10 | Registry | planned |
 | M11 | Performance optimization | planned |
-| M12 | Debugger, profiler, screenshots, 3D models, MCP for AI agents | built, waiting for review (0.10.0, not released yet) |
+| M12 | Debugger, profiler, screenshots, 3D models, MCP for AI agents | done · 2026-10-25 (0.10.0) |
 
 What works today:
 
