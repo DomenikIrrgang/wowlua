@@ -188,7 +188,11 @@ fn selectable(suite: &Suite, file: &TestFile, filters: &[String]) -> bool {
 /// ends with it: an absolute one).
 fn is_path(rel: &str, path: &str) -> bool {
     let path = path.replace('\\', "/");
-    path == rel || path.ends_with(&format!("/{rel}"))
+    // (a source's examples are named by that source)
+    let source = wowlua_driver::examples::source_of(rel);
+    [rel, source.as_str()]
+        .iter()
+        .any(|r| path == *r || path.ends_with(&format!("/{r}")))
 }
 
 /// Whether filter `f` selects the test `name` of file `file` (a case of a
@@ -258,6 +262,11 @@ fn source_path(root: &Path, src: &str, output: &str) -> String {
     };
     let stem = rest.strip_suffix(".lua").unwrap_or(rest);
     let wowlua = format!("{prefix}{stem}.wowlua");
+    // a doc comment's examples: the source they are written in (their
+    // lines are its)
+    if wowlua.ends_with(wowlua_driver::examples::SUFFIX) {
+        return wowlua_driver::examples::source_of(&wowlua);
+    }
     if root.join(&wowlua).exists() {
         wowlua
     } else {
@@ -376,7 +385,8 @@ pub fn run_file(suite: &Suite, file: &TestFile, filters: &[String]) -> FileResul
     let started = Instant::now();
     let rel = file.rel.clone();
     let mut result = FileResult {
-        file: rel.clone(),
+        // (a source's examples are reported as that source's)
+        file: wowlua_driver::examples::source_of(&rel),
         flavor: suite.flavor.clone(),
         tests: Vec::new(),
         error: None,

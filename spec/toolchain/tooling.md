@@ -239,9 +239,25 @@ returns whether it passed and the message; a library exports its matchers and
 a test file that imports it gets them, checked like the built-in ones.
 
 **Benchmarks and examples.** `@bench` functions in test files are run by
-`wowlua bench` (M11, decision T221); code examples in `---` doc comments run
-as tests with the language server's documentation work (M9 S8, decision
-T222).
+`wowlua bench` (M11, decision T221).
+
+Code examples in `---` doc comments run as tests (decision T222). A fenced
+block marked `wowlua` (```` ```wowlua ````) in a doc comment of an addon
+source is one test, named after the declaration below the comment (`add
+example`, then `add example 2`, …; `file example` with none); a block
+marked `wowlua norun` (or `ignore`) or of another language is not. It runs
+in the test client with the addon loaded, as a test file's test does, and
+sees `expect` and everything its module exports (no imports written). The
+build of a test run makes, for each source with examples, the test file
+`<path>.examples.test.wowlua` (never written to disk): the source's lines,
+blank but its examples', which keep their lines and columns (the `---`
+blanked; the imports and each test's header on the first fence's line,
+`end` on each closing one), and diagnostics name it by the source's path.
+So a type error or a failure points at the comment's line, the language
+server shows an example's errors in the source, and the reports name the
+source (`src/math.wowlua`, `src/math.wowlua::add example` selects one). An
+examples file that does not compile is left out of the run, as a test
+file is.
 
 ### 16.1.3.1 Module internals and mocked imports
 

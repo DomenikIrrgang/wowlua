@@ -1285,7 +1285,7 @@ fn export_redeclarations(
     }
 }
 
-pub(crate) fn exported_names_of(inner: Stmt<'_>) -> Vec<String> {
+pub fn exported_names_of(inner: Stmt<'_>) -> Vec<String> {
     match inner.kind() {
         StmtKind::Local { names, .. } => names.iter().map(|n| n.name.text().to_string()).collect(),
         StmtKind::Function { name, .. } => vec![name.path().at(0).text().to_string()],

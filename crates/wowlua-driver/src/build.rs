@@ -443,6 +443,60 @@ fn build_inner(
             ),
         }
     }
+    // The code examples of the addon's doc comments, as test files (decision
+    // T222): each source's next to it, its text the source's diagnostics
+    // name (an example's lines and columns are its comment's).
+    if request.tests && request.only.is_none() {
+        let mut made: Vec<(Source, FileId, Arc<[u8]>)> = Vec::new();
+        for (source, _) in &files {
+            if source.kind != SourceKind::Wowlua
+                || sources::TestRole::of(&source.rel).is_some()
+                || source.rel.ends_with(".d.wowlua")
+            {
+                continue;
+            }
+            let Some(bytes) = raw.get(&source.rel) else {
+                continue;
+            };
+            let Ok(text) = std::str::from_utf8(bytes) else {
+                continue;
+            };
+            let module = source
+                .src_rel
+                .strip_suffix(".wowlua")
+                .filter(|_| !source.src_rel.starts_with('@'))
+                .map(|stem| format!("/{stem}"));
+            let Some(examples) = crate::examples::examples_file(text, module.as_deref()) else {
+                continue;
+            };
+            let (Some(rel), Some(src_rel)) = (
+                crate::examples::examples_path(&source.rel),
+                crate::examples::examples_path(&source.src_rel),
+            ) else {
+                continue;
+            };
+            if request.left_out.contains(&rel) {
+                continue;
+            }
+            let file = session.db.add(&source.rel, examples.clone());
+            session.examples.insert(file, rel.clone());
+            made.push((
+                Source {
+                    abs: root.join(&rel),
+                    rel,
+                    src_rel,
+                    kind: SourceKind::Wowlua,
+                    output: None,
+                },
+                file,
+                examples.into_bytes().into(),
+            ));
+        }
+        for (source, file, bytes) in made {
+            raw.insert(source.rel.clone(), bytes);
+            files.push((source, file));
+        }
+    }
     let mut declarations = Vec::new();
     let declaration_sources = match (&request.only, given_declarations) {
         (Some(only), Some(given)) if !only.project_declarations => given,

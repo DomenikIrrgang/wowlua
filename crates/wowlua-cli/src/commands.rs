@@ -1123,9 +1123,15 @@ fn not_compiling(
 ) -> Vec<wowlua_test::FileResult> {
     let mut results = Vec::new();
     for file in left_out {
-        if filters.is_empty() || filters.iter().any(|f| file.contains(f.as_str())) {
+        // (a source's examples are named by that source)
+        let shown = wowlua_driver::examples::source_of(file);
+        if filters.is_empty()
+            || filters
+                .iter()
+                .any(|f| file.contains(f.as_str()) || shown.contains(f.as_str()))
+        {
             results.push(wowlua_test::FileResult {
-                file: file.clone(),
+                file: shown.clone(),
                 flavor: flavor.to_string(),
                 tests: Vec::new(),
                 error: Some(
@@ -1137,7 +1143,7 @@ fn not_compiling(
                 coverage: None,
             });
         } else {
-            out.status("Skipped", format!("{file}, which does not compile"));
+            out.status("Skipped", format!("{shown}, which does not compile"));
         }
     }
     results
@@ -1149,10 +1155,14 @@ fn not_compiling(
 fn broken_test_files(session: &Session) -> Option<Vec<String>> {
     let mut files: Vec<String> = Vec::new();
     for d in session.diagnostics.iter().filter(|d| d.is_error()) {
+        // (an error in a doc comment's example is its examples file's)
         let path = d
             .labels
             .first()
-            .map(|l| session.db.get(l.span.file).path().to_path_buf())
+            .map(|l| match session.examples.get(&l.span.file) {
+                Some(examples) => std::path::PathBuf::from(examples),
+                None => session.db.get(l.span.file).path().to_path_buf(),
+            })
             .or_else(|| d.path.clone())?;
         let path = path.to_string_lossy().replace('\\', "/");
         let path = path.strip_prefix("./").unwrap_or(&path).to_string();

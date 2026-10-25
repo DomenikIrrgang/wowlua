@@ -11,6 +11,7 @@ pub mod compile_cache;
 pub mod credentials;
 pub mod deps;
 mod embed;
+pub mod examples;
 pub mod external;
 pub mod fix;
 mod foreign;
@@ -93,6 +94,10 @@ pub struct Session {
     /// With `complete`: the signatures of the call around the cursor
     /// (signature help).
     pub signature: Option<Vec<wowlua_sema::check::complete::Signature>>,
+    /// The doc comments' examples files the builds made (decision T222):
+    /// their path (`src/money.examples.test.wowlua`) by their file, which
+    /// diagnostics name by the source's path.
+    pub examples: std::collections::HashMap<wowlua_span::FileId, String>,
 }
 
 impl Session {

@@ -5186,3 +5186,33 @@ end
     let (ok, out) = test(dir.path(), &[]);
     assert!(ok, "{out}");
 }
+
+/// Code examples in doc comments run as tests (decision T222): named after
+/// what they document, reported as their source's, a failure and a type
+/// error at the comment's line; `norun` ones and other languages left
+/// alone; `path::name` runs one.
+#[test]
+fn doc_comment_examples_run_as_tests() {
+    let src = "--- Adds two numbers.\n---\n--- ```wowlua\n--- expect(add(1, 2)).toBe(3)\n--- ```\n---\n--- ```wowlua\n--- expect(add(2, 2)).toBe(5)\n--- ```\n---\n--- ```lua\n--- add(\"not run\")\n--- ```\nexport function add(a: number, b: number): number\n    return a + b\nend\n\n--- ```wowlua norun\n--- double(\"x\")\n--- ```\nexport function double(n: number): number\n    return n * 2\nend\n";
+    let dir = project(r#""standard": {}"#, &[("src/math.wowlua", src)]);
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(!ok, "{out}");
+    assert!(out.contains("src/math.wowlua"), "{out}");
+    assert!(out.contains("✓ add example\n"), "{out}");
+    assert!(out.contains("✗ add example 2"), "{out}");
+    assert!(out.contains("at src/math.wowlua:8"), "{out}");
+    assert!(!out.contains("double example"), "{out}");
+    // one, exactly
+    let (_, out) = test(dir.path(), &["src/math.wowlua::add example"]);
+    assert!(out.contains("1 passed, 0 failed"), "{out}");
+    // a type error: at the comment's line and column; the other tests run
+    std::fs::write(
+        dir.path().join("src/math.wowlua"),
+        src.replace("expect(add(2, 2)).toBe(5)", "local s: string = add(2, 2)"),
+    )
+    .unwrap();
+    let (ok, out) = test(dir.path(), &[]);
+    assert!(!ok, "{out}");
+    assert!(out.contains("src/math.wowlua:8:11"), "{out}");
+    assert!(out.contains("does not compile"), "{out}");
+}
