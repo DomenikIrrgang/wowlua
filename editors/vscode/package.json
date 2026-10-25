@@ -215,6 +215,12 @@
         "command": "wowlua.restartLanguageServer",
         "title": "Restart Language Server",
         "category": "wowlua"
+      },
+      {
+        "command": "wowlua.showCoverageReport",
+        "title": "Show Coverage Report",
+        "category": "wowlua",
+        "icon": "$(graph)"
       }
     ],
     "views": {
@@ -236,6 +242,25 @@
         {
           "command": "wowlua.showUI",
           "when": "view == wowlua.frames",
+          "group": "navigation"
+        },
+        {
+          "command": "wowlua.showCoverageReport",
+          "when": "view == workbench.view.testCoverage",
+          "group": "navigation"
+        }
+      ],
+      "explorer/context": [
+        {
+          "command": "wowlua.showCoverageReport",
+          "when": "resourceFilename == coverage.html",
+          "group": "navigation"
+        }
+      ],
+      "editor/title": [
+        {
+          "command": "wowlua.showCoverageReport",
+          "when": "resourceFilename == coverage.html",
           "group": "navigation"
         }
       ],

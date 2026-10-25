@@ -360,6 +360,22 @@ async function testsScenario() {
     assert(main && main.lines === 3 && main.of === 3, "coverage " + JSON.stringify(api.tests.lastCoverage));
     const details = api.tests.covered.get(vscode.Uri.file(path.join(folder, "src/main.wowlua")).toString()) || [];
     assert(details.some((d) => d instanceof vscode.DeclarationCoverage && d.name === "add" && d.executed === 4), "details " + details.length);
+    // the run's HTML report in a tab: a file of it, and a line's number
+    // opens the line in the editor
+    const drawn = api.coverage.drawn();
+    assert(await vscode.commands.executeCommand("wowlua.showCoverageReport"), "no coverage report");
+    const first = await Promise.race([drawn, new Promise((r) => setTimeout(() => r("timeout"), 15000))]);
+    log("report shows:", JSON.stringify(first), api.coverage.panel.title);
+    assert(first === "", "the report's first view " + first);
+    const view = await api.coverage.post({ type: "go", hash: "#/src/main.wowlua" });
+    assert(view === "#/src/main.wowlua", "the report's file view " + view);
+    api.coverage.panel.webview.postMessage({ type: "click", selector: "#L2 .n a" });
+    const editor = await waitFor(() => {
+        const e = vscode.window.activeTextEditor;
+        return e && e.document.uri.fsPath.endsWith(path.join("src", "main.wowlua")) && e;
+    }, 15000, "the source opened from the report");
+    log("opened from the report:", editor.document.uri.fsPath, editor.selection.active.line);
+    assert(editor.selection.active.line === 1, "opened at line " + editor.selection.active.line);
     log("PASS", name);
 }
 

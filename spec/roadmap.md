@@ -480,7 +480,8 @@ The test framework runs on wowlua's own emulation of the WoW client
   formatting, the outline and go to definition, in the extension too; hover
   (T376) and completion (T377) on 2026-10-25, then signature help (T381), the
   test explorer (T382), the "run test" code lenses (T383) and coverage in the
-  editor (T384), and doc comments' examples run as tests (T222).
+  editor (T384), and doc comments' examples run as tests (T222); the HTML
+  coverage report in an editor tab (T385).
 
 **Exit:** the full edit, test, debug loop works without leaving the editor, and
 the in-game bugs found so far fail as tests the same way they failed in game

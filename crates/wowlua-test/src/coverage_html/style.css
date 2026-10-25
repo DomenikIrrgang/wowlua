@@ -65,3 +65,11 @@ button { font: inherit; color: var(--text); background: var(--panel); border: 1p
 .fn.never { color: var(--bad); }
 kbd { border: 1px solid var(--line); padding: 0 4px; border-radius: 3px; font: inherit; font-size: 12px; }
 summary { cursor: pointer; margin-bottom: 8px; } summary h3 { display: inline; }
+/* In VS Code: its theme's light or dark, whatever the system's */
+body.vscode-dark, body.vscode-high-contrast { --bg: #14120e; --panel: #1b1914; --raised: #221f19; --line: #2e2a22;
+  --text: #ece6d6; --muted: #a39b8a; --accent: #ffb547; --hit: rgba(95, 201, 138, 0.13); --miss: rgba(224, 100, 100, 0.18);
+  --part: rgba(255, 181, 71, 0.15); --focus: rgba(255, 181, 71, 0.30); --good: #5fc98a; --mid: #ffb547; --bad: #e06464; }
+body.vscode-light, body.vscode-high-contrast-light { --bg: #f7f6f2; --panel: #ffffff; --raised: #efede6; --line: #dcd8cc;
+  --text: #1a1813; --muted: #5c5548; --accent: #975200; --hit: rgba(35, 134, 74, 0.11); --miss: rgba(183, 58, 58, 0.12);
+  --part: rgba(151, 82, 0, 0.12); --focus: rgba(151, 82, 0, 0.22); --good: #23864a; --mid: #975200; --bad: #b73a3a; }
+header .open { margin-left: auto; }

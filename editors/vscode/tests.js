@@ -6,7 +6,8 @@
 // `wowlua debug` on the test's file, filtered to it. Code lenses above each
 // test and at the top of a test file run or debug it the same way. Run
 // with Coverage adds `--coverage` and shows the addon's lines, branches and
-// functions as the run covered them (decision T384).
+// functions as the run covered them (decision T384), and keeps its HTML
+// report for "wowlua: Show Coverage Report" (decision T385).
 const vscode = require("vscode");
 const cp = require("child_process");
 const fs = require("fs");
@@ -253,7 +254,7 @@ class TestExplorer {
                 break;
             }
             const out = fs.mkdtempSync(path.join(os.tmpdir(), "wowlua-tests-"));
-            const reporters = opts.coverage ? "json,coverage-json" : "json";
+            const reporters = opts.coverage ? "json,coverage-json,html" : "json";
             const args = [
                 "test",
                 ...(opts.coverage ? ["--coverage"] : []),
@@ -290,6 +291,15 @@ class TestExplorer {
                     coverage = JSON.parse(fs.readFileSync(path.join(out, "coverage.json"), "utf8"));
                 } catch {
                     coverage = undefined;
+                }
+                // the HTML report, for "wowlua: Show Coverage Report"
+                try {
+                    const html = fs.readFileSync(path.join(out, "coverage.html"), "utf8");
+                    if (this.onCoverageReport) {
+                        this.onCoverageReport(root, html);
+                    }
+                } catch {
+                    // no report: the run failed
                 }
             }
             fs.rmSync(out, { recursive: true, force: true });

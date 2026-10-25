@@ -2,12 +2,14 @@
 // folder and talks the Debug Adapter Protocol with it over stdio. The UI
 // panel shows the game's screen; the Frames view its frames. The language
 // client starts `wowlua lsp` for diagnostics, formatting and the outline;
-// the test explorer runs the packages' tests from the Testing view.
+// the test explorer runs the packages' tests from the Testing view; the
+// coverage report shows in an editor tab.
 const vscode = require("vscode");
 const { LanguageClient } = require("./lsp");
 const { UiPanel } = require("./ui");
 const { FramesView } = require("./frames");
 const { TestExplorer } = require("./tests");
+const { CoverageReport } = require("./coverage");
 
 // The flavors the package's wowlua.json names, in order.
 async function packageFlavors(folder) {
@@ -31,6 +33,8 @@ function activate(context) {
     lsp.start();
     // the Testing view: the packages' tests, run and debugged
     const tests = new TestExplorer(context, lsp);
+    const coverage = new CoverageReport(context);
+    tests.onCoverageReport = (root, html) => coverage.ranWithCoverage(root, html);
     const ui = new UiPanel(context);
     const frames = new FramesView(ui);
     // The UI panel's frame picker asks for the frames shown now.
@@ -110,6 +114,7 @@ function activate(context) {
         }),
         vscode.commands.registerCommand("wowlua.showUI", () => ui.show(false)),
         vscode.commands.registerCommand("wowlua.restartLanguageServer", () => lsp.restart()),
+        vscode.commands.registerCommand("wowlua.showCoverageReport", (uri) => coverage.show(uri)),
         vscode.commands.registerCommand("wowlua.refreshFrames", () => frames.refresh()),
         vscode.commands.registerCommand("wowlua.outlineFrame", (node) => {
             if (node && node.rect) {
@@ -123,7 +128,7 @@ function activate(context) {
         }),
     );
     // For the extension's tests.
-    return { ui, frames, lsp, tests };
+    return { ui, frames, lsp, tests, coverage };
 }
 
 function deactivate() {}

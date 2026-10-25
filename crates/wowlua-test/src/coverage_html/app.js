@@ -1,8 +1,36 @@
 // wowlua's coverage report: the index (totals, where to test next, every
 // file) or one file (its totals, the lines that never ran, its functions,
 // its source), drawn from the data in #data. The address says which:
-// "#/src/a.wowlua" a file, "#/src/a.wowlua:L12" a line in it.
+// "#/src/a.wowlua" a file, "#/src/a.wowlua:L12" a line in it. Opened in
+// VS Code (the extension's "Show Coverage Report", which gives the page
+// `window.wowluaVscode`), it keeps its address itself, a line's number
+// opens the line in the editor, and "Open in editor" the file.
 "use strict";
+
+// The VS Code webview's API, when the page is shown there.
+const VSCODE = typeof window !== "undefined" ? window.wowluaVscode : undefined;
+// The address in VS Code (a webview's links do not change its location).
+let here = "";
+if (VSCODE) {
+  try { here = (VSCODE.getState() || {}).here || ""; } catch (e) { /* none */ }
+}
+function address() { return VSCODE ? here : location.hash; }
+function go(hash) {
+  if (!VSCODE) {
+    location.hash = hash;
+    return;
+  }
+  here = hash;
+  try { VSCODE.setState({ here }); } catch (e) { /* none */ }
+  if (DATA) show(DATA);
+}
+
+// Draws the view the address names; in VS Code, tells the extension.
+function show(data) {
+  route(data);
+  if (VSCODE) VSCODE.postMessage({ type: "shown", here: address() });
+}
+let DATA;
 
 const KINDS = ["lines", "branches", "functions", "conditions"];
 
@@ -174,7 +202,9 @@ function renderFile(data, f) {
   const at = data.files.indexOf(f);
   const prev = data.files[at - 1], next = data.files[at + 1];
   let out = BRAND + '<header><div class="row"><a href="#/">← all files</a>' +
-    `<h1>${esc(f.p)}</h1>${chips(f.t)}</div></header><main>`;
+    `<h1>${esc(f.p)}</h1>${chips(f.t)}` +
+    (VSCODE ? `<a href="#" class="open" data-open="${esc(f.p)}" data-line="1">Open in editor</a>` : "") +
+    "</div></header><main>";
   const gaps = ranges(f.missed);
   out += "<section>";
   if (gaps.length) {
@@ -214,7 +244,10 @@ function renderFile(data, f) {
     const c = h === undefined ? "" : h === 0 ? "miss" : oneWay ? "part" : "hit";
     const marks = brs.map(([a, b]) => branchChip(a, b)).join("") +
       (fnAt.get(ln) || []).map((x) => `<span class="fn${x.calls === 0 ? " never" : ""}">${x.calls === 0 ? "never called" : "called " + x.calls + "×"}</span>`).join("");
-    out += `<div id="L${ln}" class="${c}"><span class="n"><a href="${fileLink(f.p, ln)}">${ln}</a></span>` +
+    const num = VSCODE
+      ? `<a href="#" data-open="${esc(f.p)}" data-line="${ln}" title="Open line ${ln} in the editor">${ln}</a>`
+      : `<a href="${fileLink(f.p, ln)}">${ln}</a>`;
+    out += `<div id="L${ln}" class="${c}"><span class="n">${num}</span>` +
       `<span class="h">${h === undefined ? "" : h}</span><span class="c">${esc(line)}${marks}</span></div>`;
   });
   return out + "</div></section></main>";
@@ -232,7 +265,7 @@ function gapFrom(f, down) {
 // --------------------------------------------------------------- routing --
 
 function route(data) {
-  const hash = decodeURI(location.hash.replace(/^#\/?/, ""));
+  const hash = decodeURI(address().replace(/^#\/?/, ""));
   const m = hash.match(/^(.*?)(?::L(\d+))?$/);
   const f = m && m[1] ? data.files.find((x) => x.p === m[1]) : null;
   const root = document.getElementById("app");
@@ -263,7 +296,7 @@ function route(data) {
   document.title = f.p + " · " + data.title + " coverage";
   const jump = (down) => {
     const ln = gapFrom(f, down);
-    if (ln) location.hash = fileLink(f.p, ln);
+    if (ln) go(fileLink(f.p, ln));
   };
   const prev = document.getElementById("prevGap"), next = document.getElementById("nextGap");
   if (prev) prev.onclick = () => jump(false);
@@ -282,9 +315,42 @@ function route(data) {
   }
 }
 
+// In VS Code: the page's links, followed here (the webview would only
+// scroll), and the editor's requests.
+function vscodeLinks() {
+  document.addEventListener("click", (e) => {
+    const a = e.target.closest && e.target.closest("a");
+    if (!a) return;
+    const href = a.getAttribute("href") || "";
+    if (a.dataset.open) {
+      e.preventDefault();
+      e.stopPropagation();
+      VSCODE.postMessage({ type: "open", path: a.dataset.open, line: Number(a.dataset.line) || 1 });
+    } else if (href.startsWith("#")) {
+      e.preventDefault();
+      e.stopPropagation();
+      go(href === "#" ? "#/" : href);
+    }
+  });
+  window.addEventListener("message", (e) => {
+    const m = e.data || {};
+    // "go": the extension shows a file or a line; "click": its tests click
+    if (m.type === "go") go(m.hash);
+    if (m.type === "click") {
+      const el = document.querySelector(m.selector);
+      if (el) el.click();
+    }
+  });
+}
+
 if (typeof document !== "undefined" && document.getElementById("data")) {
   const data = JSON.parse(document.getElementById("data").textContent);
-  window.addEventListener("hashchange", () => route(data));
-  route(data);
+  DATA = data;
+  if (VSCODE) {
+    vscodeLinks();
+  } else {
+    window.addEventListener("hashchange", () => route(data));
+  }
+  show(data);
 }
 if (typeof module !== "undefined") module.exports = { renderIndex, renderTable, renderFile, ranges, unpack, branchChip };

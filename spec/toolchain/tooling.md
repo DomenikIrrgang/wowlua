@@ -713,8 +713,16 @@ adds `--coverage` and the `coverage-json` report: each of the addon's
 files covered gets its lines', branches' and functions' counts in the
 Testing view's coverage, and, shown in the editor, its lines with their
 hits, each branch's two sides and its functions with their calls (VS
-Code's test coverage, 1.88 or newer). Find references and the
-rest of the table follow.
+Code's test coverage, 1.88 or newer), and keeps the `html` report for
+*wowlua: Show Coverage Report* (decision T385). That command shows the
+HTML report (§16.1.6) in an editor tab: the Testing view's last run with
+coverage, or the newest `coverage.html` in the workspace (from `wowlua
+test --coverage --reporter html`); in the Explorer's menu of a
+`coverage.html`, and in the editor's title while one is open, it shows that
+one, and the Test Coverage view's title has it too. In the tab the report
+follows the editor's light or dark theme, its links stay in the tab, and a
+line's number, or "Open in editor" on a file, opens the source at that
+line beside it. Find references and the rest of the table follow.
 
 The VS Code extension starts `wowlua lsp` (the `wowlua.path` command) when a
 `.wowlua` file opens or the workspace has a `wowlua.json`, and sends it the
