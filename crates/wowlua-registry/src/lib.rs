@@ -10,6 +10,7 @@
 
 pub mod api;
 pub mod auth;
+pub mod limits;
 pub mod pages;
 pub mod store;
 #[doc(hidden)]
@@ -31,6 +32,8 @@ pub struct Config {
     pub admins: Vec<String>,
     /// The largest archive a publish may upload, in bytes (413 beyond).
     pub max_archive: usize,
+    /// Requests per client address (429 beyond).
+    pub limits: limits::Limits,
 }
 
 impl Config {
@@ -49,6 +52,7 @@ pub struct App {
     pub config: Config,
     pub store: store::Store,
     pub sessions: auth::Sessions,
+    pub limiter: limits::Limiter,
 }
 
 pub type Shared = Arc<App>;
@@ -76,6 +80,7 @@ pub fn router(app: Shared) -> axum::Router {
                 .layer(axum::extract::DefaultBodyLimit::max(body_limit)),
         )
         .route("/v1/packages/{name}/{version}/unyank", put(api::unyank))
+        .route("/v1/search", get(api::search))
         .route("/v1/reserved", get(api::reserved_list))
         .route(
             "/v1/reserved/{name}",
@@ -92,6 +97,10 @@ pub fn router(app: Shared) -> axum::Router {
         .route("/account/owners", post(pages::owners))
         .route("/account/reserved", post(pages::reserved))
         .fallback(api::not_found)
+        .layer(axum::middleware::from_fn_with_state(
+            app.clone(),
+            limits::limit,
+        ))
         .with_state(app)
 }
 
@@ -141,6 +150,7 @@ pub fn spawn(mut config: Config, addr: &str) -> std::io::Result<Running> {
         config,
         store,
         sessions: auth::Sessions::default(),
+        limiter: limits::Limiter::default(),
     });
     let (tx, rx) = tokio::sync::oneshot::channel::<()>();
     let runtime = tokio::runtime::Builder::new_multi_thread()
@@ -155,11 +165,14 @@ pub fn spawn(mut config: Config, addr: &str) -> std::io::Result<Running> {
                     return;
                 }
             };
-            let served = axum::serve(listener, router(app))
-                .with_graceful_shutdown(async {
-                    let _ = rx.await;
-                })
-                .await;
+            let served = axum::serve(
+                listener,
+                router(app).into_make_service_with_connect_info::<std::net::SocketAddr>(),
+            )
+            .with_graceful_shutdown(async {
+                let _ = rx.await;
+            })
+            .await;
             if let Err(e) = served {
                 eprintln!("wowlua-registry: {e}");
             }

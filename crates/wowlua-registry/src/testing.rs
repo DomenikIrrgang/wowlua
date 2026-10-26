@@ -99,6 +99,23 @@ impl TestRegistry {
         users: &[&str],
         max_archive: usize,
     ) -> TestRegistry {
+        Self::start_with(
+            data,
+            admins,
+            users,
+            max_archive,
+            crate::limits::Limits::default(),
+        )
+    }
+
+    /// [`start`](Self::start) with other rate limits.
+    pub fn start_with(
+        data: &std::path::Path,
+        admins: &[&str],
+        users: &[&str],
+        max_archive: usize,
+        limits: crate::limits::Limits,
+    ) -> TestRegistry {
         let github = FakeGitHub::start("secret", users);
         let config = crate::Config {
             public_url: String::new(),
@@ -111,6 +128,7 @@ impl TestRegistry {
             },
             admins: admins.iter().map(|a| a.to_string()).collect(),
             max_archive,
+            limits,
         };
         let server = crate::spawn(config, "127.0.0.1:0").expect("the registry starts");
         TestRegistry { server, github }

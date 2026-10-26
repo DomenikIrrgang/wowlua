@@ -19,6 +19,26 @@ fn config() -> Result<(Config, String), String> {
             .map_err(|_| "WOWLUA_REGISTRY_MAX_ARCHIVE is a number of bytes".to_string())?,
         None => 10 * 1024 * 1024,
     };
+    let rate = |name: &str, default: Option<wowlua_registry::limits::Rate>| match var(name) {
+        Some(v) => wowlua_registry::limits::Rate::parse(&v).map_err(|e| format!("{name}: {e}")),
+        None => Ok(default),
+    };
+    let defaults = wowlua_registry::limits::Limits::default();
+    let limits = wowlua_registry::limits::Limits {
+        publish: rate("WOWLUA_REGISTRY_RATE_PUBLISH", defaults.publish)?,
+        login: rate("WOWLUA_REGISTRY_RATE_LOGIN", defaults.login)?,
+        write: rate("WOWLUA_REGISTRY_RATE_WRITE", defaults.write)?,
+        read: rate("WOWLUA_REGISTRY_RATE_READ", defaults.read)?,
+        trusted_proxies: var("WOWLUA_REGISTRY_TRUSTED_PROXIES")
+            .unwrap_or_default()
+            .split(',')
+            .filter(|p| !p.trim().is_empty())
+            .map(|p| {
+                wowlua_registry::limits::Net::parse(p)
+                    .map_err(|e| format!("WOWLUA_REGISTRY_TRUSTED_PROXIES: {e}"))
+            })
+            .collect::<Result<Vec<_>, _>>()?,
+    };
     let config = Config {
         public_url,
         data_dir: PathBuf::from(var("WOWLUA_REGISTRY_DATA").unwrap_or_else(|| "/data".into())),
@@ -36,6 +56,7 @@ fn config() -> Result<(Config, String), String> {
             .filter(|a| !a.is_empty())
             .collect(),
         max_archive,
+        limits,
     };
     Ok((config, addr))
 }

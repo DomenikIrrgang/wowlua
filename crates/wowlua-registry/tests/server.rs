@@ -441,3 +441,203 @@ fn the_account_page_needs_a_github_sign_in() {
     assert!(!stored.contains(&token));
     assert!(stored.contains(&wowlua_registry::auth::hash_token(&token)));
 }
+
+fn described(
+    r: &TestRegistry,
+    token: &str,
+    name: &str,
+    version: &str,
+    description: &str,
+    keywords: &[&str],
+) -> Answer {
+    let m = serde_json::to_string_pretty(&serde_json::json!({
+        "package": { "name": name, "version": version, "kind": "library", "description": description, "keywords": keywords },
+    }))
+    .unwrap();
+    publish(r, Some(token), &m, &archive(&m, 0), name, version)
+}
+
+#[test]
+fn search_ranks_and_pages() {
+    let dir = tempfile::tempdir().unwrap();
+    let r = TestRegistry::start(dir.path(), &[], &["alice"], 1 << 20);
+    let alice = r.token("alice");
+    assert_eq!(
+        described(
+            &r,
+            &alice,
+            "tooltip",
+            "1.0.0",
+            "Tooltips for frames",
+            &["ui"]
+        )
+        .status,
+        201
+    );
+    assert_eq!(
+        described(&r, &alice, "tooltip-extra", "0.1.0", "More", &["tooltip"]).status,
+        201
+    );
+    assert_eq!(
+        described(
+            &r,
+            &alice,
+            "lib-frames",
+            "2.0.0",
+            "Frame helpers with a tooltip",
+            &["ui", "frames"]
+        )
+        .status,
+        201
+    );
+    assert_eq!(
+        described(
+            &r,
+            &alice,
+            "lib-frames",
+            "2.1.0",
+            "Frame helpers, newer",
+            &["ui", "frames"]
+        )
+        .status,
+        201
+    );
+    assert_eq!(
+        described(&r, &alice, "lib-gone", "1.0.0", "tooltip", &[]).status,
+        201
+    );
+    let gone = format!("{}/v1/packages/lib-gone/1.0.0", r.url());
+    assert_eq!(with_token("DELETE", &gone, &alice, None).status, 200);
+    let search = |q: &str| answer(agent().get(&format!("{}/v1/search?{q}", r.url())).call()).json();
+    let found = search("q=tooltip");
+    let names: Vec<&str> = found["packages"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| p["name"].as_str().unwrap())
+        .collect();
+    // Name before keyword before description; only yanked: not found.
+    assert_eq!(names, ["tooltip", "tooltip-extra"], "{found}");
+    assert_eq!(found["total"], 2);
+    assert_eq!(found["packages"][0]["vers"], "1.0.0");
+    assert_eq!(found["packages"][0]["description"], "Tooltips for frames");
+    assert_eq!(found["packages"][0]["keywords"][0], "ui");
+    assert_eq!(found["packages"][0]["kind"], "library");
+    // Every word must match; the newest version's description counts.
+    let found = search("q=frames+newer");
+    assert_eq!(found["total"], 1);
+    assert_eq!(found["packages"][0]["name"], "lib-frames");
+    assert_eq!(found["packages"][0]["vers"], "2.1.0");
+    // Paged.
+    let first = search("q=&per_page=2");
+    assert_eq!(first["total"], 3);
+    assert_eq!(first["packages"].as_array().unwrap().len(), 2);
+    let second = search("q=&per_page=2&page=2");
+    assert_eq!(second["packages"].as_array().unwrap().len(), 1);
+    assert_eq!(second["page"], 2);
+    let bad = answer(
+        agent()
+            .get(&format!("{}/v1/search?q=x&page=0", r.url()))
+            .call(),
+    );
+    assert_eq!((bad.status, bad.code().as_str()), (400, "invalid-request"));
+}
+
+fn rate(text: &str) -> Option<wowlua_registry::limits::Rate> {
+    wowlua_registry::limits::Rate::parse(text).unwrap()
+}
+
+#[test]
+fn publishes_and_sign_ins_are_rate_limited() {
+    let dir = tempfile::tempdir().unwrap();
+    let limits = wowlua_registry::limits::Limits {
+        publish: rate("2/hour"),
+        login: rate("3/minute"),
+        ..Default::default()
+    };
+    let r = TestRegistry::start_with(dir.path(), &[], &["alice"], 1 << 20, limits);
+    let alice = r.token("alice");
+    assert_eq!(lib(&r, &alice, "lib-a", "1.0.0").status, 201);
+    assert_eq!(lib(&r, &alice, "lib-a", "1.1.0").status, 201);
+    let mut third = agent()
+        .put(&format!("{}/v1/packages/lib-a/1.2.0", r.url()))
+        .header("Authorization", &format!("Bearer {alice}"))
+        .send("")
+        .unwrap();
+    assert_eq!(third.status(), 429);
+    let retry: u64 = third
+        .headers()
+        .get("retry-after")
+        .unwrap()
+        .to_str()
+        .unwrap()
+        .parse()
+        .unwrap();
+    assert!(retry > 1000 && retry <= 1800, "{retry}");
+    let body: serde_json::Value =
+        serde_json::from_str(&third.body_mut().read_to_string().unwrap()).unwrap();
+    assert_eq!(body["errors"][0]["code"], "rate-limited");
+    // Reads are not publishes; the sign-in used 2 of its 3.
+    assert_eq!(
+        answer(agent().get(&format!("{}/index/lib-a", r.url())).call()).status,
+        200
+    );
+    let no_redirects = ureq::Agent::new_with_config(
+        ureq::Agent::config_builder()
+            .http_status_as_error(false)
+            .max_redirects(0)
+            .build(),
+    );
+    let login = || {
+        no_redirects
+            .get(&format!("{}/login/github", r.url()))
+            .call()
+            .unwrap()
+            .status()
+            .as_u16()
+    };
+    assert_eq!(login(), 303);
+    assert_eq!(login(), 429);
+    assert_eq!(
+        answer(agent().get(&format!("{}/health", r.url())).call()).status,
+        200
+    );
+}
+
+#[test]
+fn forwarded_for_counts_only_from_a_trusted_proxy() {
+    let reads = |trusted: &str| {
+        let dir = tempfile::tempdir().unwrap();
+        let limits = wowlua_registry::limits::Limits {
+            read: rate("2/minute"),
+            trusted_proxies: trusted
+                .split(',')
+                .filter(|t| !t.is_empty())
+                .map(|t| wowlua_registry::limits::Net::parse(t).unwrap())
+                .collect(),
+            ..Default::default()
+        };
+        let r = TestRegistry::start_with(dir.path(), &[], &[], 1 << 20, limits);
+        let get = |from: &str| {
+            agent()
+                .get(&format!("{}/config.json", r.url()))
+                .header("X-Forwarded-For", from)
+                .call()
+                .unwrap()
+                .status()
+                .as_u16()
+        };
+        [
+            get("203.0.113.5"),
+            get("203.0.113.5"),
+            get("203.0.113.5"),
+            get("203.0.113.6"),
+            // A forged entry left of the proxy's own counts as that client.
+            get("198.51.100.9, 203.0.113.6"),
+        ]
+    };
+    // Behind the trusted proxy (here: this computer), each client has its own bucket.
+    assert_eq!(reads("127.0.0.1,::1"), [200, 200, 429, 200, 200]);
+    // Otherwise the header is ignored: one bucket for the connection's address.
+    assert_eq!(reads(""), [200, 200, 429, 429, 429]);
+}

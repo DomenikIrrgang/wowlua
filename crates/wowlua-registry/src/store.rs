@@ -8,6 +8,7 @@
 //! <data>/index/<name>                    the sparse index file (one JSON line per version)
 //! <data>/archives/<name>/<version>.tar.gz
 //! <data>/owners/<name>.json              {"users": [GitHub logins]}
+//! <data>/meta/<name>.json                the newest version's description, keywords and kind (search)
 //! <data>/tokens.json                     {"tokens": [{id, hash, login, name, created}]}
 //! <data>/reserved.json                   the admins' additions to the reserved names
 //! ```
@@ -58,6 +59,19 @@ pub fn builtin_reserved() -> BTreeMap<String, Reserved> {
         .expect("data/reserved.json is a map of reserved names")
 }
 
+/// What search reads of a package: its newest version's manifest fields.
+#[derive(Clone, Debug, Default, Serialize, Deserialize, PartialEq, Eq)]
+pub struct Meta {
+    #[serde(default)]
+    pub vers: String,
+    #[serde(default)]
+    pub description: String,
+    #[serde(default)]
+    pub keywords: Vec<String>,
+    #[serde(default)]
+    pub kind: String,
+}
+
 #[derive(Clone, Debug, Default, Serialize, Deserialize)]
 struct Owners {
     #[serde(default)]
@@ -84,7 +98,7 @@ pub enum PublishError {
 impl Store {
     /// Opens (and creates) the data directory.
     pub fn open(root: &Path) -> io::Result<Store> {
-        for dir in ["index", "archives", "owners", "tmp"] {
+        for dir in ["index", "archives", "owners", "meta", "tmp"] {
             std::fs::create_dir_all(root.join(dir))?;
         }
         let lock = File::options()
@@ -142,6 +156,19 @@ impl Store {
             .join(format!("{version}.tar.gz"))
     }
 
+    fn meta_path(&self, name: &str) -> PathBuf {
+        self.root.join("meta").join(format!("{name}.json"))
+    }
+
+    /// The search fields of a package (empty for one published before
+    /// they were kept).
+    pub fn meta(&self, name: &str) -> Meta {
+        std::fs::read(self.meta_path(name))
+            .ok()
+            .and_then(|b| serde_json::from_slice(&b).ok())
+            .unwrap_or_default()
+    }
+
     fn owners_path(&self, name: &str) -> PathBuf {
         self.root.join("owners").join(format!("{name}.json"))
     }
@@ -195,6 +222,7 @@ impl Store {
         archive: &[u8],
         login: &str,
         admin: bool,
+        meta: &Meta,
     ) -> Result<(), PublishError> {
         let _guard = self.lock();
         let io = |e: io::Error| PublishError::Io(e.to_string());
@@ -222,6 +250,18 @@ impl Store {
             self.write_file(
                 &self.owners_path(&entry.name),
                 &serde_json::to_vec_pretty(&owners).unwrap_or_default(),
+            )
+            .map_err(io)?;
+        }
+        // Search shows the newest version's description.
+        let newest = entries
+            .iter()
+            .filter_map(IndexEntry::version)
+            .all(|v| version.as_ref().is_some_and(|n| *n > v));
+        if newest {
+            self.write_file(
+                &self.meta_path(&entry.name),
+                &serde_json::to_vec_pretty(meta).unwrap_or_default(),
             )
             .map_err(io)?;
         }
@@ -386,18 +426,42 @@ mod tests {
         let dir = tempfile::tempdir().unwrap();
         let store = Store::open(dir.path()).unwrap();
         store
-            .publish(&entry("lib-a", "1.0.0"), b"x", "Alice", false)
+            .publish(
+                &entry("lib-a", "1.0.0"),
+                b"x",
+                "Alice",
+                false,
+                &Meta::default(),
+            )
             .unwrap();
         assert_eq!(
-            store.publish(&entry("lib-a", "1.0.0"), b"y", "alice", false),
+            store.publish(
+                &entry("lib-a", "1.0.0"),
+                b"y",
+                "alice",
+                false,
+                &Meta::default()
+            ),
             Err(PublishError::Exists)
         );
         assert_eq!(
-            store.publish(&entry("lib-a", "1.1.0"), b"y", "bob", false),
+            store.publish(
+                &entry("lib-a", "1.1.0"),
+                b"y",
+                "bob",
+                false,
+                &Meta::default()
+            ),
             Err(PublishError::NotOwner)
         );
         store
-            .publish(&entry("lib-a", "1.1.0"), b"y", "ALICE", false)
+            .publish(
+                &entry("lib-a", "1.1.0"),
+                b"y",
+                "ALICE",
+                false,
+                &Meta::default(),
+            )
             .unwrap();
         assert_eq!(store.entries("lib-a").len(), 2);
         assert_eq!(store.owners("lib-a"), vec!["Alice"]);

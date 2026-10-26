@@ -4,8 +4,8 @@ The server of the wowlua registry, <https://registry.wowlua.dev>: the
 protocol of the spec's [Package manager §10.10](../../spec/toolchain/package-manager.md#1010-registry)
 and [Publishing §11.8](../../spec/toolchain/publishing.md#118-wowlua-registry).
 `wowlua` is its client: registry dependencies (`"lib-a": "^1.0"`),
-`wowlua package --registry`, `wowlua publish` of a library, and
-`wowlua login registry`.
+`wowlua package --registry`, `wowlua publish` of a library,
+`wowlua login registry`, `wowlua yank`, `wowlua owner` and `wowlua search`.
 
 It speaks plain HTTP; HTTPS ends at the proxy in front of it (Traefik on
 the droplet). Accounts are GitHub accounts: `/login` signs in with GitHub
@@ -39,12 +39,26 @@ in `~/.wowlua/config.json` (plain HTTP is accepted for this computer only).
 | `WOWLUA_REGISTRY_DATA` | `/data` | The data directory |
 | `WOWLUA_REGISTRY_ADDR` | `0.0.0.0:8080` | Where it listens |
 | `WOWLUA_REGISTRY_MAX_ARCHIVE` | `10485760` (10 MiB) | The largest package archive a publish may upload, in bytes; larger is 413 |
+| `WOWLUA_REGISTRY_TRUSTED_PROXIES` | none | Addresses or networks (`172.16.0.0/12`, `10.0.0.5`, `fd00::/8`), comma-separated, of the proxies whose `X-Forwarded-For` names the client. Set it to Traefik's address or its Docker network: without it every request counts against the proxy's address. |
+| `WOWLUA_REGISTRY_RATE_PUBLISH` | `30/hour` | Publishes per client address |
+| `WOWLUA_REGISTRY_RATE_LOGIN` | `10/minute` | Sign-ins (`/login/github`, `/login/callback`) per address |
+| `WOWLUA_REGISTRY_RATE_WRITE` | `120/hour` | Other changes (yank, owners, reserved names, account forms) per address |
+| `WOWLUA_REGISTRY_RATE_READ` | `600/minute` | Reads (index, downloads, search, pages) per address |
 | `WOWLUA_REGISTRY_GITHUB_URL`, `WOWLUA_REGISTRY_GITHUB_API_URL` | `https://github.com`, `https://api.github.com` | GitHub's addresses (tests point them elsewhere) |
 
 The GitHub OAuth app (GitHub → Settings → Developer settings → OAuth Apps)
 has the homepage URL `https://registry.wowlua.dev` and the authorization
 callback URL `https://registry.wowlua.dev/login/callback`. The registry asks
 for no scopes: it reads the public login only.
+
+A rate is `<count>/<second|minute|hour|day>`, `<count>/<seconds>`, or
+`off`. Each is a token bucket per client address and class: up to `count`
+at once, refilled evenly over the period. Over it, the answer is 429 with
+`Retry-After` (seconds) and the error code `rate-limited`. `/health` is
+never limited. The client's address is the connection's, or, when the
+connection comes from a trusted proxy, the last `X-Forwarded-For` entry that
+is not a trusted proxy (an entry a client wrote itself stays to the left of
+the one Traefik adds, so it is never read).
 
 `GET /health` answers `ok`; `wowlua-registry health` asks it (the image's
 `HEALTHCHECK`). The server stops cleanly on SIGTERM.
@@ -60,6 +74,7 @@ at a time, so concurrent requests are safe. Back it up as a folder.
 | `index/<name>` | The index file: one JSON line per version (§10.10.1) |
 | `archives/<name>/<version>.tar.gz` | The package archives |
 | `owners/<name>.json` | `{"users": [GitHub logins]}` |
+| `meta/<name>.json` | The newest version's description, keywords and kind, for search |
 | `tokens.json` | API tokens: id, SHA-256, login, name, creation time |
 | `reserved.json` | The admins' reserved names, over the built-in ones |
 
@@ -94,14 +109,15 @@ lists them.
 | `DELETE /v1/packages/<name>/<version>` | Yank |
 | `PUT /v1/packages/<name>/<version>/unyank` | Undo a yank |
 | `GET` / `PUT` / `DELETE /v1/packages/<name>/owners` | List, add, remove owners (`{"users": [...]}`; added logins must exist on GitHub; the last owner stays) |
+| `GET /v1/search?q=<words>&page=<n>&per_page=<n>` | Search by name, keywords and description, ranked and paged: `{"packages": [{"name", "vers", "description", "keywords", "kind", "score"}], "total", "page", "per_page"}` |
 | `GET` / `PUT` / `DELETE /v1/reserved[/<name>]` | Reserved names (changes: admins) |
 
 Errors are `{"errors": [{"code": "…", "detail": "…"}]}` with 400
 (`invalid-name`, `invalid-version`, `invalid-manifest`, `manifest-mismatch`,
 `invalid-archive`, `addon`, `dependency-source`, `unknown-user`,
 `last-owner`, `invalid-request`), 401 (`unauthorized`), 403 (`not-owner`,
-`reserved`, `not-admin`), 404 (`not-found`), 409 (`version-exists`) and 413
-(`too-large`).
+`reserved`, `not-admin`), 404 (`not-found`), 409 (`version-exists`), 413
+(`too-large`) and 429 (`rate-limited`).
 
 A publish is checked with the manifest rules of the server's wowlua version
 (`wowlua-manifest`), against the URL's name and version and the archive's

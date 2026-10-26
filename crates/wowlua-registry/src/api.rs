@@ -366,6 +366,7 @@ fn publish_blocking(
             ));
         }
     }
+    let meta = checked.meta;
     let entry = IndexEntry {
         name: name.to_string(),
         vers: version.to_string(),
@@ -375,7 +376,7 @@ fn publish_blocking(
         yanked: false,
         wowlua: checked.wowlua,
     };
-    match app.store.publish(&entry, archive, login, admin) {
+    match app.store.publish(&entry, archive, login, admin, &meta) {
         Ok(()) => Ok(entry),
         Err(PublishError::Exists) => Err(ApiError::new(
             StatusCode::CONFLICT,
@@ -393,11 +394,12 @@ fn publish_blocking(
     }
 }
 
-/// What the index line takes from a manifest.
+/// What the index line and search take from a manifest.
 struct Checked {
     deps: Vec<IndexDep>,
     features: BTreeMap<String, Vec<String>>,
     wowlua: Option<String>,
+    meta: crate::store::Meta,
 }
 
 /// Checks a published manifest: valid by `wowlua-manifest`'s rules (of
@@ -547,10 +549,24 @@ fn check_manifest(text: &str, name: &str, version: &str, own_registry: &str) -> 
                 .collect()
         })
         .unwrap_or_default();
+    let meta = crate::store::Meta {
+        vers: version.to_string(),
+        description: package["description"].as_str().unwrap_or("").to_string(),
+        keywords: package["keywords"]
+            .as_array()
+            .map(|a| {
+                a.iter()
+                    .filter_map(|k| k.as_str().map(str::to_string))
+                    .collect()
+            })
+            .unwrap_or_default(),
+        kind: package["kind"].as_str().unwrap_or("").to_string(),
+    };
     Ok(Checked {
         deps,
         features,
         wowlua,
+        meta,
     })
 }
 
@@ -813,4 +829,119 @@ pub async fn reserved_release(
         .await
         .map_err(ApiError::internal)?;
     Ok(json(StatusCode::OK, serde_json::json!({ "ok": true })))
+}
+
+// ---- search --------------------------------------------------------------------
+
+/// How well a package matches one word of a search: 0 is no match.
+fn word_score(word: &str, name: &str, meta: &crate::store::Meta) -> u32 {
+    let mut score = if name == word {
+        100
+    } else if name.starts_with(word) {
+        60
+    } else if name.contains(word) {
+        40
+    } else {
+        0
+    };
+    let keywords = meta.keywords.iter().map(|k| k.to_lowercase());
+    let mut keyword = 0;
+    for k in keywords {
+        keyword = keyword.max(if k == word {
+            30
+        } else if k.contains(word) {
+            15
+        } else {
+            0
+        });
+    }
+    score += keyword;
+    if meta.description.to_lowercase().contains(word) {
+        score += 10;
+    }
+    score
+}
+
+/// A page of search results (spec §10.10.2).
+pub fn search_packages(
+    app: &Shared,
+    query: &str,
+    page: usize,
+    per_page: usize,
+) -> serde_json::Value {
+    let words: Vec<String> = query
+        .split_whitespace()
+        .take(10)
+        .map(|w| w.to_lowercase().chars().take(64).collect())
+        .collect();
+    let mut hits: Vec<(u32, String, String, crate::store::Meta)> = Vec::new();
+    for name in app.store.packages() {
+        let newest = app
+            .store
+            .entries(&name)
+            .iter()
+            .filter(|e| !e.yanked)
+            .filter_map(IndexEntry::version)
+            .max();
+        let Some(newest) = newest else {
+            continue;
+        };
+        let meta = app.store.meta(&name);
+        let mut total = 0;
+        let mut all = true;
+        for w in &words {
+            let s = word_score(w, &name, &meta);
+            if s == 0 {
+                all = false;
+                break;
+            }
+            total += s;
+        }
+        if all {
+            hits.push((total, name, newest.to_string(), meta));
+        }
+    }
+    hits.sort_by(|a, b| b.0.cmp(&a.0).then_with(|| a.1.cmp(&b.1)));
+    let total = hits.len();
+    let packages: Vec<serde_json::Value> = hits
+        .into_iter()
+        .skip((page - 1) * per_page)
+        .take(per_page)
+        .map(|(score, name, vers, meta)| {
+            serde_json::json!({
+                "name": name,
+                "vers": vers,
+                "description": meta.description,
+                "keywords": meta.keywords,
+                "kind": meta.kind,
+                "score": score,
+            })
+        })
+        .collect();
+    serde_json::json!({
+        "packages": packages,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+    })
+}
+
+/// `GET {api}/v1/search?q=<words>&page=<n>&per_page=<n>`.
+pub async fn search(
+    State(app): State<Shared>,
+    axum::extract::Query(query): axum::extract::Query<std::collections::HashMap<String, String>>,
+) -> Result<Response> {
+    let number = |key: &str, default: usize| -> Result<usize> {
+        match query.get(key) {
+            None => Ok(default),
+            Some(v) => v.parse::<usize>().ok().filter(|n| *n >= 1).ok_or_else(|| {
+                ApiError::bad("invalid-request", format!("`{key}` is a number from 1"))
+            }),
+        }
+    };
+    let page = number("page", 1)?;
+    let per_page = number("per_page", 20)?.min(100);
+    let q = query.get("q").cloned().unwrap_or_default();
+    let result = blocking(move || search_packages(&app, &q, page, per_page)).await;
+    Ok(json(StatusCode::OK, result))
 }
