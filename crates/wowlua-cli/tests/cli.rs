@@ -1276,6 +1276,47 @@ print(build.debug and debugOnly() or "release")
 /// `--jobs 4` (parallel regions, also for a small project when explicit)
 /// gives what `--jobs 1` gives: the same warnings in the same order, and
 /// the same files.
+/// `--features` and `--no-default-features` (spec Manifest §9.6) choose
+/// the features `wowlua:meta` sees and the optional dependencies they
+/// embed; an unknown feature is E4314.
+#[test]
+fn features_are_selected_on_the_command_line() {
+    let dir = tempfile::tempdir().unwrap();
+    let addon = dir.path().join("FeatDemo");
+    write(
+        dir.path(),
+        &[
+            (
+                "FeatDemo/wowlua.json",
+                r#"{ "package": { "name": "feat-demo", "version": "1.0.0" },
+  "dependencies": { "extra-lib": { "path": "../ExtraLib", "kind": "lua-library", "files": ["ExtraLib.lua"], "optional": true } },
+  "features": { "default": ["minimap"], "minimap": [], "comms": ["dep:extra-lib"] } }
+"#,
+            ),
+            (
+                "FeatDemo/src/main.wowlua",
+                "import features from \"wowlua:meta\"\nprint(features.minimap, features.comms)\n",
+            ),
+            ("ExtraLib/ExtraLib.lua", "ExtraLib = true\n"),
+        ],
+    );
+    let dist = addon.join("dist/dev/FeatDemo");
+    wowlua(&addon).arg("build").assert().success();
+    assert_eq!(run_addon(&dist, "FeatDemo"), "true false");
+    assert!(!dist.join("libs/extra-lib").exists());
+    wowlua(&addon)
+        .args(["build", "--no-default-features", "--features", "comms"])
+        .assert()
+        .success();
+    assert_eq!(run_addon(&dist, "FeatDemo"), "false true");
+    assert!(dist.join("libs/extra-lib/ExtraLib.lua").exists());
+    wowlua(&addon)
+        .args(["check", "--features", "comms,nope"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("error[E4314]").and(predicate::str::contains("`nope`")));
+}
+
 #[test]
 fn parallel_builds_equal_sequential_builds() {
     let dir = tempfile::tempdir().unwrap();

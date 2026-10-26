@@ -77,6 +77,72 @@ pub struct Project {
     pub selected: bool,
     /// Bundled into the workspace root's zip (`publish.bundle-addons`).
     pub bundled: bool,
+    /// `--features` and `--no-default-features` (spec Manifest §9.6).
+    pub features: FeatureSelection,
+}
+
+/// The features a command selects: the manifest's `default` ones unless
+/// `no_default`, and `features` besides (spec Manifest §9.6).
+#[derive(Debug, Clone, Default, PartialEq, Eq)]
+pub struct FeatureSelection {
+    /// `--features a,b`.
+    pub features: Vec<String>,
+    /// `--no-default-features`.
+    pub no_default: bool,
+}
+
+/// Applies the command's feature selection to the selected projects. A
+/// feature that none of them defines is error E4314; each project enables
+/// the named features it defines.
+pub fn select_features(
+    session: &mut Session,
+    projects: &mut [Project],
+    selection: &FeatureSelection,
+) -> bool {
+    let mut ok = true;
+    for name in &selection.features {
+        let known = projects
+            .iter()
+            .filter(|p| p.selected)
+            .any(|p| p.manifest.manifest.features.contains_key(name) && name != "default");
+        if !known {
+            let mut known: Vec<&str> = projects
+                .iter()
+                .filter(|p| p.selected)
+                .flat_map(|p| p.manifest.manifest.features.keys())
+                .map(String::as_str)
+                .filter(|k| *k != "default")
+                .collect();
+            known.sort_unstable();
+            known.dedup();
+            let help = if known.is_empty() {
+                "the manifest's `features` defines no features".to_string()
+            } else {
+                format!("the features are: {}", known.join(", "))
+            };
+            session.push(
+                Diagnostic::error(
+                    "E4314",
+                    format!("`--features` names the unknown feature `{name}`"),
+                )
+                .with_help(help),
+            );
+            ok = false;
+        }
+    }
+    for project in projects.iter_mut() {
+        let own = &project.manifest.manifest.features;
+        project.features = FeatureSelection {
+            features: selection
+                .features
+                .iter()
+                .filter(|f| own.contains_key(*f))
+                .cloned()
+                .collect(),
+            no_default: selection.no_default,
+        };
+    }
+    ok
 }
 
 /// Warnings a project turns on in `check.lints` (W2063, implicit `any`).
@@ -134,6 +200,29 @@ pub fn external_dependency_name(addon: &str) -> String {
 impl Project {
     pub fn root(&self) -> &std::path::Path {
         &self.manifest.root
+    }
+
+    /// The enabled features (without `default`) and the optional
+    /// dependencies they turn on: the `default` ones unless
+    /// `--no-default-features`, `--features`, and what they include.
+    pub fn enabled_features(&self) -> (BTreeSet<String>, BTreeSet<String>) {
+        let features = &self.manifest.manifest.features;
+        let mut stack: Vec<String> = self.features.features.clone();
+        if !self.features.no_default {
+            stack.extend(features.get("default").cloned().unwrap_or_default());
+        }
+        let (mut enabled, mut deps) = (BTreeSet::new(), BTreeSet::new());
+        while let Some(f) = stack.pop() {
+            if let Some(dep) = f.strip_prefix("dep:") {
+                deps.insert(dep.to_string());
+            } else if enabled.insert(f.clone())
+                && let Some(more) = features.get(&f)
+            {
+                stack.extend(more.iter().cloned());
+            }
+        }
+        enabled.remove("default");
+        (enabled, deps)
     }
 
     pub fn addon_name(&self) -> String {
@@ -445,6 +534,7 @@ pub fn standalone_project(
         external_addons: Vec::new(),
         selected: true,
         bundled: false,
+        features: FeatureSelection::default(),
     })
 }
 
@@ -497,6 +587,7 @@ fn load_single(session: &mut Session, options: &LoadOptions, path: &Path) -> Opt
         external_addons: Vec::new(),
         selected: true,
         bundled: false,
+        features: FeatureSelection::default(),
     })
 }
 
@@ -800,6 +891,7 @@ fn load_workspace(
             manifest,
             selected: selected.contains(&i),
             bundled: bundled.contains(&i),
+            features: FeatureSelection::default(),
         });
     }
     Some(projects)

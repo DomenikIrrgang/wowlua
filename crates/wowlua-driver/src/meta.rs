@@ -55,21 +55,6 @@ fn camel(name: &str) -> String {
     out
 }
 
-/// The features enabled by default (`default` and what it includes).
-fn enabled_features(features: &IndexMap<String, Vec<String>>) -> BTreeSet<String> {
-    let mut enabled = BTreeSet::new();
-    let mut stack: Vec<String> = features.get("default").cloned().unwrap_or_default();
-    while let Some(f) = stack.pop() {
-        if f.starts_with("dep:") || !enabled.insert(f.clone()) {
-            continue;
-        }
-        if let Some(more) = features.get(&f) {
-            stack.extend(more.iter().cloned());
-        }
-    }
-    enabled
-}
-
 /// Days since 1970-01-01 → (year, month, day) (proleptic Gregorian).
 fn civil(days: i64) -> (i64, u32, u32) {
     let z = days + 719_468;
@@ -234,7 +219,7 @@ pub fn build_meta(project: &Project, input: &MetaInput) -> Meta {
     );
     build.insert("target".into(), MetaValue::Nil);
 
-    let enabled = enabled_features(&manifest.manifest.features);
+    let (enabled, _) = project.enabled_features();
     let features: IndexMap<String, MetaValue> = manifest
         .manifest
         .features

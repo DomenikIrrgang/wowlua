@@ -91,26 +91,6 @@ fn normalize(path: &str) -> Option<String> {
     Some(parts.join("/"))
 }
 
-/// The optional dependencies the enabled features turn on.
-fn enabled_optional(project: &Project) -> BTreeSet<String> {
-    let features = &project.manifest.manifest.features;
-    let mut enabled = BTreeSet::new();
-    let mut seen = BTreeSet::new();
-    let mut stack: Vec<String> = features.get("default").cloned().unwrap_or_default();
-    while let Some(f) = stack.pop() {
-        if let Some(dep) = f.strip_prefix("dep:") {
-            enabled.insert(dep.to_string());
-            continue;
-        }
-        if seen.insert(f.clone())
-            && let Some(more) = features.get(&f)
-        {
-            stack.extend(more.iter().cloned());
-        }
-    }
-    enabled
-}
-
 fn resolve_flavors(list: &[String]) -> Vec<String> {
     let table = wowlua_flavors::table();
     list.iter()
@@ -137,7 +117,7 @@ pub fn embedded(project: &Project) -> Vec<(&ResolvedPackage, Option<BTreeSet<Str
         .filter(|p| p.used_by.contains(&root_name))
         .map(|p| (p.name.as_str(), p))
         .collect();
-    let optional_on = enabled_optional(project);
+    let optional_on = project.enabled_features().1;
     let mut order: Vec<String> = Vec::new();
     let mut restriction: HashMap<String, Option<BTreeSet<String>>> = HashMap::new();
     fn visit(

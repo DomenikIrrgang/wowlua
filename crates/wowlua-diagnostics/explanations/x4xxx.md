@@ -844,7 +844,8 @@ switched on: a feature that is not defined (or `default`, which only lists the
 features that are on by default), `dep:<name>` for a dependency the manifest
 does not declare, or `dep:<name>` for a dependency that is not marked
 `"optional": true`. A required dependency is always included, so no feature
-can switch it on.
+can switch it on. `--features` on the command line reports it too when it
+names a feature the package does not define.
 
 Define the missing feature, fix the name, or mark the dependency optional.
 

@@ -1140,6 +1140,27 @@ fn wowlua_library_is_compiled_into_the_addon() {
             "run `wowlua check` to check the library",
         ));
 
+    // `add --features` names the dependency's features, and
+    // `--no-default-features` turns its defaults off.
+    wowlua(&e.project, &e.home)
+        .args([
+            "add",
+            "wowlua-ui",
+            "--path",
+            "../ui",
+            "--features",
+            "fancy",
+            "--no-default-features",
+        ])
+        .assert()
+        .success();
+    let manifest: serde_json::Value =
+        serde_json::from_str(&fs::read_to_string(e.project.join("wowlua.json")).unwrap()).unwrap();
+    assert_eq!(
+        manifest["dependencies"]["wowlua-ui"],
+        serde_json::json!({ "path": "../ui", "features": ["fancy"], "default-features": false })
+    );
+
     // Unknown packages and escaping paths.
     write(
         &e.project,

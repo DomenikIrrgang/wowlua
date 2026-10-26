@@ -56,7 +56,8 @@ pub use compile::{Optimizations, Optimized, optimize_and_emit};
 pub use incremental::{BuildCache, CacheStats, module_cache_in, module_cache_path};
 pub use luacheck::LuaOutOfMemory;
 pub use project::{
-    ExternalAddon, LoadOptions, Project, Status, load_project, load_projects, standalone_project,
+    ExternalAddon, FeatureSelection, LoadOptions, Project, Status, load_project, load_projects,
+    select_features, standalone_project,
 };
 pub use sources::{TestRole, glob_set};
 pub use sources::{forget_walks, remember_walks};

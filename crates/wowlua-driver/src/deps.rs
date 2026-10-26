@@ -34,6 +34,8 @@ pub struct AddRequest {
     pub optional: bool,
     pub flavors: Vec<String>,
     pub features: Vec<String>,
+    /// `default-features: false`.
+    pub no_default_features: bool,
 }
 
 impl AddRequest {
@@ -68,6 +70,9 @@ impl AddRequest {
         }
         if !self.features.is_empty() {
             m.insert("features".into(), json!(self.features));
+        }
+        if self.no_default_features {
+            m.insert("default-features".into(), json!(false));
         }
         if m.is_empty() {
             return json!(self.requirement.clone().unwrap_or_else(|| "*".into()));

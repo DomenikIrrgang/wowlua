@@ -15,7 +15,7 @@ wowlua <command> [options]
 | `--locked` | Fail if `wowlua.lock` would change (E4104) |
 | `--offline` | Use only the cache; never access the network (E4105 if something is missing) |
 | `--frozen` | `--locked` plus `--offline` ([Package manager §10.6](package-manager.md#106-lockfile)) |
-| `--features <a,b>` / `--no-default-features` | Select features ([Manifest §9.6](manifest.md#96-features)) |
+| `--features <a,b>` / `--no-default-features` | Select features ([Manifest §9.6](manifest.md#96-features)). A feature no selected package defines is error E4314. With `wowlua add`, they set the new dependency's `features` and `default-features: false` instead. |
 | `--message-format human\|short\|json\|github` | Diagnostic output format. `human` shows each diagnostic with its source lines; a line longer than 160 characters is shown as 120 characters around the labels, with `...` where it is cut. `short` is one line per diagnostic. Both end with a summary, `warning: N warnings emitted` or `error: aborting due to N previous errors; M warnings emitted` (not with `-q`). `json` emits one JSON object per line, for editors and tools. `github` emits GitHub Actions annotations. |
 | `--color auto\|always\|never` | Terminal colors |
 | `-q, --quiet` / `-v, --verbose` | Output verbosity. `-q` leaves out status lines, notes and the summary; `-v` adds a line for each external command the package manager runs (`git`, `svn`) and each HTTP request publishing makes (method and URL). Tokens are always redacted: headers are never shown. |
@@ -81,7 +81,7 @@ bundling work as in `wowlua build`.
 
 | Command | Description |
 |---------|-------------|
-| `wowlua add <name>[@<req>] [--git <url> [--tag\|--branch\|--rev <x>] [--subdir <d>]] [--svn <url> [--rev <n>]] [--path <p>] [--archive <url> --sha256 <h> [--strip-prefix <p>]] [--kind <k>] [--files <a,b>] [--install-path <p>] [--dev] [--optional] [--flavors <f,…>] [--features <a,b>]` | Add (or replace) a dependency and update the lockfile. If the dependency cannot be resolved, `wowlua.json` is left unchanged |
+| `wowlua add <name>[@<req>] [--git <url> [--tag\|--branch\|--rev <x>] [--subdir <d>]] [--svn <url> [--rev <n>]] [--path <p>] [--archive <url> --sha256 <h> [--strip-prefix <p>]] [--kind <k>] [--files <a,b>] [--install-path <p>] [--dev] [--optional] [--flavors <f,…>] [--features <a,b>] [--no-default-features]` | Add (or replace) a dependency and update the lockfile. If the dependency cannot be resolved, `wowlua.json` is left unchanged |
 | `wowlua add --addon <Name> [--optional]` | Add an `addon-dependencies` entry |
 | `wowlua remove <name> [--dev]` | Remove a dependency |
 | `wowlua update [<name>…] [--precise <pin>]` | Move locked pins within their declarations: branches and default branches to their newest commit, SVN sources without `rev` to their newest revision. Tags and explicit revisions are pinned by the manifest. `--precise` pins one dependency to a given git commit or SVN revision |

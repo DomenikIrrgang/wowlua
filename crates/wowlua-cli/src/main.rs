@@ -56,12 +56,27 @@ pub struct GlobalArgs {
     /// Treat warnings as errors
     #[arg(long, global = true)]
     pub deny_warnings: bool,
+    /// Enable these features (with `add`: the dependency's features)
+    #[arg(long, global = true, value_delimiter = ',', value_name = "A,B")]
+    pub features: Vec<String>,
+    /// Leave the manifest's `default` features off (with `add`: the
+    /// dependency's)
+    #[arg(long, global = true)]
+    pub no_default_features: bool,
     /// Worker threads for per-file work (1: none)
     #[arg(short = 'j', long, global = true, value_name = "N")]
     pub jobs: Option<usize>,
 }
 
 impl GlobalArgs {
+    /// `--features` and `--no-default-features`.
+    pub fn feature_selection(&self) -> wowlua_driver::FeatureSelection {
+        wowlua_driver::FeatureSelection {
+            features: self.features.clone(),
+            no_default: self.no_default_features,
+        }
+    }
+
     /// `--jobs`, else `WOWLUA_JOBS`, else the config, else the default.
     pub fn jobs(&self) -> wowlua_driver::parallel::Jobs {
         wowlua_driver::parallel::Jobs::resolve(self.jobs)
@@ -480,9 +495,6 @@ pub struct AddArgs {
     /// Only for these flavors
     #[arg(long, value_delimiter = ',')]
     pub flavors: Vec<String>,
-    /// Features of the dependency to enable
-    #[arg(long, value_delimiter = ',')]
-    pub features: Vec<String>,
 }
 
 #[derive(Subcommand, Debug)]
