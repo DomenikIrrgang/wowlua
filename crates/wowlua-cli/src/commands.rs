@@ -28,6 +28,7 @@ pub(crate) fn load_options(out: &Output, global: &GlobalArgs) -> LoadOptions {
         skip_dependencies: false,
         update: None,
         precise: None,
+        refresh: false,
         status: Some(out.status_sink()),
         bundled: false,
         all_members: false,
@@ -350,13 +351,56 @@ pub fn package(
     }
 }
 
+/// `wowlua package --registry`: the registry archive of each selected
+/// library package (spec Package manager §10.10.3).
+pub fn package_registry(out: &Output, global: &GlobalArgs) -> bool {
+    let started = Instant::now();
+    let mut session = Session::new();
+    let Some(projects) = load_projects(global, &mut session, &load_options(out, global)) else {
+        out.flush(&mut session);
+        return false;
+    };
+    let archives: Vec<_> = projects
+        .iter()
+        .filter(|p| p.selected)
+        .filter_map(|p| wowlua_driver::publish::registry::archive(&mut session, p))
+        .collect();
+    let ok = out.flush(&mut session);
+    if !ok {
+        return false;
+    }
+    for a in &archives {
+        out.status(
+            "Packaged",
+            format!(
+                "{} (registry; {} files, {}) → {}",
+                a.file_name,
+                a.files.len(),
+                a.checksum,
+                relative(&a.path)
+            ),
+        );
+    }
+    out.status(
+        "Finished",
+        format!("packaging in {:.2}s", started.elapsed().as_secs_f64()),
+    );
+    true
+}
+
 pub fn publish(out: &Output, global: &GlobalArgs, args: crate::PublishArgs) -> bool {
     use wowlua_manifest::model::ReleaseType;
     let started = Instant::now();
     let mut session = Session::new();
-    // A publish never changes the lockfile (§11.1.1).
+    // A publish never changes the lockfile (§11.1.1): an addon's must be
+    // up to date; a library's is not committed, so it resolves without
+    // writing one.
     let mut options = load_options(out, global);
-    options.locked = true;
+    if library_manifest(&options) {
+        options.lock_in_memory = true;
+    } else {
+        options.locked = true;
+    }
     options.bundled = true;
     let Some(projects) = load_projects(global, &mut session, &options) else {
         out.flush(&mut session);
@@ -417,6 +461,23 @@ pub fn publish(out: &Output, global: &GlobalArgs, args: crate::PublishArgs) -> b
         );
     }
     ok
+}
+
+/// Whether the command's manifest is a `library`, `lua-library` or `types`
+/// package's.
+fn library_manifest(options: &LoadOptions) -> bool {
+    let Some(path) = wowlua_manifest::find_manifest(&options.cwd, options.manifest.as_deref())
+    else {
+        return false;
+    };
+    let Ok(text) = std::fs::read_to_string(path) else {
+        return false;
+    };
+    let value: serde_json::Value = serde_json::from_str(&text).unwrap_or_default();
+    matches!(
+        value.pointer("/package/kind").and_then(|k| k.as_str()),
+        Some("library" | "lua-library" | "types")
+    )
 }
 
 /// Prints one diagnostic.
@@ -2446,7 +2507,10 @@ fn current_lock(global: &GlobalArgs) -> Vec<wowlua_pkg::LockedPackage> {
 pub fn add(out: &Output, global: &GlobalArgs, args: &AddArgs) -> bool {
     let mut session = Session::new();
     let before = current_lock(global);
-    let options = load_options(out, global);
+    let options = LoadOptions {
+        refresh: true,
+        ..load_options(out, global)
+    };
     let project = if args.addon {
         wowlua_driver::deps::add_addon(&mut session, &options, &args.name, args.optional)
     } else {
@@ -2544,6 +2608,7 @@ pub fn update(
             wowlua_pkg::Update::Only(names.clone())
         }),
         precise: precise.map(|p| (names[0].clone(), p)),
+        refresh: true,
         ..load_options(out, global)
     };
     let project = load_project(global, &mut session, &options);
@@ -2565,7 +2630,11 @@ pub fn update(
 /// `wowlua fetch`.
 pub fn fetch(out: &Output, global: &GlobalArgs) -> bool {
     let mut session = Session::new();
-    let project = load_project(global, &mut session, &load_options(out, global));
+    let options = LoadOptions {
+        refresh: true,
+        ..load_options(out, global)
+    };
+    let project = load_project(global, &mut session, &options);
     let ok = out.flush(&mut session);
     match project {
         Some(p) if ok => {
@@ -2622,7 +2691,10 @@ pub fn tree(out: &Output, global: &GlobalArgs, flavor: Option<&str>, invert: Opt
 /// `wowlua outdated`.
 pub fn outdated(out: &Output, global: &GlobalArgs) -> bool {
     let mut session = Session::new();
-    let options = load_options(out, global);
+    let options = LoadOptions {
+        refresh: true,
+        ..load_options(out, global)
+    };
     let project = load_project(global, &mut session, &options);
     let ok = out.flush(&mut session);
     let Some(project) = project.filter(|_| ok) else {

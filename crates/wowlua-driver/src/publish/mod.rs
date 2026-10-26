@@ -13,6 +13,7 @@
 
 pub mod changelog;
 pub mod http;
+pub mod registry;
 pub mod sites;
 pub mod versions;
 
@@ -48,6 +49,8 @@ pub struct PublishRequest {
 #[derive(Clone, Debug, Default)]
 pub struct Report {
     pub packaged: Option<Packaged>,
+    /// The registry archives (Publishing §11.8).
+    pub archives: Vec<registry::Archive>,
     pub outcomes: Vec<Outcome>,
     /// Notes for the summary.
     pub notes: Vec<String>,
@@ -188,7 +191,49 @@ pub fn publish(
         }
         commit = head;
     }
-    let packaged = crate::package::package(session, projects, &package_request)?;
+    // Registry targets (§11.8) upload an archive, not a zip.
+    let registry_jobs = registry::plan(session, projects, &request.package.targets);
+    if session.has_errors() {
+        return None;
+    }
+    let registry_names: Vec<&str> = registry_jobs
+        .iter()
+        .map(|j| j.target_name.as_str())
+        .collect();
+    let requested = request.package.targets.clone();
+    package_request
+        .targets
+        .retain(|t| !registry_names.contains(&t.as_str()));
+    let only_registry = (!requested.is_empty() && package_request.targets.is_empty())
+        || projects.iter().all(|p| p.kind() != PackageKind::Addon);
+    let packaged = if only_registry {
+        Packaged {
+            zips: Vec::new(),
+            release: crate::package::Release::Release,
+            tag: None,
+            packager: false,
+            repo: repo.clone(),
+            title: String::new(),
+            main: String::new(),
+        }
+    } else {
+        crate::package::package(session, projects, &package_request)?
+    };
+    if session.has_errors() {
+        return None;
+    }
+    let mut archives: Vec<(registry::Job, registry::Archive)> = Vec::new();
+    for job in registry_jobs {
+        let made = archives
+            .iter()
+            .find(|(j, _)| j.project == job.project)
+            .map(|(_, a)| a.clone());
+        let archive = match made {
+            Some(a) => a,
+            None => registry::archive(session, &projects[job.project])?,
+        };
+        archives.push((job, archive));
+    }
     if session.has_errors() {
         return None;
     }
@@ -214,7 +259,27 @@ pub fn publish(
                 ),
             );
         }
-        if packaged.zips.is_empty() {
+        let mut said: Vec<&PathBuf> = Vec::new();
+        for (_, archive) in &archives {
+            if said.contains(&&archive.path) {
+                continue;
+            }
+            said.push(&archive.path);
+            (status.0)(
+                "Packaged",
+                &format!(
+                    "{} (registry) → {}",
+                    archive.file_name,
+                    archive
+                        .path
+                        .strip_prefix(&cwd)
+                        .unwrap_or(&archive.path)
+                        .to_string_lossy()
+                        .replace('\\', "/")
+                ),
+            );
+        }
+        if packaged.zips.is_empty() && archives.is_empty() {
             (status.0)(
                 "Note",
                 "no publish targets: add one under `publish.targets` (see `wowlua explain` or the manual)",
@@ -233,6 +298,7 @@ pub fn publish(
             session,
             projects,
             &packaged,
+            &archives,
             &http,
             &tokens,
             request,
@@ -240,6 +306,7 @@ pub fn publish(
             &mut report,
         );
     }
+    report.archives = archives.into_iter().map(|(_, a)| a).collect();
     for o in &report.outcomes {
         for w in &o.warnings {
             session.push(w.clone().with_path(&repo));
@@ -367,6 +434,21 @@ struct MissingToken {
 impl MissingToken {
     /// E4201 for the publish target `name` of the site type `kind`.
     fn error(&self, name: &str, kind: &str) -> Diagnostic {
+        let d = self.error_of(name, kind);
+        if kind != "registry" {
+            return d;
+        }
+        let help = d.help.clone().unwrap_or_default();
+        Diagnostic {
+            help: Some(format!(
+                "{help}; sign in at {}/login to create a token",
+                wowlua_pkg::registry::DEFAULT_REGISTRY
+            )),
+            ..d
+        }
+    }
+
+    fn error_of(&self, name: &str, kind: &str) -> Diagnostic {
         if self.no_terminal {
             return Diagnostic::error(
                 "E4201",
@@ -670,6 +752,7 @@ fn publish_native(
     session: &mut Session,
     projects: &[Project],
     packaged: &Packaged,
+    archives: &[(registry::Job, registry::Archive)],
     http: &http::Http,
     tokens: &Tokens,
     request: &PublishRequest,
@@ -760,6 +843,18 @@ fn publish_native(
             }
         }
     }
+    let mut registry_jobs: Vec<(&registry::Job, &registry::Archive, String)> = Vec::new();
+    for (job, archive) in archives {
+        let token = match tokens.of(&job.target) {
+            Ok(t) => t,
+            Err(missing) => {
+                session.push(missing.error(&job.target_name, "registry"));
+                missing_token = true;
+                String::new()
+            }
+        };
+        registry_jobs.push((job, archive, token));
+    }
     // Nothing is uploaded while a token is missing; a dry run still shows
     // what the targets would receive.
     if missing_token && !request.dry_run {
@@ -837,15 +932,17 @@ fn publish_native(
                 };
                 sites::github(&upload, &gh)
             }
-            TargetType::Registry => Outcome::skipped(
-                &job.name,
-                &job.zips[0].file_name,
-                "registry publishing is not available yet",
-            ),
+            // Uploaded by `registry::upload`; packaging never zips them.
+            TargetType::Registry => Outcome::skipped(&job.name, &job.zips[0].file_name, ""),
         }
     };
     let outcomes: Vec<Outcome> = std::thread::scope(|s| {
-        let handles: Vec<_> = jobs.iter().map(|job| s.spawn(|| run(job))).collect();
+        let mut handles: Vec<_> = jobs.iter().map(|job| s.spawn(|| run(job))).collect();
+        handles.extend(registry_jobs.iter().map(|(job, archive, token)| {
+            s.spawn(move || {
+                registry::upload(http, &job.target_name, &job.target, token, archive, dry_run)
+            })
+        }));
         handles
             .into_iter()
             .map(|h| {

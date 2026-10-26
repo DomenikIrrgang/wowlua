@@ -682,6 +682,296 @@ impl Fetcher {
     }
 }
 
+/// A registry's answer to a GET.
+struct Got {
+    status: u16,
+    etag: Option<String>,
+    body: Vec<u8>,
+}
+
+/// A GET to a registry: retried up to three times on network errors and
+/// server errors, like archive downloads.
+#[cfg(feature = "net")]
+fn registry_get(url: &str, etag: Option<&str>) -> Result<Got, String> {
+    let config = ureq::Agent::config_builder()
+        .http_status_as_error(false)
+        .timeout_global(Some(std::time::Duration::from_secs(300)))
+        .build();
+    let agent = ureq::Agent::new_with_config(config);
+    let mut delay = std::time::Duration::from_secs(1);
+    let mut attempt = 1;
+    loop {
+        crate::verbose::note("Requesting", &format!("GET {url}"));
+        let mut request = agent.get(url);
+        if let Some(e) = etag {
+            request = request.header("If-None-Match", e);
+        }
+        let result = request.call().map_err(|e| e.to_string()).and_then(|r| {
+            let status = r.status().as_u16();
+            let etag = r
+                .headers()
+                .get("etag")
+                .and_then(|v| v.to_str().ok())
+                .map(str::to_string);
+            let body = r
+                .into_body()
+                .with_config()
+                .limit(512 * 1024 * 1024)
+                .read_to_vec()
+                .map_err(|e| e.to_string())?;
+            Ok(Got { status, etag, body })
+        });
+        match result {
+            Ok(got) if got.status < 500 || attempt >= 3 => return Ok(got),
+            Err(e) if attempt >= 3 => return Err(e),
+            _ => {
+                std::thread::sleep(delay);
+                delay *= 2;
+                attempt += 1;
+            }
+        }
+    }
+}
+
+#[cfg(not(feature = "net"))]
+fn registry_get(_url: &str, _etag: Option<&str>) -> Result<Got, String> {
+    Err("this build of wowlua has no downloads".into())
+}
+
+/// The `{"errors": [{"detail": …}]}` of a registry's error response.
+fn error_detail(body: &[u8]) -> Option<String> {
+    let value: serde_json::Value = serde_json::from_slice(body).ok()?;
+    let details: Vec<String> = value["errors"]
+        .as_array()?
+        .iter()
+        .filter_map(|e| e["detail"].as_str().map(str::to_string))
+        .collect();
+    (!details.is_empty()).then(|| details.join("; "))
+}
+
+impl Fetcher {
+    fn registry_url_allowed(url: &str) -> Result<(), FetchError> {
+        if crate::registry::allowed_url(url) {
+            return Ok(());
+        }
+        Err(if url.contains("://") {
+            FetchError::coded(
+                "E4102",
+                format!("the registry `{url}` must be reached over HTTPS"),
+            )
+        } else {
+            FetchError::coded("E4102", format!("unknown registry `{url}`")).help(
+                "give the registry's URL, or name one under `registries` in the wowlua home's config.json",
+            )
+        })
+    }
+
+    /// A registry's `config.json` (cached; read again once per command).
+    pub fn registry_config(
+        &self,
+        url: &str,
+    ) -> Result<crate::registry::RegistryConfig, FetchError> {
+        Self::registry_url_allowed(url)?;
+        let file = self.cache.registry_dir(url).join("config.json");
+        let cached = || {
+            std::fs::read(&file)
+                .ok()
+                .and_then(|b| serde_json::from_slice(&b).ok())
+        };
+        if self.offline || !self.fetched.borrow_mut().insert(format!("config {url}")) {
+            return cached().ok_or_else(|| FetchError::offline(&format!("the registry `{url}`")));
+        }
+        let got = registry_get(&format!("{url}/config.json"), None);
+        match got {
+            Ok(g) if g.status == 200 => {
+                let config: crate::registry::RegistryConfig = serde_json::from_slice(&g.body)
+                    .map_err(|e| {
+                        FetchError::coded(
+                            "E4102",
+                            format!("`{url}/config.json` is not a registry configuration: {e}"),
+                        )
+                    })?;
+                let _ = write_atomic(&file, &g.body);
+                Ok(config)
+            }
+            other => cached().ok_or_else(|| {
+                let why = match other {
+                    Ok(g) => format!("HTTP {}", g.status),
+                    Err(e) => e,
+                };
+                FetchError::coded("E4102", format!("cannot reach the registry `{url}`: {why}"))
+            }),
+        }
+    }
+
+    /// The index of a registry package (§10.10.1), from the cache unless
+    /// `refresh`; refreshed at most once per command, with
+    /// `If-None-Match`. `Ok(None)`: the registry has no such package.
+    pub fn registry_index(
+        &self,
+        url: &str,
+        name: &str,
+        refresh: bool,
+    ) -> Result<Option<Vec<crate::registry::IndexEntry>>, FetchError> {
+        Self::registry_url_allowed(url)?;
+        let dir = self.cache.registry_dir(url).join(name);
+        let file = dir.join(".index");
+        let etag_file = dir.join(".index.etag");
+        let cached = || {
+            std::fs::read_to_string(&file)
+                .ok()
+                .map(|t| crate::registry::parse_index(&t))
+        };
+        let key = format!("index {url}/{name}");
+        let fresh = self.fetched.borrow().contains(&key);
+        if self.offline || fresh || (!refresh && file.exists()) {
+            return match cached() {
+                Some(entries) => Ok(Some(entries)),
+                None if fresh => Ok(None),
+                None => Err(FetchError::offline(&format!(
+                    "the index of `{name}` in the registry `{url}`"
+                ))),
+            };
+        }
+        if self.fetched.borrow_mut().insert(format!("updating {url}")) {
+            self.say("Updating", &format!("{url} index"));
+        }
+        self.fetched.borrow_mut().insert(key);
+        let etag = std::fs::read_to_string(&etag_file)
+            .ok()
+            .filter(|_| file.exists());
+        match registry_get(&format!("{url}/index/{name}"), etag.as_deref()) {
+            Ok(g) if g.status == 304 => Ok(cached()),
+            Ok(g) if g.status == 200 => {
+                let text = String::from_utf8_lossy(&g.body).into_owned();
+                let _ = write_atomic(&file, text.as_bytes());
+                match &g.etag {
+                    Some(e) => {
+                        let _ = write_atomic(&etag_file, e.as_bytes());
+                    }
+                    None => {
+                        let _ = std::fs::remove_file(&etag_file);
+                    }
+                }
+                Ok(Some(crate::registry::parse_index(&text)))
+            }
+            Ok(g) if g.status == 404 || g.status == 410 => {
+                let _ = std::fs::remove_file(&file);
+                Ok(None)
+            }
+            other => {
+                let why = match other {
+                    Ok(g) => error_detail(&g.body).unwrap_or_else(|| format!("HTTP {}", g.status)),
+                    Err(e) => e,
+                };
+                match cached() {
+                    // The registry is unreachable: the cached index still
+                    // names the locked versions.
+                    Some(entries) => {
+                        self.say(
+                            "Warning",
+                            &format!("cannot reach `{url}` ({why}); using its cached index"),
+                        );
+                        Ok(Some(entries))
+                    }
+                    None => Err(FetchError::coded(
+                        "E4102",
+                        format!(
+                            "cannot read the index of `{name}` from the registry `{url}`: {why}"
+                        ),
+                    )),
+                }
+            }
+        }
+    }
+
+    /// A registry package version, downloaded, checked against its index
+    /// checksum (E4103) and unpacked into
+    /// `registry/<host>/<name>/<version>/`.
+    pub fn registry_package(
+        &self,
+        url: &str,
+        entry: &crate::registry::IndexEntry,
+    ) -> Result<PathBuf, FetchError> {
+        Self::registry_url_allowed(url)?;
+        let target = self
+            .cache
+            .registry_dir(url)
+            .join(&entry.name)
+            .join(&entry.vers);
+        if target.is_dir() {
+            self.cache.touch(&target);
+            return Ok(target);
+        }
+        let what = format!("{} {}", entry.name, entry.vers);
+        if self.offline {
+            return Err(FetchError::offline(&format!("package {what}")));
+        }
+        let config = self.registry_config(url)?;
+        let dl = format!(
+            "{}/{}/{}.tar.gz",
+            crate::registry::normalize_url(&config.dl),
+            entry.name,
+            entry.vers
+        );
+        Self::registry_url_allowed(&dl)?;
+        self.say("Downloading", &what);
+        let got = registry_get(&dl, None)
+            .map_err(|e| FetchError::coded("E4102", format!("cannot download {what}: {e}")))?;
+        if got.status != 200 {
+            return Err(FetchError::coded(
+                "E4102",
+                format!(
+                    "cannot download {what} from `{dl}`: {}",
+                    error_detail(&got.body).unwrap_or_else(|| format!("HTTP {}", got.status))
+                ),
+            ));
+        }
+        let files = crate::registry::read_archive(&got.body).map_err(|e| match e {
+            crate::registry::ArchiveError::Unsafe(u) => unsafe_error(&dl, u),
+            other => FetchError::plain(format!("cannot unpack {what}: {other}")),
+        })?;
+        let sum = crate::registry::checksum(&files);
+        if sum != entry.cksum {
+            return Err(FetchError::coded(
+                "E4103",
+                format!(
+                    "checksum mismatch for {what}: the registry's index has {}, the downloaded files have {sum}",
+                    entry.cksum
+                ),
+            )
+            .help("try again later; if it persists, tell the registry's operators"));
+        }
+        let staged = cache::staging(&target).map_err(|e| FetchError::plain(e.to_string()))?;
+        let written = (|| -> std::io::Result<()> {
+            for (rel, contents) in &files {
+                let path = staged.join(rel);
+                if let Some(parent) = path.parent() {
+                    std::fs::create_dir_all(parent)?;
+                }
+                std::fs::write(path, contents)?;
+            }
+            std::fs::create_dir_all(&staged)
+        })();
+        if let Err(e) = written {
+            let _ = cache::remove(&staged);
+            return Err(FetchError::plain(format!("cannot unpack {what}: {e}")));
+        }
+        cache::commit(&staged, &target).map_err(|e| FetchError::plain(e.to_string()))?;
+        self.cache.touch(&target);
+        Ok(target)
+    }
+}
+
+/// Writes a cache file through a temporary sibling.
+fn write_atomic(path: &Path, bytes: &[u8]) -> std::io::Result<()> {
+    let staged = cache::staging(path)?;
+    std::fs::write(&staged, bytes)?;
+    std::fs::rename(&staged, path).inspect_err(|_| {
+        let _ = std::fs::remove_file(&staged);
+    })
+}
+
 /// Downloads `url` and returns its SHA-256 (for converting `.pkgmeta` zip
 /// externals, which carry no checksum).
 pub fn sha256_of_url(url: &str) -> Result<String, String> {

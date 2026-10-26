@@ -148,11 +148,30 @@ pub fn add(session: &mut Session, options: &LoadOptions, request: &AddRequest) -
         "dependencies"
     };
     let entry = request.entry();
-    edit_and_load(session, options, |text| {
+    let project = edit_and_load(session, options, |text| {
         wowlua_manifest::edit::set(text, &[section], &request.name, &entry)
             .map(Some)
             .map_err(edit_error)
-    })
+    })?;
+    // A registry dependency added without a requirement asks for the
+    // version it resolved to, and compatible ones (`^1.2.3`), like Cargo.
+    if entry == json!("*")
+        && let Some(p) = project
+            .deps
+            .packages
+            .iter()
+            .find(|p| p.name == request.name && matches!(p.source, Source::Registry { .. }))
+    {
+        let path = project.manifest.path.clone();
+        let requirement = json!(format!("^{}", p.version));
+        if let Ok(text) = crate::host::read_to_string(&path)
+            && let Ok(edited) =
+                wowlua_manifest::edit::set(&text, &[section], &request.name, &requirement)
+        {
+            let _ = crate::host::write(&path, &edited);
+        }
+    }
+    Some(project)
 }
 
 /// `wowlua add --addon <Name> [--optional]`.
@@ -446,6 +465,37 @@ pub fn outdated(
                     },
                 }),
                 Ok(_) => None,
+                Err(e) => {
+                    session.push(Diagnostic::plain_warning(format!(
+                        "{}: {}",
+                        p.name, e.message
+                    )));
+                    None
+                }
+            },
+            Source::Registry { req, url } => match fetcher.registry_index(url, &p.name, false) {
+                Ok(Some(index)) => {
+                    let newest = index
+                        .iter()
+                        .filter(|e| !e.yanked)
+                        .filter_map(|e| e.version())
+                        .filter(|v| v.pre.is_empty() || !p.version.pre.is_empty())
+                        .max();
+                    newest.filter(|n| *n > p.version).map(|newest| {
+                        let fits = semver::VersionReq::parse(req).is_ok_and(|r| r.matches(&newest));
+                        Outdated {
+                            name: p.name.clone(),
+                            current: p.version.to_string(),
+                            latest: newest.to_string(),
+                            action: if fits {
+                                "`wowlua update`".into()
+                            } else {
+                                format!("change the requirement to \"^{newest}\"")
+                            },
+                        }
+                    })
+                }
+                Ok(None) => None,
                 Err(e) => {
                     session.push(Diagnostic::plain_warning(format!(
                         "{}: {}",

@@ -32,21 +32,61 @@ pub enum Source {
         sha256: String,
         strip_prefix: Option<String>,
     },
-    /// Not available until the registry exists (decision T104).
-    Registry { req: String },
+    /// A version requirement against a registry (spec §10.10); `url` is
+    /// the registry's, without a trailing `/`.
+    Registry { req: String, url: String },
+}
+
+/// The registries dependencies may name: the default one and the named ones
+/// of `config.json`'s `registries` (spec CLI §12.7).
+#[derive(Clone, Debug, PartialEq, Eq)]
+pub struct Registries {
+    pub default: String,
+    pub named: std::collections::BTreeMap<String, String>,
+}
+
+impl Default for Registries {
+    fn default() -> Self {
+        Registries {
+            default: crate::registry::DEFAULT_REGISTRY.into(),
+            named: Default::default(),
+        }
+    }
+}
+
+impl Registries {
+    /// The URL of a dependency's `registry` (a URL, or a name in
+    /// `config.json`); a name that is neither stays as it is, and
+    /// resolution reports it.
+    pub fn url(&self, declared: Option<&str>) -> String {
+        match declared {
+            None => self.default.clone(),
+            Some(d) if d.contains("://") => crate::registry::normalize_url(d),
+            Some(d) => self
+                .named
+                .get(d)
+                .map(|u| crate::registry::normalize_url(u))
+                .unwrap_or_else(|| d.to_string()),
+        }
+    }
 }
 
 impl Source {
     /// The source of a dependency entry declared in the manifest at `base`.
-    pub fn of(dep: &Dependency, base: &Path) -> Source {
+    pub fn of(dep: &Dependency, base: &Path, registries: &Registries) -> Source {
         let d = match dep {
-            Dependency::Version(req) => return Source::Registry { req: req.clone() },
+            Dependency::Version(req) => {
+                return Source::Registry {
+                    req: req.clone(),
+                    url: registries.url(None),
+                };
+            }
             Dependency::Detailed(d) => d,
         };
-        Self::of_detail(d, base)
+        Self::of_detail(d, base, registries)
     }
 
-    fn of_detail(d: &DependencyDetail, base: &Path) -> Source {
+    fn of_detail(d: &DependencyDetail, base: &Path, registries: &Registries) -> Source {
         if let Some(url) = &d.git {
             let reference = if let Some(t) = &d.tag {
                 GitRef::Tag(t.clone())
@@ -90,6 +130,7 @@ impl Source {
         }
         Source::Registry {
             req: d.version.clone().unwrap_or_else(|| "*".into()),
+            url: registries.url(d.registry.as_deref()),
         }
     }
 
@@ -104,7 +145,7 @@ impl Source {
             },
             Source::Svn { url, .. } => format!("svn+{}", normalize_url(url)),
             Source::Archive { url, .. } => format!("archive+{url}"),
-            Source::Registry { .. } => "registry".into(),
+            Source::Registry { url, .. } => format!("registry+{url}"),
         }
     }
 
@@ -160,7 +201,7 @@ impl Source {
                 }
             }
             Source::Archive { url, .. } => format!("archive+{url}"),
-            Source::Registry { .. } => "registry+https://registry.wowlua.dev".into(),
+            Source::Registry { url, .. } => format!("registry+{url}"),
         }
     }
 
@@ -179,7 +220,10 @@ impl Source {
                 None => format!("svn {url}"),
             },
             Source::Archive { url, .. } => format!("archive {url}"),
-            Source::Registry { req } => format!("registry {req}"),
+            Source::Registry { req, url } if url == crate::registry::DEFAULT_REGISTRY => {
+                format!("registry {req}")
+            }
+            Source::Registry { req, url } => format!("registry {url} {req}"),
         }
     }
 }

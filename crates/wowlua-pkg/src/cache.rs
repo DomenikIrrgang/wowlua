@@ -93,6 +93,30 @@ impl Cache {
         self.root.join("archives").join(sha256)
     }
 
+    /// A registry's folder: `registry/<host>/`, holding its `config.json`,
+    /// and per package `<name>/.index` (the index file, with its ETag in
+    /// `.index.etag`) and the unpacked versions `<name>/<version>/`.
+    pub fn registry_dir(&self, url: &str) -> PathBuf {
+        let rest = url.split_once("://").map_or(url, |(_, r)| r);
+        let (host, path) = rest.split_once('/').unwrap_or((rest, ""));
+        let host: String = host
+            .chars()
+            .map(|c| {
+                if c.is_ascii_alphanumeric() || c == '-' || c == '.' {
+                    c.to_ascii_lowercase()
+                } else {
+                    '_'
+                }
+            })
+            .collect();
+        let name = if path.trim_matches('/').is_empty() {
+            host
+        } else {
+            format!("{host}-{}", key(url))
+        };
+        self.root.join("registry").join(name)
+    }
+
     /// Marks an entry as used now (for `cache clean`).
     pub fn touch(&self, entry: &Path) {
         let _ = std::fs::write(stamp(entry), b"");
@@ -130,6 +154,38 @@ impl Cache {
                     removed.push(path);
                 }
             }
+        }
+        // Unpacked registry packages: `registry/<host>/<name>/<version>/`.
+        let registry = self.root.join("registry");
+        for entry in walkdir::WalkDir::new(&registry)
+            .min_depth(3)
+            .max_depth(3)
+            .into_iter()
+            .flatten()
+            .filter(|e| e.file_type().is_dir())
+        {
+            let path = entry.into_path();
+            let name = path.file_name().unwrap_or_default().to_string_lossy();
+            if name.starts_with('.') {
+                continue;
+            }
+            let used = std::fs::metadata(stamp(&path))
+                .or_else(|_| std::fs::metadata(&path))
+                .and_then(|m| m.modified())
+                .unwrap_or(now);
+            let stale = match older_than {
+                None => true,
+                Some(limit) => now.duration_since(used).unwrap_or_default() > limit,
+            };
+            if stale {
+                freed += size(&path);
+                remove(&path)?;
+                let _ = std::fs::remove_file(stamp(&path));
+                removed.push(path);
+            }
+        }
+        if older_than.is_none() {
+            remove(&registry)?;
         }
         // Lua compile results (`compile/<hash>`) and the language server's
         // module caches (`check/<hash>`): each entry's modification time is

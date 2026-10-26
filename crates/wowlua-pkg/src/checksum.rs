@@ -42,12 +42,32 @@ pub fn tree(dir: &Path) -> std::io::Result<String> {
         } else {
             std::fs::read(&path)?
         };
-        hasher.update((rel.len() as u64).to_le_bytes());
-        hasher.update(rel.as_bytes());
-        hasher.update((contents.len() as u64).to_le_bytes());
-        hasher.update(&contents);
+        add(&mut hasher, &rel, &contents);
     }
-    Ok(format!("sha256-{}", hex(&hasher.finalize())))
+    Ok(finish(hasher))
+}
+
+/// The checksum of files given by their `/`-separated paths: what [`tree`]
+/// gives for them on disk.
+pub fn of_files<'a>(files: impl IntoIterator<Item = (&'a str, &'a [u8])>) -> String {
+    let mut files: Vec<(&str, &[u8])> = files.into_iter().collect();
+    files.sort();
+    let mut hasher = Sha256::new();
+    for (rel, contents) in files {
+        add(&mut hasher, rel, contents);
+    }
+    finish(hasher)
+}
+
+fn add(hasher: &mut Sha256, rel: &str, contents: &[u8]) {
+    hasher.update((rel.len() as u64).to_le_bytes());
+    hasher.update(rel.as_bytes());
+    hasher.update((contents.len() as u64).to_le_bytes());
+    hasher.update(contents);
+}
+
+fn finish(hasher: Sha256) -> String {
+    format!("sha256-{}", hex(&hasher.finalize()))
 }
 
 /// SHA-256 of bytes, as lowercase hex.

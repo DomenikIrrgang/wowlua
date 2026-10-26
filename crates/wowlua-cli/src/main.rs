@@ -295,6 +295,9 @@ enum Command {
         /// Restrict to these flavors
         #[arg(long, value_delimiter = ',')]
         flavor: Vec<String>,
+        /// Create the wowlua registry's archive of a library package instead
+        #[arg(long, conflicts_with_all = ["targets", "flavor"])]
+        registry: bool,
     },
     /// Package and upload to the publish targets
     Publish(PublishArgs),
@@ -738,9 +741,17 @@ fn run() -> ExitCode {
             from_pkgmeta,
         } => commands::init(&out, from_toc, from_pkgmeta),
         Command::Build(args) => commands::build(&out, &cli.global, &args),
-        Command::Package { targets, flavor } => {
-            commands::package(&out, &cli.global, targets, flavor)
+        Command::Package {
+            targets,
+            flavor,
+            registry: true,
+        } => {
+            let _ = (targets, flavor);
+            commands::package_registry(&out, &cli.global)
         }
+        Command::Package {
+            targets, flavor, ..
+        } => commands::package(&out, &cli.global, targets, flavor),
         Command::Publish(args) => commands::publish(&out, &cli.global, args),
         Command::Login {
             site,

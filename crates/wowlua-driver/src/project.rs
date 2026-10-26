@@ -33,6 +33,10 @@ pub struct LoadOptions {
     pub update: Option<wowlua_pkg::Update>,
     /// `wowlua update <name> --precise <pin>`.
     pub precise: Option<(String, String)>,
+    /// Read the registries' indexes again (`fetch`, `update`, `add`,
+    /// `outdated`); other commands use a cached index that has the locked
+    /// versions.
+    pub refresh: bool,
     /// Progress lines (`Cloning …`, `Fetching …`).
     pub status: Option<Status>,
     /// `package` / `publish` at a workspace root: also load the members the
@@ -1028,6 +1032,7 @@ fn load_workspace(
             lock: lock.clone(),
             deps: wowlua_pkg::Resolution {
                 packages: deps.packages.clone(),
+                warnings: Vec::new(),
             },
             workspace_root: Some(root.to_path_buf()),
             workspace_addons: addons.iter().filter(|a| a.name != own).cloned().collect(),
@@ -1214,15 +1219,46 @@ fn resolve(
                 .precise
                 .as_ref()
                 .map(|(n, p)| (n.as_str(), p.as_str())),
+            registries: &registries(),
+            refresh: options.refresh,
         },
     );
     match resolved {
-        Ok(r) => Some(r),
+        Ok(mut r) => {
+            session.diagnostics.extend(std::mem::take(&mut r.warnings));
+            Some(r)
+        }
         Err(errors) => {
             session.diagnostics.extend(errors);
             None
         }
     }
+}
+
+/// The registries of `$WOWLUA_HOME/config.json` (`registries`: names to
+/// URLs; `default` names the default registry, spec CLI §12.7).
+pub fn registries() -> wowlua_pkg::source::Registries {
+    let mut registries = wowlua_pkg::source::Registries::default();
+    let config: Option<serde_json::Value> = crate::install::wowlua_home()
+        .and_then(|home| crate::host::read_to_string(home.join("config.json")).ok())
+        .and_then(|text| serde_json::from_str(&text).ok());
+    if let Some(map) = config
+        .as_ref()
+        .and_then(|c| c.get("registries"))
+        .and_then(|r| r.as_object())
+    {
+        for (name, url) in map {
+            if let Some(url) = url.as_str() {
+                registries
+                    .named
+                    .insert(name.clone(), wowlua_pkg::registry::normalize_url(url));
+            }
+        }
+    }
+    if let Some(default) = registries.named.get("default") {
+        registries.default = default.clone();
+    }
+    registries
 }
 
 /// A path relative to `cwd` when possible, for messages.

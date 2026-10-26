@@ -441,6 +441,7 @@ fn check_and(
         skip_dependencies: false,
         update: None,
         precise: None,
+        refresh: false,
         status: None,
         bundled: false,
         // (a member's whole check: those of its workspace that depend on it)
