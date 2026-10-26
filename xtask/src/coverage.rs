@@ -173,15 +173,15 @@ fn lua_strings(path: &Path) -> Result<BTreeMap<String, String>> {
 
 /// Counts of each source.
 #[derive(Default, Clone, Copy)]
-struct Counts {
-    model: usize,
-    recorded: usize,
-    fill_in: usize,
-    generated: usize,
+pub(crate) struct Counts {
+    pub(crate) model: usize,
+    pub(crate) recorded: usize,
+    pub(crate) fill_in: usize,
+    pub(crate) generated: usize,
 }
 
 impl Counts {
-    fn add(&mut self, source: Source) {
+    pub(crate) fn add(&mut self, source: Source) {
         match source {
             Source::Model => self.model += 1,
             Source::Recorded => self.recorded += 1,
@@ -197,7 +197,7 @@ impl Counts {
         self.generated += other.generated;
     }
 
-    fn total(&self) -> usize {
+    pub(crate) fn total(&self) -> usize {
         self.model + self.recorded + self.fill_in + self.generated
     }
 
@@ -217,7 +217,7 @@ impl Counts {
     }
 }
 
-fn counts<'a>(entries: impl Iterator<Item = &'a Entry>) -> Counts {
+pub(crate) fn counts<'a>(entries: impl Iterator<Item = &'a Entry>) -> Counts {
     let mut c = Counts::default();
     for e in entries {
         c.add(e.source);
@@ -539,6 +539,13 @@ fn misses(root: &Path, file: &str) -> Result<(usize, usize, BTreeMap<String, usi
         bail!("{file}: no matched or total line");
     };
     Ok((matched, total, by))
+}
+
+/// The full probe's answers the engine gives as the client gave them, and
+/// all of them (the report's "Full probe" line).
+pub(crate) fn full_probe(root: &Path) -> Result<(usize, usize)> {
+    let v = Verification::read(root)?;
+    Ok((v.fullprobe.matched, v.fullprobe.total))
 }
 
 impl Verification {

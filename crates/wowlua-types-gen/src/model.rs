@@ -58,6 +58,11 @@ pub struct Decls {
     /// `Constants.X` values.
     pub constants: IndexMap<String, Vec<(String, String)>>,
     pub events: IndexMap<String, Vec<ParamDecl>>,
+    /// The results' names of a function's first form, as LuaLS
+    /// annotations give them (`---@return string result`), by the name it
+    /// is defined by (`UnitName`, `C_Timer.After`, `Frame:Show`); empty
+    /// where a result is unnamed. The declarations do not use them.
+    pub return_names: IndexMap<String, Vec<String>>,
     pub globals: IndexMap<String, String>,
     /// Globals only a load-on-demand Blizzard addon defines: name → addon.
     pub global_addons: IndexMap<String, String>,
@@ -266,6 +271,7 @@ impl Decls {
                     )
                 })
                 .collect();
+            doc_comment(&mut out, &self.docs, &format!("event:{name}"), "");
             let _ = writeln!(out, "declare event {name}({})", list.join(", "));
         }
         out

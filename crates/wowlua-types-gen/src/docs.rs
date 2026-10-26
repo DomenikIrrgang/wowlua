@@ -2,7 +2,8 @@
 //! (the language server's hover and completion, spec §16.2): the summary,
 //! parameters and results warcraft.wiki.gg's API pages describe (CC BY-SA
 //! 4.0), and the descriptions Blizzard's own documentation gives. Keys:
-//! `UnitHealth`, `C_Spell.GetSpellInfo`, `Button:GetText`.
+//! `UnitHealth`, `C_Spell.GetSpellInfo`, `Button:GetText`, and an event's
+//! `event:BAG_UPDATE` (its payload's descriptions as its parameters).
 
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
@@ -71,7 +72,13 @@ pub fn key(title: &str) -> Option<String> {
 /// results.
 pub fn from_wiki(title: &str, text: &str) -> Option<(String, Doc)> {
     let key = key(title)?;
-    let lead = match text.find("\n==") {
+    // (an old page parts its sections with `----` lines and `;''Returns''`
+    // headings)
+    let end = [text.find("\n=="), text.find("\n----"), text.find("\n;''")]
+        .into_iter()
+        .flatten()
+        .min();
+    let lead = match end {
         Some(i) => &text[..i],
         None => text,
     };
@@ -80,7 +87,8 @@ pub fn from_wiki(title: &str, text: &str) -> Option<(String, Doc)> {
     let mut paragraphs: Vec<String> = Vec::new();
     let mut current = String::new();
     for line in lead.lines() {
-        let t = line.trim();
+        // (a definition's `:` indents a line)
+        let t = line.trim().trim_start_matches(':').trim_start();
         let prose = markdown(t);
         // (an old page writes its call as text: the signature shows it)
         let prose = strip_call(&prose);
@@ -184,7 +192,8 @@ fn described(section: Option<&str>) -> Vec<(String, String)> {
             .trim()
             .trim_start_matches(|c: char| c.is_ascii_digit() || c == '.')
             .trim();
-        let text = markdown(rest.trim().trim_start_matches(['-', '–']).trim());
+        // (after the type a dash or a colon: `{{apitype|number}} : [[UiMapID]]`)
+        let text = markdown(rest.trim().trim_start_matches(['-', '–', ':']).trim());
         if !name.is_empty() && !text.is_empty() && !out.iter().any(|(n, _)| n == name) {
             out.push((name.to_string(), strip_templates(&text)));
         }
@@ -339,7 +348,8 @@ pub fn markdown(s: &str) -> String {
 }
 
 /// The descriptions in Blizzard's documentation (`Documentation = {…}` of
-/// a function and its arguments and results), by key.
+/// a function and its arguments and results, of an event and its payload),
+/// by key; an event's is `event:BAG_UPDATE`.
 pub fn from_blizzard(api: &serde_json::Value) -> Docs {
     let mut out = Docs::new();
     let lines = |v: &serde_json::Value| -> String {
@@ -384,6 +394,21 @@ pub fn from_blizzard(api: &serde_json::Value) -> Docs {
             };
             if doc != Doc::default() {
                 out.insert(format!("{prefix}{name}"), doc);
+            }
+        }
+        for e in system["Events"].as_array().into_iter().flatten() {
+            let Some(name) = e["LiteralName"].as_str() else {
+                continue;
+            };
+            let doc = Doc {
+                summary: lines(e),
+                params: values(&e["Payload"]),
+                returns: Vec::new(),
+                page: None,
+                written: false,
+            };
+            if doc != Doc::default() {
+                out.insert(format!("event:{name}"), doc);
             }
         }
     }
@@ -490,6 +515,19 @@ mod tests {
         assert_eq!(
             lines(&doc).last().map(String::as_str),
             Some("[warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_UnitHealth)")
+        );
+    }
+
+    #[test]
+    fn an_old_page_gives_its_lead_and_no_markup() {
+        let text = "{{wowapi}}\nReturns true if on a Windows client.\n{{apisig|IsWindowsClient()}}\n\n----\n;''Returns''\n:;true - If running on a Windows\n\n----\n;''Description''\n\n: Will check the user client.";
+        let (_, doc) = from_wiki("API:IsWindowsClient", text).unwrap();
+        assert_eq!(doc.summary, "Returns true if on a Windows client.");
+        let text = "{{wowapi}}\nUpdates the digsites.\n\n==Arguments==\n:;uiMapID:{{apitype|number}} : [[UiMapID]]\n";
+        let (_, doc) = from_wiki("API:ArchaeologyMapUpdateAll", text).unwrap();
+        assert_eq!(
+            doc.params,
+            vec![("uiMapID".to_string(), "UiMapID".to_string())]
         );
     }
 

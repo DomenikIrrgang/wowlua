@@ -31,6 +31,8 @@ struct Block {
     params: Vec<ParamDecl>,
     vararg: Option<String>,
     returns: Vec<String>,
+    /// The results' names (`---@return string result`), empty where unnamed.
+    return_names: Vec<String>,
     overloads: Vec<String>,
     generics: Vec<String>,
     alias: Option<(String, Vec<String>)>,
@@ -167,6 +169,12 @@ impl Converter {
                 let ty = type_part(rest);
                 if !ty.is_empty() {
                     block.returns.push(convert_type(ty));
+                    let name = rest.trim()[ty.len()..]
+                        .split_whitespace()
+                        .next()
+                        .filter(|n| !n.starts_with('#'))
+                        .unwrap_or("");
+                    block.return_names.push(name.to_string());
                 }
             }
             "overload" => block.overloads.push(rest.to_string()),
@@ -294,6 +302,12 @@ impl Converter {
             let name = name.trim();
             let method = name.contains(':');
             let mut sigs = vec![self.sig(block, &params, method)];
+            if block.return_names.iter().any(|n| !n.is_empty()) {
+                self.out
+                    .return_names
+                    .entry(name.to_string())
+                    .or_insert_with(|| block.return_names.clone());
+            }
             for o in &block.overloads {
                 if let Some(mut sig) = overload_sig(o, block.deprecated) {
                     // Method overloads name `self` first.

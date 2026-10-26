@@ -7,6 +7,11 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 ### New
 
 - `wowlua explain` explains every error and warning: what triggers it, how to fix it, an example that reports it and one that compiles, and related codes. The same explanations are on each code's page on wowlua.dev.
+- Every WoW event and many more API functions now have a description, which the editor shows on hover and wowlua.dev's new WoW API reference shows on each entry's page with how far `wowlua test` emulates it.
+
+### Fixed
+
+- Function descriptions taken from old-style warcraft.wiki.gg pages no longer include the page's raw markup (`----`, `;''Returns''`).
 
 ## 0.12.0 (2026-10-26)
 

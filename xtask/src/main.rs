@@ -28,6 +28,8 @@
 //!   (`tests/ingame/src/methodprobeplan.lua`).
 //! - `cargo xtask coverage-report`: the emulator's coverage report
 //!   (`docs/emulator-coverage.md`).
+//! - `cargo xtask api-reference`: the website's WoW API reference data
+//!   for camelot (`docs/reference/api/camelot.json.gz`).
 //! - `cargo xtask web-ui`: the Blizzard UI files the playground fetches
 //!   per flavor (`crates/wowlua-web/ui/`).
 
@@ -35,6 +37,7 @@ use anyhow::{Context, Result, bail};
 use std::fs;
 use std::path::{Path, PathBuf};
 
+mod api_reference;
 mod atlases;
 mod corpus;
 mod coverage;
@@ -121,6 +124,10 @@ fn main() -> Result<()> {
         "coverage-report" => {
             write_if_changed(&root.join(coverage::REPORT), &coverage::generate(&root)?)
         }
+        "api-reference" => write_bytes_if_changed(
+            &root.join(api_reference::PATH),
+            &api_reference::generate(&root)?,
+        ),
         "web-ui" => {
             for flavor in webui::FLAVORS {
                 write_if_changed(&webui::path(&root, flavor), &webui::generate(flavor)?)?;
@@ -169,6 +176,11 @@ fn main() -> Result<()> {
                 &root.join(coverage::REPORT),
                 &coverage::generate(&root)?,
                 "coverage-report",
+            )?;
+            check_bytes_current(
+                &root.join(api_reference::PATH),
+                &api_reference::generate(&root)?,
+                "api-reference",
             )?;
             let slices = runtime::generate(&root)?;
             if let Some(stale) = stale_runtime_files(&root, &slices)?.first() {
@@ -263,7 +275,7 @@ fn main() -> Result<()> {
             }
         }
         _ => bail!(
-            "usage: cargo xtask <codes|diagnostics|schema|check|coverage-report|corpus|types|packager-diff|packager-runs>"
+            "usage: cargo xtask <codes|diagnostics|schema|check|coverage-report|api-reference|corpus|types|packager-diff|packager-runs>"
         ),
     }
 }
@@ -295,7 +307,11 @@ fn world_schema_path(root: &Path) -> PathBuf {
 }
 
 fn check_current(path: &Path, expected: &str, task: &str) -> Result<()> {
-    if fs::read_to_string(path).ok().as_deref() != Some(expected) {
+    check_bytes_current(path, expected.as_bytes(), task)
+}
+
+fn check_bytes_current(path: &Path, expected: &[u8], task: &str) -> Result<()> {
+    if fs::read(path).ok().as_deref() != Some(expected) {
         bail!(
             "{} is out of date: run `cargo xtask {task}`",
             path.display()
@@ -317,7 +333,11 @@ fn stale_runtime_files(root: &Path, slices: &[(PathBuf, String)]) -> Result<Vec<
 }
 
 fn write_if_changed(path: &Path, content: &str) -> Result<()> {
-    if fs::read_to_string(path).ok().as_deref() != Some(content) {
+    write_bytes_if_changed(path, content.as_bytes())
+}
+
+fn write_bytes_if_changed(path: &Path, content: &[u8]) -> Result<()> {
+    if fs::read(path).ok().as_deref() != Some(content) {
         if let Some(parent) = path.parent() {
             fs::create_dir_all(parent)?;
         }
