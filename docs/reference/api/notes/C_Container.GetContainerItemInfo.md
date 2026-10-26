@@ -20,9 +20,10 @@ It returns `nil` for an empty slot and for a bag that isn't there. After a
 loot, an item that went into an empty slot reads as `nil` until its data
 arrives a moment later, as in the client (see `BAG_UPDATE`).
 
-An item the test doesn't define, and that wowlua has no data for, has `nil`
-for `itemName`, `hyperlink`, `iconFileID` and `quality`, although its type
-says they are always there. Define every item your test puts in the bags.
+For an item the test doesn't define, and that wowlua has no data for, it
+returns `nil`, as the client does for an item whose data hasn't arrived.
+`GetContainerItemID` still returns the item's ID. Define every item your
+test puts in the bags.
 
 ## Example
 

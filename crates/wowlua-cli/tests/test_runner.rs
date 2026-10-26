@@ -2229,6 +2229,63 @@ fn example(name: &str, summary: &str) {
     assert!(text.contains(summary), "{name}: {text}");
 }
 
+/// A world profile's bag item nothing has data for loads with Blizzard's
+/// UI without an error: its bag slot has no item info, as in the client
+/// while the item's data has not arrived (its reagent bag tutorial reads a
+/// slot's link).
+#[test]
+fn blizzard_ui_with_a_bag_item_without_data() {
+    let source = Path::new(env!("CARGO_MANIFEST_DIR")).join("../../target/types-src");
+    if !source.join("camelot/Interface").exists() {
+        eprintln!("skipped: no Blizzard UI code (run `cargo xtask types fetch`)");
+        return;
+    }
+    let dir = project(
+        r#""camelot": {}"#,
+        &[
+            ("src/main.wowlua", "print(\"loaded\")\n"),
+            (
+                "tests/profiles/bags.json",
+                r#"{ "bags": { "0": { "slots": 16, "items": { "1": { "id": 159, "count": 5 } } } } }"#,
+            ),
+            (
+                "tests/bags.test.wowlua",
+                r#"import test, expect from "wowlua:test"
+
+@test("the slot has no info")
+local function slot()
+    expect(C_Container.GetContainerItemID(0, 1)).toBe(159)
+    expect(C_Container.GetContainerItemInfo(0, 1)).toBeNil()
+end
+"#,
+            ),
+        ],
+    );
+    let manifest = dir.path().join("wowlua.json");
+    let text = fs::read_to_string(&manifest).unwrap();
+    fs::write(
+        &manifest,
+        text.replacen(
+            '{',
+            r#"{ "test": { "blizzard-ui": true, "profile": "bags" },"#,
+            1,
+        ),
+    )
+    .unwrap();
+    let out = wowlua(dir.path())
+        .arg("test")
+        .env("WOWLUA_UI_SOURCE", &source)
+        .output()
+        .unwrap();
+    let text = format!(
+        "{}{}",
+        String::from_utf8_lossy(&out.stdout),
+        String::from_utf8_lossy(&out.stderr)
+    );
+    assert!(out.status.success(), "{text}");
+    assert!(text.contains("1 passed, 0 failed"), "{text}");
+}
+
 /// Blizzard's UI through the world's changes, without an error (it runs
 /// without one in the client): casts, money, gear, bags, auras in and out
 /// of combat (their secret updates), a target's death.

@@ -411,7 +411,9 @@ makes one unless given, decision T283; cached unless `cached` is
 `false` or a `delay` or `missing` is given, and then `RequestLoadItemDataByID` fires `ITEM_DATA_LOAD_RESULT`
 after `delay`, 0.2 s by default, decision T228), in the test or in `tests/mocks/`. The data
 stays the test's table, so its values may be secrets. An ID the test did not define behaves as data
-the client does not have. Optionally, tests can run with the real client's
+the client does not have: in the bags, `C_Container.GetContainerItemInfo`
+answers nothing for it, as the client does while an item's data has not
+arrived. Optionally, tests can run with the real client's
 data: `wowlua test --game-data` answers from the WoW installation's own
 tables where a test defines nothing (items, creatures, appearances, models:
 decisions T321, T327; T366), and `wowlua data pull --wow <path to the WoW

@@ -232,3 +232,20 @@ return table.concat(seen, ';'), plain, bar:HasSecretAspect(Enum.SecretAspect.Bar
         ]
     );
 }
+
+/// An item the client has no data for reads as no item info, as the
+/// client answers while an item's data has not arrived; one with data has
+/// its name, link and icon.
+#[test]
+fn a_bag_item_without_data_has_no_info() {
+    let mut vm = vm("camelot");
+    let r = run(
+        &mut vm,
+        "mock.defineItem(2589, { name = 'Linen Cloth', icon = 132889, quality = 1 })
+mock.setBag(0, { slots = 4, items = { [1] = 2589, [2] = 987654 } })
+local known = C_Container.GetContainerItemInfo(0, 1)
+return known.itemName, known.iconFileID, known.hyperlink ~= nil,
+    C_Container.GetContainerItemInfo(0, 2), C_Container.GetContainerItemID(0, 2)",
+    );
+    assert_eq!(r, ["Linen Cloth", "132889", "true", "nil", "987654"]);
+}

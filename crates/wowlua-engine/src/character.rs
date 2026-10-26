@@ -630,11 +630,18 @@ fn get_container_item_link(vm: &mut Vm, c: NativeCall) -> Ret {
     Ok(vec![link.unwrap_or(Value::Nil)])
 }
 
-/// `C_Container.GetContainerItemInfo(bag, slot)`: a `ContainerItemInfo`.
+/// `C_Container.GetContainerItemInfo(bag, slot)`: a `ContainerItemInfo`;
+/// nothing for an item whose data the client does not have (no test's,
+/// installation's or recorded data), as the client answers for one whose
+/// data has not arrived (recorded after a loot), so its name, link and
+/// icon are never nil.
 fn get_container_item_info(vm: &mut Vm, c: NativeCall) -> Ret {
     let Some(h) = bag_slot(vm, &c) else {
         return Ok(vec![]);
     };
+    if item_data(vm, h.id).is_none() {
+        return Ok(vec![]);
+    }
     let t = vm.new_table();
     let link = link_of(vm, &h).unwrap_or(Value::Nil);
     let icon = item_field(vm, h.id, "icon");
