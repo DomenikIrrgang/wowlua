@@ -592,6 +592,70 @@ fn check_and_fmt() {
         .success();
 }
 
+/// `wowlua check --watch` (spec CLI §12.2) checks once, then again after
+/// each change, and names the package root it watches (`.` from there).
+#[test]
+fn check_watch_checks_again_after_a_change() {
+    use std::io::{BufRead, BufReader};
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("Watched");
+    write(
+        &root,
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"watched\", \"version\": \"1.0.0\" } }\n",
+            ),
+            ("src/main.wowlua", "local n: number = 1\nprint(n)\n"),
+        ],
+    );
+    let mut child = std::process::Command::new(assert_cmd::cargo::cargo_bin("wowlua"))
+        .current_dir(&root)
+        .env("NO_COLOR", "1")
+        .env("WOWLUA_HOME", dir.path().join(".wowlua-home"))
+        .args(["check", "--watch"])
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let pid = child.id();
+    // A missed file event would leave the check waiting: fail instead.
+    let (done, finished) = std::sync::mpsc::channel::<()>();
+    std::thread::spawn(move || {
+        if finished
+            .recv_timeout(std::time::Duration::from_secs(120))
+            .is_err()
+        {
+            eprintln!("wowlua check --watch did not check the change");
+            let _ = std::process::Command::new("kill")
+                .arg(pid.to_string())
+                .status();
+            std::process::abort();
+        }
+    });
+    let mut log = String::new();
+    for line in BufReader::new(child.stderr.take().unwrap()).lines() {
+        let line = line.unwrap();
+        log.push_str(&line);
+        log.push('\n');
+        if line.contains("Watching") {
+            fs::write(
+                root.join("src/main.wowlua"),
+                "local n: number = \"x\"\nprint(n)\n",
+            )
+            .unwrap();
+        }
+        if line.contains("error[") {
+            break;
+        }
+    }
+    let _ = done.send(());
+    child.kill().unwrap();
+    let _ = child.wait();
+    assert!(log.contains("Checked"), "{log}");
+    assert!(log.contains("Watching . for changes"), "{log}");
+    assert!(log.contains("error[E2001]"), "the change is checked: {log}");
+}
+
 /// Loads a built AddOn into the embedded Lua 5.1 VM like WoW does: the
 /// TOC's Lua files in order, each with `(addonName, addonTable)` as `...`.
 /// Returns what it printed.
@@ -5859,6 +5923,8 @@ fn dev_rebuilds_match_a_fresh_build() {
     assert!(child.wait().unwrap().success(), "{log}");
     let _ = done.send(());
     assert_eq!(ready, 2, "{log}");
+    // Run at the package root, it names the folder it watches as `.`.
+    assert!(log.contains("Watching . for changes"), "{log}");
     let tree = |root: &Path| -> Vec<(String, Vec<u8>)> {
         files_in(root)
             .into_iter()

@@ -479,14 +479,48 @@ pub fn toc(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<String
     true
 }
 
-/// `wowlua check`: the build pipeline without writing (type checking
-/// arrives with M4).
-pub fn check(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<String>) -> bool {
+/// `wowlua check`: the build pipeline without writing; with `--watch`,
+/// again after every change (spec CLI §12.2).
+pub fn check(
+    out: &Output,
+    global: &GlobalArgs,
+    profile: &str,
+    flavors: Vec<String>,
+    watching: bool,
+) -> bool {
+    let (ok, watched) = check_once(out, global, profile, &flavors);
+    if !watching {
+        return ok;
+    }
+    // The folder of the manifest the command found (a workspace's root
+    // covers its members), else the first project's.
+    let found = wowlua_manifest::find_manifest(&cwd(), global.manifest.as_deref())
+        .and_then(|m| m.parent().map(Path::to_path_buf));
+    let Some(root) = found.or_else(|| watched.as_ref().map(|(root, _)| root.clone())) else {
+        return ok;
+    };
+    let out_dir = watched.map_or_else(|| root.join("dist"), |(_, out_dir)| out_dir);
+    watch(out, &root, out_dir, |out_dir| {
+        if let (_, Some((_, dir))) = check_once(out, global, profile, &flavors) {
+            *out_dir = dir;
+        }
+        true
+    })
+}
+
+/// One `wowlua check` run: whether it passed, and the first project's root
+/// and output folder.
+fn check_once(
+    out: &Output,
+    global: &GlobalArgs,
+    profile: &str,
+    flavors: &[String],
+) -> (bool, Option<(PathBuf, PathBuf)>) {
     let started = Instant::now();
     let mut session = Session::new();
     let request = BuildRequest {
         profile: profile.into(),
-        flavors: (!flavors.is_empty()).then_some(flavors),
+        flavors: (!flavors.is_empty()).then(|| flavors.to_vec()),
         out_dir: None,
         write: false,
         nolib: false,
@@ -514,9 +548,13 @@ pub fn check(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<Stri
                     ),
                 );
             }
-            true
+            let watched = built
+                .builds
+                .first()
+                .map(|(p, _)| (p.root().to_path_buf(), p.manifest.out_dir()));
+            (true, watched)
         }
-        _ => false,
+        _ => (false, None),
     }
 }
 
@@ -531,6 +569,30 @@ pub fn test(out: &Output, global: &GlobalArgs, args: &crate::TestArgs) -> bool {
     let Some((root, out_dir)) = watched else {
         return ok;
     };
+    watch(out, &root, out_dir, |_| {
+        test_once(out, global, args);
+        true
+    })
+}
+
+/// The folder a status line shows: relative to the current directory, `.`
+/// for the current directory itself.
+fn shown_folder(path: &Path) -> String {
+    let shown = relative(path);
+    if shown.is_empty() { ".".into() } else { shown }
+}
+
+/// Watches `root` and calls `run` once per batch of changes: changes saved
+/// while it runs make one more run, not one each. Changes in the output
+/// folder (which `run` may move), in `.git` and in temporary files are not
+/// changes. Runs until `run` returns false; false when the folder cannot be
+/// watched.
+fn watch(
+    out: &Output,
+    root: &Path,
+    mut out_dir: PathBuf,
+    mut run: impl FnMut(&mut PathBuf) -> bool,
+) -> bool {
     let (tx, rx) = std::sync::mpsc::channel();
     let mut debouncer = match new_debouncer(Duration::from_millis(300), tx) {
         Ok(d) => d,
@@ -543,7 +605,7 @@ pub fn test(out: &Output, global: &GlobalArgs, args: &crate::TestArgs) -> bool {
             return false;
         }
     };
-    if let Err(error) = debouncer.watcher().watch(&root, RecursiveMode::Recursive) {
+    if let Err(error) = debouncer.watcher().watch(root, RecursiveMode::Recursive) {
         let mut session = Session::new();
         session.push(Diagnostic::plain_error(format!(
             "cannot watch `{}`: {error}",
@@ -552,32 +614,28 @@ pub fn test(out: &Output, global: &GlobalArgs, args: &crate::TestArgs) -> bool {
         out.flush(&mut session);
         return false;
     }
-    let shown = relative(&root);
     out.status(
         "Watching",
-        format!(
-            "{} for changes (Ctrl+C to stop)",
-            if shown.is_empty() { "." } else { &shown }
-        ),
+        format!("{} for changes (Ctrl+C to stop)", shown_folder(root)),
     );
-    let relevant = |result: &Result<Vec<DebouncedEvent>, _>| {
+    let relevant = |out_dir: &Path, result: &Result<Vec<DebouncedEvent>, _>| {
         result.as_ref().is_ok_and(|events| {
             events.iter().any(|event| {
                 let path = &event.path;
-                !path.starts_with(&out_dir)
+                !path.starts_with(out_dir)
                     && !path.components().any(|c| c.as_os_str() == ".git")
                     && !path.to_string_lossy().contains(".wowlua-tmp")
             })
         })
     };
     while let Ok(result) = rx.recv() {
-        let mut changed = relevant(&result);
-        // Changes during the last run: one run for all.
+        let mut changed = relevant(&out_dir, &result);
+        // Changes that arrived during the last run: one run for all.
         while let Ok(result) = rx.try_recv() {
-            changed |= relevant(&result);
+            changed |= relevant(&out_dir, &result);
         }
-        if changed {
-            test_once(out, global, args);
+        if changed && !run(&mut out_dir) {
+            break;
         }
     }
     true
@@ -1869,61 +1927,15 @@ pub fn dev(
     }
     // The build writes here: its own writes are not changes. Until a build
     // succeeds, the manifest is not known to be readable.
-    let mut out_dir = first.map_or_else(|| root.join("dist"), |(_, out_dir)| out_dir);
+    let out_dir = first.map_or_else(|| root.join("dist"), |(_, out_dir)| out_dir);
 
-    let (tx, rx) = std::sync::mpsc::channel();
-    let mut debouncer = match new_debouncer(Duration::from_millis(300), tx) {
-        Ok(d) => d,
-        Err(error) => {
-            let mut session = Session::new();
-            session.push(Diagnostic::plain_error(format!(
-                "cannot watch files: {error}"
-            )));
-            out.flush(&mut session);
-            return false;
-        }
-    };
-    if let Err(error) = debouncer.watcher().watch(&root, RecursiveMode::Recursive) {
-        let mut session = Session::new();
-        session.push(Diagnostic::plain_error(format!(
-            "cannot watch `{}`: {error}",
-            root.display()
-        )));
-        out.flush(&mut session);
-        return false;
-    }
-    out.status(
-        "Watching",
-        format!("{} for changes (Ctrl+C to stop)", relative(&root)),
-    );
-    let relevant = |out_dir: &Path, result: &Result<Vec<DebouncedEvent>, _>| {
-        result.as_ref().is_ok_and(|events| {
-            events.iter().any(|event| {
-                let path = &event.path;
-                !path.starts_with(out_dir)
-                    && !path.components().any(|c| c.as_os_str() == ".git")
-                    && !path.to_string_lossy().contains(".wowlua-tmp")
-            })
-        })
-    };
-    while let Ok(result) = rx.recv() {
-        let mut changed = relevant(&out_dir, &result);
-        // Changes that arrived during the last build: one build for all.
-        while let Ok(result) = rx.try_recv() {
-            changed |= relevant(&out_dir, &result);
-        }
-        if !changed {
-            continue;
-        }
+    watch(out, &root, out_dir, |out_dir| {
         if let Some((_, dir)) = cycle(false) {
-            out_dir = dir;
+            *out_dir = dir;
         }
         builds += 1;
-        if exit_after.is_some_and(|n| builds >= n) {
-            break;
-        }
-    }
-    true
+        exit_after.is_none_or(|n| builds < n)
+    })
 }
 
 /// Whether `wowlua lint` shows a diagnostic: lints, and errors that stop

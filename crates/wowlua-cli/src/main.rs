@@ -279,6 +279,9 @@ enum Command {
         /// Restrict to these flavors
         #[arg(long, value_delimiter = ',')]
         flavor: Vec<String>,
+        /// Check again whenever a file of the package changes
+        #[arg(long)]
+        watch: bool,
     },
     /// Run the tests in the emulated client
     Test(TestArgs),
@@ -631,9 +634,11 @@ fn run() -> ExitCode {
             no_verify,
         } => commands::login(&out, site, token, no_verify),
         Command::Logout { site } => commands::logout(&out, site),
-        Command::Check { profile, flavor } => {
-            commands::check(&out, &cli.global, &profile.name("dev"), flavor)
-        }
+        Command::Check {
+            profile,
+            flavor,
+            watch,
+        } => commands::check(&out, &cli.global, &profile.name("dev"), flavor, watch),
         Command::Test(args) => commands::test(&out, &cli.global, &args),
         Command::Debug { port } => debug::debug(&out, &cli.global, port),
         // exit code 1 when the client exits without `shutdown`
