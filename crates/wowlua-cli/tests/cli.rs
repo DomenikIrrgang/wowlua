@@ -1458,7 +1458,6 @@ print(cancel, zoom, maxZoom, secretTable, completion, known, tabCost, conditionT
         diagnostics,
         [
             "src/main.wowlua:22:30: error[E2040]: `number | Secret<number>` may be a secret value; narrow it with `canaccessvalue` or `issecretvalue` first",
-            "src/main.wowlua:22:30: error[E2001]: cannot compare `number | Secret<number>` with `0`",
             "src/main.wowlua:32:7: error[E2001]: `nil | string | Secret<string>` is not assignable to `string`",
             // (the cursor's id depends on what it holds: unknown, T288)
             "src/main.wowlua:35:7: error[E2001]: `unknown?` is not assignable to `number`",
