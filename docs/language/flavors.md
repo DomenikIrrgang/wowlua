@@ -211,7 +211,7 @@ A profile can't change the type of a value, so the code checks the same in
 every build:
 
 ```text
-error[E4012]: profile `dev`: config key `maxHistory` has type a string but the top-level `config` defines a number
+error[E4012]: profile `dev`: config key `maxHistory` is a string but the top-level `config` defines a number
    ┌─ wowlua.json:33:9
    │
 33 │         "maxHistory": "lots"

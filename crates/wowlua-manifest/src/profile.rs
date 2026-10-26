@@ -247,7 +247,7 @@ fn compare(
             Some(expected) if !same_type(expected, value) => out.push((
                 path.clone(),
                 format!(
-                    "has type {} but the top-level `config` defines {}",
+                    "is {} but the top-level `config` defines {}",
                     crate::model::json_type_name(value),
                     crate::model::json_type_name(expected)
                 ),
@@ -336,5 +336,13 @@ mod tests {
         let profile = json!({ "a": "str", "missing": true, "o": { "x": 2 } });
         let issues = config_mismatches(top.as_object().unwrap(), profile.as_object().unwrap());
         assert_eq!(issues.len(), 3);
+        // the reason reads as a sentence after "config key `a`"
+        assert!(
+            issues.contains(&(
+                vec!["a".to_string()],
+                "is a string but the top-level `config` defines a number".to_string()
+            )),
+            "{issues:?}"
+        );
     }
 }
