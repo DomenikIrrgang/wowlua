@@ -1,0 +1,114 @@
+name: Registry image
+
+# Builds the wowlua registry server (crates/wowlua-registry) into an image
+# and pushes it to the DigitalOcean container registry, tagged with the
+# commit (its first 12 characters). Deploying it to the droplet is not this
+# workflow's job.
+#   - push to main that changes the server or a crate it uses
+#   - by hand (workflow_dispatch)
+on:
+  push:
+    branches: [main]
+    paths:
+      - crates/wowlua-registry/**
+      - crates/wowlua-pkg/**
+      - crates/wowlua-manifest/**
+      - crates/wowlua-diagnostics/**
+      - crates/wowlua-flavors/**
+      - crates/wowlua-span/**
+      - crates/wowlua-host/**
+      - Cargo.toml
+      - Cargo.lock
+      - .github/workflows/registry-image.yml
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: registry-image
+  cancel-in-progress: false
+
+env:
+  REGISTRY: registry.digitalocean.com/suuui
+  REPOSITORY: wowlua-registry
+  KEEP_TAGS: 5
+
+jobs:
+  image:
+    runs-on: ubuntu-latest
+    # The access token lives on the environment, which only accepts the
+    # main branch.
+    environment:
+      name: production
+      url: https://registry.wowlua.dev
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Tag
+        id: v
+        run: |
+          tag="${GITHUB_SHA::12}"
+          echo "tag=$tag" >> "$GITHUB_OUTPUT"
+          echo "image tag: $tag"
+
+      - uses: digitalocean/action-doctl@3cb3953159719656269e044e0e24ca16dd2a690f # v2.5.2
+        with:
+          token: ${{ secrets.DIGITALOCEAN_ACCESS_TOKEN }}
+
+      - name: Skip when this commit's image exists
+        id: skip
+        run: |
+          if doctl registry repository list-tags "$REPOSITORY" --format Tag --no-header 2>/dev/null | grep -qx "${{ steps.v.outputs.tag }}"; then
+            echo "skip=true" >> "$GITHUB_OUTPUT"
+            echo "image ${{ steps.v.outputs.tag }} exists"
+          fi
+
+      # The registry is read-only while garbage collection runs (suuui-website's
+      # deploys start one; it waits for every registry login to expire).
+      - name: Wait for registry garbage collection
+        if: steps.skip.outputs.skip != 'true'
+        run: |
+          for _ in $(seq 120); do
+            doctl registry garbage-collection get-active >/dev/null 2>&1 || exit 0
+            echo "garbage collection in progress, waiting..."
+            sleep 15
+          done
+          echo "garbage collection still running after 30 minutes" >&2
+          exit 1
+
+      - name: Log in to registry
+        if: steps.skip.outputs.skip != 'true'
+        # Short-lived: garbage collection waits for every write login to expire.
+        run: doctl registry login --expiry-seconds 1200
+
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+        if: steps.skip.outputs.skip != 'true'
+
+      - uses: docker/build-push-action@c3c9e263c25d99ce0380d002d59b67737d91b0dc # v7.4.0
+        if: steps.skip.outputs.skip != 'true'
+        with:
+          context: .
+          file: crates/wowlua-registry/Dockerfile
+          push: true
+          tags: ${{ env.REGISTRY }}/${{ env.REPOSITORY }}:${{ steps.v.outputs.tag }}
+          # A single plain manifest per tag keeps registry garbage collection
+          # from treating attestation manifests as untagged.
+          provenance: false
+          sbom: false
+          cache-from: type=gha,scope=wowlua-registry
+          cache-to: type=gha,mode=max,scope=wowlua-registry
+
+      # Only the tags: the registry (shared with suuui-website, 5 GB) is
+      # garbage collected by suuui-website's deploys, which free these images too.
+      - name: Prune old images
+        if: steps.skip.outputs.skip != 'true'
+        run: |
+          doctl registry repository list-tags "$REPOSITORY" --output json \
+            | jq -r --argjson keep "$KEEP_TAGS" 'sort_by(.updated_at) | reverse | .[$keep:] | .[].tag' \
+            > old-tags
+          if [ -s old-tags ]; then
+            xargs doctl registry repository delete-tag "$REPOSITORY" --force < old-tags
+          fi
