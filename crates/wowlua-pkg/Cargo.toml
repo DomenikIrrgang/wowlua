@@ -10,6 +10,7 @@ authors.workspace = true
 
 [dependencies]
 wowlua-diagnostics.workspace = true
+wowlua-host.workspace = true
 wowlua-manifest.workspace = true
 wowlua-span.workspace = true
 dirs.workspace = true

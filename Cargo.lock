@@ -3592,6 +3592,7 @@ dependencies = [
  "ureq",
  "walkdir",
  "wowlua-diagnostics",
+ "wowlua-host",
  "wowlua-manifest",
  "wowlua-span",
  "zip",

@@ -468,14 +468,16 @@ fn materialize(
         });
     }
     let pin = pin.as_deref();
+    // Through the host: a path dependency of a project in memory (the
+    // browser's) is in memory too.
     let own_pkgmeta = |root: &Path, sub: &str| {
         let file = root.join(".pkgmeta");
-        file.is_file().then(|| (file, sub.to_string()))
+        wowlua_host::is_file(&file).then(|| (file, sub.to_string()))
     };
     let mut project_file = None;
     let (dir, pin) = match source {
         Source::Path { path, dir } => {
-            if !dir.join("wowlua.json").exists() && !dir.is_dir() {
+            if !wowlua_host::exists(dir.join("wowlua.json")) && !wowlua_host::is_dir(dir) {
                 return Err(vec![Diagnostic::error(
                     "E4102",
                     format!("dependency `{name}`: path `{path}` does not exist"),
@@ -591,8 +593,18 @@ fn materialize(
         }
     };
     let manifest_path = dir.join("wowlua.json");
-    let manifest = if manifest_path.is_file() {
-        let output = wowlua_manifest::load(db, &manifest_path, options.compiler);
+    let manifest = if wowlua_host::is_file(&manifest_path) {
+        let output = match wowlua_host::read_to_string(&manifest_path) {
+            Ok(text) => {
+                let mut output = wowlua_manifest::parse(db, &manifest_path, text, options.compiler);
+                if let Some(m) = &mut output.manifest {
+                    m.path.clone_from(&manifest_path);
+                    m.root.clone_from(&dir);
+                }
+                output
+            }
+            Err(_) => wowlua_manifest::load(db, &manifest_path, options.compiler),
+        };
         let errors: Vec<Diagnostic> = output
             .diagnostics
             .iter()
