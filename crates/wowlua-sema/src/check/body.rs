@@ -80,6 +80,9 @@ pub struct FileInfo<'a> {
     pub import_targets: FxHashMap<Box<str>, super::env::DefTarget>,
     /// The counts of imported functions (W2062), by local name.
     pub import_caps: FxHashMap<Box<str>, usize>,
+    /// The imports of folded constants, by local name (assigning one is
+    /// E2010, as the lowering reports it).
+    pub const_imports: FxHashSet<Box<str>>,
     /// The file is a module (top-level `...` is not the addon arguments
     /// for imports; it still is in WoW).
     pub is_module: bool,
@@ -215,6 +218,8 @@ pub struct Checker<'e, 'p> {
     /// variables of those imports (a shadowing local is not the import).
     intrinsics: crate::stdlib::Intrinsics,
     pub(crate) import_vars: FxHashMap<Box<str>, VarId>,
+    /// See [`FileInfo::const_imports`].
+    pub(crate) const_imports: FxHashSet<Box<str>>,
     /// With `FileInfo::hover`: declared names (locals, parameters,
     /// functions, methods) and methods called, with their types.
     pub(crate) hovers: Option<Vec<(Span, TypeId)>>,
@@ -391,6 +396,7 @@ impl<'e, 'p> Checker<'e, 'p> {
             value_checks: FxHashMap::default(),
             intrinsics: info.intrinsics.clone(),
             import_vars: FxHashMap::default(),
+            const_imports: info.const_imports.clone(),
             hovers: info.hover.then(Vec::new),
             import_targets: info.import_targets.clone(),
             next_handler: None,

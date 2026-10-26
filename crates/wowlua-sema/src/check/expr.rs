@@ -1140,6 +1140,32 @@ impl Checker<'_, '_> {
         }
     }
 
+    /// An assignment to a local that cannot be assigned: an import (E1010),
+    /// a `const` (an imported one too), an enum or a class (E2010). The
+    /// messages are the lowering's, which finds them too (the build reports
+    /// a message once).
+    fn report_const_assignment(&mut self, v: VarId, n: Name<'_>) {
+        let name = n.text();
+        if self.import_vars.get(name) == Some(&v) && !self.const_imports.contains(name) {
+            let msg = format!("cannot assign to the imported binding `{name}`");
+            self.report("E1010", n.span(), msg);
+            return;
+        }
+        let what = match self.vars[v.0 as usize]
+            .declared
+            .map(|t| self.env.types.get(t).clone())
+        {
+            Some(Ty::ClassOf(d)) if self.env.def(d).kind == DefKind::Enum => "the enum",
+            Some(Ty::ClassOf(d)) if self.env.def(d).kind == DefKind::Class => "the class",
+            _ => "the constant",
+        };
+        self.report(
+            "E2010",
+            n.span(),
+            format!("cannot assign to {what} `{name}`"),
+        );
+    }
+
     pub fn assign_target(&mut self, t: Expr<'_>, value: TypeId) {
         if let ExprKind::Name(n) = t.kind() {
             let var = self.lookup_var(n.text());
@@ -1153,11 +1179,10 @@ impl Checker<'_, '_> {
             ExprKind::Name(n) => match self.lookup_var(n.text()) {
                 Some(v) => {
                     if self.vars[v.0 as usize].is_const {
-                        self.report(
-                            "E2010",
-                            n.span(),
-                            format!("cannot assign to `{}`", n.text()),
-                        );
+                        // One error, naming what it is; the value's type
+                        // doesn't matter.
+                        self.report_const_assignment(v, n);
+                        return;
                     }
                     self.assign_var(v, value, n.span())
                 }

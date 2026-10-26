@@ -1011,6 +1011,7 @@ fn check_file_in(
         imports,
         import_targets,
         import_caps,
+        const_imports: const_imports(ctx, i),
         hover,
         is_module: ctx.analysis.modules[i]
             .as_ref()
@@ -1386,6 +1387,41 @@ fn import_caps(ctx: &FileCtx<'_>, file: usize) -> FxHashMap<Box<str>, usize> {
     out
 }
 
+/// The local names of a file's imports of folded constants
+/// (`export const A = 1`): assigning one is E2010, as for a `const`.
+fn const_imports(ctx: &FileCtx<'_>, file: usize) -> FxHashSet<Box<str>> {
+    let mut out = FxHashSet::default();
+    let (Some(parse), Some(info)) = (ctx.files[file].parse, &ctx.analysis.modules[file]) else {
+        return out;
+    };
+    for s in parse.view().block().stmts() {
+        let StmtKind::Import(import) = s.kind() else {
+            continue;
+        };
+        if import.type_only() || import.internal() {
+            continue;
+        }
+        let Some(resolved) = info.imports.iter().find(|r| r.start == s.span().start) else {
+            continue;
+        };
+        let Target::Module(m) = resolved.target else {
+            continue;
+        };
+        let Some(exports) = ctx.analysis.modules[m].as_ref().map(|i| &i.exports) else {
+            continue;
+        };
+        if let ImportClause::Names(specs) = &import.clause() {
+            for spec in specs {
+                if matches!(exports.get(spec.name.text()), Some(Export::Const(Some(_)))) {
+                    let local = spec.alias.as_ref().unwrap_or(&spec.name);
+                    out.insert(local.text().into());
+                }
+            }
+        }
+    }
+    out
+}
+
 /// The types of a file's imported bindings. In an import cycle, an export
 /// of a module checked later that its annotations do not type reads as
 /// `any`: W1036 where it is imported or read (spec §5.4.4).
@@ -1705,6 +1741,8 @@ fn typeof_alias_warning(
 mod tests {
     use super::*;
     use wowlua_span::SourceDb;
+
+    mod type_rules;
 
     /// Checks one `.wowlua` source with the compiler's declarations.
     pub(crate) fn check_source(src: &str, mode: Mode) -> Vec<Diagnostic> {
