@@ -3412,6 +3412,7 @@ dependencies = [
  "wowlua-manifest",
  "wowlua-pkg",
  "wowlua-render",
+ "wowlua-runtime",
  "wowlua-span",
  "wowlua-test",
  "wowlua-vm",

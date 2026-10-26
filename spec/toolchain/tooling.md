@@ -913,17 +913,20 @@ MyAddon/MyAddon.lua:4821: attempt to index local 'a' (a nil value)
 `wowlua prof report` turns recordings exported from the dev window
 ([Debugging §7.7.9](../language/07-debugging.md#779-export)) into a single,
 self-contained HTML page and opens it in the browser (`--no-open` only writes
-it). The default output is `dist/reports/<Name>-<date>.html`; `--out` sets
-another path.
+it). The default output is `dist/reports/<Name>-<date>.html` (the date as
+`YYYY-MM-DD`, UTC); `--out` sets another path.
 
 - **Finding the data.** The command reads `WowluaDevDB_<Addon>.lua` of the
   current package from the SavedVariables folders of the WoW installation,
   found as for `wowlua dev` ([CLI §12.5](cli.md#125-wow-installation-integration)):
   `--wow`, `WOWLUA_WOW_PATH`, the global config, then auto-detection. Every
-  client folder and every account under `WTF/Account/` is searched. When more
-  than one has exported recordings, the command lists them and asks, or takes
-  `--client` and `--account` (decision T179).
-- **What it shows.** Every exported recording (`--recording` selects some),
+  client folder and every account under `WTF/Account/` is searched; only
+  exports of format 1 count. When more than one has exported recordings, the
+  command lists them and asks, or takes `--client` and `--account` (decision
+  T179). Without a terminal to ask on, it lists them and fails. None found is
+  an error that says how to export.
+- **What it shows.** Every exported recording (`--recording <name>` selects
+  some; a name that was not exported is an error),
   with the functions table, the call tree and flame graph when call paths
   were on, the frame timeline with the frame budget, the slow calls with
   their stacks, the garbage view and the hints found in that recording, in

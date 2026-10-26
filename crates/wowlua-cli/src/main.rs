@@ -5,6 +5,7 @@ mod commands;
 mod data;
 mod debug;
 mod output;
+mod prof;
 mod screenshot;
 
 use clap::{Args, Parser, Subcommand, ValueEnum};
@@ -427,6 +428,11 @@ enum Command {
         #[command(subcommand)]
         command: CacheCommand,
     },
+    /// Profiling: reports of the recordings exported from the dev window
+    Prof {
+        #[command(subcommand)]
+        command: ProfCommand,
+    },
     /// Game data from your WoW installation, for `wowlua test --game-data`
     Data {
         #[command(subcommand)]
@@ -457,6 +463,35 @@ enum DataCommand {
         #[arg(long, value_delimiter = ',')]
         flavor: Vec<String>,
     },
+}
+
+#[derive(Subcommand, Debug)]
+enum ProfCommand {
+    /// Write an HTML report of the recordings exported from the dev window
+    /// (read from WowluaDevDB_<Addon> in WoW's SavedVariables)
+    Report(ProfReportArgs),
+}
+
+#[derive(Args, Debug, Clone)]
+pub struct ProfReportArgs {
+    /// The account folder under WTF/Account/ (when several have recordings)
+    #[arg(long, value_name = "NAME")]
+    pub account: Option<String>,
+    /// The client folder, e.g. _retail_ (when several have recordings)
+    #[arg(long, value_name = "FOLDER")]
+    pub client: Option<String>,
+    /// The WoW installation directory
+    #[arg(long, value_name = "PATH")]
+    pub wow: Option<PathBuf>,
+    /// Only the recordings with these names (default: every exported one)
+    #[arg(long = "recording", value_name = "NAME")]
+    pub recording: Vec<String>,
+    /// Where to write the page (default: dist/reports/<Name>-<date>.html)
+    #[arg(long, value_name = "FILE")]
+    pub out: Option<PathBuf>,
+    /// Only write the page, without opening it in the browser
+    #[arg(long)]
+    pub no_open: bool,
 }
 
 #[derive(Subcommand, Debug)]
@@ -758,6 +793,9 @@ fn run() -> ExitCode {
             command: TypesCommand::Sync { flavor },
         } => commands::types_sync(&out, &cli.global, &flavor),
         Command::Explain { code } => commands::explain(&out, &code),
+        Command::Prof {
+            command: ProfCommand::Report(args),
+        } => prof::report(&out, &cli.global, &args),
         Command::Data {
             command: DataCommand::Pull { wow, flavor },
         } => data::pull(&out, wow.as_deref(), &flavor),

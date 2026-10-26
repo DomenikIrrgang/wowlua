@@ -51,6 +51,11 @@ export function poll() end
 "#;
 
 fn run(profile: &str, test: &str) {
+    package(profile, test);
+}
+
+/// The package of `run`, after its tests passed.
+fn package(profile: &str, test: &str) -> tempfile::TempDir {
     let dir = tempfile::tempdir().unwrap();
     let manifest = format!(
         r#"{{ "package": {{ "name": "probe", "version": "1.0.0" }}, "flavors": {{ "camelot": {{}} }},
@@ -78,6 +83,7 @@ fn run(profile: &str, test: &str) {
         String::from_utf8_lossy(&out.stderr)
     );
     assert!(out.status.success(), "{text}");
+    dir
 }
 
 /// Frame time, slow calls with their root and stack, call paths and garbage
@@ -593,4 +599,254 @@ local function toast()
 end
 "#,
     );
+}
+
+/// `wowlua prof report` (Tooling §16.5, decisions T175 and T179) on what the
+/// runtime exported: a boss pull marked for export, written to the
+/// SavedVariables file as the client writes it, found in the installation's
+/// accounts and clients, its stacks mapped to the source, as an HTML page.
+#[test]
+fn prof_report_of_an_exported_pull() {
+    let dir = package(
+        r#", "profile-call-paths": true, "profile-garbage": true, "slow-call": 3"#,
+        r#"
+-- WowluaDevDB_Probe as the client writes SavedVariables.
+local function sv(v: any, indent: string): string
+    local t = type(v)
+    if t == "string" then
+        return (string.format("%q", v):gsub("\\\n", "\\n"))
+    elseif t == "number" then
+        if v == math.floor(v) and math.abs(v) < 1e15 then
+            return string.format("%d", v)
+        end
+        return string.format("%.16g", v)
+    elseif t ~= "table" then
+        return tostring(v)
+    end
+    local inner = indent .. "\t"
+    local out = { "{\n" }
+    local n = #v
+    for i = 1, n do
+        out[#out + 1] = `{inner}{sv(v[i], inner)}, -- [{i}]\n`
+    end
+    local keys = {}
+    for k in pairs(v) do
+        if not (type(k) == "number" and k >= 1 and k <= n and k == math.floor(k)) then
+            keys[#keys + 1] = k
+        end
+    end
+    table.sort(keys, function(a, b) return tostring(a) < tostring(b) end)
+    for _, k in ipairs(keys) do
+        if type(v[k]) ~= "function" then
+            local key = type(k) == "string" and string.format("%q", k) or tostring(k)
+            out[#out + 1] = `{inner}[{key}] = {sv(v[k], inner)},\n`
+        end
+    end
+    out[#out + 1] = indent .. "}"
+    return table.concat(out)
+end
+
+@test
+@noprofile
+local function exportsAPull()
+    local perf = probe().runtime.perf
+    hooks.work = function() mock.spend(5) end
+    mock.startEncounter({ id = 2902, name = "Ulgrax", difficultyID = 16, groupSize = 20 })
+    mock.fireEvent("BAG_UPDATE", 0)
+    mock.advanceFrames(120)
+    mock.slash("/probe")
+    mock.endEncounter(true)
+    local pull = perf.recordings[#perf.recordings]
+    expect(pull.name).toBe("pull 1")
+    perf.setExport(pull, true)
+    local db: any = _G.WowluaDevDB_Probe
+    expect(#db.exports).toBe(1)
+    expect(#db.exports[1].slow > 0).toBe(true)
+    expect("\nWowluaDevDB_Probe = " .. sv(db, "") .. "\n").toMatchSnapshot("SavedVariables")
+end
+"#,
+    );
+    // The snapshot holds the file's text as a Lua string.
+    let snap = fs::read_to_string(
+        dir.path()
+            .join("tests/__snapshots__/devtools.test.wowlua.snap"),
+    )
+    .unwrap();
+    let mut literal = String::new();
+    let mut inside = false;
+    for line in snap.lines() {
+        if line.starts_with("# ") {
+            inside = line.ends_with(" SavedVariables");
+        } else if inside && let Some(rest) = line.strip_prefix('|') {
+            literal.push_str(rest.strip_prefix(' ').unwrap_or(rest));
+            literal.push('\n');
+        }
+    }
+    let lua = mlua::Lua::new();
+    let file: mlua::LuaString = lua.load(format!("return {literal}")).eval().unwrap();
+    let file = file.as_bytes().to_vec();
+    let wow = dir.path().join("wow");
+    let place = |client: &str, account: &str| {
+        let sv = wow
+            .join(client)
+            .join("WTF/Account")
+            .join(account)
+            .join("SavedVariables");
+        fs::create_dir_all(&sv).unwrap();
+        fs::write(sv.join("WowluaDevDB_Probe.lua"), &file).unwrap();
+    };
+    place("_retail_", "ACCOUNT1");
+    // An account without exports, and another addon's data, do not count.
+    fs::create_dir_all(wow.join("_retail_/WTF/Account/EMPTY/SavedVariables")).unwrap();
+    fs::write(
+        wow.join("_retail_/WTF/Account/EMPTY/SavedVariables/WowluaDevDB_Probe.lua"),
+        "WowluaDevDB_Probe = {\n[\"settings\"] = {\n},\n}\n",
+    )
+    .unwrap();
+    let report = |args: &[&str]| {
+        let out = wowlua(dir.path())
+            .args(["prof", "report", "--no-open", "--wow", "wow"])
+            .args(args)
+            .output()
+            .unwrap();
+        let text = format!(
+            "{}{}",
+            String::from_utf8_lossy(&out.stdout),
+            String::from_utf8_lossy(&out.stderr)
+        );
+        (out.status.success(), text)
+    };
+    let page_data = |path: &Path| -> serde_json::Value {
+        let page = fs::read_to_string(path).unwrap();
+        let start = page
+            .find("<script type=\"application/json\" id=\"data\">")
+            .unwrap();
+        let rest = &page[start..];
+        let json = &rest[rest.find('>').unwrap() + 1..rest.find("</script>").unwrap()];
+        serde_json::from_str(json).unwrap()
+    };
+
+    // One place with recordings: the default page.
+    let (ok, text) = report(&[]);
+    assert!(ok, "{text}");
+    assert!(text.contains("Read 1 recording of Probe"), "{text}");
+    let reports: Vec<_> = fs::read_dir(dir.path().join("dist/reports"))
+        .unwrap()
+        .flatten()
+        .map(|e| e.path())
+        .collect();
+    assert_eq!(reports.len(), 1, "{reports:?}");
+    let name = reports[0]
+        .file_name()
+        .unwrap()
+        .to_string_lossy()
+        .into_owned();
+    assert!(
+        regex::Regex::new(r"^Probe-\d{4}-\d{2}-\d{2}\.html$")
+            .unwrap()
+            .is_match(&name),
+        "{name}"
+    );
+    let page = fs::read_to_string(&reports[0]).unwrap();
+    // Self-contained: the design's fonts inside, nothing from the network.
+    assert!(page.contains("font-family: \"Martian Mono\""));
+    for load in ["src=\"http", "href=\"http", "url(http", "@import"] {
+        assert!(!page.contains(load), "{load}");
+    }
+    let data = page_data(&reports[0]);
+    assert_eq!(data["client"], "_retail_");
+    assert_eq!(data["account"], "ACCOUNT1");
+    let rec = &data["recordings"][0];
+    assert_eq!(rec["format"], 1);
+    assert_eq!(rec["addon"], "Probe");
+    assert_eq!(rec["name"], "pull 1");
+    assert_eq!(rec["kind"], "pull");
+    assert_eq!(rec["detail"], "Ulgrax");
+    assert_eq!(rec["callPaths"], true);
+    assert_eq!(rec["functions"]["heavy"]["calls"], 2);
+    assert!(
+        rec["functions"]["heavy"]["location"]
+            .as_str()
+            .unwrap()
+            .starts_with("src/main.wowlua:"),
+        "{rec}"
+    );
+    assert!(rec["frames"].as_i64().unwrap() >= 120, "{rec}");
+    assert!(
+        rec["seconds"]["frames"].as_array().unwrap().len() >= 2,
+        "{rec}"
+    );
+    let paths: Vec<String> = rec["paths"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|p| {
+            p["path"]
+                .as_array()
+                .unwrap()
+                .iter()
+                .map(|n| n.as_str().unwrap().to_string())
+                .collect::<Vec<_>>()
+                .join(">")
+        })
+        .collect();
+    assert!(
+        paths.contains(&"BAG_UPDATE>handler>heavy".to_string()),
+        "{paths:?}"
+    );
+    assert!(
+        paths.contains(&"/probe>handler>heavy".to_string()),
+        "{paths:?}"
+    );
+    let slow = rec["slow"].as_array().unwrap();
+    assert_eq!(slow.len(), 2, "{slow:?}");
+    assert_eq!(slow[0]["root"], "/probe");
+    assert_eq!(slow[1]["root"], "BAG_UPDATE");
+    // The stack, with its lines mapped to the source.
+    let stack = slow[0]["stack"].as_str().unwrap();
+    assert!(stack.contains("→ src/main.wowlua:"), "{stack}");
+    let hints: Vec<&str> = rec["hints"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|h| h["code"].as_str().unwrap())
+        .collect();
+    assert!(hints.contains(&"P7301"), "{hints:?}");
+
+    // Several accounts and clients: without a terminal, the command lists
+    // them and asks for --client and --account.
+    place("_classic_", "OTHER");
+    let (ok, text) = report(&[]);
+    assert!(!ok, "{text}");
+    assert!(text.contains("several accounts or clients"), "{text}");
+    assert!(
+        text.contains("_retail_  ACCOUNT1  1 recording (pull 1)"),
+        "{text}"
+    );
+    assert!(text.contains("_classic_  OTHER"), "{text}");
+    assert!(text.contains("--client"), "{text}");
+    let (ok, text) = report(&[
+        "--account",
+        "other",
+        "--out",
+        "pull.html",
+        "--recording",
+        "pull 1",
+    ]);
+    assert!(ok, "{text}");
+    assert_eq!(
+        page_data(&dir.path().join("pull.html"))["client"],
+        "_classic_"
+    );
+    let (ok, text) = report(&["--client", "retail", "--recording", "pull 9"]);
+    assert!(!ok, "{text}");
+    assert!(
+        text.contains("no exported recording named `pull 9`"),
+        "{text}"
+    );
+    assert!(text.contains("exported: pull 1"), "{text}");
+    let (ok, text) = report(&["--account", "EMPTY"]);
+    assert!(!ok, "{text}");
+    assert!(text.contains("no exported recordings of Probe"), "{text}");
+    assert!(text.contains("Mark for export"), "{text}");
 }

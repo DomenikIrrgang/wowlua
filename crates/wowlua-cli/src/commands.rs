@@ -11,11 +11,11 @@ use wowlua_driver::scaffold::{self, InitRequest, NewRequest};
 use wowlua_driver::{BuildOutput, BuildRequest, LoadOptions, Project, Session};
 use wowlua_manifest::model::PackageKind;
 
-fn cwd() -> PathBuf {
+pub(crate) fn cwd() -> PathBuf {
     std::env::current_dir().unwrap_or_else(|_| PathBuf::from("."))
 }
 
-fn load_options(out: &Output, global: &GlobalArgs) -> LoadOptions {
+pub(crate) fn load_options(out: &Output, global: &GlobalArgs) -> LoadOptions {
     let cwd = cwd();
     LoadOptions {
         manifest: global.manifest.as_ref().map(|m| cwd.join(m)),
@@ -46,7 +46,7 @@ fn load_projects(
 }
 
 /// `load_projects` for commands that work on one project.
-fn load_project(
+pub(crate) fn load_project(
     global: &GlobalArgs,
     session: &mut Session,
     options: &LoadOptions,
@@ -64,7 +64,7 @@ fn apply_lints(session: &mut Session, project: &Project) {
     project.apply_lints(session);
 }
 
-fn relative(path: &Path) -> String {
+pub(crate) fn relative(path: &Path) -> String {
     let cwd = cwd();
     path.strip_prefix(&cwd)
         .unwrap_or(path)
@@ -1900,7 +1900,7 @@ pub fn new(
     }
 }
 
-fn plural(count: usize, one: &str, many: &str) -> String {
+pub(crate) fn plural(count: usize, one: &str, many: &str) -> String {
     format!("{count} {}", if count == 1 { one } else { many })
 }
 
