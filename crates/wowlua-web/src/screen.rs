@@ -1,47 +1,13 @@
 //! The running addon drawn on the page's canvas (spec M14 S3, decision
 //! T396): the renderer's frames into a canvas surface, WebGPU where the
-//! browser has it, else WebGL 2. Images come from the addon's folder;
-//! Blizzard's textures and fonts need the user's installation (S5): until
-//! then they are the renderer's placeholders and stand-in fonts.
+//! browser has it, else WebGL 2. Pictures and fonts come from the addon's
+//! folder and the user's installation when the page opened it (S5,
+//! T398); without it Blizzard's are the renderer's placeholders and
+//! stand-in fonts.
 
-use std::path::PathBuf;
 use wasm_bindgen::JsCast;
 use wasm_bindgen::prelude::*;
-use wowlua_engine::scene::Image;
-use wowlua_render::{Assets, Renderer, Rgba};
-
-/// The addon's own files (`Interface\AddOns\<name>\…`) in the host.
-struct PageAssets {
-    /// `interface\addons\<name>\` (lower case) and the folder.
-    addons: Vec<(String, PathBuf)>,
-}
-
-impl Assets for PageAssets {
-    fn image(&mut self, image: &Image) -> Option<Rgba> {
-        let Image::File(path) = image else {
-            return None;
-        };
-        let norm = path.replace('/', "\\").to_ascii_lowercase();
-        let (prefix, dir) = self
-            .addons
-            .iter()
-            .find(|(p, _)| norm.starts_with(p.as_str()))?;
-        let file = wowlua_engine::bindings::find_addon_file(
-            dir,
-            &path[prefix.len()..],
-            &[".blp", ".tga", ".png"],
-        )?;
-        let bytes = wowlua_host::read(file).ok()?;
-        if bytes.starts_with(&[0x89, b'P', b'N', b'G']) {
-            return wowlua_render::decode_png(&bytes).ok();
-        }
-        wowlua_casc::decode_image(&bytes)
-    }
-
-    fn font(&mut self, _: &str) -> Option<Vec<u8>> {
-        None
-    }
-}
+use wowlua_render::Renderer;
 
 /// A canvas the running addon is drawn on.
 #[wasm_bindgen]
@@ -169,7 +135,7 @@ impl Screen {
         let Some(game) = playground.inner().game() else {
             return Ok(());
         };
-        let addons = game.addon_folders();
+        let mut assets = game.assets();
         let scene = wowlua_engine::scene::build(game.vm());
         let frame = match self.surface.get_current_texture() {
             wgpu::CurrentSurfaceTexture::Success(f)
@@ -190,7 +156,6 @@ impl Screen {
             .texture
             .create_view(&wgpu::TextureViewDescriptor::default());
         let scale = self.config.width as f32 / scene.width.max(1) as f32;
-        let mut assets = PageAssets { addons };
         // (a snapshot being read back: this frame is skipped)
         let Ok(mut renderer) = self.renderer.try_borrow_mut() else {
             return Ok(());
@@ -223,9 +188,7 @@ impl Screen {
             .inner()
             .game()
             .ok_or_else(|| JsError::new("no addon runs"))?;
-        let mut assets = PageAssets {
-            addons: game.addon_folders(),
-        };
+        let mut assets = game.assets();
         let scene = wowlua_engine::scene::build(game.vm());
         let renderer = self.renderer.clone();
         Ok(wasm_bindgen_futures::future_to_promise(async move {

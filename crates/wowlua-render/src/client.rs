@@ -2,19 +2,25 @@
 //! folders, then the WoW installation's storage for the flavor's client.
 
 use std::collections::HashMap;
-use std::path::{Path, PathBuf};
+#[cfg(not(target_arch = "wasm32"))]
+use std::path::Path;
+use std::path::PathBuf;
 use std::sync::{Arc, Mutex, OnceLock};
 
+#[cfg(not(target_arch = "wasm32"))]
+use wowlua_casc::FsStorage;
 use wowlua_casc::display::{Display, Library};
-use wowlua_casc::{Casc, FsStorage, Rgba};
+use wowlua_casc::{Casc, Rgba};
 use wowlua_engine::scene::{Image, ModelSource};
 
 use crate::Assets;
 
 /// The storages opened, by installation and product.
+#[cfg(not(target_arch = "wasm32"))]
 type Opened = Mutex<HashMap<(PathBuf, String), Arc<Casc>>>;
 
 /// Each product's storage, opened once per process.
+#[cfg(not(target_arch = "wasm32"))]
 fn opened() -> &'static Opened {
     static OPEN: OnceLock<Opened> = OnceLock::new();
     OPEN.get_or_init(Default::default)
@@ -22,20 +28,18 @@ fn opened() -> &'static Opened {
 
 /// The storage of the first of `folders` (a flavor's client folders) the
 /// installation has, opened once per process.
+#[cfg(not(target_arch = "wasm32"))]
 pub fn open_client(install: &Path, folders: &[String]) -> Result<Arc<Casc>, String> {
     let storage = FsStorage {
         root: install.to_path_buf(),
     };
-    let product = folders
-        .iter()
-        .find_map(|f| Casc::product_of_folder(&storage, f))
-        .ok_or_else(|| {
-            format!(
-                "the installation at {} has none of the clients {}",
-                install.display(),
-                folders.join(", ")
-            )
-        })?;
+    let product = product_of(&storage, folders).ok_or_else(|| {
+        format!(
+            "the installation at {} has none of the clients {}",
+            install.display(),
+            folders.join(", ")
+        )
+    })?;
     let key = (install.to_path_buf(), product.clone());
     if let Some(c) = opened().lock().ok().and_then(|m| m.get(&key).cloned()) {
         return Ok(c);
@@ -45,6 +49,14 @@ pub fn open_client(install: &Path, folders: &[String]) -> Result<Arc<Casc>, Stri
         m.insert(key, casc.clone());
     }
     Ok(casc)
+}
+
+/// The product of the first of `folders` (a flavor's client folders) the
+/// installation has (`wow_classic_beta`, …).
+pub fn product_of(storage: &dyn wowlua_casc::Storage, folders: &[String]) -> Option<String> {
+    folders
+        .iter()
+        .find_map(|f| Casc::product_of_folder(storage, f))
 }
 
 /// The build's atlases, by lower-case name.
@@ -128,7 +140,7 @@ impl ClientAssets {
             .iter()
             .find(|(p, _)| n.starts_with(p.as_str()))?;
         let file = wowlua_engine::bindings::find_addon_file(dir, &path[prefix.len()..], exts)?;
-        std::fs::read(file).ok()
+        wowlua_host::read(file).ok()
     }
 }
 

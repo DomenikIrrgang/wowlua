@@ -9,6 +9,7 @@
 //! `file:///playground/…`.
 
 pub mod debug;
+pub mod installation;
 pub mod run;
 #[cfg(target_arch = "wasm32")]
 mod screen;
@@ -58,6 +59,8 @@ pub struct Playground {
     memory: Arc<MemoryHost>,
     server: wowlua_lsp::embedded::Embedded,
     game: Option<run::Game>,
+    /// The user's installation, by flavor (its clients the page opened).
+    installations: Vec<installation::Installation>,
 }
 
 impl Default for Playground {
@@ -75,6 +78,7 @@ impl Playground {
             memory,
             server: wowlua_lsp::embedded::Embedded::new(),
             game: None,
+            installations: Vec::new(),
         };
         playground.reset(TEMPLATE.iter().map(|(p, t)| (p.to_string(), t.to_string())));
         playground
@@ -243,9 +247,36 @@ impl Playground {
         json!({ "text": self.read_file(rel) })
     }
 
+    /// Opens `flavor`'s client from the user's installation (`storage`):
+    /// runs of that flavor then draw with its textures and fonts and answer
+    /// from its tables. `{ flavor, product }`.
+    pub fn use_installation(
+        &mut self,
+        storage: Box<dyn wowlua_casc::Storage + Send + Sync>,
+        flavor: &str,
+    ) -> Result<Json, String> {
+        let opened = installation::open(storage, flavor)?;
+        let info = json!({ "flavor": flavor, "product": opened.product });
+        self.installations.retain(|i| i.flavor != flavor);
+        self.installations.push(opened);
+        Ok(info)
+    }
+
+    /// The installation's client of `flavor`, when the page opened it.
+    pub fn installation(&self, flavor: &str) -> Option<Arc<wowlua_casc::Casc>> {
+        self.installations
+            .iter()
+            .find(|i| i.flavor == flavor)
+            .map(|i| i.casc.clone())
+    }
+
     /// Builds the package for `options.flavor` and runs it (the running one
-    /// stops): `{ ok, diagnostics, error }`.
-    pub fn run(&mut self, options: run::Options) -> Json {
+    /// stops), with the installation of the flavor when the page opened
+    /// it: `{ ok, diagnostics, error }`.
+    pub fn run(&mut self, mut options: run::Options) -> Json {
+        if options.installation.is_none() {
+            options.installation = self.installation(&options.flavor);
+        }
         self.game = None;
         let mut session = Session::new();
         let Some(project) = self.load(&mut session) else {

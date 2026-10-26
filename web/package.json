@@ -28,6 +28,7 @@
     "index.d.ts",
     "client.js",
     "worker.js",
+    "installation.js",
     "pkg/wowlua_web.js",
     "pkg/wowlua_web_bg.wasm"
   ],

@@ -16,6 +16,7 @@ pollster = "1.0.1"
 wgpu = "30.0.1"
 wowlua-casc.workspace = true
 wowlua-engine.workspace = true
+wowlua-host.workspace = true
 
 [dev-dependencies]
 wowlua-casc.workspace = true

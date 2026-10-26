@@ -160,8 +160,28 @@ impl WebPlayground {
             blizzard_ui: o["blizzardUI"].as_bool().unwrap_or(false),
             profile: o["profile"].as_str().map(str::to_string),
             debug,
+            installation: None,
         };
         Ok(self.0.run(options).to_string())
+    }
+
+    /// Opens `flavor`'s client from the installation the worker was given
+    /// (`wowluaInstall*`): `{ flavor, product }`.
+    #[wasm_bindgen(js_name = useInstallation)]
+    pub fn use_installation(&mut self, flavor: &str) -> Result<String, JsError> {
+        #[cfg(target_arch = "wasm32")]
+        {
+            let info = self
+                .0
+                .use_installation(Box::new(crate::installation::PageStorage), flavor)
+                .map_err(|e| JsError::new(&e))?;
+            Ok(info.to_string())
+        }
+        #[cfg(not(target_arch = "wasm32"))]
+        {
+            let _ = flavor;
+            Err(JsError::new("the installation needs a page"))
+        }
     }
 
     pub fn stop(&mut self) {

@@ -47,6 +47,7 @@ fn run_and_play(p: &mut Playground, blizzard_ui: bool) {
         blizzard_ui,
         profile: None,
         debug: None,
+        installation: None,
     });
     assert_eq!(started["ok"], true, "{started}");
     let game = p.game().expect("running");
@@ -80,6 +81,7 @@ fn the_addon_runs_alone_and_after_blizzard_s_ui() {
         blizzard_ui: false,
         profile: None,
         debug: None,
+        installation: None,
     });
     let said = started.to_string();
     assert!(said.contains("broken"), "{said}");
@@ -96,6 +98,7 @@ fn the_addon_runs_alone_and_after_blizzard_s_ui() {
         blizzard_ui: true,
         profile: None,
         debug: None,
+        installation: None,
     });
     assert!(
         started["error"]

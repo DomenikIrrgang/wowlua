@@ -3608,6 +3608,7 @@ dependencies = [
  "wgpu",
  "wowlua-casc",
  "wowlua-engine",
+ "wowlua-host",
  "wowlua-vm",
 ]
 
@@ -3719,6 +3720,7 @@ dependencies = [
  "wowlua-diagnostics",
  "wowlua-driver",
  "wowlua-engine",
+ "wowlua-flavors",
  "wowlua-host",
  "wowlua-lsp",
  "wowlua-manifest",

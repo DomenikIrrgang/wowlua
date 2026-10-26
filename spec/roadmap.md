@@ -715,6 +715,15 @@ with its own design); wowlua provides what the page embeds:
   stopping.
 - S5 Game data and assets from the user's installation through the File
   System Access API, read in the browser and never uploaded (T210).
+  Built 2026-10-26 (T398): the page hands the worker the picked folder (a
+  directory handle, a folder input's files, or path and file pairs); the
+  worker indexes what the CASC reader reads and reads it synchronously
+  for it; the flavor's client then gives runs the renderer's textures,
+  fonts and models and the engine's tables. Checked natively
+  (`crates/wowlua-web/tests/installation.rs`: a spell's name from the
+  client's tables, a texture and a font) and in Chrome: camelot's client
+  opened from 501 files in 0.3 s, the default UI drawn with its art
+  (minimap, portrait, frames, Friz Quadrata).
 - S6 A bare test page that uses only the package, `docs/embedding.md` for
   the website, and the package built and attached to each release.
   The test page (`web/demo/`) and the guide came with S2.

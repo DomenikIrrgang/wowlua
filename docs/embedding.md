@@ -108,14 +108,43 @@ const png = await wowlua.call("snapshot", 1);     // the screen as a PNG Blob
   about 30 s, later ones a few seconds. Pass `base` to fetch from another
   place with the same paths. Without it (`blizzardUI: false`) the addon
   runs alone, at once.
-- The game's textures and fonts are the user's installation's, which a
-  page cannot read yet: images are placeholders (magenta) and text uses
+- The game's textures, fonts and models are the user's installation's
+  (below); without it images are placeholders (magenta) and text uses
   stand-in fonts, except the addon's own images (its PNG, TGA and BLP
   files).
 
 Without the worker, `Playground` has the same calls (`loadBlizzardUI`,
 `run`, `advance`, `input`, `stop`) and `createScreen(canvas)` with
 `playground.play(screen, onOutput)`.
+
+## The user's installation
+
+With the user's World of Warcraft folder the game draws with its own
+textures, fonts and models, and answers from its tables (spells, items,
+currencies, …; current data before wowlua's recordings, as `wowlua test
+--game-data` does). The folder is read in the worker, a file at a time as
+wowlua needs it, and never leaves the user's machine.
+
+```js
+// a button's click (a user gesture): Chrome and Edge
+const folder = await showDirectoryPicker({ id: "wow", mode: "read" });
+await wowlua.useInstallation(folder, { flavor: "camelot" });
+// elsewhere: <input type="file" webkitdirectory> and its files
+await wowlua.useInstallation(input.files, { flavor: "camelot" });
+// → { flavor, product: "wow_classic_beta", files: 501 }
+```
+
+The user picks the folder that holds `Data` and the clients' folders
+(`_classic_beta_`, …); wowlua indexes `.build.info`, `Data/config`,
+`Data/data` and each client's `.flavor.info` and `Cache` (the hotfixes),
+about 500 files, and opens the flavor's client in well under a second.
+Runs of that flavor started afterwards use it. A browser keeps a picked
+folder's permission for the session; a page may keep the
+`FileSystemDirectoryHandle` in IndexedDB and ask again
+(`requestPermission`) on a later visit. A folder `<input>` makes the
+browser list every file of the folder first and may ask the user to
+confirm an "upload" (nothing is sent). Without the installation
+everything works with placeholders.
 
 ## Debugging
 
@@ -189,7 +218,6 @@ gone, so keep the editor's texts and write them again.
 
 ## Not yet
 
-The user's installation (textures, fonts, game data) comes with M14's
-next stages (`spec/roadmap.md`); so do dependencies other
-than the standard library, world profiles in share links and Blizzard's
-UI for flavors other than camelot.
+Dependencies other than the standard library, world profiles in share
+links and Blizzard's UI for flavors other than camelot are not in the
+playground yet (`spec/roadmap.md`).

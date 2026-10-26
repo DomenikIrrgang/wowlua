@@ -7,7 +7,9 @@
 //       methods: files, reset, writeFile, readFile, deleteFile, check,
 //                build, format, share, openShared, version,
 //                loadBlizzardUI, run, stop, input, screenSize,
-//                snapshot (the game's screen as a PNG Blob)
+//                snapshot (the game's screen as a PNG Blob),
+//                useInstallation(source, { flavor }) (the user's WoW folder:
+//                a FileSystemDirectoryHandle, or a folder input's files)
 //   { lsp: <JSON-RPC message> }            → { lsp: <JSON-RPC message> } …
 //   { id, canvas: <OffscreenCanvas> }      → { id, result: "<backend>" };
 //       the game is drawn there each frame from then on
@@ -23,6 +25,7 @@
 // The first message may be { wasm: <url> } to load the module from there.
 
 import { load, version, createScreen, Playground } from "./index.js";
+import { Installation } from "./installation.js";
 
 const CALLS = new Set([
     "files", "reset", "writeFile", "readFile", "deleteFile",
@@ -97,6 +100,13 @@ onmessage = async (event) => {
             if (!screen) throw new Error("no canvas attached");
             const png = await screen.snapshot(playground.raw, m.args?.[0] ?? 1);
             result = new Blob([png], { type: "image/png" });
+        } else if (m.call === "useInstallation") {
+            const [source, { flavor = "camelot" } = {}] = m.args ?? [];
+            const install = typeof source?.entries === "function" && source.kind === "directory"
+                ? await Installation.fromHandle(source)
+                : Installation.fromFiles(source);
+            install.expose();
+            result = { ...JSON.parse(playground.raw.useInstallation(flavor)), files: install.files.size };
         } else if (m.call === "version") {
             result = version();
         } else if (m.call === "loadBlizzardUI") {

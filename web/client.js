@@ -166,6 +166,16 @@ export function connect(worker, { wasm } = {}) {
             bindInput(canvas, call, screen);
             return backend;
         },
+        /**
+         * The user's WoW installation, read in the worker and never
+         * uploaded: `source` is the folder from `showDirectoryPicker()`, or
+         * the files of an `<input type="file" webkitdirectory>`. Runs of
+         * `flavor` then draw with its textures and fonts and answer from
+         * its tables (spells, items, …). `{ flavor, product, files }`.
+         */
+        useInstallation(source, { flavor = "camelot" } = {}) {
+            return call("useInstallation", source, { flavor });
+        },
         /** The canvas's new drawing size. */
         resize(width, height) {
             worker.postMessage({ resize: [width, height] });

@@ -48,6 +48,7 @@ fn a_breakpoint_stops_a_click_and_shows_its_values() {
             link: Box::new(link.clone()),
             settings: json!({ "breakpoints": { "src/main.wowlua": [{ "line": 6 }] } }),
         }),
+        installation: None,
     });
     assert_eq!(started["ok"], true, "{started}");
     let game = p.game().expect("running");

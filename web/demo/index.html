@@ -29,6 +29,8 @@
   <button id="run">Run</button>
   <label><input type="checkbox" id="ui"> with Blizzard's UI</label>
   <button id="stop">Stop</button>
+  <button id="install">Use my WoW installation</button>
+  <input type="file" id="installFiles" webkitdirectory hidden>
 </p>
 <p>
   <label><input type="checkbox" id="debug"> debug, breakpoints on lines</label>
@@ -188,6 +190,26 @@ $("run").addEventListener("click", async () => {
     : `Did not start: ${started.error ?? started.diagnostics.map((d) => d.message).join("; ")}`;
   document.body.dataset.running = started.ok ? "yes" : "no";
 });
+// The user's WoW folder: read in the worker, never uploaded.
+const useInstallation = async (source) => {
+  $("game").textContent = "Reading the installation…";
+  try {
+    const opened = await wowlua.useInstallation(source, { flavor: "camelot" });
+    $("game").textContent = `Using the installation's ${opened.product} (${opened.files} files).`;
+    document.body.dataset.installation = opened.product;
+  } catch (e) {
+    $("game").textContent = `The installation: ${e.message}`;
+    document.body.dataset.installation = "error";
+  }
+};
+$("install").addEventListener("click", async () => {
+  if (globalThis.showDirectoryPicker) {
+    useInstallation(await showDirectoryPicker({ id: "wow", mode: "read" }));
+  } else {
+    $("installFiles").click();
+  }
+});
+$("installFiles").addEventListener("change", () => useInstallation([...$("installFiles").files]));
 $("stop").addEventListener("click", async () => {
   await wowlua.call("stop");
   $("game").textContent = "Stopped.";

@@ -96,6 +96,9 @@ pub struct Options {
     pub profile: Option<String>,
     /// Debug it (the debugger attached from the first line it loads).
     pub debug: Option<crate::debug::Setup>,
+    /// The user's installation (its client of the flavor): the game's
+    /// textures, fonts and tables.
+    pub installation: Option<std::sync::Arc<wowlua_casc::Casc>>,
 }
 
 /// The addon running.
@@ -110,6 +113,8 @@ pub struct Game {
     last_ms: Option<f64>,
     /// The debugging session, when debugged.
     debug: Option<wowlua_debug::SharedRef>,
+    /// The installation's client, when the page opened it.
+    installation: Option<std::sync::Arc<wowlua_casc::Casc>>,
 }
 
 impl Game {
@@ -150,6 +155,7 @@ impl Game {
             });
         })));
         let debugged = options.debug.is_some();
+        let installation = options.installation.clone();
         let (session, debug) = {
             let suite = suite(
                 &project,
@@ -158,6 +164,7 @@ impl Game {
                 blizzard_ui.clone(),
                 options.profile.is_some(),
                 debugged,
+                installation.clone(),
             );
             let debug = match options.debug {
                 Some(setup) => {
@@ -190,6 +197,7 @@ impl Game {
             output,
             last_ms: None,
             debug,
+            installation,
         })
     }
 
@@ -224,6 +232,7 @@ impl Game {
                 self.blizzard_ui.clone(),
                 wowlua_host::exists(self.project.root().join("tests/profiles/playground.json")),
                 self.debug.is_some(),
+                self.installation.clone(),
             );
             self.session.reload(&suite)?;
         }
@@ -300,16 +309,13 @@ impl Game {
         wowlua_debug::ui::input(&mut self.session.vm, &input)
     }
 
-    /// The addon's folder, as its images' paths name it
-    /// (`interface\addons\<name>\`, lower case).
-    pub fn addon_folders(&self) -> Vec<(String, PathBuf)> {
-        vec![(
-            format!(
-                "interface\\addons\\{}\\",
-                self.build.addon_name.to_ascii_lowercase()
-            ),
-            self.build.dir.clone(),
-        )]
+    /// Where its pictures and fonts come from: the addon's folder, and the
+    /// installation's client when the page opened it.
+    pub fn assets(&self) -> wowlua_render::client::ClientAssets {
+        wowlua_render::client::ClientAssets::new(
+            self.installation.clone(),
+            &[(self.build.addon_name.clone(), self.build.dir.clone())],
+        )
     }
 
     /// The screen's size in pixels.
@@ -335,6 +341,7 @@ fn suite<'a>(
     blizzard_ui: Option<wowlua_test::UiSource>,
     own_profile: bool,
     debugged: bool,
+    installation: Option<std::sync::Arc<wowlua_casc::Casc>>,
 ) -> wowlua_test::Suite<'a> {
     let test = &project.manifest.manifest.test;
     wowlua_test::Suite {
@@ -365,8 +372,11 @@ fn suite<'a>(
         update_snapshots: false,
         coverage: false,
         instrument: debugged.then_some(&crate::debug::instrument as &(dyn Fn(&mut Vm) + Sync)),
-        camera: None,
-        game_data: false,
+        game_data: installation.is_some(),
+        camera: installation.map(|casc| {
+            std::sync::Arc::new(crate::installation::GameData(casc))
+                as std::sync::Arc<dyn wowlua_test::screenshots::Camera>
+        }),
         after_test: None,
         after_file: None,
     }

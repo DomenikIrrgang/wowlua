@@ -140,7 +140,7 @@ export class Playground {
 export type PlaygroundCall =
     | "files" | "reset" | "writeFile" | "readFile" | "deleteFile"
     | "check" | "build" | "format" | "share" | "openShared" | "version"
-    | "loadBlizzardUI" | "run" | "stop" | "input" | "screenSize"
+    | "loadBlizzardUI" | "run" | "stop" | "input" | "screenSize" | "useInstallation"
     /** The game's screen as a PNG Blob (`call("snapshot", scale)`). */
     | "snapshot";
 
@@ -175,6 +175,15 @@ export interface Connection {
      * passes its mouse and keyboard to the game; the backend that draws.
      */
     attachCanvas(canvas: HTMLCanvasElement): Promise<string>;
+    /**
+     * The user's WoW installation, read in the worker and never uploaded:
+     * the folder from `showDirectoryPicker()`, the files of an
+     * `<input type="file" webkitdirectory>`, or `{ path, file }` pairs.
+     */
+    useInstallation(
+        source: FileSystemDirectoryHandle | FileList | File[] | { path: string; file: File }[],
+        options?: { flavor?: string },
+    ): Promise<{ flavor: string; product: string; files: number }>;
     /** The canvas's new drawing size. */
     resize(width: number, height: number): void;
     terminate(): void;
