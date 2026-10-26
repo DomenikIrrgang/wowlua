@@ -194,7 +194,9 @@ error: aborting due to 1 previous error
 ```
 
 - The overloads come right before the implementation, which has the same name
-  (E3047 otherwise) and must accept every one of them (E3044).
+  (E3047 otherwise) and must accept every one of them (E3044). It may be a
+  `local function`, an `export function`, or a global `function` in a file
+  without imports and exports, whose calls in that file see the overloads.
 - `export overload function` before an `export function` exports them, and
   importers see the overloads too.
 - Overloads are top-level only. Methods of a [class](classes.md) have them as

@@ -177,3 +177,28 @@ fn misspelled_fields_of_open_tables() {
         "local M = {}\nfunction M.a(): number return M.b() end\nfunction M.b(): number return 1 end\nlocal t = {}\nlocal function g() print(t.later) end\nt.later = 1\ng()\nprint(M.a())\n",
     );
 }
+
+/// A script's global `function f` with overload signatures: the calls in
+/// its file see the overloads (spec §5.1.1), before and after it.
+#[test]
+fn overloads_of_a_global_function() {
+    let f = "overload function findItem(id: number): string?\noverload function findItem(name: string): string?\nfunction findItem(key: number | string): string?\n    return tostring(key)\nend\n";
+    let d = check_source(&format!("{f}print(findItem(true))\n"), Mode::Basic);
+    assert!(
+        d.iter().any(|x| x.code == Some("E2012")),
+        "{:#?}",
+        codes(&d)
+    );
+    let d = check_source(
+        &format!("local function early() return findItem(true) end\n{f}print(early())\n"),
+        Mode::Basic,
+    );
+    assert!(
+        d.iter().any(|x| x.code == Some("E2012")),
+        "{:#?}",
+        codes(&d)
+    );
+    ok(&format!("{f}print(findItem(1), findItem(\"x\"))\n"));
+    // the results are the overload's
+    err(&format!("{f}local n: number = findItem(1)\n"), "E2001");
+}

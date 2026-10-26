@@ -85,7 +85,9 @@ end
 
 - Callers, the function's own body included, see only the overload
   signatures, resolved as in [Types §2.7](02-types.md#27-calls-and-arity);
-  importers of an exported one see them too.
+  importers of an exported one see them too. For a script's global
+  `function f`, the calls in its own file do, before and after it; other
+  files read the global as `any` ([Types §2.8](02-types.md#28-globals)).
 - Each signature must be accepted by the implementation (E3044): every
   argument it takes fits the implementation's parameters, and its results
   and the implementation's fit one way or the other (wider results stand

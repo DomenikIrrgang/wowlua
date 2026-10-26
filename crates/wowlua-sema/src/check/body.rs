@@ -1073,6 +1073,19 @@ impl<'e, 'p> Checker<'e, 'p> {
                     let id = self.declare(n, Some(t), t, false, None);
                     self.hoisted_at(id, name.path().at(0));
                 }
+                // A script's global `function f`: the file's calls see its
+                // overloads, wherever they are (spec §5.1.1).
+                StmtKind::Function { name, .. }
+                    if !self.is_module
+                        && name.path().len() == 1
+                        && name.method().is_none()
+                        && self.lookup_var(name.path().at(0).text()).is_none() =>
+                {
+                    let n = name.path().at(0).text();
+                    if let Some(set) = overload_set_of(&mut self.env.types, &overloads, n) {
+                        self.global_types.insert(n.into(), set);
+                    }
+                }
                 StmtKind::Class(c) => {
                     if let Some(def) = self.env.lookup_type(c.name().text(), &self.scope) {
                         let t = self.env.types.intern(Ty::ClassOf(def));
@@ -2219,7 +2232,12 @@ impl<'e, 'p> Checker<'e, 'p> {
             let t = overloads.unwrap_or(t);
             match self.lookup_var(n.text()) {
                 Some(v) => self.assign_var(v, t, n.span()),
-                None => self.assign_global(*n, t),
+                None => {
+                    if overloads.is_some() {
+                        self.global_types.insert(n.text().into(), t);
+                    }
+                    self.assign_global(*n, t)
+                }
             }
         } else if let Some(o) = owner {
             let last = name
