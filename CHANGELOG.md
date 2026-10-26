@@ -36,6 +36,11 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - **Faster release builds**: release builds reshape the Lua they write for WoW's Lua 5.1. Fields such as `self.config.scale` are read once before a loop that can't change them, and once for repeated reads; `ipairs` over arrays becomes a numeric loop and `table.insert(t, v)` becomes `t[#t + 1] = v`; outer locals read in loops are copied into locals; closures made in a loop that need nothing from it are made once; locals holding a constant become the constant. The type-based ones apply in strict-mode files only, plain `.lua` stays as it is, and each has a switch under `optimize`.
 - `optimize.inline` also inlines functions and `@inline` private methods whose body is statements, where they're called as a statement.
 - **`wowlua bench`**: `@bench` functions in test files are benchmarks. `wowlua bench` runs them optimized and unoptimized and shows both times and the speed-up (`--profile`, `--samples`, `--batch-ms`, `--json`).
+- **wowlua registry**: depend on libraries by version (`"lib-tooltip": "^1.2"`, or `wowlua add lib-tooltip@^1.2`), from https://registry.wowlua.dev or another registry. Versions are locked with their checksums, `wowlua update` and `wowlua outdated` know them, and a yanked version your lockfile has keeps working with W4322.
+- `wowlua publish` publishes `library`, `lua-library` and `types` packages to the registry, and `wowlua package --registry` writes the archive without uploading it. Sign in with GitHub at https://registry.wowlua.dev/login for a token, then save it with `wowlua login registry` or set `WOWLUA_REGISTRY_TOKEN`.
+- `wowlua search <words>` finds registry packages by name, description and keywords.
+- `wowlua yank <name>@<version>` yanks a version you published (`--undo` takes it back), and `wowlua owner list|add|remove` manages a package's owners.
+- E4231: a package for the registry depends on a `git`, `svn`, `path` or `archive` source.
 
 ### Changed
 
@@ -63,6 +68,10 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - W3031 now names the new reasons a function isn't inlined.
 - `@inline` on a private method with a statement body is no longer W3031.
 - `wowlua init` turns the new optimizations off in an adopted addon's release profile.
+- Registry dependencies no longer stop with E4102 "not available yet"; E4102 now reports a package or version the registry doesn't have.
+- `wowlua add <name>` without a source adds a registry dependency with `^` and its newest version.
+- `wowlua update <name> --precise <version>` pins a registry dependency to a version.
+- Publishing a library no longer needs an up-to-date `wowlua.lock`.
 
 ### Fixed
 
@@ -119,6 +128,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `wowlua explain W2001` (and every plain-Lua warning form) no longer reports "unknown diagnostic code".
 - `wowlua build --watch`, `check --watch` and `test --watch` no longer run twice for one save when the file watcher reports it twice under load.
 - In strict mode, the fast forms (`??` as `or`, `?.` as `and`, interpolation without `tostring`) now also apply inside class methods, constructors and accessors.
+- `wowlua publish` runs your tests before packaging, and stops when one fails; `--no-test` skips them. A `--tag` is created only once they pass.
 
 ## 0.12.0 (2026-10-26)
 

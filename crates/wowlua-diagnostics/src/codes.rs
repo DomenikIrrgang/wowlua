@@ -135,6 +135,7 @@ pub(crate) static CODES: &[CodeInfo] = &[
     CodeInfo { code: "E4210", summary: "CurseForge upload without a changelog" },
     CodeInfo { code: "W4220", summary: "Flavor unknown to a publish site and omitted from that upload" },
     CodeInfo { code: "E4230", summary: "Addons cannot be published to the wowlua registry" },
+    CodeInfo { code: "E4231", summary: "A package for the wowlua registry depends on a non-registry source (`git`, `svn`, `path`, `archive`)" },
     CodeInfo { code: "E4300", summary: "Running compiler does not satisfy `package.wowlua` (checked before schema validation)" },
     CodeInfo { code: "E4301", summary: "`toc-layout: \"single\"` forced, but a targeted client lacks a needed TOC feature" },
     CodeInfo { code: "E4302", summary: "Per-flavor TOC names cannot distinguish the targeted flavors" },

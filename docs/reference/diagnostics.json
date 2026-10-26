@@ -3957,7 +3957,7 @@
     },
     "E4102": {
       "area": "manifest",
-      "text": "A dependency cannot be found: a `path` that does not exist, a git repository\nwithout the given tag, branch, commit or `subdir`, an archive without the\n`strip-prefix` folder, a source whose `wowlua.json` names another package, or\na registry dependency (a bare version requirement such as `\"^1.0\"`). The\nwowlua registry is not available yet, so registry dependencies are always this\nerror for now.\n\nCheck the source in the dependency entry. For a library you cannot get from a\nregistry, use a `git`, `svn`, `path` or `archive` source. The error comes from\ndependency resolution, so it has no example here.",
+      "text": "A dependency cannot be found: a `path` that does not exist, a git repository\nwithout the given tag, branch, commit or `subdir`, an archive without the\n`strip-prefix` folder, a source whose `wowlua.json` names another package, a\nregistry package the registry does not have, or a registry requirement (such\nas `\"^2.0\"`) that no version matches. Yanked versions count as missing for a\nnew requirement; the notes list the newest versions there are.\n\nCheck the name and the requirement in the dependency entry. For a library the\nregistry does not have, use a `git`, `svn`, `path` or `archive` source. The\nerror comes from dependency resolution, so it has no example here.",
       "examples": [],
       "related": [
         "E4101",
@@ -4074,7 +4074,17 @@
       "area": "manifest",
       "text": "An addon cannot be published to the wowlua registry. The registry is for\npackages that other packages depend on: `library`, `lua-library` and `types`\npackages. Players get addons from the addon sites, so publish an addon with a\n`curseforge`, `wago`, `wowinterface` or `github` target instead.\n\nThe rule belongs to publishing, so it has no example here.",
       "examples": [],
-      "related": []
+      "related": [
+        "E4231"
+      ]
+    },
+    "E4231": {
+      "area": "manifest",
+      "text": "A package for the wowlua registry depends on a library from a `git`, `svn`,\n`path` or `archive` source. The registry resolves a package's dependencies\nfrom its index, by version, so every dependency of a published package must be\non a registry as well. `dev-dependencies` are not published, so they may come\nfrom anywhere.\n\nPublish the dependency to the registry first and depend on it by version\n(`\"lib-b\": \"^1.0\"`), or copy its files into your package. The rule belongs to\npublishing, so it has no example here.",
+      "examples": [],
+      "related": [
+        "E4230"
+      ]
     },
     "E4300": {
       "area": "manifest",
