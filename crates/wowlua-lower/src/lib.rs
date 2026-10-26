@@ -20,6 +20,7 @@ use std::sync::Arc;
 use wowlua_diagnostics::Diagnostic;
 use wowlua_luair::ir::{self, Pos};
 use wowlua_runtime::Slice;
+use wowlua_sema::check::fast;
 use wowlua_sema::classes::{ClassInfo, EnumInfo};
 use wowlua_sema::constant::{self, Const, quote};
 use wowlua_sema::meta::{Lookup, Meta, MetaKind};
@@ -62,6 +63,10 @@ pub struct Context {
     /// Runtime checks of annotated parameters, `...: T` and `::`, by span
     /// (from the type checker, spec §7.5).
     pub value_checks: HashMap<(u32, u32), wowlua_sema::check::runtime::ValueCheck>,
+    /// Strict mode: what the type checker found the expressions of the
+    /// fast forms to allow, by span (`wowlua_sema::check::fast`; spec
+    /// §1.2.4, §1.4.1, §1.4.2). Empty in basic mode.
+    pub fast_forms: HashMap<(u32, u32), u8>,
     /// File-level locals test files read (`import internal`): registered
     /// as module `<id>#internal` at the end of the file.
     pub exposed: BTreeSet<String>,
@@ -148,6 +153,7 @@ impl Context {
             tools,
             type_names,
             value_checks,
+            fast_forms,
             exposed,
             inline_calls,
         } = self;
@@ -164,6 +170,7 @@ impl Context {
             && *type_names == other.type_names
             && *value_checks == other.value_checks
             && *inline_calls == other.inline_calls
+            && *fast_forms == other.fast_forms
     }
 }
 
@@ -2481,6 +2488,16 @@ impl<'a> Lowerer<'a> {
                 }
                 let l = self.expr(lhs);
                 let (pre, r) = self.isolated(|lw| lw.expr(rhs));
+                // Strict mode: `a ?? b` is `a or b` when `a` is never
+                // `false` (spec §1.4.2).
+                let op = if op == BinOp::Coalesce
+                    && pre.is_empty()
+                    && self.fast(lhs) & fast::NEVER_FALSE != 0
+                {
+                    BinOp::Or
+                } else {
+                    op
+                };
                 if pre.is_empty() && op != BinOp::Coalesce {
                     let ir_op = if op == BinOp::And {
                         ir::BinOp::And
@@ -2588,7 +2605,8 @@ impl<'a> Lowerer<'a> {
     }
 
     /// A backtick string (spec §1.2.4): parts joined with `..`, every
-    /// embedded value through `tostring`, at most 50 operands per group.
+    /// embedded value through `tostring` (in strict mode not a `string` or
+    /// `number`), at most 50 operands per group.
     fn interp(&mut self, parts: InterpParts<'a>, pos: Pos) -> ir::Expr {
         // Constant parts (literals, `const`s, `wowlua:meta` scalars, enum
         // members) are folded into the text: their type is known.
@@ -2634,8 +2652,14 @@ impl<'a> Lowerer<'a> {
                 (InterpPart::Expr(e), None) => {
                     flush(&mut text, text_pos, &mut operands);
                     let v = values.next().expect("a value per part");
-                    let tostring = self.global("tostring", None, self.span_pos(e.span()));
-                    operands.push(call(tostring, vec![v], self.span_pos(e.span())));
+                    // Strict mode: a `string` or `number` concatenates as
+                    // it is (spec §1.2.4).
+                    if self.fast(e) & fast::STRING_OR_NUMBER != 0 {
+                        operands.push(v);
+                    } else {
+                        let tostring = self.global("tostring", None, self.span_pos(e.span()));
+                        operands.push(call(tostring, vec![v], self.span_pos(e.span())));
+                    }
                 }
             }
         }
@@ -2678,10 +2702,11 @@ impl<'a> Lowerer<'a> {
         })
     }
 
-    /// An optional chain (spec §1.4.1), basic-mode form: the chain is
-    /// evaluated into a temporary step by step, and each `?.` guards the
-    /// rest with `if t ~= nil then … end`. As a statement, the final call
-    /// is a call statement. Returns the temporary (expression form).
+    /// An optional chain (spec §1.4.1): the chain is evaluated into a
+    /// temporary step by step, and each `?.` guards the rest with
+    /// `if t ~= nil then … end`. As a statement, the final call is a call
+    /// statement. Returns the temporary (expression form), or the strict
+    /// mode's `and`/`or` form ([`Self::fast_chain`]).
     fn optional_chain(&mut self, e: Expr<'a>, statement: bool) -> Option<ir::Expr> {
         let pos = self.span_pos(e.span());
         let (base, links) = flatten_chain(e);
@@ -2694,9 +2719,9 @@ impl<'a> Lowerer<'a> {
         for link in &links[..first_opt] {
             value = self.apply_link(value, link);
         }
+        let temps = self.temps;
         let t = self.temp("t");
         let tref = || name_expr(generated(&t, pos));
-        self.prelude.push(local(generated(&t, pos), value, pos));
         // Segments between optional links, innermost last.
         let mut segments: Vec<&[Link]> = Vec::new();
         let mut start = first_opt;
@@ -2706,17 +2731,30 @@ impl<'a> Lowerer<'a> {
                 start = i;
             }
         }
-        let mut inner: Vec<ir::Stmt> = Vec::new();
-        for (index, segment) in segments.iter().enumerate().rev() {
-            let last = index + 1 == segments.len();
-            let (mut body, applied) = self.isolated(|l| {
+        // Each segment applied to the temporary, with the statements it
+        // needs; lowered innermost first.
+        let mut lowered: Vec<(Vec<ir::Stmt>, ir::Expr)> = Vec::with_capacity(segments.len());
+        for segment in segments.iter().rev() {
+            lowered.push(self.isolated(|l| {
                 let mut v = tref();
                 for link in segment.iter() {
                     v = l.apply_link(v, link);
                 }
                 v
-            });
-            if statement && last {
+            }));
+        }
+        lowered.reverse();
+        if !statement && let Some(fast) = self.fast_chain(e, &value, &lowered, &t) {
+            if self.temps == temps + 1 {
+                self.temps = temps;
+            }
+            return Some(fast);
+        }
+        self.prelude.push(local(generated(&t, pos), value, pos));
+        let count = lowered.len();
+        let mut inner: Vec<ir::Stmt> = Vec::new();
+        for (index, (mut body, applied)) in lowered.into_iter().enumerate().rev() {
+            if statement && index + 1 == count {
                 body.push(stmt(ir::StmtKind::Call(applied), pos));
             } else {
                 body.push(assign(tref(), applied, pos));
@@ -2727,6 +2765,69 @@ impl<'a> Lowerer<'a> {
         }
         self.prelude.extend(inner);
         (!statement).then(tref)
+    }
+
+    /// Strict mode's form of an optional chain (spec §1.4.1, rule 1): when
+    /// its result is never `false` and every operand before a `?.` can be
+    /// read again (a name, a literal, or fields of one), `a?.b` is
+    /// `a ~= nil and a.b or nil`, or `a and a.b` when `a` is never `false`
+    /// either (every operand). `segments` are the segments applied to the
+    /// temporary `t`; none may need statements.
+    fn fast_chain(
+        &self,
+        e: Expr<'a>,
+        value: &ir::Expr,
+        segments: &[(Vec<ir::Stmt>, ir::Expr)],
+        t: &str,
+    ) -> Option<ir::Expr> {
+        if self.fast(e) & fast::NEVER_FALSE == 0 || segments.iter().any(|(pre, _)| !pre.is_empty())
+        {
+            return None;
+        }
+        let operands = optional_operands(e);
+        if operands.len() != segments.len() {
+            return None;
+        }
+        let pos = self.span_pos(e.span());
+        let mut current = value.clone();
+        let mut tests: Vec<ir::Expr> = Vec::with_capacity(segments.len());
+        let mut truthy = true;
+        for (operand, (_, applied)) in operands.iter().zip(segments) {
+            if !rereadable(&current) {
+                return None;
+            }
+            if self.fast(*operand) & fast::NEVER_FALSE != 0 {
+                tests.push(current.clone());
+            } else {
+                truthy = false;
+                tests.push(binary(
+                    ir::BinOp::Ne,
+                    current.clone(),
+                    lit(ir::ExprKind::Nil, pos),
+                    pos,
+                ));
+            }
+            current = replace_base(applied.clone(), t, current)?;
+        }
+        let mut out = tests.remove(0);
+        for test in tests {
+            out = binary(ir::BinOp::And, out, test, pos);
+        }
+        out = binary(ir::BinOp::And, out, current, pos);
+        if !truthy {
+            out = binary(ir::BinOp::Or, out, lit(ir::ExprKind::Nil, pos), pos);
+        }
+        Some(out)
+    }
+
+    /// What the checker found expression `e` to allow (strict mode,
+    /// `wowlua_sema::check::fast`).
+    fn fast(&self, e: Expr<'a>) -> u8 {
+        self.ctx
+            .fast_forms
+            .get(&(e.span().start, e.span().end))
+            .copied()
+            .unwrap_or(0)
     }
 
     fn apply_link(&mut self, obj: ir::Expr, link: &Link<'a>) -> ir::Expr {
@@ -3097,6 +3198,63 @@ fn chain_has_optional(e: Expr<'_>) -> bool {
         ExprKind::Call { callee, .. } => chain_has_optional(callee),
         _ => false,
     }
+}
+
+/// The operands before each `?.` of a chain, innermost first.
+fn optional_operands(e: Expr<'_>) -> Vec<Expr<'_>> {
+    let mut out = Vec::new();
+    let mut current = e;
+    loop {
+        let next = match current.kind() {
+            ExprKind::OptField { obj, .. }
+            | ExprKind::OptIndex { obj, .. }
+            | ExprKind::OptMethod { obj, .. } => {
+                out.push(obj);
+                obj
+            }
+            ExprKind::OptCall { callee, .. } => {
+                out.push(callee);
+                callee
+            }
+            ExprKind::Field { obj, .. }
+            | ExprKind::Index { obj, .. }
+            | ExprKind::Method { obj, .. } => obj,
+            ExprKind::Call { callee, .. } => callee,
+            _ => break,
+        };
+        current = next;
+    }
+    out.reverse();
+    out
+}
+
+/// A lowered operand that reads the same when evaluated again, cheaply: a
+/// name, a literal, or a field or index of one.
+fn rereadable(e: &ir::Expr) -> bool {
+    use ir::ExprKind as K;
+    match &e.kind {
+        K::Name(_) | K::Nil | K::True | K::False | K::Number(_) | K::String(_) => true,
+        K::Field { obj, .. } => rereadable(obj),
+        K::Index { obj, key } => rereadable(obj) && rereadable(key),
+        K::Paren { inner, .. } => rereadable(inner),
+        _ => false,
+    }
+}
+
+/// `e`, a chain applied to the temporary `t`, applied to `with` instead.
+fn replace_base(mut e: ir::Expr, t: &str, with: ir::Expr) -> Option<ir::Expr> {
+    use ir::ExprKind as K;
+    if matches!(&e.kind, K::Name(id) if id.name.as_str() == t) {
+        return Some(with);
+    }
+    let inner = match &mut e.kind {
+        K::Field { obj, .. } | K::Index { obj, .. } | K::Method { obj, .. } => obj,
+        K::Call { callee, .. } => callee,
+        _ => return None,
+    };
+    let taken = std::mem::replace(inner.as_mut(), ir::Expr::new(K::Nil, Pos::NONE));
+    **inner = grow(|| replace_base(taken, t, with))?;
+    Some(e)
 }
 
 /// Splits a chain into its base expression and links, outermost last.

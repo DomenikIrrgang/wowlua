@@ -1547,6 +1547,78 @@ fn split_flavors_share_what_compiles_the_same() {
     }
 }
 
+/// Strict mode's fast forms (spec §1.2.4, §1.4.1, §1.4.2, decision L28):
+/// no `tostring` for a `string` or `number` in a backtick string, `??` as
+/// `or` and `?.` as `and` where the types allow it; basic mode keeps the
+/// safe forms. Both print the same.
+#[test]
+fn strict_mode_lowers_to_fast_forms() {
+    let body = |name: &str| {
+        format!(
+            "interface {name}\n    icon: number?\n    name: string\n    flag: boolean?\nend\n\
+             local function pick(i: number): {name}?\n    if i == 1 then return {{ name = \"a\", icon = 5, flag = false }} end\n    if i == 2 then return {{ name = \"b\", icon = nil, flag = nil }} end\n    return nil\nend\n\
+             local profiles: {{ [string]: {name} }}? = {{ m = {{ name = \"m\", icon = 7, flag = nil }} }}\n\
+             local hp: number = 64\nlocal who: string = \"Ann\"\nlocal maybe: string? = nil\nlocal loose: any = maybe\nlocal looseOr = loose ?? 1\nlocal shown: boolean? = nil\nlocal shownOr = shown ?? true\nprint(`{{loose}}`, looseOr, shownOr)\n\
+             for i = 1, 3 do\n    local p = pick(i)\n    local icon = p?.icon ?? 0\n    local flag = p?.flag\n    local upper = p?.name:upper()\n    local deep = profiles?.[\"m\"]?.icon\n    local key = profiles?.[p?.name ?? \"m\"]?.icon\n    print(`{{who}} {{hp}} {{hp > 50 and \"ok\" or \"low\"}} {{maybe}} {{i}}`, p?.name, icon, flag, upper, deep, key)\nend\n"
+        )
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let strict = format!("--!strict\n{}", body("StrictProfile"));
+    let basic = body("BasicProfile");
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"fast\", \"version\": \"1.0.0\" } }\n",
+            ),
+            ("src/strict.wowlua", strict.as_str()),
+            ("src/basic.wowlua", basic.as_str()),
+        ],
+    );
+    let assert = wowlua(dir.path()).arg("build").assert().success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert!(!stderr.contains("warning["), "{stderr}");
+    let out = dir.path().join("dist/dev/Fast");
+    let strict = fs::read_to_string(out.join("src/strict.lua")).unwrap();
+    let basic = fs::read_to_string(out.join("src/basic.lua")).unwrap();
+    for form in [
+        "who .. \" \" .. hp .. \" \" .. (hp > 50 and \"ok\" or \"low\") .. \" \" .. tostring(maybe) .. \" \" .. i",
+        "local icon = p and p.icon or 0",
+        "local upper = p and p.name:upper()",
+        "local deep = profiles and profiles[\"m\"] and profiles[\"m\"].icon",
+        "p and p.name,",
+    ] {
+        assert!(strict.contains(form), "{form}\n{strict}");
+    }
+    // `any` and `boolean` may be `false` (and `any` a table): the safe
+    // forms; so is `flag` and a key that needs statements.
+    for form in [
+        "tostring(loose)",
+        "local looseOr = __wl_t",
+        "local shownOr = __wl_t",
+        "__wl_t3 = __wl_t3.flag",
+    ] {
+        assert!(strict.contains(form), "{form}\n{strict}");
+    }
+    assert!(!basic.contains(" and p."), "{basic}");
+    assert!(basic.contains("tostring(who)"), "{basic}");
+    let printed = run_addon(&out, "Fast");
+    let half = printed.lines().count() / 2;
+    let lines: Vec<&str> = printed.lines().collect();
+    assert_eq!(lines[..half], lines[half..], "{printed}");
+    assert_eq!(
+        lines[..half],
+        [
+            "nil 1 true",
+            "Ann 64 ok nil 1 a 5 false A 7 nil",
+            "Ann 64 ok nil 2 b 0 nil B 7 nil",
+            "Ann 64 ok nil 3 nil 0 nil nil 7 7"
+        ],
+        "{printed}"
+    );
+}
+
 /// Code `@if` removes may use the names of an import `@if` removes too
 /// (spec §6.4.3): a release build checks clean, kept code gets E1020.
 #[test]

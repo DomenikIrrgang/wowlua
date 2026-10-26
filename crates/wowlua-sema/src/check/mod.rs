@@ -10,6 +10,7 @@ mod decorate;
 mod definition;
 pub mod env;
 pub mod expr;
+pub mod fast;
 pub mod flavors;
 pub mod narrow;
 pub mod portable;
@@ -70,6 +71,9 @@ pub struct CheckOutput {
     /// Runtime checks (spec §7.5) of annotated parameters (by the name's
     /// span), `...: T` (by the `...` span) and `::` (by the expression's).
     pub value_checks: HashMap<wowlua_span::Span, runtime::ValueCheck>,
+    /// Strict files: what the expressions the fast forms look at allow
+    /// ([`fast::NEVER_FALSE`], [`fast::STRING_OR_NUMBER`]), by span.
+    pub fast_forms: HashMap<wowlua_span::Span, u8>,
     /// Name spans of the definitions of renamable methods (see
     /// `env::Member::renamable`) and of the accesses that resolve to them.
     pub private_methods: HashSet<wowlua_span::Span>,
@@ -127,6 +131,7 @@ pub fn check_package_full(
     let mut type_names = HashMap::new();
     let mut value_checks = HashMap::new();
     let mut inline_calls = HashMap::new();
+    let mut fast_forms = HashMap::new();
     let mut hovers: Vec<(wowlua_span::Span, String)> = Vec::new();
     use types::DefId;
     let mut private_methods: HashMap<wowlua_span::Span, DefId> = HashMap::new();
@@ -542,6 +547,7 @@ pub fn check_package_full(
         type_names.extend(out.type_names);
         value_checks.extend(out.value_checks);
         inline_calls.extend(out.inline_calls);
+        fast_forms.extend(out.fast_forms);
         private_methods.extend(out.private_methods);
         global_classes.extend(out.global_classes);
         diagnostics.extend(out.diagnostics);
@@ -644,6 +650,7 @@ pub fn check_package_full(
         diagnostics,
         type_names,
         value_checks,
+        fast_forms,
         private_methods,
         inline_calls,
         definitions,
@@ -845,6 +852,7 @@ struct FileOutcome {
     diagnostics: Vec<Diagnostic>,
     type_names: Vec<(wowlua_span::Span, String)>,
     value_checks: Vec<(wowlua_span::Span, runtime::ValueCheck)>,
+    fast_forms: Vec<(wowlua_span::Span, u8)>,
     private_methods: Vec<(wowlua_span::Span, types::DefId)>,
     inline_calls: Vec<(wowlua_span::Span, wowlua_span::Span)>,
     global_classes: Vec<types::DefId>,
@@ -985,6 +993,7 @@ fn check_file_in(
         diagnostics: Vec::new(),
         type_names: Vec::new(),
         value_checks: Vec::new(),
+        fast_forms: Vec::new(),
         private_methods: Vec::new(),
         inline_calls: Vec::new(),
         global_classes: Vec::new(),
@@ -1121,6 +1130,12 @@ fn check_file_in(
     }
     out.value_checks
         .extend(std::mem::take(&mut checker.value_checks));
+    let file = parse.view().span().file;
+    out.fast_forms.extend(
+        checker
+            .fast_forms()
+            .map(|((start, end), f)| (wowlua_span::Span { file, start, end }, f)),
+    );
     if hover {
         // Every expression's type (not long ones: a table literal's record
         // reads worse than its fields'), and the declared names.

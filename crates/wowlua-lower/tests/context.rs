@@ -113,6 +113,42 @@ fn contexts_compare_constants_bit_for_bit() {
         ..Context::default()
     };
     assert!(!debug.same_except_meta(&Context::default()));
+
+    // What the checker found for the strict fast forms changes the code.
+    let fast = Context {
+        fast_forms: HashMap::from([((0, 1), wowlua_sema::check::fast::NEVER_FALSE)]),
+        ..Context::default()
+    };
+    assert!(!fast.same_except_meta(&Context::default()));
+}
+
+/// The strict fast forms (spec §1.2.4, §1.4.1, §1.4.2) by what the checker
+/// found: without facts (basic mode) the safe forms.
+#[test]
+fn fast_forms_follow_the_checker() {
+    use wowlua_sema::check::fast::{NEVER_FALSE, STRING_OR_NUMBER};
+    let src = "local a, b, s = ...\nprint(`{s}!`, a ?? b, a?.x)\n";
+    // The span of the first `len` bytes of `text`.
+    let at = |text: &str, len: u32| {
+        let start = src.find(text).unwrap() as u32;
+        (start, start + len)
+    };
+    let basic = code(&lower(src, &Context::default()));
+    assert!(basic.contains("tostring(s)"), "{basic}");
+    assert!(basic.contains("if __wl_t1 == nil then"), "{basic}");
+    let strict = Context {
+        fast_forms: HashMap::from([
+            (at("s}", 1), STRING_OR_NUMBER | NEVER_FALSE),
+            (at("a ??", 1), NEVER_FALSE),
+            (at("a?.x", 4), NEVER_FALSE),
+        ]),
+        ..Context::default()
+    };
+    let strict = code(&lower(src, &strict));
+    assert_eq!(
+        strict,
+        "local a, b, s = ...\nprint(s .. \"!\", a or b, a ~= nil and a.x or nil)\n"
+    );
 }
 
 /// An import without its resolution: in the package the module analysis

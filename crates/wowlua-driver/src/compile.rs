@@ -69,6 +69,9 @@ pub struct CompileOutput {
     pub type_names: HashMap<wowlua_span::Span, String>,
     /// Runtime checks (from the checker, spec §7.5).
     pub value_checks: HashMap<wowlua_span::Span, wowlua_sema::check::runtime::ValueCheck>,
+    /// What strict files' fast forms may rely on (from the checker, spec
+    /// §1.2.4, §1.4.1, §1.4.2).
+    pub fast_forms: HashMap<wowlua_span::Span, u8>,
     /// Modules `dead-code` removed (by `Source::rel`, spec optimization
     /// §15.2.1).
     pub removed: BTreeSet<String>,
@@ -1535,6 +1538,7 @@ pub fn compile_flavor(
         out.signature = checked.signature;
         out.type_names = checked.type_names;
         out.value_checks = checked.value_checks;
+        out.fast_forms = checked.fast_forms;
         private_methods = checked.private_methods;
         inline_calls = checked.inline_calls;
     }
@@ -1827,6 +1831,13 @@ pub fn compile_flavor(
                 .insert((call.start, call.end), (at.start, at.end));
         }
     }
+    let mut fast_forms_of: HashMap<FileId, HashMap<(u32, u32), u8>> = HashMap::new();
+    for (span, &f) in &out.fast_forms {
+        fast_forms_of
+            .entry(span.file)
+            .or_default()
+            .insert((span.start, span.end), f);
+    }
     let mut type_names_of: HashMap<FileId, HashMap<(u32, u32), String>> = HashMap::new();
     for (span, name) in &out.type_names {
         type_names_of
@@ -1900,6 +1911,7 @@ pub fn compile_flavor(
             ctx.value_checks = value_checks_of.remove(file).unwrap_or_default();
             ctx.type_names = type_names_of.remove(file).unwrap_or_default();
             ctx.inline_calls = inline_calls_of.remove(file).unwrap_or_default();
+            ctx.fast_forms = fast_forms_of.remove(file).unwrap_or_default();
             ctx.compiler_known = wowlua_sema::is_compiler_known(&source.src_rel);
             ctx.dependency = unit.is_some();
             Some(ctx)

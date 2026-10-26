@@ -86,6 +86,7 @@ impl Checker<'_, '_> {
                 }),
         };
         self.expr_types.insert((e.span().start, e.span().end), t);
+        self.note_fast((e.span().start, e.span().end), t);
         t
     }
 
@@ -98,6 +99,7 @@ impl Checker<'_, '_> {
         let first = pack.types.first().copied().unwrap_or(Types::NIL);
         self.expr_types
             .insert((e.span().start, e.span().end), first);
+        self.note_fast((e.span().start, e.span().end), first);
         pack
     }
 
@@ -384,6 +386,7 @@ impl Checker<'_, '_> {
                 let first = p.types.first().copied().unwrap_or(Types::NIL);
                 self.expr_types
                     .insert((e.span().start, e.span().end), first);
+                self.note_fast((e.span().start, e.span().end), first);
                 types.append(&mut p.types);
                 rest = p.rest;
             } else {

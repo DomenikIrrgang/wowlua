@@ -174,6 +174,9 @@ pub struct Checker<'e, 'p> {
     pub(crate) chain_inner: FxHashMap<(u32, u32), TypeId>,
     /// Classes whose bodies are being checked: (def, static member).
     pub(crate) classes: Vec<(DefId, bool)>,
+    /// Strict mode: what the fast forms' expressions allow, by span
+    /// (`super::fast`).
+    pub(crate) fast: FxHashMap<(u32, u32), u8>,
     /// The class whose constructor is checked: its readonly fields may be
     /// assigned there, nowhere else (spec §3.1.1).
     pub(crate) ctor_of: Option<DefId>,
@@ -336,6 +339,8 @@ pub struct Prepared {
     pub(crate) type_name_args: Vec<wowlua_span::Span>,
     /// The globals `CreateFrame(type, "Name", …)` creates, in walk order.
     pub(crate) created_frames: Vec<String>,
+    /// The expressions the strict fast forms look at (`super::fast`).
+    pub(crate) fast_spans: Vec<wowlua_span::Span>,
 }
 
 /// [`Prepared`] for a file.
@@ -367,6 +372,7 @@ pub fn prepare(parse: &wowlua_syntax::Parse) -> Prepared {
         dynamic_env: calls_setfenv(parse.view().block()),
         type_name_args,
         created_frames,
+        fast_spans: super::fast::spans(parse),
     }
 }
 
@@ -379,6 +385,7 @@ impl<'e, 'p> Checker<'e, 'p> {
             dynamic_env,
             type_name_args: _,
             created_frames: _,
+            fast_spans,
         } = prepared;
         let (reassigned, assigned_in_closures, assigned_later, dynamic_env) = (
             reassigned.clone(),
@@ -411,6 +418,11 @@ impl<'e, 'p> Checker<'e, 'p> {
             chain_inner: FxHashMap::default(),
             classes: Vec::new(),
             ctor_of: None,
+            fast: if info.mode == Mode::Strict && !info.pure_lua {
+                fast_spans.iter().map(|s| ((s.start, s.end), 0)).collect()
+            } else {
+                FxHashMap::default()
+            },
             exports: FxHashMap::default(),
             export_vars: Vec::new(),
             fallback_fields: FxHashMap::default(),
