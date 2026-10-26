@@ -401,7 +401,31 @@ error[E2040]: `number | Secret<number>` may be a secret value; narrow it with `c
    │        ^^ here
 ```
 
-In basic mode and in plain Lua files it's the warning W2040. The rules are in
+In basic mode and in plain Lua files it's the warning W2040.
+
+A widget can hold a secret too. Once one of its setters gets a secret
+(`SetText`, `SetAlpha`, `SetValue`, `SetScale`, …), the matching getters
+return secrets for that widget, so the getters Blizzard documents this way
+(`GetText`, `IsShown`, `GetWidth`, `GetAlpha`, `GetPoint` and many more) are
+typed `T | Secret<T>`. Check what they return before you compute or compare
+with it:
+
+```wowlua title=src/layout.wowlua
+--!strict
+local frame = CreateFrame("Frame", nil, UIParent)
+
+local function halfWidth(): number
+    local width = frame:GetWidth()              -- number | Secret<number>
+    if issecretvalue(width) then
+        return 0
+    end
+    return width / 2
+end
+
+print(halfWidth())
+```
+
+The rules are in
 [Types §2.11](../../spec/language/02-types.md#211-secret-values).
 
 ## Tell wowlua what you know

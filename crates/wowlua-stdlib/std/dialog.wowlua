@@ -227,13 +227,13 @@ export function prompt(opts: PromptOptions)
     d.cancel:SetText(CANCEL)
     const validate = opts.validate
     local function valid(): boolean
-        return validate == nil or secret.flag(validate(d.edit:GetText()))
+        return validate == nil or secret.flag(validate(secret.known(d.edit:GetText(), "")))
     end
     local function submit()
         if not valid() then
             return
         end
-        const value = d.edit:GetText()
+        const value = secret.known(d.edit:GetText(), "")
         d:done()
         callIn({ component = "dialog: onAccept" }, opts.onAccept, value)
     end
@@ -282,7 +282,7 @@ export function import(opts: ImportOptions)
     d.accept:SetText(ACCEPT)
     d.cancel:SetText(CANCEL)
     d.accept:SetScript("OnClick", function()
-        const text = d.edit:GetText()
+        const text = secret.known(d.edit:GetText(), "")
         local ok, problem = pcall(opts.onImport, text)
         if not ok then
             report(`dialog: onImport: {problem}`)

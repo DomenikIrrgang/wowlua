@@ -1651,8 +1651,8 @@ export function tooltipLines(tip: GameTooltip?, right: boolean?): string[]
 end
 
 --- The text a font string, button or edit box shows: `""` when it has
---- none (a fresh font string's `GetText()` is nil).
-export function textOf(region: FontString | Button | EditBox | nil): string
+--- none (a fresh font string's `GetText()` is nil); a secret one as it is.
+export function textOf(region: FontString | Button | EditBox | nil): string | Secret<string>
     if region == nil then
         error("mock.textOf: no region (nil)", 2)
     end

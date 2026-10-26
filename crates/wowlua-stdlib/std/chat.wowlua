@@ -148,6 +148,6 @@ end
 
 --- A window's edit box (`ChatFrame1EditBox`), or nil.
 export function editBox(w: Window): EditBox?
-    const name = w:GetName()
+    const name = secret.known(w:GetName(), nil)
     return name and asEditBox(_G[name .. "EditBox"]) or nil
 end

@@ -349,6 +349,10 @@ The WoW API is typed by **pre-generated `types` packages**, one per flavor:
    frame types, templates), FrameXML globals and mixins, documentation links,
    and deprecations. On conflict, Blizzard's data wins for signatures, and the
    enrichment wins only where Blizzard's data is missing or untyped (`any`).
+   Where Blizzard documents a widget method's arguments or results as
+   possibly secret (`SecretArguments`, `SecretReturns`,
+   `SecretReturnsForAspect`), the annotated method takes or returns
+   `T | Secret<T>` there too ([Types §2.11](../language/02-types.md#211-secret-values)).
    Blizzard's UI code adds its globals: the named frames of its XML, typed by
    their mixins, and those mixins as classes with the functions their Lua
    defines ([Types §2.8](../language/02-types.md#28-globals)).
@@ -402,10 +406,8 @@ The WoW API is typed by **pre-generated `types` packages**, one per flavor:
    (`GetChatWindowMessages(index)` is `...string`), and getters a fresh
    widget answers nil (`FontString:GetText()` is `string?`); a status
    bar's `OnValueChanged` handler takes the value alone (its `userInput`
-   is a slider's), and its value and range read back secret after a
-   secret was set (`GetValue`, `GetInterpolatedValue`, `GetMinMaxValues`
-   and its scripts' values `number | Secret<number>`, Blizzard's
-   `SecretReturnsForAspect` for the bar's value). A function
+   is a slider's), and its scripts get the value and range as possibly
+   secret, as its getters return them. A function
    that gives nothing for an ID that names nothing keeps its documented
    results. The client's own C functions no source documents take what the
    client itself told (decision T294): the argument checks it was probed

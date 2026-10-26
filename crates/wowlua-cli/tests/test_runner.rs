@@ -1676,7 +1676,7 @@ end
 local function typing()
     local box = CreateFrame("EditBox", nil, UIParent)
     local changes = 0
-    local entered: string? = nil
+    local entered: (string | Secret<string>)? = nil
     box:SetScript("OnTextChanged", function(_: EditBox, user: boolean) if user then changes = changes + 1 end end)
     box:SetScript("OnEnterPressed", function(self: EditBox) entered = self:GetText() end)
     mock.typeText(box, "hello")

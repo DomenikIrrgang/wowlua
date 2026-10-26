@@ -108,17 +108,21 @@ end
 -- nil while it reads as secret.
 local function measure(frame: Frame): FramePosition?
     const scale = number(frame:GetEffectiveScale())
+    const uiScale = number(UIParent:GetEffectiveScale())
+    const width = number(UIParent:GetWidth())
+    const height = number(UIParent:GetHeight())
     local l, r, b, t = frame:GetLeft(), frame:GetRight(), frame:GetBottom(), frame:GetTop()
-    if scale == nil or secret.isSecret(l) or secret.isSecret(r) or secret.isSecret(b) or secret.isSecret(t) then
+    if scale == nil or uiScale == nil or width == nil or height == nil then
         return nil
     end
-    const s = scale / UIParent:GetEffectiveScale()
+    if secret.isSecret(l) or secret.isSecret(r) or secret.isSecret(b) or secret.isSecret(t) then
+        return nil
+    end
+    const s = scale / uiScale
     const left = (l ?? 0) * s
     const right = (r ?? 0) * s
     const bottom = (b ?? 0) * s
     const top = (t ?? 0) * s
-    const width = UIParent:GetWidth()
-    const height = UIParent:GetHeight()
     const cx = (left + right) / 2
     const cy = (bottom + top) / 2
     local horizontal, x = "", cx - width / 2
@@ -143,10 +147,11 @@ end
 -- Anchors the frame at `pos` (UIParent units, converted to the frame's).
 local function place(frame: Frame, pos: FramePosition)
     local scale, x, y = number(frame:GetEffectiveScale()), number(pos.x), number(pos.y)
-    if scale == nil or x == nil or y == nil or secret.isSecret(pos.point) or secret.isSecret(pos.relativePoint) then
+    const uiScale = number(UIParent:GetEffectiveScale())
+    if scale == nil or uiScale == nil or x == nil or y == nil or secret.isSecret(pos.point) or secret.isSecret(pos.relativePoint) then
         return
     end
-    const s = scale / UIParent:GetEffectiveScale()
+    const s = scale / uiScale
     frame:ClearAllPoints()
     frame:SetPoint(pos.point, UIParent, pos.relativePoint, x / s, y / s)
 end
@@ -295,7 +300,7 @@ class Movable implements MovableHandle
         if grip then
             grip:SetShown(not self:blocked())
             -- Above the overlay.
-            grip:SetFrameLevel(self.frame:GetFrameLevel() + 1000)
+            grip:SetFrameLevel(secret.known(self.frame:GetFrameLevel(), 0) + 1000)
         end
     end
 

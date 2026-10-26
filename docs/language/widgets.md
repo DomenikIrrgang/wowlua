@@ -109,7 +109,7 @@ export class InputBox extends EditBox
     @script("OnEnterPressed")
     function submit()
         local text = self:GetText()
-        if text ~= "" then
+        if not issecretvalue(text) and text ~= "" then
             self.onSubmit(text)
         end
         self:SetText("")

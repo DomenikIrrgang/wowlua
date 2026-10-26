@@ -8,7 +8,10 @@ import state from "/state"
 import stamp from "/state"
 import say from "/harness"
 
-local function n(v: number): string
+local function n(v: number | Secret<number>): string
+    if issecretvalue(v) then
+        return "secret"
+    end
     return string.format("%.9g", v)
 end
 

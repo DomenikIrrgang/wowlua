@@ -108,7 +108,10 @@ export class Panel
     end
 
     function layout()
-        self.frame:SetHeight(self.frame:GetWidth() / 2)
+        local width = self.frame:GetWidth()
+        if not issecretvalue(width) then
+            self.frame:SetHeight(width / 2)
+        end
     end
 end
 ```
@@ -130,7 +133,10 @@ end
 
 local box = CreateFrame("EditBox", nil, UIParent, "InputBoxTemplate")
 box:SetScript("OnTextChanged", function(self: EditBox)
-    search(self:GetText())
+    local text = self:GetText()
+    if not issecretvalue(text) then
+        search(text)
+    end
 end)
 ```
 

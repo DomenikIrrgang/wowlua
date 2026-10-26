@@ -231,8 +231,12 @@ local names = map(members, function(m) return m.name end)   -- string[]
 
 local function widest<F extends Region>(regions: F[]): F?
     local best: F? = nil
+    local most = 0
     for _, r in ipairs(regions) do
-        if not best or r:GetWidth() > best:GetWidth() then best = r end
+        local width = r:GetWidth()                               -- may be secret
+        if not issecretvalue(width) and (not best or width > most) then
+            best, most = r, width
+        end
     end
     return best
 end
@@ -259,7 +263,8 @@ of the argument's type that are a `T` are excluded.
 
 ```wowlua title=src/frames.wowlua
 local function isButton(region: Region): region is Button
-    return region:GetObjectType() == "Button"
+    local kind = region:GetObjectType()       -- may be secret: check first
+    return not issecretvalue(kind) and kind == "Button"
 end
 
 local function press(button: Button)

@@ -70,7 +70,11 @@ local function restore()
 end
 
 export function savePosition()
-    db.position = { x = frame:GetLeft(), y = frame:GetBottom() }
+    local x, y = frame:GetLeft(), frame:GetBottom()
+    if issecretvalue(x) or issecretvalue(y) then
+        return                                -- a secret position can't be stored
+    end
+    db.position = { x = x, y = y }
 end
 
 export function hideCategory(name: string)

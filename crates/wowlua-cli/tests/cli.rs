@@ -1453,7 +1453,8 @@ print(cancel, zoom, maxZoom, secretTable, completion, known, tabCost, conditionT
     let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
     let diagnostics: Vec<&str> = stderr.lines().filter(|l| l.starts_with("src/")).collect();
     // Only the spell cooldown's start time may be secret (an item's never
-    // is), and a unit's name may be absent.
+    // is) and an alpha animation's target alpha (its alpha aspect), and a
+    // unit's name may be absent.
     assert_eq!(
         diagnostics,
         [
@@ -1462,7 +1463,7 @@ print(cancel, zoom, maxZoom, secretTable, completion, known, tabCost, conditionT
             // (the cursor's id depends on what it holds: unknown, T288)
             "src/main.wowlua:35:7: error[E2001]: `unknown?` is not assignable to `number`",
             "src/main.wowlua:39:7: error[E2001]: `boolean` is not assignable to `string`",
-            "src/main.wowlua:42:7: error[E2001]: `number` is not assignable to `string`",
+            "src/main.wowlua:42:7: error[E2001]: `number | Secret<number>` is not assignable to `string`",
             "src/main.wowlua:45:7: error[E2001]: `number | \"\"` is not assignable to `string`",
             "src/main.wowlua:51:7: error[E2001]: `number` is not assignable to `string`",
             "src/main.wowlua:52:7: error[E2001]: `number` is not assignable to `string`",
@@ -3744,6 +3745,8 @@ SlashCmdList.TYPEDDEMO()
 
 /// A mock of the frame API for widget classes in the VM.
 const MOCK_FRAMES: &str = r##"UIParent = {}
+-- No secrets outside the client.
+issecretvalue = function() return false end
 local methods = {}
 methods.__index = methods
 function methods:SetSize(w, h) self.w, self.h = w, h end
@@ -3800,7 +3803,10 @@ class FancyButton extends CounterButton
     stars: number = 3
     override function refresh()
         super:refresh()
-        self:SetText(self:GetText() .. " *" .. (self.stars or 0))
+        local text = self:GetText()
+        if text and not issecretvalue(text) then
+            self:SetText(text .. " *" .. (self.stars or 0))
+        end
     end
 end
 @global("DemoRowMixin")
@@ -3985,6 +3991,8 @@ fn class_inheritance_orders_modules() {
 /// A fuller mock of the frame API: unknown methods are no-ops; the XML
 /// template of the widget demo is simulated.
 const MOCK_UI: &str = r##"UIParent = {}
+-- No secrets outside the client.
+issecretvalue = function() return false end
 UISpecialFrames = {}
 SlashCmdList = {}
 tinsert = table.insert

@@ -3,6 +3,20 @@
 -- surfaces, gilt hairlines, `arcane` for what is chosen, `amber` and
 -- `ember` only for warnings and errors.
 local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): Frame
+	-- A widget's measure or text, or `fallback` while it reads secret (or
+	-- nil): the window lays itself out from plain values.
+	local function plain(v: unknown, fallback: number): number
+		if type(v) ~= "number" or (issecretvalue and issecretvalue(v)) then
+			return fallback
+		end
+		return v :: number
+	end
+	local function plainText(v: unknown): string
+		if type(v) ~= "string" or (issecretvalue and issecretvalue(v)) then
+			return ""
+		end
+		return v :: string
+	end
 	const C = {
 		glass = { 0.075, 0.067, 0.086, 0.94 },
 		sunk = { 0.082, 0.071, 0.059, 1 },
@@ -94,7 +108,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 		local fs = text(b, "label", 12, primary and C.onSignal or C.ink)
 		fs:SetPoint("CENTER")
 		fs:SetText(label)
-		b:SetWidth(math.max(64, (fs:GetStringWidth() or 40) + 24))
+		b:SetWidth(math.max(64, plain(fs:GetStringWidth(), 40) + 24))
 		b:SetScript("OnEnter", function()
 			if not primary then
 				for _, e in ipairs(edges) do
@@ -128,7 +142,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 		hint:SetPoint("LEFT", 8, 0)
 		hint:SetText(placeholder)
 		box:SetScript("OnTextChanged", function(self)
-			hint:SetShown(self:GetText() == "")
+			hint:SetShown(plainText(self:GetText()) == "")
 			if self.onChange then
 				self.onChange(self:GetText())
 			end
@@ -136,7 +150,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 		box:SetScript("OnEscapePressed", box.ClearFocus)
 		box:SetScript("OnEnterPressed", function(self)
 			if onEnter then
-				onEnter(self:GetText())
+				onEnter(plainText(self:GetText()))
 			end
 			self:ClearFocus()
 		end)
@@ -156,7 +170,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 			local fs = text(b, "label", 12, C.inkMuted)
 			fs:SetPoint("CENTER")
 			fs:SetText(opt.label)
-			local w = math.max(56, (fs:GetStringWidth() or 40) + 20)
+			local w = math.max(56, plain(fs:GetStringWidth(), 40) + 20)
 			b:SetSize(w, 24)
 			b:SetPoint("TOPLEFT", x, -1)
 			x += w
@@ -315,7 +329,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 		for i = #reg.order + 1, #addonRows do
 			addonRows[i]:Hide()
 		end
-		addonList:SetSize(math.max(addonButton:GetWidth() or 200, 240), -y + 4)
+		addonList:SetSize(math.max(plain(addonButton:GetWidth(), 200), 240), -y + 4)
 		addonList:Show()
 	end
 	addonButton:SetScript("OnClick", function()
@@ -352,7 +366,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 		local fs = text(b, "display", 13, C.inkMuted)
 		fs:SetPoint("LEFT")
 		fs:SetText(name)
-		local w = (fs:GetStringWidth() or 60) + 4
+		local w = plain(fs:GetStringWidth(), 60) + 4
 		b:SetSize(w, 26)
 		b:SetPoint("LEFT", tx, 0)
 		tx += w + 12
@@ -388,21 +402,21 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 	local thumb = fill(body, C.giltLine, "OVERLAY")
 	thumb:SetWidth(3)
 	local function layoutThumb()
-		local view, total = scroll:GetHeight() ?? 1, list:GetHeight() ?? 1
+		local view, total = plain(scroll:GetHeight(), 1), plain(list:GetHeight(), 1)
 		if total <= view + 1 then
 			thumb:Hide()
 			return
 		end
 		thumb:Show()
 		local h = math.max(20, view * view / total)
-		local offset = (scroll:GetVerticalScroll() ?? 0) / (total - view) * (view - h)
+		local offset = plain(scroll:GetVerticalScroll(), 0) / (total - view) * (view - h)
 		thumb:ClearAllPoints()
 		thumb:SetPoint("TOPRIGHT", scroll, "TOPRIGHT", 6, -offset)
 		thumb:SetHeight(h)
 	end
 	scroll:SetScript("OnMouseWheel", function(self, delta)
-		local max = math.max(0, (list:GetHeight() ?? 0) - (self:GetHeight() ?? 0))
-		self:SetVerticalScroll(math.min(max, math.max(0, (self:GetVerticalScroll() ?? 0) - delta * 40)))
+		local max = math.max(0, plain(list:GetHeight(), 0) - plain(self:GetHeight(), 0))
+		self:SetVerticalScroll(math.min(max, math.max(0, plain(self:GetVerticalScroll(), 0) - delta * 40)))
 		layoutThumb()
 	end)
 
@@ -480,7 +494,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 		end
 		menu:SetHeight(-y + 4)
 		local cx, cy = GetCursorPosition()
-		local scale = UIParent:GetEffectiveScale()
+		local scale = plain(UIParent:GetEffectiveScale(), 1)
 		menu:ClearAllPoints()
 		menu:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", cx / scale, cy / scale)
 		menu:Show()
@@ -559,7 +573,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 	-- { cells = {}, subs = {}, colors = {}, fonts = {}, badge, indent,
 	--   tall, onClick, onRightClick }.
 	local function render(columns: any[], data: any[])
-		width = scroll:GetWidth() or (W - 40)
+		width = plain(scroll:GetWidth(), W - 40)
 		list:SetWidth(width)
 		local fixed = 0
 		for _, c in ipairs(columns) do
@@ -607,7 +621,7 @@ local function buildDevWindow(console: WowluaConsole, reg: WowluaDevRegistry): F
 		end
 		hr.onClick = function()
 			-- Sorting: the column under the cursor.
-			local cx = GetCursorPosition() / UIParent:GetEffectiveScale() - (hr:GetLeft() ?? 0)
+			local cx = GetCursorPosition() / plain(UIParent:GetEffectiveScale(), 1) - plain(hr:GetLeft(), 0)
 			for j, c in ipairs(columns) do
 				if c.sort and cx >= x0(j) and cx <= x0(j) + colWidth(j) then
 					state.sort = c.sort

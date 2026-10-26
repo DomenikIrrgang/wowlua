@@ -101,20 +101,6 @@ fn widget_corrections(classes: &mut indexmap::IndexMap<String, model::Class>) {
             }
         }
     }
-    // A status bar's value and range read back secret after a secret was
-    // set (Blizzard's `SecretReturnsForAspect` `BarValue`; the emulator's
-    // `bars.rs`).
-    if let Some(bar) = classes.get_mut("StatusBar") {
-        for method in ["GetValue", "GetInterpolatedValue", "GetMinMaxValues"] {
-            for sig in bar.methods.get_mut(method).into_iter().flatten() {
-                for ty in sig.returns.iter_mut() {
-                    if ty == "number" {
-                        *ty = "number | Secret<number>".into();
-                    }
-                }
-            }
-        }
-    }
     if let Some(frame) = classes.get_mut("Frame")
         && let Some(sigs) = frame.methods.get_mut("GetAttribute")
         && sigs.iter().all(|s| s.params.len() == 1)
@@ -415,6 +401,75 @@ const CLASS_SCRIPT_HANDLERS: &[(&str, &str, &str)] = &[
         "min: number | Secret<number>, max: number | Secret<number>",
     ),
 ];
+
+/// `ty` that may also be secret: each part of a union that is not nil
+/// also as `Secret<…>` (`string?` → `(string | Secret<string>)?`);
+/// `any`, `unknown` and types already secret stay.
+fn with_secret(ty: &str) -> String {
+    if ty.contains("Secret<") || ty == "any" || ty == "unknown" {
+        return ty.to_string();
+    }
+    let (inner, nilable) = match ty.strip_suffix('?') {
+        Some(t) => (
+            t.strip_prefix('(')
+                .and_then(|t| t.strip_suffix(')'))
+                .unwrap_or(t),
+            true,
+        ),
+        None => (ty, false),
+    };
+    // The union's parts at the top level (not inside parentheses,
+    // brackets or a function type).
+    let mut parts = Vec::new();
+    let (mut depth, mut start) = (0i32, 0);
+    let bytes = inner.as_bytes();
+    for (i, &c) in bytes.iter().enumerate() {
+        match c {
+            b'(' | b'{' | b'[' | b'<' => depth += 1,
+            b')' | b'}' | b']' => depth -= 1,
+            b'>' if i > 0 && bytes[i - 1] != b'-' => depth -= 1,
+            b'|' if depth == 0 => {
+                parts.push(inner[start..i].trim());
+                start = i + 1;
+            }
+            _ => {}
+        }
+    }
+    parts.push(inner[start..].trim());
+    let nil = parts.contains(&"nil");
+    let plain: Vec<&str> = parts.iter().copied().filter(|p| *p != "nil").collect();
+    if plain.iter().any(|p| p.contains("->") || p.contains("...")) {
+        return ty.to_string();
+    }
+    let mut out: Vec<String> = plain.iter().map(|p| p.to_string()).collect();
+    out.extend(plain.iter().map(|p| format!("Secret<{p}>")));
+    let joined = out.join(" | ");
+    if nilable {
+        model::optional(&joined)
+    } else if nil {
+        format!("{joined} | nil")
+    } else {
+        joined
+    }
+}
+
+/// An annotated method's results made possibly secret where Blizzard's
+/// documented ones are, one by one.
+fn secret_returns(doc: &model::Sig, target: &mut model::Sig) {
+    for (i, ty) in target.returns.iter_mut().enumerate() {
+        if doc.returns.get(i).is_some_and(|d| d.contains("Secret<")) {
+            *ty = with_secret(ty);
+        }
+    }
+    if doc
+        .ret_vararg
+        .as_deref()
+        .is_some_and(|d| d.contains("Secret<"))
+        && let Some(v) = &mut target.ret_vararg
+    {
+        *v = with_secret(v);
+    }
+}
 
 /// The script names a script type alias (`ScriptButton`) takes, through
 /// the aliases it extends.
@@ -1394,6 +1449,16 @@ pub fn generate(
                     for t in targets.iter_mut() {
                         t.returns = doc.returns.clone();
                         t.ret_vararg = doc.ret_vararg.clone();
+                    }
+                }
+                // Results Blizzard documents as possibly secret
+                // (`SecretReturns`, `SecretReturnsForAspect`: a widget's
+                // aspect set from a secret, `FontString:GetText()` after a
+                // secret `SetText`) are `T | Secret<T>` in the annotated
+                // methods too.
+                if let Some(doc) = sigs.first() {
+                    for t in targets.iter_mut() {
+                        secret_returns(doc, t);
                     }
                 }
                 for sig in sigs {
@@ -2431,8 +2496,8 @@ mod tests {
         assert_eq!(d["event:TEST_DONE"].summary, "The thing is done.");
     }
 
-    /// A status bar's value and range read back secret, its scripts get
-    /// them so, and its `OnValueChanged` no `userInput`; a slider's keeps it.
+    /// A status bar's scripts get its value and range as possibly secret,
+    /// and its `OnValueChanged` no `userInput`; a slider's keeps it.
     #[test]
     fn a_status_bars_value_may_be_secret() {
         let sig = |params: Vec<model::ParamDecl>, returns: &[&str]| model::Sig {
@@ -2474,17 +2539,8 @@ mod tests {
                 "\"OnValueChanged\" | \"OnMinMaxChanged\"".to_string(),
             );
         }
-        widget_corrections(&mut classes);
         script_handlers(&mut classes, &aliases);
         let text = |class: &str, m: &str, i: usize| model::sig_text(&classes[class].methods[m][i]);
-        assert_eq!(
-            text("StatusBar", "GetValue", 0),
-            "(): number | Secret<number>"
-        );
-        assert_eq!(
-            text("StatusBar", "GetMinMaxValues", 0),
-            "(): (number | Secret<number>, number | Secret<number>)"
-        );
         assert_eq!(
             text("StatusBar", "SetScript", 0),
             "(scriptType: \"OnValueChanged\", handler: (((self: Self, value: number | Secret<number>) -> ()))?)"
@@ -2493,11 +2549,36 @@ mod tests {
             text("StatusBar", "SetScript", 1),
             "(scriptType: \"OnMinMaxChanged\", handler: (((self: Self, min: number | Secret<number>, max: number | Secret<number>) -> ()))?)"
         );
-        assert_eq!(text("Slider", "GetValue", 0), "(): number");
         assert_eq!(
             text("Slider", "SetScript", 0),
             "(scriptType: \"OnValueChanged\", handler: (((self: Self, value: number, userInput: boolean) -> ()))?)"
         );
+    }
+
+    /// A method's results Blizzard documents as possibly secret are
+    /// `T | Secret<T>` in the annotations' signature too, one by one.
+    #[test]
+    fn documented_secret_results_reach_annotated_methods() {
+        assert_eq!(with_secret("number"), "number | Secret<number>");
+        assert_eq!(with_secret("string?"), "(string | Secret<string>)?");
+        assert_eq!(
+            with_secret("string | number | nil"),
+            "string | number | Secret<string> | Secret<number> | nil"
+        );
+        assert_eq!(with_secret("unknown"), "unknown");
+        assert_eq!(
+            with_secret("number | Secret<number>"),
+            "number | Secret<number>"
+        );
+        assert_eq!(with_secret("(() -> ())?"), "(() -> ())?");
+        let sig = |returns: &[&str]| model::Sig {
+            returns: returns.iter().map(|r| r.to_string()).collect(),
+            ..model::Sig::default()
+        };
+        let doc = sig(&["number | Secret<number>", "boolean"]);
+        let mut annotated = sig(&["number", "boolean"]);
+        secret_returns(&doc, &mut annotated);
+        assert_eq!(annotated.returns, ["number | Secret<number>", "boolean"]);
     }
 
     /// `FormatShortDate` without a year is the short date without one.

@@ -21,7 +21,8 @@ end
 
 local function editBox(): EditBox
     for _, c in ipairs({ window():GetChildren() }) do
-        if c:GetObjectType() == "EditBox" then
+        local kind = c:GetObjectType()
+        if not issecretvalue(kind) and kind == "EditBox" then
             return c :: EditBox
         end
     end

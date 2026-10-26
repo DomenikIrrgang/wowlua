@@ -3,6 +3,20 @@
 -- surfaces, gilt hairlines, `arcane` for what is chosen, `amber` and
 -- `ember` only for warnings and errors.
 local function buildDevWindow(console, reg)
+	-- A widget's measure or text, or `fallback` while it reads secret (or
+	-- nil): the window lays itself out from plain values.
+	local function plain(v, fallback)
+		if type(v) ~= "number" or (issecretvalue and issecretvalue(v)) then
+			return fallback
+		end
+		return v
+	end
+	local function plainText(v)
+		if type(v) ~= "string" or (issecretvalue and issecretvalue(v)) then
+			return ""
+		end
+		return v
+	end
 	local C = {
 	glass = {0.075, 0.067, 0.086, 0.94},
 	sunk = {0.082, 0.071, 0.059, 1},
@@ -94,7 +108,7 @@ local function buildDevWindow(console, reg)
 		local fs = text(b, "label", 12, primary and C.onSignal or C.ink)
 		fs:SetPoint("CENTER")
 		fs:SetText(label)
-		b:SetWidth(math.max(64, (fs:GetStringWidth() or 40) + 24))
+		b:SetWidth(math.max(64, plain(fs:GetStringWidth(), 40) + 24))
 		b:SetScript("OnEnter", function()
 			if not primary then
 				for _, e in ipairs(edges) do
@@ -128,7 +142,7 @@ local function buildDevWindow(console, reg)
 		hint:SetPoint("LEFT", 8, 0)
 		hint:SetText(placeholder)
 		box:SetScript("OnTextChanged", function(self)
-			hint:SetShown(self:GetText() == "")
+			hint:SetShown(plainText(self:GetText()) == "")
 			if self.onChange then
 				self.onChange(self:GetText())
 			end
@@ -136,7 +150,7 @@ local function buildDevWindow(console, reg)
 		box:SetScript("OnEscapePressed", box.ClearFocus)
 		box:SetScript("OnEnterPressed", function(self)
 			if onEnter then
-				onEnter(self:GetText())
+				onEnter(plainText(self:GetText()))
 			end
 			self:ClearFocus()
 		end)
@@ -156,7 +170,7 @@ local function buildDevWindow(console, reg)
 			local fs = text(b, "label", 12, C.inkMuted)
 			fs:SetPoint("CENTER")
 			fs:SetText(opt.label)
-			local w = math.max(56, (fs:GetStringWidth() or 40) + 20)
+			local w = math.max(56, plain(fs:GetStringWidth(), 40) + 20)
 			b:SetSize(w, 24)
 			b:SetPoint("TOPLEFT", x, -1)
 			x = x + w
@@ -315,7 +329,7 @@ local function buildDevWindow(console, reg)
 		for i = #reg.order + 1, #addonRows do
 			addonRows[i]:Hide()
 		end
-		addonList:SetSize(math.max(addonButton:GetWidth() or 200, 240), -y + 4)
+		addonList:SetSize(math.max(plain(addonButton:GetWidth(), 200), 240), -y + 4)
 		addonList:Show()
 	end
 	addonButton:SetScript("OnClick", function()
@@ -352,7 +366,7 @@ local function buildDevWindow(console, reg)
 		local fs = text(b, "display", 13, C.inkMuted)
 		fs:SetPoint("LEFT")
 		fs:SetText(name)
-		local w = (fs:GetStringWidth() or 60) + 4
+		local w = plain(fs:GetStringWidth(), 60) + 4
 		b:SetSize(w, 26)
 		b:SetPoint("LEFT", tx, 0)
 		tx = tx + (w + 12)
@@ -388,21 +402,21 @@ local function buildDevWindow(console, reg)
 	local thumb = fill(body, C.giltLine, "OVERLAY")
 	thumb:SetWidth(3)
 	local function layoutThumb()
-		local __wl_t4 = scroll:GetHeight() if __wl_t4 == nil then __wl_t4 = 1 end local __wl_t5 = list:GetHeight() if __wl_t5 == nil then __wl_t5 = 1 end local view, total = __wl_t4, __wl_t5
+		local view, total = plain(scroll:GetHeight(), 1), plain(list:GetHeight(), 1)
 		if total <= view + 1 then
 			thumb:Hide()
 			return
 		end
 		thumb:Show()
 		local h = math.max(20, view * view / total)
-		local __wl_t6 = scroll:GetVerticalScroll() if __wl_t6 == nil then __wl_t6 = 0 end local offset = (__wl_t6) / (total - view) * (view - h)
+		local offset = plain(scroll:GetVerticalScroll(), 0) / (total - view) * (view - h)
 		thumb:ClearAllPoints()
 		thumb:SetPoint("TOPRIGHT", scroll, "TOPRIGHT", 6, -offset)
 		thumb:SetHeight(h)
 	end
 	scroll:SetScript("OnMouseWheel", function(self, delta)
-		local __wl_t7 = list:GetHeight() if __wl_t7 == nil then __wl_t7 = 0 end local __wl_t8 = self:GetHeight() if __wl_t8 == nil then __wl_t8 = 0 end local max = math.max(0, (__wl_t7) - (__wl_t8))
-		do local __wl_t9 = self:GetVerticalScroll() if __wl_t9 == nil then __wl_t9 = 0 end self:SetVerticalScroll(math.min(max, math.max(0, (__wl_t9) - delta * 40))) end
+		local max = math.max(0, plain(list:GetHeight(), 0) - plain(self:GetHeight(), 0))
+		self:SetVerticalScroll(math.min(max, math.max(0, plain(self:GetVerticalScroll(), 0) - delta * 40)))
 		layoutThumb()
 	end)
 
@@ -480,7 +494,7 @@ local function buildDevWindow(console, reg)
 		end
 		menu:SetHeight(-y + 4)
 		local cx, cy = GetCursorPosition()
-		local scale = UIParent:GetEffectiveScale()
+		local scale = plain(UIParent:GetEffectiveScale(), 1)
 		menu:ClearAllPoints()
 		menu:SetPoint("TOPLEFT", UIParent, "BOTTOMLEFT", cx / scale, cy / scale)
 		menu:Show()
@@ -559,11 +573,11 @@ local function buildDevWindow(console, reg)
 	-- { cells = {}, subs = {}, colors = {}, fonts = {}, badge, indent,
 	--   tall, onClick, onRightClick }.
 	local function render(columns, data)
-		width = scroll:GetWidth() or (880 - 40)
+		width = plain(scroll:GetWidth(), 880 - 40)
 		list:SetWidth(width)
 		local fixed = 0
 		for _, c in ipairs(columns) do
-			do local __wl_t10 = c.width if __wl_t10 == nil then __wl_t10 = 0 end fixed = fixed + (__wl_t10) + 12 end
+			do local __wl_t4 = c.width if __wl_t4 == nil then __wl_t4 = 0 end fixed = fixed + (__wl_t4) + 12 end
 		end
 		local y = 0
 		local function x0(j)
@@ -607,7 +621,7 @@ local function buildDevWindow(console, reg)
 		end
 		hr.onClick = function()
 			-- Sorting: the column under the cursor.
-			local __wl_t12 = GetCursorPosition() / UIParent:GetEffectiveScale() local __wl_t11 = hr:GetLeft() if __wl_t11 == nil then __wl_t11 = 0 end local cx = __wl_t12 - (__wl_t11)
+			local cx = GetCursorPosition() / plain(UIParent:GetEffectiveScale(), 1) - plain(hr:GetLeft(), 0)
 			for j, c in ipairs(columns) do
 				if c.sort and cx >= x0(j) and cx <= x0(j) + colWidth(j) then
 					state.sort = c.sort
@@ -627,11 +641,11 @@ local function buildDevWindow(console, reg)
 			r.onClick, r.onRightClick = d.onClick, d.onRightClick
 			for j = 1, #columns do
 				local fs = cell(r, j)
-				local __wl_t13 = d.fonts if __wl_t13 ~= nil then __wl_t13 = __wl_t13[j] end local __wl_t14 = __wl_t13 if __wl_t14 == nil then __wl_t14 = (j == 1 and "label" or "numeric") end local font = __wl_t14
+				local __wl_t5 = d.fonts if __wl_t5 ~= nil then __wl_t5 = __wl_t5[j] end local __wl_t6 = __wl_t5 if __wl_t6 == nil then __wl_t6 = (j == 1 and "label" or "numeric") end local font = __wl_t6
 				if not fs:SetFont(FONTS[font], 12, "") then
 					fs:SetFont(FALLBACK, 12, "")
 				end
-				do local __wl_t15 = d.colors if __wl_t15 ~= nil then __wl_t15 = __wl_t15[j] end local __wl_t16 = __wl_t15 if __wl_t16 == nil then __wl_t16 = C.ink end fs:SetTextColor(unpack(__wl_t16)) end
+				do local __wl_t7 = d.colors if __wl_t7 ~= nil then __wl_t7 = __wl_t7[j] end local __wl_t8 = __wl_t7 if __wl_t8 == nil then __wl_t8 = C.ink end fs:SetTextColor(unpack(__wl_t8)) end
 				fs:SetText(d.cells[j] or "")
 				fs:ClearAllPoints()
 				local indent = (j == 1 and d.indent) or 0
@@ -695,7 +709,7 @@ local function buildDevWindow(console, reg)
 		return string.format((v or 0) >= 10 and "%.1f" or "%.2f", v or 0)
 	end
 	local function count(n)
-		local __wl_t17 = n if __wl_t17 == nil then __wl_t17 = 0 end local s = tostring(math.floor(__wl_t17))
+		local __wl_t9 = n if __wl_t9 == nil then __wl_t9 = 0 end local s = tostring(math.floor(__wl_t9))
 		local out = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
 		return (out:gsub("^,", ""))
 	end
@@ -703,7 +717,7 @@ local function buildDevWindow(console, reg)
 	-- Inspector: the value shown and how to reach it again.
 	local inspected = {label = "ns", get = function()
 		local d = current()
-		do local __wl_t18 = d if __wl_t18 ~= nil then __wl_t18 = __wl_t18.runtime.ns end return __wl_t18 end
+		do local __wl_t10 = d if __wl_t10 ~= nil then __wl_t10 = __wl_t10.runtime.ns end return __wl_t10 end
 	end}
 	local function inspect(label, get)
 		inspected = {label = label, get = get}
@@ -737,7 +751,7 @@ local function buildDevWindow(console, reg)
 		for _, t in ipairs(toolRows) do
 			data[#data + 1] = {cells = {t[1], t[2]}, colors = {C.ink, C.inkMuted}, fonts = {"label", "body"}}
 		end
-		local __wl_t19 = rt.mon if __wl_t19 ~= nil then __wl_t19 = __wl_t19.memory end local __wl_t20 = __wl_t19 if __wl_t20 == nil then __wl_t20 = {} end local mem = __wl_t20
+		local __wl_t11 = rt.mon if __wl_t11 ~= nil then __wl_t11 = __wl_t11.memory end local __wl_t12 = __wl_t11 if __wl_t12 == nil then __wl_t12 = {} end local mem = __wl_t12
 		local last = mem[#mem]
 		data[#data + 1] = {
 		cells = {"Memory", last and string.format("%.2f MB · %d samples", last / 1024, #mem) or "no samples yet"},
@@ -770,12 +784,12 @@ local function buildDevWindow(console, reg)
 		local _ = filter, reset
 		local prof = d.runtime.prof
 		local data = {}
-		do local __wl_t21 = prof if __wl_t21 ~= nil then __wl_t21 = __wl_t21.stats end local __wl_t22 = __wl_t21 if __wl_t22 == nil then __wl_t22 = {} end for _, r in ipairs(console.sorted(__wl_t22, state.sort)) do repeat
+		do local __wl_t13 = prof if __wl_t13 ~= nil then __wl_t13 = __wl_t13.stats end local __wl_t14 = __wl_t13 if __wl_t14 == nil then __wl_t14 = {} end for _, r in ipairs(console.sorted(__wl_t14, state.sort)) do repeat
 					if not (state.filter == "" or r.name:lower():find(state.filter, 1, true)) then
 						break
 					end
 					local s = r.s
-					local __wl_t23 = s.max if __wl_t23 == nil then __wl_t23 = 0 end local slow = (__wl_t23) > 16.7
+					local __wl_t15 = s.max if __wl_t15 == nil then __wl_t15 = 0 end local slow = (__wl_t15) > 16.7
 					data[#data + 1] = {
 					cells = {r.name, count(s.calls), ms(s.total), ms(s.self), ms(s.max), ms(s.total / math.max(s.calls, 1))},
 					subs = {s.location},
@@ -828,7 +842,7 @@ local function buildDevWindow(console, reg)
 		if mon then
 			for _, r in ipairs(console.sorted(mon[state.monitor], "total")) do
 				local s = r.s
-				local __wl_t24 = s.max if __wl_t24 == nil then __wl_t24 = 0 end local slow = (__wl_t24) > 16.7
+				local __wl_t16 = s.max if __wl_t16 == nil then __wl_t16 = 0 end local slow = (__wl_t16) > 16.7
 				data[#data + 1] = {
 				cells = {r.name, count(s.count), ms(s.total), ms(s.max)},
 				subs = {s.detail},
@@ -869,12 +883,12 @@ local function buildDevWindow(console, reg)
 		if logs then
 			local min = state.level == "all" and -1 or LEVEL_RANK[state.level]
 			for _, e in ipairs(logs.history()) do repeat
-					do local __wl_t25 = LEVEL_RANK[e.level] if __wl_t25 == nil then __wl_t25 = 0 end if (__wl_t25) < min then
+					do local __wl_t17 = LEVEL_RANK[e.level] if __wl_t17 == nil then __wl_t17 = 0 end if (__wl_t17) < min then
 							break
 						end end
 					local tone = e.level == "error" and C.emberText or (e.level == "warn" and C.amber or C.inkMuted)
 					do
-						local __wl_t26 = e.time if __wl_t26 == nil then __wl_t26 = 0 end local __wl_t28 = string.format("%.1f", __wl_t26) local __wl_t27 = e.location if __wl_t27 == nil then __wl_t27 = "" end data[#data + 1] = {cells = {__wl_t28, e.level, e.message, __wl_t27},
+						local __wl_t18 = e.time if __wl_t18 == nil then __wl_t18 = 0 end local __wl_t20 = string.format("%.1f", __wl_t18) local __wl_t19 = e.location if __wl_t19 == nil then __wl_t19 = "" end data[#data + 1] = {cells = {__wl_t20, e.level, e.message, __wl_t19},
 						colors = {C.inkMuted, tone, C.ink, C.inkMuted},
 						fonts = {"numeric", "display", "body", "body"}
 						} end
@@ -1127,7 +1141,7 @@ local function buildDevWindow(console, reg)
 			selected = (saved.addon and reg.addons[saved.addon]) and saved.addon or selected
 			if saved.point then
 				win:ClearAllPoints()
-				do local __wl_t29 = saved.x if __wl_t29 == nil then __wl_t29 = 0 end local __wl_t30 = saved.y if __wl_t30 == nil then __wl_t30 = 0 end win:SetPoint(saved.point, UIParent, saved.point, __wl_t29, __wl_t30) end
+				do local __wl_t21 = saved.x if __wl_t21 == nil then __wl_t21 = 0 end local __wl_t22 = saved.y if __wl_t22 == nil then __wl_t22 = 0 end win:SetPoint(saved.point, UIParent, saved.point, __wl_t21, __wl_t22) end
 			end
 			if saved.width and saved.height then
 				win:SetSize(saved.width, saved.height)
@@ -1139,7 +1153,7 @@ local function buildDevWindow(console, reg)
 	-- Refreshed only while visible: watches and the inspector often.
 	local elapsed = 0
 	win:SetScript("OnUpdate", function(_, dt)
-		do local __wl_t31 = dt if __wl_t31 == nil then __wl_t31 = 0 end elapsed = elapsed + (__wl_t31) end
+		do local __wl_t23 = dt if __wl_t23 == nil then __wl_t23 = 0 end elapsed = elapsed + (__wl_t23) end
 		local every = (state.tab == 6 or state.tab == 7) and 0.25 or 1
 		if elapsed >= every and not menu:IsShown() then
 			elapsed = 0
@@ -1159,7 +1173,7 @@ end
 local dev
 do
 
-	local __wl_t32 = wl.devInfo if __wl_t32 == nil then __wl_t32 = {} end dev = {name = addonName, info = __wl_t32,
+	local __wl_t24 = wl.devInfo if __wl_t24 == nil then __wl_t24 = {} end dev = {name = addonName, info = __wl_t24,
 	watches = {},
 	schema = 1,
 	-- The data the console reads, through one versioned interface.
@@ -1180,7 +1194,7 @@ if not reg.addons[addonName] then
 end
 reg.addons[addonName] = dev
 
-local __wl_t33 = wl.devInfo if __wl_t33 ~= nil then __wl_t33 = __wl_t33.runtime end local __wl_t34 = __wl_t33 if __wl_t34 == nil then __wl_t34 = 0 end local VERSION = __wl_t34
+local __wl_t25 = wl.devInfo if __wl_t25 ~= nil then __wl_t25 = __wl_t25.runtime end local __wl_t26 = __wl_t25 if __wl_t26 == nil then __wl_t26 = 0 end local VERSION = __wl_t26
 
 -- This runtime's console replaces older ones.
 local function install()
@@ -1247,7 +1261,7 @@ local function install()
 			rows[#rows + 1] = {name = name, s = s}
 		end
 		table.sort(rows, function(a, b)
-			do local __wl_t35 = a.s[key] if __wl_t35 == nil then __wl_t35 = 0 end local __wl_t36 = b.s[key] if __wl_t36 == nil then __wl_t36 = 0 end return (__wl_t35) > (__wl_t36) end
+			do local __wl_t27 = a.s[key] if __wl_t27 == nil then __wl_t27 = 0 end local __wl_t28 = b.s[key] if __wl_t28 == nil then __wl_t28 = 0 end return (__wl_t27) > (__wl_t28) end
 		end)
 		return rows
 	end
@@ -1258,9 +1272,9 @@ local function install()
 		for i = 1, math.min(top, #rows) do
 			local r = rows[i]
 			local s = r.s
-			do local __wl_t50 = pad(r.name, 34) local __wl_t37 = s.calls if __wl_t37 == nil then __wl_t37 = s.count end local __wl_t38 = __wl_t37 if __wl_t38 == nil then __wl_t38 = 0 end local __wl_t49 = pad(__wl_t38, 8, true) local __wl_t39 = s.total if __wl_t39 == nil then __wl_t39 = 0 end local __wl_t48 = pad(ms(__wl_t39), 9, true)
-				local __wl_t40 = s.self if __wl_t40 == nil then __wl_t40 = s.total end local __wl_t41 = __wl_t40 if __wl_t41 == nil then __wl_t41 = 0 end local __wl_t47 = pad(ms(__wl_t41), 9, true) local __wl_t42 = s.max if __wl_t42 == nil then __wl_t42 = 0 end local __wl_t46 = pad(ms(__wl_t42), 9, true)
-				local __wl_t43 = s.total if __wl_t43 == nil then __wl_t43 = 0 end local __wl_t44 = s.calls if __wl_t44 == nil then __wl_t44 = s.count end local __wl_t45 = __wl_t44 if __wl_t45 == nil then __wl_t45 = 1 end say(__wl_t50 .. __wl_t49 .. __wl_t48 .. __wl_t47 .. __wl_t46 .. pad(ms((__wl_t43) / math.max(__wl_t45, 1)), 9, true)) end
+			do local __wl_t42 = pad(r.name, 34) local __wl_t29 = s.calls if __wl_t29 == nil then __wl_t29 = s.count end local __wl_t30 = __wl_t29 if __wl_t30 == nil then __wl_t30 = 0 end local __wl_t41 = pad(__wl_t30, 8, true) local __wl_t31 = s.total if __wl_t31 == nil then __wl_t31 = 0 end local __wl_t40 = pad(ms(__wl_t31), 9, true)
+				local __wl_t32 = s.self if __wl_t32 == nil then __wl_t32 = s.total end local __wl_t33 = __wl_t32 if __wl_t33 == nil then __wl_t33 = 0 end local __wl_t39 = pad(ms(__wl_t33), 9, true) local __wl_t34 = s.max if __wl_t34 == nil then __wl_t34 = 0 end local __wl_t38 = pad(ms(__wl_t34), 9, true)
+				local __wl_t35 = s.total if __wl_t35 == nil then __wl_t35 = 0 end local __wl_t36 = s.calls if __wl_t36 == nil then __wl_t36 = s.count end local __wl_t37 = __wl_t36 if __wl_t37 == nil then __wl_t37 = 1 end say(__wl_t42 .. __wl_t41 .. __wl_t40 .. __wl_t39 .. __wl_t38 .. pad(ms((__wl_t35) / math.max(__wl_t37, 1)), 9, true)) end
 		end
 		if #rows == 0 then
 			say("(no data yet)")
@@ -1281,7 +1295,7 @@ local function install()
 	function commands.list()
 		for _, n in ipairs(reg.order) do
 			local i = reg.addons[n].info
-			do local __wl_t51 = i.version if __wl_t51 == nil then __wl_t51 = "?" end local __wl_t52 = i.profile if __wl_t52 == nil then __wl_t52 = "?" end local __wl_t53 = i.build if __wl_t53 == nil then __wl_t53 = "?" end say(tostring(n) .. " " .. tostring(__wl_t51) .. " · " .. tostring(__wl_t52) .. " · build " .. tostring(__wl_t53)) end
+			do local __wl_t43 = i.version if __wl_t43 == nil then __wl_t43 = "?" end local __wl_t44 = i.profile if __wl_t44 == nil then __wl_t44 = "?" end local __wl_t45 = i.build if __wl_t45 == nil then __wl_t45 = "?" end say(tostring(n) .. " " .. tostring(__wl_t43) .. " · " .. tostring(__wl_t44) .. " · build " .. tostring(__wl_t45)) end
 		end
 	end
 
@@ -1490,6 +1504,6 @@ local function install()
 	end
 	dev.console = console
 end
-do local __wl_t54 = reg.version if __wl_t54 == nil then __wl_t54 = -1 end if (__wl_t54) < VERSION then
+do local __wl_t46 = reg.version if __wl_t46 == nil then __wl_t46 = -1 end if (__wl_t46) < VERSION then
 		install()
 	end end

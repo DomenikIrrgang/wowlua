@@ -1005,6 +1005,7 @@ wowlua models this with the type `Secret<T>`:
 | Errors | Arithmetic, comparison, `#`, indexing, calling, use as a table key, or a boolean test on `Secret<boolean>`: error E2040 in strict mode and warning W2040 in basic mode and in pure Lua files |
 | Narrowing | `issecretvalue(v)` is declared as the predicate `v is Secret<unknown>`, and the global `canaccessvalue(v)` narrows as its complement (declared returning `boolean`; a local of that name does not narrow). The false branch of `issecretvalue` and the true branch of `canaccessvalue` remove all `Secret<…>` members (§2.2.8); the true branch of `issecretvalue` and the false branch of `canaccessvalue` keep only them. |
 | Widget setters | Declared to accept `T \| Secret<T>` where Blizzard documents secret support, so values can be displayed without being read |
+| Widget getters | Declared to return `T \| Secret<T>` where Blizzard documents their results as possibly secret (`SecretReturns`, or `SecretReturnsForAspect`: a widget's aspect a setter was given a secret for reads back secret, `FontString:GetText()` after a secret `SetText`, `StatusBar:GetValue()` after a secret `SetValue`), in every flavor's declarations of the widget classes |
 | Assignability | `Secret<T>` is not assignable to `T`. `T` is assignable to `T \| Secret<T>`. |
 | Erasure | Purely static. No runtime cost. |
 

@@ -27,7 +27,10 @@ const handle = frames.movable(box, {
     scaleWheel = "CTRL",
 })
 
-local function near(a: number, b: number): boolean
+local function near(a: number | Secret<number>, b: number): boolean
+    if issecretvalue(a) then
+        return false
+    end
     return math.abs(a - b) < 1
 end
 
@@ -53,7 +56,8 @@ s:test("restore and reset", function(t)
     t:eq(point, "TOP", "the saved anchor")
     t:eq(relPoint, "TOP", "relative to UIParent's top")
     t:ok(near(box:GetWidth(), 300) and near(box:GetHeight(), 150), "the saved size")
-    t:ok(near(box:GetScale() * 100, 120), "the saved scale")
+    const scale = box:GetScale()
+    t:ok(not issecretvalue(scale) and near(scale * 100, 120), "the saved scale")
     handle:reset()
     t:eq(store.box, nil, "reset forgets the position")
     t:eq((box:GetPoint(1)), "CENTER", "back to the original anchor")
