@@ -389,8 +389,9 @@ Related: E8113, E8107
 
 `launcher.register` is called more than once. An addon has one launcher: one
 minimap button, one Addon Compartment entry and one LDB object. The compiler
-reports a second call it can see in the code. A second call it can't see, such
-as one function that runs twice, raises an error at run time instead.
+counts the calls that are statements at the top level of your files, and
+reports a second one. Any other second call, such as one in a function that
+runs twice or in a branch, raises an error at run time instead.
 
 Register once, and change the launcher later with `launcher.setIcon`,
 `setLabel`, `showMinimap` and `refresh`.

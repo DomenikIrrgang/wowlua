@@ -1027,7 +1027,8 @@ impl Ctx<'_> {
                     );
                 }
             }
-            "launcher.register" => match self.launcher_registered {
+            // Top-level calls are counted; others are checked at run time.
+            "launcher.register" if top => match self.launcher_registered {
                 Some(first) => self.diagnostics.push(
                     Diagnostic::error("E8080", "`launcher.register` is called more than once")
                         .with_label(e.span(), "again")

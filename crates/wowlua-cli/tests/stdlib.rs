@@ -2989,6 +2989,17 @@ fn core_modules_are_checked_at_compile_time() {
     }
 }
 
+/// E8080 counts top-level `launcher.register` statements; calls the
+/// compiler can't count (in branches, in functions) are checked at run
+/// time.
+#[test]
+fn launcher_register_is_counted_at_the_top_level() {
+    let stderr = check(
+        "import * as launcher from \"wowlua:launcher\"\nlocal tank = true\nif tank then\n    launcher.register({ icon = \"i\", label = \"Tank\", onClick = function() end })\nelse\n    launcher.register({ icon = \"i\", label = \"Heal\", onClick = function() end })\nend\nlocal function late() launcher.register({ icon = \"i\", label = \"l\", onClick = function() end }) end\nlate()\n",
+    );
+    assert!(!stderr.contains("E8080"), "{stderr}");
+}
+
 /// Correct uses of the core modules pass their checks.
 #[test]
 fn core_modules_accept_correct_uses() {
