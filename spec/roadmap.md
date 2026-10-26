@@ -703,6 +703,16 @@ with its own design); wowlua provides what the page embeds:
   S5 (placeholders and stand-in fonts until then).
 - S4 The debugger over the JavaScript API: breakpoints, stepping,
   variables, frames and events, as the M12 views have them.
+  Built 2026-10-26 (T397): a run with `debug` attaches the M12 controller
+  to the addon's VMs from their first line; its requests and events are
+  the debugger protocol's, over a mailbox the worker waits on when
+  stopped (a cross-origin isolated page); between frames the game serves
+  them, and runs the input and events the debugger queued. Checked
+  natively (`crates/wowlua-web/tests/debug.rs`: a breakpoint in a click
+  handler, the stack, a value, a step), in Node through the page's link,
+  and in Chrome: a click on the canvas stopped at the handler's line with
+  its upvalue shown, continued; a pause between frames, an evaluation,
+  stopping.
 - S5 Game data and assets from the user's installation through the File
   System Access API, read in the browser and never uploaded (T210).
 - S6 A bare test page that uses only the package, `docs/embedding.md` for

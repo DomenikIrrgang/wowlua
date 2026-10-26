@@ -15,6 +15,10 @@
 //   (from the worker) { output: { kind, text, stack } }: what the game
 //       printed and raised; { progress: [done, total] } while loading
 //       Blizzard's UI
+//   { debugMailbox: <SharedArrayBuffer> }  the debugger's requests come
+//       there (client.js writes them; a cross-origin isolated page only):
+//       stopped, the game waits on it. Its answers and events come back as
+//       { debug: { id, response } | { id, error } | { event, … } }
 //
 // The first message may be { wasm: <url> } to load the module from there.
 
@@ -31,6 +35,25 @@ let server = null;
 let ready = null;
 let screen = null;
 let canvas = null;
+
+// The debugger's mailbox: [state (0 empty, 1 full), length], then the
+// request's UTF-8 bytes.
+let mailbox = null;
+const decoder = new TextDecoder();
+globalThis.wowluaDebugRecv = (timeoutMs) => {
+    if (!mailbox) return undefined;
+    const { control, bytes } = mailbox;
+    if (Atomics.load(control, 0) === 0) {
+        if (timeoutMs === 0) return undefined;
+        Atomics.wait(control, 0, 0, timeoutMs < 0 ? undefined : timeoutMs);
+        if (Atomics.load(control, 0) === 0) return undefined;
+    }
+    const text = decoder.decode(bytes.slice(0, Atomics.load(control, 1)));
+    Atomics.store(control, 0, 0);
+    Atomics.notify(control, 0);
+    return text;
+};
+globalThis.wowluaDebugSend = (text) => postMessage({ debug: JSON.parse(text) });
 
 function start(wasm) {
     ready ??= load(wasm).then(() => {
@@ -49,6 +72,13 @@ onmessage = async (event) => {
     await start();
     if (m.lsp !== undefined) {
         server.send(m.lsp);
+        return;
+    }
+    if (m.debugMailbox !== undefined) {
+        mailbox = {
+            control: new Int32Array(m.debugMailbox, 0, 2),
+            bytes: new Uint8Array(m.debugMailbox, 8),
+        };
         return;
     }
     if (m.resize !== undefined) {
@@ -73,6 +103,8 @@ onmessage = async (event) => {
             const options = { ...(m.args?.[0] ?? {}), onProgress: (done, total) => postMessage({ progress: [done, total] }) };
             const loaded = await playground.loadBlizzardUI(options);
             result = { flavor: loaded.flavor, commit: loaded.commit };
+        } else if (m.call === "run" && m.args?.[0]?.debug && !mailbox) {
+            throw new Error("debugging needs a cross-origin isolated page (COOP and COEP headers)");
         } else if (CALLS.has(m.call)) {
             result = playground[m.call](...(m.args ?? []));
             // (what input made the game print goes where the frames' does)

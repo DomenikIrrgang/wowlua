@@ -30,6 +30,17 @@
   <label><input type="checkbox" id="ui"> with Blizzard's UI</label>
   <button id="stop">Stop</button>
 </p>
+<p>
+  <label><input type="checkbox" id="debug"> debug, breakpoints on lines</label>
+  <input id="lines" size="12" placeholder="e.g. 6, 9">
+  <button id="continue">Continue</button>
+  <button id="next">Step over</button>
+  <button id="stepIn">Step in</button>
+  <button id="stepOut">Step out</button>
+  <button id="pause">Pause</button>
+</p>
+<h2>Debugger</h2>
+<pre id="debugger">Not debugging.</pre>
 <h2>Game</h2>
 <p id="game">Not running.</p>
 <canvas id="screen" width="1280" height="720"></canvas>
@@ -127,6 +138,39 @@ wowlua.onProgress((done, total) => {
   // (after the startup files the rest comes in the background)
   if (!uiLoaded) $("game").textContent = `Loading Blizzard's UI: ${done} of ${total} files`;
 });
+wowlua.debug.onEvent(async (e) => {
+  document.body.dataset.debugEvent = e.event;
+  if (e.event !== "stopped") {
+    $("debugger").textContent = e.event === "continued" ? "Running." : `${e.event}${e.summary ? ": " + e.summary : ""}`;
+    return;
+  }
+  const { frames } = await wowlua.debug.request("stackTrace");
+  const lines = [`Stopped (${e.reason}${e.text ? ": " + e.text : ""})`, "", "Stack:"];
+  for (const f of frames) lines.push(`  ${f.name}  ${f.source ?? f.chunk ?? ""}:${f.line}`);
+  if (frames.length > 0 && frames[0].line > 0) {
+    const { scopes } = await wowlua.debug.request("scopes", { frame: frames[0].id });
+    for (const scope of scopes.filter((s) => s.name !== "Globals")) {
+      const { variables } = await wowlua.debug.request("variables", { reference: scope.reference });
+      lines.push("", `${scope.name}:`);
+      for (const v of variables) lines.push(`  ${v.name} = ${v.value}`);
+    }
+  }
+  $("debugger").textContent = lines.join("\n");
+  document.body.dataset.stopped = String(frames[0]?.line ?? 0);
+});
+for (const command of ["continue", "next", "stepIn", "stepOut", "pause"]) {
+  $(command).addEventListener("click", async () => {
+    try {
+      await wowlua.debug.request(command);
+      // (its answer means the game runs on, until the next "stopped")
+      if (command !== "pause") $("debugger").textContent = "Running.";
+    } catch (e) {
+      $("debugger").textContent = e.message;
+    }
+  });
+}
+if (!wowlua.debug.available) $("debugger").textContent = "Debugging needs a cross-origin isolated page: serve it with demo/serve.mjs.";
+
 $("run").addEventListener("click", async () => {
   attached ??= wowlua.attachCanvas($("screen"));
   const backend = await attached;
@@ -135,7 +179,10 @@ $("run").addEventListener("click", async () => {
     uiLoaded = true;
   }
   $("chat").textContent = "";
-  const started = await wowlua.call("run", { blizzardUI: $("ui").checked });
+  const breakpoints = $("lines").value.split(",").map((l) => parseInt(l, 10)).filter((l) => l > 0).map((line) => ({ line }));
+  const debug = $("debug").checked ? { breakpoints: { "src/main.wowlua": breakpoints } } : undefined;
+  if (debug) $("debugger").textContent = "Running.";
+  const started = await wowlua.call("run", { blizzardUI: $("ui").checked, debug });
   $("game").textContent = started.ok
     ? `Running (drawn with ${backend}).`
     : `Did not start: ${started.error ?? started.diagnostics.map((d) => d.message).join("; ")}`;

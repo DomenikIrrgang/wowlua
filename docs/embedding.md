@@ -117,16 +117,67 @@ Without the worker, `Playground` has the same calls (`loadBlizzardUI`,
 `run`, `advance`, `input`, `stop`) and `createScreen(canvas)` with
 `playground.play(screen, onOutput)`.
 
+## Debugging
+
+The debugger of `wowlua debug` (spec chapter 18) runs in the page too:
+breakpoints (lines, functions, events, scripts, exceptions), stepping,
+the stack, variables and evaluating code where it stopped, the frame
+tree. When it stops, the worker waits for the page's next request on a
+`SharedArrayBuffer`, so the page must be **cross-origin isolated**: serve
+it with
+
+```
+Cross-Origin-Opener-Policy: same-origin
+Cross-Origin-Embedder-Policy: require-corp
+```
+
+(in Next.js, `headers()` in `next.config.js` for `/playground/:path*`).
+Other origins' images and scripts the page embeds then need CORS or
+`Cross-Origin-Resource-Policy`; `credentialless` instead of `require-corp`
+avoids that where the browser supports it. Blizzard's UI is fetched with
+CORS and works either way. `wowlua.debug.available` says whether the page
+is isolated; without it everything else works.
+
+```js
+wowlua.debug.onEvent(async (e) => {
+    if (e.event === "stopped") {                  // reason: breakpoint, step, pause, …
+        const { frames } = await wowlua.debug.request("stackTrace");
+        const { scopes } = await wowlua.debug.request("scopes", { frame: frames[0].id });
+        const { variables } = await wowlua.debug.request("variables", { reference: scopes[0].reference });
+    }
+});
+await wowlua.call("run", {
+    debug: {
+        breakpoints: { "src/main.wowlua": [{ line: 12 }, { line: 20, condition: "count > 3" }] },
+        functionBreakpoints: [{ name: "event:PLAYER_LOGIN" }],
+        exceptions: ["uncaught"],
+    },
+});
+await wowlua.debug.request("setBreakpoints", { source: "src/main.wowlua", breakpoints: [{ line: 14 }] });
+await wowlua.debug.request("next");               // continue, stepIn, stepOut, pause
+const { variable } = await wowlua.debug.request("evaluate", { expression: "count", frame: 1 });
+```
+
+Requests and answers are wowlua's debugger protocol
+(`crates/wowlua-debug/src/protocol.rs`): a request is `{ command, … }`,
+an answer `{ kind, … }`. The answer to `continue` or a step means the
+game runs on until the next `stopped`; `terminated` ends the session (a
+`stop`, or the run ended). While it is stopped the game does not move or
+draw, and calls to the worker wait until it runs on. Sources are the
+package's paths; frames in Blizzard's code name its files
+(`Interface/AddOns/…`), which the page can show with `readFile`.
+
 ## A test page
 
 `web/demo/index.html` uses only the package, through its worker: a text
 area for `src/main.wowlua`, the language server's diagnostics as you type,
-hover on click, build, format, share, and the game on a canvas (with or
-without Blizzard's UI) with its chat output. Serve `web/` and open it:
+hover on click, build, format, share, the game on a canvas (with or
+without Blizzard's UI) with its chat output, and the debugger. Serve
+`web/` cross-origin isolated and open it:
 
 ```sh
-cd web && npm run build && python3 -m http.server 8000
-# http://localhost:8000/demo/
+cd web && npm run build && node demo/serve.mjs
+# http://127.0.0.1:8000/demo/
 ```
 
 ## When wowlua fails
@@ -138,7 +189,7 @@ gone, so keep the editor's texts and write them again.
 
 ## Not yet
 
-The debugger and the user's installation (textures, fonts, game data)
-come with M14's next stages (`spec/roadmap.md`); so do dependencies other
+The user's installation (textures, fonts, game data) comes with M14's
+next stages (`spec/roadmap.md`); so do dependencies other
 than the standard library, world profiles in share links and Blizzard's
 UI for flavors other than camelot.

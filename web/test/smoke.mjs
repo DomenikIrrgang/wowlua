@@ -46,6 +46,42 @@ assert.deepEqual(printed, ["clicked"]);
 p.stop();
 assert.equal(p.running, false);
 
+// the debugger through the page's link (the worker's mailbox stands in
+// here: requests for when it waits, everything sent kept)
+const requests = [
+    { id: 1, command: "stackTrace" },
+    { id: 2, command: "evaluate", expression: "count", frame: 1 },
+    { id: 3, command: "continue" },
+];
+const sent = [];
+globalThis.wowluaDebugRecv = (timeoutMs) => (timeoutMs < 0 ? JSON.stringify(requests.shift()) : undefined);
+globalThis.wowluaDebugSend = (text) => sent.push(JSON.parse(text));
+p.writeFile(
+    "src/main.wowlua",
+    [
+        "local count = 0",
+        'local b = CreateFrame("Button", nil, UIParent)',
+        "b:SetSize(100, 40)",
+        'b:SetPoint("CENTER")',
+        'b:SetScript("OnClick", function()',
+        "    count = count + 1",
+        '    print("clicked", count)',
+        "end)",
+        "",
+    ].join("\n"),
+);
+const debugged = p.run({ debug: { breakpoints: { "src/main.wowlua": [{ line: 7 }] } } });
+assert.equal(debugged.ok, true, JSON.stringify(debugged));
+p.advance();
+printed = p.input({ action: "click", x: w / 2, y: h / 2 }).map((o) => o.text);
+assert.deepEqual(printed, ["clicked 1"]);
+assert.equal(sent.find((m) => m.event === "stopped")?.reason, "breakpoint", JSON.stringify(sent));
+const top = sent.find((m) => m.id === 1).response.frames[0];
+assert.deepEqual([top.source, top.line], ["src/main.wowlua", 7]);
+assert.equal(sent.find((m) => m.id === 2).response.variable.value, "1");
+p.stop();
+assert.equal(sent.at(-1).event, "terminated");
+
 // the language server: diagnostics of the open file, then a hover
 const got = [];
 const server = p.languageServer((m) => got.push(m));

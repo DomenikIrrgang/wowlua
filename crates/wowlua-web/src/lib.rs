@@ -8,6 +8,7 @@
 //! to the package's folder, [`ROOT`]; the language server's URIs are
 //! `file:///playground/…`.
 
+pub mod debug;
 pub mod run;
 #[cfg(target_arch = "wasm32")]
 mod screen;
@@ -244,7 +245,7 @@ impl Playground {
 
     /// Builds the package for `options.flavor` and runs it (the running one
     /// stops): `{ ok, diagnostics, error }`.
-    pub fn run(&mut self, options: &run::Options) -> Json {
+    pub fn run(&mut self, options: run::Options) -> Json {
         self.game = None;
         let mut session = Session::new();
         let Some(project) = self.load(&mut session) else {
@@ -267,6 +268,14 @@ impl Playground {
         let built = wowlua_driver::build(&mut session, &project, &request);
         let found = diagnostics(&mut session);
         let Some(build) = built.filter(|_| !session.has_errors()) else {
+            if let Some(setup) = options.debug {
+                let shared = wowlua_debug::Shared::new(
+                    setup.link,
+                    Box::new(|_| None),
+                    std::rc::Rc::new(|| 0),
+                );
+                debug::end(&shared, Some("the package did not build".into()));
+            }
             return json!({ "ok": false, "diagnostics": found });
         };
         match run::Game::start(project, build, options) {
@@ -278,8 +287,12 @@ impl Playground {
         }
     }
 
-    /// The running addon, if one runs.
+    /// The running addon, if one runs (one whose debugger ended it is
+    /// stopped here).
     pub fn game(&mut self) -> Option<&mut run::Game> {
+        if self.game.as_ref().is_some_and(|g| g.ended()) {
+            self.game = None;
+        }
         self.game.as_mut()
     }
 

@@ -12,6 +12,12 @@
 //   await wowlua.attachCanvas(canvas);          // the game is drawn there
 //   await wowlua.call("run", { blizzardUI: true });
 //   wowlua.onOutput((o) => console.log(o.text));
+//
+// Debugging (a cross-origin isolated page: `wowlua.debug.available`):
+//   wowlua.debug.onEvent((e) => …);                  // { event: "stopped", reason, … }
+//   await wowlua.call("run", { debug: { breakpoints: { "src/main.wowlua": [{ line: 6 }] } } });
+//   const { frames } = await wowlua.debug.request("stackTrace");
+//   await wowlua.debug.request("continue");
 
 export function connect(worker, { wasm } = {}) {
     let next = 1;
@@ -19,6 +25,9 @@ export function connect(worker, { wasm } = {}) {
     const listeners = new Set();
     const outputs = new Set();
     const progress = new Set();
+    const debugEvents = new Set();
+    const debugWaiting = new Map();
+    let nextDebug = 1;
     worker.addEventListener("message", (event) => {
         const m = event.data;
         if (m.lsp !== undefined) {
@@ -33,6 +42,18 @@ export function connect(worker, { wasm } = {}) {
             for (const listen of progress) listen(...m.progress);
             return;
         }
+        if (m.debug !== undefined) {
+            const d = m.debug;
+            const pending = d.id !== undefined && debugWaiting.get(d.id);
+            if (pending) {
+                debugWaiting.delete(d.id);
+                if (d.error !== undefined) pending.reject(new Error(d.error));
+                else pending.resolve(d.response);
+            } else if (d.event !== undefined) {
+                for (const listen of debugEvents) listen(d);
+            }
+            return;
+        }
         const pending = waiting.get(m.id);
         if (!pending) return;
         waiting.delete(m.id);
@@ -40,6 +61,34 @@ export function connect(worker, { wasm } = {}) {
         else pending.resolve(m.result);
     });
     if (wasm !== undefined) worker.postMessage({ wasm: String(wasm) });
+    // The debugger's mailbox: written here, waited on in the worker.
+    const isolated = typeof SharedArrayBuffer !== "undefined" && globalThis.crossOriginIsolated === true;
+    const mailbox = isolated ? new SharedArrayBuffer(8 + (1 << 20)) : null;
+    const control = mailbox && new Int32Array(mailbox, 0, 2);
+    const bytes = mailbox && new Uint8Array(mailbox, 8);
+    const outbox = [];
+    const encoder = new TextEncoder();
+    let pumping = false;
+    const pump = () => {
+        if (pumping) return;
+        while (outbox.length > 0) {
+            if (Atomics.load(control, 0) !== 0) {
+                // the worker has not taken the last one yet
+                pumping = true;
+                const again = () => { pumping = false; pump(); };
+                const waiting = Atomics.waitAsync?.(control, 0, 1);
+                if (waiting?.async) waiting.value.then(again);
+                else setTimeout(again, waiting ? 0 : 2);
+                return;
+            }
+            const data = encoder.encode(outbox.shift());
+            bytes.set(data.subarray(0, bytes.length));
+            Atomics.store(control, 1, Math.min(data.length, bytes.length));
+            Atomics.store(control, 0, 1);
+            Atomics.notify(control, 0);
+        }
+    };
+    if (mailbox) worker.postMessage({ debugMailbox: mailbox });
     const ask = (message, transfer = []) => {
         const id = next++;
         return new Promise((resolve, reject) => {
@@ -65,6 +114,35 @@ export function connect(worker, { wasm } = {}) {
             onMessage(listen) {
                 listeners.add(listen);
                 return () => listeners.delete(listen);
+            },
+        },
+        debug: {
+            /** Whether the page can debug (it is cross-origin isolated). */
+            available: isolated,
+            /**
+             * A request of the debugger's protocol (`stackTrace`, `scopes`,
+             * `variables`, `evaluate`, `continue`, `next`, `stepIn`,
+             * `stepOut`, `pause`, `setBreakpoints`, `frameTree`, …): its
+             * response.
+             */
+            request(command, args = {}) {
+                if (!mailbox) return Promise.reject(new Error("debugging needs a cross-origin isolated page"));
+                const id = nextDebug++;
+                return new Promise((resolve, reject) => {
+                    debugWaiting.set(id, { resolve, reject });
+                    outbox.push(JSON.stringify({ id, command, ...args }));
+                    pump();
+                });
+            },
+            /**
+             * Its events: `stopped` (`reason`: breakpoint, step, pause,
+             * exception, …), `breakpoint` (one was placed when its file
+             * loaded), `terminated`. The answer to `continue` or a step
+             * means the game runs on.
+             */
+            onEvent(listen) {
+                debugEvents.add(listen);
+                return () => debugEvents.delete(listen);
             },
         },
         /** What the running addon prints and raises (`{ kind, text, stack }`). */

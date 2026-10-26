@@ -139,15 +139,29 @@ impl WebPlayground {
     }
 
     /// Builds and runs the package: `options` is `{ flavor, blizzardUI,
-    /// profile }`; `{ ok, diagnostics, error }`.
+    /// profile, debug }` (`debug`: the debugger's setup, see
+    /// `debug::Setup`; the worker's mailbox carries its requests);
+    /// `{ ok, diagnostics, error }`.
     pub fn run(&mut self, options: &str) -> Result<String, JsError> {
         let o: Json = serde_json::from_str(options)?;
+        let debug = match &o["debug"] {
+            Json::Null | Json::Bool(false) => None,
+            settings => Some(crate::debug::Setup {
+                link: page_link()?,
+                settings: if settings.is_object() {
+                    settings.clone()
+                } else {
+                    Json::Null
+                },
+            }),
+        };
         let options = crate::run::Options {
             flavor: o["flavor"].as_str().unwrap_or("camelot").to_string(),
             blizzard_ui: o["blizzardUI"].as_bool().unwrap_or(false),
             profile: o["profile"].as_str().map(str::to_string),
+            debug,
         };
-        Ok(self.0.run(&options).to_string())
+        Ok(self.0.run(options).to_string())
     }
 
     pub fn stop(&mut self) {
@@ -209,5 +223,17 @@ impl WebPlayground {
     #[wasm_bindgen(js_name = lspRunDue)]
     pub fn lsp_run_due(&mut self) -> String {
         Json::Array(self.0.lsp_run_due()).to_string()
+    }
+}
+
+/// The debugger's link to the page (the worker's mailbox).
+fn page_link() -> Result<Box<dyn wowlua_debug::Link>, JsError> {
+    #[cfg(target_arch = "wasm32")]
+    {
+        Ok(Box::new(crate::debug::PageLink))
+    }
+    #[cfg(not(target_arch = "wasm32"))]
+    {
+        Err(JsError::new("the debugger needs a page"))
     }
 }

@@ -46,6 +46,18 @@ export interface RunOptions {
     blizzardUI?: boolean;
     /** A world profile's JSON text (`tests/profiles/<name>.json`'s). */
     profile?: string;
+    /** Debug the run (through the worker, a cross-origin isolated page). */
+    debug?: DebugSetup | true;
+}
+
+export interface DebugSetup {
+    /** Line breakpoints by the package's source path (`src/main.wowlua`). */
+    breakpoints?: Record<string, { line: number; condition?: string; hitCondition?: string; logMessage?: string }[]>;
+    /** `Name`, `Table:method`, `event:PLAYER_LOGIN`, `script:OnClick`, `timer`, … */
+    functionBreakpoints?: { name: string; condition?: string }[];
+    /** "uncaught", "all", "taint", "blocked". */
+    exceptions?: string[];
+    stopOnEntry?: boolean;
 }
 
 export interface Started {
@@ -139,6 +151,20 @@ export interface Connection {
         send(message: LspMessage): void;
         /** Returns a function that stops listening. */
         onMessage(listen: (message: LspMessage) => void): () => void;
+    };
+    /** The debugger (a cross-origin isolated page only). */
+    debug: {
+        readonly available: boolean;
+        /**
+         * A request of wowlua's debugger protocol (`stackTrace`, `scopes`,
+         * `variables`, `evaluate`, `setVariable`, `setBreakpoints`,
+         * `setFunctionBreakpoints`, `setExceptionBreakpoints`, `continue`,
+         * `next`, `stepIn`, `stepOut`, `pause`, `frameTree`, `findFrames`,
+         * `fireEvent`, `profileStart`, `profileStop`): its response.
+         */
+        request(command: string, args?: Record<string, unknown>): Promise<any>;
+        /** `{ event: "stopped" | "breakpoint" | "terminated", … }`. */
+        onEvent(listen: (event: Record<string, any>) => void): () => void;
     };
     /** What the running addon prints and raises. */
     onOutput(listen: (output: Output) => void): () => void;

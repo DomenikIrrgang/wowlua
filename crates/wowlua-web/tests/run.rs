@@ -42,10 +42,11 @@ fn texts(output: &[Json]) -> Vec<String> {
 }
 
 fn run_and_play(p: &mut Playground, blizzard_ui: bool) {
-    let started = p.run(&Options {
+    let started = p.run(Options {
         flavor: "camelot".into(),
         blizzard_ui,
         profile: None,
+        debug: None,
     });
     assert_eq!(started["ok"], true, "{started}");
     let game = p.game().expect("running");
@@ -74,10 +75,11 @@ fn the_addon_runs_alone_and_after_blizzard_s_ui() {
 
     // a load error is the run's
     p.write_file("src/main.wowlua", "error(\"broken\")\n");
-    let started = p.run(&Options {
+    let started = p.run(Options {
         flavor: "camelot".into(),
         blizzard_ui: false,
         profile: None,
+        debug: None,
     });
     let said = started.to_string();
     assert!(said.contains("broken"), "{said}");
@@ -89,10 +91,11 @@ fn the_addon_runs_alone_and_after_blizzard_s_ui() {
         eprintln!("skipped Blizzard's UI: no UI code (run `cargo xtask types fetch`)");
         return;
     }
-    let started = p.run(&Options {
+    let started = p.run(Options {
         flavor: "camelot".into(),
         blizzard_ui: true,
         profile: None,
+        debug: None,
     });
     assert!(
         started["error"]

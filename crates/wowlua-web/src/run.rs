@@ -94,6 +94,8 @@ pub struct Options {
     /// The world profile's text (`tests/profiles/<name>.json`'s); none: the
     /// manifest's, else a fresh character's.
     pub profile: Option<String>,
+    /// Debug it (the debugger attached from the first line it loads).
+    pub debug: Option<crate::debug::Setup>,
 }
 
 /// The addon running.
@@ -106,6 +108,8 @@ pub struct Game {
     output: Rc<RefCell<Vec<Json>>>,
     /// The page's time at the last frame, and what was left of a frame.
     last_ms: Option<f64>,
+    /// The debugging session, when debugged.
+    debug: Option<wowlua_debug::SharedRef>,
 }
 
 impl Game {
@@ -113,7 +117,7 @@ impl Game {
     pub fn start(
         project: wowlua_driver::Project,
         build: BuildOutput,
-        options: &Options,
+        options: Options,
     ) -> Result<Game, String> {
         let blizzard_ui = if options.blizzard_ui {
             Some(ui_source(&options.flavor).ok_or_else(|| {
@@ -145,15 +149,37 @@ impl Game {
                 }
             });
         })));
-        let session = {
+        let debugged = options.debug.is_some();
+        let (session, debug) = {
             let suite = suite(
                 &project,
                 &build,
                 &options.flavor,
                 blizzard_ui.clone(),
                 options.profile.is_some(),
+                debugged,
             );
-            wowlua_test::AddonSession::open(&suite)?
+            let debug = match options.debug {
+                Some(setup) => {
+                    let mapper = wowlua_test::chunk_mapper(&suite);
+                    let files = wowlua_test::chunk_file_mapper(&suite);
+                    Some(crate::debug::start(
+                        setup,
+                        Box::new(move |c: &str| mapper(c)),
+                        Box::new(move |c: &str| files(c)),
+                    )?)
+                }
+                None => None,
+            };
+            match wowlua_test::AddonSession::open(&suite) {
+                Ok(session) => (session, debug),
+                Err(e) => {
+                    if let Some(shared) = &debug {
+                        crate::debug::end(shared, Some(e.clone()));
+                    }
+                    return Err(e);
+                }
+            }
         };
         Ok(Game {
             build,
@@ -163,6 +189,7 @@ impl Game {
             session,
             output,
             last_ms: None,
+            debug,
         })
     }
 
@@ -196,13 +223,69 @@ impl Game {
                 &self.flavor,
                 self.blizzard_ui.clone(),
                 wowlua_host::exists(self.project.root().join("tests/profiles/playground.json")),
+                self.debug.is_some(),
             );
             self.session.reload(&suite)?;
+        }
+        if let Some(shared) = self.debug.clone() {
+            self.serve_debugger(&shared);
+            if self.ended() {
+                return Ok(self.take_output());
+            }
         }
         if frames > 0 {
             wowlua_engine::clock::advance_frames(&mut self.session.vm, frames, FRAME_MS);
         }
         Ok(self.take_output())
+    }
+
+    /// Between frames: the debugger's waiting requests (a pause waits
+    /// here), then the input and events it was asked to run, and time it
+    /// was asked to move, with the debugger attached.
+    fn serve_debugger(&mut self, shared: &wowlua_debug::SharedRef) {
+        let vm = &mut self.session.vm;
+        vm.with_debugger(|d, vm| d.idle(vm));
+        if self.ended() {
+            return;
+        }
+        let vm = &mut self.session.vm;
+        let queued = std::mem::take(&mut shared.borrow_mut().run_queue);
+        for (id, req) in queued {
+            let r = match &req {
+                wowlua_debug::Request::Input { input } => {
+                    wowlua_debug::ui::input(vm, input).map(|()| wowlua_debug::Response::Ok)
+                }
+                wowlua_debug::Request::FireEvent { event, args } => {
+                    wowlua_debug::ui::fire_event(vm, event, args)
+                        .map(|()| wowlua_debug::Response::Ok)
+                }
+                _ => Err("not a request that runs code".into()),
+            };
+            shared.borrow_mut().link.respond(id, r);
+        }
+        let advance = shared.borrow_mut().advance.take();
+        if let Some((id, seconds, frames)) = advance {
+            let n = match (frames, seconds) {
+                (Some(f), _) => f as usize,
+                (None, Some(s)) => (s * 1000.0 / FRAME_MS).ceil() as usize,
+                (None, None) => 1,
+            };
+            wowlua_engine::clock::advance_frames(vm, n, FRAME_MS);
+            shared
+                .borrow_mut()
+                .link
+                .respond(id, Ok(wowlua_debug::Response::Ok));
+        }
+    }
+
+    /// Whether the run ended: the debugger's `terminate`, or the VM
+    /// aborted.
+    pub fn ended(&self) -> bool {
+        self.session.vm.aborted()
+            || self
+                .debug
+                .as_ref()
+                .is_some_and(|s| s.try_borrow().is_ok_and(|s| s.terminate))
     }
 
     /// What was printed and raised since the last time asked.
@@ -239,6 +322,9 @@ impl Game {
 impl Drop for Game {
     fn drop(&mut self) {
         wowlua_test::set_tee(None);
+        if let Some(shared) = &self.debug {
+            crate::debug::end(shared, Some("the session ended".into()));
+        }
     }
 }
 
@@ -248,6 +334,7 @@ fn suite<'a>(
     flavor: &str,
     blizzard_ui: Option<wowlua_test::UiSource>,
     own_profile: bool,
+    debugged: bool,
 ) -> wowlua_test::Suite<'a> {
     let test = &project.manifest.manifest.test;
     wowlua_test::Suite {
@@ -277,7 +364,7 @@ fn suite<'a>(
         addons: Vec::new(),
         update_snapshots: false,
         coverage: false,
-        instrument: None,
+        instrument: debugged.then_some(&crate::debug::instrument as &(dyn Fn(&mut Vm) + Sync)),
         camera: None,
         game_data: false,
         after_test: None,

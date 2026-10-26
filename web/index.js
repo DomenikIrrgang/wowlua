@@ -164,12 +164,13 @@ export class Playground {
 
     /**
      * Builds the package and runs it: `{ flavor = "camelot", blizzardUI =
-     * false, profile }` (a world profile's JSON text). `{ ok, diagnostics,
-     * error }`.
+     * false, profile, debug }` (`profile`: a world profile's JSON text;
+     * `debug`: the debugger's breakpoints, for a worker with a mailbox, see
+     * client.js). `{ ok, diagnostics, error }`.
      */
-    run({ flavor = "camelot", blizzardUI = false, profile } = {}) {
+    run({ flavor = "camelot", blizzardUI = false, profile, debug } = {}) {
         this.tick();
-        return JSON.parse(this.raw.run(JSON.stringify({ flavor, blizzardUI, profile })));
+        return JSON.parse(this.raw.run(JSON.stringify({ flavor, blizzardUI, profile, debug })));
     }
 
     stop() {
