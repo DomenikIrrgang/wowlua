@@ -27,12 +27,12 @@ end
 prof.record = record
 local function finish(name, location, start, depth, ...)
 	local elapsed = clock() - start
-	local __wl_t1 = child[depth] if __wl_t1 == nil then __wl_t1 = 0 end local inner = __wl_t1
+	local inner = child[depth] or 0
 	for i = #child, depth, -1 do
 		child[i] = nil
 	end
 	if depth > 1 then
-		do local __wl_t2 = child[depth - 1] if __wl_t2 == nil then __wl_t2 = 0 end child[depth - 1] = (__wl_t2) + elapsed end
+		child[depth - 1] = (child[depth - 1] or 0) + elapsed
 	end
 	record(name, location, elapsed, elapsed - inner)
 	return...
@@ -62,8 +62,8 @@ function prof.wrap(fn, name, location, opts)
 	if type(fn) ~= "function" then
 		return fn
 	end
-	local __wl_t4 = prof.errors if not __wl_t4 then local __wl_t3 = opts if __wl_t3 ~= nil then __wl_t3 = __wl_t3.errors end __wl_t4 = __wl_t3 end local errors = __wl_t4
-	local __wl_t5 = opts if __wl_t5 ~= nil then __wl_t5 = __wl_t5.memory end local memory = __wl_t5
+	local __wl_t2 = prof.errors if not __wl_t2 then local __wl_t1 = opts if __wl_t1 ~= nil then __wl_t1 = __wl_t1.errors end __wl_t2 = __wl_t1 end local errors = __wl_t2
+	local __wl_t3 = opts if __wl_t3 ~= nil then __wl_t3 = __wl_t3.memory end local memory = __wl_t3
 	if memory then
 		return function(...)
 			local before = memoryKiB()
@@ -73,7 +73,7 @@ function prof.wrap(fn, name, location, opts)
 				-- (finish made the entry)
 				local s = prof.stats[name]
 				if s then
-					do local __wl_t6 = s.memory if __wl_t6 == nil then __wl_t6 = 0 end s.memory = (__wl_t6) + math.max(memoryKiB() - before, 0) end
+					s.memory = (s.memory or 0) + math.max(memoryKiB() - before, 0)
 				end
 				return...
 			end

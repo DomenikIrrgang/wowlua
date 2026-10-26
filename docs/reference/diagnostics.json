@@ -3237,7 +3237,7 @@
     },
     "E3032": {
       "area": "classes",
-      "text": "A `@debugOnly` function is used in a way that can't be removed. Release\nbuilds remove the function and every call statement to it, so it can't return\nvalues and its calls can't be used as values (`local x = report(1)`). Make it\nreturn nothing, and call it on its own line. A call used as a value is\nreported when checking or building without `debug` (`wowlua check --release`).",
+      "text": "A `@debugOnly` function is used in a way that can't be removed. Release\nbuilds remove the function and every call statement to it, so it can't return\nvalues and its calls can't be used as values (`local x = report(1)`). Make it\nreturn nothing, and call it on its own line. A use as a value is reported in\nevery build, also where `debug` keeps the function, but not in code that only\ndebug builds keep (`if build.debug then … end`, `@if(build.debug)`).",
       "examples": [
         {
           "compiles": false,
@@ -3249,6 +3249,17 @@
             }
           ],
           "output": "error[E3032]: a `@debugOnly` function cannot return values (its calls are removed from release builds)\n  ┌─ src/main.wowlua:3:5\n  │\n3 │     return n > 0\n  │     ^^^^^^^^^^^^ here"
+        },
+        {
+          "compiles": false,
+          "files": [
+            {
+              "path": "src/main.wowlua",
+              "lang": "wowlua",
+              "text": "@debugOnly\nlocal function report(n: number)\n    print(n)\nend\nC_Timer.After(1, function() report(1) end)\nlocal later = report\n"
+            }
+          ],
+          "output": "error[E3032]: `report` is `@debugOnly`: it can only be called as a statement (the calls are removed from release builds)\n  ┌─ src/main.wowlua:6:15\n  │\n6 │ local later = report\n  │               ^^^^^^ here"
         },
         {
           "compiles": true,
@@ -5023,7 +5034,7 @@
     },
     "W5004": {
       "area": "codegen",
-      "text": "An XML file of the build loads a file that exists in your sources but is not\npart of this build's output, usually because `build.flavor-files` restricts\nit to flavors this build doesn't target. In game the reference fails to load\nfor those flavors.\n\nRestrict the XML file to the same flavors, or let the generated TOC load the\nfile (it lists each file only for the flavors it belongs to) and drop the\nreference.",
+      "text": "An XML file of the build loads a file that exists in your sources but is not\npart of this build's output: `build.flavor-files` restricts it to flavors\nthis build doesn't target, or `build.exclude` or the profile's `exclude`\nleaves it out (a developer tool left out of `release`). In game the\nreference fails to load in those builds.\n\nRestrict the XML file to the same flavors, or let the generated TOC load the\nfile (it lists each file only for the flavors it belongs to) and drop the\nreference. For an excluded file, load it from code that the same builds\nleave out, or stop excluding it. A reference to a file that doesn't exist at\nall is E5002.",
       "examples": [
         {
           "compiles": false,

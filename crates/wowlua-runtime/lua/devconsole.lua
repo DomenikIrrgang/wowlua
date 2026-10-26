@@ -36,14 +36,14 @@ local function buildDevWindow(console, reg)
 	onSignal = {0.071, 0.055, 0.043, 1},
 	progress = {0.549, 0.482, 0.369, 1}
 	}
-	local DIR = "Interface\\AddOns\\" .. tostring(addonName) .. "\\wowlua\\fonts\\"
+	local DIR = "Interface\\AddOns\\" .. addonName .. "\\wowlua\\fonts\\"
 	local FONTS = {
 	display = DIR .. "MarcellusSC-Regular.ttf",
 	body = DIR .. "Figtree-Regular.ttf",
 	label = DIR .. "Figtree-SemiBold.ttf",
 	numeric = DIR .. "Figtree-Bold.ttf"
 	}
-	local __wl_t1 = STANDARD_TEXT_FONT if __wl_t1 == nil then __wl_t1 = "Fonts\\FRIZQT__.TTF" end local FALLBACK = __wl_t1
+	local FALLBACK = STANDARD_TEXT_FONT or "Fonts\\FRIZQT__.TTF"
 
 
 
@@ -313,7 +313,7 @@ local function buildDevWindow(console, reg)
 			b.fs:SetTextColor(unpack(chosen and C.ink or C.inkMuted))
 			b.mark:SetShown(chosen)
 			local entry = reg.addons[name]
-			do local __wl_t2 = entry if __wl_t2 ~= nil then __wl_t2 = __wl_t2.info.version end local __wl_t3 = __wl_t2 if __wl_t3 == nil then __wl_t3 = "" end b.info:SetText(__wl_t3) end
+			do local __wl_t1 = entry if __wl_t1 ~= nil then __wl_t1 = __wl_t1.info.version end local __wl_t2 = __wl_t1 if __wl_t2 == nil then __wl_t2 = "" end b.info:SetText(__wl_t2) end
 			b:SetScript("OnClick", function()
 				selected = name
 				addonList:Hide()
@@ -577,7 +577,7 @@ local function buildDevWindow(console, reg)
 		list:SetWidth(width)
 		local fixed = 0
 		for _, c in ipairs(columns) do
-			do local __wl_t4 = c.width if __wl_t4 == nil then __wl_t4 = 0 end fixed = fixed + (__wl_t4) + 12 end
+			do local __wl_t3 = c.width if __wl_t3 == nil then __wl_t3 = 0 end fixed = fixed + (__wl_t3) + 12 end
 		end
 		local y = 0
 		local function x0(j)
@@ -641,11 +641,11 @@ local function buildDevWindow(console, reg)
 			r.onClick, r.onRightClick = d.onClick, d.onRightClick
 			for j = 1, #columns do
 				local fs = cell(r, j)
-				local __wl_t5 = d.fonts if __wl_t5 ~= nil then __wl_t5 = __wl_t5[j] end local __wl_t6 = __wl_t5 if __wl_t6 == nil then __wl_t6 = (j == 1 and "label" or "numeric") end local font = __wl_t6
+				local __wl_t4 = d.fonts if __wl_t4 ~= nil then __wl_t4 = __wl_t4[j] end local __wl_t5 = __wl_t4 if __wl_t5 == nil then __wl_t5 = (j == 1 and "label" or "numeric") end local font = __wl_t5
 				if not fs:SetFont(FONTS[font], 12, "") then
 					fs:SetFont(FALLBACK, 12, "")
 				end
-				do local __wl_t7 = d.colors if __wl_t7 ~= nil then __wl_t7 = __wl_t7[j] end local __wl_t8 = __wl_t7 if __wl_t8 == nil then __wl_t8 = C.ink end fs:SetTextColor(unpack(__wl_t8)) end
+				do local __wl_t6 = d.colors if __wl_t6 ~= nil then __wl_t6 = __wl_t6[j] end local __wl_t7 = __wl_t6 if __wl_t7 == nil then __wl_t7 = C.ink end fs:SetTextColor(unpack(__wl_t7)) end
 				fs:SetText(d.cells[j] or "")
 				fs:ClearAllPoints()
 				local indent = (j == 1 and d.indent) or 0
@@ -709,7 +709,7 @@ local function buildDevWindow(console, reg)
 		return string.format((v or 0) >= 10 and "%.1f" or "%.2f", v or 0)
 	end
 	local function count(n)
-		local __wl_t9 = n if __wl_t9 == nil then __wl_t9 = 0 end local s = tostring(math.floor(__wl_t9))
+		local s = tostring(math.floor(n or 0))
 		local out = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
 		return (out:gsub("^,", ""))
 	end
@@ -717,7 +717,7 @@ local function buildDevWindow(console, reg)
 	-- Inspector: the value shown and how to reach it again.
 	local inspected = {label = "ns", get = function()
 		local d = current()
-		do local __wl_t10 = d if __wl_t10 ~= nil then __wl_t10 = __wl_t10.runtime.ns end return __wl_t10 end
+		return d and d.runtime.ns
 	end}
 	local function inspect(label, get)
 		inspected = {label = label, get = get}
@@ -751,7 +751,7 @@ local function buildDevWindow(console, reg)
 		for _, t in ipairs(toolRows) do
 			data[#data + 1] = {cells = {t[1], t[2]}, colors = {C.ink, C.inkMuted}, fonts = {"label", "body"}}
 		end
-		local __wl_t11 = rt.mon if __wl_t11 ~= nil then __wl_t11 = __wl_t11.memory end local __wl_t12 = __wl_t11 if __wl_t12 == nil then __wl_t12 = {} end local mem = __wl_t12
+		local mem = rt.mon and rt.mon.memory or {}
 		local last = mem[#mem]
 		data[#data + 1] = {
 		cells = {"Memory", last and string.format("%.2f MB · %d samples", last / 1024, #mem) or "no samples yet"},
@@ -784,20 +784,20 @@ local function buildDevWindow(console, reg)
 		local _ = filter, reset
 		local prof = d.runtime.prof
 		local data = {}
-		do local __wl_t13 = prof if __wl_t13 ~= nil then __wl_t13 = __wl_t13.stats end local __wl_t14 = __wl_t13 if __wl_t14 == nil then __wl_t14 = {} end for _, r in ipairs(console.sorted(__wl_t14, state.sort)) do repeat
-					if not (state.filter == "" or r.name:lower():find(state.filter, 1, true)) then
-						break
-					end
-					local s = r.s
-					local __wl_t15 = s.max if __wl_t15 == nil then __wl_t15 = 0 end local slow = (__wl_t15) > 16.7
-					data[#data + 1] = {
-					cells = {r.name, count(s.calls), ms(s.total), ms(s.self), ms(s.max), ms(s.total / math.max(s.calls, 1))},
-					subs = {s.location},
-					colors = {C.ink, C.ink, C.ink, C.ink, slow and C.amber or C.ink, C.ink},
-					badge = slow and {text = "Slow", color = C.amber} or nil,
-					tall = s.location ~= nil
-					}
-				until true end end
+		for _, r in ipairs(console.sorted(prof and prof.stats or {}, state.sort)) do repeat
+				if not (state.filter == "" or r.name:lower():find(state.filter, 1, true)) then
+					break
+				end
+				local s = r.s
+				local __wl_t8 = s.max if __wl_t8 == nil then __wl_t8 = 0 end local slow = (__wl_t8) > 16.7
+				data[#data + 1] = {
+				cells = {r.name, count(s.calls), ms(s.total), ms(s.self), ms(s.max), ms(s.total / math.max(s.calls, 1))},
+				subs = {s.location},
+				colors = {C.ink, C.ink, C.ink, C.ink, slow and C.amber or C.ink, C.ink},
+				badge = slow and {text = "Slow", color = C.amber} or nil,
+				tall = s.location ~= nil
+				}
+			until true end
 		if not prof then
 			data[1] = {cells = {"The profiler is off in this build"}, colors = {C.inkMuted}}
 		end
@@ -842,7 +842,7 @@ local function buildDevWindow(console, reg)
 		if mon then
 			for _, r in ipairs(console.sorted(mon[state.monitor], "total")) do
 				local s = r.s
-				local __wl_t16 = s.max if __wl_t16 == nil then __wl_t16 = 0 end local slow = (__wl_t16) > 16.7
+				local __wl_t9 = s.max if __wl_t9 == nil then __wl_t9 = 0 end local slow = (__wl_t9) > 16.7
 				data[#data + 1] = {
 				cells = {r.name, count(s.count), ms(s.total), ms(s.max)},
 				subs = {s.detail},
@@ -883,15 +883,15 @@ local function buildDevWindow(console, reg)
 		if logs then
 			local min = state.level == "all" and -1 or LEVEL_RANK[state.level]
 			for _, e in ipairs(logs.history()) do repeat
-					do local __wl_t17 = LEVEL_RANK[e.level] if __wl_t17 == nil then __wl_t17 = 0 end if (__wl_t17) < min then
+					do local __wl_t10 = LEVEL_RANK[e.level] if __wl_t10 == nil then __wl_t10 = 0 end if (__wl_t10) < min then
 							break
 						end end
 					local tone = e.level == "error" and C.emberText or (e.level == "warn" and C.amber or C.inkMuted)
-					do
-						local __wl_t18 = e.time if __wl_t18 == nil then __wl_t18 = 0 end local __wl_t20 = string.format("%.1f", __wl_t18) local __wl_t19 = e.location if __wl_t19 == nil then __wl_t19 = "" end data[#data + 1] = {cells = {__wl_t20, e.level, e.message, __wl_t19},
-						colors = {C.inkMuted, tone, C.ink, C.inkMuted},
-						fonts = {"numeric", "display", "body", "body"}
-						} end
+					data[#data + 1] = {
+					cells = {string.format("%.1f", e.time or 0), e.level, e.message, e.location or ""},
+					colors = {C.inkMuted, tone, C.ink, C.inkMuted},
+					fonts = {"numeric", "display", "body", "body"}
+					}
 				until true end
 		else
 			data[1] = {cells = {"", "", "This addon does not use wowlua:log"}, colors = {C.ink, C.ink, C.inkMuted}}
@@ -1141,7 +1141,7 @@ local function buildDevWindow(console, reg)
 			selected = (saved.addon and reg.addons[saved.addon]) and saved.addon or selected
 			if saved.point then
 				win:ClearAllPoints()
-				do local __wl_t21 = saved.x if __wl_t21 == nil then __wl_t21 = 0 end local __wl_t22 = saved.y if __wl_t22 == nil then __wl_t22 = 0 end win:SetPoint(saved.point, UIParent, saved.point, __wl_t21, __wl_t22) end
+				do local __wl_t11 = saved.x if __wl_t11 == nil then __wl_t11 = 0 end local __wl_t12 = saved.y if __wl_t12 == nil then __wl_t12 = 0 end win:SetPoint(saved.point, UIParent, saved.point, __wl_t11, __wl_t12) end
 			end
 			if saved.width and saved.height then
 				win:SetSize(saved.width, saved.height)
@@ -1153,7 +1153,7 @@ local function buildDevWindow(console, reg)
 	-- Refreshed only while visible: watches and the inspector often.
 	local elapsed = 0
 	win:SetScript("OnUpdate", function(_, dt)
-		do local __wl_t23 = dt if __wl_t23 == nil then __wl_t23 = 0 end elapsed = elapsed + (__wl_t23) end
+		elapsed = elapsed + (dt or 0)
 		local every = (state.tab == 6 or state.tab == 7) and 0.25 or 1
 		if elapsed >= every and not menu:IsShown() then
 			elapsed = 0
@@ -1171,18 +1171,18 @@ end
 -- shared `WOWLUA_DEV` registry, and — from the newest runtime loaded — the
 -- `/wl` command and the dev window.
 local dev
-do
-
-	local __wl_t24 = wl.devInfo if __wl_t24 == nil then __wl_t24 = {} end dev = {name = addonName, info = __wl_t24,
-	watches = {},
-	schema = 1,
-	-- The data the console reads, through one versioned interface.
-	runtime = wl,
-	-- A watch from code (`debug.watch`): `fn()` shown live under `label`.
-	watch = function(label, fn)
-		dev.watches[#dev.watches + 1] = {label = label, fn = fn, source = "code"}
-	end
-	} end
+dev = {
+name = addonName,
+info = wl.devInfo or {},
+watches = {},
+schema = 1,
+-- The data the console reads, through one versioned interface.
+runtime = wl,
+-- A watch from code (`debug.watch`): `fn()` shown live under `label`.
+watch = function(label, fn)
+	dev.watches[#dev.watches + 1] = {label = label, fn = fn, source = "code"}
+end
+}
 wl.dev = dev
 local reg = WOWLUA_DEV
 if type(reg) ~= "table" then
@@ -1194,7 +1194,7 @@ if not reg.addons[addonName] then
 end
 reg.addons[addonName] = dev
 
-local __wl_t25 = wl.devInfo if __wl_t25 ~= nil then __wl_t25 = __wl_t25.runtime end local __wl_t26 = __wl_t25 if __wl_t26 == nil then __wl_t26 = 0 end local VERSION = __wl_t26
+local __wl_t13 = wl.devInfo if __wl_t13 ~= nil then __wl_t13 = __wl_t13.runtime end local __wl_t14 = __wl_t13 if __wl_t14 == nil then __wl_t14 = 0 end local VERSION = __wl_t14
 
 -- This runtime's console replaces older ones.
 local function install()
@@ -1261,7 +1261,7 @@ local function install()
 			rows[#rows + 1] = {name = name, s = s}
 		end
 		table.sort(rows, function(a, b)
-			do local __wl_t27 = a.s[key] if __wl_t27 == nil then __wl_t27 = 0 end local __wl_t28 = b.s[key] if __wl_t28 == nil then __wl_t28 = 0 end return (__wl_t27) > (__wl_t28) end
+			do local __wl_t15 = a.s[key] if __wl_t15 == nil then __wl_t15 = 0 end local __wl_t16 = b.s[key] if __wl_t16 == nil then __wl_t16 = 0 end return (__wl_t15) > (__wl_t16) end
 		end)
 		return rows
 	end
@@ -1272,9 +1272,9 @@ local function install()
 		for i = 1, math.min(top, #rows) do
 			local r = rows[i]
 			local s = r.s
-			do local __wl_t42 = pad(r.name, 34) local __wl_t29 = s.calls if __wl_t29 == nil then __wl_t29 = s.count end local __wl_t30 = __wl_t29 if __wl_t30 == nil then __wl_t30 = 0 end local __wl_t41 = pad(__wl_t30, 8, true) local __wl_t31 = s.total if __wl_t31 == nil then __wl_t31 = 0 end local __wl_t40 = pad(ms(__wl_t31), 9, true)
-				local __wl_t32 = s.self if __wl_t32 == nil then __wl_t32 = s.total end local __wl_t33 = __wl_t32 if __wl_t33 == nil then __wl_t33 = 0 end local __wl_t39 = pad(ms(__wl_t33), 9, true) local __wl_t34 = s.max if __wl_t34 == nil then __wl_t34 = 0 end local __wl_t38 = pad(ms(__wl_t34), 9, true)
-				local __wl_t35 = s.total if __wl_t35 == nil then __wl_t35 = 0 end local __wl_t36 = s.calls if __wl_t36 == nil then __wl_t36 = s.count end local __wl_t37 = __wl_t36 if __wl_t37 == nil then __wl_t37 = 1 end say(__wl_t42 .. __wl_t41 .. __wl_t40 .. __wl_t39 .. __wl_t38 .. pad(ms((__wl_t35) / math.max(__wl_t37, 1)), 9, true)) end
+			do local __wl_t30 = pad(r.name, 34) local __wl_t17 = s.calls if __wl_t17 == nil then __wl_t17 = s.count end local __wl_t18 = __wl_t17 if __wl_t18 == nil then __wl_t18 = 0 end local __wl_t29 = pad(__wl_t18, 8, true) local __wl_t19 = s.total if __wl_t19 == nil then __wl_t19 = 0 end local __wl_t28 = pad(ms(__wl_t19), 9, true)
+				local __wl_t20 = s.self if __wl_t20 == nil then __wl_t20 = s.total end local __wl_t21 = __wl_t20 if __wl_t21 == nil then __wl_t21 = 0 end local __wl_t27 = pad(ms(__wl_t21), 9, true) local __wl_t22 = s.max if __wl_t22 == nil then __wl_t22 = 0 end local __wl_t26 = pad(ms(__wl_t22), 9, true)
+				local __wl_t23 = s.total if __wl_t23 == nil then __wl_t23 = 0 end local __wl_t24 = s.calls if __wl_t24 == nil then __wl_t24 = s.count end local __wl_t25 = __wl_t24 if __wl_t25 == nil then __wl_t25 = 1 end say(__wl_t30 .. __wl_t29 .. __wl_t28 .. __wl_t27 .. __wl_t26 .. pad(ms((__wl_t23) / math.max(__wl_t25, 1)), 9, true)) end
 		end
 		if #rows == 0 then
 			say("(no data yet)")
@@ -1295,7 +1295,7 @@ local function install()
 	function commands.list()
 		for _, n in ipairs(reg.order) do
 			local i = reg.addons[n].info
-			do local __wl_t43 = i.version if __wl_t43 == nil then __wl_t43 = "?" end local __wl_t44 = i.profile if __wl_t44 == nil then __wl_t44 = "?" end local __wl_t45 = i.build if __wl_t45 == nil then __wl_t45 = "?" end say(tostring(n) .. " " .. tostring(__wl_t43) .. " · " .. tostring(__wl_t44) .. " · build " .. tostring(__wl_t45)) end
+			do local __wl_t31 = i.version if __wl_t31 == nil then __wl_t31 = "?" end local __wl_t32 = i.profile if __wl_t32 == nil then __wl_t32 = "?" end local __wl_t33 = i.build if __wl_t33 == nil then __wl_t33 = "?" end say(tostring(n) .. " " .. tostring(__wl_t31) .. " · " .. tostring(__wl_t32) .. " · build " .. tostring(__wl_t33)) end
 		end
 	end
 
@@ -1306,7 +1306,7 @@ local function install()
 		end
 		local prof = d.runtime.prof
 		if not prof then
-			return say(tostring(d.name) .. ": the profiler is off in this build")
+			return say(d.name .. ": the profiler is off in this build")
 		end
 		local top, sortKey = 20, "total"
 		local i = 2
@@ -1314,7 +1314,7 @@ local function install()
 			local w = args[i]:lower()
 			if w == "reset" then
 				prof.reset()
-				return say(tostring(d.name) .. ": profiler statistics reset")
+				return say(d.name .. ": profiler statistics reset")
 			elseif w == "top" then
 				top = tonumber(args[i + 1]) or top
 				i = i + 1
@@ -1324,7 +1324,7 @@ local function install()
 			end
 			i = i + 1
 		end
-		say(tostring(d.name) .. " profiler (ms), by " .. tostring(sortKey) .. ":")
+		say(d.name .. " profiler (ms), by " .. sortKey .. ":")
 		statTable(prof.stats, sortKey, top, "calls")
 	end
 
@@ -1335,14 +1335,14 @@ local function install()
 		end
 		local mon = d.runtime.mon
 		if not mon then
-			return say(tostring(d.name) .. ": the monitor is off in this build")
+			return say(d.name .. ": the monitor is off in this build")
 		end
 		if (args[2] or ""):lower() == "reset" then
 			mon.reset()
-			return say(tostring(d.name) .. ": monitor reset")
+			return say(d.name .. ": monitor reset")
 		end
 		for _, kind in ipairs({"events", "scripts", "timers"}) do
-			say(tostring(d.name) .. " " .. tostring(kind) .. ":")
+			say(d.name .. " " .. kind .. ":")
 			statTable(mon[kind], "total", 10, kind == "events" and "count" or "runs")
 		end
 		local mem = mon.memory[#mon.memory]
@@ -1358,17 +1358,17 @@ local function install()
 		end
 		local errors = d.runtime.errors
 		if not errors then
-			return say(tostring(d.name) .. ": error capture is off in this build")
+			return say(d.name .. ": error capture is off in this build")
 		end
 		if (args[2] or ""):lower() == "clear" then
 			errors.clear()
-			return say(tostring(d.name) .. ": errors cleared")
+			return say(d.name .. ": errors cleared")
 		end
 		if #errors.list == 0 then
-			return say(tostring(d.name) .. ": no errors")
+			return say(d.name .. ": no errors")
 		end
 		for _, e in ipairs(errors.list) do
-			say("|cffff9a80" .. tostring(e.message) .. "|r ×" .. tostring(e.count) .. " · " .. tostring(e.time))
+			say("|cffff9a80" .. e.message .. "|r ×" .. e.count .. " · " .. e.time)
 		end
 	end
 
@@ -1379,14 +1379,14 @@ local function install()
 		end
 		local logs = d.runtime.logs
 		if not logs then
-			return say(tostring(d.name) .. ": this addon does not use wowlua:log")
+			return say(d.name .. ": this addon does not use wowlua:log")
 		end
 		if args[2] then
 			logs.setLevel(args[2]:lower())
-			return say(tostring(d.name) .. ": log level " .. tostring(args[2]:lower()))
+			return say(d.name .. ": log level " .. args[2]:lower())
 		end
 		for _, e in ipairs(logs.history(20)) do
-			say(tostring(string.format("%.1f", e.time)) .. " [" .. tostring(e.level) .. "] " .. tostring(e.message))
+			say(string.format("%.1f", e.time) .. " [" .. e.level .. "] " .. e.message)
 		end
 	end
 
@@ -1396,7 +1396,7 @@ local function install()
 			return say("which addon? /wl meta <addon>")
 		end
 		for k, v in pairs(d.info) do
-			say(tostring(d.name) .. " " .. tostring(k) .. " = " .. tostring(v))
+			say(d.name .. " " .. k .. " = " .. tostring(v))
 		end
 		local meta = d.runtime.meta
 		for kind, t in pairs(meta or {}) do repeat
@@ -1405,7 +1405,7 @@ local function install()
 				end
 				for k, v in pairs(t) do
 					if type(v) ~= "table" then
-						say(tostring(d.name) .. " " .. tostring(kind) .. "." .. tostring(k) .. " = " .. tostring(v))
+						say(d.name .. " " .. tostring(kind) .. "." .. tostring(k) .. " = " .. tostring(v))
 					end
 				end
 			until true end
@@ -1504,6 +1504,6 @@ local function install()
 	end
 	dev.console = console
 end
-do local __wl_t46 = reg.version if __wl_t46 == nil then __wl_t46 = -1 end if (__wl_t46) < VERSION then
+do local __wl_t34 = reg.version if __wl_t34 == nil then __wl_t34 = -1 end if (__wl_t34) < VERSION then
 		install()
 	end end

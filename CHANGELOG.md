@@ -16,6 +16,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `@script` checks the script name and the handler's parameters against the frame type.
 - W3021 when a built-in decorator's name (`@profile`, …) hides a function of yours.
 - In optimized builds, `@inline` private methods are inlined where their class calls them, like `@inline` local functions.
+- In `--!strict` files, backtick strings skip `tostring` for strings and numbers, `??` compiles to `or`, and `?.` compiles to `and`/`or` where the types allow it.
 
 ### Changed
 
@@ -28,6 +29,8 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `ns.__wowlua = …` is E2003.
 - `@inline` on a function that isn't local gives W3031.
 - Widget getters Blizzard documents as possibly secret (`GetText`, `IsShown`, `GetWidth`, `GetAlpha`, `GetPoint`, …) are typed `T | Secret<T>`: check them with `issecretvalue` or `canaccessvalue` before computing with them. `mock.textOf` returns `string | Secret<string>`.
+- `wowlua check` and dev builds report E3032 when a `@debugOnly` function is used as a value, as release builds already did; uses in code only debug builds keep are allowed.
+- An XML file loading a file that `build.exclude` or a profile's `exclude` leaves out warns W5004 instead of failing with E5002.
 
 ### Fixed
 
@@ -62,6 +65,10 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `FormatShortDate`'s `year` is optional.
 - Hover and completion show Blizzard's own descriptions where warcraft.wiki.gg has none.
 - The example addons' tests pass on every flavor they list.
+- Code removed by `@if` no longer warns W1001 about names of an import that `@if` also removes.
+- A missing module reports one E1015, without the extra "imports need the package context" error, and its imported names no longer warn W1001.
+- With `line-mode: "pretty"` or `"statement"`, trailing comments stay after the code of their line.
+- A publish target that minifies differently from its profile (`minify: "max"`) gets its own build id, so `wowlua trace` decodes its errors with the right maps.
 
 ## 0.12.0 (2026-10-26)
 

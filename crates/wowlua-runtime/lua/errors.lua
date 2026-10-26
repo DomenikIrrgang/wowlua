@@ -4,14 +4,14 @@ local errors = {
 list = {},
 byMessage = {}
 }
-local FOLDER = ("addons/" .. tostring(addonName) .. "/"):lower()
+local FOLDER = ("addons/" .. addonName .. "/"):lower()
 local function normal(s)
 	return tostring(s or ""):gsub("\\", "/"):lower()
 end
 -- The runtime's own errors start with the addon's name; otherwise the
 -- message's location decides (`path:line: text`), and without a path in
 -- it, the stack.
-local PREFIX = (tostring(addonName) .. ": "):lower()
+local PREFIX = (addonName .. ": "):lower()
 local function mine(message, stack)
 	local m = normal(message)
 	if m:sub(1, #PREFIX) == PREFIX then

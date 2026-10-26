@@ -9,7 +9,7 @@ local modules, loaded = {}, {}
 wl.ns, wl.modules = ns, modules
 --@placeholders
 local function fail(message)
-	error(tostring(addonName) .. ": " .. tostring(message), 3)
+	error(addonName .. ": " .. message, 3)
 end
 -- Creates (or completes) the export table of module `id`.
 function wl.module(id)
@@ -25,7 +25,7 @@ end
 function wl.require(id, lazy)
 	local exports = modules[id]
 	if not exports or (not lazy and not loaded[id] and wl.debug) then
-		fail("module '" .. tostring(id) .. "' has not been loaded")
+		fail("module '" .. id .. "' has not been loaded")
 	end
 	return exports
 end

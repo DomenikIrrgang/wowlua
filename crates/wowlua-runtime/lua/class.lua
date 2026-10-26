@@ -12,7 +12,7 @@ end
 -- Creates the table of class `name` (spec §3.1.9).
 function wl.class(name, super)
 	if super ~= nil and not isClass(super) then
-		error(tostring(addonName) .. ": class " .. tostring(name) .. " extends a value that is not a class", 2)
+		error(addonName .. ": class " .. name .. " extends a value that is not a class", 2)
 	end
 	local cls = {__name = name, __super = super}
 	cls.__index = cls
@@ -123,7 +123,7 @@ end
 -- Debug builds: an abstract method raises an error when called.
 function wl.abstract(cls, name)
 	rawset(cls, name, function()
-		error("abstract method " .. tostring(cls.__name) .. ":" .. tostring(name) .. " is not implemented", 2)
+		error("abstract method " .. tostring(cls.__name) .. ":" .. name .. " is not implemented", 2)
 	end)
 end
 -- The class of a value (widget instances carry `__class`); none for a
