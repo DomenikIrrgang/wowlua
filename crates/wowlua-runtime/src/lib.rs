@@ -336,7 +336,8 @@ mod tests {
             assert(outer(1) == "done")
             assert(#perf.slow == 0 and wl.prof.stats.inner.over == 1)
             assert(outer(4) == "done")
-            assert(#perf.slow == 2 and perf.slow[1].name == "inner" and perf.slow[1].root == "other")
+            -- Only the deepest slow call: its caller is in its stack.
+            assert(#perf.slow == 1 and perf.slow[1].name == "inner" and perf.slow[1].root == "other")
             perf.mark()
             assert(perf.lastFrame == 5 and perf.frames == 1 and perf.over == 1)
             local data = perf.data(perf.recordings[1])

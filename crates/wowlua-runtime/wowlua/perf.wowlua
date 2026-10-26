@@ -34,11 +34,13 @@ local perf: any = {
 	-- The number of the frame being measured (the first is 1).
 	frame = 1,
 	-- Totals since load: frames closed, measured time (ms), frames over the
-	-- budget, garbage sampled per frame (KB), garbage of profiled functions
-	-- themselves (KB, with garbage per function).
+	-- budget, the garbage the addon's measured code made (KB), the whole Lua
+	-- state's garbage sampled per frame (all addons, KB), the garbage of
+	-- profiled functions themselves (KB, with garbage per function).
 	frames = 0,
 	time = 0,
 	over = 0,
+	garbageAddon = 0,
 	garbageAll = 0,
 	garbageFns = 0,
 	lastFrame = 0,
@@ -49,9 +51,9 @@ local perf: any = {
 	-- Every call path node below a root.
 	nodes = {},
 	-- The frame ring, by slot.
-	ring = { id = {}, time = {}, garbage = {}, at = {}, names = {}, times = {} },
+	ring = { id = {}, time = {}, garbage = {}, garbageAll = {}, at = {}, names = {}, times = {} },
 	-- Per-second figures, by second number (`first` to `last`).
-	seconds = { first = 1, last = 0, at = {}, frames = {}, time = {}, max = {}, over = {}, garbage = {} },
+	seconds = { first = 1, last = 0, at = {}, frames = {}, time = {}, max = {}, over = {}, garbage = {}, garbageAll = {} },
 	-- The slow calls, oldest first.
 	slow = {},
 	-- Each function's time per 4 seconds over the last minute.
@@ -72,7 +74,7 @@ wl.perf = perf
 -- The time and names of the frame being measured.
 local cur, curN, curRest = 0, 0, 0
 local curNames: string[], curTimes: number[] = {}, {}
-local secFrames, secTime, secMax, secOver, secGarbage, secStart = 0, 0, 0, 0, 0, now()
+local secFrames, secTime, secMax, secOver, secGarbage, secAll, secStart = 0, 0, 0, 0, 0, 0, now()
 local lastMemory = memory()
 
 -- The open recordings' maxima: `kind` is `fn`, `path`, `root`, `ev`, `sc`,
@@ -132,6 +134,57 @@ local function logSlow(name: string, location: string?, elapsed: number)
 	end
 end
 
+-- Per measured call running, by depth: whether a slow call was logged
+-- inside it (only the deepest is, decision proposal). The memory count when
+-- the outermost one started: the garbage the addon's code made.
+local logged: { [number]: boolean } = {}
+local topMemory = 0
+local curGarbage = 0
+
+-- A measured call starts (a profiled function or a monitored handler).
+local function push(): number
+	local d = perf.depth + 1
+	perf.depth = d
+	logged[d] = nil
+	if d == 1 then
+		topMemory = memory()
+	end
+	return d
+end
+perf.push = push
+
+-- A measured call ended after `elapsed` ms: over the budget, the slow-call
+-- log (the deepest call longer than the threshold; its callers are in its
+-- stack), and at the top the garbage the work made. A `suspended` call (it
+-- ended in a later frame: a coroutine yielded inside it) counts its time,
+-- but is no slow call and not over the budget. The depth after it.
+local function pop(label: string, location: string?, elapsed: number, suspended: boolean, stat: any): number
+	local d = perf.depth
+	if not suspended then
+		if elapsed > perf.frameBudget then
+			stat.over = (stat.over ?? 0) + 1
+		end
+		if elapsed > perf.slowCall and not logged[d] then
+			logSlow(label, location, elapsed)
+			for i = 1, d - 1 do
+				logged[i] = true
+			end
+		end
+	end
+	logged[d] = nil
+	if d <= 1 then
+		perf.depth = 0
+		local made = memory() - topMemory
+		if made > 0 then
+			curGarbage += made
+			perf.garbageAddon += made
+		end
+		return 0
+	end
+	perf.depth = d - 1
+	return d - 1
+end
+
 -- A profiled call starts: with call paths, its node below the running one.
 function perf.enter(name: string): any
 	local parent = perf.node ?? rootNode(perf.root ?? "other", perf.rootKind ?? "other")
@@ -146,12 +199,9 @@ function perf.enter(name: string): any
 end
 
 -- A profiled call of `name` ended after `elapsed` ms (`own` without
--- profiled callees); `stat` is its statistics entry. A `suspended` call
--- (it ended in a later frame: a coroutine yielded inside it) counts its
--- time, but is no slow call and not over the budget.
+-- profiled callees); `stat` is its statistics entry.
 function perf.done(name: string, location: string?, elapsed: number, own: number, node: any, stat: any, suspended: boolean)
-	local depth = perf.depth - 1
-	perf.depth = depth
+	local depth = pop(name, location, elapsed, suspended, stat)
 	local label = perf.root ?? "other"
 	local r = perf.roots[label] ?? rootNode(label, perf.rootKind ?? "other")
 	r.fns[name] = (r.fns[name] ?? 0) + own
@@ -165,14 +215,7 @@ function perf.done(name: string, location: string?, elapsed: number, own: number
 		maxOpen("path", node, elapsed)
 		perf.node = node.parent
 	end
-	if elapsed > perf.frameBudget and not suspended then
-		stat.over = (stat.over ?? 0) + 1
-		if elapsed > perf.slowCall then
-			logSlow(name, location, elapsed)
-		end
-	end
 	if depth <= 0 then
-		perf.depth = 0
 		perf.node = nil
 		addToFrame(name, elapsed)
 		if not perf.root then
@@ -190,24 +233,19 @@ end
 -- A monitored handler starts: at the top, it is the root of the work.
 function perf.begin(label: string, kind: string): boolean
 	if perf.depth <= 0 then
-		perf.depth = 1
+		perf.depth = 0
+		push()
 		perf.root, perf.rootKind = label, kind
 		perf.node = perf.callPaths and rootNode(label, kind) or nil
 		return true
 	end
-	perf.depth += 1
+	push()
 	return false
 end
 
 -- A monitored handler ended; `stat` is its monitor entry.
 function perf.finish(top: boolean, label: string, kind: string, location: string?, elapsed: number, stat: any)
-	perf.depth -= 1
-	if elapsed > perf.frameBudget then
-		stat.over = (stat.over ?? 0) + 1
-		if elapsed > perf.slowCall then
-			logSlow(label, location, elapsed)
-		end
-	end
+	pop(label, location, elapsed, false, stat)
 	if top then
 		local r = rootNode(label, kind)
 		r.calls += 1
@@ -262,6 +300,7 @@ local function snapshot(): any
 		frames = perf.frames,
 		time = perf.time,
 		over = perf.over,
+		garbageAddon = perf.garbageAddon,
 		garbageAll = perf.garbageAll,
 		garbageFns = perf.garbageFns,
 	}
@@ -315,6 +354,7 @@ local function delta(snap: any, base: any?): any
 		frames = snap.frames - (base?.frames ?? 0),
 		time = snap.time - (base?.time ?? 0),
 		over = snap.over - (base?.over ?? 0),
+		garbageAddon = snap.garbageAddon - (base?.garbageAddon ?? 0),
 		garbageAll = snap.garbageAll - (base?.garbageAll ?? 0),
 		garbageFns = snap.garbageFns - (base?.garbageFns ?? 0),
 	}
@@ -347,7 +387,7 @@ local function add(into: any, more: any?)
 			fns[k] = (fns[k] ?? 0) + v
 		end
 	end
-	for _, f in ipairs({ "frames", "time", "over", "garbageAll", "garbageFns" }) do
+	for _, f in ipairs({ "frames", "time", "over", "garbageAddon", "garbageAll", "garbageFns" }) do
 		into[f] += more[f]
 	end
 end
@@ -413,6 +453,7 @@ local function render(rec: any, d: any, maxima: any?, ended: number): any
 		frames = d.frames,
 		time = d.time,
 		over = d.over,
+		garbageAddon = d.garbageAddon,
 		garbageAll = d.garbageAll,
 		garbageFns = d.garbageFns,
 		functions = {},
@@ -422,7 +463,7 @@ local function render(rec: any, d: any, maxima: any?, ended: number): any
 		scripts = {},
 		timers = {},
 		commands = {},
-		seconds = { frames = {}, time = {}, max = {}, over = {}, garbage = {} },
+		seconds = { frames = {}, time = {}, max = {}, over = {}, garbage = {}, garbageAll = {} },
 		memory = {},
 		slow = {},
 	}
@@ -478,6 +519,7 @@ local function render(rec: any, d: any, maxima: any?, ended: number): any
 		data.seconds.max[n] = sec.max[i]
 		data.seconds.over[n] = sec.over[i]
 		data.seconds.garbage[n] = sec.garbage[i]
+		data.seconds.garbageAll[n] = sec.garbageAll[i]
 	end
 	local samples, times = mon?.memory ?? {}, mon?.memoryAt ?? {}
 	for i, kb in ipairs(samples) do
@@ -525,15 +567,16 @@ function perf.frameRange(rec: any): (number, number)
 	local first = math.max(rec.frame ?? 1, perf.frame - RING)
 	return first, last
 end
--- The figures of frame `id` while it is in the ring: time, garbage, the
--- time it closed, and the names and times of what ran in it.
-function perf.frameAt(id: number): (number?, number?, number?, string[]?, number[]?)
+-- The figures of frame `id` while it is in the ring: time, the addon's
+-- garbage, the time it closed, the names and times of what ran in it, and
+-- all addons' garbage.
+function perf.frameAt(id: number): (number?, number?, number?, string[]?, number[]?, number?)
 	local ring = perf.ring
 	local slot = id % RING + 1
 	if ring.id[slot] ~= id then
-		return nil, nil, nil, nil, nil
+		return nil, nil, nil, nil, nil, nil
 	end
-	return ring.time[slot], ring.garbage[slot], ring.at[slot], ring.names[slot], ring.times[slot]
+	return ring.time[slot], ring.garbage[slot], ring.at[slot], ring.names[slot], ring.times[slot], ring.garbageAll[slot]
 end
 
 local function counted(kind: string): number
@@ -658,7 +701,7 @@ function perf.reset(what: string?)
 	end
 	if not what then
 		perf.roots, perf.nodes = {}, {}
-		perf.frames, perf.time, perf.over, perf.garbageAll, perf.garbageFns = 0, 0, 0, 0, 0
+		perf.frames, perf.time, perf.over, perf.garbageAddon, perf.garbageAll, perf.garbageFns = 0, 0, 0, 0, 0, 0
 		perf.slow = {}
 	end
 	local base = snapshot()
@@ -705,15 +748,15 @@ local function closeSecond(t: number)
 	local sec = perf.seconds
 	local i = sec.last + 1
 	sec.last = i
-	sec.at[i], sec.frames[i], sec.time[i], sec.max[i], sec.over[i], sec.garbage[i] =
-		secStart, secFrames, secTime, secMax, secOver, secGarbage
+	sec.at[i], sec.frames[i], sec.time[i], sec.max[i], sec.over[i], sec.garbage[i], sec.garbageAll[i] =
+		secStart, secFrames, secTime, secMax, secOver, secGarbage, secAll
 	local old = i - SECONDS
 	if old >= sec.first then
-		sec.at[old], sec.frames[old], sec.time[old], sec.max[old], sec.over[old], sec.garbage[old] =
-			nil, nil, nil, nil, nil, nil
+		sec.at[old], sec.frames[old], sec.time[old], sec.max[old], sec.over[old], sec.garbage[old], sec.garbageAll[old] =
+			nil, nil, nil, nil, nil, nil, nil
 		sec.first = old + 1
 	end
-	secFrames, secTime, secMax, secOver, secGarbage, secStart = 0, 0, 0, 0, 0, t
+	secFrames, secTime, secMax, secOver, secGarbage, secAll, secStart = 0, 0, 0, 0, 0, 0, t
 	if i % 4 == 0 and wl.prof then
 		local slot = perf.trendSlot % 15 + 1
 		perf.trendSlot = slot
@@ -732,16 +775,20 @@ end
 -- The frame mark: closes the frame being measured.
 local function mark()
 	local t = now()
+	-- All addons' garbage: the whole Lua state's count since the last mark
+	-- (a collection step in between: nothing); the addon's own, from its
+	-- measured calls.
 	local count = memory()
-	local garbage = count - lastMemory
-	if garbage < 0 then
-		garbage = 0
+	local all = count - lastMemory
+	if all < 0 then
+		all = 0
 	end
 	lastMemory = count
+	local garbage = curGarbage
 	local id = perf.frame
 	local ring = perf.ring
 	local slot = id % RING + 1
-	ring.id[slot], ring.time[slot], ring.garbage[slot], ring.at[slot] = id, cur, garbage, t
+	ring.id[slot], ring.time[slot], ring.garbage[slot], ring.garbageAll[slot], ring.at[slot] = id, cur, garbage, all, t
 	local names, times = ring.names[slot], ring.times[slot]
 	if not names then
 		names, times = {}, {}
@@ -758,7 +805,7 @@ local function mark()
 	end
 	perf.frames += 1
 	perf.time += cur
-	perf.garbageAll += garbage
+	perf.garbageAll += all
 	perf.lastFrame = cur
 	local over = cur > perf.frameBudget
 	if over then
@@ -768,6 +815,7 @@ local function mark()
 	secFrames += 1
 	secTime += cur
 	secGarbage += garbage
+	secAll += all
 	if cur > secMax then
 		secMax = cur
 	end
@@ -778,10 +826,13 @@ local function mark()
 		closeSecond(t)
 	end
 	perf.frame = id + 1
-	cur, curN, curRest = 0, 0, 0
+	cur, curN, curRest, curGarbage = 0, 0, 0, 0
 	-- Nothing of the addon runs between frames: what an error left open
 	-- is closed.
 	perf.depth, perf.root, perf.rootKind, perf.node = 0, nil, nil, nil
+	for k in pairs(logged) do
+		logged[k] = nil
+	end
 	if wl.prof then
 		wl.prof.unwind()
 	end

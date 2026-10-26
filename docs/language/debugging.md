@@ -262,8 +262,9 @@ end
 In a release build, `debug.stats()` is an empty table.
 
 The dev window adds to these numbers. It adds up the time your addon takes
-in each frame, and any single call longer than `slow-call` (2 ms by default)
-is kept as a slow call with its stack. With call paths on, it also knows
+in each frame and the garbage it makes, and the deepest call longer than
+`slow-call` (2 ms by default) is kept as a slow call with its stack, which
+shows the callers. With call paths on, it also knows
 which event, script, timer or slash command started each call, and with
 garbage per function, how much garbage each function made itself. Both cost
 time on every call, so they are off until you switch them on in the window

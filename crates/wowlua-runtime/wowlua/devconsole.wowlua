@@ -1505,8 +1505,8 @@ local function buildDevWindow(console: any, reg: WowluaDevRegistry): Frame
 		local perf = rt.perf
 		if perf then
 			local sec = perf.seconds
-			local gc = sec.garbage[sec.last]
-			parts[#parts + 1] = "garbage " .. K.kb(gc ?? 0) .. "/s"
+			parts[#parts + 1] = "garbage " .. K.kb(sec.garbage[sec.last] ?? 0) .. "/s"
+			parts[#parts + 1] = "all addons " .. K.kb(sec.garbageAll[sec.last] ?? 0) .. "/s"
 			parts[#parts + 1] = "frame " .. K.ms(perf.lastFrame) .. " ms"
 		end
 		parts[#parts + 1] = (d.info.version or "?") .. " · " .. (d.info.profile or "?")
@@ -2335,7 +2335,7 @@ local function buildPerformance(console: any, U: any, PERF_VIEWS: any[], layout:
 		U.rect(4, base + budget / most * CHART, cw, 1, C.warning)
 		U.label(cw - 120, base + budget / most * CHART + 2, `budget {K.ms(budget)} ms`, C.warning, 120)
 		U.label(8, base + CHART + 4, inRing and `frames · {K.ms(most)} ms at the top · wheel to scroll` or "per second (slowest frame) · the frames left the ring", C.muted, cw - 140)
-		U.label(8, 2, "garbage", C.note, 80)
+		U.label(8, 2, "garbage, this addon", C.note, 160)
 		-- Combats and pulls in view.
 		if inRing and #items > 0 then
 			local lo, hi = items[1].id, items[#items].id
@@ -2389,7 +2389,8 @@ local function buildPerformance(console: any, U: any, PERF_VIEWS: any[], layout:
 		end
 		summary("time per frame", avg(data), other and avg(other), K.ms)
 		summary("frames over budget, per minute", K.perMinute(data.over, data), other and K.perMinute(other.over, other), K.count)
-		summary("garbage per second", (data.garbageAll ?? 0) / math.max(data.duration ?? 1, 1), other and (other.garbageAll ?? 0) / math.max(other.duration ?? 1, 1), K.kb)
+		summary("garbage per second", (data.garbageAddon ?? 0) / math.max(data.duration ?? 1, 1), other and (other.garbageAddon ?? 0) / math.max(other.duration ?? 1, 1), K.kb)
+		summary("garbage per second, all addons", (data.garbageAll ?? 0) / math.max(data.duration ?? 1, 1), other and (other.garbageAll ?? 0) / math.max(other.duration ?? 1, 1), K.kb)
 		render({ { title = "Frame", width = 0 }, { title = "Time", width = 80, align = "RIGHT" }, { title = other and ("vs " .. other.name) or "Garbage", width = 92, align = "RIGHT" } }, out)
 	end
 
@@ -2443,15 +2444,19 @@ local function buildPerformance(console: any, U: any, PERF_VIEWS: any[], layout:
 		layout(true, 2, 120)
 		U.clearCanvas()
 		local cw = math.max(plain(U.canvas:GetWidth(), 600) - 8, 100)
+		-- Per second: all addons' garbage behind the addon's own.
 		local s = data.seconds
+		local allSeconds = s.garbageAll or {}
 		local n = math.min(#s.garbage, math.floor(cw / 3))
 		local most = 0
 		for i = #s.garbage - n + 1, #s.garbage do
-			most = math.max(most, s.garbage[i] ?? 0)
+			most = math.max(most, s.garbage[i] ?? 0, allSeconds[i] ?? 0)
 		end
 		for k = 1, n do
-			local v = s.garbage[#s.garbage - n + k] ?? 0
-			U.rect(4 + (k - 1) * 3, 18, 2, most > 0 and v / most * 78 or 1, C.noteSoft)
+			local i = #s.garbage - n + k
+			local a, v = allSeconds[i] ?? 0, s.garbage[i] ?? 0
+			U.rect(4 + (k - 1) * 3, 18, 2, most > 0 and a / most * 78 or 1, C.line)
+			U.rect(4 + (k - 1) * 3, 18, 2, most > 0 and v / most * 78 or 1, C.note)
 		end
 		local mem = data.memory
 		local top = 0
@@ -2463,18 +2468,23 @@ local function buildPerformance(console: any, U: any, PERF_VIEWS: any[], layout:
 			U.rect(4 + m.at / span * cw, 18 + (top > 0 and m.kb / top * 78 or 0), 3, 3, C.accent)
 		end
 		U.label(8, 100, `garbage per second (up to {K.kb(most)}) · memory (up to {K.kb(top)})`, C.muted, cw - 8)
-		U.label(8, 2, "garbage", C.note, 80)
-		U.label(90, 2, "memory", C.accent, 80)
+		U.label(8, 2, "this addon", C.note, 90)
+		U.label(100, 2, "all addons", C.lineStrong, 90)
+		U.label(192, 2, "memory", C.accent, 80)
 		U.canvasClick, U.canvasWheel = nil, nil
 		local out = {}
-		local rate = (data.garbageAll ?? 0) / math.max(data.duration ?? 1, 1)
-		local cells = { "garbage rate (the whole Lua state)", K.kb(rate) .. "/s", "", "", "" }
-		local colors = { C.muted, C.ink }
-		if other then
-			local change, tone = K.change(rate, (other.garbageAll ?? 0) / math.max(other.duration ?? 1, 1))
-			cells[5], colors[5] = change, tone
+		-- The garbage rate: the addon's own, and all addons' (the whole Lua
+		-- state).
+		for _, kind in ipairs({ { "garbage rate of this addon", "garbageAddon" }, { "garbage rate of all addons", "garbageAll" } }) do
+			local rate = (data[kind[2]] ?? 0) / math.max(data.duration ?? 1, 1)
+			local cells = { kind[1], K.kb(rate) .. "/s", "", "", "" }
+			local colors = { C.muted, C.ink }
+			if other then
+				local change, tone = K.change(rate, (other[kind[2]] ?? 0) / math.max(other.duration ?? 1, 1))
+				cells[5], colors[5] = change, tone
+			end
+			out[#out + 1] = { cells = cells, colors = colors, fonts = { "body" } }
 		end
-		out[#out + 1] = { cells = cells, colors = colors, fonts = { "body" } }
 		if not data.garbage and (data.garbageFns ?? 0) == 0 then
 			for _, r in ipairs(needs("garbage", "Garbage per function", perf)) do
 				out[#out + 1] = r

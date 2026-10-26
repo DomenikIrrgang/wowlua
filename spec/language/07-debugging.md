@@ -176,9 +176,11 @@ kept in a ring buffer (at least 60 seconds at 60 fps). The frame timeline
 (§7.7.4) and the HUD (§7.7.8) read it.
 
 A single call that takes longer than the slow-call threshold (`slow-call`,
-default 2 ms) is a **slow call**. It is recorded with its time, function and
-location, the root that started the work (§7.3.2) and a stack from
-`debugstack()`. Only calls over the threshold pay for the stack. The last 200
+default 2 ms) is a **slow call**. Only the deepest one is recorded: a call
+inside which a slow call was recorded is not, because the callers that were
+waiting for it are in that entry's stack. It is recorded with its time,
+function and location, the root that started the work (§7.3.2) and a stack
+from `debugstack()`. Only calls over the threshold pay for the stack. The last 200
 slow calls per addon are kept (decision T178). A frame whose total exceeds
 `frame-budget` (default 1 ms) is **over budget**, and so is a single call
 longer than it. A call that ends in a later frame than it started (a
@@ -198,8 +200,12 @@ entry, and every call pays a path lookup, which is why it is opt-in.
 
 ### 7.3.3 Garbage
 
-The runtime samples `collectgarbage("count")` once per frame and reports the
-addon-wide **garbage rate** (KB created per second, collections removed). With
+The **garbage rate** is the addon's own: the KB its measured code created
+per second, from `collectgarbage("count")` before and after each outermost
+measured call (a profiled function or monitored handler no other measured
+call runs under), whatever the switch below says. The window shows next to
+it the rate of all addons: the whole Lua state's count, sampled once per
+frame (collections removed). With
 garbage per function switched on (`profile-garbage`, or the window's switch),
 every instrumented call records its allocation, as `@profile({ memory = true })`
 does for one function (§7.3): all of it, and its **own** part without the
@@ -356,8 +362,8 @@ selector and these tabs (decision T170):
 | inspector | A table tree view (§7.7.3) |
 | hints | Performance hints with a count on the tab (§7.7.7) |
 
-The footer shows the addon's memory, its garbage rate and the last frame's
-time, the HUD switch (§7.7.8) and, while recordings are marked for export,
+The footer shows the addon's memory, its garbage rate (and all addons') and
+the last frame's time, the HUD switch (§7.7.8) and, while recordings are marked for export,
 the reminder that `/reload` saves them.
 
 The window refreshes only while it is visible (default every 0.25 s for
@@ -507,12 +513,12 @@ recording (the same while it is shown in the window):
 | `name`, `kind`, `detail` | Its name, `"live"`, `"combat"`, `"pull"` or `"manual"`, and a pull's encounter name |
 | `started`, `duration` | Its start as `time()` (Unix seconds) and its length in seconds |
 | `frameBudget`, `slowCall`, `callPaths`, `garbage` | The thresholds (ms) and switches |
-| `frames`, `time`, `over`, `garbageAll`, `garbageFns` | Frames rendered, measured time (ms), frames over budget, garbage sampled per frame and the functions' own garbage (KB) |
+| `frames`, `time`, `over`, `garbageAddon`, `garbageAll`, `garbageFns` | Frames rendered, measured time (ms), frames over budget, the addon's garbage, all addons' garbage (the Lua state's, sampled per frame) and the functions' own garbage (KB) |
 | `functions` | By function: `calls`, `total`, `self`, `max`, `errors`, `over` (calls over budget), `garbage`, `selfGarbage` (KB, with garbage per function), `location` |
 | `paths` | With call paths: an array of `{ path = { root, name, … }, calls, total, self, max }` |
 | `roots` | By root: `kind` (`event`, `script`, `timer`, `slash`, `other`), `calls`, `total`, `max`, `top` (the function with the most own time under it) and `topSelf` |
 | `events`, `scripts`, `timers`, `commands` | The monitor's entries: `count`, `total`, `max`, `over`, `detail` (where it was set), `frames` (frames it ran in); events also `bursts` and `burstMax`, scripts `script` and for `OnUpdate` `showsNothing` |
-| `seconds` | Per second of the recording, arrays `frames`, `time`, `max` (slowest frame), `over` and `garbage` |
+| `seconds` | Per second of the recording, arrays `frames`, `time`, `max` (slowest frame), `over`, `garbage` (the addon's) and `garbageAll` (all addons') |
 | `memory` | An array of `{ at, kb }` (seconds from the start) |
 | `slow` | The slow calls, newest first: `{ at, ms, name, location, root, recording, stack }` |
 | `hints` | The hints of the recording: `{ code, subject, evidence, fix, recording, metric }` |

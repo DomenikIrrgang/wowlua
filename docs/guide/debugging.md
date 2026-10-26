@@ -16,7 +16,7 @@ contains none of it.
 |------|----------------|
 | Profiler | Every named function and method: calls, total, self, max and average time |
 | Monitor | The addon's events, scripts, timers and slash commands (count, total and max time), and its memory every 5 seconds outside combat, for the last 10 minutes |
-| Recordings | The time the addon takes in each frame, its slow calls with their stack, and the game's garbage rate; one recording per combat and per boss pull |
+| Recordings | The time the addon takes in each frame, its slow calls with their stack, and the garbage it makes; one recording per combat and per boss pull |
 | Error capture | Errors raised in the addon's folder, with stack and repeat count; BugSack and the default error frame still see every error |
 | Log | The `wowlua:log` ring buffer, from `debug` level up |
 | Runtime type checks | The parameters of exported functions, of public methods of exported classes, and of event, slash and hook handlers, against their declared types |
@@ -36,8 +36,8 @@ resizable, has a selector for every loaded wowlua dev build, and these tabs:
 | inspector | A table as an expandable tree |
 | hints | Performance hints, with the number of new ones on the tab |
 
-The footer shows the addon's memory, the garbage rate and the time the last
-frame took. The window refreshes only while it is shown, and Escape closes
+The footer shows the addon's memory, the garbage it makes per second (and
+next to it all addons' together) and the time the last frame took. The window refreshes only while it is shown, and Escape closes
 it. Its position, size, tab and selected addon are saved per addon, in the
 SavedVariables `WowluaDevDB_<Addon>` that dev builds add to the TOC. The
 profile settings and what each one costs are in
@@ -60,7 +60,7 @@ Pick a recording on the left, and a view on the right:
 | by event | The time each event, script, timer or command took, and the function that took most of it |
 | timeline | The time of every frame against the frame budget, the garbage, and the combats and pulls; click a frame to see what ran in it |
 | slow | The slow calls, newest first, with their stack |
-| garbage | The garbage rate and memory over time, then the garbage per function |
+| garbage | The addon's garbage per second against all addons', memory over time, then the garbage per function |
 | bench | Runs of an expression, timed |
 
 Right-click a recording to compare the selected one with it. Every view then

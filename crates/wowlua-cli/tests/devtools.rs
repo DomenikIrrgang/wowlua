@@ -101,15 +101,15 @@ local function measures()
     mock.fireEvent("BAG_UPDATE", 0)
     mock.nextFrame()
     perf.stop(rec)
-    -- Every call over 3 ms is a slow call, innermost first, with its root.
-    expect(perf.slow[#perf.slow - 1].name).toBe("handler")
-    local slow = perf.slow[#perf.slow - 2]
+    -- Only the deepest call over 3 ms is a slow call, with its root; its
+    -- callers (handler, the event) are in its stack.
+    local slow = perf.slow[#perf.slow]
+    expect(#rec.data.slow).toBe(1)
     expect(slow.name).toBe("heavy")
     expect(slow.ms >= 5).toBe(true)
     expect(slow.root).toBe("BAG_UPDATE")
     expect(type(slow.stack)).toBe("string")
-    -- The handler itself is slow too, and the last frame took its time.
-    expect(perf.slow[#perf.slow].name).toBe("BAG_UPDATE")
+    -- The last frame took its time.
     expect(perf.lastFrame >= 5).toBe(true)
     expect(perf.over > 0).toBe(true)
     local data = rec.data
@@ -124,6 +124,9 @@ local function measures()
     end
     expect(found).toBe(true)
     expect(data.functions.alloc.selfGarbage > 0).toBe(true)
+    -- The addon's own garbage, besides all addons'.
+    expect(data.garbageAddon >= data.functions.alloc.selfGarbage).toBe(true)
+    expect(#data.seconds.garbageAll).toBe(#data.seconds.garbage)
     expect(data.functions.handler.garbage >= data.functions.alloc.garbage).toBe(true)
     -- A slash command is a root too.
     mock.slash("/probe")
@@ -162,6 +165,8 @@ local function records()
         expect(combat.running).toBe(false)
         expect(combat.data.functions.handler.calls).toBe(2)
         expect(combat.data.events.BAG_UPDATE.count).toBe(2)
+        -- The addon's garbage is measured without garbage per function.
+        expect(combat.data.garbageAddon > 0).toBe(true)
         mock.startEncounter({ id = 2902, name = "Ulgrax", difficultyID = 16, groupSize = 20 })
         mock.fireEvent("BAG_UPDATE", 0)
         mock.endEncounter(true)

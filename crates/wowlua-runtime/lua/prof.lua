@@ -101,7 +101,7 @@ local function enter(name)
 	if not perf then
 		return depth, nil, nil, nil
 	end
-	perf.depth = perf.depth + 1
+	perf.push()
 	local node = perf.callPaths and perf.enter(name) or nil
 	if perf.garbage then
 		childGarbage[depth] = 0
