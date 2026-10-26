@@ -75,7 +75,7 @@ which a call counts as slow (`slow-call`, 2 ms). What you set there is saved
 for the addon and wins over the profile; **Profile's** goes back to the
 profile's values.
 
-```json title=wowlua.json
+```json
 "profiles": {
   "dev": { "profile-call-paths": true, "frame-budget": 2 }
 }

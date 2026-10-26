@@ -269,7 +269,7 @@ garbage per function, how much garbage each function made itself. Both cost
 time on every call, so they are off until you switch them on in the window
 or the profile:
 
-```json title=wowlua.json
+```json
 "profiles": {
   "dev": { "profile-call-paths": true, "profile-garbage": true, "slow-call": 4 }
 }

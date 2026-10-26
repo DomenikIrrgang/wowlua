@@ -548,6 +548,14 @@ In-game performance tools, to measure what the optimizations change
 - The compact HUD (T177) and the error toast (T180).
 - Export through SavedVariables and `wowlua prof report` (T175, T179).
 
+The in-game tools above were built 2026-10-26, ahead of the optimizations:
+the dev window in the design system with its fonts, recordings, frame time,
+slow calls, call paths, roots (slash commands and the standard library's
+dispatch frames monitored too), garbage per function, the eight views,
+the hints and their explanations, bench, the HUD, the error toast and the
+export through SavedVariables, tested in the emulated client. Not yet: the
+in-game run of a boss pull (the exit below).
+
 **Exit:** the benchmark suite shows a measured speed-up of the optimized
 release build over the unoptimized one, the corpus and differential tests show
 unchanged behavior, and an optimized addon is checked in game; a recording of
