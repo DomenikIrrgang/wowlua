@@ -214,7 +214,7 @@ fn expr_parts(e: &mut Expr, v: &mut impl Visitor) {
                 }
             }
         }
-        ExprKind::Index { obj, key } => {
+        ExprKind::Index { obj, key, .. } => {
             expr(obj, v);
             expr(key, v);
         }

@@ -64,6 +64,8 @@ pub fn number_expr(n: f64, pos: Pos) -> ir::Expr {
         } else {
             ir::Expr::new(
                 K::Unary {
+                    // (a numeral's arithmetic runs no metamethod)
+                    facts: ir::Facts::NO_META,
                     op: ir::UnOp::Neg,
                     operand: Box::new(num("1")),
                 },
@@ -75,6 +77,8 @@ pub fn number_expr(n: f64, pos: Pos) -> ir::Expr {
     if n < 0.0 || (n == 0.0 && n.is_sign_negative()) {
         return paren(ir::Expr::new(
             K::Unary {
+                // (a numeral's arithmetic runs no metamethod)
+                facts: ir::Facts::NO_META,
                 op: ir::UnOp::Neg,
                 operand: Box::new(num(&format_number(-n))),
             },
@@ -87,6 +91,8 @@ pub fn number_expr(n: f64, pos: Pos) -> ir::Expr {
 fn binary(op: ir::BinOp, lhs: ir::Expr, rhs: ir::Expr, pos: Pos) -> ir::Expr {
     ir::Expr::new(
         ir::ExprKind::Binary {
+            // (a numeral's arithmetic runs no metamethod)
+            facts: ir::Facts::NO_META,
             op,
             op_pos: Pos::NONE,
             lhs: Box::new(lhs),

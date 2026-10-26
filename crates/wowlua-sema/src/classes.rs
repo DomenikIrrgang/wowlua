@@ -696,15 +696,51 @@ fn vararg_in(e: Expr<'_>) -> Option<Span> {
     found
 }
 
-/// Whether an `@inline` method can be inlined as written (spec §4.3): its
-/// body is a single `return` of one expression, and it takes no `...` and
-/// no defaults (which add statements).
+/// Whether an `@inline` method can be inlined as written (spec §4.3,
+/// optimization §15.2): it takes no `...` and no defaults (which add
+/// statements), and its body is a single `return` of one expression, or
+/// statements without `return` but a last one without values (inlined
+/// where it is called as a statement).
 pub fn inline_shape(f: Func<'_>) -> bool {
     if f.vararg().is_some() || f.params().iter().any(|p| p.default().is_some()) {
         return false;
     }
     let stmts = f.body().stmts();
-    stmts.len() == 1 && matches!(stmts.at(0).kind(), StmtKind::Return(values) if values.len() == 1)
+    if stmts.len() == 1
+        && matches!(stmts.at(0).kind(), StmtKind::Return(values) if values.len() == 1)
+    {
+        return true;
+    }
+    statements_without_return(f.body())
+}
+
+/// A body of statements with no `return` (a last one without values
+/// aside) in its own code.
+fn statements_without_return(body: Block<'_>) -> bool {
+    fn own(b: Block<'_>, last_ok: bool) -> bool {
+        let n = b.stmts().len();
+        b.stmts().iter().enumerate().all(|(i, s)| match s.kind() {
+            StmtKind::Return(values) => last_ok && i + 1 == n && values.is_empty(),
+            StmtKind::Do(b)
+            | StmtKind::While { body: b, .. }
+            | StmtKind::Repeat { body: b, .. } => own(b, false),
+            StmtKind::NumericFor { body, .. } | StmtKind::GenericFor { body, .. } => {
+                own(body, false)
+            }
+            StmtKind::If {
+                then_block,
+                elseifs,
+                else_block,
+                ..
+            } => {
+                own(then_block, false)
+                    && elseifs.iter().all(|(_, b)| own(b, false))
+                    && else_block.is_none_or(|b| own(b, false))
+            }
+            _ => true,
+        })
+    }
+    own(body, true)
 }
 
 /// Whether a class member is an `@inline` private method with a body: one

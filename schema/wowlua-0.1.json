@@ -1307,6 +1307,48 @@
             "boolean",
             "null"
           ]
+        },
+        "constants": {
+          "description": "Locals assigned once with a constant become the constant\n(Optimization §15.2.3).",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "cache-fields": {
+          "description": "Field reads of plain tables read once into a local: out of loops\nthey do not change in, and repeated ones in a stretch of code.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "cache-upvalues": {
+          "description": "Upvalues read often in a function copied into locals.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "numeric-loops": {
+          "description": "`ipairs` loops over plain arrays become numeric loops.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "table-insert": {
+          "description": "`table.insert(t, v)` on a plain table becomes `t[#t + 1] = v`.",
+          "type": [
+            "boolean",
+            "null"
+          ]
+        },
+        "hoist-closures": {
+          "description": "Closures that capture nothing from a loop are made once, before it.",
+          "type": [
+            "boolean",
+            "null"
+          ]
         }
       },
       "additionalProperties": false

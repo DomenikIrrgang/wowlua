@@ -1504,7 +1504,11 @@ fn convert_pkgmeta(
             json!({
                 "bundle": false,
                 "minify": "none",
-                "optimize": { "inline": false, "cache-globals": "off", "dead-code": false }
+                "optimize": {
+                    "inline": false, "cache-globals": "off", "dead-code": false,
+                    "constants": false, "cache-fields": false, "cache-upvalues": false,
+                    "numeric-loops": false, "table-insert": false, "hoist-closures": false
+                }
             }),
         );
     let root_addon = report.addon_name.clone();

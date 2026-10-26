@@ -3,8 +3,10 @@
 //! - `cargo xtask corpus fetch`: downloads the pinned archives listed in
 //!   `xtask/corpus.txt` into `target/corpus/` (checked against SHA-256).
 //! - `cargo xtask corpus run [dir]`: for every `.lua` file, checks that
-//!   wowlua accepts what Lua 5.1 accepts, and that `emit(lower(parse))`
-//!   compiles to the same bytecode as the file in every line mode.
+//!   wowlua accepts what Lua 5.1 accepts, that `emit(lower(parse))`
+//!   compiles to the same bytecode as the file in every line mode, and
+//!   that its main chunk prints and fails the same in PUC Lua 5.1 with and
+//!   without the optimizations (differential).
 //! - `cargo xtask corpus addons [dir]`: adopts and builds every addon.
 //! - `cargo xtask corpus vm [dir]`: wowlua's VM compiles every file to the
 //!   same bytecode and line info as Lua 5.1, and runs its main chunk with
@@ -144,6 +146,8 @@ struct Stats {
     both_reject: usize,
     full_equal: usize,
     formatted: usize,
+    /// Main chunks that ran the same optimized and not.
+    differential: usize,
     parse_time: std::time::Duration,
     failures: Vec<String>,
 }
@@ -166,12 +170,13 @@ pub fn run(dir: &Path) -> Result<()> {
         stats.both_reject += file.both_reject;
         stats.full_equal += file.full_equal;
         stats.formatted += file.formatted;
+        stats.differential += file.differential;
         stats.parse_time += file.parse_time;
         stats.failures.extend(file.failures);
     }
     let checked = stats.files - stats.both_reject;
     println!(
-        "{} files ({} lines) in {:.1?} (parsing {:.1?}); {} rejected by both; line info identical for {}/{}; formatted {}; {} failures",
+        "{} files ({} lines) in {:.1?} (parsing {:.1?}); {} rejected by both; line info identical for {}/{}; formatted {}; optimized main chunks run the same {}; {} failures",
         stats.files,
         stats.lines,
         started.elapsed(),
@@ -180,6 +185,7 @@ pub fn run(dir: &Path) -> Result<()> {
         stats.full_equal,
         checked,
         stats.formatted,
+        stats.differential,
         stats.failures.len()
     );
     for f in stats.failures.iter().take(50) {
@@ -292,6 +298,7 @@ fn check_file(lua: &mlua::Lua, dir: &Path, path: &Path) -> Result<Stats> {
                     dead_code: true,
                     inline: true,
                     cache_globals: true,
+                    shaping: all_shaping(),
                 }
             } else {
                 wowlua_driver::Optimizations::default()
@@ -338,6 +345,46 @@ fn check_file(lua: &mlua::Lua, dir: &Path, path: &Path) -> Result<Stats> {
                 }
             }
         }
+    }
+    // Differential (spec optimization §15.2.3): the main chunk, optimized
+    // with every optimization and not, prints the same and fails the same.
+    let none = wowlua_luair::Passes::default();
+    let options = none.emit_options(LineMode::Statement);
+    let unoptimized = emit(&chunk, &options);
+    let optimized = wowlua_driver::optimize_and_emit(
+        chunk.clone(),
+        // (not `dead-code`: dropping an unused table changes what
+        // `gcinfo` sees, which the Lua test suite asserts)
+        &wowlua_driver::Optimizations {
+            dead_code: false,
+            inline: true,
+            cache_globals: true,
+            shaping: all_shaping(),
+        },
+        &none,
+        &options,
+    )
+    .emitted;
+    match (
+        run_puc(&unoptimized.text, &rel),
+        run_puc(&optimized.text, &rel),
+    ) {
+        (Some(a), Some(b)) if a == b => stats.differential += 1,
+        (Some(a), Some(b)) => {
+            // `WOWLUA_CORPUS_DUMP=<dir>`: both versions, to compare.
+            if let Some(dir) = std::env::var_os("WOWLUA_CORPUS_DUMP") {
+                let name = rel.replace('/', "_");
+                let dir = Path::new(&dir);
+                let _ = std::fs::create_dir_all(dir);
+                let _ = std::fs::write(dir.join(format!("{name}.plain.lua")), &unoptimized.text);
+                let _ = std::fs::write(dir.join(format!("{name}.optimized.lua")), &optimized.text);
+            }
+            stats.failures.push(format!(
+                "{rel}: optimized, the main chunk runs differently: {b:?}, unoptimized {a:?}"
+            ))
+        }
+        // (one ran too long to compare)
+        _ => {}
     }
     for mode in [LineMode::Preserve, LineMode::Statement, LineMode::Pretty] {
         let comments = if mode == LineMode::Preserve {
@@ -979,6 +1026,92 @@ fn vm_file(lua: &mut mlua::Lua, dir: &Path, path: &Path) -> Result<VmFile> {
     }
 }
 
+/// Runs a main chunk in PUC Lua 5.1 with the libraries the client has:
+/// what it printed and how it failed (without the error's line, which the
+/// optimizations may move). `None` when it runs too long to compare.
+fn run_puc(src: &[u8], rel: &str) -> Option<(String, Option<String>)> {
+    use mlua::StdLib;
+    let lua = mlua::Lua::new_with(
+        StdLib::STRING | StdLib::TABLE | StdLib::MATH,
+        mlua::LuaOptions::default(),
+    )
+    .ok()?;
+    lua.load("dofile, loadfile, string.dump = nil")
+        .exec()
+        .ok()?;
+    lua.load(RUN_PRELUDE).exec().ok()?;
+    // WoW's `bit` library, which `cache-globals` reads once: functions
+    // that answer alike optimized or not.
+    lua.load("bit = {} for _, k in ipairs({'band','bor','bxor','bnot','lshift','rshift','arshift','mod'}) do bit[k] = function() return 0 end end")
+        .exec()
+        .ok()?;
+    let budget = std::rc::Rc::new(std::cell::Cell::new(0u32));
+    let left = budget.clone();
+    lua.set_hook(
+        mlua::HookTriggers::new().every_nth_instruction(100_000),
+        move |_, _| {
+            left.set(left.get() + 1);
+            if left.get() > 200 {
+                Err(mlua::Error::RuntimeError("instruction limit".into()))
+            } else {
+                Ok(mlua::VmState::Continue)
+            }
+        },
+    )
+    .ok()?;
+    let err = lua
+        .load(src)
+        .set_name(format!("@{rel}"))
+        .exec()
+        .err()
+        .map(|e| mlua_message(&e));
+    if budget.get() > 200
+        || err
+            .as_deref()
+            .is_some_and(|e| e.contains("instruction limit"))
+    {
+        return None;
+    }
+    lua.remove_hook();
+    let out: String = lua
+        .load(RUN_OUTPUT)
+        .eval()
+        .unwrap_or_else(|_| "<output lost>".into());
+    // `file:12: message`: the message, without how it names the value
+    // (`global 'x'` read once into a local is `local 'x'`, as with
+    // `cache-globals`).
+    static LOCATION: std::sync::LazyLock<regex::Regex> = std::sync::LazyLock::new(|| {
+        regex::Regex::new(r"(\[string [^\]]*\]|[\w./ -]+\.lua):\d+: ").expect("a pattern")
+    });
+    let err = err.map(|e| unnamed(&LOCATION.replace_all(&without_addresses(&e), "")));
+    Some((without_addresses(&out), err))
+}
+
+/// An error message without the names Lua gives the value (`attempt to
+/// call global 'f' (a nil value)` → `attempt to call (a nil value)`).
+fn unnamed(e: &str) -> String {
+    let mut out = e.to_string();
+    for kind in ["global", "local", "upvalue", "field", "method", "constant"] {
+        while let Some(at) = out.find(&format!("{kind} '")) {
+            let rest = &out[at + kind.len() + 2..];
+            let Some(end) = rest.find('\'') else {
+                break;
+            };
+            let cut = at + kind.len() + 2 + end + 1;
+            let cut = if out[cut..].starts_with(' ') {
+                cut + 1
+            } else {
+                cut
+            };
+            out.replace_range(at..cut, "");
+        }
+    }
+    // (`(a nil value)` after a name, `a nil value` after a literal)
+    out.replace("(a ", "a ")
+        .replace("(an ", "an ")
+        .replace(" value)", " value")
+}
+
 /// Captures `print` the same way in both VMs.
 const RUN_PRELUDE: &str = "local out, tostring, select, concat = {}, tostring, select, table.concat \
     print = function (...) local t = {} for i = 1, select('#', ...) do \
@@ -1080,6 +1213,20 @@ fn without_addresses(s: &str) -> String {
     }
     out.push_str(rest);
     out
+}
+
+/// Every optimization of spec optimization §15.2.3: the corpus is plain
+/// Lua, which builds leave as it is, but the passes must keep what they
+/// rewrite compiling (the type-based ones find no facts here).
+fn all_shaping() -> wowlua_luair::optimize::Shaping {
+    wowlua_luair::optimize::Shaping {
+        constants: true,
+        cache_fields: true,
+        cache_upvalues: true,
+        numeric_loops: true,
+        table_insert: true,
+        hoist_closures: true,
+    }
 }
 
 #[cfg(test)]

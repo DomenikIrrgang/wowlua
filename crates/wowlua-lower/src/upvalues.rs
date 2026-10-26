@@ -207,6 +207,7 @@ fn registry_read(import: &ImportLocal, pos: Pos) -> ir::Expr {
     let key = ir::Expr::new(ir::ExprKind::String(id.into()), pos);
     let table = ir::Expr::new(
         ir::ExprKind::Index {
+            facts: Default::default(),
             obj: Box::new(modules),
             key: Box::new(key),
         },

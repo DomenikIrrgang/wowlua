@@ -202,6 +202,32 @@ pub struct Optimizations {
     pub dead_code: bool,
     pub inline: bool,
     pub cache_globals: bool,
+    /// Those of §15.2.3; compiled files only, plain Lua stays as it is.
+    pub shaping: wowlua_luair::optimize::Shaping,
+}
+
+impl Optimizations {
+    /// A profile's, for a file compiled from wowlua (`compiled`) or a plain
+    /// Lua file.
+    pub fn of(o: &wowlua_manifest::profile::Optimize, compiled: bool) -> Optimizations {
+        Optimizations {
+            dead_code: o.dead_code,
+            inline: o.inline,
+            cache_globals: o.cache_globals == wowlua_manifest::model::CacheGlobals::Safe,
+            shaping: if compiled {
+                wowlua_luair::optimize::Shaping {
+                    constants: o.constants,
+                    cache_fields: o.cache_fields,
+                    cache_upvalues: o.cache_upvalues,
+                    numeric_loops: o.numeric_loops,
+                    table_insert: o.table_insert,
+                    hoist_closures: o.hoist_closures,
+                }
+            } else {
+                Default::default()
+            },
+        }
+    }
 }
 
 /// A chunk optimized, minified and emitted.
@@ -221,8 +247,9 @@ pub struct Optimized {
 
 /// Optimizes, minifies and emits `chunk`. When that breaks a Lua 5.1 limit
 /// (registers, locals, upvalues, constants) that the code without
-/// `dedupe-strings`, `cache-globals` and `inline` keeps, those are left out:
-/// optimization never creates a limit error (spec optimization §15.2.2).
+/// `dedupe-strings`, `cache-globals`, `inline` and the optimizations that
+/// add locals keeps, those are left out: optimization never creates a
+/// limit error (spec optimization §15.2.2).
 pub fn optimize_and_emit(
     chunk: wowlua_luair::ir::Chunk,
     optimizations: &Optimizations,
@@ -234,9 +261,16 @@ pub fn optimize_and_emit(
             wowlua_luair::optimize::remove_dead_locals(&mut chunk);
         }
         let mut not_inlined = Vec::new();
+        let preserve = options.line_mode == LineMode::Preserve;
         if optimizations.inline && !reduced {
-            not_inlined = wowlua_luair::optimize::inline(&mut chunk);
+            not_inlined = wowlua_luair::optimize::inline_with(&mut chunk, !preserve);
         }
+        let shaping = if reduced {
+            optimizations.shaping.without_new_locals()
+        } else {
+            optimizations.shaping
+        };
+        wowlua_luair::optimize::shape(&mut chunk, &shaping, preserve);
         if optimizations.cache_globals && !reduced {
             wowlua_luair::optimize::cache_globals(&mut chunk);
         }
@@ -253,7 +287,10 @@ pub fn optimize_and_emit(
             compiles: false,
         }
     };
-    let grows = optimizations.inline || optimizations.cache_globals || passes.dedupe_strings;
+    let grows = optimizations.inline
+        || optimizations.cache_globals
+        || passes.dedupe_strings
+        || optimizations.shaping.without_new_locals() != optimizations.shaping;
     if !grows {
         return run(chunk, false);
     }
@@ -1615,7 +1652,7 @@ pub fn compile_flavor(
                     diagnostics.push(
                         Diagnostic::warning(
                             "W3031",
-                            "`@inline` is ignored: only local functions and private methods with a single `return` expression are inlined",
+                            "`@inline` is ignored: only local functions and private methods are inlined",
                         )
                         .with_label(name.span(), "not a local function"),
                     );
@@ -1627,7 +1664,7 @@ pub fn compile_flavor(
                     diagnostics.push(
                         Diagnostic::warning(
                             "W3031",
-                            "`@inline` is ignored: only local functions and private methods with a single `return` expression are inlined",
+                            "`@inline` is ignored: only local functions and private methods are inlined",
                         )
                         .with_label(inner.span(), "not a local function"),
                     );
@@ -1646,7 +1683,7 @@ pub fn compile_flavor(
                                 diagnostics.push(
                                     Diagnostic::warning(
                                         "W3031",
-                                        "`@inline` is ignored: its body is not a single `return` expression",
+                                        "`@inline` is ignored: its body is neither a single `return` expression nor statements without an early `return`",
                                     )
                                     .with_label(name.span(), "not inlined"),
                                 );
@@ -1656,7 +1693,7 @@ pub fn compile_flavor(
                         diagnostics.push(
                             Diagnostic::warning(
                                 "W3031",
-                                "`@inline` is ignored: only local functions and private methods with a single `return` expression are inlined",
+                                "`@inline` is ignored: only local functions and private methods are inlined",
                             )
                             .with_label(m.span(), "not a private method"),
                         );
@@ -1677,12 +1714,7 @@ pub fn compile_flavor(
         wowlua_luair::deep::run(|| {
             let optimized = optimize_and_emit(
                 chunk,
-                &Optimizations {
-                    dead_code: profile.optimize.dead_code,
-                    inline: profile.optimize.inline,
-                    cache_globals: profile.optimize.cache_globals
-                        == wowlua_manifest::model::CacheGlobals::Safe,
-                },
+                &Optimizations::of(&profile.optimize, source.kind == SourceKind::Wowlua),
                 &minify.passes,
                 &options,
             );
@@ -1692,9 +1724,18 @@ pub fn compile_flavor(
                     continue;
                 };
                 let why = match why {
-                    NotInlined::NotAnExpression => "its body is not a single `return` expression",
+                    NotInlined::NotAnExpression => {
+                        "its body is neither a single `return` expression nor statements without an early `return`"
+                    }
                     NotInlined::Recursive => "it is recursive",
                     NotInlined::Escapes => "it is used other than by calling it",
+                    NotInlined::TooLarge => "its body is too long to copy to every call",
+                    NotInlined::Stack => {
+                        "it uses levels of the call stack (`setfenv`, `getfenv`, `error` with a level, `debugstack`)"
+                    }
+                    NotInlined::ValueUsed => {
+                        "its body is statements, and no call of it is a statement of its own (or the build keeps lines)"
+                    }
                 };
                 diagnostics.push(
                     Diagnostic::warning("W3031", format!("`@inline` is ignored: {why}"))
@@ -1704,7 +1745,7 @@ pub fn compile_flavor(
             if optimized.reduced {
                 diagnostics.push(
                 Diagnostic::note(
-                    "`dedupe-strings`, `cache-globals` and `inline` are left out for this file: with them it would exceed a Lua 5.1 limit",
+                    "`dedupe-strings`, `cache-globals`, `inline` and the optimizations that add locals are left out for this file: with them it would exceed a Lua 5.1 limit",
                 )
                 .with_path(&source.rel),
             );

@@ -681,6 +681,26 @@ pub struct OptimizeSettings {
     pub cache_globals: Option<CacheGlobals>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dead_code: Option<bool>,
+    /// Locals assigned once with a constant become the constant
+    /// (Optimization §15.2.3).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub constants: Option<bool>,
+    /// Field reads of plain tables read once into a local: out of loops
+    /// they do not change in, and repeated ones in a stretch of code.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_fields: Option<bool>,
+    /// Upvalues read often in a function copied into locals.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub cache_upvalues: Option<bool>,
+    /// `ipairs` loops over plain arrays become numeric loops.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub numeric_loops: Option<bool>,
+    /// `table.insert(t, v)` on a plain table becomes `t[#t + 1] = v`.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub table_insert: Option<bool>,
+    /// Closures that capture nothing from a loop are made once, before it.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hoist_closures: Option<bool>,
 }
 
 /// Settings of one profile as written in the manifest. Unset values are

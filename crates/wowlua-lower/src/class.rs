@@ -182,6 +182,7 @@ impl<'a> Lowerer<'a> {
         } else {
             ir::Expr::new(
                 ir::ExprKind::Index {
+                    facts: Default::default(),
                     obj: Box::new(g),
                     key: Box::new(self.string(name, pos)),
                 },
@@ -604,7 +605,43 @@ impl<'a> Lowerer<'a> {
         };
         let mut why = None;
         if values.len() != 1 {
-            why = Some("its body is not a single `return` expression");
+            // Statements (the checker's `inline_shape` let them through):
+            // inlined where a call is a statement of its own.
+            let mut body = method.body.clone();
+            wowlua_luair::optimize::clear_block_positions(&mut body);
+            let mut recursive = false;
+            let mut probe = ir::Chunk {
+                block: body.clone(),
+                comments: Vec::new(),
+            };
+            struct Names<'h>(&'h str, &'h mut bool);
+            impl wowlua_luair::scope::Visitor for Names<'_> {
+                fn ident(&mut self, id: &mut ir::Ident, _use: wowlua_luair::scope::Use) {
+                    if id.name.as_str() == self.0 {
+                        *self.1 = true;
+                    }
+                }
+            }
+            wowlua_luair::scope::walk(&mut probe, &mut Names(helper, &mut recursive));
+            if recursive {
+                self.warnings.push(
+                    Diagnostic::warning("W3031", "`@inline` is ignored: it is recursive")
+                        .with_label(name.span(), "not inlined"),
+                );
+            }
+            let func = ir::Func {
+                pos: Pos::NONE,
+                params,
+                vararg: false,
+                body,
+            };
+            return stmt(
+                ir::StmtKind::LocalFunction {
+                    name: generated(helper, pos),
+                    func,
+                },
+                pos,
+            );
         }
         for v in &mut values {
             wowlua_luair::optimize::clear_positions(v);
@@ -631,7 +668,9 @@ impl<'a> Lowerer<'a> {
             };
             wowlua_luair::scope::walk_expr(v, &mut probe);
             if probe.function {
-                why = why.or(Some("its body is not a single `return` expression"));
+                why = why.or(Some(
+                    "its body is neither a single `return` expression nor statements without an early `return`",
+                ));
             }
             if probe.recursive {
                 why = why.or(Some("it is recursive"));
@@ -1374,7 +1413,7 @@ fn enum_value_uses(parse: &Parse) -> HashSet<String> {
                 member_objects.insert(n.span().start);
             }
         }
-        ExprKind::Index { obj, key } if matches!(key.kind(), ExprKind::String(_)) => {
+        ExprKind::Index { obj, key, .. } if matches!(key.kind(), ExprKind::String(_)) => {
             if let ExprKind::Name(n) = obj.kind() {
                 member_objects.insert(n.span().start);
             }

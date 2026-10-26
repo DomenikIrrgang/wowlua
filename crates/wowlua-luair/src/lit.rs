@@ -5,18 +5,19 @@
 use std::fmt;
 use std::ops::Deref;
 
-/// Bytes stored inline up to [`Bytes::INLINE`], else on the heap, and a
-/// flag of their owner's (an identifier's `generated`) in the room left.
-/// The same size as a `Vec<u8>`.
+/// Bytes stored inline up to [`Bytes::INLINE`], else on the heap, and
+/// flags of their owner's (an identifier's `generated` and the checker's
+/// facts, [`crate::ir::Facts`]) in the room left. The same size as a
+/// `Vec<u8>`.
 #[derive(Clone)]
 enum Bytes {
     Inline {
         len: u8,
-        flag: bool,
+        flags: u8,
         bytes: [u8; Bytes::INLINE],
     },
     Heap {
-        flag: bool,
+        flags: u8,
         bytes: Box<[u8]>,
     },
 }
@@ -30,12 +31,12 @@ impl Bytes {
             inline[..bytes.len()].copy_from_slice(bytes);
             Bytes::Inline {
                 len: bytes.len() as u8,
-                flag: false,
+                flags: 0,
                 bytes: inline,
             }
         } else {
             Bytes::Heap {
-                flag: false,
+                flags: 0,
                 bytes: bytes.into(),
             }
         }
@@ -48,15 +49,15 @@ impl Bytes {
         }
     }
 
-    fn flag(&self) -> bool {
+    fn flags(&self) -> u8 {
         match self {
-            Bytes::Inline { flag, .. } | Bytes::Heap { flag, .. } => *flag,
+            Bytes::Inline { flags, .. } | Bytes::Heap { flags, .. } => *flags,
         }
     }
 
-    fn set_flag(&mut self, to: bool) {
+    fn set_flags(&mut self, to: u8) {
         match self {
-            Bytes::Inline { flag, .. } | Bytes::Heap { flag, .. } => *flag = to,
+            Bytes::Inline { flags, .. } | Bytes::Heap { flags, .. } => *flags = to,
         }
     }
 }
@@ -123,11 +124,21 @@ impl Name {
     /// The identifier's `generated` flag, kept here to keep `Ident` at 32
     /// bytes. Not part of the name: comparing and hashing leave it out.
     pub(crate) fn flag(&self) -> bool {
-        self.0.flag()
+        self.0.flags() & 1 != 0
     }
 
     pub(crate) fn set_flag(&mut self, to: bool) {
-        self.0.set_flag(to);
+        self.0.set_flags((self.0.flags() & !1) | u8::from(to));
+    }
+
+    /// The identifier's facts ([`crate::ir::Facts`]), beside the flag;
+    /// not part of the name either.
+    pub(crate) fn facts(&self) -> u8 {
+        self.0.flags() >> 1
+    }
+
+    pub(crate) fn set_facts(&mut self, facts: u8) {
+        self.0.set_flags((self.0.flags() & 1) | (facts << 1));
     }
 }
 

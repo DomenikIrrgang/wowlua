@@ -238,6 +238,9 @@ pub struct Checker<'e, 'p> {
     pub inline_calls: FxHashMap<wowlua_span::Span, wowlua_span::Span>,
     /// Classes whose instances or class tables this file stores in globals.
     pub global_classes: FxHashSet<DefId>,
+    /// Some class of the package has accessors or an `__index` or
+    /// `__newindex` metamethod (`super::fast`): known once asked.
+    pub(crate) accessor_classes: Option<bool>,
     reassigned: FxHashSet<u32>,
     pub(crate) assigned_in_closures: FxHashSet<u32>,
     /// Locals assigned after their declaration (anywhere).
@@ -457,6 +460,7 @@ impl<'e, 'p> Checker<'e, 'p> {
             private_methods: FxHashMap::default(),
             inline_calls: FxHashMap::default(),
             global_classes: FxHashSet::default(),
+            accessor_classes: None,
             reassigned,
             assigned_in_closures,
             assigned_later,

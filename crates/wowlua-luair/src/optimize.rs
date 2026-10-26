@@ -7,6 +7,193 @@ use crate::minify::{LOCALS_BUDGET, UPVALUES_BUDGET};
 use crate::scope::{Ref, Resolution, Use, Visitor, ident_count, resolve, walk};
 use std::collections::{BTreeMap, BTreeSet, HashMap};
 
+mod constants;
+mod fields;
+mod globals;
+mod loops;
+mod names;
+mod upvalues;
+mod walk;
+use self::walk as optimize_walk;
+
+/// The optimizations that shape code for Lua 5.1's compiler (spec
+/// optimization §15.2.3): each where its preconditions hold, those that
+/// need types where the checker proved them ([`Facts`]).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Shaping {
+    pub constants: bool,
+    pub cache_fields: bool,
+    pub cache_upvalues: bool,
+    pub numeric_loops: bool,
+    pub table_insert: bool,
+    pub hoist_closures: bool,
+}
+
+impl Shaping {
+    pub fn any(&self) -> bool {
+        *self != Shaping::default()
+    }
+
+    /// Those that add locals (left out, with `inline`, `cache-globals` and
+    /// `dedupe-strings`, when a file would exceed a Lua 5.1 limit; spec
+    /// optimization §15.2.2).
+    pub fn without_new_locals(self) -> Shaping {
+        Shaping {
+            cache_fields: false,
+            cache_upvalues: false,
+            numeric_loops: false,
+            hoist_closures: false,
+            ..self
+        }
+    }
+}
+
+/// Runs the shaping optimizations of `opts` on a chunk. `preserve`: the
+/// output keeps the line of every instruction (`line-mode` `preserve`), so
+/// closures stay where they are.
+pub fn shape(chunk: &mut Chunk, opts: &Shaping, preserve: bool) {
+    if !opts.any() {
+        return;
+    }
+    let mut unique = names::uniquify(chunk);
+    let g = globals::Globals::of(chunk);
+    if opts.constants {
+        constants::propagate(chunk);
+    }
+    if opts.numeric_loops {
+        loops::numeric_loops(chunk, &g, &mut unique);
+    }
+    if opts.table_insert {
+        loops::table_insert(chunk, &g);
+    }
+    if opts.cache_fields {
+        fields::cache_fields(chunk, &g, &mut unique);
+    }
+    if opts.hoist_closures && !preserve {
+        loops::hoist_closures(chunk, &g, &mut unique);
+    }
+    if opts.cache_upvalues {
+        upvalues::cache_upvalues(chunk, &mut unique);
+    }
+    unique.restore(chunk);
+    crate::hygiene::apply(chunk);
+}
+
+/// The positions of the names that are not variables: fields, methods and
+/// table keys.
+fn clear_names(e: &mut Expr) {
+    match &mut e.kind {
+        ExprKind::Field { name, .. } => name.pos = Pos::NONE,
+        ExprKind::Method { name, .. } => name.pos = Pos::NONE,
+        ExprKind::Table { fields, .. } => {
+            for f in fields {
+                match f {
+                    Field::Named { name, .. } => name.pos = Pos::NONE,
+                    Field::Keyed { open, .. } => *open = Pos::NONE,
+                    Field::Positional(_) => {}
+                }
+            }
+        }
+        _ => {}
+    }
+}
+
+/// Where an inlined call statement goes, until the inliner's walk is done:
+/// an empty block, told apart by its end.
+fn inlined_placeholder(index: usize) -> Stmt {
+    Stmt {
+        pos: Pos::NONE,
+        kind: StmtKind::Do(Block {
+            stmts: Vec::new(),
+            end: Pos::new(u32::MAX, index as u32),
+        }),
+    }
+}
+
+/// Puts the inlined call statements in their placeholders.
+fn fill_inlined(b: &mut Block, stmts: &mut [Option<Stmt>]) {
+    optimize_walk::each_block(b, &mut |b| {
+        for s in &mut b.stmts {
+            if let StmtKind::Do(inner) = &s.kind
+                && inner.stmts.is_empty()
+                && inner.end.line == u32::MAX
+                && let Some(new) = stmts.get_mut(inner.end.col as usize).and_then(Option::take)
+            {
+                *s = new;
+            }
+        }
+    });
+}
+
+/// A block without positions (inlined statements, generated helpers).
+pub fn clear_block_positions(b: &mut Block) {
+    struct Clear;
+    impl Visitor for Clear {
+        fn stmt(&mut self, s: &mut Stmt) {
+            s.pos = Pos::NONE;
+            match &mut s.kind {
+                StmtKind::While { do_pos, .. }
+                | StmtKind::NumericFor { do_pos, .. }
+                | StmtKind::GenericFor { do_pos, .. } => *do_pos = Pos::NONE,
+                StmtKind::If { clauses, .. } => {
+                    for c in clauses {
+                        c.then_pos = Pos::NONE;
+                    }
+                }
+                StmtKind::Function { path, method, func } => {
+                    for p in path {
+                        p.pos = Pos::NONE;
+                    }
+                    if let Some(m) = method {
+                        m.pos = Pos::NONE;
+                    }
+                    func.pos = Pos::NONE;
+                }
+                StmtKind::LocalFunction { func, .. } => func.pos = Pos::NONE,
+                _ => {}
+            }
+            for inner in optimize_walk::inner_blocks(s) {
+                inner.end = Pos::NONE;
+            }
+            if let Some(f) = optimize_walk::declared_function(s) {
+                f.body.end = Pos::NONE;
+            }
+        }
+        fn expr(&mut self, e: &mut Expr) {
+            e.pos = Pos::NONE;
+            e.sep = Pos::NONE;
+            clear_names(e);
+            match &mut e.kind {
+                ExprKind::Binary { op_pos, .. } => *op_pos = Pos::NONE,
+                ExprKind::Paren { close, .. } | ExprKind::Table { close, .. } => *close = Pos::NONE,
+                ExprKind::Call {
+                    args: Args::Parens { close, .. },
+                    ..
+                }
+                | ExprKind::Method {
+                    args: Args::Parens { close, .. },
+                    ..
+                } => *close = Pos::NONE,
+                ExprKind::Function(f) => {
+                    f.pos = Pos::NONE;
+                    f.body.end = Pos::NONE;
+                }
+                _ => {}
+            }
+        }
+        fn ident(&mut self, id: &mut Ident, _use: Use) {
+            id.pos = Pos::NONE;
+        }
+    }
+    b.end = Pos::NONE;
+    let mut c = Chunk {
+        block: std::mem::take(b),
+        comments: Vec::new(),
+    };
+    walk(&mut c, &mut Clear);
+    *b = c.block;
+}
+
 /// Lua 5.1's base functions, WoW's Lua aliases and the standard library
 /// tables: the names `cache-globals: "safe"` may hoist (decision T162).
 /// `print`, the environment functions and every other WoW API stay global,
@@ -544,18 +731,68 @@ fn blocks_of(s: &mut Stmt) -> Vec<&mut Block> {
 /// Why a local function was not inlined (for W3031 on `@inline` ones).
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum NotInlined {
-    /// Its body is not a single `return <expression>` without functions
-    /// or `...`, or it takes `...`.
+    /// Its body is neither a single `return <expression>` without
+    /// functions or `...` nor statements without `return` (but a last one
+    /// without values) or `...`, or it takes `...`.
     NotAnExpression,
     Recursive,
     /// Assigned, or used other than by calling it.
     Escapes,
+    /// Statements: longer than [`STATEMENT_LIMIT`], and called more than
+    /// once.
+    TooLarge,
+    /// Statements, but every call of it uses its value (or the build keeps
+    /// lines, `line-mode` `preserve`).
+    ValueUsed,
+    /// It reads or sets the call stack by level (`setfenv`, `getfenv`,
+    /// `error(…, level)`, `debugstack`, `debuglocals`, `debug.*`), which
+    /// inlining would shift.
+    Stack,
 }
+
+/// `f` reads or sets the call stack by level ([`NotInlined::Stack`]).
+fn uses_stack(f: &Func) -> bool {
+    let mut found = false;
+    let mut body = f.body.clone();
+    optimize_walk::each_expr_in_block(&mut body, false, &mut |e| {
+        let ExprKind::Call { callee, args } = &e.kind else {
+            return;
+        };
+        let n_args = match args {
+            Args::Parens { args, .. } => args.len(),
+            _ => 1,
+        };
+        found |= match &callee.kind {
+            ExprKind::Name(n) => match n.name.as_str() {
+                "setfenv" | "getfenv" | "debugstack" | "debuglocals" => true,
+                "error" => n_args >= 2,
+                _ => false,
+            },
+            ExprKind::Field { obj, .. } => {
+                matches!(&obj.kind, ExprKind::Name(d) if d.name == "debug")
+            }
+            _ => false,
+        };
+    });
+    found
+}
+
+/// Statement bodies longer than this (counting nested statements) are
+/// inlined only where they are called once.
+pub const STATEMENT_LIMIT: usize = 12;
 
 /// An inlinable local function.
 struct Helper {
     params: Vec<usize>,
+    /// The body: an expression (`return <expression>`), or statements.
     body: Expr,
+    stmts: Option<Vec<Stmt>>,
+    /// The parameters, as declared (statement bodies declare them).
+    param_names: Vec<Ident>,
+    /// The locals the body declares (statement bodies).
+    declared: BTreeSet<usize>,
+    /// The most locals active at once in the body.
+    locals: usize,
     /// The references of the body's names, in walk order.
     refs: Vec<Ref>,
 }
@@ -568,6 +805,7 @@ pub fn clear_positions(e: &mut Expr) {
         fn expr(&mut self, e: &mut Expr) {
             e.pos = Pos::NONE;
             e.sep = Pos::NONE;
+            clear_names(e);
             match &mut e.kind {
                 ExprKind::Binary { op_pos, .. } => *op_pos = Pos::NONE,
                 ExprKind::Paren { close, .. } | ExprKind::Table { close, .. } => *close = Pos::NONE,
@@ -612,16 +850,69 @@ fn single_return(func: &Func) -> Option<&Expr> {
     clean.then_some(e)
 }
 
+/// The statements of a local function's body, if they can be inlined at a
+/// call statement: no `...`, no `return` but a last one without values.
+fn statement_body(func: &Func) -> Option<Vec<Stmt>> {
+    if func.vararg {
+        return None;
+    }
+    let mut stmts = func.body.stmts.clone();
+    if matches!(stmts.last(), Some(Stmt { kind: StmtKind::Return(v), .. }) if v.is_empty()) {
+        stmts.pop();
+    }
+    fn clean(b: &[Stmt]) -> bool {
+        b.iter().all(|s| {
+            let mut s = s.clone();
+            if matches!(s.kind, StmtKind::Return(_)) {
+                return false;
+            }
+            let mut ok = true;
+            for e in optimize_walk::own_exprs(&mut s) {
+                optimize_walk::each_expr(e, false, &mut |e| {
+                    if matches!(e.kind, ExprKind::Vararg) {
+                        ok = false;
+                    }
+                });
+            }
+            ok && optimize_walk::inner_blocks(&mut s)
+                .into_iter()
+                .all(|b| clean(&b.stmts))
+        })
+    }
+    clean(&stmts).then_some(stmts)
+}
+
+/// Statements in `b`, nested ones included.
+fn statement_count(b: &[Stmt]) -> usize {
+    b.iter()
+        .map(|s| {
+            let mut s = s.clone();
+            1 + optimize_walk::inner_blocks(&mut s)
+                .into_iter()
+                .map(|b| statement_count(&b.stmts))
+                .sum::<usize>()
+        })
+        .sum()
+}
+
 /// `optimize.inline` (spec §15.2): calls of local functions whose body is a
 /// single `return <expression>` become that expression, when the function
 /// is not recursive, never assigned and only called, the arguments have no
 /// side effects (literals and locals) and the body's names mean the same at
-/// the call. A function whose calls were all inlined goes. Returns the
-/// position of every local function not inlined, and why.
+/// the call; call statements of local functions whose body is statements
+/// become a `do` block that declares the parameters with the arguments and
+/// runs the body (unless `statements` is off: `line-mode` `preserve`). A
+/// function whose calls were all inlined goes. Returns the position of
+/// every local function not inlined, and why.
 pub fn inline(chunk: &mut Chunk) -> Vec<(Pos, NotInlined)> {
+    inline_with(chunk, true)
+}
+
+/// [`inline`], with or without statement bodies.
+pub fn inline_with(chunk: &mut Chunk, statements: bool) -> Vec<(Pos, NotInlined)> {
     let mut skipped = Vec::new();
     for round in 0..4 {
-        let (inlined, reasons) = inline_round(chunk);
+        let (inlined, reasons) = inline_round(chunk, statements);
         if round == 0 {
             skipped = reasons;
         }
@@ -632,21 +923,30 @@ pub fn inline(chunk: &mut Chunk) -> Vec<(Pos, NotInlined)> {
     skipped
 }
 
-fn inline_round(chunk: &mut Chunk) -> (bool, Vec<(Pos, NotInlined)>) {
+fn inline_round(chunk: &mut Chunk, statements: bool) -> (bool, Vec<(Pos, NotInlined)>) {
     let res = resolve(chunk);
     // How often each local is called (as `f(…)`).
     struct Calls<'a> {
         res: &'a Resolution,
         next: usize,
         calls: HashMap<usize, u32>,
+        stmt_calls: HashMap<usize, u32>,
+        statement: bool,
     }
     impl Visitor for Calls<'_> {
+        fn stmt(&mut self, s: &mut Stmt) {
+            self.statement = matches!(s.kind, StmtKind::Call(_));
+        }
         fn expr(&mut self, e: &mut Expr) {
+            let statement = std::mem::take(&mut self.statement);
             if let ExprKind::Call { callee, .. } = &e.kind
                 && matches!(callee.kind, ExprKind::Name(_))
                 && let Some(Ref::Local(b)) = self.res.occurrences.get(self.next)
             {
                 *self.calls.entry(*b).or_default() += 1;
+                if statement {
+                    *self.stmt_calls.entry(*b).or_default() += 1;
+                }
             }
         }
         fn ident(&mut self, _id: &mut Ident, _use: Use) {
@@ -657,8 +957,11 @@ fn inline_round(chunk: &mut Chunk) -> (bool, Vec<(Pos, NotInlined)>) {
         res: &res,
         next: 0,
         calls: HashMap::new(),
+        stmt_calls: HashMap::new(),
+        statement: false,
     };
     walk(chunk, &mut calls);
+    let stmt_calls = calls.stmt_calls;
     let calls = calls.calls;
 
     struct Inliner<'a> {
@@ -677,6 +980,12 @@ fn inline_round(chunk: &mut Chunk) -> (bool, Vec<(Pos, NotInlined)>) {
         reasons: Vec<(Pos, NotInlined)>,
         /// The next expression is a call statement, which must stay a call.
         statement: bool,
+        /// Statement bodies are inlined.
+        statements: bool,
+        /// Call statements of each local.
+        stmt_calls: &'a HashMap<usize, u32>,
+        /// Inlined call statements, by their placeholder's number.
+        inlined_stmts: Vec<Option<Stmt>>,
     }
     impl Inliner<'_> {
         fn binding(&self, occurrence: usize) -> Option<usize> {
@@ -694,8 +1003,167 @@ fn inline_round(chunk: &mut Chunk) -> (bool, Vec<(Pos, NotInlined)>) {
                 .find(|&b| self.res.bindings[b].name == name)
         }
     }
+    impl Inliner<'_> {
+        /// The body's free names mean the same here, and the function
+        /// the call is in has room for what it captures: the captured
+        /// locals that are new to it.
+        fn fits(
+            &mut self,
+            helper_refs: &[Ref],
+            body_names: &[String],
+            own: &dyn Fn(usize) -> bool,
+        ) -> Option<usize> {
+            let current = *self.functions.last().expect("in a function");
+            let mut captures: BTreeSet<usize> = BTreeSet::new();
+            for (r, name) in helper_refs.iter().zip(body_names) {
+                match r {
+                    Ref::Local(p) if own(*p) => {}
+                    Ref::Local(x) => {
+                        if self.visible(name) != Some(*x) {
+                            return None;
+                        }
+                        if self.res.bindings[*x].function != current {
+                            captures.insert(*x);
+                        }
+                    }
+                    Ref::Global => {
+                        if self.visible(name).is_some() {
+                            return None;
+                        }
+                    }
+                }
+            }
+            let new = captures
+                .iter()
+                .filter(|x| !self.res.functions[current].upvalues.contains(x))
+                .count();
+            if current != 0
+                && self.res.functions[current].upvalues.len()
+                    + self.added.get(&current).copied().unwrap_or(0)
+                    + new
+                    > UPVALUES_BUDGET
+            {
+                return None;
+            }
+            Some(new)
+        }
+
+        /// A call statement of a local function whose body is statements:
+        /// `do local <params> = <args> <body> end`.
+        fn inline_statement(&mut self, s: &mut Stmt) -> bool {
+            let StmtKind::Call(call) = &s.kind else {
+                return false;
+            };
+            let ExprKind::Call { callee, args } = &call.kind else {
+                return false;
+            };
+            if !matches!(callee.kind, ExprKind::Name(_)) {
+                return false;
+            }
+            let Some(b) = self.binding(self.next) else {
+                return false;
+            };
+            let Some(helper) = self.helpers.get(&b) else {
+                return false;
+            };
+            let Some(stmts) = helper.stmts.clone() else {
+                return false;
+            };
+            let mut args: Vec<Expr> = match args {
+                Args::Parens { args, .. } => args.clone(),
+                Args::String(s) => vec![(**s).clone()],
+                Args::Table(t) => vec![(**t).clone()],
+            };
+            // Arguments past the parameters are evaluated by the call:
+            // dropped only when that does nothing.
+            if args.len() > helper.params.len()
+                && !args[helper.params.len()..].iter().all(|a| {
+                    matches!(
+                        a.kind,
+                        ExprKind::Nil
+                            | ExprKind::True
+                            | ExprKind::False
+                            | ExprKind::Number(_)
+                            | ExprKind::String(_)
+                            | ExprKind::Name(_)
+                    )
+                })
+            {
+                return false;
+            }
+            args.truncate(helper.params.len());
+            let mut body_names: Vec<String> = Vec::new();
+            {
+                let mut probe = Block {
+                    stmts: stmts.clone(),
+                    end: Pos::NONE,
+                };
+                optimize_walk::each_name_in_block(&mut probe, &mut |id| {
+                    body_names.push(id.name.to_string())
+                });
+            }
+            let refs = helper.refs.clone();
+            let params = helper.params.clone();
+            let declared = helper.declared.clone();
+            let own = |p: usize| params.contains(&p) || declared.contains(&p);
+            let current = *self.functions.last().expect("in a function");
+            let locals = helper.locals + helper.param_names.len();
+            if self.res.functions[current].max_locals + locals > LOCALS_BUDGET {
+                return false;
+            }
+            let Some(new) = self.fits(&refs, &body_names, &own) else {
+                return false;
+            };
+            *self.added.entry(current).or_default() += new;
+            let helper = self.helpers.get(&b).expect("found above");
+            let pos = s.pos;
+            let mut names = helper.param_names.clone();
+            for n in &mut names {
+                n.pos = Pos::NONE;
+            }
+            for a in &mut args {
+                a.sep = Pos::NONE;
+            }
+            let mut body: Vec<Stmt> = Vec::with_capacity(stmts.len() + 1);
+            if !names.is_empty() {
+                body.push(Stmt {
+                    pos,
+                    kind: StmtKind::Local {
+                        names,
+                        values: args,
+                    },
+                });
+            }
+            // The body keeps its positions: no build that inlines statements
+            // keeps lines, so they only map the code to its source (an
+            // error in it points at the line in the function).
+            body.extend(stmts);
+            let new = Stmt {
+                pos,
+                kind: StmtKind::Do(Block {
+                    stmts: body,
+                    end: Pos::NONE,
+                }),
+            };
+            // The walk goes on over an empty placeholder: the inlined code
+            // takes its place once the walk is done, so its names and
+            // functions are not counted against the resolution.
+            let index = self.inlined_stmts.len();
+            self.inlined_stmts.push(Some(new));
+            let mut old = std::mem::replace(s, inlined_placeholder(index));
+            self.next += crate::scope::stmt_ident_count(&mut old);
+            *self.inlined.entry(b).or_default() += 1;
+            true
+        }
+    }
     impl Visitor for Inliner<'_> {
         fn stmt(&mut self, s: &mut Stmt) {
+            if self.skip > 0 {
+                return;
+            }
+            if self.statements && self.inline_statement(s) {
+                return;
+            }
             if matches!(s.kind, StmtKind::Call(_)) {
                 self.statement = true;
             }
@@ -705,18 +1173,42 @@ fn inline_round(chunk: &mut Chunk) -> (bool, Vec<(Pos, NotInlined)>) {
             let Some(b) = self.binding(self.next) else {
                 return;
             };
-            let Some(body) = single_return(func) else {
+            if uses_stack(func) {
+                self.reasons.push((name.pos, NotInlined::Stack));
+                return;
+            }
+            let expression = single_return(func);
+            let statements_body = if expression.is_none() {
+                statement_body(func)
+            } else {
+                None
+            };
+            if expression.is_none() && statements_body.is_none() {
                 self.reasons.push((name.pos, NotInlined::NotAnExpression));
                 return;
-            };
+            }
             let binding = &self.res.bindings[b];
             let params_start = self.next + 1;
             let params: Vec<usize> = (0..func.params.len())
                 .filter_map(|i| self.binding(params_start + i))
                 .collect();
             let body_start = params_start + func.params.len();
-            let mut body = body.clone();
-            let count = ident_count(&mut body);
+            let (body, count) = match expression {
+                Some(body) => {
+                    let mut body = body.clone();
+                    let count = ident_count(&mut body);
+                    (body, count)
+                }
+                None => {
+                    let mut b = Block {
+                        stmts: statements_body.clone().expect("statements"),
+                        end: Pos::NONE,
+                    };
+                    let mut count = 0;
+                    optimize_walk::each_name_in_block(&mut b, &mut |_| count += 1);
+                    (Expr::new(ExprKind::Nil, Pos::NONE), count)
+                }
+            };
             let refs: Vec<Ref> = self.res.occurrences[body_start..body_start + count].to_vec();
             if refs.contains(&Ref::Local(b)) {
                 self.reasons.push((name.pos, NotInlined::Recursive));
@@ -727,7 +1219,70 @@ fn inline_round(chunk: &mut Chunk) -> (bool, Vec<(Pos, NotInlined)>) {
                 self.reasons.push((name.pos, NotInlined::Escapes));
                 return;
             }
-            self.helpers.insert(b, Helper { params, body, refs });
+            let mut declared = BTreeSet::new();
+            let mut locals = 0;
+            if let Some(stmts) = &statements_body {
+                let stmt_calls = self.stmt_calls.get(&b).copied().unwrap_or(0);
+                if !self.statements || stmt_calls == 0 {
+                    self.reasons.push((name.pos, NotInlined::ValueUsed));
+                    return;
+                }
+                if called > 1 && statement_count(stmts) > STATEMENT_LIMIT {
+                    self.reasons.push((name.pos, NotInlined::TooLarge));
+                    return;
+                }
+                // The locals the body declares (with its functions').
+                let mut b = Block {
+                    stmts: stmts.clone(),
+                    end: Pos::NONE,
+                };
+                struct Decl<'r> {
+                    refs: &'r [Ref],
+                    next: usize,
+                    out: &'r mut BTreeSet<usize>,
+                }
+                impl Visitor for Decl<'_> {
+                    fn ident(&mut self, _id: &mut Ident, use_: Use) {
+                        if use_ == Use::Declare
+                            && let Some(Ref::Local(x)) = self.refs.get(self.next)
+                        {
+                            self.out.insert(*x);
+                        }
+                        self.next += 1;
+                    }
+                }
+                let mut c = Chunk {
+                    block: std::mem::take(&mut b),
+                    comments: Vec::new(),
+                };
+                walk(
+                    &mut c,
+                    &mut Decl {
+                        refs: &refs,
+                        next: 0,
+                        out: &mut declared,
+                    },
+                );
+                let f = Func {
+                    pos: Pos::NONE,
+                    params: Vec::new(),
+                    vararg: false,
+                    body: c.block,
+                };
+                locals = optimize_walk::max_locals(&f, false);
+            }
+            self.helpers.insert(
+                b,
+                Helper {
+                    params,
+                    body,
+                    stmts: statements_body,
+                    param_names: func.params.clone(),
+                    declared,
+                    locals,
+                    refs,
+                },
+            );
         }
 
         fn expr(&mut self, e: &mut Expr) {
@@ -746,6 +1301,9 @@ fn inline_round(chunk: &mut Chunk) -> (bool, Vec<(Pos, NotInlined)>) {
             let Some(helper) = self.helpers.get(&b) else {
                 return;
             };
+            if helper.stmts.is_some() {
+                return;
+            }
             let args: Vec<Expr> = match args {
                 Args::Parens { args, .. } => args.clone(),
                 Args::String(s) => vec![(**s).clone()],
@@ -917,8 +1475,15 @@ fn inline_round(chunk: &mut Chunk) -> (bool, Vec<(Pos, NotInlined)>) {
         inlined: HashMap::new(),
         reasons: Vec::new(),
         statement: false,
+        statements,
+        stmt_calls: &stmt_calls,
+        inlined_stmts: Vec::new(),
     };
     walk(chunk, &mut inliner);
+    if !inliner.inlined_stmts.is_empty() {
+        let mut stmts = std::mem::take(&mut inliner.inlined_stmts);
+        fill_inlined(&mut chunk.block, &mut stmts);
+    }
     let any = !inliner.inlined.is_empty();
     // Helpers whose every call was inlined go.
     let gone: BTreeSet<usize> = inliner
@@ -950,11 +1515,12 @@ fn remove_functions(chunk: &mut Chunk, names: &BTreeSet<String>) {
                 && self.names.contains(name.name.as_str())
                 && let Some(Ref::Local(b)) = self.res.occurrences.get(self.next)
                 && self.res.bindings[*b].uses == 0
-                && single_return(match &s.kind {
-                    StmtKind::LocalFunction { func, .. } => func,
-                    _ => unreachable!(),
-                })
-                .is_some()
+                && match &s.kind {
+                    StmtKind::LocalFunction { func, .. } => {
+                        single_return(func).is_some() || statement_body(func).is_some()
+                    }
+                    _ => false,
+                }
             {
                 let mut inner = std::mem::replace(
                     s,

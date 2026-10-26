@@ -357,6 +357,22 @@ impl<'a> DefView<'a> {
 }
 
 impl<'p> Env<'p> {
+    /// Some class of the package (not of the declarations) has accessors
+    /// or an `__index` or `__newindex` metamethod: its instances read
+    /// through a function (spec §3.1.10). A view of every definition that
+    /// records no read: declarations never have them.
+    pub(crate) fn package_has_accessor_classes(&self) -> bool {
+        self.defs.iter().any(|d| {
+            d.kind == DefKind::Class
+                && !d.native
+                && d.members.iter().chain(d.statics.iter()).any(|(name, m)| {
+                    matches!(m.kind, MemberKind::Getter | MemberKind::Setter)
+                        || &**name == "__index"
+                        || &**name == "__newindex"
+                })
+        })
+    }
+
     pub fn def(&self, id: DefId) -> &Def {
         self.declared.note_def(id);
         &self.defs[id.0 as usize]

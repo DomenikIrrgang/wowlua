@@ -231,6 +231,7 @@ impl<'a> Lowerer<'a> {
                 };
                 let member = ir::Expr::new(
                     ir::ExprKind::Index {
+                        facts: Default::default(),
                         obj: Box::new(name_expr(generated(&name, pos))),
                         key: Box::new(value),
                     },
@@ -267,6 +268,7 @@ impl<'a> Lowerer<'a> {
                     let key = self.string(name, pos);
                     let member = ir::Expr::new(
                         ir::ExprKind::Index {
+                            facts: Default::default(),
                             obj: Box::new(value.clone()),
                             key: Box::new(key),
                         },
@@ -305,6 +307,7 @@ impl<'a> Lowerer<'a> {
 fn not(e: ir::Expr, pos: Pos) -> ir::Expr {
     ir::Expr::new(
         ir::ExprKind::Unary {
+            facts: ir::Facts::NO_META,
             op: ir::UnOp::Not,
             operand: Box::new(paren(e)),
         },

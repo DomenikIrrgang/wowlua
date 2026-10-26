@@ -623,7 +623,7 @@ impl<'a> Emitter<'a> {
                 self.token(b"}", *close);
             }
             ExprKind::Name(id) => self.ident(id),
-            ExprKind::Index { obj, key } => {
+            ExprKind::Index { obj, key, .. } => {
                 self.prefix(obj);
                 self.token(b"[", Pos::NONE);
                 self.expr(key);
@@ -654,6 +654,7 @@ impl<'a> Emitter<'a> {
                 op_pos,
                 lhs,
                 rhs,
+                ..
             } => {
                 let (left, right) = op.priority();
                 // `a p b q c` groups as `a p (b q c)` when q's left
@@ -676,7 +677,7 @@ impl<'a> Emitter<'a> {
                 self.space();
                 self.operand(rhs, rhs_parens);
             }
-            ExprKind::Unary { op, operand } => {
+            ExprKind::Unary { op, operand, .. } => {
                 self.token(op.as_str().as_bytes(), e.pos);
                 if *op == UnOp::Not {
                     self.last = Last::Keyword;

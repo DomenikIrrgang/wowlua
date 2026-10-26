@@ -197,7 +197,7 @@ fn expr(e: &mut Expr, f: &mut impl FnMut(&mut Ident)) {
                 }
             }
         }
-        ExprKind::Index { obj, key } => {
+        ExprKind::Index { obj, key, .. } => {
             expr(obj, f);
             expr(key, f);
         }

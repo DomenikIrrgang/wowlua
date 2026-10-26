@@ -2072,6 +2072,33 @@ fn strict_mode_lowers_to_fast_forms() {
     );
 }
 
+/// The fast forms apply in class methods, constructors and accessors too
+/// (their bodies were not looked at).
+#[test]
+fn strict_fast_forms_apply_in_class_bodies() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"fast\", \"version\": \"1.0.0\" } }\n",
+            ),
+            (
+                "src/main.wowlua",
+                "--!strict\nclass Unit\n    name: string\n    label: string?\n    constructor(name: string)\n        self.name = name\n    end\n    function title(): string\n        return `{self.name}!` .. (self.label ?? \"-\")\n    end\nend\nprint(Unit.new(\"Ann\"):title())\n",
+            ),
+        ],
+    );
+    wowlua(dir.path()).arg("build").assert().success();
+    let out = dir.path().join("dist/dev/Fast");
+    let main = fs::read_to_string(out.join("src/main.lua")).unwrap();
+    assert!(main.contains("self.name .. \"!\""), "{main}");
+    assert!(!main.contains("tostring(self.name)"), "{main}");
+    assert!(main.contains("self.label or \"-\""), "{main}");
+    assert_eq!(run_addon(&out, "Fast"), "Ann!-");
+}
+
 /// A `@debugOnly` function used as a value is E3032 in every build, also
 /// where debug keeps it (spec §4.3); call statements are fine.
 #[test]
@@ -2611,15 +2638,16 @@ fn release_builds_inline_expression_helpers() {
         .assert()
         .success()
         .stderr(predicate::str::contains(
-            "warning[W3031]: `@inline` is ignored: its body is not a single `return` expression",
+            "warning[W3031]: `@inline` is ignored: its body is neither a single `return` expression nor statements without an early `return`",
         ))
         // (not a local function: W3031 too, spec §4.3)
         .stderr(predicate::str::contains(
-            "warning[W3031]: `@inline` is ignored: only local functions and private methods with a single `return` expression are inlined",
+            "warning[W3031]: `@inline` is ignored: only local functions and private methods are inlined",
         ));
     let release = dir.path().join("dist/release/Inl");
     let main = fs::read_to_string(release.join("src/main.lua")).unwrap();
-    assert!(main.contains("print(size / 2,"), "{main}");
+    // (`size` is a constant too: `optimize.constants`)
+    assert!(main.contains("print(10 / 2,"), "{main}");
     assert!(!main.contains("half"), "{main}");
     assert_eq!(run_addon(&release, "Inl"), "5 0 0");
 }
@@ -2650,7 +2678,7 @@ fn release_builds_inline_private_methods() {
         .assert()
         .success()
         .stderr(predicate::str::contains(
-            "warning[W3031]: `@inline` is ignored: only local functions and private methods with a single `return` expression are inlined",
+            "warning[W3031]: `@inline` is ignored: only local functions and private methods are inlined",
         ))
         .stderr(predicate::str::contains(
             "warning[W3031]: `@inline` is ignored: it is recursive",
@@ -2658,7 +2686,7 @@ fn release_builds_inline_private_methods() {
     let release = dir.path().join("dist/release/Inl");
     let main = fs::read_to_string(release.join("src/main.lua")).unwrap();
     assert!(
-        main.contains("return (self.x + self.y) * k + (other.x + other.y) * 2 + k * 2 +"),
+        main.contains("return (self.x + self.y) * 3 + (other.x + other.y) * 2 + 3 * 2 +"),
         "{main}"
     );
     assert!(
@@ -2672,6 +2700,128 @@ fn release_builds_inline_private_methods() {
     let main = fs::read_to_string(dev.join("src/main.lua")).unwrap();
     assert!(main.contains("self:sum(k)"), "{main}");
     assert_eq!(run_addon(&dev, "Inl"), "22");
+}
+
+/// The optimizations that shape code for Lua 5.1 (spec optimization
+/// §15.2.3): in strict code, where the checker proved the tables plain and
+/// the values numbers, release builds read loop-invariant fields before the
+/// loop and repeated ones once, turn `ipairs` over arrays into numeric
+/// loops and `table.insert` into an assignment, copy hot upvalues and
+/// propagate constants. Basic mode gets only those that need no types,
+/// plain Lua none, and every build prints the same.
+#[test]
+fn release_builds_shape_code_where_types_allow() {
+    let body = |name: &str| {
+        format!(
+            "local SCALE = 2\nlocal weights = {{ 1, 2, 3 }}\nclass {name}\n    config: {{ step: number, base: number }}\n    items: number[]\n    constructor()\n        self.config = {{ step = 3, base = 10 }}\n        self.items = {{}}\n    end\n    function fill(n: number)\n        for i = 1, n do\n            table.insert(self.items, self.config.base + i * self.config.step)\n        end\n    end\n    function total(): number\n        local sum = 0\n        for i, v in ipairs(self.items) do\n            sum = sum + v * SCALE + weights[i % 3 + 1]\n        end\n        return sum\n    end\nend\nlocal p = {{ pos = {{ x = 3, y = 4 }} }}\nlocal d = p.pos.x * p.pos.x + p.pos.y * p.pos.y\nlocal r = {name}.new()\nr:fill(5)\nprint(r:total(), d)\n"
+        )
+    };
+    let dir = tempfile::tempdir().unwrap();
+    let strict = format!("--!strict\n{}", body("Strict"));
+    let basic = body("Basic");
+    let plain = "local LIMIT = 3\nlocal t = {}\nfor i = 1, LIMIT do table.insert(t, i) end\nfor _, v in ipairs(t) do print(v) end\n";
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "shape", "version": "1.0.0" },
+  "profiles": { "release": { "bundle": false } } }
+"#,
+            ),
+            ("src/strict.wowlua", strict.as_str()),
+            ("src/basic.wowlua", basic.as_str()),
+            ("src/plain.lua", plain),
+        ],
+    );
+    wowlua(dir.path()).arg("build").assert().success();
+    let assert = wowlua(dir.path())
+        .args(["build", "--release"])
+        .assert()
+        .success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert!(!stderr.contains("warning["), "{stderr}");
+    let release = dir.path().join("dist/release/Shape");
+    let strict = fs::read_to_string(release.join("src/strict.lua")).unwrap();
+    for form in [
+        // loop-invariant fields, read before the loop
+        "local __wl_config = self.config",
+        "__wl_config.base, __wl_config.step, self.items for i = 1, n do",
+        // `table.insert` of a plain array
+        "__wl_items[#__wl_items + 1] = __wl_base + i * __wl_step",
+        // `ipairs` of a plain array
+        "for i = 1, 2 ^ 53 do local v = __wl_a[i] if v == nil then break end",
+        // a constant, and an upvalue read in a loop
+        "sum = sum + v * 2 + weights[i % 3 + 1]",
+        "function Strict:total() local weights = weights",
+        // repeated reads in a stretch
+        "local __wl_pos = p.pos local __wl_x, __wl_y = __wl_pos.x, __wl_pos.y",
+    ] {
+        assert!(strict.contains(form), "{form}\n{strict}");
+    }
+    let basic = fs::read_to_string(release.join("src/basic.lua")).unwrap();
+    assert!(basic.contains("table.insert(self.items"), "{basic}");
+    assert!(basic.contains("in ipairs(self.items)"), "{basic}");
+    assert!(basic.contains("p.pos.x * p.pos.x"), "{basic}");
+    // (no types needed: constants and upvalues)
+    assert!(basic.contains("v * 2 +"), "{basic}");
+    assert_eq!(
+        fs::read_to_string(release.join("src/plain.lua")).unwrap(),
+        plain,
+        "plain Lua stays as it is"
+    );
+    let dev = dir.path().join("dist/dev/Shape");
+    let printed = run_addon(&release, "Shape");
+    assert_eq!(printed, run_addon(&dev, "Shape"));
+    assert_eq!(printed, "201 25\n1\n2\n3\n201 25");
+}
+
+/// `optimize.inline` inlines statement bodies (spec optimization §15.2):
+/// call statements of a local function, or of an `@inline` private method
+/// in its class, become a `do` block; a function whose calls are values
+/// stays, and so does every call in unbundled (`preserve`) builds.
+#[test]
+fn release_builds_inline_statement_bodies() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "inl", "version": "1.0.0" },
+  "profiles": {
+    "release": { "bundle": false, "line-mode": "statement" },
+    "kept": { "inherits": "release", "line-mode": "preserve" }
+  } }
+"#,
+            ),
+            (
+                "src/main.wowlua",
+                "local log: string[] = {}\nlocal function note(kind: string, text: string)\n    log[#log + 1] = kind .. \": \" .. text\nend\nclass Counter\n    n: number = 0\n    @inline\n    private function bump(by: number)\n        self.n = self.n + by\n        if self.n > 10 then\n            self.n = 0\n        end\n    end\n    function run(times: number)\n        for i = 1, times do\n            self:bump(i)\n            note(\"bump\", tostring(self.n))\n        end\n    end\nend\nlocal c = Counter.new()\nc:run(5)\nprint(c.n, #log, log[5])\n",
+            ),
+        ],
+    );
+    wowlua(dir.path()).arg("build").assert().success();
+    let assert = wowlua(dir.path())
+        .args(["build", "--release"])
+        .assert()
+        .success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert!(!stderr.contains("warning["), "{stderr}");
+    let release = dir.path().join("dist/release/Inl");
+    let main = fs::read_to_string(release.join("src/main.lua")).unwrap();
+    assert!(!main.contains("self:bump("), "{main}");
+    assert!(!main.contains("local function note"), "{main}");
+    assert!(main.contains("do\nlocal self, by = self, i\n"), "{main}");
+    let printed = run_addon(&release, "Inl");
+    assert_eq!(printed, run_addon(&dir.path().join("dist/dev/Inl"), "Inl"));
+    assert_eq!(printed, "0 5 bump: 0");
+    wowlua(dir.path())
+        .args(["build", "--profile", "kept"])
+        .assert()
+        .success();
+    let kept = fs::read_to_string(dir.path().join("dist/kept/Inl/src/main.lua")).unwrap();
+    assert!(kept.contains("local function note"), "{kept}");
 }
 
 /// What finishing a file reports (W3031 from inlining, E5001 from checking

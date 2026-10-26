@@ -447,8 +447,26 @@ fn call(callee: ir::Expr, args: Vec<ir::Expr>, pos: Pos) -> ir::Expr {
 }
 
 fn binary(op: ir::BinOp, lhs: ir::Expr, rhs: ir::Expr, pos: Pos) -> ir::Expr {
+    // `and`, `or` and a comparison with a literal run no metamethod.
+    let literal = |e: &ir::Expr| {
+        matches!(
+            e.kind,
+            ir::ExprKind::Nil
+                | ir::ExprKind::True
+                | ir::ExprKind::False
+                | ir::ExprKind::Number(_)
+                | ir::ExprKind::String(_)
+        )
+    };
+    let no_meta = matches!(op, ir::BinOp::And | ir::BinOp::Or)
+        || (matches!(op, ir::BinOp::Eq | ir::BinOp::Ne) && (literal(&lhs) || literal(&rhs)));
     ir::Expr::new(
         ir::ExprKind::Binary {
+            facts: if no_meta {
+                ir::Facts::NO_META
+            } else {
+                ir::Facts::NONE
+            },
             op,
             op_pos: Pos::NONE,
             lhs: Box::new(lhs),
@@ -527,7 +545,7 @@ fn has_side_effects(e: &ir::Expr) -> bool {
                 has_side_effects(value)
             }
         }),
-        K::Index { obj, key } => has_side_effects(obj) || has_side_effects(key),
+        K::Index { obj, key, .. } => has_side_effects(obj) || has_side_effects(key),
         K::Field { obj, .. } => has_side_effects(obj),
         K::Paren { inner, .. } => has_side_effects(inner),
         K::Binary { lhs, rhs, .. } => has_side_effects(lhs) || has_side_effects(rhs),
@@ -1150,6 +1168,7 @@ impl<'a> Lowerer<'a> {
                     let mut check = pre;
                     let negated = ir::Expr::new(
                         ir::ExprKind::Unary {
+                            facts: Default::default(),
                             op: ir::UnOp::Not,
                             operand: Box::new(paren(c)),
                         },
@@ -2034,7 +2053,7 @@ impl<'a> Lowerer<'a> {
     /// fields and indexes, `(name, None)` for names.
     fn target_parts(t: Expr<'a>) -> Vec<Expr<'a>> {
         match t.kind() {
-            ExprKind::Index { obj, key } => vec![obj, key],
+            ExprKind::Index { obj, key, .. } => vec![obj, key],
             ExprKind::Field { obj, .. } => vec![obj],
             _ => Vec::new(),
         }
@@ -2085,17 +2104,18 @@ impl<'a> Lowerer<'a> {
         for (t, n) in targets.iter().zip(counts) {
             let tpos = self.span_pos(t.span());
             let kind = match (&t.kind(), n) {
-                (ExprKind::Index { .. }, 2) => {
+                (ExprKind::Index { obj: o, .. }, 2) => {
                     let obj = lowered.next().expect("object");
                     let key = lowered.next().expect("key");
                     ir::ExprKind::Index {
+                        facts: self.plain(*o),
                         obj: Box::new(obj),
                         key: Box::new(key),
                     }
                 }
-                (ExprKind::Field { name, .. }, 1) => ir::ExprKind::Field {
+                (ExprKind::Field { obj: o, name }, 1) => ir::ExprKind::Field {
                     obj: Box::new(lowered.next().expect("object")),
-                    name: self.ident(*name),
+                    name: self.field_name(*o, *name),
                 },
                 (ExprKind::Name(n), _) => ir::ExprKind::Name(self.ident(*n)),
                 _ => ir::ExprKind::Nil,
@@ -2147,13 +2167,13 @@ impl<'a> Lowerer<'a> {
                 let e = ir::Expr::new(
                     ir::ExprKind::Field {
                         obj: Box::new(o),
-                        name: self.ident(name),
+                        name: self.field_name(obj, name),
                     },
                     tpos,
                 );
                 (e.clone(), e)
             }
-            ExprKind::Index { obj, key } => {
+            ExprKind::Index { obj, key, .. } => {
                 let o = self.expr(obj);
                 let o = if is_name(&o) {
                     o
@@ -2168,6 +2188,7 @@ impl<'a> Lowerer<'a> {
                 };
                 let e = ir::Expr::new(
                     ir::ExprKind::Index {
+                        facts: self.plain(obj),
                         obj: Box::new(o),
                         key: Box::new(k),
                     },
@@ -2356,7 +2377,7 @@ impl<'a> Lowerer<'a> {
                     K::Name(self.ident(n))
                 }
             },
-            ExprKind::Index { obj, key }
+            ExprKind::Index { obj, key, .. }
                 if matches!(key.kind(), ExprKind::String(_))
                     && let ExprKind::String(k) = key.kind()
                     && let Some(v) = self.enum_member(
@@ -2368,9 +2389,10 @@ impl<'a> Lowerer<'a> {
             {
                 return v;
             }
-            ExprKind::Index { obj, key } => {
+            ExprKind::Index { obj, key, .. } => {
                 let mut parts = self.seq(&[obj, key]).into_iter();
                 K::Index {
+                    facts: self.plain(obj),
                     obj: Box::new(parts.next().expect("object")),
                     key: Box::new(parts.next().expect("key")),
                 }
@@ -2385,7 +2407,7 @@ impl<'a> Lowerer<'a> {
                 }
                 K::Field {
                     obj: Box::new(self.expr(obj)),
-                    name: self.ident(name),
+                    name: self.field_name(obj, name),
                 }
             }
             ExprKind::Method { obj, name, args } if self.is_super(obj) => {
@@ -2406,9 +2428,13 @@ impl<'a> Lowerer<'a> {
                     args,
                 }
             }
-            ExprKind::Call { callee, args } => {
-                self.check_instantiation(callee);
-                let (callee, args) = self.call_parts(callee, args);
+            ExprKind::Call {
+                callee: syntax_callee,
+                args: syntax_args,
+            } => {
+                self.check_instantiation(syntax_callee);
+                let (mut callee, args) = self.call_parts(syntax_callee, syntax_args);
+                self.callee_facts(syntax_callee, syntax_args, &mut callee);
                 K::Call {
                     callee: Box::new(callee),
                     args,
@@ -2450,7 +2476,7 @@ impl<'a> Lowerer<'a> {
                 close: self.close_pos(e.span()),
             },
             ExprKind::Binary { op, lhs, rhs } => return self.binary_expr(op, lhs, rhs, e),
-            ExprKind::Unary { op, operand } => {
+            ExprKind::Unary { op, operand, .. } => {
                 if op == UnOp::BNot {
                     if let Some(Const::Number(n)) = self.const_value(operand)
                         && let Some(v) = constant::fold_bnot(n)
@@ -2460,7 +2486,19 @@ impl<'a> Lowerer<'a> {
                     let x = self.expr(operand);
                     return self.bit_call("bnot", vec![x], pos);
                 }
+                let f = self.fast(operand);
+                let no_meta = match op {
+                    UnOp::Not => true,
+                    UnOp::Neg => f & fast::NUMBER != 0,
+                    // `#` of a table never runs `__len` in Lua 5.1.
+                    _ => f & (fast::STRING | fast::PLAIN) != 0,
+                };
                 K::Unary {
+                    facts: if no_meta {
+                        ir::Facts::NO_META
+                    } else {
+                        ir::Facts::NONE
+                    },
                     op: match op {
                         UnOp::Neg => ir::UnOp::Neg,
                         UnOp::Not => ir::UnOp::Not,
@@ -2609,6 +2647,7 @@ impl<'a> Lowerer<'a> {
                     };
                     return ir::Expr::new(
                         ir::ExprKind::Binary {
+                            facts: ir::Facts::NO_META,
                             op: ir_op,
                             op_pos,
                             lhs: Box::new(l),
@@ -2624,6 +2663,7 @@ impl<'a> Lowerer<'a> {
                     BinOp::And => t.clone(),
                     BinOp::Or => ir::Expr::new(
                         ir::ExprKind::Unary {
+                            facts: Default::default(),
                             op: ir::UnOp::Not,
                             operand: Box::new(t.clone()),
                         },
@@ -2682,9 +2722,11 @@ impl<'a> Lowerer<'a> {
                 self.idiv(a, b, pos)
             }
             _ => {
+                let facts = self.binary_facts(op, lhs, rhs);
                 let mut parts = self.seq(&[lhs, rhs]).into_iter();
                 ir::Expr::new(
                     ir::ExprKind::Binary {
+                        facts,
                         op: lua_binop(op),
                         op_pos,
                         lhs: Box::new(parts.next().expect("lhs")),
@@ -2933,6 +2975,89 @@ impl<'a> Lowerer<'a> {
             .unwrap_or(0)
     }
 
+    /// [`ir::Facts::PLAIN`] when the checker found `obj` to be a plain
+    /// table (spec optimization §15.2.3).
+    fn plain(&self, obj: Expr<'a>) -> ir::Facts {
+        if self.fast(obj) & fast::PLAIN != 0 {
+            ir::Facts::PLAIN
+        } else {
+            ir::Facts::NONE
+        }
+    }
+
+    /// A field's name, with the facts of the object it is read from or
+    /// written to.
+    fn field_name(&self, obj: Expr<'a>, name: Name<'a>) -> ir::Ident {
+        let mut id = self.ident(name);
+        id.set_facts(self.plain(obj));
+        id
+    }
+
+    /// [`ir::Facts::NO_META`] for `lhs op rhs` where the checker found the
+    /// operands' types to take the operator without a metamethod.
+    fn binary_facts(&self, op: BinOp, lhs: Expr<'a>, rhs: Expr<'a>) -> ir::Facts {
+        let (a, b) = (self.fast(lhs), self.fast(rhs));
+        let literal = |e: Expr<'a>| {
+            matches!(
+                e.kind(),
+                ExprKind::Nil
+                    | ExprKind::True
+                    | ExprKind::False
+                    | ExprKind::Number(_)
+                    | ExprKind::String(_)
+            )
+        };
+        let no_meta = match op {
+            BinOp::And | BinOp::Or => true,
+            BinOp::Add | BinOp::Sub | BinOp::Mul | BinOp::Div | BinOp::Mod | BinOp::Pow => {
+                a & b & fast::NUMBER != 0
+            }
+            BinOp::Concat => a & b & fast::STRING_OR_NUMBER != 0,
+            BinOp::Lt | BinOp::Le | BinOp::Gt | BinOp::Ge => {
+                a & b & fast::NUMBER != 0 || a & b & fast::STRING != 0
+            }
+            // `__eq` runs only for two tables (or two userdata).
+            BinOp::Eq | BinOp::Ne => {
+                (a | b) & (fast::NUMBER | fast::STRING | fast::STRING_OR_NUMBER) != 0
+                    || literal(lhs)
+                    || literal(rhs)
+            }
+            _ => false,
+        };
+        if no_meta {
+            ir::Facts::NO_META
+        } else {
+            ir::Facts::NONE
+        }
+    }
+
+    /// The facts of a call's callee: `ipairs(t)` of a plain array,
+    /// `table.insert(t, …)` and `tinsert(t, …)` of a plain table.
+    fn callee_facts(&self, callee: Expr<'a>, args: Args<'a>, lowered: &mut ir::Expr) {
+        let ArgsKind::Parens { args, .. } = args.kind() else {
+            return;
+        };
+        let Some(first) = args.iter().next() else {
+            return;
+        };
+        let facts = self.fast(first);
+        match (callee.kind(), &mut lowered.kind) {
+            (ExprKind::Name(n), ir::ExprKind::Name(id)) => {
+                if n.text() == "ipairs" && facts & fast::ARRAY != 0 {
+                    id.set_facts(ir::Facts::ARG_ARRAY);
+                } else if n.text() == "tinsert" && facts & fast::PLAIN != 0 {
+                    id.set_facts(ir::Facts::ARG_PLAIN);
+                }
+            }
+            (ExprKind::Field { name, .. }, ir::ExprKind::Field { name: id, .. })
+                if name.text() == "insert" && facts & fast::PLAIN != 0 =>
+            {
+                id.set_facts(id.facts().with(ir::Facts::ARG_PLAIN));
+            }
+            _ => {}
+        }
+    }
+
     fn apply_link(&mut self, obj: ir::Expr, link: &Link<'a>) -> ir::Expr {
         let pos = obj.pos;
         let kind = match link.kind {
@@ -2941,6 +3066,7 @@ impl<'a> Lowerer<'a> {
                 name: self.ident(name),
             },
             LinkKind::Index(key) => ir::ExprKind::Index {
+                facts: Default::default(),
                 obj: Box::new(obj),
                 key: Box::new(self.expr(key)),
             },
@@ -3093,6 +3219,7 @@ impl<'a> Lowerer<'a> {
                     } else if let Ok(n) = key.parse::<f64>() {
                         ir::Expr::new(
                             ir::ExprKind::Index {
+                                facts: Default::default(),
                                 obj: Box::new(value),
                                 key: Box::new(constant::number_expr(n, pos)),
                             },
@@ -3101,6 +3228,7 @@ impl<'a> Lowerer<'a> {
                     } else {
                         ir::Expr::new(
                             ir::ExprKind::Index {
+                                facts: Default::default(),
                                 obj: Box::new(value),
                                 key: Box::new(lit(
                                     ir::ExprKind::String(quote(key.as_bytes()).into()),
@@ -3338,7 +3466,7 @@ fn rereadable(e: &ir::Expr) -> bool {
     match &e.kind {
         K::Name(_) | K::Nil | K::True | K::False | K::Number(_) | K::String(_) => true,
         K::Field { obj, .. } => rereadable(obj),
-        K::Index { obj, key } => rereadable(obj) && rereadable(key),
+        K::Index { obj, key, .. } => rereadable(obj) && rereadable(key),
         K::Paren { inner, .. } => rereadable(inner),
         _ => false,
     }
@@ -3380,7 +3508,7 @@ fn flatten_chain(e: Expr<'_>) -> (Expr<'_>, Vec<Link<'_>>) {
                     kind: LinkKind::Field(name),
                 },
             ),
-            ExprKind::Index { obj, key } => (
+            ExprKind::Index { obj, key, .. } => (
                 obj,
                 Link {
                     optional: false,

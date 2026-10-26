@@ -127,7 +127,7 @@ impl<'a> Lowerer<'a> {
                     }
                 }
             }
-            K::Index { obj, key } => {
+            K::Index { obj, key, .. } => {
                 self.instrument_expr(obj);
                 self.instrument_expr(key);
             }

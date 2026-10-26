@@ -48,6 +48,7 @@ impl Visitor for Exprs {
                 ExprKind::Unary {
                     op: UnOp::Not,
                     operand,
+                    ..
                 } => {
                     let target = match &mut operand.kind {
                         ExprKind::Paren { inner, .. } => inner.as_mut(),
@@ -168,7 +169,7 @@ fn expr_blocks(e: &mut Expr, f: &mut impl FnMut(&mut Block)) {
                 }
             }
         }
-        ExprKind::Index { obj, key } => {
+        ExprKind::Index { obj, key, .. } => {
             expr_blocks(obj, f);
             expr_blocks(key, f);
         }

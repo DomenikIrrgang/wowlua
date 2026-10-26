@@ -155,11 +155,58 @@ impl Ident {
         self.name.set_flag(generated);
     }
 
-    /// Gives the identifier the name `name`, generated or not as before.
+    /// Gives the identifier the name `name`, generated or not as before,
+    /// with its facts.
     pub fn rename(&mut self, name: impl Into<crate::lit::Name>) {
         let generated = self.generated();
+        let facts = self.facts();
         self.name = name.into();
         self.set_generated(generated);
+        self.set_facts(facts);
+    }
+
+    /// What the type checker proved where the identifier is: of the object
+    /// when it names a field ([`Facts::PLAIN`]), of the arguments when it
+    /// names the function a call calls ([`Facts::ARG_ARRAY`],
+    /// [`Facts::ARG_PLAIN`]).
+    pub fn facts(&self) -> Facts {
+        Facts(self.name.facts())
+    }
+
+    pub fn set_facts(&mut self, facts: Facts) {
+        self.name.set_facts(facts.0);
+    }
+}
+
+/// What the type checker proved of an IR node, in strict mode (spec
+/// optimization §15.2.3): the optimizations that need types read these and
+/// nothing else, so code without them (basic mode, plain Lua, `any`) stays
+/// as it is. Kept in room the nodes have anyway.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Hash)]
+pub struct Facts(pub u8);
+
+impl Facts {
+    pub const NONE: Facts = Facts(0);
+    /// A field's name, an index: the object is a table, never `nil`, whose
+    /// reads and writes run no code (no `__index` or `__newindex`
+    /// function): reading it cannot fail or change anything.
+    pub const PLAIN: Facts = Facts(1);
+    /// A called function's name (`ipairs`): its argument is a plain array.
+    pub const ARG_ARRAY: Facts = Facts(2);
+    /// A called function's name (`insert` of `table.insert`, `tinsert`):
+    /// its first argument is a plain table.
+    pub const ARG_PLAIN: Facts = Facts(4);
+    /// An operator: its operands are of types it takes without a
+    /// metamethod (numbers for arithmetic, strings or numbers for `..`, …),
+    /// so it runs no code.
+    pub const NO_META: Facts = Facts(8);
+
+    pub fn has(self, f: Facts) -> bool {
+        self.0 & f.0 == f.0 && f.0 != 0
+    }
+
+    pub fn with(self, f: Facts) -> Facts {
+        Facts(self.0 | f.0)
     }
 }
 
@@ -220,6 +267,8 @@ pub enum ExprKind {
     Index {
         obj: Box<Expr>,
         key: Box<Expr>,
+        /// [`Facts::PLAIN`] for the object.
+        facts: Facts,
     },
     Field {
         obj: Box<Expr>,
@@ -241,6 +290,8 @@ pub enum ExprKind {
     },
     Binary {
         op: BinOp,
+        /// [`Facts::NO_META`].
+        facts: Facts,
         /// Position of the operator (Lua emits code when it reads it).
         op_pos: Pos,
         lhs: Box<Expr>,
@@ -248,6 +299,8 @@ pub enum ExprKind {
     },
     Unary {
         op: UnOp,
+        /// [`Facts::NO_META`].
+        facts: Facts,
         operand: Box<Expr>,
     },
 }

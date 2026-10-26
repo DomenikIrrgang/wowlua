@@ -45,7 +45,11 @@ impl BuiltinProfile {
                 "frame-budget": 1.0, "slow-call": 2.0,
                 "dev-console": true, "monitor": true, "capture-errors": true, "source-maps": true,
                 "bundle": false, "minify": "none", "minify-libraries": false,
-                "optimize": { "inline": false, "cache-globals": "off", "dead-code": false },
+                "optimize": {
+                    "inline": false, "cache-globals": "off", "dead-code": false,
+                    "constants": false, "cache-fields": false, "cache-upvalues": false,
+                    "numeric-loops": false, "table-insert": false, "hoist-closures": false,
+                },
             }),
             BuiltinProfile::Release => json!({
                 "debug": false, "assertions": false, "log-level": "warn",
@@ -55,7 +59,11 @@ impl BuiltinProfile {
                 "frame-budget": 1.0, "slow-call": 2.0,
                 "dev-console": false, "monitor": false, "capture-errors": false, "source-maps": true,
                 "bundle": true, "minify": "strip", "minify-libraries": false,
-                "optimize": { "inline": true, "cache-globals": "safe", "dead-code": true },
+                "optimize": {
+                    "inline": true, "cache-globals": "safe", "dead-code": true,
+                    "constants": true, "cache-fields": true, "cache-upvalues": true,
+                    "numeric-loops": true, "table-insert": true, "hoist-closures": true,
+                },
             }),
             BuiltinProfile::Test => json!({
                 "debug": true, "assertions": true, "log-level": "trace",
@@ -65,7 +73,11 @@ impl BuiltinProfile {
                 "frame-budget": 1.0, "slow-call": 2.0,
                 "dev-console": false, "monitor": false, "capture-errors": false, "source-maps": true,
                 "bundle": false, "minify": "none", "minify-libraries": false,
-                "optimize": { "inline": false, "cache-globals": "off", "dead-code": false },
+                "optimize": {
+                    "inline": false, "cache-globals": "off", "dead-code": false,
+                    "constants": false, "cache-fields": false, "cache-upvalues": false,
+                    "numeric-loops": false, "table-insert": false, "hoist-closures": false,
+                },
             }),
         }
     }
@@ -77,6 +89,30 @@ pub struct Optimize {
     pub inline: bool,
     pub cache_globals: CacheGlobals,
     pub dead_code: bool,
+    pub constants: bool,
+    pub cache_fields: bool,
+    pub cache_upvalues: bool,
+    pub numeric_loops: bool,
+    pub table_insert: bool,
+    pub hoist_closures: bool,
+}
+
+impl Optimize {
+    /// Every optimization off: the unoptimized build `wowlua bench`
+    /// compares with (spec Tooling §16.1.7).
+    pub fn none() -> Optimize {
+        Optimize {
+            inline: false,
+            cache_globals: CacheGlobals::Off,
+            dead_code: false,
+            constants: false,
+            cache_fields: false,
+            cache_upvalues: false,
+            numeric_loops: false,
+            table_insert: false,
+            hoist_closures: false,
+        }
+    }
 }
 
 /// A fully resolved profile.
