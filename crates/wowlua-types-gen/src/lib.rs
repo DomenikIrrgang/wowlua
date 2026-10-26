@@ -1953,6 +1953,9 @@ pub fn generate(
     // Each flavor's functions of a Lua table the annotations declare as a
     // namespace but without them (`AuraUtil.UnpackAuraData`).
     let mut ns_extras: Vec<Vec<(String, String, Vec<model::Sig>)>> = Vec::new();
+    // The number globals a client was recorded defining itself, for the
+    // flavors without a record of their own.
+    let recorded: Vec<&String> = flavors.iter().flat_map(|f| &f.number_globals).collect();
     for (f, (_, _, d)) in flavors.iter().zip(&per_flavor) {
         let lod = framexml::lod_origins(&f.ui_lua, &f.ui_xml, &f.lod_files);
         let ui = framexml::ui_globals(&f.ui_lua, &f.ui_xml, &widget_classes);
@@ -2134,9 +2137,9 @@ pub fn generate(
                 .or_insert_with(|| ("string".into(), None));
         }
         // The number globals the client defines itself.
-        for n in &f.number_globals {
-            g.entry(n.clone())
-                .or_insert_with(|| ("number".into(), None));
+        let read = framexml::names_read(&f.ui_lua, &f.ui_xml);
+        for n in client_numbers(&f.number_globals, &recorded, &read) {
+            g.entry(n).or_insert_with(|| ("number".into(), None));
         }
         // what Blizzard's Lua makes a global, over another source's untyped
         // declaration of it (`CombatLogGetCurrentEventInfo =
@@ -2452,9 +2455,49 @@ fn create_frame_sig(frame_type: &str, result: &str) -> model::Sig {
     }
 }
 
+/// The number globals a flavor's client defines itself (`LE_*`,
+/// `NUM_LE_*`): its record (`own`), or without one those another client
+/// was recorded defining that its UI code reads (`IsInGroup(
+/// LE_PARTY_CATEGORY_INSTANCE)`): UI code reads the client's constants
+/// without defining them.
+fn client_numbers(own: &[String], recorded: &[&String], read: &HashSet<String>) -> Vec<String> {
+    if !own.is_empty() {
+        return own.to_vec();
+    }
+    let mut out: Vec<String> = recorded
+        .iter()
+        .filter(|n| read.contains(n.as_str()))
+        .map(|n| n.to_string())
+        .collect();
+    out.sort();
+    out.dedup();
+    out
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    /// A flavor's own record of its number globals, or those of another
+    /// client's record its UI code reads.
+    #[test]
+    fn client_numbers_of_unrecorded_flavors() {
+        let camelot = [
+            "LE_PARTY_CATEGORY_HOME".to_string(),
+            "LE_PARTY_CATEGORY_INSTANCE".to_string(),
+            "NUM_LE_X".to_string(),
+        ];
+        let recorded: Vec<&String> = camelot.iter().collect();
+        let read: HashSet<String> = ["LE_PARTY_CATEGORY_INSTANCE", "IsInGroup"]
+            .into_iter()
+            .map(String::from)
+            .collect();
+        assert_eq!(client_numbers(&camelot, &recorded, &read), camelot);
+        assert_eq!(
+            client_numbers(&[], &recorded, &read),
+            ["LE_PARTY_CATEGORY_INSTANCE"]
+        );
+    }
 
     fn untyped(params: &[&str]) -> Vec<model::Sig> {
         vec![model::Sig {

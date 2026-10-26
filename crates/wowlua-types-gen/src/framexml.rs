@@ -136,17 +136,35 @@ pub fn ui_globals(
         lua_globals(text, &mut out, &mut defs);
     }
     let templates = template_defs(xml);
-    let declared = |m: &String| defs.contains_key(m) || widget_classes.contains(m);
     // Each frame's widget type and mixins; one defined differently in
     // several files keeps the mixins every definition has.
     let mut frames: IndexMap<String, Option<(String, Vec<String>)>> = IndexMap::new();
     for (_, text) in xml {
         let mut names = IndexMap::new();
         let mut named = Vec::new();
-        xml_globals(text, &mut names, &mut named);
+        let mut scripts = Vec::new();
+        xml_globals(text, &mut names, &mut named, &mut scripts);
+        for (frame, code) in scripts {
+            match frame {
+                None => lua_globals(&code, &mut out, &mut defs),
+                // `self` is the frame; a handler defines no mixins.
+                Some(frame) => {
+                    let mut found = IndexMap::new();
+                    lua_globals(&code, &mut found, &mut IndexMap::new());
+                    for (name, ty) in found {
+                        let ty = if ty == "alias:self" {
+                            format!("alias:{frame}")
+                        } else {
+                            ty
+                        };
+                        add(&mut out, &name, &ty);
+                    }
+                }
+            }
+        }
         for frame in named {
             let (base, mut mixins) = frame_type(&frame, &templates, widget_classes);
-            mixins.retain(|m| declared(m));
+            mixins.retain(|m| defs.contains_key(m) || widget_classes.contains(m));
             match frames.get_mut(&frame.name) {
                 Some(Some((b, ms))) if *b == base => ms.retain(|m| mixins.contains(m)),
                 Some(slot) => *slot = None,
@@ -369,9 +387,13 @@ pub fn lod_origins(
             lua_globals(text, &mut g, &mut IndexMap::new());
         } else {
             let mut named = Vec::new();
-            xml_globals(text, &mut g, &mut named);
+            let mut scripts = Vec::new();
+            xml_globals(text, &mut g, &mut named, &mut scripts);
             for frame in named {
                 g.insert(frame.name, String::new());
+            }
+            for (_, code) in scripts {
+                lua_globals(&code, &mut g, &mut IndexMap::new());
             }
         }
         match lod_files.get(&path.replace('\\', "/").to_lowercase()) {
@@ -608,12 +630,27 @@ fn block(
     }
 }
 
+/// The Lua of an XML file that defines globals: an inline `<Script>`
+/// (top-level code, `None`), and a named frame's `OnLoad` (it runs once,
+/// `self` the frame). Templates' handlers run for each frame made from
+/// them: left out.
+type Scripts = Vec<(Option<String>, String)>;
+
 /// Named elements of an XML file: font objects (into `out`), frames and
-/// regions outside templates (into `named`).
-fn xml_globals(text: &str, out: &mut IndexMap<String, String>, named: &mut Vec<NamedFrame>) {
+/// regions outside templates (into `named`), and its Lua that defines
+/// globals (into `scripts`).
+fn xml_globals(
+    text: &str,
+    out: &mut IndexMap<String, String>,
+    named: &mut Vec<NamedFrame>,
+    scripts: &mut Scripts,
+) {
     let mut reader = Reader::from_str(text);
-    // Depth inside templates (`virtual="true"`).
-    let mut stack: Vec<bool> = Vec::new();
+    // Per open element: inside a template (`virtual="true"`), its tag and
+    // its name (a frame's outside templates).
+    let mut stack: Vec<(bool, String, Option<String>)> = Vec::new();
+    // The script being read: the depth of its element, its frame, its code.
+    let mut reading: Option<(usize, Option<String>, String)> = None;
     loop {
         let event = match reader.read_event() {
             Ok(e) => e,
@@ -627,8 +664,9 @@ fn xml_globals(text: &str, out: &mut IndexMap<String, String>, named: &mut Vec<N
                 let a = attributes(e);
                 // An intrinsic frame type (`DropdownButton`) is a template,
                 // not a frame.
-                let in_template = stack.iter().any(|v| *v) || a.virtual_ || a.intrinsic;
-                if let Some(n) = a.name.filter(|n| !n.contains('$')) {
+                let in_template = stack.iter().any(|v| v.0) || a.virtual_ || a.intrinsic;
+                let name = a.name.clone().filter(|n| !n.contains('$'));
+                if let Some(n) = name.clone() {
                     match tag.as_str() {
                         // Font objects are globals even when virtual.
                         "Font" | "FontFamily" => add(out, &n, "Font"),
@@ -642,16 +680,100 @@ fn xml_globals(text: &str, out: &mut IndexMap<String, String>, named: &mut Vec<N
                     }
                 }
                 if matches!(event, Event::Start(_)) {
-                    stack.push(in_template);
+                    if reading.is_none() && !in_template {
+                        let frame = match stack.as_slice() {
+                            [.., (_, _, Some(frame)), (_, scripts, _)]
+                                if tag == "OnLoad" && scripts == "Scripts" =>
+                            {
+                                Some(Some(frame.clone()))
+                            }
+                            _ if tag == "Script" && !a.file => Some(None),
+                            _ => None,
+                        };
+                        if let Some(frame) = frame {
+                            reading = Some((stack.len(), frame, String::new()));
+                        }
+                    }
+                    stack.push((in_template, tag, name.filter(|_| !in_template)));
+                }
+            }
+            Event::Text(t) => {
+                if let Some((_, _, code)) = reading.as_mut() {
+                    code.push_str(&t.xml10_content());
+                }
+            }
+            Event::CData(t) => {
+                if let Some((_, _, code)) = reading.as_mut() {
+                    code.push_str(&t.into_inner());
+                }
+            }
+            Event::GeneralRef(r) => {
+                if let Some((_, _, code)) = reading.as_mut() {
+                    let c = match r.resolve_char_ref() {
+                        Ok(Some(c)) => Some(c),
+                        _ => match &*r.into_inner() {
+                            "lt" => Some('<'),
+                            "gt" => Some('>'),
+                            "amp" => Some('&'),
+                            "quot" => Some('"'),
+                            "apos" => Some('\''),
+                            _ => None,
+                        },
+                    };
+                    code.extend(c);
                 }
             }
             Event::End(_) => {
                 stack.pop();
+                if reading
+                    .as_ref()
+                    .is_some_and(|(at, _, _)| *at == stack.len())
+                    && let Some((_, frame, code)) = reading.take()
+                {
+                    scripts.push((frame, code));
+                }
             }
             Event::Eof => return,
             _ => {}
         }
     }
+}
+
+/// The names the UI code reads: every name of its Lua (and its XML's
+/// scripts) outside comments and strings that is no field (`a.b`, `a:b`).
+pub fn names_read(lua: &[(String, String)], xml: &[(String, String)]) -> HashSet<String> {
+    let mut out = HashSet::new();
+    let mut db = wowlua_span::SourceDb::new();
+    let file = db.add("ui.lua", String::new());
+    let mut read = |code: &str| {
+        let lexed = wowlua_syntax::lexer::lex(code.as_bytes(), file);
+        let tokens = &lexed.tokens;
+        for i in 0..tokens.len() {
+            let t = tokens.token(i);
+            if t.kind != wowlua_syntax::token::TokenKind::Name {
+                continue;
+            }
+            let field = i > 0
+                && matches!(
+                    tokens.kind(i - 1),
+                    wowlua_syntax::token::TokenKind::Dot | wowlua_syntax::token::TokenKind::Colon
+                );
+            if !field {
+                out.insert(code[t.start as usize..t.end as usize].to_string());
+            }
+        }
+    };
+    for (_, text) in lua {
+        read(text);
+    }
+    for (_, text) in xml {
+        let mut scripts = Vec::new();
+        xml_globals(text, &mut IndexMap::new(), &mut Vec::new(), &mut scripts);
+        for (_, code) in scripts {
+            read(&code);
+        }
+    }
+    out
 }
 
 /// The attributes of an XML element the globals depend on.
@@ -663,6 +785,8 @@ struct Attributes {
     /// `mixin` and `secureMixin`.
     mixins: Vec<String>,
     inherits: Vec<String>,
+    /// A `<Script file="…">`.
+    file: bool,
 }
 
 fn attributes(e: &quick_xml::events::BytesStart<'_>) -> Attributes {
@@ -684,6 +808,7 @@ fn attributes(e: &quick_xml::events::BytesStart<'_>) -> Attributes {
             "intrinsic" => out.intrinsic |= value.eq_ignore_ascii_case("true"),
             "mixin" | "secureMixin" => out.mixins.extend(list(&value)),
             "inherits" => out.inherits.extend(list(&value)),
+            "file" => out.file = true,
             _ => {}
         }
     }
@@ -855,6 +980,52 @@ mod tests {
         );
         let foo = &ui.mixins["FooMixin"].methods["Bar"][0];
         assert_eq!(crate::model::sig_text(foo), "(a: any, b: any): (...any)");
+    }
+
+    /// The Lua of the XML: an inline `<Script>` is a chunk of top-level
+    /// code, a named frame's `OnLoad` runs once with `self` the frame
+    /// (`GENERAL_CHAT_DOCK = self`); templates' handlers make no globals.
+    #[test]
+    fn globals_of_the_xml_scripts() {
+        let xml = r#"<Ui><Script>
+		if (LOCALE_koKR) then
+			STANDARD_TEXT_FONT = "Fonts\\2002.TTF";
+		else
+			STANDARD_TEXT_FONT = "Fonts\\FRIZQT__.TTF";
+		end
+		local hidden = 1
+		CMP = 1 &lt; 2
+	</Script><Script file="Other.lua"/><Frame name="Dock" mixin="DockMixin"><Scripts><OnLoad>
+		DockMixin.OnLoad(self);
+		GENERAL_CHAT_DOCK = self;
+		local list = self.list;
+		COUNT = 3;
+	</OnLoad><OnShow>SHOWN = self</OnShow></Scripts></Frame><Frame name="Tpl" virtual="true"><Scripts><OnLoad>TEMPLATE_GLOBAL = self</OnLoad></Scripts></Frame></Ui>"#;
+        let lua = "DockMixin = {}\nfunction DockMixin:OnLoad() end\n";
+        let classes: HashSet<String> = ["Frame".to_string()].into_iter().collect();
+        let g = globals(
+            &[("a.lua".into(), lua.into())],
+            &[("a.xml".into(), xml.into())],
+            &classes,
+        );
+        assert_eq!(g["STANDARD_TEXT_FONT"], "string");
+        // (`&lt;` read as `<`)
+        assert_eq!(g["CMP"], "unknown");
+        assert_eq!(g["GENERAL_CHAT_DOCK"], "alias:Dock");
+        assert_eq!(g["COUNT"], "number");
+        assert_eq!(g["Dock"], "DockMixin & Frame");
+        for n in ["hidden", "list", "SHOWN", "TEMPLATE_GLOBAL", "self"] {
+            assert!(!g.contains_key(n), "{n}: {g:?}");
+        }
+        // what the code reads, outside comments and strings
+        let read = names_read(
+            &[("a.lua".into(), "-- LE_COMMENT\nif IsInGroup(LE_PARTY_CATEGORY_INSTANCE) then print(\"LE_STRING\") end\n".into())],
+            &[("a.xml".into(), "<Ui><Script>x = LE_IN_SCRIPT</Script></Ui>".into())],
+        );
+        for n in ["IsInGroup", "LE_PARTY_CATEGORY_INSTANCE", "LE_IN_SCRIPT"] {
+            assert!(read.contains(n), "{n}");
+        }
+        assert!(!read.contains("LE_COMMENT") && !read.contains("LE_STRING"));
     }
 
     #[test]

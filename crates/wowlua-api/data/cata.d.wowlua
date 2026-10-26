@@ -30279,6 +30279,9 @@ declare global WorldMapTrackQuest_Toggle: () -> ()
 declare global WorldMapArchaeologyShowDigsites_Toggle: () -> ()
 declare global WorldMap_InvasionDataProviderMixin: unknown
 declare global WowTokenRedemptionFrame_ShowDialog: (dialogName: unknown, dialogData: unknown) -> ()
+declare global PERFORMANCEBAR_LOW_LATENCY: number
+declare global PERFORMANCEBAR_MEDIUM_LATENCY: number
+declare global GENERAL_CHAT_DOCK: Frame
 declare global LetterAndNumberFontNormalSmallGray: Font
 declare global QuestTitleFontBlackShadowSmaller: Font
 declare global GlueFontNormalLargeLeft: Font
@@ -35072,6 +35075,16 @@ declare global WORLD_BOSS_OONDASTA: string
 declare global WORLD_BOSS_ORDOS: string
 declare global WORLD_BOSS_SHA_OF_ANGER: string
 declare global WORLD_PVP_AUTO_QUEUE_EJECT: string
+declare global LE_FRAME_TUTORIAL_BAG_SETTINGS: number
+declare global LE_FRAME_TUTORIAL_CLEAN_UP_BAGS: number
+declare global LE_FRAME_TUTORIAL_HEIRLOOM_JOURNAL_LEVEL: number
+declare global LE_FRAME_TUTORIAL_HEIRLOOM_JOURNAL_TAB: number
+declare global LE_FRAME_TUTORIAL_LFG_LIST: number
+declare global LE_FRAME_TUTORIAL_MOUNT_COLLECTION_DRAGONRIDING: number
+declare global LE_FRAME_TUTORIAL_TRANSMOG_SETS_VENDOR_TAB: number
+declare global LE_INVITE_CONFIRMATION_QUEUE_WARNING: number
+declare global LE_UNIT_STAT_SPIRIT: number
+declare global LE_WOW_CONNECTION_STATE_NONE: number
 
 declare namespace C_AccountInfo
     --- Converts a battle.net account GUID to battle.net ID.

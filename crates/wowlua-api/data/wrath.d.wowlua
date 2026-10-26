@@ -41042,6 +41042,10 @@ declare global WorldMapQuestShowObjectives_Toggle: () -> ()
 @onDemand("Blizzard_WowSurveyUI")
 declare global WowSurveyStatusMixin: WowSurveyStatusMixin
 declare global WowTokenRedemptionFrame_ShowDialog: (dialogName: unknown, dialogData: unknown) -> ()
+declare global PERFORMANCEBAR_LOW_LATENCY: number
+declare global PERFORMANCEBAR_MEDIUM_LATENCY: number
+declare global PERFORMANCEBAR_UPDATE_INTERVAL: number
+declare global GENERAL_CHAT_DOCK: Frame
 declare global GameFontNormalMed1HSpacing: Font
 declare global GameFontNormalHugeOutline2: Font
 declare global GameFontHighlightHugeOutline2: Font
@@ -45953,6 +45957,43 @@ declare global WORLD_BOSS_OONDASTA: string
 declare global WORLD_BOSS_ORDOS: string
 declare global WORLD_BOSS_SHA_OF_ANGER: string
 declare global WORLD_PVP_AUTO_QUEUE_EJECT: string
+declare global LE_AURORA_STATE_WAITING_FOR_NETWORK: number
+declare global LE_EXPANSION_WAR_WITHIN: number
+declare global LE_FRAME_TUTORIAL_ASSISTED_HIGHLIGHT_ENABLED_POPUP: number
+declare global LE_FRAME_TUTORIAL_AZERITE_ITEM_IN_BAG: number
+declare global LE_FRAME_TUTORIAL_BAG_SETTINGS: number
+declare global LE_FRAME_TUTORIAL_BRAWL: number
+declare global LE_FRAME_TUTORIAL_CLEAN_UP_BAGS: number
+declare global LE_FRAME_TUTORIAL_DRIVE_START_JOB: number
+declare global LE_FRAME_TUTORIAL_EYE_OF_JAILER: number
+declare global LE_FRAME_TUTORIAL_FIRST_RUNEFORGE_LEGENDARY_POWER: number
+declare global LE_FRAME_TUTORIAL_GLYPH: number
+declare global LE_FRAME_TUTORIAL_HEIRLOOM_JOURNAL_LEVEL: number
+declare global LE_FRAME_TUTORIAL_HEIRLOOM_JOURNAL_TAB: number
+declare global LE_FRAME_TUTORIAL_JOURNEYS_TAB: number
+declare global LE_FRAME_TUTORIAL_LFG_LIST: number
+declare global LE_FRAME_TUTORIAL_LOREWALKING_QUESTS_HIDDEN: number
+declare global LE_FRAME_TUTORIAL_MOUNT_COLLECTION_DRAGONRIDING: number
+declare global LE_FRAME_TUTORIAL_MOUNT_EQUIPMENT_SLOT_FRAME: number
+declare global LE_FRAME_TUTORIAL_PET_JOURNAL: number
+declare global LE_FRAME_TUTORIAL_PVP_SPECIAL_EVENT: number
+declare global LE_FRAME_TUTORIAL_SPEC: number
+declare global LE_FRAME_TUTORIAL_TALENT: number
+declare global LE_FRAME_TUTORIAL_TALENT_CHANGES: number
+declare global LE_FRAME_TUTORIAL_TORGHAST_DOMINANCE_BAR: number
+declare global LE_FRAME_TUTORIAL_TORGHAST_DOMINANCE_BAR_CUTOFF: number
+declare global LE_FRAME_TUTORIAL_TRANSMOG_MODEL_CLICK: number
+declare global LE_FRAME_TUTORIAL_TRIAL_BANKED_XP: number
+declare global LE_INVITE_CONFIRMATION_QUEUE_WARNING: number
+declare global LE_PET_JOURNAL_FILTER_TYPE_BATTLE_PETS: number
+declare global LE_PET_JOURNAL_FILTER_TYPE_NON_COMBAT_PETS: number
+declare global LE_SCENARIO_TYPE_CHALLENGE_MODE: number
+declare global LE_SORT_BY_LEVEL: number
+declare global LE_SORT_BY_NAME: number
+declare global LE_SORT_BY_PETTYPE: number
+declare global LE_SORT_BY_RARITY: number
+declare global LE_UNIT_STAT_SPIRIT: number
+declare global LE_WOW_CONNECTION_STATE_NONE: number
 
 declare namespace C_AccountInfo
     --- Converts a battle.net account GUID to battle.net ID.
