@@ -23,6 +23,9 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `--features a,b` and `--no-default-features` choose a build's features, and `wowlua add --no-default-features` turns a dependency's defaults off.
 - `wowlua test` runs a library's tests, and `wowlua check` checks `lua-library` and `types` packages.
 - `@wowlua/web`: the worker has an `advance` call, `play(null, onOutput)` runs the game without drawing it, and `check()` diagnostics carry `text`, the diagnostic as `wowlua check` prints it.
+- `wowlua data pull` reads your WoW installation's game data into wowlua's cache, so `wowlua test --game-data` works without the installation.
+- `wowlua build --watch` builds again after every change.
+- `wowlua build --reproducible` takes `build.time` from `SOURCE_DATE_EPOCH` or the commit time instead of the clock.
 
 ### Changed
 
@@ -86,6 +89,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `@wowlua/web`: `check`, `build`, `run` and `format` read what `writeFile` wrote, also while the language server has the file open, and the language server checks again when the page writes, deletes or replaces files.
 - `@wowlua/web`: the manifest's `check.lints` apply as in `wowlua check`: W2063 is off until set to `"warn"`, `"allow"` drops a warning and a `"deny"` lint stops a build or a run.
 - `@wowlua/web`: a run through the worker without a canvas moves, and what it prints reaches `onOutput`.
+- A file starting with `--!strict` (or another directive) no longer gets that directive as a comment after the generated first line.
 
 ## 0.12.0 (2026-10-26)
 
