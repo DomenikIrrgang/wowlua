@@ -1733,6 +1733,12 @@ impl Checker<'_, '_> {
     ) -> Option<TypeId> {
         // (for this lookup only, not the ones it makes)
         let own_open = std::mem::take(&mut self.own_open);
+        // (`o:name()`: the error names a method)
+        let what = if std::mem::take(&mut self.method_lookup) {
+            "method"
+        } else {
+            "field"
+        };
         let members = self.env.types.members(o);
         let mut out = Vec::new();
         for m in members {
@@ -1767,7 +1773,7 @@ impl Checker<'_, '_> {
                         }
                         None if r.open && quiet => Some(Types::ERROR),
                         None if self.mode == super::query::Mode::Strict && !quiet => {
-                            let msg = format!("`{}` has no field `{name}`", self.env.display(m));
+                            let msg = format!("`{}` has no {what} `{name}`", self.env.display(m));
                             self.report("E2003", span, msg);
                             Some(Types::ERROR)
                         }
@@ -1780,7 +1786,7 @@ impl Checker<'_, '_> {
                     } else if self.mode == super::query::Mode::Strict && !quiet {
                         // An array has numbered values only (decision L49).
                         let _ = e;
-                        let msg = format!("`{}` has no field `{name}`", self.env.display(m));
+                        let msg = format!("`{}` has no {what} `{name}`", self.env.display(m));
                         self.report("E2003", span, msg);
                         Some(Types::ERROR)
                     } else {
@@ -2080,6 +2086,7 @@ impl Checker<'_, '_> {
                 }
                 _ => {
                     self.own_open = own_open;
+                    self.method_lookup = true;
                     let f = self.member_type(m, name, span, false).unwrap_or(Types::ANY);
                     self.drop_first(f)
                 }

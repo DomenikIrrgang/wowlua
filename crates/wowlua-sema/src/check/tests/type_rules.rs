@@ -369,3 +369,14 @@ fn existence_tests_of_record_fields() {
         "local t = {}\nfor i = 1, 2 do\n    if t.seen then print(t.seen, i) end\n    t.seen = true\nend\n",
     );
 }
+
+/// A misspelled method is "has no method", a misspelled field "has no
+/// field".
+#[test]
+fn missing_methods_are_named_methods() {
+    let r = "local r: { name: string } = { name = \"a\" }\n";
+    let d = errors(&format!("{r}r:greet()\n"), Mode::Strict);
+    assert_eq!(d, ["E2003: `{ name: string }` has no method `greet`"]);
+    let d = errors(&format!("{r}print(r.greet)\n"), Mode::Strict);
+    assert_eq!(d, ["E2003: `{ name: string }` has no field `greet`"]);
+}

@@ -189,6 +189,8 @@ pub struct Checker<'e, 'p> {
     /// The next member lookup reads a field from an open table of this
     /// function's own (strict mode reports a missing one, spec §2.4.2).
     pub(crate) own_open: bool,
+    /// The next member lookup is a method call's (`o:name()`).
+    pub(crate) method_lookup: bool,
     /// The span of the file's top-level block (whose types the environment
     /// declares).
     file_block: Option<(u32, u32)>,
@@ -398,6 +400,7 @@ impl<'e, 'p> Checker<'e, 'p> {
             fallback_fields: FxHashMap::default(),
             index_of: FxHashMap::default(),
             own_open: false,
+            method_lookup: false,
             file_block: None,
             literal_locals: FxHashSet::default(),
             objects: FxHashSet::default(),
