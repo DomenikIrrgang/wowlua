@@ -294,7 +294,9 @@ export function traitsProbe()
     end
     local _, class = UnitClass("player")
     st.engineTraitAnswers = st.engineTraitAnswers ?? {}
-    st.engineTraitAnswers[class] = out
+    if canaccessvalue(class) then
+        st.engineTraitAnswers[class] = out
+    end
     stamp(`traits:{class}`)
     say(`engine traits: {#configs} configs, {#trees} trees, {nodes} nodes for {class}; the talents' spells in a moment`)
     -- The talents' spells, once loaded: info, description, cost.

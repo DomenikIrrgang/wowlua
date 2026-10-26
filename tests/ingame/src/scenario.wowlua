@@ -762,7 +762,7 @@ export function scenarioProbe(name: string)
             const mine: { [any]: boolean } = {}
             for _, u in ipairs({ "player", "pet", "target" }) do
                 const guid = UnitGUID(u)
-                if guid then
+                if guid and canaccessvalue(guid) then
                     mine[guid] = true
                 end
             end
