@@ -376,7 +376,7 @@ fn parse_row(line: &str) -> Option<(String, String)> {
     let code = cells.next()?;
     let summary = cells.next()?;
     let valid = code.len() == 5
-        && matches!(code.as_bytes()[0], b'E' | b'W')
+        && matches!(code.as_bytes()[0], b'E' | b'W' | b'P')
         && code[1..].bytes().all(|b| b.is_ascii_digit());
     valid.then(|| (code.to_string(), summary.replace("\\|", "|")))
 }

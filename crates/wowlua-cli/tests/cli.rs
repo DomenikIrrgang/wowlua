@@ -369,6 +369,28 @@ fn explain_and_clean() {
         .args(["explain", "E9999"])
         .assert()
         .code(1);
+    // The plain-Lua warning form of a name or type error is explained as
+    // that error (appendix B.2).
+    wowlua(dir.path())
+        .args(["explain", "W2001"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains(
+            "W2001 (warning): the plain-Lua warning form of E2001",
+        ))
+        .stdout(predicate::str::contains("E2001 (error)"))
+        .stdout(predicate::str::contains("diagnostics/E2001"));
+    wowlua(dir.path())
+        .args(["explain", "W2999"])
+        .assert()
+        .code(1);
+    // Performance hints come from the dev window (decision T176).
+    wowlua(dir.path())
+        .args(["explain", "P7301"])
+        .assert()
+        .success()
+        .stdout(predicate::str::contains("P7301 (hint)"))
+        .stdout(predicate::str::contains("wowlua:jobs"));
 
     write(
         dir.path(),

@@ -25,6 +25,19 @@ pub fn lookup(code: &str) -> Option<&'static CodeInfo> {
     codes::CODES.iter().find(|info| info.code == code)
 }
 
+/// The error a plain-Lua warning code stands for: in pure Lua files every
+/// name, type, flavor and secret error (`E1xxx`, `E2xxx`) is reported as the
+/// warning with the same number (appendix B.2: `E2001` → `W2001`). `None`
+/// for a registered warning and for any other code.
+pub fn plain_lua_error(code: &str) -> Option<&'static CodeInfo> {
+    let code = code.to_ascii_uppercase();
+    let number = code.strip_prefix('W')?;
+    if !number.starts_with(['1', '2']) || lookup(&code).is_some() {
+        return None;
+    }
+    lookup(&format!("E{number}"))
+}
+
 /// All registered codes, sorted by number.
 pub fn all_codes() -> &'static [CodeInfo] {
     codes::CODES
@@ -275,6 +288,15 @@ mod tests {
         assert!(lookup("E4002").is_some());
         assert!(lookup("w1001").is_some());
         assert!(lookup("E9999").is_none());
+        assert!(
+            lookup("P7301").is_some(),
+            "performance hints (appendix B.4)"
+        );
+        assert_eq!(plain_lua_error("W2001").map(|i| i.code), Some("E2001"));
+        assert_eq!(plain_lua_error("w1012").map(|i| i.code), Some("E1012"));
+        assert!(plain_lua_error("W1003").is_none(), "a registered warning");
+        assert!(plain_lua_error("W4002").is_none(), "only E1xxx and E2xxx");
+        assert!(plain_lua_error("W2999").is_none());
         let codes = all_codes();
         assert!(codes.windows(2).all(|w| w[0].code[1..] <= w[1].code[1..]));
     }

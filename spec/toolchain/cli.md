@@ -44,7 +44,7 @@ wowlua <command> [options]
 | `wowlua trace [file] [--clipboard] [--build <id>]` | Decode error stacks ([Tooling §16.4](tooling.md#164-trace-decoder-wowlua-trace)) |
 | `wowlua prof report [--account <name>] [--client <folder>] [--wow <install>] [--recording <name>…] [--out <file>] [--no-open]` | Write an HTML report of the recordings exported from the dev window ([Tooling §16.5](tooling.md#165-profiling-reports-wowlua-prof-report)) |
 | `wowlua clean` | Remove `dist/` (archived source maps in `$WOWLUA_HOME/maps/` are kept) |
-| `wowlua explain <code>` | Explain a diagnostic code, with examples (works offline) |
+| `wowlua explain <code>` | Explain a diagnostic code, with examples (works offline). The plain-Lua warning form of an error (`W2001`, appendix B.2) is explained as that error; `P` codes as the dev window's hints |
 | `wowlua lsp` | Start the language server on stdio |
 | `wowlua toc [--flavor <f>]` | Print the TOC(s) that would be generated |
 | `wowlua compile <files…> [--profile <p> \| --release] [--flavor <f>…] [--bundle \| --no-bundle] [--minify <level>] [-o <path>]` | Compile files to Lua without making an AddOn folder (§12.2.1) |

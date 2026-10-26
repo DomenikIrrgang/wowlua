@@ -2,7 +2,7 @@
 
 Every diagnostic has a stable code. `E` codes are errors, which fail the build.
 `W` codes are warnings, which fail it only with `--deny-warnings`. `P` codes
-are performance hints found at run time by the dev window (§B.3); they never
+are performance hints found at run time by the dev window (§B.4); they never
 affect a build. The level of
 any warning can be changed in the manifest (`check.lints`), including the
 warning forms of §B.2's pure Lua files (`W2001`). `wowlua explain
@@ -274,7 +274,7 @@ is reported as the warning with the same number (`E2001` → `W2001`, `E2030` �
 | E8440 | Invalid macro conditional in a literal state driver (brackets, or an unknown condition) |
 | E8441 | Visibility driver value other than `show` or `hide` |
 
-## B.3 Performance hints
+## B.4 Performance hints
 
 Performance hints are found in game by the dev window's rules
 ([Debugging §7.7.7](../language/07-debugging.md#777-hints)), not by the

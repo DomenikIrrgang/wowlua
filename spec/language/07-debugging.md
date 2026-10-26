@@ -455,7 +455,7 @@ the count of new hints on the tab. Each hint has a `P` code (`hint[P7301]`),
 names its subject, states the evidence with numbers and the recording it came
 from, and suggests a fix that uses the standard library or plain Lua.
 `wowlua explain P7301` explains it (decision T176). The codes are listed in
-[Diagnostics §B.3](../appendix/diagnostics.md#b3-performance-hints). Hints
+[Diagnostics §B.4](../appendix/diagnostics.md#b4-performance-hints). Hints
 can be dismissed; a dismissed hint comes back when its finding gets worse.
 The rules run only while the window is shown.
 

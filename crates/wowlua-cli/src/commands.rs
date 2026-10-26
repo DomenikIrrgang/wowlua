@@ -1792,57 +1792,74 @@ pub fn clean(out: &Output, global: &GlobalArgs) -> bool {
 }
 
 pub fn explain(out: &Output, code: &str) -> bool {
-    match wowlua_diagnostics::lookup(code) {
-        Some(info) => {
-            let kind = if info.code.starts_with('E') {
-                "error"
-            } else {
-                "warning"
-            };
-            let mut text = format!(
-                "{} ({kind}): {}\n",
-                info.code,
-                info.summary.replace('`', "")
-            );
-            if let Some(e) = wowlua_diagnostics::explanation(info.code) {
-                text.push_str(&format!("\n{}\n", e.text));
-                for example in &e.examples {
-                    let verdict = if example.compiles {
-                        "Compiles"
-                    } else {
-                        "Reports it"
-                    };
-                    text.push_str(&format!("\n{verdict}:\n"));
-                    for file in &example.files {
-                        if example.files.len() > 1 || file.path != "src/main.wowlua" {
-                            text.push_str(&format!("  {}\n", file.path));
-                        }
-                        for line in file.text.lines() {
-                            text.push_str(format!("    {line}").trim_end());
-                            text.push('\n');
-                        }
-                    }
-                }
-                if !e.related.is_empty() {
-                    text.push_str(&format!("\nRelated: {}\n", e.related.join(", ")));
-                }
-            }
-            text.push_str(&format!(
-                "\nhttps://wowlua.dev/docs/reference/diagnostics/{}\n",
-                info.code
-            ));
-            out.print(text);
-            true
+    // The plain-Lua warning form of a name or type error (`W2001`) is
+    // explained as that error (appendix B.2).
+    let (info, intro) = match (
+        wowlua_diagnostics::lookup(code),
+        wowlua_diagnostics::plain_lua_error(code),
+    ) {
+        (Some(info), _) => (info, String::new()),
+        (None, Some(error)) => {
+            let warning = code.to_ascii_uppercase();
+            (
+                error,
+                format!(
+                    "{warning} (warning): the plain-Lua warning form of {e}\n\n\
+                     In a file of plain Lua (no wowlua syntax and no `--!strict`), {e}\n\
+                     is reported as the warning {warning}. It means the same; set its\n\
+                     level in `check.lints` as \"{warning}\".\n\n",
+                    e = error.code
+                ),
+            )
         }
-        None => {
+        (None, None) => {
             let mut session = Session::new();
             session.push(Diagnostic::plain_error(format!(
                 "unknown diagnostic code `{code}`"
             )));
             out.flush(&mut session);
-            false
+            return false;
+        }
+    };
+    let kind = match info.code.as_bytes()[0] {
+        b'E' => "error",
+        b'W' => "warning",
+        _ => "hint",
+    };
+    let mut text = format!(
+        "{intro}{} ({kind}): {}\n",
+        info.code,
+        info.summary.replace('`', "")
+    );
+    if let Some(e) = wowlua_diagnostics::explanation(info.code) {
+        text.push_str(&format!("\n{}\n", e.text));
+        for example in &e.examples {
+            let verdict = if example.compiles {
+                "Compiles"
+            } else {
+                "Reports it"
+            };
+            text.push_str(&format!("\n{verdict}:\n"));
+            for file in &example.files {
+                if example.files.len() > 1 || file.path != "src/main.wowlua" {
+                    text.push_str(&format!("  {}\n", file.path));
+                }
+                for line in file.text.lines() {
+                    text.push_str(format!("    {line}").trim_end());
+                    text.push('\n');
+                }
+            }
+        }
+        if !e.related.is_empty() {
+            text.push_str(&format!("\nRelated: {}\n", e.related.join(", ")));
         }
     }
+    text.push_str(&format!(
+        "\nhttps://wowlua.dev/docs/reference/diagnostics/{}\n",
+        info.code
+    ));
+    out.print(text);
+    true
 }
 
 pub fn new(

@@ -952,12 +952,9 @@ fn test_addons(manifest: &Manifest, ctx: &mut Ctx) {
 /// warning form of a name, type, flavor or secret error (`E1xxx`, `E2xxx`),
 /// which pure Lua files report instead (appendix B.2: `E2001` → `W2001`).
 fn is_warning_code(code: &str) -> bool {
-    let Some(number) = code.strip_prefix('W') else {
-        return false;
-    };
-    wowlua_diagnostics::lookup(code).is_some()
-        || (number.starts_with(['1', '2'])
-            && wowlua_diagnostics::lookup(&format!("E{number}")).is_some())
+    code.starts_with('W')
+        && (wowlua_diagnostics::lookup(code).is_some()
+            || wowlua_diagnostics::plain_lua_error(code).is_some())
 }
 
 fn lints(manifest: &Manifest, ctx: &mut Ctx) {
