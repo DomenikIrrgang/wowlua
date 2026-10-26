@@ -429,8 +429,28 @@ Two interfaces with the same name are declared in the same scope. Only
 ambient `declare interface` declarations merge (as for the addon namespace);
 give the other interface its own name, or merge the two into one.
 
-The current compiler does not report this code: the later interface replaces
-the earlier one without a diagnostic, so there are no examples.
+An interface under `@if` counts only where the build keeps it, so two
+alternatives for different builds may share a name.
+
+```wowlua fails
+interface Named
+    name: string
+end
+interface Named
+    id: number
+end
+local n: Named = { name = "x" }
+print(n)
+```
+
+```wowlua compiles
+interface Named
+    name: string
+    id: number
+end
+local n: Named = { name = "x", id = 1 }
+print(n)
+```
 
 ## E1032
 

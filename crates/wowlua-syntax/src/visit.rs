@@ -88,6 +88,18 @@ pub fn walk_stmts<'t>(block: Block<'t>, f: &mut impl FnMut(Stmt<'t>)) {
 
 fn walk_one_stmt<'t>(s: Stmt<'t>, f: &mut impl FnMut(Stmt<'t>)) {
     f(s);
+    if let StmtKind::Export(inner) = s.kind() {
+        return walk_one_stmt(inner, f);
+    }
+    for b in child_blocks(s) {
+        walk_stmts(b, f);
+    }
+}
+
+/// The blocks directly inside a statement: its bodies, and those of the
+/// functions its expressions make (not those of an exported statement:
+/// they are its inner statement's).
+pub fn child_blocks<'t>(s: Stmt<'t>) -> Vec<Block<'t>> {
     let mut blocks: Vec<Block<'t>> = Vec::new();
     let mut exprs: Vec<Expr<'t>> = Vec::new();
     match s.kind() {
@@ -137,7 +149,6 @@ fn walk_one_stmt<'t>(s: Stmt<'t>, f: &mut impl FnMut(Stmt<'t>)) {
             exprs.extend(value);
         }
         StmtKind::Const { value, .. } => exprs.extend(value),
-        StmtKind::Export(inner) => walk_one_stmt(inner, f),
         _ => {}
     }
     for e in exprs {
@@ -147,9 +158,7 @@ fn walk_one_stmt<'t>(s: Stmt<'t>, f: &mut impl FnMut(Stmt<'t>)) {
             }
         });
     }
-    for b in blocks {
-        walk_stmts(b, f);
-    }
+    blocks
 }
 
 /// Calls `f` on every expression in `block`.

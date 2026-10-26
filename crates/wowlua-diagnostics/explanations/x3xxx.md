@@ -174,8 +174,34 @@ Related: E3003
 A class says `implements I` but doesn't satisfy the interface `I`: a member
 is missing, or its type doesn't fit. Add the member or fix its type.
 
-The checker doesn't report this code yet. A missing member shows up as E2001
-where an instance is used as the interface (`local p: Pet = Dog.new()`).
+Only public members count, as where an instance is used as the interface: a
+`private` or `protected` member doesn't satisfy it. Members the class
+inherits do, and so do those of the interfaces the interface extends.
+
+```wowlua fails
+interface Pet
+    name: string
+    function play(): boolean
+end
+class Dog implements Pet
+    name: string = "Rex"
+end
+print(Dog)
+```
+
+```wowlua compiles
+interface Pet
+    name: string
+    function play(): boolean
+end
+class Dog implements Pet
+    name: string = "Rex"
+    function play(): boolean
+        return true
+    end
+end
+print(Dog)
+```
 
 Related: E2001
 
@@ -208,13 +234,32 @@ Related: E3043, E3004
 
 ## E3008
 
-A class extends something that isn't a class. `extends` needs a class value
-to inherit from at run time. A class that `import type` brings is only a
+A class extends something that isn't a class: an interface, a type alias,
+an enum, or a value such as a table. `extends` needs a class value to inherit
+from at run time. To take an interface's shape, write `implements` instead
+(`class Dog implements Pet`). A class that `import type` brings is only a
 type, with nothing to extend at run time: import it as a value
 (`import Animal from "./animal"`).
 
-The checker reports the code for a class that `import type` brings; extending
-an interface, a type alias or an enum isn't reported yet.
+```wowlua fails
+interface Pet
+    name: string
+end
+class Dog extends Pet
+    name: string = "Rex"
+end
+print(Dog)
+```
+
+```wowlua compiles
+interface Pet
+    name: string
+end
+class Dog implements Pet
+    name: string = "Rex"
+end
+print(Dog)
+```
 
 ```wowlua fails title=src/main.wowlua
 import type Animal from "./animal"

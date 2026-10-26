@@ -366,6 +366,7 @@ pub fn analyze(files: &[FileInput], meta: Option<&Meta>) -> Analysis {
                 _ => seen_other = true,
             }
         }
+        duplicate_interfaces(parse, &info, f.meta.or(meta), &mut analysis.diagnostics);
         if info.is_module {
             export_redeclarations(parse, &info, f.meta.or(meta), &mut analysis.diagnostics);
             for s in parse.view().block().stmts() {
@@ -1205,6 +1206,78 @@ fn module_level_names(s: Stmt<'_>) -> Vec<Name<'_>> {
     }
 }
 
+/// Whether the build keeps `s`: it has no `@if`, or every `@if` condition
+/// is statically true.
+fn kept_by_if(s: Stmt<'_>, info: &ModuleInfo, meta: Option<&Meta>) -> bool {
+    let kind_of = |n: &str| info.meta_bindings.get(n).copied();
+    s.decorators().iter().all(|d| match meta::if_condition(d) {
+        None => true,
+        Some(cond) => match (cond, meta) {
+            (Some(cond), Some(meta)) => {
+                meta::static_value(cond, meta, &kind_of, &|_| None).is_some_and(|c| c.truthy())
+            }
+            _ => false,
+        },
+    })
+}
+
+/// E1031: two interfaces with one name in one block (spec §3.3). Only
+/// ambient `declare interface`s merge; declarations under `@if` count
+/// where the build keeps them (alternatives for different builds may share
+/// a name).
+fn duplicate_interfaces(
+    parse: &Parse,
+    info: &ModuleInfo,
+    meta: Option<&Meta>,
+    out: &mut Vec<Diagnostic>,
+) {
+    let mut blocks = vec![parse.view().block()];
+    while let Some(b) = blocks.pop() {
+        let mut seen: HashMap<&str, Name<'_>> = HashMap::new();
+        for s in b.stmts() {
+            let inner = match s.kind() {
+                StmtKind::Export(inner) => inner,
+                _ => s,
+            };
+            blocks.extend(wowlua_syntax::visit::child_blocks(inner));
+            if let StmtKind::Class(c) = inner.kind() {
+                for m in c.members() {
+                    match m.kind() {
+                        ClassMemberKind::Method { func, .. }
+                        | ClassMemberKind::Constructor { func, .. } => blocks.push(func.body()),
+                        ClassMemberKind::Getter { body, .. }
+                        | ClassMemberKind::Setter { body, .. } => blocks.push(body),
+                        ClassMemberKind::Field { .. } => {}
+                    }
+                }
+            }
+            let StmtKind::Interface(i) = inner.kind() else {
+                continue;
+            };
+            if !kept_by_if(s, info, meta) || !kept_by_if(inner, info, meta) {
+                continue;
+            }
+            let name = i.name();
+            match seen.get(name.text()) {
+                Some(first) => out.push(
+                    Diagnostic::error(
+                        "E1031",
+                        format!("the interface `{}` is declared twice in this scope", name.text()),
+                    )
+                    .with_label(name.span(), "declared again here")
+                    .with_label(first.span(), "first declared here")
+                    .with_help(
+                        "only ambient `declare interface` declarations merge: rename one of them, or merge the two",
+                    ),
+                ),
+                None => {
+                    seen.insert(name.text(), name);
+                }
+            }
+        }
+    }
+}
+
 /// E1016: an export shares its name with another top-level declaration of
 /// the module (spec §5.1), so one of them shadows the other. A declaration
 /// under `@if` counts where the build keeps it (alternatives for different
@@ -1215,19 +1288,7 @@ fn export_redeclarations(
     meta: Option<&Meta>,
     out: &mut Vec<Diagnostic>,
 ) {
-    let kind_of = |n: &str| info.meta_bindings.get(n).copied();
-    // Kept: no `@if`, or every `@if` condition statically true.
-    let kept = |s: Stmt<'_>| {
-        s.decorators().iter().all(|d| match meta::if_condition(d) {
-            None => true,
-            Some(cond) => match (cond, meta) {
-                (Some(cond), Some(meta)) => {
-                    meta::static_value(cond, meta, &kind_of, &|_| None).is_some_and(|c| c.truthy())
-                }
-                _ => false,
-            },
-        })
-    };
+    let kept = |s: Stmt<'_>| kept_by_if(s, info, meta);
     // Every declared name, and whether it is exported.
     let mut decls: Vec<(Name<'_>, bool)> = Vec::new();
     for s in parse.view().block().stmts() {

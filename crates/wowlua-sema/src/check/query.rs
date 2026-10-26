@@ -252,13 +252,18 @@ impl Env<'_> {
 
     /// A static member of a class (inherited statics included).
     pub fn static_member(&mut self, def: DefId, name: &str) -> Option<Member> {
+        self.static_member_at(def, name).map(|(m, _)| m)
+    }
+
+    /// [`Self::static_member`] and the class that declares it.
+    pub fn static_member_at(&mut self, def: DefId, name: &str) -> Option<(Member, DefId)> {
         let mut current = Some(def);
         let mut guard = 0;
         while let Some(d) = current {
             if let Some(m) = self.view(d).static_member(name) {
                 let m = m.clone();
                 self.note_pending(d, name);
-                return Some(m);
+                return Some((m, d));
             }
             guard += 1;
             if guard > 64 {

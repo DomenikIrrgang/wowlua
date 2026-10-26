@@ -2782,7 +2782,10 @@ impl<'e, 'p> Checker<'e, 'p> {
         // A base whose type arguments use `typeof` (directly or through a
         // `typeof` alias) is known only where the file reaches the class
         // (`extends Module<typeof(DEFAULTS)>`, decision L45).
-        if let Some(e) = c.extends() {
+        // (none where it extends no class, E3008)
+        if let Some(e) = c.extends()
+            && !self.env.def(def).bases.is_empty()
+        {
             let mut exprs: Vec<Expr<'_>> = Vec::new();
             typeof_exprs(e, &mut exprs);
             for x in exprs {
@@ -2798,6 +2801,7 @@ impl<'e, 'p> Checker<'e, 'p> {
                 *b = t;
             }
         }
+        self.check_implements(c, instance);
         if self.mode == Mode::Strict {
             // (which fields the constructor sets: no results read, L56)
             let reads = self.env.pending_reads.clone();

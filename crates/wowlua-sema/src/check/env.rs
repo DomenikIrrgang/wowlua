@@ -9,6 +9,7 @@ use crate::constant::Const;
 use indexmap::IndexMap;
 use rustc_hash::FxBuildHasher;
 use rustc_hash::FxHashMap;
+use rustc_hash::FxHashSet;
 use wowlua_diagnostics::Diagnostic;
 use wowlua_span::Span;
 use wowlua_syntax::view::Func as FuncNode;
@@ -494,11 +495,22 @@ impl<'p> Env<'p> {
                 env.lazy_aliases.insert(*def, (*a, module));
             }
         }
+        // A class after the class it extends: it takes the superclass's
+        // constructor and widget type, whatever order the files come in.
+        let classes: FxHashMap<DefId, usize> = pending
+            .iter()
+            .enumerate()
+            .filter(|(_, (_, p))| matches!(p, Pending::Class(..)))
+            .map(|(i, (d, _))| (*d, i))
+            .collect();
+        let mut resolved: FxHashSet<DefId> = FxHashSet::default();
         for (def, p) in &pending {
-            if matches!(p, Pending::Alias(..)) {
-                env.force_alias(*def);
-            } else {
-                env.resolve_pending(*def, p, sources);
+            match p {
+                Pending::Alias(..) => env.force_alias(*def),
+                Pending::Class(..) => {
+                    env.resolve_class_after_base(*def, &pending, &classes, &mut resolved, sources)
+                }
+                _ => env.resolve_pending(*def, p, sources),
             }
         }
         // Pass 3: global values, events and messages.
@@ -1286,6 +1298,115 @@ impl<'p> Env<'p> {
         self.def_mut(def).members.insert(name.into(), m);
     }
 
+    /// Resolves class `def` (a pending class) after the class it extends,
+    /// if that one is pending too.
+    fn resolve_class_after_base(
+        &mut self,
+        def: DefId,
+        pending: &[(DefId, Pending<'_>)],
+        classes: &FxHashMap<DefId, usize>,
+        resolved: &mut FxHashSet<DefId>,
+        sources: &[Source],
+    ) {
+        // (a cycle of `extends`: each class once)
+        let mut chain = vec![def];
+        while let Some(&d) = chain.last() {
+            if resolved.contains(&d) {
+                chain.pop();
+                continue;
+            }
+            let Some(Pending::Class(c, m)) = classes.get(&d).map(|&i| &pending[i].1) else {
+                chain.pop();
+                continue;
+            };
+            let base = c.extends().and_then(|e| self.base_def(e, *m, sources));
+            match base {
+                Some(b)
+                    if classes.contains_key(&b)
+                        && !resolved.contains(&b)
+                        && !chain.contains(&b) =>
+                {
+                    chain.push(b)
+                }
+                _ => {
+                    resolved.insert(d);
+                    chain.pop();
+                    self.resolve_class(d, *c, *m, sources);
+                }
+            }
+        }
+    }
+
+    /// The class an `extends` names, looked up without reporting anything.
+    fn base_def(&mut self, e: Type<'_>, module: usize, sources: &[Source]) -> Option<DefId> {
+        let scope = self.scope_of(module, sources);
+        let reported = self.diagnostics.len();
+        let t = self.resolve(e, &scope);
+        self.diagnostics.truncate(reported);
+        match self.types.get(t) {
+            Ty::Named(d, _) => Some(*d),
+            _ => None,
+        }
+    }
+
+    /// What a class extends: a class (E3008 for an interface, a type, an
+    /// enum or a value that is no class, spec §3.1.4).
+    fn class_base(&mut self, c: ClassDecl<'_>, e: Type<'_>, scope: &Scope) -> Option<TypeId> {
+        let not_a_class = |env: &mut Self, what: &str| {
+            let name = match e.kind() {
+                TypeKind::Ref { path, .. } => {
+                    path.iter().map(|n| n.text()).collect::<Vec<_>>().join(".")
+                }
+                _ => "…".to_string(),
+            };
+            let msg = format!("class `{}` extends `{name}`, {what}", c.name().text());
+            env.diagnostics.push(
+                Diagnostic::error("E3008", msg)
+                    .with_label(e.span(), "not a class")
+                    .with_help(
+                        "a class extends one class; it implements interfaces (`implements I`)",
+                    ),
+            );
+        };
+        // A name that is no type: a value (`local Base = {}`).
+        if let TypeKind::Ref { path, .. } = e.kind()
+            && let Some([name]) = path.exactly::<1>()
+            && !scope.params.iter().any(|(n, _)| n.as_ref() == name.text())
+            && self.lookup_type(name.text(), scope).is_none()
+        {
+            not_a_class(self, "a value, not a class");
+            return None;
+        }
+        // (an alias of a class names no value either)
+        let alias = match e.kind() {
+            TypeKind::Ref { path, .. } => path
+                .exactly::<1>()
+                .and_then(|[n]| self.lookup_type(n.text(), scope))
+                .is_some_and(|d| self.def(d).kind == DefKind::Alias),
+            _ => false,
+        };
+        let t = self.resolve(e, scope);
+        let what = match self.types.get(t) {
+            _ if alias => Some("a type alias, not a class"),
+            Ty::Named(b, _) => match self.def(*b).kind {
+                DefKind::Class => None,
+                DefKind::Interface => Some("an interface, not a class"),
+                DefKind::Enum => Some("an enum, not a class"),
+                _ => Some("a type, not a class"),
+            },
+            Ty::ClassOf(b) if self.def(*b).kind == DefKind::Enum => Some("an enum, not a class"),
+            Ty::Error | Ty::Any => None,
+            _ => Some("a type, not a class"),
+        };
+        match what {
+            Some(what) => {
+                not_a_class(self, what);
+                None
+            }
+            None => Some(t),
+        }
+    }
+
     fn resolve_class(&mut self, def: DefId, c: ClassDecl<'_>, module: usize, sources: &[Source]) {
         let declaration = sources
             .iter()
@@ -1295,8 +1416,9 @@ impl<'p> Env<'p> {
         self.def_type_params(def, c.type_params(), &mut scope);
         let instance = self.instance(def);
         scope.self_ty = Some(instance);
-        if let Some(e) = c.extends() {
-            let t = self.resolve(e, &scope);
+        if let Some(e) = c.extends()
+            && let Some(t) = self.class_base(c, e, &scope)
+        {
             self.def_mut(def).bases.push(t);
             if let Ty::Named(b, _) = self.types.get(t).clone() {
                 let w = self.def(b).widget.clone().or_else(|| {

@@ -4,6 +4,7 @@
 
 pub mod body;
 pub mod complete;
+mod decl;
 pub mod declared;
 mod definition;
 pub mod env;
@@ -1742,6 +1743,8 @@ mod tests {
     use super::*;
     use wowlua_span::SourceDb;
 
+    // Classes, interfaces, decorators and names (spec chapters 3 and 4).
+    mod classes;
     mod type_rules;
 
     /// Checks one `.wowlua` source with the compiler's declarations.

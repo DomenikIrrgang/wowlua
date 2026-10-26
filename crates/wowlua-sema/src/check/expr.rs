@@ -1339,9 +1339,19 @@ impl Checker<'_, '_> {
                         None => {}
                     },
                 },
+                // The runtime's key, also where it is declared (the addon
+                // namespace's `__wowlua`, spec §2.4.7).
+                Ty::Named(..) if name == "__wowlua" => {
+                    self.report(
+                        "E2003",
+                        span,
+                        "`__wowlua` is reserved for the wowlua runtime",
+                    );
+                }
                 Ty::Named(d, args) => match self.env.instance_member(d, &args, name) {
                     Some((mem, owner)) => {
                         self.note_member(span, mem.span, owner);
+                        self.check_visibility(mem.visibility, owner, name, span);
                         // A readonly field: only in its own class's
                         // constructor (spec §3.1.1).
                         let in_own_ctor = self.ctor_of == Some(owner);
@@ -1362,25 +1372,11 @@ impl Checker<'_, '_> {
                         if self.env.indexer_of(d).is_none()
                             && self.env.view(d).kind() != DefKind::Enum
                         {
-                            if name == "__wowlua" {
-                                self.report(
-                                    "E2003",
-                                    span,
-                                    "`__wowlua` is reserved for the wowlua runtime",
-                                );
-                            } else if !self.env.view(d).native()
-                                || self.env.view(d).widget().is_none()
-                            {
+                            if !self.env.view(d).native() || self.env.view(d).widget().is_none() {
                                 let msg =
                                     format!("`{}` has no field `{name}`", self.env.display(m));
                                 self.report("E2003", span, msg);
                             }
-                        } else if name == "__wowlua" {
-                            self.report(
-                                "E2003",
-                                span,
-                                "`__wowlua` is reserved for the wowlua runtime",
-                            );
                         } else if self.env.open_through_native(d) {
                             self.undeclared_member(m, name, span);
                         }
@@ -1393,7 +1389,8 @@ impl Checker<'_, '_> {
                             span,
                             format!("cannot assign to the enum member `{name}`"),
                         );
-                    } else if let Some(mem) = self.env.static_member(d, name) {
+                    } else if let Some((mem, owner)) = self.env.static_member_at(d, name) {
+                        self.check_visibility(mem.visibility, owner, name, span);
                         self.check_assignable(span, value, mem.ty);
                     }
                 }
@@ -1985,12 +1982,15 @@ impl Checker<'_, '_> {
                     Some(Types::ERROR)
                 }
             },
-            _ => match self.env.static_member(d, name) {
-                Some(m) => {
+            _ => match self.env.static_member_at(d, name) {
+                Some((m, owner)) => {
                     if m.renamable {
                         self.private_methods.insert(span, d);
                     }
                     self.note_member(span, m.span, d);
+                    if !quiet {
+                        self.check_visibility(m.visibility, owner, name, span);
+                    }
                     Some(m.ty)
                 }
                 None => {

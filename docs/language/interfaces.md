@@ -119,13 +119,22 @@ print(render({ GoldReadout.new(), BagReadout.new() }))
 
 `implements` is optional: both classes fit `Readout` without it, because a
 class instance fits an interface through its public fields, accessors and
-methods.
+methods. What `implements` adds is the check where the class is declared: a
+class that misses a member, or has one of the wrong type, is error E3006
+there, not only where it is used as the interface, as in `render` above.
 
-> [!NOTE]
-> The [specification](../../spec/language/03-classes.md#318-typing) has
-> `implements` check the class where it is declared (E3006). wowlua 0.12.0
-> doesn't do that check yet. A class that doesn't fit is reported where it is
-> used as the interface, as in `render` above.
+```wowlua fails=E3006
+interface Readout
+    title: string
+    function current(): number
+end
+
+class EmptyReadout implements Readout
+    title: string = "Nothing"
+end
+
+print(EmptyReadout)
+```
 
 ## Extend and combine interfaces
 
