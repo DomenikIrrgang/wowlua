@@ -441,6 +441,19 @@ fn publish_checks_before_uploading() {
         .stderr(predicate::str::contains("W6010").not())
         .stderr(predicate::str::contains("cf-secret").not());
     assert!(mock.requests().iter().all(|r| r.method == "GET"));
+    // A dry run without tokens reports them missing (E4201) and does not
+    // reach a site with the empty token: CurseForge's game versions need it.
+    let asked = mock.find("GET", "/api/game/wow/versions").len();
+    let checked = mock.find("GET", "/repos/o/r").len();
+    wowlua(&e.project, &e.home)
+        .args(["publish", "--dry-run"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("error[E4201]"))
+        .stderr(predicate::str::contains("E4202").not())
+        .stderr(predicate::str::contains("no token"));
+    assert_eq!(mock.find("GET", "/api/game/wow/versions").len(), asked);
+    assert_eq!(mock.find("GET", "/repos/o/r").len(), checked);
     // A missing token stops the publish before any upload. Looking for it
     // where `wowlua login` saves it is said first: the OS credential store
     // may wait for the user to allow it. The zips are named as soon as

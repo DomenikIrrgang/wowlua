@@ -161,6 +161,11 @@ pub fn curseforge(u: &Upload, relations: &[(String, String)]) -> Outcome {
         o.code = "E4210";
         return o.fail("CurseForge needs a changelog for every file");
     };
+    // Its game versions need the token: a dry run without one (E4201)
+    // does not ask with an empty one.
+    if u.dry_run && u.token.is_empty() {
+        return o.skip("no token, so CurseForge's game versions are not looked up");
+    }
     let list = match u
         .http
         .retried("GET", &format!("{base}/api/game/wow/versions"), &auth, None)
