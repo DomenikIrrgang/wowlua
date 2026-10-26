@@ -41,6 +41,8 @@ $ wowlua check --watch                     # again on every change
 $ wowlua test                              # run the tests in the emulated client
 $ wowlua test "options window"             # only the files and tests whose path or name contains it
 $ wowlua test --watch                      # again on every change
+$ wowlua data pull                         # read your WoW installation's game data into wowlua's cache, once
+$ wowlua test --game-data                  # tests see the client's items and spells where they define none
 $ wowlua test -u                           # take the new snapshots and screenshots
 $ wowlua test --coverage --reporter html   # which lines and branches the tests ran
 $ wowlua fmt                               # format the package's sources
@@ -105,6 +107,8 @@ More: [Libraries and dependencies](packages.md).
 $ wowlua build                          # dev build into dist/dev/
 $ wowlua build --release --stats        # bundled release build, with its size and Lua compile time
 $ wowlua build --profile beta           # a profile of your own
+$ wowlua build --watch                  # again on every save
+$ wowlua build --release --reproducible # build.time from SOURCE_DATE_EPOCH or the commit, not the clock
 $ wowlua compile src/util.wowlua        # just the Lua for some files, no AddOn folder
 $ wowlua login curseforge               # save a token once; also wago, wowinterface, github
 $ wowlua logout curseforge              # remove it

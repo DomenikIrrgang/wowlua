@@ -48,6 +48,13 @@ pub fn info(dir: &Path) -> Option<VcsInfo> {
     })
 }
 
+/// The commit time of `HEAD` (Unix seconds), for reproducible builds.
+pub fn commit_time(dir: &Path) -> Option<i64> {
+    git(dir, &["log", "-1", "--format=%ct", "HEAD"])?
+        .parse()
+        .ok()
+}
+
 /// Whether `dir` is inside a Git work tree.
 pub fn inside_work_tree(dir: &Path) -> bool {
     git(dir, &["rev-parse", "--is-inside-work-tree"]).as_deref() == Some("true")

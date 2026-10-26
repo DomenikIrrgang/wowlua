@@ -727,6 +727,75 @@ fn check_watch_checks_again_after_a_change() {
     assert!(log.contains("error[E2001]"), "the change is checked: {log}");
 }
 
+/// `wowlua build --watch` (spec CLI §12.2) builds once, then again after
+/// each change; what it writes, also into `--out`, is not a change.
+#[test]
+fn build_watch_builds_again_after_a_change() {
+    use std::io::{BufRead, BufReader, Read};
+    let dir = tempfile::tempdir().unwrap();
+    let root = dir.path().join("Watched");
+    write(
+        &root,
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"watched\", \"version\": \"1.0.0\" } }\n",
+            ),
+            ("src/main.wowlua", "print(1)\n"),
+        ],
+    );
+    let mut child = std::process::Command::new(assert_cmd::cargo::cargo_bin("wowlua"))
+        .current_dir(&root)
+        .env("NO_COLOR", "1")
+        .env("WOWLUA_HOME", dir.path().join(".wowlua-home"))
+        .args(["build", "--watch", "--out", "out/Watched"])
+        .stderr(std::process::Stdio::piped())
+        .spawn()
+        .unwrap();
+    let pid = child.id();
+    let (done, finished) = std::sync::mpsc::channel::<()>();
+    std::thread::spawn(move || {
+        if finished
+            .recv_timeout(std::time::Duration::from_secs(120))
+            .is_err()
+        {
+            eprintln!("wowlua build --watch did not build the change");
+            let _ = std::process::Command::new("kill")
+                .arg(pid.to_string())
+                .status();
+            std::process::abort();
+        }
+    });
+    let mut log = String::new();
+    let mut finished_builds = 0;
+    let mut reader = BufReader::new(child.stderr.take().unwrap());
+    for line in reader.by_ref().lines() {
+        let line = line.unwrap();
+        log.push_str(&line);
+        log.push('\n');
+        if line.contains("Watching") {
+            fs::write(root.join("src/main.wowlua"), "print(2)\n").unwrap();
+        }
+        if line.contains("Finished") {
+            finished_builds += 1;
+            if finished_builds == 2 {
+                break;
+            }
+        }
+    }
+    let _ = done.send(());
+    // No third build: the second one's writes are not changes.
+    std::thread::sleep(std::time::Duration::from_millis(1500));
+    child.kill().unwrap();
+    let mut rest = String::new();
+    let _ = reader.read_to_string(&mut rest);
+    let _ = child.wait();
+    assert!(log.contains("Watching . for changes"), "{log}");
+    assert_eq!(finished_builds, 2, "{log}");
+    assert!(!rest.contains("Finished"), "{log}{rest}");
+    assert_eq!(run_addon(&root.join("out/Watched"), "Watched"), "2");
+}
+
 /// Loads a built AddOn into the embedded Lua 5.1 VM like WoW does: the
 /// TOC's Lua files in order, each with `(addonName, addonTable)` as `...`.
 /// Returns what it printed.
@@ -4003,6 +4072,67 @@ print("shown", console.window:IsShown(), type(WowluaDevDB_Win))
         !toc.contains("WowluaDevDB") && !release.join("wowlua/fonts").exists(),
         "{toc}"
     );
+}
+
+/// `wowlua build --reproducible` (spec meta §6.1.2): `build.time` and
+/// `build.timestamp` come from `SOURCE_DATE_EPOCH`, else the commit time,
+/// else 0, never the clock; without it, the clock.
+#[test]
+fn reproducible_builds_take_their_time_from_the_commit() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"repro\", \"version\": \"1.0.0\" } }\n",
+            ),
+            (
+                "src/main.wowlua",
+                "import build from \"wowlua:meta\"\nprint(build.timestamp, build.time)\n",
+            ),
+        ],
+    );
+    let built = |args: &[&str], epoch: Option<&str>| -> String {
+        let mut cmd = wowlua(dir.path());
+        cmd.arg("build").args(args).env_remove("SOURCE_DATE_EPOCH");
+        if let Some(e) = epoch {
+            cmd.env("SOURCE_DATE_EPOCH", e);
+        }
+        cmd.assert().success();
+        run_addon(&dir.path().join("dist/dev/Repro"), "Repro")
+    };
+    // No repository: 0.
+    assert_eq!(built(&["--reproducible"], None), "0 1970-01-01T00:00:00Z");
+    assert_eq!(
+        built(&["--reproducible"], Some("86400")),
+        "86400 1970-01-02T00:00:00Z"
+    );
+    let git = |args: &[&str]| {
+        let ok = std::process::Command::new("git")
+            .args(args)
+            .current_dir(dir.path())
+            .env("GIT_AUTHOR_DATE", "@1700000000 +0000")
+            .env("GIT_COMMITTER_DATE", "@1700000000 +0000")
+            .env("GIT_AUTHOR_NAME", "t")
+            .env("GIT_AUTHOR_EMAIL", "t@example.com")
+            .env("GIT_COMMITTER_NAME", "t")
+            .env("GIT_COMMITTER_EMAIL", "t@example.com")
+            .output()
+            .is_ok_and(|o| o.status.success());
+        assert!(ok, "git {args:?}");
+    };
+    git(&["init", "-q"]);
+    git(&["add", "."]);
+    git(&["commit", "-q", "-m", "first"]);
+    assert_eq!(
+        built(&["--reproducible"], None),
+        "1700000000 2023-11-14T22:13:20Z"
+    );
+    // Without the flag: the clock (and `SOURCE_DATE_EPOCH` does not count).
+    let clock = built(&[], Some("86400"));
+    let seconds: i64 = clock.split(' ').next().unwrap().parse().unwrap();
+    assert!(seconds > 1_700_000_000, "{clock}");
 }
 
 /// A publish target that minifies further than its profile is another

@@ -65,6 +65,7 @@ fn a_path_dependency_in_memory_builds_into_the_addon() {
         keep_code: false,
         tests: false,
         left_out: Vec::new(),
+        reproducible: false,
     };
     let output = wowlua_driver::build(&mut session, &project, &request);
     assert!(

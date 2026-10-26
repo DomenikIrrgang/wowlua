@@ -20,6 +20,8 @@ pub struct MetaInput<'a> {
     pub version: &'a str,
     pub build_id: &'a str,
     pub vcs: Option<&'a VcsInfo>,
+    /// `build.time` and `build.timestamp` (Unix seconds).
+    pub time: i64,
     /// Asset paths relative to the package root.
     pub assets: &'a [String],
     pub addon_name: &'a str,
@@ -195,7 +197,7 @@ pub fn build_meta(project: &Project, input: &MetaInput) -> Meta {
         ),
     );
 
-    let now = crate::host::unix_now();
+    let now = input.time;
     let mut build: IndexMap<String, MetaValue> = IndexMap::new();
     build.insert("profile".into(), MetaValue::str(&input.profile.name));
     build.insert("debug".into(), MetaValue::Bool(input.profile.debug));

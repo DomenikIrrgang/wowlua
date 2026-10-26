@@ -240,6 +240,7 @@ impl Playground {
                 keep_code,
                 tests,
                 left_out: Vec::new(),
+                reproducible: false,
             };
             let built = wowlua_driver::build(&mut session, &project, &request);
             // (`check.lints`, W2063 off by default: as the CLI reports)
@@ -353,6 +354,7 @@ impl Playground {
             keep_code: true,
             tests: false,
             left_out: Vec::new(),
+            reproducible: false,
         };
         let built = wowlua_driver::build(&mut session, &project, &request);
         project.apply_lints(&mut session);

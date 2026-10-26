@@ -26,6 +26,7 @@ fn request(write: bool) -> BuildRequest {
         keep_code: false,
         tests: false,
         left_out: Vec::new(),
+        reproducible: false,
     }
 }
 

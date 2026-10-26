@@ -595,6 +595,13 @@ pub struct BuildArgs {
     /// Report the output's files, sizes and Lua compile time
     #[arg(long)]
     pub stats: bool,
+    /// Build again whenever a file of the package changes
+    #[arg(long)]
+    pub watch: bool,
+    /// Take `build.time` and `build.timestamp` from SOURCE_DATE_EPOCH, else
+    /// the commit time, never the clock
+    #[arg(long)]
+    pub reproducible: bool,
 }
 
 #[derive(Args, Debug, Clone)]

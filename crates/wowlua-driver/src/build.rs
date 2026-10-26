@@ -49,6 +49,10 @@ pub struct BuildRequest {
     /// Test files (`*.test.wowlua`, package-relative) left out of the test
     /// side: ones that do not compile, so the others still run.
     pub left_out: Vec<String>,
+    /// `--reproducible` (spec meta §6.1.2): `build.time` and
+    /// `build.timestamp` from `SOURCE_DATE_EPOCH`, else the commit time,
+    /// else 0, never from the clock.
+    pub reproducible: bool,
 }
 
 /// The files `wowlua compile` compiles.
@@ -77,6 +81,7 @@ impl BuildRequest {
             keep_code: true,
             tests: false,
             left_out: Vec::new(),
+            reproducible: false,
         }
     }
 }
@@ -645,6 +650,16 @@ fn build_inner(
         None => vcs::info(&root),
     };
     let version = build_version(session, project, &profile, vcs.as_ref())?;
+    // The build's time (spec meta §6.1.2).
+    let time = if request.reproducible {
+        std::env::var("SOURCE_DATE_EPOCH")
+            .ok()
+            .and_then(|s| s.trim().parse().ok())
+            .or_else(|| crate::vcs::commit_time(&root))
+            .unwrap_or(0)
+    } else {
+        crate::host::unix_now()
+    };
     // The settings as resolved: a publish target's `minify` or `bundle`
     // over the profile's, and `nolib`, make another build.
     let settings = format!("{profile:?} nolib={}", request.nolib);
@@ -675,7 +690,11 @@ fn build_inner(
     let mut flavor_blocks: BTreeSet<String> = BTreeSet::new();
     let keyword_info = keywords.then(|| {
         let alpha = semver::Version::parse(&version).is_ok_and(|v| !v.pre.is_empty());
-        let now = crate::keywords::build_time();
+        let now = if request.reproducible {
+            time
+        } else {
+            crate::keywords::build_time()
+        };
         crate::keywords::KeywordInfo::from_git(&root, &version, profile.debug, alpha, now)
     });
     if let Some(info) = &keyword_info {
@@ -1244,6 +1263,7 @@ fn build_inner(
                 version: &version,
                 build_id: &build_id,
                 vcs: vcs.as_ref(),
+                time,
                 assets: asset_rels,
                 addon_name: &addon_name,
             },

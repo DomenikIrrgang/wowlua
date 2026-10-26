@@ -186,7 +186,50 @@ fn load_and_build(
     build.map(|b| (project, b))
 }
 
+/// `wowlua build`; with `--watch`, again after every change (spec CLI
+/// §12.2).
 pub fn build(out: &Output, global: &GlobalArgs, args: &BuildArgs) -> bool {
+    let (ok, watched) = build_once(out, global, args);
+    if !args.watch {
+        return ok;
+    }
+    // The folder of the manifest the command found (a workspace's root
+    // covers its members), else the first project's.
+    let found = wowlua_manifest::find_manifest(&cwd(), global.manifest.as_deref())
+        .and_then(|m| m.parent().map(Path::to_path_buf));
+    let Some(root) = found.or_else(|| watched.as_ref().map(|(root, _)| root.clone())) else {
+        return ok;
+    };
+    // What the build writes is not a change: its output folder, the one
+    // `--out` names and the source maps beside that (as the watcher names
+    // them: symbolic links resolved).
+    let out_dirs = |dist: PathBuf| {
+        let mut dirs = vec![dist];
+        if let Some(o) = &args.out {
+            let o = cwd().join(o);
+            dirs.extend(o.parent().map(|p| p.join(".maps")));
+            dirs.push(o);
+        }
+        let real: Vec<PathBuf> = dirs.iter().filter_map(|d| d.canonicalize().ok()).collect();
+        dirs.extend(real);
+        dirs
+    };
+    let dist = watched.map_or_else(|| root.join("dist"), |(_, dist)| dist);
+    watch(out, &root, out_dirs(dist), |dirs| {
+        if let (_, Some((_, dist))) = build_once(out, global, args) {
+            *dirs = out_dirs(dist);
+        }
+        true
+    })
+}
+
+/// One `wowlua build`: whether it succeeded, and the first project's root
+/// and output folder.
+fn build_once(
+    out: &Output,
+    global: &GlobalArgs,
+    args: &BuildArgs,
+) -> (bool, Option<(PathBuf, PathBuf)>) {
     let started = Instant::now();
     let mut session = Session::new();
     let request = BuildRequest {
@@ -202,11 +245,16 @@ pub fn build(out: &Output, global: &GlobalArgs, args: &BuildArgs) -> bool {
         keep_code: true,
         tests: false,
         left_out: Vec::new(),
+        reproducible: args.reproducible,
     };
     let result = load_and_build_all(out, &mut session, global, &request);
     let ok = out.flush(&mut session);
     match result {
         Some(built) if ok => {
+            let watched = built
+                .builds
+                .first()
+                .map(|(p, _)| (p.root().to_path_buf(), p.manifest.out_dir()));
             let all = built.builds.iter().map(|(_, b)| b).chain(&built.externals);
             for build in all {
                 out.status(
@@ -236,9 +284,9 @@ pub fn build(out: &Output, global: &GlobalArgs, args: &BuildArgs) -> bool {
                     );
                 }
             }
-            true
+            (true, watched)
         }
-        _ => false,
+        _ => (false, None),
     }
 }
 
@@ -502,6 +550,7 @@ pub fn toc(out: &Output, global: &GlobalArgs, profile: &str, flavors: Vec<String
         keep_code: true,
         tests: false,
         left_out: Vec::new(),
+        reproducible: false,
     };
     let result = load_and_build(out, &mut session, global, &request, None);
     let ok = out.flush(&mut session);
@@ -542,9 +591,9 @@ pub fn check(
         return ok;
     };
     let out_dir = watched.map_or_else(|| root.join("dist"), |(_, out_dir)| out_dir);
-    watch(out, &root, out_dir, |out_dir| {
+    watch(out, &root, vec![out_dir], |out_dirs| {
         if let (_, Some((_, dir))) = check_once(out, global, profile, &flavors) {
-            *out_dir = dir;
+            *out_dirs = vec![dir];
         }
         true
     })
@@ -575,6 +624,7 @@ fn check_once(
         // compiles it.
         tests: true,
         left_out: Vec::new(),
+        reproducible: false,
     };
     let result = load_and_build_all(out, &mut session, global, &request);
     let ok = out.flush(&mut session);
@@ -611,7 +661,7 @@ pub fn test(out: &Output, global: &GlobalArgs, args: &crate::TestArgs) -> bool {
     let Some((root, out_dir)) = watched else {
         return ok;
     };
-    watch(out, &root, out_dir, |_| {
+    watch(out, &root, vec![out_dir], |_| {
         test_once(out, global, args);
         true
     })
@@ -626,14 +676,14 @@ fn shown_folder(path: &Path) -> String {
 
 /// Watches `root` and calls `run` once per batch of changes: changes saved
 /// while it runs make one more run, not one each. Changes in the output
-/// folder (which `run` may move), in `.git` and in temporary files are not
-/// changes. Runs until `run` returns false; false when the folder cannot be
-/// watched.
+/// folders (which `run` may change), in `.git` and in temporary files are
+/// not changes. Runs until `run` returns false; false when the folder
+/// cannot be watched.
 fn watch(
     out: &Output,
     root: &Path,
-    mut out_dir: PathBuf,
-    mut run: impl FnMut(&mut PathBuf) -> bool,
+    mut out_dirs: Vec<PathBuf>,
+    mut run: impl FnMut(&mut Vec<PathBuf>) -> bool,
 ) -> bool {
     let (tx, rx) = std::sync::mpsc::channel();
     let mut debouncer = match new_debouncer(Duration::from_millis(300), tx) {
@@ -660,23 +710,28 @@ fn watch(
         "Watching",
         format!("{} for changes (Ctrl+C to stop)", shown_folder(root)),
     );
-    let relevant = |out_dir: &Path, result: &Result<Vec<DebouncedEvent>, _>| {
+    let relevant = |out_dirs: &[PathBuf], result: &Result<Vec<DebouncedEvent>, _>| {
         result.as_ref().is_ok_and(|events| {
             events.iter().any(|event| {
                 let path = &event.path;
-                !path.starts_with(out_dir)
+                // (a folder that holds an output folder changes with it)
+                !out_dirs
+                    .iter()
+                    .any(|d| path.starts_with(d) || d.starts_with(path))
                     && !path.components().any(|c| c.as_os_str() == ".git")
                     && !path.to_string_lossy().contains(".wowlua-tmp")
+                    // (the build's previous output, moved aside)
+                    && !path.to_string_lossy().contains(".wowlua-old")
             })
         })
     };
     while let Ok(result) = rx.recv() {
-        let mut changed = relevant(&out_dir, &result);
+        let mut changed = relevant(&out_dirs, &result);
         // Changes that arrived during the last run: one run for all.
         while let Ok(result) = rx.try_recv() {
-            changed |= relevant(&out_dir, &result);
+            changed |= relevant(&out_dirs, &result);
         }
-        if changed && !run(&mut out_dir) {
+        if changed && !run(&mut out_dirs) {
             break;
         }
     }
@@ -1209,6 +1264,7 @@ fn test_build(
             keep_code: true,
             tests: true,
             left_out: left_out.clone(),
+            reproducible: false,
         };
         let build = wowlua_driver::build(session, project, &request);
         apply_lints(session, project);
@@ -1406,6 +1462,7 @@ pub fn compile(out: &Output, global: &GlobalArgs, args: &crate::CompileArgs) -> 
         keep_code: true,
         tests: false,
         left_out: Vec::new(),
+        reproducible: false,
     };
     let build = wowlua_driver::build(&mut session, &project, &request);
     apply_lints(&mut session, &project);
@@ -1609,6 +1666,7 @@ pub fn install(out: &Output, global: &GlobalArgs, profile: &str, target: &Instal
         keep_code: true,
         tests: false,
         left_out: Vec::new(),
+        reproducible: false,
     };
     let Some(built) = load_and_build_all(out, &mut session, global, &request) else {
         out.flush(&mut session);
@@ -1941,6 +1999,7 @@ pub fn dev(
         keep_code: true,
         tests: false,
         left_out: Vec::new(),
+        reproducible: false,
     };
     let install = install_request(target, link);
     // What one build compiled, for the next ones.
@@ -1985,9 +2044,9 @@ pub fn dev(
     // succeeds, the manifest is not known to be readable.
     let out_dir = first.map_or_else(|| root.join("dist"), |(_, out_dir)| out_dir);
 
-    watch(out, &root, out_dir, |out_dir| {
+    watch(out, &root, vec![out_dir], |out_dirs| {
         if let Some((_, dir)) = cycle(false) {
-            *out_dir = dir;
+            *out_dirs = vec![dir];
         }
         builds += 1;
         exit_after.is_none_or(|n| builds < n)
@@ -2020,6 +2079,7 @@ fn apply_fixes(out: &Output, global: &GlobalArgs, lints_only: bool) -> Option<us
         keep_code: true,
         tests: false,
         left_out: Vec::new(),
+        reproducible: false,
     };
     let mut total = 0;
     let mut files: std::collections::BTreeSet<PathBuf> = Default::default();
@@ -2080,6 +2140,7 @@ pub fn lint(out: &Output, global: &GlobalArgs, fix: bool) -> bool {
         keep_code: true,
         tests: false,
         left_out: Vec::new(),
+        reproducible: false,
     };
     let Some(project) = load_project(global, &mut session, &load_options(out, global)) else {
         out.flush(&mut session);
@@ -2145,6 +2206,7 @@ pub fn fix(out: &Output, global: &GlobalArgs, migrate: bool) -> bool {
         keep_code: true,
         tests: false,
         left_out: Vec::new(),
+        reproducible: false,
     };
     let _ = load_and_build(out, &mut session, global, &request, None);
     out.flush(&mut session)
