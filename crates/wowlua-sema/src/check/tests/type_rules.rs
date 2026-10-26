@@ -420,3 +420,228 @@ fn record_keys_show_as_written() {
         "{d:#?}"
     );
 }
+
+/// An unannotated local with a value takes that value's type as its
+/// declared type, widened as a `local` widens it: assigning a value of
+/// another type is E2001, as for an annotated local (spec §2.4.1,
+/// decision L100).
+#[test]
+fn initializer_fixes_an_unannotated_local() {
+    let annotated = "local test: number = 3\ntest = \"hello world\"\nprint(test)\n";
+    let inferred = "local test = 3\ntest = \"hello world\"\nprint(test)\n";
+    for mode in [Mode::Basic, Mode::Strict] {
+        for src in [annotated, inferred] {
+            assert_eq!(
+                errors(src, mode),
+                ["E2001: `\"hello world\"` is not assignable to `number`"],
+                "{src}"
+            );
+        }
+    }
+    // the help says where the type comes from
+    let d = check_source(inferred, Mode::Basic);
+    assert!(
+        d.iter().any(|x| x.help.as_deref().is_some_and(
+            |h| h.contains("`test` has the type `number` from the value it is declared with")
+        )),
+        "{d:#?}"
+    );
+    // values of the type are fine, and the local keeps their narrowing
+    assert!(errors("local n = 1\nn = 2\nn = n + 1\nprint(n)\n", Mode::Strict).is_empty());
+    // a literal boolean widens: `true` fits, a number doesn't
+    assert!(
+        errors(
+            "local done = false\ndone = true\nprint(done)\n",
+            Mode::Strict
+        )
+        .is_empty()
+    );
+    assert_eq!(
+        errors("local done = false\ndone = 1\nprint(done)\n", Mode::Strict),
+        ["E2001: `1` is not assignable to `boolean`"]
+    );
+    // a value typed elsewhere keeps its type, literal unions included
+    let kinds = "type Kind = \"a\" | \"b\"\nlocal opts: { kind: Kind } = { kind = \"a\" }\nlocal k = opts.kind\n";
+    assert!(errors(&format!("{kinds}k = \"b\"\nprint(k)\n"), Mode::Strict).is_empty());
+    assert_eq!(
+        errors(&format!("{kinds}k = \"c\"\nprint(k)\n"), Mode::Strict),
+        ["E2001: `\"c\"` is not assignable to `\"a\" | \"b\"`"]
+    );
+}
+
+/// `nil` is assignable to every type in basic mode, so only strict mode
+/// reports a later `nil` for a local whose value excludes it; a local
+/// that may be cleared says so (`local t: T? = …`).
+#[test]
+fn initializer_fixed_local_and_nil() {
+    let src = "local t = { 1 }\nt = nil\nprint(t)\n";
+    assert!(errors(src, Mode::Basic).is_empty());
+    assert_eq!(
+        errors(src, Mode::Strict),
+        ["E2001: `nil` is not assignable to `number[]`"]
+    );
+    assert!(
+        errors(
+            "local t: number[]? = { 1 }\nt = nil\nprint(t)\n",
+            Mode::Strict
+        )
+        .is_empty()
+    );
+}
+
+/// Without a value, or with `nil`, there is nothing to fix the type to: the
+/// local holds the union of what is assigned to it (spec §2.4.1).
+#[test]
+fn local_without_a_value_keeps_the_union() {
+    for src in [
+        "local x\nx = 1\nx = \"a\"\nprint(x)\n",
+        "local x = nil\nx = 1\nx = \"a\"\nprint(x)\n",
+        // the names past the values have none
+        "local a, b = 1\nb = \"x\"\nprint(a, b)\n",
+    ] {
+        assert!(errors(src, Mode::Strict).is_empty(), "{src}");
+    }
+    // and it is narrowed by what is assigned
+    assert_eq!(
+        errors(
+            "local x\nx = 1\nlocal s: string = x\nprint(s)\n",
+            Mode::Strict
+        ),
+        ["E2001: `number` is not assignable to `string`"]
+    );
+}
+
+/// `local a, b = f()` fixes each local to its value's type.
+#[test]
+fn multiple_locals_take_each_value_type() {
+    let pre = "local function f(): (number, string) return 1, \"a\" end\nlocal a, b = f()\n";
+    assert!(
+        errors(
+            &format!("{pre}a = 2\nb = \"c\"\nprint(a, b)\n"),
+            Mode::Strict
+        )
+        .is_empty()
+    );
+    assert_eq!(
+        errors(
+            &format!("{pre}a = \"c\"\nb = 2\nprint(a, b)\n"),
+            Mode::Strict
+        ),
+        [
+            "E2001: `\"c\"` is not assignable to `number`",
+            "E2001: `2` is not assignable to `string`"
+        ]
+    );
+}
+
+/// A value of type `any` fixes nothing: the local stays `any`.
+#[test]
+fn any_initializer_stays_any() {
+    let src = "local function g(x)\n local v = x\n v = 1\n v = \"a\"\n print(v)\nend\ng(1)\n";
+    assert!(errors(src, Mode::Basic).is_empty());
+    let src = "local v = (1 :: any)\nv = \"a\"\nv = {}\nprint(v)\n";
+    assert!(errors(src, Mode::Strict).is_empty());
+}
+
+/// An optional value fixes an optional type, which a test narrows; `nil`
+/// fits it later.
+#[test]
+fn initializer_fixed_local_narrows() {
+    let pre = "local function f(): number? return nil end\nlocal x = f()\n";
+    assert!(
+        errors(
+            &format!("{pre}if x then\n local n: number = x\n print(n)\nend\nx = nil\nx = 2\nlocal m: number = x\nprint(m)\n"),
+            Mode::Strict
+        )
+        .is_empty()
+    );
+    assert_eq!(
+        errors(
+            &format!("{pre}local n: number = x\nprint(n)\n"),
+            Mode::Strict
+        ),
+        ["E2001: `number?` is not assignable to `number`"]
+    );
+    assert_eq!(
+        errors(&format!("{pre}x = \"s\"\nprint(x)\n"), Mode::Strict),
+        ["E2001: `\"s\"` is not assignable to `number?`"]
+    );
+}
+
+/// An empty table literal fixes `{}`: any table fits it later, and the
+/// open table's fields still grow (spec §2.4.2).
+#[test]
+fn open_table_initializer() {
+    let src = "local t = {}\nt.a = 1\nlocal n: number = t.a\nt = {}\nt = { b = 2 }\nprint(n, t)\n";
+    assert!(errors(src, Mode::Strict).is_empty());
+    assert_eq!(
+        errors("local t = {}\nt = 5\nprint(t)\n", Mode::Strict),
+        ["E2001: `5` is not assignable to `{}`"]
+    );
+    // a table with fields fixes them
+    assert_eq!(
+        errors(
+            "local t = { a = 1 }\nt = { a = \"x\" }\nprint(t)\n",
+            Mode::Strict
+        )
+        .len(),
+        1
+    );
+}
+
+/// A closure that assigns the local, or reads one assigned later, sees its
+/// declared type (spec §2.4.1).
+#[test]
+fn closures_follow_the_fixed_type() {
+    assert_eq!(
+        errors(
+            "local n = 0\nlocal function f() n = \"a\" end\nprint(f, n)\n",
+            Mode::Strict
+        ),
+        ["E2001: `\"a\"` is not assignable to `number`"]
+    );
+    assert!(
+        errors(
+            "local n = 0\nlocal function f(): number\n n = n + 1\n return n\nend\nprint(f)\n",
+            Mode::Strict
+        )
+        .is_empty()
+    );
+    assert_eq!(
+        errors(
+            "local n = 0\nlocal function f()\n local s: string = n\n print(s)\nend\nn = 2\nprint(f)\n",
+            Mode::Strict
+        ),
+        ["E2001: `number` is not assignable to `string`"]
+    );
+}
+
+/// A pure Lua file reports it as the warning W2001 (spec §2.1).
+#[test]
+fn initializer_fixed_local_in_pure_lua() {
+    let d = check_pure_lua("local test = 3\ntest = \"hello world\"\nprint(test)\n");
+    assert!(d.iter().all(|x| !x.is_error()), "{d:#?}");
+    assert!(d.iter().any(|x| x.code == Some("W2001")), "{d:#?}");
+}
+
+/// A single literal from elsewhere (a `const`) widens as a fresh one does.
+#[test]
+fn initializer_fixed_local_widens_a_single_literal() {
+    let src = "const LIMIT = 40\nconst HEX = \"ff\"\nlocal n = LIMIT\nn = n - 1\nlocal h = HEX\nh = \"00\"\nprint(n, h)\n";
+    assert!(errors(src, Mode::Strict).is_empty());
+    // an enum's member is the enum
+    let e = "enum Mode { Fast, Slow }\nlocal m = Mode.Fast\n";
+    assert!(errors(&format!("{e}m = Mode.Slow\nprint(m)\n"), Mode::Strict).is_empty());
+    assert_eq!(
+        errors(&format!("{e}m = 1\nprint(m)\n"), Mode::Strict),
+        ["E2001: `1` is not assignable to `Mode`"]
+    );
+}
+
+/// A local under `@if` keeps the union: a build without it may define the
+/// name otherwise.
+#[test]
+fn conditional_local_keeps_the_union() {
+    let src = "import build from \"wowlua:meta\"\n@if(not build.debug)\nlocal items = {}\nitems = function() return 1 end\nprint(items)\n";
+    assert!(errors(src, Mode::Strict).is_empty());
+}

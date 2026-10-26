@@ -143,6 +143,7 @@ impl Checker<'_, '_> {
             assigned: base,
             captured: false,
             nil_init: false,
+            fixed: None,
         });
         self.field_vars
             .entry(root)

@@ -2,11 +2,17 @@
 
 ## E2001
 
-A value's type doesn't fit where it is used: an argument, an assignment to an
-annotated local or field, or a return value. The same code covers an operator
-used on a type it doesn't take, such as comparing a number with a string or
-doing arithmetic on a boolean. Change the value, or widen the annotation if
-the value is right.
+A value's type doesn't fit where it is used: an argument, an assignment to a
+local or field, or a return value. The same code covers an operator used on a
+type it doesn't take, such as comparing a number with a string or doing
+arithmetic on a boolean. Change the value, or widen the annotation if the
+value is right.
+
+A local without an annotation takes the type of the value it is declared with
+(`local test = 3` is a `number`), and later assignments must fit that type as
+if it were written out. To hold other values too, annotate it
+(`local test: number | string = 3`). A local declared without a value, or with
+`nil`, holds whatever is assigned to it.
 
 In a plain Lua file (no wowlua syntax, no `--!strict`) the checker reports the
 warning with the same number, W2001, so existing code keeps building.
@@ -19,6 +25,18 @@ print(count)
 ```wowlua compiles
 local count: number = 3
 print(count)
+```
+
+```wowlua fails
+local test = 3
+test = "hello world"
+print(`test: {test}`)
+```
+
+```wowlua compiles
+local test: number | string = 3
+test = "hello world"
+print(`test: {test}`)
 ```
 
 Related: W2001, E2005

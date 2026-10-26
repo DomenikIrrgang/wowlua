@@ -46,6 +46,18 @@ pub struct Var {
     /// Declared with `nil` (or no value): that `nil` is not counted for a
     /// function made before a value is assigned (a forward declaration).
     pub nil_init: bool,
+    /// An unannotated `local` with a value: the declared type that value
+    /// gives it (spec §2.4.1, decision L100). Later assignments are checked
+    /// against it as against an annotation.
+    pub fixed: Option<TypeId>,
+}
+
+impl Var {
+    /// Unannotated and without a value that fixed its type: it holds the
+    /// union of the values assigned to it (spec §2.4.1).
+    pub fn is_union(&self) -> bool {
+        self.declared.is_none() && self.fixed.is_none()
+    }
 }
 
 /// The function being checked.
@@ -627,6 +639,7 @@ impl<'e, 'p> Checker<'e, 'p> {
             assigned: Types::NEVER,
             captured: false,
             nil_init: declared.is_none() && base == Types::NIL,
+            fixed: None,
         });
         self.scopes.declare(name, id);
         if declared.is_none() {
@@ -782,7 +795,7 @@ impl<'e, 'p> Checker<'e, 'p> {
     /// first pass what was assigned so far (spec §2.4.1).
     pub fn var_type_in(&self, v: VarId, flow: &Flow) -> TypeId {
         let var = &self.vars[v.0 as usize];
-        if var.depth < self.depth && var.declared.is_none() && var.reassigned_in_closure {
+        if var.depth < self.depth && var.is_union() && var.reassigned_in_closure {
             // What this function assigned or narrowed it to (a function
             // starts without the outer narrowing of these).
             if let Some(&t) = flow.get(&v) {
@@ -808,7 +821,7 @@ impl<'e, 'p> Checker<'e, 'p> {
             .filter_map(|s| s.last().copied())
             .filter(|v| {
                 let var = &self.vars[v.0 as usize];
-                var.declared.is_none() && var.reassigned_in_closure
+                var.is_union() && var.reassigned_in_closure
             })
             .collect();
         for v in visible {
@@ -845,7 +858,8 @@ impl<'e, 'p> Checker<'e, 'p> {
     pub(crate) fn closure_finals(&mut self) -> FxHashMap<u32, TypeId> {
         let mut out: FxHashMap<u32, TypeId> = FxHashMap::default();
         for var in &self.vars {
-            let (Some(d), None, true) = (var.decl, var.declared, var.reassigned_in_closure) else {
+            let (Some(d), true, true) = (var.decl, var.is_union(), var.reassigned_in_closure)
+            else {
                 continue;
             };
             let t = match out.get(&d) {
@@ -885,6 +899,36 @@ impl<'e, 'p> Checker<'e, 'p> {
                 };
                 self.flow.insert(v, narrowed);
             }
+            None if var.fixed.is_some() => {
+                let fixed = var.fixed.expect("fixed");
+                if !self.env.assignable(value, fixed, self.mode) {
+                    self.mismatch(span, value, fixed);
+                    let help = format!(
+                        "`{}` has the type `{}` from the value it is declared with; to hold other values too, annotate it (`local {}: {} | … = …`)",
+                        var.name,
+                        self.env.display(fixed),
+                        var.name,
+                        self.env.display(fixed)
+                    );
+                    if let Some(d) = self.diagnostics.last_mut() {
+                        d.help = Some(help);
+                    }
+                    self.flow.insert(v, fixed);
+                    return;
+                }
+                // Narrowed to the value, its empty fields filled in and its
+                // literals widened (L59, L61), within the declared type.
+                // Closures see the declared type, so nothing is collected
+                // for them.
+                let value = self.fill_empty_fields(value, var.base);
+                let widened = self.widen_assigned(value, var.base);
+                let narrowed = if self.env.assignable(widened, fixed, self.mode) {
+                    widened
+                } else {
+                    self.narrow_to_assigned(fixed, value)
+                };
+                self.flow.insert(v, narrowed);
+            }
             None => {
                 let value = self.fill_empty_fields(value, var.base);
                 let widened = self.widen_assigned(value, var.base);
@@ -898,6 +942,33 @@ impl<'e, 'p> Checker<'e, 'p> {
                 };
                 self.set_base(v, base, assigned);
             }
+        }
+    }
+
+    /// An unannotated `local` with a value: that value's type (as the local
+    /// holds it) becomes its declared type, unless it is `nil`, `any` or
+    /// unknown (decision L100). A single literal widens: `local n = LIMIT`
+    /// with `const LIMIT = 40` is a `number`, as `local n = 40` is, and an
+    /// enum's member is the enum (`local d = Mode.Fast` is a `Mode`).
+    fn fix_local(&mut self, v: VarId, span: Span) {
+        let Some(&t) = self.flow.get(&v) else {
+            return;
+        };
+        if matches!(t, Types::NIL | Types::ANY | Types::ERROR | Types::NEVER) {
+            return;
+        }
+        let t = match *self.env.types.get(t) {
+            Ty::Bool(_) | Ty::Num(_) | Ty::Str(_) => self.env.types.widen_value(t),
+            Ty::EnumMember(d, _) => self.env.types.intern(Ty::Named(d, Vec::new())),
+            _ => t,
+        };
+        let var = &mut self.vars[v.0 as usize];
+        var.fixed = Some(t);
+        var.base = t;
+        if let Some(h) = self.hovers.as_mut()
+            && let Some(last) = h.iter_mut().rev().find(|(s, _)| *s == span)
+        {
+            last.1 = t;
         }
     }
 
@@ -1539,6 +1610,10 @@ impl<'e, 'p> Checker<'e, 'p> {
     fn stmt_inner(&mut self, s: Stmt<'_>) {
         match s.kind() {
             StmtKind::Local { names, values } => {
+                let conditional = s
+                    .decorators()
+                    .iter()
+                    .any(|d| crate::meta::if_condition(d).is_some());
                 // `local a, b: any, any = …` declares a third local `any`:
                 // a name after an annotated one that names a type is a
                 // misplaced annotation list (E2060).
@@ -1607,6 +1682,14 @@ impl<'e, 'p> Checker<'e, 'p> {
                     let kept = keep.get(i).or(keep.last()).copied().unwrap_or(false);
                     if declared.is_none() && kept {
                         self.flow.insert(id, value);
+                    }
+                    // Its value gives an unannotated local its declared type,
+                    // widened as above; without a value, with `nil` or an
+                    // `any`, it holds what is assigned (spec §2.4.1). So does
+                    // one under `@if`: a build without it may define the
+                    // name otherwise (`export function name()`).
+                    if declared.is_none() && i < values.len() && !conditional {
+                        self.fix_local(id, n.name.span());
                     }
                     if declared.is_some() && no_values {
                         self.flow.insert(id, Types::NIL);
@@ -2250,7 +2333,7 @@ impl<'e, 'p> Checker<'e, 'p> {
                 && !keep.contains(&v)
             {
                 let var = self.vars[v.0 as usize].clone();
-                let t = match var.declared {
+                let t = match var.declared.or(var.fixed) {
                     Some(d) => d,
                     // Unknown future assignments.
                     None => Types::ANY,

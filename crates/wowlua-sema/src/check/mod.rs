@@ -1817,12 +1817,28 @@ mod tests {
         check_with(src, mode, None, None)
     }
 
+    /// Checks one source as a pure Lua file not opted into strict mode
+    /// (spec §2.1): the x1xxx and x2xxx diagnostics are warnings.
+    pub(crate) fn check_pure_lua(src: &str) -> Vec<Diagnostic> {
+        check_file(src, Mode::Basic, None, None, true)
+    }
+
     /// Checks with an extra declaration file and shared flavor mode.
     fn check_with(
         src: &str,
         mode: Mode,
         extra: Option<&'static str>,
         shared: Option<&flavors::SharedFlavors>,
+    ) -> Vec<Diagnostic> {
+        check_file(src, mode, extra, shared, false)
+    }
+
+    fn check_file(
+        src: &str,
+        mode: Mode,
+        extra: Option<&'static str>,
+        shared: Option<&flavors::SharedFlavors>,
+        pure_lua: bool,
     ) -> Vec<Diagnostic> {
         let mut db = SourceDb::new();
         let mut parses = Vec::new();
@@ -1864,10 +1880,7 @@ mod tests {
         });
         let analysis = crate::analyze(&inputs, None);
         let mut settings: Vec<Option<FileSettings>> = vec![None; inputs.len()];
-        *settings.last_mut().expect("main") = Some(FileSettings {
-            mode,
-            pure_lua: false,
-        });
+        *settings.last_mut().expect("main") = Some(FileSettings { mode, pure_lua });
         let mut d = analysis.diagnostics.clone();
         d.extend(check_package(
             &inputs,
@@ -3053,9 +3066,7 @@ print(a, b, c, d, e, name, realm, more)
             "type Layer = { n: number }\nlocal layer = nil\nlocal function build() layer = { n = 1 } :: Layer end\nbuild()\nlocal function show(): number\n if not layer then build() end\n return layer.n\nend\nprint(show)\n",
         );
         // What the closure itself assigned holds there.
-        strict_ok(
-            "local n = 0\nlocal function f(): string\n n = \"a\"\n return n\nend\nprint(f)\n",
-        );
+        strict_ok("local n\nlocal function f(): string\n n = \"a\"\n return n\nend\nprint(f)\n");
         // A `nil` a closure assigns counts.
         strict_err(
             "local n\nlocal function set() n = 1 end\nlocal function clear() n = nil end\nlocal function read(): number return n end\nprint(set, clear, read)\n",
@@ -3322,7 +3333,7 @@ print(a, b, c, d, e, name, realm, more)
             "{pre}local p = by.a\np = {{ seen = {{}}, ids = {{}}, extra = 1 }}\nlocal n: number = p.extra\nprint(n)\n"
         ));
         // a value that doesn't fit is taken as it is
-        strict_ok("local t = { a = 1 }\nt = { b = {} }\nprint(t.b)\n");
+        strict_ok("local t\nt = { a = 1 }\nt = { b = {} }\nprint(t.b)\n");
     }
 
     /// A local keeps the type of a value written with `::` (decision L64).
@@ -3586,8 +3597,11 @@ print(a, b, c, d, e, name, realm, more)
         ok(
             "local function f(kind: \"a\" | \"b\")\n if kind == \"a\" then local y: \"a\" = kind end\nend\n",
         );
-        ok("local x = 1\nx = \"s\"\nprint(x:upper())\n");
-        err("local x = \"s\"\nx = 1\nprint(x:upper())\n", "E2003");
+        // A local without a value is narrowed by each assignment; one
+        // with a value keeps that value's type (decision L100).
+        ok("local x\nx = 1\nx = \"s\"\nprint(x:upper())\n");
+        err("local x\nx = \"s\"\nx = 1\nprint(x:upper())\n", "E2003");
+        err("local x = 1\nx = \"s\"\nprint(x)\n", "E2001");
         // A local keeps a declared union of literals (a call's result);
         // fresh literals still widen, and the local takes other strings.
         ok(

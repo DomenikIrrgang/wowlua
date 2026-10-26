@@ -408,7 +408,8 @@ Inference is local and bidirectional. There is no whole-program inference.
 
 | Construct | Inferred type |
 |-----------|---------------|
-| `local x = 5` | declared type `number` (literal widened) |
+| `local x = 5` | declared type `number` (literal widened); a later `x = "a"` is E2001 (§2.4.1) |
+| `local x`, `local x = nil` | no declared type of its own: the union of the values assigned to it (§2.4.1) |
 | `local p = s :: Point`, `local k = opts.kind` | `Point`, the field's type: a value typed elsewhere (a name, a field or index read, a call's result, a `::` assertion) keeps its type, unions of literals included (decision L64) |
 | `local y = ok and t` (`ok: boolean`, `t: T`) | `false \| T` (`false` and `true` beside types other than `nil` and booleans are not widened) |
 | `const X = 5` | `5` (literal kept) |
@@ -420,37 +421,72 @@ Inference is local and bidirectional. There is no whole-program inference.
 
 ### 2.4.1 Unannotated locals
 
-An unannotated local's **declared type** is the union of the types of all
-values assigned to it within its scope. At each use, its **narrowed type** is
-the type of the most recent assignment on that control-flow path. This keeps
-valid Lua patterns valid, and a local may hold different types over time,
-while still catching misuse such as calling `:upper()` on a value that is a
-number at that point.
+An unannotated local declared with a value takes that value's type as its
+**declared type**, as if it were annotated with it: the type the table above
+gives (`local x = 5` is `number`; `local k = opts.kind` is the field's type,
+a union of literals included). A single literal widens wherever it comes
+from (`local n = LIMIT` with `const LIMIT = 40` is `number`), a literal
+boolean included (`local done = false` is `boolean`), and an enum's member is
+its enum (`local m = Mode.Fast` is `Mode`). Each name of `local a, b = f()`
+takes the type of its own value. A later assignment is checked against the
+declared type as against an annotation: a value that does not fit is E2001 in
+basic and strict mode alike, and W2001 in a pure Lua file (§2.1); `nil` fits
+it in basic mode only, so in strict mode a local that is cleared later is
+annotated (`local t: Timer? = …`). A local that should hold values of several
+types says so (`local x: number | string = 5`), decision L100.
 
-A table assigned to such a local after its declaration fills in what an empty
-table leaves out: where the value fits the local's type so far, each field
-holding `{}` (with no fields and no indexer) takes that type's field type. In
+```wowlua
+local test = 3
+test = "hello world"   -- E2001: `"hello world"` is not assignable to `number`
+```
+
+A value of type `any` gives no declared type: the local is `any`. A local
+without a value, with `nil` or with a value of type `nil` (a name past the
+values of `local a, b = 1` too) has nothing to take a type from: its declared
+type is the union of the types of all values assigned to it within its scope.
+So is a local declared under `@if` (§6.4.3): a build that removes it may
+define the name otherwise (`export function name()`).
+
+At each use, an unannotated local's **narrowed type** is the type of the most
+recent assignment on that control-flow path (within its declared type), so a
+local without a value may hold different types over time while misuse is still
+caught, such as calling `:upper()` on a value that is a number at that point.
+A test narrows it as it narrows an annotated local (§2.5): after
+`local x = f()` with `f(): T?`, `if x then` gives `T`.
+
+A table assigned to an unannotated local after its declaration fills in what
+an empty table leaves out: where the value fits the local's type (its declared
+type, or for a local without a value its type so far), each field holding `{}`
+(with no fields and no indexer) takes that type's field type. In
 `local p = byKey[key]; if not p then p = { seen = {} } end` with
 `byKey: { [string]: { seen: { [number]: boolean } } }`, `p.seen` is the map,
 not an empty table read as `any`. The value's other fields stay as they are
 (decision L59).
 
-A literal assigned to such a local keeps its literal type where the local's
-type so far has that literal: `local w = cache[k]; if w == nil then w = false
+A literal assigned to an unannotated local keeps its literal type where the
+local's type has that literal: `local w = cache[k]; if w == nil then w = false
 end` with `cache: { [string]: T | false }` leaves `w` a `T | false`, so
 `cache[k] = w` fits. Other assigned literals widen as in a `local` (`w = true`
-there gives `boolean`), decision L61.
+there is E2001: `w` is declared `T | false | nil`, and `true` is a `boolean`),
+decision L61.
 
-Inside a closure, an unannotated local that a closure assigns, or that is
-captured and assigned later, may hold any value it is given before the closure
-runs: it reads as the union of its narrowed types where functions are made in
-its scope and the values assigned to it after one is made or from inside a
-function (decision L47). A local declared without a value or with `nil` adds no
-`nil` for a function made before it is first assigned, so a forward declaration
-(`local f` … `f = function() … end`) reads as the function. The union depends
-on what is read in closures, so a file with such reads is checked again with
-the unions the pass before found until they hold (at most four passes; a local
-whose union still changes reads as `any`).
+A table literal's declared type is the table as declared: `local t = {}` is
+`{}`, so any table fits it later, and `local t = { a = 1 }` takes tables with
+a numeric `a`. While the table is open (§2.4.2) the fields it gains extend its
+narrowed type, not its declared type.
+
+Inside a closure, a local declared with a value that a closure assigns, or
+that is assigned after its declaration, reads as its declared type, as an
+annotated local does (§2.5). A local without a value that a closure assigns,
+or that is captured and assigned later, may hold any value it is given before
+the closure runs: it reads as the union of its narrowed types where functions
+are made in its scope and the values assigned to it after one is made or from
+inside a function (decision L47). A local declared without a value or with
+`nil` adds no `nil` for a function made before it is first assigned, so a
+forward declaration (`local f` … `f = function() … end`) reads as the
+function. The union depends on what is read in closures, so a file with such
+reads is checked again with the unions the pass before found until they hold
+(at most four passes; a local whose union still changes reads as `any`).
 
 An annotated local without a value (`local x: T`) is `nil` until assigned:
 its narrowed type follows the assignments, so where some path did not assign
@@ -702,8 +738,8 @@ fits (a literal stays a literal where the declared type is a literal union; a
 record or interface stays as declared), except a declared `any`. A closure sees
 the narrowing of the locals that are never assigned after their declaration (it
 cannot change), except open tables, which are sealed for closures (§2.4.2);
-other locals are their declared type inside closures (an unannotated one, the
-union of §2.4.1). A local
+other locals are their declared type inside closures (an unannotated one
+without a value, the union of §2.4.1). A local
 narrowed to `nil` that a closure assigns is its declared type again after any
 call, which may run that closure.
 
@@ -719,7 +755,7 @@ kept so join the flow after the loop: `local found = nil` that a search loop
 sets to an index is a `number?` after it. Otherwise (a declared local that
 leaves its narrowing, an unannotated one whose union still grows, or one a
 closure assigns) the loop body sees the declared type (`any` for an
-unannotated local), decision L65.
+unannotated local without a value), decision L65.
 
 **Fields through a narrowed local.** Assigning a field of an annotated local
 (`item.x = 1`) checks against the members of its declared type that its

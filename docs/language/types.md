@@ -80,6 +80,28 @@ error[E2001]: `number` is not assignable to `string`
 error: aborting due to 1 previous error
 ```
 
+A local keeps the type of the value you declare it with. Assigning a value of
+another type later is an error, just as it would be with the type written out:
+
+```wowlua fails=E2001
+local test = 3          -- number
+test = "hello world"    -- E2001: `"hello world"` is not assignable to `number`
+print(`test: {test}`)
+```
+
+`local test: number = 3` reports the same. When a local should hold both, say
+so with an annotation: `local test: number | string = 3`. A local declared
+without a value (`local test`) or with `nil` has nothing to take a type from:
+it holds whatever you assign to it, and each use sees the value assigned last.
+A literal widens (`local done = false` is a `boolean`, so `done = true`
+fits), and a value with `any` type leaves the local `any`.
+
+In strict mode `nil` doesn't fit such a local unless its value could already
+be `nil`: write `local timer: TimerHandle? = C_Timer.NewTimer(5, f)` for
+one you clear later. In a plain Lua file, one without wowlua syntax, the
+mismatch is the warning W2001: the example above with `print(test)` as its
+last line is plain Lua, and reports W2001.
+
 A parameter without a type is `any`, unless the function is a callback whose
 parameters the call already fixes (see
 [the game's API](#the-games-api-is-typed)). Hover a name in
