@@ -1,0 +1,42 @@
+-- Classes
+-- Leave out `override` on line 28 to see E3005, or read `leap.started` at the end: it is private.
+class Cooldown
+    spell: string
+    duration: number
+    private started: number = 0
+
+    constructor(spell: string, duration: number)
+        self.spell = spell
+        self.duration = duration
+    end
+
+    function start(now: number)
+        self.started = now
+    end
+
+    function remaining(now: number): number
+        return math.max(0, self.started + self.duration - now)
+    end
+end
+
+class Charges extends Cooldown
+    charges: number
+
+    constructor(spell: string, duration: number, charges: number)
+        super(spell, duration)
+        self.charges = charges
+    end
+
+    override function start(now: number)
+        self.charges -= 1
+        super:start(now)
+    end
+end
+
+local leap = Cooldown.new("Heroic Leap", 45)
+leap:start(100)
+print(`{leap.spell}: {leap:remaining(130)}s left`)
+
+local roll = Charges.new("Roll", 20, 2)
+roll:start(100)
+print(`{roll.spell}: {roll.charges} charge left, ready in {roll:remaining(105)}s`)

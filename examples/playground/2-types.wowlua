@@ -1,0 +1,43 @@
+-- Types and narrowing
+-- Switch checking to **strict** and print `best.amount` without the `if` on line 38: `best` may be `nil`.
+type Earned = { kind: "earned", amount: number, source: string }
+type Spent = { kind: "spent", amount: number, vendor: string }
+type Entry = Earned | Spent
+
+-- The tag narrows the union: each branch knows its fields.
+local function describe(entry: Entry): string
+    if entry.kind == "earned" then
+        return `+{entry.amount} from {entry.source}`
+    end
+    return `-{entry.amount} at {entry.vendor}`
+end
+
+-- type() narrows too.
+local function label(spell: number | string): string
+    if type(spell) == "number" then
+        return `spell #{spell}`
+    end
+    return spell:upper()
+end
+
+local function biggest(entries: Entry[]): Entry?
+    local best: Entry? = nil
+    for _, entry in ipairs(entries) do
+        if not best or entry.amount > best.amount then best = entry end
+    end
+    return best
+end
+
+local ledger: Entry[] = {
+    { kind = "earned", amount = 250, source = "Hogger" },
+    { kind = "spent", amount = 120, vendor = "Arnok" },
+    { kind = "earned", amount = 75, source = "a quest" },
+}
+for _, entry in ipairs(ledger) do
+    print(describe(entry))
+end
+local best = biggest(ledger)
+if best then
+    print(`biggest: {describe(best)}`)
+end
+print(label(774), label("rejuvenation"))

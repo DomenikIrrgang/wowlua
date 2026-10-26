@@ -1,0 +1,49 @@
+-- Generics
+-- Try `names:push(42)` at the end: a `Ring<string>` holds strings only.
+local function map<T, U>(list: T[], fn: (value: T) -> U): U[]
+    local out: U[] = {}
+    for i, v in ipairs(list) do out[i] = fn(v) end
+    return out
+end
+
+local function first<T>(list: T[], pred: (value: T) -> boolean): T?
+    for _, v in ipairs(list) do
+        if pred(v) then return v end
+    end
+    return nil
+end
+
+-- Keeps the newest values.
+class Ring<T>
+    private values: T[] = {}
+    private next: number = 1
+    readonly capacity: number
+
+    constructor(capacity: number)
+        self.capacity = capacity
+    end
+
+    function push(value: T)
+        self.values[self.next] = value
+        self.next = self.next % self.capacity + 1
+    end
+
+    function all(): T[]
+        return self.values
+    end
+end
+
+type Member = { name: string, level: number }
+local raid: Member[] = {
+    { name = "Thrall", level = 60 },
+    { name = "Jaina", level = 58 },
+    { name = "Rexxar", level = 60 },
+}
+
+local levels = map(raid, function(m) return m.level end)             -- number[]
+local low = first(raid, function(m) return m.level < 60 end)         -- Member?
+print(table.concat(levels, ", "), low and low.name)
+
+local names: Ring<string> = Ring.new(2)
+for _, m in ipairs(raid) do names:push(m.name) end
+print(table.concat(names:all(), ", "))

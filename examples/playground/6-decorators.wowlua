@@ -1,0 +1,43 @@
+-- Decorators
+-- Misspell the event on line 24: it is checked against the game's API. The output tab runs the login.
+import event from "wowlua:events"
+
+-- A decorator takes the function and returns the one to use instead.
+local function logged(fn: (number) -> number, ctx: DecoratorContext): (number) -> number
+    return function(n: number): number
+        local result = fn(n)
+        print(`{ctx.name}({n}) = {result}`)
+        return result
+    end
+end
+
+local function memoize<A, R>(fn: (A) -> R, _ctx: DecoratorContext): (A) -> R
+    local cache: { [A]: R } = {}
+    return function(a: A): R
+        local v = cache[a]
+        if v == nil then
+            v = fn(a)
+            cache[a] = v
+        end
+        return v
+    end
+end
+
+@event("PLAYER_LOGIN")
+local function onLogin()
+    print(`logged in as {UnitName("player")}`)
+end
+
+@logged
+local function double(n: number): number
+    return n * 2
+end
+
+@memoize
+local function fib(n: number): number
+    if n < 2 then return n end
+    return fib(n - 1) + fib(n - 2)
+end
+
+double(21)
+print(`fib(40) = {fib(40)}`)

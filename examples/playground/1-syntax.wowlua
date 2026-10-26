@@ -1,0 +1,25 @@
+-- Syntax and sugar
+-- Try `summary("bag")` on line 21 to see a type error, or switch checking to **strict** to get nil safety.
+interface Item
+    name: string
+    count: number
+    quality?: number
+end
+local function summary(items: Item[]): string
+    local total = 0
+    for _, item in ipairs(items) do
+        if item.count == 0 then continue end
+        total += item.count
+    end
+    return `{#items} stacks, {total} items`
+end
+
+local bag: Item[] = {
+    { name = "Linen Cloth", count = 20 },
+    { name = "Copper Ore", count = 0 },
+    { name = "Peacebloom", count = 7, quality = 1 },
+}
+
+print(summary(bag))
+print(bag[3].quality ?? 0)
+local wasShown = false

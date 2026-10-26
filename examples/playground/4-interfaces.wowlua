@@ -1,0 +1,42 @@
+-- Interfaces and enums
+-- Pass `quality = 7` on line 37: a number is not a `Quality`. In the lua tab, `Quality.Epic` is the number 4.
+enum Quality { Poor = 0, Common, Uncommon, Rare, Epic, Legendary }
+
+interface LootEntry
+    item: string
+    quality: Quality
+    looter: string
+    note?: string
+end
+
+interface Readout
+    title: string
+    function current(): number
+end
+
+class LootLog implements Readout
+    title: string = "Epics"
+    private entries: LootEntry[] = {}
+
+    function add(entry: LootEntry)
+        self.entries[#self.entries + 1] = entry
+    end
+
+    function current(): number
+        local epics = 0
+        for _, entry in ipairs(self.entries) do
+            if entry.quality >= Quality.Epic then epics += 1 end
+        end
+        return epics
+    end
+end
+
+local function show(readout: Readout)
+    print(`{readout.title}: {readout:current()}`)
+end
+
+local log = LootLog.new()
+log:add({ item = "Hearthstone", quality = Quality.Common, looter = "Thrall" })
+log:add({ item = "Thunderfury", quality = Quality.Legendary, looter = "Jaina" })
+log:add({ item = "Onyxia Scale Cloak", quality = Quality.Epic, looter = "Thrall", note = "finally" })
+show(log)
