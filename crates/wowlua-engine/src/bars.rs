@@ -7,9 +7,10 @@
 //! both clamp to the range (0 to 0 until set). `OnValueChanged` runs at
 //! once, hidden or disabled, only when the value changes: a slider's with
 //! `(value, userInput)` (`SetValue`'s second argument), a bar's with the
-//! value alone. `SetMinMaxValues` runs `OnMinMaxChanged(min, max)` when the
-//! range changes, then clamps the value; a range whose maximum is below its
-//! minimum is an error; `SetValueStep` snaps the value again. Until a
+//! value alone (`userInput` nil). `SetMinMaxValues` runs
+//! `OnMinMaxChanged(min, max)` when the range changes, then clamps the
+//! value; a range whose maximum is below its minimum is an error;
+//! `SetValueStep` snaps the value again. Until a
 //! slider's value is set, neither a range nor a step moves it (it stays 0);
 //! a bar's first range clamps it, silently. A user's drag (`drag`) runs
 //! `OnValueChanged(value, true)` at each move, unsnapped. A bar keeps
@@ -78,7 +79,10 @@ fn kept_value(b: &Bar, v: f64) -> f64 {
     single(x)
 }
 
-/// Gives the bar value `v` as kept; `OnValueChanged` runs if it changed.
+/// Gives the bar value `v` as kept; `OnValueChanged` runs if it changed,
+/// with the value as `GetValue` reads it (and `OnMinMaxChanged` with the
+/// range as `GetMinMaxValues` does): secret after a secret was set, the
+/// bar's value aspect (unverified for the scripts: not recorded).
 fn change(vm: &mut Vm, id: WidgetId, v: f64, user: bool) {
     let mut b = bar(vm, id);
     let x = kept_value(&b, v);
@@ -86,13 +90,24 @@ fn change(vm: &mut Vm, id: WidgetId, v: f64, user: bool) {
     b.value = x;
     engine_mut(vm).world.bars.insert(id.0, b);
     if changed {
+        let value = read(vm, x, b.secret_value);
         let args = if b.step.is_some() {
-            vec![Value::Num(x), Value::Bool(user)]
+            vec![value, Value::Bool(user)]
         } else {
-            vec![Value::Num(x)]
+            vec![value]
         };
         widgets::run_script(vm, id, "OnValueChanged", &args);
     }
+}
+
+/// Whether a bar's value or range was set from a secret (its bar value
+/// aspect).
+pub(crate) fn secret_value(vm: &Vm, id: WidgetId) -> bool {
+    engine(vm)
+        .world
+        .bars
+        .get(&id.0)
+        .is_some_and(|b| b.secret_value || b.secret_range)
 }
 
 /// A number given, a secret's hidden one too.
@@ -200,12 +215,8 @@ fn set_min_max_values(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
         b.value = kept_value(&b, b.value);
     }
     engine_mut(vm).world.bars.insert(id.0, b);
-    widgets::run_script(
-        vm,
-        id,
-        "OnMinMaxChanged",
-        &[Value::Num(min), Value::Num(max)],
-    );
+    let range = [read(vm, min, secret), read(vm, max, secret)];
+    widgets::run_script(vm, id, "OnMinMaxChanged", &range);
     if !slider || b.valued {
         change(vm, id, b.value, false);
     }

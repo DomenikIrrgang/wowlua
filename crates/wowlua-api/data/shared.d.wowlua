@@ -9517,8 +9517,8 @@ declare class StatusBar extends Frame
     function HookScript(scriptType: "OnHyperlinkClick", handler: ((self: Self, link: string, text: string, button: string, ...unknown) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHyperlinkEnter", handler: ((self: Self, link: string, text: string, ...unknown) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: "OnHyperlinkLeave", handler: ((self: Self, link: string, text: string, ...unknown) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
-    function HookScript(scriptType: "OnValueChanged", handler: ((self: Self, value: number, userInput: boolean) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
-    function HookScript(scriptType: "OnMinMaxChanged", handler: ((self: Self, min: number, max: number) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnValueChanged", handler: ((self: Self, value: number | Secret<number>) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
+    function HookScript(scriptType: "OnMinMaxChanged", handler: ((self: Self, min: number | Secret<number>, max: number | Secret<number>) -> ()), bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     function HookScript(scriptType: ScriptStatusBar, handler: function, bindingType: LE_SCRIPT_BINDING_TYPE?): boolean
     --- Sets the widget script handler.
     ---
@@ -9550,8 +9550,8 @@ declare class StatusBar extends Frame
     function SetScript(scriptType: "OnHyperlinkClick", handler: (((self: Self, link: string, text: string, button: string, ...unknown) -> ()))?)
     function SetScript(scriptType: "OnHyperlinkEnter", handler: (((self: Self, link: string, text: string, ...unknown) -> ()))?)
     function SetScript(scriptType: "OnHyperlinkLeave", handler: (((self: Self, link: string, text: string, ...unknown) -> ()))?)
-    function SetScript(scriptType: "OnValueChanged", handler: (((self: Self, value: number, userInput: boolean) -> ()))?)
-    function SetScript(scriptType: "OnMinMaxChanged", handler: (((self: Self, min: number, max: number) -> ()))?)
+    function SetScript(scriptType: "OnValueChanged", handler: (((self: Self, value: number | Secret<number>) -> ()))?)
+    function SetScript(scriptType: "OnMinMaxChanged", handler: (((self: Self, min: number | Secret<number>, max: number | Secret<number>) -> ()))?)
     function SetScript(scriptType: ScriptStatusBar, handler: function | nil)
     --- Returns how the status bar fills.
     ---
@@ -9562,7 +9562,7 @@ declare class StatusBar extends Frame
     --- Returns the current interpolated value displayed by the bar.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_StatusBar_GetInterpolatedValue)
-    function GetInterpolatedValue(): number
+    function GetInterpolatedValue(): number | Secret<number>
     --- Returns the minimum and maximum values of a status bar.
     ---
     --- **Returns**
@@ -9570,7 +9570,7 @@ declare class StatusBar extends Frame
     --- - `maxValue`: The maximum value of the status bar.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_StatusBar_GetMinMaxValues)
-    function GetMinMaxValues(): (number, number)
+    function GetMinMaxValues(): (number | Secret<number>, number | Secret<number>)
     --- Returns whether the status bar is horizontal or vertical.
     ---
     --- *Description by wowlua: the API's documentation has none.*
@@ -9616,7 +9616,7 @@ declare class StatusBar extends Frame
     --- *Description by wowlua: the API's documentation has none.*
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_StatusBar_GetValue)
-    function GetValue(): number
+    function GetValue(): number | Secret<number>
     --- Returns true if the status bar is currently interpolating toward a target value.
     ---
     --- [warcraft.wiki.gg](https://warcraft.wiki.gg/wiki/API_StatusBar_IsInterpolating)

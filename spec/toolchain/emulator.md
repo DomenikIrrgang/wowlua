@@ -240,6 +240,13 @@ its secret alpha aspect: `GetAlpha` reads back a secret, and keeps doing so
 after a plain alpha is set, whose value still applies (decision T251;
 found in game). What takes the aspect away again is unverified.
 
+A status bar's value or range set from a secret is its bar value aspect:
+`GetValue`, `GetInterpolatedValue` and `GetMinMaxValues` read back
+secrets, `OnValueChanged` and `OnMinMaxChanged` get the value and range
+as secrets, and `HasSecretAspect(Enum.SecretAspect.BarValue)` is true,
+until a plain value (or range) is set again (unverified: the scripts'
+values, and what the client keeps).
+
 A protected frame anchored to a region (a texture, a font string, a line,
 a mask texture) is refused with the client's error, out of combat too:
 "Action[SetPoint] failed because[Cannot anchor protected frames to

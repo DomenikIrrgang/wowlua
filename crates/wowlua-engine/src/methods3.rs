@@ -423,20 +423,25 @@ fn get_source_location(vm: &mut Vm, _id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![vm.str("")])
 }
 
-/// `FrameScriptObject:HasAnySecretAspect()`: the engine's secret aspect is
-/// an alpha set from a secret.
+/// `FrameScriptObject:HasAnySecretAspect()`: the engine's secret aspects
+/// are an alpha set from a secret and a bar's value or range set from one.
 fn has_any_secret_aspect(vm: &mut Vm, id: WidgetId, _c: NativeCall) -> Ret {
     Ok(vec![Value::Bool(
-        engine(vm).world.widgets[id.0].secret_alpha,
+        engine(vm).world.widgets[id.0].secret_alpha || crate::bars::secret_value(vm, id),
     )])
 }
 
 /// `FrameScriptObject:HasSecretAspect(aspect)`: the alpha aspect
-/// (`Enum.SecretAspect.Alpha`, 128) when its alpha was set from a secret.
+/// (`Enum.SecretAspect.Alpha`, 128) when its alpha was set from a secret,
+/// the bar value aspect (`BarValue`, 16384) when a bar's value or range
+/// was.
 fn has_secret_aspect(vm: &mut Vm, id: WidgetId, c: NativeCall) -> Ret {
     let aspect = number(vm, c.arg(2)).unwrap_or(0.0) as i64;
-    let secret = engine(vm).world.widgets[id.0].secret_alpha;
-    Ok(vec![Value::Bool(secret && (aspect & 128) != 0)])
+    let alpha = engine(vm).world.widgets[id.0].secret_alpha;
+    let bar = crate::bars::secret_value(vm, id);
+    Ok(vec![Value::Bool(
+        (alpha && (aspect & 128) != 0) || (bar && (aspect & 16384) != 0),
+    )])
 }
 
 // -------------------------------------------------------------- textures

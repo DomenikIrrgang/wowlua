@@ -12,8 +12,7 @@ does. This was recorded from the client:
   range first, as Blizzard's unit frames do in `UnitFrameHealthBar_Update`.
 - `OnValueChanged(self, value)` runs at once, even while the bar is hidden,
   and only when the value actually changes. A status bar passes only the
-  value. The `userInput` argument is a slider's and is `nil` here, although
-  the handler's type says `boolean`.
+  value. The `userInput` argument is a slider's.
 - `SetMinMaxValues` runs `OnMinMaxChanged(self, min, max)` when the range
   changes, then clamps the value into the new range, which runs
   `OnValueChanged` if the value moves. A maximum below the minimum is an
@@ -32,9 +31,10 @@ jumps straight to the new value, `GetInterpolatedValue` returns that value
 and `IsInterpolating` returns false.
 
 `SetValue` and `SetMinMaxValues` accept secret values. After a secret one,
-`GetValue` or `GetMinMaxValues` returns a secret, although its declared type
-is `number`. It returns plain numbers again after the next plain `SetValue`
-or `SetMinMaxValues`. In a camelot test, `UnitHealth("player")` returns a
+`GetValue` or `GetMinMaxValues` returns a secret, and `OnValueChanged` or
+`OnMinMaxChanged` gets the value or range as a secret, which is why their
+types are `number | Secret<number>`. They return plain numbers again after
+the next plain `SetValue` or `SetMinMaxValues`. In a camelot test, `UnitHealth("player")` returns a
 secret, so a health bar's `GetValue` returns one too.
 
 ## Example

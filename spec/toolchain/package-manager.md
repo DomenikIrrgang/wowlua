@@ -400,7 +400,12 @@ The WoW API is typed by **pre-generated `types` packages**, one per flavor:
    gives that the documentation lacks (`C_PetBattles.IsTrapAvailable()`'s
    reason), lists the wiki gives as their first values
    (`GetChatWindowMessages(index)` is `...string`), and getters a fresh
-   widget answers nil (`FontString:GetText()` is `string?`). A function
+   widget answers nil (`FontString:GetText()` is `string?`); a status
+   bar's `OnValueChanged` handler takes the value alone (its `userInput`
+   is a slider's), and its value and range read back secret after a
+   secret was set (`GetValue`, `GetInterpolatedValue`, `GetMinMaxValues`
+   and its scripts' values `number | Secret<number>`, Blizzard's
+   `SecretReturnsForAspect` for the bar's value). A function
    that gives nothing for an ID that names nothing keeps its documented
    results. The client's own C functions no source documents take what the
    client itself told (decision T294): the argument checks it was probed

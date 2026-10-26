@@ -101,6 +101,20 @@ fn widget_corrections(classes: &mut indexmap::IndexMap<String, model::Class>) {
             }
         }
     }
+    // A status bar's value and range read back secret after a secret was
+    // set (Blizzard's `SecretReturnsForAspect` `BarValue`; the emulator's
+    // `bars.rs`).
+    if let Some(bar) = classes.get_mut("StatusBar") {
+        for method in ["GetValue", "GetInterpolatedValue", "GetMinMaxValues"] {
+            for sig in bar.methods.get_mut(method).into_iter().flatten() {
+                for ty in sig.returns.iter_mut() {
+                    if ty == "number" {
+                        *ty = "number | Secret<number>".into();
+                    }
+                }
+            }
+        }
+    }
     if let Some(frame) = classes.get_mut("Frame")
         && let Some(sigs) = frame.methods.get_mut("GetAttribute")
         && sigs.iter().all(|s| s.params.len() == 1)
@@ -383,6 +397,25 @@ const SCRIPT_HANDLERS: &[(&str, &str)] = &[
     ("OnLoop", "loopState: string"),
 ];
 
+/// Where a class's scripts get other arguments than [`SCRIPT_HANDLERS`]
+/// say: a status bar's `OnValueChanged` gets the value alone (recorded:
+/// `userInput` nil; `userInput` is a slider's), and its scripts get the
+/// value and range as its getters read them, secret after a secret was set
+/// (Blizzard's `SecretArgumentsAddAspect` `BarValue`; the emulator's
+/// `bars.rs`).
+const CLASS_SCRIPT_HANDLERS: &[(&str, &str, &str)] = &[
+    (
+        "StatusBar",
+        "OnValueChanged",
+        "value: number | Secret<number>",
+    ),
+    (
+        "StatusBar",
+        "OnMinMaxChanged",
+        "min: number | Secret<number>, max: number | Secret<number>",
+    ),
+];
+
 /// The script names a script type alias (`ScriptButton`) takes, through
 /// the aliases it extends.
 fn script_names(
@@ -450,6 +483,10 @@ fn script_handlers(
                 if !names.contains(*name) {
                     continue;
                 }
+                let args = CLASS_SCRIPT_HANDLERS
+                    .iter()
+                    .find(|(c, n, _)| c == class_name && n == name)
+                    .map_or(*args, |(_, _, a)| *a);
                 let params = if args.is_empty() {
                     "self: Self".to_string()
                 } else {
@@ -2344,6 +2381,75 @@ mod tests {
             ret_vararg: Some("any".into()),
             ..model::Sig::default()
         }]
+    }
+
+    /// A status bar's value and range read back secret, its scripts get
+    /// them so, and its `OnValueChanged` no `userInput`; a slider's keeps it.
+    #[test]
+    fn a_status_bars_value_may_be_secret() {
+        let sig = |params: Vec<model::ParamDecl>, returns: &[&str]| model::Sig {
+            params,
+            returns: returns.iter().map(|r| r.to_string()).collect(),
+            ..model::Sig::default()
+        };
+        let script = |ty: &str| {
+            vec![
+                model::ParamDecl {
+                    name: "scriptType".into(),
+                    ty: ty.into(),
+                    optional: false,
+                },
+                model::ParamDecl {
+                    name: "handler".into(),
+                    ty: "function".into(),
+                    optional: true,
+                },
+            ]
+        };
+        let mut classes = indexmap::IndexMap::new();
+        for (name, alias) in [("StatusBar", "ScriptStatusBar"), ("Slider", "ScriptSlider")] {
+            let mut c = model::Class::default();
+            c.methods
+                .insert("GetValue".into(), vec![sig(vec![], &["number"])]);
+            c.methods.insert(
+                "GetMinMaxValues".into(),
+                vec![sig(vec![], &["number", "number"])],
+            );
+            c.methods
+                .insert("SetScript".into(), vec![sig(script(alias), &[])]);
+            classes.insert(name.to_string(), c);
+        }
+        let mut aliases = indexmap::IndexMap::new();
+        for alias in ["ScriptStatusBar", "ScriptSlider"] {
+            aliases.insert(
+                alias.to_string(),
+                "\"OnValueChanged\" | \"OnMinMaxChanged\"".to_string(),
+            );
+        }
+        widget_corrections(&mut classes);
+        script_handlers(&mut classes, &aliases);
+        let text = |class: &str, m: &str, i: usize| model::sig_text(&classes[class].methods[m][i]);
+        assert_eq!(
+            text("StatusBar", "GetValue", 0),
+            "(): number | Secret<number>"
+        );
+        assert_eq!(
+            text("StatusBar", "GetMinMaxValues", 0),
+            "(): (number | Secret<number>, number | Secret<number>)"
+        );
+        assert_eq!(
+            text("StatusBar", "SetScript", 0),
+            "(scriptType: \"OnValueChanged\", handler: (((self: Self, value: number | Secret<number>) -> ()))?)"
+        );
+        assert_eq!(
+            text("StatusBar", "SetScript", 1),
+            "(scriptType: \"OnMinMaxChanged\", handler: (((self: Self, min: number | Secret<number>, max: number | Secret<number>) -> ()))?)"
+        );
+        assert_eq!(text("Slider", "GetValue", 0), "(): number");
+        assert_eq!(
+            text("Slider", "SetScript", 0),
+            "(scriptType: \"OnValueChanged\", handler: (((self: Self, value: number, userInput: boolean) -> ()))?)"
+        );
     }
 
     #[test]

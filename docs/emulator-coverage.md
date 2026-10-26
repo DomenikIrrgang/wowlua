@@ -28,7 +28,7 @@ their clients answer differently is unverified.
   them (98.1%).
 - **Scenario replays:** 22,097 of 22,154 recorded lines replayed as the client
   logged them (99.7%); 25 of 29 scenarios line for line.
-- **Unverified rules:** 1,142 comments in the engine mark a rule unverified.
+- **Unverified rules:** 1,143 comments in the engine mark a rule unverified.
 
 | Flavor | Documented functions | With behaviour | Recorded answers | Widget methods | With behaviour | Recordings |
 |--------|---------------------:|---------------:|-----------------:|---------------:|---------------:|------------|
@@ -844,7 +844,7 @@ read-back counts for its setter), from the test's misses
 
 ## Unverified rules
 
-The engine's code marks 1,142 rules unverified: each rests on Blizzard's
+The engine's code marks 1,143 rules unverified: each rests on Blizzard's
 documentation or UI code, warcraft.wiki.gg, elune or the function's name, not on
 a probe of the client. An in-game probe confirms or corrects each
 ([probes](../tests/ingame/PROBES.md)). Each line is the marking comment's first
@@ -952,9 +952,10 @@ page changes only when a rule is added, removed or reworded.
 - [bank.rs](../crates/wowlua-engine/src/bank.rs): The second tab costs 1000 (SuuUI probe bankSlots: one bought), the third 10000 (the bank scenario: two bought); the o...
 - [bank.rs](../crates/wowlua-engine/src/bank.rs): `C_Bank.IsItemAllowedInBankType(bankType, itemLocation)`: any item in the character's bank; none in another (the acco...
 
-### bars (2)
+### bars (3)
 
 - [bars.rs](../crates/wowlua-engine/src/bars.rs): Whether the range or the value was set from a secret: read back secret (unverified: the documented secret aspects; a...
+- [bars.rs](../crates/wowlua-engine/src/bars.rs): Gives the bar value `v` as kept; `OnValueChanged` runs if it changed, with the value as `GetValue` reads it (and `OnM...
 - [bars.rs](../crates/wowlua-engine/src/bars.rs): A slider's thumb, placed by the slider as the client does when it has no points of its own: (the slider, how far alon...
 
 ### batch (3)

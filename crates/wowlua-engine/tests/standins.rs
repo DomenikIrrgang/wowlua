@@ -1,5 +1,7 @@
 //! What Blizzard's UI code defines that addons use as the client's, the
-//! engine's until that code loads (`standins.rs`).
+//! engine's until that code loads (`standins.rs`); and the fixes found
+//! while writing the documentation: a bar's scripts after a secret value,
+//! a bag item without data, an event payload's enumerations.
 
 use wowlua_vm::{Value, Vm};
 
@@ -193,4 +195,40 @@ fn the_container_constants_come_from_the_inventory_constants() {
         "return NUM_BAG_SLOTS, NUM_REAGENTBAG_SLOTS, NUM_TOTAL_EQUIPPED_BAG_SLOTS, NUM_CHARACTER_BANK_SLOTS",
     );
     assert_eq!(r, ["4", "1", "5", "9"]);
+}
+
+/// A status bar's scripts get what its getters read: a secret after a
+/// secret value or range, and no `userInput` (recorded: `40:nil`).
+#[test]
+fn a_bars_scripts_pass_its_value_as_its_getters_read_it() {
+    let mut vm = vm("camelot");
+    let r = run(
+        &mut vm,
+        "local bar = CreateFrame('StatusBar')
+local seen = {}
+bar:SetScript('OnValueChanged', function(_, v, user)
+    seen[#seen + 1] = 'value ' .. (issecretvalue(v) and 'secret' or tostring(v)) .. ' ' .. tostring(user)
+end)
+bar:SetScript('OnMinMaxChanged', function(_, min, max)
+    seen[#seen + 1] = 'range ' .. (issecretvalue(min) and 'secret' or tostring(min))
+        .. ' ' .. (issecretvalue(max) and 'secret' or tostring(max))
+end)
+bar:SetMinMaxValues(0, 100)
+bar:SetValue(40)
+local plain = bar:HasSecretAspect(Enum.SecretAspect.BarValue)
+bar:SetValue(secretwrap(30))
+bar:SetMinMaxValues(0, secretwrap(50))
+return table.concat(seen, ';'), plain, bar:HasSecretAspect(Enum.SecretAspect.BarValue),
+    bar:HasAnySecretAspect(), issecretvalue(bar:GetValue())",
+    );
+    assert_eq!(
+        r,
+        [
+            "range 0 100;value 40 nil;value secret nil;range secret secret",
+            "false",
+            "true",
+            "true",
+            "true"
+        ]
+    );
 }
