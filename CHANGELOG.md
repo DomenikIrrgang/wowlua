@@ -22,6 +22,7 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `-v` shows the git and svn commands wowlua runs and the requests `wowlua publish` makes.
 - `--features a,b` and `--no-default-features` choose a build's features, and `wowlua add --no-default-features` turns a dependency's defaults off.
 - `wowlua test` runs a library's tests, and `wowlua check` checks `lua-library` and `types` packages.
+- `@wowlua/web`: the worker has an `advance` call, `play(null, onOutput)` runs the game without drawing it, and `check()` diagnostics carry `text`, the diagnostic as `wowlua check` prints it.
 
 ### Changed
 
@@ -82,6 +83,9 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - A misspelled `--target` is E4006 instead of doing nothing.
 - Path dependencies work in the browser playground.
 - An asset a profile excludes or another flavor owns is E4307 where it is used, not a misleading E1038 or a missing texture.
+- `@wowlua/web`: `check`, `build`, `run` and `format` read what `writeFile` wrote, also while the language server has the file open, and the language server checks again when the page writes, deletes or replaces files.
+- `@wowlua/web`: the manifest's `check.lints` apply as in `wowlua check`: W2063 is off until set to `"warn"`, `"allow"` drops a warning and a `"deny"` lint stops a build or a run.
+- `@wowlua/web`: a run through the worker without a canvas moves, and what it prints reaches `onOutput`.
 
 ## 0.12.0 (2026-10-26)
 
