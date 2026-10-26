@@ -2811,6 +2811,20 @@ fn core_modules_are_checked_at_compile_time() {
             "import router from \"wowlua:slash\"\nlocal r = router({})\nr:add(\"go\", { args = { \"rest\" }, run = function(text: boolean) end })\n",
             "E8112",
         ),
+        // A job cannot yield inside a protected call, a C callback or a
+        // metamethod.
+        (
+            "import * as jobs from \"wowlua:jobs\"\njobs.start(function(ctx)\n    pcall(function() ctx:yield() end)\nend)\n",
+            "W8430",
+        ),
+        (
+            "import * as jobs from \"wowlua:jobs\"\njobs.start(function(ctx)\n    local t = setmetatable({}, { __index = function(_, k) ctx:check() return k end })\n    print(t.x)\nend)\n",
+            "W8430",
+        ),
+        (
+            "import * as jobs from \"wowlua:jobs\"\njobs.start(function(ctx)\n    local mt: any = {}\n    mt.__lt = function(a, b) ctx:sleep(1) return false end\n    print(mt)\nend)\n",
+            "W8430",
+        ),
         // `known`'s fallback joins the result's type.
         (
             "import * as secret from \"wowlua:secret\"\nlocal function f(name: string | Secret<string>)\n    local b: boolean = secret.known(name, \"?\")\n    print(b)\nend\nf(\"x\")\n",
@@ -2998,6 +3012,16 @@ fn launcher_register_is_counted_at_the_top_level() {
         "import * as launcher from \"wowlua:launcher\"\nlocal tank = true\nif tank then\n    launcher.register({ icon = \"i\", label = \"Tank\", onClick = function() end })\nelse\n    launcher.register({ icon = \"i\", label = \"Heal\", onClick = function() end })\nend\nlocal function late() launcher.register({ icon = \"i\", label = \"l\", onClick = function() end }) end\nlate()\n",
     );
     assert!(!stderr.contains("E8080"), "{stderr}");
+}
+
+/// A job may yield between protected calls and metamethods, and a
+/// metamethod that doesn't yield is fine (no W8430).
+#[test]
+fn jobs_yield_outside_boundaries() {
+    let stderr = check(
+        "import * as jobs from \"wowlua:jobs\"\njobs.start(function(ctx)\n    local t = setmetatable({}, { __index = function(_, k) return k end, step = function() ctx:yield() end })\n    pcall(print, 1)\n    ctx:yield()\n    print(t.x)\nend)\n",
+    );
+    assert!(!stderr.contains("W8430"), "{stderr}");
 }
 
 /// Correct uses of the core modules pass their checks.

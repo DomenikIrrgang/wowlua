@@ -45,6 +45,27 @@ pub struct FlavorTooltips {
     pub data_system: bool,
 }
 
+/// Lua 5.1's metamethods: a coroutine cannot yield inside one (W8430).
+const METAMETHODS: &[&str] = &[
+    "__index",
+    "__newindex",
+    "__call",
+    "__add",
+    "__sub",
+    "__mul",
+    "__div",
+    "__mod",
+    "__pow",
+    "__unm",
+    "__concat",
+    "__len",
+    "__eq",
+    "__lt",
+    "__le",
+    "__tostring",
+    "__gc",
+];
+
 /// The media kinds of `wowlua:media` (LibSharedMedia's).
 const MEDIA_KINDS: &[&str] = &["font", "statusbar", "border", "background", "sound"];
 
@@ -737,10 +758,34 @@ impl Ctx<'_> {
 
     /// W8430: a job's `ctx:check/yield/sleep/waitFor` inside a function
     /// handed to `pcall`, `xpcall`, `securecallfunction`, `table.sort` or
-    /// `gsub`, which a coroutine cannot yield across.
+    /// `gsub`, or a metamethod (`{ __index = function … end }`,
+    /// `mt.__lt = function … end`), which a coroutine cannot yield across.
     fn job_yields(&mut self, body: Block<'_>, ctx: &str) {
         let mut boundaries: Vec<Expr<'_>> = Vec::new();
+        wowlua_syntax::visit::walk_stmts(body, &mut |s| {
+            if let StmtKind::Assign { targets, values } = s.kind() {
+                for (target, value) in targets.iter().zip(values.iter()) {
+                    if let ExprKind::Field { name, .. } = target.kind()
+                        && METAMETHODS.contains(&name.text())
+                        && matches!(value.kind(), ExprKind::Function(_))
+                    {
+                        boundaries.push(value);
+                    }
+                }
+            }
+        });
         wowlua_syntax::visit::walk_block(body, &mut |e| {
+            if let ExprKind::Table(fields) = e.kind() {
+                for f in fields {
+                    if let TableField::Named { name, value } = f
+                        && METAMETHODS.contains(&name.text())
+                        && matches!(value.kind(), ExprKind::Function(_))
+                    {
+                        boundaries.push(value);
+                    }
+                }
+                return;
+            }
             let (callee_name, args) = match e.kind() {
                 ExprKind::Call { callee, args } => (call_name(callee), args),
                 ExprKind::Method { name, args, .. } => (Some(name.text().to_string()), args),
@@ -783,7 +828,7 @@ impl Ctx<'_> {
                 self.warn(
                     "W8430",
                     span,
-                    "a job cannot yield here: the coroutine would cross a pcall, sort or gsub callback".into(),
+                    "a job cannot yield here: the coroutine would cross a pcall, a metamethod, or a sort or gsub callback".into(),
                     "yields inside a C call",
                 );
             }

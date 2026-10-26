@@ -203,7 +203,9 @@ Semantics:
   comparator or a `gsub` callback). In a function passed to `jobs.start`,
   calling `check`, `yield`, `sleep` or `waitFor` on its context parameter
   inside a function literal handed to `pcall`, `xpcall`,
-  `securecallfunction`, `table.sort` or `gsub` is warning W8430. At runtime it
+  `securecallfunction`, `table.sort` or `gsub`, or given as a metamethod
+  (a table literal's `__index = function … end`, or `mt.__lt = function … end`,
+  for any Lua 5.1 metamethod), is warning W8430. At runtime it
   raises "attempt to yield across metamethod/C-call boundary".
 - `wowlua:item`'s `await` and the import parsing of large strings in
   `wowlua:dialog` ([Interface: dialog](interface.md#dialog)) are built on this module.

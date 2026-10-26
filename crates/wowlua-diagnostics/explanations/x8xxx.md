@@ -1683,8 +1683,9 @@ end
 Inside a function passed to `jobs.start`, the job's context
 (`ctx:check`, `ctx:yield`, `ctx:sleep`, `ctx:waitFor`) is called inside a
 function literal handed to `pcall`, `xpcall`, `securecall`,
-`securecallfunction`, `table.sort` or `gsub`. Jobs are coroutines, and Lua 5.1
-cannot yield across these calls: at run time it raises "attempt to yield
+`securecallfunction`, `table.sort` or `gsub`, or inside a metamethod
+(`setmetatable(t, { __index = function … end })`, `mt.__lt = function … end`).
+Jobs are coroutines, and Lua 5.1 cannot yield across these calls: at run time it raises "attempt to yield
 across metamethod/C-call boundary". Yield before or after the call instead,
 or split the work so the callback doesn't need to yield.
 
