@@ -1900,6 +1900,10 @@ impl wowlua_engine::clientdata::ClientData for MapTables {
             "C_Map.GetMapInfo(5000)" => Some(
                 "1: {flags=number 0,mapID=number 5000,mapType=number 3,name=string New Land,parentMapID=number 947}".into(),
             ),
+            // its own data the client's, completed the recorded character's
+            "GetAchievementInfo(1042)" => Some(
+                "15: number 1042, string Hugs given, number 10, boolean true, number 1, number 2, number 3, string Hugs given, number 1, number 136243, string , boolean false, boolean true, string Someone, boolean true".into(),
+            ),
             "C_Map.GetMapInfo(1411)" => Some(
                 "1: {flags=number 2,mapID=number 1411,mapType=number 3,name=string Durotar (client),parentMapID=number 1414}".into(),
             ),
@@ -1922,6 +1926,14 @@ fn the_client_tables_answer_before_the_recordings() {
     C_Map.GetMapInfo(1411).name, C_Map.GetMapInfo(1412).name",
     );
     assert_eq!(r, ["New Land", "947", "Durotar (client)", "Mulgore"]);
+    // The character's part of an answer stays the recorded one (decision
+    // T465).
+    let r = run(
+        &mut vm,
+        "local _, name, points, completed, month, _, _, _, _, _, _, _, mine, by = GetAchievementInfo(1042)
+return name, points, tostring(completed), tostring(month), tostring(mine), tostring(by)",
+    );
+    assert_eq!(r, ["Hugs given", "10", "false", "nil", "false", "nil"]);
 }
 
 /// `BNGetInfo()` answers the account; given an argument, nothing (both

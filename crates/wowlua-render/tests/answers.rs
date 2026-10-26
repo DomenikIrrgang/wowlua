@@ -41,3 +41,28 @@ fn check(prefix: &str, at_least: usize) {
 fn maps() {
     check("C_Map.", 700);
 }
+
+/// The achievements' own data and their categories.
+#[test]
+fn achievements() {
+    for (prefix, at_least) in [
+        ("GetAchievementInfo(", 311),
+        ("GetAchievementCategory(", 311),
+        ("GetCategoryInfo(", 55),
+        ("GetCategoryList(", 2),
+        ("GetStatisticsCategoryList(", 2),
+        ("GetPreviousAchievement(", 311),
+        ("GetNextAchievement(", 311),
+        ("C_AchievementInfo.", 622),
+        ("C_Traits.GetTraitCurrencyForAchievement(", 311),
+    ] {
+        check(prefix, at_least);
+    }
+}
+
+/// The item classes' and subclasses' names.
+#[test]
+fn item_kinds() {
+    check("C_Item.GetItemClassInfo(", 20);
+    check("C_Item.GetItemSubClassInfo(", 109);
+}

@@ -3,7 +3,10 @@
 //! that the engine takes them where it would take a recorded one: the
 //! world maps' static data (`C_Map.GetMapInfo`, `GetMapChildrenInfo`,
 //! `GetMapRectOnMap`, `GetMapWorldSize`, the map art's ID, layers and
-//! tiles, its text positions).
+//! tiles, its text positions); the achievements' own data and their
+//! categories (decision T465: the character's part of an answer the
+//! engine keeps from the recordings); the item classes' and subclasses'
+//! names.
 
 use std::collections::{BTreeMap, HashMap};
 
@@ -328,6 +331,239 @@ impl Maps {
     }
 }
 
+/// An achievement (`Achievement`).
+struct Achievement {
+    title: String,
+    description: String,
+    reward: String,
+    flags: u32,
+    supercedes: u32,
+    category: u32,
+    points: u32,
+    icon: u32,
+}
+
+/// `ACHIEVEMENT_FLAGS_COUNTER` (a statistic), `ACHIEVEMENT_FLAGS_GUILD`.
+const STATISTIC: u32 = 0x1;
+const GUILD: u32 = 0x4000;
+/// The statistics' root category.
+const STATISTICS: u32 = 1;
+
+/// The achievements, their categories and the trait currency they give.
+struct Achievements {
+    achievements: HashMap<u32, Achievement>,
+    /// Name, parent (none: 0), display order.
+    categories: BTreeMap<u32, (String, u32, u32)>,
+    /// The achievement following one in its series.
+    next: HashMap<u32, u32>,
+    /// (currency, achievement) → amount (`TraitCurrencySource`).
+    currency: HashMap<(u32, u32), u32>,
+}
+
+impl Achievements {
+    fn open(casc: &Casc) -> Option<Achievements> {
+        let open = |name: &str| Table::open(casc, name);
+        let mut achievements = HashMap::new();
+        let mut next = HashMap::new();
+        for r in open("Achievement")?.rows() {
+            let text = |c: &str| r.string(c).unwrap_or_default();
+            let supercedes = r.int("Supercedes");
+            if supercedes != 0 {
+                next.entry(supercedes).or_insert(r.id());
+            }
+            achievements.insert(
+                r.id(),
+                Achievement {
+                    title: text("Title_lang"),
+                    description: text("Description_lang"),
+                    reward: text("Reward_lang"),
+                    flags: r.int("Flags"),
+                    supercedes,
+                    category: r.int("Category"),
+                    points: r.int("Points"),
+                    icon: r.int("IconFileID"),
+                },
+            );
+        }
+        let rows: Vec<(u32, String, u32, u32)> = open("Achievement_Category")?
+            .rows()
+            .map(|r| {
+                (
+                    r.id(),
+                    r.string("Name_lang").unwrap_or_default(),
+                    r.int("Parent"),
+                    r.int("Ui_order"),
+                )
+            })
+            .collect();
+        let ids: Vec<u32> = rows.iter().map(|r| r.0).collect();
+        let categories = rows
+            .into_iter()
+            .map(|(id, name, parent, order)| {
+                // (none: -1, as its field's bits hold it)
+                let parent = if ids.contains(&parent) { parent } else { 0 };
+                (id, (name, parent, order))
+            })
+            .collect();
+        let mut currency = HashMap::new();
+        if let Some(t) = open("TraitCurrencySource") {
+            for r in t.rows() {
+                if r.int("AchievementID") != 0 {
+                    *currency
+                        .entry((r.int("TraitCurrencyID"), r.int("AchievementID")))
+                        .or_insert(0) += r.int("Amount");
+                }
+            }
+        }
+        Some(Achievements {
+            achievements,
+            categories,
+            next,
+            currency,
+        })
+    }
+
+    /// Whether a category is under the statistics' root.
+    fn statistic(&self, mut id: u32) -> bool {
+        for _ in 0..16 {
+            match self.categories.get(&id) {
+                Some((_, parent, _)) if *parent == STATISTICS => return true,
+                Some((_, parent, _)) if *parent != 0 => id = *parent,
+                _ => return false,
+            }
+        }
+        false
+    }
+
+    /// The achievements' categories or the statistics', by display order,
+    /// then ID.
+    fn category_list(&self, statistics: bool) -> String {
+        let mut ids: Vec<(u32, u32)> = self
+            .categories
+            .iter()
+            .filter(|(id, _)| **id != STATISTICS && self.statistic(**id) == statistics)
+            .map(|(id, (_, _, order))| (*order, *id))
+            .collect();
+        ids.sort_unstable();
+        list(ids.into_iter().map(|(_, id)| format!("number {id}")))
+    }
+
+    fn answer(&self, name: &str, args: &[&str]) -> Option<String> {
+        let id = |i: usize| -> Option<u32> { args.get(i)?.parse().ok() };
+        let a = |i: usize| self.achievements.get(&id(i)?);
+        Some(match name {
+            // By ID; the character's part (completed, its date, by whom)
+            // the engine's (decision T465).
+            "GetAchievementInfo" if args.len() == 1 => {
+                let x = a(0)?;
+                let icon = match x.icon {
+                    0 => "nil nil".to_string(),
+                    i => format!("number {i}"),
+                };
+                format!(
+                    "15: number {}, string {}, number {}, boolean false, nil nil, nil nil, nil nil, \
+                     string {}, number {}, {icon}, string {}, boolean {}, boolean false, nil nil, \
+                     boolean {}",
+                    id(0)?,
+                    x.title,
+                    x.points,
+                    x.description,
+                    x.flags,
+                    x.reward,
+                    x.flags & GUILD != 0,
+                    x.flags & STATISTIC != 0
+                )
+            }
+            "GetAchievementCategory" => format!("1: number {}", a(0)?.category),
+            "C_AchievementInfo.IsValidAchievement" => format!("1: boolean {}", a(0).is_some()),
+            "C_AchievementInfo.IsGuildAchievement" => {
+                format!("1: boolean {}", a(0).is_some_and(|x| x.flags & GUILD != 0))
+            }
+            "GetPreviousAchievement" => match a(0)?.supercedes {
+                0 => "0: ".into(),
+                s => format!("1: number {s}"),
+            },
+            "GetNextAchievement" => match self.next.get(&id(0)?) {
+                Some(n) => format!("2: number {n}, boolean false"),
+                None => "0: ".into(),
+            },
+            "GetCategoryInfo" => {
+                let (name, parent, _) = self.categories.get(&id(0)?)?;
+                let parent = match *parent {
+                    0 | STATISTICS => -1,
+                    p => i64::from(p),
+                };
+                format!("3: string {name}, number {parent}, number 0")
+            }
+            "GetCategoryList" => self.category_list(false),
+            "GetStatisticsCategoryList" => self.category_list(true),
+            "C_Traits.GetTraitCurrencyForAchievement" => format!(
+                "1: number {}",
+                self.currency.get(&(id(0)?, id(1)?)).copied().unwrap_or(0)
+            ),
+            _ => return None,
+        })
+    }
+}
+
+/// The item classes and subclasses' names (`ItemClass`, `ItemSubClass`).
+struct ItemKinds {
+    classes: HashMap<u32, String>,
+    /// (class, subclass) → name (the verbose one, else the shown one),
+    /// whether it is an armor type (its flag 512).
+    subclasses: HashMap<(u32, u32), (String, bool)>,
+}
+
+impl ItemKinds {
+    fn open(casc: &Casc) -> Option<ItemKinds> {
+        let classes = Table::open(casc, "ItemClass")?
+            .rows()
+            .map(|r| {
+                (
+                    r.int("ClassID"),
+                    r.string("ClassName_lang").unwrap_or_default(),
+                )
+            })
+            .collect();
+        let subclasses = Table::open(casc, "ItemSubClass")?
+            .rows()
+            .map(|r| {
+                let verbose = r.string("VerboseName_lang").unwrap_or_default();
+                let name = if verbose.is_empty() {
+                    r.string("DisplayName_lang").unwrap_or_default()
+                } else {
+                    verbose
+                };
+                (
+                    (r.int("ClassID"), r.int("SubClassID")),
+                    (name, r.int("Flags") & 512 != 0),
+                )
+            })
+            .collect();
+        Some(ItemKinds {
+            classes,
+            subclasses,
+        })
+    }
+
+    fn answer(&self, name: &str, args: &[&str]) -> Option<String> {
+        let id = |i: usize| -> Option<u32> { args.get(i)?.parse().ok() };
+        Some(match name {
+            "C_Item.GetItemClassInfo" | "GetItemClassInfo" => match self.classes.get(&id(0)?) {
+                Some(n) => format!("1: string {n}"),
+                None => "1: nil nil".into(),
+            },
+            "C_Item.GetItemSubClassInfo" | "GetItemSubClassInfo" => {
+                match self.subclasses.get(&(id(0)?, id(1)?)) {
+                    Some((n, armor)) => format!("2: string {n}, boolean {armor}"),
+                    None => "0: ".into(),
+                }
+            }
+            _ => return None,
+        })
+    }
+}
+
 /// A list's answer (`1: {1=…,2=…}`).
 fn list(items: impl Iterator<Item = String>) -> String {
     let items: Vec<String> = items
@@ -340,12 +576,16 @@ fn list(items: impl Iterator<Item = String>) -> String {
 /// The answers the client's tables give.
 pub(crate) struct Answers {
     maps: Option<Maps>,
+    achievements: Option<Achievements>,
+    items: Option<ItemKinds>,
 }
 
 impl Answers {
     pub(crate) fn open(casc: &Casc) -> Answers {
         Answers {
             maps: Maps::open(casc),
+            achievements: Achievements::open(casc),
+            items: ItemKinds::open(casc),
         }
     }
 
@@ -360,6 +600,9 @@ impl Answers {
         if name.starts_with("C_Map.") {
             return self.maps.as_ref()?.answer(name, &args);
         }
-        None
+        if let Some(a) = self.items.as_ref().and_then(|i| i.answer(name, &args)) {
+            return Some(a);
+        }
+        self.achievements.as_ref()?.answer(name, &args)
     }
 }

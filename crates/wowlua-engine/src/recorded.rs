@@ -43,13 +43,60 @@ fn platform_answers(platform: crate::Platform) -> &'static HashMap<&'static str,
 /// one every machine gave.
 pub(crate) fn answer(vm: &Vm, call: &str) -> Option<&'static str> {
     // The client's tables', where at hand (decision T464).
-    if let Some(a) = crate::clientdata::answer(vm, call) {
-        return Some(intern(a));
-    }
-    platform_answers(engine(vm).platform)
+    let recorded = platform_answers(engine(vm).platform)
         .get(call)
         .or_else(|| answers().get(call))
-        .copied()
+        .copied();
+    if let Some(a) = crate::clientdata::answer(vm, call) {
+        return Some(intern(match recorded {
+            Some(r) => with_character(call, a, r),
+            None => a,
+        }));
+    }
+    recorded
+}
+
+/// The values of an answer that are the character's, not the tables'
+/// (decision T465), by function: a client answer takes them from the
+/// recorded one.
+const CHARACTER_VALUES: &[(&str, &[usize])] = &[
+    // completed, month, day, year; wasEarnedByMe, earnedBy
+    ("GetAchievementInfo", &[3, 4, 5, 6, 12, 13]),
+    // completed
+    ("GetNextAchievement", &[1]),
+];
+
+/// A client's answer with the character's values of the recorded one.
+fn with_character(call: &str, client: String, recorded: &str) -> String {
+    let name = call.split('(').next().unwrap_or_default();
+    let Some((_, positions)) = CHARACTER_VALUES.iter().find(|(n, _)| *n == name) else {
+        return client;
+    };
+    let values = |text: &str| -> Option<(String, Vec<String>)> {
+        let (count, rest) = text.split_once(": ")?;
+        let starts = regex_starts(rest);
+        Some((
+            count.to_string(),
+            (0..starts.len())
+                .map(|i| {
+                    let end = starts.get(i + 1).map_or(rest.len(), |&e| e - 2);
+                    rest[starts[i]..end].to_string()
+                })
+                .collect(),
+        ))
+    };
+    let (Some((count, mut ours)), Some((_, theirs))) = (values(&client), values(recorded)) else {
+        return client;
+    };
+    if count == "0" || ours.len() != theirs.len() {
+        return client;
+    }
+    for &p in *positions {
+        if let (Some(o), Some(t)) = (ours.get_mut(p), theirs.get(p)) {
+            o.clone_from(t);
+        }
+    }
+    format!("{count}: {}", ours.join(", "))
 }
 
 /// A text kept for the program's life, once.
@@ -97,6 +144,7 @@ pub fn compare_with_client(
         let Some(ours) = data.answer(call) else {
             continue;
         };
+        let ours = with_character(call, ours, theirs);
         checked += 1;
         let (a, b) = (Rv::answer(&ours), Rv::answer(theirs));
         if a.len() != b.len() || !a.iter().zip(&b).all(|(x, y)| close(x, y)) {

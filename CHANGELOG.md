@@ -44,6 +44,8 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 
 ### Changed
 
+- With your WoW installation, item class and subclass names (`C_Item.GetItemClassInfo`, `C_Item.GetItemSubClassInfo`) come from your client's game tables.
+- With your WoW installation, achievements' names, descriptions, points, icons, categories and series come from your client's game tables (`GetAchievementInfo`, `GetCategoryInfo`, `GetCategoryList`, …); whether the character earned them stays as recorded.
 - With your WoW installation, the world map's data (`C_Map.GetMapInfo`, `GetMapChildrenInfo`, `GetMapRectOnMap`, `GetMapWorldSize`, the map art and its tiles) comes from your client's game tables.
 - With your WoW installation, the world map's flight paths (`C_TaxiMap.GetTaxiNodesForMap`) come from your client's game tables.
 - With your WoW installation, every transmog source and appearance answers from your client's game tables (`C_TransmogCollection.GetAppearanceSources`, `GetSourceInfo`, `GetAllAppearanceSources`, …), not only those wowlua recorded.

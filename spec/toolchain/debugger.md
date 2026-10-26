@@ -471,6 +471,29 @@ T310).
   (`UiMap`, `UiMapAssignment`, `UiMapXMapArt`, `UiMapArt`,
   `UiMapArtStyleLayer`, `UiMapArtTile`). Checked against the 809 recorded
   answers of these calls: the same.
+
+  An achievement's own data (decision T465) is the client's
+  (`Achievement`, `Achievement_Category`, `TraitCurrencySource`):
+  `GetAchievementInfo(id)`'s ID, name, points, description, flags, icon
+  (nil for none), reward, guild and statistic; its category, the one it
+  follows and the one following it in its series; a category's name and
+  parent (-1 under none or the statistics' root, 1); the achievement and
+  statistic category lists (the statistics' root's descendants or the
+  others, by display order then ID); `C_AchievementInfo.IsValidAchievement`
+  and `IsGuildAchievement`; `C_Traits.GetTraitCurrencyForAchievement`
+  (the sources' amounts). The character's part of an answer stays the
+  recorded one: whether and when it was earned and by whom (none for an
+  achievement not recorded). Which achievements a category lists, their
+  criteria and their order stay recorded: they follow the character (a
+  series its current step, faction-only criteria, "most used" statistics
+  one, three quarters of the lists by the character's counts). Checked
+  against the 2,236 recorded answers of these calls: the same.
+
+  An item class's and subclass's names (decision T466) are the client's:
+  `C_Item.GetItemClassInfo` the class's (`ItemClass`; nil for none),
+  `GetItemSubClassInfo` the subclass's verbose name, else its shown one,
+  and whether it is an armor type (its flag 512; `ItemSubClass`; nothing
+  for none). Checked against the 129 recorded answers: the same.
 - **Fonts**: the client's TrueType fonts from the installation; without
   them, the bundled stand-in fonts (open licenses), at the same pixel
   heights. Glyph positions follow the engine's measured widths (§17.6), so
