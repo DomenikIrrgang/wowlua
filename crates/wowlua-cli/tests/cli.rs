@@ -1902,7 +1902,7 @@ fn release_builds_inline_expression_helpers() {
             ),
             (
                 "src/main.wowlua",
-                "local function half(n: number): number return n / 2 end\n@inline\nlocal function countdown(n: number): number\n    if n <= 0 then return 0 end\n    return countdown(n - 1)\nend\nlocal size = 10\nprint(half(size), countdown(3))\n",
+                "local function half(n: number): number return n / 2 end\n@inline\nlocal function countdown(n: number): number\n    if n <= 0 then return 0 end\n    return countdown(n - 1)\nend\nlocal M = {}\n@inline\nfunction M.one(): number return 1 end\nlocal size = 10\nprint(half(size), countdown(3), M.one() - 1)\n",
             ),
         ],
     );
@@ -1912,12 +1912,16 @@ fn release_builds_inline_expression_helpers() {
         .success()
         .stderr(predicate::str::contains(
             "warning[W3031]: `@inline` is ignored: its body is not a single `return` expression",
+        ))
+        // (not a local function: W3031 too, spec §4.3)
+        .stderr(predicate::str::contains(
+            "warning[W3031]: `@inline` is ignored: only local functions with a single `return` expression are inlined",
         ));
     let release = dir.path().join("dist/release/Inl");
     let main = fs::read_to_string(release.join("src/main.lua")).unwrap();
     assert!(main.contains("print(size / 2,"), "{main}");
     assert!(!main.contains("half"), "{main}");
-    assert_eq!(run_addon(&release, "Inl"), "5 0");
+    assert_eq!(run_addon(&release, "Inl"), "5 0 0");
 }
 
 /// What finishing a file reports (W3031 from inlining, E5001 from checking

@@ -1603,6 +1603,29 @@ pub fn compile_flavor(
                         .or_default()
                         .push((pos, name.span()));
                 }
+                // `function f()` and `function t.f()`: not local functions
+                // (an exported one has the `export`'s decorators).
+                view::StmtKind::Function { name, .. } if is_inline(st.decorators()) => {
+                    diagnostics.push(
+                        Diagnostic::warning(
+                            "W3031",
+                            "`@inline` is ignored: only local functions with a single `return` expression are inlined",
+                        )
+                        .with_label(name.span(), "not a local function"),
+                    );
+                }
+                view::StmtKind::Export(inner)
+                    if is_inline(st.decorators())
+                        && matches!(inner.kind(), view::StmtKind::Function { .. }) =>
+                {
+                    diagnostics.push(
+                        Diagnostic::warning(
+                            "W3031",
+                            "`@inline` is ignored: only local functions with a single `return` expression are inlined",
+                        )
+                        .with_label(inner.span(), "not a local function"),
+                    );
+                }
                 view::StmtKind::Class(c) => {
                     for m in &c.members() {
                         if is_inline(m.decorators()) {
