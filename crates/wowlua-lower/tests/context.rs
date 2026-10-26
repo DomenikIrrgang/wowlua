@@ -114,3 +114,26 @@ fn contexts_compare_constants_bit_for_bit() {
     };
     assert!(!debug.same_except_meta(&Context::default()));
 }
+
+/// An import without its resolution: in the package the module analysis
+/// reported why (E1015), so the lowering fails without a second error; a
+/// script (no package context) is told that imports need one.
+#[test]
+fn an_unresolved_import_fails_without_a_second_error() {
+    let src = "import foo from \"./missing\"\nprint(foo)\n";
+    let mut db = SourceDb::new();
+    let file = db.add("t.wowlua", src.to_string());
+    let parse = wowlua_syntax::parse(src.as_bytes(), file);
+    let module = Context {
+        module: Some("t".into()),
+        ..Context::default()
+    };
+    match wowlua_lower::lower_module(&parse, src.as_bytes(), &module) {
+        Ok(_) => panic!("an unresolved import lowers"),
+        Err(errors) => assert!(errors.is_empty(), "{errors:?}"),
+    }
+    let errors = wowlua_lower::lower_module(&parse, src.as_bytes(), &Context::default())
+        .expect_err("a script's import fails");
+    assert_eq!(errors.len(), 1);
+    assert!(errors[0].message.contains("package context"));
+}

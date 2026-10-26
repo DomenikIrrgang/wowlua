@@ -256,6 +256,7 @@ pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered,
         aliases: BTreeMap::new(),
         literal_sets: Vec::new(),
         errors: Vec::new(),
+        unresolved: false,
         loops: Vec::new(),
         func_depth: 0,
         pending: HashSet::new(),
@@ -282,7 +283,7 @@ pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered,
     let hoisted = lowerer.hoist();
     let mut stmts = lowerer.stmts(parse.view().block().stmts());
     stmts.extend(lowerer.expose_internals());
-    if !lowerer.errors.is_empty() {
+    if !lowerer.errors.is_empty() || lowerer.unresolved {
         return Err(lowerer.errors);
     }
     // Profiling and tracing wrappers (spec §7.3, §7.4).
@@ -677,6 +678,9 @@ struct Lowerer<'a> {
     /// (spec §7.5), made once in the prologue: name, Lua literals.
     literal_sets: Vec<(String, Vec<String>)>,
     errors: Vec<Diagnostic>,
+    /// An import did not resolve: the module analysis reported it (E1015),
+    /// and the file is not lowered.
+    unresolved: bool,
     loops: Vec<LoopInfo>,
     /// Names of the functions being lowered (innermost last; `None` for
     /// anonymous ones), for `location()` and the profiler.
@@ -1697,11 +1701,17 @@ impl<'a> Lowerer<'a> {
             return Vec::new();
         }
         let Some(target) = self.ctx.imports.get(&span.start).cloned() else {
-            self.error(
-                "E1015",
-                span,
-                "imports need the package context (build the package with `wowlua build`)",
-            );
+            if self.ctx.module.is_some() {
+                // In the package (a file that imports is a module), the
+                // module analysis reported why the import did not resolve.
+                self.unresolved = true;
+            } else {
+                self.error(
+                    "E1015",
+                    span,
+                    "imports need the package context (build the package with `wowlua build`)",
+                );
+            }
             return Vec::new();
         };
         let (id, lazy, exports, attrs, intrinsics) = match target {

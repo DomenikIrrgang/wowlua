@@ -1547,6 +1547,81 @@ fn split_flavors_share_what_compiles_the_same() {
     }
 }
 
+/// Code `@if` removes may use the names of an import `@if` removes too
+/// (spec §6.4.3): a release build checks clean, kept code gets E1020.
+#[test]
+fn removed_imports_name_removed_code() {
+    let dir = tempfile::tempdir().unwrap();
+    let main = "import build from \"wowlua:meta\"\n@if(build.debug)\nimport dump from \"./tools\"\n\n@if(build.debug)\nlocal function show(x: number)\n    dump(x)\nend\n\n@if(build.debug)\nfunction debugAll()\n    dump(1)\nend\n\nprint(\"hi\")\n";
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"gone\", \"version\": \"1.0.0\" }, \"profiles\": { \"release\": { \"exclude\": [\"src/tools.wowlua\"] } } }\n",
+            ),
+            ("src/main.wowlua", main),
+            (
+                "src/tools.wowlua",
+                "export function dump(x: any)\n    print(x)\nend\n",
+            ),
+        ],
+    );
+    for args in [&["check"][..], &["check", "--release"]] {
+        let assert = wowlua(dir.path()).args(args).assert().success();
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        assert!(!stderr.contains("warning["), "{args:?}: {stderr}");
+    }
+    fs::write(
+        dir.path().join("src/main.wowlua"),
+        format!("{main}dump(2)\n"),
+    )
+    .unwrap();
+    let assert = wowlua(dir.path())
+        .args(["check", "--release"])
+        .assert()
+        .code(1);
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert!(stderr.contains("error[E1020]"), "{stderr}");
+    assert!(!stderr.contains("W1001"), "{stderr}");
+}
+
+/// An import that does not resolve reports its E1015 once, and its names
+/// read as unknown values, not as undeclared globals.
+#[test]
+fn an_unresolved_import_reports_once() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                "{ \"package\": { \"name\": \"miss\", \"version\": \"1.0.0\" } }\n",
+            ),
+            (
+                "src/main.wowlua",
+                "import foo from \"./missing\"\nprint(foo)\n",
+            ),
+            (
+                "tests/main.test.wowlua",
+                "import bar from \"/nowhere\"\nprint(bar)\n",
+            ),
+        ],
+    );
+    for args in [&["check"][..], &["build"], &["test"]] {
+        let assert = wowlua(dir.path()).args(args).assert().code(1);
+        let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+        let not_found = stderr.matches("not found").count();
+        assert!(not_found > 0, "{args:?}: {stderr}");
+        assert_eq!(
+            stderr.matches("error[E1015]").count(),
+            not_found,
+            "{args:?}: {stderr}"
+        );
+        assert!(!stderr.contains("W1001"), "{args:?}: {stderr}");
+    }
+}
+
 #[test]
 fn build_metadata_errors() {
     let cases: &[(&str, &str, &str)] = &[

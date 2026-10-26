@@ -1476,6 +1476,24 @@ fn import_types(
             continue;
         };
         let Some(resolved) = info.imports.iter().find(|r| r.start == s.span().start) else {
+            // An import `@if` removes (its names are still read by code
+            // `@if` removes too, spec §6.4.3; kept code gets E1020 from the
+            // lowering), or one that does not resolve (E1015): its names
+            // are unknown values, not undeclared globals.
+            if !import.type_only() {
+                match &import.clause() {
+                    ImportClause::Names(specs) => {
+                        for spec in specs {
+                            let local = spec.alias.as_ref().unwrap_or(&spec.name);
+                            out.insert(local.text().into(), Types::ANY);
+                        }
+                    }
+                    ImportClause::Namespace(n) => {
+                        out.insert(n.text().into(), Types::ANY);
+                    }
+                    ImportClause::SideEffect => {}
+                }
+            }
             continue;
         };
         let module = match resolved.target {
