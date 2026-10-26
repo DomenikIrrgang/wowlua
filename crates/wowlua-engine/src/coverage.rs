@@ -469,7 +469,13 @@ mod tests {
         let mut sources = BTreeMap::new();
         for file in files {
             let rel = file.strip_prefix(&src).expect("below src");
-            let module = rel.with_extension("").to_string_lossy().replace('/', "::");
+            // Path components, so Windows' backslashes name modules as `/` does.
+            let module = rel
+                .with_extension("")
+                .components()
+                .map(|c| c.as_os_str().to_string_lossy().into_owned())
+                .collect::<Vec<_>>()
+                .join("::");
             let module = module.strip_suffix("::mod").unwrap_or(&module).to_string();
             let text = std::fs::read_to_string(&file).expect("a source");
             sources.insert(module.clone(), text.clone());
