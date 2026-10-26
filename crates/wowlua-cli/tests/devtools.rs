@@ -150,7 +150,10 @@ fn recordings_and_export() {
     run(
         "",
         r#"
+-- (Not profiled: the addon's garbage counts at the outermost measured call,
+-- which would be the test.)
 @test
+@noprofile
 local function records()
     local perf = probe().runtime.perf
     if mock.reloads() == 0 then
