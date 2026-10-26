@@ -42,6 +42,8 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - An XML file loading a file that `build.exclude` or a profile's `exclude` leaves out warns W5004 instead of failing with E5002.
 - `wowlua new --ci github` writes a workflow that checks, tests and builds every push and publishes tags.
 - `flavors.<id>.types` must accept the API version wowlua ships (E4318).
+- `frames.movable` with `editMode` warns W8301 when you build for Cata Classic, which has no Edit Mode.
+- Shared flavor mode checks members of Blizzard's utility tables per flavor: `ChatFrameUtil.SendTell` without a guard is E2030 when you build for cata.
 
 ### Fixed
 
@@ -90,6 +92,11 @@ All notable changes to wowlua. Each minor version closes a milestone of the [roa
 - `@wowlua/web`: the manifest's `check.lints` apply as in `wowlua check`: W2063 is off until set to `"warn"`, `"allow"` drops a warning and a `"deny"` lint stops a build or a run.
 - `@wowlua/web`: a run through the worker without a canvas moves, and what it prints reaches `onOutput`.
 - A file starting with `--!strict` (or another directive) no longer gets that directive as a comment after the generated first line.
+- `unit.healthPercent` no longer answers 0 to 1 on a client with `UnitHealthPercent` but without `CurveConstants`.
+- `frames.movable` with `editMode` no longer fails on Cata Classic; the option is ignored there.
+- Tooltip hooks (`tooltip.hook`, `@onTooltip`) run on the classic flavors again, through the tooltips' scripts.
+- `STANDARD_TEXT_FONT`, `GENERAL_CHAT_DOCK`, `LE_PARTY_CATEGORY_INSTANCE`, `LE_EXPANSION_LEVEL_CURRENT` and other client constants are declared for every flavor that has them.
+- Messages show record keys that aren't identifiers as written: `{ ["1ST"]: string }`.
 
 ## 0.12.0 (2026-10-26)
 
