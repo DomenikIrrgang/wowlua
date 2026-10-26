@@ -44,13 +44,13 @@ local function garbage(s, depth, before)
 		-- A collection step ran during the call.
 		made = 0
 	end
-	local __wl_t1 = childGarbage[depth] if __wl_t1 == nil then __wl_t1 = 0 end local inner = __wl_t1
+	local inner = childGarbage[depth] or 0
 	childGarbage[depth] = nil
 	local own = math.max(made - inner, 0)
-	do local __wl_t2 = s.garbage if __wl_t2 == nil then __wl_t2 = 0 end s.garbage = (__wl_t2) + made end
-	do local __wl_t3 = s.selfGarbage if __wl_t3 == nil then __wl_t3 = 0 end s.selfGarbage = (__wl_t3) + own end
+	s.garbage = (s.garbage or 0) + made
+	s.selfGarbage = (s.selfGarbage or 0) + own
 	if depth > 1 then
-		do local __wl_t4 = childGarbage[depth - 1] if __wl_t4 == nil then __wl_t4 = 0 end childGarbage[depth - 1] = (__wl_t4) + made end
+		childGarbage[depth - 1] = (childGarbage[depth - 1] or 0) + made
 	end
 	perf.garbageFns = perf.garbageFns + own
 end
@@ -58,12 +58,12 @@ end
 -- frame was suspended: a coroutine yielded inside it).
 local function finish(name, location, start, depth, frame0, node, before, ...)
 	local elapsed = clock() - start
-	local __wl_t5 = child[depth] if __wl_t5 == nil then __wl_t5 = 0 end local inner = __wl_t5
+	local inner = child[depth] or 0
 	for i = #child, depth, -1 do
 		child[i] = nil
 	end
 	if depth > 1 then
-		do local __wl_t6 = child[depth - 1] if __wl_t6 == nil then __wl_t6 = 0 end child[depth - 1] = (__wl_t6) + elapsed end
+		child[depth - 1] = (child[depth - 1] or 0) + elapsed
 	end
 	local s = record(name, location, elapsed, elapsed - inner)
 	if before then
@@ -114,8 +114,8 @@ function prof.wrap(fn, name, location, opts)
 	if type(fn) ~= "function" then
 		return fn
 	end
-	local __wl_t8 = prof.errors if not __wl_t8 then local __wl_t7 = opts if __wl_t7 ~= nil then __wl_t7 = __wl_t7.errors end __wl_t8 = __wl_t7 end local errors = __wl_t8
-	local __wl_t9 = opts if __wl_t9 ~= nil then __wl_t9 = __wl_t9.memory end local memory = __wl_t9
+	local __wl_t2 = prof.errors if not __wl_t2 then local __wl_t1 = opts if __wl_t1 ~= nil then __wl_t1 = __wl_t1.errors end __wl_t2 = __wl_t1 end local errors = __wl_t2
+	local __wl_t3 = opts if __wl_t3 ~= nil then __wl_t3 = __wl_t3.memory end local memory = __wl_t3
 	if memory then
 		return function(...)
 			local before = memoryKiB()
@@ -124,7 +124,7 @@ function prof.wrap(fn, name, location, opts)
 				-- (finish made the entry)
 				local s = prof.stats[name]
 				if s then
-					do local __wl_t10 = s.memory if __wl_t10 == nil then __wl_t10 = 0 end s.memory = (__wl_t10) + math.max(memoryKiB() - before, 0) end
+					s.memory = (s.memory or 0) + math.max(memoryKiB() - before, 0)
 				end
 				return...
 			end

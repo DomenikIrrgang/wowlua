@@ -47,18 +47,18 @@ local function perFrame(s, key, event)
 	local frame = perf.frame
 	if s.lastFrame ~= frame then
 		s.lastFrame = frame
-		do local __wl_t1 = s.frames if __wl_t1 == nil then __wl_t1 = 0 end s.frames = (__wl_t1) + 1 end
+		s.frames = (s.frames or 0) + 1
 		s.inFrame = 0
 	end
 	if event then
-		local __wl_t2 = s.inFrame if __wl_t2 == nil then __wl_t2 = 0 end local n = (__wl_t2) + 1
+		local n = (s.inFrame or 0) + 1
 		s.inFrame = n
 		if n == 5 then
-			do local __wl_t3 = s.bursts if __wl_t3 == nil then __wl_t3 = 0 end s.bursts = (__wl_t3) + 1 end
+			s.bursts = (s.bursts or 0) + 1
 		end
-		do local __wl_t4 = s.burstMax if __wl_t4 == nil then __wl_t4 = 0 end if n > (__wl_t4) then
-				s.burstMax = n
-			end end
+		if n > (s.burstMax or 0) then
+			s.burstMax = n
+		end
 		perf.maxOpen("burst", key, n)
 	end
 end
@@ -152,7 +152,7 @@ function mon.slash(fn, location)
 				end
 			end
 		end
-		local __wl_t5 = key if __wl_t5 == nil then __wl_t5 = ("command at " .. location) end local command = __wl_t5
+		local command = key or ("command at " .. location)
 		local s = entry(mon.commands, command, location)
 		local top = perf and perf.begin(command, "slash") or false
 		return timed(s, "cm", command, clock(), top, fn(...))
