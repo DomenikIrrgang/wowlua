@@ -61,7 +61,8 @@ A user function whose name equals a core decorator can only be used as a
 decorator through an alias (`import profile as myProfile from "./perf"`).
 Warning W3021 is reported when a lexical binding with a core decorator's name
 is a function that is **not** a re-export of that core decorator, because the
-binding is ignored in decorator position. Re-exports such as
+binding is ignored in decorator position. It is reported at each decorator
+that names it (`@profile`); a binding no decorator names gets none. Re-exports such as
 `import profile from "wowlua:debug"` and namespace imports such as
 `import * as reflect from "wowlua:reflect"` produce no warning.
 
@@ -185,6 +186,27 @@ The checker verifies that a user decorator's parameter types accept the target
 and the context (E3022). When the decorator returns a function, the declared
 name gets the **return type of the decorator**, which allows decorators that
 change signatures.
+
+- A decorator's expression is checked where the declaration is, as load time
+  evaluates it (§4.5.2): a factory's arguments against its parameters, and
+  a name in them that is neither in scope there nor a declared global is
+  E1003, in every mode. Function bodies in the arguments run later and are
+  checked as such.
+- The target is the function as written; a method's (and a constructor's or
+  accessor's) function takes `self` first, a class decorator receives the
+  class table and a field decorator `nil`. Type parameters of a generic
+  decorator are inferred from the target and the context. The second
+  parameter must take a `DecoratorContext`; parameters after it must be
+  optional.
+- Decorators apply bottom to top, each to the result of the one below it.
+  A result of `nil`, `any` or anything but a function keeps the value's
+  type; a `F?` result gives `F`. Functions and methods get the result's
+  type (a method's without its `self`); callers checked after the
+  declaration see it, the function's own body is checked as declared.
+  Constructors, accessors, classes and fields keep their declared types.
+- Wrapping framework decorators (§4.4) are checked and typed like user
+  decorators; registering ones are checked by their own rules (the event
+  names, the handler's parameters) and change no type.
 
 ### 4.5.2 Evaluation order
 

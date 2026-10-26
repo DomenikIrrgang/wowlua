@@ -128,9 +128,11 @@ in the constructor (its text, its value, showing it) never runs them early. If
 the constructor sets a handler for the same script itself, the `@script`
 method replaces it.
 
-The compiler does not check the script name or the handler's parameters
-against the frame type yet, so spell the name the way the
-[WoW API reference](../reference/api.md) does.
+The compiler checks the script name against the frame type: a script the
+frame type doesn't have, such as a misspelled `OnClik` or `OnClick` on an
+`EditBox`, is error E2001. Where the [WoW API reference](../reference/api.md)
+gives the script's arguments, the method's parameters are checked against
+them too, as for a function passed to `SetScript`.
 
 ## Variations on a widget
 

@@ -387,10 +387,35 @@ Related: E3020, E0109
 
 A user decorator's parameters don't accept the declaration it decorates: a
 function decorator is `(fn: F, ctx: DecoratorContext) -> F?`, and its `fn`
-must take the decorated function's type. Fix the decorator's signature, or
-decorate a fitting declaration.
+must take the decorated function's type. A method's function takes `self`
+first, a class decorator gets the class table and a field decorator `nil`.
+The second parameter must take the `DecoratorContext`, and any further
+parameters must be optional. Fix the decorator's signature, or decorate a
+fitting declaration.
 
-The checker doesn't report this code yet.
+```wowlua fails
+local function onNumbers(fn: (n: number) -> (), _ctx: DecoratorContext)
+    return fn
+end
+
+@onNumbers
+local function greet(name: string)
+    print(name)
+end
+greet("Ana")
+```
+
+```wowlua compiles
+local function onNumbers(fn: (n: number) -> (), _ctx: DecoratorContext)
+    return fn
+end
+
+@onNumbers
+local function double(n: number)
+    print(n * 2)
+end
+double(2)
+```
 
 Related: E3021
 
@@ -654,11 +679,32 @@ Related: E3044
 A local or imported function has a core decorator's name (`profile`, `trace`,
 …) but isn't a re-export of that decorator. In decorator position a core
 decorator's name always means the core decorator, so `@profile` ignores your
-function. Import it under another name (`import profile as myProfile from
+function; the warning is reported where `@profile` is written. Import it under another name (`import profile as myProfile from
 "./perf"`) and write `@myProfile`. Re-exports such as `import profile from
 "wowlua:debug"` are fine.
 
-The checker doesn't report this code yet.
+```wowlua fails
+local function profile(fn: () -> (), _ctx: DecoratorContext)
+    return fn
+end
+
+@profile
+local function refresh()
+end
+refresh()
+print(profile)
+```
+
+```wowlua compiles
+local function measured(fn: () -> (), _ctx: DecoratorContext)
+    return fn
+end
+
+@measured
+local function refresh()
+end
+refresh()
+```
 
 Related: E3020
 

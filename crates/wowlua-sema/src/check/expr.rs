@@ -1008,6 +1008,12 @@ impl Checker<'_, '_> {
         match self.env.declared.global(n.text()) {
             Some(t) => t,
             None if n.text() == "_G" => Types::TABLE,
+            // A decorator's argument is evaluated where the declaration is
+            // (spec §4.5.2): a name not in scope there is E1003.
+            None if self.decorating == Some(self.depth) && !self.known_global(n.text()) => {
+                self.report_undefined_in_decorator(n);
+                Types::ANY
+            }
             None if self.dynamic_env
                 || self.extra_globals.contains(n.text())
                 || self.assigned_globals.contains(n.text()) =>
@@ -1033,6 +1039,16 @@ impl Checker<'_, '_> {
                 Types::ANY
             }
         }
+    }
+
+    /// A global the checker knows: declared, allowed, or assigned by the
+    /// package.
+    pub(crate) fn known_global(&self, name: &str) -> bool {
+        name == "_G"
+            || self.env.declared.global(name).is_some()
+            || self.dynamic_env
+            || self.extra_globals.contains(name)
+            || self.assigned_globals.contains(name)
     }
 
     /// Assigning a global (W1002 / E1002 unless declared).
@@ -2971,7 +2987,7 @@ impl Checker<'_, '_> {
         (subst::apply(&mut self.env.types, c, &probe) == c && c != p).then_some(c)
     }
 
-    fn instantiate_any(&mut self, f: &Func) -> Func {
+    pub(crate) fn instantiate_any(&mut self, f: &Func) -> Func {
         if f.type_params.is_empty() {
             return f.clone();
         }

@@ -205,3 +205,241 @@ fn assigning_wowlua_on_the_namespace_is_e2003() {
     );
     assert!(!found.iter().any(|c| c.starts_with('E')), "{found:#?}");
 }
+
+/// The language's own types (`DecoratorContext`, spec §4.5).
+const LANGUAGE: &str = include_str!("../../../../wowlua-stdlib/decl/wowlua.d.wowlua");
+
+/// The codes `src` reports with the language's types.
+fn decorated(src: &str, mode: Mode) -> Vec<String> {
+    codes(&check_with(src, mode, Some(LANGUAGE), None))
+}
+
+/// A decorator's arguments are evaluated where the declaration is: a name
+/// that is neither in scope nor a declared global is E1003, in either mode
+/// (spec §4.5.2), and arguments are checked against the factory's
+/// parameters.
+#[test]
+fn decorator_arguments_are_checked() {
+    let factory = "local function throttle(sec: number): (fn: (...any) -> (), ctx: DecoratorContext) -> (...any) -> ()\n    return function(fn: (...any) -> (), _: DecoratorContext): (...any) -> ()\n        return function(...: any) if sec > 0 then fn(...) end end\n    end\nend\n";
+    for mode in [Mode::Basic, Mode::Strict] {
+        let found = decorated(
+            &format!("{factory}@throttle(delay)\nlocal function f() end\nf()\n"),
+            mode,
+        );
+        assert!(
+            found
+                .iter()
+                .any(|c| c.starts_with("E1003:") && c.contains("`delay`")),
+            "{found:#?}"
+        );
+        assert!(!has(&found, "W1001") && !has(&found, "E1001"), "{found:#?}");
+    }
+    let found = decorated(
+        &format!("{factory}@throttle(\"x\")\nlocal function f() end\nf()\n"),
+        Mode::Basic,
+    );
+    assert!(has(&found, "E2001"), "{found:#?}");
+    // A user decorator's argument too, and the decorator's own path.
+    let found = decorated(
+        "local function deco(_: any): FunctionDecorator<() -> ()>\n    return function(fn: () -> (), _: DecoratorContext) return fn end\nend\n@deco(missing)\nlocal function f() end\nf()\n",
+        Mode::Basic,
+    );
+    assert!(has(&found, "E1003"), "{found:#?}");
+    // In scope: locals, upvalues and declared globals; a function in an
+    // argument runs later, and is checked as such.
+    let found = decorated(
+        &format!(
+            "local delay = 0.5\n{factory}@throttle(delay)\nlocal function f() end\n@throttle(math.max(delay, 1))\nlocal function g() end\nf()\ng()\n"
+        ),
+        Mode::Strict,
+    );
+    assert!(!found.iter().any(|c| c.starts_with('E')), "{found:#?}");
+}
+
+/// A user decorator's parameters take the value and the context (E3022),
+/// and the declared name gets the decorator's result (spec §4.5.1).
+#[test]
+fn decorators_are_typed() {
+    let memoize = "local function memoize<A, R>(fn: (A) -> R, _: DecoratorContext): (A) -> R\n    return fn\nend\n";
+    // Accepts: generic, its type parameters from the function.
+    let found = decorated(
+        &format!(
+            "{memoize}@memoize\nlocal function lookup(id: number): string return tostring(id) end\nlocal s: string = lookup(1)\nprint(s)\n"
+        ),
+        Mode::Strict,
+    );
+    assert!(!found.iter().any(|c| c.starts_with('E')), "{found:#?}");
+    // A function the decorator does not take.
+    let found = decorated(
+        "local function onNumbers(fn: (n: number) -> (), _: DecoratorContext) return fn end\n@onNumbers\nlocal function f(s: string) print(s) end\nf(\"x\")\n",
+        Mode::Basic,
+    );
+    assert!(
+        found
+            .iter()
+            .any(|c| c.starts_with("E3022:") && c.contains("@onNumbers")),
+        "{found:#?}"
+    );
+    // A context parameter that is no context, a third parameter, a value
+    // that is no function.
+    for deco in [
+        "local function d(fn: () -> (), ctx: number) return fn end\n",
+        "local function d(fn: () -> (), ctx: DecoratorContext, extra: string) return fn end\n",
+        "local d = 5\n",
+    ] {
+        let found = decorated(
+            &format!("{deco}@d\nlocal function f() end\nf()\n"),
+            Mode::Basic,
+        );
+        assert!(has(&found, "E3022"), "{deco}{found:#?}");
+    }
+    // The result changes the signature: callers see it.
+    let wrap = "local function stringly(fn: (n: number) -> (), _: DecoratorContext): (s: string) -> ()\n    return function(s: string) fn(tonumber(s) or 0) end\nend\n";
+    let found = decorated(
+        &format!("{wrap}@stringly\nlocal function f(n: number) print(n) end\nf(\"12\")\n"),
+        Mode::Strict,
+    );
+    assert!(!found.iter().any(|c| c.starts_with('E')), "{found:#?}");
+    let found = decorated(
+        &format!("{wrap}@stringly\nlocal function f(n: number) print(n) end\nf(12)\n"),
+        Mode::Strict,
+    );
+    assert!(has(&found, "E2001"), "{found:#?}");
+    // Also a module's hoisted function, and an exported one.
+    let found = decorated(
+        &format!("{wrap}@stringly\nfunction F(n: number) print(n) end\nF(\"1\")\n"),
+        Mode::Basic,
+    );
+    assert!(!found.iter().any(|c| c.starts_with('E')), "{found:#?}");
+    let wrap_any = wrap.replace("DecoratorContext", "any");
+    let errs = check_modules(
+        &[
+            (
+                "m.wowlua",
+                &format!(
+                    "{wrap_any}@stringly\nexport function f(n: number) print(n) end\nf(\"1\")\n"
+                ),
+            ),
+            ("main.wowlua", "import f from \"./m\"\nf(\"2\")\nf(3)\n"),
+        ],
+        Mode::Strict,
+    );
+    assert!(errs.len() == 1 && errs[0].starts_with("E2001"), "{errs:#?}");
+    // `nil` (or `F?`) keeps the function; a decorator typed `any` too.
+    let found = decorated(
+        "local function keep(fn: (...any) -> (), _: DecoratorContext): nil return nil end\nlocal function opt<F>(fn: F, _: DecoratorContext): F? return fn end\nlocal untyped: any = nil\n@keep\n@opt\n@untyped\nlocal function f(n: number) print(n) end\nf(1)\n",
+        Mode::Strict,
+    );
+    assert!(!found.iter().any(|c| c.starts_with('E')), "{found:#?}");
+}
+
+/// Methods, constructors, accessors, fields and classes: their decorators
+/// take the method's function (`self` first), the class table, or `nil`.
+#[test]
+fn member_decorators_are_typed() {
+    let method_deco = "local function logged<F>(fn: F, _: DecoratorContext): F return fn end\nlocal function onlyStrings(fn: (s: string) -> (), _: DecoratorContext) return fn end\nlocal function register(_: nil, _: DecoratorContext) end\nlocal function classDeco<C>(c: C, _: DecoratorContext): C return c end\n";
+    let found = decorated(
+        &format!(
+            "{method_deco}@classDeco\nclass A\n    @register\n    x: number = 1\n    @logged\n    constructor() end\n    @logged\n    function f(n: number): number return n end\n    @logged\n    get g(): number return 1 end\nend\nlocal n: number = A.new():f(1)\nprint(n)\n"
+        ),
+        Mode::Strict,
+    );
+    assert!(!found.iter().any(|c| c.starts_with('E')), "{found:#?}");
+    // A method's function takes `self` first: a decorator for plain
+    // `(string) -> ()` functions does not take it.
+    let found = decorated(
+        &format!(
+            "{method_deco}class A\n    @onlyStrings\n    function f(s: string) print(s) end\nend\nprint(A)\n"
+        ),
+        Mode::Basic,
+    );
+    assert!(has(&found, "E3022"), "{found:#?}");
+    // A field decorator receives `nil`.
+    let found = decorated(
+        &format!("{method_deco}class A\n    @onlyStrings\n    x: number = 1\nend\nprint(A)\n"),
+        Mode::Strict,
+    );
+    assert!(has(&found, "E3022"), "{found:#?}");
+    // A decorated method's callers see the decorator's result.
+    let found = decorated(
+        "local function toString(fn: (self: any, n: number) -> (), _: DecoratorContext): (self: any, s: string) -> ()\n    return function(self: any, s: string) fn(self, tonumber(s) or 0) end\nend\nclass A\n    @toString\n    function f(n: number) print(n) end\nend\nA.new():f(\"1\")\n",
+        Mode::Strict,
+    );
+    assert!(!found.iter().any(|c| c.starts_with('E')), "{found:#?}");
+}
+
+/// W3021: a local function named like a core decorator is ignored in
+/// decorator position (spec §4.2); re-exports of the core decorators are
+/// not.
+#[test]
+fn core_decorator_names_hide_bindings() {
+    let found = decorated(
+        "local function profile(fn: () -> (), _: DecoratorContext) return fn end\n@profile\nlocal function f() end\nf()\nprint(profile)\n",
+        Mode::Basic,
+    );
+    assert!(
+        found
+            .iter()
+            .any(|c| c.starts_with("W3021:") && c.contains("`profile`")),
+        "{found:#?}"
+    );
+    // A value that is no function, or no binding at all: nothing.
+    let found = decorated(
+        "local trace = 1\n@trace\nlocal function f() end\nf()\nprint(trace)\n@profile\nlocal function g() end\ng()\n",
+        Mode::Basic,
+    );
+    assert!(!has(&found, "W3021"), "{found:#?}");
+}
+
+/// Frame types as the API's declarations give them: scripts with typed
+/// handlers, and others only the script type alias names.
+const WIDGETS: &str = "type ScriptType = string
+type ScriptFrame = ScriptType | \"OnShow\" | \"OnGamePadStick\"
+type ScriptButton = ScriptFrame | \"OnClick\"
+@widget(\"Frame\")
+declare class Frame
+    function SetScript(scriptType: \"OnShow\", handler: ((self: Self) -> ())?)
+    function SetScript(scriptType: ScriptFrame, handler: ((...any) -> ())?)
+end
+@widget(\"Button\")
+declare class Button extends Frame
+    function SetScript(scriptType: \"OnShow\", handler: ((self: Self) -> ())?)
+    function SetScript(scriptType: \"OnClick\", handler: ((self: Self, button: string, down: boolean) -> ())?)
+    function SetScript(scriptType: ScriptButton, handler: ((...any) -> ())?)
+    function HookScript(scriptType: \"OnClick\", handler: (self: Self, button: string, down: boolean) -> ())
+    function HookScript(scriptType: ScriptButton, handler: (...any) -> ())
+end
+";
+
+/// `@script(name)` names a script of the widget type, and the method takes
+/// that script's arguments (E2001, spec §3.2.1).
+#[test]
+fn script_handlers_are_checked() {
+    let check = |members: &str| {
+        let src = format!("class B extends Button\n{members}end\nprint(B)\n");
+        codes(&check_with(&src, Mode::Strict, Some(WIDGETS), None))
+    };
+    let fine = check(
+        "    @script(\"OnClick\")\n    function clicked(button: string, down: boolean) print(button, down) end\n    @script(\"OnClick\", { hook = true })\n    function also(button: string) print(button) end\n    @script(\"OnShow\")\n    function shown() end\n    @script(\"OnGamePadStick\")\n    function stick(...: any) print(...) end\n",
+    );
+    assert!(!fine.iter().any(|c| c.starts_with('E')), "{fine:#?}");
+    let found = check("    @script(\"OnClik\")\n    function clicked() end\n");
+    assert!(
+        found
+            .iter()
+            .any(|c| c.starts_with("E2001:") && c.contains("`OnClik` is not a script of `Button`")),
+        "{found:#?}"
+    );
+    let found =
+        check("    @script(\"OnClick\")\n    function clicked(button: number) print(button) end\n");
+    assert!(
+        found
+            .iter()
+            .any(|c| c.starts_with("E2001:") && c.contains("cannot handle `OnClick`")),
+        "{found:#?}"
+    );
+    // A subclass of a widget class: the frame type its chain ends in.
+    let src = "class B extends Button\nend\nclass C extends B\n    @script(\"OnClik\")\n    function clicked() end\nend\nprint(C)\n";
+    let found = codes(&check_with(src, Mode::Strict, Some(WIDGETS), None));
+    assert!(has(&found, "E2001"), "{found:#?}");
+}

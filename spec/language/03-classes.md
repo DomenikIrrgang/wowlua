@@ -472,7 +472,12 @@ end
   keeps the registration, and its override is called. A `SetScript` handler of
   a subclass for the same script replaces the superclass's; hooks add up.
 - `@script` applies only to instance methods of widget classes (E3021). The
-  checker (milestone M4) also checks the script name against the widget type.
+  checker also checks the script name against the widget type the class
+  chain ends in: a name its `SetScript` (with `hook = true`: `HookScript`)
+  does not take, literally or through the script type alias of its
+  declaration (`ScriptButton`), is E2001. Where the declaration types the
+  script's handler, the method, with the frame as `self`, must fit it
+  (E2001), as a function passed to `SetScript` must.
 
 ## 3.3 Interfaces
 

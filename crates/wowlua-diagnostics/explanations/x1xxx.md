@@ -95,11 +95,31 @@ Related: E1002, W1001
 ## E1003
 
 A name used in a wowlua construct, such as a decorator argument, is not a
-local or upvalue in scope there. Declare the local before the construct, or
-fix the name.
+local or upvalue in scope there, nor a declared global. A decorator's
+arguments are evaluated where the declaration is, when the file loads, so
+the name must exist there. It is an error in every mode, where reading an
+undeclared global elsewhere is W1001 or E1001. Declare the local before the
+declaration, or fix the name.
 
-The current compiler does not report this code: it is registered for this
-rule, but no check produces it yet, so there are no examples.
+```wowlua fails
+import throttle from "wowlua:timer"
+
+@throttle(delay)
+local function refresh()
+end
+refresh()
+```
+
+```wowlua compiles
+import throttle from "wowlua:timer"
+
+local delay = 0.5
+
+@throttle(delay)
+local function refresh()
+end
+refresh()
+```
 
 Related: E1001
 

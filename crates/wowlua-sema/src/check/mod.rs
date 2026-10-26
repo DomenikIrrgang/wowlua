@@ -6,6 +6,7 @@ pub mod body;
 pub mod complete;
 mod decl;
 pub mod declared;
+mod decorate;
 mod definition;
 pub mod env;
 pub mod expr;
@@ -995,6 +996,7 @@ fn check_file_in(
     let import_caps = import_caps(ctx, i);
     let info = FileInfo {
         intrinsics: crate::stdlib::Intrinsics::of(ctx.analysis, i, parse),
+        std_imports: std_imports(parse),
         static_branches: ctx.analysis.modules[i]
             .as_ref()
             .map(|m| m.static_branches.clone())
@@ -1202,6 +1204,25 @@ fn check_file_in(
                 .filter(|(_, t)| **t != Types::ANY)
                 .map(|(k, &t)| (k.clone(), t)),
         );
+    }
+    out
+}
+
+/// The local names a file imports from the standard library (`wowlua:*`).
+fn std_imports(parse: &wowlua_syntax::Parse) -> FxHashSet<Box<str>> {
+    let mut out = FxHashSet::default();
+    for s in parse.view().block().stmts() {
+        let StmtKind::Import(i) = s.kind() else {
+            continue;
+        };
+        if !i.from().value().starts_with(b"wowlua:") {
+            continue;
+        }
+        if let wowlua_syntax::view::ImportClause::Names(specs) = i.clause() {
+            for sp in specs.iter() {
+                out.insert(sp.alias.unwrap_or(sp.name).text().into());
+            }
+        }
     }
     out
 }

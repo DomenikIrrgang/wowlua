@@ -92,6 +92,9 @@ pub struct FileInfo<'a> {
     pub meta_flavor: FxHashSet<String>,
     /// Imports bound to the standard library's `@intrinsic` ids.
     pub intrinsics: crate::stdlib::Intrinsics,
+    /// Names imported from the standard library (`wowlua:*`): a core
+    /// decorator's re-export is no W3021.
+    pub std_imports: FxHashSet<Box<str>>,
     /// `if` blocks static conditions decide (spec §6.4.2): `false`
     /// removed, `true` always runs.
     pub static_branches: std::collections::HashMap<(u32, u32), bool>,
@@ -250,6 +253,16 @@ pub struct Checker<'e, 'p> {
     /// The handler type the decorators of the statement being checked give
     /// its function (`@event("X")`): (type, what it handles).
     next_handler: Option<(Func, String)>,
+    /// The user decorators of the declaration being checked, evaluated
+    /// (spec §4.5), and those an `export` statement passes to its inner
+    /// declaration.
+    next_decorators: Vec<super::decorate::DecoratorValue>,
+    export_decorators: Vec<super::decorate::DecoratorValue>,
+    /// While a decorator's expression is checked: the function depth it is
+    /// at (E1003 for names that are not in scope).
+    pub(crate) decorating: Option<u32>,
+    /// `FileInfo::std_imports`.
+    pub(crate) std_imports: FxHashSet<Box<str>>,
     /// The most values a `local function` can give, counted from its own
     /// `return`s when each gives a fixed number (W2062, decision S40).
     pub(crate) result_caps: FxHashMap<VarId, usize>,
@@ -429,6 +442,10 @@ impl<'e, 'p> Checker<'e, 'p> {
             hovers: info.hover.then(Vec::new),
             import_targets: info.import_targets.clone(),
             next_handler: None,
+            next_decorators: Vec::new(),
+            export_decorators: Vec::new(),
+            decorating: None,
+            std_imports: info.std_imports.clone(),
             result_caps: FxHashMap::default(),
             method_caps: FxHashMap::default(),
             self_owners: FxHashMap::default(),
@@ -1261,9 +1278,42 @@ impl<'e, 'p> Checker<'e, 'p> {
     }
 
     fn stmt(&mut self, s: Stmt<'_>) {
-        self.complete_decorators(s.decorators(), super::complete::on_stmt(s));
-        self.next_handler = self.decorated_handler(s.decorators());
+        let on = super::complete::on_stmt(s);
+        self.complete_decorators(s.decorators(), on);
+        // (an `export`'s decorators are its declaration's)
+        let mut decorators = std::mem::take(&mut self.export_decorators);
+        decorators.extend(self.decorator_values(s.decorators(), on));
+        let handler = self.decorated_handler(s.decorators());
+        match s.kind() {
+            StmtKind::Export(_) => {
+                self.export_decorators = decorators;
+                self.next_handler = handler;
+            }
+            _ => {
+                self.next_decorators = decorators;
+                if handler.is_some() || s.decorators().is_empty() {
+                    self.next_handler = handler.or(self.next_handler.take());
+                }
+            }
+        }
+        // (the bodies checked below have decorators of their own)
+        let class_decorators = match s.kind() {
+            StmtKind::Class(_) => std::mem::take(&mut self.next_decorators),
+            _ => Vec::new(),
+        };
         stacker::maybe_grow(64 * 1024, 1024 * 1024, || self.stmt_inner(s));
+        // A class's own decorators take the class table (E3022).
+        if let StmtKind::Class(c) = s.kind()
+            && let Some(def) = self.env.lookup_type(c.name().text(), &self.scope)
+        {
+            let decorators = class_decorators;
+            if !decorators.is_empty() {
+                let class = self.env.types.intern(Ty::ClassOf(def));
+                self.apply_decorators(&decorators, class, "class");
+            }
+        }
+        self.next_decorators.clear();
+        self.export_decorators.clear();
         self.next_handler = None;
         if !s.decorators().is_empty() {
             self.check_cases(s);
@@ -1812,6 +1862,7 @@ impl<'e, 'p> Checker<'e, 'p> {
                     .push((name.text().into(), t, name.span()));
             }
             StmtKind::LocalFunction { name, func } => {
+                let decorators = std::mem::take(&mut self.next_decorators);
                 let sig = self.func_sig(&FnSig::of(func));
                 let impl_t = self.env.types.func(sig);
                 // Callers (and the body, recursing) see the overloads.
@@ -1831,6 +1882,12 @@ impl<'e, 'p> Checker<'e, 'p> {
                     self.result_caps.insert(id, cap);
                 }
                 let actual = set.unwrap_or(actual);
+                // The name holds the decorated value (spec §4.5.1).
+                let actual = if decorators.is_empty() {
+                    actual
+                } else {
+                    self.apply_decorators(&decorators, actual, "function")
+                };
                 self.flow.insert(id, actual);
                 self.vars[id.0 as usize].base = actual;
             }
@@ -2186,6 +2243,7 @@ impl<'e, 'p> Checker<'e, 'p> {
 
     /// `function f()`, `function t.f()`, `function t:m()`.
     fn function_stmt(&mut self, name: FuncName<'_>, func: FuncNode<'_>) {
+        let decorators = std::mem::take(&mut self.next_decorators);
         let method = name.method().is_some();
         // The table the function is stored in gives `self`'s type.
         let mut owner: Option<TypeId> = None;
@@ -2280,6 +2338,20 @@ impl<'e, 'p> Checker<'e, 'p> {
             let n = &name.path().at(0);
             // Callers see the overloads.
             let t = overloads.unwrap_or(t);
+            // The name holds the decorated value (spec §4.5.1), also where
+            // the module hoisted the function with its signature.
+            let t = if decorators.is_empty() {
+                t
+            } else {
+                let decorated = self.apply_decorators(&decorators, t, "function");
+                if decorated != t
+                    && let Some(v) = self.lookup_var(n.text())
+                    && self.vars[v.0 as usize].declared.is_some()
+                {
+                    self.vars[v.0 as usize].declared = Some(decorated);
+                }
+                decorated
+            };
             match self.lookup_var(n.text()) {
                 Some(v) => self.assign_var(v, t, n.span()),
                 None => {
@@ -2293,10 +2365,16 @@ impl<'e, 'p> Checker<'e, 'p> {
             let last = name
                 .method()
                 .unwrap_or_else(|| name.path().last().expect("a name"));
-            // A method stored in a table takes `self` first.
+            // A method stored in a table takes `self` first; the decorators
+            // receive (and give) that function.
             let stored = match self_ty {
                 Some(st) if method => self.env.with_self(t, st),
                 _ => t,
+            };
+            let stored = if decorators.is_empty() {
+                stored
+            } else {
+                self.apply_decorators(&decorators, stored, "function")
             };
             self.extend_open(o, last.text(), stored);
         }
@@ -2802,6 +2880,25 @@ impl<'e, 'p> Checker<'e, 'p> {
             }
         }
         self.check_implements(c, instance);
+        // The members' decorators are evaluated with the class (spec
+        // §3.1.9); a decorated method's body is checked as declared.
+        let decorated: Vec<(usize, Vec<super::decorate::DecoratorValue>)> = c
+            .members()
+            .iter()
+            .enumerate()
+            .filter(|(_, m)| !m.decorators().is_empty())
+            .map(|(i, m)| {
+                use super::complete::On;
+                let on = match m.kind() {
+                    ClassMemberKind::Field { .. } => On::Field,
+                    ClassMemberKind::Method { .. } => On::Method,
+                    ClassMemberKind::Constructor { .. } => On::Constructor,
+                    _ => On::Accessor,
+                };
+                (i, self.decorator_values(m.decorators(), on))
+            })
+            .collect();
+        self.restore_declared_methods(def);
         if self.mode == Mode::Strict {
             // (which fields the constructor sets: no results read, L56)
             let reads = self.env.pending_reads.clone();
@@ -2888,6 +2985,10 @@ impl<'e, 'p> Checker<'e, 'p> {
         for r in reports {
             self.diagnostics.extend(r);
         }
+        for (i, values) in decorated {
+            self.decorate_member(def, instance, members[i], &values);
+        }
+        self.check_scripts(def, instance, c);
         self.scope = saved;
         let _ = class_obj;
     }

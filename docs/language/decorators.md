@@ -351,7 +351,8 @@ end rescanBags = __wl.prof.wrap(rescanBags, "rescanBags", "src/bags.wowlua:7") r
 > [!NOTE]
 > The name of a built-in decorator always means the built-in. A function of
 > yours called `profile` can still be a decorator under another name:
-> `import profile as myProfile from "./perf"`, then `@myProfile`. Decorators
+> `import profile as myProfile from "./perf"`, then `@myProfile`. Writing
+> `@profile` while such a function is in scope gives warning W3021. Decorators
 > never pick up globals by accident: a name that is not a built-in, a local or
 > an import is error E3020. To use a decorator another addon exposes as a
 > global, write the path from `_G`: `@_G.MyLib.memoize`.

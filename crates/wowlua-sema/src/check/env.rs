@@ -202,6 +202,13 @@ pub struct Env<'p> {
     /// Aliases whose bodies are not resolved yet (while building), with the
     /// module of their scope.
     lazy_aliases: FxHashMap<DefId, (TypeAlias<'p>, Option<usize>)>,
+    /// The bodies of the declarations' type aliases as written, by name:
+    /// the script names a union of literals lists, which `string` in it
+    /// would absorb once resolved (`ScriptButton`).
+    declared_alias_syntax: FxHashMap<Box<str>, Type<'p>>,
+    /// The script types the `SetScript` and `HookScript` signatures of a
+    /// declared class take, as written.
+    script_types: FxHashMap<DefId, Vec<Type<'p>>>,
     /// Aliases whose body is a table type, while that body is resolved: one
     /// that meets itself there becomes a named structural type (L58).
     record_aliases: rustc_hash::FxHashSet<DefId>,
@@ -242,6 +249,10 @@ pub struct Env<'p> {
     pub inferring: Option<(DefId, Box<str>)>,
     /// Members whose results were inferred so far.
     pub inferred: usize,
+    /// Decorated methods (spec §4.5.1): their types as declared, by class,
+    /// static and name; callers see the decorated type, the method's own
+    /// body the declared one.
+    pub decorated_methods: FxHashMap<(DefId, bool, Box<str>), TypeId>,
 }
 
 /// What a name refers to, for go to definition; the last three are
@@ -490,9 +501,26 @@ impl<'p> Env<'p> {
         // own turn has not come yet (aliases of other modules, too, refer to
         // each other in any order).
         for (def, p) in &pending {
-            if let Pending::Alias(a, m) = p {
-                let module = env.scope_of(*m, sources).module;
-                env.lazy_aliases.insert(*def, (*a, module));
+            match p {
+                Pending::Alias(a, m) => {
+                    let module = env.scope_of(*m, sources).module;
+                    if module.is_none() {
+                        env.declared_alias_syntax
+                            .insert(a.name().text().into(), a.ty());
+                    }
+                    env.lazy_aliases.insert(*def, (*a, module));
+                }
+                Pending::DeclClass(_, _, members, _) => {
+                    for member in members.iter() {
+                        if let DeclMemberKind::Function { name, sig } = member.kind()
+                            && matches!(name.text(), "SetScript" | "HookScript")
+                            && let Some(t) = FnSig::of(sig).params.first().and_then(|p| p.ty)
+                        {
+                            env.script_types.entry(*def).or_default().push(t);
+                        }
+                    }
+                }
+                _ => {}
             }
         }
         // A class after the class it extends: it takes the superclass's
@@ -1296,6 +1324,59 @@ impl<'p> Env<'p> {
         m.kind = MemberKind::Field;
         m.readonly = true;
         self.def_mut(def).members.insert(name.into(), m);
+    }
+
+    /// The script names a declared widget type and its superclasses take
+    /// (`SetScript`'s and `HookScript`'s literals, through the aliases of
+    /// the declarations): empty where the declarations list none.
+    pub fn script_names(&self, def: DefId) -> FxHashSet<Box<str>> {
+        let mut out = FxHashSet::default();
+        let mut current = Some(def);
+        let mut seen = FxHashSet::default();
+        while let Some(d) = current {
+            if !seen.insert(d) {
+                break;
+            }
+            for t in self.script_types.get(&d).into_iter().flatten() {
+                self.literal_names(*t, &mut out, 0);
+            }
+            current = self
+                .def(d)
+                .bases
+                .first()
+                .and_then(|&b| match self.types.get(b) {
+                    Ty::Named(bd, _) => Some(*bd),
+                    _ => None,
+                });
+        }
+        out
+    }
+
+    fn literal_names(&self, t: Type<'_>, out: &mut FxHashSet<Box<str>>, depth: u32) {
+        if depth > 16 {
+            return;
+        }
+        match t.kind() {
+            TypeKind::String(s) => {
+                out.insert(String::from_utf8_lossy(&s.value()).into());
+            }
+            TypeKind::Union(ms) => {
+                for m in ms.iter() {
+                    self.literal_names(m, out, depth + 1);
+                }
+            }
+            TypeKind::Paren(inner) | TypeKind::Optional(inner) => {
+                self.literal_names(inner, out, depth + 1)
+            }
+            TypeKind::Ref { path, .. } => {
+                if let Some([n]) = path.exactly::<1>()
+                    && let Some(&body) = self.declared_alias_syntax.get(n.text())
+                {
+                    self.literal_names(body, out, depth + 1);
+                }
+            }
+            _ => {}
+        }
     }
 
     /// Resolves class `def` (a pending class) after the class it extends,
