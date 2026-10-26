@@ -122,7 +122,10 @@ frames.movable(bar, { store = db, key = "bar", editMode = { label = "MyAddon Bar
   `EditModeManagerFrame` has the manager's methods (`IsEditModeActive`,
   `GetActiveLayoutInfo`, `ClearSelectedSystem`, `SelectSystem`,
   `UpdateLayoutInfo`) and `EventRegistry` exists; Cata Classic's client
-  has only a stub of the manager (`IsEditModeActive`).
+  has only a stub of the manager (`IsEditModeActive`). The compiler warns
+  (W8301) where a targeted flavor's declarations lack
+  `EditModeManagerFrame.GetActiveLayoutInfo` and the call passes `editMode`
+  (decision S59).
 
 ## bindings
 

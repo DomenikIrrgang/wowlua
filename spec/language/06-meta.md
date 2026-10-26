@@ -301,7 +301,12 @@ Besides `if build.debug then … end`, debug-only code can be written with:
 In `shared` flavor mode, `flavor` is a runtime value and the checker requires
 flavor-specific APIs to be guarded. A use of an API that does not exist in
 every selected flavor is error E2030 (warning W2030 in pure Lua files) unless it
-is inside a **flavor guard**. These forms are recognized as guards:
+is inside a **flavor guard**. Where an API exists comes from each flavor's
+declarations: its globals, the members of its namespaces (`C_Garrison.GetGarrisonInfo`)
+and the members of the classes its globals are typed with, through the classes
+they extend (`ChatFrameUtil.SendTell`, `EditModeManagerFrame.GetActiveLayoutInfo`).
+A global whose declared type says nothing of its members (`unknown`, `table`)
+may have any. These forms are recognized as guards:
 
 | Guard | Narrows to |
 |-------|-----------|

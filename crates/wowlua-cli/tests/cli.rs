@@ -4453,6 +4453,46 @@ print(GetTime())
         );
 }
 
+/// Shared flavor mode knows the members of globals a class types
+/// (`ChatFrameUtil`, whose class differs per flavor): one some flavor lacks
+/// needs a guard (E2030, W2030 in basic mode), one every flavor has does
+/// not.
+#[test]
+fn flavor_guards_for_class_members() {
+    let dir = tempfile::tempdir().unwrap();
+    let manifest = "{ \"package\": { \"name\": \"guards\", \"version\": \"1.0.0\" }, \"flavors\": { \"mists\": {}, \"cata\": {} }, \"build\": { \"flavor-mode\": \"shared\" } }\n";
+    write(
+        dir.path(),
+        &[
+            ("wowlua.json", manifest),
+            (
+                "src/main.wowlua",
+                "import flavor from \"wowlua:meta\"\nprint(ChatFrameUtil.ForEachChatFrame)\nif flavor == \"mists\" then\n    print(ChatFrameUtil.SendTell)\nend\n",
+            ),
+        ],
+    );
+    let assert = wowlua(dir.path())
+        .args(["build", "--message-format", "short"])
+        .assert()
+        .success();
+    let stderr = String::from_utf8_lossy(&assert.get_output().stderr).into_owned();
+    assert!(!stderr.contains("E2030"), "{stderr}");
+    fs::write(
+        dir.path().join("src/main.wowlua"),
+        "print(ChatFrameUtil.SendTell)\n",
+    )
+    .unwrap();
+    // (a warning in basic mode)
+    wowlua(dir.path())
+        .args(["build", "--message-format", "short"])
+        .assert()
+        .stderr(
+            predicate::str::contains("2030]")
+                .and(predicate::str::contains("`ChatFrameUtil.SendTell`"))
+                .and(predicate::str::contains("`cata`")),
+        );
+}
+
 /// The typed sample addon checks in strict mode without diagnostics
 /// (milestone M4 exit criterion) and runs on both of its flavors: the
 /// mainline-only API is behind a flavor guard.

@@ -971,24 +971,22 @@ fn build_inner(
         && flavors.len() > 1)
         .then(|| {
             let table = wowlua_flavors::table();
-            let mut per_flavor: Vec<(String, std::collections::HashSet<String>)> = Vec::new();
+            let mut per_flavor: Vec<(String, &std::collections::HashSet<String>)> = Vec::new();
             for f in &flavors {
-                if let Some([_, own]) = wowlua_api::declarations(f) {
-                    // The text leaves out its globals of a primitive type.
-                    let mut names = wowlua_api::declared_names(own.text);
-                    names.extend(own.globals.iter().map(|g| g.name.to_string()));
+                if let Some(names) = wowlua_api::flavor_names(f) {
                     per_flavor.push((f.clone(), names));
                 }
             }
             let mut availability: HashMap<String, BTreeSet<String>> = HashMap::new();
             for (_, names) in &per_flavor {
-                for n in names {
-                    if availability.contains_key(n) {
+                for n in names.iter() {
+                    // `Global.*`: a global that may have any member.
+                    if availability.contains_key(n) || n.ends_with(".*") {
                         continue;
                     }
                     let have: BTreeSet<String> = per_flavor
                         .iter()
-                        .filter(|(_, ns)| ns.contains(n))
+                        .filter(|(_, ns)| wowlua_api::has_api(ns, n))
                         .map(|(f, _)| f.clone())
                         .collect();
                     if have.len() < per_flavor.len() {
@@ -4489,52 +4487,20 @@ fn bindings_xml(
     xml
 }
 
-/// The binding names of the hand-written keybinding files in `root`.
 /// Which client APIs the standard library's flavor-dependent functions
 /// use (`wowlua_sema::stdlib::needed_apis`) flavor `f` declares, in its
-/// own or the shared declarations. Kept for the process: the declarations
-/// are embedded.
+/// own or the shared declarations (members of classes included).
 fn stdlib_apis(f: &str) -> Option<HashSet<String>> {
-    use std::sync::{Mutex, OnceLock};
-    static CACHE: OnceLock<Mutex<HashMap<String, Option<HashSet<String>>>>> = OnceLock::new();
-    let cache = CACHE.get_or_init(Default::default);
-    if let Some(found) = cache.lock().ok()?.get(f) {
-        return found.clone();
-    }
-    let found = wowlua_api::declarations(f).map(|files| {
-        // Globals by their declaration lines; namespace members (`C_X.F`)
-        // need every declared name.
-        let mut names: Option<HashSet<String>> = None;
-        let declared = |api: &str, names: &mut Option<HashSet<String>>| {
-            if api.contains('.') {
-                let names = names.get_or_insert_with(|| {
-                    files
-                        .iter()
-                        .flat_map(|file| wowlua_api::declared_names(file.text))
-                        .collect()
-                });
-                return names.contains(api);
-            }
-            files.iter().any(|file| {
-                file.globals.iter().any(|g| g.name == api)
-                    || file.text.lines().any(|line| {
-                        let rest = line
-                            .strip_prefix("declare global ")
-                            .or_else(|| line.strip_prefix("declare function "));
-                        rest.and_then(|r| r.strip_prefix(api))
-                            .is_some_and(|r| r.starts_with([':', '(', '<', ' ']))
-                    })
-            })
-        };
+    let names = wowlua_api::flavor_names(f)?;
+    Some(
         wowlua_sema::stdlib::needed_apis()
-            .filter(|a| declared(a, &mut names))
+            .filter(|a| wowlua_api::has_api(names, a))
             .map(str::to_string)
-            .collect()
-    });
-    cache.lock().ok()?.insert(f.to_string(), found.clone());
-    found
+            .collect(),
+    )
 }
 
+/// The binding names of the hand-written keybinding files in `root`.
 fn xml_binding_names(root: &Path) -> HashSet<String> {
     let Ok(entries) = crate::host::read_dir(root) else {
         return HashSet::new();

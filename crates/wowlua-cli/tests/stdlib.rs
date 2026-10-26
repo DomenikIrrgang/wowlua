@@ -4383,6 +4383,48 @@ fn reduced_fallbacks_are_warned_per_flavor() {
     assert!(!out.contains("W8301"), "{out}");
 }
 
+/// `frames.movable` with `editMode` on Cata Classic, whose Edit Mode
+/// manager is a stub, is W8301 (the option is ignored there); without the
+/// option, or in a branch the guard keeps from cata, it is not.
+#[test]
+fn edit_mode_is_reduced_on_cata() {
+    let check_in = |mode: &str, body: &str| {
+        let dir = project(&[("src/main.wowlua", body)]);
+        fs::write(
+            dir.path().join("wowlua.json"),
+            format!(r#"{{ "package": {{ "name": "std", "version": "1.0.0" }}, "flavors": {{ "mists": {{}}, "cata": {{}} }}, "build": {{ "flavor-mode": "{mode}" }} }}"#),
+        )
+        .unwrap();
+        let assert = wowlua(dir.path())
+            .args(["build", "--message-format", "short"])
+            .assert();
+        String::from_utf8_lossy(&assert.get_output().stderr).into_owned()
+    };
+    let head = "import * as frames from \"wowlua:frames\"\nimport flavor from \"wowlua:meta\"\nlocal store: any = {}\nlocal f = CreateFrame(\"Frame\", nil, UIParent)\n";
+    let edit = "frames.movable(f, { store = store, key = \"f\", editMode = { label = \"F\" } })\n";
+    for mode in ["split", "shared"] {
+        let out = check_in(mode, &format!("{head}{edit}"));
+        assert!(
+            out.contains("warning[W8301]")
+                && out.contains("`frames.movable`")
+                && out.contains("on cata")
+                && out.contains("`editMode` is ignored")
+                && !out.contains("on mists"),
+            "{mode}: {out}"
+        );
+        let out = check_in(
+            mode,
+            &format!("{head}frames.movable(f, {{ store = store, key = \"f\" }})\n"),
+        );
+        assert!(!out.contains("W8301"), "{mode}: {out}");
+        let out = check_in(
+            mode,
+            &format!("{head}if flavor ~= \"cata\" then\n    {edit}end\n"),
+        );
+        assert!(!out.contains("W8301"), "{mode}: {out}");
+    }
+}
+
 /// `wowlua:tooltip` with secrets in what the client shows: `id`, `link`
 /// and `unit` are nil, `guid` passes through, and data addons may not
 /// index gives only the kind.

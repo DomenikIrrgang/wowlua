@@ -55,13 +55,25 @@ pub struct Needs {
 /// The standard library's functions that need an API some flavor lacks
 /// (by each flavor's API declarations, as for tooltips and auras; decision
 /// S22). Tooltip kinds and aura containers have checks of their own.
-pub const NEEDS: &[Needs] = &[Needs {
-    id: "launcher.register",
-    apis: &["AddonCompartmentFrame"],
-    reduced: Some("no Addon Compartment entry (the minimap button and the LDB launcher work)"),
-    option: Some((0, "compartment", true)),
-    help: Some("pass `compartment = false` where you don't want the entry"),
-}];
+pub const NEEDS: &[Needs] = &[
+    Needs {
+        id: "launcher.register",
+        apis: &["AddonCompartmentFrame"],
+        reduced: Some("no Addon Compartment entry (the minimap button and the LDB launcher work)"),
+        option: Some((0, "compartment", true)),
+        help: Some("pass `compartment = false` where you don't want the entry"),
+    },
+    // Cata Classic's `EditModeManagerFrame` is a stub without the layouts.
+    Needs {
+        id: "frames.movable",
+        apis: &["EditModeManagerFrame.GetActiveLayoutInfo"],
+        reduced: Some("`editMode` is ignored (the frame is an ordinary movable frame)"),
+        option: Some((1, "editMode", false)),
+        help: Some(
+            "pass `editMode` only in an `if flavor ~= \"cata\"` branch, or accept the ordinary movable frame there",
+        ),
+    },
+];
 
 /// The client APIs [`NEEDS`] names, which the build looks up per flavor.
 pub fn needed_apis() -> impl Iterator<Item = &'static str> {
