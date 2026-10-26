@@ -1,0 +1,130 @@
+-- The benchmarks of the optimizations that shape code (spec optimization
+-- §15.2.3), and a test that each computes what it should: `wowlua test`
+-- runs the tests, `wowlua bench` the benchmarks.
+import test, bench, expect from "wowlua:test"
+import Layout, cellRect from "/layout"
+import shown, sortGroups, stacks from "/auras"
+import type Aura from "/auras"
+import score, distance2, step, logAll, dispatch, sumScaled from "/stats"
+import type Body from "/stats"
+
+local layout = Layout.new({ spacing = 36, scale = 1.25, offset = 4, perRow = 8 }, 40)
+
+local function auraList(n: number): Aura[]
+    local out: Aura[] = {}
+    for i = 1, n do
+        out[i] = { spellId = 1000 + i, stacks = i % 3, duration = (i % 4) * 10, expires = 100 + (i * 7) % 50, mine = i % 2 == 0 }
+    end
+    return out
+end
+
+local auras = auraList(40)
+local groups: Aura[][] = {}
+for g = 1, 8 do
+    groups[g] = auraList(6)
+end
+local samples: number[] = {}
+for i = 1, 64 do
+    samples[i] = (i * 37) % 101
+end
+local a: Body = { pos = { x = 1, y = 2 }, vel = { x = 0.5, y = -0.25 } }
+local b: Body = { pos = { x = 10, y = -4 }, vel = { x = 0, y = 0 } }
+local log: number[] = {}
+local seen = 0
+local handlers: ((number) -> ())[] = {}
+for i = 1, 8 do
+    handlers[i] = function(v: number) seen = seen + v end
+end
+
+@test("the layout places every slot")
+local function places()
+    layout:arrange()
+    expect(layout.slots[9].y).toBe(4 + 36 * 1.25)
+    expect(layout:width()).toBe(4 + 7 * 36 * 1.25 + 36 * 1.25)
+end
+
+@test("cells are placed on the grid")
+local function cells()
+    local x, y, size = cellRect(10)
+    expect(x).toBe(34)
+    expect(y).toBe(34)
+    expect(size).toBe(62)
+end
+
+@test("auras are filtered, counted and sorted")
+local function filters()
+    local list = shown(auras, 110)
+    expect(#list).toBe(8)
+    expect(stacks(list)).toBe(10)
+    sortGroups(groups)
+    expect(groups[1][1].expires <= groups[1][2].expires).toBe(true)
+end
+
+@test("the numeric helpers compute")
+local function computes()
+    expect(distance2(a, b)).toBeCloseTo(117, 5)
+    logAll(log, samples)
+    expect(#log).toBe(64)
+    expect(dispatch(handlers, 1)).toBe(0)
+    expect(sumScaled({ 1, 2, 3 }, 2)).toBe(12)
+end
+
+@bench("layout: config fields read in a loop")
+local function arrange()
+    layout:arrange()
+end
+
+@bench("layout: ipairs over the slots")
+local function width()
+    layout:width()
+end
+
+@bench("layout: constants of the module")
+local function grid()
+    for i = 1, 64 do
+        cellRect(i)
+    end
+end
+
+@bench("auras: filter with ipairs and table.insert")
+local function filter()
+    shown(auras, 110)
+end
+
+@bench("auras: sort comparators made in a loop")
+local function sorting()
+    sortGroups(groups)
+end
+
+@bench("auras: sum over ipairs")
+local function sum()
+    stacks(auras)
+end
+
+@bench("stats: upvalues read in a loop")
+local function scoring()
+    score(samples)
+end
+
+@bench("stats: repeated field reads")
+local function motion()
+    for _ = 1, 16 do
+        step(a, 0.016)
+        distance2(a, b)
+    end
+end
+
+@bench("stats: a statement helper called in a loop")
+local function logging()
+    logAll(log, samples)
+end
+
+@bench("stats: closures made in a loop")
+local function dispatching()
+    dispatch(handlers, 1)
+end
+
+@bench("stats: a helper made in a loop")
+local function helpers()
+    sumScaled(samples, 0.5)
+end

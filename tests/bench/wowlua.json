@@ -1,0 +1,49 @@
+{
+  "$schema": "https://raw.githubusercontent.com/DomenikIrrgang/wowlua/main/schema/wowlua-0.1.json",
+  "package": {
+    "name": "shaping-bench",
+    "version": "0.1.0",
+    "description": "wowlua's benchmark suite for the optimizations of milestone M11 (`wowlua bench`)",
+    "license": "MIT",
+    "wowlua": "^0.12"
+  },
+  "addon": {
+    "title": "Shaping Bench"
+  },
+  "check": {
+    "mode": "strict"
+  },
+  "flavors": {
+    "camelot": {}
+  },
+  "profiles": {
+    "only-inline": {
+      "inherits": "release",
+      "optimize": { "inline": true, "cache-globals": "off", "dead-code": false, "constants": false, "cache-fields": false, "cache-upvalues": false, "numeric-loops": false, "table-insert": false, "hoist-closures": false }
+    },
+    "only-constants": {
+      "inherits": "release",
+      "optimize": { "inline": false, "cache-globals": "off", "dead-code": false, "constants": true, "cache-fields": false, "cache-upvalues": false, "numeric-loops": false, "table-insert": false, "hoist-closures": false }
+    },
+    "only-cache-fields": {
+      "inherits": "release",
+      "optimize": { "inline": false, "cache-globals": "off", "dead-code": false, "constants": false, "cache-fields": true, "cache-upvalues": false, "numeric-loops": false, "table-insert": false, "hoist-closures": false }
+    },
+    "only-cache-upvalues": {
+      "inherits": "release",
+      "optimize": { "inline": false, "cache-globals": "off", "dead-code": false, "constants": false, "cache-fields": false, "cache-upvalues": true, "numeric-loops": false, "table-insert": false, "hoist-closures": false }
+    },
+    "only-numeric-loops": {
+      "inherits": "release",
+      "optimize": { "inline": false, "cache-globals": "off", "dead-code": false, "constants": false, "cache-fields": false, "cache-upvalues": false, "numeric-loops": true, "table-insert": false, "hoist-closures": false }
+    },
+    "only-table-insert": {
+      "inherits": "release",
+      "optimize": { "inline": false, "cache-globals": "off", "dead-code": false, "constants": false, "cache-fields": false, "cache-upvalues": false, "numeric-loops": false, "table-insert": true, "hoist-closures": false }
+    },
+    "only-hoist-closures": {
+      "inherits": "release",
+      "optimize": { "inline": false, "cache-globals": "off", "dead-code": false, "constants": false, "cache-fields": false, "cache-upvalues": false, "numeric-loops": false, "table-insert": false, "hoist-closures": true }
+    }
+  }
+}

@@ -1,0 +1,55 @@
+-- A row of icons laid out from a shared configuration: the reads of
+-- `self.config` in the loop do not change while it runs.
+
+export type LayoutConfig = { spacing: number, scale: number, offset: number, perRow: number }
+
+export type Slot = { x: number, y: number, size: number }
+
+export class Layout
+    config: LayoutConfig
+    slots: Slot[]
+
+    constructor(config: LayoutConfig, count: number)
+        self.config = config
+        self.slots = {}
+        for i = 1, count do
+            self.slots[i] = { x = 0, y = 0, size = 0 }
+        end
+    end
+
+    -- Places every slot: the configuration is read once a slot.
+    function arrange()
+        for i = 1, #self.slots do
+            local slot = self.slots[i]
+            local column = (i - 1) % self.config.perRow
+            local row = math.floor((i - 1) / self.config.perRow)
+            slot.x = self.config.offset + column * self.config.spacing * self.config.scale
+            slot.y = self.config.offset + row * self.config.spacing * self.config.scale
+            slot.size = self.config.spacing * self.config.scale
+        end
+    end
+
+    -- The width the slots take.
+    function width(): number
+        local widest = 0
+        for _, slot in ipairs(self.slots) do
+            local right = slot.x + slot.size
+            if right > widest then
+                widest = right
+            end
+        end
+        return widest
+    end
+end
+
+local GRID = 8
+local CELL = 32
+local PAD = 2
+
+-- Where a cell of the grid goes: the grid's constants, read as locals of
+-- the module.
+export function cellRect(index: number): (number, number, number)
+    local column = (index - 1) % GRID
+    local row = (index - 1 - column) / GRID
+    return column * (CELL + PAD), row * (CELL + PAD), CELL * 2 - PAD
+end

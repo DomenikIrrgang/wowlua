@@ -1,0 +1,12 @@
+{
+  "version": 1,
+  "flavor-table": {
+    "version": "2026.10.11",
+    "interfaces": {
+      "camelot": [
+        16001
+      ]
+    }
+  },
+  "packages": []
+}

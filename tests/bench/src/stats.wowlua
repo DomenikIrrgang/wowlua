@@ -1,0 +1,72 @@
+-- Small numeric helpers addons write: a weighted score, vector math, and a
+-- log of samples.
+
+local weights = { 0.5, 0.25, 0.125, 0.0625 }
+local smoothing = 0.8
+
+export type Vec = { x: number, y: number }
+export type Body = { pos: Vec, vel: Vec }
+
+-- A score: every sample weighted by its position's weight.
+export function score(samples: number[]): number
+    local total = 0
+    for i = 1, #samples do
+        local w = weights[(i - 1) % #weights + 1]
+        total = total * smoothing + samples[i] * w
+    end
+    return total
+end
+
+-- The squared distance between two bodies' positions.
+export function distance2(a: Body, b: Body): number
+    local dx = a.pos.x - b.pos.x
+    local dy = a.pos.y - b.pos.y
+    return dx * dx + dy * dy
+end
+
+-- One step of motion.
+export function step(b: Body, dt: number)
+    b.pos.x = b.pos.x + b.vel.x * dt
+    b.pos.y = b.pos.y + b.vel.y * dt
+end
+
+local function record(log: number[], value: number)
+    log[#log + 1] = value
+    if #log > 64 then
+        log[#log - 64] = 0
+    end
+end
+
+-- Logs a run of samples.
+export function logAll(log: number[], samples: number[])
+    for i = 1, #samples do
+        record(log, samples[i] * 2)
+    end
+end
+
+-- Runs callbacks protected, as event dispatchers do.
+export function dispatch(handlers: ((number) -> ())[], value: number): number
+    local failed = 0
+    for i = 1, #handlers do
+        local ok = pcall(function()
+            local _ = value + 1
+        end)
+        if not ok then
+            failed = failed + 1
+        end
+        handlers[i](value)
+    end
+    return failed
+end
+
+-- Sums values through a small helper made in the loop.
+export function sumScaled(values: number[], factor: number): number
+    local total = 0
+    for i = 1, #values do
+        local function scaled(x: number): number
+            return x * factor
+        end
+        total = total + scaled(values[i])
+    end
+    return total
+end

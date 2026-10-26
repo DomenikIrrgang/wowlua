@@ -1,0 +1,39 @@
+-- Aura bookkeeping as unit frames do it: filter the auras of a unit into
+-- a list to show, sorted.
+
+export type Aura = { spellId: number, stacks: number, duration: number, expires: number, mine: boolean }
+
+local MAX_SHOWN = 16
+local MIN_DURATION = 0
+
+-- The auras worth showing, newest expiry last.
+export function shown(auras: Aura[], now: number): Aura[]
+    local out: Aura[] = {}
+    for _, aura in ipairs(auras) do
+        if aura.mine and aura.duration > MIN_DURATION and aura.expires > now then
+            table.insert(out, aura)
+            if #out >= MAX_SHOWN then
+                break
+            end
+        end
+    end
+    return out
+end
+
+-- The auras of each group, each list sorted by when they expire.
+export function sortGroups(groups: Aura[][])
+    for _, list in ipairs(groups) do
+        table.sort(list, function(a: Aura, b: Aura): boolean
+            return a.expires < b.expires
+        end)
+    end
+end
+
+-- How many stacks the shown auras have in all.
+export function stacks(auras: Aura[]): number
+    local n = 0
+    for _, aura in ipairs(auras) do
+        n = n + aura.stacks
+    end
+    return n
+end
