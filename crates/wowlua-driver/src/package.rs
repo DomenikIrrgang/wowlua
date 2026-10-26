@@ -406,6 +406,9 @@ pub fn package(
         .tag
         .clone()
         .or_else(|| crate::keywords::head_tag(&repo));
+    if !targets_exist(session, projects, request, &repo) {
+        return None;
+    }
     let dirty = dirty(&repo, &out_root(first));
     let packager = first.manifest.manifest.compat.packager_keywords;
     if packager {
@@ -413,6 +416,44 @@ pub fn package(
     } else {
         package_native(session, projects, request, &repo, tag, dirty)
     }
+}
+
+/// Whether every `--target` names a publish target of the projects (or of
+/// the workspace root's bundle); E4006 for each that does not.
+fn targets_exist(
+    session: &mut Session,
+    projects: &[Project],
+    request: &PackageRequest,
+    repo: &Path,
+) -> bool {
+    let mut names: Vec<String> = projects
+        .iter()
+        .flat_map(|p| p.manifest.manifest.publish.iter())
+        .flat_map(|p| p.targets.keys().cloned())
+        .collect();
+    if let Some((publish, _)) = bundle_publish(repo) {
+        names.extend(publish.targets.keys().cloned());
+    }
+    names.sort();
+    names.dedup();
+    let mut ok = true;
+    for wanted in &request.targets {
+        if names.contains(wanted) {
+            continue;
+        }
+        ok = false;
+        let help = if names.is_empty() {
+            "the manifest's `publish.targets` defines no targets".to_string()
+        } else {
+            format!("the publish targets are: {}", names.join(", "))
+        };
+        session.push(
+            Diagnostic::error("E4006", format!("unknown publish target `{wanted}`"))
+                .with_path(repo.join(wowlua_manifest::MANIFEST_FILE))
+                .with_help(help),
+        );
+    }
+    ok
 }
 
 /// AddOns packaged together: one project, or the members bundled by the

@@ -118,7 +118,7 @@ warning forms of §B.2's pure Lua files (`W2001`). `wowlua explain
 | E4003 | Invalid package name or version |
 | E4004 | Unknown flavor |
 | E4005 | Conflicting setting between `.pkgmeta` and `wowlua.json` in compatibility mode |
-| E4006 | Unknown profile, minification level or publish target referenced |
+| E4006 | Unknown profile, minification level, publish target or bundled addon referenced |
 | E4007 | Cyclic profile or minification-level inheritance (`inherits` / `extends`) |
 | E4012 | Profile `config` key missing from the top-level `config`, or with an incompatible type |
 | E4101 | Version conflict in dependency resolution |

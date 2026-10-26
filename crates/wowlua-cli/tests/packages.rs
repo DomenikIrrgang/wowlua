@@ -2119,6 +2119,26 @@ fn package_builds_every_target() {
         before,
         fs::read(packages.join("MyAddon-1.0.0-cf.zip")).unwrap()
     );
+    // `--target` names a target that exists (E4006 otherwise).
+    wowlua(&e.project, &e.home)
+        .args(["package", "--target", "cf"])
+        .assert()
+        .success();
+    wowlua(&e.project, &e.home)
+        .args(["package", "--target", "curse"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains(
+            "error[E4006]: unknown publish target `curse`",
+        ))
+        .stderr(predicate::str::contains(
+            "the publish targets are: cf, gh, wago",
+        ));
+    wowlua(&e.project, &e.home)
+        .args(["publish", "--dry-run", "--target", "curse"])
+        .assert()
+        .failure()
+        .stderr(predicate::str::contains("error[E4006]"));
 }
 
 /// Bundling and libraries (spec optimization §15.3.1): an entry XML that

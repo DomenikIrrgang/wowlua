@@ -225,15 +225,17 @@ Related: W4333
 
 ## E4006
 
-A name that should refer to a profile, minification level or addon does not:
-a profile's `inherits`, a profile's or publish target's `minify`, a target's
-`profile`, a minification level's `extends`, an entry of
-`publish.bundle-addons`, or `--profile` on the command line. The built-in
+A name that should refer to a profile, minification level, publish target or
+addon does not: a profile's `inherits`, a profile's or publish target's
+`minify`, a target's `profile`, a minification level's `extends`, an entry of
+`publish.bundle-addons` (it must name an addon of the workspace), or
+`--profile` or `--target` (of `wowlua package` and `wowlua publish`) on the
+command line. The built-in
 profiles are `dev`, `release` and `test`; the built-in minification levels
 are `none`, `strip`, `compact`, `rename` and `max`. Your own come from
 `profiles` and `minify-levels`.
 
-Fix the name, or define the profile or level.
+Fix the name, or define the profile, level or target.
 
 ```json fails title=wowlua.json
 {
