@@ -15,7 +15,8 @@ contains none of it.
 | Tool | In a dev build |
 |------|----------------|
 | Profiler | Every named function and method: calls, total, self, max and average time |
-| Monitor | The addon's events, scripts and timers (count, total and max time), and its memory every 5 seconds outside combat, for the last 10 minutes |
+| Monitor | The addon's events, scripts, timers and slash commands (count, total and max time), and its memory every 5 seconds outside combat, for the last 10 minutes |
+| Recordings | The time the addon takes in each frame, its slow calls with their stack, and the game's garbage rate; one recording per combat and per boss pull |
 | Error capture | Errors raised in the addon's folder, with stack and repeat count; BugSack and the default error frame still see every error |
 | Log | The `wowlua:log` ring buffer, from `debug` level up |
 | Runtime type checks | The parameters of exported functions, of public methods of exported classes, and of event, slash and hook handlers, against their declared types |
@@ -27,18 +28,88 @@ resizable, has a selector for every loaded wowlua dev build, and these tabs:
 | Tab | Shows |
 |-----|-------|
 | overview | Version, profile, build id, your `wowlua:meta` values and memory over time |
-| profiler | The profiler table, per function |
-| monitor | Events, scripts and timers since load |
+| performance | The recordings, and eight views of them (below) |
+| monitor | Events, scripts, timers and slash commands since load |
 | log | The log ring buffer, filterable by level |
 | errors | Captured errors with count, location and stack |
 | watch | Watched values, live |
 | inspector | A table as an expandable tree |
+| hints | Performance hints, with the number of new ones on the tab |
 
-The window refreshes only while it is shown, and Escape closes it. Its
-position, size, tab and selected addon are saved per addon, in the
+The footer shows the addon's memory, the garbage rate and the time the last
+frame took. The window refreshes only while it is shown, and Escape closes
+it. Its position, size, tab and selected addon are saved per addon, in the
 SavedVariables `WowluaDevDB_<Addon>` that dev builds add to the TOC. The
 profile settings and what each one costs are in
 [Debugging](../../spec/language/07-debugging.md) of the specification.
+
+### Recordings
+
+A recording is a slice of time. `live` covers everything since the last
+reload; a recording is made for every combat and every boss pull on its own,
+and you start and stop your own with the window's **Record** button or
+`/wl record`. The window keeps the last 20 combats and pulls.
+
+Pick a recording on the left, and a view on the right:
+
+| View | Shows |
+|------|-------|
+| functions | Calls, total, self, max and average time per function, the garbage it made, and its last minute |
+| tree | The call tree, from the event, script, timer or slash command that started the work |
+| flame | The same as a flame graph; click a bar to zoom in, right-click to zoom out |
+| by event | The time each event, script, timer or command took, and the function that took most of it |
+| timeline | The time of every frame against the frame budget, the garbage, and the combats and pulls; click a frame to see what ran in it |
+| slow | The slow calls, newest first, with their stack |
+| garbage | The garbage rate and memory over time, then the garbage per function |
+| bench | Runs of an expression, timed |
+
+Right-click a recording to compare the selected one with it. Every view then
+shows the change per minute of recording, so a longer pull is not slower
+just because it is longer.
+
+The call tree, the flame graph and the garbage per function cost time on
+every call, so they are off until you switch them on in the bar above the
+views, or in the profile with `profile-call-paths` and `profile-garbage`.
+The same bar sets the frame budget (`frame-budget`, 1 ms) and the time from
+which a call counts as slow (`slow-call`, 2 ms). What you set there is saved
+for the addon and wins over the profile; **Profile's** goes back to the
+profile's values.
+
+```json title=wowlua.json
+"profiles": {
+  "dev": { "profile-call-paths": true, "frame-budget": 2 }
+}
+```
+
+### Hints
+
+While the window is open, it checks the live recording every few seconds and
+lists what it finds in the hints tab: an event that comes in bursts (P7101),
+an `OnUpdate` that runs every frame on a frame nobody sees (P7102), a
+function that makes much of the garbage (P7201) and a call longer than the
+frame budget (P7301). Each hint says what it found, with the numbers, and how
+to fix it; `wowlua explain P7301` explains it at length. Dismiss a hint by
+clicking it; it comes back if it gets worse.
+
+### The HUD and the error toast
+
+`/wl hud`, or **HUD** in the window's footer, shows a small overlay with a row
+per loaded dev build: the time it took in the last frame, its average, the
+garbage rate and its errors. A row turns red for a second when a frame goes
+over the budget, and clicking it opens the window. The HUD hides while the
+window is open and during cinematics, and it comes back where you left it.
+
+When the window is closed, a new error shows a notice at the top of the
+screen for eight seconds (longer while the cursor is on it); click it to see
+the error in the errors tab. In combat it waits until the combat ends. BugSack
+and the default error frame still get every error.
+
+### Exporting a recording
+
+Right-click a recording and choose **Mark for export**. The window saves it in
+`WowluaDevDB_<Addon>` and reminds you that WoW writes it on `/reload` or when
+you log out. `wowlua prof report` then makes an HTML page of it on your
+computer.
 
 ### From chat
 
@@ -53,6 +124,10 @@ profile settings and what each one costs are in
 | `/wl meta <addon>` | Print the `wowlua:meta` information |
 | `/wl inspect <addon> <module>` | Print a module's exports |
 | `/wl watch <addon> <expression>` | Add a watch |
+| `/wl record <addon> [name]`, `/wl record <addon> stop` | Start or stop a recording |
+| `/wl bench <addon> <expression> [n]` | Run an expression n times (10,000 by default) and print the fastest, median and slowest run |
+| `/wl hints <addon>` | Print the performance hints |
+| `/wl hud` | Show or hide the HUD |
 | `/wl reload` | Reload the UI |
 
 The log level can be raised at runtime (`/wl log MyAddon error`), but never

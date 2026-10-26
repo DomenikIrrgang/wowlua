@@ -19,6 +19,10 @@ pub enum Slice {
     Enum,
     /// User decorators (spec §4.5).
     Decorate,
+    /// Frame time, slow calls, call paths, garbage and recordings (spec
+    /// §7.3.1–7.3.3, §7.7.4): dev builds that profile or monitor. Before
+    /// `Prof` and `Monitor`, which report to it.
+    Perf,
     /// The profiler (spec §7.3).
     Prof,
     /// Tracing wrappers (spec §7.4).
@@ -42,6 +46,7 @@ impl Slice {
             Slice::Widget => include_str!("../lua/widget.lua"),
             Slice::Enum => include_str!("../lua/enum.lua"),
             Slice::Decorate => include_str!("../lua/decorate.lua"),
+            Slice::Perf => include_str!("../lua/perf.lua"),
             Slice::Prof => include_str!("../lua/prof.lua"),
             Slice::Trace => include_str!("../lua/trace.lua"),
             Slice::Check => include_str!("../lua/check.lua"),
@@ -60,32 +65,34 @@ impl Slice {
     }
 }
 
-/// The fonts of the dev window (SuuUI: Marcellus SC, Figtree; SIL Open
-/// Font License), written to `wowlua/fonts/` in dev builds.
+/// The fonts of the dev window (the wowlua design system: Martian Mono for
+/// titles, IBM Plex Mono for everything else; SIL Open Font License,
+/// decision T171), written to `wowlua/fonts/` in dev builds. (Figtree and
+/// Marcellus SC in `fonts/` are the renderer's stand-in fonts.)
 pub const DEV_FONTS: &[(&str, &[u8])] = &[
     (
-        "MarcellusSC-Regular.ttf",
-        include_bytes!("../fonts/MarcellusSC-Regular.ttf"),
+        "MartianMono-StdBd.ttf",
+        include_bytes!("../fonts/MartianMono-StdBd.ttf"),
     ),
     (
-        "Figtree-Regular.ttf",
-        include_bytes!("../fonts/Figtree-Regular.ttf"),
+        "IBMPlexMono-Regular.ttf",
+        include_bytes!("../fonts/IBMPlexMono-Regular.ttf"),
     ),
     (
-        "Figtree-SemiBold.ttf",
-        include_bytes!("../fonts/Figtree-SemiBold.ttf"),
+        "IBMPlexMono-Medium.ttf",
+        include_bytes!("../fonts/IBMPlexMono-Medium.ttf"),
     ),
     (
-        "Figtree-Bold.ttf",
-        include_bytes!("../fonts/Figtree-Bold.ttf"),
+        "IBMPlexMono-SemiBold.ttf",
+        include_bytes!("../fonts/IBMPlexMono-SemiBold.ttf"),
     ),
     (
-        "MarcellusSC-OFL.txt",
-        include_bytes!("../fonts/MarcellusSC-OFL.txt"),
+        "MartianMono-OFL.txt",
+        include_bytes!("../fonts/MartianMono-OFL.txt"),
     ),
     (
-        "Figtree-OFL.txt",
-        include_bytes!("../fonts/Figtree-OFL.txt"),
+        "IBMPlexMono-OFL.txt",
+        include_bytes!("../fonts/IBMPlexMono-OFL.txt"),
     ),
 ];
 
@@ -110,10 +117,36 @@ pub struct RuntimeOptions {
     /// `(key, value)` strings, and the runtime version number.
     pub dev_info: Vec<(String, String)>,
     pub runtime_version: u32,
+    /// The profile's performance settings, the dev window's starting
+    /// switches and thresholds (spec §7.7.5; with the `Perf` slice).
+    pub perf: PerfDefaults,
     /// Lua statements filling `wl.meta` (build metadata runtime tables).
     pub meta: Option<String>,
     /// Slices the compiled code uses.
     pub slices: BTreeSet<Slice>,
+}
+
+/// `profile-call-paths`, `profile-garbage`, `frame-budget` and `slow-call`
+/// (spec §9.9, decision T174).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct PerfDefaults {
+    pub call_paths: bool,
+    pub garbage: bool,
+    /// Milliseconds.
+    pub frame_budget: f64,
+    /// Milliseconds.
+    pub slow_call: f64,
+}
+
+impl Default for PerfDefaults {
+    fn default() -> Self {
+        PerfDefaults {
+            call_paths: false,
+            garbage: false,
+            frame_budget: 1.0,
+            slow_call: 2.0,
+        }
+    }
 }
 
 fn lua_string(s: &str) -> String {
@@ -159,6 +192,13 @@ pub fn runtime(options: &RuntimeOptions) -> String {
             options.runtime_version
         ));
     }
+    if options.slices.contains(&Slice::Perf) {
+        let p = options.perf;
+        placeholders.push_str(&format!(
+            "wl.perfDefaults = {{ callPaths = {}, garbage = {}, frameBudget = {}, slowCall = {} }}\n",
+            p.call_paths, p.garbage, p.frame_budget, p.slow_call
+        ));
+    }
     if !options.log_level.is_empty() {
         placeholders.push_str(&format!(
             "wl.logLevel = {}\nwl.logHistory = {}\n",
@@ -175,8 +215,16 @@ pub fn runtime(options: &RuntimeOptions) -> String {
     for s in options.slices.iter() {
         slices.extend(s.requires());
     }
+    // Each slice in a block of its own: its locals end with it, so the
+    // chunk stays below Lua 5.1's 200 active locals (slices share only
+    // core's locals and `wl`).
     for s in &slices {
+        text.push_str("do ");
         text.push_str(&s.source().replace("\r\n", "\n"));
+        if !text.ends_with('\n') {
+            text.push('\n');
+        }
+        text.push_str("end\n");
     }
     if let Some(meta) = &options.meta {
         text.push_str(meta);
@@ -251,6 +299,52 @@ mod tests {
             (version, owner.as_str(), order.as_str()),
             (6_000, "New", "Old,New,Older")
         );
+    }
+
+    /// The profile's performance settings reach the runtime (spec §7.7.5);
+    /// a profiled call reports frame time and slow calls (§7.3.1).
+    #[test]
+    fn perf_defaults_and_slow_calls() {
+        let lua = mlua::Lua::new();
+        lua.load("local now = 0\nfunction debugprofilestop() return now end\nfunction spend(ms) now = now + ms end")
+            .exec()
+            .unwrap();
+        let code = runtime(&RuntimeOptions {
+            slices: [Slice::Perf, Slice::Prof].into_iter().collect(),
+            perf: PerfDefaults {
+                call_paths: true,
+                garbage: false,
+                frame_budget: 0.5,
+                slow_call: 3.0,
+            },
+            ..RuntimeOptions::default()
+        });
+        assert!(
+            code.contains("do -- wowlua runtime: profiler"),
+            "slices are blocks"
+        );
+        let ns = lua.create_table().unwrap();
+        lua.load(&code).call::<()>(("Addon", ns.clone())).unwrap();
+        let wl: mlua::Table = ns.get("__wowlua").unwrap();
+        lua.globals().set("wl", wl).unwrap();
+        lua.load(
+            r#"
+            local perf = wl.perf
+            assert(perf.callPaths == true and perf.frameBudget == 0.5 and perf.slowCall == 3)
+            local inner = wl.prof.wrap(function(ms) spend(ms) end, "inner", "a.lua:1")
+            local outer = wl.prof.wrap(function(ms) inner(ms); return "done" end, "outer", "a.lua:2")
+            assert(outer(1) == "done")
+            assert(#perf.slow == 0 and wl.prof.stats.inner.over == 1)
+            assert(outer(4) == "done")
+            assert(#perf.slow == 2 and perf.slow[1].name == "inner" and perf.slow[1].root == "other")
+            perf.mark()
+            assert(perf.lastFrame == 5 and perf.frames == 1 and perf.over == 1)
+            local data = perf.data(perf.recordings[1])
+            assert(data.paths[1] and data.roots.other.calls == 2)
+            "#,
+        )
+        .exec()
+        .unwrap();
     }
 
     #[test]

@@ -1,5 +1,7 @@
 -- wowlua runtime: profiler (spec §7.3). Statistics per function or label:
 -- calls, total, self (total minus instrumented callees), max, avg (ms).
+-- In dev builds every call is also reported to `wl.perf` (frame time,
+-- slow calls, call paths, garbage per function).
 local prof = {
 	stats = {} :: { [string]: WowluaProfStat },
 	timers = {} :: { [string]: number },
@@ -7,10 +9,13 @@ local prof = {
 }
 local clock: () -> number = debugprofilestop
 prof.clock = clock
+local perf: any = wl.perf
 -- Time spent in instrumented callees, per active call (innermost last;
--- finished calls are cleared to nil).
+-- finished calls are cleared to nil), and with garbage per function the
+-- garbage they made (KB).
 local child: { [number]: number } = {}
-local function record(name: string, location: string?, elapsed: number, own: number)
+local childGarbage: { [number]: number } = {}
+local function record(name: string, location: string?, elapsed: number, own: number): WowluaProfStat
 	local s = prof.stats[name]
 	if not s then
 		s = { calls = 0, total = 0, self = 0, max = 0, avg = 0, errors = 0, location = location }
@@ -23,9 +28,35 @@ local function record(name: string, location: string?, elapsed: number, own: num
 		s.max = elapsed
 	end
 	s.avg = s.total / s.calls
+	if perf then
+		perf.maxOpen("fn", name, elapsed)
+	end
+	return s
 end
 prof.record = record
-local function finish(name: string, location: string?, start: number, depth: number, ...: any): ...any
+local function memoryKiB(): number
+	return collectgarbage("count")
+end
+-- The garbage a call made: all of it, and without profiled callees'.
+local function garbage(s: WowluaProfStat, depth: number, before: number)
+	local made = memoryKiB() - before
+	if made < 0 then
+		-- A collection step ran during the call.
+		made = 0
+	end
+	local inner = childGarbage[depth] ?? 0
+	childGarbage[depth] = nil
+	local own = math.max(made - inner, 0)
+	s.garbage = (s.garbage ?? 0) + made
+	s.selfGarbage = (s.selfGarbage ?? 0) + own
+	if depth > 1 then
+		childGarbage[depth - 1] = (childGarbage[depth - 1] ?? 0) + made
+	end
+	perf.garbageFns += own
+end
+-- `frame0`: the frame the call started in (a call that ends in a later
+-- frame was suspended: a coroutine yielded inside it).
+local function finish(name: string, location: string?, start: number, depth: number, frame0: number?, node: any, before: number?, ...: any): ...any
 	local elapsed = clock() - start
 	local inner = child[depth] ?? 0
 	for i = #child, depth, -1 do
@@ -34,28 +65,49 @@ local function finish(name: string, location: string?, start: number, depth: num
 	if depth > 1 then
 		child[depth - 1] = (child[depth - 1] ?? 0) + elapsed
 	end
-	record(name, location, elapsed, elapsed - inner)
+	local s = record(name, location, elapsed, elapsed - inner)
+	if before then
+		garbage(s, depth, before)
+	end
+	if perf then
+		perf.done(name, location, elapsed, elapsed - inner, node, s, frame0 ~= perf.frame)
+	end
 	return ...
-end
-local function memoryKiB(): number
-	return collectgarbage("count")
 end
 -- Errors are counted with `xpcall` (an allocation per call), only when
 -- asked for (`profile-errors`, `@profile({ errors = true })`).
-local function failed(name: string, location: string?, depth: number, start: number, message: any): never
+local function failed(name: string, location: string?, depth: number, start: number, frame0: number?, node: any, message: any): never
 	for i = #child, depth, -1 do
 		child[i] = nil
 	end
-	record(name, location, clock() - start, 0)
-	local s = assert(prof.stats[name])
+	local elapsed = clock() - start
+	local s = record(name, location, elapsed, 0)
 	s.errors += 1
+	if perf then
+		perf.done(name, location, elapsed, 0, node, s, frame0 ~= perf.frame)
+	end
 	error(message, 0)
 end
-local function finishTracked(name: string, location: string?, start: number, depth: number, ok: boolean, ...: any): ...any
+local function finishTracked(name: string, location: string?, start: number, depth: number, frame0: number?, node: any, before: number?, ok: boolean, ...: any): ...any
 	if not ok then
-		return failed(name, location, depth, start, (...))
+		return failed(name, location, depth, start, frame0, node, (...))
 	end
-	return finish(name, location, start, depth, ...)
+	return finish(name, location, start, depth, frame0, node, before, ...)
+end
+-- A call starts: its slot for callees' time, and what perf counts.
+local function enter(name: string): (number, number?, any, number?)
+	local depth = #child + 1
+	child[depth] = 0
+	if not perf then
+		return depth, nil, nil, nil
+	end
+	perf.depth += 1
+	local node = perf.callPaths and perf.enter(name) or nil
+	if perf.garbage then
+		childGarbage[depth] = 0
+		return depth, perf.frame, node, memoryKiB()
+	end
+	return depth, perf.frame, node, nil
 end
 -- Wraps `fn`: every call is timed under `name`; results pass through.
 function prof.wrap(fn: any, name: string, location: string, opts: { errors: boolean?, memory: boolean? }?): any
@@ -67,8 +119,7 @@ function prof.wrap(fn: any, name: string, location: string, opts: { errors: bool
 	if memory then
 		return function(...)
 			local before = memoryKiB()
-			local depth = #child + 1
-			child[depth] = 0
+			local depth, frame0, node, gc = enter(name)
 			local function done(...: any): ...any
 				-- (finish made the entry)
 				local s = prof.stats[name]
@@ -77,16 +128,15 @@ function prof.wrap(fn: any, name: string, location: string, opts: { errors: bool
 				end
 				return ...
 			end
-			return done(finish(name, location, clock(), depth, fn(...)))
+			return done(finish(name, location, clock(), depth, frame0, node, gc, fn(...)))
 		end
 	end
 	if errors then
 		return function(...)
-			local depth = #child + 1
-			child[depth] = 0
+			local depth, frame0, node, gc = enter(name)
 			local n = select("#", ...)
 			local args = { ... }
-			return finishTracked(name, location, clock(), depth, xpcall(function(): ...any
+			return finishTracked(name, location, clock(), depth, frame0, node, gc, xpcall(function(): ...any
 				return fn(unpack(args, 1, n))
 			end, function(message: any): any
 				return message
@@ -94,16 +144,14 @@ function prof.wrap(fn: any, name: string, location: string, opts: { errors: bool
 		end
 	end
 	return function(...)
-		local depth = #child + 1
-		child[depth] = 0
-		return finish(name, location, clock(), depth, fn(...))
+		local depth, frame0, node, gc = enter(name)
+		return finish(name, location, clock(), depth, frame0, node, gc, fn(...))
 	end
 end
 -- Times one call of `fn(...)` under `label`.
 function prof.measure(label: string, fn: (...any) -> ...any, ...: any): ...any
-	local depth = #child + 1
-	child[depth] = 0
-	return finish(label, nil, clock(), depth, fn(...))
+	local depth, frame0, node, gc = enter(label)
+	return finish(label, nil, clock(), depth, frame0, node, gc, fn(...))
 end
 function prof.time(label: string)
 	prof.timers[label] = clock()
@@ -117,6 +165,19 @@ function prof.timeEnd(label: string)
 	end
 end
 function prof.reset()
-	prof.stats = {}
+	if perf then
+		perf.reset("prof")
+	else
+		prof.stats = {}
+	end
+end
+-- Between frames nothing runs: the slots an error left open are cleared.
+function prof.unwind()
+	for i = #child, 1, -1 do
+		child[i] = nil
+	end
+	for k in pairs(childGarbage) do
+		childGarbage[k] = nil
+	end
 end
 wl.prof = prof

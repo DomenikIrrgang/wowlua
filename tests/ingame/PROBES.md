@@ -699,3 +699,29 @@ Take a screenshot after each step that names one.
   `|`); decision T342 stays a proposal.
 - Still owed: the skill bars' fill (item 19 of "Owed from the M12
   screenshots").
+
+## The dev tools (0.12.1)
+
+The dev window's performance tab, hints, HUD and error toast are tested in
+the emulator (`crates/wowlua-cli/tests/devtools.rs`); these check what the
+emulator cannot: the fonts, the look and the real frame times. StdTest's dev
+build has them all (`wowlua install` in `tests/ingame`).
+
+1. **The window in the design system's fonts**: `/wl`, then every tab.
+   Titles in Martian Mono, everything else in IBM Plex Mono; no empty boxes
+   (a glyph the fonts lack). A screenshot of the performance tab's
+   functions view and of the flame view (switch call paths on first).
+2. **A combat and a boss pull**: fight something, then a boss in a
+   dungeon; the recordings list gets `combat N` and `pull N` with the boss's
+   name. Compare the pull with `live` (right-click): the change column is
+   per minute.
+3. **The HUD**: `/wl hud`, move it, `/reload`: it comes back where it was.
+   It hides while the window is open and during a cinematic, not in a pet
+   battle.
+4. **The toast**: an error from StdTest's own code (any probe that fails;
+   `/run error("x")` is not the addon's and shows none) shows the toast at
+   the top for 8 seconds, longer with the cursor on it; in combat it waits
+   for the end of combat. Clicking it opens the errors tab.
+5. **Export**: mark the pull for export, `/reload`, and check that
+   `WTF/Account/<account>/SavedVariables/StdTest.lua` holds
+   `WowluaDevDB_StdTest` with `exports`; `wowlua prof report` reads it.

@@ -10,7 +10,8 @@ arguments of the calls, so it costs players nothing.
 
 Without any helper in your code, the dev build that `wowlua dev` makes
 already has a profiler around every named function, a monitor for events,
-scripts and timers, error capture, and the `/wl` dev window. It keeps one Lua
+scripts, timers and slash commands, recordings of the time it takes per
+frame, error capture, and the `/wl` dev window. It keeps one Lua
 file per source with the same line numbers, so an error on line 14 of
 `src/core/tracker.lua` is on line 14 of `src/core/tracker.wowlua`.
 
@@ -259,6 +260,26 @@ end
 ```
 
 In a release build, `debug.stats()` is an empty table.
+
+The dev window adds to these numbers. It adds up the time your addon takes
+in each frame, and any single call longer than `slow-call` (2 ms by default)
+is kept as a slow call with its stack. With call paths on, it also knows
+which event, script, timer or slash command started each call, and with
+garbage per function, how much garbage each function made itself. Both cost
+time on every call, so they are off until you switch them on in the window
+or the profile:
+
+```json title=wowlua.json
+"profiles": {
+  "dev": { "profile-call-paths": true, "profile-garbage": true, "slow-call": 4 }
+}
+```
+
+From these numbers the window's hints tab finds the usual problems and names
+the fix, with `P` codes that `wowlua explain` explains: P7101 for an event
+that comes in bursts, P7102 for an `OnUpdate` on a frame nobody sees, P7201
+for a function that makes much of the garbage and P7301 for a call longer
+than the frame budget.
 
 > [!NOTE]
 > A profiled or traced function runs inside a wrapper, which adds a stack

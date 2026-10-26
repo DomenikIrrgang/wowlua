@@ -58,6 +58,12 @@ function errors.record(message: any, stack: string?)
 		chat:AddMessage("|cff33ff99" .. addonName .. "|r |cffff9a80error captured:|r " .. short
 			.. " |cffa39b8b(/wl errors " .. addonName .. ")|r")
 	end
+	-- Dev builds: the console's toast (spec §7.10).
+	local reg = WOWLUA_DEV
+	local console = reg and reg.console
+	if console and console.errorCaptured then
+		console.errorCaptured(addonName, e)
+	end
 	if #errors.list > 50 then
 		local old = table.remove(errors.list)
 		if old then

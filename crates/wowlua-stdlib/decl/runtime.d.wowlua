@@ -27,6 +27,12 @@ type WowluaProfStat = {
     location?: string,
     --- The memory its calls allocated, in KiB (`@profile({ memory = true })`).
     memory?: number,
+    --- With garbage per function (dev window): the garbage its calls made,
+    --- in KiB, and the part they made themselves (without profiled callees).
+    garbage?: number,
+    selfGarbage?: number,
+    --- Dev builds: the calls longer than the frame budget (outside coroutines).
+    over?: number,
 }
 
 --- The profiler (slice `prof`).
@@ -53,11 +59,21 @@ interface WowluaProfiler
     timeEnd: (label: string) -> ()
     --- Clears the statistics.
     reset: () -> ()
+    --- Clears what calls that raised errors left open (at every frame).
+    unwind: () -> ()
 end
 
 --- The monitor's statistics of one event, script or timer (times in
 --- milliseconds; `detail`: where the handler was set).
-type WowluaMonitorStat = { count: number, total: number, max: number, detail: string }
+--- In dev builds also: the runs longer than the frame budget (`over`), the
+--- frames it ran in (`frames`, `lastFrame`, `inFrame`), for events the
+--- frames with bursts of five or more (`bursts`) and the most in one frame
+--- (`burstMax`), and for scripts the script's name.
+type WowluaMonitorStat = {
+    count: number, total: number, max: number, detail: string,
+    over?: number, frames?: number, lastFrame?: number, inFrame?: number,
+    bursts?: number, burstMax?: number, script?: string,
+}
 
 --- The event, script and timer monitor (slice `monitor`).
 interface WowluaMonitor
@@ -67,12 +83,20 @@ interface WowluaMonitor
     scripts: { [string]: WowluaMonitorStat }
     --- Timer callbacks' statistics, by `C_Timer` function and location.
     timers: { [string]: WowluaMonitorStat }
+    --- Slash commands' statistics, by command.
+    commands: { [string]: WowluaMonitorStat }
     --- Memory samples in KiB, the newest last.
     memory: number[]
+    --- The `GetTime()` of each memory sample.
+    memoryAt: number[]
+    --- The frame of each script entry (weak).
+    objects: { [string]: any }
     --- `frame:SetScript(script, fn)` with `fn` timed (compiled code calls it).
     setScript: (frame: any, script: string, fn: any, location: string) -> any
     --- `frame:HookScript(script, fn)` with `fn` timed (compiled code calls it).
     hookScript: (frame: any, script: string, fn: any, location: string) -> any
+    --- A slash command's handler, timed (`SlashCmdList[key] = fn`).
+    slash: (fn: any, location: string) -> any
     --- `C_Timer.After` with the callback timed.
     after: (seconds: number, fn: any, location: string) -> ()
     --- `C_Timer.NewTimer` with the callback timed.
@@ -94,7 +118,8 @@ interface WowluaErrorLog
     --- The captured errors, by message.
     byMessage: { [string]: WowluaErrorEntry }
     --- Captures an error if it comes from this addon's code: counts a repeat,
-    --- or adds it and announces it in chat (the newest 50 are kept).
+    --- or adds it, announces it in chat and in the dev console's toast (the
+    --- newest 50 are kept).
     record: (message: any, stack: string?) -> ()
     --- Forgets the captured errors.
     clear: () -> ()
@@ -249,6 +274,12 @@ interface WowluaRuntime
     prof?: WowluaProfiler
     --- The event, script and timer monitor.
     mon?: WowluaMonitor
+    --- Frame time, slow calls, call paths, garbage and recordings (dev
+    --- builds that profile or monitor; spec §7.3.1–7.3.3, §7.7.4).
+    perf?: any
+    --- The profile's `profile-call-paths`, `profile-garbage`, `frame-budget`
+    --- and `slow-call`: the dev window's starting switches and thresholds.
+    perfDefaults?: { callPaths: boolean, garbage: boolean, frameBudget: number, slowCall: number }
     --- The captured errors.
     errors?: WowluaErrorLog
     --- What the dev console knows about this addon.

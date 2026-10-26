@@ -1,0 +1,938 @@
+-- wowlua runtime: frame time, slow calls, call paths, garbage and the
+-- recordings (spec §7.3.1–7.3.3, §7.7.4, §7.7.7, §7.7.9). The profiler and
+-- the monitor report every measured call here; the dev window reads it.
+local defaults = wl.perfDefaults ?? { callPaths = false, garbage = false, frameBudget = 1, slowCall = 2 }
+-- Frames kept in the ring: 60 seconds at 60 fps.
+const RING = 3600
+-- Seconds of per-second figures kept: two hours.
+const SECONDS = 7200
+-- Slow calls kept, automatic recordings kept, names kept per frame.
+const SLOW = 200
+const AUTO = 20
+const TOP = 8
+-- A burst: the same event handled this often within one frame.
+const BURST = 5
+local function now(): number
+	return GetTime and GetTime() or 0
+end
+local function memory(): number
+	return collectgarbage("count")
+end
+
+local perf: any = {
+	callPaths = defaults.callPaths,
+	garbage = defaults.garbage,
+	frameBudget = defaults.frameBudget,
+	slowCall = defaults.slowCall,
+	defaults = defaults,
+	-- Measured calls running (profiled functions and monitored handlers).
+	depth = 0,
+	-- The root of the work running, its kind, and the call path's node.
+	root = nil,
+	rootKind = nil,
+	node = nil,
+	-- The number of the frame being measured (the first is 1).
+	frame = 1,
+	-- Totals since load: frames closed, measured time (ms), frames over the
+	-- budget, garbage sampled per frame (KB), garbage of profiled functions
+	-- themselves (KB, with garbage per function).
+	frames = 0,
+	time = 0,
+	over = 0,
+	garbageAll = 0,
+	garbageFns = 0,
+	lastFrame = 0,
+	lastOver = -1,
+	-- Roots, by label: a call path's first node, with the root's own
+	-- statistics and each function's time under it (`fns`).
+	roots = {},
+	-- Every call path node below a root.
+	nodes = {},
+	-- The frame ring, by slot.
+	ring = { id = {}, time = {}, garbage = {}, at = {}, names = {}, times = {} },
+	-- Per-second figures, by second number (`first` to `last`).
+	seconds = { first = 1, last = 0, at = {}, frames = {}, time = {}, max = {}, over = {}, garbage = {} },
+	-- The slow calls, oldest first.
+	slow = {},
+	-- Each function's time per 4 seconds over the last minute.
+	trend = {},
+	trendBase = {},
+	trendSlot = 0,
+	-- The recordings, `live` first, and those that run besides `live`.
+	recordings = {},
+	open = {},
+	counts = {},
+	-- Recordings marked or unmarked for export since the last reload.
+	exportPending = false,
+	-- The addon's WowluaDevDB_<Addon> once it is loaded.
+	db = nil,
+}
+wl.perf = perf
+
+-- The time and names of the frame being measured.
+local cur, curN, curRest = 0, 0, 0
+local curNames: string[], curTimes: number[] = {}, {}
+local secFrames, secTime, secMax, secOver, secGarbage, secStart = 0, 0, 0, 0, 0, now()
+local lastMemory = memory()
+
+-- The open recordings' maxima: `kind` is `fn`, `path`, `root`, `ev`, `sc`,
+-- `tm` or `burst`.
+local function maxOpen(kind: string, key: any, value: number)
+	local open = perf.open
+	for i = 1, #open do
+		local m = open[i].max[kind]
+		if value > (m[key] ?? 0) then
+			m[key] = value
+		end
+	end
+end
+perf.maxOpen = maxOpen
+
+local function rootNode(label: string, kind: string): any
+	local r = perf.roots[label]
+	if not r then
+		r = { name = label, kind = kind, kids = {}, fns = {}, calls = 0, total = 0, self = 0, max = 0 }
+		perf.roots[label] = r
+	end
+	return r
+end
+
+-- Adds `elapsed` to the frame being measured, under `label`.
+local function addToFrame(label: string, elapsed: number)
+	cur += elapsed
+	for i = 1, curN do
+		if curNames[i] == label then
+			curTimes[i] += elapsed
+			return
+		end
+	end
+	if curN < TOP then
+		curN += 1
+		curNames[curN] = label
+		curTimes[curN] = elapsed
+	else
+		curRest += elapsed
+	end
+end
+
+local function logSlow(name: string, location: string?, elapsed: number)
+	local open = perf.open
+	local rec = open[#open]
+	perf.slow[#perf.slow + 1] = {
+		at = now(),
+		ms = elapsed,
+		name = name,
+		location = location,
+		root = perf.root ?? "other",
+		recording = rec and rec.name or "live",
+		stack = debugstack and debugstack(3) or "",
+	}
+	if #perf.slow > SLOW then
+		table.remove(perf.slow, 1)
+	end
+end
+
+-- A profiled call starts: with call paths, its node below the running one.
+function perf.enter(name: string): any
+	local parent = perf.node ?? rootNode(perf.root ?? "other", perf.rootKind ?? "other")
+	local node = parent.kids[name]
+	if not node then
+		node = { name = name, parent = parent, kids = {}, calls = 0, total = 0, self = 0, max = 0 }
+		parent.kids[name] = node
+		perf.nodes[#perf.nodes + 1] = node
+	end
+	perf.node = node
+	return node
+end
+
+-- A profiled call of `name` ended after `elapsed` ms (`own` without
+-- profiled callees); `stat` is its statistics entry. A `suspended` call
+-- (it ended in a later frame: a coroutine yielded inside it) counts its
+-- time, but is no slow call and not over the budget.
+function perf.done(name: string, location: string?, elapsed: number, own: number, node: any, stat: any, suspended: boolean)
+	local depth = perf.depth - 1
+	perf.depth = depth
+	local label = perf.root ?? "other"
+	local r = perf.roots[label] ?? rootNode(label, perf.rootKind ?? "other")
+	r.fns[name] = (r.fns[name] ?? 0) + own
+	if node then
+		node.calls += 1
+		node.total += elapsed
+		node.self += own
+		if elapsed > node.max then
+			node.max = elapsed
+		end
+		maxOpen("path", node, elapsed)
+		perf.node = node.parent
+	end
+	if elapsed > perf.frameBudget and not suspended then
+		stat.over = (stat.over ?? 0) + 1
+		if elapsed > perf.slowCall then
+			logSlow(name, location, elapsed)
+		end
+	end
+	if depth <= 0 then
+		perf.depth = 0
+		perf.node = nil
+		addToFrame(name, elapsed)
+		if not perf.root then
+			r.calls += 1
+			r.total += elapsed
+			r.self += own
+			if elapsed > r.max then
+				r.max = elapsed
+			end
+			maxOpen("root", label, elapsed)
+		end
+	end
+end
+
+-- A monitored handler starts: at the top, it is the root of the work.
+function perf.begin(label: string, kind: string): boolean
+	if perf.depth <= 0 then
+		perf.depth = 1
+		perf.root, perf.rootKind = label, kind
+		perf.node = perf.callPaths and rootNode(label, kind) or nil
+		return true
+	end
+	perf.depth += 1
+	return false
+end
+
+-- A monitored handler ended; `stat` is its monitor entry.
+function perf.finish(top: boolean, label: string, kind: string, location: string?, elapsed: number, stat: any)
+	perf.depth -= 1
+	if elapsed > perf.frameBudget then
+		stat.over = (stat.over ?? 0) + 1
+		if elapsed > perf.slowCall then
+			logSlow(label, location, elapsed)
+		end
+	end
+	if top then
+		local r = rootNode(label, kind)
+		r.calls += 1
+		r.total += elapsed
+		if elapsed > r.max then
+			r.max = elapsed
+		end
+		maxOpen("root", label, elapsed)
+		addToFrame(label, elapsed)
+		perf.depth = 0
+		perf.root, perf.rootKind, perf.node = nil, nil, nil
+	end
+end
+
+-- Statistics snapshots: what a recording counts from its start.
+local function copyStats(t: { [any]: any }, fields: string[]): { [any]: any }
+	local out = {}
+	for k, s in pairs(t) do
+		local c = {}
+		for _, f in ipairs(fields) do
+			c[f] = s[f]
+		end
+		out[k] = c
+	end
+	return out
+end
+const FN_FIELDS = { "calls", "total", "self", "errors", "garbage", "selfGarbage", "over" }
+const MON_FIELDS = { "count", "total", "over", "bursts", "frames" }
+const NODE_FIELDS = { "calls", "total", "self" }
+local function snapshot(): any
+	local prof, mon = wl.prof, wl.mon
+	local roots = {}
+	for label, r in pairs(perf.roots) do
+		local fns = {}
+		for k, v in pairs(r.fns) do
+			fns[k] = v
+		end
+		roots[label] = { calls = r.calls, total = r.total, self = r.self, fns = fns }
+	end
+	local nodes = {}
+	for _, n in ipairs(perf.nodes) do
+		nodes[n] = { calls = n.calls, total = n.total, self = n.self }
+	end
+	return {
+		functions = prof and copyStats(prof.stats, FN_FIELDS) or {},
+		events = mon and copyStats(mon.events, MON_FIELDS) or {},
+		scripts = mon and copyStats(mon.scripts, MON_FIELDS) or {},
+		timers = mon and copyStats(mon.timers, MON_FIELDS) or {},
+		commands = mon and copyStats(mon.commands, MON_FIELDS) or {},
+		roots = roots,
+		nodes = nodes,
+		frames = perf.frames,
+		time = perf.time,
+		over = perf.over,
+		garbageAll = perf.garbageAll,
+		garbageFns = perf.garbageFns,
+	}
+end
+perf.snapshot = snapshot
+
+-- `a - b`, field by field; entries that did not run are left out.
+local function minus(a: { [any]: any }, b: { [any]: any }?, fields: string[], countField: string): { [any]: any }
+	local out = {}
+	for k, s in pairs(a) do
+		local base = b and b[k]
+		local d = {}
+		for _, f in ipairs(fields) do
+			local v = s[f]
+			if type(v) == "number" then
+				d[f] = v - (base and base[f] or 0)
+			end
+		end
+		if (d[countField] ?? 0) > 0 then
+			out[k] = d
+		end
+	end
+	return out
+end
+-- `a + b` into `a`, for a recording's figures from before a reset.
+local function plus(a: { [any]: any }, b: { [any]: any }?, fields: string[])
+	for k, s in pairs(b or {}) do
+		local d = a[k]
+		if not d then
+			d = {}
+			a[k] = d
+		end
+		for _, f in ipairs(fields) do
+			if type(s[f]) == "number" then
+				d[f] = (d[f] ?? 0) + s[f]
+			end
+		end
+	end
+end
+
+-- The figures of the recordings since `base` (nil: since load).
+local function delta(snap: any, base: any?): any
+	local d = {
+		functions = minus(snap.functions, base?.functions, FN_FIELDS, "calls"),
+		events = minus(snap.events, base?.events, MON_FIELDS, "count"),
+		scripts = minus(snap.scripts, base?.scripts, MON_FIELDS, "count"),
+		timers = minus(snap.timers, base?.timers, MON_FIELDS, "count"),
+		commands = minus(snap.commands, base?.commands, MON_FIELDS, "count"),
+		roots = minus(snap.roots, base?.roots, NODE_FIELDS, "calls"),
+		nodes = minus(snap.nodes, base?.nodes, NODE_FIELDS, "calls"),
+		frames = snap.frames - (base?.frames ?? 0),
+		time = snap.time - (base?.time ?? 0),
+		over = snap.over - (base?.over ?? 0),
+		garbageAll = snap.garbageAll - (base?.garbageAll ?? 0),
+		garbageFns = snap.garbageFns - (base?.garbageFns ?? 0),
+	}
+	for label, r in pairs(d.roots) do
+		r.fns = {}
+		for k, v in pairs(snap.roots[label].fns) do
+			local was = base?.roots[label]?.fns[k] ?? 0
+			if v > was then
+				r.fns[k] = v - was
+			end
+		end
+	end
+	return d
+end
+local function add(into: any, more: any?)
+	if not more then
+		return
+	end
+	plus(into.functions, more.functions, FN_FIELDS)
+	plus(into.events, more.events, MON_FIELDS)
+	plus(into.scripts, more.scripts, MON_FIELDS)
+	plus(into.timers, more.timers, MON_FIELDS)
+	plus(into.commands, more.commands, MON_FIELDS)
+	plus(into.roots, more.roots, NODE_FIELDS)
+	plus(into.nodes, more.nodes, NODE_FIELDS)
+	for label, r in pairs(more.roots) do
+		local fns = into.roots[label].fns or {}
+		into.roots[label].fns = fns
+		for k, v in pairs(r.fns or {}) do
+			fns[k] = (fns[k] ?? 0) + v
+		end
+	end
+	for _, f in ipairs({ "frames", "time", "over", "garbageAll", "garbageFns" }) do
+		into[f] += more[f]
+	end
+end
+
+-- A call path as names, root first.
+local function pathOf(node: any): string[]
+	local out = {}
+	while node do
+		table.insert(out, 1, node.name)
+		node = node.parent
+	end
+	return out
+end
+
+-- Whether a frame shows nothing: no size, children or regions, or fully
+-- transparent (P7102). Secret measures count as showing something.
+local function showsNothing(f: any): string?
+	if type(f) ~= "table" then
+		return nil
+	end
+	local function number(method: string): number?
+		local fn = f[method]
+		if type(fn) ~= "function" then
+			return nil
+		end
+		local ok, v = pcall(fn, f)
+		if not ok or type(v) ~= "number" or (issecretvalue and issecretvalue(v)) then
+			return nil
+		end
+		return v
+	end
+	local alpha = number("GetEffectiveAlpha")
+	if alpha == 0 then
+		return "fully transparent"
+	end
+	local w, h = number("GetWidth"), number("GetHeight")
+	if (w == 0 or h == 0) and number("GetNumChildren") == 0 and number("GetNumRegions") == 0 then
+		return "no size"
+	end
+	return nil
+end
+
+-- The data of a recording in the export format (§7.7.9), from its figures.
+local function render(rec: any, d: any, maxima: any?, ended: number): any
+	local prof, mon = wl.prof, wl.mon
+	local info = wl.devInfo ?? {}
+	local data = {
+		format = 1,
+		addon = addonName,
+		version = info.version,
+		profile = info.profile,
+		build = info.build,
+		compiler = info.compiler,
+		name = rec.name,
+		kind = rec.kind,
+		detail = rec.detail,
+		started = rec.started,
+		duration = math.max(ended - rec.at, 0),
+		frameBudget = perf.frameBudget,
+		slowCall = perf.slowCall,
+		callPaths = rec.callPaths or perf.callPaths,
+		garbage = rec.garbage or perf.garbage,
+		frames = d.frames,
+		time = d.time,
+		over = d.over,
+		garbageAll = d.garbageAll,
+		garbageFns = d.garbageFns,
+		functions = {},
+		paths = {},
+		roots = {},
+		events = {},
+		scripts = {},
+		timers = {},
+		commands = {},
+		seconds = { frames = {}, time = {}, max = {}, over = {}, garbage = {} },
+		memory = {},
+		slow = {},
+	}
+	for name, s in pairs(d.functions) do
+		local live = prof?.stats[name]
+		s.max = maxima and (maxima.fn[name] ?? 0) or (live?.max ?? 0)
+		s.location = live?.location
+		data.functions[name] = s
+	end
+	for node, s in pairs(d.nodes) do
+		s.path = pathOf(node)
+		s.max = maxima and (maxima.path[node] ?? 0) or node.max
+		data.paths[#data.paths + 1] = s
+	end
+	for label, s in pairs(d.roots) do
+		local top, topSelf = nil, 0
+		for name, t in pairs(s.fns) do
+			if t > topSelf then
+				top, topSelf = name, t
+			end
+		end
+		local live = perf.roots[label]
+		data.roots[label] = {
+			kind = live?.kind ?? "other",
+			calls = s.calls,
+			total = s.total,
+			max = maxima and (maxima.root[label] ?? 0) or (live?.max ?? 0),
+			top = top,
+			topSelf = topSelf,
+		}
+	end
+	for _, kind in ipairs({ "events", "scripts", "timers", "commands" }) do
+		local short = ({ events = "ev", scripts = "sc", timers = "tm", commands = "cm" })[kind]
+		for key, s in pairs(d[kind]) do
+			local live = mon and mon[kind][key]
+			s.max = maxima and (maxima[short][key] ?? 0) or (live?.max ?? 0)
+			s.detail = live?.detail
+			s.script = live?.script
+			if kind == "events" then
+				s.burstMax = maxima and (maxima.burst[key] ?? 0) or (live?.burstMax ?? 0)
+			end
+			if s.script == "OnUpdate" and mon then
+				s.showsNothing = showsNothing(mon.objects[key])
+			end
+			data[kind][key] = s
+		end
+	end
+	local sec = perf.seconds
+	for i = math.max(rec.second ?? 1, sec.first), sec.last do
+		local n = #data.seconds.frames + 1
+		data.seconds.frames[n] = sec.frames[i]
+		data.seconds.time[n] = sec.time[i]
+		data.seconds.max[n] = sec.max[i]
+		data.seconds.over[n] = sec.over[i]
+		data.seconds.garbage[n] = sec.garbage[i]
+	end
+	local samples, times = mon?.memory ?? {}, mon?.memoryAt ?? {}
+	for i, kb in ipairs(samples) do
+		local at = times[i]
+		if at and at >= rec.at and at <= ended then
+			data.memory[#data.memory + 1] = { at = at - rec.at, kb = kb }
+		end
+	end
+	for i = #perf.slow, 1, -1 do
+		local s = perf.slow[i]
+		if s.at >= rec.at and s.at <= ended then
+			data.slow[#data.slow + 1] = {
+				at = s.at - rec.at,
+				ms = s.ms,
+				name = s.name,
+				location = s.location,
+				root = s.root,
+				recording = s.recording,
+				stack = s.stack,
+			}
+		end
+	end
+	return data
+end
+
+-- The data of a recording: finished ones keep theirs; `live` and open ones
+-- are taken now.
+function perf.data(rec: any): any
+	if rec.data then
+		return rec.data
+	end
+	local t = now()
+	if rec.kind == "live" then
+		local d = delta(snapshot(), rec.base)
+		return render(rec, d, nil, t)
+	end
+	local d = delta(snapshot(), rec.base)
+	add(d, rec.carry)
+	return render(rec, d, rec.max, t)
+end
+
+-- The frames of a recording still in the ring: first and last frame number.
+function perf.frameRange(rec: any): (number, number)
+	local last = rec.lastFrame ?? (perf.frame - 1)
+	local first = math.max(rec.frame ?? 1, perf.frame - RING)
+	return first, last
+end
+-- The figures of frame `id` while it is in the ring: time, garbage, the
+-- time it closed, and the names and times of what ran in it.
+function perf.frameAt(id: number): (number?, number?, number?, string[]?, number[]?)
+	local ring = perf.ring
+	local slot = id % RING + 1
+	if ring.id[slot] ~= id then
+		return nil, nil, nil, nil, nil
+	end
+	return ring.time[slot], ring.garbage[slot], ring.at[slot], ring.names[slot], ring.times[slot]
+end
+
+local function counted(kind: string): number
+	perf.counts[kind] = (perf.counts[kind] ?? 0) + 1
+	return perf.counts[kind]
+end
+
+-- Starts a recording (`kind`: combat, pull, manual).
+function perf.start(kind: string, name: string?, detail: string?): any
+	local rec = {
+		kind = kind,
+		name = name ?? (kind == "manual" and `recording {counted(kind)}` or `{kind} {counted(kind)}`),
+		detail = detail,
+		at = now(),
+		started = time and time() or 0,
+		frame = perf.frame,
+		second = perf.seconds.last + 1,
+		base = snapshot(),
+		max = { fn = {}, path = {}, root = {}, ev = {}, sc = {}, tm = {}, cm = {}, burst = {} },
+		callPaths = perf.callPaths,
+		garbage = perf.garbage,
+		running = true,
+	}
+	perf.recordings[#perf.recordings + 1] = rec
+	perf.open[#perf.open + 1] = rec
+	return rec
+end
+
+-- The open recording of `kind`, newest first.
+function perf.running(kind: string): any?
+	for i = #perf.open, 1, -1 do
+		if perf.open[i].kind == kind then
+			return perf.open[i]
+		end
+	end
+	return nil
+end
+
+local function writeExports()
+	local db = perf.db
+	if not db then
+		return
+	end
+	local out = {}
+	for _, rec in ipairs(perf.recordings) do
+		if rec.export then
+			local data = perf.data(rec)
+			data.hints = perf.hints(data)
+			out[#out + 1] = data
+		end
+	end
+	db.exports = out
+end
+perf.writeExports = writeExports
+
+-- Ends a recording; `name` renames it. The oldest automatic recordings
+-- beyond the last 20 are dropped.
+function perf.stop(rec: any, name: string?)
+	if not rec.running then
+		return
+	end
+	if name and name ~= "" then
+		rec.name = name
+	end
+	rec.lastFrame = perf.frame - 1
+	rec.data = perf.data(rec)
+	rec.running = false
+	rec.base, rec.carry = nil, nil
+	for i, r in ipairs(perf.open) do
+		if r == rec then
+			table.remove(perf.open, i)
+			break
+		end
+	end
+	if rec.kind == "combat" or rec.kind == "pull" then
+		local auto = 0
+		for i = #perf.recordings, 1, -1 do
+			local r = perf.recordings[i]
+			if (r.kind == "combat" or r.kind == "pull") and not r.running and not r.export then
+				auto += 1
+				if auto > AUTO then
+					table.remove(perf.recordings, i)
+				end
+			end
+		end
+	end
+	if rec.export then
+		writeExports()
+	end
+end
+
+-- Marks or unmarks a recording for export (§7.7.9).
+function perf.setExport(rec: any, on: boolean)
+	rec.export = on
+	perf.exportPending = true
+	writeExports()
+end
+
+-- Clears statistics (`what`: "prof", "mon", or nil for everything):
+-- `live` starts again, the open recordings keep what they counted so far.
+function perf.reset(what: string?)
+	local snap = snapshot()
+	for _, rec in ipairs(perf.open) do
+		local so = delta(snap, rec.base)
+		if rec.carry then
+			add(so, rec.carry)
+		end
+		rec.carry = so
+	end
+	if wl.prof and what ~= "mon" then
+		wl.prof.stats = {}
+		perf.nodes = {}
+		for _, r in pairs(perf.roots) do
+			r.fns, r.kids = {}, {}
+		end
+		perf.trend, perf.trendBase = {}, {}
+		perf.garbageFns = 0
+	end
+	if wl.mon and what ~= "prof" then
+		wl.mon.events, wl.mon.scripts, wl.mon.timers, wl.mon.commands = {}, {}, {}, {}
+		wl.mon.objects = setmetatable({}, { __mode = "v" })
+	end
+	if not what then
+		perf.roots, perf.nodes = {}, {}
+		perf.frames, perf.time, perf.over, perf.garbageAll, perf.garbageFns = 0, 0, 0, 0, 0
+		perf.slow = {}
+	end
+	local base = snapshot()
+	for _, rec in ipairs(perf.open) do
+		rec.base = base
+	end
+	local live = perf.recordings[1]
+	live.at, live.started, live.frame, live.second = now(), time and time() or 0, perf.frame, perf.seconds.last + 1
+	live.base = base
+end
+
+-- Switches and thresholds (§7.7.5): the window's, saved per addon, win
+-- over the profile's until reset.
+function perf.set(key: string, value: any)
+	(perf :: any)[key] = value
+	local db = perf.db
+	if db then
+		db.settings = db.settings or {}
+		db.settings[key] = value
+	end
+end
+function perf.resetSettings()
+	for _, k in ipairs({ "callPaths", "garbage", "frameBudget", "slowCall" }) do
+		(perf :: any)[k] = (defaults :: any)[k]
+	end
+	if perf.db then
+		perf.db.settings = nil
+	end
+end
+
+-- The `live` recording.
+perf.recordings[1] = {
+	kind = "live",
+	name = "live",
+	at = now(),
+	started = time and time() or 0,
+	frame = 1,
+	second = 1,
+	running = true,
+}
+
+-- Closes a second: its figures, and every 4 seconds the functions' trends.
+local function closeSecond(t: number)
+	local sec = perf.seconds
+	local i = sec.last + 1
+	sec.last = i
+	sec.at[i], sec.frames[i], sec.time[i], sec.max[i], sec.over[i], sec.garbage[i] =
+		secStart, secFrames, secTime, secMax, secOver, secGarbage
+	local old = i - SECONDS
+	if old >= sec.first then
+		sec.at[old], sec.frames[old], sec.time[old], sec.max[old], sec.over[old], sec.garbage[old] =
+			nil, nil, nil, nil, nil, nil
+		sec.first = old + 1
+	end
+	secFrames, secTime, secMax, secOver, secGarbage, secStart = 0, 0, 0, 0, 0, t
+	if i % 4 == 0 and wl.prof then
+		local slot = perf.trendSlot % 15 + 1
+		perf.trendSlot = slot
+		for name, s in pairs(wl.prof.stats) do
+			local tr = perf.trend[name]
+			if not tr then
+				tr = {}
+				perf.trend[name] = tr
+			end
+			tr[slot] = s.total - (perf.trendBase[name] ?? 0)
+			perf.trendBase[name] = s.total
+		end
+	end
+end
+
+-- The frame mark: closes the frame being measured.
+local function mark()
+	local t = now()
+	local count = memory()
+	local garbage = count - lastMemory
+	if garbage < 0 then
+		garbage = 0
+	end
+	lastMemory = count
+	local id = perf.frame
+	local ring = perf.ring
+	local slot = id % RING + 1
+	ring.id[slot], ring.time[slot], ring.garbage[slot], ring.at[slot] = id, cur, garbage, t
+	local names, times = ring.names[slot], ring.times[slot]
+	if not names then
+		names, times = {}, {}
+		ring.names[slot], ring.times[slot] = names, times
+	end
+	for i = 1, curN do
+		names[i], times[i] = curNames[i], curTimes[i]
+	end
+	for i = curN + 1, #names do
+		names[i], times[i] = nil, nil
+	end
+	if curRest > 0 then
+		names[curN + 1], times[curN + 1] = "(other)", curRest
+	end
+	perf.frames += 1
+	perf.time += cur
+	perf.garbageAll += garbage
+	perf.lastFrame = cur
+	local over = cur > perf.frameBudget
+	if over then
+		perf.over += 1
+		perf.lastOver = t
+	end
+	secFrames += 1
+	secTime += cur
+	secGarbage += garbage
+	if cur > secMax then
+		secMax = cur
+	end
+	if over then
+		secOver += 1
+	end
+	if t - secStart >= 1 then
+		closeSecond(t)
+	end
+	perf.frame = id + 1
+	cur, curN, curRest = 0, 0, 0
+	-- Nothing of the addon runs between frames: what an error left open
+	-- is closed.
+	perf.depth, perf.root, perf.rootKind, perf.node = 0, nil, nil, nil
+	if wl.prof then
+		wl.prof.unwind()
+	end
+end
+perf.mark = mark
+
+-- Combats, pulls, the saved data, and the frame mark.
+if type(CreateFrame) == "function" then
+	local f = CreateFrame("Frame")
+	f:SetScript("OnUpdate", mark)
+	for _, e in ipairs({ "ADDON_LOADED", "PLAYER_REGEN_DISABLED", "PLAYER_REGEN_ENABLED", "ENCOUNTER_START", "ENCOUNTER_END", "PLAYER_LOGOUT" }) do
+		pcall(f.RegisterEvent, f, e)
+	end
+	local pulls: { [string]: number } = {}
+	f:SetScript("OnEvent", function(_, event: string, ...: any)
+		if event == "ADDON_LOADED" and ... == addonName then
+			local name = "WowluaDevDB_" .. addonName:gsub("[^%w_]", "_")
+			local db = _G[name]
+			if type(db) ~= "table" then
+				db = {}
+				_G[name] = db
+			end
+			perf.db = db
+			for k, v in pairs(db.settings or {}) do
+				(perf :: any)[k] = v
+			end
+			-- Recordings exported before the reload stay marked.
+			for _, data in ipairs(db.exports or {}) do
+				if type(data) == "table" then
+					perf.recordings[#perf.recordings + 1] = {
+						kind = data.kind, name = data.name, detail = data.detail, at = 0,
+						started = data.started, data = data, export = true, saved = true,
+					}
+				end
+			end
+		elseif event == "PLAYER_REGEN_DISABLED" then
+			if not perf.running("combat") then
+				perf.start("combat")
+			end
+		elseif event == "PLAYER_REGEN_ENABLED" then
+			local rec = perf.running("combat")
+			if rec then
+				perf.stop(rec)
+			end
+		elseif event == "ENCOUNTER_START" then
+			local _, encounter = ...
+			local key = tostring(encounter or "?")
+			pulls[key] = (pulls[key] ?? 0) + 1
+			perf.start("pull", `pull {pulls[key]}`, encounter)
+		elseif event == "ENCOUNTER_END" then
+			local rec = perf.running("pull")
+			if rec then
+				perf.stop(rec)
+			end
+		elseif event == "PLAYER_LOGOUT" then
+			writeExports()
+		end
+	end)
+end
+
+-- Performance hints (§7.7.7): the rules over a recording's data. Each hint
+-- has a code, its subject, the evidence, a fix, and the number that grows
+-- when the finding gets worse.
+local function n(v: number): string
+	local s = tostring(math.floor(v + 0.5))
+	local out = s:reverse():gsub("(%d%d%d)", "%1,"):reverse()
+	return (out:gsub("^,", ""))
+end
+local function ms(v: number): string
+	return string.format(v >= 10 and "%.1f ms" or "%.2f ms", v)
+end
+local function kb(v: number): string
+	return v >= 1024 and string.format("%.1f MB", v / 1024) or string.format("%.0f KB", v)
+end
+local function span(data: any): string
+	local d = data.duration ?? 0
+	return d >= 60 and string.format("%s (%.1f min)", data.name, d / 60) or string.format("%s (%d s)", data.name, d)
+end
+function perf.hints(data: any): any[]
+	local out = {}
+	local frames = math.max(data.frames ?? 0, 1)
+	-- P7101: bursts of one event.
+	for event, s in pairs(data.events ?? {}) do
+		if (s.bursts ?? 0) >= 10 then
+			out[#out + 1] = {
+				code = "P7101",
+				subject = event,
+				evidence = `{event} was handled {n(s.count)} times in {span(data)}, in bursts of {BURST} or more in {n(s.bursts)} frames (up to {n(s.burstMax ?? 0)} in one frame), {ms(s.total)} in all`,
+				fix = "Collapse each burst into one call: give the function that does the work @throttle(0.1) or @nextFrame from wowlua:timer, and return early for units or bags the addon does not show",
+				metric = s.bursts / math.max(data.duration ?? 1, 1),
+			}
+		end
+	end
+	-- P7102: an OnUpdate in nearly every frame while its frame shows nothing.
+	for key, s in pairs(data.scripts ?? {}) do
+		local share = (s.frames ?? 0) / frames
+		if s.script == "OnUpdate" and s.showsNothing and share >= 0.9 and (data.duration ?? 0) >= 10 then
+			out[#out + 1] = {
+				code = "P7102",
+				subject = key,
+				evidence = string.format("%s ran in %d%% of the %s frames of %s while its frame showed nothing (%s), %s in all",
+					key, math.floor(share * 100), n(data.frames), span(data), s.showsNothing, ms(s.total)),
+				fix = "Run the work on a timer, with every(0.1, fn) from wowlua:timer, or set the script in OnShow and clear it with SetScript(\"OnUpdate\", nil) in OnHide",
+				metric = s.total / math.max(data.duration ?? 1, 1),
+			}
+		end
+	end
+	-- P7201: one function's share of the garbage.
+	local all = data.garbageFns ?? 0
+	for name, s in pairs(data.functions ?? {}) do
+		local own = s.selfGarbage ?? 0
+		if all > 0 and own >= 100 and own / all >= 0.25 then
+			out[#out + 1] = {
+				code = "P7201",
+				subject = name,
+				evidence = string.format("%s created %s, %d%% of the garbage the addon's functions made in %s, %s per call",
+					name, kb(own), math.floor(own / all * 100), span(data), kb(own / math.max(s.calls, 1))),
+				fix = "Reuse tables instead of creating them per call (clear them with wipe), move closures that capture nothing out of loops and handlers, and cache strings and results that do not change",
+				metric = own / math.max(data.duration ?? 1, 1),
+			}
+		end
+	end
+	-- P7301: single calls over the frame budget.
+	local function over(name: string, s: any, what: string)
+		if (s.over ?? 0) > 0 then
+			out[#out + 1] = {
+				code = "P7301",
+				subject = name,
+				evidence = string.format("%s took %s in its slowest call, over the %s frame budget; %s of %s %s were over it in %s",
+					name, ms(s.max ?? 0), ms(data.frameBudget ?? 1), n(s.over), n(s.calls ?? s.count ?? 0), what, span(data)),
+				fix = "Spread the work across frames: run it as a job with jobs.start from wowlua:jobs and call ctx:check() in its loop, or wait for the end of combat",
+				metric = s.max ?? 0,
+			}
+		end
+	end
+	for name, s in pairs(data.functions ?? {}) do
+		over(name, s, "calls")
+	end
+	for _, kind in ipairs({ "events", "scripts", "timers", "commands" }) do
+		for key, s in pairs(data[kind] ?? {}) do
+			over(key, s, "runs")
+		end
+	end
+	for _, h in ipairs(out) do
+		h.recording = data.name
+	end
+	table.sort(out, function(a, b)
+		if a.code ~= b.code then
+			return a.code < b.code
+		end
+		return a.metric > b.metric
+	end)
+	return out
+end

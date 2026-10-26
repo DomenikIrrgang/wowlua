@@ -1555,6 +1555,12 @@ fn build_inner(
                     Vec::new()
                 },
                 runtime_version: runtime_version(),
+                perf: wowlua_runtime::PerfDefaults {
+                    call_paths: profile.profile_call_paths,
+                    garbage: profile.profile_garbage,
+                    frame_budget: profile.frame_budget,
+                    slow_call: profile.slow_call,
+                },
                 meta: crate::meta::runtime_tables(
                     &b.meta,
                     &b.output.meta_used,
@@ -4539,10 +4545,10 @@ fn licenses_text(dev_fonts: bool, libs: &[(String, String)]) -> String {
     if dev_fonts {
         embedded.push_str(
             "The dev window's fonts in wowlua/fonts/ (dev builds only):\n\
-             - Marcellus SC, Copyright (c) 2012 Brian J. Bonislawsky DBA Astigmatic (AOETI),\n  \
-               SIL Open Font License 1.1 (wowlua/fonts/MarcellusSC-OFL.txt)\n\
-             - Figtree, Copyright 2022 The Figtree Project Authors,\n  \
-               SIL Open Font License 1.1 (wowlua/fonts/Figtree-OFL.txt)\n",
+             - Martian Mono, Copyright 2020 The Martian Mono Project Authors,\n  \
+               SIL Open Font License 1.1 (wowlua/fonts/MartianMono-OFL.txt)\n\
+             - IBM Plex Mono, Copyright 2017 IBM Corp., with Reserved Font Name \"Plex\",\n  \
+               SIL Open Font License 1.1 (wowlua/fonts/IBMPlexMono-OFL.txt)\n",
         );
     }
     if embedded.is_empty() {
@@ -5175,6 +5181,15 @@ fn tool_slices(
     }
     if profile.instrument != wowlua_manifest::model::Instrument::None && profile.dev_console {
         out.insert(Slice::Prof);
+    }
+    // Frame time and recordings (spec §7.3.1): dev builds that profile or
+    // monitor.
+    if profile.dev_console
+        && (out.contains(&Slice::Monitor)
+            || (out.contains(&Slice::Prof)
+                && profile.instrument != wowlua_manifest::model::Instrument::None))
+    {
+        out.insert(Slice::Perf);
     }
     out
 }

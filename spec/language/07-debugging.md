@@ -167,8 +167,8 @@ standard library's own modules are never instrumented.
 
 ### 7.3.1 Frame time and slow calls
 
-In profiles with `instrument` other than `"none"` or with `monitor = true`,
-the runtime also measures time **per rendered frame**: the time of every
+In dev builds (`dev-console`) with `instrument` other than `"none"` or with
+`monitor = true`, the runtime also measures time **per rendered frame**: the time of every
 top-level instrumented call and monitored handler (one that no other measured
 call is running under) is added to the current frame, and the frame is closed
 by the runtime's `OnUpdate` mark. The last frames of the live recording are
@@ -180,15 +180,19 @@ default 2 ms) is a **slow call**. It is recorded with its time, function and
 location, the root that started the work (§7.3.2) and a stack from
 `debugstack()`. Only calls over the threshold pay for the stack. The last 200
 slow calls per addon are kept (decision T178). A frame whose total exceeds
-`frame-budget` (default 1 ms) is **over budget**.
+`frame-budget` (default 1 ms) is **over budget**, and so is a single call
+longer than it. A call that ends in a later frame than it started (a
+coroutine yielded inside it) counts its time but is neither a slow call nor
+over budget, because the time includes the frames it was suspended.
 
 ### 7.3.2 Call paths
 
 With call paths switched on (`profile-call-paths`, or the window's switch),
 the profiler also keys its statistics by **path**: the chain of instrumented
 functions from a **root** to the function. A root is the monitored handler
-that started the work (an event, a script, a timer or a slash command, §7.9);
-work that started elsewhere has the root `other`. Paths feed the call tree,
+that started the work (an event, a script, a timer or a slash command, §7.9)
+when no other measured call was running; work that started elsewhere has the
+root `other`. Paths feed the call tree,
 the flame graph and the by-event view (§7.7.4). Each path costs one statistics
 entry, and every call pays a path lookup, which is why it is opt-in.
 
@@ -198,7 +202,8 @@ The runtime samples `collectgarbage("count")` once per frame and reports the
 addon-wide **garbage rate** (KB created per second, collections removed). With
 garbage per function switched on (`profile-garbage`, or the window's switch),
 every instrumented call records its allocation, as `@profile({ memory = true })`
-does for one function (§7.3). `collectgarbage("count")` measures the whole
+does for one function (§7.3): all of it, and its **own** part without the
+instrumented callees' (as `self` is for time). `collectgarbage("count")` measures the whole
 Lua state, so the figures are exact only for work that runs synchronously
 inside the call; a collection step during a call lowers the count and is
 recorded as zero.
@@ -406,7 +411,8 @@ time and garbage data (decision T172):
 
 The last 20 automatic recordings per addon are kept; an older one is dropped
 when a new one ends. Manual recordings and recordings marked for export are
-never dropped automatically. Recordings live in memory and end with the
+never dropped automatically (and an automatic one marked for export does not
+count toward the 20). Recordings live in memory and end with the
 session, except those marked for export (§7.7.9).
 
 | View | Shows |
@@ -456,8 +462,19 @@ names its subject, states the evidence with numbers and the recording it came
 from, and suggests a fix that uses the standard library or plain Lua.
 `wowlua explain P7301` explains it (decision T176). The codes are listed in
 [Diagnostics §B.4](../appendix/diagnostics.md#b4-performance-hints). Hints
-can be dismissed; a dismissed hint comes back when its finding gets worse.
-The rules run only while the window is shown.
+can be dismissed; a dismissed hint comes back when its finding gets worse:
+when the number it is measured by has grown by half. A hint is new until the
+hints tab has shown it. The rules run only while the window is shown (every
+5 seconds), and `/wl hints <addon>` runs them once. The rules:
+
+| Code | Finds | Measured by |
+|------|-------|-------------|
+| P7101 | An event handled 5 or more times within one frame, in 10 or more frames of the recording | Such frames per second |
+| P7102 | An `OnUpdate` script that ran in 90% or more of the recording's frames, over 10 seconds or more, while its frame shows nothing: no size and no children or regions, or an effective alpha of 0 (a script only runs while its frame is shown, so "hidden" means hidden from the player) | Its time per second |
+| P7201 | With garbage per function: a function whose own garbage is a quarter or more of the garbage the addon's functions made, and 100 KB or more | Its own garbage per second |
+| P7301 | A function, event, script, timer or slash command with a call over the frame budget | Its slowest call |
+
+Exported recordings keep the hints of their data (§7.7.9).
 
 ### 7.7.8 HUD
 
@@ -479,6 +496,28 @@ On the desktop, `wowlua prof report` reads them and writes a report
 ([Developer tooling §16.5](../toolchain/tooling.md#165-profiling-reports-wowlua-prof-report),
 decision T179). An exported recording keeps its statistics, call paths,
 frame times (bucketed) and slow calls; stacks are kept as text.
+
+`WowluaDevDB_<Addon>.exports` is an array with a table per exported
+recording (the same while it is shown in the window):
+
+| Field | Contents |
+|-------|----------|
+| `format` | `1` |
+| `addon`, `version`, `profile`, `build`, `compiler` | The build that recorded it; `build` maps locations back (§7.6) |
+| `name`, `kind`, `detail` | Its name, `"live"`, `"combat"`, `"pull"` or `"manual"`, and a pull's encounter name |
+| `started`, `duration` | Its start as `time()` (Unix seconds) and its length in seconds |
+| `frameBudget`, `slowCall`, `callPaths`, `garbage` | The thresholds (ms) and switches |
+| `frames`, `time`, `over`, `garbageAll`, `garbageFns` | Frames rendered, measured time (ms), frames over budget, garbage sampled per frame and the functions' own garbage (KB) |
+| `functions` | By function: `calls`, `total`, `self`, `max`, `errors`, `over` (calls over budget), `garbage`, `selfGarbage` (KB, with garbage per function), `location` |
+| `paths` | With call paths: an array of `{ path = { root, name, … }, calls, total, self, max }` |
+| `roots` | By root: `kind` (`event`, `script`, `timer`, `slash`, `other`), `calls`, `total`, `max`, `top` (the function with the most own time under it) and `topSelf` |
+| `events`, `scripts`, `timers`, `commands` | The monitor's entries: `count`, `total`, `max`, `over`, `detail` (where it was set), `frames` (frames it ran in); events also `bursts` and `burstMax`, scripts `script` and for `OnUpdate` `showsNothing` |
+| `seconds` | Per second of the recording, arrays `frames`, `time`, `max` (slowest frame), `over` and `garbage` |
+| `memory` | An array of `{ at, kb }` (seconds from the start) |
+| `slow` | The slow calls, newest first: `{ at, ms, name, location, root, recording, stack }` |
+| `hints` | The hints of the recording: `{ code, subject, evidence, fix, recording, metric }` |
+
+Times are milliseconds unless named otherwise.
 
 ## 7.8 Reflection
 
@@ -549,14 +588,19 @@ With `monitor = true`, the compiler routes the addon's own handler
 installations through the runtime's monitor (decision T99):
 `frame:SetScript(name, fn)`, `frame:HookScript(name, fn)`, `C_Timer.After`,
 `C_Timer.NewTimer` and `C_Timer.NewTicker` calls in the addon's sources become
-calls of monitor helpers that install a timing wrapper around `fn`. Nothing
-global is hooked, so no other addon or Blizzard frame is affected.
+calls of monitor helpers that install a timing wrapper around `fn`, and so do
+assignments of a slash command's handler (`SlashCmdList.KEY = fn`,
+`SlashCmdList[key] = fn`). The standard library's modules are routed as
+well, since their frames dispatch the addon's `@event` handlers, timers and
+jobs; wowlua library dependencies are not. Nothing global is hooked, so no
+other addon or Blizzard frame is affected.
 
 | Monitored | Recorded per entry |
 |-----------|--------------------|
 | Events (`OnEvent` handlers) | Per event name: count, total and max handler time |
 | Scripts | Per frame (name, or widget class and creation location) and script: count, total, max |
 | Timers | Per creation location: callbacks run, total, max |
+| Slash commands | Per command (`/myaddon`): runs, total, max |
 | Memory | The addon's memory (`GetAddOnMemoryUsage`) sampled every 5 s, last 10 minutes |
 
 Handlers set in XML files, and calls through a local alias of `C_Timer`,

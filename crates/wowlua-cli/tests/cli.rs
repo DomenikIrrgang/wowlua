@@ -3929,8 +3929,10 @@ local now = 0
 function debugprofilestop() now = now + 1 return now end
 C_Timer = { After = function(_, fn) fn() end, NewTicker = function() end }
 local frames = {}
+-- Methods the test does not need do nothing and give such an object.
+local function anything() return setmetatable({}, { __index = function() return function() return anything() end end }) end
 function CreateFrame(_, name)
-  local f = { scripts = {}, name = name }
+  local f = setmetatable({ scripts = {}, name = name }, { __index = function() return function() return anything() end end })
   function f:GetName() return self.name end
   function f:RegisterEvent() end
   function f:SetScript(s, fn) self.scripts[s] = fn end
@@ -4045,6 +4047,7 @@ watch("scale", function() return ns.db.profile.scale end)
 end
 UIParent = object("UIParent")
 function CreateFrame(kind) return object(kind) end
+function GetTime() return 0 end
 function GetCursorPosition() return 10, 10 end
 SlashCmdList = {}
 UISpecialFrames = {}
@@ -4053,7 +4056,7 @@ DEFAULT_CHAT_FRAME = { AddMessage = function() end }
     let sim = r#"SlashCmdList.WOWLUA("")
 local console = WOWLUA_DEV.console
 assert(console.window and console.window:IsShown(), "the window opens")
-for tab = 1, 7 do console.setTab(tab) end
+for tab = 1, 8 do console.setTab(tab) end
 console.window:GetScript("OnUpdate")(console.window, 1)
 SlashCmdList.WOWLUA("")
 print("shown", console.window:IsShown(), type(WowluaDevDB_Win))
@@ -4072,11 +4075,14 @@ print("shown", console.window:IsShown(), type(WowluaDevDB_Win))
     let dist = dir.path().join("dist/dev/Win");
     let toc = fs::read_to_string(dist.join("Win.toc")).unwrap();
     assert!(toc.contains("## SavedVariables: WowluaDevDB_Win"), "{toc}");
-    assert!(dist.join("wowlua/fonts/MarcellusSC-Regular.ttf").exists());
-    assert!(dist.join("wowlua/fonts/Figtree-OFL.txt").exists());
+    // The wowlua design system's fonts (decision T171).
+    assert!(dist.join("wowlua/fonts/MartianMono-StdBd.ttf").exists());
+    assert!(dist.join("wowlua/fonts/IBMPlexMono-Regular.ttf").exists());
+    assert!(dist.join("wowlua/fonts/IBMPlexMono-OFL.txt").exists());
+    assert!(!dist.join("wowlua/fonts/Figtree-Regular.ttf").exists());
     let licenses = fs::read_to_string(dist.join("LICENSES.txt")).unwrap();
     assert!(
-        licenses.contains("Marcellus SC") && licenses.contains("Figtree"),
+        licenses.contains("Martian Mono") && licenses.contains("IBM Plex Mono"),
         "{licenses}"
     );
     fs::write(dist.join("mock.lua"), mock).unwrap();
