@@ -253,6 +253,9 @@ pub struct Env<'p> {
     /// static and name; callers see the decorated type, the method's own
     /// body the declared one.
     pub decorated_methods: FxHashMap<(DefId, bool, Box<str>), TypeId>,
+    /// `@inline` private methods with a body (spec §4.3), by class, static
+    /// and name: where the name is declared.
+    pub inline_methods: FxHashMap<(DefId, bool, Box<str>), Span>,
 }
 
 /// What a name refers to, for go to definition; the last three are
@@ -1554,6 +1557,14 @@ impl<'p> Env<'p> {
                     func,
                     has_body,
                 } => {
+                    if has_body
+                        && !declaration
+                        && visibility == Visibility::Private
+                        && m.decorators().iter().any(|d| d.is_named("inline"))
+                    {
+                        self.inline_methods
+                            .insert((def, is_static, name.text().into()), name.span());
+                    }
                     let sig = FnSig::of(func);
                     // results without an annotation: the body's (L56)
                     if has_body && !declaration && sig.ret.is_none() && sig.type_params.is_empty() {

@@ -73,6 +73,10 @@ pub struct CheckOutput {
     /// Name spans of the definitions of renamable methods (see
     /// `env::Member::renamable`) and of the accesses that resolve to them.
     pub private_methods: HashSet<wowlua_span::Span>,
+    /// Calls of `@inline` private methods (spec §4.3): the method name's
+    /// span at the call, and the span of the method's name where it is
+    /// declared.
+    pub inline_calls: HashMap<wowlua_span::Span, wowlua_span::Span>,
     /// With `indexed`: each name the check met (its span) and the span of
     /// what it refers to, for the language server's go to definition
     /// (spec §16.2).
@@ -122,6 +126,7 @@ pub fn check_package_full(
     let (indexed, only) = (extras.definitions, extras.only);
     let mut type_names = HashMap::new();
     let mut value_checks = HashMap::new();
+    let mut inline_calls = HashMap::new();
     let mut hovers: Vec<(wowlua_span::Span, String)> = Vec::new();
     use types::DefId;
     let mut private_methods: HashMap<wowlua_span::Span, DefId> = HashMap::new();
@@ -536,6 +541,7 @@ pub fn check_package_full(
         hovers.extend(out.hovers);
         type_names.extend(out.type_names);
         value_checks.extend(out.value_checks);
+        inline_calls.extend(out.inline_calls);
         private_methods.extend(out.private_methods);
         global_classes.extend(out.global_classes);
         diagnostics.extend(out.diagnostics);
@@ -639,6 +645,7 @@ pub fn check_package_full(
         type_names,
         value_checks,
         private_methods,
+        inline_calls,
         definitions,
         hovers,
         completions,
@@ -839,6 +846,7 @@ struct FileOutcome {
     type_names: Vec<(wowlua_span::Span, String)>,
     value_checks: Vec<(wowlua_span::Span, runtime::ValueCheck)>,
     private_methods: Vec<(wowlua_span::Span, types::DefId)>,
+    inline_calls: Vec<(wowlua_span::Span, wowlua_span::Span)>,
     global_classes: Vec<types::DefId>,
     exports: FxHashMap<Box<str>, TypeId>,
     export_caps: FxHashMap<Box<str>, usize>,
@@ -978,6 +986,7 @@ fn check_file_in(
         type_names: Vec::new(),
         value_checks: Vec::new(),
         private_methods: Vec::new(),
+        inline_calls: Vec::new(),
         global_classes: Vec::new(),
         exports: FxHashMap::default(),
         export_caps: FxHashMap::default(),
@@ -1130,6 +1139,8 @@ fn check_file_in(
     }
     out.private_methods
         .extend(std::mem::take(&mut checker.private_methods));
+    out.inline_calls
+        .extend(std::mem::take(&mut checker.inline_calls));
     // `@global` declarations hand their classes to other addons: the
     // class itself, the types of its values, the types its signature
     // names.

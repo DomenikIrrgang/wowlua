@@ -1495,6 +1495,7 @@ pub fn compile_flavor(
         }
     }
     let mut private_methods = std::collections::HashSet::new();
+    let mut inline_calls: HashMap<wowlua_span::Span, wowlua_span::Span> = HashMap::new();
     if settings.iter().any(Option::is_some) {
         let checked = wowlua_sema::check::check_package_full(
             &inputs,
@@ -1535,6 +1536,7 @@ pub fn compile_flavor(
         out.type_names = checked.type_names;
         out.value_checks = checked.value_checks;
         private_methods = checked.private_methods;
+        inline_calls = checked.inline_calls;
     }
     // What the types-only sources report is their addon's.
     if !foreign_ids.is_empty() {
@@ -1609,7 +1611,7 @@ pub fn compile_flavor(
                     diagnostics.push(
                         Diagnostic::warning(
                             "W3031",
-                            "`@inline` is ignored: only local functions with a single `return` expression are inlined",
+                            "`@inline` is ignored: only local functions and private methods with a single `return` expression are inlined",
                         )
                         .with_label(name.span(), "not a local function"),
                     );
@@ -1621,22 +1623,39 @@ pub fn compile_flavor(
                     diagnostics.push(
                         Diagnostic::warning(
                             "W3031",
-                            "`@inline` is ignored: only local functions with a single `return` expression are inlined",
+                            "`@inline` is ignored: only local functions and private methods with a single `return` expression are inlined",
                         )
                         .with_label(inner.span(), "not a local function"),
                     );
                 }
                 view::StmtKind::Class(c) => {
                     for m in &c.members() {
-                        if is_inline(m.decorators()) {
-                            diagnostics.push(
-                                Diagnostic::warning(
-                                    "W3031",
-                                    "`@inline` is ignored: only local functions with a single `return` expression are inlined",
-                                )
-                                .with_label(m.span(), "a method"),
-                            );
+                        if !is_inline(m.decorators()) {
+                            continue;
                         }
+                        // A private method is inlined like a local function
+                        // (lowering reports what keeps its calls from it).
+                        if let view::ClassMemberKind::Method { name, func, .. } = m.kind()
+                            && wowlua_sema::classes::inline_private_method(m)
+                        {
+                            if !wowlua_sema::classes::inline_shape(func) {
+                                diagnostics.push(
+                                    Diagnostic::warning(
+                                        "W3031",
+                                        "`@inline` is ignored: its body is not a single `return` expression",
+                                    )
+                                    .with_label(name.span(), "not inlined"),
+                                );
+                            }
+                            continue;
+                        }
+                        diagnostics.push(
+                            Diagnostic::warning(
+                                "W3031",
+                                "`@inline` is ignored: only local functions and private methods with a single `return` expression are inlined",
+                            )
+                            .with_label(m.span(), "not a private method"),
+                        );
                     }
                 }
                 _ => {}
@@ -1797,6 +1816,17 @@ pub fn compile_flavor(
             .or_default()
             .insert((span.start, span.end), c.clone());
     }
+    // Calls of `@inline` private methods, by file (spec §4.3).
+    type Offsets = (u32, u32);
+    let mut inline_calls_of: HashMap<FileId, HashMap<Offsets, Offsets>> = HashMap::new();
+    if profile.optimize.inline {
+        for (call, at) in &inline_calls {
+            inline_calls_of
+                .entry(call.file)
+                .or_default()
+                .insert((call.start, call.end), (at.start, at.end));
+        }
+    }
     let mut type_names_of: HashMap<FileId, HashMap<(u32, u32), String>> = HashMap::new();
     for (span, name) in &out.type_names {
         type_names_of
@@ -1869,6 +1899,7 @@ pub fn compile_flavor(
             };
             ctx.value_checks = value_checks_of.remove(file).unwrap_or_default();
             ctx.type_names = type_names_of.remove(file).unwrap_or_default();
+            ctx.inline_calls = inline_calls_of.remove(file).unwrap_or_default();
             ctx.compiler_known = wowlua_sema::is_compiler_known(&source.src_rel);
             ctx.dependency = unit.is_some();
             Some(ctx)

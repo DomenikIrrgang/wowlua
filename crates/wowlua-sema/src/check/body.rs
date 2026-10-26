@@ -211,6 +211,9 @@ pub struct Checker<'e, 'p> {
     /// Name spans of accesses to renamable methods (`rename-private`), with
     /// the class that declares the method.
     pub private_methods: FxHashMap<wowlua_span::Span, DefId>,
+    /// Calls of `@inline` private methods: the name's span at the call,
+    /// and where the method's name is declared.
+    pub inline_calls: FxHashMap<wowlua_span::Span, wowlua_span::Span>,
     /// Classes whose instances or class tables this file stores in globals.
     pub global_classes: FxHashSet<DefId>,
     reassigned: FxHashSet<u32>,
@@ -419,6 +422,7 @@ impl<'e, 'p> Checker<'e, 'p> {
             objects: FxHashSet::default(),
             stored_fields: FxHashMap::default(),
             private_methods: FxHashMap::default(),
+            inline_calls: FxHashMap::default(),
             global_classes: FxHashSet::default(),
             reassigned,
             assigned_in_closures,

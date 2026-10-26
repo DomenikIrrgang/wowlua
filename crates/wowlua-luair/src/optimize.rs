@@ -560,7 +560,9 @@ struct Helper {
     refs: Vec<Ref>,
 }
 
-fn clear_positions(e: &mut Expr) {
+/// `e` without positions: emitted where the code around it is (inlined
+/// code, generated helpers).
+pub fn clear_positions(e: &mut Expr) {
     struct Clear;
     impl Visitor for Clear {
         fn expr(&mut self, e: &mut Expr) {

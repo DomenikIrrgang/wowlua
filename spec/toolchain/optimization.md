@@ -22,7 +22,7 @@ harder to read:
 
 | Setting | Values | Effect |
 |---------|--------|--------|
-| `optimize.inline` | bool | Inline local functions whose body is a single `return <expression>` (§15.2) |
+| `optimize.inline` | bool | Inline local functions and `@inline` private methods whose body is a single `return <expression>` (§15.2) |
 | `optimize.cache-globals` | `"off"` `"safe"` | Hoist frequently used read-only globals and Lua standard-library functions into file-level locals (`local pairs, type = pairs, type`). Faster access in hot code. `"safe"` only hoists names the module never assigns and that are on the compiler's stable-global list (Lua stdlib and immutable WoW API namespaces). Never hoists names that addons commonly hook. |
 | `optimize.dead-code` | bool | Remove unused local functions, unused module-private declarations, and **side-effect-free** modules nothing uses (§15.2.1) |
 | `bundle` | bool | Bundle all Lua into as few files as possible (§15.3) |
@@ -61,7 +61,16 @@ called, the call's arguments are literals or locals, and the body's other
 names mean the same at the call. Calls used as statements stay calls. A
 function whose calls were all inlined goes. `@inline` is a hint for such
 functions; on anything else (a longer body, a recursive or escaping function,
-a method) it is ignored with W3031 (decision T166).
+a function that is not local, a public or protected method) it is ignored
+with W3031 (decision T166).
+
+An `@inline` private method is inlined the same way where its class calls
+it: `obj:m(args)` (any instance: a private method is the class's own, which
+nothing outside the class calls or replaces) and `C.m(args)` for a static
+one go through a local function made from the method, declared before the
+class, which the rules above then inline. The method stays on the class for
+other uses (`self.m` as a value). Without `optimize.inline` the calls stay
+method calls.
 
 **`dead-code`** removes `local` declarations and local functions nothing uses
 whose values have no side effects (literals, tables of them, functions,

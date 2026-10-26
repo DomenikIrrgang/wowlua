@@ -253,6 +253,24 @@ impl<'a> Lowerer<'a> {
         let mut field_inits: Vec<ClassMember<'a>> = Vec::new();
         let mut statics: Vec<ClassMember<'a>> = Vec::new();
         let mut has_ctor = false;
+        // `@inline` private methods the class calls (spec §4.3): each call
+        // goes through a local function made from the method, which the
+        // optimizer inlines like any `local function`.
+        let mut helpers: Vec<ir::Stmt> = Vec::new();
+        for m in &c.members() {
+            if let ClassMemberKind::Method {
+                name: mname, func, ..
+            } = m.kind()
+                && wowlua_sema::classes::inline_private_method(m)
+                && wowlua_sema::classes::inline_shape(func)
+            {
+                let key = (mname.span().start, mname.span().end);
+                if self.ctx.inline_calls.values().any(|&at| at == key) {
+                    let helper = format!("__wl_inline_{name}_{}", mname.text());
+                    self.inline_helpers.insert(key, helper);
+                }
+            }
+        }
         for m in &c.members() {
             if !m.decorators().is_empty() && !self.kept_by_if_decorators(m.decorators(), false) {
                 continue;
@@ -327,6 +345,15 @@ impl<'a> Lowerer<'a> {
                         self.member_marks(&class_marks, exported && public);
                         self.func(func, !is_static)
                     };
+                    if let Some(helper) = self
+                        .inline_helpers
+                        .get(&(mname.span().start, mname.span().end))
+                        .cloned()
+                        && !removed
+                    {
+                        helpers
+                            .push(self.inline_helper_fn(&helper, &lowered, is_static, mname, pos));
+                    }
                     let (path, method) = if is_static {
                         (vec![ident(&name, mpos), self.ident(mname)], None)
                     } else {
@@ -530,7 +557,104 @@ impl<'a> Lowerer<'a> {
         if exported {
             out.push(self.export_assign(&name, cls, end));
         }
+        // The helpers come before the class: its methods call them.
+        if !helpers.is_empty() {
+            helpers.append(&mut out);
+            out = helpers;
+        }
         out
+    }
+
+    /// The local function calls of an `@inline` private method go through
+    /// (spec §4.3): the method's function with `self` as its first
+    /// parameter, on the class's line, so the lines after it keep theirs.
+    /// One the optimizer cannot inline is W3031 (the calls still work).
+    fn inline_helper_fn(
+        &mut self,
+        helper: &str,
+        method: &ir::Func,
+        is_static: bool,
+        name: Name<'a>,
+        pos: Pos,
+    ) -> ir::Stmt {
+        let mut params: Vec<ir::Ident> = method
+            .params
+            .iter()
+            .map(|p| {
+                let mut p = p.clone();
+                p.pos = Pos::NONE;
+                p
+            })
+            .collect();
+        if !is_static {
+            params.insert(0, ident("self", Pos::NONE));
+        }
+        let mut values = match method.body.stmts.as_slice() {
+            [
+                ir::Stmt {
+                    kind: ir::StmtKind::Return(values),
+                    ..
+                },
+            ] => values.clone(),
+            _ => Vec::new(),
+        };
+        let mut why = None;
+        if values.len() != 1 {
+            why = Some("its body is not a single `return` expression");
+        }
+        for v in &mut values {
+            wowlua_luair::optimize::clear_positions(v);
+            struct Probe<'h> {
+                helper: &'h str,
+                recursive: bool,
+                function: bool,
+            }
+            impl wowlua_luair::scope::Visitor for Probe<'_> {
+                fn expr(&mut self, e: &mut ir::Expr) {
+                    match &e.kind {
+                        ir::ExprKind::Function(_) | ir::ExprKind::Vararg => self.function = true,
+                        ir::ExprKind::Name(n) if n.name.as_str() == self.helper => {
+                            self.recursive = true
+                        }
+                        _ => {}
+                    }
+                }
+            }
+            let mut probe = Probe {
+                helper,
+                recursive: false,
+                function: false,
+            };
+            wowlua_luair::scope::walk_expr(v, &mut probe);
+            if probe.function {
+                why = why.or(Some("its body is not a single `return` expression"));
+            }
+            if probe.recursive {
+                why = why.or(Some("it is recursive"));
+            }
+        }
+        if let Some(why) = why {
+            self.warnings.push(
+                Diagnostic::warning("W3031", format!("`@inline` is ignored: {why}"))
+                    .with_label(name.span(), "not inlined"),
+            );
+        }
+        let func = ir::Func {
+            pos: Pos::NONE,
+            params,
+            vararg: false,
+            body: ir::Block {
+                stmts: vec![stmt(ir::StmtKind::Return(values), Pos::NONE)],
+                end: Pos::NONE,
+            },
+        };
+        stmt(
+            ir::StmtKind::LocalFunction {
+                name: generated(helper, pos),
+                func,
+            },
+            pos,
+        )
     }
 
     /// `@script("OnClick")` / `@script("OnShow", { hook = true })`: the

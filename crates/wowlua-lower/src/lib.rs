@@ -65,6 +65,10 @@ pub struct Context {
     /// File-level locals test files read (`import internal`): registered
     /// as module `<id>#internal` at the end of the file.
     pub exposed: BTreeSet<String>,
+    /// `optimize.inline`: calls of `@inline` private methods (spec §4.3),
+    /// by the method name's span at the call: the span of the method's
+    /// name where it is declared (from the type checker).
+    pub inline_calls: HashMap<(u32, u32), (u32, u32)>,
 }
 
 /// The debugging settings of the build profile (spec chapter 7).
@@ -145,6 +149,7 @@ impl Context {
             type_names,
             value_checks,
             exposed,
+            inline_calls,
         } = self;
         *module == other.module
             && *exposed == other.exposed
@@ -158,6 +163,7 @@ impl Context {
             && same_map(imports, &other.imports, same_import)
             && *type_names == other.type_names
             && *value_checks == other.value_checks
+            && *inline_calls == other.inline_calls
     }
 }
 
@@ -269,6 +275,7 @@ pub fn lower_module(parse: &Parse, src: &[u8], ctx: &Context) -> Result<Lowered,
         fn_marks: HashMap::new(),
         meta_read: std::cell::Cell::new(false),
         line_hint: std::cell::Cell::new(0),
+        inline_helpers: HashMap::new(),
     };
     // Exported functions, classes and enums are hoisted (spec §5.1,
     // decisions L24 and T76).
@@ -693,6 +700,9 @@ struct Lowerer<'a> {
     /// walks a file mostly forward, so the next lookup starts its search
     /// there ([`partition_point_near`]).
     line_hint: std::cell::Cell<usize>,
+    /// `@inline` private methods called in their class: the local
+    /// function each call goes through, by the span of the method's name.
+    inline_helpers: HashMap<(u32, u32), String>,
 }
 
 const LICENSE_WORDS: &[&str] = &["license", "copyright", "spdx-license-identifier"];
@@ -822,6 +832,16 @@ impl<'a> Lowerer<'a> {
 
     fn is_local(&self, name: &str) -> bool {
         self.lookup(name).is_some()
+    }
+
+    /// The helper of the `@inline` private method a call names (spec
+    /// §4.3), if the class lowers one.
+    fn inline_helper(&self, name: Name<'a>) -> Option<String> {
+        let at = self
+            .ctx
+            .inline_calls
+            .get(&(name.span().start, name.span().end))?;
+        self.inline_helpers.get(at).cloned()
     }
 
     /// A fresh hygienic temporary.
@@ -2255,11 +2275,45 @@ impl<'a> Lowerer<'a> {
                 let id = self.call_intrinsic(e).expect("an intrinsic");
                 return self.intrinsic_expr(&id, callee, args, e);
             }
+            // A static `@inline` private method: its helper (spec §4.3).
+            ExprKind::Call { callee, args }
+                if let ExprKind::Field { name, .. } = callee.kind()
+                    && let Some(helper) = self.inline_helper(name) =>
+            {
+                let (_, args) = self.call_parts(callee, args);
+                K::Call {
+                    callee: Box::new(name_expr(generated(&helper, self.span_pos(name.span())))),
+                    args,
+                }
+            }
             ExprKind::Call { callee, args } => {
                 self.check_instantiation(callee);
                 let (callee, args) = self.call_parts(callee, args);
                 K::Call {
                     callee: Box::new(callee),
+                    args,
+                }
+            }
+            // `obj:m(…)` of an `@inline` private method: `helper(obj, …)`,
+            // which the optimizer inlines.
+            ExprKind::Method { obj, name, args } if let Some(helper) = self.inline_helper(name) => {
+                let (obj, args) = self.call_parts(obj, args);
+                let args = match args {
+                    ir::Args::Parens { mut args, close } => {
+                        args.insert(0, obj);
+                        ir::Args::Parens { args, close }
+                    }
+                    ir::Args::Table(t) => ir::Args::Parens {
+                        args: vec![obj, *t],
+                        close: Pos::NONE,
+                    },
+                    ir::Args::String(s) => ir::Args::Parens {
+                        args: vec![obj, *s],
+                        close: Pos::NONE,
+                    },
+                };
+                K::Call {
+                    callee: Box::new(name_expr(generated(&helper, self.span_pos(name.span())))),
                     args,
                 }
             }

@@ -1915,13 +1915,63 @@ fn release_builds_inline_expression_helpers() {
         ))
         // (not a local function: W3031 too, spec §4.3)
         .stderr(predicate::str::contains(
-            "warning[W3031]: `@inline` is ignored: only local functions with a single `return` expression are inlined",
+            "warning[W3031]: `@inline` is ignored: only local functions and private methods with a single `return` expression are inlined",
         ));
     let release = dir.path().join("dist/release/Inl");
     let main = fs::read_to_string(release.join("src/main.lua")).unwrap();
     assert!(main.contains("print(size / 2,"), "{main}");
     assert!(!main.contains("half"), "{main}");
     assert_eq!(run_addon(&release, "Inl"), "5 0 0");
+}
+
+/// `@inline` private methods (spec §4.3) are inlined in their class like
+/// local functions: instance and static ones, on any instance of the
+/// class. A public method's `@inline` and a recursive one are W3031.
+#[test]
+fn release_builds_inline_private_methods() {
+    let dir = tempfile::tempdir().unwrap();
+    write(
+        dir.path(),
+        &[
+            (
+                "wowlua.json",
+                r#"{ "package": { "name": "inl", "version": "1.0.0" },
+  "profiles": { "release": { "bundle": false } } }
+"#,
+            ),
+            (
+                "src/main.wowlua",
+                "class Vec\n    x: number = 1\n    y: number = 2\n    @inline\n    private function sum(k: number): number return (self.x + self.y) * k end\n    @inline\n    private static function twice(n: number): number return n * 2 end\n    @inline\n    private function down(n: number): number return n > 0 and self:down(n - 1) or 0 end\n    @inline\n    function one(): number return 1 end\n    function total(other: Vec): number\n        local k = 3\n        return self:sum(k) + other:sum(2) + Vec.twice(k) + self:down(2) + self:one()\n    end\nend\nprint(Vec.new():total(Vec.new()))\n",
+            ),
+        ],
+    );
+    wowlua(dir.path())
+        .args(["build", "--release"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains(
+            "warning[W3031]: `@inline` is ignored: only local functions and private methods with a single `return` expression are inlined",
+        ))
+        .stderr(predicate::str::contains(
+            "warning[W3031]: `@inline` is ignored: it is recursive",
+        ));
+    let release = dir.path().join("dist/release/Inl");
+    let main = fs::read_to_string(release.join("src/main.lua")).unwrap();
+    assert!(
+        main.contains("return (self.x + self.y) * k + (other.x + other.y) * 2 + k * 2 +"),
+        "{main}"
+    );
+    assert!(
+        !main.contains(":sum(") && !main.contains("Vec.twice(k)"),
+        "{main}"
+    );
+    assert_eq!(run_addon(&release, "Inl"), "22");
+    // Without `optimize.inline`, the methods are called.
+    wowlua(dir.path()).args(["build"]).assert().success();
+    let dev = dir.path().join("dist/dev/Inl");
+    let main = fs::read_to_string(dev.join("src/main.lua")).unwrap();
+    assert!(main.contains("self:sum(k)"), "{main}");
+    assert_eq!(run_addon(&dev, "Inl"), "22");
 }
 
 /// What finishing a file reports (W3031 from inlining, E5001 from checking

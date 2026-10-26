@@ -696,6 +696,26 @@ fn vararg_in(e: Expr<'_>) -> Option<Span> {
     found
 }
 
+/// Whether an `@inline` method can be inlined as written (spec §4.3): its
+/// body is a single `return` of one expression, and it takes no `...` and
+/// no defaults (which add statements).
+pub fn inline_shape(f: Func<'_>) -> bool {
+    if f.vararg().is_some() || f.params().iter().any(|p| p.default().is_some()) {
+        return false;
+    }
+    let stmts = f.body().stmts();
+    stmts.len() == 1 && matches!(stmts.at(0).kind(), StmtKind::Return(values) if values.len() == 1)
+}
+
+/// Whether a class member is an `@inline` private method with a body: one
+/// optimized builds inline (spec §4.3).
+pub fn inline_private_method(m: ClassMember<'_>) -> bool {
+    matches!(m.kind(), ClassMemberKind::Method { has_body: true, .. })
+        && m.modifiers().contains(&Modifier::Private)
+        && !m.modifiers().contains(&Modifier::Overload)
+        && m.decorators().iter().any(|d| d.is_named("inline"))
+}
+
 /// Resolves what each class extends and which classes are widget classes.
 #[allow(clippy::too_many_arguments)]
 pub fn resolve_base(

@@ -730,10 +730,13 @@ newName()
 ## W3031
 
 `@inline` is ignored: the function can't be inlined. Only a `local function`
-whose body is a single `return` expression is inlined, and only when it isn't
-recursive and is used only by calling it; the warning says which rule failed.
-A method with `@inline` is reported too. Simplify the function, or remove
-the hint.
+or a private method whose body is a single `return` expression is inlined,
+and only when it isn't recursive and (a local function) is used only by
+calling it; the warning says which rule failed. A private method is inlined
+where its class calls it, as no other code can call it or replace it. A
+public or protected method, or a function that isn't local (`function f()`,
+`function t.f()`), is reported too. Simplify the function, make the method
+private, or remove the hint.
 
 The warning comes from `wowlua build` with a profile that inlines
 (`optimize.inline`, on in `release`), not from `wowlua check`.

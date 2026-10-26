@@ -172,8 +172,8 @@ rebuild()
 - `@deprecated` gives a warning (W3030) everywhere the function is still
   used, and in debug builds a message in the chat the first time it is
   called.
-- Also built in: `@inline` for small local functions whose body is a single
-  `return` (inlined in optimized builds), `@reflect` for full reflection data,
+- Also built in: `@inline` for small local functions and private methods
+  whose body is a single `return` (inlined in optimized builds), `@reflect` for full reflection data,
   `@noprofile` to keep a function out of the dev build's profiling,
   `@checked` and `@unchecked` to force or skip runtime parameter checks,
   `@nocheck` to skip type checking a body, and `@script` for

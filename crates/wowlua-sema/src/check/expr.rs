@@ -2006,6 +2006,10 @@ impl Checker<'_, '_> {
                     self.note_member(span, m.span, d);
                     if !quiet {
                         self.check_visibility(m.visibility, owner, name, span);
+                        if let Some(&at) = self.env.inline_methods.get(&(owner, true, name.into()))
+                        {
+                            self.inline_calls.insert(span, at);
+                        }
                     }
                     Some(m.ty)
                 }
@@ -2069,6 +2073,12 @@ impl Checker<'_, '_> {
                         Some((mem, owner)) => {
                             if mem.renamable {
                                 self.private_methods.insert(span, owner);
+                            }
+                            if mem.kind == MemberKind::Method
+                                && let Some(&at) =
+                                    self.env.inline_methods.get(&(owner, false, name.into()))
+                            {
+                                self.inline_calls.insert(span, at);
                             }
                             self.note_member(span, mem.span, owner);
                             self.check_visibility(mem.visibility, owner, name, span);
