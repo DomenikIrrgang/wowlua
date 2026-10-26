@@ -49,6 +49,10 @@ pub struct GlobalArgs {
     /// Print less output
     #[arg(short, long, global = true)]
     pub quiet: bool,
+    /// Print more output: the commands the package manager runs and the
+    /// requests publishing makes (tokens are never shown)
+    #[arg(short, long, global = true, conflicts_with = "quiet")]
+    pub verbose: bool,
     /// Treat warnings as errors
     #[arg(long, global = true)]
     pub deny_warnings: bool,
@@ -606,6 +610,9 @@ fn run() -> ExitCode {
         std::process::exit(101);
     }));
     let cli = Cli::parse();
+    if cli.global.verbose {
+        wowlua_pkg::verbose::enable();
+    }
     // Lua compile results are kept between runs (#50, spec §10.7).
     if let Some(cache) = wowlua_driver::compile_cache::CompileCache::from_env() {
         wowlua_driver::compile_cache::enable(cache);

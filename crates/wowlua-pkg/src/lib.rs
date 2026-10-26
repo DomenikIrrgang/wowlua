@@ -12,6 +12,7 @@ pub mod lock;
 pub mod resolve;
 pub mod safety;
 pub mod source;
+pub mod verbose;
 
 pub use cache::Cache;
 pub use fetch::{FetchError, Fetcher};

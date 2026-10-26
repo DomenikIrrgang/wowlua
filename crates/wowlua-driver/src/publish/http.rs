@@ -58,6 +58,8 @@ impl Http {
         headers: &[(&str, String)],
         body: Option<&[u8]>,
     ) -> Result<Response, String> {
+        // The method and URL only: the headers carry the tokens.
+        wowlua_pkg::verbose::note("Requesting", &format!("{method} {url}"));
         let mut req = ureq::http::Request::builder().method(method).uri(url);
         for (k, v) in headers {
             req = req.header(*k, v.as_str());

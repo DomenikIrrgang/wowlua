@@ -257,6 +257,33 @@ fn git_dependency_on_the_default_branch() {
     wowlua(&e.project, &e.home).arg("build").assert().success();
 }
 
+/// `-v` shows the commands the package manager runs (spec CLI §12.1);
+/// `-v` and `-q` together are a usage error.
+#[test]
+fn verbose_shows_the_commands_it_runs() {
+    let e = env();
+    let url = git_repo(&e.root.join("Lib"), &[("Lib.lua", "Lib = {}\n")], "v1");
+    addon(
+        &e.project,
+        serde_json::json!({ "lib": { "git": url, "tag": "v1", "kind": "lua-library", "files": ["Lib.lua"] } }),
+        serde_json::json!({}),
+    );
+    wowlua(&e.project, &e.home)
+        .args(["-v", "build"])
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Running git").and(predicate::str::contains("archive")));
+    wowlua(&e.project, &e.home)
+        .arg("build")
+        .assert()
+        .success()
+        .stderr(predicate::str::contains("Running").not());
+    wowlua(&e.project, &e.home)
+        .args(["-v", "-q", "build"])
+        .assert()
+        .code(2);
+}
+
 #[test]
 fn offline_and_locked_modes() {
     let e = env();

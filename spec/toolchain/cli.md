@@ -18,7 +18,7 @@ wowlua <command> [options]
 | `--features <a,b>` / `--no-default-features` | Select features ([Manifest §9.6](manifest.md#96-features)) |
 | `--message-format human\|short\|json\|github` | Diagnostic output format. `human` shows each diagnostic with its source lines; a line longer than 160 characters is shown as 120 characters around the labels, with `...` where it is cut. `short` is one line per diagnostic. Both end with a summary, `warning: N warnings emitted` or `error: aborting due to N previous errors; M warnings emitted` (not with `-q`). `json` emits one JSON object per line, for editors and tools. `github` emits GitHub Actions annotations. |
 | `--color auto\|always\|never` | Terminal colors |
-| `-q, --quiet` / `-v, --verbose` | Output verbosity. Tokens are always redacted. |
+| `-q, --quiet` / `-v, --verbose` | Output verbosity. `-q` leaves out status lines, notes and the summary; `-v` adds a line for each external command the package manager runs (`git`, `svn`) and each HTTP request publishing makes (method and URL). Tokens are always redacted: headers are never shown. |
 | `--deny-warnings` | Treat warnings as errors |
 | `-j, --jobs <N>` | Worker threads for per-file work (parsing, lowering and finishing, linting); `1` runs it in order on one thread. Default: the number of cores, at most 8. The output and the order of diagnostics do not depend on it. |
 

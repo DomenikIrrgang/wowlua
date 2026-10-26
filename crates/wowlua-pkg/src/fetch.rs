@@ -72,6 +72,7 @@ impl std::fmt::Debug for Fetcher {
 /// Output of a finished command, or why it failed.
 fn run(mut command: Command, what: &str) -> Result<String, FetchError> {
     let program = command.get_program().to_string_lossy().into_owned();
+    crate::verbose::note("Running", &crate::verbose::command_line(&command));
     let output = command
         .stdin(Stdio::null())
         .env("GIT_TERMINAL_PROMPT", "0")
@@ -336,8 +337,10 @@ impl Fetcher {
 
     fn git_export(repo: &Path, commit: &str, dest: &Path) -> Result<(), FetchError> {
         std::fs::create_dir_all(dest).map_err(|e| FetchError::plain(e.to_string()))?;
-        let output = git(Some(repo))
-            .args(["archive", "--format=tar", commit])
+        let mut command = git(Some(repo));
+        command.args(["archive", "--format=tar", commit]);
+        crate::verbose::note("Running", &crate::verbose::command_line(&command));
+        let output = command
             .stdin(Stdio::null())
             .stderr(Stdio::piped())
             .output()
@@ -529,12 +532,12 @@ impl Fetcher {
             if self.offline {
                 return None;
             }
-            let output = Command::new("svn")
+            let mut command = Command::new("svn");
+            command
                 .args(["cat", "--non-interactive"])
-                .arg(format!("{root}/.pkgmeta@{rev}"))
-                .stdin(Stdio::null())
-                .output()
-                .ok()?;
+                .arg(format!("{root}/.pkgmeta@{rev}"));
+            crate::verbose::note("Running", &crate::verbose::command_line(&command));
+            let output = command.stdin(Stdio::null()).output().ok()?;
             let missing = String::from_utf8_lossy(&output.stderr).contains("160013");
             if !output.status.success() && !missing {
                 return None;
