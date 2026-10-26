@@ -284,7 +284,8 @@ launcher.register({
   top-level calls this is checked at compile time; otherwise a second call raises
   a runtime error.
 - `launcher.setIcon`, `setLabel`, `showMinimap(bool)` and `refresh()` update
-  the surfaces at runtime.
+  the surfaces at runtime. When `minimap.store` is a table from `saved.bind`
+  with profiles, a profile switch refreshes the button (`profiles:onChange`).
 - **Secrets** are not published: LibDataBroker compares values and the
   compartment's menu measures them. A secret `icon` or `label` in `register`
   becomes the question-mark icon or the addon's name, the setters and

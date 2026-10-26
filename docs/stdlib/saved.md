@@ -189,9 +189,9 @@ error before the data is loaded.
 
 > [!TIP]
 > An options page from [`wowlua:settings`](settings.md) whose `store` is `db`
-> re-reads its controls when the profile changes. A minimap button from
-> `wowlua:launcher` does not: call `launcher.refresh()` in `onChange` to move it
-> to the new profile's position.
+> re-reads its controls when the profile changes, and a minimap button from
+> `wowlua:launcher` whose `minimap.store` is `db` moves to the new profile's
+> position.
 
 ## Change the shape of your data
 

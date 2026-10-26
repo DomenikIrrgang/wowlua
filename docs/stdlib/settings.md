@@ -216,8 +216,9 @@ launcher.register({
 - Everything is created at login. `register` can be called once per addon
   (E8080).
 - `launcher.setIcon`, `setLabel`, `showMinimap(show)` and `refresh()` change
-  it later. `refresh()` reads the stored position again, for example after a
-  profile switch.
+  it later. `refresh()` reads the stored position again, for example after you
+  change it in code. A profile switch of a `minimap.store` from
+  `saved.bind` refreshes the button by itself.
 - The built-in button looks like the game's own minimap buttons. A `theme` in
   `register`, or `launcher.setTheme(theme)`, restyles it with a widget theme
   (see [Frames, lists and menus](ui.md)).

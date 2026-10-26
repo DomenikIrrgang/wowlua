@@ -11,6 +11,7 @@ import type Subscription from "wowlua:events"
 import callIn from "wowlua:errors"
 import type WidgetTheme from "wowlua:frames"
 import * as secret from "wowlua:secret"
+import handle from "wowlua:saved"
 
 local addonName, ns = ...
 local wl = ns.__wowlua
@@ -260,6 +261,20 @@ end
 -- What a secret icon shows instead.
 const QUESTION_MARK = "Interface\\Icons\\INV_Misc_QuestionMark"
 
+--- Re-reads the stored position and visibility (a profile switch does it
+--- itself).
+export function refresh()
+    if not opts then
+        return
+    end
+    if libIcon then
+        libIcon:Refresh(addonName, position())
+    else
+        place()
+    end
+    applyVisibility()
+end
+
 local function create()
     local o = opts
     if not o then
@@ -296,6 +311,11 @@ local function create()
             place()
         end
         applyVisibility()
+        -- A profile switch re-reads the position and visibility.
+        local found, h = pcall(handle, o.minimap.store)
+        if found and h.profiles then
+            h.profiles:onChange(function() refresh() end)
+        end
     end
     if o.compartment ~= false and AddonCompartmentFrame and AddonCompartmentFrame.RegisterAddon then
         local entry: CompartmentEntry = {
@@ -368,19 +388,6 @@ export function showMinimap(show: boolean)
         return
     end
     t.hide = not show
-    applyVisibility()
-end
-
---- Re-reads the stored position and visibility (after a profile switch).
-export function refresh()
-    if not opts then
-        return
-    end
-    if libIcon then
-        libIcon:Refresh(addonName, position())
-    else
-        place()
-    end
     applyVisibility()
 end
 

@@ -7490,6 +7490,53 @@ StdLauncher.launcher.refresh()
     );
 }
 
+/// A profile switch moves the minimap button to the new profile's
+/// position and visibility (spec stdlib "saved", profiles).
+#[test]
+fn launcher_follows_profile_switches() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as launcher from "wowlua:launcher"
+import * as saved from "wowlua:saved"
+
+local db = saved.bind("StdDB", { version = 1, defaults = { minimap = { hide = false } }, profiles = true })
+launcher.register({
+    icon = "icon-1",
+    label = "Std",
+    onClick = function() end,
+    minimap = { store = db, key = "minimap" },
+})
+_G.StdProfiles = saved.handle(db).profiles
+_G.StdDb = db
+"#,
+        )],
+        "",
+        r#"Mock.loadAddon("Std")
+Mock.fire("PLAYER_LOGIN")
+local b = StdMinimapButton
+local function at(): string local _, _, _, x, y = b:GetPoint(); return math.floor(x + 0.5) .. " " .. math.floor(y + 0.5) end
+print("default", at(), b:IsShown())
+StdProfiles:use("Tank")
+StdDb.minimap.minimapPos = 0
+StdDb.minimap.hide = true
+StdProfiles:use("Default")
+print("back", at(), b:IsShown())
+StdProfiles:use("Tank")
+print("tank", at(), b:IsShown())
+"#,
+    );
+    assert_eq!(
+        out,
+        [
+            "default -57 -57 true",
+            "back -57 -57 true",
+            "tank 80 0 false"
+        ],
+        "{out:?}"
+    );
+}
+
 /// `wowlua:launcher` with secrets: secret icons, labels and texts are not
 /// published (the previous value stays), a secret `showMinimap` changes
 /// nothing, and a stored position or visibility that is secret reads as
