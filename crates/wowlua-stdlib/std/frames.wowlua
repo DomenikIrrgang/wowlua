@@ -170,8 +170,21 @@ type EditModeManager = {
     GetActiveLayoutInfo: (self: EditModeManager) -> { layoutName?: string }?,
     ClearSelectedSystem: (self: EditModeManager) -> (),
 }
+-- What Edit Mode is used through: the manager's methods called and hooked
+-- here. A client without Edit Mode lacks the manager, or has a stub of it
+-- (cata's answers only `IsEditModeActive`).
+const EDIT_MODE_METHODS = { "IsEditModeActive", "GetActiveLayoutInfo", "ClearSelectedSystem", "SelectSystem", "UpdateLayoutInfo" }
 local function editModeManager(): EditModeManager?
-    return _G.EditModeManagerFrame :: EditModeManager?
+    const manager = _G.EditModeManagerFrame :: unknown
+    if type(manager) ~= "table" or _G.EventRegistry == nil then
+        return nil
+    end
+    for _, name in ipairs(EDIT_MODE_METHODS) do
+        if type((manager :: { [string]: unknown })[name]) ~= "function" then
+            return nil
+        end
+    end
+    return manager :: EditModeManager
 end
 
 -- This addon's frames in Edit Mode.

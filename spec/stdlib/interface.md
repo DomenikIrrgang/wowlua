@@ -95,7 +95,7 @@ if list then frames.keepAway(list, { fade = true }) end     -- out of sight, sti
 ### Edit Mode
 
 With `editMode = { label = … }` the frame joins the client's Edit Mode, which
-every active client has (decision S36):
+every active client has but Cata Classic's (decision S36):
 
 ```wowlua
 frames.movable(bar, { store = db, key = "bar", editMode = { label = "MyAddon Bar" } })
@@ -117,8 +117,12 @@ frames.movable(bar, { store = db, key = "bar", editMode = { label = "MyAddon Bar
 - **Locked outside Edit Mode**, so the player arranges frames in one place;
   `lock = false` keeps the frame movable outside Edit Mode too (then
   `MovableHandle:lock` applies there).
-- On a client without Edit Mode (`EditModeManagerFrame` missing) the option is
-  ignored and the frame is an ordinary movable frame.
+- On a client without Edit Mode the option is ignored and the frame is an
+  ordinary movable frame. A client has Edit Mode when its
+  `EditModeManagerFrame` has the manager's methods (`IsEditModeActive`,
+  `GetActiveLayoutInfo`, `ClearSelectedSystem`, `SelectSystem`,
+  `UpdateLayoutInfo`) and `EventRegistry` exists; Cata Classic's client
+  has only a stub of the manager (`IsEditModeActive`).
 
 ## bindings
 

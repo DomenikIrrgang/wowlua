@@ -4704,6 +4704,40 @@ print("locked again", at(box))
     );
 }
 
+/// A client whose `EditModeManagerFrame` is only a stub (cata's has
+/// `IsEditModeActive` alone) has no Edit Mode: `editMode` is ignored and
+/// the frame is an ordinary movable frame.
+#[test]
+fn frames_edit_mode_ignored_on_a_stub() {
+    let out = modes(
+        &[(
+            "src/main.wowlua",
+            r#"import * as frames from "wowlua:frames"
+import type FramePosition from "wowlua:frames"
+import * as saved from "wowlua:saved"
+
+interface Layout
+    box?: FramePosition
+end
+
+local db = saved.bind("StdDB", { version = 1, defaults = {} :: Layout })
+local box = CreateFrame("Frame", "StdBox", UIParent)
+box:SetSize(100, 100)
+box:SetPoint("CENTER")
+frames.movable(box, { store = db, key = "box", editMode = { label = "Std Box" } })
+"#,
+        )],
+        "EditModeManagerFrame = { IsEditModeActive = function() return false end }",
+        r#"Mock.loadAddon("Std")
+local S = UIParent:GetEffectiveScale()
+print("overlay", Mock.selectionOf(StdBox))
+Mock.drag(StdBox, 50 * S, 0)
+print("moved", StdDB.box ~= nil, StdDB.box and StdDB.box.layouts)
+"#,
+    );
+    assert_eq!(out, ["overlay nil", "moved true nil"], "{out:?}");
+}
+
 /// `wowlua:frames` with secrets: a position, size or scale that reads as
 /// secret (a frame anchored to a restricted one) is neither saved nor
 /// applied; a stored position that cannot be read is ignored; a secret
